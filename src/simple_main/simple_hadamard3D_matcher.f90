@@ -1,7 +1,4 @@
-!------------------------------------------------------------------------------!
-! SIMPLE v3.0         Elmlund & Elmlund Lab          simplecryoem.com          !
-!------------------------------------------------------------------------------!
-!> Simple class Hadamard3D matcher is the workhorse for Prime3D
+! projection-matching based on Hadamard products, high-level search routines for PRIME3D
 module simple_hadamard3D_matcher
 !$ use omp_lib
 !$ use omp_lib_kinds

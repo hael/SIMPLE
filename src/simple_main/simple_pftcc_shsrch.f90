@@ -1,7 +1,4 @@
-!------------------------------------------------------------------------------!
-! SIMPLE v3.0         Elmlund & Elmlund Lab          simplecryoem.com          !
-!------------------------------------------------------------------------------!
-!> Simple optimisation method: Shift search of pftcc objects
+! rotational origin shift alignment of band-pass limited polar projections in the Fourier domain
 module simple_pftcc_shsrch
 use simple_opt_spec,          only: opt_spec
 use simple_pftcc_opt,         only: pftcc_opt

@@ -1,7 +1,4 @@
-!------------------------------------------------------------------------------!
-! SIMPLE v3.0         Elmlund & Elmlund Lab          simplecryoem.com          !
-!------------------------------------------------------------------------------!
-!> Simple hash module
+! real hash data structure
 module simple_hash
 use simple_defs
 use simple_strings ! use all in there
@@ -174,8 +171,6 @@ contains
         write(fnr,"(A)") trim(real2str(self%vals(self%hash_index)))
     end subroutine write
 
-    
-    
     !>  \brief  reads a row of a text-file into the inputted hash, assuming key=value pairs
     subroutine read( self, fnr )
         use simple_math, only: is_a_number

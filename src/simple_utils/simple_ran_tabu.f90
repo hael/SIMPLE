@@ -1,20 +1,4 @@
-!------------------------------------------------------------------------------!
-! SIMPLE v3.0         Elmlund & Elmlund Lab          simplecryoem.com          !
-!------------------------------------------------------------------------------!
-!> Simple random tabulated module contains routines for generation of directed random numbers.
-!>
-!! simple_math contains various mathematical subroutines and functions.
-!! \author Cyril Reboul & Hans Elmlund
-!!
-!
-!==changes are documented below
-!* incorporated in the _SIMPLE_ library, HE 2009-06-25
-!* OOD 2003, HE 2012-06-15
-!
-! The SIMPLE code is distributed with the hope that it will be
-! useful, but WITHOUT ANY WARRANTY. Redistribution and modification is regulated
-! by the GNU General Public License.
-! -----------------------------------------------------------------------------!
+! routines for generation of directed random numbers
 module simple_ran_tabu
 use simple_jiffys, only: alloc_err
 implicit none

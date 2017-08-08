@@ -1,7 +1,4 @@
-!------------------------------------------------------------------------------!
-! SIMPLE v3.0         Elmlund & Elmlund Lab          simplecryoem.com          !
-!------------------------------------------------------------------------------!
-!> Simple program:  class averages of particles
+! probabilistic PCA within 2D clusters
 module simple_cavgppca
 use simple_defs
 use simple_oris,             only: oris
@@ -39,7 +36,6 @@ type cavgppca
     character(len=STDLEN)    :: metric    = 'realcc' !< Pixel of PFT space
     logical                  :: usemsk    = .false.  !< Whether to mask ptcls
     logical                  :: exists    = .false.
-
   contains
     ! CONSTRUCTORS
     procedure          :: new

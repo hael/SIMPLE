@@ -1,7 +1,4 @@
-!------------------------------------------------------------------------------!
-! SIMPLE v3.0         Elmlund & Elmlund Lab          simplecryoem.com          !
-!------------------------------------------------------------------------------!
-!> Simple class expanded Fourier transform functions of images
+! expanded Fourier transform class for improved cache utilisation
 module simple_ft_expanded
 !$ use omp_lib
 !$ use omp_lib_kinds

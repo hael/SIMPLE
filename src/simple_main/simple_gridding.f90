@@ -1,7 +1,4 @@
-!------------------------------------------------------------------------------!
-! SIMPLE v3.0         Elmlund & Elmlund Lab          simplecryoem.com          !
-!------------------------------------------------------------------------------!
-!> Simple image module: gridding utilities
+! utilities for convolution interpolation (gridding)
 module simple_gridding
 use simple_defs        ! use all in there
 use simple_image,      only: image
@@ -9,8 +6,6 @@ use simple_kbinterpol, only: kbinterpol
 implicit none
 
 contains
-
-    ! bails when zero images
 
     !>  \brief  prepare image for gridding interpolation in Fourier space
     subroutine prep4cgrid( img, img4grid, msk, kbwin )

@@ -1,7 +1,4 @@
-!------------------------------------------------------------------------------!
-! SIMPLE v3.0         Elmlund & Elmlund Lab          simplecryoem.com          !
-!------------------------------------------------------------------------------!
-!> Simple clustering module: stochastic hill climbing module for clustering
+! clustering of a similarity matrix using stochastic hill-climbing
 module simple_shc_cluster
 use simple_oris, only: oris
 use simple_rnd,  only: irnd_uni

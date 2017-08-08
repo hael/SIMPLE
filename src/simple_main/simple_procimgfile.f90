@@ -1,15 +1,12 @@
-!------------------------------------------------------------------------------!
-! SIMPLE v3.0         Elmlund & Elmlund Lab          simplecryoem.com          !
-!------------------------------------------------------------------------------!
-!>  \brief  SIMPLE stack image processing routines for SPIDER/MRC files
+! stack image processing routines for SPIDER/MRC files
 module simple_procimgfile
-    use simple_defs
-    use simple_image,  only: image
-    use simple_jiffys, only: find_ldim_nptcls, progress
-    implicit none
+use simple_defs
+use simple_image,  only: image
+use simple_jiffys, only: find_ldim_nptcls, progress
+implicit none
 
-    private :: raise_exception_imgfile
-    public
+private :: raise_exception_imgfile
+public
 
 contains
 
@@ -590,7 +587,6 @@ contains
     !>  \brief  is for calculating the acf of a stack
     !! \param fname2acf  output filename
     !! \param fname  input filename
-   
     subroutine acf_imgfile( fname2acf, fname )
         character(len=*), intent(in) :: fname2acf, fname
         type(image)   :: img
@@ -1044,6 +1040,7 @@ contains
         call avg%div(real(n))
         call avg%write(avgname,1)
     end subroutine make_avg_imgfile
+    
     !>  random_selection_from_imgfile
     !! \param fname2selfrom  output filename
     !! \param fname  input filename

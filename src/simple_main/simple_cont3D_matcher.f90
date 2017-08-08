@@ -1,7 +1,4 @@
-!------------------------------------------------------------------------------!
-! SIMPLE v3.0         Elmlund & Elmlund Lab          simplecryoem.com          !
-!------------------------------------------------------------------------------!
-!> Simple matcher class:  3D continous algorithm
+! high-level continuous 3D projection matching
 module simple_cont3D_matcher
 use simple_defs
 use simple_build,             only: build

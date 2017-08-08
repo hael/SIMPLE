@@ -1,8 +1,4 @@
-!------------------------------------------------------------------------------!
-! SIMPLE v3.0         Elmlund & Elmlund Lab          simplecryoem.com          !
-!------------------------------------------------------------------------------!
-!>  \brief  SIMPLE polarft_corrcalc class
-
+! for calculation of band-pass limited cross-correlation of polar Fourier transforms
 module simple_polarft_corrcalc
 use simple_defs      ! use all in there
 use simple_params,   only: params
@@ -105,8 +101,7 @@ contains
     !! \param ring2    radius of molecule
     !! \param ldim     logical dimensions of original cartesian image                              
     !! \param smpd     sampling distance                                                           
-    !! \param kfromto  Fourier index range                                                         
-    
+    !! \param kfromto  Fourier index range
     subroutine new( self, nrefs, pfromto, ldim, smpd, kfromto, ring2, ctfflag, isxfel )
         use simple_math, only: rad2deg, is_even, round2even
         class(polarft_corrcalc),    intent(inout) :: self    !< this object
@@ -445,7 +440,6 @@ contains
     
     !>  \brief  returns polar Fourier transform of reference iref
     !! \param iref reference index
-   
     function get_ref_pft( self, iref ) result( pft )
         class(polarft_corrcalc), intent(in) :: self
         integer,                 intent(in) :: iref
@@ -775,9 +769,8 @@ contains
     !>  \brief  is for generating resolution dependent correlations
     !! \param iref reference index
     !! \param iptcl particle index
-   
     function genfrc( self, iref, iptcl, irot ) result( frc )
-    use simple_math, only: csq
+        use simple_math, only: csq
         class(polarft_corrcalc), target, intent(inout) :: self              !< instance
         integer,                         intent(in)    :: iref, iptcl, irot !< rotation index
         real(sp), allocatable :: frc(:)

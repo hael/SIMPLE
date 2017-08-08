@@ -1,13 +1,4 @@
-!------------------------------------------------------------------------------!
-! SIMPLE v3.0         Elmlund & Elmlund Lab          simplecryoem.com          !
-!------------------------------------------------------------------------------!
-!>  \brief Simple unblur iterator class
-!! Run unblur_movie within checks so parent call does not have to
-!
-! The SIMPLE code is distributed with the hope that it will be
-! useful, but WITHOUT ANY WARRANTY. Redistribution and modification is regulated
-! by the GNU General Public License.
-! -----------------------------------------------------------------------------!
+! iterator for unblur (a program for motion correction, dose-weighting and frame-weighting of DDD movies)
 module simple_unblur_iter
 use simple_image,   only: image
 use simple_cmdline, only: cmdline

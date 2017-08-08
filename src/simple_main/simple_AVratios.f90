@@ -1,7 +1,4 @@
-!------------------------------------------------------------------------------!
-! SIMPLE v3.0         Elmlund & Elmlund Lab          simplecryoem.com          !
-!------------------------------------------------------------------------------!
-!> Simple module for converting atomic and volume modes
+! area volume ratio calculations for accounting for background noise effects in SSNR estimation 
 module simple_AVratios
 use simple_defs
 implicit none

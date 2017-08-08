@@ -1,18 +1,4 @@
-!------------------------------------------------------------------------------!
-! SIMPLE v3.0         Elmlund & Elmlund Lab          simplecryoem.com          !
-!------------------------------------------------------------------------------!
-!> simple_build is the builder class for the methods in _SIMPLE_. Access is global in the using unit
-!
-! The code is distributed with the hope that it will be useful, but _WITHOUT_ _ANY_ _WARRANTY_.
-! Redistribution or modification is regulated by the GNU General Public License.
-! *Author:* Hans Elmlund, 2009-06-11.
-!
-!==Changes are documented below
-!
-!* deugged and incorporated in the _SIMPLE_ library, HE 2009-06-25
-!* reshaped according to the new simple_params class that will deal with all global parameters, HE 2011-08-18
-!* rewritten with the new language features, HE 2012-06-18
-!
+! centralised builder (the main object constructor in SIMPLE)
 module simple_build
 use simple_defs
 use simple_cmdline,             only: cmdline

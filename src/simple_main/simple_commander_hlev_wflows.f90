@@ -1,17 +1,4 @@
-!------------------------------------------------------------------------------!
-! SIMPLE v3.0         Elmlund & Elmlund Lab          simplecryoem.com          !
-!------------------------------------------------------------------------------!
-!> Simple commander module: high-level workflows
-!
-!! This class contains commanders responsible for execution of high-level
-!! workflows in SIMPLE. This class provides the glue between the reciver (main
-!! reciever is simple_distr_exec) and the abstract action, which is simply
-!! execute (defined by the base class: simple_commander_base).
-!
-! The code is distributed with the hope that it will be useful, but _WITHOUT_
-! _ANY_ _WARRANTY_. Redistribution and modification is regulated by the GNU
-! General Public License. *Authors:* Hans Elmlund 2017
-!
+! concrete commander: high-level workflows
 module simple_commander_hlev_wflows
 use simple_defs
 use simple_cmdline,        only: cmdline

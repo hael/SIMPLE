@@ -1,7 +1,4 @@
-!------------------------------------------------------------------------------!
-! SIMPLE v3.0         Elmlund & Elmlund Lab          simplecryoem.com          !
-!------------------------------------------------------------------------------!
-!> \brief CTF correlation calculator module
+! Cartesian cross-correlation calculation in Fourier space
 module simple_cartft_corrcalc
 use simple_defs
 use simple_params,    only: params

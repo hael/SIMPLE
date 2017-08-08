@@ -1,9 +1,4 @@
-!------------------------------------------------------------------------------!
-! SIMPLE v3.0         Elmlund & Elmlund Lab          simplecryoem.com          !
-!------------------------------------------------------------------------------!
-!-------------------------------
-!> simple_pair_dtab
-!--------------------------------
+! pair distance table
 module simple_pair_dtab
 use simple_jiffys, only: alloc_err
 implicit none

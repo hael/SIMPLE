@@ -1,17 +1,6 @@
-!------------------------------------------------------------------------------!
-! SIMPLE v3.0         Elmlund & Elmlund Lab          simplecryoem.com          !
-!------------------------------------------------------------------------------!
-!> Simple sting operations class
-!
-!! simple_string contains various string manipulation subroutines and functions.
-!! Adapted from George Benthien's string module http://gbenthien.net/strings/str-index.html
-!!
-!! Modification and additions by Cyril Reboul, Michael Eager & Hans Elmlund
-!
-! The SIMPLE code is distributed with the hope that it will be
-! useful, but WITHOUT ANY WARRANTY. Redistribution and modification is regulated
-! by the GNU General Public License.
-! -----------------------------------------------------------------------------!
+! contains various string manipulation subroutines and functions
+! adapted from George Benthien's string module http://gbenthien.net/strings/str-index.html
+! modification and additions by Cyril Reboul, Michael Eager & Hans Elmlund
 module simple_strings
 use simple_defs ! singleton
 use, intrinsic :: iso_c_binding

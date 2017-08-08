@@ -1,15 +1,4 @@
-!------------------------------------------------------------------------------!
-! SIMPLE v3.0         Elmlund & Elmlund Lab          simplecryoem.com          !
-!------------------------------------------------------------------------------!
-!> simple_unblur
-!
-!! simple_unblur Attempts to remove EM artifacts in micrographs
-!
-! The code is distributed with the
-! hope that it will be useful, but _WITHOUT_ _ANY_ _WARRANTY_. Redistribution or
-! modification is regulated by the GNU General Public License.
-!
-!------------------------------------------------------------------------------!
+! unblur does motion correction, dose-weighting and frame-weighting of DDD movies 
 module simple_unblur
 !$ use omp_lib
 !$ use omp_lib_kinds
@@ -66,7 +55,8 @@ integer, parameter :: MITSREF    = 30 !< max nr iterations of refinement optimis
 real,    parameter :: SMALLSHIFT = 2. !< small initial shift to blur out fixed pattern noise
 
 contains
-    !> Unblur EM micrograph stacks
+
+    !> Unblur DDD movie
     subroutine unblur_movie( movie_stack_fname, p, corr, smpd_out, nsig )
         use simple_oris,        only: oris
         use simple_strings,     only: int2str
@@ -174,7 +164,8 @@ contains
         smpd_out = smpd_scaled
 
     contains
-        !> update resolution of movie
+
+            !> update resolution of movie
             !! \param  thres_corrfrac threshold corecction factor
             !! \param  thres_frac_improved threshold for fractional improvement
             subroutine update_res( thres_corrfrac, thres_frac_improved, which_update )
@@ -207,6 +198,7 @@ contains
             end subroutine update_res
 
     end subroutine unblur_movie
+
     !> Calulate stack sums 
     !! \param movie_sum movie stack sums
     !! \param movie_sum_corrected corrected movie stack sums
@@ -227,6 +219,7 @@ contains
         movie_sum = movie_sum_global
         call movie_sum%bwd_ft
     end subroutine unblur_calc_sums_1
+
     !> Calulate stack sums in range 
     !! \param fromto ranges to calc sum
     !! \param movie_sum_corrected corrected movie stack sums
@@ -243,6 +236,7 @@ contains
         call movie_sum_corrected%bwd_ft
         do_dose_weight = l_tmp
     end subroutine unblur_calc_sums_2
+
     !> Calulate stack sums per time frame
     !! \param movie_sum movie stack sums
     !! \param movie_sum_corrected corrected movie stack sums
@@ -265,6 +259,7 @@ contains
         movie_sum = movie_sum_global
         call movie_sum%bwd_ft
     end subroutine unblur_calc_sums_tomo
+
     !> Initialise unblur
     subroutine unblur_init( movie_stack_fname, p )
         use simple_jiffys, only: find_ldim_nptcls, alloc_err, progress
@@ -381,6 +376,7 @@ contains
         existence = .true.
         DebugPrint  'unblur_init, done'
     end subroutine unblur_init
+
     !> center_shifts
     !! \param shifts  2D origin shifts
     !!
@@ -397,6 +393,7 @@ contains
             if( abs(shifts(iframe,2)) < 1e-6 ) shifts(iframe,2) = 0.
         end do
     end subroutine center_shifts
+
     !> shift_frames
     !! \param shifts  2D origin shifts
     !!
@@ -436,6 +433,7 @@ contains
             call add_movie_frame(iframe)
         end do
     end subroutine calc_corrs
+
     !> corrmat2weight
     !!
     subroutine corrmat2weights()
@@ -453,6 +451,7 @@ contains
         !$omp end parallel do
         frameweights = corrs2weights(corrs)
     end subroutine corrmat2weights
+
     !> sum_movie_frames_ftexp
     !!
     subroutine sum_movie_frames_ftexp()
@@ -464,6 +463,7 @@ contains
             call movie_sum_global_ftexp%add(movie_frames_ftexp_sh(iframe), w=w)
         end do
     end subroutine sum_movie_frames_ftexp
+
     !> sum_movie_frames
     !! \param shifts 2D array of shifts for each frame
     !!
@@ -487,6 +487,7 @@ contains
         end do
         call frame_tmp%kill
     end subroutine sum_movie_frames
+
     !> wsum_movie_frames_ftexp
     !!
     subroutine wsum_movie_frames_ftexp()
@@ -497,6 +498,7 @@ contains
             &call movie_sum_global_ftexp%add(movie_frames_ftexp_sh(iframe), w=frameweights(iframe))
         end do
     end subroutine wsum_movie_frames_ftexp
+
     !> wsum_movie_frames
     !! \param shifts 
     !! \param fromto 
@@ -524,6 +526,7 @@ contains
             endif
         end do
     end subroutine wsum_movie_frames
+
     !> wsum movie frames tomo
     !! \param shifts 
     !! \param frame_counter 
@@ -552,6 +555,7 @@ contains
             endif
         end do
     end subroutine wsum_movie_frames_tomo
+
     !> add movie frame
     !! \param iframe frame index to insert
     !! \param w frame weight
@@ -565,6 +569,7 @@ contains
         if( frameweights(iframe) > 0. )&
         &call movie_sum_global_ftexp%add(movie_frames_ftexp_sh(iframe), w=ww)
     end subroutine add_movie_frame
+
     !> subtract_movie_frame
     !! \param iframe frame index to remove 
     !!
@@ -573,6 +578,7 @@ contains
         if( frameweights(iframe) > 0. )&
         &call movie_sum_global_ftexp%subtr(movie_frames_ftexp_sh(iframe), w=frameweights(iframe))
     end subroutine subtract_movie_frame
+    
     !> unblur_kill class destructor
     !!
     subroutine unblur_kill

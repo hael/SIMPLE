@@ -1,7 +1,4 @@
-!------------------------------------------------------------------------------!
-! SIMPLE v3.0         Elmlund & Elmlund Lab          simplecryoem.com          !
-!------------------------------------------------------------------------------!
-!> Simple optimisation module: common-line mode search
+! for common-lines-based search
 module simple_comlin_srch
 use simple_defs
 use simple_build,       only: build
@@ -43,6 +40,7 @@ real                      :: lp=0.            !< fixed low-pass limit
 real                      :: trs=0.           !< half shift range
 
 contains
+
     !> common-line mode search constructor
     subroutine comlin_srch_init( b, p, opt_str, mode )
         class(build),  target, intent(in) :: b           !< build object
@@ -102,12 +100,14 @@ contains
         integer :: nbestout
         nbestout = NBEST
     end function comlin_srch_get_nbest
+
     !> Write results of common-line mode search to file
     subroutine comlin_srch_write_resoris( fname, fromto )
         character(len=*) :: fname
         integer          :: fromto(2)
         call resoris%write(fname, fromto)
     end subroutine comlin_srch_write_resoris
+
     !> common-line mode search symmetry axis
     subroutine comlin_srch_symaxis( orientation_best, fromto )
         class(ori)           :: orientation_best
@@ -184,6 +184,7 @@ contains
             call orientation_best%print_ori()
         endif
     end subroutine comlin_srch_symaxis
+
     !> Calculate similarity between pairs
     function comlin_srch_pair() result( similarity )
         integer, allocatable :: order(:)
@@ -222,6 +223,7 @@ contains
         ! we are only interested in a similarity value, return best
         similarity = resoris%get(order(1), 'corr')
     end function comlin_srch_pair
+
     !> common-line mode search minimisation function
     function comlin_srch_minimize( otarget ) result( cxy )
         class(ori) :: otarget  !< orientation target
@@ -234,6 +236,7 @@ contains
         cxy(1)  = -cxy(1) ! correlation 
         cxy(2:) = ospec%x ! euler set
     end function comlin_srch_minimize
+
     !> Pair search minimisation
     function comlin_pairsrch_minimize( otarget ) result( cxy )
         class(ori) :: otarget
@@ -246,6 +249,7 @@ contains
         cxy(1)  = -cxy(1) ! correlation 
         cxy(2:) = ospec%x ! ori set
     end function comlin_pairsrch_minimize
+
     !> Common-line mode search cost function
     function comlin_srch_cost( vec, D ) result( cost )
         integer, intent(in)  :: D     !< size of parameter vector
@@ -274,6 +278,7 @@ contains
             bp%a = a_copy ! puts back unmodified oris
         endif
     end function comlin_srch_cost
+    
      !> Pair search cost function
     function comlin_pairsrch_cost( vec, D ) result( cost )
         integer, intent(in)  :: D   !< size of parameter vector

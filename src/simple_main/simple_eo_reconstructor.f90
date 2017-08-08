@@ -1,7 +1,4 @@
-!------------------------------------------------------------------------------!
-! SIMPLE v3.0         Elmlund & Elmlund Lab          simplecryoem.com          !
-!------------------------------------------------------------------------------!
-!> Simple image module: 3D volume reconstruction with EO
+! 3D reconstruction of even-odd pairs for FSC estimation
 module simple_eo_reconstructor
 use simple_defs
 use simple_reconstructor, only: reconstructor
@@ -479,6 +476,7 @@ contains
                     endif
                  endif
             end subroutine rec_dens
+            
     end subroutine eorec
 
     ! DESTRUCTOR

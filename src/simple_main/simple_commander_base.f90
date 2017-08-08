@@ -1,7 +1,4 @@
-!------------------------------------------------------------------------------!
-! SIMPLE v3.0         Elmlund & Elmlund Lab          simplecryoem.com          !
-!------------------------------------------------------------------------------!
-!> \brief Abstract module for commander classes
+! abstract commander
 module simple_commander_base
 implicit none
 

@@ -1,7 +1,4 @@
-!------------------------------------------------------------------------------!
-! SIMPLE v3.0         Elmlund & Elmlund Lab          simplecryoem.com          !
-!------------------------------------------------------------------------------!
-!> Simple batch-processing manager - control module
+! batch-processing manager - control module
 module simple_qsys_ctrl
 use simple_defs
 use simple_qsys_base, only: qsys_base

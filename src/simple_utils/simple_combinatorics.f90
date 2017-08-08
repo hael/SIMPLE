@@ -1,7 +1,4 @@
-!------------------------------------------------------------------------------!
-! SIMPLE v3.0         Elmlund & Elmlund Lab          simplecryoem.com          !
-!------------------------------------------------------------------------------!
-!> Simple combinatorics module
+! combinatorics module
 module simple_combinatorics
 use simple_rnd
 use simple_ran_tabu, only: ran_tabu

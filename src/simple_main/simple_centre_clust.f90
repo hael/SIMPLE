@@ -1,13 +1,4 @@
-!------------------------------------------------------------------------------!
-! SIMPLE v3.0         Elmlund & Elmlund Lab          simplecryoem.com          !
-!------------------------------------------------------------------------------!
-!> Simple class for centre-based clustering of feature vectors.
-! The code is distributed with the hope that it will be useful, but _WITHOUT_ _ANY_ _WARRANTY_.
-! Redistribution or modification is regulated by the GNU General Public License.
-! *Author:* Hans Elmlund, 2012-02-02.
-!
-!==Changes are documented below
-!
+! centre-based clustering of feature vectors using stochastic hill-climbing
 module simple_centre_clust
 use simple_oris,     only: oris
 use simple_jiffys,   only: alloc_err

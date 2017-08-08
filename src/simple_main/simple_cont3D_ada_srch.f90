@@ -1,7 +1,4 @@
-!------------------------------------------------------------------------------!
-! SIMPLE v3.0         Elmlund & Elmlund Lab          simplecryoem.com          !
-!------------------------------------------------------------------------------!
-!> Simple search class:  continous 3D ADA algorithm
+! continuous adaptive 3D orientation search
 module simple_cont3D_ada_srch
 use simple_defs
 use simple_params,           only: params

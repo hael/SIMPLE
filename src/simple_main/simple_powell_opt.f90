@@ -1,14 +1,4 @@
-!------------------------------------------------------------------------------!
-! SIMPLE v3.0         Elmlund & Elmlund Lab          simplecryoem.com          !
-!------------------------------------------------------------------------------!
-!> Simple optimisation module: Powell's direction optimisation
-!!
-!! Minimization of an externally defined function by Powell's direction set method
-!
-! The code is distributed with the hope that it will be useful, but _WITHOUT_
-! _ANY_ _WARRANTY_. Redistribution or modification is regulated by the GNU
-! General Public License. *Author:* Hans Elmlund, 2013-10-15
-!
+! continuous function optimisation by Powell's method of conjugate search directions
 module simple_powell_opt
 use simple_optimizer, only: optimizer
 use simple_opt_spec,  only: opt_spec

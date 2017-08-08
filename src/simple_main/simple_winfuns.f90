@@ -1,32 +1,4 @@
-!------------------------------------------------------------------------------!
-! SIMPLE v3.0         Elmlund & Elmlund Lab          simplecryoem.com          !
-!------------------------------------------------------------------------------!
-!> Simple math module:  windowing functions
-!
-!! the simple_winfuns provides interfaces and definitions for the
-!! window/instrument functions used in the SIMPLE library.
-! The code is distributed with the hope that it will be useful, but _WITHOUT_ _ANY_ _WARRANTY_. Redistribution
-! or modification is regulated by the GNU General Public License. *Author:* Hans Elmlund, 2013-08-12.
-!
-!==Changes are documented below
-!
-!! RELEVANT INFO:
-!! http://mathworld.wolfram.com/ApodizationFunction.html
-!!
-!! Jackson 1991, Least Relative Aliased Energy on a 1X grid
-!!           Gaussian Kaiser-Bessel
-!!             var       beta
-!! W=3       0.4241    1.9980
-!! W=4       0.4927    2.3934
-!! W=5       0.4839    3.3800
-!!
-!! Beatty 2005, 2X grid
-!!           Jackson   Beatty
-!!             beta     beta
-!! W=3        6.6875   6.4861
-!! W=4        9.1375   8.9962
-!! W=5       11.5250  11.4410
-!!
+! window functions for Fourier interpolation
 module simple_winfuns
 use simple_defs
 implicit none
@@ -389,42 +361,5 @@ contains
                 &y*(qs(4)+y*(qs(5)+y*(qs(6)+y*(qs(7)+y*(qs(8)+y*qs(9)))))))))
         endif
     end function bessi0
-
-    !>  \brief returns the modified Bessel function I0(x) for any real x
-    ! function bessi0(x) result(bess)
-    !     real, intent(in) :: x
-    !     real :: bess, ax
-    !     double precision :: p1,p2,p3,p4,p5,p6,p7,q1,q2,q3,q4,q5,q6,q7,q8,q9,y ! accumulate polynomials in double precision
-    !     save p1,p2,p3,p4,p5,p6,p7,q1,q2,q3,q4,q5,q6,q7,q8,q9
-    !     data p1,p2,p3,p4,p5,p6,p7/1.0d0,3.5156229d0,3.0899424d0,1.2067492d0,0.2659732d0,0.360768d-1,0.45813d-2/
-    !     data q1,q2,q3,q4,q5,q6,q7,q8,q9/0.39894228d0,0.1328592d-1,0.225319d-2,-0.157565d-2,0.916281d-2,&
-    !     -0.2057706d-1,0.2635537d-1,-0.1647633d-1,0.392377d-2/
-    !     if( abs(x) .lt. 3.75 )then
-    !         y = x/3.75
-    !         y = y*y
-    !         bess = p1+y*(p3+y*(p4+y*(p5+y*(p6+y*p7))))
-    !     else
-    !         ax = abs(x)
-    !         y = 3.75/ax
-    !         bess = (exp(ax)/sqrt(ax))*(q1+y*(q2+y*(q3+y*(q4+y*(q5+y*(q6+y*(q7+y*(q8+y*q9))))))))
-    !     endif
-    ! end function
-
-    !>  \brief returns the modified Bessel function I0(x) for positive real x
-    ! function bessk0(x) result(bess)
-    !     real, intent(in) :: x
-    !     real :: bess
-    !     double precision :: p1,p2,p3,p4,p5,p6,p7,q1,q2,q3,q4,q5,q6,q7,y ! accumulate polynomials in double precision
-    !     save p1,p2,p3,p4,p5,p6,p7,q1,q2,q3,q4,q5,q6,q7
-    !     data p1,p2,p3,p4,p5,p6,p7/-0.57721566d0,0.42278420d0,0.23069756d0,0.3488590d-1,0.262698d-2,0.10750d-3,0.74d-5/
-    !     data q1,q2,q3,q4,q5,q6,q7/1.25331414d0,-0.7832358d-1,0.2189568d-1,-0.1062446d-1,0.587872d-2,-0.251540d-2,0.53208d-3/
-    !     if( x .le. 2.0 )then ! polynomial fit
-    !         y = x*x/4.0
-    !         bess = (-log(x/2.0)*bessi0(x))+(p1+y*(p2+y*(p3+y*(p4+y*(p5+y*(p6+y*p7))))))
-    !     else
-    !         y = (2.0/x)
-    !         bess = (exp(-x)/sqrt(x))*(q1+y*(q2+y*(q3+y*(q4+y*(q5+y*(q6+y*(q7)))))))
-    !     endif
-    ! end function
 
 end module simple_winfuns

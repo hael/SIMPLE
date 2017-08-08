@@ -1,13 +1,6 @@
-!> simple_testfuns singleton provides 20 mathematical test functions for
-!> evaluating unconstrained optimization procedures. 1-9 are generalized test
-!> functions (of arbitrary dimension) whereas functions 10-20 are
-!> two-dimensional test functions.
-!
-! The code is distributed with the hope that it will be useful, but _WITHOUT_ _ANY_ _WARRANTY_.
-! Redistribution or modification is regulated by the GNU General Public License.
-! *Author:* Hans Elmlund, 2014-01-07.
-!
-!==Changes are documented below
+! provides 20 mathematical test functions for evaluating unconstrained optimization procedures. 
+! 1-9 are generalized test functions (of arbitrary dimension) whereas functions 10-20 are
+! two-dimensional test functions.
 !
 !! RELEVANT INFO:
 !! http://en.wikipedia.org/wiki/Test_functions_for_optimization

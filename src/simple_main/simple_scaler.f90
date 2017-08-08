@@ -1,7 +1,4 @@
-!------------------------------------------------------------------------------!
-! SIMPLE v3.0         Elmlund & Elmlund Lab          simplecryoem.com          !
-!------------------------------------------------------------------------------!
-!> Simple module for scaling images or stacks
+! downscaling of image stacks
 module simple_scaler
 use simple_cmdline, only: cmdline
 use simple_defs     ! use all in there

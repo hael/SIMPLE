@@ -1,28 +1,14 @@
-!------------------------------------------------------------------------------!
-! SIMPLE v3.0         Elmlund & Elmlund Lab          simplecryoem.com          !
-!------------------------------------------------------------------------------!
-!> \brief Simple class to deal with image files on disks
-!!
-!!  The following file formats are (will be) supported:
-!!  - Imagic: http://imagescience.de/formats/index.htm
-!!  - Spider: http://www.wadsworth.org/spider_doc/spider/docs/image_doc.html
-!!  - MRC: http://www2.mrc-lmb.cam.ac.uk/image2000.html
-!!
-!! This class is based on a class used in CTFFIND4, developed by Alexis Rohou
-!! and Nikolaus Grigorieff at Janelia Farm. The below copyright statement therefore
-!! needs to be included here:
-!! Copyright 2014 Howard Hughes Medical Institute
-!! All rights reserved
-!! Use is subject to Janelia Farm Research Campus Software Copyright 1.1
-!! license terms ( http://license.janelia.org/license/jfrc_copyright_1_1.html )
-!!
-!! Modifications by Cyril Reboul, Michael Eager & Hans Elmlund
-!!
-! The SIMPLE code is distributed with the hope that it will be
-! useful, but WITHOUT ANY WARRANTY. Redistribution and modification is regulated
-! by the GNU General Public License.
-! -----------------------------------------------------------------------------!
-
+! class to deal with image files on disks. Supported formats are:
+!  - Spider: http://www.wadsworth.org/spider_doc/spider/docs/image_doc.html
+!  - MRC: http://www2.mrc-lmb.cam.ac.uk/image2000.html
+! This class is based on a class used in CTFFIND4, developed by Alexis Rohou
+! and Nikolaus Grigorieff at Janelia Farm. The below copyright statement therefore
+! needs to be included here:
+! Copyright 2014 Howard Hughes Medical Institute
+! All rights reserved
+! Use is subject to Janelia Farm Research Campus Software Copyright 1.1
+! license terms ( http://license.janelia.org/license/jfrc_copyright_1_1.html )
+! Modifications by Cyril Reboul, Michael Eager & Hans Elmlund
 module simple_imgfile
     use simple_defs
     use simple_filehandling
@@ -115,10 +101,6 @@ contains
         DebugPrint   'format: ', self%head_format
         ! Allocate head object
         select case(self%head_format)
-            case('F')
-                allocate(MrcFeiImgHead :: self%overall_head)
-                DebugPrint   ' allocated MrcFeiImgHead'
-                call self%overall_head%new(ldim)
             case ('M')
                 allocate(MrcImgHead :: self%overall_head)
                 DebugPrint   ' allocated MrcImgHead'
@@ -260,8 +242,6 @@ contains
         select type(ptr)
             type is (MrcImgHead)
                 stop 'Cannot translate an image index to record indices for MRC files; slice2recpos; simple_imgfile'
-            type is (MrcFeiImgHead)
-                stop 'Cannot translate an image index to record indices for MRC files; slice2recpos; simple_imgfile'
             type is (SpiImgHead)
                 cnt = self%overall_head%getLabrec()
                 dims = self%overall_head%getDims()
@@ -353,8 +333,6 @@ contains
             select type(ptr)
                 type is (MrcImgHead)
                     call head%new
-                type is (MrcFeiImgHead)
-                    call head%new
                 type is (SpiImgHead)
                     if( present(ldim) )then
                         call head%new(ldim=ldim)
@@ -373,8 +351,6 @@ contains
         else
             select type(ptr)
                 type is (MrcImgHead)
-                    stop 'Individual images in MRC stacks do not have associated headers; rHead; simple_imgfile'
-                type is (MrcFeiImgHead)
                     stop 'Individual images in MRC stacks do not have associated headers; rHead; simple_imgfile'
                 type is (SpiImgHead)
                     call self%slice2bytepos(slice, hedbyteinds, imbyteinds)
@@ -416,8 +392,6 @@ contains
             ptr => self%overall_head
             select type(ptr)
                 type is (MrcImgHead)
-                    stop 'Individual images in MRC stacks do not have associated headers; wHead; simple_imgfile'
-                type is (MrcFeiImgHead)
                     stop 'Individual images in MRC stacks do not have associated headers; wHead; simple_imgfile'
                 type is (SpiImgHead)
                     call self%slice2bytepos(slice, hedbyteinds, imbyteinds)
@@ -474,8 +448,6 @@ contains
                 ! Get the dims of the image file
                 dims = self%overall_head%getDims()
                 DebugPrint  '(rwSlices :: simple_imgfile) dims gotten from overall_head: ', dims(1), dims(2), dims(3)
-            type is (MrcFeiImgHead)
-                ! all good
             type is (SpiImgHead)
                 if( self%isvol )then
                     ! all good
@@ -505,8 +477,6 @@ contains
                         dims(3) = max(last_slice,dims(3))
                         DebugPrint  '(rwSlices :: simple_imgfile) dims set in overall_head: ', dims(1), dims(2), dims(3)
                         call self%overall_head%setDims(dims)
-                    type is (MrcFeiImgHead)
-                        ! nothing to do
                     type is (SpiImgHead)
                         ! Since we need to know the image dimensions in order to create a SPIDER
                         ! file-handler there is no point in redefining the file dims. We should check that
@@ -619,12 +589,6 @@ contains
             if( present(read_failure) )then
                 read_failure = .false.
                 return
-            endif
-            if( self%head_format .eq. 'M' .or. self%head_format .eq. 'F' )then
-                ! Is this file from a machine with opposite endinaness?
-                if( .not. self%overall_head%hasLocalEndianess() )then
-                    stop 'Files created by machines with the opposite endianess are not supported; rwSlices; simple_imgfile'
-                endif
             endif
         else
             ! find minmax

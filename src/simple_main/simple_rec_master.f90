@@ -1,7 +1,4 @@
-!------------------------------------------------------------------------------!
-! SIMPLE v3.0         Elmlund & Elmlund Lab          simplecryoem.com          !
-!------------------------------------------------------------------------------!
-!> simple module: image reconstruction
+! 3D reconstruction - master module
 module simple_rec_master
 use simple_defs
 use simple_build,     only: build
@@ -15,7 +12,6 @@ implicit none
 public :: exec_rec_master
 private
 #include "simple_local_flags.inc"
-
 
 contains
 

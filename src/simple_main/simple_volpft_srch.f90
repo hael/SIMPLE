@@ -1,7 +1,4 @@
-!------------------------------------------------------------------------------!
-! SIMPLE v3.0         Elmlund & Elmlund Lab          simplecryoem.com          !
-!------------------------------------------------------------------------------!
-!> Simple optimisation module: volume correllation search
+! volume alignment based on band-pass limited cross-correlation
 module simple_volpft_srch
 use simple_opt_spec,        only: opt_spec
 use simple_pftcc_opt,       only: pftcc_opt
@@ -24,6 +21,7 @@ integer                         :: nrestarts = 3        !< simplex restarts (ran
 logical                         :: serial = .true.      !< controls shared-mem parallellization of corr calc
 
 contains
+
     !> Initialise  volume correllation search
     subroutine volpft_srch_init( vol_ref, vol_target, hp, lp, nrestarts_in )
         use simple_projector, only: projector
@@ -47,6 +45,7 @@ contains
         ! generate the simplex optimizer object 
         call nlopt%new(ospec)
     end subroutine volpft_srch_init
+    
     !> Cost-function of  volume correllation search
     function volpft_srch_costfun( vec, D ) result( cost )
         use simple_ori, only: ori

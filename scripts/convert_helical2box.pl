@@ -1,6 +1,8 @@
 #!/usr/bin/perl
+
 use warnings;
 use strict;
+
 if( scalar(@ARGV) < 2 ){
   die "Please input (1) filename of table of helical parameter files and (2) box size\n";
 }

@@ -1,7 +1,4 @@
-!------------------------------------------------------------------------------!
-! SIMPLE v3.0         Elmlund & Elmlund Lab          simplecryoem.com          !
-!------------------------------------------------------------------------------!
-!> Simple map reduce module:  distributed resource allocation
+! routines for distributed SIMPLE execution
 module simple_map_reduce
 use simple_defs
 use simple_strings,      only: int2str, int2str_pad

@@ -1,12 +1,5 @@
-!------------------------------------------------------------------------------!
-! SIMPLE v3.0         Elmlund & Elmlund Lab          simplecryoem.com          !
-!------------------------------------------------------------------------------!
-!> simple optimisation module: Simplex optimisation on pft correlations
-!
-!! Minimization of an externally defined function by the simplex method of Nelder and Mead
-! The code is distributed with the hope that it will be useful, but _WITHOUT_ _ANY_ _WARRANTY_.
-! Redistribution or modification is regulated by the GNU General Public License.
-! *Author:* Hans Elmlund, 2013-10-15
+! The Nelder-Mead simplex method for continuous function minimisation
+! with cost function defined in classes that extend pftcc_opt
 module simple_simplex_pftcc_opt
 use simple_pftcc_opt, only: pftcc_opt
 implicit none

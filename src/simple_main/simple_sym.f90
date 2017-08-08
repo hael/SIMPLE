@@ -1,14 +1,4 @@
-!------------------------------------------------------------------------------!
-! SIMPLE v3.0         Elmlund & Elmlund Lab          simplecryoem.com          !
-!------------------------------------------------------------------------------!
-!> Simple orientation module for symmetry adaption
-!
-! The code is distributed with the hope that it will be useful,
-! but _WITHOUT_ _ANY_ _WARRANTY_. Redistribution or modification is regulated by the GNU General Public
-! License. *Author:* Hans Elmlund, 2009-05-12.
-!
-!==Changes are documented below
-!
+! defines protein point-group symmetries
 module simple_sym
 use simple_defs
 use simple_oris,   only: oris
@@ -243,6 +233,7 @@ contains
         deallocate(pgrps)
 
         contains
+
             function fmtsymstr( symtype, iord )result( ostr )
                 integer, intent(in)           :: iord     !< order index
                 character(len=1), intent(in)  :: symtype  !< symmetry
@@ -405,6 +396,7 @@ contains
         character(len=*), intent(in) :: orifile  !< output filename
         call self%e_sym%write(orifile)
     end subroutine write
+    
     !>  apply symmetry orientations with shift
     subroutine apply_sym_with_shift( self, os, symaxis_ori, shvec, state )
         use simple_ori, only: ori

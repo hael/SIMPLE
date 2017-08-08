@@ -1,7 +1,4 @@
-!------------------------------------------------------------------------------!
-! SIMPLE v3.0         Elmlund & Elmlund Lab          simplecryoem.com          !
-!------------------------------------------------------------------------------!
-!> Simple optimisation method: Basic search of pftcc objects
+! continuous 3D alignment of band-pass limited polar projections in the Fourier domain
 module simple_pftcc_srch
 use simple_opt_spec,          only: opt_spec
 use simple_pftcc_opt,         only: pftcc_opt

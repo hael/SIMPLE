@@ -1,18 +1,4 @@
-!------------------------------------------------------------------------------!
-! SIMPLE v3.0         Elmlund & Elmlund Lab          simplecryoem.com          !
-!------------------------------------------------------------------------------!
-!> Simple module: runtime polymorphic singly linked list class.
-!!
-!! \author Dominika Elmlund, 2009-05-25.
-!!
-!==Changes are documented below
-!!
-!* incorporated in the _SIMPLE_ library, HE 2009-06-25
-!
-! The SIMPLE code is distributed with the hope that it will be
-! useful, but WITHOUT ANY WARRANTY. Redistribution and modification is regulated
-! by the GNU General Public License.
-! -----------------------------------------------------------------------------!
+! runtime polymorphic singly linked list class
 module simple_sll
 use simple_defs
 use simple_arr, only: arr

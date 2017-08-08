@@ -1,21 +1,4 @@
-!------------------------------------------------------------------------------!
-! SIMPLE v3.0         Elmlund & Elmlund Lab          simplecryoem.com          !
-!------------------------------------------------------------------------------!
-!>simple_params
-!
-!! simple_params provides global distribution of constants and derived constants
-!! used in the SIMPLE library.
-!
-! The code is distributed with the hope that it will be useful, but _WITHOUT_
-! _ANY_ _WARRANTY_. Redistribution or modification is regulated by the GNU
-! General Public License.
-!
-! *Author:* Hans Elmlund, 2011-08-18.
-!
-!==Changes are documented below
-!
-!* rewrote as a proper class, HE June 7 2012
-!
+! provides global distribution of constants and derived constants
 module simple_params
 use simple_defs
 use simple_ori,         only: ori

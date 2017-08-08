@@ -1,13 +1,11 @@
-!------------------------------------------------------------------------------!
-! SIMPLE v3.0         Elmlund & Elmlund Lab          simplecryoem.com          !
-!------------------------------------------------------------------------------!
-!> Simple orientation cluster module
+! high-level clustering module
 module simple_clusterer
 use simple_defs
 implicit none
 
 contains
 
+    ! routine for SHC-based clustering of orientation based on Geodesic distance
     subroutine shc_cluster_oris( os, ncls )
         use simple_shc_cluster, only: shc_cluster
         use simple_oris,        only: oris

@@ -1,18 +1,4 @@
-
-!------------------------------------------------------------------------------!
-! SIMPLE v3.0         Elmlund & Elmlund Lab          simplecryoem.com          !
-!------------------------------------------------------------------------------!
-!> Simple math module: statistics utility functions
-!
-!! simple_stat contains various statistical subroutines and functions.
-!! \author Cyril Reboul & Hans Elmlund
-!!
-
-!
-! The SIMPLE code is distributed with the hope that it will be
-! useful, but WITHOUT ANY WARRANTY. Redistribution and modification is regulated
-! by the GNU General Public License.
-! -----------------------------------------------------------------------------!
+! statistics utility functions
 module simple_stat
 use simple_defs ! singleton
 use simple_math, only: hpsort

@@ -1,15 +1,4 @@
-!> simple optimisation module: simulated annealing
-!!
-!! simple_sa_opt performs cobinatorial minimization of an externally defined
-!! function by simulated annealing
-! The code is distributed with the hope that it will be useful, but _WITHOUT_ _ANY_ _WARRANTY_.
-! Redistribution or modification is regulated by the GNU General Public License.
-! *Author:* Hans Elmlund, 2009-05-25.
-!
-!==Changes are documented below
-!
-!* incorporated in the _SIMPLE_ library, HE 2009-06-25
-!
+! combinatorial optimisation by simulated annealing
 module simple_sa_opt
 use simple_optimizer, only: optimizer
 use simple_ran_tabu,  only: ran_tabu
@@ -46,6 +35,7 @@ end type sa_opt
 
 !>  \brief  defines the function interfaces
 abstract interface
+
     !> Template for cost minimisation/maximisation function of optimisation
     !! \param vec solution vector
     !! \param i index
@@ -57,14 +47,17 @@ abstract interface
         integer, intent(in) :: N, L, vec(N,L), i
         real                :: cost
     end function costfun
+
     !> Template for completion function of optimisation
     subroutine acceptfun( vec, i, L )
         integer, intent(in) :: L, vec(L), i
     end subroutine acceptfun
+
     !< Template for current state of optimisation
     subroutine statefun( T, Tinit )
         real, intent(in) :: T, Tinit !< state variables
     end subroutine
+    
 end interface
 
 interface sa_opt

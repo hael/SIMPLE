@@ -181,7 +181,6 @@ contains
     end subroutine setup_testenv
 
     subroutine test_prep4srch
-        use simple_prime_srch, only: prime_srch
         type(ori) :: o, o_saved
         real      :: e3, shvec(2), x, y
         integer   :: nrefs, nrots, ind,i, state, proj
@@ -214,7 +213,6 @@ contains
     end subroutine test_prep4srch
 
     subroutine test_prepcorr4srch
-        use simple_prime_srch, only: prime_srch
         use simple_rnd,        only: ran3
         type(ori) :: o
         real      :: prev_corr, corr

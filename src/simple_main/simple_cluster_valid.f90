@@ -1,7 +1,4 @@
-!------------------------------------------------------------------------------!
-! SIMPLE v3.0         Elmlund & Elmlund Lab          simplecryoem.com          !
-!------------------------------------------------------------------------------!
-!> Simple cluster search module
+! cluster validation
 module simple_cluster_valid
     use simple_defs
     use simple_jiffys, only: alloc_err

@@ -1,7 +1,4 @@
-!------------------------------------------------------------------------------!
-! SIMPLE v3.0         Elmlund & Elmlund Lab          simplecryoem.com          !
-!------------------------------------------------------------------------------!
-!> Simple image ops module: common-line correlation
+! for calculation of common-line correlations
 module simple_comlin
 use simple_defs    ! use all in there
 use simple_image,  only: image

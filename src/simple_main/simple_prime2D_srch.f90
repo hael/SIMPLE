@@ -1,13 +1,8 @@
-!------------------------------------------------------------------------------!
-! SIMPLE v3.0         Elmlund & Elmlund Lab          simplecryoem.com          !
-!------------------------------------------------------------------------------!
-!> Simple search module: Prime2D method
-!!
+! PRIME2D stochastic search routines
 module simple_prime2D_srch
 use simple_polarft_corrcalc, only: polarft_corrcalc
 use simple_pftcc_inplsrch,   only: pftcc_inplsrch
 use simple_pftcc_bfacsrch,   only: pftcc_bfacsrch
-use simple_prime_srch,       only: prime_srch
 use simple_oris,             only: oris
 use simple_defs              ! use all in there
 use simple_math              ! use all in there

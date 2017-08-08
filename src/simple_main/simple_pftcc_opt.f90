@@ -1,7 +1,4 @@
-!------------------------------------------------------------------------------!
-! SIMPLE v3.0         Elmlund & Elmlund Lab          simplecryoem.com          !
-!------------------------------------------------------------------------------!
-!> Simple optimisation method: generic polar Fourier cross-correlation optimisation
+! abstract polar Fourier cross-correlation optimisation class
 module simple_pftcc_opt
 implicit none
 

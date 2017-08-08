@@ -1,12 +1,4 @@
-!------------------------------------------------------------------------------!
-! SIMPLE v3.0         Elmlund & Elmlund Lab          simplecryoem.com          !
-!------------------------------------------------------------------------------!
-!> simple_jiffys provides jiffys.
-!
-! The SIMPLE code is distributed with the hope that it will be
-! useful, but WITHOUT ANY WARRANTY. Redistribution and modification is regulated
-! by the GNU General Public License.
-! -----------------------------------------------------------------------------!
+! jiffy =  the time it takes light to travel one centimeter in vacuum
 module simple_jiffys
 use simple_defs         ! singleton
 use simple_filehandling ! singleton
@@ -15,11 +7,14 @@ implicit none
 interface assert_eq
     module procedure assert_eq_2,assert_eq_3,assert_eq_4,assert_eq_n
 end interface assert_eq
+
 interface swap
     module procedure swap_i,swap_r,swap_rv,swap_c, swap_cv,swap_cm,&
     &masked_swap_rs,masked_swap_rv,masked_swap_rm
 end interface swap
+
 contains
+
     ! FILE-HANDLING JIFFYS
     !>  \brief  is for finding logical dimension and number of particles in stack
     subroutine find_ldim_nptcls( fname, ldim, nptcls, doprint, formatchar, endconv )
@@ -85,7 +80,7 @@ contains
 
     !>  \brief is for gettign a part of the info in a MRC image header
     subroutine get_mrcfile_info( fname, ldim, form, smpd, doprint )
-        use simple_imghead, only: ImgHead, MrcImgHead, MrcFeiImgHead
+        use simple_imghead, only: ImgHead, MrcImgHead
         character(len=*), intent(in)  :: fname
         character(len=1), intent(in)  :: form
         integer,          intent(out) :: ldim(3)

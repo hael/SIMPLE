@@ -1,12 +1,4 @@
-!------------------------------------------------------------------------------!
-! SIMPLE v3.0 Elmlund & Elmlund Lab simplecryoem.com !
-!------------------------------------------------------------------------------!
-!> Simple filehandling class
-!
-! The code is distributed with the hope that it will be useful, but WITHOUT ANY
-! WARRANTY. Redistribution and modification is regulated by the GNU General
-! Public License.
-!-----------------------------------------------------------------------------!
+! generic filehandling class
 module simple_filehandling
 use simple_defs
 implicit none

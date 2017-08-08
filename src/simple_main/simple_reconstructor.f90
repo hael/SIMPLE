@@ -1,7 +1,4 @@
-!------------------------------------------------------------------------------!
-! SIMPLE v3.0         Elmlund & Elmlund Lab          simplecryoem.com          !
-!------------------------------------------------------------------------------!
-!> Simple class for particle reconstruction
+! 3D reconstruction from projections using convolution interpolation (gridding)
 module simple_reconstructor
 !$ use omp_lib
 !$ use omp_lib_kinds
@@ -171,7 +168,8 @@ contains
         endif
         close(unit=filnum)
     end subroutine write_rho
-    !> Read reconstructed image
+
+    !> Read sampling density matrix
     subroutine read_rho( self, kernam )
         use simple_filehandling, only: get_fileunit, fopen_err
         class(reconstructor), intent(inout) :: self !< this instance
@@ -272,7 +270,8 @@ contains
             if( self%tfneg ) tval = -tval
         endif
     end subroutine calc_tfun_vals
-    !> Process reconstruction inout mode
+
+    !> insert or uninsert Fourier plane
     subroutine inout_fplane( self, o, inoutmode, fpl, pwght, mul )
         use simple_math, only: hyp
         use simple_ori,  only: ori

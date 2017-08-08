@@ -1,18 +1,4 @@
-!------------------------------------------------------------------------------!
-! SIMPLE v3.0         Elmlund & Elmlund Lab          simplecryoem.com          !
-!------------------------------------------------------------------------------!
-!> Simple commander module: common-line commander
-!!
-!! This class contains the set of concrete common-lines commanders of the SIMPLE
-!! library. This class provides the glue between the reciver (main reciever is
-!! simple_exec program) and the abstract action, which is simply execute
-!! (defined by the base class: simple_commander_base). Later we can use the
-!! composite pattern to create MacroCommanders (or workflows)
-!
-! The code is distributed with the hope that it will be useful, but _WITHOUT_ _ANY_ _WARRANTY_.
-! Redistribution and modification is regulated by the GNU General Public License.
-! *Authors:* Cyril Reboul & Hans Elmlund 2016
-!
+! concrete commander: common-lines based clustering and search
 module simple_commander_comlin
 use simple_defs
 use simple_cmdline,        only: cmdline
@@ -26,7 +12,9 @@ implicit none
 public :: comlin_smat_commander
 public :: symsrch_commander
 private
+
 #include "simple_local_flags.inc"
+
 type, extends(commander_base) :: comlin_smat_commander
   contains
     procedure :: execute      => exec_comlin_smat
@@ -37,7 +25,8 @@ type, extends(commander_base) :: symsrch_commander
 end type symsrch_commander
 
 contains
-!> comlin_smat commander for common-line search
+
+    ! calculates a similarity matrix based on common line correlations to measure 3D similarity of 2D images
     subroutine exec_comlin_smat( self, cline )
         use simple_comlin_srch   ! use all in there
         use simple_ori,          only: ori
@@ -141,6 +130,7 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_COMLIN_SMAT NORMAL STOP ****')
     end subroutine exec_comlin_smat
+    
     !> symsrch commander for symmetry searching
     !! is a program for searching for the principal symmetry axis of a volume
     !! reconstructed without assuming any point-group symmetry. The program

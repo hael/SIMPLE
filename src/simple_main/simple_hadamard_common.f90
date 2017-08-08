@@ -1,7 +1,4 @@
-!------------------------------------------------------------------------------!
-! SIMPLE v3.0         Elmlund & Elmlund Lab          simplecryoem.com          !
-!------------------------------------------------------------------------------!
-!> Simple Hadamard module: Generic Prime 2D/3D search module
+! common PRIME2D/PRIME3D routines used primarily by the Hadamard matchers
 module simple_hadamard_common
 use simple_defs
 use simple_cmdline,      only: cmdline

@@ -1,9 +1,4 @@
-!------------------------------------------------------------------------------!
-! SIMPLE v3.0         Elmlund & Elmlund Lab          simplecryoem.com          !
-!------------------------------------------------------------------------------!
-!> Simple commander module:  stream-based workflow interface
-!! Pre-process single-particle ddds in streaming mode
-!!
+! concrete commander: stream processing routines
 module simple_commander_stream_wflows
 use simple_defs
 use simple_filehandling       ! use all in there

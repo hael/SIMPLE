@@ -1,7 +1,4 @@
-!------------------------------------------------------------------------------!
-! SIMPLE v3.0         Elmlund & Elmlund Lab          simplecryoem.com          !
-!------------------------------------------------------------------------------!
-!> Simple class convergence
+! for checking convergence
 module simple_convergence
 use simple_oris,     only: oris
 use simple_params,   only: params
@@ -260,7 +257,7 @@ contains
                 write(*,'(A,1X,F7.1)') '>>> AVERAGE ANGULAR DISTANCE BTW ORIS: ', self%dist
                 write(*,'(A,1X,F7.1)') '>>> PERCENTAGE OF SEARCH SPACE SCANNED:', self%frac
                 write(*,'(A,1X,F7.4)') '>>> CORRELATION:                       ', self%corr
-                write(*,'(A,1X,F7.2)') '>>> ANGULAR SDEV OF MODEL:             ', self%sdev                ! determine convergence
+                write(*,'(A,1X,F7.2)') '>>> ANGULAR SDEV OF MODEL:             ', self%sdev
                 if( self%pp%nstates == 1 )then
                     if( (self%mi_proj > MI_CLASS_LIM_3D) .and.&
                         &( self%frac  >  FRAC_LIM) )then

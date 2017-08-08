@@ -1,7 +1,4 @@
-!------------------------------------------------------------------------------!
-! SIMPLE v3.0         Elmlund & Elmlund Lab          simplecryoem.com          !
-!------------------------------------------------------------------------------!
-!> Simple batch-processing manager - base module
+! batch-processing manager - abstract interface
 module simple_qsys_base
 implicit none
 

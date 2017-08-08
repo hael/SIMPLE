@@ -1,13 +1,4 @@
-!------------------------------------------------------------------------------!
-! SIMPLE v3.0         Elmlund & Elmlund Lab          simplecryoem.com          !
-!------------------------------------------------------------------------------!
-!> simple_kmeans is the SIMPLE class for k-means refinement of the clustering solution in o.
-! The code is distributed with the hope that it will be useful, but _WITHOUT_ _ANY_ _WARRANTY_.
-! Redistribution or modification is regulated by the GNU General Public License.
-! *Author:* Hans Elmlund, 2012-02-02.
-!
-!==Changes are documented below
-!
+! k-means clustering of feature vectors
 module simple_kmeans
 use simple_oris,   only: oris
 use simple_jiffys, only: alloc_err

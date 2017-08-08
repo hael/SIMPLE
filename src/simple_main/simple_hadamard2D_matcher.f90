@@ -1,7 +1,4 @@
-!------------------------------------------------------------------------------!
-! SIMPLE v3.0         Elmlund & Elmlund Lab          simplecryoem.com          !
-!------------------------------------------------------------------------------!
-!> Simple Hadamard module: Prime2D method 
+! projection-matching based on Hadamard products, high-level search routines for PRIME2D
 module simple_hadamard2D_matcher
 !$ use omp_lib
 !$ use omp_lib_kinds

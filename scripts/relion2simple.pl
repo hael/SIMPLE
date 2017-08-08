@@ -1,6 +1,8 @@
 #!/usr/bin/perl
+
 use warnings;
 use Tie::File;
+
 if( scalar(@ARGV) < 1 ){
   die "Need *star file input on command line\n";
 }

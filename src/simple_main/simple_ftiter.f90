@@ -1,7 +1,4 @@
-!------------------------------------------------------------------------------!
-! SIMPLE v3.0         Elmlund & Elmlund Lab          simplecryoem.com          !
-!------------------------------------------------------------------------------!
-!>  \brief  SIMPLE Fourier iterator class
+! Fourier index iterator
 module simple_ftiter
 use simple_defs
 implicit none

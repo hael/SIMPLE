@@ -1,14 +1,4 @@
-!------------------------------------------------------------------------------!
-! SIMPLE v3.0         Elmlund & Elmlund Lab          simplecryoem.com          !
-!------------------------------------------------------------------------------!
-!>  \brief Simple image header recorder class
-!! Records are contained in image headers. Each contains a piece of information
-!! regarding the image file.
-!
-! The SIMPLE code is distributed with the hope that it will be
-! useful, but WITHOUT ANY WARRANTY. Redistribution and modification is regulated
-! by the GNU General Public License.
-! -----------------------------------------------------------------------------!
+! image file header class
 module simple_imgheadrec
 use simple_defs
 implicit none
@@ -23,16 +13,16 @@ type :: imgheadrec
     integer                  :: byte_position           !<  the position of the first byte of the record within the header.
     integer(kind=1), pointer :: byte_array(:) => null() !<  pointer to the array of bytes containing the actual header values
 contains
-   procedure ::  new
-   procedure ::  kill
+    procedure :: new
+    procedure :: kill
 end type imgheadrec
 
 type, extends(imgheadrec) :: int_imgheadrec
 contains
-    procedure, private ::  getIntg
-    procedure          ::  get => getIntg
-    procedure, private ::  setIntg
-    generic            ::  assignment(=) => setIntg
+    procedure, private :: getIntg
+    procedure          :: get => getIntg
+    procedure, private :: setIntg
+    generic            :: assignment(=) => setIntg
 end type int_imgheadrec
 
 type, extends(imgheadrec) :: real_imgheadrec
@@ -57,9 +47,9 @@ interface imgrec
 end interface imgrec
 
 interface assignment(=)
-    module procedure  getIntgAssign
-    module procedure  getRealAssign
-    module procedure  getCharAssign
+    module procedure getIntgAssign
+    module procedure getRealAssign
+    module procedure getCharAssign
 end interface
 
 contains

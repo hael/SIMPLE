@@ -1,7 +1,4 @@
-!------------------------------------------------------------------------------!
-! SIMPLE v3.0         Elmlund & Elmlund Lab          simplecryoem.com          !
-!------------------------------------------------------------------------------!
-!>  Simple image module: estimation routines for 2D analysis
+! spectral signal-to-noise ratio estimation routines
 module simple_estimate_ssnr
 use simple_defs
 use simple_image, only: image

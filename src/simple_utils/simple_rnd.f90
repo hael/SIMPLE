@@ -1,13 +1,4 @@
-!> Simple random number generation module
-!
-! simple_rnd contains routines for generation of random numbers. The code is distributed
-! with the hope that it will be useful, but _WITHOUT_ _ANY_ _WARRANTY_. Redistribution
-! or modification is regulated by the GNU General Public License. *Author:* Hans Elmlund, 2009-05-12.
-!
-!==Changes are documented below
-!
-!* incorporated in the _SIMPLE_ library, HE 2009-06-25
-!
+! random number generation module
 module simple_rnd
 use simple_defs ! singleton
 use simple_jiffys, only: alloc_err

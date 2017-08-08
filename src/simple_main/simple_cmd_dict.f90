@@ -1,7 +1,4 @@
-!------------------------------------------------------------------------------!
-! SIMPLE v3.0         Elmlund & Elmlund Lab          simplecryoem.com          !
-!------------------------------------------------------------------------------!
-!> Simple command dictionary module
+! command line dictonary
 module simple_cmd_dict
 use simple_chash, only: chash
 use simple_defs

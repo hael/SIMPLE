@@ -1,15 +1,4 @@
-!------------------------------------------------------------------------------!
-! SIMPLE v3.0         Elmlund & Elmlund Lab          simplecryoem.com          !
-!------------------------------------------------------------------------------!
-!> Simple math module: a class for probabilistic principal component analysis.
-!! This code should be able to deal with many millions of particle images.
-!
-! The code is distributed with the hope that it will be useful, but _WITHOUT_
-! _ANY_ _WARRANTY_. Redistribution or modification is regulated by the
-! GNU General Public License. *Author:* Hans Elmlund, 2011-09-03.
-!
-!==Changes are documented below
-!
+! probabilistic PCA
 module simple_ppca
 use simple_defs
 use simple_jiffys, only: alloc_err

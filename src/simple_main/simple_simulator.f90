@@ -1,3 +1,4 @@
+! simulation of single-particle images
 module simple_simulator
 implicit none
 

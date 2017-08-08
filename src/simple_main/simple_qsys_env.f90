@@ -1,7 +1,4 @@
-!------------------------------------------------------------------------------!
-! SIMPLE v3.0         Elmlund & Elmlund Lab          simplecryoem.com          !
-!------------------------------------------------------------------------------!
-!> Simple batch-processing manager - environment module
+! batch-processing manager - environment module
 module simple_qsys_env
 use simple_qsys_factory, only: qsys_factory
 use simple_qsys_base,    only: qsys_base

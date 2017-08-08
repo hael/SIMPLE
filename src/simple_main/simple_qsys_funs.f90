@@ -1,7 +1,4 @@
-!------------------------------------------------------------------------------!
-! SIMPLE v3.0         Elmlund & Elmlund Lab          simplecryoem.com          !
-!------------------------------------------------------------------------------!
-!> Simple batch-processing manager - functions
+! batch-processing manager - functions
 module simple_qsys_funs
 use simple_defs     
 use simple_filehandling, only: del_file, del_files

@@ -1,7 +1,4 @@
-!------------------------------------------------------------------------------!
-! SIMPLE v3.0         Elmlund & Elmlund Lab          simplecryoem.com          !
-!------------------------------------------------------------------------------!
-!> Simple CTF optimisation module:  basic shift search
+! cftcc = Cartesian Fourier Transform Cross Correlation, shsrch = shift-search
 module simple_cftcc_shsrch
 use simple_opt_factory,     only: opt_factory
 use simple_opt_spec,        only: opt_spec
@@ -22,6 +19,7 @@ class(optimizer), pointer       :: nlopt    =>null() !< pointer to nonlinear opt
 class(cartft_corrcalc), pointer :: cftcc_ptr=>null() !< pointer to cftcc object
 class(image), pointer           :: pimg     =>null() !< pointer to image
 integer                         :: state=1           !< state to evaluate
+
 contains
 
     subroutine cftcc_shsrch_init( cftcc, img, opt_str, trs, nrestarts )

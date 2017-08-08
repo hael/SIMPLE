@@ -1,7 +1,4 @@
-!------------------------------------------------------------------------------!
-! SIMPLE v3.0         Elmlund & Elmlund Lab          simplecryoem.com          !
-!------------------------------------------------------------------------------!
-!> Simple optimisation module:  generic optimisation subroutines
+! generic optimisation subroutines
 module simple_opt_subs
 implicit none
 

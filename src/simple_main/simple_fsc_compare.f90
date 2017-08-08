@@ -1,7 +1,4 @@
-!------------------------------------------------------------------------------!
-! SIMPLE v3.0         Elmlund & Elmlund Lab          simplecryoem.com          !
-!------------------------------------------------------------------------------!
-!> \brief Simple module: FSC comparison
+! Fourier Ring/Shell Correlation comparisons
 module simple_fsc_compare
 implicit none
 

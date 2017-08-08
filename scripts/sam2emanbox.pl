@@ -1,7 +1,9 @@
 #!/usr/bin/perl
+
 use warnings;
 use strict;
 use Tie::File;
+
 if( scalar(@ARGV) < 4 ){
     die "Need (1) filetable of SAM dat files (2) binning fatcor (3) micrograph y-dim (4) box size in pixels\n";
 }

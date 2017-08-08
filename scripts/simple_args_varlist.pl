@@ -1,19 +1,16 @@
 #!/usr/bin/perl
-#------------------------------------------------------------------------------!
-# SIMPLE v2.5         Elmlund & Elmlund Lab          simplecryoem.com          !
-#------------------------------------------------------------------------------!
+
 use warnings;
 use strict;
+
 # read the simple_params.f90 into an array
 my @lines;
 my @vars;
-
 my$SIMPLE_PATH;
 $SIMPLE_PATH = $ENV{'SIMPLE_PATH'};
 if ( -e  $SIMPLE_PATH and -d $SIMPLE_PATH ){
     die 'simple_args_varlist cannot find SIMPLE_PATH or is not set';
 }
-
 my$varlistfile;
 my$simple_argsfile;
 if ( -e  $SIMPLE_PATH.'/lib64' and -d $SIMPLE_PATH.'/lib64' ){

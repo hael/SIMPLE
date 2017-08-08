@@ -1,7 +1,4 @@
-!------------------------------------------------------------------------------!
-! SIMPLE v3.0         Elmlund & Elmlund Lab          simplecryoem.com          !
-!------------------------------------------------------------------------------!
-!> Simple batch-processing manager - SunGrid Engine
+! batch-processing manager - SunGrid Engine
 module simple_qsys_sge
 use simple_qsys_base, only: qsys_base
 use simple_chash,     only: chash

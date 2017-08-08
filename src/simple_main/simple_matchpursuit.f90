@@ -1,8 +1,4 @@
-!------------------------------------------------------------------------------!
-! SIMPLE v3.0         Elmlund & Elmlund Lab          simplecryoem.com          !
-!------------------------------------------------------------------------------!
-!> Simple module: matching pursuit
-!!  pearson correlation-based matching pursuit
+! feature selection by matching pursuit
 module simple_matchpursuit
 use simple_defs
 use simple_jiffys, only: alloc_err

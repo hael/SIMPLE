@@ -1,17 +1,4 @@
-!------------------------------------------------------------------------------!
-! SIMPLE v3.0         Elmlund & Elmlund Lab          simplecryoem.com          !
-!------------------------------------------------------------------------------!
-!> Simple system call module
-!
-!! simple_syscalls is a little module for using basic system functions e.g. CPU_time.
-! The code is distributed with the hope that it will be useful, but _WITHOUT_ _ANY_ _WARRANTY_.
-! Redistribution or modification is regulated by the GNU General Public License.
-! *Author:* Hans Elmlund, 2009-10-01.
-!
-!==Changes are documented below
-!
-!* incorporated in the _SIMPLE_ library, HE 2009-10-01
-!
+! for using basic system functions
 module simple_syscalls
 use simple_jiffys       ! use all in there
 use simple_defs         ! use all in there

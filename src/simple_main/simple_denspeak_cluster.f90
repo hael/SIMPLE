@@ -1,7 +1,4 @@
-!------------------------------------------------------------------------------!
-! SIMPLE v3.0         Elmlund & Elmlund Lab          simplecryoem.com          !
-!------------------------------------------------------------------------------!
-!> Simple cluster class : peak density
+! density peak clustering of distance matrix
 module simple_denspeak_cluster
 use simple_jiffys, only: alloc_err
 implicit none

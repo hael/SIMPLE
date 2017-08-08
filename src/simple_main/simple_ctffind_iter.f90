@@ -1,7 +1,4 @@
-!------------------------------------------------------------------------------!
-! SIMPLE v3.0         Elmlund & Elmlund Lab          simplecryoem.com          !
-!------------------------------------------------------------------------------!
-!> Wrapper for ctffind class
+! ctffind iterator
 module simple_ctffind_iter
 use simple_syscalls,  only: exec_cmdline
 use simple_nrtxtfile, only: nrtxtfile

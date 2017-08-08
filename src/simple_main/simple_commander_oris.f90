@@ -1,17 +1,4 @@
-!------------------------------------------------------------------------------!
-! SIMPLE v3.0         Elmlund & Elmlund Lab          simplecryoem.com          !
-!------------------------------------------------------------------------------!
-!> simple_commander_oris This class contains the set of concrete commanders for
-!> orientation data management in the SIMPLE library.
-!! This class provides the glue between the reciver (main reciever is
-!! simple_exec program) and the abstract action, which is simply execute
-!! (defined by the base class: simple_commander_base). Later we can use the
-!! composite pattern to create MacroCommanders (or workflows)
-!
-! The code is distributed with the hope that it will be useful, but _WITHOUT_ _ANY_ _WARRANTY_.
-! Redistribution and modification is regulated by the GNU General Public License.
-! *Authors:* Cyril Reboul & Hans Elmlund 2016
-!
+! concrete commander: operations on orientations
 module simple_commander_oris
 use simple_defs
 use simple_cmdline,        only: cmdline
@@ -101,14 +88,14 @@ contains
         call simple_end('**** SIMPLE_CLUSTER_ORIS NORMAL STOP ****')
     end subroutine exec_cluster_oris
 
-  !>  makedeftab is a program for creating a SIMPLE conformant file of CTF
-  !!  parameter values (deftab). Input is either an earlier SIMPLE
-  !!  deftab/oritab. The purpose is to get the kv, cs, and fraca parameters as
-  !!  part of the CTF input doc as that is the new convention. The other
-  !!  alternative is to input a plain text file with CTF parameters dfx, dfy,
-  !!  angast according to the Frealign convention. Unit conversions are dealt
-  !!  with using optional variables. The units refer to the units in the
-  !!  inputted d
+    !>  makedeftab is a program for creating a SIMPLE conformant file of CTF
+    !!  parameter values (deftab). Input is either an earlier SIMPLE
+    !!  deftab/oritab. The purpose is to get the kv, cs, and fraca parameters as
+    !!  part of the CTF input doc as that is the new convention. The other
+    !!  alternative is to input a plain text file with CTF parameters dfx, dfy,
+    !!  angast according to the Frealign convention. Unit conversions are dealt
+    !!  with using optional variables. The units refer to the units in the
+    !!  inputted d
     subroutine exec_makedeftab( self, cline )
         use simple_nrtxtfile, only: nrtxtfile
         use simple_math,      only: rad2deg

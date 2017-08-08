@@ -1,7 +1,9 @@
 #!/usr/bin/perl
+
 use warnings;
 use strict;
 use Tie::File;
+
 if( scalar(@ARGV) < 2 ){
     die "Need (1) filetable of Relion star files (2) box size in pixels\n";
 }

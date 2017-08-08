@@ -1,17 +1,4 @@
-!------------------------------------------------------------------------------!
-! SIMPLE v3.0         Elmlund & Elmlund Lab          simplecryoem.com          !
-!------------------------------------------------------------------------------!
-!> Simple hierarchical clustering module
-!
-!! simple_hac is the SIMPLE class for hierarchical clustering.
-!
-! The code is
-! distributed with the hope that it will be useful, but _WITHOUT_
-! _ANY_ _WARRANTY_. Redistribution or modification is regulated by the
-! GNU General Public License. *Author:* Hans Elmlund, 2012-02-02.
-!
-!==Changes are documented below
-!
+! agglomerative average link hierarchical clustering
 module simple_hac
 use simple_sll,    only: sll
 use simple_oris,   only: oris

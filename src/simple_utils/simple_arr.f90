@@ -1,18 +1,10 @@
-!------------------------------------------------------------------------------!
-! SIMPLE v3.0 Elmlund & Elmlund Lab simplecryoem.com !
-!------------------------------------------------------------------------------!
-!> Simple array class
-!
-! The code is distributed with the hope that it will be useful, but WITHOUT ANY
-! WARRANTY. Redistribution and modification is regulated by the GNU General
-! Public License.
-!-----------------------------------------------------------------------------!
+! array class (container class for the singly linked list)
 module simple_arr
 implicit none
 
 public :: arr
 private
-!> General array type
+
 type :: arr
     private
     integer, allocatable :: iarr(:)

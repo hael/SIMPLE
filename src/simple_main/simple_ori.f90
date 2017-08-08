@@ -1,19 +1,4 @@
-!------------------------------------------------------------------------------!
-! SIMPLE v3.0         Elmlund & Elmlund Lab          simplecryoem.com          !
-!------------------------------------------------------------------------------!
-!> Simple ori class handles orientational information.
-!
-! The code is distributed with the
-! hope that it will be useful, but _WITHOUT_ _ANY_ _WARRANTY_. Redistribution or
-! modification is regulated by the GNU General Public License.
-!
-!
-! *Author:* Hans Elmlund, 2009-05-26
-!
-!==Changes are documented below
-!* new class, HE 2012-03-27
-!* all methods tested
-!
+! an orientation
 module simple_ori
 use simple_defs
 use simple_hash,   only: hash

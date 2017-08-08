@@ -1,7 +1,4 @@
-!------------------------------------------------------------------------------!
-! SIMPLE v3.0         Elmlund & Elmlund Lab          simplecryoem.com          !
-!------------------------------------------------------------------------------!
-!> Simple class convergence per particle
+! for checking convergence (per-particle)
 module simple_convergence_perptcl
 use simple_oris,     only: oris
 use simple_params,   only: params

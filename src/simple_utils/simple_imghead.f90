@@ -1,92 +1,77 @@
-!------------------------------------------------------------------------------!
-! SIMPLE v3.0         Elmlund & Elmlund Lab          simplecryoem.com          !
-!------------------------------------------------------------------------------!
-!> Module with type and routine definitions to deal with image file headers
-!!
-!!  The following file formats are (will be) supported:
-!!  - Imagic: http://imagescience.de/formats/index.htm
-!!  - Spider: http://www.wadsworth.org/spider_doc/spider/docs/image_doc.html
-!!  - MRC: http://www2.mrc-lmb.cam.ac.uk/image2000.html
-!!
-!! This class is based on a class used in CTFFIND4, developed by Alexis Rohou
-!! and Nikolaus Grigorieff at Janelia Farm. The below copyright statement therefore
-!! needs to be included here:
-!! Copyright 2014 Howard Hughes Medical Institute
-!! All rights reserved
-!! Use is subject to Janelia Farm Research Campus Software Copyright 1.1
-!! license terms ( http://license.janelia.org/license/jfrc_copyright_1_1.html )
-!!
-!! Modifications by Cyril Reboul, Michael Eager & Hans Elmlund
-!! 
-! The SIMPLE code is distributed with the hope that it will be
-! useful, but WITHOUT ANY WARRANTY. Redistribution and modification is regulated
-! by the GNU General Public License.
-! -----------------------------------------------------------------------------!
+! type and routine definitions to deal with image file headers supporting
+!  - Spider: http://www.wadsworth.org/spider_doc/spider/docs/image_doc.html
+!  - MRC: http://www2.mrc-lmb.cam.ac.uk/image2000.html
+! file formats
+! This class is based on a class used in CTFFIND4, developed by Alexis Rohou
+! and Nikolaus Grigorieff at Janelia Farm. The below copyright statement therefore
+! needs to be included here:
+! Copyright 2014 Howard Hughes Medical Institute
+! All rights reserved
+! Use is subject to Janelia Farm Research Campus Software Copyright 1.1
+! license terms ( http://license.janelia.org/license/jfrc_copyright_1_1.html )
+! Modifications by Cyril Reboul, Michael Eager & Hans Elmlund
 module simple_imghead
-    use simple_imgheadrec, only: int_imgheadrec, real_imgheadrec, char_imgheadrec
-    use simple_defs ! singleton
-    implicit none
+use simple_imgheadrec, only: int_imgheadrec, real_imgheadrec, char_imgheadrec
+use simple_defs
+implicit none
 
-    public :: ImgHead, MrcImgHead, MrcFeiImgHead, SpiImgHead, test_imghead
-    private
+public :: ImgHead, MrcImgHead, SpiImgHead, test_imghead
+private
 #include "simple_local_flags.inc"
 
-    integer, parameter         :: NREALS          = 104
-    integer, parameter, public :: dataRbytes      = 1
-    integer, parameter, public :: dataRinteger    = 2
-    integer, parameter, public :: dataRfloat      = 3
-    integer, parameter         :: NREMAINS        = 14
-    integer, parameter         :: CLOSE2THEANSWER = 43
-    integer, parameter         :: MRCHEADSZ       = 1024
-    integer, parameter         :: MRCFEIHEADSZ    = 128
-    integer, parameter         :: NLABL           = 10
+integer, parameter         :: NREALS          = 104
+integer, parameter, public :: dataRbytes      = 1
+integer, parameter, public :: dataRinteger    = 2
+integer, parameter, public :: dataRfloat      = 3
+integer, parameter         :: NREMAINS        = 14
+integer, parameter         :: CLOSE2THEANSWER = 43
+integer, parameter         :: MRCHEADSZ       = 1024
+integer, parameter         :: NLABL           = 10
 
-    type ImgHead
-        private
-        integer                      :: length          !< length (in bytes) of the header
-        integer(kind=1), allocatable :: byte_array(:)   !< array of bytes
-        logical                      :: exists=.false.  !< to indicate existence
-    contains
-        procedure :: new
-        procedure :: reset2default
-        procedure :: setMinimal
-        procedure :: print_imghead
-        procedure :: read
-        procedure :: write
-        procedure :: hasLocalEndianess
-        procedure, private :: setMachineStamp
-        procedure :: bytesPerPix
-        procedure :: pixIsSigned
-        procedure :: getPixType
-        procedure :: pixIsComplex
-        procedure :: firstDataByte
-        procedure, private :: assign
-        generic   :: assignment(=) => assign
-        procedure :: getMinPixVal
-        procedure :: getMaxPixVal
-        procedure :: setMinPixVal
-        procedure :: setMaxPixVal
-        procedure :: getPixSz
-        procedure :: setPixSz
-        procedure :: getStackSz
-        procedure :: getDims
-        procedure :: getDim
-        procedure :: setDims
-        procedure :: setDim
-        procedure :: getLabrec
-        procedure :: getLenbyt
-        procedure :: getLabbyt
-        procedure :: getMaxim
-        procedure :: setMaxim
-        procedure :: setMode
-        procedure :: setRMSD
-        procedure :: getIform
-        procedure :: getMode
-        procedure :: setIform
-        procedure :: kill
-    end type ImgHead
+type ImgHead
+    private
+    integer                      :: length          !< length (in bytes) of the header
+    integer(kind=1), allocatable :: byte_array(:)   !< array of bytes
+    logical                      :: exists=.false.  !< to indicate existence
+contains
+    procedure :: new
+    procedure :: reset2default
+    procedure :: setMinimal
+    procedure :: print_imghead
+    procedure :: read
+    procedure :: write
+    procedure :: bytesPerPix
+    procedure :: pixIsSigned
+    procedure :: getPixType
+    procedure :: pixIsComplex
+    procedure :: firstDataByte
+    procedure, private :: assign
+    generic   :: assignment(=) => assign
+    procedure :: getMinPixVal
+    procedure :: getMaxPixVal
+    procedure :: setMinPixVal
+    procedure :: setMaxPixVal
+    procedure :: getPixSz
+    procedure :: setPixSz
+    procedure :: getStackSz
+    procedure :: getDims
+    procedure :: getDim
+    procedure :: setDims
+    procedure :: setDim
+    procedure :: getLabrec
+    procedure :: getLenbyt
+    procedure :: getLabbyt
+    procedure :: getMaxim
+    procedure :: setMaxim
+    procedure :: setMode
+    procedure :: setRMSD
+    procedure :: getIform
+    procedure :: getMode
+    procedure :: setIform
+    procedure :: kill
+end type ImgHead
 
-    type, extends(ImgHead) :: MrcImgHead
+type, extends(ImgHead) :: MrcImgHead
     type(int_imgheadrec)  :: nx           !< number of columns (fastest changing in map)
     type(int_imgheadrec)  :: ny           !< number of rows
     type(int_imgheadrec)  :: nz           !< number of sections (slowest changing in map)
@@ -126,28 +111,6 @@ module simple_imghead
     type(char_imgheadrec) :: label(NLABL) !< 10 80-character text labels
 end type MrcImgHead
 
-type, extends(ImgHead) :: MrcFeiImgHead
-    type(real_imgheadrec) :: alpha_tilt        !< Alpha, degrees
-    type(real_imgheadrec) :: beta_tilt         !< Beta, degrees
-    type(real_imgheadrec) :: xstage            !< Stage X position, meters
-    type(real_imgheadrec) :: ystage            !< Stage Y position, meters
-    type(real_imgheadrec) :: zstage            !< Stage Z position, meters
-    type(real_imgheadrec) :: xshift            !< Image beam shift X, TEM optical units as in general microscope UI
-    type(real_imgheadrec) :: yshift            !< Image beam shift Y, TEM optical units as in general microscope UI
-    type(real_imgheadrec) :: defocus           !< Defocus as read from microscope in meters
-    type(real_imgheadrec) :: exp_time          !< Exposure time in seconds
-    type(real_imgheadrec) :: mean_int          !< Image mean pixel intensity
-    type(real_imgheadrec) :: na1               !< Not applicable
-    type(real_imgheadrec) :: pixsiz            !< Pixel size in the images, meters
-    type(real_imgheadrec) :: mag               !< TEM magnification used for recording images
-    type(real_imgheadrec) :: ht                !< Value of high tension, volts
-    type(real_imgheadrec) :: binning           !< Camera binning used for exposure
-    type(real_imgheadrec) :: defocus_app       !< Application’s applied intended defocus, meters
-    type(real_imgheadrec) :: na2               !< Unused
-    type(real_imgheadrec) :: na3               !< Unused
-    type(real_imgheadrec) :: remains(NREMAINS) !< Unused
-end type MrcFeiImgHead
-
 type, extends(ImgHead) :: SpiImgHead
     ! All SPIDER image files consist of unformatted, direct access records.
     ! Each record contains NX 4-byte words which are stored as floating point numbers.
@@ -170,44 +133,43 @@ type, extends(ImgHead) :: SpiImgHead
     real(kind=4) :: sig       !< (10) Standard deviation of data. A value of -1.0 or 0.0 indicates that
     !! SIG has not been computed
     real(kind=4) :: nx        !< (12) Number of pixels (samples) per line
-real(kind=4) :: labrec    !< (13) Number of records in file header (label)
-real(kind=4) :: iangle      !< (14) Flag that following three tilt angles are present
-real(kind=4) :: phi       !< (15) Tilt angle: phi (See note #2 below)
-real(kind=4) :: theta     !< (16) Tilt angle: theta
-real(kind=4) :: gamma     !< (17) Tilt angle: gamma (also called psi)
-real(kind=4) :: xoff      !< (18) X translation
-real(kind=4) :: yoff      !< (19) Y translation
-real(kind=4) :: zoff      !< (20) Z translation
-real(kind=4) :: scale     !< (21) Scale factor
-real(kind=4) :: labbyt    !< (22) Total number of bytes in header
-real(kind=4) :: lenbyt    !< (23) Record length in bytes
-real(kind=4) :: istack    !< (24) istack has a value of 0 in simple 2D or 3D (non-stack) files. In an
-!! "image stack" there is one overall stack header followed by a stack of images, in which
-!! each image has its own image header. A value of >0 in this position in the overall stack
-!! header indicates a stack of images. A value of <0 in this position in the overall stack
-!! header indicates an indexed stack of images
-real(kind=4) :: maxim     !< (26) only used in the overall header for a stacked image file. There, this position
-!! contains the number of the highest image currently used in the stack. This number is
-!! updated, if necessary, when an image is added or deleted from the stack
-real(kind=4) :: imgnum    !< (27) Position is only used in a stacked image header. There, it contains the number of
-!! the current image or zero if this image is unused
-real(kind=4) :: lastindx  !< (28) Position is only used in overall header of indexed stacks. There, this position is the
-!! highest index location currently in use
-real(kind=4) :: kangle    !< (31) Flag that additional rotation angles follow in header.
-!! 1 = one additional angle set is present, 2 = two additional angle sets
-real(kind=4) :: phi1      !< (32) angle
-real(kind=4) :: theta1    !< (33) angle
-real(kind=4) :: psi1      !< (34) angle
-real(kind=4) :: phi2      !< (35) angle
-real(kind=4) :: theta2    !< (36) angle
-real(kind=4) :: psi2      !< (37) angle
-real(kind=4) :: pixsiz    !< (38) pixel size (Angstroms)
-real(kind=4) :: ev        !< (39) electron voltage
-real(kind=4) :: proj      !< (40) project number
-real(kind=4) :: mic       !< (41) micrograph number
-real(kind=4) :: num       !< (42) micrograph window number
-real(kind=4) :: glonum    !< (43) global image number
-! contains
+    real(kind=4) :: labrec    !< (13) Number of records in file header (label)
+    real(kind=4) :: iangle    !< (14) Flag that following three tilt angles are present
+    real(kind=4) :: phi       !< (15) Tilt angle: phi (See note #2 below)
+    real(kind=4) :: theta     !< (16) Tilt angle: theta
+    real(kind=4) :: gamma     !< (17) Tilt angle: gamma (also called psi)
+    real(kind=4) :: xoff      !< (18) X translation
+    real(kind=4) :: yoff      !< (19) Y translation
+    real(kind=4) :: zoff      !< (20) Z translation
+    real(kind=4) :: scale     !< (21) Scale factor
+    real(kind=4) :: labbyt    !< (22) Total number of bytes in header
+    real(kind=4) :: lenbyt    !< (23) Record length in bytes
+    real(kind=4) :: istack    !< (24) istack has a value of 0 in simple 2D or 3D (non-stack) files. In an
+    !! "image stack" there is one overall stack header followed by a stack of images, in which
+    !! each image has its own image header. A value of >0 in this position in the overall stack
+    !! header indicates a stack of images. A value of <0 in this position in the overall stack
+    !! header indicates an indexed stack of images
+    real(kind=4) :: maxim     !< (26) only used in the overall header for a stacked image file. There, this position
+    !! contains the number of the highest image currently used in the stack. This number is
+    !! updated, if necessary, when an image is added or deleted from the stack
+    real(kind=4) :: imgnum    !< (27) Position is only used in a stacked image header. There, it contains the number of
+    !! the current image or zero if this image is unused
+    real(kind=4) :: lastindx  !< (28) Position is only used in overall header of indexed stacks. There, this position is the
+    !! highest index location currently in use
+    real(kind=4) :: kangle    !< (31) Flag that additional rotation angles follow in header.
+    !! 1 = one additional angle set is present, 2 = two additional angle sets
+    real(kind=4) :: phi1      !< (32) angle
+    real(kind=4) :: theta1    !< (33) angle
+    real(kind=4) :: psi1      !< (34) angle
+    real(kind=4) :: phi2      !< (35) angle
+    real(kind=4) :: theta2    !< (36) angle
+    real(kind=4) :: psi2      !< (37) angle
+    real(kind=4) :: pixsiz    !< (38) pixel size (Angstroms)
+    real(kind=4) :: ev        !< (39) electron voltage
+    real(kind=4) :: proj      !< (40) project number
+    real(kind=4) :: mic       !< (41) micrograph number
+    real(kind=4) :: num       !< (42) micrograph window number
+    real(kind=4) :: glonum    !< (43) global image number
 end type SpiImgHead
 
 contains
@@ -289,57 +251,6 @@ contains
                 self%my = ldim(2)
                 self%mz = ldim(3)
             endif
-        type is( MrcFeiImgHead )
-            llength = MRCFEIHEADSZ
-            ! allocate byte array
-            if( allocated(self%byte_array) )then
-                if( size(self%byte_array) .ne. llength ) deallocate(self%byte_array)
-            endif
-            if( .not. allocated(self%byte_array) )then
-                allocate(self%byte_array(llength),stat=ierr,errmsg=err)
-                if( ierr .ne. 0 )then
-                    write(*,'(a,i0,2a)') '**error(ImgHead::new): memory allocation failed with error ',&
-                         ierr, ': ', trim(adjustl(err))
-                    stop 'Memory allocation failed; new; simple_imghead'
-                endif
-            endif
-            ! zero the byte array
-            self%byte_array = 0
-            ! first argument: index_position, i.e. the position of the record within the file header. starting at 1 and incrementing
-            ! second argument: byte_position, i.e. the position of the first byte of the record within the header
-            call self%alpha_tilt  %new(1,   1,  self%byte_array) !< Alpha, degrees
-            call self%beta_tilt   %new(2,   5,  self%byte_array) !< Beta, degrees
-            call self%xstage      %new(3,   9,  self%byte_array) !< Stage X position, meters
-            call self%ystage      %new(4,  13,  self%byte_array) !< Stage Y position, meters
-            call self%zstage      %new(5,  17,  self%byte_array) !< Stage Z position, meters
-            call self%xshift      %new(6,  21,  self%byte_array) !< Image beam shift X, TEM optical units as in general microscope UI
-            call self%yshift      %new(7,  25,  self%byte_array) !< Image beam shift Y, TEM optical units as in general microscope UI
-            call self%defocus     %new(8,  29,  self%byte_array) !< Defocus as read from microscope in meters
-            call self%exp_time    %new(9,  33,  self%byte_array) !< Exposure time in seconds
-            call self%mean_int    %new(10, 37,  self%byte_array) !< Image mean pixel intensity
-            call self%na1         %new(11, 41,  self%byte_array) !< Not applicable
-            call self%pixsiz      %new(12, 45,  self%byte_array) !< Pixel size in the images, meters
-            call self%mag         %new(13, 49,  self%byte_array) !< TEM magnification used for recording images
-            call self%ht          %new(14, 53,  self%byte_array) !< Value of high tension, volts
-            call self%binning     %new(15, 57,  self%byte_array) !< Camera binning used for exposure
-            call self%defocus_app %new(16, 61,  self%byte_array) !< Application’s applied intended defocus, meters
-            call self%na2         %new(17, 65,  self%byte_array) !< Unused
-            call self%na3         %new(18, 69,  self%byte_array) !< Unused
-            call self%remains(1)  %new(19, 73,  self%byte_array) !< Unused
-            call self%remains(2)  %new(20, 77,  self%byte_array) !< Unused
-            call self%remains(3)  %new(21, 81,  self%byte_array) !< Unused
-            call self%remains(4)  %new(22, 85,  self%byte_array) !< Unused
-            call self%remains(5)  %new(23, 89,  self%byte_array) !< Unused
-            call self%remains(6)  %new(24, 93,  self%byte_array) !< Unused
-            call self%remains(7)  %new(25, 97,  self%byte_array) !< Unused
-            call self%remains(8)  %new(26, 101, self%byte_array) !< Unused
-            call self%remains(9)  %new(27, 105, self%byte_array) !< Unused
-            call self%remains(10) %new(28, 109, self%byte_array) !< Unused
-            call self%remains(11) %new(29, 113, self%byte_array) !< Unused
-            call self%remains(12) %new(30, 117, self%byte_array) !< Unused
-            call self%remains(13) %new(31, 121, self%byte_array) !< Unused
-            call self%remains(14) %new(32, 125, self%byte_array) !< Unused
-            call self%reset2default
         type is( SpiImgHead )
             if( present(ldim) )then
                 call self%reset2default
@@ -394,28 +305,6 @@ contains
             self%nlabl   = 0
             do i=1,NLABL
                 self%label(i) = ' '
-            end do
-        type is( MrcFeiImgHead )
-            self%alpha_tilt  = 0.0    !< Alpha, degrees
-            self%beta_tilt   = 0.0    !< Beta, degrees
-            self%xstage      = 0.0    !< Stage X position, meters
-            self%ystage      = 0.0    !< Stage Y position, meters
-            self%zstage      = 0.0    !< Stage Z position, meters
-            self%xshift      = 0.0    !< Image beam shift X, TEM optical units as in general microscope UI
-            self%yshift      = 0.0    !< Image beam shift Y, TEM optical units as in general microscope UI
-            self%defocus     = 0.0    !< Defocus as read from microscope in meters
-            self%exp_time    = 0.0    !< Exposure time in seconds
-            self%mean_int    = 0.0    !< Image mean pixel intensity
-            self%na1         = 0.0    !< Not applicable
-            self%pixsiz      = 0.0    !< Pixel size in the images, meters
-            self%mag         = 0.0    !< TEM magnification used for recording images
-            self%ht          = 0.0    !< Value of high tension, volts
-            self%binning     = 0.0    !< Camera binning used for exposure
-            self%defocus_app = 0.0    !< Application’s applied intended defocus, meters
-            self%na2         = 0.0    !< Unused
-            self%na3         = 0.0    !< Unused
-            do i=1,NREMAINS
-                self%remains(i) = 0.0 !< Unused
             end do
         type is (SpiImgHead)
             self%nz       = 0.
@@ -480,8 +369,6 @@ contains
         type is( MrcImgHead )
             call self%setPixSz(smpd)
             call self%setDims(ldim)
-        type is( MrcFeiImgHead )
-            call self%setPixSz(smpd)
         type is( SpiImgHead )
             call self%setPixSz(smpd)
             lenbyt = ldim(1)*4     ! record length in bytes
@@ -562,10 +449,6 @@ contains
             if (self%my%get() .ne. 0) smpd(2) = self%cella2%get()/self%my%get()
             if (self%mz%get() .ne. 0) smpd(3) = self%cella3%get()/self%mz%get()
             write(*,'(a,3(f0.3,1x))')   'Pixel size: ', smpd
-        type is( MrcFeiImgHead )
-            write(*,'(a,1x,f7.3)') 'Pixel size:    ', self%pixsiz%get()
-            write(*,'(a,1x,f7.3)') 'Magnification: ', self%mag%get()
-            write(*,'(a,1x,f7.3)') 'High tension:  ', self%ht%get()
         type is( SpiImgHead )
             write(*,'(a,3(1x,f7.0))') 'Number of columns, rows, sections: ', self%nx, self%ny, self%nz
             write(*,'(a,1x,f7.0)') 'SPIDER data mode (iform):                                       ', self%iform
@@ -687,14 +570,7 @@ contains
                      ' when reading header bytes from disk: ', trim(io_message)
                 stop 'I/O error; read; simple_imghead'
             endif
-        type is( MrcFeiImgHead )
-            read(unit=lun,pos=ppos,iostat=io_status,iomsg=io_message) self%byte_array
-            if (io_status .ne. 0) then
-                write(*,'(a,i0,2a)') '**error(ImgHead::read): error ', io_status, &
-                     ' when reading header bytes from disk: ', trim(io_message)
-                stop 'I/O error; read; simple_imghead'
-            endif
-            class DEFAULT
+        class DEFAULT
             stop 'Format not supported; print; simle_imghead'
         end select
         DebugPrint '(imghead::read) done'
@@ -775,7 +651,6 @@ contains
                 endif
             end do
         type is( MrcImgHead )
-            call self%setMachineStamp()
             write(unit=lun,pos=ppos,iostat=io_status) self%byte_array
             if( io_status .ne. 0 )then
                 write(*,'(a,i0,a)') '**error(ImgHead::write): error ', io_status, ' when writing header bytes to disk'
@@ -783,101 +658,10 @@ contains
                 print *, lun
                 stop 'I/O error; write; simple_imghead'
             endif
-        type is( MrcFeiImgHead )
-            call self%setMachineStamp()
-            write(unit=lun,pos=ppos,iostat=io_status) self%byte_array
-            if( io_status .ne. 0 )then
-                write(*,'(a,i0,a)') '**error(ImgHead::write): error ', io_status, ' when writing header bytes to disk'
-                print *, allocated(self%byte_array)
-                print *, lun
-                stop 'I/O error; write; simple_imghead'
-            endif
-            class DEFAULT
+        class DEFAULT
             stop 'Format not supported; print; simle_imghead'
         end select
     end subroutine write
-
-    !>  \brief  Check whether the header was created by a machine with the same endianess as the machine we're on now
-    !!          If the header doesn't have a machine stamp (or it is 0), we assume it's in the local endianess.
-    logical function hasLocalEndianess(self)
-        class(ImgHead), intent(in)      ::  self
-
-        !select type(self)
-        !    type is (MrcImgHead)
-        !        hasLocalEndianess = (getLocalMachineStamp() .eq. self%machst%get()) .or. self%machst%get() .eq. 0
-        !    class DEFAULT
-        !        call this_program%TerminateWithFatalError('ImgHead::setMachineStamp','Format not supported')
-        !end select
-
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! SETTING THIS TO ALWAYS RETURN TRUE!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-        ! It seems most programs ignore the endianess setting in the header, which should basically all be the !
-        ! same these days. As such I am setting this function to always return true, the code is being
-        ! left in place so that we can revert this back at a later date if required.
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! SETTING THIS TO ALWAYS RETURN TRUE!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-
-        hasLocalEndianess = .true.
-    end function hasLocalEndianess
-
-    !> \brief   Set the machine stamp
-    subroutine setMachineStamp(self)
-        class(ImgHead), intent(inout)   ::  self
-        select type(self)
-        type is (MrcImgHead)
-            self%machst = getLocalMachineStamp()
-        end select
-    end subroutine setMachineStamp
-
-    !>  \brief  Return the local machine's "machinestamp", which is endian-specific
-    function getLocalMachineStamp()
-        integer(kind=4) :: getLocalMachineStamp
-        integer(kind=1)            :: machst(4)
-        integer(kind=4), parameter :: a0 = 48
-        integer(kind=4), parameter :: a1 = 49
-        integer(kind=4), parameter :: a2 = 50
-        integer(kind=4), parameter :: a3 = 51
-        integer(kind=4)            :: i
-        character(len=4)           :: ich
-        i=a0+a1*256+a2*(256**2)+a3*(256**3) ! = 858927408 (decimal)
-        ! = 0011 0011 0011 0010 0011 0001 0011 0000 (binary, little endian)
-        ! when this is converted to ASCII characters (1 byte per character,
-        ! with the most significant bit always 0) this will give different
-        ! results on little- and big-endian machines. For example, '0' in
-        ! ASCII has decimal value 48 and bit value 011 0000 '3' in ASCII has
-        ! decimal value 51 and bit value 011 0011. Therefore, the value
-        ! computed above, when converted to bytes will have the first byte
-        ! read off as ASCII character '0' on little-endian and '3' on big-
-        ! endian machines
-
-        ! Take the bit pattern over from the 4byte integer to an array of 4 characters (each 1 byte)
-        ich = transfer(i,ich)
-        if( ich .eq. '0123' )then
-            DebugPrint '**debug(getLocalMachineStamp): machine is little-endian (dec/osf, intel, amd ...)'
-            !0100 0100
-            machst(1)=68
-            !0100 0001
-            machst(2)=65
-            machst(3)=0
-            machst(4)=0
-        elseif (ich.eq.'3210') then
-            DebugPrint '**debug(getLocalMachineStamp): machine is big-endian (sgi, sun, hp, ibm)'
-            !0001 0001
-            machst(1)=17
-            !0001 0001
-            machst(2)=17
-            machst(3)=0
-            machst(4)=0
-        else
-            DebugPrint '**debug(getLocalMachineStamp): mixed endianity machine (vax)'
-            !0010 0010
-            machst(1)=34
-            !0010 0001
-            machst(2)=33
-            machst(3)=0
-            machst(4)=0
-        endif
-        ! Convert machst (4 bytes) to a 4-byte integer
-        getLocalMachineStamp = transfer(machst,getLocalMachineStamp)
-    end function getLocalMachineStamp
 
     !>  \brief  Return the number of bytes per pixel
     !!          All SPIDER image files consist of unformatted, direct access records.
@@ -949,8 +733,6 @@ contains
         select type(self)
         type is( MrcImgHead )
             firstDataByte = MRCHEADSZ+1+self%nsymbt%get()
-        type is( MrcFeiImgHead )
-            firstDataByte = MRCFEIHEADSZ+1
         type is( SpiImgHead )
             firstDataByte = int(self%labbyt)+1
             class DEFAULT
@@ -1016,13 +798,7 @@ contains
                 call lhs%new
                 lhs%byte_array = rhs%byte_array
             end select
-        type is (MrcFeiImgHead)
-            select type( rhs )
-            type is( MrcFeiImgHead )
-                call lhs%new
-                lhs%byte_array = rhs%byte_array
-            end select
-            class DEFAULT
+        class DEFAULT
             stop 'Format not supported (LHS); assign; simle_imghead'
         end select
     end subroutine assign
@@ -1088,8 +864,6 @@ contains
             endif
         type is (SpiImgHead)
             getPixSz = self%pixsiz
-        type is (MrcFeiImgHead)
-            getPixSz = self%pixsiz%get()
         end select
     end function getPixSz
 
@@ -1103,8 +877,6 @@ contains
             self%cella2 = smpd*self%my%get()
             self%cella3 = smpd*self%mz%get()
         type is (SpiImgHead)
-            self%pixsiz = smpd
-        type is (MrcFeiImgHead)
             self%pixsiz = smpd
         end select
     end subroutine setPixSz
@@ -1375,32 +1147,9 @@ contains
                     call self%label(i)%kill
                 enddo
                 if(allocated(self%byte_array)) deallocate(self%byte_array)
-            type is (MrcFeiImgHead)
-                call self%alpha_tilt  %kill
-                call self%beta_tilt   %kill
-                call self%xstage      %kill
-                call self%ystage      %kill
-                call self%zstage      %kill
-                call self%xshift      %kill
-                call self%yshift      %kill
-                call self%defocus     %kill
-                call self%exp_time    %kill
-                call self%mean_int    %kill
-                call self%na1         %kill
-                call self%pixsiz      %kill
-                call self%mag         %kill
-                call self%ht          %kill
-                call self%binning     %kill
-                call self%defocus_app %kill
-                call self%na2         %kill
-                call self%na3         %kill
-                do i=1,NREMAINS
-                    call self%remains(i)%kill
-                end do
-                if(allocated(self%byte_array)) deallocate(self%byte_array)
             type is (SpiImgHead)
                 return
-                class DEFAULT
+            class DEFAULT
                 stop 'Unsupported header type; kill; simple_imghead'
             end select
             self%exists = .false.
@@ -1419,7 +1168,6 @@ contains
         funit = get_fileunit()
         open(unit=funit,access='STREAM',file='test_imghed.spi',&
              &action='READWRITE',status='UNKNOWN')
-!         ,convert='BIG_ENDIAN')
         call hed%write(funit)
         call hed2%read(funit)
         close(funit)

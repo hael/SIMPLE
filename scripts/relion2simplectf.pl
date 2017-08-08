@@ -1,7 +1,9 @@
 #!/usr/bin/perl
+
 use warnings;
 use strict;
 use Tie::File;
+
 if( scalar(@ARGV) < 1 ){
     die "Need filetable of Relion *ctffind3.log files as input\n";
 }

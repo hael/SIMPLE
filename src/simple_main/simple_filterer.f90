@@ -1,7 +1,4 @@
-!------------------------------------------------------------------------------!
-! SIMPLE v3.0         Elmlund & Elmlund Lab          simplecryoem.com          !
-!------------------------------------------------------------------------------!
-!> Simple filter class
+! Fourier filtering routines
 module simple_filterer
 use simple_defs
 use simple_image,     only: image

@@ -1,7 +1,4 @@
-!------------------------------------------------------------------------------!
-! SIMPLE v3.0         Elmlund & Elmlund Lab          simplecryoem.com          !
-!------------------------------------------------------------------------------!
-!>  \brief Simple file module: Class to deal with text files of numbers
+! deals with text files of numbers
 module simple_nrtxtfile
 use simple_defs
 use simple_strings ! use all in there

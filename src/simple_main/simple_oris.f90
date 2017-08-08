@@ -1,19 +1,4 @@
-!------------------------------------------------------------------------------!
-! SIMPLE v3.0         Elmlund & Elmlund Lab          simplecryoem.com          !
-!------------------------------------------------------------------------------!
-!> simple_oris module
-!!
-!! simple_oris handles orientation information.
-!
-!    The code is distributed with the hope that it will be useful,
-! but _WITHOUT_ _ANY_ _WARRANTY_. Redistribution or modification is regulated by the GNU General Public License.
-! *Author:* Hans Elmlund, 2009-05-26
-!
-!==Changes and comments below
-!* new class, HE 2012-03-27
-!* could easily implement alignment document comparsions with this new class (convergence criterion)
-!* all methods tested
-!
+! an agglomeration of orientations
 module simple_oris
 !$ use omp_lib
 !$ use omp_lib_kinds

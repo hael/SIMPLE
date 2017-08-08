@@ -1,11 +1,6 @@
-!------------------------------------------------------------------------------!
-! SIMPLE v3.0         Elmlund & Elmlund Lab          simplecryoem.com          !
-!------------------------------------------------------------------------------!
-!> Simple search module: Prime3D method
-!!
+! PRIME3D stochastic search routines
 module simple_prime3D_srch
 use simple_defs
-use simple_prime_srch,       only: prime_srch
 use simple_oris,             only: oris
 use simple_ori,              only: ori
 use simple_strings,          only: str_has_substr, int2str_pad
@@ -187,7 +182,6 @@ contains
         call self%inplsrch_obj%new(pftcc, self%lims, shbarrier=self%shbarr)
         DebugPrint '>>> PRIME3D_SRCH::CONSTRUCTED NEW SIMPLE_PRIME3D_SRCH OBJECT'
     end subroutine new
-
 
     ! SEARCH ROUTINES
     

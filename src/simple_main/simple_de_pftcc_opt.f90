@@ -1,3 +1,4 @@
+! continous optimisation of polar Fourier cross-correlation using differential evolution
 module simple_de_pftcc_opt
 use simple_pftcc_opt, only: pftcc_opt
 use simple_opt_spec,  only: opt_spec
@@ -156,6 +157,7 @@ contains
                 deallocate(inds)
             endif
         endif
+
         contains
 
             subroutine update_agent( X )
@@ -203,6 +205,7 @@ contains
                     nworse = nworse + 1
                 endif
             end subroutine update_agent
+            
     end subroutine de_minimize
 
     ! GETTERS

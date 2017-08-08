@@ -1,18 +1,4 @@
-!------------------------------------------------------------------------------!
-! SIMPLE v3.0         Elmlund & Elmlund Lab          simplecryoem.com          !
-!------------------------------------------------------------------------------!
-!> Simple commander module: check commander
-!! This class contains the set of concrete checks commanders of the SIMPLE
-!! library (used for checking image stack/volume parameters). This class
-!! provides the glue between the reciver (main reciever is simple_exec program)
-!! and the abstract action, which is simply execute (defined by the base class:
-!! simple_commander_base). Later we can use the composite pattern to create
-!! MacroCommanders (or workflows)
-!
-! The code is distributed with the hope that it will be useful, but _WITHOUT_ _ANY_ _WARRANTY_.
-! Redistribution and modification is regulated by the GNU General Public License.
-! *Authors:* Cyril Reboul & Hans Elmlund 2016
-!
+! concrete commander: checking routines
 module simple_commander_checks
 use simple_defs
 use simple_cmdline,        only: cmdline
@@ -42,6 +28,7 @@ type, extends(commander_base) :: iminfo_commander
 end type iminfo_commander
 
 contains
+
     !> checkbox is a program for checking the image dimensions of MRC and SPIDER stacks and volumes
     subroutine exec_check_box( self, cline )
         class(check_box_commander), intent(inout) :: self
@@ -58,7 +45,8 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_CHECK_BOX NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_check_box
-!> for checking the number of images in MRC and SPIDER stacks
+
+    !> for checking the number of images in MRC and SPIDER stacks
     subroutine exec_check_nptcls( self, cline )
         class(check_nptcls_commander), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
@@ -69,6 +57,7 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_CHECK_NPTCLS NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_check_nptcls
+
     !> iminfo is a program for printing header information in MRC and SPIDER stacks and volumes
     subroutine exec_iminfo( self, cline)
         use simple_image,   only: image

@@ -1,7 +1,4 @@
-!------------------------------------------------------------------------------!
-! SIMPLE v3.0         Elmlund & Elmlund Lab          simplecryoem.com          !
-!------------------------------------------------------------------------------!
-!> Simple optimisation module: Fourier-expanded shift search
+! shift search using expanded Fourier transforms (used in unblur)
 module simple_ftexp_shsrch
 use simple_opt_factory, only: opt_factory
 use simple_opt_spec,    only: opt_spec
@@ -24,6 +21,7 @@ real,    parameter            :: TOL=1e-4          !< tolerance parameter
 integer, parameter            :: MAXITS=30         !< maximum number of iterations
 
 contains
+
     !> Initialise  ftexp_shsrch
     subroutine ftexp_shsrch_init( ref, ptcl, lims, opt, nrestarts_in )
         class(ft_expanded), target, intent(in) :: ref, ptcl
@@ -57,6 +55,7 @@ contains
         reference => ref
         particle  => ptcl
     end subroutine ftexp_shsrch_reset_ptrs
+
     !> Cost function
     function ftexp_shsrch_cost( vec, D ) result( cost )
         integer, intent(in) :: D
@@ -64,6 +63,7 @@ contains
         real :: cost
         cost = -reference%corr_shifted(particle, -vec)
     end function ftexp_shsrch_cost
+    
     !> Main search routine
     function ftexp_shsrch_minimize( prev_corr, prev_shift ) result( cxy )
         real, optional, intent(in) :: prev_corr, prev_shift(2)

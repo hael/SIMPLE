@@ -1,7 +1,4 @@
-!------------------------------------------------------------------------------!
-! SIMPLE v3.0         Elmlund & Elmlund Lab          simplecryoem.com          !
-!------------------------------------------------------------------------------!
-!> Simple image module: Time series tracker
+! time series tracker intended for movies of nanoparticles spinning in solution
 module simple_tseries_tracker
 !$ use omp_lib
 !$ use omp_lib_kinds
@@ -23,6 +20,7 @@ integer                :: ldim(3), nframes, box, nx, ny, offset
 real                   :: smpd, sxx, lp
 
 contains
+
     !> initialise time series tracker
     !! \param filetabname file table name
     !! \param boxcoord box coordinates
@@ -61,6 +59,7 @@ contains
         particle_locations(1,1) = boxcoord(1)
         particle_locations(1,2) = boxcoord(2)
     end subroutine init_tracker
+
     !> time series particle tracker
     subroutine track_particle
         use simple_jiffys, only: progress
@@ -82,6 +81,7 @@ contains
             call update_reference(pos)
         end do
     end subroutine track_particle
+    
     !> write results of time series tracker
     subroutine write_tracked_series( fbody, neg )
         use simple_filehandling, only: get_fileunit

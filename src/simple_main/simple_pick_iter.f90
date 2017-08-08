@@ -1,7 +1,4 @@
-!------------------------------------------------------------------------------!
-! SIMPLE v3.0         Elmlund & Elmlund Lab          simplecryoem.com          !
-!------------------------------------------------------------------------------!
-!> Simple module picker iterator
+! particle picker iterator
 module simple_pick_iter
 use simple_picker
 use simple_defs

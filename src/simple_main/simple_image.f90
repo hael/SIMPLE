@@ -1,11 +1,5 @@
-!------------------------------------------------------------------------------!
-! SIMPLE v3.0         Elmlund & Elmlund Lab          simplecryoem.com          !
-!------------------------------------------------------------------------------!
-!>  \brief  SIMPLE image class
-!!
-!!
-!------------------------------------------------------------------------------!
-
+! the abstract image data type and its methods. 2D/3D & FT/real all implemented by this class
+! and Fourier transformations done in-place to reduce memory usage
 module simple_image
 !$ use omp_lib
 !$ use omp_lib_kinds

@@ -1,7 +1,4 @@
-!------------------------------------------------------------------------------!
-! SIMPLE v3.0         Elmlund & Elmlund Lab          simplecryoem.com          !
-!------------------------------------------------------------------------------!
-!> Simple movie watcher class
+! movie watcher for stream processing
 module simple_moviewatcher
 use simple_defs
 use simple_syscalls
@@ -15,27 +12,24 @@ private
 
 type moviewatcher
     private
-        character(len=STDLEN)              :: cwd       = ''    !< CWD
-        character(len=STDLEN)              :: watch_dir = ''    !< movies directory to watch
-        character(len=STDLEN), allocatable :: history(:)        !< history of movies detected
-        integer                            :: n_history = 0     !< history of movies detected
-        integer                            :: report_time       !< time ellapsed prior to processing
-        integer                            :: starttime         !< time of first watch
-        integer                            :: ellapsedtime      !< time ellapsed between last and first watch
-        integer                            :: lastreporttime    !< time ellapsed between last and first watch
-        integer                            :: n_watch   = 0     !< number of times the folder has been watched
-        integer                            :: n_fails   = 0     !< number of times a watch has resulted in some error
-        logical                            :: doprint   = .false.
-
+    character(len=STDLEN)              :: cwd       = ''    !< CWD
+    character(len=STDLEN)              :: watch_dir = ''    !< movies directory to watch
+    character(len=STDLEN), allocatable :: history(:)        !< history of movies detected
+    integer                            :: n_history = 0     !< history of movies detected
+    integer                            :: report_time       !< time ellapsed prior to processing
+    integer                            :: starttime         !< time of first watch
+    integer                            :: ellapsedtime      !< time ellapsed between last and first watch
+    integer                            :: lastreporttime    !< time ellapsed between last and first watch
+    integer                            :: n_watch   = 0     !< number of times the folder has been watched
+    integer                            :: n_fails   = 0     !< number of times a watch has resulted in some error
+    logical                            :: doprint   = .false.
   contains
-
     ! doers
     procedure          :: watch
     procedure, private :: is_past
     procedure, private :: add2history
     ! destructor
     procedure          :: kill
-
 end type
 
 interface moviewatcher

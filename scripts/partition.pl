@@ -1,6 +1,8 @@
 #!/usr/bin/perl
+
 use warnings;
 use strict;
+
 if( scalar(@ARGV) < 1 ){
     die "Script needs (1) filebody and (2) chunksize as input to create partitions\n";
 }

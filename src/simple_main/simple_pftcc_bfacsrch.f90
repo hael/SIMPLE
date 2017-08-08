@@ -1,7 +1,4 @@
-!------------------------------------------------------------------------------!
-! SIMPLE v3.0         Elmlund & Elmlund Lab          simplecryoem.com          !
-!------------------------------------------------------------------------------!
-!> Simple class:  B factor search of polar FT correlations 
+! B-factor search
 module simple_pftcc_bfacsrch
 use simple_opt_spec,          only: opt_spec
 use simple_pftcc_opt,         only: pftcc_opt

@@ -1,7 +1,4 @@
-!------------------------------------------------------------------------------!
-! SIMPLE v3.0         Elmlund & Elmlund Lab          simplecryoem.com          !
-!------------------------------------------------------------------------------!
-!> Simple optimisation module: Fourier shift search
+! rotational origin shift search in the Fourier domain
 module simple_ft_shsrch
 use simple_opt_factory, only: opt_factory
 use simple_opt_spec,    only: opt_spec

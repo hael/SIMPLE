@@ -1,7 +1,5 @@
-!------------------------------------------------------------------------------!
-! SIMPLE v3.0         Elmlund & Elmlund Lab          simplecryoem.com          !
-!------------------------------------------------------------------------------!
-!> Simple projector class
+! projection of 3D volumes in the Fourier domain by convolution interpolation
+! to generate band-pass limited Cartesian and polar 2D Fourier transforms 
 module simple_projector
 !$ use omp_lib
 !$ use omp_lib_kinds

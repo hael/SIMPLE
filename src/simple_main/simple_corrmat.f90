@@ -1,7 +1,4 @@
-!------------------------------------------------------------------------------!
-! SIMPLE v3.0         Elmlund & Elmlund Lab          simplecryoem.com          !
-!------------------------------------------------------------------------------!
-!> \brief Simple module for calculation of cartesian correlation matricies
+! for calculation of cartesian correlation matrices
 module simple_corrmat
 !$ use omp_lib
 !$ use omp_lib_kinds
@@ -21,7 +18,6 @@ type(image)          :: mskimg
 integer, allocatable :: pairs(:,:)
 integer              :: nptcls, ntot, npix, norig, nsel
 
-    
 contains
     
     subroutine calc_cartesian_corrmat_1( imgs, corrmat, msk, lp )

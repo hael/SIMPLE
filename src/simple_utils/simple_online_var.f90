@@ -1,7 +1,4 @@
-!------------------------------------------------------------------------------!
-! SIMPLE v3.0         Elmlund & Elmlund Lab          simplecryoem.com          !
-!------------------------------------------------------------------------------!
-!> Simple class:  real-time stats module
+! online moments estimation
 module simple_online_var
 use simple_defs ! singleton
 implicit none

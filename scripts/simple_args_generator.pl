@@ -1,10 +1,9 @@
 #!/usr/bin/perl
-#------------------------------------------------------------------------------!
-# SIMPLE              Elmlund & Elmlund Lab          simplecryoem.com          !
-#------------------------------------------------------------------------------!
+
 use warnings;
 use strict;
 use File::Compare;
+
 # read the simple_params.f90 into an array
 my @lines;
 my @vars;
@@ -67,17 +66,7 @@ unlink(${tmp_varlist})# do nothing
 # generate the code
 unlink($tmp_argsfile);
 open(MODULE, "> ".$tmp_argsfile) or die "Cannot open simple_args.f90\n";
-print MODULE "!------------------------------------------------------------------------------!
-! SIMPLE v3.0         Elmlund & Elmlund Lab          simplecryoem.com          !
-!------------------------------------------------------------------------------!
-!\> \\brief simple_args is for error checking of the SIMPLE command line arguments.
-!!
-! The code is distributed with the hope that it will be useful, but _WITHOUT_ _ANY_ _WARRANTY_. Redistribution
-! or modification is regulated by the GNU General Public License. *Author:* Hans Elmlund, 2011-08-18.
-!
-!
-!==Changes are documented below
-!  Modified  2017  Michael Eager - create at compile time
+print MODULE "! for error checking of the SIMPLE command line arguments
 module simple_args
 use simple_defs
 implicit none

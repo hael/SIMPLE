@@ -1,7 +1,4 @@
-!------------------------------------------------------------------------------!
-! SIMPLE v3.0         Elmlund & Elmlund Lab          simplecryoem.com          !
-!------------------------------------------------------------------------------!
-!> Simple image module: generate mask from images
+! 2D/3D envelope and adaptive masking
 module simple_masker
 use simple_defs    ! use all in there
 use simple_image,  only: image

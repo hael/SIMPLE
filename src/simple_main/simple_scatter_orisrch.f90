@@ -1,7 +1,4 @@
-!------------------------------------------------------------------------------!
-! SIMPLE v3.0         Elmlund & Elmlund Lab          simplecryoem.com          !
-!------------------------------------------------------------------------------!
-!> Simple ori methods module: scatter orientation search
+! scatter orientation search
 module simple_scatter_orisrch
 use simple_defs
 use simple_oris, only: oris

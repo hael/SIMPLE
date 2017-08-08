@@ -1,7 +1,4 @@
-!------------------------------------------------------------------------------!
-! SIMPLE v3.0         Elmlund & Elmlund Lab          simplecryoem.com          !
-!------------------------------------------------------------------------------!
-!> Simple class: magic boxes 
+! box sizes optimised for FFTW perfomance
 module simple_magic_boxes
 use simple_math, only: find
 implicit none

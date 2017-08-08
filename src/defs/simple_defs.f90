@@ -1,19 +1,7 @@
-!------------------------------------------------------------------------------!
-! SIMPLE , Elmlund & Elmlund Lab,     simplecryoem.com                         !
-!------------------------------------------------------------------------------!
-!> \brief Simple_defs is the main singleton module for all the global variables
-!
-!! DEBUG and VERBOSE modes can be enabled at compile-time or run-time
-!! BUILD_DESC uses the cmake build to describe <GNU/Intel/PGI>_<RELEASE/DEBUG>_<FFTW/MKL>
-!! SimpleGitVersion include file contains the string definitions for SIMPLE_PATH and version info
-!
-!! \author Cyril Reboul, Michael Eager & Hans Elmlund 
-!
-! The code is distributed with the hope that it will be useful, but WITHOUT ANY
-! WARRANTY. Redistribution and modification is regulated by the GNU General
-! Public License.
-! -----------------------------------------------------------------------------!
-
+! module with global variables
+! DEBUG and VERBOSE modes can be enabled at compile-time or run-time
+! BUILD_DESC uses the cmake build to describe <GNU/Intel/PGI>_<RELEASE/DEBUG>_<FFTW/MKL>
+! SimpleGitVersion include file contains the string definitions for SIMPLE_PATH and version info
 module simple_defs
 use, intrinsic :: iso_c_binding
 implicit none
@@ -56,31 +44,31 @@ real(sp), parameter :: ATHRES_LIM = 5.
 ! constants for masks
 real, parameter :: COSMSKHALFWIDTH = 3.0
 
-!> plan for the CTF
+! plan for the CTF
 type :: ctfplan
     character(len=STDLEN) :: mode='' !< astig/noastig
     character(len=STDLEN) :: flag='' !< flag: <mul|flip|no>
 end type ctfplan
 
-!! constants for picker
+! constants for picker
 real,    parameter :: PICKER_SHRINK        = 4.
 real,    parameter :: PICKER_SHRINK_REFINE = 2.
 integer, parameter :: PICKER_OFFSET        = 3
 
-!! constants for interpolation
+! constants for interpolation
 real, parameter :: KBWINSZ = 1.5    !< interpolation window size
 real, parameter :: KBALPHA = 2.0    !< interpolation alpha (smoothing constant)
 
 integer, parameter :: SPECWMINPOP=2000 !< minimum population for spectral weighting
 
-!! SNHC-related global vars
+! SNHC-related global vars
 character(len=32), parameter :: SNHCDOC = 'snhc_oris.txt'
 character(len=32), parameter :: SNHCVOL = 'snhc_recvol_state'
 integer,           parameter :: SZSN_INIT = 5
 integer,           parameter :: SZSN_STEP = 3
 integer,           parameter :: SZSN_MAX  = 20
 
-!! constants that control search and convergence
+! constants that control search and convergence
 real,    parameter :: FRAC_SH_LIM      = 80.0 !< at what frac to turn on the shift search
 real,    parameter :: FRAC_INTERPOL    = 60.0 ! at what frac to turn on the gridding interpolation (2D)
 real,    parameter :: EXTRINITHRESH    = 0.5
@@ -102,10 +90,9 @@ character(len=STDLEN) :: exec_abspath_glob !< global executable absolute path
 #else
   integer, parameter :: img_kind = SP
 #endif
+integer, parameter :: fp_kind = DP
 
-  integer, parameter :: fp_kind = DP
-
-!! Debugging and print verbosity flags
+! Debugging and print verbosity flags
 #ifdef _DEBUG
   logical :: global_debug=.true.          !< global debugging flag
   logical :: global_verbose=.true.        !< global flag for verbosity set to TRUE in debug mode
@@ -119,7 +106,7 @@ character(len=STDLEN) :: exec_abspath_glob !< global executable absolute path
 #endif
   logical :: global_warn=.false.          !< warning flag
 
-!! append SIMPLE_VERSION and SIMPLE_GIT_VERSION strings to simple_defs
+! append SIMPLE_VERSION and SIMPLE_GIT_VERSION strings to simple_defs
 #include "SimpleGitVersion.h"
 
 end module simple_defs

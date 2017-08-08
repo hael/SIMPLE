@@ -1,18 +1,4 @@
-!------------------------------------------------------------------------------!
-! SIMPLE v3.0         Elmlund & Elmlund Lab          simplecryoem.com          !
-!------------------------------------------------------------------------------!
-!> Simple commander module: mask interface
-!
-!! This class contains the set of concrete mask commanders of the SIMPLE
-!! library. This class provides the glue between the reciver (main reciever is
-!! simple_exec program) and the abstract action, which is simply execute
-!! (defined by the base class: simple_commander_base). Later we can use the
-!! composite pattern to create MacroCommanders (or workflows)
-!
-! The code is distributed with the hope that it will be useful, but _WITHOUT_ _ANY_ _WARRANTY_.
-! Redistribution and modification is regulated by the GNU General Public License.
-! *Authors:* Cyril Reboul & Hans Elmlund 2016
-!
+! concrete commander: masking routines
 module simple_commander_mask
 use simple_defs
 use simple_cmdline,        only: cmdline

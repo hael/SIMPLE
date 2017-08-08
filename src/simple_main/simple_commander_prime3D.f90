@@ -1,44 +1,4 @@
-!------------------------------------------------------------------------------!
-! SIMPLE v3.0         Elmlund & Elmlund Lab          simplecryoem.com          !
-!------------------------------------------------------------------------------!
-!> simple_commander_prime3D
-!
-!! This class contains the set of concrete prime3D commanders of the SIMPLE
-!! library. This class provides the glue between the reciver (main reciever is
-!! simple_exec program) and the abstract action, which is simply execute
-!! (defined by the base class: simple_commander_base). Later we can use the
-!! composite pattern to create MacroCommanders (or workflows)
-!!
-!!
-!! \see  http://simplecryoem.com/tutorials.html?#ab-initio-3d-reconstruction-from-class-averages-using-prime3d
-!! Ab initio 3D Reconstruction from Class Averages Using PRIME3D
-!!
-!! A major obstacle to achieving near-atomic resolution with single-particle
-!! cryo-EM is the problem of generating an accurate de novo 3D reconstruction.
-!! Many cryo-EM structures are therefore solved by alignment of the images to a
-!! priori models. The use of prior information, in the form of either a starting
-!! model from an independent source or an assumption of a particular point-group
-!! symmetry, is associated with the risk of introducing model bias. The model
-!! bias phenomenon is often illustrated by alignment of pure noise images to an
-!! image of Einstein. The image of Einstein is almost perfectly reproduced when
-!! the aligned noise images are averaged. It is often stated that low-pass
-!! filtering of X-ray maps, before they are used as starting models, eliminates
-!! model bias. This is a misunderstanding, as any model can be convincingly
-!! reproduced from noisy images . Most refinement software, such as FREALIGN ,
-!! RELION , or projection matching , depends on an accurate starting model for
-!! convergence to a high-resolution map. If the starting model is not supported
-!! by the images, there is a potent risk of introducing model bias. To what
-!! degree a starting model can bias the final 3D structure needs to be better
-!! characterised by methodological studies. We introduced the PRIME3D algorithm
-!! to remove the requirement for a priori structural knowledge and open the
-!! method to the study of particles with novel structure. Robust algorithms for
-!! ab initio 3D reconstruction are particularly important for the analysis of
-!! small particles with low symmetry.
-!
-! The code is distributed with the hope that it will be useful, but _WITHOUT_ _ANY_ _WARRANTY_.
-! Redistribution and modification is regulated by the GNU General Public License.
-! *Authors:* Cyril Reboul & Hans Elmlund 2016
-!
+! concrete commander: prime3D for ab initio 3D reconstruction and 3D refinement
 module simple_commander_prime3D
 use simple_defs
 use simple_cmdline,        only: cmdline

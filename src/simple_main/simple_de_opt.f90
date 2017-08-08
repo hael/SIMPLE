@@ -1,7 +1,4 @@
-!------------------------------------------------------------------------------!
-! SIMPLE v3.0         Elmlund & Elmlund Lab          simplecryoem.com          !
-!------------------------------------------------------------------------------!
-!> Simple optimisation module: DE optimisation
+! continuous function optimisation by differential evolution
 module simple_de_opt
 use simple_defs
 use simple_optimizer, only: optimizer

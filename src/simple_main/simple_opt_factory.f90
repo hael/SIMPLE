@@ -1,7 +1,4 @@
-!------------------------------------------------------------------------------!
-! SIMPLE v3.0         Elmlund & Elmlund Lab          simplecryoem.com          !
-!------------------------------------------------------------------------------!
-!> Simple optimisation class - abstract factory module
+! factory pattern class for the SIMPLE optimisers
 module simple_opt_factory
 use simple_optimizer,          only: optimizer
 use simple_opt_spec,           only: opt_spec

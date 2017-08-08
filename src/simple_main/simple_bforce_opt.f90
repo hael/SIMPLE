@@ -1,16 +1,4 @@
-!------------------------------------------------------------------------------!
-! SIMPLE v3.0         Elmlund & Elmlund Lab          simplecryoem.com          !
-!------------------------------------------------------------------------------!
-!> Simple optimisation module: brute force optimisation
-!!
-!! This class is based on a class used in CTFFIND4, developed by Alexis Rohou
-!! and Nikolaus Grigorieff at Janelia Farm. The below copyright statement therefore 
-!! needs to be included here:
-!! Copyright 2014 Howard Hughes Medical Institute
-!! All rights reserved
-!! Use is subject to Janelia Farm Research Campus Software Copyright 1.1
-!! license terms ( http://license.janelia.org/license/jfrc_copyright_1_1.html )
-!!
+! brute force function minimisation
 module simple_bforce_opt
 use simple_defs
 use simple_optimizer, only: optimizer

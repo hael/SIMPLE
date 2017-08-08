@@ -1,7 +1,4 @@
-!------------------------------------------------------------------------------!
-! SIMPLE v3.0         Elmlund & Elmlund Lab          simplecryoem.com          !
-!------------------------------------------------------------------------------!
-!> Simple Kaiser-Bessel interpolation module
+! Kaiser-Bessel interpolation kernel
 module simple_kbinterpol
 use simple_defs
 implicit none

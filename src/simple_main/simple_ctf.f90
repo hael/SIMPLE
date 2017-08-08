@@ -1,16 +1,11 @@
-!------------------------------------------------------------------------------!
-! SIMPLE v3.0         Elmlund & Elmlund Lab          simplecryoem.com          !
-!------------------------------------------------------------------------------!
-!>  \brief  Class that defines the Contrast Transfer Function (CTF) of the electron microscope
-!!
-!! This class is based on a class used in CTFFIND4, developed by Alexis Rohou
-!! and Nikolaus Grigorieff at Janelia Farm. The below copyright statement therefore
-!! needs to be included here:
-!! Copyright 2014 Howard Hughes Medical Institute
-!! All rights reserved
-!! Use is subject to Janelia Farm Research Campus Software Copyright 1.1
-!! license terms ( http://license.janelia.org/license/jfrc_copyright_1_1.html )
-!!
+! defines the Contrast Transfer Function (CTF) of the electron microscope
+! based on a class used in CTFFIND4, developed by Alexis Rohou and Nikolaus 
+! Grigorieff at Janelia Farm. The below copyright statement therefore
+! needs to be included here:
+! Copyright 2014 Howard Hughes Medical Institute
+! All rights reserved
+! Use is subject to Janelia Farm Research Campus Software Copyright 1.1
+! license terms ( http://license.janelia.org/license/jfrc_copyright_1_1.html )
 module simple_ctf
 !$ use omp_lib
 !$ use omp_lib_kinds
@@ -440,7 +435,8 @@ contains
         enddo
     end subroutine solve4PhSh
 
-    !>  \brief  sqFreq4PhSh Compute set of squared spatial frequencies at which the given phase shift is obtained by the CTF
+    !>  \brief  sqFreq4PhSh Compute set of squared spatial frequencies at which the given phase shift 
+    !!          is obtained by the CTF
     subroutine sqFreq4PhSh( self, phase_shifts, ang, spaFreqSq, nsols )
         use simple_math, only: hpsort
         class(ctf), intent(in)    :: self
