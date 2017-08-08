@@ -137,17 +137,18 @@ subroutine test_args()
     character(len=STDLEN) :: varlist = 'simple/simple_varlist.txt'
     write(*,'(a)') '**info(simple_args_unit_test): testing it all'
     write(*,'(a)') '**info(simple_args_unit_test, part 1): testing for args that should be present'
-    
     as = args()
     funit = get_fileunit()
     write(*,'(a)') '**info(simple_args_unit_test): getting SIMPLE_PATH env variable'
     call getenv(\"SIMPLE_PATH\",spath)
     spath=adjustl(trim(spath))
-    print *, 'get_environment_variable found SIMPLE_PATH ', trim(spath)
-    write(*,'(a)') '**info(simple_args_unit_test): getting SIMPLE_SOURCE_PATH env variable'
-    call getenv(\"SIMPLE_SOURCE_PATH\",srcpath)
+    print *, 'get_environment_variable found SIMPLE_PATH    ', trim(spath)
+    print *, 'simple_defs compile-time variable SIMPLE_PATH:', trim(SIMPLE_PATH)
+    write(*,'(a)') '**info(simple_args_unit_test): getting SIMPLE_SOURCE_PATH variable'
+    print *, 'simple_defs variable SIMPLE_SOURCE_PATH', trim(SIMPLE_SOURCE_PATH)
+    srcpath = SIMPLE_SOURCE_PATH
     srcpath=adjustl(trim(srcpath))
-    print *, 'get_environment_variable found SIMPLE_SOURCE_PATH ', trim(srcpath)
+
     print *, 'appending varlist '
     vfilename = trim(adjustl(spath)) // '/lib/' // trim(adjustl(varlist))
     vfilename = trim(adjustl(vfilename))
@@ -163,7 +164,7 @@ subroutine test_args()
       call file_stat(vfilename,status,buff)
       if(status /= 0)then
         print *,' varlist not in lib64/simple/,  calling simple_args_varlist.pl'
-        call exec_cmdline(\"simple_args_varlist.pl\")
+        call exec_cmdline(\"cd \"//srcpath//\";simple_args_varlist.pl\")
         call file_stat(vfilename,status,buff)
         if(status /= 0)then
           print *,' varlist still not in lib/simple/ after calling simple_args_varlist.pl'

@@ -1,6 +1,5 @@
 
 export SIMPLE_EMAIL="my.name@uni.edu"
 export SIMPLE_QSYS="local"
-export SIMPLE_SOURCE_PATH=@CMAKE_SOURCE_DIR@
 export SIMPLE_PATH=@CMAKE_INSTALL_PREFIX@
 export PATH=${SIMPLE_PATH}/scripts:${SIMPLE_PATH}/bin:${PATH}

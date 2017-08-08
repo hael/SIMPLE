@@ -1,7 +1,6 @@
 
 setenv SIMPLE_EMAIL="my.name@uni.edu"
 setenv SIMPLE_QSYS="local"
-setenv SIMPLE_SOURCE_PATH @CMAKE_SOURCE_DIR@
 setenv SIMPLE_PATH=@CMAKE_BINARY_DIR@
 set path=(${SIMPLE_PATH}/scripts ${SIMPLE_PATH}/bin $path)
 if [[ "$OSTYPE" == "darwin"* ]];then
