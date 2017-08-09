@@ -21,6 +21,7 @@ Makefile_macros
 junk*
 *.dSYM
 bin/
+lib/
 build*
 obj/
 add2.bashrc

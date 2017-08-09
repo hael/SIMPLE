@@ -35,17 +35,17 @@ contains
         class(params)                 :: p_master
         logical, optional             :: stream
         character(len=:), allocatable :: qsnam, tpi, hrs_str, mins_str, secs_str
-        integer                       :: io_stat, partsz, hrs, mins, secs, ipart
+        integer                       :: io_stat, partsz, hrs, mins, secs, ipart, nparts
         real                          :: rtpi, tot_time_sec
         logical                       :: sstream
         integer, parameter            :: MAXNKEYS = 30
-        !DEBUG removed -- use simple_local_flags when debugging
         call self%kill
         sstream = .false.
         if( present(stream) ) sstream = stream
+        nparts = p_master%nparts
         select case(p_master%split_mode)
             case('even')
-                self%parts = split_nobjs_even(p_master%nptcls, p_master%nparts)
+                self%parts = split_nobjs_even(p_master%nptcls, nparts)
                 partsz     = self%parts(1,2) - self%parts(1,1) + 1
             case('chunk')
                 self%parts = split_nobjs_in_chunks(p_master%nptcls, p_master%chunksz)
@@ -54,6 +54,11 @@ contains
                 allocate(self%parts(p_master%nptcls,2))
                 self%parts(:,:) = 1
                 partsz          = 1
+            case('stream')
+                nparts = p_master%ncunits
+                allocate(self%parts(p_master%nptcls,2)) ! unused
+                self%parts(:,:) = 1 ! unused
+                partsz          = 1 ! unused
             case DEFAULT
                 write(*,*) 'split_mode: ', trim(p_master%split_mode)
                 stop 'Unsupported split_mode'
@@ -83,7 +88,7 @@ contains
         ! create the user specific qsys and qsys controller (script generator)
         self%simple_exec_bin = trim(self%qdescr%get('simple_path'))//'/bin/simple_exec'
         call self%qscripts%new(self%simple_exec_bin, self%myqsys, self%parts,&
-        &[1,p_master%nparts], p_master%ncunits, sstream )
+        &[1, nparts], p_master%ncunits, sstream )
         call self%qdescr%set('job_cpus_per_task', int2str(p_master%nthr))   ! overrides env file
         call self%qdescr%set('job_nparts',        int2str(p_master%nparts)) ! overrides env file
         deallocate(qsnam)

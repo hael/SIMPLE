@@ -10,16 +10,12 @@ use simple_ftiter,           only: test_ftiter
 use simple_ori,              only: test_ori, test_ori_dists
 use simple_oris,             only: test_oris
 use simple_image,            only: test_image
-use simple_hac,              only: test_hac
-use simple_kmeans,           only: test_kmeans
 use simple_shc_cluster,      only: test_shc_cluster
-use simple_aff_prop,         only: test_aff_prop
 use simple_args,             only: test_args
 use simple_online_var,       only: test_online_var
 use simple_hash,             only: test_hash
 use simple_imghead,          only: test_imghead
 use simple_jiffys,           only: simple_end
-use simple_ft_shsrch,        only: test_ft_shsrch
 use simple_ftexp_shsrch,     only: test_ftexp_shsrch
 implicit none
 character(8)          :: date
@@ -40,13 +36,9 @@ call test_ori_dists          ! pass with PGI
 call test_oris(.false.)      ! pass with PGI
 call test_imghead            ! NOT HAPPY: seems to believe it is an imgheadrec
 call test_image(.false.)     ! NOT HAPPY
-call test_hac                ! NOT HAPPY
-call test_kmeans             ! NOT HAPPY
 call test_shc_cluster        ! pass with PGI
-call test_aff_prop           ! pass with PGI
 call test_online_var         ! pass with PGI
 call test_hash               ! pass with PGI
-call test_ft_shsrch          ! pass with PGI
 call test_ftexp_shsrch       ! pass with PGI
 ! LOCAL TESTFUNCTIONS
 call test_multinomal         ! pass with PGI

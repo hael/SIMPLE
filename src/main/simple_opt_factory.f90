@@ -5,7 +5,6 @@ use simple_opt_spec,           only: opt_spec
 use simple_bfgs_opt,           only: bfgs_opt
 use simple_powell_opt,         only: powell_opt
 use simple_simplex_opt,        only: simplex_opt
-use simple_oasis_opt,          only: oasis_opt
 use simple_bforce_opt,         only: bforce_opt
 use simple_particle_swarm_opt, only: particle_swarm_opt
 use simple_de_opt,             only: de_opt
@@ -39,8 +38,6 @@ contains
                 allocate(powell_opt         :: self%optimizer_type)
             case('simplex')
                 allocate(simplex_opt        :: self%optimizer_type)
-            case('oasis')
-                allocate(oasis_opt          :: self%optimizer_type)
             case('bforce')
                 allocate(bforce_opt         :: self%optimizer_type)
             case('pso')

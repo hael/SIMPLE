@@ -3,6 +3,8 @@ module simple_filehandling
 use simple_defs
 implicit none
 
+private :: sys_stat
+
 interface arr2file
     module procedure arr2file_1
     module procedure arr2file_2

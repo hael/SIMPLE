@@ -237,44 +237,4 @@ contains
         end do
     end function ssnr2optlp
 
-    !> \brief  calculates the particle SSNR in 2D (Grigorieff)
-    function estimate_pssnr2D( avr, fsc ) result( pssnr )
-        use simple_AVratios, only: AVratios
-        class(AVratios), intent(in) :: avr     !< Atomic to volume conversion object
-        real, intent(in)            :: fsc(:)  !<  instrument FSC
-        real, allocatable :: pssnr(:) !<  particle SSNR
-        pssnr = fsc2ssnr(fsc)
-        pssnr = pssnr*avr%Abox_o_Aptcl()*avr%Vmsk_o_Vbox()
-    end function estimate_pssnr2D
-
-    !> \brief  calculates the particle SSNR in 3D (Grigorieff)
-    function estimate_pssnr3D( avr, fsc ) result( pssnr )
-        use simple_AVratios, only: AVratios
-        class(AVratios), intent(in) :: avr !< Atomic to volume conversion object
-        real, intent(in)            :: fsc(:) !<  instrument FSC
-        real, allocatable :: pssnr(:) !<  particle SSNR
-        pssnr = estimate_pssnr2D(avr, fsc)
-        pssnr = pssnr*avr%Vbox_o_Vptcl()*avr%Aptcl_o_Abox()
-    end function estimate_pssnr3D
-
-    !> \brief  calculates the particle SSNR in 2D (Grigorieff)
-    function from_ssnr_estimate_pssnr2D( avr, ssnr ) result( pssnr )
-        use simple_AVratios, only: AVratios
-        class(AVratios), intent(in) :: avr !< Atomic to volume conversion object
-        real, intent(in)            :: ssnr(:) !<  instrument SSNR
-        real, allocatable :: pssnr(:) !<  particle SSNR
-        allocate(pssnr(size(ssnr)), source=ssnr)
-        pssnr = pssnr*avr%Abox_o_Aptcl()*avr%Vmsk_o_Vbox()
-    end function from_ssnr_estimate_pssnr2D
-
-    !> \brief  calculates the particle SSNR in 3D (Grigorieff)
-    function from_ssnr_estimate_pssnr3D( avr, ssnr ) result( pssnr )
-        use simple_AVratios, only: AVratios
-        class(AVratios), intent(in) :: avr !< Atomic to volume conversion object
-        real, intent(in)            :: ssnr(:) !<  instrument SSNR
-        real, allocatable :: pssnr(:)           !<  particle SSNR
-        pssnr = from_ssnr_estimate_pssnr2D(avr, ssnr)
-        pssnr = pssnr*avr%Vbox_o_Vptcl()*avr%Aptcl_o_Abox()
-    end function from_ssnr_estimate_pssnr3D
-
 end module simple_estimate_ssnr

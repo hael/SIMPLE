@@ -120,12 +120,6 @@ contains
                     call primesrch2D(iptcl)%nn_srch(pftcc, iptcl, b%a, b%nnmat)
                 end do
                 !$omp end parallel do
-            case('bfac')
-                !$omp parallel do default(shared) schedule(guided) private(iptcl) proc_bind(close)
-                do iptcl=p%fromp,p%top
-                    call primesrch2D(iptcl)%bfac_srch(pftcc, iptcl, b%a)
-                end do
-                !$omp end parallel do
             case DEFAULT
                 if( p%oritab .eq. '' )then
                     !$omp parallel do default(shared) schedule(guided) private(iptcl) proc_bind(close)

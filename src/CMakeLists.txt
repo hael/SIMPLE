@@ -6,9 +6,9 @@
 
 add_custom_target(simple_args
   COMMAND SIMPLE_PATH=${CMAKE_BINARY_DIR} ${CMAKE_SOURCE_DIR}/scripts/simple_args_generator.pl
-  DEPENDS "${CMAKE_SOURCE_DIR}/scripts/simple_args_generator.pl" "${CMAKE_CURRENT_SOURCE_DIR}/simple_main/simple_params.f90"
+  DEPENDS "${CMAKE_SOURCE_DIR}/scripts/simple_args_generator.pl" "${CMAKE_CURRENT_SOURCE_DIR}/main/simple_params.f90"
   BYPRODUCTS "${CMAKE_BINARY_DIR}/lib/simple/simple_args.f90" "${CMAKE_BINARY_DIR}/lib/simple/simple_varlist.txt"
-  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/simple_main
+  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/main
   USES_TERMINAL
   )
 
@@ -23,8 +23,8 @@ add_custom_target(simple_gen_doc_f90
 
 # if(NOT EXISTS "${CMAKE_BINARY_DIR}/lib/simple/simple_gen_doc.f90")
 # add_custom_target(simple_gen_doc
-#   COMMAND cp "${CMAKE_CURRENT_SOURCE_DIR}/simple_main/simple_gen_doc.f90" "${CMAKE_BINARY_DIR}/lib/simple/simple_gen_doc.f90"
-#   DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/simple_main/simple_gen_doc.f90"
+#   COMMAND cp "${CMAKE_CURRENT_SOURCE_DIR}/main/simple_gen_doc.f90" "${CMAKE_BINARY_DIR}/lib/simple/simple_gen_doc.f90"
+#   DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/main/simple_gen_doc.f90"
 #   WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
 #   USES_TERMINAL
 #   )
@@ -39,30 +39,26 @@ add_custom_target(simple_gen_doc_f90
 # endif()
 
 file(GLOB DEFS_src "${CMAKE_CURRENT_SOURCE_DIR}/defs/*.f[90][08]" PARENT_SCOPE)
-file(GLOB UTILS_src "${CMAKE_CURRENT_SOURCE_DIR}/simple_utils/*.f90" PARENT_SCOPE)
+file(GLOB UTILS_src "${CMAKE_CURRENT_SOURCE_DIR}/utils/*.f90" PARENT_SCOPE)
 if ( USE_CUDA )
   file(GLOB CUDA_src "${CMAKE_CURRENT_SOURCE_DIR}/cuda/*.f[90][08]" PARENT_SCOPE)
-##  list(REMOVE_ITEM UTILS_src "${CMAKE_CURRENT_SOURCE_DIR}/simple_utils/simple_timer_cuda.f90")
+##  list(REMOVE_ITEM UTILS_src "${CMAKE_CURRENT_SOURCE_DIR}/utils/simple_timer_cuda.f90")
 ## else()
-##   list(APPEND UTILS_src ${UTILS_src} "${CMAKE_SOURCE_DIR}/simple_utils/simple_timer_cuda.f90")
+##   list(APPEND UTILS_src ${UTILS_src} "${CMAKE_SOURCE_DIR}/utils/simple_timer_cuda.f90")
 endif()
 
 ##########################################################################
-# Simple_main folder
+# main folder
 ##########################################################################
-file(GLOB SIMPLE_src "${CMAKE_CURRENT_SOURCE_DIR}/simple_main/*.f[09][0-9]" PARENT_SCOPE)
+file(GLOB SIMPLE_src "${CMAKE_CURRENT_SOURCE_DIR}/main/*.f[09][0-9]" PARENT_SCOPE)
 list(APPEND SIMPLE_src
   "${CMAKE_BINARY_DIR}/lib/simple/simple_args.f90")
 
 # Remove unused files
 list(REMOVE_ITEM SIMPLE_src
-  "${CMAKE_CURRENT_SOURCE_DIR}/simple_main/simple_polarft_corrcalc_backup.f90"
-  "${CMAKE_CURRENT_SOURCE_DIR}/simple_main/simple_polarft_corrcalc_dble.f90"
-  "${CMAKE_CURRENT_SOURCE_DIR}/simple_main/simple_cftcc_scatsrch.f90"
-  "${CMAKE_CURRENT_SOURCE_DIR}/simple_main/simple_kninterpol_elemental.f90"
-  "${CMAKE_CURRENT_SOURCE_DIR}/simple_utils/simple_wavelet.f90"
- "${CMAKE_CURRENT_SOURCE_DIR}/simple_utils/simple_wavelet_csd.f90"
-) #  "${CMAKE_CURRENT_SOURCE_DIR}/simple_main/simple_symsrcher.f90"
+  "${CMAKE_CURRENT_SOURCE_DIR}/main/simple_cftcc_scatsrch.f90"
+  "${CMAKE_CURRENT_SOURCE_DIR}/main/simple_kbinterpol_elemental.f90"
+) #  "${CMAKE_CURRENT_SOURCE_DIR}/main/simple_symsrcher.f90"
 
 
 set(CORELIB_src  ${DEFS_src} ${UTILS_src} ${SIMPLE_src})

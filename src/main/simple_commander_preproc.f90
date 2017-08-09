@@ -87,8 +87,8 @@ contains
         type(cmdline)           :: cline_extract
         character(len=STDLEN), allocatable :: movienames(:)
         character(len=:),      allocatable :: fname_ctffind_ctrl, fname_unidoc_output
-        character(len=:),      allocatable :: moviename_forctf, moviename_intg
-        character(len=STDLEN) :: boxfile, dir_ptcls
+        character(len=:),      allocatable :: moviename_forctf, moviename_intg, outfile
+        character(len=STDLEN) :: boxfile, dir_ptcls, movie_fbody, movie_ext
         type(params) :: p
         type(oris)   :: os_uni
         type(ori)    :: orientation
@@ -145,8 +145,22 @@ contains
                 stop 'fromp & top args need to be defined in parallel execution; exec_preproc'
             endif
         else
-            allocate(fname_ctffind_ctrl,  source='ctffind_ctrl_file.txt')
-            allocate(fname_unidoc_output, source='unidoc_output.txt')
+            if( p%stream.eq.'yes' )then
+                movie_ext   = fname2ext(trim(movienames(1)))
+                movie_fbody = get_fbody(trim(movienames(1)), trim(movie_ext))
+                if( cline%defined('dir_target') )then
+                    allocate(fname_ctffind_ctrl,  source=trim(p%dir_target)//'/'//&
+                    &'ctffind_ctrl_file_'//trim(movie_fbody)//'.txt')
+                    allocate(fname_unidoc_output, source=trim(p%dir_target)//'/'//&
+                    &'unidoc_output_'//trim(movie_fbody)//'.txt')
+                else
+                    allocate(fname_ctffind_ctrl,  source='ctffind_ctrl_file_'//trim(movie_fbody)//'.txt')
+                    allocate(fname_unidoc_output, source='unidoc_output_'//trim(movie_fbody)//'.txt')
+                endif
+            else
+                allocate(fname_ctffind_ctrl,  source='ctffind_ctrl_file.txt')
+                allocate(fname_unidoc_output, source='unidoc_output.txt')
+            endif
             ! determine loop range
             fromto(1) = 1
             if( cline%defined('startit') ) fromto(1) = p%startit

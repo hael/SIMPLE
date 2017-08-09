@@ -2,8 +2,10 @@
 module simple_qsys_ctrl
 use simple_defs
 use simple_qsys_base, only: qsys_base
+!use simple_qsys_env,  only: qsys_env
 use simple_chash,     only: chash
 use simple_strings,   only: int2str, int2str_pad
+use simple_cmdline,   only: cmdline
 implicit none
 
 public :: qsys_ctrl
@@ -29,6 +31,11 @@ type qsys_ctrl
     integer                        :: numlen = 0                 !< length of padded number string
     logical                        :: stream = .false.           !< stream flag
     logical                        :: existence = .false.        !< indicates existence
+    ! for streaming
+    class(cmdline), allocatable    :: cline_stack(:)
+    integer                        :: cline_stacksz
+
+
   contains
     ! CONSTRUCTOR
     procedure          :: new
@@ -52,6 +59,9 @@ type qsys_ctrl
     procedure          :: update_queue
     ! THE MASTER SCHEDULER
     procedure          :: schedule_jobs
+    ! STREAMING
+    procedure          :: schedule_streaming
+    procedure          :: add_to_streaming
     ! DESTRUCTOR
     procedure          :: kill
 end type qsys_ctrl
@@ -99,7 +109,7 @@ contains
         if( stream )then
             self%numlen = 5
         else
-            self%numlen =  len(int2str(self%nparts_tot))
+            self%numlen = len(int2str(self%nparts_tot))
         endif
         ! allocate
         allocate(   self%jobs_done(fromto_part(1):fromto_part(2)),&
@@ -107,7 +117,11 @@ contains
                     self%script_names(fromto_part(1):fromto_part(2)),&
                     self%jobs_done_fnames(fromto_part(1):fromto_part(2)), stat=alloc_stat)
         call alloc_err("In: simple_qsys_ctrl :: new", alloc_stat)
-        self%jobs_done      = .false.
+        if( self%stream )then
+            self%jobs_done = .true.
+        else
+            self%jobs_done = .false.
+        endif
         self%jobs_submitted = .false.
         ! create script names
         do ipart=fromto_part(1),fromto_part(2)
@@ -410,11 +424,12 @@ contains
             if( .not. self%jobs_done(ipart) )then
                 self%jobs_done(ipart) = file_exists(self%jobs_done_fnames(ipart))
             endif
-            ! this one is for streaming
-            if( self%jobs_done(ipart) ) self%jobs_submitted(ipart) = .true.
+            !! this one is for streaming
+            !if( self%jobs_done(ipart) ) self%jobs_submitted(ipart) = .true.
         end do
-        njobs_in_queue = count(self%jobs_submitted .eqv. (.not. self%jobs_done))
-        self%ncomputing_units_avail = self%ncomputing_units-njobs_in_queue
+        ! njobs_in_queue = count(self%jobs_submitted .eqv. (.not. self%jobs_done))
+        ! self%ncomputing_units_avail = self%ncomputing_units-njobs_in_queue
+        self%ncomputing_units_avail = min(count(self%jobs_done), self%ncomputing_units)
     end subroutine update_queue
 
     ! THE MASTER SCHEDULER
@@ -429,6 +444,84 @@ contains
             call simple_sleep(SHORTTIME)
         end do
     end subroutine schedule_jobs
+
+    ! STREAMING
+
+    subroutine schedule_streaming( self, q_descr )
+        class(qsys_ctrl),  intent(inout) :: self
+        class(chash),      intent(in)    :: q_descr
+        type(cmdline)         :: cline
+        type(chash)           :: job_descr
+        character(len=STDLEN) :: outfile, script_name
+        integer               :: ipart
+        call self%update_queue
+        print *,'schedule_streaming ncomputing_units_avail',self%ncomputing_units_avail
+        print *,'schedule_streaming stacksz',self%ncomputing_units_avail
+        if( self%cline_stacksz .eq. 0 )return
+        if( self%ncomputing_units_avail > 0 )then
+            do ipart = 1, self%ncomputing_units
+                print *,'schedule_streaming ipart stacksz',ipart, self%ncomputing_units_avail
+                if( self%cline_stacksz .eq. 0 )exit
+                if( self%jobs_done(ipart) )then
+                    cline = self%cline_stack(1)
+                    call updatestack
+                    call cline%gen_job_descr(job_descr)
+                    script_name = self%script_names(ipart)
+                    ! outfile     = 
+                    outfile     = self%jobs_done_fnames(ipart)
+                    self%jobs_submitted(ipart) = .true.
+                    self%jobs_done(ipart)      = .false.
+                    call self%generate_script_2(job_descr, q_descr, self%exec_binary, script_name, outfile)
+                    call self%submit_script( script_name )
+                endif
+            enddo
+        endif
+
+        contains 
+
+            ! move everything up so '1' is index for next job
+            subroutine updatestack
+                type(cmdline), allocatable :: tmp_stack(:)
+                integer :: i
+                if( self%cline_stacksz > 1 )then
+                    tmp_stack = self%cline_stack(2:)
+                    self%cline_stacksz = self%cline_stacksz-1
+                    deallocate(self%cline_stack)
+                    allocate(self%cline_stack(self%cline_stacksz))
+                    do i = 1, self%cline_stacksz
+                        self%cline_stack(i) = tmp_stack(i)
+                    enddo
+                    deallocate(tmp_stack)
+                else
+                    deallocate(self%cline_stack)
+                    self%cline_stacksz = 0
+                endif
+            end subroutine updatestack
+
+    end subroutine schedule_streaming
+
+    subroutine add_to_streaming( self, cline )
+        class(qsys_ctrl),  intent(inout) :: self
+        class(cmdline),    intent(in)    :: cline
+        type(cmdline), allocatable :: tmp_stack(:)
+        integer :: i
+        if( .not. allocated(self%cline_stack) )then
+            ! empty stack
+            allocate( self%cline_stack(1) )
+            self%cline_stack(1) = cline
+            self%cline_stacksz  = 1
+        else
+            ! append
+            tmp_stack = self%cline_stack
+            deallocate(self%cline_stack)
+            self%cline_stacksz = self%cline_stacksz + 1
+            allocate( self%cline_stack(self%cline_stacksz) )
+            do i = 1, self%cline_stacksz-1
+                self%cline_stack(i) = tmp_stack(i)
+            enddo
+            self%cline_stack(self%cline_stacksz)    = cline
+        endif
+    end subroutine add_to_streaming
 
     ! DESTRUCTOR
 

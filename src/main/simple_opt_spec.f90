@@ -5,6 +5,7 @@ implicit none
 
 public :: opt_spec
 private
+
 !> struct for all opt specifications
 type :: opt_spec
     procedure(costfun),  pointer, nopass :: costfun  =>null() !< defines cost function
@@ -20,7 +21,6 @@ type :: opt_spec
     integer               :: nbest=0                          !< number of best solutions used to re-estimate the model in CE
     integer               :: niter=0                          !< actual number of iterations
     integer               :: nrestarts=1                      !< number of restarts
-    integer               :: nsample=0                        !< number of samples per OASIS iteration
     integer               :: nevals=0                         !< total number of cost function evaluations
     integer               :: nstates=1                        !< number of states
     integer               :: npeaks=0                         !< number of peaks (local optima to identify)
@@ -33,7 +33,6 @@ type :: opt_spec
     real, allocatable     :: x(:)                             !< best/final solution
     real, allocatable     :: xi(:)                            !< search direction used in linmin
     real, allocatable     :: xt(:)                            !< test point, used in linmin
-    real, allocatable     :: sdevs(:)                         !< standard deviations of the variables, used in oasis
     real, allocatable     :: inipopulation(:,:)               !< input population for the evolutionary approaches
     real, allocatable     :: population(:,:)                  !< output solution population from the evolutionary approaches
     real, allocatable     :: peaks(:,:)                       !< output peaks (local optimal solutions)
@@ -75,8 +74,8 @@ contains
 
     !>  \brief  specifies the optimization parameters
     subroutine specify( self, str_opt, ndim, mode, ldim, ftol, gtol, maxits,&
-    nrestarts, nsample, limits, cyclic, verbose_arg, debug_arg, npop,&
-    eps, cfac, warn_arg, nbest, nstates, stepsz, npeaks, nnn )
+    nrestarts, limits, cyclic, verbose_arg, debug_arg, npop,&
+    cfac, warn_arg, nbest, nstates, stepsz, npeaks, nnn )
         use simple_jiffys, only: alloc_err
         class(opt_spec),            intent(inout) :: self           !< instance
         character(len=*),           intent(in)    :: str_opt        !< string descriptor (of optimization routine to be used)
@@ -88,7 +87,6 @@ contains
         integer,          optional, intent(in)    :: maxits         !< maximum number of iterations
         integer,          optional, intent(in)    :: nbest          !< nr of best solutions used to update the CE model
         integer,          optional, intent(in)    :: nrestarts      !< number of restarts
-        integer,          optional, intent(in)    :: nsample        !< number of samples per OASIS iteration
         integer,          optional, intent(in)    :: nstates        !< nr of states
         real,             optional, intent(in)    :: limits(ndim,2) !< variable bounds
         logical,          optional, intent(in)    :: cyclic(ndim)   !< to indicate which variables are cyclic (Euler angles)
@@ -99,7 +97,6 @@ contains
         integer,          optional, intent(in)    :: npeaks         !< number of peaks (local optima to identify)
         integer,          optional, intent(in)    :: nnn            !< number of nearest neighbors
         real,             optional, intent(in)    :: cfac           !< convergence factor (bfgs)
-        real,             optional, intent(in)    :: eps            !< learning rate (OASIS)
         real,             optional, intent(in)    :: stepsz(ndim)   !< step sizes for brute force search
         integer :: alloc_stat
         call self%kill
@@ -113,10 +110,6 @@ contains
             case('simplex')
                 if( .not. present(limits) ) stop 'need limits (variable bounds) for simplex opt; specify; simple_opt_spec'
                 self%maxits = ndim*1000
-            case('oasis')
-                if( .not. present(limits) ) stop 'need limits (variable bounds) for oasis opt; specify; simple_opt_spec'
-                self%maxits  = ndim*1000
-                self%nsample = max(5,ndim)
             case('pso')
                 self%npop    = 150
                 self%maxits  = ndim*10000
@@ -142,7 +135,6 @@ contains
         if(present(gtol))      self%gtol      = gtol
         if(present(maxits))    self%maxits    = maxits
         if(present(nbest))     self%nbest     = nbest
-        if(present(nsample))   self%nsample   = nsample
         if(present(npeaks))    self%npeaks    = npeaks
         if(present(nrestarts)) self%nrestarts = nrestarts
         if(present(nstates))   self%nstates   = nstates
@@ -160,9 +152,8 @@ contains
             self%stepsz = stepsz
         endif
         if(present(verbose_arg)) self%verbose = verbose_arg
-        if(present(npop))    self%npop    = npop
-        if(present(cfac))    self%cfac    = cfac
-        if(present(eps))     self%eps     = eps
+        if(present(npop))        self%npop    = npop
+        if(present(cfac))        self%cfac    = cfac
         if(present(debug_arg))   self%debug   = debug_arg
         if(present(warn_arg))    self%warn    = warn_arg
         ! allocate
@@ -171,10 +162,6 @@ contains
             call alloc_err('In: specify; simple_opt_spec, peaks', alloc_stat)
         endif
         select case(str_opt)
-            case('oasis')
-                allocate( self%x(self%ndim), self%sdevs(self%ndim), stat=alloc_stat )
-                call alloc_err('In: specify; simple_opt_spec, oasis', alloc_stat)
-                self%sdevs  = 0.
             case('linmin')
                 allocate( self%x(self%ndim), self%xi(self%ndim), self%xt(self%ndim), stat=alloc_stat )
                 call alloc_err('In: specify; simple_opt_spec, linmin', alloc_stat)
@@ -279,7 +266,6 @@ contains
             if( allocated(self%x) )            deallocate(self%x)
             if( allocated(self%xi) )           deallocate(self%xi)
             if( allocated(self%xt) )           deallocate(self%xt)
-            if( allocated(self%sdevs) )        deallocate(self%sdevs)
             if( allocated(self%population) )   deallocate(self%population)
             if( allocated(self%inipopulation) )deallocate(self%inipopulation)
             if( allocated(self%peaks) )        deallocate(self%peaks)

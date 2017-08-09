@@ -2,7 +2,6 @@
 module simple_prime2D_srch
 use simple_polarft_corrcalc, only: polarft_corrcalc
 use simple_pftcc_inplsrch,   only: pftcc_inplsrch
-use simple_pftcc_bfacsrch,   only: pftcc_bfacsrch
 use simple_oris,             only: oris
 use simple_defs              ! use all in there
 use simple_math              ! use all in there
@@ -15,7 +14,6 @@ private
 type prime2D_srch
     private
     type(pftcc_inplsrch) :: inplsrch_obj         !< in-plane search object
-    type(pftcc_bfacsrch) :: bfacsrch_obj         !< B-factor search object
     integer              :: nrefs         =  0   !< number of references
     integer              :: nrots         =  0   !< number of in-plane rotations in polar representation
     integer              :: nrefs_eval    =  0   !< nr of references evaluated
@@ -30,7 +28,6 @@ type prime2D_srch
     real                 :: trs           =  0.  !< shift range parameter [-trs,trs]
     real                 :: prev_shvec(2) =  0.  !< previous origin shift vector
     real                 :: best_shvec(2) =  0.  !< best shift vector found by search
-    real                 :: best_bfac     =  0.  !< best B-factor found by search
     real                 :: prev_corr     = -1.  !< previous best correlation
     real                 :: best_corr     = -1.  !< best corr found by search
     real                 :: specscore     =  0.  !< spectral score
@@ -51,8 +48,6 @@ type prime2D_srch
     procedure          :: stochastic_srch
     procedure          :: nn_srch
     procedure, private :: inpl_srch
-    procedure          :: bfac_srch
-    procedure, private :: bfac_srch_local
     ! DESTRUCTOR
     procedure          :: kill
 end type prime2D_srch
@@ -68,7 +63,7 @@ contains
         class(params),           intent(in)    :: p
         class(polarft_corrcalc), intent(inout) :: pftcc
         integer :: alloc_stat, i
-        real    :: lims(2,2), lims_bfac(1,2)
+        real    :: lims(2,2)
         ! destroy possibly pre-existing instance
         call self%kill
         ! set constants
@@ -87,9 +82,6 @@ contains
         lims(2,1)        = -self%trs
         lims(2,2)        =  self%trs
         call self%inplsrch_obj%new(pftcc, lims, nrestarts=3, maxits=30)
-        lims_bfac(1,1)   = -50.
-        lims_bfac(1,2)   =  50.
-        call self%bfacsrch_obj%new(pftcc, lims_bfac)
         ! the instance now exists
         self%exists = .true.
         DebugPrint '>>> PRIME2D_SRCH::CONSTRUCTED NEW SIMPLE_PRIME2D_SRCH OBJECT'
@@ -375,38 +367,6 @@ contains
         endif
         if( DEBUG ) write(*,'(A)') '>>> PRIME2D_SRCH::FINISHED SHIFT SEARCH'
     end subroutine inpl_srch
-
-    !>  \brief  executes B-factor search
-    subroutine bfac_srch( self, pftcc, iptcl, a )
-        class(prime2D_srch),     intent(inout) :: self
-        class(polarft_corrcalc), intent(inout) :: pftcc
-        integer,                 intent(in)    :: iptcl
-        class(oris),             intent(inout) :: a
-        if( nint(a%get(iptcl,'state')) > 0 )then
-            call self%prep4srch( pftcc, iptcl, a )
-            self%nrefs_eval = self%nrefs
-            call self%bfac_srch_local(iptcl)
-            call self%update_best(pftcc, iptcl, a)
-
-            ! here 4 now
-            call a%set(iptcl, 'bfac',      self%best_bfac)
-
-        else
-            call a%reject(iptcl)
-        endif
-        DebugPrint '>>> PRIME2D_SRCH::FINISHED SHIFT SEARCH'
-    end subroutine bfac_srch
-
-    !>  \brief  executes B-factor search on the best matching reference
-    subroutine bfac_srch_local( self, iptcl )
-        class(prime2D_srch), intent(inout) :: self
-        integer,             intent(in)    :: iptcl
-        real :: cb(2)
-        call self%bfacsrch_obj%set_indices(self%best_class, iptcl, self%best_rot)
-        cb = self%bfacsrch_obj%minimize()
-        self%best_bfac = cb(2)
-        DebugPrint '>>> PRIME2D_SRCH::FINISHED B-FACTOR SEARCH'
-    end subroutine bfac_srch_local
 
     ! DESTRUCTOR
 

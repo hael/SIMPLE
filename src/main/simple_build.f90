@@ -4,17 +4,13 @@ use simple_defs
 use simple_cmdline,             only: cmdline
 use simple_comlin,              only: comlin
 use simple_image,               only: image
-use simple_centre_clust,        only: centre_clust
 use simple_oris,                only: oris
-use simple_pair_dtab,           only: pair_dtab
-use simple_ppca,                only: ppca
 use simple_reconstructor,       only: reconstructor
 use simple_eo_reconstructor,    only: eo_reconstructor
 use simple_params,              only: params
 use simple_sym,                 only: sym
 use simple_opt_spec,            only: opt_spec
 use simple_convergence,         only: convergence
-use simple_convergence_perptcl, only: convergence_perptcl
 use simple_jiffys,              only: alloc_err
 use simple_projector,           only: projector
 use simple_polarizer,           only: polarizer
@@ -31,7 +27,6 @@ type :: build
     type(oris)                          :: a, e               !< aligndata, discrete space
     type(sym)                           :: se                 !< symmetry elements object
     type(convergence)                   :: conv               !< object for convergence checking of the PRIME2D/3D approaches
-    type(convergence_perptcl)           :: ppconv             !< per-particle convergence checking object
     type(image)                         :: img                !< individual image objects 
     type(polarizer)                     :: img_match          !< -"- image objects
     type(image)                         :: img_pad            !< -"- image objects
@@ -42,10 +37,6 @@ type :: build
     type(projector)                     :: vol_pad            !< -"- image objects
     type(masker)                        :: mskimg             !< mask image
     type(masker)                        :: mskvol             !< mask volume
-    ! CLUSTER TOOLBOX
-    type(ppca)                          :: pca                !< 4 probabilistic pca
-    type(centre_clust)                  :: cenclust           !< centre-based clustering object
-    real, allocatable                   :: features(:,:)      !< features for clustering
     ! COMMON LINES TOOLBOX
     type(image), allocatable            :: imgs(:)            !< images (all should be read in)
     type(image), allocatable            :: imgs_sym(:)        !< images (all should be read in)
@@ -78,8 +69,6 @@ type :: build
   contains
     procedure                           :: build_general_tbox
     procedure                           :: kill_general_tbox
-    procedure                           :: build_cluster_tbox
-    procedure                           :: kill_cluster_tbox
     procedure                           :: build_comlin_tbox
     procedure                           :: kill_comlin_tbox
     procedure                           :: build_rec_tbox
@@ -94,7 +83,6 @@ type :: build
     procedure                           :: kill_cont3D_tbox
     procedure                           :: build_extremal3D_tbox
     procedure                           :: kill_extremal3D_tbox
-    procedure                           :: read_features
     procedure                           :: raise_hard_ctf_exception
 end type build
 
@@ -203,9 +191,8 @@ contains
             endif
             DebugPrint   'did set default values'
         endif
-        ! build convergence checkers
-        self%conv   = convergence(self%a, p, cline)
-        self%ppconv = convergence_perptcl(self%a, p, cline)
+        ! build convergence checker
+        self%conv = convergence(self%a, p, cline)
         ! generate random particle batch
         if( cline%defined('batchfrac') )then
             ! allocate index array
@@ -251,37 +238,6 @@ contains
             self%general_tbox_exists = .false.
         endif
     end subroutine kill_general_tbox
-
-    !> \brief  constructs the cluster toolbox
-    subroutine build_cluster_tbox( self, p )
-        class(build),  intent(inout) :: self
-        class(params), intent(inout) :: p
-        type(image)                  :: img
-        integer                      :: alloc_stat
-        call self%kill_cluster_tbox
-        call img%new([p%box,p%box,1], p%smpd, p%imgkind)
-        p%ncomps = img%get_npix(p%msk)
-        call img%kill
-        DebugPrint   'ncomps (npixels): ', p%ncomps
-        DebugPrint   'nvars (nfeatures): ', p%nvars
-        call self%pca%new(p%nptcls, p%ncomps, p%nvars) !< Dmat not pre-allocated (possible bug... /ME)
-        call self%cenclust%new(self%features, self%a, p%nptcls, p%nvars, p%ncls)
-        allocate( self%features(p%nptcls,p%nvars), stat=alloc_stat )
-        call alloc_err('build_cluster_toolbox', alloc_stat)
-        write(*,'(A)') '>>> DONE BUILDING CLUSTER TOOLBOX'
-        self%cluster_tbox_exists = .true.
-    end subroutine build_cluster_tbox
-
-    !> \brief  destructs the cluster toolbox
-    subroutine kill_cluster_tbox( self )
-        class(build), intent(inout) :: self
-        if( self%cluster_tbox_exists )then
-            call self%pca%kill
-            call self%cenclust%kill
-            deallocate( self%features )
-            self%cluster_tbox_exists = .false.
-        endif
-    end subroutine kill_cluster_tbox
 
     !> \brief  constructs the common lines toolbox
     subroutine build_comlin_tbox( self, p )
@@ -555,23 +511,6 @@ contains
         endif
     end subroutine kill_extremal3D_tbox
 
-    !>  \brief  for reading feature vectors from disk
-    subroutine read_features( self, p )
-        class(build),  intent(inout) :: self
-        class(params), intent(in)    :: p
-        integer :: k, file_stat, funit, recsz
-        inquire( iolength=recsz ) self%features(1,:)
-        funit = get_fileunit()
-        open(unit=funit, status='old', action='read', file=p%featstk,&
-        access='direct', form='unformatted', recl=recsz, iostat=file_stat)
-        call fopen_err('build_read_features', file_stat)
-        ! read features from disk
-        do k=1,p%nptcls
-            read(funit, rec=k) self%features(k,:)
-        end do
-        close(unit=funit)
-    end subroutine read_features
-
     !> \brief  fall-over if CTF params are missing
     subroutine raise_hard_ctf_exception( self, p )
         class(build),  intent(inout) :: self
@@ -728,10 +667,6 @@ contains
               call myb%build_general_tbox(myp, mycline_varying, do3d=.true., nooritab=.true.)
               call myb%kill_general_tbox
               write(*,'(a)') 'build_general_tbox passed'
-              call myb%build_cluster_tbox(myp)
-              call myb%build_cluster_tbox(myp)
-              call myb%kill_cluster_tbox
-              write(*,'(a)') 'build_cluster_tbox passed'
               call myb%build_comlin_tbox(myp)
               call myb%build_comlin_tbox(myp)
               call myb%kill_comlin_tbox
