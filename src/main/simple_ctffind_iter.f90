@@ -36,7 +36,7 @@ contains
         funit         = get_fileunit()
         fname_diag    = add2fbody(moviename_forctf, p%ext, '_ctffind_diag')
         fname_param   = fname_new_ext(fname_diag, 'txt')
-        open(unit=funit, status='REPLACE', action='WRITE', file=fname_ctrl)
+        open(unit=funit, status='REPLACE', action='WRITE', file=trim(fname_ctrl))
         write(funit,'(a)') trim(moviename_forctf)      ! integrated movie used for fitting
         write(funit,'(a)') trim(fname_diag)            ! diagnostic file
         write(funit,'(a)') real2str(p%smpd)            ! magnification dependent sampling distance

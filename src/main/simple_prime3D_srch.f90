@@ -15,6 +15,8 @@ private
 #include "simple_local_flags.inc"
 
 real,    parameter :: FACTWEIGHTS_THRESH = 0.001        !< threshold for factorial weights
+integer, parameter :: INPL_EXPAND_FAC    = 3            !< expansion factor for in-plane weighting
+
 !> struct for prime3d params
 type prime3D_srch
     private
@@ -108,8 +110,6 @@ type prime3D_srch
     ! DESTRUCTOR
     procedure          :: kill
 end type prime3D_srch
-
-integer, parameter :: INPL_EXPAND_FAC = 3
 
 contains
 
@@ -284,7 +284,7 @@ contains
             call self%inpl_peaks(pftcc, iptcl)
             ! prepare weights & orientation
             call self%prep_npeaks_oris
-            call self%stochastic_weights(pftcc, iptcl, e, wcorr)
+            call self%stochastic_weights(iptcl, wcorr)
             call self%update_best(pftcc, iptcl, a)
             call a%set(iptcl, 'corr', wcorr)
         else
@@ -358,7 +358,7 @@ contains
             call self%inpl_srch(pftcc, iptcl)
             ! prepare weights & orientation
             call self%prep_npeaks_oris
-            call self%stochastic_weights(pftcc, iptcl, e, wcorr)
+            call self%stochastic_weights(iptcl, wcorr)
             call self%update_best(pftcc, iptcl, a)
             call a%set(iptcl, 'corr', wcorr)
         else
@@ -505,7 +505,7 @@ contains
             call self%inpl_srch(pftcc, iptcl) ! search shifts
             ! prepare weights and orientations
             call self%prep_npeaks_oris
-            call self%stochastic_weights(pftcc, iptcl, e, wcorr)
+            call self%stochastic_weights(iptcl, wcorr)
             call self%update_best(pftcc, iptcl, a)
             call a%set(iptcl, 'corr', wcorr)
         else
@@ -551,7 +551,7 @@ contains
     !! \param nnmat nearest neighbour matrix
     !! \param grid_projs grid projections
     subroutine stochastic_srch_shc( self, pftcc, iptcl, a, e, lp, nnmat, grid_projs )
-    class(prime3D_srch),     intent(inout) :: self
+        class(prime3D_srch),     intent(inout) :: self
         class(polarft_corrcalc), intent(inout) :: pftcc
         integer,                 intent(in)    :: iptcl
         class(oris),             intent(inout) :: a, e
@@ -637,13 +637,13 @@ contains
     !! \param lp low-pass cutoff freq
     !! \param szsn size ref evals
     subroutine stochastic_srch_snhc( self, pftcc, iptcl, a, e, lp, szsn )
-    class(prime3D_srch),     intent(inout) :: self
+        class(prime3D_srch),     intent(inout) :: self
         class(polarft_corrcalc), intent(inout) :: pftcc
         integer,                 intent(in)    :: iptcl
         class(oris),             intent(inout) :: a, e
         real,                    intent(in)    :: lp
         integer,                 intent(in)    :: szsn
-        real    :: projspace_corrs(self%nrefs)
+        real    :: projspace_corrs(self%nrefs), wcorr
         integer :: iref, isample
         if( nint(a%get(iptcl,'state')) > 0 )then
             ! initialize
@@ -662,6 +662,7 @@ contains
             call hpsort(self%nrefs, projspace_corrs, self%proj_space_inds) 
             ! output
             call self%prep_npeaks_oris
+            call self%stochastic_weights(iptcl, wcorr)
             call self%update_best(pftcc, iptcl, a)
         else
             call a%reject(iptcl)
@@ -687,6 +688,7 @@ contains
             end subroutine per_ref_srch
 
     end subroutine stochastic_srch_snhc
+
     !> stochastic search het
     !! \param pftcc polarft corrcalc search storage
     !! \param iptcl particle index
@@ -755,6 +757,7 @@ contains
         endif
         DebugPrint '>>> PRIME3D_SRCH::FINISHED HET SEARCH'
     end subroutine stochastic_srch_het
+
     !> in-plane peak calc corr
     !! \param pftcc polarft corrcalc search storage
     !! \param iptcl particle index
@@ -849,7 +852,7 @@ contains
     !! \param nnmat nearest neighbour matrix
     !! \param target_projs grid projections
     subroutine prep4srch( self, pftcc, iptcl, a, e, lp, nnmat, target_projs )
-    use simple_combinatorics, only: merge_into_disjoint_set
+        use simple_combinatorics, only: merge_into_disjoint_set
         class(prime3D_srch),     intent(inout) :: self
         class(polarft_corrcalc), intent(inout) :: pftcc
         integer,                 intent(in)    :: iptcl
@@ -922,7 +925,7 @@ contains
     !! \param e search orientation
     !! \param nnvec nearest neighbour matrix
     subroutine prep_reforis( self, e, nnvec )
-    use simple_ran_tabu, only: ran_tabu
+        use simple_ran_tabu, only: ran_tabu
         class(prime3D_srch),  intent(inout) :: self
         class(oris),          intent(inout) :: e
         integer,    optional, intent(in)    :: nnvec(:)
@@ -1078,11 +1081,9 @@ contains
     !! \param iptcl particle index
     !! \param e search orientation
     !! \param wcorr weights
-    subroutine stochastic_weights( self, pftcc, iptcl, e, wcorr )
+    subroutine stochastic_weights( self, iptcl, wcorr )
         class(prime3D_srch),     intent(inout) :: self
-        class(polarft_corrcalc), intent(inout) :: pftcc
         integer,                 intent(in)    :: iptcl
-        class(oris),             intent(inout) :: e
         real,                    intent(out)   :: wcorr
         real,    allocatable :: corrs(:), ws(:), logws(:)
         integer, allocatable :: order(:) 
@@ -1252,7 +1253,6 @@ contains
     !! \param ref ref index
     !! \param inpl_ind in-plane index
     !! \param corr solution
-    !!
     subroutine store_solution( self, pftcc, ind, ref, inpl_ind, corr )
         class(prime3D_srch),     intent(inout) :: self
         class(polarft_corrcalc), intent(inout) :: pftcc

@@ -230,6 +230,13 @@ contains
             call fopen_err( source, file_stat )
             close( unit=fnr )
         endif
+        if( p%stream.eq.'yes' )then
+            fnr = get_fileunit()
+            open(unit=fnr, FILE='JOB_FINISHED_'//int2str_pad(p%part,p%numlen),&
+            &STATUS='REPLACE', action='WRITE', iostat=file_stat)
+            call fopen_err( source, file_stat )
+            close( unit=fnr )
+        endif
     end subroutine qsys_job_finished
 
     !>  returns when the inputted file exists in cwd
