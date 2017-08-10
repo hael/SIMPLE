@@ -155,10 +155,13 @@ contains
                     &'ctffind_ctrl_file_'//trim(movie_fbody)//'.txt')
                     allocate(fname_unidoc_output, source=trim(p%dir_target)//'/'//&
                     &'unidoc_output_'//trim(movie_fbody)//'.txt')
+                    p%fbody = trim( trim(p%dir_target)//'/'//trim(movie_fbody) )
                 else
                     allocate(fname_ctffind_ctrl,  source='ctffind_ctrl_file_'//trim(movie_fbody)//'.txt')
                     allocate(fname_unidoc_output, source='unidoc_output_'//trim(movie_fbody)//'.txt')
+                    p%fbody = trim(movie_fbody)
                 endif
+                call cline%set('fbody', trim(p%fbody))
             else
                 allocate(fname_ctffind_ctrl,  source='ctffind_ctrl_file.txt')
                 allocate(fname_unidoc_output, source='unidoc_output.txt')

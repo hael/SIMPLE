@@ -116,7 +116,7 @@ function is_present( self, arg ) result( yep )
 end function
 
 subroutine test_args()
-    use simple_filehandling, only: file_stat, get_fileunit, nlines
+    use simple_filehandling, only: sys_stat, get_fileunit, nlines
     use simple_syscalls, only: exec_cmdline
     type(args) :: as
     character(len=STDLEN) :: vfilename,arg, errarg1, errarg2, errarg3, spath, srcpath
@@ -143,18 +143,18 @@ subroutine test_args()
     vfilename = trim(adjustl(vfilename))
     print *, 'varlist: ', trim(adjustl(vfilename))
     write(*,'(a,a)') '**info(simple_args_unit_test): checking varlist file ',trim(adjustl(vfilename))
-    call file_stat(vfilename,status,buff)
+    call sys_stat(vfilename,status,buff)
     if(status /= 0)then
       print *,' varlist not in lib/simple/,  checking lib64/simple'
       vfilename = trim(adjustl(spath)) // '/lib64/' // trim(adjustl(varlist))
       vfilename = trim(adjustl(vfilename))
       print *, 'varlist: ', trim(adjustl(vfilename))
       write(*,'(a)') '**info(simple_args_unit_test): checking varlist file'
-      call file_stat(vfilename,status,buff)
+      call sys_stat(vfilename,status,buff)
       if(status /= 0)then
         print *,' varlist not in lib64/simple/,  calling simple_args_varlist.pl'
         call exec_cmdline(\"cd \"//srcpath//\";simple_args_varlist.pl\")
-        call file_stat(vfilename,status,buff)
+        call sys_stat(vfilename,status,buff)
         if(status /= 0)then
           print *,' varlist still not in lib/simple/ after calling simple_args_varlist.pl'
         end if

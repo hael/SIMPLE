@@ -31,14 +31,14 @@ contains
         class(preproc_stream_commander), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline
         logical,               parameter   :: DEBUG = .true.
-        integer,               parameter   :: SHORTTIME = 30    ! 60 secs for watching folder
-        integer,               parameter   :: LONGTIME  = 10   ! 20 mins before processing a new movie
+        integer,               parameter   :: SHORTTIME = 30   ! folder watched every minute
+        integer,               parameter   :: LONGTIME  = 15  ! 15 mins before processing a new movie
         character(len=STDLEN), allocatable :: movies(:)
         character(len=STDLEN)    :: movie
         type(qsys_env)           :: qenv
         type(params)             :: p_master
         type(moviewatcher)       :: movie_buff
-        integer                  :: nmovies, imovie, movie_ind
+        integer                  :: nmovies, imovie, stacksz, prev_stacksz
         integer, parameter       :: TRAILING=5
         ! make master parameters
         p_master = params(cline, checkdistr=.false.)
@@ -59,7 +59,8 @@ contains
         ! movie watcher init
         movie_buff = moviewatcher(p_master, LONGTIME, print=.true.)
         ! start watching
-        nmovies    = 0
+        prev_stacksz = 0
+        nmovies      = 0
         do
             ! watch
             call movie_buff%watch( nmovies, movies )
@@ -73,6 +74,11 @@ contains
             endif
             ! manage stream scheduling
             call qenv%qscripts%schedule_streaming( qenv%qdescr )
+            stacksz = qenv%qscripts%get_stacksz()
+            if( stacksz .ne. prev_stacksz )then
+                prev_stacksz = stacksz
+                write(*,'(A,I5)')'>>> MOVIES TO PROCESS: ', stacksz
+            endif
             ! wait
             call simple_sleep(SHORTTIME)
         end do

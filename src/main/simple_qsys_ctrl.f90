@@ -60,6 +60,7 @@ type qsys_ctrl
     ! STREAMING
     procedure          :: schedule_streaming
     procedure          :: add_to_streaming
+    procedure          :: get_stacksz
     ! DESTRUCTOR
     procedure          :: kill
 end type qsys_ctrl
@@ -515,6 +516,11 @@ contains
             self%cline_stack(self%cline_stacksz) = cline
         endif
     end subroutine add_to_streaming
+
+    integer function get_stacksz( self )
+        class(qsys_ctrl), intent(inout) :: self
+        get_stacksz = self%cline_stacksz
+    end function get_stacksz
 
     ! DESTRUCTOR
 

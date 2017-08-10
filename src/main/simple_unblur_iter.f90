@@ -44,36 +44,42 @@ contains
         real    :: corr, scale
         ! make names
         if( cline%defined('fbody') )then
-            call orientation%set('movie', trim(moviename))
-            self%moviename_intg   = trim(adjustl(p%fbody))//'_intg'//int2str_pad(imovie,p%numlen)//p%ext
-            call orientation%set('intg', trim(self%moviename_intg))
-            self%moviename_forctf = trim(adjustl(p%fbody))//'_forctf'//int2str_pad(imovie,p%numlen)//p%ext
-            call orientation%set('forctf', trim(self%moviename_forctf))
-            self%moviename_pspec  = trim(adjustl(p%fbody))//'_pspec'//int2str_pad(imovie,p%numlen)//p%ext
-            call orientation%set('pspec', trim(self%moviename_pspec))
-            self%moviename_thumb  = trim(adjustl(p%fbody))//'_thumb'//int2str_pad(imovie,p%numlen)//p%ext
-            call orientation%set('thumb', trim(self%moviename_thumb))
+            if( p%stream.eq.'yes' )then
+                self%moviename_intg   = trim(adjustl(p%fbody))//'_intg'//p%ext
+                self%moviename_forctf = trim(adjustl(p%fbody))//'_forctf'//p%ext
+                self%moviename_pspec  = trim(adjustl(p%fbody))//'_pspec'//p%ext
+                self%moviename_thumb  = trim(adjustl(p%fbody))//'_thumb'//p%ext
+            else
+                self%moviename_intg   = trim(adjustl(p%fbody))//'_intg'//int2str_pad(imovie,p%numlen)//p%ext
+                self%moviename_forctf = trim(adjustl(p%fbody))//'_forctf'//int2str_pad(imovie,p%numlen)//p%ext
+                self%moviename_pspec  = trim(adjustl(p%fbody))//'_pspec'//int2str_pad(imovie,p%numlen)//p%ext
+                self%moviename_thumb  = trim(adjustl(p%fbody))//'_thumb'//int2str_pad(imovie,p%numlen)//p%ext
+            endif
             if( cline%defined('tof') )then
-                self%moviename_intg_frames = trim(adjustl(p%fbody))//'_frames'//int2str(p%fromf)//'-'&
-                &//int2str(p%tof)//'_intg'//int2str_pad(imovie,p%numlen)//p%ext
-                call orientation%set('intg_frames', trim(self%moviename_intg_frames))
+                if( p%stream.eq.'yes' )then
+                    self%moviename_intg_frames = trim(adjustl(p%fbody))//'_frames'//int2str(p%fromf)//'-'&
+                    &//int2str(p%tof)//'_intg'//p%ext
+                else
+                    self%moviename_intg_frames = trim(adjustl(p%fbody))//'_frames'//int2str(p%fromf)//'-'&
+                    &//int2str(p%tof)//'_intg'//int2str_pad(imovie,p%numlen)//p%ext
+                endif
             endif
         else
-            call orientation%set('movie', trim(moviename))
             self%moviename_intg   = int2str_pad(imovie,p%numlen)//'_intg'//p%ext
-            call orientation%set('intg', trim(self%moviename_intg))
             self%moviename_forctf = int2str_pad(imovie,p%numlen)//'_forctf'//p%ext
-            call orientation%set('forctf', trim(self%moviename_forctf))
             self%moviename_pspec  = int2str_pad(imovie,p%numlen)//'_pspec'//p%ext
-            call orientation%set('pspec', trim(self%moviename_pspec))
             self%moviename_thumb  = int2str_pad(imovie,p%numlen)//'_thumb'//p%ext
-            call orientation%set('thumb', trim(self%moviename_thumb))
             if( cline%defined('tof') )then
                 self%moviename_intg_frames = int2str_pad(imovie,p%numlen)//'_frames'//int2str(p%fromf)//'-'&
                 &//int2str(p%tof)//'_intg'//p%ext
-                call orientation%set('intg_frames', trim(self%moviename_intg_frames))
             endif
         endif
+        call orientation%set('movie',  trim(moviename))
+        call orientation%set('intg',   trim(self%moviename_intg))
+        call orientation%set('forctf', trim(self%moviename_forctf))
+        call orientation%set('pspec',  trim(self%moviename_pspec))
+        call orientation%set('thumb',  trim(self%moviename_thumb))
+        if( cline%defined('tof') )call orientation%set('intg_frames', trim(self%moviename_intg_frames))
         ! check, increment counter & print
         if( .not. file_exists(moviename) )then
             write(*,*) 'inputted movie stack does not exist: ', moviename

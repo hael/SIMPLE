@@ -336,10 +336,9 @@ contains
     !>  \brief  determines and updates stochastic weights
     subroutine stochastic_weights( self, wcorr )
         class(cont3D_ada_srch), intent(inout) :: self
-        real,                   intent(out)   :: wcorr   !<  stochastic weights
+        real,                   intent(out)   :: wcorr
         type(ori)         :: o
-        real, allocatable :: frc(:)
-        real              :: ws(self%npeaks), corrs(self%npeaks), logws(self%npeaks), frcmed
+        real              :: ws(self%npeaks), corrs(self%npeaks), logws(self%npeaks)
         integer           :: ipeak, iref, iroind, order(self%npeaks)
         logical           :: included(self%npeaks)
         if( self%npeaks == 1 )then
@@ -348,17 +347,6 @@ contains
             return
         endif
         corrs = self%o_peaks%get_all('corr')
-        ! calculate L1 norms
-        ! do ipeak = 1, self%npeaks
-        !     o      = self%o_peaks%get_ori(ipeak)
-        !     iroind = self%pftcc_ptr%get_roind(360.-o%e3get())
-        !     !!!!!!!!!!!!!!! note state default 1 here
-        !     iref   = self%o_srch%find_closest_proj(o, 1)
-        !     ! frc    = self%pftcc_ptr%genfrc(iref, self%iptcl, iroind)
-        !     ! frcmed = max(0., median_nocopy(frc))
-        !     ! ws(ipeak) = exp(-(1.-frcmed))
-        !     ! deallocate(frc)
-        ! end do
         ws    = exp(-(1.-corrs))
         logws = log(ws)
         order = (/(ipeak,ipeak=1,self%npeaks)/)

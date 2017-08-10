@@ -81,8 +81,14 @@ contains
         ! DETERMINE THE NUMBER OF PEAKS
         select case(p%refine)
             case('yes')
-                if( .not. cline%defined('npeaks') )p%npeaks = MAXNPEAKS
-                p%npeaks = min(MAXNPEAKS, p%npeaks)
+                if( .not. cline%defined('npeaks') )then
+                    if( p%eo .eq. 'yes' )then
+                        p%npeaks = min(b%e%find_npeaks_from_athres(NPEAKSATHRES), MAXNPEAKS)
+                    else
+                        p%npeaks = min(10,b%e%find_npeaks(p%lp, p%moldiam))
+                    endif
+                endif
+                p%npeaks = min(NREFS, p%npeaks)
             case DEFAULT
                 stop 'Unknown refinement mode; pcont3D_matcher::cont3D_exec'
         end select

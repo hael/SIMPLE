@@ -12,22 +12,25 @@ private
 
 type moviewatcher
     private
-    character(len=STDLEN)              :: cwd        = ''    !< CWD
-    character(len=STDLEN)              :: watch_dir  = ''    !< movies directory to watch
-    character(len=STDLEN)              :: target_dir = ''    !< target directory
-    character(len=STDLEN), allocatable :: history(:)        !< history of movies detected
-    integer                            :: n_history = 0     !< history of movies detected
-    integer                            :: report_time       !< time ellapsed prior to processing
-    integer                            :: starttime         !< time of first watch
-    integer                            :: ellapsedtime      !< time ellapsed between last and first watch
-    integer                            :: lastreporttime    !< time ellapsed between last and first watch
-    integer                            :: n_watch   = 0     !< number of times the folder has been watched
-    logical                            :: doprint   = .false.
+    character(len=STDLEN), allocatable :: history(:)             !< history of movies detected
+    character(len=STDLEN)              :: cwd            = ''    !< CWD
+    character(len=STDLEN)              :: watch_dir      = ''    !< movies directory to watch
+    character(len=STDLEN)              :: target_dir     = ''    !< target directory
+    character(len=STDLEN)              :: ext            = ''    !< target directory
+    integer                            :: n_history      = 0     !< history of movies detected
+    integer                            :: report_time    = 600   !< time ellapsed prior to processing
+    integer                            :: starttime      = 0     !< time of first watch
+    integer                            :: ellapsedtime   = 0     !< time ellapsed between last and first watch
+    integer                            :: lastreporttime = 0     !< time ellapsed between last and first watch
+    integer                            :: n_watch        = 0     !< number of times the folder has been watched
+    logical                            :: dopick         = .false.
+    logical                            :: doprint        = .false.
 contains
     ! doers
     procedure          :: watch
     procedure, private :: is_past
     procedure, private :: add2history
+    procedure, private :: to_process
     ! destructor
     procedure          :: kill
 end type
@@ -36,7 +39,7 @@ interface moviewatcher
     module procedure constructor
 end interface moviewatcher
 
-character(len=STDLEN), parameter   :: FILETABNAME='movieftab_preproc_stream.txt'
+character(len=STDLEN), parameter   :: FILETABNAME = 'movieftab_preproc_stream.txt'
 integer,               parameter   :: FAIL_THRESH = 50
 integer,               parameter   :: FAIL_TIME   = 7200 ! 2 hours
 
@@ -63,6 +66,8 @@ contains
         self%watch_dir   = trim(adjustl(p%dir_movies))
         self%target_dir  = trim(adjustl(p%dir_target))
         self%report_time = report_time
+        self%dopick      = p%l_pick
+        self%ext         = trim(adjustl(p%ext))
         if( present(print) )then
             self%doprint = print
         else
@@ -80,7 +85,7 @@ contains
         logical,               allocatable :: is_new_movie(:)
         integer               :: tnow, last_accessed, last_modified, last_status_change ! in seconds
         integer               :: i, fstat, alloc_stat, n_lsfiles, cnt, fail_cnt
-        character(len=STDLEN) :: fname, abs_fname, fbody, unidoc_name, ext
+        character(len=STDLEN) :: fname, abs_fname
         logical               :: is_closed
         ! init
         self%n_watch = self%n_watch + 1
@@ -110,7 +115,7 @@ contains
                 is_new_movie(i) = .false.
             else
                 abs_fname = trim(self%cwd)//'/'//trim(adjustl(fname))
-                call file_stat(abs_fname, fstat, stats)
+                call sys_stat(abs_fname, fstat, stats, doprint=.false.)
                 is_closed = .not. is_file_open(abs_fname)
                 if( fstat.eq.0 )then
                     ! new movie
@@ -132,17 +137,13 @@ contains
         ! identifies already processed files for restart
         do i = 1, n_lsfiles
             if( is_new_movie(i) )then
-                fname = remove_abspath(trim(adjustl(farray(i))))
-                ext   = trim(fname2ext(fname))
-                fbody = trim(get_fbody(trim(fname), trim(ext)))
-                unidoc_name = trim(self%target_dir)//'/'//'unidoc_ouput_'//trim(adjustl(fbody))//'.txt'
-                if( file_exists(unidoc_name) ) is_new_movie(i) = .false.
-                if( is_new_movie(i) ) write(*,'(A,A,A,A)')'>>> NEW MOVIE: ',trim(fname), ' ; ', ctime(tnow)
+                is_new_movie(i) = self%to_process( farray(i) )
+                if( is_new_movie(i) )write(*,'(A,A,A,A)')'>>> NEW MOVIE: ',&
+                &trim(adjustl(farray(i))), '; ', ctime(tnow)
             endif
         enddo
         ! report
         n_movies = count(is_new_movie)
-        print *, 'n_movies: ', n_movies
         if( n_movies > 0 )then
             allocate(movies(n_movies))
             cnt = 0
@@ -155,6 +156,32 @@ contains
             enddo
         endif
     end subroutine watch
+
+    !>  \brief whether the movie should be processed or not
+    !!         if one file is missing it is re-processed  
+    logical function to_process( self, fname )
+        class(moviewatcher), intent(inout) :: self
+        character(len=*),    intent(in)    :: fname
+        character(len=STDLEN) :: fname_here, fbody, ext, unblur_name, unidoc_name, picker_name
+        logical :: unblur_done, ctffind_done, picker_done
+        fname_here = remove_abspath(trim(adjustl(fname)))
+        ext        = trim(fname2ext(fname_here))
+        fbody      = trim(get_fbody(trim(fname_here), trim(ext)))
+        ! unblur
+        unblur_name = trim(self%target_dir)//trim(adjustl(fbody))//'_thumb'//trim(self%ext)
+        unblur_done = file_exists(unblur_name)
+        ! ctffind
+        unidoc_name  = trim(self%target_dir)//'/'//'unidoc_ouput_'//trim(adjustl(fbody))//'.txt'
+        ctffind_done = file_exists(unidoc_name)
+        if( self%dopick )then
+            ! picker
+            picker_name = trim(self%target_dir)//trim(adjustl(fbody))//'_intg.box'
+            picker_done = file_exists(picker_name)
+            to_process = .not. (unblur_done .and. ctffind_done .and. picker_done)
+        else
+            to_process = .not. (unblur_done .and. ctffind_done)
+        endif
+    end function to_process
 
     !>  \brief  is for adding to the history of already reported files
     subroutine add2history( self, fname )
@@ -200,8 +227,10 @@ contains
     !>  \brief  is a destructor
     subroutine kill( self )
         class(moviewatcher), intent(inout) :: self
-        self%cwd       = ''
-        self%watch_dir = ''
+        self%cwd        = ''
+        self%watch_dir  = ''
+        self%target_dir = ''
+        self%ext        = ''
         if(allocated(self%history))deallocate(self%history)
         self%report_time    = 0
         self%starttime      = 0

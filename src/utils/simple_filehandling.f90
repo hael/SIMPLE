@@ -3,8 +3,6 @@ module simple_filehandling
 use simple_defs
 implicit none
 
-private :: sys_stat
-
 interface arr2file
     module procedure arr2file_1
     module procedure arr2file_2
@@ -239,38 +237,22 @@ contains
         endif
     end function is_file_open
 
-    !>  \brief  check whether a IO unit is current open
-    subroutine file_stat( fname, fstat, vals )
-        character(len=*),     intent(inout) :: fname
-        integer,              intent(inout) :: fstat
-        integer, allocatable, intent(inout) :: vals(:)
-        if( file_exists(trim(adjustl(fname))) )then
-            allocate(vals(13), source=0)
-            call sys_stat(fname, fstat, vals)
-            if( fstat.ne.0 )then
-                print *, 'Error simple_filehandling%file_stat for file:', trim(adjustl(fname))
-            endif
-        else
-            fstat = 0
-            print *, 'Unknown file: ',trim(adjustl(fname))
-        endif
-    end subroutine file_stat
-
     !>  Wrapper for system call
-    subroutine sys_stat( filename, status, buffer )
+    subroutine sys_stat( filename, status, buffer, doprint )
 #if defined(INTEL)
         use ifport
         use ifposix
-        character(len=*),  intent(inout) :: filename
-        integer,  intent(inout)    :: buffer(:)  !< POSIX stat struct
-        integer, intent(inout)     :: status
-        logical                    :: doprint = .true.
+        character(len=*),     intent(inout) :: filename
+        integer,              intent(inout) :: status
+        integer, allocatable, intent(inout) :: buffer(:)  !< POSIX stat struct
+        logical, optional,    intent(in)    :: doprint
+        logical    :: l_print = .true.
         integer(4) :: ierror
         integer(8) :: jhandle
+        allocate(buffer(13), source=0)
         call pxfstat (trim(adjustl(filename)), len_trim(adjustl(filename)), jhandle, ierror)
         call PXFSTRUCTCREATE('stat', jhandle, ierror)
         if(ierror.EQ.0) then
-            !call pxfstat (trim(adjustl(filename)), len_trim(adjustl(filename)), jhandle1, ierror)
             if(ierror.EQ.0) then
                 CALL PXFINTGET (jhandle,'st_dev',buffer(1), ierror)    ! Device ID
                 CALL PXFINTGET (jhandle,'st_ino',buffer(2), ierror)    ! Inode number
@@ -299,15 +281,13 @@ contains
         status=ierror
 #elif defined(PGI)
         include 'lib3f.h'
-        character(len=*),  intent(inout) :: filename
-        integer,  intent(inout)    :: buffer(:)  !< POSIX stat struct
-        integer, intent(inout)     :: status
-        logical                    :: doprint = .true.
-
-  integer,allocatable        :: statb(:)
-  integer                    :: stato
-        !debug=.true.
-!        allocate(statb(13))
+        character(len=*),     intent(inout) :: filename
+        integer,              intent(inout) :: status
+        integer, allocatable, intent(inout) :: buffer(:)  !< POSIX stat struct
+        logical, optional,    intent(in)    :: doprint
+        integer,allocatable :: statb(:)
+        integer             :: stato
+        logical             :: l_print = .true.
         stato =  stat(trim(adjustl(filename)), statb)
         status = stato
         buffer = statb
@@ -317,14 +297,16 @@ contains
 #endif
 
 #elif defined(GNU)
-        character(len=*),  intent(inout) :: filename
-        integer,  intent(inout)    :: buffer(:)  !< POSIX stat struct
-        integer, intent(inout)     :: status
-        logical                    :: doprint = .true.
-       !intrinsic :: stat
+        character(len=*),     intent(inout) :: filename
+        integer,              intent(inout) :: status
+        integer, allocatable, intent(inout) :: buffer(:)  !< POSIX stat struct
+        logical, optional,    intent(in)    :: doprint
+        logical :: l_print = .true.
+        allocate(buffer(13), source=0)
         call stat(trim(adjustl(filename)), buffer, status)
 #endif
-        if( doprint )then
+        if( present(doprint) )l_print = doprint
+        if( l_print )then
             write(*,*) 'command: stat ', trim(adjustl(filename))
             write(*,*) 'status of execution: ', status
         endif
