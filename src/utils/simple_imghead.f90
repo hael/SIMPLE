@@ -11,7 +11,6 @@
 ! license terms ( http://license.janelia.org/license/jfrc_copyright_1_1.html )
 ! Modifications by Cyril Reboul, Michael Eager & Hans Elmlund
 module simple_imghead
-use simple_imgheadrec, only: int_imgheadrec, real_imgheadrec, char_imgheadrec
 use simple_defs
 implicit none
 
@@ -30,85 +29,90 @@ integer, parameter         :: NLABL           = 10
 
 type ImgHead
     private
-    integer                      :: length          !< length (in bytes) of the header
-    integer(kind=1), allocatable :: byte_array(:)   !< array of bytes
-    logical                      :: exists=.false.  !< to indicate existence
+    integer                      :: length         !< length (in bytes) of the header
+    integer(kind=1), allocatable :: byte_array(:)  !< array of bytes
+    logical                      :: exists=.false. !< to indicate existence
 contains
-    procedure :: new
-    procedure :: reset2default
-    procedure :: setMinimal
-    procedure :: print_imghead
-    procedure :: read
-    procedure :: write
-    procedure :: bytesPerPix
-    procedure :: pixIsSigned
-    procedure :: getPixType
-    procedure :: pixIsComplex
-    procedure :: firstDataByte
-    procedure, private :: assign
-    generic   :: assignment(=) => assign
-    procedure :: getMinPixVal
-    procedure :: getMaxPixVal
-    procedure :: setMinPixVal
-    procedure :: setMaxPixVal
-    procedure :: getPixSz
-    procedure :: setPixSz
-    procedure :: getStackSz
-    procedure :: getDims
-    procedure :: getDim
-    procedure :: setDims
-    procedure :: setDim
-    procedure :: getLabrec
-    procedure :: getLenbyt
-    procedure :: getLabbyt
-    procedure :: getMaxim
-    procedure :: setMaxim
-    procedure :: setMode
-    procedure :: setRMSD
-    procedure :: getIform
-    procedure :: getMode
-    procedure :: setIform
-    procedure :: kill
+    ! polymorphic constructor
+    procedure          :: new
+    procedure          :: reset2default
+    procedure          :: setMinimal
+    ! I/O
+    procedure          :: print_imghead
+    procedure          :: read
+    procedure          :: write
+    ! byte array conversions
+    procedure, private :: transfer_obj2byte_array
+    procedure, private :: transfer_byte_array2obj
+    ! getters/setters
+    procedure          :: bytesPerPix
+    procedure          :: pixIsSigned
+    procedure          :: getPixType
+    procedure          :: pixIsComplex
+    procedure          :: firstDataByte
+    procedure          :: getMinPixVal
+    procedure          :: getMaxPixVal
+    procedure          :: setMinPixVal
+    procedure          :: setMaxPixVal
+    procedure          :: getPixSz
+    procedure          :: setPixSz
+    procedure          :: getStackSz
+    procedure          :: getDims
+    procedure          :: getDim
+    procedure          :: setDims
+    procedure          :: setDim
+    procedure          :: getLabrec
+    procedure          :: getLenbyt
+    procedure          :: getLabbyt
+    procedure          :: getMaxim
+    procedure          :: setMaxim
+    procedure          :: setMode
+    procedure          :: setRMSD
+    procedure          :: getIform
+    procedure          :: getMode
+    procedure          :: setIform
+    ! destructor
+    procedure          :: kill
 end type ImgHead
 
 type, extends(ImgHead) :: MrcImgHead
-    type(int_imgheadrec)  :: nx           !< number of columns (fastest changing in map)
-    type(int_imgheadrec)  :: ny           !< number of rows
-    type(int_imgheadrec)  :: nz           !< number of sections (slowest changing in map)
-    type(int_imgheadrec)  :: mode         !< data type: 0 image: signed 8-bit bytes range -128 to 127
+    integer   :: nx           !< number of columns (fastest changing in map)
+    integer   :: ny           !< number of rows
+    integer   :: nz           !< number of sections (slowest changing in map)
+    integer   :: mode         !< data type: 0 image: signed 8-bit bytes range -128 to 127
     !!            1 image: 16-bit halfwords
     !!            2 image: 32-bit reals (DEFAULT MODE)
     !!            3 transform: complex 16-bit integers
     !!            4 transform: complex 32-bit reals (THIS WOULD BE THE DEFAULT FT MODE)
-    type(int_imgheadrec)  :: nxstart      !< number of first column in map (default = 0)
-    type(int_imgheadrec)  :: nystart      !< number of first row in map
-    type(int_imgheadrec)  :: nzstart      !< number of first section in map
-    type(int_imgheadrec)  :: mx           !< number of intervals along x
-    type(int_imgheadrec)  :: my           !< number of intervals along y
-    type(int_imgheadrec)  :: mz           !< number of intervals along z
-    type(real_imgheadrec) :: cella1       !< cell dims in angstroms
-    type(real_imgheadrec) :: cella2
-    type(real_imgheadrec) :: cella3
-    type(real_imgheadrec) :: cellb1       !< cell angles in degrees
-    type(real_imgheadrec) :: cellb2
-    type(real_imgheadrec) :: cellb3
-    type(int_imgheadrec)  :: mapc         !< axis corresponding to columns  (1,2,3 for x,y,z)
-    type(int_imgheadrec)  :: mapr         !< axis corresponding to rows     (1,2,3 for x,y,z)
-    type(int_imgheadrec)  :: maps         !< axis corresponding to sections (1,2,3 for x,y,z)
-    type(real_imgheadrec) :: dmin         !< minimum density value
-    type(real_imgheadrec) :: dmax         !< maximum density value
-    type(real_imgheadrec) :: dmean        !< mean density value
-    type(int_imgheadrec)  :: ispg         !< space group number 0 or 1 (default=1)
-    type(int_imgheadrec)  :: nsymbt       !< number of bytes used for symmetry data (0 or 80)
-    type(int_imgheadrec)  :: extra        !< extra space used for anything - 0 by default
-    type(int_imgheadrec)  :: originx      !< origin in x used for transforms
-    type(int_imgheadrec)  :: originy      !< origin in y used for transforms
-    type(int_imgheadrec)  :: originz      !< origin in z used for transforms
-    type(char_imgheadrec) :: map          !< character string 'map' to identify file type
-    type(int_imgheadrec)  :: machst       !< machine stamp
-    type(real_imgheadrec) :: rms          !< rms deviation of map from mean density
-    type(int_imgheadrec)  :: nlabl        !< number of labels being used
-    type(char_imgheadrec) :: label(NLABL) !< 10 80-character text labels
+    integer   :: nxstart      !< number of first column in map (default = 0)
+    integer   :: nystart      !< number of first row in map
+    integer   :: nzstart      !< number of first section in map
+    integer   :: mx           !< number of intervals along x
+    integer   :: my           !< number of intervals along y
+    integer   :: mz           !< number of intervals along z
+    real      :: cella1       !< cell dims in angstroms
+    real      :: cella2
+    real      :: cella3
+    real      :: cellb1       !< cell angles in degrees
+    real      :: cellb2
+    real      :: cellb3
+    integer   :: mapc         !< axis corresponding to columns  (1,2,3 for x,y,z)
+    integer   :: mapr         !< axis corresponding to rows     (1,2,3 for x,y,z)
+    integer   :: maps         !< axis corresponding to sections (1,2,3 for x,y,z)
+    real      :: dmin         !< minimum density value
+    real      :: dmax         !< maximum density value
+    real      :: dmean        !< mean density value
+    integer   :: ispg         !< space group number 0 or 1 (default=1)
+    integer   :: nsymbt       !< number of bytes used for symmetry data (0 or 80)
+    integer   :: extra        !< extra space used for anything - 0 by default
+    integer   :: originx      !< origin in x used for transforms
+    integer   :: originy      !< origin in y used for transforms
+    integer   :: originz      !< origin in z used for transforms
+    character(len=4)  :: map  !< character string 'map' to identify file type
+    integer   :: machst       !< machine stamp
+    real      :: rms          !< rms deviation of map from mean density
+    integer   :: nlabl        !< number of labels being used
+    character(len=80) :: label(NLABL) !< 10 80-character text labels
 end type MrcImgHead
 
 type, extends(ImgHead) :: SpiImgHead
@@ -174,417 +178,217 @@ end type SpiImgHead
 
 contains
 
-    ! POLYMORPHIC CONSTRUCTOR
+    ! polymorphic constructor
 
     !>  \brief  create an imghead object
     subroutine new( self, ldim, length )
         class(ImgHead), target, intent(inout) :: self    !< instance
-        integer, intent(in), optional         :: ldim(3) !< logical dims of image
-        integer, intent(in), optional         :: length  !< length of the header record.
-        integer               :: ierr,llength, i !, lenbyt, labrec, labbyt
+        integer, optional,      intent(in)    :: ldim(3) !< logical dims of image
+        integer, optional,      intent(in)    :: length  !< length of the header record.
+        integer               :: ierr, llength, i
         character(len=STDLEN) :: err
         call self%kill
         select type( self )
-        type is( MrcImgHead )
-            if( present(length) ) then
-                llength = length
-            else
-                llength = MRCHEADSZ
-            endif
-            ! allocate byte array
-            if( allocated(self%byte_array) )then
-                if( size(self%byte_array) .ne. llength ) deallocate(self%byte_array)
-            endif
-            if( .not. allocated(self%byte_array) )then
-                allocate(self%byte_array(llength),stat=ierr,errmsg=err)
-                if( ierr .ne. 0 )then
-                    write(*,'(a,i0,2a)') '**error(ImgHead::new): memory allocation failed with error ',&
-                         ierr, ': ', trim(adjustl(err))
-                    stop 'Memory allocation failed; new; simple_imghead'
+            type is( MrcImgHead )
+                if( present(length) ) then
+                    llength = length
+                else
+                    llength = MRCHEADSZ
                 endif
-            endif
-            ! zero the byte array
-            self%byte_array = 0
-            ! first argument: index_position, i.e. the position of the record within the file header. starting at 1 and incrementing
-            ! second argument: byte_position, i.e. the position of the first byte of the record within the header
-            call self%nx     %new(1,   1,  self%byte_array)
-            call self%ny     %new(2,   5,  self%byte_array)
-            call self%nz     %new(3,   9,  self%byte_array)
-            call self%mode   %new(4,  13,  self%byte_array)
-            call self%nxstart%new(5,  17,  self%byte_array)
-            call self%nystart%new(6,  21,  self%byte_array)
-            call self%nzstart%new(7,  25,  self%byte_array)
-            call self%mx     %new(8,  29,  self%byte_array)
-            call self%my     %new(9,  33,  self%byte_array)
-            call self%mz     %new(10, 37,  self%byte_array)
-            call self%cella1 %new(11, 41,  self%byte_array)
-            call self%cella2 %new(12, 45,  self%byte_array)
-            call self%cella3 %new(13, 49,  self%byte_array)
-            call self%cellb1 %new(14, 53,  self%byte_array)
-            call self%cellb2 %new(15, 57,  self%byte_array)
-            call self%cellb3 %new(16, 61,  self%byte_array)
-            call self%mapc   %new(17, 65,  self%byte_array)
-            call self%mapr   %new(18, 69,  self%byte_array)
-            call self%maps   %new(19, 73,  self%byte_array)
-            call self%dmin   %new(20, 77,  self%byte_array)
-            call self%dmax   %new(21, 81,  self%byte_array)
-            call self%dmean  %new(22, 85,  self%byte_array)
-            call self%ispg   %new(23, 89,  self%byte_array)
-            call self%nsymbt %new(24, 93,  self%byte_array)
-            call self%extra  %new(25, 97,  self%byte_array)
-            call self%originx%new(50, 197, self%byte_array)
-            call self%originy%new(51, 201, self%byte_array)
-            call self%originz%new(52, 205, self%byte_array)
-            call self%map    %new(53, 209, self%byte_array, length=4)
-            call self%machst %new(54, 213, self%byte_array)
-            call self%rms    %new(55, 217, self%byte_array)
-            call self%nlabl  %new(56, 221, self%byte_array)
-            do i=1,NLABL
-                call self%label(i)%new(57, 225, self%byte_array, length=80)
-            end do
-            call self%reset2default
-            if( present(ldim) )then
-                self%nx = INT( ldim(1) ) ! Intel warning
-                self%ny = ldim(2)
-                self%nz = ldim(3)
-                self%mx = ldim(1)
-                self%my = ldim(2)
-                self%mz = ldim(3)
-            endif
-        type is( SpiImgHead )
-            if( present(ldim) )then
+                ! allocate byte array
+                if( allocated(self%byte_array) )then
+                    if( size(self%byte_array) .ne. llength ) deallocate(self%byte_array)
+                endif
+                if( .not. allocated(self%byte_array) )then
+                    allocate(self%byte_array(llength),stat=ierr,errmsg=err)
+                    if( ierr .ne. 0 )then
+                        write(*,'(a,i0,2a)') '**error(ImgHead::new): memory allocation failed with error ',&
+                             ierr, ': ', trim(adjustl(err))
+                        stop 'Memory allocation failed; new; simple_imghead'
+                    endif
+                endif
+                ! zero the byte array
+                self%byte_array = 0
+                ! insert default header values
                 call self%reset2default
-                call self%setMinimal(ldim, .false., 1.)
-            else
-                stop 'Need logical dimension (ldim) to create SPIDER header; new; simple_imghead'
-            end if
+                if( present(ldim) )then
+                    self%nx = ldim(1)
+                    self%ny = ldim(2)
+                    self%nz = ldim(3)
+                    self%mx = ldim(1)
+                    self%my = ldim(2)
+                    self%mz = ldim(3)
+                endif
+            type is( SpiImgHead )
+                if( present(ldim) )then
+                    ! insert default header values
+                    call self%reset2default
+                    ! set minimal header
+                    call self%setMinimal(ldim, .false., 1.)
+                else
+                    stop 'Need logical dimension (ldim) to create SPIDER header; new; simple_imghead'
+                end if
             class DEFAULT
-            stop 'Unsupported header type; initImgHead; simple_imghead'
+                stop 'Unsupported header type; initImgHead; simple_imghead'
         end select
         self%exists = .true.
         DebugPrint  'created imghead ::new '
     end subroutine new
 
-    !>  \brief  Reset all the values in the header to default values
-    subroutine reset2default(self)
-        class(ImgHead), intent(inout) :: self
-        integer ::  i
-        select type(self)
-        type is ( MrcImgHead )
-            self%nx      = 0
-            self%ny      = 0
-            self%nz      = 0
-            self%mode    = 2
-            self%nxstart = 0
-            self%nystart = 0
-            self%nzstart = 0
-            self%mx      = 1
-            self%my      = 1
-            self%mz      = 1
-            self%cella1  = 1.0
-            self%cella2  = 1.0
-            self%cella3  = 1.0
-            self%cellb1  = 90.0
-            self%cellb2  = 90.0
-            self%cellb3  = 90.0
-            self%mapc    = 1
-            self%mapr    = 2
-            self%maps    = 3
-            self%dmin    = 0.0
-            self%dmax    = 0.0
-            self%dmean   = 0.0
-            self%ispg    = 1
-            self%nsymbt  = 0
-            self%extra   = 0
-            self%originx = 0
-            self%originy = 0
-            self%originz = 0
-            self%map     = 'MAP '
-            self%machst  = 0
-            self%rms     = 1.0
-            self%nlabl   = 0
-            do i=1,NLABL
-                self%label(i) = ' '
-            end do
-        type is (SpiImgHead)
-            self%nz       = 0.
-            self%ny       = 0.
-            self%irec     = 0.
-            self%iform    = 1.
-            self%imami    = 0.
-            self%fmax     = 0.
-            self%fmin     = 0.
-            self%av       = 0.
-            self%sig      = 0.
-            self%nx       = 0.
-            self%labrec   = 0.
-            self%iangle   = 0.
-            self%phi      = 0.
-            self%theta    = 0.
-            self%gamma    = 0.
-            self%xoff     = 0.
-            self%yoff     = 0.
-            self%zoff     = 0.
-            self%scale    = 1.
-            self%labbyt   = 0.
-            self%lenbyt   = 0.
-            self%istack   = 1.
-            self%maxim    = 0.
-            self%imgnum   = 0.
-            self%lastindx = 0.
-            self%kangle   = 0.
-            self%phi1     = 0.
-            self%theta1   = 0.
-            self%psi1     = 0.
-            self%phi2     = 0.
-            self%theta2   = 0.
-            self%psi2     = 0.
-            self%pixsiz   = 1.
-            self%ev       = 300.
-            self%proj     = 0.
-            self%mic      = 0.
-            self%num      = 0.
-            self%glonum   = 0.
-            class DEFAULT
-            stop 'Format not supported; reset2default; simle_imghead'
-        end select
-    end subroutine reset2default
-
-    !>  \brief  if for setting the minimal info in the image header
-    subroutine setMinimal( self, ldim, is_ft, smpd )
-        class(ImgHead), intent(inout) :: self
-        integer, intent(in)           :: ldim(3)
-        logical, intent(in)           :: is_ft
-        real, intent(in)              :: smpd
-        logical                       :: even_dims, is_3d
-        integer                       :: lenbyt, labrec, labbyt
-        if( ldim(3) == 1 )then
-            even_dims = is_even(ldim(:2))
-        else
-            even_dims = is_even(ldim)
-        endif
-        is_3d = .false.
-        if( ldim(3) > 1 ) is_3d = .true.
-        select type(self)
-        type is( MrcImgHead )
-            call self%setPixSz(smpd)
-            call self%setDims(ldim)
-        type is( SpiImgHead )
-            call self%setPixSz(smpd)
-            lenbyt = ldim(1)*4     ! record length in bytes
-            labrec = MRCHEADSZ/lenbyt   ! nr of records in file header (label)
-            if( mod(MRCHEADSZ,lenbyt ) /= 0 ) labrec = labrec+1
-            labbyt = labrec*lenbyt ! total number of bytes in header
-            self%lenbyt = real(lenbyt, kind=4)
-            self%labrec = real(labrec, kind=4)
-            self%labbyt = real(labbyt, kind=4)
-            self%nx     = real(ldim(1), kind=4)
-            self%ny     = real(ldim(2), kind=4)
-            self%nz     = real(ldim(3), kind=4)
-            if( .not. is_3d .and. .not. is_ft )then
-                self%iform = 1.
-            else if( is_3d .and. .not. is_ft )then
-                self%iform = 3.
-            else if( .not. is_3d .and. is_ft .and. .not. even_dims )then
-                self%iform = -11.
-            else if( .not. is_3d .and. is_ft .and. even_dims )then
-                self%iform = -12.
-            else if( is_3d .and. is_ft .and. .not. even_dims )then
-                self%iform = -21.
-            else if( is_3d .and. is_ft .and. even_dims )then
-                self%iform = -22.
-            else
-                stop 'undefined file type, setMinimal; simple_imghead'
-            endif 
-            self%irec = real(ldim(2), kind=4)+self%labrec ! Total number of records (including header records)
-            ! in each image of a simple image or stacked image file
-            self%sig = -1.         ! Standard deviation of data. A value of -1.0 or 0.0
-            ! indicates that SIG has not been computed
-            self%scale = 1.        !  Scale factor
-            if( ldim(3) > 1 )then  ! istack has a value of 0 in simple 2D or 3D (non-stack) files. In an
-                self%istack = 0.   ! "image stack" there is one overall stack header followed by a stack of images, in which
-            else                   ! each image has its own image header. A value of >0 in this position in the overall stack
-                self%istack = 2.   ! header indicates a stack of images. A value of <0 in this position in the overall stack
-            endif                  ! header indicates an indexed stack of images
-            if ( ldim(3) > 1 )then ! maxim is only used in the overall header for a stacked image file. There, this position
-                self%maxim = 1.    ! contains the number of the highest image currently used in the stack. This number is
-            else                   ! updated, if necessary, when an image is added or deleted from the stack
-                self%maxim = 0.
-            endif
-            self%imgnum = 0.   ! only used in a stacked image header, the number of the current image or zero if this image is unused
-            class DEFAULT
-            stop 'Format not supported; setMinimal; simle_imghead'
-        end select
-
-    contains
-
-        !> \brief  to check if all vals in array are even
-        pure function is_even( arr ) result( yep )
-            integer, intent(in) :: arr(:)
-            logical :: yep, test(size(arr))
-            integer :: i
-            test = .false.
-            do i=1,size(arr)
-                test(i) = mod(arr(i),2) == 0
-            end do
-            yep = all(test)
-        end function is_even
-
-    end subroutine setMinimal
+    ! I/O
 
     !>  \brief  print information contained in the header to the terminal
     subroutine print_imghead( self )
         class(ImgHead), intent(in) :: self
-        !integer :: i
         real    :: smpd(3)
         integer :: bytes_per_pixel
         select type( self )
-        type is( MrcImgHead )
-            write(*,'(a,3(i0,1x))')     'Number of columns, rows, sections: ', self%nx%get(), self%ny%get(), self%nz%get()
-            write(*,'(a,i0)')           'MRC data mode: ',  self%mode%get()
-            bytes_per_pixel = self%bytesPerPix()
-            write(*,'(a,i0)')           'Bit depth: ',      bytes_per_pixel*8
-            smpd = 0.0
-            if (self%mx%get() .ne. 0) smpd(1) = self%cella1%get()/self%mx%get()
-            if (self%my%get() .ne. 0) smpd(2) = self%cella2%get()/self%my%get()
-            if (self%mz%get() .ne. 0) smpd(3) = self%cella3%get()/self%mz%get()
-            write(*,'(a,3(f0.3,1x))')   'Pixel size: ', smpd
-        type is( SpiImgHead )
-            write(*,'(a,3(1x,f7.0))') 'Number of columns, rows, sections: ', self%nx, self%ny, self%nz
-            write(*,'(a,1x,f7.0)') 'SPIDER data mode (iform):                                       ', self%iform
-            bytes_per_pixel = self%bytesPerPix()
-            write(*,'(a,1x,f7.0)') 'Bit depth:                                                       ', real(bytes_per_pixel*8)
-            write(*,'(a,1x,f7.3)') 'Pixel size:                                                      ', self%pixsiz
-            write(*,'(a,1x,f7.0)') 'Number of slices (planes) in volume (=1 for an image)            ', self%nz
-            write(*,'(a,1x,f7.0)') 'Total number of records (including header records) in each image:', self%irec
-            write(*,'(a,1x,f7.0)') 'Maximum/minimum flag=1 if stats have been computed and 0 else:   ', self%imami
-            write(*,'(a,1x,f7.3)') 'Maximum data value:                                              ', self%fmax
-            write(*,'(a,1x,f7.3)') 'Minimum data value:                                              ', self%fmin
-            write(*,'(a,1x,f7.3)') 'Average data value:                                              ', self%av
-            write(*,'(a,1x,f7.3)') 'Standard deviation. -1. or 0. indicates SIG not computed:        ', self%sig
-            write(*,'(a,1x,f7.0)') 'Number of records in file header (label):                        ', self%labrec
-            write(*,'(a,1x,f7.0)') 'Flag that following three tilt angles are present:               ', self%iangle
-            write(*,'(a,1x,f7.3)') 'Tilt angle: phi (See note #2 below):                             ', self%phi
-            write(*,'(a,1x,f7.3)') 'Tilt angle: theta:                                               ', self%theta
-            write(*,'(a,1x,f7.3)') 'Tilt angle: gamma (also called psi):                             ', self%gamma
-            write(*,'(a,1x,f7.3)') 'X translation:                                                   ', self%xoff
-            write(*,'(a,1x,f7.3)') 'Y translation:                                                   ', self%yoff
-            write(*,'(a,1x,f7.3)') 'Z translation:                                                   ', self%zoff
-            write(*,'(a,1x,f7.3)') 'Scale factor:                                                    ', self%scale
-            write(*,'(a,1x,f7.0)') 'Total number of bytes in header:                                 ', self%labbyt
-            write(*,'(a,1x,f7.0)') 'Record length in bytes:                                          ', self%lenbyt
-            write(*,'(a,1x,f7.0)') 'istack=0 for 3D (non-stack) files and a value > 0 for stacks:    ', self%istack
-            write(*,'(a,1x,f7.0)') 'The number of the highest image currently used in the stack:     ', self%maxim
-            write(*,'(a,1x,f7.0)') 'Number of current image in stack:                                ', self%imgnum
-            write(*,'(a,1x,f7.0)') 'Highest index location currently in use in indexed stacks:       ', self%lastindx
-            write(*,'(a,1x,f7.0)') 'Flag that additional rotation angles follow in header:           ', self%kangle
-            write(*,'(a,1x,f7.3)') 'Angle:                                                           ', self%phi1
-            write(*,'(a,1x,f7.3)') 'Angle:                                                           ', self%theta1
-            write(*,'(a,1x,f7.3)') 'Angle:                                                           ', self%psi1
-            write(*,'(a,1x,f7.3)') 'Angle:                                                           ', self%phi2
-            write(*,'(a,1x,f7.3)') 'Angle:                                                           ', self%theta2
-            write(*,'(a,1x,f7.3)') 'Angle:                                                           ', self%psi2
-            write(*,'(a,1x,f7.3)') 'Electron voltage:                                                ', self%ev
-            write(*,'(a,1x,f7.0)') 'Project number:                                                  ', self%proj
-            write(*,'(a,1x,f7.0)') 'Micrograph number:                                               ', self%mic
-            write(*,'(a,1x,f7.0)') 'Micrograph window number:                                        ', self%num
-            write(*,'(a,1x,f7.0)') 'Global image number:                                             ', self%glonum
+            type is( MrcImgHead )
+                write(*,'(a,3(i0,1x))')     'Number of columns, rows, sections: ', self%nx, self%ny, self%nz
+                write(*,'(a,i0)')           'MRC data mode: ',  self%mode
+                bytes_per_pixel = self%bytesPerPix()
+                write(*,'(a,i0)')           'Bit depth: ',      bytes_per_pixel*8
+                smpd = 0.0
+                if (self%mx .ne. 0) smpd(1) = self%cella1/self%mx
+                if (self%my .ne. 0) smpd(2) = self%cella2/self%my
+                if (self%mz .ne. 0) smpd(3) = self%cella3/self%mz
+                write(*,'(a,3(f0.3,1x))')   'Pixel size: ', smpd
+            type is( SpiImgHead )
+                write(*,'(a,3(1x,f7.0))') 'Number of columns, rows, sections: ', self%nx, self%ny, self%nz
+                write(*,'(a,1x,f7.0)') 'SPIDER data mode (iform):                                       ', self%iform
+                bytes_per_pixel = self%bytesPerPix()
+                write(*,'(a,1x,f7.0)') 'Bit depth:                                                       ', real(bytes_per_pixel*8)
+                write(*,'(a,1x,f7.3)') 'Pixel size:                                                      ', self%pixsiz
+                write(*,'(a,1x,f7.0)') 'Number of slices (planes) in volume (=1 for an image)            ', self%nz
+                write(*,'(a,1x,f7.0)') 'Total number of records (including header records) in each image:', self%irec
+                write(*,'(a,1x,f7.0)') 'Maximum/minimum flag=1 if stats have been computed and 0 else:   ', self%imami
+                write(*,'(a,1x,f7.3)') 'Maximum data value:                                              ', self%fmax
+                write(*,'(a,1x,f7.3)') 'Minimum data value:                                              ', self%fmin
+                write(*,'(a,1x,f7.3)') 'Average data value:                                              ', self%av
+                write(*,'(a,1x,f7.3)') 'Standard deviation. -1. or 0. indicates SIG not computed:        ', self%sig
+                write(*,'(a,1x,f7.0)') 'Number of records in file header (label):                        ', self%labrec
+                write(*,'(a,1x,f7.0)') 'Flag that following three tilt angles are present:               ', self%iangle
+                write(*,'(a,1x,f7.3)') 'Tilt angle: phi (See note #2 below):                             ', self%phi
+                write(*,'(a,1x,f7.3)') 'Tilt angle: theta:                                               ', self%theta
+                write(*,'(a,1x,f7.3)') 'Tilt angle: gamma (also called psi):                             ', self%gamma
+                write(*,'(a,1x,f7.3)') 'X translation:                                                   ', self%xoff
+                write(*,'(a,1x,f7.3)') 'Y translation:                                                   ', self%yoff
+                write(*,'(a,1x,f7.3)') 'Z translation:                                                   ', self%zoff
+                write(*,'(a,1x,f7.3)') 'Scale factor:                                                    ', self%scale
+                write(*,'(a,1x,f7.0)') 'Total number of bytes in header:                                 ', self%labbyt
+                write(*,'(a,1x,f7.0)') 'Record length in bytes:                                          ', self%lenbyt
+                write(*,'(a,1x,f7.0)') 'istack=0 for 3D (non-stack) files and a value > 0 for stacks:    ', self%istack
+                write(*,'(a,1x,f7.0)') 'The number of the highest image currently used in the stack:     ', self%maxim
+                write(*,'(a,1x,f7.0)') 'Number of current image in stack:                                ', self%imgnum
+                write(*,'(a,1x,f7.0)') 'Highest index location currently in use in indexed stacks:       ', self%lastindx
+                write(*,'(a,1x,f7.0)') 'Flag that additional rotation angles follow in header:           ', self%kangle
+                write(*,'(a,1x,f7.3)') 'Angle:                                                           ', self%phi1
+                write(*,'(a,1x,f7.3)') 'Angle:                                                           ', self%theta1
+                write(*,'(a,1x,f7.3)') 'Angle:                                                           ', self%psi1
+                write(*,'(a,1x,f7.3)') 'Angle:                                                           ', self%phi2
+                write(*,'(a,1x,f7.3)') 'Angle:                                                           ', self%theta2
+                write(*,'(a,1x,f7.3)') 'Angle:                                                           ', self%psi2
+                write(*,'(a,1x,f7.3)') 'Electron voltage:                                                ', self%ev
+                write(*,'(a,1x,f7.0)') 'Project number:                                                  ', self%proj
+                write(*,'(a,1x,f7.0)') 'Micrograph number:                                               ', self%mic
+                write(*,'(a,1x,f7.0)') 'Micrograph window number:                                        ', self%num
+                write(*,'(a,1x,f7.0)') 'Global image number:                                             ', self%glonum
             class DEFAULT
-            stop 'Format not supported; print; simple_imghead'
+                stop 'Format not supported; print; simple_imghead'
         end select
     end subroutine print_imghead
 
     !>  \brief  Read the header data from disk
     subroutine read( self, lun, pos, print_entire )
-        class(ImgHead), intent(inout)         :: self
-        integer, intent(in)                   :: lun
-        integer(kind=8), intent(in), optional :: pos
-        logical, intent(in), optional         :: print_entire
-        integer                               :: io_status, ppos, i, cnt
-        integer                               :: labrec, dim1, alloc_stat
-        character(len=512)                    :: io_message
-        real(kind=4), allocatable             :: spihed(:)
+        class(ImgHead),            intent(inout) :: self
+        integer,                   intent(in)    :: lun
+        integer(kind=8), optional, intent(in)    :: pos
+        logical,         optional, intent(in)    :: print_entire
+        integer                   :: io_status, ppos, i, cnt
+        integer                   :: labrec, dim1, alloc_stat
+        character(len=512)        :: io_message
+        real(kind=4), allocatable :: spihed(:)
         ppos = 1
         if( present(pos) ) ppos = pos
         select type( self )
-        type is( SpiImgHead )
-            allocate(spihed(self%getLabbyt()/4))
-            cnt = 0
-            do i=ppos,ppos+self%getLabbyt()-1,4
-                cnt = cnt+1
-                read(unit=lun,pos=i) spihed(cnt)
-                if( present(print_entire) )then
-                    write(*,*) i, spihed(cnt)
+            type is( SpiImgHead )
+                allocate(spihed(self%getLabbyt()/4))
+                cnt = 0
+                do i=ppos,ppos+self%getLabbyt()-1,4
+                    cnt = cnt+1
+                    read(unit=lun,pos=i) spihed(cnt)
+                    if( present(print_entire) )then
+                        write(*,*) i, spihed(cnt)
+                    endif
+                end do
+                self%nz       = spihed(1)
+                DebugPrint ' nz: ', self%nz
+                self%ny       = spihed(2)
+                DebugPrint ' ny: ', self%ny
+                self%irec     = spihed(3)
+                self%iform    = spihed(5)
+                DebugPrint  ' iform: ', self%iform
+                self%imami    = spihed(6)
+                self%fmax     = spihed(7)
+                self%fmin     = spihed(8)
+                self%av       = spihed(9)
+                self%sig      = spihed(10)
+                self%nx       = spihed(12)
+                DebugPrint ' nx: ', self%nx
+                self%labrec   = spihed(13)
+                DebugPrint ' labrec: ', self%labrec
+                self%iangle   = spihed(14)
+                self%phi      = spihed(15)
+                self%theta    = spihed(16)
+                self%gamma    = spihed(17)
+                self%xoff     = spihed(18)
+                self%yoff     = spihed(19)
+                self%zoff     = spihed(20)
+                self%scale    = spihed(21)
+                self%labbyt   = spihed(22)
+                DebugPrint ' labbyt: ', self%labbyt
+                self%lenbyt   = spihed(23)
+                DebugPrint ' lenbyt: ', self%lenbyt
+                self%istack   = spihed(24)
+                self%maxim    = spihed(26)
+                self%imgnum   = spihed(27)
+                self%lastindx = spihed(28)
+                self%kangle   = spihed(31)
+                self%phi1     = spihed(32)
+                self%theta1   = spihed(33)
+                self%psi1     = spihed(34)
+                self%phi2     = spihed(35)
+                self%theta2   = spihed(36)
+                self%psi2     = spihed(37)
+                self%pixsiz   = spihed(38)
+                self%ev       = spihed(39)
+                self%proj     = spihed(40)
+                self%mic      = spihed(41)
+                self%num      = spihed(42)
+                self%glonum   = spihed(43)
+                deallocate(spihed)
+            type is( MrcImgHead )
+                read(unit=lun,pos=ppos,iostat=io_status,iomsg=io_message) self%byte_array
+                if( io_status .ne. 0 ) then
+                    write(*,'(a,i0,2a)') '**error(ImgHead::read): error ', io_status, &
+                         ' when reading header bytes from disk: ', trim(io_message)
+                    stop 'I/O error; read; simple_imghead'
                 endif
-            end do
-            self%nz       = spihed(1)
-            DebugPrint ' nz: ', self%nz
-            self%ny       = spihed(2)
-            DebugPrint ' ny: ', self%ny
-            self%irec     = spihed(3)
-            self%iform    = spihed(5)
-            DebugPrint  ' iform: ', self%iform
-            self%imami    = spihed(6)
-            self%fmax     = spihed(7)
-            self%fmin     = spihed(8)
-            self%av       = spihed(9)
-            self%sig      = spihed(10)
-            self%nx       = spihed(12)
-            DebugPrint ' nx: ', self%nx
-            self%labrec   = spihed(13)
-            DebugPrint ' labrec: ', self%labrec
-            self%iangle   = spihed(14)
-            self%phi      = spihed(15)
-            self%theta    = spihed(16)
-            self%gamma    = spihed(17)
-            self%xoff     = spihed(18)
-            self%yoff     = spihed(19)
-            self%zoff     = spihed(20)
-            self%scale    = spihed(21)
-            self%labbyt   = spihed(22)
-            DebugPrint ' labbyt: ', self%labbyt
-            self%lenbyt   = spihed(23)
-            DebugPrint ' lenbyt: ', self%lenbyt
-            self%istack   = spihed(24)
-            self%maxim    = spihed(26)
-            self%imgnum   = spihed(27)
-            self%lastindx = spihed(28)
-            self%kangle   = spihed(31)
-            self%phi1     = spihed(32)
-            self%theta1   = spihed(33)
-            self%psi1     = spihed(34)
-            self%phi2     = spihed(35)
-            self%theta2   = spihed(36)
-            self%psi2     = spihed(37)
-            self%pixsiz   = spihed(38)
-            self%ev       = spihed(39)
-            self%proj     = spihed(40)
-            self%mic      = spihed(41)
-            self%num      = spihed(42)
-            self%glonum   = spihed(43)
-            deallocate(spihed)
-        type is( MrcImgHead )
-            read(unit=lun,pos=ppos,iostat=io_status,iomsg=io_message) self%byte_array
-            if (io_status .ne. 0) then
-                write(*,'(a,i0,2a)') '**error(ImgHead::read): error ', io_status, &
-                     ' when reading header bytes from disk: ', trim(io_message)
-                stop 'I/O error; read; simple_imghead'
-            endif
-        class DEFAULT
-            stop 'Format not supported; print; simle_imghead'
+                call self%transfer_byte_array2obj
+            class DEFAULT
+                stop 'Format not supported; print; simle_imghead'
         end select
         DebugPrint '(imghead::read) done'
     end subroutine read
 
     !>  \brief write header data to disk
     subroutine write( self, lun, pos )
-        class(ImgHead), intent(inout)         :: self
-        integer, intent(in)                   :: lun
-        integer(kind=8), intent(in), optional :: pos
-        integer(kind=8)                       :: ppos, i
-        integer                               :: io_status, cnt
-        !integer                               :: rsz, labrec, dim1, alloc_stat, ldim(3)
-        real(kind=4)                          :: spihed(CLOSE2THEANSWER), zero
+        class(ImgHead),            intent(inout) :: self
+        integer,                   intent(in)    :: lun
+        integer(kind=8), optional, intent(in)    :: pos
+        integer(kind=8) :: ppos, i
+        integer         :: io_status, cnt
+        real(kind=4)    :: spihed(CLOSE2THEANSWER), zero
         zero = 0.
         if( self%exists )then
             ! all good
@@ -651,6 +455,7 @@ contains
                 endif
             end do
         type is( MrcImgHead )
+            call self%transfer_obj2byte_array
             write(unit=lun,pos=ppos,iostat=io_status) self%byte_array
             if( io_status .ne. 0 )then
                 write(*,'(a,i0,a)') '**error(ImgHead::write): error ', io_status, ' when writing header bytes to disk'
@@ -663,6 +468,263 @@ contains
         end select
     end subroutine write
 
+    ! byte array conversions
+
+    subroutine transfer_obj2byte_array( self )
+        class(ImgHead), intent(in) :: self
+        integer :: i
+        select type( self )
+            type is( MrcImgHead )
+                self%byte_array(1:4)     = transfer(self%nx,      self%byte_array(1:4))
+                self%byte_array(5:8)     = transfer(self%ny,      self%byte_array(5:8))
+                self%byte_array(9:12)    = transfer(self%nz,      self%byte_array(9:12))
+                self%byte_array(13:16)   = transfer(self%mode,    self%byte_array(13:16))
+                self%byte_array(17:20)   = transfer(self%nxstart, self%byte_array(17:20))
+                self%byte_array(21:24)   = transfer(self%nystart, self%byte_array(21:24))
+                self%byte_array(25:28)   = transfer(self%nzstart, self%byte_array(25:28))
+                self%byte_array(29:32)   = transfer(self%mx,      self%byte_array(29:32))
+                self%byte_array(33:36)   = transfer(self%my,      self%byte_array(33:36))
+                self%byte_array(37:40)   = transfer(self%mz,      self%byte_array(37:40))
+                self%byte_array(41:44)   = transfer(self%cella1,  self%byte_array(41:44))
+                self%byte_array(45:48)   = transfer(self%cella2,  self%byte_array(45:48))
+                self%byte_array(49:52)   = transfer(self%cella3,  self%byte_array(49:52))
+                self%byte_array(53:56)   = transfer(self%cellb1,  self%byte_array(53:56))
+                self%byte_array(57:60)   = transfer(self%cellb2,  self%byte_array(57:60))
+                self%byte_array(61:64)   = transfer(self%cellb3,  self%byte_array(61:64))
+                self%byte_array(65:68)   = transfer(self%mapc,    self%byte_array(65:68))
+                self%byte_array(69:72)   = transfer(self%mapr,    self%byte_array(69:72))
+                self%byte_array(73:76)   = transfer(self%maps,    self%byte_array(73:76))
+                self%byte_array(77:80)   = transfer(self%dmin,    self%byte_array(77:80))
+                self%byte_array(81:84)   = transfer(self%dmax,    self%byte_array(81:84))
+                self%byte_array(85:88)   = transfer(self%dmean,   self%byte_array(85:88))
+                self%byte_array(89:92)   = transfer(self%ispg,    self%byte_array(89:92))
+                self%byte_array(93:96)   = transfer(self%nsymbt,  self%byte_array(93:96))
+                self%byte_array(97:100)  = transfer(self%extra,   self%byte_array(97:100))
+                self%byte_array(197:200) = transfer(self%originx, self%byte_array(197:200))
+                self%byte_array(201:204) = transfer(self%originy, self%byte_array(201:204))
+                self%byte_array(205:208) = transfer(self%originz, self%byte_array(205:208))
+                self%byte_array(209:212) = transfer(self%map,     self%byte_array(209:212))
+                self%byte_array(213:216) = transfer(self%machst,  self%byte_array(213:216))
+                self%byte_array(217:220) = transfer(self%rms,     self%byte_array(217:220))
+                self%byte_array(221:224) = transfer(self%nlabl,   self%byte_array(221:224))
+                do i=1,NLABL
+                    self%byte_array(225:304) = transfer(self%label(i), self%byte_array(225:304))
+                end do
+        end select
+    end subroutine transfer_obj2byte_array
+
+    subroutine transfer_byte_array2obj( self )
+        class(ImgHead), intent(in) :: self
+        integer :: i
+        select type( self )
+            type is( MrcImgHead )
+                self%nx      = transfer(self%byte_array(1:4),     self%nx)
+                self%ny      = transfer(self%byte_array(5:8),     self%ny)
+                self%nz      = transfer(self%byte_array(9:12),    self%nz)
+                self%mode    = transfer(self%byte_array(13:16),   self%mode)
+                self%nxstart = transfer(self%byte_array(17:20),   self%nxstart)
+                self%nystart = transfer(self%byte_array(21:24),   self%nystart)
+                self%nzstart = transfer(self%byte_array(25:28),   self%nzstart)
+                self%mx      = transfer(self%byte_array(29:32),   self%mx)
+                self%my      = transfer(self%byte_array(33:36),   self%my)
+                self%mz      = transfer(self%byte_array(37:40),   self%mz)
+                self%cella1  = transfer(self%byte_array(41:44),   self%cella1)
+                self%cella2  = transfer(self%byte_array(45:48),   self%cella2)
+                self%cella3  = transfer(self%byte_array(49:52),   self%cella3)
+                self%cellb1  = transfer(self%byte_array(53:56),   self%cellb1)
+                self%cellb2  = transfer(self%byte_array(57:60),   self%cellb2)
+                self%cellb3  = transfer(self%byte_array(61:64),   self%cellb3)
+                self%mapc    = transfer(self%byte_array(65:68),   self%mapc)
+                self%mapr    = transfer(self%byte_array(69:72),   self%mapr)
+                self%maps    = transfer(self%byte_array(73:76),   self%maps)
+                self%dmin    = transfer(self%byte_array(77:80),   self%dmin)
+                self%dmax    = transfer(self%byte_array(81:84),   self%dmax)
+                self%dmean   = transfer(self%byte_array(85:88),   self%dmean)
+                self%ispg    = transfer(self%byte_array(89:92),   self%ispg)
+                self%nsymbt  = transfer(self%byte_array(93:96),   self%nsymbt)
+                self%extra   = transfer(self%byte_array(97:100),  self%extra)
+                self%originx = transfer(self%byte_array(197:200), self%originx)
+                self%originy = transfer(self%byte_array(201:204), self%originy)
+                self%originz = transfer(self%byte_array(205:208), self%originz)
+                self%map     = transfer(self%byte_array(209:212), self%map)
+                self%machst  = transfer(self%byte_array(213:216), self%machst)
+                self%rms     = transfer(self%byte_array(217:220), self%rms)
+                self%nlabl   = transfer(self%byte_array(221:224), self%nlabl)
+                do i=1,NLABL
+                    self%label(i) = transfer(self%byte_array(225:304), self%label(i))
+                end do
+        end select
+    end subroutine transfer_byte_array2obj
+
+    ! getters/setters
+
+    !>  \brief  Reset all the values in the header to default values
+    subroutine reset2default( self )
+        class(ImgHead), intent(inout) :: self
+        integer ::  i
+        select type(self)
+            type is ( MrcImgHead )
+                self%nx      = 0
+                self%ny      = 0
+                self%nz      = 0
+                self%mode    = 2
+                self%nxstart = 0
+                self%nystart = 0
+                self%nzstart = 0
+                self%mx      = 1
+                self%my      = 1
+                self%mz      = 1
+                self%cella1  = 1.0
+                self%cella2  = 1.0
+                self%cella3  = 1.0
+                self%cellb1  = 90.0
+                self%cellb2  = 90.0
+                self%cellb3  = 90.0
+                self%mapc    = 1
+                self%mapr    = 2
+                self%maps    = 3
+                self%dmin    = 0.0
+                self%dmax    = 0.0
+                self%dmean   = 0.0
+                self%ispg    = 1
+                self%nsymbt  = 0
+                self%extra   = 0
+                self%originx = 0
+                self%originy = 0
+                self%originz = 0
+                self%map     = 'MAP '
+                self%machst  = 0
+                self%rms     = 1.0
+                self%nlabl   = 0
+                do i=1,NLABL
+                    self%label(i) = ' '
+                end do
+            type is (SpiImgHead)
+                self%nz       = 0.
+                self%ny       = 0.
+                self%irec     = 0.
+                self%iform    = 1.
+                self%imami    = 0.
+                self%fmax     = 0.
+                self%fmin     = 0.
+                self%av       = 0.
+                self%sig      = 0.
+                self%nx       = 0.
+                self%labrec   = 0.
+                self%iangle   = 0.
+                self%phi      = 0.
+                self%theta    = 0.
+                self%gamma    = 0.
+                self%xoff     = 0.
+                self%yoff     = 0.
+                self%zoff     = 0.
+                self%scale    = 1.
+                self%labbyt   = 0.
+                self%lenbyt   = 0.
+                self%istack   = 1.
+                self%maxim    = 0.
+                self%imgnum   = 0.
+                self%lastindx = 0.
+                self%kangle   = 0.
+                self%phi1     = 0.
+                self%theta1   = 0.
+                self%psi1     = 0.
+                self%phi2     = 0.
+                self%theta2   = 0.
+                self%psi2     = 0.
+                self%pixsiz   = 1.
+                self%ev       = 300.
+                self%proj     = 0.
+                self%mic      = 0.
+                self%num      = 0.
+                self%glonum   = 0.
+            class DEFAULT
+                stop 'Format not supported; reset2default; simle_imghead'
+        end select
+    end subroutine reset2default
+
+    !>  \brief  if for setting the minimal info in the image header
+    subroutine setMinimal( self, ldim, is_ft, smpd )
+        class(ImgHead), intent(inout) :: self
+        integer,        intent(in)    :: ldim(3)
+        logical,        intent(in)    :: is_ft
+        real,           intent(in)    :: smpd
+        logical :: even_dims, is_3d
+        integer :: lenbyt, labrec, labbyt
+        if( ldim(3) == 1 )then
+            even_dims = is_even(ldim(:2))
+        else
+            even_dims = is_even(ldim)
+        endif
+        is_3d = .false.
+        if( ldim(3) > 1 ) is_3d = .true.
+        select type(self)
+            type is( MrcImgHead )
+                call self%setPixSz(smpd)
+                call self%setDims(ldim)
+            type is( SpiImgHead )
+                call self%setPixSz(smpd)
+                lenbyt = ldim(1)*4     ! record length in bytes
+                labrec = MRCHEADSZ/lenbyt   ! nr of records in file header (label)
+                if( mod(MRCHEADSZ,lenbyt ) /= 0 ) labrec = labrec + 1
+                labbyt = labrec*lenbyt ! total number of bytes in header
+                self%lenbyt = real(lenbyt, kind=4)
+                self%labrec = real(labrec, kind=4)
+                self%labbyt = real(labbyt, kind=4)
+                self%nx     = real(ldim(1), kind=4)
+                self%ny     = real(ldim(2), kind=4)
+                self%nz     = real(ldim(3), kind=4)
+                if( .not. is_3d .and. .not. is_ft )then
+                    self%iform = 1.
+                else if( is_3d .and. .not. is_ft )then
+                    self%iform = 3.
+                else if( .not. is_3d .and. is_ft .and. .not. even_dims )then
+                    self%iform = -11.
+                else if( .not. is_3d .and. is_ft .and. even_dims )then
+                    self%iform = -12.
+                else if( is_3d .and. is_ft .and. .not. even_dims )then
+                    self%iform = -21.
+                else if( is_3d .and. is_ft .and. even_dims )then
+                    self%iform = -22.
+                else
+                    stop 'undefined file type, setMinimal; simple_imghead'
+                endif 
+                self%irec = real(ldim(2), kind=4)+self%labrec ! Total number of records (including header records)
+                ! in each image of a simple image or stacked image file
+                self%sig = -1.         ! Standard deviation of data. A value of -1.0 or 0.0
+                ! indicates that SIG has not been computed
+                self%scale = 1.        !  Scale factor
+                if( ldim(3) > 1 )then  ! istack has a value of 0 in simple 2D or 3D (non-stack) files. In an
+                    self%istack = 0.   ! "image stack" there is one overall stack header followed by a stack of images, in which
+                else                   ! each image has its own image header. A value of >0 in this position in the overall stack
+                    self%istack = 2.   ! header indicates a stack of images. A value of <0 in this position in the overall stack
+                endif                  ! header indicates an indexed stack of images
+                if ( ldim(3) > 1 )then ! maxim is only used in the overall header for a stacked image file. There, this position
+                    self%maxim = 1.    ! contains the number of the highest image currently used in the stack. This number is
+                else                   ! updated, if necessary, when an image is added or deleted from the stack
+                    self%maxim = 0.
+                endif
+                self%imgnum = 0.   ! only used in a stacked image header, the number of the current image or zero if this image is unused
+            class DEFAULT
+                stop 'Format not supported; setMinimal; simle_imghead'
+        end select
+
+    contains
+
+        !> \brief  to check if all vals in array are even
+        pure function is_even( arr ) result( yep )
+            integer, intent(in) :: arr(:)
+            logical :: yep, test(size(arr))
+            integer :: i
+            test = .false.
+            do i=1,size(arr)
+                test(i) = mod(arr(i),2) == 0
+            end do
+            yep = all(test)
+        end function is_even
+
+    end subroutine setMinimal
+
     !>  \brief  Return the number of bytes per pixel
     !!          All SPIDER image files consist of unformatted, direct access records.
     !!          Each record contains NX 4-byte words which are stored as floating point numbers.
@@ -670,15 +732,15 @@ contains
         class(ImgHead), intent(in) :: self
         bytesPerPix = 4
         select type( self )
-        type is( MrcImgHead )
-            select case( self%mode%get() )
-            case(0)
-                bytesPerPix = 1
-            case(1,3,6)
-                bytesPerPix = 2
-            case(2,4)
-                bytesPerPix = 4
-            end select
+            type is( MrcImgHead )
+                select case( self%mode )
+                    case(0)
+                        bytesPerPix = 1
+                    case(1,3,6)
+                        bytesPerPix = 2
+                    case(2,4)
+                        bytesPerPix = 4
+                end select
         end select
     end function bytesPerPix
 
@@ -688,7 +750,7 @@ contains
         pixIsSigned = .true.
         select type( self )
         type is( MrcImgHead )
-            select case( self%mode%get() )
+            select case( self%mode )
             case (6,16)
                 pixIsSigned = .false.
             end select
@@ -703,13 +765,13 @@ contains
         getPixType = dataRfloat
         select type( self )
         type is( MrcImgHead )
-            select case( self%mode%get() )
-            case( 0 )
-                getPixType = dataRbytes
-            case( 1,3,6 )
-                getPixType = dataRinteger
-            case( 2,4 )
-                getPixType = dataRfloat
+            select case( self%mode )
+                case( 0 )
+                    getPixType = dataRbytes
+                case( 1,3,6 )
+                    getPixType = dataRinteger
+                case( 2,4 )
+                    getPixType = dataRfloat
             end select
         end select
     end function getPixType
@@ -720,9 +782,9 @@ contains
         pixIsComplex = .false.
         select type( self )
         type is( MrcImgHead )
-            select case( self%mode%get() )
-            case( 3,4 )
-                pixIsComplex = .true.
+            select case( self%mode )
+                case( 3,4 )
+                    pixIsComplex = .true.
             end select
         end select
     end function pixIsComplex
@@ -732,7 +794,7 @@ contains
         class(ImgHead), intent(in) :: self
         select type(self)
         type is( MrcImgHead )
-            firstDataByte = MRCHEADSZ+1+self%nsymbt%get()
+            firstDataByte = MRCHEADSZ+1+self%nsymbt
         type is( SpiImgHead )
             firstDataByte = int(self%labbyt)+1
             class DEFAULT
@@ -740,78 +802,15 @@ contains
         end select
     end function firstDataByte
 
-    !>  \brief  assignment overloader
-    subroutine assign( lhs, rhs )
-        class(ImgHead), intent(inout) :: lhs
-        class(ImgHead), intent(in)    :: rhs
-        integer :: ldim(3)
-        select type( lhs )
-        type is (SpiImgHead)
-            select type( rhs )
-            type is( SpiImgHead )
-                ldim(1) = int(rhs%nx)
-                ldim(2) = int(rhs%ny)
-                ldim(3) = int(rhs%nz)
-                call lhs%new(ldim=ldim)
-                lhs%nz       = rhs%nz
-                lhs%ny       = rhs%ny
-                lhs%irec     = rhs%irec
-                lhs%iform    = rhs%iform
-                lhs%imami    = rhs%imami
-                lhs%fmax     = rhs%fmax
-                lhs%fmin     = rhs%fmin
-                lhs%av       = rhs%av
-                lhs%sig      = rhs%sig
-                lhs%nx       = rhs%nx
-                lhs%labrec   = rhs%labrec
-                lhs%iangle   = rhs%iangle
-                lhs%phi      = rhs%phi
-                lhs%theta    = rhs%theta
-                lhs%gamma    = rhs%gamma
-                lhs%xoff     = rhs%xoff
-                lhs%yoff     = rhs%yoff
-                lhs%zoff     = rhs%zoff
-                lhs%scale    = rhs%scale
-                lhs%labbyt   = rhs%labbyt
-                lhs%lenbyt   = rhs%lenbyt
-                lhs%istack   = rhs%istack
-                lhs%maxim    = rhs%maxim
-                lhs%imgnum   = rhs%imgnum
-                lhs%lastindx = rhs%lastindx
-                lhs%kangle   = rhs%kangle
-                lhs%phi1     = rhs%phi1
-                lhs%theta1   = rhs%theta1
-                lhs%psi1     = rhs%psi1
-                lhs%phi2     = rhs%phi2
-                lhs%theta2   = rhs%theta2
-                lhs%psi2     = rhs%psi2
-                lhs%pixsiz   = rhs%pixsiz
-                lhs%ev       = rhs%ev
-                lhs%proj     = rhs%proj
-                lhs%mic      = rhs%mic
-                lhs%num      = rhs%num
-                lhs%glonum   = rhs%glonum
-            end select
-        type is (MrcImgHead)
-            select type( rhs )
-            type is( MrcImgHead )
-                call lhs%new
-                lhs%byte_array = rhs%byte_array
-            end select
-        class DEFAULT
-            stop 'Format not supported (LHS); assign; simle_imghead'
-        end select
-    end subroutine assign
-
     !>  \brief  Return the minimum pixel value
     real function getMinPixVal(self)
         class(ImgHead), intent(in) :: self
         getMinPixVal = 0.
         select type(self)
-        type is (MrcImgHead)
-            getMinPixVal = self%dmin%get()
-        type is (SpiImgHead)
-            getMinPixVal = self%fmin
+            type is (MrcImgHead)
+                getMinPixVal = self%dmin
+            type is (SpiImgHead)
+                getMinPixVal = self%fmin
         end select
     end function getMinPixVal
 
@@ -820,10 +819,10 @@ contains
         class(ImgHead), intent(in) :: self
         getMaxPixVal = 0.
         select type(self)
-        type is (MrcImgHead)
-            getMaxPixVal = self%dmax%get()
-        type is (SpiImgHead)
-            getMaxPixVal = self%fmax
+            type is (MrcImgHead)
+                getMaxPixVal = self%dmax
+            type is (SpiImgHead)
+                getMaxPixVal = self%fmax
         end select
     end function getMaxPixVal
 
@@ -832,11 +831,11 @@ contains
         class(ImgHead), intent(inout)  :: self
         real,               intent(in) :: new_value
         select type(self)
-        type is (MrcImgHead)
-            self%dmin = new_value
-        type is (SpiImgHead)
-            self%fmin  = new_value
-            self%imami = 1
+            type is (MrcImgHead)
+                self%dmin = new_value
+            type is (SpiImgHead)
+                self%fmin  = new_value
+                self%imami = 1
         end select
     end subroutine setMinPixVal
 
@@ -845,11 +844,11 @@ contains
         class(ImgHead), intent(inout) :: self
         real,           intent(in)    :: new_value
         select type(self)
-        type is (MrcImgHead)
-            self%dmax = new_value
-        type is (SpiImgHead)
-            self%fmax  = new_value
-            self%imami = 1
+            type is (MrcImgHead)
+                self%dmax = new_value
+            type is (SpiImgHead)
+                self%fmax  = new_value
+                self%imami = 1
         end select
     end subroutine setMaxPixVal
 
@@ -858,26 +857,24 @@ contains
         class(ImgHead), intent(in)  ::  self
         getPixSz = 0.
         select type(self)
-        type is (MrcImgHead)
-            if (self%mx%get() .ne. 0) then
-                getPixSz = self%cella1%get()/self%mx%get()
-            endif
-        type is (SpiImgHead)
-            getPixSz = self%pixsiz
+            type is (MrcImgHead)
+                if( self%mx .ne. 0 ) getPixSz = self%cella1/self%mx
+            type is (SpiImgHead)
+                getPixSz = self%pixsiz
         end select
     end function getPixSz
 
     !>  \brief  Set the pixel size
     subroutine setPixSz( self, smpd )
         class(ImgHead), intent(inout) :: self
-        real, intent(in)              :: smpd
+        real,           intent(in)    :: smpd
         select type(self)
-        type is (MrcImgHead)
-            self%cella1 = smpd*self%mx%get()
-            self%cella2 = smpd*self%my%get()
-            self%cella3 = smpd*self%mz%get()
-        type is (SpiImgHead)
-            self%pixsiz = smpd
+            type is (MrcImgHead)
+                self%cella1 = smpd*self%mx
+                self%cella2 = smpd*self%my
+                self%cella3 = smpd*self%mz
+            type is (SpiImgHead)
+                self%pixsiz = smpd
         end select
     end subroutine setPixSz
 
@@ -886,10 +883,10 @@ contains
         class(ImgHead), intent(in) ::  self
         stack_size = 0
         select type(self)
-        type is (MrcImgHead)
-            stack_size = self%nz%get()
-        type is (SpiImgHead)
-            stack_size = int(self%maxim)
+            type is (MrcImgHead)
+                stack_size = self%nz
+            type is (SpiImgHead)
+                stack_size = int(self%maxim)
         end select
     end function getStackSz
 
@@ -899,99 +896,99 @@ contains
         integer ::  dims(3)
         dims = 0
         select type(self)
-        type is (MrcImgHead)
-            dims = [self%nx%get(),self%ny%get(),self%nz%get()]
-        type is (SpiImgHead)
-            dims = int([self%nx,self%ny,self%nz])
+            type is (MrcImgHead)
+                dims = [self%nx,self%ny,self%nz]
+            type is (SpiImgHead)
+                dims = int([self%nx,self%ny,self%nz])
         end select
     end function getDims
 
     !>  \brief  Return one of the dims stored in the header
     function getDim( self, which_dim ) result( dim )
         class(ImgHead), intent(in) :: self
-        integer, intent(in)        :: which_dim
+        integer,        intent(in) :: which_dim
         integer :: dim
         dim = 0
         select type( self )
-        type is( MrcImgHead )
-            select case( which_dim )
-            case (1)
-                dim = self%nx%get()
-            case (2)
-                dim = self%ny%get()
-            case (3)
-                dim = self%nz%get()
-            case DEFAULT
-                stop 'Dimension should be 1, 2 or 3; getDim; simle_imghead'
-            end select
-        type is( SpiImgHead )
-            select case( which_dim )
-            case (1)
-                dim = int(self%nx)
-            case (2)
-                dim = int(self%ny)
-            case (3)
-                dim = int(self%nz)
-            case DEFAULT
-                stop 'Dimension should be 1, 2 or 3; getDim; simle_imghead'
-            end select
+            type is( MrcImgHead )
+                select case( which_dim )
+                    case (1)
+                        dim = self%nx
+                    case (2)
+                        dim = self%ny
+                    case (3)
+                        dim = self%nz
+                    case DEFAULT
+                        stop 'Dimension should be 1, 2 or 3; getDim; simle_imghead'
+                end select
+            type is( SpiImgHead )
+                select case( which_dim )
+                    case (1)
+                        dim = int(self%nx)
+                    case (2)
+                        dim = int(self%ny)
+                    case (3)
+                        dim = int(self%nz)
+                    case DEFAULT
+                        stop 'Dimension should be 1, 2 or 3; getDim; simle_imghead'
+                end select
         end select
     end function getDim
 
     !>  \brief  set the dims in the header
     subroutine setDims( self, ldim )
         class(ImgHead), intent(inout) :: self
-        integer, intent(in)           :: ldim(3)
+        integer,        intent(in)    :: ldim(3)
         select type( self )
-        type is( MrcImgHead )
-            self%nx = ldim(1)
-            self%ny = ldim(2)
-            self%nz = ldim(3)
-            self%mx = ldim(1)
-            self%my = ldim(2)
-            self%mz = ldim(3)
-        type is( SpiImgHead )
-            self%nx = ldim(1)
-            self%ny = ldim(2)
-            self%nz = ldim(3)
+            type is( MrcImgHead )
+                self%nx = ldim(1)
+                self%ny = ldim(2)
+                self%nz = ldim(3)
+                self%mx = ldim(1)
+                self%my = ldim(2)
+                self%mz = ldim(3)
+            type is( SpiImgHead )
+                self%nx = ldim(1)
+                self%ny = ldim(2)
+                self%nz = ldim(3)
         end select
     end subroutine setDims
 
     !>  \brief  set the dims in the header
     subroutine setDim( self, which_dim, d )
         class(ImgHead), intent(inout) :: self
-        integer, intent(in)           :: which_dim, d
+        integer,        intent(in)    :: which_dim, d
         if( d < 1 )then
             write(*,'(a,1x,f7.0)') 'Dimension: ', real(d)
             write(*,*) 'Trying to set image dimension that is nonconforming; setDim; simple_imghead'
             stop
         endif
         select type( self )
-        type is( MrcImgHead )
-            select case( which_dim )
-            case(1)
-                self%nx = d
-                self%mx = d
-            case(2)
-                self%ny = d
-                self%my = d
-            case(3)
-                self%nz = d
-                self%mz = d
-            case DEFAULT
-                stop 'not a valid dimension; setDim; simple_imghead'
-            end select
-        type is( SpiImgHead )
-            select case( which_dim )
-            case(1)
-                self%nx = d
-            case(2)
-                self%ny = d
-            case(3)
-                self%nz = d
-            case DEFAULT
-                stop 'not a valid dimension; setDim; simple_imghead'
-            end select
+            type is( MrcImgHead )
+                select case( which_dim )
+                    case(1)
+                        self%nx = d
+                        self%mx = d
+                    case(2)
+                        self%ny = d
+                        self%my = d
+                    case(3)
+                        self%nz = d
+                        self%mz = d
+                    case DEFAULT
+                        stop 'not a valid dimension; setDim; simple_imghead'
+                end select
+            type is( SpiImgHead )
+                select case( which_dim )
+                    case(1)
+                        self%nx = d
+                    case(2)
+                        self%ny = d
+                    case(3)
+                        self%nz = d
+                    case DEFAULT
+                        stop 'not a valid dimension; setDim; simple_imghead'
+                end select
         end select
     end subroutine setDim
 
@@ -1001,8 +998,8 @@ contains
         integer :: labrec
         labrec = 0
         select type( self )
-        type is( SpiImgHead )
-            labrec = int(self%labrec)
+            type is( SpiImgHead )
+                labrec = int(self%labrec)
         end select
     end function getLabrec
 
@@ -1012,8 +1009,8 @@ contains
         integer :: lenbyt
         lenbyt = 0
         select type( self )
-        type is( SpiImgHead )
-            lenbyt = int(self%lenbyt)
+            type is( SpiImgHead )
+                lenbyt = int(self%lenbyt)
         end select
     end function getLenbyt
 
@@ -1023,8 +1020,8 @@ contains
         integer :: labbyt
         labbyt = 0
         select type( self )
-        type is( SpiImgHead )
-            labbyt = int(self%lenbyt)
+            type is( SpiImgHead )
+                labbyt = int(self%lenbyt)
         end select
     end function getLabbyt
 
@@ -1034,20 +1031,20 @@ contains
         integer :: maxim
         maxim = 0
         select type( self )
-        type is( SpiImgHead )
-            maxim = int(self%maxim)
-        type is( MrcImgHead)
-            maxim = self%nz%get()
+            type is( SpiImgHead )
+                maxim = int(self%maxim)
+            type is( MrcImgHead)
+                maxim = self%nz
         end select
     end function getMaxim
 
     !>  \brief  Set the maximum nr of images in stack
     subroutine setMaxim( self, maxim )
         class(ImgHead), intent(inout) :: self
-        integer, intent(in) :: maxim
+        integer,        intent(in) :: maxim
         select type( self )
-        type is( SpiImgHead )
-            self%maxim = maxim
+            type is( SpiImgHead )
+                self%maxim = maxim
         end select
     end subroutine setMaxim
 
@@ -1057,8 +1054,8 @@ contains
         integer :: iform
         iform = 1
         select type( self )
-        type is( SpiImgHead )
-            iform = int(self%iform)
+            type is( SpiImgHead )
+                iform = int(self%iform)
         end select
     end function getIform
 
@@ -1068,28 +1065,28 @@ contains
         integer :: mode
         mode = 2
         select type( self )
-        type is( MrcImgHead )
-            mode = self%mode%get()
+            type is( MrcImgHead )
+                mode = self%mode
         end select
     end function getMode
 
     !>  \brief  Set the maximum nr of images in stack
     subroutine setIform( self, iform )
         class(ImgHead), intent(inout) :: self
-        integer, intent(in)           :: iform
+        integer,        intent(in)    :: iform
         select type( self )
-        type is( SpiImgHead )
-            self%iform = iform
+            type is( SpiImgHead )
+                self%iform = iform
         end select
     end subroutine setIform
 
     !>  \brief  Set the image format tag
     subroutine setMode( self, mode )
         class(ImgHead), intent(inout) :: self
-        integer, intent(in)           :: mode
+        integer,        intent(in)    :: mode
         select type( self )
-        type is( MrcImgHead )
-            self%mode = mode
+            type is( MrcImgHead )
+                self%mode = mode
         end select
     end subroutine setMode
 
@@ -1098,59 +1095,24 @@ contains
         class(ImgHead), intent(inout) :: self
         real,           intent(in)    :: RMSD
         select type( self )
-        type is( MrcImgHead )
-            self%rms = RMSD
+            type is( MrcImgHead )
+                self%rms = RMSD
         end select
     end subroutine setRMSD
 
     ! POLYMORPHIC DESTRUCTOR
 
-    subroutine kill(self)
+    subroutine kill( self )
         class(ImgHead), intent(inout) :: self
         integer :: i
         if( self%exists )then
             select type(self)
-            type is (MrcImgHead)
-                call self%nx     %kill
-                call self%ny     %kill
-                call self%nz     %kill
-                call self%mode   %kill
-                call self%nxstart%kill
-                call self%nystart%kill
-                call self%nzstart%kill
-                call self%mx     %kill
-                call self%my     %kill
-                call self%mz     %kill
-                call self%cella1 %kill
-                call self%cella2 %kill
-                call self%cella3 %kill
-                call self%cellb1 %kill
-                call self%cellb2 %kill
-                call self%cellb3 %kill
-                call self%mapc   %kill
-                call self%mapr   %kill
-                call self%maps   %kill
-                call self%dmin   %kill
-                call self%dmax   %kill
-                call self%dmean  %kill
-                call self%ispg   %kill
-                call self%nsymbt %kill
-                call self%extra  %kill
-                call self%originx%kill
-                call self%originy%kill
-                call self%originz%kill
-                call self%map    %kill
-                call self%machst %kill
-                call self%rms    %kill
-                call self%nlabl  %kill
-                do i=1,NLABL
-                    call self%label(i)%kill
-                enddo
-                if(allocated(self%byte_array)) deallocate(self%byte_array)
-            type is (SpiImgHead)
-                return
-            class DEFAULT
-                stop 'Unsupported header type; kill; simple_imghead'
+                type is (MrcImgHead)
+                    if( allocated(self%byte_array) ) deallocate(self%byte_array)
+                type is (SpiImgHead)
+                    return
+                class DEFAULT
+                    stop 'Unsupported header type; kill; simple_imghead'
             end select
             self%exists = .false.
         endif

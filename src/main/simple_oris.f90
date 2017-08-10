@@ -2333,11 +2333,11 @@ contains
         character(len=*), intent(in)    :: which
         real,             intent(out)   :: ave, sdev, var
         logical,          intent(out)   :: err
-        real,    allocatable :: vals(:), all_vals(:)
-        integer, allocatable :: states(:)
-        states   = nint( self%get_all('state') )
+        real, allocatable :: vals(:), all_vals(:)
+        real, allocatable :: states(:)
+        states   = self%get_all('state')
         all_vals = self%get_all(which)
-        vals     = pack(states, mask=(states > 0))
+        vals     = pack(all_vals, mask=(states > 0.5))
         call moment(vals, ave, sdev, var, err)
         deallocate(vals, all_vals, states)
     end subroutine stats

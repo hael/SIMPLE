@@ -56,10 +56,8 @@ list(APPEND SIMPLE_src
 
 # Remove unused files
 list(REMOVE_ITEM SIMPLE_src
-  "${CMAKE_CURRENT_SOURCE_DIR}/main/simple_cftcc_scatsrch.f90"
   "${CMAKE_CURRENT_SOURCE_DIR}/main/simple_kbinterpol_elemental.f90"
-) #  "${CMAKE_CURRENT_SOURCE_DIR}/main/simple_symsrcher.f90"
-
+)
 
 set(CORELIB_src  ${DEFS_src} ${UTILS_src} ${SIMPLE_src})
 

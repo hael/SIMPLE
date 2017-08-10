@@ -806,6 +806,7 @@ contains
         endif
 
         contains
+
             !> read_local
             !! \param ioimg Image file object
             !!
@@ -825,6 +826,7 @@ contains
                 if( .not. ioimg_present ) call ioimg%close
                 if( iisxfel ) call self%em2xfel
             end subroutine read_local
+
             !> exception_handler
             !! \param ioimg Image file object
             !!
@@ -841,6 +843,7 @@ contains
                     endif
                 endif
             end subroutine exception_handler
+            
             !> spider_exception_handler
             !! \param ioimg Image IO object to get Iform
             !! iform file type specifier:
