@@ -423,8 +423,18 @@ contains
             if( .not. self%jobs_done(ipart) )then
                 self%jobs_done(ipart) = file_exists(self%jobs_done_fnames(ipart))
             endif
+            if( self%stream )then
+                ! all done
+            else
+                if( self%jobs_done(ipart) )self%jobs_submitted(ipart) = .true.
+            endif
         end do
-        self%ncomputing_units_avail = min(count(self%jobs_done), self%ncomputing_units)
+        if( self%stream )then
+            self%ncomputing_units_avail = min(count(self%jobs_done), self%ncomputing_units)
+        else
+            njobs_in_queue = count(self%jobs_submitted .eqv. (.not.self%jobs_done))
+            self%ncomputing_units_avail = self%ncomputing_units - njobs_in_queue
+        endif
     end subroutine update_queue
 
     ! THE MASTER SCHEDULER
