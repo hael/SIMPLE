@@ -168,14 +168,14 @@ contains
         ext        = trim(fname2ext(fname_here))
         fbody      = trim(get_fbody(trim(fname_here), trim(ext)))
         ! unblur
-        unblur_name = trim(self%target_dir)//trim(adjustl(fbody))//'_thumb'//trim(self%ext)
-        unblur_done = file_exists(unblur_name)
+        unblur_name = trim(self%target_dir)//'/'//trim(adjustl(fbody))//'_thumb'//trim(self%ext)
+        unblur_done = file_exists(trim(unblur_name))
         ! ctffind
-        unidoc_name  = trim(self%target_dir)//'/'//'unidoc_ouput_'//trim(adjustl(fbody))//'.txt'
-        ctffind_done = file_exists(unidoc_name)
+        unidoc_name  = trim(self%target_dir)//'/unidoc_output_'//trim(adjustl(fbody))//'.txt'
+        ctffind_done = file_exists(trim(unidoc_name))
         if( self%dopick )then
             ! picker
-            picker_name = trim(self%target_dir)//trim(adjustl(fbody))//'_intg.box'
+            picker_name = trim(self%target_dir)//'/'//trim(adjustl(fbody))//'_intg.box'
             picker_done = file_exists(picker_name)
             to_process = .not. (unblur_done .and. ctffind_done .and. picker_done)
         else
