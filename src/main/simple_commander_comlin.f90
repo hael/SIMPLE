@@ -50,7 +50,7 @@ contains
         call alloc_err('In: simple_comlin_smat, 1', alloc_stat)
         DebugPrint  'analysing this number of objects: ', p%nptcls
         do iptcl=1,p%nptcls
-            call b%imgs_sym(iptcl)%new([p%box,p%box,1], p%smpd, p%imgkind)
+            call b%imgs_sym(iptcl)%new([p%box,p%box,1], p%smpd)
             call b%imgs_sym(iptcl)%read(p%stk, iptcl)
             ! apply a soft-edged mask
             call b%imgs_sym(iptcl)%mask(p%msk, 'soft')

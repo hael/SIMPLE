@@ -35,8 +35,6 @@ type :: image
     type(c_ptr)                            :: plan_fwd             !< fftw plan for the image (fwd)
     type(c_ptr)                            :: plan_bwd             !< fftw plan for the image (bwd)
     integer                                :: array_shape(3)       !< shape of complex array
-    integer                                :: lims(3,2)            !< physical limits for the XFEL patterns
-    character(len=STDLEN)                  :: imgkind='em'         !< indicates image kind (different representation 4 EM/XFEL)
     logical                                :: existence=.false.    !< indicates existence
   contains
     ! CONSTRUCTORS
@@ -54,15 +52,12 @@ type :: image
     procedure          :: open
     procedure          :: read
     procedure          :: write
-    procedure, private :: write_emkind
     ! GETTERS/SETTERS
     procedure          :: get_array_shape
     procedure          :: get_ldim
     procedure          :: get_smpd
     procedure          :: get_nyq
     procedure          :: get_filtsz
-    procedure          :: get_imgkind
-    procedure          :: get_cmat_lims
     procedure          :: cyci
     procedure          :: get
     procedure          :: get_rmat
@@ -105,7 +100,6 @@ type :: image
     generic            :: operator(.eqdims.) => same_dims_1
     procedure          :: same_dims
     procedure          :: same_smpd
-    procedure          :: same_kind
     generic            :: operator(.eqsmpd.) => same_smpd
     procedure          :: is_ft
     ! ARITHMETICS
@@ -243,7 +237,6 @@ type :: image
     procedure          :: before_after
     procedure          :: gauimg
     procedure          :: fwd_ft
-    procedure          :: em2xfel
     procedure          :: ft2img
     procedure          :: fwd_logft
     procedure          :: mask
@@ -288,17 +281,15 @@ contains
     !>  \brief  is a constructor
     !! \param ldim image dimesions
     !! \param smpd sampling distance
-    !! \param imgkind  type of image, options 'em' (default), 'xfel'
     !! \param backgr  constant initial background
     !! \return  self new image object
     !!
-    function constructor( ldim, smpd, imgkind, backgr ) result( self ) !(FAILS W PRESENT GFORTRAN)
-        integer,                    intent(in) :: ldim(:)
-        real,                       intent(in) :: smpd
-        character(len=*), optional, intent(in) :: imgkind
-        real,             optional, intent(in) :: backgr
+    function constructor( ldim, smpd, backgr ) result( self ) !(FAILS W PRESENT GFORTRAN)
+        integer,           intent(in) :: ldim(:)
+        real,              intent(in) :: smpd
+        real,    optional, intent(in) :: backgr
         type(image) :: self
-        call self%new( ldim, smpd, imgkind, backgr )
+        call self%new( ldim, smpd, backgr )
     end function constructor
 
     !>  \brief  Constructor for simple_image class
@@ -306,67 +297,44 @@ contains
     !!\param self this image object
     !!\param ldim 3D dimensions
     !!\param smpd sampling distance
-    !!\param imgkind type of image, options 'em' (default), 'xfel'
     !!\param backgr constant initial background
     !!
     !!\return new image object
-    subroutine new( self, ldim, smpd, imgkind, backgr )
+    subroutine new( self, ldim, smpd, backgr )
     !! have to have a type-bound constructor here because we get a sigbus error with the function construct
     !! "program received signal sigbus: access to an undefined portion of a memory object."
     !! this seems to be related to how the cstyle-allocated matrix is referenced by the gfortran compiler
-        class(image),               intent(inout) :: self
-        integer,                    intent(in)    :: ldim(3)
-        real,                       intent(in)    :: smpd
-        character(len=*), optional, intent(in)    :: imgkind
-        real,             optional, intent(in)    :: backgr
+        class(image),   intent(inout) :: self
+        integer,        intent(in)    :: ldim(3)
+        real,           intent(in)    :: smpd
+        real, optional, intent(in)    :: backgr
         integer(kind=c_int) :: rc
         integer :: i
         call self%kill
         self%ldim = ldim
         self%smpd = smpd
-        self%imgkind = 'em'
-        if( present(imgkind) ) self%imgkind = imgkind
         ! Make Fourier iterator
-        call self%fit%new(ldim, smpd, self%imgkind)
+        call self%fit%new(ldim, smpd)
         ! Work out dimensions of the complex array
         self%array_shape(1)   = fdim(self%ldim(1))
-        self%array_shape(2:3) = self%ldim(2:3)
-        if( self%imgkind .eq. 'xfel' )then
-            if( self%even_dims() )then
-                self%lims(1,1) = -self%ldim(1)/2
-                self%lims(1,2) = self%ldim(1)/2-1
-                self%lims(2,1) = -self%ldim(2)/2
-                self%lims(2,2) = self%ldim(2)/2-1
-                self%lims(3,1) = 0
-                self%lims(3,2) = 0
-                if( self%ldim(3) > 1 )then
-                    self%lims(3,1) = -self%ldim(3)/2
-                    self%lims(3,2) = self%ldim(3)/2-1
-                endif
-                allocate(self%cmat(self%lims(1,1):self%lims(1,2),self%lims(2,1):self%lims(2,2),self%lims(3,1):self%lims(3,2)))
-            else
-                stop 'even dimensions assumed for xfel images; smple_image::new'
-            endif
-            self%ft = .true.
+        self%array_shape(2:3) = self%ldim(2:3)        
+        self%nc = int(product(self%array_shape)) ! nr of components
+        ! Letting FFTW do the allocation in C ensures that we will be using aligned memory
+        self%p = fftwf_alloc_complex(int(product(self%array_shape),c_size_t))
+        ! Set up the complex array which will point at the allocated memory
+        call c_f_pointer(self%p,self%cmat,self%array_shape)
+        ! Work out the shape of the real array
+        self%array_shape(1) = 2*(self%array_shape(1))
+        ! Set up the real array
+        call c_f_pointer(self%p,self%rmat,self%array_shape)
+        ! put back the shape of the complex array
+        self%array_shape(1) = fdim(self%ldim(1))
+        if( present(backgr) )then
+            self%rmat = backgr
         else
-            self%nc = int(product(self%array_shape)) ! nr of components
-            ! Letting FFTW do the allocation in C ensures that we will be using aligned memory
-            self%p = fftwf_alloc_complex(int(product(self%array_shape),c_size_t))
-            ! Set up the complex array which will point at the allocated memory
-            call c_f_pointer(self%p,self%cmat,self%array_shape)
-            ! Work out the shape of the real array
-            self%array_shape(1) = 2*(self%array_shape(1))
-            ! Set up the real array
-            call c_f_pointer(self%p,self%rmat,self%array_shape)
-            ! put back the shape of the complex array
-            self%array_shape(1) = fdim(self%ldim(1))
-            if( present(backgr) )then
-                self%rmat = backgr
-            else
-                self%rmat = 0.
-            endif
-            self%ft = .false.
+            self%rmat = 0.
         endif
+        self%ft = .false.
         ! make fftw plans
         if( (any(ldim > 500) .or. ldim(3) > 200) .and. nthr_glob > 1 )then
             rc = fftwf_init_threads()
@@ -423,17 +391,13 @@ contains
             if( self%exists() )then
                 if( (self.eqsmpd.self_in) .and. (self.eqdims.self_in) )then
                 else
-                    call self%new(self_in%ldim, self_in%smpd, imgkind=self_in%imgkind)
+                    call self%new(self_in%ldim, self_in%smpd)
                 endif
             else
-                call self%new(self_in%ldim, self_in%smpd, imgkind=self_in%imgkind)
+                call self%new(self_in%ldim, self_in%smpd)
             endif
-            if( self_in%imgkind .eq. 'xfel' )then
-                self%cmat = self_in%cmat
-            else
-                self%rmat = self_in%rmat
-            endif
-            self%ft = self_in%ft
+            self%rmat = self_in%rmat
+            self%ft   = self_in%ft
         else
             stop 'cannot copy nonexistent image; copy; simple_image'
         endif
@@ -724,13 +688,12 @@ contains
     !! \param fname            filename of image
     !! \param i                file index in stack
     !! \param ioimg            image IO object
-    !! \param isxfel           is the file Xfel
     !! \param formatchar       image type (M,F,S)
     !! \param readhead         get header info flag
     !! \param rwaction         read mode flag
     !! \param read_failure     file i/o status
     !!
-    subroutine read( self, fname, i, ioimg, isxfel, formatchar, readhead, rwaction, read_failure )
+    subroutine read( self, fname, i, ioimg, formatchar, readhead, rwaction, read_failure )
         use simple_imgfile,      only: imgfile
         use simple_jiffys,       only: read_raw_image
         use simple_filehandling, only: fname2format, file_exists
@@ -738,7 +701,6 @@ contains
         character(len=*),           intent(in)    :: fname
         integer,          optional, intent(in)    :: i
         class(imgfile),   optional, intent(inout) :: ioimg
-        logical,          optional, intent(in)    :: isxfel
         character(len=1), optional, intent(in)    :: formatchar
         logical,          optional, intent(in)    :: readhead
         character(len=*), optional, intent(in)    :: rwaction
@@ -748,20 +710,12 @@ contains
         integer               :: ldim(3), iform, first_slice, mode
         integer               :: last_slice, ii, alloc_stat
         real                  :: smpd
-        logical               :: isvol, err, iisxfel, ioimg_present
+        logical               :: isvol, err, ioimg_present
         real(dp), allocatable :: tmpmat1(:,:,:)
         real(sp), allocatable :: tmpmat2(:,:,:)
         ldim          = self%ldim
         smpd          = self%smpd
         ioimg_present = present(ioimg)
-        iisxfel       = .false.
-        if( present(isxfel) ) iisxfel = isxfel
-        if( iisxfel )then
-            ! always assume EM-kind images on disk
-            DebugPrint 'ldim: ', ldim
-            DebugPrint 'smpd: ', smpd
-            call self%new(ldim, smpd)
-        endif
         isvol = .true. ! assume volume by default
         ii    = 1      ! default location
         if( present(i) )then
@@ -782,21 +736,6 @@ contains
             select case(form)
                 case('M', 'F', 'S')
                     call self%open(fname, ioimg_local, formatchar, readhead, rwaction)
-                case('D')
-                    if( self%even_dims())then
-                        allocate(tmpmat1(self%ldim(1),self%ldim(2),self%ldim(3)),&
-                        tmpmat2(self%ldim(1),self%ldim(2),self%ldim(3)), stat=alloc_stat)
-                        call alloc_err('In: simple_image::read, tmpmat1 & tmpmat2', alloc_stat)
-                        call read_raw_image(fname, tmpmat1, 1)
-                        self%ft = .true.
-                        tmpmat2 = 0.
-                        self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) = real(tmpmat1)
-                        call self%em2xfel
-                        deallocate(tmpmat1,tmpmat2)
-                        return
-                    else
-                        stop 'mode: D, code for odd dimensions not yet implemented'
-                    endif
                 case DEFAULT
                     write(*,*) 'Trying to read from file: ', fname
                     stop 'ERROR, unsupported file format; read; simple_image'
@@ -824,7 +763,6 @@ contains
                 call ioimg%rwSlices('r',first_slice,last_slice,self%rmat,&
                 &self%ldim,self%ft,self%smpd,read_failure=read_failure)
                 if( .not. ioimg_present ) call ioimg%close
-                if( iisxfel ) call self%em2xfel
             end subroutine read_local
 
             !> exception_handler
@@ -843,7 +781,7 @@ contains
                     endif
                 endif
             end subroutine exception_handler
-            
+
             !> spider_exception_handler
             !! \param ioimg Image IO object to get Iform
             !! iform file type specifier:
@@ -900,32 +838,6 @@ contains
     !! \param formatchar
     !! \todo fix optional args
     subroutine write( self, fname, i, del_if_exists, formatchar )
-        class(image),               intent(inout) :: self
-        character(len=*),           intent(in)    :: fname
-        integer,          optional, intent(in)    :: i
-        logical,          optional, intent(in)    :: del_if_exists
-        character(len=1), optional, intent(in)    :: formatchar
-        type(image) :: tmpimg
-        real        :: dev
-        if( self%imgkind .eq. 'xfel' )then
-             call self%ft2img('real', tmpimg)
-             call tmpimg%write_emkind(fname, i, del_if_exists, formatchar=formatchar)
-             call tmpimg%kill
-        else
-            ! to prepare the header for coot
-            dev = self%rmsd()
-            call self%write_emkind(fname, i, del_if_exists, formatchar=formatchar, rmsd=dev)
-        endif
-    end subroutine write
-
-    !>  \brief write_emkind for writing emkind images to stack or volumes to volume files
-    !! \param fname  filename of image
-    !! \param i  file index in stack/part
-    !! \param del_if_exists  overwrite file if present
-    !! \param formatchar file format 'M','F' or 'S'
-    !! \param rmsd
-    !!
-    subroutine write_emkind( self, fname, i, del_if_exists, formatchar, rmsd )
         use simple_imgfile,      only: imgfile
         use simple_filehandling, only: fname2format
         class(image),               intent(inout) :: self
@@ -933,12 +845,13 @@ contains
         integer,          optional, intent(in)    :: i
         logical,          optional, intent(in)    :: del_if_exists
         character(len=1), optional, intent(in)    :: formatchar
-        real,             optional, intent(in)    :: rmsd
-        type(imgfile)     :: ioimg
-        character(len=1)  :: form
-        integer           :: first_slice, last_slice, iform, ii
-        logical           :: isvol, die
+        real             :: dev
+        type(imgfile)    :: ioimg
+        character(len=1) :: form
+        integer          :: first_slice, last_slice, iform, ii
+        logical          :: isvol, die
         if( self%existence )then
+            dev = self%rmsd()
             die = .false.
             if( present(del_if_exists) ) die = del_if_exists
             if( self%is_2d() )then
@@ -976,7 +889,7 @@ contains
                     else
                         call ioimg%setMode(2)
                     endif
-                    if( present(rmsd) ) call ioimg%setRMSD(rmsd)
+                    call ioimg%setRMSD(dev)
                 case('S')
                     ! pixel size of object overrides pixel size in header
                     call ioimg%open(fname, self%ldim, self%smpd, del_if_exists=die,&
@@ -1029,7 +942,7 @@ contains
         else
             stop 'ERROR, nonexisting image cannot be written to disk; write; simple_image'
         endif
-    end subroutine write_emkind
+    end subroutine write
 
     ! GETTERS/SETTERS
 
@@ -1077,28 +990,6 @@ contains
         n = fdim(self%ldim(1)) - 1
     end function get_filtsz
 
-    !> \brief get_imgkind  to get the image kind (em/xfel)
-    !! \return  imgkind
-    !!
-    pure function get_imgkind( self ) result( imgkind )
-        class(image), intent(in)      :: self
-        character(len=:), allocatable :: imgkind
-        allocate(imgkind, source=self%imgkind)
-    end function get_imgkind
-
-    !> \brief get_cmat_lims  to get the bounds of the cmat for xfel-kind images
-    !! \return  lims
-    !!
-    function get_cmat_lims( self ) result( lims )
-        class(image), intent(in) :: self
-        integer :: lims(3,2)
-        if( self%imgkind .eq. 'xfel' )then
-            lims = self%lims
-        else
-            stop 'only xfel-kind images have lims defined; simple_image::get_cmat_lims'
-        endif
-    end function get_cmat_lims
-
     !> \brief cyci  cyclic index generation
     !! \param logi
     !! \return  inds
@@ -1128,7 +1019,6 @@ contains
         class(image), intent(inout) :: self
         integer,      intent(in)    :: logi(3)
         real :: val
-        if( self%imgkind .eq. 'xfel' ) stop 'rmat not allocated for xfel-kind images; simple_image::get'
         if( logi(1) > self%ldim(1) .or. logi(1) < 1 )then
             val = 0.
             return
@@ -1181,7 +1071,6 @@ contains
          class(image), intent(in) :: self
          complex, allocatable :: fplane(:,:)
          integer :: xdim, ydim, h, k, phys(3)
-         if( self%imgkind .eq. 'xfel' ) stop 'not implemented for xfel-kind images; simple_image :: expand_ft'
          if(is_even(self%ldim(1)))then
              xdim = self%ldim(1)/2
              ydim = self%ldim(2)/2
@@ -1207,7 +1096,6 @@ contains
         class(image), intent(inout) :: self
         integer,      intent(in)    :: logi(3)
         real,         intent(in)    :: val
-        if( self%imgkind .eq. 'xfel' ) stop 'rmat not allocated for xfel-kind images; simple_image::set'
         if( logi(1) <= self%ldim(1) .and. logi(1) >= 1 .and. logi(2) <= self%ldim(2)&
         .and. logi(2) >= 1 .and. logi(3) <= self%ldim(3) .and. logi(3) >= 1 )then
             self%rmat(logi(1),logi(2),logi(3)) = val
@@ -1262,8 +1150,6 @@ contains
         class(image), intent(in) :: self3d
         integer,      intent(in) :: slice
         type(image)              :: self2d
-        if( self3d%imgkind .eq. 'xfel' .or. self2d%imgkind .eq. 'xfel' )&
-        stop 'not intended for&xfel-kind images; simple_image::get_slice'
         call self2d%new([self3d%ldim(1),self3d%ldim(2),1],self3d%smpd)
         self2d%rmat(:,:,1) = self3d%rmat(:,:,slice)
     end function get_slice
@@ -1277,8 +1163,6 @@ contains
         class(image), intent(in)    :: self2d
         integer,      intent(in)    :: slice
         class(image), intent(inout) :: self3d
-        if( self3d%imgkind .eq. 'xfel' .or. self2d%imgkind .eq. 'xfel' )&
-        stop 'not intended for&xfel-kind images; simple_image::set_slice'
         self3d%rmat(:,:,slice) = self2d%rmat(:,:,1)
     end subroutine set_slice
 
@@ -1534,7 +1418,6 @@ contains
     subroutine zero2one( self )
         class(image), intent(inout) :: self
         integer :: i, j, k
-        if( self%imgkind .eq. 'xfel' ) stop 'rmat not allocated for xfel-kind images; simple_image::zero2one'
         do i=1,self%ldim(1)
             do j=1,self%ldim(2)
                 do k=1,self%ldim(3)
@@ -1554,9 +1437,7 @@ contains
         integer,      intent(in)  :: logi(3), phys(3)
         complex :: comp
         comp = self%cmat(phys(1),phys(2),phys(3))
-        if( self%imgkind .ne. 'xfel' )then
-            if( logi(1) < 0 ) comp = conjg(comp)
-        endif
+        if( logi(1) < 0 ) comp = conjg(comp)
     end function get_fcomp
 
     !> \brief set_fcomp  for setting a Fourier component in the compact representation
@@ -1569,7 +1450,7 @@ contains
         integer,      intent(in)    :: logi(3), phys(3)
         complex,      intent(in)    :: comp
         complex :: comp_here
-        if( logi(1) < 0 .and. self%imgkind .ne. 'xfel' )then
+        if( logi(1) < 0 )then
             comp_here = conjg(comp)
         else
             comp_here = comp
@@ -1587,7 +1468,7 @@ contains
         integer,      intent(in)    :: logi(3), phys(3)
         complex,      intent(in)    :: comp
         complex :: comp_here
-        if( logi(1) < 0 .and. self%imgkind .ne. 'xfel' )then
+        if( logi(1) < 0 )then
             comp_here = conjg(comp)
         else
             comp_here = comp
@@ -1605,7 +1486,7 @@ contains
         integer,      intent(in)    :: logi(3), phys(3)
         complex,      intent(in)    :: comp
         complex :: comp_here
-        if( logi(1) < 0 .and. self%imgkind .ne. 'xfel' )then
+        if( logi(1) < 0 )then
             comp_here = conjg(comp)
         else
             comp_here = comp
@@ -1621,23 +1502,17 @@ contains
         integer, optional, intent(in) :: sect
         complex, allocatable :: fplane(:,:)
         integer              :: sect_here
-        if( self%imgkind .eq. 'xfel' )then
-            sect_here = 0
-            if( present(sect) ) sect_here = sect
-            call gnufor_image(real(self%cmat(:,:,sect_here)), palette='gray')
+        sect_here = 1
+        if( present(sect) ) sect_here = sect
+        if( self%ft )then
+            if( self%ldim(3) == 1 ) sect_here = 0
+            fplane = self%expand_ft()
+            call gnufor_image(real(fplane), palette='gray')
+            call gnufor_image(aimag(fplane), palette='gray')
+            deallocate(fplane)
         else
-            sect_here = 1
-            if( present(sect) ) sect_here = sect
-            if( self%ft )then
-                if( self%ldim(3) == 1 ) sect_here = 0
-                fplane = self%expand_ft()
-                call gnufor_image(real(fplane), palette='gray')
-                call gnufor_image(aimag(fplane), palette='gray')
-                deallocate(fplane)
-            else
-                if( self%ldim(3) == 1 ) sect_here = 1
-                call gnufor_image(self%rmat(:self%ldim(1),:self%ldim(2),sect_here), palette='gray')
-            endif
+            if( self%ldim(3) == 1 ) sect_here = 1
+            call gnufor_image(self%rmat(:self%ldim(1),:self%ldim(2),sect_here), palette='gray')
         endif
     end subroutine vis
 
@@ -1664,7 +1539,6 @@ contains
         integer :: win(2,2), i, j, phys(3)
         if( self%ldim(3) > 1 )         stop 'only 4 2D images; extr_fcomp; simple_image'
         if( .not. self%ft )            stop 'image need to be FTed; extr_fcomp; simple_image'
-        if( self%imgkind .eq. 'xfel' ) stop 'this method not intended for xfel-kind images; simple_image::extr_fcomp'
         ! evenness and squareness are checked in the comlin class
         win  = recwin_2d(h, k, 1.)
         allocate( comps(win(1,1):win(1,2),win(2,1):win(2,2)) )
@@ -1833,17 +1707,6 @@ contains
         endif
     end function same_smpd
 
-    !>  \brief same_kind  checks if image are of the same kind
-    !!
-    !! \param self1 image object
-    !! \param self2 image object
-    !! \return  yep logical flag if image objects have same kind
-    pure function same_kind( self1, self2 ) result( yep )
-        class(image), intent(in) :: self1, self2
-        logical :: yep
-        yep = self1%imgkind .eq. self2%imgkind
-    end function same_kind
-
     !>  \brief  checks if image is ft
     !! \return logical flag if image objects have same kind
     pure function is_ft( self ) result( is )
@@ -1870,7 +1733,6 @@ contains
     subroutine assign_r2img( self, realin )
         class(image), intent(inout) :: self
         real,         intent(in)    :: realin
-        if( self%imgkind .eq. 'xfel' ) stop 'rmat not allocated for xfel-kind images; simple_image::assign_r2img'
         self%rmat = realin
         self%ft = .false.
     end subroutine assign_r2img
@@ -1898,14 +1760,7 @@ contains
             if( self1%ft .neqv. self2%ft )then
                 stop 'cannot add images of different FT state; addition(+); simple_image'
             endif
-            if( .not. self1%same_kind(self2) )then
-                stop 'cannot add images of different kind em/xfel; addition(+); simple_image'
-            endif
-            if( self1%imgkind .eq. 'xfel' )then
-                self%cmat = self1%cmat+self2%cmat
-            else
-                self%rmat = self1%rmat+self2%rmat
-            endif
+            self%rmat = self1%rmat+self2%rmat
         else
             stop 'cannot add images of different dims; addition(+); simple_image'
         endif
@@ -1924,9 +1779,6 @@ contains
             call self%new(self1%ldim, self1%smpd)
             if( self1%ft .neqv. self2%ft )then
                 stop 'cannot process images of different FT state; l1norm_1; simple_image'
-            endif
-            if( .not. self1%same_kind(self2) )then
-                stop 'cannot process images of different kind em/xfel; l1norm_1; simple_image'
             endif
             if( self1%ft )then
                 self%cmat = cabs(self1%cmat-self2%cmat)
@@ -2036,7 +1888,7 @@ contains
         else
             phys = self%fit%comp_addr_phys(logi)
         endif
-        if( logi(1) < 0 .and. self%imgkind .ne. 'xfel' )then
+        if( logi(1) < 0 )then
             comp_here = conjg(comp)
         else
             comp_here = comp
@@ -2072,7 +1924,7 @@ contains
         complex :: comp_here
         if( .not. self%ft ) stop 'cannot add complex number to real image; add_2; simple_image'
         phys = self%fit%comp_addr_phys(logi)
-        if( logi(1) < 0 .and. self%imgkind .ne. 'xfel' )then
+        if( logi(1) < 0 )then
             comp_here = conjg(comp)
         else
             comp_here = comp
@@ -2107,14 +1959,7 @@ contains
             if( self_from%ft .neqv. self_to%ft )then
                 stop 'cannot subtract images of different FT state; subtraction(+); simple_image'
             endif
-            if( .not. self_from%same_kind(self_to) )then
-                stop 'cannot subtract images of different kind em/xfel; subtraction; simple_image'
-            endif
-            if( self_from%imgkind .eq. 'xfel' )then
-                self%cmat = self_from%cmat-self_to%cmat
-            else
-                self%rmat = self_from%rmat-self_to%rmat
-            endif
+            self%rmat = self_from%rmat-self_to%rmat
         else
             stop 'cannot subtract images of different dims; subtraction(-); simple_image'
         endif
@@ -2170,7 +2015,7 @@ contains
         else
             phys = self%fit%comp_addr_phys(logi)
         endif
-        if( logi(1) < 0 .and. self%imgkind .ne. 'xfel' )then
+        if( logi(1) < 0 )then
             comp_here = conjg(comp)
         else
             comp_here = comp
@@ -2194,7 +2039,7 @@ contains
         complex :: comp_here
         if( .not. self%ft ) stop 'cannot subtract complex number from real image; subtr_3; simple_image'
         phys = self%fit%comp_addr_phys(logi)
-        if( logi(1) < 0 .and. self%imgkind .ne. 'xfel' )then
+        if( logi(1) < 0 )then
             comp_here = conjg(comp)
         else
             comp_here = comp
@@ -2210,7 +2055,6 @@ contains
     subroutine subtr_4( self, c )
         class(image), intent(inout) :: self
         real,         intent(in)    :: c
-        if( self%imgkind .eq. 'xfel' ) stop 'rmat not allocated for xfel-kind images; simple_image::subtr_4'
         self%rmat = self%rmat-c
     end subroutine subtr_4
 
@@ -2228,18 +2072,12 @@ contains
                 self%cmat = self1%cmat*self2%cmat
                 self%ft = .true.
             else if( self1%ft .eqv. self2%ft )then
-                if( self1%imgkind .eq. 'xfel' .or. self2%imgkind .eq. 'xfel' )&
-                stop 'rmat not allocated for xfel-kind images; simple_image::multiplication'
                 self%rmat = self1%rmat*self2%rmat
                 self%ft = .false.
             else if(self1%ft)then
-                if( self2%imgkind .eq. 'xfel' )&
-                stop 'rmat not allocated for xfel-kind images; simple_image::multiplication'
                 self%cmat = self1%cmat*self2%rmat
                 self%ft = .true.
             else
-                if( self1%imgkind .eq. 'xfel' )&
-                stop 'rmat not allocated for xfel-kind images; simple_image::multiplication'
                 self%cmat = self1%rmat*self2%cmat
                 self%ft = .true.
             endif
@@ -2270,7 +2108,6 @@ contains
             if( present(phys_out) ) phys_out = phys
             self%cmat(phys(1),phys(2),phys(3)) = self%cmat(phys(1),phys(2),phys(3))*rc
          else
-            if( self%imgkind .eq. 'xfel' ) stop 'rmat not allocated for xfel-kind images; simple_image::mul_1'
             self%rmat(logi(1),logi(2),logi(3)) = self%rmat(logi(1),logi(2),logi(3))*rc
          endif
     end subroutine mul_1
@@ -2286,7 +2123,6 @@ contains
             self%cmat = self%cmat*rc
             !$omp end parallel workshare
         else
-            if( self%imgkind .eq. 'xfel' ) stop 'rmat not allocated for xfel-kind images; simple_image::mul_2'
             !$omp parallel workshare proc_bind(close)
             self%rmat = self%rmat*rc
             !$omp end parallel workshare
@@ -2305,21 +2141,15 @@ contains
                 self%cmat = self%cmat*self2mul%cmat
                 !$omp end parallel workshare
             else if( self%ft .eqv. self2mul%ft )then
-                if( self%imgkind .eq. 'xfel' .or. self2mul%imgkind .eq. 'xfel' )&
-                stop 'rmat not allocated for xfel-kind images; simple_image::mul_3'
                 !$omp parallel workshare proc_bind(close)
                 self%rmat = self%rmat*self2mul%rmat
                 !$omp end parallel workshare
                 self%ft = .false.
             else if(self%ft)then
-                if( self2mul%imgkind .eq. 'xfel' )&
-                stop 'rmat not allocated for xfel-kind images; simple_image::mul_3'
                 !$omp parallel workshare proc_bind(close)
                 self%cmat = self%cmat*self2mul%rmat
                 !$omp end parallel workshare
             else
-                if( self%imgkind .eq. 'xfel' )&
-                stop 'rmat not allocated for xfel-kind images; simple_image::mul_3'
                 !$omp parallel workshare proc_bind(close)
                 self%cmat = self%rmat*self2mul%cmat
                 !$omp end parallel workshare
@@ -2372,59 +2202,49 @@ contains
         class(image), intent(in) :: self1, self2
         type(image) :: self
         integer :: lims(3,2), h, k, l, phys(3)
-        if( self1%same_kind(self2) )then
-            if( self1.eqdims.self2 )then
-                call self%new(self1%ldim, self1%smpd)
-                if( self1%ft .and. self2%ft )then
-                    lims = self1%loop_lims(2)
-                    !$omp parallel default(shared) private(h,k,l,phys) proc_bind(close)
-                    !$omp do collapse(3) schedule(static)
-                    do h=lims(1,1),lims(1,2)
-                        do k=lims(2,1),lims(2,2)
-                            do l=lims(3,1),lims(3,2)
-                                phys = self%fit%comp_addr_phys([h,k,l])
-                                if( mycabs(self2%cmat(phys(1),phys(2),phys(3))) < 1e-6 )then
-                                    self1%cmat(phys(1),phys(2),phys(3)) = cmplx(0.,0.)
-                                else
-                                    self1%cmat(phys(1),phys(2),phys(3)) =&
-                                    self1%cmat(phys(1),phys(2),phys(3))/self2%cmat(phys(1),phys(2),phys(3))
-                                endif
-                            end do
+        if( self1.eqdims.self2 )then
+            call self%new(self1%ldim, self1%smpd)
+            if( self1%ft .and. self2%ft )then
+                lims = self1%loop_lims(2)
+                !$omp parallel default(shared) private(h,k,l,phys) proc_bind(close)
+                !$omp do collapse(3) schedule(static)
+                do h=lims(1,1),lims(1,2)
+                    do k=lims(2,1),lims(2,2)
+                        do l=lims(3,1),lims(3,2)
+                            phys = self%fit%comp_addr_phys([h,k,l])
+                            if( mycabs(self2%cmat(phys(1),phys(2),phys(3))) < 1e-6 )then
+                                self1%cmat(phys(1),phys(2),phys(3)) = cmplx(0.,0.)
+                            else
+                                self1%cmat(phys(1),phys(2),phys(3)) =&
+                                self1%cmat(phys(1),phys(2),phys(3))/self2%cmat(phys(1),phys(2),phys(3))
+                            endif
                         end do
                     end do
-                    !$omp end do nowait
-                    !$omp workshare
-                    self%cmat = self1%cmat/self2%cmat
-                    !$omp end workshare
-                    !$omp end parallel
-                    self%ft = .true.
-                else if( self1%ft .eqv. self2%ft )then
-                    if( self1%imgkind .eq. 'xfel' .or. self2%imgkind .eq. 'xfel' )&
-                    stop 'rmat not allocated for xfel-kind images; simple_image::division(/)'
-                    !$omp parallel workshare proc_bind(close)
-                    self%rmat = self1%rmat/self2%rmat
-                    !$omp end parallel workshare
-                    self%ft = .false.
-                else if(self1%ft)then
-                    if( self2%imgkind .eq. 'xfel' )&
-                    stop 'rmat not allocated for xfel-kind images; simple_image::division(/)'
-                    !$omp parallel workshare proc_bind(close)
-                    self%cmat = self1%cmat/self2%rmat
-                    !$omp end parallel workshare
-                    self%ft = .true.
-                else
-                    if( self1%imgkind .eq. 'xfel' )&
-                    stop 'rmat not allocated for xfel-kind images; simple_image::division(/)'
-                    !$omp parallel workshare proc_bind(close)
-                    self%cmat = self1%rmat/self2%cmat
-                    !$omp end parallel workshare
-                    self%ft = .true.
-                endif
+                end do
+                !$omp end do nowait
+                !$omp workshare
+                self%cmat = self1%cmat/self2%cmat
+                !$omp end workshare
+                !$omp end parallel
+                self%ft = .true.
+            else if( self1%ft .eqv. self2%ft )then
+                !$omp parallel workshare proc_bind(close)
+                self%rmat = self1%rmat/self2%rmat
+                !$omp end parallel workshare
+                self%ft = .false.
+            else if(self1%ft)then
+                !$omp parallel workshare proc_bind(close)
+                self%cmat = self1%cmat/self2%rmat
+                !$omp end parallel workshare
+                self%ft = .true.
             else
-                stop 'cannot divide images of different dims; division(/); simple_image'
+                !$omp parallel workshare proc_bind(close)
+                self%cmat = self1%rmat/self2%cmat
+                !$omp end parallel workshare
+                self%ft = .true.
             endif
         else
-            stop 'cannot divide images of different kind em/xfel; division(/); simple_image'
+            stop 'cannot divide images of different dims; division(/); simple_image'
         endif
     end function division
 
@@ -2511,17 +2331,11 @@ contains
             if( self%ft .and. self2div%ft )then
                 self%cmat = self%cmat/self2div%cmat
             else if( self%ft .eqv. self2div%ft )then
-                if( self%imgkind .eq. 'xfel' .or. self2div%imgkind .eq. 'xfel' )&
-                stop 'rmat not allocated for xfel-kind images; simple_image::div_4'
                 self%rmat = self%rmat/self2div%rmat
                 self%ft = .false.
             else if(self%ft)then
-                if( self2div%imgkind .eq. 'xfel' )&
-                stop 'rmat not allocated for xfel-kind images; simple_image::div_4'
                 self%cmat = self%cmat/self2div%rmat
             else
-                if( self%imgkind .eq. 'xfel' )&
-                stop 'rmat not allocated for xfel-kind images; simple_image::div_4'
                 self%cmat = self%rmat/self2div%cmat
                 self%ft = .true.
             endif
@@ -2579,9 +2393,6 @@ contains
         class(image), intent(in) :: self
         type(image) :: self_out
         if( self%is_ft() )then
-            if( self%imgkind .eq. 'xfel' )then
-                stop 'cannot conjugate xfel-kind images; simple_image::conjugate'
-            endif
             call self_out%copy(self)
             self%cmat = conjg(self%cmat)
         else
@@ -2632,9 +2443,6 @@ contains
     function nforeground( self ) result( n )
         class(image), intent(in) :: self
         integer :: n, i, j, k
-        if( self%imgkind .eq. 'xfel' )then
-            stop 'xfel-kind images cannot be binary; simple_image::nforeground'
-        endif
         n = count(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) > 0.5)
     end function nforeground
 
@@ -2644,9 +2452,6 @@ contains
     function nbackground( self ) result( n )
         class(image), intent(in) :: self
         integer :: n
-        if( self%imgkind .eq. 'xfel' )then
-            stop 'xfel-kind images cannot be binary; simple_image::nbackground'
-        endif
         n = product(self%ldim)-self%nforeground()
     end function nbackground
 
@@ -2856,8 +2661,7 @@ contains
         class(image), intent(inout) :: self
         real    :: xyz(3), spix, pix, ci, cj, ck
         integer :: i, j, k
-        if( self%imgkind .eq. 'xfel' ) stop 'masscen not implemented for xfel patterns; masscen; simple_image'
-        if( self%ft )                  stop 'masscen not implemented for FTs; masscen; simple_image'
+        if( self%ft ) stop 'masscen not implemented for FTs; masscen; simple_image'
         spix = 0.
         xyz  = 0.
         ci   = -real(self%ldim(1))/2.
@@ -2899,7 +2703,6 @@ contains
         real        :: xyz(3), rmsk
         integer     :: dims(3)
         logical     :: l_doshift
-        if( self%imgkind .eq. 'xfel' ) stop 'centering not implemented for xfel patterns; center; simple_image'
         l_doshift = .true.
         if( present(doshift) )l_doshift = doshift
         tmp = self
@@ -2933,9 +2736,6 @@ contains
     !>  \brief bin_inv inverts a binary image
     subroutine bin_inv( self )
         class(image), intent(inout) :: self
-        if( self%imgkind .eq. 'xfel' )then
-            stop 'xfel-kind images cannot be binary; simple_image::bin_inv'
-        endif
         self%rmat = -1.*(self%rmat-1.)
     end subroutine bin_inv
 
@@ -3244,7 +3044,6 @@ contains
         real                        :: rfalloff, scalefactor
         integer                     :: i, j, k, is, js, ks, ie, je, ke
         integer                     :: il, ir, jl, jr, kl, kr, falloff_sq
-        if( self%imgkind .eq. 'xfel' ) stop 'xfel-kind images cannot be low-pass filtered in real space; simple_image::cos_edge'
         if( falloff<=0 ) stop 'stictly positive values for edge fall-off allowed; simple_image::cos_edge'
         if( self%ft )    stop 'not intended for FTs; simple_image :: cos_edge'
         self%rmat   = self%rmat/maxval(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)))
@@ -3351,9 +3150,6 @@ contains
         class(image), intent(inout) :: self
         integer, intent(in)         :: logi(3)
         real, intent(in)            :: incr
-        if( self%imgkind .eq. 'xfel' )then
-            stop 'rmat not allocated for xfel-kind images; simple_image::increment'
-        endif
         self%rmat(logi(1),logi(2),logi(3)) = self%rmat(logi(1),logi(2),logi(3))+incr
     end subroutine increment
 
@@ -3430,7 +3226,7 @@ contains
     end function guinier
 
     !>  \brief spectrum generates the rotationally averaged spectrum of an image
-    !! \param which  EM and Xfel accepts:'real' or 'count'. EM accepts also 'power''absreal''absimag''phase''abs'
+    !! \param which accepts 'real''power''absreal''absimag''abs''phase''count'
     !! \param norm normalise result
     !! \return spec Power spectrum array
     !!
@@ -3445,13 +3241,6 @@ contains
         logical :: didft, nnorm
         nnorm = .true.
         if( present(norm) ) nnorm = norm
-        if( self%imgkind .eq. 'xfel' )then
-            if( which .eq. 'real' .or. which .eq. 'count' )then
-                ! acceptable for xfel images
-            else
-                stop 'this which parameter is not compatible with the xfel image kind; simple_image :: spectrum'
-            endif
-        endif
         didft = .false.
         if( which .ne. 'count' )then
             if( .not. self%ft )then
@@ -3757,9 +3546,6 @@ contains
         logical                     :: didft
         real                        :: freq,lp_freq,sgn1,sgn2,sgn3
         real, parameter             :: errfrac=0.5
-        if( self%imgkind .eq. 'xfel' )then
-            stop 'phase_rand not applicable to xfel-kind images; simple_image::phase_rand'
-        endif
         didft = .false.
         if( .not. self%ft )then
             call self%fwd_ft
@@ -4047,67 +3833,62 @@ contains
         else
             stop 'unrecognized parameter: which; stats; simple_image'
         endif
-        if( self%imgkind .eq. 'xfel' )then
-            call moment( real(self%cmat), ave, sdev, var, err )
-            med = ave
-        else
-            allocate( pixels(product(self%ldim)), stat=alloc_stat )
-            call alloc_err('backgr; simple_image', alloc_stat)
-            pixels = 0.
-            npix = 0
-            if( self%ldim(3) > 1 )then
-                ! 3d
-                ci = -real(self%ldim(1))/2.
-                do i=1,self%ldim(1)
-                    cj = -real(self%ldim(2))/2.
-                    do j=1,self%ldim(2)
-                        ck = -real(self%ldim(3))/2.
-                        do k=1,self%ldim(3)
-                            e = hardedge(ci,cj,ck,mskrad)
-                            if( background )then
-                                if( e < 0.5 )then
-                                    npix = npix+1
-                                    pixels(npix) = self%rmat(i,j,k)
-                                endif
-                            else
-                                if( e > 0.5 )then
-                                    npix = npix+1
-                                    pixels(npix) = self%rmat(i,j,k)
-                                endif
-                            endif
-                            ck = ck+1
-                        end do
-                        cj = cj+1.
-                    end do
-                    ci = ci+1.
-                end do
-            else
-                ! 2d
-                ci = -real(self%ldim(1))/2.
-                do i=1,self%ldim(1)
-                    cj = -real(self%ldim(2))/2.
-                    do j=1,self%ldim(2)
-                        e = hardedge(ci,cj,mskrad)
+        allocate( pixels(product(self%ldim)), stat=alloc_stat )
+        call alloc_err('backgr; simple_image', alloc_stat)
+        pixels = 0.
+        npix = 0
+        if( self%ldim(3) > 1 )then
+            ! 3d
+            ci = -real(self%ldim(1))/2.
+            do i=1,self%ldim(1)
+                cj = -real(self%ldim(2))/2.
+                do j=1,self%ldim(2)
+                    ck = -real(self%ldim(3))/2.
+                    do k=1,self%ldim(3)
+                        e = hardedge(ci,cj,ck,mskrad)
                         if( background )then
                             if( e < 0.5 )then
                                 npix = npix+1
-                                pixels(npix) = self%rmat(i,j,1)
+                                pixels(npix) = self%rmat(i,j,k)
                             endif
                         else
                             if( e > 0.5 )then
                                 npix = npix+1
-                                pixels(npix) = self%rmat(i,j,1)
+                                pixels(npix) = self%rmat(i,j,k)
                             endif
                         endif
-                        cj = cj+1.
+                        ck = ck+1
                     end do
-                    ci = ci+1.
+                    cj = cj+1.
                 end do
-            endif
-            call moment( pixels(:npix), ave, sdev, var, err )
-            if( present(med) ) med  = median_nocopy(pixels(:npix))
-            deallocate( pixels )
+                ci = ci+1.
+            end do
+        else
+            ! 2d
+            ci = -real(self%ldim(1))/2.
+            do i=1,self%ldim(1)
+                cj = -real(self%ldim(2))/2.
+                do j=1,self%ldim(2)
+                    e = hardedge(ci,cj,mskrad)
+                    if( background )then
+                        if( e < 0.5 )then
+                            npix = npix+1
+                            pixels(npix) = self%rmat(i,j,1)
+                        endif
+                    else
+                        if( e > 0.5 )then
+                            npix = npix+1
+                            pixels(npix) = self%rmat(i,j,1)
+                        endif
+                    endif
+                    cj = cj+1.
+                end do
+                ci = ci+1.
+            end do
         endif
+        call moment( pixels(:npix), ave, sdev, var, err )
+        if( present(med) ) med  = median_nocopy(pixels(:npix))
+        deallocate( pixels )
         if( present(errout) )then
             errout = err
         else
@@ -4159,7 +3940,6 @@ contains
         integer                     :: i, j, k
         real                        :: ci, cj, ck, e, sdev, mv(2)
         logical                     :: didft
-        if( self%imgkind .eq. 'xfel' ) stop 'routine not implemented for xfel-kind images; simple_image::noisesdev'
         ovar = online_var( )
         didft = .false.
         if( self%ft )then
@@ -4207,7 +3987,6 @@ contains
         real                        :: sdev, pow
         type(image)                 :: tmp
         real, allocatable           :: spec(:)
-        if( self%imgkind .eq. 'xfel' ) stop 'routine not implemented for xfel-kind images; simple_image::est_noise_pow'
         sdev = self%noisesdev(msk)
         call tmp%new(self%ldim, self%smpd)
         call tmp%gauran(0., sdev)
@@ -4227,7 +4006,6 @@ contains
         type(image)                 :: tmp
         real, parameter             :: sdev = 1.
         real, allocatable           :: spec(:)
-        if( self%imgkind .eq. 'xfel' ) stop 'routine not implemented for xfel-kind images; simple_image::est_noise_pow_norm'
         call tmp%new(self%ldim, self%smpd)
         call tmp%gauran(0., sdev)
         spec = tmp%spectrum('power')
@@ -4244,7 +4022,6 @@ contains
         class(image), intent(inout) :: self
         real :: avg
         logical :: didft
-        if( self%imgkind .eq. 'xfel' ) stop 'routine not implemented for xfel-kind images; simple_image::mean'
         didft = .false.
         if( self%ft )then
             call self%bwd_ft
@@ -4271,7 +4048,6 @@ contains
     logical function contains_nans( self )
         class(image), intent(in) :: self
         integer :: i, j, k
-        if( self%imgkind .eq. 'xfel' ) stop 'routine not implemented for xfel-kind images; simple_image::contains_nans'
         contains_nans = .false.
         do i=1,size(self%rmat,1)
             do j=1,size(self%rmat,2)
@@ -4305,7 +4081,6 @@ contains
             write(*,*) 'WARNING: Cannot cure FTs; cure_1; simple_image'
             return
         endif
-        if( self%imgkind .eq. 'xfel' ) stop 'routine not implemented for xfel-kind images; simple_image::cure'
         npix   = product(self%ldim)
         n_nans = 0
         ave    = 0.
@@ -4356,7 +4131,6 @@ contains
             write(*,*) 'WARNING: Cannot cure FTs; cure; simple_image'
             return
         endif
-        if( self%imgkind .eq. 'xfel' ) stop 'routine not implemented for xfel-kind images; simple_image::cure'
         npix   = product(self%ldim)
         n_nans = 0
         ave    = 0.
@@ -4973,7 +4747,6 @@ contains
     !>  \brief  is for inverting an image
     subroutine inv( self )
         class(image), intent(inout) :: self
-        if( self%imgkind .eq. 'xfel' ) stop 'not intended for xfel-kind images; simple_image::inv'
         self%rmat = -1.*self%rmat
     end subroutine inv
 
@@ -4981,7 +4754,6 @@ contains
     subroutine ran( self )
         class(image), intent(inout) :: self
         integer :: i, j, k
-        if( self%imgkind .eq. 'xfel' ) stop 'not intended for xfel-kind images; simple_image::ran'
         do i=1,self%ldim(1)
             do j=1,self%ldim(2)
                 do k=1,self%ldim(3)
@@ -5000,7 +4772,6 @@ contains
         class(image), intent(inout) :: self
         real, intent(in) :: mean, sdev
         integer :: i, j, k
-        if( self%imgkind .eq. 'xfel' ) stop 'not intended for xfel-kind images; simple_image::gauran'
         do i=1,self%ldim(1)
             do j=1,self%ldim(2)
                 do k=1,self%ldim(3)
@@ -5022,7 +4793,6 @@ contains
         real    :: noisesdev, ran
         integer :: i, j, k
         logical :: noiseimg_present
-        if( self%imgkind .eq. 'xfel' ) stop 'not intended for xfel-kind images; simple_image::add_gauran'
         call self%norm
         noiseimg_present = present(noiseimg)
         if( noiseimg_present ) call noiseimg%new(self%ldim, self%smpd)
@@ -5224,7 +4994,6 @@ contains
         class(image), intent(inout) :: self
         logical, intent(in)         :: pos(:,:)
         integer :: ipix, jpix
-        if( self%imgkind .eq. 'xfel' ) stop 'not intended for xfel-kind images; simple_image::salt_n_pepper'
         if( .not. self%is_2d() ) stop 'only for 2D images; salt_n_pepper; simple_image'
         call self%norm('sigm')
         do ipix=1,self%ldim(1)
@@ -5247,7 +5016,6 @@ contains
         class(image), intent(inout) :: self
         integer,      intent(in)    :: sqrad
         integer :: i, j, k
-        if( self%imgkind .eq. 'xfel' ) stop 'not intended for xfel-kind images; simple_image::square'
         self%rmat = 0.
         if( all(self%ldim(1:2) .gt. sqrad) .and. self%ldim(3) == 1 ) then
             do i=self%ldim(1)/2-sqrad+1,self%ldim(1)/2+sqrad
@@ -5276,7 +5044,6 @@ contains
         class(image), intent(inout) :: self
         integer, intent(in)         :: sqrad
         integer :: i, j
-        if( self%imgkind .eq. 'xfel' ) stop 'not intended for xfel-kind images; simple_image::corners'
         self%rmat = 0.
         do i=self%ldim(1)-sqrad+1,self%ldim(1)
             do j=self%ldim(2)-sqrad+1,self%ldim(2)
@@ -5333,7 +5100,6 @@ contains
         integer, intent(in) :: wsz
         real    :: x, y, z, xw, yw, zw
         integer :: i, j, k
-        if( self%imgkind .eq. 'xfel' ) stop 'not intended for xfel-kind images; simple_image::gauimg'
         x = -real(self%ldim(1))/2.
         do i=1,self%ldim(1)
             xw = gauwfun(x, 0.5*real(wsz))
@@ -5361,7 +5127,6 @@ contains
     !!
     subroutine fwd_ft( self )
         class(image), intent(inout) :: self
-        if( self%imgkind .eq. 'xfel' ) stop 'Fourier transformation of XFEL patterns not allowed; simple_image::fwd_ft'
         if( self%ft ) return
         if( shift_to_phase_origin ) call self%shift_phorig
         call fftwf_execute_dft_r2c(self%plan_fwd,self%rmat,self%cmat)
@@ -5375,35 +5140,12 @@ contains
     !!
     subroutine bwd_ft( self )
         class(image), intent(inout) :: self
-        if( self%imgkind .eq. 'xfel' ) stop 'Back fourier transformation of XFEL patterns not allowed; simple_image::bwd_ft'
         if( self%ft )then
             call fftwf_execute_dft_c2r(self%plan_bwd,self%cmat,self%rmat)
             self%ft = .false.
             if( shift_to_phase_origin ) call self%shift_phorig
         endif
     end subroutine bwd_ft
-
-    !> \brief em2xfel  converts a em-kind image into a xfel pattern
-    !!
-    subroutine em2xfel( self )
-        class(image), intent(inout) :: self
-        type(image) :: tmp
-        real, allocatable :: zeroes(:,:,:)
-        integer :: alloc_stat
-        if( self%imgkind .eq. 'xfel' ) return
-        ! make a temporary copy of the image
-        tmp = self
-        ! make the XFEL pattern
-        call self%new(tmp%ldim,tmp%smpd,imgkind='xfel')
-        allocate(zeroes(tmp%ldim(1),tmp%ldim(2),tmp%ldim(3)), stat=alloc_stat)
-        call alloc_err("In: simple_image::img2xfel", alloc_stat)
-        zeroes = 0.
-        self%cmat(self%lims(1,1):self%lims(1,2),self%lims(2,1):self%lims(2,2),&
-        self%lims(3,1):self%lims(3,2)) = cmplx(tmp%rmat(:tmp%ldim(1),:tmp%ldim(2),:tmp%ldim(3)),zeroes)
-        self%rmat => null()
-        call tmp%kill
-        deallocate(zeroes)
-    end subroutine em2xfel
 
     !> \brief ft2img  generates images for visualization of a Fourier transform
     !! \param which
@@ -5416,13 +5158,6 @@ contains
         integer :: h,mh,k,mk,l,ml,lims(3,2),inds(3),phys(3)
         logical :: didft
         complex :: comp
-        if( self%imgkind .eq. 'xfel' )then
-            if( which .eq. 'real' )then
-                ! all ok
-            else
-                stop 'this which parameter is not applicable to xfel-kind images; simple_image::ft2img'
-            endif
-        endif
         didft = .false.
         if( self%ft )then
         else
@@ -5478,7 +5213,6 @@ contains
     subroutine fwd_logft( self )
         class(image), intent(inout) :: self
         integer :: lims(3,2), h, k, l, phys(3)
-        if( self%imgkind .eq. 'xfel' ) stop 'Fourier transformation of XFEL patterns not allowed; simple_image::fwd_logft'
         call self%fwd_ft
         lims = self%fit%loop_lims(2)
         do h=lims(1,1),lims(1,2)
@@ -5497,7 +5231,6 @@ contains
     subroutine bwd_logft( self )
         class(image), intent(inout) :: self
         integer :: lims(3,2), h, k, l, phys(3)
-        if( self%imgkind .eq. 'xfel' ) stop 'Fourier transformation of XFEL patterns not allowed; simple_image::bwd_logft'
         if( self%ft )then
             lims = self%fit%loop_lims(2)
             do h=lims(1,1),lims(1,2)
@@ -5581,10 +5314,6 @@ contains
         integer                               :: h, k, l, lims(3,2), phys(3)
         real                                  :: zz
         logical                               :: didft
-        if( self%imgkind .eq. 'xfel' )then
-            write(*,*) 'WARNING! shifting of xfel patterns not yet implemented; simple_image::shift'
-            return
-        endif
         if( present(z) )then
             if( x == 0. .and. y == 0. .and. z == 0. )then
                 if( present(imgout) ) call imgout%copy(self)
@@ -5660,7 +5389,6 @@ contains
         real    :: cis(self%ldim(1)), cjs(self%ldim(2)), cks(self%ldim(3))
         integer :: i, j, k, minlen, ir, jr, kr, vec(3)
         logical :: didft, doinner, soft, domsksum
-        if( self%imgkind .eq. 'xfel' ) stop 'masking of xfel-kind images not allowed; simple_image::mask'
         ! width
         wwidth = 10.
         if( present(width) ) wwidth = width
@@ -5831,7 +5559,6 @@ contains
         character(len=*)            :: which
         real, intent(in), optional  :: inner, width
         real                        :: frac, sum_masked, sum_unmasked
-        if( self%imgkind .eq. 'xfel' ) stop 'masking of xfel-kind images not allowed; simple_image::fmaskv_1'
         sum_unmasked = product( self%get_ldim() )
         call self%mask(mskrad, which, inner=inner, width=width, msksum=sum_masked)
         frac = sum_masked/sum_unmasked
@@ -5844,7 +5571,6 @@ contains
     function fmaskv_2( self ) result( frac )
         class(image), intent(inout) :: self
         real                        :: frac, sum_masked, sum_unmasked
-        if( self%imgkind .eq. 'xfel' ) stop 'masking of xfel-kind images not allowed; simple_image::fmaskv_2'
         if( self%ft ) stop 'need real-valued mask; fmaskv_2; simple_image'
         sum_unmasked = product(self%ldim)
         sum_masked = sum(self%rmat(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3))**2.)
@@ -5875,8 +5601,6 @@ contains
         real    :: tx, ty, tz
         integer :: i, j, k, x, y, z
         logical :: didft
-        if( self_in%imgkind .eq. 'xfel' .or. self_out%imgkind .eq. 'xfel' )&
-        stop 'not implemented for xfel-kind images; simple_image::resize_nn'
         didft = .false.
         if( self_in%ft )then
             call self_in%bwd_ft
@@ -5905,8 +5629,6 @@ contains
         real    :: tx, ty, x_diff, y_diff !, maxpix, minpix
         integer :: i, j, x, y
         logical :: didft
-        if( self_in%imgkind .eq. 'xfel' .or.  self_out%imgkind .eq. 'xfel' )&
-        stop 'not implemented for xfel-kind images; simple_image::resize_bilin'
         if( self_in%is_2d() .and. self_out%is_2d() )then
         else
             stop 'only 4 2D images; resize_bilin; simple_image'
@@ -5953,9 +5675,6 @@ contains
         integer                       :: starts(3), stops(3), lims(3,2)
         integer                       :: h, k, l, phys_in(3), phys_out(3)
         real, allocatable             :: antialw(:)
-        if( .not. self_in%same_kind(self_out) )then
-            stop 'images not of same kind (xfel/em); simple_image::pad'
-        endif
         if( self_in.eqdims.self_out )then
             call self_out%copy(self_in)
             return
@@ -5963,43 +5682,27 @@ contains
         if( self_out%ldim(1) >= self_in%ldim(1) .and. self_out%ldim(2) >= self_in%ldim(2)&
         .and. self_out%ldim(3) >= self_in%ldim(3) )then
             if( self_in%ft )then
-                self_out = cmplx(0.,0.)
-                if( self_in%imgkind .eq. 'xfel' )then
-                    lims = self_in%fit%loop_lims(2)
-                    !$omp parallel do collapse(3) schedule(static) default(shared)&
-                    !$omp private(h,k,l,w,phys_out,phys_in) proc_bind(close)
-
-                    do h=lims(1,1),lims(1,2)
-                        do k=lims(2,1),lims(2,2)
-                            do l=lims(3,1),lims(3,2)
-                                self_out%cmat(h,k,l)=self_in%cmat(h,k,l)
-                            end do
+                self_out = cmplx(0.,0.)                
+                antialw = self_in%hannw()
+                lims = self_in%fit%loop_lims(2)
+                !$omp parallel do collapse(3) schedule(static) default(shared)&
+                !$omp private(h,k,l,w,phys_out,phys_in) proc_bind(close)
+                do h=lims(1,1),lims(1,2)
+                    do k=lims(2,1),lims(2,2)
+                        do l=lims(3,1),lims(3,2)
+                            w = antialw(max(1,abs(h)))*antialw(max(1,abs(k)))*antialw(max(1,abs(l)))
+                            phys_out = self_out%fit%comp_addr_phys([h,k,l])
+                            phys_in  = self_in%fit%comp_addr_phys([h,k,l])
+                            self_out%cmat(phys_out(1),phys_out(2),phys_out(3))=&
+                            self_in%cmat(phys_in(1),phys_in(2),phys_in(3))*w
                         end do
                     end do
-                    !$omp end parallel do
-                    self_out%ft = .true.
-                else
-                    antialw = self_in%hannw()
-                    lims = self_in%fit%loop_lims(2)
-                    !$omp parallel do collapse(3) schedule(static) default(shared)&
-                    !$omp private(h,k,l,w,phys_out,phys_in) proc_bind(close)
-                    do h=lims(1,1),lims(1,2)
-                        do k=lims(2,1),lims(2,2)
-                            do l=lims(3,1),lims(3,2)
-                                w = antialw(max(1,abs(h)))*antialw(max(1,abs(k)))*antialw(max(1,abs(l)))
-                                phys_out = self_out%fit%comp_addr_phys([h,k,l])
-                                phys_in  = self_in%fit%comp_addr_phys([h,k,l])
-                                self_out%cmat(phys_out(1),phys_out(2),phys_out(3))=&
-                                self_in%cmat(phys_in(1),phys_in(2),phys_in(3))*w
-                            end do
-                        end do
-                    end do
-                    !$omp end parallel do
-                    deallocate(antialw)
-                    ratio = real(self_in%ldim(1))/real(self_out%ldim(1))
-                    self_out%smpd = self_in%smpd*ratio ! padding Fourier transform, so sampling is finer
-                    self_out%ft = .true.
-                endif
+                end do
+                !$omp end parallel do
+                deallocate(antialw)
+                ratio = real(self_in%ldim(1))/real(self_out%ldim(1))
+                self_out%smpd = self_in%smpd*ratio ! padding Fourier transform, so sampling is finer
+                self_out%ft = .true.
             else
                 starts = (self_out%ldim-self_in%ldim)/2+1
                 stops  = self_out%ldim-starts+1
@@ -6030,9 +5733,6 @@ contains
         class(image),   intent(inout) :: self_in, self_out
         integer :: starts(3), stops(3), lims(3,2)
         integer :: i,j, i_in, j_in
-        if( .not. self_in%same_kind(self_out) )then
-            stop 'images not of same kind (xfel/em); simple_image::pad_mirr'
-        endif
         if( self_in.eqdims.self_out )then
             call self_out%copy(self_in)
             return
@@ -6090,9 +5790,6 @@ contains
         real                        :: ratio
         integer                     :: starts(3), stops(3), lims(3,2)
         integer                     :: phys_out(3), phys_in(3), h, k, l
-        if( .not. self_in%same_kind(self_out) )then
-            stop 'images not of same kind (xfel/em); simple_image::clip'
-        endif
         if( self_in.eqdims.self_out )then
             call self_out%copy(self_in)
             return
@@ -6114,12 +5811,8 @@ contains
                     end do
                 end do
                 !$omp end parallel do
-                if( self_in%imgkind .eq. 'xfel' )then
-                    self_out%smpd = self_in%smpd
-                else
-                    ratio = real(self_in%ldim(1))/real(self_out%ldim(1))
-                    self_out%smpd = self_in%smpd*ratio ! clipping Fourier transform, so sampling is coarser
-                endif
+                ratio = real(self_in%ldim(1))/real(self_out%ldim(1))
+                self_out%smpd = self_in%smpd*ratio ! clipping Fourier transform, so sampling is coarser
                 self_out%ft = .true.
             else
                 starts = (self_in%ldim-self_out%ldim)/2+1
@@ -6157,7 +5850,6 @@ contains
         character(len=*), intent(in) :: md
         integer :: i, j
         logical :: didft
-        if( self%imgkind .eq. 'xfel' ) stop 'not implemented for xfel-kind images; simple_image::mirror'
         didft = .false.
         if( self%ft )then
             call self%bwd_ft
@@ -6318,7 +6010,6 @@ contains
         class(image), intent(inout) :: self
         real                        :: smin, smax
         logical                     :: didft
-        if( self%imgkind .eq. 'xfel' ) stop 'not implemented for xfel-kind images; simple_image::norm_bin'
         didft = .false.
         if( self%ft )then
             call self%bwd_ft
@@ -6343,7 +6034,6 @@ contains
         class(image), intent(inout) :: avg
         type(image)                 :: rotated
         real                        :: ang, div
-        if( self%imgkind .eq. 'xfel' ) stop 'not implemented for xfel-kind images; simple_image::roavg'
         call rotated%copy(self)
         call avg%copy(self)
         rotated = 0.
@@ -6380,7 +6070,6 @@ contains
         real    :: mat_in(self_in%ldim(1),self_in%ldim(2))
         real    :: mat_out(self_in%ldim(1),self_in%ldim(2))
         logical :: didft
-        if( self_in%imgkind .eq. 'xfel' ) stop 'not implemented for xfel-kind images; simple_image::rtsq'
         if( self_in%ldim(3) > 1 ) stop 'only for 2D images; rtsq; simple_image'
         if( .not. self_in%square_dims() ) stop 'only for square dims (need to sort shifts out); rtsq; simple_image'
         call self_here%new(self_in%ldim, self_in%smpd)
@@ -7074,11 +6763,7 @@ contains
     subroutine kill( self )
         class(image), intent(inout) :: self
         if( self%existence )then
-            if( self%imgkind .eq. 'xfel' )then
-                deallocate(self%cmat)
-            else
-                call fftwf_free(self%p)
-            endif
+            call fftwf_free(self%p)
             self%rmat=>null()
             self%cmat=>null()
             call fftwf_destroy_plan(self%plan_fwd)

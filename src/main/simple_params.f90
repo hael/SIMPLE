@@ -83,7 +83,6 @@ type :: params
 !    character(len=3)      :: verbose='no'      !< verbosity flag (yes|no){no}
     character(len=3)      :: vis='no'          !< visualise(yes|no)
     character(len=3)      :: weights2D='no'
-    character(len=3)      :: xfel='no'         !< images are XFEL diffraction patterns(yes|no){no}
     character(len=3)      :: zero='no'         !< zeroing(yes|no){no}
     ! other fixed length character variables in ascending alphabetical order
     character(len=STDLEN) :: angastunit='degrees' !< angle of astigmatism unit (radians|degrees){degrees}
@@ -117,7 +116,6 @@ type :: params
     character(len=STDLEN) :: fsc='fsc_state01.bin'!< binary file with FSC info{fsc_state01.bin}
     character(len=STDLEN) :: hfun='sigm'          !< function used for normalization(sigm|tanh|lin){sigm}
     character(len=STDLEN) :: hist='corr'          !< give variable for histogram plot
-    character(len=STDLEN) :: imgkind='em'
     character(len=STDLEN) :: infile='infile.txt'  !< table (text file) of inputs(.asc/.txt)
     character(len=STDLEN) :: label='class'        !< discrete label(class|state){class}
     character(len=STDLEN) :: mskfile=''           !< maskfile.ext
@@ -348,7 +346,6 @@ type :: params
     logical :: l_innermsk      = .false. 
     logical :: l_pick          = .false.
     logical :: l_remap_classes = .false.
-    logical :: l_xfel          = .false.
   contains
     procedure :: new
 end type params
@@ -509,7 +506,6 @@ contains
         call check_carg('vol',            self%vol)
         call check_carg('wfun',           self%wfun)
         call check_carg('weights2D',      self%weights2D)
-        call check_carg('xfel',           self%xfel)
         call check_carg('zero',           self%zero)
         ! File args
         call check_file('boxfile',        self%boxfile,'T')
@@ -916,12 +912,7 @@ contains
         endif
         ! set nr of rotations
         self%nrots = round2even(twopi*real(self%ring2))
-        ! set boxmatch (for clipped imags) and xfel logical
-        self%l_xfel = .false.
-        if( self%xfel .eq. 'yes')then
-            self%boxmatch = self%box
-            self%l_xfel    = .true.
-        else if( self%box > 2*(nint(self%msk)+10) )then
+        if( self%box > 2*(nint(self%msk)+10) )then
             self%boxmatch = find_magic_box(2*(nint(self%msk)+10))
             if( self%boxmatch > self%box ) self%boxmatch = self%box
         else
@@ -1020,16 +1011,6 @@ contains
         ! Set molecular diameter
         if( .not. cline%defined('moldiam') )then
             self%moldiam = 2. * self%msk * self%smpd
-        endif
-        ! set imgkind and check so that ctf and xfel parameters are congruent
-        self%imgkind = 'em'
-        if( self%xfel .eq. 'yes' ) then
-            self%imgkind = 'xfel'
-            if( self%ctf .eq. 'no') then
-                ! all good
-            else
-                stop 'when xfel .eq. yes, ctf .ne. no is not allowed; simple_params'
-            endif
         endif
         ! check if we are dose-weighting or not
         self%l_dose_weight = .false.

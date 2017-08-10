@@ -383,7 +383,7 @@ contains
         allocate(b%imgs_sym(p%nptcls), stat=alloc_stat)
         call alloc_err('In: simple_image_smat, 1', alloc_stat)
         do iptcl=1,p%nptcls
-            call b%imgs_sym(iptcl)%new([p%box,p%box,1], p%smpd, p%imgkind)
+            call b%imgs_sym(iptcl)%new([p%box,p%box,1], p%smpd)
             call b%imgs_sym(iptcl)%read(p%stk, iptcl)
         end do
         write(*,'(a)') '>>> CALCULATING CORRELATIONS'
@@ -491,8 +491,8 @@ contains
         p = params(cline)                               ! parameters generated
         call b%build_general_tbox(p, cline)             ! general objects built
         call b%vol%new([p%box,p%box,p%box], p%smpd)     ! reallocate vol (boxmatch issue)
-        call img%new([p%box,p%box,1],p%smpd,p%imgkind)  ! image created
-        call img2%new([p%box,p%box,1],p%smpd,p%imgkind) ! image created
+        call img%new([p%box,p%box,1],p%smpd)  ! image created
+        call img2%new([p%box,p%box,1],p%smpd) ! image created
         if( cline%defined('stk') .and. cline%defined('vol1') )stop 'Cannot operate on images AND volume at once'
         if( cline%defined('stk') )then
             ! 2D
@@ -594,8 +594,8 @@ contains
             else
                 stop 'need scale factor for this mode of execution; simple_commander_imgproc :: exec_scale'
             endif
-            call img%new(ldim,p%smpd,p%imgkind)
-            call img2%new(ldim_scaled,p%smpd/p%scale,p%imgkind)
+            call img%new(ldim,p%smpd)
+            call img2%new(ldim_scaled,p%smpd/p%scale)
             do ifile=1,nfiles
                 call progress(ifile, nfiles)
                 fname = add2fbody(remove_abspath(filenames(ifile)), p%ext, '_sc')
@@ -749,9 +749,9 @@ contains
         character(len=:), allocatable            :: fname
         integer :: i, s, ipst, cnt, cnt2, cnt3, nincl, alloc_stat, lfoo(3), np1,np2,ntot
         real    :: p_ctf, p_dfx
-        p = params(cline)                               ! parameters generated
-        call b%build_general_tbox(p, cline)             ! general objects built
-        call img%new([p%box,p%box,1],p%smpd,p%imgkind)  ! image created
+        p = params(cline)                    ! parameters generated
+        call b%build_general_tbox(p, cline)  ! general objects built
+        call img%new([p%box,p%box,1],p%smpd) ! image created
         ! random selection
         if( cline%defined('nran') )then
             write(*,'(a)') '>>> RANDOMLY SELECTING IMAGES'

@@ -328,12 +328,8 @@ contains
             do i=1,nsamp
                 call progress(i, nsamp)
                 orientation = b%a%get_ori(sample(i))
-                call b%img%read(p%stk, sample(i), isxfel=p%l_xfel)
-                if( p%l_xfel )then
-                    call b%img%pad(b%img_pad)
-                else
-                    call prep4cgrid(b%img, b%img_pad, p%msk, kbwin)
-                endif
+                call b%img%read(p%stk, sample(i))
+                call prep4cgrid(b%img, b%img_pad, p%msk, kbwin)
                 if( p%pgrp == 'c1' )then
                     call b%recvols(1)%inout_fplane(orientation, .true., b%img_pad)
                 else
@@ -360,17 +356,10 @@ contains
         ! must be done here since p%kfromto is dynamically set based on FSC from previous round
         ! or based on dynamic resolution limit update
         nrefs = p%nspace*p%nstates
-        if( p%l_xfel )then
-            call pftcc%new(nrefs, [p%fromp,p%top], [p%boxmatch,p%boxmatch,1],&
-            p%smpd, p%kfromto, p%ring2, p%ctf, isxfel='yes')
-        else
-            call pftcc%new(nrefs, [p%fromp,p%top], [p%boxmatch,p%boxmatch,1],&
-            p%smpd, p%kfromto, p%ring2, p%ctf)
-        endif
+        call pftcc%new(nrefs, [p%fromp,p%top], [p%boxmatch,p%boxmatch,1],&
+        p%smpd, p%kfromto, p%ring2, p%ctf)
         call prep_refs_pftcc4align( b, p, cline )
         call prep_ptcls_pftcc4align( b, p, ppfts_fname )
-        ! subtract the mean shell values for xfel correlations
-        if( p%l_xfel ) call pftcc%xfel_subtract_shell_mean()
         DebugPrint '*** hadamard3D_matcher ***: finished preppftcc4align'
     end subroutine preppftcc4align
 

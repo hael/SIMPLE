@@ -218,11 +218,7 @@ contains
             if( cline%defined('trs') ) call b%a%rnd_inpls(p%trs)
         endif
         ! fix volumes and stacks
-        if( p%xfel .eq. 'yes' )then
-            call b%vol%read(p%vols(1), isxfel=.true.)
-        else
-            call b%vol%read(p%vols(1))
-        endif
+        call b%vol%read(p%vols(1))
         DebugPrint 'read volume'
         ! masking
         if(cline%defined('msk'))then

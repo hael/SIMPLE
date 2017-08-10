@@ -40,7 +40,7 @@ contains
         character(len=STDLEN)         :: rho_name
         integer :: s, fri, toi, file_stat, fnr, nstates_oritab
         ! rebuild b%vol according to box size (beacuse it is otherwise boxmatch)
-        call b%vol%new([p%box,p%box,p%box], p%smpd, p%imgkind)
+        call b%vol%new([p%box,p%box,p%box], p%smpd)
         if( p%mirr .eq. 'yes' ) call b%a%mirror3d
         if( cline%defined('state') )then ! setting iteration from/to state
             fri = p%state
@@ -105,7 +105,7 @@ contains
         integer :: s, fri, toi, fnr, file_stat, ldim(3)
         real    :: smpd
         ! rebuild b%vol according to box size (beacuse it is otherwise boxmatch)
-        call b%vol%new([p%box,p%box,p%box], p%smpd, p%imgkind)
+        call b%vol%new([p%box,p%box,p%box], p%smpd)
         if( cline%defined('state') )then ! setting iteration from/to state
             fri = p%state
             toi = p%state

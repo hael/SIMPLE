@@ -229,7 +229,6 @@ contains
         call chdict%push('winsz',         'half-width of window for real-space filter(in pixels)')
         call chdict%push('xcoord',        'x coordinate{0}')
         call chdict%push('xdim',          'x dimension(in pixles)')
-        call chdict%push('xfel',          'images are XFEL diffraction patterns(yes|no){no}')
         call chdict%push('xsh',           'x shift(in pixels){0}')
         call chdict%push('ycoord',        'y coordinate{0}')
         call chdict%push('ydim',          'y dimension(in pixles)')

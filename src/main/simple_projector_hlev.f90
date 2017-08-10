@@ -25,19 +25,13 @@ contains
         integer, optional, intent(in)    :: top     !< stop index
         real,    optional, intent(inout) :: lp      !< low-pass
         type(image),      allocatable :: imgs(:) !< resulting images
-        character(len=:), allocatable :: imgk
         type(projector)  :: vol_pad, img_pad
         type(kbinterpol) :: kbwin
         integer          :: n, i, alloc_stat
         kbwin = kbinterpol(KBWINSZ, KBALPHA)
-        imgk  = vol%get_imgkind()
-        call vol_pad%new([p%boxpd,p%boxpd,p%boxpd], p%smpd, imgk)
-        if( imgk .eq. 'xfel' )then
-            call vol%pad(vol_pad)
-        else
-            call prep4cgrid(vol, vol_pad, p%msk, kbwin)
-        endif
-        call img_pad%new([p%boxpd,p%boxpd,1], p%smpd, imgk)
+        call vol_pad%new([p%boxpd,p%boxpd,p%boxpd], p%smpd)
+        call prep4cgrid(vol, vol_pad, p%msk, kbwin)
+        call img_pad%new([p%boxpd,p%boxpd,1], p%smpd)
         if( present(top) )then
             n = top
         else
@@ -49,20 +43,14 @@ contains
         write(*,'(A)') '>>> GENERATES PROJECTIONS' 
         do i=1,n
             call progress(i, n)
-            call imgs(i)%new([p%box,p%box,1], p%smpd, imgk)
+            call imgs(i)%new([p%box,p%box,1], p%smpd)
             if( present(lp) )then
                 call vol_pad%fproject( o%get_ori(i), img_pad, lp=lp )
             else
                 call vol_pad%fproject( o%get_ori(i), img_pad )
             endif
-            if( imgk .eq. 'xfel' )then
-                call img_pad%clip(imgs(i))
-            else
-                call img_pad%bwd_ft
-                call img_pad%clip(imgs(i))
-                ! HAD TO TAKE OUT BECAUSE PGI COMPILER BAILS
-                ! call imgs(i)%norm
-            endif
+            call img_pad%bwd_ft
+            call img_pad%clip(imgs(i))
         end do
         call vol_pad%kill
         call img_pad%kill

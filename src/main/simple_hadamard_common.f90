@@ -1,16 +1,16 @@
 ! common PRIME2D/PRIME3D routines used primarily by the Hadamard matchers
 module simple_hadamard_common
 use simple_defs
-use simple_cmdline,      only: cmdline
-use simple_build,        only: build
-use simple_params,       only: params
-use simple_ori,          only: ori
-use simple_oris,         only: oris
-use simple_rnd,          only: ran3
-use simple_gridding,     only: prep4cgrid
-use simple_strings       ! use all in there
-use simple_math          ! use all in there
-use simple_masker        ! use all in there
+use simple_cmdline,  only: cmdline
+use simple_build,    only: build
+use simple_params,   only: params
+use simple_ori,      only: ori
+use simple_oris,     only: oris
+use simple_rnd,      only: ran3
+use simple_gridding, only: prep4cgrid
+use simple_strings   ! use all in there
+use simple_math      ! use all in there
+use simple_masker    ! use all in there
 implicit none
 
 public :: read_img_from_stk, set_bp_range, set_bp_range2D, grid_ptcl, prepimg4align,&
@@ -185,11 +185,7 @@ contains
         if( orientation%isthere('w') ) pw = orientation%get('w')
         if( pw > TINY )then
             ! pre-gridding correction for the kernel convolution
-            if( p%l_xfel )then
-                call b%img%pad(b%img_pad)
-            else
-                call prep4cgrid(b%img, b%img_pad, p%msk, kbwin)
-            endif
+            call prep4cgrid(b%img, b%img_pad, p%msk, kbwin)
             DebugPrint  '*** simple_hadamard_common ***: prepared image for gridding'
             ran = ran3()
             if( present(ran_eo) ) ran = ran_eo 
@@ -238,70 +234,65 @@ contains
         type(ctf)         :: tfun
         real              :: x, y, dfx, dfy, angast
         integer           :: state, cls
-        if( p%l_xfel )then
-            ! nothing to do 4 now
-            return
-        else
-            x     = o%get('x')
-            y     = o%get('y')
-            cls   = nint(o%get('class'))
-            state = nint(o%get('state'))
-            ! move to Fourier space
-            call b%img%fwd_ft
-            ! set CTF parameters
-            if( p%ctf .ne. 'no' )then
-                ! we here need to re-create the CTF object as kV/cs/fraca are now per-particle params
-                ! that these parameters are part of the doc is checked in the params class
-                tfun = ctf(p%smpd, o%get('kv'), o%get('cs'), o%get('fraca'))
-                select case(p%tfplan%mode)
-                    case('astig') ! astigmatic CTF
-                        dfx    = o%get('dfx')
-                        dfy    = o%get('dfy')
-                        angast = o%get('angast')
-                    case('noastig') ! non-astigmatic CTF
-                        dfx    = o%get('dfx')
-                        dfy    = dfx
-                        angast = 0.
-                    case DEFAULT
-                        write(*,*) 'Unsupported p%tfplan%mode: ', trim(p%tfplan%mode)
-                        stop 'simple_hadamard_common :: prepimg4align'
-                end select
-            endif
-            ! deal with CTF
-            select case(p%ctf)
-                case('mul')  ! images have been multiplied with the CTF, no CTF-dependent weighting of the correlations
-                    stop 'ctf=mul is not supported; simple_hadamard_common :: prepimg4align'
-                case('no')   ! do nothing
-                case('yes')  ! do nothing
-                case('flip') ! flip back
-                    call tfun%apply(b%img, dfx, 'flip', dfy, angast)
+        x     = o%get('x')
+        y     = o%get('y')
+        cls   = nint(o%get('class'))
+        state = nint(o%get('state'))
+        ! move to Fourier space
+        call b%img%fwd_ft
+        ! set CTF parameters
+        if( p%ctf .ne. 'no' )then
+            ! we here need to re-create the CTF object as kV/cs/fraca are now per-particle params
+            ! that these parameters are part of the doc is checked in the params class
+            tfun = ctf(p%smpd, o%get('kv'), o%get('cs'), o%get('fraca'))
+            select case(p%tfplan%mode)
+                case('astig') ! astigmatic CTF
+                    dfx    = o%get('dfx')
+                    dfy    = o%get('dfy')
+                    angast = o%get('angast')
+                case('noastig') ! non-astigmatic CTF
+                    dfx    = o%get('dfx')
+                    dfy    = dfx
+                    angast = 0.
                 case DEFAULT
-                    stop 'Unsupported ctf mode; simple_hadamard_common :: prepimg4align'
+                    write(*,*) 'Unsupported p%tfplan%mode: ', trim(p%tfplan%mode)
+                    stop 'simple_hadamard_common :: prepimg4align'
             end select
-            ! shift image to rotational origin
-            if(abs(x) > SHTHRESH .or. abs(y) > SHTHRESH) call b%img%shift(-x, -y)
-            ! back to real-space
-            call b%img%bwd_ft
-            ! clip image if needed
-            call b%img%clip(b%img_match) ! SQUARE DIMS ASSUMED
-            ! MASKING
-            if( p%l_envmsk .and. p%automsk .eq. 'cavg' )then
-                ! 2D adaptive cos-edge mask
-                call b%mskimg%apply_adamask2ptcl_2D(b%img_match, cls)
-            else if( p%l_envmsk )then
-                ! 3D adaptive cos-edge mask
-                call b%mskvol%apply_adamask2ptcl_3D(o, b%img_match)
-            else              
-                ! soft-edged mask
-                if( p%l_innermsk )then
-                    call b%img_match%mask(p%msk, 'soft', inner=p%inner, width=p%width)
-                else
-                    call b%img_match%mask(p%msk, 'soft')
-                endif
-            endif
-            ! return in Fourier space
-            call b%img_match%fwd_ft
         endif
+        ! deal with CTF
+        select case(p%ctf)
+            case('mul')  ! images have been multiplied with the CTF, no CTF-dependent weighting of the correlations
+                stop 'ctf=mul is not supported; simple_hadamard_common :: prepimg4align'
+            case('no')   ! do nothing
+            case('yes')  ! do nothing
+            case('flip') ! flip back
+                call tfun%apply(b%img, dfx, 'flip', dfy, angast)
+            case DEFAULT
+                stop 'Unsupported ctf mode; simple_hadamard_common :: prepimg4align'
+        end select
+        ! shift image to rotational origin
+        if(abs(x) > SHTHRESH .or. abs(y) > SHTHRESH) call b%img%shift(-x, -y)
+        ! back to real-space
+        call b%img%bwd_ft
+        ! clip image if needed
+        call b%img%clip(b%img_match) ! SQUARE DIMS ASSUMED
+        ! MASKING
+        if( p%l_envmsk .and. p%automsk .eq. 'cavg' )then
+            ! 2D adaptive cos-edge mask
+            call b%mskimg%apply_adamask2ptcl_2D(b%img_match, cls)
+        else if( p%l_envmsk )then
+            ! 3D adaptive cos-edge mask
+            call b%mskvol%apply_adamask2ptcl_3D(o, b%img_match)
+        else              
+            ! soft-edged mask
+            if( p%l_innermsk )then
+                call b%img_match%mask(p%msk, 'soft', inner=p%inner, width=p%width)
+            else
+                call b%img_match%mask(p%msk, 'soft')
+            endif
+        endif
+        ! return in Fourier space
+        call b%img_match%fwd_ft
         DebugPrint  '*** simple_hadamard_common ***: finished prepimg4align'
     end subroutine prepimg4align
 
@@ -364,7 +355,7 @@ contains
         else
             do istate = 1, p%nstates
                 if( b%a%get_statepop(istate) > 0)then
-                    call b%recvols(istate)%new([p%boxpd, p%boxpd, p%boxpd], p%smpd, p%imgkind)
+                    call b%recvols(istate)%new([p%boxpd, p%boxpd, p%boxpd], p%smpd)
                     call b%recvols(istate)%alloc_rho(p)
                     call b%recvols(istate)%reset
                 endif
@@ -403,63 +394,55 @@ contains
         l_doexpand = .true.
         if( present(doexpand) ) l_doexpand = doexpand
         if( p%boxmatch < p%box )call b%vol%new([p%box,p%box,p%box],p%smpd) ! ensure correct dim
-        call b%vol%read(p%vols(s), isxfel=p%l_xfel)
+        call b%vol%read(p%vols(s))
         call b%vol%norm ! because auto-normalisation on read is taken out
-        if( p%l_xfel )then
-            ! no centering
-        else
-            ! Volume filtering
-            if( p%eo.eq.'yes' )then
-                if( any(b%fsc(s,:) > 0.143) )then
-                    ! Rosenthal & Henderson, 2003 
-                    call b%vol%fwd_ft
-                    filter = fsc2optlp(b%fsc(s,:))
-                    call b%vol%shellnorm()
-                    call b%vol%apply_filter(filter)
-                endif
+        ! Volume filtering
+        if( p%eo.eq.'yes' )then
+            if( any(b%fsc(s,:) > 0.143) )then
+                ! Rosenthal & Henderson, 2003 
+                call b%vol%fwd_ft
+                filter = fsc2optlp(b%fsc(s,:))
+                call b%vol%shellnorm()
+                call b%vol%apply_filter(filter)
             endif
-            ! centering            
-            do_center = .true.
-            if( p%center .eq. 'no' .or. p%nstates > 1 .or. .not. p%doshift .or.&
-                p%pgrp(:1) .ne. 'c' .or. cline%defined('mskfile') ) do_center = .false.
-            if( do_center )then
-                shvec = b%vol%center(p%cenlp,'no',p%msk,doshift=.false.) ! find center of mass shift
-                if( arg(shvec) > CENTHRESH )then
-                    if( p%pgrp .ne. 'c1' ) shvec(1:2) = 0.       ! shifts only along z-axis for C2 and above
-                    call b%vol%shift(shvec(1),shvec(2),shvec(3)) ! performs shift
-                    ! map back to particle oritentations
-                    if( cline%defined('oritab') )call b%a%map3dshift22d(-shvec(:), state=s)
-                endif
-            endif
-            ! back to real space
-            call b%vol%bwd_ft
         endif
+        ! centering            
+        do_center = .true.
+        if( p%center .eq. 'no' .or. p%nstates > 1 .or. .not. p%doshift .or.&
+            p%pgrp(:1) .ne. 'c' .or. cline%defined('mskfile') ) do_center = .false.
+        if( do_center )then
+            shvec = b%vol%center(p%cenlp,'no',p%msk,doshift=.false.) ! find center of mass shift
+            if( arg(shvec) > CENTHRESH )then
+                if( p%pgrp .ne. 'c1' ) shvec(1:2) = 0.       ! shifts only along z-axis for C2 and above
+                call b%vol%shift(shvec(1),shvec(2),shvec(3)) ! performs shift
+                ! map back to particle oritentations
+                if( cline%defined('oritab') )call b%a%map3dshift22d(-shvec(:), state=s)
+            endif
+        endif
+        ! back to real space
+        call b%vol%bwd_ft
         ! clip
         if( p%boxmatch < p%box )then
             call b%vol%clip_inplace([p%boxmatch,p%boxmatch,p%boxmatch]) ! SQUARE DIMS ASSUMED
         endif
         ! masking
-        if( p%l_xfel )then
-            ! no centering or masking
+        if( cline%defined('mskfile') )then
+            ! mask provided
+            call b%mskvol%new([p%box, p%box, p%box], p%smpd)
+            call b%mskvol%read(p%mskfile)
+            call b%mskvol%clip_inplace([p%boxmatch,p%boxmatch,p%boxmatch])
+            ! no need for the below line anymore as I (HE) removed auto-normalisation on read
+            call b%vol%mul(b%mskvol)
+            ! re-initialise the object for 2D envelope masking
+            call b%mskvol%init_envmask2D(p%msk)
+            ! don't use this for any 3D work from now on, because the soft edge is removed
+            ! on initialisation
         else
-            if( cline%defined('mskfile') )then
-                ! mask provided
-                call b%mskvol%new([p%box, p%box, p%box], p%smpd, p%imgkind)
-                call b%mskvol%read(p%mskfile)
-                call b%mskvol%clip_inplace([p%boxmatch,p%boxmatch,p%boxmatch])
-                ! no need for the below line anymore as I (HE) removed auto-normalisation on read
-                call b%vol%mul(b%mskvol)
-                ! re-initialise the object for 2D envelope masking
-                call b%mskvol%init_envmask2D(p%msk)
-                ! don't use this for any 3D work from now on, because the soft edge is removed
-                ! on initialisation
+            ! circular masking
+            if( p%l_innermsk )then
+                call b%vol%mask(p%msk, 'soft', inner=p%inner, width=p%width)
             else
-                ! circular masking
-                if( p%l_innermsk )then
-                    call b%vol%mask(p%msk, 'soft', inner=p%inner, width=p%width)
-                else
-                    call b%vol%mask(p%msk, 'soft')
-                endif
+                call b%vol%mask(p%msk, 'soft')
             endif
         endif
         ! FT volume
@@ -555,11 +538,7 @@ contains
                 endif
                 call b%recvols(s)%compress_exp
                 call b%recvols(s)%sampl_dens_correct(self_out=b%vol_pad) ! this preserves the recvol for online update
-                if( p%l_xfel )then
-                    ! no back transformation of the volume
-                else
-                    call b%vol_pad%bwd_ft
-                endif
+                call b%vol_pad%bwd_ft
                 call b%vol_pad%clip(b%vol)
                 call b%vol%write(p%vols(s), del_if_exists=.true.)
                 if( present(which_iter) )then

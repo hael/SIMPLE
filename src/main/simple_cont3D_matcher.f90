@@ -246,11 +246,7 @@ contains
         class(params),              intent(inout) :: p        !< params object
         integer,                    intent(in)    :: iptcl    !< index to particle
         class(polarft_corrcalc),    intent(inout) :: pftcc    !< calculator object
-        if( p%l_xfel )then
-            call pftcc%new(nrefs_per_ptcl, [iptcl,iptcl], [p%boxmatch,p%boxmatch,1], p%smpd, p%kfromto, p%ring2, p%ctf, isxfel='yes')
-        else
-            call pftcc%new(nrefs_per_ptcl, [iptcl,iptcl], [p%boxmatch,p%boxmatch,1], p%smpd, p%kfromto, p%ring2, p%ctf)
-        endif
+        call pftcc%new(nrefs_per_ptcl, [iptcl,iptcl], [p%boxmatch,p%boxmatch,1], p%smpd, p%kfromto, p%ring2, p%ctf)
     end subroutine init_pftcc
 
     !>  \brief  particle projection into pftcc

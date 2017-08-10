@@ -8,7 +8,6 @@ private
 
 type :: ftiter
     private
-     character(len=STDLEN) :: imgkind=''    !< image kind 'xfel' or 'em'
     integer :: rlogi_lbounds(3)=[0,0,0]     !<  In each dimension, the lower bound of the real image's logical addresses
     integer :: rlogi_ubounds(3)=[0,0,0]     !<  In each dimension, the upper bound of the real image's logical addresses
     integer :: clogi_lbounds(3)=[0,0,0]     !<  In each dimension, the lower bound of the complex image's logical addresses
@@ -53,23 +52,20 @@ end interface
 contains
 
     !>  \brief is a parameterized constructor
-    function constructor( ldim, smpd, imgkind ) result( self )
-        type(ftiter)                 :: self
-        real, intent(in)             :: smpd
-        integer, intent(in)          :: ldim(:)
-        character(len=*), intent(in) :: imgkind
-        call self%new(ldim, smpd, imgkind)
+    function constructor( ldim, smpd ) result( self )
+        real,    intent(in) :: smpd
+        integer, intent(in) :: ldim(:)
+        type(ftiter) :: self
+        call self%new(ldim, smpd)
     end function constructor
 
     !>  \brief  is a parameterized constructor
-    subroutine new( self, ldim, smpd, imgkind )
+    subroutine new( self, ldim, smpd )
         use simple_math, only: is_even, fdim
         class(ftiter), intent(inout) :: self
-        real, intent(in)             :: smpd
-        integer, intent(in)          :: ldim(:)
-        character(len=*), intent(in) :: imgkind
-        integer                      :: d
-        self%imgkind = imgkind
+        real,          intent(in)    :: smpd
+        integer,       intent(in)    :: ldim(:)
+        integer :: d
         if( size(ldim) == 2 )then
             self%ldim(1:2) = ldim
             self%ldim(3) = 1
@@ -129,14 +125,14 @@ contains
     !>  \brief  is a setter
     subroutine set_hp( self, hp )
         class(ftiter), intent(inout) :: self
-        real, intent(in)             :: hp
+        real,          intent(in)    :: hp
         self%lhps = int(self%dsteps/hp)
     end subroutine set_hp
 
     !>  \brief  is a getter
     pure function get_lhp( self, which ) result( hpl )
         class(ftiter), intent(in) :: self
-        integer, intent(in) :: which
+        integer,       intent(in) :: which
         integer :: hpl
         hpl = self%lhps(which)
     end function get_lhp
@@ -144,7 +140,7 @@ contains
     !>  \brief  is a getter
     pure function get_llp( self, which ) result( lpl )
         class(ftiter), intent(in) :: self
-        integer, intent(in) :: which
+        integer,       intent(in) :: which
         integer :: lpl
         lpl = self%llps(which)
     end function get_llp
@@ -152,8 +148,8 @@ contains
     !>  \brief  is a getter
     pure function get_find( self, which, res ) result( ind )
         class(ftiter), intent(in) :: self
-        integer, intent(in) :: which
-        real, intent(in)    :: res
+        integer,       intent(in) :: which
+        real,          intent(in) :: res
         integer :: ind
         ind = int(self%dsteps(which)/res)
     end function get_find
@@ -161,7 +157,7 @@ contains
     !>  \brief  is a getter
     pure function get_lfny( self, which ) result( fnyl )
         class(ftiter), intent(in) :: self
-        integer, intent(in) :: which
+        integer,       intent(in) :: which
         integer :: fnyl
         fnyl = self%lfnys(which)
     end function get_lfny
@@ -169,7 +165,7 @@ contains
     !>  \brief  is a getter
     pure function get_lp( self, which, ind ) result( lp )
         class(ftiter), intent(in) :: self
-        integer, intent(in) :: which, ind
+        integer,       intent(in) :: which, ind
         real :: lp
         lp = self%dsteps(which)/real(ind)
     end function get_lp
@@ -185,8 +181,8 @@ contains
     !>  \brief  is a getter
     pure function get_clin_lims( self, lp_dyn ) result( lims )
         class(ftiter), intent(in) :: self
-        real, intent(in)          :: lp_dyn
-        integer                   :: lims(2)
+        real,          intent(in) :: lp_dyn
+        integer :: lims(2)
         lims(2) = dynfind( self%dsteps(1), lp_dyn, self%lfnys(1) )
         lims(1) = self%lhps(1)
     end function get_clin_lims
@@ -195,9 +191,9 @@ contains
 
     !>  \brief is for determining loop limits for transforms
     function loop_lims( self, mode, lp_dyn ) result( lims )
-        class(ftiter), intent(in)  :: self
-        integer, intent(in)        :: mode
-        real, intent(in), optional :: lp_dyn
+        class(ftiter),  intent(in) :: self
+        integer,        intent(in) :: mode
+        real, optional, intent(in) :: lp_dyn
         integer                    :: lims(3,2)
         if( present(lp_dyn) )then
             select case(mode)
@@ -228,21 +224,12 @@ contains
                 case(2) ! loop over logical addresses
                 ! (exluding redundant Friedel mates in
                 ! the negative frequencies of the 1st dimension)
-                    if( self%imgkind .eq. 'xfel' )then
-                        lims(1,1) = self%clogi_lbounds_all(1)
-                        lims(1,2) = self%clogi_ubounds_all(1)
-                        lims(2,1) = self%clogi_lbounds_all(2)
-                        lims(2,2) = self%clogi_ubounds_all(2)
-                        lims(3,1) = self%clogi_lbounds_all(3)
-                        lims(3,2) = self%clogi_ubounds_all(3)
-                    else
-                        lims(1,1) = self%clogi_lbounds(1)
-                        lims(1,2) = self%clogi_ubounds(1)
-                        lims(2,1) = self%clogi_lbounds(2)
-                        lims(2,2) = self%clogi_ubounds(2)
-                        lims(3,1) = self%clogi_lbounds(3)
-                        lims(3,2) = self%clogi_ubounds(3)
-                    endif
+                    lims(1,1) = self%clogi_lbounds(1)
+                    lims(1,2) = self%clogi_ubounds(1)
+                    lims(2,1) = self%clogi_lbounds(2)
+                    lims(2,2) = self%clogi_ubounds(2)
+                    lims(3,1) = self%clogi_lbounds(3)
+                    lims(3,2) = self%clogi_ubounds(3)
                 case(3) ! loop over logical addresses
                 ! (including redundant Friedel mates)
                     lims(1,1) = self%clogi_lbounds_all(1)
@@ -263,30 +250,26 @@ contains
     function comp_addr_phys(self,logi) result(phys)
         class(ftiter), intent(in) :: self
         integer,       intent(in) :: logi(3) !<  Logical address
-        integer                   :: phys(3) !<  Physical address
-        integer                   :: i
-        if( self%imgkind .eq. 'xfel' )then
-            phys = logi
+        integer :: phys(3) !<  Physical address
+        integer :: i
+        if (logi(1) .ge. 0) then
+            phys = logi + 1
+            ! The above is true except when in negative frequencies of
+            ! 2nd or 3rd dimension
+            do i=2,3
+                if (logi(i) .lt. 0) phys(i) = logi(i) + self%ldim(i) + 1
+            enddo
         else
-            if (logi(1) .ge. 0) then
-                phys = logi + 1
-                ! The above is true except when in negative frequencies of
-                ! 2nd or 3rd dimension
-                do i=2,3
-                    if (logi(i) .lt. 0) phys(i) = logi(i) + self%ldim(i) + 1
-                enddo
-            else
-                ! We are in the negative frequencies of the first dimensions,
-                ! which are not defined by the output of FFTW's fwd FT,
-                ! so we need to look for the Friedel mate in the positive frequencies
-                ! of the first dimension
-                phys = -logi + 1
-                ! The above is true except when in negative frequencies of
-                ! 2nd or 3rd dimension
-                do i=2,3
-                    if (-logi(i) .lt. 0) phys(i) = -logi(i) + self%ldim(i) + 1
-                enddo
-            endif
+            ! We are in the negative frequencies of the first dimensions,
+            ! which are not defined by the output of FFTW's fwd FT,
+            ! so we need to look for the Friedel mate in the positive frequencies
+            ! of the first dimension
+            phys = -logi + 1
+            ! The above is true except when in negative frequencies of
+            ! 2nd or 3rd dimension
+            do i=2,3
+                if (-logi(i) .lt. 0) phys(i) = -logi(i) + self%ldim(i) + 1
+            enddo
         endif
     end function comp_addr_phys
 
@@ -294,8 +277,8 @@ contains
     function comp_addr_logi(self,phys) result(logi)
         class(ftiter), intent(in) :: self
         integer,       intent(in) :: phys(3) !<  Physical address
-        integer                   :: logi(3) !<  Logical address
-        integer                   :: i
+        integer :: logi(3) !<  Logical address
+        integer :: i
         logi = phys - 1
         ! The above is true except when in negative frequencies of
         ! 2nd or 3rd dimension
@@ -308,7 +291,7 @@ contains
 
     !> \brief  for finding the dynamic low-pass limit
     pure function dynfind( dstep, lp_dyn, tofny ) result( target_to )
-        real, intent(in) :: dstep, lp_dyn
+        real,    intent(in) :: dstep, lp_dyn
         integer, intent(in) :: tofny
         integer :: target_to
         target_to = int(dstep/lp_dyn)
@@ -324,14 +307,14 @@ contains
     subroutine test_ftiter
         type(ftiter) :: fit
         write(*,'(a)') '**info(simple_ftiter_unit_test): testing square dimensions'
-        call fit%new([100,100,100],2.,'em')
+        call fit%new([100,100,100],2.)
         call fit%test_addr
-        call fit%new([100,100,1],2.,'em')
+        call fit%new([100,100,1],2.)
         call fit%test_addr
         write(*,'(a)') '**info(simple_ftiter_unit_test): testing non-square dimensions'
-        call fit%new([120,90,80],2.,'em')
+        call fit%new([120,90,80],2.)
         call fit%test_addr
-        call fit%new([120,90,1],2.,'em')
+        call fit%new([120,90,1],2.)
         call fit%test_addr
          write(*,'(a)') 'SIMPLE_FTITER_UNIT_TEST COMPLETED SUCCESSFULLY ;-)'
     end subroutine test_ftiter

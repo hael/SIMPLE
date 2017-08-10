@@ -33,7 +33,6 @@ type :: polarft_corrcalc
     complex(sp), allocatable :: pfts_refs(:,:,:)       !< 3D complex matrix of polar reference sections (nrefs,refsz,nk)
     complex(sp), allocatable :: pfts_ptcls(:,:,:)      !< 3D complex matrix of particle sections
     logical                  :: with_ctf     = .false. !< CTF flag
-    logical                  :: xfel         = .false. !< to indicate whether we process xfel patterns or not
     logical                  :: existence    = .false. !< to indicate existence
   contains
     ! CONSTRUCTOR
@@ -75,7 +74,6 @@ type :: polarft_corrcalc
     procedure          :: read_pfts_ptcls
     ! MODIFIERS
     procedure, private :: prep_ref4corr
-    procedure          :: xfel_subtract_shell_mean
     ! CALCULATORS
     procedure, private :: create_polar_ctfmat
     procedure          :: create_polar_ctfmats
@@ -102,13 +100,12 @@ contains
     !! \param ldim     logical dimensions of original cartesian image                              
     !! \param smpd     sampling distance                                                           
     !! \param kfromto  Fourier index range
-    subroutine new( self, nrefs, pfromto, ldim, smpd, kfromto, ring2, ctfflag, isxfel )
+    subroutine new( self, nrefs, pfromto, ldim, smpd, kfromto, ring2, ctfflag )
         use simple_math, only: rad2deg, is_even, round2even
-        class(polarft_corrcalc),    intent(inout) :: self    !< this object
-        integer,                    intent(in)    :: nrefs, pfromto(2), ldim(3), kfromto(2), ring2
-        real,                       intent(in)    :: smpd
-        character(len=*),           intent(in)    :: ctfflag !< are we using ctf
-        character(len=*), optional, intent(in)    :: isxfel  !< are we using xfel type
+        class(polarft_corrcalc), intent(inout) :: self    !< this object
+        integer,                 intent(in)    :: nrefs, pfromto(2), ldim(3), kfromto(2), ring2
+        real,                    intent(in)    :: smpd
+        character(len=*),        intent(in)    :: ctfflag !< are we using ctf
         integer  :: alloc_stat, irot, k
         logical  :: even_dims, test(3)
         real(sp) :: ang
@@ -148,10 +145,6 @@ contains
             write(*,*) 'ldim: ', ldim
             stop 'only even logical dims supported; new; simple_polarft_corrcalc'
         endif
-        self%xfel = .false.
-        if( present(isxfel) )then
-            if( isxfel .eq. 'yes' ) self%xfel = .true.
-        end if
         ! set constants
         self%pfromto = pfromto                         !< from/to particle indices (in parallel execution)
         self%nptcls  = pfromto(2) - pfromto(1) + 1     !< the total number of particles in partition (logically indexded [fromp,top])
@@ -503,11 +496,7 @@ contains
         use simple_math, only: csq
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iptcl
-        if( self%xfel )then
-            self%sqsums_ptcls(iptcl) = sum(real(self%pfts_ptcls(iptcl,:self%refsz,:))**2.)
-        else
-            self%sqsums_ptcls(iptcl) = sum(csq(self%pfts_ptcls(iptcl,:self%refsz,:)))
-        endif
+        self%sqsums_ptcls(iptcl) = sum(csq(self%pfts_ptcls(iptcl,:self%refsz,:)))
     end subroutine memoize_sqsum_ptcl
 
     ! I/O
@@ -580,47 +569,6 @@ contains
             sqsum_ref = sum(csq(pft_ref))
         endif
     end subroutine prep_ref4corr
-
-    !>  \brief  is for preparing for XFEL pattern corr calc
-    subroutine xfel_subtract_shell_mean( self )
-        class(polarft_corrcalc), intent(inout) :: self
-        real(sp), allocatable :: ptcls_mean_tmp(:,:,:)
-        real(sp), allocatable :: refs_mean_tmp(:,:)
-        integer :: iptcl, iref, irot, k
-        allocate( ptcls_mean_tmp(2*self%nptcls,self%ptclsz,self%kfromto(1):self%kfromto(2)),&
-        refs_mean_tmp(self%nrefs,self%kfromto(1):self%kfromto(2)))
-        ! calculate the mean of each reference at each k shell
-        do iref=1,self%nrefs
-            do k=self%kfromto(1),self%kfromto(2)
-                refs_mean_tmp(iref,k) = sum(real(self%pfts_refs(iref,:,k)))/real(self%refsz)
-            end do
-        end do
-        ! calculate the mean of each reference at each k shell
-        do iref=1,self%nrefs
-            do irot=1,self%refsz
-                do k=self%kfromto(1),self%kfromto(2)
-                    self%pfts_refs(iref,irot,k) = &
-                    self%pfts_refs(iref,irot,k) - refs_mean_tmp(iref,k) 
-                end do
-            end do
-        end do
-        ! calculate the mean of each particle at each k shell at each in plane rotation
-        do iptcl=self%pfromto(1),self%pfromto(2)
-            do k=self%kfromto(1),self%kfromto(2)
-                ptcls_mean_tmp(iptcl,1,k) = sum(real(self%pfts_ptcls(iptcl,1:self%winsz,k)))/real(self%refsz)
-            end do
-        end do
-        ! subtract the mean of each particle at each k shell at each in plane rotation
-        do iptcl=self%pfromto(1),self%pfromto(2)
-            do irot=1,self%ptclsz
-                do k=self%kfromto(1),self%kfromto(2)
-                    self%pfts_ptcls(iptcl,irot,k) = &
-                    self%pfts_ptcls(iptcl,irot,k) - ptcls_mean_tmp(iptcl,1,k)
-                end do
-            end do
-        end do
-        deallocate( ptcls_mean_tmp, refs_mean_tmp )
-    end subroutine xfel_subtract_shell_mean
 
     ! CALCULATORS
 
@@ -737,11 +685,7 @@ contains
         real(sp)    :: cc(self%nrots), sqsum_ref, sqsum_ptcl
         integer     :: irot, i
         call self%prep_ref4corr(iptcl, iref, pft_ref, sqsum_ref, kstop)
-        if( self%xfel )then
-            sqsum_ptcl = sum(real(self%pfts_ptcls(iptcl,:self%refsz,self%kfromto(1):kstop))**2.)
-        else
-            sqsum_ptcl = sum(csq(self%pfts_ptcls(iptcl,:self%refsz,self%kfromto(1):kstop)))
-        endif
+        sqsum_ptcl = sum(csq(self%pfts_ptcls(iptcl,:self%refsz,self%kfromto(1):kstop)))
         if( present(roind_vec) )then
             ! calculates only corrs for rotational indices provided in roind_vec
             ! see get_win_roind. returns -1. when not calculated

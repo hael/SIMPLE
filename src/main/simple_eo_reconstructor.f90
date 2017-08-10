@@ -12,19 +12,18 @@ private
 
 type :: eo_reconstructor
     private
-    type(reconstructor)    :: even
-    type(reconstructor)    :: odd
-    type(reconstructor)    :: eosum
-    type(image)            :: envmask
-    character(len=4)       :: ext
-    real                   :: fsc05      !<   target resolution at FSC=0.5
-    real                   :: fsc0143    !<   target resolution at FSC=0.143
-    real                   :: smpd, msk, fny, inner=0., width=10.
-    integer                :: box=0, nstates=1, numlen=2, lfny=0
-    logical                :: automsk = .false.
-    logical                :: xfel    = .false.
-    logical                :: wiener  = .false.
-    logical                :: exists  = .false.
+    type(reconstructor) :: even
+    type(reconstructor) :: odd
+    type(reconstructor) :: eosum
+    type(image)         :: envmask
+    character(len=4)    :: ext
+    real                :: fsc05      !<   target resolution at FSC=0.5
+    real                :: fsc0143    !<   target resolution at FSC=0.143
+    real                :: smpd, msk, fny, inner=0., width=10.
+    integer             :: box=0, nstates=1, numlen=2, lfny=0
+    logical             :: automsk = .false.
+    logical             :: wiener  = .false.
+    logical             :: exists  = .false.
   contains
     ! CONSTRUCTOR
     procedure          :: new
@@ -84,20 +83,19 @@ contains
         self%ext     = p%ext
         self%numlen  = p%numlen
         self%msk     = p%msk
-        self%xfel    = p%l_xfel
         self%automsk = file_exists(p%mskfile)
         ! create composites
         if( self%automsk )then
             call self%envmask%new([p%box,p%box,p%box], p%smpd)
             call self%envmask%read(p%mskfile)
         endif
-        call self%even%new([p%boxpd,p%boxpd,p%boxpd], p%smpd, p%imgkind)
+        call self%even%new([p%boxpd,p%boxpd,p%boxpd], p%smpd)
         call self%even%alloc_rho(p)
         call self%even%set_ft(.true.)
-        call self%odd%new([p%boxpd,p%boxpd,p%boxpd], p%smpd, p%imgkind)
+        call self%odd%new([p%boxpd,p%boxpd,p%boxpd], p%smpd)
         call self%odd%alloc_rho(p)
         call self%odd%set_ft(.true.)
-        call self%eosum%new([p%boxpd,p%boxpd,p%boxpd], p%smpd, p%imgkind)
+        call self%eosum%new([p%boxpd,p%boxpd,p%boxpd], p%smpd)
         call self%eosum%alloc_rho(p, expand=.false.)
         ! set lfny
         call imgtmp%new([self%box,self%box,self%box], self%smpd)
@@ -292,51 +290,38 @@ contains
         type(masker)      :: volmasker
         integer           :: j, find
         ! make clipped volumes
-        if( self%xfel )then
-            call even%new([self%box,self%box,self%box],self%smpd,imgkind='xfel')
-            call odd%new([self%box,self%box,self%box],self%smpd,imgkind='xfel')
-        else
-            call even%new([self%box,self%box,self%box],self%smpd)
-            call odd%new([self%box,self%box,self%box],self%smpd)
-        endif
+        call even%new([self%box,self%box,self%box],self%smpd)
+        call odd%new([self%box,self%box,self%box],self%smpd)
         ! correct for the uneven sampling density
         call self%even%sampl_dens_correct
         call self%odd%sampl_dens_correct
-        if( self%xfel )then
-            ! no back transformation
-        else
-            ! reverse FT
-            call self%even%bwd_ft
-            call self%odd%bwd_ft
-        endif
+        ! reverse FT
+        call self%even%bwd_ft
+        call self%odd%bwd_ft
         ! clip
         call self%even%clip(even)
         call self%odd%clip(odd)
-        if( self%xfel )then
-            ! no masking or Fourier transformation
+        if( self%automsk )then
+            call even%mul(self%envmask)
+            call odd%mul(self%envmask)
         else
-            if( self%automsk )then
-                call even%mul(self%envmask)
-                call odd%mul(self%envmask)
+            ! spherical masking
+            if( self%inner > 1. )then
+                call even%mask(self%msk, 'soft', inner=self%inner, width=self%width) 
+                call odd%mask(self%msk, 'soft', inner=self%inner, width=self%width)
             else
-                ! spherical masking
-                if( self%inner > 1. )then
-                    call even%mask(self%msk, 'soft', inner=self%inner, width=self%width) 
-                    call odd%mask(self%msk, 'soft', inner=self%inner, width=self%width)
-                else
-                    call even%mask(self%msk, 'soft') 
-                    call odd%mask(self%msk, 'soft')
-                endif
+                call even%mask(self%msk, 'soft') 
+                call odd%mask(self%msk, 'soft')
             endif
-            ! forward FT
-            call even%fwd_ft
-            call odd%fwd_ft
-            ! calculate FSC
-            call even%fsc(odd, res, corrs)
-            do j=1,size(res)
-               write(*,'(A,1X,F6.2,1X,A,1X,F7.3)') '>>> RESOLUTION:', res(j), '>>> CORRELATION:', corrs(j)
-            end do
         endif
+        ! forward FT
+        call even%fwd_ft
+        call odd%fwd_ft
+        ! calculate FSC
+        call even%fsc(odd, res, corrs)
+        do j=1,size(res)
+           write(*,'(A,1X,F6.2,1X,A,1X,F7.3)') '>>> RESOLUTION:', res(j), '>>> CORRELATION:', corrs(j)
+        end do
         ! save, get & print resolution
         call arr2file(corrs, 'fsc_state'//int2str_pad(state,2)//'.bin')
         call get_resolution(corrs, res, self%fsc05, self%fsc0143)
@@ -356,13 +341,9 @@ contains
         class(image),            intent(inout) :: reference !< reference volume
         write(*,'(A)') '>>> SAMPLING DENSITY (RHO) CORRECTION & WIENER NORMALIZATION'
         call self%eosum%sampl_dens_correct
-        if( self%xfel )then
-            call self%eosum%clip(reference)
-        else
-            call self%eosum%bwd_ft
-            call self%eosum%norm
-            call self%eosum%clip(reference)
-        endif
+        call self%eosum%bwd_ft
+        call self%eosum%norm
+        call self%eosum%clip(reference)
     end subroutine sampl_dens_correct_sum
 
     ! RECONSTRUCTION
@@ -399,8 +380,8 @@ contains
         ! stash global state index
         state_glob = state
         ! make the images
-        call img%new([p%box,p%box,1],p%smpd,p%imgkind)
-        call img_pad%new([p%boxpd,p%boxpd,1],p%smpd,p%imgkind)
+        call img%new([p%box,p%box,1],p%smpd)
+        call img_pad%new([p%boxpd,p%boxpd,1],p%smpd)
         ! calculate weights
         call o%calc_spectral_weights(p%frac)
         ! zero the Fourier volumes and rhos
@@ -456,15 +437,11 @@ contains
                 if( pw > 0. )then
                     orientation = o%get_ori(i)
                     if( p%l_distr_exec )then
-                        call img%read(p%stk_part, cnt, isxfel=p%l_xfel)
+                        call img%read(p%stk_part, cnt)
                     else
-                        call img%read(fname, i, isxfel=p%l_xfel)
+                        call img%read(fname, i)
                     endif
-                    if( p%l_xfel )then
-                        call img%pad(img_pad)
-                    else
-                        call prep4cgrid(img, img_pad, p%msk, kbwin)
-                    endif
+                    call prep4cgrid(img, img_pad, p%msk, kbwin)
                     if( p%pgrp == 'c1' )then
                         call self%grid_fplane(orientation, img_pad, pwght=pw, mul=mul)
                     else

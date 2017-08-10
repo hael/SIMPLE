@@ -27,7 +27,6 @@ type, extends(image) :: reconstructor
     integer                     :: lfny          = 0            !< Nyqvist Fourier index
     integer                     :: ldim_img(3)   = 0            !< logical dimension of the original image
     character(len=STDLEN)       :: ctfflag       = ''           !< ctf flag <yes|no|mul|flip>
-    character(len=STDLEN)       :: ikind                        !< image kind (em/xfel)
     logical                     :: tfneg              = .false. !< invert contrast or not
     logical                     :: tfastig            = .false. !< astigmatic CTF or not
     logical                     :: rho_allocated      = .false. !< existence of rho matrix
@@ -91,20 +90,13 @@ contains
         self%tfastig = .false.
         if( p%tfplan%mode .eq. 'astig' ) self%tfastig = .true.
         self%kbwin = kbinterpol(self%winsz,self%alpha)
-        ikind_tmp  = self%get_imgkind()
-        self%ikind = ikind_tmp
-        if( trim(self%ikind) .eq. 'xfel' )then
-            rho_lims = self%get_cmat_lims()
-            allocate(self%rho(rho_lims(1,1):rho_lims(1,2),rho_lims(2,1):rho_lims(2,2),rho_lims(3,1):rho_lims(3,2)))
-        else
-            ! Work out dimensions of the rho array
-            rho_shape(1)   = fdim(self%ldim_img(1))
-            rho_shape(2:3) = self%ldim_img(2:3)
-            ! Letting FFTW do the allocation in C ensures that we will be using aligned memory
-            self%kp = fftwf_alloc_real(int(product(rho_shape),c_size_t))
-            ! Set up the rho array which will point at the allocated memory
-            call c_f_pointer(self%kp,self%rho,rho_shape)
-        endif
+        ! Work out dimensions of the rho array
+        rho_shape(1)   = fdim(self%ldim_img(1))
+        rho_shape(2:3) = self%ldim_img(2:3)
+        ! Letting FFTW do the allocation in C ensures that we will be using aligned memory
+        self%kp = fftwf_alloc_real(int(product(rho_shape),c_size_t))
+        ! Set up the rho array which will point at the allocated memory
+        call c_f_pointer(self%kp,self%rho,rho_shape)
         self%rho_allocated = .true.
         if( l_expand )then
             ! setup expanded matrices
@@ -426,8 +418,8 @@ contains
         state_glob = state
         ! make random number generator
         ! make the images
-        call img_pd%new([p%boxpd,p%boxpd,1],self%get_smpd(),p%imgkind)
-        call img%new([p%box,p%box,1],self%get_smpd(),p%imgkind)
+        call img_pd%new([p%boxpd,p%boxpd,1],self%get_smpd())
+        call img%new([p%box,p%box,1],self%get_smpd())
         ! calculate particle weights
         call o%calc_spectral_weights(p%frac, bystate=.true.)
         ! zero the Fourier volume and rho
@@ -461,13 +453,7 @@ contains
             call self%compress_exp
             call self%sampl_dens_correct
         endif
-        if( p%l_xfel )then
-            ! no bwd_ft or normalisation
-        else
-            call self%bwd_ft
-            ! HAD TO TAKE OUT BECAUSE PGI COMPILER BAILS
-            ! call self%norm
-        endif
+        call self%bwd_ft
         call img%kill
         call img_pd%kill
         ! report how many particles were used to reconstruct each state
@@ -490,15 +476,11 @@ contains
                 if( pw > 0. )then
                     orientation = o%get_ori(i)
                     if( p%l_distr_exec )then
-                        call img%read(p%stk_part, cnt, isxfel=p%l_xfel)
+                        call img%read(p%stk_part, cnt)
                     else
-                        call img%read(fname, i, isxfel=p%l_xfel)
+                        call img%read(fname, i)
                     endif
-                    if( p%l_xfel )then
-                        call img%pad(img_pd)
-                    else
-                        call prep4cgrid(img, img_pd, p%msk, self%kbwin)
-                    endif
+                    call prep4cgrid(img, img_pd, p%msk, self%kbwin)
                     if( p%pgrp == 'c1' )then
                         call self%inout_fplane(orientation, .true., img_pd, pwght=pw, mul=mul)
                     else

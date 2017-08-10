@@ -121,12 +121,6 @@ contains
         type(build)        :: b
         integer, parameter :: MAXIMGS=1000
         p = params(cline) ! parameters generated
-        if( p%l_xfel )then
-            if( cline%defined('msk') .or. cline%defined('mw') .or.&
-            cline%defined('nvox') .or. cline%defined('mskfile') )then
-                stop 'no mask allowed when processing XFEL patterns; simple_prime3D_init'
-            endif
-        endif
         if( p%ctf .ne. 'no')then
             if( .not. cline%defined('deftab') )&
             &stop 'need texfile with defocus/astigmatism values for ctf .ne. no mode exec'
@@ -210,12 +204,6 @@ contains
         update_res = .false.
         converged  = .false.
         p = params(cline) ! parameters generated
-        if( p%l_xfel )then
-            if( cline%defined('msk') .or. cline%defined('mw') .or.&
-            cline%defined('nvox') .or. cline%defined('automsk') )then
-                stop 'no mask allowed when processing XFEL patterns; simple_prime3D'
-            endif
-        endif
         if( str_has_substr(p%refine,'neigh') .or. p%refine .eq. 'exp' )then
             if( .not. cline%defined('oritab') )then
                 stop 'need oritab input for execution of prime3D with this refine mode'
@@ -308,12 +296,6 @@ contains
             case DEFAULT
                 stop 'unknown refinement mode; simple_commander_prime3D%exec_cont3D'
         end select
-        if( p%xfel .eq. 'yes' )then
-            if( cline%defined('msk') .or. cline%defined('mw') .or.&
-            cline%defined('nvox') .or. cline%defined('automsk') )then
-                stop 'no mask allowed when processing XFEL patterns; simple_prime3D'
-            endif
-        endif
         call b%build_general_tbox(p, cline)
         call b%build_cont3D_tbox(p)
         startit = 1

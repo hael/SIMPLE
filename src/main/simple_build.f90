@@ -1,21 +1,21 @@
 ! centralised builder (the main object constructor in SIMPLE)
 module simple_build
 use simple_defs
-use simple_cmdline,             only: cmdline
-use simple_comlin,              only: comlin
-use simple_image,               only: image
-use simple_oris,                only: oris
-use simple_reconstructor,       only: reconstructor
-use simple_eo_reconstructor,    only: eo_reconstructor
-use simple_params,              only: params
-use simple_sym,                 only: sym
-use simple_opt_spec,            only: opt_spec
-use simple_convergence,         only: convergence
-use simple_jiffys,              only: alloc_err
-use simple_projector,           only: projector
-use simple_polarizer,           only: polarizer
-use simple_masker,              only: masker
-use simple_filehandling         ! use all in there
+use simple_cmdline,          only: cmdline
+use simple_comlin,           only: comlin
+use simple_image,            only: image
+use simple_oris,             only: oris
+use simple_reconstructor,    only: reconstructor
+use simple_eo_reconstructor, only: eo_reconstructor
+use simple_params,           only: params
+use simple_sym,              only: sym
+use simple_opt_spec,         only: opt_spec
+use simple_convergence,      only: convergence
+use simple_jiffys,           only: alloc_err
+use simple_projector,        only: projector
+use simple_polarizer,        only: polarizer
+use simple_masker,           only: masker
+use simple_filehandling      ! use all in there
 implicit none
 
 public :: build, test_build
@@ -164,20 +164,20 @@ contains
         if( p%box > 0 )then
             ! build image objects
             ! box-sized ones
-            call self%img%new([p%box,p%box,1],p%smpd,p%imgkind)
-            call self%img_match%new([p%boxmatch,p%boxmatch,1],p%smpd,p%imgkind)
-            call self%img_copy%new([p%boxmatch,p%boxmatch,1],p%smpd,p%imgkind)
+            call self%img%new([p%box,p%box,1],p%smpd)
+            call self%img_match%new([p%boxmatch,p%boxmatch,1],p%smpd)
+            call self%img_copy%new([p%boxmatch,p%boxmatch,1],p%smpd)
             DebugPrint   'did build box-sized image objects'
             ! boxmatch-sized ones
-            call self%img_tmp%new([p%boxmatch,p%boxmatch,1],p%smpd,p%imgkind)
-            call self%img_msk%new([p%boxmatch,p%boxmatch,1],p%smpd,p%imgkind)
-            call self%mskimg%new([p%boxmatch, p%boxmatch, 1],p%smpd,p%imgkind)
+            call self%img_tmp%new([p%boxmatch,p%boxmatch,1],p%smpd)
+            call self%img_msk%new([p%boxmatch,p%boxmatch,1],p%smpd)
+            call self%mskimg%new([p%boxmatch, p%boxmatch, 1],p%smpd)
             DebugPrint  'did build boxmatch-sized image objects'
             ! boxpd-sized ones
-            call self%img_pad%new([p%boxpd,p%boxpd,1],p%smpd,p%imgkind)
+            call self%img_pad%new([p%boxpd,p%boxpd,1],p%smpd)
             if( ddo3d )then
-                call self%vol%new([p%box,p%box,p%box], p%smpd, p%imgkind)
-                call self%vol_pad%new([p%boxpd,p%boxpd,p%boxpd],p%smpd,p%imgkind)
+                call self%vol%new([p%box,p%box,p%box], p%smpd)
+                call self%vol_pad%new([p%boxpd,p%boxpd,p%boxpd],p%smpd)
             endif
             DebugPrint  'did build boxpd-sized image objects'
             ! build arrays
@@ -251,14 +251,14 @@ contains
             allocate( self%imgs_sym(1:p%nsym*p%nptcls), self%ref_imgs(p%nstates,p%nspace), stat=alloc_stat )
             call alloc_err( 'build_comlin_tbox; simple_build, 1', alloc_stat )
             do i=1,p%nptcls*p%nsym
-                call self%imgs_sym(i)%new([p%box,p%box,1],p%smpd,p%imgkind)
+                call self%imgs_sym(i)%new([p%box,p%box,1],p%smpd)
             end do
             self%clins = comlin(self%a, self%imgs_sym, p%lp)
         else ! set up assymetrical common lines-based alignment functionality
             allocate( self%imgs(1:p%nptcls), stat=alloc_stat )
             call alloc_err( 'build_comlin_tbox; simple_build, 2', alloc_stat )
             do i=1,p%nptcls
-                call self%imgs(i)%new([p%box,p%box,1],p%smpd,p%imgkind)
+                call self%imgs(i)%new([p%box,p%box,1],p%smpd)
             end do
             self%clins = comlin( self%a, self%imgs, p%lp )
         endif
@@ -303,7 +303,7 @@ contains
         class(params), intent(in)    :: p
         call self%kill_rec_tbox
         call self%raise_hard_ctf_exception(p)
-        call self%recvol%new([p%boxpd,p%boxpd,p%boxpd],p%smpd,p%imgkind)
+        call self%recvol%new([p%boxpd,p%boxpd,p%boxpd],p%smpd)
         call self%recvol%alloc_rho(p)
         write(*,'(A)') '>>> DONE BUILDING RECONSTRUCTION TOOLBOX'
         self%rec_tbox_exists = .true.
@@ -351,8 +351,8 @@ contains
         allocate( self%cavgs(p%ncls), self%ctfsqsums(p%ncls), stat=alloc_stat )
         call alloc_err('build_hadamard_prime2D_tbox; simple_build, 1', alloc_stat)
         do icls=1,p%ncls
-            call self%cavgs(icls)%new([p%box,p%box,1],p%smpd,p%imgkind)
-            call self%ctfsqsums(icls)%new([p%box,p%box,1],p%smpd,p%imgkind)
+            call self%cavgs(icls)%new([p%box,p%box,1],p%smpd)
+            call self%ctfsqsums(icls)%new([p%box,p%box,1],p%smpd)
         end do
         if( str_has_substr(p%refine,'neigh') )then
             if( file_exists(p%oritab3D) )then
@@ -450,7 +450,7 @@ contains
         allocate( self%refvols(p%nstates), stat=alloc_stat)
         call alloc_err('build_cont3D_tbox; simple_build, 3', alloc_stat)
         do s=1,p%nstates
-            call self%refvols(s)%new([p%boxmatch,p%boxmatch,p%boxmatch],p%smpd,p%imgkind)
+            call self%refvols(s)%new([p%boxmatch,p%boxmatch,p%boxmatch],p%smpd)
         end do
         write(*,'(A)') '>>> DONE BUILDING CONT3D TOOLBOX'
         self%cont3D_tbox_exists = .true.
@@ -494,7 +494,7 @@ contains
         call self%raise_hard_ctf_exception(p)
         allocate( self%recvols(1), stat=alloc_stat )
         call alloc_err('build_hadamard_prime3D_tbox; simple_build, 2', alloc_stat)
-        call self%recvols(1)%new([p%boxpd,p%boxpd,p%boxpd],p%smpd,p%imgkind)
+        call self%recvols(1)%new([p%boxpd,p%boxpd,p%boxpd],p%smpd)
         call self%recvols(1)%alloc_rho(p)
         write(*,'(A)') '>>> DONE BUILDING EXTREMAL3D TOOLBOX'
         self%extremal3D_tbox_exists = .true.

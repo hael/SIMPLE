@@ -88,13 +88,13 @@ contains
         call b%build_general_tbox(p, cline) ! general objects built
         call b%build_eo_rec_tbox(p)         ! reconstruction toolbox built
         call b%eorecvol%kill_exp            ! reduced meory usage
-        call b%mskvol%kill                 ! reduced memory usage
+        call b%mskvol%kill                  ! reduced memory usage
         allocate(res05s(p%nstates), res0143s(p%nstates), stat=alloc_stat)
         call alloc_err("In: simple_eo_volassemble", alloc_stat)
         res0143s = 0.
         res05s   = 0.
         ! rebuild b%vol according to box size (beacuse it is otherwise boxmatch)
-        call b%vol%new([p%box,p%box,p%box], p%smpd, p%imgkind)
+        call b%vol%new([p%box,p%box,p%box], p%smpd)
         call eorecvol_read%new(p)
         call eorecvol_read%kill_exp        ! reduced memory usage
         n = p%nstates*p%nparts
@@ -171,11 +171,11 @@ contains
         call b%build_general_tbox(p, cline) ! general objects built
         call b%build_rec_tbox(p)            ! reconstruction toolbox built
         ! rebuild b%vol according to box size (because it is otherwise boxmatch)
-        call b%vol%new([p%box,p%box,p%box], p%smpd, p%imgkind)
+        call b%vol%new([p%box,p%box,p%box], p%smpd)
         if( cline%defined('find') )then
             p%lp = b%img%get_lp(p%find)
         endif
-        call recvol_read%new([p%boxpd,p%boxpd,p%boxpd], p%smpd, p%imgkind)
+        call recvol_read%new([p%boxpd,p%boxpd,p%boxpd], p%smpd)
         call recvol_read%alloc_rho(p)
         endit = 1
         if( p%eo .eq. 'yes' ) endit = 2
@@ -186,7 +186,7 @@ contains
                 s = ss
             endif
             DebugPrint  'processing state: ', s
-            if( b%a%get_statepop( s ) == 0 )cycle           ! Empty state
+            if( b%a%get_statepop( s ) == 0 ) cycle ! Empty state
             call b%recvol%reset
             do part=1,p%nparts
                 if( cline%defined('state') )then

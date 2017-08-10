@@ -1100,7 +1100,7 @@ contains
         end select
     end subroutine setRMSD
 
-    ! POLYMORPHIC DESTRUCTOR
+    ! polymorphic destructor
 
     subroutine kill( self )
         class(ImgHead), intent(inout) :: self
