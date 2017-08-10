@@ -22,19 +22,17 @@ type qsys_ctrl
     character(len=STDLEN)          :: pwd        = ''            !< working directory
     class(qsys_base), pointer      :: myqsys     => null()       !< pointer to polymorphic qsys object
     integer, pointer               :: parts(:,:) => null()       !< defines the fromp/top ranges for all partitions
+    class(cmdline), allocatable    :: cline_stack(:)             !< stack of command lines, for streaming only
     logical, allocatable           :: jobs_done(:)               !< to indicate completion of distributed scripts
     logical, allocatable           :: jobs_submitted(:)          !< to indicate which jobs have been submitted
     integer                        :: fromto_part(2)         = 0 !< defines the range of partitions controlled by this instance
     integer                        :: nparts_tot             = 0 !< total number of partitions
     integer                        :: ncomputing_units       = 0 !< number of computing units
     integer                        :: ncomputing_units_avail = 0 !< number of available units
-    integer                        :: numlen = 0                 !< length of padded number string
-    logical                        :: stream = .false.           !< stream flag
+    integer                        :: numlen                 = 0 !< length of padded number string
+    integer                        :: cline_stacksz          = 0 !< size of stack of command lines, for streaming only
+    logical                        :: stream    = .false.        !< stream flag
     logical                        :: existence = .false.        !< indicates existence
-    ! for streaming
-    class(cmdline), allocatable    :: cline_stack(:)
-    integer                        :: cline_stacksz
-
 
   contains
     ! CONSTRUCTOR
@@ -424,11 +422,7 @@ contains
             if( .not. self%jobs_done(ipart) )then
                 self%jobs_done(ipart) = file_exists(self%jobs_done_fnames(ipart))
             endif
-            !! this one is for streaming
-            !if( self%jobs_done(ipart) ) self%jobs_submitted(ipart) = .true.
         end do
-        ! njobs_in_queue = count(self%jobs_submitted .eqv. (.not. self%jobs_done))
-        ! self%ncomputing_units_avail = self%ncomputing_units-njobs_in_queue
         self%ncomputing_units_avail = min(count(self%jobs_done), self%ncomputing_units)
     end subroutine update_queue
 
@@ -448,6 +442,7 @@ contains
     ! STREAMING
 
     subroutine schedule_streaming( self, q_descr )
+        use simple_filehandling, only: del_file
         class(qsys_ctrl),  intent(inout) :: self
         class(chash),      intent(in)    :: q_descr
         type(cmdline)         :: cline
@@ -455,22 +450,20 @@ contains
         character(len=STDLEN) :: outfile, script_name
         integer               :: ipart
         call self%update_queue
-        print *,'schedule_streaming ncomputing_units_avail',self%ncomputing_units_avail
-        print *,'schedule_streaming stacksz',self%ncomputing_units_avail
         if( self%cline_stacksz .eq. 0 )return
         if( self%ncomputing_units_avail > 0 )then
             do ipart = 1, self%ncomputing_units
-                print *,'schedule_streaming ipart stacksz',ipart, self%ncomputing_units_avail
                 if( self%cline_stacksz .eq. 0 )exit
                 if( self%jobs_done(ipart) )then
                     cline = self%cline_stack(1)
                     call updatestack
+                    call cline%set('part', real(ipart)) ! computing unit allocation
                     call cline%gen_job_descr(job_descr)
                     script_name = self%script_names(ipart)
-                    ! outfile     = 
-                    outfile     = self%jobs_done_fnames(ipart)
+                    outfile     = 'OUT' // int2str_pad(ipart, self%numlen) 
                     self%jobs_submitted(ipart) = .true.
                     self%jobs_done(ipart)      = .false.
+                    call del_file(self%jobs_done_fnames(ipart))
                     call self%generate_script_2(job_descr, q_descr, self%exec_binary, script_name, outfile)
                     call self%submit_script( script_name )
                 endif
@@ -519,7 +512,7 @@ contains
             do i = 1, self%cline_stacksz-1
                 self%cline_stack(i) = tmp_stack(i)
             enddo
-            self%cline_stack(self%cline_stacksz)    = cline
+            self%cline_stack(self%cline_stacksz) = cline
         endif
     end subroutine add_to_streaming
 
@@ -537,8 +530,11 @@ contains
             self%ncomputing_units       =  0
             self%ncomputing_units_avail =  0
             self%numlen                 =  0
+            self%cline_stacksz          =  0
             deallocate(self%script_names, self%jobs_done, self%jobs_done_fnames, self%jobs_submitted)
+            if(allocated(self%cline_stack))deallocate(self%cline_stack)
             self%existence = .false.
+
         endif
     end subroutine kill
 

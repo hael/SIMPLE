@@ -820,7 +820,7 @@ contains
         nparts_set      = .false.
         if( cline%defined('nparts') ) nparts_set  = .true.
         ! set execution mode (shmem or distr)
-        if( cline%defined('part') )then
+        if( cline%defined('part') .and. cline%defined('nparts') )then
             self%l_distr_exec = .true.
         else
             self%l_distr_exec = .false.
