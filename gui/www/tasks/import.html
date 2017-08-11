@@ -1,93 +1,56 @@
-<div class=bodyheader>
-	<img src=img/up_chevron.png>
-	<b>Import</b>
-	<div class=hoverdiv>Import movies, micrographs or boxfiles</div>
-</div>	
-<table class=tasktable>
+<div class=jobheader>
+	Import
+</div>
+
+<div class=jobdescription>
+	Import movies, micrographs or boxfiles
+</div>
+
+<div class=jobcolumnselect>
+	<div class=jobcolumnheader>Parameters</div>
+	<div class=jobtabselect id=parameters onclick="selectJobTab(this);">Job Parameters</div>
+	<div class=jobtabselect id=required onclick="selectJobTab(this);">Required Arguments</div>
+</div>
+
+<div class="jobcolumn parameters">
+	<div class=jobcolumnheader>Job Parameters</div>
 	<input class=jobarg type=hidden id=cmd value=import>
 	<input class=jobarg type=hidden id=jobtype value=import>
 	<input class=jobarg type=hidden id=taskname value=importtask>
-	<tr class=taskheader onclick=taskHeaderShowHide(this)>
-		<td>
-			<img src=img/right_chevron.png>
-			<b>Job Parameters</b>
-		</td>
-		<td></td>
-		<td></td>
-		<td style="width: 100%;"></td>
-	</tr>
-	<tr class=taskheaderline>
-		<td>Job Name</td>
-		<td><input class=jobarg type=text id=jobname></td>
-		<td></td>
-		<td class=taskhelp>
-			<img src=img/info.png>
-			<div class=hoverdiv>An identifier for the job. This will appear in the name of the folder containing the output from the job. E.G First_100</div>
-		</td>
-	</tr>
-	<tr class=taskheaderline>
-		<td>Job Description</td>
-		<td><input class=jobarg type=text id=jobdescription></td>
-		<td></td>
-		<td class=taskhelp>
-			<img src=img/info.png>
-			<div class=hoverdiv>A description of the job</div>
-		</td>
-	</tr>
-	<tr class=taskheader onclick=taskRequiredShowHide(this)>
-		<td>
-			<img src=img/right_chevron.png>
-			<b>Required Arguments</b>
-		</td>
-		<td></td>
-		<td></td>
-		<td></td>
-	</tr>
-	<tr class=taskrequiredline>
-		<td>Directory</td>
-		<td><input class=jobarg type=text id=dir></td>
-		<td><img src=img/folder.png onclick=selectFolder('dir')></img></td>
-		<td class=taskhelp>
-			<img src=img/info.png>
-			<div class=hoverdiv></div>
-		</td>
-	</tr>
-	<tr class=taskrequiredline>
-		<td>File Suffix</td>
-		<td>
-			<select class=jobarg type=select id=suffix>
-				<option value=mrc>mrc</option>
-				<option value=box>box</option>
-				<option value=txt>txt</option>
-				<option value=mrcs>mrcs</option>
-			</select>
-		</td>
-		<td></td>
-		<td class=taskhelp>
-			<img class=taskhelpimage src=img/info.png>
-			<div class=taskhelptext></div>
-		</td>
-	</tr>
-	<tr class=taskheader onclick=taskOptionalShowHide(this)>
-		<td>
-			<img src=img/right_chevron.png>
-			<b>Optional Arguments</b>
-		</td>
-		<td></td>
-		<td></td>
-		<td></td>
-	</tr>
-	<tr class=taskoptionalline>
-		<td>Output Filename</td>
-		<td><input class=jobarg type=text id=outfile></td>
-		<td></td>
-		<td class=taskhelp>
-			<img class=taskhelpimage src=img/info.png>
-			<div class=taskhelptext></div>
-		</td>
-	</tr>
-</table>
-<div class=clickbuttoncontainer>
-	<div class=clickbutton onclick='selectMode();showTask("tasklist")'>Cancel</div>
-	<div class=clickbutton onclick=runTask('importtask')>Run</div>
+	<div class=jobcolumnrow>
+		<div class=jobargname>Job Name</div>
+		<input class=jobarg type=text id=jobname>
+	</div>	
+	<div class=jobcolumnrow>	
+		<div class=jobargname>Job Description</div>
+		<input class=jobarg type=text id=jobdescription>
+	</div>
 </div>
+
+<div class="jobcolumn required">
+	<div class=jobcolumnheader>Required Arguments</div>
+	<div class=jobcolumnrow>
+		Import Type
+		<select class=jobarg type=select id=filetype>
+			<option value=movies selected>movies</option>
+			<option value=micrographs>micrographs</option>
+		</select>
+	</div>	
+	<div class=jobcolumnrow>
+		Import Directory
+		<input class=jobarg type=text id=dir>
+		<img src=folder.png onclick='fileSelector("folder", "dir");'>
+	</div>	
+	<div class=jobcolumnrow>
+		Import File Suffix
+		<select class=jobarg type=select id=suffix>
+			<option value=mrc>mrc</option>
+			<option value=box>box</option>
+			<option value=txt>txt</option>
+			<option value=mrcs>mrcs</option>
+		</select>
+	</div>
+</div>
+
+<div class=newjobbutton onclick='document.getElementById("job").style.display = "none"; document.getElementById("gauze").style.display = "none"'>Cancel</div>
+<div class=newjobbutton onclick='newJob(this); document.getElementById("job").style.display = "none"; document.getElementById("gauze").style.display = "none"'>Run</div>

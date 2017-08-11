@@ -1,0 +1,40 @@
+.newproject {
+	position: fixed;
+	height: 143px;
+	width: 400px;
+	top: calc(50vh - 100px);
+	left: calc(50vw - 200px);
+	background-color: white;
+	z-index: 200;
+	display: none;
+	text-align: center;
+}
+
+.newprojectheader {
+	background-color: 7891b0;
+	padding: 5px;
+	color: white;
+}
+
+.newprojectbutton {
+	display: inline-block;
+	width: 100px;
+	padding: 5px;
+	background-color: 7891b0;
+	text-align: center;
+}
+
+.newprojectrow {
+	display: inline-block;
+	font-size: 12px;
+	padding: 5px;
+	float: left;
+}
+.newprojectrow input{
+	width: 240px;
+	height: 28px;
+}
+
+.newprojectrow div {
+	display: inline-block;
+}

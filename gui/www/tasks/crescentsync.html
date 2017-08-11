@@ -1,0 +1,70 @@
+<div class=jobheader>
+	Crescent Sync
+</div>
+
+<div class=jobdescription>
+	Sync data from the microscope
+</div>
+
+<div class=jobcolumnselect>
+	<div class=jobcolumnheader>Parameters</div>
+	<div class=jobtabselect id=parameters onclick="selectJobTab(this);">Job Parameters</div>
+	<div class=jobtabselect id=run onclick="selectJobTab(this);">Run Parameters</div>
+</div>
+
+<div class="jobcolumn parameters">
+	<div class=jobcolumnheader>Job Parameters</div>
+	<input class=jobarg type=hidden id=cmd value=syncjob>
+	<input class=jobarg type=hidden id=taskname value=syncjob>
+	<div class=jobcolumnrow>
+		<div class=jobargname>Job Name</div>
+		<input class=jobarg type=text id=jobname>
+	</div>	
+	<div class=jobcolumnrow>	
+		<div class=jobargname>Job Description</div>
+		<input class=jobarg type=text id=jobdescription>
+	</div>
+	<div class=jobcolumnrow>
+		<div class=jobargname>Data Source Directory</div>
+		<input class=jobarg type=text id=sourcedir>
+		<img src=folder.png onclick='fileSelector("folder", "sourcedir");'>
+	</div>
+	<div class=jobcolumnrow>
+		<div class=jobargname>Data Destination Directory</div>
+		<input class=jobarg type=text id=destinationdir>
+		<img src=folder.png onclick='fileSelector("folder", "destinationdir");'>
+	</div>
+	<div class=jobcolumnrow>
+		<div class=jobargname>Stop After No Data Collected For</div>
+		<select class=jobarg type=select id=stoptime>
+			<option value=600>5 Minutes</option>
+			<option value=1800 selected>30 Minutes</option>
+			<option value=3600>1 Hour</option>
+			<option value=7200>2 Hours</option>
+		</select>
+	</div>
+	<div class=jobcolumnrow>
+		<div class=jobargname>Stop After Elapsed</div>
+		<select class=jobarg type=select id=killtime>
+			<option value=43200>12 Hours</option>
+			<option value=86400 selected>24 Hours</option>
+			<option value=172800>48 Hours</option>
+			<option value=259200>72 Hours</option>
+		</select>
+	</div>
+	<div class=jobcolumnrow>
+		<div class=jobargname>Alert Email Address</div>
+		<input class=jobarg type=text id=email>
+	</div>
+</div>
+
+<div class="jobcolumn run">
+	<div class=jobcolumnheader>Run Parameters</div>
+	<div class=jobcolumnrow>
+		<div class=jobargname>Number Of Compute Units</div>
+		<input class=jobarg type=text id=ncunits value=1>
+	</div>	
+</div>
+
+<div class=newjobbutton onclick='document.getElementById("job").style.display = "none"; document.getElementById("gauze").style.display = "none"'>Cancel</div>
+<div class=newjobbutton onclick='newJob(this); document.getElementById("job").style.display = "none"; document.getElementById("gauze").style.display = "none"'>Run</div>

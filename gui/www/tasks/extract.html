@@ -1,127 +1,63 @@
-<div class=bodyheader>
-	<img src=img/up_chevron.png>
-	<b>Extract Particles</b>
-	<div class=hoverdiv>Extract particles from micrographs</div>
+<div class=jobheader>
+	Extract Particles
 </div>
 
-<table class=tasktable>
-	<input class=jobarg type=hidden id=cmd value=simple_exec>
-	<input class=jobarg type=hidden id=prg value=extract>
-	<input class=jobarg type=hidden id=jobtype value=extract>
-	<input class=jobarg type=hidden id=taskname value=extracttask>
-	<tr class=taskheader onclick=taskHeaderShowHide(this)>
-		<td>
-			<img src=img/right_chevron.png>
-			<b>Job Parameters</b>
-		</td>
-		<td></td>
-		<td></td>
-		<td style="width: 100%;"></td>
-	</tr>
-	<tr class=taskheaderline>
-		<td>Job Name</td>
-		<td><input class=jobarg type=text id=jobname></td>
-		<td></td>
-		<td class=taskhelp>
-			<img src=img/info.png>
-			<div class=hoverdiv>An identifier for the job. This will appear in the name of the folder containing the output from the job. E.G First_100</div>
-		</td>
-	</tr>
-	<tr class=taskheaderline>
-		<td>Job Description</td>
-		<td><input class=jobarg type=text id=jobdescription></td>
-		<td></td>
-		<td class=taskhelp>
-			<img src=img/info.png>
-			<div class=hoverdiv>A description of the job</div>
-		</td>
-	</tr>	
-	<tr class=taskheader onclick=taskRequiredShowHide(this)>
-		<td>
-			<img src=img/right_chevron.png>
-			<b>Required Arguments</b>
-		</td>
-		<td></td>
-		<td></td>
-		<td></td>
-	</tr>
-	<tr class=taskrequiredline>
-		<td>Micrograph Parameters File</td>
-		<td>
-			<input class=jobarg type=text id=unidoc>
-		</td>
-		<td>
-			<img src=img/folder.png onclick=fileBrowser('unidoc')>
-		</td>
-		<td class=taskhelp>
-			<img src=img/info.png>
-			<div class=hoverdiv>Text file containing a list of micrographs and associated CTF parameters. Usually this is output from an unblur, unblur_ctf or pipeline job</div>
-		</td>
-	</tr>
-	
-	<tr class=taskheader onclick=taskOptionalShowHide(this)>
-		<td>
-			<img src=img/right_chevron.png>
-			<b>Optional Arguments</b>
-		</td>
-		<td></td>
-		<td></td>
-		<td></td>
-	</tr>
-	<tr class=taskoptionalline>
-		<td>Boxfiles Directory</td>
-		<td>
-			<input class=jobarg type=text id=boxdir>
-		</td>
-		<td>
-			<img src=img/folder.png onclick=selectFolder('boxdir')>
-		</td>
-		<td class=taskhelp>
-			<img src=img/info.png>
-			<div class=hoverdiv>Directory containing box files. These files must have the same name as the micrograph with a .box suffix</div>
-		</td>
-	</tr>
-	<tr class=taskoptionalline>
-		<td>Boxsize</td>
-		<td><input class=jobarg type=text id=box></td>
-		<td></td>
-		<td class=taskhelp>
-			<img src=img/info.png>
-			<div class=hoverdiv>Box size in pixels if different from that defined in the box files</div>
-		</td>
-	</tr>
-	<tr class=taskoptionalline>
-		<td>Invert Contrast</td>
-		<td>
-			<select class=jobarg type=select id=neg>
-				<option selected></option>
-				<option value=yes>yes</option>
-				<option value=no>no</option>
-			</select>
-		</td>
-		<td></td>
-		<td class=taskhelp>
-			<img src=img/info.png>
-			<div class=hoverdiv>Invert the contrast of extract particles. Default: yes</div>
-		</td>
-	</tr>	
-	<tr class=taskoptionalline>
-		<td>Extract Outside</td>
-		<td>
-			<select class=jobarg type=select id=outside>
-				<option selected></option>
-				<option value=yes>yes</option>
-				<option value=no>no</option>
-			</select>
-		</td>
-		<td></td>
-		<td class=taskhelp>
-			<img src=img/info.png>
-			<div class=hoverdiv>Extract boxes extending outdside the micrograph boundaries. Default: no</div>
-		</td>
-	</tr>
-</table>
+<div class=jobdescription>
+	Extract particles from movies
+</div>
 
-<div class=clickbutton onclick="hideTasks(); projectHistoryFull()">Cancel</div>
-<div class=clickbutton onclick=showRunParameters('extracttask')>Run</div>
+<div class=jobcolumnselect>
+	<div class=jobcolumnheader>Parameters</div>
+	<div class=jobtabselect id=parameters onclick="selectJobTab(this);">Job Parameters</div>
+	<div class=jobtabselect id=required onclick="selectJobTab(this);">Required Arguments</div>
+	<div class=jobtabselect id=run onclick="selectJobTab(this);">Run Parameters</div>
+</div>
 
+<div class="jobcolumn parameters">
+	<div class=jobcolumnheader>Job Parameters</div>
+	<input class=jobarg type=hidden id=cmd value=simplejob>
+	<input class=jobarg type=hidden id=taskname value=makepickrefsjob>
+	<input class=jobarg type=hidden id=exec value=simple_exec>
+	<input class=jobarg type=hidden id=prg value=makepickrefs>
+	<input class=jobarg type=hidden id=jobtype value=makepickrefs>
+	<div class=jobcolumnrow>
+		<div class=jobargname>Job Name</div>
+		<input class=jobarg type=text id=jobname>
+	</div>	
+	<div class=jobcolumnrow>	
+		<div class=jobargname>Job Description</div>
+		<input class=jobarg type=text id=jobdescription>
+	</div>
+</div>
+
+<div class="jobcolumn required">
+	<div class=jobcolumnheader>Required Arguments</div>
+	<div class=jobcolumnrow>
+		<div class=jobargname>Input Volume</div>
+		<input class=jobarg type=text id=vol1>
+		<img src=folder.png onclick='fileSelector("file", "vol1");'>
+	</div>	
+	<div class=jobcolumnrow>
+		<div class=jobargname><i>or</i></div>
+	</div>
+	<div class=jobcolumnrow>
+		<div class=jobargname>Input Cluster Averages</div>
+		<input class=jobarg type=text id=stk>
+		<img src=folder.png onclick='fileSelector("file", "stk");'>
+	</div>
+	<div class=jobcolumnrow>
+		<div class=jobargname>Symmetry</div>
+		<input class=jobarg type=text id=pgrp>
+	</div>
+</div>
+
+<div class="jobcolumn run">
+	<div class=jobcolumnheader>Run Parameters</div>
+	<div class=jobcolumnrow>
+		<div class=jobargname>Number Threads</div>
+		<input class=jobarg type=text id=ncunits>
+	</div>	
+</div>
+
+<div class=newjobbutton onclick='document.getElementById("job").style.display = "none"; document.getElementById("gauze").style.display = "none"'>Cancel</div>
+<div class=newjobbutton onclick='newJob(this); document.getElementById("job").style.display = "none"; document.getElementById("gauze").style.display = "none"'>Run</div>

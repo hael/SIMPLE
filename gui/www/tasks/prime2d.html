@@ -1,318 +1,234 @@
-<div class=bodyheader>
-	<img src=img/up_chevron.png>
-	<b>2D Clustering</b>
-	<div class=hoverdiv>Sort particles into clusters based on their similarity in 2D</div>
+<div class=jobheader>
+	Prime 2D
 </div>
-<table class=tasktable>
-	<input class=jobarg type=hidden id=cmd value=simple_distr_exec>
-	<input class=jobarg type=hidden id=prg value=prime2D>
-	<input class=jobarg type=hidden id=jobtype value=prime2d>
-	<input class=jobarg type=hidden id=taskname value=prime2dtask>
-	<tr class=taskheader onclick=taskHeaderShowHide(this)>
-		<td>
-			<img src=img/right_chevron.png>
-			<b>Job Parameters</b>
-		</td>
-		<td></td>
-		<td></td>
-		<td style="width: 100%;"></td>
-	</tr>
-	<tr class=taskheaderline>
-		<td>Job Name</td>
-		<td><input class=jobarg type=text id=jobname></td>
-		<td></td>
-		<td class=taskhelp>
-			<img src=img/info.png>
-			<div class=hoverdiv>An identifier for the job. This will appear in the name of the folder containing the output from the job. E.G First_100</div>
-		</td>
-	</tr>
-	<tr class=taskheaderline>
-		<td>Job Description</td>
-		<td><input class=jobarg type=text id=jobdescription></td>
-		<td></td>
-		<td class=taskhelp>
-			<img src=img/info.png>
-			<div class=hoverdiv>A description of the job</div>
-		</td>
-	</tr>	
-	<tr class=taskheader onclick=taskRequiredShowHide(this)>
-		<td>
-			<img src=img/right_chevron.png>
-			<b>Required Arguments</b>
-		</td>
-		<td></td>
-		<td></td>
-		<td></td>
-	</tr>
-	<tr class=taskrequiredline>
-		<td>Particle Stack File</td>
-		<td>
-			<input class=jobarg type=text id=stk>
-		</td>
-		<td>
-			<img src=img/folder.png onclick=fileBrowser('stk')>
-		</td>
-		<td class=taskhelp>
-			<img src=img/info.png>
-			<div class=hoverdiv>Stack file containing extracted particles. Usually this is the produced during an extract job</div>
-		</td>
-	</tr>
-	<tr class=taskrequiredline>
-		<td>Sampling Distance</td>
-		<td>
-			<input class=jobarg type=text id=smpd>
-		</td>
-		<td></td>
-		<td class=taskhelp>
-			<img src=img/info.png>
-			<div class=hoverdiv>Sampling distance of the microscope in A/pixel</div>
-		</td>
-	</tr>
-	<tr class=taskrequiredline>
-		<td>Mask Radius</td>
-		<td>
-			<input class=jobarg type=text id=msk>
-		</td>
-		<td></td>
-		<td class=taskhelp>
-			<img src=img/info.png>
-			<div class=hoverdiv>Mask radius (pixels)</div>
-		</td>
-	</tr>
-	<tr class=taskrequiredline>
-		<td>Number Of Clusters</td>
-		<td>
-			<input class=jobarg type=text id=ncls>
-		</td>
-		<td></td>
-		<td class=taskhelp>
-			<img src=img/info.png>
-			<div class=hoverdiv>Number of clusters to sort the particles into</div>
-		</td>
-	</tr>
-		<tr class=taskrequiredline>
-		<td>Apply CTF Correction</td>
-		<td>
-			<select class=jobarg type=select id=ctf>
-				<option value=yes selected>yes</option>
-				<option value=no>no</option>
-				<option value=flip>flip</option>
-			</select>
-		</td>
-		<td></td>
-		<td class=taskhelp>
-			<img src=img/info.png>
-			<div class=hoverdiv>Choose to apply full CTF correction, perform phase flipping only or none</div>
-		</td>
-	</tr>
-	<tr class=taskheader onclick=taskOptionalShowHide(this)>
-		<td>
-			<img src=img/right_chevron.png>
-			<b>Optional Arguments</b>
-		</td>
-		<td></td>
-		<td></td>
-		<td></td>
-	</tr>
-	<tr class=taskoptionalline>
-		<td>CTF Parameters File</td>
-		<td><input class=jobarg type=text id=deftab></td>
-		<td>
-			<img src=img/folder.png onclick=fileBrowser('deftab')>
-		</td>
-		<td class=taskhelp>
-			<img src=img/info.png>
-			<div class=hoverdiv>File containing CTF parameters</div>
-		</td>
-	</tr>
-	<tr class=taskoptionalline>
-		<td>Initial References</td>
-		<td><input class=jobarg type=text id=refs></td>
-		<td>
-			<img src=img/folder.png onclick=fileBrowser('refs')>
-		</td>
-		<td class=taskhelp>
-			<img src=img/info.png>
-			<div class=hoverdiv>Initial references to start the clustering</div>
-		</td>
-	</tr>
-	<tr class=taskoptionalline>
-		<td>Orientation Table File</td>
-		<td><input class=jobarg type=text id=oritab></td>
-		<td>
-			<img src=img/folder.png onclick=fileBrowser('oritab')>
-		</td>
-		<td class=taskhelp>
-			<img src=img/info.png>
-			<div class=hoverdiv>File containing previously determined orientations for each particle</div>
-		</td>
-	</tr>
-	</tr>	
-		<tr class=taskoptionalline>
-		<td>High Pass Limit</td>
-		<td><input class=jobarg type=text id=hp></td>
-		<td></td>
-		<td class=taskhelp>
-			<img src=img/info.png>
-			<div class=hoverdiv>High pass limit(A)</div>
-		</td>
-	</tr>
-		<tr class=taskoptionalline>
-		<td>Low Pass Limit</td>
-		<td><input class=jobarg type=text id=lp></td>
-		<td></td>
-		<td class=taskhelp>
-			<img src=img/info.png>
-			<div class=hoverdiv>Low pass limit (A)</div>
-		</td>
-	</tr>
-		</tr>	
-		<tr class=taskoptionalline>
-		<td>Starting Low Pass Limit</td>
-		<td><input class=jobarg type=text id=lpstart></td>
-		<td></td>
-		<td class=taskhelp>
-			<img src=img/info.png>
-			<div class=hoverdiv>Starting low pass limit (A). Default: 15A</div>
-		</td>
-	</tr>
-		<tr class=taskoptionalline>
-		<td>Stopping Low Pass Limit</td>
-		<td><input class=jobarg type=text id=lpstop></td>
-		<td></td>
-		<td class=taskhelp>
-			<img src=img/info.png>
-			<div class=hoverdiv>Starting low pass limit (A). Default: 8A</div>
-		</td>
-	</tr>
-	<tr class=taskoptionalline>
-		<td>Low Pass Limit For Centering Binarisation</td>
-		<td><input class=jobarg type=text id=cenlp></td>
-		<td></td>
-		<td class=taskhelp>
-			<img src=img/info.png>
-			<div class=hoverdiv>Low pass limit for binarisation in centering (A)</div>
-		</td>
-	</tr>
-	<tr class=taskoptionalline>
-		<td>Maximum Halfwidth Shift</td>
-		<td><input class=jobarg type=text id=trs></td>
-		<td></td>
-		<td class=taskhelp>
-			<img src=img/info.png>
-			<div class=hoverdiv>Maximum halfwidth shift in translational search (pixels)</div>
-		</td>
-	</tr>
-	<tr class=taskoptionalline>
-		<td>Envelope Masking</td>
-			<td>
-				<select class=jobarg type=select id=automsk>
-					<option selected></option>
-					<option value=yes>yes</option>
-					<option value=no>no</option>
-					<option value=cavg>cavg</option>
-				</select>
-			</td>
-		<td></td>
-		<td class=taskhelp>
-			<img src=img/info.png>
-			<div class=hoverdiv>Enable envelope masking. Default: no</div>
-		</td>
-	</tr>
-	<tr class=taskoptionalline>
-		<td>Low Pass Limit For Envelope Masking</td>
-		<td><input class=jobarg type=text id=amsklp></td>
-		<td></td>
-		<td class=taskhelp>
-			<img src=img/info.png>
-			<div class=hoverdiv>Low pass limit for envelope mask generation (A)</div>
-		</td>
-	</tr>
-	<tr class=taskoptionalline>
-		<td>Inner Mask Radius</td>
-		<td><input class=jobarg type=text id=inner></td>
-		<td></td>
-		<td class=taskhelp>
-			<img src=img/info.png>
-			<div class=hoverdiv>Inner mask radius (pixels)</div>
-		</td>
-	</tr>
-	<tr class=taskoptionalline>
-		<td>Inner Mask Falloff</td>
-		<td><input class=jobarg type=text id=width></td>
-		<td></td>
-		<td class=taskhelp>
-			<img src=img/info.png>
-			<div class=hoverdiv>Falloff of inner mask (pixels). Default: 10 pixels</div>
-		</td>
-	</tr>
-	<tr class=taskoptionalline>
-		<td>First Iteration</td>
-		<td><input class=jobarg type=text id=startit></td>
-		<td></td>
-		<td class=taskhelp>
-			<img src=img/info.png>
-			<div class=hoverdiv>Start iterating from here</div>
-		</td>
-	</tr>
-	<tr class=taskoptionalline>
-		<td>Maximum Number Of Iterations</td>
-		<td><input class=jobarg type=text id=maxits></td>
-		<td></td>
-		<td class=taskhelp>
-			<img src=img/info.png>
-			<div class=hoverdiv>Maximum number of iterations. Default: 500</div>
-		</td>
-	</tr>
-	<tr class=taskoptionalline>
-		<td>Filament Width</td>
-		<td><input class=jobarg type=text id=filwidth></td>
-		<td></td>
-		<td class=taskhelp>
-			<img src=img/info.png>
-			<div class=hoverdiv>Filament width (A)</div>
-		</td>
-	</tr>
-	<tr class=taskoptionalline>
-		<td>Center Images</td>
-		<td>
-			<select class=jobarg type=select id=center>
-				<option selected></option>
-				<option value=yes>yes</option>
-				<option value=no>no</option>
-			</select>
-		</td>
-		<td></td>
-		<td class=taskhelp>
-			<img src=img/info.png>
-			<div class=hoverdiv>Center images. Default: no</div>
-		</td>
-	</tr>	
-	<tr class=taskoptionalline>
-		<td>Origin Shift Multiplication Factor</td>
-		<td><input class=jobarg type=text id=mul></td>
-		<td></td>
-		<td class=taskhelp>
-			<img src=img/info.png>
-			<div class=hoverdiv>Origin shift multiplication factor. Default: 1</div>
-		</td>
 
-		<tr class=taskoptionalline>
-		<td>Autoscale</td>
-		<td>
-			<select class=jobarg type=select id=autoscale>
-				<option selected></option>
-				<option value=yes>yes</option>
-				<option value=no>no</option>
-			</select>
-		<td></td>
-		<td class=taskhelp>
-			<img src=img/info.png>
-			<div class=hoverdiv>Automatic down-scaling. Default: yes</div>
-		</td>
-	</tr>
-</table>
-<div class=clickbuttoncontainer>
-	<div class=clickbutton onclick='selectMode();showTask("tasklist")'>Cancel</div>
-	<div class=clickbutton onclick=showRunParameters('prime2dtask')>Run</div>
+<div class=jobdescription>
+	Cluster particles in 2D
 </div>
+
+<div class=jobcolumnselect>
+	<div class=jobcolumnheader>Parameters</div>
+	<div class=jobtabselect id=parameters onclick="selectJobTab(this);">Job Parameters</div>
+	<div class=jobtabselect id=required onclick="selectJobTab(this);">Required Arguments</div>
+	<div class=jobtabselect id=optional onclick="selectJobTab(this);">Optional Arguments</div>
+	<div class=jobtabselect id=run onclick="selectJobTab(this);">Run Parameters</div>
+</div>
+
+<div class="jobcolumn parameters">
+	<div class=jobcolumnheader>Job Parameters</div>
+	<input class=jobarg type=hidden id=cmd value=simplejob>
+	<input class=jobarg type=hidden id=taskname value=prime2djob>
+	<input class=jobarg type=hidden id=prg value=prime2D>
+	<input class=jobarg type=hidden id=jobtype value=prime2D>
+	<div class=jobcolumnrow>
+		<div class=jobargname>Job Name</div>
+		<input class=jobarg type=text id=jobname>
+	</div>	
+	<div class=jobcolumnrow>	
+		<div class=jobargname>Job Description</div>
+		<input class=jobarg type=text id=jobdescription>
+	</div>
+</div>
+
+<div class="jobcolumn required">
+	<div class=jobcolumnheader>Required Arguments</div>
+	<div class=jobcolumnrow>
+		<div class=jobargname>Particle Stack</div>
+		<input class=jobarg type=text id=stk>
+		<img src=folder.png onclick='fileSelector("file", "filetab");'>
+	</div>
+	<div class=jobcolumnrow>
+		<div class=jobargname>Sampling Distance</div>
+		<input class=jobarg type=text id=smpd>
+	</div>	
+	<div class=jobcolumnrow>
+		<div class=jobargname>Mask Radius (px)</div>
+		<input class=jobarg type=text id=msk>
+	</div>
+	<div class=jobcolumnrow>
+		<div class=jobargname>Number Of Clusters</div>
+		<input class=jobarg type=text id=ncls>
+	</div>
+	<div class=jobcolumnrow>
+		<div class=jobargname>CTF Correction</div>
+		<select class=jobarg id=ctf>
+			<option value=yes>yes</option>
+			<option value=no selected>no</option>
+			<option value=flip>flip</option>
+		</select>
+		
+	</div>
+</div>
+
+<div class="jobcolumn optional">
+	<div class=jobcolumnheader>Optional Arguments</div>
+	<div class=jobcolumnrow>
+		Chunk Size
+		<input class=jobarg type=text id=chunksz>
+	</div>	
+	
+	<div class=jobcolumnrow>
+		Starting Low Pass Limit (A)
+		<input class=jobarg type=text id=lpstart value=15>
+	</div>
+	
+	<div class=jobcolumnrow>
+		Stop Low Pass Limit (A)
+		<input class=jobarg type=text id=lpstop value=8>
+	</div>
+	
+	<div class=jobcolumnrow>
+		Maximum Halfwidth Shift (px)
+		<input class=jobarg type=text id=trs>
+	</div>
+	
+	<div class=jobcolumnrow>
+		Power Spectrum Size (px)
+		<input class=jobarg type=text id=pspecsz>
+	</div>
+	
+	<div class=jobcolumnrow>
+		Length Of Number String
+		<input class=jobarg type=text id=numlen>
+	</div>
+	
+	<div class=jobcolumnrow>
+		Starting Iteration
+		<input class=jobarg type=text id=startit>
+	</div>
+	
+	<div class=jobcolumnrow>
+		Image Scale Factor
+		<input class=jobarg type=text id=scale>
+	</div>
+	
+	<div class=jobcolumnrow>
+		Number Frames To Group
+		<input class=jobarg type=text id=nframesgrp value=0>
+	</div>
+	
+	<div class=jobcolumnrow>
+		Tomography Mode
+		<select class=jobarg id=tomo>
+			<option value=yes>yes</option>
+			<option value=no selected>no</option>
+		</select>
+	</div>
+	
+	<div class=jobcolumnrow>
+		Starting Frame Index
+		<input class=jobarg type=text id=fromf>
+	</div>	
+	
+	<div class=jobcolumnrow>
+		Final Frame Index
+		<input class=jobarg type=text id=tof>
+	</div>	
+	
+	<div class=jobcolumnrow>
+		Number Sigmas
+		<input class=jobarg type=text id=nsig>
+	</div>	
+	
+	<div class=jobcolumnrow>
+		Output Filename
+		<input class=jobarg type=text id=outfile>
+	</div>
+	
+	<div class=jobcolumnrow>
+		High Pass Limit (A)
+		<input class=jobarg type=text id=hp>
+	</div>
+	
+	<div class=jobcolumnrow>
+		Low Pass Limit (A)
+		<input class=jobarg type=text id=lp>
+	</div>
+	
+	<div class=jobcolumnrow>
+		Minimum Expected Defocus (uM)
+		<input class=jobarg type=text id=dfmin>
+	</div>	
+		
+	<div class=jobcolumnrow>
+		Maximum Expected Defocus (uM)
+		<input class=jobarg type=text id=dfmax>
+	</div>
+		
+	<div class=jobcolumnrow>
+		Astigmatism Search Step Size
+		<input class=jobarg type=text id=astigstep>
+	</div>
+		
+	<div class=jobcolumnrow>
+		Expected Astigmatism (uM)
+		<input class=jobarg type=text id=expastig>
+	</div>
+		
+	<div class=jobcolumnrow>
+		Phaseplate
+		<select class=jobarg id=phaseplate>
+			<option value=yes>yes</option>
+			<option value=no selected>no</option>
+		</select>
+	</div>
+	
+</div>
+
+<div class="jobcolumn run">
+	<div class=jobcolumnheader>Run Parameters</div>
+	<div class=jobcolumnrow>
+		<div class=jobargname>Distribute</div>	
+		<input class=jobarg type=checkbox id=exec value=simple_exec onchange="if(this.checked){ 
+																				this.value = 'simple_distr_exec';
+																				var distr = parentElement.parentElement.getElementsByClassName('distr');
+																				for(var i = 0; i < distr.length; i++){
+																						distr[i].style.display = 'block';
+																				}
+																				var nondistr = parentElement.parentElement.getElementsByClassName('nondistr');
+																				for(var i = 0; i < nondistr.length; i++){
+																						nondistr[i].style.display = 'none';
+																				}
+																			  }else{
+																				this.value = 'simple_exec';
+																				var distr = parentElement.parentElement.getElementsByClassName('distr');
+																				for(var i = 0; i < distr.length; i++){
+																						distr[i].style.display = 'none';
+																				}
+																				var nondistr = parentElement.parentElement.getElementsByClassName('nondistr');
+																				for(var i = 0; i < nondistr.length; i++){
+																						nondistr[i].style.display = 'block';
+																				}
+																			  }";
+		>
+	</div>
+	
+	<div class="jobcolumnrow">
+		<div class=jobargname>Number Threads</div>
+		<input class=jobarg type=text id=nthr>
+	</div>
+	
+	<div class="jobcolumnrow distr">
+		<div class=jobargname>Number Parts</div>
+		<input class=jobarg type=text id=nparts>
+	</div>
+	
+	<div class="jobcolumnrow distr">
+		<div class=jobargname>Number Of Compute Units</div>
+		<input class=jobarg type=text id=ncunits>
+	</div>
+	
+	<div class="jobcolumnrow distr">
+		<div class=jobargname>Scheduler</div>
+		<select class=jobarg id=qsys_name>
+			<option value=slurm>slurm</option>
+			<option value=pbs>pbs</option>
+			<option value=sge>sge</option>
+			<option value=local selected>local</option>
+		</select>
+	</div>
+		
+</div>
+
+<div class=newjobbutton onclick='document.getElementById("job").style.display = "none"; document.getElementById("gauze").style.display = "none"'>Cancel</div>
+<div class=newjobbutton onclick='newJob(this); document.getElementById("job").style.display = "none"; document.getElementById("gauze").style.display = "none"'>Run</div>

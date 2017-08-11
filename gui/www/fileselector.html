@@ -1,0 +1,13 @@
+<div class=fileselectorheader id=fileselectorheader></div>
+<input type=hidden id=fileselectorcaller>
+
+<div class=fileselectorcolumn>
+	<img src=upchevron.png onclick=fileSelectorUp() id=fileselectorback class=fileselectorback>
+	<input type=text id=fileselectordirectory class=fileselectordirectory>
+	<div id=fileselectortablecontainer class=fileselectortablecontainer>
+		<table id=fileselectortable class=fileselectortable></table>
+	</div>
+	
+</div>
+<div class=fileselectorbutton onclick='document.getElementById("fileselector").style.display = "none";document.getElementById("gauze").style.display = "none"'>Cancel</div>
+<div class=fileselectorbutton onclick='if(document.getElementById("fileselectorcaller").value == "fileviewerfile"){fileViewer()}; document.getElementById("fileselector").style.display = "none";'>OK</div>

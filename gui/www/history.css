@@ -1,0 +1,51 @@
+.history{
+	height: calc(100vh);
+	overflow: hidden;
+	padding: 20px;
+	background-color: 7891b0;
+}
+
+.historyheader {
+	font-size: 16px;
+	padding: 5px;
+	background-color: white;
+	height: calc(100vh - 140px);
+}
+
+.historytable {
+	width: 100%;
+	display: block;
+	overflow-y: scroll;
+	transition: height 0.2s;
+	white-space: nowrap;
+	font-size: 12px;
+}
+	
+.historytable tr:nth-child(odd) {
+	background-color: rgb(201, 218, 240);
+}
+
+.historytable td {
+	padding-left: 10px;
+	padding-right: 10px;
+}	
+
+.historyrefreshicon {
+	height: 15px;
+	float: right;
+}
+
+.historyactions .hoverdiv {
+	display: none;
+	position: absolute;
+	background-color: #d7d7d7;
+	padding: 5px;
+}
+
+.historyactions .hoverdiv div:hover{
+	background-color: #acb2ba;
+}
+
+.historyactions:hover .hoverdiv {
+	display: block;
+}
