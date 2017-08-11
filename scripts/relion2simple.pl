@@ -48,15 +48,19 @@ foreach my $i ($last_header_line + 1 .. $#reliondoc){
     chomp ($line);
     $line =~ s/^\s+//;
     my @line_split = split(/\s+/, $line);
-    foreach my $i (0 .. $#which_columns){
-        if( $simple_tags[$which_tags[$i]] =~ /df/ ){
-            $val = $line_split[$which_columns[$i]-1]/10000.;
-        }else{
-            $val = $line_split[$which_columns[$i]-1];
+    if( $#line_split > 2 ){
+        foreach my $i (0 .. $#which_columns){
+            if( $simple_tags[$which_tags[$i]] =~ /df/ ){
+                $val = $line_split[$which_columns[$i]-1]/10000.;
+            }else{
+                $val = $line_split[$which_columns[$i]-1];
+            }
+            print "$simple_tags[$which_tags[$i]]=$val ";
         }
-        print "$simple_tags[$which_tags[$i]]=$val ";
     }
-    print "\n";
+    unless( $i ==  $#reliondoc ){
+        print "\n";
+    }
 }
 
 sub look4relion_column{ 
