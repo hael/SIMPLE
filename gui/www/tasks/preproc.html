@@ -1,0 +1,143 @@
+<div class=jobheader>
+	Preprocessing Pipeline
+</div>
+
+<div class=jobdescription>
+	Run the SIMPLE preprocessing pipeline to motion correct movies,calculate CTF parameters and perform automated picking
+</div>
+
+<div class=jobcolumnselect>
+	<div class=jobcolumnheader>Parameters</div>
+	<div class=jobtabselect id=parameters onclick="selectJobTab(this);">Job Parameters</div>
+	<div class=jobtabselect id=required onclick="selectJobTab(this);">Required Arguments</div>
+	<div class=jobtabselect id=optional onclick="selectJobTab(this);">Optional Arguments</div>
+	<div class=jobtabselect id=run onclick="selectJobTab(this);">Run Parameters</div>
+</div>
+
+<div class="jobcolumn parameters">
+	<div class=jobcolumnheader>Job Parameters</div>
+	<input class=jobarg type=hidden id=cmd value=simplejob>
+	<input class=jobarg type=hidden id=taskname value=preprocjob>
+	<input class=jobarg type=hidden id=prg value=preproc>
+	<input class=jobarg type=hidden id=jobtype value=preproc>
+	<div class=jobcolumnrow>
+		<div class=jobargname>Job Name</div>
+		<input class=jobarg type=text id=jobname>
+	</div>	
+	<div class=jobcolumnrow>	
+		<div class=jobargname>Job Description</div>
+		<input class=jobarg type=text id=jobdescription>
+	</div>
+</div>
+
+<div class="jobcolumn required">
+	<div class=jobcolumnheader>Required Arguments</div>
+	<div class=jobcolumnrow>
+		<div class=jobargname>Sampling Distance</div>
+		<input class=jobarg type=text id=smpd>
+	</div>	
+	<div class=jobcolumnrow>
+		<div class=jobargname>Spherical Aberration</div>
+		<input class=jobarg type=text id=cs>
+	</div>
+	<div class=jobcolumnrow>
+		<div class=jobargname>Fraction Of Amplitude Contrast</div>
+		<input class=jobarg type=text id=fraca>
+	</div>
+	<div class=jobcolumnrow>
+		<div class=jobargname>Acceleration Voltage</div>
+		<select class=jobarg id=kv onchange="var kvselect = document.getElementsByClassName('kvselect');
+													for(var i = 0; i < kvselect.length; i++){
+														if(this.options[this.selectedIndex].value == 300){
+															kvselect[i].style.display = 'block';
+														} else {
+															kvselect[i].style.display = 'none';
+														}
+													}";
+		>
+			<option value=120>120 kV</option>
+			<option value=200>200 kV</option>
+			<option value=300 selected>300 kV</option>
+		</select>
+		
+	</div>
+	<div class="jobcolumnrow kvselect">
+		<div class=jobargname >Dose Rate</div>
+		<input class=jobarg type=text id=dose_rate>
+	</div>
+	<div class="jobcolumnrow kvselect">
+		<div class=jobargname>Exposure Time</div>
+		<input class=jobarg type=text id=exp_time>
+	</div>
+	<div class=jobcolumnrow>
+	<div class=jobargname>Automated Picking</div>	
+	<input class=jobarg type=checkbox id=dopick value=yes checked onchange="if(this.checked){ 
+																				this.value = 'yes';
+																				var dopick = parentElement.parentElement.getElementsByClassName('dopick');
+																				for(var i = 0; i < dopick.length; i++){
+																						dopick[i].style.display = 'block';
+																				}
+																			  }else{
+																				this.value = 'no';
+																				var dopick = parentElement.parentElement.getElementsByClassName('dopick');
+																				for(var i = 0; i < dopick.length; i++){
+																						dopick[i].style.display = 'none';
+																				}
+																			  }";
+	>
+	</div>
+	<div class="jobcolumnrow dopick">
+		<div class=jobargname>References</div>
+		<input class=jobarg type=text id=refs>
+		<img src=folder.png onclick='fileSelector("folder", "refs");'>
+	</div>
+	<div class=jobcolumnrow>
+		<div class=jobargname>Movie Directory</div>
+		<input class=jobarg type=text id=moviesdir>
+		<img src=folder.png onclick='fileSelector("folder", "moviesdir");'>
+	</div>
+</div>
+
+<div class="jobcolumn optional">
+	<div class=jobcolumnheader>Optional Arguments</div>
+	<div class=jobcolumnrow>
+		Output Filename
+		<input class=jobarg type=text id=outfile>
+	</div>	
+</div>
+
+<div class="jobcolumn run">
+	
+	<div class=jobcolumnheader>Run Parameters</div>
+	
+	<input class=jobarg type=hidden id=exec value=simple_distr_exec>
+	
+	<div class="jobcolumnrow">
+		<div class=jobargname>Number Threads</div>
+		<input class=jobarg type=text id=nthr>
+	</div>
+	
+	<div class="jobcolumnrow">
+		<div class=jobargname>Number Parts</div>
+		<input class=jobarg type=text id=nparts>
+	</div>
+	
+	<div class="jobcolumnrow">
+		<div class=jobargname>Number Of Compute Units</div>
+		<input class=jobarg type=text id=ncunits>
+	</div>
+	
+	<div class="jobcolumnrow">
+		<div class=jobargname>Scheduler</div>
+		<select class=jobarg id=qsys_name>
+			<option value=slurm>slurm</option>
+			<option value=pbs>pbs</option>
+			<option value=sge>sge</option>
+			<option value=local selected>local</option>
+		</select>
+	</div>
+	
+</div>
+
+<div class=newjobbutton onclick='document.getElementById("job").style.display = "none"; document.getElementById("gauze").style.display = "none"'>Cancel</div>
+<div class=newjobbutton onclick='newJob(this); document.getElementById("job").style.display = "none"; document.getElementById("gauze").style.display = "none"'>Run</div>

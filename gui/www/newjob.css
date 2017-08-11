@@ -1,0 +1,67 @@
+.newjob{
+	position: fixed;
+	height: 400px;
+	width: 600px;
+	top: calc(50vh - 200px);
+	left: calc(50vw - 300px);
+	background-color: white;
+	z-index: 200;
+	text-align: center;
+	display: none;
+}
+
+.newjobheader {
+	background-color: #7891b0;
+	padding: 5px;
+	color: white;
+	text-align: left;
+}
+
+.newjobbutton {
+	display: inline-block;
+	width: 100px;
+	padding: 5px;
+	background-color: #7891b0;
+	text-align: center;
+}
+
+.newjobcolumn {
+	width: 193px;
+	display: inline-table;
+	height: 328px;
+	font-size: 12px;
+	background-color: #d7d7d7;
+	text-align: left;
+	margin-bottom: 5px;
+}
+
+.newjobcolumnheader {
+	padding-left: 5px;
+	background-color: #7891b0;
+	color: white;
+	height: 20px;
+}
+
+.newjobworkflow {
+	padding: 5px;
+}
+
+.newjobworkflow:hover{
+	background-color: #acb2ba;
+}
+
+.newjobjob {
+	padding: 5px;
+}
+
+.newjobjob:hover{
+	background-color: #acb2ba;
+}
+
+.advanced {
+	display: none;
+}
+
+.standard {
+	display: block;
+}

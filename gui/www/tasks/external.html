@@ -1,0 +1,40 @@
+<div class=jobheader>
+	External
+</div>
+
+<div class=jobdescription>
+	Register a job run externally to the Simple GUI
+</div>
+
+<div class=jobcolumnselect>
+	<div class=jobcolumnheader>Parameters</div>
+	<div class=jobtabselect id=parameters onclick="selectJobTab(this);">Job Parameters</div>
+</div>
+
+<div class="jobcolumn parameters">
+	<div class=jobcolumnheader>Job Parameters</div>
+	<input class=jobarg type=hidden id=cmd value=external>
+	<input class=jobarg type=hidden id=taskname value=externaljob>
+	<div class=jobcolumnrow>
+		<div class=jobargname>Job Name</div>
+		<input class=jobarg type=text id=jobname>
+	</div>	
+	<div class=jobcolumnrow>	
+		<div class=jobargname>Job Description</div>
+		<input class=jobarg type=text id=jobdescription>
+	</div>
+	<div class=jobcolumnrow>
+		<div class=jobargname>Job Type</div>
+		<select class=jobarg type=select id=jobtype>
+			<option value=pipeline>pipeline</option>
+		</select>
+	</div>
+	<div class=jobcolumnrow>
+		<div class=jobargname>Job Directory</div>
+		<input class=jobarg type=text id=jobdirectory>
+		<img src=folder.png onclick='fileSelector("folder", "jobdirectory");'>
+	</div>
+</div>
+
+<div class=newjobbutton onclick='document.getElementById("job").style.display = "none"; document.getElementById("gauze").style.display = "none"'>Cancel</div>
+<div class=newjobbutton onclick='newJob(this); document.getElementById("job").style.display = "none"; document.getElementById("gauze").style.display = "none"'>Run</div>
