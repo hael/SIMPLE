@@ -13,27 +13,28 @@ private
 
 type prime2D_srch
     private
-    type(pftcc_inplsrch) :: inplsrch_obj         !< in-plane search object
-    integer              :: nrefs         =  0   !< number of references
-    integer              :: nrots         =  0   !< number of in-plane rotations in polar representation
-    integer              :: nrefs_eval    =  0   !< nr of references evaluated
-    integer              :: prev_class    =  0   !< previous class index
-    integer              :: best_class    =  0   !< best class index found by search
-    integer              :: prev_rot      =  0   !< previous in-plane rotation index
-    integer              :: best_rot      =  0   !< best in-plane rotation found by search
-    integer              :: nthr          =  0   !< number of threads
-    integer              :: fromp         =  1   !< from particle index
-    integer              :: top           =  1   !< to particle index
-    integer              :: nnn           =  0   !< # nearest neighbors
-    real                 :: trs           =  0.  !< shift range parameter [-trs,trs]
-    real                 :: prev_shvec(2) =  0.  !< previous origin shift vector
-    real                 :: best_shvec(2) =  0.  !< best shift vector found by search
-    real                 :: prev_corr     = -1.  !< previous best correlation
-    real                 :: best_corr     = -1.  !< best corr found by search
-    real                 :: specscore     =  0.  !< spectral score
-    integer, allocatable :: srch_order(:)        !< stochastic search order
-    logical              :: doshift = .true.     !< origin shift search indicator
-    logical              :: exists  = .false.    !< 2 indicate existence
+    type(pftcc_inplsrch)  :: inplsrch_obj         !< in-plane search object
+    integer               :: nrefs         =  0   !< number of references
+    integer               :: nrots         =  0   !< number of in-plane rotations in polar representation
+    integer               :: nrefs_eval    =  0   !< nr of references evaluated
+    integer               :: prev_class    =  0   !< previous class index
+    integer               :: best_class    =  0   !< best class index found by search
+    integer               :: prev_rot      =  0   !< previous in-plane rotation index
+    integer               :: best_rot      =  0   !< best in-plane rotation found by search
+    integer               :: nthr          =  0   !< number of threads
+    integer               :: fromp         =  1   !< from particle index
+    integer               :: top           =  1   !< to particle index
+    integer               :: nnn           =  0   !< # nearest neighbors
+    real                  :: trs           =  0.  !< shift range parameter [-trs,trs]
+    real                  :: prev_shvec(2) =  0.  !< previous origin shift vector
+    real                  :: best_shvec(2) =  0.  !< best shift vector found by search
+    real                  :: prev_corr     = -1.  !< previous best correlation
+    real                  :: best_corr     = -1.  !< best corr found by search
+    real                  :: specscore     =  0.  !< spectral score
+    integer, allocatable  :: srch_order(:)        !< stochastic search order
+    character(len=STDLEN) :: refine        = ''   !< refinement flag
+    logical               :: doshift = .true.     !< origin shift search indicator
+    logical               :: exists  = .false.    !< 2 indicate existence
   contains
     ! CONSTRUCTOR
     procedure          :: new
@@ -72,6 +73,7 @@ contains
         self%nrefs_eval  =  0
         self%trs         =  p%trs
         self%doshift     =  p%doshift
+        self%refine      =  p%refine
         self%nthr        =  p%nthr
         self%fromp       =  p%fromp
         self%top         =  p%top
@@ -191,8 +193,12 @@ contains
         logical, optional,       intent(in)    :: greedy
         real,    optional,       intent(in)    :: extr_bound
         logical :: ggreedy
-        ggreedy = .false.
-        if( present(greedy) ) ggreedy = greedy
+        if( self%refine .eq. 'yes' )then
+            ggreedy = .true.
+        else
+            ggreedy = .false.
+             if( present(greedy) ) ggreedy = greedy
+        endif
         if( ggreedy )then
             call self%greedy_srch(pftcc, iptcl, a)
         else

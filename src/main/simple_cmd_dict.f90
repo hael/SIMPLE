@@ -178,7 +178,7 @@ contains
         call chdict%push('pspecsz_ctffind','size of power spectrum 4 ctffind(in pixels)')
         call chdict%push('pspecsz_unblur','size of power spectrum 4 unblur(in pixels)')
         call chdict%push('real_filter',   'real-space filter kind(median|average|bman)')
-        call chdict%push('refine',        'refinement mode(no|shc|neigh|shcneigh){no}')
+        call chdict%push('refine',        'refinement mode(no|yes|neigh|greedy|greedyneigh|shc|shcneigh){no}')
         call chdict%push('refs',          'initial2Dreferences.ext')
         call chdict%push('remap_classes', 'remove empty and renumber and/or expand # classes(yes|no){no}')
         call chdict%push('rm_outliers',   'remove outliers{yes}')

@@ -139,7 +139,7 @@ contains
                     !$omp end parallel do
                 endif
         end select
-        if( DEBUG ) print *, 'DEBUG, hadamard2D_matcher; completed alignment'
+        DebugPrint ' hadamard2D_matcher; completed alignment'
         ! output orientations
         call b%a%write(p%outfile, [p%fromp,p%top])
         p%oritab = p%outfile
@@ -152,7 +152,7 @@ contains
             ! real-space rotation
             call prime2D_assemble_sums(b, p, grid=.false.)
         endif
-        DebugPrint   ' generated class averages'
+        DebugPrint ' generated class averages'
 
         ! WRITE CLASS AVERAGES
         if( p%l_distr_exec )then
