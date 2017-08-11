@@ -25,7 +25,7 @@ private
 type(polarft_corrcalc)          :: pftcc
 type(prime3D_srch), allocatable :: primesrch3D(:)
 real                            :: reslim
-real                            :: frac_srch_space = 0.
+
 type(ori)                       :: orientation, o_sym
 character(len=:), allocatable   :: ppfts_fname
 
@@ -66,14 +66,11 @@ contains
         class(cmdline), intent(inout) :: cline
         integer,        intent(in)    :: which_iter
         logical,        intent(inout) :: update_res, converged
-        type(oris)        :: prime3D_oris
-        real              :: norm, corr_thresh
-        integer           :: iptcl, inptcls, prev_state, istate
-        integer           :: statecnt(p%nstates)
+        type(oris) :: prime3D_oris
+        real       :: norm, corr_thresh, skewness, frac_srch_space
+        integer    :: iptcl, inptcls, istate
+        integer    :: statecnt(p%nstates)
         inptcls = p%top - p%fromp + 1
-
-        ! SET FRACTION OF SEARCH SPACE
-        frac_srch_space = b%a%get_avg('frac')
 
         ! SET BAND-PASS LIMIT RANGE
         call set_bp_range( b, p, cline )
@@ -108,12 +105,8 @@ contains
             DebugPrint '*** hadamard3D_matcher ***: generated random model'
         endif
 
-        ! SETUP WEIGHTS
-        if( p%nptcls <= SPECWMINPOP )then
-            call b%a%calc_hard_ptcl_weights(p%frac)
-        else
-            call b%a%calc_spectral_weights(p%frac)
-        endif
+        ! SET FRACTION OF SEARCH SPACE
+        frac_srch_space = b%a%get_avg('frac')
 
         ! EXTREMAL LOGICS
         if( p%refine.eq.'het' )then
@@ -234,26 +227,40 @@ contains
         end select
         call pftcc%kill
 
-        ! output orientations
+        ! SETUP WEIGHTS
+        if( p%nptcls <= SPECWMINPOP )then
+            call b%a%calc_hard_ptcl_weights(p%frac)
+        else
+            call b%a%calc_spectral_weights(p%frac)
+        endif
+
+        ! POPULATION BALANCING LOGICS
+        if( p%balance .eq. 'yes' )then
+            call b%a%balance('proj', skewness)
+            write(*,'(A,F8.2)') '>>> PROJECTION DISTRIBUTION SKEWNESS(%):', 100. * skewness
+        else
+            call b%a%set_all2single('state_balance', 1.0)
+        endif
+
+        ! OUTPUT ORIENTATIONS
         call b%a%write(p%outfile, [p%fromp,p%top])
         p%oritab = p%outfile
 
-        ! volumetric 3d reconstruction
+        ! VOLUMETRIC 3D RECONSTRUCTION
         if( p%norec .eq. 'no' )then
             ! init volumes
             call preprecvols(b, p)
             ! reconstruction
             do iptcl=p%fromp,p%top
                 orientation = b%a%get_ori(iptcl)
-                prev_state  = nint( orientation%get('state') )
-                if( prev_state > 0 )then
-                    call read_img_from_stk( b, p, iptcl )
-                    if( p%npeaks > 1 )then
-                        call primesrch3D(iptcl)%get_oris(prime3D_oris, orientation)
-                        call grid_ptcl(b, p, orientation, prime3D_oris)
-                    else
-                        call grid_ptcl(b, p, orientation)
-                    endif
+                if( nint(orientation%get('state')) == 0 .or.&
+                   &nint(orientation%get('state_balance')) == 0 ) cycle
+                call read_img_from_stk( b, p, iptcl )
+                if( p%npeaks > 1 )then
+                    call primesrch3D(iptcl)%get_oris(prime3D_oris, orientation)
+                    call grid_ptcl(b, p, orientation, prime3D_oris)
+                else
+                    call grid_ptcl(b, p, orientation)
                 endif
             end do
             ! normalise structure factors
@@ -266,14 +273,14 @@ contains
             call killrecvols(b, p)
         endif
 
-        ! destruct search objects and prime3D_oris
+        ! DESTRUCT
         do iptcl=p%fromp,p%top
             call primesrch3D(iptcl)%kill
         end do
         deallocate( primesrch3D )
         call prime3D_oris%kill
 
-        ! report convergence
+        ! REPORT CONVERGENCE
         if( p%l_distr_exec )then
             call qsys_job_finished( p, 'simple_hadamard3D_matcher :: prime3D_exec')
         else

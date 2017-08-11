@@ -109,14 +109,16 @@ contains
             call os%mul_shifts(1./scale_stage2)
             call os%write(FINALDOC)
             cline_makecavgs = cline
+            call cline_makecavgs%delete('balance')
             call cline_makecavgs%delete('chunksz')
             if( p_master%l_chunk_distr )then
                 call cline_makecavgs%delete('ncls')
             endif
-            call cline_makecavgs%set('prg',   'makecavgs')
-            call cline_makecavgs%set('oritab', trim(FINALDOC))
-            call cline_makecavgs%set('nparts', real(nparts))
-            call cline_makecavgs%set('refs',   'cavgs_final'//p_master%ext)
+            call cline_makecavgs%set('prg',     'makecavgs')
+            call cline_makecavgs%set('oritab',  trim(FINALDOC))
+            call cline_makecavgs%set('nparts',  real(nparts))
+            call cline_makecavgs%set('refs',    'cavgs_final'//p_master%ext)
+            call cline_makecavgs%set('balance', 'no')
             call xmakecavgs%execute(cline_makecavgs)
             call del_file(trim(STKSCALEDBODY)//p_master%ext)
         else

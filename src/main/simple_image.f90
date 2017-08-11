@@ -1861,6 +1861,8 @@ contains
                     stop 'cannot sum images with different FT status; add_1; simple_image'
                 endif
             else
+                print *, 'dim(self):        ', self%ldim
+                print *, 'dim(self_to_add): ', self_to_add%ldim
                 stop 'cannot sum images of different dims; add_1; simple_image'
             endif
         else

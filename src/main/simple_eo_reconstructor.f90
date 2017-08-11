@@ -369,11 +369,11 @@ contains
         real,             optional, intent(in)    :: mul       !< shift multiplication factor
         integer,          optional, intent(in)    :: part      !< partition (4 parallel rec)
         character(len=*), optional, intent(in)    :: fbody     !< body of output file
-        type(image)       :: img, img_pad
-        type(kbinterpol)  :: kbwin
-        real, allocatable :: invctfsq(:)
-        integer           :: i, cnt, n, ldim(3), io_stat, filnum, state_glob
-        integer           :: statecnt(p%nstates), alloc_stat, state_here
+        type(image)      :: img, img_pad
+        type(kbinterpol) :: kbwin
+        real             :: skewness
+        integer          :: i, cnt, n, ldim(3), io_stat, filnum, state_glob
+        integer          :: statecnt(p%nstates), alloc_stat, state_here
         call find_ldim_nptcls(fname, ldim, n)
         if( n /= o%get_noris() ) stop 'inconsistent nr entries; eorec; simple_eo_reconstructor'
         kbwin = self%get_kbwin() 
@@ -384,6 +384,13 @@ contains
         call img_pad%new([p%boxpd,p%boxpd,1],p%smpd)
         ! calculate weights
         call o%calc_spectral_weights(p%frac)
+        ! population balancing logics
+        if( p%balance .eq. 'yes' )then
+            call o%balance('proj', skewness)
+            write(*,'(A,F8.2)') '>>> PROJECTION DISTRIBUTION SKEWNESS(%):', 100. * skewness
+        else
+            call o%set_all2single('state_balance', 1.0)
+        endif
         ! zero the Fourier volumes and rhos
         call self%reset_all
         write(*,'(A)') '>>> KAISER-BESSEL INTERPOLATION'
@@ -428,10 +435,11 @@ contains
                 use simple_ori, only: ori
                 use simple_rnd, only: ran3
                 type(ori) :: o_sym, orientation
-                integer   :: j, state
+                integer   :: j, state, state_balance
                 real      :: pw, ran
-                state = nint(o%get(i, 'state'))
-                if( state == 0 ) return
+                state         = nint(o%get(i, 'state'))
+                state_balance = nint(o%get(i, 'state_balance'))
+                if( state == 0 .or. state_balance == 0 ) return
                 pw = 1.
                 if( p%frac < 0.99 ) pw = o%get(i, 'w')
                 if( pw > 0. )then

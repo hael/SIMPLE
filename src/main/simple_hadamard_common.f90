@@ -169,17 +169,17 @@ contains
         integer          :: jpeak, s, k, npeaks
         type(ori)        :: orisoft, o_sym
         type(kbinterpol) :: kbwin
-        logical          :: softrec
+        logical          :: l_softrec
         if( p%eo .eq. 'yes' )then
             kbwin = b%eorecvols(1)%get_kbwin()
         else
             kbwin = b%recvols(1)%get_kbwin()
         endif
-        softrec = .false.
-        npeaks  = 1
+        l_softrec = .false.
+        npeaks    = 1
         if( present(os) )then
-            softrec = .true.
-            npeaks  = os%get_noris()
+            l_softrec = .true.
+            npeaks    = os%get_noris()
         endif
         pw = 1.0
         if( orientation%isthere('w') ) pw = orientation%get('w')
@@ -193,7 +193,7 @@ contains
             do jpeak=1, npeaks
                 DebugPrint  '*** simple_hadamard_common ***: gridding, iteration:', jpeak
                 ! get ori info
-                if( softrec )then
+                if( l_softrec )then
                     orisoft = os%get_ori(jpeak)
                     w = orisoft%get('ow')
                 else

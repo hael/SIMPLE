@@ -2526,12 +2526,12 @@ contains
         if( present(bystate) ) l_bystate = bystate
         if( .not.l_bystate )then
             ! treated as single state
-            call self%calc_spectral_weights_single( frac )
+            call self%calc_spectral_weights_single(frac)
         else
             ! per state frac
             nstates = self%get_nstates()
             if( nstates==1 )then
-                call self%calc_spectral_weights_single( frac )
+                call self%calc_spectral_weights_single(frac)
             else
                 do s=1,nstates
                     pop = self%get_state_pop( s )
@@ -2541,7 +2541,7 @@ contains
                     do i=1,pop
                         call os%set_ori( i, self%get_ori( inds(i) ))
                     enddo
-                    call os%calc_spectral_weights_single( frac )
+                    call os%calc_spectral_weights_single(frac)
                     do i=1,pop
                         call self%set_ori( inds(i), os%get_ori( i ))
                     enddo

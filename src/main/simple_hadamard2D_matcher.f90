@@ -156,6 +156,7 @@ contains
         p%oritab = p%outfile
 
         ! WIENER RESTORATION OF CLASS AVERAGES
+        ! if( frac_srch_space > FRAC_INTERPOL .and. which_iter > 1 )then
         if( frac_srch_space > FRAC_INTERPOL )then
             ! gridded rotation
             call prime2D_assemble_sums(b, p, grid=.true.)
@@ -277,6 +278,9 @@ contains
                     iptcl       = istart - 1 + ptcls_inds(batches(batch,1)+i-1)
                     orientation = b%a%get_ori(iptcl)
                     call batch_oris%set_ori(i, orientation)
+                    ! stash images (this goes here or suffer bugs)
+                    call read_img_from_stk( b, p, iptcl )
+                    batch_imgs(i) = b%img
                     ! enforce state, balancing and weight exclusions
                     if( nint(orientation%get('state')) == 0 .or.&
                         &nint(orientation%get('state_balance')) == 0 .or.&
@@ -284,9 +288,6 @@ contains
                         batch_mask(i) = .false.
                         cycle
                     endif
-                    ! stash images
-                    call read_img_from_stk( b, p, iptcl )
-                    batch_imgs(i) = b%img
                     ! CTF square sum & shift
                     call apply_ctf_and_shift(batch_imgs(i), orientation)
                 enddo
@@ -302,7 +303,13 @@ contains
                         orientation = b%a%get_ori(iptcl)
                         w = orientation%get('w')
                         call batch_imgs(i)%rtsq( -orientation%e3get(), 0., 0. )
+
+                        print *, 'trying to add'
+
                         call batch_imgsum%add(batch_imgs(i), w)
+
+                        print *, 'did add'
+
                     enddo
                 endif
                 ! batch summation

@@ -170,7 +170,6 @@ contains
         ! gridding
         allocate(padded_imgs(nimgs))
         do i = 1, nimgs
-            if( .not. batch_mask(i) ) cycle
             call padded_imgs(i)%new(ldim_pd, smpd)
             call prep4cgrid(imgs(i), padded_imgs(i), msk, kbwin)
         enddo

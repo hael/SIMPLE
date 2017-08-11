@@ -410,6 +410,7 @@ contains
         integer, optional,    intent(in)    :: eo        !< even(2) or odd(1)
         integer, optional,    intent(in)    :: part      !< partition (4 parallel rec)
         type(image) :: img, img_pd
+        real        :: skewness
         integer     :: statecnt(p%nstates), i, cnt, n, ldim(3)
         integer     :: state_here, state_glob
         call find_ldim_nptcls(fname, ldim, n)
@@ -421,7 +422,14 @@ contains
         call img_pd%new([p%boxpd,p%boxpd,1],self%get_smpd())
         call img%new([p%box,p%box,1],self%get_smpd())
         ! calculate particle weights
-        call o%calc_spectral_weights(p%frac, bystate=.true.)
+        call o%calc_spectral_weights(p%frac)
+        ! population balancing logics
+        if( p%balance .eq. 'yes' )then
+            call o%balance('proj', skewness)
+            write(*,'(A,F8.2)') '>>> PROJECTION DISTRIBUTION SKEWNESS(%):', 100. * skewness
+        else
+            call o%set_all2single('state_balance', 1.0)
+        endif
         ! zero the Fourier volume and rho
         call self%reset
         write(*,'(A)') '>>> KAISER-BESSEL INTERPOLATION'
@@ -467,10 +475,11 @@ contains
             subroutine rec_dens
                 use simple_ori, only: ori
                 type(ori) :: orientation, o_sym
-                integer   :: j, state
+                integer   :: j, state, state_balance
                 real      :: pw
-                state = nint(o%get(i, 'state'))
-                if( state == 0 ) return
+                state         = nint(o%get(i, 'state'))
+                state_balance = nint(o%get(i, 'state_balance'))
+                if( state == 0 .or. state_balance == 0 ) return
                 pw = 1.
                 if( p%frac < 0.99 ) pw = o%get(i, 'w')
                 if( pw > 0. )then

@@ -641,9 +641,10 @@ select case(prg)
         keys_optional(9)  = 'refs'
         keys_optional(10) = 'remap_classes'
         keys_optional(11) = 'weights2D'
+        keys_optional(12) = 'balance'
         ! parse command line
         if( describe ) call print_doc_makecavgs
-        call cline%parse(keys_required(:3), keys_optional(:11))
+        call cline%parse(keys_required(:3), keys_optional(:12))
         ! set defaults
         if( .not. cline%defined('weights2D') ) call cline%set('weights2D', 'no')
         ! execute
@@ -854,11 +855,10 @@ select case(prg)
         keys_optional(5) = 'width'
         keys_optional(6) = 'nspace'
         keys_optional(7) = 'nran'
-        keys_optional(8) = 'npeaks'
-        keys_optional(9) = 'xfel'      
+        keys_optional(8) = 'npeaks'    
         ! parse command line
         if( describe ) call print_doc_prime3D_init
-        call cline%parse(keys_required(:5), keys_optional(:9))
+        call cline%parse(keys_required(:5), keys_optional(:8))
         ! set defaults
         if( .not. cline%defined('eo')     ) call cline%set('eo',      'no')
         if( .not. cline%defined('nspace') ) call cline%set('nspace', 1000.)
@@ -940,12 +940,12 @@ select case(prg)
         keys_optional(22) = 'maxits'
         keys_optional(23) = 'shbarrier'
         keys_optional(24) = 'noise'
-        keys_optional(25) = 'xfel'
-        keys_optional(26) = 'nnn'
-        keys_optional(27) = 'rrate'
-        keys_optional(28) = 'norec'
-        keys_optional(29) = 'nsub'
-        keys_optional(30) = 'lp_grid'
+        keys_optional(25) = 'nnn'
+        keys_optional(26) = 'rrate'
+        keys_optional(27) = 'norec'
+        keys_optional(28) = 'nsub'
+        keys_optional(29) = 'lp_grid'
+        keys_optional(30) = 'balance'
         ! parse command line
         if( describe ) call print_doc_prime3D
         call cline%parse(keys_required(:6), keys_optional(:30))
@@ -991,13 +991,12 @@ select case(prg)
         keys_optional(9)  = 'lpstop'
         keys_optional(10) = 'startit'
         keys_optional(11) = 'maxits'
-        keys_optional(12) = 'xfel'
-        keys_optional(13) = 'refine'
-        keys_optional(14) = 'eo'
-        keys_optional(15) = 'athres'
+        keys_optional(12) = 'refine'
+        keys_optional(13) = 'eo'
+        keys_optional(14) = 'athres'
         ! parse command line
         if( describe ) call print_doc_cont3D
-        call cline%parse(keys_required(:8), keys_optional(:15))
+        call cline%parse(keys_required(:8), keys_optional(:14))
         ! set defaults
         call cline%set('dynlp', 'no')
         if( cline%defined('eo') )then
@@ -1250,23 +1249,24 @@ select case(prg)
         ! icosahedral viruses<recvol/end>
         !
         ! set required keys
-        keys_required(1)  = 'stk'
-        keys_required(2)  = 'smpd'
-        keys_required(3)  = 'oritab'
-        keys_required(4)  = 'msk'
-        keys_required(5)  = 'ctf'
-        keys_required(6)  = 'pgrp'
+        keys_required(1) = 'stk'
+        keys_required(2) = 'smpd'
+        keys_required(3) = 'oritab'
+        keys_required(4) = 'msk'
+        keys_required(5) = 'ctf'
+        keys_required(6) = 'pgrp'
         ! set optional keys
-        keys_optional(1)  = 'nthr'
-        keys_optional(2)  = 'eo'
-        keys_optional(3)  = 'deftab'
-        keys_optional(4)  = 'frac'
-        keys_optional(5)  = 'mul'
-        keys_optional(6)  = 'state'
-        keys_optional(7)  = 'mskfile'
+        keys_optional(1) = 'nthr'
+        keys_optional(2) = 'eo'
+        keys_optional(3) = 'deftab'
+        keys_optional(4) = 'frac'
+        keys_optional(5) = 'mul'
+        keys_optional(6) = 'state'
+        keys_optional(7) = 'mskfile'
+        keys_optional(8) = 'balance'
         ! parse command line
         if( describe ) call print_doc_recvol
-        call cline%parse(keys_required(:6), keys_optional(:7))
+        call cline%parse(keys_required(:6), keys_optional(:8))
         ! set defaults
         if( .not. cline%defined('trs') ) call cline%set('trs', 5.) ! to assure that shifts are being used
         if( .not. cline%defined('eo')  ) call cline%set('eo', 'no')
@@ -1323,10 +1323,9 @@ select case(prg)
         keys_optional(3) = 'odd'
         keys_optional(4) = 'eo'
         keys_optional(5) = 'state'
-        keys_optional(6) = 'xfel'
         ! parse command line
         if( describe ) call print_doc_volassemble
-        call cline%parse(keys_required(:4), keys_optional(:6))
+        call cline%parse(keys_required(:4), keys_optional(:5))
         ! set defaults
         if( cline%defined('state')    ) call cline%set('nstates', 1.)
         if( .not. cline%defined('eo') ) call cline%set('eo', 'no')
@@ -1473,11 +1472,10 @@ select case(prg)
         keys_optional(8)  = 'neg'
         keys_optional(9)  = 'mirr'
         keys_optional(10) = 'top'
-        keys_optional(11) = 'xfel'
-        keys_optional(12) = 'msk'
+        keys_optional(11) = 'msk'
         ! parse command line
         if( describe ) call print_doc_projvol
-        call cline%parse(keys_required(:2), keys_optional(:12))
+        call cline%parse(keys_required(:2), keys_optional(:11))
         ! set defaults
         if( .not. cline%defined('wfun')  ) call cline%set('wfun', 'kb')
         if( .not. cline%defined('winsz') ) call cline%set('winsz', 1.5)
