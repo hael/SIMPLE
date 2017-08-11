@@ -16,8 +16,8 @@ public :: cont3D_exec
 private
 #include "simple_local_flags.inc"
 integer,                   parameter :: BATCHSZ_MUL = 10   !< particles per thread
-integer,                   parameter :: NREFS       = 80   !< Max num of references
-type(cont3D_ada_srch),   allocatable :: cont3Dadasrch(:)    !< pftcc array for refine=ada
+integer,                   parameter :: NREFS       = 100  !< Max num of references
+type(cont3D_ada_srch),   allocatable :: cont3Dadasrch(:)   !< pftcc array for refine=ada
 logical, allocatable                 :: state_exists(:)
 integer                              :: nptcls          = 0 !< number of particle images per part
 integer                              :: nrefs_per_ptcl  = 0 !< number of references per particle 
@@ -76,7 +76,6 @@ contains
         ! CALCULATE ANGULAR THRESHOLD
         if( .not.cline%defined('athres') ) p%athres = max(p%lp, ATHRES_LIM)
         write(*,'(A,F6.2)')'>>> ANGULAR THRESHOLD: ', p%athres
-
 
         ! DETERMINE THE NUMBER OF PEAKS
         select case(p%refine)

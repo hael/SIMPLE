@@ -107,9 +107,9 @@ contains
             if( .not. cline%defined('refs') )then
                 stop 'need references for picker or turn off picking with dopick=no'
             endif
+            dir_ptcls = trim(p%dir_target)//'/particles/'
+            call exec_cmdline('mkdir -p '//trim(adjustl(dir_ptcls)))
         endif
-        dir_ptcls = trim(p%dir_target)//'/particles/'
-        call exec_cmdline('mkdir -p '//trim(adjustl(dir_ptcls)))
         call read_filetable(p%filetab, movienames)
         nmovies = size(movienames)
         if( cline%defined('numlen') )then

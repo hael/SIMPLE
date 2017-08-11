@@ -24,8 +24,8 @@ contains
         ! single files
         call del_file('FOO')
         call del_file('fort.0')
-        call del_file('qsys_submit_jobs')
-        call del_file('simple_script_single')
+        !call del_file('qsys_submit_jobs')
+        !call del_file('simple_script_single')
         call del_file('ftab_from_sys_find_last_fname.txt')
         call del_file('VOLASSEMBLE')
         call del_file('CAVGASSEMBLE')

@@ -64,7 +64,7 @@ contains
         integer, intent(in)    :: nrepeats, nptcls
         integer, intent(inout) :: labels(nrepeats,nptcls), consensus(nptcls)
         integer, parameter     :: MAXITS   = 1000
-        real,    parameter     :: TINYTINY = 1e-40               !! Intel warn too small for kind=4 real
+        real,    parameter     :: TINYTINY = 1e-20               !! Intel warn too small for kind=4 real
         logical, parameter     :: DOPRINT  = .false.
         integer, allocatable   :: counts(:), labels_consensus(:,:)
         integer :: nlabels, loc(1), rp(2), it, irnd, inds(nrepeats)
@@ -76,10 +76,16 @@ contains
         norm       = real((nrepeats-1)*nptcls)
         score_best = 0.0
         allocate(labels_consensus(nrepeats,nptcls),counts(nlabels))
-        do irestart=1,nrepeats
+        ! do irestart=1,nrepeats
+
+        !!!!!!!!!! nrepeats restarts not needed when we init with best solution
+
             if( DOPRINT ) write(*,'(a,1x,I5)') '>>> SHC AGGREGATION, RESTART ROUND:', irestart
             ! change the first solution in the row (will affect the greedy initial solution)
-            call change_first( irestart )
+
+            call change_first( irestart ) !!!!!!!! this should be the best scoring solution 
+
+
             ! obtain an initial solution using a greedy appraoch
             call greedy_init
             ! initialize scores
@@ -117,7 +123,7 @@ contains
                 restart_winner   = irestart
             endif
             if( DOPRINT ) write(*,'(a,1x,f7.2)') '>>> SHC AGGREGATION, SCORE:', score_curr
-        end do
+        ! end do
         if( DOPRINT ) write(*,'(a,1x,f7.2)') '>>> SHC AGGREGATION, FINAL SCORE:', score_best
         ! report the consensus solution
         do iptcl=1,nptcls
@@ -127,6 +133,10 @@ contains
             loc = maxloc(counts)
             consensus(iptcl) = loc(1)
         end do
+
+        !!!!!!!!!!! MUST VALIDATE THAT THE CONSENSUS SOLUTION IS EQUAL TO OR BETTER THAN 
+        !!!!!!!!!!! THE BEST SOLUTION OR ELSE ??????
+
 
         contains
 
@@ -143,6 +153,9 @@ contains
                 integer :: irep, iswap, jswap, swap_best(2)
                 real    :: smax, s
                 ! (1) we fix the first solution in its original configuration
+
+                !!!! > this shoudl correspond to the best scoring labeling
+
                 ! (2) we loop over the remaining solutions
                 do irep=2,nrepeats
                     swap_best = 0

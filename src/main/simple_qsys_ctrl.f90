@@ -105,7 +105,7 @@ contains
         self%nparts_tot             =  size(parts,1)
         self%ncomputing_units       =  ncomputing_units
         self%ncomputing_units_avail =  ncomputing_units
-        if( stream )then
+        if( self%stream )then
             self%numlen = 5
         else
             self%numlen = len(int2str(self%nparts_tot))
@@ -256,9 +256,6 @@ contains
         character(len=512) :: io_msg
         integer :: ios, funit, val
         funit = get_fileunit()
-        if( self%stream )then
-            if( file_exists(self%script_names(ipart)) ) return
-        endif
         open(unit=funit, file=self%script_names(ipart), iostat=ios, STATUS='REPLACE', action='WRITE', iomsg=io_msg)
         if( ios .ne. 0 )then
             close(funit)
@@ -352,7 +349,7 @@ contains
         logical :: submit_or_not(self%fromto_part(1):self%fromto_part(2)), err
         ! master command line
         master_submit_script = trim(adjustl(self%pwd))//'/qsys_submit_jobs'
-        call del_file(trim(master_submit_script))
+        !call del_file(trim(master_submit_script))
         ! make a submission mask
         submit_or_not = .false.
         do ipart=self%fromto_part(1),self%fromto_part(2)
@@ -371,7 +368,7 @@ contains
         if( .not. any(submit_or_not) ) return
         ! make the master submission script
         fnr = get_fileunit()
-        open(unit=fnr, FILE=master_submit_script, STATUS='NEW', action='WRITE', iostat=file_stat)
+        open(unit=fnr, FILE=master_submit_script, STATUS='REPLACE', action='WRITE', iostat=file_stat)
         call fopen_err('simple_qsys_ctrl :: submit_scripts', file_stat )
         write(fnr,'(a)') '#!/bin/bash'
         do ipart=self%fromto_part(1),self%fromto_part(2)
@@ -405,9 +402,11 @@ contains
         character(len=STDLEN) :: cmd
         select type( pmyqsys => self%myqsys )
             class is(qsys_local)
-                cmd = self%myqsys%submit_cmd()//' '//trim(adjustl(self%pwd))//'/'//trim(adjustl(script_name))//' &'
+                cmd = trim(adjustl(self%myqsys%submit_cmd()))//' '//trim(adjustl(self%pwd))&
+                &//'/'//trim(adjustl(script_name))//' &'
             class DEFAULT
-                cmd = self%myqsys%submit_cmd()//' '//trim(adjustl(self%pwd))//'/'//trim(adjustl(script_name))
+                cmd = trim(adjustl(self%myqsys%submit_cmd()))//' '//trim(adjustl(self%pwd))&
+                &//'/'//trim(adjustl(script_name))
         end select
         ! execute the command
         call exec_cmdline(cmd)
@@ -504,6 +503,7 @@ contains
 
     end subroutine schedule_streaming
 
+    !>  \brief  is to append to the streaming command-line stack 
     subroutine add_to_streaming( self, cline )
         class(qsys_ctrl),  intent(inout) :: self
         class(cmdline),    intent(in)    :: cline

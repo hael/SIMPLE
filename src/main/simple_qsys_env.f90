@@ -57,8 +57,8 @@ contains
             case('stream')
                 nparts = p_master%ncunits
                 allocate(self%parts(p_master%nptcls,2)) ! unused
-                self%parts(:,:) = 1 ! unused
-                partsz          = 1 ! unused
+                self%parts(:,:) = 1                     ! unused
+                partsz          = 1                     ! unused
             case DEFAULT
                 write(*,*) 'split_mode: ', trim(p_master%split_mode)
                 stop 'Unsupported split_mode'

@@ -142,15 +142,19 @@ contains
                 call b%eorecvol%sum(eorecvol_read)
             end subroutine assemble
             
-            subroutine normalize( recnam )
-                use simple_image, only: image
-                character(len=*), intent(in)  :: recnam
+            subroutine normalize( recname )
+                use simple_syscalls, only: wait_for_closure
+                character(len=*), intent(in)  :: recname
+                character(len=STDLEN) :: volname
+                volname = trim(recname)//trim(p%ext)
                 call b%eorecvol%sum_eos
                 call b%eorecvol%sampl_dens_correct_eos(s)
                 call b%eorecvol%get_res(res05s(s), res0143s(s))
-                call b%eorecvol%sampl_dens_correct_sum(b%vol)
-                call b%eorecvol%write_eos(recnam)
-                call b%vol%write(recnam//p%ext, del_if_exists=.true.)
+                call b%eorecvol%sampl_dens_correct_sum( b%vol )
+                call b%eorecvol%write_eos(recname)
+                call wait_for_closure( recname )
+                call b%vol%write( volname, del_if_exists=.true. )
+                call wait_for_closure(volname)
             end subroutine normalize
 
     end subroutine exec_eo_volassemble
@@ -268,12 +272,14 @@ contains
                 endif
             end subroutine assemble
     
-            subroutine normalize( recnam )
-                character(len=*), intent(in) :: recnam
+            subroutine normalize( recname )
+                use simple_syscalls, only: wait_for_closure
+                character(len=*), intent(in) :: recname
                 call b%recvol%sampl_dens_correct
                 call b%recvol%bwd_ft
                 call b%recvol%clip(b%vol)
-                call b%vol%write(recnam, del_if_exists=.true.)
+                call b%vol%write(recname, del_if_exists=.true.)
+                call wait_for_closure(recname)
             end subroutine normalize
 
     end subroutine exec_volassemble

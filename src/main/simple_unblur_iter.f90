@@ -109,7 +109,6 @@ contains
             DebugPrint 'ldim(moviesum):           ', self%moviesum%get_ldim()
             DebugPrint 'ldim(moviesum_corrected): ', self%moviesum_corrected%get_ldim()
             DebugPrint 'ldim(moviesum_ctf):       ', self%moviesum_ctf%get_ldim()
-            
         endif
         ! generate power-spectra
         self%pspec_sum         = self%moviesum%mic2spec(p%pspecsz, self%speckind)

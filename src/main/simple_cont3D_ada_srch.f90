@@ -16,8 +16,8 @@ public :: cont3D_ada_srch
 private
 ! #include "simple_local_flags.inc"
 real,    parameter :: FACTWEIGHTS_THRESH = 0.001    !< threshold for factorial weights
-real,    parameter :: E3HALFWINSZ = 90.             !< in-plane angle half window size
-integer, parameter :: NREFS       = 80
+real,    parameter :: E3HALFWINSZ        = 90.      !< in-plane angle half window size
+integer, parameter :: INPL_EXPANDFACTOR  = 2
 logical, parameter :: debug = .false.
 
 type cont3D_ada_srch
@@ -91,19 +91,17 @@ contains
         if( size(vols).ne.self%nstates )stop 'Inconsistent number of volumes; cont3D_ada_srch%new'
         self%angthresh   = p%athres
         self%shbarr      = p%shbarrier
+        self%nrefs       = pftcc%get_nrefs() !!! 1 state assumed here
         self%npeaks      = p%npeaks
-        self%npeaks_inpl = self%npeaks * 3
+        self%npeaks_inpl = min(self%nrefs, self%npeaks*INPL_EXPANDFACTOR)
         self%refine      = p%refine
         self%nstates     = p%nstates
-        self%nrefs       = NREFS !!! 1 state assumed here
         self%nrots       = self%pftcc_ptr%get_nrots()
-        self%state       = 1     !!! 1 state assumed here
+        self%state       = 1                !!! 1 state assumed here
         self%lims(:3,:)  = self%se%srchrange()
         trs = p%trs
         self%lims(4,:)  = [-trs, trs]
         self%lims(5,:)  = self%lims(4,:)
-        if( pftcc%get_nrefs() .ne. self%nrefs )&
-        &stop 'Non-congruent number of references in pftcc; cont3D_ada_srch%new'
         ! done
         self%exists = .true.
         if( debug )write(*,'(A)') '>>> cont3D_ada_srch%CONSTRUCTED NEW SIMPLE_cont3D_ada_srch OBJECT'
@@ -310,18 +308,16 @@ contains
         call hpsort(self%nrefs, corrs, ref_inds)
         deallocate(corrs)
         ! in-plane search
-        do i = self%nrefs-self%npeaks+1, self%nrefs
+        do i = self%nrefs-self%npeaks_inpl+1, self%nrefs
             iref     = ref_inds(i)
             o        = self%o_srch%get_ori(iref)
             corr     = o%get('corr')
             inpl_ind = self%pftcc_ptr%get_roind(360.-o%e3get())
-            ! in-plane search
             call self%inplsrch_obj%set_indices(iref, self%iptcl)
             crxy = self%inplsrch_obj%minimize(irot=inpl_ind)
             if(crxy(1) >= corr)then
                 call o%set('corr', crxy(1))
                 call o%e3set(360. - crxy(2))
-                ! shift addition
                 call o%set_shift(crxy(3:4) + self%prev_shift)
             else
                 call o%set_shift(self%prev_shift)
@@ -347,6 +343,7 @@ contains
             return
         endif
         corrs = self%o_peaks%get_all('corr')
+        ! factorial weights
         ws    = exp(-(1.-corrs))
         logws = log(ws)
         order = (/(ipeak,ipeak=1,self%npeaks)/)
@@ -354,7 +351,7 @@ contains
         call reverse(order)
         call reverse(logws)
         forall(ipeak = 1:self%npeaks) ws(order(ipeak)) = exp(sum(logws(:ipeak))) 
-        ! thresholding of the weights
+        ! thresholding
         included = (ws >= FACTWEIGHTS_THRESH)
         where( .not.included ) ws = 0.
         ! weighted correlation
