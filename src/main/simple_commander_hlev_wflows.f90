@@ -407,8 +407,10 @@ contains
         logical,               allocatable :: included(:)
         type(params)                  :: p_master
         type(oris)                    :: os
+        real                          :: rep_corrs(NREPEATS)
         character(len=STDLEN)         :: oritab, vol1, vol2, fsc, str_state
         integer                       :: irepeat, state, iter, n_incl, it
+        integer                       :: best_loc(1)
         ! some init
         allocate(init_docs(NREPEATS), final_docs(NREPEATS))
         do irepeat=1,NREPEATS
@@ -478,13 +480,15 @@ contains
             oritab = 'prime3Ddoc_'//int2str_pad(iter,3)//'.txt'
             call rename(trim(oritab), trim(final_docs(irepeat)))
             call os%read(trim(final_docs(irepeat)))
-            ! updates labels & stash
-            labels(irepeat,:) = nint(os%get_all('state'))
+            ! updates labels & correlations
+            labels(irepeat,:)  = nint(os%get_all('state'))
+            rep_corrs(irepeat) = sum(os%get_all('corr'), mask=included) / real(n_incl)
             ! STASH FINAL VOLUMES
             call stash_volumes
             ! CLEANUP
             call prime3d_cleanup
         enddo
+        best_loc = maxloc(rep_corrs)
 
         ! GENERATE CONSENSUS DOCUMENT
         oritab = trim(REPEATFBODY)//'consensus.txt'
@@ -542,11 +546,6 @@ contains
                     enddo
                     oritab = 'prime3Ddoc_'//int2str_pad(it,3)//'.txt'
                     if(file_exists(oritab))call del_file(oritab)
-                enddo
-                ! delete restart documents
-                do it = 1, iter
-                    fname = 'prime3D_restart_iter'//int2str_pad(it,3)//'.txt'
-                    if(file_exists(fname))call del_file(fname)
                 enddo
             end subroutine prime3d_cleanup
 
