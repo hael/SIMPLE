@@ -53,11 +53,11 @@ contains
         ! MULTIPLE STATES DEACTIVATED FOR NOW
         if(p%nstates>1)stop 'MULTIPLE STATES DEACTIVATED FOR NOW; cont3D_matcher::cont3Dexec'
         ! INIT
-        nptcls = p%top - p%fromp + 1                    ! number of particles processed
+        nptcls = p%top - p%fromp + 1               ! number of particles processed
         ! states
         allocate(state_exists(p%nstates))
-        state_exists = b%a%get_state_exist(p%nstates)   ! state existence
-        neff_states  = count(state_exists)              ! number of non-empty states
+        state_exists = b%a%states_exist(p%nstates) ! state existence
+        neff_states  = count(state_exists)         ! number of non-empty states
         ! number of references per particle
         select case(p%refine)
             case('yes')

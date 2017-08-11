@@ -23,6 +23,7 @@ type :: params
     character(len=3)      :: async='no'        !< asynchronous (yes|no){no}
     character(len=3)      :: autoscale='yes'   !< automatic down-scaling(yes|no){yes}
     character(len=3)      :: avg='no'          !< calc average automatic (yes|no){no}
+    character(len=3)      :: balance='no'      !< population balancing restraint applied(yes|no){no}
     character(len=3)      :: bin='no'          !< binarise image(yes|no){no}
     character(len=3)      :: center='yes'      !< center image(s)/class average(s)/volume(s)(yes|no){no}
     character(len=3)      :: clustvalid='no'   !< validate clustering(yes|homo|no){no}
@@ -215,7 +216,6 @@ type :: params
     integer :: nsub=300
     integer :: nsym=1
     integer :: nthr=1              !< # OpenMP threads{1}
-    integer :: nthr_master=1       !< # OpenMP threads on master node{1}
     integer :: numlen=0            !< length of number string
     integer :: nvalid=0
     integer :: nvars=30
@@ -416,6 +416,7 @@ contains
         call check_carg('automsk',        self%automsk)
         call check_carg('autoscale',      self%autoscale)
         call check_carg('avg',            self%avg)
+        call check_carg('balance',        self%balance)
         call check_carg('bin',            self%bin)
         call check_carg('boxtype',        self%boxtype)
         call check_carg('center',         self%center)
@@ -583,7 +584,6 @@ contains
         call check_iarg('npix',           self%npix)
         call check_iarg('nptcls',         self%nptcls)
         call check_iarg('nthr',           self%nthr)
-        call check_iarg('nthr_master',    self%nthr_master)
         call check_iarg('numlen',         self%numlen)
         call check_iarg('nvars',          self%nvars)
         call check_iarg('nvox',           self%nvox)
@@ -861,9 +861,7 @@ contains
 !$          call omp_set_num_threads(self%nthr)
         endif
         nthr_glob = self%nthr
-        if( .not. cline%defined('nthr_master') )then
-            self%nthr_master = nthr_glob
-        endif
+
 !<<< END, PARALLELISATION-RELATED
 
 !>>> START, IMAGE-PROCESSING-RELATED

@@ -7,7 +7,7 @@ use simple_strings,          only: str_has_substr, int2str_pad
 use simple_polarft_corrcalc, only: polarft_corrcalc
 use simple_pftcc_shsrch,     only: pftcc_shsrch
 use simple_pftcc_inplsrch,   only: pftcc_inplsrch
-use simple_math             ! use all in there
+use simple_math              ! use all in there
 implicit none
 
 public :: prime3D_srch
@@ -151,7 +151,7 @@ contains
         endif
         ! construct composites
         if( p%oritab.ne.'' )then
-            self%state_exists = a%get_state_exist(self%nstates)
+            self%state_exists = a%states_exist(self%nstates)
         else
             allocate(self%state_exists(self%nstates), stat=alloc_stat)   
             call alloc_err('In: new; simple_prime3D_srch, 1', alloc_stat)

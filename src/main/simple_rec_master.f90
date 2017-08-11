@@ -51,7 +51,7 @@ contains
         endif
         do s=fri,toi ! state loop
             DebugPrint  'processing state: ', s
-            if( b%a%get_statepop(s) == 0 ) cycle ! empty state
+            if( b%a%get_state_pop(s) == 0 ) cycle ! empty state
             if( p%l_distr_exec )then ! embarrasingly parallel rec
                 if( present(fbody_in) )then
                     allocate(fbody, source=trim(adjustl(fbody_in))//&
@@ -115,7 +115,7 @@ contains
         endif
         do s=fri,toi ! state loop
             DebugPrint  'processing state: ', s
-            if( b%a%get_statepop(s) == 0 ) cycle ! empty state
+            if( b%a%get_state_pop(s) == 0 ) cycle ! empty state
             if( p%l_distr_exec )then ! embarrasingly parallel exec
                 if( present(fbody_in) )then
                     allocate(fbody, source=trim(adjustl(fbody_in))//'_state')

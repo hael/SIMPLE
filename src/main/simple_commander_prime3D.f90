@@ -337,7 +337,7 @@ contains
             allocate( maplp(p%nstates) )
             maplp = 0.
             do istate=1,p%nstates
-                if( b%a%get_statepop( istate ) == 0 )cycle ! empty state
+                if( b%a%get_state_pop( istate ) == 0 )cycle ! empty state
                 p%fsc = 'fsc_state'//int2str_pad(istate,2)//'.bin'
                 inquire(file=p%fsc, exist=here)
                 if( here )then

@@ -939,7 +939,7 @@ contains
             call os%read(trim(oritab))
             do state = 1,p_master%nstates
                 str_state = int2str_pad(state,2)
-                if( os%get_statepop( state ) == 0 )then
+                if( os%get_state_pop( state ) == 0 )then
                     ! cleanup for empty state
                     vol = 'vol'//trim(int2str(state))
                     call cline%delete( vol )
@@ -1157,7 +1157,7 @@ contains
             call os%read(trim(oritab))
             do state = 1,p_master%nstates
                 str_state = int2str_pad(state,2)
-                if( os%get_statepop( state ) == 0 )then
+                if( os%get_state_pop( state ) == 0 )then
                     ! cleanup for empty state
                     vol = 'vol'//trim(int2str(state))
                     call cline%delete( vol )

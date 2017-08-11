@@ -127,6 +127,7 @@ contains
         call self%htab%set('y',0.)
         call self%htab%set('dist',180.)
         call self%htab%set('state',1.)
+        call self%htab%set('state_balance',1.)
         call self%htab%set('frac',0.)
         self%chtab = chash(NNAMES)
         self%existence = .true.
@@ -740,7 +741,6 @@ contains
         call self%set('e3',self%euls(3))
         self%normal = matmul(zvec, self%rmat)
     end subroutine mirror2d
-
 
     !! \param self1,self2 ori class type rotational matrices
     subroutine oripair_diverse( self1, self2 )

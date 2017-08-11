@@ -43,13 +43,12 @@ type :: oris
     procedure, private :: isthere_2
     generic            :: isthere => isthere_1, isthere_2
     procedure          :: get_ncls
+    procedure          :: get_nprojs
     procedure          :: get_pop
     procedure          :: get_cls_pop
     procedure          :: get_proj_pop
-    procedure          :: get_cls_corr
-    procedure          :: cls_corr_sigthresh
-    procedure          :: get_statepop
-    procedure          :: get_state_exist
+    procedure          :: get_state_pop
+    procedure          :: states_exist
     procedure          :: get_ptcls_in_state
     procedure          :: get_nstates
     procedure          :: get_nlabels
@@ -63,6 +62,8 @@ type :: oris
     procedure          :: get_cls_oris
     procedure          :: get_proj_oris
     procedure          :: get_state
+    procedure          :: get_proj
+    procedure          :: get_class
     procedure          :: get_arr
     procedure, private :: calc_sum
     procedure          :: get_sum
@@ -71,10 +72,8 @@ type :: oris
     procedure          :: get_nonzero_sum
     procedure          :: get_nonzero_avg
     procedure          :: get_ctfparams
-    procedure          :: get_defocus_groups
     procedure          :: extract_table
     procedure          :: ang_sdev
-    procedure          :: stochastic_weights
     procedure          :: included
     procedure          :: print_
     procedure          :: print_chash_sizes
@@ -158,6 +157,7 @@ type :: oris
     procedure          :: order
     procedure          :: order_corr
     procedure          :: order_cls
+    procedure          :: balance
     procedure          :: calc_hard_ptcl_weights
     procedure          :: calc_spectral_weights
     procedure, private :: calc_hard_ptcl_weights_single
@@ -211,13 +211,10 @@ interface oris
     module procedure constructor
 end interface oris
 
-type(ori),  pointer  :: op(:)=>null()
 type(oris), pointer  :: ops  =>null()
-integer, allocatable :: classpops(:)
 logical, allocatable :: class_part_of_set(:)
-real,    allocatable :: class_weights(:), class_specscores(:)
+real,    allocatable :: class_weights(:)
 type(ori)            :: o_glob
-real                 :: angthres = 0.
 
 contains
 
@@ -316,7 +313,7 @@ contains
         call self%o(i)%getter(key, val)
     end subroutine getter_1
 
-    !>  \brief  is a getter
+    ! !>  \brief  is a getter
     subroutine getter_2( self, i, key, val )
         class(oris),      intent(inout) :: self
         integer,          intent(in)    :: i
@@ -429,6 +426,17 @@ contains
         endif
     end function get_ncls
 
+    !>  \brief  is for checking the number of projs
+    function get_nprojs( self ) result( nprojs )
+        class(oris), intent(inout) :: self
+        integer :: i, nprojs, myproj
+        nprojs = 1
+        do i=1,self%n
+            myproj = nint(self%o(i)%get('proj'))
+            if( myproj > nprojs ) nprojs = myproj
+        end do
+    end function get_nprojs
+
     !>  \brief  is for checking label population
     function get_pop( self, ind, label ) result( pop )
         class(oris),      intent(inout) :: self
@@ -463,45 +471,8 @@ contains
         pop = self%get_pop(proj, 'proj')
     end function get_proj_pop
 
-    !>  \brief  is for getting the class score (stored per-particle)
-    function get_cls_corr( self, class ) result( corr )
-        use simple_math, only: median_nocopy
-        class(oris), intent(inout) :: self
-        integer,     intent(in)    :: class
-        real, allocatable :: corrs(:)
-        real :: corr
-        corrs = self%get_arr('corr', class=class)
-        corr  = 0.
-        if( allocated(corrs) )then
-            corr  = median_nocopy(corrs)
-        endif
-    end function get_cls_corr
-
-    !>  \brief  is for counting the number of inclusions given nsigma thresh
-    function cls_corr_sigthresh( self, class, nsig ) result( percen )
-        use simple_stat, only: moment
-        class(oris), intent(inout) :: self
-        integer,     intent(in)    :: class
-        real,        intent(in)    :: nsig
-        real, allocatable :: corrs(:)
-        real    :: corr, ccav, ccsd, ccvar, thresh, percen
-        logical :: err
-        corrs = self%get_arr('corr', class=class)
-        if( allocated(corrs) )then
-            if( size(corrs) > 1 )then
-                call moment(corrs, ccav, ccsd, ccvar, err)
-                thresh = ccav-nsig*ccsd
-                percen = 100.*real(count(corrs >= thresh)/real(size(corrs)))
-            else
-                percen = 0.
-            endif
-        else
-            percen = 0.
-        endif
-    end function cls_corr_sigthresh
-
     !>  \brief  is for checking state population
-    function get_statepop( self, state ) result( pop )
+    function get_state_pop( self, state ) result( pop )
         class(oris), intent(inout) :: self
         integer,     intent(in)    :: state
         integer :: mystate, pop, i
@@ -510,18 +481,18 @@ contains
             mystate = nint(self%o(i)%get('state'))
             if( mystate == state ) pop = pop+1
         end do
-    end function get_statepop
+    end function get_state_pop
 
     !>  \brief  returns a logical array of state existence
-    function get_state_exist(self, nstates) result(exists)
+    function states_exist(self, nstates) result(exists)
         class(oris), intent(inout) :: self
         integer,     intent(in)    :: nstates
         integer :: i
         logical :: exists(nstates)
         do i=1,nstates
-            exists(i) = (self%get_statepop(i) > 0)
+            exists(i) = (self%get_state_pop(i) > 0)
         end do
-    end function get_state_exist
+    end function states_exist
 
     !>  \brief  4 getting the particle indices corresponding to state
     function get_ptcls_in_state( self, state ) result( ptcls )
@@ -529,7 +500,7 @@ contains
         integer,     intent(in)    :: state
         integer, allocatable :: ptcls(:)
         integer :: pop, mystate, cnt, alloc_stat, i
-        pop = self%get_statepop(state)
+        pop = self%get_state_pop(state)
         allocate( ptcls(pop), stat=alloc_stat )
         call alloc_err("In: get_ptcls_in_state; simple_oris", alloc_stat)
         cnt = 0
@@ -792,7 +763,7 @@ contains
         integer,     intent(in)    :: state
         integer, allocatable       :: statearr(:)
         integer                    :: statenr, i, pop, alloc_stat, cnt
-        pop = self%get_statepop( state )
+        pop = self%get_state_pop( state )
         if( pop > 0 )then
             allocate( statearr(pop), stat=alloc_stat )
             call alloc_err('get_state; simple_oris', alloc_stat)
@@ -807,6 +778,48 @@ contains
         endif
     end function get_state
 
+    !>  \brief  is for getting an allocatable array with ptcl indices of the projgroup 'proj'
+    function get_proj( self, proj ) result( projarr )
+        class(oris), intent(inout) :: self
+        integer,     intent(in)    :: proj
+        integer, allocatable       :: projarr(:)
+        integer                    :: projnr, i, pop, alloc_stat, cnt
+        pop = self%get_proj_pop( proj )
+        if( pop > 0 )then
+            allocate( projarr(pop), stat=alloc_stat )
+            call alloc_err('get_proj; simple_oris', alloc_stat)
+            cnt = 0
+            do i=1,self%n
+                projnr = nint(self%get( i, 'proj' ))
+                if( projnr == proj )then
+                    cnt = cnt+1
+                    projarr(cnt) = i
+                endif
+            end do
+        endif
+    end function get_proj
+
+    !>  \brief  is for getting an allocatable array with ptcl indices of the class 'class'
+    function get_class( self, class ) result( classarr )
+        class(oris), intent(inout) :: self
+        integer,     intent(in)    :: class
+        integer, allocatable       :: classarr(:)
+        integer                    :: classnr, i, pop, alloc_stat, cnt
+        pop = self%get_cls_pop( class )
+        if( pop > 0 )then
+            allocate( classarr(pop), stat=alloc_stat )
+            call alloc_err('get_class; simple_oris', alloc_stat)
+            cnt = 0
+            do i=1,self%n
+                classnr = nint(self%get( i, 'class' ))
+                if( classnr == class )then
+                    cnt = cnt+1
+                    classarr(cnt) = i
+                endif
+            end do
+        endif
+    end function get_class
+
     !>  \brief  is for getting an array of 'which' variables with
     !!          filtering based on class/state
     function get_arr( self, which, class, state ) result( vals )
@@ -820,7 +833,7 @@ contains
         if( present(class) )then
             pop = self%get_cls_pop(class)
         else if( present(state) )then
-            pop = self%get_statepop(state)
+            pop = self%get_state_pop(state)
         else
             pop = self%n
         endif
@@ -1041,90 +1054,6 @@ contains
         end do
     end function get_ctfparams
 
-    !>  \brief  is for finding the defocus groups and their corresponding CTF parameters
-    subroutine get_defocus_groups( self, fromto, defgroups, ctfparams )
-        use simple_sll,  only: sll
-        use simple_math, only: euclid
-        class(oris),          intent(inout) :: self
-        integer, optional,    intent(in)    :: fromto(2)
-        integer, allocatable, intent(out)   :: defgroups(:)
-        real,    allocatable, intent(out)   :: ctfparams(:,:)
-        real, allocatable :: ctfvec(:)
-        type(sll)         :: llist
-        integer           :: ffromto(2),nparams,i,cnt
-        real              :: kV,cs,fraca,dfx,dfy,angast,kV_prev,cs_prev
-        real              :: fraca_prev,dfx_prev,dfy_prev,angast_prev,dist
-        logical           :: astig=.false.
-        ! parse
-        if( .not. self%isthere('dfx') ) stop 'cannot get defocus groups if there is no CTF info; simple_oris :: get_defocus_groups'
-        ffromto(1) = 1
-        ffromto(2) = self%n
-        if( present(fromto) ) ffromto = fromto
-        ! build
-        llist = sll()
-        ! init
-        allocate(defgroups(ffromto(1):ffromto(2)))
-        defgroups  = 1
-        kV_prev    = self%get(ffromto(1), 'kv'   )
-        cs_prev    = self%get(ffromto(1), 'cs'   )
-        fraca_prev = self%get(ffromto(1), 'fraca')
-        dfx_prev   = self%get(ffromto(1), 'dfx'  )
-        if( self%isthere('dfy') )then
-            dfy_prev    = self%get(ffromto(1), 'dfy'   )
-            angast_prev = self%get(ffromto(1), 'angast')
-            astig       = .true.
-            nparams     = 6
-            call llist%add(rarr=[kV_prev,cs_prev,fraca_prev,dfx_prev,dfy_prev,angast_prev])
-        else
-            dfy_prev    = 0.
-            angast_prev = 0.
-            astig       = .false.
-            nparams     = 6
-            call llist%add(rarr=[kV_prev,cs_prev,fraca_prev,dfx_prev])
-        endif
-        cnt = 1
-        ! find groups
-        do i=ffromto(1) + 1,ffromto(2)
-            kV     = self%get(i, 'kv')
-            cs     = self%get(i, 'cs')
-            fraca  = self%get(i, 'fraca')
-            dfx    = self%get(i, 'dfx'   )
-            if( astig )then
-                dfy    = self%get(i, 'dfy'   )
-                angast = self%get(i, 'angast')
-                dist = euclid([kV,cs,fraca,dfx,dfy,angast],[kV_prev,cs_prev,fraca_prev,dfx_prev,dfy_prev,angast_prev])
-            else
-                dist = euclid([kV,cs,fraca,dfx],[kV_prev,cs_prev,fraca_prev,dfx_prev])
-            endif
-            if( dist < 0.001 )then
-                ! CTF parameters are the same as for the previous particle & no update is needed
-            else
-                ! update counter
-                cnt         = cnt + 1
-                ! update parameters
-                kV_prev     = kV
-                cs_prev     = cs
-                fraca_prev  = fraca
-                dfx_prev    = dfx
-                dfy_prev    = dfy
-                angast_prev = angast
-                ! update the linked list
-                if( astig )then
-                    call llist%add(rarr=[kV_prev,cs_prev,fraca_prev,dfx_prev,dfy_prev,angast_prev])
-                else
-                    call llist%add(rarr=[kV_prev,cs_prev,fraca_prev,dfx_prev])
-                endif
-            endif
-            defgroups(i) = cnt
-        end do
-        ! output params
-        allocate(ctfparams(cnt,nparams))
-        do i=1,cnt
-            call llist%get(i, rarr=ctfvec)
-            ctfparams(i,:) = ctfvec
-        end do
-    end subroutine get_defocus_groups
-
     !>  \brief  is for extracting a table from the character hash
     function extract_table( self, which ) result( table )
         class(oris),      intent(inout) :: self
@@ -1149,7 +1078,7 @@ contains
         if(npeaks < 3 .or. trim(refine).eq.'shc' .or. trim(refine).eq.'shcneigh')return
         instates = 0
         do state=1,nstates
-            pop = self%get_statepop( state )
+            pop = self%get_state_pop( state )
             if( pop > 0 )then
                 ang_sdev = ang_sdev + ang_sdev_state( state )
                 instates = instates + 1
@@ -1200,30 +1129,6 @@ contains
                 call os%kill
             end function ang_sdev_state
     end function ang_sdev
-
-    !>  \brief  determines and updates stochastic weights
-    subroutine stochastic_weights( self, wcorr )
-        class(oris), intent(inout) :: self
-        real,        intent(out)   :: wcorr
-        real             :: ws(self%n)
-        real,allocatable :: corrs(:)
-        if(self%n == 1)then
-            call self%set(1,'ow',1.0)
-            wcorr = self%get(1,'corr')
-            return
-        endif
-        ws    = 0.
-        wcorr = 0.
-        ! get unnormalised correlations
-        corrs = self%get_all('corr')
-        ! calculate normalised weights and weighted corr
-        where(corrs > TINY) ws = exp(corrs) ! ignore invalid corrs
-        ws    = ws/sum(ws)
-        wcorr = sum(ws*corrs)
-        ! update npeaks individual weights
-        call self%set_all('ow', ws)
-        deallocate(corrs)
-    end subroutine stochastic_weights
 
     !>  \brief  is for printing
     function included( self )result( incl )
@@ -1986,7 +1891,7 @@ contains
         if( which .eq. 'class' )then
             pop = self%get_cls_pop(icls)
         else
-            pop = self%get_statepop(icls)
+            pop = self%get_state_pop(icls)
         endif
         ! apply population treshold
         if( pop < minp ) return
@@ -2070,7 +1975,7 @@ contains
             if( which .eq. 'class' )then
                 pop = self%get_cls_pop(k)
             else
-                pop = self%get_statepop(k)
+                pop = self%get_state_pop(k)
             endif
             if( pop == 0 ) cycle
             if( pop == 1 )then
@@ -2142,7 +2047,7 @@ contains
                 ipop = self%get_cls_pop(iclass)
                 if( ipop > 0 ) iclsarr = self%get_cls_pinds(iclass)
             else
-                ipop = self%get_statepop(iclass)
+                ipop = self%get_state_pop(iclass)
                 if( ipop > 0 ) iclsarr = self%get_state(iclass)
             endif
             if( ipop > 0 )then
@@ -2151,7 +2056,7 @@ contains
                         jpop = self%get_cls_pop(jclass)
                         if( jpop > 0 ) jclsarr = self%get_cls_pinds(jclass)
                     else
-                        jpop = self%get_statepop(jclass)
+                        jpop = self%get_state_pop(jclass)
                         if( jpop > 0 ) jclsarr = self%get_state(jclass)
                     endif
                     if( jpop > 0 )then
@@ -2446,49 +2351,129 @@ contains
     end subroutine qspiral
 
     !>  \brief  orders oris according to specscore
-    function order( self ) result( arr )
-        class(oris), intent(in), target :: self
-        integer, allocatable :: arr(:)
+    function order( self ) result( inds )
+        class(oris), intent(inout) :: self
+        real,    allocatable :: specscores(:)
+        integer, allocatable :: inds(:)
         integer :: i, alloc_stat
-        op => self%o
-        allocate( arr(self%n), stat=alloc_stat )
+        allocate( inds(self%n), stat=alloc_stat )
         call alloc_err('order; simple_oris', alloc_stat)
-        arr = (/(i,i=1,self%n)/)
-        call hpsort( self%n, arr, o1_gt_o2 )
+        specscores = self%get_all('specscore')
+        inds = (/(i,i=1,self%n)/)
+        call hpsort( self%n, specscores, inds )
     end function order
 
     !>  \brief  orders oris according to corr
-    function order_corr( self ) result( arr )
-        class(oris), intent(in), target :: self
-        integer, allocatable :: arr(:)
+    function order_corr( self ) result( inds )
+        class(oris), intent(inout) :: self
+        real,    allocatable :: corrs(:)
+        integer, allocatable :: inds(:)
         integer :: i, alloc_stat
-        op => self%o
-        allocate( arr(self%n), stat=alloc_stat )
+        allocate( inds(self%n), stat=alloc_stat )
         call alloc_err('order; simple_oris', alloc_stat)
-        arr = (/(i,i=1,self%n)/)
-        call hpsort( self%n, arr, o1_gt_o2_corr )
+        corrs = self%get_all('corr')
+        inds = (/(i,i=1,self%n)/)
+        call hpsort( self%n, corrs, inds )
     end function order_corr
 
     !>  \brief  orders clusters according to population
-    function order_cls( self, ncls ) result( arr )
-        class(oris), intent(inout), target :: self
-        integer,     intent(in)            :: ncls
-        integer, allocatable :: arr(:)
+    function order_cls( self, ncls ) result( inds )
+        class(oris), intent(inout) :: self
+        integer,     intent(in)    :: ncls
+        real,    allocatable :: classpops(:)
+        integer, allocatable :: inds(:)
         integer :: i, alloc_stat
-        ops => self
         if(ncls <= 0) stop 'invalid number of classes; simple_oris%order_cls'
-        allocate(arr(ncls), classpops(ncls), stat=alloc_stat)
-        classpops = 0
+        allocate(inds(ncls), classpops(ncls), stat=alloc_stat)
         call alloc_err('order_cls; simple_oris', alloc_stat)
-        classpops = 0
+        classpops = 0.0
         ! calculate class populations
         do i=1,ncls
-            classpops(i) = self%get_cls_pop(i)
+            classpops(i) = real(self%get_cls_pop(i))
         end do
-        arr = (/(i,i=1,ncls)/)
-        call hpsort( ncls, arr, class1_gt_class2 )
+        inds = (/(i,i=1,ncls)/)
+        call hpsort( ncls, classpops, inds )
         deallocate(classpops)
     end function order_cls
+
+    !>  \brief  applies a one-sided balance restraint on the number of particles
+    !!          in projection groups based on corr/specscore order
+    subroutine balance( self, which, skewness )
+        use simple_math, only: median_nocopy
+        class(oris),      intent(inout) :: self
+        character(len=*), intent(in)    :: which
+        real,             intent(out)   :: skewness
+        integer, allocatable :: inds(:), inds_tmp(:)
+        logical, allocatable :: included(:)
+        real,    allocatable :: pops(:), scores(:), nonzero_pops(:)
+        integer :: i, j, n, pop, pop_thres
+        logical :: use_specscore, l_proj
+        use_specscore = self%isthere('specscore')
+        ! decide whether to do proj or class analysis
+        l_proj = .false.
+        select case(which)
+            case('class')
+                n = self%get_ncls()
+            case('proj')
+                n = self%get_nprojs()
+                l_proj = .true.
+            case DEFAULT
+                stop 'unsupported which flag; simple_oris :: balance'
+        end select
+        ! find pop thresh
+        allocate(pops(n), included(self%n))
+        pops = 0.
+        do i=1,n
+            if( l_proj )then
+                pops(i) = real(self%get_proj_pop(i))
+            else
+                pops(i) = real(self%get_cls_pop(i))
+            endif
+        end do
+        nonzero_pops = pack(pops, pops > 0.5)
+        pop_thres    = nint(median_nocopy(nonzero_pops))
+        ! apply the one-sided population treshold
+        included = .false.
+        do i=1,n
+            pop = nint(pops(i))
+            if( pop < 1 )cycle
+            if( l_proj )then
+                inds = self%get_proj(i)
+            else
+                inds = self%get_class(i)
+            endif
+            if( pop <= pop_thres )then
+                do j=1,pop
+                    included(inds(j)) = .true.
+                end do
+            else
+                allocate(scores(pop), inds_tmp(pop))
+                do j=1,pop
+                    if( use_specscore )then
+                        scores(j) = self%o(inds(j))%get('specscore')
+                    else
+                        scores(j) = self%o(inds(j))%get('corr')
+                    endif
+                    inds_tmp(j) = inds(j)
+                end do
+                call hpsort(pop, scores, inds_tmp)
+                do j=pop,pop - pop_thres + 1,-1
+                    included(inds_tmp(j)) = .true. 
+                end do
+                deallocate(scores, inds_tmp)
+            endif
+        end do
+        ! communicate selection to instance
+        do i=1,self%n
+            if( included(i) )then
+                call self%o(i)%set('state_balance', 1.0)
+            else
+                call self%o(i)%set('state_balance', 0.0)
+            endif
+        end do
+        ! communicate skewness as fraction of excluded
+        skewness = real(self%n - count(included))/real(self%n)
+    end subroutine balance
 
     !>  \brief  calculates hard weights based on ptcl ranking
     subroutine calc_hard_ptcl_weights( self, frac, bystate )
@@ -2511,7 +2496,7 @@ contains
                 call self%calc_hard_ptcl_weights_single( frac )
             else
                 do s=1,nstates
-                    pop = self%get_statepop( s )
+                    pop = self%get_state_pop( s )
                     if( pop==0 )cycle
                     inds = self%get_state( s )
                     os = oris( pop )
@@ -2549,7 +2534,7 @@ contains
                 call self%calc_spectral_weights_single( frac )
             else
                 do s=1,nstates
-                    pop = self%get_statepop( s )
+                    pop = self%get_state_pop( s )
                     if( pop==0 )cycle
                     inds = self%get_state( s )
                     os = oris( pop )
@@ -3086,62 +3071,6 @@ contains
 
     ! PRIVATE STUFF
 
-    !>  \brief  orientation 1 greater than (better) than orientation 2 ?
-    function o1_gt_o2( o1, o2 ) result( val )
-        integer, intent(in) :: o1, o2
-        logical             :: val
-        real                :: corr1, corr2, spec1, spec2
-        spec1 = op(o1)%get('specscore')
-        spec2 = op(o2)%get('specscore')
-        if( spec1 > spec2 )then
-            val = .true.
-        else
-            val = .false.
-        endif
-    end function o1_gt_o2
-
-    !>  \brief  orientation 1 greater than (better) than orientation 2 ?
-    function o1_gt_o2_corr( o1, o2 ) result( val )
-        integer, intent(in) :: o1, o2
-        logical             :: val
-        real                :: corr1, corr2, spec1, spec2
-        corr1 = op(o1)%get('corr')
-        corr2 = op(o2)%get('corr')
-        if( corr1 > corr2 )then
-            val = .true.
-        else
-            val = .false.
-        endif
-    end function o1_gt_o2_corr
-
-    !>  \brief  orientation 1 less than (worse) than orientation 2 ?
-    function o1_lt_o2( o1, o2 ) result( val )
-        integer, intent(in) :: o1, o2
-        logical             :: val
-        val = .not. o1_gt_o2( o1, o2 )
-    end function o1_lt_o2
-
-    !>  \brief  class 1 greater than (better) than class 2 ?
-    function class1_gt_class2( class1, class2 ) result( val )
-        integer, intent(in) :: class1, class2
-        logical             :: val
-        integer             :: pop1, pop2
-        pop1  = classpops(class1)
-        pop2  = classpops(class2)
-        if( pop1 > pop2 )then
-            val = .true.
-        else
-            val = .false.
-        endif
-    end function class1_gt_class2
-
-    !>  \brief  class 1 less than (worse) than class 2 ?
-    function class1_lt_class2( class1, class2 ) result( val )
-        integer, intent(in) :: class1, class2
-        logical             :: val
-        val = .not. class1_gt_class2(class1, class2)
-    end function class1_lt_class2
-
     !>  \brief  for correlating oris objs, just for testing purposes
     function corr_oris( self1, self2 ) result( corr )
         use simple_stat, only: pearsn
@@ -3496,7 +3425,7 @@ contains
         do i=1,ncls_prev
             pop      = pop_spawn(i) ! pop of new cluster spawning from prev cluster
             if(key.eq.'state')then
-                pop_prev = self%get_statepop( i )
+                pop_prev = self%get_state_pop( i )
             else
                 pop_prev = self%get_cls_pop( i )
             endif

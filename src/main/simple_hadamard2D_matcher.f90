@@ -37,22 +37,7 @@ contains
         integer,        intent(in)    :: which_iter
         logical,        intent(inout) :: converged
         integer   :: iptcl
-        real      :: corr_thresh, frac_srch_space
-
-        ! SET FRACTION OF SEARCH SPACE
-        frac_srch_space = b%a%get_avg('frac')
-
-        ! SETUP WEIGHTS
-        if( p%weights2D.eq.'yes' )then
-            if( p%nptcls <= SPECWMINPOP )then
-                call b%a%set_all2single('w', 1.0)
-            else
-                call b%a%calc_spectral_weights(1.0)
-            endif
-        else
-            ! defaults to unitary weights
-            call b%a%set_all2single('w', 1.0)
-        endif
+        real      :: corr_thresh, frac_srch_space, skewness
 
         ! PREP REFERENCES
         if( p%l_distr_exec )then
@@ -83,6 +68,9 @@ contains
                 endif
             endif
         endif
+
+        ! SET FRACTION OF SEARCH SPACE
+        frac_srch_space = b%a%get_avg('frac')
 
         ! EXTREMAL LOGICS
         if( frac_srch_space < 98. .or. p%extr_thresh > 0.025 )then
@@ -140,7 +128,30 @@ contains
                 endif
         end select
         DebugPrint ' hadamard2D_matcher; completed alignment'
-        ! output orientations
+
+        ! SETUP WEIGHTS
+        if( p%weights2D.eq.'yes' )then
+            if( p%nptcls <= SPECWMINPOP )then
+                call b%a%set_all2single('w', 1.0)
+            else
+                ! frac is one by default in prime2D (no option to set frac)
+                ! so spectral weighting is done over all images
+                call b%a%calc_spectral_weights(1.0)
+            endif
+        else
+            ! defaults to unitary weights
+            call b%a%set_all2single('w', 1.0)
+        endif
+
+        ! POPULATION BALANCING LOGICS
+        if( p%balance .eq. 'yes' )then
+            call b%a%balance('class', skewness)
+            write(*,'(A,F8.2)') '>>> CLASS DISTRIBUTION SKEWNESS(%):', 100. * skewness
+        else
+            call b%a%set_all2single('state_balance', 1.0)
+        endif
+
+        ! OUTPUT ORIENTATIONS
         call b%a%write(p%outfile, [p%fromp,p%top])
         p%oritab = p%outfile
 
@@ -154,7 +165,7 @@ contains
         endif
         DebugPrint ' generated class averages'
 
-        ! WRITE CLASS AVERAGES
+        ! OUTPUT CLASS AVERAGES
         if( p%l_distr_exec )then
             call prime2D_write_partial_sums( b, p )
         else
@@ -172,7 +183,6 @@ contains
         if( p%l_distr_exec )then
             call qsys_job_finished(p, 'simple_hadamard2D_matcher :: prime2D_exec')
         else
-            ! CONVERGENCE TEST
             converged = b%conv%check_conv2D()
         endif
     end subroutine prime2D_exec
@@ -216,6 +226,7 @@ contains
         type(image)              :: batch_imgsum, cls_imgsum
         type(image), allocatable :: batch_imgs(:) 
         integer,     allocatable :: ptcls_inds(:), batches(:,:)
+        logical,     allocatable :: batch_mask(:)
         real      :: w
         integer   :: icls, iptcl, istart, iend, inptcls, icls_pop
         integer   :: i, nbatches, batch, batchsz, cnt
@@ -258,32 +269,38 @@ contains
             do batch = 1, nbatches
                 ! prep batch
                 batchsz = batches(batch,2) - batches(batch,1) + 1
-                allocate(batch_imgs(batchsz))
+                allocate(batch_imgs(batchsz), batch_mask(batchsz))
+                batch_mask = .true.
                 call batch_oris%new(batchsz)
                 ! batch particles loop
                 do i = 1,batchsz
                     iptcl       = istart - 1 + ptcls_inds(batches(batch,1)+i-1)
                     orientation = b%a%get_ori(iptcl)
                     call batch_oris%set_ori(i, orientation)
-                    if( nint(orientation%get('state')) == 0 )cycle
+                    ! enforce state, balancing and weight exclusions
+                    if( nint(orientation%get('state')) == 0 .or.&
+                        &nint(orientation%get('state_balance')) == 0 .or.&
+                        &orientation%get('w') < TINY )then
+                        batch_mask(i) = .false.
+                        cycle
+                    endif
                     ! stash images
                     call read_img_from_stk( b, p, iptcl )
                     batch_imgs(i) = b%img
                     ! CTF square sum & shift
-                    if( orientation%get('w') < TINY )cycle
                     call apply_ctf_and_shift(batch_imgs(i), orientation)
                 enddo
                 if( l_grid )then
                     ! rotate batch by gridding
-                    call rot_imgbatch(batch_imgs, batch_oris, batch_imgsum, p%msk)
+                    call rot_imgbatch(batch_imgs, batch_oris, batch_imgsum, p%msk, batch_mask)
                 else
                     ! real space rotation
                     call batch_imgsum%new([p%box, p%box, 1], p%smpd)
                     do i = 1,batchsz
+                        if( .not. batch_mask(i) ) cycle
                         iptcl = istart - 1 + ptcls_inds(batches(batch,1)+i-1)
                         orientation = b%a%get_ori(iptcl)
                         w = orientation%get('w')
-                        if( w < TINY )cycle
                         call batch_imgs(i)%rtsq( -orientation%e3get(), 0., 0. )
                         call batch_imgsum%add(batch_imgs(i), w)
                     enddo
@@ -294,7 +311,7 @@ contains
                 do i = 1, batchsz
                     call batch_imgs(i)%kill
                 enddo
-                deallocate(batch_imgs)
+                deallocate(batch_imgs, batch_mask)
             enddo
             ! set class
             b%cavgs(icls) = cls_imgsum

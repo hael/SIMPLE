@@ -141,12 +141,13 @@ contains
 
     !>  \brief  rotates an image batch by angle ang using Fourier gridding
     !>          the weighted images sum is returned
-    subroutine rot_imgbatch( imgs, os, imgsum, msk )
+    subroutine rot_imgbatch( imgs, os, imgsum, msk, batch_mask )
         use simple_math, only: cyci_1d, sqwin_2d, rotmat2d
-        class(image), intent(inout) :: imgs(:)   !< images to rotate
-        type(oris),   intent(inout) :: os        !< orientations
-        class(image), intent(inout) :: imgsum    !< reconstituted image
-        real,         intent(in)    :: msk       !< mask radius (in pixels)
+        class(image), intent(inout) :: imgs(:)       !< images to rotate
+        type(oris),   intent(inout) :: os            !< orientations
+        class(image), intent(inout) :: imgsum        !< reconstituted image
+        real,         intent(in)    :: msk           !< mask radius (in pixels)
+        logical,      intent(in)    :: batch_mask(:) !< exclusions
         type(projector), allocatable :: padded_imgs(:)
         complex,         allocatable :: cmat(:,:), comps(:,:)
         real,            allocatable :: w(:,:)
@@ -169,6 +170,7 @@ contains
         ! gridding
         allocate(padded_imgs(nimgs))
         do i = 1, nimgs
+            if( .not. batch_mask(i) ) cycle
             call padded_imgs(i)%new(ldim_pd, smpd)
             call prep4cgrid(imgs(i), padded_imgs(i), msk, kbwin)
         enddo
@@ -181,40 +183,39 @@ contains
         !$omp parallel do default(shared) private(i,h,k,l,m,loc,mat,logi,phys,cyc1,cyc2,w,comps,win,incr,pw)&
         !$omp schedule(static) reduction(+:cmat) proc_bind(close)
         do i = 1, nimgs
+            if( .not. batch_mask(i) ) cycle
             pw = os%get(i, 'w')
-            if( pw > TINY )then
-                mat = rotmat2d( -os%e3get(i) )
-                do h = lims(1,1), lims(1,2)
-                    do k = lims(2,1), lims(2,2)
-                        loc   = matmul(real([h,k]),mat)
-                        win   = sqwin_2d(loc(1),loc(2), winsz)
-                        comps = zero
-                        w     = 1.
-                        do l = 1, wdim
-                            incr = l-1
-                            ! circular addresses
-                            cyc1(l)  = cyci_1d(cyc_lims(1,:), win(1,1)+incr)
-                            cyc2(l)  = cyci_1d(cyc_lims(2,:), win(2,1)+incr)
-                            ! interpolation kernel matrix
-                            w(l,:) = w(l,:) * kbwin%apod( real(win(1,1)+incr)-loc(1) )
-                            w(:,l) = w(:,l) * kbwin%apod( real(win(2,1)+incr)-loc(2) )
-                        enddo
-                        ! fetch fourier components
-                        do l=1, wdim
-                            do m=1, wdim
-                                if(w(l,m) == 0.)cycle
-                                logi       = [cyc1(l), cyc2(m), 0]
-                                phys       = padded_imgs(i)%comp_addr_phys(logi)
-                                comps(l,m) = padded_imgs(i)%get_fcomp(logi, phys)
-                            end do
+            mat = rotmat2d( -os%e3get(i) )
+            do h = lims(1,1), lims(1,2)
+                do k = lims(2,1), lims(2,2)
+                    loc   = matmul(real([h,k]),mat)
+                    win   = sqwin_2d(loc(1),loc(2), winsz)
+                    comps = zero
+                    w     = 1.
+                    do l = 1, wdim
+                        incr = l-1
+                        ! circular addresses
+                        cyc1(l)  = cyci_1d(cyc_lims(1,:), win(1,1)+incr)
+                        cyc2(l)  = cyci_1d(cyc_lims(2,:), win(2,1)+incr)
+                        ! interpolation kernel matrix
+                        w(l,:) = w(l,:) * kbwin%apod( real(win(1,1)+incr)-loc(1) )
+                        w(:,l) = w(:,l) * kbwin%apod( real(win(2,1)+incr)-loc(2) )
+                    enddo
+                    ! fetch fourier components
+                    do l=1, wdim
+                        do m=1, wdim
+                            if(w(l,m) == 0.)cycle
+                            logi       = [cyc1(l), cyc2(m), 0]
+                            phys       = padded_imgs(i)%comp_addr_phys(logi)
+                            comps(l,m) = padded_imgs(i)%get_fcomp(logi, phys)
                         end do
-                        ! SUM( kernel x components )
-                        cmat(h,k) = cmat(h,k) + pw * sum(w * comps)
-                        ! above is an optimized version of:
-                        ! cmat(h,k) = cmat(h,k) + padded_imgs(i)%extr_gridfcomp( [loc(1),loc(2),0.] )
                     end do
+                    ! SUM( kernel x components )
+                    cmat(h,k) = cmat(h,k) + pw * sum(w * comps)
+                    ! above is an optimized version of:
+                    ! cmat(h,k) = cmat(h,k) + padded_imgs(i)%extr_gridfcomp( [loc(1),loc(2),0.] )
                 end do
-            endif
+            end do
             ! cleanup
             call padded_imgs(i)%kill
         enddo

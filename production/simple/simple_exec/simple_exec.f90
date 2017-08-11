@@ -682,9 +682,10 @@ select case(prg)
         keys_optional(19) = 'oritab3D'
         keys_optional(20) = 'weights2D'
         keys_optional(21) = 'refine'
+        keys_optional(22) = 'balance'
         ! parse command line
         if( describe ) call print_doc_prime2D
-        call cline%parse(keys_required(:5), keys_optional(:21))
+        call cline%parse(keys_required(:5), keys_optional(:22))
         ! set defaults
         if( .not. cline%defined('lpstart')   ) call cline%set('lpstart',   15.)
         if( .not. cline%defined('lpstop')    ) call cline%set('lpstop',     8.)

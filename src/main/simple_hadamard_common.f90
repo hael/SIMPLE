@@ -55,7 +55,7 @@ contains
                 do s=1,p%nstates
                     fsc_fname = 'fsc_state'//int2str_pad(s,2)//'.bin'
                     if( file_exists(trim(adjustl(fsc_fname))) )fsc_bin_exists( s ) = .true.
-                    if( b%a%get_statepop( s )>0 .and. .not.fsc_bin_exists(s))&
+                    if( b%a%get_state_pop( s )>0 .and. .not.fsc_bin_exists(s))&
                         & all_fsc_bin_exist = .false.
                 enddo
                 if( p%oritab.eq.'')all_fsc_bin_exist = (count(fsc_bin_exists)==p%nstates)
@@ -347,14 +347,14 @@ contains
         integer :: istate
         if( p%eo .eq. 'yes' )then
             do istate = 1, p%nstates
-                if( b%a%get_statepop(istate) > 0)then
+                if( b%a%get_state_pop(istate) > 0)then
                     call b%eorecvols(istate)%new(p)
                     call b%eorecvols(istate)%reset_all
                 endif
             end do
         else
             do istate = 1, p%nstates
-                if( b%a%get_statepop(istate) > 0)then
+                if( b%a%get_state_pop(istate) > 0)then
                     call b%recvols(istate)%new([p%boxpd, p%boxpd, p%boxpd], p%smpd)
                     call b%recvols(istate)%alloc_rho(p)
                     call b%recvols(istate)%reset
@@ -466,7 +466,7 @@ contains
         res05s   = 0.
         ! cycle through states
         do s=1,p%nstates
-            if( b%a%get_statepop(s) == 0 )then
+            if( b%a%get_state_pop(s) == 0 )then
                 ! empty state
                 if( present(which_iter) )b%fsc(s,:) = 0.
                 cycle
@@ -515,7 +515,7 @@ contains
         character(len=:), allocatable :: fbody
         character(len=STDLEN) :: pprocvol
         do s=1,p%nstates
-            if( b%a%get_statepop(s) == 0 )then
+            if( b%a%get_state_pop(s) == 0 )then
                 ! empty space
                 cycle
             endif

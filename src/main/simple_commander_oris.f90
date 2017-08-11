@@ -426,7 +426,7 @@ contains
             ! extract the state populations
             allocate( statepops(p%nstates) )
             do istate=1,p%nstates
-                statepops(istate) = o_comlindoc%get_statepop(istate)
+                statepops(istate) = o_comlindoc%get_state_pop(istate)
             end do
         else
             ! set default values for nstates, statepop and state
@@ -577,7 +577,7 @@ contains
         type(build)       :: b
         type(ori)         :: orientation
         type(params)      :: p
-        real              :: normal(3), thresh, corr, percen
+        real              :: normal(3), thresh, corr
         integer           :: s, i, nincl, ind, icls, ncls
         real, allocatable :: corrs(:)
         p = params(cline)
@@ -643,17 +643,6 @@ contains
                     write(*,*) 'particle: ', i, 'included: ', 0
                 endif
             end do
-        endif
-        if( cline%defined('nsig') )then
-            ncls = b%a%get_ncls()
-            percen = 0.
-            write(*,'(a)') '>>> SIGMA THRESHOLDING CLUSTERING SOLUTION'
-            do icls=1,ncls
-                call progress(icls, ncls)
-                percen = percen + b%a%cls_corr_sigthresh(icls, p%nsig)
-            end do
-            percen = percen/real(ncls)
-            write(*,*) percen, ' % of the particles included at sigma ', p%nsig
         endif
         if( cline%defined('npeaks') )then
             call b%a%new(p%nspace)

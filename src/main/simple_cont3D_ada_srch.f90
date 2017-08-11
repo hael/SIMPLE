@@ -129,7 +129,7 @@ contains
         call self%o_peaks%new( self%npeaks )
         ! state init
         allocate(self%state_exists(self%nstates))
-        self%state_exists = a%get_state_exist(self%nstates)
+        self%state_exists = a%states_exist(self%nstates)
         if( .not.self%state_exists(self%prev_state) )stop 'state is empty; cont3D_ada_srch::prep_srch'
         ! current reference put first
         o = self%o_in
