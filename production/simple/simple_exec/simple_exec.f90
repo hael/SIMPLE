@@ -1779,8 +1779,8 @@ select case(prg)
         keys_optional(20) = 'bfac'
         keys_optional(21) = 'outfile'
         keys_optional(22) = 'ctfreslim'
-        keys_optional(23) = 'df_close'
-        keys_optional(24) = 'df_far'
+        keys_optional(23) = 'dfclose'
+        keys_optional(24) = 'dffar'
         ! parse command line
         if( describe ) call print_doc_stackops
         call cline%parse( keys_required(:2),keys_optional(:24) )
