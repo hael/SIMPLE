@@ -305,6 +305,11 @@ contains
         call self%raise_hard_ctf_exception(p)
         call self%recvol%new([p%boxpd,p%boxpd,p%boxpd],p%smpd)
         call self%recvol%alloc_rho(p)
+        if( p%balance .eq. 'yes' )then
+            if( .not. self%a%isthere('proj') )then
+                call self%a%set_projs(self%e)
+            endif
+        endif
         write(*,'(A)') '>>> DONE BUILDING RECONSTRUCTION TOOLBOX'
         self%rec_tbox_exists = .true.
     end subroutine build_rec_tbox
@@ -326,6 +331,11 @@ contains
         call self%kill_eo_rec_tbox
         call self%raise_hard_ctf_exception(p)
         call self%eorecvol%new(p)
+        if( p%balance .eq. 'yes' )then
+            if( .not. self%a%isthere('proj') )then
+                call self%a%set_projs(self%e)
+            endif
+        endif
         write(*,'(A)') '>>> DONE BUILDING EO RECONSTRUCTION TOOLBOX'
         self%eo_rec_tbox_exists = .true.
     end subroutine build_eo_rec_tbox

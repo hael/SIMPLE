@@ -97,6 +97,7 @@ type :: oris
     procedure, private :: set_all2single_1
     procedure, private :: set_all2single_2
     generic            :: set_all2single => set_all2single_1, set_all2single_2
+    procedure          :: set_projs
     procedure          :: e3swapsgn
     procedure          :: swape1e3
     procedure          :: zero
@@ -1300,6 +1301,18 @@ contains
     end subroutine set_all2single_2
 
     !>  \brief  is a setter
+    subroutine set_projs( self, e_space )
+        class(oris), intent(inout) :: self
+        class(oris), intent(inout) :: e_space
+        integer    :: i
+        type(ori)  :: o
+        do i=1,self%n
+            o = self%get_ori(i)
+            call self%set(i, 'proj', real(e_space%find_closest_proj(o)))
+        end do
+    end subroutine set_projs
+
+    !>  \brief  is a setter
     subroutine e3swapsgn( self )
         class(oris), intent(inout) :: self
         integer :: i
@@ -2413,8 +2426,10 @@ contains
         l_proj = .false.
         select case(which)
             case('class')
+                if( .not. self%isthere('class') ) stop 'class label must be set; oris :: balance'
                 n = self%get_ncls()
             case('proj')
+                if( .not. self%isthere('proj') ) stop 'proj label must be set; oris :: balance'
                 n = self%get_nprojs()
                 l_proj = .true.
             case DEFAULT
