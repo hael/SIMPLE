@@ -124,6 +124,7 @@ contains
         call del_file(finish_indicator)
         call cline%gen_job_descr(job_descr)
         call self%qscripts%generate_script(job_descr, self%qdescr, self%simple_exec_bin, script_name, outfile)
+        call wait_for_closure(script_name) !!!!!
         call self%qscripts%submit_script(script_name)
         call qsys_watcher(finish_indicator)
         call del_file(finish_indicator)

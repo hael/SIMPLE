@@ -67,7 +67,7 @@ contains
         integer,        intent(in)    :: which_iter
         logical,        intent(inout) :: update_res, converged
         type(oris) :: prime3D_oris
-        real       :: norm, corr_thresh, skewness, frac_srch_space
+        real       :: norm, corr_thresh, skewness, frac_srch_space, extr_thresh
         integer    :: iptcl, inptcls, istate
         integer    :: statecnt(p%nstates)
         inptcls = p%top - p%fromp + 1
@@ -110,9 +110,15 @@ contains
 
         ! EXTREMAL LOGICS
         if( p%refine.eq.'het' )then
-            if( frac_srch_space < 98. .or. p%extr_thresh > 0.025 )then
-                corr_thresh  = b%a%extremal_bound(p%extr_thresh)
-                statecnt(:)  = 0
+            if( frac_srch_space < 98. .or. which_iter <= 15 )then
+            ! if( frac_srch_space < 98. .or. extr_thresh > 0.025 )then
+                !extr_thresh = p%extr_thresh                                          ! factorial decay: the old way
+                !extr_thresh = EXTRINITHRESH * exp(-(real(which_iter-1)/6.)**2. / 2.) ! gaussian decay: untested
+                extr_thresh = EXTRINITHRESH * cos(PI/2. * real(which_iter-1)/15.)   ! cosine decay
+                extr_thresh = max(0., extr_thresh)
+                extr_thresh = min(EXTRINITHRESH, extr_thresh)
+                corr_thresh = b%a%extremal_bound(extr_thresh)
+                statecnt(:) = 0
             else
                 corr_thresh = -huge(corr_thresh)
             endif
@@ -198,8 +204,9 @@ contains
                 !$omp end parallel do
             case('het')
                 if(p%oritab .eq. '') stop 'cannot run the refine=het mode without input oridoc (oritab)'
-                if( corr_thresh > 0. )then
-                    write(*,'(A,F8.2)') '>>> PARTICLE RANDOMIZATION(%):', 100.*p%extr_thresh
+                if( corr_thresh > TINY )then
+                    ! write(*,'(A,F8.2)') '>>> PARTICLE RANDOMIZATION(%):', 100.*p%extr_thresh
+                    write(*,'(A,F8.2)') '>>> PARTICLE RANDOMIZATION(%):', 100.*extr_thresh
                     write(*,'(A,F8.2)') '>>> CORRELATION THRESHOLD:    ', corr_thresh
                 endif
                 !$omp parallel do default(shared) schedule(guided) private(iptcl) reduction(+:statecnt) proc_bind(close)
@@ -207,7 +214,7 @@ contains
                     call primesrch3D(iptcl)%exec_prime3D_srch_het(pftcc, iptcl, b%a, b%e, corr_thresh, statecnt)
                 end do
                 !$omp end parallel do
-                if(corr_thresh > 0.)then
+                if( corr_thresh > TINY )then
                     norm = real(sum(statecnt))
                     do istate=1,p%nstates
                         print *,'% randomized ptcls for state ',istate,' is ',100.*(real(statecnt(istate))/norm),&

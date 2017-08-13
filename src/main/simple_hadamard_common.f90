@@ -233,11 +233,10 @@ contains
         type(ori),         intent(inout) :: o
         type(ctf)         :: tfun
         real              :: x, y, dfx, dfy, angast
-        integer           :: state, cls
+        integer           :: cls
         x     = o%get('x')
         y     = o%get('y')
         cls   = nint(o%get('class'))
-        state = nint(o%get('state'))
         ! move to Fourier space
         call b%img%fwd_ft
         ! set CTF parameters

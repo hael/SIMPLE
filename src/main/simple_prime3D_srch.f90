@@ -704,12 +704,18 @@ contains
         class(oris),             intent(inout) :: a, e
         real,                    intent(in)    :: extr_bound
         integer,                 intent(inout) :: statecnt(self%nstates)
+        real, allocatable :: frc(:)
         type(ori) :: o
         integer   :: iref, state
         real      :: corr, mi_state, frac, corrs(self%nstates)
-        if( nint(a%get(iptcl, 'state')) > 0 )then
+        self%prev_state = nint(a%get(iptcl, 'state'))
+        if( self%prev_state > self%nstates ) stop 'previous best state outside boundary; stochastic_srch_het; simple_prime3D_srch'
+        if( .not. self%state_exists(self%prev_state) ) stop 'empty previous state; stochastic_srch_het; simple_prime3D_srch'
+        if( self%prev_state > 0 )then
             ! initialize
-            call self%prep4srch(pftcc, iptcl, a, e, 0.)
+            o = a%get_ori(iptcl)
+            self%prev_roind = pftcc%get_roind(360.-o%e3get())
+            self%prev_proj  = e%find_closest_proj(o,1)
             if(a%get(iptcl,'corr') < extr_bound)then
                 ! state randomization
                 statecnt(self%prev_state) = statecnt(self%prev_state) + 1
@@ -723,35 +729,40 @@ contains
             else
                 ! SHC
                 corrs = -1.
-                do state=1,self%nstates
+                do state = 1, self%nstates
                     if( .not.self%state_exists(state) )cycle
                     iref = (state-1) * self%nprojs + self%prev_proj 
                     corrs(state) = pftcc%corr(iref, iptcl, self%prev_roind)
                 enddo
-                self%prev_corr  = corrs(self%prev_state)
-                state           = shcloc(self%nstates, corrs, self%prev_corr)
+                self%prev_corr = corrs(self%prev_state)
+                state          = shcloc(self%nstates, corrs, self%prev_corr)
                 if(state == 0)state = self%prev_state ! numerical stability
                 corr            = corrs(state)
                 self%nrefs_eval = count(corrs <= self%prev_corr)
             endif
-            frac = 100.*real(self%nrefs_eval)/real(self%nstates)
-            call a%set(iptcl, 'frac', frac)
-            call a%set(iptcl, 'state', real(state))
-            call a%set(iptcl, 'corr', corr)
-            call a%set(iptcl, 'specscore', self%specscore)
-            call a%set(iptcl, 'mi_proj', 1.)
-            call a%set(iptcl, 'mi_inpl', 1.)
+            ! updates orientation
+            frac = 100.*real(self%nrefs_eval) / real(self%nstates)
+            call o%set('frac', frac)
+            call o%set('state', real(state))
+            call o%set('corr', corr)
+            call o%set('mi_proj', 1.)
+            call o%set('mi_inpl', 1.)
             if( self%prev_state .ne. state )then
                 mi_state = 0.
             else
                 mi_state = 1.
             endif
-            call a%set(iptcl, 'mi_state', mi_state)
-            call a%set(iptcl, 'mi_joint', mi_state)
-            call a%set(iptcl, 'w', 1.)
-            o = a%get_ori(iptcl)
-            call self%o_peaks%set_ori(1,o)
-            call self%update_best(pftcc, iptcl, a)
+            call o%set('mi_state', mi_state)
+            call o%set('mi_joint', mi_state)
+            call o%set('w', 1.)
+            ! specscore
+            iref = (state - 1) * self%nprojs + self%prev_proj
+            frc  = pftcc%genfrc(iref, iptcl, self%prev_roind)
+            self%specscore = max(0., median_nocopy(frc))
+            call o%set('specscore', self%specscore)
+            ! updates orientations objects
+            call self%o_peaks%set_ori(1, o)
+            call a%set_ori(iptcl, o)
         else
             call a%reject(iptcl)
         endif

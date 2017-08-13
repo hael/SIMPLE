@@ -328,7 +328,7 @@ contains
         write(funit,'(a)',advance='yes') ''
         write(funit,'(a)',advance='yes') 'exit'
         close(funit)
-        if( q_descr%get('qsys_name').eq.'local' )call chmod(trim(script_name),'+x')
+        if( trim(q_descr%get('qsys_name')).eq.'local' )call chmod(trim(script_name),'+x')
         if( ios .ne. 0 )then
             write(*,'(a)',advance='no') 'simple_qsys_ctrl :: generate_script_2; Error'
             write(*,'(a)') 'chmoding submit script'//trim(script_name)
