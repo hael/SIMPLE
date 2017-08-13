@@ -118,7 +118,6 @@ contains
             call cline_makecavgs%set('oritab',  trim(FINALDOC))
             call cline_makecavgs%set('nparts',  real(nparts))
             call cline_makecavgs%set('refs',    'cavgs_final'//p_master%ext)
-            call cline_makecavgs%set('balance', 'no')
             call xmakecavgs%execute(cline_makecavgs)
             call del_file(trim(STKSCALEDBODY)//p_master%ext)
         else

@@ -23,7 +23,6 @@ type :: params
     character(len=3)      :: async='no'        !< asynchronous (yes|no){no}
     character(len=3)      :: autoscale='yes'   !< automatic down-scaling(yes|no){yes}
     character(len=3)      :: avg='no'          !< calc average automatic (yes|no){no}
-    character(len=3)      :: balance='no'      !< population balancing restraint applied(yes|no){no}
     character(len=3)      :: bin='no'          !< binarise image(yes|no){no}
     character(len=3)      :: center='yes'      !< center image(s)/class average(s)/volume(s)(yes|no){no}
     character(len=3)      :: clustvalid='no'   !< validate clustering(yes|homo|no){no}
@@ -256,6 +255,7 @@ type :: params
     real    :: astigerr=0.         !< astigmatism error(in microns)
     real    :: astigtol=0.05       !< expected (tolerated) astigmatism(in microns){0.1}
     real    :: athres=0.           !< angular threshold(in degrees)
+    real    :: balance=0.0         !< # sigmas for population balancing restraint{0}
     real    :: batchfrac=1.0
     real    :: bfac=200            !< bfactor for sharpening/low-pass filtering(in A**2){200.}
     real    :: bfacerr=50.         !< bfactor error in simulated images(in A**2){0}
@@ -416,7 +416,6 @@ contains
         call check_carg('automsk',        self%automsk)
         call check_carg('autoscale',      self%autoscale)
         call check_carg('avg',            self%avg)
-        call check_carg('balance',        self%balance)
         call check_carg('bin',            self%bin)
         call check_carg('boxtype',        self%boxtype)
         call check_carg('center',         self%center)
@@ -618,6 +617,7 @@ contains
         call check_rarg('astigerr',       self%astigerr)
         call check_rarg('astigtol',       self%astigtol)
         call check_rarg('athres',         self%athres)
+        call check_rarg('balance',        self%balance)
         call check_rarg('batchfrac',      self%batchfrac)
         call check_rarg('bfac',           self%bfac)
         call check_rarg('bfacerr',        self%bfacerr)

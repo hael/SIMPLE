@@ -424,8 +424,8 @@ contains
         ! calculate particle weights
         call o%calc_spectral_weights(p%frac)
         ! population balancing logics
-        if( p%balance .eq. 'yes' )then
-            call o%balance('proj', skewness)
+        if( p%balance > TINY )then
+            call o%balance('proj', p%balance, skewness)
             write(*,'(A,F8.2)') '>>> PROJECTION DISTRIBUTION SKEWNESS(%):', 100. * skewness
         else
             call o%set_all2single('state_balance', 1.0)

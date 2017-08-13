@@ -577,7 +577,7 @@ contains
         type(build)       :: b
         type(ori)         :: orientation
         type(params)      :: p
-        real              :: normal(3), thresh, corr
+        real              :: normal(3), thresh, corr, skewness
         integer           :: s, i, nincl, ind, icls, ncls
         real, allocatable :: corrs(:)
         p = params(cline)
@@ -653,6 +653,10 @@ contains
             call b%a%new(p%nspace)
             call b%a%spiral
             write(*,*) 'NPEAKS: ', b%a%find_npeaks_from_athres( p%athres )
+        endif
+        if( cline%defined('balance') )then
+            call b%a%balance('proj', p%balance, skewness)
+            write(*,'(A,F8.2)') '>>> PROJECTION DISTRIBUTION SKEWNESS(%):', 100. * skewness
         endif
         call b%a%write(p%outfile)
         call simple_end('**** SIMPLE_ORISOPS NORMAL STOP ****')

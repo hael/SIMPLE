@@ -235,8 +235,8 @@ contains
         endif
 
         ! POPULATION BALANCING LOGICS
-        if( p%balance .eq. 'yes' )then
-            call b%a%balance('proj', skewness)
+        if( p%balance > TINY )then
+            call b%a%balance('proj', p%balance, skewness)
             write(*,'(A,F8.2)') '>>> PROJECTION DISTRIBUTION SKEWNESS(%):', 100. * skewness
         else
             call b%a%set_all2single('state_balance', 1.0)

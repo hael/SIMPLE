@@ -28,7 +28,7 @@ contains
         call chdict%push('avg',           'calculate average(yes|no)')
         call chdict%push('bfac',          'bfactor for sharpening/low-pass filtering(in A**2){200.}')
         call chdict%push('bfacerr',       'bfactor error in simulated images(in A**2){0}')
-        call chdict%push('balance',       'population balancing restraint applied(yes|no){no}')
+        call chdict%push('balance',       '# sigmas for population balancing restraint{0}')
         call chdict%push('bin',           'binarise image(yes|no){no}')
         call chdict%push('binwidth',      'binary layers grown for molecular envelope(in pixels){1}')
         call chdict%push('box',           'square image size(in pixels)')

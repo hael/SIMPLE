@@ -2411,16 +2411,17 @@ contains
 
     !>  \brief  applies a one-sided balance restraint on the number of particles
     !!          in projection groups based on corr/specscore order
-    subroutine balance( self, which, skewness )
-        use simple_math, only: median_nocopy
+    subroutine balance( self, which, nsig, skewness )
         class(oris),      intent(inout) :: self
         character(len=*), intent(in)    :: which
+        real,             intent(in)    :: nsig
         real,             intent(out)   :: skewness
         integer, allocatable :: inds(:), inds_tmp(:)
         logical, allocatable :: included(:)
         real,    allocatable :: pops(:), scores(:), nonzero_pops(:)
+        real    :: ave, sdev, var
         integer :: i, j, n, pop, pop_thres
-        logical :: use_specscore, l_proj
+        logical :: use_specscore, l_proj, err
         use_specscore = self%isthere('specscore')
         ! decide whether to do proj or class analysis
         l_proj = .false.
@@ -2446,7 +2447,8 @@ contains
             endif
         end do
         nonzero_pops = pack(pops, pops > 0.5)
-        pop_thres    = nint(median_nocopy(nonzero_pops))
+        call moment(nonzero_pops, ave, sdev, var, err )
+        pop_thres = nint(ave + nsig * sdev)
         ! apply the one-sided population treshold
         included = .false.
         do i=1,n
