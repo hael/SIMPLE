@@ -49,19 +49,27 @@ contains
 
     !> \brief for parsing the command line arguments passed as key=val
     subroutine parse( self, keys_required, keys_optional )
-        use simple_args, only: args
+        use simple_args,         only: args
+        use simple_filehandling, only: get_fileunit
         class(cmdline),             intent(inout) :: self
         character(len=*), optional, intent(in)    :: keys_required(:), keys_optional(:)
         character(len=STDLEN) :: arg
         type(args)            :: allowed_args
         integer               :: i, ri, cmdstat, cmdlen, cntbin, ikey
-        integer               :: cnttxt, io_stat, nreq, cmdargcnt
+        integer               :: cnttxt, io_stat, nreq, cmdargcnt, funit
         logical               :: distr_exec
         character(len=STDLEN) :: exec_name
         call getarg(0,exec_name)
         distr_exec = str_has_substr(exec_name,'distr')
         cmdargcnt = command_argument_count()
         call get_command(self%entire_line)
+        ! write the command line to file
+        if( .not. str_has_substr(self%entire_line,'nparts') )then
+            funit = get_fileunit()
+            open(unit=funit, status='replace', action='write', file='cmdline.txt')
+            write(funit,'(a)') trim(self%entire_line)
+            close(funit)
+        endif
         DebugPrint ' command_argument_count: ', cmdargcnt 
         if( present(keys_required) )then
             if( str_has_substr(self%entire_line,'prg=') )then

@@ -766,6 +766,7 @@ select case(prg)
         keys_optional(7)  = 'inner'
         keys_optional(8)  = 'width'
         keys_optional(9)  = 'nspace'
+        keys_optional(10) = 'balance'
         ! parse command line
         if( describe ) call print_doc_het_ensemble
         call cline%parse(keys_required(:9), keys_optional(:9))

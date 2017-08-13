@@ -280,9 +280,11 @@ contains
         if( p%l_envmsk .and. p%automsk .eq. 'cavg' )then
             ! 2D adaptive cos-edge mask
             call b%mskimg%apply_adamask2ptcl_2D(b%img_match, cls)
-        else if( p%l_envmsk )then
-            ! 3D adaptive cos-edge mask
-            call b%mskvol%apply_adamask2ptcl_3D(o, b%img_match)
+        ! TOOK OUT: THE AUTOMASKING IS STILL NOT WORKING
+        ! BEST STRATEGY IS PROBABLY TO LEAVE PARTICLES ALONE AND MASK THE VOL
+        ! else if( p%l_envmsk )then
+        !     ! 3D adaptive cos-edge mask
+        !     call b%mskvol%apply_adamask2ptcl_3D(o, b%img_match)
         else              
             ! soft-edged mask
             if( p%l_innermsk )then

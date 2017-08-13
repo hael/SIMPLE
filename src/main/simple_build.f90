@@ -412,6 +412,11 @@ contains
             nnn = p%nnn
             call self%se%nearest_neighbors(self%e, nnn, self%nnmat)
         endif
+        if( p%balance > TINY )then
+            if( .not. self%a%isthere('proj') )then
+                call self%a%set_projs(self%e)
+            endif
+        endif
         write(*,'(A)') '>>> DONE BUILDING HADAMARD PRIME3D TOOLBOX'
         self%hadamard_prime3D_tbox_exists = .true.
     end subroutine build_hadamard_prime3D_tbox
@@ -506,6 +511,11 @@ contains
         call alloc_err('build_hadamard_prime3D_tbox; simple_build, 2', alloc_stat)
         call self%recvols(1)%new([p%boxpd,p%boxpd,p%boxpd],p%smpd)
         call self%recvols(1)%alloc_rho(p)
+        if( p%balance > TINY )then
+            if( .not. self%a%isthere('proj') )then
+                call self%a%set_projs(self%e)
+            endif
+        endif
         write(*,'(A)') '>>> DONE BUILDING EXTREMAL3D TOOLBOX'
         self%extremal3D_tbox_exists = .true.
     end subroutine build_extremal3D_tbox
