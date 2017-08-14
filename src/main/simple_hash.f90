@@ -1,6 +1,6 @@
 ! real hash data structure
 module simple_hash
-use simple_defs
+use simple_defs    ! use all in there
 use simple_strings ! use all in there
 implicit none
 
@@ -8,6 +8,7 @@ public :: hash, test_hash
 private
 
 integer, parameter :: NMAX=100 !< maximum number of entries in hash table
+
 !> hash stuct
 type :: hash
     private
@@ -23,6 +24,8 @@ type :: hash
     procedure :: set
     procedure :: isthere
     procedure :: get
+    procedure :: get_keys
+    procedure :: get_vals
     procedure :: hash2str
     procedure :: print
     procedure :: write
@@ -54,9 +57,9 @@ contains
     
     !>  \brief  pushes values to the hash
     subroutine push( self, key, val )
-        class(hash), intent(inout)   :: self
-        character(len=*), intent(in) :: key
-        real, intent(in)             :: val
+        class(hash),      intent(inout) :: self
+        character(len=*), intent(in)    :: key
+        real,             intent(in)    :: val
         self%hash_index = self%hash_index+1
         if( self%hash_index > NMAX )then
             write(*,*) 'Hash table full; push; simple_hash, nentries:', self%hash_index
@@ -75,9 +78,9 @@ contains
     
     !>  \brief  sets a value in the hash 
     subroutine set( self, key, val )
-        class(hash), intent(inout)   :: self
-        character(len=*), intent(in) :: key
-        real, intent(in)             :: val
+        class(hash),      intent(inout) :: self
+        character(len=*), intent(in)    :: key
+        real,             intent(in)    :: val
         integer :: i
         if( self%hash_index >= 1 )then
             do i=1,self%hash_index
@@ -92,8 +95,8 @@ contains
     
     !>  \brief  check for presence of key in the hash
     function isthere( self, key ) result( found )
-        class(hash), intent(inout)   :: self
-        character(len=*), intent(in) :: key
+        class(hash),      intent(inout) :: self
+        character(len=*), intent(in)    :: key
         integer :: i
         logical :: found
         found = .false.
@@ -109,9 +112,9 @@ contains
     
     !>  \brief  gets a value in the hash
     function get( self, key ) result( val ) 
-        class(hash), intent(inout)   :: self
-        character(len=*), intent(in) :: key
-        real                         :: val
+        class(hash),      intent(inout) :: self
+        character(len=*), intent(in)    :: key
+        real    :: val
         integer :: i
         val = 0.
         do i=1,self%hash_index
@@ -121,6 +124,20 @@ contains
             endif
         end do
     end function get
+
+    !>  \brief  returns the keys of the hash
+    function get_keys( self ) result( keys )
+        class(hash), intent(inout) :: self
+        character(len=32), allocatable :: keys(:)
+        allocate(keys(self%hash_index), source=self%keys(:self%hash_index))
+    end function get_keys
+
+    !>  \brief  returns the values of the hash
+    function get_vals( self ) result( vals )
+        class(hash), intent(inout) :: self
+        real(kind=4), allocatable  :: vals(:)
+        allocate(vals(self%hash_index), source=self%vals(:self%hash_index))
+    end function get_vals
 
     !>  \brief  convert hash to string
     function hash2str( self ) result( str )
@@ -161,8 +178,8 @@ contains
     !>  \brief  writes the hash to file
     subroutine write( self, fnr )
         class(hash), intent(inout) :: self
-        integer, intent(in)        :: fnr
-        integer                    :: i
+        integer,     intent(in)    :: fnr
+        integer :: i
         do i=1,self%hash_index-1
             write(fnr,"(1X,A,A)", advance="no") trim(self%keys(i)), '='
             write(fnr,"(A)", advance="no") trim(real2str(self%vals(i)))

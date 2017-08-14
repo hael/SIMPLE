@@ -190,7 +190,7 @@ contains
             ran = ran3()
             if( present(ran_eo) ) ran = ran_eo 
             orisoft = orientation
-            do jpeak=1, npeaks
+            do jpeak=1,npeaks
                 DebugPrint  '*** simple_hadamard_common ***: gridding, iteration:', jpeak
                 ! get ori info
                 if( l_softrec )then

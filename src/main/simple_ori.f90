@@ -61,6 +61,7 @@ type :: ori
     generic            :: getter => getter_1, getter_2
     procedure          :: get_shift
     procedure          :: hash_size
+    procedure          :: hash_keys
     procedure          :: chash_size
     procedure          :: chash_nmax
     procedure          :: isthere
@@ -497,6 +498,13 @@ contains
         integer :: sz
         sz = self%htab%size_of_hash()
     end function hash_size
+
+    !>  \brief  returns the keys of the hash
+    function hash_keys( self ) result( keys )
+        class(ori), intent(inout) :: self
+        character(len=32), allocatable :: keys(:)
+        keys = self%htab%get_keys()
+    end function hash_keys
 
     !>  \brief  returns size of chash
     function chash_size( self ) result( sz )

@@ -156,24 +156,24 @@ contains
     !>  \brief open the file(s) for the imgfile
     subroutine open_local( self, del_if_exists, rwaction )
         class(imgfile),             intent(inout) :: self   !< Imagefile object 
-        logical, optional,          intent(in) :: del_if_exists !< overwrite flag
+        logical,          optional, intent(in) :: del_if_exists !< overwrite flag
         character(len=*), optional, intent(in) :: rwaction      !< read/write flag
         character(len=9) :: rw_str
         character(len=7) :: stat_str
-        ! We need to prepare a string for the open statement
+        ! prepare a string for the open statement
         if( present(rwaction) )then
             rw_str = trim(rwaction)
         else
             rw_str = 'READWRITE'
         endif
-        ! What is the status of the file?
+        ! what is the status of the file?
         stat_str = 'UNKNOWN'
         if( present(del_if_exists) )then
             if( del_if_exists )then
                 call del_file(self%fname)
             endif
         endif
-        ! Get an IO unit number for the head file
+        ! get an IO unit number 
         self%funit = get_fileunit()
 #ifdef INTEL
         open(unit=self%funit,access='STREAM',file=self%fname,action=rw_str,status=stat_str)

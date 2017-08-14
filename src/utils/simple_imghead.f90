@@ -459,8 +459,6 @@ contains
             write(unit=lun,pos=ppos,iostat=io_status) self%byte_array
             if( io_status .ne. 0 )then
                 write(*,'(a,i0,a)') '**error(ImgHead::write): error ', io_status, ' when writing header bytes to disk'
-                print *, allocated(self%byte_array)
-                print *, lun
                 stop 'I/O error; write; simple_imghead'
             endif
         class DEFAULT
