@@ -90,12 +90,16 @@ contains
             if( p%nptcls <= SPECWMINPOP )then
                 call b%a%set_all2single('w', 1.0)
             else
+                ! frac is one by default in prime2D (no option to set frac)
+                ! so spectral weighting is done over all images
                 call b%a%calc_spectral_weights(1.0)
             endif
         else
             call b%a%set_all2single('w', 1.0)
         endif
         if( p%l_distr_exec .and. nint(cline%get_rarg('part')) .eq. 1 )then
+            call b%a%write(p%oritab)
+        else
             call b%a%write(p%oritab)
         endif
         if( cline%defined('filwidth') )then

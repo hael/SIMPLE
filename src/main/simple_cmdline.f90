@@ -64,10 +64,15 @@ contains
         cmdargcnt = command_argument_count()
         call get_command(self%entire_line)
         ! write the command line to file
-        if( .not. str_has_substr(self%entire_line,'nparts') )then
+        if( str_has_substr(self%entire_line,'part=' ) .and.&
+           &str_has_substr(self%entire_line,'fromp=') .and.&
+           &str_has_substr(self%entire_line,'top='  ) )then
+            ! do nothing
+        else
+            ! write the command line to a file (biological memory support)
             funit = get_fileunit()
             open(unit=funit, status='replace', action='write', file='cmdline.txt')
-            write(funit,'(a)') trim(self%entire_line)
+            write(funit,'(a256)') adjustl(trim(self%entire_line))
             close(funit)
         endif
         DebugPrint ' command_argument_count: ', cmdargcnt 

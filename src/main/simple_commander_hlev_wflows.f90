@@ -145,11 +145,11 @@ contains
     !!    smpd=1.62 msk=88 pgrp=d2 pgrp_known=yes nparts=2 nthr=4 >& INI3DOUT &
     !!```
     subroutine exec_ini3D_from_cavgs( self, cline )
-        use simple_commander_volops,  only: projvol_commander
-        use simple_commander_rec,     only: recvol_commander
-        use simple_strings,           only: int2str_pad, str2int
-        use simple_scaler,            only: scaler
-        use simple_oris,              only: oris
+        use simple_commander_volops, only: projvol_commander
+        use simple_commander_rec,    only: recvol_commander
+        use simple_strings,          only: int2str_pad, str2int
+        use simple_scaler,           only: scaler
+        use simple_oris,             only: oris
         class(ini3D_from_cavgs_commander), intent(inout) :: self
         class(cmdline),                    intent(inout) :: cline
         ! constants

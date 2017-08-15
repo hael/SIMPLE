@@ -590,9 +590,7 @@ contains
         if( p%mirr .eq. '3d' ) call b%a%mirror3d ! mirror input Eulers
         if( cline%defined('e1') )then ! rotate input Eulers
             call orientation%new
-            call orientation%e1set(p%e1)
-            call orientation%e2set(p%e2)
-            call orientation%e3set(p%e3)
+            call orientation%set_euler([p%e1,p%e2,p%e3])
             if( cline%defined('state') )then
                 do i=1,b%a%get_noris()
                     s = nint(b%a%get(i, 'state'))
@@ -674,13 +672,13 @@ contains
         class(oristats_commander), intent(inout) :: self
         class(cmdline),            intent(inout) :: cline
         type(build)          :: b
-        type(oris)           :: o, ten_highest, ten_lowest
+        type(oris)           :: o, nonzero_pop_o, zero_pop_o
         type(ori)            :: o_single
         type(params)         :: p
         real                 :: mind, maxd, avgd, sdevd, sumd, vard
         real                 :: mind2, maxd2, avgd2, sdevd2, vard2, homo_cnt, homo_avg
         real                 :: popmin, popmax, popmed, popave, popsdev, popvar, frac_populated
-        integer              :: nprojs, iproj, cnt
+        integer              :: nprojs, iproj, cnt_zero, cnt_nonzero, n_zero, n_nonzero
         real,    allocatable :: projpops(:), tmp(:)
         integer, allocatable :: projinds(:)
         logical              :: err
@@ -739,30 +737,24 @@ contains
                 write(*,'(a,1x,f8.2)') 'MEDIAN POPULATION        :', popmed
                 write(*,'(a,1x,f8.2)') 'AVERAGE POPULATION       :', popave
                 write(*,'(a,1x,f8.2)') 'SDEV OF POPULATION       :', popsdev
-                allocate(projinds(nprojs))
-                projinds = (/(iproj,iproj=1,nprojs)/)
-                call hpsort(nprojs, tmp, projinds)
-                call ten_highest%new(10)
-                ! 10 highest
-                cnt = 0
-                do iproj=nprojs,nprojs - 10 + 1,-1
-                    cnt = cnt + 1
-                    o_single = b%e%get_ori(projinds(iproj))
-                    call ten_highest%set_ori(cnt,o_single)
-                end do
-                call ten_highest%write('ten_highest_pop_pdirs.txt')
-                ! 10 lowest
-                call ten_lowest%new(10)
-                cnt = 0
-                do iproj=1,p%nspace
-                    if( tmp(iproj) > 0.5 )then
-                        cnt = cnt + 1
-                        o_single = b%e%get_ori(projinds(iproj))
-                        call ten_lowest%set_ori(cnt,o_single)
-                        if( cnt == 10 ) exit
+                n_zero    = count(tmp < 0.5)
+                n_nonzero = nprojs - n_zero
+                call zero_pop_o%new(n_zero)
+                call nonzero_pop_o%new(n_nonzero)
+                cnt_zero    = 0
+                cnt_nonzero = 0
+                do iproj=1,nprojs
+                    o_single = b%e%get_ori(iproj)
+                    if( tmp(iproj) < 0.5 )then
+                        cnt_zero = cnt_zero + 1
+                        call zero_pop_o%set_ori(cnt_zero,o_single)
+                    else
+                        cnt_nonzero = cnt_nonzero + 1
+                        call nonzero_pop_o%set_ori(cnt_nonzero,o_single)
                     endif
                 end do
-                call ten_lowest%write('ten_lowest_pop_pdirs.txt')
+                call nonzero_pop_o%write('pop_zero_pdirs.txt')
+                call zero_pop_o%write('pop_nonzero_pdirs.txt')
             endif
             if( p%trsstats .eq. 'yes' )then
                 call b%a%stats('x', avgd, sdevd, vard, err )

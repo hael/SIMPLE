@@ -2393,6 +2393,7 @@ contains
             case DEFAULT
                 stop 'unsupported which flag; simple_oris :: balance'
         end select
+        allocate(included(self%n))
         included = .false.
         do i=1,n
             if( l_proj )then

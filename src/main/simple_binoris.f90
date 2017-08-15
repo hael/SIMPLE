@@ -258,9 +258,13 @@ contains
             ! transfer os_peak data to self%record
             if( self%n_peaks /= os_peak%get_noris() ) stop 'nonconforming os_peak size; binoris :: write_record'        
             cnt = self%n_hash_vals
-            do iflag=1,NOPEAKFLAGS
-                do ipeak=1,self%n_peaks
+            do ipeak=1,self%n_peaks
+                do iflag=1,NOPEAKFLAGS
                     cnt = cnt + 1
+                    if( .not. os_peak%isthere(trim(o_peak_flags(iflag))) )then
+                        write(*,'(a)') 'WARNING! The '//trim(o_peak_flags(iflag))//' is missing from os_peak'
+                        write(*,'(a)') 'In: simple_binors; write_record'
+                    endif
                     self%record(cnt) = os_peak%get(ipeak, trim(o_peak_flags(iflag)))
                 end do
             end do
@@ -305,6 +309,7 @@ contains
         if( present(os_peak) )then
             ! transfer os_peak data
             cnt = self%n_hash_vals
+            call os_peak%new(self%n_peaks)
             do ipeak=1,self%n_peaks
                 euls = 0.
                 do iflag=1,NOPEAKFLAGS

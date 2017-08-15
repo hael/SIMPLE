@@ -164,12 +164,18 @@ contains
         ! set best to previous best by default
         self%best_class = self%prev_class         
         self%best_rot   = self%prev_rot
-        ! calculate previous best corr (treshold for better)
-        self%prev_corr  = max( 0., pftcc%corr(self%prev_class, iptcl, self%prev_rot) )
-        self%best_corr  = self%prev_corr
-        ! calculate spectral score
-        frc = pftcc%genfrc(self%prev_class, iptcl, self%prev_rot)
-        self%specscore  = max(0.,median_nocopy(frc))
+        if( self%prev_class > 0 )then
+            ! calculate previous best corr (treshold for better)
+            self%prev_corr  = max( 0., pftcc%corr(self%prev_class, iptcl, self%prev_rot) )
+            self%best_corr  = self%prev_corr
+            ! calculate spectral score
+            frc = pftcc%genfrc(self%prev_class, iptcl, self%prev_rot)
+            self%specscore  = max(0.,median_nocopy(frc))
+        else
+            self%prev_corr = 0.
+            self%best_corr = 0.
+            self%specscore = 1.
+        endif
         ! make random reference direction order
         rt = ran_tabu(self%nrefs)
         if( allocated(self%srch_order) ) deallocate(self%srch_order)
