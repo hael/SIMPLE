@@ -1325,11 +1325,15 @@ static void simpleJob(struct mg_connection *nc, std::string messagedata){
 							}
 							if(unidocprocessed){
 								unidocs.push_back(unidocfilename);
+								UniDoc* unidoc = new UniDoc(); 
+								readUniDoc(unidoc, unidocfilename);
 								// ADD INFO FROM UNIDOC TO STARFUILE
+								starfile->data.push_back(unidoc->data[0]);
+								delete unidoc;
+								writeStarFile(starfile, "micrographs_preproc.star");
 							}
 						}
 					}
-					writeStarFile(starfile, "micrographs_preproc.star");
 					usleep(60000000);
 				}
 			}

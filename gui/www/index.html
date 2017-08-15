@@ -310,6 +310,7 @@
 			element.style.backgroundColor = "orange";
 			
 			var job = document.getElementById(element.id + "job");
+			jobWorkflowReset(job);
 			var jobdescription = job.getElementsByClassName('jobdescription')[0].innerHTML;
 			var newjobdescription = document.getElementById("newjobdescription");
 			newjobdescription.innerHTML = jobdescription;
@@ -774,6 +775,76 @@
 			websocketSend(message);
 			console.log(message);
 		}
+		
+		function jobWorkflowReset(element){
+			console.log(element.id);
+			var workflowelements = element.getElementsByClassName('jobworkflowheader');
+			var workflowpages = element.getElementsByClassName('jobworkflowpage');
+			element.getElementsByClassName('jobworkflow')[0].id = 0;
+			for(var i = 0; i < workflowelements.length; i++){
+				workflowelements[i].style.background =  "#7891b0";
+				workflowpages[i].style.display =  "none";
+			}
+			workflowelements[0].style.background =  "orange";
+			workflowpages[0].style.display =  "block";
+			element.getElementsByClassName('newjobbutton')[1].innerHTML = "Next";
+			element.getElementsByClassName('newjobbutton')[0].style.display = "none"
+		}
+		
+		function jobWorkflowNext(element){
+			var parent = element.parentNode.parentNode;
+			var id = parent.getElementsByClassName('jobworkflow')[0].id;
+			var workflowelements = parent.getElementsByClassName('jobworkflowheader');
+			var workflowpages = parent.getElementsByClassName('jobworkflowpage');
+			var jobargsrequired = workflowpages[id].getElementsByClassName('jobargrequired');
+			
+			for(var i = 0; i < jobargsrequired.length; i++){
+				if(jobargsrequired[i].value == ""){
+						jobargsrequired[i].style.border = "solid red";
+					return;
+				}
+				jobargsrequired[i].style.border = "none";
+			}
+			
+			if(id == (workflowelements.length - 1)){
+				document.getElementById("job").style.display = "none"; 
+				document.getElementById("gauze").style.display = "none";
+				newJob(element.parentNode);
+				return;
+			}
+			
+			workflowelements[id].style.background = "#7891b0";
+			workflowpages[id].style.display =  "none";
+
+			id++;
+			parent.getElementsByClassName('jobworkflow')[0].id = id;
+			workflowelements[id].style.background = "orange";
+			workflowpages[id].style.display =  "block";
+			if(id == (workflowelements.length - 1)){
+				element.innerHTML = "Run";
+			}
+			parent.getElementsByClassName('newjobbutton')[0].style.display = "inline-block"
+		}
+		
+		function jobWorkflowBack(element){
+			var parent = element.parentNode.parentNode;
+			var id = parent.getElementsByClassName('jobworkflow')[0].id;
+			var workflowelements = parent.getElementsByClassName('jobworkflowheader');
+			var workflowpages = parent.getElementsByClassName('jobworkflowpage');
+			workflowelements[id].style.background = "#7891b0";
+			workflowpages[id].style.display =  "none";
+			id--;
+			parent.getElementsByClassName('jobworkflow')[0].id = id;
+			workflowelements[id].style.background = "orange";
+			workflowpages[id].style.display =  "block";
+			if(id != (workflowelements.length - 1)){
+				parent.getElementsByClassName('newjobbutton')[1].innerHTML = "Next"
+			}
+			if(id == 0){
+				element.style.display = "none";
+			}
+		}
+		
 			
 	</script>
 	</body>

@@ -8,3 +8,4 @@ make install
 # Compile gui
 cd <install_dir>
 g++ simple_gui.cpp mongoose.c  libjpeg/lib/libjpeg.a -O3 -pthread -DSIMPLE_DIR=<simple_install_location> -lsqlite3 -o simple -Ilibjpeg/include/
+#g++ simple_mongoose.cpp mongoose.c  libjpeg/lib/libjpeg.a -O3 -pthread -DSIMPLE_DIR=/beegfs/software/electron_microscopy/simple/simple_git -lsqlite3 -o simple -Ilibjpeg/include/

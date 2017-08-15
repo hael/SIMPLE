@@ -1,21 +1,19 @@
 <div class=jobheader>
 	Unblur Movies
+	<img class=jobclose src=close.png onclick='document.getElementById("job").style.display = "none"; document.getElementById("gauze").style.display = "none"'>
 </div>
 
 <div class=jobdescription>
 	Motion correct movies and calculate CTF parameters
 </div>
 
-<div class=jobcolumnselect>
-	<div class=jobcolumnheader>Parameters</div>
-	<div class=jobtabselect id=parameters onclick="selectJobTab(this);">Job Parameters</div>
-	<div class=jobtabselect id=required onclick="selectJobTab(this);">Required Arguments</div>
-	<div class=jobtabselect id=optional onclick="selectJobTab(this);">Optional Arguments</div>
-	<div class=jobtabselect id=run onclick="selectJobTab(this);">Run Parameters</div>
+<div class=jobworkflow id=0>
+	<div class=jobworkflowheader>Description</div>
+	<div class=jobworkflowheader>Arguments</div>
+	<div class=jobworkflowheader>Run</div>
 </div>
 
-<div class="jobcolumn parameters">
-	<div class=jobcolumnheader>Job Parameters</div>
+<div class=jobworkflowpage>
 	<input class=jobarg type=hidden id=cmd value=simplejob>
 	<input class=jobarg type=hidden id=taskname value=unblurjob>
 	<input class=jobarg type=hidden id=prg value=unblur>
@@ -26,31 +24,30 @@
 	</div>	
 	<div class=jobcolumnrow>	
 		<div class=jobargname>Job Description</div>
-		<input class=jobarg type=text id=jobdescription>
+		<textarea rows=6 cols=50 class=jobarg type=text id=jobdescription></textarea>
 	</div>
 </div>
 
-<div class="jobcolumn required">
-	<div class=jobcolumnheader>Required Arguments</div>
+<div class=jobworkflowpage>
 	<div class=jobcolumnrow>
 		<div class=jobargname>Input STAR File</div>
-		<input class=jobarg type=text id=starfile>
+		<input class="jobarg jobargrequired" type=text id=starfile>
 		<img src=folder.png onclick='fileSelector("file", "starfile");'>
-	</div>
+	</div>	
 	<div class=jobcolumnrow>
 		<div class=jobargname>Sampling Distance</div>
-		<input class=jobarg type=text id=smpd>
+		<input class="jobarg jobargrequired" type=text id=smpd>
 	</div>	
 	<div class=jobcolumnrow>
 		<div class=jobargname>Acceleration Voltage</div>
-		<select class=jobarg id=kv onchange="var kvselect = document.getElementsByClassName('kvselect');
-													for(var i = 0; i < kvselect.length; i++){
-														if(this.options[this.selectedIndex].value == 300){
-															kvselect[i].style.display = 'block';
-														} else {
-															kvselect[i].style.display = 'none';
-														}
-													}";
+		<select class="jobarg jobargrequired" id=kv onchange="var kvselect = document.getElementsByClassName('kvselect');
+															for(var i = 0; i < kvselect.length; i++){
+																if(this.options[this.selectedIndex].value == 300){
+																	kvselect[i].style.display = 'block';
+																} else {
+																	kvselect[i].style.display = 'none';
+																}
+															}";
 		>
 			<option value=120>120 kV</option>
 			<option value=200>200 kV</option>
@@ -65,87 +62,99 @@
 		<div class=jobargname>Exposure Time</div>
 		<input class=jobarg type=text id=exp_time>
 	</div>
+	<div class=jobcolumnrow>
+		<div class=jobargname>Sampling Distance</div>
+		<input class="jobarg jobargrequired" type=text id=smpd>
+	</div>
+
+	<div class=jobcolumnoptional>
+		<div class=jobcolumnoptionaltitle onclick="var jobargoptional = document.getElementsByClassName('jobargoptional');
+														for(var i = 0; i < jobargoptional.length; i++){
+															if(jobargoptional[i].style.display == 'block'){
+																jobargoptional[i].style.display = 'none';
+															}else{
+																jobargoptional[i].style.display = 'block';
+															}
+														}";>
+			Optional Arguments
+		</div>
+		<div class="jobcolumnrow jobargoptional">
+			<div class=jobargname>Output File Body</div>
+			<input class=jobarg type=text id=fbody>
+		</div>	
+	
+		<div class="jobcolumnrow jobargoptional">
+			<div class=jobargname>Starting Low Pass Limit (A)</div>
+			<input class=jobarg type=text id=lpstart value=15>
+		</div>
+		
+		<div class="jobcolumnrow jobargoptional">
+			<div class=jobargname>Stop Low Pass Limit (A)</div>
+			<input class=jobarg type=text id=lpstop value=8>
+		</div>
+		
+		<div class="jobcolumnrow jobargoptional">
+			<div class=jobargname>Maximum Halfwidth Shift (px)</div>
+			<input class=jobarg type=text id=trs>
+		</div>
+		
+		<div class="jobcolumnrow jobargoptional">
+			<div class=jobargname>Power Spectrum Size (px)</div>
+			<input class=jobarg type=text id=pspecsz>
+		</div>
+		
+		<div class="jobcolumnrow jobargoptional">
+			<div class=jobargname>Length Of Number String</div>
+			<input class=jobarg type=text id=numlen>
+		</div>
+		
+		<div class="jobcolumnrow jobargoptional">
+			<div class=jobargname>Starting Iteration</div>
+			<input class=jobarg type=text id=startit>
+		</div>
+		
+		<div class="jobcolumnrow jobargoptional">
+			<div class=jobargname>Image Scale Factor</div>
+			<input class=jobarg type=text id=scale>
+		</div>
+		
+		<div class="jobcolumnrow jobargoptional">
+			<div class=jobargname>Number Frames To Group</div>
+			<input class=jobarg type=text id=nframesgrp value=0>
+		</div>
+		
+		<div class="jobcolumnrow jobargoptional">
+			<div class=jobargname>Tomography Mode</div>
+			<select class=jobarg id=tomo>
+				<option value=yes>yes</option>
+				<option value=no selected>no</option>
+			</select>
+		</div>
+		
+		<div class="jobcolumnrow jobargoptional">
+			<div class=jobargname>Starting Frame Index</div>
+			<input class=jobarg type=text id=fromf>
+		</div>	
+		
+		<div class="jobcolumnrow jobargoptional">
+			<div class=jobargname>Final Frame Index</div>
+			<input class=jobarg type=text id=tof>
+		</div>	
+		
+		<div class="jobcolumnrow jobargoptional">
+			<div class=jobargname>Number Sigmas</div>
+			<input class=jobarg type=text id=nsig>
+		</div>	
+		
+		<div class="jobcolumnrow jobargoptional">
+			<div class=jobargname>Output Filename</div>
+			<input class=jobarg type=text id=outfile>
+		</div>
+	</div>
 </div>
 
-<div class="jobcolumn optional">
-	<div class=jobcolumnheader>Optional Arguments</div>
-	<div class=jobcolumnrow>
-		Output File Body
-		<input class=jobarg type=text id=fbody>
-	</div>	
-	
-	<div class=jobcolumnrow>
-		Starting Low Pass Limit (A)
-		<input class=jobarg type=text id=lpstart value=15>
-	</div>
-	
-	<div class=jobcolumnrow>
-		Stop Low Pass Limit (A)
-		<input class=jobarg type=text id=lpstop value=8>
-	</div>
-	
-	<div class=jobcolumnrow>
-		Maximum Halfwidth Shift (px)
-		<input class=jobarg type=text id=trs>
-	</div>
-	
-	<div class=jobcolumnrow>
-		Power Spectrum Size (px)
-		<input class=jobarg type=text id=pspecsz>
-	</div>
-	
-	<div class=jobcolumnrow>
-		Length Of Number String
-		<input class=jobarg type=text id=numlen>
-	</div>
-	
-	<div class=jobcolumnrow>
-		Starting Iteration
-		<input class=jobarg type=text id=startit>
-	</div>
-	
-	<div class=jobcolumnrow>
-		Image Scale Factor
-		<input class=jobarg type=text id=scale>
-	</div>
-	
-	<div class=jobcolumnrow>
-		Number Frames To Group
-		<input class=jobarg type=text id=nframesgrp value=0>
-	</div>
-	
-	<div class=jobcolumnrow>
-		Tomography Mode
-		<select class=jobarg id=tomo>
-			<option value=yes>yes</option>
-			<option value=no selected>no</option>
-		</select>
-	</div>
-	
-	<div class=jobcolumnrow>
-		Starting Frame Index
-		<input class=jobarg type=text id=fromf>
-	</div>	
-	
-	<div class=jobcolumnrow>
-		Final Frame Index
-		<input class=jobarg type=text id=tof>
-	</div>	
-	
-	<div class=jobcolumnrow>
-		Number Sigmas
-		<input class=jobarg type=text id=nsig>
-	</div>	
-	
-	<div class=jobcolumnrow>
-		Output Filename
-		<input class=jobarg type=text id=outfile>
-	</div>			
-	
-</div>
 
-<div class="jobcolumn run">
-	<div class=jobcolumnheader>Run Parameters</div>
+<div class=jobworkflowpage>
 	<div class=jobcolumnrow>
 		<div class=jobargname>Distribute</div>	
 		<input class=jobarg type=checkbox id=exec value=simple_exec onchange="if(this.checked){ 
@@ -199,5 +208,7 @@
 		
 </div>
 
-<div class=newjobbutton onclick='document.getElementById("job").style.display = "none"; document.getElementById("gauze").style.display = "none"'>Cancel</div>
-<div class=newjobbutton onclick='newJob(this); document.getElementById("job").style.display = "none"; document.getElementById("gauze").style.display = "none"'>Run</div>
+<div class=jobworkflowbuttons>
+	<div class=newjobbutton onclick='jobWorkflowBack(this)'>Back</div>
+	<div class=newjobbutton onclick='jobWorkflowNext(this)'>Next</div>
+</div>
