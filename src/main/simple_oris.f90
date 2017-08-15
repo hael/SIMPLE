@@ -2363,18 +2363,23 @@ contains
 
     !>  \brief  applies a one-sided balance restraint on the number of particles
     !!          in projection groups based on corr/specscore order
-    subroutine balance( self, which, nsig, skewness )
-        class(oris),      intent(inout) :: self
-        character(len=*), intent(in)    :: which
-        real,             intent(in)    :: nsig
-        real,             intent(out)   :: skewness
+    subroutine balance( self, which, popmax, skewness, use_specscore )
+        class(oris),       intent(inout) :: self
+        character(len=*),  intent(in)    :: which
+        integer,           intent(in)    :: popmax
+        real,              intent(out)   :: skewness
+        logical, optional, intent(in)    :: use_specscore
         integer, allocatable :: inds(:), inds_tmp(:)
         logical, allocatable :: included(:)
         real,    allocatable :: pops(:), scores(:), nonzero_pops(:)
-        real    :: ave, sdev, var
-        integer :: i, j, n, pop, pop_thres
-        logical :: use_specscore, l_proj, err
-        use_specscore = self%isthere('specscore')
+        integer :: i, j, n, pop
+        logical :: uuse_specscore, l_proj
+        uuse_specscore = .false.
+        if( present(use_specscore) )then
+            if( use_specscore )then
+                uuse_specscore = self%isthere('specscore')
+            endif
+        endif
         ! decide whether to do proj or class analysis
         l_proj = .false.
         select case(which)
@@ -2388,37 +2393,27 @@ contains
             case DEFAULT
                 stop 'unsupported which flag; simple_oris :: balance'
         end select
-        ! find pop thresh
-        allocate(pops(n), included(self%n))
-        pops = 0.
-        do i=1,n
-            if( l_proj )then
-                pops(i) = real(self%get_proj_pop(i))
-            else
-                pops(i) = real(self%get_cls_pop(i))
-            endif
-        end do
-        nonzero_pops = pack(pops, pops > 0.5)
-        call moment(nonzero_pops, ave, sdev, var, err )
-        pop_thres = nint(ave + nsig * sdev)
-        ! apply the one-sided population treshold
         included = .false.
         do i=1,n
-            pop = nint(pops(i))
+            if( l_proj )then
+                pop = self%get_proj_pop(i)
+            else
+                pop = self%get_cls_pop(i)
+            endif
             if( pop < 1 )cycle
             if( l_proj )then
                 inds = self%get_proj(i)
             else
                 inds = self%get_class(i)
             endif
-            if( pop <= pop_thres )then
+            if( pop <= popmax )then
                 do j=1,pop
                     included(inds(j)) = .true.
                 end do
             else
                 allocate(scores(pop), inds_tmp(pop))
                 do j=1,pop
-                    if( use_specscore )then
+                    if( uuse_specscore )then
                         scores(j) = self%o(inds(j))%get('specscore')
                     else
                         scores(j) = self%o(inds(j))%get('corr')
@@ -2426,7 +2421,7 @@ contains
                     inds_tmp(j) = inds(j)
                 end do
                 call hpsort(pop, scores, inds_tmp)
-                do j=pop,pop - pop_thres + 1,-1
+                do j=pop,pop - popmax + 1,-1
                     included(inds_tmp(j)) = .true. 
                 end do
                 deallocate(scores, inds_tmp)

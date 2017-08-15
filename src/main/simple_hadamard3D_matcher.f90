@@ -242,7 +242,7 @@ contains
         endif
 
         ! POPULATION BALANCING LOGICS
-        if( p%balance > TINY )then
+        if( p%balance > 0 )then
             call b%a%balance('proj', p%balance, skewness)
             write(*,'(A,F8.2)') '>>> PROJECTION DISTRIBUTION SKEWNESS(%):', 100. * skewness
         else

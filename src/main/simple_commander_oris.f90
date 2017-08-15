@@ -667,22 +667,25 @@ contains
     !! standard deviation of angular distances, the minimum angular distance, and
     !! the maximum angular distance
     subroutine exec_oristats(self,cline)
+        use simple_ori,  only: ori
         use simple_oris, only: oris
         use simple_stat, only: moment
-        use simple_math, only: median_nocopy
+        use simple_math, only: median_nocopy, hpsort
         class(oristats_commander), intent(inout) :: self
         class(cmdline),            intent(inout) :: cline
-        type(build)       :: b
-        type(oris)        :: o
-        type(params)      :: p
-        real              :: mind, maxd, avgd, sdevd, sumd, vard
-        real              :: mind2, maxd2, avgd2, sdevd2, vard2, homo_cnt, homo_avg
-        real              :: popmin, popmax, popmed, popave, popsdev, popvar, frac_populated
-        integer           :: nprojs, iproj
-        real, allocatable :: projpops(:), tmp(:)
-        logical           :: err
+        type(build)          :: b
+        type(oris)           :: o, ten_highest, ten_lowest
+        type(ori)            :: o_single
+        type(params)         :: p
+        real                 :: mind, maxd, avgd, sdevd, sumd, vard
+        real                 :: mind2, maxd2, avgd2, sdevd2, vard2, homo_cnt, homo_avg
+        real                 :: popmin, popmax, popmed, popave, popsdev, popvar, frac_populated
+        integer              :: nprojs, iproj, cnt
+        real,    allocatable :: projpops(:), tmp(:)
+        integer, allocatable :: projinds(:)
+        logical              :: err
         p = params(cline)
-        call b%build_general_tbox(p, cline)
+        call b%build_general_tbox(p, cline, do3d=.false.)
         if( cline%defined('oritab2') )then
             ! Comparison
             if( .not. cline%defined('oritab') ) stop 'need oritab for comparison'
@@ -721,14 +724,14 @@ contains
                 goto 999
             endif
             if( p%projstats .eq. 'yes' )then
+                if( .not. cline%defined('nspace') ) stop 'need nspace command line arg to provide projstats'
                 tmp            = b%a%get_proj_pops()
                 nprojs         = size(tmp)
                 projpops       = pack(tmp, tmp > 0.5)
-                frac_populated = real(size(projpops))/real(nprojs)
-                deallocate(tmp)
-                popmin = minval(projpops)
-                popmax = maxval(projpops)
-                popmed = median_nocopy(projpops)
+                frac_populated = real(size(projpops))/real(p%nspace)
+                popmin         = minval(projpops)
+                popmax         = maxval(projpops)
+                popmed         = median_nocopy(projpops)
                 call moment(projpops, popave, popsdev, popvar, err)
                 write(*,'(a,1x,f8.2)') 'FRAC POPULATED DIRECTIONS:', frac_populated
                 write(*,'(a,1x,f8.2)') 'MINIMUM POPULATION       :', popmin
@@ -736,6 +739,30 @@ contains
                 write(*,'(a,1x,f8.2)') 'MEDIAN POPULATION        :', popmed
                 write(*,'(a,1x,f8.2)') 'AVERAGE POPULATION       :', popave
                 write(*,'(a,1x,f8.2)') 'SDEV OF POPULATION       :', popsdev
+                allocate(projinds(nprojs))
+                projinds = (/(iproj,iproj=1,nprojs)/)
+                call hpsort(nprojs, tmp, projinds)
+                call ten_highest%new(10)
+                ! 10 highest
+                cnt = 0
+                do iproj=nprojs,nprojs - 10 + 1,-1
+                    cnt = cnt + 1
+                    o_single = b%e%get_ori(projinds(iproj))
+                    call ten_highest%set_ori(cnt,o_single)
+                end do
+                call ten_highest%write('ten_highest_pop_pdirs.txt')
+                ! 10 lowest
+                call ten_lowest%new(10)
+                cnt = 0
+                do iproj=1,p%nspace
+                    if( tmp(iproj) > 0.5 )then
+                        cnt = cnt + 1
+                        o_single = b%e%get_ori(projinds(iproj))
+                        call ten_lowest%set_ori(cnt,o_single)
+                        if( cnt == 10 ) exit
+                    endif
+                end do
+                call ten_lowest%write('ten_lowest_pop_pdirs.txt')
             endif
             if( p%trsstats .eq. 'yes' )then
                 call b%a%stats('x', avgd, sdevd, vard, err )

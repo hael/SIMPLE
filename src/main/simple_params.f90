@@ -158,6 +158,7 @@ type :: params
     integer :: astep=1
     integer :: avgsz=0
     integer :: batchsz=0
+    integer :: balance=0           !< max pop for balancing restraint{0}
     integer :: binwidth=1          !< binary layers grown for molecular envelope(in pixels){1}
     integer :: box=0               !< square image size(in pixels)
     integer :: boxconvsz=256       !< size of box used for box-convolution(in pixels)
@@ -256,7 +257,6 @@ type :: params
     real    :: astigerr=0.         !< astigmatism error(in microns)
     real    :: astigtol=0.05       !< expected (tolerated) astigmatism(in microns){0.1}
     real    :: athres=0.           !< angular threshold(in degrees)
-    real    :: balance=0.0         !< # sigmas for population balancing restraint{0}
     real    :: batchfrac=1.0
     real    :: bfac=200            !< bfactor for sharpening/low-pass filtering(in A**2){200.}
     real    :: bfacerr=50.         !< bfactor error in simulated images(in A**2){0}
@@ -538,6 +538,7 @@ contains
         ! Integer args
         call check_iarg('astep',          self%astep)
         call check_iarg('avgsz',          self%avgsz)
+        call check_iarg('balance',        self%balance)
         call check_iarg('binwidth',       self%binwidth)
         call check_iarg('box',            self%box)
         call check_iarg('boxconvsz',      self%boxconvsz)
@@ -619,7 +620,6 @@ contains
         call check_rarg('astigerr',       self%astigerr)
         call check_rarg('astigtol',       self%astigtol)
         call check_rarg('athres',         self%athres)
-        call check_rarg('balance',        self%balance)
         call check_rarg('batchfrac',      self%batchfrac)
         call check_rarg('bfac',           self%bfac)
         call check_rarg('bfacerr',        self%bfacerr)

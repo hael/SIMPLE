@@ -385,7 +385,7 @@ contains
         ! calculate weights
         call o%calc_spectral_weights(p%frac)
         ! population balancing logics
-        if( p%balance > TINY )then
+        if( p%balance > 0 )then
             call o%balance('proj', p%balance, skewness)
             write(*,'(A,F8.2)') '>>> PROJECTION DISTRIBUTION SKEWNESS(%):', 100. * skewness
         else
