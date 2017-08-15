@@ -207,6 +207,11 @@ contains
             self%pbatch = self%pbatch + p%fromp - 1
             call rt%kill
         endif
+        if( p%projstats .eq. 'yes' )then
+            if( .not. self%a%isthere('proj') )then
+                call self%a%set_projs(self%e)
+            endif
+        endif
         write(*,'(A)') '>>> DONE BUILDING GENERAL TOOLBOX'
         self%general_tbox_exists = .true.
     end subroutine build_general_tbox

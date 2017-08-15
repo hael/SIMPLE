@@ -2016,15 +2016,12 @@ select case(prg)
        ! set optional keys
        keys_optional(1)  = 'nthr'
        keys_optional(2)  = 'oritab3D'
-       keys_optional(3)  = 'comlindoc'
-       keys_optional(4)  = 'doclist'
-       keys_optional(5)  = 'deftab'
-       keys_optional(6)  = 'outfile'
-       keys_optional(7)  = 'mul'
-       keys_optional(8)  = 'scale'
+       keys_optional(3)  = 'deftab'
+       keys_optional(4)  = 'outfile'
+       keys_optional(5)  = 'mul'
        ! parse command line
        if( describe ) call print_doc_map2ptcls
-       call cline%parse(keys_required(:4), keys_optional(:8))
+       call cline%parse(keys_required(:4), keys_optional(:5))
        ! set defaults
        if( .not. cline%defined('outfile') ) call cline%set('outfile', 'mapped_ptcls_params.txt')
        ! execute
@@ -2107,9 +2104,10 @@ select case(prg)
         keys_optional(12) = 'thres'
         keys_optional(13) = 'projstats'
         keys_optional(14) = 'nspace'
+        keys_optional(15) = 'pgrp'
         ! parse command line
         if( describe ) call print_doc_oristats
-        call cline%parse( keys_required(:1), keys_optional(:14) )
+        call cline%parse( keys_required(:1), keys_optional(:15) )
         ! execute
         call xoristats%execute(cline)
     case( 'rotmats2oris' )

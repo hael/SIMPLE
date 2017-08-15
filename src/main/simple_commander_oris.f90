@@ -322,31 +322,28 @@ contains
         use simple_oris,    only: oris
         use simple_ori,     only: ori
         use simple_image,   only: image
-        use simple_corrmat  ! use all in there
+        use simple_corrmat   ! use all in there
         class(map2ptcls_commander), intent(inout) :: self
         class(cmdline),             intent(inout) :: cline
         type state_organiser !> map2ptcls state struct
             integer, allocatable :: particles(:)
-            integer              :: cls_orig = 0
-            integer              :: cls_sel  = 0
-            integer              :: istate   = 0
             type(ori)            :: ori3d
         end type state_organiser
-        type(params)                       :: p
-        type(build)                        :: b
-        type(oris)                         :: o_comlindoc, o_state, a_copy, o_oritab3D
-        type(ori)                          :: ori2d, ori_comp
         type(state_organiser), allocatable :: labeler(:)
         type(image),           allocatable :: imgs_sel(:), imgs_cls(:)
         real,                  allocatable :: correlations(:,:)
-        integer,               allocatable :: statepops(:), state_particles(:), rejected_particles(:)
-        logical,               allocatable :: statedoc_exists(:), selected(:)
-        integer                            :: isel, nsel, loc(1), iptcl, pind, icls
-        integer                            :: nlines_oritab, nlines_oritab3D, nlines_comlindoc, nlines_deftab
-        integer                            :: cnt, istate, funit, iline, nls, lfoo(3)
-        character(len=STDLEN)              :: statedoc
-        real                               :: corr
-
+        integer,               allocatable :: rejected_particles(:)
+        logical,               allocatable :: selected(:)
+        integer      :: isel, nsel, loc(1), iptcl, pind, icls
+        integer      :: nlines_oritab, nlines_oritab3D, nlines_deftab
+        integer      :: cnt, istate, funit, iline, nls, lfoo(3)
+        real         :: corr, rproj, rstate
+        type(params) :: p
+        type(build)  :: b
+        type(oris)   :: o_oritab3D
+        type(ori)    :: ori2d, ori_comp, o
+        if( cline%defined('doclist')   ) stop 'doclist execution route no longer supported'
+        if( cline%defined('comlindoc') ) stop 'comlindoc execution route no longer supported'
         p = params(cline)                   ! parameters generated
         call b%build_general_tbox(p, cline) ! general objects built
         ! find number of selected cavgs
@@ -361,15 +358,6 @@ contains
             nlines_deftab = nlines(p%deftab)
             if( nlines_oritab /= nlines_deftab ) stop 'nr lines in oritab .ne. nr lines in deftab; must be congruent!'
         endif
-        if( cline%defined('doclist') )then
-            if( .not. cline%defined('comlindoc') )then
-                if( nlines(p%doclist) /= 1 ) stop 'need a comlindoc together with statelist'
-            endif
-        endif
-        if( cline%defined('comlindoc') .and. cline%defined('oritab3D') )&
-        &stop 'either comlindoc or oritab3D can be inputted, not both'
-        if( cline%defined('doclist')   .and. cline%defined('oritab3D') )&
-        &stop 'either doclist or oritab3D can be inputted, not both'
         allocate(imgs_sel(nsel), imgs_cls(p%ncls))
         ! read images
         do isel=1,nsel
@@ -389,10 +377,8 @@ contains
         write(*,'(a)') '>>> MAPPING SELECTED TO ORIGINAL CLUSTERS'
         do isel=1,nsel
             loc                     = maxloc(correlations(isel,:))
-            labeler(isel)%cls_orig  = loc(1)
             selected(loc(1))        = .true.
-            labeler(isel)%cls_sel   = isel
-            labeler(isel)%particles = b%a%get_cls_pinds(labeler(isel)%cls_orig)
+            labeler(isel)%particles = b%a%get_cls_pinds(loc(1))
         end do
         ! erase deselected (by setting their state to zero)
         do icls=1,p%ncls
@@ -405,36 +391,6 @@ contains
                 deallocate(rejected_particles)
             endif
         end do
-        ! parse state info
-        if( cline%defined('comlindoc') )then
-            write(*,'(a)') '>>> PROCESSING COMLIN STATE ASSIGNMENT DOCUMENT'
-            nlines_comlindoc = nlines(p%comlindoc)
-            if( nsel /= nlines_comlindoc ) stop 'nr lines in comlindoc .ne. nr of selected clusters; must be congruent!'
-            ! make a new oris object and read in the comlin clustering (state) info
-            o_comlindoc = oris(nsel)
-            call o_comlindoc%read(p%comlindoc)
-            if( .not. o_comlindoc%isthere('state') )then
-                write(*,*) 'no state labeling in comlindoc, perhaps you clustered with label=class'
-                stop 'please, re-cluster with label=state'
-            endif
-            ! set the number of states
-            p%nstates = o_comlindoc%get_nstates()
-            ! map states to selected cavgs
-            do isel=1,nsel
-                labeler(isel)%istate = nint(o_comlindoc%get(isel, 'state'))
-            end do
-            ! extract the state populations
-            allocate( statepops(p%nstates) )
-            do istate=1,p%nstates
-                statepops(istate) = o_comlindoc%get_state_pop(istate)
-            end do
-        else
-            ! set default values for nstates, statepop and state
-            p%nstates         = 1
-            allocate( statepops(1) )
-            statepops(1)      = nsel
-            labeler(:)%istate = 1
-        endif
         if( cline%defined('oritab3D') )then
             if( .not. file_exists(p%oritab3D) ) stop 'Inputted oritab3D does not exist in the cwd'
             nlines_oritab3D = nlines(p%oritab3D)
@@ -443,10 +399,11 @@ contains
             call o_oritab3D%read(p%oritab3D)
             ! compose orientations and set states
             do isel=1,nsel
-                ! get 3d ori
-                labeler(isel)%ori3d  = o_oritab3D%get_ori(isel)
-                labeler(isel)%istate = nint(labeler(isel)%ori3d%get('state'))
-                corr                 = labeler(isel)%ori3d%get('corr')
+                ! get 3d ori info
+                o      = o_oritab3D%get_ori(isel)
+                rproj  = o%get('proj')
+                rstate = o%get('state')
+                corr   = o%get('corr')
                 do iptcl=1,size(labeler(isel)%particles)
                     ! get particle index
                     pind = labeler(isel)%particles(iptcl)
@@ -459,110 +416,14 @@ contains
                     ! transfer original parameters in b%a
                     ori_comp = b%a%get_ori(pind)
                     ! compose ori3d and ori2d
-                    call labeler(isel)%ori3d%compose3d2d(ori2d, ori_comp)
+                    call o%compose3d2d(ori2d, ori_comp)
                     ! set parameters in b%a
-                    call b%a%set_ori(pind,ori_comp)
-                    call b%a%set(pind, 'corr', corr)
+                    call b%a%set_ori(pind, ori_comp)
+                    call b%a%set(pind, 'corr',  corr)
+                    call b%a%set(pind, 'proj',  rproj)
+                    call b%a%set(pind, 'state', rstate)
                 end do
             end do
-        endif
-        ! map states to particles
-        do isel=1,nsel
-            do iptcl=1,size(labeler(isel)%particles)
-                ! get particle index
-                pind = labeler(isel)%particles(iptcl)
-                call b%a%set(pind, 'state', real(labeler(isel)%istate))
-            end do
-        end do
-        ! parse ori info
-        if( cline%defined('doclist') )then
-            write(*,'(a)') '>>> COMBINING 3D ORIS (CAVGS) WITH 2D ALIGNMENT (PARTICLES)'
-            if( nlines(p%doclist) /= p%nstates )then
-                stop 'the number of lines in doclist does not match the number of states in comlindoc'
-            endif
-            allocate(statedoc_exists(p%nstates))
-            ! read in 3d orientations
-            funit = get_fileunit()
-            open(unit=funit, status='old', file=p%doclist)
-            do istate=1,p%nstates
-                ! read the relevant statedoc
-                read(funit,'(a256)') statedoc
-                statedoc_exists(istate) = file_exists(statedoc)
-                if( statedoc_exists(istate) )then
-                    nls = nlines(statedoc)
-                    if( nls /= statepops(istate) )then
-                        write(*,*) 'the nr of lines in statedoc: ', trim(statedoc),&
-                        'does not match pop size: ', statepops(istate), 'in comlindoc'
-                        stop
-                    endif
-                    o_state = oris(nls)
-                    call o_state%read(statedoc)
-                else
-                    ! make a fake o_state
-                    o_state = oris(statepops(istate))
-                    do iline=1,statepops(istate)
-                        call o_state%set(iline, 'state', 0.)
-                    end do
-                    statepops(istate) = 0
-                endif
-                cnt = 0
-                do isel=1,nsel
-                    if( labeler(isel)%istate == istate )then
-                        cnt = cnt+1
-                        labeler(isel)%ori3d = o_state%get_ori(cnt)
-                    endif
-                end do
-            end do
-            close(funit)
-            ! wipe out the states for which no docs are provided
-            do isel=1,nsel
-                do iptcl=1,size(labeler(isel)%particles)
-                    ! get particle index
-                    pind = labeler(isel)%particles(iptcl)
-                    ! get state index
-                    istate = nint(b%a%get(pind, 'state'))
-                    if( .not. statedoc_exists(istate) )then
-                        call b%a%set(pind, 'state', 0.)
-                    endif
-                end do
-            end do
-            ! compose orientations
-            do isel=1,nsel
-                do iptcl=1,size(labeler(isel)%particles)
-                    ! get particle index
-                    pind = labeler(isel)%particles(iptcl)
-                    ! get 2d ori
-                    ori2d = b%a%get_ori(pind)
-                    if( cline%defined('mul') )then
-                        call ori2d%set('x', p%mul*ori2d%get('x'))
-                        call ori2d%set('y', p%mul*ori2d%get('y'))
-                    endif
-                    ! transfer original parameters in b%a
-                    ori_comp = b%a%get_ori(pind)
-                    ! compose ori3d and ori2d
-                    call labeler(isel)%ori3d%compose3d2d(ori2d, ori_comp)
-                    ! set parameters in b%a
-                    call b%a%set_ori(pind,ori_comp)
-                    call b%a%set(pind, 'corr',  labeler(isel)%ori3d%get('corr'))
-                end do
-            end do
-            ! relabel states in consequtive order
-            if( any(statepops == 0) )then
-                a_copy = b%a
-                cnt    = 0
-                do istate=1,p%nstates
-                    if( statepops(istate) > 0 )then
-                        cnt = cnt+1
-                        write(*,'(a,1x,i3,1x,a,1x,i3)') '>>> THE STATE THAT WAS FORMERLY:', istate, 'IS NOW:', cnt
-                        state_particles = a_copy%get_ptcls_in_state(istate)
-                        do iptcl=1,size(state_particles)
-                            call b%a%set(state_particles(iptcl),'state',real(cnt))
-                        end do
-                    else
-                        write(*,'(a,1x,i3,1x,a)') '>>> THE STATE THAT WAS FORMERLY:', istate, 'HAS BEEN EXCLUDED'
-                    endif
-                end do
-            endif
         endif
         call b%a%write(p%outfile)
         call simple_end('**** SIMPLE_MAP2PTCLS NORMAL STOP ****')
