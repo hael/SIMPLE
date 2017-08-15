@@ -9,159 +9,345 @@ public :: binoris
 private
 
 type binoris
-	private 
-	! in header
-	integer                        :: n_bytes_header  = 0
-	integer                        :: n_hash_vals     = 0 
-	integer                        :: first_data_byte = 0
-	integer                        :: n_records       = 0
-	integer                        :: n_peaks         = 0
-	integer                        :: fromto(2)
-	character(len=32), allocatable :: hash_keys(:)
-	! derived
-	integer                        :: n_bytes_hash_keys  = 0
-	integer                        :: n_reals_per_record = 0
-	! in record
-	real,              allocatable :: hash_vals(:)
-	real,              allocatable :: peak_array(:,:)
-	! byte arrays
-	integer(kind=1),   allocatable :: byte_array_header(:)
-	real(kind=4),      allocatable :: record(:)
-	! for on-line use
-	integer                        :: funit  = 0
-	logical                        :: exists = .false.
+    private 
+    ! in header
+    integer                        :: n_bytes_header  = 0
+    integer                        :: n_hash_vals     = 0 
+    integer                        :: first_data_byte = 0
+    integer                        :: n_records       = 0
+    integer                        :: n_peaks         = 0
+    integer                        :: fromto(2)
+    character(len=32), allocatable :: hash_keys(:)
+    ! derived
+    integer                        :: n_bytes_hash_keys  = 0
+    integer                        :: n_reals_per_record = 0
+    ! header byte array
+    integer(kind=1), allocatable   :: byte_array_header(:)
+    ! record
+    real(kind=4),    allocatable   :: record(:)
+    ! for on-line use
+    integer                        :: funit  = 0
+    logical                        :: exists = .false.
   contains
-  	procedure, private :: new_1
-  	procedure, private :: new_2
-  	generic            :: new => new_1, new_2
-  	procedure, private :: header2byte_array
-  	procedure, private :: byte_array2header
-  	procedure          :: open
-  	procedure          :: close
-  	procedure          :: write_header
-  	procedure          :: write_record
-  	
-  	procedure          :: kill
+    ! constructors
+    procedure          :: new
+    ! I/O
+    procedure          :: open
+    procedure, private :: open_local
+    procedure          :: close
+    procedure          :: print_header
+    procedure          ::  print_hash_keys
+    procedure          :: write_header
+    procedure          :: write_record
+    procedure          :: read_record
+    ! byte indexing
+    procedure          :: first_byte
+    procedure          :: last_byte
+    ! header byte array conversions for mixed format read/write
+    procedure, private :: header2byte_array
+    procedure, private :: byte_array2header
+    ! destructor
+    procedure          :: kill
 end type binoris
 
-enum, bind(c)
-	enumerator :: E1=1, E2, E3, X, Y, STATE
-	enumerator :: PROJ, CORR, OW
-end enum
+integer, parameter :: NOPEAKFLAGS = 9
+character(len=32)  :: o_peak_flags(NOPEAKFLAGS)
 
 contains
 
-	subroutine new_1( self, a, fromto, os_peak )
-		use simple_jiffys, only: alloc_err
-		class(binoris),        intent(inout) :: self
-		class(oris),           intent(inout) :: a
-		integer,     optional, intent(in)    :: fromto(2)
-		class(oris), optional, intent(in)    :: os_peak
-		type(ori) :: o
-		integer   :: alloc_stat
-		! destruct possibly pre-existing
-		call self%kill
-		! set n_hash_vals
-		o = a%get_ori(1)
-		self%n_hash_vals = o%hash_size()
-		! set hash keys
-		self%hash_keys = o%hash_keys()
-		if( size(self%hash_keys) /= self%n_hash_vals )&
-		&stop 'ERROR, n_hash_vals /= n_keys; binoris :: new_1'
-		! set range
-		if( present(fromto) )then
-			self%fromto = fromto
-		else
-			self%fromto(1) = 1
-			self%fromto(2) = a%get_noris()
-		endif
-		! set n_records
-		self%n_records = self%fromto(2) - self%fromto(1) + 1
-		if( self%n_records < 1 ) stop 'ERROR, input oritab (a) empty; binoris :: new_1'
-		! set n_peaks
-		self%n_peaks = 0
-		if( present(os_peak) )then
-			self%n_peaks = os_peak%get_noris()
-		endif
-		! set derived
-		self%n_bytes_hash_keys  = 32 * self%n_hash_vals
-		self%n_bytes_header     = 7  * 4 + self%n_bytes_hash_keys
-		self%first_data_byte    = self%n_bytes_header + 1
-		self%n_reals_per_record = self%n_hash_vals + self%n_peaks * OW
-		! allocate
-		allocate( self%peak_array(self%n_peaks,OW),&
-			     &self%byte_array_header(self%n_bytes_header),&
-			     &self%record(self%n_reals_per_record), stat=alloc_stat )
-		call alloc_err( 'In: binoris :: new_1', alloc_stat )
-		! set
-		self%peak_array = 0.0
-		call self%header2byte_array
-        self%record     = 0.0
-        ! flag existence
-        self%exists     = .true.
-	end subroutine new_1
+    ! constructors
 
-	subroutine new_2( self, fname )
-		use simple_filehandling, only: file_exists
-		class(binoris),   intent(inout) :: self  !< instance
-		character(len=*), intent(in)    :: fname !< filename
-		integer            :: file_size, io_status, alloc_stat
-		character(len=512) :: io_message
-		integer(kind=1)    :: bytes(8)
-		! destruct possibly pre-existing
-		call self%kill
-		! check file existence
-		if( .not. file_exists(fname) ) stop 'input file does not exists; binoris :: new_2'
-		! open file
-		call self%open(fname)
-		! check size
-		inquire(unit=self%funit, size=file_size)
-		if( file_size == -1 )then 
-			stop 'file_size cannot be inquired; binoris :: new_2'
-		else if( file_size >= 28 )then
-			! ok
-		else
-			stop 'file_size too small to contain a header; binoris :: new_2'
-		endif
-		! read first two header records (n_bytes_header & n_hash_vals)
-		read(unit=self%funit,pos=1,iostat=io_status,iomsg=io_message) bytes
-		if( io_status .ne. 0 )then
+    subroutine new( self, a, fromto, os_peak )
+        use simple_jiffys, only: alloc_err
+        class(binoris),        intent(inout) :: self
+        class(oris),           intent(inout) :: a
+        integer,     optional, intent(in)    :: fromto(2)
+        class(oris), optional, intent(in)    :: os_peak
+        type(ori) :: o
+        integer   :: alloc_stat
+        ! destruct possibly pre-existing
+        call self%kill
+        ! set n_hash_vals
+        o = a%get_ori(1)
+        self%n_hash_vals = o%hash_size()
+        ! set hash keys
+        self%hash_keys = o%hash_keys()
+        if( size(self%hash_keys) /= self%n_hash_vals )&
+        &stop 'ERROR, n_hash_vals /= n_keys; binoris :: new_1'
+        ! set range
+        if( present(fromto) )then
+            self%fromto = fromto
+        else
+            self%fromto(1) = 1
+            self%fromto(2) = a%get_noris()
+        endif
+        ! set n_records
+        self%n_records = self%fromto(2) - self%fromto(1) + 1
+        if( self%n_records < 1 ) stop 'ERROR, input oritab (a) empty; binoris :: new_1'
+        ! set n_peaks
+        self%n_peaks = 0
+        if( present(os_peak) )then
+            self%n_peaks = os_peak%get_noris()
+        endif
+        ! set derived
+        self%n_bytes_hash_keys  = 32 * self%n_hash_vals
+        self%n_bytes_header     = 7  * 4 + self%n_bytes_hash_keys
+        self%first_data_byte    = self%n_bytes_header + 1
+        self%n_reals_per_record = self%n_hash_vals + self%n_peaks * NOPEAKFLAGS
+        ! allocate
+        allocate( self%byte_array_header(self%n_bytes_header),&
+                 &self%record(self%n_reals_per_record), stat=alloc_stat )
+        call alloc_err( 'In: binoris :: new_1', alloc_stat )
+        ! set
+        call self%header2byte_array
+        self%record = 0.0
+        call set_o_peak_flags ! class variable
+        ! flag existence
+        self%exists = .true.
+    end subroutine new
+
+    ! I/O supporting ori + oris (peaks)
+
+    subroutine open( self, fname, del_if_exists )
+        use simple_jiffys,       only: alloc_err
+        use simple_filehandling, only: file_exists, del_file
+        class(binoris),    intent(inout) :: self          !< instance
+        character(len=*),  intent(in)    :: fname         !< filename
+        logical, optional, intent(in)    :: del_if_exists !< If the file already exists on disk, replace 
+        integer            :: file_size, io_status, alloc_stat
+        character(len=512) :: io_message
+        integer(kind=1)    :: bytes(8)
+        ! deletion logics
+        if( present(del_if_exists) )then
+            if( del_if_exists )then
+                call del_file(fname)
+            endif
+        endif
+        ! existence logics
+        if( .not. file_exists(fname) )then
+            if( self%exists )then
+                call self%open_local(fname)
+                return
+            else
+                stop 'cannot open non-existing file using non-existing object; binoris :: open'
+            endif
+        endif
+        call self%kill        
+        ! open file
+        call self%open_local(fname)
+        ! check size
+        inquire(unit=self%funit, size=file_size)
+        if( file_size == -1 )then 
+            stop 'file_size cannot be inquired; binoris :: new_2'
+        else if( file_size >= 28 )then
+            ! ok
+        else
+            stop 'file_size too small to contain a header; binoris :: new_2'
+        endif
+        ! read first two header records (n_bytes_header & n_hash_vals)
+        read(unit=self%funit,pos=1,iostat=io_status,iomsg=io_message) bytes
+        if( io_status .ne. 0 )then
             write(*,'(a,i0,2a)') '**error(binoris::new_2): error ', io_status,&
             &' when reading first two header record from disk: ', trim(io_message)
             stop 'I/O error; new_2; simple_binoris'
         endif
         ! allocate header byte array and hash_keys
-		self%n_bytes_header = transfer(bytes(1:4), self%n_bytes_header)
-		self%n_hash_vals    = transfer(bytes(5:8), self%n_hash_vals)
-		allocate( self%byte_array_header(self%n_bytes_header),&
-			&self%hash_keys(self%n_hash_vals), stat=alloc_stat )
-		call alloc_err( 'In: binoris :: new_2, 1', alloc_stat )
-		read(unit=self%funit,pos=1,iostat=io_status,iomsg=io_message) self%byte_array_header
+        self%n_bytes_header = transfer(bytes(1:4), self%n_bytes_header)
+        self%n_hash_vals    = transfer(bytes(5:8), self%n_hash_vals)
+        allocate( self%byte_array_header(self%n_bytes_header),&
+            &self%hash_keys(self%n_hash_vals), stat=alloc_stat )
+        call alloc_err( 'In: binoris :: new_2, 1', alloc_stat )
+        read(unit=self%funit,pos=1,iostat=io_status,iomsg=io_message) self%byte_array_header
         if( io_status .ne. 0 )then
             write(*,'(a,i0,2a)') '**error(binoris::new_2): error ', io_status,&
             &' when reading header bytes from disk: ', trim(io_message)
             stop 'I/O error; new_2; simple_binoris'
         endif
-        call self%close
         call self%byte_array2header
         ! set derived
-		self%n_bytes_hash_keys  = 32 * self%n_hash_vals
-		self%n_reals_per_record = self%n_hash_vals + self%n_peaks * OW
-		! allocate
-		allocate( self%peak_array(self%n_peaks,OW),&
-			     &self%record(self%n_reals_per_record), stat=alloc_stat )
-		call alloc_err( 'In: binoris :: new_2, 2', alloc_stat )
-		! set
-		self%peak_array = 0.
-        self%record     = 0.0
+        self%n_bytes_hash_keys  = 32 * self%n_hash_vals
+        self%n_reals_per_record = self%n_hash_vals + self%n_peaks * NOPEAKFLAGS
+        ! allocate
+        allocate( self%record(self%n_reals_per_record), stat=alloc_stat )
+        call alloc_err( 'In: binoris :: new_2, 2', alloc_stat )
+        ! set
+        self%record = 0.0
+        call set_o_peak_flags ! class variable
         ! flag existence
-        self%exists     = .true.
-    end subroutine new_2
+        self%exists = .true.
+    end subroutine open
+
+    subroutine open_local( self, fname, rwaction )
+        use simple_filehandling, only: get_fileunit, is_open
+        class(binoris),             intent(inout) :: self     !< instance
+        character(len=*),           intent(in)    :: fname    !< filename
+        character(len=*), optional, intent(in)    :: rwaction !< read/write flag
+        character(len=9) :: rw_str
+        character(len=7) :: stat_str
+        if( .not. is_open(self%funit) )then
+            if( present(rwaction) )then
+                rw_str = trim(rwaction)
+            else
+                rw_str = 'READWRITE'
+            endif
+            stat_str = 'UNKNOWN'
+            self%funit = get_fileunit()
+            open(unit=self%funit,access='STREAM',file=fname,action=rw_str,status=stat_str)
+        endif
+    end subroutine open_local
+
+    subroutine close( self )
+        use simple_filehandling, only: is_open
+        class(binoris), intent(in) :: self !< instance
+        if( is_open(self%funit) ) close(self%funit)
+    end subroutine close
+
+    subroutine print_header( self )
+        class(binoris), intent(in) :: self
+        write(*,*) '*****  HEADER VALUES  *****'
+        write(*,*) 'n_bytes_header    : ', self%n_bytes_header
+        write(*,*) 'n_hash_vals       : ', self%n_hash_vals
+        write(*,*) 'first_data_byte   : ', self%first_data_byte
+        write(*,*) 'n_records         : ', self%n_records
+        write(*,*) 'n_peaks           : ', self%n_peaks
+        write(*,*) 'fromto(1)         : ', self%fromto(1)
+        write(*,*) 'fromto(2)         : ', self%fromto(2)
+        write(*,*) 'n_bytes_hash_keys : ', self%n_bytes_hash_keys
+        write(*,*) 'n_reals_per_record: ', self%n_reals_per_record
+    end subroutine print_header
+
+    subroutine print_hash_keys( self )
+        class(binoris), intent(in) :: self
+        integer :: i
+        write(*,*) '*****  HASH KEYS  *****'
+        do i=1,size(self%hash_keys)
+            write(*,*) 'key ', i, ' is ', trim(self%hash_keys(i))
+        end do
+    end subroutine print_hash_keys
+
+    subroutine write_header( self )
+        class(binoris), intent(inout) :: self  !< instance
+        integer :: io_status
+        ! assuming file open
+        call self%header2byte_array
+        write(unit=self%funit,pos=1,iostat=io_status) self%byte_array_header
+        if( io_status .ne. 0 )then
+            write(*,'(a,i0,a)') '**error(binoris::write_header): error ', io_status, ' when writing header bytes to disk'
+            stop 'I/O error; write_header; simple_binoris'
+        endif
+    end subroutine write_header
+
+    subroutine write_record( self, a, i, os_peak )
+        class(binoris),        intent(inout) :: self
+        class(oris),           intent(inout) :: a
+        integer,               intent(in)    :: i
+        class(oris), optional, intent(inout) :: os_peak
+        integer                   :: io_status, iflag, ipeak, cnt, ind
+        type(ori)                 :: o
+        real(kind=4), allocatable :: vals(:)
+        ! assuming file open
+        ! check index bounds
+        if( i < self%fromto(1) .or. i > self%fromto(2) ) stop 'index i out of bound; binoris :: write_record'
+        ! transfer hash data to self%record
+        o = a%get_ori(i)
+        vals = o%hash_vals()
+        if( self%n_hash_vals /= size(vals) ) stop 'nonconforming hash size; binoris :: write_record'
+        self%record = 0.0
+        self%record(:self%n_hash_vals) = vals
+        if( present(os_peak) )then
+            ! transfer os_peak data to self%record
+            if( self%n_peaks /= os_peak%get_noris() ) stop 'nonconforming os_peak size; binoris :: write_record'        
+            cnt = self%n_hash_vals
+            do iflag=1,NOPEAKFLAGS
+                do ipeak=1,self%n_peaks
+                    cnt = cnt + 1
+                    self%record(cnt) = os_peak%get(ipeak, trim(o_peak_flags(iflag)))
+                end do
+            end do
+        endif
+        write(unit=self%funit,pos=self%first_byte(i),iostat=io_status) self%record
+        if( io_status .ne. 0 )then
+            write(*,'(a,i0,a)') '**error(binoris::write_record): error ', io_status, ' when writing record bytes to disk'
+            stop 'I/O error; write_record; simple_binoris'
+        endif
+    end subroutine write_record
+
+    subroutine read_record( self, a, i, os_peak )
+        class(binoris),        intent(inout) :: self
+        class(oris),           intent(inout) :: a
+        integer,               intent(in)    :: i
+        class(oris), optional, intent(inout) :: os_peak
+        integer   :: io_status, iflag, ipeak, cnt, ind, j
+        real      :: euls(3)
+        ! assuming file open
+        ! check index bounds
+        if( i < self%fromto(1) .or. i > self%fromto(2) ) stop 'index i out of bound; binoris :: read_record'
+        read(unit=self%funit,pos=self%first_byte(i),iostat=io_status) self%record
+        if( io_status .ne. 0 )then
+            write(*,'(a,i0,a)') '**error(binoris::read_record): error ', io_status, ' when reading record bytes from disk'
+            stop 'I/O error; read_record; simple_binoris'
+        endif
+        ! transfer hash data
+        euls = 0.
+        do j=1,self%n_hash_vals
+            select case(trim(self%hash_keys(j)))
+                case('e1')
+                    euls(1) = self%record(j)
+                case('e2')
+                    euls(2) = self%record(j)
+                case('e3')
+                    euls(3) = self%record(j)
+                case DEFAULT
+                    call a%set(i, trim(self%hash_keys(j)), self%record(j))
+            end select            
+        end do
+        call a%set_euler(i, euls)
+        if( present(os_peak) )then
+            ! transfer os_peak data
+            cnt = self%n_hash_vals
+            do ipeak=1,self%n_peaks
+                euls = 0.
+                do iflag=1,NOPEAKFLAGS
+                    cnt = cnt + 1
+                    select case(trim(o_peak_flags(iflag)))
+                        case('e1')
+                            euls(1) = self%record(cnt)
+                        case('e2')
+                            euls(2) = self%record(cnt)
+                        case('e3')
+                            euls(3) = self%record(cnt)
+                        case DEFAULT
+                            call os_peak%set(ipeak, trim(o_peak_flags(iflag)), self%record(cnt))
+                    end select
+                end do
+                call os_peak%set_euler(ipeak, euls)
+            end do
+        endif
+    end subroutine read_record
+
+    ! byte indexing
+
+    integer function first_byte( self, irec )
+        class(binoris), intent(in) :: self
+        integer,        intent(in) :: irec
+        integer :: ind
+        ind = irec - self%fromto(1) + 1
+        first_byte = self%first_data_byte + (ind - 1) * self%n_reals_per_record * 4
+    end function first_byte
+
+    integer function last_byte( self )
+        class(binoris), intent(in) :: self
+        integer :: ind
+        ind = self%fromto(2) - self%fromto(1) + 1
+        last_byte = self%n_bytes_header + ind * self%n_reals_per_record * 4
+    end function last_byte
+
+    ! header byte array conversions for mixed format read/write
 
     subroutine header2byte_array( self )
-		class(binoris), intent(inout) :: self
-		self%byte_array_header(1:4)   = transfer(self%n_bytes_header,  self%byte_array_header(1:4))
-		self%byte_array_header(5:8)   = transfer(self%n_hash_vals,     self%byte_array_header(5:8))
+        class(binoris), intent(inout) :: self
+        self%byte_array_header(1:4)   = transfer(self%n_bytes_header,  self%byte_array_header(1:4))
+        self%byte_array_header(5:8)   = transfer(self%n_hash_vals,     self%byte_array_header(5:8))
         self%byte_array_header(9:12)  = transfer(self%n_records,       self%byte_array_header(9:12))
         self%byte_array_header(13:16) = transfer(self%first_data_byte, self%byte_array_header(13:16))
         self%byte_array_header(17:20) = transfer(self%n_peaks,         self%byte_array_header(17:20))
@@ -169,87 +355,43 @@ contains
         self%byte_array_header(25:28) = transfer(self%fromto(2),       self%byte_array_header(25:28))
         self%byte_array_header(29:self%n_bytes_header)&
         &= transfer(self%hash_keys, self%byte_array_header(29:self%n_bytes_header))
-	end subroutine header2byte_array
+    end subroutine header2byte_array
 
-	subroutine byte_array2header( self )
-		class(binoris), intent(inout) :: self
-		self%n_bytes_header  = transfer(self%byte_array_header(1:4),   self%n_bytes_header)
-		self%n_hash_vals     = transfer(self%byte_array_header(5:8),   self%n_hash_vals)
+    subroutine byte_array2header( self )
+        class(binoris), intent(inout) :: self
+        self%n_bytes_header  = transfer(self%byte_array_header(1:4),   self%n_bytes_header)
+        self%n_hash_vals     = transfer(self%byte_array_header(5:8),   self%n_hash_vals)
         self%n_records       = transfer(self%byte_array_header(9:12),  self%n_records)
         self%first_data_byte = transfer(self%byte_array_header(13:16), self%first_data_byte)
         self%n_peaks         = transfer(self%byte_array_header(17:20), self%n_peaks)
         self%fromto(1)       = transfer(self%byte_array_header(21:24), self%fromto(1))
         self%fromto(2)       = transfer(self%byte_array_header(25:28), self%fromto(2))
         self%hash_keys       = transfer(self%byte_array_header(29:self%n_bytes_header), self%hash_keys)
-	end subroutine byte_array2header
+    end subroutine byte_array2header
 
-    subroutine open( self, fname, rwaction )
-		use simple_filehandling, only: get_fileunit, is_open
-		class(binoris),             intent(inout) :: self     !< instance
-		character(len=*),           intent(in)    :: fname    !< filename
-        character(len=*), optional, intent(in)    :: rwaction !< read/write flag
-        character(len=9) :: rw_str
-        character(len=7) :: stat_str
-        if( .not. is_open(self%funit) )then
-	        if( present(rwaction) )then
-	            rw_str = trim(rwaction)
-	        else
-	            rw_str = 'READWRITE'
-	        endif
-	        stat_str = 'UNKNOWN'
-	        self%funit = get_fileunit()
-	        open(unit=self%funit,access='STREAM',file=fname,action=rw_str,status=stat_str)
-	    endif
-	end subroutine open
+    ! destructor
 
-	subroutine close( self )
-		use simple_filehandling, only: is_open
-		class(binoris), intent(in) :: self !< instance
-		if( is_open(self%funit) ) close(self%funit)
-	end subroutine close
-
-	subroutine write_header( self, fname )
-		class(binoris),   intent(inout) :: self  !< instance
-		character(len=*), intent(in)    :: fname !< filename
-		integer :: io_status
-		! assuming file open
-		call self%header2byte_array
-		write(unit=self%funit,pos=1,iostat=io_status) self%byte_array_header
-        if( io_status .ne. 0 )then
-            write(*,'(a,i0,a)') '**error(binoris::write_header): error ', io_status, ' when writing header bytes to disk'
-            stop 'I/O error; write_header; simple_binoris'
+    subroutine kill( self )
+        class(binoris), intent(inout) :: self
+        call self%close
+        if( self%exists )then
+            deallocate(self%hash_keys, self%byte_array_header, self%record)
+            self%exists = .false.
         endif
-	end subroutine write_header
+    end subroutine kill
 
-	subroutine write_record( self, a, i, os_peak )
-		class(binoris),        intent(inout) :: self
-		class(oris),           intent(inout) :: a
-		integer,               intent(in)    :: i
-		class(oris), optional, intent(in)    :: os_peak
-		integer :: first_byte, io_status
+    ! local subs
 
-		! assuming file open
-
-		! transfer data to self%record
-
-
-		first_byte = self%first_data_byte + (i - 1) * self%n_reals_per_record * 4
-		write(unit=self%funit,pos=first_byte,iostat=io_status) self%record
-        if( io_status .ne. 0 )then
-            write(*,'(a,i0,a)') '**error(binoris::write_record): error ', io_status, ' when writing record bytes to disk'
-            stop 'I/O error; write_record; simple_binoris'
-        endif
-	end subroutine write_record
-
-
-	subroutine kill( self )
-		class(binoris), intent(inout) :: self
-		call self%close
-		if( self%exists )then
-			deallocate(self%hash_keys, self%hash_vals, self%peak_array,&
-				&self%byte_array_header, self%record)
-			self%exists = .false.
-		endif
-	end subroutine kill
+    subroutine set_o_peak_flags
+        o_peak_flags(1) = 'e1'
+        o_peak_flags(2) = 'e2'
+        o_peak_flags(3) = 'e3'
+        o_peak_flags(4) = 'x'
+        o_peak_flags(5) = 'y'
+        o_peak_flags(6) = 'state'
+        o_peak_flags(7) = 'proj'
+        o_peak_flags(8) = 'corr'
+        o_peak_flags(9) = 'ow'
+    end subroutine set_o_peak_flags
 
 end module simple_binoris

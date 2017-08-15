@@ -12,12 +12,12 @@ private
 !>  orientation parameter stuct and operations 
 type :: ori
     private
-    real                        :: euls(3)=0.        !< Euler angle
-    real                        :: normal(3)=0.      !< Fourier plane normal
-    real                        :: rmat(3,3)=0.      !< rotation matrix
-    type(hash)                  :: htab              !< hash table for the parameters
-    type(chash)                 :: chtab             !< hash table for the filenames etc.
-    logical                     :: existence=.false. !< to indicate existence
+    real        :: euls(3)=0.        !< Euler angle
+    real        :: normal(3)=0.      !< Fourier plane normal
+    real        :: rmat(3,3)=0.      !< rotation matrix
+    type(hash)  :: htab              !< hash table for the parameters
+    type(chash) :: chtab             !< hash table for the filenames etc.
+    logical     :: existence=.false. !< to indicate existence
   contains
     ! CONSTRUCTOR
     procedure          :: new_ori
@@ -62,6 +62,7 @@ type :: ori
     procedure          :: get_shift
     procedure          :: hash_size
     procedure          :: hash_keys
+    procedure          :: hash_vals
     procedure          :: chash_size
     procedure          :: chash_nmax
     procedure          :: isthere
@@ -505,6 +506,13 @@ contains
         character(len=32), allocatable :: keys(:)
         keys = self%htab%get_keys()
     end function hash_keys
+
+    !>  \brief  returns the keys of the hash
+    function hash_vals( self ) result( vals )
+        class(ori), intent(inout) :: self
+        real(kind=4), allocatable :: vals(:)
+        vals = self%htab%get_vals()
+    end function hash_vals
 
     !>  \brief  returns size of chash
     function chash_size( self ) result( sz )

@@ -52,6 +52,7 @@ contains
         call chdict%push('ctfsq',         'apply ctf**2 to the images(yes|no){no}')
         call chdict%push('ctfsqspec',     'filename of ctf**2 spectrum{ctfsqspec_state01.bin}')
         call chdict%push('ctfstats',      'calculate ctf statistics(yes|no){no}')
+        call chdict%push('projstats',     'calculate projection direction population statistics(yes|no){no}')
         call chdict%push('cube',          'side size(in pixels){0}')
         call chdict%push('dcrit_rel',     'critical distance relative to box(0-1){0.5}')
         call chdict%push('defocus',       'defocus(in microns){3.}')

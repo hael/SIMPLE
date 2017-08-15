@@ -156,8 +156,8 @@ contains
     !>  \brief open the file(s) for the imgfile
     subroutine open_local( self, del_if_exists, rwaction )
         class(imgfile),             intent(inout) :: self   !< Imagefile object 
-        logical,          optional, intent(in) :: del_if_exists !< overwrite flag
-        character(len=*), optional, intent(in) :: rwaction      !< read/write flag
+        logical,          optional, intent(in)    :: del_if_exists !< overwrite flag
+        character(len=*), optional, intent(in)    :: rwaction      !< read/write flag
         character(len=9) :: rw_str
         character(len=7) :: stat_str
         ! prepare a string for the open statement

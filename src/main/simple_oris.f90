@@ -58,9 +58,6 @@ type :: oris
     procedure          :: remap_classes
     procedure          :: shift_classes
     procedure          :: get_cls_pinds
-    procedure          :: get_proj_pinds
-    procedure          :: get_cls_oris
-    procedure          :: get_proj_oris
     procedure          :: get_state
     procedure          :: get_proj
     procedure          :: get_class
@@ -409,22 +406,14 @@ contains
     end function isthere_2
 
     !>  \brief  is for checking the number of classes
-    function get_ncls( self, minpop ) result( ncls )
-        class(oris),       intent(inout) :: self
-        integer, optional, intent(in)    :: minpop
-        integer :: i, ncls, mycls, ncls_here
+    function get_ncls( self ) result( ncls )
+        class(oris), intent(inout) :: self
+        integer :: i, ncls, mycls
         ncls = 1
         do i=1,self%n
             mycls = nint(self%o(i)%get('class'))
             if( mycls > ncls ) ncls = mycls
         end do
-        if( present(minpop) )then
-            ncls_here = 0
-            do i=1,ncls
-                if( self%get_cls_pop(i) >= minpop ) ncls_here = ncls_here+1
-            end do
-            ncls = ncls_here
-        endif
     end function get_ncls
 
     !>  \brief  is for checking the number of projs
@@ -480,7 +469,7 @@ contains
         pop = 0
         do i=1,self%n
             mystate = nint(self%o(i)%get('state'))
-            if( mystate == state ) pop = pop+1
+            if( mystate == state ) pop = pop + 1
         end do
     end function get_state_pop
 
@@ -697,67 +686,6 @@ contains
         endif
     end function get_cls_pinds
 
-    !>  \brief  is for getting an allocatable array with ptcl indices of the proj 'proj'
-    function get_proj_pinds( self, proj ) result( projarr )
-        class(oris), intent(inout) :: self
-        integer,     intent(in)    :: proj
-        integer, allocatable       :: projarr(:)
-        integer                    :: projnr, i, pop, alloc_stat, cnt
-        pop = self%get_proj_pop( proj )
-        if( pop > 0 )then
-            allocate( projarr(pop), stat=alloc_stat )
-            call alloc_err('get_proj_pinds; simple_oris', alloc_stat)
-            cnt = 0
-            do i=1,self%n
-                projnr = nint(self%get( i, 'proj'))
-                if( projnr == proj )then
-                    cnt = cnt+1
-                    projarr(cnt) = i
-                endif
-            end do
-        endif
-    end function get_proj_pinds
-
-    !>  \brief  is for extracting the subset of oris with class label class
-    function get_cls_oris( self, class ) result( clsoris )
-        class(oris), intent(inout) :: self
-        integer,     intent(in)    :: class
-        type(oris)                 :: clsoris
-        integer                    :: clsnr, i, pop, cnt
-        pop = self%get_cls_pop( class )
-        if( pop > 0 )then
-            call clsoris%new(pop)
-            cnt = 0
-            do i=1,self%n
-                clsnr = nint(self%get(i, 'class'))
-                if( clsnr == class )then
-                    cnt = cnt+1
-                    clsoris%o(cnt) = self%o(i)
-                endif
-            end do
-        endif
-    end function get_cls_oris
-
-    !>  \brief  is for extracting the subset of oris with proj label proj
-    function get_proj_oris( self, proj ) result( projoris )
-        class(oris), intent(inout) :: self
-        integer,     intent(in)    :: proj
-        type(oris)                 :: projoris
-        integer                    :: projnr, i, pop, cnt
-        pop = self%get_proj_pop( proj )
-        if( pop > 0 )then
-            call projoris%new(pop)
-            cnt = 0
-            do i=1,self%n
-                projnr = nint(self%get(i, 'proj'))
-                if( projnr == proj )then
-                    cnt = cnt+1
-                    projoris%o(cnt) = self%o(i)
-                endif
-            end do
-        endif
-    end function get_proj_oris
-
     !>  \brief  is for getting an allocatable array with ptcl indices of the stategroup 'state'
     function get_state( self, state ) result( statearr )
         class(oris), intent(inout) :: self
@@ -784,17 +712,20 @@ contains
         class(oris), intent(inout) :: self
         integer,     intent(in)    :: proj
         integer, allocatable       :: projarr(:)
-        integer                    :: projnr, i, pop, alloc_stat, cnt
+        integer                    :: projnr, i, pop, alloc_stat, cnt, mystate
         pop = self%get_proj_pop( proj )
         if( pop > 0 )then
             allocate( projarr(pop), stat=alloc_stat )
             call alloc_err('get_proj; simple_oris', alloc_stat)
             cnt = 0
             do i=1,self%n
-                projnr = nint(self%get( i, 'proj' ))
-                if( projnr == proj )then
-                    cnt = cnt+1
-                    projarr(cnt) = i
+                mystate = nint(self%o(i)%get('state'))
+                if( mystate > 0 )then
+                    projnr = nint(self%get( i, 'proj' ))
+                    if( projnr == proj )then
+                        cnt = cnt+1
+                        projarr(cnt) = i
+                    endif
                 endif
             end do
         endif
@@ -805,17 +736,20 @@ contains
         class(oris), intent(inout) :: self
         integer,     intent(in)    :: class
         integer, allocatable       :: classarr(:)
-        integer                    :: classnr, i, pop, alloc_stat, cnt
+        integer                    :: classnr, i, pop, alloc_stat, cnt, mystate
         pop = self%get_cls_pop( class )
         if( pop > 0 )then
             allocate( classarr(pop), stat=alloc_stat )
             call alloc_err('get_class; simple_oris', alloc_stat)
             cnt = 0
             do i=1,self%n
-                classnr = nint(self%get( i, 'class' ))
-                if( classnr == class )then
-                    cnt = cnt+1
-                    classarr(cnt) = i
+                mystate = nint(self%o(i)%get('state'))
+                if( mystate > 0 )then
+                    classnr = nint(self%get( i, 'class' ))
+                    if( classnr == class )then
+                        cnt = cnt+1
+                        classarr(cnt) = i
+                    endif
                 endif
             end do
         endif
@@ -1132,7 +1066,7 @@ contains
     end function ang_sdev
 
     !>  \brief  is for printing
-    function included( self )result( incl )
+    function included( self ) result( incl )
         class(oris), intent(inout) :: self
         logical, allocatable :: incl(:)
         integer :: i, istate
@@ -1377,7 +1311,7 @@ contains
     end subroutine mul_shifts
 
     !>  \brief  randomizes eulers in oris
-    subroutine rnd_oris( self, trs, eullims)
+    subroutine rnd_oris( self, trs, eullims )
         class(oris),    intent(inout) :: self
         real, optional, intent(in)    :: trs
         real, optional, intent(inout) :: eullims(3,2)

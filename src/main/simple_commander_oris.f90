@@ -654,10 +654,6 @@ contains
             call b%a%spiral
             write(*,*) 'NPEAKS: ', b%a%find_npeaks_from_athres( p%athres )
         endif
-        if( cline%defined('balance') )then
-            call b%a%balance('proj', p%balance, skewness)
-            write(*,'(A,F8.2)') '>>> PROJECTION DISTRIBUTION SKEWNESS(%):', 100. * skewness
-        endif
         call b%a%write(p%outfile)
         call simple_end('**** SIMPLE_ORISOPS NORMAL STOP ****')
     end subroutine exec_orisops
@@ -672,14 +668,19 @@ contains
     !! the maximum angular distance
     subroutine exec_oristats(self,cline)
         use simple_oris, only: oris
+        use simple_stat, only: moment
+        use simple_math, only: median_nocopy
         class(oristats_commander), intent(inout) :: self
         class(cmdline),            intent(inout) :: cline
-        type(build)  :: b
-        type(oris)   :: o
-        type(params) :: p
-        real         :: mind, maxd, avgd, sdevd, sumd, vard
-        real         :: mind2, maxd2, avgd2, sdevd2, vard2, homo_cnt, homo_avg
-        logical      :: err
+        type(build)       :: b
+        type(oris)        :: o
+        type(params)      :: p
+        real              :: mind, maxd, avgd, sdevd, sumd, vard
+        real              :: mind2, maxd2, avgd2, sdevd2, vard2, homo_cnt, homo_avg
+        real              :: popmin, popmax, popmed, popave, popsdev, popvar, frac_populated
+        integer           :: nprojs, iproj
+        real, allocatable :: projpops(:), tmp(:)
+        logical           :: err
         p = params(cline)
         call b%build_general_tbox(p, cline)
         if( cline%defined('oritab2') )then
@@ -718,6 +719,26 @@ contains
                 write(*,'(a,1x,f8.2)') 'MINIMUM DF                           :', (mind+mind2)/2.
                 write(*,'(a,1x,f8.2)') 'MAXIMUM DF                           :', (maxd+maxd2)/2.
                 goto 999
+            endif
+            if( p%projstats .eq. 'yes' )then
+                nprojs = b%a%get_nprojs()
+                allocate( tmp(nprojs) )
+                do iproj=1,nprojs
+                    tmp(iproj) = real(b%a%get_proj_pop(iproj))
+                end do
+                projpops       = pack(tmp, tmp > 0.5)
+                frac_populated = real(size(tmp))/real(size(projpops))
+                deallocate(tmp)
+                popmin = minval(projpops)
+                popmax = minval(projpops)
+                popmed = median_nocopy(projpops)
+                call moment(projpops, popave, popsdev, popvar, err)
+                write(*,'(a,1x,f8.2)') 'FRAC POPULATED DIRECTIONS:', frac_populated
+                write(*,'(a,1x,f8.2)') 'MINIMUM POPULATION       :', popmin
+                write(*,'(a,1x,f8.2)') 'MAXIMUM POPULATION       :', popmax
+                write(*,'(a,1x,f8.2)') 'MEDIAN POPULATION        :', popmed
+                write(*,'(a,1x,f8.2)') 'AVERAGE POPULATION       :', popave
+                write(*,'(a,1x,f8.2)') 'SDEV OF POPULATION       :', popsdev
             endif
             if( p%trsstats .eq. 'yes' )then
                 call b%a%stats('x', avgd, sdevd, vard, err )
