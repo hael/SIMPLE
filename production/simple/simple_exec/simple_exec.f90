@@ -2105,9 +2105,10 @@ select case(prg)
         keys_optional(10) = 'minp'
         keys_optional(11) = 'clustvalid'
         keys_optional(12) = 'thres'
+        keys_optional(13) = 'projstats'
         ! parse command line
         if( describe ) call print_doc_oristats
-        call cline%parse( keys_required(:1), keys_optional(:12) )
+        call cline%parse( keys_required(:1), keys_optional(:13) )
         ! execute
         call xoristats%execute(cline)
     case( 'rotmats2oris' )

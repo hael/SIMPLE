@@ -721,16 +721,13 @@ contains
                 goto 999
             endif
             if( p%projstats .eq. 'yes' )then
-                nprojs = b%a%get_nprojs()
-                allocate( tmp(nprojs) )
-                do iproj=1,nprojs
-                    tmp(iproj) = real(b%a%get_proj_pop(iproj))
-                end do
+                tmp            = b%a%get_proj_pops()
+                nprojs         = size(tmp)
                 projpops       = pack(tmp, tmp > 0.5)
-                frac_populated = real(size(tmp))/real(size(projpops))
+                frac_populated = real(size(projpops))/real(nprojs)
                 deallocate(tmp)
                 popmin = minval(projpops)
-                popmax = minval(projpops)
+                popmax = maxval(projpops)
                 popmed = median_nocopy(projpops)
                 call moment(projpops, popave, popsdev, popvar, err)
                 write(*,'(a,1x,f8.2)') 'FRAC POPULATED DIRECTIONS:', frac_populated

@@ -47,6 +47,7 @@ type :: oris
     procedure          :: get_pop
     procedure          :: get_cls_pop
     procedure          :: get_proj_pop
+    procedure          :: get_proj_pops
     procedure          :: get_state_pop
     procedure          :: states_exist
     procedure          :: get_ptcls_in_state
@@ -432,13 +433,13 @@ contains
         class(oris),      intent(inout) :: self
         integer,          intent(in)    :: ind
         character(len=*), intent(in)    :: label
-        integer :: mycls, pop, i, mystate
+        integer :: mylab, pop, i, mystate
         pop = 0
         do i=1,self%n
             mystate = nint(self%o(i)%get('state'))
             if( mystate > 0 )then
-                mycls = nint(self%o(i)%get(label))
-                if( mycls == ind )then
+                mylab = nint(self%o(i)%get(label))
+                if( mylab == ind )then
                     pop = pop+1
                 endif
             endif
@@ -460,6 +461,23 @@ contains
         integer :: pop
         pop = self%get_pop(proj, 'proj')
     end function get_proj_pop
+
+    !>  \brief  is for checking proj populations
+    function get_proj_pops( self ) result( pops )
+        class(oris), intent(inout) :: self
+        real, allocatable :: pops(:)
+        integer :: i, mystate, myproj, nprojs
+        nprojs = self%get_nprojs()
+        allocate(pops(nprojs))
+        pops = 0.0
+        do i=1,self%n
+            mystate = nint(self%o(i)%get('state'))
+            if( mystate > 0 )then
+                myproj = nint(self%o(i)%get('proj'))
+                pops(myproj) = pops(myproj) + 1.0  
+            endif
+        end do
+    end function get_proj_pops
 
     !>  \brief  is for checking state population
     function get_state_pop( self, state ) result( pop )
