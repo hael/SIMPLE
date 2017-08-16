@@ -980,6 +980,7 @@ contains
         class(prime3D_srch),  intent(inout) :: self
         class(oris),          intent(inout) :: e
         integer,    optional, intent(in)    :: nnvec(:)
+        integer, allocatable :: srch_order_here(:)
         type(ran_tabu) :: rt
         integer        :: i, cnt, istate, iproj
         type(ori)      :: o
@@ -990,7 +991,6 @@ contains
         endif
         ! on exit all the oris are clean and only the out-of-planes, 
         ! state & proj fields are present
-        if( allocated(self%srch_order) ) deallocate(self%srch_order)
         if( str_has_substr(self%refine, 'neigh') .or. trim(self%refine).eq.'exp' )then ! local refinement
             allocate(self%srch_order(self%nnnrefs))
             rt = ran_tabu(self%nnnrefs)
