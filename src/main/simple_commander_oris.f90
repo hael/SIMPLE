@@ -638,7 +638,7 @@ contains
                 ! scale to max 50 #:s
                 scale = 1.0
                 do while( nint(scale*szmax) > hlen )
-                    scale = scale - 0.03
+                    scale = scale - 0.001
                 end do
                 write(*,'(a)') '>>> HISTOGRAM OF SUBSPACE POPULATIONS (FROM NORTH TO SOUTH)'
                  do icls=1,p%ndiscrete

@@ -306,8 +306,12 @@ contains
         real :: xyz(3), sharg
         ! p%center:  user gets opportunity to turn on/off centering
         ! p%doshift: search space fraction controlled centering (or not)
-        if( p%center .eq. 'yes' .and. p%doshift )then
-            ! center the reference
+        ! REPLACED
+        ! if( p%center .eq. 'yes' .and. p%doshift )then
+        ! WITH
+        if( p%center .eq. 'yes' )then
+        ! BECAUSE: typically you'd want to center the class averages
+        !          even though they're not good enough to search shifts
             xyz   = b%img%center(p%cenlp, 'no', p%msk, doshift=.false.)
             sharg = arg(xyz)
             if( sharg > CENTHRESH )then
