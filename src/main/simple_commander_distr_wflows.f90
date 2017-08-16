@@ -412,17 +412,11 @@ contains
                 call random_selection_from_imgfile(p_master%stk, p_master%refs, p_master%ncls, p_master%smpd)               
             endif
         endif
-        if( cline%defined('extr_thresh') )then
-            ! all is well
+        ! extremal dynamics
+        if( cline%defined('extr_iter') )then
+            p_master%extr_iter = p_master%extr_iter - 1
         else
-            ! starts from the top
-            p_master%extr_thresh = EXTRINITHRESH / p_master%rrate
-            if( p_master%startit > 1 )then
-                ! need to update the randomization rate
-                do i=1,p_master%startit-1
-                     p_master%extr_thresh = p_master%extr_thresh * p_master%rrate
-                end do
-            endif
+            p_master%extr_iter = p_master%startit - 1
         endif
 
         ! main loop
@@ -433,10 +427,10 @@ contains
             write(*,'(A)')   '>>>'
             write(*,'(A,I6)')'>>> ITERATION ', iter
             write(*,'(A)')   '>>>'
-            ! exponential cooling of the randomization rate
-            p_master%extr_thresh = p_master%extr_thresh * p_master%rrate
-            call job_descr%set('extr_thresh', real2str(p_master%extr_thresh))
-            call cline%set('extr_thresh', p_master%extr_thresh)
+            ! cosine cooling of the randomization rate
+            p_master%extr_iter = p_master%extr_iter + 1
+            call job_descr%set('extr_iter', trim(int2str(p_master%extr_iter)))
+            call cline%set('extr_iter', real(p_master%extr_iter))
             if( oritab .ne. '' ) call job_descr%set('oritab',  trim(oritab))
             call job_descr%set('refs',    trim(refs))
             call job_descr%set('startit', int2str(iter))
@@ -851,17 +845,10 @@ contains
             call cline%set( 'find', real(p_master%find) )
         endif
         ! EXTREMAL DYNAMICS
-        if( cline%defined('extr_thresh') )then
-            ! all is well
+        if( cline%defined('extr_iter') )then
+            p_master%extr_iter = p_master%extr_iter - 1
         else
-            ! starts from the top
-            p_master%extr_thresh = EXTRINITHRESH / p_master%rrate
-            if( p_master%startit > 1 )then
-                ! need to update the randomization rate
-                do i=1,p_master%startit-1
-                     p_master%extr_thresh = p_master%extr_thresh * p_master%rrate
-                end do
-            endif
+            p_master%extr_iter = p_master%startit - 1
         endif
         ! prepare Prime3D job description
         call cline%gen_job_descr(job_descr)
@@ -890,9 +877,9 @@ contains
                 endif
             endif
             ! exponential cooling of the randomization rate
-            p_master%extr_thresh = p_master%extr_thresh * p_master%rrate
-            call job_descr%set('extr_thresh', real2str(p_master%extr_thresh))
-            call cline%set('extr_thresh', p_master%extr_thresh)
+            p_master%extr_iter = p_master%extr_iter + 1
+            call job_descr%set('extr_iter', trim(int2str(p_master%extr_iter)))
+            call cline%set('extr_iter', real(p_master%extr_iter))
             call job_descr%set( 'startit', trim(int2str(iter)) )
             call cline%set( 'startit', real(iter) )
             ! schedule

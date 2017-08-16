@@ -152,9 +152,8 @@ contains
                 call b%eorecvol%get_res(res05s(s), res0143s(s))
                 call b%eorecvol%sampl_dens_correct_sum( b%vol )
                 call b%eorecvol%write_eos(recname)
-                !call wait_for_closure( recname )
                 call b%vol%write( volname, del_if_exists=.true. )
-                call wait_for_closure(volname)
+                call wait_for_closure( volname )
             end subroutine normalize
 
     end subroutine exec_eo_volassemble

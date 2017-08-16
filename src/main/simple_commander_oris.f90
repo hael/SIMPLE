@@ -204,12 +204,13 @@ contains
         class(cmdline),            intent(inout) :: cline
         character(len=STDLEN), allocatable :: oritabs(:)
         integer, allocatable :: labels(:,:), consensus(:)
+        real,    allocatable :: corrs(:)
         type(build)  :: b
         type(ori)    :: orientation
         type(oris)   :: o, o_even
         type(params) :: p
         real         :: e3, x, y!, score
-        integer      :: i, j, cnt, ispace, irot, class
+        integer      :: i, j, cnt, ispace, irot, class, loc(1)
         integer      :: ioritab, noritabs, nl, nl1
         p = params(cline)
         call b%build_general_tbox(p, cline)
@@ -288,17 +289,20 @@ contains
                     &simple_commander_oris :: makeoris'
                 endif
             end do
-            allocate(labels(noritabs,nl), consensus(nl))
+            allocate(labels(noritabs,nl), consensus(nl), corrs(noritabs))
             call o%new(nl)
             do ioritab=1,noritabs
                 call o%read(oritabs(ioritab))
                 labels(ioritab,:) = nint(o%get_all('state'))
+                corrs(ioritab)    = sum(o%get_all('corrs'), mask=(labels(ioritab,:)>0))&
+                &/real(count(labels(ioritab,:)>0))
             end do
-            call shc_aggregation(noritabs, nl, labels, consensus)
+            loc = maxloc(corrs)
+            call shc_aggregation(noritabs, nl, labels, consensus, loc(1))
             do i=1,nl
                 call o%set(i,'state', real(consensus(i)))
             end do
-            call o%write('aggregate_oris.txt')
+            call o%write('aggregated_oris.txt')
             return
         else
             call b%a%rnd_oris(p%trs)

@@ -189,6 +189,7 @@ contains
             if( wait_time == 60 )then
                 write(*,'(A,A)')'>>> WARNING: been waiting for a minute for file: ',trim(adjustl(fname))
                 wait_time = 0
+                call flush(6)
             endif
             exists = file_exists(fname)
             closed = .false.

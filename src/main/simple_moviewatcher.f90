@@ -26,6 +26,7 @@ type moviewatcher
     logical                            :: dopick         = .false.
     logical                            :: doprint        = .false.
 contains
+
     ! doers
     procedure          :: watch
     procedure, private :: is_past

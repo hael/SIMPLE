@@ -37,7 +37,7 @@ contains
         integer,        intent(in)    :: which_iter
         logical,        intent(inout) :: converged
         integer   :: iptcl
-        real      :: corr_thresh, frac_srch_space, skewness
+        real      :: corr_thresh, frac_srch_space, skewness, extr_thresh
 
         ! PREP REFERENCES
         if( p%l_distr_exec )then
@@ -73,8 +73,12 @@ contains
         frac_srch_space = b%a%get_avg('frac')
 
         ! EXTREMAL LOGICS
-        if( frac_srch_space < 98. .or. p%extr_thresh > 0.025 )then
-            corr_thresh = b%a%extremal_bound(p%extr_thresh)
+        if( frac_srch_space < 98. .or. p%extr_iter <= 15 )then
+            ! extr_thresh = EXTRINITHRESH * (1.-EXTRTHRESH_CONST)**(p%extr_iter-1)  ! factorial decay
+            ! extr_thresh = EXTRINITHRESH * exp(-(real(p%extr_iter-1)/6.)**2. / 2.) ! gaussian decay: untested
+            extr_thresh = EXTRINITHRESH * cos(PI/2. * real(p%extr_iter-1)/15.)    ! cosine decay
+            extr_thresh = min(EXTRINITHRESH, max(0., extr_thresh))
+            corr_thresh = b%a%extremal_bound(extr_thresh)
         else
             corr_thresh = -huge(corr_thresh)
         endif
@@ -117,7 +121,7 @@ contains
                     !$omp end parallel do
                 else
                     if( corr_thresh > 0. )then
-                        write(*,'(A,F8.2)') '>>> PARTICLE RANDOMIZATION(%):', 100.*p%extr_thresh
+                        write(*,'(A,F8.2)') '>>> PARTICLE RANDOMIZATION(%):', 100.*extr_thresh
                         write(*,'(A,F8.2)') '>>> CORRELATION THRESHOLD:    ', corr_thresh
                     endif
                     !$omp parallel do default(shared) schedule(guided) private(iptcl) proc_bind(close)
@@ -303,13 +307,7 @@ contains
                         orientation = b%a%get_ori(iptcl)
                         w = orientation%get('w')
                         call batch_imgs(i)%rtsq( -orientation%e3get(), 0., 0. )
-
-                        print *, 'trying to add'
-
                         call batch_imgsum%add(batch_imgs(i), w)
-
-                        print *, 'did add'
-
                     enddo
                 endif
                 ! batch summation

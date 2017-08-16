@@ -171,6 +171,7 @@ type :: params
     integer :: corner=0            !< corner size(in pixels){0}
     integer :: cube=0              !< side size(in pixels){0}
     integer :: edge=3              !< edge size for softening molecular envelope(in pixels)
+    integer :: extr_iter=1
     integer :: find=1              !< Fourier index
     integer :: nframesgrp=0        !< # frames to group before unblur(Falcon 3){0}
     integer :: fromf=1             !< start frame index
@@ -281,7 +282,6 @@ type :: params
     real    :: e2=0.               !< 2nd Euler(in degrees){0}
     real    :: e3=0.               !< 3d Euler(in degrees){0}
     real    :: eps=0.003
-    real    :: extr_thresh=EXTRINITHRESH
     real    :: eullims(3,2)=0.
     real    :: exp_time=2.0       !< exposure time(in s)
     real    :: filwidth=0.        !< width of filament (in A)
@@ -319,7 +319,6 @@ type :: params
     real    :: outer=0.           !< outer mask radius(in pixels)
     real    :: phranlp=35.        !< low-pass phase randomize(yes|no){no}
     real    :: power=2.           !<
-    real    :: rrate=0.8          !< randomization rate{0.8}
     real    :: scale=1.           !< image scale factor{1}
     real    :: scale2=1.          !< image scale factor 2nd{1}
     real    :: sherr=0.           !< shift error(in pixels){2}
@@ -548,6 +547,7 @@ contains
         call check_iarg('corner',         self%corner)
         call check_iarg('cube',           self%cube)
         call check_iarg('edge',           self%edge)
+        call check_iarg('extr_iter',      self%extr_iter)
         call check_iarg('find',           self%find)
         call check_iarg('nframesgrp',     self%nframesgrp)
         call check_iarg('fromf',          self%fromf)
@@ -643,7 +643,6 @@ contains
         call check_rarg('e3',             self%e3)
         call check_rarg('eps',            self%eps)
         call check_rarg('exp_time',       self%exp_time)
-        call check_rarg('extr_thresh',    self%extr_thresh)
         call check_rarg('filwidth',       self%filwidth)
         call check_rarg('frac',           self%frac)
         call check_rarg('fraca',          self%fraca)
@@ -673,7 +672,6 @@ contains
         call check_rarg('outer',          self%outer)
         call check_rarg('phranlp',        self%phranlp)
         call check_rarg('power',          self%power)
-        call check_rarg('rrate',          self%rrate)
         call check_rarg('scale',          self%scale)
         call check_rarg('scale2',         self%scale2)
         call check_rarg('sherr',          self%sherr)

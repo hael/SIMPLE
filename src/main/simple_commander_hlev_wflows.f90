@@ -503,7 +503,7 @@ contains
             labels_incl(irepeat,:) = pack(labels(irepeat,:), mask=included)
         enddo
         labels(1,:) = 0
-        call shc_aggregation(NREPEATS, n_incl, labels_incl, consensus)
+        call shc_aggregation(NREPEATS, n_incl, labels_incl, consensus, best_loc(1))
         call os%set_all('state', real(unpack(consensus, included, labels(1,:))) )
         call os%write(trim(oritab))
         ! cleanup

@@ -59,14 +59,15 @@ contains
         end do
     end function merge_into_disjoint_set
 
-    subroutine shc_aggregation( nrepeats, nptcls, labels, consensus )
+    subroutine shc_aggregation( nrepeats, nptcls, labels, consensus, best_ind )
         use simple_math, only: hpsort
         integer, intent(in)    :: nrepeats, nptcls
         integer, intent(inout) :: labels(nrepeats,nptcls), consensus(nptcls)
+        integer, intent(in)    :: best_ind
         integer, parameter     :: MAXITS   = 1000
-        real,    parameter     :: TINYTINY = 1e-40               !! Intel warn too small for kind=4 real
-        logical, parameter     :: DOPRINT  = .false.
-        integer, allocatable   :: counts(:), labels_consensus(:,:)
+        real,    parameter     :: TINYTINY = 1e-20               !! Intel warn too small for kind=4 real
+        logical, parameter     :: DOPRINT  = .true.
+        integer, allocatable   :: counts(:), labels_consensus(:,:), labels_backup(:,:)
         integer :: nlabels, loc(1), rp(2), it, irnd, inds(nrepeats)
         integer :: irep, ilab, iptcl, irestart, restart_winner
         real    :: scores(nrepeats), s, naccepted, norm, score_best
@@ -76,15 +77,17 @@ contains
         norm       = real((nrepeats-1)*nptcls)
         score_best = 0.0
         allocate(labels_consensus(nrepeats,nptcls),counts(nlabels))
-        do irestart=1,nrepeats
+        labels_backup = labels
+        do irestart=1,nrepeats*nlabels
             if( DOPRINT ) write(*,'(a,1x,I5)') '>>> SHC AGGREGATION, RESTART ROUND:', irestart
             ! change the first solution in the row (will affect the greedy initial solution)
-            call change_first( irestart )
+            labels = labels_backup
+            call change_first( best_ind )
             ! obtain an initial solution using a greedy appraoch
             call greedy_init
             ! initialize scores
             do irep=1,nrepeats
-                scores = score( irep )
+                scores(irep) = score( irep )
             end do
             ! stochastic hill-climbing
             naccepted = 0.

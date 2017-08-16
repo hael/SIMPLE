@@ -110,13 +110,11 @@ contains
 
         ! EXTREMAL LOGICS
         if( p%refine.eq.'het' )then
-            if( frac_srch_space < 98. .or. which_iter <= 15 )then
-            ! if( frac_srch_space < 98. .or. extr_thresh > 0.025 )then
-                !extr_thresh = p%extr_thresh                                          ! factorial decay: the old way
-                !extr_thresh = EXTRINITHRESH * exp(-(real(which_iter-1)/6.)**2. / 2.) ! gaussian decay: untested
-                extr_thresh = EXTRINITHRESH * cos(PI/2. * real(which_iter-1)/15.)   ! cosine decay
-                extr_thresh = max(0., extr_thresh)
-                extr_thresh = min(EXTRINITHRESH, extr_thresh)
+            if( frac_srch_space < 98. .or. p%extr_iter <= 15 )then
+                ! extr_thresh = EXTRINITHRESH * (1.-EXTRTHRESH_CONST)**(p%extr_iter-1)  ! factorial decay
+                ! extr_thresh = EXTRINITHRESH * exp(-(real(p%extr_iter-1)/6.)**2. / 2.) ! gaussian decay: untested
+                extr_thresh = EXTRINITHRESH * cos(PI/2. * real(p%extr_iter-1)/15.)    ! cosine decay
+                extr_thresh = min(EXTRINITHRESH, max(0., extr_thresh))
                 corr_thresh = b%a%extremal_bound(extr_thresh)
                 statecnt(:) = 0
             else
@@ -205,7 +203,6 @@ contains
             case('het')
                 if(p%oritab .eq. '') stop 'cannot run the refine=het mode without input oridoc (oritab)'
                 if( corr_thresh > TINY )then
-                    ! write(*,'(A,F8.2)') '>>> PARTICLE RANDOMIZATION(%):', 100.*p%extr_thresh
                     write(*,'(A,F8.2)') '>>> PARTICLE RANDOMIZATION(%):', 100.*extr_thresh
                     write(*,'(A,F8.2)') '>>> CORRELATION THRESHOLD:    ', corr_thresh
                 endif

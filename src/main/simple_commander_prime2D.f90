@@ -174,21 +174,16 @@ contains
         else
             startit = 1
             if( cline%defined('startit') ) startit = p%startit
-            if( cline%defined('extr_thresh') )then
+            ! extremal dynamics
+            if( cline%defined('extr_iter') )then
                 ! all is well
             else
-                ! starts from the top
-                p%extr_thresh = EXTRINITHRESH/p%rrate
-                if( startit > 1 )then
-                    ! need to update the randomization rate
-                    do i=1,startit-1
-                         p%extr_thresh = p%extr_thresh * p%rrate
-                    end do
-                endif
+                p%extr_iter = startit
             endif
             do i=startit,p%maxits
-                p%extr_thresh = p%extr_thresh * p%rrate
                 call prime2D_exec(b, p, cline, i, converged)
+                ! updates extremal dynamics
+                p%extr_iter = p%extr_iter + 1
                 if(converged) exit
             end do
         endif
@@ -238,7 +233,7 @@ contains
         converged = b%conv%check_conv2D() ! convergence check
         call cline%set('frac', b%conv%get('frac'))
         if( p%doshift )then
-            ! activates shift serach
+            ! activates shift search
             call cline%set('trs', p%trs)
         endif
         if( converged )then

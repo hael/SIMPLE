@@ -242,23 +242,17 @@ contains
                 endif
             endif
             p%find = calc_fourier_index( p%lp, p%boxmatch, p%smpd )
-            ! extremal dynamics
-            if( cline%defined('extr_thresh') )then
+            ! init extremal dynamics
+            if( cline%defined('extr_iter') )then
                 ! all is well
             else
-                ! starts from the top
-                p%extr_thresh = EXTRINITHRESH/p%rrate
-                if( startit > 1 )then
-                    ! need to update the randomization rate
-                    do i=1,startit-1
-                         p%extr_thresh = p%extr_thresh * p%rrate
-                    end do
-                endif
+                p%extr_iter = startit
             endif
             corr = -1
             do i=startit,p%maxits
-                p%extr_thresh = p%extr_thresh * p%rrate
                 call prime3D_exec(b, p, cline, i, update_res, converged)
+                ! updates extremal iteration
+                p%extr_iter = p%extr_iter + 1
                 if( .not. p%l_distr_exec .and. p%refine .eq. 'snhc' .and. .not. cline%defined('szsn') )then
                     ! update stochastic neighborhood size if corr is not improving
                     corr_prev = corr

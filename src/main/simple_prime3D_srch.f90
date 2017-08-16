@@ -31,6 +31,7 @@ type prime3D_srch
     integer                 :: nrots          = 0       !< # in-plane rotations in polar representation
     integer                 :: npeaks         = 0       !< # peaks (nonzero orientation weights)
     integer                 :: npeaks_inpl    = 0       !< total # peaks, including in-plane ones
+    integer                 :: npeaks_grid    = 0       !< # peaks after coarse search
     integer                 :: nbetter        = 0       !< # better orientations identified
     integer                 :: nrefs_eval     = 0       !< # references evaluated
     integer                 :: nnn_static     = 0       !< # nearest neighbors (static)
@@ -82,6 +83,7 @@ type prime3D_srch
     ! CALCULATORS
     procedure          :: prep_npeaks_oris
     procedure          :: stochastic_weights
+    procedure, private :: calc_specscore
     ! GETTERS & SETTERS
     procedure          :: update_best
     procedure          :: get_ori
@@ -122,7 +124,7 @@ contains
         class(oris),             intent(inout) :: a        !< oris
         class(params),           intent(in)    :: p        !< parameters
         class(polarft_corrcalc), intent(inout) :: pftcc    !< correlator
-        integer  :: alloc_stat
+        integer  :: alloc_stat, nstates_eff
         ! destroy possibly pre-existing instance
         call self%kill
         ! set constants
@@ -157,12 +159,34 @@ contains
             call alloc_err('In: new; simple_prime3D_srch, 1', alloc_stat)
             self%state_exists = .true.
         endif
+        ! multiple states
+        if( self%nstates == 1 )then
+            self%npeaks_grid = GRIDNPEAKS              
+        else
+            ! number of populated states
+            nstates_eff = count(self%state_exists)
+            select case(trim(p%refine))
+                case('het')
+                    self%npeaks_grid = 1
+                case('shc', 'shcneigh')
+                    ! "-(nstates_eff-1)" because all states share the same previous orientation
+                    self%npeaks_grid = GRIDNPEAKS*nstates_eff - (nstates_eff-1)
+                case DEFAULT
+                    self%npeaks      = nstates_eff * self%npeaks
+                    self%npeaks_grid = GRIDNPEAKS*nstates_eff - (nstates_eff-1)
+            end select
+        endif
+        if(str_has_substr(self%refine,'neigh'))then
+            self%npeaks_grid = min(self%npeaks_grid,self%nnnrefs)
+        else
+            self%npeaks_grid = min(self%npeaks_grid,self%nrefs)
+        endif
+        ! in-plane weighing
         self%do_weight_inpl = .false.
         if( str_has_substr(self%refine, 'exp') .and. self%npeaks > 1 )then
             self%do_weight_inpl = .true.
             self%greedy_inpl    = .false.
             self%npeaks_inpl    = INPL_EXPAND_FAC * self%npeaks
-            !self%npeaks         = nint( real(self%npeaks_inpl)/2. )
         endif
         ! generate oris oject in which the best npeaks refs will be stored
         if( self%do_weight_inpl )then
@@ -258,7 +282,7 @@ contains
         real,                    intent(in)    :: lp
         integer, optional,       intent(in)    :: nnmat(self%nprojs,self%nnn_static), grid_projs(:)
         real    :: projspace_corrs(self%nrefs),wcorr
-        integer :: iref, isample, nrefs, target_projs(GRIDNPEAKS)
+        integer :: iref, isample, nrefs, target_projs(self%npeaks_grid)
         ! IS BY DEFAULT A NEIGHBOORHOOD MODE
         if( nint(a%get(iptcl,'state')) > 0 )then
             ! for neighbour modes we do a coarse grid search first
@@ -284,7 +308,7 @@ contains
             call self%inpl_peaks(pftcc, iptcl)
             ! prepare weights & orientation
             call self%prep_npeaks_oris
-            call self%stochastic_weights(iptcl, wcorr)
+            call self%stochastic_weights(wcorr)
             call self%update_best(pftcc, iptcl, a)
             call a%set(iptcl, 'corr', wcorr)
         else
@@ -327,7 +351,7 @@ contains
         real,                    intent(in)    :: lp
         integer, optional,       intent(in)    :: nnmat(self%nprojs,self%nnn_static), grid_projs(:)
         real    :: projspace_corrs(self%nrefs),wcorr
-        integer :: iref,isample,nrefs,target_projs(GRIDNPEAKS)
+        integer :: iref,isample,nrefs,target_projs(self%npeaks_grid)
         if( nint(a%get(iptcl,'state')) > 0 )then
             if( str_has_substr(self%refine, 'neigh') )then
                 ! for neighbour modes we do a coarse grid search first
@@ -358,7 +382,7 @@ contains
             call self%inpl_srch(pftcc, iptcl)
             ! prepare weights & orientation
             call self%prep_npeaks_oris
-            call self%stochastic_weights(iptcl, wcorr)
+            call self%stochastic_weights(wcorr)
             call self%update_best(pftcc, iptcl, a)
             call a%set(iptcl, 'corr', wcorr)
         else
@@ -402,37 +426,58 @@ contains
         integer,                 intent(in)    :: grid_projs(:)
         integer,                 intent(inout) :: target_projs(:)
         real      :: projspace_corrs(self%nrefs)
-        integer   :: iref, isample, nrefs, state, ntargets, cnt, prev_proj
+        integer   :: iref, isample, nrefs, ntargets, cnt, prev_proj, istate
+        integer   :: state_cnt(self%nstates), iref_state
         type(ori) :: o_prev
         if( nint(a%get(iptcl,'state')) > 0 )then
             o_prev    = a%get_ori(iptcl)
             prev_proj = e%find_closest_proj(o_prev,1)
             ! initialize
             self%proj_space_inds = 0
+            target_projs         = 0
             projspace_corrs      = -1.
             nrefs = size(grid_projs)
             ! search
-            do isample=1,nrefs
-                do state=1,self%nstates
-                    iref = grid_projs(isample) ! set the reference index
-                    call per_ref_srch(iref)    ! actual search
+            do isample = 1, nrefs
+                do istate = 1, self%nstates
+                    iref = grid_projs(isample)           ! set the projdir reference index
+                    iref = (istate-1)*self%nprojs + iref ! set the state reference index
+                    call per_ref_srch(iref)              ! actual search
                 end do
             end do
             ! sort in correlation projection direction space
             call hpsort(self%nrefs, projspace_corrs, self%proj_space_inds)
             ! return target points
             ntargets = size(target_projs)
-            target_projs(1) = prev_proj ! previous always part of the targets
-            cnt = 1 ! because we have one in there already
-            do isample=self%nrefs,self%nrefs - ntargets + 1,-1
-                if( target_projs(1) == self%proj_space_inds(isample) )then
-                    ! direction is already in target set
-                else
+            cnt = 1
+            target_projs( cnt ) = prev_proj ! previous always part of the targets
+            if( self%nstates == 1 )then
+                ! Single state
+                do isample=self%nrefs,self%nrefs - ntargets + 1,-1
+                    if( target_projs(1) == self%proj_space_inds(isample) )then
+                        ! direction is already in target set
+                    else
+                        cnt = cnt + 1
+                        target_projs(cnt) = self%proj_space_inds(isample)
+                        if( cnt == ntargets ) exit
+                    endif
+                end do
+            else
+                ! Multiples states
+                state_cnt = 1                                           ! previous always part of the targets
+                do isample = self%nrefs, 1, -1
+                    if( cnt >= self%npeaks_grid )exit                   ! all that we need
+                    iref_state = self%proj_space_inds(isample)          ! reference index to multi-state space
+                    istate     = ceiling(real(iref_state)/real(self%nprojs))
+                    iref       = iref_state - (istate-1)*self%nprojs    ! reference index to single state space
+                    if( .not.self%state_exists(istate) )cycle
+                    if( any(target_projs == iref) )cycle                ! direction is already set
+                    if( state_cnt(istate) >= GRIDNPEAKS )cycle          ! state is already filled
                     cnt = cnt + 1
-                    target_projs(cnt) = self%proj_space_inds(isample)
-                    if( cnt == ntargets ) exit
-                endif
-            end do
+                    target_projs(cnt) = iref
+                    state_cnt(istate) = state_cnt(istate) + 1
+                end do
+            endif
         else
             call a%reject(iptcl)
         endif
@@ -444,7 +489,7 @@ contains
                 integer, intent(in) :: iref
                 real    :: corrs(self%nrots), inpl_corr
                 integer :: loc(1), inpl_ind
-                if( self%state_exists(state) )then
+                if( self%state_exists(istate) )then
                     corrs     = pftcc%gencorrs(iref, iptcl, self%kstop_grid) ! In-plane correlations
                     loc       = maxloc(corrs)                                ! greedy in-plane
                     inpl_ind  = loc(1)                                       ! in-plane angle index
@@ -471,7 +516,7 @@ contains
         real,                    intent(in)    :: lp
         integer, optional,       intent(in)    :: nnmat(self%nprojs,self%nnn_static), grid_projs(:)
         real      :: projspace_corrs(self%nrefs),wcorr
-        integer   :: iref,isample,nrefs,target_projs(GRIDNPEAKS)
+        integer   :: iref,isample,nrefs,target_projs(self%npeaks_grid)
         ! execute search
         if( nint(a%get(iptcl,'state')) > 0 )then
             if( str_has_substr(self%refine, 'neigh') )then
@@ -505,7 +550,7 @@ contains
             call self%inpl_srch(pftcc, iptcl) ! search shifts
             ! prepare weights and orientations
             call self%prep_npeaks_oris
-            call self%stochastic_weights(iptcl, wcorr)
+            call self%stochastic_weights(wcorr)
             call self%update_best(pftcc, iptcl, a)
             call a%set(iptcl, 'corr', wcorr)
         else
@@ -558,7 +603,7 @@ contains
         real,                    intent(in)    :: lp
         integer, optional,       intent(in)    :: nnmat(self%nprojs,self%nnn_static), grid_projs(:)
         real    :: inpl_corr,corrs(self%nrots)
-        integer :: iref,isample,nrefs,inpl_ind,loc(1),target_projs(GRIDNPEAKS)
+        integer :: iref,isample,nrefs,inpl_ind,loc(1),target_projs(self%npeaks_grid)
         logical :: found_better
         if( nint(a%get(iptcl,'state')) > 0 )then
             if( str_has_substr(self%refine, 'neigh') )then
@@ -573,7 +618,7 @@ contains
                 call self%prep4srch(pftcc, iptcl, a, e, lp)
                 nrefs = self%nrefs
             endif
-            ! initialize, ctd
+            ! initialize
             found_better         = .false.
             self%nrefs_eval      = 0
             self%proj_space_inds = 0
@@ -662,7 +707,7 @@ contains
             call hpsort(self%nrefs, projspace_corrs, self%proj_space_inds) 
             ! output
             call self%prep_npeaks_oris
-            call self%stochastic_weights(iptcl, wcorr)
+            call self%stochastic_weights(wcorr)
             call self%update_best(pftcc, iptcl, a)
         else
             call a%reject(iptcl)
@@ -704,7 +749,6 @@ contains
         class(oris),             intent(inout) :: a, e
         real,                    intent(in)    :: extr_bound
         integer,                 intent(inout) :: statecnt(self%nstates)
-        real, allocatable :: frc(:)
         type(ori) :: o
         integer   :: iref, state
         real      :: corr, mi_state, frac, corrs(self%nstates)
@@ -757,8 +801,7 @@ contains
             call o%set('w', 1.)
             ! specscore
             iref = (state - 1) * self%nprojs + self%prev_proj
-            frc  = pftcc%genfrc(iref, iptcl, self%prev_roind)
-            self%specscore = max(0., median_nocopy(frc))
+            call self%calc_specscore(pftcc, iref, iptcl, self%prev_roind)
             call o%set('specscore', self%specscore)
             ! updates orientations objects
             call self%o_peaks%set_ori(1, o)
@@ -777,8 +820,8 @@ contains
         class(polarft_corrcalc), intent(inout) :: pftcc
         integer,                 intent(in)    :: iptcl
         type(ori)         :: o
-        real              :: inpl_corrs(self%npeaks,self%nrots), e3, cc, cxy(3), thresh
-        integer           :: ipeak, iref, cnt, ncorrs, inpl_ind, irot, inds(self%nrots)
+        real              :: inpl_corrs(self%npeaks,self%nrots), cc, cxy(3)
+        integer           :: ipeak, iref, cnt, inpl_ind, irot, inds(self%nrots)
         ! re-generate in-plane corrs
         inpl_corrs = 0.
         cnt = 0 
@@ -869,8 +912,7 @@ contains
         integer,                 intent(in)    :: iptcl
         class(oris),             intent(inout) :: a, e
         real,                    intent(in)    :: lp
-        integer, optional,       intent(in)    :: nnmat(self%nprojs,self%nnn_static), target_projs(GRIDNPEAKS)
-        real,    allocatable :: frc(:)
+        integer, optional,       intent(in)    :: nnmat(self%nprojs,self%nnn_static), target_projs(self%npeaks_grid)
         integer, allocatable :: nnvec(:)
         type(ori) :: o_prev
         real      :: cc_t_min_1, corr
@@ -902,8 +944,7 @@ contains
         end select
         ! prep corr
         if( self%refine .ne. 'het' )then
-            o_prev = a%get_ori(iptcl)
-            corr   = max( 0., pftcc%corr(self%prev_ref, iptcl, self%prev_roind) )
+            corr = max( 0., pftcc%corr(self%prev_ref, iptcl, self%prev_roind) )
             if( corr - 1.0 > 1.0e-5 .or. .not. is_a_number(corr) )then
                 print *, 'FLOATING POINT EXCEPTION ALARM; simple_prime3D_srch :: prep4srch'
                 print *, 'corr > 1. or isNaN'
@@ -927,8 +968,7 @@ contains
             self%prev_corr = corr
         endif
         ! prep specscore
-        frc = pftcc%genfrc(self%prev_ref, iptcl, self%prev_roind)
-        self%specscore = max(0., median_nocopy(frc))
+        call self%calc_specscore(pftcc, self%prev_ref, iptcl, self%prev_roind)
         DebugPrint '>>> PRIME3D_SRCH::PREPARED FOR SIMPLE_PRIME3D_SRCH'
     end subroutine prep4srch
 
@@ -1001,14 +1041,14 @@ contains
         integer    :: neff_states ! number of effective (non-empty) states
         ! empty states
         neff_states = 1
-        if( self%nstates > 1 ) neff_states = count( self%state_exists )
+        if(self%nstates > 1) neff_states = count( self%state_exists )
         ! init npeaks
         if( self%do_weight_inpl) then
             npeaks = self%npeaks_inpl
         else
             npeaks = self%npeaks
         endif
-        call o_peaks%new(npeaks)
+        call o_peaks%new(npeaks) ! redundant & dangerous with self%do_weight_inpl?
         do ipeak = 1, npeaks
             if(self%do_weight_inpl)then
                 o = self%o_peaks%get_ori(ipeak)
@@ -1092,15 +1132,13 @@ contains
     !! \param iptcl particle index
     !! \param e search orientation
     !! \param wcorr weights
-    subroutine stochastic_weights( self, iptcl, wcorr )
+    subroutine stochastic_weights( self, wcorr )
         class(prime3D_srch),     intent(inout) :: self
-        integer,                 intent(in)    :: iptcl
         real,                    intent(out)   :: wcorr
         real,    allocatable :: corrs(:), ws(:), logws(:)
         integer, allocatable :: order(:) 
         logical, allocatable :: included(:)
-        type(ori) :: o
-        integer   :: state, roind, proj, ref, ipeak, npeaks
+        integer              :: ipeak, npeaks
         if( self%npeaks == 1 )then
             call self%o_peaks%set(1,'ow',1.0)
             wcorr = self%o_peaks%get(1,'corr')
@@ -1132,6 +1170,16 @@ contains
         ! update npeaks individual weights
         call self%o_peaks%set_all('ow', ws)
     end subroutine stochastic_weights
+
+    !>  \brief  calculates the sprectral score
+    subroutine calc_specscore( self, pftcc, iref, iptcl, roind )
+        class(prime3D_srch),     intent(inout) :: self
+        class(polarft_corrcalc), intent(inout) :: pftcc
+        integer,                 intent(in)    :: iref, iptcl, roind
+        real, allocatable :: frc(:)
+        frc = pftcc%genfrc(iref, iptcl, roind)
+        self%specscore = max(0., median_nocopy(frc))
+    end subroutine calc_specscore
 
     ! GETTERS & SETTERS
     
