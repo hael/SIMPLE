@@ -541,12 +541,13 @@ contains
         type(oris)           :: o, nonzero_pop_o, zero_pop_o, osubspace
         type(ori)            :: o_single
         type(params)         :: p
-        real                 :: mind, maxd, avgd, sdevd, sumd, vard, median_clustsz
+        real                 :: mind, maxd, avgd, sdevd, sumd, vard, median_clustsz, scale
         real                 :: mind2, maxd2, avgd2, sdevd2, vard2, homo_cnt, homo_avg
         real                 :: popmin, popmax, popmed, popave, popsdev, popvar, frac_populated, szmax
-        integer              :: nprojs, iproj, iptcl, icls, cnt_zero, cnt_nonzero, n_zero, n_nonzero
+        integer              :: nprojs, iproj, iptcl, icls, cnt_zero, cnt_nonzero, n_zero, n_nonzero, j
         real,    allocatable :: projpops(:), tmp(:), clustszs(:)
         integer, allocatable :: projinds(:), clustering(:)
+        integer, parameter   :: hlen=50
         logical              :: err
         p = params(cline)
         call b%build_general_tbox(p, cline, do3d=.false.)
@@ -634,9 +635,15 @@ contains
                     clustszs(icls) = real(count(clustering == icls))
                 end do
                 szmax = maxval(clustszs)
-                clustszs = (clustszs / szmax) * 1000.0
+                ! scale to max 50 #:s
+                scale = 1.0
+                do while( nint(scale*szmax) > hlen )
+                    scale = scale - 0.03
+                end do
                 write(*,'(a)') '>>> HISTOGRAM OF SUBSPACE POPULATIONS (FROM NORTH TO SOUTH)'
-                call plot_hist(clustszs, p%ndiscrete, 1)
+                 do icls=1,p%ndiscrete
+                    write(*,*) nint(clustszs(icls)),"|",('#', j=1,nint(clustszs(icls)*scale))  
+                end do
             endif
             if( p%trsstats .eq. 'yes' )then
                 call b%a%stats('x', avgd, sdevd, vard, err )
