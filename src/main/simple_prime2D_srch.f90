@@ -195,6 +195,7 @@ contains
         class(polarft_corrcalc), intent(inout) :: pftcc
         integer,                 intent(in)    :: iptcl
         real, allocatable :: frc(:)
+        if( self%best_class <= 0 )stop 'Invalid class index in simple_prime2D_srch%calc_specscore'
         frc = pftcc%genfrc(self%best_class, iptcl, self%best_rot)
         self%specscore = max(0.,median_nocopy(frc))
     end subroutine calc_specscore

@@ -274,13 +274,12 @@ contains
         write(funit,'(a)',advance='yes') 'cd '//trim(self%pwd)
         write(funit,'(a)',advance='yes') ''
         ! compose the command line
-        write(funit,'(a)',advance='no') trim(self%exec_binary)//' '//job_descr%chash2str()
+        write(funit,'(a)',advance='no') trim(self%exec_binary)//' '//trim(job_descr%chash2str())
         ! direct output
         write(funit,'(a)',advance='yes') ' > OUT'//int2str_pad(ipart,self%numlen)
         ! exit shell when done
         write(funit,'(a)',advance='yes') ''
         write(funit,'(a)',advance='yes') 'exit'
-
         close(funit)
         if( q_descr%get('qsys_name').eq.'local' )call chmod(trim(self%script_names(ipart)),'+x')
         if( ios .ne. 0 )then
@@ -344,11 +343,11 @@ contains
         use simple_qsys_local,   only: qsys_local
         class(qsys_ctrl),  intent(inout) :: self
         class(qsys_base),      pointer   :: pmyqsys
-        character(len=STDLEN)            :: master_submit_script
+        character(len=LONGSTRLEN)        :: qsys_cmd
         integer :: ipart, fnr, file_stat, chmod_stat, ios, val
         logical :: submit_or_not(self%fromto_part(1):self%fromto_part(2)), err
         ! master command line
-        master_submit_script = trim(adjustl(self%pwd))//'/qsys_submit_jobs'
+        ! master_submit_script = trim(adjustl(self%pwd))//'/qsys_submit_jobs'
         !call del_file(trim(master_submit_script))
         ! make a submission mask
         submit_or_not = .false.
@@ -366,30 +365,18 @@ contains
             endif
         end do
         if( .not. any(submit_or_not) ) return
-        ! make the master submission script
-        fnr = get_fileunit()
-        open(unit=fnr, FILE=master_submit_script, STATUS='REPLACE', action='WRITE', iostat=file_stat)
-        call fopen_err('simple_qsys_ctrl :: submit_scripts', file_stat )
-        write(fnr,'(a)') '#!/bin/bash'
+        ! on the fly submission
         do ipart=self%fromto_part(1),self%fromto_part(2)
             if( submit_or_not(ipart) )then
                 select type( pmyqsys => self%myqsys )
                     class is(qsys_local)
-                        write(fnr,'(a)') self%myqsys%submit_cmd()//' ./'//trim(adjustl(self%script_names(ipart)))//' &'
+                        qsys_cmd = trim(trim(self%myqsys%submit_cmd())//' ./'//trim(adjustl(self%script_names(ipart)))//' &')
                     class DEFAULT
-                        write(fnr,'(a)') self%myqsys%submit_cmd()//' ./'//trim(adjustl(self%script_names(ipart)))
+                        qsys_cmd = trim(trim(self%myqsys%submit_cmd())//' ./'//trim(adjustl(self%script_names(ipart))))
                 end select
+                call exec_cmdline(trim(qsys_cmd))
             endif
         end do
-        write(fnr,'(a)') 'exit'
-        close( unit=fnr )
-        call chmod(master_submit_script,'+x')
-        if( debug.or.global_debug )then
-            call exec_cmdline('echo DISTRIBUTED MODE :: submitting scripts:')
-            call exec_cmdline('ls -1 distr_simple_script_*')
-        endif
-        ! execute the master submission script
-        call exec_cmdline(master_submit_script)
     end subroutine submit_scripts
 
     subroutine submit_script( self, script_name )

@@ -6,6 +6,7 @@ use simple_params,          only: params
 use simple_build,           only: build
 use simple_commander_base,  only: commander_base
 use simple_strings,         only: int2str_pad
+use simple_syscalls, only: wait_for_closure
 use simple_hadamard_common  ! use all in there
 use simple_filehandling     ! use all in there
 use simple_jiffys           ! use all in there
@@ -132,6 +133,7 @@ contains
         open(unit=fnr, FILE='VOLASSEMBLE_FINISHED', STATUS='REPLACE', action='WRITE', iostat=file_stat)
         call fopen_err('In: commander_rec :: eo_volassemble', file_stat )
         close( unit=fnr )
+        call wait_for_closure('VOLASSEMBLE_FINISHED')
         
         contains
 
@@ -143,7 +145,6 @@ contains
             end subroutine assemble
             
             subroutine normalize( recname )
-                use simple_syscalls, only: wait_for_closure
                 character(len=*), intent(in)  :: recname
                 character(len=STDLEN) :: volname
                 volname = trim(recname)//trim(p%ext)
@@ -252,6 +253,7 @@ contains
         open(unit=fnr, FILE='VOLASSEMBLE_FINISHED', STATUS='REPLACE', action='WRITE', iostat=file_stat)
         call fopen_err('In: commander_rec :: eo_volassemble', file_stat )
         close(fnr)
+        call wait_for_closure('VOLASSEMBLE_FINISHED')
 
         contains
 
@@ -272,7 +274,6 @@ contains
             end subroutine assemble
     
             subroutine normalize( recname )
-                use simple_syscalls, only: wait_for_closure
                 character(len=*), intent(in) :: recname
                 call b%recvol%sampl_dens_correct
                 call b%recvol%bwd_ft

@@ -8,7 +8,8 @@ implicit none
 character(len=1), parameter :: default_file_format = 'M' !<  'I', 'M' or 'S' for imagic, mrc, spider
 integer, parameter  :: IMPORTANT=10 !< number of solutions considered important
 integer, parameter  :: MAXS=99      !< maximum number of states
-integer, parameter  :: STDLEN=256   !< standard string length
+integer, parameter  :: STDLEN     = 256  !< standard string length
+integer, parameter  :: LONGSTRLEN = 2048 !< longer string length
 integer, parameter  :: short = selected_int_kind(4)
 integer, parameter  :: long  = selected_int_kind(9)
 integer, parameter  :: longer  = selected_int_kind(16)
