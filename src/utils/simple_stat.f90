@@ -42,22 +42,21 @@ contains
     !>    prints a primitive histogram given an array of real data
     !! \param  bins,sc histogram bins and scale
     subroutine plot_hist( arr, bins, sc )
-        real, intent(in)    :: arr(:) !< input data
+        real,    intent(in) :: arr(:) !< input data
         integer, intent(in) :: bins, sc
         real                :: a(bins), minv, maxv, mean, std, var, binwidth
         integer             :: h(bins), bin, i, j, n
-        logical             :: err
-        write(*,*) ">>> GENERATING HISTOGRAM <<<"
+        logical             :: err 
         n = size(arr,1)
         call moment( arr, mean, std, var, err )
         minv = minval(arr)
         maxv = maxval(arr)
-        write(*,*) "Number of values = ", n
-        write(*,*) "Minimum value = ", minv
-        write(*,*) "Maximum value = ", maxv
-        write(*,*) "Mean value = ", mean
+        write(*,*) "Number of values   = ", n
+        write(*,*) "Minimum value      = ", minv
+        write(*,*) "Maximum value      = ", maxv
+        write(*,*) "Mean value         = ", mean
         write(*,*) "Standard deviation = ", std
-        write(*,*) "Variance = ", var
+        write(*,*) "Variance           = ", var
         h = 0
         binwidth = (maxv-minv)/real(bins)
         do i=1,n
@@ -68,7 +67,7 @@ contains
             a(bin) = a(bin)+arr(i)
         end do
         do i=1,bins
-            a(i) = a(i)/real(h(i))
+            if( h(i) > 0 ) a(i) = a(i)/real(h(i))
             write(*,*) a(i),h(i),"|",('#', j=1,nint(real(h(i))/real(sc)))
         end do
     end subroutine plot_hist

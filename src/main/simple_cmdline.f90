@@ -72,7 +72,7 @@ contains
             ! write the command line to a file (biological memory support)
             funit = get_fileunit()
             open(unit=funit, status='replace', action='write', file='cmdline.txt')
-            write(funit,'(a256)') adjustl(trim(self%entire_line))
+            write(funit,*) trim(self%entire_line)
             close(funit)
         endif
         DebugPrint ' command_argument_count: ', cmdargcnt 

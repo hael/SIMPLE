@@ -534,18 +534,19 @@ contains
         use simple_oris, only: oris
         use simple_stat, only: moment
         use simple_math, only: median_nocopy, hpsort
+        use simple_stat, only: plot_hist
         class(oristats_commander), intent(inout) :: self
         class(cmdline),            intent(inout) :: cline
         type(build)          :: b
-        type(oris)           :: o, nonzero_pop_o, zero_pop_o
+        type(oris)           :: o, nonzero_pop_o, zero_pop_o, osubspace
         type(ori)            :: o_single
         type(params)         :: p
-        real                 :: mind, maxd, avgd, sdevd, sumd, vard
+        real                 :: mind, maxd, avgd, sdevd, sumd, vard, median_clustsz
         real                 :: mind2, maxd2, avgd2, sdevd2, vard2, homo_cnt, homo_avg
-        real                 :: popmin, popmax, popmed, popave, popsdev, popvar, frac_populated
-        integer              :: nprojs, iproj, cnt_zero, cnt_nonzero, n_zero, n_nonzero
-        real,    allocatable :: projpops(:), tmp(:)
-        integer, allocatable :: projinds(:)
+        real                 :: popmin, popmax, popmed, popave, popsdev, popvar, frac_populated, szmax
+        integer              :: nprojs, iproj, iptcl, icls, cnt_zero, cnt_nonzero, n_zero, n_nonzero
+        real,    allocatable :: projpops(:), tmp(:), clustszs(:)
+        integer, allocatable :: projinds(:), clustering(:)
         logical              :: err
         p = params(cline)
         call b%build_general_tbox(p, cline, do3d=.false.)
@@ -596,12 +597,13 @@ contains
                 popmax         = maxval(projpops)
                 popmed         = median_nocopy(projpops)
                 call moment(projpops, popave, popsdev, popvar, err)
-                write(*,'(a,1x,f8.2)') 'FRAC POPULATED DIRECTIONS:', frac_populated
-                write(*,'(a,1x,f8.2)') 'MINIMUM POPULATION       :', popmin
-                write(*,'(a,1x,f8.2)') 'MAXIMUM POPULATION       :', popmax
-                write(*,'(a,1x,f8.2)') 'MEDIAN POPULATION        :', popmed
-                write(*,'(a,1x,f8.2)') 'AVERAGE POPULATION       :', popave
-                write(*,'(a,1x,f8.2)') 'SDEV OF POPULATION       :', popsdev
+                write(*,'(a,1x,f8.2)') 'FRAC POPULATED DIRECTIONS :', frac_populated
+                write(*,'(a,1x,f8.2)') 'MINIMUM POPULATION        :', popmin
+                write(*,'(a,1x,f8.2)') 'MAXIMUM POPULATION        :', popmax
+                write(*,'(a,1x,f8.2)') 'MEDIAN POPULATION         :', popmed
+                write(*,'(a,1x,f8.2)') 'AVERAGE POPULATION        :', popave
+                write(*,'(a,1x,f8.2)') 'SDEV OF POPULATION        :', popsdev
+                ! write out the zero and nonzero populated projection directions
                 n_zero    = count(tmp < 0.5)
                 n_nonzero = nprojs - n_zero
                 call zero_pop_o%new(n_zero)
@@ -620,6 +622,21 @@ contains
                 end do
                 call nonzero_pop_o%write('pop_zero_pdirs.txt')
                 call zero_pop_o%write('pop_nonzero_pdirs.txt')
+                ! produce a histogram based on clustering into ndiscrete (default 100) even directions
+                allocate(clustering(b%a%get_noris()), clustszs(p%ndiscrete))
+                call osubspace%new(p%ndiscrete)
+                call osubspace%spiral(p%nsym, p%eullims)
+                do iptcl=1,b%a%get_noris()
+                    o_single = b%a%get_ori(iptcl)
+                    clustering(iptcl) = osubspace%find_closest_proj(o_single)
+                end do
+                do icls=1,p%ndiscrete
+                    clustszs(icls) = real(count(clustering == icls))
+                end do
+                szmax = maxval(clustszs)
+                clustszs = (clustszs / szmax) * 1000.0
+                write(*,'(a)') '>>> HISTOGRAM OF SUBSPACE POPULATIONS (FROM NORTH TO SOUTH)'
+                call plot_hist(clustszs, p%ndiscrete, 1)
             endif
             if( p%trsstats .eq. 'yes' )then
                 call b%a%stats('x', avgd, sdevd, vard, err )

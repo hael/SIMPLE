@@ -2105,9 +2105,12 @@ select case(prg)
         keys_optional(13) = 'projstats'
         keys_optional(14) = 'nspace'
         keys_optional(15) = 'pgrp'
+        keys_optional(16) = 'ndiscrete'
         ! parse command line
         if( describe ) call print_doc_oristats
-        call cline%parse( keys_required(:1), keys_optional(:15) )
+        call cline%parse( keys_required(:1), keys_optional(:16) )
+        ! set defaults
+        if( .not. cline%defined('ndiscrete') ) call cline%set('ndiscrete', 100.)
         ! execute
         call xoristats%execute(cline)
     case( 'rotmats2oris' )
