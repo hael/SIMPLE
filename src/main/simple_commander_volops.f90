@@ -152,7 +152,7 @@ contains
             write(*,*) 'no method for low-pass filtering defined; give fsc or lp on command line'
             stop 'comple_commander_volops :: exec_postproc_vol'
         endif
-        vol_copy = b%vol
+        call vol_copy%copy(b%vol)
         ! B-fact
         if( cline%defined('bfac') ) call b%vol%apply_bfac(p%bfac)
         ! final low-pass filtering for smoothness

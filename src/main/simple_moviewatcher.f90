@@ -78,6 +78,9 @@ contains
 
     !>  \brief  is the watching procedure
     subroutine watch( self, n_movies, movies )
+#ifdef PGI
+        include 'lib3f.h'
+#endif
         class(moviewatcher),           intent(inout) :: self
         integer,                       intent(out)   :: n_movies
         character(len=*), allocatable, intent(out)   :: movies(:)
@@ -85,7 +88,7 @@ contains
         integer,               allocatable :: stats(:)
         logical,               allocatable :: is_new_movie(:)
         integer               :: tnow, last_accessed, last_modified, last_status_change ! in seconds
-        integer               :: i, fstat, alloc_stat, n_lsfiles, cnt, fail_cnt
+        integer               :: i, io_stat, alloc_stat, n_lsfiles, cnt, fail_cnt
         character(len=STDLEN) :: fname, abs_fname
         logical               :: is_closed
         ! init
@@ -116,9 +119,9 @@ contains
                 is_new_movie(i) = .false.
             else
                 abs_fname = trim(self%cwd)//'/'//trim(adjustl(fname))
-                call sys_stat(abs_fname, fstat, stats, doprint=.false.)
+                call sys_stat(abs_fname, io_stat, stats, doprint=.false.)
                 is_closed = .not. is_file_open(abs_fname)
-                if( fstat.eq.0 )then
+                if( io_stat.eq.0 )then
                     ! new movie
                     last_accessed      = tnow - stats( 9)
                     last_modified      = tnow - stats(10)
@@ -130,7 +133,7 @@ contains
                 else
                     ! some error occured
                     fail_cnt = fail_cnt + 1
-                    print *,'Error watching file: ', trim(fname), ' with code: ',fstat
+                    print *,'Error watching file: ', trim(fname), ' with code: ',io_stat
                 endif
                 if(allocated(stats))deallocate(stats)
             endif

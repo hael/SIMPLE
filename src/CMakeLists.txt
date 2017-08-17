@@ -54,15 +54,18 @@ file(GLOB SIMPLE_src "${CMAKE_CURRENT_SOURCE_DIR}/main/*.f[09][0-9]" PARENT_SCOP
 list(APPEND SIMPLE_src
   "${CMAKE_BINARY_DIR}/lib/simple/simple_args.f90")
 
-# Remove unused files
-list(REMOVE_ITEM SIMPLE_src
+set(CORELIB_src  ${DEFS_src} ${UTILS_src} ${SIMPLE_src})
+list(APPEND SIMPLECORELIB  ${DEFS_src} ${UTILS_src} ${SIMPLE_src})
+# message(STATUS "SIMPLE LIBRARY SOURCES: ${SIMPLECORELIB}")
+
+##########################################################################
+# Remove unused files here
+##########################################################################
+list(REMOVE_ITEM SIMPLECORELIB
+  "${CMAKE_CURRENT_SOURCE_DIR}/main/simple_cftcc_scatsrch.f90"
   "${CMAKE_CURRENT_SOURCE_DIR}/main/simple_kbinterpol_elemental.f90"
 )
 
-set(CORELIB_src  ${DEFS_src} ${UTILS_src} ${SIMPLE_src})
-
-list(APPEND SIMPLECORELIB  ${DEFS_src} ${UTILS_src} ${SIMPLE_src})
-# message(STATUS "SIMPLE LIBRARY SOURCES: ${SIMPLECORELIB}")
 
 if (${CMAKE_Fortran_COMPILER_ID} STREQUAL "Intel")
   add_library(${SIMPLELIB} STATIC ${SIMPLECORELIB} )

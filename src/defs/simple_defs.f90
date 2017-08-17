@@ -108,6 +108,17 @@ integer, parameter :: fp_kind = DP
   logical :: global_warn=.false.          !< warning flag
 
 ! append SIMPLE_VERSION and SIMPLE_GIT_VERSION strings to simple_defs
-#include "SimpleGitVersion.h"
+#include 'SimpleGitVersion.h'
+
+  ! public :: Error_Msg
+  ! contains
+  ! subroutine Error_Msg(fname,linenum,msg)
+  !     use ISO_FORTRAN_ENV
+  !     character(len=*), intent(in) :: fname,msg
+  !     integer,intent(in) :: linenum
+  !     write(unit=ERROR_UNIT,fmt='("Error in ",/,A,/," at line ",I0,":",A)') fname,linenum,trim(msg)
+  !     flush(unit=ERROR_UNIT)
+  ! end subroutine Error_Msg
+
 
 end module simple_defs

@@ -216,16 +216,17 @@ elseif(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR Fortran_COMPILER_NAME MATC
   set(PGICOMPILER ON)
   set(EXTRA_FLAGS "${EXTRA_FLAGS} -module ${CMAKE_Fortran_MODULE_DIRECTORY} -I${CMAKE_Fortran_MODULE_DIRECTORY}")
   # NVIDIA PGI Linux compiler
+#  set(CMAKE_AR                           "pgfortran")
   set(CMAKE_CPP_COMPILER                 "pgcc -E ")
-  set(CMAKE_CPP_COMPILER_FLAGS           " ")
+  set(CMAKE_CPP_COMPILER_FLAGS           "  ")
   set(CMAKE_Fortran_FLAGS                " ${EXTRA_FLAGS} ${CMAKE_Fortran_FLAGS_RELEASE_INIT}")
   set(CMAKE_Fortran_FLAGS_DEBUG          " ${EXTRA_FLAGS} ${CMAKE_Fortran_FLAGS_DEBUG_INIT}")
   # set(CMAKE_Fortran_FLAGS_MINSIZEREL     "${CMAKE_Fortran_FLAGS_RELEASE_INIT}")
   set(CMAKE_Fortran_FLAGS_RELEASE        "${EXTRA_FLAGS} ${CMAKE_Fortran_FLAGS_RELEASE_INIT}")
   set(CMAKE_Fortran_FLAGS_RELWITHDEBINFO "-gopt ${CMAKE_Fortran_FLAGS_RELEASE_INIT} ${CMAKE_Fortran_DEBUG_INIT} -Mneginfo=all")
   set(CMAKE_EXE_LINKER_FLAGS             "${CMAKE_EXE_LINKER_FLAGS_INIT} -acclibs -cudalibs -Mcudalib=cufft,curand")
-  set(CMAKE_SHARED_LINKER_FLAG           "${CMAKE_SHARED_LINKER_FLAGS_INIT} -acclibs -cudalibs -Mcudalib=cufft,curand")
-  set(CMAKE_STATIC_LINKER_FLAG           "${CMAKE_SHARED_LINKER_FLAGS_INIT} -acclibs -cudalibs -Mcudalib=cufft,curand")
+  set(CMAKE_SHARED_LINKER_FLAGS           "${CMAKE_SHARED_LINKER_FLAGS_INIT} -acclibs -cudalibs -Mcudalib=cufft,curand")
+  set(CMAKE_STATIC_LINKER_FLAGS           "${CMAKE_SHARED_LINKER_FLAGS_INIT} -acclibs -cudalibs -Mcudalib=cufft,curand")
 
   ################################################################
   # CUDA PGI Default options
@@ -236,6 +237,16 @@ elseif(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR Fortran_COMPILER_NAME MATC
   ## PGI does not have the OpenMP proc_bind option
   add_definitions("-Dproc_bind\\(close\\)=\"\"")  # disable proc_bind in OMP
 
+#  if (PGI_LARGE_FILE_SUPPORT)
+#    set(CMAKE_SHARED_LINKER_FLAGS           "-Mlfs ${CMAKE_SHARED_LINKER_FLAGS}")
+#    set(CMAKE_STATIC_LINKER_FLAGS          "-Mlfs ${CMAKE_SHARED_LINKER_FLAGS}")
+#  endif()
+#  if (PGI_EXTRACT_ALL)
+#    set(CMAKE_Fortran_FLAGS           " -Minline ${CMAKE_Fortran_FLAGS}")
+#  endif()
+#  if (PGI_CUDA_MANAGED_MEMORY)
+#    set(CMAKE_Fortran_FLAGS           "-ta=nvidia:managed ${CMAKE_Fortran_FLAGS}")
+#  endif()
 
   # #  add_definitions("-module ${CMAKE_Fortran_MODULE_DIRECTORY}") # pgc++ doesn't have -module
   #   set(CMAKE_SHARED_LINKER_FLAGS          "${CMAKE_SHARED_LINKER_FLAGS_INIT} ${EXTRA_LIBS}  -module ${CMAKE_Fortran_MODULE_DIRECTORY}")
@@ -442,15 +453,22 @@ endif()
 
 # Unroll loops
 #message(STATUS "Testing flags unroll")
-#SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_RELEASE "${CMAKE_Fortran_FLAGS_RELEASE}"
-#  Fortran
-#  "-unroll-aggressive"        # Intel
-#  "-funroll-all-loops"        # GNU, Intel, Clang
-#  "/unroll"                   # Intel Windows
-#  "-Munroll"                  # Portland Group
-#  )
-
-
+if(ENABLE_AGGRESSIVE_OPTIMISATION)
+SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_RELEASE "${CMAKE_Fortran_FLAGS_RELEASE}"
+  Fortran
+  "-unroll-aggressive"        # Intel
+  "-funroll-all-loops"        # GNU, Intel, Clang
+  "/unroll"                   # Intel Windows
+  "-Munroll "                 # Portland Group
+  )
+SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_RELEASE "${CMAKE_Fortran_FLAGS_RELEASE}"
+  Fortran
+  "-inline-level=2"           # Intel
+  "-finline-functions"        # GNU, Intel, Clang
+  "/unroll"                   # Intel Windows
+  "-Minline"                  # Portland Group
+  )
+endif()
 if(ENABLE_LINK_TIME_OPTIMISATION)
   # Interprocedural (link-time) optimizations
   # See IPO performance issues https://software.intel.com/en-us/node/694501
@@ -460,7 +478,7 @@ if(ENABLE_LINK_TIME_OPTIMISATION)
     "-ipo-separate -ffat-lto-object"   # Intel (Linux OS X)
     "/Qipo-separate"                   # Intel Windows
     "-flto "                           # GNU
-    "-Mipa=fast,libinline"    # Portland Group
+    "-Mipa=fast,libinline,vestigial,reaggregation"    # Portland Group
     )
 
   # Single-file optimizations
@@ -519,7 +537,7 @@ if  (CMAKE_Fortran_COMPILER_ID STREQUAL "PGI" OR CMAKE_Fortran_COMPILER_ID STREQ
      Fortran
      "-parallel -opt-report-phase=par -opt-report:5"            # Intel (Linux)
      "/Qparallel /Qopt-report-phase=par /Qopt-report:5"         # Intel (Windows)
-     "-Mconcur=bind,allcores"                                                 # PGI
+     "-Mconcur=bind,allcores,cncall"                            # PGI
      )
  endif()
 endif()
@@ -561,11 +579,12 @@ add_definitions(" -D__FILENAME__='\"$(notdir $<)\"'")
 
 # Override Fortran preprocessor
 # block constructs (F2008), unlimited polymorphism and variadic macros (not included in F2003 -- but is part of C99 )
-#if (${CMAKE_Fortran_COMPILER_ID} STREQUAL "Intel")
-#set(CMAKE_Fortran_COMPILE_OBJECT "grep --silent -E '#include' <SOURCE> && ( ${CMAKE_CPP_COMPILER} ${CMAKE_CPP_COMPILER_FLAGS} -DOPENMP <DEFINES> <INCLUDES> <SOURCE> > <OBJECT>.f90 &&  <CMAKE_Fortran_COMPILER> <DEFINES> <INCLUDES> <FLAGS> -c <OBJECT>.f90 -o <OBJECT> ) || <CMAKE_Fortran_COMPILER> <DEFINES> <INCLUDES> <FLAGS> -c <SOURCE> -o <OBJECT>")
-#else()
+if (${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI")
+set(CMAKE_Fortran_COMPILE_OBJECT "grep --silent -E '#include' <SOURCE> && ( ${CMAKE_CPP_COMPILER} ${CMAKE_CPP_COMPILER_FLAGS} -DOPENMP <DEFINES> <INCLUDES> <SOURCE> > <OBJECT>.f90 &&  <CMAKE_Fortran_COMPILER> <DEFINES> <INCLUDES> <FLAGS> -c <OBJECT>.f90 -o <OBJECT> ) || <CMAKE_Fortran_COMPILER> <DEFINES> <INCLUDES> <FLAGS> -c <SOURCE> -o <OBJECT>")
+else()
+#elseif (${CMAKE_Fortran_COMPILER_ID} STREQUAL "Intel")
 set(CMAKE_Fortran_COMPILE_OBJECT "grep --silent -E '#include.*timer.h' <SOURCE> && ( ${CMAKE_CPP_COMPILER} ${CMAKE_CPP_COMPILER_FLAGS} -DOPENMP <DEFINES> <INCLUDES> <SOURCE> > <OBJECT>.f90 &&  <CMAKE_Fortran_COMPILER> <DEFINES> <INCLUDES> <FLAGS> -c <OBJECT>.f90 -o <OBJECT> ) || <CMAKE_Fortran_COMPILER> <DEFINES> <INCLUDES> <FLAGS> -c <SOURCE> -o <OBJECT>")
-#endif()
+endif()
 
 # Option for code coverage
 if(VERBOSE OR ${BUILD_WITH_COVERAGE})

@@ -2,8 +2,10 @@
 module simple_math
 use simple_defs
 use simple_jiffys
+#ifdef PGI
+! use libm
+#endif
 implicit none
-
 public
 interface is_a_number
     module procedure is_a_number_1
@@ -110,6 +112,13 @@ interface csq
     module procedure csq_2
 end interface
 
+
+#ifdef PGI
+include 'lib3f.h'
+#endif
+
+
+
 logical, parameter,private :: warn=.false.
 
 !private :: warn, pi, cosedge_1, cosedge_2, cosedge_3, hardedge_1, hardedge_2,&
@@ -132,7 +141,9 @@ contains
     !! mass of protein in kg \f$ M_\mathrm{kg prot} = M_\mathrm{prot Da}*M_{Hydrogen (\mathrm{kg/Da}) \f$
     !! mass of protein in g \f$ M_\mathrm{g prot} = ((mwkda*1e3)*one_da)*1e3 \f$
     !! therefore number of voxels in protein is:
-    !! \f[ \begin{align*} N_{\mathrm{vox}} &=& \frac{ M_{\mathrm{molecule}} }{ \rho_{\mathrm{prot}} \times \frac{1}{v^3}\\ & \sim& \nint {frac{\mathrm{mwkda}\times\num{1e3}\times\num{1.66e-27)} {\num{1.43}\times\num{1e-24}} \times \frac{1}{\mathrm{smpd}^3}}} \end{align*}
+    !! \f[ \begin{align*} N_{\mathrm{vox}} &=& \frac{ M_{\mathrm{molecule}} }{ \rho_{\mathrm{prot}}
+    !! \times \frac{1}{v^3}\\ & \sim& \nint {frac{\mathrm{mwkda}\times\num{1e3}\times\num{1.66e-27)}
+    !! {\num{1.43}\times\num{1e-24}} \times \frac{1}{\mathrm{smpd}^3}}} \end{align*}
     !! \f]
     !! we must also assume the number of voxels are discrete, hence we must round to the nearest integer
     !! \param smpd sampling distance in angstroms (SI unit \f$ \si{\angstrom}= \si{1e-10}{\metre} \f$)
@@ -1483,13 +1494,7 @@ contains
 
     !>   lu decomposition, nr
     !! \see Numerical recipes
-    !! \param a 
-    !! \param n 
-    !! \param np 
-    !! \param indx 
-    !! \param d 
-    !! \param err 
-    !!
+
     subroutine ludcmp(a,n,np,indx,d,err)
         integer :: n,np,indx(n),nmax
         real    :: d,a(np,np), tiny
@@ -1629,13 +1634,7 @@ contains
 
     !>  jacobi SVD, NR
     !! \see Numerical recipes
-    !! \param a matrix
-    !! \param n size
-    !! \param np matrix size
-    !! \param d output vector
-    !! \param v output matrix
-    !! \param nrot 
-    !!
+
     subroutine jacobi( a, n, np, d, v, nrot)
         integer, intent(in)    :: n,np
         real,    intent(inout) :: a(np,np), v(np,np), d(np)

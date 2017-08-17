@@ -176,18 +176,24 @@ if (CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
   #
 elseif (CMAKE_Fortran_COMPILER_ID STREQUAL "PGI")
   # pgfortran
+  message(STATUS " PGI Compiler settings: default USE_CUDA=ON")
+  set(USE_CUDA ON)
   set(preproc  "-Mpreprocess ")
-  set(dialect  "-Mfreeform -Mstandard -Mallocatable=03 -Mextend -Mnosecond_underscore")
-  set(checks   "-Mdclchk -Mchkptr -Mchkstk  -Munixlogical -Mlarge_arrays -Mflushz -Mdaz -Mfpmisalign")
-  set(warn     "-Minform=warn -Minfo=all,ftn ${checks}")
+  set(dialect  "-Mfreeform  -Mextend -Mnosecond_underscore -Mlarge_arrays  ") #-Mstandard -Mallocatable=03
+  set(checks   "-Mdclchk -Mchkptr -Mchkstk -Mdepchk -Munixlogical -Mflushz -Mdaz -Mfpmisalign")
+  set(warn     "-Minform=warn -Minfo=all,ftn ") # ${checks}")
   # bounds checking cannot be done in CUDA fortran or OpenACC GPU
-  set(fordebug "-g ${warn}  -traceback -gopt -Mneginfo=all,ftn -Mnodwarf -Mpgicoff -traceback -Mprof  ")
-  set(forspeed "-O3 " ) # -Munroll -O4  -Mipa=fast -fast -Mcuda=fastmath,unroll -Mvect=nosizelimit,short,simd,sse  ")
-  set(forpar   " -mp -acc -Mcuda=cc60") # -Mconcur=bind,allcores -Mcuda=cuda8.0,cc60,flushz,fma
-  set(target   " -m64 -fPIC ")
+  set(fordebug "-g ${warn}  -traceback -gopt -Mneginfo=all,ftn -Mpgicoff -traceback -Mprof  ")
+  set(forspeed "-O3 -fast " ) # -Munroll -O4  -Mipa=fast -fast -Mcuda=fastmath,unroll -Mvect=nosizelimit,short,simd,sse  ")
+  set(forpar   " -mp -acc -Mcuda=cc60,cuda8.0") # -Mconcur=bind,allcores -Mcuda=cuda8.0,cc60,flushz,fma
+  set(target   " -m64 -fPIC ")  # 
   set(common   "${preproc} ${dialect} ${target}")
+  # further PGI options 
+  option(PGI_EXTRACT_ALL  "PGI --Extract subprograms for inlining (-Mextract)" OFF)
+  option(PGI_LARGE_FILE_SUPPORT  "PGI -- Link with library directory for large file support (-Mlfs)" OFF)
+  option(PGI_CUDA_MANAGED_MEMORY "Use CUDA Managed Memory" OFF)
   #
-  message(STATUS "FFTW should be set with one of the following environment variables: FFTWDIR,FFTW_DIR, or FFTW_ROOT ")
+  message(STATUS "In PGI: FFTW should be set with one of the following environment variables: FFTWDIR,FFTW_DIR, or FFTW_ROOT ")
   if(NOT "$ENV{FFTW_DIR}" STREQUAL "")
     set(FFTWDIR "$ENV{FFTW_DIR}")
   elseif (NOT "$ENV{FFTWDIR}" STREQUAL "")

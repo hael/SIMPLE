@@ -31,12 +31,12 @@ contains
             open( unit=funit, file=trim(fname) )
             n = 0
             do
-                 read(funit,*,IOSTAT=ios) junk
-                 if(ios /= 0)then
-                     exit
-                 else
-                     n = n + 1
-                 endif
+                read(funit,*,IOSTAT=ios) junk
+                if(ios /= 0)then
+                    exit
+                else
+                    n = n + 1
+                endif
             end do
             close( unit=funit )
         else

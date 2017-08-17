@@ -37,7 +37,7 @@
 #ifndef VerbosePrint
 # define VerbosePrint if(verbose.or.global_verbose.or.debug.or.global_debug) print *, 
 #endif
-#ifndef ERRORMSG
-#define ERRORMSG(msg) write(0,'(A,/,":",I0,":")',advance='no') __FILENAME__,__LINE__; print *,msg
 
+#ifndef ErrorMsg
+#define ErrorMsg(msg) Error_Msg ( __FILENAME__, __LINE__, msg )
 #endif

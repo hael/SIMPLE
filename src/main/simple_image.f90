@@ -310,7 +310,7 @@ contains
         real, optional, intent(in)    :: backgr
         integer(kind=c_int) :: rc
         integer :: i
-        call self%kill
+        call self%kill()
         self%ldim = ldim
         self%smpd = smpd
         ! Make Fourier iterator
@@ -435,8 +435,8 @@ contains
                 call tmp%ft2img(speckind, tmp2)
                 call img_out%add(tmp2)
                 cnt = cnt+1
-                call tmp%kill
-                call tmp2%kill
+                call tmp%kill()
+                call tmp2%kill()
             end do
         end do
         call img_out%div(real(cnt))
@@ -469,7 +469,7 @@ contains
                 call self%window([xind,yind],box,tmp)
                 call img_out%add(tmp)
                 cnt = cnt+1
-                call tmp%kill
+                call tmp%kill()
             end do
         end do
         call img_out%div(real(cnt))
@@ -2565,7 +2565,7 @@ contains
             elsewhere
                 self%rmat = 0.0
             end where
-            call binimg%kill
+            call binimg%kill()
         else
             ! binarize the image
             where( (cen1 - self%rmat)**2. < (cen2 - self%rmat)**2. )
@@ -2618,7 +2618,7 @@ contains
                 self%rmat(:self%ldim(1),:self%ldim(2),k) = plane(:,:,1)
             endif
         enddo
-        call mask2d%kill
+        call mask2d%kill()
         deallocate(plane)
     end subroutine bin_cylinder
 
@@ -3724,8 +3724,8 @@ contains
                     stop 'unknown filter type; simple_image :: real_space_filter'
             end select
         endif
-        self = img_filt
-        call img_filt%kill
+        call self%copy(img_filt)
+        call img_filt%kill()
     end subroutine real_space_filter
 
     !>  \brief is a 18th-neighbourhood Sobel filter (gradients magnitude)
@@ -3995,7 +3995,7 @@ contains
         spec = tmp%spectrum('power')
         pow = median_nocopy(spec)
         deallocate(spec)
-        call tmp%kill
+        call tmp%kill()
     end function est_noise_pow
 
     !>  \brief  is for estimating the noise power of an noise normalized image (noise sdev=1)
@@ -4013,7 +4013,7 @@ contains
         spec = tmp%spectrum('power')
         pow = median_nocopy(spec)
         deallocate(spec)
-        call tmp%kill
+        call tmp%kill()
     end function est_noise_pow_norm
 
     !>  \brief  is for calculating the mean of an image
@@ -5842,7 +5842,7 @@ contains
         call tmp%new(ldim, self%smpd)
         call self%clip(tmp)
         call self%copy(tmp)
-        call tmp%kill
+        call tmp%kill()
     end subroutine clip_inplace
 
     !>  \brief  is for mirroring an image
@@ -6049,7 +6049,7 @@ contains
             div = div + 1.
         end do
         call avg%div(div)
-        call rotated%kill
+        call rotated%kill()
     end subroutine roavg
 
     !> \brief rtsq  rotation of image by quadratic interpolation (from spider)
@@ -6140,7 +6140,7 @@ contains
         else
             call self_in%copy(self_here)
         endif
-        call self_here%kill
+        call self_here%kill()
         if( didft )then
             call self_in%bwd_ft
         endif
@@ -6283,7 +6283,7 @@ contains
 
         if(retl1norm)then
             l1normdiff = l1norm_2(selfcopy,self)
-            call selfcopy%kill
+            call selfcopy%kill()
         end if
     end subroutine denoise_NLM
 
@@ -6727,8 +6727,8 @@ contains
 
                 write(*,'(a)') '**info(simple_image_unit_test, part 21): testing destructor'
                 passed = .false.
-                call img%kill
-                call img3d%kill
+                call img%kill()
+                call img3d%kill()
                 test(1) = .not. img%exists()
                 test(2) = .not. img3d%exists()
                 passed = all(test)

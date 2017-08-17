@@ -6,9 +6,14 @@ implicit none
 public :: int_imgheadrec, real_imgheadrec, char_imgheadrec
 private
 
+#ifdef PGI
+include 'lib3f.h'
+#endif
+
 !>  a header record is a labelled value which describes the characteristics of an imagefile
 type :: imgheadrec
     private
+    integer                  :: length                  !<  length of the string of characters
     integer                  :: index_position          !<  the position of the record within the file header. starting at 1 and incrementing
     integer                  :: byte_position           !<  the position of the first byte of the record within the header.
     integer(kind=1), pointer :: byte_array(:) => null() !<  pointer to the array of bytes containing the actual header values
@@ -34,7 +39,6 @@ contains
 end type real_imgheadrec
 
 type, extends(imgheadrec) :: char_imgheadrec
-integer :: length=0 !<  length of the string of characters
 contains
     procedure, private :: getChar
     procedure          :: get => getChar
@@ -57,30 +61,28 @@ contains
     ! CONSTRUCTORS
 
     !>  \brief constructor
-    function constructor( index_position, byte_position, byte_array, length ) result( self )
+    function constructor( index_position, byte_position, byte_array, clength ) result( self )
         integer, intent(in)                 :: index_position !<  the position of the record within the file header. starting at 1 and incrementing
         integer, intent(in)                 :: byte_position  !<  the position of the first byte of the record within the header.
         integer(kind=1), target, intent(in) :: byte_array(:)  !<  byte array to point to
-        integer, optional, intent(in)       :: length         !<  length of character string
+        integer, optional, intent(in)       :: clength         !<  length of character string
         type(imgheadrec)                    :: self
-        call self%new(index_position, byte_position, byte_array, length)
+        call self%new(index_position, byte_position, byte_array, clength)
     end function
 
     !>  \brief constructor
-    subroutine new( self, index_position, byte_position, byte_array, length )
-        class(imgheadrec), intent(inout)    :: self            !<  header record
+    subroutine new( self, index_position, byte_position, byte_array, clength )
+        class(imgheadrec), target, intent(inout)    :: self            !<  header record
         integer, intent(in)                 ::  index_position !<  the position of the record within the file header. starting at 1 and incrementing
         integer, intent(in)                 ::  byte_position  !<  the position of the first byte of the record within the header.
         integer(kind=1), target, intent(in) ::  byte_array(:)  !<  byte array to point to
-        integer, optional, intent(in)       ::  length         !<  length of character string
+        integer, optional, intent(in)       ::  clength         !<  length of character string
+        if( present(clength) )then
+            self%length = clength
+        end if
         self%index_position =  index_position
         self%byte_position  =  byte_position
         self%byte_array     => byte_array
-        select type(self)
-            type is (char_imgheadrec)
-                self%length = 1
-                if (present(length)) self%length = length
-        end select
     end subroutine
 
     ! SETTERS
