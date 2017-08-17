@@ -1,15 +1,15 @@
 <div class=newjobheader>
 	Start New Job
 </div>
-<div class=newjobcolumn>
-	<div class=newjobcolumnheader>Workflow</div>
-	<div class=newjobworkflow onclick="selectWorkflow(this);" id=standard>Standard</div>
-	<div class=newjobworkflow onclick="selectWorkflow(this);" id=pipeline>Pipeline</div>
-	<div class=newjobworkflow onclick="selectWorkflow(this);" id=pipeline2d>Pipeline 2D</div>
-	<div class=newjobworkflow onclick="selectWorkflow(this);" id=advanced>Advanced</div>
+
+<div class=newjobworkflow>
+	<div class=newjobworkflowheader>Workflow</div>
+	<div class=newjobworkflowbutton onclick="selectWorkflow(this);" id=standard>Standard</div>
+	<div class=newjobworkflowbutton onclick="selectWorkflow(this);" id=pipeline>Pipeline</div>
+	<div class=newjobworkflowbutton onclick="selectWorkflow(this);" id=pipeline2d>Pipeline 2D</div>
+	<div class=newjobworkflowbutton onclick="selectWorkflow(this);" id=advanced>Advanced</div>
 </div>
 <div class=newjobcolumn>
-	<div class=newjobcolumnheader>Job</div>
 	<div class="newjobjob standard advanced" onclick="selectJob(this);" id=import>Import</div>
 	<div class="newjobjob standard advanced" onclick="selectJob(this);" id=unblur_ctffind>Motion Correction & CTF Estimation</div>
 	<div class="newjobjob standard advanced">Manual Picking</div>
@@ -23,7 +23,7 @@
 	<div class="newjobjob standard pipeline advanced" onclick="selectJob(this);" id=extract>Extract Particles</div>
 	<div class="newjobjob standard pipeline advanced" onclick="selectJob(this);" id=prime2d>2D Clustering</div>
 </div>
-<div class=newjobcolumn>
+<div class=newjobdescriptioncolumn>
 	<div class=newjobcolumnheader>Description</div>
 	<div class=newjobdescription id=newjobdescription></div>
 </div>

@@ -1309,6 +1309,7 @@ static void simpleJob(struct mg_connection *nc, std::string messagedata){
 				starfile->columns.push_back("splCtfMaxResolution");
 				starfile->columns.push_back("splAmplitudeContrast");
 				
+				std::cout << "started watcher thread" < std::endl;
 				while(true){
 					//LIST UNIDOC PARTS THEN TEST TO SEE IF PROCESSED. IF NOT ADD TO STARFILE
 					dir = opendir("pipeline");

@@ -70,8 +70,23 @@
 	vertical-align: top;
 }
 
+.jobcolumnoptionaltitle{
+	width: 560px;
+	display: inline-block;
+	vertical-align: top;
+	border: solid 2px #7891b0;
+	height: 17px;
+	padding: 5px;
+	margin-top: 15px;
+}
+
 .jobarg {
 	border: none;
+}
+
+.jobargoptional {
+	padding-left: 50px;
+	display: none;
 }
 
 .distr {
@@ -93,15 +108,17 @@
 	margin-bottom: 5px;
 	position: relative;
 	width: 100px;
+	font-size: 12px;
+	padding: 2px;
 }
 
 .jobworkflowheader:before { 
-	border-top: 15px solid transparent;
-	border-left: 17px solid #7891b0;
-	border-bottom: 15px solid transparent;
+	border-top: 10px solid transparent;
+	border-left: 16px solid #7891b0;
+	border-bottom: 10px solid transparent;
 	content: "";
 	height: 0;
-	left: 100px;
+	left: 106px;
 	position: absolute;
 	top: 0px;
 	width: 0;
