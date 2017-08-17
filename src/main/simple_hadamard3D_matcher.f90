@@ -222,7 +222,7 @@ contains
                 !$omp parallel do default(shared) schedule(guided) private(iptcl) proc_bind(close)
                 do iptcl=p%fromp,p%top
                     call primesrch3D(iptcl)%exec_prime3D_srch(pftcc, iptcl, b%a, b%e, p%lp,&
-                        greedy=.true., nnmat=b%nnmat, grid_projs=b%grid_projs)
+                        greedy=.true., nnmat=b%nnmat)
                 end do
                 !$omp end parallel do
             case DEFAULT
