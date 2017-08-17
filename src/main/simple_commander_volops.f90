@@ -241,7 +241,6 @@ contains
                 call imgs(i)%shift(x, y)
             endif
             if( p%neg .eq. 'yes' ) call imgs(i)%neg
-            if( p%mirr .ne. 'no' ) call imgs(i)%mirror(p%mirr)
             call imgs(i)%write(p%outstk,i)
         end do
         call b%a%write('projvol_oris.txt')
@@ -298,12 +297,12 @@ contains
         DebugPrint   'file extension: ', p%ext
         ! average the states
         call vol_avg%copy(b%vol)
-        p%nstates = b%a%get_nstates()
+        p%nstates = b%a%get_n('state')
         DebugPrint   'number of states: ', p%nstates
         numlen = len(int2str(p%nstates))
         do istate=1,p%nstates
             DebugPrint   'processing state: ', istate
-            ptcls = b%a%get_ptcls_in_state(istate)
+            ptcls = b%a%get_pinds(istate, 'state')
             vol_avg = 0.
             do ivol=1,size(ptcls)
                 call b%vol%read(volnames(ptcls(ivol)))

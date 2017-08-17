@@ -233,7 +233,7 @@ contains
 
         ! SETUP WEIGHTS
         if( p%nptcls <= SPECWMINPOP )then
-            call b%a%calc_hard_ptcl_weights(p%frac)
+            call b%a%calc_hard_weights(p%frac)
         else
             call b%a%calc_spectral_weights(p%frac)
         endif
@@ -389,7 +389,7 @@ contains
         do s=1,p%nstates
             if( p%oritab .ne. '' )then
                 ! greedy start
-                if( b%a%get_state_pop(s) == 0 )then
+                if( b%a%get_pop(s, 'state') == 0 )then
                     ! empty state
                     cnt = cnt + p%nspace
                     call progress(cnt, nrefs)
@@ -439,7 +439,7 @@ contains
                 ntot = (p%top-p%fromp+1) * p%nstates
                 cnt  = 0
                 do s=1,p%nstates
-                    if( b%a%get_state_pop(s) == 0 )then
+                    if( b%a%get_pop(s, 'state') == 0 )then
                         ! empty state
                         cycle
                     endif

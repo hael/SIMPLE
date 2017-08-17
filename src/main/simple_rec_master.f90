@@ -41,7 +41,6 @@ contains
         integer :: s, fri, toi, file_stat, fnr, nstates_oritab
         ! rebuild b%vol according to box size (beacuse it is otherwise boxmatch)
         call b%vol%new([p%box,p%box,p%box], p%smpd)
-        if( p%mirr .eq. 'yes' ) call b%a%mirror3d
         if( cline%defined('state') )then ! setting iteration from/to state
             fri = p%state
             toi = p%state
@@ -51,7 +50,7 @@ contains
         endif
         do s=fri,toi ! state loop
             DebugPrint  'processing state: ', s
-            if( b%a%get_state_pop(s) == 0 ) cycle ! empty state
+            if( b%a%get_pop(s, 'state') == 0 ) cycle ! empty state
             if( p%l_distr_exec )then ! embarrasingly parallel rec
                 if( present(fbody_in) )then
                     allocate(fbody, source=trim(adjustl(fbody_in))//&
@@ -115,7 +114,7 @@ contains
         endif
         do s=fri,toi ! state loop
             DebugPrint  'processing state: ', s
-            if( b%a%get_state_pop(s) == 0 ) cycle ! empty state
+            if( b%a%get_pop(s, 'state') == 0 ) cycle ! empty state
             if( p%l_distr_exec )then ! embarrasingly parallel exec
                 if( present(fbody_in) )then
                     allocate(fbody, source=trim(adjustl(fbody_in))//'_state')

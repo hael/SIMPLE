@@ -19,11 +19,11 @@ type cmdarg
 end type cmdarg
 
 type cmdline
-    integer               :: NMAX=60
-    type(cmdarg)          :: cmds(60)
-    character(len=32)     :: checker(60)
-    character(len=STDLEN) :: entire_line=''
-    integer               :: argcnt=0, totlen=0, ncheck=0
+    integer                   :: NMAX=60
+    type(cmdarg)              :: cmds(60)
+    character(len=32)         :: checker(60)
+    character(len=LONGSTRLEN) :: entire_line=''
+    integer                   :: argcnt=0, totlen=0, ncheck=0
 contains
     procedure             :: parse
     procedure, private    :: copy
@@ -63,7 +63,7 @@ contains
         distr_exec = str_has_substr(exec_name,'distr')
         cmdargcnt = command_argument_count()
         call get_command(self%entire_line)
-        ! write the command line to file
+        ! write the command line to file & store in global var
         if( str_has_substr(self%entire_line,'part=' ) .and.&
            &str_has_substr(self%entire_line,'fromp=') .and.&
            &str_has_substr(self%entire_line,'top='  ) )then
@@ -74,6 +74,8 @@ contains
             open(unit=funit, status='replace', action='write', file='cmdline.txt')
             write(funit,*) trim(self%entire_line)
             close(funit)
+            ! store in global var
+            cmdline_glob = trim(self%entire_line)
         endif
         DebugPrint ' command_argument_count: ', cmdargcnt 
         if( present(keys_required) )then

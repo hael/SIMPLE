@@ -160,7 +160,7 @@ contains
             end select
         endif
         ! GENERATE PROJECTIONS (POLAR FTs)
-        call b%a%calc_hard_ptcl_weights(p%frac)
+        call b%a%calc_hard_weights(p%frac)
         b%a = o_ptcls
         call pftcc%new(NPROJS, [p%fromp,p%top], [p%boxmatch,p%boxmatch,1],&
         p%smpd, p%kfromto, p%ring2, p%ctf)

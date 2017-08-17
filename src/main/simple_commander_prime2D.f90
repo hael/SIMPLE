@@ -56,7 +56,7 @@ contains
         write(*,'(a)') '>>> GENERATING CLUSTER CENTERS'
         if( cline%defined('oritab') .and. p%l_remap_classes )then
             call b%a%remap_classes
-            ncls_in_oritab = b%a%get_ncls()
+            ncls_in_oritab = b%a%get_n('class')
             if( cline%defined('ncls') )then
                 if( p%ncls < ncls_in_oritab ) stop 'ERROR, inputted ncls < ncls_in_oritab; not allowed!'
                 if( p%ncls > ncls_in_oritab )then
@@ -66,7 +66,7 @@ contains
                 p%ncls = ncls_in_oritab
             endif
         else if( cline%defined('oritab') )then
-            if( .not. cline%defined('ncls') ) p%ncls = b%a%get_ncls()
+            if( .not. cline%defined('ncls') ) p%ncls = b%a%get_n('class')
         else if( p%tseries .eq. 'yes' )then
             if( .not. cline%defined('ncls') )then
                 stop '# class averages (ncls) need to be part of command line when tseries=yes'
@@ -202,7 +202,7 @@ contains
         integer      :: fnr, file_stat
         p = params(cline) ! parameters generated
         call b%build_general_tbox(p, cline, do3d=.false.) ! general objects built
-        p%ncls = b%a%get_ncls()
+        p%ncls = b%a%get_n('class')
         call b%build_hadamard_prime2D_tbox(p)
         call prime2D_assemble_sums_from_parts(b, p)
         if( cline%defined('which_iter') )then
@@ -229,7 +229,7 @@ contains
         logical      :: converged
         p = params(cline) ! parameters generated
         call b%build_general_tbox(p, cline, do3d=.false.) ! general objects built
-        p%ncls    = b%a%get_ncls()
+        p%ncls    = b%a%get_n('class')
         converged = b%conv%check_conv2D() ! convergence check
         call cline%set('frac', b%conv%get('frac'))
         if( p%doshift )then
@@ -262,7 +262,7 @@ contains
         order = b%a%order_cls(p%ncls)
         do iclass=1,p%ncls
             write(*,'(a,1x,i5,1x,a,1x,i5,1x,a,i5)') 'CLASS:', order(iclass),&
-            &'CLASS_RANK:', iclass ,'POP:', b%a%get_cls_pop(order(iclass)) 
+            &'CLASS_RANK:', iclass ,'POP:', b%a%get_pop(order(iclass), 'class') 
             call b%img%read(p%stk, order(iclass))
             call b%img%write(p%outstk, iclass)
         end do

@@ -106,7 +106,7 @@ contains
                 s = ss
             endif
             DebugPrint  'processing state: ', s
-            if( b%a%get_state_pop( s ) == 0 )cycle           ! Empty state
+            if( b%a%get_pop( s, 'state' ) == 0 )cycle           ! Empty state
             call b%eorecvol%reset_all
             do part=1,p%nparts
                 if( cline%defined('state') )then
@@ -190,7 +190,7 @@ contains
                 s = ss
             endif
             DebugPrint  'processing state: ', s
-            if( b%a%get_state_pop( s ) == 0 ) cycle ! Empty state
+            if( b%a%get_pop( s, 'state' ) == 0 ) cycle ! Empty state
             call b%recvol%reset
             do part=1,p%nparts
                 if( cline%defined('state') )then

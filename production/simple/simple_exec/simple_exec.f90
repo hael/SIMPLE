@@ -1455,8 +1455,7 @@ select case(prg)
         ! the random origin shift. Less commonly used parameters are pgrp, which controls the point-group symmetry
         ! c (rotational), d (dihedral), t (tetrahedral), o (octahedral) or i (icosahedral). The point-group symmetry is 
         ! used to restrict the set of projections to within the asymmetric unit. 
-        ! neg inverts the contrast of the projections. mirr=yes mirrors the projection by modifying the Euler 
-        ! angles. If mirr=x or mirr=y the projection is physically mirrored after it has been generated<projvol/end>
+        ! neg inverts the contrast of the projections. <projvol/end>
         !
         ! set required keys
         keys_required(1)  = 'vol1'
@@ -1470,12 +1469,11 @@ select case(prg)
         keys_optional(6)  = 'trs'
         keys_optional(7)  = 'pgrp'
         keys_optional(8)  = 'neg'
-        keys_optional(9)  = 'mirr'
-        keys_optional(10) = 'top'
-        keys_optional(11) = 'msk'
+        keys_optional(9) = 'top'
+        keys_optional(10) = 'msk'
         ! parse command line
         if( describe ) call print_doc_projvol
-        call cline%parse(keys_required(:2), keys_optional(:11))
+        call cline%parse(keys_required(:2), keys_optional(:10))
         ! set defaults
         if( .not. cline%defined('wfun')  ) call cline%set('wfun', 'kb')
         if( .not. cline%defined('winsz') ) call cline%set('winsz', 1.5)
@@ -2047,34 +2045,31 @@ select case(prg)
         ! set optional keys
         keys_optional(1)  = 'oritab'
         keys_optional(2)  = 'nptcls'
-        keys_optional(3)  = 'plot'
-        keys_optional(4)  = 'outfile'
-        keys_optional(5)  = 'e1'
-        keys_optional(6)  = 'e2'
-        keys_optional(7)  = 'e3'
-        keys_optional(8)  = 'trs'
-        keys_optional(9)  = 'nstates'
-        keys_optional(10) = 'pgrp'
-        keys_optional(11) = 'defocus'
-        keys_optional(12) = 'deftab'
-        keys_optional(13) = 'angerr'
-        keys_optional(14) = 'sherr'
-        keys_optional(15) = 'dferr'
-        keys_optional(16) = 'zero'
-        keys_optional(17) = 'discrete'
-        keys_optional(18) = 'ndiscrete'
-        keys_optional(19) = 'state'
-        keys_optional(20) = 'errify'
-        keys_optional(21) = 'mul'
-        keys_optional(22) = 'mirr'
-        keys_optional(23) = 'xsh'
-        keys_optional(24) = 'ysh'
-        keys_optional(25) = 'zsh'
-        keys_optional(26) = 'npeaks'
-        keys_optional(27) = 'athres'
+        keys_optional(3)  = 'outfile'
+        keys_optional(4)  = 'e1'
+        keys_optional(5)  = 'e2'
+        keys_optional(6)  = 'e3'
+        keys_optional(7)  = 'trs'
+        keys_optional(8)  = 'nstates'
+        keys_optional(9)  = 'pgrp'
+        keys_optional(10) = 'defocus'
+        keys_optional(11) = 'deftab'
+        keys_optional(12) = 'angerr'
+        keys_optional(13) = 'sherr'
+        keys_optional(14) = 'dferr'
+        keys_optional(15) = 'zero'
+        keys_optional(16) = 'discrete'
+        keys_optional(17) = 'ndiscrete'
+        keys_optional(18) = 'state'
+        keys_optional(19) = 'errify'
+        keys_optional(20) = 'mul'
+        keys_optional(21) = 'mirr'
+        keys_optional(22) = 'xsh'
+        keys_optional(23) = 'ysh'
+        keys_optional(24) = 'zsh'
         ! parse command line
         if( describe ) call print_doc_orisops
-        call cline%parse(keys_optional=keys_optional(:27))
+        call cline%parse(keys_optional=keys_optional(:24))
         ! execute
         call xorisops%execute(cline)
     case( 'oristats' )
@@ -2097,18 +2092,16 @@ select case(prg)
         keys_optional(5)  = 'state'
         keys_optional(6)  = 'ctfstats'
         keys_optional(7)  = 'trsstats'
-        keys_optional(8)  = 'hist'
-        keys_optional(9)  = 'ncls'
-        keys_optional(10) = 'minp'
-        keys_optional(11) = 'clustvalid'
-        keys_optional(12) = 'thres'
-        keys_optional(13) = 'projstats'
-        keys_optional(14) = 'nspace'
-        keys_optional(15) = 'pgrp'
-        keys_optional(16) = 'ndiscrete'
+        keys_optional(8)  = 'ncls'
+        keys_optional(9)  = 'minp'
+        keys_optional(10) = 'thres'
+        keys_optional(11) = 'projstats'
+        keys_optional(12) = 'nspace'
+        keys_optional(13) = 'pgrp'
+        keys_optional(14) = 'ndiscrete'
         ! parse command line
         if( describe ) call print_doc_oristats
-        call cline%parse( keys_required(:1), keys_optional(:16) )
+        call cline%parse( keys_required(:1), keys_optional(:14) )
         ! set defaults
         if( .not. cline%defined('ndiscrete') ) call cline%set('ndiscrete', 100.)
         ! execute

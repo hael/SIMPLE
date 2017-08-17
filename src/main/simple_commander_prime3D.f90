@@ -160,7 +160,7 @@ contains
         endif
         if( cline%defined('state2split') )then
             if( cline%defined('oritab') )then
-                p%nstates = b%a%get_nstates()
+                p%nstates = b%a%get_n('state')
                 call b%a%split_state(p%state2split)
                 p%nstates = p%nstates + 1
             else
@@ -331,7 +331,7 @@ contains
             allocate( maplp(p%nstates) )
             maplp = 0.
             do istate=1,p%nstates
-                if( b%a%get_state_pop( istate ) == 0 )cycle ! empty state
+                if( b%a%get_pop( istate, 'state' ) == 0 )cycle ! empty state
                 p%fsc = 'fsc_state'//int2str_pad(istate,2)//'.bin'
                 inquire(file=p%fsc, exist=here)
                 if( here )then

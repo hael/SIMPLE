@@ -37,41 +37,6 @@ end interface
 
 contains
 
-    ! VISUALIZATION
-
-    !>    prints a primitive histogram given an array of real data
-    !! \param  bins,sc histogram bins and scale
-    subroutine plot_hist( arr, bins, sc )
-        real,    intent(in) :: arr(:) !< input data
-        integer, intent(in) :: bins, sc
-        real                :: a(bins), minv, maxv, mean, std, var, binwidth
-        integer             :: h(bins), bin, i, j, n
-        logical             :: err 
-        n = size(arr,1)
-        call moment( arr, mean, std, var, err )
-        minv = minval(arr)
-        maxv = maxval(arr)
-        write(*,*) "Number of values   = ", n
-        write(*,*) "Minimum value      = ", minv
-        write(*,*) "Maximum value      = ", maxv
-        write(*,*) "Mean value         = ", mean
-        write(*,*) "Standard deviation = ", std
-        write(*,*) "Variance           = ", var
-        h = 0
-        binwidth = (maxv-minv)/real(bins)
-        do i=1,n
-            bin = nint((arr(i)-minv)/binwidth)  ! int(1.+(arr(i)-minv)/binwidth)
-            if( bin < 1 )    bin = 1            ! check for underflows
-            if( bin > bins ) bin = bins         ! check for overflows
-            h(bin) = h(bin)+1
-            a(bin) = a(bin)+arr(i)
-        end do
-        do i=1,bins
-            if( h(i) > 0 ) a(i) = a(i)/real(h(i))
-            write(*,*) a(i),h(i),"|",('#', j=1,nint(real(h(i))/real(sc)))
-        end do
-    end subroutine plot_hist
-
     ! MOMENTS/NORMALIZATION
 
     !>    given a 1D real array of data, this routine returns its mean: _ave_,

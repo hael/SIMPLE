@@ -81,10 +81,11 @@ integer, parameter :: LPLIM3ITERBOUND  = 7
 integer, parameter :: GRIDNPEAKS       = 3
 integer, parameter :: MAXNPEAKS        = 40
 
-character(len=:), allocatable :: endconv   !< endianness conversion
-integer(kind=c_int):: nthr_glob            !< number of threads global variable
-logical :: l_distr_exec_glob               !< global distributed execution flag
-character(len=STDLEN) :: exec_abspath_glob !< global executable absolute path
+character(len=:), allocatable :: endconv           !< endianness conversion
+integer(kind=c_int)           :: nthr_glob         !< number of threads global variable
+logical                       :: l_distr_exec_glob !< global distributed execution flag
+character(len=STDLEN)         :: exec_abspath_glob !< global executable absolute path
+character(len=LONGSTRLEN)     :: cmdline_glob      !< global command line string
 
 #ifndef IMAGE_SINGLE_PRECISION
   integer, parameter :: img_kind = DP

@@ -95,7 +95,7 @@ contains
 
         ! SETUP WEIGHTS FOR THE 3D RECONSTRUCTION
         if( p%nptcls <= SPECWMINPOP )then
-            call b%a%calc_hard_ptcl_weights(p%frac)
+            call b%a%calc_hard_weights(p%frac)
         else
             call b%a%calc_spectral_weights(p%frac)
         endif

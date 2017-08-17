@@ -76,7 +76,7 @@ contains
         ! generate the class documents
         numlen = len(int2str(p%ncls))
         do icls=1,p%ncls
-            clsarr = b%a%get_cls_pinds(icls)
+            clsarr = b%a%get_pinds(icls, 'class')
             if( allocated(clsarr) )then
                 do iptcl=1,size(clsarr)
                     call b%a%write(clsarr(iptcl), 'oris_class'//int2str_pad(icls,numlen)//'.txt')
@@ -382,13 +382,13 @@ contains
         do isel=1,nsel
             loc                     = maxloc(correlations(isel,:))
             selected(loc(1))        = .true.
-            labeler(isel)%particles = b%a%get_cls_pinds(loc(1))
+            labeler(isel)%particles = b%a%get_pinds(loc(1), 'class')
         end do
         ! erase deselected (by setting their state to zero)
         do icls=1,p%ncls
             if( selected(icls) ) cycle
-            if( b%a%get_cls_pop(icls) > 0 )then
-                rejected_particles = b%a%get_cls_pinds(icls)
+            if( b%a%get_pop(icls, 'class') > 0 )then
+                rejected_particles = b%a%get_pinds(icls, 'class')
                 do iptcl=1,size(rejected_particles)
                     call b%a%set(rejected_particles(iptcl), 'state', 0.)
                 end do
@@ -448,11 +448,10 @@ contains
         p = params(cline)
         call b%build_general_tbox(p, cline)
         if( p%errify .eq. 'yes' )then   ! introduce error in input orientations
-            if( cline%defined('angerr') .or. cline%defined('sherr') ) call b%a%introd_alig_err(p%angerr, p%sherr)
-            if( p%ctf .eq. 'yes' ) call b%a%introd_ctf_err(p%dferr)
+            if( cline%defined('angerr').or.&
+                cline%defined('sherr') ) call b%a%introd_alig_err(p%angerr, p%sherr)
+            if( p%ctf .eq. 'yes' )       call b%a%introd_ctf_err(p%dferr)
         endif
-        if( p%mirr .eq. '2d' ) call b%a%mirror2d ! mirror input Eulers
-        if( p%mirr .eq. '3d' ) call b%a%mirror3d ! mirror input Eulers
         if( cline%defined('e1') )then ! rotate input Eulers
             call orientation%new
             call orientation%set_euler([p%e1,p%e2,p%e3])
@@ -471,12 +470,6 @@ contains
             call b%a%mul_shifts(p%mul)
         endif
         if( p%zero  .eq. 'yes' ) call b%a%zero_shifts
-        if( p%plot  .eq. 'yes' )then ! plot polar vectors
-            do i=1,b%a%get_noris()
-                normal = b%a%get_normal(i)
-                write(*,'(1x,f7.2,3x,f7.2)') normal(1), normal(2)
-            end do
-        endif
         if( p%discrete .eq. 'yes' )then
             if( cline%defined('ndiscrete') )then
                 call b%a%discretize(p%ndiscrete)
@@ -484,39 +477,7 @@ contains
                 stop 'need ndiscrete to be defined!'
             endif
         endif
-        if( cline%defined('xsh') )     call b%a%map3dshift22d([p%xsh,p%ysh,p%zsh])
         if( cline%defined('nstates') ) call b%a%rnd_states(p%nstates)
-        if( cline%defined('frac') )then
-            if( p%oritab == '' ) stop 'need input orientation doc for fishing expedition; simple_orisops'
-            ! determine how many particles to include
-            nincl = nint(real(p%nptcls)*p%frac)
-            ! extract the correlations
-            corrs = b%a%get_all('corr')
-            ! order them from low to high
-            call hpsort(p%nptcls, corrs)
-            ! figure out the threshold
-            ind = p%nptcls - nincl + 1
-            thresh = corrs(ind)
-            ! print inlcusion/exclusion stats
-            do i=1,p%nptcls
-                corr = b%a%get(i, 'corr')
-                if( corr >= thresh )then
-                    write(*,*) 'particle: ', i, 'included: ', 1
-                else
-                    write(*,*) 'particle: ', i, 'included: ', 0
-                endif
-            end do
-        endif
-        if( cline%defined('npeaks') )then
-            call b%a%new(p%nspace)
-            call b%a%spiral
-            write(*,*) 'ATHRESH: ', b%a%find_athres_from_npeaks( p%npeaks )
-        endif
-        if( cline%defined('athres') )then
-            call b%a%new(p%nspace)
-            call b%a%spiral
-            write(*,*) 'NPEAKS: ', b%a%find_npeaks_from_athres( p%athres )
-        endif
         call b%a%write(p%outfile)
         call simple_end('**** SIMPLE_ORISOPS NORMAL STOP ****')
     end subroutine exec_orisops
@@ -534,7 +495,6 @@ contains
         use simple_oris, only: oris
         use simple_stat, only: moment
         use simple_math, only: median_nocopy, hpsort
-        use simple_stat, only: plot_hist
         class(oristats_commander), intent(inout) :: self
         class(cmdline),            intent(inout) :: cline
         type(build)          :: b
@@ -545,8 +505,10 @@ contains
         real                 :: mind2, maxd2, avgd2, sdevd2, vard2, homo_cnt, homo_avg
         real                 :: popmin, popmax, popmed, popave, popsdev, popvar, frac_populated, szmax
         integer              :: nprojs, iproj, iptcl, icls, cnt_zero, cnt_nonzero, n_zero, n_nonzero, j
+        integer              :: noris
         real,    allocatable :: projpops(:), tmp(:), clustszs(:)
         integer, allocatable :: projinds(:), clustering(:)
+        logical, allocatable :: ptcl_mask(:)
         integer, parameter   :: hlen=50
         logical              :: err
         p = params(cline)
@@ -566,11 +528,6 @@ contains
             write(*,'(a,1x,f15.6)') 'MINIMUM ANGULAR DISTANCE                      :', mind
             write(*,'(a,1x,f15.6)') 'MAXIMUM ANGULAR DISTANCE                      :', maxd
         else if( cline%defined('oritab') )then
-            ! General info
-            if( cline%defined('hist') )then
-                call b%a%histogram(p%hist)
-                goto 999
-            endif
             if( p%ctfstats .eq. 'yes' )then
                 call b%a%stats('ctfres', avgd, sdevd, vard, err )
                 call b%a%minmax('ctfres', mind, maxd)
@@ -590,7 +547,15 @@ contains
             endif
             if( p%projstats .eq. 'yes' )then
                 if( .not. cline%defined('nspace') ) stop 'need nspace command line arg to provide projstats'
-                tmp            = b%a%get_proj_pops()
+                noris = b%a%get_noris()
+                ! setup weights
+                if( noris <= SPECWMINPOP )then
+                    call b%a%calc_hard_weights(p%frac)
+                else
+                    call b%a%calc_spectral_weights(p%frac)
+                endif
+                ! generate population stats
+                tmp            = b%a%get_pops('proj', consider_w=.true.)
                 nprojs         = size(tmp)
                 projpops       = pack(tmp, tmp > 0.5)
                 frac_populated = real(size(projpops))/real(p%nspace)
@@ -624,25 +589,31 @@ contains
                 call nonzero_pop_o%write('pop_zero_pdirs.txt')
                 call zero_pop_o%write('pop_nonzero_pdirs.txt')
                 ! produce a histogram based on clustering into ndiscrete (default 100) even directions
-                allocate(clustering(b%a%get_noris()), clustszs(p%ndiscrete))
+                ! first, generate a mask based on state flag and w
+                ptcl_mask = b%a%included(consider_w=.true.)
+                allocate(clustering(noris), clustszs(p%ndiscrete))
                 call osubspace%new(p%ndiscrete)
                 call osubspace%spiral(p%nsym, p%eullims)
                 do iptcl=1,b%a%get_noris()
-                    o_single = b%a%get_ori(iptcl)
-                    clustering(iptcl) = osubspace%find_closest_proj(o_single)
+                    if( ptcl_mask(iptcl) )then
+                        o_single = b%a%get_ori(iptcl)
+                        clustering(iptcl) = osubspace%find_closest_proj(o_single)
+                    else
+                        clustering(iptcl) = 0
+                    endif
                 end do
                 do icls=1,p%ndiscrete
                     clustszs(icls) = real(count(clustering == icls))
                 end do
                 szmax = maxval(clustszs)
-                ! scale to max 50 #:s
+                ! scale to max 50 *:s
                 scale = 1.0
                 do while( nint(scale*szmax) > hlen )
                     scale = scale - 0.001
                 end do
                 write(*,'(a)') '>>> HISTOGRAM OF SUBSPACE POPULATIONS (FROM NORTH TO SOUTH)'
                  do icls=1,p%ndiscrete
-                    write(*,*) nint(clustszs(icls)),"|",('#', j=1,nint(clustszs(icls)*scale))  
+                    write(*,*) nint(clustszs(icls)),"|",('*', j=1,nint(clustszs(icls)*scale))  
                 end do
             endif
             if( p%trsstats .eq. 'yes' )then
@@ -655,31 +626,7 @@ contains
                 write(*,'(a,1x,f8.2)') 'MINIMUM TRS               :', (mind+mind2)/2.
                 write(*,'(a,1x,f8.2)') 'MAXIMUM TRS               :', (maxd+maxd2)/2.
                 goto 999
-            endif
-            ! Class and states
-            if( p%clustvalid .eq. 'yes' )then
-                if( cline%defined('ncls') )then
-                    write(*,'(a,3x,f5.1)') '>>> COHESION: ',   b%a%cohesion_norm('class',p%ncls)*100.
-                    write(*,'(a,1x,f5.1)') '>>> SEPARATION: ', b%a%separation_norm('class',p%ncls)*100.
-                else if( cline%defined('nstates') )then
-                    write(*,'(a,3x,f5.1)') '>>> COHESION: ',   b%a%cohesion_norm('state',p%nstates)*100.
-                    write(*,'(a,1x,f5.1)') '>>> SEPARATION: ', b%a%separation_norm('state',p%nstates)*100.
-                else
-                    stop 'need ncls/nstates as input for clustvalid'
-                endif
-            else if( p%clustvalid .eq. 'homo' )then
-                if( cline%defined('ncls') )then
-                    call b%a%homogeneity('class', p%minp, p%thres, homo_cnt, homo_avg)
-                    write(*,'(a,1x,f5.1)') '>>> THIS % OF CLUSTERS CONSIDERED HOMOGENEOUS: ', homo_cnt*100.
-                    write(*,'(a,1x,f5.1)') '>>> AVERAGE HOMOGENEITY:                       ', homo_avg*100.
-                else if( cline%defined('nstates') )then
-                    call b%a%homogeneity('state', p%minp, p%thres, homo_cnt, homo_avg)
-                    write(*,'(a,1x,f5.1)') '>>> THIS % OF CLUSTERS CONSIDERED HOMOGENEOUS: ', homo_cnt*100.
-                    write(*,'(a,13x,f5.1)') '>>> AVERAGE HOMOGENEITY:                      ', homo_avg*100.
-                else
-                    stop 'need ncls/nstates as input for clustvalid'
-                endif
-            endif
+            endif            
         endif
         call b%a%write(p%outfile)
         999 call simple_end('**** SIMPLE_ORISTATS NORMAL STOP ****')
