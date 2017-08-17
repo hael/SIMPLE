@@ -46,6 +46,7 @@ type :: oris
     procedure          :: get_nprojs
     procedure          :: get_pop
     procedure          :: get_cls_pop
+    procedure          :: get_cls_pops
     procedure          :: get_proj_pop
     procedure          :: get_proj_pops
     procedure          :: get_state_pop
@@ -59,6 +60,7 @@ type :: oris
     procedure          :: remap_classes
     procedure          :: shift_classes
     procedure          :: get_cls_pinds
+    procedure          :: get_indices
     procedure          :: get_state
     procedure          :: get_proj
     procedure          :: get_class
@@ -429,55 +431,102 @@ contains
     end function get_nprojs
 
     !>  \brief  is for checking label population
-    function get_pop( self, ind, label ) result( pop )
-        class(oris),      intent(inout) :: self
-        integer,          intent(in)    :: ind
-        character(len=*), intent(in)    :: label
+    function get_pop( self, ind, label, consider_w ) result( pop )
+        class(oris),       intent(inout) :: self
+        integer,           intent(in)    :: ind
+        character(len=*),  intent(in)    :: label
+        logical, optional, intent(in)    :: consider_w
         integer :: mylab, pop, i, mystate
+        logical :: cconsider_w
+        real    :: w
+        cconsider_w = .false.
+        if( present(consider_w) ) cconsider_w = consider_w
+        if( cconsider_w )then
+            if( .not. self%isthere('w') ) stop 'ERROR, oris :: get_pop with optional consider_w assumes w set'
+        endif
         pop = 0
         do i=1,self%n
             mystate = nint(self%o(i)%get('state'))
-            if( mystate > 0 )then
+            w = 1.0
+            if( cconsider_w ) w = self%o(i)%get('w')
+            if( mystate > 0 .and. w > TINY )then
                 mylab = nint(self%o(i)%get(label))
-                if( mylab == ind )then
-                    pop = pop+1
-                endif
+                if( mylab == ind )  pop = pop + 1
             endif
         end do
     end function get_pop
 
     !>  \brief  is for checking class population
-    function get_cls_pop( self, class ) result( pop )
-        class(oris), intent(inout) :: self
-        integer,     intent(in)    :: class
+    function get_cls_pop( self, class, consider_w ) result( pop )
+        class(oris),       intent(inout) :: self
+        integer,           intent(in)    :: class
+        logical, optional, intent(in)    :: consider_w
         integer :: pop
-        pop = self%get_pop(class, 'class')
+        pop = self%get_pop(class, 'class', consider_w)
     end function get_cls_pop
 
     !>  \brief  is for checking proj population
-    function get_proj_pop( self, proj ) result( pop )
-        class(oris), intent(inout) :: self
-        integer,     intent(in)    :: proj
+    function get_proj_pop( self, proj, consider_w ) result( pop )
+        class(oris),       intent(inout) :: self
+        integer,           intent(in)    :: proj
+        logical, optional, intent(in)    :: consider_w
         integer :: pop
-        pop = self%get_pop(proj, 'proj')
+        pop = self%get_pop(proj, 'proj', consider_w)
     end function get_proj_pop
 
     !>  \brief  is for checking proj populations
-    function get_proj_pops( self ) result( pops )
-        class(oris), intent(inout) :: self
+    function get_proj_pops( self, consider_w ) result( pops )
+        class(oris),       intent(inout) :: self
+        logical, optional, intent(in)    :: consider_w
         real, allocatable :: pops(:)
         integer :: i, mystate, myproj, nprojs
+        real    :: w
+        logical :: cconsider_w
+        cconsider_w = .false.
+        if( present(consider_w) ) cconsider_w = consider_w
+        if( cconsider_w )then
+            if( .not. self%isthere('w') ) stop 'ERROR, oris :: get_proj_pops with optional consider_w assumes w set'
+        endif
         nprojs = self%get_nprojs()
         allocate(pops(nprojs))
         pops = 0.0
         do i=1,self%n
             mystate = nint(self%o(i)%get('state'))
-            if( mystate > 0 )then
+            w = 1.0
+            if( cconsider_w )  w = self%o(i)%get('w')
+            if( mystate > 0 .and. w > TINY )then
                 myproj = nint(self%o(i)%get('proj'))
                 pops(myproj) = pops(myproj) + 1.0  
             endif
         end do
     end function get_proj_pops
+
+    !>  \brief  is for checking cls populations
+    function get_cls_pops( self, consider_w ) result( pops )
+        class(oris),       intent(inout) :: self
+        logical, optional, intent(in)    :: consider_w
+        real, allocatable :: pops(:)
+        integer :: i, mystate, mycls, ncls
+        real    :: w
+        logical :: cconsider_w
+        cconsider_w = .false.
+        if( present(consider_w) ) cconsider_w = consider_w
+        if( cconsider_w )then
+            if( .not. self%isthere('w') ) stop 'ERROR, oris :: get_cls_pops with optional consider_w assumes w set'
+        endif
+        ncls = self%get_ncls()
+        allocate(pops(ncls))
+        pops = 0.0
+        do i=1,self%n
+            mystate = nint(self%o(i)%get('state'))
+            w = 1.0
+            if( cconsider_w )  w = self%o(i)%get('w')
+            if( mystate > 0 .and. w > TINY )then
+                mycls = nint(self%o(i)%get('class'))
+                pops(mycls) = pops(mycls) + 1.0  
+            endif
+        end do
+    end function get_cls_pops
 
     !>  \brief  is for checking state population
     function get_state_pop( self, state ) result( pop )
@@ -704,73 +753,66 @@ contains
         endif
     end function get_cls_pinds
 
-    !>  \brief  is for getting an allocatable array with ptcl indices of the stategroup 'state'
-    function get_state( self, state ) result( statearr )
-        class(oris), intent(inout) :: self
-        integer,     intent(in)    :: state
-        integer, allocatable       :: statearr(:)
-        integer                    :: statenr, i, pop, alloc_stat, cnt
-        pop = self%get_state_pop( state )
+    !>  \brief  is for getting an allocatable array with ptcl indices of the label 'label'
+    function get_indices( self, ind, label, consider_w ) result( indices )
+        class(oris),       intent(inout) :: self
+        character(len=*),  intent(in)    :: label
+        integer,           intent(in)    :: ind
+        logical, optional, intent(in)    :: consider_w
+        integer, allocatable :: indices(:)
+        integer :: pop, alloc_stat, mystate, cnt, myval, i
+        logical :: cconsider_w
+        real    :: w
+        cconsider_w = .false.
+        if( present(consider_w) ) cconsider_w = consider_w
+        if( cconsider_w )then
+            if( .not. self%isthere('w') ) stop 'ERROR, oris :: get_indices with optional consider_w assumes w set'
+        endif
+        pop = self%get_pop(ind, label, consider_w ) 
         if( pop > 0 )then
-            allocate( statearr(pop), stat=alloc_stat )
-            call alloc_err('get_state; simple_oris', alloc_stat)
+            allocate( indices(pop), stat=alloc_stat )
+            call alloc_err('get_indices; simple_oris', alloc_stat)
             cnt = 0
             do i=1,self%n
-                statenr = nint(self%get( i, 'state' ))
-                if( statenr == state )then
-                    cnt = cnt+1
-                    statearr(cnt) = i
+                mystate = nint(self%o(i)%get('state'))
+                w = 1.0
+                if( cconsider_w ) w = self%o(i)%get('w')
+                if( mystate > 0 .and. w > TINY )then
+                    myval = nint(self%get(i, trim(label)))
+                    if( myval == ind )then
+                        cnt = cnt + 1
+                        indices(cnt) = i
+                    endif
                 endif
             end do
         endif
+    end function get_indices
+
+    !>  \brief  is for getting an allocatable array with ptcl indices of the stategroup 'state'
+    function get_state( self, state, consider_w ) result( statearr )
+        class(oris),       intent(inout) :: self
+        integer,           intent(in)    :: state
+        logical, optional, intent(in)    :: consider_w
+        integer, allocatable :: statearr(:)
+        statearr = self%get_indices(state, 'state', consider_w)
     end function get_state
 
     !>  \brief  is for getting an allocatable array with ptcl indices of the projgroup 'proj'
-    function get_proj( self, proj ) result( projarr )
-        class(oris), intent(inout) :: self
-        integer,     intent(in)    :: proj
-        integer, allocatable       :: projarr(:)
-        integer                    :: projnr, i, pop, alloc_stat, cnt, mystate
-        pop = self%get_proj_pop( proj )
-        if( pop > 0 )then
-            allocate( projarr(pop), stat=alloc_stat )
-            call alloc_err('get_proj; simple_oris', alloc_stat)
-            cnt = 0
-            do i=1,self%n
-                mystate = nint(self%o(i)%get('state'))
-                if( mystate > 0 )then
-                    projnr = nint(self%get( i, 'proj' ))
-                    if( projnr == proj )then
-                        cnt = cnt+1
-                        projarr(cnt) = i
-                    endif
-                endif
-            end do
-        endif
+    function get_proj( self, proj, consider_w ) result( projarr )
+        class(oris),       intent(inout) :: self
+        integer,           intent(in)    :: proj
+        logical, optional, intent(in)    :: consider_w
+        integer, allocatable :: projarr(:)
+        projarr = self%get_indices(proj, 'proj', consider_w)
     end function get_proj
 
     !>  \brief  is for getting an allocatable array with ptcl indices of the class 'class'
-    function get_class( self, class ) result( classarr )
-        class(oris), intent(inout) :: self
-        integer,     intent(in)    :: class
-        integer, allocatable       :: classarr(:)
-        integer                    :: classnr, i, pop, alloc_stat, cnt, mystate
-        pop = self%get_cls_pop( class )
-        if( pop > 0 )then
-            allocate( classarr(pop), stat=alloc_stat )
-            call alloc_err('get_class; simple_oris', alloc_stat)
-            cnt = 0
-            do i=1,self%n
-                mystate = nint(self%o(i)%get('state'))
-                if( mystate > 0 )then
-                    classnr = nint(self%get( i, 'class' ))
-                    if( classnr == class )then
-                        cnt = cnt+1
-                        classarr(cnt) = i
-                    endif
-                endif
-            end do
-        endif
+    function get_class( self, class, consider_w ) result( classarr )
+        class(oris),       intent(inout) :: self
+        integer,           intent(in)    :: class
+        logical, optional, intent(in)    :: consider_w
+        integer, allocatable :: classarr(:)
+        classarr = self%get_indices(class, 'class', consider_w)
     end function get_class
 
     !>  \brief  is for getting an array of 'which' variables with
@@ -2372,8 +2414,10 @@ contains
         integer, allocatable :: inds(:), inds_tmp(:)
         logical, allocatable :: included(:)
         real,    allocatable :: pops(:), scores(:), nonzero_pops(:)
+        real    :: w
         integer :: i, j, n, pop
         logical :: uuse_specscore, l_proj
+        if( .not. self%isthere('w') ) stop 'ERROR, oris :: balance assumes w  set'
         uuse_specscore = .false.
         if( present(use_specscore) )then
             if( use_specscore )then
@@ -2395,23 +2439,27 @@ contains
         end select
         allocate(included(self%n))
         included = .false.
-        do i=1,n
+        do i=1,n ! n is number of projection directions or classes
+            ! get class/proj population
             if( l_proj )then
-                pop = self%get_proj_pop(i)
+                pop = self%get_proj_pop(i, consider_w=.true.)
             else
-                pop = self%get_cls_pop(i)
+                pop = self%get_cls_pop(i, consider_w=.true.)
             endif
+            ! zero case
             if( pop < 1 )cycle
+            ! get indices of particles in projection direction/class subject
+            ! to spectral particle weight > 0
             if( l_proj )then
-                inds = self%get_proj(i)
+                inds = self%get_proj(i, consider_w=.true.)
             else
-                inds = self%get_class(i)
+                inds = self%get_class(i, consider_w=.true.)
             endif
-            if( pop <= popmax )then
+            if( pop <= popmax )then ! all inclded
                 do j=1,pop
                     included(inds(j)) = .true.
                 end do
-            else
+            else ! popmax threshold applied
                 allocate(scores(pop), inds_tmp(pop))
                 do j=1,pop
                     if( uuse_specscore )then
