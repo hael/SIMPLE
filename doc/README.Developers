@@ -46,7 +46,7 @@
 
 
 
-** Installation Options
+* Installation Options
 
 /Note/: Simple is designed for modern Fortran compilers, preferrably Fortran
 2008 compliant. It has been tested on Linux & macOS (OS X) only with GNU gfortran.
@@ -111,6 +111,7 @@ single and double precision libraries in the interactive =ccmake= or declare FFT
 Source the =compilervars.sh= file from your Intel compiler source path
 #+BEGIN_SRC sh
    source /opt/intel/bin/compilervars.sh intel64
+   source /opt/intel/bin/mklvars.sh 
    mkdir build-intel
    cd build-intel
    export FC=ifort
@@ -211,10 +212,68 @@ Generate Visual Studio 12 Solution and build the ALL_BUILD target:
 #+END_SRC
 
 
+** Runtime
 
-*** Testing
+Environment variables that will affect SIMPLE at runtime:
+ - OMP_NUM_THREADS
+ - OMP_STACKSIZE
 
-**** Unit testing with CTest                          :noexport:
+For PGI related environment variable in Installation settings above, see PGI reference http://www.pgroup.com/resources/docs/17.7/x86/pgi-user-guide/index.htm#use-pgi-compilers-linux
+and http://www.pgroup.com/resources/docs/17.7/x86/pgi-user-guide/index.htm#env-vars-pgi
+
+PGI's version of OpenMP fails with /proc_bind/ in source !omp$ commands. 
+
+MP_BIND MPSTKZ NCPUS_MAX NCPUS MP_SPIN MP_WARN
+ PGI_STACK_USAGE
+
+Generic environment variables affecting Fortran programs:
+ - NO_STOP_MESSAGE: if this var exists, the execution of a plain STOP statement does not produce the message FORTRAN STOP
+ - STATIC_RANDOM_SEED: if this var equals YES, calls to random_seed() will return the same value
+
+
+***  Convert specifier
+
+File formats can be manipulated by the CONVERT specifier. See
+https://gcc.gnu.org/onlinedocs/gcc-7.1.0/gfortran/CONVERT-specifier.html#CONVERT-specifier
+
+Compile time arg /-fconvert/ is overridden by /CONVERT=/ in calls to /open/. Both compile arg and in source are overridden by 
+GFORTRAN_CONVERT_UNIT on the commandline.
+
+See, set endianness for unformatted I/O https://gcc.gnu.org/onlinedocs/gcc-5.4.0/gfortran/GFORTRAN_005fCONVERT_005fUNIT.html
+
+*** Stack size 
+
+ PGI_STACK_USAGE
+Large static stack support in Linux 64-bit systems:
+
+/-mcmodel=medium/ see http://www.pgroup.com/resources/docs/17.7/x86/pgi-user-guide/index.htm#prog-64bits-static-data-linux
+
+Dynamic heap support
+-Mlarge_arrays  http://www.pgroup.com/resources/docs/17.7/x86/pgi-user-guide/index.htm#prog-64bits-static-data-linux
+
+*** Running Parallel Programs on Linux
+
+You may encounter difficulties running auto-parallel or OpenMP programs on Linux
+systems when the per-thread stack size is set to the default (2MB). If you have
+unexplained failures, please try setting the environment variable OMP_STACKSIZE
+to a larger value, such as 8MB. For information on setting environment
+variables, refer to Setting Environment Variables.
+
+If your program is still failing, you may be encountering the hard 8 MB limit on
+main process stack sizes in Linux. You can work around the problem by issuing
+the following command:
+
+In csh:
+```sh
+	% limit stacksize unlimited
+```
+In bash, sh, zsh, or ksh, use:
+```sh
+	$ ulimit -s unlimited
+```
+** Testing
+
+*** Unit testing with CTest                                        :noexport:
 
 Add unit tests with CTest using =add_test()=.
 
