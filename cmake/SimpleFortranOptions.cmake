@@ -214,6 +214,7 @@ elseif(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR Fortran_COMPILER_NAME MATC
   #############################################
   message(STATUS "NVIDIA PGI Linux compiler")
   set(PGICOMPILER ON)
+  set(ENABLE_LINK_TIME_OPTIMISATION ON)
   set(EXTRA_FLAGS "${EXTRA_FLAGS} -module ${CMAKE_Fortran_MODULE_DIRECTORY} -I${CMAKE_Fortran_MODULE_DIRECTORY}")
   # NVIDIA PGI Linux compiler
 #  set(CMAKE_AR                           "pgfortran")
@@ -226,7 +227,7 @@ elseif(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR Fortran_COMPILER_NAME MATC
   set(CMAKE_Fortran_FLAGS_RELWITHDEBINFO "-gopt ${CMAKE_Fortran_FLAGS_RELEASE_INIT} ${CMAKE_Fortran_DEBUG_INIT} -Mneginfo=all")
   set(CMAKE_EXE_LINKER_FLAGS             "${CMAKE_EXE_LINKER_FLAGS_INIT} -acclibs -cudalibs -Mcudalib=cufft,curand")
   set(CMAKE_SHARED_LINKER_FLAGS           "${CMAKE_SHARED_LINKER_FLAGS_INIT} -acclibs -cudalibs -Mcudalib=cufft,curand")
-  set(CMAKE_STATIC_LINKER_FLAGS           "${CMAKE_SHARED_LINKER_FLAGS_INIT} -acclibs -cudalibs -Mcudalib=cufft,curand")
+  set(CMAKE_STATIC_LINKER_FLAGS           "${CMAKE_SHARED_LINKER_FLAGS_INIT} ")
 
   ################################################################
   # CUDA PGI Default options
@@ -237,10 +238,9 @@ elseif(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR Fortran_COMPILER_NAME MATC
   ## PGI does not have the OpenMP proc_bind option
   add_definitions("-Dproc_bind\\(close\\)=\"\"")  # disable proc_bind in OMP
 
-#  if (PGI_LARGE_FILE_SUPPORT)
-#    set(CMAKE_SHARED_LINKER_FLAGS           "-Mlfs ${CMAKE_SHARED_LINKER_FLAGS}")
-#    set(CMAKE_STATIC_LINKER_FLAGS          "-Mlfs ${CMAKE_SHARED_LINKER_FLAGS}")
-#  endif()
+  if (PGI_LARGE_FILE_SUPPORT)
+    set(CMAKE_EXE_LINKER_FLAGS          "-Mlfs ${CMAKE_EXE_LINKER_FLAGS}")
+  endif()
 #  if (PGI_EXTRACT_ALL)
 #    set(CMAKE_Fortran_FLAGS           " -Minline ${CMAKE_Fortran_FLAGS}")
 #  endif()
@@ -466,7 +466,7 @@ SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_RELEASE "${CMAKE_Fortran_FLAGS_RELEASE}"
   "-inline-level=2"           # Intel
   "-finline-functions"        # GNU, Intel, Clang
   "/unroll"                   # Intel Windows
-  "-Minline"                  # Portland Group
+  "-Minline=maxsize=100,reshape,smallsize=10"      # Portland Group
   )
 endif()
 if(ENABLE_LINK_TIME_OPTIMISATION)
@@ -481,13 +481,13 @@ if(ENABLE_LINK_TIME_OPTIMISATION)
     "-Mipa=fast,libinline,vestigial,reaggregation"    # Portland Group
     )
 
-  # Single-file optimizations
+  #Profile optimizations
   SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_RELEASE "${CMAKE_Fortran_FLAGS_RELEASE}"
     Fortran
     "-ip-dir=.profiling"           # Intel
     "/Qip-dir=_profiling"          # Intel Windows
     "-fprofile-dir=.profiling" # GNU
-    # PGI
+    "-Mpfo "# PGI
     )
 endif(ENABLE_LINK_TIME_OPTIMISATION)
 #if(ENABLE_AUTOMATIC_VECTORIZATION)
@@ -526,8 +526,8 @@ if (ENABLE_FAST_MATH_OPTIMISATION)
   SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_RELEASE "${CMAKE_Fortran_FLAGS_RELEASE}"
     Fortran
     "-ffp-contract=fast"              # GNU
-    "-Mfma -Mvect=fma,fuse,gather"        # Portland Group
-    )   
+    "-Mfma -Mvect=assoc,tile,fuse,gather,simd,partial,prefetch"        # Portland Group
+    )   # PGI 
 endif(ENABLE_FAST_MATH_OPTIMISATION)
 
 if  (CMAKE_Fortran_COMPILER_ID STREQUAL "PGI" OR CMAKE_Fortran_COMPILER_ID STREQUAL "Intel")
