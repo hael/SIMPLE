@@ -81,6 +81,7 @@ type prime3D_srch
     procedure          :: prep_npeaks_oris
     procedure          :: stochastic_weights
     procedure, private :: calc_specscore
+
     ! GETTERS & SETTERS
     procedure          :: update_best
     procedure          :: get_ori
@@ -165,13 +166,10 @@ contains
             select case(trim(p%refine))
                 case('het')
                     self%npeaks_grid = 1
-                case('shc', 'shcneigh')
-                    ! "-(nstates_eff-1)" because all states share the same previous orientation
-                    self%npeaks_grid = GRIDNPEAKS*nstates_eff - (nstates_eff-1)
                 case('exp')
                     self%npeaks_grid = GRIDNPEAKS
                 case DEFAULT
-                    self%npeaks      = nstates_eff * self%npeaks
+                    ! "-(nstates_eff-1)" because all states share the same previous orientation
                     self%npeaks_grid = GRIDNPEAKS*nstates_eff - (nstates_eff-1)
             end select
         endif
@@ -307,13 +305,11 @@ contains
             subroutine per_ref_srch( iref )
                 integer, intent(in) :: iref
                 real    :: corrs(self%nrots), inpl_corr
-                integer :: loc(1), inpl_ind, state
-                state = nint( self%o_refs%get(iref, 'state') )
-                if( state.ne.self%prev_state .or. .not.self%state_exists(state) )return
+                integer :: loc(1), inpl_ind
                 corrs     = pftcc%gencorrs(iref, iptcl) ! In-plane correlations
-                loc       = maxloc(corrs)   ! greedy in-plane
-                inpl_ind  = loc(1)          ! in-plane angle index
-                inpl_corr = corrs(inpl_ind) ! max in plane correlation
+                loc       = maxloc(corrs)               ! greedy in-plane
+                inpl_ind  = loc(1)                      ! in-plane angle index
+                inpl_corr = corrs(inpl_ind)             ! max in plane correlation
                 call self%store_solution(pftcc, iref, iref, inpl_ind, inpl_corr)
                 projspace_corrs( iref ) = inpl_corr ! stash in-plane correlation for sorting                   
                 ! update nbetter to keep track of how many improving solutions we have identified
@@ -886,7 +882,7 @@ contains
                 self%prev_ref = (self%prev_state-1)*self%nprojs+self%prev_proj
             case( 'exp' )
                 call self%prep_reforis(e, nnvec=nnmat(self%prev_proj,:))
-                self%prev_ref = (self%prev_state-1)*self%nprojs+self%prev_proj
+                self%prev_ref = self%prev_proj ! because oris only cover one state
             case DEFAULT
                 stop 'Unknown refinement mode; simple_prime3D_srch; prep4srch'
         end select
@@ -916,7 +912,7 @@ contains
             self%prev_corr = corr
         endif
         ! prep specscore
-        call self%calc_specscore(pftcc, self%prev_ref, iptcl, self%prev_roind)
+        ! call self%calc_specscore(pftcc, self%prev_ref, iptcl, self%prev_roind)
         DebugPrint '>>> PRIME3D_SRCH::PREPARED FOR SIMPLE_PRIME3D_SRCH'
     end subroutine prep4srch
 
@@ -966,8 +962,8 @@ contains
             endif
         endif
         if( any(self%srch_order == 0) ) stop 'Invalid index in srch_order; simple_prime3d_srch::prep_ref_oris'
-        call rt%kill
         ! prepare discrete reforis
+        ! The underlying principle here is that o_refs is congruent with pftcc
         call self%o_refs%new( self%nrefs )          ! init references object
         cnt = 0
         do istate=1,self%nstates
@@ -979,6 +975,7 @@ contains
                 call self%o_refs%set_ori( cnt,o )
             enddo
         enddo
+        call rt%kill
     end subroutine prep_reforis
 
     ! CALCULATORS
@@ -1141,7 +1138,7 @@ contains
         type(ori)         :: o_new, o_old, o_new_copy
         real, allocatable :: corrs(:)
         real              :: euldist, mi_joint, mi_proj, mi_inpl, mi_state, dist_inpl
-        integer           :: roind, state, best_loc(1)
+        integer           :: roind, state, best_loc(1), iref
         o_old    = a%get_ori(iptcl)
         corrs    = self%o_peaks%get_all('corr')
         best_loc = maxloc(corrs) 
@@ -1152,13 +1149,15 @@ contains
         call se%sym_euldist( o_old, o_new_copy, euldist )
         dist_inpl = rad2deg( o_new_copy.inplrotdist.o_old )
         call se%kill
-        ! new params
-        roind   = pftcc%get_roind( 360.-o_new%e3get() )
-        state   = nint( o_new%get('state') )
+        ! specscore & new parameters
+        state = nint( o_new%get('state') )
         if( .not. self%state_exists(state) )then
             print *,'Empty state in simple_prime3d_srch; update_best'
             stop
         endif
+        roind = pftcc%get_roind( 360.-o_new%e3get() )
+        iref  = self%o_refs%find_closest_proj(o_new, state)
+        call self%calc_specscore(pftcc, iref, iptcl, roind)
         ! calculate overlap between distributions
         mi_proj  = 0.
         mi_inpl  = 0.
