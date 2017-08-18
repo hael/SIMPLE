@@ -179,7 +179,7 @@ elseif (CMAKE_Fortran_COMPILER_ID STREQUAL "PGI")
   message(STATUS " PGI Compiler settings: default USE_CUDA=ON")
   set(USE_CUDA ON)
   set(preproc  "-Mpreprocess ")
-  set(dialect  "-Mfreeform  -Mextend -Mnosecond_underscore -Mlarge_arrays  ") #-Mstandard -Mallocatable=03
+  set(dialect  "-Mfreeform  -Mextend -Mnosecond_underscore -Mlarge_arrays -Miomutex") #-Mstandard -Mallocatable=03
   set(checks   "-Mdclchk -Mchkptr -Mchkstk -Mdepchk -Munixlogical -Mflushz -Mdaz -Mfpmisalign")
   set(warn     "-Minform=warn -Minfo=all,ftn ") # ${checks}")
   # bounds checking cannot be done in CUDA fortran or OpenACC GPU
