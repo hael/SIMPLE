@@ -133,7 +133,9 @@ type :: oris
     procedure          :: order
     procedure          :: order_corr
     procedure          :: order_cls
-    procedure          :: balance
+    procedure, private :: balance_1
+    procedure, private :: balance_2
+    generic            :: balance => balance_1, balance_2
     procedure          :: calc_hard_weights
     procedure          :: calc_spectral_weights
     procedure, private :: calc_hard_weights_single
@@ -1939,10 +1941,9 @@ contains
     end function order_cls
 
     !>  \brief  applies a one-sided balance restraint on the number of particles
-    !!          in projection groups based on corr/specscore order
-    subroutine balance( self, which, popmax, skewness, use_specscore )
+    !!          in 2D classes based on corr/specscore order
+    subroutine balance_1( self, popmax, skewness, use_specscore )
         class(oris),       intent(inout) :: self
-        character(len=*),  intent(in)    :: which
         integer,           intent(in)    :: popmax
         real,              intent(out)   :: skewness
         logical, optional, intent(in)    :: use_specscore
@@ -1951,45 +1952,25 @@ contains
         real,    allocatable :: pops(:), scores(:), nonzero_pops(:)
         real    :: w
         integer :: i, j, n, pop
-        logical :: uuse_specscore, l_proj
-        if( .not. self%isthere('w') ) stop 'ERROR, oris :: balance assumes w  set'
+        logical :: uuse_specscore
+        if( .not. self%isthere('w') ) stop 'ERROR, oris :: balance_1 assumes w  set'
         uuse_specscore = .false.
         if( present(use_specscore) )then
             if( use_specscore )then
                 uuse_specscore = self%isthere('specscore')
             endif
         endif
-        ! decide whether to do proj or class analysis
-        l_proj = .false.
-        select case(which)
-            case('class')
-                if( .not. self%isthere('class') ) stop 'class label must be set; oris :: balance'
-                n = self%get_n('class')
-            case('proj')
-                if( .not. self%isthere('proj') ) stop 'proj label must be set; oris :: balance'
-                n = self%get_n('proj')
-                l_proj = .true.
-            case DEFAULT
-                stop 'unsupported which flag; simple_oris :: balance'
-        end select
+        if( .not. self%isthere('class') ) stop 'class label must be set; oris :: balance_1'
+        n = self%get_n('class')
         allocate(included(self%n))
         included = .false.
-        do i=1,n ! n is number of projection directions or classes
-            ! get class/proj population
-            if( l_proj )then
-                pop = self%get_pop(i, 'proj', consider_w=.true.)
-            else
-                pop = self%get_pop(i, 'class', consider_w=.true.)
-            endif
+        do i=1,n ! n is number of classes
+            ! get class population
+            pop = self%get_pop(i, 'class', consider_w=.true.)
             ! zero case
             if( pop < 1 )cycle
-            ! get indices of particles in projection direction/class subject
-            ! to spectral particle weight > 0
-            if( l_proj )then
-                inds = self%get_pinds(i, 'proj', consider_w=.true.)
-            else
-                inds = self%get_pinds(i, 'class', consider_w=.true.)
-            endif
+            ! get indices of particles in class subject to weight not zero
+            inds = self%get_pinds(i, 'class', consider_w=.true.)
             if( pop <= popmax )then ! all inclded
                 do j=1,pop
                     included(inds(j)) = .true.
@@ -2021,7 +2002,98 @@ contains
         end do
         ! communicate skewness as fraction of excluded
         skewness = real(self%n - count(included))/real(self%n)
-    end subroutine balance
+    end subroutine balance_1
+
+    !>  \brief  applies a one-sided balance restraint on the number of particles
+    !!          in projection groups based on corr/specscore order
+    subroutine balance_2( self, popmax, nspace_bal, nsym, eullims, skewness, use_specscore )
+        class(oris),       intent(inout) :: self
+        integer,           intent(in)    :: popmax, nspace_bal, nsym
+        real,              intent(in)    :: eullims(3,2)
+        real,              intent(out)   :: skewness
+        logical, optional, intent(in)    :: use_specscore
+        type(oris)           :: osubspace
+        type(ori)            :: o_single
+        integer, allocatable :: inds(:), inds_tmp(:), clustering(:), clustszs(:)
+        real,    allocatable :: pops(:), scores(:), nonzero_pops(:)
+        logical, allocatable :: ptcl_mask(:), included(:)
+        real                 :: w
+        integer              :: i, j, n, pop, alloc_stat, iptcl, icls, cnt
+        logical              :: uuse_specscore
+        if( .not. self%isthere('w') ) stop 'ERROR, oris :: balance assumes w  set'
+        uuse_specscore = .false.
+        if( present(use_specscore) )then
+            if( use_specscore )then
+                uuse_specscore = self%isthere('specscore')
+            endif
+        endif
+        if( .not. self%isthere('proj') ) stop 'proj label must be set; oris :: balance'
+        n = self%get_n('proj')
+        ptcl_mask = self%included(consider_w=.true.)
+        allocate(clustering(self%n), clustszs(nspace_bal), included(self%n), stat=alloc_stat)
+        call alloc_err('In oris :: balance', alloc_stat)
+        clustering = 0
+        clustszs   = 0
+        included   = .false.
+        ! generate discrete projection direction space
+        call osubspace%new( nspace_bal )
+        call osubspace%spiral( nsym, eullims )
+        ! cluster the projection directions
+        do iptcl=1,self%n
+            if( ptcl_mask(iptcl) )then
+                o_single = self%get_ori(iptcl)
+                clustering(iptcl) = osubspace%find_closest_proj(o_single)
+            else
+                clustering(iptcl) = 0
+            endif
+        end do
+        ! loop over clusters
+        do icls=1,nspace_bal
+            pop = count(clustering == icls)
+            ! zero case
+            if( pop < 1 ) cycle
+            ! get indices of particles in cluster
+            allocate(inds(pop))
+            cnt = 0 
+            do iptcl=1,self%n
+                if( clustering(iptcl) == icls )then
+                    cnt = cnt + 1
+                    inds(cnt) = iptcl
+                endif
+            end do
+            if( pop <= popmax )then ! all inclded
+                do j=1,pop
+                    included(inds(j)) = .true.
+                end do
+            else ! popmax threshold applied
+                allocate(scores(pop), inds_tmp(pop))
+                do j=1,pop
+                    if( uuse_specscore )then
+                        scores(j) = self%o(inds(j))%get('specscore')
+                    else
+                        scores(j) = self%o(inds(j))%get('corr')
+                    endif
+                    inds_tmp(j) = inds(j)
+                end do
+                call hpsort(pop, scores, inds_tmp)
+                do j=pop,pop - popmax + 1,-1
+                    included(inds_tmp(j)) = .true. 
+                end do
+                deallocate(scores, inds_tmp)
+            endif
+            deallocate(inds)
+        end do
+        ! communicate selection to instance
+        do i=1,self%n
+            if( included(i) )then
+                call self%o(i)%set('state_balance', 1.0)
+            else
+                call self%o(i)%set('state_balance', 0.0)
+            endif
+        end do
+        ! communicate skewness as fraction of excluded
+        skewness = real(self%n - count(included))/real(self%n)
+    end subroutine balance_2
 
     !>  \brief  calculates hard weights based on ptcl ranking
     subroutine calc_hard_weights( self, frac, bystate )
@@ -2787,25 +2859,6 @@ contains
         maxd  = maxd/real(nobs)
         mind  = mind/real(nobs)
     end subroutine cluster_diststat
-
-    !>  \brief  generates the opposite hand of the set of Euler angles
-    ! subroutine mirror3d( self )
-    !     class(oris), intent(inout) :: self
-    !     integer                    :: i
-    !     do i=1,self%n
-    !         call self%o(i)%mirror3d
-    !     end do
-    ! end subroutine mirror3d
-
-    ! !>  \brief  generates the opposite hand of the set of Euler angles
-    ! !!          according to the spider convention
-    ! subroutine mirror2d( self )
-    !     class(oris), intent(inout) :: self
-    !     integer                    :: i
-    !     do i=1,self%n
-    !         call self%o(i)%mirror2d
-    !     end do
-    ! end subroutine mirror2d
 
     ! PRIVATE ROUTINES
 

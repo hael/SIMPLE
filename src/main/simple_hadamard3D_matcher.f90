@@ -240,7 +240,7 @@ contains
 
         ! POPULATION BALANCING LOGICS
         if( p%balance > 0 )then
-            call b%a%balance('proj', p%balance, skewness)
+            call b%a%balance( p%balance, NSPACE_BALANCE, p%nsym, p%eullims, skewness )
             write(*,'(A,F8.2)') '>>> PROJECTION DISTRIBUTION SKEWNESS(%):', 100. * skewness
         else
             call b%a%set_all2single('state_balance', 1.0)

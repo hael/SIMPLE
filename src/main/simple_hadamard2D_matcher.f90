@@ -149,7 +149,7 @@ contains
 
         ! POPULATION BALANCING LOGICS
         if( p%balance > 0 )then
-            call b%a%balance('class', p%balance, skewness)
+            call b%a%balance(p%balance, skewness)
             write(*,'(A,F8.2)') '>>> CLASS DISTRIBUTION SKEWNESS(%):', 100. * skewness
         else
             call b%a%set_all2single('state_balance', 1.0)

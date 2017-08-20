@@ -602,6 +602,7 @@ contains
                         clustering(iptcl) = 0
                     endif
                 end do
+                ! determine cluster sizes
                 do icls=1,p%ndiscrete
                     clustszs(icls) = real(count(clustering == icls))
                 end do

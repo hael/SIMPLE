@@ -17,7 +17,7 @@ do ipart=1,5
     call bos%open('bos'//int2str(ipart)//'.bin', del_if_exists=.true.)
     call bos%write_header
     do iptcl=parts(ipart,1),parts(ipart,2)
-        call bos%write_record(a, iptcl)
+        call bos%write_record(iptcl, a)
     end do
     call bos%kill
 end do
@@ -26,7 +26,7 @@ call a%new(10)
 do ipart=1,5
     call bos%open('bos'//int2str(ipart)//'.bin')
     do iptcl=parts(ipart,1),parts(ipart,2)
-        call bos%read_record(a, iptcl)
+        call bos%read_record(iptcl, a)
     end do
     call bos%kill
 end do
@@ -46,7 +46,7 @@ do ipart=1,5
     call bos%open('bos'//int2str(ipart)//'.bin', del_if_exists=.true.)
     call bos%write_header
     do iptcl=parts(ipart,1),parts(ipart,2)
-        call bos%write_record(a, iptcl, os_peak)
+        call bos%write_record(iptcl, a, os_peak)
     end do
     call bos%kill
 end do
@@ -55,7 +55,7 @@ call a%new(10)
 do ipart=1,5
     call bos%open('bos'//int2str(ipart)//'.bin')
     do iptcl=parts(ipart,1),parts(ipart,2)
-        call bos%read_record(a, iptcl, os_peak)
+        call bos%read_record(iptcl, a, os_peak)
         call os_peak%write('os_peak'//int2str(ipart)//'.txt')
     end do
     call bos%kill

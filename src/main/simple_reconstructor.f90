@@ -425,7 +425,7 @@ contains
         call o%calc_spectral_weights(p%frac)
         ! population balancing logics
         if( p%balance > 0 )then
-            call o%balance('proj', p%balance, skewness)
+            call o%balance( p%balance, NSPACE_BALANCE, p%nsym, p%eullims, skewness )
             write(*,'(A,F8.2)') '>>> PROJECTION DISTRIBUTION SKEWNESS(%):', 100. * skewness
         else
             call o%set_all2single('state_balance', 1.0)
