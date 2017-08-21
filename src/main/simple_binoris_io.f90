@@ -76,6 +76,7 @@ contains
 		class(oris),      intent(inout) :: a
 		integer,          intent(in)    :: fromto(2)
 		type(binoris) :: bos
+		integer       :: irec
 		call bos%new(a, fromto)
 		call bos%open(fname, del_if_exists=.true.)
 		call bos%write_header()
