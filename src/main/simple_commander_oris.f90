@@ -16,6 +16,8 @@ public :: map2ptcls_commander
 public :: orisops_commander
 public :: oristats_commander
 public :: rotmats2oris_commander
+public :: bin2txt_commander
+public :: txt2bin_commander
 private
 #include "simple_local_flags.inc"
 
@@ -48,6 +50,14 @@ type, extends(commander_base) :: rotmats2oris_commander
  contains
    procedure :: execute      => exec_rotmats2oris
 end type rotmats2oris_commander
+type, extends(commander_base) :: bin2txt_commander
+ contains
+   procedure :: execute      => exec_bin2txt
+end type bin2txt_commander
+type, extends(commander_base) :: txt2bin_commander
+ contains
+   procedure :: execute      => exec_txt2bin
+end type txt2bin_commander
 
 contains
 
@@ -505,8 +515,8 @@ contains
         real                 :: mind2, maxd2, avgd2, sdevd2, vard2, homo_cnt, homo_avg
         real                 :: popmin, popmax, popmed, popave, popsdev, popvar, frac_populated, szmax
         integer              :: nprojs, iproj, iptcl, icls, cnt_zero, cnt_nonzero, n_zero, n_nonzero, j
-        integer              :: noris
-        real,    allocatable :: projpops(:), tmp(:), clustszs(:)
+        integer              :: noris, ncls
+        real,    allocatable :: pops(:), tmp(:), clustszs(:)
         integer, allocatable :: projinds(:), clustering(:)
         logical, allocatable :: ptcl_mask(:)
         integer, parameter   :: hlen=50
@@ -545,6 +555,45 @@ contains
                 write(*,'(a,1x,f8.2)') 'MAXIMUM DF                           :', (maxd+maxd2)/2.
                 goto 999
             endif
+            if( p%classtats .eq. 'yes' )then
+                noris = b%a%get_noris()
+                ncls  = b%a%get_n('class')
+                ! setup weights
+                if( p%weights2D.eq.'yes' )then
+                    if( noris <= SPECWMINPOP )then
+                        call b%a%set_all2single('w', 1.0)
+                    else
+                        ! frac is one by default in prime2D (no option to set frac)
+                        ! so spectral weighting is done over all images
+                        call b%a%calc_spectral_weights(1.0)
+                    endif
+                else
+                    ! defaults to unitary weights
+                    call b%a%set_all2single('w', 1.0)
+                endif
+                ! generate class stats
+                pops           = b%a%get_pops('class', consider_w=.true.)
+                popmin         = minval(pops)
+                popmax         = maxval(pops)
+                popmed         = median_nocopy(pops)
+                call moment(pops, popave, popsdev, popvar, err)
+                write(*,'(a,1x,f8.2)') 'MINIMUM POPULATION :', popmin
+                write(*,'(a,1x,f8.2)') 'MAXIMUM POPULATION :', popmax
+                write(*,'(a,1x,f8.2)') 'MEDIAN  POPULATION :', popmed
+                write(*,'(a,1x,f8.2)') 'AVERAGE POPULATION :', popave
+                write(*,'(a,1x,f8.2)') 'SDEV OF POPULATION :', popsdev
+                ! produce a histogram of class populations
+                szmax = maxval(pops)
+                ! scale to max 50 *:s
+                scale = 1.0
+                do while( nint(scale*szmax) > hlen )
+                    scale = scale - 0.001
+                end do
+                write(*,'(a)') '>>> HISTOGRAM OF CLASS POPULATIONS'
+                do icls=1,ncls
+                    write(*,*) nint(pops(icls)),"|",('*', j=1,nint(pops(icls)*scale))  
+                end do
+            endif
             if( p%projstats .eq. 'yes' )then
                 if( .not. cline%defined('nspace') ) stop 'need nspace command line arg to provide projstats'
                 noris = b%a%get_noris()
@@ -557,16 +606,16 @@ contains
                 ! generate population stats
                 tmp            = b%a%get_pops('proj', consider_w=.true.)
                 nprojs         = size(tmp)
-                projpops       = pack(tmp, tmp > 0.5)
-                frac_populated = real(size(projpops))/real(p%nspace)
-                popmin         = minval(projpops)
-                popmax         = maxval(projpops)
-                popmed         = median_nocopy(projpops)
-                call moment(projpops, popave, popsdev, popvar, err)
+                pops           = pack(tmp, tmp > 0.5)
+                frac_populated = real(size(pops))/real(p%nspace)
+                popmin         = minval(pops)
+                popmax         = maxval(pops)
+                popmed         = median_nocopy(pops)
+                call moment(pops, popave, popsdev, popvar, err)
                 write(*,'(a,1x,f8.2)') 'FRAC POPULATED DIRECTIONS :', frac_populated
                 write(*,'(a,1x,f8.2)') 'MINIMUM POPULATION        :', popmin
                 write(*,'(a,1x,f8.2)') 'MAXIMUM POPULATION        :', popmax
-                write(*,'(a,1x,f8.2)') 'MEDIAN POPULATION         :', popmed
+                write(*,'(a,1x,f8.2)') 'MEDIAN  POPULATION        :', popmed
                 write(*,'(a,1x,f8.2)') 'AVERAGE POPULATION        :', popave
                 write(*,'(a,1x,f8.2)') 'SDEV OF POPULATION        :', popsdev
                 ! write out the zero and nonzero populated projection directions
@@ -613,7 +662,7 @@ contains
                     scale = scale - 0.001
                 end do
                 write(*,'(a)') '>>> HISTOGRAM OF SUBSPACE POPULATIONS (FROM NORTH TO SOUTH)'
-                 do icls=1,p%ndiscrete
+                do icls=1,p%ndiscrete
                     write(*,*) nint(clustszs(icls)),"|",('*', j=1,nint(clustszs(icls)*scale))  
                 end do
             endif
@@ -660,7 +709,6 @@ contains
         call os_out%new(ndatlines)
         do iline=1,ndatlines
             call rotmats%readNextDataLine(rline)
-            ! print *, rline(1), rline(2), rline(3), rline(4), rline(5), rline(6), rline(7), rline(8), rline(9)
             rmat(1,1) = rline(1)
             rmat(1,2) = rline(2)
             rmat(1,3) = rline(3)
@@ -679,5 +727,50 @@ contains
         call rotmats%kill
         call simple_end('**** ROTMATS2ORIS NORMAL STOP ****')
     end subroutine exec_rotmats2oris
+
+    !> convert text (.txt) oris doc to binary (.bin)
+    subroutine exec_txt2bin( self, cline )
+        use simple_oris,         only: oris
+        use simple_binoris,      only: binoris
+        use simple_filehandling, only: nlines
+        class(txt2bin_commander), intent(inout) :: self
+        class(cmdline),           intent(inout) :: cline
+        type(params)  :: p
+        type(oris)    :: os
+        type(binoris) :: bos
+        integer       :: noris, i
+        p = params(cline)
+        noris = nlines(p%oritab)
+        call os%new(noris)
+        call os%read(p%oritab)
+        call bos%new(os)
+        call bos%open(p%outfile, del_if_exists=.true.)
+        call bos%write_header()
+        do i=1,noris
+            call bos%write_record(i, os)
+        end do
+        call bos%close
+    end subroutine exec_txt2bin
+
+    !> convert binary (.bin) oris doc to text (.txt)
+    subroutine exec_bin2txt( self, cline )
+        use simple_oris,         only: oris
+        use simple_binoris,      only: binoris
+        class(bin2txt_commander), intent(inout) :: self
+        class(cmdline),           intent(inout) :: cline
+        type(params)  :: p
+        type(oris)    :: os
+        type(binoris) :: bos
+        integer       :: noris, i
+        p = params(cline)
+        call bos%open(p%oritab)
+        noris = bos%get_n_records()
+        call os%new(noris)
+        do i=1,noris
+            call bos%read_record(i, os)
+        end do
+        call bos%close
+        call os%write(p%outfile)
+    end subroutine exec_bin2txt
 
 end module simple_commander_oris

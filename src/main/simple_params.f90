@@ -25,6 +25,7 @@ type :: params
     character(len=3)      :: avg='no'          !< calc average automatic (yes|no){no}
     character(len=3)      :: bin='no'          !< binarise image(yes|no){no}
     character(len=3)      :: center='yes'      !< center image(s)/class average(s)/volume(s)(yes|no){no}
+    character(len=3)      :: classtats='no'    !< calculate class population statistics(yes|no){no}
     character(len=3)      :: clustvalid='no'   !< validate clustering(yes|homo|no){no}
     character(len=3)      :: compare='no'      !< do comparison(yes|no){no}
     character(len=3)      :: countvox='no'     !< count # voxels(yes|no){no}
@@ -122,9 +123,9 @@ type :: params
     character(len=STDLEN) :: mskfile=''           !< maskfile.ext
     character(len=STDLEN) :: msktype='soft'       !< type of mask(hard|soft){soft}
     character(len=STDLEN) :: opt='simplex'        !< optimiser (powell|simplex|oasis|bforce|pso|de){simplex}
-    character(len=STDLEN) :: oritab=''            !< table (text file) of orientations(.asc/.txt)
-    character(len=STDLEN) :: oritab2=''           !< 2nd table (text file) of orientations(.asc/.txt)
-    character(len=STDLEN) :: oritab3D=''          !< table (text file) of 3D orientations(.asc/.txt)
+    character(len=STDLEN) :: oritab=''            !< table  of orientations(.asc/.txt)
+    character(len=STDLEN) :: oritab2=''           !< 2nd table of orientations(.asc/.bin/.txt)
+    character(len=STDLEN) :: oritab3D=''          !< table of 3D orientations(.asc/.bin/.txt)
     character(len=STDLEN) :: outfile='outfile.txt'!< output document
     character(len=STDLEN) :: outstk=''            !< output image stack
     character(len=STDLEN) :: outstk2=''           !< output image stack 2nd
@@ -340,7 +341,7 @@ type :: params
     logical :: l_distr_exec    = .false.
     logical :: l_chunk_distr   = .false.
     logical :: doshift         = .false.
-    logical :: l_envmsk       = .false.
+    logical :: l_envmsk        = .false.
     logical :: l_autoscale     = .false.
     logical :: l_dose_weight   = .false. 
     logical :: l_innermsk      = .false. 
@@ -520,9 +521,9 @@ contains
         call check_file('fsc',            self%fsc,'B')
         call check_file('infile',         self%infile)
         call check_file('mskfile',        self%mskfile,  notAllowed='T')
-        call check_file('oritab',         self%oritab, 'T')
-        call check_file('oritab2',        self%oritab2,'T')
-        call check_file('oritab3D',       self%oritab3D,'T')
+        call check_file('oritab',         self%oritab, 'T', 'B')
+        call check_file('oritab2',        self%oritab2,'T', 'B')
+        call check_file('oritab3D',       self%oritab3D,'T', 'B')
         call check_file('outstk',         self%outstk,   notAllowed='T')
         call check_file('outstk2',        self%outstk2,  notAllowed='T')
         call check_file('outvol',         self%outvol,   notAllowed='T')

@@ -1326,7 +1326,7 @@ contains
             stop 'inputted boxfile is empty; simple_commander_tseries :: exec_tseries_track'
         endif
         call boxfile%kill
-        call cline%delete('boxfile')
+        call cline%delete('boxfile')  
         p_master%nptcls = ndatlines
         p_master%nparts = p_master%nptcls
         if( p_master%ncunits > p_master%nparts )&
@@ -1345,6 +1345,7 @@ contains
         ! setup the environment for distributed execution
         call qenv%new(p_master)
         ! schedule & clean
+        call cline%gen_job_descr(job_descr)
         call qenv%gen_scripts_and_schedule_jobs(p_master, job_descr, part_params=part_params)
         call qsys_cleanup(p_master)
         ! end gracefully

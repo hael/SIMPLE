@@ -18,8 +18,8 @@ public :: read_img_from_stk, set_bp_range, set_bp_range2D, grid_ptcl, prepimg4al
 private
 #include "simple_local_flags.inc"
 
-real,    parameter :: SHTHRESH  = 0.0001
-real,    parameter :: CENTHRESH = 0.01   ! threshold for performing volume/cavg centering in pixels
+real, parameter :: SHTHRESH  = 0.0001
+real, parameter :: CENTHRESH = 0.01   ! threshold for performing volume/cavg centering in pixels
     
 contains
 
