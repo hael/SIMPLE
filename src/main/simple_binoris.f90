@@ -22,21 +22,22 @@ type binoris
     integer                        :: n_bytes_hash_keys  = 0
     integer                        :: n_reals_per_record = 0
     ! header byte array
-    integer(kind=1), allocatable   :: byte_array_header(:)
+    integer(kind=1),   allocatable :: byte_array_header(:)
     ! record
-    real(kind=4),    allocatable   :: record(:)
+    real(kind=4),      allocatable :: record(:)
     ! for on-line use
     integer                        :: funit  = 0
     logical                        :: exists = .false.
   contains
     ! constructors
     procedure          :: new
-    ! checkers/setters/getter
+    ! checkers/setters/getters
     procedure, private :: same_dims
     generic            :: operator(.eqdims.) => same_dims
     procedure          :: set_fromto
     procedure          :: get_n_records
     procedure          :: get_fromto
+    procedure          :: get_n_peaks
     ! I/O
     procedure          :: open
     procedure, private :: open_local
@@ -50,6 +51,7 @@ type binoris
     procedure, private :: read_record_1
     procedure, private :: read_record_2
     generic            :: read_record => read_record_1, read_record_2
+    procedure          :: read_ctfparams_and_state
     ! byte indexing
     procedure          :: first_byte
     procedure          :: last_byte
@@ -116,7 +118,7 @@ contains
         self%exists = .true.
     end subroutine new
 
-    ! checkers
+    ! checkers/setters/getters
 
     logical function same_dims( self1, self2 )
         class(binoris), intent(in) :: self1, self2 !< instances
@@ -145,6 +147,11 @@ contains
         integer :: fromto(2)
         fromto = self%fromto
     end function get_fromto
+
+    integer function get_n_peaks( self )
+        class(binoris), intent(in) :: self !< instance
+        get_n_peaks = self%n_peaks
+    end function get_n_peaks
 
     ! I/O supporting ori + oris (peaks)
 
@@ -298,7 +305,7 @@ contains
         integer,               intent(in)    :: i
         class(oris),           intent(inout) :: a
         class(oris), optional, intent(inout) :: os_peak
-        integer                   :: io_status, iflag, ipeak, cnt, ind
+        integer                   :: io_status, iflag, ipeak, cnt
         type(ori)                 :: o
         real(kind=4), allocatable :: vals(:)
         ! assuming file open
@@ -346,21 +353,15 @@ contains
         endif
     end subroutine read_record_1
 
-    subroutine read_record_2( self, i, a, os_peak )
+    subroutine read_record_2( self, i, a, os_peak, nst )
         class(binoris),        intent(inout) :: self
         integer,               intent(in)    :: i
         class(oris),           intent(inout) :: a
         class(oris), optional, intent(inout) :: os_peak
-        integer   :: io_status, iflag, ipeak, cnt, ind, j
+        integer,     optional, intent(out)   :: nst
+        integer   :: io_status, iflag, ipeak, cnt, j, state
         real      :: euls(3)
-        ! assuming file open
-        ! check index bounds
-        if( i < self%fromto(1) .or. i > self%fromto(2) ) stop 'index i out of bound; binoris :: read_record_2'
-        read(unit=self%funit,pos=self%first_byte(i),iostat=io_status) self%record
-        if( io_status .ne. 0 )then
-            write(*,'(a,i0,a)') '**error(binoris::read_record_2): error ', io_status, ' when reading record bytes from disk'
-            stop 'I/O error; read_record_2; simple_binoris'
-        endif
+        call self%read_record_1(i)
         ! transfer hash data
         euls = 0.
         do j=1,self%n_hash_vals
@@ -376,6 +377,10 @@ contains
             end select            
         end do
         call a%set_euler(i, euls)
+        if( present(nst) )then
+            state = int(a%get(i, 'state'))
+            nst = max(1,max(state,nst))
+        endif
         if( present(os_peak) )then
             ! transfer os_peak data
             cnt = self%n_hash_vals
@@ -399,6 +404,21 @@ contains
             end do
         endif
     end subroutine read_record_2
+
+    subroutine read_ctfparams_and_state( self, i, a )
+        class(binoris), intent(inout) :: self
+        integer,        intent(in)    :: i
+        class(oris),    intent(inout) :: a
+        integer :: j
+        call self%read_record_1(i)
+        ! transfer hash data
+        do j=1,self%n_hash_vals
+            select case(trim(self%hash_keys(j)))
+                case('smpd','kv','cs','fraca','phaseplate','dfx','dfy','angast','bfac','state')
+                    call a%set(i, trim(self%hash_keys(j)), self%record(j))
+            end select            
+        end do
+    end subroutine read_ctfparams_and_state
 
     ! byte indexing
 

@@ -18,74 +18,74 @@ type :: params
     type(ori)             :: ori_glob
     type(ctfplan)         :: tfplan
     ! yes/no decision variables in ascending alphabetical order
-    character(len=3)      :: acf='no'          !< calculate autocorrelation function(yes|no){no}
-    character(len=3)      :: append='no'       !< append in context of files(yes|no){no}
-    character(len=3)      :: async='no'        !< asynchronous (yes|no){no}
-    character(len=3)      :: autoscale='yes'   !< automatic down-scaling(yes|no){yes}
-    character(len=3)      :: avg='no'          !< calc average automatic (yes|no){no}
-    character(len=3)      :: bin='no'          !< binarise image(yes|no){no}
-    character(len=3)      :: center='yes'      !< center image(s)/class average(s)/volume(s)(yes|no){no}
-    character(len=3)      :: classtats='no'    !< calculate class population statistics(yes|no){no}
-    character(len=3)      :: clustvalid='no'   !< validate clustering(yes|homo|no){no}
-    character(len=3)      :: compare='no'      !< do comparison(yes|no){no}
-    character(len=3)      :: countvox='no'     !< count # voxels(yes|no){no}
-    character(len=3)      :: ctfstats='no'     !< calculate ctf statistics(yes|no){no}
+    character(len=3)      :: acf='no'             !< calculate autocorrelation function(yes|no){no}
+    character(len=3)      :: append='no'          !< append in context of files(yes|no){no}
+    character(len=3)      :: async='no'           !< asynchronous (yes|no){no}
+    character(len=3)      :: autoscale='yes'      !< automatic down-scaling(yes|no){yes}
+    character(len=3)      :: avg='no'             !< calc average automatic (yes|no){no}
+    character(len=3)      :: bin='no'             !< binarise image(yes|no){no}
+    character(len=3)      :: center='yes'         !< center image(s)/class average(s)/volume(s)(yes|no){no}
+    character(len=3)      :: classtats='no'       !< calculate class population statistics(yes|no){no}
+    character(len=3)      :: clustvalid='no'      !< validate clustering(yes|homo|no){no}
+    character(len=3)      :: compare='no'         !< do comparison(yes|no){no}
+    character(len=3)      :: countvox='no'        !< count # voxels(yes|no){no}
+    character(len=3)      :: ctfstats='no'        !< calculate ctf statistics(yes|no){no}
     character(len=3)      :: cure='no'
-    character(len=3)      :: discrete='no'     !< be discrete(yes|no){no}
-    character(len=3)      :: diverse='no'      !< diverse or not flag (yes|no){no}
+    character(len=3)      :: discrete='no'        !< be discrete(yes|no){no}
+    character(len=3)      :: diverse='no'         !< diverse or not flag (yes|no){no}
     character(len=3)      :: doalign='yes'
     character(len=3)      :: dopca='yes'
     character(len=3)      :: dopick='yes'
     character(len=3)      :: doprint='no'
-    character(len=3)      :: dynlp='yes'       !< automatic resolution limit update(yes|no){yes}
-    character(len=3)      :: eo='yes'          !< use FSC for filtering and low-pass limit update(yes|no){no}
-    character(len=3)      :: errify='no'       !< introduce error(yes|no){no}
-    character(len=3)      :: even='no'         !< calculate even eo-pair(yes|no){no}
-    character(len=3)      :: ft2img='no'       !< convert Fourier transform to real image of power(yes|no){no}
-    character(len=3)      :: guinier='no'      !< calculate Guinier plot(yes|no){no}
+    character(len=3)      :: dynlp='yes'          !< automatic resolution limit update(yes|no){yes}
+    character(len=3)      :: eo='yes'             !< use FSC for filtering and low-pass limit update(yes|no){no}
+    character(len=3)      :: errify='no'          !< introduce error(yes|no){no}
+    character(len=3)      :: even='no'            !< calculate even eo-pair(yes|no){no}
+    character(len=3)      :: ft2img='no'          !< convert Fourier transform to real image of power(yes|no){no}
+    character(len=3)      :: guinier='no'         !< calculate Guinier plot(yes|no){no}
     character(len=3)      :: kmeans='yes'
     character(len=3)      :: local='no'
-    character(len=3)      :: masscen='no'      !< center using binarisation and mass centering(yes|no){no}
+    character(len=3)      :: masscen='no'         !< center using binarisation and mass centering(yes|no){no}
     character(len=3)      :: merge='no'
-    character(len=3)      :: mirr='no'         !< mirror(no|x|y){no}
-    character(len=3)      :: neg='no'          !< invert contrast of images(yes|no)
+    character(len=3)      :: mirr='no'            !< mirror(no|x|y){no}
+    character(len=3)      :: neg='no'             !< invert contrast of images(yes|no)
     character(len=3)      :: noise_norm ='no'
-    character(len=3)      :: noise='no'        !< noise initialisation(yes|no){no}
-    character(len=3)      :: norec='no'        !< do not reconstruct volume(s)(yes|no){no}
-    character(len=3)      :: norm='no'         !< do statistical normalisation avg
-    character(len=3)      :: odd='no'          !< calculate odd eo-pair(yes|no){no}
-    character(len=3)      :: order='no'        !< order ptcls according to correlation(yes|no){no}
-    character(len=3)      :: outside='no'      !< extract boxes outside the micrograph boundaries(yes|no){no}
+    character(len=3)      :: noise='no'           !< noise initialisation(yes|no){no}
+    character(len=3)      :: norec='no'           !< do not reconstruct volume(s)(yes|no){no}
+    character(len=3)      :: norm='no'            !< do statistical normalisation avg
+    character(len=3)      :: odd='no'             !< calculate odd eo-pair(yes|no){no}
+    character(len=3)      :: order='no'           !< order ptcls according to correlation(yes|no){no}
+    character(len=3)      :: outside='no'         !< extract boxes outside the micrograph boundaries(yes|no){no}
     character(len=3)      :: pad='no'
-    character(len=3)      :: pgrp_known='no'   !< point-group known a priori(yes|no){no}
-    character(len=3)      :: phaseplate='no'   !< images obtained with phaseplate(yes|no){no}
-    character(len=3)      :: phrand='no'       !< phase randomize(yes|no){no}
-    character(len=3)      :: plot='no'         !< make plot(yes|no){no}
+    character(len=3)      :: pgrp_known='no'      !< point-group known a priori(yes|no){no}
+    character(len=3)      :: phaseplate='no'      !< images obtained with phaseplate(yes|no){no}
+    character(len=3)      :: phrand='no'          !< phase randomize(yes|no){no}
+    character(len=3)      :: plot='no'            !< make plot(yes|no){no}
     character(len=3)      :: projstats='no'
     character(len=3)      :: readwrite='no'
     character(len=3)      :: remap_classes='no'
     character(len=3)      :: restart='no'
-    character(len=3)      :: rnd='no'          !< random(yes|no){no}
-    character(len=3)      :: rm_outliers='yes' !< remove outliers{yes}
+    character(len=3)      :: rnd='no'             !< random(yes|no){no}
+    character(len=3)      :: rm_outliers='yes'    !< remove outliers{yes}
     character(len=3)      :: roalgn='no'
     character(len=3)      :: round='no'
-    character(len=3)      :: shalgn='no'       !< do 2D shift alignment(yes|no){no}
+    character(len=3)      :: shalgn='no'          !< do 2D shift alignment(yes|no){no}
     character(len=3)      :: shellnorm='no'
-    character(len=3)      :: shbarrier='yes'   !< use shift search barrier constraint(yes|no){yes}
-    character(len=3)      :: single='no'       !< simulate a single image(yes|no){no}
-    character(len=3)      :: soften='no'       !< soften envelope with cosine edge(yes|no){no}
-    character(len=3)      :: stats='no'        !< provide statistics(yes|no){yes}
-    character(len=3)      :: stream='no'       !< sream (real time) execution mode(yes|no){no}
+    character(len=3)      :: shbarrier='yes'      !< use shift search barrier constraint(yes|no){yes}
+    character(len=3)      :: single='no'          !< simulate a single image(yes|no){no}
+    character(len=3)      :: soften='no'          !< soften envelope with cosine edge(yes|no){no}
+    character(len=3)      :: stats='no'           !< provide statistics(yes|no){yes}
+    character(len=3)      :: stream='no'          !< sream (real time) execution mode(yes|no){no}
     character(len=3)      :: swap='no'
     character(len=3)      :: test='no'
-    character(len=3)      :: tomo='no'         !< tomography mode(yes|no){no}
+    character(len=3)      :: tomo='no'            !< tomography mode(yes|no){no}
     character(len=3)      :: time='no'
-    character(len=3)      :: trsstats='no'     !< provide origin shift statistics(yes|no){no}
-    character(len=3)      :: tseries='no'      !< images represent a time-series(yes|no){no}
-!    character(len=3)      :: verbose='no'      !< verbosity flag (yes|no){no}
-    character(len=3)      :: vis='no'          !< visualise(yes|no)
+    character(len=3)      :: trsstats='no'        !< provide origin shift statistics(yes|no){no}
+    character(len=3)      :: tseries='no'         !< images represent a time-series(yes|no){no}
+!    character(len=3)      :: verbose='no'        !< verbosity flag (yes|no){no}
+    character(len=3)      :: vis='no'             !< visualise(yes|no)
     character(len=3)      :: weights2D='no'
-    character(len=3)      :: zero='no'         !< zeroing(yes|no){no}
+    character(len=3)      :: zero='no'            !< zeroing(yes|no){no}
     ! other fixed length character variables in ascending alphabetical order
     character(len=STDLEN) :: angastunit='degrees' !< angle of astigmatism unit (radians|degrees){degrees}
     character(len=4)      :: automsk='no'
@@ -284,58 +284,58 @@ type :: params
     real    :: e3=0.               !< 3d Euler(in degrees){0}
     real    :: eps=0.003
     real    :: eullims(3,2)=0.
-    real    :: exp_time=2.0       !< exposure time(in s)
-    real    :: filwidth=0.        !< width of filament (in A)
+    real    :: exp_time=2.0        !< exposure time(in s)
+    real    :: filwidth=0.         !< width of filament (in A)
     real    :: fny=0.
-    real    :: frac=1.            !< fraction of ptcls(0-1){1}
-    real    :: fraca=0.07         !< fraction of amplitude contrast used for fitting CTF{0.07}
-    real    :: fracdeadhot=0.05   !< fraction of dead or hot pixels{0.01}
+    real    :: frac=1.             !< fraction of ptcls(0-1){1}
+    real    :: fraca=0.07          !< fraction of amplitude contrast used for fitting CTF{0.07}
+    real    :: fracdeadhot=0.05    !< fraction of dead or hot pixels{0.01}
     real    :: frac_outliers=0.
     real    :: fraczero=0.
     real    :: ftol=1e-6
     real    :: gw=0.5
-    real    :: hp=100.            !< high-pass limit(in A)
-    real    :: hp_ctffind=30.     !< high-pass limit 4 ctffind(in A)
-    real    :: inner=0.           !< inner mask radius(in pixels)
-    real    :: kv=300.            !< acceleration voltage(in kV){300.}
+    real    :: hp=100.             !< high-pass limit(in A)
+    real    :: hp_ctffind=30.      !< high-pass limit 4 ctffind(in A)
+    real    :: inner=0.            !< inner mask radius(in pixels)
+    real    :: kv=300.             !< acceleration voltage(in kV){300.}
     real    :: lam=0.5
     real    :: lp_dyn=20.
     real    :: lp_grid=20.
-    real    :: lp=20.             !< low-pass limit(in A)
-    real    :: lp_ctffind=5.0     !< low-pass limit 4 ctffind(in A)
-    real    :: lp_pick=20.        !< low-pass limit 4 picker(in A)
+    real    :: lp=20.              !< low-pass limit(in A)
+    real    :: lp_ctffind=5.0      !< low-pass limit 4 ctffind(in A)
+    real    :: lp_pick=20.         !< low-pass limit 4 picker(in A)
     real    :: lplims2D(3)
     real    :: lpmed=20.
-    real    :: lpstart=0.         !< start low-pass limit(in A){15}
-    real    :: lpstop=7.0         !< stop low-pass limit(in A){8}
+    real    :: lpstart=0.          !< start low-pass limit(in A){15}
+    real    :: lpstop=7.0          !< stop low-pass limit(in A){8}
     real    :: lpvalid=20.
-    real    :: moldiam=140.       !< molecular diameter(in A)
+    real    :: moldiam=140.        !< molecular diameter(in A)
     real    :: moment=0.
-    real    :: msk=0.             !< mask radius(in pixels)
-    real    :: mul=1.             !< origin shift multiplication factor{1}
-    real    :: mw=0.              !< molecular weight(in kD)
+    real    :: msk=0.              !< mask radius(in pixels)
+    real    :: mul=1.              !< origin shift multiplication factor{1}
+    real    :: mw=0.               !< molecular weight(in kD)
     real    :: neigh=0.2
-    real    :: nsig=2.5           !< # sigmas
+    real    :: nsig=2.5            !< # sigmas
     real    :: optlims(7,2)=0.
-    real    :: outer=0.           !< outer mask radius(in pixels)
-    real    :: phranlp=35.        !< low-pass phase randomize(yes|no){no}
-    real    :: power=2.           !<
-    real    :: scale=1.           !< image scale factor{1}
-    real    :: scale2=1.          !< image scale factor 2nd{1}
-    real    :: sherr=0.           !< shift error(in pixels){2}
-    real    :: smpd=2.            !< sampling distance, same as EMANs apix(in A)
+    real    :: outer=0.            !< outer mask radius(in pixels)
+    real    :: phranlp=35.         !< low-pass phase randomize(yes|no){no}
+    real    :: power=2.
+    real    :: scale=1.            !< image scale factor{1}
+    real    :: scale2=1.           !< image scale factor 2nd{1}
+    real    :: sherr=0.            !< shift error(in pixels){2}
+    real    :: smpd=2.             !< sampling distance, same as EMANs apix(in A)
     real    :: smpd_targets2D(2)
-    real    :: snr=0.             !< signal-to-noise ratio
-    real    :: thres=0.           !< threshold (binarisation: 0-1; distance filer: in pixels)
+    real    :: snr=0.              !< signal-to-noise ratio
+    real    :: thres=0.            !< threshold (binarisation: 0-1; distance filer: in pixels)
     real    :: time_per_image=200.
     real    :: time_per_frame=0.
-    real    :: trs=0.             !< maximum halfwidth shift(in pixels)
+    real    :: trs=0.              !< maximum halfwidth shift(in pixels)
     real    :: var=1.
-    real    :: width=10.          !< falloff of inner mask(in pixels){10}
+    real    :: width=10.           !< falloff of inner mask(in pixels){10}
     real    :: winsz=1.
-    real    :: xsh=0.             !< x shift(in pixels){0}
-    real    :: ysh=0.             !< y shift(in pixels){0}
-    real    :: zsh=0.             !< z shift(in pixels){0}
+    real    :: xsh=0.              !< x shift(in pixels){0}
+    real    :: ysh=0.              !< y shift(in pixels){0}
+    real    :: zsh=0.              !< z shift(in pixels){0}
     ! logical variables in ascending alphabetical order
     logical :: cyclic(7)       = .false.
     logical :: l_distr_exec    = .false.
@@ -1031,200 +1031,196 @@ contains
 
         write(*,'(A)') '>>> DONE PROCESSING PARAMETERS'
 
-      contains
+        contains
 
-          subroutine check_vol( i )
-              integer, intent(in) :: i
-              character(len=STDLEN) :: nam
-              logical :: here
-              nam = 'vol'//int2str(i)
-              if( cline%defined(nam) )then
-                  call check_file(nam, self%vols(i), notAllowed='T')
-                  inquire(FILE=self%vols(i), EXIST=here)
-                  if( .not. here )then
-                      write(*,*) 'Input volume:', self%vols(i), 'does not exist!'
-                      stop
-                  endif
-                  !self%nstates = i
-                 DebugPrint nam, '=', self%vols(i)
-              endif
-          end subroutine check_vol
+            subroutine check_vol( i )
+                integer, intent(in) :: i
+                character(len=STDLEN) :: nam
+                logical :: here
+                nam = 'vol'//int2str(i)
+                if( cline%defined(nam) )then
+                    call check_file(nam, self%vols(i), notAllowed='T')
+                    inquire(FILE=self%vols(i), EXIST=here)
+                    if( .not. here )then
+                        write(*,*) 'Input volume:', self%vols(i), 'does not exist!'
+                        stop
+                    endif
+                    DebugPrint nam, '=', self%vols(i)
+                endif
+            end subroutine check_vol
 
-          subroutine read_vols
-              character(len=STDLEN) :: filenam, nam
-              integer :: nl, fnr, i
-              filenam = cline%get_carg('vollist')
-              nl = nlines(filenam)
-              fnr = get_fileunit( )
-              open(fnr, file=filenam)
-              do i=1,nl
-                  read(fnr,*) nam
-                  if( nam .ne. '' )then
-                      self%vols(i) = nam
-                      !self%nstates = i
-                  endif
-              end do
-              close(fnr)
-          end subroutine read_vols
+            subroutine read_vols
+                character(len=STDLEN) :: filenam, nam
+                integer :: nl, fnr, i
+                filenam = cline%get_carg('vollist')
+                nl = nlines(filenam)
+                fnr = get_fileunit( )
+                open(fnr, file=filenam)
+                do i=1,nl
+                    read(fnr,*) nam
+                    if( nam .ne. '' )then
+                        self%vols(i) = nam
+                    endif
+                end do
+                close(fnr)
+            end subroutine read_vols
 
-          subroutine check_file( file, var, allowed1, allowed2, notAllowed )
-              character(len=*),           intent(in)  :: file
-              character(len=*),           intent(out) :: var
-              character(len=1), optional, intent(in)  :: allowed1, allowed2, notAllowed
-              character(len=1) :: file_descr
-              logical          :: raise_exception
-              if( cline%defined(file) )then
-                  var = cline%get_carg(file)
-                  DebugPrint 'var = ', var
-                  file_descr = fname2format(var)
-                  DebugPrint 'file_descr = ', file_descr
-                  raise_exception = .false.
-                  if( present(allowed1) )then
-                      if( allowed1 == file_descr ) then
-                          if( present(allowed2) )then
-                              if( allowed2 == file_descr ) then
-                                  ! all good
-                              else
-                                  raise_exception = .true.
-                              endif
-                          endif
-                      else
-                          raise_exception = .true.
-                      endif
-                  endif
-                  if( present(notAllowed) )then
-                      if( notAllowed == file_descr ) raise_exception = .true.
-                  endif
-                  if( raise_exception )then
-                      write(*,*) 'This format: ', file_descr, ' is not allowed for this file: ', var
-                      stop
-                  endif
-                  select case(file_descr)
-                      case ('I')
-                          stop 'Support for IMAGIC files is not yet implemented!'
-                      case ('M')
-                          ! MRC files are supported
-                          cntfile = cntfile+1
-                          checkupfile(cntfile) = 'M'
-                      case ('S')
-                          ! SPIDER files are supported
-                          cntfile = cntfile+1
-                          checkupfile(cntfile) = 'S'
-                      case ('N')
-                          stop 'This file format is not supported by SIMPLE; simple_params::check_file'
-                      case ('T')
-                          ! text files are supported
-                      case ('B')
-                          ! binary files are supported
-                      case DEFAULT
-                          stop 'This file format is not supported by SIMPLE; simple_params::check_file'
-                  end select
-                  DebugPrint file, '=', var
-              endif
-          end subroutine check_file
+            subroutine check_file( file, var, allowed1, allowed2, notAllowed )
+                character(len=*),           intent(in)  :: file
+                character(len=*),           intent(out) :: var
+                character(len=1), optional, intent(in)  :: allowed1, allowed2, notAllowed
+                character(len=1) :: file_descr
+                logical          :: raise_exception
+                if( cline%defined(file) )then
+                    var = cline%get_carg(file)
+                    DebugPrint 'var = ', var
+                    file_descr = fname2format(var)
+                    DebugPrint 'file_descr = ', file_descr
+                    raise_exception = .false.
+                    if( present(allowed1) )then
+                        if( present(allowed2) )then
+                            if( allowed1 == file_descr .or. allowed2 == file_descr )then
+                                ! all good
+                            else
+                                raise_exception = .true.
+                            endif
+                        else
+                            if( allowed1 /= file_descr ) raise_exception = .true.
+                        endif
+                    endif
+                    if( present(notAllowed) )then
+                        if( notAllowed == file_descr ) raise_exception = .true.
+                    endif
+                    if( raise_exception )then
+                        write(*,*) 'This format: ', file_descr, ' is not allowed for this file: ', var
+                        stop
+                    endif
+                    select case(file_descr)
+                        case ('I')
+                            stop 'Support for IMAGIC files is not yet implemented!'
+                        case ('M')
+                            ! MRC files are supported
+                            cntfile = cntfile+1
+                            checkupfile(cntfile) = 'M'
+                        case ('S')
+                            ! SPIDER files are supported
+                            cntfile = cntfile+1
+                            checkupfile(cntfile) = 'S'
+                        case ('N')
+                            stop 'This file format is not supported by SIMPLE; simple_params::check_file'
+                        case ('T')
+                            ! text files are supported
+                        case ('B')
+                            ! binary files are supported
+                        case DEFAULT
+                            stop 'This file format is not supported by SIMPLE; simple_params::check_file'
+                    end select
+                    DebugPrint file, '=', var
+                endif
+            end subroutine check_file
 
-          subroutine check_file_formats( allow_mix )
-              logical, intent(in) :: allow_mix
-              integer :: i, j
-              if( cntfile > 0 )then
-                  do i=1,cntfile
-                      do j=1,cntfile
-                          if( i == j ) cycle
-                          if( checkupfile(i) == checkupfile(j) )then
-                              ! all ok
-                          else
-                              if( .not. allow_mix )then
-                                  stop 'The inputted file names have nonconforming format (mixed formats not yet allowed)!'
-                              endif
-                          endif
-                      end do
-                  end do
-                  select case(checkupfile(1))
-                      case('M')
-                          self%ext = '.mrc'
-                      case('S')
-                          self%ext = '.spi'
-                      case('D')
-                          self%ext = '.mrc'
-                      case('B')
-                          self%ext = '.mrc'
-                      case DEFAULT
-                          stop 'This file format is not supported by SIMPLE; check_file_formats; simple_params'
-                  end select
-              endif
-          end subroutine check_file_formats
+            subroutine check_file_formats( allow_mix )
+                logical, intent(in) :: allow_mix
+                integer :: i, j
+                if( cntfile > 0 )then
+                    do i=1,cntfile
+                        do j=1,cntfile
+                            if( i == j ) cycle
+                            if( checkupfile(i) == checkupfile(j) )then
+                                ! all ok
+                            else
+                                if( .not. allow_mix )then
+                                    stop 'The inputted file names have nonconforming format (mixed formats not yet allowed)!'
+                                endif
+                            endif
+                        end do
+                    end do
+                    select case(checkupfile(1))
+                        case('M')
+                            self%ext = '.mrc'
+                        case('S')
+                            self%ext = '.spi'
+                        case('D')
+                            self%ext = '.mrc'
+                        case('B')
+                            self%ext = '.mrc'
+                        case DEFAULT
+                            stop 'This file format is not supported by SIMPLE; check_file_formats; simple_params'
+                    end select
+                endif
+            end subroutine check_file_formats
 
-          subroutine double_check_file_formats
-              character(len=STDLEN) :: fname
-              character(len=1)      :: form
-              integer :: funit
-              if( cntfile == 0 )then
-                  if( cline%defined('filetab') )then
-                      funit = get_fileunit()
-                      open(unit=funit, status='old', file=self%filetab)
-                      read(funit,'(a256)') fname
-                      form = fname2format(fname)
-                      close(funit)
-                      select case(form)
-                          case('M')
-                              self%ext = '.mrc'
-                          case('S')
-                              self%ext = '.spi'
-                          case('D')
-                              self%ext = '.mrc'
-                          case('B')
-                              self%ext = '.mrc'
-                          case DEFAULT
-                              write(*,*) 'format string is ', form
-                              stop 'This file format is not supported by SIMPLE; double_check_file_formats; simple_params'
-                      end select
-                  endif
-              endif
-          end subroutine double_check_file_formats
+            subroutine double_check_file_formats
+                character(len=STDLEN) :: fname
+                character(len=1)      :: form
+                integer :: funit
+                if( cntfile == 0 )then
+                    if( cline%defined('filetab') )then
+                        funit = get_fileunit()
+                        open(unit=funit, status='old', file=self%filetab)
+                        read(funit,'(a256)') fname
+                        form = fname2format(fname)
+                        close(funit)
+                        select case(form)
+                            case('M')
+                                self%ext = '.mrc'
+                            case('S')
+                                self%ext = '.spi'
+                            case('D')
+                                self%ext = '.mrc'
+                            case('B')
+                                self%ext = '.mrc'
+                            case DEFAULT
+                                write(*,*) 'format string is ', form
+                                stop 'This file format is not supported by SIMPLE; double_check_file_formats; simple_params'
+                        end select
+                    endif
+                endif
+            end subroutine double_check_file_formats
 
-          subroutine mkfnames
-              if( .not. cline%defined('outstk')  ) self%outstk  = 'outstk'//self%ext
-              if( .not. cline%defined('outstk2') ) self%outstk2 = 'outstk2'//self%ext
-              if( .not. cline%defined('outvol')  ) self%outvol  = 'outvol'//self%ext
-          end subroutine mkfnames
+            subroutine mkfnames
+                if( .not. cline%defined('outstk')  ) self%outstk  = 'outstk'//self%ext
+                if( .not. cline%defined('outstk2') ) self%outstk2 = 'outstk2'//self%ext
+                if( .not. cline%defined('outvol')  ) self%outvol  = 'outvol'//self%ext
+            end subroutine mkfnames
 
-          subroutine check_carg( carg, var )
-              character(len=*), intent(in)  :: carg
-              character(len=*), intent(out) :: var
-              if( cline%defined(carg) )then
-                  var = cline%get_carg(carg)
-                  DebugPrint carg, '=', var
-              endif
-          end subroutine check_carg
+            subroutine check_carg( carg, var )
+                character(len=*), intent(in)  :: carg
+                character(len=*), intent(out) :: var
+                if( cline%defined(carg) )then
+                    var = cline%get_carg(carg)
+                    DebugPrint carg, '=', var
+                endif
+            end subroutine check_carg
 
-          subroutine check_iarg( iarg, var )
-              character(len=*), intent(in)  :: iarg
-              integer, intent(out) :: var
-              if( cline%defined(iarg) )then
-                  var = nint(cline%get_rarg(iarg))
-                  DebugPrint iarg, '=', var
-              endif
-          end subroutine check_iarg
+            subroutine check_iarg( iarg, var )
+                character(len=*), intent(in)  :: iarg
+                integer, intent(out) :: var
+                if( cline%defined(iarg) )then
+                    var = nint(cline%get_rarg(iarg))
+                    DebugPrint iarg, '=', var
+                endif
+            end subroutine check_iarg
 
-          subroutine check_larg( larg, var )
-              character(len=*), intent(in)  :: larg
-              logical, intent(out) :: var
-              integer :: tmp
-              if( cline%defined(larg) )then
-                  tmp =  NINT( cline%get_rarg(larg) )
-                  var = tmp /= 0
-                  DebugPrint larg, '=', var
-              endif
-          end subroutine check_larg
+            subroutine check_larg( larg, var )
+                character(len=*), intent(in)  :: larg
+                logical, intent(out) :: var
+                integer :: tmp
+                if( cline%defined(larg) )then
+                    tmp =  NINT( cline%get_rarg(larg) )
+                    var = tmp /= 0
+                    DebugPrint larg, '=', var
+                endif
+            end subroutine check_larg
 
-          subroutine check_rarg( rarg, var )
-              character(len=*), intent(in)  :: rarg
-              real, intent(out) :: var
-              if( cline%defined(rarg) )then
-                  var = cline%get_rarg(rarg)
-                  DebugPrint rarg, '=', var
-              endif
-          end subroutine check_rarg
+            subroutine check_rarg( rarg, var )
+                character(len=*), intent(in)  :: rarg
+                real, intent(out) :: var
+                if( cline%defined(rarg) )then
+                    var = cline%get_rarg(rarg)
+                    DebugPrint rarg, '=', var
+                endif
+            end subroutine check_rarg
 
     end subroutine new
 

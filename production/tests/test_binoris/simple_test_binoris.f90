@@ -7,7 +7,7 @@ implicit none
 type(oris)           :: a, os_peak
 integer, allocatable :: parts(:,:)
 type(binoris)        :: bos
-integer              :: ipart, iptcl
+integer              :: ipart, iptcl, n_recs, n_peaks
 call a%new(10)
 call a%rnd_oris
 call a%write('oris1_facit.txt')

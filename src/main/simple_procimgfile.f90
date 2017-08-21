@@ -12,10 +12,10 @@ contains
 
     !>  \brief  is for raising exception
     subroutine raise_exception_imgfile( n, ldim, routine )
-        integer, intent(in) :: n            !< num of images
-        integer, intent(in) :: ldim(3)      !< logical dimensions
-        character(len=*)    :: routine      !< Error message caller
-        if( n < 1 .or. any(ldim == 0))then
+        integer, intent(in) :: n        !< num of images
+        integer, intent(in) :: ldim(3)  !< logical dimensions
+        character(len=*)    :: routine  !< Error message caller
+        if( n < 1 .or. any(ldim == 0) )then
             write(*,*) routine
             write(*,*) 'The input stack is corrupt!'
             write(*,*) 'Number of images: ', n

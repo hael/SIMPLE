@@ -14,11 +14,14 @@ private
 
 integer,               allocatable :: particle_locations(:,:)
 character(len=STDLEN), allocatable :: framenames(:)
-real,    parameter :: EPS=0.5
-logical, parameter :: DOPRINT=.true.
-type(image)        :: frame_img, reference, tmp_img
-integer            :: ldim(3), nframes, box, nx, ny, offset
-real               :: smpd, sxx, lp
+real,    parameter                 :: EPS=0.1
+logical, parameter                 :: DOPRINT=.true.
+integer, parameter                 :: CENRATE=50
+type(image)                        :: frame_img, reference, tmp_img, ptcl_target
+integer                            :: ldim(3), nframes, box, nx, ny, offset
+real                               :: smpd, sxx, lp, cenlp
+character(len=3)                   :: neg
+character(len=STDLEN)              :: fbody
 
 contains
 
@@ -29,17 +32,19 @@ contains
     !! \param offset_in offset input value
     !! \param smpd_in smpd input value
     !! \param lp_in lp input value
-    subroutine init_tracker( filetabname, boxcoord, box_in, offset_in, smpd_in, lp_in  )
-        character(len=*), intent(in) :: filetabname
-        integer,          intent(in) :: boxcoord(2), box_in, offset_in
-        real,             intent(in) :: smpd_in, lp_in
+    subroutine init_tracker( p, boxcoord )
+        use simple_params, only: params
+        class(params), intent(in) :: p
+        integer,       intent(in) :: boxcoord(2)
         integer :: alloc_stat, n
         ! set constants
-        box    = box_in
-        offset = offset_in
-        smpd   = smpd_in
-        lp     = lp_in
-        call read_filetable(filetabname, framenames)
+        box    = p%box
+        offset = p%offset
+        smpd   = p%smpd
+        lp     = p%lp
+        cenlp  = p%cenlp
+        neg    = p%neg
+        call read_filetable(p%filetab, framenames)
         nframes = size(framenames)
         call find_ldim_nptcls(framenames(1),ldim,n)
         if( n == 1 .and. ldim(3) == 1 )then
@@ -58,6 +63,7 @@ contains
         call frame_img%new(ldim, smpd)
         call tmp_img%new([box,box,1], smpd)
         call reference%new([box,box,1], smpd)
+        call ptcl_target%new([box,box,1], smpd)
         particle_locations(:,1) = boxcoord(1)
         particle_locations(:,2) = boxcoord(2)
     end subroutine init_tracker
@@ -87,10 +93,9 @@ contains
     end subroutine track_particle
     
     !> write results of time series tracker
-    subroutine write_tracked_series( fbody, neg )
+    subroutine write_tracked_series( fbody )
         use simple_filehandling, only: get_fileunit
         character(len=*), intent(in) :: fbody
-        character(len=*), intent(in) :: neg
         integer :: funit, iframe, xind, yind
         funit = get_fileunit()
         open(unit=funit, status='REPLACE', action='WRITE', file=trim(fbody)//'.box')
@@ -109,16 +114,18 @@ contains
 
     subroutine update_reference( iframe, pos )
         integer, intent(in) :: iframe, pos(2)
+        real :: xyz(3)
         call frame_img%window_slim(pos, box, tmp_img)
         call tmp_img%prenorm4real_corr(sxx)
         if( iframe == 1 )then
             reference = tmp_img
         else
-            ! IMPROVED
-            ! call reference%add(tmp_img)
-            ! call reference%div(2.0)
             call reference%mul(1.0 - EPS)
             call reference%add(tmp_img, EPS)
+        endif
+        if( mod(iframe,CENRATE) == 0 )then
+            ! center the reference
+            xyz = reference%center(cenlp, neg)
         endif
         call reference%write('refstack.mrc', iframe)
     end subroutine update_reference
@@ -134,10 +141,8 @@ contains
     subroutine refine_position( pos, pos_refined )
         integer, intent(in)  :: pos(2)
         integer, intent(out) :: pos_refined(2)
-        type(image) :: ptcl_target
         integer     :: xind, yind, xrange(2), yrange(2)
         real        :: corr, target_corr
-        call ptcl_target%new([box,box,1], smpd)
         ! set srch range
         xrange(1) = max(0,  pos(1) - offset)
         xrange(2) = min(nx, pos(1) + offset)
@@ -155,13 +160,14 @@ contains
                 endif
             end do
         end do
-        call ptcl_target%kill
     end subroutine refine_position
 
     subroutine kill_tracker
         deallocate(particle_locations, framenames)
         call frame_img%kill
         call reference%kill
+        call tmp_img%kill
+        call ptcl_target%kill
     end subroutine kill_tracker
 
 end module simple_tseries_tracker

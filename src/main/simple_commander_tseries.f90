@@ -131,14 +131,14 @@ contains
             &; simple_commander_tseries :: exec_tseries_track'
         endif
         do j=1,ndatlines
-            call init_tracker(p%filetab, nint(boxdata(j,1:2)), orig_box, p%offset, p%smpd, p%lp)
+            call init_tracker(p, nint(boxdata(j,1:2)))
             call track_particle
             if( cline%defined('ind') )then
                 if( .not. cline%defined('numlen') ) stop 'need numlen to be part of command line if ind is&
                 &; simple_commander_tseries :: exec_tseries_track'
-                call write_tracked_series(trim(p%fbody)//int2str_pad(p%ind,p%numlen), p%neg)
+                call write_tracked_series(trim(p%fbody)//int2str_pad(p%ind,p%numlen))
             else
-                call write_tracked_series(trim(p%fbody)//int2str_pad(j,numlen), p%neg)
+                call write_tracked_series(trim(p%fbody)//int2str_pad(j,numlen))
             endif
             call kill_tracker
         end do

@@ -4,7 +4,6 @@ use simple_defs
 use simple_jiffys
 implicit none
 
-public
 interface is_a_number
     module procedure is_a_number_1
     module procedure is_a_number_2
@@ -112,10 +111,6 @@ end interface
 
 logical, parameter,private :: warn=.false.
 
-!private :: warn, pi, cosedge_1, cosedge_2, cosedge_3, hardedge_1, hardedge_2,&
-!find_1, find_2, locate_1, locate_2, selec, selec_1, selec_2, hpsort_1, hpsort_2,&
-!hpsort_3, reverse_iarr, reverse_rarr,g reverse_carr
-
 contains
 
     ! JIFFYS
@@ -138,7 +133,7 @@ contains
     !! \param smpd sampling distance in angstroms (SI unit \f$ \si{\angstrom}= \si{1e-10}{\metre} \f$)
     !! \param mwkda molecular weight \f$ M_{\mathrm{molecule}} \f$ in kDa
     pure function nvoxfind_1( smpd, mwkda ) result( nvox )
-    real, intent(in) :: smpd             !< sampling distance
+        real, intent(in) :: smpd             !< sampling distance
         real, intent(in) :: mwkda            !< molecular weight
         integer          :: nvox             !< nr of voxels
         double precision , parameter :: prot_d = 1.43d0            ! g/cm**3

@@ -1558,7 +1558,6 @@ contains
         character(len=100) :: io_message
         integer :: file_stat, i, fnr, state, recsz
         if( .not. file_exists(orifile) )then
-            
             ERRORMSG( 'The file you are trying to read: '//trim(orifile)//' does not exist in cwd' )
             stop 'simple_oris :: read'
         endif
