@@ -6,7 +6,8 @@ use simple_params,      only: params
 use simple_optimizer,   only: optimizer
 use simple_opt_factory, only: opt_factory
 use simple_opt_spec,    only: opt_spec
-use simple_jiffys,      only: progress, alloc_err
+use simple_syslib,      only: alloc_errchk, simple_stop
+use simple_jiffys,      only: progress
 use simple_ori,         only: ori
 use simple_oris,        only: oris
 use simple_sym,         only: sym
@@ -61,8 +62,7 @@ contains
         call espace%new(NPROJ)
         ! make optimizer spec
         if( opt_str.ne.'simplex' .and. opt_str.ne.'de' .and. opt_str.ne.'oasis' )then
-            write(*,*) 'Unsupported minimizer in simple_comlin_srch; comlin_srch_init'
-            stop
+            HALT ('Unsupported minimizer in simple_comlin_srch; comlin_srch_init')
         else
             str_opt = opt_str
         endif
@@ -86,7 +86,7 @@ contains
             call ospec%specify(str_opt, 5, ftol=1e-4, gtol=1e-4, limits=optlims, nrestarts=1, maxits=30)
             call ospec%set_costfun(comlin_pairsrch_cost)
         else
-            stop 'Unsupported mode; simple_comlin_srch::comlin_srch_init'
+            HALT ('Unsupported mode; simple_comlin_srch::comlin_srch_init')
         endif
         call ofac%new(ospec, nlopt)
     end subroutine comlin_srch_init

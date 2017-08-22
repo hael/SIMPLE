@@ -37,6 +37,7 @@ contains
     real(dp)    :: etime,sysclockrate
     integer(dp) ::  t1,t2
     integer(dp) :: i
+    integer :: io_stat
 
     if(present(be_verbose)) verbose=be_verbose
     c=.1
@@ -100,7 +101,7 @@ contains
 
     call reset_timer()
     VerbosePrint "5.  Testing empty tic() lhs "
-    open (10,file=DEV_NULL)
+    open (10,file=DEV_NULL, IOSTAT=io_stat)
     if (be_verbose) write (10,'(A,1i20)') "    Inline tic ",tic()
     ! if(be_verbose) write (*, '(A,1d20.10)') "2. t1 = ", real(t1, dp)
     c=.1
@@ -192,5 +193,31 @@ contains
     write (*,'(A,1d20.10)') "    Average over 3 (sec):", SUM(elapsed,DIM=1)/REAL(N,dp)
     write (*,'(A,1d20.10)') "    Min time (sec) ", MINVAL(elapsed,DIM=1)
     write (*,"(A)") ' '
-  end function test_loop
+end function test_loop
+
+  ! from GCC test suite -- F2008
+   subroutine test_precision_timer ( )
+       integer(1)    :: count1, irate1, mymax1
+       integer(2)    :: count2, irate2, mymax2
+       integer(4)    :: count4, irate4, mymax4
+       integer(8)    :: count8, irate8, mymax8
+       real(4)       :: rrate4
+       
+       call system_clock(count=count1, count_rate=irate4, count_max=mymax4)
+       if (count1.ne.-127.or.irate4.ne.0.or.mymax4.ne.0) call abort
+       call system_clock(count=count1, count_rate=rrate4, count_max=mymax1)
+       if (count1.ne.-127.or.rrate4.ne.0.0.or.mymax4.ne.0) call abort
+       call system_clock(count=count2, count_rate=irate2, count_max=mymax2)
+       if (count2.ne.-32767.or.irate2.ne.0.or.mymax2.ne.0) call abort
+       call system_clock(count=count2, count_rate=rrate4, count_max=mymax2)
+       if (count2.ne.-32767.or.rrate4.ne.0.0.or.mymax2.ne.0) call abort
+       call system_clock(count=count4, count_rate=irate4, count_max=mymax4)
+       if (irate4.ne.1000.or.mymax4.ne.huge(0_4)) call abort
+       call system_clock(count=count4, count_rate=rrate4, count_max=mymax4)
+       if (rrate4.ne.1000.0.or.mymax4.ne.huge(0_4)) call abort
+       call system_clock(count=count8, count_rate=irate8, count_max=mymax8)
+       if (irate8.ne.1000000000.or.mymax4.ne.huge(0_8)) call abort
+
+  end subroutine test_precision_timer
+
 end module simple_timer_basic_test

@@ -1,10 +1,7 @@
 ! various mathematical subroutines and functions
 module simple_math
 use simple_defs
-use simple_jiffys
-#ifdef PGI
-! use libm
-#endif
+use simple_syslib, only: alloc_errchk
 implicit none
 public
 interface is_a_number
@@ -113,9 +110,9 @@ interface csq
 end interface
 
 
-#ifdef PGI
-include 'lib3f.h'
-#endif
+!#ifdef PGI
+!include 'lib3f.h'
+!#endif
 
 
 
@@ -191,23 +188,6 @@ contains
         deg = (rad/DPI)*180.d0
     end function
 
-    !> \brief   Convert acceleration voltage in kV into electron wavelength in Angstroms
-    !! \details  DeBroglie showed that  \f$ \lambda = \frac{h}{mv} \f$, where
-    !! h is Planck’s constant  \f$ \SI{6.626e-34}{\joule\second} \f$
-    !! mv is momentum (mass times velocity), which is  \f$ \sqrt{2 m_e q V} \f$
-    !! mass of an electron is \f$ \SI{9.1e-31}{\kilo\gram} \f$ and charge of an electron is  \f$ \SI{1.6e-19}{\coulomb} \f$
-    !! Equation for converting acceleration voltage into electron wavelength in Angstroms (\f$ \si{\angstrom} \f$) :
-    !! \f[ \lambda (\si{\metre}) =  \frac{12.26 \times 10^{-10}}{\sqrt{V}} \f]
-    !! Due to relativistic effects Lorentz law applies:
-    !!  \f[ \lambda (\si{\metre}) =  \frac{12.26 \times 10^{-10}}{\sqrt{V}} \times \frac{1}{\sqrt{1+\frac{e V}{2 m_e c^2}}} \f]
-    !! where c is the speed of light,\f$ \sim \SI{3e8}{\metre\per\second} \f$
-    !!  \f[ \lambda (\si{\angstrom}) =  \frac{12.26}{\sqrt{\left(10^3 kV + 0.9784 \times (10^3 kV)^2 \right) / 10^6 }} 
-    !! \f]
-    pure real function kV2wl( kV )
-        real, intent(in):: kV !< acceleration voltage in \f$\si{\kilo\volt}\f$
-        kV2wl = 12.26/sqrt(1000.0*kV+0.9784*(1000.0*kV)**2/(10.0**6.0))
-    end function
-
     !>   converts from correlation to euclidean distance
     pure function corr2dist( corr ) result( dist )
         real, intent(in) :: corr   !< query correlation
@@ -247,36 +227,44 @@ contains
     subroutine check4nans3D_1( arr )
         real, intent(in)  :: arr(:,:,:)   !< query vector
         real, allocatable :: arr1d(:)
+        integer :: alloc_stat 
         arr1d = pack(arr, .true.)
         call check4nans_1(arr1d)
-        deallocate(arr1d)
+        deallocate(arr1d, stat=alloc_stat )
+        call alloc_errchk('In: check4nans3D_1 module: simple_math', alloc_stat)
     end subroutine
 
     !>    is for checking the numerical soundness of an vector
     subroutine check4nans3D_2( arr )
         complex, intent(in)  :: arr(:,:,:)    !< query vector
         complex, allocatable :: arr1d(:)
+        integer :: alloc_stat
         arr1d = pack(arr, .true.)
         call check4nans_2(arr1d)
-        deallocate(arr1d)
+        deallocate(arr1d, stat=alloc_stat )
+        call alloc_errchk('In: check4nans3D_2; get_hist', alloc_stat)
     end subroutine
 
     !>    is for checking the numerical soundness of an vector
     subroutine check4nans2D_1( arr )
         real, intent(in)  :: arr(:,:)   !< query vector
         real, allocatable :: arr1d(:)
+        integer :: alloc_stat
         arr1d = pack(arr, .true.)
         call check4nans_1(arr1d)
-        deallocate(arr1d)
+        deallocate(arr1d, stat=alloc_stat )
+        call alloc_errchk('In: check4nans2D_1; get_hist', alloc_stat)
     end subroutine
 
     !>    is for checking the numerical soundness of an vector
     subroutine check4nans2D_2( arr )
         complex, intent(in)  :: arr(:,:)   !< query vector
         complex, allocatable :: arr1d(:)
+        integer :: alloc_stat
         arr1d = pack(arr, .true.)
         call check4nans_2(arr1d)
-        deallocate(arr1d)
+        deallocate(arr1d, stat=alloc_stat )
+        call alloc_errchk('In: check4nans2D_2; get_hist', alloc_stat)
     end subroutine
 
     !>    is for checking the numerical soundness of an vector
@@ -513,7 +501,7 @@ contains
         ndat = size(dat)
         if( allocated(labels) ) deallocate(labels)
         allocate( dat_sorted(ndat), mask(ndat), labels(ndat), stat=alloc_stat )
-        call alloc_err("sortmeans; simple_math", alloc_stat)
+        call alloc_errchk("sortmeans; simple_math", alloc_stat)
         ! initialization by sorting
         dat_sorted = dat
         call hpsort(ndat, dat_sorted)
@@ -546,6 +534,7 @@ contains
             if( changes == 0 ) exit
         end do
         deallocate(dat_sorted, mask)
+        call alloc_errchk("sortmeans end; simple_math ", alloc_stat)
     end subroutine sortmeans
 
     !>   calculates the number of common integers in two arrays
@@ -1478,7 +1467,7 @@ contains
         real, allocatable   :: a(:)
         integer             :: alloc_stat
         allocate( a(n), stat=alloc_stat )
-        call alloc_err("In: zeros_1; simple_math", alloc_stat)
+        call alloc_errchk("In: zeros_1; simple_math", alloc_stat)
         a = 0.
     end function
 
@@ -1488,7 +1477,7 @@ contains
         real, allocatable   :: a(:,:)
         integer             :: alloc_stat
         allocate( a(n1,n2), stat=alloc_stat )
-        call alloc_err("In: zeros_2; simple_math", alloc_stat)
+        call alloc_errchk("In: zeros_2; simple_math", alloc_stat)
         a = 0.
     end function
 
@@ -2120,7 +2109,7 @@ contains
         if( allocated(coords) ) deallocate(coords)
         if( allocated(angtab) ) deallocate(angtab)
         allocate( coords(nradial_lines,kfromto(1):kfromto(2),2), angtab(nradial_lines), stat=alloc_stat )
-        call alloc_err("In: gen_polar_coords_1; simple_math", alloc_stat)
+        call alloc_errchk("In: gen_polar_coords_1; simple_math", alloc_stat)
         dang = twopi/real(nradial_lines)
         do i=1,nradial_lines
             angtab(i) = real(i-1)*dang
@@ -2148,7 +2137,7 @@ contains
         n = size(xa)
         if( n /= size(ya) ) stop 'incompatible array sizes; ratint; simple_math'
         allocate(c(n), d(n), stat=alloc_stat)
-        call alloc_err("In: ratint; simple_math", alloc_stat)
+        call alloc_errchk("In: ratint; simple_math", alloc_stat)
         ns = 1
         hh = abs(x-xa(1))
         do i=1,n
@@ -2185,7 +2174,8 @@ contains
             endif
             y = y+dy
         end do
-        deallocate(c,d)
+        deallocate(c,d,stat=alloc_stat)
+        call alloc_errchk("In: ratint; simple_math", alloc_stat)
     end subroutine
 
     !>    quadratic interpolation in 2D, from spider
@@ -2275,9 +2265,10 @@ contains
         integer, intent(in)  :: npeaks
         integer, allocatable :: peakpos(:)
         logical, allocatable :: mask(:)
-        integer :: n, ipeak, loc(1)
+        integer :: n, ipeak, loc(1), alloc_stat
         n = size(vals)
         allocate(peakpos(npeaks), mask(n))
+        call alloc_errchk("In: peakfinder; simple_math", alloc_stat)
         mask = .true.
         do ipeak=1,npeaks
             loc = maxloc(vals, mask=mask)
@@ -2682,7 +2673,7 @@ contains
             pos2 = pos1
         endif
         allocate( copy(n), stat=alloc_stat )
-        call alloc_err('In: median, module: simple_math', alloc_stat)
+        call alloc_errchk('In: median, module: simple_math', alloc_stat)
         copy = arr
         if( pos1 == pos2 )then
             val  = selec(pos1,n,copy)
@@ -2691,7 +2682,8 @@ contains
             val2 = selec(pos2,n,copy)
             val  = (val1+val2)/2.
         endif
-        deallocate(copy)
+        deallocate(copy, stat=alloc_stat )
+        call alloc_errchk('OUT: median, module: simple_math', alloc_stat)
     end function
 
     !>   for calculating the median

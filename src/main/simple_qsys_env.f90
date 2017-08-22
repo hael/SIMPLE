@@ -7,7 +7,7 @@ use simple_chash,        only: chash
 use simple_params,       only: params
 use simple_qsys_funs     ! use all in there
 use simple_defs          ! use all in there   
-use simple_filehandling  ! use all in there
+use simple_fileio        ! use all in there
 implicit none
 #include "simple_local_flags.inc"
 

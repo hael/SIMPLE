@@ -1,6 +1,7 @@
 ! The Nelder-Mead simplex method for continuous function minimisation
 module simple_simplex_opt
 use simple_optimizer, only: optimizer
+use simple_syslib,    only: alloc_errchk, simple_stop
 implicit none
 
 public :: simplex_opt
@@ -24,14 +25,13 @@ contains
     !> \brief  is a constructor
     subroutine new_simplex_opt( self, spec )
         use simple_opt_spec, only: opt_spec
-        use simple_jiffys,   only: alloc_err
         class(simplex_opt), intent(inout) :: self !< instance
         class(opt_spec),    intent(inout) :: spec !< specification
         integer                           :: alloc_stat
         real                              :: x
         call self%kill
         allocate(self%p(spec%ndim+1,spec%ndim), self%y(spec%ndim+1), self%pb(spec%ndim), stat=alloc_stat)
-        call alloc_err("In: new_simplex_opt", alloc_stat)
+        call alloc_errchk("In: new_simplex_opt", alloc_stat)
         ! initialize best cost to huge number
         self%yb = huge(x)
         self%exists = .true. ! indicates existence
@@ -51,7 +51,7 @@ contains
         integer                           :: niters(spec%nrestarts)
         logical                           :: arezero(spec%ndim)
         if( .not. associated(spec%costfun) )then
-            stop 'cost function not associated in opt_spec; simplex_minimize; simple_simplex_opt'
+            HALT ('cost function not associated in opt_spec; simplex_minimize; simple_simplex_opt')
         endif
         ! test if best point in spec is set
         arezero = .false.
@@ -108,9 +108,11 @@ contains
     !> \brief  is a destructor
     subroutine kill_simplex_opt( self )
         class(simplex_opt), intent(inout) :: self
-        if( allocated(self%p) )  deallocate(self%p)
-        if( allocated(self%y) )  deallocate(self%y)
-        if( allocated(self%pb) ) deallocate(self%pb)
+        integer                           :: alloc_stat
+        if( allocated(self%p) )  deallocate(self%p, stat=alloc_stat)
+        if( allocated(self%y) )  deallocate(self%y, stat=alloc_stat)
+        if( allocated(self%pb) ) deallocate(self%pb, stat=alloc_stat)
+        call alloc_errchk("In: kill_simplex_opt", alloc_stat)
         self%exists = .false.
     end subroutine kill_simplex_opt
 

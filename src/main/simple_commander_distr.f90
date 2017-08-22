@@ -1,13 +1,15 @@
 ! concrete commander: routines for managing distributed SIMPLE execution
 module simple_commander_distr
 use simple_defs
+use simple_syslib,         only: alloc_errchk
 use simple_cmdline,        only: cmdline
 use simple_params,         only: params
 use simple_build,          only: build
 use simple_commander_base, only: commander_base
 use simple_strings,        only: int2str, int2str_pad
-use simple_filehandling    ! use all in there
-use simple_jiffys          ! use all in there
+use simple_fileio,         only: fopen,fclose, fileio_errmsg
+use simple_imgfile,        only: find_ldim_nptcls
+use simple_jiffys,         only: simple_end, progress
 implicit none
 
 public :: merge_algndocs_commander
@@ -48,21 +50,18 @@ contains
         class(merge_algndocs_commander), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline
         type(params)          :: p
-        integer               :: i, j, nj, numlen, funit, funit_merge, ios, nentries_all
+        integer               :: i, j, nj, numlen, funit, funit_merge, io_stat, nentries_all
         character(len=STDLEN) :: fname
         integer, allocatable  :: parts(:,:)
         character(len=1024)   :: line
         p = params(cline) ! parameters generated
         parts = split_nobjs_even(p%nptcls, p%ndocs)
-        funit_merge = get_fileunit()
-        open(unit=funit_merge, file=p%outfile, iostat=ios, status='replace',&
-        &action='write', position='append', access='sequential')
-        if( ios /= 0 )then
-            write(*,*) "Error opening file", trim(adjustl(p%outfile))
-            stop
+        if(.not.fopen(funit_merge, file=p%outfile, iostat=io_stat, status='replace',&
+             &action='write', position='append', access='sequential'))then
+            call fileio_errmsg("Error opening file"//trim(adjustl(p%outfile)), io_stat)
         endif
         numlen = len(int2str(p%ndocs))
-        funit  = get_fileunit()
+        
         do i=1,p%ndocs
             fname = trim(adjustl(p%fbody))//int2str_pad(i,numlen)//'.txt'
             nj = nlines(fname)
@@ -73,18 +72,19 @@ contains
                 write(*,*) 'filename: ', trim(fname)
                 stop 'number of lines in file not consistent with the size of the partition'
             endif
-            open(unit=funit, file=fname, iostat=ios, status='old', action='read', access='sequential')
-            if( ios /= 0 )then
-                write(*,*) "Error opening file", trim(adjustl(fname))
+            if(.not.fopen(funit, file=fname, iostat=io_stat, status='old', action='read', access='sequential'))then
+                call fileio_errmsg("Error opening file "//trim(adjustl(fname)), io_stat)
                 stop
             endif
             do j=1,nj
                 read(funit,fmt='(A)') line
                 write(funit_merge,fmt='(A)') trim(line)
             end do
-            close(funit)
+            if(.not.fclose(funit, iostat=io_stat))&
+                 call fileio_errmsg("Error closing file ", io_stat)
         end do
-        close(funit_merge)
+        if(.not.fclose(funit_merge, iostat=io_stat))&
+             call fileio_errmsg("Error closing outfile ", io_stat)
         ! end gracefully
         call simple_end('**** SIMPLE_MERGE_ALGNDOCS NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_merge_algndocs
@@ -99,14 +99,15 @@ contains
         integer :: filnum, io_stat
         p      = params(cline) ! parameters generated
         nnmat  = merge_nnmat_from_parts(p%nptcls, p%nparts, p%nnn)
-        filnum = get_fileunit()
-        open(unit=filnum, status='REPLACE', action='WRITE', file='nnmat.bin', access='STREAM')
+        if(.not.fopen(filnum, status='REPLACE', action='WRITE', file='nnmat.bin', access='STREAM', iostat=io_stat))&
+             call fileio_errmsg('simple_merge_nnmat ; fopen error when opening nnmat.bin  ', io_stat)
         write(unit=filnum,pos=1,iostat=io_stat) nnmat
         if( io_stat .ne. 0 )then
             write(*,'(a,i0,a)') 'I/O error ', io_stat, ' when writing to nnmat.bin'
             stop 'I/O error; simple_merge_nnmat'
         endif
-        close(filnum)
+        if(.not.fclose(filnum, iostat=io_stat))&
+             call fileio_errmsg('simple_merge_nnmat ; fopen error when closing nnmat.bin  ', io_stat)
         ! end gracefully
         call simple_end('**** SIMPLE_MERGE_NNMAT NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_merge_nnmat
@@ -120,14 +121,16 @@ contains
         integer           :: filnum, io_stat
         p      = params(cline) ! parameters generated
         simmat = merge_similarities_from_parts(p%nptcls, p%nparts)
-        filnum = get_fileunit()
-        open(unit=filnum, status='REPLACE', action='WRITE', file='smat.bin', access='STREAM')
+       
+        if(.not.fopen(filnum, status='REPLACE', action='WRITE', file='smat.bin', access='STREAM', iostat=io_stat))&
+             call fileio_errmsg('simple_merge_nnmat ; fopen error when opening smat.bin  ', io_stat)
         write(unit=filnum,pos=1,iostat=io_stat) simmat
         if( io_stat .ne. 0 )then
             write(*,'(a,i0,a)') 'I/O error ', io_stat, ' when writing to smat.bin'
             stop 'I/O error; simple_merge_similarities'
         endif
-        close(filnum)
+         if(.not.fclose(filnum, iostat=io_stat))&
+             call fileio_errmsg('simple_merge_nnmat ; fopen error when opening smat.bin  ', io_stat)
         ! end gracefully
         call simple_end('**** SIMPLE_MERGE_SIMILARITIES NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_merge_similarities
@@ -148,6 +151,7 @@ contains
     subroutine exec_split( self, cline )
         use simple_map_reduce ! use all in there
         use simple_image, only: image
+        use simple_jiffys,          only: progress
         class(split_commander), intent(inout) :: self
         class(cmdline),         intent(inout) :: cline
         type(params)         :: p

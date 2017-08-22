@@ -1,5 +1,5 @@
 program simple_test_units
-use simple_syscalls          ! use all in there
+use simple_syslib          ! use all in there
 use simple_defs              ! use all in there
 use simple_testfuns          ! use all in there
 use simple_rnd               ! use all in there

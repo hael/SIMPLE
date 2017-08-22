@@ -9,7 +9,7 @@ use simple_image,      only: image
 use simple_ori,        only: ori
 use simple_oris,       only: oris
 use simple_params,     only: params
-use simple_jiffys,     only: alloc_err
+use simple_syslib,     only: alloc_errchk
 use simple_math,       only: sqwin_3d
 implicit none
 
@@ -71,7 +71,7 @@ contains
                                 &cych(self%ldim_exp(1,1):self%ldim_exp(1,2)),&
                                 &cyck(self%ldim_exp(2,1):self%ldim_exp(2,2)),&
                                 &cycm(self%ldim_exp(3,1):self%ldim_exp(3,2)), stat=alloc_stat)
-        call alloc_err("In: expand_cmat; simple_projector", alloc_stat)
+        call alloc_errchk("In: expand_cmat; simple_projector", alloc_stat)
         ! pre-compute addresses in 2nd and 3rd dimension
         do h = self%ldim_exp(1,1),self%ldim_exp(1,2)
             cych(h) = h

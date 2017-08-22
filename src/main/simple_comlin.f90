@@ -45,7 +45,7 @@ contains
     subroutine new( self, a, fpls, lp )
         use simple_oris,   only: oris
         use simple_image,  only: image
-        use simple_jiffys, only: alloc_err
+        use simple_syslib, only: alloc_errchk
         class(comlin),        intent(inout) :: self    !< object
         class(oris),  target, intent(in)    :: a       !< orientations
         class(image), target, intent(in)    :: fpls(:) !< Fourier planes

@@ -6,7 +6,7 @@ use simple_params,         only: params
 use simple_build,          only: build
 use simple_commander_base, only: commander_base
 use simple_strings,        only: int2str, int2str_pad
-use simple_filehandling    ! use all in there
+use simple_fileio          ! use all in there
 use simple_jiffys          ! use all in there
 implicit none
 
@@ -87,18 +87,19 @@ contains
         call b%build_general_tbox(p, cline, do3d=.false.)! general objects built
         ! obtain similarity matrix
         allocate(smat(p%nptcls,p%nptcls), stat=alloc_stat)
-        call alloc_err('In: simple_cluster_smat, 1', alloc_stat)
+        call alloc_errchk('In: simple_cluster_smat, 1', alloc_stat)
         smat = 1.
-        funit = get_fileunit()
-        open(unit=funit, status='OLD', action='READ', file=p%fname, access='STREAM')
+        if(.not.fopen(funit, status='OLD', action='READ', file=p%fname, access='STREAM',iostat=io_stat))&
+             call fileio_errmsg('commander_misc; cluster_smat fopen', io_stat)
         read(unit=funit,pos=1,iostat=io_stat) smat
         if( io_stat .ne. 0 )then
             write(*,'(a,i0,a)') 'I/O error ', io_stat, ' when reading: ', p%fname
-            stop 'I/O error; simple_cluster_smat'
+            HALT ( 'I/O error; simple_cluster_smat')
         endif
-        close(funit)
+        if(.not.fclose(funit,iostat=io_stat))&
+             call fileio_errmsg('commander_misc; cluster_smat fclose ', io_stat)
         allocate(validinds(2:p%ncls), stat=alloc_stat)
-        call alloc_err("In: simple_cluster_smat", alloc_stat)
+        call alloc_errchk("In: simple_cluster_smat", alloc_stat)
         validinds = 0
         ntot = (p%ncls-1)*NRESTARTS
         cnt = 0
@@ -332,10 +333,12 @@ contains
         call sympeaks%write('sympeaks.txt')
         call sympeaks%write(p%outfile)
         ! the end
-        fnr = get_fileunit()
-        open(unit=fnr, FILE='SYM_AGGREGATE_FINISHED', STATUS='REPLACE', action='WRITE', iostat=file_stat)
-        call fopen_err('In: commander_misc :: sym_aggregate', file_stat )
-        close( unit=fnr )
+        
+        if(.not.fopen(fnr, FILE='SYM_AGGREGATE_FINISHED', STATUS='REPLACE', action='WRITE', iostat=file_stat))&
+             call fileio_errmsg('commander_misc; sym_aggregate ', file_stat)
+        
+        if(.not.fclose( fnr, iostat=file_stat ))&
+             call fileio_errmsg('commander_misc; sym_aggregate ', file_stat)
         call simple_end('**** SIMPLE_SYM_AGGREGATE NORMAL STOP ****')
 
         contains

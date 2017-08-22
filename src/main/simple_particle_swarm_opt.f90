@@ -28,7 +28,7 @@ contains
 
     !> \brief  is a constructor
     subroutine new_particle_swarm( self, spec )
-        use simple_jiffys,   only: alloc_err
+        use simple_syslib,   only: alloc_errchk
         class(particle_swarm_opt), intent(inout) :: self !< instance
         class(opt_spec), intent(inout)           :: spec !< specification
         integer :: alloc_stat
@@ -36,7 +36,7 @@ contains
         call self%kill
         ! allocate
         allocate(self%swarm(spec%npop,spec%ndim), self%velocities(spec%npop,spec%ndim), stat=alloc_stat)
-        call alloc_err("In: new_particle_swarm_opt, 1", alloc_stat)
+        call alloc_errchk("In: new_particle_swarm_opt, 1", alloc_stat)
         self%exists = .true. ! indicates existence
         if( spec%debug ) write(*,*) 'created new particle swarm (spec debug)'
         DebugPrint 'created new particle swarm (instance)'

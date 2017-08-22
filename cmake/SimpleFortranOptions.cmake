@@ -186,7 +186,7 @@ elseif (${CMAKE_Fortran_COMPILER_ID} STREQUAL "Intel" OR Fortran_COMPILER_NAME M
   ## INTEL fortran
   #
   #############################################
-  set(EXTRA_FLAGS "${EXTRA_FLAGS} -fpp -I${MKLROOT}/include -list-line-len=264 -assume realloc_lhs -assume source_include -diag-enable=openmp,vec,par,error -diag-file=diagnostics.txt -diag-disable=warn -sox")
+  set(EXTRA_FLAGS "${EXTRA_FLAGS} -fpp -I${MKLROOT}/include -list-line-len=264 -assume realloc_lhs -assume source_include -diag-enable=openmp,vec,par,error -diag-file-append=diagnostics.txt -diag-disable=warn -sox")
   #
   set(CMAKE_AR                           "xiar")
   set(CMAKE_CPP_COMPILER                 "fpp")
@@ -236,7 +236,7 @@ elseif(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR Fortran_COMPILER_NAME MATC
   set(CUDA_USE_STATIC_CUDA_RUNTIME OFF)
   set(CUDA_rt_LIBRARY  /usr/lib/x86_64-linux-gnu/librt.so)
   ## PGI does not have the OpenMP proc_bind option
-  add_definitions("-Dproc_bind\\(close\\)=\"\"")  # disable proc_bind in OMP
+  add_definitions("-Dproc_bind\\(close\\)=\"\"")  # disable proc_bind in PGI  OMP
 
   if (PGI_LARGE_FILE_SUPPORT)
     set(CMAKE_EXE_LINKER_FLAGS          "-Mlfs ${CMAKE_EXE_LINKER_FLAGS}")
@@ -575,7 +575,10 @@ endif()
 #set(CMAKE_FCPP_FLAGS " -C -P ") # Retain comments due to fortran slash-slash
 #set(CMAKE_Fortran_CREATE_PREPROCESSED_SOURCE "${CMAKE_FCPP_COMPILER} <DEFINES> <INCLUDES> <FLAGS> -E <SOURCE> > <PREPROCESSED_SOURCE>")
 
-add_definitions(" -D__FILENAME__='\"$(notdir $<)\"'")
+add_definitions("-D__FILENAME__='\"$(notdir $<)\"'")
+add_definitions("-DHALT\\(X\\)='call simple_stop (X, __FILENAME__, __LINE__)'")
+
+
 
 # Override Fortran preprocessor
 # block constructs (F2008), unlimited polymorphism and variadic macros (not included in F2003 -- but is part of C99 )

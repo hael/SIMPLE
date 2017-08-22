@@ -31,7 +31,7 @@ contains
     
     !>  \brief  is a constructor
     subroutine new( self, N_in, ncls_in, S_in, o, minsim )
-        use simple_jiffys, only: alloc_err
+        use simple_syslib, only: alloc_errchk
         class(shc_cluster), intent(inout) :: self
         integer,            intent(in)    :: N_in, ncls_in
         real, target,       intent(in)    :: S_in(N_in,N_in)
@@ -49,7 +49,7 @@ contains
             self%MINS = -1.
         endif
         allocate(self%labels(self%N), self%SPS(self%N), stat=alloc_stat)
-        call alloc_err('In: nsimple_shc_cluster::new', alloc_stat)
+        call alloc_errchk('In: nsimple_shc_cluster::new', alloc_stat)
         self%labels = 0
         self%SPS    = 0.
         self%existence = .true.

@@ -18,7 +18,7 @@ use simple_timer_basic_test
 use simple_timer_profile_test
 use simple_cmdline, only: cmdline
 use simple_strings, only: str2real
-use simple_syscalls
+use simple_syslib
 implicit none
 type(cmdline)     :: cline
 real              :: starttime, stoptime

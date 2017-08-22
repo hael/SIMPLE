@@ -31,6 +31,7 @@ contains
         use simple_qsys_funs,  only: qsys_job_finished
         use simple_strings,    only: int2str_pad
         use simple_projector,  only: projector
+        use simple_fileio,     only: del_file
         !$ use omp_lib
         !$ use omp_lib_kinds
         class(build),   intent(inout) :: b               !< build object
@@ -127,7 +128,7 @@ contains
             ! PREP BATCH
             allocate(pftccs(fromp:top), cont3Dadasrch(fromp:top),&
             &batch_imgs(fromp:top), stat=alloc_stat)
-            call alloc_err('In pcont3D_matcher::pcont3D_exec',alloc_stat)
+            call alloc_errchk('In pcont3D_matcher::pcont3D_exec',alloc_stat)
             do iptcl = fromp, top
                 state = nint(b%a%get(iptcl, 'state'))
                 if(state == 0)cycle

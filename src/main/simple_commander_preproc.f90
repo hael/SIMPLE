@@ -1,15 +1,17 @@
 ! concrete commander: pre-processing routines
 module simple_commander_preproc
 use simple_defs
-use simple_jiffys          ! use all in there
-use simple_filehandling    ! use all in there
+use simple_jiffys         ! use all in there
+use simple_fileio         ! use all in there
 use simple_strings,        only: int2str, int2str_pad
-use simple_syscalls,       only: exec_cmdline
+use simple_syslib,         only: exec_cmdline, simple_stop
 use simple_cmdline,        only: cmdline
 use simple_params,         only: params
 use simple_build,          only: build
 use simple_commander_base, only: commander_base
 use simple_strings,        only: int2str, int2str_pad
+use simple_imgfile,        only: find_ldim_nptcls
+
 implicit none
 
 public :: preproc_commander
@@ -650,32 +652,33 @@ contains
         end do
         if( file_exists('corrmat_select.bin') )then
             allocate(correlations(nsel,nall), stat=alloc_stat)
-            call alloc_err('In: exec_select; simple_commander_preproc', alloc_stat)
+            call alloc_errchk('In: exec_select; simple_commander_preproc', alloc_stat)
             ! read matrix
-            funit = get_fileunit()
-            open(unit=funit, status='OLD', action='READ', file='corrmat_select.bin', access='STREAM')
+            
+            if(.not.fopen(funit, status='OLD', action='READ', file='corrmat_select.bin', access='STREAM', iostat=io_stat))&
+             call fileio_errmsg('simple_commander_preproc ; fopen error when opening corrmat_select.bin  ', io_stat)
             read(unit=funit,pos=1,iostat=io_stat) correlations
             ! Check if the read was successful
-            if( io_stat .ne. 0 )then
-                write(*,'(a,i0,2a)') '**ERROR(exec_select): I/O error ',&
-                io_stat, ' when reading corrmat_select.bin. Remove the file to override the memoization.'
-                stop 'I/O error; exec_select; simple_commander_preproc'
+            if(io_stat/=0) then
+                call fileio_errmsg('**ERROR(simple_commander_preproc): I/O error reading corrmat_select.bin. Remove the file to override the memoization.', io_stat)
             endif
-            close(funit)
+ 
+            if(.not.fclose(funit, iostat=io_stat))&
+             call fileio_errmsg('simple_commander_preproc ; fopen error when closing corrmat_select.bin  ', io_stat)
         else
             write(*,'(a)') '>>> CALCULATING CORRELATIONS'
             call calc_cartesian_corrmat(imgs_sel, imgs_all, correlations)
             ! write matrix
-            funit = get_fileunit()
-            open(unit=funit, status='REPLACE', action='WRITE', file='corrmat_select.bin', access='STREAM')
+            
+            if(.not.fopen(funit, status='REPLACE', action='WRITE', file='corrmat_select.bin', access='STREAM', iostat=io_stat))&
+                 call fileio_errmsg('simple_commander_preproc ; fopen error when opening corrmat_select.bin  ', io_stat)
             write(unit=funit,pos=1,iostat=io_stat) correlations
             ! Check if the write was successful
-            if( io_stat .ne. 0 )then
-                write(*,'(a,i0,2a)') '**ERROR(exec_select): I/O error ',&
-                io_stat, ' when writing to corrmat_select.bin'
-                stop 'I/O error; exec_select; simple_commander_preproc'
+            if(io_stat/=0) then
+                call fileio_errmsg('**ERROR(simple_commander_preproc): I/O error writing corrmat_select.bin. Remove the file to override the memoization.', io_stat)
             endif
-            close(funit)
+            if(.not.fclose(funit, iostat=io_stat))&
+                 call fileio_errmsg('simple_commander_preproc ; fopen error when closing corrmat_select.bin  ', io_stat)
         endif
         ! find selected
         ! in addition to the index array, also make a logical array encoding the selection (to be able to reject)
@@ -691,12 +694,12 @@ contains
             ! read filetable
             call read_filetable(p%filetab, imgnames)
             if( size(imgnames) /= nall ) stop 'nr of entries in filetab and stk not consistent'
-            funit = get_fileunit()
-            open(unit=funit, file=p%outfile, iostat=ios, status="replace", action="write", access="sequential")
-            if( ios /= 0 )then
-                write(*,*) "Error opening file name", trim(adjustl(p%outfile))
-                stop
-            endif
+            
+            if(.not.fopen(funit, file=p%outfile,status="replace", action="write", access="sequential", iostat=io_stat))&
+                 call fileio_errmsg('simple_commander_preproc ; fopen error when opening '//trim(p%outfile), ios)
+            !if( ios /= 0 )then
+            !    HALT("In exec_select; simple_commander_preproc Error opening file name"//trim(adjustl(p%outfile)) )
+            !endif
             call exec_cmdline('mkdir -p '//trim(adjustl(p%dir_select)))
             call exec_cmdline('mkdir -p '//trim(adjustl(p%dir_reject)))
             ! write outoput & move files
@@ -710,7 +713,8 @@ contains
                     call exec_cmdline(cmd_str)
                 endif
             end do
-            close(funit)
+            if(.not.fclose(funit, iostat=io_stat))&
+                 call fileio_errmsg('simple_commander_preproc ; fopen error when closing '//trim(p%outfile), io_stat)
             deallocate(imgnames)
         endif
         if( cline%defined('stk3') )then
@@ -990,7 +994,7 @@ contains
 
             ! read box data
             allocate( boxdata(ndatlines,boxfile%get_nrecs_per_line()), pinds(ndatlines), stat=alloc_stat)
-            call alloc_err('In: simple_extract; boxdata etc., 2', alloc_stat)
+            call alloc_errchk('In: simple_extract; boxdata etc., 2', alloc_stat)
             do j=1,ndatlines
                 call boxfile%readNextDataLine(boxdata(j,:))
                 orig_box = nint(boxdata(j,3))

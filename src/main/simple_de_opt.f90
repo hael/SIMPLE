@@ -32,7 +32,7 @@ contains
     
     !> \brief  is a constructor
     subroutine new_de( self, spec )
-        use simple_jiffys, only: alloc_err
+        use simple_syslib, only: alloc_errchk
         class(de_opt),   intent(inout) :: self !< instance
         class(opt_spec), intent(inout) :: spec !< specification
         integer :: alloc_stat
@@ -63,7 +63,7 @@ contains
         end select
         ! allocate
         allocate(self%pop(spec%npop,spec%ndim), self%costs(spec%npop), stat=alloc_stat)
-        call alloc_err("In: new_de; simple_de_opt", alloc_stat)
+        call alloc_errchk("In: new_de; simple_de_opt", alloc_stat)
         self%exists = .true. ! indicates existence
         if( spec%DEBUG ) write(*,*) 'created new differential evolution population'
     end subroutine new_de

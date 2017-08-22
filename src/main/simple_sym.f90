@@ -2,7 +2,7 @@
 module simple_sym
 use simple_defs
 use simple_oris,   only: oris
-use simple_jiffys, only: alloc_err
+use simple_syslib, only: alloc_errchk
 implicit none
 
 public :: sym
@@ -206,7 +206,7 @@ contains
         character(len=1)                      :: pgrp
         character(len=3),allocatable          :: pgrps(:), subgrps(:)
         allocate( pgrps(self%n), stat=alloc_stat )
-        call alloc_err( 'get_all_cd_subgrps; simple_sym; 1', alloc_stat )
+        call alloc_errchk( 'get_all_cd_subgrps; simple_sym; 1', alloc_stat )
         pgrp = self%pgrp(1:1)
         cnt  = 0
         if( pgrp=='c' )then
@@ -226,7 +226,7 @@ contains
             stop
         endif
         allocate( subgrps(cnt), stat=alloc_stat )
-        call alloc_err( 'get_all_cd_subgrps; simple_sym; 2', alloc_stat )
+        call alloc_errchk( 'get_all_cd_subgrps; simple_sym; 2', alloc_stat )
         do i=1,cnt
             subgrps(i) = pgrps(i)
         enddo
@@ -256,16 +256,16 @@ contains
             call self%get_all_cd_subgrps( subgrps )
         else if( pgrp=='t' )then
             allocate( subgrps(1), stat=alloc_stat )
-            call alloc_err( 'get_all_subgrps; simple_sym; 1', alloc_stat )
+            call alloc_errchk( 'get_all_subgrps; simple_sym; 1', alloc_stat )
             subgrps(1)  = 't'
         else if( pgrp=='o' )then
             allocate( subgrps(2), stat=alloc_stat )
-            call alloc_err( 'get_all_subgrps; simple_sym; 2', alloc_stat )
+            call alloc_errchk( 'get_all_subgrps; simple_sym; 2', alloc_stat )
             subgrps(1)  = 't'
             subgrps(2)  = 'o'
         else if( pgrp=='i' )then
             allocate( subgrps(3), stat=alloc_stat )
-            call alloc_err( 'get_all_subgrps; simple_sym; 3', alloc_stat )
+            call alloc_errchk( 'get_all_subgrps; simple_sym; 3', alloc_stat )
             subgrps(1)  = 't'
             subgrps(2)  = 'o'
             subgrps(3)  = 'i'
@@ -441,9 +441,9 @@ contains
         else
             n_os = asym_os%get_noris()
             allocate( nnmat(n_os,k), stat=alloc_stat )
-            call alloc_err("In: nearest_neighbors 1; simple_sym", alloc_stat)
+            call alloc_errchk("In: nearest_neighbors 1; simple_sym", alloc_stat)
             allocate(dists(n_os), inds(n_os), stat=alloc_stat)
-            call alloc_err("In: nearest_neighbors 2; simple_sym", alloc_stat)
+            call alloc_errchk("In: nearest_neighbors 2; simple_sym", alloc_stat)
             do i = 1, n_os
                 dists = 360.
                 oasym = asym_os%get_ori(i)

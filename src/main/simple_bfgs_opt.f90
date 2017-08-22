@@ -21,14 +21,14 @@ contains
     !> \brief  is a constructor
     subroutine new_bfgs_opt( self, spec )
         use simple_opt_spec, only: opt_spec
-        use simple_jiffys,   only: alloc_err
+        use simple_syslib,   only: alloc_errchk
         class(bfgs_opt), intent(inout) :: self !< instance
         class(opt_spec), intent(inout) :: spec !< specification
         integer :: alloc_stat
         call self%kill
         allocate(self%p(spec%ndim),self%dg(spec%ndim),self%hdg(spec%ndim),&
         self%hessin(spec%ndim,spec%ndim),self%pnew(spec%ndim),self%xi(spec%ndim),stat=alloc_stat)
-        call alloc_err('In: new_bfgs_opt; simple_bfgs_opt', alloc_stat)
+        call alloc_errchk('In: new_bfgs_opt; simple_bfgs_opt', alloc_stat)
         self%dg     = 0.
         self%hdg    = 0.
         self%hessin = 0.

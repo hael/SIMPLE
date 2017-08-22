@@ -6,7 +6,7 @@ use simple_chash,   only: chash
 use simple_strings, only: str2int, str2real, str_has_substr, real2str, int2str
 implicit none
 
-public :: cmdline
+public :: cmdline, cmdline_err
 private
 #include "simple_local_flags.inc"
 
@@ -50,7 +50,7 @@ contains
     !> \brief for parsing the command line arguments passed as key=val
     subroutine parse( self, keys_required, keys_optional )
         use simple_args,         only: args
-        use simple_filehandling, only: get_fileunit
+        use simple_fileio     
         class(cmdline),             intent(inout) :: self
         character(len=*), optional, intent(in)    :: keys_required(:), keys_optional(:)
         character(len=STDLEN) :: arg
@@ -70,10 +70,11 @@ contains
             ! do nothing
         else
             ! write the command line to a file (biological memory support)
-            funit = get_fileunit()
-            open(unit=funit, status='replace', action='write', file='cmdline.txt')
+            if(.not.fopen(funit, status='replace', action='write', file='cmdline.txt', iostat=io_stat))&
+             call fileio_errmsg('cmdline ; parse fopen cmdline.txt', io_stat)
             write(funit,*) trim(self%entire_line)
-            close(funit)
+            if(.not.fclose(funit, iostat=io_stat))&
+             call fileio_errmsg('cmdline ; parse fclose cmdline.txt', io_stat)
         endif
         DebugPrint ' command_argument_count: ', cmdargcnt 
         if( present(keys_required) )then
@@ -275,14 +276,14 @@ contains
 
     !> \brief  for checking that the passed array of keys are present in the struct
     subroutine check( self )
-        use simple_jiffys, only: alloc_err
+        use simple_syslib,  only: alloc_errchk
         class(cmdline), intent(inout) :: self
         logical, allocatable  :: cmderr(:)
         integer               :: i, alloc_stat, nstates
         character(len=STDLEN) :: str
         logical               :: vol_defined
         allocate( cmderr(self%ncheck), stat=alloc_stat )
-        call alloc_err('check; simple_cmdline', alloc_stat)
+        call alloc_errchk('check; simple_cmdline', alloc_stat)
         cmderr = .false.
         do i=1,self%ncheck
            cmderr(i) = .not. self%defined(self%checker(i))
@@ -476,5 +477,29 @@ contains
             call hash%set('prg', trim(prg))
         endif
     end subroutine gen_job_descr
+
+
+    ! EXCEPTION-HANDLING JIFFYS
+
+    !> \brief  is for raising command line exception
+    subroutine cmdline_err( cmdstat, cmdlen, arg, pos )
+        integer, intent(in)          :: cmdstat, cmdlen, pos
+        character(len=*), intent(in) :: arg
+        if( cmdstat == -1 )then
+            write(*,*) 'ERROR! while parsing the command line; simple_exec'
+            write(*,*) 'The string length of argument: ', arg, 'is: ', cmdlen
+            write(*,*) 'which likely exeeds the lenght limit STDLEN'
+            write(*,*) 'Create a symbolic link with shorter name in the cwd'
+            stop
+        endif
+        if( arg(:pos-1) .ne. 'prg' )then
+            write(*,'(a)') 'ERROR!'
+            write(*,'(a)') 'prg=simple_program required to be first on command line'
+            write(*,'(a)') 'Please, refer to the manual for a comprehensive '
+            write(*,'(a)') 'list of all programs and their specific documentation'
+            stop
+        endif
+    end subroutine cmdline_err
+
 
 end module simple_cmdline

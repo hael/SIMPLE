@@ -40,6 +40,7 @@ type ctf
     procedure          :: apply
     procedure          :: apply_and_shift
     ! CALCULATORS
+    procedure          :: kV2wl
     procedure          :: freqOfAZero
     procedure, private :: solve4PhSh
     procedure, private :: sqFreq4PhSh
@@ -54,7 +55,6 @@ contains
 
     !>  \brief  is a constructor
     function constructor( smpd, kV, Cs, amp_contr ) result( self )
-        use simple_math, only: kV2wl
         real, intent(in) :: smpd !< sampling distance
         real, intent(in) :: kV   !< accelleration voltage
         real, intent(in) :: Cs   !< constant
@@ -62,7 +62,7 @@ contains
         type(ctf) :: self
         ! set constants
         self%kV        = kV
-        self%wl        = kV2wl(self%kV)/smpd
+        self%wl        = self%kV2wl(kV) / smpd
         self%Cs        = (Cs*1.0e7)/smpd
         self%amp_contr = amp_contr
         self%smpd      = smpd
@@ -104,7 +104,7 @@ contains
     !                        else
     !                            ang = 0.
     !                        endif
-    function eval( self, spaFreqSq, dfx, dfy, angast, ang ) result( val )
+    function eval( self, spaFreqSq, dfx, dfy, angast, ang ) result ( val )
         class(ctf), intent(inout) :: self      !< instance
         real,       intent(in)    :: spaFreqSq !< squared reciprocal pixels
         real,       intent(in)    :: dfx       !< Defocus along first axis (micrometers)
@@ -213,7 +213,7 @@ contains
     !!          modes: abs, ctf, flip, flipneg, neg, square
     function ctf2spec( self, kfromto, box, dfx, mode, bfac ) result(spec)
         use simple_image,  only: image
-        use simple_jiffys, only: alloc_err
+        use simple_fileio, only: alloc_errchk
         class(ctf),       intent(inout) :: self       !< instance
         integer,          intent(in)    :: kfromto(2) !< Fourier index range
         integer,          intent(in)    :: box        !< box size
@@ -227,7 +227,7 @@ contains
         call self%init(dfx, dfx, 0.)
         ! allocate spectrum
         allocate( spec(kfromto(1):kfromto(2)), stat=alloc_stat )
-        call alloc_err('In: ctf2spec; simple_ctf', alloc_stat)
+        call alloc_errchk('In: ctf2spec; simple_ctf', alloc_stat)
         ! do the work
         do k=kfromto(1),kfromto(2) ! loop over resolution range
             kinv = real(k)/real(box)
@@ -370,6 +370,24 @@ contains
     end subroutine apply_and_shift
 
     ! CALCULATORS
+
+    !> \brief   Convert acceleration voltage in kV into electron wavelength in Angstroms
+    !! \details  DeBroglie showed that  \f$ \lambda = \frac{h}{mv} \f$, where
+    !! h is Planck’s constant  \f$ \SI{6.626e-34}{\joule\second} \f$
+    !! mv is momentum (mass times velocity), which is  \f$ \sqrt{2 m_e q V} \f$
+    !! mass of an electron is \f$ \SI{9.1e-31}{\kilo\gram} \f$ and charge of an electron is  \f$ \SI{1.6e-19}{\coulomb} \f$
+    !! Equation for converting acceleration voltage into electron wavelength in Angstroms (\f$ \si{\angstrom} \f$) :
+    !! \f[ \lambda (\si{\metre}) =  \frac{12.26 \times 10^{-10}}{\sqrt{V}} \f]
+    !! Due to relativistic effects Lorentz law applies:
+    !!  \f[ \lambda (\si{\metre}) =  \frac{12.26 \times 10^{-10}}{\sqrt{V}} \times \frac{1}{\sqrt{1+\frac{e V}{2 m_e c^2}}} \f]
+    !! where c is the speed of light,\f$ \sim \SI{3e8}{\metre\per\second} \f$
+    !!  \f[ \lambda (\si{\angstrom}) =  \frac{12.26}{\sqrt{\left(10^3 kV + 0.9784 \times (10^3 kV)^2 \right) / 10^6 }} 
+    !! \f]
+    pure elemental real function kV2wl( self, accelkv ) result (wavelength)
+        class(ctf), intent(in) :: self      !< instance
+        real,       intent(in) :: accelkv        !< acceleration voltage 
+        wavelength = 12.26 / sqrt((1000.0*accelkv) + (0.9784*(1000.0*accelkv)**2)/(10.0**6.0))
+    end function kV2wl
 
     !>  \brief  Return the spatial frequency (reciprocal pixels) of the n-th zero, where n is given as which_zero
     real function freqOfAZero( self, dfx, dfy, angast, ang, which_zero )

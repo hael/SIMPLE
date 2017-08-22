@@ -1,6 +1,7 @@
 ! statistics utility functions
 module simple_stat
-use simple_defs ! singleton
+    use simple_defs ! singleton
+    use simple_syslib
 use simple_math, only: hpsort
 implicit none
 
@@ -560,9 +561,10 @@ contains
         real, allocatable :: weights(:), corrs_copy(:), expnegdists(:)
         real, parameter   :: THRESHOLD=1.5
         real    :: maxminratio, normfac, corrmax, corrmin
-        integer :: icorr, ncorrs
+        integer :: icorr, ncorrs, alloc_stat
         ncorrs = size(corrs)
-        allocate(weights(ncorrs), corrs_copy(ncorrs), expnegdists(ncorrs))
+        allocate(weights(ncorrs), corrs_copy(ncorrs), expnegdists(ncorrs),stat=alloc_stat)
+        call alloc_errchk("In: corrs2weights; simple_stat", alloc_stat )
         weights     = 0.
         corrs_copy  = corrs
         expnegdists = 0.
@@ -599,21 +601,21 @@ contains
                 weights(icorr) = 0.
             endif
         end do
-        deallocate(corrs_copy)
+        deallocate(corrs_copy,stat=alloc_stat)
+        call alloc_errchk("In: corrs2weights", alloc_stat )
     end function corrs2weights
 
     ! INTEGER STUFF
 
     !>    is for rank transformation of an array
     subroutine rank_transform_1( arr )
-        use simple_jiffys, only: alloc_err
         real, intent(inout)  :: arr(:)  !< array to be modified
         integer              :: j, n, alloc_stat
         integer, allocatable :: order(:)
         real, allocatable    :: vals(:)
         n = size(arr)
         allocate( vals(n), order(n), stat=alloc_stat )
-        call alloc_err("In: rank_transform_1; simple_stat", alloc_stat )
+        call alloc_errchk("In: rank_transform_1; simple_stat", alloc_stat )
         do j=1,n
             order(j) = j
             vals(j)  = arr(j)
@@ -622,12 +624,12 @@ contains
         do j=1,n
             arr(order(j)) = real(j)
         end do
-        deallocate(vals, order)
+        deallocate(vals, order, stat=alloc_stat )
+        call alloc_errchk("In: rank_transform_1; simple_stat", alloc_stat )
     end subroutine rank_transform_1
 
     !>    is for rank transformation of a 2D matrix
     subroutine rank_transform_2( mat )
-        use simple_jiffys, only: alloc_err
         real, intent(inout)   :: mat(:,:)  !< matrix to be modified
         integer, allocatable  :: order(:), indices(:,:)
         real, allocatable     :: vals(:)
@@ -636,7 +638,7 @@ contains
         ny = size(mat,2)
         n = nx*ny
         allocate( vals(n), order(n), indices(n,2), stat=alloc_stat )
-        call alloc_err("In: rank_transform_2; simple_stat", alloc_stat )
+        call alloc_errchk("In: rank_transform_2; simple_stat", alloc_stat )
         cnt = 0
         do i=1,nx
             do j=1,ny
@@ -651,7 +653,8 @@ contains
         do j=1,n
             mat(indices(order(j),1),indices(order(j),2)) = real(j)
         end do
-        deallocate(vals, order, indices)
+        deallocate(vals, order, indices, stat=alloc_stat )
+         call alloc_errchk("In: rank_transform_2; simple_stat", alloc_stat )
     end subroutine rank_transform_2
 
     !>    Spearman rank correlation
@@ -789,13 +792,14 @@ contains
         integer, intent(in)  :: nbins  !< num histogram bins
         real                 :: binwidth, minv, maxv
         integer, allocatable :: h(:)
-        integer              :: bin, i, n
+        integer              :: bin, i, n, alloc_stat
         if( nbins<2 )stop 'Invalib number of bins in simple_stat%get_hist'
         n        = size(arr,1)
         minv     = minval(arr)
         maxv     = maxval(arr)
         binwidth = ( maxv - minv ) / real( nbins )
-        allocate( h(nbins) )
+        allocate( h(nbins) , stat=alloc_stat )
+        call alloc_errchk('In: simple_stat; get_hist', alloc_stat)
         h = 0
         do i=1,n
             bin = nint((arr(i)-minv)/binwidth)   ! int(1.+(arr(i)-minv)/binwidth)
@@ -814,7 +818,7 @@ contains
         integer, allocatable :: h(:,:)             !< output histogram
         real                 :: binwidth1, minv1
         real                 :: binwidth2, minv2
-        integer              :: i, n, bin1, bin2
+        integer              :: i, n, bin1, bin2, alloc_stat
         if( nbins<2 )stop 'Invalib number of bins in simple_stat%get_hist'
         ! first array
         n         = size(x,1)
@@ -825,7 +829,8 @@ contains
         minv2     = minval(y)
         binwidth2 = ( maxval(y)-minv2 ) / real( nbins )
         ! Joint
-        allocate( h(nbins,nbins) )
+        allocate( h(nbins,nbins) , stat=alloc_stat )
+        call alloc_errchk('In: simple_stat; get_jointhist', alloc_stat) 
         h = 0
         do i=1,n
             bin1 = bin( x(i), minv1, binwidth1 )

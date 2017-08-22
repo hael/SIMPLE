@@ -1,14 +1,22 @@
 ! module with global variables
-! DEBUG and VERBOSE modes can be enabled at compile-time or run-time
-! BUILD_DESC uses the cmake build to describe <GNU/Intel/PGI>_<RELEASE/DEBUG>_<FFTW/MKL>
-! SimpleGitVersion include file contains the string definitions for SIMPLE_PATH and version info
+! DEBUG and VERBOSE modes can be enabled at
+!  compile-time or run-time
+! BUILD_DESC uses the cmake build to describe compiler,
+!   build type and FFT library e.g.
+! <GNU/Intel/PGI>_<RELEASE/DEBUG>_<FFTW/MKL>
+! SimpleGitVersion include file contains the string definitions for SIMPLE_PATH
+! and version info
 module simple_defs
 use, intrinsic :: iso_c_binding
+use, intrinsic :: iso_fortran_env, only: &
+     stderr=>ERROR_UNIT,&
+     stdout=>OUTPUT_UNIT,&
+     stdin=>INPUT_UNIT
 implicit none
-character(len=1), parameter :: default_file_format = 'M' !<  'I', 'M' or 'S' for imagic, mrc, spider
+character(len=1), parameter :: default_file_format = 'M' !< I:imagic, M:mrc or S:spider
 integer, parameter  :: IMPORTANT=10 !< number of solutions considered important
 integer, parameter  :: MAXS=99      !< maximum number of states
-integer, parameter  :: STDLEN     = 256  !< standard string length
+integer, parameter  :: STDLEN=256   !< standard string length
 integer, parameter  :: LONGSTRLEN = 2048 !< longer string length
 integer, parameter  :: short = selected_int_kind(4)
 integer, parameter  :: long  = selected_int_kind(9)
@@ -87,38 +95,30 @@ logical :: l_distr_exec_glob               !< global distributed execution flag
 character(len=STDLEN) :: exec_abspath_glob !< global executable absolute path
 
 #ifndef IMAGE_SINGLE_PRECISION
-  integer, parameter :: img_kind = DP
+integer, parameter :: img_kind = DP
 #else
-  integer, parameter :: img_kind = SP
+integer, parameter :: img_kind = SP
 #endif
 integer, parameter :: fp_kind = DP
 
 ! Debugging and print verbosity flags
 #ifdef _DEBUG
-  logical :: global_debug=.true.          !< global debugging flag
-  logical :: global_verbose=.true.        !< global flag for verbosity set to TRUE in debug mode
+logical :: global_debug=.true.          !< global debugging flag
+logical :: global_verbose=.true.        !< global flag for verbosity set to TRUE in debug mode
 #else
-  logical :: global_debug=.false.         !< global flag for debugging disabled
+logical :: global_debug=.false.         !< global flag for debugging disabled
 #ifdef VERBOSE
-  logical :: global_verbose=.true.        !< global flag for verbosity TRUE with VERBOSE compilation flag
+logical :: global_verbose=.true.        !< global flag for verbosity TRUE with VERBOSE compilation flag
 #else
-  logical :: global_verbose=.false.       !< global flag for verbosity FALSE by default
+logical :: global_verbose=.false.       !< global flag for verbosity FALSE by default
 #endif
 #endif
-  logical :: global_warn=.false.          !< warning flag
+logical :: global_warn=.false.          !< warning flag
 
 ! append SIMPLE_VERSION and SIMPLE_GIT_VERSION strings to simple_defs
-#include 'SimpleGitVersion.h'
+#include "SimpleGitVersion.h"
 
-  ! public :: Error_Msg
-  ! contains
-  ! subroutine Error_Msg(fname,linenum,msg)
-  !     use ISO_FORTRAN_ENV
-  !     character(len=*), intent(in) :: fname,msg
-  !     integer,intent(in) :: linenum
-  !     write(unit=ERROR_UNIT,fmt='("Error in ",/,A,/," at line ",I0,":",A)') fname,linenum,trim(msg)
-  !     flush(unit=ERROR_UNIT)
-  ! end subroutine Error_Msg
+
 
 
 end module simple_defs

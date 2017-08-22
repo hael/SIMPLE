@@ -4,6 +4,8 @@
 module simple_projector_hlev
 !$ use omp_lib
 !$ use omp_lib_kinds
+use simple_defs
+use simple_syslib
 use simple_image,      only: image
 use simple_oris,       only: oris
 use simple_params,     only: params
@@ -12,7 +14,7 @@ use simple_ori,        only: ori
 use simple_math,       only: rotmat2d
 use simple_projector,  only: projector
 use simple_kbinterpol, only: kbinterpol
-use simple_jiffys      ! use all in there
+use simple_jiffys,      only: progress ! use all in there
 implicit none
 
 contains
@@ -39,7 +41,7 @@ contains
         endif
         allocate( imgs(n), stat=alloc_stat )
         call vol_pad%expand_cmat
-        call alloc_err('projvol; simple_projector', alloc_stat)
+        call alloc_errchk('projvol; simple_projector', alloc_stat)
         write(*,'(A)') '>>> GENERATES PROJECTIONS' 
         do i=1,n
             call progress(i, n)

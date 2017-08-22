@@ -27,14 +27,14 @@ contains
     !> \brief  is a constructor
     subroutine new( self, spec )
         use simple_opt_spec, only: opt_spec
-        use simple_jiffys,   only: alloc_err
+        use simple_syslib,   only: alloc_errchk
         class(simplex_pftcc_opt), intent(inout) :: self !< instance
         class(opt_spec),          intent(inout) :: spec   !< specification
         integer :: alloc_stat
         real    :: x
         call self%kill
         allocate(self%p(spec%ndim+1,spec%ndim), self%y(spec%ndim+1), self%pb(spec%ndim), stat=alloc_stat)
-        call alloc_err("In: new_simplex_opt_c", alloc_stat)
+        call alloc_errchk("In: new_simplex_opt_c", alloc_stat)
         ! initialize best cost to huge number
         self%yb = huge(x)
         self%exists = .true. ! indicates existence

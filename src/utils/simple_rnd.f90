@@ -1,7 +1,8 @@
 ! random number generation module
 module simple_rnd
 use simple_defs ! singleton
-use simple_jiffys, only: alloc_err
+use simple_syslib, only: alloc_errchk
+!use simple_jiffys
 implicit none
 
 private :: idum, r8po_fa
@@ -25,7 +26,7 @@ contains
     !>  \brief  random seed
     subroutine seed_rnd
         integer :: i, n, clock
-        integer, dimension(:), allocatable :: seed                
+        integer, dimension(:), allocatable :: seed
         call random_seed(size = n)
         allocate(seed(n))
         call system_clock(count=clock)
@@ -53,7 +54,7 @@ contains
         real, allocatable   :: a(:)
         integer             :: alloc_stat, i
         allocate( a(n), stat=alloc_stat )
-        call alloc_err("In: randn_1; simple_rnd", alloc_stat)
+        call alloc_errchk("In: randn_1; simple_rnd", alloc_stat)
         do i=1,n
             a(i) = -1.+2.*ran3()
         end do
@@ -66,7 +67,7 @@ contains
         real, allocatable   :: a(:,:)
         integer             :: alloc_stat, i, j
         allocate( a(n1,n2), stat=alloc_stat )
-        call alloc_err("In: randn_2; simple_rnd", alloc_stat)
+        call alloc_errchk("In: randn_2; simple_rnd", alloc_stat)
         do i=1,n1
             do j=1,n2
                 a(i,j) = -1.+2.*ran3()
@@ -322,7 +323,6 @@ contains
 
     !>  \brief  pick a random improving correlation, given the previous
     function shcloc( ncorrs, corrs, corr_prev ) result( this )
-        use simple_jiffys, only: alloc_err
         integer, intent(in)  :: ncorrs
         real, intent(in)     :: corrs(ncorrs)
         real, intent(in)     :: corr_prev

@@ -3,6 +3,7 @@ module simple_hadamard3D_matcher
 !$ use omp_lib
 !$ use omp_lib_kinds
 use simple_defs
+use simple_syslib
 use simple_polarft_corrcalc, only: polarft_corrcalc
 use simple_prime3D_srch,     only: prime3D_srch
 use simple_ori,              only: ori
@@ -14,6 +15,7 @@ use simple_strings,          only: str_has_substr, int2str_pad
 use simple_cont3D_matcher    ! use all in there
 use simple_hadamard_common   ! use all in there
 use simple_math              ! use all in there
+use simple_jiffys
 implicit none
 
 public :: prime3D_find_resrange, prime3D_exec, gen_random_model
@@ -44,7 +46,7 @@ contains
         call o%spiral
         lfny = b%img_match%get_lfny(1)
         allocate( peaks(lfny), stat=alloc_stat )
-        call alloc_err("In: prime3D_find_resrange, simple_hadamard3D_matcher", alloc_stat)
+        call alloc_errchk("In: prime3D_find_resrange, simple_hadamard3D_matcher", alloc_stat)
         do k=2,b%img_match%get_lfny(1)
             peaks(k) = real(o%find_npeaks(b%img_match%get_lp(k), p%moldiam))
         end do
@@ -61,6 +63,7 @@ contains
     subroutine prime3D_exec( b, p, cline, which_iter, update_res, converged )
         use simple_qsys_funs, only: qsys_job_finished
         use simple_oris,      only: oris
+        use simple_fileio,    only: del_file
         class(build),   intent(inout) :: b
         class(params),  intent(inout) :: p
         class(cmdline), intent(inout) :: cline
@@ -68,7 +71,7 @@ contains
         logical,        intent(inout) :: update_res, converged
         type(oris) :: prime3D_oris
         real       :: norm, corr_thresh, skewness, frac_srch_space, extr_thresh
-        integer    :: iptcl, inptcls, istate
+        integer    :: iptcl, inptcls, istate, alloc_stat
         integer    :: statecnt(p%nstates)
         inptcls = p%top - p%fromp + 1
 
@@ -150,7 +153,8 @@ contains
 
         ! STOCHASTIC IMAGE ALIGNMENT
         ! create the search objects, need to re-create every round because parameters are changing
-        allocate( primesrch3D(p%fromp:p%top) )
+        allocate( primesrch3D(p%fromp:p%top) , stat=alloc_stat)
+        call alloc_errchk("In hadamard3D_matcher::prime3D_exec ",alloc_stat)
         do iptcl=p%fromp,p%top
             call primesrch3D(iptcl)%new(b%a, p, pftcc)
         end do
@@ -326,7 +330,7 @@ contains
             nsamp = p%nptcls
             if( present(nsamp_in) ) nsamp = nsamp_in
             allocate( sample(nsamp), stat=alloc_stat )
-            call alloc_err("In: gen_random_model; simple_hadamard3D_matcher", alloc_stat)
+            call alloc_errchk("In: gen_random_model; simple_hadamard3D_matcher", alloc_stat)
             if( present(nsamp_in) )then
                 rt = ran_tabu(p%nptcls)
                 call rt%ne_ran_iarr(sample)
@@ -413,6 +417,7 @@ contains
 
     !> Prepare particle images and create polar projections
     subroutine prep_ptcls_pftcc4align( b, p, ppfts_fname )
+        use simple_fileio, only: file_exists
         class(build),               intent(inout) :: b          !< build object
         class(params),              intent(inout) :: p          !< param object
         character(len=*), optional, intent(in)    :: ppfts_fname

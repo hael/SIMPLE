@@ -5,9 +5,9 @@ module simple_oris
 use simple_defs
 use simple_ori,         only: ori
 use simple_math,        only: hpsort, is_a_number, rad2deg
-use simple_jiffys,      only: alloc_err
+use simple_syslib,      only: alloc_errchk, file_exists, simple_stop
 use simple_stat,        only: moment
-use simple_filehandling ! use all in there
+use simple_fileio,      only: fopen, fclose, fileio_errmsg
 implicit none
 
 public :: oris, test_oris
@@ -234,7 +234,7 @@ contains
         call self%kill
         self%n = n
         allocate( self%o(self%n), stat=alloc_stat )
-        call alloc_err('new; simple_oris', alloc_stat)
+        call alloc_errchk('new; simple_oris', alloc_stat)
         do i=1,n
             call self%o(i)%new
         end do
@@ -332,7 +332,7 @@ contains
         ffromto(2) = self%n
         if( present(fromto) ) ffromto = fromto
         allocate( arr(ffromto(1):ffromto(2)), stat=alloc_stat)
-        call alloc_err('get_all; simple_oris', alloc_stat)
+        call alloc_errchk('get_all; simple_oris', alloc_stat)
         do i=ffromto(1),ffromto(2)
             arr(i) = self%o(i)%get(key)
         enddo
@@ -346,7 +346,7 @@ contains
         integer :: i, alloc_stat
         if( allocated(vals) ) deallocate(vals)
         allocate( vals(self%n), stat=alloc_stat)
-        call alloc_err('getter_all_1; simple_oris', alloc_stat)
+        call alloc_errchk('getter_all_1; simple_oris', alloc_stat)
         do i=1,self%n
             call self%o(i)%getter(key, vals(i))
         enddo
@@ -361,7 +361,7 @@ contains
         character(len=:), allocatable :: tmp
         if( allocated(vals) ) deallocate(vals)
         allocate( vals(self%n), stat=alloc_stat)
-        call alloc_err('getter_all_2; simple_oris', alloc_stat)
+        call alloc_errchk('getter_all_2; simple_oris', alloc_stat)
         do i=1,self%n
             call self%o(i)%getter(key, tmp)
             vals(i) = tmp
@@ -466,9 +466,10 @@ contains
     function get_proj_pops( self ) result( pops )
         class(oris), intent(inout) :: self
         real, allocatable :: pops(:)
-        integer :: i, mystate, myproj, nprojs
+        integer :: i, mystate, myproj, nprojs, alloc_stat
         nprojs = self%get_nprojs()
-        allocate(pops(nprojs))
+        allocate(pops(nprojs),stat=alloc_stat)
+        call alloc_errchk('In: get_proj_pops, module: simple_oris', alloc_stat)
         pops = 0.0
         do i=1,self%n
             mystate = nint(self%o(i)%get('state'))
@@ -510,7 +511,7 @@ contains
         integer :: pop, mystate, cnt, alloc_stat, i
         pop = self%get_state_pop(state)
         allocate( ptcls(pop), stat=alloc_stat )
-        call alloc_err("In: get_ptcls_in_state; simple_oris", alloc_stat)
+        call alloc_errchk("In: get_ptcls_in_state; simple_oris", alloc_stat)
         cnt = 0
         do i=1,self%n
             mystate = nint(self%o(i)%get('state'))
@@ -559,7 +560,7 @@ contains
         ptcls_in_which = self%get_state(which)
         n = size(ptcls_in_which)
         allocate(states(n), stat=alloc_stat)
-        call alloc_err("simple_oris::split_state", alloc_stat)
+        call alloc_errchk("simple_oris::split_state", alloc_stat)
         rt = ran_tabu(n)
         call rt%balanced(2, states)
         do iptcl=1,n
@@ -589,7 +590,7 @@ contains
         ptcls_in_which = self%get_cls_pinds(which)
         n = size(ptcls_in_which)
         allocate(members(n), stat=alloc_stat)
-        call alloc_err("simple_oris::split_class", alloc_stat)
+        call alloc_errchk("simple_oris::split_class", alloc_stat)
         rt = ran_tabu(n)
         call rt%balanced(2, members)
         do iptcl=1,n
@@ -608,11 +609,12 @@ contains
         class(oris), intent(inout) :: self
         integer,     intent(in)    :: ncls_target
         integer, allocatable       :: pops(:)
-        integer :: ncls, loc(1), myncls, icls
+        integer :: ncls, loc(1), myncls, icls,alloc_stat
         ncls = self%get_ncls()
         if( ncls_target <= ncls ) stop 'Number of target classes cannot be <= original number'
         ! calculate class populations
-        allocate(pops(ncls_target))
+        allocate(pops(ncls_target),stat=alloc_stat)
+        call alloc_errchk('In: expand_classes, module: simple_oris', alloc_stat)
         pops = 0
         do icls=1,ncls
             pops(icls) = self%get_cls_pop(icls)
@@ -633,10 +635,11 @@ contains
     !>  \brief  for remapping classes after exclusion
     subroutine remap_classes( self )
         class(oris), intent(inout) :: self
-        integer :: ncls, clsind_remap, pop, icls, iptcl, old_cls
+        integer :: ncls, clsind_remap, pop, icls, iptcl, old_cls, alloc_stat
         integer , allocatable :: clspops(:)
         ncls = self%get_ncls()
-        allocate(clspops(ncls))
+        allocate(clspops(ncls),stat=alloc_stat)
+        call alloc_errchk('In: remap_classes, module: simple_oris', alloc_stat)
         do icls=1,ncls
             clspops(icls) = self%get_cls_pop(icls)
         end do
@@ -692,7 +695,7 @@ contains
         pop = self%get_cls_pop( class )
         if( pop > 0 )then
             allocate( clsarr(pop), stat=alloc_stat )
-            call alloc_err('get_cls_pinds; simple_oris', alloc_stat)
+            call alloc_errchk('get_cls_pinds; simple_oris', alloc_stat)
             cnt = 0
             do i=1,self%n
                 clsnr = nint(self%get( i, 'class'))
@@ -713,7 +716,7 @@ contains
         pop = self%get_state_pop( state )
         if( pop > 0 )then
             allocate( statearr(pop), stat=alloc_stat )
-            call alloc_err('get_state; simple_oris', alloc_stat)
+            call alloc_errchk('get_state; simple_oris', alloc_stat)
             cnt = 0
             do i=1,self%n
                 statenr = nint(self%get( i, 'state' ))
@@ -734,7 +737,7 @@ contains
         pop = self%get_proj_pop( proj )
         if( pop > 0 )then
             allocate( projarr(pop), stat=alloc_stat )
-            call alloc_err('get_proj; simple_oris', alloc_stat)
+            call alloc_errchk('get_proj; simple_oris', alloc_stat)
             cnt = 0
             do i=1,self%n
                 mystate = nint(self%o(i)%get('state'))
@@ -758,7 +761,7 @@ contains
         pop = self%get_cls_pop( class )
         if( pop > 0 )then
             allocate( classarr(pop), stat=alloc_stat )
-            call alloc_err('get_class; simple_oris', alloc_stat)
+            call alloc_errchk('get_class; simple_oris', alloc_stat)
             cnt = 0
             do i=1,self%n
                 mystate = nint(self%o(i)%get('state'))
@@ -792,7 +795,7 @@ contains
         endif
         if( pop > 0 )then
             allocate( vals(pop), stat=alloc_stat )
-            call alloc_err('get_arr; simple_oris', alloc_stat)
+            call alloc_errchk('get_arr; simple_oris', alloc_stat)
             cnt = 0
             do i=1,self%n
                 val = self%get(i, which)
@@ -978,10 +981,11 @@ contains
         class(oris), intent(inout) :: self
         integer,     intent(in)    :: pfromto(2)
         real, allocatable :: ctfparams(:,:)
-        integer :: nparams, cnt, iptcl
+        integer :: nparams, cnt, iptcl, alloc_stat
         logical :: astig
         nparams = pfromto(2)-pfromto(1)+1
-        allocate(ctfparams(nparams,6))
+        allocate(ctfparams(nparams,6), stat=alloc_stat)
+         call alloc_errchk('In: get_ctfparams, module: simple_oris', alloc_stat)
         ctfparams = 0.
         astig = .false.
         if( self%isthere('dfx') )then
@@ -1013,8 +1017,9 @@ contains
         character(len=*), intent(in)    :: which
         character(len=STDLEN), allocatable :: table(:)
         character(len=:),      allocatable :: str
-        integer :: i
-        allocate(table(self%n))
+        integer :: i, alloc_stat
+        allocate(table(self%n), stat=alloc_stat)
+        call alloc_errchk('In: extract_table, module: simple_oris', alloc_stat)
         do i=1,self%n
             call self%getter(i, which, str)
             table(i) = str
@@ -1058,7 +1063,7 @@ contains
                 if( n < 3 )return ! because one is excluded in the next step & moment needs at least 2 objs
                 call os%new( n )
                 allocate( ws(n), dists(n-1), stat=alloc_stat )
-                call alloc_err( 'ang_sdev_state; simple_oris', alloc_stat )
+                call alloc_errchk( 'ang_sdev_state; simple_oris', alloc_stat )
                 ws    = 0.
                 dists = 0.
                 ! get best ori
@@ -1087,8 +1092,9 @@ contains
     function included( self ) result( incl )
         class(oris), intent(inout) :: self
         logical, allocatable :: incl(:)
-        integer :: i, istate
-        allocate(incl(self%n))
+        integer :: i, istate, alloc_stat
+        allocate(incl(self%n), stat=alloc_stat)
+        call alloc_errchk('In: included, module: simple_oris', alloc_stat)
         incl = .false.
         do i=1,self%n
             istate = nint(self%o(i)%get('state'))
@@ -1586,7 +1592,7 @@ contains
         integer :: alloc_stat, i, state
         if( nstates > 1 )then
             allocate( states(self%n), stat=alloc_stat )
-            call alloc_err("simple_oris::rnd_states", alloc_stat)
+            call alloc_errchk("simple_oris::rnd_states", alloc_stat)
             rt = ran_tabu(self%n)
             call rt%balanced(nstates, states)
             do i=1,self%n
@@ -1618,7 +1624,7 @@ contains
         integer :: alloc_stat, i
         if( ncls > 1 )then
             allocate(classes(self%n), stat=alloc_stat)
-            call alloc_err("simple_oris::rnd_classes", alloc_stat)
+            call alloc_errchk("simple_oris::rnd_classes", alloc_stat)
             rt = ran_tabu(self%n)
             call rt%balanced(ncls, classes)
             do i=1,self%n
@@ -1737,15 +1743,11 @@ contains
         character(len=100) :: io_message
         integer :: file_stat, i, fnr, state, recsz
         if( .not. file_exists(orifile) )then
-            
-            ERRORMSG( 'The file you are trying to read: '//trim(orifile)//' does not exist in cwd' )
-            stop 'simple_oris :: read'
+            HALT ("oris ; read; The file you are trying to read: "//trim(orifile)//' does not exist in cwd' )
         endif
-        fnr = get_fileunit( )
-        open(unit=fnr, FILE=orifile, STATUS='OLD', action='READ', iostat=file_stat)
-        if( file_stat .ne. 0 )then
-            close(fnr)
-            ERRORMSG( 'Error when opening file for reading: '//trim(orifile)//':'//trim(io_message) )
+        io_message='No error'
+        if(.not.fopen(fnr, FILE=orifile, STATUS='OLD', action='READ', iostat=file_stat,iomsg=io_message))then
+             call fileio_errmsg("oris ; read ,Error when opening file for reading: "//trim(orifile)//':'//trim(io_message), file_stat)
             stop
         endif
         if( present(nst) ) nst = 0
@@ -1756,7 +1758,8 @@ contains
                 nst = max(1,max(state,nst))
             endif
         end do
-        close(fnr)
+         if(.not.fclose(fnr, iostat=file_stat))&
+             call fileio_errmsg("oris ; read ,Error when closing file",file_stat)
     end subroutine read
 
     !>  \brief  reads CTF parameters and state info from file
@@ -1803,20 +1806,17 @@ contains
         ffromto(1) = 1
         ffromto(2) = self%n
         if( present(fromto) ) ffromto = fromto
-        fnr = get_fileunit( )
-        open(unit=fnr, FILE=orifile, STATUS='REPLACE', action='WRITE',&
-        &iostat=file_stat, iomsg=io_message)
-        if( file_stat .ne. 0 )then
-            close(fnr)
-            ERRORMSG(' Error opening file for writing: '//trim(orifile)//' ; '//trim(io_message) )
-            stop
+        if(.not.fopen(fnr, orifile, status='REPLACE', action='WRITE',&
+        &iostat=file_stat, iomsg=io_message))then
+            call fileio_errmsg(' Error opening file for writing: '//trim(orifile)//' ; '//trim(io_message), file_stat)
         endif
         cnt = 0
         do i=ffromto(1),ffromto(2)
             cnt = cnt + 1
             call self%o(i)%write(fnr)
         end do
-        close(fnr)
+        if(.not.fclose(fnr,iostat=file_stat)) &
+             call fileio_errmsg(' Error closing file for writing: '//trim(orifile), file_stat)
     end subroutine write_1
 
     !>  \brief  writes orientation info to file
@@ -1825,11 +1825,11 @@ contains
         character(len=*), intent(in)    :: orifile
         integer,          intent(in)    :: i
         integer :: fnr, file_stat
-        fnr = get_fileunit( )
-        open(unit=fnr, FILE=orifile, STATUS='UNKNOWN', action='WRITE', position='APPEND', iostat=file_stat)
-        call fopen_err( 'In: write_2, module: simple_oris.f90', file_stat )
+        if(.not.fopen(fnr, orifile, status='UNKNOWN', action='WRITE', position='APPEND', iostat=file_stat))&
+             call fileio_errmsg( 'In: write_2, module: simple_oris.f90  opening '//trim(orifile), file_stat )
         call self%o(i)%write(fnr)
-        close(fnr)
+        if(.not.fclose(fnr,iostat=file_stat)) &
+             call fileio_errmsg(' Error closing file for writing: '//trim(orifile), file_stat)
     end subroutine write_2
 
     ! CALCULATORS
@@ -1842,14 +1842,15 @@ contains
         integer,          intent(in)    :: minp
         real,             intent(in)    :: thres
         real,             intent(inout) :: cnt, homo_cnt, homo_avg
-        integer              :: pop, i, nlabels, medlab(1)
+        integer              :: pop, i, alloc_stat, nlabels, medlab(1)
         real                 :: homo_cls
         real, allocatable    :: vals(:)
         integer, allocatable :: labelpops(:)
 
         nlabels = self%get_nlabels()
         DebugPrint  'number of labels: ', nlabels
-        allocate(labelpops(nlabels))
+        allocate(labelpops(nlabels),stat=alloc_stat)
+        call alloc_errchk('In: homogeneity_1, module: simple_oris', alloc_stat)
         DebugPrint  'allocated labelpops'
         DebugPrint  '>>> PROCESSING CLASS: ', icls
         ! get pop
@@ -2186,7 +2187,7 @@ contains
             endif
         else
             allocate( vals(self%n), stat=alloc_stat )
-            call alloc_err('In: median_1, module: simple_oris', alloc_stat)
+            call alloc_errchk('In: median_1, module: simple_oris', alloc_stat)
             vals = 0.
             do i=1,self%n
                 vals(i) = self%o(i)%get(which)
@@ -2220,7 +2221,7 @@ contains
         real, allocatable :: vals(:)
         integer           :: alloc_stat, i, cnt, mystate
         allocate( vals(self%n), stat=alloc_stat )
-        call alloc_err('In: minmax, module: simple_oris', alloc_stat)
+        call alloc_errchk('In: minmax, module: simple_oris', alloc_stat)
         vals = 0.
         ! fish values
         cnt = 0
@@ -2322,7 +2323,7 @@ contains
         integer, allocatable :: inds(:)
         integer :: i, alloc_stat
         allocate( inds(self%n), stat=alloc_stat )
-        call alloc_err('order; simple_oris', alloc_stat)
+        call alloc_errchk('order; simple_oris', alloc_stat)
         specscores = self%get_all('specscore')
         inds = (/(i,i=1,self%n)/)
         call hpsort( self%n, specscores, inds )
@@ -2335,7 +2336,7 @@ contains
         integer, allocatable :: inds(:)
         integer :: i, alloc_stat
         allocate( inds(self%n), stat=alloc_stat )
-        call alloc_err('order; simple_oris', alloc_stat)
+        call alloc_errchk('order; simple_oris', alloc_stat)
         corrs = self%get_all('corr')
         inds = (/(i,i=1,self%n)/)
         call hpsort( self%n, corrs, inds )
@@ -2350,7 +2351,7 @@ contains
         integer :: i, alloc_stat
         if(ncls <= 0) stop 'invalid number of classes; simple_oris%order_cls'
         allocate(inds(ncls), classpops(ncls), stat=alloc_stat)
-        call alloc_err('order_cls; simple_oris', alloc_stat)
+        call alloc_errchk('order_cls; simple_oris', alloc_stat)
         classpops = 0.0
         ! calculate class populations
         do i=1,ncls
@@ -2372,7 +2373,7 @@ contains
         integer, allocatable :: inds(:), inds_tmp(:)
         logical, allocatable :: included(:)
         real,    allocatable :: pops(:), scores(:), nonzero_pops(:)
-        integer :: i, j, n, pop
+        integer :: i, j, n, pop,alloc_stat
         logical :: uuse_specscore, l_proj
         uuse_specscore = .false.
         if( present(use_specscore) )then
@@ -2393,7 +2394,8 @@ contains
             case DEFAULT
                 stop 'unsupported which flag; simple_oris :: balance'
         end select
-        allocate(included(self%n))
+        allocate(included(self%n),stat=alloc_stat)
+        call alloc_errchk('In: balance, module: simple_oris', alloc_stat)
         included = .false.
         do i=1,n
             if( l_proj )then
@@ -2653,10 +2655,11 @@ contains
         type(ori)            :: o
         type(oris)           :: suboris
         integer, allocatable :: subspace_projs(:)
-        integer :: isub
+        integer :: isub, alloc_stat
         call suboris%new(nsub)
         call suboris%spiral
-        allocate( subspace_projs(nsub) )
+        allocate( subspace_projs(nsub) ,stat=alloc_stat)
+        call alloc_errchk('In: create_proj_subspace_1, module: simple_oris', alloc_stat)
         do isub=1,nsub
             o = suboris%get_ori(isub)
             subspace_projs(isub) = self%find_closest_proj(o)
@@ -2672,10 +2675,11 @@ contains
         type(ori)            :: o
         type(oris)           :: suboris
         integer, allocatable :: subspace_projs(:)
-        integer :: isub
+        integer :: isub, alloc_stat
         call suboris%new(nsub)
         call suboris%spiral(nsym, eullims)
-        allocate( subspace_projs(nsub) )
+        allocate( subspace_projs(nsub) , stat=alloc_stat)
+        call alloc_errchk('In: create_proj_subspace_2, module: simple_oris', alloc_stat)
         do isub=1,nsub
             o = suboris%get_ori(isub)
             subspace_projs(isub) = self%find_closest_proj(o)
@@ -2713,7 +2717,7 @@ contains
         if( k >= self%n ) stop 'need to identify fewer nearest_neighbors; simple_oris'
         if( allocated(nnmat) ) deallocate(nnmat)
         allocate( nnmat(self%n,k), stat=alloc_stat )
-        call alloc_err("In: nearest_neighbors; simple_oris", alloc_stat)
+        call alloc_errchk("In: nearest_neighbors; simple_oris", alloc_stat)
         do i=1,self%n
             o = self%get_ori(i)
             do j=1,self%n
@@ -2897,7 +2901,7 @@ contains
         cnt    = 0
         npairs = (pop*(pop-1))/2
         allocate( dists(npairs), stat=alloc_stat )
-        call alloc_err( 'class_dist_stat; simple_oris', alloc_stat )
+        call alloc_errchk( 'class_dist_stat; simple_oris', alloc_stat )
         cnt = 0
         distavg = 0.
         do i=1,pop-1
@@ -3062,11 +3066,12 @@ contains
         use simple_jiffys, only: progress
         class(oris), intent(inout) :: self
         logical, allocatable       :: o_is_set(:)
-        integer                    :: i
+        integer                    :: i, alloc_stat
         type(ori)                  :: o1, o2
         ! create the first diverse pair
         call o1%oripair_diverse(o2)
-        allocate(o_is_set(self%n))
+        allocate(o_is_set(self%n), stat=alloc_stat)
+        call alloc_errchk('In: gen_diverse, module: simple_oris', alloc_stat)
         o_is_set = .false.
         call self%set_ori(1,o1)
         call self%set_ori(2,o2)
@@ -3131,21 +3136,24 @@ contains
         type(opt_spec)    :: ospec
         type(simplex_opt) :: opt
         real              :: dist, lims(3,2)
+        integer           :: alloc_stat
         ! manage class vars
         if( allocated(class_part_of_set) ) deallocate(class_part_of_set)
         if( allocated(class_weights)     ) deallocate(class_weights)
         if( present(part_of_set) )then
-            allocate(class_part_of_set(self%n), source=part_of_set)
+            allocate(class_part_of_set(self%n), source=part_of_set, stat=alloc_stat)
         else
-            allocate(class_part_of_set(self%n))
+            allocate(class_part_of_set(self%n), stat=alloc_stat)
             class_part_of_set = .true.
         endif
+        call alloc_errchk('In: ori_generator, module: simple_oris part_of_set', alloc_stat)
         if( present(weights) )then
-            allocate(class_weights(self%n), source=weights)
+            allocate(class_weights(self%n), source=weights, stat=alloc_stat)
         else
-            allocate(class_weights(self%n))
+            allocate(class_weights(self%n), stat=alloc_stat)
             class_weights = 1.0
         endif
+        call alloc_errchk('In: ori_generator, module: simple_oris weights', alloc_stat)
         ! set globals
         ops => self
         call o_glob%new
@@ -3183,7 +3191,7 @@ contains
         real, allocatable :: smat(:,:)
         integer :: alloc_stat, i, j
         allocate( smat(self%n,self%n), stat=alloc_stat )
-        call alloc_err("In: simple_oris :: gen_smat", alloc_stat)
+        call alloc_errchk("In: simple_oris :: gen_smat", alloc_stat)
         smat = 0.
         !$omp parallel do schedule(guided) default(shared) private(i,j) proc_bind(close)
         do i=1,self%n-1
@@ -3372,7 +3380,7 @@ contains
         if( ncls<ncls_prev)stop 'inconsistent arguments order in simple_oris; overlap'
         if( (key.ne.'class').and.(key.ne.'state') ) stop 'Unsupported field in simple_oris; overlap'
         allocate( cls_pop(ncls), pop_spawn(ncls_prev), stat=alloc_stat)
-        call alloc_err('In: simple_oris; overlap', alloc_stat)
+        call alloc_errchk('In: simple_oris; overlap', alloc_stat)
         do i=1,ncls_prev
             ! Identifies the newly created cluster (with max pop overlap to current prev cluster)
             cls_pop(:) = 0
@@ -3544,13 +3552,15 @@ contains
     !>  \brief  is a destructor
     subroutine kill( self )
         class(oris), intent(inout) :: self
-        integer :: i
+        integer :: i, alloc_stat
         if( allocated(self%o) )then
             do i=1,self%n
                 call self%o(i)%kill
             end do
-            deallocate( self%o )
+            deallocate( self%o , stat=alloc_stat)
+            call alloc_errchk('In: kill, module: simple_oris', alloc_stat)
         endif
+
     end subroutine kill
 
 end module simple_oris

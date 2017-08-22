@@ -564,9 +564,9 @@ contains
 
     !>  \brief  for reading 2D images from stack or volumes from volume files
     subroutine read( self, fname, i, isxfel )
-        use simple_imgfile
-        use simple_jiffys,  only: fname2format, file_exists, read_raw_image, alloc_err
+        use simple_fileio,  only: fname2format, file_exists, read_raw_image, alloc_err
         use simple_imghead, only: imghead, SpiImgHead
+        use simple_imgfile
         class(image), intent(inout)   :: self
         character(len=*), intent(in)  :: fname
         integer, intent(in), optional :: i

@@ -87,11 +87,11 @@ contains
 
     !>  \brief  is a constructor
     subroutine new( self, exec_binary, qsys_obj, parts, fromto_part, ncomputing_units, stream )
-        use simple_jiffys, only: alloc_err
+        use simple_syslib, only: alloc_errchk, simple_getenv
         class(qsys_ctrl),         intent(inout) :: self             !< the instance
         character(len=*),         intent(in)    :: exec_binary      !< the binary that we want to execute in parallel
         class(qsys_base), target, intent(in)    :: qsys_obj         !< the object that defines the qeueuing system
-        integer,          target, intent(in)    :: parts(:,:)       !< defines the start_ptcl/stop_ptcl ranges  
+        integer,          target, intent(in)    :: parts(:,:)       !< defines the start_ptcl/stop_ptcl ranges
         integer,                  intent(in)    :: fromto_part(2)   !< defines the range of partitions controlled by this object
         integer,                  intent(in)    :: ncomputing_units !< number of computing units (<= the number of parts controlled)
         logical,                  intent(in)    :: stream           !< stream flag
@@ -115,7 +115,7 @@ contains
                     self%jobs_submitted(fromto_part(1):fromto_part(2)),&
                     self%script_names(fromto_part(1):fromto_part(2)),&
                     self%jobs_done_fnames(fromto_part(1):fromto_part(2)), stat=alloc_stat)
-        call alloc_err("In: simple_qsys_ctrl :: new", alloc_stat)
+        call alloc_errchk("In: simple_qsys_ctrl :: new", alloc_stat)
         if( self%stream )then
             self%jobs_done = .true.
         else
@@ -131,7 +131,7 @@ contains
             self%jobs_done_fnames(ipart) = 'JOB_FINISHED_'//int2str_pad(ipart,self%numlen)
         end do
         ! get pwd
-        call get_environment_variable('PWD', self%pwd)
+        self%pwd = simple_getenv('PWD')
         self%existence = .true.
     end subroutine new
 
@@ -248,19 +248,16 @@ contains
 
     !>  \brief  private part script generator
     subroutine generate_script_1( self, job_descr, ipart, q_descr )
-        use simple_filehandling, only: get_fileunit, file_exists
+        use simple_fileio      , only: fopen,fclose,fileio_errmsg, file_exists
         class(qsys_ctrl), intent(inout) :: self
         class(chash),     intent(in)    :: job_descr
         integer,          intent(in)    :: ipart
         class(chash),     intent(in)    :: q_descr
         character(len=512) :: io_msg
         integer :: ios, funit, val
-        funit = get_fileunit()
-        open(unit=funit, file=self%script_names(ipart), iostat=ios, STATUS='REPLACE', action='WRITE', iomsg=io_msg)
-        if( ios .ne. 0 )then
-            close(funit)
-            write(*,'(a)') 'simple_qsys_ctrl :: gen_qsys_script; Error when opening file for writing: '&
-            //trim(self%script_names(ipart))//' ; '//trim(io_msg)
+        if(.not.fopen(funit, file=self%script_names(ipart), iostat=ios, STATUS='REPLACE', action='WRITE', iomsg=io_msg))then
+             call fileio_errmsg('simple_qsys_ctrl :: gen_qsys_script; Error when opening file for writing: '&
+             //trim(self%script_names(ipart))//' ; '//trim(io_msg),ios )
             stop
         endif
         ! need to specify shell
@@ -280,7 +277,9 @@ contains
         ! exit shell when done
         write(funit,'(a)',advance='yes') ''
         write(funit,'(a)',advance='yes') 'exit'
-        close(funit)
+        if(.not.fclose(funit,iostat=ios))&
+             call fileio_errmsg('simple_qsys_ctrl :: gen_qsys_script; Error when close file: '&
+             //trim(self%script_names(ipart)),ios )
         if( q_descr%get('qsys_name').eq.'local' )call chmod(trim(self%script_names(ipart)),'+x')
         if( ios .ne. 0 )then
             write(*,'(a)',advance='no') 'simple_qsys_scripts :: gen_qsys_script; Error'
@@ -292,21 +291,64 @@ contains
         self%jobs_submitted(ipart) = .false.
     end subroutine generate_script_1
 
+    ! !>  \brief  public script generator for single jobs
+    ! subroutine generate_script_2( self, job_descr, q_descr, exec_bin, script_name, outfile )
+    !     use simple_fileio      , only: fopen,fileio_errmsg, file_exists
+    !     class(qsys_ctrl), intent(inout) :: self
+    !     class(chash),     intent(in)    :: job_descr
+    !     class(chash),     intent(in)    :: q_descr
+    !     character(len=*), intent(in)    :: exec_bin, script_name, outfile
+    !     character(len=512) :: io_msg
+    !     integer :: ios, funit, val
+    !     if(.not.fopen(funit, file=script_name, iostat=ios, STATUS='REPLACE', action='WRITE', iomsg=io_msg))&
+    !          call fileio_errmsg('simple_qsys_ctrl :: gen_qsys_script; Error when close file: '&
+    !          //trim(self%script_names(ipart)),ios )
+    !     if( q_descr%get('qsys_name').eq.'local' )call chmod(trim(self%script_names(ipart)),'+x')
+    !     if( ios .ne. 0 )then
+    !         write(*,'(a)',advance='no') 'simple_qsys_scripts :: gen_qsys_script; Error'
+    !         write(*,'(a)') 'chmoding submit script'//trim(self%script_names(ipart))
+    !         stop
+    !     endif
+    !     ! when we generate the script we also unflag jobs_submitted and jobs_done
+    !     self%jobs_done(ipart)      = .false.
+    !     self%jobs_submitted(ipart) = .false.
+    ! end subroutine generate_script_2
+
+    ! !>  \brief  public script generator for single jobs
+    ! subroutine generate_script_2( self, job_descr, q_descr, exec_bin, script_name, outfile )
+    !     use simple_fileio      , only: fopen,fileio_errmsg, file_exists
+    !     class(qsys_ctrl), intent(inout) :: self
+    !     class(chash),     intent(in)    :: job_descr
+    !     class(chash),     intent(in)    :: q_descr
+    !     character(len=*), intent(in)    :: exec_bin, script_name, outfile
+    !     character(len=512) :: io_msg
+    !     integer :: ios, funit, val
+    !     if(.not.fopen(funit, file=script_name, iostat=ios, STATUS='REPLACE', action='WRITE', iomsg=io_msg))&
+    !          call fileio_errmsg('simple_qsys_ctrl :: gen_qsys_script; Error when close file: '&
+    !          //trim(self%script_names(ipart)),ios )
+    !     if( q_descr%get('qsys_name').eq.'local' )call chmod(trim(self%script_names(ipart)),'+x')
+    !     if( ios .ne. 0 )then
+    !         write(*,'(a)',advance='no') 'simple_qsys_scripts :: gen_qsys_script; Error'
+    !         write(*,'(a)') 'chmoding submit script'//trim(self%script_names(ipart))
+    !         stop
+    !     endif
+    !     ! when we generate the script we also unflag jobs_submitted and jobs_done
+    !     self%jobs_done(ipart)      = .false.
+    !     self%jobs_submitted(ipart) = .false.
+    ! end subroutine generate_script_1
+
     !>  \brief  public script generator for single jobs
     subroutine generate_script_2( self, job_descr, q_descr, exec_bin, script_name, outfile )
-        use simple_filehandling, only: get_fileunit, file_exists
+        use simple_fileio      , only: fopen,fclose,fileio_errmsg, file_exists
         class(qsys_ctrl), intent(inout) :: self
         class(chash),     intent(in)    :: job_descr
         class(chash),     intent(in)    :: q_descr
         character(len=*), intent(in)    :: exec_bin, script_name, outfile
         character(len=512) :: io_msg
         integer :: ios, funit, val
-        funit = get_fileunit()
-        open(unit=funit, file=script_name, iostat=ios, STATUS='REPLACE', action='WRITE', iomsg=io_msg)
-        if( ios .ne. 0 )then
-            close(funit)
-            write(*,'(a)') 'simple_qsys_ctrl :: gen_qsys_script; Error when opening file for writing: '&
-            //trim(script_name)//' ; '//trim(io_msg)
+        if(.not.fopen(funit, file=script_name, iostat=ios, STATUS='REPLACE', action='WRITE', iomsg=io_msg))then
+            call fileio_errmsg('simple_qsys_ctrl :: generate_script_2; Error when opening file: '&
+                 //trim(script_name)//' ; '//trim(io_msg),ios )
             stop
         endif
         ! need to specify shell
@@ -326,7 +368,9 @@ contains
         ! exit shell when done
         write(funit,'(a)',advance='yes') ''
         write(funit,'(a)',advance='yes') 'exit'
-        close(funit)
+        if(.not.fclose(funit, iostat=ios))&
+             call fileio_errmsg('simple_qsys_ctrl :: generate_script_2; Error when closing file: '&
+             //trim(script_name),ios )
         if( trim(q_descr%get('qsys_name')).eq.'local' )call chmod(trim(script_name),'+x')
         if( ios .ne. 0 )then
             write(*,'(a)',advance='no') 'simple_qsys_ctrl :: generate_script_2; Error'
@@ -338,8 +382,8 @@ contains
     ! SUBMISSION TO QSYS
 
     subroutine submit_scripts( self )
-        use simple_filehandling, only: get_fileunit, fopen_err, del_file
-        use simple_syscalls,     only: exec_cmdline
+       ! use simple_fileio
+        use simple_syslib,       only: exec_cmdline
         use simple_qsys_local,   only: qsys_local
         class(qsys_ctrl),  intent(inout) :: self
         class(qsys_base),      pointer   :: pmyqsys
@@ -380,7 +424,7 @@ contains
     end subroutine submit_scripts
 
     subroutine submit_script( self, script_name )
-        use simple_syscalls,     only: exec_cmdline
+        use simple_syslib,       only: exec_cmdline
         use simple_qsys_local,   only: qsys_local
         class(qsys_ctrl), intent(inout) :: self
         character(len=*), intent(in)    :: script_name
@@ -402,7 +446,7 @@ contains
     ! QUERIES
 
     subroutine update_queue( self )
-        use simple_filehandling, only: file_exists
+        use simple_fileio      , only: file_exists
         class(qsys_ctrl),  intent(inout) :: self
         integer :: ipart, njobs_in_queue
         do ipart=self%fromto_part(1),self%fromto_part(2)
@@ -426,7 +470,7 @@ contains
     ! THE MASTER SCHEDULER
 
     subroutine schedule_jobs( self )
-        use simple_syscalls, only: simple_sleep
+        use simple_syslib, only: simple_sleep
         class(qsys_ctrl),  intent(inout) :: self
         do
             if( all(self%jobs_done) ) exit
@@ -439,7 +483,7 @@ contains
     ! STREAMING
 
     subroutine schedule_streaming( self, q_descr )
-        use simple_filehandling, only: del_file
+        use simple_fileio      , only: del_file
         class(qsys_ctrl),  intent(inout) :: self
         class(chash),      intent(in)    :: q_descr
         type(cmdline)         :: cline
@@ -457,7 +501,7 @@ contains
                     call cline%set('part', real(ipart)) ! computing unit allocation
                     call cline%gen_job_descr(job_descr)
                     script_name = self%script_names(ipart)
-                    outfile     = 'OUT' // int2str_pad(ipart, self%numlen) 
+                    outfile     = 'OUT' // int2str_pad(ipart, self%numlen)
                     self%jobs_submitted(ipart) = .true.
                     self%jobs_done(ipart)      = .false.
                     call del_file(self%jobs_done_fnames(ipart))
@@ -467,7 +511,7 @@ contains
             enddo
         endif
 
-        contains 
+        contains
 
             ! move everything up so '1' is index for next job
             subroutine updatestack
@@ -490,7 +534,7 @@ contains
 
     end subroutine schedule_streaming
 
-    !>  \brief  is to append to the streaming command-line stack 
+    !>  \brief  is to append to the streaming command-line stack
     subroutine add_to_streaming( self, cline )
         class(qsys_ctrl),  intent(inout) :: self
         class(cmdline),    intent(in)    :: cline

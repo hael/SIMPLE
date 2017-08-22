@@ -6,7 +6,7 @@ use simple_params,         only: params
 use simple_commander_base, only: commander_base
 use simple_qsys_env,       only: qsys_env
 use simple_commander_distr_wflows ! use all in there
-use simple_filehandling           ! use all in there
+use simple_fileio                 ! use all in there
 use simple_jiffys                 ! use all in there
 implicit none
 
@@ -36,7 +36,6 @@ contains
         use simple_scaler,            only: scaler
         use simple_oris,              only: oris
         use simple_commander_prime2D, only: rank_cavgs_commander
-        use simple_syscalls,          only: sys_del_files
         class(prime2D_autoscale_commander), intent(inout) :: self
         class(cmdline),                     intent(inout) :: cline
         ! constants
@@ -382,7 +381,7 @@ contains
         use simple_strings,          only: int2str_pad
         use simple_oris,             only: oris
         use simple_combinatorics,    only: diverse_labeling, shc_aggregation
-        use simple_filehandling,     only: file_exists, del_file
+        use simple_fileio      ,     only: file_exists, del_file
         class(het_ensemble_commander), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
         ! constants

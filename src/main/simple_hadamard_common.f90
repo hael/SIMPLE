@@ -39,6 +39,7 @@ contains
 
     subroutine set_bp_range( b, p, cline )
         use simple_math,          only: calc_fourier_index
+        use simple_fileio,        only: file_exists,file2rarr
         class(build),   intent(inout) :: b
         class(params),  intent(inout) :: p
         class(cmdline), intent(inout) :: cline
@@ -458,6 +459,7 @@ contains
     
     subroutine eonorm_struct_facts( b, p, res, which_iter )
         use simple_image, only: image
+        use simple_fileio, only: add2fbody, file2rarr
         class(build),      intent(inout) :: b
         class(params),     intent(inout) :: p
         real,              intent(inout) :: res
@@ -513,6 +515,7 @@ contains
     end subroutine eonorm_struct_facts
 
     subroutine norm_struct_facts( b, p, which_iter )
+         use simple_fileio, only: add2fbody
         class(build),      intent(inout) :: b
         class(params),     intent(inout) :: p
         integer, optional, intent(in)    :: which_iter

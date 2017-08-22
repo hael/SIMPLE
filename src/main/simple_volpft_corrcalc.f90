@@ -42,7 +42,7 @@ contains
 
     !>  \brief  is a constructor
     subroutine new( self, vol_ref, vol_target, hp, lp )
-        use simple_jiffys, only: alloc_err
+        use simple_syslib, only: alloc_errchk
         use simple_math,   only: is_even
         class(volpft_corrcalc),    intent(inout) :: self
         class(projector), target , intent(in)    :: vol_ref, vol_target
@@ -71,7 +71,7 @@ contains
         allocate( self%vpft_ref(self%nspace,self%kfromto_vpft(1):self%kfromto_vpft(2)),&
                   self%vpft_target(self%nspace,self%kfromto_vpft(1):self%kfromto_vpft(2)),&
                   self%locs_ref(self%nspace,self%kfromto_vpft(1):self%kfromto_vpft(2),3), stat=alloc_stat)
-        call alloc_err("In: simple_volpft_corrcalc :: new", alloc_stat)
+        call alloc_errchk("In: simple_volpft_corrcalc :: new", alloc_stat)
         ! generate sampling space
         do isym=1,self%nspace
             ! get symmetry rotation matrix

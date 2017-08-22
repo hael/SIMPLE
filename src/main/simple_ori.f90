@@ -1,9 +1,11 @@
 ! an orientation
 module simple_ori
 use simple_defs
+use simple_syslib, only: alloc_errchk
+use simple_fileio
 use simple_hash,   only: hash
 use simple_chash,  only: chash
-use simple_jiffys, only: alloc_err
+
 implicit none
 
 public :: ori, test_ori, test_ori_dists
@@ -473,7 +475,7 @@ contains
         class(ori),                    intent(inout) :: self
         character(len=*),              intent(in)    :: key
         character(len=:), allocatable, intent(inout) :: val
-        if( allocated(val) ) deallocate(val)
+        deallocate(val)
         val = self%chtab%get(key)
     end subroutine getter_1
 
@@ -557,18 +559,19 @@ contains
     function ori2str( self ) result( str )
         class(ori), intent(inout) :: self
         character(len=:), allocatable :: str, str_chtab, str_htab
-        integer :: sz_chash, sz_hash
+        integer :: sz_chash, sz_hash, alloc_stat
         sz_chash = self%chtab%size_of_chash()
         sz_hash  = self%htab%size_of_hash()
         if( sz_chash > 0 ) str_chtab = self%chtab%chash2str()
         if( sz_hash  > 0 ) str_htab  = self%htab%hash2str()
         if( sz_chash > 0 .and. sz_hash > 0 )then
-            allocate( str, source=str_chtab//' '//str_htab )
+            allocate( str, source=str_chtab//' '//str_htab ,stat = alloc_stat)
         else if( sz_hash > 0 )then
-            allocate( str, source=str_htab )
+            allocate( str, source=str_htab ,stat = alloc_stat)
         else if( sz_chash > 0 )then
-            allocate( str, source=str_chtab )
+            allocate( str, source=str_chtab ,stat = alloc_stat)
         endif
+        call alloc_errchk("in simple_ori::ori2str ",alloc_stat)
     end function ori2str
 
     !<  \brief  to print the rotation matrix

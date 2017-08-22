@@ -11,7 +11,8 @@
 ! Modifications by Cyril Reboul, Michael Eager & Hans Elmlund
 module simple_imgfile
     use simple_defs
-    use simple_filehandling
+    use simple_syslib
+    use simple_fileio
     use simple_imghead
     use gnufor2
     implicit none
@@ -66,7 +67,6 @@ contains
     ! CONSTRUCTOR
     !>  \brief  constructs an imgfile object (file-handle)
     subroutine open( self, fname, ldim, smpd, del_if_exists, formatchar, readhead, rwaction )
-        use simple_jiffys, only: alloc_err
         class(imgfile),             intent(inout) :: self          !< Imagefile object to be created
         character(len=*),           intent(in)    :: fname         !< Filename
         integer,                    intent(in)    :: ldim(3)       !< logical dimension of image/stack

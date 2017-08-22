@@ -6,13 +6,12 @@ use simple_chash,          only: chash
 use simple_qsys_env,       only: qsys_env
 use simple_params,         only: params
 use simple_commander_base, only: commander_base
-use simple_strings,        only: real2str
 use simple_commander_distr ! use all in there
-use simple_map_reduce      ! use all in there
+use simple_jiffys,         only: simple_end
+!use simple_map_reduce      ! use all in there
 use simple_qsys_funs       ! use all in there
-use simple_syscalls        ! use all in there
-use simple_filehandling    ! use all in there
-use simple_jiffys          ! use all in there
+!use simple_fileio          ! use all in there
+use simple_syslib          ! use all in there
 implicit none
 
 public :: unblur_ctffind_distr_commander
@@ -175,7 +174,9 @@ contains
 
     subroutine exec_unblur_tomo_movies_distr( self, cline )
         use simple_commander_preproc
-        use simple_oris, only: oris
+        use simple_oris,           only: oris
+        use simple_strings,        only: real2str
+        use simple_fileio,         only: read_filetable
         class(unblur_tomo_movies_distr_commander), intent(inout) :: self
         class(cmdline),                            intent(inout) :: cline
         character(len=STDLEN), allocatable :: tomonames(:)
@@ -339,7 +340,7 @@ contains
         use simple_commander_distr   ! use all in there
         use simple_commander_mask    ! use all in there
         use simple_procimgfile, only: random_selection_from_imgfile
-        use simple_strings,     only: str_has_substr
+        use simple_strings,     only: str_has_substr, real2str
         class(prime2D_distr_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
         ! constants
@@ -482,6 +483,7 @@ contains
         use simple_oris,              only: oris
         use simple_ori,               only: ori
         use simple_strings,           only: str_has_substr
+        use simple_fileio
         class(prime2D_chunk_distr_commander), intent(inout) :: self
         class(cmdline),                       intent(inout) :: cline
         character(len=STDLEN), parameter   :: CAVGNAMES       = 'cavgs_final.txt'
@@ -552,8 +554,8 @@ contains
         ishift = 0
         do ipart=1,p_master%nparts
             chunktag = 'chunk'//int2str_pad(ipart,numlen)
-            final_cavgs(ipart) = sys_get_last_fname(trim(chunktag)//CAVGS_ITERFBODY, p_master%ext)
-            final_docs(ipart)  = sys_get_last_fname(trim(chunktag)//ITERFBODY, 'txt')
+            final_cavgs(ipart) = get_last_fname(trim(chunktag)//CAVGS_ITERFBODY, p_master%ext)
+            final_docs(ipart)  = get_last_fname(trim(chunktag)//ITERFBODY, 'txt')
             if( ipart > 1 )then
                 ! the class indices need to be shifted by p%ncls
                 ishift = ishift + p_master%ncls
@@ -566,7 +568,7 @@ contains
             endif
         end do
         ! merge docs
-        call sys_merge_docs(final_docs, 'prime2Ddoc_final.txt')
+        call merge_docs(final_docs, 'prime2Ddoc_final.txt')
         ! merge class averages
         call write_filetable(CAVGNAMES, final_cavgs)
         call cline_stack%set('filetab', CAVGNAMES)
@@ -609,6 +611,7 @@ contains
     subroutine exec_comlin_smat_distr( self, cline )
         use simple_commander_comlin, only: comlin_smat_commander
         use simple_commander_distr,  only: merge_similarities_commander
+        use simple_map_reduce
         class(comlin_smat_distr_commander), intent(inout) :: self
         class(cmdline),                     intent(inout) :: cline
         type(merge_similarities_commander) :: xmergesims
@@ -697,6 +700,7 @@ contains
         use simple_commander_volops
         use simple_oris, only: oris
         use simple_math, only: calc_fourier_index, calc_lowpass_lim
+        use simple_strings,        only: real2str
         class(prime3D_distr_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
         ! constants
@@ -1253,7 +1257,8 @@ contains
     !> parallel TIME-SERIES ROUTINES
     !! tseries_track_distr  is a program for particle tracking in time-series data
     subroutine exec_tseries_track_distr( self, cline )
-        use simple_nrtxtfile,         only: nrtxtfile 
+        use simple_nrtxtfile,         only: nrtxtfile
+        use simple_strings,           only: real2str
         class(tseries_track_distr_commander), intent(inout) :: self
         class(cmdline),                       intent(inout) :: cline
         type(qsys_env)                :: qenv
@@ -1271,7 +1276,7 @@ contains
             ndatlines = boxfile%get_ndatalines()
             numlen    = len(int2str(ndatlines))
             allocate( boxdata(ndatlines,boxfile%get_nrecs_per_line()), stat=alloc_stat)
-            call alloc_err('In: simple_commander_tseries :: exec_tseries_track', alloc_stat)
+            call alloc_errchk('In: simple_commander_tseries :: exec_tseries_track', alloc_stat)
             do j=1,ndatlines
                 call boxfile%readNextDataLine(boxdata(j,:))
                 orig_box = nint(boxdata(j,3))
@@ -1327,7 +1332,7 @@ contains
         use simple_sym,     only: sym
         use simple_ori,     only: ori
         use simple_oris,    only: oris
-        use simple_strings, only: int2str_pad, int2str
+        use simple_strings, only: int2str_pad, int2str,real2str
         class(symsrch_distr_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
         type(merge_algndocs_commander) :: xmerge_algndocs

@@ -2,7 +2,7 @@ program simple_test_install
 use simple_defs              ! use all in there
 use simple_testfuns          ! use all in there
 use simple_rnd               ! use all in there
-use simple_syscalls          ! use all in there
+use simple_syslib          ! use all in there
 use simple_jiffys,           only: simple_end
 use simple_image,            only: image
 use simple_commander_volops, only: projvol_commander

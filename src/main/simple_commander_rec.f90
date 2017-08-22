@@ -6,9 +6,9 @@ use simple_params,          only: params
 use simple_build,           only: build
 use simple_commander_base,  only: commander_base
 use simple_strings,         only: int2str_pad
-use simple_syscalls, only: wait_for_closure
+use simple_syslib,          only: wait_for_closure
 use simple_hadamard_common  ! use all in there
-use simple_filehandling     ! use all in there
+use simple_fileio           ! use all in there
 use simple_jiffys           ! use all in there
 implicit none
 
@@ -91,7 +91,7 @@ contains
         call b%eorecvol%kill_exp            ! reduced meory usage
         call b%mskvol%kill                  ! reduced memory usage
         allocate(res05s(p%nstates), res0143s(p%nstates), stat=alloc_stat)
-        call alloc_err("In: simple_eo_volassemble", alloc_stat)
+        call alloc_errchk("In: simple_eo_volassemble", alloc_stat)
         res0143s = 0.
         res05s   = 0.
         ! rebuild b%vol according to box size (beacuse it is otherwise boxmatch)
@@ -129,10 +129,11 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_EO_VOLASSEMBLE NORMAL STOP ****', print_simple=.false.)
         ! indicate completion (when run in a qsys env)
-        fnr = get_fileunit()
-        open(unit=fnr, FILE='VOLASSEMBLE_FINISHED', STATUS='REPLACE', action='WRITE', iostat=file_stat)
-        call fopen_err('In: commander_rec :: eo_volassemble', file_stat )
-        close( unit=fnr )
+        
+        if(.not.fopen(fnr, FILE='VOLASSEMBLE_FINISHED', STATUS='REPLACE', action='WRITE', iostat=file_stat))&
+             call  fileio_errmsg('In: commander_rec :: eo_volassemble', file_stat )
+        if(.not.fclose( fnr , iostat=file_stat))&
+             call  fileio_errmsg('In: commander_rec :: eo_volassemble', file_stat )
         call wait_for_closure('VOLASSEMBLE_FINISHED')
         
         contains
@@ -170,7 +171,7 @@ contains
         character(len=STDLEN)         :: recvolname, rho_name
         integer                       :: part, s, ss, endit, i, state4name, file_stat, fnr
         type(reconstructor)           :: recvol_read
-        logical                       :: here(2)
+        
         p = params(cline)                   ! parameters generated
         call b%build_general_tbox(p, cline) ! general objects built
         call b%build_rec_tbox(p)            ! reconstruction toolbox built
@@ -249,10 +250,10 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_VOLASSEMBLE NORMAL STOP ****', print_simple=.false.)
         ! indicate completion (when run in a qsys env)
-        fnr = get_fileunit()
-        open(unit=fnr, FILE='VOLASSEMBLE_FINISHED', STATUS='REPLACE', action='WRITE', iostat=file_stat)
-        call fopen_err('In: commander_rec :: eo_volassemble', file_stat )
-        close(fnr)
+        if(.not.fopen(fnr, FILE='VOLASSEMBLE_FINISHED', STATUS='REPLACE', action='WRITE', iostat=file_stat))&
+             call  fileio_errmsg('In: commander_rec :: volassemble', file_stat )
+        if(.not.fclose( fnr , iostat=file_stat))&
+             call  fileio_errmsg('In: commander_rec :: volassemble', file_stat )
         call wait_for_closure('VOLASSEMBLE_FINISHED')
 
         contains
@@ -260,8 +261,9 @@ contains
             subroutine assemble( recnam, kernam )
                 character(len=*), intent(in) :: recnam
                 character(len=*), intent(in) :: kernam
-                inquire(FILE=recnam, EXIST=here(1))
-                inquire(FILE=kernam, EXIST=here(2))
+                logical                      :: here(2)
+                here(1)=file_exists(recnam)
+                here(2)=file_exists(kernam)
                 if( all(here) )then     
                     call recvol_read%read(recnam)
                     call recvol_read%read_rho(kernam)

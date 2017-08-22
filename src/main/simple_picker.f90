@@ -6,8 +6,8 @@ use simple_defs
 use simple_math,         only: sortmeans, round2even
 use simple_image,        only: image
 use simple_math,         only: euclid, hpsort
-use simple_filehandling, only: get_fileunit, remove_abspath, fname_new_ext
-use simple_jiffys,       only: alloc_err, find_ldim_nptcls
+!use simple_fileio      
+use simple_syslib,       only: alloc_errchk
 implicit none
 
 public :: init_picker, exec_picker, kill_picker
@@ -35,14 +35,16 @@ logical                       :: rm_outliers = .true.
 contains
 
     subroutine init_picker( micfname, refsfname, smpd_in, lp_in, distthr_in, rm_outliers_in )
+    use simple_fileio,   only:  remove_abspath,fname_new_ext
+    use simple_imgfile,  only: find_ldim_nptcls
         character(len=*),           intent(in) :: micfname, refsfname
         real,                       intent(in) :: smpd_in
         real,             optional, intent(in) :: lp_in, distthr_in
         character(len=*), optional, intent(in) :: rm_outliers_in
         type(image) :: refimg
         integer     :: alloc_stat, ifoo, iref
-        allocate(micname,  source=trim(micfname))
-        allocate(refsname, source=trim(refsfname))
+        allocate(micname,  source=trim(micfname), stat=alloc_stat);call alloc_errchk('picker;init, 2', alloc_stat)
+        allocate(refsname, source=trim(refsfname), stat=alloc_stat);call alloc_errchk('picker;init, 2', alloc_stat)
         boxname = remove_abspath( fname_new_ext(micname,'box') )   
         smpd    = smpd_in
         lp      = 20.0
@@ -84,7 +86,7 @@ contains
         if( present(distthr_in) ) distthr = distthr_in/PICKER_SHRINK
         ! read and shrink references
         allocate( refs(nrefs), refs_refine(nrefs), sxx(nrefs), sxx_refine(nrefs), stat=alloc_stat )
-        call alloc_err( "In: simple_picker :: init_picker, 1", alloc_stat)
+        call alloc_errchk( "In: simple_picker :: init_picker, 1", alloc_stat)
         do iref=1,nrefs
             call refs(iref)%new(ldim_refs, smpd_shrunken)
             call refs_refine(iref)%new(ldim_refs_refine, smpd_shrunken_refine)
@@ -141,7 +143,7 @@ contains
         end do
         allocate( target_corrs(ntargets), target_positions(ntargets,2),&
                   corrmat(0:nx,0:ny), refmat(0:nx,0:ny), is_a_peak(0:nx,0:ny), stat=alloc_stat )
-        call alloc_err( 'In: simple_picker :: gen_corr_peaks, 1', alloc_stat )
+        call alloc_errchk( 'In: simple_picker :: gen_corr_peaks, 1', alloc_stat )
         target_corrs     = 0.
         target_positions = 0
         corrmat          = -1.
@@ -172,7 +174,7 @@ contains
         call sortmeans(target_corrs, MAXKMIT, means, labels)
         npeaks = count(labels == 2)
         allocate( peak_positions(npeaks,2), specscores(0:nx,0:ny), stat=alloc_stat)
-        call alloc_err( 'In: simple_picker :: gen_corr_peaks, 2', alloc_stat )
+        call alloc_errchk( 'In: simple_picker :: gen_corr_peaks, 2', alloc_stat )
         peak_positions = 0
         specscores     = 0.0
         ! store peak positions
@@ -230,7 +232,7 @@ contains
             end do
         end do
         allocate( backgr_positions(nbackgr,2), stat=alloc_stat)
-        call alloc_err( 'In: simple_picker :: gen_corr_peaks, 3', alloc_stat )
+        call alloc_errchk( 'In: simple_picker :: gen_corr_peaks, 3', alloc_stat )
         nbackgr = 0
         do xind=0,nx,ldim_refs(1)/2
             do yind=0,ny,ldim_refs(1)/2
@@ -250,7 +252,7 @@ contains
         real,    allocatable :: corrs(:)
         write(*,'(a)') '>>> DISTANCE FILTERING'
         allocate( mask(npeaks), corrs(npeaks), selected_peak_positions(npeaks), stat=alloc_stat)
-        call alloc_err( 'In: simple_picker :: distance_filter', alloc_stat )
+        call alloc_errchk( 'In: simple_picker :: distance_filter', alloc_stat )
         selected_peak_positions = .true.
         do ipeak=1,npeaks
             ipos = peak_positions(ipeak,:)
@@ -374,22 +376,25 @@ contains
     end subroutine remove_outliers
 
     subroutine write_boxfile
-        integer :: funit, ipeak
-        funit = get_fileunit()
-        open(unit=funit, status='REPLACE', action='WRITE', file=boxname)
+        use simple_fileio, only: fopen, fclose, fileio_errmsg
+        integer :: funit, ipeak,iostat
+        if(.not.fopen(funit, status='REPLACE', action='WRITE', file=boxname,iostat=iostat))&
+             call fileio_errmsg('picker; write_boxfile ', iostat)
         do ipeak=1,npeaks
             if( selected_peak_positions(ipeak) )then             
                 write(funit,'(I7,I7,I7,I7,I7)') peak_positions_refined(ipeak,1),&
                 peak_positions_refined(ipeak,2), orig_box, orig_box, -3
             endif
         end do
-        close(funit)
+        if(.not.fclose(funit,iostat=iostat))&
+             call fileio_errmsg('picker; write_boxfile end', iostat)
     end subroutine write_boxfile
 
     subroutine write_backgr_coords
-        integer :: funit, xind, yind
-        funit = get_fileunit()
-        open(unit=funit, status='REPLACE', action='WRITE', file='background.box')
+        use simple_fileio, only: fopen, fclose, fileio_errmsg
+        integer :: funit, xind, yind, iostat
+        if(.not.fopen(funit, status='REPLACE', action='WRITE', file='background.box',iostat=iostat))&
+             call fileio_errmsg('picker; write_backgr_coords ', iostat)
         nbackgr = 0
         do xind=0,nx,ldim_refs_refine(1)/2
             do yind=0,ny,ldim_refs_refine(1)/2
@@ -401,22 +406,27 @@ contains
                 endif
             end do
         end do
+        if(.not.fclose(funit,iostat=iostat))&
+             call fileio_errmsg('picker; write_backgr_coords end', iostat)
     end subroutine write_backgr_coords
 
     subroutine kill_picker
-        integer :: iref
+        integer :: iref, alloc_stat
         if( allocated(micname) )then
             call micrograph%kill
             call mic_shrunken%kill
             call mic_shrunken_refine%kill
             call ptcl_target%kill
-            deallocate(selected_peak_positions,is_a_peak,sxx,sxx_refine,corrmat,specscores)
-            deallocate(peak_positions,peak_positions_refined,refmat,backgr_positions,micname,refsname)
+            deallocate(selected_peak_positions,is_a_peak,sxx,sxx_refine,corrmat,specscores, stat=alloc_stat)
+            call alloc_errchk('picker kill, 1', alloc_stat)
+            deallocate(peak_positions,peak_positions_refined,refmat,backgr_positions,micname,refsname, stat=alloc_stat)
+            call alloc_errchk('picker kill, 2', alloc_stat)
             do iref=1,nrefs
                 call refs(iref)%kill
                 call refs_refine(iref)%kill
             end do
-            deallocate(refs, refs_refine)
+            deallocate(refs, refs_refine, stat=alloc_stat)
+            call alloc_errchk('picker; kill 3', alloc_stat)
         endif
     end subroutine kill_picker
 

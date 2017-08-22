@@ -125,13 +125,13 @@
  end if
 !***********************************************************************************
  ierror=0
- call get_unit(file_unit)
- if (file_unit==0) then
-  ierror=1
-  print *,'write_vector_date - fatal error! Could not get a free FORTRAN unit.'
-  stop
- end if
- open (unit=file_unit, file=data_file_name, status='replace', iostat=ios)
+! call get_unit(file_unit)
+! if (file_unit==0) then
+!  ierror=1
+!  print *,'write_vector_date - fatal error! Could not get a free FORTRAN unit.'
+!  stop
+! end if
+ open (newunit=file_unit, file=data_file_name, status='replace', iostat=ios)
  if (ios/=0) then
   ierror=2
   print *,'write_vector_data - fatal error! Could not open the terminal data file.'
@@ -150,13 +150,13 @@
  close (unit=file_unit)
 !***********************************************************************************
  ierror = 0
- call get_unit(file_unit)
- if (file_unit==0) then
-  ierror=1
-  print *,'write_vector_date - fatal error! Could not get a free FORTRAN unit.'
-  stop
- end if
- open (unit=file_unit, file=command_file_name, status='replace', iostat=ios)
+! call get_unit(file_unit)
+! if (file_unit==0) then
+!  ierror=1
+!  print *,'write_vector_date - fatal error! Could not get a free FORTRAN unit.'
+!  stop
+! end if
+ open (newunit=file_unit, file=command_file_name, status='replace', iostat=ios)
  if (ios/=0) then
   ierror=2
   print *,'write_vector_data - fatal error! Could not open the terminal command file.'
@@ -240,13 +240,13 @@
  end if
 !***********************************************************************************
  ierror=0
- call get_unit(file_unit)
- if (file_unit==0) then
-  ierror=1
-  print *,'write_vector_date - fatal error! Could not get a free FORTRAN unit.'
-  stop
- end if
- open (unit=file_unit, file=data_file_name, status='replace', iostat=ios)
+ !call get_unit(file_unit)
+ !if (file_unit==0) then
+ ! ierror=1
+ ! print *,'write_vector_date - fatal error! Could not get a free FORTRAN unit.'
+ ! stop
+ !end if
+ open (newunit=file_unit, file=data_file_name, status='replace', iostat=ios)
  if (ios/=0) then
   ierror=2
   print *,'write_vector_data - fatal error! Could not open the terminal data file.'
@@ -265,13 +265,13 @@
  close (unit=file_unit)
 !***********************************************************************************
  ierror = 0
- call get_unit(file_unit)
- if (file_unit==0) then
-  ierror=1
-  print *,'write_vector_date - fatal error! Could not get a free FORTRAN unit.'
-  stop
- end if
- open (unit=file_unit, file=command_file_name, status='replace', iostat=ios)
+ !call get_unit(file_unit)
+ !if (file_unit==0) then
+ ! ierror=1
+ ! print *,'write_vector_date - fatal error! Could not get a free FORTRAN unit.'
+ ! stop
+ !end if
+ open (newunit=file_unit, file=command_file_name, status='replace', iostat=ios)
  if (ios/=0) then
   ierror=2
   print *,'write_vector_data - fatal error! Could not open the terminal command file.'
@@ -358,13 +358,13 @@
  end if
 !***********************************************************************************
  ierror=0
- call get_unit(file_unit)
- if (file_unit==0) then
-  ierror=1
-  print *,'write_vector_date - fatal error! Could not get a free FORTRAN unit.'
-  stop
- end if
- open (unit=file_unit, file=data_file_name, status='replace', iostat=ios)
+ !call get_unit(file_unit)
+ !if (file_unit==0) then
+ ! ierror=1
+ ! print *,'write_vector_date - fatal error! Could not get a free FORTRAN unit.'
+ ! stop
+ !end if
+ open (newunit=file_unit, file=data_file_name, status='replace', iostat=ios)
  if (ios/=0) then
   ierror=2
   print *,'write_vector_data - fatal error! Could not open the terminal data file.'
@@ -383,13 +383,13 @@
  close (unit=file_unit)
 !***********************************************************************************
  ierror = 0
- call get_unit(file_unit)
- if (file_unit==0) then
-  ierror=1
-  print *,'write_vector_date - fatal error! Could not get a free FORTRAN unit.'
-  stop
- end if
- open (unit=file_unit, file=command_file_name, status='replace', iostat=ios)
+ ! call get_unit(file_unit)
+ ! if (file_unit==0) then
+ !  ierror=1
+ !  print *,'write_vector_date - fatal error! Could not get a free FORTRAN unit.'
+ !  stop
+ ! end if
+ open (newunit=file_unit, file=command_file_name, status='replace', iostat=ios)
  if (ios/=0) then
   ierror=2
   print *,'write_vector_data - fatal error! Could not open the terminal command file.'
@@ -476,13 +476,13 @@
  end if
 !***********************************************************************************
  ierror=0
- call get_unit(file_unit)
- if (file_unit==0) then
-  ierror=1
-  print *,'write_vector_date - fatal error! Could not get a free FORTRAN unit.'
-  stop
- end if
- open (unit=file_unit, file=data_file_name, status='replace', iostat=ios)
+ ! call get_unit(file_unit)
+ ! if (file_unit==0) then
+ !  ierror=1
+ !  print *,'write_vector_date - fatal error! Could not get a free FORTRAN unit.'
+ !  stop
+ ! end if
+ open (newunit=file_unit, file=data_file_name, status='replace', iostat=ios)
  if (ios/=0) then
   ierror=2
   print *,'write_vector_data - fatal error! Could not open the terminal data file.'
@@ -501,13 +501,13 @@
  close (unit=file_unit)
 !***********************************************************************************
  ierror = 0
- call get_unit(file_unit)
- if (file_unit==0) then
-  ierror=1
-  print *,'write_vector_date - fatal error! Could not get a free FORTRAN unit.'
-  stop
- end if
- open (unit=file_unit, file=command_file_name, status='replace', iostat=ios)
+ ! call get_unit(file_unit)
+ ! if (file_unit==0) then
+ !  ierror=1
+ !  print *,'write_vector_date - fatal error! Could not get a free FORTRAN unit.'
+ !  stop
+ ! end if
+ open (newunit=file_unit, file=command_file_name, status='replace', iostat=ios)
  if (ios/=0) then
   ierror=2
   print *,'write_vector_data - fatal error! Could not open the terminal command file.'
@@ -596,13 +596,13 @@
  end if
 !***********************************************************************************
  ierror=0
- call get_unit(file_unit)
- if (file_unit==0) then
-  ierror=1
-  print *,'write_vector_date - fatal error! Could not get a free FORTRAN unit.'
-  stop
- end if
- open (unit=file_unit, file=data_file_name, status='replace', iostat=ios)
+ ! call get_unit(file_unit)
+ ! if (file_unit==0) then
+ !  ierror=1
+ !  print *,'write_vector_date - fatal error! Could not get a free FORTRAN unit.'
+ !  stop
+ ! end if
+ open (newunit=file_unit, file=data_file_name, status='replace', iostat=ios)
  if (ios/=0) then
   ierror=2
   print *,'write_vector_data - fatal error! Could not open the terminal data file.'
@@ -618,13 +618,13 @@
  close (unit=file_unit)
 !***********************************************************************************
  ierror = 0
- call get_unit(file_unit)
- if (file_unit==0) then
-  ierror=1
-  print *,'write_vector_date - fatal error! Could not get a free FORTRAN unit.'
-  stop
- end if
- open (unit=file_unit, file=command_file_name, status='replace', iostat=ios)
+ ! call get_unit(file_unit)
+ ! if (file_unit==0) then
+ !  ierror=1
+ !  print *,'write_vector_date - fatal error! Could not get a free FORTRAN unit.'
+ !  stop
+ ! end if
+ open (newunit=file_unit, file=command_file_name, status='replace', iostat=ios)
  if (ios/=0) then
   ierror=2
   print *,'write_vector_data - fatal error! Could not open the terminal command file.'
@@ -726,13 +726,13 @@
  end if
 !***********************************************************************************
  ierror=0
- call get_unit(file_unit)
- if (file_unit==0) then
-  ierror=1
-  print *,'write_vector_date - fatal error! Could not get a free FORTRAN unit.'
-  stop
- end if
- open (unit=file_unit, file=data_file_name, status='replace', iostat=ios)
+ ! call get_unit(file_unit)
+ ! if (file_unit==0) then
+ !  ierror=1
+ !  print *,'write_vector_date - fatal error! Could not get a free FORTRAN unit.'
+ !  stop
+ ! end if
+ open (newunit=file_unit, file=data_file_name, status='replace', iostat=ios)
  if (ios/=0) then
   ierror=2
   print *,'write_vector_data - fatal error! Could not open the terminal data file.'
@@ -748,13 +748,13 @@
  close (unit=file_unit)
 !***********************************************************************************
  ierror = 0
- call get_unit(file_unit)
- if (file_unit==0) then
-  ierror=1
-  print *,'write_vector_date - fatal error! Could not get a free FORTRAN unit.'
-  stop
- end if
- open (unit=file_unit, file=command_file_name, status='replace', iostat=ios)
+ ! call get_unit(file_unit)
+ ! if (file_unit==0) then
+ !  ierror=1
+ !  print *,'write_vector_date - fatal error! Could not get a free FORTRAN unit.'
+ !  stop
+ ! end if
+ open (newunit=file_unit, file=command_file_name, status='replace', iostat=ios)
  if (ios/=0) then
   ierror=2
   print *,'write_vector_data - fatal error! Could not open the terminal command file.'
@@ -900,13 +900,13 @@
  end if
 !***********************************************************************************
  ierror=0
- call get_unit(file_unit)
- if (file_unit==0) then
-  ierror=1
-  print *,'write_vector_date - fatal error! Could not get a free FORTRAN unit.'
-  stop
- end if
- open (unit=file_unit, file=data_file_name, status='replace', iostat=ios)
+ ! call get_unit(file_unit)
+ ! if (file_unit==0) then
+ !  ierror=1
+ !  print *,'write_vector_date - fatal error! Could not get a free FORTRAN unit.'
+ !  stop
+ ! end if
+ open (newunit=file_unit, file=data_file_name, status='replace', iostat=ios)
  if (ios/=0) then
   ierror=2
   print *,'write_vector_data - fatal error! Could not open the terminal data file.'
@@ -925,13 +925,13 @@
  close (unit=file_unit)
 !***********************************************************************************
  ierror = 0
- call get_unit(file_unit)
- if (file_unit==0) then
-  ierror=1
-  print *,'write_vector_date - fatal error! Could not get a free FORTRAN unit.'
-  stop
- end if
- open (unit=file_unit, file=command_file_name, status='replace', iostat=ios)
+ ! call get_unit(file_unit)
+ ! if (file_unit==0) then
+ !  ierror=1
+ !  print *,'write_vector_date - fatal error! Could not get a free FORTRAN unit.'
+ !  stop
+ ! end if
+ open (newunit=file_unit, file=command_file_name, status='replace', iostat=ios)
  if (ios/=0) then
   ierror=2
   print *,'write_vector_data - fatal error! Could not open the terminal command file.'
@@ -1044,13 +1044,13 @@
  end if
 !***********************************************************************************
  ierror=0
- call get_unit(file_unit)
- if (file_unit==0) then
-  ierror=1
-  print *,'write_vector_data - fatal error! Could not get a free FORTRAN unit.'
-  stop
- end if
- open (unit=file_unit, file=data_file_name, status='replace', iostat=ios)
+ ! call get_unit(file_unit)
+ ! if (file_unit==0) then
+ !  ierror=1
+ !  print *,'write_vector_data - fatal error! Could not get a free FORTRAN unit.'
+ !  stop
+ ! end if
+ open (newunit=file_unit, file=data_file_name, status='replace', iostat=ios)
  if (ios/=0) then
   ierror=2
   print *,'write_vector_data - fatal error! Could not open the terminal data file.'
@@ -1068,13 +1068,13 @@
  close (unit=file_unit)
 !***********************************************************************************
  ierror = 0
- call get_unit(file_unit)
- if (file_unit==0) then
-  ierror=1
-  print *,'write_vector_data - fatal error! Could not get a free FORTRAN unit.'
-  stop
- end if
- open (unit=file_unit, file=command_file_name, status='replace', iostat=ios)
+ ! call get_unit(file_unit)
+ ! if (file_unit==0) then
+ !  ierror=1
+ !  print *,'write_vector_data - fatal error! Could not get a free FORTRAN unit.'
+ !  stop
+ ! end if
+ open (newunit=file_unit, file=command_file_name, status='replace', iostat=ios)
  if (ios/=0) then
   ierror=2
   print *,'write_vector_data - fatal error! Could not open the terminal command file.'
@@ -1250,13 +1250,13 @@
  end if
 !***********************************************************************************
  ierror=0
- call get_unit(file_unit)
- if (file_unit==0) then
-  ierror=1
-  print *,'write_vector_data - fatal error! Could not get a free FORTRAN unit.'
-  stop
- end if
- open (unit=file_unit, file=data_file_name, status='replace', iostat=ios)
+ ! call get_unit(file_unit)
+ ! if (file_unit==0) then
+ !  ierror=1
+ !  print *,'write_vector_data - fatal error! Could not get a free FORTRAN unit.'
+ !  stop
+ ! end if
+ open (newunit=file_unit, file=data_file_name, status='replace', iostat=ios)
  if (ios/=0) then
   ierror=2
   print *,'write_vector_data - fatal error! Could not open the terminal data file.'
@@ -1274,13 +1274,13 @@
  close (unit=file_unit)
 !***********************************************************************************
  ierror = 0
- call get_unit(file_unit)
- if (file_unit==0) then
-  ierror=1
-  print *,'write_vector_data - fatal error! Could not get a free FORTRAN unit.'
-  stop
- end if
- open (unit=file_unit, file=command_file_name, status='replace', iostat=ios)
+ ! call get_unit(file_unit)
+ ! if (file_unit==0) then
+ !  ierror=1
+ !  print *,'write_vector_data - fatal error! Could not get a free FORTRAN unit.'
+ !  stop
+ ! end if
+ open (newunit=file_unit, file=command_file_name, status='replace', iostat=ios)
  if (ios/=0) then
   ierror=2
   print *,'write_vector_data - fatal error! Could not open the terminal command file.'
@@ -1436,13 +1436,13 @@
  end if
 !***********************************************************************************
  ierror=0
- call get_unit(file_unit)
- if (file_unit==0) then
-  ierror=1
-  print *,'write_vector_data - fatal error! Could not get a free FORTRAN unit.'
-  stop
- end if
- open (unit=file_unit, file=data_file_name, status='replace', iostat=ios)
+ ! call get_unit(file_unit)
+ ! if (file_unit==0) then
+ !  ierror=1
+ !  print *,'write_vector_data - fatal error! Could not get a free FORTRAN unit.'
+ !  stop
+ ! end if
+ open (newunit=file_unit, file=data_file_name, status='replace', iostat=ios)
  if (ios/=0) then
   ierror=2
   print *,'write_vector_data - fatal error! Could not open the terminal data file.'
@@ -1459,13 +1459,13 @@
  close (unit=file_unit)
 !***********************************************************************************
  ierror = 0
- call get_unit(file_unit)
- if (file_unit==0) then
-  ierror=1
-  print *,'write_vector_data - fatal error! Could not get a free FORTRAN unit.'
-  stop
- end if
- open (unit=file_unit, file=command_file_name, status='replace', iostat=ios)
+ ! call get_unit(file_unit)
+ ! if (file_unit==0) then
+ !  ierror=1
+ !  print *,'write_vector_data - fatal error! Could not get a free FORTRAN unit.'
+ !  stop
+ ! end if
+ open (newunit=file_unit, file=command_file_name, status='replace', iostat=ios)
  if (ios/=0) then
   ierror=2
   print *,'write_vector_data - fatal error! Could not open the terminal command file.'
@@ -1602,13 +1602,13 @@
  end if
 !***********************************************************************************
  ierror=0
- call get_unit(file_unit)
- if (file_unit==0) then
-  ierror=1
-  print *,'write_vector_data - fatal error! Could not get a free FORTRAN unit.'
-  stop
- end if
- open (unit=file_unit, file=data_file_name, status='replace', iostat=ios)
+ ! call get_unit(file_unit)
+ ! if (file_unit==0) then
+ !  ierror=1
+ !  print *,'write_vector_data - fatal error! Could not get a free FORTRAN unit.'
+ !  stop
+ ! end if
+ open (newunit=file_unit, file=data_file_name, status='replace', iostat=ios)
  if (ios/=0) then
   ierror=2
   print *,'write_vector_data - fatal error! Could not open the terminal data file.'
@@ -1624,13 +1624,13 @@
  close (unit=file_unit)
 !***********************************************************************************
  ierror = 0
- call get_unit(file_unit)
- if (file_unit==0) then
-  ierror=1
-  print *,'write_vector_data - fatal error! Could not get a free FORTRAN unit.'
-  stop
- end if
- open (unit=file_unit, file=command_file_name, status='replace', iostat=ios)
+ ! call get_unit(file_unit)
+ ! if (file_unit==0) then
+ !  ierror=1
+ !  print *,'write_vector_data - fatal error! Could not get a free FORTRAN unit.'
+ !  stop
+ ! end if
+ open (newunit=file_unit, file=command_file_name, status='replace', iostat=ios)
  if (ios/=0) then
   ierror=2
   print *,'write_vector_data - fatal error! Could not open the terminal command file.'
@@ -1735,31 +1735,5 @@ call system(trim(command))
  return
 !***********************************************************************************
  end subroutine run_gnuplot
-!***********************************************************************************
-!***********************************************************************************
-!***********************************************************************************
- subroutine get_unit(iunit)
-!***********************************************************************************
- implicit none
- integer i
- integer ios
- integer iunit
- logical lopen
-!***********************************************************************************
- iunit=0
- do i=1,99
-  if (i/= 5 .and. i/=6) then
-   inquire (unit=i, opened=lopen, iostat=ios)
-   if (ios==0) then
-    if (.not.lopen) then
-     iunit=i
-     return
-    end if
-   end if
-
-  end if
- end do
- return
- end subroutine get_unit
 !***********************************************************************************
 end module gnufor2

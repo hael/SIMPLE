@@ -6,7 +6,7 @@ use simple_params,         only: params
 use simple_build,          only: build
 use simple_commander_base, only: commander_base
 use simple_strings,        only: int2str, int2str_pad
-use simple_filehandling    ! use all in there
+use simple_fileio          ! use all in there
 use simple_jiffys          ! use all in there
 implicit none
 
@@ -31,7 +31,8 @@ end type tseries_split_commander
 contains
 
     subroutine exec_tseries_extract( self, cline )
-        use simple_image, only: image
+    use simple_image, only: image
+    use simple_imgfile,  only: find_ldim_nptcls
         class(tseries_extract_commander), intent(inout) :: self
         class(cmdline),                   intent(inout) :: cline
         type(params) :: p
@@ -108,7 +109,7 @@ contains
                 ndatlines = boxfile%get_ndatalines()
                 numlen    = len(int2str(ndatlines))
                 allocate( boxdata(ndatlines,boxfile%get_nrecs_per_line()), stat=alloc_stat)
-                call alloc_err('In: simple_commander_tseries :: exec_tseries_track', alloc_stat)
+                call alloc_errchk('In: simple_commander_tseries :: exec_tseries_track', alloc_stat)
                 do j=1,ndatlines
                     call boxfile%readNextDataLine(boxdata(j,:))
                     orig_box = nint(boxdata(j,3))
@@ -147,7 +148,7 @@ contains
     subroutine exec_tseries_split( self, cline )
         use simple_oris,     only: oris
         use simple_ori,      only: ori
-        use simple_syscalls, only: exec_cmdline
+        use simple_syslib,   only: exec_cmdline
         class(tseries_split_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
         type(params) :: p

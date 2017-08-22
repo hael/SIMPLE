@@ -1,9 +1,8 @@
 ! executes the shared-memory parallelised programs in SIMPLE
 program simple_exec
 use simple_defs
-use simple_cmdline, only: cmdline
+use simple_cmdline, only: cmdline, cmdline_err
 use simple_strings, only: str_has_substr
-use simple_jiffys,  only: cmdline_err
 use simple_gen_doc
 use simple_commander_checks
 use simple_commander_comlin

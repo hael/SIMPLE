@@ -1,9 +1,9 @@
 ! ctffind iterator
 module simple_ctffind_iter
-use simple_syscalls,  only: exec_cmdline
+use simple_syslib,  only: exec_cmdline
 use simple_nrtxtfile, only: nrtxtfile
 use simple_strings,   only: real2str
-use simple_filehandling ! use all in there
+use simple_fileio       ! use all in there
 implicit none
 
 public :: ctffind_iter
@@ -15,7 +15,7 @@ type :: ctffind_iter
 end type ctffind_iter
 
 contains
-    
+
     subroutine iterate( self, p, imovie, movie_counter, moviename_forctf, fname_ctrl, fname_output, os )
         use simple_params, only: params
         use simple_oris,   only: oris
@@ -29,14 +29,16 @@ contains
         real,             allocatable :: ctfparams(:,:)
         character(len=STDLEN)         :: cmd_str, fname_param
         type(nrtxtfile)               :: ctfparamfile
-        integer                       :: funit, ndatlines, nrecs, j, file_stat
+        integer                       :: funit, ndatlines, nrecs, j, file_stat,alloc_stat
         if( .not. file_exists(moviename_forctf) )&
         & write(*,*) 'inputted micrograph does not exist: ', trim(adjustl(moviename_forctf))
         movie_counter = movie_counter + 1
-        funit         = get_fileunit()
+
         fname_diag    = add2fbody(moviename_forctf, p%ext, '_ctffind_diag')
         fname_param   = fname_new_ext(fname_diag, 'txt')
-        open(unit=funit, status='REPLACE', action='WRITE', file=trim(fname_ctrl))
+
+        if(.not.fopen(funit, status='REPLACE', action='WRITE', file=trim(fname_ctrl),iostat=file_stat))&
+             call fileio_errmsg("ctffind_iter:: iterate fopen failed",file_stat)
         write(funit,'(a)') trim(moviename_forctf)      ! integrated movie used for fitting
         write(funit,'(a)') trim(fname_diag)            ! diagnostic file
         write(funit,'(a)') real2str(p%smpd)            ! magnification dependent sampling distance
@@ -45,7 +47,7 @@ contains
         write(funit,'(a)') real2str(p%fraca)           ! fraction of amplitude contrast, default 0.1 (10%)
         write(funit,'(a)') real2str(real(p%pspecsz))   ! size of power spectrum, default 1024 to avoid aliasing
         write(funit,'(a)') real2str(p%hp)              ! high-pass limit, default 30.0 A
-        write(funit,'(a)') real2str(p%lp)              ! low-pass  limit, default 5.0 A  
+        write(funit,'(a)') real2str(p%lp)              ! low-pass  limit, default 5.0 A
         write(funit,'(a)') real2str(1.0e4*p%dfmin)     ! minimum defocus, default 0.5 microns
         write(funit,'(a)') real2str(1.0e4*p%dfmax)     ! maximum defocus, default 5.0 microns
         write(funit,'(a)') real2str(1.0e4*p%dfstep)    ! defocus grid search step size, default 0.05 microns
@@ -53,15 +55,17 @@ contains
         write(funit,'(a)') 'yes'                       ! slower, more exhaustive search
         write(funit,'(a)') 'yes'                       ! use a restraint on astigmatism
         write(funit,'(a)') real2str(1.0e4*p%astigtol)  ! defocus grid search step size, default 0.05 microns
-        write(funit,'(a)') trim(p%phaseplate)          ! phase-plate or not (yes|no) {no}       
+        write(funit,'(a)') trim(p%phaseplate)          ! phase-plate or not (yes|no) {no}
         write(funit,'(a)') 'no';                       ! set expert options
-        close(funit)
+        if(.not.fclose(funit,iostat=file_stat))&
+             call fileio_errmsg("ctffind_iter:: iterate fopen failed",file_stat)
         cmd_str = 'cat ' // fname_ctrl//' | ctffind'
-        call system(trim(cmd_str))
+        call exec_cmdline(trim(cmd_str))
         call ctfparamfile%new(fname_param, 1)
         ndatlines = ctfparamfile%get_ndatalines()
         nrecs     = ctfparamfile%get_nrecs_per_line()
-        allocate( ctfparams(ndatlines,nrecs) )
+        allocate( ctfparams(ndatlines,nrecs) , stat=alloc_stat)
+        call alloc_errchk('In: iterate, module: simple_ctffind_iter', alloc_stat)
         do j=1,ndatlines
             call ctfparamfile%readNextDataLine(ctfparams(j,:))
         end do

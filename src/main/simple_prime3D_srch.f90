@@ -1,6 +1,7 @@
 ! PRIME3D stochastic search routines
 module simple_prime3D_srch
 use simple_defs
+use simple_syslib
 use simple_oris,             only: oris
 use simple_ori,              only: ori
 use simple_strings,          only: str_has_substr, int2str_pad
@@ -156,7 +157,7 @@ contains
             self%state_exists = a%states_exist(self%nstates)
         else
             allocate(self%state_exists(self%nstates), stat=alloc_stat)   
-            call alloc_err('In: new; simple_prime3D_srch, 1', alloc_stat)
+            call alloc_errchk('In: new; simple_prime3D_srch, 1', alloc_stat)
             self%state_exists = .true.
         endif
         ! multiple states
@@ -1138,7 +1139,7 @@ contains
         real,    allocatable :: corrs(:), ws(:), logws(:)
         integer, allocatable :: order(:) 
         logical, allocatable :: included(:)
-        integer              :: ipeak, npeaks
+        integer              :: ipeak, npeaks, alloc_stat
         if( self%npeaks == 1 )then
             call self%o_peaks%set(1,'ow',1.0)
             wcorr = self%o_peaks%get(1,'corr')
@@ -1152,7 +1153,8 @@ contains
         ! calculate the exponential of the negative distances
         ! so that when diff==0 the weights are maximum and when
         ! diff==corrmax the weights are minimum
-        allocate( ws(npeaks), logws(npeaks) )
+        allocate( ws(npeaks), logws(npeaks) , stat=alloc_stat)
+        call alloc_errchk("In stochastic_weights ws/logws ",alloc_stat)
         corrs = self%o_peaks%get_all('corr')
         ws    = exp(-(1.-corrs))
         logws = log(ws)
@@ -1333,7 +1335,7 @@ contains
         integer,allocatable :: inds(:)
         integer             :: alloc_stat
         allocate( inds(size(self%srch_order)), stat=alloc_stat )
-        call alloc_err( 'simple_prime3D_srch::get_srch_order', alloc_stat)
+        call alloc_errchk( 'simple_prime3D_srch::get_srch_order', alloc_stat)
         inds(:) = self%srch_order(:)
     end function get_srch_order
 
@@ -1464,7 +1466,7 @@ contains
         class(prime3D_srch), intent(inout) :: self
         integer :: alloc_stat
         allocate(self%proj_space_inds(self%nrefs), stat=alloc_stat)  
-        call alloc_err('In: prime3D_srch_allocate; simple_prime3D_srch', alloc_stat)
+        call alloc_errchk('In: prime3D_srch_allocate; simple_prime3D_srch', alloc_stat)
         self%proj_space_inds = 0
     end subroutine online_allocate
 

@@ -6,7 +6,7 @@ use simple_params,         only: params
 use simple_build,          only: build
 use simple_commander_base, only: commander_base
 use simple_qsys_funs       ! use all in there
-use simple_filehandling    ! use all in there
+use simple_fileio          ! use all in there
 use simple_jiffys          ! use all in there
 implicit none
 
@@ -333,12 +333,11 @@ contains
             do istate=1,p%nstates
                 if( b%a%get_state_pop( istate ) == 0 )cycle ! empty state
                 p%fsc = 'fsc_state'//int2str_pad(istate,2)//'.bin'
-                inquire(file=p%fsc, exist=here)
-                if( here )then
+                if( file_exists(p%fsc) )then
                     b%fsc(istate,:) = file2rarr(p%fsc)
                     maplp(istate)   = max(b%img%get_lp(get_lplim(b%fsc(istate,:))),2.*p%smpd)
                 else
-                    write(*,*) 'Tried to open the fsc file: ', trim(p%fsc)
+                    write(*,*) 'Tried to check the fsc file: ', trim(p%fsc)
                     stop 'but it does not exist!'
                 endif
             enddo

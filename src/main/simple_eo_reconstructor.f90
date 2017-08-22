@@ -65,7 +65,7 @@ contains
 
     !>  \brief  is a constructor
     subroutine new(self, p )
-        use simple_filehandling, only: file_exists
+        use simple_fileio      , only: file_exists
         class(eo_reconstructor), intent(inout) :: self !< instance
         class(params), target,   intent(in)    :: p    !< parameters object (provides constants)
         type(image) :: imgtmp
@@ -195,14 +195,15 @@ contains
 
     !>  \brief  read the even reconstruction
     subroutine read_even( self, fbody )
+        use simple_fileio      , only: file_exists
         class(eo_reconstructor), intent(inout) :: self
         character(len=*),        intent(in)    :: fbody
         character(len=STDLEN)                  :: even_vol, even_rho
         logical                                :: here(2)
         even_vol = trim(adjustl(fbody))//'_even'//self%ext
         even_rho = 'rho_'//trim(adjustl(fbody))//'_even'//self%ext
-        inquire(FILE=even_vol, EXIST=here(1))
-        inquire(FILE=even_rho, EXIST=here(2))
+        here(1)= file_exists(even_vol)
+        here(2)= file_exists(even_rho)
         if( all(here) )then
             call self%even%read(even_vol)
             call self%even%read_rho(even_rho)
@@ -213,14 +214,15 @@ contains
 
     !>  \brief  read the odd reconstruction
     subroutine read_odd( self, fbody )
+        use simple_fileio      , only: file_exists
         class(eo_reconstructor), intent(inout) :: self
         character(len=*),        intent(in)    :: fbody
         character(len=STDLEN)                  :: odd_vol, odd_rho
         logical                                :: here(2)
         odd_vol = trim(adjustl(fbody))//'_odd'//self%ext
         odd_rho = 'rho_'//trim(adjustl(fbody))//'_odd'//self%ext
-        inquire(FILE=odd_vol, EXIST=here(1))
-        inquire(FILE=odd_rho, EXIST=here(2))
+        here(1)= file_exists(odd_vol)
+        here(2)= file_exists(odd_rho)
         if( all(here) )then
             call self%odd%read(odd_vol)
             call self%odd%read_rho(odd_rho)
@@ -280,7 +282,7 @@ contains
     !> \brief  for sampling density correction of the eo pairs
     subroutine sampl_dens_correct_eos( self, state )
         use simple_strings,      only: int2str_pad
-        use simple_filehandling, only: arr2file
+        use simple_fileio,       only: arr2file
         use simple_math,         only: get_resolution, calc_fourier_index
         use simple_masker,       only: masker
         class(eo_reconstructor), intent(inout) :: self  !< instance
@@ -352,12 +354,13 @@ contains
     !!         and states in o, assumes that stack is open   
     subroutine eorec( self, fname, p, o, se, state, vol, mul, part, fbody )
         use simple_oris,       only: oris
+        use simple_fileio,     only: file_exists
         use simple_sym,        only: sym
         use simple_params,     only: params
         use simple_gridding,   only: prep4cgrid
-        use simple_imgfile,    only: imgfile
+        use simple_imgfile,    only: imgfile, find_ldim_nptcls
         use simple_strings,    only: int2str_pad
-        use simple_jiffys,     only: find_ldim_nptcls, progress
+        use simple_jiffys,     only: progress
         use simple_kbinterpol, only: kbinterpol
         class(eo_reconstructor),    intent(inout) :: self      !< object
         character(len=*),           intent(in)    :: fname     !< spider/MRC stack filename

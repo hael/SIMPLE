@@ -116,8 +116,8 @@ function is_present( self, arg ) result( yep )
 end function
 
 subroutine test_args()
-    use simple_filehandling, only: sys_stat, get_fileunit, nlines
-    use simple_syscalls, only: exec_cmdline
+    use simple_fileio, only: sys_stat, nlines
+    use simple_syslib, only: exec_cmdline, simple_getenv
     type(args) :: as
     character(len=STDLEN) :: vfilename,arg, errarg1, errarg2, errarg3, spath, srcpath
     integer :: funit, n, i
@@ -127,9 +127,8 @@ subroutine test_args()
     write(*,'(a)') '**info(simple_args_unit_test): testing it all'
     write(*,'(a)') '**info(simple_args_unit_test, part 1): testing for args that should be present'
     as = args()
-    funit = get_fileunit()
     write(*,'(a)') '**info(simple_args_unit_test): getting SIMPLE_PATH env variable'
-    call getenv(\"SIMPLE_PATH\",spath)
+    spath= simple_getenv(\"SIMPLE_PATH\")
     spath=adjustl(trim(spath))
     print *, 'get_environment_variable found SIMPLE_PATH    ', trim(spath)
     print *, 'simple_defs compile-time variable SIMPLE_PATH:', trim(SIMPLE_PATH)
@@ -161,7 +160,7 @@ subroutine test_args()
       end if
     end if
     n = nlines(vfilename)
-    open(unit=funit, status='old', action='read', file=vfilename)
+    open(newunit=funit, status='old', action='read', file=vfilename)
     do i=1,n
         read(funit,*) arg
         if( as%is_present(arg) )then

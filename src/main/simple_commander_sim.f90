@@ -6,7 +6,7 @@ use simple_params,         only: params
 use simple_build,          only: build
 use simple_commander_base, only: commander_base
 use simple_strings,        only: int2str, int2str_pad
-use simple_filehandling    ! use all in there
+use simple_fileio          ! use all in there
 use simple_jiffys          ! use all in there
 implicit none
 
@@ -244,7 +244,7 @@ contains
         DebugPrint  'initialized shifts'
         ! generate shifts
         allocate( shifts(p%nframes,2), stat=alloc_stat )
-        call alloc_err('In: simple_simmovie; shifts', alloc_stat)
+        call alloc_errchk('In: simple_simmovie; shifts', alloc_stat)
         x = 0.
         y = 0.
         do i=1,p%nframes
@@ -328,7 +328,7 @@ contains
 
             !> \brief  generate mutually exclusive positions
             function gen_ptcl_pos( npos, xdim, ydim, box ) result( pos )
-                use simple_jiffys, only: alloc_err
+                use simple_syslib, only: alloc_errchk
                 use simple_rnd,    only: irnd_uni
                 use simple_jiffys, only: progress
                 integer, intent(in)           :: npos, xdim, ydim
@@ -337,7 +337,7 @@ contains
                 logical                       :: occupied(xdim,ydim)
                 integer                       :: alloc_stat, ix, iy, cnt, i, j
                 allocate( pos(npos,2), stat=alloc_stat )
-                call alloc_err("In: gen_ptcl_pos, simple_math", alloc_stat)
+                call alloc_errchk("In: gen_ptcl_pos, simple_math", alloc_stat)
                 occupied = .false.
                 cnt = 0
                 do

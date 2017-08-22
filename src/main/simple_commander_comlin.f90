@@ -5,7 +5,7 @@ use simple_cmdline,        only: cmdline
 use simple_params,         only: params
 use simple_build,          only: build
 use simple_commander_base, only: commander_base
-use simple_filehandling    ! use all in there
+use simple_fileio          ! use all in there
 use simple_jiffys          ! use all in there
 implicit none
 
@@ -47,7 +47,7 @@ contains
         p = params(cline, .false.)                           ! constants & derived constants produced
         call b%build_general_tbox(p, cline, .false., .true.) ! general objects built (no oritab reading)
         allocate(b%imgs_sym(p%nptcls), stat=alloc_stat)
-        call alloc_err('In: simple_comlin_smat, 1', alloc_stat)
+        call alloc_errchk('In: simple_comlin_smat, 1', alloc_stat)
         DebugPrint  'analysing this number of objects: ', p%nptcls
         do iptcl=1,p%nptcls
             call b%imgs_sym(iptcl)%new([p%box,p%box,1], p%smpd)
@@ -62,16 +62,17 @@ contains
             npairs = p%top - p%fromp + 1
             DebugPrint  'allocating this number of similarities: ', npairs
             allocate(corrs(p%fromp:p%top), pairs(p%fromp:p%top,2), stat=alloc_stat)
-            call alloc_err('In: simple_comlin_smat, 1', alloc_stat)
+            call alloc_errchk('In: simple_comlin_smat, 2', alloc_stat)
             ! read the pairs
-            funit = get_fileunit()
             allocate(fname, source='pairs_part'//int2str_pad(p%part,p%numlen)//'.bin')
+            call alloc_errchk("In:  simple_comlin_smat, 3", alloc_stat)
             if( .not. file_exists(fname) )then
                 write(*,*) 'file: ', fname, ' does not exist!'
                 write(*,*) 'If all pair_part* are not in cwd, please execute simple_split_pairs to generate the required files'
                 stop 'I/O error; simple_comlin_smat'
             endif
-            open(unit=funit, status='OLD', action='READ', file=fname, access='STREAM')
+            if(.not.fopen(funit, status='OLD', action='READ', file=fname, access='STREAM', iostat=io_stat))&
+                 call fileio_errmsg('simple_comlin_smat opening  '//trim(fname), io_stat)
             DebugPrint  'reading pairs in range: ', p%fromp, p%top
             read(unit=funit,pos=1,iostat=io_stat) pairs(p%fromp:p%top,:)
             ! check if the read was successful
@@ -79,7 +80,8 @@ contains
                 write(*,'(a,i0,2a)') '**ERROR(simple_comlin_smat): I/O error ', io_stat, ' when reading file: ', fname
                 stop 'I/O error; simple_comlin_smat'
             endif
-            close(funit)
+            if(.not.fclose(funit, iostat=io_stat))&
+                 call fileio_errmsg('simple_comlin_smat closing  '//trim(fname), io_stat)
             deallocate(fname)
             ! calculate the similarities
             call comlin_srch_init( b, p, 'simplex', 'pair' )
@@ -89,21 +91,23 @@ contains
                 corrs(ipair) = comlin_srch_pair()
             end do
             ! write the similarities
-            funit = get_fileunit()
+           
             allocate(fname, source='similarities_part'//int2str_pad(p%part,p%numlen)//'.bin')
-            open(unit=funit, status='REPLACE', action='WRITE', file=fname, access='STREAM')
+            if(.not.fopen(funit, status='REPLACE', action='WRITE', file=fname, access='STREAM', iostat=io_stat))&
+                 call fileio_errmsg('simple_comlin_smat opening  '//trim(fname), io_stat)
             write(unit=funit,pos=1,iostat=io_stat) corrs(p%fromp:p%top)
             ! Check if the write was successful
             if( io_stat .ne. 0 )then
                 write(*,'(a,i0,2a)') '**ERROR(simple_comlin_smat): I/O error ', io_stat, ' when writing to: ', fname
                 stop 'I/O error; simple_comlin_smat'
             endif
-            close(funit)
+            if(.not.fclose(funit, iostat=io_stat))&
+                 call fileio_errmsg('simple_comlin_smat opening  '//trim(fname), io_stat)
             deallocate(fname, corrs, pairs)
             call qsys_job_finished(p,'simple_commander_comlin :: exec_comlin_smat')
         else
             allocate(corrmat(p%nptcls,p%nptcls), stat=alloc_stat)
-            call alloc_err('In: simple_comlin_smat, 3', alloc_stat)
+            call alloc_errchk('In: simple_comlin_smat, 3', alloc_stat)
             corrmat = 1.
             ntot = (p%nptcls*(p%nptcls-1))/2
             ! calculate the similarities
@@ -117,14 +121,16 @@ contains
                 end do
             end do
             call progress(ntot, ntot)
-            funit = get_fileunit()
-            open(unit=funit, status='REPLACE', action='WRITE', file='clin_smat.bin', access='STREAM')
+           
+            if(.not.fopen(funit, status='REPLACE', action='WRITE', file='clin_smat.bin', access='STREAM', iostat=io_stat))&
+                 call fileio_errmsg('simple_comlin_smat opening  clin_smat.bin', io_stat)
             write(unit=funit,pos=1,iostat=io_stat) corrmat
             if( io_stat .ne. 0 )then
                 write(*,'(a,i0,a)') 'I/O error ', io_stat, ' when writing to clin_smat.bin'
                 stop 'I/O error; simple_comlin_smat'
             endif
-            close(funit)
+            if(.not.fclose(funit, iostat=io_stat))&
+                 call fileio_errmsg('simple_comlin_smat closing clin_smat.bin ', io_stat)
             deallocate(corrmat)
         endif
         ! end gracefully
@@ -232,10 +238,11 @@ contains
         else
             fname_finished = 'SYMSRCH_FINISHED'
         endif
-        fnr = get_fileunit()
-        open(unit=fnr, FILE=trim(fname_finished), STATUS='REPLACE', action='WRITE', iostat=file_stat)
-        call fopen_err('In: commander_comlin :: symsrch', file_stat )
-        close( unit=fnr )
+       
+        if(.not.fopen(fnr, FILE=trim(fname_finished), STATUS='REPLACE', action='WRITE', iostat=file_stat))&
+             call fileio_errmsg('In: commander_comlin :: symsrch', file_stat )
+        if(.not.fclose( unit=fnr , iostat=file_stat))&
+             call fileio_errmsg('In: commander_comlin :: symsrch closing', file_stat )
     end subroutine exec_symsrch
 
 end module simple_commander_comlin

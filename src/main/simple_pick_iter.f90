@@ -18,7 +18,7 @@ contains
         use simple_params,       only: params
         use simple_oris,         only: oris
         use simple_cmdline,      only: cmdline
-        use simple_filehandling, only: file_exists
+        use simple_fileio      , only: file_exists
         class(pick_iter),      intent(inout) :: self
         class(cmdline),        intent(in)    :: cline
         class(params),         intent(inout) :: p

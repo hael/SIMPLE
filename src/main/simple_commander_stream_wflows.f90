@@ -1,8 +1,8 @@
 ! concrete commander: stream processing routines
 module simple_commander_stream_wflows
 use simple_defs
-use simple_filehandling       ! use all in there
-use simple_syscalls           ! use all in there
+!use simple_fileio             ! use all in there
+use simple_syslib,            only:  exec_cmdline, simple_sleep 
 use simple_cmdline,           only: cmdline
 use simple_chash,             only: chash
 use simple_params,            only: params
@@ -86,16 +86,16 @@ contains
         contains
 
             subroutine create_individual_filetab
+                use simple_fileio, only: fopen, fclose, fileio_errmsg
                 integer               :: fnr, file_stat
                 character(len=STDLEN) :: fname, ext, movie_here
                 movie_here = remove_abspath(trim(movie))
                 ext   = fname2ext(trim(movie_here))
                 fname = 'preproc_'//trim(get_fbody(trim(movie_here), trim(ext)))//'.txt'
-                fnr   = get_fileunit()
-                open(unit=fnr, status='replace', action='write', file=trim(fname), iostat=file_stat)
-                call fopen_err('exec_preproc_stream :: create_individual_filetab', file_stat)
+                if(.not.fopen(fnr, status='replace', action='write', file=trim(fname), iostat=file_stat))&
+                     call fileio_errmsg('exec_preproc_stream :: create_individual_filetab', file_stat)
                 write(fnr,'(a)') trim(movie)
-                close(unit=fnr)
+                if(.not.fclose(fnr,file_stat)) call fileio_errmsg('exec_preproc_stream closing filetab', file_stat)
                 call cline%set('filetab', fname)
             end subroutine create_individual_filetab
 

@@ -5,7 +5,8 @@ module simple_image
 !$ use omp_lib_kinds
 use simple_defs
 use simple_ftiter, only: ftiter
-use simple_jiffys, only: alloc_err
+use simple_syslib
+use simple_fileio, only: fname2format, file_exists, read_raw_image
 use simple_fftw3
 use simple_math
 use gnufor2
@@ -567,7 +568,7 @@ contains
             npix = (2*winsz+1)**2
         endif
         allocate(pixels(npix), stat=alloc_stat)
-        call alloc_err('In: win2arr; simple_image', alloc_stat)
+        call alloc_errchk('In: win2arr; simple_image', alloc_stat)
         cnt = 1
         do s=i-winsz,i+winsz
             ss = cyci_1d([1,self%ldim(1)], s)
@@ -631,8 +632,6 @@ contains
     !!
     subroutine open( self, fname, ioimg, formatchar, readhead, rwaction )
         use simple_imgfile,      only: imgfile
-        use simple_jiffys,       only: read_raw_image
-        use simple_filehandling, only: fname2format, file_exists
         class(image),               intent(inout) :: self
         character(len=*),           intent(in)    :: fname
         class(imgfile),             intent(inout) :: ioimg
@@ -695,8 +694,6 @@ contains
     !!
     subroutine read( self, fname, i, ioimg, formatchar, readhead, rwaction, read_failure )
         use simple_imgfile,      only: imgfile
-        use simple_jiffys,       only: read_raw_image
-        use simple_filehandling, only: fname2format, file_exists
         class(image),               intent(inout) :: self
         character(len=*),           intent(in)    :: fname
         integer,          optional, intent(in)    :: i
@@ -839,7 +836,6 @@ contains
     !! \todo fix optional args
     subroutine write( self, fname, i, del_if_exists, formatchar )
         use simple_imgfile,      only: imgfile
-        use simple_filehandling, only: fname2format
         class(image),               intent(inout) :: self
         character(len=*),           intent(in)    :: fname
         integer,          optional, intent(in)    :: i
@@ -1306,7 +1302,7 @@ contains
         else
             pack = .true.
             allocate( pcavec(npix), stat=alloc_stat )
-            call alloc_err('serialize; simple_image', alloc_stat)
+            call alloc_errchk('serialize; simple_image', alloc_stat)
             pcavec = 0.
         endif
         npix = 0
@@ -1407,7 +1403,7 @@ contains
                 else
                     pack = .true.
                     allocate( pcavec(npix), stat=alloc_stat )
-                    call alloc_err('winserialize; simple_image', alloc_stat)
+                    call alloc_errchk('winserialize; simple_image', alloc_stat)
                     pcavec = 0.
                 endif
             end subroutine set_action
@@ -2750,7 +2746,7 @@ contains
         logical, allocatable        :: add_pixels(:,:,:)
         if( self%ft ) stop 'only for real images; grow_bin; simple image'
         allocate( add_pixels(self%ldim(1),self%ldim(2),self%ldim(3)), stat=alloc_stat )
-        call alloc_err('grow_bin; simple_image', alloc_stat)
+        call alloc_errchk('grow_bin; simple_image', alloc_stat)
         ! Figure out which pixels to add
         add_pixels = .false.
         if( self%ldim(3) == 1 )then
@@ -2799,7 +2795,7 @@ contains
         logical, allocatable        :: sub_pixels(:,:,:)
         if( self%ft ) stop 'only for real images; shrink_bin; simple image'
         allocate( sub_pixels(self%ldim(1),self%ldim(2),self%ldim(3)), stat=alloc_stat )
-        call alloc_err('shrink_bin; simple_image', alloc_stat)
+        call alloc_errchk('shrink_bin; simple_image', alloc_stat)
         ! Figure out which pixels to remove
         sub_pixels = .false.
         if( self%ldim(3) == 1 )then
@@ -2852,13 +2848,13 @@ contains
         tsz(:,2) = nlayers
         if(self%is_2d())tsz(3,:) = 1
         allocate( template(tsz(1,1):tsz(1,2), tsz(2,1):tsz(2,2), tsz(3,1):tsz(3,2)), stat=alloc_stat )
-        call alloc_err('grow_bins; simple_image 2', alloc_stat)
+        call alloc_errchk('grow_bins; simple_image 2', alloc_stat)
         pdsz(:,1) = 1 - nlayers
         pdsz(:,2) = self%ldim + nlayers
         if(self%is_2d())pdsz(3,:) = 1
         allocate( add_pixels(pdsz(1,1):pdsz(1,2), pdsz(2,1):pdsz(2,2),&
         &pdsz(3,1):pdsz(3,2)), stat=alloc_stat )
-        call alloc_err('grow_bins; simple_image 1', alloc_stat)
+        call alloc_errchk('grow_bins; simple_image 1', alloc_stat)
         ! template matrix
         template = .true.
         do i = tsz(1,1), tsz(1,2)
@@ -2926,13 +2922,13 @@ contains
         tsz(:,2) = nlayers
         if(self%is_2d())tsz(3,:) = 1
         allocate( template(tsz(1,1):tsz(1,2), tsz(2,1):tsz(2,2), tsz(3,1):tsz(3,2)), stat=alloc_stat )
-        call alloc_err('shrink_bins; simple_image 2', alloc_stat)
+        call alloc_errchk('shrink_bins; simple_image 2', alloc_stat)
         pdsz(:,1) = 1 - nlayers
         pdsz(:,2) = self%ldim + nlayers
         if(self%is_2d())pdsz(3,:) = 1
         allocate( sub_pixels(pdsz(1,1):pdsz(1,2), pdsz(2,1):pdsz(2,2),&
         &pdsz(3,1):pdsz(3,2)), stat=alloc_stat )
-        call alloc_err('shrink_bins; simple_image 1', alloc_stat)
+        call alloc_errchk('shrink_bins; simple_image 1', alloc_stat)
         ! template matrix
         template = .true.
         do i = tsz(1,1), tsz(1,2)
@@ -3218,7 +3214,7 @@ contains
         spec = self%spectrum('absreal')
         lfny = self%get_lfny(1)
         allocate( plot(lfny,2), stat=alloc_stat )
-        call alloc_err("In: guinier; simple_image", alloc_stat)
+        call alloc_errchk("In: guinier; simple_image", alloc_stat)
         do k=1,lfny
             plot(k,1) = 1./(self%get_lp(k)**2.)
             plot(k,2) = log(spec(k))
@@ -3252,7 +3248,7 @@ contains
         endif
         lfny = self%get_lfny(1)
         allocate( spec(lfny), counts(lfny), stat=alloc_stat )
-        call alloc_err('spectrum; simple_image', alloc_stat)
+        call alloc_errchk('spectrum; simple_image', alloc_stat)
         spec   = 0.
         counts = 0.
         lims   = self%fit%loop_lims(2)
@@ -3596,7 +3592,7 @@ contains
         maxl = maxval(lims)
         kmax = maxl+int(oshoot*real(maxl))
         allocate( w(kmax), stat=alloc_stat )
-        call alloc_err("In: hannw; simple_image", alloc_stat)
+        call alloc_errchk("In: hannw; simple_image", alloc_stat)
         wstr = 'hann'
         wfuns = winfuns(wstr, real(kmax), 2.)
         do k=1,kmax
@@ -3737,7 +3733,7 @@ contains
         if( self%is_ft() )stop 'real space only; simple_image%sobel'
         if( self%ldim(3) == 1 )stop 'Volumes only; simple_image%sobel'
         allocate(rmat(self%ldim(1), self%ldim(2), self%ldim(3)), source=0., stat=alloc_stat)
-        call alloc_err("In: sobel; simple_image", alloc_stat)
+        call alloc_errchk("In: sobel; simple_image", alloc_stat)
         kernel      = 0.
         kernel(1,:) = -1
         kernel(1,2) = -2.
@@ -3836,7 +3832,7 @@ contains
             stop 'unrecognized parameter: which; stats; simple_image'
         endif
         allocate( pixels(product(self%ldim)), stat=alloc_stat )
-        call alloc_err('backgr; simple_image', alloc_stat)
+        call alloc_errchk('backgr; simple_image', alloc_stat)
         pixels = 0.
         npix = 0
         if( self%ldim(3) > 1 )then
@@ -4523,7 +4519,7 @@ contains
         if( allocated(corrs) ) deallocate(corrs)
         if( allocated(res) )   deallocate(res)
         allocate( corrs(n), res(n), sumasq(n), sumbsq(n), stat=alloc_stat )
-        call alloc_err('In: fsc, module: simple_image', alloc_stat)
+        call alloc_errchk('In: fsc, module: simple_image', alloc_stat)
         corrs  = 0.
         res    = 0.
         sumasq = 0.
@@ -4575,7 +4571,7 @@ contains
         n = self%get_filtsz()
         if( allocated(voxs) )deallocate(voxs)
         allocate( voxs(n), stat=alloc_stat )
-        call alloc_err('In: get_nvoxshell, module: simple_image', alloc_stat)
+        call alloc_errchk('In: get_nvoxshell, module: simple_image', alloc_stat)
         voxs = 0.
         lims = self%fit%loop_lims(2)
         !$omp parallel do collapse(3) default(shared) private(h,k,l,sh)&
@@ -4604,7 +4600,7 @@ contains
         integer                  :: n, k, alloc_stat
         n = self%get_filtsz()
         allocate( res(n), stat=alloc_stat )
-        call alloc_err('In: get_res, module: simple_image', alloc_stat)
+        call alloc_errchk('In: get_res, module: simple_image', alloc_stat)
         do k=1,n
             res(k) = self%fit%get_lp(1,k)
         end do
@@ -5150,9 +5146,6 @@ contains
     end subroutine bwd_ft
 
     !> \brief ft2img  generates images for visualization of a Fourier transform
-    !! \param which
-    !! \param img
-    !!
     subroutine ft2img( self, which, img )
         class(image),     intent(inout) :: self
         character(len=*), intent(in)    :: which
@@ -6182,7 +6175,7 @@ contains
             deadhot = 0
             allocate(rmat_pad(1-hwinsz:self%ldim(1)+hwinsz,1-hwinsz:self%ldim(2)+hwinsz),&
                 &win(winsz,winsz), stat=alloc_stat)
-            call alloc_err('In: cure_outliers; simple_image 1', alloc_stat)
+            call alloc_errchk('In: cure_outliers; simple_image 1', alloc_stat)
             rmat_pad(:,:) = median( reshape(self%rmat(:,:,1), (/(self%ldim(1)*self%ldim(2))/)) )
             rmat_pad(1:self%ldim(1), 1:self%ldim(2)) = &
                 &self%rmat(1:self%ldim(1),1:self%ldim(2),1)
@@ -6254,7 +6247,7 @@ contains
             deadhot = 0
             allocate(padded_image(1-hwinsz:self%ldim(1)+hwinsz,1-hwinsz:self%ldim(2)+hwinsz),&
                 &patch(winsz,winsz), stat=alloc_stat)
-            call alloc_err('In: cure_outliers; simple_image 1', alloc_stat)
+            call alloc_errchk('In: cure_outliers; simple_image 1', alloc_stat)
             padded_image(:,:) = median( reshape(self%rmat(:,:,1), (/(self%ldim(1)*self%ldim(2))/)) )
             padded_image(1:self%ldim(1), 1:self%ldim(2)) = &
                 &self%rmat(1:self%ldim(1),1:self%ldim(2),1)

@@ -1,8 +1,10 @@
 ! for manging orientation data using binary files
 module simple_binoris
 use, intrinsic :: iso_c_binding
+use simple_defs
 use simple_ori,  only: ori
 use simple_oris, only: oris
+
 implicit none
 
 public :: binoris
@@ -58,7 +60,7 @@ contains
     ! constructors
 
     subroutine new( self, a, fromto, os_peak )
-        use simple_jiffys, only: alloc_err
+        use simple_syslib, only: alloc_errchk
         class(binoris),        intent(inout) :: self
         class(oris),           intent(inout) :: a
         integer,     optional, intent(in)    :: fromto(2)
@@ -97,7 +99,7 @@ contains
         ! allocate
         allocate( self%byte_array_header(self%n_bytes_header),&
                  &self%record(self%n_reals_per_record), stat=alloc_stat )
-        call alloc_err( 'In: binoris :: new_1', alloc_stat )
+        call alloc_errchk( 'In: binoris :: new_1', alloc_stat )
         ! set
         call self%header2byte_array
         self%record = 0.0
@@ -109,12 +111,13 @@ contains
     ! I/O supporting ori + oris (peaks)
 
     subroutine open( self, fname, del_if_exists )
-        use simple_jiffys,       only: alloc_err
-        use simple_filehandling, only: file_exists, del_file
+        use simple_syslib,       only: alloc_errchk
+        use simple_fileio      , only: file_exists, del_file, funit_size
         class(binoris),    intent(inout) :: self          !< instance
         character(len=*),  intent(in)    :: fname         !< filename
         logical, optional, intent(in)    :: del_if_exists !< If the file already exists on disk, replace 
-        integer            :: file_size, io_status, alloc_stat
+        integer(dp)            :: filesz
+        integer            :: io_status, alloc_stat
         character(len=512) :: io_message
         integer(kind=1)    :: bytes(8)
         ! deletion logics
@@ -136,10 +139,10 @@ contains
         ! open file
         call self%open_local(fname)
         ! check size
-        inquire(unit=self%funit, size=file_size)
-        if( file_size == -1 )then 
+        filesz = funit_size(self%funit)
+        if( filesz == -1 )then 
             stop 'file_size cannot be inquired; binoris :: new_2'
-        else if( file_size >= 28 )then
+        else if( filesz >= 28 )then
             ! ok
         else
             stop 'file_size too small to contain a header; binoris :: new_2'
@@ -156,7 +159,7 @@ contains
         self%n_hash_vals    = transfer(bytes(5:8), self%n_hash_vals)
         allocate( self%byte_array_header(self%n_bytes_header),&
             &self%hash_keys(self%n_hash_vals), stat=alloc_stat )
-        call alloc_err( 'In: binoris :: new_2, 1', alloc_stat )
+        call alloc_errchk( 'In: binoris :: new_2, 1', alloc_stat )
         read(unit=self%funit,pos=1,iostat=io_status,iomsg=io_message) self%byte_array_header
         if( io_status .ne. 0 )then
             write(*,'(a,i0,2a)') '**error(binoris::new_2): error ', io_status,&
@@ -169,7 +172,7 @@ contains
         self%n_reals_per_record = self%n_hash_vals + self%n_peaks * NOPEAKFLAGS
         ! allocate
         allocate( self%record(self%n_reals_per_record), stat=alloc_stat )
-        call alloc_err( 'In: binoris :: new_2, 2', alloc_stat )
+        call alloc_errchk( 'In: binoris :: new_2, 2', alloc_stat )
         ! set
         self%record = 0.0
         call set_o_peak_flags ! class variable
@@ -178,12 +181,13 @@ contains
     end subroutine open
 
     subroutine open_local( self, fname, rwaction )
-        use simple_filehandling, only: get_fileunit, is_open
+        use simple_fileio      , only: fopen,fclose,fileio_errmsg, is_open
         class(binoris),             intent(inout) :: self     !< instance
         character(len=*),           intent(in)    :: fname    !< filename
         character(len=*), optional, intent(in)    :: rwaction !< read/write flag
         character(len=9) :: rw_str
         character(len=7) :: stat_str
+        integer          :: io_stat, tmpunit
         if( .not. is_open(self%funit) )then
             if( present(rwaction) )then
                 rw_str = trim(rwaction)
@@ -191,15 +195,37 @@ contains
                 rw_str = 'READWRITE'
             endif
             stat_str = 'UNKNOWN'
-            self%funit = get_fileunit()
-            open(unit=self%funit,access='STREAM',file=fname,action=rw_str,status=stat_str)
+            if(.not.fopen(tmpunit,fname,access='STREAM',action=rw_str,status=stat_str, iostat=io_stat))&
+                 call fileio_errmsg('binoris ; open_local '// trim(fname), io_stat)
+            self%funit = tmpunit
         endif
     end subroutine open_local
 
+    ! subroutine close( self )
+    !     use simple_fileio      , only: is_open
+    !     class(binoris), intent(in) :: self !< instance
+    !     integer          :: io_stat, tmpunit
+    !     if( .not. is_open(self%funit) )then
+    !         if( present(rwaction) )then
+    !             rw_str = trim(rwaction)
+    !         else
+    !             rw_str = 'READWRITE'
+    !         endif
+    !         stat_str = 'UNKNOWN'
+    !         if(.not.fopen(tmpunit,access='STREAM',file=fname,action=rw_str,status=stat_str, iostat=io_stat))&
+    !              call fileio_errmsg('binoris ; open_local '// trim(fnam), io_stat)
+    !         self%funit = tmpunit
+    !     endif
+    ! end subroutine close
+
     subroutine close( self )
-        use simple_filehandling, only: is_open
+        use simple_fileio, only: is_open, fclose, fileio_errmsg
         class(binoris), intent(in) :: self !< instance
-        if( is_open(self%funit) ) close(self%funit)
+        integer          :: io_stat
+        if( is_open(self%funit) ) then
+            if(.not.fclose(self%funit, iostat=io_stat))&
+            call fileio_errmsg('binoris ; close ', io_stat)
+        end if
     end subroutine close
 
     subroutine print_header( self )

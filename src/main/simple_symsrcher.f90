@@ -155,7 +155,7 @@ end module simple_symsrcher
 ! contains
 
 !     subroutine symsrch_master( cline, p, b, os )
-!         use simple_filehandling,   only: nlines
+!         use simple_fileio      ,   only: nlines
 !         use simple_projector_hlev, only: projvol
 !         class(cmdline), intent(inout) :: cline
 !         class(params),  intent(inout) :: p
@@ -265,7 +265,7 @@ end module simple_symsrcher
     !         enddo
     !         deallocate(b%imgs_sym, b%ref_imgs)
     !         allocate( b%imgs_sym(1:p%nsym*p%nptcls), b%ref_imgs(p%nstates,p%nspace), stat=alloc_stat )
-    !         call alloc_err( 'build_update_tboxs; simple_symsrch, 1', alloc_stat )            
+    !         call alloc_errchk( 'build_update_tboxs; simple_symsrch, 1', alloc_stat )            
     !         do i=1,p%nptcls*p%nsym
     !             call b%imgs_sym(i)%new([p%box,p%box,1], p%smpd)
     !         end do 
@@ -304,7 +304,7 @@ end module simple_symsrcher
     !     real              :: bestp
     !     integer           :: i, j, k, alloc_stat
     !     allocate( probs(n_subgrps), stat=alloc_stat)
-    !     call alloc_err( 'sym_probs; simple_sym', alloc_stat )            
+    !     call alloc_errchk( 'sym_probs; simple_sym', alloc_stat )            
     !     probs = 0.
     !     do i=1,n_subgrps
     !         pgrp = subgrps(i)

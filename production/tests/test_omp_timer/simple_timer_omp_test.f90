@@ -39,6 +39,7 @@ contains
       real(dp)    :: etime
       real(dp) ::  t1, t2
       integer(dp) :: i
+      integer :: io_stat
       c = .1
       cfac = .25
       b = 1.
@@ -97,7 +98,7 @@ contains
 
       call reset_timer_omp()
       VerbosePrint "5.  Testing empty tic() lhs "
-      open (10, file=DEV_NULL)
+      open (10, file=DEV_NULL, IOSTAT=io_stat)
       if (be_verbose) write (10, '(A,1d20.10)') "     inline tic ", tic_omp()
       ! if(be_verbose) write (*, '(A,1d20.10)') "2. t1 = ", real(t1, dp)
       c = .1

@@ -1,10 +1,10 @@
 ! movie watcher for stream processing
 module simple_moviewatcher
 use simple_defs
-use simple_syscalls
-use simple_filehandling
-use simple_jiffys
-use simple_params
+use simple_syslib
+use simple_fileio
+use simple_params, only: params
+use simple_timer
 implicit none
 
 public :: moviewatcher
@@ -80,20 +80,22 @@ contains
     subroutine watch( self, n_movies, movies )
 #ifdef PGI
         include 'lib3f.h'
+        procedure :: cast_time_char => ctime
 #endif
         class(moviewatcher),           intent(inout) :: self
         integer,                       intent(out)   :: n_movies
         character(len=*), allocatable, intent(out)   :: movies(:)
         character(len=STDLEN), allocatable :: farray(:)
-        integer,               allocatable :: stats(:)
+        integer,               allocatable :: fileinfo(:)
         logical,               allocatable :: is_new_movie(:)
         integer               :: tnow, last_accessed, last_modified, last_status_change ! in seconds
         integer               :: i, io_stat, alloc_stat, n_lsfiles, cnt, fail_cnt
         character(len=STDLEN) :: fname, abs_fname
         logical               :: is_closed
+
         ! init
         self%n_watch = self%n_watch + 1
-        tnow = time()
+        tnow = gettime()
         if( self%n_watch .eq. 1 )then
             ! first call
             self%starttime  = tnow
@@ -103,7 +105,7 @@ contains
         n_movies = 0
         fail_cnt = 0
         ! builds files array
-        call sys_gen_mrcfiletab(self%watch_dir, trim(FILETABNAME))
+        call ls_mrcfiletab(self%watch_dir, trim(FILETABNAME))
         call read_filetable( trim(FILETABNAME), farray )
         n_lsfiles = size(farray)
         if( n_lsfiles .eq. 0 )then
@@ -119,13 +121,13 @@ contains
                 is_new_movie(i) = .false.
             else
                 abs_fname = trim(self%cwd)//'/'//trim(adjustl(fname))
-                call sys_stat(abs_fname, io_stat, stats, doprint=.false.)
+                call sys_stat(abs_fname, io_stat, fileinfo, doprint=.false.)
                 is_closed = .not. is_file_open(abs_fname)
                 if( io_stat.eq.0 )then
                     ! new movie
-                    last_accessed      = tnow - stats( 9)
-                    last_modified      = tnow - stats(10)
-                    last_status_change = tnow - stats(11)
+                    last_accessed      = tnow - fileinfo( 9)
+                    last_modified      = tnow - fileinfo(10)
+                    last_status_change = tnow - fileinfo(11)
                     if(    (last_accessed      > self%report_time)&
                     &.and. (last_modified      > self%report_time)&
                     &.and. (last_status_change > self%report_time)&
@@ -135,7 +137,7 @@ contains
                     fail_cnt = fail_cnt + 1
                     print *,'Error watching file: ', trim(fname), ' with code: ',io_stat
                 endif
-                if(allocated(stats))deallocate(stats)
+                if(allocated(fileinfo))deallocate(fileinfo)
             endif
         enddo
         ! identifies already processed files for restart
@@ -143,7 +145,7 @@ contains
             if( is_new_movie(i) )then
                 is_new_movie(i) = self%to_process( farray(i) )
                 if( is_new_movie(i) )write(*,'(A,A,A,A)')'>>> NEW MOVIE: ',&
-                &trim(adjustl(farray(i))), '; ', ctime(tnow)
+                &trim(adjustl(farray(i))), '; ', cast_time_char(tnow)
             endif
         enddo
         ! report
@@ -196,15 +198,15 @@ contains
         if( .not.allocated(self%history) )then
             n = 0
             allocate(self%history(1), stat=alloc_stat)
-            call alloc_err("In: simple_moviewatcher%add2history 1", alloc_stat)
+            call alloc_errchk("In: simple_moviewatcher%add2history 1", alloc_stat)
         else
             n = size(self%history)
             allocate(tmp_farr(n), stat=alloc_stat)
-            call alloc_err("In: simple_moviewatcher%add2history 2", alloc_stat)
+            call alloc_errchk("In: simple_moviewatcher%add2history 2", alloc_stat)
             tmp_farr(:) = self%history
             deallocate(self%history)
             allocate(self%history(n+1), stat=alloc_stat)
-            call alloc_err("In: simple_moviewatcher%add2history 3", alloc_stat)
+            call alloc_errchk("In: simple_moviewatcher%add2history 3", alloc_stat)
             self%history(:n) = tmp_farr
             deallocate(tmp_farr)
         endif

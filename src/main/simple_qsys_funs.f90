@@ -1,9 +1,10 @@
 ! batch-processing manager - functions
 module simple_qsys_funs
-use simple_defs     
-use simple_filehandling, only: del_file, del_files
-use simple_syscalls ! use all in there
+use simple_defs
+use simple_fileio
+use simple_syslib   ! use all in there
 use simple_strings  ! use all in there
+
 implicit none
 
 interface qsys_watcher
@@ -20,7 +21,7 @@ contains
         class(params),     intent(in) :: p
         character(len=:), allocatable :: rec_base_str, rho_base_str
         integer, parameter :: NUMLEN_STATE = 2, NUMLEN_ITER = 3
-        integer :: istate        
+        integer :: istate
         ! single files
         call del_file('FOO')
         call del_file('fort.0')
@@ -55,12 +56,13 @@ contains
     end subroutine qsys_cleanup
 
     function stack_is_split( stk_part_fbody, stkext, parts, box ) result( is_split_correctly )
+    use simple_imgfile, only: find_ldim_nptcls
         character(len=*), intent(in)  :: stk_part_fbody
         character(len=4), intent(in)  :: stkext
         integer,          intent(in)  :: parts(:,:)
         integer,          intent(in)  :: box
         character(len=:), allocatable :: stack_part_fname
-        logical, allocatable          :: stack_parts_exist(:) 
+        logical, allocatable          :: stack_parts_exist(:)
         integer :: ipart, numlen, nparts, sz, sz_correct, ldim(3)
         logical :: is_split, is_correct, is_split_correctly
         nparts = size(parts,1)
@@ -102,24 +104,28 @@ contains
         cmd = 'pgrep '//trim(prg)//' > pid_from_fortran.txt'
         call exec_cmdline(cmd)
         ! read in the pid
-        funit = get_fileunit()
-        open(unit=funit, status='old', action='read', file='pid_from_fortran.txt', iostat=file_stat)
+        if(.not.fopen(funit, status='old', action='read', file='pid_from_fortran.txt', iostat=file_stat))&
+             call fileio_errmsg("qsys_funs; terminate_if_prg_in_cwd fopen failed", file_stat)
         read(funit,'(a)') pid
-        close(funit)
+        if(.not.fclose(funit, iostat=file_stat))&
+             call fileio_errmsg("qsys_funs; terminate_if_prg_in_cwd fclose failed", file_stat)
         ! get a string that contains the directory it is running in with lsof -p
         cmd = 'lsof -p '//trim(pid)//' | grep cwd > pid_dir_from_fortran.txt'
         call exec_cmdline(cmd)
-        open(unit=funit, status='old', action='read', file='pid_dir_from_fortran.txt', iostat=file_stat)
-        read(funit,'(a)') pid_dir
-        close(funit)
+        if(.not.fopen(funit, status='old', action='read', file='pid_dir_from_fortran.txt', iostat=file_stat))&
+             call fileio_errmsg("qsys_funs; terminate_if_prg_in_cwd fopen failed pid_dir_from_fortran.txt", file_stat)
+        read(funit,'(a)', iostat=file_stat) pid_dir
+        if(file_stat/=0)call fileio_errmsg("qsys_funs; terminate_if_prg_in_cwd read failed", file_stat)
+        if(.not.fclose(funit, iostat=file_stat))&
+             call fileio_errmsg("qsys_funs; terminate_if_prg_in_cwd fclose failed", file_stat)
         ! get pwd
-        call get_environment_variable('PWD', pwd)
+        pwd = simple_getenv('PWD')
         ! assert
         pos = index(pid_dir, '/') ! start of directory
         if( trim(pid_dir(pos:)) .eq. trim(pwd) )then
             write(*,*) 'Another process of your program: ', trim(prg)
             write(*,*) 'is already running in the cwd: ', trim(pid_dir(pos:)), ' ABORTING...'
-            stop 
+            stop
         endif
         ! remove temporary files
         call del_file('pid_from_fortran.txt')
@@ -137,7 +143,7 @@ contains
         call env%read( trim(env_file) )
         ! User keys
         if( .not. env%isthere('simple_path') )stop 'Path to SIMPLE directory is required in simple_distr_config.env (simple_path)'
-        simple_path = sys_get_env_var('SIMPLE_PATH')
+        simple_path = simple_getenv('SIMPLE_PATH')
         if( allocated(simple_path) )then
             simple_path_env = env%get('simple_path')
             if( str_has_substr(simple_path, simple_path_env) .or. str_has_substr(simple_path_env, simple_path) )then
@@ -153,7 +159,7 @@ contains
         if( qsys_name.ne.'local' .and. qsys_name.ne.'pbs' .and. qsys_name.ne.'slurm' .and. qsys_name.ne.'sge' ) &
             & stop 'Invalid qsys_name in simple_distr_config.env'
         if( qsys_name.eq.'slurm' )then
-            if( .not. env%isthere('qsys_partition') )stop 'qsys_partition field is required in simple_distr_config.env'        
+            if( .not. env%isthere('qsys_partition') )stop 'qsys_partition field is required in simple_distr_config.env'
         endif
         ! Job keys
         if( qsys_name.ne.'local' )then
@@ -167,20 +173,21 @@ contains
     end subroutine parse_env_file
 
     subroutine autogen_env_file( env_file )
-        use simple_syscalls, only: sys_get_env_var
+        use simple_syslib, only: simple_getenv
         character(len=*), intent(in)  :: env_file
         integer                       :: funit, file_stat
         character(len=:), allocatable :: simple_path, simple_email, simple_qsys
-        simple_path = sys_get_env_var('SIMPLE_PATH')
+        simple_path = simple_getenv('SIMPLE_PATH')
         if( .not. allocated(simple_path) )&
         stop 'need SIMPLE_PATH env var to auto-generate simple_distr_config.env; simple_qsys_funs :: autogen_env_file'
-        simple_qsys = sys_get_env_var('SIMPLE_QSYS')
+        simple_qsys = simple_getenv('SIMPLE_QSYS')
         if( .not. allocated(simple_qsys) )&
         stop 'need SIMPLE_QSYS env var to auto-generate simple_distr_config.env; simple_qsys_funs :: autogen_env_file'
-        simple_email = sys_get_env_var('SIMPLE_EMAIL')
+        simple_email = simple_getenv('SIMPLE_EMAIL')
         if( .not. allocated(simple_email) ) allocate(simple_email, source='me.myself\uni.edu')
-        funit = get_fileunit()
-        open(unit=funit, status='replace', action='write', file=trim(env_file), iostat=file_stat)
+
+        if(.not.fopen(funit, status='replace', action='write', file=trim(env_file), iostat=file_stat))&
+             call fileio_errmsg("autogen_env_file qsys_funs ", file_stat)
         write(funit,'(a)') '# CONFIGURATION FILE FOR DISTRIBUTED SIMPLE EXECUTION'
         write(funit,'(a)') ''
         write(funit,'(a)') '# ABSOLUTE PATH TO SIMPLE ROOT DIRECTORY'
@@ -190,7 +197,7 @@ contains
         write(funit,'(a)')  'time_per_image        = 400'
         write(funit,'(a)') ''
         write(funit,'(a)') '# USER DETAILS'
-        write(funit,'(a)') 'user_account          =' 
+        write(funit,'(a)') 'user_account          ='
         write(funit,'(a)') 'user_email            = '//simple_email
         write(funit,'(a)') 'user_project          ='
         write(funit,'(a)') ''
@@ -205,37 +212,38 @@ contains
         write(funit,'(a)') 'job_memory_per_task   = 32000'
         write(funit,'(a)') 'job_name              = default'
         write(funit,'(a)') 'job_ntasks_per_socket = 1'
-        close(funit)
+        if(.not.fclose(funit,iostat=file_stat))&
+             call fileio_errmsg("autogen_env_file qsys_funs ", file_stat)
     end subroutine autogen_env_file
 
-    !>  Writes the JOB_FINISHED_* file to mark end of computing unit job 
+    !>  Writes the JOB_FINISHED_* file to mark end of computing unit job
     subroutine qsys_job_finished( p, source )
         ! generation of this file marks completion of the partition
         ! this file is empty 4 now but may contain run stats etc.
         use simple_params, only: params
         class(params),    intent(in) :: p
-        character(len=*), intent(in) :: source 
+        character(len=*), intent(in) :: source
         integer :: fnr, file_stat
         if( p%l_chunk_distr )then
-            fnr = get_fileunit()
-            open(unit=fnr, FILE='JOB_FINISHED_'//int2str_pad(p%chunk,p%numlen),&
-            &STATUS='REPLACE', action='WRITE', iostat=file_stat)
-            call fopen_err( source, file_stat )
-            close( unit=fnr )
+            if(.not.fopen(fnr, FILE='JOB_FINISHED_'//int2str_pad(p%chunk,p%numlen),&
+                 &STATUS='REPLACE', action='WRITE', iostat=file_stat))&
+                 call fileio_errmsg("qsys_job_finished fopen failed "//trim(source), file_stat)
+            if(.not.fclose( fnr,iostat=file_stat ))&
+                 call fileio_errmsg("qsys_job_finished fclose failed ", file_stat)
         endif
         if( p%l_distr_exec )then
-            fnr = get_fileunit()
-            open(unit=fnr, FILE='JOB_FINISHED_'//int2str_pad(p%part,p%numlen),&
-            &STATUS='REPLACE', action='WRITE', iostat=file_stat)
-            call fopen_err( source, file_stat )
-            close( unit=fnr )
+            if(.not.fopen(fnr, FILE='JOB_FINISHED_'//int2str_pad(p%part,p%numlen),&
+            &STATUS='REPLACE', action='WRITE', iostat=file_stat))&
+                 call fileio_errmsg("qsys_job_finished fopen failed "//trim(source), file_stat)
+            if(.not.fclose( fnr , iostat=file_stat))&
+                 call fileio_errmsg("qsys_job_finished fopen failed ", file_stat)
         endif
         if( p%stream.eq.'yes' )then
-            fnr = get_fileunit()
-            open(unit=fnr, FILE='JOB_FINISHED_'//int2str_pad(p%part,p%numlen),&
-            &STATUS='REPLACE', action='WRITE', iostat=file_stat)
-            call fopen_err( source, file_stat )
-            close( unit=fnr )
+            if(.not.fopen(fnr, FILE='JOB_FINISHED_'//int2str_pad(p%part,p%numlen),&
+            &STATUS='REPLACE', action='WRITE', iostat=file_stat))&
+                 call fileio_errmsg("qsys_job_finished fopen failed "//trim(source), file_stat)
+            if(.not.fclose( fnr , iostat=file_stat))&
+                 call fileio_errmsg("qsys_job_finished fclose failed ", file_stat)
         endif
     end subroutine qsys_job_finished
 
@@ -266,7 +274,7 @@ contains
         if( present(wtime) ) wwtime = wtime
         nfiles = size(fnames)
         nlogic = size(files_exist)
-        if( nlogic .ne. nfiles ) stop 'nonconforming arrays in simple_qsys_funs :: qsys_watcher_2' 
+        if( nlogic .ne. nfiles ) stop 'nonconforming arrays in simple_qsys_funs :: qsys_watcher_2'
         do i=1,MAXITS
             doreturn = .false.
             do ifile=1,nfiles

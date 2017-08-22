@@ -107,13 +107,13 @@ contains
         !$ use omp_lib
         !$ use omp_lib_kinds
         use simple_rnd
-        use simple_syscalls
+        use simple_syslib
         integer, parameter   :: NTSTS=1000, NTHR=8
         integer              :: itst
         type(image)          :: img_ref, img_ptcl
         type(ft_expanded)    :: ftexp_ref, ftexp_ptcl
         real, allocatable    :: shvecs(:,:)
-        real    :: corr, actual, delta, shvec(3)
+        real    :: corr, actual, delta, shvec(3), tarray(2)
 !$      call omp_set_num_threads(NTHR)
         call img_ref%new([4096,4096,1],SMPD)
         call img_ref%ran
@@ -129,22 +129,30 @@ contains
             shvecs(itst,2) = ran3()*2*TRS-TRS
             shvecs(itst,3) = 0.
         end do
-        actual = getabscpu(.true.)
-        delta  = getdiffcpu(.true.) 
+        actual = etime( tarray )
+        write(*,'(A,2X,F9.2)') 'Actual cpu-time:', actual
+        delta = dtime( tarray )
+        write(*,'(A,F9.2)') 'Relative cpu-time:', delta
+        
         write(*,'(a)') '>>> PROFILING STANDARD CORRELATOR' 
         do itst=1,NTST
             corr = img_ref%corr_shifted(img_ptcl, shvecs(itst,:), lp_dyn=LP)
         end do
-        actual = getabscpu(.true.)
-        delta  = getdiffcpu(.true.)
+        actual = etime( tarray )
+        write(*,'(A,2X,F9.2)') 'Actual cpu-time:', actual
+        delta = dtime( tarray )
+        write(*,'(A,F9.2)') 'Relative cpu-time:', delta
         write(*,'(a)') '>>> PROFILING FTEXP CORRELATOR' 
         !$omp parallel do schedule(auto) default(shared) private(itst)
         do itst=1,NTST
             corr = ftexp_ref%corr_shifted(ftexp_ptcl, shvecs(itst,:))
         end do
         !$omp end parallel do
-        actual = getabscpu(.true.)
-        delta  = getdiffcpu(.true.)
+       
+        actual = etime( tarray )
+        write(*,'(A,2X,F9.2)') 'Actual cpu-time:', actual
+        delta = dtime( tarray )
+        write(*,'(A,F9.2)') 'Relative cpu-time:', delta
     end subroutine profile_corrs
 
 end module simple_ft_expanded_tester

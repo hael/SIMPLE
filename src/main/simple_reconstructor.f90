@@ -6,7 +6,8 @@ use simple_fftw3
 use simple_defs
 use simple_image,      only: image
 use simple_ctf,        only: ctf
-use simple_jiffys,     only: alloc_err
+use simple_syslib,     only: alloc_errchk
+use simple_imgfile,    only: find_ldim_nptcls
 use simple_kbinterpol, only: kbinterpol
 implicit none
 
@@ -110,11 +111,11 @@ contains
             allocate(self%cmat_exp( ldim_exp(1,1):ldim_exp(1,2),&
                                     &ldim_exp(2,1):ldim_exp(2,2),&
                                     &ldim_exp(3,1):ldim_exp(3,2)), stat=alloc_stat)
-            call alloc_err("In: alloc_rho; simple_reconstructor 1", alloc_stat)
+            call alloc_errchk("In: alloc_rho; simple_reconstructor 1", alloc_stat)
             allocate(self%rho_exp( rho_exp_lims(1,1):rho_exp_lims(1,2),&
                                     &rho_exp_lims(2,1):rho_exp_lims(2,2),&
                                     &rho_exp_lims(3,1):rho_exp_lims(3,2)), stat=alloc_stat)
-            call alloc_err("In: alloc_rho; simple_reconstructor 2", alloc_stat)
+            call alloc_errchk("In: alloc_rho; simple_reconstructor 2", alloc_stat)
             self%cmat_exp           = cmplx(0.,0.)
             self%rho_exp            = 0.
             self%cmat_exp_allocated = .true.
@@ -143,41 +144,42 @@ contains
     ! I/O
     !>Write reconstructed image
     subroutine write_rho( self, kernam )
-        use simple_filehandling, only: get_fileunit, fopen_err, del_file
+        use simple_fileio
         class(reconstructor), intent(in) :: self   !< this instance
         character(len=*),     intent(in) :: kernam !< kernel name
         character(len=100) :: io_message
         integer :: filnum, ier, io_stat
         call del_file(trim(kernam))
-        filnum = get_fileunit( )
-        open(unit=filnum, status='NEW', action='WRITE', file=trim(kernam), access='STREAM', iostat=ier)
-        call fopen_err('write_rho; simple_reconstructor', ier)
+        if(.not.fopen(filnum, status='NEW', action='WRITE', file=trim(kernam), access='STREAM', iostat=ier))&
+               call fileio_errmsg( 'simple_reconstructor ; write rho   ', ier)
+
         write(filnum, pos=1, iostat=io_stat, iomsg=io_message) self%rho
         if( io_stat .ne. 0 )then
             write(*,'(a,i0,2a)') '**ERROR(write_rho): I/O error ', io_stat, ' when writing to: ', trim(kernam)
             write(*,'(2a)') 'IO error message was: ', io_message
             stop 'I/O error; write_rho; simple_reconstructor'
         endif
-        close(unit=filnum)
+        if(.not.fclose(filnum, iostat=ier))&
+               call fileio_errmsg( 'simple_reconstructor ; write rho  fclose ', ier)
     end subroutine write_rho
 
     !> Read sampling density matrix
     subroutine read_rho( self, kernam )
-        use simple_filehandling, only: get_fileunit, fopen_err
+        use simple_fileio
         class(reconstructor), intent(inout) :: self !< this instance
         character(len=*),     intent(in)    :: kernam !< kernel name
         character(len=100) :: io_message
         integer :: filnum, ier, io_stat
-        filnum = get_fileunit( )
-        open(unit=filnum, status='OLD', action='READ', file=kernam, access='STREAM', iostat=ier)
-        call fopen_err('read_rho; simple_reconstructor', ier)
+        if(.not.fopen(filnum, status='OLD', action='READ', file=kernam, access='STREAM', iostat=ier))&
+             call fileio_errmsg('read_rho; simple_reconstructor opening '//trim(kernam), ier)
         read(filnum, pos=1, iostat=io_stat, iomsg=io_message) self%rho
         if( io_stat .ne. 0 )then
             write(*,'(a,i0,2a)') '**ERROR(read_rho): I/O error ', io_stat, ' when reading from: ', trim(kernam)
             write(*,'(2a)') 'IO error message was: ', io_message
             stop 'I/O error; read_rho; simple_reconstructor'
         endif
-        close(unit=filnum)
+        if(.not.fclose(filnum, iostat=ier))&
+             call fileio_errmsg('read_rho; simple_reconstructor closing '//trim(kernam), ier)
     end subroutine read_rho
 
     ! INTERPOLATION
@@ -306,7 +308,7 @@ contains
             ytmp = y
             if( abs(x) < 1e-6 ) xtmp = 0.
             if( abs(y) < 1e-6 ) ytmp = 0.
-        endif       
+        endif
         !$omp parallel do collapse(2) default(shared) schedule(static)&
         !$omp private(h,k,oshift,logi,phys) proc_bind(close)
         do h=lims(1,1),lims(1,2)
@@ -322,7 +324,7 @@ contains
 
     !> sampl_dens_correct Correct sample density
     !! \param self_out corrected image output
-    !! 
+    !!
     subroutine sampl_dens_correct( self, self_out )
         class(reconstructor),   intent(inout) :: self !< this instance
         class(image), optional, intent(inout) :: self_out  !< output image instance
@@ -391,14 +393,14 @@ contains
          self%rho = self%rho+self_in%rho
          !$omp end parallel workshare
     end subroutine sum
-    
+
     ! RECONSTRUCTION
     !> reconstruction routine
     subroutine rec( self, fname, p, o, se, state, mul, eo, part )
         use simple_oris,     only: oris
         use simple_sym,      only: sym
         use simple_params,   only: params
-        use simple_jiffys,   only: find_ldim_nptcls, progress
+        use simple_jiffys,   only: progress
         use simple_gridding  ! use all in there
         class(reconstructor), intent(inout) :: self      !< this object
         character(len=*),     intent(inout) :: fname     !< spider/MRC stack filename

@@ -2,7 +2,7 @@
 module simple_powell_opt
 use simple_optimizer, only: optimizer
 use simple_opt_spec,  only: opt_spec
-use simple_jiffys,    only: alloc_err
+use simple_syslib,    only: alloc_errchk
 implicit none
 
 public :: powell_opt
@@ -32,7 +32,7 @@ contains
         real                             :: x
         call self%kill
         allocate(self%direction_set(spec%ndim,spec%ndim), stat=alloc_stat)
-        call alloc_err("In: new; simple_powell_opt", alloc_stat)
+        call alloc_errchk("In: new; simple_powell_opt", alloc_stat)
         self%direction_set = 0.
         self%yb            = huge(x) ! initialize best cost to huge number
         ! make line minimizer
@@ -122,7 +122,7 @@ contains
                 integer :: i,ibig,j,iter,alloc_stat
                 real    :: del,fp,fptt,t
                 allocate(pt(spec%ndim),ptt(spec%ndim), stat=alloc_stat)
-                call alloc_err("In: powell; simple_powell_opt", alloc_stat)
+                call alloc_errchk("In: powell; simple_powell_opt", alloc_stat)
                 cost=spec%costfun(self%spec_linmin%x,spec%ndim) ! set initial costfun val
                 spec%nevals = spec%nevals+1
                 do j=1,spec%ndim

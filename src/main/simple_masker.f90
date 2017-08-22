@@ -97,7 +97,7 @@ contains
     !>  \brief  is a 2D constructor
     !!          on exit the parent image is untouched
     subroutine init2D(self, p, ncls)
-        use simple_jiffys, only: alloc_err
+        use simple_syslib, only: alloc_errchk
         class(masker), intent(inout) :: self
         class(params), intent(in)    :: p
         integer,       intent(in)    :: ncls
@@ -115,7 +115,7 @@ contains
         call self%img_dist%new(self%idim, self%get_smpd())
         call self%img_dist%cendist
         allocate(self%adamsks(self%n), stat=alloc_stat )
-        call alloc_err('in simple_masker::init2D 1', alloc_stat)
+        call alloc_errchk('in simple_masker::init2D 1', alloc_stat)
         self%adamsks = 0.
     end subroutine init2D
 

@@ -1,6 +1,7 @@
 ! optimiser specification
 module simple_opt_spec
 use simple_defs
+use simple_syslib, only: alloc_errchk
 implicit none
 
 public :: opt_spec
@@ -37,9 +38,9 @@ type :: opt_spec
     real, allocatable     :: population(:,:)                  !< output solution population from the evolutionary approaches
     real, allocatable     :: peaks(:,:)                       !< output peaks (local optimal solutions)
 #include "simple_local_flags.inc"
-!    logical               :: verbose   = .false.              !< verbose output of optimizer on/off
-!    logical               :: opt_spec_debug = .false.         !< debugging mode on/off unique to opt_spec
-!    logical               :: warn      = .false.              !< warning mode on/off
+!    logical               :: verbose   = .false.             !< verbose output of optimizer on/off
+!    logical               :: debug = .false.                 !< debugging mode on/off unique to opt_spec
+!    logical               :: warn      = .false.             !< warning mode on/off
     logical               :: converged = .false.              !< converged status
     logical               :: exists    = .false.              !< to indicate existence
   contains
@@ -76,7 +77,6 @@ contains
     subroutine specify( self, str_opt, ndim, mode, ldim, ftol, gtol, maxits,&
     nrestarts, limits, cyclic, verbose_arg, debug_arg, npop,&
     cfac, warn_arg, nbest, nstates, stepsz, npeaks, nnn )
-        use simple_jiffys, only: alloc_err
         class(opt_spec),            intent(inout) :: self           !< instance
         character(len=*),           intent(in)    :: str_opt        !< string descriptor (of optimization routine to be used)
         integer,                    intent(in)    :: ndim           !< problem dimensionality
@@ -141,14 +141,14 @@ contains
         if(present(nnn))       self%nnn       = nnn
         if(present(limits))    call self%set_limits( limits )
         allocate( self%cyclic(self%ndim), stat=alloc_stat )
-        call alloc_err('In: specify; simple_opt_spec, cyclic', alloc_stat)
+        call alloc_errchk('In: specify; simple_opt_spec, cyclic', alloc_stat)
         self%cyclic = .false.
         if( present(cyclic) )then
             self%cyclic = cyclic
         endif
         if(present(stepsz))then
             allocate( self%stepsz(ndim), stat=alloc_stat )
-            call alloc_err('In: specify; simple_opt_spec, stepsz', alloc_stat)
+            call alloc_errchk('In: specify; simple_opt_spec, stepsz', alloc_stat)
             self%stepsz = stepsz
         endif
         if(present(verbose_arg)) self%verbose = verbose_arg
@@ -159,17 +159,17 @@ contains
         ! allocate
         if( self%npeaks > 0 )then
             allocate( self%peaks(self%npeaks,self%ndim+1), source=1., stat=alloc_stat )
-            call alloc_err('In: specify; simple_opt_spec, peaks', alloc_stat)
+            call alloc_errchk('In: specify; simple_opt_spec, peaks', alloc_stat)
         endif
         select case(str_opt)
             case('linmin')
                 allocate( self%x(self%ndim), self%xi(self%ndim), self%xt(self%ndim), stat=alloc_stat )
-                call alloc_err('In: specify; simple_opt_spec, linmin', alloc_stat)
+                call alloc_errchk('In: specify; simple_opt_spec, linmin', alloc_stat)
                 self%xi = 0.
                 self%xt = 0.
             case DEFAULT
                 allocate( self%x(self%ndim), stat=alloc_stat )
-                call alloc_err('In: specify; simple_opt_spec, DEFAULT', alloc_stat)
+                call alloc_errchk('In: specify; simple_opt_spec, DEFAULT', alloc_stat)
         end select
         self%x  = 0.
         self%exists = .true.
@@ -184,7 +184,7 @@ contains
 
     !>  \brief  sets the optimizer limits
     subroutine set_limits( self, lims )
-        use simple_jiffys, only: alloc_err
+        
         class(opt_spec), intent(inout) :: self              !< instance
         real,               intent(in) :: lims(self%ndim,2) !< new limits
         integer  :: i,alloc_stat
@@ -199,14 +199,13 @@ contains
         end do
         if( .not.allocated(self%limits))then
             allocate( self%limits(self%ndim,2), stat=alloc_stat )
-            call alloc_err('In: specify; simple_opt_spec, limits', alloc_stat)
+            call alloc_errchk('In: specify; simple_opt_spec, limits', alloc_stat)
         endif
         self%limits = lims
     end subroutine set_limits
     
     !>  \brief  sets the initialization population for de
     subroutine set_inipop( self, pop )
-        use simple_jiffys, only: alloc_err
         class(opt_spec), intent(inout) :: self              !< instance
         real,            intent(in)    :: pop(:,:)
         if(self%str_opt.ne.'de')stop 'Only for use with DE; simple_opt_spec%set_inipop'

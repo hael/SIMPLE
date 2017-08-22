@@ -178,8 +178,8 @@ contains
     !>  \brief  writes the hash to file
     subroutine write( self, fnr )
         class(hash), intent(inout) :: self
-        integer,     intent(in)    :: fnr
-        integer :: i
+        integer, intent(in)        :: fnr
+        integer                    :: i
         do i=1,self%hash_index-1
             write(fnr,"(1X,A,A)", advance="no") trim(self%keys(i)), '='
             write(fnr,"(A)", advance="no") trim(real2str(self%vals(i)))
@@ -224,7 +224,7 @@ contains
     
     !>  \brief  is the hash unit test
     subroutine test_hash
-        use simple_filehandling, only: get_fileunit
+        use simple_fileio      , only: get_fileunit
         type(hash) :: htab, htab2
         integer    :: fnr, file_stat
         write(*,'(a)') '**info(simple_hash_unit_test: testing all functionality'

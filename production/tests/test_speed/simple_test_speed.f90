@@ -3,7 +3,7 @@ use simple_defs
 use simple_speedtester
 use simple_cmdline, only: cmdline
 use simple_strings, only: str2real
-use simple_syscalls
+use simple_syslib
 implicit none
 type(cmdline)     :: cline
 real              :: starttime, stoptime

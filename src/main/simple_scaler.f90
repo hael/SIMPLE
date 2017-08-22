@@ -1,7 +1,9 @@
 ! downscaling of image stacks
 module simple_scaler
-use simple_cmdline, only: cmdline
 use simple_defs     ! use all in there
+use simple_fileio
+use simple_cmdline, only: cmdline
+
 implicit none
 
 public :: scaler
@@ -63,8 +65,8 @@ contains
 
     subroutine scale_exec( self )
         use simple_commander_imgproc, only: scale_commander
-        use simple_jiffys,            only: has_ldim_nptcls
-        use simple_filehandling,      only: file_exists
+        use simple_fileio      ,      only: file_exists
+        use simple_imgfile,           only: has_ldim_nptcls
         class(scaler)         :: self
         type(scale_commander) :: xscale
         logical :: doscale

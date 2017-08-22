@@ -3,6 +3,7 @@ module simple_hadamard2D_matcher
 !$ use omp_lib
 !$ use omp_lib_kinds
 use simple_defs
+use simple_syslib
 use simple_polarft_corrcalc, only: polarft_corrcalc
 use simple_prime2D_srch,     only: prime2D_srch
 use simple_ori,              only: ori
@@ -10,8 +11,8 @@ use simple_build,            only: build
 use simple_params,           only: params
 use simple_cmdline,          only: cmdline
 use simple_strings,          only: int2str_pad
-use simple_jiffys,           only: progress
-use simple_filehandling      ! use all in there
+use simple_jiffys
+use simple_fileio            ! use all in there
 use simple_hadamard_common   ! use all in there
 use simple_filterer          ! use all in there
 implicit none
@@ -453,7 +454,7 @@ contains
 
     !>  \brief  prepares the polarft corrcalc object for search
     subroutine preppftcc4align( b, p )
-        use simple_jiffys,       only: alloc_err
+        use simple_syslib,       only: alloc_errchk
         class(build),  intent(inout) :: b
         class(params), intent(inout) :: p
         type(ori) :: o

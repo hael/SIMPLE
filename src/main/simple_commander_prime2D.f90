@@ -5,7 +5,7 @@ use simple_cmdline,        only: cmdline
 use simple_params,         only: params
 use simple_build,          only: build
 use simple_commander_base, only: commander_base
-use simple_filehandling    ! use all in there
+use simple_fileio          ! use all in there
 use simple_jiffys          ! use all in there
 implicit none
 
@@ -18,7 +18,7 @@ private
 
 !> generator type
 type, extends(commander_base) :: makecavgs_commander 
-  contains
+ contains
     procedure :: execute      => exec_makecavgs
 end type makecavgs_commander 
 type, extends(commander_base) :: prime2D_commander 
@@ -151,6 +151,7 @@ contains
     subroutine exec_prime2D( self, cline )
         use simple_hadamard2D_matcher, only: prime2D_exec
         use simple_qsys_funs,          only: qsys_job_finished
+        use simple_imgfile,            only: find_ldim_nptcls
         class(prime2D_commander), intent(inout) :: self
         class(cmdline),           intent(inout) :: cline
         type(params) :: p
@@ -215,10 +216,10 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_CAVGASSEMBLE NORMAL STOP ****', print_simple=.false.)
         ! indicate completion (when run in a qsys env)
-        fnr = get_fileunit()
-        open(unit=fnr, FILE='CAVGASSEMBLE_FINISHED', STATUS='REPLACE', action='WRITE', iostat=file_stat)
-        call fopen_err('In: commander_rec :: eo_volassemble', file_stat )
-        close( unit=fnr )
+        if(.not.fopen(fnr, FILE='CAVGASSEMBLE_FINISHED', STATUS='REPLACE', action='WRITE', iostat=file_stat))&
+        call fileio_errmsg('In: commander_rec :: eo_volassemble', file_stat )
+         if(.not.fclose( fnr , iostat=file_stat))&
+        call fileio_errmsg('In: commander_rec :: eo_volassemble fclose', file_stat )
     end subroutine exec_cavgassemble
     
     subroutine exec_check2D_conv( self, cline )

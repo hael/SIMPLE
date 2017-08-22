@@ -1,81 +1,104 @@
 ! for using basic system functions
 module simple_syscalls
-use simple_jiffys       ! use all in there
 use simple_defs         ! use all in there
-use simple_filehandling ! use all in there
+!use simple_jiffys       ! use all in there
+!use, intrinsic :: iso_fortran_env
+!use iso_fortran_env
+!use ISO_C_BINDING
 implicit none
 
 private :: raise_sys_error
 
+private
+
+#ifdef PGI
+
+include 'lib3f.h'
+public :: exec_cmdline, dtime, etime, getabscpu, getdiffcpu, &
+     sys_get_env_var, sys_gen_mrcfiletab, sys_gen_filetab, &
+     sys_del_files, sys_get_last_fname, simple_sleep, &
+     sys_merge_docs
+
+#endif
+
 contains
 
-    !> is the fortran 90 variant of the classic dtime
-    real function dtime( time )
-        real                  :: time(2)
-        double precision,save :: last_time = 0
-        double precision      :: this_time
-        intrinsic cpu_time
-        call cpu_time(this_time)
-        time(1) = real(this_time-last_time)
-        time(2) = 0.
-        dtime = time(1)
-        last_time = this_time
-    end function dtime
+! #Ifndef PGI
+!     !> is the fortran 90 variant of the classic dtime
+!     real function dtime( time )
+!         real                  :: time(2)
+!         double precision,save :: last_time = 0
+!         double precision      :: this_time
+!         intrinsic cpu_time
+!         call cpu_time(this_time)
+!         time(1) = real(this_time-last_time)
+!         time(2) = 0.
+!         dtime = time(1)
+!         last_time = this_time
+!     end function dtime
 
-    !> is the fortran 90 variant of the classic etime
-    real function etime( time )
-        real :: time(2)
-        call cpu_time(etime)
-        time(1) = etime
-        time(2) = 0
-    end function etime
+!     !> is the fortran 90 variant of the classic etime
+!     real function etime( time )
+!         real :: time(2)
+!         call cpu_time(etime)
+!         time(1) = etime
+!         time(2) = 0
+!     end function etime
+! #endif
 
-    !> is for getting the actual cputime
-    function getabscpu( lprint ) result( actual )
-        logical, intent(in) :: lprint
-        real                :: tarray(2)
-        real                :: actual
-        actual = etime( tarray )
-        if( lprint )then
-            write(*,'(A,2X,F9.2)') 'Actual cpu-time:', actual
-        endif
-    end function getabscpu
+    ! !> is for getting the actual cputime
+    ! function getabscpu( lprint ) result( actual )
+    !     logical, intent(in) :: lprint
+    !     real                :: tarray(2)
+    !     real                :: actual
+    !     actual = etime( tarray )
+    !     if( lprint )then
+    !         write(*,'(A,2X,F9.2)') 'Actual cpu-time:', actual
+    !     endif
+    ! end function getabscpu
 
-    !> is for getting the relative cpu-time
-    function getdiffcpu( lprint ) result( delta )
-        logical, intent(in) :: lprint
-        real                :: tarray(2)
-        real                :: delta
-        delta = dtime( tarray )
-        if( lprint )then
-            write(*,'(A,F9.2)') 'Relative cpu-time:', delta
-        endif
-    end function getdiffcpu
+    ! !> is for getting the relative cpu-time
+    ! function getdiffcpu( lprint ) result( delta )
+    !     logical, intent(in) :: lprint
+    !     real                :: tarray(2)
+    !     real                :: delta
+    !     delta = dtime( tarray )
+    !     if( lprint )then
+    !         write(*,'(A,F9.2)') 'Relative cpu-time:', delta
+    !     endif
+    ! end function getdiffcpu
 
     !>  Wrapper for system call
-    subroutine exec_cmdline( cmdline, wait )
+    subroutine exec_cmdline( cmdline, waitflag )
 #if defined(INTEL)
         use ifport
 #endif
         character(len=*),  intent(in) :: cmdline
-        logical, optional, intent(in) :: wait
+        logical, optional, intent(in) :: waitflag
         character(len=STDLEN) :: cmsg
-        integer :: estat, cstat, exec_stat
+        integer ::  cstat, exec_stat
         logical :: l_doprint = .true., wwait = .true.
+        wwait = .true.
+        if( present(wait) ) wwait = waitflag
+
 #if defined(PGI)
-        call system(trim(adjustl(cmdline)))
+        include 'lib3f.h'  ! PGI declares kill,wait here
+        exec_stat = system(trim(adjustl(cmdline)))
+
 #elif defined(INTEL)
         exec_stat = system(trim(adjustl(cmdline)))
+
+#else  ! GNU
+        
+        call execute_command_line( trim(adjustl(cmdline)), wait=wwait, exitstat=exec_stat, cmdstat=cstat, cmdmsg=cmsg)
+        call raise_sys_error( cmdline, exec_stat, cstat, cmsg )
+#endif
+
         if( l_doprint )then
             write(*,*) 'command: ', trim(adjustl(cmdline))
             write(*,*) 'status of execution: ', exec_stat
         endif
-#else
-        wwait = .true.
-        if( present(wait) ) wwait = wait
-        call execute_command_line( trim(adjustl(cmdline)), wait=wwait, exitstat=estat, cmdstat=cstat, cmdmsg=cmsg)
-        call raise_sys_error( cmdline, estat, cstat, cmsg )
-#endif
+
     end subroutine exec_cmdline
 
     !>  Handles error from system call
@@ -90,6 +113,7 @@ contains
             err = .true.
         endif
         if( cmdstat /= 0 )then
+            call simple_error_check()
             write(*,*)'cmdstat = ',cmdstat,' command could not be executed: ', trim(adjustl(cmd))
             err = .true.
         endif
@@ -101,11 +125,15 @@ contains
         character(len=STDLEN)         :: value
         character(len=:), allocatable :: varval
         integer :: length, status
+#if definded(PGI)
+        call getenv( trim(name), value)
+#else ! Intel and GNU F2003 included
         call get_environment_variable( trim(name), value=value, length=length, status=status)
         if( status == -1 ) write(*,*) 'value string too short; simple_syscalls :: get_env_var'
         if( status ==  1 ) write(*,*) 'environment variable: ', trim(name), ' is not defined; simple_syscalls :: get_env_var'
         if( status ==  2 ) write(*,*) 'environment variables not supported by system; simple_syscalls :: get_env_var'
         if( length ==  0 .or. status /= 0 ) return
+#endif
         allocate(varval, source=trim(value))
     end function sys_get_env_var
 
@@ -199,5 +227,7 @@ contains
             wait_time = wait_time + 1
         enddo
     end subroutine wait_for_closure
+
+
 
 end module simple_syscalls

@@ -1117,20 +1117,21 @@ contains
     end subroutine kill
 
     subroutine test_imghead
-        use simple_filehandling
+        use simple_fileio      
         class(ImgHead), allocatable :: hed, hed2
-        integer :: recsz, funit, dims(3), dims2(3)
+        integer :: recsz, io_stat, funit, dims(3), dims2(3)
         write(*,'(a)') '**info(simple_imghead_unit_test): testing read/write capabilities'
         allocate(SpiImgHead :: hed, hed2 )
         call hed%new([120,120,1])
         call hed2%new([120,120,1])
         recsz = 120*4
-        funit = get_fileunit()
-        open(unit=funit,access='STREAM',file='test_imghed.spi',&
-             &action='READWRITE',status='UNKNOWN')
+        if(.not.fopen(unit=funit,access='STREAM',file='test_imghed.spi',&
+             &action='READWRITE',status='UNKNOWN', iostat=io_stat))&
+             call fileio_errmsg("simple_imghead_unit_test: testing read/write", io_stat)
         call hed%write(funit)
         call hed2%read(funit)
-        close(funit)
+        if(.not.fclose(funit, iostat=io_stat))&
+             call fileio_errmsg("simple_imghead_unit_test: testing read/write", io_stat)
         write(*,*) '>>> PRINTING HEADER THAT WAS WRITTEN TO DISK'
         call hed%print_imghead
         write(*,*) ''

@@ -3,10 +3,11 @@ module simple_polarizer
 !$ use omp_lib
 !$ use omp_lib_kinds
 use simple_defs       ! use all in there
+use simple_syslib, only: alloc_errchk
 use simple_kbinterpol, only: kbinterpol
 use simple_image,      only: image
 use simple_params,     only: params
-use simple_jiffys,     only: alloc_err
+
 
 implicit none
 
@@ -54,7 +55,7 @@ contains
                   &self%polcyc2_mat(1:pdim(1), pdim(2):pdim(3), 1:self%wdim),&
                   &self%polweights_mat(1:pdim(1), pdim(2):pdim(3), 1:wlen),&
                   &w(1:self%wdim,1:self%wdim), stat=alloc_stat)
-        call alloc_err('in simple_projector :: init_imgpolarizer', alloc_stat)
+        call alloc_errchk('in simple_projector :: init_imgpolarizer', alloc_stat)
         !$omp parallel do collapse(2) schedule(static) default(shared)&
         !$omp private(i,k,l,w,loc,cnt,win) proc_bind(close)
         do i=1,pdim(1)
@@ -110,7 +111,7 @@ contains
         windim = 2*ceiling(self%harwin_exp) + 1
         vecdim = windim**2
         allocate( pft(pdim(1),pdim(2):pdim(3)), comps(1:windim,1:windim), stat=alloc_stat )
-        call alloc_err("In: imgpolarizer; simple_projector", alloc_stat)
+        call alloc_errchk("In: imgpolarizer; simple_projector", alloc_stat)
         lims = self%loop_lims(3)
         !$omp parallel do collapse(2) schedule(static) default(shared)&
         !$omp private(i,k,l,m,logi,phys,comps,addr_l) proc_bind(close)

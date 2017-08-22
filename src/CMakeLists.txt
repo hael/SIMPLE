@@ -39,9 +39,11 @@ add_custom_target(simple_gen_doc_f90
 # endif()
 
 file(GLOB DEFS_src "${CMAKE_CURRENT_SOURCE_DIR}/defs/*.f[90][08]" PARENT_SCOPE)
+file(GLOB FILEIO_src "${CMAKE_CURRENT_SOURCE_DIR}/fileio/*.f[90][08]" PARENT_SCOPE)
 file(GLOB UTILS_src "${CMAKE_CURRENT_SOURCE_DIR}/utils/*.f90" PARENT_SCOPE)
 if ( USE_CUDA )
   file(GLOB CUDA_src "${CMAKE_CURRENT_SOURCE_DIR}/cuda/*.f[90][08]" PARENT_SCOPE)
+#  list(APPEND UTILS_src ${UTILS_src} ${CUDA_src})
 ##  list(REMOVE_ITEM UTILS_src "${CMAKE_CURRENT_SOURCE_DIR}/utils/simple_timer_cuda.f90")
 ## else()
 ##   list(APPEND UTILS_src ${UTILS_src} "${CMAKE_SOURCE_DIR}/utils/simple_timer_cuda.f90")
@@ -54,16 +56,23 @@ file(GLOB SIMPLE_src "${CMAKE_CURRENT_SOURCE_DIR}/main/*.f[09][0-9]" PARENT_SCOP
 list(APPEND SIMPLE_src
   "${CMAKE_BINARY_DIR}/lib/simple/simple_args.f90")
 
-set(CORELIB_src  ${DEFS_src} ${UTILS_src} ${SIMPLE_src})
-list(APPEND SIMPLECORELIB  ${DEFS_src} ${UTILS_src} ${SIMPLE_src})
+#set(CORELIB_src  ${DEFS_src} ${UTILS_src} ${SIMPLE_src})
+list(APPEND SIMPLECORELIB  ${DEFS_src} ${UTILS_src} ${FILEIO_src} ${SIMPLE_src})
 # message(STATUS "SIMPLE LIBRARY SOURCES: ${SIMPLECORELIB}")
 
 ##########################################################################
 # Remove unused files here
 ##########################################################################
 list(REMOVE_ITEM SIMPLECORELIB
-  "${CMAKE_CURRENT_SOURCE_DIR}/main/simple_cftcc_scatsrch.f90"
-  "${CMAKE_CURRENT_SOURCE_DIR}/main/simple_kbinterpol_elemental.f90"
+   "${CMAKE_CURRENT_SOURCE_DIR}/utils/simple_filehandling.f90"
+   "${CMAKE_CURRENT_SOURCE_DIR}/utils/simple_syscalls.f90"
+   "${CMAKE_CURRENT_SOURCE_DIR}/utils/simple_imghead.f90"
+   "${CMAKE_CURRENT_SOURCE_DIR}/utils/simple_imgfile.f90"
+   "${CMAKE_CURRENT_SOURCE_DIR}/fileio/simple_alloc.f90"
+   "${CMAKE_CURRENT_SOURCE_DIR}/main/simple_hash.f90"
+   "${CMAKE_CURRENT_SOURCE_DIR}/main/simple_chash.f90"
+   "${CMAKE_CURRENT_SOURCE_DIR}/main/simple_cftcc_scatsrch.f90"
+   "${CMAKE_CURRENT_SOURCE_DIR}/main/simple_kbinterpol_elemental.f90"
 )
 
 

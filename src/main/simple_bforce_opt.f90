@@ -25,14 +25,14 @@ contains
     !> \brief  is a constructor
     subroutine new_bforce_opt( self, spec )
         use simple_opt_spec, only: opt_spec
-        use simple_jiffys,   only: alloc_err
+        use simple_syslib,   only: alloc_errchk
         class(bforce_opt), intent(inout) :: self !< instance
         class(opt_spec), intent(inout)   :: spec !< specification
         integer                          :: alloc_stat, i
         real                             :: x
         call self%kill
         allocate(self%pb(spec%ndim), self%pc(spec%ndim), stat=alloc_stat)
-        call alloc_err("In: new_bforce_opt", alloc_stat)
+        call alloc_errchk("In: new_bforce_opt", alloc_stat)
         self%pb = spec%limits(:,1)
         self%pc = spec%limits(:,1)
         if( all(spec%stepsz == 0.) ) stop 'step size (stepsz) not set in&

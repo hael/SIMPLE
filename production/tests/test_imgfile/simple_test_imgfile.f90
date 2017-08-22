@@ -1,5 +1,8 @@
 program simple_test_imgfile
-    use simple_image,   only: image
+use simple_defs
+use simple_fileio
+use simple_syslib
+use simple_image,   only: image
     use simple_imgfile, only: imgfile
     use simple_imghead, only: imghead, SpiImgHead, test_imghead
     use simple_defs

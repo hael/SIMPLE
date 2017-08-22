@@ -309,11 +309,11 @@ To run a typical test with 8 cores, use:
 #+END_SRC
 
 
-** Usage
+* Usage
 
 See [[http://simplecryoem.com/manuals.html][User documentation]] on the homepage
 
-** Contributing
+* Contributing
 
 Create documentation with =make doc= (see below) or see the [[file:doc/SimpleManual/simple3.0devel.tex][Developer Manual]]
 
@@ -365,3 +365,24 @@ SIMPLE depends on FFTW which is licenced under GPL ([[https://www.fftw.org][FFTW
 CTFFIND4 Copyright 2014 Howard Hughes Medical Institute
  -  Use is subject to Janelia Farm Research Campus Software Copyright 1.1
    license terms ( http://license.janelia.org/license/jfrc_copyright_1_1.html )
+
+* Post Release 2.5 Changes
+** Universal File I/O
+Former method:
+:-        fnr = get_fileunit()
+:-        open(unit=fnr, FILE='CAVGASSEMBLE_FINISHED', STATUS='REPLACE', action='WRITE', iostat=file_stat)
+:-        call fopen_err('In: commander_rec :: eo_volassemble', file_stat )
+:-        close( unit=fnr )
+New file open/close
+:+        if(.not.fopen(fnr, 'CAVGASSEMBLE_FINISHED', STATUS='REPLACE', action='WRITE', iostat=file_stat))&
+:+        call fileio_errmsg('In: commander_rec :: eo_volassemble', file_stat )
+:+         if(.not.fclose( fnr , iostat=file_stat))&
+:+        call fileio_errmsg('In: commander_rec :: eo_volassemble fclose', file_stat )
+
+| Old         |   | New Function  | args              | optional           |
+|-------------+---+---------------+-------------------+--------------------|
+| open()      |   | l = fopen()   | funit,file,iostat | access,status,recl |
+|             |   |               |                   |                    |
+| close()     |   | l = fclose()  | unit,iostat       | dispose            |
+| fopen_err() |   | fileio_errmsg | msg,iostat        |                    |
+|             |   |               |                   |                    |

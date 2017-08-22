@@ -1,6 +1,7 @@
 ! runtime polymorphic singly linked list class
 module simple_sll
 use simple_defs
+use simple_syslib, only: alloc_errchk
 use simple_arr, only: arr
 implicit none
 
@@ -39,6 +40,7 @@ interface sll
     module procedure constructor
 end interface sll
 
+#include "simple_local_flags.inc"
 contains
 
     !>  \brief  is a constructor that allocates the head of the list
@@ -52,8 +54,11 @@ contains
     !! and nullifies its pointer to the nextcoming node
     subroutine new(self)
         class(sll), intent(inout) :: self
+        integer              :: err
+        character(len=STDLEN):: io_msg
         if( associated(self%head) ) call self%kill
-        allocate(self%head)     ! allocate memory for the object
+        allocate(self%head,STAT=err,ERRMSG=io_msg)     ! allocate memory for the object
+        call alloc_errchk(" In simple_sll::new  deallocation fault "//trim(io_msg),err)
         nullify(self%head%next) ! start with an empty list
     end subroutine new
 
@@ -64,6 +69,8 @@ contains
         integer, optional, intent(in)    :: iarr(:)
         real, optional,    intent(in)    :: rarr(:)
         type(sll_node), pointer          :: prev, curr
+        integer              :: err
+        character(len=STDLEN):: io_msg
         ! initialization, begin at the 0:th position
         prev => self%head
         curr => prev%next
@@ -71,7 +78,8 @@ contains
           prev => curr
           curr => curr%next
         end do
-        allocate( curr ) ! insert it at the end of the list
+        allocate( curr ,STAT=err,ERRMSG=io_msg) ! insert it at the end of the list
+        call alloc_errchk(" In simple_sll::add  deallocation fault "//trim(io_msg),err)
         if( present(iarr) ) curr%content = iarr
         if( present(rarr) ) curr%content = rarr
         self%list_size = self%list_size+1
@@ -87,6 +95,8 @@ contains
         real,    allocatable, optional, intent(out) :: rarr(:)
         type(sll_node), pointer :: curr
         integer                 :: counter
+        integer              :: err
+        character(len=STDLEN):: io_msg
         if ( pos < 1 .or. pos > self%list_size ) then
             write(*,*) 'Variable pos is out of range!'
             write(*,*) 'get; simple_sll'
@@ -99,14 +109,17 @@ contains
             if( counter == pos ) exit
             curr => curr%next
         end do
+        err=0
         if( present(iarr) )then
-            if( allocated(iarr) ) deallocate(iarr)
+            if( allocated(iarr) ) deallocate(iarr,STAT=err,ERRMSG=io_msg)
             iarr = curr%content%iget()
         endif
+        call alloc_errchk(" In simple_sll::get  deallocation fault "//trim(io_msg),err)
         if( present(rarr) )then
-            if( allocated(rarr) ) deallocate(rarr)
+            if( allocated(rarr) ) deallocate(rarr,STAT=err,ERRMSG=io_msg)
             rarr = curr%content%rget()
         endif
+        call alloc_errchk(" In simple_sll::get  deallocation fault "//trim(io_msg),err)
     end subroutine get
 
     !>  \brief  is a polymorphic setter
@@ -139,6 +152,8 @@ contains
         integer,    intent(in)    :: pos
         type(sll_node), pointer   :: prev, curr
         integer                   :: counter
+        integer              :: err
+        character(len=STDLEN):: io_msg
         if ( pos < 1 .or. pos > self%list_size ) then
             write(*,*) 'Variable pos is out of range!'
             write(*,*) 'get; simple_sll'
@@ -165,11 +180,13 @@ contains
         if( associated( curr%next ) ) then
           prev%next => curr%next          ! redirect pointer
           call curr%content%kill          ! free space for the content
-          deallocate( curr )              ! free space for node
+          deallocate( curr ,STAT=err,ERRMSG=io_msg)              ! free space for node
+          call alloc_errchk(" In simple_sll::del  deallocation fault "//trim(io_msg),err)
           nullify( curr )
         else
           call curr%content%kill          ! free space for the list object
-          deallocate( curr )              ! free space for node
+          deallocate( curr ,STAT=err,ERRMSG=io_msg)              ! free space for node
+          call alloc_errchk(" In simple_sll::del  deallocation fault "//trim(io_msg),err)
           nullify( curr, prev%next )
         endif
         self%list_size = self%list_size-1 ! update the list size
@@ -194,13 +211,16 @@ contains
         class(sll), intent(inout)  :: self2
         type(sll)                  :: self
         type(sll_node), pointer    :: prev, curr
+        integer              :: err
+        character(len=STDLEN):: io_msg
         ! Make resulting list
         call self%new
         self%list_size = self1%list_size + self2%list_size
         ! make resulting list a replica of self1
         self%head%next => self1%head%next
         ! remove list 1
-        deallocate( self1%head )
+        deallocate( self1%head,STAT=err,ERRMSG=io_msg )
+        call alloc_errchk(" In simple_sll::append  deallocation fault "//trim(io_msg),err)
         nullify( self1%head )
         self1%list_size = 0
         ! do the choka choka
@@ -212,7 +232,8 @@ contains
         end do
         prev%next => self2%head%next
         ! remove list 2
-        deallocate( self2%head )
+        deallocate( self2%head ,STAT=err,ERRMSG=io_msg)
+        call alloc_errchk(" In simple_sll::append  deallocation fault "//trim(io_msg),err)
         nullify( self2%head )
         self2%list_size = 0
     end function append
@@ -243,14 +264,16 @@ contains
     !>  \brief  is a destructor
     subroutine kill( self )
         class(sll), intent(inout) :: self
-        integer                   :: i
+        integer                   :: i,err
+         character(len=STDLEN):: io_msg
         if( self%list_size >= 0 )then
             do i=1,self%list_size
                 call self%del(1)
             end do
         endif
         if( associated(self%head) )then
-            deallocate(self%head)
+            deallocate(self%head,STAT=err,ERRMSG=io_msg)
+            call alloc_errchk(" In simple_sll::kill  deallocation fault "//trim(io_msg),err)
             nullify(self%head)
         endif
     end subroutine kill

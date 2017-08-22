@@ -1,12 +1,14 @@
 ! concrete commander: general image processing routines
 module simple_commander_imgproc
 use simple_defs
+use simple_syslib
 use simple_cmdline,        only: cmdline
 use simple_params,         only: params
 use simple_build,          only: build
 use simple_commander_base, only: commander_base
 use simple_strings,        only: int2str, int2str_pad
-use simple_filehandling    ! use all in there
+use simple_imgfile,        only: find_ldim_nptcls
+use simple_fileio          ! use all in there
 use simple_jiffys          ! use all in there
 implicit none
 #include "simple_local_flags.inc"
@@ -184,7 +186,7 @@ contains
         if( cline%defined('msk') )then
             if( p%stats .eq. 'yes' )then
                 allocate(corrs(p%nptcls), stat=alloc_stat)
-                call alloc_err('In: simple_corrcompare', alloc_stat)
+                call alloc_errchk('In: simple_corrcompare', alloc_stat)
             endif
             do iptcl=1,p%nptcls
                 call b%img%read(p%stk, iptcl)
@@ -368,6 +370,7 @@ contains
    !> volume/image_smat is a program for creating a similarity matrix based on volume2volume correlation
     subroutine exec_image_smat(self, cline)
         use simple_corrmat  ! use all in there
+        use simple_fileio, only: fopen,fclose,fileio_errmsg
         use simple_ori,     only: ori
         use simple_imgfile, only: imgfile
         use simple_image,   only: image
@@ -381,7 +384,7 @@ contains
         p = params(cline, .false.)                           ! constants & derived constants produced
         call b%build_general_tbox(p, cline, .false., .true.) ! general objects built (no oritab reading)
         allocate(b%imgs_sym(p%nptcls), stat=alloc_stat)
-        call alloc_err('In: simple_image_smat, 1', alloc_stat)
+        call alloc_errchk('In: simple_image_smat, 1', alloc_stat)
         do iptcl=1,p%nptcls
             call b%imgs_sym(iptcl)%new([p%box,p%box,1], p%smpd)
             call b%imgs_sym(iptcl)%read(p%stk, iptcl)
@@ -397,14 +400,16 @@ contains
                 call calc_cartesian_corrmat(b%imgs_sym, corrmat)
             endif
         endif
-        funit = get_fileunit()
-        open(unit=funit, status='REPLACE', action='WRITE', file='img_smat.bin', access='STREAM')
+        if(.not.fopen(funit, status='REPLACE', action='WRITE', file='img_smat.bin', access='STREAM',iostat=io_stat))&
+             call fileio_errmsg("commander_imgproc; image_smat failed to open image_smat.bin ", io_stat)
+
         write(unit=funit,pos=1,iostat=io_stat) corrmat
         if( io_stat .ne. 0 )then
             write(*,'(a,i0,a)') 'I/O error ', io_stat, ' when writing to image_smat.bin'
             stop 'I/O error; simple_image_smat'
         endif
-        close(funit)
+         if(.not.fclose(funit,iostat=io_stat))&
+             call fileio_errmsg("commander_imgproc; image_smat failed to close image_smat.bin ", io_stat)
         ! end gracefully
         call simple_end('**** SIMPLE_IMAGE_SMAT NORMAL STOP ****')
     end subroutine exec_image_smat
@@ -756,7 +761,7 @@ contains
         if( cline%defined('nran') )then
             write(*,'(a)') '>>> RANDOMLY SELECTING IMAGES'
             allocate( pinds(p%nran), stat=alloc_stat )
-            call alloc_err('In: simple_commander; stackops', alloc_stat)
+            call alloc_errchk('In: simple_commander; stackops', alloc_stat)
             rt = ran_tabu(p%nptcls)
             call rt%ne_ran_iarr(pinds)
             if( cline%defined('oritab') .or. cline%defined('deftab') )then

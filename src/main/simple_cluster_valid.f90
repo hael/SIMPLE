@@ -1,7 +1,7 @@
 ! cluster validation
 module simple_cluster_valid
     use simple_defs
-    use simple_jiffys, only: alloc_err
+    use simple_syslib, only: alloc_errchk
 implicit none
 #include "simple_local_flags.inc"
 
@@ -78,7 +78,7 @@ contains
         allocate( self%labels(self%nptcls), self%centers(self%ncls), self%maxdists(self%ncls),&
         self%avgdists(self%ncls), self%sepmat(self%ncls,self%ncls), self%mindists(self%ncls,self%ncls),&
         self%avgdists_cen(self%ncls), self%maxdists_cen(self%ncls), stat=alloc_stat )
-        call alloc_err( 'In: simple_cluster_valid::new', alloc_stat )
+        call alloc_errchk( 'In: simple_cluster_valid::new', alloc_stat )
         ! fill-up labels
         do iptcl=1,self%nptcls
             self%labels(iptcl) = nint(o%get(iptcl, which))
@@ -128,7 +128,7 @@ contains
         integer, allocatable :: arr(:)
         integer :: alloc_stat, cnt, iptcl
         allocate( arr(pop), stat=alloc_stat )
-        call alloc_err( 'In: simple_cluster_valid::get_clsarr', alloc_stat )
+        call alloc_errchk( 'In: simple_cluster_valid::get_clsarr', alloc_stat )
         cnt = 0
         do iptcl=1,self%nptcls
             if( self%labels(iptcl) == class )then

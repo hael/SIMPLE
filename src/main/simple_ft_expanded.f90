@@ -4,7 +4,7 @@ module simple_ft_expanded
 !$ use omp_lib_kinds
 use simple_defs
 use simple_image,  only: image
-use simple_jiffys, only: alloc_err
+use simple_syslib, only: alloc_errchk
 implicit none
 
 public :: ft_expanded
@@ -108,7 +108,7 @@ contains
                   self%transfmat(self%flims(1,1):self%flims(1,2),&
                                  self%flims(2,1):self%flims(2,2),&
                                  self%flims(3,1):self%flims(3,2), 3), stat=alloc_stat)
-        call alloc_err("In: new_1; simple_ft_expanded, 2", alloc_stat)
+        call alloc_errchk("In: new_1; simple_ft_expanded, 2", alloc_stat)
         self%cmat      = cmplx(0.,0.)
         self%transfmat = 0.
         hcnt = 0
@@ -138,7 +138,7 @@ contains
 
     !>  \brief  is a constructor
     subroutine new_2( self, ldim, smpd, hp, lp )
-        use simple_jiffys, only: alloc_err
+        use simple_syslib, only: alloc_errchk
         class(ft_expanded), intent(inout) :: self
         integer,            intent(in)    :: ldim(3)
         real,               intent(in)    :: smpd
@@ -336,7 +336,7 @@ contains
                                self1%flims(2,1):self1%flims(2,2),   &
                                self1%flims(3,1):self1%flims(3,2)),  &
                                stat=alloc_stat                      )
-            call alloc_err("In: corr_shifted; simple_ft_expanded", alloc_stat)
+            call alloc_errchk("In: corr_shifted; simple_ft_expanded", alloc_stat)
             shvec_here = shvec
             if( self1%ldim(3) == 1 ) shvec_here(3) = 0.
             !$omp parallel do collapse(3) schedule(static) default(shared) &

@@ -1,7 +1,7 @@
 ! jiffy =  the time it takes light to travel one centimeter in vacuum
 module simple_jiffys
 use simple_defs         ! singleton
-use simple_filehandling ! singleton
+!use simple_fileio       ! singleton
 implicit none
 
 interface assert_eq
@@ -15,284 +15,284 @@ end interface swap
 
 contains
 
-    ! FILE-HANDLING JIFFYS
-    !>  \brief  is for finding logical dimension and number of particles in stack
-    subroutine find_ldim_nptcls( fname, ldim, nptcls, doprint, formatchar, endconv )
-        character(len=*),                        intent(in)  :: fname      !< filename
-        integer,                                 intent(out) :: ldim(3)    !< logical dimension
-        integer,                                 intent(out) :: nptcls     !< number of particles
-        logical,                       optional, intent(in)  :: doprint    !< do print or not
-        character(len=1),              optional, intent(in)  :: formatchar !< input format
-        character(len=:), allocatable, optional, intent(out) :: endconv    !< endian conversion
-        integer                       :: mode, iform, maxim
-        real                          :: smpd
-        character(len=:), allocatable :: conv
-        character(len=1)              :: form
-        logical                       :: ddoprint
-        ddoprint = .false.
-        if( present(doprint) ) ddoprint = doprint
-        if( present(formatchar) )then
-            form = formatchar
-        else
-            form = fname2format(fname)
-        endif
-        nptcls = 0
-        select case (form)
-            case('M','F')
-                call get_mrcfile_info(fname, ldim, form, smpd, ddoprint )
-                nptcls = ldim(3)
-            case('S')
-                call get_spifile_info(fname, ldim, iform, maxim, smpd, conv, ddoprint)
-                nptcls = maxim
-            case DEFAULT
-                write(*,*) 'fname: ', fname
-                write(*,*) 'format descriptor: ', fname2format(fname)
-                stop 'File format not supported; find_ldim_nptcls; simple_procimgfile'
-        end select
-        if( present(endconv) )then
-            if( allocated(endconv) ) deallocate(endconv)
-            select case (form)
-                case('M','F')
-                    allocate(endconv, source='NATIVE')
-                case('S')
-                    allocate(endconv, source=conv)
-            end select
-        endif
-    end subroutine find_ldim_nptcls
+!     ! FILE-HANDLING JIFFYS
+!     !>  \brief  is for finding logical dimension and number of particles in stack
+!     subroutine find_ldim_nptcls( fname, ldim, nptcls, doprint, formatchar, endconv )
+!         character(len=*),                        intent(in)  :: fname      !< filename
+!         integer,                                 intent(out) :: ldim(3)    !< logical dimension
+!         integer,                                 intent(out) :: nptcls     !< number of particles
+!         logical,                       optional, intent(in)  :: doprint    !< do print or not
+!         character(len=1),              optional, intent(in)  :: formatchar !< input format
+!         character(len=:), allocatable, optional, intent(out) :: endconv    !< endian conversion
+!         integer                       :: mode, iform, maxim
+!         real                          :: smpd
+!         character(len=:), allocatable :: conv
+!         character(len=1)              :: form
+!         logical                       :: ddoprint
+!         ddoprint = .false.
+!         if( present(doprint) ) ddoprint = doprint
+!         if( present(formatchar) )then
+!             form = formatchar
+!         else
+!             form = fname2format(fname)
+!         endif
+!         nptcls = 0
+!         select case (form)
+!             case('M','F')
+!                 call get_mrcfile_info(fname, ldim, form, smpd, ddoprint )
+!                 nptcls = ldim(3)
+!             case('S')
+!                 call get_spifile_info(fname, ldim, iform, maxim, smpd, conv, ddoprint)
+!                 nptcls = maxim
+!             case DEFAULT
+!                 write(*,*) 'fname: ', fname
+!                 write(*,*) 'format descriptor: ', fname2format(fname)
+!                 stop 'File format not supported; find_ldim_nptcls; simple_procimgfile'
+!         end select
+!         if( present(endconv) )then
+!             if( allocated(endconv) ) deallocate(endconv)
+!             select case (form)
+!                 case('M','F')
+!                     allocate(endconv, source='NATIVE')
+!                 case('S')
+!                     allocate(endconv, source=conv)
+!             end select
+!         endif
+!     end subroutine find_ldim_nptcls
 
-    !>  \brief  is for checking logical dimension and number of particles in stack
-    logical function has_ldim_nptcls( fname, ldim, nptcls )
-        character(len=*), intent(in) :: fname   !< filename
-        integer,          intent(in) :: ldim(3) !< expected logical dimension
-        integer,          intent(in) :: nptcls  !< number of expected particles
-        integer :: ldim_found(3), nptcls_found
-        call find_ldim_nptcls( fname, ldim_found, nptcls_found )
-        if( ldim_found(1) /= ldim(1) .or. ldim_found(2) /= ldim(2) )then
-            has_ldim_nptcls = .false.
-            return
-        endif
-        if( nptcls_found /= nptcls )then
-            has_ldim_nptcls = .false.
-            return
-        endif
-        has_ldim_nptcls = .true.
-    end function has_ldim_nptcls
+!     !>  \brief  is for checking logical dimension and number of particles in stack
+!     logical function has_ldim_nptcls( fname, ldim, nptcls )
+!         character(len=*), intent(in) :: fname   !< filename
+!         integer,          intent(in) :: ldim(3) !< expected logical dimension
+!         integer,          intent(in) :: nptcls  !< number of expected particles
+!         integer :: ldim_found(3), nptcls_found
+!         call find_ldim_nptcls( fname, ldim_found, nptcls_found )
+!         if( ldim_found(1) /= ldim(1) .or. ldim_found(2) /= ldim(2) )then
+!             has_ldim_nptcls = .false.
+!             return
+!         endif
+!         if( nptcls_found /= nptcls )then
+!             has_ldim_nptcls = .false.
+!             return
+!         endif
+!         has_ldim_nptcls = .true.
+!     end function has_ldim_nptcls
 
-    !>  \brief is for gettign a part of the info in a MRC image header
-    subroutine get_mrcfile_info( fname, ldim, form, smpd, doprint )
-        use simple_imghead, only: ImgHead, MrcImgHead
-        character(len=*), intent(in)  :: fname
-        character(len=1), intent(in)  :: form
-        integer,          intent(out) :: ldim(3)
-        real,             intent(out) :: smpd
-        logical,          intent(in)  :: doprint
-        class(imghead), allocatable   :: hed
-        integer :: filnum
-        ldim = 0
-        smpd = 0.
-        if( file_exists(fname) )then
-            select case(form)
-                case('M')
-                    allocate(MrcImgHead :: hed)
-                    call hed%new
-                    filnum = get_fileunit()
-#ifdef INTEL
-                    open(unit=filnum, status='OLD', action='READ', file=fname, access='STREAM')
-#else
-                    open(unit=filnum, status='OLD', action='READ', file=fname, access='STREAM', convert='NATIVE')
-#endif
-                    call hed%read(filnum)
-                    close(filnum)
-                    ldim = hed%getDims()
-                    smpd = hed%getPixSz()
-                    if( doprint )then
-                        call hed%print_imghead
-                        write(*,'(a,3(i0,1x))') 'Number of columns, rows, sections: ', ldim(1), ldim(2), ldim(3)
-                        write(*,'(a,1x,f15.8)')  'Pixel size: ', smpd
-                    endif
-                case('F')
-                    allocate(MrcImgHead :: hed)
-                    call hed%new
-                    filnum = get_fileunit()
-#ifdef INTEL
-                    open(unit=filnum, status='OLD', action='READ', file=fname, access='STREAM')
-#else
-                    open(unit=filnum, status='OLD', action='READ', file=fname, access='STREAM', convert='BIG_ENDIAN')
-#endif
-                    call hed%read(filnum)
-                    close(filnum)
-                    if( doprint ) call hed%print_imghead
-                case DEFAULT
-                    write(*,*) 'The inputted file is not an MRC file; get_mrcfile_info; simple_jiffys'
-                    write(*,*) fname
-                    stop
-            end select
-        else
-            write(*,*) 'The below file does not exists; get_mrcfile_info; simple_jiffys'
-            write(*,*) fname
-            stop
-        endif
-    end subroutine get_mrcfile_info
+!     !>  \brief is for gettign a part of the info in a MRC image header
+!     subroutine get_mrcfile_info( fname, ldim, form, smpd, doprint )
+!         use simple_imghead, only: ImgHead, MrcImgHead
+!         character(len=*), intent(in)  :: fname
+!         character(len=1), intent(in)  :: form
+!         integer,          intent(out) :: ldim(3)
+!         real,             intent(out) :: smpd
+!         logical,          intent(in)  :: doprint
+!         class(imghead), allocatable   :: hed
+!         integer :: filnum
+!         ldim = 0
+!         smpd = 0.
+!         if( file_exists(fname) )then
+!             select case(form)
+!                 case('M')
+!                     allocate(MrcImgHead :: hed)
+!                     call hed%new
+!                     filnum = get_fileunit()
+! #ifdef INTEL
+!                     open(unit=filnum, status='OLD', action='READ', file=fname, access='STREAM')
+! #else
+!                     open(unit=filnum, status='OLD', action='READ', file=fname, access='STREAM', convert='NATIVE')
+! #endif
+!                     call hed%read(filnum)
+!                     close(filnum)
+!                     ldim = hed%getDims()
+!                     smpd = hed%getPixSz()
+!                     if( doprint )then
+!                         call hed%print_imghead
+!                         write(*,'(a,3(i0,1x))') 'Number of columns, rows, sections: ', ldim(1), ldim(2), ldim(3)
+!                         write(*,'(a,1x,f15.8)')  'Pixel size: ', smpd
+!                     endif
+!                 case('F')
+!                     allocate(MrcImgHead :: hed)
+!                     call hed%new
+!                     filnum = get_fileunit()
+! #ifdef INTEL
+!                     open(unit=filnum, status='OLD', action='READ', file=fname, access='STREAM')
+! #else
+!                     open(unit=filnum, status='OLD', action='READ', file=fname, access='STREAM', convert='BIG_ENDIAN')
+! #endif
+!                     call hed%read(filnum)
+!                     close(filnum)
+!                     if( doprint ) call hed%print_imghead
+!                 case DEFAULT
+!                     write(*,*) 'The inputted file is not an MRC file; get_mrcfile_info; simple_jiffys'
+!                     write(*,*) fname
+!                     stop
+!             end select
+!         else
+!             write(*,*) 'The below file does not exists; get_mrcfile_info; simple_jiffys'
+!             write(*,*) fname
+!             stop
+!         endif
+!     end subroutine get_mrcfile_info
 
-    !>  \brief is for gettign a part of the info in a SPIDER image header
-    subroutine get_spifile_info( fname, ldim, iform, maxim, smpd, conv, doprint )
-        character(len=*), intent(in)               :: fname
-        integer, intent(out)                       :: ldim(3), maxim, iform
-        real, intent(out)                          :: smpd
-        character(len=:), allocatable, intent(out) :: conv
-        logical, intent(in)                        :: doprint
-        real    :: spihed(40)
-        integer :: filnum, cnt, i
-        if( file_exists(fname) )then
-            if( fname2format(fname) .eq. 'S' )then
-                if( allocated(conv) ) deallocate(conv)
-                filnum = get_fileunit()
-#ifdef INTEL
-                open(unit=filnum, status='OLD', action='READ', file=fname, access='STREAM')
-#else
-                open(unit=filnum, status='OLD', action='READ', file=fname, access='STREAM', convert='NATIVE')
-#endif
-                call read_spihed
-                close(filnum)
-                if( .not. any(ldim < 1) )then
-                    allocate(conv, source='NATIVE')
-                    call print_spihed
-                    return
-                endif
-#ifdef INTEL
-                open(unit=filnum, status='OLD', action='READ', file=fname, access='STREAM')
-#else
-                open(unit=filnum, status='OLD', action='READ', file=fname, access='STREAM', convert='BIG_ENDIAN') !
-#endif
-                call read_spihed
-                close(filnum)
-                if( .not. any(ldim < 1) )then
-                    allocate(conv, source='BIG_ENDIAN')
-                    call print_spihed
-                    return
-                endif
-#ifdef INTEL
-                open(unit=filnum, status='OLD', action='READ', file=fname, access='STREAM')
-#else
-                open(unit=filnum, status='OLD', action='READ', file=fname, access='STREAM', convert='LITTLE_ENDIAN') !
-#endif
-                call read_spihed
-                close(filnum)
-                if( .not. any(ldim < 1) )then
-                    allocate(conv, source='LITTLE_ENDIAN')
-                    call print_spihed
-                    return
-                endif
-            else
-                write(*,*) 'The inputted file is not a SPIDER file; get_spifile_info; simple_jiffys'
-                write(*,*) fname
-                stop
-            endif
-        else
-            write(*,*) 'The below file does not exists; get_spifile_info; simple_jiffys'
-            write(*,*) fname
-            stop
-        endif
+!     !>  \brief is for gettign a part of the info in a SPIDER image header
+!     subroutine get_spifile_info( fname, ldim, iform, maxim, smpd, conv, doprint )
+!         character(len=*), intent(in)               :: fname
+!         integer, intent(out)                       :: ldim(3), maxim, iform
+!         real, intent(out)                          :: smpd
+!         character(len=:), allocatable, intent(out) :: conv
+!         logical, intent(in)                        :: doprint
+!         real    :: spihed(40)
+!         integer :: filnum, cnt, i
+!         if( file_exists(fname) )then
+!             if( fname2format(fname) .eq. 'S' )then
+!                 if( allocated(conv) ) deallocate(conv)
+!                 filnum = get_fileunit()
+! #ifdef INTEL
+!                 open(unit=filnum, status='OLD', action='READ', file=fname, access='STREAM')
+! #else
+!                 open(unit=filnum, status='OLD', action='READ', file=fname, access='STREAM', convert='NATIVE')
+! #endif
+!                 call read_spihed
+!                 close(filnum)
+!                 if( .not. any(ldim < 1) )then
+!                     allocate(conv, source='NATIVE')
+!                     call print_spihed
+!                     return
+!                 endif
+! #ifdef INTEL
+!                 open(unit=filnum, status='OLD', action='READ', file=fname, access='STREAM')
+! #else
+!                 open(unit=filnum, status='OLD', action='READ', file=fname, access='STREAM', convert='BIG_ENDIAN') !
+! #endif
+!                 call read_spihed
+!                 close(filnum)
+!                 if( .not. any(ldim < 1) )then
+!                     allocate(conv, source='BIG_ENDIAN')
+!                     call print_spihed
+!                     return
+!                 endif
+! #ifdef INTEL
+!                 open(unit=filnum, status='OLD', action='READ', file=fname, access='STREAM')
+! #else
+!                 open(unit=filnum, status='OLD', action='READ', file=fname, access='STREAM', convert='LITTLE_ENDIAN') !
+! #endif
+!                 call read_spihed
+!                 close(filnum)
+!                 if( .not. any(ldim < 1) )then
+!                     allocate(conv, source='LITTLE_ENDIAN')
+!                     call print_spihed
+!                     return
+!                 endif
+!             else
+!                 write(*,*) 'The inputted file is not a SPIDER file; get_spifile_info; simple_jiffys'
+!                 write(*,*) fname
+!                 stop
+!             endif
+!         else
+!             write(*,*) 'The below file does not exists; get_spifile_info; simple_jiffys'
+!             write(*,*) fname
+!             stop
+!         endif
 
-        contains
+!         contains
 
-            subroutine read_spihed
-                cnt = 0
-                do i=1,40*4,4
-                    cnt = cnt+1
-                    read(unit=filnum ,pos=i) spihed(cnt)
-                end do
-                ldim  = int([spihed(12), spihed(2), spihed(1)])
-                iform = int(spihed(5))
-                maxim = int(spihed(26))
-                smpd  = spihed(38)
-            end subroutine
+!             subroutine read_spihed
+!                 cnt = 0
+!                 do i=1,40*4,4
+!                     cnt = cnt+1
+!                     read(unit=filnum ,pos=i) spihed(cnt)
+!                 end do
+!                 ldim  = int([spihed(12), spihed(2), spihed(1)])
+!                 iform = int(spihed(5))
+!                 maxim = int(spihed(26))
+!                 smpd  = spihed(38)
+!             end subroutine
 
-            subroutine print_spihed
-                if( doprint )then
-                    write(*,'(a,3(i0,1x))') 'Number of columns, rows, sections: ', int(spihed(12)), int(spihed(2)), int(spihed(1))
-                    write(*,'(a,1x,i3)')    'Iform descriptor: ', int(spihed(5))
-                    write(*,'(a,1x,f7.0)')  'The number of the highest image currently used in the stack: ', spihed(26)
-                    write(*,'(a,1x,f7.3)')  'Pixel size: ', spihed(38)
-                endif
-            end subroutine
+!             subroutine print_spihed
+!                 if( doprint )then
+!                     write(*,'(a,3(i0,1x))') 'Number of columns, rows, sections: ', int(spihed(12)), int(spihed(2)), int(spihed(1))
+!                     write(*,'(a,1x,i3)')    'Iform descriptor: ', int(spihed(5))
+!                     write(*,'(a,1x,f7.0)')  'The number of the highest image currently used in the stack: ', spihed(26)
+!                     write(*,'(a,1x,f7.3)')  'Pixel size: ', spihed(38)
+!                 endif
+!             end subroutine
 
-    end subroutine get_spifile_info
+!     end subroutine get_spifile_info
 
-    !> \brief  for reading raw images using stream access
-    subroutine read_raw_image( fname, mat, first_byte )
-        character(len=*), intent(in)  :: fname
-        double precision, intent(out) :: mat(:,:,:)
-        integer, intent(in)           :: first_byte
-        integer :: filnum, io_stat
-        character(len=100) :: io_message
-        filnum = get_fileunit()
-#ifdef INTEL
-        open(unit=filnum, status='OLD', action='READ', file=fname, access='STREAM')
-#else
-        open(unit=filnum, status='OLD', action='READ', file=fname, access='STREAM', convert='NATIVE')
-#endif
-        read(unit=filnum,pos=first_byte,iostat=io_stat,iomsg=io_message) mat
-        ! Check the read was successful
-        if( io_stat .ne. 0 )then
-            write(*,'(a,i0,2a)') '**ERROR(rwSlices): I/O error ', io_stat, ' when reading from: ', fname
-            write(*,'(2a)') 'IO error message was: ', io_message
-            stop 'I/O error; read_raw_image; simple_jiffys'
-        endif
-        close(filnum)
-    end subroutine read_raw_image
+!     !> \brief  for reading raw images using stream access
+!     subroutine read_raw_image( fname, mat, first_byte )
+!         character(len=*), intent(in)  :: fname
+!         double precision, intent(out) :: mat(:,:,:)
+!         integer, intent(in)           :: first_byte
+!         integer :: filnum, io_stat
+!         character(len=100) :: io_message
+!         filnum = get_fileunit()
+! #ifdef INTEL
+!         open(unit=filnum, status='OLD', action='READ', file=fname, access='STREAM')
+! #else
+!         open(unit=filnum, status='OLD', action='READ', file=fname, access='STREAM', convert='NATIVE')
+! #endif
+!         read(unit=filnum,pos=first_byte,iostat=io_stat,iomsg=io_message) mat
+!         ! Check the read was successful
+!         if( io_stat .ne. 0 )then
+!             write(*,'(a,i0,2a)') '**ERROR(rwSlices): I/O error ', io_stat, ' when reading from: ', fname
+!             write(*,'(2a)') 'IO error message was: ', io_message
+!             stop 'I/O error; read_raw_image; simple_jiffys'
+!         endif
+!         close(filnum)
+!     end subroutine read_raw_image
 
-    !> \brief  for writing raw images using stream access
-    subroutine write_raw_image( fname, mat, first_byte )
-        character(len=*), intent(in) :: fname
-        real,             intent(in) :: mat(:,:,:)
-        integer,          intent(in) :: first_byte
-        integer :: filnum, io_stat
-        character(len=100) :: io_message
-        filnum = get_fileunit()
-        open(unit=filnum, status='REPLACE', action='WRITE', file=fname, access='STREAM')
-        write(unit=filnum,pos=first_byte,iostat=io_stat,iomsg=io_message) mat
-        ! Check the write was successful
-        if( io_stat .ne. 0 )then
-            write(*,'(a,i0,2a)') '**ERROR(rwSlices): I/O error ', io_stat, ' when reading from: ', fname
-            write(*,'(2a)') 'IO error message was: ', io_message
-            stop 'I/O error; read_raw_image; simple_jiffys'
-        endif
-        close(filnum)
-    end subroutine write_raw_image
+!     !> \brief  for writing raw images using stream access
+!     subroutine write_raw_image( fname, mat, first_byte )
+!         character(len=*), intent(in) :: fname
+!         real,             intent(in) :: mat(:,:,:)
+!         integer,          intent(in) :: first_byte
+!         integer :: filnum, io_stat
+!         character(len=100) :: io_message
+!         filnum = get_fileunit()
+!         open(unit=filnum, status='REPLACE', action='WRITE', file=fname, access='STREAM')
+!         write(unit=filnum,pos=first_byte,iostat=io_stat,iomsg=io_message) mat
+!         ! Check the write was successful
+!         if( io_stat .ne. 0 )then
+!             write(*,'(a,i0,2a)') '**ERROR(rwSlices): I/O error ', io_stat, ' when reading from: ', fname
+!             write(*,'(2a)') 'IO error message was: ', io_message
+!             stop 'I/O error; read_raw_image; simple_jiffys'
+!         endif
+!         close(filnum)
+!     end subroutine write_raw_image
 
-    ! EXCEPTION-HANDLING JIFFYS
+!     ! EXCEPTION-HANDLING JIFFYS
 
-    !> \brief  is for raising command line exception
-    subroutine cmdline_err( cmdstat, cmdlen, arg, pos )
-        integer, intent(in)          :: cmdstat, cmdlen, pos
-        character(len=*), intent(in) :: arg
-        if( cmdstat == -1 )then
-            write(*,*) 'ERROR! while parsing the command line; simple_exec'
-            write(*,*) 'The string length of argument: ', arg, 'is: ', cmdlen
-            write(*,*) 'which likely exeeds the lenght limit STDLEN'
-            write(*,*) 'Create a symbolic link with shorter name in the cwd'
-            stop
-        endif
-        if( arg(:pos-1) .ne. 'prg' )then
-            write(*,'(a)') 'ERROR!'
-            write(*,'(a)') 'prg=simple_program required to be first on command line'
-            write(*,'(a)') 'Please, refer to the manual for a comprehensive '
-            write(*,'(a)') 'list of all programs and their specific documentation'
-            stop
-        endif
-    end subroutine cmdline_err
+!     !> \brief  is for raising command line exception
+!     subroutine cmdline_err( cmdstat, cmdlen, arg, pos )
+!         integer, intent(in)          :: cmdstat, cmdlen, pos
+!         character(len=*), intent(in) :: arg
+!         if( cmdstat == -1 )then
+!             write(*,*) 'ERROR! while parsing the command line; simple_exec'
+!             write(*,*) 'The string length of argument: ', arg, 'is: ', cmdlen
+!             write(*,*) 'which likely exeeds the lenght limit STDLEN'
+!             write(*,*) 'Create a symbolic link with shorter name in the cwd'
+!             stop
+!         endif
+!         if( arg(:pos-1) .ne. 'prg' )then
+!             write(*,'(a)') 'ERROR!'
+!             write(*,'(a)') 'prg=simple_program required to be first on command line'
+!             write(*,'(a)') 'Please, refer to the manual for a comprehensive '
+!             write(*,'(a)') 'list of all programs and their specific documentation'
+!             stop
+!         endif
+!     end subroutine cmdline_err
 
-    !> \brief  is for checking allocation
-    subroutine alloc_err( message, alloc_stat )
-        character(len=*), intent(in) :: message
-        integer, intent(in)          :: alloc_stat
-        if( alloc_stat /= 0 ) then
-            write(*,'(a)') 'ERROR: Allocation failure!'
-            write(*,'(a)') message
-            stop
-        endif
-    end subroutine alloc_err
+!     !> \brief  is for checking allocation
+!     subroutine alloc_errchk( message, alloc_stat )
+!         character(len=*), intent(in) :: message
+!         integer, intent(in)          :: alloc_stat
+!         if( alloc_stat /= 0 ) then
+!             write(*,'(a)') 'ERROR: Allocation failure!'
+!             write(*,'(a)') message
+!             stop
+!         endif
+!     end subroutine alloc_errchk
 
     ! PRETTY PROGRESS & ENDING JIFFYS
 

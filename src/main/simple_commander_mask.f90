@@ -1,11 +1,12 @@
 ! concrete commander: masking routines
 module simple_commander_mask
 use simple_defs
+use simple_syslib
 use simple_cmdline,        only: cmdline
 use simple_params,         only: params
 use simple_build,          only: build
 use simple_commander_base, only: commander_base
-use simple_filehandling    ! use all in there
+use simple_fileio          ! use all in there
 use simple_jiffys          ! use all in there
 implicit none
 
@@ -36,7 +37,6 @@ contains
         type(params)               :: p
         type(automask2D_commander) :: automask2D
         type(image)                :: mskvol
-        logical                    :: here
         integer                    :: ldim(3)
         p = params(cline)                   ! parameters generated
         p%boxmatch = p%box                  ! turns off boxmatch logics
@@ -68,15 +68,11 @@ contains
             endif
         else if( cline%defined('vol1') )then
             ! 3D
-            here = .false.
-            inquire(FILE=p%vols(1), EXIST=here)
-            if( .not.here )stop 'Cannot find input volume'
+            if( .not. file_exists(p%vols(1)) ) stop 'Cannot find input volume'
             call b%vol%read(p%vols(1))
             if( cline%defined('mskfile') )then
                 ! from file
-                here = .false.
-                inquire(FILE=p%mskfile, EXIST=here)
-                if( .not. here ) stop 'Cannot find input mskfile'
+                if( .not. file_exists(p%mskfile) ) stop 'Cannot find input mskfile'
                 ldim = b%vol%get_ldim()
                 call mskvol%new(ldim, p%smpd)
                 call mskvol%read(p%mskfile)

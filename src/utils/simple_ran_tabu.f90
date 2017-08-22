@@ -1,6 +1,7 @@
 ! routines for generation of directed random numbers
 module simple_ran_tabu
-use simple_jiffys, only: alloc_err
+use simple_defs
+use simple_syslib, only: alloc_errchk
 implicit none
 
 type :: ran_tabu
@@ -40,7 +41,7 @@ contains
         self%NP = NP
         self%N_tabus = 0
         allocate( self%avail(NP), stat=alloc_stat )
-        call alloc_err('In: new_ran_tabu, module: simple_ran_tabu.f90', alloc_stat)
+        call alloc_errchk('In: new_ran_tabu, module: simple_ran_tabu.f90', alloc_stat)
         self%avail = .true. ! all integers from 1 to NP made available
     end function constructor
 
@@ -213,7 +214,7 @@ contains
         integer, allocatable :: nnmat(:,:) !> output nearest neigh matrix
         integer :: iptcl, alloc_stat
         allocate(nnmat(pfromto(1):pfromto(2),nnn), stat=alloc_stat)
-        call alloc_err('In: simple_ran_tabu; stoch_nnmat', alloc_stat)
+        call alloc_errchk('In: simple_ran_tabu; stoch_nnmat', alloc_stat)
         do iptcl=pfromto(1),pfromto(2)
             call self%ne_mnomal_iarr( pmat(iptcl,:), nnmat(iptcl,:))
         end do
@@ -254,7 +255,11 @@ contains
     !>  \brief  is a destructor
     subroutine kill( self )
         class(ran_tabu), intent(inout) :: self
-        if( allocated(self%avail) ) deallocate( self%avail )
+        integer :: alloc_stat
+        if( allocated(self%avail) )then
+            deallocate( self%avail )
+            call alloc_errchk('In: simple_ran_tabu; kill ', alloc_stat)
+        end if
     end subroutine kill
 
 end module simple_ran_tabu

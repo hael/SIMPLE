@@ -3,7 +3,7 @@ module simple_polarft_corrcalc
 use simple_defs      ! use all in there
 use simple_params,   only: params
 use simple_ran_tabu, only: ran_tabu
-use simple_jiffys,   only: alloc_err
+use simple_syslib,   only: alloc_errchk, simple_stop
 implicit none
 
 public :: polarft_corrcalc
@@ -114,27 +114,27 @@ contains
         ! error check
         if( kfromto(2) - kfromto(1) <= 2 )then
             write(*,*) 'kfromto: ', kfromto(1), kfromto(2)
-            stop 'resolution range too narrow; new; simple_polarft_corrcalc'
+            HALT( 'resolution range too narrow; new; simple_polarft_corrcalc')
         endif
         if( ring2 < 1 )then
             write(*,*) 'ring2: ', ring2
-            stop 'ring2 must be > 0; new; simple_polarft_corrcalc'
+            HALT ( 'ring2 must be > 0; new; simple_polarft_corrcalc')
         endif
         if( pfromto(2) - pfromto(1) + 1 < 1 )then
             write(*,*) 'pfromto: ', pfromto(1), pfromto(2)
-            stop 'nptcls (# of particles) must be > 0; new; simple_polarft_corrcalc'
+            HALT ('nptcls (# of particles) must be > 0; new; simple_polarft_corrcalc')
         endif
         if( nrefs < 1 )then
             write(*,*) 'nrefs: ', nrefs
-            stop 'nrefs (# of reference sections) must be > 0; new; simple_polarft_corrcalc'
+            HALT ('nrefs (# of reference sections) must be > 0; new; simple_polarft_corrcalc')
         endif
         if( any(ldim == 0) )then
             write(*,*) 'ldim: ', ldim
-            stop 'ldim is not conforming (is zero); new; simple_polarft_corrcalc'
+            HALT ('ldim is not conforming (is zero); new; simple_polarft_corrcalc')
         endif
         if( ldim(3) > 1 )then
             write(*,*) 'ldim: ', ldim
-            stop '3D polarfts are not yet supported; new; simple_polarft_corrcalc'
+            HALT ('3D polarfts are not yet supported; new; simple_polarft_corrcalc')
         endif
         test    = .false.
         test(1) = is_even(ldim(1))
@@ -143,7 +143,7 @@ contains
         even_dims = all(test)
         if( .not. even_dims )then
             write(*,*) 'ldim: ', ldim
-            stop 'only even logical dims supported; new; simple_polarft_corrcalc'
+            HALT ('only even logical dims supported; new; simple_polarft_corrcalc')
         endif
         ! set constants
         self%pfromto = pfromto                         !< from/to particle indices (in parallel execution)
@@ -159,7 +159,7 @@ contains
         self%kfromto = kfromto                         !< Fourier index range
         ! generate polar coordinates
         allocate( self%polar(self%ptclsz,self%kfromto(1):self%kfromto(2)), self%angtab(self%nrots), stat=alloc_stat)
-        call alloc_err('polar coordinate arrays; new; simple_polarft_corrcalc', alloc_stat)
+        call alloc_errchk('polar coordinate arrays; new; simple_polarft_corrcalc', alloc_stat)
         ang = twopi/real(self%nrots)
         do irot=1,self%nrots
             self%angtab(irot) = real(irot-1)*ang
@@ -171,7 +171,7 @@ contains
         end do
         ! generate the argument transfer constants for shifting reference polarfts
         allocate( self%argtransf(self%nrots,self%kfromto(1):self%kfromto(2)), stat=alloc_stat)
-        call alloc_err('shift argument transfer array; new; simple_polarft_corrcalc', alloc_stat)
+        call alloc_errchk('shift argument transfer array; new; simple_polarft_corrcalc', alloc_stat)
         self%argtransf(:self%refsz,:)   = &
             self%polar(:self%refsz,:)   * &
             (PI/real(self%ldim(1)/2))    ! x-part
@@ -182,7 +182,7 @@ contains
         allocate(   self%pfts_refs(self%nrefs,self%refsz,self%kfromto(1):self%kfromto(2)),&
                     self%pfts_ptcls(self%pfromto(1):self%pfromto(2),self%ptclsz,self%kfromto(1):self%kfromto(2)),&
                     self%sqsums_ptcls(self%pfromto(1):self%pfromto(2)), stat=alloc_stat)
-        call alloc_err('polarfts and sqsums; new; simple_polarft_corrcalc', alloc_stat)
+        call alloc_errchk('polarfts and sqsums; new; simple_polarft_corrcalc', alloc_stat)
         self%pfts_refs    = zero
         self%pfts_ptcls   = zero
         self%sqsums_ptcls = 0.
@@ -245,7 +245,7 @@ contains
         if( self%nrefs .eq. self%nptcls )then
             self%pfts_refs(:,:,:) = self%pfts_ptcls(:,:self%refsz,:)         
         else
-            stop 'pfts_refs and pfts_ptcls not congruent (nrefs .ne. nptcls)'
+            HALT ('pfts_refs and pfts_ptcls not congruent (nrefs .ne. nptcls)')
         endif
     end subroutine cp_ptcls2refs
 
@@ -358,7 +358,7 @@ contains
         integer,                 intent(in) :: roind !<  in-plane rotation index
         real(sp) :: rot
         if( roind < 1 .or. roind > self%nrots )then
-            stop 'roind is out of range; get_rot; simple_polarft_corrcalc'
+            HALT( 'roind is out of range; get_rot; simple_polarft_corrcalc')
         endif
         rot = self%angtab(roind)
     end function get_rot
@@ -390,15 +390,15 @@ contains
         integer, allocatable :: roind_vec(:)  
         real(sp) :: dist(self%nrots)
         integer  :: i, irot, nrots, alloc_stat
-        if(ang>360. .or. ang<TINY)stop 'input angle outside of the conventional range; simple_polarft_corrcalc::get_win_roind'
-        if(winsz<0. .or. winsz>180.)stop 'invalid window size; simple_polarft_corrcalc::get_win_roind'
-        if(winsz < 360./real(self%nrots))stop 'too small window size; simple_polarft_corrcalc::get_win_roind'
+        if(ang>360. .or. ang<TINY)HALT ('input angle outside of the conventional range; simple_polarft_corrcalc::get_win_roind')
+        if(winsz<0. .or. winsz>180.)HALT ('invalid window size; simple_polarft_corrcalc::get_win_roind')
+        if(winsz < 360./real(self%nrots))HALT ('too small window size; simple_polarft_corrcalc::get_win_roind')
         i    = self%get_roind( ang )
         dist = abs(self%angtab(i) - self%angtab)
         where( dist>180. )dist = 360.-dist
         nrots = count(dist <= winsz)
         allocate( roind_vec(nrots), stat=alloc_stat )
-        call alloc_err("In: get_win_roind; simple_polarft_corrcalc", alloc_stat)
+        call alloc_errchk("In: get_win_roind; simple_polarft_corrcalc", alloc_stat)
         irot = 0
         do i = 1,self%nrots
             if( dist(i)<=winsz )then
@@ -428,7 +428,7 @@ contains
         integer :: alloc_stat
         allocate(pft(self%refsz,self%kfromto(1):self%kfromto(2)),&
         source=self%pfts_ptcls(iptcl,irot:irot+self%winsz,:), stat=alloc_stat)
-        call alloc_err("In: get_ptcl_pft; simple_polarft_corrcalc", alloc_stat)
+        call alloc_errchk("In: get_ptcl_pft; simple_polarft_corrcalc", alloc_stat)
     end function get_ptcl_pft
     
     !>  \brief  returns polar Fourier transform of reference iref
@@ -440,7 +440,7 @@ contains
         integer :: alloc_stat
         allocate(pft(self%refsz,self%kfromto(1):self%kfromto(2)),&
         source=self%pfts_refs(iref,:,:), stat=alloc_stat)
-        call alloc_err("In: get_ref_pft; simple_polarft_corrcalc", alloc_stat)
+        call alloc_errchk("In: get_ref_pft; simple_polarft_corrcalc", alloc_stat)
     end function get_ref_pft
 
     !>  \brief  checks for existence
@@ -503,38 +503,40 @@ contains
 
     !>  \brief  is for writing particle pfts to file
     subroutine write_pfts_ptcls( self, fname )
-        use simple_filehandling, only: get_fileunit
+        use simple_fileio      
         class(polarft_corrcalc), intent(in) :: self
         character(len=*),        intent(in) :: fname !< output filename
         integer :: funit, io_stat
-        funit = get_fileunit()
-        open(unit=funit, status='REPLACE', action='WRITE', file=trim(fname), access='STREAM')
+        if(.not.fopen(funit, status='REPLACE', action='WRITE', file=trim(fname), access='STREAM', iostat=io_stat))&
+             call fileio_errmsg('polarft_corrcalc write_ptfs_ptcls  ', io_stat)
         write(unit=funit,pos=1,iostat=io_stat) self%pfts_ptcls
         ! Check if the write was successful
         if( io_stat .ne. 0 )then
-            write(*,'(a,i0,2a)') '**ERROR(simple_polarft_corrcalc): I/O error ', io_stat, ' when writing file: ', trim(fname)
-            stop 'I/O error; write_pfts_ptcls'
+            call fileio_errmsg('**ERROR(simple_polarft_corrcalc): I/O error when writing file: '// trim(fname), io_stat)
+            HALT ('I/O error; write_pfts_ptcls')
         endif
-        close(funit)
+         if(.not.fclose(funit, iostat=io_stat))&
+             call fileio_errmsg('polarft_corrcalc write_ptfs_ptcls  ', io_stat)
     end subroutine write_pfts_ptcls
 
     !>  \brief  is for reading particle pfts from file
     subroutine read_pfts_ptcls( self, fname )
         !$ use omp_lib
         !$ use omp_lib_kinds
-        use simple_filehandling, only: get_fileunit
+        use simple_fileio 
         class(polarft_corrcalc), intent(inout) :: self
         character(len=*),        intent(in)    :: fname !< input filename
         integer :: funit, io_stat, iptcl
-        funit = get_fileunit()
-        open(unit=funit, status='OLD', action='READ', file=trim(fname), access='STREAM')
+        
+         if(.not.fopen(funit, status='OLD', action='READ', file=trim(fname), access='STREAM', iostat=io_stat))&
+             call fileio_errmsg('polarft_corrcalc read_ptfs_ptcls fopen ', io_stat)
         read(unit=funit,pos=1,iostat=io_stat) self%pfts_ptcls
         ! Check if the read was successful
         if( io_stat .ne. 0 )then
-            write(*,'(a,i0,2a)') '**ERROR(simple_polarft_corrcalc): I/O error ', io_stat, ' when reading file: ', trim(fname)
-            stop 'I/O error; read_pfts_ptcls'
+            call fileio_errmsg('**ERROR(simple_polarft_corrcalc): I/O error when reading file: '// trim(fname), io_stat)
         endif
-        close(funit)
+         if(.not.fclose(funit, iostat=io_stat))&
+             call fileio_errmsg('polarft_corrcalc read_ptfs_ptcls fclose ', io_stat)
         ! memoize sqsum_ptcls
         !$omp parallel do schedule(static) default(shared) private(iptcl) proc_bind(close)
         do iptcl=self%pfromto(1),self%pfromto(2)
@@ -619,7 +621,7 @@ contains
         astig = a%isthere('dfy')
         if( allocated(self%ctfmats) ) deallocate(self%ctfmats)
         allocate(self%ctfmats(self%pfromto(1):self%pfromto(2),self%refsz,self%kfromto(1):self%kfromto(2)), stat=alloc_stat)
-        call alloc_err("In: simple_polarft_corrcalc :: create_polar_ctfmats, 2", alloc_stat)
+        call alloc_errchk("In: simple_polarft_corrcalc :: create_polar_ctfmats, 2", alloc_stat)
         do iptcl=self%pfromto(1),self%pfromto(2)
             kv     = a%get(iptcl, 'kv'   )
             cs     = a%get(iptcl, 'cs'   )
@@ -679,7 +681,7 @@ contains
     use simple_math, only: csq
         class(polarft_corrcalc), intent(inout) :: self        !< instance
         integer,                 intent(in)    :: iref, iptcl
-        integer,                 intent(in)    :: kstop       !< last frequency
+        integer,                 intent(in)    :: kstop    !< last frequency
         integer,       optional, intent(in)    :: roind_vec(:)
         complex(sp) :: pft_ref(self%refsz,self%kfromto(1):self%kfromto(2))
         real(sp)    :: cc(self%nrots), sqsum_ref, sqsum_ptcl
@@ -690,7 +692,7 @@ contains
             ! calculates only corrs for rotational indices provided in roind_vec
             ! see get_win_roind. returns -1. when not calculated
             if( any(roind_vec<=0) .or. any(roind_vec>self%nrots) )&
-                &stop 'index out of range; simple_polarft_corrcalc::gencorrs'
+                &HALT ('index out of range; simple_polarft_corrcalc::gencorrs')
             cc = -1.
             do i = 1, size(roind_vec)
                 irot = roind_vec(i)

@@ -280,19 +280,32 @@ contains
     end function real2str
 
     !>  \brief  turn integer variable into character variable
+    !! - now supports negative values
     function int2str(intg) result(string)
         integer, intent(in)           :: intg
         character(len=:), allocatable :: string
-        integer :: ndigs_int
+        integer :: ndigs_int, intg_this
+        logical :: isnegative
+#include "simple_local_flags.inc"
+        isnegative=.false.
+        intg_this=intg
         if( intg < 0 )then
-            stop 'cannot convert negative intg 2 str; simple_strings :: int2str'
-        else if (intg .eq. 0) then
+            DebugPrint 'trying convert negative intg 2 str; simple_strings :: int2str'
+            isnegative=.true.
+            intg_this =  -intg
+        end if
+        if (intg_this .eq. 0) then
             ndigs_int = 1
         else
-            ndigs_int = int(log10(real(intg))) + 1
+            ndigs_int = int(log10(real(intg_this))) + 1
         endif
+        if (isnegative) ndigs_int = ndigs_int +1
         allocate(character(len=ndigs_int) :: string)
-        write(string,'(i0)') intg
+        if (isnegative)then
+            write(string,'(a1,i0)') '-',intg_this
+        else
+            write(string,'(i0)') intg_this
+        end if
     end function int2str
 
     !>  \brief  turn integer variable into zero padded character variable

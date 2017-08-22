@@ -47,6 +47,7 @@ private
    integer(timer_int_kind), dimension(MAX_TOKENS), public :: profile_last_timerstamp !< storage of time stamps for profiler
    character(len=MAX_TOKEN_CHARSIZE), dimension(MAX_TOKENS), public :: profile_labels = ""
 
+   public :: gettime,cast_time_char
    public :: tic, tickrate
    public :: toc, tdiff, tocprint
    public :: now, reset_timer
@@ -54,6 +55,38 @@ private
    public :: timer_profile_setup, timer_profile_start, timer_profile_break, timer_profile_report
    public ::  tic_i4, toc_i4, tdiff_i4, tickrate_i4  !! Only for testing 32-bit system_clock (1 ms resolution)
 contains
+
+integer function gettime ()
+#ifdef PGI
+    include 'lib3f.h'          ! time
+    gettime=time()
+#elif defined(INTEL)
+    use ifport
+    integer :: gettime
+    call time(gettime)
+#else
+    gettime= time()
+#endif
+end function gettime
+
+function cast_time_char (arg)
+    character(len=24) :: cast_time_char
+    integer, intent(in) :: arg
+#ifdef PGI
+    include 'lib3f.h'          ! time
+    cast_time_char=ctime(arg)
+#elif defined(INTEL)
+    !! TODO fix intel ctime
+    use ifport
+    integer :: now
+    call time(now)
+#else
+    cast_time_char=ctime(arg)
+#endif
+    
+
+end function cast_time_char
+
 
 !< Force timestamps and clock rate to zero
    subroutine reset_timer
@@ -500,6 +533,7 @@ DebugPrint 'Size of elapsed array ', size(elapsed_times)
       toc_i4 = tdiff_i4(end_point, tstart)
       last_time_point = INT(end_point, timer_int_kind)
    end function toc_i4
+
 
 end module simple_timer
 

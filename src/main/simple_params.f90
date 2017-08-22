@@ -1,12 +1,13 @@
 ! provides global distribution of constants and derived constants
 module simple_params
 use simple_defs
+use simple_syslib
 use simple_ori,         only: ori
 use simple_cmdline,     only: cmdline
-use simple_jiffys,      only: find_ldim_nptcls
 use simple_magic_boxes, only: find_magic_box
 use simple_strings      ! use all in there
-use simple_filehandling ! use all in there
+use simple_fileio,       only: fopen, fclose, fileio_errmsg
+use simple_imgfile,      only: find_ldim_nptcls
 implicit none
 
 public :: params
@@ -374,7 +375,7 @@ contains
         class(cmdline),    intent(inout) :: cline
         logical, optional, intent(in)    :: checkdistr, allow_mix
         integer                          :: i, ncls, ifoo, lfoo(3), cntfile
-        logical                          :: here, ccheckdistr, aamix
+        logical                          :: ccheckdistr, aamix
         character(len=STDLEN)            :: cwd_local, debug_local, verbose_local
         character(len=1)                 :: checkupfile(50)
         character(len=:), allocatable    :: conv
@@ -744,8 +745,7 @@ contains
             DebugPrint 'found logical dimension of volume: ', self%ldim
         endif
         if( self%stk .ne. '' )then
-            inquire(FILE=self%stk, EXIST=here)
-            if( here )then
+            if( file_exists(self%stk) )then
                 if( cline%defined('box') )then
                 else
                     call find_ldim_nptcls(self%stk, self%ldim, ifoo, endconv=conv)
@@ -768,8 +768,7 @@ contains
             ! get nr of particles from oritab
             if( .not. cline%defined('nptcls') ) self%nptcls = nlines(self%oritab)
         else if( self%refs .ne. '' )then
-            inquire(FILE=self%refs, EXIST=here)
-            if( here )then
+            if( file_exists(self%refs) )then
                 if( cline%defined('box') )then
                 else
                     call find_ldim_nptcls(self%refs, self%ldim, ifoo, endconv=conv)
@@ -1035,12 +1034,10 @@ contains
           subroutine check_vol( i )
               integer, intent(in) :: i
               character(len=STDLEN) :: nam
-              logical :: here
               nam = 'vol'//int2str(i)
               if( cline%defined(nam) )then
                   call check_file(nam, self%vols(i), notAllowed='T')
-                  inquire(FILE=self%vols(i), EXIST=here)
-                  if( .not. here )then
+                  if( .not. file_exists(self%vols(i)) )then
                       write(*,*) 'Input volume:', self%vols(i), 'does not exist!'
                       stop
                   endif
@@ -1051,11 +1048,11 @@ contains
 
           subroutine read_vols
               character(len=STDLEN) :: filenam, nam
-              integer :: nl, fnr, i
+              integer :: nl, fnr, i, io_stat
               filenam = cline%get_carg('vollist')
               nl = nlines(filenam)
-              fnr = get_fileunit( )
-              open(fnr, file=filenam)
+              if(.not.fopen(fnr, file=filenam, iostat=io_stat))&
+                   call fileio_errmsg("params ; read_vols error opening "//trim(filenam), io_stat)
               do i=1,nl
                   read(fnr,*) nam
                   if( nam .ne. '' )then
@@ -1063,7 +1060,8 @@ contains
                       !self%nstates = i
                   endif
               end do
-              close(fnr)
+              if(.not.fclose(fnr, iostat=io_stat))&
+                   call fileio_errmsg("params ; read_vols error closing "//trim(filenam), io_stat)
           end subroutine read_vols
 
           subroutine check_file( file, var, allowed1, allowed2, notAllowed )
@@ -1156,14 +1154,15 @@ contains
           subroutine double_check_file_formats
               character(len=STDLEN) :: fname
               character(len=1)      :: form
-              integer :: funit
+              integer :: funit, io_stat
               if( cntfile == 0 )then
                   if( cline%defined('filetab') )then
-                      funit = get_fileunit()
-                      open(unit=funit, status='old', file=self%filetab)
+                      if(.not.fopen(funit, status='old', file=self%filetab, iostat=io_stat))&
+                           call fileio_errmsg("In params:: double_check_file_formats fopen failed "//trim(self%filetab) , io_stat)
                       read(funit,'(a256)') fname
                       form = fname2format(fname)
-                      close(funit)
+                      if(.not.fclose(funit, iostat=io_stat))&
+                           call fileio_errmsg("In params:: double_check_file_formats fclose failed" , io_stat)
                       select case(form)
                           case('M')
                               self%ext = '.mrc'

@@ -1,11 +1,12 @@
 ! concrete commander: checking routines
 module simple_commander_checks
-use simple_defs
+use simple_defs            ! singleton
+use simple_syslib
 use simple_cmdline,        only: cmdline
 use simple_params,         only: params
 use simple_build,          only: build
 use simple_commander_base, only: commander_base
-use simple_filehandling    ! use all in there
+use simple_fileio          ! use all in there
 use simple_jiffys          ! use all in there
 implicit none
 
@@ -61,7 +62,7 @@ contains
     !> iminfo is a program for printing header information in MRC and SPIDER stacks and volumes
     subroutine exec_iminfo( self, cline)
         use simple_image,   only: image
-        use simple_imgfile, only: imgfile
+        use simple_imgfile, only: imgfile, find_ldim_nptcls
         class(iminfo_commander), intent(inout) :: self
         class(cmdline),          intent(inout) :: cline
         type(params)      :: p

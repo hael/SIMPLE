@@ -1,5 +1,5 @@
-! generic filehandling class
-module simple_filehandling
+! generic fileio       class
+module simple_fileio      
 use simple_defs
 implicit none
 
@@ -130,7 +130,7 @@ contains
         names = make_filenames( body, n, ext, numlen=numlen, suffix=suffix )
         fnr = get_fileunit()
         open(unit=fnr, status='replace', action='write', file=tabname, iostat=file_status)
-        call fopen_err('simple_filehandling :: make_filetable', file_status)
+        call fopen_err('simple_fileio       :: make_filetable', file_status)
         do ifile=1,n
             write(fnr,'(a)') trim(names(ifile))
         end do
@@ -151,7 +151,7 @@ contains
         n = size(tab1)
         fnr = get_fileunit()
         open(unit=fnr, status='replace', action='write', file=tabname, iostat=file_status)
-        call fopen_err('simple_filehandling :: make_filetable', file_status)
+        call fopen_err('simple_fileio       :: make_filetable', file_status)
         do ifile=1,n
             if( ntabs == 2 ) write(fnr,'(a)') trim(tab1(ifile))//' '//trim(tab2(ifile))
             if( ntabs == 3 ) write(fnr,'(a)') trim(tab1(ifile))//' '//trim(tab2(ifile))&
@@ -220,7 +220,7 @@ contains
         inquire(unit=unit_number, opened=is_open,iostat=io_status,iomsg=io_message)
         if (io_status .ne. 0) then
             print *, 'is_open: IO error ', io_status, ': ', trim(adjustl(io_message))
-            stop 'IO error; is_open; simple_filehandling'
+            stop 'IO error; is_open; simple_fileio      '
         endif
     end function is_open
 
@@ -233,7 +233,7 @@ contains
         inquire(file=fname, opened=is_file_open,iostat=io_status,iomsg=io_message)
         if (io_status .ne. 0) then
             print *, 'is_open: IO error ', io_status, ': ', trim(adjustl(io_message))
-            stop 'IO error; is_file_open; simple_filehandling'
+            stop 'IO error; is_file_open; simple_fileio      '
         endif
     end function is_file_open
 
@@ -292,8 +292,8 @@ contains
         status = stato
         buffer = statb
 #ifdef _DEBUG
-        print *, 'filehandling sys_stat PGI stato ', stato
-        print *, 'filehandling sys_stat PGI size of statb ', size(statb)
+        print *, 'fileio       sys_stat PGI stato ', stato
+        print *, 'fileio       sys_stat PGI size of statb ', size(statb)
 #endif
 
 #elif defined(GNU)
@@ -498,7 +498,7 @@ contains
         allocate( filenames(nl), stat=alloc_stat )
         if( alloc_stat /= 0 ) then
             write(*,'(a)') 'ERROR: Allocation failure!'
-            write(*,'(a)') 'In: read_filetable; simple_filehandling'
+            write(*,'(a)') 'In: read_filetable; simple_fileio      '
             stop
         endif
         do iline=1,nl
@@ -534,7 +534,7 @@ contains
             allocate( arr(n), stat=alloc_stat )
             if( alloc_stat /= 0 ) then
                 write(*,'(a)') 'ERROR: Allocation failure!'
-                write(*,'(a)') 'In: file2arr; simple_filehandling'
+                write(*,'(a)') 'In: file2arr; simple_fileio      '
                 stop
             endif
             open(unit=funit, status='old', file=fnam)
@@ -544,7 +544,7 @@ contains
             close(funit)
         else
             write(*,*) fnam
-            stop 'file does not exist; txtfile2rarr; simple_filehandling'
+            stop 'file does not exist; txtfile2rarr; simple_fileio      '
         endif
     end function txtfile2rarr
 
@@ -564,7 +564,7 @@ contains
         allocate( arr(n1+n2), stat=alloc_stat )
         if( alloc_stat /= 0 ) then
             write(*,'(a)') 'ERROR: Allocation failure!'
-            write(*,'(a)') 'In: merge_txtfiles; simple_filehandling'
+            write(*,'(a)') 'In: merge_txtfiles; simple_fileio      '
             stop
         endif
         if( here1 )then
@@ -611,7 +611,7 @@ contains
             allocate( arr(n), stat=alloc_stat )
             if( alloc_stat /= 0 ) then
                 write(*,'(a)') 'ERROR: Allocation failure!'
-                write(*,'(a)') 'In: file2arr; simple_filehandling'
+                write(*,'(a)') 'In: file2arr; simple_fileio      '
                 stop
             endif
             do i=1,n
@@ -620,7 +620,7 @@ contains
             close(funit)
         else
             write(*,*) fnam
-            stop 'file does not exist; file2iarr; simple_filehandling'
+            stop 'file does not exist; file2iarr; simple_fileio      '
         endif
     end function file2iarr
 
@@ -658,7 +658,7 @@ contains
             allocate( arr(n), stat=alloc_stat )
             if( alloc_stat /= 0 ) then
                 write(*,'(a)') 'ERROR: Allocation failure!'
-                write(*,'(a)') 'In: file2arr; simple_filehandling'
+                write(*,'(a)') 'In: file2arr; simple_fileio      '
                 stop
             endif
             do i=1,n
@@ -666,7 +666,7 @@ contains
             end do
             close(funit)
         else
-            write(*,*) fnam, ' does not exist; file2rarr; simple_filehandling'
+            write(*,*) fnam, ' does not exist; file2rarr; simple_fileio      '
             stop
         endif
     end function file2rarr
@@ -701,19 +701,19 @@ contains
         if( io_stat .ne. 0 )then
             write(*,'(a,i0,2a)') '**ERROR(arr2D2file): I/O error ',&
             io_stat, ' when writing stream startbyte 1 to: ', trim(fnam)
-            stop 'I/O error; arr2D2file; simple_filehandling'
+            stop 'I/O error; arr2D2file; simple_fileio      '
         endif
         write(unit=funit,pos=5,iostat=io_stat) dim2
         if( io_stat .ne. 0 )then
             write(*,'(a,i0,2a)') '**ERROR(arr2D2file): I/O error ',&
             io_stat, ' when writing stream startbyte 5 to: ', trim(fnam)
-            stop 'I/O error; arr2D2file; simple_filehandling'
+            stop 'I/O error; arr2D2file; simple_fileio      '
         endif
         write(unit=funit,pos=9,iostat=io_stat) arr(:,:)
         if( io_stat .ne. 0 )then
             write(*,'(a,i0,2a)') '**ERROR(arr2D2file): I/O error ',&
             io_stat, ' when writing stream startbyte 9 to: ', trim(fnam)
-            stop 'I/O error; arr2D2file; simple_filehandling'
+            stop 'I/O error; arr2D2file; simple_fileio      '
         endif
         close(funit)
     end subroutine arr2D2file
@@ -730,13 +730,13 @@ contains
         if( io_stat .ne. 0 )then
             write(*,'(a,i0,2a)') '**ERROR(arr2D2file): I/O error ',&
             io_stat, ' when reading stream startbyte 1 from: ', trim(fnam)
-            stop 'I/O error; file22Darr; simple_filehandling'
+            stop 'I/O error; file22Darr; simple_fileio      '
         endif
         read(unit=funit,pos=5,iostat=io_stat) dim2r
         if( io_stat .ne. 0 )then
             write(*,'(a,i0,2a)') '**ERROR(arr2D2file): I/O error ',&
             io_stat, ' when reading stream startbyte 5 from: ', trim(fnam)
-            stop 'I/O error; file22Darr; simple_filehandling'
+            stop 'I/O error; file22Darr; simple_fileio      '
         endif
         dim1 = nint(dim1r)
         dim2 = nint(dim2r)
@@ -744,14 +744,14 @@ contains
         allocate( arr(dim1,dim2), stat=alloc_stat )
         if( alloc_stat /= 0 ) then
             write(*,'(a)') 'ERROR: Allocation failure!'
-            write(*,'(a)') 'In: simple_filehandling :: file22Darr'
+            write(*,'(a)') 'In: simple_fileio       :: file22Darr'
             stop
         endif
         read(unit=funit,pos=9,iostat=io_stat) arr(:,:)
         if( io_stat .ne. 0 )then
             write(*,'(a,i0,2a)') '**ERROR(arr2D2file): I/O error ',&
             io_stat, ' when reading stream startbyte 9 from: ', trim(fnam)
-            stop 'I/O error; file22Darr; simple_filehandling'
+            stop 'I/O error; file22Darr; simple_fileio      '
         endif
         close(funit)
     end function file2arr2D
@@ -769,4 +769,4 @@ contains
         close(funit)
     end subroutine arr2txtfile
 
-end module simple_filehandling
+end module simple_fileio      

@@ -5,7 +5,7 @@ use simple_cmdline,        only: cmdline
 use simple_params,         only: params
 use simple_build,          only: build
 use simple_commander_base, only: commander_base
-use simple_filehandling    ! use all in there
+use simple_fileio          ! use all in there
 use simple_jiffys          ! use all in there
 implicit none
 
@@ -326,6 +326,7 @@ contains
         use simple_oris,    only: oris
         use simple_ori,     only: ori
         use simple_image,   only: image
+        use simple_imgfile,  only: find_ldim_nptcls
         use simple_corrmat   ! use all in there
         class(map2ptcls_commander), intent(inout) :: self
         class(cmdline),             intent(inout) :: cline

@@ -9,11 +9,12 @@
 !* new class, HE 2014-10-05
 !
 module simple_pori
+use simple_defs        ! singleton
 use simple_ori,        only: ori
 use simple_online_var, only: online_var
 use simple_sll,        only: sll
 ! use simple_opt_spec,   only: opt_spec
-use simple_defs        ! singleton
+use simple_math
 implicit none
 
 public :: pori, test_pori
@@ -82,7 +83,6 @@ contains
     
     !>  \brief  is a constructor
     subroutine new( self, o, ndim, nstates )
-        use simple_jiffys,   only: alloc_err
         class(pori), intent(inout)    :: self
         type(ori), intent(in), target :: o
         integer, intent(in)           :: ndim, nstates
@@ -114,7 +114,6 @@ contains
     
     !>  \brief  for serialization of a pori object
     function serialize( self ) result( arr )
-        use simple_jiffys, only: alloc_err
         ! ngaup             => 1                    => 1
         ! nstates           => 1                    => 2
         ! vars              => 4*self%ngaup         => 3->2+4*self%ngaup
@@ -166,7 +165,6 @@ contains
     
     !>  \brief  for re-creation of a pori object from its serialization
     subroutine unserialize( self, arr, o )
-        use simple_jiffys,   only: alloc_err
         use simple_opt_spec, only: opt_spec
         ! ngaup             => 1                    => 1
         ! nstates           => 1                    => 2
@@ -236,7 +234,6 @@ contains
     
     !>  \brief  for extracting an array representation of the previous solution
     function optr2arr( self ) result( x )
-        use simple_jiffys, only: alloc_err
         class(pori), intent(inout) :: self
         real, allocatable          :: x(:)
         integer                    :: i, alloc_stat
@@ -359,7 +356,7 @@ contains
     
     !>  \brief  for writing a pori object to file
     subroutine write( self, fname, i )
-        use simple_jiffys, only: get_fileunit, fopen_err
+        use simple_filehandling, only: fopen,fclose, err_msg
         class(pori), intent(in)      :: self
         character(len=*), intent(in) :: fname
         integer, intent(in)          :: i
@@ -371,15 +368,15 @@ contains
         arr = self%serialize()
         inquire(iolength=recsz) arr
         inquire(iolength=elemsz) tmp
-        fnr = get_fileunit()
         inquire(file=fname, exist=here)
         ostat = 'new'
         if( here ) ostat = 'old'
-        open(unit=fnr, status=ostat, action='write', file=fname,&
-        access='direct', form='unformatted', recl=recsz, iostat=file_stat)
-        call fopen_err( 'In: write; simple_pori', file_stat )
+        if(.not.fopen(fnr, status=ostat, action='write', file=fname,&
+             access='direct', form='unformatted', recl=recsz, iostat=file_stat))&
+             call err_msg( 'In: write; simple_pori', file_stat )
         write(fnr,rec=i) arr
-        close(fnr)
+        if(.not.fclose(fnr,file_stat))&
+             call err_msg( 'In: write; simple_pori', file_stat )
     end subroutine
 
     !>  \brief  for re-creating a pori object from file 
@@ -539,7 +536,7 @@ contains
             
             !>  \brief  for extracting the correlations of the local minima
             subroutine extract_corrs
-                use simple_jiffys, only: alloc_err
+                use simple_fileio, only: alloc_err
                 integer :: alloc_stat, i
                 allocate( weights(loptsz), stat=alloc_stat )
                 call alloc_err('In: extract_corrs; calc_weights; simple_pori', alloc_stat)

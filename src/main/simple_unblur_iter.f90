@@ -6,7 +6,7 @@ use simple_params,  only: params
 use simple_strings, only: int2str_pad, int2str
 use simple_math,    only: round2even
 use simple_ori,     only: ori
-use simple_filehandling ! use all in there
+use simple_fileio       ! use all in there
 use simple_procimgfile  ! use all in there
 use simple_unblur       ! use all in there
 implicit none

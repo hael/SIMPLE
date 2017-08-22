@@ -262,7 +262,9 @@ contains
 
     !> Initialise unblur
     subroutine unblur_init( movie_stack_fname, p )
-        use simple_jiffys, only: find_ldim_nptcls, alloc_err, progress
+        use simple_syslib, only: alloc_errchk
+        use simple_imgfile, only: find_ldim_nptcls
+        use simple_jiffys, only: progress
         use simple_math,   only: round2even, median
         character(len=*), intent(in)    :: movie_stack_fname  !< input filename of stack
         class(params),    intent(inout) :: p                  !< params object
@@ -307,7 +309,7 @@ contains
         movie_frames_ftexp_sh(nframes), corrs(nframes), opt_shifts(nframes,2),&
         opt_shifts_saved(nframes,2), corrmat(nframes,nframes), frameweights(nframes),&
         frameweights_saved(nframes), stat=alloc_stat )
-        call alloc_err('unblur_init; simple_unblur', alloc_stat)
+        call alloc_errchk('unblur_init; simple_unblur', alloc_stat)
         corrmat = 0.
         corrs   = 0.
         call frame_tmp%new(ldim, smpd)
@@ -364,7 +366,7 @@ contains
         if( p%l_dose_weight )then
             do_dose_weight = .true.
             allocate( acc_doses(nframes), stat=alloc_stat )
-            call alloc_err('unblur_init; simple_unblur, 2', alloc_stat)
+            call alloc_errchk('unblur_init; simple_unblur, 2', alloc_stat)
             kV = p%kv
             time_per_frame = p%exp_time/real(nframes)           ! unit: s
             dose_rate      = p%dose_rate
