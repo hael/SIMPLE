@@ -115,6 +115,7 @@ type :: oris
     procedure          :: expand_classes
     procedure          :: remap_classes
     procedure          :: shift_classes
+    procedure          :: create_conforming_npeaks_set
     procedure          :: merge_classes
     procedure          :: round_shifts
     procedure          :: introd_alig_err
@@ -591,6 +592,48 @@ contains
             call self%o(iptcl)%set('class', real(new_cls))
         end do
     end subroutine shift_classes
+
+    !>  \brief  is for contracting/expanding the ori set in self to make 
+    !!          a set of conforming size
+    function create_conforming_npeaks_set( self, npeaks ) result( os_conf )
+        class(oris), intent(inout) :: self
+        integer,     intent(in)    :: npeaks
+        real, allocatable :: ows(:)
+        type(ori)         :: o_template
+        type(oris)        :: os_conf
+        integer           :: inds(self%n), i, cnt
+        if( .not. self%isthere('ow') )&
+        &stop 'orientation weights (ow) needs to be set; oris :: create_conforming_npeaks_set'
+        if( self%n == npeaks )then
+            ! set is conforming
+            os_conf = self
+        else if( self%n > npeaks )then
+            ! shrink set
+            ows  = self%get_all('ow')
+            inds = (/(i,i=1,self%n)/)
+            call hpsort(self%n, ows, inds)
+            cnt = 0
+            do i=self%n,self%n - npeaks + 1,-1
+                cnt = cnt + 1
+                os_conf%o(cnt) = self%o(inds(i))
+            end do
+        else
+            ! expand set
+            o_template = self%o(1)
+            call o_template%set_euler([0.,0.,0.])
+            call o_template%set_shift([0.,0.])
+            call o_template%set('state', 1.0)
+            call o_template%set('ow', 0.0)
+            call os_conf%new(npeaks)
+            do i=1,npeaks
+                if( i <= self%n )then
+                    os_conf%o(i) = self%o(i)
+                else
+                    os_conf%o(i) = o_template
+                endif
+            end do
+        endif
+    end function create_conforming_npeaks_set
 
     !>  \brief  is for getting an allocatable array with ptcl indices of the label 'label'
     function get_pinds( self, ind, label, consider_w ) result( indices )
@@ -1921,13 +1964,14 @@ contains
 
     !>  \brief  orders clusters according to population
     function order_cls( self, ncls ) result( inds )
+        use simple_math, only: reverse
         class(oris), intent(inout) :: self
         integer,     intent(in)    :: ncls
-        real,    allocatable :: classpops(:)
         integer, allocatable :: inds(:)
+        real    :: classpops(ncls)
         integer :: i, alloc_stat
         if(ncls <= 0) stop 'invalid number of classes; simple_oris%order_cls'
-        allocate(inds(ncls), classpops(ncls), stat=alloc_stat)
+        allocate(inds(ncls), stat=alloc_stat)
         call alloc_err('order_cls; simple_oris', alloc_stat)
         classpops = 0.0
         ! calculate class populations
@@ -1936,7 +1980,7 @@ contains
         end do
         inds = (/(i,i=1,ncls)/)
         call hpsort( ncls, classpops, inds )
-        deallocate(classpops)
+        call reverse(inds)
     end function order_cls
 
     !>  \brief  applies a one-sided balance restraint on the number of particles

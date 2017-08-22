@@ -220,6 +220,7 @@ type :: params
     integer :: nsym=1
     integer :: nthr=1              !< # OpenMP threads{1}
     integer :: numlen=0            !< length of number string
+    integer :: numlen_tomo=3       !< length of number string tomo series index{3}
     integer :: nvalid=0
     integer :: nvars=30
     integer :: nvox=0              !< # voxels{0}
@@ -588,6 +589,7 @@ contains
         call check_iarg('nptcls',         self%nptcls)
         call check_iarg('nthr',           self%nthr)
         call check_iarg('numlen',         self%numlen)
+        call check_iarg('numlen_tomo',    self%numlen_tomo)
         call check_iarg('nvars',          self%nvars)
         call check_iarg('nvox',           self%nvox)
         call check_iarg('offset',         self%offset)

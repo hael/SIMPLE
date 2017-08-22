@@ -643,6 +643,7 @@ contains
                 allocate(clustering(noris), clustszs(p%ndiscrete))
                 call osubspace%new(p%ndiscrete)
                 call osubspace%spiral(p%nsym, p%eullims)
+                call osubspace%write('even_pdirs.txt')
                 do iptcl=1,b%a%get_noris()
                     if( ptcl_mask(iptcl) )then
                         o_single = b%a%get_ori(iptcl)

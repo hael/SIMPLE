@@ -155,6 +155,7 @@ contains
         call chdict%push('nsub',          '# proj dirs in coarse grid search{300}')
         call chdict%push('nthr',          '# OpenMP threads{1}')
         call chdict%push('numlen',        'length of number string')
+        call chdict%push('numlen_tomo',   'length of number string tomo series index{3}')
         call chdict%push('nvox',          '# voxels{0}')
         call chdict%push('odd',           'calculate odd eo-pair(yes|no){no}')
         call chdict%push('offset',        'pixels offset{7}')

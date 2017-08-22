@@ -186,7 +186,7 @@ contains
         class(cmdline),                            intent(inout) :: cline
         character(len=STDLEN), allocatable :: tomonames(:)
         type(oris)               :: exp_doc
-        integer                  :: nseries, ipart, numlen
+        integer                  :: nseries, ipart
         type(qsys_env)           :: qenv
         type(params)             :: p_master
         character(len=KEYLEN)    :: str
@@ -217,14 +217,12 @@ contains
         endif
         p_master%nparts = nseries
         p_master%nptcls = nseries
-        numlen = len(int2str(p_master%nparts))
-        if( .not. cline%defined('numlen') ) call cline%set('numlen', real(numlen))     
         ! prepare part-dependent parameters
         allocate(part_params(p_master%nparts))
         do ipart=1,p_master%nparts
             call part_params(ipart)%new(4)
             call part_params(ipart)%set('filetab', trim(tomonames(ipart)))
-            call part_params(ipart)%set('fbody', 'tomo'//int2str_pad(ipart,numlen))
+            call part_params(ipart)%set('fbody', 'tomo'//int2str_pad(ipart,p_master%numlen_tomo))
             str = real2str(exp_doc%get(ipart,'exp_time'))
             call part_params(ipart)%set('exp_time', trim(str))
             str = real2str(exp_doc%get(ipart,'dose_rate'))

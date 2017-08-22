@@ -89,6 +89,8 @@ contains
                     p%kfromto(2) = calc_fourier_index( p%lp, p%boxmatch, p%smpd )
                 else if( cline%defined('find') )then
                     p%kfromto(2) = min(p%find,p%tofny)
+                else if( b%a%isthere(p%fromp,'lp') )then
+                    p%kfromto(2) = calc_fourier_index( b%a%get(p%fromp,'lp'), p%boxmatch, p%smpd )
                 else
                     write(*,*) 'no method available for setting the low-pass limit'
                     stop 'need fsc file, lp, or find; set_bp_range; simple_hadamard_common'

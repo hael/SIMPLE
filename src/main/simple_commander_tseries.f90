@@ -90,6 +90,7 @@ contains
     subroutine exec_tseries_track( self, cline )
         use simple_tseries_tracker
         use simple_nrtxtfile, only: nrtxtfile
+        use simple_qsys_funs, only: qsys_job_finished
         class(tseries_track_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
         type(params)      :: p
@@ -142,6 +143,7 @@ contains
             endif
             call kill_tracker
         end do
+        if( p%l_distr_exec ) call qsys_job_finished(p, 'simple_commander_tseries :: exec_tseries_track')
     end subroutine exec_tseries_track
 
     subroutine exec_tseries_split( self, cline )
