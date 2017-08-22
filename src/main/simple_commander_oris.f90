@@ -18,6 +18,8 @@ public :: oristats_commander
 public :: rotmats2oris_commander
 public :: bin2txt_commander
 public :: txt2bin_commander
+public :: vizoris_commander
+
 private
 #include "simple_local_flags.inc"
 
@@ -58,6 +60,10 @@ type, extends(commander_base) :: txt2bin_commander
  contains
    procedure :: execute      => exec_txt2bin
 end type txt2bin_commander
+type, extends(commander_base) :: vizoris_commander
+ contains
+   procedure :: execute      => exec_vizoris
+end type vizoris_commander
 
 contains
 
@@ -350,7 +356,7 @@ contains
         logical,               allocatable :: selected(:)
         integer      :: isel, nsel, loc(1), iptcl, pind, icls
         integer      :: nlines_oritab, nlines_oritab3D, nlines_deftab
-        integer      :: cnt, istate, funit, iline, nls, lfoo(3)
+        integer      :: cnt, istate, iline, nls, lfoo(3)
         real         :: corr, rproj, rstate
         type(params) :: p
         type(build)  :: b
@@ -773,5 +779,80 @@ contains
         call bos%close
         call os%write(p%outfile)
     end subroutine exec_bin2txt
+
+    !> convert rotation matrix to orientation oris class
+    subroutine exec_vizoris( self, cline )
+        use simple_math,      only: rad2deg, myacos
+        use simple_oris,      only: oris
+        use simple_ori,       only: ori
+        class(vizoris_commander),  intent(inout) :: self
+        class(cmdline),            intent(inout) :: cline
+        type(build)           :: b
+        type(params)          :: p
+        type(ori)             :: o
+        integer, allocatable  :: pops(:)
+        character(len=STDLEN) :: fname, ext, fbody
+        integer               :: i, n, maxpop, funit, closest
+        real                  :: radius, maxradius, xyz_end(3), xyz_start(3), ang, scale
+        p = params(cline)
+        call b%build_general_tbox(p, cline, do3d=.false.)
+        ! init
+        allocate(pops(p%nspace), source=0)
+        ang = 3.6 / sqrt(real(p%nsym*p%nspace))
+        maxradius = 0.75 * sqrt( (1.-cos(ang))**2. + sin(ang)**2. )
+        ! projection direction attribution
+        n = b%a%get_noris()
+        do i = 1, n
+            o = b%a%get_ori(i)
+            if(nint(o%get('state')) == 0 )cycle
+            call progress(i, n)
+            closest = b%e%find_closest_proj(o)
+            pops(closest) = pops(closest) + 1          
+        enddo        
+        maxpop = maxval(pops)
+        write(*,'(A,I6)')'>>> NUMBER OF POPULATED PROJECTION DIRECTIONS:', count(pops>0)
+        write(*,'(A,I6)')'>>> NUMBER OF EMPTY     PROJECTION DIRECTIONS:', count(pops==0)
+        ! output
+        fname = remove_abspath(trim(adjustl(p%oritab)))
+        ext   = trim(fname2ext(fname))
+        fbody = trim(get_fbody(trim(fname), trim(ext)))
+        fname = trim(fbody)//'.bild'
+        open(unit=funit, status='REPLACE', action='WRITE', file=trim(fname))
+        ! header
+        write(funit,'(A)')".font Courier 16 bold"
+        write(funit,'(A)')".translate 0.0 0.0 0.0"
+        write(funit,'(A)')".scale 10"
+        write(funit,'(A)')".comment -- unit sphere --"
+        write(funit,'(A)')".color 0.8 0.8 0.8"
+        write(funit,'(A)')".sphere 0 0 0 1.0"
+        write(funit,'(A)')".comment -- planes --"
+        write(funit,'(A)')".color 0.3 0.3 0.3"
+        write(funit,'(A)')".cylinder -0.02 0 0 0.02 0 0 1.02"
+        write(funit,'(A)')".cylinder 0 -0.02 0 0 0.02 0 1.02"
+        write(funit,'(A)')".cylinder 0 0 -0.02 0 0 0.02 1.02"
+        write(funit,'(A)')".comment -- x-axis --"
+        write(funit,'(A)')".color 1 0 0"
+        write(funit,'(A)')".cylinder -1.5 0 0 1.5 0 0 0.02"
+        write(funit,'(A)')".comment -- y-axis --"
+        write(funit,'(A)')".color 0 1 0"
+        write(funit,'(A)')".cylinder 0 -1.5 0 0 1.5 0 0.02"
+        write(funit,'(A)')".comment -- z-axis --"
+        write(funit,'(A)')".color 0 0 1"
+        write(funit,'(A)')".cylinder 0 0 -1.5 0 0 1.5 0.02"
+        ! body
+        write(funit,'(A)')".comment -- projection firections --"
+        write(funit,'(A)')".color 0.4 0.4 0.4"
+        do i = 1, p%nspace
+            if( pops(i) == 0 )cycle
+            scale     = real(pops(i)) / real(maxpop)
+            xyz_start = b%e%get_normal(i)
+            xyz_end   = (1.05 + scale/4.) * xyz_start
+            radius    = max(maxradius * scale, 0.002)
+            write(funit,'(A,F7.3,F7.3,F7.3,F7.3,F7.3,F7.3,F6.3)')&
+            &'.cylinder ', xyz_start, xyz_end, radius
+        enddo
+        close(funit)
+        call simple_end('**** VIZORIS NORMAL STOP ****')
+    end subroutine exec_vizoris
 
 end module simple_commander_oris

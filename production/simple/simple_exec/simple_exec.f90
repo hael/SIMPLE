@@ -119,6 +119,7 @@ type(oristats_commander)           :: xoristats
 type(rotmats2oris_commander)       :: xrotmats2oris
 type(txt2bin_commander)            :: xtxt2bin
 type(bin2txt_commander)            :: xbin2txt
+type(vizoris_commander)            :: xvizoris
 
 ! TIME-SERIES ANALYSIS PROGRAMS
 type(tseries_extract_commander)    :: xtseries_extract
@@ -2156,6 +2157,22 @@ select case(prg)
         if( .not. cline%defined('outfile') ) call cline%set('outfile', 'outfile.txt')
         ! execute
         call xbin2txt%execute(cline)
+    case( 'vizoris' )
+        !==Program vizoris
+        !
+        ! <vizoris/begin>extract projection direction from an orientation direction
+        ! for visualization in UCSF Chimera<vizoris/end>
+        !
+        ! Required keys
+        keys_required(1)  = 'oritab'
+        ! set optional keys
+        keys_optional(1)  = 'nspace'
+        keys_optional(2)  = 'pgrp'
+        ! parse command line
+        !if( describe ) call print_doc_vizoris
+        call cline%parse( keys_required(:1), keys_optional(:2) )
+        ! execute
+        call xvizoris%execute(cline)
 
     ! TIME-SERIES ANALYSIS PROGRAMS
 
