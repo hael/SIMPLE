@@ -68,7 +68,7 @@ contains
         logical,        intent(inout) :: update_res, converged
         type(oris) :: prime3D_oris
         real       :: norm, corr_thresh, skewness, frac_srch_space, extr_thresh
-        integer    :: iptcl, inptcls, istate
+        integer    :: iptcl, inptcls, istate, iextr_lim
         integer    :: statecnt(p%nstates)
         inptcls = p%top - p%fromp + 1
 
@@ -110,10 +110,11 @@ contains
 
         ! EXTREMAL LOGICS
         if( p%refine.eq.'het' )then
-            if( frac_srch_space < 98. .or. p%extr_iter <= 15 )then
+            iextr_lim = ceiling(2.*log(real(p%nptcls)))
+            if( frac_srch_space < 98. .or. p%extr_iter <= iextr_lim )then
                 ! extr_thresh = EXTRINITHRESH * (1.-EXTRTHRESH_CONST)**(p%extr_iter-1)  ! factorial decay
                 ! extr_thresh = EXTRINITHRESH * exp(-(real(p%extr_iter-1)/6.)**2. / 2.) ! gaussian decay: untested
-                extr_thresh = EXTRINITHRESH * cos(PI/2. * real(p%extr_iter-1)/15.)    ! cosine decay
+                extr_thresh = EXTRINITHRESH * cos(PI/2. * real(p%extr_iter-1)/real(iextr_lim))    ! cosine decay
                 extr_thresh = min(EXTRINITHRESH, max(0., extr_thresh))
                 corr_thresh = b%a%extremal_bound(extr_thresh)
                 statecnt(:) = 0

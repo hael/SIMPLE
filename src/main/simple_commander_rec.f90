@@ -251,7 +251,7 @@ contains
         ! indicate completion (when run in a qsys env)
         fnr = get_fileunit()
         open(unit=fnr, FILE='VOLASSEMBLE_FINISHED', STATUS='REPLACE', action='WRITE', iostat=file_stat)
-        call fopen_err('In: commander_rec :: eo_volassemble', file_stat )
+        call fopen_err('In: commander_rec :: volassemble', file_stat )
         close(fnr)
         call wait_for_closure('VOLASSEMBLE_FINISHED')
 

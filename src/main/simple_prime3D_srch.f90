@@ -911,8 +911,6 @@ contains
             endif
             self%prev_corr = corr
         endif
-        ! prep specscore
-        ! call self%calc_specscore(pftcc, self%prev_ref, iptcl, self%prev_roind)
         DebugPrint '>>> PRIME3D_SRCH::PREPARED FOR SIMPLE_PRIME3D_SRCH'
     end subroutine prep4srch
 
