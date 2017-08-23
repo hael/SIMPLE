@@ -2106,10 +2106,16 @@ contains
         real                           :: dang
         integer                        :: i, j, alloc_stat
         nradial_lines = round2even(twopi*real(ring2))
-        if( allocated(coords) ) deallocate(coords)
-        if( allocated(angtab) ) deallocate(angtab)
+        if( allocated(coords) )then
+            deallocate(coords, stat=alloc_stat )
+            call alloc_errchk("In: gen_polar_coords_1; simple_math dealloc coords", alloc_stat)
+        end if
+        if( allocated(angtab) ) then
+            deallocate(angtab, stat=alloc_stat )
+            call alloc_errchk("In: gen_polar_coords_1; simple_math dealloc angtab", alloc_stat)
+        end if
         allocate( coords(nradial_lines,kfromto(1):kfromto(2),2), angtab(nradial_lines), stat=alloc_stat )
-        call alloc_errchk("In: gen_polar_coords_1; simple_math", alloc_stat)
+        call alloc_errchk("In: gen_polar_coords_1; simple_math coords/angtab alloc", alloc_stat)
         dang = twopi/real(nradial_lines)
         do i=1,nradial_lines
             angtab(i) = real(i-1)*dang

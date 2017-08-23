@@ -40,8 +40,8 @@ contains
             n = o%get_noris()
         endif
         allocate( imgs(n), stat=alloc_stat )
-        call vol_pad%expand_cmat
         call alloc_errchk('projvol; simple_projector', alloc_stat)
+        call vol_pad%expand_cmat
         write(*,'(A)') '>>> GENERATES PROJECTIONS' 
         do i=1,n
             call progress(i, n)

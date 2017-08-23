@@ -43,8 +43,10 @@ contains
         character(len=*), optional, intent(in) :: rm_outliers_in
         type(image) :: refimg
         integer     :: alloc_stat, ifoo, iref
-        allocate(micname,  source=trim(micfname), stat=alloc_stat);call alloc_errchk('picker;init, 2', alloc_stat)
-        allocate(refsname, source=trim(refsfname), stat=alloc_stat);call alloc_errchk('picker;init, 2', alloc_stat)
+        allocate(micname,  source=trim(micfname), stat=alloc_stat)
+        call alloc_errchk('picker;init, 2', alloc_stat)
+        allocate(refsname, source=trim(refsfname), stat=alloc_stat)
+        call alloc_errchk('picker;init, 2', alloc_stat)
         boxname = remove_abspath( fname_new_ext(micname,'box') )   
         smpd    = smpd_in
         lp      = 20.0

@@ -109,6 +109,7 @@ contains
     subroutine kill_simplex_opt( self )
         class(simplex_opt), intent(inout) :: self
         integer                           :: alloc_stat
+        alloc_stat=0
         if( allocated(self%p) )  deallocate(self%p, stat=alloc_stat)
         if( allocated(self%y) )  deallocate(self%y, stat=alloc_stat)
         if( allocated(self%pb) ) deallocate(self%pb, stat=alloc_stat)

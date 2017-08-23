@@ -111,15 +111,20 @@ contains
         end do
         err=0
         if( present(iarr) )then
-            if( allocated(iarr) ) deallocate(iarr,STAT=err,ERRMSG=io_msg)
+            if( allocated(iarr) ) then
+                deallocate(iarr,STAT=err,ERRMSG=io_msg)
+                call alloc_errchk(" In simple_sll::get  deallocation fault "//trim(io_msg),err)
+            end if
             iarr = curr%content%iget()
         endif
-        call alloc_errchk(" In simple_sll::get  deallocation fault "//trim(io_msg),err)
+
         if( present(rarr) )then
-            if( allocated(rarr) ) deallocate(rarr,STAT=err,ERRMSG=io_msg)
+            if( allocated(rarr) )then
+                deallocate(rarr,STAT=err,ERRMSG=io_msg)
+                call alloc_errchk(" In simple_sll::get  deallocation fault "//trim(io_msg),err)
+            end if
             rarr = curr%content%rget()
         endif
-        call alloc_errchk(" In simple_sll::get  deallocation fault "//trim(io_msg),err)
     end subroutine get
 
     !>  \brief  is a polymorphic setter
