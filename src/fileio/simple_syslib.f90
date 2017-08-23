@@ -5,13 +5,9 @@
 module simple_syslib
     use simple_defs
     use simple_strings, only: cpStr
-#ifdef INTEL
-    use ifport
-    use ifcore
-#endif
     use, intrinsic :: iso_fortran_env, only: &
-    stderr=>ERROR_UNIT, stdout=>OUTPUT_UNIT,&
-    IOSTAT_END, IOSTAT_EOR
+    &stderr=>ERROR_UNIT, stdout=>OUTPUT_UNIT,&
+    &IOSTAT_END, IOSTAT_EOR
     implicit none
 
 
@@ -321,9 +317,13 @@ contains
     end subroutine simple_stop
 
     function get_sys_error () result(err)
+#ifdef INTEL
+        use ifport
+        use ifcore
+#endif
         integer :: err
         CHARACTER(len=100) :: msg
-        err=INT( IERRNO() ) ! no implicit type
+        err=INT( IERRNO() ) !! no implicit type
 
         if( err < 0)then !! PGI likes to use negative error numbers
 !#ifdef PGI
@@ -457,6 +457,10 @@ contains
 
 
     subroutine simple_error_check (iostat, msg)
+#ifdef INTEL
+        use ifport
+        use ifcore
+#endif
         integer,          intent(in), optional :: iostat
         character(len=*), intent(in), optional :: msg
         integer :: io_stat
@@ -494,11 +498,9 @@ contains
 
 
     subroutine print_compiler_info(file_unit)
-#ifndef PGI
-    use, intrinsic :: iso_fortran_env, only: &
-    stdout=>OUTPUT_UNIT,&
-             COMPILER_VERSION, &
-             COMPILER_OPTIONS
+#ifdef GNU
+    use, intrinsic :: iso_fortran_env, only: compiler_version, &
+    &compiler_options
 #endif
 #ifdef INTEL
         use ifport
@@ -514,7 +516,7 @@ contains
         else
             file_unit_op = stdout
         end if
-#ifndef PGI
+#ifdef GNU
         write( file_unit_op, '(/4a/)' ) &
              ' This file was compiled by ', COMPILER_VERSION(), &
              ' using the options ', COMPILER_OPTIONS()
@@ -544,7 +546,7 @@ contains
     end subroutine rt_shutdown
 
     ! IFCORE checks
-    pure function fastmem_policy() return (policy)
+    pure function fastmem_policy() result (policy)
         use ifcore
         integer(4) :: old_policy, policy
         print *,"Print the current Results of initial for_set_fastmem_policy(FOR_K_FASTMEM_INFO):"
@@ -581,7 +583,7 @@ contains
         real :: get_hbw_size
         real, intent(in) :: arg
         INTEGER(kind=4),         intent(in)  :: partition, status
-        INTEGER(kind=int_ptr_kind(), intent(in)) :: total,free
+        INTEGER(kind=int_ptr_kind()), intent(in) :: total,free
         status = for_get_hbw_size(partition,total,free )
 
     end function get_hbw_size

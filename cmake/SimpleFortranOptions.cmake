@@ -186,8 +186,8 @@ elseif (${CMAKE_Fortran_COMPILER_ID} STREQUAL "Intel" OR Fortran_COMPILER_NAME M
   ## INTEL fortran
   #
   #############################################
-  set(EXTRA_FLAGS "${EXTRA_FLAGS} -fpp -I${MKLROOT}/include -list-line-len=264 -assume realloc_lhs -assume source_include -diag-enable=openmp,vec,par,error -diag-file-append=diagnostics.txt -diag-disable=warn -sox")
-  #
+  set(EXTRA_FLAGS "${EXTRA_FLAGS} -fpp -I${MKLROOT}/include -list-line-len=264 -assume realloc_lhs -assume source_include -diag-enable=openmp,vec,par,error  -diag-disable=warn -sox")
+  # -diag-file-append=diagnostics.txt
   set(CMAKE_AR                           "xiar")
   set(CMAKE_CPP_COMPILER                 "fpp")
   set(CMAKE_CPP_COMPILER_FLAGS           " -noJ -noB -noC ")  #Recognize C,C++,F90 style comments. 

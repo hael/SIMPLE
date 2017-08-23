@@ -5,19 +5,19 @@ use simple_oris,         only: oris
 use simple_prime3D_srch, only: prime3D_srch
 use simple_fileio,       only: file_exists
 implicit none
-
+ 
 interface binread_oritab
     module procedure binread_oritab_1
     module procedure binread_oritab_2
 end interface
-
+ 
 interface binwrite_oritab
     module procedure binwrite_oritab_1
     module procedure binwrite_oritab_2
 end interface
-
+ 
 contains
-
+ 
     subroutine binread_oritab_1( fname, a, fromto, nst )
         character(len=*),      intent(in)    :: fname
         class(oris),           intent(inout) :: a
@@ -35,7 +35,7 @@ contains
         end do
         call bos%close
     end subroutine binread_oritab_1
-
+ 
     subroutine binread_oritab_2( fname, a, fromto, primesrch3D, mask )
         character(len=*),    intent(in)    :: fname
         class(oris),         intent(inout) :: a
@@ -50,11 +50,11 @@ contains
         endif
         ! establish input file handler
         call bos%open(fname)
-
+ 
 !!!!!!!!!!!!!!! 2 BE CONTINUED
-
+ 
     end subroutine binread_oritab_2
-
+ 
     subroutine binread_ctfparams_and_state( fname, a, fromto )
         character(len=*), intent(in)    :: fname
         class(oris),      intent(inout) :: a
@@ -71,7 +71,7 @@ contains
         end do
         call bos%close
     end subroutine binread_ctfparams_and_state
-
+ 
     subroutine binwrite_oritab_1( fname, a, fromto )
         character(len=*), intent(in)    :: fname
         class(oris),      intent(inout) :: a
@@ -86,7 +86,7 @@ contains
         end do
         call bos%close
     end subroutine binwrite_oritab_1
-
+ 
     subroutine binwrite_oritab_2( fname, fname_fill_in, a, fromto, primesrch3D, mask )
         character(len=*),    intent(in)    :: fname, fname_fill_in
         class(oris),         intent(inout) :: a
@@ -139,5 +139,5 @@ contains
         call os_peak_fill_in%kill
         call os_peak_conforming%kill
     end subroutine binwrite_oritab_2
-
+ 
 end module simple_binoris_io

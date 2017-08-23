@@ -366,8 +366,23 @@ CTFFIND4 Copyright 2014 Howard Hughes Medical Institute
  -  Use is subject to Janelia Farm Research Campus Software Copyright 1.1
    license terms ( http://license.janelia.org/license/jfrc_copyright_1_1.html )
 
+
 * Post Release 2.5 Changes
+** Syslib
+
+- simple_error_check -- gather relevant info, print stuff and will not stop
+- simple_stop   -- gather relevant info, print stuff and stop 
+- alloc_errchk  -- jiffys only for progress and simple_end
+- get_sys_error
+- all syscalls functions
+
 ** Universal File I/O
+
+- fopen  -- do not use "UNIT=",  return logical false on fail, user can then call fileio_errmsg to terminate 
+- fclose -- same as fopen
+- fileio_errmsg -- wrapper for simple_error_check, will stop if necessary, if
+  you want to prevent termination use die=.false
+
 Former method:
 :-        fnr = get_fileunit()
 :-        open(unit=fnr, FILE='CAVGASSEMBLE_FINISHED', STATUS='REPLACE', action='WRITE', iostat=file_stat)
@@ -379,10 +394,24 @@ New file open/close
 :+         if(.not.fclose( fnr , iostat=file_stat))&
 :+        call fileio_errmsg('In: commander_rec :: eo_volassemble fclose', file_stat )
 
-| Old         |   | New Function  | args              | optional           |
-|-------------+---+---------------+-------------------+--------------------|
-| open()      |   | l = fopen()   | funit,file,iostat | access,status,recl |
-|             |   |               |                   |                    |
-| close()     |   | l = fclose()  | unit,iostat       | dispose            |
-| fopen_err() |   | fileio_errmsg | msg,iostat        |                    |
-|             |   |               |                   |                    |
+
+| Old         |   | New Function  | args              | optional               |
+|-------------+---+---------------+-------------------+------------------------|
+| open()      |   | l = fopen()   | funit,file,iostat | access,status,recl,... |
+|             |   |               |                   |                        |
+| close()     |   | l = fclose()  | unit,iostat       | dispose                |
+| fopen_err() |   | fileio_errmsg | msg,iostat        | die (default true)     |
+|             |   |               |                   |                        |
+
+** Image files
+
+- imgfile contains find_ldim_nptcls and imgfile type
+- imghead/imgfile/procimg etc all rely on fileio
+
+** Allocation
+
+- all allocate() and deallocate() calls should have a =stat= argument, then call alloc_errchk immediately afterwards
+- alloc_err replaced with alloc_errchk with additional features.
+
+Syslib's simple_error_check and get_sys_error gather relevant info, print stuff and stop if necessary
+

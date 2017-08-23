@@ -62,7 +62,7 @@ integer function gettime ()
     gettime=time()
 #elif defined(INTEL)
     use ifport
-    integer :: gettime
+    !integer :: gettime
     call time(gettime)
 #else
     gettime= time()
