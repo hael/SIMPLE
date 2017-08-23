@@ -208,7 +208,7 @@ contains
         ! auto-scaling prep
         doautoscale = (p_master%autoscale.eq.'yes')
         ! now, remove autoscale flag from command line, since no scaled partial stacks 
-        ! will be poroduced (this program used shared-mem paralllelisation of scale)
+        ! will be produced (this program used shared-mem paralllelisation of scale)
         call cline%delete('autoscale')
         smpd = cline%get_rarg('smpd')
         if( doautoscale )then
