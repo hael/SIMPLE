@@ -382,6 +382,7 @@ contains
         character(len=:), allocatable    :: conv
         logical                          :: nparts_set
         logical                          :: vol_defined(MAXS)
+        character(len=STDLEN)            :: stk_part_fname_sc, stk_part_fname
         nparts_set        = .false.
         vol_defined(MAXS) = .false.
         debug_local = 'no'
@@ -821,10 +822,13 @@ contains
             if( nparts_set ) self%numlen = len(int2str(self%nparts))
         endif
         ! set name of partial files in parallel execution
+        stk_part_fname_sc = trim(STKPARTFBODY_SC)//int2str_pad(self%part,self%numlen)//self%ext
+        stk_part_fname    = trim(STKPARTFBODY)//int2str_pad(self%part,self%numlen)//self%ext
+        self%stk_part     = stk_part_fname
         if( self%autoscale .eq. 'yes' )then
-            self%stk_part = trim(STKPARTFBODY_SC)//int2str_pad(self%part,self%numlen)//self%ext
-        else
-            self%stk_part = trim(STKPARTFBODY)//int2str_pad(self%part,self%numlen)//self%ext
+            if( file_exists(stk_part_fname_sc) )then
+                self%stk_part = stk_part_fname_sc
+            endif
         endif
         ! set logical dimension
         if( file_exists(self%stk_part) .and. cline%defined('nparts') )then

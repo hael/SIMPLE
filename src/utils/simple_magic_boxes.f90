@@ -58,7 +58,7 @@ contains
             return
         endif
         scale    = smpd_in/smpd_target
-        box_new  = find_magic_box(nint(scale*real(box_in)))
+        box_new  = max(64,find_magic_box(nint(scale*real(box_in))))
         scale    = real(box_new)/real(box_in)
         smpd_new = smpd_in/scale
     end subroutine autoscale

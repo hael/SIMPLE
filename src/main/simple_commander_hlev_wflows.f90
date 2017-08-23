@@ -207,6 +207,9 @@ contains
         endif
         ! auto-scaling prep
         doautoscale = (p_master%autoscale.eq.'yes')
+        ! now, remove autoscale flag from command line, since no scaled partial stacks 
+        ! will be poroduced (this program used shared-mem paralllelisation of scale)
+        call cline%delete('autoscale')
         smpd = cline%get_rarg('smpd')
         if( doautoscale )then
             if( cline%defined('lp') )then
@@ -227,6 +230,9 @@ contains
         cline_symsrch        = cline
         cline_recvol         = cline
         cline_projvol        = cline
+        ! recvol & projvol are not distributed executions, so remove the nparts flag
+        call cline_recvol%delete('nparts')
+        call cline_projvol%delete('nparts')
         ! initialise command line parameters
         ! (1) INITIALIZATION BY STOCHASTIC NEIGHBORHOOD HILL-CLIMBING
         call cline_prime3D_snhc%set('prg',    'prime3D')
@@ -243,10 +249,6 @@ contains
         call cline_prime3D_init%set('oritab', SNHCDOC)
         ! (3) SYMMETRY AXIS SEARCH
         if( srch4symaxis )then
-            if( doautoscale )then
-                call scobj%update_smpd_msk(cline_symsrch, 'scaled')
-                call scobj%update_stk_smpd_msk(cline_recvol, 'scaled')
-            endif
             ! need to replace original point-group flag with c1
             call cline_prime3D_snhc%set('pgrp', 'c1')
             call cline_prime3D_init%set('pgrp', 'c1')
@@ -321,6 +323,8 @@ contains
         call xprime3D_distr%execute(cline_prime3D_refine)
         iter = cline_prime3D_refine%get_rarg('endit')
         call set_iter_dependencies
+        ! delete stack parts (we are done with them)
+        call del_files(trim(STKPARTFBODY), p_master%nparts, ext=p_master%ext)
         if( doautoscale )then
             write(*,'(A)') '>>>'
             write(*,'(A)') '>>> 3D RECONSTRUCTION AT NATIVE SAMPLING'

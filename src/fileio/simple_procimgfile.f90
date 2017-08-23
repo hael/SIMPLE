@@ -2,9 +2,9 @@
 module simple_procimgfile
 use simple_defs
 use simple_syslib
-use simple_image,  only: image
+use simple_image,   only: image
 use simple_imgfile, only: find_ldim_nptcls
-use simple_jiffys, only: progress
+use simple_jiffys,  only: progress
 implicit none
 
 private :: raise_exception_imgfile
