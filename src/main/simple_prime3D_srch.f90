@@ -1234,8 +1234,8 @@ contains
     !>  \brief  to produce oris object for probabilistic reconstruction
     subroutine get_oris( self, os, o )
         class(prime3D_srch), intent(inout) :: self
-        class(oris),         intent(inout) :: os !< search orientation list
-        class(ori),          intent(inout) :: o  !< search orientation
+        class(oris),         intent(out)   :: os !< search orientation list
+        class(ori),          intent(in)    :: o  !< search orientation
         type(ori) :: o_new
         integer   :: ipeak, npeaks
         npeaks = self%o_peaks%get_noris()
