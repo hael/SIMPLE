@@ -2074,7 +2074,7 @@ contains
         n = self%get_n('proj')
         ptcl_mask = self%included(consider_w=.true.)
         allocate(clustering(self%n), clustszs(nspace_bal), included(self%n), stat=alloc_stat)
-        call alloc_err('In oris :: balance', alloc_stat)
+        call alloc_errchk('In oris :: balance', alloc_stat)
         clustering = 0
         clustszs   = 0
         included   = .false.

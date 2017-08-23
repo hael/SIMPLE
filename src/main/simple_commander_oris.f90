@@ -740,7 +740,6 @@ contains
     subroutine exec_txt2bin( self, cline )
         use simple_oris,         only: oris
         use simple_binoris,      only: binoris
-        use simple_filehandling, only: nlines
         class(txt2bin_commander), intent(inout) :: self
         class(cmdline),           intent(inout) :: cline
         type(params)  :: p

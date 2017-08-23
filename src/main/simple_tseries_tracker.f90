@@ -3,10 +3,10 @@ module simple_tseries_tracker
 !$ use omp_lib
 !$ use omp_lib_kinds
 use simple_defs
+use simple_syslib
 use simple_image,        only: image
-use simple_syslib,       only: alloc_errchk
 use simple_strings,      only: int2str
-use simple_fileio      , only: read_filetable
+use simple_fileio
 use simple_imgfile,      only: find_ldim_nptcls
 implicit none
 
