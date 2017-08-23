@@ -2087,6 +2087,17 @@ contains
         R(3,3) = 1.
     end function make_transfmat
 
+    !>   is for converting a rotation matrix to axis-angle representation
+    subroutine rotmat2axis( R, axis )
+        real, intent(in)  :: R(3,3)
+        real, intent(out) :: axis(3)
+        axis(1) = R(3,2) - R(2,3)
+        axis(2) = R(1,3) - R(3,1)
+        axis(3) = R(2,1) - R(1,2)
+        ! normalization
+        axis = axis / sqrt(dot_product(axis,axis))
+    end subroutine rotmat2axis
+
     !>   generates polar coordinates
     subroutine gen_polar_coords( kfromto, ring2, coords, angtab )
         integer, intent(in)            :: kfromto(2), ring2

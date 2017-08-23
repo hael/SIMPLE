@@ -379,11 +379,11 @@ contains
                 !!!!!!!!!!!!
                 select type( pmyqsys => self%myqsys )
                     class is(qsys_local)
-                        qsys_cmd = trim(trim(self%myqsys%submit_cmd())//' ./'//trim(script_name)//' &')
+                        qsys_cmd = trim(adjustl(self%myqsys%submit_cmd()))//' ./'//trim(adjustl(script_name))//' &'
                     class DEFAULT
-                        qsys_cmd = trim(trim(self%myqsys%submit_cmd())//' ./'//trim(script_name))
+                        qsys_cmd = trim(adjustl(self%myqsys%submit_cmd()))//' ./'//trim(adjustl(script_name))
                 end select
-                call exec_cmdline(trim(qsys_cmd))
+                call exec_cmdline(trim(adjustl(qsys_cmd)))
             endif
         end do
     end subroutine submit_scripts

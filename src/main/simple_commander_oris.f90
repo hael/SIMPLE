@@ -782,76 +782,166 @@ contains
 
     !> convert rotation matrix to orientation oris class
     subroutine exec_vizoris( self, cline )
-        use simple_math,      only: rad2deg, myacos
+        use simple_math,      only: rad2deg, myacos, rotmat2axis
         use simple_oris,      only: oris
         use simple_ori,       only: ori
+        use simple_strings,   only: real2str
         class(vizoris_commander),  intent(inout) :: self
         class(cmdline),            intent(inout) :: cline
         type(build)           :: b
         type(params)          :: p
-        type(ori)             :: o
+        type(ori)             :: o, o_prev
+        type(oris)            :: a
+        real,    allocatable  :: euldists(:)
         integer, allocatable  :: pops(:)
-        character(len=STDLEN) :: fname, ext, fbody
-        integer               :: i, n, maxpop, funit, closest
-        real                  :: radius, maxradius, xyz_end(3), xyz_start(3), ang, scale
+        character(len=STDLEN) :: fname, ext
+        integer               :: i, n, maxpop, funit, closest, alloc_stat
+        real                  :: radius, maxradius, ang, scale, col, trace, dp
+        real                  :: xyz(3), xyz_end(3), xyz_start(3), vec(3), axis(3)
+        real :: R(3,3), Ri(3,3), Rprev(3,3)
         p = params(cline)
         call b%build_general_tbox(p, cline, do3d=.false.)
-        ! init
-        allocate(pops(p%nspace), source=0)
-        ang = 3.6 / sqrt(real(p%nsym*p%nspace))
-        maxradius = 0.75 * sqrt( (1.-cos(ang))**2. + sin(ang)**2. )
-        ! projection direction attribution
+        ! BELOW IS FOR TESTING ONLY
+        ! call b%a%spiral
+        ! call a%new(2*b%a%get_noris()-1)
+        ! do i = 1, b%a%get_noris()
+        !     call a%set_ori(i,b%a%get_ori(i))
+        ! enddo
+        ! do i = b%a%get_noris()+1, 2*b%a%get_noris()-1
+        !     call a%set_ori(i,b%a%get_ori(2*b%a%get_noris()-i))
+        ! enddo
+        ! b%a = a
         n = b%a%get_noris()
-        do i = 1, n
-            o = b%a%get_ori(i)
-            if(nint(o%get('state')) == 0 )cycle
-            call progress(i, n)
-            closest = b%e%find_closest_proj(o)
-            pops(closest) = pops(closest) + 1          
-        enddo        
-        maxpop = maxval(pops)
-        write(*,'(A,I6)')'>>> NUMBER OF POPULATED PROJECTION DIRECTIONS:', count(pops>0)
-        write(*,'(A,I6)')'>>> NUMBER OF EMPTY     PROJECTION DIRECTIONS:', count(pops==0)
-        ! output
-        fname = remove_abspath(trim(adjustl(p%oritab)))
-        ext   = trim(fname2ext(fname))
-        fbody = trim(get_fbody(trim(fname), trim(ext)))
-        fname = trim(fbody)//'.bild'
-        open(unit=funit, status='REPLACE', action='WRITE', file=trim(fname))
-        ! header
-        write(funit,'(A)')".font Courier 16 bold"
-        write(funit,'(A)')".translate 0.0 0.0 0.0"
-        write(funit,'(A)')".scale 10"
-        write(funit,'(A)')".comment -- unit sphere --"
-        write(funit,'(A)')".color 0.8 0.8 0.8"
-        write(funit,'(A)')".sphere 0 0 0 1.0"
-        write(funit,'(A)')".comment -- planes --"
-        write(funit,'(A)')".color 0.3 0.3 0.3"
-        write(funit,'(A)')".cylinder -0.02 0 0 0.02 0 0 1.02"
-        write(funit,'(A)')".cylinder 0 -0.02 0 0 0.02 0 1.02"
-        write(funit,'(A)')".cylinder 0 0 -0.02 0 0 0.02 1.02"
-        write(funit,'(A)')".comment -- x-axis --"
-        write(funit,'(A)')".color 1 0 0"
-        write(funit,'(A)')".cylinder -1.5 0 0 1.5 0 0 0.02"
-        write(funit,'(A)')".comment -- y-axis --"
-        write(funit,'(A)')".color 0 1 0"
-        write(funit,'(A)')".cylinder 0 -1.5 0 0 1.5 0 0.02"
-        write(funit,'(A)')".comment -- z-axis --"
-        write(funit,'(A)')".color 0 0 1"
-        write(funit,'(A)')".cylinder 0 0 -1.5 0 0 1.5 0.02"
-        ! body
-        write(funit,'(A)')".comment -- projection firections --"
-        write(funit,'(A)')".color 0.4 0.4 0.4"
-        do i = 1, p%nspace
-            if( pops(i) == 0 )cycle
-            scale     = real(pops(i)) / real(maxpop)
-            xyz_start = b%e%get_normal(i)
-            xyz_end   = (1.05 + scale/4.) * xyz_start
-            radius    = max(maxradius * scale, 0.002)
-            write(funit,'(A,F7.3,F7.3,F7.3,F7.3,F7.3,F7.3,F6.3)')&
-            &'.cylinder ', xyz_start, xyz_end, radius
-        enddo
-        close(funit)
+        if( .not.cline%defined('fbody') )then
+            fname = remove_abspath(trim(adjustl(p%oritab)))
+            ext   = trim(fname2ext(fname))
+            p%fbody = trim(get_fbody(trim(fname), trim(ext)))
+        endif
+        if( p%tseries.eq.'no' )then
+            ! Discretization of the projection directions
+            ! init
+            allocate(pops(p%nspace), source=0)
+            ang = 3.6 / sqrt(real(p%nsym*p%nspace))
+            maxradius = 0.75 * sqrt( (1.-cos(ang))**2. + sin(ang)**2. )
+            ! projection direction attribution
+            n = b%a%get_noris()
+            do i = 1, n
+                o = b%a%get_ori(i)
+                if(nint(o%get('state')) == 0 )cycle
+                call progress(i, n)
+                closest = b%e%find_closest_proj(o)
+                pops(closest) = pops(closest) + 1          
+            enddo        
+            maxpop = maxval(pops)
+            write(*,'(A,I6)')'>>> NUMBER OF POPULATED PROJECTION DIRECTIONS:', count(pops>0)
+            write(*,'(A,I6)')'>>> NUMBER OF EMPTY     PROJECTION DIRECTIONS:', count(pops==0)
+            ! output
+            fname = trim(p%fbody)//'.bild'
+            open(unit=funit, status='REPLACE', action='WRITE', file=trim(fname))
+            ! header
+            write(funit,'(A)')".translate 0.0 0.0 0.0"
+            write(funit,'(A)')".scale 10"
+            write(funit,'(A)')".comment -- unit sphere --"
+            write(funit,'(A)')".color 0.8 0.8 0.8"
+            write(funit,'(A)')".sphere 0 0 0 1.0"
+            write(funit,'(A)')".comment -- planes --"
+            write(funit,'(A)')".color 0.3 0.3 0.3"
+            write(funit,'(A)')".cylinder -0.02 0 0 0.02 0 0 1.02"
+            write(funit,'(A)')".cylinder 0 -0.02 0 0 0.02 0 1.02"
+            write(funit,'(A)')".cylinder 0 0 -0.02 0 0 0.02 1.02"
+            write(funit,'(A)')".comment -- x-axis --"
+            write(funit,'(A)')".color 1 0 0"
+            write(funit,'(A)')".cylinder -1.5 0 0 1.5 0 0 0.02"
+            write(funit,'(A)')".comment -- y-axis --"
+            write(funit,'(A)')".color 0 1 0"
+            write(funit,'(A)')".cylinder 0 -1.5 0 0 1.5 0 0.02"
+            write(funit,'(A)')".comment -- z-axis --"
+            write(funit,'(A)')".color 0 0 1"
+            write(funit,'(A)')".cylinder 0 0 -1.5 0 0 1.5 0.02"
+            ! body
+            write(funit,'(A)')".comment -- projection firections --"
+            write(funit,'(A)')".color 0.4 0.4 0.4"
+            do i = 1, p%nspace
+                if( pops(i) == 0 )cycle
+                scale     = real(pops(i)) / real(maxpop)
+                xyz_start = b%e%get_normal(i)
+                xyz_end   = (1.05 + scale/4.) * xyz_start
+                radius    = max(maxradius * scale, 0.002)
+                write(funit,'(A,F7.3,F7.3,F7.3,F7.3,F7.3,F7.3,F6.3)')&
+                &'.cylinder ', xyz_start, xyz_end, radius
+            enddo
+            close(funit)
+        else
+            ! time series visualization
+            allocate(euldists(n), stat=alloc_stat)
+            ! unit sphere tracking
+            fname  = trim(p%fbody)//'_motion.bild'
+            radius = 0.02
+            open(unit=funit, status='REPLACE', action='WRITE', file=trim(fname))
+            write(funit,'(A)')".translate 0.0 0.0 0.0"
+            write(funit,'(A)')".scale 1"
+            do i = 1, n
+                o   = b%a%get_ori(i)
+                xyz = o%get_normal()
+                col = real(i-1)/real(n-1)
+                write(funit,'(A,F6.2,F6.2)')".color 1.0 ", col, col
+                if( i==1 )then
+                    write(funit,'(A,F7.3,F7.3,F7.3,A)')".sphere ", xyz, " 0.08"
+                else
+                    vec = xyz - xyz_start
+                    if( sqrt(dot_product(vec, vec)) > 0.01 )then
+                        write(funit,'(A,F7.3,F7.3,F7.3,F7.3,F7.3,F7.3,F6.3)')&
+                        &'.cylinder ', xyz_start, xyz, radius
+                    endif
+                endif
+                xyz_start = xyz
+            enddo
+            write(funit,'(A,F7.3,F7.3,F7.3,A)')".sphere ", xyz, " 0.08"
+            close(funit)
+            ! distance output
+            fname  = trim(p%fbody)//'_motion.csv'
+            open(unit=funit, status='REPLACE', action='WRITE', file=trim(fname))
+            do i = 1, n
+                o = b%a%get_ori(i)
+                if( i==1 )then
+                    ang = 0.
+                else
+                    ang = rad2deg(o_prev.euldist.o)
+                endif
+                euldists(i) = ang
+                write(funit,'(I7,A1,F7.2)')i, ',', ang     
+                o_prev = o
+            enddo
+            close(funit)
+            ! movie output
+            ! setting Rprev to south pole as it where how chimera opens
+            call o_prev%new
+            call o_prev%mirror3d
+            Rprev = o_prev%get_mat()
+            fname = trim(p%fbody)//'_movie.cmd'
+            open(unit=funit, status='REPLACE', action='WRITE', file=trim(fname))
+            do i = 1, n
+                o  = b%a%get_ori(i)
+                Ri = o%get_mat()
+                R  = matmul(Ri,transpose(Rprev))
+                call rotmat2axis(R, axis)
+                if( abs(euldists(i)) > 0.01 )then
+                    if(i==1)then
+                        euldists(1) = rad2deg(o.euldist.o_prev)
+                        write(funit,'(A,A,A1,A,A1,A,A1,F8.2,A2)')&
+                        &'roll ', trim(real2str(axis(1))),',', trim(real2str(axis(2))),',', trim(real2str(axis(3))),' ',&
+                        &euldists(i), ' 1'
+                    else
+                        write(funit,'(A,A,A1,A,A1,A,A1,F8.2,A)')&
+                        &'roll ', trim(real2str(axis(1))),',', trim(real2str(axis(2))),',', trim(real2str(axis(3))),' ',&
+                        &euldists(i), ' 2; wait 2'
+                    endif
+                    o_prev = o
+                    Rprev  = Ri
+                endif
+            enddo
+            close(funit)
+        endif
         call simple_end('**** VIZORIS NORMAL STOP ****')
     end subroutine exec_vizoris
 

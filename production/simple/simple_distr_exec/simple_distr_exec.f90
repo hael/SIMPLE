@@ -3,7 +3,7 @@ program simple_distr_exec
 use simple_defs
 use simple_cmdline,      only: cmdline,cmdline_err
 use simple_strings,      only: str_has_substr
-use simple_filehandling, only: extract_abspath
+use simple_fileio,       only: extract_abspath
 use simple_gen_doc
 use simple_commander_stream_wflows
 use simple_commander_distr_wflows

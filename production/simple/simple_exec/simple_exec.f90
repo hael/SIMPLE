@@ -2167,9 +2167,10 @@ select case(prg)
         ! set optional keys
         keys_optional(1)  = 'nspace'
         keys_optional(2)  = 'pgrp'
+        keys_optional(3)  = 'tseries'
         ! parse command line
         !if( describe ) call print_doc_vizoris
-        call cline%parse( keys_required(:1), keys_optional(:2) )
+        call cline%parse( keys_required(:1), keys_optional(:3) )
         ! execute
         call xvizoris%execute(cline)
 
