@@ -93,7 +93,7 @@ contains
         end if
         if(present(iostat))iostat_this=iostat
         !! Default
-        write(action_this,'(A)') 'READ'
+        write(action_this,'(A)') 'READWRITE'
         write(status_this,'(A)') 'UNKNOWN'
         write(position_this,'(A)') 'APPEND'
         if (present(status))then
@@ -105,7 +105,7 @@ contains
         ! ACTION: READ, WRITE, or READWRITE.
         if (present(action))then
             if (stringsAreEqual(action, 'WRITE',.false.))  write(action_this ,'(A)') upperCase(action)
-            if (stringsAreEqual(action, 'READWRITE',.false.))  write(action_this ,'(A)') upperCase(action)
+            if (stringsAreEqual(action, 'READ',.false.))  write(action_this ,'(A)') upperCase(action)
         end if
         if ( (stringsAreEqual(status_this, 'NEW',.false.))  .and. &
              (stringsAreEqual(action_this, 'READ',.false.))  .and. &

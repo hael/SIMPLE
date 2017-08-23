@@ -24,7 +24,7 @@ character(len=300)    :: command
 call seed_rnd
 call date_and_time(date=date)
 folder = './SIMPLE_TEST_UNITS_'//date
-command = 'mkdir '//folder
+command = 'mkdir '//folder//'|| true'
 call exec_cmdline( trim(command) )
 call chdir(folder)
 call test_cmd_dict           ! pass with PGI

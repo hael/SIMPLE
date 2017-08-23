@@ -53,7 +53,7 @@ contains
             call cline%set('fbody', trim(p_master%dir_target)//'/')
         endif
         ! make target directory
-        call exec_cmdline('mkdir -p '//trim(adjustl(p_master%dir_target)))
+        call exec_cmdline('mkdir -p '//trim(adjustl(p_master%dir_target))//'|| true')
         ! setup the environment for distributed execution
         call qenv%new(p_master, stream=.true.)
         ! movie watcher init

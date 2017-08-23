@@ -470,7 +470,7 @@ contains
         character(len=line_max_len)  :: buffer !< will hold a line from the file
         character(len=512)           :: io_msg !< will hold the io error message
         integer :: ios, pos, funit
-        if(.not.fopen(funit, file=fname, iostat=ios, status='replace', iomsg=io_msg))then
+        if(.not.fopen(funit, fname, iostat=ios, status='replace', iomsg=io_msg))then
             call fileio_errmsg('simple_chash :: write; Error when opening file for writing: '&
             //trim(fname)//' ; '//trim(io_msg), ios)
         endif

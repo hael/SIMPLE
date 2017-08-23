@@ -176,7 +176,7 @@ contains
             cnt    = cnt + 1
             call progress(cnt,ntot)
             call os%new(p%chunksz)
-            call exec_cmdline('mkdir -p '//'tseries_chunk'//int2str_pad(cnt,numlen))
+            call exec_cmdline('mkdir -p '//'tseries_chunk'//int2str_pad(cnt,numlen)//'|| true')
             allocate( stkname, source='./tseries_chunk'//int2str_pad(cnt,numlen)//'/imgs'//p%ext )
             allocate( oriname, source='tseries_chunk'//int2str_pad(cnt,numlen)//'/oris'//'.txt' )
             call del_file( stkname )

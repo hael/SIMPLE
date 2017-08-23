@@ -17,7 +17,7 @@ character(len=300)    :: command
 call seed_rnd
 call date_and_time(date=date)
 folder = trim('./SIMPLE_TEST_INSTALL_'//date)
-command = 'mkdir ' // trim( folder )
+command = 'mkdir ' // trim( folder )//'|| true'
 call exec_cmdline( trim(command) )
 call chdir( trim(folder) )
 ! dummy data

@@ -565,11 +565,11 @@ contains
         if( sz_chash > 0 ) str_chtab = self%chtab%chash2str()
         if( sz_hash  > 0 ) str_htab  = self%htab%hash2str()
         if( sz_chash > 0 .and. sz_hash > 0 )then
-            allocate( str, source=str_chtab//' '//str_htab ,stat = alloc_stat)
+            allocate( str, source=str_chtab//' '//str_htab ,stat=alloc_stat)
         else if( sz_hash > 0 )then
-            allocate( str, source=str_htab ,stat = alloc_stat)
+            allocate( str, source=str_htab ,stat=alloc_stat)
         else if( sz_chash > 0 )then
-            allocate( str, source=str_chtab ,stat = alloc_stat)
+            allocate( str, source=str_chtab ,stat=alloc_stat)
         endif
         call alloc_errchk("in simple_ori::ori2str ",alloc_stat)
     end function ori2str
@@ -1158,6 +1158,7 @@ contains
         adist = adist/real(NTESTS)
         print *, 'average distance for spatial extremes: ', adist, ' maxdist: ',&
         frob_lim, ' frac_of_max: ', 100*(adist/frob_lim), ' %'
+        write(*,'(a)') 'SIMPLE_ORI_DISTS_UNIT_TEST COMPLETED SUCCESSFULLY ;-)'
     end subroutine test_ori_dists
 
     !>  \brief  is the unit test for the ori class

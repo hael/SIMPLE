@@ -110,7 +110,7 @@ contains
                 stop 'need references for picker or turn off picking with dopick=no'
             endif
             dir_ptcls = trim(p%dir_target)//'/particles/'
-            call exec_cmdline('mkdir -p '//trim(adjustl(dir_ptcls)))
+            call exec_cmdline('mkdir -p '//trim(adjustl(dir_ptcls))//'|| true')
         endif
         call read_filetable(p%filetab, movienames)
         nmovies = size(movienames)
@@ -700,8 +700,8 @@ contains
             !if( ios /= 0 )then
             !    HALT("In exec_select; simple_commander_preproc Error opening file name"//trim(adjustl(p%outfile)) )
             !endif
-            call exec_cmdline('mkdir -p '//trim(adjustl(p%dir_select)))
-            call exec_cmdline('mkdir -p '//trim(adjustl(p%dir_reject)))
+            call exec_cmdline('mkdir -p '//trim(adjustl(p%dir_select))//'|| true')
+            call exec_cmdline('mkdir -p '//trim(adjustl(p%dir_reject))//'|| true')
             ! write outoput & move files
             do iimg=1,nall
                 if( lselected(iimg) )then
