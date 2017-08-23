@@ -50,9 +50,9 @@ contains
         endif
         ! establish input file handler
         call bos%open(fname)
- 
-!!!!!!!!!!!!!!! 2 BE CONTINUED
- 
+        
+    !!!!!!!!!!!!!!! 2 BE CONTINUED
+
     end subroutine binread_oritab_2
  
     subroutine binread_ctfparams_and_state( fname, a, fromto )

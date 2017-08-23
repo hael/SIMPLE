@@ -263,7 +263,7 @@ contains
         character(len=1) :: junk
         if( file_exists(fname) )then
             tfile=fname
-            if(.not.fopen(funit, tfile, status='unknown', action='write', iostat=io_status))then
+            if(.not.fopen(funit, tfile, status='unknown', action='read', iostat=io_status))then
                 call fileio_errmsg(":nlines error opening file "//trim(tfile), io_status)
             end if
             n = 0
