@@ -29,6 +29,7 @@ public :: prime3D_distr_commander
 public :: recvol_distr_commander
 public :: tseries_track_distr_commander
 public :: symsrch_distr_commander
+public :: scale_stk_parts_commander
 private
 
 type, extends(commander_base) :: unblur_ctffind_distr_commander
@@ -91,6 +92,10 @@ type, extends(commander_base) :: symsrch_distr_commander
   contains
     procedure :: execute      => exec_symsrch_distr
 end type symsrch_distr_commander
+type, extends(commander_base) :: scale_stk_parts_commander
+  contains
+    procedure :: execute      => exec_scale_stk_parts
+end type scale_stk_parts_commander
 
 integer, parameter :: KEYLEN=32
 
@@ -336,10 +341,7 @@ contains
             call cline_cavgassemble%set('oritab', 'prime2D_startdoc.txt')
         endif
         ! split stack
-        if( stack_is_split(p_master%stk_part_fbody, p_master%ext, qenv%parts, p_master%box) )then
-        else
-            call xsplit%execute(cline)
-        endif
+         call xsplit%execute(cline)
         ! schedule
         call qenv%gen_scripts_and_schedule_jobs(p_master, job_descr)
         ! assemble class averages
@@ -419,10 +421,7 @@ contains
         if( job_descr%isthere('automsk') ) call job_descr%delete('automsk')
 
         ! split stack
-        if( stack_is_split(p_master%stk_part_fbody, p_master%ext, qenv%parts, p_master%box) )then
-        else
-            call xsplit%execute(cline)
-        endif
+        call xsplit%execute(cline)
         ! execute initialiser
         if( .not. cline%defined('refs') )then
             p_master%refs = 'start2Drefs'//p_master%ext
@@ -430,7 +429,8 @@ contains
                 call cline_makecavgs%set('refs', p_master%refs)
                 call xmakecavgs%execute(cline_makecavgs)
             else
-                call random_selection_from_imgfile(p_master%stk, p_master%refs, p_master%ncls, p_master%smpd)               
+                call random_selection_from_imgfile(p_master%stk, p_master%refs,&
+                    &p_master%ncls, p_master%box, p_master%smpd)             
             endif
         endif
         ! extremal dynamics
@@ -448,10 +448,11 @@ contains
             write(*,'(A)')   '>>>'
             write(*,'(A,I6)')'>>> ITERATION ', iter
             write(*,'(A)')   '>>>'
-            ! cosine cooling of the randomization rate
+            ! cooling of the randomization rate
             p_master%extr_iter = p_master%extr_iter + 1
             call job_descr%set('extr_iter', trim(int2str(p_master%extr_iter)))
             call cline%set('extr_iter', real(p_master%extr_iter))
+            ! updates
             if( oritab .ne. '' ) call job_descr%set('oritab',  trim(oritab))
             call job_descr%set('refs',    trim(refs))
             call job_descr%set('startit', int2str(iter))
@@ -550,7 +551,11 @@ contains
             chunktag = 'chunk'//int2str_pad(ipart,numlen)
             call part_params(ipart)%set('chunk',    int2str(ipart))
             call part_params(ipart)%set('chunktag', chunktag)
-            call part_params(ipart)%set('stk', trim(p_master%stk_part_fbody)//int2str_pad(ipart,numlen)//p_master%ext)
+            if( p_master%autoscale .eq. 'yes' )then
+                call part_params(ipart)%set('stk', trim(STKPARTFBODY_SC)//int2str_pad(ipart,numlen)//p_master%ext)
+            else
+                call part_params(ipart)%set('stk', trim(STKPARTFBODY)//int2str_pad(ipart,numlen)//p_master%ext)
+            endif
             if( cline%defined('deftab') )then
                 call read_part_and_write(qenv%parts(ipart,:), p_master%deftab, trim(chunktag)//'deftab.txt')
                 call part_params(ipart)%set('deftab', trim(chunktag)//'deftab.txt')
@@ -562,10 +567,7 @@ contains
             endif
         end do
         ! split stack
-        if( stack_is_split(p_master%stk_part_fbody, p_master%ext, qenv%parts, p_master%box) )then
-        else
-            call xsplit%execute(cline)
-        endif
+        call xsplit%execute(cline)
         ! schedule & clean
         write(*,'(A)') '>>>'
         write(*,'(A)') '>>> EXECUTING PRIME2D IN CHUNK-BASED DISTRIBUTION MODE'
@@ -698,10 +700,7 @@ contains
             vol = trim('startvol_state01'//p_master%ext)
         endif
         ! split stack
-        if( stack_is_split(p_master%stk_part_fbody, p_master%ext, qenv%parts, p_master%box) )then
-        else
-            call xsplit%execute(cline)
-        endif
+        call xsplit%execute(cline)
         ! prepare command lines from prototype master
         cline_volassemble = cline
         call cline_volassemble%set( 'outvol',  vol                  )
@@ -811,10 +810,7 @@ contains
             call cline_volassemble%delete( trim(vol) )
         enddo
         ! SPLIT STACK
-        if( stack_is_split(p_master%stk_part_fbody, p_master%ext, qenv%parts, p_master%box) )then
-        else
-            call xsplit%execute(cline)
-        endif
+        call xsplit%execute(cline)
         ! GENERATE STARTING MODELS & ORIENTATIONS
         ! Orientations
         if( cline%defined('oritab') )then
@@ -1114,10 +1110,7 @@ contains
             call cline_volassemble%delete( trim(vol) )
         enddo
         ! SPLIT STACK
-        if( stack_is_split(p_master%stk_part_fbody, p_master%ext, qenv%parts, p_master%box) )then
-        else
-            call xsplit%execute(cline)
-        endif
+        call xsplit%execute(cline)
         ! GENERATE STARTING MODELS & ORIENTATIONS
         ! Orientations
         oritab=trim(p_master%oritab)
@@ -1271,10 +1264,7 @@ contains
         call qenv%new(p_master)
         call cline%gen_job_descr(job_descr)
         ! split stack
-        if( stack_is_split(p_master%stk_part_fbody, p_master%ext, qenv%parts, p_master%box) )then
-        else
-            call xsplit%execute(cline)
-        endif
+        call xsplit%execute(cline)
         ! schedule
         call qenv%gen_scripts_and_schedule_jobs(p_master, job_descr)
         ! assemble volumes
@@ -1496,5 +1486,39 @@ contains
         call qsys_cleanup(p_master)
         call simple_end('**** SIMPLE_SYMSRCH NORMAL STOP ****')
     end subroutine exec_symsrch_distr
+
+    subroutine exec_scale_stk_parts( self, cline )
+        class(scale_stk_parts_commander), intent(inout) :: self
+        class(cmdline),                   intent(inout) :: cline
+        type(qsys_env)           :: qenv
+        type(params)             :: p_master
+        type(chash)              :: job_descr
+        type(chash), allocatable :: part_params(:)
+        integer :: ipart
+        ! output command line executed
+        write(*,'(a)') '>>> COMMAND LINE EXECUTED'
+        write(*,*) trim(cmdline_glob)
+        ! make master parameters
+        p_master = params(cline)
+        ! prepare part-dependent parameters
+        allocate(part_params(p_master%nparts))
+        do ipart=1,p_master%nparts
+            call part_params(ipart)%new(2)
+            call part_params(ipart)%set('stk',    trim(STKPARTFBODY)//int2str_pad(ipart,p_master%numlen)//p_master%ext)
+            call part_params(ipart)%set('outstk', trim(STKPARTFBODY_SC)//int2str_pad(ipart,p_master%numlen)//p_master%ext)
+        end do
+        ! setup the environment for distributed execution
+        call qenv%new(p_master)
+        ! prepare job description
+        call cline%gen_job_descr(job_descr)
+        call job_descr%set('prg', 'scale')
+        call job_descr%set('autoscale', 'no')
+        ! schedule & clean
+        call qenv%gen_scripts_and_schedule_jobs(p_master, job_descr, part_params=part_params)
+        ! clean
+        call qsys_cleanup(p_master)
+        ! end gracefully
+        call simple_end('**** SIMPLE_DISTR_SCALE_STK_PARTS NORMAL STOP ****')
+    end subroutine exec_scale_stk_parts
 
 end module simple_commander_distr_wflows

@@ -24,7 +24,7 @@ contains
         call chdict%push('async',         'asynchronous mode of operation(yes|no){no}')
         call chdict%push('athres',        'angular threshold(in degrees)')
         call chdict%push('automsk',       'envelope masking(yes|no|cavg){no}')
-        call chdict%push('autoscale',     'automatic down-scaling(yes|no){yes}')
+        call chdict%push('autoscale',     'automatic down-scaling(yes|no)')
         call chdict%push('avg',           'calculate average(yes|no)')
         call chdict%push('bfac',          'bfactor for sharpening/low-pass filtering(in A**2){200.}')
         call chdict%push('bfacerr',       'bfactor error in simulated images(in A**2){0}')

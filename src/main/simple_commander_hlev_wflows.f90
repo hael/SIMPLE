@@ -7,6 +7,7 @@ use simple_commander_base, only: commander_base
 use simple_qsys_env,       only: qsys_env
 use simple_commander_distr_wflows ! use all in there
 use simple_fileio                 ! use all in there
+use simple_commander_distr        ! use all in 
 use simple_jiffys                 ! use all in there
 implicit none
 
@@ -41,9 +42,9 @@ contains
         ! constants
         integer,           parameter :: MAXITS_STAGE1   = 10
         character(len=32), parameter :: CAVGS_ITERFBODY = 'cavgs_iter'
-        character(len=32), parameter :: STKSCALEDBODY   = 'stk_sc_prime2D'
         character(len=32), parameter :: FINALDOC        = 'prime2Ddoc_final.txt'
         ! commanders
+        type(split_commander)                        :: xsplit
         type(makecavgs_distr_commander)              :: xmakecavgs
         type(prime2D_distr_commander),       target  :: xprime2D_distr
         type(prime2D_chunk_distr_commander), target  :: xprime2D_chunk_distr
@@ -67,16 +68,19 @@ contains
         if( cline%defined('chunksz') )then
             nparts = nint(real(p_master%nptcls)/real(p_master%chunksz))
             xprime2D => xprime2D_chunk_distr
+            call cline%set('nparts', real(nparts))
         else
             nparts = p_master%nparts
             xprime2D => xprime2D_distr
         endif
+        ! split stack
+        call xsplit%execute(cline)
         if( p_master%l_autoscale )then
             ! auto-scaling prep (cline is modified by scobj%init)
-            call scobj%init(p_master, cline, p_master%smpd_targets2D(1), STKSCALEDBODY)
+            call scobj%init(p_master, cline, p_master%smpd_targets2D(1))
             scale_stage1 = scobj%get_scaled_var('scale')
-            ! scale images
-            call scobj%scale_exec
+            ! scale images in parallel
+            call scobj%scale_distr_exec
             ! execute stage 1
             cline_prime2D_stage1 = cline
             call cline_prime2D_stage1%delete('automsk') ! deletes possible automsk flag from stage 1
@@ -84,9 +88,9 @@ contains
             call xprime2D%execute(cline_prime2D_stage1)
             ! prepare stage 2 input -- re-scale
             call scobj%uninit(cline) ! puts back the old command line
-            call scobj%init(p_master, cline, p_master%smpd_targets2D(2), STKSCALEDBODY)
+            call scobj%init(p_master, cline, p_master%smpd_targets2D(2))
             scale_stage2 = scobj%get_scaled_var('scale')
-            call scobj%scale_exec
+            call scobj%scale_distr_exec
             ! prepare stage 2 input -- shift modulation
             call os%new(p_master%nptcls)
             call os%read(FINALDOC)
@@ -102,12 +106,15 @@ contains
             call cline_prime2D_stage2%set('oritab',  trim(FINALDOC))
             call cline_prime2D_stage2%set('startit', real(MAXITS_STAGE1 + 1))
             call xprime2D%execute(cline_prime2D_stage2)
+            ! delete downscaled stack parts (we are done with them)
+            call del_files(trim(STKPARTFBODY_SC), p_master%nparts, ext=p_master%ext)
             ! re-generate class averages at native sampling
             call scobj%uninit(cline) ! puts back the old command line
             call os%read(FINALDOC)
             call os%mul_shifts(1./scale_stage2)
             call os%write(FINALDOC)
             cline_makecavgs = cline
+            call cline_makecavgs%delete('autoscale')
             call cline_makecavgs%delete('balance')
             call cline_makecavgs%delete('chunksz')
             if( p_master%l_chunk_distr )then
@@ -118,11 +125,9 @@ contains
             call cline_makecavgs%set('nparts',  real(nparts))
             call cline_makecavgs%set('refs',    'cavgs_final'//p_master%ext)
             call xmakecavgs%execute(cline_makecavgs)
-            call del_file(trim(STKSCALEDBODY)//p_master%ext)
         else
             call xprime2D%execute(cline)
         endif
-        call cline_rank_cavgs%printline
         ! ranking
         call cline_rank_cavgs%set('oritab', trim(FINALDOC))
         call cline_rank_cavgs%set('stk',    'cavgs_final'//p_master%ext)
@@ -187,7 +192,8 @@ contains
         ! set global state string
         str_state = int2str_pad(STATE,2)
         ! delete possibly pre-existing stack_parts
-        call del_files(trim(p_master%stk_part_fbody), p_master%nparts, ext=p_master%ext)
+        call del_files(STKPARTFBODY, p_master%nparts, ext=p_master%ext)
+        call del_files(STKPARTFBODY_SC, p_master%nparts, ext=p_master%ext)
         ! decide wether to search for the symmetry axis or put the point-group in from the start
         ! if the point-group is considered known, it is put in from the start
         srch4symaxis = .false.
@@ -430,7 +436,8 @@ contains
         p_master = params(cline, checkdistr=.false.)
 
         ! delete possibly pre-existing stack & pft parts
-        call del_files(trim(p_master%stk_part_fbody), p_master%nparts, ext=p_master%ext)
+        call del_files(STKPARTFBODY, p_master%nparts, ext=p_master%ext)
+        call del_files(STKPARTFBODY_SC, p_master%nparts, ext=p_master%ext)
         call del_files('ppfts_memoized_part', p_master%nparts, ext='.bin')
 
         ! prepare command lines from prototype master

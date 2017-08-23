@@ -14,6 +14,7 @@ type :: scaler
     type(cmdline)         :: cline_scale
     character(len=STDLEN) :: native_stk, stk_sc
     real                  :: native_smpd, native_msk, smpd_sc, scale, msk_sc
+    logical               :: stkname_changed
     integer               :: native_box, box_sc, nptcls
   contains
     ! init/uninit
@@ -21,6 +22,7 @@ type :: scaler
     procedure :: uninit
     ! exec
     procedure :: scale_exec
+    procedure :: scale_distr_exec
     ! getters
     procedure :: update_smpd_msk
     procedure :: update_stk_smpd_msk
@@ -33,59 +35,60 @@ contains
     subroutine init( self, p_master, cline, smpd_target, stkscaledbody )
         use simple_magic_boxes, only: autoscale
         use simple_params,      only: params
-        class(scaler)    :: self
-        class(params)    :: p_master
-        class(cmdline)   :: cline
-        real             :: smpd_target
-        character(len=*) :: stkscaledbody
-        self%native_stk  = p_master%stk
-        self%native_smpd = p_master%smpd
-        self%native_msk  = p_master%msk
-        self%native_box  = p_master%box
-        self%nptcls      = p_master%nptcls
-        self%cline_scale = cline
+        class(scaler)              :: self
+        class(params)              :: p_master
+        class(cmdline)             :: cline
+        real                       :: smpd_target
+        character(len=*), optional :: stkscaledbody
+        self%stkname_changed = present(stkscaledbody)
+        self%native_stk      = p_master%stk
+        self%native_smpd     = p_master%smpd
+        self%native_msk      = p_master%msk
+        self%native_box      = p_master%box
+        self%nptcls          = p_master%nptcls
+        self%cline_scale     = cline
         call autoscale(p_master%box, p_master%smpd,&
         &smpd_target, self%box_sc, self%smpd_sc, self%scale)
         self%msk_sc = self%scale * p_master%msk
-        self%stk_sc = trim(stkscaledbody)//p_master%ext
+        if( self%stkname_changed )then
+            self%stk_sc = trim(stkscaledbody)//p_master%ext
+            call self%cline_scale%set('outstk', trim(self%stk_sc))
+            call cline%set('stk',  trim(self%stk_sc))
+        endif
         call self%cline_scale%set('newbox', real(self%box_sc))
-        call self%cline_scale%set('outstk', trim(self%stk_sc))
-        call cline%set('stk',  trim(self%stk_sc))
-        call cline%set('smpd', self%smpd_sc)
-        call cline%set('msk',  self%msk_sc)
+        call cline%set('smpd',      self%smpd_sc)
+        call cline%set('msk',       self%msk_sc)
     end subroutine init
 
     subroutine uninit( self, cline )
         class(scaler)  :: self
         class(cmdline) :: cline
-        call cline%set('stk',  trim(self%native_stk))
+        if( self%stkname_changed )  call cline%set('stk',  trim(self%native_stk))
         call cline%set('smpd', self%native_smpd)
-        call cline%set('msk',  self%native_msk)        
+        call cline%set('msk',  self%native_msk)
     end subroutine uninit
 
     subroutine scale_exec( self )
         use simple_commander_imgproc, only: scale_commander
-        use simple_fileio      ,      only: file_exists
-        use simple_imgfile,           only: has_ldim_nptcls
         class(scaler)         :: self
         type(scale_commander) :: xscale
         logical :: doscale
-        if( file_exists(trim(self%stk_sc)) )then
-            if( has_ldim_nptcls(self%stk_sc, [self%box_sc,self%box_sc,1], self%nptcls) )then
-                doscale = .false.
-            else
-                doscale = .true.
-            endif
-        else
-            doscale = .true.
-        endif
-        if( doscale )then
-            write(*,'(A)') '>>>'
-            write(*,'(A)') '>>> AUTO-SCALING IMAGES'
-            write(*,'(A)') '>>>'
-            call xscale%execute(self%cline_scale)
-        endif
+        write(*,'(A)') '>>>'
+        write(*,'(A)') '>>> AUTO-SCALING IMAGES'
+        write(*,'(A)') '>>>'
+        call xscale%execute(self%cline_scale)
     end subroutine scale_exec
+
+    subroutine scale_distr_exec( self )
+        use simple_commander_distr_wflows, only: scale_stk_parts_commander
+        class(scaler)                   :: self
+        type(scale_stk_parts_commander) :: xscale_distr
+        logical :: doscale
+        write(*,'(A)') '>>>'
+        write(*,'(A)') '>>> AUTO-SCALING IMAGES'
+        write(*,'(A)') '>>>'
+        call xscale_distr%execute(self%cline_scale)
+    end subroutine scale_distr_exec
 
     subroutine update_smpd_msk( self, cline, which )
         class(scaler)    :: self
@@ -110,11 +113,11 @@ contains
         character(len=*) :: which
         select case(which)
             case('scaled')
-                call cline%set('stk',  self%stk_sc)
+                if( self%stkname_changed ) call cline%set('stk',  self%stk_sc)
                 call cline%set('smpd', self%smpd_sc)
                 call cline%set('msk',  self%msk_sc)
             case('native')
-                call cline%set('stk',  self%native_stk)
+                if( self%stkname_changed ) call cline%set('stk',  self%native_stk)
                 call cline%set('smpd', self%native_smpd)
                 call cline%set('msk',  self%native_msk)
             case DEFAULT

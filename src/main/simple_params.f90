@@ -6,8 +6,8 @@ use simple_ori,         only: ori
 use simple_cmdline,     only: cmdline
 use simple_magic_boxes, only: find_magic_box
 use simple_strings      ! use all in there
-use simple_fileio,       only: fopen, fclose, fileio_errmsg
-use simple_imgfile,      only: find_ldim_nptcls
+use simple_fileio,      only: fopen, fclose, fileio_errmsg
+use simple_imgfile,     only: find_ldim_nptcls
 implicit none
 
 public :: params
@@ -22,7 +22,7 @@ type :: params
     character(len=3)      :: acf='no'             !< calculate autocorrelation function(yes|no){no}
     character(len=3)      :: append='no'          !< append in context of files(yes|no){no}
     character(len=3)      :: async='no'           !< asynchronous (yes|no){no}
-    character(len=3)      :: autoscale='yes'      !< automatic down-scaling(yes|no){yes}
+    character(len=3)      :: autoscale='no'       !< automatic down-scaling(yes|no){yes}
     character(len=3)      :: avg='no'             !< calc average automatic (yes|no){no}
     character(len=3)      :: bin='no'             !< binarise image(yes|no){no}
     character(len=3)      :: center='yes'         !< center image(s)/class average(s)/volume(s)(yes|no){no}
@@ -144,7 +144,6 @@ type :: params
     character(len=STDLEN) :: speckind='sqrt'      !< power spectrum kind(amp|square|phase|real|log|sqrt){sqrt}
     character(len=STDLEN) :: split_mode='even'
     character(len=STDLEN) :: stk_part=''
-    character(len=STDLEN) :: stk_part_fbody='stack_part'
     character(len=STDLEN) :: stk=''               !< particle stack with all images(ptcls.ext)
     character(len=STDLEN) :: stk2=''              !< 2nd stack(in map2ptcls/select: selected(cavgs).ext)
     character(len=STDLEN) :: stk3=''              !< 3d stack (in map2ptcls/select: (cavgs)2selectfrom.ext)
@@ -497,7 +496,6 @@ contains
         call check_carg('soften',         self%soften)
         call check_carg('speckind',       self%speckind)
         call check_carg('stats',          self%stats)
-        call check_carg('stk_part_fbody', self%stk_part_fbody)
         call check_carg('stream',         self%stream)
         call check_carg('swap',           self%swap)
         call check_carg('test',           self%test)
@@ -742,26 +740,20 @@ contains
                 end do
             endif
         endif
+        ! no stack given, get ldim from volume if present
         if( self%stk .eq. '' .and. self%vols(1) .ne. '' )then
             call find_ldim_nptcls(self%vols(1), self%ldim, ifoo, endconv=conv)
             self%box  = self%ldim(1)
             DebugPrint 'found logical dimension of volume: ', self%ldim
         endif
+        ! take care of nptcls
         if( self%stk .ne. '' )then
             if( file_exists(self%stk) )then
-                if( cline%defined('box') )then
-                else
-                    call find_ldim_nptcls(self%stk, self%ldim, ifoo, endconv=conv)
-                    self%ldim(3) = 1
-                    DebugPrint 'found logical dimension of stack: ', self%ldim
-                    self%box     = self%ldim(1)
-                endif
                 if( .not. cline%defined('nptcls') )then
                     ! get number of particles from stack
-                     call find_ldim_nptcls(self%stk, self%ldim, self%nptcls, endconv=conv)
-                     DebugPrint 'found logical dimension of stack: ', self%ldim
+                     call find_ldim_nptcls(self%stk, lfoo, self%nptcls, endconv=conv)
+                     DebugPrint 'found logical dimension of stack: ', lfoo
                      DebugPrint 'found nr of ptcls from stack: ', self%nptcls
-                     self%ldim(3) = 1
                 endif
             else
                 write(*,'(a,1x,a)') 'Inputted stack file does not exist!', trim(self%stk)
@@ -829,17 +821,23 @@ contains
             if( nparts_set ) self%numlen = len(int2str(self%nparts))
         endif
         ! set name of partial files in parallel execution
-        if( self%numlen > 0 )then
-            self%stk_part = trim(self%stk_part_fbody)//int2str_pad(self%part,self%numlen)//self%ext
+        if( self%autoscale .eq. 'yes' )then
+            self%stk_part = trim(STKPARTFBODY_SC)//int2str_pad(self%part,self%numlen)//self%ext
         else
-            self%stk_part = trim(self%stk_part_fbody)//int2str(self%part)//self%ext
+            self%stk_part = trim(STKPARTFBODY)//int2str_pad(self%part,self%numlen)//self%ext
+        endif
+        ! set logical dimension
+        if( file_exists(self%stk_part) .and. cline%defined('nparts') )then
+            call set_ldim_box_from_stk( self%stk_part )
+        else
+            call set_ldim_box_from_stk( self%stk )
         endif
         ! Check for the existance of this file if part is defined on the command line
         if( cline%defined('part') )then
             if( ccheckdistr )then
                 if(trim(self%prg).eq.'simple_symsrch')then
                     ! no need for split stack with prg=symsrch
-                elseif( .not. file_exists(self%stk_part) )then
+                else if( .not. file_exists(self%stk_part) )then
                     write(*,*) 'Need partial stacks to be generated for parallel execution'
                     write(*,*) 'Use simple_exec prg=split'
                     stop
@@ -1034,195 +1032,216 @@ contains
 
         contains
 
-          subroutine check_vol( i )
-              integer, intent(in) :: i
-              character(len=STDLEN) :: nam
-              nam = 'vol'//int2str(i)
-              if( cline%defined(nam) )then
-                  call check_file(nam, self%vols(i), notAllowed='T')
-                  if( .not. file_exists(self%vols(i)) )then
-                      write(*,*) 'Input volume:', self%vols(i), 'does not exist!'
-                      stop
-                  endif
-                  DebugPrint nam, '=', self%vols(i)
-              endif
-          end subroutine check_vol
+            subroutine check_vol( i )
+                integer, intent(in) :: i
+                character(len=STDLEN) :: nam
+                nam = 'vol'//int2str(i)
+                if( cline%defined(nam) )then
+                    call check_file(nam, self%vols(i), notAllowed='T')
+                    if( .not. file_exists(self%vols(i)) )then
+                        write(*,*) 'Input volume:', self%vols(i), 'does not exist!'
+                        stop
+                    endif
+                    DebugPrint nam, '=', self%vols(i)
+                endif
+            end subroutine check_vol
 
-          subroutine read_vols
-              character(len=STDLEN) :: filenam, nam
-              integer :: nl, fnr, i, io_stat
-              filenam = cline%get_carg('vollist')
-              nl = nlines(filenam)
-              if(.not.fopen(fnr, file=filenam, iostat=io_stat))&
-                   call fileio_errmsg("params ; read_vols error opening "//trim(filenam), io_stat)
-              do i=1,nl
-                  read(fnr,*) nam
-                  if( nam .ne. '' )then
-                      self%vols(i) = nam
-                      !self%nstates = i
-                  endif
-              end do
-              if(.not.fclose(fnr, iostat=io_stat))&
-                   call fileio_errmsg("params ; read_vols error closing "//trim(filenam), io_stat)
-          end subroutine read_vols
+            subroutine read_vols
+                character(len=STDLEN) :: filenam, nam
+                integer :: nl, fnr, i, io_stat
+                filenam = cline%get_carg('vollist')
+                nl = nlines(filenam)
+                if(.not.fopen(fnr, file=filenam, iostat=io_stat))&
+                    call fileio_errmsg("params ; read_vols error opening "//trim(filenam), io_stat)
+                do i=1,nl
+                    read(fnr,*) nam
+                    if( nam .ne. '' )then
+                        self%vols(i) = nam
+                    endif
+                end do
+                if(.not.fclose(fnr, iostat=io_stat))&
+                call fileio_errmsg("params ; read_vols error closing "//trim(filenam), io_stat)
+            end subroutine read_vols
 
-          subroutine check_file( file, var, allowed1, allowed2, notAllowed )
-              character(len=*),           intent(in)  :: file
-              character(len=*),           intent(out) :: var
-              character(len=1), optional, intent(in)  :: allowed1, allowed2, notAllowed
-              character(len=1) :: file_descr
-              logical          :: raise_exception
-              if( cline%defined(file) )then
-                  var = cline%get_carg(file)
-                  DebugPrint 'var = ', var
-                  file_descr = fname2format(var)
-                  DebugPrint 'file_descr = ', file_descr
-                  raise_exception = .false.
-                  if( present(allowed1) )then
-                      if( present(allowed2) )then
-                          if( allowed1 == file_descr .or. allowed2 == file_descr ) then
-                              ! all good
-                          else
-                              raise_exception = .true.
-                          endif
-                      else
-                          raise_exception = .true.
-                      endif
-                  endif
-                  if( present(notAllowed) )then
-                      if( notAllowed == file_descr ) raise_exception = .true.
-                  endif
-                  if( raise_exception )then
-                      write(*,*) 'This format: ', file_descr, ' is not allowed for this file: ', var
-                      stop
-                  endif
-                  select case(file_descr)
-                      case ('I')
-                          stop 'Support for IMAGIC files is not yet implemented!'
-                      case ('M')
-                          ! MRC files are supported
-                          cntfile = cntfile+1
-                          checkupfile(cntfile) = 'M'
-                      case ('S')
-                          ! SPIDER files are supported
-                          cntfile = cntfile+1
-                          checkupfile(cntfile) = 'S'
-                      case ('N')
-                          stop 'This file format is not supported by SIMPLE; simple_params::check_file'
-                      case ('T')
-                          ! text files are supported
-                      case ('B')
-                          ! binary files are supported
-                      case DEFAULT
-                          stop 'This file format is not supported by SIMPLE; simple_params::check_file'
-                  end select
-                  DebugPrint file, '=', var
-              endif
-          end subroutine check_file
+            subroutine check_file( file, var, allowed1, allowed2, notAllowed )
+                character(len=*),           intent(in)  :: file
+                character(len=*),           intent(out) :: var
+                character(len=1), optional, intent(in)  :: allowed1, allowed2, notAllowed
+                character(len=1) :: file_descr
+                logical          :: raise_exception
+                if( cline%defined(file) )then
+                    var = cline%get_carg(file)
+                    DebugPrint 'var = ', var
+                    file_descr = fname2format(var)
+                    DebugPrint 'file_descr = ', file_descr
+                    raise_exception = .false.
+                    if( present(allowed1) )then
+                        if( present(allowed2) )then
+                            if( allowed1 == file_descr .or. allowed2 == file_descr )then
+                                ! all good
+                            else
+                                raise_exception = .true.
+                            endif
+                        else
+                            if( allowed1 /= file_descr ) raise_exception = .true.
+                        endif
+                    endif
+                    if( present(notAllowed) )then
+                        if( notAllowed == file_descr ) raise_exception = .true.
+                    endif
+                    if( raise_exception )then
+                        write(*,*) 'This format: ', file_descr, ' is not allowed for this file: ', var
+                        stop
+                    endif
+                    select case(file_descr)
+                        case ('I')
+                            stop 'Support for IMAGIC files is not yet implemented!'
+                        case ('M')
+                            ! MRC files are supported
+                            cntfile = cntfile+1
+                            checkupfile(cntfile) = 'M'
+                        case ('S')
+                            ! SPIDER files are supported
+                            cntfile = cntfile+1
+                            checkupfile(cntfile) = 'S'
+                        case ('N')
+                            write(*,*) 'file: ', trim(file)
+                            stop 'This file format is not supported by SIMPLE; simple_params::check_file'
+                        case ('T')
+                            ! text files are supported
+                        case ('B')
+                            ! binary files are supported
+                        case DEFAULT
+                            write(*,*) 'file: ', trim(file)
+                            stop 'This file format is not supported by SIMPLE; simple_params::check_file'
+                    end select
+                    DebugPrint file, '=', var
+                endif
+            end subroutine check_file
 
-          subroutine check_file_formats( allow_mix )
-              logical, intent(in) :: allow_mix
-              integer :: i, j
-              if( cntfile > 0 )then
-                  do i=1,cntfile
-                      do j=1,cntfile
-                          if( i == j ) cycle
-                          if( checkupfile(i) == checkupfile(j) )then
-                              ! all ok
-                          else
-                              if( .not. allow_mix )then
-                                  stop 'The inputted file names have nonconforming format (mixed formats not yet allowed)!'
-                              endif
-                          endif
-                      end do
-                  end do
-                  select case(checkupfile(1))
-                      case('M')
-                          self%ext = '.mrc'
-                      case('S')
-                          self%ext = '.spi'
-                      case('D')
-                          self%ext = '.mrc'
-                      case('B')
-                          self%ext = '.mrc'
-                      case DEFAULT
-                          stop 'This file format is not supported by SIMPLE; check_file_formats; simple_params'
-                  end select
-              endif
-          end subroutine check_file_formats
 
-          subroutine double_check_file_formats
-              character(len=STDLEN) :: fname
-              character(len=1)      :: form
-              integer :: funit, io_stat
-              if( cntfile == 0 )then
-                  if( cline%defined('filetab') )then
-                      if(.not.fopen(funit, status='old', file=self%filetab, iostat=io_stat))&
-                           call fileio_errmsg("In params:: double_check_file_formats fopen failed "//trim(self%filetab) , io_stat)
-                      read(funit,'(a256)') fname
-                      form = fname2format(fname)
-                      if(.not.fclose(funit, iostat=io_stat))&
-                           call fileio_errmsg("In params:: double_check_file_formats fclose failed" , io_stat)
-                      select case(form)
-                          case('M')
-                              self%ext = '.mrc'
-                          case('S')
-                              self%ext = '.spi'
-                          case('D')
-                              self%ext = '.mrc'
-                          case('B')
-                              self%ext = '.mrc'
-                          case DEFAULT
-                              write(*,*) 'format string is ', form
-                              stop 'This file format is not supported by SIMPLE; double_check_file_formats; simple_params'
-                      end select
-                  endif
-              endif
-          end subroutine double_check_file_formats
+            subroutine check_file_formats( allow_mix )
+                logical, intent(in) :: allow_mix
+                integer :: i, j
+                if( cntfile > 0 )then
+                    do i=1,cntfile
+                        do j=1,cntfile
+                            if( i == j ) cycle
+                            if( checkupfile(i) == checkupfile(j) )then
+                                ! all ok
+                            else
+                                if( .not. allow_mix )then
+                                    stop 'The inputted file names have nonconforming format (mixed formats not yet allowed)!'
+                                endif
+                            endif
+                        end do
+                    end do
+                    select case(checkupfile(1))
+                        case('M')
+                            self%ext = '.mrc'
+                        case('S')
+                            self%ext = '.spi'
+                        case('D')
+                            self%ext = '.mrc'
+                        case('B')
+                            self%ext = '.mrc'
+                        case DEFAULT
+                            stop 'This file format is not supported by SIMPLE; check_file_formats; simple_params'
+                    end select
+                endif
+            end subroutine check_file_formats
 
-          subroutine mkfnames
-              if( .not. cline%defined('outstk')  ) self%outstk  = 'outstk'//self%ext
-              if( .not. cline%defined('outstk2') ) self%outstk2 = 'outstk2'//self%ext
-              if( .not. cline%defined('outvol')  ) self%outvol  = 'outvol'//self%ext
-          end subroutine mkfnames
+            subroutine double_check_file_formats
+                character(len=STDLEN) :: fname
+                character(len=1)      :: form
+                integer :: funit, io_stat
+                if( cntfile == 0 )then
+                    if( cline%defined('filetab') )then
+                        if(.not.fopen(funit, status='old', file=self%filetab, iostat=io_stat))&
+                            call fileio_errmsg("In params:: double_check_file_formats fopen failed "//trim(self%filetab) , io_stat)
+                        read(funit,'(a256)') fname
+                        form = fname2format(fname)
+                        if(.not.fclose(funit, iostat=io_stat))&
+                            call fileio_errmsg("In params:: double_check_file_formats fclose failed" , io_stat)
+                        select case(form)
+                            case('M')
+                                self%ext = '.mrc'
+                            case('S')
+                                self%ext = '.spi'
+                            case('D')
+                                self%ext = '.mrc'
+                            case('B')
+                                self%ext = '.mrc'
+                            case DEFAULT
+                                write(*,*) 'format string is ', form
+                                stop 'This file format is not supported by SIMPLE; double_check_file_formats; simple_params'
+                        end select
+                    endif
+                endif
+            end subroutine double_check_file_formats
 
-          subroutine check_carg( carg, var )
-              character(len=*), intent(in)  :: carg
-              character(len=*), intent(out) :: var
-              if( cline%defined(carg) )then
-                  var = cline%get_carg(carg)
-                  DebugPrint carg, '=', var
-              endif
-          end subroutine check_carg
+            subroutine mkfnames
+                if( .not. cline%defined('outstk')  ) self%outstk  = 'outstk'//self%ext
+                if( .not. cline%defined('outstk2') ) self%outstk2 = 'outstk2'//self%ext
+                if( .not. cline%defined('outvol')  ) self%outvol  = 'outvol'//self%ext
+            end subroutine mkfnames
 
-          subroutine check_iarg( iarg, var )
-              character(len=*), intent(in)  :: iarg
-              integer, intent(out) :: var
-              if( cline%defined(iarg) )then
-                  var = nint(cline%get_rarg(iarg))
-                  DebugPrint iarg, '=', var
-              endif
-          end subroutine check_iarg
+            subroutine check_carg( carg, var )
+                character(len=*), intent(in)  :: carg
+                character(len=*), intent(out) :: var
+                if( cline%defined(carg) )then
+                    var = cline%get_carg(carg)
+                    DebugPrint carg, '=', var
+                endif
+            end subroutine check_carg
 
-          subroutine check_larg( larg, var )
-              character(len=*), intent(in)  :: larg
-              logical, intent(out) :: var
-              integer :: tmp
-              if( cline%defined(larg) )then
-                  tmp =  NINT( cline%get_rarg(larg) )
-                  var = tmp /= 0
-                  DebugPrint larg, '=', var
-              endif
-          end subroutine check_larg
+            subroutine check_iarg( iarg, var )
+                character(len=*), intent(in)  :: iarg
+                integer, intent(out) :: var
+                if( cline%defined(iarg) )then
+                    var = nint(cline%get_rarg(iarg))
+                    DebugPrint iarg, '=', var
+                endif
+            end subroutine check_iarg
 
-          subroutine check_rarg( rarg, var )
-              character(len=*), intent(in)  :: rarg
-              real, intent(out) :: var
-              if( cline%defined(rarg) )then
-                  var = cline%get_rarg(rarg)
-                  DebugPrint rarg, '=', var
-              endif
-          end subroutine check_rarg
+            subroutine check_larg( larg, var )
+                character(len=*), intent(in)  :: larg
+                logical, intent(out) :: var
+                integer :: tmp
+                if( cline%defined(larg) )then
+                    tmp =  NINT( cline%get_rarg(larg) )
+                    var = tmp /= 0
+                    DebugPrint larg, '=', var
+                endif
+            end subroutine check_larg
+
+            subroutine check_rarg( rarg, var )
+                character(len=*), intent(in)  :: rarg
+                real, intent(out) :: var
+                if( cline%defined(rarg) )then
+                    var = cline%get_rarg(rarg)
+                    DebugPrint rarg, '=', var
+                endif
+            end subroutine check_rarg
+
+            subroutine set_ldim_box_from_stk( stkfname )
+                character(len=*), intent(in) :: stkfname
+                if( stkfname .ne. '' )then
+                    if( file_exists(stkfname) )then
+                        if( cline%defined('box') )then
+                        else
+                            call find_ldim_nptcls(stkfname, self%ldim, ifoo, endconv=conv)
+                            self%ldim(3) = 1
+                            DebugPrint 'found logical dimension of stack: ', self%ldim
+                            self%box     = self%ldim(1)
+                        endif
+                    else
+                        write(*,'(a)')      'simple_params :: set_ldim_box_from_stk'
+                        write(*,'(a,1x,a)') 'Stack file does not exist!', trim(stkfname)
+                        stop
+                    endif
+                endif
+            end subroutine set_ldim_box_from_stk
 
     end subroutine new
 

@@ -313,6 +313,10 @@ contains
         integer, intent(in)           :: intg, numlen
         character(len=:), allocatable :: string, str_tmp, str_tmp2
         integer :: slen
+        if( numlen == 0 )then
+            string = int2str(intg)
+            return
+        endif
         str_tmp = int2str(intg)
         slen    = len(str_tmp)
         if( slen > numlen )then

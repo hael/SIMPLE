@@ -475,7 +475,7 @@ contains
             stop 'No input images(s) or volume provided'
         endif
         ! end gracefully
-        call simple_end('**** SIMPLE_NORM NORMAL STOP ****')
+        call simple_end('**** SIMPLE_NORM NORMAL STOP ****')    
     end subroutine exec_norm
 
     !> scale is a program that provides re-scaling and clipping routines for MRC or SPIDER stacks and volumes
@@ -483,6 +483,7 @@ contains
         use simple_procimgfile  ! use all in there
         use simple_image,       only: image
         use simple_math,        only: round2even
+        use simple_qsys_funs,   only: qsys_job_finished
         class(scale_commander), intent(inout) :: self
         class(cmdline),         intent(inout) :: cline
         type(params) :: p
@@ -502,47 +503,33 @@ contains
         if( cline%defined('stk') )then
             ! 2D
             if( cline%defined('scale2') )then
+                call del_file(p%outstk)
+                call del_file(p%outstk2)
                 ! Rescaling, double
-                if( cline%defined('clip')  ) stop 'clip is not allowed in double scaling'
+                if( cline%defined('clip')        ) stop 'clip is not allowed in double scaling'
                 if( .not. cline%defined('scale') ) stop 'need scale to be part of command line as well 4 double scaling'
                 ldims_scaled(1,:) = [p%newbox,p%newbox,1]   ! dimension of scaled
                 ldims_scaled(2,:) = [p%newbox2,p%newbox2,1] ! dimension of scaled
-                if( cline%defined('part') )then
-                    p%outstk  = 'outstk_part'//int2str_pad(p%part, p%numlen)//p%ext
-                    p%outstk2 = 'outstk2_part'//int2str_pad(p%part, p%numlen)//p%ext
-                    call resize_imgfile_double(p%stk, p%outstk, p%outstk2,&
-                    p%smpd, ldims_scaled, smpds_new, [p%fromp,p%top])
-                else
-                    call resize_imgfile_double(p%stk, p%outstk, p%outstk2,&
-                    p%smpd, ldims_scaled, smpds_new)
-                endif
+                call resize_imgfile_double(p%stk, p%outstk, p%outstk2,&
+                p%smpd, ldims_scaled, smpds_new)
                 write(*,'(a,1x,f9.4)') 'SAMPLING DISTANCE AFTER SCALING (OUTSTK) :', smpds_new(1)
                 write(*,'(a,1x,f9.4)') 'SAMPLING DISTANCE AFTER SCALING (OUTSTK2):', smpds_new(2)
                 write(*,'(a,1x,i5)')   'BOX SIZE AFTER SCALING (OUTSTK) :', ldims_scaled(1,1)
                 write(*,'(a,1x,i5)')   'BOX SIZE AFTER SCALING (OUTSTK2):', ldims_scaled(2,1)
             else if( cline%defined('scale') .or. cline%defined('newbox') )then
+                call del_file(p%outstk)
                 ! Rescaling
                 ldim_scaled = [p%newbox,p%newbox,1] ! dimension of scaled
                 if( cline%defined('clip') )then
-                    if( cline%defined('part') )then
-                        p%outstk = 'outstk_part'//int2str_pad(p%part, p%numlen)//p%ext
-                        call resize_and_clip_imgfile(p%stk,p%outstk,p%smpd,ldim_scaled,&
-                        &[p%clip,p%clip,1],smpd_new,[p%fromp,p%top])
-                    else
-                        call resize_and_clip_imgfile(p%stk,p%outstk,p%smpd,ldim_scaled,&
-                        [p%clip,p%clip,1],smpd_new)
-                    endif
+                    call resize_and_clip_imgfile(p%stk,p%outstk,p%smpd,ldim_scaled,&
+                    [p%clip,p%clip,1],smpd_new)
                 else
-                    if( cline%defined('part') )then
-                        p%outstk = 'outstk_part'//int2str_pad(p%part, p%numlen)//p%ext
-                        call resize_imgfile(p%stk,p%outstk,p%smpd,ldim_scaled,smpd_new,[p%fromp,p%top])
-                    else
-                        call resize_imgfile(p%stk,p%outstk,p%smpd,ldim_scaled,smpd_new)
-                    endif
+                    call resize_imgfile(p%stk,p%outstk,p%smpd,ldim_scaled,smpd_new)
                     write(*,'(a,1x,i5)') 'BOX SIZE AFTER SCALING:', ldim_scaled(1)
                 endif
                 write(*,'(a,1x,f9.4)') 'SAMPLING DISTANCE AFTER SCALING:', smpd_new
             else if( cline%defined('clip') )then
+                call del_file(p%outstk)
                 ! Clipping
                 call clip_imgfile(p%stk,p%outstk,[p%clip,p%clip,1],p%smpd)
             endif
@@ -622,6 +609,7 @@ contains
         endif
         ! end gracefully
         call simple_end('**** SIMPLE_SCALE NORMAL STOP ****', print_simple=.false.)
+        if( p%l_distr_exec ) call qsys_job_finished( p, 'simple_commander_imgproc :: exec_scale' )
     end subroutine exec_scale
 
     !> stack is a program for stacking individual images or multiple stacks into one
@@ -638,7 +626,6 @@ contains
         character(len=:), allocatable         :: moviename
         type(image)                           :: mask, tmp, frameimg
         real                                  :: mm(2)
-
         if( cline%defined('lp') )then
             if( .not. cline%defined('smpd') ) stop 'smpd (sampling distance) needs to be defined if lp is'
         endif

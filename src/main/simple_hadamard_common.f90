@@ -30,6 +30,9 @@ contains
         integer :: stack_index
         if( p%l_distr_exec )then
             stack_index = iptcl - p%fromp + 1
+
+            print *, 'trying to read from: ', trim(p%stk_part) 
+
             call b%img%read(p%stk_part, stack_index)
         else
             call b%img%read(p%stk, iptcl)

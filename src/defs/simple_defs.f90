@@ -91,12 +91,14 @@ integer, parameter :: MAXNPEAKS        = 40
 integer, parameter :: SPECWMINPOP    = 2000 !< minimum population for spectral weighting
 integer, parameter :: NSPACE_BALANCE = 1000 !< # projection directions for applying the balancing constraint 
 
-character(len=:), allocatable :: endconv           !< endianness conversion
-integer(kind=c_int)           :: nthr_glob         !< number of threads global variable
-logical                       :: l_distr_exec_glob !< global distributed execution flag
-character(len=STDLEN)         :: exec_abspath_glob !< global executable absolute path
-character(len=LONGSTRLEN)     :: cmdline_glob      !< global command line string
-
+character(len=:), allocatable    :: endconv           !< endianness conversion
+integer(kind=c_int)              :: nthr_glob         !< number of threads global variable
+logical                          :: l_distr_exec_glob !< global distributed execution flag
+character(len=STDLEN)            :: exec_abspath_glob !< global executable absolute path
+character(len=LONGSTRLEN)        :: cmdline_glob      !< global command line string
+character(len=32),     parameter :: STKPARTSDIR = 'stack_parts'
+character(len=STDLEN), parameter :: STKPARTFBODY=trim(STKPARTSDIR)//'/stack_part'
+character(len=STDLEN), parameter :: STKPARTFBODY_SC=trim(STKPARTSDIR)//'/stack_part_sc'
 
 #ifndef IMAGE_SINGLE_PRECISION
 integer, parameter :: img_kind = DP
