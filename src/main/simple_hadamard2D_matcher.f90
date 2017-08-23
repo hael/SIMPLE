@@ -150,7 +150,7 @@ contains
 
         ! POPULATION BALANCING LOGICS
         if( p%balance > 0 )then
-            call b%a%balance('class', p%balance, skewness)
+            call b%a%balance(p%balance, skewness)
             write(*,'(A,F8.2)') '>>> CLASS DISTRIBUTION SKEWNESS(%):', 100. * skewness
         else
             call b%a%set_all2single('state_balance', 1.0)
@@ -264,10 +264,10 @@ contains
         ! cluster loop
         do icls = 1, p%ncls
             call progress(icls,p%ncls)
-            icls_pop = a_here%get_cls_pop( icls )
+            icls_pop = a_here%get_pop( icls, 'class' )
             if(icls_pop == 0)cycle
             call cls_imgsum%new([p%box, p%box, 1], p%smpd)
-            ptcls_inds = a_here%get_cls_pinds( icls )
+            ptcls_inds = a_here%get_pinds( icls, 'class' )
             ! batch planning
             nbatches = ceiling(real(icls_pop)/real(p%nthr*BATCHTHRSZ))
             batches  = split_nobjs_even(icls_pop, nbatches)
@@ -419,7 +419,7 @@ contains
         class(params), intent(inout) :: p
         integer :: icls, pop
         do icls=1,p%ncls
-            pop = b%a%get_cls_pop(icls)
+            pop = b%a%get_pop(icls, 'class')
             if( pop > 1 )then
                 call b%cavgs(icls)%fwd_ft
                 call b%cavgs(icls)%ctf_dens_correct(b%ctfsqsums(icls))
@@ -473,7 +473,7 @@ contains
         do icls=1,p%ncls
             call progress(icls, p%ncls)
             pop = 2
-            if( p%oritab /= '' ) pop = b%a%get_cls_pop(icls)
+            if( p%oritab /= '' ) pop = b%a%get_pop(icls, 'class')
             if( pop > 1 )then
                 ! prepare the reference
                 b%img = b%cavgs(icls)

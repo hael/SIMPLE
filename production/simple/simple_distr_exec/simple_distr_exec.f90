@@ -521,10 +521,11 @@ select case(prg)
         keys_optional(29) = 'nsub'
         keys_optional(30) = 'lp_grid'
         keys_optional(31) = 'balance'
+        keys_optional(32) = 'center'
         ! documentation
         if( describe ) call print_doc_prime3D
         ! parse command line
-        call cline%parse( keys_required(:6), keys_optional(:31) )
+        call cline%parse( keys_required(:6), keys_optional(:32) )
         ! set defaults
         if( .not. cline%defined('nspace')                  ) call cline%set('nspace', 1000.)
         if( cline%defined('lp') .or. cline%defined('find') ) call cline%set('dynlp',   'no')
@@ -690,13 +691,15 @@ select case(prg)
         ! set optional keys
         keys_optional(1) = 'lp'
         keys_optional(2) = 'offset'
+        keys_optional(3) = 'cenlp'
         ! parse command line
         if( describe ) call print_doc_tseries_track
         call cline%parse(keys_required(:5), keys_optional(:2))
         ! set defaults
         call cline%set('nthr', 1.0)
-        if( .not. cline%defined('neg') ) call cline%set('neg', 'yes')
-        if( .not. cline%defined('lp')  ) call cline%set('lp',    2.0)
+        if( .not. cline%defined('neg')   ) call cline%set('neg', 'yes')
+        if( .not. cline%defined('lp')    ) call cline%set('lp',    2.0)
+        if( .not. cline%defined('cenlp') ) call cline%set('cenlp', 5.0)
         ! execute
         call xtseries_track_distr%execute( cline )
 
@@ -731,9 +734,10 @@ select case(prg)
         keys_optional(14) = 'shbarrier'
         keys_optional(15) = 'autoscale'
         keys_optional(16) = 'pgrp_known'
+        keys_optional(17) = 'center'
         ! parse command line
         if( describe ) call print_doc_ini3D_from_cavgs
-        call cline%parse(keys_required(:5), keys_optional(:16))
+        call cline%parse(keys_required(:5), keys_optional(:17))
         ! set defaults
         if( .not. cline%defined('amsklp') ) call cline%set('amsklp', 20.)
         if( .not. cline%defined('edge')   ) call cline%set('edge',   10.)

@@ -71,7 +71,7 @@ contains
         logical,        intent(inout) :: update_res, converged
         type(oris) :: prime3D_oris
         real       :: norm, corr_thresh, skewness, frac_srch_space, extr_thresh
-        integer    :: iptcl, inptcls, istate, alloc_stat
+        integer    :: iptcl, inptcls, istate, alloc_stat, iextr_lim
         integer    :: statecnt(p%nstates)
         inptcls = p%top - p%fromp + 1
 
@@ -113,10 +113,11 @@ contains
 
         ! EXTREMAL LOGICS
         if( p%refine.eq.'het' )then
-            if( frac_srch_space < 98. .or. p%extr_iter <= 15 )then
+            iextr_lim = ceiling(2.*log(real(p%nptcls)))
+            if( frac_srch_space < 98. .or. p%extr_iter <= iextr_lim )then
                 ! extr_thresh = EXTRINITHRESH * (1.-EXTRTHRESH_CONST)**(p%extr_iter-1)  ! factorial decay
                 ! extr_thresh = EXTRINITHRESH * exp(-(real(p%extr_iter-1)/6.)**2. / 2.) ! gaussian decay: untested
-                extr_thresh = EXTRINITHRESH * cos(PI/2. * real(p%extr_iter-1)/15.)    ! cosine decay
+                extr_thresh = EXTRINITHRESH * cos(PI/2. * real(p%extr_iter-1)/real(iextr_lim))    ! cosine decay
                 extr_thresh = min(EXTRINITHRESH, max(0., extr_thresh))
                 corr_thresh = b%a%extremal_bound(extr_thresh)
                 statecnt(:) = 0
@@ -226,7 +227,7 @@ contains
                 !$omp parallel do default(shared) schedule(guided) private(iptcl) proc_bind(close)
                 do iptcl=p%fromp,p%top
                     call primesrch3D(iptcl)%exec_prime3D_srch(pftcc, iptcl, b%a, b%e, p%lp,&
-                        greedy=.true., nnmat=b%nnmat, grid_projs=b%grid_projs)
+                        greedy=.true., nnmat=b%nnmat)
                 end do
                 !$omp end parallel do
             case DEFAULT
@@ -237,14 +238,14 @@ contains
 
         ! SETUP WEIGHTS
         if( p%nptcls <= SPECWMINPOP )then
-            call b%a%calc_hard_ptcl_weights(p%frac)
+            call b%a%calc_hard_weights(p%frac)
         else
             call b%a%calc_spectral_weights(p%frac)
         endif
 
         ! POPULATION BALANCING LOGICS
         if( p%balance > 0 )then
-            call b%a%balance('proj', p%balance, skewness)
+            call b%a%balance( p%balance, NSPACE_BALANCE, p%nsym, p%eullims, skewness )
             write(*,'(A,F8.2)') '>>> PROJECTION DISTRIBUTION SKEWNESS(%):', 100. * skewness
         else
             call b%a%set_all2single('state_balance', 1.0)
@@ -393,7 +394,7 @@ contains
         do s=1,p%nstates
             if( p%oritab .ne. '' )then
                 ! greedy start
-                if( b%a%get_state_pop(s) == 0 )then
+                if( b%a%get_pop(s, 'state') == 0 )then
                     ! empty state
                     cnt = cnt + p%nspace
                     call progress(cnt, nrefs)
@@ -444,7 +445,7 @@ contains
                 ntot = (p%top-p%fromp+1) * p%nstates
                 cnt  = 0
                 do s=1,p%nstates
-                    if( b%a%get_state_pop(s) == 0 )then
+                    if( b%a%get_pop(s, 'state') == 0 )then
                         ! empty state
                         cycle
                     endif

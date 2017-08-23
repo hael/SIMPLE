@@ -4321,25 +4321,23 @@ contains
     !!
     function real_corr_1( self1, self2 ) result( r )
         class(image), intent(inout) :: self1, self2
-        real, allocatable           :: diffmat1(:,:,:), diffmat2(:,:,:)
-        real                        :: r,ax,ay,sxx,syy,sxy,npix
+        real :: diffmat1(self1%ldim(1),self1%ldim(2),self1%ldim(3))
+        real :: diffmat2(self2%ldim(1),self2%ldim(2),self2%ldim(3))
+        real :: r,ax,ay,sxx,syy,sxy,rnpix
         if( self1%ft .or. self2%ft ) stop 'cannot real-space correlate FTs; real_corr; simple_image'
         if( .not. (self1.eqdims.self2) )then
             write(*,*) 'ldim self1: ', self1%ldim
             write(*,*) 'ldim self2: ', self2%ldim
             stop 'images to be correlated need to have same dims; real_corr; simple_image'
         endif
-        allocate(diffmat1(self1%ldim(1),self1%ldim(2),self1%ldim(3)),&
-                 diffmat2(self2%ldim(1),self2%ldim(2),self2%ldim(3)))
-        npix     = real(product(self1%ldim))
-        ax       = sum(self1%rmat(:self1%ldim(1),:self1%ldim(2),:self1%ldim(3)))/npix
-        ay       = sum(self2%rmat(:self2%ldim(1),:self2%ldim(2),:self2%ldim(3)))/npix
+        rnpix     = real(product(self1%ldim))
+        ax       = sum(self1%rmat(:self1%ldim(1),:self1%ldim(2),:self1%ldim(3)))/rnpix
+        ay       = sum(self2%rmat(:self2%ldim(1),:self2%ldim(2),:self2%ldim(3)))/rnpix
         diffmat1 = self1%rmat(:self1%ldim(1),:self1%ldim(2),:self1%ldim(3))-ax
         diffmat2 = self2%rmat(:self2%ldim(1),:self2%ldim(2),:self2%ldim(3))-ay
-        sxx      = sum(diffmat1**2.)
-        syy      = sum(diffmat2**2.)
-        sxy      = sum(diffmat1*diffmat2)
-        deallocate(diffmat1,diffmat2)
+        sxx      = sum(diffmat1 * diffmat1)
+        syy      = sum(diffmat2 * diffmat2)
+        sxy      = sum(diffmat1 * diffmat2)
         r = calc_corr(sxy,sxx*syy)
     end function real_corr_1
 
@@ -4353,8 +4351,8 @@ contains
     function real_corr_2( self1, self2, maskimg ) result( r )
         class(image), intent(inout) :: self1, self2
         class(image), intent(in)    :: maskimg
-        real,    allocatable        :: vec1(:), vec2(:), rmat(:,:,:)
-        logical, allocatable        :: mask(:,:,:)
+        real,    allocatable        :: vec1(:), vec2(:)
+        logical :: mask(self1%ldim(1),self1%ldim(2),self1%ldim(3))
         integer :: npix
         real    :: r, ax, ay, sxx, syy, sxy, rnpix
         if( self1%ft .or. self2%ft ) stop 'cannot real-space correlate FTs; real_corr_mask; simple_image'
@@ -4367,28 +4365,23 @@ contains
             stop 'images and mask do have same dims; real_corr_mask; simple_image'
         endif
         ! build logical mask
-        rmat = maskimg%get_rmat()
-        allocate(mask(self1%ldim(1),self1%ldim(2),self1%ldim(3)))
-        mask = .false.
-        where(rmat > 0.5) mask = .true.
-        deallocate(rmat)
+        where(maskimg%rmat(:self1%ldim(1),:self1%ldim(2),:self1%ldim(3)) > 0.5)
+            mask = .true.
+        elsewhere
+            mask = .false.
+        end where
         npix  = count(mask)
         rnpix = real(npix)
         ! vectorize
-        rmat = self1%get_rmat()
-        vec1 = pack(rmat, mask)
-        deallocate(rmat)
-        rmat = self2%get_rmat()
-        vec2 = pack(rmat, mask)
-        deallocate(rmat, mask)
+        vec1 = pack(self1%rmat(:self1%ldim(1),:self1%ldim(2),:self1%ldim(3)), mask)
+        vec2 = pack(self2%rmat(:self1%ldim(1),:self1%ldim(2),:self1%ldim(3)), mask)
         ! correlation
         vec1 = vec1 - sum(vec1)/rnpix
         vec2 = vec2 - sum(vec2)/rnpix
-        sxx  = sum(vec1**2.)
-        syy  = sum(vec2**2.)
+        sxx  = sum(vec1 * vec1)
+        syy  = sum(vec2 * vec2)
         sxy  = sum(vec1 * vec2)
         r    = calc_corr(sxy,sxx*syy)
-        deallocate(vec1,vec2)
     end function real_corr_2
 
     !> \brief prenorm4real_corr is pre-normalise the reference in preparation for real_corr_prenorm
@@ -4413,7 +4406,7 @@ contains
     function real_corr_prenorm( self_ref, self_ptcl, sxx_ref ) result( r )
         class(image), intent(inout) :: self_ref, self_ptcl
         real,         intent(in)    :: sxx_ref
-        real, allocatable           :: diffmat(:,:,:)
+        real                        :: diffmat(self_ptcl%ldim(1),self_ptcl%ldim(2),self_ptcl%ldim(3))
         real                        :: r,ay,syy,sxy,npix
         if( self_ref%ft .or. self_ptcl%ft ) stop 'cannot real-space correlate FTs; real_corr_prenorm; simple_image'
         if( .not. (self_ref.eqdims.self_ptcl) )then
@@ -4421,13 +4414,11 @@ contains
             write(*,*) 'ldim self_ptcl: ', self_ptcl%ldim
             stop 'images to be correlated need to have same dims; real_corr_prenorm; simple_image'
         endif
-        allocate(diffmat(self_ptcl%ldim(1),self_ptcl%ldim(2),self_ptcl%ldim(3)))
         npix    = real(product(self_ptcl%ldim))
         ay      = sum(self_ptcl%rmat(:self_ptcl%ldim(1),:self_ptcl%ldim(2),:self_ptcl%ldim(3)))/npix
         diffmat = self_ptcl%rmat(:self_ptcl%ldim(1),:self_ptcl%ldim(2),:self_ptcl%ldim(3))-ay
-        syy     = sum(diffmat**2.)
+        syy     = sum(diffmat * diffmat)
         sxy     = sum(self_ref%rmat(:self_ref%ldim(1),:self_ref%ldim(2),:self_ref%ldim(3))*diffmat)
-        deallocate(diffmat)
         r = calc_corr(sxy,sxx_ref*syy)
     end function real_corr_prenorm
 

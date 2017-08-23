@@ -284,7 +284,7 @@
 		}
 			
 		function selectWorkflow(element){
-			var workflows = document.getElementsByClassName('newjobworkflow');
+			var workflows = element.parentNode.getElementsByClassName('newjobworkflowbutton');
 			for(var  i = 0; i < workflows.length; i++){
 				workflows[i].style.backgroundColor = null;
 			}

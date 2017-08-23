@@ -16,6 +16,10 @@ public :: map2ptcls_commander
 public :: orisops_commander
 public :: oristats_commander
 public :: rotmats2oris_commander
+public :: bin2txt_commander
+public :: txt2bin_commander
+public :: vizoris_commander
+
 private
 #include "simple_local_flags.inc"
 
@@ -48,6 +52,18 @@ type, extends(commander_base) :: rotmats2oris_commander
  contains
    procedure :: execute      => exec_rotmats2oris
 end type rotmats2oris_commander
+type, extends(commander_base) :: bin2txt_commander
+ contains
+   procedure :: execute      => exec_bin2txt
+end type bin2txt_commander
+type, extends(commander_base) :: txt2bin_commander
+ contains
+   procedure :: execute      => exec_txt2bin
+end type txt2bin_commander
+type, extends(commander_base) :: vizoris_commander
+ contains
+   procedure :: execute      => exec_vizoris
+end type vizoris_commander
 
 contains
 
@@ -76,7 +92,7 @@ contains
         ! generate the class documents
         numlen = len(int2str(p%ncls))
         do icls=1,p%ncls
-            clsarr = b%a%get_cls_pinds(icls)
+            clsarr = b%a%get_pinds(icls, 'class')
             if( allocated(clsarr) )then
                 do iptcl=1,size(clsarr)
                     call b%a%write(clsarr(iptcl), 'oris_class'//int2str_pad(icls,numlen)//'.txt')
@@ -341,7 +357,7 @@ contains
         logical,               allocatable :: selected(:)
         integer      :: isel, nsel, loc(1), iptcl, pind, icls
         integer      :: nlines_oritab, nlines_oritab3D, nlines_deftab
-        integer      :: cnt, istate, funit, iline, nls, lfoo(3)
+        integer      :: cnt, istate, iline, nls, lfoo(3)
         real         :: corr, rproj, rstate
         type(params) :: p
         type(build)  :: b
@@ -383,13 +399,13 @@ contains
         do isel=1,nsel
             loc                     = maxloc(correlations(isel,:))
             selected(loc(1))        = .true.
-            labeler(isel)%particles = b%a%get_cls_pinds(loc(1))
+            labeler(isel)%particles = b%a%get_pinds(loc(1), 'class')
         end do
         ! erase deselected (by setting their state to zero)
         do icls=1,p%ncls
             if( selected(icls) ) cycle
-            if( b%a%get_cls_pop(icls) > 0 )then
-                rejected_particles = b%a%get_cls_pinds(icls)
+            if( b%a%get_pop(icls, 'class') > 0 )then
+                rejected_particles = b%a%get_pinds(icls, 'class')
                 do iptcl=1,size(rejected_particles)
                     call b%a%set(rejected_particles(iptcl), 'state', 0.)
                 end do
@@ -449,11 +465,10 @@ contains
         p = params(cline)
         call b%build_general_tbox(p, cline)
         if( p%errify .eq. 'yes' )then   ! introduce error in input orientations
-            if( cline%defined('angerr') .or. cline%defined('sherr') ) call b%a%introd_alig_err(p%angerr, p%sherr)
-            if( p%ctf .eq. 'yes' ) call b%a%introd_ctf_err(p%dferr)
+            if( cline%defined('angerr').or.&
+                cline%defined('sherr') ) call b%a%introd_alig_err(p%angerr, p%sherr)
+            if( p%ctf .eq. 'yes' )       call b%a%introd_ctf_err(p%dferr)
         endif
-        if( p%mirr .eq. '2d' ) call b%a%mirror2d ! mirror input Eulers
-        if( p%mirr .eq. '3d' ) call b%a%mirror3d ! mirror input Eulers
         if( cline%defined('e1') )then ! rotate input Eulers
             call orientation%new
             call orientation%set_euler([p%e1,p%e2,p%e3])
@@ -472,12 +487,6 @@ contains
             call b%a%mul_shifts(p%mul)
         endif
         if( p%zero  .eq. 'yes' ) call b%a%zero_shifts
-        if( p%plot  .eq. 'yes' )then ! plot polar vectors
-            do i=1,b%a%get_noris()
-                normal = b%a%get_normal(i)
-                write(*,'(1x,f7.2,3x,f7.2)') normal(1), normal(2)
-            end do
-        endif
         if( p%discrete .eq. 'yes' )then
             if( cline%defined('ndiscrete') )then
                 call b%a%discretize(p%ndiscrete)
@@ -485,39 +494,7 @@ contains
                 stop 'need ndiscrete to be defined!'
             endif
         endif
-        if( cline%defined('xsh') )     call b%a%map3dshift22d([p%xsh,p%ysh,p%zsh])
         if( cline%defined('nstates') ) call b%a%rnd_states(p%nstates)
-        if( cline%defined('frac') )then
-            if( p%oritab == '' ) stop 'need input orientation doc for fishing expedition; simple_orisops'
-            ! determine how many particles to include
-            nincl = nint(real(p%nptcls)*p%frac)
-            ! extract the correlations
-            corrs = b%a%get_all('corr')
-            ! order them from low to high
-            call hpsort(p%nptcls, corrs)
-            ! figure out the threshold
-            ind = p%nptcls - nincl + 1
-            thresh = corrs(ind)
-            ! print inlcusion/exclusion stats
-            do i=1,p%nptcls
-                corr = b%a%get(i, 'corr')
-                if( corr >= thresh )then
-                    write(*,*) 'particle: ', i, 'included: ', 1
-                else
-                    write(*,*) 'particle: ', i, 'included: ', 0
-                endif
-            end do
-        endif
-        if( cline%defined('npeaks') )then
-            call b%a%new(p%nspace)
-            call b%a%spiral
-            write(*,*) 'ATHRESH: ', b%a%find_athres_from_npeaks( p%npeaks )
-        endif
-        if( cline%defined('athres') )then
-            call b%a%new(p%nspace)
-            call b%a%spiral
-            write(*,*) 'NPEAKS: ', b%a%find_npeaks_from_athres( p%athres )
-        endif
         call b%a%write(p%outfile)
         call simple_end('**** SIMPLE_ORISOPS NORMAL STOP ****')
     end subroutine exec_orisops
@@ -535,7 +512,6 @@ contains
         use simple_oris, only: oris
         use simple_stat, only: moment
         use simple_math, only: median_nocopy, hpsort
-        use simple_stat, only: plot_hist
         class(oristats_commander), intent(inout) :: self
         class(cmdline),            intent(inout) :: cline
         type(build)          :: b
@@ -546,8 +522,10 @@ contains
         real                 :: mind2, maxd2, avgd2, sdevd2, vard2, homo_cnt, homo_avg
         real                 :: popmin, popmax, popmed, popave, popsdev, popvar, frac_populated, szmax
         integer              :: nprojs, iproj, iptcl, icls, cnt_zero, cnt_nonzero, n_zero, n_nonzero, j
-        real,    allocatable :: projpops(:), tmp(:), clustszs(:)
+        integer              :: noris, ncls
+        real,    allocatable :: pops(:), tmp(:), clustszs(:)
         integer, allocatable :: projinds(:), clustering(:)
+        logical, allocatable :: ptcl_mask(:)
         integer, parameter   :: hlen=50
         logical              :: err
         p = params(cline)
@@ -567,11 +545,6 @@ contains
             write(*,'(a,1x,f15.6)') 'MINIMUM ANGULAR DISTANCE                      :', mind
             write(*,'(a,1x,f15.6)') 'MAXIMUM ANGULAR DISTANCE                      :', maxd
         else if( cline%defined('oritab') )then
-            ! General info
-            if( cline%defined('hist') )then
-                call b%a%histogram(p%hist)
-                goto 999
-            endif
             if( p%ctfstats .eq. 'yes' )then
                 call b%a%stats('ctfres', avgd, sdevd, vard, err )
                 call b%a%minmax('ctfres', mind, maxd)
@@ -589,20 +562,67 @@ contains
                 write(*,'(a,1x,f8.2)') 'MAXIMUM DF                           :', (maxd+maxd2)/2.
                 goto 999
             endif
+            if( p%classtats .eq. 'yes' )then
+                noris = b%a%get_noris()
+                ncls  = b%a%get_n('class')
+                ! setup weights
+                if( p%weights2D.eq.'yes' )then
+                    if( noris <= SPECWMINPOP )then
+                        call b%a%set_all2single('w', 1.0)
+                    else
+                        ! frac is one by default in prime2D (no option to set frac)
+                        ! so spectral weighting is done over all images
+                        call b%a%calc_spectral_weights(1.0)
+                    endif
+                else
+                    ! defaults to unitary weights
+                    call b%a%set_all2single('w', 1.0)
+                endif
+                ! generate class stats
+                pops           = b%a%get_pops('class', consider_w=.true.)
+                popmin         = minval(pops)
+                popmax         = maxval(pops)
+                popmed         = median_nocopy(pops)
+                call moment(pops, popave, popsdev, popvar, err)
+                write(*,'(a,1x,f8.2)') 'MINIMUM POPULATION :', popmin
+                write(*,'(a,1x,f8.2)') 'MAXIMUM POPULATION :', popmax
+                write(*,'(a,1x,f8.2)') 'MEDIAN  POPULATION :', popmed
+                write(*,'(a,1x,f8.2)') 'AVERAGE POPULATION :', popave
+                write(*,'(a,1x,f8.2)') 'SDEV OF POPULATION :', popsdev
+                ! produce a histogram of class populations
+                szmax = maxval(pops)
+                ! scale to max 50 *:s
+                scale = 1.0
+                do while( nint(scale*szmax) > hlen )
+                    scale = scale - 0.001
+                end do
+                write(*,'(a)') '>>> HISTOGRAM OF CLASS POPULATIONS'
+                do icls=1,ncls
+                    write(*,*) nint(pops(icls)),"|",('*', j=1,nint(pops(icls)*scale))  
+                end do
+            endif
             if( p%projstats .eq. 'yes' )then
                 if( .not. cline%defined('nspace') ) stop 'need nspace command line arg to provide projstats'
-                tmp            = b%a%get_proj_pops()
+                noris = b%a%get_noris()
+                ! setup weights
+                if( noris <= SPECWMINPOP )then
+                    call b%a%calc_hard_weights(p%frac)
+                else
+                    call b%a%calc_spectral_weights(p%frac)
+                endif
+                ! generate population stats
+                tmp            = b%a%get_pops('proj', consider_w=.true.)
                 nprojs         = size(tmp)
-                projpops       = pack(tmp, tmp > 0.5)
-                frac_populated = real(size(projpops))/real(p%nspace)
-                popmin         = minval(projpops)
-                popmax         = maxval(projpops)
-                popmed         = median_nocopy(projpops)
-                call moment(projpops, popave, popsdev, popvar, err)
+                pops           = pack(tmp, tmp > 0.5)
+                frac_populated = real(size(pops))/real(p%nspace)
+                popmin         = minval(pops)
+                popmax         = maxval(pops)
+                popmed         = median_nocopy(pops)
+                call moment(pops, popave, popsdev, popvar, err)
                 write(*,'(a,1x,f8.2)') 'FRAC POPULATED DIRECTIONS :', frac_populated
                 write(*,'(a,1x,f8.2)') 'MINIMUM POPULATION        :', popmin
                 write(*,'(a,1x,f8.2)') 'MAXIMUM POPULATION        :', popmax
-                write(*,'(a,1x,f8.2)') 'MEDIAN POPULATION         :', popmed
+                write(*,'(a,1x,f8.2)') 'MEDIAN  POPULATION        :', popmed
                 write(*,'(a,1x,f8.2)') 'AVERAGE POPULATION        :', popave
                 write(*,'(a,1x,f8.2)') 'SDEV OF POPULATION        :', popsdev
                 ! write out the zero and nonzero populated projection directions
@@ -625,25 +645,33 @@ contains
                 call nonzero_pop_o%write('pop_zero_pdirs.txt')
                 call zero_pop_o%write('pop_nonzero_pdirs.txt')
                 ! produce a histogram based on clustering into ndiscrete (default 100) even directions
-                allocate(clustering(b%a%get_noris()), clustszs(p%ndiscrete))
+                ! first, generate a mask based on state flag and w
+                ptcl_mask = b%a%included(consider_w=.true.)
+                allocate(clustering(noris), clustszs(p%ndiscrete))
                 call osubspace%new(p%ndiscrete)
                 call osubspace%spiral(p%nsym, p%eullims)
+                call osubspace%write('even_pdirs.txt')
                 do iptcl=1,b%a%get_noris()
-                    o_single = b%a%get_ori(iptcl)
-                    clustering(iptcl) = osubspace%find_closest_proj(o_single)
+                    if( ptcl_mask(iptcl) )then
+                        o_single = b%a%get_ori(iptcl)
+                        clustering(iptcl) = osubspace%find_closest_proj(o_single)
+                    else
+                        clustering(iptcl) = 0
+                    endif
                 end do
+                ! determine cluster sizes
                 do icls=1,p%ndiscrete
                     clustszs(icls) = real(count(clustering == icls))
                 end do
                 szmax = maxval(clustszs)
-                ! scale to max 50 #:s
+                ! scale to max 50 *:s
                 scale = 1.0
                 do while( nint(scale*szmax) > hlen )
                     scale = scale - 0.001
                 end do
                 write(*,'(a)') '>>> HISTOGRAM OF SUBSPACE POPULATIONS (FROM NORTH TO SOUTH)'
-                 do icls=1,p%ndiscrete
-                    write(*,*) nint(clustszs(icls)),"|",('#', j=1,nint(clustszs(icls)*scale))  
+                do icls=1,p%ndiscrete
+                    write(*,*) nint(clustszs(icls)),"|",('*', j=1,nint(clustszs(icls)*scale))  
                 end do
             endif
             if( p%trsstats .eq. 'yes' )then
@@ -656,31 +684,7 @@ contains
                 write(*,'(a,1x,f8.2)') 'MINIMUM TRS               :', (mind+mind2)/2.
                 write(*,'(a,1x,f8.2)') 'MAXIMUM TRS               :', (maxd+maxd2)/2.
                 goto 999
-            endif
-            ! Class and states
-            if( p%clustvalid .eq. 'yes' )then
-                if( cline%defined('ncls') )then
-                    write(*,'(a,3x,f5.1)') '>>> COHESION: ',   b%a%cohesion_norm('class',p%ncls)*100.
-                    write(*,'(a,1x,f5.1)') '>>> SEPARATION: ', b%a%separation_norm('class',p%ncls)*100.
-                else if( cline%defined('nstates') )then
-                    write(*,'(a,3x,f5.1)') '>>> COHESION: ',   b%a%cohesion_norm('state',p%nstates)*100.
-                    write(*,'(a,1x,f5.1)') '>>> SEPARATION: ', b%a%separation_norm('state',p%nstates)*100.
-                else
-                    stop 'need ncls/nstates as input for clustvalid'
-                endif
-            else if( p%clustvalid .eq. 'homo' )then
-                if( cline%defined('ncls') )then
-                    call b%a%homogeneity('class', p%minp, p%thres, homo_cnt, homo_avg)
-                    write(*,'(a,1x,f5.1)') '>>> THIS % OF CLUSTERS CONSIDERED HOMOGENEOUS: ', homo_cnt*100.
-                    write(*,'(a,1x,f5.1)') '>>> AVERAGE HOMOGENEITY:                       ', homo_avg*100.
-                else if( cline%defined('nstates') )then
-                    call b%a%homogeneity('state', p%minp, p%thres, homo_cnt, homo_avg)
-                    write(*,'(a,1x,f5.1)') '>>> THIS % OF CLUSTERS CONSIDERED HOMOGENEOUS: ', homo_cnt*100.
-                    write(*,'(a,13x,f5.1)') '>>> AVERAGE HOMOGENEITY:                      ', homo_avg*100.
-                else
-                    stop 'need ncls/nstates as input for clustvalid'
-                endif
-            endif
+            endif            
         endif
         call b%a%write(p%outfile)
         999 call simple_end('**** SIMPLE_ORISTATS NORMAL STOP ****')
@@ -713,7 +717,6 @@ contains
         call os_out%new(ndatlines)
         do iline=1,ndatlines
             call rotmats%readNextDataLine(rline)
-            ! print *, rline(1), rline(2), rline(3), rline(4), rline(5), rline(6), rline(7), rline(8), rline(9)
             rmat(1,1) = rline(1)
             rmat(1,2) = rline(2)
             rmat(1,3) = rline(3)
@@ -732,5 +735,125 @@ contains
         call rotmats%kill
         call simple_end('**** ROTMATS2ORIS NORMAL STOP ****')
     end subroutine exec_rotmats2oris
+
+    !> convert text (.txt) oris doc to binary (.bin)
+    subroutine exec_txt2bin( self, cline )
+        use simple_oris,         only: oris
+        use simple_binoris,      only: binoris
+        use simple_filehandling, only: nlines
+        class(txt2bin_commander), intent(inout) :: self
+        class(cmdline),           intent(inout) :: cline
+        type(params)  :: p
+        type(oris)    :: os
+        type(binoris) :: bos
+        integer       :: noris, i
+        p = params(cline)
+        noris = nlines(p%oritab)
+        call os%new(noris)
+        call os%read(p%oritab)
+        call bos%new(os)
+        call bos%open(p%outfile, del_if_exists=.true.)
+        call bos%write_header()
+        do i=1,noris
+            call bos%write_record(i, os)
+        end do
+        call bos%close
+    end subroutine exec_txt2bin
+
+    !> convert binary (.bin) oris doc to text (.txt)
+    subroutine exec_bin2txt( self, cline )
+        use simple_oris,         only: oris
+        use simple_binoris,      only: binoris
+        class(bin2txt_commander), intent(inout) :: self
+        class(cmdline),           intent(inout) :: cline
+        type(params)  :: p
+        type(oris)    :: os
+        type(binoris) :: bos
+        integer       :: noris, i
+        p = params(cline)
+        call bos%open(p%oritab)
+        noris = bos%get_n_records()
+        call os%new(noris)
+        do i=1,noris
+            call bos%read_record(i, os)
+        end do
+        call bos%close
+        call os%write(p%outfile)
+    end subroutine exec_bin2txt
+
+    !> convert rotation matrix to orientation oris class
+    subroutine exec_vizoris( self, cline )
+        use simple_math,      only: rad2deg, myacos
+        use simple_oris,      only: oris
+        use simple_ori,       only: ori
+        class(vizoris_commander),  intent(inout) :: self
+        class(cmdline),            intent(inout) :: cline
+        type(build)           :: b
+        type(params)          :: p
+        type(ori)             :: o
+        integer, allocatable  :: pops(:)
+        character(len=STDLEN) :: fname, ext, fbody
+        integer               :: i, n, maxpop, funit, closest
+        real                  :: radius, maxradius, xyz_end(3), xyz_start(3), ang, scale
+        p = params(cline)
+        call b%build_general_tbox(p, cline, do3d=.false.)
+        ! init
+        allocate(pops(p%nspace), source=0)
+        ang = 3.6 / sqrt(real(p%nsym*p%nspace))
+        maxradius = 0.75 * sqrt( (1.-cos(ang))**2. + sin(ang)**2. )
+        ! projection direction attribution
+        n = b%a%get_noris()
+        do i = 1, n
+            o = b%a%get_ori(i)
+            if(nint(o%get('state')) == 0 )cycle
+            call progress(i, n)
+            closest = b%e%find_closest_proj(o)
+            pops(closest) = pops(closest) + 1          
+        enddo        
+        maxpop = maxval(pops)
+        write(*,'(A,I6)')'>>> NUMBER OF POPULATED PROJECTION DIRECTIONS:', count(pops>0)
+        write(*,'(A,I6)')'>>> NUMBER OF EMPTY     PROJECTION DIRECTIONS:', count(pops==0)
+        ! output
+        fname = remove_abspath(trim(adjustl(p%oritab)))
+        ext   = trim(fname2ext(fname))
+        fbody = trim(get_fbody(trim(fname), trim(ext)))
+        fname = trim(fbody)//'.bild'
+        open(unit=funit, status='REPLACE', action='WRITE', file=trim(fname))
+        ! header
+        write(funit,'(A)')".font Courier 16 bold"
+        write(funit,'(A)')".translate 0.0 0.0 0.0"
+        write(funit,'(A)')".scale 10"
+        write(funit,'(A)')".comment -- unit sphere --"
+        write(funit,'(A)')".color 0.8 0.8 0.8"
+        write(funit,'(A)')".sphere 0 0 0 1.0"
+        write(funit,'(A)')".comment -- planes --"
+        write(funit,'(A)')".color 0.3 0.3 0.3"
+        write(funit,'(A)')".cylinder -0.02 0 0 0.02 0 0 1.02"
+        write(funit,'(A)')".cylinder 0 -0.02 0 0 0.02 0 1.02"
+        write(funit,'(A)')".cylinder 0 0 -0.02 0 0 0.02 1.02"
+        write(funit,'(A)')".comment -- x-axis --"
+        write(funit,'(A)')".color 1 0 0"
+        write(funit,'(A)')".cylinder -1.5 0 0 1.5 0 0 0.02"
+        write(funit,'(A)')".comment -- y-axis --"
+        write(funit,'(A)')".color 0 1 0"
+        write(funit,'(A)')".cylinder 0 -1.5 0 0 1.5 0 0.02"
+        write(funit,'(A)')".comment -- z-axis --"
+        write(funit,'(A)')".color 0 0 1"
+        write(funit,'(A)')".cylinder 0 0 -1.5 0 0 1.5 0.02"
+        ! body
+        write(funit,'(A)')".comment -- projection firections --"
+        write(funit,'(A)')".color 0.4 0.4 0.4"
+        do i = 1, p%nspace
+            if( pops(i) == 0 )cycle
+            scale     = real(pops(i)) / real(maxpop)
+            xyz_start = b%e%get_normal(i)
+            xyz_end   = (1.05 + scale/4.) * xyz_start
+            radius    = max(maxradius * scale, 0.002)
+            write(funit,'(A,F7.3,F7.3,F7.3,F7.3,F7.3,F7.3,F6.3)')&
+            &'.cylinder ', xyz_start, xyz_end, radius
+        enddo
+        close(funit)
+        call simple_end('**** VIZORIS NORMAL STOP ****')
+    end subroutine exec_vizoris
 
 end module simple_commander_oris

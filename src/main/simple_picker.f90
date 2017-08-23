@@ -293,8 +293,8 @@ contains
                 prev_corr = corrmat(peak_positions(ipeak,1),peak_positions(ipeak,2))
                 ! refinement range
                 call srch_range(peak_positions_refined(ipeak,:))
-                corr = -1
                 ! extract image, correlate, find peak
+                corr = -1
                 do xind=xrange(1),xrange(2)
                     do yind=yrange(1),yrange(2)
                         call mic_shrunken_refine%window_slim([xind,yind], ldim_refs_refine(1), ptcl_target)

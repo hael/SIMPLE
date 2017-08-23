@@ -136,7 +136,7 @@ contains
                     call self%a%stats('corr', slask(1), slask(2), slask(3), err)
                     if( err )then
                     else
-                        if( p%frac < 0.99 ) call self%a%calc_hard_ptcl_weights(p%var, bystate=.true.)
+                        if( p%frac < 0.99 ) call self%a%calc_hard_weights(p%var, bystate=.true.)
                     endif
                 endif
             endif

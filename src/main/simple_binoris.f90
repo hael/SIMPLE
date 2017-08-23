@@ -4,7 +4,6 @@ use, intrinsic :: iso_c_binding
 use simple_defs
 use simple_ori,  only: ori
 use simple_oris, only: oris
-
 implicit none
 
 public :: binoris
@@ -24,24 +23,36 @@ type binoris
     integer                        :: n_bytes_hash_keys  = 0
     integer                        :: n_reals_per_record = 0
     ! header byte array
-    integer(kind=1), allocatable   :: byte_array_header(:)
+    integer(kind=1),   allocatable :: byte_array_header(:)
     ! record
-    real(kind=4),    allocatable   :: record(:)
+    real(kind=4),      allocatable :: record(:)
     ! for on-line use
     integer                        :: funit  = 0
     logical                        :: exists = .false.
   contains
     ! constructors
     procedure          :: new
+    ! checkers/setters/getters
+    procedure, private :: same_dims
+    generic            :: operator(.eqdims.) => same_dims
+    procedure          :: set_fromto
+    procedure          :: get_n_records
+    procedure          :: get_fromto
+    procedure          :: get_n_peaks
     ! I/O
     procedure          :: open
     procedure, private :: open_local
     procedure          :: close
     procedure          :: print_header
-    procedure          ::  print_hash_keys
+    procedure          :: print_hash_keys
     procedure          :: write_header
-    procedure          :: write_record
-    procedure          :: read_record
+    procedure, private :: write_record_1
+    procedure, private :: write_record_2
+    generic            :: write_record => write_record_1, write_record_2
+    procedure, private :: read_record_1
+    procedure, private :: read_record_2
+    generic            :: read_record => read_record_1, read_record_2
+    procedure          :: read_ctfparams_and_state
     ! byte indexing
     procedure          :: first_byte
     procedure          :: last_byte
@@ -108,6 +119,41 @@ contains
         self%exists = .true.
     end subroutine new
 
+    ! checkers/setters/getters
+
+    logical function same_dims( self1, self2 )
+        class(binoris), intent(in) :: self1, self2 !< instances
+        same_dims = all([self1%n_bytes_header == self2%n_bytes_header,&
+                        &self1%n_hash_vals    == self2%n_hash_vals,&
+                        &self1%n_peaks        == self2%n_peaks])
+    end function same_dims
+
+    subroutine set_fromto( self, fromto )
+        class(binoris), intent(inout) :: self      !< instance
+        integer,        intent(in)    :: fromto(2) !< range
+        if( fromto(1) > 1 .or. fromto(2) < fromto(1) )&
+        &stop 'unallowed fromto range; binoris :: set_fromto'
+        self%fromto = fromto 
+        ! set n_records
+        self%n_records = self%fromto(2) - self%fromto(1) + 1
+    end subroutine set_fromto
+
+    integer function get_n_records( self )
+        class(binoris), intent(in) :: self !< instance
+        get_n_records = self%n_records
+    end function get_n_records
+
+    function get_fromto( self ) result( fromto )
+        class(binoris), intent(in) :: self !< instance
+        integer :: fromto(2)
+        fromto = self%fromto
+    end function get_fromto
+
+    integer function get_n_peaks( self )
+        class(binoris), intent(in) :: self !< instance
+        get_n_peaks = self%n_peaks
+    end function get_n_peaks
+
     ! I/O supporting ori + oris (peaks)
 
     subroutine open( self, fname, del_if_exists )
@@ -123,13 +169,13 @@ contains
         ! deletion logics
         if( present(del_if_exists) )then
             if( del_if_exists )then
-                call del_file(fname)
+                call del_file(trim(fname))
             endif
         endif
         ! existence logics
-        if( .not. file_exists(fname) )then
+        if( .not. file_exists(trim(fname)) )then
             if( self%exists )then
-                call self%open_local(fname)
+                call self%open_local(trim(fname))
                 return
             else
                 stop 'cannot open non-existing file using non-existing object; binoris :: open'
@@ -137,7 +183,7 @@ contains
         endif
         call self%kill        
         ! open file
-        call self%open_local(fname)
+        call self%open_local(trim(fname))
         ! check size
         filesz = funit_size(self%funit)
         if( filesz == -1 )then 
@@ -201,23 +247,6 @@ contains
         endif
     end subroutine open_local
 
-    ! subroutine close( self )
-    !     use simple_fileio      , only: is_open
-    !     class(binoris), intent(in) :: self !< instance
-    !     integer          :: io_stat, tmpunit
-    !     if( .not. is_open(self%funit) )then
-    !         if( present(rwaction) )then
-    !             rw_str = trim(rwaction)
-    !         else
-    !             rw_str = 'READWRITE'
-    !         endif
-    !         stat_str = 'UNKNOWN'
-    !         if(.not.fopen(tmpunit,access='STREAM',file=fname,action=rw_str,status=stat_str, iostat=io_stat))&
-    !              call fileio_errmsg('binoris ; open_local '// trim(fnam), io_stat)
-    !         self%funit = tmpunit
-    !     endif
-    ! end subroutine close
-
     subroutine close( self )
         use simple_fileio, only: is_open, fclose, fileio_errmsg
         class(binoris), intent(in) :: self !< instance
@@ -263,33 +292,49 @@ contains
         endif
     end subroutine write_header
 
-    subroutine write_record( self, a, i, os_peak )
+    subroutine write_record_1( self, i, self2 )
+        class(binoris), intent(inout) :: self
+        integer,        intent(in)    :: i
+        class(binoris), intent(in)    :: self2
+        integer :: io_status
+        if( .not. (self.eqdims.self2) ) stop 'filehandlers have different dims; binoris :: write_record_1'
+        ! assuming file open
+        ! check index bounds
+        if( i < self%fromto(1) .or. i > self%fromto(2) ) stop 'index i out of bound; binoris :: write_record_1'
+        write(unit=self%funit,pos=self%first_byte(i),iostat=io_status) self2%record
+        if( io_status .ne. 0 )then
+            write(*,'(a,i0,a)') '**error(binoris::write_record_1): error ', io_status, ' when writing record bytes to disk'
+            stop 'I/O error; write_record_1; simple_binoris'
+        endif
+    end subroutine write_record_1
+
+    subroutine write_record_2( self, i, a, os_peak )
         class(binoris),        intent(inout) :: self
-        class(oris),           intent(inout) :: a
         integer,               intent(in)    :: i
+        class(oris),           intent(inout) :: a
         class(oris), optional, intent(inout) :: os_peak
-        integer                   :: io_status, iflag, ipeak, cnt, ind
+        integer                   :: io_status, iflag, ipeak, cnt
         type(ori)                 :: o
         real(kind=4), allocatable :: vals(:)
         ! assuming file open
         ! check index bounds
-        if( i < self%fromto(1) .or. i > self%fromto(2) ) stop 'index i out of bound; binoris :: write_record'
+        if( i < self%fromto(1) .or. i > self%fromto(2) ) stop 'index i out of bound; binoris :: write_record_2'
         ! transfer hash data to self%record
         o = a%get_ori(i)
         vals = o%hash_vals()
-        if( self%n_hash_vals /= size(vals) ) stop 'nonconforming hash size; binoris :: write_record'
+        if( self%n_hash_vals /= size(vals) ) stop 'nonconforming hash size; binoris :: write_record_2'
         self%record = 0.0
         self%record(:self%n_hash_vals) = vals
         if( present(os_peak) )then
             ! transfer os_peak data to self%record
-            if( self%n_peaks /= os_peak%get_noris() ) stop 'nonconforming os_peak size; binoris :: write_record'        
+            if( self%n_peaks /= os_peak%get_noris() ) stop 'nonconforming os_peak size; binoris :: write_record_2'        
             cnt = self%n_hash_vals
             do ipeak=1,self%n_peaks
                 do iflag=1,NOPEAKFLAGS
                     cnt = cnt + 1
                     if( .not. os_peak%isthere(trim(o_peak_flags(iflag))) )then
                         write(*,'(a)') 'WARNING! The '//trim(o_peak_flags(iflag))//' is missing from os_peak'
-                        write(*,'(a)') 'In: simple_binors; write_record'
+                        write(*,'(a)') 'In: simple_binors; write_record_2'
                     endif
                     self%record(cnt) = os_peak%get(ipeak, trim(o_peak_flags(iflag)))
                 end do
@@ -297,26 +342,34 @@ contains
         endif
         write(unit=self%funit,pos=self%first_byte(i),iostat=io_status) self%record
         if( io_status .ne. 0 )then
-            write(*,'(a,i0,a)') '**error(binoris::write_record): error ', io_status, ' when writing record bytes to disk'
-            stop 'I/O error; write_record; simple_binoris'
+            write(*,'(a,i0,a)') '**error(binoris::write_record_2): error ', io_status, ' when writing record bytes to disk'
+            stop 'I/O error; write_record_2; simple_binoris'
         endif
-    end subroutine write_record
+    end subroutine write_record_2
 
-    subroutine read_record( self, a, i, os_peak )
-        class(binoris),        intent(inout) :: self
-        class(oris),           intent(inout) :: a
-        integer,               intent(in)    :: i
-        class(oris), optional, intent(inout) :: os_peak
-        integer   :: io_status, iflag, ipeak, cnt, ind, j
-        real      :: euls(3)
+    subroutine read_record_1( self, i )
+        class(binoris), intent(inout) :: self
+        integer,        intent(in)    :: i
+        integer :: io_status
         ! assuming file open
         ! check index bounds
-        if( i < self%fromto(1) .or. i > self%fromto(2) ) stop 'index i out of bound; binoris :: read_record'
+        if( i < self%fromto(1) .or. i > self%fromto(2) ) stop 'index i out of bound; binoris :: read_record_1'
         read(unit=self%funit,pos=self%first_byte(i),iostat=io_status) self%record
         if( io_status .ne. 0 )then
-            write(*,'(a,i0,a)') '**error(binoris::read_record): error ', io_status, ' when reading record bytes from disk'
-            stop 'I/O error; read_record; simple_binoris'
+            write(*,'(a,i0,a)') '**error(binoris::read_record_1): error ', io_status, ' when reading record bytes from disk'
+            stop 'I/O error; read_record_1; simple_binoris'
         endif
+    end subroutine read_record_1
+
+    subroutine read_record_2( self, i, a, os_peak, nst )
+        class(binoris),        intent(inout) :: self
+        integer,               intent(in)    :: i
+        class(oris),           intent(inout) :: a
+        class(oris), optional, intent(inout) :: os_peak
+        integer,     optional, intent(out)   :: nst
+        integer   :: io_status, iflag, ipeak, cnt, j, state
+        real      :: euls(3)
+        call self%read_record_1(i)
         ! transfer hash data
         euls = 0.
         do j=1,self%n_hash_vals
@@ -332,6 +385,10 @@ contains
             end select            
         end do
         call a%set_euler(i, euls)
+        if( present(nst) )then
+            state = int(a%get(i, 'state'))
+            nst = max(1,max(state,nst))
+        endif
         if( present(os_peak) )then
             ! transfer os_peak data
             cnt = self%n_hash_vals
@@ -354,7 +411,22 @@ contains
                 call os_peak%set_euler(ipeak, euls)
             end do
         endif
-    end subroutine read_record
+    end subroutine read_record_2
+
+    subroutine read_ctfparams_and_state( self, i, a )
+        class(binoris), intent(inout) :: self
+        integer,        intent(in)    :: i
+        class(oris),    intent(inout) :: a
+        integer :: j
+        call self%read_record_1(i)
+        ! transfer hash data
+        do j=1,self%n_hash_vals
+            select case(trim(self%hash_keys(j)))
+                case('smpd','kv','cs','fraca','phaseplate','dfx','dfy','angast','bfac','state')
+                    call a%set(i, trim(self%hash_keys(j)), self%record(j))
+            end select            
+        end do
+    end subroutine read_ctfparams_and_state
 
     ! byte indexing
 

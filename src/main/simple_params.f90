@@ -19,73 +19,74 @@ type :: params
     type(ori)             :: ori_glob
     type(ctfplan)         :: tfplan
     ! yes/no decision variables in ascending alphabetical order
-    character(len=3)      :: acf='no'          !< calculate autocorrelation function(yes|no){no}
-    character(len=3)      :: append='no'       !< append in context of files(yes|no){no}
-    character(len=3)      :: async='no'        !< asynchronous (yes|no){no}
-    character(len=3)      :: autoscale='yes'   !< automatic down-scaling(yes|no){yes}
-    character(len=3)      :: avg='no'          !< calc average automatic (yes|no){no}
-    character(len=3)      :: bin='no'          !< binarise image(yes|no){no}
-    character(len=3)      :: center='yes'      !< center image(s)/class average(s)/volume(s)(yes|no){no}
-    character(len=3)      :: clustvalid='no'   !< validate clustering(yes|homo|no){no}
-    character(len=3)      :: compare='no'      !< do comparison(yes|no){no}
-    character(len=3)      :: countvox='no'     !< count # voxels(yes|no){no}
-    character(len=3)      :: ctfstats='no'     !< calculate ctf statistics(yes|no){no}
+    character(len=3)      :: acf='no'             !< calculate autocorrelation function(yes|no){no}
+    character(len=3)      :: append='no'          !< append in context of files(yes|no){no}
+    character(len=3)      :: async='no'           !< asynchronous (yes|no){no}
+    character(len=3)      :: autoscale='yes'      !< automatic down-scaling(yes|no){yes}
+    character(len=3)      :: avg='no'             !< calc average automatic (yes|no){no}
+    character(len=3)      :: bin='no'             !< binarise image(yes|no){no}
+    character(len=3)      :: center='yes'         !< center image(s)/class average(s)/volume(s)(yes|no){no}
+    character(len=3)      :: classtats='no'       !< calculate class population statistics(yes|no){no}
+    character(len=3)      :: clustvalid='no'      !< validate clustering(yes|homo|no){no}
+    character(len=3)      :: compare='no'         !< do comparison(yes|no){no}
+    character(len=3)      :: countvox='no'        !< count # voxels(yes|no){no}
+    character(len=3)      :: ctfstats='no'        !< calculate ctf statistics(yes|no){no}
     character(len=3)      :: cure='no'
-    character(len=3)      :: discrete='no'     !< be discrete(yes|no){no}
-    character(len=3)      :: diverse='no'      !< diverse or not flag (yes|no){no}
+    character(len=3)      :: discrete='no'        !< be discrete(yes|no){no}
+    character(len=3)      :: diverse='no'         !< diverse or not flag (yes|no){no}
     character(len=3)      :: doalign='yes'
     character(len=3)      :: dopca='yes'
     character(len=3)      :: dopick='yes'
     character(len=3)      :: doprint='no'
-    character(len=3)      :: dynlp='yes'       !< automatic resolution limit update(yes|no){yes}
-    character(len=3)      :: eo='yes'          !< use FSC for filtering and low-pass limit update(yes|no){no}
-    character(len=3)      :: errify='no'       !< introduce error(yes|no){no}
-    character(len=3)      :: even='no'         !< calculate even eo-pair(yes|no){no}
-    character(len=3)      :: ft2img='no'       !< convert Fourier transform to real image of power(yes|no){no}
-    character(len=3)      :: guinier='no'      !< calculate Guinier plot(yes|no){no}
+    character(len=3)      :: dynlp='yes'          !< automatic resolution limit update(yes|no){yes}
+    character(len=3)      :: eo='yes'             !< use FSC for filtering and low-pass limit update(yes|no){no}
+    character(len=3)      :: errify='no'          !< introduce error(yes|no){no}
+    character(len=3)      :: even='no'            !< calculate even eo-pair(yes|no){no}
+    character(len=3)      :: ft2img='no'          !< convert Fourier transform to real image of power(yes|no){no}
+    character(len=3)      :: guinier='no'         !< calculate Guinier plot(yes|no){no}
     character(len=3)      :: kmeans='yes'
     character(len=3)      :: local='no'
-    character(len=3)      :: masscen='no'      !< center using binarisation and mass centering(yes|no){no}
+    character(len=3)      :: masscen='no'         !< center using binarisation and mass centering(yes|no){no}
     character(len=3)      :: merge='no'
-    character(len=3)      :: mirr='no'         !< mirror(no|x|y){no}
-    character(len=3)      :: neg='no'          !< invert contrast of images(yes|no)
+    character(len=3)      :: mirr='no'            !< mirror(no|x|y){no}
+    character(len=3)      :: neg='no'             !< invert contrast of images(yes|no)
     character(len=3)      :: noise_norm ='no'
-    character(len=3)      :: noise='no'        !< noise initialisation(yes|no){no}
-    character(len=3)      :: norec='no'        !< do not reconstruct volume(s)(yes|no){no}
-    character(len=3)      :: norm='no'         !< do statistical normalisation avg
-    character(len=3)      :: odd='no'          !< calculate odd eo-pair(yes|no){no}
-    character(len=3)      :: order='no'        !< order ptcls according to correlation(yes|no){no}
-    character(len=3)      :: outside='no'      !< extract boxes outside the micrograph boundaries(yes|no){no}
+    character(len=3)      :: noise='no'           !< noise initialisation(yes|no){no}
+    character(len=3)      :: norec='no'           !< do not reconstruct volume(s)(yes|no){no}
+    character(len=3)      :: norm='no'            !< do statistical normalisation avg
+    character(len=3)      :: odd='no'             !< calculate odd eo-pair(yes|no){no}
+    character(len=3)      :: order='no'           !< order ptcls according to correlation(yes|no){no}
+    character(len=3)      :: outside='no'         !< extract boxes outside the micrograph boundaries(yes|no){no}
     character(len=3)      :: pad='no'
-    character(len=3)      :: pgrp_known='no'   !< point-group known a priori(yes|no){no}
-    character(len=3)      :: phaseplate='no'   !< images obtained with phaseplate(yes|no){no}
-    character(len=3)      :: phrand='no'       !< phase randomize(yes|no){no}
-    character(len=3)      :: plot='no'         !< make plot(yes|no){no}
+    character(len=3)      :: pgrp_known='no'      !< point-group known a priori(yes|no){no}
+    character(len=3)      :: phaseplate='no'      !< images obtained with phaseplate(yes|no){no}
+    character(len=3)      :: phrand='no'          !< phase randomize(yes|no){no}
+    character(len=3)      :: plot='no'            !< make plot(yes|no){no}
     character(len=3)      :: projstats='no'
     character(len=3)      :: readwrite='no'
     character(len=3)      :: remap_classes='no'
     character(len=3)      :: restart='no'
-    character(len=3)      :: rnd='no'          !< random(yes|no){no}
-    character(len=3)      :: rm_outliers='yes' !< remove outliers{yes}
+    character(len=3)      :: rnd='no'             !< random(yes|no){no}
+    character(len=3)      :: rm_outliers='yes'    !< remove outliers{yes}
     character(len=3)      :: roalgn='no'
     character(len=3)      :: round='no'
-    character(len=3)      :: shalgn='no'       !< do 2D shift alignment(yes|no){no}
+    character(len=3)      :: shalgn='no'          !< do 2D shift alignment(yes|no){no}
     character(len=3)      :: shellnorm='no'
-    character(len=3)      :: shbarrier='yes'   !< use shift search barrier constraint(yes|no){yes}
-    character(len=3)      :: single='no'       !< simulate a single image(yes|no){no}
-    character(len=3)      :: soften='no'       !< soften envelope with cosine edge(yes|no){no}
-    character(len=3)      :: stats='no'        !< provide statistics(yes|no){yes}
-    character(len=3)      :: stream='no'       !< sream (real time) execution mode(yes|no){no}
+    character(len=3)      :: shbarrier='yes'      !< use shift search barrier constraint(yes|no){yes}
+    character(len=3)      :: single='no'          !< simulate a single image(yes|no){no}
+    character(len=3)      :: soften='no'          !< soften envelope with cosine edge(yes|no){no}
+    character(len=3)      :: stats='no'           !< provide statistics(yes|no){yes}
+    character(len=3)      :: stream='no'          !< sream (real time) execution mode(yes|no){no}
     character(len=3)      :: swap='no'
     character(len=3)      :: test='no'
-    character(len=3)      :: tomo='no'         !< tomography mode(yes|no){no}
+    character(len=3)      :: tomo='no'            !< tomography mode(yes|no){no}
     character(len=3)      :: time='no'
-    character(len=3)      :: trsstats='no'     !< provide origin shift statistics(yes|no){no}
-    character(len=3)      :: tseries='no'      !< images represent a time-series(yes|no){no}
-!    character(len=3)      :: verbose='no'      !< verbosity flag (yes|no){no}
-    character(len=3)      :: vis='no'          !< visualise(yes|no)
+    character(len=3)      :: trsstats='no'        !< provide origin shift statistics(yes|no){no}
+    character(len=3)      :: tseries='no'         !< images represent a time-series(yes|no){no}
+!    character(len=3)      :: verbose='no'        !< verbosity flag (yes|no){no}
+    character(len=3)      :: vis='no'             !< visualise(yes|no)
     character(len=3)      :: weights2D='no'
-    character(len=3)      :: zero='no'         !< zeroing(yes|no){no}
+    character(len=3)      :: zero='no'            !< zeroing(yes|no){no}
     ! other fixed length character variables in ascending alphabetical order
     character(len=STDLEN) :: angastunit='degrees' !< angle of astigmatism unit (radians|degrees){degrees}
     character(len=4)      :: automsk='no'
@@ -123,9 +124,9 @@ type :: params
     character(len=STDLEN) :: mskfile=''           !< maskfile.ext
     character(len=STDLEN) :: msktype='soft'       !< type of mask(hard|soft){soft}
     character(len=STDLEN) :: opt='simplex'        !< optimiser (powell|simplex|oasis|bforce|pso|de){simplex}
-    character(len=STDLEN) :: oritab=''            !< table (text file) of orientations(.asc/.txt)
-    character(len=STDLEN) :: oritab2=''           !< 2nd table (text file) of orientations(.asc/.txt)
-    character(len=STDLEN) :: oritab3D=''          !< table (text file) of 3D orientations(.asc/.txt)
+    character(len=STDLEN) :: oritab=''            !< table  of orientations(.asc/.txt)
+    character(len=STDLEN) :: oritab2=''           !< 2nd table of orientations(.asc/.bin/.txt)
+    character(len=STDLEN) :: oritab3D=''          !< table of 3D orientations(.asc/.bin/.txt)
     character(len=STDLEN) :: outfile='outfile.txt'!< output document
     character(len=STDLEN) :: outstk=''            !< output image stack
     character(len=STDLEN) :: outstk2=''           !< output image stack 2nd
@@ -220,6 +221,7 @@ type :: params
     integer :: nsym=1
     integer :: nthr=1              !< # OpenMP threads{1}
     integer :: numlen=0            !< length of number string
+    integer :: numlen_tomo=3       !< length of number string tomo series index{3}
     integer :: nvalid=0
     integer :: nvars=30
     integer :: nvox=0              !< # voxels{0}
@@ -284,64 +286,64 @@ type :: params
     real    :: e3=0.               !< 3d Euler(in degrees){0}
     real    :: eps=0.003
     real    :: eullims(3,2)=0.
-    real    :: exp_time=2.0       !< exposure time(in s)
-    real    :: filwidth=0.        !< width of filament (in A)
+    real    :: exp_time=2.0        !< exposure time(in s)
+    real    :: filwidth=0.         !< width of filament (in A)
     real    :: fny=0.
-    real    :: frac=1.            !< fraction of ptcls(0-1){1}
-    real    :: fraca=0.07         !< fraction of amplitude contrast used for fitting CTF{0.07}
-    real    :: fracdeadhot=0.05   !< fraction of dead or hot pixels{0.01}
+    real    :: frac=1.             !< fraction of ptcls(0-1){1}
+    real    :: fraca=0.07          !< fraction of amplitude contrast used for fitting CTF{0.07}
+    real    :: fracdeadhot=0.05    !< fraction of dead or hot pixels{0.01}
     real    :: frac_outliers=0.
     real    :: fraczero=0.
     real    :: ftol=1e-6
     real    :: gw=0.5
-    real    :: hp=100.            !< high-pass limit(in A)
-    real    :: hp_ctffind=30.     !< high-pass limit 4 ctffind(in A)
-    real    :: inner=0.           !< inner mask radius(in pixels)
-    real    :: kv=300.            !< acceleration voltage(in kV){300.}
+    real    :: hp=100.             !< high-pass limit(in A)
+    real    :: hp_ctffind=30.      !< high-pass limit 4 ctffind(in A)
+    real    :: inner=0.            !< inner mask radius(in pixels)
+    real    :: kv=300.             !< acceleration voltage(in kV){300.}
     real    :: lam=0.5
     real    :: lp_dyn=20.
     real    :: lp_grid=20.
-    real    :: lp=20.             !< low-pass limit(in A)
-    real    :: lp_ctffind=5.0     !< low-pass limit 4 ctffind(in A)
-    real    :: lp_pick=20.        !< low-pass limit 4 picker(in A)
+    real    :: lp=20.              !< low-pass limit(in A)
+    real    :: lp_ctffind=5.0      !< low-pass limit 4 ctffind(in A)
+    real    :: lp_pick=20.         !< low-pass limit 4 picker(in A)
     real    :: lplims2D(3)
     real    :: lpmed=20.
-    real    :: lpstart=0.         !< start low-pass limit(in A){15}
-    real    :: lpstop=7.0         !< stop low-pass limit(in A){8}
+    real    :: lpstart=0.          !< start low-pass limit(in A){15}
+    real    :: lpstop=7.0          !< stop low-pass limit(in A){8}
     real    :: lpvalid=20.
-    real    :: moldiam=140.       !< molecular diameter(in A)
+    real    :: moldiam=140.        !< molecular diameter(in A)
     real    :: moment=0.
-    real    :: msk=0.             !< mask radius(in pixels)
-    real    :: mul=1.             !< origin shift multiplication factor{1}
-    real    :: mw=0.              !< molecular weight(in kD)
+    real    :: msk=0.              !< mask radius(in pixels)
+    real    :: mul=1.              !< origin shift multiplication factor{1}
+    real    :: mw=0.               !< molecular weight(in kD)
     real    :: neigh=0.2
-    real    :: nsig=2.5           !< # sigmas
+    real    :: nsig=2.5            !< # sigmas
     real    :: optlims(7,2)=0.
-    real    :: outer=0.           !< outer mask radius(in pixels)
-    real    :: phranlp=35.        !< low-pass phase randomize(yes|no){no}
-    real    :: power=2.           !<
-    real    :: scale=1.           !< image scale factor{1}
-    real    :: scale2=1.          !< image scale factor 2nd{1}
-    real    :: sherr=0.           !< shift error(in pixels){2}
-    real    :: smpd=2.            !< sampling distance, same as EMANs apix(in A)
+    real    :: outer=0.            !< outer mask radius(in pixels)
+    real    :: phranlp=35.         !< low-pass phase randomize(yes|no){no}
+    real    :: power=2.
+    real    :: scale=1.            !< image scale factor{1}
+    real    :: scale2=1.           !< image scale factor 2nd{1}
+    real    :: sherr=0.            !< shift error(in pixels){2}
+    real    :: smpd=2.             !< sampling distance, same as EMANs apix(in A)
     real    :: smpd_targets2D(2)
-    real    :: snr=0.             !< signal-to-noise ratio
-    real    :: thres=0.           !< threshold (binarisation: 0-1; distance filer: in pixels)
+    real    :: snr=0.              !< signal-to-noise ratio
+    real    :: thres=0.            !< threshold (binarisation: 0-1; distance filer: in pixels)
     real    :: time_per_image=200.
     real    :: time_per_frame=0.
-    real    :: trs=0.             !< maximum halfwidth shift(in pixels)
+    real    :: trs=0.              !< maximum halfwidth shift(in pixels)
     real    :: var=1.
-    real    :: width=10.          !< falloff of inner mask(in pixels){10}
+    real    :: width=10.           !< falloff of inner mask(in pixels){10}
     real    :: winsz=1.
-    real    :: xsh=0.             !< x shift(in pixels){0}
-    real    :: ysh=0.             !< y shift(in pixels){0}
-    real    :: zsh=0.             !< z shift(in pixels){0}
+    real    :: xsh=0.              !< x shift(in pixels){0}
+    real    :: ysh=0.              !< y shift(in pixels){0}
+    real    :: zsh=0.              !< z shift(in pixels){0}
     ! logical variables in ascending alphabetical order
     logical :: cyclic(7)       = .false.
     logical :: l_distr_exec    = .false.
     logical :: l_chunk_distr   = .false.
     logical :: doshift         = .false.
-    logical :: l_envmsk       = .false.
+    logical :: l_envmsk        = .false.
     logical :: l_autoscale     = .false.
     logical :: l_dose_weight   = .false. 
     logical :: l_innermsk      = .false. 
@@ -521,9 +523,9 @@ contains
         call check_file('fsc',            self%fsc,'B')
         call check_file('infile',         self%infile)
         call check_file('mskfile',        self%mskfile,  notAllowed='T')
-        call check_file('oritab',         self%oritab, 'T')
-        call check_file('oritab2',        self%oritab2,'T')
-        call check_file('oritab3D',       self%oritab3D,'T')
+        call check_file('oritab',         self%oritab, 'T', 'B')
+        call check_file('oritab2',        self%oritab2,'T', 'B')
+        call check_file('oritab3D',       self%oritab3D,'T', 'B')
         call check_file('outstk',         self%outstk,   notAllowed='T')
         call check_file('outstk2',        self%outstk2,  notAllowed='T')
         call check_file('outvol',         self%outvol,   notAllowed='T')
@@ -588,6 +590,7 @@ contains
         call check_iarg('nptcls',         self%nptcls)
         call check_iarg('nthr',           self%nthr)
         call check_iarg('numlen',         self%numlen)
+        call check_iarg('numlen_tomo',    self%numlen_tomo)
         call check_iarg('nvars',          self%nvars)
         call check_iarg('nvox',           self%nvox)
         call check_iarg('offset',         self%offset)
@@ -1029,7 +1032,7 @@ contains
 
         write(*,'(A)') '>>> DONE PROCESSING PARAMETERS'
 
-      contains
+        contains
 
           subroutine check_vol( i )
               integer, intent(in) :: i
@@ -1041,8 +1044,7 @@ contains
                       write(*,*) 'Input volume:', self%vols(i), 'does not exist!'
                       stop
                   endif
-                  !self%nstates = i
-                 DebugPrint nam, '=', self%vols(i)
+                  DebugPrint nam, '=', self%vols(i)
               endif
           end subroutine check_vol
 
@@ -1077,13 +1079,11 @@ contains
                   DebugPrint 'file_descr = ', file_descr
                   raise_exception = .false.
                   if( present(allowed1) )then
-                      if( allowed1 == file_descr ) then
-                          if( present(allowed2) )then
-                              if( allowed2 == file_descr ) then
-                                  ! all good
-                              else
-                                  raise_exception = .true.
-                              endif
+                      if( present(allowed2) )then
+                          if( allowed1 == file_descr .or. allowed2 == file_descr ) then
+                              ! all good
+                          else
+                              raise_exception = .true.
                           endif
                       else
                           raise_exception = .true.

@@ -42,26 +42,11 @@ type :: oris
     procedure, private :: isthere_1
     procedure, private :: isthere_2
     generic            :: isthere => isthere_1, isthere_2
-    procedure          :: get_ncls
-    procedure          :: get_nprojs
+    procedure          :: get_n
     procedure          :: get_pop
-    procedure          :: get_cls_pop
-    procedure          :: get_proj_pop
-    procedure          :: get_proj_pops
-    procedure          :: get_state_pop
+    procedure          :: get_pops
+    procedure          :: get_pinds
     procedure          :: states_exist
-    procedure          :: get_ptcls_in_state
-    procedure          :: get_nstates
-    procedure          :: get_nlabels
-    procedure          :: split_state
-    procedure          :: split_class
-    procedure          :: expand_classes
-    procedure          :: remap_classes
-    procedure          :: shift_classes
-    procedure          :: get_cls_pinds
-    procedure          :: get_state
-    procedure          :: get_proj
-    procedure          :: get_class
     procedure          :: get_arr
     procedure, private :: calc_sum
     procedure          :: get_sum
@@ -69,13 +54,10 @@ type :: oris
     procedure, private :: calc_nonzero_sum
     procedure          :: get_nonzero_sum
     procedure          :: get_nonzero_avg
-    procedure          :: get_ctfparams
     procedure          :: extract_table
     procedure          :: ang_sdev
     procedure          :: included
     procedure          :: print_
-    procedure          :: print_chash_sizes
-    procedure          :: print_mats
     ! SETTERS
     procedure, private :: assign
     generic            :: assignment(=) => assign
@@ -108,7 +90,6 @@ type :: oris
     procedure          :: rnd_gau_neighbors
     procedure          :: rnd_ori
     procedure          :: rnd_cls
-    procedure          :: ini_tseries
     procedure          :: rnd_oris_discrete
     procedure          :: rnd_inpls
     procedure          :: rnd_trs
@@ -119,7 +100,7 @@ type :: oris
     procedure          :: rnd_corrs
     procedure          :: revshsgn
     procedure          :: revorisgn
-    procedure          :: merge_classes
+    procedure          :: ini_tseries
     procedure          :: symmetrize
     procedure          :: merge
     ! I/O
@@ -129,16 +110,13 @@ type :: oris
     procedure, private :: write_2
     generic            :: write => write_1, write_2
     ! CALCULATORS
-    procedure, private :: homogeneity_1
-    procedure, private :: homogeneity_2
-    generic            :: homogeneity => homogeneity_1, homogeneity_2
-    procedure          :: cohesion_norm
-    procedure          :: cohesion
-    procedure          :: cohesion_ideal
-    procedure          :: separation_norm
-    procedure          :: separation
-    procedure          :: separation_ideal
-    procedure          :: histogram
+    procedure          :: split_state
+    procedure          :: split_class
+    procedure          :: expand_classes
+    procedure          :: remap_classes
+    procedure          :: shift_classes
+    procedure          :: create_conforming_npeaks_set
+    procedure          :: merge_classes
     procedure          :: round_shifts
     procedure          :: introd_alig_err
     procedure          :: introd_ctf_err
@@ -156,10 +134,12 @@ type :: oris
     procedure          :: order
     procedure          :: order_corr
     procedure          :: order_cls
-    procedure          :: balance
-    procedure          :: calc_hard_ptcl_weights
+    procedure, private :: balance_1
+    procedure, private :: balance_2
+    generic            :: balance => balance_1, balance_2
+    procedure          :: calc_hard_weights
     procedure          :: calc_spectral_weights
-    procedure, private :: calc_hard_ptcl_weights_single
+    procedure, private :: calc_hard_weights_single
     procedure, private :: calc_spectral_weights_single
     procedure          :: find_closest_proj
     procedure          :: find_closest_projs
@@ -176,13 +156,6 @@ type :: oris
     procedure          :: find_npeaks
     procedure          :: find_athres_from_npeaks
     procedure          :: find_npeaks_from_athres
-    procedure          :: class_calc_frac
-    procedure          :: class_dist_stat
-    procedure          :: class_corravg
-    procedure          :: best_in_class
-    procedure, private :: calc_avg_class_shifts_1
-    procedure, private :: calc_avg_class_shifts_2
-    generic            :: calc_avg_class_shifts => calc_avg_class_shifts_1, calc_avg_class_shifts_2
     procedure, private :: map3dshift22d_1
     procedure, private :: map3dshift22d_2
     generic            :: map3dshift22d => map3dshift22d_1, map3dshift22d_2
@@ -199,9 +172,6 @@ type :: oris
     procedure, private :: diststat_2
     generic            :: diststat => diststat_1, diststat_2
     procedure          :: cluster_diststat
-    procedure          :: mirror3d
-    procedure          :: mirror2d
-    procedure          :: cls_overlap
     ! DESTRUCTOR
     procedure          :: kill
 end type oris
@@ -406,91 +376,72 @@ contains
         is = self%o(i)%isthere(key)
     end function isthere_2
 
-    !>  \brief  is for checking the number of classes
-    function get_ncls( self ) result( ncls )
-        class(oris), intent(inout) :: self
-        integer :: i, ncls, mycls
-        ncls = 1
+    !>  \brief  is for getting the max val of integer label
+    function get_n( self, label ) result( n )
+        class(oris),      intent(inout) :: self
+        character(len=*), intent(in)    :: label
+        integer :: i, n, ival
+        n = 1
         do i=1,self%n
-            mycls = nint(self%o(i)%get('class'))
-            if( mycls > ncls ) ncls = mycls
+            ival = nint(self%o(i)%get(trim(label)))
+            if( ival > n ) n = ival
         end do
-    end function get_ncls
-
-    !>  \brief  is for checking the number of projs
-    function get_nprojs( self ) result( nprojs )
-        class(oris), intent(inout) :: self
-        integer :: i, nprojs, myproj
-        nprojs = 1
-        do i=1,self%n
-            myproj = nint(self%o(i)%get('proj'))
-            if( myproj > nprojs ) nprojs = myproj
-        end do
-    end function get_nprojs
+    end function get_n
 
     !>  \brief  is for checking label population
-    function get_pop( self, ind, label ) result( pop )
-        class(oris),      intent(inout) :: self
-        integer,          intent(in)    :: ind
-        character(len=*), intent(in)    :: label
+    function get_pop( self, ind, label, consider_w ) result( pop )
+        class(oris),       intent(inout) :: self
+        integer,           intent(in)    :: ind
+        character(len=*),  intent(in)    :: label
+        logical, optional, intent(in)    :: consider_w
         integer :: mylab, pop, i, mystate
+        logical :: cconsider_w
+        real    :: w
+        cconsider_w = .false.
+        if( present(consider_w) ) cconsider_w = consider_w
+        if( cconsider_w )then
+            if( .not. self%isthere('w') ) stop 'ERROR, oris :: get_pop with optional consider_w assumes w set'
+        endif
         pop = 0
         do i=1,self%n
             mystate = nint(self%o(i)%get('state'))
-            if( mystate > 0 )then
+            w = 1.0
+            if( cconsider_w ) w = self%o(i)%get('w')
+            if( mystate > 0 .and. w > TINY )then
                 mylab = nint(self%o(i)%get(label))
-                if( mylab == ind )then
-                    pop = pop+1
-                endif
+                if( mylab == ind )  pop = pop + 1
             endif
         end do
     end function get_pop
 
-    !>  \brief  is for checking class population
-    function get_cls_pop( self, class ) result( pop )
-        class(oris), intent(inout) :: self
-        integer,     intent(in)    :: class
-        integer :: pop
-        pop = self%get_pop(class, 'class')
-    end function get_cls_pop
-
-    !>  \brief  is for checking proj population
-    function get_proj_pop( self, proj ) result( pop )
-        class(oris), intent(inout) :: self
-        integer,     intent(in)    :: proj
-        integer :: pop
-        pop = self%get_pop(proj, 'proj')
-    end function get_proj_pop
-
-    !>  \brief  is for checking proj populations
-    function get_proj_pops( self ) result( pops )
-        class(oris), intent(inout) :: self
+    !>  \brief  is for checking discrete label populations
+    function get_pops( self, label, consider_w ) result( pops )
+        class(oris),       intent(inout) :: self
+        character(len=*),  intent(in)    :: label
+        logical, optional, intent(in)    :: consider_w
         real, allocatable :: pops(:)
-        integer :: i, mystate, myproj, nprojs, alloc_stat
-        nprojs = self%get_nprojs()
-        allocate(pops(nprojs),stat=alloc_stat)
-        call alloc_errchk('In: get_proj_pops, module: simple_oris', alloc_stat)
+        integer :: i, mystate, myval, n, alloc_stat
+        real    :: w
+        logical :: cconsider_w
+        cconsider_w = .false.
+        if( present(consider_w) ) cconsider_w = consider_w
+        if( cconsider_w )then
+            if( .not. self%isthere('w') ) stop 'ERROR, oris :: get_pops with optional consider_w assumes w set'
+        endif
+        n = self%get_n(label)
+        allocate(pops(n),stat=alloc_stat)
+        call alloc_errchk('In: get_pops, module: simple_oris', alloc_stat)
         pops = 0.0
         do i=1,self%n
             mystate = nint(self%o(i)%get('state'))
-            if( mystate > 0 )then
-                myproj = nint(self%o(i)%get('proj'))
-                pops(myproj) = pops(myproj) + 1.0  
+            w = 1.0
+            if( cconsider_w )  w = self%o(i)%get('w')
+            if( mystate > 0 .and. w > TINY )then
+                myval = nint(self%o(i)%get(label))
+                pops(myval) = pops(myval) + 1.0  
             endif
         end do
-    end function get_proj_pops
-
-    !>  \brief  is for checking state population
-    function get_state_pop( self, state ) result( pop )
-        class(oris), intent(inout) :: self
-        integer,     intent(in)    :: state
-        integer :: mystate, pop, i
-        pop = 0
-        do i=1,self%n
-            mystate = nint(self%o(i)%get('state'))
-            if( mystate == state ) pop = pop + 1
-        end do
-    end function get_state_pop
+    end function get_pops
 
     !>  \brief  returns a logical array of state existence
     function states_exist(self, nstates) result(exists)
@@ -499,50 +450,9 @@ contains
         integer :: i
         logical :: exists(nstates)
         do i=1,nstates
-            exists(i) = (self%get_state_pop(i) > 0)
+            exists(i) = (self%get_pop(i, 'state') > 0)
         end do
     end function states_exist
-
-    !>  \brief  4 getting the particle indices corresponding to state
-    function get_ptcls_in_state( self, state ) result( ptcls )
-        class(oris), intent(inout) :: self
-        integer,     intent(in)    :: state
-        integer, allocatable :: ptcls(:)
-        integer :: pop, mystate, cnt, alloc_stat, i
-        pop = self%get_state_pop(state)
-        allocate( ptcls(pop), stat=alloc_stat )
-        call alloc_errchk("In: get_ptcls_in_state; simple_oris", alloc_stat)
-        cnt = 0
-        do i=1,self%n
-            mystate = nint(self%o(i)%get('state'))
-            if( mystate == state )then
-                cnt = cnt+1
-                ptcls(cnt) = i
-            endif
-        end do
-    end function get_ptcls_in_state
-
-    !>  \brief  is for getting the number of states
-    function get_nstates( self ) result( nstates )
-        class(oris), intent(inout) :: self
-        integer :: nstates, i, mystate
-        nstates = 1
-        do i=1,self%n
-            mystate = nint(self%o(i)%get('state'))
-            if( mystate > nstates ) nstates = mystate
-        end do
-    end function get_nstates
-
-    !>  \brief  is for getting the number of labels
-    function get_nlabels( self ) result( nlabels )
-        class(oris), intent(inout) :: self
-        integer :: nlabels, i, mylabel
-        nlabels = 1
-        do i=1,self%n
-            mylabel = nint(self%o(i)%get('label'))
-            if( mylabel > nlabels ) nlabels = mylabel
-        end do
-    end function get_nlabels
 
     !>  \brief  for balanced split of a state group
     subroutine split_state( self, which )
@@ -553,11 +463,11 @@ contains
         integer, allocatable :: states(:)
         type(ran_tabu)       :: rt
         integer              :: alloc_stat, n, nstates, iptcl
-        nstates = self%get_nstates()
+        nstates = self%get_n('state')
         if( which < 1 .or. which > nstates )then
             stop 'which (state) is out of range; simple_oris::split_state'
         endif
-        ptcls_in_which = self%get_state(which)
+        ptcls_in_which = self%get_pinds(which, 'state')
         n = size(ptcls_in_which)
         allocate(states(n), stat=alloc_stat)
         call alloc_errchk("simple_oris::split_state", alloc_stat)
@@ -583,11 +493,11 @@ contains
         integer, allocatable :: members(:)
         type(ran_tabu)       :: rt
         integer              :: alloc_stat, n, nmembers, iptcl
-        nmembers = self%get_ncls()
+        nmembers = self%get_n('class')
         if( which < 1 .or. which > nmembers )then
             stop 'which member is out of range; simple_oris :: split_class'
         endif
-        ptcls_in_which = self%get_cls_pinds(which)
+        ptcls_in_which = self%get_pinds(which, 'class')
         n = size(ptcls_in_which)
         allocate(members(n), stat=alloc_stat)
         call alloc_errchk("simple_oris::split_class", alloc_stat)
@@ -609,15 +519,15 @@ contains
         class(oris), intent(inout) :: self
         integer,     intent(in)    :: ncls_target
         integer, allocatable       :: pops(:)
-        integer :: ncls, loc(1), myncls, icls,alloc_stat
-        ncls = self%get_ncls()
+        integer :: ncls, loc(1), myncls, icls, alloc_stat
+        ncls = self%get_n('class')
         if( ncls_target <= ncls ) stop 'Number of target classes cannot be <= original number'
         ! calculate class populations
         allocate(pops(ncls_target),stat=alloc_stat)
         call alloc_errchk('In: expand_classes, module: simple_oris', alloc_stat)
         pops = 0
         do icls=1,ncls
-            pops(icls) = self%get_cls_pop(icls)
+            pops(icls) = self%get_pop(icls, 'class')
         end do
         myncls = ncls
         do while( myncls < ncls_target )
@@ -627,8 +537,8 @@ contains
             ! update number of classes
             myncls = myncls+1
             ! update pops
-            pops(loc(1)) = self%get_cls_pop(loc(1))
-            pops(myncls) = self%get_cls_pop(myncls)
+            pops(loc(1)) = self%get_pop(loc(1), 'class')
+            pops(myncls) = self%get_pop(myncls, 'class')
         end do
     end subroutine expand_classes
 
@@ -637,11 +547,11 @@ contains
         class(oris), intent(inout) :: self
         integer :: ncls, clsind_remap, pop, icls, iptcl, old_cls, alloc_stat
         integer , allocatable :: clspops(:)
-        ncls = self%get_ncls()
+        ncls = self%get_n('class')
         allocate(clspops(ncls),stat=alloc_stat)
         call alloc_errchk('In: remap_classes, module: simple_oris', alloc_stat)
         do icls=1,ncls
-            clspops(icls) = self%get_cls_pop(icls)
+            clspops(icls) = self%get_pop(icls, 'class')
         end do
         if( any(clspops == 0) )then
             clsind_remap = ncls
@@ -686,95 +596,82 @@ contains
         end do
     end subroutine shift_classes
 
-    !>  \brief  is for getting an allocatable array with ptcl indices of the class 'class'
-    function get_cls_pinds( self, class ) result( clsarr )
+    !>  \brief  is for contracting/expanding the ori set in self to make 
+    !!          a set of conforming size
+    function create_conforming_npeaks_set( self, npeaks ) result( os_conf )
         class(oris), intent(inout) :: self
-        integer,     intent(in)    :: class
-        integer, allocatable       :: clsarr(:)
-        integer                    :: clsnr, i, pop, alloc_stat, cnt
-        pop = self%get_cls_pop( class )
-        if( pop > 0 )then
-            allocate( clsarr(pop), stat=alloc_stat )
-            call alloc_errchk('get_cls_pinds; simple_oris', alloc_stat)
+        integer,     intent(in)    :: npeaks
+        real, allocatable :: ows(:)
+        type(ori)         :: o_template
+        type(oris)        :: os_conf
+        integer           :: inds(self%n), i, cnt
+        if( .not. self%isthere('ow') )&
+        &stop 'orientation weights (ow) needs to be set; oris :: create_conforming_npeaks_set'
+        if( self%n == npeaks )then
+            ! set is conforming
+            os_conf = self
+        else if( self%n > npeaks )then
+            ! shrink set
+            ows  = self%get_all('ow')
+            inds = (/(i,i=1,self%n)/)
+            call hpsort(self%n, ows, inds)
             cnt = 0
-            do i=1,self%n
-                clsnr = nint(self%get( i, 'class'))
-                if( clsnr == class )then
-                    cnt = cnt+1
-                    clsarr(cnt) = i
+            do i=self%n,self%n - npeaks + 1,-1
+                cnt = cnt + 1
+                os_conf%o(cnt) = self%o(inds(i))
+            end do
+        else
+            ! expand set
+            o_template = self%o(1)
+            call o_template%set_euler([0.,0.,0.])
+            call o_template%set_shift([0.,0.])
+            call o_template%set('state', 1.0)
+            call o_template%set('ow', 0.0)
+            call os_conf%new(npeaks)
+            do i=1,npeaks
+                if( i <= self%n )then
+                    os_conf%o(i) = self%o(i)
+                else
+                    os_conf%o(i) = o_template
                 endif
             end do
         endif
-    end function get_cls_pinds
+    end function create_conforming_npeaks_set
 
-    !>  \brief  is for getting an allocatable array with ptcl indices of the stategroup 'state'
-    function get_state( self, state ) result( statearr )
-        class(oris), intent(inout) :: self
-        integer,     intent(in)    :: state
-        integer, allocatable       :: statearr(:)
-        integer                    :: statenr, i, pop, alloc_stat, cnt
-        pop = self%get_state_pop( state )
-        if( pop > 0 )then
-            allocate( statearr(pop), stat=alloc_stat )
-            call alloc_errchk('get_state; simple_oris', alloc_stat)
-            cnt = 0
-            do i=1,self%n
-                statenr = nint(self%get( i, 'state' ))
-                if( statenr == state )then
-                    cnt = cnt+1
-                    statearr(cnt) = i
-                endif
-            end do
+    !>  \brief  is for getting an allocatable array with ptcl indices of the label 'label'
+    function get_pinds( self, ind, label, consider_w ) result( indices )
+        class(oris),       intent(inout) :: self
+        character(len=*),  intent(in)    :: label
+        integer,           intent(in)    :: ind
+        logical, optional, intent(in)    :: consider_w
+        integer, allocatable :: indices(:)
+        integer :: pop, alloc_stat, mystate, cnt, myval, i
+        logical :: cconsider_w
+        real    :: w
+        cconsider_w = .false.
+        if( present(consider_w) ) cconsider_w = consider_w
+        if( cconsider_w )then
+            if( .not. self%isthere('w') ) stop 'ERROR, oris :: get_pinds with optional consider_w assumes w set'
         endif
-    end function get_state
-
-    !>  \brief  is for getting an allocatable array with ptcl indices of the projgroup 'proj'
-    function get_proj( self, proj ) result( projarr )
-        class(oris), intent(inout) :: self
-        integer,     intent(in)    :: proj
-        integer, allocatable       :: projarr(:)
-        integer                    :: projnr, i, pop, alloc_stat, cnt, mystate
-        pop = self%get_proj_pop( proj )
+        pop = self%get_pop(ind, label, consider_w ) 
         if( pop > 0 )then
-            allocate( projarr(pop), stat=alloc_stat )
-            call alloc_errchk('get_proj; simple_oris', alloc_stat)
+            allocate( indices(pop), stat=alloc_stat )
+            call alloc_errchk('get_pinds; simple_oris', alloc_stat)
             cnt = 0
             do i=1,self%n
                 mystate = nint(self%o(i)%get('state'))
-                if( mystate > 0 )then
-                    projnr = nint(self%get( i, 'proj' ))
-                    if( projnr == proj )then
-                        cnt = cnt+1
-                        projarr(cnt) = i
+                w = 1.0
+                if( cconsider_w ) w = self%o(i)%get('w')
+                if( mystate > 0 .and. w > TINY )then
+                    myval = nint(self%get(i, trim(label)))
+                    if( myval == ind )then
+                        cnt = cnt + 1
+                        indices(cnt) = i
                     endif
                 endif
             end do
         endif
-    end function get_proj
-
-    !>  \brief  is for getting an allocatable array with ptcl indices of the class 'class'
-    function get_class( self, class ) result( classarr )
-        class(oris), intent(inout) :: self
-        integer,     intent(in)    :: class
-        integer, allocatable       :: classarr(:)
-        integer                    :: classnr, i, pop, alloc_stat, cnt, mystate
-        pop = self%get_cls_pop( class )
-        if( pop > 0 )then
-            allocate( classarr(pop), stat=alloc_stat )
-            call alloc_errchk('get_class; simple_oris', alloc_stat)
-            cnt = 0
-            do i=1,self%n
-                mystate = nint(self%o(i)%get('state'))
-                if( mystate > 0 )then
-                    classnr = nint(self%get( i, 'class' ))
-                    if( classnr == class )then
-                        cnt = cnt+1
-                        classarr(cnt) = i
-                    endif
-                endif
-            end do
-        endif
-    end function get_class
+    end function get_pinds
 
     !>  \brief  is for getting an array of 'which' variables with
     !!          filtering based on class/state
@@ -786,10 +683,13 @@ contains
         real, allocatable :: vals(:)
         integer :: pop, cnt, clsnr, i, alloc_stat, mystate
         real    :: val
-        if( present(class) )then
-            pop = self%get_cls_pop(class)
-        else if( present(state) )then
-            pop = self%get_state_pop(state)
+        logical :: class_present, state_present
+        class_present = class_present
+        state_present = present(state)
+        if( class_present )then
+            pop = self%get_pop(class, 'class')
+        else if( state_present )then
+            pop = self%get_pop(state, 'state')
         else
             pop = self%n
         endif
@@ -799,7 +699,7 @@ contains
             cnt = 0
             do i=1,self%n
                 val = self%get(i, which)
-                if( present(class) )then
+                if( class_present )then
                     mystate = nint(self%get( i, 'state'))
                     if( mystate > 0 )then
                         clsnr   = nint(self%get( i, 'class'))
@@ -808,7 +708,7 @@ contains
                             vals(cnt) = val
                         endif
                     endif
-                else if( present(state) )then
+                else if( state_present )then
                     mystate = nint(self%get( i, 'state'))
                     if( mystate == state )then
                         cnt = cnt+1
@@ -834,7 +734,10 @@ contains
         logical, optional, intent(in)    :: mask(self%n)
         integer :: clsnr, i, mystate, istart, istop
         real    :: val
-        logical :: proceed
+        logical :: proceed, class_present, state_present, mask_present
+        class_present = present(class)
+        state_present = present(state)
+        mask_present  = present(mask)
         cnt = 0
         sum = 0.
         if( present(fromto) )then
@@ -847,7 +750,7 @@ contains
         do i=istart,istop
             mystate = nint(self%get( i, 'state'))
             if( mystate == 0 ) cycle
-            if( present(mask) )then
+            if( mask_present )then
                 proceed = mask(i)
             else
                 proceed = .true.
@@ -855,13 +758,13 @@ contains
             if( proceed )then
                 val = self%get(i, which)
                 if( .not. is_a_number(val) ) val=0.
-                if( present(class) )then
+                if( class_present )then
                     clsnr = nint(self%get( i, 'class'))
                     if( clsnr == class )then
                         cnt = cnt+1
                         sum = sum+val
                     endif
-                else if( present(state) )then
+                else if( state_present )then
                     if( mystate == state )then
                         cnt = cnt+1
                         sum = sum+val
@@ -915,6 +818,10 @@ contains
         integer, optional, intent(in)    :: fromto(2)
         integer :: clsnr, i, mystate, istart, istop
         real    :: val
+        logical :: class_present, state_present
+        class_present = present(class)
+        state_present = present(state)
+
         cnt = 0
         sum = 0.
         if( present(fromto) )then
@@ -928,15 +835,15 @@ contains
             mystate = nint(self%get( i, 'state'))
             if( mystate == 0 ) cycle
             val = self%get(i, which)
-            if( .not. is_a_number(val) ) val=0.
+            if( .not. is_a_number(val) ) val = 0.
             if( val > 0. )then
-                if( present(class) )then
+                if( class_present )then
                     clsnr = nint(self%get( i, 'class'))
                     if( clsnr == class )then
                         cnt = cnt+1
                         sum = sum+val
                     endif
-                else if( present(state) )then
+                else if( state_present )then
                     if( mystate == state )then
                         cnt = cnt+1
                         sum = sum+val
@@ -976,41 +883,6 @@ contains
         avg = sum/real(cnt)
     end function get_nonzero_avg
 
-    !>  \brief  is for getting a matrix of CTF parameters
-    function get_ctfparams( self, pfromto ) result( ctfparams )
-        class(oris), intent(inout) :: self
-        integer,     intent(in)    :: pfromto(2)
-        real, allocatable :: ctfparams(:,:)
-        integer :: nparams, cnt, iptcl, alloc_stat
-        logical :: astig
-        nparams = pfromto(2)-pfromto(1)+1
-        allocate(ctfparams(nparams,6), stat=alloc_stat)
-         call alloc_errchk('In: get_ctfparams, module: simple_oris', alloc_stat)
-        ctfparams = 0.
-        astig = .false.
-        if( self%isthere('dfx') )then
-            ! ok
-            if( self%isthere('dfy') ) astig = .true.
-        else
-            stop 'CTF parameters not in oris; simple_oris :: get_ctfparams'
-        endif
-        cnt = 0
-        do iptcl=pfromto(1),pfromto(2)
-            cnt = cnt + 1
-            ctfparams(cnt,1) = self%get(iptcl,'kv')
-            ctfparams(cnt,2) = self%get(iptcl,'cs')
-            ctfparams(cnt,3) = self%get(iptcl,'fraca')
-            ctfparams(cnt,4) = self%get(iptcl,'dfx')
-            if( astig )then
-                ctfparams(cnt,5) = self%get(iptcl,'dfy')
-                ctfparams(cnt,6) = self%get(iptcl,'angast')
-            else
-                ctfparams(cnt,5) = self%get(iptcl,'dfx')
-                ctfparams(cnt,6) = 0.
-            endif
-        end do
-    end function get_ctfparams
-
     !>  \brief  is for extracting a table from the character hash
     function extract_table( self, which ) result( table )
         class(oris),      intent(inout) :: self
@@ -1036,7 +908,7 @@ contains
         if(npeaks < 3 .or. trim(refine).eq.'shc' .or. trim(refine).eq.'shcneigh')return
         instates = 0
         do state=1,nstates
-            pop = self%get_state_pop( state )
+            pop = self%get_pop( state, 'state' )
             if( pop > 0 )then
                 ang_sdev = ang_sdev + ang_sdev_state( state )
                 instates = instates + 1
@@ -1058,7 +930,7 @@ contains
                 integer              :: loc(1), alloc_stat, i, ind, n, cnt
                 logical              :: err
                 isdev = 0.
-                inds = self%get_state( istate )
+                inds = self%get_pinds( istate, 'state' )
                 n = size(inds)
                 if( n < 3 )return ! because one is excluded in the next step & moment needs at least 2 objs
                 call os%new( n )
@@ -1088,17 +960,27 @@ contains
             end function ang_sdev_state
     end function ang_sdev
 
-    !>  \brief  is for printing
-    function included( self ) result( incl )
-        class(oris), intent(inout) :: self
+    !>  \brief  for getting a logical mask of the included particles
+    function included( self, consider_w ) result( incl )
+        class(oris),       intent(inout) :: self
+        logical, optional, intent(in)    :: consider_w
         logical, allocatable :: incl(:)
         integer :: i, istate, alloc_stat
+        logical :: cconsider_w
+        real    :: w
+        cconsider_w = .false.
+        if( present(consider_w) ) cconsider_w = consider_w
+        if( cconsider_w )then
+            if( .not. self%isthere('w') ) stop 'ERROR, oris :: included with optional consider_w assumes w set'
+        endif
         allocate(incl(self%n), stat=alloc_stat)
         call alloc_errchk('In: included, module: simple_oris', alloc_stat)
         incl = .false.
         do i=1,self%n
             istate = nint(self%o(i)%get('state'))
-            if( istate > 0 ) incl(i) = .true.
+            w = 1.0
+            if( cconsider_w ) w = self%o(i)%get('w')
+            if( istate > 0 .and. w > TINY ) incl(i) = .true.
         end do
     end function included
 
@@ -1108,25 +990,6 @@ contains
         integer,     intent(in)    :: i
         call self%o(i)%print_ori()
     end subroutine print_
-
-    !>  \brief  is for printing
-    subroutine print_chash_sizes( self )
-        class(oris), intent(inout) :: self
-        integer :: nmax, i
-        do i=1,self%n
-            nmax = self%o(i)%chash_nmax()
-        end do
-    end subroutine print_chash_sizes
-
-    !>  \brief  is for printing
-    subroutine print_mats( self )
-        class(oris), intent(inout) :: self
-        integer                    :: i
-        do i=1,self%n
-            write(*,*) i
-            call self%o(i)%print_mat
-        end do
-    end subroutine print_mats
 
     ! SETTERS
 
@@ -1748,7 +1611,6 @@ contains
         io_message='No error'
         if(.not.fopen(fnr, FILE=orifile, STATUS='OLD', action='READ', iostat=file_stat,iomsg=io_message))then
              call fileio_errmsg("oris ; read ,Error when opening file for reading: "//trim(orifile)//':'//trim(io_message), file_stat)
-            stop
         endif
         if( present(nst) ) nst = 0
         do i=1,self%n
@@ -1833,249 +1695,6 @@ contains
     end subroutine write_2
 
     ! CALCULATORS
-
-    !>  \brief  for calculating homogeneity of labels within a state group or class
-    subroutine homogeneity_1( self, icls, which, minp, thres, cnt, homo_cnt, homo_avg )
-        class(oris),      intent(inout) :: self
-        integer,          intent(in)    :: icls
-        character(len=*), intent(in)    :: which
-        integer,          intent(in)    :: minp
-        real,             intent(in)    :: thres
-        real,             intent(inout) :: cnt, homo_cnt, homo_avg
-        integer              :: pop, i, alloc_stat, nlabels, medlab(1)
-        real                 :: homo_cls
-        real, allocatable    :: vals(:)
-        integer, allocatable :: labelpops(:)
-
-        nlabels = self%get_nlabels()
-        DebugPrint  'number of labels: ', nlabels
-        allocate(labelpops(nlabels),stat=alloc_stat)
-        call alloc_errchk('In: homogeneity_1, module: simple_oris', alloc_stat)
-        DebugPrint  'allocated labelpops'
-        DebugPrint  '>>> PROCESSING CLASS: ', icls
-        ! get pop
-        if( which .eq. 'class' )then
-            pop = self%get_cls_pop(icls)
-        else
-            pop = self%get_state_pop(icls)
-        endif
-        ! apply population treshold
-        if( pop < minp ) return
-        ! increment counter
-        cnt = cnt+1.
-        ! get label values
-        if( which .eq. 'class' )then
-            vals = self%get_arr('label', class=icls)
-        else
-            vals = self%get_arr('label', state=icls)
-        endif
-        DebugPrint  nint(vals)
-        ! count label occurences
-        labelpops = 0
-        do i=1,pop
-            labelpops(nint(vals(i))) = labelpops(nint(vals(i)))+1
-        end do
-        ! find median label
-        medlab   = maxloc(labelpops)
-        homo_cls = real(count(medlab(1) == nint(vals)))/real(pop)
-        homo_avg = homo_avg+homo_cls
-        DebugPrint  '>>> CLASS HOMOGENEITY: ', homo_cls
-        ! apply homogeneity threshold
-        if( homo_cls >= thres ) homo_cnt = homo_cnt+1.
-        deallocate(labelpops)
-    end subroutine homogeneity_1
-
-    !>  \brief  for calculating homogeneity of labels within a state group or class
-    subroutine homogeneity_2( self, which, minp, thres, homo_cnt, homo_avg )
-        class(oris),      intent(inout) :: self
-        character(len=*), intent(in)    :: which
-        integer,          intent(in)    :: minp
-        real,             intent(in)    :: thres
-        real,             intent(out)   :: homo_cnt, homo_avg
-        integer :: k, ncls
-        real    :: cnt
-        if( which .eq. 'class' )then
-            ncls = self%get_ncls()
-        else if( which .eq. 'state' )then
-            ncls = self%get_nstates()
-        else
-            stop 'Unsupported which flag; simple_oris::homogeneity'
-        endif
-        DebugPrint  'number of clusters to analyse: ', ncls
-        homo_cnt = 0.
-        homo_avg = 0.
-        cnt      = 0.
-        do k=1,ncls
-            call self%homogeneity_1(k, which, minp, thres, cnt, homo_cnt, homo_avg)
-        end do
-        write(*,'(a,2x,i5)') 'This nr of clusters has pop >= minpop:      ', nint(cnt)
-        write(*,'(a,2x,i5)') 'This is the number of homogeneous clusters: ', nint(homo_cnt)
-        homo_cnt = homo_cnt/cnt
-        homo_avg = homo_avg/cnt
-    end subroutine homogeneity_2
-
-    !>  \brief  for calculating clustering cohesion (normalised)
-    function cohesion_norm( self, which, ncls ) result( coh_norm )
-        class(oris),      intent(inout) :: self
-        character(len=*), intent(in)    :: which
-        integer,          intent(in)    :: ncls
-        real :: coh_norm
-        coh_norm = real(self%cohesion(which))/real(self%cohesion_ideal(ncls))
-    end function cohesion_norm
-
-    !>  \brief  for calculating clustering cohesion
-    function cohesion( self, which ) result( coh )
-        class(oris),      intent(inout) :: self
-        character(len=*), intent(in)    :: which
-        real, allocatable :: vals(:)
-        integer :: coh, ncls, pop, ival, jval, i, j, k
-        if( which .eq. 'class' )then
-            ncls = self%get_ncls()
-        else if( which .eq. 'state' )then
-            ncls = self%get_nstates()
-        else
-            stop 'Unsupported which flag; simple_oris::cohesion'
-        endif
-        coh = 0
-        do k=1,ncls
-            if( which .eq. 'class' )then
-                pop = self%get_cls_pop(k)
-            else
-                pop = self%get_state_pop(k)
-            endif
-            if( pop == 0 ) cycle
-            if( pop == 1 )then
-                coh = coh+1
-                cycle
-            endif
-            if( which .eq. 'class' )then
-                vals = self%get_arr('label', class=k)
-            else
-                vals = self%get_arr('label', state=k)
-            endif
-            do i=1,pop-1
-                do j=i+1,pop
-                    ival = nint(vals(i))
-                    jval = nint(vals(j))
-                    if( jval == ival ) coh = coh+1
-                end do
-            end do
-            deallocate(vals)
-        end do
-    end function cohesion
-
-    !>  \brief  for calculating the ideal clustering cohesion
-    function cohesion_ideal( self, ncls ) result( coh )
-        class(oris), intent(inout) :: self
-        integer,     intent(in)    :: ncls
-        integer :: coh, pop, i, j, k
-        pop = nint(real(self%n)/real(ncls))
-        coh = 0
-        do k=1,ncls
-            do i=1,pop-1
-                do j=i+1,pop
-                    coh = coh+1
-                end do
-            end do
-        end do
-    end function cohesion_ideal
-
-    !>  \brief  for calculating the degree of separation between all classes based on label (normalised)
-    function separation_norm( self, which, ncls ) result( sep_norm )
-        class(oris),      intent(inout) :: self
-        character(len=*), intent(in)    :: which
-        integer,          intent(in)    :: ncls
-        real :: sep_norm
-        sep_norm = real(self%separation(which))/real(self%separation_ideal(ncls))
-    end function separation_norm
-
-    !>  \brief  for calculating the degree of separation between all classes based on label
-    function separation( self, which ) result( sep )
-        class(oris),      intent(inout) :: self
-        character(len=*), intent(in)    :: which
-        integer, allocatable :: iclsarr(:), jclsarr(:)
-        integer :: iclass, jclass, ncls, sep
-        integer :: i, j, ilab, jlab, ipop, jpop
-        if( which .eq. 'class' )then
-            ncls = self%get_ncls()
-        else if( which .eq. 'state' )then
-            ncls = self%get_nstates()
-        else
-            stop 'Unsupported which flag; simple_oris::cohesion'
-        endif
-        if( ncls == 1 )then
-            sep = 1
-            return
-        endif
-        sep = 0
-        do iclass=1,ncls-1
-            if( which .eq. 'class' )then
-                ipop = self%get_cls_pop(iclass)
-                if( ipop > 0 ) iclsarr = self%get_cls_pinds(iclass)
-            else
-                ipop = self%get_state_pop(iclass)
-                if( ipop > 0 ) iclsarr = self%get_state(iclass)
-            endif
-            if( ipop > 0 )then
-                do jclass=iclass+1,ncls
-                    if( which .eq. 'class' )then
-                        jpop = self%get_cls_pop(jclass)
-                        if( jpop > 0 ) jclsarr = self%get_cls_pinds(jclass)
-                    else
-                        jpop = self%get_state_pop(jclass)
-                        if( jpop > 0 ) jclsarr = self%get_state(jclass)
-                    endif
-                    if( jpop > 0 )then
-                        do i=1,size(iclsarr)
-                            do j=1,size(jclsarr)
-                                ilab = nint(self%get(iclsarr(i), 'label'))
-                                jlab = nint(self%get(jclsarr(j), 'label'))
-                                if(jlab /= ilab ) sep = sep+1
-                            end do
-                        end do
-                    endif
-                    if( allocated(iclsarr) ) deallocate(iclsarr)
-                    if( allocated(jclsarr) ) deallocate(jclsarr)
-                end do
-            endif
-        end do
-    end function separation
-
-    !>  \brief  for calculating the degree of separation between all classes based on label
-    function separation_ideal( self, ncls ) result( sep )
-        class(oris), intent(inout) :: self
-        integer,     intent(in)    :: ncls
-        integer :: iclass, jclass, sep
-        integer :: i, j, pop
-        pop = nint(real(self%n)/real(ncls))
-        if( ncls == 1 )then
-            sep = 1
-            return
-        endif
-        sep = 0
-        do iclass=1,ncls-1
-            do jclass=iclass+1,ncls
-                do i=1,pop
-                    do j=1,pop
-                        sep = sep+1
-                    end do
-                end do
-            end do
-        end do
-    end function separation_ideal
-
-    !>  \brief  plots a histogram using gnuplot
-    subroutine histogram( self, which, class, state )
-        use simple_stat, only: plot_hist
-        class(oris),       intent(inout) :: self
-        character(len=*),  intent(in)    :: which
-        integer, optional, intent(in)    :: class
-        integer, optional, intent(in)    :: state
-        real, allocatable :: vals(:)
-        vals = self%get_arr( which, class, state )
-        call plot_hist(vals, 100, 10)
-        deallocate(vals)
-    end subroutine histogram
 
     !>  \brief  for rounding the origin shifts
     subroutine round_shifts( self )
@@ -2174,7 +1793,7 @@ contains
         real :: med
         if( present(class) )then
             med = 0.
-            pop = self%get_cls_pop(class)
+            pop = self%get_pop(class, 'class')
             if( pop == 0 ) return
             vals = self%get_arr(which, class)
             if( pop == 1 )then
@@ -2344,76 +1963,62 @@ contains
 
     !>  \brief  orders clusters according to population
     function order_cls( self, ncls ) result( inds )
+        use simple_math, only: reverse
         class(oris), intent(inout) :: self
         integer,     intent(in)    :: ncls
-        real,    allocatable :: classpops(:)
         integer, allocatable :: inds(:)
+        real    :: classpops(ncls)
         integer :: i, alloc_stat
         if(ncls <= 0) stop 'invalid number of classes; simple_oris%order_cls'
-        allocate(inds(ncls), classpops(ncls), stat=alloc_stat)
+        allocate(inds(ncls), stat=alloc_stat)
         call alloc_errchk('order_cls; simple_oris', alloc_stat)
         classpops = 0.0
         ! calculate class populations
         do i=1,ncls
-            classpops(i) = real(self%get_cls_pop(i))
+            classpops(i) = real(self%get_pop(i, 'class'))
         end do
         inds = (/(i,i=1,ncls)/)
         call hpsort( ncls, classpops, inds )
-        deallocate(classpops)
+        call reverse(inds)
     end function order_cls
 
     !>  \brief  applies a one-sided balance restraint on the number of particles
-    !!          in projection groups based on corr/specscore order
-    subroutine balance( self, which, popmax, skewness, use_specscore )
+    !!          in 2D classes based on corr/specscore order
+    subroutine balance_1( self, popmax, skewness, use_specscore )
         class(oris),       intent(inout) :: self
-        character(len=*),  intent(in)    :: which
         integer,           intent(in)    :: popmax
         real,              intent(out)   :: skewness
         logical, optional, intent(in)    :: use_specscore
         integer, allocatable :: inds(:), inds_tmp(:)
         logical, allocatable :: included(:)
         real,    allocatable :: pops(:), scores(:), nonzero_pops(:)
-        integer :: i, j, n, pop,alloc_stat
-        logical :: uuse_specscore, l_proj
+        real    :: w
+        integer :: i, j, n, pop, alloc_stat
+        logical :: uuse_specscore
+        if( .not. self%isthere('w') ) stop 'ERROR, oris :: balance_1 assumes w  set'
         uuse_specscore = .false.
         if( present(use_specscore) )then
             if( use_specscore )then
                 uuse_specscore = self%isthere('specscore')
             endif
         endif
-        ! decide whether to do proj or class analysis
-        l_proj = .false.
-        select case(which)
-            case('class')
-                if( .not. self%isthere('class') ) stop 'class label must be set; oris :: balance'
-                n = self%get_ncls()
-            case('proj')
-                if( .not. self%isthere('proj') ) stop 'proj label must be set; oris :: balance'
-                n = self%get_nprojs()
-                l_proj = .true.
-            case DEFAULT
-                stop 'unsupported which flag; simple_oris :: balance'
-        end select
+        if( .not. self%isthere('class') ) stop 'class label must be set; oris :: balance_1'
+        n = self%get_n('class')
         allocate(included(self%n),stat=alloc_stat)
         call alloc_errchk('In: balance, module: simple_oris', alloc_stat)
         included = .false.
-        do i=1,n
-            if( l_proj )then
-                pop = self%get_proj_pop(i)
-            else
-                pop = self%get_cls_pop(i)
-            endif
+        do i=1,n ! n is number of classes
+            ! get class population
+            pop = self%get_pop(i, 'class', consider_w=.true.)
+            ! zero case
             if( pop < 1 )cycle
-            if( l_proj )then
-                inds = self%get_proj(i)
-            else
-                inds = self%get_class(i)
-            endif
-            if( pop <= popmax )then
+            ! get indices of particles in class subject to weight not zero
+            inds = self%get_pinds(i, 'class', consider_w=.true.)
+            if( pop <= popmax )then ! all inclded
                 do j=1,pop
                     included(inds(j)) = .true.
                 end do
-            else
+            else ! popmax threshold applied
                 allocate(scores(pop), inds_tmp(pop))
                 do j=1,pop
                     if( uuse_specscore )then
@@ -2440,10 +2045,101 @@ contains
         end do
         ! communicate skewness as fraction of excluded
         skewness = real(self%n - count(included))/real(self%n)
-    end subroutine balance
+    end subroutine balance_1
+
+    !>  \brief  applies a one-sided balance restraint on the number of particles
+    !!          in projection groups based on corr/specscore order
+    subroutine balance_2( self, popmax, nspace_bal, nsym, eullims, skewness, use_specscore )
+        class(oris),       intent(inout) :: self
+        integer,           intent(in)    :: popmax, nspace_bal, nsym
+        real,              intent(in)    :: eullims(3,2)
+        real,              intent(out)   :: skewness
+        logical, optional, intent(in)    :: use_specscore
+        type(oris)           :: osubspace
+        type(ori)            :: o_single
+        integer, allocatable :: inds(:), inds_tmp(:), clustering(:), clustszs(:)
+        real,    allocatable :: pops(:), scores(:), nonzero_pops(:)
+        logical, allocatable :: ptcl_mask(:), included(:)
+        real                 :: w
+        integer              :: i, j, n, pop, alloc_stat, iptcl, icls, cnt
+        logical              :: uuse_specscore
+        if( .not. self%isthere('w') ) stop 'ERROR, oris :: balance assumes w  set'
+        uuse_specscore = .false.
+        if( present(use_specscore) )then
+            if( use_specscore )then
+                uuse_specscore = self%isthere('specscore')
+            endif
+        endif
+        if( .not. self%isthere('proj') ) stop 'proj label must be set; oris :: balance'
+        n = self%get_n('proj')
+        ptcl_mask = self%included(consider_w=.true.)
+        allocate(clustering(self%n), clustszs(nspace_bal), included(self%n), stat=alloc_stat)
+        call alloc_err('In oris :: balance', alloc_stat)
+        clustering = 0
+        clustszs   = 0
+        included   = .false.
+        ! generate discrete projection direction space
+        call osubspace%new( nspace_bal )
+        call osubspace%spiral( nsym, eullims )
+        ! cluster the projection directions
+        do iptcl=1,self%n
+            if( ptcl_mask(iptcl) )then
+                o_single = self%get_ori(iptcl)
+                clustering(iptcl) = osubspace%find_closest_proj(o_single)
+            else
+                clustering(iptcl) = 0
+            endif
+        end do
+        ! loop over clusters
+        do icls=1,nspace_bal
+            pop = count(clustering == icls)
+            ! zero case
+            if( pop < 1 ) cycle
+            ! get indices of particles in cluster
+            allocate(inds(pop))
+            cnt = 0 
+            do iptcl=1,self%n
+                if( clustering(iptcl) == icls )then
+                    cnt = cnt + 1
+                    inds(cnt) = iptcl
+                endif
+            end do
+            if( pop <= popmax )then ! all inclded
+                do j=1,pop
+                    included(inds(j)) = .true.
+                end do
+            else ! popmax threshold applied
+                allocate(scores(pop), inds_tmp(pop))
+                do j=1,pop
+                    if( uuse_specscore )then
+                        scores(j) = self%o(inds(j))%get('specscore')
+                    else
+                        scores(j) = self%o(inds(j))%get('corr')
+                    endif
+                    inds_tmp(j) = inds(j)
+                end do
+                call hpsort(pop, scores, inds_tmp)
+                do j=pop,pop - popmax + 1,-1
+                    included(inds_tmp(j)) = .true. 
+                end do
+                deallocate(scores, inds_tmp)
+            endif
+            deallocate(inds)
+        end do
+        ! communicate selection to instance
+        do i=1,self%n
+            if( included(i) )then
+                call self%o(i)%set('state_balance', 1.0)
+            else
+                call self%o(i)%set('state_balance', 0.0)
+            endif
+        end do
+        ! communicate skewness as fraction of excluded
+        skewness = real(self%n - count(included))/real(self%n)
+    end subroutine balance_2
 
     !>  \brief  calculates hard weights based on ptcl ranking
-    subroutine calc_hard_ptcl_weights( self, frac, bystate )
+    subroutine calc_hard_weights( self, frac, bystate )
         class(oris),       intent(inout) :: self
         real,              intent(in)    :: frac
         logical, optional, intent(in)    :: bystate
@@ -2455,22 +2151,22 @@ contains
         if( present(bystate) ) l_bystate = bystate
         if( .not.l_bystate )then
             ! treated as single state
-            call self%calc_hard_ptcl_weights_single( frac )
+            call self%calc_hard_weights_single( frac )
         else
             ! per state frac
-            nstates = self%get_nstates()
+            nstates = self%get_n('state')
             if( nstates == 1 )then
-                call self%calc_hard_ptcl_weights_single( frac )
+                call self%calc_hard_weights_single( frac )
             else
                 do s=1,nstates
-                    pop = self%get_state_pop( s )
+                    pop = self%get_pop( s, 'state' )
                     if( pop==0 )cycle
-                    inds = self%get_state( s )
+                    inds = self%get_pinds( s, 'state' )
                     os = oris( pop )
                     do i=1,pop
                         call os%set_ori( i, self%get_ori( inds(i) ))
                     enddo
-                    call os%calc_hard_ptcl_weights_single( frac )
+                    call os%calc_hard_weights_single( frac )
                     do i=1,pop
                         call self%set_ori( inds(i), os%get_ori( i ))
                     enddo
@@ -2478,7 +2174,7 @@ contains
                 enddo
             endif
         endif
-    end subroutine calc_hard_ptcl_weights
+    end subroutine calc_hard_weights
 
     !>  \brief  calculates hard weights based on ptcl ranking
     subroutine calc_spectral_weights( self, frac, bystate )
@@ -2496,14 +2192,14 @@ contains
             call self%calc_spectral_weights_single(frac)
         else
             ! per state frac
-            nstates = self%get_nstates()
+            nstates = self%get_n('state')
             if( nstates==1 )then
                 call self%calc_spectral_weights_single(frac)
             else
                 do s=1,nstates
-                    pop = self%get_state_pop( s )
+                    pop = self%get_pop( s, 'state' )
                     if( pop==0 )cycle
-                    inds = self%get_state( s )
+                    inds = self%get_pinds( s, 'state' )
                     os = oris( pop )
                     do i=1,pop
                         call os%set_ori( i, self%get_ori( inds(i) ))
@@ -2519,7 +2215,7 @@ contains
     end subroutine calc_spectral_weights
 
     !>  \brief  calculates hard weights based on ptcl ranking
-    subroutine calc_hard_ptcl_weights_single( self, frac )
+    subroutine calc_hard_weights_single( self, frac )
         class(oris),       intent(inout) :: self
         real,              intent(in)    :: frac
         integer, allocatable :: order(:)
@@ -2547,7 +2243,7 @@ contains
         else
             call self%set_all2single('w', 1.)
         endif
-    end subroutine calc_hard_ptcl_weights_single
+    end subroutine calc_hard_weights_single
 
     !>  \brief  calculates hard weights based on ptcl ranking
     subroutine calc_spectral_weights_single( self, frac )
@@ -2557,7 +2253,7 @@ contains
         real,    allocatable :: specscores(:), weights(:)
         real    :: w, minscore
         integer :: i, lim, n
-        call self%calc_hard_ptcl_weights_single(frac)
+        call self%calc_hard_weights_single(frac)
         if( self%isthere('specscore') )then
             specscores = self%get_all('specscore')
             weights    = pack(specscores, mask=specscores > TINY)
@@ -2864,137 +2560,6 @@ contains
         npeaks = nint(rnpeaks/real(self%n))
     end function find_npeaks_from_athres
 
-    !>  \brief  calculate fraction of ptcls in class within lims
-    function class_calc_frac( self, class, lims ) result( frac )
-        class(oris), intent(inout) :: self
-        integer,     intent(in)    :: class, lims(2)
-        integer, allocatable       :: clsarr(:)
-        integer                    :: i, cnt, pop
-        real                       :: frac
-        clsarr = self%get_cls_pinds(class)
-        cnt = 0
-        do i=1,size(clsarr)
-            if( clsarr(i) >= lims(1) .and. clsarr(i) <= lims(2) ) cnt = cnt+1
-        end do
-        pop = size(clsarr)
-        frac = 0.
-        if( pop > 0 ) frac = real(cnt)/real(pop)
-        deallocate(clsarr)
-    end function class_calc_frac
-
-    !>  \brief  is for calculating the average and variance of euler distances (in degrees) within a class
-    subroutine class_dist_stat( self, class, distavg, distsdev )
-    ! can envision many other class statistics to calculate that would be interesting
-    ! this routine could also be used to reduce bias in refinement (enforce class variance reduction for new orientations)
-    ! could also be used to measure convergence (while reducing class variance, continue, else stop)
-        use simple_math, only: rad2deg
-        class(oris), intent(inout) :: self
-        integer,     intent(in)    :: class
-        real,        intent(out)   :: distavg, distsdev
-        integer, allocatable       :: clsarr(:)
-        integer                    :: i, j, cnt, npairs, alloc_stat, pop
-        real, allocatable          :: dists(:)
-        logical                    :: err
-        real                       :: distvar
-        clsarr = self%get_cls_pinds(class)
-        pop    = size(clsarr)
-        cnt    = 0
-        npairs = (pop*(pop-1))/2
-        allocate( dists(npairs), stat=alloc_stat )
-        call alloc_errchk( 'class_dist_stat; simple_oris', alloc_stat )
-        cnt = 0
-        distavg = 0.
-        do i=1,pop-1
-            do j=i+1,pop
-                cnt = cnt+1
-                dists(cnt) = self%o(clsarr(i)).euldist.self%o(clsarr(j))
-            end do
-        end do
-        call moment( dists, distavg, distsdev, distvar, err )
-        distavg  = rad2deg(distavg)
-        distsdev = rad2deg(distsdev)
-        deallocate(clsarr)
-    end subroutine class_dist_stat
-
-    !>  \brief  for calculating the average correlation within a class
-    function class_corravg( self, class ) result( avg )
-        class(oris), intent(inout) :: self
-        integer,     intent(in)    :: class
-        integer                    :: i, cnt, clsnr
-        real                       :: corr, avg
-        avg = 0.
-        cnt = 0
-        do i=1,self%n
-            clsnr = nint(self%get(i, 'class'))
-            corr  = self%get(i, 'corr')
-            if( clsnr == class )then
-                avg = avg+corr
-                cnt = cnt+1
-            endif
-        end do
-        avg = avg/real(cnt)
-    end function class_corravg
-
-    !>  \brief  for finding the best (highest correlating) member in a class
-    function best_in_class( self, class ) result( best )
-        class(oris), intent(inout) :: self
-        integer,     intent(in)    :: class
-        integer                    :: i, best, clsnr
-        real                       :: corr, best_corr
-        best_corr = -1.
-        best = 0
-        do i=1,self%n
-            clsnr = nint(self%get(i, 'class'))
-            corr  = self%get(i, 'corr')
-            if( clsnr == class )then
-                if( corr > best_corr )then
-                    best_corr = corr
-                    best = i
-                endif
-            endif
-        end do
-    end function best_in_class
-
-    !>  \brief  for calculating the average class shifts
-    subroutine calc_avg_class_shifts_1( self, avg_shifts )
-        class(oris),       intent(inout) :: self
-        real, allocatable, intent(out)   :: avg_shifts(:,:)
-        real    :: classpop
-        integer :: ncls, icls, iptcl, mycls
-        ncls = self%get_ncls()
-        if( allocated(avg_shifts) ) deallocate(avg_shifts)
-        allocate(avg_shifts(ncls,2))
-        avg_shifts = 0.
-        do icls=1,ncls
-            classpop = 0.0
-            do iptcl=1,self%n
-                mycls = nint(self%o(iptcl)%get('class'))
-                if( mycls == icls )then
-                    classpop           = classpop           + 1.0
-                    avg_shifts(icls,1) = avg_shifts(icls,1) + self%o(iptcl)%get('x')
-                    avg_shifts(icls,2) = avg_shifts(icls,2) + self%o(iptcl)%get('y')
-                endif
-            end do
-            if( classpop > 0.5 ) avg_shifts(icls,:) = avg_shifts(icls,:)/classpop
-        end do
-    end subroutine calc_avg_class_shifts_1
-
-    !>  \brief  for calculating the average class shifts
-    subroutine calc_avg_class_shifts_2( self, o_avg_shifts )
-        class(oris), intent(inout) :: self
-        real, allocatable          :: avg_shifts(:,:)
-        type(oris)                 :: o_avg_shifts
-        integer                    :: ncls, icls
-        call self%calc_avg_class_shifts_1(avg_shifts)
-        ncls = size(avg_shifts,1)
-        call o_avg_shifts%new(ncls)
-        do icls=1,ncls
-            call o_avg_shifts%set(icls, 'x', avg_shifts(icls,1))
-            call o_avg_shifts%set(icls, 'y', avg_shifts(icls,2))
-        end do
-        deallocate(avg_shifts)
-    end subroutine calc_avg_class_shifts_2
-
     !>  \brief  for mapping a 3D shift of volume to 2D shifts of the projections
     subroutine map3dshift22d_1( self, sh3d, state )
         class(oris),       intent(inout) :: self
@@ -3037,8 +2602,6 @@ contains
             endif
         end do
     end subroutine add_shift2class
-
-    ! PRIVATE STUFF
 
     !>  \brief  for correlating oris objs, just for testing purposes
     function corr_oris( self1, self2 ) result( corr )
@@ -3306,14 +2869,14 @@ contains
         real                       :: avgd_here, sdevd_here, vard_here, mind_here, maxd_here
         type(ori)                  :: iori, jori
         logical                    :: err
-        ncls  = self%get_ncls()
+        ncls  = self%get_n('class')
         nobs  = 0
         avgd  = 0.
         sdevd = 0.
         maxd  = 0.
         mind  = 0.
         do icls=1,ncls
-            clsarr = self%get_cls_pinds(icls)
+            clsarr = self%get_pinds(icls, 'class')
             if( allocated(clsarr) )then
                 sz = size(clsarr)
                 n  = (sz*(sz-1))/2
@@ -3346,71 +2909,6 @@ contains
         mind  = mind/real(nobs)
     end subroutine cluster_diststat
 
-    !>  \brief  generates the opposite hand of the set of Euler angles
-    subroutine mirror3d( self )
-        class(oris), intent(inout) :: self
-        integer                    :: i
-        do i=1,self%n
-            call self%o(i)%mirror3d
-        end do
-    end subroutine mirror3d
-
-    !>  \brief  generates the opposite hand of the set of Euler angles
-    !!          according to the spider convention
-    subroutine mirror2d( self )
-        class(oris), intent(inout) :: self
-        integer                    :: i
-        do i=1,self%n
-            call self%o(i)%mirror2d
-        end do
-    end subroutine mirror2d
-
-    !>  \brief  returns cluster population overlap between two already clustered orientations sets
-    function cls_overlap( self, os, key ) result( overlap )
-        class(oris),      intent(inout)   :: self !< previous oris
-        type(oris),       intent(inout)   :: os   !< new oris (eg number of clusters clusters > number of self clusters)
-        character(len=*), intent(in)      :: key
-        integer, allocatable              :: cls_pop(:), pop_spawn(:)
-        real                              :: overlap, ov
-        integer                           :: i, iptcl, pop, pop_prev, ncls, ncls_prev
-        integer                           :: alloc_stat, loc(1), membership, prev_membership
-        overlap   = 0.
-        ncls      = os%get_nstates()
-        ncls_prev = self%get_nstates()
-        if( ncls<ncls_prev)stop 'inconsistent arguments order in simple_oris; overlap'
-        if( (key.ne.'class').and.(key.ne.'state') ) stop 'Unsupported field in simple_oris; overlap'
-        allocate( cls_pop(ncls), pop_spawn(ncls_prev), stat=alloc_stat)
-        call alloc_errchk('In: simple_oris; overlap', alloc_stat)
-        do i=1,ncls_prev
-            ! Identifies the newly created cluster (with max pop overlap to current prev cluster)
-            cls_pop(:) = 0
-            do iptcl=1,self%n
-                prev_membership = nint( self%get( iptcl,key ) )
-                if( prev_membership.eq.i)then
-                    membership          = nint( os%get( iptcl,key ) )
-                    cls_pop(membership) = cls_pop(membership)+1
-                endif
-            enddo
-            loc          = maxloc(cls_pop) ! location of new cluster with max pop belonging to prev cluster
-            pop_spawn(i) = cls_pop(loc(1))
-        enddo
-        ! Calculates overlap between prev and new clusters
-        do i=1,ncls_prev
-            pop      = pop_spawn(i) ! pop of new cluster spawning from prev cluster
-            if(key.eq.'state')then
-                pop_prev = self%get_state_pop( i )
-            else
-                pop_prev = self%get_cls_pop( i )
-            endif
-            if( (pop>0).and.(pop_prev>0) )then
-                ov       = real(pop)/real(pop_prev)
-                overlap  = overlap+ov
-            endif
-        enddo
-        overlap = overlap/real(ncls_prev)
-        deallocate(cls_pop,pop_spawn)
-    end function cls_overlap
-
     ! PRIVATE ROUTINES
 
     function costfun_median( vec, D ) result( dist )
@@ -3431,7 +2929,7 @@ contains
         dist = -ops%geodesic_dist(o_glob,class_part_of_set,class_weights)
     end function costfun_diverse
 
-    ! UNIT TESTS
+    ! UNIT TEST
 
     !>  \brief  oris class unit test
     subroutine test_oris( doprint )
@@ -3471,11 +2969,6 @@ contains
             do i=1,100
                 call os2%print_(i)
             end do
-            ! call os%merge(os2)
-            ! write(*,*) '********'
-            ! do i=1,200
-            !     call os%print_(i)
-            ! end do
         endif
         write(*,'(a)') '**info(simple_oris_unit_test, part2): testing assignment'
         os = oris(2)
@@ -3560,7 +3053,6 @@ contains
             deallocate( self%o , stat=alloc_stat)
             call alloc_errchk('In: kill, module: simple_oris', alloc_stat)
         endif
-
     end subroutine kill
 
 end module simple_oris

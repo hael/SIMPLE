@@ -97,7 +97,6 @@ type(norm_commander)               :: xnorm
 type(scale_commander)              :: xscale
 type(stack_commander)              :: xstack
 type(stackops_commander)           :: xstackops
-! type(fixmapheader_commander)       :: xfixmapheader
     
 ! MISCELLANOUS PROGRAMS
 type(cluster_smat_commander)       :: xcluster_smat
@@ -117,6 +116,9 @@ type(map2ptcls_commander)          :: xmap2ptcls
 type(orisops_commander)            :: xorisops
 type(oristats_commander)           :: xoristats
 type(rotmats2oris_commander)       :: xrotmats2oris
+type(txt2bin_commander)            :: xtxt2bin
+type(bin2txt_commander)            :: xbin2txt
+type(vizoris_commander)            :: xvizoris
 
 ! TIME-SERIES ANALYSIS PROGRAMS
 type(tseries_extract_commander)    :: xtseries_extract
@@ -125,6 +127,7 @@ type(tseries_split_commander)      :: xtseries_split
 
 ! PARALLEL PROCESSING PROGRAMS
 type(merge_algndocs_commander)     :: xmerge_algndocs
+type(merge_binalgndocs_commander)  :: xmerge_binalgndocs
 type(merge_nnmat_commander)        :: xmerge_nnmat
 type(merge_similarities_commander) :: xmerge_similarities  
 type(split_pairs_commander)        :: xsplit_pairs
@@ -890,9 +893,10 @@ select case(prg)
         keys_optional(11) = 'mul'
         keys_optional(12) = 'zero'
         keys_optional(13) = 'tseries'
+        keys_optional(14) = 'center'
         ! parse command line
         if( describe ) call print_doc_multiptcl_init
-        call cline%parse(keys_required(:6), keys_optional(:13))
+        call cline%parse(keys_required(:6), keys_optional(:14))
         ! set defaults
         if( .not. cline%defined('trs') ) call cline%set('trs', 3.) ! to assure that shifts are being used
         !execute
@@ -1454,8 +1458,7 @@ select case(prg)
         ! the random origin shift. Less commonly used parameters are pgrp, which controls the point-group symmetry
         ! c (rotational), d (dihedral), t (tetrahedral), o (octahedral) or i (icosahedral). The point-group symmetry is 
         ! used to restrict the set of projections to within the asymmetric unit. 
-        ! neg inverts the contrast of the projections. mirr=yes mirrors the projection by modifying the Euler 
-        ! angles. If mirr=x or mirr=y the projection is physically mirrored after it has been generated<projvol/end>
+        ! neg inverts the contrast of the projections. <projvol/end>
         !
         ! set required keys
         keys_required(1)  = 'vol1'
@@ -1469,12 +1472,11 @@ select case(prg)
         keys_optional(6)  = 'trs'
         keys_optional(7)  = 'pgrp'
         keys_optional(8)  = 'neg'
-        keys_optional(9)  = 'mirr'
-        keys_optional(10) = 'top'
-        keys_optional(11) = 'msk'
+        keys_optional(9) = 'top'
+        keys_optional(10) = 'msk'
         ! parse command line
         if( describe ) call print_doc_projvol
-        call cline%parse(keys_required(:2), keys_optional(:11))
+        call cline%parse(keys_required(:2), keys_optional(:10))
         ! set defaults
         if( .not. cline%defined('wfun')  ) call cline%set('wfun', 'kb')
         if( .not. cline%defined('winsz') ) call cline%set('winsz', 1.5)
@@ -2046,34 +2048,31 @@ select case(prg)
         ! set optional keys
         keys_optional(1)  = 'oritab'
         keys_optional(2)  = 'nptcls'
-        keys_optional(3)  = 'plot'
-        keys_optional(4)  = 'outfile'
-        keys_optional(5)  = 'e1'
-        keys_optional(6)  = 'e2'
-        keys_optional(7)  = 'e3'
-        keys_optional(8)  = 'trs'
-        keys_optional(9)  = 'nstates'
-        keys_optional(10) = 'pgrp'
-        keys_optional(11) = 'defocus'
-        keys_optional(12) = 'deftab'
-        keys_optional(13) = 'angerr'
-        keys_optional(14) = 'sherr'
-        keys_optional(15) = 'dferr'
-        keys_optional(16) = 'zero'
-        keys_optional(17) = 'discrete'
-        keys_optional(18) = 'ndiscrete'
-        keys_optional(19) = 'state'
-        keys_optional(20) = 'errify'
-        keys_optional(21) = 'mul'
-        keys_optional(22) = 'mirr'
-        keys_optional(23) = 'xsh'
-        keys_optional(24) = 'ysh'
-        keys_optional(25) = 'zsh'
-        keys_optional(26) = 'npeaks'
-        keys_optional(27) = 'athres'
+        keys_optional(3)  = 'outfile'
+        keys_optional(4)  = 'e1'
+        keys_optional(5)  = 'e2'
+        keys_optional(6)  = 'e3'
+        keys_optional(7)  = 'trs'
+        keys_optional(8)  = 'nstates'
+        keys_optional(9)  = 'pgrp'
+        keys_optional(10) = 'defocus'
+        keys_optional(11) = 'deftab'
+        keys_optional(12) = 'angerr'
+        keys_optional(13) = 'sherr'
+        keys_optional(14) = 'dferr'
+        keys_optional(15) = 'zero'
+        keys_optional(16) = 'discrete'
+        keys_optional(17) = 'ndiscrete'
+        keys_optional(18) = 'state'
+        keys_optional(19) = 'errify'
+        keys_optional(20) = 'mul'
+        keys_optional(21) = 'mirr'
+        keys_optional(22) = 'xsh'
+        keys_optional(23) = 'ysh'
+        keys_optional(24) = 'zsh'
         ! parse command line
         if( describe ) call print_doc_orisops
-        call cline%parse(keys_optional=keys_optional(:27))
+        call cline%parse(keys_optional=keys_optional(:24))
         ! execute
         call xorisops%execute(cline)
     case( 'oristats' )
@@ -2096,15 +2095,15 @@ select case(prg)
         keys_optional(5)  = 'state'
         keys_optional(6)  = 'ctfstats'
         keys_optional(7)  = 'trsstats'
-        keys_optional(8)  = 'hist'
-        keys_optional(9)  = 'ncls'
-        keys_optional(10) = 'minp'
-        keys_optional(11) = 'clustvalid'
-        keys_optional(12) = 'thres'
-        keys_optional(13) = 'projstats'
-        keys_optional(14) = 'nspace'
-        keys_optional(15) = 'pgrp'
-        keys_optional(16) = 'ndiscrete'
+        keys_optional(8)  = 'ncls'
+        keys_optional(9)  = 'minp'
+        keys_optional(10) = 'thres'
+        keys_optional(11) = 'projstats'
+        keys_optional(12) = 'nspace'
+        keys_optional(13) = 'pgrp'
+        keys_optional(14) = 'ndiscrete'
+        keys_optional(15) = 'weights2D'
+        keys_optional(16) = 'classtats'
         ! parse command line
         if( describe ) call print_doc_oristats
         call cline%parse( keys_required(:1), keys_optional(:16) )
@@ -2127,6 +2126,52 @@ select case(prg)
         call cline%parse( keys_required(:1), keys_optional(:1) )
         ! execute
         call xrotmats2oris%execute(cline)
+    case( 'txt2bin' )
+        !==Program txt2bin
+        !
+        ! <txt2bin/begin>converts a text oritab to a binary oritab<txt2bin/end>
+        !
+        ! Required keys
+        keys_required(1)  = 'oritab'
+        ! set optional keys
+        keys_optional(1)  = 'outfile'
+        ! if( describe ) call print_doc_txt2bin
+        call cline%parse(keys_required(:1), keys_optional(:1))
+        ! set defaults  
+        if( .not. cline%defined('outfile') ) call cline%set('outfile', 'outfile.bin')
+        ! execute
+        call xtxt2bin%execute(cline)
+    case( 'bin2txt' )
+        !==Program bin2txt
+        !
+        ! <bin2txt/begin>converts a binary oritab to a text oritab<bin2txt/end>
+        !
+        ! Required keys
+        keys_required(1)  = 'oritab'
+        ! set optional keys
+        keys_optional(1)  = 'outfile'
+        ! if( describe ) call print_doc_bin2txt
+        call cline%parse(keys_required(:1), keys_optional(:1))
+        ! set defaults
+        if( .not. cline%defined('outfile') ) call cline%set('outfile', 'outfile.txt')
+        ! execute
+        call xbin2txt%execute(cline)
+    case( 'vizoris' )
+        !==Program vizoris
+        !
+        ! <vizoris/begin>extract projection direction from an orientation direction
+        ! for visualization in UCSF Chimera<vizoris/end>
+        !
+        ! Required keys
+        keys_required(1)  = 'oritab'
+        ! set optional keys
+        keys_optional(1)  = 'nspace'
+        keys_optional(2)  = 'pgrp'
+        ! parse command line
+        !if( describe ) call print_doc_vizoris
+        call cline%parse( keys_required(:1), keys_optional(:2) )
+        ! execute
+        call xvizoris%execute(cline)
 
     ! TIME-SERIES ANALYSIS PROGRAMS
 
@@ -2165,12 +2210,14 @@ select case(prg)
         keys_optional(5)  = 'offset'
         keys_optional(6)  = 'box'
         keys_optional(7)  = 'neg'
+        keys_optional(8)  = 'cenlp'
         ! parse command line
         if( describe ) call print_doc_tseries_track
-        call cline%parse(keys_required(:3), keys_optional(:7))
+        call cline%parse(keys_required(:3), keys_optional(:8))
         ! set defaults
-        if( .not. cline%defined('neg') ) call cline%set('neg', 'yes')
-        if( .not. cline%defined('lp')  ) call cline%set('lp',    2.0)
+        if( .not. cline%defined('neg')   ) call cline%set('neg', 'yes')
+        if( .not. cline%defined('lp')    ) call cline%set('lp',    2.0)
+        if( .not. cline%defined('cenlp') ) call cline%set('cenlp', 5.0)
         ! execute
         call xtseries_track%execute(cline)
     case( 'tseries_split' )
@@ -2209,6 +2256,22 @@ select case(prg)
         call cline%parse(keys_required(:4))
         ! execute
         call xmerge_algndocs%execute(cline)
+    case( 'merge_binalgndocs' )
+        !==Program merge_binalgndocs
+        !
+        ! <merge_binalgndocs/begin>is a program for merging alignment documents from SIMPLE
+        ! runs in distributed mode<merge_binalgndocs/end>
+        !
+        ! set required keys
+        keys_required(1) = 'fbody'
+        keys_required(2) = 'nptcls'
+        keys_required(3) = 'ndocs'
+        keys_required(4) = 'outfile'
+        ! parse command line
+        ! if( describe ) call print_doc_merge_binalgndocs
+        call cline%parse(keys_required(:4))
+        ! execute
+        call xmerge_binalgndocs%execute(cline)
     case( 'merge_nnmat' )
         !==Program merge_nnmat
         !

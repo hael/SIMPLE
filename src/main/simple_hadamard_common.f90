@@ -18,8 +18,8 @@ public :: read_img_from_stk, set_bp_range, set_bp_range2D, grid_ptcl, prepimg4al
 private
 #include "simple_local_flags.inc"
 
-real,    parameter :: SHTHRESH  = 0.0001
-real,    parameter :: CENTHRESH = 0.01   ! threshold for performing volume/cavg centering in pixels
+real, parameter :: SHTHRESH  = 0.0001
+real, parameter :: CENTHRESH = 0.01   ! threshold for performing volume/cavg centering in pixels
     
 contains
 
@@ -56,7 +56,7 @@ contains
                 do s=1,p%nstates
                     fsc_fname = 'fsc_state'//int2str_pad(s,2)//'.bin'
                     if( file_exists(trim(adjustl(fsc_fname))) )fsc_bin_exists( s ) = .true.
-                    if( b%a%get_state_pop( s )>0 .and. .not.fsc_bin_exists(s))&
+                    if( b%a%get_pop( s, 'state' )>0 .and. .not.fsc_bin_exists(s))&
                         & all_fsc_bin_exist = .false.
                 enddo
                 if( p%oritab.eq.'')all_fsc_bin_exist = (count(fsc_bin_exists)==p%nstates)
@@ -90,6 +90,8 @@ contains
                     p%kfromto(2) = calc_fourier_index( p%lp, p%boxmatch, p%smpd )
                 else if( cline%defined('find') )then
                     p%kfromto(2) = min(p%find,p%tofny)
+                else if( b%a%isthere(p%fromp,'lp') )then
+                    p%kfromto(2) = calc_fourier_index( b%a%get(p%fromp,'lp'), p%boxmatch, p%smpd )
                 else
                     write(*,*) 'no method available for setting the low-pass limit'
                     stop 'need fsc file, lp, or find; set_bp_range; simple_hadamard_common'
@@ -353,14 +355,14 @@ contains
         integer :: istate
         if( p%eo .eq. 'yes' )then
             do istate = 1, p%nstates
-                if( b%a%get_state_pop(istate) > 0)then
+                if( b%a%get_pop(istate, 'state') > 0)then
                     call b%eorecvols(istate)%new(p)
                     call b%eorecvols(istate)%reset_all
                 endif
             end do
         else
             do istate = 1, p%nstates
-                if( b%a%get_state_pop(istate) > 0)then
+                if( b%a%get_pop(istate, 'state') > 0)then
                     call b%recvols(istate)%new([p%boxpd, p%boxpd, p%boxpd], p%smpd)
                     call b%recvols(istate)%alloc_rho(p)
                     call b%recvols(istate)%reset
@@ -473,7 +475,7 @@ contains
         res05s   = 0.
         ! cycle through states
         do s=1,p%nstates
-            if( b%a%get_state_pop(s) == 0 )then
+            if( b%a%get_pop(s, 'state') == 0 )then
                 ! empty state
                 if( present(which_iter) )b%fsc(s,:) = 0.
                 cycle
@@ -523,7 +525,7 @@ contains
         character(len=:), allocatable :: fbody
         character(len=STDLEN) :: pprocvol
         do s=1,p%nstates
-            if( b%a%get_state_pop(s) == 0 )then
+            if( b%a%get_pop(s, 'state') == 0 )then
                 ! empty space
                 cycle
             endif

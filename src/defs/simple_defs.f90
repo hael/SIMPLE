@@ -68,8 +68,6 @@ integer, parameter :: PICKER_OFFSET        = 3
 real, parameter :: KBWINSZ = 1.5    !< interpolation window size
 real, parameter :: KBALPHA = 2.0    !< interpolation alpha (smoothing constant)
 
-integer, parameter :: SPECWMINPOP=2000 !< minimum population for spectral weighting
-
 ! SNHC-related global vars
 character(len=32), parameter :: SNHCDOC = 'snhc_oris.txt'
 character(len=32), parameter :: SNHCVOL = 'snhc_recvol_state'
@@ -89,10 +87,16 @@ integer, parameter :: LPLIM3ITERBOUND  = 7
 integer, parameter :: GRIDNPEAKS       = 3
 integer, parameter :: MAXNPEAKS        = 40
 
-character(len=:), allocatable :: endconv   !< endianness conversion
-integer(kind=c_int):: nthr_glob            !< number of threads global variable
-logical :: l_distr_exec_glob               !< global distributed execution flag
-character(len=STDLEN) :: exec_abspath_glob !< global executable absolute path
+! others
+integer, parameter :: SPECWMINPOP    = 2000 !< minimum population for spectral weighting
+integer, parameter :: NSPACE_BALANCE = 1000 !< # projection directions for applying the balancing constraint 
+
+character(len=:), allocatable :: endconv           !< endianness conversion
+integer(kind=c_int)           :: nthr_glob         !< number of threads global variable
+logical                       :: l_distr_exec_glob !< global distributed execution flag
+character(len=STDLEN)         :: exec_abspath_glob !< global executable absolute path
+character(len=LONGSTRLEN)     :: cmdline_glob      !< global command line string
+
 
 #ifndef IMAGE_SINGLE_PRECISION
 integer, parameter :: img_kind = DP

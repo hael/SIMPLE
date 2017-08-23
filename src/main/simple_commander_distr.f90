@@ -13,6 +13,7 @@ use simple_jiffys,         only: simple_end, progress
 implicit none
 
 public :: merge_algndocs_commander
+public :: merge_binalgndocs_commander
 public :: merge_nnmat_commander
 public :: merge_similarities_commander
 public :: split_pairs_commander
@@ -24,6 +25,10 @@ type, extends(commander_base) :: merge_algndocs_commander
   contains
     procedure :: execute      => exec_merge_algndocs
 end type merge_algndocs_commander
+type, extends(commander_base) :: merge_binalgndocs_commander
+  contains
+    procedure :: execute      => exec_merge_binalgndocs
+end type merge_binalgndocs_commander
 type, extends(commander_base) :: merge_nnmat_commander
   contains
     procedure :: execute      => exec_merge_nnmat
@@ -88,6 +93,62 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_MERGE_ALGNDOCS NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_merge_algndocs
+
+    !> for merging binary alignment documents from SIMPLE runs in distributed mode
+    subroutine exec_merge_binalgndocs( self, cline )
+        use simple_oris,    only: oris
+        use simple_binoris, only: binoris
+        use simple_map_reduce ! use all in there
+        class(merge_binalgndocs_commander), intent(inout) :: self
+        class(cmdline),                     intent(inout) :: cline
+        type(params)          :: p
+        integer               :: i, j, nj, numlen, nentries_all, cnt, fromto(2)
+        character(len=STDLEN) :: fname
+        integer, allocatable  :: parts(:,:)
+        type(binoris)         :: fhandle_doc, fhandle_merged
+        p      = params(cline) ! parameters generated
+        parts  = split_nobjs_even(p%nptcls, p%ndocs)
+        numlen = len(int2str(p%ndocs))
+        ! generate a merged filehandling object based on the first file
+        fname = trim(adjustl(p%fbody))//int2str_pad(1,numlen)//'.bin'
+        call fhandle_merged%open(fname)
+        call fhandle_merged%set_fromto([1,p%nptcls])
+        call fhandle_merged%close()
+        ! make a new header based on the modified template
+        call fhandle_merged%open(p%outfile, del_if_exists=.true.)
+        call fhandle_merged%write_header()
+        ! loop over documents
+        cnt = 0
+        do i=1,p%ndocs
+            fname = trim(adjustl(p%fbody))//int2str_pad(i,numlen)//'.bin'
+            call fhandle_doc%open(fname)
+            nj = fhandle_doc%get_n_records()
+            nentries_all = parts(i,2) - parts(i,1) + 1
+            if( nentries_all /= nj ) then
+                write(*,*) 'in: commander_distr :: exec_merge_binalgndocs'
+                write(*,*) 'nr of entries in partition: ', nentries_all
+                write(*,*) 'nr of records in file     : ', nj
+                write(*,*) 'filename                  : ', trim(fname)
+                stop 'number of records in file not consistent with the size of the partition'
+            endif
+            fromto = fhandle_doc%get_fromto()
+            if( any(fromto /= parts(i,:)) )then
+                write(*,*) 'in: commander_distr :: exec_merge_binalgndocs'
+                write(*,*) 'range in partition: ', parts(i,:)
+                write(*,*) 'range in file     : ', fromto
+                stop 'range in file not consistent with the range in the partition'
+            endif
+            do j=fromto(1),fromto(2)
+                cnt = cnt + 1
+                call fhandle_doc%read_record(j)
+                call fhandle_merged%write_record(cnt, fhandle_doc)
+            end do
+        end do
+        call fhandle_merged%close()
+        call fhandle_doc%close()
+        ! end gracefully
+        call simple_end('**** SIMPLE_MERGE_BINALGNDOCS NORMAL STOP ****', print_simple=.false.)
+    end subroutine exec_merge_binalgndocs
 
     !> merge_nnmat is a program for merging partial nearest neighbour matrices calculated in distributed mode
     subroutine exec_merge_nnmat( self, cline )

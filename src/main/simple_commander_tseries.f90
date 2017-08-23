@@ -91,6 +91,7 @@ contains
     subroutine exec_tseries_track( self, cline )
         use simple_tseries_tracker
         use simple_nrtxtfile, only: nrtxtfile
+        use simple_qsys_funs, only: qsys_job_finished
         class(tseries_track_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
         type(params)      :: p
@@ -132,17 +133,18 @@ contains
             &; simple_commander_tseries :: exec_tseries_track'
         endif
         do j=1,ndatlines
-            call init_tracker(p%filetab, nint(boxdata(j,1:2)), orig_box, p%offset, p%smpd, p%lp)
+            call init_tracker(p, nint(boxdata(j,1:2)))
             call track_particle
             if( cline%defined('ind') )then
                 if( .not. cline%defined('numlen') ) stop 'need numlen to be part of command line if ind is&
                 &; simple_commander_tseries :: exec_tseries_track'
-                call write_tracked_series(trim(p%fbody)//int2str_pad(p%ind,p%numlen), p%neg)
+                call write_tracked_series(trim(p%fbody)//int2str_pad(p%ind,p%numlen))
             else
-                call write_tracked_series(trim(p%fbody)//int2str_pad(j,numlen), p%neg)
+                call write_tracked_series(trim(p%fbody)//int2str_pad(j,numlen))
             endif
             call kill_tracker
         end do
+        if( p%l_distr_exec ) call qsys_job_finished(p, 'simple_commander_tseries :: exec_tseries_track')
     end subroutine exec_tseries_track
 
     subroutine exec_tseries_split( self, cline )

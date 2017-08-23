@@ -178,6 +178,9 @@ contains
                 end if
             end if
         end do
+        if(iunit == 0)then
+            write(*,'(A)')'Could not allocate file unit!'
+        endif
     end function get_fileunit
 
     !> \brief  is for checking file kind

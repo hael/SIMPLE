@@ -108,6 +108,9 @@ contains
         type(qsys_env) :: qenv
         type(params)   :: p_master
         type(chash)    :: job_descr
+        ! output command line executed
+        write(*,'(a)') '>>> COMMAND LINE EXECUTED'
+        write(*,*) trim(cmdline_glob)
         ! make master parameters
         p_master = params(cline, checkdistr=.false.)
         p_master%nptcls = nlines(p_master%filetab)
@@ -145,6 +148,9 @@ contains
         type(qsys_env) :: qenv
         type(params)   :: p_master
         type(chash)    :: job_descr
+        ! output command line executed
+        write(*,'(a)') '>>> COMMAND LINE EXECUTED'
+        write(*,*) trim(cmdline_glob)
         ! make master parameters
         p_master = params(cline, checkdistr=.false.)
         p_master%nptcls = nlines(p_master%filetab)
@@ -181,12 +187,15 @@ contains
         class(cmdline),                            intent(inout) :: cline
         character(len=STDLEN), allocatable :: tomonames(:)
         type(oris)               :: exp_doc
-        integer                  :: nseries, ipart, numlen
+        integer                  :: nseries, ipart
         type(qsys_env)           :: qenv
         type(params)             :: p_master
         character(len=KEYLEN)    :: str
         type(chash)              :: job_descr
         type(chash), allocatable :: part_params(:)
+        ! output command line executed
+        write(*,'(a)') '>>> COMMAND LINE EXECUTED'
+        write(*,*) trim(cmdline_glob)
         ! make master parameters
         call cline%set('prg', 'unblur')
         p_master = params(cline, checkdistr=.false.)
@@ -209,13 +218,12 @@ contains
         endif
         p_master%nparts = nseries
         p_master%nptcls = nseries
-        numlen = len(int2str(p_master%nparts))
         ! prepare part-dependent parameters
         allocate(part_params(p_master%nparts))
         do ipart=1,p_master%nparts
             call part_params(ipart)%new(4)
             call part_params(ipart)%set('filetab', trim(tomonames(ipart)))
-            call part_params(ipart)%set('fbody', 'tomo'//int2str_pad(ipart,numlen))
+            call part_params(ipart)%set('fbody', 'tomo'//int2str_pad(ipart,p_master%numlen_tomo))
             str = real2str(exp_doc%get(ipart,'exp_time'))
             call part_params(ipart)%set('exp_time', trim(str))
             str = real2str(exp_doc%get(ipart,'dose_rate'))
@@ -241,6 +249,9 @@ contains
         type(params)                   :: p_master
         type(chash)                    :: job_descr
         type(qsys_env)                 :: qenv
+        ! output command line executed
+        write(*,'(a)') '>>> COMMAND LINE EXECUTED'
+        write(*,*) trim(cmdline_glob)
         ! make master parameters
         p_master = params(cline, checkdistr=.false.)
         p_master%nptcls = nlines(p_master%filetab)
@@ -274,6 +285,9 @@ contains
         type(qsys_env) :: qenv
         type(params)   :: p_master
         type(chash)    :: job_descr
+        ! output command line executed
+        write(*,'(a)') '>>> COMMAND LINE EXECUTED'
+        write(*,*) trim(cmdline_glob)
         ! make master parameters
         p_master = params(cline, checkdistr=.false.)
         p_master%nptcls = nlines(p_master%filetab)
@@ -301,6 +315,9 @@ contains
         type(qsys_env)        :: qenv
         type(params)          :: p_master
         type(chash)           :: job_descr
+        ! output command line executed
+        write(*,'(a)') '>>> COMMAND LINE EXECUTED'
+        write(*,*) trim(cmdline_glob)
         ! make master parameters
         p_master = params(cline, checkdistr=.false.)
         ! setup the environment for distributed execution
@@ -364,6 +381,9 @@ contains
         integer               :: iter, i
         type(chash)           :: job_descr
         real                  :: frac_srch_space
+        ! output command line executed
+        write(*,'(a)') '>>> COMMAND LINE EXECUTED'
+        write(*,*) trim(cmdline_glob)
         ! make master parameters
         p_master = params(cline, checkdistr=.false.)
         ! setup the environment for distributed execution
@@ -500,6 +520,9 @@ contains
         type(chash)                        :: job_descr
         type(oris)                         :: os
         integer :: ipart, numlen, nl, ishift, nparts, npart_params
+        ! output command line executed
+        write(*,'(a)') '>>> COMMAND LINE EXECUTED'
+        write(*,*) trim(cmdline_glob)
         ! make master parameters
         p_master = params(cline, checkdistr=.false.)
         ! determine the number of partitions
@@ -620,6 +643,9 @@ contains
         type(params)   :: p_master
         type(chash)    :: job_descr
         integer        :: nptcls
+        ! output command line executed
+        write(*,'(a)') '>>> COMMAND LINE EXECUTED'
+        write(*,*) trim(cmdline_glob)
         ! make master parameters
         p_master        = params(cline, checkdistr=.false.)
         nptcls          = p_master%nptcls
@@ -656,6 +682,9 @@ contains
         type(params)          :: p_master
         character(len=STDLEN) :: vol
         type(chash)           :: job_descr
+        ! output command line executed
+        write(*,'(a)') '>>> COMMAND LINE EXECUTED'
+        write(*,*) trim(cmdline_glob)
         ! make master parameters
         p_master = params(cline, checkdistr=.false.)
         ! setup the environment for distributed execution
@@ -733,6 +762,9 @@ contains
         real                  :: frac_srch_space, corr, corr_prev
         integer               :: s, state, iter, i
         logical               :: vol_defined
+        ! output command line executed
+        write(*,'(a)') '>>> COMMAND LINE EXECUTED'
+        write(*,*) trim(cmdline_glob)
         ! make master parameters
         p_master = params(cline, checkdistr=.false.)
         ! make oritab
@@ -930,7 +962,7 @@ contains
             call os%read(trim(oritab))
             do state = 1,p_master%nstates
                 str_state = int2str_pad(state,2)
-                if( os%get_state_pop( state ) == 0 )then
+                if( os%get_pop( state, 'state' ) == 0 )then
                     ! cleanup for empty state
                     vol = 'vol'//trim(int2str(state))
                     call cline%delete( vol )
@@ -1041,6 +1073,9 @@ contains
         real                  :: frac_srch_space
         integer               :: s, state, iter
         logical               :: vol_defined
+        ! output command line executed
+        write(*,'(a)') '>>> COMMAND LINE EXECUTED'
+        write(*,*) trim(cmdline_glob)
         ! make master parameters
         p_master = params(cline, checkdistr=.false.)
         ! make oritab
@@ -1148,7 +1183,7 @@ contains
             call os%read(trim(oritab))
             do state = 1,p_master%nstates
                 str_state = int2str_pad(state,2)
-                if( os%get_state_pop( state ) == 0 )then
+                if( os%get_pop( state, 'state' ) == 0 )then
                     ! cleanup for empty state
                     vol = 'vol'//trim(int2str(state))
                     call cline%delete( vol )
@@ -1227,6 +1262,9 @@ contains
         type(params)          :: p_master
         character(len=STDLEN) :: volassemble_output
         type(chash)           :: job_descr
+        ! output command line executed
+        write(*,'(a)') '>>> COMMAND LINE EXECUTED'
+        write(*,*) trim(cmdline_glob)
         ! make master parameters
         p_master = params(cline, checkdistr=.false.)
         ! setup the environment for distributed execution
@@ -1268,6 +1306,9 @@ contains
         real,        allocatable      :: boxdata(:,:)
         type(chash), allocatable      :: part_params(:)
         integer :: ndatlines, numlen, alloc_stat, j, orig_box, ipart
+        ! output command line executed
+        write(*,'(a)') '>>> COMMAND LINE EXECUTED'
+        write(*,*) trim(cmdline_glob)
         ! make master parameters
         p_master = params(cline, checkdistr=.false.)
         if( .not. file_exists(p_master%boxfile)  ) stop 'inputted boxfile does not exist in cwd'
@@ -1288,7 +1329,7 @@ contains
             stop 'inputted boxfile is empty; simple_commander_tseries :: exec_tseries_track'
         endif
         call boxfile%kill
-        call cline%delete('boxfile')
+        call cline%delete('boxfile')  
         p_master%nptcls = ndatlines
         p_master%nparts = p_master%nptcls
         if( p_master%ncunits > p_master%nparts )&
@@ -1307,6 +1348,7 @@ contains
         ! setup the environment for distributed execution
         call qenv%new(p_master)
         ! schedule & clean
+        call cline%gen_job_descr(job_descr)
         call qenv%gen_scripts_and_schedule_jobs(p_master, job_descr, part_params=part_params)
         call qsys_cleanup(p_master)
         ! end gracefully
@@ -1355,6 +1397,9 @@ contains
         character(len=32), parameter :: SYMSHTAB    = 'sym_3dshift.txt'     !< volume 3D shift
         character(len=32), parameter :: SYMPROJSTK  = 'sym_projs.mrc'       !< volume reference projections
         character(len=32), parameter :: SYMPROJTAB  = 'sym_projs.txt'       !< volume reference projections doc
+        ! output command line executed
+        write(*,'(a)') '>>> COMMAND LINE EXECUTED'
+        write(*,*) trim(cmdline_glob)
         ! make master parameters
         p_master          = params(cline, checkdistr=.false.)
         comlin_srch_nproj = comlin_srch_get_nproj()
