@@ -17,6 +17,10 @@ interface arr2file
     module procedure arr2file_2
 end interface arr2file
 
+! interface fclose
+!  module procedure fclose_1
+!     module procedure fclose_2
+! end interface fclose
 
 ! interface
 !     !> Declare the interface for POSIX fsync function
@@ -54,6 +58,12 @@ contains
         endif
     end subroutine fileio_errmsg
 
+    logical function is_io(unit)
+        integer, intent(in) :: unit
+        is_io=.false.
+        if (unit == stderr .or. unit == stdout .or. unit == stdin) is_io= .true.
+    end function is_io
+
     !> FOPEN enforce F2008 style open so that PGI/Intel behave correctly
     !!
     !! 
@@ -88,6 +98,7 @@ contains
         present(round) .or. present(delim) .or. present(blank) ) )then
             open(NEWUNIT=funit, FILE=trim(adjustl(filename)),IOSTAT=iostat_this)
             call simple_error_check(iostat_this,"fileio::fopen basic open "//trim(filename))
+            if(is_io(funit)) call simple_stop( "::fopen newunit returned "//int2str(funit) )
             if (iostat_this == 0 ) fopen = .true.
             return ! if ok ? true : false
         end if
@@ -122,7 +133,8 @@ contains
             if ( (stringsAreEqual(status_this, 'OLD',.false.))  .and. &
              (stringsAreEqual(position, 'APPEND',.false.))  .and. &
              (.not. file_exists(filename) ) )then
-                print *, "::fopen incompatible status=OLD and position=APPEND  when ", trim(filename)," does not exist"
+                print *, "::fopen incompatible status=OLD and position=APPEND  when ",&
+                trim(filename)," does not exist"
                 write( status_this,'(A)')  upperCase('NEW')
             end if
 
@@ -147,49 +159,50 @@ contains
         &present(decimal) .or. present(round) .or. present(delim) .or. present(blank) ) )then
             if (stringsAreEqual(access_this, 'DIRECT',.false.) .and. (recl_this > 0) ) then
 
-            if (present(action))then
-                if (present(position))then
-                    !! Appending to file
-                    open( NEWUNIT=funit,FILE=filename,IOSTAT=iostat_this,RECL=recl_this,&
-                    &ACTION=action_this,STATUS=status_this,ACCESS=access_this,POSITION=position_this)
-                else
-                    open( NEWUNIT=funit,FILE=filename,IOSTAT=iostat_this,RECL=recl_this,&
-                     &ACTION=action_this,STATUS=status_this,ACCESS=access_this)
+                if (present(action))then
+                    if (present(position))then
+                        !! Appending to file
+                        open( NEWUNIT=funit,FILE=filename,IOSTAT=iostat_this,RECL=recl_this,&
+                        &ACTION=action_this,STATUS=status_this,ACCESS=access_this,POSITION=position_this)
+                    else
+                        open( NEWUNIT=funit,FILE=filename,IOSTAT=iostat_this,RECL=recl_this,&
+                        &ACTION=action_this,STATUS=status_this,ACCESS=access_this)
+                    end if
+                else ! no action
+                    if (present(position))then
+                        !! Appending to file
+                        open( NEWUNIT=funit,FILE=filename,IOSTAT=iostat_this,RECL=recl_this,&
+                        &STATUS=status_this,ACCESS=access_this,POSITION=position_this)
+                    else
+                        open( NEWUNIT=funit,FILE=filename,IOSTAT=iostat_this,&
+                        &STATUS=status_this,ACCESS=access_this,RECL=recl_this)
+                    end if
                 end if
-            else ! no action
-                if (present(position))then
-                    !! Appending to file
-                    open( NEWUNIT=funit,FILE=filename,IOSTAT=iostat_this,RECL=recl_this,&
-                    &STATUS=status_this,ACCESS=access_this,POSITION=position_this)
-                else
-                    open( NEWUNIT=funit,FILE=filename,IOSTAT=iostat_this,&
-                    &STATUS=status_this,ACCESS=access_this,RECL=recl_this)
+            else
+                if (present(action))then
+                    if (present(position))then
+                        !! Appending to file
+                        open( NEWUNIT=funit,FILE=filename,IOSTAT=iostat_this,&
+                        &ACTION=action_this,STATUS=status_this,ACCESS=access_this,POSITION=position_this)
+                    else
+                        open( NEWUNIT=funit,FILE=filename,IOSTAT=iostat_this,&
+                        &ACTION=action_this,STATUS=status_this,ACCESS=access_this)
+                    end if
+                else ! no action
+                    if (present(position))then
+                        !! Appending to file
+                        open( NEWUNIT=funit,FILE=filename,IOSTAT=iostat_this,&
+                        &STATUS=status_this,ACCESS=access_this,POSITION=position_this)
+                    else
+                        open( NEWUNIT=funit,FILE=filename,IOSTAT=iostat_this,&
+                        &STATUS=status_this,ACCESS=access_this)
+                    end if
                 end if
             end if
-        else
-            if (present(action))then
-                if (present(position))then
-                    !! Appending to file
-                    open( NEWUNIT=funit,FILE=filename,IOSTAT=iostat_this,&
-                    &ACTION=action_this,STATUS=status_this,ACCESS=access_this,POSITION=position_this)
-                else
-                    open( NEWUNIT=funit,FILE=filename,IOSTAT=iostat_this,&
-                    &ACTION=action_this,STATUS=status_this,ACCESS=access_this)
-                end if
-            else ! no action
-                if (present(position))then
-                    !! Appending to file
-                    open( NEWUNIT=funit,FILE=filename,IOSTAT=iostat_this,&
-                    &STATUS=status_this,ACCESS=access_this,POSITION=position_this)
-                else
-                    open( NEWUNIT=funit,FILE=filename,IOSTAT=iostat_this,&
-                    &STATUS=status_this,ACCESS=access_this)
-                end if
-            end if
-        end if
             call simple_error_check(iostat_this,"::fopen common open ACTION/STATUS/ACCESS")
             if (iostat_this == 0 ) fopen = .true.
             if(present(iostat))iostat=iostat_this
+            if(is_io(funit)) call simple_stop( "::fopen newunit returned "//int2str(funit) )
             return
         end if
 
@@ -258,6 +271,7 @@ contains
             end if
         end if
         call simple_error_check(iostat_this,"fileio::fopen extra open ")
+        if(is_io(funit)) call simple_stop( "::fopen newunit returned "//int2str(funit) )
         if(present(iostat))iostat=iostat_this
         if(present(recl))recl=recl_this
         if (iostat_this == 0 ) fopen = .true.
@@ -275,8 +289,10 @@ contains
         character(len=*), intent(in), optional :: status,dispose
         character(len=30) :: status_this
         logical :: fclose
-        fclose=.false.
-
+        fclose=.true.
+        if(is_io(unit)) then
+            return !true
+        end if
         !! status or dispose: 'KEEP' or 'DELETE', unless file was opened with status=SCRATCH
         write(status_this,'(A)')'KEEP'
         if (present(dispose))then
@@ -287,15 +303,56 @@ contains
         end if
         if (is_open(unit)) then
             CLOSE (unit,IOSTAT=iostat,STATUS=status_this)
-            call simple_error_check(iostat, "fclose failed ")
-
+            call simple_error_check(iostat, "SIMPLE_FILEIO::fclose_1 failed closing unit "//int2str(unit))
         end if
-        if ( iostat == 0 ) fclose=.true.
-        return
+        if ( iostat /= 0 ) fclose=.false.
+        return 
 ! 92      print ERROR_UNIT, "fclose failed ", int2str(iostat_this)
 !         return
     end function fclose
+!     function fclose_2 (fname,iostat,status,dispose,errmsg)
+!         character(len=*), intent(in) :: fname
+!         integer, intent(inout) :: iostat
+!         character(len=*), intent(in), optional :: status,dispose, errmsg
+!         character(len=30) :: status_this, errmsg_this
+!         integer :: unit_number
+!         logical :: fclose_2
+!         ! initialise
+!         fclose_2=.true.
+!         unit_number=-1
+!         write(status_this,'(A)')'KEEP'
 
+!         if(present(errmsg)) write(errmsg_this,'(a)')errmsg
+!         if (is_file_open(fname)) then
+!             if( .not. file_exists(fname) )then
+!                 unit_number = get_lunit(fname)
+!             else
+!                 call simple_stop( "SIMPLE_FILEIO::fclose_2 not possible, file open but does not exist")
+!             end if
+!             if (unit_number>0 .and. .not. is_io(unit_number)) then
+
+!                 !! status or dispose: 'KEEP' or 'DELETE', unless file was opened with status=SCRATCH
+!                 write(status_this,'(A)')'KEEP'
+!                 if (present(dispose))then
+!                     if (stringsAreEqual(dispose, 'DELETE',.false.))  write(status_this ,'(A)') upperCase(dispose)
+!                 end if
+!                 if (present(status))then
+!                     if (stringsAreEqual(status, 'DELETE',.false.))  write(status_this ,'(A)') upperCase(status)
+!                 end if
+
+!                 CLOSE (unit_number,IOSTAT=iostat,STATUS=status_this)
+!                 call simple_error_check(iostat, "SIMPLE_FILEIO::fclose_2 failed closing "//trim(fname)//&
+!                 " Message: "//errmsg)
+!             end if
+!             if ( iostat /= 0 ) fclose_2=.false.
+!             return
+!         else
+!             if(present(errmsg)) write(stderr,'(A)') errmsg
+!             call simple_stop( "SIMPLE_FILEIO::fclose_2 failed closing "//trim(fname)//" unit invalid "//int2str(unit_number))
+!         end if
+! ! 92      print ERROR_UNIT, "fclose failed ", int2str(iostat_this)
+! !         return
+!         end function fclose_2
 
     !> \brief return the number of lines in a textfile
     function nlines( fname ) result( n )
@@ -864,9 +921,11 @@ contains
         integer :: recsz, i, funit,io_stat
         inquire(iolength=recsz) rval
         rval = size(arr)
-        if(.not.fopen(funit,fnam,'replace','unknown', io_stat,'direct','unformatted',recl=recsz))then
+        funit=-1
+        if(.not.fopen(funit,fnam,'replace','unknown', iostat=io_stat,access='direct',form='unformatted',recl=recsz))then
             call fileio_errmsg("arr2file_1 fopen failed "//trim(fnam),io_stat)
         endif
+        if (funit > 0) call fileio_errmsg("arr2file_1 fopen failed "//trim(fnam),io_stat)
         write(funit, rec=1) rval
         do i=1,size(arr)
             write(funit, rec=i+1) arr(i)

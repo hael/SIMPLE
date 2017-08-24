@@ -692,7 +692,8 @@ contains
             print *, 'is_open: IO error ', io_status, ': ', trim(adjustl(io_message))
             stop 'IO error; is_file_open; simple_fileio      '
         endif
-    end function is_file_open
+        end function is_file_open
+
     !>  \brief  check whether a IO unit is currently opened
     logical function is_open( unit_number )
         integer, intent(in)   :: unit_number
@@ -705,7 +706,20 @@ contains
             call simple_stop ('IO error; is_open; simple_fileio      ')
         endif
     end function is_open
-
+        
+    ! !>  \brief  get logical unit of file
+    ! integer function get_lunit( fname )
+    !     character(len=*), intent(in) :: fname
+        
+    !     integer               :: io_status
+    !     character(len=STDLEN) :: io_message
+    !     io_status = 0
+    !     inquire(file=trim(adjustl(fname)),unit=get_lunit,iostat=io_status,iomsg=io_message)
+    !     if (io_status .ne. 0) then
+    !         print *, 'is_open: IO error ', io_status, ': ', trim(adjustl(io_message))
+    !         call simple_stop ('IO error; is_open; simple_fileio      ')
+    !     endif
+    ! end function get_lunit
     !>  \brief  check if a file exists on disk
     logical function file_exists(fname)
         character(len=*), intent(in) :: fname
