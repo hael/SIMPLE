@@ -576,7 +576,7 @@ endif()
 #set(CMAKE_Fortran_CREATE_PREPROCESSED_SOURCE "${CMAKE_FCPP_COMPILER} <DEFINES> <INCLUDES> <FLAGS> -E <SOURCE> > <PREPROCESSED_SOURCE>")
 
 add_definitions("-D__FILENAME__='\"$(notdir $<)\"'")
-add_definitions("-DHALT\\(X\\)='call simple_stop (X, __FILENAME__, __LINE__)'")
+add_definitions("-DHALT\\(X\\)='call simple_stop\\(X, __FILENAME__, __LINE__\\)'")
 
 
 
