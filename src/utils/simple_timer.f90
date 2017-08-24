@@ -59,32 +59,22 @@ contains
 integer function gettime ()
 #ifdef PGI
     include 'lib3f.h'          ! time
-    gettime=time()
 #elif defined(INTEL)
     use ifport
-    !integer :: gettime
-    call time(gettime)
-#else
-    gettime= time()
 #endif
+    gettime= time()
 end function gettime
 
 function cast_time_char (arg)
+#if defined(INTEL)
+    use ifport
+#endif
     character(len=24) :: cast_time_char
     integer, intent(in) :: arg
 #ifdef PGI
     include 'lib3f.h'          ! time
-    cast_time_char=ctime(arg)
-#elif defined(INTEL)
-    !! TODO fix intel ctime
-    use ifport
-    integer :: now
-    call time(now)
-#else
-    cast_time_char=ctime(arg)
 #endif
-    
-
+    cast_time_char = ctime(arg)
 end function cast_time_char
 
 
