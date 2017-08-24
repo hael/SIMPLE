@@ -1232,18 +1232,18 @@ contains
     end subroutine get_ori
 
     !>  \brief  to produce oris object for probabilistic reconstruction
-    subroutine get_oris( self, os, o )
+    subroutine get_oris( self, os, o_in )
         class(prime3D_srch), intent(inout) :: self
-        class(oris),         intent(out)   :: os !< search orientation list
-        class(ori),          intent(in)    :: o  !< search orientation
-        type(ori) :: o_new
+        class(oris),         intent(out)   :: os    !< search orientation list
+        class(ori),          intent(in)    :: o_in  !< search orientation
+        type(ori) :: o, o_peak
         integer   :: ipeak, npeaks
         npeaks = self%o_peaks%get_noris()
         call os%new( npeaks )
         do ipeak=1,npeaks
-            o_new = o
-            call self%get_ori(ipeak, o_new)
-            call os%set_ori(ipeak, o_new)
+            o = o_in
+            call self%get_ori(ipeak, o)
+            call os%set_ori(ipeak, o)
         enddo
     end subroutine get_oris
 

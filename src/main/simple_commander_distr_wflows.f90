@@ -980,18 +980,21 @@ contains
                     endif
                     call rename( trim(vol), trim(vol_iter) )
                     ! post-process
-                    vol = 'vol'//trim(int2str(state))
-                    call cline_postproc_vol%set( 'vol1' , trim(vol_iter))
-                    fsc_file = 'fsc_state'//trim(str_state)//'.bin'
-                    if( file_exists(fsc_file) .and. p_master%eo .eq. 'yes' )then
-                        call cline_postproc_vol%delete('lp')
-                        call cline_postproc_vol%set('fsc', trim(fsc_file))
-                    else
-                        call cline_postproc_vol%delete('fsc')
-                        call cline_postproc_vol%set('lp', p_master%lp)
+                    if( p_master%pproc.eq.'yes' )then
+                        vol = 'vol'//trim(int2str(state))
+                        call cline_postproc_vol%set( 'vol1' , trim(vol_iter))
+                        fsc_file = 'fsc_state'//trim(str_state)//'.bin'
+                        if( file_exists(fsc_file) .and. p_master%eo .eq. 'yes' )then
+                            call cline_postproc_vol%delete('lp')
+                            call cline_postproc_vol%set('fsc', trim(fsc_file))
+                        else
+                            call cline_postproc_vol%delete('fsc')
+                            call cline_postproc_vol%set('lp', p_master%lp)
+                        endif
+                        call xpostproc_vol%execute(cline_postproc_vol)
                     endif
-                    call xpostproc_vol%execute(cline_postproc_vol)
                     ! updates cmdlines & job description
+                    vol = 'vol'//trim(int2str(state))
                     call job_descr%set( trim(vol), trim(vol_iter) )
                     call cline%set( trim(vol), trim(vol_iter) )
                 endif

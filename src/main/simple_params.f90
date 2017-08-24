@@ -62,6 +62,7 @@ type :: params
     character(len=3)      :: phaseplate='no'      !< images obtained with phaseplate(yes|no){no}
     character(len=3)      :: phrand='no'          !< phase randomize(yes|no){no}
     character(len=3)      :: plot='no'            !< make plot(yes|no){no}
+    character(len=3)      :: pproc='yes'          !< whether to perform volume post-processing(yes|no){yes}
     character(len=3)      :: projstats='no'
     character(len=3)      :: readwrite='no'
     character(len=3)      :: remap_classes='no'
@@ -213,6 +214,7 @@ type :: params
     integer :: nran=0              !< # random images to select
     integer :: nrefs=100           !< # references used for picking{100}
     integer :: nrestarts=1
+    integer :: nrepeats=HETNREPEATS !< # repeats in het_ensemble worklow
     integer :: nrots=0
     integer :: nspace=1000         !< # projection directions
     integer :: nstates=1           !< # states to reconstruct

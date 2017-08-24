@@ -387,15 +387,15 @@ contains
     !> het_ensemble is a SIMPLE program for ensemble heterogeinity analysis
     subroutine exec_het_ensemble( self, cline )
         use simple_commander_rec,    only: recvol_commander
-        use simple_commander_volops, only: postproc_vol_commander, projvol_commander
+        use simple_commander_volops, only: postproc_vol_commander
         use simple_strings,          only: int2str_pad
         use simple_oris,             only: oris
         use simple_combinatorics,    only: diverse_labeling, shc_aggregation
-        use simple_fileio      ,     only: file_exists, del_file
+        use simple_fileio,           only: file_exists, del_file
         class(het_ensemble_commander), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
         ! constants
-        integer,               parameter :: MAXITS_INIT=50, NREPEATS=5
+        integer,               parameter :: MAXITS_INIT=50
         character(len=32),     parameter :: HETFBODY    = 'hetrep_'
         character(len=32),     parameter :: REPEATFBODY = 'hetdoc_'
         character(len=32),     parameter :: VOLFBODY    = 'recvol_state'
@@ -404,25 +404,24 @@ contains
         type(recvol_distr_commander)  :: xrecvol_distr
         ! shared-mem commanders
         type(postproc_vol_commander)  :: xpostproc_vol
-        type(projvol_commander)       :: xprojvol
         ! command lines
         type(cmdline)                 :: cline_prime3D_master
         type(cmdline)                 :: cline_prime3D
         type(cmdline)                 :: cline_recvol_distr
-        type(cmdline)                 :: cline_postproc_vol
-        type(cmdline)                 :: cline_projvol
+        type(cmdline)                 :: cline_postproc_vol, cline_postproc_repvol
         ! other variables
+        real,                  allocatable :: rep_corrs(:)
         integer,               allocatable :: labels(:,:), labels_incl(:,:), consensus(:)
         character(len=STDLEN), allocatable :: init_docs(:), final_docs(:)
         logical,               allocatable :: included(:)
         type(params)                  :: p_master
         type(oris)                    :: os
-        real                          :: rep_corrs(NREPEATS)
-        character(len=STDLEN)         :: oritab, vol1, vol2, fsc, str_state
-        integer                       :: irepeat, state, iter, n_incl, it
+        character(len=STDLEN)         :: oritab, vol, fsc, str_state
+        integer                       :: irepeat, state, iter, n_incl, it, alloc_stat, NREPEATS
         integer                       :: best_loc(1)
         ! some init
-        allocate(init_docs(NREPEATS), final_docs(NREPEATS))
+        NREPEATS = nint(cline%get_rarg('nrepeats'))
+        allocate(init_docs(NREPEATS), final_docs(NREPEATS), rep_corrs(NREPEATS), stat=alloc_stat)
         do irepeat=1,NREPEATS
             oritab              = trim(REPEATFBODY)//'init_rep'//int2str_pad(irepeat,2)//'.txt'
             init_docs(irepeat)  = trim(oritab)
@@ -437,6 +436,7 @@ contains
         if(nint(cline%get_rarg('nstates')) <= 1)stop 'Non-sensical NSTATES argument for heterogeinity analysis!'
 
         ! make master parameters
+        call cline%set('nrepeats', 1.)
         p_master = params(cline, checkdistr=.false.)
 
         ! delete possibly pre-existing stack & pft parts
@@ -444,7 +444,7 @@ contains
         call del_files(STKPARTFBODY_SC, p_master%nparts, ext=p_master%ext)
         call del_files('ppfts_memoized_part', p_master%nparts, ext='.bin')
 
-        ! prepare command lines from prototype master
+        ! prepare command lines from prototype
         cline_recvol_distr = cline
         call cline_recvol_distr%set('prg', 'recvol')
         call cline_recvol_distr%set('eo', 'yes')
@@ -453,6 +453,10 @@ contains
         call cline_postproc_vol%set('prg', 'postproc_vol')
         call cline_postproc_vol%set('eo', 'yes')
         call cline_postproc_vol%delete('lp')
+        cline_postproc_repvol = cline
+        call cline_postproc_repvol%set('prg', 'postproc_vol')
+        call cline_postproc_repvol%set('eo', 'no')
+        call cline_postproc_repvol%set('lp', p_master%lp)
         cline_prime3D_master = cline
         call cline_prime3D_master%set('prg', 'prime3D')
         call cline_prime3D_master%set('startit', 1.)
@@ -460,17 +464,16 @@ contains
         call cline_prime3D_master%set('refine', 'het')
         call cline_prime3D_master%set('dynlp', 'no')
         call cline_prime3D_master%set('lp', p_master%lp)
+        call cline_prime3D_master%set('pproc', 'no')
 
         ! GENERATE DIVERSE INITIAL LABELS
         write(*,'(A)') '>>>'
         write(*,'(A)') '>>> GENERATING DIVERSE LABELING'
-        write(*,'(A)') '>>>'
         call os%new(p_master%nptcls)
         call os%read(p_master%oritab)
         labels   = diverse_labeling(p_master%nptcls, p_master%nstates, NREPEATS)
         included = os%included()
         n_incl   = count(included)
-        ! GENERATE ORIENTATIONS
         do irepeat=1,NREPEATS
             where( .not.included )labels(irepeat,:) = 0
             call os%set_all('state', real(labels(irepeat,:)))
@@ -494,8 +497,8 @@ contains
             ! updates labels & correlations
             labels(irepeat,:)  = nint(os%get_all('state'))
             rep_corrs(irepeat) = sum(os%get_all('corr'), mask=included) / real(n_incl)
-            ! STASH FINAL VOLUMES
-            call stash_volumes
+            ! PROCESS FINAL VOLUMES
+            call pproc_volumes
             ! CLEANUP
             call prime3d_cleanup
         enddo
@@ -504,21 +507,28 @@ contains
         ! GENERATE CONSENSUS DOCUMENT
         oritab = trim(REPEATFBODY)//'consensus.txt'
         call del_file(oritab)
-        call os%read(p_master%oritab)
         write(*,'(A)')   '>>>'
         write(*,'(A,A)') '>>> GENERATING ENSEMBLE SOLUTION: ', trim(oritab)
         write(*,'(A)')   '>>>'
-        allocate(labels_incl(NREPEATS,n_incl), consensus(n_incl))
-        do irepeat=1,NREPEATS
-            labels_incl(irepeat,:) = pack(labels(irepeat,:), mask=included)
-        enddo
-        labels(1,:) = 0
-        call shc_aggregation(NREPEATS, n_incl, labels_incl, consensus, best_loc(1))
-        call os%set_all('state', real(unpack(consensus, included, labels(1,:))) )
+        if( NREPEATS == 1 )then
+            ! all done
+        else 
+            ! solutions aggregation
+            call os%read(p_master%oritab)
+            allocate(labels_incl(NREPEATS,n_incl), consensus(n_incl), stat=alloc_stat)
+            do irepeat=1,NREPEATS
+                labels_incl(irepeat,:) = pack(labels(irepeat,:), mask=included)
+            enddo
+            labels(1,:) = 0
+            call shc_aggregation(NREPEATS, n_incl, labels_incl, consensus, best_loc(1))
+            call os%set_all('state', real(unpack(consensus, included, labels(1,:))) )
+            deallocate(labels_incl, consensus, stat=alloc_stat)
+        endif
+        ! output
         call os%write(trim(oritab))
         ! cleanup
         call os%kill
-        deallocate(init_docs, final_docs, labels_incl, consensus, labels, included)
+        deallocate(init_docs, final_docs, labels, included, rep_corrs, stat=alloc_stat)
 
         ! FINAL RECONSTRUCTION
         ! distributed reconstruction
@@ -527,11 +537,11 @@ contains
         ! post-process
         do state = 1, p_master%nstates
             str_state = int2str_pad(state, 2)
-            vol1 = 'recvol_state'//trim(str_state)//p_master%ext
-            call cline_postproc_vol%set('vol1', trim(vol1))
+            vol = 'recvol_state'//trim(str_state)//p_master%ext
+            call cline_postproc_vol%set('vol1', trim(vol))
             fsc = 'fsc_state'//trim(str_state)//'.bin'
             call cline_postproc_vol%set('fsc', trim(fsc))
-            if(file_exists(vol1) .and. file_exists(fsc))then
+            if(file_exists(vol) .and. file_exists(fsc))then
                 call xpostproc_vol%execute(cline_postproc_vol)
             endif
         enddo
@@ -541,38 +551,36 @@ contains
         contains
 
             subroutine prime3d_cleanup
-                character(len=STDLEN) :: fname
+                character(len=STDLEN) :: fname, vol
                 ! delete starting volumes
                 do state = 1, p_master%nstates
-                    vol1 = 'startvol_state'//int2str_pad(state,2)//p_master%ext
-                    if(file_exists(vol1))call del_file(vol1)
+                    vol = 'startvol_state'//int2str_pad(state,2)//p_master%ext
+                    if(file_exists(vol))call del_file(vol)
                 enddo
                 ! delete iterations volumes & documents
                 do it = 1, iter-1
                     do state = 1, p_master%nstates
-                        vol1 = trim(VOLFBODY)//int2str_pad(state,2)//'_iter'//int2str_pad(it,3)//p_master%ext
-                        if(file_exists(vol1))call del_file(vol1)
-                        vol1 = trim(VOLFBODY)//int2str_pad(state,2)//'_iter'//int2str_pad(it,3)//'pproc'//p_master%ext
-                        if(file_exists(vol1))call del_file(vol1)
+                        vol = trim(VOLFBODY)//int2str_pad(state,2)//'_iter'//int2str_pad(it,3)//p_master%ext
+                        if(file_exists(vol))call del_file(vol)
                     enddo
                     oritab = 'prime3Ddoc_'//int2str_pad(it,3)//'.txt'
                     if(file_exists(oritab))call del_file(oritab)
                 enddo
             end subroutine prime3d_cleanup
 
-            subroutine stash_volumes
-                ! renames final volumes of each repeat for all states
+            ! renames & post-process final volumes of a repeat for all states
+            subroutine pproc_volumes
+                character(len=STDLEN) :: srcvol, destvol
                 do state=1,p_master%nstates
-                    vol2 = trim(HETFBODY)//int2str_pad(irepeat,2)//'_'//trim(VOLFBODY)//int2str_pad(state,2)//p_master%ext
-                    call del_file(trim(vol2))
-                    vol1 = trim(VOLFBODY)//int2str_pad(state,2)//'_iter'//int2str_pad(iter,3)//p_master%ext
-                    call rename(trim(vol1), trim(vol2))
-                    vol2 = trim(HETFBODY)//int2str_pad(irepeat,2)//'_'//trim(VOLFBODY)//int2str_pad(state,2)//'pproc'//p_master%ext
-                    call del_file(trim(vol2))
-                    vol1 = trim(VOLFBODY)//int2str_pad(state,2)//'_iter'//int2str_pad(iter,3)//'pproc'//p_master%ext
-                    call rename(trim(vol1), trim(vol2))
+                    srcvol  = trim(VOLFBODY)//int2str_pad(state,2)//'_iter'//int2str_pad(iter,3)//p_master%ext
+                    destvol = trim(HETFBODY)//int2str_pad(irepeat,2)//'_'//trim(VOLFBODY)//int2str_pad(state,2)//p_master%ext
+                    if(file_exists(destvol))call del_file(destvol)
+                    call rename(trim(srcvol), trim(destvol))
+                    call cline_postproc_repvol%set('vol1', trim(destvol))
+                    call xpostproc_vol%execute(cline_postproc_repvol)
                 enddo
-            end subroutine stash_volumes
+            end subroutine pproc_volumes
+
     end subroutine exec_het_ensemble
 
 end module simple_commander_hlev_wflows

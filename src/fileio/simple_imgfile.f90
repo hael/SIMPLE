@@ -191,7 +191,7 @@ contains
                 DebugPrint  '(simple_imgfile::close) wrote overall_head'
             endif
             if(.not. fclose(self%funit, ios))&
-                  call fileio_errmsg("test_imgfile::close error",ios)
+                  call fileio_errmsg("simple_imgfile::close error",ios)
         endif
         if( allocated(self%overall_head) ) call self%overall_head%kill
         if( allocated(self%overall_head) ) deallocate(self%overall_head)
@@ -202,9 +202,10 @@ contains
     !>  \brief  close the file(s)
     subroutine close_nowrite( self )
         class(imgfile), intent(inout) :: self   !< Imagefile object 
-        integer :: ret,ios
-        if(.not. fclose( self%funit, ios))&
-             call fileio_errmsg("test_imgfile close nowrite error",ios)
+        integer :: ret, ios
+        if(.not. fclose( self%funit, ios))then
+             call fileio_errmsg("simple_imgfile close nowrite error",ios)
+        endif
         if( allocated(self%overall_head) ) call self%overall_head%kill
         if( allocated(self%overall_head) ) deallocate(self%overall_head)
         self%was_written_to = .false.
@@ -526,18 +527,16 @@ contains
         byteperpix = int(self%overall_head%bytesPerPix(),kind=8)
         DebugPrint 'Work out the position of the first byte'
         DebugPrint 'byte per pix: ', byteperpix, ' first slice: ',first_slice
-
+        ! Work out the position of the first byte
         select case(self%head_format)
         case('M','F')
-
-            first_byte = int(self%overall_head%firstDataByte(),kind=8)
-            DebugPrint 'rwSlices; MRC format ',first_byte
-            first_byte = first_byte + byteperpix*int((first_slice-1)*dims(1)*dims(2),kind=8)
+            first_byte = int(self%overall_head%firstDataByte(),kind=8)+int((first_slice-1),kind=8)&
+            &*int(product(dims(1:2)),kind=8)*int(self%overall_head%bytesPerPix(),kind=8)
             DebugPrint 'rwSlices; MRC format first byte offset ',first_byte
         case('S')
             if( self%isvol )then
                 first_byte = int(self%overall_head%firstDataByte(),kind=8)+int((first_slice-1),kind=8)&
-                     *int(product(dims(1:2)),kind=8)*byteperpix
+                &*int(product(dims(1:2)),kind=8)*byteperpix
             else
                 call self%slice2bytepos(first_slice, hedbyteinds, imbyteinds)
                 first_byte = imbyteinds(1)     ! first image byte
@@ -624,7 +623,6 @@ contains
                 if(io_stat /= 0)then
                     ErrorPrint(io_message)
                 endif
-
             case DEFAULT
                 write(*,'(2a)') 'fname: ', self%fname
                 write(*,'(a,i0,a)') 'bit depth: ', self%overall_head%bytesPerPix(), ' bytes'

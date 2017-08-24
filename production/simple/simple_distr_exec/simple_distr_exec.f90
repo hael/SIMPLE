@@ -525,15 +525,17 @@ select case(prg)
         keys_optional(30) = 'lp_grid'
         keys_optional(31) = 'balance'
         keys_optional(32) = 'center'
+        keys_optional(33) = 'pproc'
         ! documentation
         if( describe ) call print_doc_prime3D
         ! parse command line
-        call cline%parse( keys_required(:6), keys_optional(:32) )
+        call cline%parse( keys_required(:6), keys_optional(:33) )
         ! set defaults
         if( .not. cline%defined('nspace')                  ) call cline%set('nspace', 1000.)
         if( cline%defined('lp') .or. cline%defined('find') ) call cline%set('dynlp',   'no')
         if( .not. cline%defined('cenlp')                   ) call cline%set('cenlp',    30.)
         if( .not. cline%defined('refine')                  ) call cline%set('refine',  'no')
+        if( .not. cline%defined('pproc')                   ) call cline%set('pproc',  'yes')
         if( .not. cline%defined('eo') )then
             call cline%set('eo', 'no')
         else
@@ -774,12 +776,14 @@ select case(prg)
         keys_optional(8)  = 'width'
         keys_optional(9)  = 'nspace'
         keys_optional(10) = 'balance'
+        keys_optional(11) = 'nrepeats'
         ! parse command line
         if( describe ) call print_doc_het_ensemble
-        call cline%parse(keys_required(:9), keys_optional(:9))
+        call cline%parse(keys_required(:9), keys_optional(:11))
         ! set defaults
-        if( .not. cline%defined('amsklp') ) call cline%set('amsklp', 20.)
-        if( .not. cline%defined('edge')   ) call cline%set('edge',   10.)
+        if( .not. cline%defined('amsklp')   ) call cline%set('amsklp',   20.)
+        if( .not. cline%defined('edge')     ) call cline%set('edge',     10.)
+        if( .not. cline%defined('nrepeats') ) call cline%set('nrepeats', real(HETNREPEATS))
         ! execute
         call xhet_ensemble%execute( cline )
 

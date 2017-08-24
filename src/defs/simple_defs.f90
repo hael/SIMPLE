@@ -86,6 +86,7 @@ integer, parameter :: LPLIM1ITERBOUND  = 5
 integer, parameter :: LPLIM3ITERBOUND  = 7
 integer, parameter :: GRIDNPEAKS       = 3
 integer, parameter :: MAXNPEAKS        = 40
+integer, parameter :: HETNREPEATS      = 5
 
 ! others
 integer, parameter :: SPECWMINPOP    = 2000 !< minimum population for spectral weighting

@@ -65,24 +65,19 @@ contains
     end function is_io
 
     !> FOPEN enforce F2008 style open so that PGI/Intel behave correctly
-    !!
-    !! 
-    !!
-    function fopen (funit,file,status,action,iostat,access,form,recl,async,pad,&
-         decimal,round,delim,blank,convert,iomsg,position)
-        integer, intent(inout) :: funit
-        character(len=*), intent(in) :: file
-        integer, intent(inout), optional :: iostat
-        integer, intent(inout), optional :: recl
-        character(len=*), intent(in), optional :: access, async, action, &
-             &status, blank, pad, form, decimal, round, delim, convert, &
-             &iomsg, position
-        integer  :: iostat_this,  recl_this
+    function fopen (funit, file, status, action, iostat, access, form, recl, async, pad,&
+        &decimal, round, delim, blank, convert, iomsg, position)
+        integer,                    intent(inout) :: funit
+        character(len=*),           intent(in)    :: file
+        integer,          optional, intent(inout) :: iostat
+        integer,          optional, intent(inout) :: recl
+        character(len=*), optional, intent(in)    :: status, access, async, action, &
+        &blank, pad, form, decimal, round, delim, convert, iomsg, position
+        integer               :: iostat_this,  recl_this
         character(len=STDLEN) :: filename,iomsg_this
-        character(len=30) :: async_this, access_this, action_this, status_this,&
-             &blank_this, pad_this, decimal_this, delim_this, form_this , &
-             &round_this,position_this
-        logical :: fopen
+        character(len=30)     :: async_this, access_this, action_this, status_this,&
+             &blank_this, pad_this, decimal_this, delim_this, form_this, round_this, position_this
+        logical               :: fopen
         fopen=.false.
         ! check to see if filename is empty
         write(filename,'(A)') trim(adjustl(file))
@@ -104,8 +99,7 @@ contains
         end if
         ! Optional args
         if(present(convert)) then
-!            print *, 'CONVERT ignored in file open argument list'
-
+            ! print *, 'CONVERT ignored in file open argument list'
         end if
         if(present(iostat))iostat_this=iostat
         !! Default
@@ -205,9 +199,8 @@ contains
             if(is_io(funit)) call simple_stop( "::fopen newunit returned "//int2str(funit) )
             return
         end if
-
         ! err_this=2000
-       ! if(present(err))err_this=err
+        ! if(present(err))err_this=err
         recl_this=-1
         if(present(recl)) recl_this=recl
         write(pad_this,'(A)') 'YES'
@@ -548,7 +541,6 @@ contains
         status =  stat(trim(adjustl(filename)), buffer)
 !        DebugPrint 'fileio       sys_stat PGI stato ', status
 !        DebugPrint 'fileio       sys_stat PGI size of buffer ', size(statb)
-
 #elif defined(INTEL)
         ! use ifport
         ! integer(4) statarray(12), istat
@@ -556,7 +548,6 @@ contains
         ! if (.NOT. istat) then
         !     print *, statarray
         ! end if
-
         integer(4) :: ierror
         integer(8) :: jhandle
         allocate(buffer(13), source=0)
@@ -919,7 +910,7 @@ contains
         character(len=*), intent(in) :: fnam      !< input table filename
         real    :: rval
         integer :: recsz, i, funit,io_stat
-        inquire(iolength=recsz) rval
+        inquire(iolength=recsz)rval
         rval = size(arr)
         funit=-1
         if(.not.fopen(funit,fnam,'replace','unknown', iostat=io_stat,access='direct',form='unformatted',recl=recsz))then

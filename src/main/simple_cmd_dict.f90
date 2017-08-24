@@ -176,6 +176,7 @@ contains
         call chdict%push('phrand',        'phase randomize(yes|no){no}')
         call chdict%push('plaintexttab',  'plain text file of input parameters')
         call chdict%push('plot',          'make plot(yes|no){no}')
+        call chdict%push('pproc',         'whether to perform volume post-processing(yes|no){yes}')
         call chdict%push('prg',           'SIMPLE program to execute')
         call chdict%push('pspecsz',       'size of power spectrum(in pixels)')
         call chdict%push('pspecsz_ctffind','size of power spectrum 4 ctffind(in pixels)')

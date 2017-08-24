@@ -527,7 +527,6 @@ contains
         class(polarft_corrcalc), intent(inout) :: self
         character(len=*),        intent(in)    :: fname !< input filename
         integer :: funit, io_stat, iptcl
-        
          if(.not.fopen(funit, status='OLD', action='READ', file=trim(fname), access='STREAM', iostat=io_stat))&
              call fileio_errmsg('polarft_corrcalc read_ptfs_ptcls fopen ', io_stat)
         read(unit=funit,pos=1,iostat=io_stat) self%pfts_ptcls
