@@ -425,7 +425,7 @@ contains
             case (42)
                 write(stderr,'(A)')"SIMPLE SYSERROR 42 ILSEQ       "
             end select
-            write(msg,'("SIMPLE SYSERROR ",I0)',advance='no') err
+            write(msg,'("SIMPLE SYSERROR ",I0)') err
             call perror(msg)
 #else
             !! PGI
@@ -534,24 +534,24 @@ contains
 
 #if defined(INTEL)
 
-    pure subroutine rt_init (arg)
-        real, intent(in) :: arg
-        io_status = for_rtl_finish_ ( )
+    ! pure subroutine rt_init (arg)
+    !     real, intent(in) :: arg
+    !     io_status = for_rtl_finish_ ( )
 
-    end subroutine rt_init
-    pure subroutine rt_shutdown (arg)
-        real, intent(in) :: arg
-        io_status = for_rtl_finish_ ( )
+    ! end subroutine rt_init
+    ! pure subroutine rt_shutdown (arg)
+    !     real, intent(in) :: arg
+    !     io_status = for_rtl_finish_ ( )
 
-    end subroutine rt_shutdown
+    ! end subroutine rt_shutdown
 
     ! IFCORE checks
-    pure function fastmem_policy() result (policy)
+    function fastmem_policy() result (policy)
         use ifcore
         integer(4) :: old_policy, policy
         print *,"Print the current Results of initial for_set_fastmem_policy(FOR_K_FASTMEM_INFO):"
         old_policy = for_set_fastmem_policy(FOR_K_FASTMEM_INFO)
-        select case (i4_old_policy)
+        select case (old_policy)
         case (FOR_K_FASTMEM_NORETRY)
             print *,"    Issue a Severe error if FASTMEM is not available."
         case (FOR_K_FASTMEM_RETRY_WARN)
@@ -564,9 +564,9 @@ contains
         policy = for_set_fastmem_policy(FOR_K_FASTMEM_RETRY_WARN)
     end function fastmem_policy
 
-    pure integer function hbw_availability
+    integer function hbw_availability
         use ifcore
-        integer(4) :: hbw_availability
+!        integer(4) :: hbw_availability
         hbw_availability = for_get_hbw_availability()
         print *,"Results of for_get_hbw_availability():"
         select case (hbw_availability)
@@ -579,13 +579,17 @@ contains
         end select
     end function hbw_availability
 
-    function get_hbw_size (arg)
-        real :: get_hbw_size
-        real, intent(in) :: arg
-        INTEGER(kind=4),         intent(in)  :: partition, status
-        INTEGER(kind=int_ptr_kind()), intent(in) :: total,free
-        status = for_get_hbw_size(partition,total,free )
-
+    function get_hbw_size (partition, total, free) result(istatus)
+        use ifcore
+        use, intrinsic :: iso_c_binding
+        integer(kind=4),         intent(in)  :: partition
+        integer(kind=int_ptr_kind()), intent(inout) :: total,free
+        integer(kind=C_INT) :: part, istatus
+        integer(kind=C_SIZE_T) :: tot, freemem
+        istatus = for_get_hbw_size(part,tot,freemem )
+        call simple_error_check(istatus, "syslib::get_hbw_size ")
+        total = tot
+        free = freemem
     end function get_hbw_size
 
 #endif

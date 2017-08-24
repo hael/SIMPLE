@@ -473,7 +473,7 @@ contains
     ! byte array conversions
 
     subroutine transfer_obj2byte_array( self )
-        class(ImgHead), intent(in) :: self
+        class(ImgHead), intent(inout) :: self !! ICE error #6780: A dummy argument with the INTENT(IN) attribute shall not be defined nor become undefined.
         integer :: i
         select type( self )
             type is( MrcImgHead )
@@ -516,7 +516,7 @@ contains
     end subroutine transfer_obj2byte_array
 
     subroutine transfer_byte_array2obj( self )
-        class(ImgHead), intent(in) :: self
+        class(ImgHead), intent(inout) :: self !! ICE error #6780: A dummy argument with the INTENT(IN) attribute shall not be defined nor become undefined.
         integer :: i
         select type( self )
             type is( MrcImgHead )

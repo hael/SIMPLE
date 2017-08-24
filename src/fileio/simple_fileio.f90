@@ -56,6 +56,9 @@ contains
     end subroutine fileio_errmsg
 
     !> FOPEN enforce F2008 style open so that PGI/Intel behave correctly
+    !!
+    !! 
+    !!
     function fopen (funit,file,status,action,iostat,access,form,recl,async,pad,&
          decimal,round,delim,blank,convert,iomsg,position)
         integer, intent(inout) :: funit
@@ -83,8 +86,8 @@ contains
         if (.not. (present(iostat) ) )then
             open(NEWUNIT=funit, FILE=trim(adjustl(filename)),IOSTAT=iostat_this)
             call simple_error_check(iostat_this,"fileio::fopen basic open "//trim(filename))
-            fopen = .true.
-            return ! true
+            if (io_stat_this == 0 ) fopen = .true.
+            return ! if ok ? true : false
         end if
         ! Optional args
         if(present(convert)) then
@@ -138,16 +141,27 @@ contains
         !! Common file open
         if (.not.( present(form) .or. present(recl) .or. present(async) .or. present(pad) .or. &
              &present(decimal) .or. present(round) .or. present(delim) .or. present(blank) ) )then
-            if (present(position))then
-                !! Appending to file
-                open( NEWUNIT=funit,FILE=filename,IOSTAT=iostat_this,&
-                     &ACTION=action_this,STATUS=status_this,ACCESS=access_this,POSITION=position_this)
-            else
-                open( NEWUNIT=funit,FILE=filename,IOSTAT=iostat_this,&
+            if (present(action))then
+                if (present(position))then
+                    !! Appending to file
+                    open( NEWUNIT=funit,FILE=filename,IOSTAT=iostat_this,&
+                    &ACTION=action_this,STATUS=status_this,ACCESS=access_this,POSITION=position_this)
+                else
+                    open( NEWUNIT=funit,FILE=filename,IOSTAT=iostat_this,&
                      &ACTION=action_this,STATUS=status_this,ACCESS=access_this)
+                end if
+            else ! no action
+                if (present(position))then
+                    !! Appending to file
+                    open( NEWUNIT=funit,FILE=filename,IOSTAT=iostat_this,&
+                    &STATUS=status_this,ACCESS=access_this,POSITION=position_this)
+                else
+                    open( NEWUNIT=funit,FILE=filename,IOSTAT=iostat_this,&
+                    &STATUS=status_this,ACCESS=access_this)
+                end if
             end if
             call simple_error_check(iostat_this,"::fopen common open ACTION/STATUS/ACCESS")
-            fopen=.true.
+            if (io_stat_this == 0 ) fopen = .true.
             if(present(iostat))iostat=iostat_this
             return
         end if
@@ -219,7 +233,8 @@ contains
         call simple_error_check(iostat_this,"fileio::fopen extra open ")
         if(present(iostat))iostat=iostat_this
         if(present(recl))recl=recl_this
-        fopen=.true.
+        if (io_stat_this == 0 ) fopen = .true.
+            if(present(iostat))iostat=iostat_this
         return ! true
         ! Seriously bad hack for PGI system call
 !91      print stderr, "fopen: ERR called file " ,trim(filename)," err # ",iostat_this
@@ -275,7 +290,8 @@ contains
                      n = n + 1
                  endif
             end do
-            if(.not.fclose( funit, io_status )) call fileio_errmsg(" Error closing file in ::nlines ",io_status)
+            if(.not.fclose( funit, io_status )) &
+            &call fileio_errmsg(" Error closing file in ::nlines ",io_status)
         else
             n = 0
         endif
@@ -283,7 +299,7 @@ contains
 
     !> \brief  return the size of a binary file
     function filelength( fname ) result( filesz )
-        character(len=*), intent(inout) :: fname !< input filename
+        character(len=*), intent(in) :: fname !< input filename
         integer                      :: filesz, funit, ios, cnt,recl
         character(len=1)             :: junk
         if(  file_exists(fname) )then
@@ -292,8 +308,6 @@ contains
             ACCESS='direct', form='unformatted', recl=recl))then
                 call fileio_errmsg('simple_fileio       :: nlines', ios)
             end if
-            !open( unit=funit, file=trim(fname), action='read',&
-            !access='direct', form='unformatted', recl=1 )
             cnt = 0
             filesz = 0
             do
@@ -337,15 +351,14 @@ contains
     !> \brief  is for deleting a file
     subroutine del_file( file )
         character(len=*), intent(in) :: file !< input filename
-        integer :: fnr, ios
-
+        integer :: fnr, file_status
         if( file_exists(file) )then
             !call cpStr(file,tfile)
-            if(.not.fopen(fnr,file,STATUS='OLD',IOSTAT=ios))&
-                call fileio_errmsg( "del_file failed to open file designated for deletion", ios)
-            if( ios == 0 )then
-                if(.not.fclose(fnr, status='delete',iostat=ios))&
-                     call fileio_errmsg("::fclose failed in del_file ",ios)
+            if(.not.fopen(fnr,file,STATUS='OLD',IOSTAT=file_status))&
+                call fileio_errmsg( "del_file failed to open file designated for deletion", file_status)
+            if( file_status == 0 )then
+                if(.not.fclose(fnr, status='delete',iostat=file_status))&
+                     call fileio_errmsg("::fclose failed in del_file ",file_status)
             end if
         endif
     end subroutine del_file
@@ -379,7 +392,6 @@ contains
         character(len=*), optional, intent(in) :: suffix  !< file suffix
         character(len=STDLEN), allocatable :: names(:)
         integer :: ifile, fnr, ios
-
         names = make_filenames( body, n, ext, numlen=numlen, suffix=suffix )
         if(.not.fopen(fnr, file=tabname, status='replace', action='write', iostat=ios))then
             call fileio_errmsg('simple_fileio       :: make_filetable', ios)
@@ -402,10 +414,8 @@ contains
         if( present(tab3) ) ntabs = 3
         if( present(tab4) ) ntabs = 4
         n = size(tab1)
-
         if(.not.fopen(fnr,tabname, status='replace', action='write', iostat=ios))&
             call fileio_errmsg('simple_fileio       :: make_multitab_filetable', ios)
-
         do ifile=1,n
             if( ntabs == 2 ) write(fnr,'(a)') trim(tab1(ifile))//' '//trim(tab2(ifile))
             if( ntabs == 3 ) write(fnr,'(a)') trim(tab1(ifile))//' '//trim(tab2(ifile))&
