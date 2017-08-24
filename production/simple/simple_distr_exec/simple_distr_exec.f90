@@ -33,6 +33,8 @@ type(tseries_track_distr_commander)      :: xtseries_track_distr
 ! HIGH-LEVEL WORKFLOWS
 type(ini3D_from_cavgs_commander)         :: xini3D_from_cavgs
 type(het_ensemble_commander)             :: xhet_ensemble
+! SUPORTING DISTRIBUTED WORKFLOWS
+type(scale_stk_parts_commander)          :: xscale_stk_parts
 
 ! OTHER DECLARATIONS
 integer, parameter    :: MAXNKEYS=100, KEYLEN=32
@@ -398,6 +400,7 @@ select case(prg)
         if( .not. cline%defined('edge')      ) call cline%set('edge',       10.)
         if( .not. cline%defined('maxits')    ) call cline%set('maxits',     30.)
         if( .not. cline%defined('weights2D') ) call cline%set('weights2D', 'no')
+        if( .not. cline%defined('autoscale') ) call cline%set('autoscale', 'yes')
         if( cline%defined('nparts') .and. cline%defined('chunksz') )then
             stop 'nparts and chunksz cannot simultaneously be part of command line'
         else if(cline%defined('nparts') )then
@@ -739,8 +742,9 @@ select case(prg)
         if( describe ) call print_doc_ini3D_from_cavgs
         call cline%parse(keys_required(:5), keys_optional(:17))
         ! set defaults
-        if( .not. cline%defined('amsklp') ) call cline%set('amsklp', 20.)
-        if( .not. cline%defined('edge')   ) call cline%set('edge',   10.)
+        if( .not. cline%defined('amsklp')    ) call cline%set('amsklp', 20.)
+        if( .not. cline%defined('edge')      ) call cline%set('edge',   10.)
+        if( .not. cline%defined('autoscale') ) call cline%set('autoscale', 'yes')
         ! execute
         call xini3D_from_cavgs%execute( cline )
     case( 'het_ensemble' )
@@ -778,6 +782,26 @@ select case(prg)
         if( .not. cline%defined('edge')   ) call cline%set('edge',   10.)
         ! execute
         call xhet_ensemble%execute( cline )
+
+    ! SUPORTING DISTRIBUTED WORKFLOWS
+
+    case( 'scale_stk_parts' )
+        !==Program scale_stk_parts
+        !
+        ! <scale_stk_parts/begin>is a distributed workflow for scaling
+        ! balanced partial stacks<scale_stk_parts/end> 
+        !
+        ! set required keys
+        keys_required(1) = 'smpd'
+        keys_required(2) = 'nparts'
+        keys_required(3) = 'newbox'
+        ! set optional keys
+        keys_optional(1)  = 'nthr'
+        ! parse command line
+        ! if( describe ) call print_doc_scale_stk_parts
+        call cline%parse(keys_required(:3), keys_optional(:1))
+         ! execute
+        call xscale_stk_parts%execute( cline )
     case DEFAULT
         write(*,'(a,a)') 'program key (prg) is: ', trim(prg)
         stop 'unsupported program'

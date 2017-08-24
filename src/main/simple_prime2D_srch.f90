@@ -215,7 +215,7 @@ contains
             ggreedy = .true.
         else
             ggreedy = .false.
-             if( present(greedy) ) ggreedy = greedy
+            if( present(greedy) ) ggreedy = greedy
         endif
         if( ggreedy )then
             call self%greedy_srch(pftcc, iptcl, a)

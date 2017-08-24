@@ -157,7 +157,7 @@ contains
         real,             optional, intent(in)    :: angast      !< angle of astigmatism
         real,             optional, intent(in)    :: bfac        !< bfactor
         integer :: lims(3,2),h,k,phys(3),hh,kk,ldim(3)
-        real    :: ang, tval, tvalsq, ddfy, aangast, spaFreqSq, hinv
+        real    :: ang, tval, ddfy, aangast, spaFreqSq, hinv
         real    :: kinv, inv_ldim(3)
         if( img%is_3d() )then
             print *, 'ldim: ', img%get_ldim()
@@ -352,7 +352,7 @@ contains
                 ang       = atan2(real(k),real(h))
                 tval      = 1.0
                 if( imode <  3 ) tval = self%eval(spaFreqSq, dfx, ddfy, aangast, ang)
-                tvalsq = min(1.,max(tval**2.,0.001))
+                tvalsq = tval * tval
                 if( imode == 1 ) tval = abs(tval)
                 ! multiply image with CTF
                 logi = [h,k,0]

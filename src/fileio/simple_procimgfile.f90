@@ -2,9 +2,9 @@
 module simple_procimgfile
 use simple_defs
 use simple_syslib
-use simple_image,  only: image
+use simple_image,   only: image
 use simple_imgfile, only: find_ldim_nptcls
-use simple_jiffys, only: progress
+use simple_jiffys,  only: progress
 implicit none
 
 private :: raise_exception_imgfile
@@ -1050,27 +1050,49 @@ contains
     !! \param fname  input filename
     !! \param nran number of random samples
     !! \param smpd sampling distance
-    subroutine random_selection_from_imgfile( fname2selfrom, fname, nran, smpd )
+    subroutine random_selection_from_imgfile( fname2selfrom, fname, nran, box, smpd, mask )
         use simple_ran_tabu, only: ran_tabu
-        character(len=*), intent(in) :: fname2selfrom, fname
-        integer,          intent(in) :: nran
-        real,             intent(in) :: smpd
-        integer, allocatable :: pinds(:)
-        integer              :: alloc_stat, n, ldim(3), i
-        type(ran_tabu)       :: rt
-        type(image)          :: img
+        character(len=*),  intent(in) :: fname2selfrom, fname
+        integer,           intent(in) :: nran, box
+        real,              intent(in) :: smpd
+        logical, optional, intent(in) :: mask(:)
+        integer        :: alloc_stat, n, ldim(3), i, ii, ldim_scaled(3)
+        type(ran_tabu) :: rt
+        type(image)    :: img, img_scaled
+        logical        :: doscale
         call find_ldim_nptcls(fname2selfrom, ldim, n)
         ldim(3) = 1
+        ldim_scaled = [box,box,1]
+        doscale = any(ldim /= ldim_scaled)
+        if( doscale ) call img_scaled%new(ldim_scaled,smpd) ! this sampling distance will be overwritten
         call raise_exception_imgfile( n, ldim, 'random_selection_from_imgfile' )
         call img%new(ldim,smpd)
         write(*,'(a)') '>>> RANDOMLY SELECTING IMAGES'
-        allocate( pinds(nran) )
         rt = ran_tabu(n)
-        call rt%ne_ran_iarr(pinds)
+        if( present(mask) )then
+            if( size(mask) /= n ) stop 'non-conguent logical mask; procimgfile :: random_selection_from_imgfile'
+            do i=1,n
+                if( .not. mask(i) ) call rt%insert(i)
+            end do
+        endif
         do i=1,nran
             call progress(i, nran)
-            call img%read(fname2selfrom, pinds(i))
-            call img%write(fname, i)
+            ii = rt%irnd()
+            call rt%insert(ii)
+            call img%read(fname2selfrom, ii)
+            if( doscale )then
+                call img%fwd_ft
+                if( ldim_scaled(1) <= ldim(1) .and. ldim_scaled(2) <= ldim(2)&
+                     .and. ldim_scaled(3) <= ldim(3) )then
+                    call img%clip(img_scaled)
+                else
+                    call img%pad(img_scaled)
+                endif
+                call img_scaled%bwd_ft
+                call img_scaled%write(fname, i)
+            else
+                call img%write(fname, i)
+            endif
         end do
     end subroutine random_selection_from_imgfile
 

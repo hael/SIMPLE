@@ -36,24 +36,31 @@ contains
         call bos%close
     end subroutine binread_oritab_1
  
-     subroutine binread_oritab_2( fname, a, fromto, primesrch3D, mask )
-         character(len=*),    intent(in)    :: fname
-         class(oris),         intent(inout) :: a
-         integer,             intent(in)    :: fromto(2)
-         class(prime3D_srch), intent(inout) :: primesrch3D(fromto(1):fromto(2))
-         logical,             intent(in)    :: mask(fromto(1):fromto(2))
-!         type(binoris) :: bos
-!         type(binoris) :: bos_fill_in
-!         if( .not. file_exists(fname) )then
-!             write(*,*) 'file: ', trim(fname)
-!             stop 'does not exist in cwd; binoris_io :: binread_oritab_2'
-!         endif
-!         ! establish input file handler
-!         call bos%open(fname)
- 
-! !!!!!!!!!!!!!!! 2 BE CONTINUED
- 
-     end subroutine binread_oritab_2
+    subroutine binread_oritab_2( fname, a, fromto, primesrch3D, mask )
+        character(len=*),    intent(in)    :: fname
+        class(oris),         intent(inout) :: a
+        integer,             intent(in)    :: fromto(2)
+        class(prime3D_srch), intent(inout) :: primesrch3D(fromto(1):fromto(2))
+        logical, optional,   intent(in)    :: mask(fromto(1):fromto(2))
+        type(binoris) :: bos
+        integer       :: irec
+        type(oris)    :: os_peak
+        logical       :: mmask(fromto(1):fromto(2))
+        if( .not. file_exists(fname) )then
+            write(*,*) 'file: ', trim(fname)
+            stop 'does not exist in cwd; binoris_io :: binread_oritab_2'
+        endif
+        mmask = .true.
+        if( present(mask) ) mmask = mask
+        call bos%open(fname)
+        do irec=fromto(1),fromto(2)
+            if( mmask(irec) )then
+                call bos%read_record(irec, a, os_peak)
+                call primesrch3D(irec)%set_o_peaks(os_peak)
+            endif
+        end do
+        call bos%close
+    end subroutine binread_oritab_2
  
     subroutine binread_ctfparams_and_state( fname, a, fromto )
         character(len=*), intent(in)    :: fname
@@ -87,21 +94,30 @@ contains
         call bos%close
     end subroutine binwrite_oritab_1
  
-    subroutine binwrite_oritab_2( fname, fname_fill_in, a, fromto, primesrch3D, mask )
-        character(len=*),    intent(in)    :: fname, fname_fill_in
-        class(oris),         intent(inout) :: a
-        integer,             intent(in)    :: fromto(2)
-        class(prime3D_srch), intent(inout) :: primesrch3D(fromto(1):fromto(2))
-        logical,             intent(in)    :: mask(fromto(1):fromto(2))
+    subroutine binwrite_oritab_2( fname, a, fromto, primesrch3D, mask, fname_fill_in )
+        character(len=*),           intent(in)    :: fname
+        class(oris),                intent(inout) :: a
+        integer,                    intent(in)    :: fromto(2)
+        class(prime3D_srch),        intent(inout) :: primesrch3D(fromto(1):fromto(2))
+        logical,          optional, intent(in)    :: mask(fromto(1):fromto(2))
+        character(len=*), optional, intent(in)    :: fname_fill_in
         type(binoris) :: bos
         type(binoris) :: bos_fill_in
         type(oris)    :: os_peak, os_peak_fill_in, os_peak_conforming
         type(ori)     :: o_single
-        integer       :: npeaks, npeaks_fill_in, i
-        logical       :: reshape_fill_in
-        if( .not. file_exists(fname_fill_in) )then
-            write(*,*) 'file: ', trim(fname_fill_in)
-            stop 'does not exist in cwd; binoris_io :: binwrite_oritab_2'
+        integer       :: npeaks, npeaks_fill_in, irec
+        logical       :: reshape_fill_in, mmask(fromto(1):fromto(2)), l_fill_in
+        mmask     = .true.
+        l_fill_in = .false.
+        if( present(mask) )then
+            mmask = mask
+            if( .not. present(fname_fill_in) )&
+            &stop 'need fill in file in conjunction with mask; binoris_io :: binwrite_oritab_2'
+            if( .not. file_exists(fname_fill_in) )then
+                write(*,*) 'file: ', trim(fname_fill_in)
+                stop 'does not exist in cwd; binoris_io :: binwrite_oritab_2'
+            endif
+            l_fill_in = .true.
         endif
         ! establish outfile header
         o_single = a%get_ori(fromto(1))
@@ -110,26 +126,28 @@ contains
         call bos%new(a, fromto, os_peak)
         call bos%open(fname, del_if_exists=.true.)
         call bos%write_header()
-        ! establish fill-in filehandler
-        call bos_fill_in%open(fname_fill_in)
-        npeaks_fill_in  = bos_fill_in%get_n_peaks()
-        reshape_fill_in = npeaks_fill_in /= npeaks
-        do i=fromto(1),fromto(2)
-            if( mask(i) )then
+        if( l_fill_in )then
+            ! establish fill-in filehandler
+            call bos_fill_in%open(fname_fill_in)
+            npeaks_fill_in  = bos_fill_in%get_n_peaks()
+            reshape_fill_in = npeaks_fill_in /= npeaks
+        endif
+        do irec=fromto(1),fromto(2)
+            if( mmask(irec) )then
                 ! particle has been subjected to update
-                o_single = a%get_ori(i)
-                call primesrch3D(i)%get_oris(os_peak, o_single)
-                call bos%write_record(i, a, os_peak)
+                o_single = a%get_ori(irec)
+                call primesrch3D(irec)%get_oris(os_peak, o_single)
+                call bos%write_record(irec, a, os_peak)
             else
                 ! info in fill-in file is needed
                 if( reshape_fill_in )then
-                    call bos_fill_in%read_record(i, a, os_peak_fill_in)
+                    call bos_fill_in%read_record(irec, a, os_peak_fill_in)
                     os_peak_conforming =&
                     &os_peak_fill_in%create_conforming_npeaks_set(npeaks)
-                    call bos%write_record(i, a, os_peak_conforming)
+                    call bos%write_record(irec, a, os_peak_conforming)
                 else
-                    call bos_fill_in%read_record(i)
-                    call bos%write_record(i, bos_fill_in)
+                    call bos_fill_in%read_record(irec)
+                    call bos%write_record(irec, bos_fill_in)
                 endif
             endif
         end do

@@ -515,7 +515,7 @@ contains
         class(oristats_commander), intent(inout) :: self
         class(cmdline),            intent(inout) :: cline
         type(build)          :: b
-        type(oris)           :: o, nonzero_pop_o, zero_pop_o, osubspace
+        type(oris)           :: o, osubspace
         type(ori)            :: o_single
         type(params)         :: p
         real                 :: mind, maxd, avgd, sdevd, sumd, vard, median_clustsz, scale
@@ -625,25 +625,6 @@ contains
                 write(*,'(a,1x,f8.2)') 'MEDIAN  POPULATION        :', popmed
                 write(*,'(a,1x,f8.2)') 'AVERAGE POPULATION        :', popave
                 write(*,'(a,1x,f8.2)') 'SDEV OF POPULATION        :', popsdev
-                ! write out the zero and nonzero populated projection directions
-                n_zero    = count(tmp < 0.5)
-                n_nonzero = nprojs - n_zero
-                call zero_pop_o%new(n_zero)
-                call nonzero_pop_o%new(n_nonzero)
-                cnt_zero    = 0
-                cnt_nonzero = 0
-                do iproj=1,nprojs
-                    o_single = b%e%get_ori(iproj)
-                    if( tmp(iproj) < 0.5 )then
-                        cnt_zero = cnt_zero + 1
-                        call zero_pop_o%set_ori(cnt_zero,o_single)
-                    else
-                        cnt_nonzero = cnt_nonzero + 1
-                        call nonzero_pop_o%set_ori(cnt_nonzero,o_single)
-                    endif
-                end do
-                call nonzero_pop_o%write('pop_zero_pdirs.txt')
-                call zero_pop_o%write('pop_nonzero_pdirs.txt')
                 ! produce a histogram based on clustering into ndiscrete (default 100) even directions
                 ! first, generate a mask based on state flag and w
                 ptcl_mask = b%a%included(consider_w=.true.)

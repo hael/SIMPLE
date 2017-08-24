@@ -254,7 +254,7 @@ contains
             ! calculate CTF and CTF**2 values
             ! dfx, dfy, angast are class vars that are set by inout fplane
             tval   = self%tfun%eval(sqSpatFreq, dfx, dfy, angast, ang) ! no bfactor 4 now
-            tvalsq = min(1.,max(tval**2.,0.001))
+            tvalsq = tval * tval
             if( self%ctfflag .eq. 'flip' ) tval = abs(tval)
             if( self%ctfflag .eq. 'mul'  ) tval = 1.
             if( self%tfneg ) tval = -tval

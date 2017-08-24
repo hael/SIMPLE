@@ -331,109 +331,109 @@ contains
 !#else
             call gerror(msg) !! EXTERNAL;
 !#endif
-            write(stderr,'("SIMPLE SYSERROR NEG ",I0)') err
+            write(stderr,'("SIMPLE_SYSLIB::SYSERROR NEG ",I0)') err
             write(stderr,*) trim(msg)
         else if (err /= 0) then
 #ifdef GNU
-            write(msg,'("SIMPLE SYSERROR ",I0)') err
-            call perror(msg) !! EXTERNAL;
+            write(msg,'("SIMPLE_SYSLIB::SYSERROR ",I0)') err
+            call perror(msg)
 
 #elif defined(INTEL)
             ! err= getlasterror()
             ! using IERRNO result from above
             select case (err)
             case (1) ! EPERM
-                write(stderr,'(A)')"SIMPLE SYSERROR: 1 Insufficient permission for operation"
+                write(stderr,'(A)')"SIMPLE_SYSLIB::SYSERROR 1 Insufficient permission for operation"
             case (2) ! ENOENT
-                write(stderr,'(A)')"SIMPLE SYSERROR 2 No such file or directory"
+                write(stderr,'(A)')"SIMPLE_SYSLIB::SYSERROR 2 No such file or directory"
             case (3) ! ESRCH
-                write(stderr,'(A)')"SIMPLE SYSERROR 3 No such process"
+                write(stderr,'(A)')"SIMPLE_SYSLIB::SYSERROR 3 No such process"
             case (4) ! EIO
-                write(stderr,'(A)')"SIMPLE SYSERROR 4 INTR error"
+                write(stderr,'(A)')"SIMPLE_SYSLIB::SYSERROR 4 INTR error"
             case (5) ! EIO
-                write(stderr,'(A)')"SIMPLE SYSERROR 5 I/O error"
+                write(stderr,'(A)')"SIMPLE_SYSLIB::SYSERROR 5 I/O error"
             case (6) ! ENXIO
-                write(stderr,'(A)')"SIMPLE SYSERROR 5 NXIO error"
+                write(stderr,'(A)')"SIMPLE_SYSLIB::SYSERROR 5 NXIO error"
             case (7) ! E2BIG)
-                write(stderr,'(A)')"SIMPLE SYSERROR 7 Argument list too long"
+                write(stderr,'(A)')"SIMPLE_SYSLIB::SYSERROR 7 Argument list too long"
             case (8) ! ENOEXEC)
-                write(stderr,'(A)')"SIMPLE SYSERROR 8 File is not executable"
+                write(stderr,'(A)')"SIMPLE_SYSLIB::SYSERROR 8 File is not executable"
             case (9)
-                write(stderr,'(A)')"SIMPLE SYSERROR 9 Bad file"
+                write(stderr,'(A)')"SIMPLE_SYSLIB::SYSERROR 9 Bad file"
             case (10)
-                write(stderr,'(A)')"SIMPLE SYSERROR 8 Bad child"
+                write(stderr,'(A)')"SIMPLE_SYSLIB::SYSERROR 8 Bad child"
             case (11)
-                write(stderr,'(A)')"SIMPLE SYSERROR 9 AGAIN error"
+                write(stderr,'(A)')"SIMPLE_SYSLIB::SYSERROR 9 AGAIN error"
             case ( ENOMEM)
-                write(stderr,'(A)')"SIMPLE SYSERROR 12 Not enough resources"
+                write(stderr,'(A)')"SIMPLE_SYSLIB::SYSERROR 12 Not enough resources"
             case ( EACCES)
-                write(stderr,'(A)')"SIMPLE SYSERROR 13  Access denied; the file's permission setting does not allow the specified access. Permission denied"
+                write(stderr,'(A)')"SIMPLE_SYSLIB::SYSERROR 13  Access denied; the file's permission setting does not allow the specified access. Permission denied"
             case (14)
-                write(stderr,'(A)')"SIMPLE SYSERROR 14 FAULT"
+                write(stderr,'(A)')"SIMPLE_SYSLIB::SYSERROR 14 FAULT"
             case (15)
-                write(stderr,'(A)')"SIMPLE SYSERROR 15 NOTBLK       "
+                write(stderr,'(A)')"SIMPLE_SYSLIB::SYSERROR 15 NOTBLK       "
             case (16) ! ENOEXEC)
-                write(stderr,'(A)')"SIMPLE SYSERROR 16 BUSY         "
+                write(stderr,'(A)')"SIMPLE_SYSLIB::SYSERROR 16 BUSY         "
             case (17) ! ENOEXEC)
-                write(stderr,'(A)')"SIMPLE SYSERROR 17 EXIST        "
+                write(stderr,'(A)')"SIMPLE_SYSLIB::SYSERROR 17 EXIST        "
             case ( EXDEV)
-                write(stderr,'(A)')"SIMPLE SYSERROR 18 Cross-device link"
+                write(stderr,'(A)')"SIMPLE_SYSLIB::SYSERROR 18 Cross-device link"
             case (19) ! ENOEXEC)
-                write(stderr,'(A)')"SIMPLE SYSERROR 19 ERR$NODEV"
+                write(stderr,'(A)')"SIMPLE_SYSLIB::SYSERROR 19 ERR$NODEV"
             case ( ENOTDIR)
-                write(stderr,'(A)')"SIMPLE SYSERROR 20 Not a directory"
+                write(stderr,'(A)')"SIMPLE_SYSLIB::SYSERROR 20 Not a directory"
             case (21)
-                write(stderr,'(A)')"SIMPLE SYSERROR 21 Is a directory"
+                write(stderr,'(A)')"SIMPLE_SYSLIB::SYSERROR 21 Is a directory"
             case (  EINVAL)
-                write(stderr,'(A)')"SIMPLE SYSERROR 22 Invalid argument"
+                write(stderr,'(A)')"SIMPLE_SYSLIB::SYSERROR 22 Invalid argument"
             case (23)
-                write(stderr,'(A)')"SIMPLE SYSERROR 23 NFILE       "
+                write(stderr,'(A)')"SIMPLE_SYSLIB::SYSERROR 23 NFILE       "
             case (24)
-                write(stderr,'(A)')"SIMPLE SYSERROR 24 MFILE       "
+                write(stderr,'(A)')"SIMPLE_SYSLIB::SYSERROR 24 MFILE       "
             case (25)
-                write(stderr,'(A)')"SIMPLE SYSERROR 25 NOTTY       "
+                write(stderr,'(A)')"SIMPLE_SYSLIB::SYSERROR 25 NOTTY       "
             case (26)
-                write(stderr,'(A)')"SIMPLE SYSERROR 26 TXTBSY      "
+                write(stderr,'(A)')"SIMPLE_SYSLIB::SYSERROR 26 TXTBSY      "
             case (27)
-                write(stderr,'(A)')"SIMPLE SYSERROR 27 FBIG        "
+                write(stderr,'(A)')"SIMPLE_SYSLIB::SYSERROR 27 FBIG        "
             case (28)
-                write(stderr,'(A)')"SIMPLE SYSERROR 28 NOSPC       "
+                write(stderr,'(A)')"SIMPLE_SYSLIB::SYSERROR 28 NOSPC       "
             case (29)
-                write(stderr,'(A)')"SIMPLE SYSERROR 29 SPIPE       "
+                write(stderr,'(A)')"SIMPLE_SYSLIB::SYSERROR 29 SPIPE       "
             case (30)
-                write(stderr,'(A)')"SIMPLE SYSERROR 30 ROFS        "
+                write(stderr,'(A)')"SIMPLE_SYSLIB::SYSERROR 30 ROFS        "
             case (31)
-                write(stderr,'(A)')"SIMPLE SYSERROR 31 MLINK       "
+                write(stderr,'(A)')"SIMPLE_SYSLIB::SYSERROR 31 MLINK       "
             case (32)
-                write(stderr,'(A)')"SIMPLE SYSERROR 32 PIPE        "
+                write(stderr,'(A)')"SIMPLE_SYSLIB::SYSERROR 32 PIPE        "
             case (33)
-                write(stderr,'(A)')"SIMPLE SYSERROR 33 DOM         "
+                write(stderr,'(A)')"SIMPLE_SYSLIB::SYSERROR 33 DOM         "
             case (34)
-                write(stderr,'(A)')"SIMPLE SYSERROR 34 RANGE       "
+                write(stderr,'(A)')"SIMPLE_SYSLIB::SYSERROR 34 RANGE       "
             case (35)
-                write(stderr,'(A)')"SIMPLE SYSERROR 35 UCLEAN      "
+                write(stderr,'(A)')"SIMPLE_SYSLIB::SYSERROR 35 UCLEAN      "
             case (36)
-                write(stderr,'(A)')"SIMPLE SYSERROR 36 DEADLOCK    "
+                write(stderr,'(A)')"SIMPLE_SYSLIB::SYSERROR 36 DEADLOCK    "
             case (38)
-                write(stderr,'(A)')"SIMPLE SYSERROR 38 NAMETOOLONG "
+                write(stderr,'(A)')"SIMPLE_SYSLIB::SYSERROR 38 NAMETOOLONG "
             case (39)
-                write(stderr,'(A)')"SIMPLE SYSERROR 39 NOLCK       "
+                write(stderr,'(A)')"SIMPLE_SYSLIB::SYSERROR 39 NOLCK       "
             case (40)
-                write(stderr,'(A)')"SIMPLE SYSERROR 40 NOSYS       "
+                write(stderr,'(A)')"SIMPLE_SYSLIB::SYSERROR 40 NOSYS       "
             case (41)
-                write(stderr,'(A)')"SIMPLE SYSERROR 41 NOTEMPTY    "
+                write(stderr,'(A)')"SIMPLE_SYSLIB::SYSERROR 41 NOTEMPTY    "
             case (42)
-                write(stderr,'(A)')"SIMPLE SYSERROR 42 ILSEQ       "
+                write(stderr,'(A)')"SIMPLE_SYSLIB::SYSERROR 42 ILSEQ       "
             end select
             write(msg,'("SIMPLE SYSERROR ",I0)') err
             call perror(msg)
 #else
             !! PGI
             ! msg = gerror()
-            ! write(stderr,'("SIMPLE SYSERROR ",I0)',advance='no') err
+            ! write(stderr,'("SIMPLE_SYSLIB::SYSERROR ",I0)',advance='no') err
             ! write(stderr,*) trim(msg)
 
-            write(msg,'("SIMPLE SYSERROR ",I0)') err
+            write(msg,'("SIMPLE_SYSLIB::SYSERROR ",I0)') err
             call perror(msg)
 #endif
         end if

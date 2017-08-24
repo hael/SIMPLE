@@ -257,7 +257,7 @@ contains
         class(ran_tabu), intent(inout) :: self
         integer :: alloc_stat
         if( allocated(self%avail) )then
-            deallocate( self%avail )
+            deallocate( self%avail, stat=alloc_stat )
             call alloc_errchk('In: simple_ran_tabu; kill ', alloc_stat)
         end if
     end subroutine kill

@@ -37,8 +37,9 @@ contains
         class(cmdline), intent(inout) :: cline
         integer,        intent(in)    :: which_iter
         logical,        intent(inout) :: converged
-        integer   :: iptcl
-        real      :: corr_thresh, frac_srch_space, skewness, extr_thresh
+        logical, allocatable :: ptcl_mask(:)
+        integer :: iptcl
+        real    :: corr_thresh, frac_srch_space, skewness, extr_thresh
 
         ! PREP REFERENCES
         if( p%l_distr_exec )then
@@ -63,7 +64,9 @@ contains
                         ! we randomly select particle images as initial references
                         p%refs = 'start2Drefs'//p%ext
                         if( p%chunktag .ne. '' ) p%refs = trim(p%chunktag)//trim(p%refs)
-                        call random_selection_from_imgfile(p%stk, p%refs, p%ncls, p%smpd)
+                        ptcl_mask = b%a%included()
+                        call random_selection_from_imgfile(p%stk, p%refs, p%ncls, p%box, p%smpd, ptcl_mask)
+                        deallocate(ptcl_mask)
                         call prime2D_read_sums( b, p )
                     endif
                 endif
@@ -197,7 +200,7 @@ contains
         class(build),  intent(inout) :: b
         class(params), intent(inout) :: p
         integer :: icls
-        if( file_exists(p%refs) )then
+        if( file_exists(p%refs) )then            
             do icls=1,p%ncls
                 call b%cavgs(icls)%read(p%refs, icls)
             end do

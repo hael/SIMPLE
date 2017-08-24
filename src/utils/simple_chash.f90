@@ -6,6 +6,7 @@ implicit none
 
 public :: chash
 private
+
 !> Simple chash type
 type :: chash
     private
@@ -433,8 +434,8 @@ contains
 
     !>  \brief  for reading key-vals from a text file
     subroutine read( self, fname )
-        use simple_fileio      , only: fopen, fclose, fileio_errmsg
-        use simple_strings,      only: strIsComment, strIsBlank
+        use simple_fileio,  only: fopen, fclose, fileio_errmsg
+        use simple_strings, only: strIsComment, strIsBlank
         class(chash), intent(inout)  :: self   !< instance
         character(len=*), intent(in) :: fname  !< name of file
         character(len=line_max_len)  :: buffer !< will hold a line from the file

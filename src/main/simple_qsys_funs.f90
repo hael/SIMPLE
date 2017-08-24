@@ -55,48 +55,6 @@ contains
         end do
     end subroutine qsys_cleanup
 
-    function stack_is_split( stk_part_fbody, stkext, parts, box ) result( is_split_correctly )
-    use simple_imgfile, only: find_ldim_nptcls
-        character(len=*), intent(in)  :: stk_part_fbody
-        character(len=4), intent(in)  :: stkext
-        integer,          intent(in)  :: parts(:,:)
-        integer,          intent(in)  :: box
-        character(len=:), allocatable :: stack_part_fname
-        logical, allocatable          :: stack_parts_exist(:)
-        integer :: ipart, numlen, nparts, sz, sz_correct, ldim(3)
-        logical :: is_split, is_correct, is_split_correctly
-        nparts = size(parts,1)
-        allocate( stack_parts_exist(nparts) )
-        numlen = len(int2str(nparts))
-        do ipart=1,nparts
-            allocate(stack_part_fname, source=trim(stk_part_fbody)//int2str_pad(ipart,numlen)//stkext)
-            stack_parts_exist(ipart) = file_exists(stack_part_fname)
-            deallocate(stack_part_fname)
-        end do
-        is_split   = all(stack_parts_exist)
-        is_correct = .true.
-        if( is_split )then
-            do ipart=1,nparts
-                sz_correct = parts(ipart,2)-parts(ipart,1)+1
-                allocate(stack_part_fname, source=trim(stk_part_fbody)//int2str_pad(ipart,numlen)//stkext)
-                call find_ldim_nptcls(stack_part_fname, ldim, sz)
-                if( sz /= sz_correct )then
-                    is_correct = .false.
-                    exit
-                endif
-                if( ldim(1) == box .and. ldim(2) == box )then
-                    ! dimension ok
-                else
-                    is_correct = .false.
-                    exit
-                endif
-                deallocate(stack_part_fname)
-            end do
-        endif
-        is_split_correctly = is_split .and. is_correct
-        if( .not. is_split_correctly ) call del_files(trim(stk_part_fbody), nparts, ext=stkext)
-    end function stack_is_split
-
     subroutine terminate_if_prg_in_cwd( prg )
         character(len=*), intent(in) :: prg
         integer                      :: file_stat, funit, ios, file_rec, i, pos
