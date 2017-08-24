@@ -254,7 +254,7 @@ contains
             if (stringsAreEqual(access_this, 'DIRECT',.false.))then
                 open( NEWUNIT=funit, FILE=filename, IOSTAT=iostat_this, &
                      &ACTION=action_this, STATUS=status_this,&
-                     &ACCESS=access_this, FORM=form_this,&
+                     &ACCESS=access_this, FORM=form_this, RECL=recl_this,&
                      &IOMSG=iomsg_this)
             else
                 if (recl_this == -1)then
