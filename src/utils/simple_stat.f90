@@ -726,6 +726,36 @@ contains
         end do
     end subroutine analyze_smat
 
+    !>  median deviation (for use in one-class clustering)
+    !!  should be a robust metric for the spread of a cluster 
+    !!  (1) estimate median of cluster (member most similar to all others)
+    !!  (2) calculate the similarity between the median and all others
+    !!  (3) take the median of (2) to get the deviation
+    !!  suggested exclusion based on 2.5 * dev criterion
+    subroutine median_dev( smat, i_median, smed, sdev )
+        use simple_math, only: median
+        real,    intent(in)  :: smat(:,:)
+        integer, intent(out) :: i_median
+        real,    intent(out) :: smed, sdev
+        real, allocatable :: sims(:)
+        integer :: loc(1), i, j, n
+        n = size(smat,1)
+        if( n /= size(smat,2) ) stop 'symmetric similarity matrix assumed; stat :: mad'
+        allocate(sims(n))
+        do i=1,n
+            sims(i) = 0.0
+            do j=1,n
+                if( i /= j )then
+                    sims(i) = sims(i) + smat(i,j)
+                endif
+            end do
+        end do
+        loc      = maxloc(sims)
+        i_median = loc(1)
+        smed     = sims(i_median)/real(n - 1)
+        sdev     = median(smat(i_median,:))
+    end subroutine median_dev
+
     ! SPECIAL FUNCTIONS
 
     !>    is the factorial function
@@ -824,6 +854,14 @@ contains
         if( size(x)/=size(y) )stop 'Invalid dimensions in simple_stat :: hamming_dist'
         dist = real(count( x /= y ))
     end function hamming_dist
+
+    !> distance metric based on the likelihood ratio
+    !! could be useful for Fourier transforms
+    real function likelihood_ratio( a, b )
+        real, intent(in) :: a(:), b(:)
+        if( size(a) /= size(b) ) stop 'ERROR, noncongruent arrays; stat :: likelihood_ratio '
+        likelihood_ratio = sum(2.0 * log(a + b) - log(a) - log(b))
+    end function likelihood_ratio
 
     !>   is the Normalized Mutual Information (in bits)
     !! Mutual Information \f$ I(X;Y)=\sum_{y\in Y}\sum_{x\in X}p(x,y)\log{\left({\frac{p(x,y)}{p(x)\,p(y)}}\right)} \f$
