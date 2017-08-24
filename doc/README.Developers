@@ -415,3 +415,8 @@ New file open/close
 
 Syslib's simple_error_check and get_sys_error gather relevant info, print stuff and stop if necessary
 
+REPLACE
+:- allocate(self%p(spec%ndim+1,spec%ndim), self%y(spec%ndim+1), self%pb(spec%ndim))
+WITH
+:+ allocate(self%p(spec%ndim+1,spec%ndim), self%y(spec%ndim+1), self%pb(spec%ndim), stat=alloc_stat)
+:+ call alloc_errchk("In: new_simplex_opt", alloc_stat)

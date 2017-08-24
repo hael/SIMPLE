@@ -36,14 +36,13 @@ contains
 
     !> \brief  is for checking file IO status
     subroutine fileio_errmsg( message, iostat , die)
-        use simple_syslib, only: simple_error_check
-        character(len=*), intent(in) :: message  !< error message
+        character(len=*), intent(in)    :: message  !< error message
         integer, intent(inout)          :: iostat !< error status
         logical, intent(in), optional   :: die    !< do you want to terminate or not
-        integer :: errno
         logical :: this_die
         this_die=.true.
         if(present(die)) this_die=die
+        write(stderr,'(a)') message
         if (iostat == -1)then
             write(stderr,'(a)') "fileio: EOF reached (PGI version)"
         else if (iostat == -2) then
@@ -73,7 +72,7 @@ contains
         character(len=30) :: async_this, access_this, action_this, status_this,&
              &blank_this, pad_this, decimal_this, delim_this, form_this , &
              &round_this,position_this
-        logical :: fopen,is_open
+        logical :: fopen
         fopen=.false.
         ! check to see if filename is empty
         write(filename,'(A)') trim(adjustl(file))
@@ -86,7 +85,7 @@ contains
         if (.not. (present(iostat) ) )then
             open(NEWUNIT=funit, FILE=trim(adjustl(filename)),IOSTAT=iostat_this)
             call simple_error_check(iostat_this,"fileio::fopen basic open "//trim(filename))
-            if (io_stat_this == 0 ) fopen = .true.
+            if (iostat_this == 0 ) fopen = .true.
             return ! if ok ? true : false
         end if
         ! Optional args
@@ -161,7 +160,7 @@ contains
                 end if
             end if
             call simple_error_check(iostat_this,"::fopen common open ACTION/STATUS/ACCESS")
-            if (io_stat_this == 0 ) fopen = .true.
+            if (iostat_this == 0 ) fopen = .true.
             if(present(iostat))iostat=iostat_this
             return
         end if
@@ -233,8 +232,8 @@ contains
         call simple_error_check(iostat_this,"fileio::fopen extra open ")
         if(present(iostat))iostat=iostat_this
         if(present(recl))recl=recl_this
-        if (io_stat_this == 0 ) fopen = .true.
-            if(present(iostat))iostat=iostat_this
+        if (iostat_this == 0 ) fopen = .true.
+        if(present(iostat))iostat=iostat_this
         return ! true
         ! Seriously bad hack for PGI system call
 !91      print stderr, "fopen: ERR called file " ,trim(filename)," err # ",iostat_this
@@ -246,8 +245,7 @@ contains
         integer, intent(in) :: unit
         integer, intent(inout) :: iostat
         character(len=*), intent(in), optional :: status,dispose
-        integer :: iostat_this
-        character(len=30) :: status_this,dispose_this
+        character(len=30) :: status_this
         logical :: fclose
         fclose=.false.
 
@@ -262,8 +260,9 @@ contains
         if (is_open(unit)) then
             CLOSE (unit,IOSTAT=iostat,STATUS=status_this)
             call simple_error_check(iostat, "fclose failed ")
+
         end if
-        fclose=.true.
+        if ( iostat == 0 ) fclose=.true.
         return
 ! 92      print ERROR_UNIT, "fclose failed ", int2str(iostat_this)
 !         return

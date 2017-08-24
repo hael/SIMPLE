@@ -323,20 +323,20 @@ contains
 #endif
         integer :: err
         CHARACTER(len=100) :: msg
-        err=INT( IERRNO() ) !! no implicit type
+        err = INT( IERRNO() ) !! EXTERNAL;  no implicit type in INTEL
 
         if( err < 0)then !! PGI likes to use negative error numbers
 !#ifdef PGI
 !            msg = gerror()
 !#else
-            call gerror(msg)
+            call gerror(msg) !! EXTERNAL;
 !#endif
             write(stderr,'("SIMPLE SYSERROR NEG ",I0)') err
             write(stderr,*) trim(msg)
         else if (err /= 0) then
 #ifdef GNU
             write(msg,'("SIMPLE SYSERROR ",I0)') err
-            call perror(msg)
+            call perror(msg) !! EXTERNAL;
 
 #elif defined(INTEL)
             ! err= getlasterror()
@@ -672,12 +672,12 @@ contains
         use ifport
 #endif
         integer, intent(in) :: secs
+#if defined(INTEL)
         integer  :: msecs
         msecs = 1000*secs
-#if defined(INTEL)
-        call sleepqq(msecs)
+        call sleepqq(msecs)  !! milliseconds 
 #else
-        call sleep(secs)
+        call sleep(secs) !! EXTERNAL;
 #endif        
     end subroutine simple_sleep
 

@@ -51,8 +51,8 @@ contains
         integer                           :: niters(spec%nrestarts)
         logical                           :: arezero(spec%ndim)
         if( .not. associated(spec%costfun) )then
-            HALT ('cost function not associated in opt_spec; simplex_minimize; simple_simplex_opt')
-        endif
+            HALT('cost function not associated in opt_spec; simplex_minimize; simple_simplex_opt')
+        end if
         ! test if best point in spec is set
         arezero = .false.
         do i=1,spec%ndim

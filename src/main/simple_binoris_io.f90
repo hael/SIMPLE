@@ -36,24 +36,24 @@ contains
         call bos%close
     end subroutine binread_oritab_1
  
-    subroutine binread_oritab_2( fname, a, fromto, primesrch3D, mask )
-        character(len=*),    intent(in)    :: fname
-        class(oris),         intent(inout) :: a
-        integer,             intent(in)    :: fromto(2)
-        class(prime3D_srch), intent(inout) :: primesrch3D(fromto(1):fromto(2))
-        logical,             intent(in)    :: mask(fromto(1):fromto(2))
-        type(binoris) :: bos
-        type(binoris) :: bos_fill_in
-        if( .not. file_exists(fname) )then
-            write(*,*) 'file: ', trim(fname)
-            stop 'does not exist in cwd; binoris_io :: binread_oritab_2'
-        endif
-        ! establish input file handler
-        call bos%open(fname)
+     subroutine binread_oritab_2( fname, a, fromto, primesrch3D, mask )
+         character(len=*),    intent(in)    :: fname
+         class(oris),         intent(inout) :: a
+         integer,             intent(in)    :: fromto(2)
+         class(prime3D_srch), intent(inout) :: primesrch3D(fromto(1):fromto(2))
+         logical,             intent(in)    :: mask(fromto(1):fromto(2))
+!         type(binoris) :: bos
+!         type(binoris) :: bos_fill_in
+!         if( .not. file_exists(fname) )then
+!             write(*,*) 'file: ', trim(fname)
+!             stop 'does not exist in cwd; binoris_io :: binread_oritab_2'
+!         endif
+!         ! establish input file handler
+!         call bos%open(fname)
  
-!!!!!!!!!!!!!!! 2 BE CONTINUED
+! !!!!!!!!!!!!!!! 2 BE CONTINUED
  
-    end subroutine binread_oritab_2
+     end subroutine binread_oritab_2
  
     subroutine binread_ctfparams_and_state( fname, a, fromto )
         character(len=*), intent(in)    :: fname

@@ -70,6 +70,7 @@ list(REMOVE_ITEM SIMPLECORELIB
    "${CMAKE_CURRENT_SOURCE_DIR}/utils/simple_imgfile.f90"
    "${CMAKE_CURRENT_SOURCE_DIR}/fileio/simple_alloc.f90"
    "${CMAKE_CURRENT_SOURCE_DIR}/main/simple_hash.f90"
+   "${CMAKE_CURRENT_SOURCE_DIR}/main/simple_binoris_io.f90"
    "${CMAKE_CURRENT_SOURCE_DIR}/main/simple_chash.f90"
    "${CMAKE_CURRENT_SOURCE_DIR}/main/simple_cftcc_scatsrch.f90"
    "${CMAKE_CURRENT_SOURCE_DIR}/main/simple_kbinterpol_elemental.f90"
