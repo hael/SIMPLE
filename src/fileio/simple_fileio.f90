@@ -82,7 +82,10 @@ contains
             return
         end if
 
-        if (.not. (present(iostat) ) )then
+        if (.not. (present(iostat) .or. present(form) .or. present(recl) .or.&
+        & present(async) .or. present(pad) .or. present(action) .or. present(status)&
+        & .or. present(position) .or. present(access) .or. present(decimal) .or. &
+        present(round) .or. present(delim) .or. present(blank) ) )then
             open(NEWUNIT=funit, FILE=trim(adjustl(filename)),IOSTAT=iostat_this)
             call simple_error_check(iostat_this,"fileio::fopen basic open "//trim(filename))
             if (iostat_this == 0 ) fopen = .true.
@@ -137,9 +140,33 @@ contains
 #endif
             endif
         end if
+        recl_this=-1
+        if(present(recl)) recl_this=recl
         !! Common file open
-        if (.not.( present(form) .or. present(recl) .or. present(async) .or. present(pad) .or. &
-             &present(decimal) .or. present(round) .or. present(delim) .or. present(blank) ) )then
+        if (.not.( present(form) .or. present(async) .or. present(pad) .or. &
+        &present(decimal) .or. present(round) .or. present(delim) .or. present(blank) ) )then
+            if (stringsAreEqual(access_this, 'DIRECT',.false.) .and. (recl_this > 0) ) then
+
+            if (present(action))then
+                if (present(position))then
+                    !! Appending to file
+                    open( NEWUNIT=funit,FILE=filename,IOSTAT=iostat_this,RECL=recl_this,&
+                    &ACTION=action_this,STATUS=status_this,ACCESS=access_this,POSITION=position_this)
+                else
+                    open( NEWUNIT=funit,FILE=filename,IOSTAT=iostat_this,RECL=recl_this,&
+                     &ACTION=action_this,STATUS=status_this,ACCESS=access_this)
+                end if
+            else ! no action
+                if (present(position))then
+                    !! Appending to file
+                    open( NEWUNIT=funit,FILE=filename,IOSTAT=iostat_this,RECL=recl_this,&
+                    &STATUS=status_this,ACCESS=access_this,POSITION=position_this)
+                else
+                    open( NEWUNIT=funit,FILE=filename,IOSTAT=iostat_this,&
+                    &STATUS=status_this,ACCESS=access_this,RECL=recl_this)
+                end if
+            end if
+        else
             if (present(action))then
                 if (present(position))then
                     !! Appending to file
@@ -147,7 +174,7 @@ contains
                     &ACTION=action_this,STATUS=status_this,ACCESS=access_this,POSITION=position_this)
                 else
                     open( NEWUNIT=funit,FILE=filename,IOSTAT=iostat_this,&
-                     &ACTION=action_this,STATUS=status_this,ACCESS=access_this)
+                    &ACTION=action_this,STATUS=status_this,ACCESS=access_this)
                 end if
             else ! no action
                 if (present(position))then
@@ -159,6 +186,7 @@ contains
                     &STATUS=status_this,ACCESS=access_this)
                 end if
             end if
+        end if
             call simple_error_check(iostat_this,"::fopen common open ACTION/STATUS/ACCESS")
             if (iostat_this == 0 ) fopen = .true.
             if(present(iostat))iostat=iostat_this

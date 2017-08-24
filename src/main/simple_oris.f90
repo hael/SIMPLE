@@ -1606,7 +1606,7 @@ contains
         character(len=100) :: io_message
         integer :: file_stat, i, fnr, state, recsz
         if( .not. file_exists(orifile) )then
-            HALT ("oris ; read; The file you are trying to read: "//trim(orifile)//' does not exist in cwd' )
+            call simple_stop ("oris ; read; The file you are trying to read: "//trim(orifile)//' does not exist in cwd' )
         endif
         io_message='No error'
         if(.not.fopen(fnr, FILE=orifile, STATUS='OLD', action='READ', iostat=file_stat,iomsg=io_message))then

@@ -147,7 +147,7 @@ contains
             stop 'simple_nrtxtfile::writeDataLineReal; File is not OPEN_TO_WRITE'
         endif
         if( size(data_to_write) .lt. self%recs_per_line )then
-             HALT( 'simple_nrtxtfile::writeDataLineReal; Supplied array is smaller than records per line')
+             call simple_stop( 'simple_nrtxtfile::writeDataLineReal; Supplied array is smaller than records per line')
         endif
         do record_counter = 1, self%recs_per_line
             write(self%funit, '(g14.7,a)', advance='no') data_to_write(record_counter), ' '
@@ -164,7 +164,7 @@ contains
         integer                         :: record_counter
         ! Check we are open to write
         if (self%access_type .ne. OPEN_TO_WRITE) then
-            HALT('simple_nrtxtfile::writeDataLineInt; File is not OPEN_TO_WRITE')
+            call simple_stop('simple_nrtxtfile::writeDataLineInt; File is not OPEN_TO_WRITE')
         endif
         ! Check size
         if( size(data_to_write) .lt. self%recs_per_line )then

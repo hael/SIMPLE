@@ -94,7 +94,7 @@ contains
         read(unit=funit,pos=1,iostat=io_stat) smat
         if( io_stat .ne. 0 )then
             write(*,'(a,i0,a)') 'I/O error ', io_stat, ' when reading: ', p%fname
-            HALT ( 'I/O error; simple_cluster_smat')
+            call simple_stop ( 'I/O error; simple_cluster_smat')
         endif
         if(.not.fclose(funit,iostat=io_stat))&
              call fileio_errmsg('commander_misc; cluster_smat fclose ', io_stat)

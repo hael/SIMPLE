@@ -114,27 +114,27 @@ contains
         ! error check
         if( kfromto(2) - kfromto(1) <= 2 )then
             write(*,*) 'kfromto: ', kfromto(1), kfromto(2)
-            HALT( 'resolution range too narrow; new; simple_polarft_corrcalc')
+            call simple_stop( 'resolution range too narrow; new; simple_polarft_corrcalc')
         endif
         if( ring2 < 1 )then
             write(*,*) 'ring2: ', ring2
-            HALT ( 'ring2 must be > 0; new; simple_polarft_corrcalc')
+            call simple_stop ( 'ring2 must be > 0; new; simple_polarft_corrcalc')
         endif
         if( pfromto(2) - pfromto(1) + 1 < 1 )then
             write(*,*) 'pfromto: ', pfromto(1), pfromto(2)
-            HALT ('nptcls (# of particles) must be > 0; new; simple_polarft_corrcalc')
+            call simple_stop ('nptcls (# of particles) must be > 0; new; simple_polarft_corrcalc')
         endif
         if( nrefs < 1 )then
             write(*,*) 'nrefs: ', nrefs
-            HALT ('nrefs (# of reference sections) must be > 0; new; simple_polarft_corrcalc')
+            call simple_stop ('nrefs (# of reference sections) must be > 0; new; simple_polarft_corrcalc')
         endif
         if( any(ldim == 0) )then
             write(*,*) 'ldim: ', ldim
-            HALT ('ldim is not conforming (is zero); new; simple_polarft_corrcalc')
+            call simple_stop ('ldim is not conforming (is zero); new; simple_polarft_corrcalc')
         endif
         if( ldim(3) > 1 )then
             write(*,*) 'ldim: ', ldim
-            HALT ('3D polarfts are not yet supported; new; simple_polarft_corrcalc')
+            call simple_stop ('3D polarfts are not yet supported; new; simple_polarft_corrcalc')
         endif
         test    = .false.
         test(1) = is_even(ldim(1))
@@ -143,7 +143,7 @@ contains
         even_dims = all(test)
         if( .not. even_dims )then
             write(*,*) 'ldim: ', ldim
-            HALT ('only even logical dims supported; new; simple_polarft_corrcalc')
+            call simple_stop ('only even logical dims supported; new; simple_polarft_corrcalc')
         endif
         ! set constants
         self%pfromto = pfromto                         !< from/to particle indices (in parallel execution)
@@ -245,7 +245,7 @@ contains
         if( self%nrefs .eq. self%nptcls )then
             self%pfts_refs(:,:,:) = self%pfts_ptcls(:,:self%refsz,:)         
         else
-            HALT ('pfts_refs and pfts_ptcls not congruent (nrefs .ne. nptcls)')
+            call simple_stop ('pfts_refs and pfts_ptcls not congruent (nrefs .ne. nptcls)')
         endif
     end subroutine cp_ptcls2refs
 
@@ -358,7 +358,7 @@ contains
         integer,                 intent(in) :: roind !<  in-plane rotation index
         real(sp) :: rot
         if( roind < 1 .or. roind > self%nrots )then
-            HALT( 'roind is out of range; get_rot; simple_polarft_corrcalc')
+            call simple_stop( 'roind is out of range; get_rot; simple_polarft_corrcalc')
         endif
         rot = self%angtab(roind)
     end function get_rot
@@ -390,9 +390,9 @@ contains
         integer, allocatable :: roind_vec(:)  
         real(sp) :: dist(self%nrots)
         integer  :: i, irot, nrots, alloc_stat
-        if(ang>360. .or. ang<TINY)HALT ('input angle outside of the conventional range; simple_polarft_corrcalc::get_win_roind')
-        if(winsz<0. .or. winsz>180.)HALT ('invalid window size; simple_polarft_corrcalc::get_win_roind')
-        if(winsz < 360./real(self%nrots))HALT ('too small window size; simple_polarft_corrcalc::get_win_roind')
+        if(ang>360. .or. ang<TINY)call simple_stop ('input angle outside of the conventional range; simple_polarft_corrcalc::get_win_roind')
+        if(winsz<0. .or. winsz>180.)call simple_stop ('invalid window size; simple_polarft_corrcalc::get_win_roind')
+        if(winsz < 360./real(self%nrots))call simple_stop ('too small window size; simple_polarft_corrcalc::get_win_roind')
         i    = self%get_roind( ang )
         dist = abs(self%angtab(i) - self%angtab)
         where( dist>180. )dist = 360.-dist
@@ -513,7 +513,7 @@ contains
         ! Check if the write was successful
         if( io_stat .ne. 0 )then
             call fileio_errmsg('**ERROR(simple_polarft_corrcalc): I/O error when writing file: '// trim(fname), io_stat)
-            HALT ('I/O error; write_pfts_ptcls')
+            call simple_stop ('I/O error; write_pfts_ptcls')
         endif
          if(.not.fclose(funit, iostat=io_stat))&
              call fileio_errmsg('polarft_corrcalc write_ptfs_ptcls  ', io_stat)
@@ -692,7 +692,7 @@ contains
             ! calculates only corrs for rotational indices provided in roind_vec
             ! see get_win_roind. returns -1. when not calculated
             if( any(roind_vec<=0) .or. any(roind_vec>self%nrots) )&
-                &HALT ('index out of range; simple_polarft_corrcalc::gencorrs')
+                &call simple_stop ('index out of range; simple_polarft_corrcalc::gencorrs')
             cc = -1.
             do i = 1, size(roind_vec)
                 irot = roind_vec(i)
