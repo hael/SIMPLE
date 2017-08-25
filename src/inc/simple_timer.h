@@ -83,8 +83,7 @@ block; use simple_timer;\
 character(len=80) :: comment_,srcname; \
 integer(timer_int_kind) :: t1; \
 integer :: srcline;  \
-t1=tic(); \
-srcline= __LINE__ ; \
+t1=tic();srcline=__LINE__; \
 comment_=trim(adjustl(COMMENT)); \
 srcname=trim(__FILENAME__); \
 YBLOCK; \

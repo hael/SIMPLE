@@ -151,7 +151,7 @@ if (${CMAKE_Fortran_COMPILER_ID} STREQUAL "GNU" ) #AND Fortran_COMPILER_NAME MAT
     message(FATAL_ERROR "${PROJECT_NAME} requires gfortran version 4.9 or above")
   endif ()
   set(EXTRA_FLAGS "${EXTRA_FLAGS} ") # -fopenmp-simd -mfma -mfma4 -faggressive-function-elimination") # -Wimplicit-interface -Wunderflow -fbounds-check -fimplicit-none   -Wunused-parameter -Wunused-variable -Wuninitialized ")
-  set(CMAKE_CPP_COMPILER_FLAGS           "-E -w -Wno-endif-labels -fopenmp") # only seen by preprocessor if #include is present
+  set(CMAKE_CPP_COMPILER_FLAGS           "-E -C -CC -w -Wno-endif-labels -fopenmp") # only seen by preprocessor if #include is present
 
   set(CMAKE_Fortran_FLAGS                " ${EXTRA_FLAGS} ") #${CMAKE_Fortran_FLAGS_RELEASE_INIT}")
   set(CMAKE_Fortran_FLAGS_DEBUG          " ${EXTRA_FLAGS} ${CMAKE_Fortran_FLAGS_DEBUG_INIT}" )
@@ -571,12 +571,12 @@ if(ENABLE_PROFILE_OPTIMISATION)
     )
 endif()
 
-#set(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS}  ")
+#set(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS}  ")\
 #set(CMAKE_FCPP_FLAGS " -C -P ") # Retain comments due to fortran slash-slash
 #set(CMAKE_Fortran_CREATE_PREPROCESSED_SOURCE "${CMAKE_FCPP_COMPILER} <DEFINES> <INCLUDES> <FLAGS> -E <SOURCE> > <PREPROCESSED_SOURCE>")
 
 add_definitions("-D__FILENAME__='\"$(notdir $<)\"'")
-add_definitions("-DHALT\\(X\\)='call simple_stop\\(X, __FILENAME__, __LINE__\\)'")
+add_definitions("-DHALT\\(X\\)=\"call simple_stop(X, __FILENAME__, __LINE__)\"")
 
 
 
@@ -586,7 +586,7 @@ if (${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI")
 set(CMAKE_Fortran_COMPILE_OBJECT "grep --silent -E '#include' <SOURCE> && ( ${CMAKE_CPP_COMPILER} ${CMAKE_CPP_COMPILER_FLAGS} -DOPENMP <DEFINES> <INCLUDES> <SOURCE> > <OBJECT>.f90 &&  <CMAKE_Fortran_COMPILER> <DEFINES> <INCLUDES> <FLAGS> -c <OBJECT>.f90 -o <OBJECT> ) || <CMAKE_Fortran_COMPILER> <DEFINES> <INCLUDES> <FLAGS> -c <SOURCE> -o <OBJECT>")
 else()
 #elseif (${CMAKE_Fortran_COMPILER_ID} STREQUAL "Intel")
-set(CMAKE_Fortran_COMPILE_OBJECT "grep --silent -E '#include.*timer.h' <SOURCE> && ( ${CMAKE_CPP_COMPILER} ${CMAKE_CPP_COMPILER_FLAGS} -DOPENMP <DEFINES> <INCLUDES> <SOURCE> > <OBJECT>.f90 &&  <CMAKE_Fortran_COMPILER> <DEFINES> <INCLUDES> <FLAGS> -c <OBJECT>.f90 -o <OBJECT> ) || <CMAKE_Fortran_COMPILER> <DEFINES> <INCLUDES> <FLAGS> -c <SOURCE> -o <OBJECT>")
+set(CMAKE_Fortran_COMPILE_OBJECT "grep --silent -E '#include' <SOURCE> && ( ${CMAKE_CPP_COMPILER} ${CMAKE_CPP_COMPILER_FLAGS} -DOPENMP <DEFINES> <INCLUDES> <SOURCE> > <OBJECT>.f90 &&  <CMAKE_Fortran_COMPILER> <DEFINES> <INCLUDES> <FLAGS> -c <OBJECT>.f90 -o <OBJECT> ) || <CMAKE_Fortran_COMPILER> <DEFINES> <INCLUDES> <FLAGS> -c <SOURCE> -o <OBJECT>")
 endif()
 
 # Option for code coverage

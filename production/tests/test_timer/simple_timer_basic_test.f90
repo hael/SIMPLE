@@ -148,7 +148,8 @@ contains
     VerbosePrint ' '
     VerbosePrint '10.  Testing timed block macro '
     DebugPrint 'Testing line num'
-#if defined(GNU)
+#if 0
+    ! defined(GNU)
     TIMER_BLOCK(
     c=.1;
     c=saxy(c)

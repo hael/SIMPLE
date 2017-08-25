@@ -125,7 +125,4 @@ logical :: global_warn=.false.          !< warning flag
 ! append SIMPLE_VERSION and SIMPLE_GIT_VERSION strings to simple_defs
 #include "SimpleGitVersion.h"
 
-
-
-
 end module simple_defs
