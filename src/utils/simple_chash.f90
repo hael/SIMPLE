@@ -1,12 +1,14 @@
 ! character hash
+#define ALLOCCHK(X) call alloc_errchk(X,alloc_stat,__FILENAME__,__LINE__)
 module simple_chash
 use simple_defs
 use simple_fileio
+use simple_syslib, only: alloc_errchk
 implicit none
 
 public :: chash
 private
-
+integer  :: alloc_stat  !< private allocation status
 !> Simple chash type
 type :: chash
     private
@@ -75,7 +77,7 @@ contains
         call self%kill
         self%nmax = nmax
         allocate(self%keys(nmax), self%values(nmax), stat=alloc_stat)
-        call alloc_errchk("In: simple_chash :: new", alloc_stat)
+        ALLOCCHK("In simple_chash :: new")
         self%exists = .true.
     end subroutine new
 
@@ -226,7 +228,7 @@ contains
         integer :: i
         do i=1,self%chash_index
             if( trim(self%keys(i)) .eq. trim(key) )then
-                allocate(val, source=trim(self%values(i)))
+                allocate(val, source=trim(self%values(i)),stat=alloc_stat); ALLOCCHK("In get_1")
                 return
             endif
         end do
@@ -237,7 +239,7 @@ contains
         class(chash), intent(in)      :: self
         integer,      intent(in)      :: ival
         character(len=:), allocatable :: val
-        allocate(val, source=trim(self%values(ival)))
+        allocate(val, source=trim(self%values(ival)),stat=alloc_stat); ALLOCCHK("In get_1")
     end function get_2
 
     !>  \brief  gets the size of the hash
@@ -252,7 +254,7 @@ contains
         class(chash), intent(in)      :: self
         integer,      intent(in)      :: ikey
         character(len=:), allocatable :: val
-        allocate(val, source=trim(self%keys(ikey)))
+        allocate(val, source=trim(self%keys(ikey)),stat=alloc_stat); ALLOCCHK("In get_key")
     end function get_key
 
     !>  \brief  concatenates the chash into a string
@@ -262,19 +264,23 @@ contains
         integer :: i
         if( self%chash_index > 0 )then
             if( self%chash_index == 1 )then
-                allocate(str, source=trim(self%keys(1))//'='//trim(self%values(1)))
+                allocate(str, source=trim(self%keys(1))//'='//trim(self%values(1)),stat=alloc_stat)
+                ALLOCCHK("In chash2str 1 ")
                 return
             endif
-            allocate(str_moving, source=trim(self%keys(1))//'='//trim(self%values(1))//' ')
+            allocate(str_moving, source=trim(self%keys(1))//'='//trim(self%values(1))//' ',stat=alloc_stat)
+            ALLOCCHK("In chash2str 2")
             if( self%chash_index > 2 )then
                 do i=2,self%chash_index-1
-                    allocate(str, source=str_moving//trim(self%keys(i))//'='//trim(self%values(i))//' ')
-                    deallocate(str_moving)
-                    allocate(str_moving,source=str)
-                    deallocate(str)
+                    allocate(str, source=str_moving//trim(self%keys(i))//'='//trim(self%values(i))//' ',&
+                    &stat=alloc_stat); ALLOCCHK("In get_1")
+                    deallocate(str_moving,stat=alloc_stat); ALLOCCHK("In chash2str 3")
+                    allocate(str_moving,source=str,stat=alloc_stat); ALLOCCHK("In chash2str 4")
+                    deallocate(str,stat=alloc_stat); ALLOCCHK("In chash2str 5")
                 end do
             endif
-            allocate(str,source=trim(str_moving//trim(self%keys(self%chash_index))//'='//trim(self%values(self%chash_index))))
+            allocate(str,source=trim(str_moving//trim(self%keys(self%chash_index))//'='//&
+            &trim(self%values(self%chash_index))),stat=alloc_stat); ALLOCCHK("In chash2str 5")
         endif
     end function chash2str
 
@@ -299,7 +305,7 @@ contains
         if( self%chash_index > 1 )then
             call tmp%new(self%nmax)
             ! fill in keys
-            allocate(keys_sorted(self%chash_index))
+            allocate(keys_sorted(self%chash_index),stat=alloc_stat); ALLOCCHK("In sort")
             keys_sorted = self%keys(:self%chash_index)
             ! sort keys
             call lexSort(keys_sorted)
@@ -476,7 +482,8 @@ contains
             //trim(fname)//' ; '//trim(io_msg), ios)
         endif
         call self%print_key_val_pairs(fhandle=funit)
-        if(.not.fclose(funit, iostat=ios)) call fileio_errmsg('simple_chash :: write; ',ios)
+        if(.not.fclose(funit, iostat=ios)) &
+        &call fileio_errmsg('simple_chash :: write; ',ios)
     end subroutine write
 
     ! DESTRUCTOR
@@ -485,8 +492,15 @@ contains
     subroutine kill( self )
         class(chash), intent(inout) :: self !< instance
         if( self%exists )then
-            if(allocated(self%keys))deallocate(self%keys)
-            if(allocated(self%values))deallocate(self%values)
+            if(allocated(self%keys))then
+                deallocate(self%keys,stat=alloc_stat)
+                ALLOCCHK("In kill 1")
+            end if
+
+            if(allocated(self%values))then
+                deallocate(self%values,stat=alloc_stat)
+                ALLOCCHK("In kill 2")
+            end if
             self%nmax        = 0
             self%chash_index = 0
             self%exists      = .false.

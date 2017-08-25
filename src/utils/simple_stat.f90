@@ -1,7 +1,7 @@
 ! statistics utility functions
 module simple_stat
-    use simple_defs ! singleton
-    use simple_syslib
+use simple_defs ! singleton
+use simple_syslib, only: alloc_errchk
 use simple_math, only: hpsort
 implicit none
 
@@ -294,12 +294,13 @@ contains
         integer, intent(in) :: winsz
         logical, intent(out) :: err              !< error status
         real, intent(in)     :: data(:,:)        !< input data
-        integer              :: nx, ny, i, j, h, k, px, py, tmpcnt
+        integer              :: nx, ny, i, j, h, k, px, py, tmpcnt,alstat
         real                 :: n, tmpave!, nrpatch
         err = .false.
         nx = size(data,1)
         ny = size(data,2)
-        allocate(ave(nx,ny))
+        allocate(ave(nx,ny),stat=alstat)
+        call alloc_errchk("In: mean_2D; simple_stat",alstat )
         n  = nx*ny
         if( n <= 1 ) then
             write(*,*) 'ERROR: n must be at least 2'
@@ -354,12 +355,13 @@ contains
         real, intent(in)     :: data(:,:), ave(:,:)        !< input data
         real, intent(out), allocatable  :: stdev(:,:),var(:,:)
         logical, intent(out) :: err              !< error status
-        integer              :: nx, ny, i, j, h, k,px,py, tmpcnt
+        integer              :: nx, ny, i, j, h, k,px,py, tmpcnt, alstat
         real                 :: n, tmpdev, nr, tmpvar, ep
         err = .false.
         nx = size(data,1)
         ny = size(data,2)
-        allocate(stdev(nx,ny),var(nx,ny))
+        allocate(stdev(nx,ny),var(nx,ny),stat=alstat)
+        call alloc_errchk("In: stdev_2D; simple_stat",alstat )
         n  = nx*ny
         if( n <= 1 ) then
             write(*,*) 'ERROR: n must be at least 2'
@@ -464,7 +466,7 @@ contains
     !! \param y input test array
     function pearsn_3( x, y ) result( r )
         real, intent(in) :: x(:,:,:),y(:,:,:)
-        real    :: r,ax,ay,az,sxx,syy,sxy,xt,yt
+        real    :: r,ax,ay,sxx,syy,sxy,xt,yt
         integer :: i, j, k, nx, ny, nz
         nx = size(x,1)
         ny = size(x,2)
@@ -590,7 +592,7 @@ contains
             arr(order(j)) = real(j)
         end do
         deallocate(vals, order, stat=alloc_stat )
-        call alloc_errchk("In: rank_transform_1; simple_stat", alloc_stat )
+        call alloc_errchk("In: rank_transform_1; simple_stat dealloc ", alloc_stat )
     end subroutine rank_transform_1
 
     !>    is for rank transformation of a 2D matrix
@@ -879,7 +881,7 @@ contains
         integer, intent(in)  :: nbins         !< num histogram bins
         real,    allocatable :: rh(:,:), pxs(:), pys(:)
         real    :: mi, val, ex, ey, pxy, px, py, logtwo
-        integer :: i, j, n
+        integer :: i,  j,   n,  alstat
         if( nbins<2 )stop 'Invalid number of bins in simple_stat%nmi'
         ! Init
         logtwo  = log(2.)
@@ -888,7 +890,8 @@ contains
         mi = 0.
         ex = 0.
         ey = 0.
-        allocate( rh(nbins,nbins), pxs(nbins), pys(nbins) )
+        allocate( rh(nbins,nbins), pxs(nbins), pys(nbins),stat=alstat)
+        call alloc_errchk("In: nmi; simple_stat",alstat )
         rh = real( get_jointhist( x, y, nbins ) ) / real( n )
         ! marginal entropies
         do i=1,nbins
@@ -911,7 +914,7 @@ contains
                 mi = mi + pxy * log( pxy/ (px*py) ) / logtwo
             enddo
         enddo
-        if( ( ex /= 0.0) .and. (ey /= 0.0) )then
+        if( ( ex /= 0.0 ) .and. (ey /= 0.0 ) )then
             val = mi / sqrt(ex*ey)
         else
             val = 0.0

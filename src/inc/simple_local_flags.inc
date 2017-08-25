@@ -39,6 +39,6 @@
 # define VerbosePrint if(verbose.or.global_verbose.or.debug.or.global_debug) print *, 
 #endif
 #ifndef ErrorPrint
-# define ErrorPrint(msg) write(stderr,'("Error in ",/,A,/," line ",I0,":",A)') __FILENAME__,__LINE__, msg
+# define ErrorPrint(msg) write(*,'("Error in ",/,A,/," line ",I0,":",A)') __FILENAME__,__LINE__, msg
 #endif
 

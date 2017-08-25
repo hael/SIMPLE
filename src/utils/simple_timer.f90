@@ -24,6 +24,7 @@
 module simple_timer
 !     use simple_jiffys ! singleton
 use simple_defs   ! singleton, fp_kind declared
+use simple_syslib, only: simple_stop
 !   use precision_m
 implicit none
 !  private :: raise_sys_error
@@ -198,7 +199,7 @@ DebugPrint 'Size of elapsed array ', size(elapsed_times)
          if (len_trim(COMMENT) .le. 128) then
             strcomment = trim(adjustl(COMMENT))
          else
-            stop "Timer loop error - comment string must be less than 128 characters"
+            HALT ("Timer loop error - comment string must be less than 128 characters")
          end if
       end if
       if (.not. in_loop) then

@@ -1,7 +1,7 @@
 !!
 !! System library functions and error checking
 !!
-#include "../inc/simple_lib.f08"
+#include "simple_lib.f08"
 module simple_syslib
     use simple_defs
     use simple_strings, only: cpStr
@@ -444,10 +444,15 @@ contains
 
 
     !> \brief  is for checking allocation
-    subroutine alloc_errchk( message, alloc_stat )
-        character(len=*), intent(in) :: message
-        integer, intent(in)          :: alloc_stat
+    subroutine alloc_errchk( message, alloc_stat,f,l )
+        character(len=*), intent(in)           :: message
+        integer,          intent(in)           :: alloc_stat
+        character(len=*), intent(in), optional :: f !< filename of caller
+        integer,          intent(in), optional :: l !< line number from calling file
         integer                      :: syserr
+        if(present(f).and.present(l))&
+             write(stderr,'("Stopping in file ",/,A,/," at line ",I0)') f,l
+        
         if (alloc_stat/=0)then
             write(stderr,'(a)') 'ERROR: Allocation failure!'
             call simple_stop(message)
