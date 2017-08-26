@@ -16,7 +16,6 @@ public :: check2D_conv_commander
 public :: rank_cavgs_commander
 private
 
-!> generator type
 type, extends(commander_base) :: makecavgs_commander 
  contains
     procedure :: execute      => exec_makecavgs
@@ -44,7 +43,8 @@ contains
     subroutine exec_makecavgs( self, cline )
         use simple_hadamard2D_matcher, only: prime2D_assemble_sums, prime2D_write_sums, &
         & prime2D_write_partial_sums
-        use simple_qsys_funs, only: qsys_job_finished
+        use simple_binoris_io, only: binwrite_oritab
+        use simple_qsys_funs,  only: qsys_job_finished
         class(makecavgs_commander), intent(inout) :: self
         class(cmdline),             intent(inout) :: cline
         type(params)  :: p
@@ -98,9 +98,9 @@ contains
             call b%a%set_all2single('w', 1.0)
         endif
         if( p%l_distr_exec .and. nint(cline%get_rarg('part')) .eq. 1 )then
-            call b%a%write(p%oritab)
+            call binwrite_oritab(p%oritab, b%a, [1,p%nptcls])
         else
-            call b%a%write(p%oritab)
+            call binwrite_oritab(p%oritab, b%a, [1,p%nptcls])
         endif
         if( cline%defined('filwidth') )then
             if( p%l_distr_exec)then
@@ -115,7 +115,6 @@ contains
                 call prime2D_write_sums(b, p)
             endif           
         else
-            ! assembly
             call prime2D_assemble_sums(b, p)
             if( p%l_distr_exec)then
                 call prime2D_write_partial_sums( b, p )
@@ -247,7 +246,8 @@ contains
     end subroutine exec_check2D_conv
     
     subroutine exec_rank_cavgs( self, cline )
-        use simple_oris, only: oris
+        use simple_oris,       only: oris
+        use simple_binoris_io, only: binread_oritab, binread_nlines
         class(rank_cavgs_commander), intent(inout) :: self
         class(cmdline),              intent(inout) :: cline
         type(params)         :: p
@@ -257,9 +257,9 @@ contains
         p = params(cline) ! parameters generated
         call b%build_general_tbox(p, cline, do3d=.false.) ! general objects built
         p%ncls   = p%nptcls
-        p%nptcls = nlines(p%oritab) 
+        p%nptcls = binread_nlines(p%oritab) 
         call b%a%new(p%nptcls)
-        call b%a%read(p%oritab)
+        call binread_oritab(p%oritab, b%a, [1,p%nptcls])
         order = b%a%order_cls(p%ncls)
         do iclass=1,p%ncls
             write(*,'(a,1x,i5,1x,a,1x,i5,1x,a,i5)') 'CLASS:', order(iclass),&

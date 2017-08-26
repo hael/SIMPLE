@@ -1,7 +1,5 @@
 ! PRIME3D stochastic search routines
 module simple_prime3D_srch
-use simple_defs
-use simple_syslib
 use simple_oris,             only: oris
 use simple_ori,              only: ori
 use simple_strings,          only: str_has_substr, int2str_pad
@@ -9,6 +7,8 @@ use simple_polarft_corrcalc, only: polarft_corrcalc
 use simple_pftcc_shsrch,     only: pftcc_shsrch
 use simple_pftcc_inplsrch,   only: pftcc_inplsrch
 use simple_math              ! use all in there
+use simple_defs              ! use all in there
+use simple_syslib            ! use all in there
 implicit none
 
 public :: prime3D_srch
@@ -81,8 +81,6 @@ type prime3D_srch
     ! CALCULATORS
     procedure          :: prep_npeaks_oris
     procedure          :: stochastic_weights
-    procedure, private :: calc_specscore
-
     ! GETTERS & SETTERS
     procedure          :: update_best
     procedure          :: get_ori
@@ -221,7 +219,6 @@ contains
         if( trim(self%refine).eq.'exp' )then
             ! experimental refinement mode
             call self%dev_srch(pftcc,  iptcl, a, e, lp, nnmat)
-            !call self%o_peaks%write('ptcl_'//int2str_pad(iptcl,3)//'.txt')
         else
             ! classic refinement modes
             if( ggreedy )then
@@ -787,10 +784,12 @@ contains
             call o%set('mi_state', mi_state)
             call o%set('mi_joint', mi_state)
             call o%set('w', 1.)
+            !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
             ! specscore
-            iref = (state - 1) * self%nprojs + self%prev_proj
-            call self%calc_specscore(pftcc, iref, iptcl, self%prev_roind)
-            call o%set('specscore', self%specscore)
+            ! iref = (state - 1) * self%nprojs + self%prev_proj
+            ! call self%calc_specscore(pftcc, iref, iptcl, self%prev_roind)
+            ! call o%set('specscore', self%specscore)
+            !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
             ! updates orientations objects
             call self%o_peaks%set_ori(1, o)
             call a%set_ori(iptcl, o)
@@ -856,6 +855,7 @@ contains
         real,                    intent(in)    :: lp
         integer, optional,       intent(in)    :: nnmat(self%nprojs,self%nnn_static), target_projs(self%npeaks_grid)
         integer, allocatable :: nnvec(:)
+        real,    allocatable :: frc(:)
         type(ori) :: o_prev
         real      :: cc_t_min_1, corr
         if( str_has_substr(self%refine,'neigh') )then
@@ -887,6 +887,9 @@ contains
             case DEFAULT
                 stop 'Unknown refinement mode; simple_prime3D_srch; prep4srch'
         end select
+        ! calc specscore
+        frc = pftcc%genfrc(self%prev_ref, iptcl, self%prev_roind)
+        self%specscore = max(0., median_nocopy(frc))
         ! prep corr
         if( self%refine .ne. 'het' )then
             corr = max( 0., pftcc%corr(self%prev_ref, iptcl, self%prev_roind) )
@@ -1110,16 +1113,6 @@ contains
         call self%o_peaks%set_all('ow', ws)
     end subroutine stochastic_weights
 
-    !>  \brief  calculates the sprectral score
-    subroutine calc_specscore( self, pftcc, iref, iptcl, roind )
-        class(prime3D_srch),     intent(inout) :: self
-        class(polarft_corrcalc), intent(inout) :: pftcc
-        integer,                 intent(in)    :: iref, iptcl, roind
-        real, allocatable :: frc(:)
-        frc = pftcc%genfrc(iref, iptcl, roind)
-        self%specscore = max(0., median_nocopy(frc))
-    end subroutine calc_specscore
-
     ! GETTERS & SETTERS
     
     !>  \brief  to get the best orientation
@@ -1148,16 +1141,17 @@ contains
         call se%sym_euldist( o_old, o_new_copy, euldist )
         dist_inpl = rad2deg( o_new_copy.inplrotdist.o_old )
         call se%kill
-        ! specscore & new parameters
         state = nint( o_new%get('state') )
         if( .not. self%state_exists(state) )then
             print *,'Empty state in simple_prime3d_srch; update_best'
             stop
         endif
         roind = pftcc%get_roind( 360.-o_new%e3get() )
-        iref  = self%o_refs%find_closest_proj(o_new, state)
-        call self%calc_specscore(pftcc, iref, iptcl, roind)
+        !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+        ! iref  = self%o_refs%find_closest_proj(o_new, state)
+        ! call self%calc_specscore(pftcc, iref, iptcl, roind)
         ! calculate overlap between distributions
+        !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
         mi_proj  = 0.
         mi_inpl  = 0.
         mi_state = 0.
@@ -1209,25 +1203,30 @@ contains
         class(prime3D_srch), intent(inout) :: self
         integer,             intent(in)    :: ipeak    !< which peak
         class(ori),          intent(inout) :: o2update !< search orientation
-        real      :: euls(3), x, y, rstate, ow
-        integer   :: ind, npeaks
+        real      :: euls(3), x, y, rstate, rproj, corr, ow
+        integer   :: npeaks
         if( str_has_substr(self%refine,'shc') .and. ipeak /= 1 ) stop 'get_ori not for shc-modes; simple_prime3D_srch'
         npeaks = self%o_peaks%get_noris()
         if( ipeak < 1 .or. ipeak > npeaks ) stop 'Invalid index in simple_prime3D_srch::get_ori'
-        ind    = npeaks - ipeak + 1
-        euls   = self%o_peaks%get_euler( ind )
-        x      = self%o_peaks%get( ind, 'x'    )
-        y      = self%o_peaks%get( ind, 'y'    )
-        rstate = self%o_peaks%get( ind, 'state')
-        if( .not. self%state_exists(nint(rstate)) )then
-            print *,'Empty state in simple_prime3d_srch; get_ori'
-            stop
+        euls   = self%o_peaks%get_euler( ipeak )
+        x      = self%o_peaks%get( ipeak, 'x'    )
+        y      = self%o_peaks%get( ipeak, 'y'    )
+        rstate = self%o_peaks%get( ipeak, 'state')
+        if( allocated(self%state_exists) )then
+            if( .not. self%state_exists(nint(rstate)) )then
+                print *,'Empty state in simple_prime3d_srch; get_ori'
+                stop
+            endif
         endif
-        ow = self%o_peaks%get( ind, 'ow' )
+        rproj = self%o_peaks%get( ipeak, 'proj' )
+        corr  = self%o_peaks%get( ipeak, 'corr' )
+        ow    = self%o_peaks%get( ipeak, 'ow'   )
         call o2update%set_euler( euls )
         call o2update%set( 'x',     x      )
         call o2update%set( 'y',     y      )
         call o2update%set( 'state', rstate )
+        call o2update%set( 'proj',  rproj  )
+        call o2update%set( 'corr',  corr   )
         call o2update%set( 'ow',    ow     )
     end subroutine get_ori
 

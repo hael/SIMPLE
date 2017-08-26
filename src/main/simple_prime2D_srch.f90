@@ -43,8 +43,6 @@ type prime2D_srch
     procedure          :: update_best
     ! PREPARATION ROUTINE
     procedure          :: prep4srch
-    ! CALCULATION ROUTINES
-    procedure, private :: calc_specscore
     ! SEARCH ROUTINES
     procedure          :: exec_prime2D_srch
     procedure          :: greedy_srch
@@ -153,11 +151,13 @@ contains
     !>  \brief  prepares for the search
     subroutine prep4srch( self, pftcc, iptcl, a )
         use simple_ran_tabu, only: ran_tabu
+        use simple_rnd,      only: irnd_uni
         class(prime2D_srch),     intent(inout) :: self
         class(polarft_corrcalc), intent(inout) :: pftcc
         integer,                 intent(in)    :: iptcl
         class(oris),             intent(inout) :: a
         type(ran_tabu)    :: rt
+        real, allocatable :: frc(:)
         ! find previous discrete alignment parameters
         self%prev_class = nint(a%get(iptcl,'class'))           ! class index
         self%prev_rot   = pftcc%get_roind(360.-a%e3get(iptcl)) ! in-plane angle index
@@ -173,9 +173,13 @@ contains
             self%prev_corr  = max( 0., pftcc%corr(self%prev_class, iptcl, self%prev_rot) )
             self%best_corr  = self%prev_corr
         else
-            self%prev_corr = 0.
-            self%best_corr = 0.
+            self%prev_class = irnd_uni(self%nrefs)
+            self%prev_corr  = 0.
+            self%best_corr  = 0.
         endif
+        ! calculate spectral score
+        frc = pftcc%genfrc(self%prev_class, iptcl, self%prev_rot)
+        self%specscore = max(0.,median_nocopy(frc))
         ! make random reference direction order
         rt = ran_tabu(self%nrefs)
         if( allocated(self%srch_order) ) deallocate(self%srch_order)
@@ -187,18 +191,6 @@ contains
         if( any(self%srch_order == 0) ) stop 'Invalid index in srch_order; simple_prime2D_srch :: prep4srch'
         DebugPrint '>>> PRIME2D_SRCH::PREPARED FOR SIMPLE_PRIME2D_SRCH'
     end subroutine prep4srch
-
-    ! CALCULATION ROUTINES
-
-    subroutine calc_specscore( self, pftcc, iptcl )
-        class(prime2D_srch),     intent(inout) :: self
-        class(polarft_corrcalc), intent(inout) :: pftcc
-        integer,                 intent(in)    :: iptcl
-        real, allocatable :: frc(:)
-        if( self%best_class <= 0 )stop 'Invalid class index in simple_prime2D_srch%calc_specscore'
-        frc = pftcc%genfrc(self%best_class, iptcl, self%best_rot)
-        self%specscore = max(0.,median_nocopy(frc))
-    end subroutine calc_specscore
 
     ! SEARCH ROUTINES
 
@@ -252,7 +244,6 @@ contains
             end do
             self%nrefs_eval = self%nrefs
             call self%inpl_srch(pftcc, iptcl)
-            call self%calc_specscore(pftcc, iptcl)
             call self%update_best(pftcc, iptcl, a)
         else
             call a%reject(iptcl)
@@ -317,7 +308,6 @@ contains
                 self%best_rot   = self%prev_rot
             endif
             call self%inpl_srch(pftcc, iptcl)
-            call self%calc_specscore(pftcc, iptcl)
             call self%update_best(pftcc, iptcl, a)
         else
             call a%reject(iptcl)
@@ -364,7 +354,6 @@ contains
             end do
             self%nrefs_eval = self%nrefs
             call self%inpl_srch(pftcc, iptcl)
-            call self%calc_specscore(pftcc, iptcl)
             call self%update_best(pftcc, iptcl, a)
         else
             call a%reject(iptcl)

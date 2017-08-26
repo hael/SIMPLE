@@ -6,12 +6,11 @@ use simple_chash,          only: chash
 use simple_qsys_env,       only: qsys_env
 use simple_params,         only: params
 use simple_commander_base, only: commander_base
-use simple_commander_distr ! use all in there
 use simple_jiffys,         only: simple_end
-!use simple_map_reduce      ! use all in there
+use simple_commander_distr ! use all in there
 use simple_qsys_funs       ! use all in there
-!use simple_fileio          ! use all in there
 use simple_syslib          ! use all in there
+use simple_binoris_io      ! use all in there
 implicit none
 
 public :: unblur_ctffind_distr_commander
@@ -582,14 +581,14 @@ contains
             final_cavgs(ipart) = get_last_fname(trim(chunktag)//CAVGS_ITERFBODY, p_master%ext)
             final_docs(ipart)  = get_last_fname(trim(chunktag)//ITERFBODY, 'txt')
             if( ipart > 1 )then
-                ! the class indices need to be shifted by p%ncls
+                ! the class indices need to be shifted by p_master%ncls
                 ishift = ishift + p_master%ncls
                 ! modify the doc accordingly
-                nl = nlines(final_docs(ipart))
+                nl = binread_nlines(final_docs(ipart))
                 call os%new(nl)
-                call os%read(final_docs(ipart))
+                call binread_oritab(final_docs(ipart), os, [1,nl])
                 call os%shift_classes(ishift)
-                call os%write(final_docs(ipart))
+                call binwrite_oritab(final_docs(ipart), os, [1,nl])
             endif
         end do
         ! merge docs
@@ -612,13 +611,14 @@ contains
                 integer,           intent(in) :: pfromto(2)
                 character(len=*),  intent(in) :: file_in, file_out
                 integer, optional, intent(in) :: ishift
-                integer    :: nl, cnt, i
+                integer    :: nl, cnt, i, noris
                 type(oris) :: os_in, os_out
                 type(ori)  :: o
-                nl = nlines(file_in)
+                nl = binread_nlines(file_in)
                 call os_in%new(nl)
-                call os_in%read(file_in)
-                call os_out%new(pfromto(2) - pfromto(1) + 1)
+                call binread_oritab(file_in, os_in, [1,nl])
+                noris = pfromto(2) - pfromto(1) + 1
+                call os_out%new(noris)
                 cnt = 0
                 do i=pfromto(1),pfromto(2)
                     cnt = cnt + 1
@@ -626,7 +626,7 @@ contains
                     call os_out%set_ori(cnt, o)
                 end do
                 if( present(ishift) ) call os_out%shift_classes(ishift)
-                call os_out%write(file_out)
+                call binwrite_oritab(file_out, os_out, [1,noris])
             end subroutine read_part_and_write
 
     end subroutine exec_prime2D_chunk_distr
@@ -894,7 +894,7 @@ contains
             write(*,'(A,I6)')'>>> ITERATION ', iter
             write(*,'(A)')   '>>>'
             if( cline%defined('oritab') )then
-                call os%read(trim(cline%get_carg('oritab')))
+                call binread_oritab(trim(cline%get_carg('oritab')), os, [1,p_master%nptcls])
                 frac_srch_space = os%get_avg('frac')
                 call job_descr%set( 'oritab', trim(oritab) )
                 if( p_master%refine .eq. 'snhc' )then
@@ -955,7 +955,7 @@ contains
                 &trim(volassemble_output), 'VOLASSEMBLE_FINISHED')
             endif
             ! rename volumes, postprocess & update job_descr
-            call os%read(trim(oritab))
+            call binread_oritab(trim(oritab), os, [1,p_master%nptcls])
             do state = 1,p_master%nstates
                 str_state = int2str_pad(state,2)
                 if( os%get_pop( state, 'state' ) == 0 )then
@@ -1148,7 +1148,7 @@ contains
             write(*,'(A)')   '>>>'
             write(*,'(A,I6)')'>>> ITERATION ', iter
             write(*,'(A)')   '>>>' 
-            call os%read(trim(cline%get_carg('oritab')))
+            call binread_oritab(trim(cline%get_carg('oritab')), os, [1,p_master%nptcls])
             frac_srch_space = os%get_avg('frac')
             call job_descr%set( 'oritab', trim(oritab) )
             call job_descr%set( 'startit', trim(int2str(iter)) )
@@ -1176,7 +1176,7 @@ contains
             call qenv%exec_simple_prg_in_queue(cline_volassemble,&
             &trim(volassemble_output), 'VOLASSEMBLE_FINISHED')
             ! rename volumes, postprocess & update job_descr
-            call os%read(trim(oritab))
+            call binread_oritab(trim(oritab), os, [1,p_master%nptcls])
             do state = 1,p_master%nstates
                 str_state = int2str_pad(state,2)
                 if( os%get_pop( state, 'state' ) == 0 )then
@@ -1371,7 +1371,6 @@ contains
         class(symsrch_distr_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
         type(merge_algndocs_commander) :: xmerge_algndocs
-        !type(sym_aggregate_commander)  :: xsym_aggregate
         type(cmdline)                  :: cline_merge_algndocs
         type(cmdline)                  :: cline_sym_aggregate
         type(qsys_env)          :: qenv
@@ -1382,7 +1381,7 @@ contains
         type(sym)               :: syme
         integer,    allocatable :: order_inds(:)
         real                    :: shvec(3)
-        integer                 :: i, comlin_srch_nproj
+        integer                 :: i, comlin_srch_nproj, nl, noris
         character(len=STDLEN)   :: part_tab
         character(len=32), parameter :: SYMFBODY    = 'symaxes_part'        !< symmetry axes doc (distributed mode)
         character(len=32), parameter :: SYMTAB      = 'symaxes.txt'         !< continuous symmetry axes doc
@@ -1415,21 +1414,6 @@ contains
         call cline_merge_algndocs%set( 'outfile', trim(SYMTAB)            )
         ! merge docs
         call xmerge_algndocs%execute( cline_merge_algndocs )
-        ! read symmetry axes, sort & pick best
-        ! call sym_os%new(comlin_srch_nproj)
-        ! call sym_os%read(trim(SYMTAB))
-        ! order_inds  = sym_os%order_corr()
-        ! symaxis_ori = sym_os%get_ori(order_inds(1))
-        ! write(*,'(A)') '>>> FOUND SYMMETRY AXIS ORIENTATION:'
-        ! call symaxis_ori%display()
-        ! ! sort the output
-        ! call sym_os_ordered%new(comlin_srch_nproj)
-        ! do i=1,comlin_srch_nproj
-        !     o = sym_os%get_ori(order_inds(i))
-        !     call sym_os_ordered%set_ori(i,o)
-        ! enddo
-        ! call del_file(SYMTAB)
-        ! call sym_os_ordered%write(SYMTAB)
         ! prepare sym_aggregate command line
         cline_sym_aggregate = cline
         call cline_sym_aggregate%set( 'prg' ,    'sym_aggregate' )
@@ -1441,40 +1425,43 @@ contains
         call cline_sym_aggregate%set( 'eo', 'no' )
         call qenv%exec_simple_prg_in_queue(cline_sym_aggregate,&
         &'SYM_AGGREGATE', 'SYM_AGGREGATE_FINISHED')
-        ! read and sort 
-        call sym_os%new( nlines(trim(FINALSYMTAB)) )
-        call sym_os%read( trim(FINALSYMTAB) )
+        ! read and sort
+        nl = binread_nlines(trim(FINALSYMTAB))
+        call sym_os%new(nl)
+        call binread_oritab(trim(FINALSYMTAB), sym_os, [1,nl])
         order_inds  = sym_os%order_corr()
         symaxis_ori = sym_os%get_ori(order_inds(1))
         write(*,'(A)') '>>> FOUND SYMMETRY AXIS ORIENTATION:'
         call symaxis_ori%print_ori()
         call sym_os_ordered%new(sym_os%get_noris())
-        do i = 1, sym_os%get_noris()
+        noris = sym_os%get_noris()
+        do i=1,noris 
             o = sym_os%get_ori(order_inds(i))
             call sym_os_ordered%set_ori(i,o)
         enddo
         call del_file(trim(FINALSYMTAB))
-        call sym_os_ordered%write(trim(FINALSYMTAB))
+        call binwrite_oritab(trim(FINALSYMTAB), sym_os_ordered, [1,noris])
         ! output
         if( cline%defined('oritab') )then
             ! transfer shift and symmetry to input orientations
             call syme%new(p_master%pgrp)
             call o_shift%new(1)
             ! retrieve shift
-            call o_shift%read(trim(SYMSHTAB))
+            call binread_oritab(trim(SYMSHTAB), o_shift, [1,1])
             shvec(1) = o_shift%get(1,'x')
             shvec(2) = o_shift%get(1,'y')
             shvec(3) = o_shift%get(1,'z')
             shvec    = -1. * shvec ! the sign is right
             ! rotate the orientations & transfer the 3d shifts to 2d
-            os = oris(nlines(p_master%oritab))
-            call os%read(p_master%oritab)
+            nl = binread_nlines(p_master%oritab)
+            os = oris(nl)
+            call binread_oritab(p_master%oritab, os, [1,nl])
             if( cline%defined('state') )then
                 call syme%apply_sym_with_shift(os, symaxis_ori, shvec, p_master%state )
             else
                 call syme%apply_sym_with_shift(os, symaxis_ori, shvec )
             endif
-            call os%write(p_master%outfile)
+            call binwrite_oritab(p_master%outfile, os, [1,nl])
         endif
         ! cleanup
         call syme%kill

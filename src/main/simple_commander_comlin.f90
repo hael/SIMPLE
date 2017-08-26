@@ -155,13 +155,14 @@ contains
         use simple_ori,            only: ori
         use simple_projector_hlev, only: projvol
         use simple_comlin_srch     ! use all in there
+        use simple_binoris_io      ! use all in there
         class(symsrch_commander), intent(inout) :: self
         class(cmdline),           intent(inout) :: cline
         type(params)                  :: p
         type(build)                   :: b
         type(ori)                     :: symaxis_ori
         type(oris)                    :: os, oshift
-        integer                       :: fnr, file_stat, comlin_srch_nbest, cnt, i, j
+        integer                       :: fnr, file_stat, comlin_srch_nbest, cnt, i, j, nl, noris
         real                          :: shvec(3)
         character(len=STDLEN)         :: fname_finished
         character(len=32), parameter  :: SYMSHTAB   = 'sym_3dshift.txt'
@@ -179,7 +180,7 @@ contains
             call oshift%set(1,'x',shvec(1))
             call oshift%set(1,'y',shvec(2))
             call oshift%set(1,'z',shvec(3))
-            call oshift%write(trim(SYMSHTAB))
+            call binwrite_oritab(trim(SYMSHTAB), oshift, [1,1])
             call oshift%kill
         endif
         ! generate projections
@@ -192,10 +193,11 @@ contains
         else
             ! writes projections images and orientations for subsequent reconstruction
             ! only in local and distributed (part=1) modes
+            noris = b%e%get_noris()
             do i=1,b%e%get_noris()
                 call b%ref_imgs(1,i)%write(SYMPROJSTK, i)
             enddo
-            call b%e%write(SYMPROJTAB)
+            call binwrite_oritab(SYMPROJTAB, b%e, [1,noris])
         endif
         ! expand over symmetry group
         cnt = 0
@@ -218,14 +220,15 @@ contains
             if( cline%defined('oritab') )then
                 ! rotate the orientations & transfer the 3d shifts to 2d
                 shvec = -1.*shvec
-                os    = oris(nlines(p%oritab))
-                call os%read(p%oritab)
+                nl    = binread_nlines(p%oritab)
+                os    = oris(nl)
+                call binread_oritab(p%oritab, os, [1,nl])
                 if( cline%defined('state') )then
                     call b%se%apply_sym_with_shift(os, symaxis_ori, shvec, p%state )
                 else
                     call b%se%apply_sym_with_shift(os, symaxis_ori, shvec )
                 endif
-                call os%write(p%outfile)
+                call binwrite_oritab(p%outfile, os, [1,os%get_noris()])
             endif
         endif
         ! cleanup

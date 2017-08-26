@@ -190,6 +190,7 @@ contains
     subroutine exec_projvol( self, cline )
         use simple_image,          only: image
         use simple_projector_hlev, only: projvol
+        use simple_binoris_io,     only: binread_oritab, binread_nlines
         class(projvol_commander), intent(inout) :: self
         class(cmdline),           intent(inout) :: cline
         type(params)             :: p
@@ -197,15 +198,14 @@ contains
         type(image), allocatable :: imgs(:)
         integer                  :: i, loop_end
         real                     :: x, y, dfx, dfy, angast
-   
         if( .not. cline%defined('oritab') )then
             if( .not. cline%defined('nspace') ) stop 'need nspace (for number of projections)!'
         endif
         p = params(cline) ! parameters generated
         if( cline%defined('oritab') )then
-            p%nptcls = nlines(p%oritab)
+            p%nptcls = binread_nlines(p%oritab)
             call b%build_general_tbox(p, cline)
-            call b%a%read(p%oritab)
+            call binread_oritab(p%oritab, b%a, [1,p%nptcls])
             p%nspace = b%a%get_noris()
         else if( p%rnd .eq. 'yes' )then
             p%nptcls = p%nspace

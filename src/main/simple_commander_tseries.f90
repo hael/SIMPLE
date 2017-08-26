@@ -31,8 +31,8 @@ end type tseries_split_commander
 contains
 
     subroutine exec_tseries_extract( self, cline )
-    use simple_image, only: image
-    use simple_imgfile,  only: find_ldim_nptcls
+        use simple_image, only: image
+        use simple_imgfile,  only: find_ldim_nptcls
         class(tseries_extract_commander), intent(inout) :: self
         class(cmdline),                   intent(inout) :: cline
         type(params) :: p

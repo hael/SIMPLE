@@ -1,11 +1,10 @@
 ! an orientation
 module simple_ori
-use simple_defs
+use simple_defs    ! use all in there
+use simple_fileio  ! use all in there
 use simple_syslib, only: alloc_errchk
-use simple_fileio
 use simple_hash,   only: hash
 use simple_chash,  only: chash
-
 implicit none
 
 public :: ori, test_ori, test_ori_dists

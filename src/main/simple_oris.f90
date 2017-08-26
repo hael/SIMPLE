@@ -110,6 +110,7 @@ type :: oris
     procedure, private :: write_2
     generic            :: write => write_1, write_2
     ! CALCULATORS
+    procedure          :: compress
     procedure          :: split_state
     procedure          :: split_class
     procedure          :: expand_classes
@@ -454,6 +455,25 @@ contains
         end do
     end function states_exist
 
+    !>  \brief  compresses the aggregated object according to input mask
+    subroutine compress( self, mask )
+        class(oris), intent(inout) :: self
+        logical,     intent(in)    :: mask(:)
+        type(oris) :: os_tmp
+        integer    :: i, cnt
+        if( size(mask) /= self%n ) stop 'nonconforming mask size; oris :: compress'
+        call os_tmp%new(count(mask))
+        cnt = 0
+        do i=1,self%n
+            if( mask(i) )then
+                cnt = cnt + 1
+                os_tmp%o(cnt) = self%o(i)
+            endif 
+        end do
+        self = os_tmp
+        call os_tmp%kill
+    end subroutine compress
+
     !>  \brief  for balanced split of a state group
     subroutine split_state( self, which )
         use simple_ran_tabu, only: ran_tabu
@@ -625,7 +645,7 @@ contains
             o_template = self%o(1)
             call o_template%set_euler([0.,0.,0.])
             call o_template%set_shift([0.,0.])
-            call o_template%set('state', 1.0)
+            call o_template%set('state', 0.0)
             call o_template%set('ow', 0.0)
             call os_conf%new(npeaks)
             do i=1,npeaks

@@ -2,8 +2,6 @@
 module simple_hadamard3D_matcher
 !$ use omp_lib
 !$ use omp_lib_kinds
-use simple_defs
-use simple_syslib
 use simple_polarft_corrcalc, only: polarft_corrcalc
 use simple_prime3D_srch,     only: prime3D_srch
 use simple_ori,              only: ori
@@ -12,10 +10,13 @@ use simple_params,           only: params
 use simple_cmdline,          only: cmdline
 use simple_gridding,         only: prep4cgrid
 use simple_strings,          only: str_has_substr, int2str_pad
+use simple_binoris_io,       only: binwrite_oritab
 use simple_cont3D_matcher    ! use all in there
 use simple_hadamard_common   ! use all in there
 use simple_math              ! use all in there
-use simple_jiffys
+use simple_jiffys            ! use all in there
+use simple_defs              ! use all in there
+use simple_syslib            ! use all in there
 implicit none
 
 public :: prime3D_find_resrange, prime3D_exec, gen_random_model
@@ -27,7 +28,6 @@ private
 type(polarft_corrcalc)          :: pftcc
 type(prime3D_srch), allocatable :: primesrch3D(:)
 real                            :: reslim
-
 type(ori)                       :: orientation, o_sym
 character(len=:), allocatable   :: ppfts_fname
 
@@ -252,7 +252,7 @@ contains
         endif
 
         ! OUTPUT ORIENTATIONS
-        call b%a%write(p%outfile, [p%fromp,p%top])
+        call binwrite_oritab(p%outfile, b%a, [p%fromp,p%top])
         p%oritab = p%outfile
 
         ! VOLUMETRIC 3D RECONSTRUCTION
@@ -320,7 +320,7 @@ contains
             if( p%l_distr_exec .and. p%part.ne.1 )then
                 ! so random oris only written once in distributed mode
             else
-                call b%a%write( p%oritab )
+                call binwrite_oritab(p%oritab, b%a, [1,p%nptcls])
             endif
             p%vols(1) = 'startvol'//p%ext
             if( p%noise .eq. 'yes' )then

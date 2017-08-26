@@ -1,6 +1,6 @@
 ! defines protein point-group symmetries
 module simple_sym
-use simple_defs
+use simple_defs    ! use all in there
 use simple_oris,   only: oris
 use simple_syslib, only: alloc_errchk
 implicit none
@@ -35,7 +35,6 @@ type sym
     procedure          :: get_subgrp
     procedure          :: get_all_subgrps
     procedure          :: within_asymunit
-    procedure          :: write
     procedure          :: apply_sym_with_shift
     procedure          :: nearest_neighbors
     procedure, private :: build_srchrange
@@ -275,7 +274,7 @@ contains
     !>  \brief  is a symmetry adaptor
     function apply( self, e_in, symop ) result( e_sym )
         use simple_ori, only: ori
-        class(sym), intent(inout) :: self  
+        class(sym), intent(inout) :: self
         class(ori), intent(inout) :: e_in  !< orientation object
         integer, intent(in)       :: symop !< sym operation
         type(ori)                 :: e_sym, e_symop, e_tmp
@@ -389,13 +388,6 @@ contains
         if( euls(3)>=self%eullims(3,2) )return
         is_within = .true.
     end function within_asymunit
-
-    !>  \brief  4 writing the symmetry orientations 2 file
-    subroutine write( self, orifile )
-        class(sym), intent(inout)    :: self
-        character(len=*), intent(in) :: orifile  !< output filename
-        call self%e_sym%write(orifile)
-    end subroutine write
     
     !>  apply symmetry orientations with shift
     subroutine apply_sym_with_shift( self, os, symaxis_ori, shvec, state )

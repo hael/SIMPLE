@@ -1,7 +1,7 @@
 ! symmetry search routines
 module simple_symsrcher
-use simple_defs
-use simple_math
+use simple_defs     ! use all in there
+use simple_math     ! use all in there
 use simple_cmdline, only: cmdline
 use simple_params,  only: params
 use simple_oris,    only: oris

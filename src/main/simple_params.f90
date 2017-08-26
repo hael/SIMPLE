@@ -1,18 +1,20 @@
 ! provides global distribution of constants and derived constants
 module simple_params
-use simple_defs
-use simple_syslib
 use simple_ori,         only: ori
 use simple_cmdline,     only: cmdline
 use simple_magic_boxes, only: find_magic_box
-use simple_strings      ! use all in there
 use simple_fileio,      only: fopen, fclose, fileio_errmsg
 use simple_imgfile,     only: find_ldim_nptcls
+use simple_binoris,     only: binoris
+use simple_strings      ! use all in there
+use simple_defs         ! use all in there
+use simple_syslib       ! use all in there
 implicit none
 
 public :: params
 private
 #include "simple_local_flags.inc"
+
 !> global parameters
 type :: params
     ! global objects
@@ -377,6 +379,7 @@ contains
         class(params),     intent(inout) :: self
         class(cmdline),    intent(inout) :: cline
         logical, optional, intent(in)    :: checkdistr, allow_mix
+        type(binoris)                    :: bos
         integer                          :: i, ncls, ifoo, lfoo(3), cntfile
         logical                          :: ccheckdistr, aamix
         character(len=STDLEN)            :: cwd_local, debug_local, verbose_local
@@ -425,13 +428,13 @@ contains
         call check_carg('boxtype',        self%boxtype)
         call check_carg('center',         self%center)
         call check_carg('chunktag',       self%chunktag)
+        call check_carg('classtats',      self%classtats)
         call check_carg('clustvalid',     self%clustvalid)
         call check_carg('compare',        self%compare)
         call check_carg('countvox',       self%countvox)
         call check_carg('ctf',            self%ctf)
         call check_carg('ctfstats',       self%ctfstats)
         call check_carg('cure',           self%cure)
-        call check_carg('deftab',         self%deftab)
         call check_carg('dfunit',         self%dfunit)
         call check_carg('dir',            self%dir)
         call check_carg('dir_movies',     self%dir_movies)
@@ -475,7 +478,6 @@ contains
         call check_carg('outfile',        self%outfile)
         call check_carg('outside',        self%outside)
         call check_carg('pad',            self%pad)
-        call check_carg('ctffind_doc',    self%ctffind_doc)
         call check_carg('pgrp',           self%pgrp)
         call check_carg('pgrp_known',     self%pgrp_known)
         call check_carg('phaseplate',     self%phaseplate)
@@ -516,7 +518,9 @@ contains
         call check_file('boxfile',        self%boxfile,'T')
         call check_file('boxtab',         self%boxtab,'T')
         call check_file('clsdoc',         self%clsdoc,'S','T')
+        call check_file('ctffind_doc',    self%ctffind_doc, 'T', 'B')
         call check_file('comlindoc',      self%comlindoc,'T')
+        call check_file('deftab',         self%deftab, 'T', 'B')
         call check_file('doclist',        self%doclist,'T')
         call check_file('ext',            self%ext,  notAllowed='T')
         call check_file('filetab',        self%filetab,'T')
@@ -764,7 +768,17 @@ contains
             endif
         else if( self%oritab .ne. '' )then
             ! get nr of particles from oritab
-            if( .not. cline%defined('nptcls') ) self%nptcls = nlines(self%oritab)
+            if( .not. cline%defined('nptcls') )then
+                if( str_has_substr(self%oritab,'.txt') )then
+                    self%nptcls = nlines(self%oritab)
+                else
+                    ! needed because use of binoris_io causes circular dependency
+                    ! because params is used by prime3D_srch
+                    call bos%open(self%oritab)
+                    self%nptcls = bos%get_n_records()
+                    call bos%close
+                endif            
+            endif
         else if( self%refs .ne. '' )then
             if( file_exists(self%refs) )then
                 if( cline%defined('box') )then
