@@ -1,11 +1,10 @@
 ! an orientation
 module simple_ori
-use simple_defs
+use simple_defs    ! use all in there
+use simple_fileio  ! use all in there
 use simple_syslib, only: alloc_errchk
-use simple_fileio
 use simple_hash,   only: hash
 use simple_chash,  only: chash
-
 implicit none
 
 public :: ori, test_ori, test_ori_dists
@@ -68,6 +67,9 @@ type :: ori
     procedure          :: chash_size
     procedure          :: chash_nmax
     procedure          :: isthere
+    procedure          :: isevenodd
+    procedure          :: iseven
+    procedure          :: isodd
     procedure          :: key_is_real
     procedure          :: ori2str
     ! PRINTING & I/O
@@ -133,6 +135,7 @@ contains
         call self%htab%set('state',1.)
         call self%htab%set('state_balance',1.)
         call self%htab%set('frac',0.)
+        call self%htab%set('eo',-1.) ! -1. is default (low-pass set); 0. for even; 1. for odd
         self%chtab = chash(NNAMES)
         self%existence = .true.
     end subroutine new_ori
@@ -540,6 +543,30 @@ contains
         found = .false.
         if( hash_found .or. chash_found ) found = .true.
     end function isthere
+
+    !>  \brief  whether orientation has been atributed an even/odd partition
+    logical function isevenodd( self )
+        class(ori),       intent(inout) :: self
+        if( self%isthere('eo') )then
+            isevenodd = self%htab%get('eo') > -.5
+        else
+            isevenodd = .false.
+        endif
+    end function isevenodd
+
+    !>  \brief  whether orientation is part of the even partition
+    logical function iseven( self )
+        class(ori),       intent(inout) :: self
+        real :: val
+        val = self%htab%get('eo')
+        iseven = (val > -0.5) .and. (val < 0.5)
+    end function iseven
+
+    !>  \brief  whether orientation is part of the odd partition
+    logical function isodd( self )
+        class(ori),       intent(inout) :: self
+        isodd = self%htab%get('eo') > 0.5
+    end function isodd
 
     !>  \brief  is for checking whether key maps to a real value or not
     function key_is_real( self, key ) result( is )

@@ -16,6 +16,7 @@ use simple_projector,        only: projector
 use simple_polarizer,        only: polarizer
 use simple_masker,           only: masker
 use simple_fileio            ! use all in there
+use simple_binoris_io        ! use all in there
 implicit none
 
 public :: build, test_build
@@ -121,16 +122,16 @@ contains
             call self%a%spiral(p%nsym, p%eullims)
         else
             ! we need the oritab to override the deftab in order not to loose parameters
-            if( p%deftab /= '' ) call self%a%read_ctfparams_and_state(p%deftab)
+            if( p%deftab /= '' ) call binread_ctfparams_and_state(p%deftab, self%a, [1,p%nptcls])
             if( p%oritab /= '' )then
                 if( .not. cline%defined('nstates') )then
-                    call self%a%read(p%oritab, p%nstates)
+                    call binread_oritab(p%oritab, self%a, [1,p%nptcls], p%nstates)
                     if( p%nstates>1 .and. str_has_substr(p%refine,'shc') )then
                         print *,'Multiple states detected, please input the NSTATES key'
                         stop
                     endif
                 else
-                    call self%a%read(p%oritab)
+                    call binread_oritab(p%oritab, self%a, [1,p%nptcls])
                 endif
                 if( self%a%get_noris() > 1 )then
                     call self%a%stats('corr', slask(1), slask(2), slask(3), err)
@@ -372,7 +373,7 @@ contains
         if( str_has_substr(p%refine,'neigh') )then
             if( file_exists(p%oritab3D) )then
                 call os%new(p%ncls)
-                call os%read(p%oritab3D)
+                call binread_oritab(p%oritab3D, os, [1,p%ncls])
                 call os%nearest_neighbors(p%nnn, self%nnmat)
                 call os%kill
             else

@@ -2,8 +2,6 @@
 module simple_hadamard3D_matcher
 !$ use omp_lib
 !$ use omp_lib_kinds
-use simple_defs
-use simple_syslib
 use simple_polarft_corrcalc, only: polarft_corrcalc
 use simple_prime3D_srch,     only: prime3D_srch
 use simple_ori,              only: ori
@@ -12,10 +10,13 @@ use simple_params,           only: params
 use simple_cmdline,          only: cmdline
 use simple_gridding,         only: prep4cgrid
 use simple_strings,          only: str_has_substr, int2str_pad
+use simple_binoris_io,       only: binwrite_oritab
 use simple_cont3D_matcher    ! use all in there
 use simple_hadamard_common   ! use all in there
 use simple_math              ! use all in there
-use simple_jiffys
+use simple_jiffys            ! use all in there
+use simple_defs              ! use all in there
+use simple_syslib            ! use all in there
 implicit none
 
 public :: prime3D_find_resrange, prime3D_exec, gen_random_model
@@ -27,7 +28,6 @@ private
 type(polarft_corrcalc)          :: pftcc
 type(prime3D_srch), allocatable :: primesrch3D(:)
 real                            :: reslim
-
 type(ori)                       :: orientation, o_sym
 character(len=:), allocatable   :: ppfts_fname
 
@@ -64,14 +64,17 @@ contains
         use simple_qsys_funs, only: qsys_job_finished
         use simple_oris,      only: oris
         use simple_fileio,    only: del_file
+        use simple_rnd,       only: irnd_uni
         class(build),   intent(inout) :: b
         class(params),  intent(inout) :: p
         class(cmdline), intent(inout) :: cline
         integer,        intent(in)    :: which_iter
         logical,        intent(inout) :: update_res, converged
+        logical , allocatable :: to_update(:)
         type(oris) :: prime3D_oris
-        real       :: norm, corr_thresh, skewness, frac_srch_space, extr_thresh
+        real       :: norm, corr_thresh, skewness, frac_srch_space, extr_thresh, update_frac
         integer    :: iptcl, inptcls, istate, alloc_stat, iextr_lim
+        integer    :: update_ind, nupdates_target, nupdates
         integer    :: statecnt(p%nstates)
         inptcls = p%top - p%fromp + 1
 
@@ -111,12 +114,28 @@ contains
         ! SET FRACTION OF SEARCH SPACE
         frac_srch_space = b%a%get_avg('frac')
 
+        ! SETUP WEIGHTS
+        if( p%nptcls <= SPECWMINPOP )then
+            call b%a%calc_hard_weights(p%frac)
+        else
+            call b%a%calc_spectral_weights(p%frac)
+        endif
+
+        ! POPULATION BALANCING LOGICS
+        ! this needs to be done prior to search such that each part
+        ! sees the same information in distributed execution
+        if( p%balance > 0 )then
+            call b%a%balance( p%balance, NSPACE_BALANCE, p%nsym, p%eullims, skewness )
+            write(*,'(A,F8.2)') '>>> PROJECTION DISTRIBUTION SKEWNESS(%):', 100. * skewness
+        else
+            call b%a%set_all2single('state_balance', 1.0)
+        endif
+
         ! EXTREMAL LOGICS
         if( p%refine.eq.'het' )then
             iextr_lim = ceiling(2.*log(real(p%nptcls)))
             if( frac_srch_space < 98. .or. p%extr_iter <= iextr_lim )then
-                ! extr_thresh = EXTRINITHRESH * (1.-EXTRTHRESH_CONST)**(p%extr_iter-1)  ! factorial decay
-                ! extr_thresh = EXTRINITHRESH * exp(-(real(p%extr_iter-1)/6.)**2. / 2.) ! gaussian decay: untested
+                ! extr_thresh = EXTRINITHRESH * (1.-EXTRTHRESH_CONST)**real(p%extr_iter-1)  ! factorial decay
                 extr_thresh = EXTRINITHRESH * cos(PI/2. * real(p%extr_iter-1)/real(iextr_lim))    ! cosine decay
                 extr_thresh = min(EXTRINITHRESH, max(0., extr_thresh))
                 corr_thresh = b%a%extremal_bound(extr_thresh)
@@ -124,6 +143,25 @@ contains
             else
                 corr_thresh = -huge(corr_thresh)
             endif
+        endif
+
+        ! FRACTIONAL UPDATE
+        allocate( to_update(p%fromp:p%top), source=.true. )
+        if( p%l_frac_update )then
+        ! Soon to come
+        !     nupdates = inptcls
+        !     nupdates_target = nint(p%update_frac * real(inptcls))
+        !     do while( nupdates > nupdates_target )
+        !         update_ind = irnd_uni(inptcls)
+        !         if( to_update(update_ind) )then
+        !             to_update(update_ind) = .false.
+        !             nupdates = nupdates - 1
+        !         else
+        !             ! better luck next time
+        !         endif
+        !     enddo
+        else
+            ! all done
         endif
 
         ! PREPARE THE POLARFT_CORRCALC DATA STRUCTURE
@@ -167,7 +205,9 @@ contains
             case( 'snhc' )
                 !$omp parallel do default(shared) schedule(guided) private(iptcl) proc_bind(close)
                 do iptcl=p%fromp,p%top
-                    call primesrch3D(iptcl)%exec_prime3D_srch(pftcc, iptcl, b%a, b%e, p%lp, szsn=p%szsn)
+                    if( to_update(iptcl) )then
+                        call primesrch3D(iptcl)%exec_prime3D_srch(pftcc, iptcl, b%a, b%e, p%lp, szsn=p%szsn)
+                    endif
                 end do
                 !$omp end parallel do
             case( 'no','shc' )
@@ -180,7 +220,9 @@ contains
                 else
                     !$omp parallel do default(shared) schedule(guided) private(iptcl) proc_bind(close)
                     do iptcl=p%fromp,p%top
-                        call primesrch3D(iptcl)%exec_prime3D_srch(pftcc, iptcl, b%a, b%e, p%lp)
+                        if( to_update(iptcl) )then
+                            call primesrch3D(iptcl)%exec_prime3D_srch(pftcc, iptcl, b%a, b%e, p%lp)
+                        endif
                     end do
                     !$omp end parallel do
                 endif
@@ -188,23 +230,46 @@ contains
                 if( p%oritab .eq. '' ) stop 'cannot run the refine=neigh mode without input oridoc (oritab)'
                 !$omp parallel do default(shared) schedule(guided) private(iptcl) proc_bind(close)
                 do iptcl=p%fromp,p%top
-                    call primesrch3D(iptcl)%exec_prime3D_srch(pftcc, iptcl, b%a,&
-                        b%e, p%lp, nnmat=b%nnmat, grid_projs=b%grid_projs)
+                    if( to_update(iptcl) )then
+                        call primesrch3D(iptcl)%exec_prime3D_srch(pftcc, iptcl, b%a,&
+                            b%e, p%lp, nnmat=b%nnmat, grid_projs=b%grid_projs)
+                    endif
                 end do
                 !$omp end parallel do
             case('greedy')
-                !$omp parallel do default(shared) schedule(guided) private(iptcl) proc_bind(close)
-                do iptcl=p%fromp,p%top
-                    call primesrch3D(iptcl)%exec_prime3D_srch(pftcc, iptcl, b%a, b%e, p%lp, greedy=.true.)
-                end do
-                !$omp end parallel do
+                if( p%oritab .eq. '' )then
+                    !$omp parallel do default(shared) schedule(guided) private(iptcl) proc_bind(close)
+                    do iptcl=p%fromp,p%top
+                        call primesrch3D(iptcl)%exec_prime3D_srch(pftcc, iptcl, b%a, b%e, p%lp, greedy=.true.)
+                    end do
+                    !$omp end parallel do
+                else
+                    !$omp parallel do default(shared) schedule(guided) private(iptcl) proc_bind(close)
+                    do iptcl=p%fromp,p%top
+                        if( to_update(iptcl) )then
+                            call primesrch3D(iptcl)%exec_prime3D_srch(pftcc, iptcl, b%a, b%e, p%lp, greedy=.true.)
+                        endif
+                    end do
+                    !$omp end parallel do
+                endif
             case('greedyneigh')
-                !$omp parallel do default(shared) schedule(guided) private(iptcl) proc_bind(close)
-                do iptcl=p%fromp,p%top
-                    call primesrch3D(iptcl)%exec_prime3D_srch(pftcc, iptcl, b%a, b%e, p%lp,&
-                        greedy=.true., nnmat=b%nnmat, grid_projs=b%grid_projs)
-                end do
-                !$omp end parallel do
+                if( p%oritab .eq. '' )then                
+                    !$omp parallel do default(shared) schedule(guided) private(iptcl) proc_bind(close)
+                    do iptcl=p%fromp,p%top
+                        call primesrch3D(iptcl)%exec_prime3D_srch(pftcc, iptcl, b%a, b%e, p%lp,&
+                            greedy=.true., nnmat=b%nnmat, grid_projs=b%grid_projs)
+                    end do
+                    !$omp end parallel do
+                else
+                    !$omp parallel do default(shared) schedule(guided) private(iptcl) proc_bind(close)
+                    do iptcl=p%fromp,p%top
+                        if( to_update(iptcl) )then
+                            call primesrch3D(iptcl)%exec_prime3D_srch(pftcc, iptcl, b%a, b%e, p%lp,&
+                                greedy=.true., nnmat=b%nnmat, grid_projs=b%grid_projs)
+                        endif
+                    end do
+                    !$omp end parallel do
+                endif
             case('het')
                 if(p%oritab .eq. '') stop 'cannot run the refine=het mode without input oridoc (oritab)'
                 if( corr_thresh > TINY )then
@@ -224,10 +289,13 @@ contains
                     end do
                 endif
             case ('exp')
+                if(p%oritab .eq. '') stop 'cannot run the refine=exp mode without input oridoc (oritab)'
                 !$omp parallel do default(shared) schedule(guided) private(iptcl) proc_bind(close)
                 do iptcl=p%fromp,p%top
-                    call primesrch3D(iptcl)%exec_prime3D_srch(pftcc, iptcl, b%a, b%e, p%lp,&
-                        greedy=.true., nnmat=b%nnmat)
+                    if( to_update(iptcl) )then
+                        call primesrch3D(iptcl)%exec_prime3D_srch(pftcc, iptcl, b%a, b%e, p%lp,&
+                            greedy=.true., nnmat=b%nnmat)
+                    endif
                 end do
                 !$omp end parallel do
             case DEFAULT
@@ -236,40 +304,43 @@ contains
         end select
         call pftcc%kill
 
-        ! SETUP WEIGHTS
-        if( p%nptcls <= SPECWMINPOP )then
-            call b%a%calc_hard_weights(p%frac)
+        ! SETUP (OVERWRITES) EVEN/ODD PARTITION
+        if( p%eo.eq.'yes' )then
+            ! weights & states assumed here
+            call b%a%partition_eo([p%fromp, p%top])
         else
-            call b%a%calc_spectral_weights(p%frac)
-        endif
-
-        ! POPULATION BALANCING LOGICS
-        if( p%balance > 0 )then
-            call b%a%balance( p%balance, NSPACE_BALANCE, p%nsym, p%eullims, skewness )
-            write(*,'(A,F8.2)') '>>> PROJECTION DISTRIBUTION SKEWNESS(%):', 100. * skewness
-        else
-            call b%a%set_all2single('state_balance', 1.0)
+            call b%a%set_all2single('eo', -1.)
         endif
 
         ! OUTPUT ORIENTATIONS
-        call b%a%write(p%outfile, [p%fromp,p%top])
+        call binwrite_oritab(p%outfile, b%a, [p%fromp,p%top])
         p%oritab = p%outfile
 
         ! VOLUMETRIC 3D RECONSTRUCTION
         if( p%norec .eq. 'no' )then
             ! init volumes
             call preprecvols(b, p)
+            if( p%l_frac_update )then
+                ! need to read in part volumes & rho
+                ! todo in simple_hadamard_common
+                ! call readrecvols_for_update(p)
+                ! discarding contribution to volume shiuld be done within grid_ptcl
+            endif
             ! reconstruction
             do iptcl=p%fromp,p%top
-                orientation = b%a%get_ori(iptcl)
-                if( nint(orientation%get('state')) == 0 .or.&
-                   &nint(orientation%get('state_balance')) == 0 ) cycle
-                call read_img_from_stk( b, p, iptcl )
-                if( p%npeaks > 1 )then
-                    call primesrch3D(iptcl)%get_oris(prime3D_oris, orientation)
-                    call grid_ptcl(b, p, orientation, prime3D_oris)
+                if( to_update(iptcl) )then
+                    orientation = b%a%get_ori(iptcl)
+                    if( nint(orientation%get('state')) == 0 .or.&
+                       &nint(orientation%get('state_balance')) == 0 ) cycle
+                    call read_img_from_stk( b, p, iptcl )
+                    if( p%npeaks > 1 )then
+                        call primesrch3D(iptcl)%get_oris(prime3D_oris, orientation)
+                        call grid_ptcl(b, p, orientation, os=prime3D_oris)
+                    else
+                        call grid_ptcl(b, p, orientation)
+                    endif
                 else
-                    call grid_ptcl(b, p, orientation)
+                    ! reconstruction contribution already part of recvols
                 endif
             end do
             ! normalise structure factors
@@ -320,7 +391,7 @@ contains
             if( p%l_distr_exec .and. p%part.ne.1 )then
                 ! so random oris only written once in distributed mode
             else
-                call b%a%write( p%oritab )
+                call binwrite_oritab(p%oritab, b%a, [1,p%nptcls])
             endif
             p%vols(1) = 'startvol'//p%ext
             if( p%noise .eq. 'yes' )then

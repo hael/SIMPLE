@@ -1,7 +1,7 @@
 ! for manging orientation data using binary files
 module simple_binoris
 use, intrinsic :: iso_c_binding
-use simple_defs
+use simple_defs  ! use all in there
 use simple_ori,  only: ori
 use simple_oris, only: oris
 implicit none
@@ -28,6 +28,7 @@ type binoris
     real(kind=4),      allocatable :: record(:)
     ! for on-line use
     integer                        :: funit  = 0
+    logical                        :: l_open = .false.
     logical                        :: exists = .false.
   contains
     ! constructors
@@ -157,8 +158,8 @@ contains
     ! I/O supporting ori + oris (peaks)
 
     subroutine open( self, fname, del_if_exists )
-        use simple_syslib,       only: alloc_errchk
-        use simple_fileio      , only: file_exists, del_file, funit_size
+        use simple_syslib, only: alloc_errchk
+        use simple_fileio, only: file_exists, del_file, funit_size
         class(binoris),    intent(inout) :: self          !< instance
         character(len=*),  intent(in)    :: fname         !< filename
         logical, optional, intent(in)    :: del_if_exists !< If the file already exists on disk, replace 
@@ -227,14 +228,14 @@ contains
     end subroutine open
 
     subroutine open_local( self, fname, rwaction )
-        use simple_fileio      , only: fopen,fclose,fileio_errmsg, is_open
+        use simple_fileio, only: fopen, fclose, fileio_errmsg
         class(binoris),             intent(inout) :: self     !< instance
         character(len=*),           intent(in)    :: fname    !< filename
         character(len=*), optional, intent(in)    :: rwaction !< read/write flag
         character(len=9) :: rw_str
         character(len=7) :: stat_str
         integer          :: io_stat, tmpunit
-        if( .not. is_open(self%funit) )then
+        if( .not. self%l_open )then
             if( present(rwaction) )then
                 rw_str = trim(rwaction)
             else
@@ -243,17 +244,19 @@ contains
             stat_str = 'UNKNOWN'
             if(.not.fopen(tmpunit,fname,access='STREAM',action=rw_str,status=stat_str, iostat=io_stat))&
                  call fileio_errmsg('binoris ; open_local '// trim(fname), io_stat)
-            self%funit = tmpunit
+            self%funit  = tmpunit
+            self%l_open = .true.
         endif
     end subroutine open_local
 
     subroutine close( self )
-        use simple_fileio, only: is_open, fclose, fileio_errmsg
-        class(binoris), intent(in) :: self !< instance
+        use simple_fileio, only: fclose, fileio_errmsg
+        class(binoris), intent(inout) :: self !< instance
         integer          :: io_stat
-        if( is_open(self%funit) ) then
+        if( self%l_open )then
             if(.not.fclose(self%funit, iostat=io_stat))&
             call fileio_errmsg('binoris ; close ', io_stat)
+            self%l_open =.false.
         end if
     end subroutine close
 
@@ -283,7 +286,7 @@ contains
     subroutine write_header( self )
         class(binoris), intent(inout) :: self  !< instance
         integer :: io_status
-        ! assuming file open
+        if( .not. self%l_open ) stop 'file needs to be open; binoris :: write_header'
         call self%header2byte_array
         write(unit=self%funit,pos=1,iostat=io_status) self%byte_array_header
         if( io_status .ne. 0 )then
@@ -297,9 +300,8 @@ contains
         integer,        intent(in)    :: i
         class(binoris), intent(in)    :: self2
         integer :: io_status
+        if( .not. self%l_open         ) stop 'file needs to be open; binoris :: write_record_1'
         if( .not. (self.eqdims.self2) ) stop 'filehandlers have different dims; binoris :: write_record_1'
-        ! assuming file open
-        ! check index bounds
         if( i < self%fromto(1) .or. i > self%fromto(2) ) stop 'index i out of bound; binoris :: write_record_1'
         write(unit=self%funit,pos=self%first_byte(i),iostat=io_status) self2%record
         if( io_status .ne. 0 )then
@@ -313,16 +315,20 @@ contains
         integer,               intent(in)    :: i
         class(oris),           intent(inout) :: a
         class(oris), optional, intent(inout) :: os_peak
-        integer                   :: io_status, iflag, ipeak, cnt
+        integer                   :: io_status, iflag, ipeak, cnt, sz_vals
         type(ori)                 :: o
         real(kind=4), allocatable :: vals(:)
-        ! assuming file open
-        ! check index bounds
+        if( .not. self%l_open ) stop 'file needs to be open; binoris :: write_record_2'
         if( i < self%fromto(1) .or. i > self%fromto(2) ) stop 'index i out of bound; binoris :: write_record_2'
         ! transfer hash data to self%record
-        o = a%get_ori(i)
-        vals = o%hash_vals()
-        if( self%n_hash_vals /= size(vals) ) stop 'nonconforming hash size; binoris :: write_record_2'
+        o       = a%get_ori(i)
+        vals    = o%hash_vals()
+        sz_vals = size(vals)
+        if( self%n_hash_vals /= sz_vals )then
+            print *, 'self%n_hash_vals: ', self%n_hash_vals
+            print *, 'sz_vals         : ', sz_vals
+            stop 'nonconforming hash size; binoris :: write_record_2'
+        endif
         self%record = 0.0
         self%record(:self%n_hash_vals) = vals
         if( present(os_peak) )then
@@ -351,8 +357,7 @@ contains
         class(binoris), intent(inout) :: self
         integer,        intent(in)    :: i
         integer :: io_status
-        ! assuming file open
-        ! check index bounds
+        if( .not. self%l_open ) stop 'file needs to be open; binoris :: read_record_1'
         if( i < self%fromto(1) .or. i > self%fromto(2) ) stop 'index i out of bound; binoris :: read_record_1'
         read(unit=self%funit,pos=self%first_byte(i),iostat=io_status) self%record
         if( io_status .ne. 0 )then

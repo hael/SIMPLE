@@ -1,6 +1,5 @@
 ! concrete commander: simulation routines
 module simple_commander_sim
-use simple_defs
 use simple_cmdline,        only: cmdline
 use simple_params,         only: params
 use simple_build,          only: build
@@ -8,6 +7,8 @@ use simple_commander_base, only: commander_base
 use simple_strings,        only: int2str, int2str_pad
 use simple_fileio          ! use all in there
 use simple_jiffys          ! use all in there
+use simple_binoris_io      ! use all in there
+use simple_defs            ! use all in there
 implicit none
 
 public :: noiseimgs_commander
@@ -111,7 +112,7 @@ contains
             if( p%ctf .ne. 'no' ) call b%a%rnd_ctf(p%kv, p%cs, p%fraca, p%defocus, p%dferr, p%astigerr)
         endif
         DebugPrint  '>>> DONE GENERATING ORIENTATION/CTF PARAMETERS'
-        call b%a%write(p%outfile)
+        call binwrite_oritab(p%outfile, b%a, [1,p%nptcls])
         ! calculate snr:s
         snr_pink = p%snr/0.2
         snr_detector = p%snr/0.8

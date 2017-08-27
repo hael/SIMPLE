@@ -29,11 +29,14 @@ type :: volpft_corrcalc
     procedure          :: new
     ! INTERPOLATION METHODS
     procedure, private :: extract_ref
-    procedure, private :: extract_target
+    procedure, private :: extract_target_1
+    procedure, private :: extract_target_2
     ! CORRELATORS
     procedure, private :: corr_1
     procedure, private :: corr_2
-    generic            :: corr => corr_1, corr_2
+    procedure, private :: corr_3
+    procedure, private :: corr_4
+    generic            :: corr => corr_1, corr_2, corr_3, corr_4
     ! DESTRUCTOR
     procedure          :: kill
 end type volpft_corrcalc
@@ -116,7 +119,7 @@ contains
     
     !>  \brief  extracts the lines required for matchiing
     !!          from the reference
-    subroutine extract_target( self, e, serial )
+    subroutine extract_target_1( self, e, serial )
         use simple_math, only: csq
         class(volpft_corrcalc), intent(inout) :: self
         class(ori),             intent(in)    :: e
@@ -146,7 +149,44 @@ contains
             !$omp end parallel do
         endif
         self%sqsum_target = sum(csq(self%vpft_target))
-    end subroutine extract_target
+    end subroutine extract_target_1
+
+    !>  \brief  extracts the lines required for matchiing
+    !!          from the reference
+    subroutine extract_target_2( self, e, shvec, serial )
+        use simple_math, only: csq
+        class(volpft_corrcalc), intent(inout) :: self
+        class(ori),             intent(in)    :: e
+        real,                   intent(in)    :: shvec(3)
+        logical, optional,      intent(in)    :: serial
+        real    :: loc(3), mat(3,3)
+        integer :: ispace, k
+        logical :: sserial
+        sserial = .true.
+        if( present(serial) ) sserial = serial
+        mat = e%get_mat()
+        if( sserial )then
+            do ispace=1,self%nspace
+                do k=self%kfromto_vpft(1),self%kfromto_vpft(2)
+                    loc  = matmul(self%locs_ref(ispace,k,:),mat)
+                    self%vpft_target(ispace,k) =&
+                        &self%vol_target%interp_fcomp(loc) * self%vol_target%oshift(loc, shvec)
+                end do
+            end do
+        else
+            !$omp parallel do schedule(static) default(shared)&
+            !$omp private(ispace,k,loc) proc_bind(close)
+            do ispace=1,self%nspace
+                do k=self%kfromto_vpft(1),self%kfromto_vpft(2)
+                    loc  = matmul(self%locs_ref(ispace,k,:),mat)
+                    self%vpft_target(ispace,k) =&
+                        &self%vol_target%interp_fcomp(loc) * self%vol_target%oshift(loc, shvec)
+                end do
+            end do
+            !$omp end parallel do
+        endif
+        self%sqsum_target = sum(csq(self%vpft_target))
+    end subroutine extract_target_2
     
     !>  \brief  continous rotational correlator
     function corr_1( self, e, serial ) result( cc )
@@ -154,12 +194,12 @@ contains
         class(ori),             intent(in)    :: e
         logical, optional,      intent(in)    :: serial
         real :: cc
-        call self%extract_target(e, serial)
+        call self%extract_target_1(e, serial)
         cc = sum(real(self%vpft_ref*conjg(self%vpft_target)))
         cc = cc/sqrt(self%sqsum_target*self%sqsum_ref)
     end function corr_1
 
-     !>  \brief  continous rotational correlator
+    !>  \brief  continous rotational correlator
     function corr_2( self, euls, serial ) result( cc )
         class(volpft_corrcalc), intent(inout) :: self
         real,                   intent(in)    :: euls(3)
@@ -170,6 +210,31 @@ contains
         call e%set_euler(euls)
         cc = self%corr_1(e, serial)
     end function corr_2
+
+    !>  \brief  continous rotational correlator
+    function corr_3( self, e, shvec, serial ) result( cc )
+        class(volpft_corrcalc), intent(inout) :: self
+        class(ori),             intent(in)    :: e
+        real,                   intent(in)    :: shvec(3)
+        logical, optional,      intent(in)    :: serial
+        real :: cc
+        call self%extract_target_2(e, shvec, serial)
+        cc = sum(real(self%vpft_ref*conjg(self%vpft_target)))
+        cc = cc/sqrt(self%sqsum_target*self%sqsum_ref)
+    end function corr_3
+
+    !>  \brief  continous rotational correlator
+    function corr_4( self, euls, shvec, serial ) result( cc )
+        class(volpft_corrcalc), intent(inout) :: self
+        real,                   intent(in)    :: euls(3)
+        real,                   intent(in)    :: shvec(3)
+        logical, optional,      intent(in)    :: serial
+        real      :: cc
+        type(ori) :: e
+        call e%new
+        call e%set_euler(euls)
+        cc = self%corr_3(e, shvec, serial)
+    end function corr_4
 
     !>  \brief  is a destructor
     subroutine kill( self )
@@ -182,39 +247,5 @@ contains
             self%existence_vpft = .false.
         endif
     end subroutine kill
-
-    ! >  \brief  shifts the reference lines
-    ! subroutine shift_ref( self, shvec )
-    !     use simple_math, only: csq
-    !     class(volpft_corrcalc), intent(inout) :: self
-    !     real, intent(in) :: shvec(3)
-    !     integer :: ispace, k, kind
-    !     do ispace=1,self%nspace
-    !         do k=self%kfromto_vpft(1),self%kfromto_vpft(2)
-    !             kind = self%k_ind(k)
-    !             self%vpft_ref_sh(ispace,kind) =&
-    !             self%vpft_ref(ispace,kind)*&
-    !             self%vol_ref%oshift(self%locs_ref(ispace,kind,:),shvec)
-    !         end do
-    !     end do
-    !     self%sqsum_ref_sh = sum(csq(self%vpft_ref))
-    ! end subroutine shift_ref
-    
-    ! >  \brief  shifts the reference lines
-    ! subroutine shift_orig_ref( self, shvec )
-    !     use simple_math, only: csq
-    !     class(volpft_corrcalc), intent(inout) :: self
-    !     real, intent(in) :: shvec(3)
-    !     integer :: ispace, k, kind
-    !     do ispace=1,self%nspace
-    !         do k=self%kfromto_vpft(1),self%kfromto_vpft(2)
-    !             kind = self%k_ind(k)
-    !             self%vpft_ref(ispace,kind) =&
-    !             self%vpft_ref(ispace,kind)*&
-    !             self%vol_ref%oshift(self%locs_ref(ispace,kind,:),shvec)
-    !         end do
-    !     end do
-    !     self%sqsum_ref_sh = sum(csq(self%vpft_ref))
-    ! end subroutine shift_orig_ref
 
 end module simple_volpft_corrcalc

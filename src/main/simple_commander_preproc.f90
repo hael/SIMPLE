@@ -1,8 +1,9 @@
 ! concrete commander: pre-processing routines
 module simple_commander_preproc
-use simple_defs
-use simple_jiffys         ! use all in there
-use simple_fileio         ! use all in there
+use simple_defs            ! use all in there
+use simple_jiffys          ! use all in there
+use simple_fileio          ! use all in there
+use simple_binoris_io      ! use all in there
 use simple_strings,        only: int2str, int2str_pad
 use simple_syslib,         only: exec_cmdline, simple_stop
 use simple_cmdline,        only: cmdline
@@ -11,7 +12,6 @@ use simple_build,          only: build
 use simple_commander_base, only: commander_base
 use simple_strings,        only: int2str, int2str_pad
 use simple_imgfile,        only: find_ldim_nptcls
-
 implicit none
 
 public :: preproc_commander
@@ -583,7 +583,7 @@ contains
             &fname_ctffind_ctrl, fname_ctffind_output, os)
             write(*,'(f4.0,1x,a)') 100.*(real(movie_counter)/real(ntot)), 'percent of the micrographs processed'
         end do
-        call os%write(fname_ctffind_output)
+        call binwrite_oritab(fname_ctffind_output, os, fromto)
         call os%kill
         deallocate(fname_ctffind_ctrl,fname_ctffind_output)
         call qsys_job_finished( p, 'simple_commander_preproc :: exec_ctffind' )
@@ -737,8 +737,8 @@ contains
         use simple_procimgfile,       only: neg_imgfile
         class(makepickrefs_commander), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline !< command line input
+        integer, parameter           :: NREFS=100, NPROJS=20
         character(STDLEN), parameter :: ORIFILE='pickrefs_oris.txt'
-        integer, parameter           :: NREFS=100
         type(params)                 :: p
         type(build)                  :: b
         type(cmdline)                :: cline_projvol, cline_stackops
@@ -751,39 +751,39 @@ contains
         if( cline%defined('stk') .or. cline%defined('vol1') )then
             p = params(cline, checkdistr=.false.) ! constants & derived constants produced
             if( cline%defined('vol1') )then
-                call b%a%new(NREFS)
-                call b%a%gen_diverse
+                p%nptcls = NPROJS
+                call b%a%new(NPROJS)
+                call b%a%spiral( p%nsym, p%eullims )
                 call b%a%write(trim(ORIFILE))
                 cline_projvol = cline
-                call cline_projvol%set('nspace', real(NREFS))
-                call cline_projvol%set('outstk', 'pickrefs'//p%ext)
+                call cline_projvol%set('nspace', real(NPROJS))
+                p%stk = 'even_projs'//p%ext
+                call cline_projvol%set('outstk', trim(p%stk)  )
                 call cline_projvol%set('oritab', trim(ORIFILE))
-                call cline_projvol%set('neg', trim(p%neg))
-                call cline_projvol%set('smpd', PICKER_SHRINK)
+                call cline_projvol%set('smpd',   PICKER_SHRINK)
                 call xprojvol%execute(cline_projvol)
-            else
-                ! expand in in-plane rotation
-                nrots = NREFS/p%nptcls
-                if( nrots > 1 )then
-                    ang = 360./real(nrots)
-                    rot = 0.
-                    cnt  = 0
-                    do iref=1,p%nptcls
-                        call b%img%read(p%stk, iref)
-                        do irot=1,nrots
-                            cnt = cnt + 1
-                            call b%img%rtsq(rot, 0., 0., b%img_copy)
-                            call b%img_copy%write('rotated_from_makepickrefs'//p%ext, cnt)
-                            rot = rot + ang
-                        end do
+            endif
+            ! expand in in-plane rotation
+            nrots = NREFS/p%nptcls
+            if( nrots > 1 )then
+                ang = 360./real(nrots)
+                rot = 0.
+                cnt  = 0
+                do iref=1,p%nptcls
+                    call b%img%read(p%stk, iref)
+                    do irot=1,nrots
+                        cnt = cnt + 1
+                        call b%img%rtsq(rot, 0., 0., b%img_copy)
+                        call b%img_copy%write('rotated_from_makepickrefs'//p%ext, cnt)
+                        rot = rot + ang
                     end do
-                    call cline%set('stk', 'rotated_from_makepickrefs'//p%ext)
-                endif
-                if( p%neg .eq. 'yes' )then
-                    call neg_imgfile('rotated_from_makepickrefs'//p%ext, 'pickrefs'//p%ext, p%smpd)
-                else
-                     call rename('rotated_from_makepickrefs'//p%ext, 'pickrefs'//p%ext)
-                endif
+                end do
+                call cline%set('stk', 'rotated_from_makepickrefs'//p%ext)
+            endif
+            if( p%neg .eq. 'yes' )then
+                call neg_imgfile('rotated_from_makepickrefs'//p%ext, 'pickrefs'//p%ext, p%smpd)
+            else
+                call rename('rotated_from_makepickrefs'//p%ext, 'pickrefs'//p%ext)
             endif
         else
             stop 'need input volume (vol1) or class averages (stk) to generate picking references'
@@ -847,7 +847,7 @@ contains
         class(cmdline),           intent(inout) :: cline !< command line input
         type(params)                       :: p
         type(build)                        :: b
-        integer                            :: nmovies, nboxfiles, nframes, pind
+        integer                            :: nmovies, nboxfiles, nframes, pind, noris
         integer                            :: i, j, k, alloc_stat, ldim(3), box_current, movie, ndatlines, nptcls
         integer                            :: cnt, niter, fromto(2), orig_box
         integer                            :: movie_ind, ntot, lfoo(3), ifoo, noutside
@@ -1115,11 +1115,15 @@ contains
             endif
 
             ! write output
-            do j=1,ndatlines ! loop over boxes
-                if( pinds(j) > 0 )then
-                    call outoris%write(pinds(j), outfile)
-                endif
-            end do
+            noris = count(pinds > 0)
+            call outoris%compress(pinds > 0)
+            call binwrite_oritab(outfile, outoris, [1,noris])
+            ! OLD CODE
+            ! do j=1,ndatlines ! loop over boxes
+            !     if( pinds(j) > 0 )then
+            !         call outoris%write(pinds(j), outfile)
+            !     endif
+            ! end do
 
             ! destruct
             call boxfile%kill

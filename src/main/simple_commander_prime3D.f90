@@ -8,6 +8,7 @@ use simple_commander_base, only: commander_base
 use simple_qsys_funs       ! use all in there
 use simple_fileio          ! use all in there
 use simple_jiffys          ! use all in there
+use simple_binoris_io      ! use all in there
 implicit none
 
 public :: resrange_commander

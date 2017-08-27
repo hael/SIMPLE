@@ -531,7 +531,7 @@ contains
         select case(self%head_format)
         case('M','F')
             first_byte = int(self%overall_head%firstDataByte(),kind=8)+int((first_slice-1),kind=8)&
-            &*int(product(dims(1:2)),kind=8)*int(self%overall_head%bytesPerPix(),kind=8)
+            &*int(product(dims(1:2)),kind=8)*byteperpix
             DebugPrint 'rwSlices; MRC format first byte offset ',first_byte
         case('S')
             if( self%isvol )then

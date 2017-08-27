@@ -567,7 +567,8 @@ select case(prg)
         if( describe ) call print_doc_makepickrefs
         call cline%parse(keys_required(:1), keys_optional(:4))
         ! set defaults
-        if( .not. cline%defined('neg') )  call cline%set('neg', 'yes')
+        if( .not. cline%defined('neg') ) call cline%set('neg', 'yes')
+        if( .not. cline%defined('pgrp')) call cline%set('pgrp', 'd1')
         ! execute
         call xmakepickrefs%execute(cline)
     case( 'pick' )
@@ -950,9 +951,10 @@ select case(prg)
         keys_optional(29) = 'lp_grid'
         keys_optional(30) = 'balance'
         keys_optional(31) = 'pproc'
+        keys_optional(32) = 'update_frac'
         ! parse command line
         if( describe ) call print_doc_prime3D
-        call cline%parse(keys_required(:6), keys_optional(:31))
+        call cline%parse(keys_required(:6), keys_optional(:32))
         ! set defaults
         if( .not. cline%defined('nspace')                  ) call cline%set('nspace', 1000.)
         if( .not. cline%defined('pproc')                   ) call cline%set('pproc',  'yes')
@@ -2188,11 +2190,9 @@ select case(prg)
         keys_required(1) = 'filetab'
         keys_required(2) = 'smpd'
         keys_required(3) = 'nframesgrp'
-        ! set optional keys
-        keys_optional(1)  = 'fbody'
         ! parse command line
         if( describe ) call print_doc_tseries_extract
-        call cline%parse(keys_required(:3), keys_optional(:1))
+        call cline%parse(keys_required(:3))
         ! execute
         call xtseries_extract%execute(cline)
     case( 'tseries_track' )

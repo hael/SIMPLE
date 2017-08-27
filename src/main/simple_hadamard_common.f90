@@ -30,9 +30,6 @@ contains
         integer :: stack_index
         if( p%l_distr_exec )then
             stack_index = iptcl - p%fromp + 1
-
-            print *, 'trying to read from: ', trim(p%stk_part) 
-
             call b%img%read(p%stk_part, stack_index)
         else
             call b%img%read(p%stk, iptcl)
@@ -164,17 +161,16 @@ contains
     end subroutine set_bp_range2D
 
     !>  \brief  grids one particle image to the volume
-    subroutine grid_ptcl( b, p, orientation, os, ran_eo )
+    subroutine grid_ptcl( b, p, orientation, os )
         use simple_kbinterpol, only: kbinterpol
         class(build),              intent(inout) :: b
         class(params),             intent(inout) :: p
         class(ori),                intent(inout) :: orientation
         class(oris),     optional, intent(inout) :: os
-        real,            optional, intent(in)    :: ran_eo
-        real             :: pw, ran, w
-        integer          :: jpeak, s, k, npeaks
         type(ori)        :: orisoft, o_sym
         type(kbinterpol) :: kbwin
+        real             :: pw, w, eopart
+        integer          :: jpeak, s, k, npeaks
         logical          :: l_softrec
         if( p%eo .eq. 'yes' )then
             kbwin = b%eorecvols(1)%get_kbwin()
@@ -193,8 +189,14 @@ contains
             ! pre-gridding correction for the kernel convolution
             call prep4cgrid(b%img, b%img_pad, p%msk, kbwin)
             DebugPrint  '*** simple_hadamard_common ***: prepared image for gridding'
-            ran = ran3()
-            if( present(ran_eo) ) ran = ran_eo 
+            if( p%eo .eq. 'yes' )then
+                ! even/odd partitioning
+                eopart = ran3()
+                if( orientation%isthere('eo') )then
+                    if( orientation%isevenodd() )eopart = orientation%get('eo')
+                endif
+            endif
+            ! weighted interpolation
             orisoft = orientation
             do jpeak=1,npeaks
                 DebugPrint  '*** simple_hadamard_common ***: gridding, iteration:', jpeak
@@ -211,7 +213,7 @@ contains
                 if( w > TINY )then
                     if( p%pgrp == 'c1' )then
                         if( p%eo .eq. 'yes' )then
-                            call b%eorecvols(s)%grid_fplane(orisoft, b%img_pad, pwght=w, ran=ran)
+                            call b%eorecvols(s)%grid_fplane(orisoft, b%img_pad, pwght=w, ran=eopart)
                         else
                             call b%recvols(s)%inout_fplane(orisoft, .true., b%img_pad, pwght=w)
                         endif
@@ -219,7 +221,7 @@ contains
                         do k=1,b%se%get_nsym()
                             o_sym = b%se%apply(orisoft, k)
                             if( p%eo .eq. 'yes' )then
-                                call b%eorecvols(s)%grid_fplane(o_sym, b%img_pad, pwght=w, ran=ran)
+                                call b%eorecvols(s)%grid_fplane(o_sym, b%img_pad, pwght=w, ran=eopart)
                             else
                                 call b%recvols(s)%inout_fplane(o_sym, .true., b%img_pad, pwght=w)
                             endif

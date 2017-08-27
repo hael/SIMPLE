@@ -19,7 +19,7 @@ type, extends(pftcc_opt) :: pftcc_shsrch
     integer                          :: particle       = 0       !< particle pft
     integer                          :: rot            = 1       !< in-plane rotation
     integer                          :: ldim(3)        = [0,0,0] !< logical dimension of Cartesian image
-    integer                          :: maxits         =  100    !< max nr of iterations
+    integer                          :: maxits         = 100     !< max nr of iterations
     real                             :: maxshift       = 0.      !< maximal shift
     logical                          :: shbarr         = .true.  !< shift barrier constraint or not
     integer                          :: nrestarts      =  5      !< simplex restarts (randomized bounds)
@@ -102,12 +102,8 @@ contains
         vec_here = vec
         where( abs(vec) < 1.e-6 ) vec_here = 0.
         if( self%shbarr )then
-            if( vec_here(1) < self%ospec%limits(1,1) .or.&
-               &vec_here(1) > self%ospec%limits(1,2) )then
-                cost = 1.
-                return
-            else if( vec_here(2) < self%ospec%limits(2,1) .or.&
-                    &vec_here(2) > self%ospec%limits(2,2) )then
+            if( any(vec_here(:) < self%ospec%limits(:,1)) .or.&
+               &any(vec_here(:) > self%ospec%limits(:,2)) )then
                 cost = 1.
                 return
             endif
@@ -141,8 +137,8 @@ contains
                 cxy(2:) = 0.
             endif
         else
-             cxy(1)  = -cost_init ! correlation
-             cxy(2:) = 0.
+            cxy(1)  = -cost_init ! correlation
+            cxy(2:) = 0.
         endif
     end function shsrch_minimize
 

@@ -1,14 +1,15 @@
 ! concrete commander: high-level workflows
 module simple_commander_hlev_wflows
-use simple_defs
-use simple_cmdline,        only: cmdline
-use simple_params,         only: params
-use simple_commander_base, only: commander_base
-use simple_qsys_env,       only: qsys_env
+use simple_cmdline,               only: cmdline
+use simple_params,                only: params
+use simple_commander_base,        only: commander_base
+use simple_qsys_env,              only: qsys_env
 use simple_commander_distr_wflows ! use all in there
 use simple_fileio                 ! use all in there
 use simple_commander_distr        ! use all in 
 use simple_jiffys                 ! use all in there
+use simple_binoris_io             ! use all in there
+use simple_defs                   ! use all in there
 implicit none
 
 public :: prime2D_autoscale_commander
@@ -93,9 +94,9 @@ contains
             call scobj%scale_distr_exec
             ! prepare stage 2 input -- shift modulation
             call os%new(p_master%nptcls)
-            call os%read(FINALDOC)
+            call binread_oritab(FINALDOC, os, [1,p_master%nptcls])
             call os%mul_shifts(scale_stage2/scale_stage1)
-            call os%write(FINALDOC)
+            call binwrite_oritab(FINALDOC, os, [1,p_master%nptcls])
             ! prepare stage 2 input -- command line
             cline_prime2D_stage2 = cline
             ! if automsk .eq. yes, we need to replace it with cavg
@@ -110,9 +111,9 @@ contains
             call del_files(trim(STKPARTFBODY_SC), p_master%nparts, ext=p_master%ext)
             ! re-generate class averages at native sampling
             call scobj%uninit(cline) ! puts back the old command line
-            call os%read(FINALDOC)
+            call binread_oritab(FINALDOC, os, [1,p_master%nptcls])
             call os%mul_shifts(1./scale_stage2)
-            call os%write(FINALDOC)
+            call binwrite_oritab(FINALDOC, os, [1,p_master%nptcls])
             cline_makecavgs = cline
             call cline_makecavgs%delete('autoscale')
             call cline_makecavgs%delete('balance')
@@ -331,9 +332,9 @@ contains
             write(*,'(A)') '>>>'
             ! modulate shifts
             call os%new(p_master%nptcls)
-            call os%read(oritab)
+            call binread_oritab(oritab, os, [1,p_master%nptcls])
             call os%mul_shifts(1./scobj%get_scaled_var('scale'))
-            call os%write(oritab)
+            call binwrite_oritab(oritab, os, [1,p_master%nptcls])
             ! prepare recvol command line
             call scobj%update_stk_smpd_msk(cline_recvol, 'native')
             call cline_recvol%set('oritab', trim(oritab))
@@ -470,14 +471,14 @@ contains
         write(*,'(A)') '>>>'
         write(*,'(A)') '>>> GENERATING DIVERSE LABELING'
         call os%new(p_master%nptcls)
-        call os%read(p_master%oritab)
+        call binread_oritab(p_master%oritab, os, [1,p_master%nptcls])
         labels   = diverse_labeling(p_master%nptcls, p_master%nstates, NREPEATS)
         included = os%included()
         n_incl   = count(included)
         do irepeat=1,NREPEATS
             where( .not.included )labels(irepeat,:) = 0
             call os%set_all('state', real(labels(irepeat,:)))
-            call os%write( trim(init_docs(irepeat)) )
+            call binwrite_oritab(trim(init_docs(irepeat)), os, [1,p_master%nptcls])
         enddo
 
         ! GENERATE CANDIDATE SOLUTIONS
@@ -493,7 +494,7 @@ contains
             iter   = nint(cline_prime3D%get_rarg('endit'))
             oritab = 'prime3Ddoc_'//int2str_pad(iter,3)//'.txt'
             call rename(trim(oritab), trim(final_docs(irepeat)))
-            call os%read(trim(final_docs(irepeat)))
+            call binread_oritab(trim(final_docs(irepeat)), os, [1,p_master%nptcls])
             ! updates labels & correlations
             labels(irepeat,:)  = nint(os%get_all('state'))
             rep_corrs(irepeat) = sum(os%get_all('corr'), mask=included) / real(n_incl)
@@ -514,7 +515,7 @@ contains
             ! all done
         else 
             ! solutions aggregation
-            call os%read(p_master%oritab)
+            call binread_oritab(p_master%oritab, os, [1,p_master%nptcls])
             allocate(labels_incl(NREPEATS,n_incl), consensus(n_incl), stat=alloc_stat)
             do irepeat=1,NREPEATS
                 labels_incl(irepeat,:) = pack(labels(irepeat,:), mask=included)
@@ -525,7 +526,7 @@ contains
             deallocate(labels_incl, consensus, stat=alloc_stat)
         endif
         ! output
-        call os%write(trim(oritab))
+        call binwrite_oritab(trim(oritab), os, [1,p_master%nptcls])
         ! cleanup
         call os%kill
         deallocate(init_docs, final_docs, labels, included, rep_corrs, stat=alloc_stat)

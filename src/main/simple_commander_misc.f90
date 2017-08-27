@@ -1,6 +1,5 @@
 ! concrete commander: miscallenaous routines
 module simple_commander_misc
-use simple_defs
 use simple_cmdline,        only: cmdline
 use simple_params,         only: params
 use simple_build,          only: build
@@ -8,6 +7,8 @@ use simple_commander_base, only: commander_base
 use simple_strings,        only: int2str, int2str_pad
 use simple_fileio          ! use all in there
 use simple_jiffys          ! use all in there
+use simple_binoris_io      ! use all in there
+use simple_defs            ! use all in there
 implicit none
 
 public :: cluster_smat_commander
@@ -266,7 +267,7 @@ contains
         call b%build_general_tbox(p, cline, do3d=.false.) ! general objects built
         call shift_imgfile(p%stk, p%outstk, b%a, p%smpd, p%mul)
         call b%a%zero_shifts
-        call b%a%write('shiftdoc.txt')
+        call binwrite_oritab('shiftdoc.txt', b%a, [1,p%nptcls])
         call simple_end('**** SIMPLE_SHIFT NORMAL STOP ****')
     end subroutine exec_shift
 
@@ -288,7 +289,7 @@ contains
         type(image)        :: symvol, asym_vol
         type(sym)          :: se_c1
         real               :: cc, rotmat(3,3)
-        integer            :: i, fnr, file_stat
+        integer            :: i, fnr, file_stat, nl
         integer, parameter :: MAXLABELS = 10   !< maximum numbers symmetry peaks
         real,    parameter :: ANGTHRESH = 10.  !< maximum half-distance between symmetry peaks
         p = params(cline)                      ! parameters generated
@@ -306,7 +307,8 @@ contains
         b%mskvol = 1.
         call b%mskvol%mask(p%msk, 'hard')
         ! identify top ranking symmetry peaks
-        sym_axes = oris(nlines(p%oritab2))
+        nl = binread_nlines(p%oritab2)
+        sym_axes = oris(nl)
         call sym_axes%read(p%oritab2)
         call find_sym_peaks(sym_axes, sympeaks)
         ! reconstruct & correlate volumes
@@ -317,7 +319,7 @@ contains
             ! symmetry
             call rec_vol(p, b%se)
             call symvol%copy( b%vol )
-             call symvol%write('sym_vol'//int2str_pad(i,2)//p%ext)
+            call symvol%write('sym_vol'//int2str_pad(i,2)//p%ext)
             ! c1
             rotmat = symaxis%get_mat()
             call o%ori_from_rotmat(transpose(rotmat))
@@ -331,7 +333,7 @@ contains
         enddo
         ! output
         call sympeaks%write('sympeaks.txt')
-        call sympeaks%write(p%outfile)
+        call binwrite_oritab(p%outfile, sympeaks, [1,sympeaks%get_noris()])
         ! the end
         
         if(.not.fopen(fnr, FILE='SYM_AGGREGATE_FINISHED', STATUS='REPLACE', action='WRITE', iostat=file_stat))&
@@ -401,7 +403,7 @@ contains
                 deallocate(sort_inds)
             end subroutine find_sym_peaks
 
-        end subroutine exec_sym_aggregate
+    end subroutine exec_sym_aggregate
 
     !> dsymsrch is a program for identifying rotational symmetries in class averages
     !> of D-symmetric molecules and generating a cylinder that matches the shape.
@@ -414,7 +416,7 @@ contains
         p = params(cline)                   ! parameters generated
         call b%build_general_tbox(p, cline) ! general objects built
         call dsym_cylinder(p, b%a, b%vol)
-        call b%a%write(p%outfile)
+        call binwrite_oritab(p%outfile, b%a, [1,p%nptcls])
         call b%vol%write(p%outvol)
     end subroutine exec_dsymsrch
 

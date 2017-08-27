@@ -192,6 +192,7 @@ type :: image
     ! CALCULATORS
     procedure          :: square_root
     procedure          :: maxcoord
+    procedure          :: ccpeak_offset
     procedure          :: minmax
     procedure          :: rmsd
     procedure          :: stats
@@ -3777,13 +3778,29 @@ contains
     !>  \brief maxcoord is for providing location of the maximum pixel value
     function maxcoord(self) result(loc)
         class(image), intent(inout) :: self
-        integer                     :: loc(3)
+        integer :: loc(3)
         if( self%ft )then
             stop 'maxloc not implemented 4 FTs! simple_image'
         else
             loc = maxloc(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)))
         endif
     end function maxcoord
+
+    !> \brief for finding the offset of the cross-correlation peak
+    function ccpeak_offset( self ) result( xyz )
+        class(image), intent(inout) :: self
+        integer :: loc(3)
+        real    :: xyz(3)
+        if( self%ft ) stop 'not implemented 4 FTs! simple_image :: ccpeak_offset'
+        loc    = maxloc(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)))
+        xyz(1) = real(loc(1) - self%ldim(1)/2)
+        xyz(2) = real(loc(2) - self%ldim(2)/2)
+        if( self%ldim(3) > 1 )then
+            xyz(3) = real(loc(3) - self%ldim(3)/2)
+        else
+            xyz(3) = 0.0
+        endif
+    end function ccpeak_offset
 
     !> \brief stats  is for providing foreground/background statistics
     !! \param which foreground or background
@@ -3796,15 +3813,15 @@ contains
     !!
     subroutine stats( self, which, ave, sdev, var, msk, med, errout )
         class(image), intent(inout)    :: self
-        character(len=*), intent(in)   :: which
-        real, intent(out)              :: ave, sdev, var
-        real, intent(in), optional     :: msk
-        real, intent(out), optional    :: med
-        logical, intent(out), optional :: errout
-        integer                        :: i, j, k, npix, alloc_stat, minlen
-        real                           :: ci, cj, ck, mskrad, e
-        logical                        :: err, didft, background
-        real, allocatable              :: pixels(:)
+        character(len=*),  intent(in)  :: which
+        real,              intent(out) :: ave, sdev, var
+        real,    optional, intent(in)  :: msk
+        real,    optional, intent(out) :: med
+        logical, optional, intent(out) :: errout
+        integer           :: i, j, k, npix, alloc_stat, minlen
+        real              :: ci, cj, ck, mskrad, e
+        logical           :: err, didft, background
+        real, allocatable :: pixels(:)
         ! FT
         didft = .false.
         if( self%ft )then
@@ -4304,9 +4321,9 @@ contains
                         shcomp = self_ptcl%cmat(phys(1),phys(2),phys(3))*&
                                 &self_ptcl%oshift([h,k,l], shvec)
                         ! real part of the complex mult btw 1 and 2*
-                        r = r+real(self_ref%cmat(phys(1),phys(2),phys(3))*conjg(shcomp))
-                        sumasq = sumasq+csq(shcomp)
-                        sumbsq = sumbsq+csq(self_ref%cmat(phys(1),phys(2),phys(3)))
+                        r = r + real(self_ref%cmat(phys(1),phys(2),phys(3))*conjg(shcomp))
+                        sumasq = sumasq + csq(shcomp)
+                        sumbsq = sumbsq + csq(self_ref%cmat(phys(1),phys(2),phys(3)))
                      endif
                 end do
             end do

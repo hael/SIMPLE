@@ -97,12 +97,8 @@ contains
         call enforce_cyclic_limit(vec_here(1), 360.)
         ! check boundary
         if( self%shbarr )then
-            if( vec_here(2) < self%ospec%limits(2,1) .or.&
-               &vec_here(2) > self%ospec%limits(2,2) )then
-                cost = 1.
-                return
-            else if( vec_here(3) < self%ospec%limits(3,1) .or.&
-                    &vec_here(3) > self%ospec%limits(3,2) )then
+            if( any(vec_here(2:3) < self%ospec%limits(2:3,1)) .or.&
+               &any(vec_here(2:3) > self%ospec%limits(2:3,2)) )then
                 cost = 1.
                 return
             endif
@@ -120,10 +116,10 @@ contains
         use simple_math, only: rotmat2d, enforce_cyclic_limit
         use simple_rnd,  only: ran3
         class(pftcc_inplsrch), intent(inout) :: self
-        integer, optional,     intent(in) :: irot
-        real,    optional,     intent(in) :: shvec(:)
-        real,    optional,     intent(in) :: rxy(:)
-        integer, optional,     intent(in) :: fromto(2)
+        integer, optional,     intent(in)    :: irot
+        real,    optional,     intent(in)    :: shvec(:)
+        real,    optional,     intent(in)    :: rxy(:)
+        integer, optional,     intent(in)    :: fromto(2)
         real, allocatable :: crxy(:)
         logical           :: irot_here, shvec_here, rxy_here
         allocate(crxy(4))
@@ -136,21 +132,21 @@ contains
         self%ospec%x      = 0.
         self%ospec%x(1)   = ran3()*360.
         self%ospec%nevals = 0
-        if( rxy_here )  self%ospec%x(1:3) = rxy(1:3)
-        if( irot_here ) self%ospec%x(1)   = self%pftcc_ptr%get_rot(irot)
-        if( shvec_here )self%ospec%x(2:3) = shvec(1:2)
+        if( rxy_here   ) self%ospec%x(1:3) = rxy(1:3)
+        if( irot_here  ) self%ospec%x(1)   = self%pftcc_ptr%get_rot(irot)
+        if( shvec_here ) self%ospec%x(2:3) = shvec(1:2)
         ! determines & applies shift scaling
         self%shift_scale = (self%ospec%limits(1,2) - self%ospec%limits(1,1)) /&
         &( maxval(self%ospec%limits(2:,2)) - minval(self%ospec%limits(2:,1)) )
         self%ospec%limits(2:,:) = self%ospec%limits(2:,:) * self%shift_scale
-        self%ospec%x(2:3)       = self%ospec%x(2:3) * self%shift_scale
+        self%ospec%x(2:3)       = self%ospec%x(2:3)       * self%shift_scale
         ! minimisation
         call self%nlopt%minimize(self%ospec, self, crxy(1))
         ! solution and un-scaling
-        crxy(1)           = -crxy(1)                                ! correlation
-        crxy(2)           = self%ospec%x(1)                         ! in-plane angle
-        self%ospec%x(2:3) = self%ospec%x(2:3) / self%shift_scale    ! shift unscaling
-        crxy(3:4)         = self%ospec%x(2:3)                       ! shift
+        crxy(1)           = -crxy(1)                             ! correlation
+        crxy(2)           = self%ospec%x(1)                      ! in-plane angle
+        self%ospec%x(2:3) = self%ospec%x(2:3) / self%shift_scale ! shift unscaling
+        crxy(3:4)         = self%ospec%x(2:3)                    ! shift
         self%ospec%limits(2:3,:) = self%ospec%limits(2:3,:) / self%shift_scale
         ! check so that the in-plane rotation is within the limit
         call enforce_cyclic_limit(crxy(2), 360.)

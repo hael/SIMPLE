@@ -1,6 +1,5 @@
 ! high-level continuous 3D projection matching
 module simple_cont3D_matcher
-use simple_defs
 use simple_build,             only: build
 use simple_params,            only: params
 use simple_cmdline,           only: cmdline
@@ -10,6 +9,8 @@ use simple_ori,               only: ori
 use simple_cont3D_ada_srch,   only: cont3D_ada_srch
 use simple_hadamard_common   ! use all in there
 use simple_math              ! use all in there
+use simple_binoris_io        ! use all in there
+use simple_defs              ! use all in there
 implicit none
 
 public :: cont3D_exec
@@ -154,9 +155,11 @@ contains
             enddo
             !$omp end parallel do
             ! ORIENTATIONS OUTPUT: only here for now
-            do iptcl = fromp, top
-                call b%a%write(iptcl, p%outfile)
-            enddo
+            ! do iptcl = fromp, top
+            !     call b%a%write(iptcl, p%outfile)
+            ! enddo
+            call binwrite_oritab(p%outfile, b%a, [fromp,top])
+
             ! GRID & 3D REC
             if(p%norec .eq. 'no')then
                 do iptcl = fromp, top
@@ -166,14 +169,16 @@ contains
                     call b%img%copy(batch_imgs(iptcl))
                     if(p%npeaks == 1)then
                         if( p%eo.eq.'yes' )then
-                            call grid_ptcl(b, p, orientation, ran_eo=eopart(iptcl) )
+                            ! call grid_ptcl(b, p, orientation, ran_eo=eopart(iptcl) )
+                            call grid_ptcl(b, p, orientation )
                         else
                             call grid_ptcl(b, p, orientation)
                         endif
                     else
                         softoris = cont3Dadasrch(iptcl)%get_peaks()
                         if( p%eo.eq.'yes' )then
-                            call grid_ptcl(b, p, orientation, os=softoris, ran_eo=eopart(iptcl) )
+                            !call grid_ptcl(b, p, orientation, os=softoris, ran_eo=eopart(iptcl) )
+                            call grid_ptcl(b, p, orientation, os=softoris)
                         else
                             call grid_ptcl(b, p, orientation, os=softoris )
                         endif

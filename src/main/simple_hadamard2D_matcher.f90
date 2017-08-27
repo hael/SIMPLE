@@ -2,8 +2,6 @@
 module simple_hadamard2D_matcher
 !$ use omp_lib
 !$ use omp_lib_kinds
-use simple_defs
-use simple_syslib
 use simple_polarft_corrcalc, only: polarft_corrcalc
 use simple_prime2D_srch,     only: prime2D_srch
 use simple_ori,              only: ori
@@ -11,10 +9,12 @@ use simple_build,            only: build
 use simple_params,           only: params
 use simple_cmdline,          only: cmdline
 use simple_strings,          only: int2str_pad
-use simple_jiffys
+use simple_jiffys            ! use all in there
 use simple_fileio            ! use all in there
 use simple_hadamard_common   ! use all in there
 use simple_filterer          ! use all in there
+use simple_defs              ! use all in there
+use simple_syslib            ! use all in there
 implicit none
 
 public :: prime2D_exec, prime2D_assemble_sums, prime2D_norm_sums, prime2D_assemble_sums_from_parts,&
@@ -32,6 +32,7 @@ contains
         use simple_qsys_funs,   only: qsys_job_finished
         use simple_strings,     only: str_has_substr
         use simple_procimgfile, only: random_selection_from_imgfile
+        use simple_binoris_io,  only: binwrite_oritab
         class(build),   intent(inout) :: b
         class(params),  intent(inout) :: p
         class(cmdline), intent(inout) :: cline
@@ -76,11 +77,35 @@ contains
         ! SET FRACTION OF SEARCH SPACE
         frac_srch_space = b%a%get_avg('frac')
 
+        ! SETUP WEIGHTS
+        ! this needs to be done prior to search such that each part
+        ! sees the same information in distributed execution
+        if( p%weights2D.eq.'yes' )then
+            if( p%nptcls <= SPECWMINPOP )then
+                call b%a%set_all2single('w', 1.0)
+            else
+                ! frac is one by default in prime2D (no option to set frac)
+                ! so spectral weighting is done over all images
+                call b%a%calc_spectral_weights(1.0)
+            endif
+        else
+            ! defaults to unitary weights
+            call b%a%set_all2single('w', 1.0)
+        endif
+
+        ! POPULATION BALANCING LOGICS
+        ! this needs to be done prior to search such that each part
+        ! sees the same information in distributed execution
+        if( p%balance > 0 )then
+            call b%a%balance(p%balance, skewness)
+            write(*,'(A,F8.2)') '>>> CLASS DISTRIBUTION SKEWNESS(%):', 100. * skewness
+        else
+            call b%a%set_all2single('state_balance', 1.0)
+        endif
+
         ! EXTREMAL LOGICS
         if( frac_srch_space < 98. .or. p%extr_iter <= 15 )then
-            ! extr_thresh = EXTRINITHRESH * (1.-EXTRTHRESH_CONST)**(p%extr_iter-1)  ! factorial decay
-            ! extr_thresh = EXTRINITHRESH * exp(-(real(p%extr_iter-1)/6.)**2. / 2.) ! gaussian decay: untested
-            extr_thresh = EXTRINITHRESH * cos(PI/2. * real(p%extr_iter-1)/15.)    ! cosine decay
+            extr_thresh = EXTRINITHRESH * (1.-EXTRTHRESH_CONST)**real(p%extr_iter-1)  ! factorial decay
             extr_thresh = min(EXTRINITHRESH, max(0., extr_thresh))
             corr_thresh = b%a%extremal_bound(extr_thresh)
         else
@@ -137,30 +162,8 @@ contains
         end select
         DebugPrint ' hadamard2D_matcher; completed alignment'
 
-        ! SETUP WEIGHTS
-        if( p%weights2D.eq.'yes' )then
-            if( p%nptcls <= SPECWMINPOP )then
-                call b%a%set_all2single('w', 1.0)
-            else
-                ! frac is one by default in prime2D (no option to set frac)
-                ! so spectral weighting is done over all images
-                call b%a%calc_spectral_weights(1.0)
-            endif
-        else
-            ! defaults to unitary weights
-            call b%a%set_all2single('w', 1.0)
-        endif
-
-        ! POPULATION BALANCING LOGICS
-        if( p%balance > 0 )then
-            call b%a%balance(p%balance, skewness)
-            write(*,'(A,F8.2)') '>>> CLASS DISTRIBUTION SKEWNESS(%):', 100. * skewness
-        else
-            call b%a%set_all2single('state_balance', 1.0)
-        endif
-
         ! OUTPUT ORIENTATIONS
-        call b%a%write(p%outfile, [p%fromp,p%top])
+        call binwrite_oritab(p%outfile, b%a, [p%fromp,p%top])
         p%oritab = p%outfile
 
         ! WIENER RESTORATION OF CLASS AVERAGES

@@ -190,6 +190,7 @@ contains
     subroutine exec_projvol( self, cline )
         use simple_image,          only: image
         use simple_projector_hlev, only: projvol
+        use simple_binoris_io,     only: binread_oritab, binread_nlines
         class(projvol_commander), intent(inout) :: self
         class(cmdline),           intent(inout) :: cline
         type(params)             :: p
@@ -197,15 +198,14 @@ contains
         type(image), allocatable :: imgs(:)
         integer                  :: i, loop_end
         real                     :: x, y, dfx, dfy, angast
-   
         if( .not. cline%defined('oritab') )then
             if( .not. cline%defined('nspace') ) stop 'need nspace (for number of projections)!'
         endif
         p = params(cline) ! parameters generated
         if( cline%defined('oritab') )then
-            p%nptcls = nlines(p%oritab)
+            p%nptcls = binread_nlines(p%oritab)
             call b%build_general_tbox(p, cline)
-            call b%a%read(p%oritab)
+            call binread_oritab(p%oritab, b%a, [1,p%nptcls])
             p%nspace = b%a%get_noris()
         else if( p%rnd .eq. 'yes' )then
             p%nptcls = p%nspace
@@ -426,7 +426,7 @@ contains
                 ivol = pairs(ipair,1)
                 jvol = pairs(ipair,2)
                 call read_and_prep_vols( ivol, jvol )
-                o = volpft_srch_minimize()
+                o = volpft_srch_minimize_eul()
                 corrs(ipair) = o%get('corr')
             end do
             DebugPrint   'did set this number of similarities: ', cnt
@@ -458,7 +458,7 @@ contains
                     cnt = cnt + 1
                     call progress(cnt, npairs)
                     call read_and_prep_vols( ivol, jvol )
-                    o = volpft_srch_minimize()
+                    o = volpft_srch_minimize_eul()
                     corrmat(ivol,jvol) = o%get('corr')
                     corrmat(jvol,ivol) = corrmat(ivol,jvol)
                     if( corrmat(ivol,jvol) > corr_max ) corr_max = corrmat(ivol,jvol)
@@ -517,7 +517,7 @@ contains
                 call vol2%clip_inplace([box_sc,box_sc,box_sc])
                 call vol1%set_smpd(smpd_sc)
                 call vol2%set_smpd(smpd_sc)
-                call volpft_srch_init(vol1, vol2, p%hp, p%lp)
+                call volpft_srch_init(vol1, vol2, p%hp, p%lp, 0.)
             end subroutine read_and_prep_vols
 
     end subroutine exec_volume_smat

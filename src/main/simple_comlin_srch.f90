@@ -103,9 +103,10 @@ contains
 
     !> Write results of common-line mode search to file
     subroutine comlin_srch_write_resoris( fname, fromto )
+        use simple_binoris_io, only: binwrite_oritab
         character(len=*) :: fname
         integer          :: fromto(2)
-        call resoris%write(fname, fromto)
+        call binwrite_oritab(fname, resoris, fromto)
     end subroutine comlin_srch_write_resoris
 
     !> common-line mode search symmetry axis

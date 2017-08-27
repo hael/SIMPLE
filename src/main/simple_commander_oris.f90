@@ -1,12 +1,13 @@
 ! concrete commander: operations on orientations
 module simple_commander_oris
-use simple_defs
 use simple_cmdline,        only: cmdline
 use simple_params,         only: params
 use simple_build,          only: build
 use simple_commander_base, only: commander_base
 use simple_fileio          ! use all in there
 use simple_jiffys          ! use all in there
+use simple_defs            ! use all in there
+use simple_binoris_io      ! use all in there
 implicit none
 
 public :: cluster_oris_commander
@@ -23,7 +24,6 @@ public :: vizoris_commander
 private
 #include "simple_local_flags.inc"
 
-!> generator type
 type, extends(commander_base) :: cluster_oris_commander
  contains
    procedure :: execute      => exec_cluster_oris
@@ -126,14 +126,14 @@ contains
         call b%build_general_tbox(p, cline)
         if( cline%defined('oritab') .or. cline%defined('deftab')  )then
             if( cline%defined('oritab') )then
-                nptcls = nlines(p%oritab)
+                nptcls = binread_nlines(p%oritab)
                 call b%a%new(nptcls)
-                call b%a%read(p%oritab)
+                call binread_oritab(p%oritab, b%a, [1,nptcls])
             endif
             if( cline%defined('deftab') )then
-                nptcls = nlines(p%deftab)
+                nptcls = binread_nlines(p%deftab)
                 call b%a%new(nptcls)
-                call b%a%read(p%deftab)
+                call binread_oritab(p%deftab, b%a, [1,nptcls])
             endif
             if( b%a%isthere('dfx') .and. b%a%isthere('dfy') .and. b%a%isthere('angast') )then
                 ! all ok, astigmatic CTF
@@ -191,7 +191,7 @@ contains
         else
             write(*,*) 'Nothing to do!'
         endif
-        call b%a%write(p%outfile)
+        call binwrite_oritab(p%outfile, b%a, [1,b%a%get_noris()])
         ! end gracefully
         call simple_end('**** SIMPLE_MAKEDEFTAB NORMAL STOP ****')
     end subroutine exec_makedeftab
@@ -297,7 +297,7 @@ contains
             call read_filetable(p%doclist, oritabs)
             noritabs = size(oritabs)
             do ioritab=1,noritabs
-                nl = nlines(oritabs(ioritab))
+                nl = binread_nlines(oritabs(ioritab))
                 if( ioritab == 1 )then
                     nl1 = nl
                 else
@@ -308,7 +308,7 @@ contains
             allocate(labels(noritabs,nl), consensus(nl), corrs(noritabs))
             call o%new(nl)
             do ioritab=1,noritabs
-                call o%read(oritabs(ioritab))
+                call binread_oritab(oritabs(ioritab), o, [1,nl])
                 labels(ioritab,:) = nint(o%get_all('state'))
                 corrs(ioritab)    = sum(o%get_all('corrs'), mask=(labels(ioritab,:)>0))&
                 &/real(count(labels(ioritab,:)>0))
@@ -329,7 +329,7 @@ contains
         else
             if( p%ctf .eq. 'yes' ) call b%a%rnd_ctf(p%kv, p%cs, p%fraca, p%defocus, p%dferr)
         endif
-        call b%a%write(p%outfile)
+        call binwrite_oritab(p%outfile, b%a, [1,b%a%get_noris()])
         ! end gracefully
         call simple_end('**** SIMPLE_MAKEORIS NORMAL STOP ****')
     end subroutine exec_makeoris
@@ -373,10 +373,10 @@ contains
         call find_ldim_nptcls(p%stk3, lfoo, p%ncls)
         if( p%ncls < nsel ) stop 'nr of original clusters cannot be less than the number of selected ones'
         ! find number of lines in input document
-        nlines_oritab = nlines(p%oritab)
+        nlines_oritab = binread_nlines(p%oritab)
         if( nlines_oritab /= p%nptcls ) stop 'nr lines in oritab .ne. nr images in particle stack; must be congruent!'
         if( cline%defined('deftab') )then
-            nlines_deftab = nlines(p%deftab)
+            nlines_deftab = binread_nlines(p%deftab)
             if( nlines_oritab /= nlines_deftab ) stop 'nr lines in oritab .ne. nr lines in deftab; must be congruent!'
         endif
         allocate(imgs_sel(nsel), imgs_cls(p%ncls))
@@ -414,10 +414,10 @@ contains
         end do
         if( cline%defined('oritab3D') )then
             if( .not. file_exists(p%oritab3D) ) stop 'Inputted oritab3D does not exist in the cwd'
-            nlines_oritab3D = nlines(p%oritab3D)
+            nlines_oritab3D = binread_nlines(p%oritab3D)
             if( nlines_oritab3D /= nsel ) stop '# lines in oritab3D /= nr of selected cavgs'
             o_oritab3D = oris(nsel)
-            call o_oritab3D%read(p%oritab3D)
+            call binread_oritab(p%oritab3D, o_oritab3D, [1,nsel])
             ! compose orientations and set states
             do isel=1,nsel
                 ! get 3d ori info
@@ -446,7 +446,7 @@ contains
                 end do
             end do
         endif
-        call b%a%write(p%outfile)
+        call binwrite_oritab(p%outfile, b%a, [1,p%nptcls])
         call simple_end('**** SIMPLE_MAP2PTCLS NORMAL STOP ****')
     end subroutine exec_map2ptcls
 
@@ -495,7 +495,7 @@ contains
             endif
         endif
         if( cline%defined('nstates') ) call b%a%rnd_states(p%nstates)
-        call b%a%write(p%outfile)
+        call binwrite_oritab(p%outfile, b%a, [1,b%a%get_noris()])
         call simple_end('**** SIMPLE_ORISOPS NORMAL STOP ****')
     end subroutine exec_orisops
 
@@ -533,11 +533,11 @@ contains
         if( cline%defined('oritab2') )then
             ! Comparison
             if( .not. cline%defined('oritab') ) stop 'need oritab for comparison'
-            if( nlines(p%oritab) .ne. nlines(p%oritab2) )then
+            if( binread_nlines(p%oritab) .ne. binread_nlines(p%oritab2) )then
                 stop 'inconsistent number of lines in the two oritabs!'
             endif
             o = oris(p%nptcls)
-            call o%read(p%oritab2)
+            call binread_oritab(p%oritab2, o, [1,p%nptcls])
             call b%a%diststat(o, sumd, avgd, sdevd, mind, maxd)
             write(*,'(a,1x,f15.6)') 'SUM OF ANGULAR DISTANCE BETWEEN ORIENTATIONS  :', sumd
             write(*,'(a,1x,f15.6)') 'AVERAGE ANGULAR DISTANCE BETWEEN ORIENTATIONS :', avgd
@@ -667,7 +667,7 @@ contains
                 goto 999
             endif            
         endif
-        call b%a%write(p%outfile)
+        call binwrite_oritab(p%outfile, b%a, [1,b%a%get_noris()])
         999 call simple_end('**** SIMPLE_ORISTATS NORMAL STOP ****')
     end subroutine exec_oristats
 
@@ -712,52 +712,38 @@ contains
             call os_out%set_ori(iline,o)
         end do
         call os_out%swape1e3
-        call os_out%write(p%outfile)
+        call binwrite_oritab(p%outfile, os_out, [1,ndatlines])
         call rotmats%kill
         call simple_end('**** ROTMATS2ORIS NORMAL STOP ****')
     end subroutine exec_rotmats2oris
 
     !> convert text (.txt) oris doc to binary (.bin)
     subroutine exec_txt2bin( self, cline )
-        use simple_oris,         only: oris
-        use simple_binoris,      only: binoris
+        use simple_oris, only: oris
         class(txt2bin_commander), intent(inout) :: self
         class(cmdline),           intent(inout) :: cline
         type(params)  :: p
         type(oris)    :: os
-        type(binoris) :: bos
-        integer       :: noris, i
+        integer       :: noris
         p = params(cline)
         noris = nlines(p%oritab)
         call os%new(noris)
         call os%read(p%oritab)
-        call bos%new(os)
-        call bos%open(p%outfile, del_if_exists=.true.)
-        call bos%write_header()
-        do i=1,noris
-            call bos%write_record(i, os)
-        end do
-        call bos%close
+        call binwrite_oritab(p%outfile, os, [1,noris])
     end subroutine exec_txt2bin
 
     !> convert binary (.bin) oris doc to text (.txt)
     subroutine exec_bin2txt( self, cline )
-        use simple_oris,         only: oris
-        use simple_binoris,      only: binoris
+        use simple_oris, only: oris
         class(bin2txt_commander), intent(inout) :: self
         class(cmdline),           intent(inout) :: cline
         type(params)  :: p
         type(oris)    :: os
-        type(binoris) :: bos
-        integer       :: noris, i
+        integer       :: noris
         p = params(cline)
-        call bos%open(p%oritab)
-        noris = bos%get_n_records()
+        noris = binread_nlines(p%oritab)
         call os%new(noris)
-        do i=1,noris
-            call bos%read_record(i, os)
-        end do
-        call bos%close
+        call binread_oritab(p%oritab, os, [1,noris])
         call os%write(p%outfile)
     end subroutine exec_bin2txt
 
@@ -854,7 +840,6 @@ contains
             close(funit)
         else
             ! time series visualization
-            allocate(euldists(n), stat=alloc_stat)
             ! unit sphere tracking
             fname  = trim(p%fbody)//'_motion.bild'
             radius = 0.02
@@ -880,6 +865,7 @@ contains
             write(funit,'(A,F7.3,F7.3,F7.3,A)')".sphere ", xyz, " 0.08"
             close(funit)
             ! distance output
+            allocate(euldists(n), stat=alloc_stat)
             fname  = trim(p%fbody)//'_motion.csv'
             open(unit=funit, status='REPLACE', action='WRITE', file=trim(fname))
             do i = 1, n

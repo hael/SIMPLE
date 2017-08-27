@@ -1,7 +1,5 @@
 ! concrete commander: general image processing routines
 module simple_commander_imgproc
-use simple_defs
-use simple_syslib
 use simple_cmdline,        only: cmdline
 use simple_params,         only: params
 use simple_build,          only: build
@@ -10,6 +8,8 @@ use simple_strings,        only: int2str, int2str_pad
 use simple_imgfile,        only: find_ldim_nptcls
 use simple_fileio          ! use all in there
 use simple_jiffys          ! use all in there
+use simple_defs            ! use all in there
+use simple_syslib          ! use all in there
 implicit none
 #include "simple_local_flags.inc"
 public :: binarise_commander
