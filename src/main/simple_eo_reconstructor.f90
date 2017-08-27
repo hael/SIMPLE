@@ -387,6 +387,8 @@ contains
         call img_pad%new([p%boxpd,p%boxpd,1],p%smpd)
         ! calculate weights
         call o%calc_spectral_weights(p%frac)
+        ! even/odd partitioning
+        if( o%get_nevenodd() == 0 )call o%partition_eo
         ! population balancing logics
         if( p%balance > 0 )then
             call o%balance( p%balance, NSPACE_BALANCE, p%nsym, p%eullims, skewness )
@@ -439,7 +441,7 @@ contains
                 use simple_rnd, only: ran3
                 type(ori) :: o_sym, orientation
                 integer   :: j, state, state_balance
-                real      :: pw, ran
+                real      :: pw, eopart
                 state         = nint(o%get(i, 'state'))
                 state_balance = nint(o%get(i, 'state_balance'))
                 if( state == 0 .or. state_balance == 0 ) return
@@ -447,19 +449,26 @@ contains
                 if( p%frac < 0.99 ) pw = o%get(i, 'w')
                 if( pw > 0. )then
                     orientation = o%get_ori(i)
+                    ! read image
                     if( p%l_distr_exec )then
                         call img%read(p%stk_part, cnt)
                     else
                         call img%read(fname, i)
                     endif
+                    ! gridding
                     call prep4cgrid(img, img_pad, p%msk, kbwin)
+                    ! e/o partitioning
+                    eopart = ran3()
+                    if( orientation%isthere('eo') )then
+                        if( orientation%isevenodd() )eopart = orientation%get('eo')
+                    endif
+                    ! interpolation
                     if( p%pgrp == 'c1' )then
-                        call self%grid_fplane(orientation, img_pad, pwght=pw, mul=mul)
+                        call self%grid_fplane(orientation, img_pad, pwght=pw, mul=mul, ran=eopart)
                     else
-                        ran = ran3()
                         do j=1,se%get_nsym()
                             o_sym = se%apply(orientation, j)
-                            call self%grid_fplane(o_sym, img_pad, pwght=pw, mul=mul, ran=ran)
+                            call self%grid_fplane(o_sym, img_pad, pwght=pw, mul=mul)
                         end do
                     endif
                  endif

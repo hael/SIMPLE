@@ -219,6 +219,7 @@ contains
         call chdict%push('trsstats',      'provide origin shift statistics(yes|no){no}')
         call chdict%push('tseries',       'images represent a time-series(yes|no){no}')
         call chdict%push('unidoc',        'unified resources and orientations doc')
+        call chdict%push('update_frac',   'Fraction of particles to update(0.-1.){1.}')
         call chdict%push('verbose',       'verbosity flag (yes|no){no}')
         call chdict%push('vis',           'visualise(yes|no)')
         call chdict%push('vol1',          'input volume no1(invol1.ext)')

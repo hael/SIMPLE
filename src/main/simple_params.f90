@@ -335,6 +335,7 @@ type :: params
     real    :: time_per_image=200.
     real    :: time_per_frame=0.
     real    :: trs=0.              !< maximum halfwidth shift(in pixels)
+    real    :: update_frac = 1.
     real    :: var=1.
     real    :: width=10.           !< falloff of inner mask(in pixels){10}
     real    :: winsz=1.
@@ -349,6 +350,7 @@ type :: params
     logical :: l_envmsk        = .false.
     logical :: l_autoscale     = .false.
     logical :: l_dose_weight   = .false. 
+    logical :: l_frac_update   = .false.
     logical :: l_innermsk      = .false. 
     logical :: l_pick          = .false.
     logical :: l_remap_classes = .false.
@@ -689,6 +691,7 @@ contains
         call check_rarg('thres',          self%thres)
         call check_rarg('time_per_image', self%time_per_image)
         call check_rarg('trs',            self%trs)
+        call check_rarg('update_frac',    self%update_frac)
         call check_rarg('var',            self%var)
         call check_rarg('width',          self%width)
         call check_rarg('winsz',          self%winsz)
@@ -819,6 +822,13 @@ contains
             allocate(endconv, source='NATIVE')
         endif
         if( allocated(conv) ) deallocate(conv)
+        ! fractional search and volume update
+        if( self%update_frac <= .99)then
+            if( self%update_frac < 0.01 )stop 'UPDATE_FRAC is too small 1; simple_params :: constructor'
+            if( nint(self%update_frac*real(self%nptcls)) < 1 )&
+                &stop 'UPDATE_FRAC is too small 2; simple_params :: constructor'
+            self%l_frac_update = .true.
+        endif
 !<<< END, SANITY CHECKING AND PARAMETER EXTRACTION FROM VOL(S)/STACK(S)
 
 !>>> START, PARALLELISATION-RELATED

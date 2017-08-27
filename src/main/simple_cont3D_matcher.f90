@@ -169,14 +169,16 @@ contains
                     call b%img%copy(batch_imgs(iptcl))
                     if(p%npeaks == 1)then
                         if( p%eo.eq.'yes' )then
-                            call grid_ptcl(b, p, orientation, ran_eo=eopart(iptcl) )
+                            ! call grid_ptcl(b, p, orientation, ran_eo=eopart(iptcl) )
+                            call grid_ptcl(b, p, orientation )
                         else
                             call grid_ptcl(b, p, orientation)
                         endif
                     else
                         softoris = cont3Dadasrch(iptcl)%get_peaks()
                         if( p%eo.eq.'yes' )then
-                            call grid_ptcl(b, p, orientation, os=softoris, ran_eo=eopart(iptcl) )
+                            !call grid_ptcl(b, p, orientation, os=softoris, ran_eo=eopart(iptcl) )
+                            call grid_ptcl(b, p, orientation, os=softoris)
                         else
                             call grid_ptcl(b, p, orientation, os=softoris )
                         endif

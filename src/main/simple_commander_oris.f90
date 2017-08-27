@@ -840,7 +840,6 @@ contains
             close(funit)
         else
             ! time series visualization
-            allocate(euldists(n), stat=alloc_stat)
             ! unit sphere tracking
             fname  = trim(p%fbody)//'_motion.bild'
             radius = 0.02
@@ -866,6 +865,7 @@ contains
             write(funit,'(A,F7.3,F7.3,F7.3,A)')".sphere ", xyz, " 0.08"
             close(funit)
             ! distance output
+            allocate(euldists(n), stat=alloc_stat)
             fname  = trim(p%fbody)//'_motion.csv'
             open(unit=funit, status='REPLACE', action='WRITE', file=trim(fname))
             do i = 1, n

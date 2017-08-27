@@ -175,7 +175,6 @@ contains
     !>  \brief  generate a uniformly distributed random integer [_1_,_NP_]
     function irnd_uni( NP ) result( irnd )
         integer, intent(in) :: NP
-        !real                :: rrnd
         integer             :: irnd
         irnd = 1
         if( NP == 0 )then

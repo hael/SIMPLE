@@ -951,9 +951,10 @@ select case(prg)
         keys_optional(29) = 'lp_grid'
         keys_optional(30) = 'balance'
         keys_optional(31) = 'pproc'
+        keys_optional(32) = 'update_frac'
         ! parse command line
         if( describe ) call print_doc_prime3D
-        call cline%parse(keys_required(:6), keys_optional(:31))
+        call cline%parse(keys_required(:6), keys_optional(:32))
         ! set defaults
         if( .not. cline%defined('nspace')                  ) call cline%set('nspace', 1000.)
         if( .not. cline%defined('pproc')                   ) call cline%set('pproc',  'yes')

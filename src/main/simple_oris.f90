@@ -57,6 +57,9 @@ type :: oris
     procedure          :: extract_table
     procedure          :: ang_sdev
     procedure          :: included
+    procedure          :: get_nevenodd
+    procedure, private :: get_neven
+    procedure, private :: get_nodd
     procedure          :: print_
     ! SETTERS
     procedure, private :: assign
@@ -103,6 +106,7 @@ type :: oris
     procedure          :: ini_tseries
     procedure          :: symmetrize
     procedure          :: merge
+    procedure          :: partition_eo
     ! I/O
     procedure          :: read
     procedure          :: read_ctfparams_and_state
@@ -1004,6 +1008,56 @@ contains
         end do
     end function included
 
+    !>  \brief  is getting the number of oris assigned to the even partion
+    integer function get_neven( self, fromto )
+        class(oris),       intent(inout) :: self
+        integer, optional, intent(in)    :: fromto(2)
+        integer :: i, from, to
+        from = 1
+        to   = self%n
+        if(present(fromto))then
+            from = fromto(1)
+            to   = fromto(2)
+        endif
+        get_neven = 0
+        do i = from, to
+            if( self%o(i)%isthere('eo') )then
+                if( self%o(i)%get('state') < 0.5 )cycle
+                if( self%o(i)%get('weights') < TINY )cycle
+                if( self%o(i)%iseven() )get_neven = get_neven + 1
+            endif
+        enddo
+    end function get_neven
+
+    !>  \brief  is getting the number of oris assigned to the odd partion
+    integer function get_nodd( self, fromto )
+        class(oris),       intent(inout) :: self
+        integer, optional, intent(in)    :: fromto(2)
+        integer :: i, from, to
+        from = 1
+        to   = self%n
+        if(present(fromto))then
+            from = fromto(1)
+            to   = fromto(2)
+        endif
+        get_nodd = 0
+        do i = from, to
+            if( self%o(i)%isthere('eo') )then
+                if( self%o(i)%get('state') < 0.5 )cycle
+                if( self%o(i)%get('weights') < TINY )cycle
+                if( self%o(i)%isodd() )get_nodd = get_nodd + 1
+            endif
+        enddo
+    end function get_nodd
+
+    !>  \brief  is getting the number of oris assigned to the odd partion
+    integer function get_nevenodd( self, fromto )
+        class(oris),       intent(inout) :: self
+        integer, optional, intent(in)    :: fromto(2)
+        integer :: i, from, to
+        get_nevenodd = self%get_neven(fromto) + self%get_nodd(fromto)
+    end function get_nevenodd
+
     !>  \brief  is for printing
     subroutine print_( self, i )
         class(oris), intent(inout) :: self
@@ -1616,6 +1670,47 @@ contains
         call self2add%kill
     end subroutine merge
 
+    !>  \brief  for uniformly assigning even/odd partitions
+    subroutine partition_eo( self, fromto )
+        use simple_ran_tabu
+        class(oris),       intent(inout) :: self
+        integer, optional, intent(in)    :: fromto(2)
+        type(ran_tabu)       :: rt
+        logical, allocatable :: to_assign(:)
+        real,    allocatable :: vals(:)
+        integer, allocatable :: eopart(:)
+        integer :: i, n, from, to, cnt, alloc_stat
+        from = 1
+        to   = self%n
+        if( present(fromto) )then
+            from = fromto(1)
+            to   = fromto(2)
+        endif
+        vals      = self%get_all('state')
+        to_assign = (vals(from:to) > 0.5)
+        deallocate(vals)
+        vals      = self%get_all('w')
+        to_assign = to_assign .and. (vals(from:to) > TINY)
+        deallocate(vals)
+        n = count(to_assign)
+        if( n == 0 )then
+            write(*,*) 'no valid state or weights for eo partition; simple_oris :: partition_eo'
+            return
+        endif
+        allocate(eopart(n), stat=alloc_stat)
+        call alloc_errchk('eopart; simple_oris :: partition_eo', alloc_stat)
+        rt = ran_tabu(n)
+        call rt%balanced(2, eopart)
+        call rt%kill
+        cnt = 0
+        do i = from, to
+            if( to_assign(i) )then
+                cnt = cnt + 1
+                call self%o(i)%set('eo', real(eopart(cnt)-1))
+            endif
+        enddo
+    end subroutine partition_eo
+
     ! I/O
 
     !>  \brief  reads orientation info from file
@@ -1957,6 +2052,7 @@ contains
 
     !>  \brief  orders oris according to specscore
     function order( self ) result( inds )
+        use simple_math, only: reverse
         class(oris), intent(inout) :: self
         real,    allocatable :: specscores(:)
         integer, allocatable :: inds(:)
@@ -1966,6 +2062,7 @@ contains
         specscores = self%get_all('specscore')
         inds = (/(i,i=1,self%n)/)
         call hpsort( self%n, specscores, inds )
+        call reverse(inds)
     end function order
 
     !>  \brief  orders oris according to corr
@@ -2239,12 +2336,12 @@ contains
         class(oris),       intent(inout) :: self
         real,              intent(in)    :: frac
         integer, allocatable :: order(:)
-        integer :: i, lim, n
+        integer :: i, lim, n, ind
         if( frac < 0.99 )then
             n = 0
             do i=1,self%n
-                if( self%o(i)%get('state') > 0. )then
-                    n = n+1
+                if( nint(self%o(i)%get('state')) > 0 )then
+                    n = n + 1
                 else
                     ! ensures rejected from frac threshold
                     call self%o(i)%reject
@@ -2252,14 +2349,14 @@ contains
             end do
             lim   = nint(frac*real(n))
             order = self%order() ! specscore ranking
-            do i=1,self%n
+            do i = 1, self%n
+                ind = order(i)
                 if( i <= lim )then
-                    call self%o(order(i))%set('w', 1.)
+                    call self%o(ind)%set('w', 1.)
                 else
-                    call self%o(order(i))%set('w', 0.)
+                    call self%o(ind)%set('w', 0.)
                 endif
             end do
-            deallocate(order)
         else
             call self%set_all2single('w', 1.)
         endif
@@ -2271,17 +2368,18 @@ contains
         class(oris), intent(inout) :: self
         real,        intent(in)    :: frac
         real,    allocatable :: specscores(:), weights(:)
-        real    :: w, minscore
-        integer :: i, lim, n
+        real    :: minscore
+        integer :: i
         call self%calc_hard_weights_single(frac)
         if( self%isthere('specscore') )then
             specscores = self%get_all('specscore')
-            weights    = pack(specscores, mask=specscores > TINY)
-            minscore   = minval(weights)
-            deallocate(weights)
+            minscore   = minval(specscores, mask=(specscores > TINY))
             weights    = self%get_all('w')
-            weights    = specscores * weights - minscore
-            where( weights < 0. ) weights = 0.
+            where( (weights > 0.5) .and. (specscores > minscore) )
+                weights = specscores
+            else where
+                weights = 0.
+            end where
             call normalize_sigm(weights)
             do i=1,self%n
                 call self%o(i)%set('w', weights(i))
