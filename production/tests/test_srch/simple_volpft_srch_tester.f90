@@ -72,7 +72,7 @@ contains
         call b%vol%mask(p%msk,'soft')
         call b%vol%write('vol_target_3.mrc')
         call b%vol%fwd_ft
-        call volpft_srch_init(vol_ref,b%vol,p%hp,p%lp)
+        call volpft_srch_init(vol_ref,b%vol,p%hp,p%lp,0.)
         call vol_tmp%kill
     end subroutine setup_testenv
 
@@ -85,7 +85,7 @@ contains
         do itest=1,NTESTS
             call progress(itest,NTESTS)
             call ranori%rnd_ori
-            o_best  = volpft_srch_minimize()
+            o_best  = volpft_srch_minimize_eul()
             corr    = o_best%get('corr') 
             sumcorr = sumcorr + corr
             dist    = o_best.euldist.ranori

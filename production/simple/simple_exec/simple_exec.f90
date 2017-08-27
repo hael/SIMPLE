@@ -2190,11 +2190,9 @@ select case(prg)
         keys_required(1) = 'filetab'
         keys_required(2) = 'smpd'
         keys_required(3) = 'nframesgrp'
-        ! set optional keys
-        keys_optional(1)  = 'fbody'
         ! parse command line
         if( describe ) call print_doc_tseries_extract
-        call cline%parse(keys_required(:3), keys_optional(:1))
+        call cline%parse(keys_required(:3))
         ! execute
         call xtseries_extract%execute(cline)
     case( 'tseries_track' )

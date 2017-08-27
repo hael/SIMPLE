@@ -194,7 +194,7 @@ contains
             ! writes projections images and orientations for subsequent reconstruction
             ! only in local and distributed (part=1) modes
             noris = b%e%get_noris()
-            do i=1,b%e%get_noris()
+            do i=1,noris 
                 call b%ref_imgs(1,i)%write(SYMPROJSTK, i)
             enddo
             call binwrite_oritab(SYMPROJTAB, b%e, [1,noris])

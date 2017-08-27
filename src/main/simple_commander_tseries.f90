@@ -39,7 +39,7 @@ contains
         character(len=STDLEN), allocatable :: filenames(:)
         character(len=STDLEN)              :: outfname
         integer      :: ldim(3), nframes, frame_from, frame_to, numlen, cnt
-        integer      :: iframe, jframe, nfiles
+        integer      :: iframe, jframe, nfiles, endit
         type(image)  :: frame_img
         p = params(cline) ! parameters generated
         if( cline%defined('filetab') )then
@@ -68,7 +68,9 @@ contains
             stop 'need nframesgrp integer input = nr of frames to average; &
             &simple_commander_imgproc :: exec_tseries_extract'
         endif
-        do iframe=1,nfiles - p%nframesgrp + 1
+        endit = nfiles - p%nframesgrp + 1
+        do iframe=1,endit
+            call progress(iframe, endit)
             if( cline%defined('fbody') )then
                 outfname = 'tseries_frames'//int2str_pad(iframe,numlen)//p%ext
             else

@@ -426,7 +426,7 @@ contains
                 ivol = pairs(ipair,1)
                 jvol = pairs(ipair,2)
                 call read_and_prep_vols( ivol, jvol )
-                o = volpft_srch_minimize()
+                o = volpft_srch_minimize_eul()
                 corrs(ipair) = o%get('corr')
             end do
             DebugPrint   'did set this number of similarities: ', cnt
@@ -458,7 +458,7 @@ contains
                     cnt = cnt + 1
                     call progress(cnt, npairs)
                     call read_and_prep_vols( ivol, jvol )
-                    o = volpft_srch_minimize()
+                    o = volpft_srch_minimize_eul()
                     corrmat(ivol,jvol) = o%get('corr')
                     corrmat(jvol,ivol) = corrmat(ivol,jvol)
                     if( corrmat(ivol,jvol) > corr_max ) corr_max = corrmat(ivol,jvol)
@@ -517,7 +517,7 @@ contains
                 call vol2%clip_inplace([box_sc,box_sc,box_sc])
                 call vol1%set_smpd(smpd_sc)
                 call vol2%set_smpd(smpd_sc)
-                call volpft_srch_init(vol1, vol2, p%hp, p%lp)
+                call volpft_srch_init(vol1, vol2, p%hp, p%lp, 0.)
             end subroutine read_and_prep_vols
 
     end subroutine exec_volume_smat
