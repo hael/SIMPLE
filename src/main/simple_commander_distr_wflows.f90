@@ -1,6 +1,6 @@
 ! concrete commander: distributed workflows
 module simple_commander_distr_wflows
-use simple_defs
+use simple_rnd,            only: seed_rnd
 use simple_cmdline,        only: cmdline
 use simple_chash,          only: chash
 use simple_qsys_env,       only: qsys_env
@@ -11,6 +11,7 @@ use simple_commander_distr ! use all in there
 use simple_qsys_funs       ! use all in there
 use simple_syslib          ! use all in there
 use simple_binoris_io      ! use all in there
+use simple_defs            ! use all in there
 implicit none
 
 public :: unblur_ctffind_distr_commander
@@ -112,6 +113,8 @@ contains
         type(qsys_env) :: qenv
         type(params)   :: p_master
         type(chash)    :: job_descr
+        ! seed the random number generator
+        call seed_rnd
         ! output command line executed
         write(*,'(a)') '>>> COMMAND LINE EXECUTED'
         write(*,*) trim(cmdline_glob)
@@ -152,6 +155,8 @@ contains
         type(qsys_env) :: qenv
         type(params)   :: p_master
         type(chash)    :: job_descr
+        ! seed the random number generator
+        call seed_rnd
         ! output command line executed
         write(*,'(a)') '>>> COMMAND LINE EXECUTED'
         write(*,*) trim(cmdline_glob)
@@ -197,11 +202,13 @@ contains
         character(len=KEYLEN)    :: str
         type(chash)              :: job_descr
         type(chash), allocatable :: part_params(:)
+        call cline%set('prg', 'unblur')
+        ! seed the random number generator
+        call seed_rnd
         ! output command line executed
         write(*,'(a)') '>>> COMMAND LINE EXECUTED'
         write(*,*) trim(cmdline_glob)
         ! make master parameters
-        call cline%set('prg', 'unblur')
         p_master = params(cline, checkdistr=.false.)
         if( cline%defined('tomoseries') )then
             call read_filetable(p_master%tomoseries, tomonames)
@@ -253,6 +260,8 @@ contains
         type(params)                   :: p_master
         type(chash)                    :: job_descr
         type(qsys_env)                 :: qenv
+        ! seed the random number generator
+        call seed_rnd
         ! output command line executed
         write(*,'(a)') '>>> COMMAND LINE EXECUTED'
         write(*,*) trim(cmdline_glob)
@@ -289,6 +298,8 @@ contains
         type(qsys_env) :: qenv
         type(params)   :: p_master
         type(chash)    :: job_descr
+        ! seed the random number generator
+        call seed_rnd
         ! output command line executed
         write(*,'(a)') '>>> COMMAND LINE EXECUTED'
         write(*,*) trim(cmdline_glob)
@@ -319,6 +330,8 @@ contains
         type(qsys_env)        :: qenv
         type(params)          :: p_master
         type(chash)           :: job_descr
+        ! seed the random number generator
+        call seed_rnd
         ! output command line executed
         write(*,'(a)') '>>> COMMAND LINE EXECUTED'
         write(*,*) trim(cmdline_glob)
@@ -382,6 +395,8 @@ contains
         integer               :: iter, i
         type(chash)           :: job_descr
         real                  :: frac_srch_space
+        ! seed the random number generator
+        call seed_rnd
         ! output command line executed
         write(*,'(a)') '>>> COMMAND LINE EXECUTED'
         write(*,*) trim(cmdline_glob)
@@ -520,6 +535,8 @@ contains
         type(chash)                        :: job_descr
         type(oris)                         :: os
         integer :: ipart, numlen, nl, ishift, nparts, npart_params
+                ! seed the random number generator
+        call seed_rnd
         ! output command line executed
         write(*,'(a)') '>>> COMMAND LINE EXECUTED'
         write(*,*) trim(cmdline_glob)
@@ -645,11 +662,13 @@ contains
         type(params)   :: p_master
         type(chash)    :: job_descr
         integer        :: nptcls
+                ! seed the random number generator
+        call seed_rnd
         ! output command line executed
         write(*,'(a)') '>>> COMMAND LINE EXECUTED'
         write(*,*) trim(cmdline_glob)
         ! make master parameters
-        p_master        = params(cline, checkdistr=.false.)
+        p_master = params(cline, checkdistr=.false.)
         nptcls          = p_master%nptcls
         p_master%nptcls = (p_master%nptcls*(p_master%nptcls - 1))/2
         call split_pairs_in_parts(nptcls, p_master%nparts)
@@ -684,6 +703,8 @@ contains
         type(params)          :: p_master
         character(len=STDLEN) :: vol
         type(chash)           :: job_descr
+        ! seed the random number generator
+        call seed_rnd
         ! output command line executed
         write(*,'(a)') '>>> COMMAND LINE EXECUTED'
         write(*,*) trim(cmdline_glob)
@@ -761,6 +782,8 @@ contains
         real                  :: frac_srch_space, corr, corr_prev
         integer               :: s, state, iter, i
         logical               :: vol_defined
+        ! seed the random number generator
+        call seed_rnd
         ! output command line executed
         write(*,'(a)') '>>> COMMAND LINE EXECUTED'
         write(*,*) trim(cmdline_glob)
@@ -1072,6 +1095,8 @@ contains
         real                  :: frac_srch_space
         integer               :: s, state, iter
         logical               :: vol_defined
+        ! seed the random number generator
+        call seed_rnd
         ! output command line executed
         write(*,'(a)') '>>> COMMAND LINE EXECUTED'
         write(*,*) trim(cmdline_glob)
@@ -1258,6 +1283,8 @@ contains
         type(params)          :: p_master
         character(len=STDLEN) :: volassemble_output
         type(chash)           :: job_descr
+        ! seed the random number generator
+        call seed_rnd
         ! output command line executed
         write(*,'(a)') '>>> COMMAND LINE EXECUTED'
         write(*,*) trim(cmdline_glob)
@@ -1299,6 +1326,8 @@ contains
         real,        allocatable      :: boxdata(:,:)
         type(chash), allocatable      :: part_params(:)
         integer :: ndatlines, numlen, alloc_stat, j, orig_box, ipart
+        ! seed the random number generator
+        call seed_rnd
         ! output command line executed
         write(*,'(a)') '>>> COMMAND LINE EXECUTED'
         write(*,*) trim(cmdline_glob)
@@ -1389,11 +1418,13 @@ contains
         character(len=32), parameter :: SYMSHTAB    = 'sym_3dshift.txt'     !< volume 3D shift
         character(len=32), parameter :: SYMPROJSTK  = 'sym_projs.mrc'       !< volume reference projections
         character(len=32), parameter :: SYMPROJTAB  = 'sym_projs.txt'       !< volume reference projections doc
+        ! seed the random number generator
+        call seed_rnd
         ! output command line executed
         write(*,'(a)') '>>> COMMAND LINE EXECUTED'
         write(*,*) trim(cmdline_glob)
         ! make master parameters
-        p_master          = params(cline, checkdistr=.false.)
+        p_master = params(cline, checkdistr=.false.)
         comlin_srch_nproj = comlin_srch_get_nproj()
         p_master%nptcls   = comlin_srch_nproj
         if( p_master%nparts > p_master%nptcls )then
@@ -1485,11 +1516,13 @@ contains
         type(chash)              :: job_descr
         type(chash), allocatable :: part_params(:)
         integer :: ipart
+        ! seed the random number generator
+        call seed_rnd
         ! output command line executed
         write(*,'(a)') '>>> COMMAND LINE EXECUTED'
         write(*,*) trim(cmdline_glob)
         ! make master parameters
-        p_master = params(cline)
+        p_master = params(cline, checkdistr=.false.)
         ! prepare part-dependent parameters
         allocate(part_params(p_master%nparts))
         do ipart=1,p_master%nparts

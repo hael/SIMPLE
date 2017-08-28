@@ -228,7 +228,7 @@ type :: params
     integer :: nvalid=0
     integer :: nvars=30
     integer :: nvox=0              !< # voxels{0}
-    integer :: offset=7            !< pixels offset{7}
+    integer :: offset=10           !< pixels offset{10}
     integer :: part=1
     integer :: pcasz=0
     integer :: ppca=0

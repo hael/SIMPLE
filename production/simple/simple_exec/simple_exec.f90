@@ -1511,21 +1511,28 @@ select case(prg)
         !
         ! set optional keys
         keys_optional(1)  = 'vol1'
-        keys_optional(2)  = 'nthr'
-        keys_optional(3)  = 'guinier'
-        keys_optional(4)  = 'smpd'
-        keys_optional(5)  = 'hp'
-        keys_optional(6)  = 'lp'
-        keys_optional(7)  = 'neg'
-        keys_optional(8)  = 'snr'
-        keys_optional(9)  = 'mirr'
-        keys_optional(10) = 'outvol'
-        keys_optional(11) = 'vollist'
-        keys_optional(12) = 'outfile'
+        keys_optional(2) = 'nthr'
+        keys_optional(3) = 'guinier'
+        keys_optional(4) = 'smpd'
+        keys_optional(5) = 'hp'
+        keys_optional(6) = 'lp'
+        keys_optional(7) = 'msk'
+        keys_optional(8) = 'neg'
+        keys_optional(9) = 'snr'
+        keys_optional(10) = 'mirr'
+        keys_optional(11) = 'bfac'
+        keys_optional(12) = 'e1'
+        keys_optional(13) = 'e2'
+        keys_optional(14) = 'e3'
+        keys_optional(15) = 'xsh'
+        keys_optional(16) = 'ysh'
+        keys_optional(17) = 'zsh'
+        keys_optional(18) = 'outvol'
+        keys_optional(19) = 'vollist'
+        keys_optional(20) = 'outfile'
         ! parse command line
         if( describe ) call print_doc_volops
-        call cline%parse(keys_optional=keys_optional(:12))
-        !
+        call cline%parse(keys_optional=keys_optional(:20))
         if( .not.cline%defined('vol1') .and. .not.cline%defined('vollist') )&
             &stop 'Input volume required!'
         ! execute

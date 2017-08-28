@@ -4839,7 +4839,6 @@ contains
     !>  \brief  Taper edges of image so that there are no sharp discontinuities in real space
     !!          This is a re-implementation of the MRC program taperedgek.for (Richard Henderson, 1987)
     !!          I stole it from CTFFIND4 (thanks Alexis for the beautiful re-implementation)
-
     subroutine taper_edges(self)
         class(image), intent(inout) :: self
         real, allocatable  :: avg_curr_edge_start(:,:)
