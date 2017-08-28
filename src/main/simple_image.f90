@@ -539,16 +539,21 @@ contains
     !! \param self_out output image object
     !! \param noutside  num window pixels outside image
     !!
-    subroutine window_slim( self_in, coord, box, self_out, noutside )
-        class(image),      intent(in)    :: self_in
-        integer,           intent(in)    :: coord(2), box !< boxwidth filter size
-        class(image),      intent(inout) :: self_out
-        integer, optional, intent(inout) :: noutside
+    subroutine window_slim( self_in, coord, box, self_out, outside )
+        class(image), intent(in)    :: self_in
+        integer,      intent(in)    :: coord(2), box !< boxwidth filter size
+        class(image), intent(inout) :: self_out
+        logical,      intent(out)   :: outside
         integer :: fromc(2), toc(2)
         fromc = coord + 1         ! compensate for the c-range that starts at 0
         toc   = fromc + (box - 1) ! the lower left corner is 1,1
         self_out%rmat = 0.
-        self_out%rmat(1:box,1:box,1) = self_in%rmat(fromc(1):toc(1),fromc(2):toc(2),1)
+        outside = .false.
+        if( fromc(1) < 1 .or. fromc(2) < 1 .or. toc(1) > self_in%ldim(1) .or. toc(2) > self_in%ldim(2) )then
+            outside = .true.
+        else
+            self_out%rmat(1:box,1:box,1) = self_in%rmat(fromc(1):toc(1),fromc(2):toc(2),1)
+        endif
     end subroutine window_slim
 
     !>  \brief win2arr extracts a small window into an array (circular indexing)

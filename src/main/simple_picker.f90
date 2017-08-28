@@ -136,6 +136,7 @@ contains
         integer :: xind, yind, alloc_stat, funit, iref, i, loc(1), ind
         integer, allocatable :: labels(:), target_positions(:,:)
         real,    allocatable :: target_corrs(:), spec(:)
+        logical :: outside
         write(*,'(a)') '>>> EXTRACTING PEAKS & BACKGROUND'
         ntargets = 0
         do xind=0,nx,PICKER_OFFSET
@@ -159,7 +160,7 @@ contains
             do yind=0,ny,PICKER_OFFSET
                 ntargets = ntargets + 1
                 target_positions(ntargets,:) = [xind,yind]
-                call mic_shrunken%window_slim([xind,yind], ldim_refs(1), ptcl_target)
+                call mic_shrunken%window_slim([xind,yind], ldim_refs(1), ptcl_target, outside)
                 !$omp parallel do schedule(static) default(shared) private(iref) proc_bind(close)
                 do iref=1,nrefs
                     corrs(iref) = refs(iref)%real_corr_prenorm(ptcl_target, sxx(iref))
@@ -196,7 +197,7 @@ contains
                     ! this is a box with signal
                 else
                     ! this is a background candidate
-                    call mic_shrunken%window_slim([xind,yind], ldim_refs(1), ptcl_target)
+                    call mic_shrunken%window_slim([xind,yind], ldim_refs(1), ptcl_target, outside)
                     call ptcl_target%fwd_ft
                     spec = ptcl_target%spectrum('power')
                     specscores(xind,yind) = sum(spec)
@@ -281,6 +282,7 @@ contains
     subroutine refine_positions
         integer :: ipeak, xrange(2), yrange(2), xind, yind, ref
         real    :: corr, prev_corr, target_corr
+        logical :: outside
         write(*,'(a)') '>>> REFINING POSITIONS'
         ! bring back coordinates to refinement sampling
         allocate( peak_positions_refined(npeaks,2), source=nint(PICKER_SHRINK/PICKER_SHRINK_REFINE)*peak_positions)
@@ -297,7 +299,7 @@ contains
                 corr = -1
                 do xind=xrange(1),xrange(2)
                     do yind=yrange(1),yrange(2)
-                        call mic_shrunken_refine%window_slim([xind,yind], ldim_refs_refine(1), ptcl_target)
+                        call mic_shrunken_refine%window_slim([xind,yind], ldim_refs_refine(1), ptcl_target, outside)
                         target_corr = refs_refine(ref)%real_corr_prenorm(ptcl_target, sxx_refine(ref))
                         if( target_corr > corr )then
                             peak_positions_refined(ipeak,:) = [xind,yind]
@@ -327,6 +329,7 @@ contains
         integer :: nsig, nnoise, ipeak, xind, yind, k, n
         integer, parameter :: NMEANS=10
         real    :: means(NMEANS), means_bin(2)
+        logical :: outside
         n = count(selected_peak_positions)
         allocate(pscores(n))
         nsig = 0
@@ -334,7 +337,8 @@ contains
         do ipeak=1,npeaks
             if( selected_peak_positions(ipeak) )then
                 nsig = nsig + 1      
-                call mic_shrunken_refine%window_slim(peak_positions_refined(ipeak,:), ldim_refs_refine(1), ptcl_target)
+                call mic_shrunken_refine%window_slim(peak_positions_refined(ipeak,:),&
+                    &ldim_refs_refine(1), ptcl_target, outside)
                 call ptcl_target%fwd_ft
                 spec = ptcl_target%spectrum('power')
                 pscores(nsig) = sum(spec)

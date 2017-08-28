@@ -107,6 +107,7 @@ contains
     subroutine write_tracked_series( fbody )
     character(len=*), intent(in) :: fbody
         integer :: funit, io_stat, iframe, xind, yind, i
+        logical :: outside
         if( .not. fopen(funit, status='REPLACE', action='WRITE', file=trim(fbody)//'.box',iostat=io_stat))&
             &call fileio_errmsg("tseries tracker ; write_tracked_series ", io_stat)
         do iframe=1,nframes
@@ -114,7 +115,7 @@ contains
             yind = particle_locations(iframe,2)
             write(funit,'(I7,I7,I7,I7,I7)') xind, yind, box, box, -3
             call frame_img%read(framenames(iframe),1)
-            call frame_img%window_slim([xind,yind,1], box, reference)
+            call frame_img%window_slim([xind,yind,1], box, reference, outside)
             if( l_neg ) call reference%neg()
             call reference%norm()
             call reference%write(trim(fbody)//'.mrc', iframe)
@@ -128,8 +129,9 @@ contains
 
     subroutine update_reference( iframe, pos )
         integer, intent(in) :: iframe, pos(2)
-        real :: xyz(3)
-        call frame_img%window_slim(pos, box, tmp_img)
+        real    :: xyz(3)
+        logical :: outside
+        call frame_img%window_slim(pos, box, tmp_img, outside)
         call tmp_img%prenorm4real_corr(sxx)
         if( iframe == 1 )then
             reference = tmp_img
@@ -146,16 +148,18 @@ contains
     subroutine update_background_images( iframe, pos )
         integer, intent(in) :: iframe, pos(2)
         integer :: neigh(NNN,2), i
+        logical :: outside
         call identify_neighbours
         do i=1,NNN
-            call frame_img%window_slim(neigh(i,:), box, diff_img)
-            if( l_neg ) call diff_img%neg()
-            call diff_img%norm()
-            call diff_img%subtr(neigh_imgs_mean(i))
-            call diff_img%div(sumw)
-            call neigh_imgs_mean(i)%add(diff_img)
+            call frame_img%window_slim(neigh(i,:), box, diff_img, outside)
+            if( .not. outside )then
+                if( l_neg ) call diff_img%neg()
+                call diff_img%norm()
+                call diff_img%subtr(neigh_imgs_mean(i))
+                call diff_img%div(sumw)
+                call neigh_imgs_mean(i)%add(diff_img)
+            endif
         end do
-        call neigh_imgs_mean(1)%write('nn1stk.mrc', iframe)
 
         contains
 
@@ -201,6 +205,7 @@ contains
         integer, intent(out) :: pos_refined(2)
         integer     :: xind, yind, xrange(2), yrange(2)
         real        :: corr, target_corr
+        logical     :: outside
         ! set srch range
         xrange(1) = max(0,  pos(1) - offset)
         xrange(2) = min(nx, pos(1) + offset)
@@ -210,7 +215,7 @@ contains
         corr = -1
         do xind=xrange(1),xrange(2)
             do yind=yrange(1),yrange(2)
-                call frame_img%window_slim([xind,yind,1], box, ptcl_target)
+                call frame_img%window_slim([xind,yind,1], box, ptcl_target, outside)
                 target_corr = reference%real_corr_prenorm(ptcl_target, sxx)
                 if( target_corr > corr )then
                     pos_refined = [xind,yind]
