@@ -1080,7 +1080,7 @@ contains
                 character(len=STDLEN) :: filenam, nam
                 integer :: nl, fnr, i, io_stat
                 filenam = cline%get_carg('vollist')
-                nl = nlines(filenam)
+                nl      = nlines(filenam)
                 if(.not.fopen(fnr, file=filenam, iostat=io_stat))&
                     call fileio_errmsg("params ; read_vols error opening "//trim(filenam), io_stat)
                 do i=1,nl

@@ -1509,21 +1509,25 @@ select case(prg)
         ! <volops/begin>provides standard single-particle image processing routines that are applied to MRC or SPIDER volumes
         ! <volops/end>
         !
-        ! set required keys
-        keys_required(1) = 'vol1'
         ! set optional keys
-        keys_optional(1) = 'nthr'
-        keys_optional(2) = 'guinier'
-        keys_optional(3) = 'smpd'
-        keys_optional(4) = 'hp'
-        keys_optional(5) = 'lp'
-        keys_optional(6) = 'neg'
-        keys_optional(7) = 'snr'
-        keys_optional(8) = 'mirr'
-        keys_optional(9) = 'outvol'
+        keys_optional(1)  = 'vol1'
+        keys_optional(2)  = 'nthr'
+        keys_optional(3)  = 'guinier'
+        keys_optional(4)  = 'smpd'
+        keys_optional(5)  = 'hp'
+        keys_optional(6)  = 'lp'
+        keys_optional(7)  = 'neg'
+        keys_optional(8)  = 'snr'
+        keys_optional(9)  = 'mirr'
+        keys_optional(10) = 'outvol'
+        keys_optional(11) = 'vollist'
+        keys_optional(12) = 'outfile'
         ! parse command line
         if( describe ) call print_doc_volops
-        call cline%parse(keys_required(:1), keys_optional(:9))
+        call cline%parse(keys_optional=keys_optional(:12))
+        !
+        if( .not.cline%defined('vol1') .and. .not.cline%defined('vollist') )&
+            &stop 'Input volume required!'
         ! execute
         call xvolops%execute(cline)
     case( 'volume_smat' )

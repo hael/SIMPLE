@@ -326,40 +326,58 @@ contains
     !! \param cline commandline
     !!
     subroutine exec_volops( self, cline )
+        use simple_fileio
         class(volops_commander), intent(inout) :: self
         class(cmdline),          intent(inout) :: cline
         type(params) :: p
         type(build)  :: b
-        logical      :: here
+        real, allocatable :: serialvol(:)
+        integer           :: i, nvols, funit, iostat, npix
+        logical           :: here, fileop
         p = params(cline,checkdistr=.false.)        ! constants & derived constants produced, mode=2
         call b%build_general_tbox(p, cline)         ! general objects built
         call b%vol%new([p%box,p%box,p%box], p%smpd) ! reallocate vol (boxmatch issue)
-        inquire(FILE=p%vols(1), EXIST=here)
-        if( here )then
-            call b%vol%read(p%vols(1))
+        if( .not.cline%defined('vollist') )then
+            inquire(FILE=p%vols(1), EXIST=here)
+            if( here )then
+                call b%vol%read(p%vols(1))
+            else
+                stop 'vol1 does not exists in cwd'
+            endif
+            if( p%guinier .eq. 'yes' )then
+                if( .not. cline%defined('smpd') ) stop 'need smpd (sampling distance) input for Guinier plot'
+                if( .not. cline%defined('hp')   ) stop 'need hp (high-pass limit) input for Guinier plot'
+                if( .not. cline%defined('lp')   ) stop 'need lp (low-pass limit) input for Guinier plot'
+                p%bfac = b%vol%guinier_bfac(p%hp, p%lp)
+                write(*,'(A,1X,F8.2)') '>>> B-FACTOR DETERMINED TO:', p%bfac
+            else
+                if( cline%defined('neg')  )then
+                    call b%vol%neg()
+                end if
+                if( cline%defined('snr') )then
+                    call b%vol%add_gauran(p%snr)
+                end if
+                if( cline%defined('mirr') )then
+                    call b%vol%mirror(p%mirr)
+                end if
+                if( cline%defined('bfac') )then
+                    call b%vol%apply_bfac(p%bfac)
+                end if
+                call b%vol%write(p%outvol, del_if_exists=.true.)
+            endif
         else
-            stop 'vol1 does not exists in cwd'
-        endif
-        if( p%guinier .eq. 'yes' )then
-            if( .not. cline%defined('smpd') ) stop 'need smpd (sampling distance) input for Guinier plot'
-            if( .not. cline%defined('hp')   ) stop 'need hp (high-pass limit) input for Guinier plot'
-            if( .not. cline%defined('lp')   ) stop 'need lp (low-pass limit) input for Guinier plot'
-            p%bfac = b%vol%guinier_bfac(p%hp, p%lp)
-            write(*,'(A,1X,F8.2)') '>>> B-FACTOR DETERMINED TO:', p%bfac
-        else
-            if( cline%defined('neg')  )then
-                call b%vol%neg()
-            end if
-            if( cline%defined('snr') )then
-                call b%vol%add_gauran(p%snr)
-            end if
-            if( cline%defined('mirr') )then
-                call b%vol%mirror(p%mirr)
-            end if
-            if( cline%defined('bfac') )then
-                call b%vol%apply_bfac(p%bfac)
-            end if
-            call b%vol%write(p%outvol, del_if_exists=.true.)
+            ! for serialization of multiple volumes
+            fileop = fopen(funit, p%outfile, status='replace', action='write', access='sequential')
+            nvols  = nlines(cline%get_carg('vollist'))
+            npix   = b%vol%get_npix(p%msk)
+            do i = 1, nvols
+                call progress(i, nvols)
+                call b%vol%read(p%vols(i))
+                call b%vol%serialize( serialvol, p%msk )
+                write(funit, '(*(F8.3))')serialvol
+                deallocate(serialvol)
+            enddo
+            fileop = fclose(funit,iostat)
         endif
         ! end gracefully
         call simple_end('**** SIMPLE_VOLOPS NORMAL STOP ****')
