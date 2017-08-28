@@ -1,7 +1,5 @@
 ! time series tracker intended for movies of nanoparticles spinning in solution
 module simple_tseries_tracker
-!$ use omp_lib
-!$ use omp_lib_kinds
 use simple_defs     ! use all in there
 use simple_syslib   ! use all in there
 use simple_fileio   ! use all in there
@@ -19,7 +17,7 @@ real,                  parameter   :: EPS=0.1
 logical,               parameter   :: DOPRINT=.true.
 integer,               parameter   :: CENRATE=15, NNN=8
 type(image)           :: frame_img, reference, tmp_img, ptcl_target
-type(image)           :: neigh_imgs_mean(NNN), diff_imgs(NNN)
+type(image)           :: neigh_imgs_mean(NNN), diff_img
 integer               :: ldim(3), nframes, box, nx, ny, offset
 real                  :: smpd, sxx, lp, cenlp, sumw
 character(len=3)      :: neg
@@ -69,9 +67,9 @@ contains
         call tmp_img%new([box,box,1], smpd)
         call reference%new([box,box,1], smpd)
         call ptcl_target%new([box,box,1], smpd)
+        call diff_img%new([box,box,1], smpd)
         do i=1,NNN
             call neigh_imgs_mean(i)%new([box,box,1], smpd)
-            call diff_imgs(i)%new([box,box,1], smpd)
         end do
         particle_locations(:,1) = boxcoord(1)
         particle_locations(:,2) = boxcoord(2)
@@ -149,16 +147,14 @@ contains
         integer, intent(in) :: iframe, pos(2)
         integer :: neigh(NNN,2), i
         call identify_neighbours
-        !$omp parallel do schedule(static) default(shared) private(i) proc_bind(close)
         do i=1,NNN
-            call frame_img%window_slim(neigh(i,:), box, diff_imgs(i))
-            if( l_neg ) call diff_imgs(i)%neg()
-            call diff_imgs(i)%norm()
-            call diff_imgs(i)%subtr(neigh_imgs_mean(i))
-            call diff_imgs(i)%div(sumw)
-            call neigh_imgs_mean(i)%add(diff_imgs(i))
+            call frame_img%window_slim(neigh(i,:), box, diff_img)
+            if( l_neg ) call diff_img%neg()
+            call diff_img%norm()
+            call diff_img%subtr(neigh_imgs_mean(i))
+            call diff_img%div(sumw)
+            call neigh_imgs_mean(i)%add(diff_img)
         end do
-        !$omp end parallel do
         call neigh_imgs_mean(1)%write('nn1stk.mrc', iframe)
 
         contains
