@@ -85,10 +85,10 @@ contains
         call update_frame(1)
         pos = particle_locations(1,:)
         call update_reference(1, pos)
+        sumw = 1.0
         call update_background_images(1, pos)
         ! track
         write(*,'(a)') ">>> TRACKING PARTICLE"
-        sumw = 1.0
         do iframe=2,nframes
             sumw = sumw + 1.0
             call progress(iframe,nframes)

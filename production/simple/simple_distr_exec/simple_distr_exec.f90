@@ -694,14 +694,14 @@ select case(prg)
         keys_required(4) = 'boxfile'
         keys_required(5) = 'ncunits'
         ! set optional keys
-        keys_optional(1) = 'lp'
-        keys_optional(2) = 'offset'
-        keys_optional(3) = 'cenlp'
+        keys_optional(1) = 'nthr'
+        keys_optional(2) = 'lp'
+        keys_optional(3) = 'offset'
+        keys_optional(4) = 'cenlp'
         ! parse command line
         if( describe ) call print_doc_tseries_track
-        call cline%parse(keys_required(:5), keys_optional(:2))
+        call cline%parse(keys_required(:5), keys_optional(:4))
         ! set defaults
-        call cline%set('nthr', 1.0)
         if( .not. cline%defined('neg')   ) call cline%set('neg', 'yes')
         if( .not. cline%defined('lp')    ) call cline%set('lp',    2.0)
         if( .not. cline%defined('cenlp') ) call cline%set('cenlp', 5.0)
