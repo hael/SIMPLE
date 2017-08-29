@@ -170,6 +170,7 @@ contains
         call self%htab%set('state', 0.)
         if( self%isthere('corr') )     call self%htab%set('corr',     -1.)
         if( self%isthere('specscore') )call self%htab%set('specscore', 0.)
+        if( self%isthere('eo') )       call self%htab%set('eo', -1.)
     end subroutine reject
 
     !>  \brief  is a polymorphic assigner

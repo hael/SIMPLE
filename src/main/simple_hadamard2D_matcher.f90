@@ -39,7 +39,8 @@ contains
         integer,        intent(in)    :: which_iter
         logical,        intent(inout) :: converged
         logical, allocatable :: ptcl_mask(:)
-        integer :: iptcl
+        integer, allocatable :: pops(:)
+        integer :: iptcl, icls
         real    :: corr_thresh, frac_srch_space, skewness, extr_thresh
 
         ! PREP REFERENCES
@@ -161,6 +162,17 @@ contains
                 endif
         end select
         DebugPrint ' hadamard2D_matcher; completed alignment'
+
+        ! REMAPPING OF HIGHEST POPULATED CLASSES
+        if( p%l_distr_exec )then
+            ! this is done in cavg_assemble
+        else
+            !pops = b%a%get_pops('class')
+            call b%a%fill_empty_classes()
+            ! do icls = 1, p%ncls
+            !     print *,icls,pops(icls), b%a%get_pop(icls, 'class')
+            ! enddo
+        endif
 
         ! OUTPUT ORIENTATIONS
         call binwrite_oritab(p%outfile, b%a, [p%fromp,p%top])
@@ -478,12 +490,16 @@ contains
         if( .not. p%l_distr_exec ) write(*,'(A)') '>>> BUILDING REFERENCES'
         do icls=1,p%ncls
             call progress(icls, p%ncls)
-            pop = 2
+            pop = 1
             if( p%oritab /= '' ) pop = b%a%get_pop(icls, 'class')
-            if( pop > 1 )then
+            if( pop > 0 )then
                 ! prepare the reference
                 b%img = b%cavgs(icls)
-                call prep2Dref(b, p, icls)
+                if( p%oritab /= '' )then
+                    call prep2Dref(b, p, icls, center=(pop > MINCLSPOPLIM))
+                else
+                    call prep2Dref(b, p, icls)
+                endif
                 ! transfer to polar coordinates
                 call b%img_match%polarize(pftcc, icls, isptcl=.false.)
             endif

@@ -714,13 +714,14 @@ select case(prg)
         keys_required(3) = 'oritab'
         keys_required(4) = 'nparts'
         keys_required(5) = 'ctf'
+        keys_required(6) = 'ncls'
         ! set optional keys
         keys_optional(1) = 'nthr'
         keys_optional(2) = 'which_iter'
         keys_optional(3) = 'refs'
         ! parse command line
         if( describe ) call print_doc_cavgassemble
-        call cline%parse(keys_required(:5), keys_optional(:3))
+        call cline%parse(keys_required(:6), keys_optional(:3))
         ! execute
         call xcavgassemble%execute(cline)
     case( 'check2D_conv' )
