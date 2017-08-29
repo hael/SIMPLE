@@ -61,6 +61,7 @@ type :: oris
     procedure, private :: get_neven
     procedure, private :: get_nodd
     procedure          :: print_
+    procedure          :: print_matrices
     ! SETTERS
     procedure, private :: assign
     generic            :: assignment(=) => assign
@@ -1121,6 +1122,16 @@ contains
         integer,     intent(in)    :: i
         call self%o(i)%print_ori()
     end subroutine print_
+
+    !>  \brief  is for printing
+    subroutine print_matrices( self )
+        class(oris), intent(inout) :: self
+        integer :: i
+        write(*,*) 'ORDER OF ROTATION MATRIX ELEMENTS: (1,1) (1,2) (1,3) (2,1) (2,2) (2,3) (3,1) (3,2) (3,3)'
+        do i=1,self%n
+            call self%o(i)%print_mat()
+        end do
+    end subroutine print_matrices
 
     ! SETTERS
 

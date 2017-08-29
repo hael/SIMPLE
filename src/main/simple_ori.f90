@@ -60,7 +60,8 @@ type :: ori
     procedure, private :: getter_1
     procedure, private :: getter_2
     generic            :: getter => getter_1, getter_2
-    procedure          :: get_shift
+    procedure          :: get_2Dshift
+    procedure          :: get_3Dshift
     procedure          :: hash_size
     procedure          :: hash_keys
     procedure          :: hash_vals
@@ -492,12 +493,21 @@ contains
     end subroutine getter_2
 
     !>  \brief  is a getter
-    function get_shift( self ) result( vec )
+    function get_2Dshift( self ) result( vec )
         class(ori), intent(inout) :: self
         real :: vec(2)
         vec(1) = self%htab%get('x')
         vec(2) = self%htab%get('y')
-    end function get_shift
+    end function get_2Dshift
+
+    !>  \brief  is a getter
+    function get_3Dshift( self ) result( vec )
+        class(ori), intent(inout) :: self
+        real :: vec(3)
+        vec(1) = self%htab%get('x')
+        vec(2) = self%htab%get('y')
+        vec(2) = self%htab%get('z')
+    end function get_3Dshift
 
     !>  \brief  returns size of hash
     function hash_size( self ) result( sz )
@@ -605,10 +615,9 @@ contains
     !<  \brief  to print the rotation matrix
     subroutine print_mat( self )
         class(ori), intent(inout) :: self
-        write(*,*) 'ROTMAT'
-        write(*,*) self%rmat(1,:)
-        write(*,*) self%rmat(2,:)
-        write(*,*) self%rmat(3,:)
+        write(*,*) self%rmat(1,1), self%rmat(1,2), self%rmat(1,3),&
+                  &self%rmat(2,1), self%rmat(2,2), self%rmat(2,3),&
+                  &self%rmat(3,1), self%rmat(3,2), self%rmat(3,3) 
     end subroutine print_mat
 
     !>  \brief prints oris data based on the existence of intent(in) character

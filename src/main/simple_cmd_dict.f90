@@ -12,6 +12,7 @@ type(chash)        :: chdict
 logical            :: initialised=.false.
 
 contains
+
     subroutine init_cmd_dict
         call chdict%new(NMAX)
         call chdict%push('acf',           'calculate autocorrelation function(yes|no){no}')
@@ -72,8 +73,10 @@ contains
         call chdict%push('dir_target',    'put output here')
         call chdict%push('discrete',      'discrete(yes|no){no}')
         call chdict%push('diverse',       'diverse or not flag (yes|no){no}')
+        call chdict%push('dockmode',      'volume docking mode(eul|shift|eulshift|all){eul}')
         call chdict%push('doclist',       'list of oritabs for different states')
         call chdict%push('dopick',        'execute picking step (in preproc){yes}')
+        call chdict%push('doprint',       'whether to print(yes|no){no}')
         call chdict%push('dose_rate',     'dose rate(in e/A2/s)')
         call chdict%push('dynlp',         'automatic resolution limit update(yes|no){yes}')
         call chdict%push('e1',            '1st Euler(in degrees){0}')

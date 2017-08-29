@@ -85,6 +85,7 @@ type(projvol_commander)              :: xprojvol
 type(volaverager_commander)          :: xvolaverager
 type(volops_commander)               :: xvolops
 type(volume_smat_commander)          :: xvolume_smat
+type(dock_volpair_commander)         :: xdock_volpair
 
 ! GENERAL IMAGE PROCESSING PROGRAMS
 type(binarise_commander)             :: xbinarise
@@ -1543,7 +1544,7 @@ select case(prg)
         !==Program volume_smat
         !
         ! <volume_smat/begin>is a program for creating a similarity matrix based on volume2volume
-        ! correlation<olume_smat/end>
+        ! correlation<volume_smat/end>
         !
         ! set required keys
         keys_required(1) = 'vollist'
@@ -1558,6 +1559,27 @@ select case(prg)
         call cline%parse(keys_required(:4), keys_optional(:2))
         ! execute
         call xvolume_smat%execute(cline)
+    case( 'dock_volpair' )
+        !==Program dock_volpair
+        !
+        ! <dock_volpair/begin>is a program for docking a pair of volumes. vol1 is reference and vol2 target.
+        ! <dock_volpair/end>
+        ! set required keys
+        keys_required(1) = 'vol1'
+        keys_required(2) = 'vol2'
+        keys_required(3) = 'smpd'
+        keys_required(4) = 'lp'
+        keys_required(5) = 'msk'
+        ! set optional keys
+        keys_optional(1) = 'hp'
+        keys_optional(2) = 'dockmode'
+        keys_optional(3) = 'outvol'
+        ! parse command line
+        ! if( describe ) call print_doc_volpair
+        call cline%parse(keys_required(:5), keys_optional(:3))
+        ! execute
+        ! execute
+        call xdock_volpair%execute(cline)
         
     ! GENERAL IMAGE PROCESSING PROGRAMS
     
@@ -2242,8 +2264,8 @@ select case(prg)
         !
         ! <tseries_backgr_subtr/begin>is a program for background subtraction in time-series data.
         ! The goal is to subtract the two graphene peaks @ 2.14 A and @ 1.23 A. This is done by 
-        ! band-pass filtering the background image, recommended (and default settings) are hp=3.0
-        ! lp=1.1 and width=2.0. <tseries_backgr_subtr/end> 
+        ! band-pass filtering the background image, recommended (and default settings) are hp=5.0
+        ! lp=1.1 and width=5.0. <tseries_backgr_subtr/end> 
         !
         ! set required keys
         keys_required(1) = 'stk'
@@ -2260,9 +2282,9 @@ select case(prg)
         ! if( describe ) call print_doc_tseries_backgr_subtr
         call cline%parse(keys_required(:3), keys_optional(:6))
         ! set defaults
-        if( .not. cline%defined('hp')    ) call cline%set('hp',    3.0)
+        if( .not. cline%defined('hp')    ) call cline%set('hp',    5.0)
         if( .not. cline%defined('lp')    ) call cline%set('lp',    1.1)
-        if( .not. cline%defined('width') ) call cline%set('width', 2.0)
+        if( .not. cline%defined('width') ) call cline%set('width', 5.0)
         ! execute
         call xtseries_backgr_subtr%execute(cline)
     case( 'tseries_split' )

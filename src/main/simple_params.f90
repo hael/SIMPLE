@@ -109,6 +109,7 @@ type :: params
     character(len=STDLEN) :: dir_select='selected'!< move selected files to here{selected}
     character(len=STDLEN) :: dir_target=''        !< put output here
     character(len=STDLEN) :: dir_ptcls=''
+    character(len=STDLEN) :: dockmode='eul'       !< volume docking mode(eul|shift|eulshift|all){eul}
     character(len=STDLEN) :: doclist=''           !< list of oritabs for different states
     character(len=STDLEN) :: endian='native'      !< endiannesss of files(big|little|native){native}
     character(len=STDLEN) :: exec_abspath=''
@@ -448,6 +449,7 @@ contains
         call check_carg('discrete',       self%discrete)
         call check_carg('diverse',        self%diverse)
         call check_carg('doalign',        self%doalign)
+        call check_carg('dockmode',       self%dockmode)
         call check_carg('dopca',          self%dopca)
         call check_carg('dopick',         self%dopick)
         call check_carg('doprint',        self%doprint)
