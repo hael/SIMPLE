@@ -21,117 +21,118 @@ use simple_commander_tseries
 implicit none
 
 ! SIMULATOR PROGRAMS
-type(noiseimgs_commander)          :: xnoiseimgs
-type(simimgs_commander)            :: xsimimgs
-type(simmovie_commander)           :: xsimmovie
-type(simsubtomo_commander)         :: xsimsubtomo
+type(noiseimgs_commander)            :: xnoiseimgs
+type(simimgs_commander)              :: xsimimgs
+type(simmovie_commander)             :: xsimmovie
+type(simsubtomo_commander)           :: xsimsubtomo
 
 ! PRE-PROCESSING PROGRAMS
-type(preproc_commander)            :: xpreproc
-type(select_frames_commander)      :: xselect_frames
-type(boxconvs_commander)           :: xboxconvs
-type(powerspecs_commander)         :: xpowerspecs
-type(unblur_commander)             :: xunblur
-type(ctffind_commander)            :: xctffind
-type(select_commander)             :: xselect
-type(makepickrefs_commander)       :: xmakepickrefs
-type(pick_commander)               :: xpick
-type(extract_commander)            :: xextract
+type(preproc_commander)              :: xpreproc
+type(select_frames_commander)        :: xselect_frames
+type(boxconvs_commander)             :: xboxconvs
+type(powerspecs_commander)           :: xpowerspecs
+type(unblur_commander)               :: xunblur
+type(ctffind_commander)              :: xctffind
+type(select_commander)               :: xselect
+type(makepickrefs_commander)         :: xmakepickrefs
+type(pick_commander)                 :: xpick
+type(extract_commander)              :: xextract
 
 ! PRIME2D PROGRAMS
-type(makecavgs_commander)          :: xmakecavgs
-type(prime2D_commander)            :: xprime2D
-type(cavgassemble_commander)       :: xcavgassemble
-type(check2D_conv_commander)       :: xcheck2D_conv
-type(rank_cavgs_commander)         :: xrank_cavgs
+type(makecavgs_commander)            :: xmakecavgs
+type(prime2D_commander)              :: xprime2D
+type(cavgassemble_commander)         :: xcavgassemble
+type(check2D_conv_commander)         :: xcheck2D_conv
+type(rank_cavgs_commander)           :: xrank_cavgs
 
 ! PRIME3D PROGRAMS
-type(resrange_commander)           :: xresrange
-type(npeaks_commander)             :: xnpeaks
-type(nspace_commander)             :: xnspace
-type(prime3D_init_commander)       :: xprime3D_init
-type(multiptcl_init_commander)     :: xmultiptcl_init
-type(prime3D_commander)            :: xprime3D
-type(cont3D_commander)             :: xcont3D
-type(check3D_conv_commander)       :: xcheck3D_conv
+type(resrange_commander)             :: xresrange
+type(npeaks_commander)               :: xnpeaks
+type(nspace_commander)               :: xnspace
+type(prime3D_init_commander)         :: xprime3D_init
+type(multiptcl_init_commander)       :: xmultiptcl_init
+type(prime3D_commander)              :: xprime3D
+type(cont3D_commander)               :: xcont3D
+type(check3D_conv_commander)         :: xcheck3D_conv
     
 ! COMMON-LINES PROGRAMS
-type(comlin_smat_commander)        :: xcomlin_smat
-type(symsrch_commander)            :: xsymsrch
+type(comlin_smat_commander)          :: xcomlin_smat
+type(symsrch_commander)              :: xsymsrch
 
 ! SYMMETRY PROGRAMS
-type(sym_aggregate_commander)      :: xsym_aggregate
-type(dsymsrch_commander)           :: xdsymsrch
+type(sym_aggregate_commander)        :: xsym_aggregate
+type(dsymsrch_commander)             :: xdsymsrch
     
 ! MASK PROGRAMS
-type(mask_commander)               :: xmask
-type(automask2D_commander)         :: xautomask2D
+type(mask_commander)                 :: xmask
+type(automask2D_commander)           :: xautomask2D
     
 ! RECONSTRUCTION PROGRAMS
-type(eo_volassemble_commander)     :: xeo_volassemble
-type(recvol_commander)             :: xrecvol
-type(volassemble_commander)        :: xvolassemble
+type(eo_volassemble_commander)       :: xeo_volassemble
+type(recvol_commander)               :: xrecvol
+type(volassemble_commander)          :: xvolassemble
 
 ! CHECKER PROGRAMS    
-type(check_box_commander)          :: xcheck_box
-type(check_nptcls_commander)       :: xcheck_nptcls
-type(iminfo_commander)             :: ximinfo
+type(check_box_commander)            :: xcheck_box
+type(check_nptcls_commander)         :: xcheck_nptcls
+type(iminfo_commander)               :: ximinfo
 
 ! VOLOPS PROGRAMS
-type(fsc_commander)                :: xfsc
-type(cenvol_commander)             :: xcenvol
-type(postproc_vol_commander)       :: xpostproc_vol
-type(projvol_commander)            :: xprojvol
-type(volaverager_commander)        :: xvolaverager
-type(volops_commander)             :: xvolops
-type(volume_smat_commander)        :: xvolume_smat
+type(fsc_commander)                  :: xfsc
+type(cenvol_commander)               :: xcenvol
+type(postproc_vol_commander)         :: xpostproc_vol
+type(projvol_commander)              :: xprojvol
+type(volaverager_commander)          :: xvolaverager
+type(volops_commander)               :: xvolops
+type(volume_smat_commander)          :: xvolume_smat
 
 ! GENERAL IMAGE PROCESSING PROGRAMS
-type(binarise_commander)           :: xbinarise
-type(convert_commander)            :: xconvert
-type(corrcompare_commander)        :: xcorrcompare
-type(ctfops_commander)             :: xctfops
-type(filter_commander)             :: xfilter
-type(image_smat_commander)         :: ximage_smat
-type(norm_commander)               :: xnorm
-type(scale_commander)              :: xscale
-type(stack_commander)              :: xstack
-type(stackops_commander)           :: xstackops
+type(binarise_commander)             :: xbinarise
+type(convert_commander)              :: xconvert
+type(corrcompare_commander)          :: xcorrcompare
+type(ctfops_commander)               :: xctfops
+type(filter_commander)               :: xfilter
+type(image_smat_commander)           :: ximage_smat
+type(norm_commander)                 :: xnorm
+type(scale_commander)                :: xscale
+type(stack_commander)                :: xstack
+type(stackops_commander)             :: xstackops
     
 ! MISCELLANOUS PROGRAMS
-type(cluster_smat_commander)       :: xcluster_smat
-type(masscen_commander)            :: xmasscen
-type(print_cmd_dict_commander)     :: xprint_cmd_dict
-type(print_dose_weights_commander) :: xprint_dose_weights
-type(print_fsc_commander)          :: xprint_fsc
-type(print_magic_boxes_commander)  :: xprint_magic_boxes
-type(res_commander)                :: xres
-type(shift_commander)              :: xshift
+type(cluster_smat_commander)         :: xcluster_smat
+type(masscen_commander)              :: xmasscen
+type(print_cmd_dict_commander)       :: xprint_cmd_dict
+type(print_dose_weights_commander)   :: xprint_dose_weights
+type(print_fsc_commander)            :: xprint_fsc
+type(print_magic_boxes_commander)    :: xprint_magic_boxes
+type(res_commander)                  :: xres
+type(shift_commander)                :: xshift
 
 ! ORIENTATION DATA MANAGEMENT PROGRAMS
-type(cluster_oris_commander)       :: xcluster_oris
-type(makedeftab_commander)         :: xmakedeftab
-type(makeoris_commander)           :: xmakeoris
-type(map2ptcls_commander)          :: xmap2ptcls
-type(orisops_commander)            :: xorisops
-type(oristats_commander)           :: xoristats
-type(rotmats2oris_commander)       :: xrotmats2oris
-type(txt2bin_commander)            :: xtxt2bin
-type(bin2txt_commander)            :: xbin2txt
-type(vizoris_commander)            :: xvizoris
+type(cluster_oris_commander)         :: xcluster_oris
+type(makedeftab_commander)           :: xmakedeftab
+type(makeoris_commander)             :: xmakeoris
+type(map2ptcls_commander)            :: xmap2ptcls
+type(orisops_commander)              :: xorisops
+type(oristats_commander)             :: xoristats
+type(rotmats2oris_commander)         :: xrotmats2oris
+type(txt2bin_commander)              :: xtxt2bin
+type(bin2txt_commander)              :: xbin2txt
+type(vizoris_commander)              :: xvizoris
 
 ! TIME-SERIES ANALYSIS PROGRAMS
-type(tseries_extract_commander)    :: xtseries_extract
-type(tseries_track_commander)      :: xtseries_track
-type(tseries_split_commander)      :: xtseries_split
+type(tseries_extract_commander)      :: xtseries_extract
+type(tseries_track_commander)        :: xtseries_track
+type(tseries_backgr_subtr_commander) :: xtseries_backgr_subtr
+type(tseries_split_commander)        :: xtseries_split
 
 ! PARALLEL PROCESSING PROGRAMS
-type(merge_algndocs_commander)     :: xmerge_algndocs
-type(merge_binalgndocs_commander)  :: xmerge_binalgndocs
-type(merge_nnmat_commander)        :: xmerge_nnmat
-type(merge_similarities_commander) :: xmerge_similarities  
-type(split_pairs_commander)        :: xsplit_pairs
-type(split_commander)              :: xsplit
+type(merge_algndocs_commander)       :: xmerge_algndocs
+type(merge_binalgndocs_commander)    :: xmerge_binalgndocs
+type(merge_nnmat_commander)          :: xmerge_nnmat
+type(merge_similarities_commander)   :: xmerge_similarities  
+type(split_pairs_commander)          :: xsplit_pairs
+type(split_commander)                :: xsplit
 
     
 ! OTHER DECLARATIONS
@@ -1509,21 +1510,32 @@ select case(prg)
         ! <volops/begin>provides standard single-particle image processing routines that are applied to MRC or SPIDER volumes
         ! <volops/end>
         !
-        ! set required keys
-        keys_required(1) = 'vol1'
         ! set optional keys
-        keys_optional(1) = 'nthr'
-        keys_optional(2) = 'guinier'
-        keys_optional(3) = 'smpd'
-        keys_optional(4) = 'hp'
-        keys_optional(5) = 'lp'
-        keys_optional(6) = 'neg'
-        keys_optional(7) = 'snr'
-        keys_optional(8) = 'mirr'
-        keys_optional(9) = 'outvol'
+        keys_optional(1)  = 'vol1'
+        keys_optional(2) = 'nthr'
+        keys_optional(3) = 'guinier'
+        keys_optional(4) = 'smpd'
+        keys_optional(5) = 'hp'
+        keys_optional(6) = 'lp'
+        keys_optional(7) = 'msk'
+        keys_optional(8) = 'neg'
+        keys_optional(9) = 'snr'
+        keys_optional(10) = 'mirr'
+        keys_optional(11) = 'bfac'
+        keys_optional(12) = 'e1'
+        keys_optional(13) = 'e2'
+        keys_optional(14) = 'e3'
+        keys_optional(15) = 'xsh'
+        keys_optional(16) = 'ysh'
+        keys_optional(17) = 'zsh'
+        keys_optional(18) = 'outvol'
+        keys_optional(19) = 'vollist'
+        keys_optional(20) = 'outfile'
         ! parse command line
         if( describe ) call print_doc_volops
-        call cline%parse(keys_required(:1), keys_optional(:9))
+        call cline%parse(keys_optional=keys_optional(:20))
+        if( .not.cline%defined('vol1') .and. .not.cline%defined('vollist') )&
+            &stop 'Input volume required!'
         ! execute
         call xvolops%execute(cline)
     case( 'volume_smat' )
@@ -2223,6 +2235,25 @@ select case(prg)
         if( .not. cline%defined('cenlp') ) call cline%set('cenlp', 5.0)
         ! execute
         call xtseries_track%execute(cline)
+    case('tseries_backgr_subtr')
+        !==Program tseries_backgr_subtr
+        !
+        ! <tseries_backgr_subtr/begin>is a program for background subtraction in time-series data
+        ! <tseries_backgr_subtr/end> 
+        !
+        ! set required keys
+        keys_required(1) = 'stk'
+        keys_required(2) = 'stk_backgr'
+        keys_required(3) = 'smpd'
+        ! set optional keys
+        keys_optional(1) = 'nthr'
+        keys_optional(2) = 'deftab'
+        keys_optional(3) = 'outstk'
+        ! parse command line
+        ! if( describe ) call print_doc_tseries_backgr_subtr
+        call cline%parse(keys_required(:3), keys_optional(:3))
+        ! execute
+        call xtseries_backgr_subtr%execute(cline)
     case( 'tseries_split' )
         !==Program tseries_split
         !

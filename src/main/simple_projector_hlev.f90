@@ -59,18 +59,21 @@ contains
     end function projvol
 
     !>  \brief  rotates a volume by Euler angle o using Fourier gridding
-    function rotvol( vol, o, p ) result( rovol )
-        class(image),     intent(inout) :: vol  !< volume to project
-        class(ori),       intent(inout) :: o    !< orientation
-        class(params),    intent(in)    :: p    !< parameters
+    function rotvol( vol, o, p, shvec ) result( rovol )
+        class(image),   intent(inout) :: vol      !< volume to project
+        class(ori),     intent(inout) :: o        !< orientation
+        class(params),  intent(in)    :: p        !< parameters
+        real, optional, intent(in)    :: shvec(3) !< 3D shift vector
         type(projector)  :: vol_pad
         type(image)      :: rovol_pad, rovol 
         type(kbinterpol) :: kbwin
         integer          :: h,k,l,lims(3,2),logi(3),phys(3),ldim(3),ldim_pd(3)
         real             :: loc(3)
-        kbwin   = kbinterpol(KBWINSZ, KBALPHA)
-        ldim    = vol%get_ldim()
-        ldim_pd = nint(KBALPHA)*ldim
+        logical          :: l_shvec_present
+        kbwin           = kbinterpol(KBWINSZ, KBALPHA)
+        ldim            = vol%get_ldim()
+        ldim_pd         = nint(KBALPHA)*ldim
+        l_shvec_present = present(shvec)
         call vol_pad%new(ldim_pd, p%smpd)
         call rovol_pad%new(ldim_pd, p%smpd)
         call rovol_pad%set_ft(.true.)
@@ -86,7 +89,11 @@ contains
                     logi = [h,k,l]
                     phys = rovol_pad%comp_addr_phys(logi)
                     loc  = matmul(real(logi), o%get_mat())
-                    call rovol_pad%set_fcomp(logi, phys, vol_pad%extr_gridfcomp(loc))
+                    if( l_shvec_present )then
+                        call rovol_pad%set_fcomp(logi, phys, vol_pad%extr_gridfcomp(loc) * rovol_pad%oshift(loc, shvec))
+                    else
+                        call rovol_pad%set_fcomp(logi, phys, vol_pad%extr_gridfcomp(loc))
+                    endif
                 end do 
             end do
         end do

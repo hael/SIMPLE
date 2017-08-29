@@ -19,6 +19,7 @@ public :: volops_commander
 public :: volume_smat_commander
 private
 #include "simple_local_flags.inc"
+
 type, extends(commander_base) :: fsc_commander
   contains
     procedure :: execute      => exec_fsc
@@ -61,7 +62,6 @@ contains
         integer           :: j
         real              :: res_fsc05, res_fsc0143
         real, allocatable :: res(:), corrs(:)
-       
         p = params(cline)
         ! read even/odd pair
         call even%new([p%box,p%box,p%box], p%smpd)
@@ -83,7 +83,7 @@ contains
         call odd%kill
     end subroutine exec_fsc
 
-    !> Program to shift 3D volume ( circular wrapping ) 
+    !> Program to center 3D volume and associated particle document
     subroutine exec_cenvol( self, cline )
         class(cenvol_commander), intent(inout) :: self
         class(cmdline),          intent(inout) :: cline
@@ -184,7 +184,7 @@ contains
         call simple_end('**** SIMPLE_POSTPROC_VOL NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_postproc_vol
 
-    !> exec_projvol build projection from volume
+    !> exec_projvol generate projections from volume
     !! \param cline command line
     !!
     subroutine exec_projvol( self, cline )
@@ -251,8 +251,8 @@ contains
     !! \param cline
     !!
     subroutine exec_volaverager( self, cline )
-    use simple_image, only: image
-    use simple_imgfile,  only: find_ldim_nptcls
+        use simple_image, only: image
+        use simple_imgfile,  only: find_ldim_nptcls
         class(volaverager_commander), intent(inout) :: self
         class(cmdline),               intent(inout) :: cline
         type(params) :: p
@@ -263,7 +263,6 @@ contains
         integer                            :: istate, ivol, nvols, funit_vols, numlen, ifoo, io_stat
         character(len=:), allocatable      :: fname
         character(len=1)                   :: fformat
-       
         p = params(cline) ! parameters generated
         ! read the volnames
         nvols = nlines(p%vollist)
@@ -326,40 +325,73 @@ contains
     !! \param cline commandline
     !!
     subroutine exec_volops( self, cline )
+        use simple_fileio
+        use simple_projector_hlev, only: rotvol
+        use simple_ori,            only: ori
+        use simple_image,          only: image
         class(volops_commander), intent(inout) :: self
         class(cmdline),          intent(inout) :: cline
         type(params) :: p
         type(build)  :: b
-        logical      :: here
+        real, allocatable :: serialvol(:)
+        integer           :: i, nvols, funit, iostat, npix
+        logical           :: here, fileop
+        type(ori)         :: o
+        type(image)       :: vol_copy
+        real              :: shvec(3)
         p = params(cline,checkdistr=.false.)        ! constants & derived constants produced, mode=2
         call b%build_general_tbox(p, cline)         ! general objects built
         call b%vol%new([p%box,p%box,p%box], p%smpd) ! reallocate vol (boxmatch issue)
-        inquire(FILE=p%vols(1), EXIST=here)
-        if( here )then
-            call b%vol%read(p%vols(1))
+        if( .not.cline%defined('vollist') )then
+            inquire(FILE=p%vols(1), EXIST=here)
+            if( here )then
+                call b%vol%read(p%vols(1))
+            else
+                stop 'vol1 does not exists in cwd'
+            endif
+            if( p%guinier .eq. 'yes' )then
+                if( .not. cline%defined('smpd') ) stop 'need smpd (sampling distance) input for Guinier plot'
+                if( .not. cline%defined('hp')   ) stop 'need hp (high-pass limit) input for Guinier plot'
+                if( .not. cline%defined('lp')   ) stop 'need lp (low-pass limit) input for Guinier plot'
+                p%bfac = b%vol%guinier_bfac(p%hp, p%lp)
+                write(*,'(A,1X,F8.2)') '>>> B-FACTOR DETERMINED TO:', p%bfac
+            else
+                if( cline%defined('neg')  )then
+                    call b%vol%neg()
+                end if
+                if( cline%defined('snr') )then
+                    call b%vol%add_gauran(p%snr)
+                end if
+                if( cline%defined('mirr') )then
+                    call b%vol%mirror(p%mirr)
+                end if
+                if( cline%defined('bfac') )then
+                    call b%vol%apply_bfac(p%bfac)
+                end if
+                if( cline%defined('e1') .or. cline%defined('e2') .or. cline%defined('e3') )then
+                    if( .not. cline%defined('smpd') ) stop 'need smpd (sampling distance) input for volume rotation'
+                    if( .not. cline%defined('msk')  ) stop 'need msk (mask radius) input for volume rotation'
+                    call o%new
+                    call o%set_euler([p%e1,p%e2,p%e3])
+                    shvec = [p%xsh,p%ysh,p%zsh]
+                    vol_copy = rotvol(b%vol, o, p, shvec)
+                    b%vol = vol_copy
+                endif
+                call b%vol%write(p%outvol, del_if_exists=.true.)
+            endif
         else
-            stop 'vol1 does not exists in cwd'
-        endif
-        if( p%guinier .eq. 'yes' )then
-            if( .not. cline%defined('smpd') ) stop 'need smpd (sampling distance) input for Guinier plot'
-            if( .not. cline%defined('hp')   ) stop 'need hp (high-pass limit) input for Guinier plot'
-            if( .not. cline%defined('lp')   ) stop 'need lp (low-pass limit) input for Guinier plot'
-            p%bfac = b%vol%guinier_bfac(p%hp, p%lp)
-            write(*,'(A,1X,F8.2)') '>>> B-FACTOR DETERMINED TO:', p%bfac
-        else
-            if( cline%defined('neg')  )then
-                call b%vol%neg()
-            end if
-            if( cline%defined('snr') )then
-                call b%vol%add_gauran(p%snr)
-            end if
-            if( cline%defined('mirr') )then
-                call b%vol%mirror(p%mirr)
-            end if
-            if( cline%defined('bfac') )then
-                call b%vol%apply_bfac(p%bfac)
-            end if
-            call b%vol%write(p%outvol, del_if_exists=.true.)
+            ! for serialization of multiple volumes
+            fileop = fopen(funit, p%outfile, status='replace', action='write', access='sequential')
+            nvols  = nlines(cline%get_carg('vollist'))
+            npix   = b%vol%get_npix(p%msk)
+            do i = 1, nvols
+                call progress(i, nvols)
+                call b%vol%read(p%vols(i))
+                call b%vol%serialize( serialvol, p%msk )
+                write(funit, '(*(F8.3))')serialvol
+                deallocate(serialvol)
+            enddo
+            fileop = fclose(funit,iostat)
         endif
         ! end gracefully
         call simple_end('**** SIMPLE_VOLOPS NORMAL STOP ****')
@@ -369,7 +401,8 @@ contains
     subroutine exec_volume_smat( self, cline )
         use simple_projector, only: projector
         use simple_ori,       only: ori
-        use simple_imgfile,  only: find_ldim_nptcls
+        use simple_imgfile,   only: find_ldim_nptcls
+        use simple_volprep,   only: read_and_prep_vol
         use simple_volpft_srch ! singleton
         class(volume_smat_commander), intent(inout) :: self
         class(cmdline),               intent(inout) :: cline
@@ -399,25 +432,18 @@ contains
             allocate(corrs(p%fromp:p%top), pairs(p%fromp:p%top,2), stat=alloc_stat)
             call alloc_errchk('In: simple_volume_smat, 1', alloc_stat)
             ! read the pairs
-            
             allocate(fname, source='pairs_part'//int2str_pad(p%part,p%numlen)//'.bin')
             call alloc_errchk('In: simple_volume_smat, fname 1', alloc_stat)
-            if( .not. file_exists(fname) )then
-!                write(*,*) 'file: ', fname, 'does not exist.'
- !               write(*,*) 'If all pair_part* are not in cwd, please execute simple_split_pairs to generate the required files'
-                stop 'I/O error; simple_volume_smat'
-            endif
+            if( .not. file_exists(fname) ) stop 'I/O error; simple_volume_smat'
             if(.not.fopen(funit, status='OLD', action='READ', file=fname, access='STREAM', iostat=io_stat))&
                  call fileio_errmsg('volops; vol_smat opening ', io_stat)
-
             DebugPrint   'reading pairs in range: ', p%fromp, p%top
             read(unit=funit,pos=1,iostat=io_stat) pairs(p%fromp:p%top,:)
             ! Check if the read was successful
             if(io_stat/=0) then
                 call fileio_errmsg('**ERROR(simple_volume_smat): I/O error reading file: '//trim(fname), io_stat)
             endif
-            if(.not.fclose(funit, iostat=io_stat))&
-                 call fileio_errmsg('volops; vol_smat closing ', io_stat)
+            if(.not.fclose(funit, iostat=io_stat)) call fileio_errmsg('volops; vol_smat closing ', io_stat)
             deallocate(fname)
             cnt = 0
             do ipair=p%fromp,p%top
@@ -425,7 +451,9 @@ contains
                 call progress(cnt, npairs)
                 ivol = pairs(ipair,1)
                 jvol = pairs(ipair,2)
-                call read_and_prep_vols( ivol, jvol )
+                call read_and_prep_vol( p, vollist(ivol), vol1 )
+                call read_and_prep_vol( p, vollist(jvol), vol2 )
+                call volpft_srch_init(vol1, vol2, p%hp, p%lp, 0.)
                 o = volpft_srch_minimize_eul()
                 corrs(ipair) = o%get('corr')
             end do
@@ -457,7 +485,9 @@ contains
                 do jvol=ivol + 1,nvols
                     cnt = cnt + 1
                     call progress(cnt, npairs)
-                    call read_and_prep_vols( ivol, jvol )
+                    call read_and_prep_vol( p, vollist(ivol), vol1 )
+                    call read_and_prep_vol( p, vollist(jvol), vol2 )
+                    call volpft_srch_init(vol1, vol2, p%hp, p%lp, 0.)
                     o = volpft_srch_minimize_eul()
                     corrmat(ivol,jvol) = o%get('corr')
                     corrmat(jvol,ivol) = corrmat(ivol,jvol)
@@ -492,34 +522,27 @@ contains
         endif
         ! end gracefully
         call simple_end('**** SIMPLE_VOLUME_SMAT NORMAL STOP ****')
-
-        contains
-
-            subroutine read_and_prep_vols( ivol, jvol )
-                use simple_magic_boxes, only: autoscale
-                integer, intent(in) :: ivol, jvol
-                real :: smpd_target
-                call vol1%new(ldim,p%smpd)
-                call vol2%new(ldim,p%smpd)
-                call vol1%read(vollist(ivol))
-                call vol2%read(vollist(jvol))
-                if( p%boxmatch < p%box )then
-                    call vol1%clip_inplace([p%boxmatch,p%boxmatch,p%boxmatch])
-                    call vol2%clip_inplace([p%boxmatch,p%boxmatch,p%boxmatch])
-                endif
-                call vol1%mask(p%msk,'soft')
-                call vol2%mask(p%msk,'soft')
-                call vol1%fwd_ft
-                call vol2%fwd_ft
-                smpd_target = p%lp*LP2SMPDFAC
-                call autoscale(p%boxmatch, p%smpd, smpd_target, box_sc, smpd_sc, scale)
-                call vol1%clip_inplace([box_sc,box_sc,box_sc])
-                call vol2%clip_inplace([box_sc,box_sc,box_sc])
-                call vol1%set_smpd(smpd_sc)
-                call vol2%set_smpd(smpd_sc)
-                call volpft_srch_init(vol1, vol2, p%hp, p%lp, 0.)
-            end subroutine read_and_prep_vols
-
     end subroutine exec_volume_smat
+
+    ! vol1
+    ! vol2
+    ! smpd
+    ! lp
+    ! msk
+
+
+    ! hp
+    subroutine exec_dock_volpair( self, cline )
+        use simple_projector, only: projector
+        class(volume_smat_commander), intent(inout) :: self
+        class(cmdline),               intent(inout) :: cline
+        type(params) :: p
+        type(projector) :: vol1, vol2
+        p = params(cline, .false.) ! constants & derived constants produced
+        call read_and_prep_vol( p, p%vols(1), vol1 )
+        call read_and_prep_vol( p, p%vols(2), vol2 )
+        call volpft_srch_init(vol1, vol2, p%hp, p%lp, 0.)
+
+    end subroutine exec_dock_volpair
 
 end module simple_commander_volops

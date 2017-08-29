@@ -1,10 +1,9 @@
 ! batch-processing manager - functions
 module simple_qsys_funs
-use simple_defs
-use simple_fileio
+use simple_defs     ! use all in there
+use simple_fileio   ! use all in there
 use simple_syslib   ! use all in there
 use simple_strings  ! use all in there
-
 implicit none
 
 interface qsys_watcher
@@ -17,7 +16,7 @@ integer, parameter :: SHORTTIME = 3
 contains
 
     subroutine qsys_cleanup( p )
-        use simple_params,       only: params
+        use simple_params, only: params
         class(params),     intent(in) :: p
         character(len=:), allocatable :: rec_base_str, rho_base_str
         integer, parameter :: NUMLEN_STATE = 2, NUMLEN_ITER = 3

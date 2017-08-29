@@ -7,7 +7,7 @@ use simple_simplex_opt,     only: simplex_opt
 use simple_ori,             only: ori
 implicit none
 
-public :: volpft_srch_init, volpft_srch_minimize_eul
+public :: volpft_srch_init, volpft_srch_minimize_eul, volpft_srch_minimize_shift, volpft_srch_minimize_all
 private
 
 integer, parameter :: NPROJ  = 200

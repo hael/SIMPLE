@@ -188,13 +188,18 @@ contains
         logical               :: srch4symaxis, doautoscale
         ! set cline defaults
         call cline%set('eo', 'no')
+        ! auto-scaling prep
+        doautoscale = (cline%get_carg('autoscale').eq.'yes')
+        ! now, remove autoscale flag from command line, since no scaled partial stacks 
+        ! will be produced (this program used shared-mem paralllelisation of scale)
+        call cline%delete('autoscale')
+        ! delete possibly pre-existing stack_parts
+        call del_files(STKPARTFBODY, p_master%nparts, ext=p_master%ext)
+        call del_files(STKPARTFBODY_SC, p_master%nparts, ext=p_master%ext)
         ! make master parameters
         p_master = params(cline, checkdistr=.false.)
         ! set global state string
         str_state = int2str_pad(STATE,2)
-        ! delete possibly pre-existing stack_parts
-        call del_files(STKPARTFBODY, p_master%nparts, ext=p_master%ext)
-        call del_files(STKPARTFBODY_SC, p_master%nparts, ext=p_master%ext)
         ! decide wether to search for the symmetry axis or put the point-group in from the start
         ! if the point-group is considered known, it is put in from the start
         srch4symaxis = .false.
@@ -206,12 +211,7 @@ contains
                 endif
             endif
         endif
-        ! auto-scaling prep
-        doautoscale = (p_master%autoscale.eq.'yes')
-        ! now, remove autoscale flag from command line, since no scaled partial stacks 
-        ! will be produced (this program used shared-mem paralllelisation of scale)
-        call cline%delete('autoscale')
-        smpd = cline%get_rarg('smpd')
+        smpd_target = p_master%smpd
         if( doautoscale )then
             if( cline%defined('lp') )then
                 smpd_target = p_master%lp*LP2SMPDFAC
@@ -221,8 +221,6 @@ contains
                 smpd_target = LPLIMS(2)*LP2SMPDFAC
             endif
             call scobj%init(p_master, cline, smpd_target, STKSCALEDBODY)
-        else
-            smpd_target = smpd
         endif
         ! prepare command lines from prototype master
         cline_prime3D_snhc   = cline

@@ -150,6 +150,7 @@ type :: params
     character(len=STDLEN) :: stk=''               !< particle stack with all images(ptcls.ext)
     character(len=STDLEN) :: stk2=''              !< 2nd stack(in map2ptcls/select: selected(cavgs).ext)
     character(len=STDLEN) :: stk3=''              !< 3d stack (in map2ptcls/select: (cavgs)2selectfrom.ext)
+    character(len=STDLEN) :: stk_backgr=''        !< stack with image for background subtraction
     character(len=STDLEN) :: tomoseries=''        !< filetable of filetables of tomograms
     character(len=STDLEN) :: unidoc=''            !< unified resources and orientations doc
     character(len=STDLEN) :: vol=''
@@ -228,7 +229,7 @@ type :: params
     integer :: nvalid=0
     integer :: nvars=30
     integer :: nvox=0              !< # voxels{0}
-    integer :: offset=7            !< pixels offset{7}
+    integer :: offset=10           !< pixels offset{10}
     integer :: part=1
     integer :: pcasz=0
     integer :: ppca=0
@@ -540,6 +541,7 @@ contains
         call check_file('stk',            self%stk,  notAllowed='T')
         call check_file('stk2',           self%stk2, notAllowed='T')
         call check_file('stk3',           self%stk3, notAllowed='T')
+        call check_file('stk_backgr',     self%stk_backgr, notAllowed='T')
         call check_file('unidoc',         self%unidoc,  'T')
         call check_file('vollist',        self%vollist, 'T')
         call check_file('voltab',         self%voltab,  'T')
@@ -1080,7 +1082,7 @@ contains
                 character(len=STDLEN) :: filenam, nam
                 integer :: nl, fnr, i, io_stat
                 filenam = cline%get_carg('vollist')
-                nl = nlines(filenam)
+                nl      = nlines(filenam)
                 if(.not.fopen(fnr, file=filenam, iostat=io_stat))&
                     call fileio_errmsg("params ; read_vols error opening "//trim(filenam), io_stat)
                 do i=1,nl
