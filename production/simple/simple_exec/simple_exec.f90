@@ -2239,8 +2239,10 @@ select case(prg)
     case('tseries_backgr_subtr')
         !==Program tseries_backgr_subtr
         !
-        ! <tseries_backgr_subtr/begin>is a program for background subtraction in time-series data
-        ! <tseries_backgr_subtr/end> 
+        ! <tseries_backgr_subtr/begin>is a program for background subtraction in time-series data.
+        ! The goal is to subtract the two graphene peaks @ 2.14 A and @ 1.23 A. This is done by 
+        ! band-pass filtering the background image, recommended (and default settings) are hp=3.0
+        ! lp=1.1 and width=2.0. <tseries_backgr_subtr/end> 
         !
         ! set required keys
         keys_required(1) = 'stk'
@@ -2248,11 +2250,18 @@ select case(prg)
         keys_required(3) = 'smpd'
         ! set optional keys
         keys_optional(1) = 'nthr'
-        keys_optional(2) = 'deftab'
-        keys_optional(3) = 'outstk'
+        keys_optional(2) = 'hp'
+        keys_optional(3) = 'lp'
+        keys_optional(4) = 'width'
+        keys_optional(5) = 'deftab'
+        keys_optional(6) = 'outstk'
         ! parse command line
         ! if( describe ) call print_doc_tseries_backgr_subtr
         call cline%parse(keys_required(:3), keys_optional(:3))
+        ! set defaults
+        if( .not. cline%defined('hp')    ) call cline%set('hp',    3.0)
+        if( .not. cline%defined('lp')    ) call cline%set('lp',    1.1)
+        if( .not. cline%defined('width') ) call cline%set('width', 2.0)
         ! execute
         call xtseries_backgr_subtr%execute(cline)
     case( 'tseries_split' )

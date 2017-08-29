@@ -209,8 +209,15 @@ contains
                     call tfun%apply(img_backgr_wctf, dfx, 'flip')
                 endif
             endif
+            ! fwd ft
+            call b%img%fwd_ft()
+            call img_backgr_wctf%fwd_ft()
+            ! filter background image
+            call img_backgr_wctf%bp(p%hp,p%lp,width=p%width)
             ! subtract background
             call b%img%subtr(img_backgr_wctf)
+            ! bwd ft
+            call b%img%bwd_ft()
             ! normalise
             call b%img%norm()
             ! output corrected image
