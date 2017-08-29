@@ -310,19 +310,22 @@ contains
         class(cmdline),          intent(inout) :: cline
         type(params) :: p
         type(build)  :: b
+        real :: width
         p = params(cline)                   ! parameters generated
         call b%build_general_tbox(p, cline) ! general objects built
+        width = 10.
+        if( cline%defined('width') ) width = p%width
         if( cline%defined('stk') )then
             ! 2D
             if( .not.file_exists(p%stk) )stop 'Cannot find input stack (stk)'
             if( p%phrand .eq. 'no')then
                 ! Band pass
                 if( cline%defined('lp') .and. cline%defined('hp') )then
-                    call bp_imgfile(p%stk, p%outstk, p%smpd, p%hp, p%lp)
+                    call bp_imgfile(p%stk, p%outstk, p%smpd, p%hp, p%lp, width=width)
                 else if( cline%defined('lp') )then
-                    call bp_imgfile(p%stk, p%outstk, p%smpd, 0., p%lp)
+                    call bp_imgfile(p%stk, p%outstk, p%smpd, 0., p%lp, width=width)
                 else if( cline%defined('hp') )then
-                    call bp_imgfile(p%stk, p%outstk, p%smpd, p%hp, 0.)
+                    call bp_imgfile(p%stk, p%outstk, p%smpd, p%hp, 0., width=width)
                 ! real-space
                 else if( cline%defined('real_filter') )then
                     if( .not. cline%defined('winsz') ) stop 'need winsz input for real-space filtering; commander_imgproc :: exec_filter'
@@ -345,11 +348,11 @@ contains
                     call b%vol%apply_bfac(p%bfac)
                 ! Band pass
                 else if( cline%defined('hp') .and. cline%defined('lp') )then
-                    call b%vol%bp(p%hp,p%lp)
+                    call b%vol%bp(p%hp, p%lp, width=width)
                 else if( cline%defined('hp') )then
-                    call b%vol%bp(p%hp,0.)
+                    call b%vol%bp(p%hp, 0., width=width)
                 else if( cline%defined('lp') )then
-                    call b%vol%bp(0.,p%lp)
+                    call b%vol%bp(0., p%lp, width=width)
                 ! real-space
                 else if( cline%defined('real_filter') )then
                     if( .not. cline%defined('winsz') ) stop 'need winsz input for real-space filtering; commander_imgproc :: exec_filter'

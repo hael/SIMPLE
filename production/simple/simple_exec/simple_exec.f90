@@ -1659,9 +1659,10 @@ select case(prg)
         keys_optional(8)  = 'bfac'
         keys_optional(9)  = 'winsz'
         keys_optional(10) = 'real_filter'
+        keys_optional(11) = 'width'
         ! parse command line
         if( describe ) call print_doc_filter
-        call cline%parse(keys_required(:1), keys_optional(:10))
+        call cline%parse(keys_required(:1), keys_optional(:11))
         ! execute
         call xfilter%execute(cline)
     case( 'image_smat' )

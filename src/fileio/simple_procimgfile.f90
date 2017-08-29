@@ -754,12 +754,15 @@ contains
     !! \param hp high-pass cutoff freq
     !! \param lp low-pass cutoff freq
     !!
-    subroutine bp_imgfile( fname2filter, fname, smpd, hp, lp )
+    subroutine bp_imgfile( fname2filter, fname, smpd, hp, lp, width )
         character(len=*), intent(in) :: fname2filter, fname
         real,             intent(in) :: smpd, hp, lp
-        type(image)     :: img
-        integer         :: n, i, ldim(3)
-        real, parameter :: width=10.
+        real, optional,   intent(in) :: width
+        type(image) :: img
+        integer     :: n, i, ldim(3)
+        real        :: wwidth
+        wwidth = 10.0
+        if( present(width) ) wwidth = width
         call find_ldim_nptcls(fname2filter, ldim, n)
         ldim(3) = 1
         call raise_exception_imgfile( n, ldim, 'bp_imgfile' )

@@ -190,6 +190,7 @@ contains
             ctfastig = b%a%isthere('dfy') .and. b%a%isthere('angast')
         endif
         do iptcl=1,p%nptcls
+            call progress(iptcl,p%nptcls)
             ! read particle image
             call b%img%read(p%stk, iptcl)
             ! copy background image
@@ -210,6 +211,8 @@ contains
             endif
             ! subtract background
             call b%img%subtr(img_backgr_wctf)
+            ! normalise
+            call b%img%norm()
             ! output corrected image
             call b%img%write(p%outstk, iptcl)
         end do

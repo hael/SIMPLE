@@ -117,12 +117,12 @@ contains
             call frame_img%read(framenames(iframe),1)
             call frame_img%window_slim([xind,yind,1], box, reference, outside)
             if( l_neg ) call reference%neg()
-            call reference%norm()
             call reference%write(trim(fbody)//'.mrc', iframe)
         end do
         if( .not. fclose(funit,iostat=io_stat) )&
             &call fileio_errmsg("tseries tracker ; write_tracked_series end", io_stat)
         do i=1,NNN
+            if( l_neg ) call neigh_imgs_mean(i)%neg()
             call neigh_imgs_mean(i)%write(trim(fbody)//'_background_nn'//int2str(i)//'.mrc')
         end do
     end subroutine write_tracked_series
@@ -153,8 +153,6 @@ contains
         do i=1,NNN
             call frame_img%window_slim(neigh(i,:), box, diff_img, outside)
             if( .not. outside )then
-                if( l_neg ) call diff_img%neg()
-                call diff_img%norm()
                 call diff_img%subtr(neigh_imgs_mean(i))
                 call diff_img%div(sumw)
                 call neigh_imgs_mean(i)%add(diff_img)

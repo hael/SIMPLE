@@ -3398,7 +3398,7 @@ contains
         integer                     :: h, k, l, lims(3,2)
         logical                     :: didft
         real                        :: freq, hplim_freq, lplim_freq, wwidth, w
-        wwidth = 5.
+        wwidth =10.
         if( present(width) ) wwidth = width
         didft = .false.
         if( .not. self%ft )then
