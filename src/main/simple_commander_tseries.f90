@@ -12,9 +12,11 @@ implicit none
 
 public :: tseries_extract_commander
 public :: tseries_track_commander
+public :: tseries_backgr_subtr_commander
 public :: tseries_split_commander
 private
 #include "simple_local_flags.inc"
+
 type, extends(commander_base) :: tseries_extract_commander
   contains
     procedure :: execute      => exec_tseries_extract
@@ -27,12 +29,16 @@ type, extends(commander_base) :: tseries_split_commander
   contains
     procedure :: execute      => exec_tseries_split
 end type tseries_split_commander
+type, extends(commander_base) :: tseries_backgr_subtr_commander
+  contains
+    procedure :: execute      => exec_tseries_backgr_subtr
+end type tseries_backgr_subtr_commander
 
 contains
 
     subroutine exec_tseries_extract( self, cline )
-        use simple_image, only: image
-        use simple_imgfile,  only: find_ldim_nptcls
+        use simple_image,   only: image
+        use simple_imgfile, only: find_ldim_nptcls
         class(tseries_extract_commander), intent(inout) :: self
         class(cmdline),                   intent(inout) :: cline
         type(params) :: p
@@ -148,6 +154,66 @@ contains
         end do
         if( p%l_distr_exec ) call qsys_job_finished(p, 'simple_commander_tseries :: exec_tseries_track')
     end subroutine exec_tseries_track
+
+    subroutine exec_tseries_backgr_subtr( self, cline )
+        use simple_image, only: image
+        use simple_ctf,   only: ctf
+        class(tseries_backgr_subtr_commander), intent(inout) :: self
+        class(cmdline),                        intent(inout) :: cline
+        type(params) :: p
+        type(build)  :: b
+        type(image)  :: img_backgr, img_backgr_wctf
+        type(ctf)    :: tfun
+        logical      :: params_present(4), ctfastig
+        real         :: dfx, dfy, angast
+        integer      :: iptcl
+        p = params(cline, checkdistr=.false.)             ! parameters generated
+        call b%build_general_tbox(p, cline, do3d=.false.) ! general objects built
+        ! get background image
+        call img_backgr%new([p%box,p%box,1], p%smpd)
+        call img_backgr_wctf%new([p%box,p%box,1], p%smpd)
+        call img_backgr%read(p%stk_backgr, 1)
+        if( cline%defined('deftab') )then
+            params_present(1) = b%a%isthere('kv')
+            params_present(2) = b%a%isthere('cs')
+            params_present(3) = b%a%isthere('fraca')
+            params_present(4) = b%a%isthere('dfx')
+            if( all(params_present) )then
+                ! alles ok
+            else
+                if( .not. params_present(1) ) write(*,*) 'ERROR! input deftab lacks kv'
+                if( .not. params_present(2) ) write(*,*) 'ERROR! input deftab lacks cs'
+                if( .not. params_present(3) ) write(*,*) 'ERROR! input deftab lacks fraca'
+                if( .not. params_present(4) ) write(*,*) 'ERROR! input deftab lacks dfx'
+                stop
+            endif
+            ctfastig = b%a%isthere('dfy') .and. b%a%isthere('angast')
+        endif
+        do iptcl=1,p%nptcls
+            ! read particle image
+            call b%img%read(p%stk, iptcl)
+            ! copy background image
+            img_backgr_wctf = img_backgr
+            ! CTF logics
+            if( cline%defined('deftab') )then
+                tfun = ctf(p%smpd, b%a%get(iptcl,'kv'), b%a%get(iptcl,'cs'), b%a%get(iptcl,'fraca'))
+                dfx = b%a%get(iptcl, 'dfx')
+                if( ctfastig )then
+                    dfy    = b%a%get(iptcl, 'dfy'   )
+                    angast = b%a%get(iptcl, 'angast')
+                    call tfun%apply(b%img, dfx, 'flip', dfy=dfy, angast=angast)
+                    call tfun%apply(img_backgr_wctf, dfx, 'flip', dfy=dfy, angast=angast)
+                else
+                    call tfun%apply(b%img, dfx, 'flip')
+                    call tfun%apply(img_backgr_wctf, dfx, 'flip')
+                endif
+            endif
+            ! subtract background
+            call b%img%subtr(img_backgr_wctf)
+            ! output corrected image
+            call b%img%write(p%outstk, iptcl)
+        end do
+    end subroutine exec_tseries_backgr_subtr
 
     subroutine exec_tseries_split( self, cline )
         use simple_oris,     only: oris

@@ -208,6 +208,7 @@ contains
         call chdict%push('stk',           'particle stack with all images(ptcls.ext)')
         call chdict%push('stk2',          '2nd stack(in map2ptcls/select: selected(cavgs).ext)')
         call chdict%push('stk3',          '3d stack (in map2ptcls/select: (cavgs)2selectfrom.ext)')
+        call chdict%push('stk_backgr',    'stack with image for background subtraction')
         call chdict%push('stream',        'sream (real time) execution mode(yes|no){no}')
         call chdict%push('szsn',          'size of stochastic neighborhood{5}')
         call chdict%push('thres',         'threshold (binarisation: 0-1; distance filer: in pixels)')
