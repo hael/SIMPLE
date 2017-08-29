@@ -2257,7 +2257,7 @@ select case(prg)
         keys_optional(6) = 'outstk'
         ! parse command line
         ! if( describe ) call print_doc_tseries_backgr_subtr
-        call cline%parse(keys_required(:3), keys_optional(:3))
+        call cline%parse(keys_required(:3), keys_optional(:6))
         ! set defaults
         if( .not. cline%defined('hp')    ) call cline%set('hp',    3.0)
         if( .not. cline%defined('lp')    ) call cline%set('lp',    1.1)

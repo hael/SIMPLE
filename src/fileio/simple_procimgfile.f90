@@ -96,7 +96,6 @@ contains
             avg = 0.
         endif
         ! extract patterns and write to file
-        
         if(.not.fopen(fnum, status='replace', action='readwrite', file=fnamePatterns,&
              access='direct', form='unformatted', recl=recsz, iostat=ier))&
         call fileio_errmsg('make_pattern_stack; simple_procimgfile', ier)
@@ -109,7 +108,7 @@ contains
                 call img%fwd_ft
                 x = otab%get(i, 'x')
                 y = otab%get(i, 'y')
-                call img%shift(-x, -y)
+                call img%shift([-x,-y,0.])
                 ! rotate image
                 call img%bwd_ft
                 call img%rtsq(-otab%e3get(i), 0., 0.)
@@ -740,7 +739,7 @@ contains
                 xhere = real(nint(xhere))
                 yhere = real(nint(yhere))
             endif
-            call img%shift(-xhere, -yhere)
+            call img%shift([-xhere,-yhere,0.])
             call img%write(fname, i)
         end do
         call img%kill
@@ -942,9 +941,9 @@ contains
             x = o%get(i, 'x')
             y = o%get(i, 'y')
             if( present(mul) )then
-                call img%shift(-x*mul, -y*mul)
+                call img%shift([-x*mul,-y*mul,0.])
             else
-                call img%shift(-x, -y)
+                call img%shift([-x,-y,0.])
             endif
             call img%bwd_ft
             call img%rtsq(-o%e3get(i), 0., 0., img_rot)

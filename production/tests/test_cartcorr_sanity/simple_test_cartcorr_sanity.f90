@@ -30,7 +30,7 @@ do i=1,nits
     x           = real(nint(ran3()*2.0*TRS-TRS))
     y           = real(nint(ran3()*2.0*TRS-TRS))
     DebugPrint  'shifted:     ', x, y
-    call img1%shift(x,y,imgout=img2)  
+    call img1%shift([x,y,0.], imgout=img2)  
     cxy         = find_shift_old()
     old_corr    = cxy(1)
     DebugPrint  'neg(old):    ', -cxy(2:3)

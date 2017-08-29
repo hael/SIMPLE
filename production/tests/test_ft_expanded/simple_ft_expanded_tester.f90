@@ -62,7 +62,7 @@ contains
         do itst=1,NTST
             x = nint(ran3()*2*TRS-TRS)
             y = nint(ran3()*2*TRS-TRS)
-            call img%shift(real(x), real(y), imgout=img_shifted)
+            call img%shift([real(x),real(y),0.], imgout=img_shifted)
             call find_shift(dist, corr)
             corravg = corravg + corr
             distavg = distavg + dist

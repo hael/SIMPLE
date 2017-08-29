@@ -138,7 +138,7 @@ contains
             ! project vol
             call b%vol_pad%fproject(orientation, b%img_pad)
             ! shift
-            call b%img_pad%shift(orientation%get('x'),orientation%get('y'))
+            call b%img_pad%shift([orientation%get('x'),orientation%get('y'),0.])
             if( cline%defined('bfac') )then
                 ! calculate bfactor
                 bfacerr = ran3()*p%bfacerr
@@ -312,7 +312,7 @@ contains
             call shifted_base_image%read('simmovie'//p%ext, i)
             x = b%a%get(1, 'x'//int2str(i))
             y = b%a%get(1, 'y'//int2str(i))
-            call shifted_base_image%shift(-x,-y)
+            call shifted_base_image%shift([-x,-y,0.])
             call base_image%add(shifted_base_image)
         end do
         if( debug ) write(*,'(a,1x,f7.4)') 'constant 4 division:', real(p%nframes)

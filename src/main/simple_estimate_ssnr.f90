@@ -83,7 +83,7 @@ contains
             end select
             x = os%get(iptcl,'x')
             y = os%get(iptcl,'y')
-            call imgs(iptcl)%shift(-x, -y)
+            call imgs(iptcl)%shift([-x,-y,0.])
             call imgs(iptcl)%bwd_ft
             call imgs(iptcl)%rtsq(-os%e3get(iptcl), 0., 0.)
             call imgs(iptcl)%mask(msk, 'soft')

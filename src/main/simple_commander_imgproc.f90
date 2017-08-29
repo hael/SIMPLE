@@ -383,7 +383,6 @@ contains
         type(build)          :: b
         integer              :: iptcl, alloc_stat, funit, io_stat
         real, allocatable    :: corrmat(:,:)
-
         p = params(cline, .false.)                           ! constants & derived constants produced
         call b%build_general_tbox(p, cline, .false., .true.) ! general objects built (no oritab reading)
         allocate(b%imgs_sym(p%nptcls), stat=alloc_stat)
@@ -513,8 +512,7 @@ contains
                 if( .not. cline%defined('scale') ) stop 'need scale to be part of command line as well 4 double scaling'
                 ldims_scaled(1,:) = [p%newbox,p%newbox,1]   ! dimension of scaled
                 ldims_scaled(2,:) = [p%newbox2,p%newbox2,1] ! dimension of scaled
-                call resize_imgfile_double(p%stk, p%outstk, p%outstk2,&
-                p%smpd, ldims_scaled, smpds_new)
+                call resize_imgfile_double(p%stk, p%outstk, p%outstk2, p%smpd, ldims_scaled, smpds_new)
                 write(*,'(a,1x,f9.4)') 'SAMPLING DISTANCE AFTER SCALING (OUTSTK) :', smpds_new(1)
                 write(*,'(a,1x,f9.4)') 'SAMPLING DISTANCE AFTER SCALING (OUTSTK2):', smpds_new(2)
                 write(*,'(a,1x,i5)')   'BOX SIZE AFTER SCALING (OUTSTK) :', ldims_scaled(1,1)
@@ -534,7 +532,11 @@ contains
             else if( cline%defined('clip') )then
                 call del_file(p%outstk)
                 ! Clipping
-                call clip_imgfile(p%stk,p%outstk,[p%clip,p%clip,1],p%smpd)
+                if( p%clip > p%box )then
+                    call pad_imgfile(p%stk,p%outstk,[p%clip,p%clip,1],p%smpd)
+                else
+                    call clip_imgfile(p%stk,p%outstk,[p%clip,p%clip,1],p%smpd)
+                endif
             endif
         else if( cline%defined('vol1') )then
             ! 3D

@@ -278,7 +278,7 @@ contains
                 stop 'Unsupported ctf mode; simple_hadamard_common :: prepimg4align'
         end select
         ! shift image to rotational origin
-        if(abs(x) > SHTHRESH .or. abs(y) > SHTHRESH) call b%img%shift(-x, -y)
+        if(abs(x) > SHTHRESH .or. abs(y) > SHTHRESH) call b%img%shift([-x,-y,0.])
         ! back to real-space
         call b%img%bwd_ft
         ! clip image if needed
@@ -426,8 +426,8 @@ contains
         if( do_center )then
             shvec = b%vol%center(p%cenlp,'no',p%msk,doshift=.false.) ! find center of mass shift
             if( arg(shvec) > CENTHRESH )then
-                if( p%pgrp .ne. 'c1' ) shvec(1:2) = 0.       ! shifts only along z-axis for C2 and above
-                call b%vol%shift(shvec(1),shvec(2),shvec(3)) ! performs shift
+                if( p%pgrp .ne. 'c1' ) shvec(1:2) = 0.         ! shifts only along z-axis for C2 and above
+                call b%vol%shift([shvec(1),shvec(2),shvec(3)]) ! performs shift
                 ! map back to particle oritentations
                 if( cline%defined('oritab') )call b%a%map3dshift22d(-shvec(:), state=s)
             endif

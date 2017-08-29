@@ -115,7 +115,7 @@ contains
         do i=1,100
             x = ran3()*2*TRS-TRS
             y = ran3()*2*TRS-TRS
-            call img_ref%shift(x, y, imgout=img_ptcl)
+            call img_ref%shift([x,y,0.], imgout=img_ptcl)
             call ftexp_ptcl%new(img_ptcl, hp, lp)
             cxy = ftexp_shsrch_minimize()
             if( cxy(1) < 0.995 )then

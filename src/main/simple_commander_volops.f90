@@ -101,7 +101,7 @@ contains
             print *, shvec
             if( istate == 1 ) call b%vol%write(p%outvol)
             if( debug )then
-                call b%vol%shift(-shvec(istate,1), -shvec(istate,2), -shvec(istate,3))
+                call b%vol%shift([-shvec(istate,1),-shvec(istate,2),-shvec(istate,3)])
                 call b%vol%write('shifted_vol_state'//int2str(istate)//p%ext)
             endif
             ! transfer the 3D shifts to 2D
@@ -238,7 +238,7 @@ contains
             if( cline%defined('oritab') .or. (p%rnd .eq. 'yes' .or. cline%defined('trs')) )then
                 x = b%a%get(i, 'x')
                 y = b%a%get(i, 'y')
-                call imgs(i)%shift(x, y)
+                call imgs(i)%shift([x,y,0.])
             endif
             if( p%neg .eq. 'yes' ) call imgs(i)%neg
             call imgs(i)%write(p%outstk,i)
@@ -337,7 +337,7 @@ contains
         integer           :: i, nvols, funit, iostat, npix
         logical           :: here, fileop
         type(ori)         :: o
-        type(image)       :: vol_copy
+        type(image)       :: vol_rot
         real              :: shvec(3)
         p = params(cline,checkdistr=.false.)        ! constants & derived constants produced, mode=2
         call b%build_general_tbox(p, cline)         ! general objects built
@@ -373,9 +373,12 @@ contains
                     if( .not. cline%defined('msk')  ) stop 'need msk (mask radius) input for volume rotation'
                     call o%new
                     call o%set_euler([p%e1,p%e2,p%e3])
-                    shvec = [p%xsh,p%ysh,p%zsh]
-                    vol_copy = rotvol(b%vol, o, p, shvec)
-                    b%vol = vol_copy
+                    shvec   = [p%xsh,p%ysh,p%zsh]
+                    vol_rot = rotvol(b%vol, o, p, shvec)
+                    b%vol   = vol_rot
+                endif
+                if( cline%defined('xsh') .or. cline%defined('ysh') .or. cline%defined('zsh') )then
+                    call b%vol%shift([p%xsh,p%ysh,p%zsh])
                 endif
                 call b%vol%write(p%outvol, del_if_exists=.true.)
             endif
