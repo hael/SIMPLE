@@ -322,6 +322,11 @@ contains
             return
         else
             call b%a%rnd_oris(p%trs)
+            if( p%doprint .eq. 'yes' )then
+                do i=1,p%nptcls
+                    call b%a%print_matrices
+                end do
+            endif
         endif
         if( p%nstates > 1 ) call b%a%rnd_states(p%nstates)
         if( cline%defined('astigerr') )then

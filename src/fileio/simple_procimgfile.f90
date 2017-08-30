@@ -96,7 +96,6 @@ contains
             avg = 0.
         endif
         ! extract patterns and write to file
-        
         if(.not.fopen(fnum, status='replace', action='readwrite', file=fnamePatterns,&
              access='direct', form='unformatted', recl=recsz, iostat=ier))&
         call fileio_errmsg('make_pattern_stack; simple_procimgfile', ier)
@@ -109,7 +108,7 @@ contains
                 call img%fwd_ft
                 x = otab%get(i, 'x')
                 y = otab%get(i, 'y')
-                call img%shift(-x, -y)
+                call img%shift([-x,-y,0.])
                 ! rotate image
                 call img%bwd_ft
                 call img%rtsq(-otab%e3get(i), 0., 0.)
@@ -740,7 +739,7 @@ contains
                 xhere = real(nint(xhere))
                 yhere = real(nint(yhere))
             endif
-            call img%shift(-xhere, -yhere)
+            call img%shift([-xhere,-yhere,0.])
             call img%write(fname, i)
         end do
         call img%kill
@@ -754,12 +753,15 @@ contains
     !! \param hp high-pass cutoff freq
     !! \param lp low-pass cutoff freq
     !!
-    subroutine bp_imgfile( fname2filter, fname, smpd, hp, lp )
+    subroutine bp_imgfile( fname2filter, fname, smpd, hp, lp, width )
         character(len=*), intent(in) :: fname2filter, fname
         real,             intent(in) :: smpd, hp, lp
-        type(image)     :: img
-        integer         :: n, i, ldim(3)
-        real, parameter :: width=10.
+        real, optional,   intent(in) :: width
+        type(image) :: img
+        integer     :: n, i, ldim(3)
+        real        :: wwidth
+        wwidth = 10.0
+        if( present(width) ) wwidth = width
         call find_ldim_nptcls(fname2filter, ldim, n)
         ldim(3) = 1
         call raise_exception_imgfile( n, ldim, 'bp_imgfile' )
@@ -939,9 +941,9 @@ contains
             x = o%get(i, 'x')
             y = o%get(i, 'y')
             if( present(mul) )then
-                call img%shift(-x*mul, -y*mul)
+                call img%shift([-x*mul,-y*mul,0.])
             else
-                call img%shift(-x, -y)
+                call img%shift([-x,-y,0.])
             endif
             call img%bwd_ft
             call img%rtsq(-o%e3get(i), 0., 0., img_rot)

@@ -190,6 +190,7 @@ contains
             ctfastig = b%a%isthere('dfy') .and. b%a%isthere('angast')
         endif
         do iptcl=1,p%nptcls
+            call progress(iptcl,p%nptcls)
             ! read particle image
             call b%img%read(p%stk, iptcl)
             ! copy background image
@@ -208,8 +209,17 @@ contains
                     call tfun%apply(img_backgr_wctf, dfx, 'flip')
                 endif
             endif
+            ! fwd ft
+            call b%img%fwd_ft()
+            call img_backgr_wctf%fwd_ft()
+            ! filter background image
+            call img_backgr_wctf%bp(p%hp,p%lp,width=p%width)
             ! subtract background
             call b%img%subtr(img_backgr_wctf)
+            ! bwd ft
+            call b%img%bwd_ft()
+            ! normalise
+            call b%img%norm()
             ! output corrected image
             call b%img%write(p%outstk, iptcl)
         end do

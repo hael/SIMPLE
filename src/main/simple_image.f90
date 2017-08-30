@@ -2730,9 +2730,9 @@ contains
         xyz = tmp%masscen()
         if( l_doshift )then
             if( self%is_2d() )then
-                call self%shift(xyz(1),xyz(2))
+                call self%shift([xyz(1),xyz(2),0.])
             else
-                call self%shift(xyz(1),xyz(2),xyz(3))
+                call self%shift([xyz(1),xyz(2),xyz(3)])
             endif
         endif
     end function center
@@ -3398,7 +3398,7 @@ contains
         integer                     :: h, k, l, lims(3,2)
         logical                     :: didft
         real                        :: freq, hplim_freq, lplim_freq, wwidth, w
-        wwidth = 5.
+        wwidth =10.
         if( present(width) ) wwidth = width
         didft = .false.
         if( .not. self%ft )then
@@ -5313,39 +5313,33 @@ contains
     !! \param lp_dyn low-pass cut-off freq
     !! \param imgout processed image
     !!
-    subroutine shift( self, x, y, z, lp_dyn, imgout )
+    subroutine shift( self, shvec, lp_dyn, imgout )
         class(image),           intent(inout) :: self
-        real,                   intent(in)    :: x, y
-        real,         optional, intent(in)    :: z, lp_dyn
+        real,                   intent(in)    :: shvec(3)
+        real,         optional, intent(in)    :: lp_dyn
         class(image), optional, intent(inout) :: imgout
-        integer                               :: h, k, l, lims(3,2), phys(3)
-        real                                  :: zz
-        logical                               :: didft
-        if( present(z) )then
-            if( x == 0. .and. y == 0. .and. z == 0. )then
-                if( present(imgout) ) call imgout%copy(self)
-                return
-            endif
-            if( self%ldim(1) == 1 ) stop 'cannot shift 2D FT in 3D; shift; simple_image'
-            zz = z
-        else
-            if( x == 0. .and. y == 0. )then
-                if( present(imgout) ) call imgout%copy(self)
-                return
-            endif
-            zz = 0.
+        integer :: h, k, l, lims(3,2), phys(3)
+        real    :: shvec_here(3)
+        logical :: didft, imgout_present, lp_dyn_present
+        imgout_present = present(imgout)
+        lp_dyn_present = present(lp_dyn)
+        if( all(abs(shvec) < TINY) )then
+            if( imgout_present ) call imgout%copy(self)
+            return
         endif
+        shvec_here = shvec
+        if( self%ldim(3) == 1 ) shvec_here(3) = 0.0
         didft = .false.
         if( .not. self%ft )then
             call self%fwd_ft
             didft = .true.
         endif
-        if( present(lp_dyn) )then
+        if( lp_dyn_present )then
             lims = self%fit%loop_lims(1,lp_dyn)
         else
             lims = self%fit%loop_lims(2)
         endif
-        if( present(imgout) )then
+        if( imgout_present )then
             imgout%ft = .true.
             !$omp parallel do collapse(3) default(shared) private(phys,h,k,l)&
             !$omp schedule(static) proc_bind(close)
@@ -5354,7 +5348,7 @@ contains
                     do l=lims(3,1),lims(3,2)
                         phys = self%fit%comp_addr_phys([h,k,l])
                         imgout%cmat(phys(1),phys(2),phys(3)) = self%cmat(phys(1),phys(2),phys(3))*&
-                        self%oshift([h,k,l], [x,y,zz])
+                        self%oshift([h,k,l], shvec_here)
                     end do
                 end do
             end do
@@ -5367,7 +5361,7 @@ contains
                     do l=lims(3,1),lims(3,2)
                         phys = self%fit%comp_addr_phys([h,k,l])
                         self%cmat(phys(1),phys(2),phys(3)) = self%cmat(phys(1),phys(2),phys(3))*&
-                        self%oshift([h,k,l], [x,y,zz])
+                        self%oshift([h,k,l], shvec_here)
                     end do
                 end do
             end do
@@ -5375,7 +5369,7 @@ contains
         endif
         if( didft )then
             call self%bwd_ft
-            if( present(imgout) ) call imgout%bwd_ft
+            if( imgout_present ) call imgout%bwd_ft
         endif
     end subroutine shift
 
@@ -6496,9 +6490,9 @@ contains
                 call img%gauimg(10)
                 if( doplot ) call img%vis
                 call img%serialize(pcavec1, msk)
-                call img%shift(-9.345,-5.786)
+                call img%shift([-9.345,-5.786,0.])
                 if( doplot ) call img%vis
-                call img%shift(9.345,5.786)
+                call img%shift([9.345,5.786,0.])
                 call img%serialize(pcavec2, msk)
                 if( doplot ) call img%vis
                 if( pearsn(pcavec1, pcavec2) > 0.99 ) passed = .true.
@@ -6512,10 +6506,10 @@ contains
                 call img%square( 10 )
                 if( doplot ) call img%vis
                 call img%serialize(pcavec1, msk)
-                call img%shift( 10., 5. )
+                call img%shift([10.,5.,0.])
                 if( doplot ) call img%vis
                 xyz = img%masscen()
-                call img%shift(real(int(xyz(1))),real(int(xyz(2))))
+                call img%shift([real(int(xyz(1))),real(int(xyz(2))),0.])
                 if( doplot ) call img%vis
                 call img%serialize(pcavec2, msk)
                 if( pearsn(pcavec1, pcavec2) > 0.9 ) passed = .true.
@@ -6606,7 +6600,7 @@ contains
                 call img%acf
                 if( doplot ) call img%vis
                 call img%square( 10 )
-                call img%shift( 5., -5. )
+                call img%shift([5.,-5.,0.])
                 if( doplot ) call img%vis
                 call img%acf
                 if( doplot ) call img%vis

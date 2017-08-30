@@ -19,7 +19,7 @@ private
 #include "simple_local_flags.inc"
 
 real, parameter :: SHTHRESH  = 0.0001
-real, parameter :: CENTHRESH = 0.01   ! threshold for performing volume/cavg centering in pixels
+real, parameter :: CENTHRESH = 0.5   ! threshold for performing volume/cavg centering in pixels
     
 contains
 
@@ -278,7 +278,7 @@ contains
                 stop 'Unsupported ctf mode; simple_hadamard_common :: prepimg4align'
         end select
         ! shift image to rotational origin
-        if(abs(x) > SHTHRESH .or. abs(y) > SHTHRESH) call b%img%shift(-x, -y)
+        if(abs(x) > SHTHRESH .or. abs(y) > SHTHRESH) call b%img%shift([-x,-y,0.])
         ! back to real-space
         call b%img%bwd_ft
         ! clip image if needed
@@ -306,18 +306,25 @@ contains
     end subroutine prepimg4align
 
     !>  \brief  prepares one cluster centre image for alignment
-    subroutine prep2Dref( b, p, icls )
+    subroutine prep2Dref( b, p, icls, center )
         use simple_image, only: image
         class(build),      intent(inout) :: b
         class(params),     intent(in)    :: p
         integer,           intent(in)    :: icls
-        real :: xyz(3), sharg
+        logical, optional, intent(in)    :: center
+        real    :: xyz(3), sharg
+        logical :: do_center
         ! p%center:  user gets opportunity to turn on/off centering
         ! p%doshift: search space fraction controlled centering (or not)
         ! REPLACED
         ! if( p%center .eq. 'yes' .and. p%doshift )then
         ! WITH
-        if( p%center .eq. 'yes' )then
+        do_center = (p%center .eq. 'yes')
+        if( present(center) )then
+            ! centering only performed if p%center.eq.'yes'
+            do_center = do_center .and. center
+        endif
+        if( do_center )then
         ! BECAUSE: typically you'd want to center the class averages
         !          even though they're not good enough to search shifts
             xyz   = b%img%center(p%cenlp, 'no', p%msk, doshift=.false.)
@@ -426,8 +433,8 @@ contains
         if( do_center )then
             shvec = b%vol%center(p%cenlp,'no',p%msk,doshift=.false.) ! find center of mass shift
             if( arg(shvec) > CENTHRESH )then
-                if( p%pgrp .ne. 'c1' ) shvec(1:2) = 0.       ! shifts only along z-axis for C2 and above
-                call b%vol%shift(shvec(1),shvec(2),shvec(3)) ! performs shift
+                if( p%pgrp .ne. 'c1' ) shvec(1:2) = 0.         ! shifts only along z-axis for C2 and above
+                call b%vol%shift([shvec(1),shvec(2),shvec(3)]) ! performs shift
                 ! map back to particle oritentations
                 if( cline%defined('oritab') )call b%a%map3dshift22d(-shvec(:), state=s)
             endif

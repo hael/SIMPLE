@@ -17,6 +17,7 @@ public :: projvol_commander
 public :: volaverager_commander
 public :: volops_commander
 public :: volume_smat_commander
+public :: dock_volpair_commander
 private
 #include "simple_local_flags.inc"
 
@@ -48,6 +49,10 @@ type, extends(commander_base) :: volume_smat_commander
   contains
     procedure :: execute      => exec_volume_smat
 end type volume_smat_commander
+type, extends(commander_base) :: dock_volpair_commander
+  contains
+    procedure :: execute      => exec_dock_volpair
+end type dock_volpair_commander
 
 contains
 
@@ -101,7 +106,7 @@ contains
             print *, shvec
             if( istate == 1 ) call b%vol%write(p%outvol)
             if( debug )then
-                call b%vol%shift(-shvec(istate,1), -shvec(istate,2), -shvec(istate,3))
+                call b%vol%shift([-shvec(istate,1),-shvec(istate,2),-shvec(istate,3)])
                 call b%vol%write('shifted_vol_state'//int2str(istate)//p%ext)
             endif
             ! transfer the 3D shifts to 2D
@@ -238,7 +243,7 @@ contains
             if( cline%defined('oritab') .or. (p%rnd .eq. 'yes' .or. cline%defined('trs')) )then
                 x = b%a%get(i, 'x')
                 y = b%a%get(i, 'y')
-                call imgs(i)%shift(x, y)
+                call imgs(i)%shift([x,y,0.])
             endif
             if( p%neg .eq. 'yes' ) call imgs(i)%neg
             call imgs(i)%write(p%outstk,i)
@@ -337,7 +342,7 @@ contains
         integer           :: i, nvols, funit, iostat, npix
         logical           :: here, fileop
         type(ori)         :: o
-        type(image)       :: vol_copy
+        type(image)       :: vol_rot
         real              :: shvec(3)
         p = params(cline,checkdistr=.false.)        ! constants & derived constants produced, mode=2
         call b%build_general_tbox(p, cline)         ! general objects built
@@ -373,9 +378,12 @@ contains
                     if( .not. cline%defined('msk')  ) stop 'need msk (mask radius) input for volume rotation'
                     call o%new
                     call o%set_euler([p%e1,p%e2,p%e3])
-                    shvec = [p%xsh,p%ysh,p%zsh]
-                    vol_copy = rotvol(b%vol, o, p, shvec)
-                    b%vol = vol_copy
+                    shvec   = [p%xsh,p%ysh,p%zsh]
+                    vol_rot = rotvol(b%vol, o, p, shvec)
+                    b%vol   = vol_rot
+                endif
+                if( cline%defined('xsh') .or. cline%defined('ysh') .or. cline%defined('zsh') )then
+                    call b%vol%shift([p%xsh,p%ysh,p%zsh])
                 endif
                 call b%vol%write(p%outvol, del_if_exists=.true.)
             endif
@@ -524,25 +532,42 @@ contains
         call simple_end('**** SIMPLE_VOLUME_SMAT NORMAL STOP ****')
     end subroutine exec_volume_smat
 
-    ! vol1
-    ! vol2
-    ! smpd
-    ! lp
-    ! msk
-
-
-    ! hp
     subroutine exec_dock_volpair( self, cline )
-        use simple_projector, only: projector
-        class(volume_smat_commander), intent(inout) :: self
-        class(cmdline),               intent(inout) :: cline
-        type(params) :: p
+        use simple_projector,      only: projector
+        use simple_ori,            only: ori
+        use simple_projector_hlev, only: rotvol
+        use simple_image,          only: image
+        use simple_volprep,        only: read_and_prep_vol
+        use simple_volpft_srch     ! use all in there
+        class(dock_volpair_commander), intent(inout) :: self
+        class(cmdline),                intent(inout) :: cline
+        type(params)    :: p
         type(projector) :: vol1, vol2
+        type(image)     :: vol_out
+        type(ori)       :: orientation
         p = params(cline, .false.) ! constants & derived constants produced
         call read_and_prep_vol( p, p%vols(1), vol1 )
         call read_and_prep_vol( p, p%vols(2), vol2 )
         call volpft_srch_init(vol1, vol2, p%hp, p%lp, 0.)
-
+        select case(p%dockmode)
+            case('eul')
+                orientation = volpft_srch_minimize_eul()
+                vol_out     = rotvol(vol2, orientation, p)
+            case('shift')
+                orientation = volpft_srch_minimize_shift()
+                call vol2%shift(orientation%get_3Dshift())
+                vol_out     = vol2
+            case('eulshift')
+                orientation = volpft_srch_minimize_eul()
+                orientation = volpft_srch_minimize_shift()
+                vol_out     = rotvol(vol2, orientation, p, orientation%get_3Dshift())
+            case('all')
+                orientation = volpft_srch_minimize_eul()
+                orientation = volpft_srch_minimize_shift()
+                orientation = volpft_srch_minimize_all()
+                vol_out     = rotvol(vol2, orientation, p, orientation%get_3Dshift())
+        end select
+        call vol_out%write(p%outvol, del_if_exists=.true.)
     end subroutine exec_dock_volpair
 
 end module simple_commander_volops

@@ -61,6 +61,7 @@ type :: oris
     procedure, private :: get_neven
     procedure, private :: get_nodd
     procedure          :: print_
+    procedure          :: print_matrices
     ! SETTERS
     procedure, private :: assign
     generic            :: assignment(=) => assign
@@ -118,6 +119,7 @@ type :: oris
     procedure          :: split_state
     procedure          :: split_class
     procedure          :: expand_classes
+    procedure          :: fill_empty_classes
     procedure          :: remap_classes
     procedure          :: shift_classes
     procedure          :: create_conforming_npeaks_set
@@ -565,6 +567,62 @@ contains
             pops(myncls) = self%get_pop(myncls, 'class')
         end do
     end subroutine expand_classes
+
+    !>  \brief  is for filling empty classes from the highest populated ones
+    subroutine fill_empty_classes( self, fromtocls )
+        use simple_ran_tabu, only: ran_tabu
+        class(oris),                    intent(inout) :: self
+        integer, allocatable, optional, intent(out)   :: fromtocls(:,:)
+        integer, allocatable :: inds2split(:), membership(:), pops(:), fromtoall(:,:)
+        type(ran_tabu)       :: rt
+        integer              :: alloc_stat, iptcl, cls2split(1), maxpop, i, icls
+        integer              :: cnt, nempty, ncls, n_incl
+        ! 'true' ensures at least one image will have a non-zero weight
+        pops   = self%get_pops('class', consider_w=.true.)
+        nempty = count(pops == 0)
+        if(nempty == 0)return
+        ncls = size(pops)
+        if( present(fromtocls) )allocate(fromtoall(ncls,2), source=0)
+        do icls = 1, ncls
+            if( pops(icls) > 0 )cycle
+            ! identify class to split
+            cls2split  = maxloc(pops)
+            maxpop     = pops(cls2split(1))
+            if( maxpop <= MINCLSPOPLIM )exit
+            ! migration
+            inds2split = self%get_pinds(cls2split(1), 'class')
+            rt = ran_tabu(maxpop)
+            allocate(membership(maxpop), stat=alloc_stat)
+            call rt%balanced(2, membership)
+            do i = 1, maxpop
+                if(membership(i) == 2)cycle
+                iptcl = inds2split(i)
+                call self%o(iptcl)%set('class', real(icls))
+            enddo
+            ! updates populations and migration
+            pops(icls) = count(membership == 1)
+            pops(cls2split(1)) = pops(cls2split(1)) - pops(icls)
+            if(present(fromtocls))then
+                fromtoall(icls,1) = cls2split(1)
+                fromtoall(icls,2) = icls
+            endif
+            deallocate(membership, inds2split, stat=alloc_stat)
+        enddo
+        if(present(fromtocls))then
+            ! updates classes migration
+            n_incl = count(fromtoall(:,1)>0)
+            if(n_incl>0)then
+                allocate(fromtocls(n_incl,2))
+                cnt = 0
+                do icls = 1,ncls
+                    if( fromtoall(icls,1) > 0 )then
+                        cnt = cnt + 1
+                        fromtocls(cnt,:) = fromtoall(icls,:)
+                    endif
+                enddo
+            endif
+        endif
+    end subroutine fill_empty_classes
 
     !>  \brief  for remapping classes after exclusion
     subroutine remap_classes( self )
@@ -1064,6 +1122,16 @@ contains
         integer,     intent(in)    :: i
         call self%o(i)%print_ori()
     end subroutine print_
+
+    !>  \brief  is for printing
+    subroutine print_matrices( self )
+        class(oris), intent(inout) :: self
+        integer :: i
+        write(*,*) 'ORDER OF ROTATION MATRIX ELEMENTS: (1,1) (1,2) (1,3) (2,1) (2,2) (2,3) (3,1) (3,2) (3,3)'
+        do i=1,self%n
+            call self%o(i)%print_mat()
+        end do
+    end subroutine print_matrices
 
     ! SETTERS
 

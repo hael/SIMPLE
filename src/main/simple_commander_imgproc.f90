@@ -310,19 +310,22 @@ contains
         class(cmdline),          intent(inout) :: cline
         type(params) :: p
         type(build)  :: b
+        real :: width
         p = params(cline)                   ! parameters generated
         call b%build_general_tbox(p, cline) ! general objects built
+        width = 10.
+        if( cline%defined('width') ) width = p%width
         if( cline%defined('stk') )then
             ! 2D
             if( .not.file_exists(p%stk) )stop 'Cannot find input stack (stk)'
             if( p%phrand .eq. 'no')then
                 ! Band pass
                 if( cline%defined('lp') .and. cline%defined('hp') )then
-                    call bp_imgfile(p%stk, p%outstk, p%smpd, p%hp, p%lp)
+                    call bp_imgfile(p%stk, p%outstk, p%smpd, p%hp, p%lp, width=width)
                 else if( cline%defined('lp') )then
-                    call bp_imgfile(p%stk, p%outstk, p%smpd, 0., p%lp)
+                    call bp_imgfile(p%stk, p%outstk, p%smpd, 0., p%lp, width=width)
                 else if( cline%defined('hp') )then
-                    call bp_imgfile(p%stk, p%outstk, p%smpd, p%hp, 0.)
+                    call bp_imgfile(p%stk, p%outstk, p%smpd, p%hp, 0., width=width)
                 ! real-space
                 else if( cline%defined('real_filter') )then
                     if( .not. cline%defined('winsz') ) stop 'need winsz input for real-space filtering; commander_imgproc :: exec_filter'
@@ -345,11 +348,11 @@ contains
                     call b%vol%apply_bfac(p%bfac)
                 ! Band pass
                 else if( cline%defined('hp') .and. cline%defined('lp') )then
-                    call b%vol%bp(p%hp,p%lp)
+                    call b%vol%bp(p%hp, p%lp, width=width)
                 else if( cline%defined('hp') )then
-                    call b%vol%bp(p%hp,0.)
+                    call b%vol%bp(p%hp, 0., width=width)
                 else if( cline%defined('lp') )then
-                    call b%vol%bp(0.,p%lp)
+                    call b%vol%bp(0., p%lp, width=width)
                 ! real-space
                 else if( cline%defined('real_filter') )then
                     if( .not. cline%defined('winsz') ) stop 'need winsz input for real-space filtering; commander_imgproc :: exec_filter'
@@ -380,7 +383,6 @@ contains
         type(build)          :: b
         integer              :: iptcl, alloc_stat, funit, io_stat
         real, allocatable    :: corrmat(:,:)
-
         p = params(cline, .false.)                           ! constants & derived constants produced
         call b%build_general_tbox(p, cline, .false., .true.) ! general objects built (no oritab reading)
         allocate(b%imgs_sym(p%nptcls), stat=alloc_stat)
@@ -510,8 +512,7 @@ contains
                 if( .not. cline%defined('scale') ) stop 'need scale to be part of command line as well 4 double scaling'
                 ldims_scaled(1,:) = [p%newbox,p%newbox,1]   ! dimension of scaled
                 ldims_scaled(2,:) = [p%newbox2,p%newbox2,1] ! dimension of scaled
-                call resize_imgfile_double(p%stk, p%outstk, p%outstk2,&
-                p%smpd, ldims_scaled, smpds_new)
+                call resize_imgfile_double(p%stk, p%outstk, p%outstk2, p%smpd, ldims_scaled, smpds_new)
                 write(*,'(a,1x,f9.4)') 'SAMPLING DISTANCE AFTER SCALING (OUTSTK) :', smpds_new(1)
                 write(*,'(a,1x,f9.4)') 'SAMPLING DISTANCE AFTER SCALING (OUTSTK2):', smpds_new(2)
                 write(*,'(a,1x,i5)')   'BOX SIZE AFTER SCALING (OUTSTK) :', ldims_scaled(1,1)
@@ -531,7 +532,11 @@ contains
             else if( cline%defined('clip') )then
                 call del_file(p%outstk)
                 ! Clipping
-                call clip_imgfile(p%stk,p%outstk,[p%clip,p%clip,1],p%smpd)
+                if( p%clip > p%box )then
+                    call pad_imgfile(p%stk,p%outstk,[p%clip,p%clip,1],p%smpd)
+                else
+                    call clip_imgfile(p%stk,p%outstk,[p%clip,p%clip,1],p%smpd)
+                endif
             endif
         else if( cline%defined('vol1') )then
             ! 3D

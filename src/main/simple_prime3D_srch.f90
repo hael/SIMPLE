@@ -867,7 +867,7 @@ contains
         o_prev          = a%get_ori(iptcl)
         self%prev_state = nint(o_prev%get('state'))                                    ! state index            
         self%prev_roind = pftcc%get_roind(360.-o_prev%e3get())                         ! in-plane angle index
-        self%prev_shvec = o_prev%get_shift()                                           ! shift vector
+        self%prev_shvec = o_prev%get_2Dshift()                                           ! shift vector
         self%prev_proj  = e%find_closest_proj(o_prev,1)                                ! projection direction
         if( self%prev_state > self%nstates ) stop 'previous best state outside boundary; prep4srch; simple_prime3D_srch'
         if( .not. self%state_exists(self%prev_state) ) stop 'empty previous state; prep4srch; simple_prime3D_srch'
@@ -1020,7 +1020,7 @@ contains
             euls  = o%get_euler()
             ! add shift
             shvec = self%prev_shvec
-            if( self%doshift )shvec = shvec + o%get_shift()
+            if( self%doshift )shvec = shvec + o%get_2Dshift()
             where( abs(shvec) < 1e-6 ) shvec = 0.
             ! copy info to new ori
             call o_new%new
@@ -1183,7 +1183,7 @@ contains
         call a%set(iptcl, 'dist_inpl', dist_inpl)
         ! all the other stuff
         call a%set_euler(iptcl, o_new%get_euler()    )
-        call a%set_shift(iptcl, o_new%get_shift()    )
+        call a%set_shift(iptcl, o_new%get_2Dshift()    )
         call a%set(iptcl, 'state', real(state)       )
         call a%set(iptcl, 'frac',  o_new%get('frac') )
         call a%set(iptcl, 'corr',  o_new%get('corr') )

@@ -138,6 +138,13 @@ contains
         call o_new%set('mi_inpl',   mi_inpl)
         call o_new%set('mi_joint',  mi_joint)
         call o_new%set('frac',      100.*(real(self%nrefs_eval)/real(self%nrefs)))
+        ! checker
+        if( .not. is_a_number(self%best_corr) )then
+            print *, 'FLOATING POINT EXCEPTION ALARM; simple_prime2D_srch :: update_best'
+            call o_old%print_ori()
+            call o_new%print_ori()
+            call o_new%set('corr', 1.)
+        endif
         ! updates orientation
         call a%set_ori(iptcl, o_new)
         ! cleanup
@@ -158,12 +165,22 @@ contains
         class(oris),             intent(inout) :: a
         type(ran_tabu)    :: rt
         real, allocatable :: frc(:)
+        integer           :: icls, clspop
         ! find previous discrete alignment parameters
         self%prev_class = nint(a%get(iptcl,'class'))           ! class index
+        select case(self%refine)
+            case('no', 'yes')
+                ! optional reassignement to a better populated class
+                do while( a%get_pop(self%prev_class, 'class') <= MINCLSPOPLIM )
+                    self%prev_class = irnd_uni(self%nrefs)
+                enddo
+            case DEFAULT
+                ! all good
+        end select
         self%prev_rot   = pftcc%get_roind(360.-a%e3get(iptcl)) ! in-plane angle index
         self%prev_shvec = [a%get(iptcl,'x'),a%get(iptcl,'y')]  ! shift vector
         ! set best to previous best by default
-        self%best_class = self%prev_class         
+        self%best_class = self%prev_class
         self%best_rot   = self%prev_rot
         ! calculate previous best corr (treshold for better)
         if( self%prev_class > 0 )then
@@ -250,21 +267,23 @@ contains
 
     !>  \brief  executes stochastic rotational search
     subroutine stochastic_srch( self, pftcc, iptcl, a, extr_bound )
-        use simple_rnd,  only: shcloc
+        use simple_rnd,  only: shcloc, irnd_uni
         class(prime2D_srch),     intent(inout) :: self
         class(polarft_corrcalc), intent(inout) :: pftcc
         integer,                 intent(in)    :: iptcl
         class(oris),             intent(inout) :: a
         real, optional,          intent(in)    :: extr_bound
-        integer :: iref,loc(1),isample,inpl_ind
+        integer :: iref, loc(1), isample, inpl_ind, nptcls
         real    :: corrs(self%nrots), inpl_corr
-        logical :: found_better
+        logical :: found_better, do_inplsrch
         real    :: corr_bound
         if( nint(a%get(iptcl,'state')) > 0 )then
-            corr_bound = -1.0
+            do_inplsrch = .true.
+            corr_bound  = -1.
             if( present(extr_bound) ) corr_bound = extr_bound
             call self%prep4srch( pftcc, iptcl, a )
             if( corr_bound < 0. .or. self%prev_corr > corr_bound )then
+                ! SHC move
                 found_better = .false.
                 self%nrefs_eval = 0
                 do isample=1,self%nrefs
@@ -285,12 +304,25 @@ contains
                     endif    
                 end do
             else
-                self%nrefs_eval = 1 ! evaluate one random ref
-                iref            = self%srch_order(1) ! random .ne. prev
-                corrs           = pftcc%gencorrs(iref, iptcl) 
-                loc             = maxloc(corrs)
-                inpl_ind        = loc(1)
-                inpl_corr       = corrs(inpl_ind)
+                ! random move
+                self%nrefs_eval = 1       ! evaluate one random ref
+                iref = self%srch_order(1) ! random .ne. prev
+                if( a%get_pop(iref, 'class') == 0 )then
+                    ! empty class
+                    do_inplsrch = .false.               ! no in-plane search
+                    inpl_ind    = irnd_uni(self%nrots)  ! random in-plane
+                    nptcls      = a%get_noris()
+                    inpl_corr   = -1.
+                    do while( inpl_corr < TINY )
+                        inpl_corr = a%get(irnd_uni(nptcls), 'corr') ! random correlation
+                    enddo
+                else
+                    ! populated class
+                    corrs           = pftcc%gencorrs(iref, iptcl) 
+                    loc             = maxloc(corrs)
+                    inpl_ind        = loc(1)
+                    inpl_corr       = corrs(inpl_ind)
+                endif
                 self%best_class = iref
                 self%best_corr  = inpl_corr
                 self%best_rot   = inpl_ind
@@ -304,7 +336,7 @@ contains
                 self%best_corr  = self%prev_corr
                 self%best_rot   = self%prev_rot
             endif
-            call self%inpl_srch(pftcc, iptcl)
+            if( do_inplsrch )call self%inpl_srch(pftcc, iptcl)
             call self%update_best(pftcc, iptcl, a)
         else
             call a%reject(iptcl)

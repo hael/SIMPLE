@@ -481,7 +481,7 @@ contains
         w = 1./real(nframes)
         do iframe=1,nframes
             if( doshift )then
-                call movie_frames_scaled(iframe)%shift(-shifts(iframe,1), -shifts(iframe,2), imgout=frame_tmp)
+                call movie_frames_scaled(iframe)%shift([-shifts(iframe,1),-shifts(iframe,2),0.], imgout=frame_tmp)
                 call movie_sum_global%add(frame_tmp, w=w)
             else
                 call movie_sum_global%add(movie_frames_scaled(iframe), w=w)
@@ -518,7 +518,7 @@ contains
         if( present(fromto) ) ffromto = fromto
         do iframe=ffromto(1),ffromto(2)
             if( frameweights(iframe) > 0. )then
-                call movie_frames_scaled(iframe)%shift(-shifts(iframe,1), -shifts(iframe,2), imgout=frame_tmp)
+                call movie_frames_scaled(iframe)%shift([-shifts(iframe,1),-shifts(iframe,2),0.], imgout=frame_tmp)
                 if( do_dose_weight )then
                     filter = acc_dose2filter(frame_tmp, acc_doses(iframe), kV)
                     call frame_tmp%apply_filter(filter)
@@ -549,7 +549,7 @@ contains
             current_time  = real(frame_counter)*time_per_frame ! unit: seconds
             acc_dose      = dose_rate*current_time             ! unit e/A2
             if( frameweights(iframe) > 0. )then
-                call movie_frames_scaled(iframe)%shift(-shifts(iframe,1), -shifts(iframe,2), imgout=frame_tmp)
+                call movie_frames_scaled(iframe)%shift([-shifts(iframe,1),-shifts(iframe,2),0.], imgout=frame_tmp)
                 filter = acc_dose2filter(movie_frames_scaled(iframe), acc_dose, kV)
                 call frame_tmp%apply_filter(filter)
                 call movie_sum_global%add(frame_tmp, w=frameweights(iframe))

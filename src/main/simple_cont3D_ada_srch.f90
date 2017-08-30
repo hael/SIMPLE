@@ -124,7 +124,7 @@ contains
         self%o_best     = self%o_in
         call self%o_best%set_shift([0.,0.])
         self%prev_state = nint(self%o_in%get('state'))
-        self%prev_shift = self%o_in%get_shift()
+        self%prev_shift = self%o_in%get_2Dshift()
         call self%o_srch%new( self%nrefs )
         call self%o_peaks%new( self%npeaks )
         ! state init
