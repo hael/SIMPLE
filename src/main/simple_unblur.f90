@@ -262,10 +262,10 @@ contains
 
     !> Initialise unblur
     subroutine unblur_init( movie_stack_fname, p )
-        use simple_syslib, only: alloc_errchk
+        use simple_syslib,  only: alloc_errchk
         use simple_imgfile, only: find_ldim_nptcls
-        use simple_jiffys, only: progress
-        use simple_math,   only: round2even, median
+        use simple_jiffys,  only: progress
+        use simple_math,    only: round2even, median
         character(len=*), intent(in)    :: movie_stack_fname  !< input filename of stack
         class(params),    intent(inout) :: p                  !< params object
         type(image)          :: tmpmovsum

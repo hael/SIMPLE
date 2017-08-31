@@ -92,7 +92,7 @@ contains
             else
                 ! frac is one by default in prime2D (no option to set frac)
                 ! so spectral weighting is done over all images
-                call b%a%calc_spectral_weights(1.0)
+                call b%a%calc_spectral_weights(1.0, 'class', p%nsym, p%eullims)
             endif
         else
             call b%a%set_all2single('w', 1.0)

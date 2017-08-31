@@ -46,6 +46,7 @@ type :: oris
     procedure          :: get_pop
     procedure          :: get_pops
     procedure          :: get_pinds
+    procedure          :: extract
     procedure          :: states_exist
     procedure          :: get_arr
     procedure, private :: calc_sum
@@ -141,13 +142,12 @@ type :: oris
     procedure          :: order
     procedure          :: order_corr
     procedure          :: order_cls
+    procedure          :: reduce_projs
     procedure, private :: balance_1
     procedure, private :: balance_2
     generic            :: balance => balance_1, balance_2
     procedure          :: calc_hard_weights
     procedure          :: calc_spectral_weights
-    procedure, private :: calc_hard_weights_single
-    procedure, private :: calc_spectral_weights_single
     procedure          :: find_closest_proj
     procedure          :: find_closest_projs
     procedure          :: find_closest_ori
@@ -755,8 +755,37 @@ contains
         endif
     end function get_pinds
 
+    !>  \brief  extracts the oris with mystate == state/ind == get(which)
+    subroutine extract( self, state, ind, which, l_mask, pop, os )
+        class(oris),          intent(inout) :: self
+        integer,              intent(in)    :: state, ind
+        character(len=*),     intent(in)    :: which
+        logical, allocatable, intent(out)   :: l_mask(:)
+        integer,              intent(out)   :: pop
+        type(oris),           intent(out)   :: os
+        integer :: i, cnt, mystate, myval
+        if( allocated(l_mask) ) deallocate(l_mask)
+        allocate(l_mask(self%n))
+        l_mask = .false.
+        do i=1,self%n
+            mystate = nint(self%o(i)%get('state'))
+            myval   = nint(self%o(i)%get(trim(which)))
+            if( mystate == state .and. myval == ind ) l_mask(i) = .true.
+        end do
+        pop = count(l_mask)
+        if( pop == 0 ) return
+        call os%new(pop)
+        cnt = 0
+        do i=1,self%n
+            if( l_mask(i) )then
+                cnt = cnt + 1
+                os%o(cnt) = self%o(i)
+            endif
+        end do
+    end subroutine extract
+
     !>  \brief  is for getting an array of 'which' variables with
-    !!          filtering based on class/state
+    !!          filtering based on class/state/proj
     function get_arr( self, which, class, state ) result( vals )
         class(oris),       intent(inout) :: self
         character(len=*),  intent(in)    :: which
@@ -2167,6 +2196,26 @@ contains
         call reverse(inds)
     end function order_cls
 
+    !>  \brief  reduces the number of projection directions, useful for balancing 
+    !!          operations
+    subroutine reduce_projs( self, nprojs_reduced, nsym, eullims )
+        class(oris), intent(inout) :: self
+        integer,     intent(in)    :: nprojs_reduced, nsym
+        real,        intent(in)    :: eullims(3,2)
+        type(oris) :: osubspace
+        type(ori)  :: o_single
+        integer    :: iptcl
+        ! generate discrete projection direction space
+        call osubspace%new( nprojs_reduced )
+        call osubspace%spiral( nsym, eullims )
+        ! reduction
+        do iptcl=1,self%n
+            o_single = self%get_ori(iptcl)
+            call self%set(iptcl, 'proj', real(osubspace%find_closest_proj(o_single)))
+        end do
+        call osubspace%kill
+    end subroutine reduce_projs
+
     !>  \brief  applies a one-sided balance restraint on the number of particles
     !!          in 2D classes based on corr/specscore order
     subroutine balance_1( self, popmax, skewness, use_specscore )
@@ -2324,100 +2373,194 @@ contains
     end subroutine balance_2
 
     !>  \brief  calculates hard weights based on ptcl ranking
-    subroutine calc_hard_weights( self, frac, bystate )
-        class(oris),       intent(inout) :: self
-        real,              intent(in)    :: frac
-        logical, optional, intent(in)    :: bystate
-        integer, allocatable :: inds(:)
-        type(oris) :: os
-        integer    :: i, nstates, s, pop
-        logical    :: l_bystate
-        l_bystate = .false.
-        if( present(bystate) ) l_bystate = bystate
-        if( .not.l_bystate )then
-            ! treated as single state
-            call self%calc_hard_weights_single( frac )
-        else
-            ! per state frac
-            nstates = self%get_n('state')
-            if( nstates == 1 )then
-                call self%calc_hard_weights_single( frac )
-            else
-                do s=1,nstates
-                    pop = self%get_pop( s, 'state' )
-                    if( pop==0 )cycle
-                    inds = self%get_pinds( s, 'state' )
-                    os = oris( pop )
-                    do i=1,pop
-                        call os%set_ori( i, self%get_ori( inds(i) ))
-                    enddo
-                    call os%calc_hard_weights_single( frac )
-                    do i=1,pop
-                        call self%set_ori( inds(i), os%get_ori( i ))
-                    enddo
-                    deallocate(inds)
-                enddo
-            endif
-        endif
-    end subroutine calc_hard_weights
+    ! subroutine calc_hard_weights( self, frac, bystate )
+    !     class(oris),       intent(inout) :: self
+    !     real,              intent(in)    :: frac
+    !     logical, optional, intent(in)    :: bystate
+    !     integer, allocatable :: inds(:)
+    !     type(oris) :: os
+    !     integer    :: i, nstates, s, pop
+    !     logical    :: l_bystate
+    !     l_bystate = .false.
+    !     if( present(bystate) ) l_bystate = bystate
+    !     if( .not.l_bystate )then
+    !         ! treated as single state
+    !         call self%calc_hard_weights_single( frac )
+    !     else
+    !         ! per state frac
+    !         nstates = self%get_n('state')
+    !         if( nstates == 1 )then
+    !             call self%calc_hard_weights_single( frac )
+    !         else
+    !             do s=1,nstates
+    !                 pop = self%get_pop( s, 'state' )
+    !                 if( pop==0 )cycle
+    !                 inds = self%get_pinds( s, 'state' )
+    !                 os = oris( pop )
+    !                 do i=1,pop
+    !                     call os%set_ori( i, self%get_ori( inds(i) ))
+    !                 enddo
+    !                 call os%calc_hard_weights_single( frac )
+    !                 do i=1,pop
+    !                     call self%set_ori( inds(i), os%get_ori( i ))
+    !                 enddo
+    !                 deallocate(inds)
+    !             enddo
+    !         endif
+    !     endif
+    ! end subroutine calc_hard_weights
 
     !>  \brief  calculates hard weights based on ptcl ranking
-    subroutine calc_spectral_weights( self, frac, bystate )
-        class(oris),       intent(inout) :: self
-        real,              intent(in)    :: frac
-        logical, optional, intent(in)    :: bystate
-        integer, allocatable :: inds(:)
-        type(oris) :: os
-        integer    :: i, nstates, s, pop
-        logical    :: l_bystate
-        l_bystate = .false.
-        if( present(bystate) ) l_bystate = bystate
-        if( .not.l_bystate )then
-            ! treated as single state
-            call self%calc_spectral_weights_single(frac)
-        else
-            ! per state frac
-            nstates = self%get_n('state')
-            if( nstates==1 )then
-                call self%calc_spectral_weights_single(frac)
-            else
-                do s=1,nstates
-                    pop = self%get_pop( s, 'state' )
-                    if( pop==0 )cycle
-                    inds = self%get_pinds( s, 'state' )
-                    os = oris( pop )
-                    do i=1,pop
-                        call os%set_ori( i, self%get_ori( inds(i) ))
-                    enddo
-                    call os%calc_spectral_weights_single(frac)
-                    do i=1,pop
-                        call self%set_ori( inds(i), os%get_ori( i ))
-                    enddo
-                    deallocate(inds)
-                enddo
-            endif
-        endif
+    ! subroutine calc_spectral_weights( self, frac, bystate )
+    !     class(oris),       intent(inout) :: self
+    !     real,              intent(in)    :: frac
+    !     logical, optional, intent(in)    :: bystate
+    !     integer, allocatable :: inds(:)
+    !     type(oris) :: os
+    !     integer    :: i, nstates, s, pop
+    !     logical    :: l_bystate
+    !     l_bystate = .false.
+    !     if( present(bystate) ) l_bystate = bystate
+    !     if( .not.l_bystate )then
+    !         ! treated as single state
+    !         call self%calc_spectral_weights_single(frac)
+    !     else
+    !         ! per state frac
+    !         nstates = self%get_n('state')
+    !         if( nstates==1 )then
+    !             call self%calc_spectral_weights_single(frac)
+    !         else
+    !             do s=1,nstates
+    !                 pop = self%get_pop( s, 'state' )
+    !                 if( pop==0 )cycle
+    !                 inds = self%get_pinds( s, 'state' )
+    !                 os = oris( pop )
+    !                 do i=1,pop
+    !                     call os%set_ori( i, self%get_ori( inds(i) ))
+    !                 enddo
+    !                 call os%calc_spectral_weights_single(frac)
+    !                 do i=1,pop
+    !                     call self%set_ori( inds(i), os%get_ori( i ))
+    !                 enddo
+    !                 deallocate(inds)
+    !             enddo
+    !         endif
+    !     endif
+    ! end subroutine calc_spectral_weights
+
+    !>  \brief  calculates hard weights based on ptcl ranking
+    ! subroutine calc_hard_weights_single( self, frac )
+    !     class(oris),       intent(inout) :: self
+    !     real,              intent(in)    :: frac
+    !     integer, allocatable :: order(:)
+    !     integer :: i, lim, n, ind
+    !     if( frac < 0.99 )then
+    !         n = 0
+    !         do i=1,self%n
+    !             if( nint(self%o(i)%get('state')) > 0 )then
+    !                 n = n + 1
+    !             else
+    !                 ! ensures rejected from frac threshold
+    !                 call self%o(i)%reject
+    !             endif
+    !         end do
+    !         lim   = nint(frac*real(n))
+    !         order = self%order() ! specscore ranking
+    !         do i=1,self%n
+    !             ind = order(i)
+    !             if( i <= lim )then
+    !                 call self%o(ind)%set('w', 1.)
+    !             else
+    !                 call self%o(ind)%set('w', 0.)
+    !             endif
+    !         end do
+    !     else
+    !         call self%set_all2single('w', 1.)
+    !     endif
+    ! end subroutine calc_hard_weights_single
+
+    !>  \brief  calculates spectral particle weights
+    subroutine calc_spectral_weights( self, frac, which, nsym, eullims )
+        use simple_stat, only: normalize_sigm
+        class(oris),      intent(inout) :: self
+        real,             intent(in)    :: frac
+        character(len=*), intent(in)    :: which ! class or proj
+        integer,          intent(in)    :: nsym
+        real,             intent(in)    :: eullims(3,2)
+        integer              :: istate, nstates, i, j, n, pop, cnt, nincl
+        logical, allocatable :: l_mask(:)
+        real,    allocatable :: weights(:), specscores(:)
+        integer, parameter   :: MINPOP = 10
+        real                 :: minscore
+        type(oris)           :: os_subset, os_reduced
+        ! first exclude shit particles in a global sense
+        call self%calc_hard_weights( frac )
+        ! decide what to do
+        if( .not. self%isthere('state') ) stop 'state label must be set; oris :: calc_spectral_weights'
+        select case(which)
+            case('class')
+                if( .not. self%isthere('class') ) stop 'class label must be set; oris :: calc_spectral_weights'
+                n = self%get_n('class')
+                os_reduced = self
+            case('proj')
+                if( .not. self%isthere('proj') ) stop 'proj label must be set; oris :: calc_spectral_weights'
+                n = self%get_n('proj')
+                os_reduced = self
+                if( n > NSPACE_BALANCE )then
+                    call os_reduced%reduce_projs(NSPACE_BALANCE, nsym, eullims)
+                    n = NSPACE_BALANCE
+                endif
+            case DEFAULT
+                stop 'unsupported which flag; oris :: calc_spectral_weights'
+        end select
+        nstates = self%get_n('state')
+        ! calculate spectral weights normlised per class/proj dir
+        do i=1,n
+            do istate=1,nstates
+                call os_reduced%extract(istate, i, which, l_mask, pop, os_subset)
+                if( pop == 0 )then
+                    cycle
+                else
+                    specscores = os_subset%get_all('specscore')
+                    weights    = os_subset%get_all('w')
+                    nincl      = count(weights > 0.5)
+                    if( nincl <= MINPOP )then
+                        minscore = 0.
+                    else
+                        minscore = minval(specscores, mask=(specscores > TINY))
+                    endif
+                    where( (weights > 0.5) .and. (specscores > minscore) )
+                        weights = specscores
+                    else where
+                        weights = 0.
+                    end where
+                    call normalize_sigm(weights)
+                    cnt = 0
+                    do j=1,self%n
+                        if( l_mask(j) )then
+                            cnt = cnt + 1
+                            call self%o(j)%set('w', weights(cnt))
+                        endif
+                    end do
+                    deallocate(specscores,weights)
+                endif
+            end do
+        end do
+        call os_subset%kill
+        call os_reduced%kill
+        if( allocated(l_mask) ) deallocate(l_mask)
     end subroutine calc_spectral_weights
 
     !>  \brief  calculates hard weights based on ptcl ranking
-    subroutine calc_hard_weights_single( self, frac )
-        class(oris),       intent(inout) :: self
-        real,              intent(in)    :: frac
+    subroutine calc_hard_weights( self, frac )
+        class(oris), intent(inout) :: self
+        real,        intent(in)    :: frac
         integer, allocatable :: order(:)
-        integer :: i, lim, n, ind
+        integer :: i, lim, ind
         if( frac < 0.99 )then
-            n = 0
-            do i=1,self%n
-                if( nint(self%o(i)%get('state')) > 0 )then
-                    n = n + 1
-                else
-                    ! ensures rejected from frac threshold
-                    call self%o(i)%reject
-                endif
-            end do
-            lim   = nint(frac*real(n))
+            lim   = nint(frac*real(self%n))
             order = self%order() ! specscore ranking
-            do i = 1, self%n
+            do i=1,self%n
                 ind = order(i)
                 if( i <= lim )then
                     call self%o(ind)%set('w', 1.)
@@ -2428,33 +2571,53 @@ contains
         else
             call self%set_all2single('w', 1.)
         endif
-    end subroutine calc_hard_weights_single
+    end subroutine calc_hard_weights
 
     !>  \brief  calculates hard weights based on ptcl ranking
-    subroutine calc_spectral_weights_single( self, frac )
-        use simple_stat, only: normalize_sigm
-        class(oris), intent(inout) :: self
-        real,        intent(in)    :: frac
-        real,    allocatable :: specscores(:), weights(:)
-        real    :: minscore
-        integer :: i
-        call self%calc_hard_weights_single(frac)
-        if( self%isthere('specscore') )then
-            specscores = self%get_all('specscore')
-            minscore   = minval(specscores, mask=(specscores > TINY))
-            weights    = self%get_all('w')
-            where( (weights > 0.5) .and. (specscores > minscore) )
-                weights = specscores
-            else where
-                weights = 0.
-            end where
-            call normalize_sigm(weights)
-            do i=1,self%n
-                call self%o(i)%set('w', weights(i))
-            end do
-            deallocate(specscores, weights)
-        endif
-    end subroutine calc_spectral_weights_single
+    ! subroutine calc_spectral_weights_single( self, frac )
+    !     use simple_stat, only: normalize_sigm
+    !     class(oris), intent(inout) :: self
+    !     real,        intent(in)    :: frac
+    !     real,    allocatable :: specscores(:), weights(:)
+    !     real    :: minscore
+    !     integer :: i
+    !     call self%calc_hard_weights_single(frac)
+    !     if( self%isthere('specscore') )then
+    !         specscores = self%get_all('specscore')
+    !         minscore   = minval(specscores, mask=(specscores > TINY))
+    !         weights    = self%get_all('w')
+    !         where( (weights > 0.5) .and. (specscores > minscore) )
+    !             weights = specscores
+    !         else where
+    !             weights = 0.
+    !         end where
+    !         call normalize_sigm(weights)
+    !         do i=1,self%n
+    !             call self%o(i)%set('w', weights(i))
+    !         end do
+    !         deallocate(specscores, weights)
+    !     endif
+    ! end subroutine calc_spectral_weights_single
+
+    !>  \brief  calculates spectral particle weights
+    ! function calc_spectral_weights( self, frac ) result( weights )
+    !     use simple_stat, only: normalize_sigm
+    !     class(oris), intent(inout) :: self
+    !     real,        intent(in)    :: frac
+    !     real,   allocatable :: specscores(:), weights(:)
+    !     real    :: minscore
+    !     integer :: i
+    !     specscores = self%get_all('specscore')
+    !     minscore   = minval(specscores, mask=(specscores > TINY))
+    !     weights    = self%get_all('w')
+    !     where( (weights > 0.5) .and. (specscores > minscore) )
+    !         weights = specscores
+    !     else where
+    !         weights = 0.
+    !     end where
+    !     call normalize_sigm(weights)
+    !     deallocate(weights)
+    ! end function calc_spectral_weights
 
     !>  \brief  to find the closest matching projection direction
     function find_closest_proj( self, o_in, state ) result( closest )
@@ -3238,6 +3401,7 @@ contains
             end do
             deallocate( self%o , stat=alloc_stat)
             call alloc_errchk('In: kill, module: simple_oris', alloc_stat)
+            self%n = 0
         endif
     end subroutine kill
 

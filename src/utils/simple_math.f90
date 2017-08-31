@@ -1033,6 +1033,23 @@ contains
         calc_lowpass_lim = (real(box-1)*smpd)/real(find)
     end function calc_lowpass_lim
 
+    !>  \brief get array of resolution steps
+    !> get_res
+    !! \return  res
+    !!
+    function get_resarr( box, smpd ) result( res )
+        integer, intent(in) :: box
+        real,    intent(in) :: smpd
+        real, allocatable   :: res(:)
+        integer :: n, k, alloc_stat
+        n = fdim(box) - 1
+        allocate( res(n), stat=alloc_stat )
+        call alloc_errchk('In: get_res, module: simple_math', alloc_stat)
+        do k=1,n
+            res(k) = calc_lowpass_lim(k, box, smpd)
+        end do
+    end function get_resarr
+
     !>   calculates a corr coeff based on sum cross prod and denominator
     !! \param sxy cross prod sum
     !! \param den denominator

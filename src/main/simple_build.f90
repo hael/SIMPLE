@@ -133,13 +133,6 @@ contains
                 else
                     call binread_oritab(p%oritab, self%a, [1,p%nptcls])
                 endif
-                if( self%a%get_noris() > 1 )then
-                    call self%a%stats('corr', slask(1), slask(2), slask(3), err)
-                    if( err )then
-                    else
-                        if( p%frac < 0.99 ) call self%a%calc_hard_weights(p%var, bystate=.true.)
-                    endif
-                endif
             endif
         endif
         DebugPrint   'created & filled object for orientations'
@@ -311,10 +304,8 @@ contains
         call self%raise_hard_ctf_exception(p)
         call self%recvol%new([p%boxpd,p%boxpd,p%boxpd],p%smpd)
         call self%recvol%alloc_rho(p)
-        if( p%balance > 0 )then
-            if( .not. self%a%isthere('proj') )then
-                call self%a%set_projs(self%e)
-            endif
+        if( .not. self%a%isthere('proj') )then
+            call self%a%set_projs(self%e)
         endif
         write(*,'(A)') '>>> DONE BUILDING RECONSTRUCTION TOOLBOX'
         self%rec_tbox_exists = .true.
@@ -337,10 +328,8 @@ contains
         call self%kill_eo_rec_tbox
         call self%raise_hard_ctf_exception(p)
         call self%eorecvol%new(p)
-        if( p%balance > 0 )then
-            if( .not. self%a%isthere('proj') )then
-                call self%a%set_projs(self%e)
-            endif
+        if( .not. self%a%isthere('proj') )then
+            call self%a%set_projs(self%e)
         endif
         write(*,'(A)') '>>> DONE BUILDING EO RECONSTRUCTION TOOLBOX'
         self%eo_rec_tbox_exists = .true.
@@ -418,10 +407,8 @@ contains
             nnn = p%nnn
             call self%se%nearest_neighbors(self%e, nnn, self%nnmat)
         endif
-        if( p%balance > 0 )then
-            if( .not. self%a%isthere('proj') )then
-                call self%a%set_projs(self%e)
-            endif
+        if( .not. self%a%isthere('proj') )then
+            call self%a%set_projs(self%e)
         endif
         write(*,'(A)') '>>> DONE BUILDING HADAMARD PRIME3D TOOLBOX'
         self%hadamard_prime3D_tbox_exists = .true.
@@ -517,10 +504,8 @@ contains
         call alloc_errchk('build_hadamard_prime3D_tbox; simple_build, 2', alloc_stat)
         call self%recvols(1)%new([p%boxpd,p%boxpd,p%boxpd],p%smpd)
         call self%recvols(1)%alloc_rho(p)
-        if( p%balance > 0 )then
-            if( .not. self%a%isthere('proj') )then
-                call self%a%set_projs(self%e)
-            endif
+        if( .not. self%a%isthere('proj') )then
+            call self%a%set_projs(self%e)
         endif
         write(*,'(A)') '>>> DONE BUILDING EXTREMAL3D TOOLBOX'
         self%extremal3D_tbox_exists = .true.

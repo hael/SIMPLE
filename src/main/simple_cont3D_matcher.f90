@@ -99,7 +99,7 @@ contains
         if( p%nptcls <= SPECWMINPOP )then
             call b%a%calc_hard_weights(p%frac)
         else
-            call b%a%calc_spectral_weights(p%frac)
+            call b%a%calc_spectral_weights(p%frac, 'proj', p%nsym, p%eullims)
         endif
 
         ! PREPARE REFERENCE & RECONSTRUCTION VOLUMES

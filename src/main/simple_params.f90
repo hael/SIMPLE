@@ -338,7 +338,6 @@ type :: params
     real    :: time_per_frame=0.
     real    :: trs=0.              !< maximum halfwidth shift(in pixels)
     real    :: update_frac = 1.
-    real    :: var=1.
     real    :: width=10.           !< falloff of inner mask(in pixels){10}
     real    :: winsz=1.
     real    :: xsh=0.              !< x shift(in pixels){0}
@@ -696,7 +695,6 @@ contains
         call check_rarg('time_per_image', self%time_per_image)
         call check_rarg('trs',            self%trs)
         call check_rarg('update_frac',    self%update_frac)
-        call check_rarg('var',            self%var)
         call check_rarg('width',          self%width)
         call check_rarg('winsz',          self%winsz)
         call check_rarg('xsh',            self%xsh)
