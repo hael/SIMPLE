@@ -169,6 +169,7 @@ type :: params
     integer :: box=0               !< square image size(in pixels)
     integer :: boxconvsz=256       !< size of box used for box-convolution(in pixels)
     integer :: boxmatch=0
+    integer :: box_original
     integer :: boxpd=0
     integer :: chunk=0
     integer :: chunksz=0           !< # images/orientations in chunk
@@ -840,11 +841,17 @@ contains
             endif
         endif
         ! set logical dimension
+        call set_ldim_box_from_stk( self%stk )
+        self%box_original = self%box
         if( file_exists(self%stk_part) .and. cline%defined('nparts') )then
             call set_ldim_box_from_stk( self%stk_part )
-            if( cline%defined('stk') .and. self%autoscale .eq. 'no' ) call stk_dim_exception(self%stk)
-        else
-            call set_ldim_box_from_stk( self%stk )
+            if( cline%defined('stk') .and. self%autoscale .eq. 'no' )then
+                if( self%box /= self%box_original )then
+                    write(*,*) 'original box:                ', self%box_original
+                    write(*,*) 'box read from partial stack: ', self%box
+                    stop 'dim mismatch; simple_params :: new'
+                endif
+            endif
         endif
         ! Check for the existance of this file if part is defined on the command line
         if( cline%defined('part') )then
@@ -1256,16 +1263,6 @@ contains
                     endif
                 endif
             end subroutine set_ldim_box_from_stk
-
-            subroutine stk_dim_exception( stk2compare )
-                character(len=*), intent(in) :: stk2compare
-                integer :: ldim_here(3)
-                call find_ldim_nptcls(stk2compare, ldim_here, ifoo)
-                if( ldim_here(1) /= self%box .or. ldim_here(2) /= self%box )then
-                    write(*,*) 'logical dimension: ', ldim_here(1:2), ' not consistent with box: ', self%box
-                    stop 'params :: stk_dim_exception'
-                endif
-            end subroutine stk_dim_exception
 
     end subroutine new
 

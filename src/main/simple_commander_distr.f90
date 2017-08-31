@@ -182,7 +182,6 @@ contains
         integer           :: filnum, io_stat
         p      = params(cline) ! parameters generated
         simmat = merge_similarities_from_parts(p%nptcls, p%nparts)
-       
         if(.not.fopen(filnum, status='REPLACE', action='WRITE', file='smat.bin', access='STREAM', iostat=io_stat))&
              call fileio_errmsg('simple_merge_nnmat ; fopen error when opening smat.bin  ', io_stat)
         write(unit=filnum,pos=1,iostat=io_stat) simmat
@@ -270,7 +269,7 @@ contains
                             is_correct = .false.
                             exit
                         endif
-                        if( ldim(1) == p%box .and. ldim(2) == p%box )then
+                        if( ldim(1) == p%box_original .and. ldim(2) == p%box_original )then
                             ! dimension ok
                         else
                             is_correct = .false.

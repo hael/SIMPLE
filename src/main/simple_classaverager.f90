@@ -6,7 +6,7 @@ implicit none
 public :: classaverager
 private
 
-type cavger_ptcl_record
+type ptcl_record
     integer              :: pind      = 0
     integer              :: state_bal = 0
     integer              :: eo        = 1 ! even is 0, odd is 1, default is -1
@@ -16,20 +16,20 @@ type cavger_ptcl_record
     real,    allocatable :: ows(:)
     real,    allocatable :: e3s(:)
     real,    allocatable :: shifts(:,:)
-end type cavger_ptcl_record
+end type ptcl_record
 
 
 type classaverager
     private
-    integer :: istart, iend
-    type(cavger_ptcl_record), allocatable :: pinfo(:)
-    type(image), allocatable :: cavgs_even(:)       !< class averages
-    type(image), allocatable :: cavgs_odd(:)        ! -"-
-    type(image), allocatable :: cavgs_merged(:)     ! -"-
-    type(image), allocatable :: ctfsqsums_even(:)   !< CTF**2 sums for Wiener normalisation
-    type(image), allocatable :: ctfsqsums_odd(:)    !< -"-
-    type(image), allocatable :: ctfsqsums_merged(:) !< -"-
-    logical :: exists = .false.
+    integer                        :: istart, iend
+    type(ptcl_record), allocatable :: pinfo(:)
+    type(image),       allocatable :: cavgs_even(:)       !< class averages
+    type(image),       allocatable :: cavgs_odd(:)        ! -"-
+    type(image),       allocatable :: cavgs_merged(:)     ! -"-
+    type(image),       allocatable :: ctfsqsums_even(:)   !< CTF**2 sums for Wiener normalisation
+    type(image),       allocatable :: ctfsqsums_odd(:)    !< -"-
+    type(image),       allocatable :: ctfsqsums_merged(:) !< -"-
+    logical                        :: exists = .false.
 contains
     procedure :: new
 
@@ -59,7 +59,7 @@ contains
         integer,     allocatable :: ptcls_inds(:), batches(:,:)
         logical,     allocatable :: batch_mask(:)
         real      :: w
-        integer   :: icls, iptcl, istart, iend, inptcls, icls_pop
+        integer   :: icls, iptcl, icls_pop
         integer   :: i, nbatches, batch, batchsz, cnt
         logical   :: l_grid
         integer, parameter :: BATCHTHRSZ = 20
@@ -82,9 +82,12 @@ contains
 
         ! work out range and oris
         if( p%l_distr_exec )then
-            istart  = p%fromp
-            iend    = p%top
-            inptcls = iend - istart +1
+            self%istart  = p%fromp
+            self%iend    = p%top
+            partsz = self%iend - self%istart + 1
+
+
+
             call a_here%new(inptcls)
             cnt = 0
             do iptcl = istart, iend
