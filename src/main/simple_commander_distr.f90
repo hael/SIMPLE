@@ -252,16 +252,10 @@ contains
                 logical,          allocatable :: stack_parts_exist(:) 
                 integer :: ipart, numlen, sz, sz_correct, ldim(3)
                 logical :: is_split, is_correct, is_split_correctly
-                character(len=STDLEN) :: sbody
-                if( p%autoscale .eq. 'yes' )then
-                    sbody = STKPARTFBODY_SC
-                else
-                    sbody = STKPARTFBODY
-                endif
                 allocate( stack_parts_exist(p%nparts) )
                 numlen = len(int2str(p%nparts))
                 do ipart=1,p%nparts
-                    allocate(stack_part_fname, source=trim(sbody)//int2str_pad(ipart,numlen)//p%ext)
+                    allocate(stack_part_fname, source=trim(STKPARTFBODY)//int2str_pad(ipart,numlen)//p%ext)
                     stack_parts_exist(ipart) = file_exists(stack_part_fname)
                     deallocate(stack_part_fname)
                 end do
@@ -270,7 +264,7 @@ contains
                 if( is_split )then
                     do ipart=1,p%nparts
                         sz_correct = parts(ipart,2) - parts(ipart,1) + 1
-                        allocate(stack_part_fname, source=trim(sbody)//int2str_pad(ipart,numlen)//p%ext)
+                        allocate(stack_part_fname, source=trim(STKPARTFBODY)//int2str_pad(ipart,numlen)//p%ext)
                         call find_ldim_nptcls(stack_part_fname, ldim, sz)
                         if( sz /= sz_correct )then
                             is_correct = .false.

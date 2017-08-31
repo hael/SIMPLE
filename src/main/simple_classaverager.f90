@@ -1,15 +1,50 @@
 module simple_classaverager
 
-type(image), allocatable :: cavgs_even(:)       !< class averages
-type(image), allocatable :: cavgs_odd(:)        ! -"-
-type(image), allocatable :: cavgs_merged(:)     ! -"-
-type(image), allocatable :: ctfsqsums_even(:)   !< CTF**2 sums for Wiener normalisation
-type(image), allocatable :: ctfsqsums_odd(:)    !< -"-
-type(image), allocatable :: ctfsqsums_merged(:) !< -"-
+
+implicit none
+
+public :: classaverager
+private
+
+type cavger_ptcl_record
+    integer              :: pind      = 0
+    integer              :: state_bal = 0
+    integer              :: eo        = 1 ! even is 0, odd is 1, default is -1
+    real                 :: pw        = 0.0
+    integer              :: class     = 0
+    integer, allocatable :: states(:)
+    real,    allocatable :: ows(:)
+    real,    allocatable :: e3s(:)
+    real,    allocatable :: shifts(:,:)
+end type cavger_ptcl_record
+
+
+type classaverager
+    private
+    integer :: istart, iend
+    type(cavger_ptcl_record), allocatable :: pinfo(:)
+    type(image), allocatable :: cavgs_even(:)       !< class averages
+    type(image), allocatable :: cavgs_odd(:)        ! -"-
+    type(image), allocatable :: cavgs_merged(:)     ! -"-
+    type(image), allocatable :: ctfsqsums_even(:)   !< CTF**2 sums for Wiener normalisation
+    type(image), allocatable :: ctfsqsums_odd(:)    !< -"-
+    type(image), allocatable :: ctfsqsums_merged(:) !< -"-
+    logical :: exists = .false.
+contains
+    procedure :: new
+
+
+end type classaverager
+
+contains
+
+    subroutine new( self, b, p, grid, prime3Dsrchobj )
+
+    end subroutine new
 
 
 
-    subroutine prime2D_assemble_sums( b, p, grid )
+    subroutine assemble_sums( b, p, grid )
         use simple_projector_hlev, only: rot_imgbatch
         use simple_map_reduce,     only: split_nobjs_even
         use simple_oris,           only: oris
@@ -33,8 +68,19 @@ type(image), allocatable :: ctfsqsums_merged(:) !< -"-
         if( .not. p%l_distr_exec )then
             write(*,'(a)') '>>> ASSEMBLING CLASS SUMS'
         endif
+
+
         ! init
-        call prime2D_init_sums( b, p )
+         do icls=1,p%ncls
+            self%cavgs_even(icls)        = 0.
+            self%cavgs_odd(icls)         = 0.
+            self%cavgs_merged(icls)      = 0.
+            self%ctfsqsums_even(icls)    = cmplx(0.,0.)
+            self%ctfsqsums_odd(icls)     = cmplx(0.,0.)
+            self%ctfsqsums_merged(icls)  = cmplx(0.,0.)
+        end do
+
+        ! work out range and oris
         if( p%l_distr_exec )then
             istart  = p%fromp
             iend    = p%top
@@ -51,6 +97,9 @@ type(image), allocatable :: ctfsqsums_merged(:) !< -"-
             inptcls = p%nptcls
             a_here  = b%a
         endif
+
+
+
         ! cluster loop
         do icls = 1, p%ncls
             call progress(icls,p%ncls)
@@ -98,7 +147,8 @@ type(image), allocatable :: ctfsqsums_merged(:) !< -"-
                         orientation = b%a%get_ori(iptcl)
                         w = orientation%get('w')
                         call batch_imgs(i)%rtsq( -orientation%e3get(), 0., 0. )
-                        call batch_imgsum%add(batch_imgs(i), w)
+                        !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+                        !call batch_imgsum%add(batch_imgs(i), w)
                     enddo
                 endif
                 ! batch summation
@@ -157,7 +207,7 @@ type(image), allocatable :: ctfsqsums_merged(:) !< -"-
                 call  b%ctfsqsums(icls)%add(ctfsq, pw)
             end subroutine apply_ctf_and_shift
 
-    end subroutine prime2D_assemble_sums
+    end subroutine assemble_sums
 
 
 
