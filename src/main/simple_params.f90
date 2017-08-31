@@ -111,7 +111,6 @@ type :: params
     character(len=STDLEN) :: dir_ptcls=''
     character(len=STDLEN) :: dockmode='eul'       !< volume docking mode(eul|shift|eulshift|all){eul}
     character(len=STDLEN) :: doclist=''           !< list of oritabs for different states
-    character(len=STDLEN) :: endian='native'      !< endiannesss of files(big|little|native){native}
     character(len=STDLEN) :: exec_abspath=''
     character(len=STDLEN) :: exp_doc=''           !< specifying exp_time and dose_rate per tomogram
     character(len=4)      :: ext='.mrc'           !< file extension{.mrc}
@@ -454,7 +453,6 @@ contains
         call check_carg('dopick',         self%dopick)
         call check_carg('doprint',        self%doprint)
         call check_carg('dynlp',          self%dynlp)
-        call check_carg('endian',         self%endian)
         call check_carg('eo',             self%eo)
         call check_carg('errify',         self%errify)
         call check_carg('even',           self%even)

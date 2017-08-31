@@ -109,7 +109,7 @@ contains
             call xprime2D%execute(cline_prime2D_stage2)
             ! delete downscaled stack parts (we are done with them)
             call del_files(trim(STKPARTFBODY_SC), p_master%nparts, ext=p_master%ext)
-            ! re-generate class averages at native sampling
+            ! re-generate class averages at original sampling
             call scobj%uninit(cline) ! puts back the old command line
             call binread_oritab(FINALDOC, os, [1,p_master%nptcls])
             call os%mul_shifts(1./scale_stage2)
@@ -281,7 +281,7 @@ contains
         call cline_projvol%set('outstk', 'reprojs'//p_master%ext)
         call cline_projvol%delete('stk')
         if( doautoscale )then
-            call scobj%update_smpd_msk(cline_projvol, 'native')
+            call scobj%update_smpd_msk(cline_projvol, 'original')
             ! scale class averages
             call scobj%scale_exec
         endif
@@ -327,7 +327,7 @@ contains
         call del_files(trim(STKPARTFBODY), p_master%nparts, ext=p_master%ext)
         if( doautoscale )then
             write(*,'(A)') '>>>'
-            write(*,'(A)') '>>> 3D RECONSTRUCTION AT NATIVE SAMPLING'
+            write(*,'(A)') '>>> 3D RECONSTRUCTION AT ORIGINAL SAMPLING'
             write(*,'(A)') '>>>'
             ! modulate shifts
             call os%new(p_master%nptcls)
@@ -335,7 +335,7 @@ contains
             call os%mul_shifts(1./scobj%get_scaled_var('scale'))
             call binwrite_oritab(oritab, os, [1,p_master%nptcls])
             ! prepare recvol command line
-            call scobj%update_stk_smpd_msk(cline_recvol, 'native')
+            call scobj%update_stk_smpd_msk(cline_recvol, 'original')
             call cline_recvol%set('oritab', trim(oritab))
             ! re-reconstruct volume
             call xrecvol%execute(cline_recvol)

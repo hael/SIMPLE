@@ -95,7 +95,7 @@ contains
         type(params) :: p
         type(oris)   :: os_uni
         type(ori)    :: orientation
-        real         :: smpd_native, smpd_scaled
+        real         :: smpd_original, smpd_scaled
         integer      :: nmovies, fromto(2), imovie, ntot, movie_counter
         integer      :: frame_counter, movie_ind, nptcls_out
         p = params(cline, checkdistr=.false.) ! constants & derived constants produced
@@ -178,10 +178,10 @@ contains
         movie_counter = 0
         call orientation%new
         call os_uni%new(ntot)
-        smpd_native = p%smpd
+        smpd_original = p%smpd
         ! loop over exposures (movies)
         do imovie=fromto(1),fromto(2)
-            p%smpd    = smpd_native
+            p%smpd    = smpd_original
             p%pspecsz = p%pspecsz_unblur
             if( ntot == 1 )then
                 movie_ind = p%part ! streaming mode

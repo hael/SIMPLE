@@ -594,7 +594,7 @@ contains
             rt = ran_tabu(maxpop)
             allocate(membership(maxpop), stat=alloc_stat)
             call rt%balanced(2, membership)
-            do i = 1, maxpop
+            do i=1,maxpop
                 if(membership(i) == 2)cycle
                 iptcl = inds2split(i)
                 call self%o(iptcl)%set('class', real(icls))
