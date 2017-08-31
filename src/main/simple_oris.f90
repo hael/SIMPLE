@@ -2102,18 +2102,21 @@ contains
         integer,     intent(in)    :: nsym
         real,        intent(in)    :: eullims(3,2)
         type(oris) :: tmp
-        integer    :: cnt, i
-        real       :: e1lim, e2lim
+        integer    :: cnt, i, n
+        real       :: e1lim, e2lim, e1_area_frac, e2_area_frac
         if( nsym == 1 )then
             call self%spiral_1
             return
         endif
         e1lim = eullims(1,2)
         e2lim = eullims(2,2)
-        tmp = oris(self%n*nsym)
+        e1_area_frac = (e1lim-eullims(1,1)) / 360.
+        e2_area_frac = (e2lim-eullims(2,1)) / 180.
+        n   = nint(real(self%n) /(e1_area_frac * e2_area_frac) )
+        tmp = oris(n)
         call tmp%spiral_1
         cnt = 0
-        do i=1,self%n*nsym
+        do i = 1, n
             if( tmp%o(i)%e1get() <= e1lim .and. tmp%o(i)%e2get() <= e2lim )then
                 cnt = cnt+1
                 self%o(cnt) = tmp%o(i)

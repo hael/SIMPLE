@@ -136,7 +136,7 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_COMLIN_SMAT NORMAL STOP ****')
     end subroutine exec_comlin_smat
-    
+
     !> symsrch commander for symmetry searching
     !! is a program for searching for the principal symmetry axis of a volume
     !! reconstructed without assuming any point-group symmetry. The program
@@ -149,6 +149,7 @@ contains
     !! orientations, and a new alignment document is produced. Input this
     !! document to recvol together with the images and the point-group symmetry
     !! to generate a symmetrised map
+
     subroutine exec_symsrch( self, cline )
         use simple_strings,        only: int2str_pad
         use simple_oris,           only: oris
@@ -158,94 +159,150 @@ contains
         use simple_binoris_io      ! use all in there
         class(symsrch_commander), intent(inout) :: self
         class(cmdline),           intent(inout) :: cline
-        type(params)                  :: p
-        type(build)                   :: b
-        type(ori)                     :: symaxis_ori
-        type(oris)                    :: os, oshift
-        integer                       :: fnr, file_stat, comlin_srch_nbest, cnt, i, j, nl, noris
-        real                          :: shvec(3)
-        character(len=STDLEN)         :: fname_finished
-        character(len=32), parameter  :: SYMSHTAB   = 'sym_3dshift.txt'
-        character(len=32), parameter  :: SYMPROJSTK = 'sym_projs.mrc'
-        character(len=32), parameter  :: SYMPROJTAB = 'sym_projs.txt'
+        type(params)                 :: p
+        type(build)                  :: b
+        type(ori)                    :: symaxis, orientation
+        type(oris)                   :: os, oshift, symaxes, orientation_best, tmp_os
+        real,            allocatable :: corrs(:)
+        integer,         allocatable :: order(:)
+        integer                      :: fnr, file_stat, comlin_srch_nbest, cnt, i, j, nl
+        integer                      :: bestloc(1), nbest_here, noris
+        real                         :: shvec(3)
+        character(len=STDLEN)        :: fname_finished
+        character(len=32), parameter :: SYMSHTAB   = 'sym_3dshift.txt'
+        character(len=32), parameter :: SYMPROJSTK = 'sym_projs.mrc'
+        character(len=32), parameter :: SYMPROJTAB = 'sym_projs.txt'
+        integer,           parameter :: NBEST = 30
         p = params(cline)                                   ! parameters generated
-        call b%build_general_tbox(p, cline, .true., .true.) ! general objects built (no oritab reading)
-        call b%build_comlin_tbox(p)                         ! objects for common lines based alignment built
-        ! center volume
-        call b%vol%read(p%vols(1))
-        shvec = b%vol%center(p%cenlp,'no',p%msk)
-        if( p%l_distr_exec .and. p%part.eq.1 )then
-            ! writes shifts for distributed execution
-            call oshift%new(1)
-            call oshift%set(1,'x',shvec(1))
-            call oshift%set(1,'y',shvec(2))
-            call oshift%set(1,'z',shvec(3))
-            call binwrite_oritab(trim(SYMSHTAB), oshift, [1,1])
-            call oshift%kill
-        endif
-        ! generate projections
-        call b%vol%mask(p%msk, 'soft')
-        call b%vol%fwd_ft
-        call b%vol%expand_cmat
-        b%ref_imgs(1,:) = projvol(b%vol, b%e, p)
-        if( p%l_distr_exec .and. p%part > 1 )then
-            ! do nothing
-        else
-            ! writes projections images and orientations for subsequent reconstruction
-            ! only in local and distributed (part=1) modes
-            noris = b%e%get_noris()
-            do i=1,noris 
-                call b%ref_imgs(1,i)%write(SYMPROJSTK, i)
-            enddo
-            call binwrite_oritab(SYMPROJTAB, b%e, [1,noris])
-        endif
-        ! expand over symmetry group
-        cnt = 0
-        do i=1,p%nptcls
-            do j=1,p%nsym
-                cnt = cnt+1
-                b%imgs_sym(cnt) = b%ref_imgs(1,i)
-                call b%imgs_sym(cnt)%fwd_ft
+        call b%build_general_tbox(p, cline, .true., nooritab=.true.) ! general objects built (no oritab reading)
+        call b%build_comlin_tbox(p)  ! objects for common lines based alignment built
+        ! SETUP
+        if( (p%l_distr_exec .and. p%refine.eq.'no') .or. .not.p%l_distr_exec )then
+            ! center volume
+            call b%vol%read(p%vols(1))
+            shvec = b%vol%center(p%cenlp,'no',p%msk)
+            if( p%l_distr_exec .and. p%part.eq.1 )then
+                ! writes shifts for distributed execution
+                call oshift%new(1)
+                call oshift%set(1,'x',shvec(1))
+                call oshift%set(1,'y',shvec(2))
+                call oshift%set(1,'z',shvec(3))
+                call binwrite_oritab(trim(SYMSHTAB), oshift, [1,1])
+                call oshift%kill
+            endif
+            ! generate projections
+            call b%vol%mask(p%msk, 'soft')
+            call b%vol%fwd_ft
+            call b%vol%expand_cmat
+            b%ref_imgs(1,:) = projvol(b%vol, b%e, p)
+            if( p%l_distr_exec .and. p%part > 1 )then
+                ! do nothing
+            else
+                ! writes projections images and orientations for subsequent reconstruction
+                ! only in local and distributed (part=1) modes
+                noris = b%e%get_noris()
+                do i=1,noris 
+                    call b%ref_imgs(1,i)%write(SYMPROJSTK, i)
+                enddo
+                call binwrite_oritab(SYMPROJTAB, b%e, [1,noris])
+            endif
+            ! expand over symmetry group
+            cnt = 0
+            do i=1,p%nptcls
+                do j=1,p%nsym
+                    cnt = cnt+1
+                    b%imgs_sym(cnt) = b%ref_imgs(1,i)
+                    call b%imgs_sym(cnt)%fwd_ft
+                end do
             end do
-        end do
-        ! search for the axes
-        call comlin_srch_init( b, p, 'simplex', 'sym')
-        if(  p%l_distr_exec )then
-            call comlin_srch_symaxis( symaxis_ori, [p%fromp,p%top])
-            call comlin_srch_write_resoris('symaxes_part'//int2str_pad(p%part,p%numlen)//'.txt', [p%fromp,p%top])
-        else
-            comlin_srch_nbest = comlin_srch_get_nbest()
-            call comlin_srch_symaxis( symaxis_ori )
-            call comlin_srch_write_resoris('symaxes.txt', [1,comlin_srch_nbest])
-            if( cline%defined('oritab') )then
-                ! rotate the orientations & transfer the 3d shifts to 2d
-                shvec = -1.*shvec
-                nl    = binread_nlines(p%oritab)
-                os    = oris(nl)
-                call binread_oritab(p%oritab, os, [1,nl])
-                if( cline%defined('state') )then
-                    call b%se%apply_sym_with_shift(os, symaxis_ori, shvec, p%state )
-                else
-                    call b%se%apply_sym_with_shift(os, symaxis_ori, shvec )
-                endif
-                call binwrite_oritab(p%outfile, os, [1,os%get_noris()])
+        endif
+        ! COARSE SEARCH
+        if( (p%l_distr_exec .and. p%refine.eq.'no') .or. .not.p%l_distr_exec )then
+            call comlin_srch_init( b, p, 'simplex', 'sym')
+            call comlin_coarsesrch_symaxis( [p%fromp,p%top], symaxes)
+            if( p%l_distr_exec )then
+                call binwrite_oritab(trim(p%fbody)//int2str_pad(p%part,p%numlen)//'.txt', symaxes, [p%fromp,p%top])
+            else
+                noris      = symaxes%get_noris()
+                nbest_here = min(NBEST, noris)
+                order      = symaxes%order_corr()
+                call tmp_os%new(nbest_here)
+                cnt = 0
+                do i = noris, noris-nbest_here+1, -1
+                    cnt = cnt + 1
+                    call tmp_os%set_ori(cnt, symaxes%get_ori(order(i)))
+                enddo
+                symaxes = tmp_os
+                call binwrite_oritab(trim('sympeaks.txt'), symaxes, [1,nbest_here])
+                deallocate(order)
+                call tmp_os%kill
             endif
         endif
-        ! cleanup
-        call b%vol%kill_expanded
+        ! FINE SEARCH
+        if( p%refine.eq.'yes' .or. .not.p%l_distr_exec)then
+            call orientation_best%new(1)
+            if( p%l_distr_exec )then
+                ! fetch orientation to refine
+                nl = binread_nlines(p%oritab)
+                call symaxes%new(nl)
+                call binread_oritab(p%oritab, symaxes, [1,nl])
+                orientation = symaxes%get_ori(p%part)
+                ! fetch refernce orientations
+                nl = binread_nlines(SYMPROJTAB)
+                call b%e%new(nl)
+                call binread_oritab(SYMPROJTAB, b%e, [1,nl])
+                do i=1,p%nptcls
+                    call b%ref_imgs(1,i)%new([p%box, p%box, 1], p%smpd)
+                    call b%ref_imgs(1,i)%read(SYMPROJSTK, i)
+                enddo
+                ! expand over symmetry group
+                cnt = 0
+                do i=1,p%nptcls
+                    do j=1,p%nsym
+                        cnt = cnt+1
+                        b%imgs_sym(cnt) = b%ref_imgs(1,i)
+                        call b%imgs_sym(cnt)%fwd_ft
+                    end do
+                end do
+                ! search
+                call comlin_srch_init( b, p, 'simplex', 'sym')
+                call comlin_singlesrch_symaxis(orientation)
+                call orientation_best%set_ori(1, orientation)
+                call orientation_best%write(trim(p%fbody)//int2str_pad(p%part, p%numlen)//'.txt')
+            else
+                ! search selected peaks in non-distributed modes
+                write(*,'(A)') '>>> CONTINOUS SYMMETRY AXIS REFINEMENT'
+                do  i = 1, nbest_here
+                    call progress(i, nbest_here)
+                    orientation = symaxes%get_ori(i)
+                    call comlin_singlesrch_symaxis(orientation)
+                    call symaxes%set_ori(i, orientation)
+                enddo
+                corrs   = symaxes%get_all('corr')
+                bestloc = maxloc(corrs)
+                symaxis = symaxes%get_ori(bestloc(1))
+                write(*,'(A)') '>>> FOUND SYMMETRY AXIS ORIENTATION:'
+                call symaxis%print_ori()
+                if( cline%defined('oritab') )then
+                    ! rotate the orientations & transfer the 3d shifts to 2d
+                    shvec = -1.*shvec
+                    if( cline%defined('state') )then
+                        call b%se%apply_sym_with_shift(b%a, symaxis, shvec, p%state )
+                    else
+                        call b%se%apply_sym_with_shift(b%a, symaxis, shvec )
+                    endif
+                    call binwrite_oritab(p%outfile, b%a, [1,b%a%get_noris()])
+                endif
+            endif
+        endif
         ! end gracefully
         call simple_end('**** SIMPLE_SYMSRCH NORMAL STOP ****')
         ! indicate completion (when run in a qsys env)
         if(p%l_distr_exec)then
             fname_finished = 'JOB_FINISHED_'//int2str_pad(p%part,p%numlen)
-        else
-            fname_finished = 'SYMSRCH_FINISHED'
+            if(.not.fopen(fnr, FILE=trim(fname_finished), STATUS='REPLACE', action='WRITE', iostat=file_stat))&
+            &call fileio_errmsg('In: commander_comlin :: symsrch', file_stat )
         endif
-       
-        if(.not.fopen(fnr, FILE=trim(fname_finished), STATUS='REPLACE', action='WRITE', iostat=file_stat))&
-             call fileio_errmsg('In: commander_comlin :: symsrch', file_stat )
-        if(.not.fclose( unit=fnr , iostat=file_stat))&
-             call fileio_errmsg('In: commander_comlin :: symsrch closing', file_stat )
     end subroutine exec_symsrch
 
 end module simple_commander_comlin

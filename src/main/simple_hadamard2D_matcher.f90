@@ -39,7 +39,6 @@ contains
         integer,        intent(in)    :: which_iter
         logical,        intent(inout) :: converged
         logical, allocatable :: ptcl_mask(:)
-        integer, allocatable :: pops(:)
         integer :: iptcl, icls
         real    :: corr_thresh, frac_srch_space, skewness, extr_thresh
 
@@ -167,11 +166,7 @@ contains
         if( p%l_distr_exec )then
             ! this is done in cavg_assemble
         else
-            !pops = b%a%get_pops('class')
             call b%a%fill_empty_classes()
-            ! do icls = 1, p%ncls
-            !     print *,icls,pops(icls), b%a%get_pop(icls, 'class')
-            ! enddo
         endif
 
         ! OUTPUT ORIENTATIONS
