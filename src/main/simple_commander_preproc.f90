@@ -506,7 +506,7 @@ contains
         ! for series of tomographic movies we need to calculate the time_per_frame
         if( p%tomo .eq. 'yes' )then
             ! get number of frames & dim from stack
-            call find_ldim_nptcls(movienames(1), lfoo, nframes, endconv=endconv)
+            call find_ldim_nptcls(movienames(1), lfoo, nframes)
             ! calculate time_per_frame
             p%time_per_frame = p%exp_time/real(nframes*nmovies)
         endif

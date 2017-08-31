@@ -114,10 +114,6 @@ contains
         case DEFAULT
             stop 'Unsupported file format; new; simple_imgfile'
         end select
-        ! check endconv status
-        if( .not. allocated(endconv) )then
-            allocate(endconv, source='NATIVE')
-        endif
         ! open the file
         call self%open_local(del_if_exists, rwaction)
         ! read/write the header
@@ -176,7 +172,7 @@ contains
         endif
         ! Get an IO unit number for the head file
         if(.not.fopen(self%funit,access='STREAM',file=self%fname,action=rw_str,&
-             status=stat_str,iostat=ios,convert=endconv))&
+             status=stat_str,iostat=ios))&
               call fileio_errmsg("imgfile::open_local fopen error",ios)
         self%was_written_to = .false.
     end subroutine open_local
@@ -870,12 +866,11 @@ contains
                 case('M')
                     allocate(MrcImgHead :: hed)
                     call hed%new
-                    if(.not.fopen(filnum, status='OLD', action='READ', file=fname, &
-                         access='STREAM', iostat=ios,convert='NATIVE'))&
-                         call fileio_errmsg(" get_mrcfile_info fopen error "//trim(fname),ios)
+                    if(.not.fopen(filnum, status='OLD', action='READ', file=fname, access='STREAM', iostat=ios))&
+                        call fileio_errmsg(" get_mrcfile_info fopen error "//trim(fname),ios)
                     call hed%read(filnum)
                     if(.not.fclose(filnum,ios))&
-                         call fileio_errmsg(" get_mrcfile_info close error "//trim(fname),ios)
+                        call fileio_errmsg(" get_mrcfile_info close error "//trim(fname),ios)
                     ldim = hed%getDims()
                     smpd = hed%getPixSz()
                     if( doprint )then
@@ -886,12 +881,10 @@ contains
                 case('F')
                     allocate(MrcImgHead :: hed)
                     call hed%new
-                    if(.not.fopen(filnum, status='OLD', action='READ', file=fname, &
-                         access='STREAM', convert='BIG_ENDIAN', iostat=ios))&
-                         call fileio_errmsg(" get_mrcfile_info fopen error "//trim(fname),ios)
+                    if(.not.fopen(filnum, status='OLD', action='READ', file=fname, access='STREAM', iostat=ios))&
+                    &call fileio_errmsg(" get_mrcfile_info fopen error "//trim(fname),ios)
                     call hed%read(filnum)
-                    if(.not. fclose(filnum, ios))&
-                         call fileio_errmsg(" get_mrcfile_info fclose error "//trim(fname),ios)
+                    if(.not. fclose(filnum, ios)) call fileio_errmsg(" get_mrcfile_info fclose error "//trim(fname),ios)
                     if( doprint ) call hed%print_imghead
                 case DEFAULT
                     write(*,*) 'The inputted file is not an MRC file; get_mrcfile_info; simple_jiffys'
@@ -917,10 +910,8 @@ contains
         if( file_exists(fname) )then
             if( fname2format(fname) .eq. 'S' )then
                 if( allocated(conv) ) deallocate(conv)
-                if(.not.fopen(filnum, status='OLD', action='READ', file=fname, &
-                &access='STREAM', convert='NATIVE',iostat=ios))&
+                if(.not.fopen(filnum, status='OLD', action='READ', file=fname, access='STREAM',iostat=ios))&
                 call fileio_errmsg(" get_spifile_info fopen error "//trim(fname),ios)
-
                 call read_spihed
                 if(.not.fclose(filnum,iostat=ios))&
                 call fileio_errmsg(" get_spifile_info fclose error "//trim(fname),ios)
@@ -929,9 +920,8 @@ contains
                     call print_spihed
                     return
                 endif
-                if(.not.fopen(filnum, status='OLD', action='READ', file=fname, &
-                         access='STREAM', convert='BIG_ENDIAN', iostat=ios))&
-                         call fileio_errmsg(" get_spifile_info fopen error "//trim(fname),ios)
+                if(.not.fopen(filnum, status='OLD', action='READ', file=fname, access='STREAM', iostat=ios))&
+                &call fileio_errmsg(" get_spifile_info fopen error "//trim(fname),ios)
                 call read_spihed
                 if(.not.fclose(filnum,iostat=ios))&
                          call fileio_errmsg(" get_spifile_info fclose error "//trim(fname),ios)
@@ -940,12 +930,12 @@ contains
                     call print_spihed
                     return
                 endif
-                if(.not.fopen(filnum, status='OLD', action='READ', file=fname, &
-                         access='STREAM', convert='LITTLE_ENDIAN', iostat=ios))&
-                         call fileio_errmsg(" get_spifile_info fopen error "//trim(fname),ios)
+                if(.not.fopen(filnum, status='OLD', action='READ', file=fname,&
+                &access='STREAM', iostat=ios))&
+                &call fileio_errmsg(" get_spifile_info fopen error "//trim(fname),ios)
                 call read_spihed
                 if(.not.fclose(filnum,iostat=ios))&
-                         call fileio_errmsg(" get_spifile_info fclose error "//trim(fname),ios)
+                &call fileio_errmsg(" get_spifile_info fclose error "//trim(fname),ios)
                 if( .not. any(ldim < 1) )then
                     allocate(conv, source='LITTLE_ENDIAN')
                     call print_spihed
@@ -988,13 +978,12 @@ contains
     end subroutine get_spifile_info
 
     !>  \brief  is for finding logical dimension and number of particles in stack
-    subroutine find_ldim_nptcls( fname, ldim, nptcls, doprint, formatchar, endconv )
-        character(len=*),                        intent(in)  :: fname      !< filename
-        integer,                                 intent(out) :: ldim(3)    !< logical dimension
-        integer,                                 intent(out) :: nptcls     !< number of particles
-        logical,                       optional, intent(in)  :: doprint    !< do print or not
-        character(len=1),              optional, intent(in)  :: formatchar !< input format
-        character(len=:), allocatable, optional, intent(out) :: endconv    !< endian conversion
+    subroutine find_ldim_nptcls( fname, ldim, nptcls, doprint, formatchar )
+        character(len=*),           intent(in)  :: fname      !< filename
+        integer,                    intent(out) :: ldim(3)    !< logical dimension
+        integer,                    intent(out) :: nptcls     !< number of particles
+        logical,          optional, intent(in)  :: doprint    !< do print or not
+        character(len=1), optional, intent(in)  :: formatchar !< input format
         integer                       :: mode, iform, maxim
         real                          :: smpd
         character(len=:), allocatable :: conv
@@ -1020,15 +1009,6 @@ contains
                 write(*,*) 'format descriptor: ', fname2format(fname)
                 stop 'File format not supported; find_ldim_nptcls; simple_procimgfile'
         end select
-        if( present(endconv) )then
-            if( allocated(endconv) ) deallocate(endconv)
-            select case (form)
-                case('M','F')
-                    allocate(endconv, source='NATIVE')
-                case('S')
-                    allocate(endconv, source=conv)
-            end select
-        endif
     end subroutine find_ldim_nptcls
 
     !>  \brief  is for checking logical dimension and number of particles in stack

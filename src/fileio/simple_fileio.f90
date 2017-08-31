@@ -1074,7 +1074,7 @@ contains
         integer :: filnum, io_stat
         character(len=100) :: io_message
 
-        if(.not.fopen(filnum, fname, 'OLD', 'READ', io_stat, 'STREAM', convert='NATIVE'))then
+        if(.not.fopen(filnum, fname, 'OLD', 'READ', io_stat, 'STREAM'))then
             call fileio_errmsg("Error opening file "//trim(fname) , io_stat)
         end if
         read(unit=filnum,pos=first_byte,iostat=io_stat,iomsg=io_message) mat

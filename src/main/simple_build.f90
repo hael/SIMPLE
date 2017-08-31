@@ -202,9 +202,7 @@ contains
             call rt%kill
         endif
         if( p%projstats .eq. 'yes' )then
-            if( .not. self%a%isthere('proj') )then
-                call self%a%set_projs(self%e)
-            endif
+            if( .not. self%a%isthere('proj') ) call self%a%set_projs(self%e)
         endif
         write(*,'(A)') '>>> DONE BUILDING GENERAL TOOLBOX'
         self%general_tbox_exists = .true.
@@ -304,9 +302,7 @@ contains
         call self%raise_hard_ctf_exception(p)
         call self%recvol%new([p%boxpd,p%boxpd,p%boxpd],p%smpd)
         call self%recvol%alloc_rho(p)
-        if( .not. self%a%isthere('proj') )then
-            call self%a%set_projs(self%e)
-        endif
+        if( .not. self%a%isthere('proj') ) call self%a%set_projs(self%e)
         write(*,'(A)') '>>> DONE BUILDING RECONSTRUCTION TOOLBOX'
         self%rec_tbox_exists = .true.
     end subroutine build_rec_tbox
@@ -328,9 +324,7 @@ contains
         call self%kill_eo_rec_tbox
         call self%raise_hard_ctf_exception(p)
         call self%eorecvol%new(p)
-        if( .not. self%a%isthere('proj') )then
-            call self%a%set_projs(self%e)
-        endif
+        if( .not. self%a%isthere('proj') ) call self%a%set_projs(self%e)
         write(*,'(A)') '>>> DONE BUILDING EO RECONSTRUCTION TOOLBOX'
         self%eo_rec_tbox_exists = .true.
     end subroutine build_eo_rec_tbox
@@ -407,9 +401,7 @@ contains
             nnn = p%nnn
             call self%se%nearest_neighbors(self%e, nnn, self%nnmat)
         endif
-        if( .not. self%a%isthere('proj') )then
-            call self%a%set_projs(self%e)
-        endif
+        if( .not. self%a%isthere('proj') ) call self%a%set_projs(self%e)
         write(*,'(A)') '>>> DONE BUILDING HADAMARD PRIME3D TOOLBOX'
         self%hadamard_prime3D_tbox_exists = .true.
     end subroutine build_hadamard_prime3D_tbox
@@ -504,9 +496,7 @@ contains
         call alloc_errchk('build_hadamard_prime3D_tbox; simple_build, 2', alloc_stat)
         call self%recvols(1)%new([p%boxpd,p%boxpd,p%boxpd],p%smpd)
         call self%recvols(1)%alloc_rho(p)
-        if( .not. self%a%isthere('proj') )then
-            call self%a%set_projs(self%e)
-        endif
+        if( .not. self%a%isthere('proj') ) call self%a%set_projs(self%e)
         write(*,'(A)') '>>> DONE BUILDING EXTREMAL3D TOOLBOX'
         self%extremal3D_tbox_exists = .true.
     end subroutine build_extremal3D_tbox

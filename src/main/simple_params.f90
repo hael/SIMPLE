@@ -754,7 +754,7 @@ contains
         endif
         ! no stack given, get ldim from volume if present
         if( self%stk .eq. '' .and. self%vols(1) .ne. '' )then
-            call find_ldim_nptcls(self%vols(1), self%ldim, ifoo, endconv=conv)
+            call find_ldim_nptcls(self%vols(1), self%ldim, ifoo)
             self%box  = self%ldim(1)
             DebugPrint 'found logical dimension of volume: ', self%ldim
         endif
@@ -763,7 +763,7 @@ contains
             if( file_exists(self%stk) )then
                 if( .not. cline%defined('nptcls') )then
                     ! get number of particles from stack
-                     call find_ldim_nptcls(self%stk, lfoo, self%nptcls, endconv=conv)
+                     call find_ldim_nptcls(self%stk, lfoo, self%nptcls)
                      DebugPrint 'found logical dimension of stack: ', lfoo
                      DebugPrint 'found nr of ptcls from stack: ', self%nptcls
                 endif
@@ -788,7 +788,7 @@ contains
             if( file_exists(self%refs) )then
                 if( cline%defined('box') )then
                 else
-                    call find_ldim_nptcls(self%refs, self%ldim, ifoo, endconv=conv)
+                    call find_ldim_nptcls(self%refs, self%ldim, ifoo)
                     self%ldim(3) = 1
                     DebugPrint 'found logical dimension of refs: ', self%ldim
                     self%box = self%ldim(1)
@@ -805,25 +805,6 @@ contains
         call mkfnames
         ! check box
         if( self%box > 0 .and. self%box < 26 ) stop 'box size need to be larger than 26; simple_params'
-        ! set endconv in simple_defs
-        if( allocated(endconv) ) deallocate(endconv)
-        if( cline%defined('endian') )then
-            select case(self%endian)
-                case('big')
-                    allocate(endconv, source='BIG_ENDIAN')
-                case('little')
-                    allocate(endconv, source='LITTLE_ENDIAN')
-                case('native')
-                    allocate(endconv, source='NATIVE')
-                case DEFAULT
-                    stop 'unsupported endianness flag; simple_params :: constructor'
-            end select
-        else if( allocated(conv) )then
-            allocate(endconv, source=conv)
-        else
-            allocate(endconv, source='NATIVE')
-        endif
-        if( allocated(conv) ) deallocate(conv)
         ! fractional search and volume update
         if( self%update_frac <= .99)then
             if( self%update_frac < 0.01 )stop 'UPDATE_FRAC is too small 1; simple_params :: constructor'
@@ -861,6 +842,7 @@ contains
         ! set logical dimension
         if( file_exists(self%stk_part) .and. cline%defined('nparts') )then
             call set_ldim_box_from_stk( self%stk_part )
+            if( cline%defined('stk') .and. self%autoscale .eq. 'no' ) call stk_dim_exception(self%stk)
         else
             call set_ldim_box_from_stk( self%stk )
         endif
@@ -998,7 +980,7 @@ contains
         ! error check ncls
         if( file_exists(self%refs) )then
             ! get number of particles from stack
-            call find_ldim_nptcls(self%refs, lfoo, ncls, endconv=conv)
+            call find_ldim_nptcls(self%refs, lfoo, ncls)
             DebugPrint 'found ncls from refs: ', ncls
             if( cline%defined('ncls') )then
                 if( ncls /= self%ncls ) stop 'inputtend number of clusters (ncls) not&
@@ -1262,7 +1244,7 @@ contains
                     if( file_exists(stkfname) )then
                         if( cline%defined('box') )then
                         else
-                            call find_ldim_nptcls(stkfname, self%ldim, ifoo, endconv=conv)
+                            call find_ldim_nptcls(stkfname, self%ldim, ifoo)
                             self%ldim(3) = 1
                             DebugPrint 'found logical dimension of stack: ', self%ldim
                             self%box     = self%ldim(1)
@@ -1274,6 +1256,16 @@ contains
                     endif
                 endif
             end subroutine set_ldim_box_from_stk
+
+            subroutine stk_dim_exception( stk2compare )
+                character(len=*), intent(in) :: stk2compare
+                integer :: ldim_here(3)
+                call find_ldim_nptcls(stk2compare, ldim_here, ifoo)
+                if( ldim_here(1) /= self%box .or. ldim_here(2) /= self%box )then
+                    write(*,*) 'logical dimension: ', ldim_here(1:2), ' not consistent with box: ', self%box
+                    stop 'params :: stk_dim_exception'
+                endif
+            end subroutine stk_dim_exception
 
     end subroutine new
 

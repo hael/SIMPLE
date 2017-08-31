@@ -137,6 +137,7 @@ contains
         ! cleanup
         call del_file('prime2D_startdoc.txt')
         call del_file('start2Drefs'//p_master%ext)
+        call del_files(STKPARTFBODY_SC, p_master%nparts, ext=p_master%ext)
         ! end gracefully
         call simple_end('**** SIMPLE_PRIME2D NORMAL STOP ****')
     end subroutine exec_prime2D_autoscale

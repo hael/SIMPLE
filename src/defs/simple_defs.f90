@@ -93,7 +93,6 @@ integer, parameter :: MINCLSPOPLIM     = 5
 integer, parameter :: SPECWMINPOP    = 2000 !< minimum population for spectral weighting
 integer, parameter :: NSPACE_BALANCE = 1000 !< # projection directions for applying the balancing constraint 
 
-character(len=:), allocatable    :: endconv           !< endianness conversion
 integer(kind=c_int)              :: nthr_glob         !< number of threads global variable
 logical                          :: l_distr_exec_glob !< global distributed execution flag
 character(len=STDLEN)            :: exec_abspath_glob !< global executable absolute path

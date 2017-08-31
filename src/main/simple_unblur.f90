@@ -277,7 +277,7 @@ contains
         logical, allocatable :: outliers(:,:)
         call unblur_kill
         ! GET NUMBER OF FRAMES & DIM FROM STACK
-        call find_ldim_nptcls(movie_stack_fname, ldim, nframes, endconv=endconv)
+        call find_ldim_nptcls(movie_stack_fname, ldim, nframes)
         DebugPrint  'logical dimension: ', ldim
         ldim(3) = 1 ! to correct for the stupid 3:d dim of mrc stacks
         if( p%scale < 0.99 )then
