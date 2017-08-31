@@ -2110,9 +2110,10 @@ contains
         endif
         e1lim = eullims(1,2)
         e2lim = eullims(2,2)
-        e1_area_frac = (e1lim-eullims(1,1)) / 360.
-        e2_area_frac = (e2lim-eullims(2,1)) / 180.
-        n   = nint(real(self%n) /(e1_area_frac * e2_area_frac) )
+        ! e1_area_frac = (e1lim-eullims(1,1)) / 360.
+        ! e2_area_frac = (e2lim-eullims(2,1)) / 180.
+        ! n   = nint(real(self%n) /(e1_area_frac * e2_area_frac) )
+        n = nsym * self%n
         tmp = oris(n)
         call tmp%spiral_1
         cnt = 0
