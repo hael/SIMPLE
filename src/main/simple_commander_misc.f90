@@ -290,7 +290,7 @@ contains
         type(sym)          :: se_c1
         real               :: cc, rotmat(3,3)
         integer            :: i, fnr, file_stat, nl
-        integer, parameter :: MAXLABELS = 10   !< maximum numbers symmetry peaks
+        integer, parameter :: MAXLABELS = 9    !< maximum numbers symmetry peaks
         real,    parameter :: ANGTHRESH = 10.  !< maximum half-distance between symmetry peaks
         p = params(cline)                      ! parameters generated
         call b%build_general_tbox(p, cline)    ! general objects built
@@ -331,11 +331,8 @@ contains
             cc = symvol%real_corr(b%vol, b%mskvol)
             call sympeaks%set(i, 'corr', cc)
         enddo
-        ! output
-        call sympeaks%write('sympeaks.txt')
         call binwrite_oritab(p%outfile, sympeaks, [1,sympeaks%get_noris()])
         ! the end
-        
         if(.not.fopen(fnr, FILE='SYM_AGGREGATE_FINISHED', STATUS='REPLACE', action='WRITE', iostat=file_stat))&
              call fileio_errmsg('commander_misc; sym_aggregate ', file_stat)
         
