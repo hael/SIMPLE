@@ -784,12 +784,6 @@ contains
             call o%set('mi_state', mi_state)
             call o%set('mi_joint', mi_state)
             call o%set('w', 1.)
-            !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-            ! specscore
-            ! iref = (state - 1) * self%nprojs + self%prev_proj
-            ! call self%calc_specscore(pftcc, iref, iptcl, self%prev_roind)
-            ! call o%set('specscore', self%specscore)
-            !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
             ! updates orientations objects
             call self%o_peaks%set_ori(1, o)
             call a%set_ori(iptcl, o)
@@ -1147,11 +1141,6 @@ contains
             stop
         endif
         roind = pftcc%get_roind( 360.-o_new%e3get() )
-        !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-        ! iref  = self%o_refs%find_closest_proj(o_new, state)
-        ! call self%calc_specscore(pftcc, iref, iptcl, roind)
-        ! calculate overlap between distributions
-        !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
         mi_proj  = 0.
         mi_inpl  = 0.
         mi_state = 0.

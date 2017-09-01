@@ -2485,7 +2485,7 @@ contains
 
     !>  \brief  calculates spectral particle weights
     subroutine calc_spectral_weights( self, frac, which, nsym, eullims )
-        use simple_stat, only: normalize_sigm
+        use simple_stat, only: corrs2weights
         class(oris),      intent(inout) :: self
         real,             intent(in)    :: frac
         character(len=*), intent(in)    :: which ! class or proj
@@ -2529,16 +2529,13 @@ contains
                     weights    = os_subset%get_all('w')
                     nincl      = count(weights > 0.5)
                     if( nincl <= MINPOP )then
-                        minscore = 0.
+                        weights = 1.0/real(nincl) ! flat weight distribution
                     else
-                        minscore = minval(specscores, mask=(specscores > TINY))
+                        where( weights < 0.5 )
+                            specscores = 0.
+                        end where
+                        weights = corrs2weights(specscores)
                     endif
-                    where( (weights > 0.5) .and. (specscores > minscore) )
-                        weights = specscores
-                    else where
-                        weights = 0.
-                    end where
-                    call normalize_sigm(weights)
                     cnt = 0
                     do j=1,self%n
                         if( l_mask(j) )then

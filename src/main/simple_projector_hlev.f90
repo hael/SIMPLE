@@ -14,7 +14,7 @@ use simple_ori,        only: ori
 use simple_math,       only: rotmat2d
 use simple_projector,  only: projector
 use simple_kbinterpol, only: kbinterpol
-use simple_jiffys,      only: progress ! use all in there
+use simple_jiffys,     only: progress ! use all in there
 implicit none
 
 contains
