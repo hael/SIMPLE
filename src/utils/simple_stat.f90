@@ -214,14 +214,23 @@ contains
         real, intent(inout) :: arr(:)                    !< input data
         real                :: smin, smax, delta         ! temp stats
         real, parameter     :: NNET_CONST = exp(1.)-1.
+        if( size(arr) == 1 )then
+            arr(1) = max(0., min(arr(1), 1.))
+            return
+        endif
         ! find minmax
         smin  = minval(arr)
         smax  = maxval(arr)
         delta = smax-smin
-        ! create [0,1]-normalized vector
-        !$omp parallel workshare default(shared)
-        arr = (exp((arr-smin)/delta)-1.)/NNET_CONST
-        !$omp end parallel workshare
+        if( delta > TINY )then
+            ! create [0,1]-normalized vector
+            !$omp parallel workshare default(shared)
+            arr = (exp((arr-smin)/delta)-1.)/NNET_CONST
+            !$omp end parallel workshare
+        else
+            write(*,'(a)') 'WARNING! stat :: normalize_sigm_1, division with zero'
+            write(*,'(a)') 'no normalisation done'
+        endif
     end subroutine normalize_sigm_1
 
     !>    is for sigmoid normalisation [0,1]
@@ -233,10 +242,15 @@ contains
         smin  = minval(arr)
         smax  = maxval(arr)
         delta = smax-smin
-        ! create [0,1]-normalized vector
-        !$omp parallel workshare default(shared)
-        arr = (exp((arr-smin)/delta)-1.)/NNET_CONST
-        !$omp end parallel workshare
+        if( delta > TINY )then
+            ! create [0,1]-normalized vector
+            !$omp parallel workshare default(shared)
+            arr = (exp((arr-smin)/delta)-1.)/NNET_CONST
+            !$omp end parallel workshare
+        else
+            write(*,'(a)') 'WARNING! stat :: normalize_sigm_2, division with zero'
+            write(*,'(a)') 'no normalisation done'
+        endif
     end subroutine normalize_sigm_2
 
     !>    is for sigmoid normalisation [0,1]
@@ -248,10 +262,15 @@ contains
         smin  = minval(arr)
         smax  = maxval(arr)
         delta = smax-smin
-        ! create [0,1]-normalized vector
-        !$omp parallel workshare default(shared)
-        arr = (exp((arr-smin)/delta)-1.)/NNET_CONST
-        !$omp end parallel workshare
+        if( delta > TINY )then
+            ! create [0,1]-normalized vector
+            !$omp parallel workshare default(shared)
+            arr = (exp((arr-smin)/delta)-1.)/NNET_CONST
+            !$omp end parallel workshare
+        else
+            write(*,'(a)') 'WARNING! stat :: normalize_sigm_2, division with zero'
+            write(*,'(a)') 'no normalisation done'
+        endif
     end subroutine normalize_sigm_3
 
     !>    calculates the devation around point
