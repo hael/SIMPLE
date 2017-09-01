@@ -159,17 +159,17 @@ ENDIF(APPLE)
 message( STATUS "CMAKE_Fortran_COMPILER_ID: ${CMAKE_Fortran_COMPILER_ID}")
 if (CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
   # gfortran
-  set(preproc  "-cpp  ")                                                               # preprocessor flags
+  set(preproc  "-cpp  -Wp,C,CC,no-endif-labels")                                                 # preprocessor flags
   set(dialect  "-ffree-form  -fimplicit-none  -ffree-line-length-none -fno-second-underscore")  # language style
-  set(warn     "-Wampersand -Wsurprising -Wtabs -Wline-truncation -Winteger-division -Wreal-q-constant ")
+  set(warn     "-Wall")
+  set(checks   "-fcheck-array-temporaries -frange-check -fstack-protector -fstack-check -fbounds-check") # checks
   set(forspeed "-O3")                                                                           # optimisation
   set(forpar   "-fopenmp  -Wp,-fopenmp")                                                        # parallel flags
   set(target   "${GNUNATIVE} -fPIC ")                                                           # target platform
 
-  set(common   "${preproc} ${dialect} ${target}")
+  set(common   "${preproc} ${dialect} ${target} ${warn} ${checks}")
 
-  set(checks   "-fcheck-array-temporaries -frange-check -fstack-protector -fstack-check -fbounds-check") # checks
-  set(warnDebug "-Wall -Wextra -Wimplicit-interface  ${checks}")                                # extra warning flags
+  set(warnDebug "${warn} -Wextra -Wimplicit-interface  ${checks}")                              # extra warning flag
   set(fordebug "-O0 -g -pedantic -fno-inline -fno-f2c -Og -ggdb -fbacktrace  ${warnDebug} ")    # debug flags
   # -O0 -g3 -Warray-bounds -Wcharacter-truncation -Wline-truncation -Wimplicit-interface
   # -Wimplicit-procedure -Wunderflow -Wuninitialized -fcheck=all -fmodule-private -fbacktrace -dump-core -finit-real=nan -ffpe-trap=invalid,zero,overflow

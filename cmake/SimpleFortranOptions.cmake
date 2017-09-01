@@ -151,13 +151,23 @@ if (${CMAKE_Fortran_COMPILER_ID} STREQUAL "GNU" ) #AND Fortran_COMPILER_NAME MAT
     message(FATAL_ERROR "${PROJECT_NAME} requires gfortran version 4.9 or above")
   endif ()
   set(EXTRA_FLAGS "${EXTRA_FLAGS} ") # -fopenmp-simd -mfma -mfma4 -faggressive-function-elimination") # -Wimplicit-interface -Wunderflow -fbounds-check -fimplicit-none   -Wunused-parameter -Wunused-variable -Wuninitialized ")
+
   set(CMAKE_CPP_COMPILER_FLAGS           "-E -C -CC -w -Wno-endif-labels -fopenmp") # only seen by preprocessor if #include is present
 
   set(CMAKE_Fortran_FLAGS                " ${EXTRA_FLAGS} ") #${CMAKE_Fortran_FLAGS_RELEASE_INIT}")
   set(CMAKE_Fortran_FLAGS_DEBUG          " ${EXTRA_FLAGS} ${CMAKE_Fortran_FLAGS_DEBUG_INIT}" )
   # set(CMAKE_Fortran_FLAGS_MINSIZEREL     "-Os ${CMAKE_Fortran_FLAGS_RELEASE_INIT}")
   set(CMAKE_Fortran_FLAGS_RELEASE        " ${EXTRA_FLAGS} ${CMAKE_Fortran_FLAGS_RELEASE_INIT}")
-  set(CMAKE_Fortran_FLAGS_RELWITHDEBINFO "${CMAKE_Fortran_FLAGS_RELEASE_INIT} ${CMAKE_Fortran_FLAGS_DEBUG_INIT} ${EXTRA_FLAGS}")
+  set(CMAKE_Fortran_FLAGS_RELWITHDEBINFO "${CMAKE_Fortran_FLAGS_RELEASE_INIT} \
+ ${EXTRA_FLAGS} \
+ -fcheck-array-temporaries -frange-check -fstack-protector -fstack-check -fbounds-check \
+-O0 -g -pedantic  \
+-Wextra -Wunused-parameter -Wvector-operation-performance \
+-Wopenmp-simd -Wstack-protector -Wpedantic -Wunsafe-loop-optimizations \
+-Wshadow -Wsystem-headers -Warray-bounds -Wsuggest-attribute=pure \
+-Wsuggest-final-methods -Wunused -Wsurprising -Wuse-without-only \
+-Wintrinsic-shadow -Wrealloc-lhs -Wrealloc-lhs-all \
+-Wno-unused-dummy-argument")
   
   # #  CMAKE_EXE_LINKER_FLAGS
   # if (LINK_TIME_OPTIMISATION)
@@ -575,8 +585,8 @@ endif()
 #set(CMAKE_FCPP_FLAGS " -C -P ") # Retain comments due to fortran slash-slash
 #set(CMAKE_Fortran_CREATE_PREPROCESSED_SOURCE "${CMAKE_FCPP_COMPILER} <DEFINES> <INCLUDES> <FLAGS> -E <SOURCE> > <PREPROCESSED_SOURCE>")
 
-add_definitions("-D__FILENAME__='\"$(notdir $<)\"'")
-add_definitions("-DHALT\\(X\\)=\"call simple_stop(X, __FILENAME__, __LINE__)\"")
+add_definitions(" -D__FILENAME__='\"$(notdir $<)\"'")
+add_definitions(" -DHALT\\(X\\)='call simple_stop(X, __FILENAME__, __LINE__)'")
 
 
 
