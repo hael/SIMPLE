@@ -230,7 +230,8 @@ contains
         p_master%nparts = nseries
         p_master%nptcls = nseries
         ! prepare part-dependent parameters
-        allocate(part_params(p_master%nparts))
+        allocate(part_params(p_master%nparts), stat=alloc_stat) ! -1. is default excluded value
+        call alloc_errchk("simple_commander_distr_wflows::unblur_tomo_moview_distr ", alloc_stat)
         do ipart=1,p_master%nparts
             call part_params(ipart)%new(4)
             call part_params(ipart)%set('filetab', trim(tomonames(ipart)))

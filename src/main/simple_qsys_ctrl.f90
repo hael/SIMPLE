@@ -6,8 +6,8 @@ use simple_qsys_local,   only: qsys_local
 use simple_chash,        only: chash
 use simple_strings,      only: int2str, int2str_pad
 use simple_cmdline,      only: cmdline
-use simple_syslib
-use simple_fileio,       only: fopen,fclose,fileio_errmsg, file_exists
+use simple_syslib,       only: alloc_errchk
+use simple_fileio
 implicit none
 
 public :: qsys_ctrl
@@ -537,7 +537,8 @@ contains
             self%ncomputing_units_avail =  0
             self%numlen                 =  0
             self%cline_stacksz          =  0
-            deallocate(self%script_names, self%jobs_done, self%jobs_done_fnames, self%jobs_submitted)
+            deallocate(self%script_names, self%jobs_done, self%jobs_done_fnames, self%jobs_submitted, stat=alloc_stat)
+            call alloc_errchk("simple_qsys_ctrl::kill deallocating ", alloc_stat)
             if(allocated(self%cline_stack))deallocate(self%cline_stack)
             self%existence = .false.
 

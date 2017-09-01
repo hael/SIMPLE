@@ -2,7 +2,7 @@
 #include "simple_lib.f08"
 module simple_hash
 use simple_defs    ! use all in there
-use simple_strings, only: real2str
+use simple_strings, only: real2str, parse
 use simple_syslib,  only: alloc_errchk
 implicit none
 

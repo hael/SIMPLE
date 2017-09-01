@@ -5,8 +5,11 @@ use simple_cmdline,        only: cmdline
 use simple_params,         only: params
 use simple_build,          only: build
 use simple_commander_base, only: commander_base
-use simple_fileio          ! use all in there
-use simple_jiffys          ! use all in there
+use simple_fileio,         only: fopen, fclose, fileio_errmsg, file_exists
+use simple_jiffys,         only: simple_end, progress
+use simple_syslib,         only: alloc_errchk
+use simple_qsys_funs,      only: qsys_job_finished
+use simple_strings,        only: int2str_pad
 implicit none
 
 public :: comlin_smat_commander
@@ -32,15 +35,12 @@ contains
         use simple_ori,          only: ori
         use simple_imgfile,      only: imgfile
         use simple_comlin,       only: comlin
-        use simple_qsys_funs,    only: qsys_job_finished
-        use simple_strings,      only: int2str_pad
         class(comlin_smat_commander), intent(inout) :: self
         class(cmdline),               intent(inout) :: cline
         type(params), target          :: p
         type(build),  target          :: b
-        type(ori)                     :: orientation_best
         integer                       :: iptcl, jptcl, funit, io_stat
-        integer                       :: ntot, npairs, ipair, fnr
+        integer                       :: ntot, npairs, ipair
         real,    allocatable          :: corrmat(:,:), corrs(:)
         integer, allocatable          :: pairs(:,:)
         character(len=:), allocatable :: fname
@@ -64,7 +64,7 @@ contains
             allocate(corrs(p%fromp:p%top), pairs(p%fromp:p%top,2), stat=alloc_stat)
             call alloc_errchk('In: simple_comlin_smat, 2', alloc_stat)
             ! read the pairs
-            allocate(fname, source='pairs_part'//int2str_pad(p%part,p%numlen)//'.bin')
+            allocate(fname, source='pairs_part'//int2str_pad(p%part,p%numlen)//'.bin', stat=alloc_stat)
             call alloc_errchk("In:  simple_comlin_smat, 3", alloc_stat)
             if( .not. file_exists(fname) )then
                 write(*,*) 'file: ', fname, ' does not exist!'
@@ -77,7 +77,6 @@ contains
             read(unit=funit,pos=1,iostat=io_stat) pairs(p%fromp:p%top,:)
             ! check if the read was successful
             if( io_stat .ne. 0 ) call fileio_errmsg('simple_comlin_smat reading  '//trim(fname), io_stat)
-                
             call fclose(funit,errmsg='simple_comlin_smat closing  '//trim(fname))
             deallocate(fname)
             ! calculate the similarities
@@ -88,14 +87,14 @@ contains
                 corrs(ipair) = comlin_srch_pair()
             end do
             ! write the similarities
-           
+
             allocate(fname, source='similarities_part'//int2str_pad(p%part,p%numlen)//'.bin')
             call fopen(funit, status='REPLACE', action='WRITE', file=fname, access='STREAM', iostat=io_stat)
             call fileio_errmsg('simple_comlin_smat opening  '//trim(fname), io_stat)
             write(unit=funit,pos=1,iostat=io_stat) corrs(p%fromp:p%top)
             ! Check if the write was successful
             if( io_stat .ne. 0 )call fileio_errmsg('simple_comlin_smat writing  '//trim(fname), io_stat)
-             
+
             call fclose(funit, errmsg='simple_comlin_smat opening  '//trim(fname))
             deallocate(fname, corrs, pairs)
             call qsys_job_finished(p,'simple_commander_comlin :: exec_comlin_smat')
@@ -115,19 +114,19 @@ contains
                 end do
             end do
             call progress(ntot, ntot)
-           
+
             call fopen(funit, status='REPLACE', action='WRITE', file='clin_smat.bin', access='STREAM', iostat=io_stat)
             call fileio_errmsg('simple_comlin_smat opening  clin_smat.bin', io_stat)
             write(unit=funit,pos=1,iostat=io_stat) corrmat
             if( io_stat .ne. 0 ) call fileio_errmsg('simple_comlin_smat writing  clin_smat.bin', io_stat)
-              
+
             call fclose(funit, errmsg='simple_comlin_smat closing clin_smat.bin ')
             deallocate(corrmat)
         endif
         ! end gracefully
         call simple_end('**** SIMPLE_COMLIN_SMAT NORMAL STOP ****')
     end subroutine exec_comlin_smat
-    
+
     !> symsrch commander for symmetry searching
     !! is a program for searching for the principal symmetry axis of a volume
     !! reconstructed without assuming any point-group symmetry. The program
@@ -146,7 +145,7 @@ contains
         use simple_ori,            only: ori
         use simple_projector_hlev, only: projvol
         use simple_comlin_srch     ! use all in there
-        use simple_binoris_io      ! use all in there
+        use simple_binoris_io,     only: binwrite_oritab, binread_oritab, binread_nlines
         class(symsrch_commander), intent(inout) :: self
         class(cmdline),           intent(inout) :: cline
         type(params)                  :: p
@@ -185,7 +184,7 @@ contains
             ! writes projections images and orientations for subsequent reconstruction
             ! only in local and distributed (part=1) modes
             noris = b%e%get_noris()
-            do i=1,noris 
+            do i=1,noris
                 call b%ref_imgs(1,i)%write(SYMPROJSTK, i)
             enddo
             call binwrite_oritab(SYMPROJTAB, b%e, [1,noris])
@@ -232,8 +231,8 @@ contains
         else
             fname_finished = 'SYMSRCH_FINISHED'
         endif
-       
-        call fopen(fnr, FILE=trim(fname_finished), STATUS='REPLACE', action='WRITE', iostat=file_stat
+
+        call fopen(fnr, FILE=trim(fname_finished), STATUS='REPLACE', action='WRITE', iostat=file_stat)
         call fileio_errmsg('In: commander_comlin :: symsrch', file_stat )
         call fclose(fnr,errmsg='In: commander_comlin :: symsrch closing' )
     end subroutine exec_symsrch

@@ -480,7 +480,7 @@ contains
         class(ori),                    intent(inout) :: self
         character(len=*),              intent(in)    :: key
         character(len=:), allocatable, intent(inout) :: val
-        deallocate(val)
+        if (allocated(val)) deallocate(val)
         val = self%chtab%get(key)
     end subroutine getter_1
 

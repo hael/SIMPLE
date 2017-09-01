@@ -2,19 +2,19 @@
 module simple_hadamard2D_matcher
 !$ use omp_lib
 !$ use omp_lib_kinds
+use simple_defs              ! use all in there
 use simple_polarft_corrcalc, only: polarft_corrcalc
 use simple_prime2D_srch,     only: prime2D_srch
 use simple_ori,              only: ori
 use simple_build,            only: build
 use simple_params,           only: params
 use simple_cmdline,          only: cmdline
-use simple_strings,          only: int2str_pad
-use simple_jiffys            ! use all in there
-!use simple_fileio            ! use all in there
+use simple_strings,          only: int2str_pad,str_has_substr
+use simple_jiffys,           only: progress ! use all in there
+use simple_fileio,           only: file_exists, del_file
 use simple_hadamard_common   ! use all in there
 use simple_filterer          ! use all in there
-use simple_defs              ! use all in there
-use simple_syslib,            only: file_exists
+use simple_syslib,           only: alloc_errchk
 implicit none
 
 public :: prime2D_exec, prime2D_assemble_sums, prime2D_norm_sums, prime2D_assemble_sums_from_parts,&
@@ -30,7 +30,6 @@ contains
     !>  \brief  is the prime2D algorithm
     subroutine prime2D_exec( b, p, cline, which_iter, converged )
         use simple_qsys_funs,   only: qsys_job_finished
-        use simple_strings,     only: str_has_substr
         use simple_procimgfile, only: random_selection_from_imgfile
         use simple_binoris_io,  only: binwrite_oritab
         class(build),   intent(inout) :: b
@@ -472,7 +471,7 @@ contains
 
     !>  \brief  prepares the polarft corrcalc object for search
     subroutine preppftcc4align( b, p )
-        use simple_syslib,       only: alloc_errchk
+        
         class(build),  intent(inout) :: b
         class(params), intent(inout) :: p
         type(ori) :: o

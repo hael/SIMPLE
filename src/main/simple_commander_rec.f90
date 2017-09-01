@@ -6,10 +6,12 @@ use simple_params,          only: params
 use simple_build,           only: build
 use simple_commander_base,  only: commander_base
 use simple_strings,         only: int2str_pad
-use simple_syslib,          only: wait_for_closure
 use simple_hadamard_common  ! use all in there
-use simple_fileio           ! use all in there
-use simple_jiffys           ! use all in there
+use simple_fileio,         only: fopen, fclose, fileio_errmsg, wait_for_closure, file_exists
+use simple_jiffys,         only: simple_end,progress
+use simple_binoris_io      ! use all in there
+use simple_syslib,         only: alloc_errchk, simple_stop
+
 implicit none
 
 public :: recvol_commander
@@ -57,7 +59,6 @@ contains
         class(cmdline),          intent(inout) :: cline
         type(params) :: p
         type(build)  :: b
-        integer      :: fnr, file_stat
         p = params(cline)                   ! parameters generated
         call b%build_general_tbox(p, cline) ! general objects built
         select case(p%eo)
@@ -70,7 +71,7 @@ contains
         end select
         call exec_rec_master(b, p, cline)
         ! end gracefully
-        call simple_end('**** SIMPLE_RECVOL NORMAL STOP ****', print_simple=.false.) 
+        call simple_end('**** SIMPLE_RECVOL NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_recvol
 
     !> EO_VOLASSEMBLE is a SIMPLE program to reconstruct volume with EO enabled
@@ -129,12 +130,12 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_EO_VOLASSEMBLE NORMAL STOP ****', print_simple=.false.)
         ! indicate completion (when run in a qsys env)
-        
+
         call fopen(fnr, FILE='VOLASSEMBLE_FINISHED', STATUS='REPLACE', action='WRITE', iostat=file_stat)
         call fileio_errmsg('In: commander_rec :: eo_volassemble', file_stat )
         call fclose( fnr , errmsg='In: commander_rec :: eo_volassemble')
         call wait_for_closure('VOLASSEMBLE_FINISHED')
-        
+
         contains
 
             subroutine assemble( fbody )
@@ -143,7 +144,7 @@ contains
                 ! sum the Fourier coefficients
                 call b%eorecvol%sum(eorecvol_read)
             end subroutine assemble
-            
+
             subroutine normalize( recname )
                 character(len=*), intent(in)  :: recname
                 character(len=STDLEN) :: volname
@@ -170,7 +171,7 @@ contains
         character(len=STDLEN)         :: recvolname, rho_name
         integer                       :: part, s, ss, endit, i, state4name, file_stat, fnr
         type(reconstructor)           :: recvol_read
-        
+
         p = params(cline)                   ! parameters generated
         call b%build_general_tbox(p, cline) ! general objects built
         call b%build_rec_tbox(p)            ! reconstruction toolbox built
@@ -219,7 +220,7 @@ contains
                             else
                                 p%vols(s) = fbody//'_even'//p%ext
                                 rho_name  = 'rho_'//fbody//'_even'//p%ext
-                            endif   
+                            endif
                         else
                             p%vols(s) = fbody//p%ext
                             rho_name  = 'rho_'//fbody//p%ext
@@ -262,7 +263,7 @@ contains
                 logical                      :: here(2)
                 here(1)=file_exists(recnam)
                 here(2)=file_exists(kernam)
-                if( all(here) )then     
+                if( all(here) )then
                     call recvol_read%read(recnam)
                     call recvol_read%read_rho(kernam)
                     call b%recvol%sum(recvol_read)
@@ -272,7 +273,7 @@ contains
                     return
                 endif
             end subroutine assemble
-    
+
             subroutine normalize( recname )
                 character(len=*), intent(in) :: recname
                 call b%recvol%sampl_dens_correct

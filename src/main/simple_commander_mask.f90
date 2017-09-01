@@ -1,12 +1,12 @@
 ! concrete commander: masking routines
 module simple_commander_mask
 use simple_defs
-use simple_syslib
+use simple_syslib,         only: alloc_errchk
 use simple_cmdline,        only: cmdline
 use simple_params,         only: params
 use simple_build,          only: build
 use simple_commander_base, only: commander_base
-use simple_fileio          ! use all in there
+use simple_fileio,         only: file_exists, add2fbody
 use simple_jiffys          ! use all in there
 implicit none
 

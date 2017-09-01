@@ -5,8 +5,9 @@ use simple_cmdline,        only: cmdline
 use simple_params,         only: params
 use simple_build,          only: build
 use simple_commander_base, only: commander_base
-!use simple_strings,        only: int2str, int2str_pad
-use simple_jiffys,         only: progress
+use simple_strings,        only: int2str, int2str_pad
+use simple_jiffys,         only: progress, simple_end
+use simple_syslib,         only: alloc_errchk
 use simple_binoris_io      ! use all in there
 !use simple_fileio          ! use all in there
 implicit none
@@ -76,7 +77,7 @@ contains
         type(ori)          :: orientation
         type(ctf)          :: tfun
         type(kbinterpol)   :: kbwin
-        real               :: snr_pink, snr_detector, bfac, bfacerr, dfx, dfy, angast
+        real               :: snr_pink, snr_detector, bfac, bfacerr
         integer            :: i, cnt, ntot
         debug=.false. ! declared in local flags
         p = params(cline, .false.)          ! parameters generated
@@ -329,7 +330,6 @@ contains
 
             !> \brief  generate mutually exclusive positions
             function gen_ptcl_pos( npos, xdim, ydim, box ) result( pos )
-                use simple_syslib, only: alloc_errchk
                 use simple_rnd,    only: irnd_uni
                 integer, intent(in)           :: npos, xdim, ydim
                 integer, intent(in), optional :: box

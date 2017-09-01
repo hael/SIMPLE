@@ -1,5 +1,6 @@
 ! concrete commander: high-level workflows
 module simple_commander_hlev_wflows
+use simple_defs                   ! use all in there
 use simple_cmdline,               only: cmdline
 use simple_params,                only: params
 use simple_commander_base,        only: commander_base
@@ -9,7 +10,7 @@ use simple_fileio                 ! use all in there
 use simple_commander_distr        ! use all in 
 use simple_jiffys                 ! use all in there
 use simple_binoris_io             ! use all in there
-use simple_defs                   ! use all in there
+use simple_syslib,         only: alloc_errchk
 implicit none
 
 public :: prime2D_autoscale_commander

@@ -1,8 +1,7 @@
 ! concrete commander: stream processing routines
 module simple_commander_stream_wflows
 use simple_defs
-!use simple_fileio             ! use all in there
-use simple_syslib,            only:  exec_cmdline, simple_sleep 
+use simple_syslib,            only: alloc_errchk,exec_cmdline, simple_sleep 
 use simple_cmdline,           only: cmdline
 use simple_chash,             only: chash
 use simple_params,            only: params
@@ -20,7 +19,7 @@ type, extends(commander_base) :: preproc_stream_commander
   contains
     procedure :: execute      => exec_preproc_stream
 end type preproc_stream_commander
-
+#include "simple_local_flags.inc"
 contains
 
     ! PRE-PROCESS SINGLE-PARTICLE DDDs IN STREAMING MODE
@@ -30,7 +29,6 @@ contains
         use simple_moviewatcher,      only: moviewatcher
         class(preproc_stream_commander), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline
-        logical,               parameter   :: DEBUG = .true.
         integer,               parameter   :: SHORTTIME = 30   ! folder watched every minute
         integer,               parameter   :: LONGTIME  = 15  ! 15 mins before processing a new movie
         character(len=STDLEN), allocatable :: movies(:)
@@ -40,6 +38,7 @@ contains
         type(moviewatcher)       :: movie_buff
         integer                  :: nmovies, imovie, stacksz, prev_stacksz
         integer, parameter       :: TRAILING=5
+        debug=.true.  ! from local flags
         ! make master parameters
         p_master = params(cline, checkdistr=.false.)
         ! set defaults
@@ -92,7 +91,7 @@ contains
                 movie_here = remove_abspath(trim(movie))
                 ext   = fname2ext(trim(movie_here))
                 fname = 'preproc_'//trim(get_fbody(trim(movie_here), trim(ext)))//'.txt'
-                call fopen(fnr, status='replace', action='write', file=trim(fname), iostat=file_stat
+                call fopen(fnr, status='replace', action='write', file=trim(fname), iostat=file_stat)
                 call fileio_errmsg('exec_preproc_stream :: create_individual_filetab '//trim(fname), file_stat)
                 write(fnr,'(a)') trim(movie)
                 call fclose(fnr, errmsg='exec_preproc_stream closing filetab '//trim(fname))

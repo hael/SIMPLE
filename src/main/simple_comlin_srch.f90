@@ -110,6 +110,7 @@ contains
 
     !> common-line mode search symmetry axis
     subroutine comlin_srch_symaxis( orientation_best, fromto )
+        use simple_jiffys, only: progress
         class(ori)           :: orientation_best
         integer, optional    :: fromto(2)
         type(ori)            :: orientation

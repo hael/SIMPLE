@@ -144,7 +144,7 @@ contains
     ! I/O
     !>Write reconstructed image
     subroutine write_rho( self, kernam )
-        use simple_fileio, only: fopen, fclose, fileio_errmsg
+        use simple_fileio, only: fopen, fclose, fileio_errmsg, del_file
         class(reconstructor), intent(in) :: self   !< this instance
         character(len=*),     intent(in) :: kernam !< kernel name
         character(len=100) :: io_message
@@ -394,6 +394,7 @@ contains
         use simple_oris,     only: oris
         use simple_sym,      only: sym
         use simple_params,   only: params
+        use simple_jiffys,   only: progress
         use simple_gridding  ! use all in there
         class(reconstructor), intent(inout) :: self      !< this object
         character(len=*),     intent(inout) :: fname     !< spider/MRC stack filename

@@ -5,6 +5,8 @@ use simple_reconstructor, only: reconstructor
 use simple_image,         only: image
 use simple_params,        only: params
 use simple_cmdline,       only: cmdline
+use simple_strings,       only: int2str_pad
+use simple_jiffys,        only: progress
 implicit none
 
 public :: eo_reconstructor
@@ -281,7 +283,6 @@ contains
 
     !> \brief  for sampling density correction of the eo pairs
     subroutine sampl_dens_correct_eos( self, state )
-        use simple_strings,      only: int2str_pad
         use simple_fileio,       only: arr2file
         use simple_math,         only: get_resolution, calc_fourier_index
         use simple_masker,       only: masker
@@ -290,7 +291,7 @@ contains
         real, allocatable :: res(:), corrs(:)
         type(image)       :: even, odd
         type(masker)      :: volmasker
-        integer           :: j, find
+        integer           :: j
         ! make clipped volumes
         call even%new([self%box,self%box,self%box],self%smpd)
         call odd%new([self%box,self%box,self%box],self%smpd)
@@ -359,8 +360,6 @@ contains
         use simple_params,     only: params
         use simple_gridding,   only: prep4cgrid
         use simple_imgfile,    only: imgfile, find_ldim_nptcls
-        use simple_strings,    only: int2str_pad
-        use simple_jiffys,     only: progress
         use simple_kbinterpol, only: kbinterpol
         class(eo_reconstructor),    intent(inout) :: self      !< object
         character(len=*),           intent(in)    :: fname     !< spider/MRC stack filename

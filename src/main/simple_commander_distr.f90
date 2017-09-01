@@ -1,14 +1,14 @@
 ! concrete commander: routines for managing distributed SIMPLE execution
 module simple_commander_distr
 use simple_defs
-use simple_jiffys,         only: simple_end
-use simple_syslib,         only: alloc_errchk, file_exists
+use simple_jiffys,         only: simple_end, progress
+use simple_syslib,         only: alloc_errchk, exec_cmdline
 use simple_cmdline,        only: cmdline
 use simple_params,         only: params
 use simple_build,          only: build
 use simple_commander_base, only: commander_base
 use simple_strings,        only: int2str, int2str_pad
-use simple_fileio,         only: fopen,fclose, fileio_errmsg, nlines, del_files
+use simple_fileio,         only: fopen, fclose, fileio_errmsg, nlines, del_files, file_exists
 use simple_imgfile,        only: find_ldim_nptcls
 implicit none
 
@@ -59,7 +59,7 @@ contains
         integer, allocatable  :: parts(:,:)
         character(len=1024)   :: line
         p = params(cline) ! parameters generated
-        parts = split_nobjs_even(p%nptcls, p%ndocs)
+        parts = split_nobjs_even(p%nptcls, p%ndocs)           !! intel realloc warning
         call fopen(funit_merge, file=p%outfile, iostat=io_stat, status='replace',&
              &action='write', position='append', access='sequential')
         call fileio_errmsg("Error opening file"//trim(adjustl(p%outfile)), io_stat)
@@ -100,7 +100,7 @@ contains
         integer, allocatable  :: parts(:,:)
         type(binoris)         :: fhandle_doc, fhandle_merged
         p      = params(cline) ! parameters generated
-        parts  = split_nobjs_even(p%nptcls, p%ndocs)
+        parts  = split_nobjs_even(p%nptcls, p%ndocs)           !! intel realloc warning
         numlen = len(int2str(p%ndocs))
         ! generate a merged filehandling object based on the first file
         fname = trim(adjustl(p%fbody))//int2str_pad(1,numlen)//'.bin'
@@ -152,7 +152,7 @@ contains
         integer, allocatable :: nnmat(:,:)
         integer :: filnum, io_stat
         p      = params(cline) ! parameters generated
-        nnmat  = merge_nnmat_from_parts(p%nptcls, p%nparts, p%nnn)
+        nnmat  = merge_nnmat_from_parts(p%nptcls, p%nparts, p%nnn)            !! intel realloc warning
         call fopen(filnum, status='REPLACE', action='WRITE', file='nnmat.bin', access='STREAM', iostat=io_stat)
         call fileio_errmsg('simple_merge_nnmat ; fopen error when opening nnmat.bin  ', io_stat)
         write(unit=filnum,pos=1,iostat=io_stat) nnmat
@@ -173,7 +173,7 @@ contains
         real, allocatable :: simmat(:,:)
         integer           :: filnum, io_stat
         p      = params(cline) ! parameters generated
-        simmat = merge_similarities_from_parts(p%nptcls, p%nparts)
+        simmat = merge_similarities_from_parts(p%nptcls, p%nparts)           !! intel realloc warning
        
         call fopen(filnum, status='REPLACE', action='WRITE', file='smat.bin', access='STREAM', iostat=io_stat)
         call fileio_errmsg('simple_merge_nnmat ; fopen error when opening smat.bin  ', io_stat)
@@ -214,7 +214,7 @@ contains
         call find_ldim_nptcls(p%stk, ldim, nimgs)
         ldim(3) = 1
         call img%new(ldim,1.)
-        parts = split_nobjs_even(nimgs, p%nparts)
+        parts = split_nobjs_even(nimgs, p%nparts)           !! intel realloc warning
         if( size(parts,1) /= p%nparts ) stop 'ERROR! generated number of parts not same as inputted nparts'
         if( .not. stack_is_split() )then
             call exec_cmdline('mkdir -p '//trim(STKPARTSDIR))

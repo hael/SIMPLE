@@ -67,6 +67,31 @@ contains
         is_io=.false.
         if (unit == stderr .or. unit == stdout .or. unit == stdin) is_io= .true.
     end function is_io
+    !>  \brief  check whether a IO unit is currently opened
+    logical function is_open( unit_number )
+        integer, intent(in)   :: unit_number
+        integer               :: io_status
+        character(len=STDLEN) :: io_message
+        io_status = 0
+        inquire(unit=unit_number, opened=is_open,iostat=io_status,iomsg=io_message)
+        if (io_status .ne. 0) then
+            print *, 'is_open: IO error ', io_status, ': ', trim(adjustl(io_message))
+            call simple_stop ('IO error; is_open; simple_fileio      ')
+        endif
+    end function is_open
+    
+    !>  \brief  check whether a file is currently opened
+    logical function is_file_open( fname )
+        character(len=*), intent(in)  :: fname
+        integer               :: io_status
+        character(len=STDLEN) :: io_message
+        io_status = 0
+        inquire(file=fname, opened=is_file_open,iostat=io_status,iomsg=io_message)
+        if (io_status .ne. 0) then
+            print *, 'is_open: IO error ', io_status, ': ', trim(adjustl(io_message))
+            stop 'IO error; is_file_open; simple_fileio      '
+        endif
+    end function is_file_open
 
     !> FOPEN enforce F2008 style open so that PGI/Intel behave correctly
     !!
@@ -574,7 +599,32 @@ contains
         endif
     end function file_kind
 
+    !>  \brief  check if a file exists on disk
+    logical function file_exists(fname)
+        character(len=*), intent(in) :: fname
+        inquire(file=trim(adjustl(fname)), exist=file_exists)
+    end function file_exists
 
+    !>  \brief  waits for file to be closed
+    subroutine wait_for_closure( fname )
+        character(len=*), intent(in)  :: fname
+        logical :: exists, closed
+        integer :: wait_time
+        wait_time = 0
+        do
+            if( wait_time == 60 )then
+                write(*,'(A,A)')'>>> WARNING: been waiting for a minute for file: ',trim(adjustl(fname))
+                wait_time = 0
+                flush(stdout)
+            endif
+            exists = file_exists(fname)
+            closed = .false.
+            if( exists )closed = .not. is_file_open(fname)
+            if( exists .and. closed )exit
+            call simple_sleep(1)
+            wait_time = wait_time + 1
+        enddo
+    end subroutine wait_for_closure
 
     !>  Wrapper for POSIX system call stat
     subroutine sys_stat( filename, status, buffer, doprint )

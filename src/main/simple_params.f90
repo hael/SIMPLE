@@ -4,11 +4,10 @@ use simple_defs         ! use all in there
 use simple_ori,         only: ori
 use simple_cmdline,     only: cmdline
 use simple_magic_boxes, only: find_magic_box
-use simple_fileio,      only: fopen, fclose, fileio_errmsg, nlines, fname2format
+use simple_fileio,      only: fopen, fclose, fileio_errmsg, nlines, fname2format,file_exists
 use simple_imgfile,     only: find_ldim_nptcls
 use simple_binoris,     only: binoris
 use simple_strings,     only: str_has_substr, int2str, int2str_pad
-use simple_syslib,      only: file_exists       ! use all in there
 implicit none
 
 public :: params

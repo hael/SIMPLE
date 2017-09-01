@@ -5,10 +5,11 @@ use simple_cmdline,        only: cmdline
 use simple_params,         only: params
 use simple_build,          only: build
 use simple_commander_base, only: commander_base
-use simple_qsys_funs       ! use all in there
-use simple_fileio          ! use all in there
-use simple_jiffys          ! use all in there
-use simple_binoris_io      ! use all in there
+use simple_jiffys,         only: simple_end,progress
+use simple_qsys_funs,      only: qsys_job_finished
+use simple_fileio,         only: fopen, fclose, fileio_errmsg, file_exists, file2rarr
+use simple_syslib,         only: alloc_errchk, simple_stop
+!use simple_binoris_io      ! use all in there
 implicit none
 
 public :: resrange_commander
@@ -313,13 +314,14 @@ contains
     !> CHECK3D_CONV is a SIMPLE program
     subroutine exec_check3D_conv( self, cline )
         use simple_math,    only: rad2deg, get_lplim
+        use simple_strings, only: int2str_pad
         class(check3D_conv_commander), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
         type(params)      :: p
         type(build)       :: b
         real, allocatable :: maplp(:)
         integer           :: istate, loc(1)
-        logical           :: here, limset, converged, update_res
+        logical           :: limset, converged, update_res
         p = params(cline)                   ! parameters generated
         call b%build_general_tbox(p, cline) ! general objects built
         ! nstates consistency check
@@ -329,7 +331,8 @@ contains
         !endif
         limset = .false. ;  update_res = .false.
         if( p%eo .eq. 'yes' )then
-            allocate( maplp(p%nstates) )
+            allocate( maplp(p%nstates) ,stat=alloc_stat)
+            call alloc_errchk("In commander_prime3D:: check3D_conv ", alloc_stat)
             maplp = 0.
             do istate=1,p%nstates
                 if( b%a%get_pop( istate, 'state' ) == 0 )cycle ! empty state

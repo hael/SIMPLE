@@ -1,7 +1,7 @@
 ! concrete commander: pre-processing routines
 module simple_commander_preproc
 use simple_defs            ! use all in there
-use simple_jiffys          ! use all in there
+use simple_jiffys,         only: progress, simple_end
 use simple_fileio          ! use all in there
 use simple_binoris_io      ! use all in there
 use simple_strings,        only: int2str, int2str_pad
@@ -10,7 +10,6 @@ use simple_cmdline,        only: cmdline
 use simple_params,         only: params
 use simple_build,          only: build
 use simple_commander_base, only: commander_base
-use simple_strings,        only: int2str, int2str_pad
 use simple_imgfile,        only: find_ldim_nptcls
 implicit none
 
@@ -90,7 +89,7 @@ contains
         type(cmdline)           :: cline_extract
         character(len=STDLEN), allocatable :: movienames(:)
         character(len=:),      allocatable :: fname_ctffind_ctrl, fname_unidoc_output
-        character(len=:),      allocatable :: moviename_forctf, moviename_intg, outfile
+        character(len=:),      allocatable :: moviename_forctf, moviename_intg
         character(len=STDLEN) :: boxfile, dir_ptcls, movie_fbody, movie_ext, movie_fname
         type(params) :: p
         type(oris)   :: os_uni
@@ -193,7 +192,7 @@ contains
             call os_uni%set_ori(movie_counter, orientation)
             p%smpd           = smpd_scaled
             movie_counter    = movie_counter - 1
-            moviename_forctf = ubiter%get_moviename('forctf')
+            moviename_forctf = ubiter%get_moviename('forctf')    !! realloc warning
             moviename_intg   = ubiter%get_moviename('intg')
             p%pspecsz        = p%pspecsz_ctffind
             p%hp             = p%hp_ctffind
@@ -445,12 +444,12 @@ contains
     !! \see http://simplecryoem.com/tutorials.html?#motion-correction
     !! EXAMPLE:
     !! ```sh
-    !! cat movies.txt 
+    !! cat movies.txt
     !!    data/movie1.mrc
     !!    data/movie2.mrc
     !! simple_distr_exec prg=unblur filetab=movies.txt smpd=5.26 nparts=2 nthr=12 fbody=proteasome dose_rate=7 exp_time=7.6 kv=300
     !!```
-    !! 
+    !!
     subroutine exec_unblur( self, cline )
         use simple_unblur_iter, only: unblur_iter
         use simple_oris,        only: oris
@@ -614,7 +613,7 @@ contains
     !! ```
     subroutine exec_select( self, cline )
         use simple_image,    only: image
-        use simple_corrmat   ! use all in there
+        use simple_corrmat,  only: calc_cartesian_corrmat
         class(select_commander), intent(inout) :: self
         class(cmdline),          intent(inout) :: cline !< command line input
         type(params)                       :: p
@@ -654,7 +653,7 @@ contains
             allocate(correlations(nsel,nall), stat=alloc_stat)
             call alloc_errchk('In: exec_select; simple_commander_preproc', alloc_stat)
             ! read matrix
-            
+
             call fopen(funit, status='OLD', action='READ', file='corrmat_select.bin', access='STREAM', iostat=io_stat)
             call fileio_errmsg('simple_commander_preproc ; fopen error when opening corrmat_select.bin  ', io_stat)
             read(unit=funit,pos=1,iostat=io_stat) correlations
@@ -662,13 +661,13 @@ contains
             if(io_stat/=0) then
                 call fileio_errmsg('**ERROR(simple_commander_preproc): I/O error reading corrmat_select.bin. Remove the file to override the memoization.', io_stat)
             endif
- 
+
             call fclose(funit,errmsg='simple_commander_preproc ; fopen error when closing corrmat_select.bin  ')
         else
             write(*,'(a)') '>>> CALCULATING CORRELATIONS'
             call calc_cartesian_corrmat(imgs_sel, imgs_all, correlations)
             ! write matrix
-            
+
             call fopen(funit, status='REPLACE', action='WRITE', file='corrmat_select.bin', access='STREAM', iostat=io_stat)
             call fileio_errmsg('simple_commander_preproc ; fopen error when opening corrmat_select.bin  ', io_stat)
             write(unit=funit,pos=1,iostat=io_stat) correlations
@@ -681,7 +680,7 @@ contains
         ! find selected
         ! in addition to the index array, also make a logical array encoding the selection (to be able to reject)
         allocate(selected(nsel), lselected(nall),stat=alloc_stat)
-        allocchk("In commander_preproc::select selected lselected ")
+        call alloc_errchk("In commander_preproc::select selected lselected ",alloc_stat)
         lselected = .false.
         do isel=1,nsel
             loc = maxloc(correlations(isel,:))
@@ -693,7 +692,7 @@ contains
             ! read filetable
             call read_filetable(p%filetab, imgnames)
             if( size(imgnames) /= nall ) stop 'nr of entries in filetab and stk not consistent'
-            
+
             call fopen(funit, file=p%outfile,status="replace", action="write", access="sequential", iostat=io_stat)
             call fileio_errmsg('simple_commander_preproc ; fopen error when opening '//trim(p%outfile), ios)
             !if( ios /= 0 )then
@@ -739,9 +738,8 @@ contains
         character(STDLEN), parameter :: ORIFILE='pickrefs_oris.txt'
         type(params)                 :: p
         type(build)                  :: b
-        type(cmdline)                :: cline_projvol, cline_stackops
+        type(cmdline)                :: cline_projvol
         type(projvol_commander)      :: xprojvol
-        type(stackops_commander)     :: xstackops
         integer                      :: nrots, cnt, iref, irot
         real                         :: ang, rot
         p = params(cline)                   ! parameters generated
@@ -846,19 +844,19 @@ contains
         type(params)                       :: p
         type(build)                        :: b
         integer                            :: nmovies, nboxfiles, nframes, pind, noris
-        integer                            :: i, j, k, ldim(3), box_current, movie, ndatlines, nptcls
+        integer                            :: i, j, ldim(3), box_current, movie, ndatlines, nptcls
         integer                            :: cnt, niter, fromto(2), orig_box
         integer                            :: movie_ind, ntot, lfoo(3), ifoo, noutside
         type(nrtxtfile)                    :: boxfile
-        character(len=STDLEN)              :: mode, sumstack, outfile, sumstack_frames
+        character(len=STDLEN)              :: sumstack, outfile, sumstack_frames
         character(len=STDLEN), allocatable :: movienames(:), boxfilenames(:), movienames_frames(:)
         real, allocatable                  :: boxdata(:,:)
         integer, allocatable               :: pinds(:)
         real                               :: kv, cs, fraca, dfx, dfy, angast, ctfres
-        real                               :: med, ave, sdev, var, particle_position(2)
+        real                               ::  particle_position(2)
         type(image)                        :: micrograph
         type(oris)                         :: outoris, os_uni
-        logical                            :: err, params_present(3)
+        logical                            :: params_present(3)
         noutside = 0
         p = params(cline, checkdistr=.false.) ! constants & derived constants produced
         if( p%stream .eq. 'yes' )then

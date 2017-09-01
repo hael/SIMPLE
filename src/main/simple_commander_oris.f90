@@ -1,13 +1,15 @@
 ! concrete commander: operations on orientations
 module simple_commander_oris
+use simple_defs            ! use all in there
 use simple_cmdline,        only: cmdline
 use simple_params,         only: params
 use simple_build,          only: build
 use simple_commander_base, only: commander_base
-use simple_fileio          ! use all in there
-use simple_jiffys          ! use all in there
-use simple_defs            ! use all in there
+use simple_fileio,         only: fopen, fclose, fileio_errmsg, file_exists, read_filetable
+use simple_jiffys,         only: simple_end,progress
 use simple_binoris_io      ! use all in there
+use simple_syslib,         only: alloc_errchk, simple_stop
+
 implicit none
 
 public :: cluster_oris_commander
@@ -92,7 +94,7 @@ contains
         ! generate the class documents
         numlen = len(int2str(p%ncls))
         do icls=1,p%ncls
-            clsarr = b%a%get_pinds(icls, 'class')
+            clsarr = b%a%get_pinds(icls, 'class')                               !! realloc warning
             if( allocated(clsarr) )then
                 do iptcl=1,size(clsarr)
                     call b%a%write(clsarr(iptcl), 'oris_class'//int2str_pad(icls,numlen)//'.txt')
@@ -404,13 +406,13 @@ contains
         do isel=1,nsel
             loc                     = maxloc(correlations(isel,:))
             selected(loc(1))        = .true.
-            labeler(isel)%particles = b%a%get_pinds(loc(1), 'class')
+            labeler(isel)%particles = b%a%get_pinds(loc(1), 'class')     !! realloc warning
         end do
         ! erase deselected (by setting their state to zero)
         do icls=1,p%ncls
             if( selected(icls) ) cycle
             if( b%a%get_pop(icls, 'class') > 0 )then
-                rejected_particles = b%a%get_pinds(icls, 'class')
+                rejected_particles = b%a%get_pinds(icls, 'class')        !! realloc warning
                 do iptcl=1,size(rejected_particles)
                     call b%a%set(rejected_particles(iptcl), 'state', 0.)
                 end do
@@ -464,9 +466,7 @@ contains
         type(build)       :: b
         type(ori)         :: orientation
         type(params)      :: p
-        real              :: normal(3), thresh, corr, skewness
-        integer           :: s, i, nincl, ind, icls, ncls
-        real, allocatable :: corrs(:)
+        integer           :: s, i
         p = params(cline)
         call b%build_general_tbox(p, cline)
         if( p%errify .eq. 'yes' )then   ! introduce error in input orientations
@@ -523,13 +523,13 @@ contains
         type(oris)           :: o, osubspace
         type(ori)            :: o_single
         type(params)         :: p
-        real                 :: mind, maxd, avgd, sdevd, sumd, vard, median_clustsz, scale
-        real                 :: mind2, maxd2, avgd2, sdevd2, vard2, homo_cnt, homo_avg
+        real                 :: mind, maxd, avgd, sdevd, sumd, vard, scale
+        real                 :: mind2, maxd2, avgd2, sdevd2, vard2
         real                 :: popmin, popmax, popmed, popave, popsdev, popvar, frac_populated, szmax
-        integer              :: nprojs, iproj, iptcl, icls, cnt_zero, cnt_nonzero, n_zero, n_nonzero, j
+        integer              :: nprojs, iptcl, icls, j 
         integer              :: noris, ncls
         real,    allocatable :: pops(:), tmp(:), clustszs(:)
-        integer, allocatable :: projinds(:), clustering(:)
+        integer, allocatable :: clustering(:)
         logical, allocatable :: ptcl_mask(:)
         integer, parameter   :: hlen=50
         logical              :: err
@@ -584,7 +584,7 @@ contains
                     call b%a%set_all2single('w', 1.0)
                 endif
                 ! generate class stats
-                pops           = b%a%get_pops('class', consider_w=.true.)
+                pops           = b%a%get_pops('class', consider_w=.true.)  !! realloc warning
                 popmin         = minval(pops)
                 popmax         = maxval(pops)
                 popmed         = median_nocopy(pops)
@@ -616,9 +616,9 @@ contains
                     call b%a%calc_spectral_weights(p%frac)
                 endif
                 ! generate population stats
-                tmp            = b%a%get_pops('proj', consider_w=.true.)
+                tmp            = b%a%get_pops('proj', consider_w=.true.)!! realloc warning
                 nprojs         = size(tmp)
-                pops           = pack(tmp, tmp > 0.5)
+                pops           = pack(tmp, tmp > 0.5)                   !! realloc warning
                 frac_populated = real(size(pops))/real(p%nspace)
                 popmin         = minval(pops)
                 popmax         = maxval(pops)
@@ -725,6 +725,7 @@ contains
     !> convert text (.txt) oris doc to binary (.bin)
     subroutine exec_txt2bin( self, cline )
         use simple_oris, only: oris
+        use simple_fileio, only: nlines
         class(txt2bin_commander), intent(inout) :: self
         class(cmdline),           intent(inout) :: cline
         type(params)  :: p
@@ -758,6 +759,7 @@ contains
         use simple_oris,      only: oris
         use simple_ori,       only: ori
         use simple_strings,   only: real2str
+        use simple_fileio,    only: remove_abspath,fname2ext,get_fbody
         class(vizoris_commander),  intent(inout) :: self
         class(cmdline),            intent(inout) :: cline
         type(build)           :: b
@@ -792,7 +794,8 @@ contains
         if( p%tseries.eq.'no' )then
             ! Discretization of the projection directions
             ! init
-            allocate(pops(p%nspace), source=0)
+            allocate(pops(p%nspace), source=0,stat=alloc_stat)
+            call alloc_errchk("In commander_oris:: vizoris allocating pops ", alloc_stat)
             ang = 3.6 / sqrt(real(p%nsym*p%nspace))
             maxradius = 0.75 * sqrt( (1.-cos(ang))**2. + sin(ang)**2. )
             ! projection direction attribution

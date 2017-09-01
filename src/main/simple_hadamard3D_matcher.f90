@@ -9,13 +9,13 @@ use simple_ori,              only: ori
 use simple_build,            only: build
 use simple_params,           only: params
 use simple_cmdline,          only: cmdline
-!use simple_gridding,         only: prep4cgrid
+use simple_gridding,         only: prep4cgrid
 use simple_strings,          only: int2str_pad
 use simple_jiffys,           only: progress
-!use simple_binoris_io,       only: binwrite_oritab
-!use simple_cont3D_matcher    ! use all in there
-!use simple_hadamard_common   ! use all in there
-!use simple_math              ! use all in there
+use simple_binoris_io,       only: binwrite_oritab
+use simple_cont3D_matcher    ! use all in there
+use simple_hadamard_common   ! use all in there
+use simple_math              ! use all in there
 
 !
 !use simple_syslib            ! use all in there
@@ -74,9 +74,8 @@ contains
         logical,        intent(inout) :: update_res, converged
         logical , allocatable :: to_update(:)
         type(oris) :: prime3D_oris
-        real       :: norm, corr_thresh, skewness, frac_srch_space, extr_thresh, update_frac
+        real       :: norm, corr_thresh, skewness, frac_srch_space, extr_thresh
         integer    :: iptcl, inptcls, istate, iextr_lim
-        integer    :: update_ind, nupdates_target, nupdates
         integer    :: statecnt(p%nstates)
         inptcls = p%top - p%fromp + 1
 
@@ -195,7 +194,7 @@ contains
         ! STOCHASTIC IMAGE ALIGNMENT
         ! create the search objects, need to re-create every round because parameters are changing
         allocate( primesrch3D(p%fromp:p%top) , stat=alloc_stat)
-        call alloc_errchk("In hadamard3D_matcher::prime3D_exec ",alloc_stat)
+        call alloc_errchk("In hadamard3D_matcher::prime3D_exec primesrch3D objects ",alloc_stat)
         do iptcl=p%fromp,p%top
             call primesrch3D(iptcl)%new(b%a, p, pftcc)
         end do

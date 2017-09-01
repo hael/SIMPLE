@@ -5,6 +5,7 @@ use simple_syslib,  only: alloc_errchk, simple_stop
 use simple_fileio,  only: fopen, fclose, fileio_errmsg
 use simple_image,   only: image
 use simple_imgfile, only: find_ldim_nptcls
+use simple_jiffys,  only: progress
 implicit none
 
 private :: raise_exception_imgfile

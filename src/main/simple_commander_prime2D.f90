@@ -5,8 +5,9 @@ use simple_cmdline,        only: cmdline
 use simple_params,         only: params
 use simple_build,          only: build
 use simple_commander_base, only: commander_base
-use simple_fileio          ! use all in there
-use simple_jiffys          ! use all in there
+use simple_jiffys,         only: simple_end,progress
+use simple_syslib,         only: alloc_errchk, simple_stop
+
 implicit none
 
 public :: makecavgs_commander
@@ -16,11 +17,11 @@ public :: check2D_conv_commander
 public :: rank_cavgs_commander
 private
 
-type, extends(commander_base) :: makecavgs_commander 
+type, extends(commander_base) :: makecavgs_commander
  contains
     procedure :: execute      => exec_makecavgs
-end type makecavgs_commander 
-type, extends(commander_base) :: prime2D_commander 
+end type makecavgs_commander
+type, extends(commander_base) :: prime2D_commander
   contains
     procedure :: execute      => exec_prime2D
 end type prime2D_commander
@@ -49,7 +50,7 @@ contains
         class(cmdline),             intent(inout) :: cline
         type(params)  :: p
         type(build)   :: b
-        integer       :: ncls_in_oritab, icls, fnr, file_stat
+        integer       :: ncls_in_oritab, icls
         p = params(cline)  ! parameters generated
         call b%build_general_tbox(p, cline, do3d=.false.) ! general objects built
         call b%build_hadamard_prime2D_tbox(p) ! 2D Hadamard matcher built
@@ -113,7 +114,7 @@ contains
                 call prime2D_write_sums(b, p, fname=p%refs)
             else
                 call prime2D_write_sums(b, p)
-            endif           
+            endif
         else
             call prime2D_assemble_sums(b, p)
             if( p%l_distr_exec)then
@@ -130,7 +131,7 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_MAKECAVGS NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_makecavgs
-    
+
     !> Prime2D  implementation of a bespoke probabilistic algorithm for simultaneous 2D alignment and clustering
     !! \see http://simplecryoem.com/tutorials.html?#d-analysis-with-prime2d
     !!
@@ -146,7 +147,7 @@ contains
     !!    called . The version we are going to use here is an improved version
     !!    of the published code released in SIMPLE 2.1 (submitted manuscript).
     !!    Grouping tens of thousands of images into several hundred clusters is
-    !!    a computationally intensive job. 
+    !!    a computationally intensive job.
     subroutine exec_prime2D( self, cline )
         use simple_hadamard2D_matcher, only: prime2D_exec
         use simple_qsys_funs,          only: qsys_job_finished
@@ -170,7 +171,7 @@ contains
         ! execute
         if( cline%defined('part') )then
             if( .not. cline%defined('outfile') ) stop 'need unique output file for parallel jobs'
-            call prime2D_exec(b, p, cline, p%startit, converged) ! partition or not, depending on 'part'       
+            call prime2D_exec(b, p, cline, p%startit, converged) ! partition or not, depending on 'part'
         else
             startit = 1
             if( cline%defined('startit') ) startit = p%startit
@@ -192,15 +193,16 @@ contains
         ! this is needed for chunk-based prime2D parallellisation
         call qsys_job_finished(p, 'simple_commander_prime2D :: exec_prime2D')
     end subroutine exec_prime2D
-    
+
     subroutine exec_cavgassemble( self, cline )
         use simple_hadamard2D_matcher, only: prime2D_assemble_sums_from_parts, prime2D_write_sums
+        use simple_fileio,         only: fopen, fclose, fileio_errmsg
         class(cavgassemble_commander), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
         type(params)         :: p
         type(build)          :: b
         integer, allocatable :: fromtocls(:,:)
-        integer              :: fnr, file_stat, icls, ncls
+        integer              :: fnr, file_stat, icls
         p = params(cline) ! parameters generated
         call b%build_general_tbox(p, cline, do3d=.false.) ! general objects built
         call b%build_hadamard_prime2D_tbox(p)
@@ -229,7 +231,7 @@ contains
         call fileio_errmsg('In: commander_rec :: eo_volassemble', file_stat )
         call fclose( fnr ,errmsg='In: commander_rec :: eo_volassemble fclose')
     end subroutine exec_cavgassemble
-    
+
     subroutine exec_check2D_conv( self, cline )
         class(check2D_conv_commander), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
@@ -253,7 +255,7 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_CHECK2D_CONV NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_check2D_conv
-    
+
     subroutine exec_rank_cavgs( self, cline )
         use simple_oris,       only: oris
         use simple_binoris_io, only: binread_oritab, binread_nlines
@@ -266,13 +268,13 @@ contains
         p = params(cline) ! parameters generated
         call b%build_general_tbox(p, cline, do3d=.false.) ! general objects built
         p%ncls   = p%nptcls
-        p%nptcls = binread_nlines(p%oritab) 
+        p%nptcls = binread_nlines(p%oritab)
         call b%a%new(p%nptcls)
         call binread_oritab(p%oritab, b%a, [1,p%nptcls])
         order = b%a%order_cls(p%ncls)
         do iclass=1,p%ncls
             write(*,'(a,1x,i5,1x,a,1x,i5,1x,a,i5)') 'CLASS:', order(iclass),&
-            &'CLASS_RANK:', iclass ,'POP:', b%a%get_pop(order(iclass), 'class') 
+            &'CLASS_RANK:', iclass ,'POP:', b%a%get_pop(order(iclass), 'class')
             call b%img%read(p%stk, order(iclass))
             call b%img%write(p%outstk, iclass)
         end do

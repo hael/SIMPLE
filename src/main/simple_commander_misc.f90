@@ -1,14 +1,15 @@
 ! concrete commander: miscallenaous routines
 module simple_commander_misc
+use simple_defs            ! use all in there
 use simple_cmdline,        only: cmdline
 use simple_params,         only: params
 use simple_build,          only: build
 use simple_commander_base, only: commander_base
 use simple_strings,        only: int2str, int2str_pad
-use simple_fileio          ! use all in there
-use simple_jiffys          ! use all in there
+use simple_fileio,         only: fopen, fclose, fileio_errmsg, file2rarr
+use simple_jiffys,         only: simple_end,progress
 use simple_binoris_io      ! use all in there
-use simple_defs            ! use all in there
+use simple_syslib,         only: alloc_errchk, simple_stop
 implicit none
 
 public :: cluster_smat_commander
@@ -169,7 +170,7 @@ contains
 
     !> for printing the command line key dictonary
     subroutine exec_print_cmd_dict( self, cline )
-        use simple_cmd_dict
+        use simple_cmd_dict, only:print_cmd_key_descr
         class(print_cmd_dict_commander), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline
         type(params) :: p
@@ -258,6 +259,7 @@ contains
     !> shift is a program for shifting a stack according to shifts in oritab
     subroutine exec_shift( self, cline )
         use simple_procimgfile, only: shift_imgfile
+        use simple_binoris_io, only: binwrite_oritab
         class(shift_commander), intent(inout) :: self
         class(cmdline),         intent(inout) :: cline
         type(params) :: p

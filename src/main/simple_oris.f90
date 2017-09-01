@@ -5,9 +5,9 @@ module simple_oris
 use simple_defs
 use simple_ori,         only: ori
 use simple_math,        only: hpsort, is_a_number, rad2deg
-use simple_syslib,      only: alloc_errchk, file_exists, simple_stop
+use simple_syslib,      only: alloc_errchk, simple_stop
 use simple_stat,        only: moment
-use simple_fileio,      only: fopen, fclose, fileio_errmsg
+use simple_fileio,      only: fopen, fclose, fileio_errmsg, file_exists
 implicit none
 
 public :: oris, test_oris
@@ -2807,6 +2807,7 @@ contains
     !!          orientations by maximizing the geodesic distance upon every
     !!          addition to the growing set
     subroutine gen_diverse( self )
+        use simple_jiffys, only: progress
         class(oris), intent(inout) :: self
         logical, allocatable       :: o_is_set(:)
         integer                    :: i

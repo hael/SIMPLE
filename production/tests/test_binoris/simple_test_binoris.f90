@@ -3,10 +3,11 @@ use simple_oris,         only: oris
 use simple_map_reduce,   only: split_nobjs_even
 use simple_strings,      only: int2str
 use simple_prime3D_srch, only: prime3D_srch
-use simple_binoris_io   ! use all in there
+!use simple_binoris,      only: binoris
+use simple_binoris_io  ! use all in there
 implicit none
 type(oris)         :: a1, a2, os_peak1, os_peak2
-type(binoris)      :: bos
+!type(binoris)      :: bos
 integer            :: i
 type(prime3D_srch) :: psrch3D(5)
 logical            :: mask(5)

@@ -5,12 +5,11 @@ use simple_build,             only: build
 use simple_params,            only: params
 use simple_cmdline,           only: cmdline
 use simple_polarft_corrcalc,  only: polarft_corrcalc
-use simple_oris,              only: oris
-use simple_ori,               only: ori
 use simple_cont3D_ada_srch,   only: cont3D_ada_srch
+use simple_syslib,            only: alloc_errchk
 use simple_hadamard_common   ! use all in there
 !use simple_math              ! use all in there
-!use simple_binoris_io        ! use all in there
+use simple_binoris_io        ! use all in there
 
 implicit none
 
@@ -30,10 +29,12 @@ contains
     !>  \brief  is the 3D continous algorithm
     subroutine cont3D_exec( b, p, cline, which_iter, converged )
         use simple_map_reduce, only: split_nobjs_even
- !       use simple_qsys_funs,  only: qsys_job_finished
+        use simple_qsys_funs,  only: qsys_job_finished
         use simple_strings,    only: int2str_pad
         use simple_projector,  only: projector
- !       use simple_fileio,     only: del_file
+        use simple_fileio,     only: del_file
+        use simple_oris,       only: oris
+        use simple_ori,        only: ori
         !$ use omp_lib
         !$ use omp_lib_kinds
         class(build),   intent(inout) :: b               !< build object
@@ -258,6 +259,7 @@ contains
 
     !>  \brief  particle projection into pftcc
     subroutine prep_pftcc_ptcl(b, p, iptcl, pftcc)
+        use simple_ori,               only: ori
         class(build),               intent(inout) :: b        !< build object
         class(params),              intent(inout) :: p        !< params object
         integer,                    intent(in)    :: iptcl       !< index to particle
@@ -283,7 +285,8 @@ contains
         rec_weights = b%a%get_all('w')
         n_recptcls  = count(rec_weights(p%fromp:p%top) > TINY)
         rt          = ran_tabu( n_recptcls )
-        allocate(part(n_recptcls), source=0)
+        allocate(part(n_recptcls), source=0, stat=alloc_stat) ! 0 is default value
+        call alloc_errchk("simple_cont3D_matcher::prep_eopairs ", alloc_stat)
         call rt%balanced(2, part)
         part = part - 1 ! 0/1 outcome
         cnt = 0

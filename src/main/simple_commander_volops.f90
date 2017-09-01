@@ -1,5 +1,5 @@
 ! concrete commander: operations on volumes
-#inlcude "simple_lib.f08"
+#include "simple_lib.f08"
 module simple_commander_volops
 use simple_defs
 use simple_jiffys,         only: simple_end, progress
@@ -329,7 +329,6 @@ contains
     !> exec_volops Volume calculations and operations - incl Guinier, snr, mirror or b-factor
     !!
     subroutine exec_volops( self, cline )
-        use simple_fileio
         use simple_projector_hlev, only: rotvol
         use simple_ori,            only: ori
         use simple_image,          only: image

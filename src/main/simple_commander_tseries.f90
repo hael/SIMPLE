@@ -7,7 +7,8 @@ use simple_build,          only: build
 use simple_commander_base, only: commander_base
 use simple_strings,        only: int2str, int2str_pad
 use simple_fileio          ! use all in there
-use simple_jiffys          ! use all in there
+use simple_jiffys,         only: progress, simple_end
+use simple_syslib,         only: alloc_errchk
 implicit none
 
 public :: tseries_extract_commander
