@@ -6,8 +6,8 @@ module simple_syslib
     use simple_defs
     use simple_strings, only: cpStr
     use, intrinsic :: iso_fortran_env, only: &
-    &stderr=>ERROR_UNIT, stdout=>OUTPUT_UNIT,&
-    &IOSTAT_END, IOSTAT_EOR
+        &stderr=>ERROR_UNIT, stdout=>OUTPUT_UNIT,&
+        &IOSTAT_END, IOSTAT_EOR
     implicit none
 
 
@@ -34,8 +34,6 @@ module simple_syslib
         integer function access(fil,mod)
             character*(*), intent(in) :: fil, mod
         end function access
-
-
 
         integer function chdir(path)
             character*(*), intent(in) :: path
@@ -290,19 +288,19 @@ module simple_syslib
 #endif
 
 
-private :: raise_sys_error
+    private :: raise_sys_error
 
-! private
+    ! private
 
 #ifdef PGI
 
-! include 'lib3f.h'
-! public :: exec_cmdline, simple_getenv, ls_mrcfiletab, ls_filetab, &
- !    sys_del_files, sys_get_last_fname, simple_sleep, &
- !     sys_merge_docs
+    ! include 'lib3f.h'
+    ! public :: exec_cmdline, simple_getenv, ls_mrcfiletab, ls_filetab, &
+    !    sys_del_files, sys_get_last_fname, simple_sleep, &
+    !     sys_merge_docs
 
 #endif
-    
+
 contains
 
     subroutine simple_stop (msg,f,l)
@@ -310,7 +308,7 @@ contains
         character(len=*),      intent(in), optional :: f !< filename of caller
         integer,               intent(in), optional :: l !< line number from calling file
         if(present(f).and.present(l))&
-             write(stderr,'("Stopping in file ",/,A,/," at line ",I0)') f,l
+            write(stderr,'("Stopping in file ",/,A,/," at line ",I0)') f,l
         write(stderr,'("Message: ",/,a,/)') trim(msg)
         write(stderr,'(I0)') get_sys_error()
         stop
@@ -323,14 +321,14 @@ contains
 #endif
         integer :: err
         CHARACTER(len=100) :: msg
-        err = INT( IERRNO() ) !! EXTERNAL;  no implicit type in INTEL
+        err = INT( IERRNO(), kind=4 ) !! intrinsic,  no implicit type in INTEL
 
         if( err < 0)then !! PGI likes to use negative error numbers
-!#ifdef PGI
-!            msg = gerror()
-!#else
+            !#ifdef PGI
+            !            msg = gerror()
+            !#else
             call gerror(msg) !! EXTERNAL;
-!#endif
+            !#endif
             write(stderr,'("SIMPLE_SYSLIB::SYSERROR NEG ",I0)') err
             write(stderr,*) trim(msg)
         else if (err /= 0) then
@@ -437,26 +435,27 @@ contains
             call perror(msg)
 #endif
         end if
-        
+
 
     end function get_sys_error
 
 
 
     !> \brief  is for checking allocation
-    subroutine alloc_errchk( message, alloc_stat,f,l )
+    subroutine alloc_errchk( message, alloc_status, f,l )
         character(len=*), intent(in)           :: message
-        integer,          intent(in)           :: alloc_stat
+        integer,          intent(in)           :: alloc_status
         character(len=*), intent(in), optional :: f !< filename of caller
         integer,          intent(in), optional :: l !< line number from calling file
         integer                      :: syserr
-        if(present(f).and.present(l))&
-             write(stderr,'("Stopping in file ",/,A,/," at line ",I0)') f,l
         
-        if (alloc_stat/=0)then
+        if (alloc_status/=0)then
             write(stderr,'(a)') 'ERROR: Allocation failure!'
+            call simple_error_check(alloc_status)
+            if(present(f).and.present(l))&
+                write(stderr,'("Stopping in file ",/,A,/," at line ",I0)') f,l
             call simple_stop(message)
-      endif
+        endif
     end subroutine alloc_errchk
 
 
@@ -482,14 +481,14 @@ contains
                 write(stderr,'(a)')"fclose EOF reached (PGI version)"
                 iostat=0
             else if (IS_IOSTAT_EOR(io_stat)) then
-                 write(stderr,'(a)')"fclose End-of-record reached (PGI version)"
+                write(stderr,'(a)')"fclose End-of-record reached (PGI version)"
                 iostat=0
             end if
         end if
 #else
         !! Intel and GNU
-        if (io_stat==IOSTAT_END)  write(*,'(a,1x,I0 )') 'ERRCHECK: EOF reached, IOS# ', io_stat
-        if (io_stat==IOSTAT_EOR)  write(*,'(a,1x,I0 )') 'ERRCHECK: EOR reached, IOS# ', io_stat
+        if (io_stat==IOSTAT_END)  write(*,'(a,1x,I0 )') 'ERRCHECK: EOF reached, end-of-file reached IOS# ', io_stat
+        if (io_stat==IOSTAT_EOR)  write(*,'(a,1x,I0 )') 'ERRCHECK: EOR reached, read was short, IOS# ', io_stat
 
 #endif
         if( io_stat /= 0 ) then
@@ -498,14 +497,14 @@ contains
             !! do not stop yet -- let the fopen/fclose call to finish
             !! stop
         endif
-        
+
     end subroutine simple_error_check
 
 
     subroutine print_compiler_info(file_unit)
 #ifdef GNU
-    use, intrinsic :: iso_fortran_env, only: compiler_version, &
-    &compiler_options
+        use, intrinsic :: iso_fortran_env, only: compiler_version, &
+            &compiler_options
 #endif
 #ifdef INTEL
         use ifport
@@ -523,16 +522,16 @@ contains
         end if
 #ifdef GNU
         write( file_unit_op, '(/4a/)' ) &
-             ' This file was compiled by ', COMPILER_VERSION(), &
-             ' using the options ', COMPILER_OPTIONS()
+            ' This file was compiled by ', COMPILER_VERSION(), &
+            ' using the options ', COMPILER_OPTIONS()
 #endif
 #ifdef INTEL
         res = for_ifcore_version( str )
         write( file_unit_op, '(/2a/)' ) &
-             ' Intel IFCORE version ', str
+            ' Intel IFCORE version ', str
         res = for_ifport_version( str )
         write( file_unit_op, '(/2a/)' ) &
-             ' Intel IFPORT version ', str
+            ' Intel IFPORT version ', str
 #endif
     end subroutine print_compiler_info
 
@@ -571,7 +570,7 @@ contains
 
     integer function hbw_availability
         use ifcore
-!        integer(4) :: hbw_availability
+        !        integer(4) :: hbw_availability
         hbw_availability = for_get_hbw_availability()
         print *,"Results of for_get_hbw_availability():"
         select case (hbw_availability)
@@ -617,8 +616,8 @@ contains
         ! include 'lib3f.h'  ! PGI declares kill,wait here
         exec_stat = system(trim(adjustl(cmdline)))
 
-! #elif defined(INTEL)
-!        exec_stat = system(trim(adjustl(cmdline)))
+        ! #elif defined(INTEL)
+        !        exec_stat = system(trim(adjustl(cmdline)))
 
 #else
         !! GNU
@@ -652,11 +651,11 @@ contains
         ! if( err ) write(*,*) trim(adjustl(cmdmsg))
     end subroutine raise_sys_error
 
-    function simple_getenv( name ) result( varval )
+    character(len=STDLEN) function simple_getenv( name ) ! result( varval )
         character(len=*), intent(in)  :: name
         character(len=STDLEN)         :: value
         character(len=:), allocatable :: varval
-        integer :: length, status, alloc_stat
+        integer :: length, status
 
 #if defined(PGI)
         call getenv( trim(name), value)
@@ -668,8 +667,9 @@ contains
         if( status ==  2 ) write(*,*) 'environment variables not supported by system; simple_syslib :: simple_getenv'
         if( length ==  0 .or. status /= 0 ) return
 #endif
-        call cpStr(value, varval)
-!        call alloc_errchk("In syslib::simple_getenv ", alloc_stat)
+        
+        write(simple_getenv,'(A)') value
+        !        call alloc_errchk("In syslib::simple_getenv ", alloc_stat)
     end function simple_getenv
 
     subroutine simple_sleep( secs )
@@ -682,7 +682,7 @@ contains
         msecs = 1000*secs
         call sleepqq(msecs)  !! milliseconds 
 #else
-        call sleep(secs) !! EXTERNAL;
+        call sleep(secs) !! intrinsic
 #endif        
     end subroutine simple_sleep
 
@@ -697,7 +697,7 @@ contains
             print *, 'is_open: IO error ', io_status, ': ', trim(adjustl(io_message))
             stop 'IO error; is_file_open; simple_fileio      '
         endif
-        end function is_file_open
+    end function is_file_open
 
     !>  \brief  check whether a IO unit is currently opened
     logical function is_open( unit_number )
@@ -711,11 +711,11 @@ contains
             call simple_stop ('IO error; is_open; simple_fileio      ')
         endif
     end function is_open
-        
+
     ! !>  \brief  get logical unit of file
     ! integer function get_lunit( fname )
     !     character(len=*), intent(in) :: fname
-        
+
     !     integer               :: io_status
     !     character(len=STDLEN) :: io_message
     !     io_status = 0
@@ -751,6 +751,50 @@ contains
             wait_time = wait_time + 1
         enddo
     end subroutine wait_for_closure
+
+    function cpu_usage ()
+        real :: cpu_usage
+
+        integer :: ios, i
+        integer :: unit,oldidle, oldsum, sumtimes = 0
+        real :: percent = 0.
+        character(len = 4) lineID ! 'cpu '
+        integer, dimension(9) :: times = 0
+        cpu_usage=0.0
+#ifdef LINUX
+        write(*, *) 'CPU Usage'
+        open(newunit=unit, file = '/proc/stat', status = 'old', action = 'read', iostat = ios)
+        if (ios /= 0) then
+            print *, 'Error opening /proc/stat'
+            stop
+        else
+            read(unit, fmt = *, iostat = ios) lineID, (times(i), i = 1, 9)
+            if (ios /= 0) then
+                print *, 'Error reading /proc/stat'
+                stop
+            end if
+            close(unit, iostat = ios)
+            if (ios /= 0) then
+                print *, 'Error closing /proc/stat'
+                stop
+            end if
+            if (lineID /= 'cpu ') then
+                print *, 'Error reading /proc/stat'
+                stop
+            end if
+            sumtimes = sum(times)
+            percent = (1. - real((times(4) - oldidle)) / real((sumtimes - oldsum))) * 100.
+            write(*, fmt = '(F6.2,A2)') percent, '%'
+            oldidle = times(4)
+            oldsum = sumtimes
+        
+        end if
+        cpu_usage=percent
+#else
+        write(*, *) 'CPU Usage not available'
+#endif
+    end function cpu_usage
+
 
 end module simple_syslib
 

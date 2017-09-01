@@ -1,10 +1,10 @@
 ! stack image processing routines for SPIDER/MRC files
 module simple_procimgfile
 use simple_defs
-use simple_syslib
+use simple_syslib,  only: alloc_errchk, simple_stop
+use simple_fileio,  only: fopen, fclose, fileio_errmsg
 use simple_image,   only: image
 use simple_imgfile, only: find_ldim_nptcls
-use simple_jiffys,  only: progress
 implicit none
 
 private :: raise_exception_imgfile
@@ -62,8 +62,6 @@ contains
     !>  \brief  is for making a stack of normalized vectors for PCA analysis
     !! \param fnameStack,fnamePatterns filenames for stacka and pattern
     subroutine make_pattern_stack( fnameStack, fnamePatterns, mskrad, D, recsz, avg, otab, hfun )
-        use simple_syslib,       only: alloc_errchk
-        use simple_fileio,       only: fopen, fclose, fileio_errmsg
         use simple_stat,         only: normalize, normalize_sigm
         use simple_oris,         only: oris
         use simple_math,         only: check4nans
@@ -76,7 +74,7 @@ contains
         type(image)        :: img
         real, allocatable  :: pcavec(:)
         real               :: x, y
-        integer            :: n, fnum, ier, i, alloc_stat, ldim(3)
+        integer            :: n, fnum, ier, i, ldim(3)
         logical            :: err
 #include "simple_local_flags.inc" 
         call find_ldim_nptcls(fnameStack, ldim, n)
@@ -96,8 +94,8 @@ contains
             avg = 0.
         endif
         ! extract patterns and write to file
-        if(.not.fopen(fnum, status='replace', action='readwrite', file=fnamePatterns,&
-             access='direct', form='unformatted', recl=recsz, iostat=ier))&
+        call fopen(fnum, status='replace', action='readwrite', file=fnamePatterns,&
+             access='direct', form='unformatted', recl=recsz, iostat=ier)
         call fileio_errmsg('make_pattern_stack; simple_procimgfile', ier)
         write(*,'(a)') '>>> MAKING PATTERN STACK'
         do i=1,n
@@ -143,8 +141,8 @@ contains
             end do
             deallocate(pcavec)
         endif
-        if(.not.fclose(fnum,iostat=ier)) &
-             call fileio_errmsg('make_pattern_stack; simple_procimgfile', ier)
+        call fclose(fnum,iostat=ier)
+        call fileio_errmsg('make_pattern_stack; simple_procimgfile', ier)
         call img%kill
     end subroutine make_pattern_stack
 
@@ -560,8 +558,6 @@ contains
     !! \param fname  input filename
     !! \param smpd  sampling distance
     subroutine cure_imgfile( fname2cure, fname, smpd )
-        use simple_image,        only: image
-        use simple_fileio
         character(len=*), intent(in) :: fname2cure, fname
         real,             intent(in) :: smpd
         type(image) :: img
@@ -570,9 +566,8 @@ contains
         call find_ldim_nptcls(fname2cure, ldim, n)
         ldim(3) = 1
         call raise_exception_imgfile( n, ldim, 'cure_imgfile' )
-       
-        if(.not.fopen(filnum, status='replace', file='cure_stats.txt',iostat=io_stat))&
-             call fileio_errmsg("cure_imgfile error", io_stat)
+        call fopen(filnum,'cure_stats.txt',status='replace',iostat=io_stat)
+        call fileio_errmsg("cure_imgfile error", io_stat)
         call img%new(ldim,smpd)
         write(*,'(a)') '>>> CURING IMAGES'
         do i=1,n
@@ -583,7 +578,7 @@ contains
                  'MIN:', minv, 'AVE:', ave, 'SDEV:', sdev, 'NANS:', n_nans
             call img%write(fname, i)
         end do
-        if(.not.fclose(filnum,io_stat)) call fileio_errmsg("cure_imgfile close error", io_stat)
+        call fclose(filnum,io_stat,errmsg="cure_imgfile close error")
         call img%kill
     end subroutine cure_imgfile
 
@@ -1058,7 +1053,7 @@ contains
         integer,           intent(in) :: nran, box
         real,              intent(in) :: smpd
         logical, optional, intent(in) :: mask(:)
-        integer        :: alloc_stat, n, ldim(3), i, ii, ldim_scaled(3)
+        integer        :: n, ldim(3), i, ii, ldim_scaled(3)
         type(ran_tabu) :: rt
         type(image)    :: img, img_scaled
         logical        :: doscale

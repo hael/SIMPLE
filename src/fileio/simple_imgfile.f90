@@ -29,7 +29,7 @@ type imgfile
     integer                     :: funit          = 0        !< Unit number
     logical                     :: was_written_to = .false.  !< Indicates whether data was written to the file since it was opened
     logical                     :: isvol          = .false.  !< Indicates if SPIDER file is volume or stack
-    logical                     :: existence      = .false.  !< Set to true when the object exists, false when it's closed
+    logical    :: existence      = .false.  !< Set to true when the object exists, false when it's closed
 contains
     ! CORE FUNCTIONALITY
     procedure          :: open
@@ -175,9 +175,9 @@ contains
             endif
         endif
         ! Get an IO unit number for the head file
-        if(.not.fopen(self%funit,access='STREAM',file=self%fname,action=rw_str,&
-             status=stat_str,iostat=ios,convert=endconv))&
-              call fileio_errmsg("imgfile::open_local fopen error",ios)
+        call fopen(self%funit,access='STREAM',file=self%fname,action=rw_str,&
+             status=stat_str,iostat=ios,convert=endconv)
+        call fileio_errmsg("imgfile::open_local fopen error",ios)
         self%was_written_to = .false.
     end subroutine open_local
 
@@ -190,8 +190,7 @@ contains
                 call self%overall_head%write(self%funit)
                 DebugPrint  '(simple_imgfile::close) wrote overall_head'
             endif
-            if(.not. fclose(self%funit, ios))&
-                  call fileio_errmsg("simple_imgfile::close error",ios)
+            call fclose(self%funit, ios,errmsg="simple_imgfile::close error")
         endif
         if( allocated(self%overall_head) ) call self%overall_head%kill
         if( allocated(self%overall_head) ) deallocate(self%overall_head)
@@ -202,10 +201,8 @@ contains
     !>  \brief  close the file(s)
     subroutine close_nowrite( self )
         class(imgfile), intent(inout) :: self   !< Imagefile object 
-        integer :: ret, ios
-        if(.not. fclose( self%funit, ios))then
-             call fileio_errmsg("simple_imgfile close nowrite error",ios)
-        endif
+        integer :: ios
+        call fclose( self%funit, ios,errmsg="simple_imgfile close nowrite error")
         if( allocated(self%overall_head) ) call self%overall_head%kill
         if( allocated(self%overall_head) ) deallocate(self%overall_head)
         self%was_written_to = .false.
@@ -215,7 +212,6 @@ contains
     !>  \brief  Check whether the file exists on disk
     logical function exists( self )
         class(imgfile), intent(inout) :: self   !< Imagefile object 
-        character(len=STDLEN)         :: new_fname
         exists = file_exists(self%fname)
         if( exists) exists = exists .and. file_size(self%fname) .gt. 0
     end function exists
@@ -272,7 +268,6 @@ contains
         class(imgfile), intent(in)     :: self   !< Imagefile object 
         integer, intent(in)            :: nr                    !< num in stack
         integer(kind=8), intent(inout) :: hedinds(2), iminds(2)
-        integer                        :: cnt, j
         if( nr < 0 )then
             stop 'cannot have negative slice indices; slice2bytepos; simple_imgfile'
         else if( nr == 0 )then
@@ -439,13 +434,13 @@ contains
         integer(kind=1), allocatable :: tmp_byte_array(:,:,:)
         integer(kind=2), allocatable :: tmp_16bit_int_array(:,:,:)
         character(len=100)           :: io_message
-        integer                      :: io_stat,i,j,k,itmp,cnt, dims(3),ldim_here(3),iform,maxim
+        integer                      :: io_stat,i,j,k,itmp, dims(3)
         integer(kind=8)              :: first_byte,hedbyteinds(2),imbyteinds(2),first_hedbyte, byteperpix
         logical                      :: arr_is_ready, ft_indic
         real                         :: min_val,max_val
         class(ImgHead), pointer      :: ptr=>null()
         class(ImgHead), allocatable  :: imghed
-        character(len=20)            :: conv
+!        character(len=20)            :: conv
 #ifdef PGI
         include 'lib3f.h'
 #endif
@@ -570,10 +565,14 @@ contains
                 if(io_stat /= 0)then
                     ErrorPrint(io_message)
                 endif
-                ! Conversion from unsigned byte integer (which MRC appears to be) is tricky because Fortran doesn't do unsigned integer natively.
-                ! The following IAND trick is courtesy of Jim Dempsey at http://software.intel.com/en-us/forums/showthread.php?t=64400
-                ! Confusingly, the MRC format documentation implies that one should expect signed integers, which seems to be incorrect: http://www2.mrc-lmb.cam.ac.uk/image2000.html
-                ! IMOD documentation indicates that prior to IMOD 4.2.23, unsigned bytes were used and that one needs to inspect the imodStamp head to check
+                ! Conversion from unsigned byte integer (which MRC appears to be) is tricky because
+                ! Fortran doesn't do unsigned integer natively. The following IAND trick is courtesy
+                ! of Jim Dempsey at http://software.intel.com/en-us/forums/showthread.php?t=64400
+                ! Confusingly, the MRC format documentation implies that one should expect signed
+                ! integers, which seems to be incorrect:
+                ! http://www2.mrc-lmb.cam.ac.uk/image2000.html IMOD documentation indicates that
+                ! prior to IMOD 4.2.23, unsigned bytes were used and that one needs to inspect the
+                ! imodStamp head to check
                 if( self%overall_head%pixIsSigned() )then
                     rarr(1:dims(1),:,:) = tmp_byte_array(:,:,:)
                 else
@@ -870,12 +869,11 @@ contains
                 case('M')
                     allocate(MrcImgHead :: hed)
                     call hed%new
-                    if(.not.fopen(filnum, status='OLD', action='READ', file=fname, &
-                         access='STREAM', iostat=ios,convert='NATIVE'))&
-                         call fileio_errmsg(" get_mrcfile_info fopen error "//trim(fname),ios)
+                    call fopen(filnum, status='OLD', action='READ', file=fname, &
+                         access='STREAM', iostat=ios,convert='NATIVE')
+                    call fileio_errmsg(" get_mrcfile_info fopen error "//trim(fname),ios)
                     call hed%read(filnum)
-                    if(.not.fclose(filnum,ios))&
-                         call fileio_errmsg(" get_mrcfile_info close error "//trim(fname),ios)
+                    call fclose(filnum,ios,errmsg=" get_mrcfile_info close error "//trim(fname))
                     ldim = hed%getDims()
                     smpd = hed%getPixSz()
                     if( doprint )then
@@ -886,12 +884,11 @@ contains
                 case('F')
                     allocate(MrcImgHead :: hed)
                     call hed%new
-                    if(.not.fopen(filnum, status='OLD', action='READ', file=fname, &
-                         access='STREAM', convert='BIG_ENDIAN', iostat=ios))&
-                         call fileio_errmsg(" get_mrcfile_info fopen error "//trim(fname),ios)
+                    call fopen(filnum, status='OLD', action='READ', file=fname, &
+                         access='STREAM', convert='BIG_ENDIAN', iostat=ios)
+                    call fileio_errmsg(" get_mrcfile_info fopen error "//trim(fname),ios)
                     call hed%read(filnum)
-                    if(.not. fclose(filnum, ios))&
-                         call fileio_errmsg(" get_mrcfile_info fclose error "//trim(fname),ios)
+                    call fclose(filnum, ios,errmsg=" get_mrcfile_info fclose error "//trim(fname))
                     if( doprint ) call hed%print_imghead
                 case DEFAULT
                     write(*,*) 'The inputted file is not an MRC file; get_mrcfile_info; simple_jiffys'
@@ -917,35 +914,31 @@ contains
         if( file_exists(fname) )then
             if( fname2format(fname) .eq. 'S' )then
                 if( allocated(conv) ) deallocate(conv)
-                if(.not.fopen(filnum, status='OLD', action='READ', file=fname, &
-                &access='STREAM', convert='NATIVE',iostat=ios))&
+                call fopen(filnum, status='OLD', action='READ', file=fname, &
+                &access='STREAM', convert='NATIVE',iostat=ios)
                 call fileio_errmsg(" get_spifile_info fopen error "//trim(fname),ios)
-
                 call read_spihed
-                if(.not.fclose(filnum,iostat=ios))&
-                call fileio_errmsg(" get_spifile_info fclose error "//trim(fname),ios)
+                call fclose(filnum,ios,errmsg=" get_spifile_info fclose error "//trim(fname))
                 if( .not. any(ldim < 1) )then
                     allocate(conv, source='NATIVE')
                     call print_spihed
                     return
                 endif
-                if(.not.fopen(filnum, status='OLD', action='READ', file=fname, &
-                         access='STREAM', convert='BIG_ENDIAN', iostat=ios))&
-                         call fileio_errmsg(" get_spifile_info fopen error "//trim(fname),ios)
+                call fopen(filnum, status='OLD', action='READ', file=fname, &
+                         access='STREAM', convert='BIG_ENDIAN', iostat=ios)
+                call fileio_errmsg(" get_spifile_info fopen error "//trim(fname),ios)
                 call read_spihed
-                if(.not.fclose(filnum,iostat=ios))&
-                         call fileio_errmsg(" get_spifile_info fclose error "//trim(fname),ios)
+                call fclose(filnum,ios,errmsg=" get_spifile_info fclose error "//trim(fname))
                 if( .not. any(ldim < 1) )then
                     allocate(conv, source='BIG_ENDIAN')
                     call print_spihed
                     return
                 endif
-                if(.not.fopen(filnum, status='OLD', action='READ', file=fname, &
-                         access='STREAM', convert='LITTLE_ENDIAN', iostat=ios))&
-                         call fileio_errmsg(" get_spifile_info fopen error "//trim(fname),ios)
+                call fopen(filnum, status='OLD', action='READ', file=fname, &
+                         access='STREAM', convert='LITTLE_ENDIAN', iostat=ios)
+                call fileio_errmsg(" get_spifile_info fopen error "//trim(fname),ios)
                 call read_spihed
-                if(.not.fclose(filnum,iostat=ios))&
-                         call fileio_errmsg(" get_spifile_info fclose error "//trim(fname),ios)
+                call fclose(filnum,iostat=ios,errmsg=" get_spifile_info fclose error "//trim(fname))
                 if( .not. any(ldim < 1) )then
                     allocate(conv, source='LITTLE_ENDIAN')
                     call print_spihed
@@ -978,7 +971,8 @@ contains
 
             subroutine print_spihed
                 if( doprint )then
-                    write(*,'(a,3(i0,1x))') 'Number of columns, rows, sections: ', int(spihed(12)), int(spihed(2)), int(spihed(1))
+                    write(*,'(a,3(i0,1x))') 'Number of columns, rows, sections: ', &
+                        &int(spihed(12)), int(spihed(2)), int(spihed(1))
                     write(*,'(a,1x,i3)')    'Iform descriptor: ', int(spihed(5))
                     write(*,'(a,1x,f7.0)')  'The number of the highest image currently used in the stack: ', spihed(26)
                     write(*,'(a,1x,f7.3)')  'Pixel size: ', spihed(38)
@@ -995,7 +989,7 @@ contains
         logical,                       optional, intent(in)  :: doprint    !< do print or not
         character(len=1),              optional, intent(in)  :: formatchar !< input format
         character(len=:), allocatable, optional, intent(out) :: endconv    !< endian conversion
-        integer                       :: mode, iform, maxim
+        integer                       :: iform, maxim
         real                          :: smpd
         character(len=:), allocatable :: conv
         character(len=1)              :: form

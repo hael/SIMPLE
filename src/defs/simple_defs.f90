@@ -7,7 +7,7 @@
 ! SimpleGitVersion include file contains the string definitions for SIMPLE_PATH
 ! and version info
 module simple_defs
-use, intrinsic :: iso_c_binding
+use, intrinsic :: iso_c_binding, only: c_int
 use, intrinsic :: iso_fortran_env, only: &
      stderr=>ERROR_UNIT,&
      stdout=>OUTPUT_UNIT,&
@@ -95,6 +95,7 @@ integer, parameter :: NSPACE_BALANCE = 1000 !< # projection directions for apply
 
 character(len=:), allocatable    :: endconv           !< endianness conversion
 integer(kind=c_int)              :: nthr_glob         !< number of threads global variable
+integer(kind=sp)                 :: alloc_stat        !< global variable for allocation error checking
 logical                          :: l_distr_exec_glob !< global distributed execution flag
 character(len=STDLEN)            :: exec_abspath_glob !< global executable absolute path
 character(len=LONGSTRLEN)        :: cmdline_glob      !< global command line string

@@ -51,13 +51,10 @@ contains
         self%access_type = access_type
         ! if we are opening to read, work out the file details..
         if( self%access_type .eq. OPEN_TO_READ )then
-            if(.not.fopen(tmpunit, file=self%fname, iostat=ios, status='old'))&
-                 call fileio_errmsg("simple_nrtxtfile::new; Error when opening file for reading ",ios)
-            if( ios .ne. 0 )then
-                if(.not.fclose(self%funit,ios)) call fileio_errmsg("nrtxt close failed ",ios)
-                write(*,'(a)') 'simple_nrtxtfile::new; Error when opening file for reading: ', trim(self%fname)
-                stop
-            endif
+            call fopen(tmpunit, file=self%fname, iostat=ios, status='old')
+            call fileio_errmsg("simple_nrtxtfile::new; Error when opening file for reading "//trim(self%fname),ios)
+            !! removed fclose check since fileio_errchk will stop if ios not 0
+
             self%funit = tmpunit
             do
                 ! work out records per line, and number_of_lines
@@ -89,19 +86,14 @@ contains
             endif
         else if (self%access_type .eq. OPEN_TO_WRITE) then
 
-            if(.not.fopen(self%funit, file=self%fname, iostat=ios, status='replace',iomsg=io_msg))&
-                  call fileio_errmsg("nrtxt::new Error when opening file "&
+            call fopen(self%funit, file=self%fname, iostat=ios, status='replace',iomsg=io_msg)
+            call fileio_errmsg("nrtxt::new Error when opening file "&
                           //trim(self%fname)//' ; '//trim(io_msg),ios)
-            if( ios .ne. 0 )then
-                if(.not.fclose(self%funit,ios))then
-                     call fileio_errmsg("nrtxt::new Error when closing file "&
-                          //trim(self%fname)//' ; '//trim(io_msg),ios)
-                 else
-                     write(*,'(a)') 'simple_nrtxtfile::new; Error when opening file for writing: '&
-                          //trim(self%fname)//' ; '//trim(io_msg)
-                 end if
-                stop
-            endif
+            ! if( ios .ne. 0 )then
+            !     call fclose(self%funit,ios)
+            !     call fileio_errmsg("nrtxt::new Error when closing file "&
+            !               //trim(self%fname)//' ; '//trim(io_msg),ios)
+            ! endif
             if (present(wanted_recs_per_line)) then
                 self%recs_per_line = wanted_recs_per_line
             else
@@ -142,7 +134,8 @@ contains
     subroutine writeDataLineReal( self, data_to_write )
         class(nrtxtfile), intent(inout) :: self
         real, intent(in)                :: data_to_write(:) !< input data
-        integer                         :: record_counter
+        integer                         :: record_counter, ios
+        character(len=256)              :: io_message
         if( self%access_type .ne. OPEN_TO_WRITE )then
             stop 'simple_nrtxtfile::writeDataLineReal; File is not OPEN_TO_WRITE'
         endif
@@ -150,7 +143,10 @@ contains
              call simple_stop( 'simple_nrtxtfile::writeDataLineReal; Supplied array is smaller than records per line')
         endif
         do record_counter = 1, self%recs_per_line
-            write(self%funit, '(g14.7,a)', advance='no') data_to_write(record_counter), ' '
+            write(self%funit, '(g14.7,a)', advance='no',iostat=ios,iomsg=io_message) data_to_write(record_counter), ' '
+            if( ios .ne. 0 )then
+                call fileio_errmsg('simple_nrtxtfile::writeNextDataLine; Encountered iostat error: '//trim(io_message),ios)
+            endif
         enddo
         ! finish the line
         write(self%funit,*)
@@ -161,7 +157,7 @@ contains
     subroutine writeDataLineInt( self, data_to_write )
         class(nrtxtfile), intent(inout) :: self
         integer, intent(inout)          :: data_to_write(:) !< input data
-        integer                         :: record_counter
+        integer                         :: record_counter, ios
         ! Check we are open to write
         if (self%access_type .ne. OPEN_TO_WRITE) then
             call simple_stop('simple_nrtxtfile::writeDataLineInt; File is not OPEN_TO_WRITE')
@@ -172,7 +168,11 @@ contains
         endif
         ! write out the line..
         do record_counter = 1,self%recs_per_line
-            write(self%funit, '(g14.7,a)', advance='no') real(data_to_write(record_counter)), ' '
+            write(self%funit, '(g14.7,a)', advance='no', iostat=ios) real(data_to_write(record_counter)), ' '
+            if( ios .ne. 0 )then
+                call fileio_errmsg('simple_nrtxtfile::writeNextDataLine; Encountered error',ios)
+            endif
+
         enddo
         ! finish the line
         write(self%funit,*)
@@ -183,12 +183,16 @@ contains
     subroutine writeCommentLine( self, comment_to_write )
         class(nrtxtfile), intent(inout) :: self
         character(len=*), intent(in)    :: comment_to_write !< input data
+        integer                         :: ios
         ! Check we are open to write
         if (self%access_type .ne. OPEN_TO_WRITE) then
             stop 'simple_nrtxtfile::writeCommentLine; File is not OPEN_TO_WRITE'
         endif
         ! write out the line..
-        write(self%funit, '(2a)') '# ', trim(adjustl(comment_to_write))
+        write(self%funit, '(2a)', iostat=ios) '# ', trim(adjustl(comment_to_write))
+        if( ios .ne. 0 )then
+            call fileio_errmsg('simple_nrtxtfile::writeCommentLine; Encountered error',ios)
+        endif
     end subroutine writeCommentLine
 
     pure integer function get_nrecs_per_line( self )
@@ -205,8 +209,7 @@ contains
         class(nrtxtfile), intent(inout) :: self
         integer :: ios
         if( is_open(self%funit) )then
-            if(.not.fclose(self%funit,iostat=ios))&
-             call fileio_errmsg("nrtxtfile; kill; Failed to close ",ios)
+            call fclose(self%funit,iostat=ios,errmsg="nrtxtfile; kill; Failed to close ")
         end if
         self%recs_per_line = 0
         self%ndatalines = 0

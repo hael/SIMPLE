@@ -4,6 +4,7 @@ use, intrinsic :: iso_c_binding
 use simple_defs  ! use all in there
 use simple_ori,  only: ori
 use simple_oris, only: oris
+use simple_fileio
 implicit none
 
 public :: binoris
@@ -78,14 +79,13 @@ contains
         integer,     optional, intent(in)    :: fromto(2)
         class(oris), optional, intent(in)    :: os_peak
         type(ori) :: o
-        integer   :: alloc_stat
         ! destruct possibly pre-existing
         call self%kill
         ! set n_hash_vals
         o = a%get_ori(1)
         self%n_hash_vals = o%hash_size()
         ! set hash keys
-        self%hash_keys = o%hash_keys()
+        self%hash_keys = o%hash_keys()               ! Intel warn: code for reallocating lhs
         if( size(self%hash_keys) /= self%n_hash_vals )&
         &stop 'ERROR, n_hash_vals /= n_keys; binoris :: new_1'
         ! set range
@@ -159,12 +159,11 @@ contains
 
     subroutine open( self, fname, del_if_exists )
         use simple_syslib, only: alloc_errchk
-        use simple_fileio, only: file_exists, del_file, funit_size
         class(binoris),    intent(inout) :: self          !< instance
         character(len=*),  intent(in)    :: fname         !< filename
         logical, optional, intent(in)    :: del_if_exists !< If the file already exists on disk, replace 
         integer(dp)            :: filesz
-        integer            :: io_status, alloc_stat
+        integer            :: io_status
         character(len=512) :: io_message
         integer(kind=1)    :: bytes(8)
         ! deletion logics
@@ -228,7 +227,6 @@ contains
     end subroutine open
 
     subroutine open_local( self, fname, rwaction )
-        use simple_fileio, only: fopen, fclose, fileio_errmsg
         class(binoris),             intent(inout) :: self     !< instance
         character(len=*),           intent(in)    :: fname    !< filename
         character(len=*), optional, intent(in)    :: rwaction !< read/write flag
@@ -242,20 +240,18 @@ contains
                 rw_str = 'READWRITE'
             endif
             stat_str = 'UNKNOWN'
-            if(.not.fopen(tmpunit,fname,access='STREAM',action=rw_str,status=stat_str, iostat=io_stat))&
-                 call fileio_errmsg('binoris ; open_local '// trim(fname), io_stat)
+            call fopen(tmpunit,fname,access='STREAM',action=rw_str,status=stat_str, iostat=io_stat)
+            call fileio_errmsg('binoris ; open_local '// trim(fname), io_stat)
             self%funit  = tmpunit
             self%l_open = .true.
         endif
     end subroutine open_local
 
     subroutine close( self )
-        use simple_fileio, only: fclose, fileio_errmsg
         class(binoris), intent(inout) :: self !< instance
         integer          :: io_stat
         if( self%l_open )then
-            if(.not.fclose(self%funit, iostat=io_stat))&
-            call fileio_errmsg('binoris ; close ', io_stat)
+            call fclose(self%funit,io_stat,errmsg='binoris ; close ')
             self%l_open =.false.
         end if
     end subroutine close
@@ -289,10 +285,8 @@ contains
         if( .not. self%l_open ) stop 'file needs to be open; binoris :: write_header'
         call self%header2byte_array
         write(unit=self%funit,pos=1,iostat=io_status) self%byte_array_header
-        if( io_status .ne. 0 )then
-            write(*,'(a,i0,a)') '**error(binoris::write_header): error ', io_status, ' when writing header bytes to disk'
-            stop 'I/O error; write_header; simple_binoris'
-        endif
+        if( io_status .ne. 0 )&
+            call fileio_errmsg('simple_binoris::write_header: error when writing header bytes to disk', io_status) 
     end subroutine write_header
 
     subroutine write_record_1( self, i, self2 )
@@ -304,10 +298,8 @@ contains
         if( .not. (self.eqdims.self2) ) stop 'filehandlers have different dims; binoris :: write_record_1'
         if( i < self%fromto(1) .or. i > self%fromto(2) ) stop 'index i out of bound; binoris :: write_record_1'
         write(unit=self%funit,pos=self%first_byte(i),iostat=io_status) self2%record
-        if( io_status .ne. 0 )then
-            write(*,'(a,i0,a)') '**error(binoris::write_record_1): error ', io_status, ' when writing record bytes to disk'
-            stop 'I/O error; write_record_1; simple_binoris'
-        endif
+        if( io_status .ne. 0 )&
+             call fileio_errmsg('simple_binoris::write_record_1: error when writing record bytes to disk', io_status) 
     end subroutine write_record_1
 
     subroutine write_record_2( self, i, a, os_peak )
@@ -322,7 +314,7 @@ contains
         if( i < self%fromto(1) .or. i > self%fromto(2) ) stop 'index i out of bound; binoris :: write_record_2'
         ! transfer hash data to self%record
         o       = a%get_ori(i)
-        vals    = o%hash_vals()
+        vals    = o%hash_vals()                  ! Intel warn: code for reallocating lhs
         sz_vals = size(vals)
         if( self%n_hash_vals /= sz_vals )then
             print *, 'self%n_hash_vals: ', self%n_hash_vals
@@ -334,7 +326,7 @@ contains
         if( present(os_peak) )then
             ! transfer os_peak data to self%record
             if( self%n_peaks /= os_peak%get_noris() ) stop 'nonconforming os_peak size; binoris :: write_record_2'        
-            cnt = self%n_hash_vals
+            cnt = self%n_hash_vals                
             do ipeak=1,self%n_peaks
                 do iflag=1,NOPEAKFLAGS
                     cnt = cnt + 1
@@ -347,10 +339,8 @@ contains
             end do
         endif
         write(unit=self%funit,pos=self%first_byte(i),iostat=io_status) self%record
-        if( io_status .ne. 0 )then
-            write(*,'(a,i0,a)') '**error(binoris::write_record_2): error ', io_status, ' when writing record bytes to disk'
-            stop 'I/O error; write_record_2; simple_binoris'
-        endif
+        if( io_status .ne. 0 )&
+            call fileio_errmsg('binoris::write_record_2: error when writing record bytes to disk', io_status) 
     end subroutine write_record_2
 
     subroutine read_record_1( self, i )
@@ -360,10 +350,8 @@ contains
         if( .not. self%l_open ) stop 'file needs to be open; binoris :: read_record_1'
         if( i < self%fromto(1) .or. i > self%fromto(2) ) stop 'index i out of bound; binoris :: read_record_1'
         read(unit=self%funit,pos=self%first_byte(i),iostat=io_status) self%record
-        if( io_status .ne. 0 )then
-            write(*,'(a,i0,a)') '**error(binoris::read_record_1): error ', io_status, ' when reading record bytes from disk'
-            stop 'I/O error; read_record_1; simple_binoris'
-        endif
+        if( io_status .ne. 0 )&
+            call fileio_errmsg("binoris::read_record_1  error when reading record bytes from disk", io_status)
     end subroutine read_record_1
 
     subroutine read_record_2( self, i, a, os_peak, nst )
@@ -372,7 +360,7 @@ contains
         class(oris),           intent(inout) :: a
         class(oris), optional, intent(inout) :: os_peak
         integer,     optional, intent(out)   :: nst
-        integer   :: io_status, iflag, ipeak, cnt, j, state
+        integer   :: iflag, ipeak, cnt, j, state
         real      :: euls(3)
         call self%read_record_1(i)
         ! transfer hash data
@@ -474,6 +462,7 @@ contains
         self%n_peaks         = transfer(self%byte_array_header(17:20), self%n_peaks)
         self%fromto(1)       = transfer(self%byte_array_header(21:24), self%fromto(1))
         self%fromto(2)       = transfer(self%byte_array_header(25:28), self%fromto(2))
+        ! Intel warn: code for reallocating lhs
         self%hash_keys       = transfer(self%byte_array_header(29:self%n_bytes_header), self%hash_keys)
     end subroutine byte_array2header
 

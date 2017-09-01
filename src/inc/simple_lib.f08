@@ -4,5 +4,10 @@
 #endif
 
 #ifndef ABANDON
-# define ABANDON(usermsg)  call simple_stop(usermsg, __FILENAME__, __LINE__)
+# define ABANDON(usermsg) print *,usermsg,__FILENAME__, __LINE__;call abort
 #endif
+
+#ifndef allocchk
+#define allocchk( X ) call alloc_errchk(X ,alloc_stat,__FILENAME__,__LINE__)
+#endif
+

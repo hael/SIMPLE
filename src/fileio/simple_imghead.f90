@@ -307,7 +307,7 @@ contains
         integer(kind=8), optional, intent(in)    :: pos
         logical,         optional, intent(in)    :: print_entire
         integer                   :: io_status, ppos, i, cnt
-        integer                   :: labrec, dim1, alloc_stat
+        integer                   :: labrec, dim1
         character(len=512)        :: io_message
         real(kind=4), allocatable :: spihed(:)
         ppos = 1
@@ -1109,7 +1109,6 @@ contains
 
     subroutine kill( self )
         class(ImgHead), intent(inout) :: self
-        integer :: i, alloc_stat
         if( self%exists )then
             select type(self)
                 type is (MrcImgHead)
@@ -1135,13 +1134,12 @@ contains
         call hed%new([120,120,1])
         call hed2%new([120,120,1])
         recsz = 120*4
-        if(.not. fopen(funit,file='test_imghed.spi',status='UNKNOWN',action='READWRITE',&
-             access='STREAM',iostat=ios))&
-             call fileio_errmsg("test_imghead fopen error",ios)
+        call fopen(funit,file='test_imghed.spi',status='UNKNOWN',action='READWRITE',&
+             access='STREAM',iostat=ios)
+        call fileio_errmsg("test_imghead fopen error",ios)
         call hed%write(funit)
         call hed2%read(funit)
-        if(.not. fclose(funit,ios))&
-             call fileio_errmsg("test_imghead fclose error",ios)
+        call fclose(funit,ios,errmsg="test_imghead fclose error")
         write(*,*) '>>> PRINTING HEADER THAT WAS WRITTEN TO DISK'
         call hed%print_imghead
         write(*,*) ''
