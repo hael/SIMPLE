@@ -1,6 +1,7 @@
 ! The Nelder-Mead simplex method for continuous function minimisation
 ! with cost function defined in classes that extend pftcc_opt
 module simple_simplex_pftcc_opt
+use simple_defs
 use simple_pftcc_opt, only: pftcc_opt
 implicit none
 
@@ -30,7 +31,6 @@ contains
         use simple_syslib,   only: alloc_errchk
         class(simplex_pftcc_opt), intent(inout) :: self !< instance
         class(opt_spec),          intent(inout) :: spec   !< specification
-        integer :: alloc_stat
         real    :: x
         call self%kill
         allocate(self%p(spec%ndim+1,spec%ndim), self%y(spec%ndim+1), self%pb(spec%ndim), stat=alloc_stat)

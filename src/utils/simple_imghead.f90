@@ -305,7 +305,7 @@ contains
         integer(kind=8), optional, intent(in)    :: pos
         logical,         optional, intent(in)    :: print_entire
         integer                   :: io_status, ppos, i, cnt
-        integer                   :: labrec, dim1, alloc_stat
+        integer                   :: labrec, dim1
         character(len=512)        :: io_message
         real(kind=4), allocatable :: spihed(:)
         ppos = 1
@@ -1125,13 +1125,12 @@ contains
         call hed%new([120,120,1])
         call hed2%new([120,120,1])
         recsz = 120*4
-        if(.not.fopen(unit=funit,access='STREAM',file='test_imghed.spi',&
-             &action='READWRITE',status='UNKNOWN', iostat=io_stat))&
-             call fileio_errmsg("simple_imghead_unit_test: testing read/write", io_stat)
+        call fopen(unit=funit,access='STREAM',file='test_imghed.spi',&
+             &action='READWRITE',status='UNKNOWN', iostat=io_stat)
+        call fileio_errmsg("simple_imghead_unit_test: testing read/write", io_stat)
         call hed%write(funit)
         call hed2%read(funit)
-        if(.not.fclose(funit, iostat=io_stat))&
-             call fileio_errmsg("simple_imghead_unit_test: testing read/write", io_stat)
+        call fclose(funit,errmsg="simple_imghead_unit_test: testing read/write")
         write(*,*) '>>> PRINTING HEADER THAT WAS WRITTEN TO DISK'
         call hed%print_imghead
         write(*,*) ''

@@ -1,9 +1,10 @@
 ! time series tracker intended for movies of nanoparticles spinning in solution
 module simple_tseries_tracker
 use simple_defs     ! use all in there
-use simple_syslib   ! use all in there
-use simple_fileio   ! use all in there
+use simple_syslib,  only: alloc_errchk ! use all in there
+use simple_fileio,  only: fopen, fclose, fileio_errmsg, read_filetable
 use simple_image,   only: image
+use simple_jiffys,  only: progress
 use simple_strings, only: int2str
 use simple_imgfile, only: find_ldim_nptcls
 implicit none
@@ -37,7 +38,7 @@ contains
         use simple_params, only: params
         class(params), intent(in) :: p
         integer,       intent(in) :: boxcoord(2)
-        integer :: alloc_stat, n, i
+        integer :: n, i
         ! set constants
         box    = p%box
         offset = p%offset
@@ -77,7 +78,6 @@ contains
 
     !> time series particle tracker
     subroutine track_particle
-        use simple_jiffys, only: progress
         integer :: pos(2), pos_refined(2), iframe
         ! extract first reference
         call update_frame(1)
@@ -108,8 +108,8 @@ contains
     character(len=*), intent(in) :: fbody
         integer :: funit, io_stat, iframe, xind, yind, i
         logical :: outside
-        if( .not. fopen(funit, status='REPLACE', action='WRITE', file=trim(fbody)//'.box',iostat=io_stat))&
-            &call fileio_errmsg("tseries tracker ; write_tracked_series ", io_stat)
+        call fopen(funit, status='REPLACE', action='WRITE', file=trim(fbody)//'.box',iostat=io_stat)
+        call fileio_errmsg("tseries tracker ; write_tracked_series ", io_stat)
         do iframe=1,nframes
             xind = particle_locations(iframe,1)
             yind = particle_locations(iframe,2)
@@ -119,8 +119,7 @@ contains
             if( l_neg ) call reference%neg()
             call reference%write(trim(fbody)//'.mrc', iframe)
         end do
-        if( .not. fclose(funit,iostat=io_stat) )&
-            &call fileio_errmsg("tseries tracker ; write_tracked_series end", io_stat)
+        call fclose(funit, errmsg="tseries tracker ; write_tracked_series end")
         do i=1,NNN
             if( l_neg ) call neigh_imgs_mean(i)%neg()
             call neigh_imgs_mean(i)%write(trim(fbody)//'_background_nn'//int2str(i)//'.mrc')
@@ -224,7 +223,6 @@ contains
     end subroutine refine_position
 
     subroutine kill_tracker
-        integer :: alloc_stat
         deallocate(particle_locations, framenames, stat=alloc_stat)
         call alloc_errchk("simple_tseries_tracker::kill_tracker dealloc", alloc_stat)
         call frame_img%kill

@@ -1,5 +1,6 @@
 ! high-level continuous 3D projection matching
 module simple_cont3D_matcher
+use simple_defs              ! use all in there
 use simple_build,             only: build
 use simple_params,            only: params
 use simple_cmdline,           only: cmdline
@@ -8,9 +9,9 @@ use simple_oris,              only: oris
 use simple_ori,               only: ori
 use simple_cont3D_ada_srch,   only: cont3D_ada_srch
 use simple_hadamard_common   ! use all in there
-use simple_math              ! use all in there
-use simple_binoris_io        ! use all in there
-use simple_defs              ! use all in there
+!use simple_math              ! use all in there
+!use simple_binoris_io        ! use all in there
+
 implicit none
 
 public :: cont3D_exec
@@ -29,10 +30,10 @@ contains
     !>  \brief  is the 3D continous algorithm
     subroutine cont3D_exec( b, p, cline, which_iter, converged )
         use simple_map_reduce, only: split_nobjs_even
-        use simple_qsys_funs,  only: qsys_job_finished
+ !       use simple_qsys_funs,  only: qsys_job_finished
         use simple_strings,    only: int2str_pad
         use simple_projector,  only: projector
-        use simple_fileio,     only: del_file
+ !       use simple_fileio,     only: del_file
         !$ use omp_lib
         !$ use omp_lib_kinds
         class(build),   intent(inout) :: b               !< build object
@@ -51,13 +52,14 @@ contains
         type(oris)             :: softoris
         type(ori)              :: orientation
         real                   :: reslim
-        integer                :: fromp, top, iptcl, state, alloc_stat,iptcl_tmp
+        integer                :: fromp, top, iptcl, state,iptcl_tmp
         ! MULTIPLE STATES DEACTIVATED FOR NOW
         if(p%nstates>1)stop 'MULTIPLE STATES DEACTIVATED FOR NOW; cont3D_matcher::cont3Dexec'
         ! INIT
         nptcls = p%top - p%fromp + 1               ! number of particles processed
         ! states
-        allocate(state_exists(p%nstates))
+        allocate(state_exists(p%nstates),stat=alloc_stat)
+        call alloc_errchk("simple_cont3D_matcher::cont3D_exec  ", alloc_stat)
         state_exists = b%a%states_exist(p%nstates) ! state existence
         neff_states  = count(state_exists)         ! number of non-empty states
         ! number of references per particle
@@ -276,7 +278,8 @@ contains
         real,    allocatable :: rec_weights(:)
         integer, allocatable :: part(:)
         integer              :: iptcl, cnt, n_recptcls
-        allocate(eopart(p%fromp:p%top), source=-1.) ! -1. is default excluded value
+        allocate(eopart(p%fromp:p%top), source=-1., stat=alloc_stat) ! -1. is default excluded value
+        call alloc_errchk("simple_cont3D_matcher::prep_eopairs ", alloc_stat)
         rec_weights = b%a%get_all('w')
         n_recptcls  = count(rec_weights(p%fromp:p%top) > TINY)
         rt          = ran_tabu( n_recptcls )

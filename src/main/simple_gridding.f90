@@ -28,7 +28,7 @@ contains
         class(image),      intent(inout) :: img
         class(kbinterpol), intent(in)    :: kbwin
         real, allocatable :: w1(:), w2(:), w3(:)
-        integer :: ldim(3), i, j, k, alloc_stat, lims(3,2)
+        integer :: ldim(3), i, j, k, lims(3,2)
         real    :: arg
         ! get the limits
         ldim = img%get_ldim()

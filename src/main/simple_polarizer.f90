@@ -44,7 +44,7 @@ contains
         real, allocatable :: w(:,:)
         real              :: loc(2)
         integer           :: pdim(3), win(2,2), lims(3,2)
-        integer           :: i, k, l, wlen, alloc_stat, cnt
+        integer           :: i, k, l, wlen, cnt
         if( .not. pftcc%exists() ) stop 'polarft_corrcalc object needs to be created; init_imgpolarizer; simple_projector'
         call self%kill_polarizer
         self%kbwin = kbinterpol(KBWINSZ, KBALPHA)
@@ -90,7 +90,7 @@ contains
         integer,                 intent(in)    :: img_ind !< image index
         logical, optional,       intent(in)    :: isptcl !< is the input in polarised coords
         complex, allocatable :: pft(:,:), comps(:,:)
-        integer :: i, k, l, m, alloc_stat, windim, vecdim, addr_l
+        integer :: i, k, l, m, windim, vecdim, addr_l
         integer :: lims(3,2), ldim_img(3), ldim_pft(3), pdim(3), logi(3), phys(3)
         logical :: iisptcl
         if( .not. allocated(self%polweights_mat) )&

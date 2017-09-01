@@ -767,7 +767,7 @@ contains
         real,    allocatable  :: euldists(:)
         integer, allocatable  :: pops(:)
         character(len=STDLEN) :: fname, ext
-        integer               :: i, n, maxpop, funit, closest, alloc_stat
+        integer               :: i, n, maxpop, funit, closest,io_stat
         real                  :: radius, maxradius, ang, scale, col, trace, dp
         real                  :: xyz(3), xyz_end(3), xyz_start(3), vec(3), axis(3)
         real :: R(3,3), Ri(3,3), Rprev(3,3)
@@ -809,7 +809,8 @@ contains
             write(*,'(A,I6)')'>>> NUMBER OF EMPTY     PROJECTION DIRECTIONS:', count(pops==0)
             ! output
             fname = trim(p%fbody)//'.bild'
-            open(unit=funit, status='REPLACE', action='WRITE', file=trim(fname))
+            call fopen(funit, status='REPLACE', action='WRITE', file=trim(fname),iostat=io_stat)
+            call fileio_errmsg("simple_commander_oris::exec_vizoris fopen failed "//trim(fname), io_stat)
             ! header
             write(funit,'(A)')".translate 0.0 0.0 0.0"
             write(funit,'(A)')".scale 10"
@@ -842,13 +843,14 @@ contains
                 write(funit,'(A,F7.3,F7.3,F7.3,F7.3,F7.3,F7.3,F6.3)')&
                 &'.cylinder ', xyz_start, xyz_end, radius
             enddo
-            close(funit)
+            call fclose(funit, errmsg="simple_commander_oris::exec_vizoris closing "//trim(fname))
         else
             ! time series visualization
             ! unit sphere tracking
             fname  = trim(p%fbody)//'_motion.bild'
             radius = 0.02
-            open(unit=funit, status='REPLACE', action='WRITE', file=trim(fname))
+            call fopen(funit, status='REPLACE', action='WRITE', file=trim(fname), iostat=io_stat)
+            call fileio_errmsg("simple_commander_oris::exec_vizoris fopen failed ", io_stat)
             write(funit,'(A)')".translate 0.0 0.0 0.0"
             write(funit,'(A)')".scale 1"
             do i = 1, n
@@ -868,11 +870,12 @@ contains
                 xyz_start = xyz
             enddo
             write(funit,'(A,F7.3,F7.3,F7.3,A)')".sphere ", xyz, " 0.08"
-            close(funit)
+            call fclose(funit, errmsg="simple_commander_oris::exec_vizoris closing "//trim(fname))
             ! distance output
             allocate(euldists(n), stat=alloc_stat)
             fname  = trim(p%fbody)//'_motion.csv'
-            open(unit=funit, status='REPLACE', action='WRITE', file=trim(fname))
+            call fopen(funit, status='REPLACE', action='WRITE', file=trim(fname), iostat=io_stat)
+            call fileio_errmsg("simple_commander_oris::exec_vizoris fopen failed "//trim(fname), io_stat)
             do i = 1, n
                 o = b%a%get_ori(i)
                 if( i==1 )then
@@ -884,14 +887,15 @@ contains
                 write(funit,'(I7,A1,F7.2)')i, ',', ang     
                 o_prev = o
             enddo
-            close(funit)
+            call fclose(funit, errmsg="simple_commander_oris::exec_vizoris closing "//trim(fname))
             ! movie output
             ! setting Rprev to south pole as it where how chimera opens
             call o_prev%new
             call o_prev%mirror3d
             Rprev = o_prev%get_mat()
             fname = trim(p%fbody)//'_movie.cmd'
-            open(unit=funit, status='REPLACE', action='WRITE', file=trim(fname))
+            call fopen(funit, status='REPLACE', action='WRITE', file=trim(fname), iostat=io_stat)
+            call fileio_errmsg("simple_commander_oris::exec_vizoris fopen failed "//trim(fname), io_stat)
             do i = 1, n
                 o  = b%a%get_ori(i)
                 Ri = o%get_mat()
@@ -912,7 +916,7 @@ contains
                     Rprev  = Ri
                 endif
             enddo
-            close(funit)
+            call fclose(funit, errmsg="simple_commander_oris::exec_vizoris closing "//trim(fname))
         endif
         call simple_end('**** VIZORIS NORMAL STOP ****')
     end subroutine exec_vizoris

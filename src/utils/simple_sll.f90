@@ -11,7 +11,7 @@ private
 !> List node type
 !!
 type sll_node
-! contains the array _content_ and a pointer _next_ to the nextcoming node
+    ! contains the array _content_ and a pointer _next_ to the nextcoming node
     type(arr) :: content
     type(sll_node), pointer :: next=>null()
 end type sll_node
@@ -22,7 +22,7 @@ type sll
     private
     integer                 :: list_size=0
     type(sll_node), pointer :: head=>null()
-  contains
+contains
     procedure :: new
     procedure :: add
     procedure :: get
@@ -75,8 +75,8 @@ contains
         prev => self%head
         curr => prev%next
         do while( associated(curr) )! find location to insert new node
-          prev => curr
-          curr => curr%next
+            prev => curr
+            curr => curr%next
         end do
         allocate( curr ,STAT=err,ERRMSG=io_msg) ! insert it at the end of the list
         call alloc_errchk(" In simple_sll::add  deallocation fault "//trim(io_msg),err)
@@ -112,16 +112,24 @@ contains
         err=0
         if( present(iarr) )then
             if( allocated(iarr) ) then
-                deallocate(iarr,STAT=err,ERRMSG=io_msg)
-                call alloc_errchk(" In simple_sll::get  deallocation fault "//trim(io_msg),err)
+                if(verbose.or.global_verbose)then
+                    deallocate(iarr,STAT=err,ERRMSG=io_msg)
+                    call alloc_errchk(" In simple_sll::get  deallocation fault "//trim(io_msg),err)
+                else !! only check deallocate in verbose mode
+                    deallocate(iarr)
+                end if
             end if
             iarr = curr%content%iget()
         endif
 
         if( present(rarr) )then
             if( allocated(rarr) )then
-                deallocate(rarr,STAT=err,ERRMSG=io_msg)
-                call alloc_errchk(" In simple_sll::get  deallocation fault "//trim(io_msg),err)
+                if(verbose.or.global_verbose)then
+                    deallocate(rarr,STAT=err,ERRMSG=io_msg)
+                    call alloc_errchk(" In simple_sll::get  deallocation fault "//trim(io_msg),err)
+                else
+                    deallocate(rarr)
+                endif
             end if
             rarr = curr%content%rget()
         endif
@@ -136,9 +144,9 @@ contains
         type(sll_node), pointer       :: curr
         integer                       :: counter
         if ( pos < 1 .or. pos > self%list_size ) then
-          write(*,*) 'Variable pos is out of range!'
-          write(*,*) 'In: set_sll_node, module: simple_sll.f90'
-          stop
+            write(*,*) 'Variable pos is out of range!'
+            write(*,*) 'In: set_sll_node, module: simple_sll.f90'
+            stop
         endif
         curr => self%head%next
         counter = 0
@@ -173,26 +181,34 @@ contains
         endif
         counter = 0
         do ! find node to delete
-          counter = counter+1
-          if( pos == counter ) then
-            exit
-          else ! move to the next node of the list
-            prev => curr
-            curr => curr%next
-          endif
+            counter = counter+1
+            if( pos == counter ) then
+                exit
+            else ! move to the next node of the list
+                prev => curr
+                curr => curr%next
+            endif
         end do
         ! delete the node
         if( associated( curr%next ) ) then
-          prev%next => curr%next          ! redirect pointer
-          call curr%content%kill          ! free space for the content
-          deallocate( curr ,STAT=err,ERRMSG=io_msg)              ! free space for node
-          call alloc_errchk(" In simple_sll::del  deallocation fault "//trim(io_msg),err)
-          nullify( curr )
+            prev%next => curr%next          ! redirect pointer
+            call curr%content%kill          ! free space for the content
+            if(verbose.or.global_verbose)then
+                deallocate( curr ,STAT=err,ERRMSG=io_msg)              ! free space for node
+                call alloc_errchk(" In simple_sll::del  deallocation fault "//trim(io_msg),err)
+            else
+                deallocate(curr)
+            end if
+            nullify( curr )
         else
-          call curr%content%kill          ! free space for the list object
-          deallocate( curr ,STAT=err,ERRMSG=io_msg)              ! free space for node
-          call alloc_errchk(" In simple_sll::del  deallocation fault "//trim(io_msg),err)
-          nullify( curr, prev%next )
+            call curr%content%kill          ! free space for the list object
+            if(verbose.or.global_verbose)then
+                deallocate( curr ,STAT=err,ERRMSG=io_msg)              ! free space for node
+                call alloc_errchk(" In simple_sll::del  deallocation fault "//trim(io_msg),err)
+            else
+                deallocate(curr)
+            end if
+            nullify( curr, prev%next )
         endif
         self%list_size = self%list_size-1 ! update the list size
     end subroutine del
@@ -224,21 +240,29 @@ contains
         ! make resulting list a replica of self1
         self%head%next => self1%head%next
         ! remove list 1
-        deallocate( self1%head,STAT=err,ERRMSG=io_msg )
-        call alloc_errchk(" In simple_sll::append  deallocation fault "//trim(io_msg),err)
+        if(verbose.or.global_verbose)then
+            deallocate( self1%head,STAT=err,ERRMSG=io_msg )
+            call alloc_errchk(" In simple_sll::append  deallocation fault "//trim(io_msg),err)
+        else
+            deallocate(self1%head)
+        end if
         nullify( self1%head )
         self1%list_size = 0
         ! do the choka choka
         prev => self%head
         curr => prev%next
         do while( associated(curr) )
-          prev => curr
-          curr => curr%next
+            prev => curr
+            curr => curr%next
         end do
         prev%next => self2%head%next
         ! remove list 2
-        deallocate( self2%head ,STAT=err,ERRMSG=io_msg)
-        call alloc_errchk(" In simple_sll::append  deallocation fault "//trim(io_msg),err)
+        if(verbose.or.global_verbose)then
+            deallocate( self2%head ,STAT=err,ERRMSG=io_msg)
+            call alloc_errchk(" In simple_sll::append  deallocation fault "//trim(io_msg),err)
+        else
+            deallocate(self2%head)
+        end if
         nullify( self2%head )
         self2%list_size = 0
     end function append
@@ -252,10 +276,10 @@ contains
         curr => self%head%next
         pos  = 0 ! with pos set to 0
         do while( associated( curr ) )
-          pos = pos+1
-          write( *,* ) 'DATA IN NODE: ', pos
-          call curr%content%display
-          curr => curr%next
+            pos = pos+1
+            write( *,* ) 'DATA IN NODE: ', pos
+            call curr%content%display
+            curr => curr%next
         end do
     end subroutine display
 
@@ -270,7 +294,7 @@ contains
     subroutine kill( self )
         class(sll), intent(inout) :: self
         integer                   :: i,err
-         character(len=STDLEN):: io_msg
+        character(len=STDLEN):: io_msg
         if( self%list_size >= 0 )then
             do i=1,self%list_size
                 call self%del(1)

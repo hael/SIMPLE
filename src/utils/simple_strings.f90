@@ -546,7 +546,7 @@ contains
         character(len=*),  intent(inout) :: strArr(:)
         logical, optional, intent(in)    :: CaseSens  !< case-sensitive sorting
         integer, allocatable :: indexarray(:)
-        integer              :: low, high, alloc_stat, k
+        integer              :: low, high, k
         logical              :: LCaseSens
         LCaseSens = .false.
         if( present(CaseSens) ) LCaseSens = CaseSens

@@ -376,7 +376,7 @@ contains
         type(kbinterpol) :: kbwin
         real             :: skewness
         integer          :: i, cnt, n, ldim(3), io_stat, filnum, state_glob
-        integer          :: statecnt(p%nstates), alloc_stat, state_here
+        integer          :: statecnt(p%nstates), state_here
         call find_ldim_nptcls(fname, ldim, n)
         if( n /= o%get_noris() ) stop 'inconsistent nr entries; eorec; simple_eo_reconstructor'
         kbwin = self%get_kbwin() 

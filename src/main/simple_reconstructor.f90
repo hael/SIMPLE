@@ -2,8 +2,8 @@
 module simple_reconstructor
 !$ use omp_lib
 !$ use omp_lib_kinds
-use simple_fftw3
 use simple_defs
+use simple_fftw3
 use simple_image,      only: image
 use simple_ctf,        only: ctf
 use simple_syslib,     only: alloc_errchk
@@ -73,7 +73,7 @@ contains
         logical, optional,    intent(in)    :: expand !< expand flag
         character(len=:), allocatable :: ikind_tmp
         integer :: rho_shape(3), rho_lims(3,2), lims(3,2), rho_exp_lims(3,2), ldim_exp(3,2)
-        integer :: alloc_stat, dim, maxlims
+        integer :: dim, maxlims
         logical :: l_expand
         l_expand = .true.
         if(.not. self%exists() ) stop 'construct image before allocating rho; alloc_rho; simple_reconstructor'
@@ -144,42 +144,36 @@ contains
     ! I/O
     !>Write reconstructed image
     subroutine write_rho( self, kernam )
-        use simple_fileio
+        use simple_fileio, only: fopen, fclose, fileio_errmsg
         class(reconstructor), intent(in) :: self   !< this instance
         character(len=*),     intent(in) :: kernam !< kernel name
         character(len=100) :: io_message
-        integer :: filnum, ier, io_stat
+        integer :: filnum, ierr
         call del_file(trim(kernam))
-        if(.not.fopen(filnum, status='NEW', action='WRITE', file=trim(kernam), access='STREAM', iostat=ier))&
-               call fileio_errmsg( 'simple_reconstructor ; write rho   ', ier)
-
-        write(filnum, pos=1, iostat=io_stat, iomsg=io_message) self%rho
-        if( io_stat .ne. 0 )then
-            write(*,'(a,i0,2a)') '**ERROR(write_rho): I/O error ', io_stat, ' when writing to: ', trim(kernam)
-            write(*,'(2a)') 'IO error message was: ', io_message
-            stop 'I/O error; write_rho; simple_reconstructor'
-        endif
-        if(.not.fclose(filnum, iostat=ier))&
-               call fileio_errmsg( 'simple_reconstructor ; write rho  fclose ', ier)
+        call fopen(filnum, status='NEW', action='WRITE', file=trim(kernam), access='STREAM', iostat=ierr)
+        call fileio_errmsg( 'simple_reconstructor ; write rho '//trim(kernam), ierr)
+        write(filnum, pos=1, iostat=ierr, iomsg=io_message) self%rho
+        if( ierr .ne. 0 ) call fileio_errmsg('read_rho; simple_reconstructor writing '//trim(kernam)&
+            // 'IO error message was: '//trim(io_message), ierr)
+            
+        call fclose(filnum,errmsg= 'simple_reconstructor ; write rho  fclose ')
     end subroutine write_rho
 
     !> Read sampling density matrix
     subroutine read_rho( self, kernam )
-        use simple_fileio
+        use simple_fileio, only: fopen, fclose, fileio_errmsg
         class(reconstructor), intent(inout) :: self !< this instance
         character(len=*),     intent(in)    :: kernam !< kernel name
         character(len=100) :: io_message
-        integer :: filnum, ier, io_stat
-        if(.not.fopen(filnum, status='OLD', action='READ', file=kernam, access='STREAM', iostat=ier))&
-             call fileio_errmsg('read_rho; simple_reconstructor opening '//trim(kernam), ier)
-        read(filnum, pos=1, iostat=io_stat, iomsg=io_message) self%rho
-        if( io_stat .ne. 0 )then
-            write(*,'(a,i0,2a)') '**ERROR(read_rho): I/O error ', io_stat, ' when reading from: ', trim(kernam)
-            write(*,'(2a)') 'IO error message was: ', io_message
-            stop 'I/O error; read_rho; simple_reconstructor'
-        endif
-        if(.not.fclose(filnum, iostat=ier))&
-             call fileio_errmsg('read_rho; simple_reconstructor closing '//trim(kernam), ier)
+        integer :: filnum, ierr
+        call fopen(filnum, file=trim(kernam), status='OLD', action='READ', access='STREAM', iostat=ierr)
+        call fileio_errmsg('read_rho; simple_reconstructor opening '//trim(kernam), ierr)
+        read(filnum, pos=1, iostat=ierr, iomsg=io_message) self%rho
+        if( ierr .ne. 0 ) &
+            call fileio_errmsg('simple_reconstructor::read_rho; simple_reconstructor reading '&
+            &// trim(kernam)&
+            &// 'IO error message was: '//trim(io_message), ierr)
+        call fclose(filnum,errmsg='read_rho; simple_reconstructor closing '//trim(kernam))
     end subroutine read_rho
 
     ! INTERPOLATION
@@ -400,7 +394,6 @@ contains
         use simple_oris,     only: oris
         use simple_sym,      only: sym
         use simple_params,   only: params
-        use simple_jiffys,   only: progress
         use simple_gridding  ! use all in there
         class(reconstructor), intent(inout) :: self      !< this object
         character(len=*),     intent(inout) :: fname     !< spider/MRC stack filename

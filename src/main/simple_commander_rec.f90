@@ -84,7 +84,7 @@ contains
         character(len=:), allocatable :: fname
         real, allocatable             :: res05s(:), res0143s(:)
         real                          :: res
-        integer                       :: part, s, alloc_stat, n, ss, state4name, file_stat, fnr
+        integer                       :: part, s, n, ss, state4name, file_stat, fnr
         p = params(cline)                   ! parameters generated
         call b%build_general_tbox(p, cline) ! general objects built
         call b%build_eo_rec_tbox(p)         ! reconstruction toolbox built
@@ -130,10 +130,9 @@ contains
         call simple_end('**** SIMPLE_EO_VOLASSEMBLE NORMAL STOP ****', print_simple=.false.)
         ! indicate completion (when run in a qsys env)
         
-        if(.not.fopen(fnr, FILE='VOLASSEMBLE_FINISHED', STATUS='REPLACE', action='WRITE', iostat=file_stat))&
-             call  fileio_errmsg('In: commander_rec :: eo_volassemble', file_stat )
-        if(.not.fclose( fnr , iostat=file_stat))&
-             call  fileio_errmsg('In: commander_rec :: eo_volassemble', file_stat )
+        call fopen(fnr, FILE='VOLASSEMBLE_FINISHED', STATUS='REPLACE', action='WRITE', iostat=file_stat)
+        call fileio_errmsg('In: commander_rec :: eo_volassemble', file_stat )
+        call fclose( fnr , errmsg='In: commander_rec :: eo_volassemble')
         call wait_for_closure('VOLASSEMBLE_FINISHED')
         
         contains
@@ -250,10 +249,9 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_VOLASSEMBLE NORMAL STOP ****', print_simple=.false.)
         ! indicate completion (when run in a qsys env)
-        if(.not.fopen(fnr, FILE='VOLASSEMBLE_FINISHED', STATUS='REPLACE', action='WRITE', iostat=file_stat))&
-             call  fileio_errmsg('In: commander_rec :: volassemble', file_stat )
-        if(.not.fclose( fnr , iostat=file_stat))&
-             call  fileio_errmsg('In: commander_rec :: volassemble', file_stat )
+        call fopen(fnr, FILE='VOLASSEMBLE_FINISHED', STATUS='REPLACE', action='WRITE', iostat=file_stat)
+        call fileio_errmsg('In: commander_rec :: volassemble', file_stat )
+        call fclose( fnr ,errmsg='In: commander_rec :: volassemble')
         call wait_for_closure('VOLASSEMBLE_FINISHED')
 
         contains

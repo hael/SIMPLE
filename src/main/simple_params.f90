@@ -1,14 +1,14 @@
 ! provides global distribution of constants and derived constants
 module simple_params
+use simple_defs         ! use all in there
 use simple_ori,         only: ori
 use simple_cmdline,     only: cmdline
 use simple_magic_boxes, only: find_magic_box
-use simple_fileio,      only: fopen, fclose, fileio_errmsg
+use simple_fileio,      only: fopen, fclose, fileio_errmsg, nlines, fname2format
 use simple_imgfile,     only: find_ldim_nptcls
 use simple_binoris,     only: binoris
-use simple_strings      ! use all in there
-use simple_defs         ! use all in there
-use simple_syslib       ! use all in there
+use simple_strings,     only: str_has_substr, int2str, int2str_pad
+use simple_syslib,      only: file_exists       ! use all in there
 implicit none
 
 public :: params
@@ -379,7 +379,7 @@ contains
         !$ use omp_lib
         !$ use omp_lib_kinds
         use simple_math, only: round2even
-        use simple_map_reduce  ! use all in there
+ !       use simple_map_reduce  ! use all in there
         class(params),     intent(inout) :: self
         class(cmdline),    intent(inout) :: cline
         logical, optional, intent(in)    :: checkdistr, allow_mix
@@ -1085,16 +1085,15 @@ contains
                 integer :: nl, fnr, i, io_stat
                 filenam = cline%get_carg('vollist')
                 nl      = nlines(filenam)
-                if(.not.fopen(fnr, file=filenam, iostat=io_stat))&
-                    call fileio_errmsg("params ; read_vols error opening "//trim(filenam), io_stat)
+                call fopen(fnr, file=filenam, iostat=io_stat)
+                call fileio_errmsg("params ; read_vols error opening "//trim(filenam), io_stat)
                 do i=1,nl
-                    read(fnr,*) nam
+                    read(fnr,*, iostat=io_stat) nam
                     if( nam .ne. '' )then
                         self%vols(i) = nam
                     endif
                 end do
-                if(.not.fclose(fnr, iostat=io_stat))&
-                call fileio_errmsg("params ; read_vols error closing "//trim(filenam), io_stat)
+                call fclose(fnr,errmsg="params ; read_vols error closing "//trim(filenam))
             end subroutine read_vols
 
             subroutine check_file( file, var, allowed1, allowed2, notAllowed )
@@ -1191,12 +1190,12 @@ contains
                 integer :: funit, io_stat
                 if( cntfile == 0 )then
                     if( cline%defined('filetab') )then
-                        if(.not.fopen(funit, status='old', file=self%filetab, iostat=io_stat))&
-                            call fileio_errmsg("In params:: double_check_file_formats fopen failed "//trim(self%filetab) , io_stat)
+                        call fopen(funit, status='old', file=self%filetab, iostat=io_stat)
+                        call fileio_errmsg("In params:: double_check_file_formats fopen failed "//trim(self%filetab) , io_stat)
                         read(funit,'(a256)') fname
                         form = fname2format(fname)
-                        if(.not.fclose(funit, iostat=io_stat))&
-                            call fileio_errmsg("In params:: double_check_file_formats fclose failed" , io_stat)
+                        call fclose(funit, &
+                            errmsg="In params:: double_check_file_formats fclose failed "//trim(self%filetab) )
                         select case(form)
                             case('M')
                                 self%ext = '.mrc'

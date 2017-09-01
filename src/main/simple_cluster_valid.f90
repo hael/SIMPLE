@@ -1,7 +1,8 @@
 ! cluster validation
 module simple_cluster_valid
-    use simple_defs
-    use simple_syslib, only: alloc_errchk
+use simple_defs
+use simple_syslib, only: alloc_errchk
+use simple_oris,   only: oris
 implicit none
 #include "simple_local_flags.inc"
 
@@ -49,14 +50,13 @@ contains
 
     !>  \brief  is a constructor
     subroutine new( self, o, ncls, which, S, D )
-        use simple_oris, only: oris
         class(cluster_valid), intent(inout) :: self   !< instance
         class(oris), intent(inout)          :: o      !< clustering solution
         integer, intent(in)                 :: ncls   !< number of clusters
         character(len=*), intent(in)        :: which  !< tag which=<state|class|subclass>
         real, intent(in), optional, target  :: S(:,:) !< similarity matrix
         real, intent(in), optional, target  :: D(:,:) !< distance matrix
-        integer :: alloc_stat, iptcl
+        integer :: iptcl
         logical :: spresen, dpresen
         call self%kill
         ! set constants
@@ -126,7 +126,7 @@ contains
         class(cluster_valid), intent(inout) :: self
         integer, intent(in)                 :: class, pop
         integer, allocatable :: arr(:)
-        integer :: alloc_stat, cnt, iptcl
+        integer :: cnt, iptcl
         allocate( arr(pop), stat=alloc_stat )
         call alloc_errchk( 'In: simple_cluster_valid::get_clsarr', alloc_stat )
         cnt = 0
@@ -181,7 +181,7 @@ contains
     !>  \brief  calculates cluster separation metrics
     subroutine gen_separation_metrics( self )
         class(cluster_valid), intent(inout) :: self
-        integer :: alloc_stat, icls, jcls, i, j, isz, jsz, ncl_pairs
+        integer :: icls, jcls, i, j, isz, jsz, ncl_pairs
         integer, allocatable :: iclsarr(:), jclsarr(:)
         real    :: d, dmin, x
         ! initialize
@@ -238,7 +238,7 @@ contains
     subroutine gen_cohesion_metrics( self )
         class(cluster_valid), intent(inout) :: self
         integer, allocatable :: karr(:)
-        integer :: sz, k, alloc_stat, i, j, npairs
+        integer :: sz, k, i, j, npairs
         real    :: d, dmax, dsum, dmax_cen
         self%maxdists     = 0.
         self%avgdists     = 0.

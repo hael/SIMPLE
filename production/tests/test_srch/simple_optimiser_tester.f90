@@ -3,6 +3,7 @@ use simple_optimizer,   only: optimizer
 use simple_opt_factory, only: opt_factory
 use simple_opt_spec,    only: opt_spec
 use simple_defs         ! singleton
+use simple_jiffys,      only: progress
 implicit none
 
 public :: exec_optimiser_test
@@ -131,7 +132,6 @@ contains
 
     !>  \brief  master test routine
     subroutine test_all_optimizers
-        use simple_jiffys, only: progress
         use simple_stat,   only: moment
         integer :: i, j, k, cnt, nfuns
         real    :: maxeval, neval

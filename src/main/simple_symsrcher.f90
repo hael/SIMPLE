@@ -242,7 +242,7 @@ end module simple_symsrcher
     !     type(build)  :: b
     !     type(params) :: p
     !     type(sym)    :: so
-    !     integer      :: i, k, alloc_stat
+    !     integer      :: i, k
     !     ! Update general toolbox sym functionality
     !     p%pgrp    = so%get_pgrp()
     !     call b%se%new(p%pgrp)
@@ -302,7 +302,7 @@ end module simple_symsrcher
     !     real, allocatable :: probs(:)
     !     character(len=3)  :: pgrp
     !     real              :: bestp
-    !     integer           :: i, j, k, alloc_stat
+    !     integer           :: i, j, k
     !     allocate( probs(n_subgrps), stat=alloc_stat)
     !     call alloc_errchk( 'sym_probs; simple_sym', alloc_stat )            
     !     probs = 0.

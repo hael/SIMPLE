@@ -416,7 +416,7 @@ contains
         type(params)                  :: p_master
         type(oris)                    :: os
         character(len=STDLEN)         :: oritab, vol, fsc, str_state
-        integer                       :: irepeat, state, iter, n_incl, it, alloc_stat, NREPEATS
+        integer                       :: irepeat, state, iter, n_incl, it, NREPEATS
         integer                       :: best_loc(1)
         ! some init
         NREPEATS = nint(cline%get_rarg('nrepeats'))

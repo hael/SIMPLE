@@ -61,7 +61,7 @@ contains
         class(ft_expanded), intent(inout) :: self
         class(image),       intent(inout) :: img
         real,               intent(in)    :: hp, lp
-        integer :: alloc_stat,h,k,l,i,hcnt,kcnt,lcnt
+        integer :: h,k,l,i,hcnt,kcnt,lcnt
         integer :: lplim,hplim,hh,kk,ll,sqarg,phys(3)
         logical :: didft
         ! kill pre-existing object
@@ -327,7 +327,7 @@ contains
         real,               intent(in) :: shvec(3)
         complex, allocatable :: shmat(:,:,:), cmat2sh(:,:,:)
         real     :: r,sumasq,sumbsq,arg,shvec_here(3)
-        integer  :: alloc_stat,hind,kind,lind
+        integer  ::hind,kind,lind
         if( self1.eqdims.self2 )then
             allocate(   shmat( self1%flims(1,1):self1%flims(1,2),   &
                                self1%flims(2,1):self1%flims(2,2),   &

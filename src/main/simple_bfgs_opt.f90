@@ -1,5 +1,6 @@
 ! function minimization by L-BFGS (Limited memory Broyden–Fletcher–Goldfarb–Shannon optimisation)
 module simple_bfgs_opt
+use simple_defs
 use simple_optimizer, only: optimizer
 implicit none
 
@@ -24,7 +25,6 @@ contains
         use simple_syslib,   only: alloc_errchk
         class(bfgs_opt), intent(inout) :: self !< instance
         class(opt_spec), intent(inout) :: spec !< specification
-        integer :: alloc_stat
         call self%kill
         allocate(self%p(spec%ndim),self%dg(spec%ndim),self%hdg(spec%ndim),&
         self%hessin(spec%ndim,spec%ndim),self%pnew(spec%ndim),self%xi(spec%ndim),stat=alloc_stat)

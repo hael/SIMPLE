@@ -201,7 +201,7 @@ contains
     subroutine get_all_cd_subgrps( self, subgrps)
         use simple_math,                   only: is_even
         class(sym), intent(inout)             :: self
-        integer                               :: i, cnt, alloc_stat
+        integer                               :: i, cnt
         character(len=1)                      :: pgrp
         character(len=3),allocatable          :: pgrps(:), subgrps(:)
         allocate( pgrps(self%n), stat=alloc_stat )
@@ -249,7 +249,6 @@ contains
         class(sym), intent(inout)             :: self
         character(len=3),allocatable          :: subgrps(:)
         character(len=1)                      :: pgrp
-        integer                               :: alloc_stat
         pgrp = self%pgrp(1:1)
         if( (pgrp=='c').or.(pgrp=='d') )then
             call self%get_all_cd_subgrps( subgrps )
@@ -427,7 +426,7 @@ contains
         real,    allocatable :: dists(:)
         integer, allocatable :: inds(:)
         type(ori)  :: oasym, osym, oj
-        integer    :: i, j, n_os, alloc_stat, isym
+        integer    :: i, j, n_os, isym
         if( trim(self%pgrp).eq.'c1' )then
             call asym_os%nearest_neighbors(k, nnmat)
         else
@@ -572,7 +571,7 @@ contains
     subroutine set_subgrps( self )
         use simple_math, only: is_even
         class(sym), intent(inout)     :: self
-        integer                       :: i, cnt, alloc_stat
+        integer                       :: i, cnt
         character(len=1)              :: pgrp
         character(len=3), allocatable :: pgrps(:)
         allocate( pgrps(self%n), stat=alloc_stat )

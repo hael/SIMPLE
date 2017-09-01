@@ -7,7 +7,6 @@ use simple_optimizer,   only: optimizer
 use simple_opt_factory, only: opt_factory
 use simple_opt_spec,    only: opt_spec
 use simple_syslib,      only: alloc_errchk, simple_stop
-use simple_jiffys,      only: progress
 use simple_ori,         only: ori
 use simple_oris,        only: oris
 use simple_sym,         only: sym

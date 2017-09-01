@@ -2,9 +2,10 @@
 module simple_corrmat
 !$ use omp_lib
 !$ use omp_lib_kinds
+use simple_defs
+use simple_jiffys, only: progress
 use simple_image,  only: image
 use simple_syslib, only: alloc_errchk
-use simple_jiffys, only: progress
 implicit none
 
 public :: calc_cartesian_corrmat
@@ -25,7 +26,7 @@ contains
         type(image),       intent(inout) :: imgs(:)
         real, allocatable, intent(out)   :: corrmat(:,:)
         real, optional,    intent(in)    :: msk, lp 
-        integer :: iptcl, jptcl, ipair, alloc_stat, cnt
+        integer :: iptcl, jptcl, ipair, cnt
         nptcls = size(imgs)
         ! prep imgs for corrcalc
         do iptcl=1,nptcls
@@ -81,7 +82,7 @@ contains
         type(image),       intent(inout) :: imgs_sel(:), imgs_orig(:)
         real, allocatable, intent(out)   :: corrmat(:,:)
         real, optional,    intent(in)    :: msk, lp
-        integer :: iptcl, isel, alloc_stat, cnt, ldim(3)
+        integer :: iptcl, isel
         logical :: doftcalc, domsk
         ! set const
         norig    = size(imgs_orig)

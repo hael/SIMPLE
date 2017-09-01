@@ -3,7 +3,7 @@ module simple_comlin
 use simple_defs    ! use all in there
 use simple_image,  only: image
 use simple_oris,   only: oris
-use simple_math,   only: csq, calc_corr
+use simple_math,   only: csq, calc_corr, projz
 implicit none
 
 public :: comlin
@@ -32,8 +32,6 @@ contains
 
     !>  \brief  is a constructor
     function constructor( a, fpls, lp ) result( self )
-        use simple_oris,  only: oris
-        use simple_image, only: image
         class(oris),  target, intent(in) :: a       !< orientations
         class(image), target, intent(in) :: fpls(:) !< Fourier planes
         real,                 intent(in) :: lp      !< low-pass limit
@@ -43,14 +41,11 @@ contains
 
     !>  \brief  is a constructor
     subroutine new( self, a, fpls, lp )
-        use simple_oris,   only: oris
-        use simple_image,  only: image
-        use simple_syslib, only: alloc_errchk
         class(comlin),        intent(inout) :: self    !< object
         class(oris),  target, intent(in)    :: a       !< orientations
         class(image), target, intent(in)    :: fpls(:) !< Fourier planes
         real,                 intent(in)    :: lp      !< low-pass limit
-        integer :: alloc_stat, j, ld_here(3)
+        integer :: j, ld_here(3)
         call self%kill
         do j=1,self%nptcls
             if(.not. fpls(j)%square_dims()) stop 'square dims assumed; new; simple_comlin'
@@ -113,7 +108,7 @@ contains
     !! \param pind,j  indecies to normals
     !! \param corr,sumasq,sumbsq output statistics
     subroutine extr_comlin( self, pind, j, corr, sumasq, sumbsq, foundline )
-        use simple_math, only: projz
+
         class(comlin), intent(inout) :: self
         integer,       intent(in)    :: pind,j
         real,          intent(out)   :: corr,sumasq,sumbsq

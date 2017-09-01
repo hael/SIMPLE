@@ -1,5 +1,6 @@
 ! continuous function optimisation by Powell's method of conjugate search directions
 module simple_powell_opt
+use simple_defs
 use simple_optimizer, only: optimizer
 use simple_opt_spec,  only: opt_spec
 use simple_syslib,    only: alloc_errchk
@@ -28,7 +29,6 @@ contains
     subroutine new_powell_opt( self, spec )
         class(powell_opt), intent(inout) :: self !< instance
         class(opt_spec), intent(inout)   :: spec !< specification
-        integer                          :: alloc_stat
         real                             :: x
         call self%kill
         allocate(self%direction_set(spec%ndim,spec%ndim), stat=alloc_stat)
@@ -119,7 +119,7 @@ contains
                 use simple_opt_subs, only: linmin
                 real, intent(out) :: cost        !< return minimisatation value
                 real, allocatable :: pt(:),ptt(:)
-                integer :: i,ibig,j,iter,alloc_stat
+                integer :: i,ibig,j,iter
                 real    :: del,fp,fptt,t
                 allocate(pt(spec%ndim),ptt(spec%ndim), stat=alloc_stat)
                 call alloc_errchk("In: powell; simple_powell_opt", alloc_stat)

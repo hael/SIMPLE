@@ -177,7 +177,7 @@ contains
         class(cmdline),               intent(inout) :: cline
         type(params)      :: p
         type(build)       :: b
-        integer           :: alloc_stat, npix, iptcl, j
+        integer           :: npix, iptcl, j
         real              :: corr, ave, sdev, var, fsc05, fsc0143
         real, allocatable :: res(:), corrs(:), corrs_sum(:)
         logical           :: err
@@ -381,12 +381,12 @@ contains
         class(cmdline),              intent(inout) :: cline
         type(params)         :: p
         type(build)          :: b
-        integer              :: iptcl, alloc_stat, funit, io_stat
+        integer              :: iptcl, funit, io_stat
         real, allocatable    :: corrmat(:,:)
         p = params(cline, .false.)                           ! constants & derived constants produced
         call b%build_general_tbox(p, cline, .false., .true.) ! general objects built (no oritab reading)
         allocate(b%imgs_sym(p%nptcls), stat=alloc_stat)
-        call alloc_errchk('In: simple_image_smat, 1', alloc_stat)
+        allocchk('In: simple_image_smat, 1')
         do iptcl=1,p%nptcls
             call b%imgs_sym(iptcl)%new([p%box,p%box,1], p%smpd)
             call b%imgs_sym(iptcl)%read(p%stk, iptcl)
@@ -402,16 +402,12 @@ contains
                 call calc_cartesian_corrmat(b%imgs_sym, corrmat)
             endif
         endif
-        if(.not.fopen(funit, status='REPLACE', action='WRITE', file='img_smat.bin', access='STREAM',iostat=io_stat))&
-             call fileio_errmsg("commander_imgproc; image_smat failed to open image_smat.bin ", io_stat)
+        call fopen(funit, status='REPLACE', action='WRITE', file='img_smat.bin', access='STREAM',iostat=io_stat)
+        call fileio_errmsg("commander_imgproc; image_smat failed to open image_smat.bin ", io_stat)
 
         write(unit=funit,pos=1,iostat=io_stat) corrmat
-        if( io_stat .ne. 0 )then
-            write(*,'(a,i0,a)') 'I/O error ', io_stat, ' when writing to image_smat.bin'
-            stop 'I/O error; simple_image_smat'
-        endif
-         if(.not.fclose(funit,iostat=io_stat))&
-             call fileio_errmsg("commander_imgproc; image_smat failed to close image_smat.bin ", io_stat)
+        call fileio_errmsg("commander_imgproc; image_smat failed to write image_smat.bin ", io_stat)
+        call fclose(funit,errmsg="commander_imgproc; image_smat failed to close image_smat.bin ")
         ! end gracefully
         call simple_end('**** SIMPLE_IMAGE_SMAT NORMAL STOP ****')
     end subroutine exec_image_smat
@@ -744,7 +740,7 @@ contains
         type(oris)                               :: o_here
         integer,          allocatable            :: pinds(:)
         character(len=:), allocatable            :: fname
-        integer :: i, s, ipst, cnt, cnt2, cnt3, nincl, alloc_stat, lfoo(3), np1,np2,ntot
+        integer :: i, s, ipst, cnt, cnt2, cnt3, nincl, lfoo(3), np1,np2,ntot
         real    :: p_ctf, p_dfx
         p = params(cline)                    ! parameters generated
         call b%build_general_tbox(p, cline)  ! general objects built

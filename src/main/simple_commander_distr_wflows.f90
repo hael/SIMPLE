@@ -1325,7 +1325,7 @@ contains
         type(nrtxtfile)               :: boxfile
         real,        allocatable      :: boxdata(:,:)
         type(chash), allocatable      :: part_params(:)
-        integer :: ndatlines, numlen, alloc_stat, j, orig_box, ipart
+        integer :: ndatlines, numlen, j, orig_box, ipart
         ! seed the random number generator
         call seed_rnd
         ! output command line executed

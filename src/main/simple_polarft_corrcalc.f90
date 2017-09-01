@@ -106,7 +106,7 @@ contains
         integer,                 intent(in)    :: nrefs, pfromto(2), ldim(3), kfromto(2), ring2
         real,                    intent(in)    :: smpd
         character(len=*),        intent(in)    :: ctfflag !< are we using ctf
-        integer  :: alloc_stat, irot, k
+        integer  :: irot, k
         logical  :: even_dims, test(3)
         real(sp) :: ang
         ! kill possibly pre-existing object
@@ -389,7 +389,7 @@ contains
         real(sp),                intent(in) :: ang, winsz
         integer, allocatable :: roind_vec(:)  
         real(sp) :: dist(self%nrots)
-        integer  :: i, irot, nrots, alloc_stat
+        integer  :: i, irot, nrots
         if(ang>360. .or. ang<TINY)call simple_stop ('input angle outside of the conventional range; simple_polarft_corrcalc::get_win_roind')
         if(winsz<0. .or. winsz>180.)call simple_stop ('invalid window size; simple_polarft_corrcalc::get_win_roind')
         if(winsz < 360./real(self%nrots))call simple_stop ('too small window size; simple_polarft_corrcalc::get_win_roind')
@@ -425,7 +425,6 @@ contains
         class(polarft_corrcalc), intent(in) :: self
         integer,                 intent(in) :: iptcl, irot
         complex(sp), allocatable :: pft(:,:)
-        integer :: alloc_stat
         allocate(pft(self%refsz,self%kfromto(1):self%kfromto(2)),&
         source=self%pfts_ptcls(iptcl,irot:irot+self%winsz,:), stat=alloc_stat)
         call alloc_errchk("In: get_ptcl_pft; simple_polarft_corrcalc", alloc_stat)
@@ -437,7 +436,6 @@ contains
         class(polarft_corrcalc), intent(in) :: self
         integer,                 intent(in) :: iref
         complex(sp), allocatable :: pft(:,:)
-        integer :: alloc_stat
         allocate(pft(self%refsz,self%kfromto(1):self%kfromto(2)),&
         source=self%pfts_refs(iref,:,:), stat=alloc_stat)
         call alloc_errchk("In: get_ref_pft; simple_polarft_corrcalc", alloc_stat)
@@ -507,16 +505,14 @@ contains
         class(polarft_corrcalc), intent(in) :: self
         character(len=*),        intent(in) :: fname !< output filename
         integer :: funit, io_stat
-        if(.not.fopen(funit, status='REPLACE', action='WRITE', file=trim(fname), access='STREAM', iostat=io_stat))&
-             call fileio_errmsg('polarft_corrcalc write_ptfs_ptcls  ', io_stat)
+        call fopen(funit, status='REPLACE', action='WRITE', file=trim(fname), access='STREAM', iostat=io_stat)
+        call fileio_errmsg('polarft_corrcalc write_ptfs_ptcls  ', io_stat)
         write(unit=funit,pos=1,iostat=io_stat) self%pfts_ptcls
         ! Check if the write was successful
         if( io_stat .ne. 0 )then
             call fileio_errmsg('**ERROR(simple_polarft_corrcalc): I/O error when writing file: '// trim(fname), io_stat)
-            call simple_stop ('I/O error; write_pfts_ptcls')
         endif
-         if(.not.fclose(funit, iostat=io_stat))&
-             call fileio_errmsg('polarft_corrcalc write_ptfs_ptcls  ', io_stat)
+        call fclose(funit, errmsg='polarft_corrcalc write_ptfs_ptcls  ')
     end subroutine write_pfts_ptcls
 
     !>  \brief  is for reading particle pfts from file
@@ -527,15 +523,14 @@ contains
         class(polarft_corrcalc), intent(inout) :: self
         character(len=*),        intent(in)    :: fname !< input filename
         integer :: funit, io_stat, iptcl
-         if(.not.fopen(funit, status='OLD', action='READ', file=trim(fname), access='STREAM', iostat=io_stat))&
-             call fileio_errmsg('polarft_corrcalc read_ptfs_ptcls fopen ', io_stat)
+         call fopen(funit, status='OLD', action='READ', file=trim(fname), access='STREAM', iostat=io_stat)
+         call fileio_errmsg('polarft_corrcalc read_ptfs_ptcls fopen '//trim(fname), io_stat)
         read(unit=funit,pos=1,iostat=io_stat) self%pfts_ptcls
         ! Check if the read was successful
         if( io_stat .ne. 0 )then
             call fileio_errmsg('**ERROR(simple_polarft_corrcalc): I/O error when reading file: '// trim(fname), io_stat)
         endif
-         if(.not.fclose(funit, iostat=io_stat))&
-             call fileio_errmsg('polarft_corrcalc read_ptfs_ptcls fclose ', io_stat)
+        call fclose(funit, errmsg='polarft_corrcalc read_ptfs_ptcls fclose '//trim(fname))
         ! memoize sqsum_ptcls
         !$omp parallel do schedule(static) default(shared) private(iptcl) proc_bind(close)
         do iptcl=self%pfromto(1),self%pfromto(2)
@@ -614,7 +609,7 @@ contains
         class(polarft_corrcalc), intent(inout) :: self
         class(oris),             intent(inout) :: a !< oris object
         type(ctf) :: tfun
-        integer   :: iptcl,alloc_stat 
+        integer   :: iptcl
         real(sp)  :: kv,cs,fraca,dfx,dfy,angast
         logical   :: astig
         astig = a%isthere('dfy')

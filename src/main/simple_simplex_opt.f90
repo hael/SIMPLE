@@ -1,5 +1,6 @@
 ! The Nelder-Mead simplex method for continuous function minimisation
 module simple_simplex_opt
+use simple_defs
 use simple_optimizer, only: optimizer
 use simple_syslib,    only: alloc_errchk, simple_stop
 implicit none
@@ -27,7 +28,6 @@ contains
         use simple_opt_spec, only: opt_spec
         class(simplex_opt), intent(inout) :: self !< instance
         class(opt_spec),    intent(inout) :: spec !< specification
-        integer                           :: alloc_stat
         real                              :: x
         call self%kill
         allocate(self%p(spec%ndim+1,spec%ndim), self%y(spec%ndim+1), self%pb(spec%ndim), stat=alloc_stat)
@@ -108,7 +108,6 @@ contains
     !> \brief  is a destructor
     subroutine kill_simplex_opt( self )
         class(simplex_opt), intent(inout) :: self
-        integer                           :: alloc_stat
         alloc_stat=0
         if( allocated(self%p) )  deallocate(self%p, stat=alloc_stat)
         if( allocated(self%y) )  deallocate(self%y, stat=alloc_stat)

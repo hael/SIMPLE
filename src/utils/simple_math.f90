@@ -1,7 +1,7 @@
 ! various mathematical subroutines and functions
 module simple_math
 use simple_defs
-use simple_syslib, only: alloc_errchk
+use simple_syslib, only: alloc_errchk 
 implicit none
 
 interface is_a_number
@@ -216,44 +216,36 @@ contains
     subroutine check4nans3D_1( arr )
         real, intent(in)  :: arr(:,:,:)   !< query vector
         real, allocatable :: arr1d(:)
-        integer :: alloc_stat 
         arr1d = pack(arr, .true.)
         call check4nans_1(arr1d)
-        deallocate(arr1d, stat=alloc_stat )
-        call alloc_errchk('In: check4nans3D_1 module: simple_math', alloc_stat)
+        deallocate(arr1d)
     end subroutine
 
     !>    is for checking the numerical soundness of an vector
     subroutine check4nans3D_2( arr )
         complex, intent(in)  :: arr(:,:,:)    !< query vector
         complex, allocatable :: arr1d(:)
-        integer :: alloc_stat
         arr1d = pack(arr, .true.)
         call check4nans_2(arr1d)
-        deallocate(arr1d, stat=alloc_stat )
-        call alloc_errchk('In: check4nans3D_2; get_hist', alloc_stat)
+        deallocate(arr1d)
     end subroutine
 
     !>    is for checking the numerical soundness of an vector
     subroutine check4nans2D_1( arr )
         real, intent(in)  :: arr(:,:)   !< query vector
         real, allocatable :: arr1d(:)
-        integer :: alloc_stat
         arr1d = pack(arr, .true.)
         call check4nans_1(arr1d)
-        deallocate(arr1d, stat=alloc_stat )
-        call alloc_errchk('In: check4nans2D_1; get_hist', alloc_stat)
+        deallocate(arr1d)
     end subroutine
 
     !>    is for checking the numerical soundness of an vector
     subroutine check4nans2D_2( arr )
         complex, intent(in)  :: arr(:,:)   !< query vector
         complex, allocatable :: arr1d(:)
-        integer :: alloc_stat
-        arr1d = pack(arr, .true.)
+        arr1d = pack(arr, .true.)  
         call check4nans_2(arr1d)
-        deallocate(arr1d, stat=alloc_stat )
-        call alloc_errchk('In: check4nans2D_2; get_hist', alloc_stat)
+        deallocate(arr1d)
     end subroutine
 
     !>    is for checking the numerical soundness of an vector
@@ -484,15 +476,15 @@ contains
         real,                 intent(out) :: means(:)  !< array for output
         integer, allocatable, intent(out) :: labels(:) !< labels for output
         logical, allocatable :: mask(:)
-        integer :: ncls, ndat, alloc_stat, clssz, i, j, cnt_means, loc(1), changes
+        integer :: ncls, ndat, clssz, i, j, cnt_means, loc(1), changes
         real, allocatable :: dat_sorted(:)
         ncls = size(means)
         ndat = size(dat)
         if( allocated(labels) ) deallocate(labels)
-        allocate( dat_sorted(ndat), mask(ndat), labels(ndat), stat=alloc_stat )
+        allocate( mask(ndat), labels(ndat), stat=alloc_stat ) 
         call alloc_errchk("sortmeans; simple_math", alloc_stat)
         ! initialization by sorting
-        dat_sorted = dat
+        dat_sorted = dat ! reallocation  dat_sorted(ndat),
         call hpsort(ndat, dat_sorted)
         clssz = int(real(ndat)/real(ncls))
         cnt_means = 0
@@ -523,7 +515,6 @@ contains
             if( changes == 0 ) exit
         end do
         deallocate(dat_sorted, mask)
-        call alloc_errchk("sortmeans end; simple_math ", alloc_stat)
     end subroutine sortmeans
 
     !>   calculates the number of common integers in two arrays
@@ -1271,7 +1262,6 @@ contains
     !!         http://math.uww.edu/~mcfarlat/inverse.htm
     !!         http://www.tutor.ms.unimelb.edu.au/matrix/matrix_inverse.html
     subroutine matinv_D(matrix, inverse, n, errflg)
-      use simple_defs
       integer, intent(in)  :: n                          !< size of square matrix
         integer, intent(out) :: errflg                   !< return error status. -1 for error, 0 for normal
         real(dp), intent(in), dimension(n,n)  :: matrix  !< input matrix
@@ -1454,7 +1444,6 @@ contains
     function zeros_1( n ) result( a )
         integer, intent(in) :: n          !< matrix size
         real, allocatable   :: a(:)
-        integer             :: alloc_stat
         allocate( a(n), stat=alloc_stat )
         call alloc_errchk("In: zeros_1; simple_math", alloc_stat)
         a = 0.
@@ -1464,7 +1453,6 @@ contains
     function zeros_2( n1, n2 ) result( a )
         integer, intent(in) :: n1, n2    !< matrix size
         real, allocatable   :: a(:,:)
-        integer             :: alloc_stat
         allocate( a(n1,n2), stat=alloc_stat )
         call alloc_errchk("In: zeros_2; simple_math", alloc_stat)
         a = 0.
@@ -2104,15 +2092,13 @@ contains
         real, allocatable, intent(out) :: coords(:,:,:), angtab(:)
         integer                        :: nradial_lines
         real                           :: dang
-        integer                        :: i, j, alloc_stat
+        integer                        :: i, j
         nradial_lines = round2even(twopi*real(ring2))
         if( allocated(coords) )then
-            deallocate(coords, stat=alloc_stat )
-            call alloc_errchk("In: gen_polar_coords_1; simple_math dealloc coords", alloc_stat)
+            deallocate(coords)
         end if
         if( allocated(angtab) ) then
-            deallocate(angtab, stat=alloc_stat )
-            call alloc_errchk("In: gen_polar_coords_1; simple_math dealloc angtab", alloc_stat)
+            deallocate(angtab)
         end if
         allocate( coords(nradial_lines,kfromto(1):kfromto(2),2), angtab(nradial_lines), stat=alloc_stat )
         call alloc_errchk("In: gen_polar_coords_1; simple_math coords/angtab alloc", alloc_stat)
@@ -2138,7 +2124,7 @@ contains
         real, intent(out) :: y, dy            !< est value and accuracy
         real, parameter   :: TINY = 1.e-25
         real, allocatable :: c(:), d(:)
-        integer :: n, i, m, ns, alloc_stat
+        integer :: n, i, m, ns
         real    :: dd, h, hh, t, w
         n = size(xa)
         if( n /= size(ya) ) stop 'incompatible array sizes; ratint; simple_math'
@@ -2180,8 +2166,7 @@ contains
             endif
             y = y+dy
         end do
-        deallocate(c,d,stat=alloc_stat)
-        call alloc_errchk("In: ratint; simple_math", alloc_stat)
+        deallocate(c,d)
     end subroutine
 
     !>    quadratic interpolation in 2D, from spider
@@ -2271,7 +2256,7 @@ contains
         integer, intent(in)  :: npeaks
         integer, allocatable :: peakpos(:)
         logical, allocatable :: mask(:)
-        integer :: n, ipeak, loc(1), alloc_stat
+        integer :: n, ipeak, loc(1)
         n = size(vals)
         allocate(peakpos(npeaks), mask(n),stat=alloc_stat)
         call alloc_errchk("In: peakfinder; simple_math", alloc_stat)
@@ -2669,7 +2654,7 @@ contains
         real, intent(in)  :: arr(:)
         real, allocatable :: copy(:)
         real    :: val, val1, val2
-        integer :: n, pos1, pos2, alloc_stat
+        integer :: n, pos1, pos2
         n = size(arr)
         if( is_even(n) )then
             pos1 = n/2
@@ -2678,9 +2663,9 @@ contains
             pos1 = nint(real(n)/2.)
             pos2 = pos1
         endif
-        allocate( copy(n), stat=alloc_stat )
-        call alloc_errchk('In: median, module: simple_math', alloc_stat)
-        copy = arr
+        !allocate( copy(n), stat=alloc_stat )
+        ! call alloc_errchk('In: median, module: simple_math', alloc_stat)
+        copy = arr  ! compiler will realloc here
         if( pos1 == pos2 )then
             val  = selec(pos1,n,copy)
         else
@@ -2688,8 +2673,7 @@ contains
             val2 = selec(pos2,n,copy)
             val  = (val1+val2)/2.
         endif
-        deallocate(copy, stat=alloc_stat )
-        call alloc_errchk('OUT: median, module: simple_math', alloc_stat)
+        deallocate(copy)
     end function
 
     !>   for calculating the median

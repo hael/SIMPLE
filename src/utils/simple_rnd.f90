@@ -52,7 +52,7 @@ contains
     function randn_1( n ) result( a )
         integer, intent(in) :: n
         real, allocatable   :: a(:)
-        integer             :: alloc_stat, i
+        integer             :: i
         allocate( a(n), stat=alloc_stat )
         call alloc_errchk("In: randn_1; simple_rnd", alloc_stat)
         do i=1,n
@@ -65,7 +65,7 @@ contains
     function randn_2( n1, n2 ) result( a )
         integer, intent(in) :: n1, n2
         real, allocatable   :: a(:,:)
-        integer             :: alloc_stat, i, j
+        integer             :: i, j
         allocate( a(n1,n2), stat=alloc_stat )
         call alloc_errchk("In: randn_2; simple_rnd", alloc_stat)
         do i=1,n1
@@ -327,7 +327,7 @@ contains
         real, intent(in)     :: corr_prev
         real    :: diffs(ncorrs)
         logical :: avail(ncorrs)
-        integer :: this !, alloc_stat
+        integer :: this 
         this  = 0
         diffs = corrs-corr_prev
         avail = .true.

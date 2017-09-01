@@ -101,7 +101,6 @@ contains
         class(masker), intent(inout) :: self
         class(params), intent(in)    :: p
         integer,       intent(in)    :: ncls
-        integer :: alloc_stat
         if( .not. self%is_2d()    ) stop 'this routine is intended for 2D images only, simple_masker::init2D'
         if( .not. self%even_dims()) stop 'even dimensions assumed; simple_masker::init2D'
         if(       self%is_ft()    ) stop 'real space only; simple_masker::init2D'

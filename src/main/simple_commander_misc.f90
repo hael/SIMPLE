@@ -79,7 +79,7 @@ contains
         type(cluster_valid) :: cvalid
         real, allocatable   :: smat(:,:)
         integer             :: funit, io_stat, ncls_min, loc(1), ncls_stop, icls
-        integer             :: pop, ncls, alloc_stat, irestart, ntot, cnt=0, numlen
+        integer             :: pop, ncls, irestart, ntot, cnt=0, numlen
         real                :: avg_ratio, min_ratio, ratio, x, sim
         real, allocatable   :: validinds(:)
         integer, parameter  :: NRESTARTS=10
@@ -90,15 +90,14 @@ contains
         allocate(smat(p%nptcls,p%nptcls), stat=alloc_stat)
         call alloc_errchk('In: simple_cluster_smat, 1', alloc_stat)
         smat = 1.
-        if(.not.fopen(funit, status='OLD', action='READ', file=p%fname, access='STREAM',iostat=io_stat))&
-             call fileio_errmsg('commander_misc; cluster_smat fopen', io_stat)
+        call fopen(funit, status='OLD', action='READ', file=p%fname, access='STREAM',iostat=io_stat)
+        call fileio_errmsg('commander_misc; cluster_smat fopen', io_stat)
         read(unit=funit,pos=1,iostat=io_stat) smat
         if( io_stat .ne. 0 )then
             write(*,'(a,i0,a)') 'I/O error ', io_stat, ' when reading: ', p%fname
             call simple_stop ( 'I/O error; simple_cluster_smat')
         endif
-        if(.not.fclose(funit,iostat=io_stat))&
-             call fileio_errmsg('commander_misc; cluster_smat fclose ', io_stat)
+        call fclose(funit,errmsg='commander_misc; cluster_smat fclose ')
         allocate(validinds(2:p%ncls), stat=alloc_stat)
         call alloc_errchk("In: simple_cluster_smat", alloc_stat)
         validinds = 0
@@ -188,7 +187,7 @@ contains
         real, allocatable :: filter(:)
         type(image)       :: dummy_img
         real              :: time_per_frame, current_time, acc_dose
-        integer           :: iframe, alloc_stat, find
+        integer           :: iframe, find
         type(params)      :: p
         p = params(cline) ! parameters generated
         call dummy_img%new([p%box,p%box,1], p%smpd)
@@ -335,12 +334,9 @@ contains
         call sympeaks%write('sympeaks.txt')
         call binwrite_oritab(p%outfile, sympeaks, [1,sympeaks%get_noris()])
         ! the end
-        
-        if(.not.fopen(fnr, FILE='SYM_AGGREGATE_FINISHED', STATUS='REPLACE', action='WRITE', iostat=file_stat))&
-             call fileio_errmsg('commander_misc; sym_aggregate ', file_stat)
-        
-        if(.not.fclose( fnr, iostat=file_stat ))&
-             call fileio_errmsg('commander_misc; sym_aggregate ', file_stat)
+        call fopen(fnr, FILE='SYM_AGGREGATE_FINISHED', STATUS='REPLACE', action='WRITE', iostat=file_stat)
+        call fileio_errmsg('commander_misc; sym_aggregate ', file_stat)
+        call fclose( fnr,errmsg='commander_misc; sym_aggregate ')
         call simple_end('**** SIMPLE_SYM_AGGREGATE NORMAL STOP ****')
 
         contains

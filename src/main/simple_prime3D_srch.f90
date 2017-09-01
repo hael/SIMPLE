@@ -121,7 +121,7 @@ contains
         class(oris),             intent(inout) :: a        !< oris
         class(params),           intent(in)    :: p        !< parameters
         class(polarft_corrcalc), intent(inout) :: pftcc    !< correlator
-        integer  :: alloc_stat, nstates_eff
+        integer  :: nstates_eff
         ! destroy possibly pre-existing instance
         call self%kill
         ! set constants
@@ -1086,7 +1086,7 @@ contains
         real,    allocatable :: corrs(:), ws(:), logws(:)
         integer, allocatable :: order(:) 
         logical, allocatable :: included(:)
-        integer              :: ipeak, alloc_stat
+        integer              :: ipeak
         if( self%npeaks == 1 )then
             call self%o_peaks%set(1,'ow',1.0)
             wcorr = self%o_peaks%get(1,'corr')
@@ -1271,7 +1271,6 @@ contains
     function get_srch_order( self )result( inds )
         class(prime3D_srch), intent(inout) :: self
         integer,allocatable :: inds(:)
-        integer             :: alloc_stat
         allocate( inds(size(self%srch_order)), stat=alloc_stat )
         call alloc_errchk( 'simple_prime3D_srch::get_srch_order', alloc_stat)
         inds(:) = self%srch_order(:)
@@ -1402,7 +1401,6 @@ contains
 
     subroutine online_allocate( self )
         class(prime3D_srch), intent(inout) :: self
-        integer :: alloc_stat
         allocate(self%proj_space_inds(self%nrefs), stat=alloc_stat)  
         call alloc_errchk('In: prime3D_srch_allocate; simple_prime3D_srch', alloc_stat)
         self%proj_space_inds = 0

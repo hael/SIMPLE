@@ -63,7 +63,7 @@ contains
         class(prime2D_srch),     intent(inout) :: self
         class(params),           intent(in)    :: p
         class(polarft_corrcalc), intent(inout) :: pftcc
-        integer :: alloc_stat, i
+        integer :: i
         real    :: lims(2,2)
         ! destroy possibly pre-existing instance
         call self%kill

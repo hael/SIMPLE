@@ -5,7 +5,8 @@ module simple_projector_hlev
 !$ use omp_lib
 !$ use omp_lib_kinds
 use simple_defs
-use simple_syslib
+use simple_jiffys,     only: progress
+use simple_syslib, only: alloc_errchk
 use simple_image,      only: image
 use simple_oris,       only: oris
 use simple_params,     only: params
@@ -14,7 +15,6 @@ use simple_ori,        only: ori
 use simple_math,       only: rotmat2d
 use simple_projector,  only: projector
 use simple_kbinterpol, only: kbinterpol
-use simple_jiffys,      only: progress ! use all in there
 implicit none
 
 contains
@@ -29,7 +29,7 @@ contains
         type(image),      allocatable :: imgs(:) !< resulting images
         type(projector)  :: vol_pad, img_pad
         type(kbinterpol) :: kbwin
-        integer          :: n, i, alloc_stat
+        integer          :: n, i
         kbwin = kbinterpol(KBWINSZ, KBALPHA)
         call vol_pad%new([p%boxpd,p%boxpd,p%boxpd], p%smpd)
         call prep4cgrid(vol, vol_pad, p%msk, kbwin)
@@ -164,7 +164,7 @@ contains
         type(kbinterpol) :: kbwin
         complex          :: comp, zero
         integer          :: lims(3,2), ldim(3), ldim_pd(3), logi(3), phys(3), win(2,2), cyc_lims(3,2)
-        integer          :: alloc_stat, wdim, incr, nimgs, i, h, k,l,m
+        integer          :: wdim, incr, nimgs, i, h, k,l,m
         real             :: loc(2), mat(2,2), smpd, winsz, pw
         kbwin = kbinterpol(KBWINSZ, KBALPHA)
         ! init

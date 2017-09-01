@@ -1,5 +1,6 @@
 ! clustering of a similarity matrix using stochastic hill-climbing
 module simple_shc_cluster
+use simple_defs
 use simple_oris, only: oris
 use simple_rnd,  only: irnd_uni
 implicit none
@@ -37,7 +38,6 @@ contains
         real, target,       intent(in)    :: S_in(N_in,N_in)
         type(oris), target, intent(in)    :: o
         real, optional,     intent(in)    :: minsim
-        integer :: alloc_stat
         call self%kill
         self%N     =  N_in
         self%ncls  =  ncls_in

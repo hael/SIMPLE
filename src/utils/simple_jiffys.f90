@@ -1,6 +1,7 @@
 ! jiffy =  the time it takes light to travel one centimeter in vacuum
 module simple_jiffys
 use simple_defs         ! singleton
+use, intrinsic :: iso_fortran_env, only: stdout=>OUTPUT_UNIT
 !use simple_fileio       ! singleton
 implicit none
 
@@ -296,12 +297,13 @@ contains
 
     ! PRETTY PROGRESS & ENDING JIFFYS
 
-     subroutine progress( i, n )
+
+    subroutine progress( i, n )
         integer, intent(in) :: i, n
         if( .not. l_distr_exec_glob )then
-            write(6,'(a1,a,t21,i3,a)',advance="no") achar(13),&
-            &"Percent Complete: ", nint((real(i)/real(n))*100.0), "%"
-            flush 6
+            write(stdout,'(a1,a,t21,i3,a)',advance="no") achar(13),&
+                &"Percent Complete: ", nint((real(i)/real(n))*100.0), "%"
+            flush (stdout)
             if( i >= n ) write(*,*) ''
         endif
     end subroutine progress
@@ -342,18 +344,18 @@ contains
         pprint_simple = .true.
         if( present(print_simple) ) pprint_simple = print_simple
         if( pprint_simple )then
-            write(*,'(A)') "       _______ _____ _______  _____         _______"
-            write(*,'(A)') "       |______   |   |  |  | |_____] |      |______"
-            write(*,'(A)') "       ______| __|__ |  |  | |       |_____ |______  v3.0"
-            write(*,'(A)') " "
-            write(*,'(A)') " _)_ ( _   _     ) o  _             _   _   _   o  _   _"
-            write(*,'(A)') " (_   ) ) )_)   (  ( ) ) (_( \)    )_) ) ) (_(  ( ) ) )_)"
-            write(*,'(A)') "         (_                  (\   (_         _)      (_"
-            write(*,'(A)') ""
+            write(stdout,'(A)') "       _______ _____ _______  _____         _______"
+            write(stdout,'(A)') "       |______   |   |  |  | |_____] |      |______"
+            write(stdout,'(A)') "       ______| __|__ |  |  | |       |_____ |______"
+            write(stdout,'(A)') " "
+            write(stdout,'(A)') " _)_ ( _   _     ) o  _             _   _   _   o  _   _"
+            write(stdout,'(A)') " (_   ) ) )_)   (  ( ) ) (_( \)    )_) ) ) (_(  ( ) ) )_)"
+            write(stdout,'(A)') "         (_                  (\   (_         _)      (_"
+            write(stdout,'(A)') ""
         endif
-        write(*,'(A)') str
+        write(stdout,'(A)') str
     end subroutine simple_end
-
+    
     !> \brief  for pretty haloween ending
     subroutine haloween_end( str )
         character(len=*), intent(in) :: str

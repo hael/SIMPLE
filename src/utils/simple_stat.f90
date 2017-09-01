@@ -528,7 +528,7 @@ contains
         real, allocatable :: weights(:), corrs_copy(:), expnegdists(:)
         real, parameter   :: THRESHOLD=1.5
         real    :: maxminratio, normfac, corrmax, corrmin
-        integer :: icorr, ncorrs, alloc_stat
+        integer :: icorr, ncorrs
         ncorrs = size(corrs)
         allocate(weights(ncorrs), corrs_copy(ncorrs), expnegdists(ncorrs),stat=alloc_stat)
         call alloc_errchk("In: corrs2weights; simple_stat", alloc_stat )
@@ -568,8 +568,7 @@ contains
                 weights(icorr) = 0.
             endif
         end do
-        deallocate(corrs_copy,stat=alloc_stat)
-        call alloc_errchk("In: corrs2weights", alloc_stat )
+        deallocate(corrs_copy)
     end function corrs2weights
 
     ! INTEGER STUFF
@@ -577,7 +576,7 @@ contains
     !>    is for rank transformation of an array
     subroutine rank_transform_1( arr )
         real, intent(inout)  :: arr(:)  !< array to be modified
-        integer              :: j, n, alloc_stat
+        integer              :: j, n
         integer, allocatable :: order(:)
         real, allocatable    :: vals(:)
         n = size(arr)
@@ -591,8 +590,7 @@ contains
         do j=1,n
             arr(order(j)) = real(j)
         end do
-        deallocate(vals, order, stat=alloc_stat )
-        call alloc_errchk("In: rank_transform_1; simple_stat dealloc ", alloc_stat )
+        deallocate(vals, order )
     end subroutine rank_transform_1
 
     !>    is for rank transformation of a 2D matrix
@@ -600,7 +598,7 @@ contains
         real, intent(inout)   :: mat(:,:)  !< matrix to be modified
         integer, allocatable  :: order(:), indices(:,:)
         real, allocatable     :: vals(:)
-        integer               :: n, alloc_stat, i, j, cnt, nx, ny
+        integer               :: n, i, j, cnt, nx, ny
         nx = size(mat,1)
         ny = size(mat,2)
         n = nx*ny
@@ -620,8 +618,7 @@ contains
         do j=1,n
             mat(indices(order(j),1),indices(order(j),2)) = real(j)
         end do
-        deallocate(vals, order, indices, stat=alloc_stat )
-         call alloc_errchk("In: rank_transform_2; simple_stat", alloc_stat )
+        deallocate(vals, order, indices )
     end subroutine rank_transform_2
 
     !>    Spearman rank correlation
@@ -789,7 +786,7 @@ contains
         integer, intent(in)  :: nbins  !< num histogram bins
         real                 :: binwidth, minv, maxv
         integer, allocatable :: h(:)
-        integer              :: bin, i, n, alloc_stat
+        integer              :: bin, i, n
         if( nbins<2 )stop 'Invalib number of bins in simple_stat%get_hist'
         n        = size(arr,1)
         minv     = minval(arr)
@@ -815,7 +812,7 @@ contains
         integer, allocatable :: h(:,:)             !< output histogram
         real                 :: binwidth1, minv1
         real                 :: binwidth2, minv2
-        integer              :: i, n, bin1, bin2, alloc_stat
+        integer              :: i, n, bin1, bin2
         if( nbins<2 )stop 'Invalib number of bins in simple_stat%get_hist'
         ! first array
         n         = size(x,1)

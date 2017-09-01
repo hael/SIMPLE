@@ -36,7 +36,6 @@ contains
     function constructor( NP ) result( self )
         integer, intent(in) :: NP    !< max number of tabus
         type(ran_tabu)      :: self
-        integer             :: alloc_stat
         call self%kill
         self%NP = NP
         self%N_tabus = 0
@@ -212,7 +211,7 @@ contains
         integer,         intent(in)    :: pfromto(2), nnn                     !< pmat range
         real,            intent(in)    :: pmat(pfromto(1):pfromto(2),self%NP) !< multinomal array
         integer, allocatable :: nnmat(:,:) !> output nearest neigh matrix
-        integer :: iptcl, alloc_stat
+        integer :: iptcl
         allocate(nnmat(pfromto(1):pfromto(2),nnn), stat=alloc_stat)
         call alloc_errchk('In: simple_ran_tabu; stoch_nnmat', alloc_stat)
         do iptcl=pfromto(1),pfromto(2)
@@ -255,7 +254,6 @@ contains
     !>  \brief  is a destructor
     subroutine kill( self )
         class(ran_tabu), intent(inout) :: self
-        integer :: alloc_stat
         if( allocated(self%avail) )then
             deallocate( self%avail, stat=alloc_stat )
             call alloc_errchk('In: simple_ran_tabu; kill ', alloc_stat)

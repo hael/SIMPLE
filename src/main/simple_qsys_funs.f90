@@ -61,20 +61,18 @@ contains
         cmd = 'pgrep '//trim(prg)//' > pid_from_fortran.txt'
         call exec_cmdline(cmd)
         ! read in the pid
-        if(.not.fopen(funit, status='old', action='read', file='pid_from_fortran.txt', iostat=file_stat))&
-             call fileio_errmsg("qsys_funs; terminate_if_prg_in_cwd fopen failed", file_stat)
+        call fopen(funit, status='old', action='read', file='pid_from_fortran.txt', iostat=file_stat)
+        call fileio_errmsg("qsys_funs; terminate_if_prg_in_cwd fopen failed", file_stat)
         read(funit,'(a)') pid
-        if(.not.fclose(funit, iostat=file_stat))&
-             call fileio_errmsg("qsys_funs; terminate_if_prg_in_cwd fclose failed", file_stat)
+        call fclose(funit,errmsg="qsys_funs; terminate_if_prg_in_cwd fclose failed")
         ! get a string that contains the directory it is running in with lsof -p
         cmd = 'lsof -p '//trim(pid)//' | grep cwd > pid_dir_from_fortran.txt'
         call exec_cmdline(cmd)
-        if(.not.fopen(funit, status='old', action='read', file='pid_dir_from_fortran.txt', iostat=file_stat))&
-             call fileio_errmsg("qsys_funs; terminate_if_prg_in_cwd fopen failed pid_dir_from_fortran.txt", file_stat)
+        call fopen(funit, status='old', action='read', file='pid_dir_from_fortran.txt', iostat=file_stat)
+        call fileio_errmsg("qsys_funs; terminate_if_prg_in_cwd fopen failed pid_dir_from_fortran.txt", file_stat)
         read(funit,'(a)', iostat=file_stat) pid_dir
         if(file_stat/=0)call fileio_errmsg("qsys_funs; terminate_if_prg_in_cwd read failed", file_stat)
-        if(.not.fclose(funit, iostat=file_stat))&
-             call fileio_errmsg("qsys_funs; terminate_if_prg_in_cwd fclose failed", file_stat)
+        call fclose(funit,errmsg="qsys_funs; terminate_if_prg_in_cwd fclose failed")
         ! get pwd
         pwd = simple_getenv('PWD')
         ! assert
@@ -143,8 +141,8 @@ contains
         simple_email = simple_getenv('SIMPLE_EMAIL')
         if( .not. allocated(simple_email) ) allocate(simple_email, source='me.myself\uni.edu')
 
-        if(.not.fopen(funit, status='replace', action='write', file=trim(env_file), iostat=file_stat))&
-             call fileio_errmsg("autogen_env_file qsys_funs ", file_stat)
+        call fopen(funit, status='replace', action='write', file=trim(env_file), iostat=file_stat)
+        call fileio_errmsg("autogen_env_file qsys_funs ", file_stat)
         write(funit,'(a)') '# CONFIGURATION FILE FOR DISTRIBUTED SIMPLE EXECUTION'
         write(funit,'(a)') ''
         write(funit,'(a)') '# ABSOLUTE PATH TO SIMPLE ROOT DIRECTORY'
@@ -169,8 +167,7 @@ contains
         write(funit,'(a)') 'job_memory_per_task   = 32000'
         write(funit,'(a)') 'job_name              = default'
         write(funit,'(a)') 'job_ntasks_per_socket = 1'
-        if(.not.fclose(funit,iostat=file_stat))&
-             call fileio_errmsg("autogen_env_file qsys_funs ", file_stat)
+        call fclose(funit,errmsg="autogen_env_file qsys_funs ")
     end subroutine autogen_env_file
 
     !>  Writes the JOB_FINISHED_* file to mark end of computing unit job
@@ -182,25 +179,22 @@ contains
         character(len=*), intent(in) :: source
         integer :: fnr, file_stat
         if( p%l_chunk_distr )then
-            if(.not.fopen(fnr, FILE='JOB_FINISHED_'//int2str_pad(p%chunk,p%numlen),&
-                 &STATUS='REPLACE', action='WRITE', iostat=file_stat))&
-                 call fileio_errmsg("qsys_job_finished fopen failed "//trim(source), file_stat)
-            if(.not.fclose( fnr,iostat=file_stat ))&
-                 call fileio_errmsg("qsys_job_finished fclose failed ", file_stat)
+            call fopen(fnr, FILE='JOB_FINISHED_'//int2str_pad(p%chunk,p%numlen),&
+                 &STATUS='REPLACE', action='WRITE', iostat=file_stat)
+            call fileio_errmsg("qsys_job_finished fopen failed "//trim(source), file_stat)
+            call fclose( fnr,errmsg="qsys_job_finished fclose failed ")
         endif
         if( p%l_distr_exec )then
-            if(.not.fopen(fnr, FILE='JOB_FINISHED_'//int2str_pad(p%part,p%numlen),&
-            &STATUS='REPLACE', action='WRITE', iostat=file_stat))&
-                 call fileio_errmsg("qsys_job_finished fopen failed "//trim(source), file_stat)
-            if(.not.fclose( fnr , iostat=file_stat))&
-                 call fileio_errmsg("qsys_job_finished fopen failed ", file_stat)
+            call fopen(fnr, FILE='JOB_FINISHED_'//int2str_pad(p%part,p%numlen),&
+            &STATUS='REPLACE', action='WRITE', iostat=file_stat)
+            call fileio_errmsg("qsys_job_finished fopen failed "//trim(source), file_stat)
+            call fclose( fnr ,errmsg="qsys_job_finished fopen failed ")
         endif
         if( p%stream.eq.'yes' )then
-            if(.not.fopen(fnr, FILE='JOB_FINISHED_'//int2str_pad(p%part,p%numlen),&
-            &STATUS='REPLACE', action='WRITE', iostat=file_stat))&
-                 call fileio_errmsg("qsys_job_finished fopen failed "//trim(source), file_stat)
-            if(.not.fclose( fnr , iostat=file_stat))&
-                 call fileio_errmsg("qsys_job_finished fclose failed ", file_stat)
+            call fopen(fnr, FILE='JOB_FINISHED_'//int2str_pad(p%part,p%numlen),&
+            &STATUS='REPLACE', action='WRITE', iostat=file_stat)
+            call fileio_errmsg("qsys_job_finished fopen failed "//trim(source), file_stat)
+            call fclose( fnr , errmsg="qsys_job_finished fclose failed ")
         endif
     end subroutine qsys_job_finished
 

@@ -1,9 +1,9 @@
 ! ctffind iterator
 module simple_ctffind_iter
-use simple_syslib,  only: exec_cmdline
-use simple_nrtxtfile, only: nrtxtfile
+use simple_defs
 use simple_strings,   only: real2str
 use simple_fileio       ! use all in there
+use simple_nrtxtfile, only: nrtxtfile
 implicit none
 
 public :: ctffind_iter
@@ -19,6 +19,7 @@ contains
     subroutine iterate( self, p, imovie, movie_counter, moviename_forctf, fname_ctrl, fname_output, os )
         use simple_params, only: params
         use simple_oris,   only: oris
+        use simple_syslib,  only: exec_cmdline
         class(ctffind_iter),        intent(inout) :: self
         class(params),              intent(inout) :: p
         integer,                    intent(in)    :: imovie
@@ -29,7 +30,7 @@ contains
         real,             allocatable :: ctfparams(:,:)
         character(len=STDLEN)         :: cmd_str, fname_param
         type(nrtxtfile)               :: ctfparamfile
-        integer                       :: funit, ndatlines, nrecs, j, file_stat,alloc_stat
+        integer                       :: funit, ndatlines, nrecs, j, file_stat
         if( .not. file_exists(moviename_forctf) )&
         & write(*,*) 'inputted micrograph does not exist: ', trim(adjustl(moviename_forctf))
         movie_counter = movie_counter + 1
@@ -37,8 +38,8 @@ contains
         fname_diag    = add2fbody(moviename_forctf, p%ext, '_ctffind_diag')
         fname_param   = fname_new_ext(fname_diag, 'txt')
 
-        if(.not.fopen(funit, status='REPLACE', action='WRITE', file=trim(fname_ctrl),iostat=file_stat))&
-             call fileio_errmsg("ctffind_iter:: iterate fopen failed",file_stat)
+        call fopen(funit, status='REPLACE', action='WRITE', file=trim(fname_ctrl),iostat=file_stat)
+        call fileio_errmsg("ctffind_iter:: iterate fopen failed "//trim(fname_ctrl),file_stat)
         write(funit,'(a)') trim(moviename_forctf)      ! integrated movie used for fitting
         write(funit,'(a)') trim(fname_diag)            ! diagnostic file
         write(funit,'(a)') real2str(p%smpd)            ! magnification dependent sampling distance
@@ -57,8 +58,7 @@ contains
         write(funit,'(a)') real2str(1.0e4*p%astigtol)  ! defocus grid search step size, default 0.05 microns
         write(funit,'(a)') trim(p%phaseplate)          ! phase-plate or not (yes|no) {no}
         write(funit,'(a)') 'no';                       ! set expert options
-        if(.not.fclose(funit,iostat=file_stat))&
-             call fileio_errmsg("ctffind_iter:: iterate fopen failed",file_stat)
+        call fclose(funit,errmsg="ctffind_iter:: iterate fopen failed "//trim(fname_ctrl))
         cmd_str = 'cat ' // fname_ctrl//' | ctffind'
         call exec_cmdline(trim(cmd_str))
         call ctfparamfile%new(fname_param, 1)

@@ -2,21 +2,23 @@
 module simple_hadamard3D_matcher
 !$ use omp_lib
 !$ use omp_lib_kinds
+use simple_defs              ! use all in there
 use simple_polarft_corrcalc, only: polarft_corrcalc
 use simple_prime3D_srch,     only: prime3D_srch
 use simple_ori,              only: ori
 use simple_build,            only: build
 use simple_params,           only: params
 use simple_cmdline,          only: cmdline
-use simple_gridding,         only: prep4cgrid
-use simple_strings,          only: str_has_substr, int2str_pad
-use simple_binoris_io,       only: binwrite_oritab
-use simple_cont3D_matcher    ! use all in there
-use simple_hadamard_common   ! use all in there
-use simple_math              ! use all in there
-use simple_jiffys            ! use all in there
-use simple_defs              ! use all in there
-use simple_syslib            ! use all in there
+!use simple_gridding,         only: prep4cgrid
+use simple_strings,          only: int2str_pad
+use simple_jiffys,           only: progress
+!use simple_binoris_io,       only: binwrite_oritab
+!use simple_cont3D_matcher    ! use all in there
+!use simple_hadamard_common   ! use all in there
+!use simple_math              ! use all in there
+
+!
+!use simple_syslib            ! use all in there
 implicit none
 
 public :: prime3D_find_resrange, prime3D_exec, gen_random_model
@@ -41,7 +43,7 @@ contains
         real,          intent(out)   :: lp_start, lp_finish
         real, allocatable :: peaks(:)
         type(oris)        :: o
-        integer :: lfny, alloc_stat, k, pos10, pos6
+        integer :: lfny, k, pos10, pos6
         call o%new(p%nspace)
         call o%spiral
         lfny = b%img_match%get_lfny(1)
@@ -73,7 +75,7 @@ contains
         logical , allocatable :: to_update(:)
         type(oris) :: prime3D_oris
         real       :: norm, corr_thresh, skewness, frac_srch_space, extr_thresh, update_frac
-        integer    :: iptcl, inptcls, istate, alloc_stat, iextr_lim
+        integer    :: iptcl, inptcls, istate, iextr_lim
         integer    :: update_ind, nupdates_target, nupdates
         integer    :: statecnt(p%nstates)
         inptcls = p%top - p%fromp + 1
@@ -380,7 +382,7 @@ contains
         integer, optional, intent(in)    :: nsamp_in  !< num input samples
         type(ran_tabu)       :: rt
         integer, allocatable :: sample(:)
-        integer              :: i, k, nsamp, alloc_stat
+        integer              :: i, k, nsamp
         type(kbinterpol)     :: kbwin
         if( p%vols(1) == '' )then
             ! init volumes

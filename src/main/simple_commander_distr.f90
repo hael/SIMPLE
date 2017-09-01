@@ -1,15 +1,15 @@
 ! concrete commander: routines for managing distributed SIMPLE execution
 module simple_commander_distr
 use simple_defs
-use simple_syslib,         only: alloc_errchk
+use simple_jiffys,         only: simple_end
+use simple_syslib,         only: alloc_errchk, file_exists
 use simple_cmdline,        only: cmdline
 use simple_params,         only: params
 use simple_build,          only: build
 use simple_commander_base, only: commander_base
 use simple_strings,        only: int2str, int2str_pad
-use simple_fileio,         only: fopen,fclose, fileio_errmsg
+use simple_fileio,         only: fopen,fclose, fileio_errmsg, nlines, del_files
 use simple_imgfile,        only: find_ldim_nptcls
-use simple_jiffys,         only: simple_end, progress
 implicit none
 
 public :: merge_algndocs_commander
@@ -50,8 +50,7 @@ contains
 
     !> for merging alignment documents from SIMPLE runs in distributed mode
     subroutine exec_merge_algndocs( self, cline )
-        use simple_oris, only: oris
-        use simple_map_reduce ! use all in there
+        use simple_map_reduce, only:  split_nobjs_even
         class(merge_algndocs_commander), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline
         type(params)          :: p
@@ -61,12 +60,10 @@ contains
         character(len=1024)   :: line
         p = params(cline) ! parameters generated
         parts = split_nobjs_even(p%nptcls, p%ndocs)
-        if(.not.fopen(funit_merge, file=p%outfile, iostat=io_stat, status='replace',&
-             &action='write', position='append', access='sequential'))then
-            call fileio_errmsg("Error opening file"//trim(adjustl(p%outfile)), io_stat)
-        endif
+        call fopen(funit_merge, file=p%outfile, iostat=io_stat, status='replace',&
+             &action='write', position='append', access='sequential')
+        call fileio_errmsg("Error opening file"//trim(adjustl(p%outfile)), io_stat)
         numlen = len(int2str(p%ndocs))
-        
         do i=1,p%ndocs
             fname = trim(adjustl(p%fbody))//int2str_pad(i,numlen)//'.txt'
             nj = nlines(fname)
@@ -77,28 +74,24 @@ contains
                 write(*,*) 'filename: ', trim(fname)
                 stop 'number of lines in file not consistent with the size of the partition'
             endif
-            if(.not.fopen(funit, file=fname, iostat=io_stat, status='old', action='read', access='sequential'))then
-                call fileio_errmsg("Error opening file "//trim(adjustl(fname)), io_stat)
-                stop
-            endif
+            call fopen(funit, file=fname, iostat=io_stat, status='old', action='read', access='sequential')
+            call fileio_errmsg("Error opening file "//trim(adjustl(fname)), io_stat)
             do j=1,nj
                 read(funit,fmt='(A)') line
                 write(funit_merge,fmt='(A)') trim(line)
             end do
-            if(.not.fclose(funit, iostat=io_stat))&
-                 call fileio_errmsg("Error closing file ", io_stat)
+            call fclose(funit,errmsg="Error closing file "//trim(fname))
         end do
-        if(.not.fclose(funit_merge, iostat=io_stat))&
-             call fileio_errmsg("Error closing outfile ", io_stat)
+        call fclose(funit_merge, errmsg="Error closing outfile "//trim(p%outfile))
         ! end gracefully
         call simple_end('**** SIMPLE_MERGE_ALGNDOCS NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_merge_algndocs
 
     !> for merging binary alignment documents from SIMPLE runs in distributed mode
     subroutine exec_merge_binalgndocs( self, cline )
-        use simple_oris,    only: oris
+ !       use simple_oris,    only: oris
         use simple_binoris, only: binoris
-        use simple_map_reduce ! use all in there
+        use simple_map_reduce , only: split_nobjs_even
         class(merge_binalgndocs_commander), intent(inout) :: self
         class(cmdline),                     intent(inout) :: cline
         type(params)          :: p
@@ -160,15 +153,14 @@ contains
         integer :: filnum, io_stat
         p      = params(cline) ! parameters generated
         nnmat  = merge_nnmat_from_parts(p%nptcls, p%nparts, p%nnn)
-        if(.not.fopen(filnum, status='REPLACE', action='WRITE', file='nnmat.bin', access='STREAM', iostat=io_stat))&
-             call fileio_errmsg('simple_merge_nnmat ; fopen error when opening nnmat.bin  ', io_stat)
+        call fopen(filnum, status='REPLACE', action='WRITE', file='nnmat.bin', access='STREAM', iostat=io_stat)
+        call fileio_errmsg('simple_merge_nnmat ; fopen error when opening nnmat.bin  ', io_stat)
         write(unit=filnum,pos=1,iostat=io_stat) nnmat
         if( io_stat .ne. 0 )then
             write(*,'(a,i0,a)') 'I/O error ', io_stat, ' when writing to nnmat.bin'
             stop 'I/O error; simple_merge_nnmat'
         endif
-        if(.not.fclose(filnum, iostat=io_stat))&
-             call fileio_errmsg('simple_merge_nnmat ; fopen error when closing nnmat.bin  ', io_stat)
+        call fclose(filnum,errmsg='simple_merge_nnmat ;error when closing nnmat.bin  ')
         ! end gracefully
         call simple_end('**** SIMPLE_MERGE_NNMAT NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_merge_nnmat
@@ -183,15 +175,14 @@ contains
         p      = params(cline) ! parameters generated
         simmat = merge_similarities_from_parts(p%nptcls, p%nparts)
        
-        if(.not.fopen(filnum, status='REPLACE', action='WRITE', file='smat.bin', access='STREAM', iostat=io_stat))&
-             call fileio_errmsg('simple_merge_nnmat ; fopen error when opening smat.bin  ', io_stat)
+        call fopen(filnum, status='REPLACE', action='WRITE', file='smat.bin', access='STREAM', iostat=io_stat)
+        call fileio_errmsg('simple_merge_nnmat ; fopen error when opening smat.bin  ', io_stat)
         write(unit=filnum,pos=1,iostat=io_stat) simmat
         if( io_stat .ne. 0 )then
             write(*,'(a,i0,a)') 'I/O error ', io_stat, ' when writing to smat.bin'
             stop 'I/O error; simple_merge_similarities'
         endif
-         if(.not.fclose(filnum, iostat=io_stat))&
-             call fileio_errmsg('simple_merge_nnmat ; fopen error when opening smat.bin  ', io_stat)
+        call fclose(filnum,errmsg='simple_merge_nnmat ; error when closing smat.bin ')
         ! end gracefully
         call simple_end('**** SIMPLE_MERGE_SIMILARITIES NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_merge_similarities
@@ -210,16 +201,15 @@ contains
     !> split is a program for splitting of image stacks into partitions for parallel execution.
     !! This is done to reduce I/O latency
     subroutine exec_split( self, cline )
-        use simple_map_reduce ! use all in there
+        use simple_map_reduce,  only: split_nobjs_even! use all in there
         use simple_image,  only: image
-        use simple_jiffys, only: progress
         class(split_commander), intent(inout) :: self
         class(cmdline),         intent(inout) :: cline
         type(params)         :: p
         type(image)          :: img
         integer              :: iptcl, ipart, ldim(3), cnt, nimgs
         integer, allocatable :: parts(:,:)
-        logical              :: either_defined
+        !logical              :: either_defined
         p = params(cline) ! parameters generated
         call find_ldim_nptcls(p%stk, ldim, nimgs)
         ldim(3) = 1
@@ -251,7 +241,7 @@ contains
                 character(len=:), allocatable :: stack_part_fname
                 logical,          allocatable :: stack_parts_exist(:) 
                 integer :: ipart, numlen, sz, sz_correct, ldim(3)
-                logical :: is_split, is_correct, is_split_correctly
+                logical :: is_split, is_correct
                 allocate( stack_parts_exist(p%nparts) )
                 numlen = len(int2str(p%nparts))
                 do ipart=1,p%nparts

@@ -1,5 +1,6 @@
 ! the abstract image data type and its methods. 2D/3D & FT/real all implemented by this class
 ! and Fourier transformations done in-place to reduce memory usage
+#include "simple_lib.f08"
 module simple_image
 !$ use omp_lib
 !$ use omp_lib_kinds
@@ -566,7 +567,7 @@ contains
         class(image), intent(inout) :: self
         integer,      intent(in)    :: i, j, k, winsz
         real, allocatable :: pixels(:)
-        integer :: s, ss, t, tt, u, uu, cnt, npix, alloc_stat
+        integer :: s, ss, t, tt, u, uu, cnt, npix
         if( self%is_ft() ) stop 'only 4 real images; win2arr; simple_image'
         if( self%is_3d() )then
             npix = (2*winsz+1)**3
@@ -711,7 +712,7 @@ contains
         type(imgfile)         :: ioimg_local
         character(len=1)      :: form
         integer               :: ldim(3), iform, first_slice, mode
-        integer               :: last_slice, ii, alloc_stat
+        integer               :: last_slice, ii
         real                  :: smpd
         logical               :: isvol, err, ioimg_present
         real(dp), allocatable :: tmpmat1(:,:,:)
@@ -1292,7 +1293,7 @@ contains
         class(image),      intent(inout) :: self
         real, allocatable, intent(inout) :: pcavec(:)
         real, optional,    intent(in)    :: mskrad
-        integer                          :: i, j, k, npix, alloc_stat
+        integer                          :: i, j, k, npix
         real                             :: ci, cj, ck, e
         logical                          :: pack, usemsk = .false.
         if( present(mskrad) )usemsk=.true.
@@ -1350,7 +1351,7 @@ contains
         class(image),      intent(inout) :: self
         real, allocatable, intent(inout) :: pcavec(:)
         integer,           intent(in)    :: coord(:), winsz
-        integer :: i, j, k, cnt, npix, alloc_stat
+        integer :: i, j, k, cnt, npix
         logical :: pack
         if( self%ft ) stop 'ERROR, winserialization not yet implemented for Fourier transforms; winserialize; simple_image'
         if( self%is_2d() )then
@@ -2629,7 +2630,7 @@ contains
     subroutine cendist( self )
         class(image), intent(inout) :: self
         real    :: centre(3), vec(3)
-        integer :: i, j, k, alloc_stat
+        integer :: i, j, k
         if( self%is_ft() ) stop 'real space only; simple_image%cendist'
         ! Builds square distance image
         self   = 0.
@@ -2747,7 +2748,7 @@ contains
     !! Classical dilation of binary image
     subroutine grow_bin( self )
         class(image), intent(inout) :: self
-        integer                     :: i,j,k,alloc_stat
+        integer                     :: i,j,k
         integer                     :: il,ir,jl,jr,kl,kr
         logical, allocatable        :: add_pixels(:,:,:)
         if( self%ft ) stop 'only for real images; grow_bin; simple image'
@@ -2796,7 +2797,7 @@ contains
     !! Classical erosion of binary image
     subroutine shrink_bin( self )
         class(image), intent(inout) :: self
-        integer                     :: i,j,k,alloc_stat
+        integer                     :: i,j,k
         integer                     :: il,ir,jl,jr,kl,kr
         logical, allocatable        :: sub_pixels(:,:,:)
         if( self%ft ) stop 'only for real images; shrink_bin; simple image'
@@ -2847,7 +2848,7 @@ contains
     subroutine grow_bins( self, nlayers )
         class(image), intent(inout) :: self
         integer,      intent(in)    :: nlayers
-        integer                     :: i,j,k,alloc_stat, tsz(3,2), win(3,2), pdsz(3,2)
+        integer                     :: i,j,k, tsz(3,2), win(3,2), pdsz(3,2)
         logical, allocatable        :: add_pixels(:,:,:), template(:,:,:)
         if( self%ft ) stop 'only for real images; grow_bin; simple image'
         tsz(:,1) = -nlayers
@@ -2921,7 +2922,7 @@ contains
     subroutine shrink_bins( self, nlayers )
         class(image), intent(inout) :: self
         integer,      intent(in)    :: nlayers
-        integer                     :: i,j,k,alloc_stat, tsz(3,2), win(3,2), pdsz(3,2)
+        integer                     :: i,j,k, tsz(3,2), win(3,2), pdsz(3,2)
         logical, allocatable        :: sub_pixels(:,:,:), template(:,:,:)
         if( self%ft ) stop 'only for real images; shrink_bin; simple image'
         tsz(:,1) = -nlayers
@@ -3215,7 +3216,7 @@ contains
     function guinier( self ) result( plot )
         class(image), intent(inout) :: self
         real, allocatable :: spec(:), plot(:,:)
-        integer           :: lfny, k, alloc_stat
+        integer           :: lfny, k
         if( .not. self%is_3d() ) stop 'Only for 3D images; guinier; simple_image'
         spec = self%spectrum('absreal')
         lfny = self%get_lfny(1)
@@ -3241,7 +3242,7 @@ contains
         real, allocatable :: spec(:)
         real, allocatable :: counts(:)
         integer :: lfny, h, k, l
-        integer :: alloc_stat, sh, lims(3,2), phys(3)
+        integer :: sh, lims(3,2), phys(3)
         logical :: didft, nnorm
         nnorm = .true.
         if( present(norm) ) nnorm = norm
@@ -3254,7 +3255,7 @@ contains
         endif
         lfny = self%get_lfny(1)
         allocate( spec(lfny), counts(lfny), stat=alloc_stat )
-        call alloc_errchk('spectrum; simple_image', alloc_stat)
+        allocchk('spectrum; simple_image')
         spec   = 0.
         counts = 0.
         lims   = self%fit%loop_lims(2)
@@ -3443,7 +3444,7 @@ contains
         class(image),   intent(inout) :: self
         real,           intent(in)    :: lplim
         real, optional, intent(in)    :: width
-        integer                       :: nyq, alloc_stat, k
+        integer                       :: nyq, k
         real                          :: wwidth, lplim_freq, freq
         real, allocatable             :: filter(:)
         wwidth = 5.
@@ -3587,7 +3588,7 @@ contains
         use simple_winfuns, only: winfuns
         class(image), intent(inout) :: self
         real, intent(in), optional  :: oshoot_in
-        integer                     :: alloc_stat, lims(3,2), k, kmax, maxl
+        integer                     :: lims(3,2), k, kmax, maxl
         type(winfuns)               :: wfuns
         character(len=STDLEN)       :: wstr
         real, allocatable           :: w(:)
@@ -3733,7 +3734,7 @@ contains
     !>  \brief is a 18th-neighbourhood Sobel filter (gradients magnitude)
     subroutine sobel( self )
         class(image), intent(inout) :: self
-        integer                     :: alloc_stat, i,j,k
+        integer                     :: i,j,k
         real, allocatable           :: rmat(:,:,:)
         real                        :: val, dx, dy, dz, kernel(3,3)
         if( self%is_ft() )stop 'real space only; simple_image%sobel'
@@ -3823,7 +3824,7 @@ contains
         real,    optional, intent(in)  :: msk
         real,    optional, intent(out) :: med
         logical, optional, intent(out) :: errout
-        integer           :: i, j, k, npix, alloc_stat, minlen
+        integer           :: i, j, k, npix, minlen
         real              :: ci, cj, ck, mskrad, e
         logical           :: err, didft, background
         real, allocatable :: pixels(:)
@@ -4511,7 +4512,7 @@ contains
         class(image),      intent(inout) :: self1, self2
         real, allocatable, intent(inout) :: res(:), corrs(:)
         real, allocatable                :: sumasq(:), sumbsq(:)
-        integer                          :: n, lims(3,2), alloc_stat, phys(3), sh, h, k, l
+        integer                          :: n, lims(3,2), phys(3), sh, h, k, l
         logical                          :: didft1, didft2
         if( self1.eqdims.self2 )then
         else
@@ -4573,7 +4574,7 @@ contains
     subroutine get_nvoxshell( self, voxs )
         class(image)     , intent(inout) :: self
         real, allocatable, intent(inout) :: voxs(:)
-        integer                          :: n, lims(3,2), alloc_stat, sh, h, k, l
+        integer                          :: n, lims(3,2), sh, h, k, l
         logical                          :: didft
         if( .not. square_dims(self) ) stop 'square dimensions only! fsc; simple_image'
         didft = .false.
@@ -4610,7 +4611,7 @@ contains
     function get_res( self ) result( res )
         class(image), intent(in) :: self
         real, allocatable        :: res(:)
-        integer                  :: n, k, alloc_stat
+        integer                  :: n, k
         n = self%get_filtsz()
         allocate( res(n), stat=alloc_stat )
         call alloc_errchk('In: get_res, module: simple_image', alloc_stat)
@@ -6161,7 +6162,7 @@ contains
         logical, optional, allocatable   :: outliers(:,:)
         real, allocatable :: win(:,:), rmat_pad(:,:)
         real    :: ave, sdev, var, lthresh, uthresh
-        integer :: i, j, alloc_stat, hwinsz, winsz
+        integer :: i, j, hwinsz, winsz
         logical :: was_fted, err, present_outliers
         if( self%ldim(3)>1 )stop 'for images only; simple_image::cure_outliers'
         if( was_fted )stop 'for real space images only; simple_image::cure_outliers'
@@ -6225,7 +6226,7 @@ contains
         type(image) :: selfcopy
         real, allocatable :: patch(:,:), padded_image(:,:)
         real    :: ave, sdev, var, lthresh, uthresh, nsigma
-        integer :: i, j, alloc_stat, hwinsz, winsz,ncured
+        integer :: i, j, hwinsz, winsz,ncured
         logical :: was_fted, err, present_outliers, retl1norm
         if( self%ldim(3)>1 )stop 'for images only; simple_image:: denoise_NLM'
         if( was_fted )stop 'for real space images only; simple_image::denoise_NLM'

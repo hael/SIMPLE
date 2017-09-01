@@ -92,10 +92,10 @@ contains
                 movie_here = remove_abspath(trim(movie))
                 ext   = fname2ext(trim(movie_here))
                 fname = 'preproc_'//trim(get_fbody(trim(movie_here), trim(ext)))//'.txt'
-                if(.not.fopen(fnr, status='replace', action='write', file=trim(fname), iostat=file_stat))&
-                     call fileio_errmsg('exec_preproc_stream :: create_individual_filetab', file_stat)
+                call fopen(fnr, status='replace', action='write', file=trim(fname), iostat=file_stat
+                call fileio_errmsg('exec_preproc_stream :: create_individual_filetab '//trim(fname), file_stat)
                 write(fnr,'(a)') trim(movie)
-                if(.not.fclose(fnr,file_stat)) call fileio_errmsg('exec_preproc_stream closing filetab', file_stat)
+                call fclose(fnr, errmsg='exec_preproc_stream closing filetab '//trim(fname))
                 call cline%set('filetab', fname)
             end subroutine create_individual_filetab
 

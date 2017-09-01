@@ -104,7 +104,7 @@ contains
         class(cmdline),                 intent(inout) :: cline
         type(params)      :: p
         type(nrtxtfile)   :: boxfile
-        integer           :: ndatlines, alloc_stat, j, orig_box, numlen
+        integer           :: ndatlines, j, orig_box, numlen
         real, allocatable :: boxdata(:,:)
         p = params(cline, checkdistr=.false.) ! parameters generated
         numlen = 5 ! default value

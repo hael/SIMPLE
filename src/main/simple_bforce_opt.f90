@@ -28,7 +28,7 @@ contains
         use simple_syslib,   only: alloc_errchk
         class(bforce_opt), intent(inout) :: self !< instance
         class(opt_spec), intent(inout)   :: spec !< specification
-        integer                          :: alloc_stat, i
+        integer                          :: i
         real                             :: x
         call self%kill
         allocate(self%pb(spec%ndim), self%pc(spec%ndim), stat=alloc_stat)

@@ -89,7 +89,7 @@ contains
         integer,               allocatable :: fileinfo(:)
         logical,               allocatable :: is_new_movie(:)
         integer               :: tnow, last_accessed, last_modified, last_status_change ! in seconds
-        integer               :: i, io_stat, alloc_stat, n_lsfiles, cnt, fail_cnt
+        integer               :: i, io_stat, n_lsfiles, cnt, fail_cnt
         character(len=STDLEN) :: fname, abs_fname
         logical               :: is_closed
 
@@ -194,7 +194,7 @@ contains
         class(moviewatcher), intent(inout) :: self
         character(len=*),    intent(in)    :: fname
         character(len=STDLEN), allocatable :: tmp_farr(:)
-        integer :: n, alloc_stat
+        integer :: n
         if( .not.allocated(self%history) )then
             n = 0
             allocate(self%history(1), stat=alloc_stat)

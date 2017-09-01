@@ -70,11 +70,10 @@ contains
             ! do nothing
         else
             ! write the command line to a file (biological memory support)
-            if(.not.fopen(funit, status='replace', action='write', file='cmdline.txt', iostat=io_stat))&
-             call fileio_errmsg('cmdline ; parse fopen cmdline.txt', io_stat)
-            write(funit,*) trim(self%entire_line)
-            if(.not.fclose(funit, iostat=io_stat))&
-             call fileio_errmsg('cmdline ; parse fclose cmdline.txt', io_stat)
+            call fopen(funit, status='replace', action='write', file='cmdline.txt', iostat=io_stat)
+            call fileio_errmsg('cmdline ; parse fopen cmdline.txt', io_stat)
+            write(funit,*,iostat=io_stat) trim(self%entire_line)
+            call fclose(funit, errmsg='cmdline ; parse fclose cmdline.txt')
             ! store in global var
             cmdline_glob = trim(self%entire_line)
         endif
@@ -281,7 +280,7 @@ contains
         use simple_syslib,  only: alloc_errchk
         class(cmdline), intent(inout) :: self
         logical, allocatable  :: cmderr(:)
-        integer               :: i, alloc_stat, nstates
+        integer               :: i, nstates
         character(len=STDLEN) :: str
         logical               :: vol_defined
         allocate( cmderr(self%ncheck), stat=alloc_stat )

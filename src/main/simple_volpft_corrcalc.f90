@@ -50,7 +50,7 @@ contains
         class(volpft_corrcalc),    intent(inout) :: self
         class(projector), target , intent(in)    :: vol_ref, vol_target
         real,                      intent(in)    :: hp, lp
-        integer    :: alloc_stat, isym, k, i
+        integer    :: isym, k, i
         real       :: vec(3)
         type(ori)  :: e
         call self%kill

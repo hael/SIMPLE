@@ -2,11 +2,12 @@
 module simple_qsys_ctrl
 use simple_defs
 use simple_qsys_base,    only: qsys_base
+use simple_qsys_local,   only: qsys_local
 use simple_chash,        only: chash
 use simple_strings,      only: int2str, int2str_pad
 use simple_cmdline,      only: cmdline
-use simple_syslib,       only: exec_cmdline, wait_for_closure, simple_sleep, simple_stop
-use simple_fileio
+use simple_syslib
+use simple_fileio,       only: fopen,fclose,fileio_errmsg, file_exists
 implicit none
 
 public :: qsys_ctrl
@@ -88,7 +89,6 @@ contains
 
     !>  \brief  is a constructor
     subroutine new( self, exec_binary, qsys_obj, parts, fromto_part, ncomputing_units, stream )
-        use simple_syslib, only: alloc_errchk, simple_getenv
         class(qsys_ctrl),         intent(inout) :: self             !< the instance
         character(len=*),         intent(in)    :: exec_binary      !< the binary that we want to execute in parallel
         class(qsys_base), target, intent(in)    :: qsys_obj         !< the object that defines the qeueuing system
@@ -96,7 +96,7 @@ contains
         integer,                  intent(in)    :: fromto_part(2)   !< defines the range of partitions controlled by this object
         integer,                  intent(in)    :: ncomputing_units !< number of computing units (<= the number of parts controlled)
         logical,                  intent(in)    :: stream           !< stream flag
-        integer :: alloc_stat, ipart
+        integer :: ipart
         call self%kill
         self%stream                 =  stream
         self%exec_binary            =  exec_binary
@@ -132,7 +132,7 @@ contains
             self%jobs_done_fnames(ipart) = 'JOB_FINISHED_'//int2str_pad(ipart,self%numlen)
         end do
         ! get pwd
-        self%pwd = simple_getenv('PWD')
+        self%pwd = trim(adjustl( simple_getenv('PWD') ))
         self%existence = .true.
     end subroutine new
 
@@ -249,17 +249,15 @@ contains
 
     !>  \brief  private part script generator
     subroutine generate_script_1( self, job_descr, ipart, q_descr )
-        use simple_fileio      , only: fopen,fclose,fileio_errmsg, file_exists
         class(qsys_ctrl), intent(inout) :: self
         class(chash),     intent(in)    :: job_descr
         integer,          intent(in)    :: ipart
         class(chash),     intent(in)    :: q_descr
         character(len=512) :: io_msg
         integer :: ios, funit
-        if(.not.fopen(funit, file=self%script_names(ipart), iostat=ios, STATUS='REPLACE', action='WRITE', iomsg=io_msg))then
-             call fileio_errmsg('simple_qsys_ctrl :: gen_qsys_script; Error when opening file for writing: '&
+        call fopen(funit, file=self%script_names(ipart), iostat=ios, STATUS='REPLACE', action='WRITE', iomsg=io_msg)
+        call fileio_errmsg('simple_qsys_ctrl :: gen_qsys_script; Error when opening file for writing: '&
              //trim(self%script_names(ipart))//' ; '//trim(io_msg),ios )
-        endif
         ! need to specify shell
         write(funit,'(a)') '#!/bin/bash'
         ! write (run-time polymorphic) instructions to the qsys
@@ -277,9 +275,8 @@ contains
         ! exit shell when done
         write(funit,'(a)',advance='yes') ''
         write(funit,'(a)',advance='yes') 'exit'
-        if(.not.fclose(funit,iostat=ios))&
-             call fileio_errmsg('simple_qsys_ctrl :: gen_qsys_script; Error when close file: '&
-             //trim(self%script_names(ipart)),ios )
+        call fclose(funit, errmsg='simple_qsys_ctrl :: gen_qsys_script; Error when close file: '&
+             //trim(self%script_names(ipart)) )
         if( q_descr%get('qsys_name').eq.'local' )then
             call chmod(trim(self%script_names(ipart)),'+x')
             if( ios .ne. 0 )then
@@ -297,17 +294,15 @@ contains
 
     !>  \brief  public script generator for single jobs
     subroutine generate_script_2( self, job_descr, q_descr, exec_bin, script_name, outfile )
-        use simple_fileio      , only: fopen,fclose,fileio_errmsg, file_exists
         class(qsys_ctrl), intent(inout) :: self
         class(chash),     intent(in)    :: job_descr
         class(chash),     intent(in)    :: q_descr
         character(len=*), intent(in)    :: exec_bin, script_name, outfile
         character(len=512) :: io_msg
         integer :: ios, funit, val
-        if(.not.fopen(funit, file=script_name, iostat=ios, STATUS='REPLACE', action='WRITE', iomsg=io_msg))then
-            call fileio_errmsg('simple_qsys_ctrl :: generate_script_2; Error when opening file: '&
+        call fopen(funit, file=script_name, iostat=ios, STATUS='REPLACE', action='WRITE', iomsg=io_msg)
+        call fileio_errmsg('simple_qsys_ctrl :: generate_script_2; Error when opening file: '&
                  //trim(script_name)//' ; '//trim(io_msg),ios )
-        endif
         ! need to specify shell
         write(funit,'(a)') '#!/bin/bash'
         ! write (run-time polymorphic) instructions to the qsys
@@ -325,27 +320,26 @@ contains
         ! exit shell when done
         write(funit,'(a)',advance='yes') ''
         write(funit,'(a)',advance='yes') 'exit'
-        if(.not.fclose(funit, iostat=ios))&
-            call fileio_errmsg('simple_qsys_ctrl :: generate_script_2; Error when closing file: '&
-            &//trim(script_name),ios )
+        call fclose(funit, ios, &
+            &errmsg='simple_qsys_ctrl :: generate_script_2; Error when closing file: '&
+            &//trim(script_name))
             !!!!!!!!!
-            call wait_for_closure(script_name)
+        call wait_for_closure(script_name)
             !!!!!!!!!
 
-            if( trim(q_descr%get('qsys_name')).eq.'local' )then
-                call chmod(trim(script_name),'+x', status=ios)
-                if( ios .ne. 0 )then
-                    write(*,'(a)',advance='no') 'simple_qsys_ctrl :: generate_script_2; Error'
-                    write(*,'(a)') 'chmoding submit script'//trim(script_name)
-                    stop
-                end if
+        if( trim(q_descr%get('qsys_name')).eq.'local' )then
+            call chmod(trim(script_name),'+x', status=ios)
+            if( ios .ne. 0 )then
+                write(*,'(a)',advance='no') 'simple_qsys_ctrl :: generate_script_2; Error'
+                write(*,'(a)') 'chmoding submit script'//trim(script_name)
+                stop
+            end if
         endif
     end subroutine generate_script_2
 
     ! SUBMISSION TO QSYS
 
     subroutine submit_scripts( self )
-        use simple_qsys_local,   only: qsys_local
         class(qsys_ctrl),  intent(inout) :: self
         class(qsys_base),        pointer :: pmyqsys
         character(len=LONGSTRLEN)        :: qsys_cmd
@@ -389,7 +383,6 @@ contains
     end subroutine submit_scripts
 
     subroutine submit_script( self, script_name )
-        use simple_qsys_local,   only: qsys_local
         class(qsys_ctrl), intent(inout) :: self
         character(len=*), intent(in)    :: script_name
         class(qsys_base),      pointer  :: pmyqsys

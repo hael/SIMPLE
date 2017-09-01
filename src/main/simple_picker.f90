@@ -42,7 +42,7 @@ contains
         real,             optional, intent(in) :: lp_in, distthr_in
         character(len=*), optional, intent(in) :: rm_outliers_in
         type(image) :: refimg
-        integer     :: alloc_stat, ifoo, iref
+        integer     :: ifoo, iref
         allocate(micname,  source=trim(micfname), stat=alloc_stat)
         call alloc_errchk('picker;init, 2', alloc_stat)
         allocate(refsname, source=trim(refsfname), stat=alloc_stat)
@@ -133,7 +133,7 @@ contains
 
     subroutine extract_peaks_and_background
         real    :: means(2), corrs(nrefs), spec_thresh
-        integer :: xind, yind, alloc_stat, funit, iref, i, loc(1), ind
+        integer :: xind, yind, funit, iref, i, loc(1), ind
         integer, allocatable :: labels(:), target_positions(:,:)
         real,    allocatable :: target_corrs(:), spec(:)
         logical :: outside
@@ -249,7 +249,7 @@ contains
     end subroutine extract_peaks_and_background
 
     subroutine distance_filter
-        integer :: ipeak, jpeak, ipos(2), jpos(2), alloc_stat, loc(1)
+        integer :: ipeak, jpeak, ipos(2), jpos(2), loc(1)
         real    :: dist
         logical, allocatable :: mask(:)
         real,    allocatable :: corrs(:)
@@ -384,23 +384,22 @@ contains
     subroutine write_boxfile
         use simple_fileio, only: fopen, fclose, fileio_errmsg
         integer :: funit, ipeak,iostat
-        if(.not.fopen(funit, status='REPLACE', action='WRITE', file=boxname,iostat=iostat))&
-             call fileio_errmsg('picker; write_boxfile ', iostat)
+        call fopen(funit, status='REPLACE', action='WRITE', file=boxname,iostat=iostat)
+        call fileio_errmsg('picker; write_boxfile ', iostat)
         do ipeak=1,npeaks
             if( selected_peak_positions(ipeak) )then             
                 write(funit,'(I7,I7,I7,I7,I7)') peak_positions_refined(ipeak,1),&
                 peak_positions_refined(ipeak,2), orig_box, orig_box, -3
             endif
         end do
-        if(.not.fclose(funit,iostat=iostat))&
-             call fileio_errmsg('picker; write_boxfile end', iostat)
+        call fclose(funit,errmsg='picker; write_boxfile end')
     end subroutine write_boxfile
 
     subroutine write_backgr_coords
         use simple_fileio, only: fopen, fclose, fileio_errmsg
         integer :: funit, xind, yind, iostat
-        if(.not.fopen(funit, status='REPLACE', action='WRITE', file='background.box',iostat=iostat))&
-             call fileio_errmsg('picker; write_backgr_coords ', iostat)
+        call fopen(funit, status='REPLACE', action='WRITE', file='background.box',iostat=iostat)
+        call fileio_errmsg('picker; write_backgr_coords ', iostat)
         nbackgr = 0
         do xind=0,nx,ldim_refs_refine(1)/2
             do yind=0,ny,ldim_refs_refine(1)/2
@@ -412,12 +411,11 @@ contains
                 endif
             end do
         end do
-        if(.not.fclose(funit,iostat=iostat))&
-             call fileio_errmsg('picker; write_backgr_coords end', iostat)
+        call fclose(funit,errmsg='picker; write_backgr_coords end')
     end subroutine write_backgr_coords
 
     subroutine kill_picker
-        integer :: iref, alloc_stat
+        integer :: iref
         if( allocated(micname) )then
             call micrograph%kill
             call mic_shrunken%kill

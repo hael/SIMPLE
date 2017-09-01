@@ -1,13 +1,14 @@
 ! concrete commander: operations on volumes
+#inlcude "simple_lib.f08"
 module simple_commander_volops
 use simple_defs
+use simple_jiffys,         only: simple_end, progress
 use simple_cmdline,        only: cmdline
 use simple_params,         only: params
 use simple_build,          only: build
 use simple_commander_base, only: commander_base
 use simple_strings,        only: int2str, int2str_pad
-use simple_jiffys          ! use all in there
-use simple_fileio          ! use all in there
+use simple_fileio
 implicit none
 
 public :: fsc_commander
@@ -121,9 +122,9 @@ contains
     !! \param cline commandline
     !!
     subroutine exec_postproc_vol(self, cline)
-        use simple_math,  only: get_resolution
-        use simple_image, only: image
-        use simple_estimate_ssnr ! use all in there
+        use simple_math,   only: get_resolution
+        use simple_image,  only: image
+        use simple_estimate_ssnr, only: fsc2optlp
         class(postproc_vol_commander), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
         type(params)      :: p
@@ -273,15 +274,14 @@ contains
         nvols = nlines(p%vollist)
         DebugPrint   'number of volumes: ', nvols
         allocate(volnames(nvols))
-        if(.not.fopen(funit_vols, status='old', file=p%vollist, iostat=io_stat))&
-             call fileio_errmsg('volops; volaverager opening ', io_stat)
+        call fopen(funit_vols, status='old', file=p%vollist, iostat=io_stat)
+        call fileio_errmsg('volops; volaverager opening ', io_stat)
         write(*,'(a)') '>>> MAKING PATTERN STACK'
         do ivol=1,nvols
             read(funit_vols,'(a256)') volnames(ivol)
             DebugPrint   'read volname: ', volnames(ivol)
         end do
-        if(.not.fclose(funit_vols, iostat=io_stat))&
-             call fileio_errmsg('volops; volaverager closing ', io_stat)
+        call fclose(funit_vols,errmsg='volops; volaverager closing ')
         ! find logical dimension
         call find_ldim_nptcls(volnames(1), p%ldim, ifoo)
         p%box  = p%ldim(1)
@@ -327,7 +327,6 @@ contains
     end subroutine exec_volaverager
 
     !> exec_volops Volume calculations and operations - incl Guinier, snr, mirror or b-factor
-    !! \param cline commandline
     !!
     subroutine exec_volops( self, cline )
         use simple_fileio
@@ -389,7 +388,8 @@ contains
             endif
         else
             ! for serialization of multiple volumes
-            fileop = fopen(funit, p%outfile, status='replace', action='write', access='sequential')
+            call fopen(funit, p%outfile, status='replace', action='write', access='sequential', iostat=iostat)
+            call fileio_errmsg("simple_commander_volops::exec_volops opening "//trim(p%outfile),iostat)
             nvols  = nlines(cline%get_carg('vollist'))
             npix   = b%vol%get_npix(p%msk)
             do i = 1, nvols
@@ -399,7 +399,7 @@ contains
                 write(funit, '(*(F8.3))')serialvol
                 deallocate(serialvol)
             enddo
-            fileop = fclose(funit,iostat)
+            call fclose(funit, errmsg="simple_commander_volops::exec_volops closing "//trim(p%outfile))
         endif
         ! end gracefully
         call simple_end('**** SIMPLE_VOLOPS NORMAL STOP ****')
@@ -416,7 +416,7 @@ contains
         class(cmdline),               intent(inout) :: cline
         type(params), target :: p
         integer              :: funit, io_stat, cnt, npairs, npix, nvols, box_sc, loc(1)
-        integer              :: ivol, jvol, ldim(3), alloc_stat, ipair, ifoo, i, spat_med
+        integer              :: ivol, jvol, ldim(3), ipair, ifoo, i, spat_med
         integer              :: furthest_from_spat_med
         real                 :: smpd_sc, scale, corr_max, corr_min, spat_med_corr
         real                 :: furthest_from_spat_med_corr
@@ -441,17 +441,16 @@ contains
             call alloc_errchk('In: simple_volume_smat, 1', alloc_stat)
             ! read the pairs
             allocate(fname, source='pairs_part'//int2str_pad(p%part,p%numlen)//'.bin')
-            call alloc_errchk('In: simple_volume_smat, fname 1', alloc_stat)
             if( .not. file_exists(fname) ) stop 'I/O error; simple_volume_smat'
-            if(.not.fopen(funit, status='OLD', action='READ', file=fname, access='STREAM', iostat=io_stat))&
-                 call fileio_errmsg('volops; vol_smat opening ', io_stat)
+            call fopen(funit, status='OLD', action='READ', file=fname, access='STREAM', iostat=io_stat)
+            call fileio_errmsg('volops; vol_smat opening ', io_stat)
             DebugPrint   'reading pairs in range: ', p%fromp, p%top
             read(unit=funit,pos=1,iostat=io_stat) pairs(p%fromp:p%top,:)
             ! Check if the read was successful
             if(io_stat/=0) then
                 call fileio_errmsg('**ERROR(simple_volume_smat): I/O error reading file: '//trim(fname), io_stat)
             endif
-            if(.not.fclose(funit, iostat=io_stat)) call fileio_errmsg('volops; vol_smat closing ', io_stat)
+            call fclose(funit, errmsg='volops; vol_smat closing '//trim(fname))
             deallocate(fname)
             cnt = 0
             do ipair=p%fromp,p%top
@@ -467,23 +466,21 @@ contains
             end do
             DebugPrint   'did set this number of similarities: ', cnt
             ! write the similarities
-            allocate(fname, source='similarities_part'//int2str_pad(p%part,p%numlen)//'.bin')
-            call alloc_errchk('In: simple_volume_smat, fname 2', alloc_stat)
-            if(.not.fopen(funit, status='REPLACE', action='WRITE', &
-                 file=fname, access='STREAM', iostat=io_stat))&
-                 call fileio_errmsg('volops; volume smat 2  opening ', io_stat)
+            allocate(fname, source='similarities_part'//int2str_pad(p%part,p%numlen)//'.bin',stat=alloc_stat)
+            allocchk( 'volops; volume smat ')
+            call fopen(funit, status='REPLACE', action='WRITE', &
+                 file=fname, access='STREAM', iostat=io_stat)
+            call fileio_errmsg('volops; volume smat 2  opening ', io_stat)
             write(unit=funit,pos=1,iostat=io_stat) corrs(p%fromp:p%top)
             ! Check if the write was successful
-            if(io_stat/=0) then
+            if(io_stat/=0) &
                 call fileio_errmsg('**ERROR(simple_volume_smat): I/O error writing file: '//trim(fname), io_stat)
-            endif
-            if(.not.fclose(funit, iostat=io_stat))&
-                 call fileio_errmsg('volops; volume smat 2  closing ', io_stat)
+            call fclose(funit, errmsg='volops; volume smat 2  closing ')
             deallocate(fname, corrs, pairs)
         else
             ! generate similarity matrix
             allocate(corrmat(nvols,nvols), corrs_avg(nvols), stat=alloc_stat)
-            call alloc_errchk('In: simple_volume_smat, 2', alloc_stat)
+            allocchk('In: simple_volume_smat, 2')
             corrmat = -1.
             forall(i=1:nvols) corrmat(i,i) = 1.0
             cnt = 0
@@ -518,14 +515,14 @@ contains
             write(*,'(a,1x,f7.4)') 'SPATIAL MEDIAN CORR        :', spat_med_corr
             write(*,'(a,1x,i7)'  ) 'FURTHEST FROM SPAT MED     :', furthest_from_spat_med
             write(*,'(a,1x,f7.4)') 'FURTHEST FROM SPAT MED CORR:', furthest_from_spat_med_corr
-            if(.not.fopen(funit, status='REPLACE', action='WRITE', file='vol_smat.bin', access='STREAM', iostat=io_stat))&
-                 call fileio_errmsg('volops; volume smat 3 opening ', io_stat)
+            call fopen(funit, status='REPLACE', action='WRITE', file='vol_smat.bin', &
+                &access='STREAM', iostat=io_stat)
+            call fileio_errmsg('volops; volume smat 3 opening ', io_stat)
             write(unit=funit,pos=1,iostat=io_stat) corrmat
-            if(io_stat/=0) then
+            if(io_stat/=0) &
                 call fileio_errmsg('**ERROR(simple_volume_smat): I/O error writing to vol_smat.bin', io_stat)
-            endif
-            if(.not.fclose(funit, iostat=io_stat))&
-                 call fileio_errmsg('volops; volume smat 3 closing ', io_stat)
+            
+            call fclose(funit, errmsg='volops; volume smat 3 closing ')
             deallocate(corrmat)
         endif
         ! end gracefully

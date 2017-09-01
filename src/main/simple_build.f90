@@ -100,7 +100,7 @@ contains
         class(cmdline),    intent(inout) :: cline
         logical, optional, intent(in)    :: do3d, nooritab, force_ctf
         type(ran_tabu) :: rt
-        integer        :: alloc_stat, lfny, partsz, lfny_match
+        integer        :: lfny, partsz, lfny_match
         real           :: slask(3)
         logical        :: err, ddo3d, fforce_ctf
         call self%kill_general_tbox
@@ -249,7 +249,7 @@ contains
     subroutine build_comlin_tbox( self, p )
         class(build),  intent(inout) :: self
         class(params), intent(in)    :: p
-        integer :: alloc_stat, i
+        integer :: i
         call self%kill_comlin_tbox
         if( p%pgrp /= 'c1' )then ! set up symmetry functionality
             ! make object for symmetrized orientations
@@ -361,7 +361,7 @@ contains
         class(build),  intent(inout) :: self
         class(params), intent(inout) :: p
         type(oris) :: os
-        integer    :: icls, alloc_stat
+        integer    :: icls
         call self%kill_hadamard_prime2D_tbox
         call self%raise_hard_ctf_exception(p)
         allocate( self%cavgs(p%ncls), self%ctfsqsums(p%ncls), stat=alloc_stat )
@@ -403,7 +403,7 @@ contains
         use simple_strings, only: str_has_substr
         class(build),  intent(inout) :: self
         class(params), intent(in)    :: p
-        integer :: s, alloc_stat, nnn
+        integer :: s, nnn
         call self%kill_hadamard_prime3D_tbox
         call self%raise_hard_ctf_exception(p)
         ! reconstruction objects
@@ -454,7 +454,7 @@ contains
     subroutine build_cont3D_tbox( self, p )
         class(build),  intent(inout) :: self
         class(params), intent(in)    :: p
-        integer :: s, alloc_stat
+        integer :: s
         call self%kill_cont3D_tbox
         call self%raise_hard_ctf_exception(p)
         if( p%norec .eq. 'yes' )then
@@ -510,7 +510,6 @@ contains
     subroutine build_extremal3D_tbox( self, p )
         class(build),  intent(inout) :: self
         class(params), intent(in)    :: p
-        integer :: alloc_stat
         call self%kill_extremal3D_tbox
         call self%raise_hard_ctf_exception(p)
         allocate( self%recvols(1), stat=alloc_stat )

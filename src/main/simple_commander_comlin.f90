@@ -39,7 +39,7 @@ contains
         type(params), target          :: p
         type(build),  target          :: b
         type(ori)                     :: orientation_best
-        integer                       :: iptcl, jptcl, alloc_stat, funit, io_stat
+        integer                       :: iptcl, jptcl, funit, io_stat
         integer                       :: ntot, npairs, ipair, fnr
         real,    allocatable          :: corrmat(:,:), corrs(:)
         integer, allocatable          :: pairs(:,:)
@@ -71,17 +71,14 @@ contains
                 write(*,*) 'If all pair_part* are not in cwd, please execute simple_split_pairs to generate the required files'
                 stop 'I/O error; simple_comlin_smat'
             endif
-            if(.not.fopen(funit, status='OLD', action='READ', file=fname, access='STREAM', iostat=io_stat))&
-                 call fileio_errmsg('simple_comlin_smat opening  '//trim(fname), io_stat)
+            call fopen(funit, status='OLD', action='READ', file=fname, access='STREAM', iostat=io_stat)
+            call fileio_errmsg('simple_comlin_smat opening  '//trim(fname), io_stat)
             DebugPrint  'reading pairs in range: ', p%fromp, p%top
             read(unit=funit,pos=1,iostat=io_stat) pairs(p%fromp:p%top,:)
             ! check if the read was successful
-            if( io_stat .ne. 0 )then
-                write(*,'(a,i0,2a)') '**ERROR(simple_comlin_smat): I/O error ', io_stat, ' when reading file: ', fname
-                stop 'I/O error; simple_comlin_smat'
-            endif
-            if(.not.fclose(funit, iostat=io_stat))&
-                 call fileio_errmsg('simple_comlin_smat closing  '//trim(fname), io_stat)
+            if( io_stat .ne. 0 ) call fileio_errmsg('simple_comlin_smat reading  '//trim(fname), io_stat)
+                
+            call fclose(funit,errmsg='simple_comlin_smat closing  '//trim(fname))
             deallocate(fname)
             ! calculate the similarities
             call comlin_srch_init( b, p, 'simplex', 'pair' )
@@ -93,16 +90,13 @@ contains
             ! write the similarities
            
             allocate(fname, source='similarities_part'//int2str_pad(p%part,p%numlen)//'.bin')
-            if(.not.fopen(funit, status='REPLACE', action='WRITE', file=fname, access='STREAM', iostat=io_stat))&
-                 call fileio_errmsg('simple_comlin_smat opening  '//trim(fname), io_stat)
+            call fopen(funit, status='REPLACE', action='WRITE', file=fname, access='STREAM', iostat=io_stat)
+            call fileio_errmsg('simple_comlin_smat opening  '//trim(fname), io_stat)
             write(unit=funit,pos=1,iostat=io_stat) corrs(p%fromp:p%top)
             ! Check if the write was successful
-            if( io_stat .ne. 0 )then
-                write(*,'(a,i0,2a)') '**ERROR(simple_comlin_smat): I/O error ', io_stat, ' when writing to: ', fname
-                stop 'I/O error; simple_comlin_smat'
-            endif
-            if(.not.fclose(funit, iostat=io_stat))&
-                 call fileio_errmsg('simple_comlin_smat opening  '//trim(fname), io_stat)
+            if( io_stat .ne. 0 )call fileio_errmsg('simple_comlin_smat writing  '//trim(fname), io_stat)
+             
+            call fclose(funit, errmsg='simple_comlin_smat opening  '//trim(fname))
             deallocate(fname, corrs, pairs)
             call qsys_job_finished(p,'simple_commander_comlin :: exec_comlin_smat')
         else
@@ -122,15 +116,12 @@ contains
             end do
             call progress(ntot, ntot)
            
-            if(.not.fopen(funit, status='REPLACE', action='WRITE', file='clin_smat.bin', access='STREAM', iostat=io_stat))&
-                 call fileio_errmsg('simple_comlin_smat opening  clin_smat.bin', io_stat)
+            call fopen(funit, status='REPLACE', action='WRITE', file='clin_smat.bin', access='STREAM', iostat=io_stat)
+            call fileio_errmsg('simple_comlin_smat opening  clin_smat.bin', io_stat)
             write(unit=funit,pos=1,iostat=io_stat) corrmat
-            if( io_stat .ne. 0 )then
-                write(*,'(a,i0,a)') 'I/O error ', io_stat, ' when writing to clin_smat.bin'
-                stop 'I/O error; simple_comlin_smat'
-            endif
-            if(.not.fclose(funit, iostat=io_stat))&
-                 call fileio_errmsg('simple_comlin_smat closing clin_smat.bin ', io_stat)
+            if( io_stat .ne. 0 ) call fileio_errmsg('simple_comlin_smat writing  clin_smat.bin', io_stat)
+              
+            call fclose(funit, errmsg='simple_comlin_smat closing clin_smat.bin ')
             deallocate(corrmat)
         endif
         ! end gracefully
@@ -242,10 +233,9 @@ contains
             fname_finished = 'SYMSRCH_FINISHED'
         endif
        
-        if(.not.fopen(fnr, FILE=trim(fname_finished), STATUS='REPLACE', action='WRITE', iostat=file_stat))&
-             call fileio_errmsg('In: commander_comlin :: symsrch', file_stat )
-        if(.not.fclose( unit=fnr , iostat=file_stat))&
-             call fileio_errmsg('In: commander_comlin :: symsrch closing', file_stat )
+        call fopen(fnr, FILE=trim(fname_finished), STATUS='REPLACE', action='WRITE', iostat=file_stat
+        call fileio_errmsg('In: commander_comlin :: symsrch', file_stat )
+        call fclose(fnr,errmsg='In: commander_comlin :: symsrch closing' )
     end subroutine exec_symsrch
 
 end module simple_commander_comlin

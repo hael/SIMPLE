@@ -55,7 +55,7 @@ contains
         use simple_math, only: cyci_1d
         class(projector), intent(inout) :: self
         integer, allocatable :: cyck(:), cycm(:), cych(:)
-        integer :: h, k, m, alloc_stat, phys(3), logi(3)
+        integer :: h, k, m, phys(3), logi(3)
         integer :: lims(3,2), ldim(3)
         call self%kill_expanded
         ldim = self%get_ldim()

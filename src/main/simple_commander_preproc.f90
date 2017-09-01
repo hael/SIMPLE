@@ -626,7 +626,7 @@ contains
         real,                  allocatable :: correlations(:,:)
         logical,               allocatable :: lselected(:)
         character(len=STDLEN)              :: cmd_str
-        integer                            :: iimg, isel, nall, nsel, loc(1), ios, alloc_stat
+        integer                            :: iimg, isel, nall, nsel, loc(1), ios
         integer                            :: funit, ldim(3), ifoo, lfoo(3), io_stat
         ! error check
         if( cline%defined('stk3') .or. cline%defined('filetab') )then
@@ -655,34 +655,33 @@ contains
             call alloc_errchk('In: exec_select; simple_commander_preproc', alloc_stat)
             ! read matrix
             
-            if(.not.fopen(funit, status='OLD', action='READ', file='corrmat_select.bin', access='STREAM', iostat=io_stat))&
-             call fileio_errmsg('simple_commander_preproc ; fopen error when opening corrmat_select.bin  ', io_stat)
+            call fopen(funit, status='OLD', action='READ', file='corrmat_select.bin', access='STREAM', iostat=io_stat)
+            call fileio_errmsg('simple_commander_preproc ; fopen error when opening corrmat_select.bin  ', io_stat)
             read(unit=funit,pos=1,iostat=io_stat) correlations
             ! Check if the read was successful
             if(io_stat/=0) then
                 call fileio_errmsg('**ERROR(simple_commander_preproc): I/O error reading corrmat_select.bin. Remove the file to override the memoization.', io_stat)
             endif
  
-            if(.not.fclose(funit, iostat=io_stat))&
-             call fileio_errmsg('simple_commander_preproc ; fopen error when closing corrmat_select.bin  ', io_stat)
+            call fclose(funit,errmsg='simple_commander_preproc ; fopen error when closing corrmat_select.bin  ')
         else
             write(*,'(a)') '>>> CALCULATING CORRELATIONS'
             call calc_cartesian_corrmat(imgs_sel, imgs_all, correlations)
             ! write matrix
             
-            if(.not.fopen(funit, status='REPLACE', action='WRITE', file='corrmat_select.bin', access='STREAM', iostat=io_stat))&
-                 call fileio_errmsg('simple_commander_preproc ; fopen error when opening corrmat_select.bin  ', io_stat)
+            call fopen(funit, status='REPLACE', action='WRITE', file='corrmat_select.bin', access='STREAM', iostat=io_stat)
+            call fileio_errmsg('simple_commander_preproc ; fopen error when opening corrmat_select.bin  ', io_stat)
             write(unit=funit,pos=1,iostat=io_stat) correlations
             ! Check if the write was successful
             if(io_stat/=0) then
                 call fileio_errmsg('**ERROR(simple_commander_preproc): I/O error writing corrmat_select.bin. Remove the file to override the memoization.', io_stat)
             endif
-            if(.not.fclose(funit, iostat=io_stat))&
-                 call fileio_errmsg('simple_commander_preproc ; fopen error when closing corrmat_select.bin  ', io_stat)
+            call fclose(funit,errmsg='simple_commander_preproc ; fopen error when closing corrmat_select.bin  ')
         endif
         ! find selected
         ! in addition to the index array, also make a logical array encoding the selection (to be able to reject)
-        allocate(selected(nsel), lselected(nall))
+        allocate(selected(nsel), lselected(nall),stat=alloc_stat)
+        allocchk("In commander_preproc::select selected lselected ")
         lselected = .false.
         do isel=1,nsel
             loc = maxloc(correlations(isel,:))
@@ -695,8 +694,8 @@ contains
             call read_filetable(p%filetab, imgnames)
             if( size(imgnames) /= nall ) stop 'nr of entries in filetab and stk not consistent'
             
-            if(.not.fopen(funit, file=p%outfile,status="replace", action="write", access="sequential", iostat=io_stat))&
-                 call fileio_errmsg('simple_commander_preproc ; fopen error when opening '//trim(p%outfile), ios)
+            call fopen(funit, file=p%outfile,status="replace", action="write", access="sequential", iostat=io_stat)
+            call fileio_errmsg('simple_commander_preproc ; fopen error when opening '//trim(p%outfile), ios)
             !if( ios /= 0 )then
             !    HALT("In exec_select; simple_commander_preproc Error opening file name"//trim(adjustl(p%outfile)) )
             !endif
@@ -713,8 +712,7 @@ contains
                     call exec_cmdline(cmd_str)
                 endif
             end do
-            if(.not.fclose(funit, iostat=io_stat))&
-                 call fileio_errmsg('simple_commander_preproc ; fopen error when closing '//trim(p%outfile), io_stat)
+            call fclose(funit,errmsg='simple_commander_preproc ; fopen error when closing '//trim(p%outfile))
             deallocate(imgnames)
         endif
         if( cline%defined('stk3') )then
@@ -783,7 +781,7 @@ contains
             if( p%neg .eq. 'yes' )then
                 call neg_imgfile('rotated_from_makepickrefs'//p%ext, 'pickrefs'//p%ext, p%smpd)
             else
-                call rename('rotated_from_makepickrefs'//p%ext, 'pickrefs'//p%ext)
+                call mv_file('rotated_from_makepickrefs'//p%ext, 'pickrefs'//p%ext)
             endif
         else
             stop 'need input volume (vol1) or class averages (stk) to generate picking references'
@@ -848,7 +846,7 @@ contains
         type(params)                       :: p
         type(build)                        :: b
         integer                            :: nmovies, nboxfiles, nframes, pind, noris
-        integer                            :: i, j, k, alloc_stat, ldim(3), box_current, movie, ndatlines, nptcls
+        integer                            :: i, j, k, ldim(3), box_current, movie, ndatlines, nptcls
         integer                            :: cnt, niter, fromto(2), orig_box
         integer                            :: movie_ind, ntot, lfoo(3), ifoo, noutside
         type(nrtxtfile)                    :: boxfile

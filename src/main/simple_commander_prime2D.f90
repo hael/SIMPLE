@@ -225,10 +225,9 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_CAVGASSEMBLE NORMAL STOP ****', print_simple=.false.)
         ! indicate completion (when run in a qsys env)
-        if(.not.fopen(fnr, FILE='CAVGASSEMBLE_FINISHED', STATUS='REPLACE', action='WRITE', iostat=file_stat))&
+        call fopen(fnr, FILE='CAVGASSEMBLE_FINISHED', STATUS='REPLACE', action='WRITE', iostat=file_stat)
         call fileio_errmsg('In: commander_rec :: eo_volassemble', file_stat )
-         if(.not.fclose( fnr , iostat=file_stat))&
-        call fileio_errmsg('In: commander_rec :: eo_volassemble fclose', file_stat )
+        call fclose( fnr ,errmsg='In: commander_rec :: eo_volassemble fclose')
     end subroutine exec_cavgassemble
     
     subroutine exec_check2D_conv( self, cline )

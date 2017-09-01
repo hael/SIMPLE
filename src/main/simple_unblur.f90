@@ -3,10 +3,12 @@ module simple_unblur
 !$ use omp_lib
 !$ use omp_lib_kinds
 use simple_defs
+use simple_jiffys,      only: progress
+use simple_syslib,      only: alloc_errchk
 use simple_ft_expanded, only: ft_expanded
 use simple_image,       only: image
 use simple_params,      only: params
-use simple_filterer     ! use all in there
+use simple_filterer,    only: acc_dose2filter
 implicit none
 
 public :: unblur_movie, unblur_calc_sums, unblur_calc_sums_tomo
@@ -59,7 +61,7 @@ contains
     !> Unblur DDD movie
     subroutine unblur_movie( movie_stack_fname, p, corr, smpd_out, nsig )
         use simple_oris,        only: oris
-        use simple_strings,     only: int2str
+        !use simple_strings,     only: int2str
         use simple_rnd,         only: ran3
         use simple_stat,        only: corrs2weights, moment
         use simple_ftexp_shsrch ! use all in there
@@ -262,15 +264,13 @@ contains
 
     !> Initialise unblur
     subroutine unblur_init( movie_stack_fname, p )
-        use simple_syslib, only: alloc_errchk
+        use simple_math,    only: round2even, median
         use simple_imgfile, only: find_ldim_nptcls
-        use simple_jiffys, only: progress
-        use simple_math,   only: round2even, median
         character(len=*), intent(in)    :: movie_stack_fname  !< input filename of stack
         class(params),    intent(inout) :: p                  !< params object
         type(image)          :: tmpmovsum
         real                 :: moldiam, dimo4
-        integer              :: alloc_stat, iframe, ncured, wisz, deadhot(2), i, j, winsz
+        integer              :: iframe, ncured, wisz, deadhot(2), i, j, winsz
         real                 :: time_per_frame, current_time
         integer, parameter   :: HWINSZ = 6
         real,    allocatable :: rmat(:,:,:), rmat_pad(:,:), win(:,:)
@@ -315,7 +315,8 @@ contains
         call frame_tmp%new(ldim, smpd)
         ! allocate padded matrix
         winsz   = 2*HWINSZ+1
-        allocate(rmat_pad(1-hwinsz:ldim(1)+hwinsz, 1-hwinsz:ldim(2)+hwinsz), win(winsz,winsz))
+        allocate(rmat_pad(1-hwinsz:ldim(1)+hwinsz, 1-hwinsz:ldim(2)+hwinsz), win(winsz,winsz), stat=alloc_stat )
+            call alloc_errchk('unblur_init; simple_unblur, rmat_pad', alloc_stat)
         ! calculate image sum and identify outliers
         if( doprint ) write(*,'(a)') '>>> READING & REMOVING DEAD/HOT PIXELS & FOURIER TRANSFORMING FRAMES'
         call tmpmovsum%new(ldim, smpd)
@@ -366,7 +367,7 @@ contains
         if( p%l_dose_weight )then
             do_dose_weight = .true.
             allocate( acc_doses(nframes), stat=alloc_stat )
-            call alloc_errchk('unblur_init; simple_unblur, 2', alloc_stat)
+            call alloc_errchk('unblur_init; simple_unblur, acc_doses', alloc_stat)
             kV = p%kv
             time_per_frame = p%exp_time/real(nframes)           ! unit: s
             dose_rate      = p%dose_rate

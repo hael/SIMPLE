@@ -597,7 +597,7 @@ contains
     function ori2str( self ) result( str )
         class(ori), intent(inout) :: self
         character(len=:), allocatable :: str, str_chtab, str_htab
-        integer :: sz_chash, sz_hash, alloc_stat
+        integer :: sz_chash, sz_hash
         sz_chash = self%chtab%size_of_chash()
         sz_hash  = self%htab%size_of_hash()
         if( sz_chash > 0 ) str_chtab = self%chtab%chash2str()

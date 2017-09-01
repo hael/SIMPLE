@@ -31,7 +31,6 @@ contains
         use simple_syslib,   only: alloc_errchk
         class(particle_swarm_opt), intent(inout) :: self !< instance
         class(opt_spec), intent(inout)           :: spec !< specification
-        integer :: alloc_stat
         ! destruct if exists
         call self%kill
         ! allocate

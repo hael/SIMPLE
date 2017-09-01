@@ -98,7 +98,6 @@ contains
         integer,          optional, intent(in)    :: nnn            !< number of nearest neighbors
         real,             optional, intent(in)    :: cfac           !< convergence factor (bfgs)
         real,             optional, intent(in)    :: stepsz(ndim)   !< step sizes for brute force search
-        integer :: alloc_stat
         call self%kill
         ! take care of optimizer specifics
         select case(str_opt)
@@ -187,7 +186,7 @@ contains
         
         class(opt_spec), intent(inout) :: self              !< instance
         real,               intent(in) :: lims(self%ndim,2) !< new limits
-        integer  :: i,alloc_stat
+        integer  :: i
         do i=1,self%ndim
             if(lims(i,2) >= lims(i,1)) then
             else

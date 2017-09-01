@@ -10,11 +10,11 @@ use simple_params,           only: params
 use simple_cmdline,          only: cmdline
 use simple_strings,          only: int2str_pad
 use simple_jiffys            ! use all in there
-use simple_fileio            ! use all in there
+!use simple_fileio            ! use all in there
 use simple_hadamard_common   ! use all in there
 use simple_filterer          ! use all in there
 use simple_defs              ! use all in there
-use simple_syslib            ! use all in there
+use simple_syslib,            only: file_exists
 implicit none
 
 public :: prime2D_exec, prime2D_assemble_sums, prime2D_norm_sums, prime2D_assemble_sums_from_parts,&
@@ -477,7 +477,7 @@ contains
         class(params), intent(inout) :: p
         type(ori) :: o
         integer   :: cnt, iptcl, icls, pop, istate
-        integer   :: filtsz, alloc_stat, filnum, io_stat
+        integer   :: filtsz, filnum, io_stat
         if( .not. p%l_distr_exec ) write(*,'(A)') '>>> BUILDING PRIME2D SEARCH ENGINE'
         ! must be done here since constants in p are dynamically set
         call pftcc%new(p%ncls, [p%fromp,p%top], [p%boxmatch,p%boxmatch,1], p%smpd, p%kfromto, p%ring2, p%ctf)

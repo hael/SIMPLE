@@ -10,6 +10,7 @@ module simple_ctf
 !$ use omp_lib
 !$ use omp_lib_kinds
 use simple_defs
+use simple_jiffys,      only: progress
 implicit none
 
 public :: ctf, test_ctf
@@ -156,7 +157,7 @@ contains
         real,             optional, intent(in)    :: dfy         !< defocus y-axis
         real,             optional, intent(in)    :: angast      !< angle of astigmatism
         real,             optional, intent(in)    :: bfac        !< bfactor
-        integer :: lims(3,2),h,k,phys(3),hh,kk,ldim(3)
+        integer :: lims(3,2),h,k,phys(3),ldim(3)
         real    :: ang, tval, ddfy, aangast, spaFreqSq, hinv
         real    :: kinv, inv_ldim(3)
         if( img%is_3d() )then
@@ -221,7 +222,7 @@ contains
         character(len=*), intent(in)    :: mode       !< abs, ctf, flip, flipneg, neg, square
         real, optional,   intent(in)    :: bfac       !< bfactor
         real, allocatable :: spec(:)
-        integer           :: k,alloc_stat
+        integer           :: k
         real              :: tval,res,wght,spaFreqSq,kinv
         ! init object
         call self%init(dfx, dfx, 0.)
@@ -272,7 +273,7 @@ contains
         real,             optional, intent(in)    :: angast      !< angle of astigmatism
         real,             optional, intent(in)    :: bfac        !< bfactor
         integer     :: ldim(3), ldim_pd(3)
-        logical     :: didbwdft, ppad, didfwdft
+!        logical     :: didbwdft, ppad, didfwdft
         type(image) :: ctfimg, img_pd
         ldim = img%get_ldim()
         if( img%is_3d() )then
@@ -311,7 +312,7 @@ contains
         real,             optional, intent(in)    :: dfy      !< defocus y-axis
         real,             optional, intent(in)    :: angast   !< angle of astigmatism
         integer :: ldim(3),logi(3),imode,lims(3,2),h,k,phys(3)
-        real    :: ang,tval,ddfy,aangast,spaFreqSq,hinv,kinv,hinvsq,kinvsq,inv_ldim(3),tvalsq
+        real    :: ang,tval,ddfy,aangast,spaFreqSq,hinv,kinv,inv_ldim(3),tvalsq
         complex :: comp
         ldim = img%get_ldim()
         ! check that image is 2D
@@ -528,7 +529,6 @@ contains
     subroutine test_ctf( nthr )
         use simple_image,  only: image
         use simple_rnd,    only: ran3
-        use simple_jiffys, only: progress
         integer, intent(in) :: nthr
         integer, parameter :: BOX_SIZES(4) = [64,128,256,512]
         real,    parameter :: SMPDS(4)     = [3.7,2.2,1.07,0.6]
@@ -538,7 +538,7 @@ contains
         real,    parameter :: KVS(3)       = [120.,200.,300.]
         integer, parameter :: NTESTS       = 10000
         real               :: dfx, dfy, angast
-        integer            :: ibox, itst, ldim(3), imode, ikv, ntot, cnt
+        integer            :: ibox, itst, ldim(3), ikv, ntot, cnt
         type(image)        :: img
         type(ctf)          :: tfun
         write(*,'(a)') '**info(simple_ctf_unit_test): testing the ctf2img routine'
