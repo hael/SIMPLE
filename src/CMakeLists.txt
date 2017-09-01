@@ -73,7 +73,6 @@ list(REMOVE_ITEM SIMPLECORELIB
    "${CMAKE_CURRENT_SOURCE_DIR}/main/simple_chash.f90"
    "${CMAKE_CURRENT_SOURCE_DIR}/main/simple_cftcc_scatsrch.f90"
    "${CMAKE_CURRENT_SOURCE_DIR}/main/simple_kbinterpol_elemental.f90"
-   "${CMAKE_CURRENT_SOURCE_DIR}/main/simple_classaverager.f90"
 )
 
 

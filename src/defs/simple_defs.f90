@@ -9,9 +9,9 @@
 module simple_defs
 use, intrinsic :: iso_c_binding
 use, intrinsic :: iso_fortran_env, only: &
-     stderr=>ERROR_UNIT,&
-     stdout=>OUTPUT_UNIT,&
-     stdin=>INPUT_UNIT
+stderr=>ERROR_UNIT,&
+stdout=>OUTPUT_UNIT,&
+stdin=>INPUT_UNIT
 implicit none
 character(len=1), parameter :: default_file_format = 'M' !< I:imagic, M:mrc or S:spider
 integer, parameter  :: IMPORTANT=10 !< number of solutions considered important

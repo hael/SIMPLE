@@ -80,7 +80,7 @@ contains
         ! SETUP WEIGHTS
         ! this needs to be done prior to search such that each part
         ! sees the same information in distributed execution
-        if( p%weights2D .eq. 'yes' .and. cline%defined('oritab') )then
+        if( p%weights2D .eq. 'yes' .and. frac_srch_space >= FRAC_INTERPOL )then
             if( p%nptcls <= SPECWMINPOP )then
                 call b%a%set_all2single('w', 1.0)
             else
