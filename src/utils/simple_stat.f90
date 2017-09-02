@@ -558,9 +558,8 @@ contains
             weights = 1./real(ncorrs)
             return
         endif
-        corrmin = minval(corrs_copy)
-        maxminratio = 2.0
-        if( corrmin > 0. ) maxminratio = corrmax/corrmin
+        corrmin = minval(corrs_copy, mask=corrs_copy > TINY)
+        maxminratio = corrmax/corrmin
         if( maxminratio >= THRESHOLD )then
            ! min/max normalise the correlations
            call normalize_sigm(corrs_copy)
@@ -579,14 +578,12 @@ contains
         normfac = sum(expnegdists)
         ! normalise and set weights where corrs==0 to 0
         do icorr=1,ncorrs
-            if( corrs_copy(icorr) >= 0. )then
+            if( corrs_copy(icorr) > TINY )then
                 weights(icorr) = expnegdists(icorr)/normfac
             else
                 weights(icorr) = 0.
             endif
         end do
-        deallocate(corrs_copy,stat=alloc_stat)
-        call alloc_errchk("In: corrs2weights", alloc_stat )
     end function corrs2weights
 
     ! INTEGER STUFF

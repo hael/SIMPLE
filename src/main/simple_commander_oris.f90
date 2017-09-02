@@ -575,7 +575,7 @@ contains
                     else
                         ! frac is one by default in prime2D (no option to set frac)
                         ! so spectral weighting is done over all images
-                        call b%a%calc_spectral_weights(1.0, 'class', p%nsym, p%eullims)
+                        call b%a%calc_spectral_weights(1.0)
                     endif
                 else
                     ! defaults to unitary weights
@@ -611,7 +611,7 @@ contains
                 if( noris <= SPECWMINPOP )then
                     call b%a%calc_hard_weights(p%frac)
                 else
-                    call b%a%calc_spectral_weights(p%frac, 'proj', p%nsym, p%eullims)
+                    call b%a%calc_spectral_weights(p%frac)
                 endif
                 ! generate population stats
                 tmp            = b%a%get_pops('proj', consider_w=.true.)

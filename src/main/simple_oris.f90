@@ -2484,72 +2484,50 @@ contains
     ! end subroutine calc_hard_weights_single
 
     !>  \brief  calculates spectral particle weights
-    subroutine calc_spectral_weights( self, frac, which, nsym, eullims )
+    subroutine calc_spectral_weights( self, frac )
         use simple_stat, only: corrs2weights
-        class(oris),      intent(inout) :: self
-        real,             intent(in)    :: frac
-        character(len=*), intent(in)    :: which ! class or proj
-        integer,          intent(in)    :: nsym
-        real,             intent(in)    :: eullims(3,2)
-        integer              :: istate, nstates, i, j, n, pop, cnt, nincl
-        logical, allocatable :: l_mask(:)
-        real,    allocatable :: weights(:), specscores(:)
-        integer, parameter   :: MINPOP = 10
-        real                 :: minscore
-        type(oris)           :: os_subset, os_reduced
-        ! first exclude shit particles in a global sense
+        class(oris), intent(inout) :: self
+        real,        intent(in)    :: frac
+        integer           :: i, nstates, istate, cnt, mystate
+        real, allocatable :: weights(:), specscores(:)
         call self%calc_hard_weights( frac )
-        ! decide what to do
-        if( .not. self%isthere('state') ) stop 'state label must be set; oris :: calc_spectral_weights'
-        select case(which)
-            case('class')
-                if( .not. self%isthere('class') ) stop 'class label must be set; oris :: calc_spectral_weights'
-                n = self%get_n('class')
-                os_reduced = self
-            case('proj')
-                if( .not. self%isthere('proj') ) stop 'proj label must be set; oris :: calc_spectral_weights'
-                n = self%get_n('proj')
-                os_reduced = self
-                if( n > NSPACE_BALANCE )then
-                    call os_reduced%reduce_projs(NSPACE_BALANCE, nsym, eullims)
-                    n = NSPACE_BALANCE
-                endif
-            case DEFAULT
-                stop 'unsupported which flag; oris :: calc_spectral_weights'
-        end select
-        nstates = self%get_n('state')
-        ! calculate spectral weights normlised per class/proj dir
-        do i=1,n
-            do istate=1,nstates
-                call os_reduced%extract(istate, i, which, l_mask, pop, os_subset)
-                if( pop == 0 )then
-                    cycle
-                else
-                    specscores = os_subset%get_all('specscore')
-                    weights    = os_subset%get_all('w')
-                    nincl      = count(weights > 0.5)
-                    if( nincl <= MINPOP )then
-                        weights = 1.0/real(nincl) ! flat weight distribution
-                    else
-                        where( weights < 0.5 )
-                            specscores = 0.
-                        end where
-                        weights = corrs2weights(specscores)
-                    endif
+        if( self%isthere('specscore') )then
+            nstates = self%get_n('state')
+            if( nstates > 1 )then
+                do istate=1,nstates
+                    specscores = self%get_arr('specscore', state=istate)
+                    weights    = self%get_arr('w',         state=istate)
+                    where( weights < 0.5 )
+                        specscores = 0.
+                    end where
+                    weights = corrs2weights(specscores)
                     cnt = 0
-                    do j=1,self%n
-                        if( l_mask(j) )then
+                    do i=1,self%n
+                        mystate = nint(self%o(i)%get('state'))
+                        if( mystate == istate )then
                             cnt = cnt + 1
-                            call self%o(j)%set('w', weights(cnt))
+                            call self%o(i)%set('w', weights(i))
+                        else if( mystate == 0 )then
+                            call self%o(i)%set('w', 0.0)
                         endif
-                    end do
+                    enddo
                     deallocate(specscores,weights)
-                endif
-            end do
-        end do
-        call os_subset%kill
-        call os_reduced%kill
-        if( allocated(l_mask) ) deallocate(l_mask)
+                enddo
+            else
+                specscores = self%get_all('specscore')
+                weights    = self%get_all('w')
+                where( weights < 0.5 )
+                    specscores = 0.
+                end where
+                weights = corrs2weights(specscores)
+                do i=1,self%n
+                    call self%o(i)%set('w', weights(i))
+                end do
+                deallocate(specscores,weights)
+            endif
+        else
+            stop 'specscore not part of oris; simple_oris :: calc_spectral_weights'
+        endif
     end subroutine calc_spectral_weights
 
     !>  \brief  calculates hard weights based on ptcl ranking

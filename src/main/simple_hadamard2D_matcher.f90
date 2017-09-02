@@ -86,7 +86,7 @@ contains
             else
                 ! frac is one by default in prime2D (no option to set frac)
                 ! so spectral weighting is done over all images
-                call b%a%calc_spectral_weights(1.0, 'class', p%nsym, p%eullims)
+                call b%a%calc_spectral_weights(1.0)
             endif
         else
             ! defaults to unitary weights
@@ -174,8 +174,7 @@ contains
         p%oritab = p%outfile
 
         ! WIENER RESTORATION OF CLASS AVERAGES
-        ! if( frac_srch_space > FRAC_INTERPOL .and. which_iter > 1 )then
-        if( frac_srch_space > FRAC_INTERPOL )then
+        if( frac_srch_space >= FRAC_INTERPOL )then
             ! gridded rotation
             call prime2D_assemble_sums(b, p, grid=.true.)
         else

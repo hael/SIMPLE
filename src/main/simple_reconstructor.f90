@@ -424,7 +424,7 @@ contains
         call img_pd%new([p%boxpd,p%boxpd,1],self%get_smpd())
         call img%new([p%box,p%box,1],self%get_smpd())
         ! calculate particle weights
-        call o%calc_spectral_weights(p%frac, 'proj', p%nsym, p%eullims)
+        call o%calc_spectral_weights(p%frac)
         ! population balancing logics
         if( p%balance > 0 )then
             call o%balance( p%balance, NSPACE_BALANCE, p%nsym, p%eullims, skewness )
