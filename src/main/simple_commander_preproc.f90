@@ -854,8 +854,9 @@ contains
         type(nrtxtfile)                    :: boxfile
         character(len=STDLEN)              :: mode, sumstack, outfile, sumstack_frames
         character(len=STDLEN), allocatable :: movienames(:), boxfilenames(:), movienames_frames(:)
-        real, allocatable                  :: boxdata(:,:)
-        integer, allocatable               :: pinds(:)
+        real,                  allocatable :: boxdata(:,:)
+        integer,               allocatable :: pinds(:)
+        logical,               allocatable :: oris_mask(:)
         real                               :: kv, cs, fraca, dfx, dfy, angast, ctfres
         real                               :: med, ave, sdev, var, particle_position(2)
         type(image)                        :: micrograph
@@ -1115,8 +1116,14 @@ contains
             endif
 
             ! write output
-            noris = count(pinds > 0)
-            call outoris%compress(pinds > 0)
+            allocate(oris_mask(ndatlines))
+            where(pinds > 0)
+                oris_mask = .true.
+            elsewhere
+                oris_mask = .false.
+            endwhere
+            noris = count(oris_mask)
+            call outoris%compress(oris_mask)
             call binwrite_oritab(outfile, outoris, [1,noris])
             ! OLD CODE
             ! do j=1,ndatlines ! loop over boxes
@@ -1127,7 +1134,7 @@ contains
 
             ! destruct
             call boxfile%kill
-            deallocate(boxdata, pinds)
+            deallocate(boxdata, pinds, oris_mask)
         end do
         if( p%outside .eq. 'yes' .and. noutside > 0 )then
             write(*,'(a,1x,i5,1x,a)') 'WARNING!', noutside, 'boxes extend outside micrograph'
