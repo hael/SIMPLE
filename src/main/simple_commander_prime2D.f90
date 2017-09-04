@@ -19,7 +19,7 @@ private
 type, extends(commander_base) :: makecavgs_commander 
  contains
     procedure :: execute      => exec_makecavgs
-end type makecavgs_commander 
+end type makecavgs_commander
 type, extends(commander_base) :: prime2D_commander 
   contains
     procedure :: execute      => exec_prime2D
@@ -39,21 +39,21 @@ end type rank_cavgs_commander
 
 contains
 
-    !> MAKECAVGS is a SIMPLE program to create class-averages
     subroutine exec_makecavgs( self, cline )
-        use simple_hadamard2D_matcher, only: prime2D_assemble_sums, prime2D_write_sums, &
-        & prime2D_write_partial_sums
-        use simple_binoris_io, only: binwrite_oritab
-        use simple_qsys_funs,  only: qsys_job_finished
+        use simple_classaverager, only: classaverager
+        use simple_binoris_io,    only: binwrite_oritab
+        use simple_qsys_funs,     only: qsys_job_finished
         class(makecavgs_commander), intent(inout) :: self
         class(cmdline),             intent(inout) :: cline
-        type(params)  :: p
-        type(build)   :: b
-        integer       :: ncls_in_oritab, icls, fnr, file_stat
-        p = params(cline)  ! parameters generated
+        type(params)        :: p
+        type(build)         :: b
+        type(classaverager) :: cavger
+        integer :: ncls_in_oritab, icls, fnr, file_stat
+        p = params(cline)                                 ! parameters generated
         call b%build_general_tbox(p, cline, do3d=.false.) ! general objects built
-        call b%build_hadamard_prime2D_tbox(p) ! 2D Hadamard matcher built
+        call b%build_hadamard_prime2D_tbox(p)             ! 2D Hadamard matcher built
         write(*,'(a)') '>>> GENERATING CLUSTER CENTERS'
+        ! deal with the orientations
         if( cline%defined('oritab') .and. p%l_remap_classes )then
             call b%a%remap_classes
             ncls_in_oritab = b%a%get_n('class')
@@ -83,9 +83,9 @@ contains
         else
             p%oritab = 'prime2D_startdoc.txt'
         endif
-        ! Multiplication
+        ! shift multiplication
         if( p%mul > 1. ) call b%a%mul_shifts(p%mul)
-        ! Setup weights
+        ! setup weights in case the 2D was run without them (specscore will still be there)
         if( p%weights2D.eq.'yes' )then
             if( p%nptcls <= SPECWMINPOP )then
                 call b%a%set_all2single('w', 1.0)
@@ -97,56 +97,46 @@ contains
         else
             call b%a%set_all2single('w', 1.0)
         endif
+        ! even/odd partitioning
+        if( b%a%get_nevenodd() == 0 ) call b%a%partition_eo('class', [p%fromp,p%top])    
+        ! write
         if( p%l_distr_exec .and. nint(cline%get_rarg('part')) .eq. 1 )then
             call binwrite_oritab(p%oritab, b%a, [1,p%nptcls])
         else
             call binwrite_oritab(p%oritab, b%a, [1,p%nptcls])
         endif
+        ! create class averager
+        call cavger%new(b, p, 'class')
+        ! transfer ori data to object
+        call cavger%transf_oridat(b%a)
         if( cline%defined('filwidth') )then
+            ! filament option
             if( p%l_distr_exec)then
                 stop 'filwidth mode not implemented for distributed mode; simple_commander_prime2D.f90; exec_makecavgs'
             endif
+            call b%img%bin_filament(p%filwidth)
             do icls=1,p%ncls
-                call b%cavgs(icls)%bin_filament(p%filwidth)
+                call cavger%set_cavg(icls, 'merged', b%img)
             end do
-            if( cline%defined('refs') )then
-                call prime2D_write_sums(b, p, fname=p%refs)
-            else
-                call prime2D_write_sums(b, p)
-            endif           
         else
-            call prime2D_assemble_sums(b, p)
-            if( p%l_distr_exec)then
-                call prime2D_write_partial_sums( b, p )
-                call qsys_job_finished( p, 'simple_commander_prime2D :: exec_makecavgs' )
+            ! standard cavg assembly
+            call cavger%assemble_sums()
+        endif
+        ! write sums
+        if( p%l_distr_exec)then
+            call cavger%write_partial_sums()
+            call qsys_job_finished( p, 'simple_commander_prime2D :: exec_makecavgs' )
+        else
+            if( cline%defined('refs') )then
+                call cavger%write(p%refs, 'merged')
             else
-                if( cline%defined('refs') )then
-                    call prime2D_write_sums(b, p, fname=p%refs)
-                else
-                    call prime2D_write_sums(b, p)
-                endif
+                call cavger%write('startcavgs'//p%ext, 'merged')
             endif
         endif
         ! end gracefully
         call simple_end('**** SIMPLE_MAKECAVGS NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_makecavgs
     
-    !> Prime2D  implementation of a bespoke probabilistic algorithm for simultaneous 2D alignment and clustering
-    !! \see http://simplecryoem.com/tutorials.html?#d-analysis-with-prime2d
-    !!
-    !!    Algorithms that can rapidly discover clusters corresponding to sets of
-    !!    images with similar projection direction and conformational state play
-    !!    an important role in single-particle analysis. Identification of such
-    !!    clusters allows for enhancement of the signal-to-noise ratio (SNR) by
-    !!    averaging and gives a first glimpse into the character of a dataset.
-    !!    Therefore, clustering algorithms play a pivotal role in initial data
-    !!    quality assessment, ab initio 3D reconstruction and analysis of
-    !!    heterogeneous single-particle populations. SIMPLE implements a
-    !!    probabilistic algorithm for simultaneous 2D alignment and clustering,
-    !!    called . The version we are going to use here is an improved version
-    !!    of the published code released in SIMPLE 2.1 (submitted manuscript).
-    !!    Grouping tens of thousands of images into several hundred clusters is
-    !!    a computationally intensive job. 
     subroutine exec_prime2D( self, cline )
         use simple_hadamard2D_matcher, only: prime2D_exec
         use simple_qsys_funs,          only: qsys_job_finished
@@ -192,32 +182,32 @@ contains
         ! this is needed for chunk-based prime2D parallellisation
         call qsys_job_finished(p, 'simple_commander_prime2D :: exec_prime2D')
     end subroutine exec_prime2D
-    
+
     subroutine exec_cavgassemble( self, cline )
-        use simple_hadamard2D_matcher, only: prime2D_assemble_sums_from_parts, prime2D_write_sums
+        use simple_classaverager, only: classaverager
         class(cavgassemble_commander), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
         type(params)         :: p
         type(build)          :: b
+        type(classaverager)  :: cavger
         integer              :: fnr, file_stat
-        p = params(cline) ! parameters generated
+        p = params(cline)                                 ! parameters generated
         call b%build_general_tbox(p, cline, do3d=.false.) ! general objects built
         call b%build_hadamard_prime2D_tbox(p)
-        call prime2D_assemble_sums_from_parts(b, p)
-        ! output
+        call cavger%new(b, p, 'class')
+        call cavger%assemble_sums_from_parts()
         if( cline%defined('which_iter') )then
-            call prime2D_write_sums(b, p, p%which_iter)
-        else if( cline%defined('refs') )then
-            call prime2D_write_sums(b, p, fname=p%refs)
-        else
-            call prime2D_write_sums(b, p, fname='startcavgs'//p%ext)
+            p%refs = 'cavgs_iter'//int2str_pad(p%which_iter,3)//p%ext
+        else if( .not. cline%defined('refs') )then
+            p%refs = 'startcavgs'//p%ext
         endif
+        call cavger%write(trim(p%refs), 'merged')
         ! end gracefully
         call simple_end('**** SIMPLE_CAVGASSEMBLE NORMAL STOP ****', print_simple=.false.)
         ! indicate completion (when run in a qsys env)
         if(.not.fopen(fnr, FILE='CAVGASSEMBLE_FINISHED', STATUS='REPLACE', action='WRITE', iostat=file_stat))&
         call fileio_errmsg('In: commander_rec :: eo_volassemble', file_stat )
-         if(.not.fclose( fnr , iostat=file_stat))&
+        if(.not.fclose( fnr , iostat=file_stat))&
         call fileio_errmsg('In: commander_rec :: eo_volassemble fclose', file_stat )
     end subroutine exec_cavgassemble
     

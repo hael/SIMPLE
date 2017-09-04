@@ -307,7 +307,7 @@ contains
         ! SETUP (OVERWRITES) EVEN/ODD PARTITION
         if( p%eo.eq.'yes' )then
             ! weights & states assumed here
-            call b%a%partition_eo([p%fromp, p%top])
+            call b%a%partition_eo('proj', [p%fromp, p%top])
         else
             call b%a%set_all2single('eo', -1.)
         endif

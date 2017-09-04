@@ -385,10 +385,8 @@ contains
         ! make the images
         call img%new([p%box,p%box,1],p%smpd)
         call img_pad%new([p%boxpd,p%boxpd,1],p%smpd)
-        ! calculate weights
-        call o%calc_spectral_weights(p%frac)
         ! even/odd partitioning
-        if( o%get_nevenodd() == 0 )call o%partition_eo
+        if( o%get_nevenodd() == 0 ) call o%partition_eo('proj', [p%fromp,p%top])
         ! population balancing logics
         if( p%balance > 0 )then
             call o%balance( p%balance, NSPACE_BALANCE, p%nsym, p%eullims, skewness )

@@ -4,6 +4,7 @@ module simple_hadamard2D_matcher
 !$ use omp_lib_kinds
 use simple_polarft_corrcalc, only: polarft_corrcalc
 use simple_prime2D_srch,     only: prime2D_srch
+use simple_classaverager,    only: classaverager
 use simple_ori,              only: ori
 use simple_build,            only: build
 use simple_params,           only: params
@@ -17,13 +18,13 @@ use simple_defs              ! use all in there
 use simple_syslib            ! use all in there
 implicit none
 
-public :: prime2D_exec, prime2D_assemble_sums, prime2D_norm_sums, prime2D_assemble_sums_from_parts,&
-prime2D_write_sums, preppftcc4align, pftcc, prime2D_read_sums, prime2D_write_partial_sums
+public :: prime2D_exec, preppftcc4align, pftcc
 private
 #include "simple_local_flags.inc"
 
 type(polarft_corrcalc)          :: pftcc
 type(prime2D_srch), allocatable :: primesrch2D(:)
+type(classaverager)             :: cavger
 
 contains
 
@@ -41,37 +42,34 @@ contains
         logical, allocatable :: ptcl_mask(:)
         integer :: iptcl, icls
         real    :: corr_thresh, frac_srch_space, skewness, extr_thresh
+        logical :: l_do_read
 
         ! PREP REFERENCES
+        call cavger%new(b, p, 'class')
+        l_do_read = .true.
         if( p%l_distr_exec )then
-            if( .not. cline%defined('refs') )then
-                stop 'need refs to be part of command line for distributed prime2D execution'
-            else if( cline%defined('refs') )then
-                if( .not. file_exists(p%refs) ) stop 'input references (refs) does not exist in cwd'
-            endif
-            call prime2D_read_sums( b, p )
+            if( .not. cline%defined('refs') )&
+            &stop 'need refs to be part of command line for distributed prime2D execution'
         else
-            ! for shared-memory or chunk-based parallellisation we need initial references for iter=1 only
             if( which_iter == p%startit )then
-                if( cline%defined('refs') )then
-                    if( .not. file_exists(p%refs) ) stop 'input references (refs) does not exist in cwd'
-                    call prime2D_read_sums( b, p )
+                if( .not. cline%defined('refs') .and. cline%defined('oritab') )then
+                    ! we make references
+                    call cavger%transf_oridat(b%a)
+                    call cavger%assemble_sums()
+                    l_do_read = .false.
                 else
-                    ! we need to make references
-                    if( cline%defined('oritab') )then
-                        ! we make class averages
-                        call prime2D_assemble_sums(b, p)
-                    else
-                        ! we randomly select particle images as initial references
-                        p%refs = 'start2Drefs'//p%ext
-                        if( p%chunktag .ne. '' ) p%refs = trim(p%chunktag)//trim(p%refs)
-                        ptcl_mask = b%a%included()
-                        call random_selection_from_imgfile(p%stk, p%refs, p%ncls, p%box, p%smpd, ptcl_mask)
-                        deallocate(ptcl_mask)
-                        call prime2D_read_sums( b, p )
-                    endif
+                    ! we randomly select particle images as initial references
+                    p%refs = 'start2Drefs'//p%ext
+                    if( p%chunktag .ne. '' ) p%refs = trim(p%chunktag)//trim(p%refs)
+                    ptcl_mask = b%a%included()
+                    call random_selection_from_imgfile(p%stk, p%refs, p%ncls, p%box, p%smpd, ptcl_mask)
+                    deallocate(ptcl_mask)
                 endif
             endif
+        endif
+        if( l_do_read )then
+            if( .not. file_exists(p%refs) ) stop 'input references (refs) does not exist in cwd'
+            call cavger%read(p%refs, 'merged')
         endif
 
         ! SET FRACTION OF SEARCH SPACE
@@ -162,9 +160,12 @@ contains
         end select
         DebugPrint ' hadamard2D_matcher; completed alignment'
 
+        ! SETUP (OVERWRITES) EVEN/ODD PARTITION
+        call b%a%partition_eo('class', [p%fromp, p%top])
+
         ! REMAPPING OF HIGHEST POPULATED CLASSES
         if( p%l_distr_exec )then
-            ! this is done in cavg_assemble
+            ! this is done in distributed workflow
         else
             call b%a%fill_empty_classes(p%ncls)
         endif
@@ -174,20 +175,15 @@ contains
         p%oritab = p%outfile
 
         ! WIENER RESTORATION OF CLASS AVERAGES
-        if( frac_srch_space >= FRAC_INTERPOL )then
-            ! gridded rotation
-            call prime2D_assemble_sums(b, p, grid=.true.)
+        call cavger%transf_oridat(b%a)
+        call cavger%set_grid_flag(frac_srch_space >= FRAC_INTERPOL)
+        call cavger%assemble_sums()
+        if( p%l_distr_exec)then
+            call cavger%write_partial_sums()
         else
-            ! real-space rotation
-            call prime2D_assemble_sums(b, p, grid=.false.)
-        endif
-        DebugPrint ' generated class averages'
-
-        ! OUTPUT CLASS AVERAGES
-        if( p%l_distr_exec )then
-            call prime2D_write_partial_sums( b, p )
-        else
-            call prime2D_write_sums( b, p, which_iter )
+            p%refs = 'cavgs_iter'//int2str_pad(which_iter,3)//p%ext
+            if( p%chunktag .ne. '' ) p%refs = trim(p%chunktag)//trim(p%refs)
+            call cavger%write(p%refs, 'merged')
         endif
 
         ! DESTRUCT
@@ -196,6 +192,7 @@ contains
         end do
         deallocate( primesrch2D )
         call pftcc%kill
+        call cavger%kill
 
         ! REPORT CONVERGENCE
         if( p%l_distr_exec )then
@@ -204,265 +201,6 @@ contains
             converged = b%conv%check_conv2D()
         endif
     end subroutine prime2D_exec
-
-    subroutine prime2D_read_sums( b, p )
-        class(build),  intent(inout) :: b
-        class(params), intent(inout) :: p
-        integer :: icls
-        if( file_exists(p%refs) )then            
-            do icls=1,p%ncls
-                call b%cavgs(icls)%read(p%refs, icls)
-            end do
-        else
-            write(*,*) 'File does not exists: ', trim(p%refs)
-            stop 'In: simple_hadamard2D_matcher :: prime2D_read_sums'
-        endif
-    end subroutine prime2D_read_sums
-
-    subroutine prime2D_init_sums( b, p )
-        class(build),  intent(inout) :: b
-        class(params), intent(inout) :: p
-        integer :: icls
-        !$omp parallel do schedule(static) default(shared) private(icls) proc_bind(close)
-        do icls=1,p%ncls
-            b%cavgs(icls) = 0.
-            b%ctfsqsums(icls) = cmplx(0.,0.)
-        end do
-        !$omp end parallel do
-    end subroutine prime2D_init_sums
-
-    subroutine prime2D_assemble_sums( b, p, grid )
-        use simple_projector_hlev, only: rot_imgbatch
-        use simple_map_reduce,     only: split_nobjs_even
-        use simple_oris,           only: oris
-        use simple_ctf,            only: ctf
-        class(build),      intent(inout) :: b
-        class(params),     intent(inout) :: p
-        logical, optional, intent(in)    :: grid
-        type(oris)               :: a_here, batch_oris
-        type(ori)                :: orientation
-        type(image)              :: batch_imgsum, cls_imgsum
-        type(image), allocatable :: batch_imgs(:) 
-        integer,     allocatable :: ptcls_inds(:), batches(:,:)
-        logical,     allocatable :: batch_mask(:)
-        real      :: w
-        integer   :: icls, iptcl, istart, iend, inptcls, icls_pop
-        integer   :: i, nbatches, batch, batchsz, cnt
-        logical   :: l_grid
-        integer, parameter :: BATCHTHRSZ = 20
-        l_grid = .true.
-        if( present(grid) ) l_grid = grid
-        if( .not. p%l_distr_exec )then
-            write(*,'(a)') '>>> ASSEMBLING CLASS SUMS'
-        endif
-        ! init
-        call prime2D_init_sums( b, p )
-        if( p%l_distr_exec )then
-            istart  = p%fromp
-            iend    = p%top
-            inptcls = iend - istart +1
-            call a_here%new(inptcls)
-            cnt = 0
-            do iptcl = istart, iend
-                cnt = cnt + 1
-                call a_here%set_ori(cnt, b%a%get_ori(iptcl))
-            enddo
-        else
-            istart  = 1
-            iend    = p%nptcls
-            inptcls = p%nptcls
-            a_here  = b%a
-        endif
-        ! cluster loop
-        do icls = 1, p%ncls
-            call progress(icls,p%ncls)
-            icls_pop = a_here%get_pop( icls, 'class' )
-            if(icls_pop == 0)cycle
-            call cls_imgsum%new([p%box, p%box, 1], p%smpd)
-            ptcls_inds = a_here%get_pinds( icls, 'class' )
-            ! batch planning
-            nbatches = ceiling(real(icls_pop)/real(p%nthr*BATCHTHRSZ))
-            batches  = split_nobjs_even(icls_pop, nbatches)
-            ! batch loop
-            do batch = 1, nbatches
-                ! prep batch
-                batchsz = batches(batch,2) - batches(batch,1) + 1
-                allocate(batch_imgs(batchsz), batch_mask(batchsz))
-                batch_mask = .true.
-                call batch_oris%new(batchsz)
-                ! batch particles loop
-                do i = 1,batchsz
-                    iptcl       = istart - 1 + ptcls_inds(batches(batch,1)+i-1)
-                    orientation = b%a%get_ori(iptcl)
-                    call batch_oris%set_ori(i, orientation)
-                    ! stash images (this goes here or suffer bugs)
-                    call read_img_from_stk( b, p, iptcl )
-                    batch_imgs(i) = b%img
-                    ! enforce state, balancing and weight exclusions
-                    if( nint(orientation%get('state')) == 0 .or.&
-                        &nint(orientation%get('state_balance')) == 0 .or.&
-                        &orientation%get('w') < TINY )then
-                        batch_mask(i) = .false.
-                        cycle
-                    endif
-                    ! CTF square sum & shift
-                    call apply_ctf_and_shift(batch_imgs(i), orientation)
-                enddo
-                if( l_grid )then
-                    ! rotate batch by gridding
-                    call rot_imgbatch(batch_imgs, batch_oris, batch_imgsum, p%msk, batch_mask)
-                else
-                    ! real space rotation
-                    call batch_imgsum%new([p%box, p%box, 1], p%smpd)
-                    do i = 1,batchsz
-                        if( .not. batch_mask(i) ) cycle
-                        iptcl = istart - 1 + ptcls_inds(batches(batch,1)+i-1)
-                        orientation = b%a%get_ori(iptcl)
-                        w = orientation%get('w')
-                        call batch_imgs(i)%rtsq( -orientation%e3get(), 0., 0. )
-                        call batch_imgsum%add(batch_imgs(i), w)
-                    enddo
-                endif
-                ! batch summation
-                call cls_imgsum%add( batch_imgsum )
-                ! batch cleanup
-                do i = 1, batchsz
-                    call batch_imgs(i)%kill
-                enddo
-                deallocate(batch_imgs, batch_mask)
-            enddo
-            ! set class
-            b%cavgs(icls) = cls_imgsum
-            ! class cleanup
-            deallocate(ptcls_inds)
-        enddo
-        if( .not.p%l_distr_exec ) call prime2D_norm_sums( b, p )
-
-        contains
-
-            !> image is shifted and Fted on exit and the class CTF square sum updated
-            subroutine apply_ctf_and_shift( img, o )
-                class(image), intent(inout) :: img
-                class(ori),   intent(inout) :: o
-                type(image) :: ctfsq
-                type(ctf)   :: tfun
-                real        :: dfx, dfy, angast, x, y, pw
-                call ctfsq%new(img%get_ldim(), p%smpd)
-                call ctfsq%set_ft(.true.)
-                tfun = ctf(img%get_smpd(), o%get('kv'), o%get('cs'), o%get('fraca'))
-                ! set CTF and shift parameters
-                select case(p%tfplan%mode)
-                    case('astig') ! astigmatic CTF
-                        dfx    = o%get('dfx')
-                        dfy    = o%get('dfy')
-                        angast = o%get('angast')
-                    case('noastig') ! non-astigmatic CTF
-                        dfx    = o%get('dfx')
-                        dfy    = dfx
-                        angast = 0.
-                end select
-                x  = -o%get('x')
-                y  = -o%get('y')
-                pw = o%get('w')
-                ! apply
-                call img%fwd_ft
-                ! take care of the nominator
-                select case(p%tfplan%flag)
-                    case('yes')  ! multiply with CTF
-                        call tfun%apply_and_shift(img, ctfsq, x, y, dfx, 'ctf', dfy, angast)
-                    case('flip') ! multiply with abs(CTF)
-                        call tfun%apply_and_shift(img, ctfsq, x, y, dfx, 'abs', dfy, angast)
-                    case('mul','no')
-                        call tfun%apply_and_shift(img, ctfsq, x, y, dfx, '', dfy, angast)
-                end select
-                ! add to sum
-                call  b%ctfsqsums(icls)%add(ctfsq, pw)
-            end subroutine apply_ctf_and_shift
-
-    end subroutine prime2D_assemble_sums
-
-    subroutine prime2D_assemble_sums_from_parts( b, p )
-        class(build),  intent(inout) :: b
-        class(params), intent(inout) :: p
-        character(len=STDLEN) :: fname_cavgs, fname_ctfsqsums
-        integer :: ipart, icls
-        call prime2D_init_sums( b, p )
-        do ipart=1,p%nparts
-            fname_cavgs     = 'cavgs_part'//int2str_pad(ipart,p%numlen)//p%ext
-            fname_ctfsqsums = 'ctfsqsums_part'//int2str_pad(ipart,p%numlen)//p%ext
-            ! read & sum partial class averages
-            if( file_exists(fname_cavgs) )then
-                do icls=1,p%ncls
-                    call b%img%read(fname_cavgs, icls)
-                    ! add subaverage to class
-                    call b%cavgs(icls)%add(b%img)
-                end do
-            else
-                write(*,*) 'File does not exists: ', trim(fname_cavgs)
-                stop 'In: simple_hadamard2D_matcher :: prime2D_assemble'
-            endif
-            ! read & sum partial ctfsqsums
-            if( file_exists(fname_ctfsqsums) )then
-                do icls=1,p%ncls
-                    call b%img%read(fname_ctfsqsums, icls)
-                    ! add subaverage to class
-                    call b%ctfsqsums(icls)%add(b%img)
-                end do
-            else
-                write(*,*) 'File does not exists: ', trim(fname_ctfsqsums)
-                stop 'In: simple_hadamard2D_matcher :: prime2D_assemble'
-            endif
-        end do
-        call prime2D_norm_sums( b, p )
-    end subroutine prime2D_assemble_sums_from_parts
-
-    subroutine prime2D_write_partial_sums( b, p )
-        class(build),  intent(inout) :: b
-        class(params), intent(inout) :: p
-        integer :: icls
-        do icls=1,p%ncls
-            call b%cavgs(icls)%write('cavgs_part'//int2str_pad(p%part,p%numlen)//p%ext, icls)
-            call b%ctfsqsums(icls)%write('ctfsqsums_part'//int2str_pad(p%part,p%numlen)//p%ext, icls)
-        end do
-    end subroutine prime2D_write_partial_sums
-
-    subroutine prime2D_norm_sums( b, p )
-        class(build),  intent(inout) :: b
-        class(params), intent(inout) :: p
-        integer :: icls, pop
-        do icls=1,p%ncls
-            pop = b%a%get_pop(icls, 'class')
-            if( pop > 1 )then
-                call b%cavgs(icls)%fwd_ft
-                call b%cavgs(icls)%ctf_dens_correct(b%ctfsqsums(icls))
-                call b%cavgs(icls)%bwd_ft
-            endif
-        end do
-    end subroutine prime2D_norm_sums
-
-    subroutine prime2D_write_sums( b, p, which_iter, fname )
-        class(build),               intent(inout) :: b
-        class(params),              intent(inout) :: p
-        integer,          optional, intent(in)    :: which_iter
-        character(len=*), optional, intent(in)    :: fname
-        integer :: icls
-        if( present(which_iter) )then
-            if( present(fname) ) stop &
-            &'fname cannot be present together with which_iter; simple_hadamard2D_matcher :: prime2D_write_sums'
-            p%refs = 'cavgs_iter'//int2str_pad(which_iter,3)//p%ext
-        else
-            if( present(fname) )then
-                p%refs = fname
-            else
-                p%refs = 'startcavgs'//p%ext
-            endif
-        endif
-        if( p%chunktag .ne. '' ) p%refs = trim(p%chunktag)//trim(p%refs)
-        ! write to disk
-        do icls=1,p%ncls
-            call b%cavgs(icls)%write(p%refs, icls)
-        end do
-    end subroutine prime2D_write_sums
 
     !>  \brief  prepares the polarft corrcalc object for search
     subroutine preppftcc4align( b, p )
@@ -488,7 +226,7 @@ contains
             if( p%oritab /= '' ) pop = b%a%get_pop(icls, 'class')
             if( pop > 0 )then
                 ! prepare the reference
-                b%img = b%cavgs(icls)
+                call cavger%get_cavg(icls, 'merged', b%img)
                 if( p%oritab /= '' )then
                     call prep2Dref(b, p, icls, center=(pop > MINCLSPOPLIM))
                 else

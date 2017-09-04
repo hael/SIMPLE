@@ -11,30 +11,30 @@ public :: classaverager
 private
 
 type ptcl_record
-    integer              :: pind   = 0
-    integer              :: eo     = -1  ! even is 0, odd is 1, default is -1
-    real                 :: pw     = 0.0
-    real                 :: kv     = 0.0
-    real                 :: cs     = 0.0
-    real                 :: fraca  = 0.0
-    real                 :: dfx    = 0.0
-    real                 :: dfy    = 0.0 
-    real                 :: angast = 0.0
-    integer, allocatable :: classes(:)
-    integer, allocatable :: states(:)
-    real,    allocatable :: ows(:)
-    real,    allocatable :: e3s(:)
-    real,    allocatable :: shifts(:,:)
+    integer              :: pind   = 0      !< particle index in stack
+    integer              :: eo     = -1     !< even is 0, odd is 1, default is -1
+    real                 :: pw     = 0.0    !< particle weight
+    real                 :: kv     = 0.0    !< acceleration voltage (V)
+    real                 :: cs     = 0.0    !< spherical aberration constant (mm)
+    real                 :: fraca  = 0.0    !< fraction of amplitude contrast (0.1 for protein)
+    real                 :: dfx    = 0.0    !< defocus in x (microns)
+    real                 :: dfy    = 0.0    !< defocus in y (microns)
+    real                 :: angast = 0.0    !< angle of astigmatism (in degrees)
+    integer, allocatable :: classes(:)      !< class assignments (can be many per particle in 3D case, hence the array)
+    integer, allocatable :: states(:)       !< state assignments
+    real,    allocatable :: ows(:)          !< orientation weights
+    real,    allocatable :: e3s(:)          !< in-plane rotations
+    real,    allocatable :: shifts(:,:)     !< rotational origin shifts
 end type ptcl_record
 
 type classaverager
     private
     class(build),      pointer     :: bp => null()          !< pointer to build
     class(params),     pointer     :: pp => null()          !< pointer to params
-    integer                        :: istart, iend          !< particle index range
-    integer                        :: partsz                !< size of partition
-    integer                        :: ncls                  !< number of classes
-    integer                        :: nstates               !< number of states
+    integer                        :: istart  = 0, iend = 0 !< particle index range
+    integer                        :: partsz  = 0           !< size of partition
+    integer                        :: ncls    = 0           !< number of classes
+    integer                        :: nstates = 0           !< number of states
     type(ptcl_record), allocatable :: precs(:)              !< particle records     
     type(image),       allocatable :: cavgs_even(:,:)       !< class averages
     type(image),       allocatable :: cavgs_odd(:,:)        !< -"-
@@ -42,27 +42,31 @@ type classaverager
     type(image),       allocatable :: ctfsqsums_even(:,:)   !< CTF**2 sums for Wiener normalisation
     type(image),       allocatable :: ctfsqsums_odd(:,:)    !< -"-
     type(image),       allocatable :: ctfsqsums_merged(:,:) !< -"-
+    logical                        :: l_is_class    = .true.
     logical                        :: l_hard_assign = .true.
     logical                        :: l_grid        = .true.
     logical                        :: exists        = .false.
   contains
     ! constructors
     procedure          :: new
-    procedure          :: new_minimal
     ! setters/getters
+    procedure          :: transf_oridat
     procedure, private :: init_cavgs_sums
     procedure, private :: get_indices
     procedure, private :: class_pop
     procedure          :: get_cavg
+    procedure          :: set_cavg
+    procedure          :: set_grid_flag
     ! calculators
     procedure          :: assemble_sums
     procedure, private :: apply_ctf_and_shift
     procedure          :: merge_eos_and_norm
+    procedure          :: calc_frcs
     ! I/O
     procedure          :: write
-    procedure          :: write_partial_sums
     procedure          :: read
-
+    procedure          :: write_partial_sums
+    procedure          :: assemble_sums_from_parts
     ! destructor
     procedure          :: kill
 end type classaverager
@@ -75,21 +79,14 @@ contains
     !!          data is now managed so that all exclusions are taken care of here
     !!          which means properly balanced batches can be produced for both soft
     !!          and hard clustering solutions
-    subroutine new( self, b, p, grid, prime3Dsrchobj )
-        use simple_ori,          only: ori
-        use simple_oris,         only: oris
-        use simple_prime3D_srch, only: prime3D_srch
-        class(classaverager),          intent(inout) :: self
-        class(build),        target,   intent(inout) :: b
-        class(params),       target,   intent(inout) :: p
-        logical,             optional, intent(in)    :: grid
-        class(prime3D_srch), optional, intent(inout) :: prime3Dsrchobj(p%fromp:p%top)
-        real, allocatable :: ori_weights(:)
-        type(ori)         :: orientation
-        type(oris)        :: prime3D_oris, a_here
-        integer           :: alloc_stat, cnt, n_incl, iori
-        integer           :: cnt_ori, istate, icls, iptcl
-        logical           :: l_reduce_projs
+    subroutine new( self, b, p, which, grid )
+        class(classaverager),  intent(inout) :: self  !< instance
+        class(build),  target, intent(inout) :: b     !< builder
+        class(params), target, intent(inout) :: p     !< params
+        character(len=*),      intent(in)    :: which !< class/proj
+        logical, optional,     intent(in)    :: grid  !< gridding interpolation or not
+        integer :: alloc_stat
+        integer :: istate, icls
         ! destruct possibly pre-existing instance
         call self%kill
         ! set pointers
@@ -100,6 +97,21 @@ contains
         if( present(grid) ) self%l_grid = grid
         ! set nstates
         self%nstates = p%nstates
+        ! class or proj
+        select case(which)
+            case('class')
+                self%l_is_class = .true.
+                self%ncls       = p%ncls
+            case('proj')
+                self%l_is_class = .false.
+                if( p%nspace > NSPACE_BALANCE )then
+                    ! reduce the number of projection directions used 
+                    ! for the class average representation
+                    self%ncls = NSPACE_BALANCE
+                else
+                    self%ncls = p%nspace
+                endif
+        end select
         ! work out range and partsz
         if( p%l_distr_exec )then
             self%istart = p%fromp
@@ -110,11 +122,43 @@ contains
             self%iend   = p%nptcls
             self%partsz = p%nptcls
         endif
-        ! create the particle records
-        allocate(self%precs(self%partsz), stat=alloc_stat)
-        call alloc_errchk('new; simple_classaverager, self%precs', alloc_stat)
+        ! build arrays
+        allocate(self%precs(self%partsz), self%cavgs_even(p%nstates,self%ncls), self%cavgs_odd(p%nstates,self%ncls),&
+        &self%cavgs_merged(p%nstates,self%ncls), self%ctfsqsums_even(p%nstates,self%ncls),&
+        &self%ctfsqsums_odd(p%nstates,self%ncls), self%ctfsqsums_merged(p%nstates,self%ncls), stat=alloc_stat)
+        call alloc_errchk('new; simple_classaverager', alloc_stat)
+        do istate=1,p%nstates
+            do icls=1,self%ncls
+                call self%cavgs_even(istate,icls)%new([p%box,p%box,1],p%smpd)
+                call self%cavgs_odd(istate,icls)%new([p%box,p%box,1],p%smpd)
+                call self%cavgs_merged(istate,icls)%new([p%box,p%box,1],p%smpd)
+                call self%ctfsqsums_even(istate,icls)%new([p%box,p%box,1],p%smpd)
+                call self%ctfsqsums_odd(istate,icls)%new([p%box,p%box,1],p%smpd)
+                call self%ctfsqsums_merged(istate,icls)%new([p%box,p%box,1],p%smpd)
+            end do
+        end do
+        ! flag existence
+        self%exists = .true.
+    end subroutine new
+
+    ! setters/getters
+
+    !>  \brief  transfers orientation data to the instance
+    subroutine transf_oridat( self, a, prime3Dsrchobj )
+        use simple_ori,          only: ori
+        use simple_oris,         only: oris
+        use simple_prime3D_srch, only: prime3D_srch
+        class(classaverager),          intent(inout) :: self  !< instance
+        class(oris),                   intent(in)    :: a
+        class(prime3D_srch), optional, intent(inout) :: prime3Dsrchobj(self%istart:self%iend)
+        real, allocatable :: ori_weights(:)
+        type(ori)         :: orientation
+        type(oris)        :: prime3D_oris, a_here
+        integer           :: alloc_stat, cnt, n_incl, iori
+        integer           :: cnt_ori, istate, icls, iptcl
+        logical           :: l_reduce_projs
         ! create a copy of a that can be modified
-        a_here = b%a
+        a_here = a
         cnt    = 0
         ! fetch data from a_here
         do iptcl=self%istart,self%iend
@@ -133,7 +177,7 @@ contains
             self%precs(cnt)%kv    = a_here%get(iptcl,'kv')
             self%precs(cnt)%cs    = a_here%get(iptcl,'cs')
             self%precs(cnt)%fraca = a_here%get(iptcl,'fraca')
-            select case(p%tfplan%mode)
+            select case(self%pp%tfplan%mode)
                 case('astig') ! astigmatic CTF
                     self%precs(cnt)%dfx    = a_here%get(iptcl,'dfx')
                     self%precs(cnt)%dfy    = a_here%get(iptcl,'dfy')
@@ -147,13 +191,11 @@ contains
         self%l_hard_assign = .true.
         if( present(prime3Dsrchobj) )then
             l_reduce_projs = .false.
-            if( p%nspace > NSPACE_BALANCE )then
-                ! reduce the number of projection directions used for the class average representation
-                call a_here%reduce_projs(NSPACE_BALANCE, p%nsym, p%eullims)
+            if( self%pp%nspace > NSPACE_BALANCE )then
+                ! reduce the number of projection directions 
+                ! used for the class average representation
+                call a_here%reduce_projs(NSPACE_BALANCE, self%pp%nsym, self%pp%eullims)
                 l_reduce_projs = .true.
-                self%ncls = NSPACE_BALANCE
-            else
-                self%ncls = p%nspace
             endif
             cnt = 0
             do iptcl=self%istart,self%iend
@@ -162,15 +204,20 @@ contains
                 if( self%precs(cnt)%pind > 0 )then
                     ! ori template
                     orientation = a_here%get_ori(iptcl)
-                    if( p%npeaks > 1 )then
+                    if( self%pp%npeaks > 1 )then
                         self%l_hard_assign = .false.
                         ! get orientation distribution
                         call prime3Dsrchobj(iptcl)%get_oris(prime3D_oris, orientation)
-                        if( l_reduce_projs ) call prime3D_oris%reduce_projs(NSPACE_BALANCE, p%nsym, p%eullims)
+                        if( l_reduce_projs ) call prime3D_oris%reduce_projs(NSPACE_BALANCE, self%pp%nsym, self%pp%eullims)
                         ori_weights = prime3D_oris%get_all('ow')
                         n_incl = count(ori_weights > TINY)
                         if( n_incl >= 1 )then
                             ! allocate & set info in record
+                            if( allocated(self%precs(cnt)%classes) ) deallocate(self%precs(cnt)%classes)
+                            if( allocated(self%precs(cnt)%states)  ) deallocate(self%precs(cnt)%states)
+                            if( allocated(self%precs(cnt)%ows)     ) deallocate(self%precs(cnt)%ows)
+                            if( allocated(self%precs(cnt)%e3s)     ) deallocate(self%precs(cnt)%e3s)
+                            if( allocated(self%precs(cnt)%shifts)  ) deallocate(self%precs(cnt)%shifts)
                             allocate( self%precs(cnt)%classes(n_incl),  self%precs(cnt)%states(n_incl),&
                                       self%precs(cnt)%ows(n_incl),      self%precs(cnt)%e3s(n_incl),&
                                       self%precs(cnt)%shifts(n_incl,2), stat=alloc_stat )
@@ -192,19 +239,21 @@ contains
                         endif
                         deallocate(ori_weights)
                         call prime3D_oris%kill
-                    else
-                        cycle
                     endif
                 endif
             end do
         else
-            self%ncls = p%ncls
-            cnt       = 0
+            cnt = 0
             do iptcl=self%istart,self%iend
                 cnt = cnt + 1
                 ! inclusion condition
                 if( self%precs(cnt)%pind > 0 )then
                     ! allocate & set info in record
+                    if( allocated(self%precs(cnt)%classes) ) deallocate(self%precs(cnt)%classes)
+                    if( allocated(self%precs(cnt)%states)  ) deallocate(self%precs(cnt)%states)
+                    if( allocated(self%precs(cnt)%ows)     ) deallocate(self%precs(cnt)%ows)
+                    if( allocated(self%precs(cnt)%e3s)     ) deallocate(self%precs(cnt)%e3s)
+                    if( allocated(self%precs(cnt)%shifts)  ) deallocate(self%precs(cnt)%shifts)
                     allocate( self%precs(cnt)%classes(1),  self%precs(cnt)%states(1),&
                               self%precs(cnt)%ows(1),      self%precs(cnt)%e3s(1),&
                               self%precs(cnt)%shifts(1,2), stat=alloc_stat )
@@ -218,55 +267,8 @@ contains
                 endif
             end do
         endif
-        ! build cavg/CTF**2 arrays
-        allocate(self%cavgs_even(p%nstates,self%ncls), self%cavgs_odd(p%nstates,self%ncls),&
-        &self%cavgs_merged(p%nstates,self%ncls), self%ctfsqsums_even(p%nstates,self%ncls),&
-        &self%ctfsqsums_odd(p%nstates,self%ncls), self%ctfsqsums_merged(p%nstates,self%ncls), stat=alloc_stat)
-        call alloc_errchk('new; simple_classaverager, cavg/ctfsqsum arrays', alloc_stat)
-        do istate=1,p%nstates
-            do icls=1,self%ncls
-                call self%cavgs_even(istate,icls)%new([p%box,p%box,1],p%smpd)
-                call self%cavgs_odd(istate,icls)%new([p%box,p%box,1],p%smpd)
-                call self%cavgs_merged(istate,icls)%new([p%box,p%box,1],p%smpd)
-                call self%ctfsqsums_even(istate,icls)%new([p%box,p%box,1],p%smpd)
-                call self%ctfsqsums_odd(istate,icls)%new([p%box,p%box,1],p%smpd)
-                call self%ctfsqsums_merged(istate,icls)%new([p%box,p%box,1],p%smpd)
-            end do
-        end do
         call a_here%kill
-        self%exists = .true.
-    end subroutine new
-
-    !>  \brief  is a minimal constructor
-    subroutine new_minimal( self, b, p )
-        use simple_ori,  only: ori
-        use simple_oris, only: oris
-        class(classaverager),  intent(inout) :: self
-        class(build),  target, intent(inout) :: b
-        class(params), target, intent(inout) :: p
-        integer :: alloc_stat, istate, icls
-        ! set pointers
-        self%bp => b
-        self%pp => p
-        ! set nstates
-        self%nstates = p%nstates
-        ! build cavg/CTF**2 arrays
-        allocate(self%cavgs_even(p%nstates,self%ncls), self%cavgs_odd(p%nstates,self%ncls),&
-        &self%cavgs_merged(p%nstates,self%ncls), self%ctfsqsums_even(p%nstates,self%ncls),&
-        &self%ctfsqsums_odd(p%nstates,self%ncls), self%ctfsqsums_merged(p%nstates,self%ncls), stat=alloc_stat)
-        call alloc_errchk('new; simple_classaverager, cavg/ctfsqsum arrays', alloc_stat)
-        do istate=1,p%nstates
-            do icls=1,self%ncls
-                call self%cavgs_even(istate,icls)%new([p%box,p%box,1],p%smpd)
-                call self%cavgs_odd(istate,icls)%new([p%box,p%box,1],p%smpd)
-                call self%cavgs_merged(istate,icls)%new([p%box,p%box,1],p%smpd)
-                call self%ctfsqsums_even(istate,icls)%new([p%box,p%box,1],p%smpd)
-                call self%ctfsqsums_odd(istate,icls)%new([p%box,p%box,1],p%smpd)
-                call self%ctfsqsums_merged(istate,icls)%new([p%box,p%box,1],p%smpd)
-            end do
-        end do
-        self%exists = .true.
-    end subroutine new_minimal
+    end subroutine transf_oridat
 
     !>  \brief  is for initialization of the sums
     subroutine init_cavgs_sums( self )
@@ -301,24 +303,26 @@ contains
         call alloc_errchk('get_iprecs_ioris; simple_classaverager', alloc_stat)
         cnt = 0
         do iprec=1,self%partsz
-            sz = size(self%precs(iprec)%classes)
-            allocate(l_state_class(sz))
-            where( self%precs(iprec)%states .eq. state .and. self%precs(iprec)%classes .eq. class )
-                l_state_class = .true.
-            else where
-                l_state_class = .false.
-            endwhere
-            if( any(l_state_class) )then
-                do i=1,sz
-                    if( l_state_class(i) )then
-                        cnt = cnt + 1
-                        pinds(cnt)  = self%precs(iprec)%pind
-                        iprecs(cnt) = iprec
-                        ioris(cnt)  = i
-                    endif
-                enddo
+            if( allocated(self%precs(iprec)%classes) )then
+                sz = size(self%precs(iprec)%classes)
+                allocate(l_state_class(sz))
+                where( self%precs(iprec)%states .eq. state .and. self%precs(iprec)%classes .eq. class )
+                    l_state_class = .true.
+                else where
+                    l_state_class = .false.
+                endwhere
+                if( any(l_state_class) )then
+                    do i=1,sz
+                        if( l_state_class(i) )then
+                            cnt = cnt + 1
+                            pinds(cnt)  = self%precs(iprec)%pind
+                            iprecs(cnt) = iprec
+                            ioris(cnt)  = i
+                        endif
+                    enddo
+                endif
+                deallocate(l_state_class)
             endif
-            deallocate(l_state_class)
         end do
     end subroutine get_indices
 
@@ -330,45 +334,85 @@ contains
         logical, allocatable :: l_state_class(:)
         pop = 0
         do iprec=1,self%partsz
-            sz = size(self%precs(iprec)%classes)
-            allocate(l_state_class(sz))
-            where( self%precs(iprec)%states .eq. state .and. self%precs(iprec)%classes .eq. class )
-                l_state_class = .true.
-            else where
-                l_state_class = .false.
-            endwhere
-            pop = pop + count(l_state_class)
-            deallocate(l_state_class)
+            if( allocated(self%precs(iprec)%classes) )then
+                sz = size(self%precs(iprec)%classes)
+                allocate(l_state_class(sz))
+                where( self%precs(iprec)%states .eq. state .and. self%precs(iprec)%classes .eq. class )
+                    l_state_class = .true.
+                else where
+                    l_state_class = .false.
+                endwhere
+                pop = pop + count(l_state_class)
+                deallocate(l_state_class)
+            endif
         end do
     end function class_pop
 
     !>  \brief  is for getting a class average
-    subroutine get_cavg( self, state, class, which, img )
+    subroutine get_cavg( self, class, which, img, state )
         class(classaverager), intent(inout) :: self
-        integer,              intent(in)    :: state, class
+        integer,              intent(in)    :: class
         character(len=*),     intent(in)    :: which
-        class(image),         intent(out)   :: img
+        class(image),         intent(inout) :: img
+        integer, optional,    intent(in)    :: state
+        integer :: sstate
+        sstate = 1
+        if( present(state) ) sstate = state
         select case(which)
             case('even')
-                img = self%cavgs_even(state,class)
+                img = self%cavgs_even(sstate,class)
             case('odd')
-                img = self%cavgs_odd(state,class)
+                img = self%cavgs_odd(sstate,class)
             case('merged')
-                img = self%cavgs_merged(state,class)
+                img = self%cavgs_merged(sstate,class)
             case DEFAULT
                 stop 'unsupported which flag; simple_classaverager :: get_cavg'
         end select
     end subroutine get_cavg
 
+    !>  \brief  is for setting a class average
+    subroutine set_cavg( self, class, which, img, state )
+        class(classaverager), intent(inout) :: self
+        integer,              intent(in)    :: class
+        character(len=*),     intent(in)    :: which
+        class(image),         intent(in)    :: img
+        integer, optional,    intent(in)    :: state
+        integer :: sstate
+        sstate = 1
+        if( present(state) ) sstate = state
+        select case(which)
+            case('even')
+                self%cavgs_even(sstate,class)   = img
+            case('odd')
+                self%cavgs_odd(sstate,class)    = img
+            case('merged')
+                self%cavgs_merged(sstate,class) = img
+            case DEFAULT
+                stop 'unsupported which flag; simple_classaverager :: set_cavg'
+        end select
+    end subroutine set_cavg
+
+    !>  \brief  is for setting the flag that controls the interpolation method
+    !!          (gridding in F-space or quadratic real)
+    subroutine set_grid_flag( self, l_grid )
+        class(classaverager), intent(inout) :: self
+        logical,              intent(in)    :: l_grid
+        self%l_grid = l_grid
+    end subroutine set_grid_flag
+
+    ! calculators
+
     !>  \brief  is for assembling the sums in distributed/non-distributed mode
-    !!          using gridding interpolation in Fourier space or quadratic interpolation
-    !!          in real-space
+    !!          using gridding interpolation in Fourier space or quadratic 
+    !!          interpolation in real-space      
     subroutine assemble_sums( self )
-        use simple_math,       only: cyci_1d, sqwin_2d, rotmat2d
-        use simple_kbinterpol, only: kbinterpol
-        use simple_gridding,   only: prep4cgrid
-        use simple_projector,  only: projector
-        use simple_map_reduce, only: split_nobjs_even
+        use simple_math,            only: cyci_1d, sqwin_2d, rotmat2d
+        use simple_kbinterpol,      only: kbinterpol
+        use simple_gridding,        only: prep4cgrid
+        use simple_projector,       only: projector
+        use simple_map_reduce,      only: split_nobjs_even
+        use simple_jiffys,          only: progress
+        use simple_hadamard_common, only: read_img_from_stk
         class(classaverager), intent(inout)  :: self
         type(kbinterpol)             :: kbwin
         type(image)                  :: batch_imgsum_even, batch_imgsum_odd
@@ -416,9 +460,9 @@ contains
                     allocate(batch_imgs(batchsz), padded_imgs(batchsz))
                     ! batch particles loop
                     do i=1,batchsz
-                        iptcl = self%istart - 1 + ptcls_inds(batches(batch,1) + i - 1)
-                        iprec = iprecs(batches(batch,1) + i - 1)
-                        iori  = ioris(batches(batch,1)  + i - 1)
+                        iptcl = ptcls_inds(batches(batch,1) + i - 1)
+                        iprec = iprecs(batches(batch,1)     + i - 1)
+                        iori  = ioris(batches(batch,1)      + i - 1)
                         ! stash images (this goes here or suffer bugs)
                         call read_img_from_stk( self%bp, self%pp, iptcl )
                         batch_imgs(i) = self%bp%img
@@ -431,11 +475,12 @@ contains
                     if( self%l_grid )then ! Fourier rotation
                         lims     = padded_imgs(1)%loop_lims(2)
                         cyc_lims = padded_imgs(1)%loop_lims(3)
-                        allocate(cmat_even(lims(1,1):lims(1,2), lims(2,1):lims(2,2)), cyc1(wdim), cyc2(wdim),&
-                        &cmat_odd(lims(1,1):lims(1,2), lims(2,1):lims(2,2)), w(wdim, wdim), comps(wdim, wdim), stat=alloc_stat)
+                        allocate(cmat_even(lims(1,1):lims(1,2), lims(2,1):lims(2,2)),&
+                                &cmat_odd(lims(1,1):lims(1,2), lims(2,1):lims(2,2)),&
+                                &cyc1(wdim), cyc2(wdim), w(wdim, wdim), comps(wdim, wdim), stat=alloc_stat)
                         call alloc_errchk('assemble_sums; simple_classaverager', alloc_stat)
                         cmat_even = zero
-                        cmat_odd = zero
+                        cmat_odd  = zero
                         !$omp parallel do default(shared) private(i,iprec,iori,h,k,l,m,loc,mat,logi,phys,cyc1,cyc2,w,comps,win,incr,pw)&
                         !$omp schedule(static) reduction(+:cmat_even,cmat_odd) proc_bind(close)
                         ! batch loop, convolution interpolation
@@ -476,17 +521,13 @@ contains
                                     end do
                                     ! SUM( kernel x components )
                                     select case(self%precs(iprec)%eo)
-                                        case(0)
+                                        case(0,-1)
                                             cmat_even(h,k) = cmat_even(h,k) + pw * sum(w * comps)
                                         case(1)
                                             cmat_odd(h,k)  = cmat_odd(h,k)  + pw * sum(w * comps)
                                     end select
-                                    ! above is an optimized version of:
-                                    ! cmat(h,k) = cmat(h,k) + padded_imgs(i)%extr_gridfcomp( [loc(1),loc(2),0.] )
                                 end do
                             end do
-                            ! cleanup
-                            call padded_imgs(i)%kill
                         enddo
                         !$omp end parallel do
                         ! transfer to images
@@ -514,8 +555,8 @@ contains
                         call batch_imgsum_odd%bwd_ft
                         call batch_imgsum_even%clip_inplace(ldim)
                         call batch_imgsum_odd%clip_inplace(ldim)
-                        ! cleanup
-                        deallocate(padded_imgs,comps,w,cyc1,cyc2,cmat_even,cmat_odd)
+                        ! gridding cleanup
+                        deallocate(cmat_even, cmat_odd, cyc1, cyc2, w, comps)
                     else
                         ! real space rotation
                         call batch_imgsum_even%new([self%pp%box, self%pp%box, 1], self%pp%smpd)
@@ -536,7 +577,7 @@ contains
                             endif
                             ! add to sums
                             select case(self%precs(iprec)%eo)
-                                case(0)
+                                case(0,-1)
                                     call batch_imgsum_even%add(batch_imgs(i), pw)
                                 case(1)
                                     call batch_imgsum_odd%add(batch_imgs(i), pw)
@@ -549,14 +590,17 @@ contains
                     ! batch cleanup
                     do i=1,batchsz
                         call batch_imgs(i)%kill
+                        call padded_imgs(i)%kill
                     enddo
-                    deallocate(batch_imgs)
+                    deallocate(batch_imgs, padded_imgs)
+                    call batch_imgsum_even%kill
+                    call batch_imgsum_odd%kill
                 enddo
                 ! class cleanup
-                deallocate(ptcls_inds, iprecs, ioris)
+                deallocate(ptcls_inds, batches, iprecs, ioris)
             enddo
         enddo
-        if( .not.self%pp%l_distr_exec ) call self%merge_eos_and_norm
+        if( .not. self%pp%l_distr_exec ) call self%merge_eos_and_norm
     end subroutine assemble_sums
 
     !>  \brief  is for CTF application and shifting 
@@ -568,26 +612,25 @@ contains
         class(image),         intent(inout) :: img
         type(image) :: ctfsq
         type(ctf)   :: tfun
-        real        :: pw
+        real        :: x, y, dfx, dfy, angast, pw
         integer     :: state, class
         call ctfsq%new(img%get_ldim(), self%pp%smpd)
         call ctfsq%set_ft(.true.)
         tfun = ctf(img%get_smpd(), self%precs(iprec)%kv, self%precs(iprec)%cs, self%precs(iprec)%fraca)
         call img%fwd_ft
         ! take care of the nominator
+        x      = -self%precs(iprec)%shifts(iori,1)
+        y      = -self%precs(iprec)%shifts(iori,2)
+        dfx    =  self%precs(iprec)%dfx
+        dfy    =  self%precs(iprec)%dfy
+        angast =  self%precs(iprec)%angast
         select case(self%pp%tfplan%flag)
             case('yes')  ! multiply with CTF
-                call tfun%apply_and_shift(img, ctfsq, self%precs(iprec)%shifts(iori,1),&
-                &self%precs(iprec)%shifts(iori,2), self%precs(iprec)%dfx, 'ctf',&
-                &self%precs(iprec)%dfy, self%precs(iprec)%angast)
+                call tfun%apply_and_shift(img, ctfsq, x, y, dfx, 'ctf', dfy, angast)
             case('flip') ! multiply with abs(CTF)
-                call tfun%apply_and_shift(img, ctfsq, self%precs(iprec)%shifts(iori,1),&
-                &self%precs(iprec)%shifts(iori,2), self%precs(iprec)%dfx, 'abs',&
-                &self%precs(iprec)%dfy, self%precs(iprec)%angast)
+                call tfun%apply_and_shift(img, ctfsq, x, y, dfx, 'abs', dfy, angast)
             case('mul','no')
-                call tfun%apply_and_shift(img, ctfsq, self%precs(iprec)%shifts(iori,1),&
-                &self%precs(iprec)%shifts(iori,2), self%precs(iprec)%dfx, '',&
-                &self%precs(iprec)%dfy, self%precs(iprec)%angast)
+                call tfun%apply_and_shift(img, ctfsq, x, y, dfx, '', dfy, angast)
         end select
         ! prep weight
         if( self%l_hard_assign )then
@@ -600,7 +643,7 @@ contains
         class = self%precs(iprec)%classes(iori)
         ! add to sums
         select case(self%precs(iprec)%eo)
-            case(0)
+            case(0,-1)
                 call self%ctfsqsums_even(state, class)%add(ctfsq, pw)
             case(1)
                 call self%ctfsqsums_odd(state, class)%add(ctfsq, pw)
@@ -621,6 +664,9 @@ contains
                 call self%ctfsqsums_merged(istate,icls)%add(self%ctfsqsums_even(istate,icls))
                 call self%ctfsqsums_merged(istate,icls)%add(self%ctfsqsums_odd(istate,icls))
                 ! (w*CTF)**2 density correction
+                ! call self%ctfsqsums_even(istate,icls)%add(1.0)
+                ! call self%ctfsqsums_odd(istate,icls)%add(1.0)
+                ! call self%ctfsqsums_merged(istate,icls)%add(1.0)
                 call self%cavgs_even(istate,icls)%fwd_ft
                 call self%cavgs_even(istate,icls)%ctf_dens_correct(self%ctfsqsums_even(istate,icls))
                 call self%cavgs_even(istate,icls)%bwd_ft
@@ -634,42 +680,90 @@ contains
          end do
     end subroutine merge_eos_and_norm
 
-    !>  \brief  writes class averages to disk
-    subroutine write( self, which_iter, fname )
-        use simple_fileio, only: add2fbody
-        class(classaverager),       intent(inout) :: self
-        integer,          optional, intent(in)    :: which_iter
-        character(len=*), optional, intent(in)    :: fname
-        integer :: istate, icls
-        character(len=:), allocatable :: refname, refname_even, refname_odd
-        if( present(which_iter) )then
-            if( present(fname) ) stop &
-            &'fname cannot be present together with which_iter; simple_classaverager :: write'
-            self%pp%refs = 'cavgs_iter'//int2str_pad(which_iter,3)//self%pp%ext
-        else
-            if( present(fname) )then
-                self%pp%refs = fname
-            else
-                self%pp%refs = 'startcavgs'//self%pp%ext
-            endif
-        endif
-        if( self%pp%chunktag .ne. '' ) self%pp%refs = trim(self%pp%chunktag)//trim(self%pp%refs)
+    !>  \brief  calculates Fourier ring correlations
+    subroutine calc_frcs( self )
+        class(classaverager), intent(inout) :: self
+        type(image)       :: even_img, odd_img
+        real, allocatable :: res(:), frc(:)
+        integer           :: istate, icls
         do istate=1,self%nstates
-            if( self%nstates > 1 )then
-                refname = add2fbody(self%pp%refs, self%pp%ext, '_state'//int2str_pad(istate,2))
-            else
-                allocate(refname, source=trim(self%pp%refs))
-            endif
-            refname_even = add2fbody(refname, self%pp%ext, '_even')
-            refname_odd  = add2fbody(refname, self%pp%ext, '_odd')
             do icls=1,self%ncls
-                call self%cavgs_merged(istate, icls)%write(refname)
-                call self%cavgs_even(istate, icls)%write(refname_even)
-                call self%cavgs_odd(istate, icls)%write(refname_odd)
+                even_img = self%cavgs_even(istate,icls)
+                odd_img  = self%cavgs_odd(istate,icls)
+                call even_img%norm
+                call odd_img%norm
+                if( self%pp%l_innermsk )then
+                    call even_img%mask(self%pp%msk, 'soft', inner=self%pp%inner, width=self%pp%width)
+                    call odd_img%mask(self%pp%msk, 'soft', inner=self%pp%inner, width=self%pp%width)
+                else
+                    call even_img%mask(self%pp%msk, 'soft')
+                    call odd_img%mask(self%pp%msk, 'soft')
+                endif
+                call even_img%fsc(odd_img, res, frc)
+                call self%bp%projfrcs%set_frc(self%pp%box, istate, icls, frc)
             end do
-            deallocate(refname, refname_even, refname_odd)
-        enddo
+        end do
+    end subroutine calc_frcs
+
+    ! I/O
+
+    !>  \brief  writes class averages to disk
+    subroutine write( self, fname, which, state )
+        use simple_fileio, only: add2fbody
+        class(classaverager), intent(inout) :: self
+        character(len=*),     intent(in)    :: fname, which
+        integer, optional,    intent(in)    :: state
+        integer :: sstate, icls
+        sstate = 1
+        if( present(state) ) sstate = state
+        select case(which)
+            case('even')
+                do icls=1,self%ncls
+                    call self%cavgs_even(sstate, icls)%write(fname, icls)
+                end do
+            case('odd')
+                do icls=1,self%ncls
+                    call self%cavgs_odd(sstate, icls)%write(fname, icls)
+                end do
+            case('merged')
+                 do icls=1,self%ncls
+                    call self%cavgs_merged(sstate, icls)%write(fname, icls)
+                end do
+            case DEFAULT
+                stop 'unsupported which flag; simple_classaverager :: get_cavg'
+        end select
     end subroutine write
+
+    !>  \brief  reads class averages from disk
+    subroutine read( self, fname, which, state )
+        use simple_fileio, only: file_exists
+        class(classaverager), intent(inout) :: self
+        character(len=*),     intent(in)    :: fname, which
+        integer, optional,    intent(in)    :: state
+        integer :: sstate, icls
+        if( .not. file_exists(fname) )then
+            write(*,*) 'file does not exist in cwd: ', trim(fname)
+            stop 'simple_classaverager :: read'
+        endif
+        sstate = 1
+        if( present(state) ) sstate = state
+        select case(which)
+            case('even')
+                do icls=1,self%ncls
+                    call self%cavgs_even(sstate, icls)%read(fname, icls)
+                end do
+            case('odd')
+                do icls=1,self%ncls
+                    call self%cavgs_odd(sstate, icls)%read(fname, icls)
+                end do
+            case('merged')
+                 do icls=1,self%ncls
+                    call self%cavgs_merged(sstate, icls)%read(fname, icls)
+                end do
+            case DEFAULT
+                stop 'unsupported which flag; simple_classaverager :: get_cavg'
+        end select
+    end subroutine read
 
     !>  \brief  writes partial class averages to disk (distributed execution)
     subroutine write_partial_sums( self )
@@ -678,48 +772,25 @@ contains
         character(len=:), allocatable :: cae, cao, cte, cto
         do istate=1,self%nstates
             if( self%nstates > 1 )then
-                allocate(cae, source='cavgs_even_part'//int2str_pad(self%pp%part,self%pp%numlen)//self%pp%ext)
-                allocate(cao, source='cavgs_odd_part'//int2str_pad(self%pp%part,self%pp%numlen)//self%pp%ext)
-                allocate(cte, source='ctfsqsums_even_part'//int2str_pad(self%pp%part,self%pp%numlen)//self%pp%ext)
-                allocate(cto, source='ctfsqsums_odd_part'//int2str_pad(self%pp%part,self%pp%numlen)//self%pp%ext)
-            else
                 allocate(cae, source='cavgs'//'_state'//int2str_pad(istate,2)//'_even_part'//int2str_pad(self%pp%part,self%pp%numlen)//self%pp%ext)
                 allocate(cao, source='cavgs'//'_state'//int2str_pad(istate,2)//'_odd_part'//int2str_pad(self%pp%part,self%pp%numlen)//self%pp%ext)
                 allocate(cte, source='ctfsqsums'//'_state'//int2str_pad(istate,2)//'_even_part'//int2str_pad(self%pp%part,self%pp%numlen)//self%pp%ext)
                 allocate(cto, source='ctfsqsums'//'_state'//int2str_pad(istate,2)//'_odd_part'//int2str_pad(self%pp%part,self%pp%numlen)//self%pp%ext)
+            else
+                allocate(cae, source='cavgs_even_part'//int2str_pad(self%pp%part,self%pp%numlen)//self%pp%ext)
+                allocate(cao, source='cavgs_odd_part'//int2str_pad(self%pp%part,self%pp%numlen)//self%pp%ext)
+                allocate(cte, source='ctfsqsums_even_part'//int2str_pad(self%pp%part,self%pp%numlen)//self%pp%ext)
+                allocate(cto, source='ctfsqsums_odd_part'//int2str_pad(self%pp%part,self%pp%numlen)//self%pp%ext)
             endif
             do icls=1,self%ncls
-                call self%cavgs_even(istate, icls)%write(cae)
-                call self%cavgs_odd(istate, icls)%write(cao)
-                call self%ctfsqsums_even(istate, icls)%write(cte)
-                call self%ctfsqsums_odd(istate, icls)%write(cto)
+                call self%cavgs_even(istate, icls)%write(cae, icls)
+                call self%cavgs_odd(istate, icls)%write(cao, icls)
+                call self%ctfsqsums_even(istate, icls)%write(cte, icls)
+                call self%ctfsqsums_odd(istate, icls)%write(cto, icls)
             end do
             deallocate(cae, cao, cte, cto)
         end do
     end subroutine write_partial_sums
-
-    !>  \brief  reads class averages from disk
-    subroutine read( self )
-        use simple_fileio, only: add2fbody
-        class(classaverager), intent(inout) :: self
-        integer :: istate, icls
-        character(len=:), allocatable :: refname, refname_even, refname_odd
-        do istate=1,self%nstates
-            if( self%nstates > 1 )then
-                refname = add2fbody(self%pp%refs, self%pp%ext, '_state'//int2str_pad(istate,2))
-            else
-                allocate(refname, source=trim(self%pp%refs))
-            endif
-            refname_even = add2fbody(refname, self%pp%ext, '_even')
-            refname_odd  = add2fbody(refname, self%pp%ext, '_odd')
-            do icls=1,self%ncls
-                call self%cavgs_merged(istate, icls)%read(refname)
-                call self%cavgs_even(istate, icls)%read(refname_even)
-                call self%cavgs_odd(istate, icls)%read(refname_odd)
-            end do
-            deallocate(refname, refname_even, refname_odd)
-        enddo
-    end subroutine read
 
     !>  \brief  re-generates the object after distributed execution
     subroutine assemble_sums_from_parts( self )
@@ -729,18 +800,18 @@ contains
         integer :: ipart, istate, icls
         call self%init_cavgs_sums
         do istate=1,self%nstates
-            if( self%nstates > 1 )then
-                allocate(cae, source='cavgs_even_part'//int2str_pad(ipart,self%pp%numlen)//self%pp%ext)
-                allocate(cao, source='cavgs_odd_part'//int2str_pad(ipart,self%pp%numlen)//self%pp%ext)
-                allocate(cte, source='ctfsqsums_even_part'//int2str_pad(ipart,self%pp%numlen)//self%pp%ext)
-                allocate(cto, source='ctfsqsums_odd_part'//int2str_pad(ipart,self%pp%numlen)//self%pp%ext)
-            else
-                allocate(cae, source='cavgs'//'_state'//int2str_pad(istate,2)//'_even_part'//int2str_pad(ipart,self%pp%numlen)//self%pp%ext)
-                allocate(cao, source='cavgs'//'_state'//int2str_pad(istate,2)//'_odd_part'//int2str_pad(ipart,self%pp%numlen)//self%pp%ext)
-                allocate(cte, source='ctfsqsums'//'_state'//int2str_pad(istate,2)//'_even_part'//int2str_pad(ipart,self%pp%numlen)//self%pp%ext)
-                allocate(cto, source='ctfsqsums'//'_state'//int2str_pad(istate,2)//'_odd_part'//int2str_pad(ipart,self%pp%numlen)//self%pp%ext)
-            endif
             do ipart=1,self%pp%nparts
+                if( self%nstates > 1 )then
+                    allocate(cae, source='cavgs'//'_state'//int2str_pad(istate,2)//'_even_part'//int2str_pad(ipart,self%pp%numlen)//self%pp%ext)
+                    allocate(cao, source='cavgs'//'_state'//int2str_pad(istate,2)//'_odd_part'//int2str_pad(ipart,self%pp%numlen)//self%pp%ext)
+                    allocate(cte, source='ctfsqsums'//'_state'//int2str_pad(istate,2)//'_even_part'//int2str_pad(ipart,self%pp%numlen)//self%pp%ext)
+                    allocate(cto, source='ctfsqsums'//'_state'//int2str_pad(istate,2)//'_odd_part'//int2str_pad(ipart,self%pp%numlen)//self%pp%ext)
+                else
+                    allocate(cae, source='cavgs_even_part'//int2str_pad(ipart,self%pp%numlen)//self%pp%ext)
+                    allocate(cao, source='cavgs_odd_part'//int2str_pad(ipart,self%pp%numlen)//self%pp%ext)
+                    allocate(cte, source='ctfsqsums_even_part'//int2str_pad(ipart,self%pp%numlen)//self%pp%ext)
+                    allocate(cto, source='ctfsqsums_odd_part'//int2str_pad(ipart,self%pp%numlen)//self%pp%ext)
+                endif
                 if( file_exists(cae) )then
                     do icls=1,self%ncls
                         call self%bp%img%read(cae, icls)
@@ -768,7 +839,6 @@ contains
                     write(*,*) 'File does not exists: ', trim(cte)
                     stop 'In: simple_classaverager :: assemble_sums_from_parts'
                 endif
-
                 if( file_exists(cto) )then
                     do icls=1,self%ncls
                         call self%bp%img%read(cto, icls)
@@ -778,10 +848,13 @@ contains
                     write(*,*) 'File does not exists: ', trim(cto)
                     stop 'In: simple_classaverager :: assemble_sums_from_parts'
                 endif
+                deallocate(cae, cao, cte, cto )
             end do
         end do
         call self%merge_eos_and_norm()
     end subroutine assemble_sums_from_parts
+
+    ! destructor
 
     !>  \brief  is a destructor
     subroutine kill( self )
@@ -800,12 +873,25 @@ contains
                     call self%ctfsqsums_merged(istate,icls)%kill
                 end do
             end do
+            deallocate( self%cavgs_even, self%cavgs_odd, self%cavgs_merged,&
+            &self%ctfsqsums_even, self%ctfsqsums_odd, self%ctfsqsums_merged)
             do iprec=1,self%partsz
-                deallocate( self%precs(iprec)%classes, self%precs(iprec)%states,&
-                &self%precs(iprec)%ows, self%precs(iprec)%e3s, self%precs(iprec)%shifts)
+                if( allocated(self%precs(iprec)%classes) ) deallocate(self%precs(iprec)%classes)
+                if( allocated(self%precs(iprec)%states)  ) deallocate(self%precs(iprec)%states)
+                if( allocated(self%precs(iprec)%ows)     ) deallocate(self%precs(iprec)%ows)
+                if( allocated(self%precs(iprec)%e3s)     ) deallocate(self%precs(iprec)%e3s)
+                if( allocated(self%precs(iprec)%shifts)  ) deallocate(self%precs(iprec)%shifts)
             end do
             deallocate(self%precs)
-            self%exists = .false.
+            self%istart        = 0
+            self%iend          = 0
+            self%partsz        = 0
+            self%ncls          = 0
+            self%nstates       = 0
+            self%l_is_class    = .true.
+            self%l_hard_assign = .true.
+            self%l_grid        = .true.
+            self%exists        = .false.
         endif
     end subroutine kill
 

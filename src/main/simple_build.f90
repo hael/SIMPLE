@@ -15,6 +15,7 @@ use simple_syslib,           only: alloc_errchk
 use simple_projector,        only: projector
 use simple_polarizer,        only: polarizer
 use simple_masker,           only: masker
+use simple_projection_frcs,  only: projection_frcs
 use simple_fileio            ! use all in there
 use simple_binoris_io        ! use all in there
 implicit none
@@ -38,6 +39,7 @@ type :: build
     type(projector)                     :: vol_pad            !< -"- image objects
     type(masker)                        :: mskimg             !< mask image
     type(masker)                        :: mskvol             !< mask volume
+    type(projection_frcs)               :: projfrcs           !< projection FRC's used in the anisotropic Wiener filter
     ! COMMON LINES TOOLBOX
     type(image), allocatable            :: imgs(:)            !< images (all should be read in)
     type(image), allocatable            :: imgs_sym(:)        !< images (all should be read in)
@@ -47,8 +49,6 @@ type :: build
     type(eo_reconstructor)              :: eorecvol           !< object for eo reconstruction
     type(reconstructor)                 :: recvol             !< object for reconstruction
     ! PRIME TOOLBOX
-    type(image),            allocatable :: cavgs(:)           !< class averages (Wiener normalised references)
-    type(image),            allocatable :: ctfsqsums(:)       !< CTF**2 sums for Wiener normalisation
     type(projector),        allocatable :: refvols(:)         !< reference volumes for quasi-continuous search
     type(reconstructor),    allocatable :: recvols(:)         !< array of volumes for reconstruction
     type(eo_reconstructor), allocatable :: eorecvols(:)       !< array of volumes for eo-reconstruction
@@ -347,12 +347,6 @@ contains
         integer    :: icls, alloc_stat
         call self%kill_hadamard_prime2D_tbox
         call self%raise_hard_ctf_exception(p)
-        allocate( self%cavgs(p%ncls), self%ctfsqsums(p%ncls), stat=alloc_stat )
-        call alloc_errchk('build_hadamard_prime2D_tbox; simple_build, 1', alloc_stat)
-        do icls=1,p%ncls
-            call self%cavgs(icls)%new([p%box,p%box,1],p%smpd)
-            call self%ctfsqsums(icls)%new([p%box,p%box,1],p%smpd)
-        end do
         if( str_has_substr(p%refine,'neigh') )then
             if( file_exists(p%oritab3D) )then
                 call os%new(p%ncls)
@@ -363,6 +357,8 @@ contains
                 stop 'need oritab3D input for prime2D refine=neigh mode; simple_build :: build_hadamard_prime2D_tbox'
             endif
         endif
+        ! build projection frcs
+        call self%projfrcs%new(p%ncls, p%box, p%smpd, p%nstates)
         write(*,'(A)') '>>> DONE BUILDING HADAMARD PRIME2D TOOLBOX'
         self%hadamard_prime2D_tbox_exists = .true.
     end subroutine build_hadamard_prime2D_tbox
@@ -372,11 +368,7 @@ contains
         class(build), intent(inout) :: self
         integer :: i
         if( self%hadamard_prime2D_tbox_exists )then
-            do i=1,size(self%cavgs)
-                call self%cavgs(i)%kill
-                call self%ctfsqsums(i)%kill
-            end do
-            deallocate(self%cavgs, self%ctfsqsums)
+            call self%projfrcs%kill
             self%hadamard_prime2D_tbox_exists = .false.
         endif
     end subroutine kill_hadamard_prime2D_tbox
@@ -386,7 +378,7 @@ contains
         use simple_strings, only: str_has_substr
         class(build),  intent(inout) :: self
         class(params), intent(in)    :: p
-        integer :: s, alloc_stat, nnn
+        integer :: s, alloc_stat, nnn, ncls
         call self%kill_hadamard_prime3D_tbox
         call self%raise_hard_ctf_exception(p)
         ! reconstruction objects
@@ -402,6 +394,9 @@ contains
             call self%se%nearest_neighbors(self%e, nnn, self%nnmat)
         endif
         if( .not. self%a%isthere('proj') ) call self%a%set_projs(self%e)
+        ! build projection frcs
+        ncls = min(NSPACE_BALANCE,p%nspace)
+        call self%projfrcs%new(ncls, p%boxpd, p%smpd, p%nstates)
         write(*,'(A)') '>>> DONE BUILDING HADAMARD PRIME3D TOOLBOX'
         self%hadamard_prime3D_tbox_exists = .true.
     end subroutine build_hadamard_prime3D_tbox
@@ -425,6 +420,7 @@ contains
                 deallocate(self%recvols)
             endif
             if( allocated(self%nnmat) ) deallocate(self%nnmat)
+            call self%projfrcs%kill
             self%hadamard_prime3D_tbox_exists = .false.
         endif
     end subroutine kill_hadamard_prime3D_tbox

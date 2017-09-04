@@ -404,7 +404,6 @@ contains
         p_master = params(cline, checkdistr=.false.)
         ! make builder
         call b%build_general_tbox(p_master, cline, do3d=.false.)
-        call b%build_hadamard_prime2D_tbox( p_master )
         ! setup the environment for distributed execution
         call qenv%new(p_master)
         ! prepare job description
@@ -514,20 +513,22 @@ contains
         contains
 
             subroutine remaps_empty_cavgs
+                use simple_image, only: image
                 integer, allocatable :: fromtocls(:,:)
                 integer              :: icls
+                type(image)          :: img_cavg
                 call b%a%read( oritab )
                 call b%a%fill_empty_classes(p_master%ncls, fromtocls)
                 if( allocated(fromtocls) )then
                     ! updates document & classes
                     call b%a%write( oritab )
+                    call img_cavg%new([p_master%box,p_master%box,1], p_master%smpd)
                     do icls = 1, size(fromtocls, dim=1)
-                        call b%cavgs(fromtocls(icls, 1))%read(trim(refs), fromtocls(icls, 1))
-                        call b%cavgs(fromtocls(icls, 2))%copy(b%cavgs(fromtocls(icls, 1)))
-                        call b%cavgs(fromtocls(icls, 2))%write(trim(refs), fromtocls(icls, 2))
+                        call img_cavg%read(trim(refs), fromtocls(icls, 1))
+                        call img_cavg%write(trim(refs), fromtocls(icls, 2))
                     enddo
-                    call b%cavgs(p_master%ncls)%read(trim(refs), p_master%ncls)
-                    call b%cavgs(p_master%ncls)%write(trim(refs), p_master%ncls) ! to preserve size
+                    call img_cavg%read(trim(refs), p_master%ncls)
+                    call img_cavg%write(trim(refs), p_master%ncls) ! to preserve size
                 endif
             end subroutine remaps_empty_cavgs
 

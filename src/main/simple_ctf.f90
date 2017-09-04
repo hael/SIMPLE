@@ -300,19 +300,22 @@ contains
     end subroutine apply
 
     !>  \brief  is for applying CTF to an image
-    subroutine apply_and_shift( self, img, imgctfsq, x, y, dfx, mode, dfy, angast )
+    subroutine apply_and_shift( self, img, imgctfsq, x, y, dfx, mode, dfy, angast, ssnr )
         use simple_image, only: image
-        class(ctf),                 intent(inout) :: self     !< instance
-        class(image),               intent(inout) :: img      !< modified image (output)
-        class(image),               intent(inout) :: imgctfsq !< CTF**2 image (output)
-        real,                       intent(in)    :: x, y     !< rotational origin shift
-        real,                       intent(in)    :: dfx      !< defocus x-axis
-        character(len=*),           intent(in)    :: mode     !< abs, ctf, flip, flipneg, neg, square
-        real,             optional, intent(in)    :: dfy      !< defocus y-axis
-        real,             optional, intent(in)    :: angast   !< angle of astigmatism
-        integer :: ldim(3),logi(3),imode,lims(3,2),h,k,phys(3)
+        use simple_math,  only: hyp
+        class(ctf),       intent(inout) :: self     !< instance
+        class(image),     intent(inout) :: img      !< modified image (output)
+        class(image),     intent(inout) :: imgctfsq !< CTF**2 image (output)
+        real,             intent(in)    :: x, y     !< rotational origin shift
+        real,             intent(in)    :: dfx      !< defocus x-axis
+        character(len=*), intent(in)    :: mode     !< abs, ctf, flip, flipneg, neg, square
+        real, optional,   intent(in)    :: dfy      !< defocus y-axis
+        real, optional,   intent(in)    :: angast   !< angle of astigmatism
+        real, optional,   intent(in)    :: ssnr(:)  !< spectral signal-to-noise ratio
+        integer :: ldim(3),logi(3),imode,lims(3,2),h,k,phys(3),sh
         real    :: ang,tval,ddfy,aangast,spaFreqSq,hinv,kinv,hinvsq,kinvsq,inv_ldim(3),tvalsq
         complex :: comp
+        logical :: ssnr_present
         ldim = img%get_ldim()
         ! check that image is 2D
         if( img%is_3d() )then
@@ -336,6 +339,7 @@ contains
             case DEFAULT
                 imode = 3
         end select
+        ssnr_present = present(ssnr)
         ! initialize
         call self%init(dfx, ddfy, aangast)
         lims     = img%loop_lims(2)
@@ -345,6 +349,8 @@ contains
         !$omp private(h,hinv,k,kinv,spaFreqSq,ang,tval,tvalsq,logi,phys,comp) schedule(static)
         do h=lims(1,1),lims(1,2)
             do k=lims(2,1),lims(2,2)
+                ! find shell
+                sh = nint(hyp(real(h),real(k)))
                 ! calculate CTF and CTF**2.0 values
                 hinv      = real(h) * inv_ldim(1)
                 kinv      = real(k) * inv_ldim(2)
@@ -354,7 +360,12 @@ contains
                 if( imode <  3 ) tval = self%eval(spaFreqSq, dfx, ddfy, aangast, ang)
                 tvalsq = tval * tval
                 if( imode == 1 ) tval = abs(tval)
-                ! multiply image with CTF
+                ! take care of ssnr
+                if( ssnr_present )then
+                    tval   = tval * ssnr(sh)
+                    tvalsq = tval * ssnr(sh)
+                endif
+                ! multiply image
                 logi = [h,k,0]
                 phys = img%comp_addr_phys(logi)
                 comp = img%get_fcomp(logi, phys)
