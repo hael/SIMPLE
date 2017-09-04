@@ -372,6 +372,7 @@ contains
         use simple_commander_mask    ! use all in there
         use simple_procimgfile, only: random_selection_from_imgfile
         use simple_strings,     only: str_has_substr, real2str
+        use simple_build,       only: build
         class(prime2D_distr_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
         ! constants
@@ -391,17 +392,19 @@ contains
         ! other variables
         type(qsys_env)        :: qenv
         type(params)          :: p_master
+        type(build)           :: b
         character(len=STDLEN) :: refs, oritab, str, str_iter
         integer               :: iter, i
         type(chash)           :: job_descr
         real                  :: frac_srch_space
-        ! seed the random number generator
-        call seed_rnd
         ! output command line executed
         write(*,'(a)') '>>> COMMAND LINE EXECUTED'
         write(*,*) trim(cmdline_glob)
         ! make master parameters
         p_master = params(cline, checkdistr=.false.)
+        ! make builder
+        call b%build_general_tbox(p_master, cline, do3d=.false.)
+        call b%build_hadamard_prime2D_tbox( p_master )
         ! setup the environment for distributed execution
         call qenv%new(p_master)
         ! prepare job description
@@ -481,6 +484,8 @@ contains
             call cline_cavgassemble%set('oritab', trim(oritab))
             call cline_cavgassemble%set('which_iter', real(iter))
             call qenv%exec_simple_prg_in_queue(cline_cavgassemble, 'CAVGASSEMBLE', 'CAVGASSEMBLE_FINISHED')
+            ! remapping of empty classes
+            call remaps_empty_cavgs
             ! check convergence
             call cline_check2D_conv%set('oritab', trim(oritab))
             call xcheck2D_conv%execute(cline_check2D_conv)
@@ -505,6 +510,27 @@ contains
         call rename(trim(refs),   'cavgs_final'//p_master%ext)
         ! end gracefully
         call simple_end('**** SIMPLE_DISTR_PRIME2D NORMAL STOP ****')
+
+        contains
+
+            subroutine remaps_empty_cavgs
+                integer, allocatable :: fromtocls(:,:)
+                integer              :: icls
+                call b%a%read( oritab )
+                call b%a%fill_empty_classes(p_master%ncls, fromtocls)
+                if( allocated(fromtocls) )then
+                    ! updates document & classes
+                    call b%a%write( oritab )
+                    do icls = 1, size(fromtocls, dim=1)
+                        call b%cavgs(fromtocls(icls, 1))%read(trim(refs), fromtocls(icls, 1))
+                        call b%cavgs(fromtocls(icls, 2))%copy(b%cavgs(fromtocls(icls, 1)))
+                        call b%cavgs(fromtocls(icls, 2))%write(trim(refs), fromtocls(icls, 2))
+                    enddo
+                    call b%cavgs(p_master%ncls)%read(trim(refs), p_master%ncls)
+                    call b%cavgs(p_master%ncls)%write(trim(refs), p_master%ncls) ! to preserve size
+                endif
+            end subroutine remaps_empty_cavgs
+
     end subroutine exec_prime2D_distr
 
     ! PRIME2D CHUNK-BASED DISTRIBUTION 

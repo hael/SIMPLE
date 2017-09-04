@@ -199,21 +199,11 @@ contains
         class(cmdline),                intent(inout) :: cline
         type(params)         :: p
         type(build)          :: b
-        integer, allocatable :: fromtocls(:,:)
-        integer              :: fnr, file_stat, icls, ncls
+        integer              :: fnr, file_stat
         p = params(cline) ! parameters generated
         call b%build_general_tbox(p, cline, do3d=.false.) ! general objects built
         call b%build_hadamard_prime2D_tbox(p)
         call prime2D_assemble_sums_from_parts(b, p)
-        ! remapping
-        call b%a%fill_empty_classes(fromtocls)
-        if( allocated(fromtocls) )then
-            ! updates document & classes
-            call b%a%write(p%oritab)
-            do icls = 1, size(fromtocls, dim=1), 1
-                call b%cavgs(fromtocls(icls, 2))%copy(b%cavgs(fromtocls(icls, 1)))
-            enddo
-        endif
         ! output
         if( cline%defined('which_iter') )then
             call prime2D_write_sums(b, p, p%which_iter)

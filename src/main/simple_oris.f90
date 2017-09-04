@@ -569,28 +569,32 @@ contains
     end subroutine expand_classes
 
     !>  \brief  is for filling empty classes from the highest populated ones
-    subroutine fill_empty_classes( self, fromtocls )
+    subroutine fill_empty_classes( self, ncls, fromtocls)
         use simple_ran_tabu, only: ran_tabu
         class(oris),                    intent(inout) :: self
+        integer,                        intent(in)    :: ncls
         integer, allocatable, optional, intent(out)   :: fromtocls(:,:)
         integer, allocatable :: inds2split(:), membership(:), pops(:), fromtoall(:,:)
         type(ran_tabu)       :: rt
-        integer              :: alloc_stat, iptcl, cls2split(1), maxpop, i, icls
-        integer              :: cnt, nempty, ncls, n_incl
-        ! 'true' ensures at least one image will have a non-zero weight
-        pops   = self%get_pops('class', consider_w=.true.)
+        integer              :: alloc_stat, iptcl, cls2split(1)
+        integer              :: cnt, nempty, n_incl, maxpop, i, icls
+        pops   = self%get_pops('class', consider_w=.false.)
         nempty = count(pops == 0)
         if(nempty == 0)return
-        ncls = size(pops)
-        if( present(fromtocls) )allocate(fromtoall(ncls,2), source=0)
+        if( present(fromtocls) )then
+            if(allocated(fromtocls))deallocate(fromtocls)
+            allocate(fromtoall(ncls,2), source=0)
+        endif
         do icls = 1, ncls
-            if( pops(icls) > 0 )cycle
+            deallocate(pops, stat=alloc_stat)
+            pops = self%get_pops('class', consider_w=.false.)
+            if( pops(icls) /= 0 )cycle
             ! identify class to split
             cls2split  = maxloc(pops)
             maxpop     = pops(cls2split(1))
-            if( maxpop <= MINCLSPOPLIM )exit
+            if( maxpop <= 2*MINCLSPOPLIM )exit
             ! migration
-            inds2split = self%get_pinds(cls2split(1), 'class')
+            inds2split = self%get_pinds(cls2split(1), 'class', consider_w=.false.)
             rt = ran_tabu(maxpop)
             allocate(membership(maxpop), stat=alloc_stat)
             call rt%balanced(2, membership)
@@ -600,8 +604,6 @@ contains
                 call self%o(iptcl)%set('class', real(icls))
             enddo
             ! updates populations and migration
-            pops(icls) = count(membership == 1)
-            pops(cls2split(1)) = pops(cls2split(1)) - pops(icls)
             if(present(fromtocls))then
                 fromtoall(icls,1) = cls2split(1)
                 fromtoall(icls,2) = icls
@@ -2071,7 +2073,7 @@ contains
     !>  \brief  is for generating evenly distributed projection directions
     subroutine spiral_1( self )
         use simple_math, only: rad2deg
-        class(oris), intent(inout) :: self
+        class(oris),    intent(inout) :: self
         real    :: h, theta, psi
         integer :: k
         if( self%n == 1 )then
@@ -2098,32 +2100,71 @@ contains
     !>  \brief  is for generating evenly distributed projection directions
     !!          within the asymetric unit
     subroutine spiral_2( self, nsym, eullims )
+        use simple_math,     only: deg2rad
+        use simple_ran_tabu, only: ran_tabu
         class(oris), intent(inout) :: self
         integer,     intent(in)    :: nsym
         real,        intent(in)    :: eullims(3,2)
+        logical, allocatable :: avail(:)
         type(oris) :: tmp
-        integer    :: cnt, i, n
-        real       :: e1lim, e2lim, e1_area_frac, e2_area_frac
+        integer    :: cnt, i, n, nprojs, alloc_stat, lim
+        real       :: e1lim, e2lim, frac, frac1, frac2
         if( nsym == 1 )then
             call self%spiral_1
             return
         endif
-        e1lim = eullims(1,2)
-        e2lim = eullims(2,2)
-        ! e1_area_frac = (e1lim-eullims(1,1)) / 360.
-        ! e2_area_frac = (e2lim-eullims(2,1)) / 180.
-        ! n   = nint(real(self%n) /(e1_area_frac * e2_area_frac) )
-        n = nsym * self%n
-        tmp = oris(n)
-        call tmp%spiral_1
+        e1lim  = eullims(1,2)
+        e2lim  = eullims(2,2)
+        frac1  = 360./e1lim
+        frac2  = 1. / ( (1.-cos(deg2rad(e2lim))) /2. )
+        frac   = frac1 * frac2 ! area sphere / area asu
+        n      = ceiling(real(self%n) * frac) ! was n = nsym * self%n
+        call gen_c1
+        nprojs = count(avail)
+        if( nprojs < self%n )then
+            ! under sampling
+            n = n + self%n/2
+            call gen_c1
+            nprojs = count(avail)
+        endif
+        if( nprojs > self%n )then
+            ! over sampling
+            lim = max(2, floor(real(nprojs)/real(nprojs-self%n)))
+            cnt  = 0
+            do i = 1, n
+                if(.not.avail(i))cycle
+                cnt  = cnt + 1
+                if(cnt == lim) then
+                    avail(i) = .false.
+                    cnt      = 0
+                    nprojs   = nprojs-1
+                    if( nprojs == self%n )exit
+                endif
+            enddo
+        endif
+        ! copy asu
         cnt = 0
         do i = 1, n
-            if( tmp%o(i)%e1get() <= e1lim .and. tmp%o(i)%e2get() <= e2lim )then
-                cnt = cnt+1
+            if( avail(i) )then
+                cnt = cnt + 1
+                if(cnt > self%n)exit
                 self%o(cnt) = tmp%o(i)
-                if( cnt == self%n ) exit
             endif
-         end do
+        enddo
+
+        contains
+
+            subroutine gen_c1
+                integer :: i
+                if( allocated(avail) )deallocate(avail, stat=alloc_stat)
+                allocate(avail(n), source=.false., stat=alloc_stat)
+                call tmp%new(n)
+                call tmp%spiral_1
+                do i = 1, n
+                    if( tmp%o(i)%e1get() <= e1lim .and. tmp%o(i)%e2get() <= e2lim )&
+                    &avail(i) = .true.
+                end do
+            end subroutine gen_c1
     end subroutine spiral_2
 
     !>  \brief  is for generating a quasi-spiral within the asymetric unit
@@ -2526,7 +2567,7 @@ contains
                 deallocate(specscores,weights)
             endif
         else
-            stop 'specscore not part of oris; simple_oris :: calc_spectral_weights'
+            !stop 'specscore not part of oris; simple_oris :: calc_spectral_weights'
         endif
     end subroutine calc_spectral_weights
 

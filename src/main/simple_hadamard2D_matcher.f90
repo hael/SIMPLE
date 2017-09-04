@@ -104,7 +104,7 @@ contains
         endif
 
         ! EXTREMAL LOGICS
-        if( frac_srch_space < 98. .or. p%extr_iter <= 15 )then
+        if( frac_srch_space < 98. .and. p%extr_iter <= 15 )then
             extr_thresh = EXTRINITHRESH * (1.-EXTRTHRESH_CONST)**real(p%extr_iter-1)  ! factorial decay
             extr_thresh = min(EXTRINITHRESH, max(0., extr_thresh))
             corr_thresh = b%a%extremal_bound(extr_thresh)
@@ -166,7 +166,7 @@ contains
         if( p%l_distr_exec )then
             ! this is done in cavg_assemble
         else
-            call b%a%fill_empty_classes()
+            call b%a%fill_empty_classes(p%ncls)
         endif
 
         ! OUTPUT ORIENTATIONS
