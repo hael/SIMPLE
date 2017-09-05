@@ -795,7 +795,7 @@ contains
             ! Discretization of the projection directions
             ! init
             allocate(pops(p%nspace), source=0,stat=alloc_stat)
-            call alloc_errchk("In commander_oris:: vizoris allocating pops ", alloc_stat)
+            if(alloc_stat/=0)call alloc_errchk("In commander_oris:: vizoris allocating pops ", alloc_stat)
             ang = 3.6 / sqrt(real(p%nsym*p%nspace))
             maxradius = 0.75 * sqrt( (1.-cos(ang))**2. + sin(ang)**2. )
             ! projection direction attribution

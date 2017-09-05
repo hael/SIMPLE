@@ -32,10 +32,10 @@ contains
         character(len=STDLEN):: io_msg
         if( allocated(self%iarr) )then
             deallocate( self%iarr,STAT=err,ERRMSG=io_msg)
-            call alloc_errchk(" In simple_arr::new_1  deallocation fault "//trim(io_msg),err)
+            if(alloc_stat/=0)call alloc_errchk(" In simple_arr::new_1  deallocation fault "//trim(io_msg),err)
         end if
         allocate( self%iarr(size(iarr)), source=iarr, stat=err,errmsg=io_msg)
-        call alloc_errchk(" In simple_arr::new_1  allocation fault "//trim(io_msg),err)
+        if(alloc_stat/=0)call alloc_errchk(" In simple_arr::new_1  allocation fault "//trim(io_msg),err)
     end subroutine new_1
 
     subroutine new_2( self, rarr )
@@ -45,10 +45,10 @@ contains
         character(len=STDLEN):: io_msg
         if( allocated(self%rarr) ) then
             deallocate( self%rarr ,STAT=err,ERRMSG=io_msg)
-            call alloc_errchk(" In simple_arr::new_2 deallocation fault"//trim(io_msg),err)
+            if(alloc_stat/=0)call alloc_errchk(" In simple_arr::new_2 deallocation fault"//trim(io_msg),err)
           end if
         allocate( self%rarr(size(rarr)), source=rarr,STAT=err,ERRMSG=io_msg )
-        call alloc_errchk(" In simple_arr::new_2 allocation fault "//trim(io_msg),err)
+        if(alloc_stat/=0)call alloc_errchk(" In simple_arr::new_2 allocation fault "//trim(io_msg),err)
     end subroutine
 
     function iget( self ) result( iarr )
@@ -58,7 +58,7 @@ contains
         character(len=STDLEN):: io_msg
         if( allocated(self%iarr) )then
             allocate( iarr(size(self%iarr)), source=self%iarr ,stat=err,errmsg=io_msg)
-            call alloc_errchk(" In simple_arr::iget  allocation fault "//trim(io_msg),err)
+            if(alloc_stat/=0)call alloc_errchk(" In simple_arr::iget  allocation fault "//trim(io_msg),err)
         else
             stop 'no info in iarr; get_1; simple_arr'
         endif
@@ -71,7 +71,7 @@ contains
         character(len=STDLEN):: io_msg
         if( allocated(self%rarr) )then
             allocate( rarr(size(self%rarr)), source=self%rarr,STAT=err,ERRMSG=io_msg)
-            call alloc_errchk(" In simple_arr::rget  allocation fault "//trim(io_msg),err)
+            if(alloc_stat/=0)call alloc_errchk(" In simple_arr::rget  allocation fault "//trim(io_msg),err)
         else
             stop 'no info in rarr; get_2; simple_arr'
         endif
@@ -89,11 +89,11 @@ contains
         character(len=STDLEN):: io_msg
         if( allocated(self%iarr) ) then
             deallocate( self%iarr ,stat=err,errmsg=io_msg)
-            call alloc_errchk(" In simple_arr::kill  deallocation fault "//trim(io_msg),err)
+            if(alloc_stat/=0)call alloc_errchk(" In simple_arr::kill  deallocation fault "//trim(io_msg),err)
         end if
           if( allocated(self%rarr) )then
               deallocate( self%rarr, stat=err,errmsg=io_msg)
-              call alloc_errchk(" In simple_arr::kill  deallocation fault "//trim(io_msg),err)
+              if(alloc_stat/=0)call alloc_errchk(" In simple_arr::kill  deallocation fault "//trim(io_msg),err)
           end if
          
     end subroutine

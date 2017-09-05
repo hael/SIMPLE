@@ -8,7 +8,7 @@ use simple_pftcc_shsrch,     only: pftcc_shsrch
 use simple_pftcc_inplsrch,   only: pftcc_inplsrch
 use simple_math              ! use all in there
 use simple_defs              ! use all in there
-use simple_syslib            ! use all in there
+use simple_syslib,           only: alloc_errchk
 implicit none
 
 public :: prime3D_srch
@@ -152,8 +152,8 @@ contains
         if( p%oritab.ne.'' )then
             self%state_exists = a%states_exist(self%nstates)
         else
-            allocate(self%state_exists(self%nstates), stat=alloc_stat)   
-            call alloc_errchk('In: new; simple_prime3D_srch, 1', alloc_stat)
+            allocate(self%state_exists(self%nstates), stat=alloc_stat)
+            if(alloc_stat/=0)call alloc_errchk('In: new; simple_prime3D_srch, 1', alloc_stat)
             self%state_exists = .true.
         endif
         ! multiple states
@@ -1130,7 +1130,7 @@ contains
         type(ori)         :: o_new, o_old, o_new_copy
         real, allocatable :: corrs(:)
         real              :: euldist, mi_joint, mi_proj, mi_inpl, mi_state, dist_inpl
-        integer           :: roind, state, best_loc(1), iref
+        integer           :: roind, state, best_loc(1)
         o_old    = a%get_ori(iptcl)
         corrs    = self%o_peaks%get_all('corr')
         best_loc = maxloc(corrs) 
@@ -1235,7 +1235,7 @@ contains
         class(prime3D_srch), intent(inout) :: self
         class(oris),         intent(out)   :: os    !< search orientation list
         class(ori),          intent(in)    :: o_in  !< search orientation
-        type(ori) :: o, o_peak
+        type(ori) :: o
         integer   :: ipeak, npeaks
         npeaks = self%o_peaks%get_noris()
         call os%new( npeaks )
@@ -1272,7 +1272,7 @@ contains
         class(prime3D_srch), intent(inout) :: self
         integer,allocatable :: inds(:)
         allocate( inds(size(self%srch_order)), stat=alloc_stat )
-        call alloc_errchk( 'simple_prime3D_srch::get_srch_order', alloc_stat)
+        if(alloc_stat/=0)call alloc_errchk( 'simple_prime3D_srch::get_srch_order', alloc_stat)
         inds(:) = self%srch_order(:)
     end function get_srch_order
 
@@ -1402,7 +1402,7 @@ contains
     subroutine online_allocate( self )
         class(prime3D_srch), intent(inout) :: self
         allocate(self%proj_space_inds(self%nrefs), stat=alloc_stat)  
-        call alloc_errchk('In: prime3D_srch_allocate; simple_prime3D_srch', alloc_stat)
+        if(alloc_stat/=0)call alloc_errchk('In: prime3D_srch_allocate; simple_prime3D_srch', alloc_stat)
         self%proj_space_inds = 0
     end subroutine online_allocate
 

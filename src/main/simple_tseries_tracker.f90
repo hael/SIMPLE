@@ -62,7 +62,7 @@ contains
         ny = ldim(2) - box
         ! construct
         allocate(particle_locations(nframes,2), stat=alloc_stat)
-        call alloc_errchk("In: simple_tseries_tracker :: init_tracker", alloc_stat)
+        if(alloc_stat/=0)call alloc_errchk("In: simple_tseries_tracker :: init_tracker", alloc_stat)
         particle_locations = 0
         call frame_img%new(ldim, smpd)
         call tmp_img%new([box,box,1], smpd)
@@ -224,7 +224,7 @@ contains
 
     subroutine kill_tracker
         deallocate(particle_locations, framenames, stat=alloc_stat)
-        call alloc_errchk("simple_tseries_tracker::kill_tracker dealloc", alloc_stat)
+        if(alloc_stat/=0)call alloc_errchk("simple_tseries_tracker::kill_tracker dealloc", alloc_stat)
         call frame_img%kill
         call reference%kill
         call tmp_img%kill

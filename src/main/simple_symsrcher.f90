@@ -265,7 +265,7 @@ end module simple_symsrcher
     !         enddo
     !         deallocate(b%imgs_sym, b%ref_imgs)
     !         allocate( b%imgs_sym(1:p%nsym*p%nptcls), b%ref_imgs(p%nstates,p%nspace), stat=alloc_stat )
-    !         call alloc_errchk( 'build_update_tboxs; simple_symsrch, 1', alloc_stat )            
+!         call alloc_errchk( 'build_update_tboxs; simple_symsrch, 1', alloc_stat )            
     !         do i=1,p%nptcls*p%nsym
     !             call b%imgs_sym(i)%new([p%box,p%box,1], p%smpd)
     !         end do 

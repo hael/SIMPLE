@@ -13,6 +13,9 @@ implicit none
 
 public :: reconstructor
 private
+enum, bind(c) 
+    enumerator :: CTFMODE_NO = 0, CTFMODE_YES = 1, CTFMODE_MUL = 2,  CTFMODE_FLIP=3
+end enum
 
 type, extends(image) :: reconstructor
     private
@@ -28,6 +31,7 @@ type, extends(image) :: reconstructor
     integer                     :: lfny          = 0            !< Nyqvist Fourier index
     integer                     :: ldim_img(3)   = 0            !< logical dimension of the original image
     character(len=STDLEN)       :: ctfflag       = ''           !< ctf flag <yes|no|mul|flip>
+    integer                     :: ctfmode
     logical                     :: tfneg              = .false. !< invert contrast or not
     logical                     :: tfastig            = .false. !< astigmatic CTF or not
     logical                     :: rho_allocated      = .false. !< existence of rho matrix
@@ -111,11 +115,11 @@ contains
             allocate(self%cmat_exp( ldim_exp(1,1):ldim_exp(1,2),&
                                     &ldim_exp(2,1):ldim_exp(2,2),&
                                     &ldim_exp(3,1):ldim_exp(3,2)), stat=alloc_stat)
-            call alloc_errchk("In: alloc_rho; simple_reconstructor 1", alloc_stat)
+            if(alloc_stat/=0)call alloc_errchk("In: alloc_rho; simple_reconstructor 1", alloc_stat)
             allocate(self%rho_exp( rho_exp_lims(1,1):rho_exp_lims(1,2),&
                                     &rho_exp_lims(2,1):rho_exp_lims(2,2),&
                                     &rho_exp_lims(3,1):rho_exp_lims(3,2)), stat=alloc_stat)
-            call alloc_errchk("In: alloc_rho; simple_reconstructor 2", alloc_stat)
+            if(alloc_stat/=0)call alloc_errchk("In: alloc_rho; simple_reconstructor 2", alloc_stat)
             self%cmat_exp           = cmplx(0.,0.)
             self%rho_exp            = 0.
             self%cmat_exp_allocated = .true.
@@ -208,9 +212,9 @@ contains
             w = self%dens_const
         endif
         do i=1,wdim
-            where(w(i,:,:)>0.)w(i,:,:) = w(i,:,:) * self%kbwin%apod(real(win(1,1)+i-1)-loc(1))
-            where(w(:,i,:)>0.)w(:,i,:) = w(:,i,:) * self%kbwin%apod(real(win(2,1)+i-1)-loc(2))
-            where(w(:,:,i)>0.)w(:,:,i) = w(:,:,i) * self%kbwin%apod(real(win(3,1)+i-1)-loc(3))
+            where(w(i,:,:)>0.) w(i,:,:) = w(i,:,:) * self%kbwin%apod(real(win(1,1)+i-1)-loc(1))
+            where(w(:,i,:)>0.) w(:,i,:) = w(:,i,:) * self%kbwin%apod(real(win(2,1)+i-1)-loc(2))
+            where(w(:,:,i)>0.) w(:,:,i) = w(:,:,i) * self%kbwin%apod(real(win(3,1)+i-1)-loc(3))
         enddo
         ! expanded matrices update
         if( inoutmode )then
@@ -269,9 +273,9 @@ contains
         class(image),         intent(inout) :: fpl       !< Fourier plane
         real,    optional,    intent(in)    :: pwght     !< external particle weight (affects both fplane and rho)
         real,    optional,    intent(in)    :: mul       !< shift weight multiplier
-        integer :: h, k, lims(3,2), sh, lfny, logi(3), phys(3)
+        integer :: h, k, lims(3,2), logi(3), phys(3)
         complex :: oshift
-        real    :: x, y, xtmp, ytmp, pw
+        real    :: x, y, xtmp, ytmp
         logical :: pwght_present
         if( .not. fpl%is_ft() )       stop 'image need to be FTed; inout_fplane; simple_reconstructor'
         if( .not. (self.eqsmpd.fpl) ) stop 'scaling not yet implemented; inout_fplane; simple_reconstructor'

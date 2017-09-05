@@ -40,7 +40,7 @@ contains
         end do
         if( allocated(corrmat) ) deallocate(corrmat)
         allocate(corrmat(nptcls,nptcls), stat=alloc_stat)
-        call alloc_errchk('In: calc_cartesian_corrmat_1; simple_corrmat, 1', alloc_stat)
+        if(alloc_stat/=0)call alloc_errchk('In: calc_cartesian_corrmat_1; simple_corrmat, 1', alloc_stat)
         corrmat = 1.
         ntot = (nptcls*(nptcls-1))/2
         if( present(lp) )then ! Fourier correlation
@@ -56,7 +56,7 @@ contains
         else ! Real-space correlation
             ! first make the pairs to balance the parallel section
             allocate(pairs(ntot,2), stat=alloc_stat)
-            call alloc_errchk('In: calc_cartesian_corrmat_1; simple_corrmat, 2', alloc_stat)
+            if(alloc_stat/=0)call alloc_errchk('In: calc_cartesian_corrmat_1; simple_corrmat, 2', alloc_stat)
             cnt = 0
             do iptcl=1,nptcls-1
                 do jptcl=iptcl+1,nptcls
@@ -111,7 +111,7 @@ contains
         end do
         if( allocated(corrmat) ) deallocate(corrmat)
         allocate(corrmat(nsel,norig), stat=alloc_stat)
-        call alloc_errchk('In: calc_cartesian_corrmat_2; simple_corrmat, 1', alloc_stat)
+        if(alloc_stat/=0)call alloc_errchk('In: calc_cartesian_corrmat_2; simple_corrmat, 1', alloc_stat)
         if( doftcalc )then ! Fourier correlation
             do isel=1,nsel
                 call progress(isel,nsel)

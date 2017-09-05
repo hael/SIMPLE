@@ -129,7 +129,7 @@ contains
         endif
         call b%build_general_tbox(p, cline)   ! general objects built
         call b%build_hadamard_prime3D_tbox(p) ! prime3D objects built
-        ! determine resolution range
+        ! determine resolution range 
         if( cline%defined('lp') ) call prime3D_find_resrange( b, p, p%lp, p%lpstop )
         ! determine the number of peaks
         if( .not. cline%defined('npeaks') ) p%npeaks = min(10,b%e%find_npeaks(p%lp, p%moldiam))
@@ -332,7 +332,7 @@ contains
         limset = .false. ;  update_res = .false.
         if( p%eo .eq. 'yes' )then
             allocate( maplp(p%nstates) ,stat=alloc_stat)
-            call alloc_errchk("In commander_prime3D:: check3D_conv ", alloc_stat)
+            if(alloc_stat/=0)call alloc_errchk("In commander_prime3D:: check3D_conv ", alloc_stat)
             maplp = 0.
             do istate=1,p%nstates
                 if( b%a%get_pop( istate, 'state' ) == 0 )cycle ! empty state

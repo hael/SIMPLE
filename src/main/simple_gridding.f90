@@ -41,7 +41,7 @@ contains
         ! make the window
         allocate( w1(lims(1,1):lims(1,2)), w2(lims(2,1):lims(2,2)),&
         w3(lims(3,1):lims(3,2)), stat=alloc_stat )
-        call alloc_errchk("In: divide_w_instr; simple_gridding", alloc_stat)
+        if(alloc_stat/=0)call alloc_errchk("In: divide_w_instr; simple_gridding", alloc_stat)
         ! calculate the values
         call calc_w(lims(1,:), ldim(1), w1)
         if( img%square_dims() )then

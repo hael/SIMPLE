@@ -62,7 +62,7 @@ contains
         end select
         ! allocate
         allocate(self%pop(spec%npop,spec%ndim), self%costs(spec%npop), stat=alloc_stat)
-        call alloc_errchk("In: new_de; simple_de_opt", alloc_stat)
+        if(alloc_stat/=0)call alloc_errchk("In: new_de; simple_de_opt", alloc_stat)
         self%exists = .true. ! indicates existence
         if( spec%DEBUG ) write(*,*) 'created new differential evolution population'
     end subroutine new_de

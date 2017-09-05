@@ -3,6 +3,7 @@ module simple_shc_cluster
 use simple_defs
 use simple_oris, only: oris
 use simple_rnd,  only: irnd_uni
+use simple_syslib, only: alloc_errchk
 implicit none
 
 public :: shc_cluster, test_shc_cluster
@@ -29,10 +30,9 @@ type shc_cluster
 end type shc_cluster
 
 contains
-    
+
     !>  \brief  is a constructor
     subroutine new( self, N_in, ncls_in, S_in, o, minsim )
-        use simple_syslib, only: alloc_errchk
         class(shc_cluster), intent(inout) :: self
         integer,            intent(in)    :: N_in, ncls_in
         real, target,       intent(in)    :: S_in(N_in,N_in)
@@ -49,12 +49,12 @@ contains
             self%MINS = -1.
         endif
         allocate(self%labels(self%N), self%SPS(self%N), stat=alloc_stat)
-        call alloc_errchk('In: nsimple_shc_cluster::new', alloc_stat)
+        if(alloc_stat/=0)call alloc_errchk('In: nsimple_shc_cluster::new', alloc_stat)
         self%labels = 0
         self%SPS    = 0.
         self%existence = .true.
     end subroutine new
-   
+
     !>  \brief  is the stochastic hill climbing routine for clustering
     subroutine shc( self, doprint, label, sim )
         use simple_ran_tabu, only: ran_tabu
@@ -92,7 +92,7 @@ contains
                 convcnt = 0
             endif
             if( convcnt == CONVFAC ) exit
-        end do        
+        end do
         ! set ouput classes
         do iptcl=1,self%N
             call self%o_ptr%set(iptcl, label, real(self%labels(iptcl)))
@@ -100,7 +100,7 @@ contains
         call rt%kill
         sim = sim_new
     end subroutine shc
-    
+
     !>  \brief  initialises randomly and calculates per-particle similarities
     subroutine init( self )
         class(shc_cluster), intent(inout) :: self
@@ -114,7 +114,7 @@ contains
             call self%per_ptcl_sim(iptcl)
         end do
     end subroutine init
-    
+
     !>  \brief  executes a move and updates the label and the per-particle similarities
     subroutine move( self, iptcl )
         !$ use omp_lib
@@ -140,10 +140,10 @@ contains
                     endif
                 endif
             end do
-            !$omp end parallel do 
+            !$omp end parallel do
         endif
     end subroutine move
-    
+
     !>  \brief  calculates the per-particle similarity
     subroutine per_ptcl_sim( self, iptcl )
         class(shc_cluster), intent(inout) :: self
@@ -164,7 +164,7 @@ contains
             self%SPS(iptcl) = self%MINS
         endif
     end subroutine per_ptcl_sim
-    
+
     !>  \brief  evaluates a solution element replacement
     function eval_change( self, iptcl, cls ) result( sim )
         class(shc_cluster), intent(inout) :: self
@@ -186,7 +186,7 @@ contains
             self%SPS(iptcl) = self%MINS
         endif
     end function eval_change
-    
+
     !>  \brief  is the unit test
     subroutine test_shc_cluster
         real              :: smat(10,10)
@@ -213,14 +213,15 @@ contains
         call shcc%shc(.true., 'class', sim)
         call o%write('test_shc_cluster_doc.txt')
     end subroutine test_shc_cluster
-    
+
     !>  \brief  is the destructor
     subroutine kill( self )
         class(shc_cluster), intent(inout) :: self
         if( self%existence )then
             self%o_ptr => null()
             self%S     => null()
-            deallocate( self%labels, self%SPS )
+            deallocate( self%labels, self%SPS , stat=alloc_stat)
+            if(alloc_stat/=0)call alloc_errchk('In: nsimple_shc_cluster::kill ', alloc_stat)
             self%existence = .false.
         endif
     end subroutine kill

@@ -5,8 +5,8 @@ use simple_build,     only: build
 use simple_params,    only: params
 use simple_cmdline,   only: cmdline
 use simple_qsys_funs, only: qsys_job_finished
-use simple_math       ! use all in there
-use simple_filterer   ! use all in there
+!use simple_math       ! use all in there
+!use simple_filterer   ! use all in there
 implicit none
 
 public :: exec_rec_master
@@ -38,7 +38,7 @@ contains
         character(len=*), optional, intent(in)    :: fbody_in
         character(len=:), allocatable :: fbody
         character(len=STDLEN)         :: rho_name
-        integer :: s, fri, toi, file_stat, fnr, nstates_oritab
+        integer :: s, fri, toi
         ! rebuild b%vol according to box size (beacuse it is otherwise boxmatch)
         call b%vol%new([p%box,p%box,p%box], p%smpd)
         if( cline%defined('state') )then ! setting iteration from/to state
@@ -101,8 +101,7 @@ contains
         class(cmdline),             intent(inout) :: cline    
         character(len=*), optional, intent(in)    :: fbody_in
         character(len=:), allocatable :: fbody, fname
-        integer :: s, fri, toi, fnr, file_stat, ldim(3)
-        real    :: smpd
+        integer :: s, fri, toi
         ! rebuild b%vol according to box size (beacuse it is otherwise boxmatch)
         call b%vol%new([p%box,p%box,p%box], p%smpd)
         if( cline%defined('state') )then ! setting iteration from/to state

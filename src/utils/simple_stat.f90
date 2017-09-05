@@ -300,7 +300,7 @@ contains
         nx = size(data,1)
         ny = size(data,2)
         allocate(ave(nx,ny),stat=alstat)
-        call alloc_errchk("In: mean_2D; simple_stat",alstat )
+        if(alloc_stat/=0)call alloc_errchk("In: mean_2D; simple_stat",alstat )
         n  = nx*ny
         if( n <= 1 ) then
             write(*,*) 'ERROR: n must be at least 2'
@@ -361,7 +361,7 @@ contains
         nx = size(data,1)
         ny = size(data,2)
         allocate(stdev(nx,ny),var(nx,ny),stat=alstat)
-        call alloc_errchk("In: stdev_2D; simple_stat",alstat )
+        if(alloc_stat/=0)call alloc_errchk("In: stdev_2D; simple_stat",alstat )
         n  = nx*ny
         if( n <= 1 ) then
             write(*,*) 'ERROR: n must be at least 2'
@@ -531,7 +531,7 @@ contains
         integer :: icorr, ncorrs
         ncorrs = size(corrs)
         allocate(weights(ncorrs), corrs_copy(ncorrs), expnegdists(ncorrs),stat=alloc_stat)
-        call alloc_errchk("In: corrs2weights; simple_stat", alloc_stat )
+        if(alloc_stat/=0)call alloc_errchk("In: corrs2weights; simple_stat", alloc_stat )
         weights     = 0.
         corrs_copy  = corrs
         expnegdists = 0.
@@ -581,7 +581,7 @@ contains
         real, allocatable    :: vals(:)
         n = size(arr)
         allocate( vals(n), order(n), stat=alloc_stat )
-        call alloc_errchk("In: rank_transform_1; simple_stat", alloc_stat )
+        if(alloc_stat/=0)call alloc_errchk("In: rank_transform_1; simple_stat", alloc_stat )
         do j=1,n
             order(j) = j
             vals(j)  = arr(j)
@@ -603,7 +603,7 @@ contains
         ny = size(mat,2)
         n = nx*ny
         allocate( vals(n), order(n), indices(n,2), stat=alloc_stat )
-        call alloc_errchk("In: rank_transform_2; simple_stat", alloc_stat )
+        if(alloc_stat/=0)call alloc_errchk("In: rank_transform_2; simple_stat", alloc_stat )
         cnt = 0
         do i=1,nx
             do j=1,ny
@@ -793,7 +793,7 @@ contains
         maxv     = maxval(arr)
         binwidth = ( maxv - minv ) / real( nbins )
         allocate( h(nbins) , stat=alloc_stat )
-        call alloc_errchk('In: simple_stat; get_hist', alloc_stat)
+        if(alloc_stat/=0)call alloc_errchk('In: simple_stat; get_hist', alloc_stat)
         h = 0
         do i=1,n
             bin = nint((arr(i)-minv)/binwidth)   ! int(1.+(arr(i)-minv)/binwidth)
@@ -824,7 +824,7 @@ contains
         binwidth2 = ( maxval(y)-minv2 ) / real( nbins )
         ! Joint
         allocate( h(nbins,nbins) , stat=alloc_stat )
-        call alloc_errchk('In: simple_stat; get_jointhist', alloc_stat) 
+        if(alloc_stat/=0)call alloc_errchk('In: simple_stat; get_jointhist', alloc_stat) 
         h = 0
         do i=1,n
             bin1 = bin( x(i), minv1, binwidth1 )
@@ -888,7 +888,7 @@ contains
         ex = 0.
         ey = 0.
         allocate( rh(nbins,nbins), pxs(nbins), pys(nbins),stat=alstat)
-        call alloc_errchk("In: nmi; simple_stat",alstat )
+        if(alloc_stat/=0)call alloc_errchk("In: nmi; simple_stat",alstat )
         rh = real( get_jointhist( x, y, nbins ) ) / real( n )
         ! marginal entropies
         do i=1,nbins

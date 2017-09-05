@@ -111,7 +111,7 @@ contains
         ! allocate
         allocate( self%byte_array_header(self%n_bytes_header),&
                  &self%record(self%n_reals_per_record), stat=alloc_stat )
-        call alloc_errchk( 'In: binoris :: new_1', alloc_stat )
+        if(alloc_stat/=0)call alloc_errchk( 'In: binoris :: new_1', alloc_stat )
         ! set
         call self%header2byte_array
         self%record = 0.0
@@ -205,7 +205,7 @@ contains
         self%n_hash_vals    = transfer(bytes(5:8), self%n_hash_vals)
         allocate( self%byte_array_header(self%n_bytes_header),&
             &self%hash_keys(self%n_hash_vals), stat=alloc_stat )
-        call alloc_errchk( 'In: binoris :: new_2, 1', alloc_stat )
+        if(alloc_stat/=0)call alloc_errchk( 'In: binoris :: new_2, 1', alloc_stat )
         read(unit=self%funit,pos=1,iostat=io_status,iomsg=io_message) self%byte_array_header
         if( io_status .ne. 0 )then
             write(*,'(a,i0,2a)') '**error(binoris::new_2): error ', io_status,&
@@ -218,7 +218,7 @@ contains
         self%n_reals_per_record = self%n_hash_vals + self%n_peaks * NOPEAKFLAGS
         ! allocate
         allocate( self%record(self%n_reals_per_record), stat=alloc_stat )
-        call alloc_errchk( 'In: binoris :: new_2, 2', alloc_stat )
+        if(alloc_stat/=0)call alloc_errchk( 'In: binoris :: new_2, 2', alloc_stat )
         ! set
         self%record = 0.0
         call set_o_peak_flags ! class variable

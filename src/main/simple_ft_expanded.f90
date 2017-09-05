@@ -108,7 +108,7 @@ contains
                   self%transfmat(self%flims(1,1):self%flims(1,2),&
                                  self%flims(2,1):self%flims(2,2),&
                                  self%flims(3,1):self%flims(3,2), 3), stat=alloc_stat)
-        call alloc_errchk("In: new_1; simple_ft_expanded, 2", alloc_stat)
+        if(alloc_stat/=0)call alloc_errchk("In: new_1; simple_ft_expanded, 2", alloc_stat)
         self%cmat      = cmplx(0.,0.)
         self%transfmat = 0.
         hcnt = 0
@@ -336,7 +336,7 @@ contains
                                self1%flims(2,1):self1%flims(2,2),   &
                                self1%flims(3,1):self1%flims(3,2)),  &
                                stat=alloc_stat                      )
-            call alloc_errchk("In: corr_shifted; simple_ft_expanded", alloc_stat)
+            if(alloc_stat/=0)call alloc_errchk("In: corr_shifted; simple_ft_expanded", alloc_stat)
             shvec_here = shvec
             if( self1%ldim(3) == 1 ) shvec_here(3) = 0.
             !$omp parallel do collapse(3) schedule(static) default(shared) &

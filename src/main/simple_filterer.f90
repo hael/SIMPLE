@@ -22,7 +22,7 @@ contains
         integer :: find, sz
         sz = img%get_filtsz()
         allocate(filter(sz),stat=alloc_stat)
-        call alloc_errchk("simple_filterer::acc_dose2filter ",alloc_stat)
+        if(alloc_stat/=0)call alloc_errchk("simple_filterer::acc_dose2filter ",alloc_stat)
         do find=1,sz
             filter(find) = dose_weight(acc_dose, img%get_spat_freq(find), kV)
         end do
@@ -63,7 +63,7 @@ contains
         filtsz_orig   = size(filt_orig)
         filtsz_resamp = size(res_new)
         allocate(filt_resamp(filtsz_resamp),stat=alloc_stat)
-        call alloc_errchk("simple_filterer::resample_filter ",alloc_stat)
+        if(alloc_stat/=0)call alloc_errchk("simple_filterer::resample_filter ",alloc_stat)
         do k=1,filtsz_resamp
             call find(res_orig, filtsz_orig, res_new(k), ind, dist)
             filt_resamp(k) = filt_orig(ind)

@@ -119,7 +119,7 @@ contains
                 ndatlines = boxfile%get_ndatalines()
                 numlen    = len(int2str(ndatlines))
                 allocate( boxdata(ndatlines,boxfile%get_nrecs_per_line()), stat=alloc_stat)
-                call alloc_errchk('In: simple_commander_tseries :: exec_tseries_track', alloc_stat)
+                if(alloc_stat/=0)call alloc_errchk('In: simple_commander_tseries :: exec_tseries_track', alloc_stat)
                 do j=1,ndatlines
                     call boxfile%readNextDataLine(boxdata(j,:))
                     orig_box = nint(boxdata(j,3))

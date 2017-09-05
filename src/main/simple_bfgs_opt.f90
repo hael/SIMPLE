@@ -28,7 +28,7 @@ contains
         call self%kill
         allocate(self%p(spec%ndim),self%dg(spec%ndim),self%hdg(spec%ndim),&
         self%hessin(spec%ndim,spec%ndim),self%pnew(spec%ndim),self%xi(spec%ndim),stat=alloc_stat)
-        call alloc_errchk('In: new_bfgs_opt; simple_bfgs_opt', alloc_stat)
+        if(alloc_stat/=0)call alloc_errchk('In: new_bfgs_opt; simple_bfgs_opt', alloc_stat)
         self%dg     = 0.
         self%hdg    = 0.
         self%hessin = 0.

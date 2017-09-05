@@ -609,7 +609,7 @@ contains
         else if( sz_chash > 0 )then
             allocate( str, source=str_chtab ,stat=alloc_stat)
         endif
-        call alloc_errchk("in simple_ori::ori2str ",alloc_stat)
+        if(alloc_stat/=0)call alloc_errchk("in simple_ori::ori2str ",alloc_stat)
     end function ori2str
 
     !<  \brief  to print the rotation matrix

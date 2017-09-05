@@ -186,7 +186,7 @@ contains
         if( cline%defined('msk') )then
             if( p%stats .eq. 'yes' )then
                 allocate(corrs(p%nptcls), stat=alloc_stat)
-                call alloc_errchk('In: simple_commander_imgproc::corrcompare 1 ', alloc_stat)
+                if(alloc_stat/=0)call alloc_errchk('In: simple_commander_imgproc::corrcompare 1 ', alloc_stat)
             endif
             do iptcl=1,p%nptcls
                 call b%img%read(p%stk, iptcl)
@@ -231,7 +231,7 @@ contains
                 call b%img%fsc(b%img_copy, res, corrs)
                 if( .not. allocated(corrs_sum) )then
                     allocate(corrs_sum(size(corrs)), stat=alloc_stat)
-                    call alloc_errchk('In: simple_commander_imgproc:: corrcompare , 2', alloc_stat)
+                    if(alloc_stat/=0)call alloc_errchk('In: simple_commander_imgproc:: corrcompare , 2', alloc_stat)
                     corrs_sum = 0.
                 endif
                 corrs_sum = corrs_sum+corrs
@@ -387,7 +387,7 @@ contains
         p = params(cline, .false.)                           ! constants & derived constants produced
         call b%build_general_tbox(p, cline, .false., .true.) ! general objects built (no oritab reading)
         allocate(b%imgs_sym(p%nptcls), stat=alloc_stat)
-        call alloc_errchk('In: simple_image_smat, 1', alloc_stat)
+        if(alloc_stat/=0)call alloc_errchk('In: simple_image_smat, 1', alloc_stat)
         do iptcl=1,p%nptcls
             call b%imgs_sym(iptcl)%new([p%box,p%box,1], p%smpd)
             call b%imgs_sym(iptcl)%read(p%stk, iptcl)
@@ -750,7 +750,7 @@ contains
         if( cline%defined('nran') )then
             write(*,'(a)') '>>> RANDOMLY SELECTING IMAGES'
             allocate( pinds(p%nran), stat=alloc_stat )
-            call alloc_errchk('In: simple_commander; stackops', alloc_stat)
+            if(alloc_stat/=0)call alloc_errchk('In: simple_commander; stackops', alloc_stat)
             rt = ran_tabu(p%nptcls)
             call rt%ne_ran_iarr(pinds)
             if( cline%defined('oritab') .or. cline%defined('deftab') )then

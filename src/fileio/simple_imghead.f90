@@ -1114,7 +1114,7 @@ contains
                 type is (MrcImgHead)
                     if( allocated(self%byte_array) )then
                         deallocate(self%byte_array, stat=alloc_stat)
-                        call alloc_errchk('In: simple_imghead; kill ', alloc_stat)
+                        if(alloc_stat/=0)call alloc_errchk('In: simple_imghead; kill ', alloc_stat)
                     end if
                 type is (SpiImgHead)
                     return

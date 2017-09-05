@@ -2,10 +2,11 @@
 module simple_commander_preproc
 use simple_defs            ! use all in there
 use simple_jiffys,         only: progress, simple_end
-use simple_fileio          ! use all in there
-use simple_binoris_io      ! use all in there
+use simple_fileio,         ! use all in there
+use simple_binoris_io,     only: binwrite_oritab
 use simple_strings,        only: int2str, int2str_pad
-use simple_syslib,         only: exec_cmdline, simple_stop
+use simple_syslib,         only: alloc_errchk,exec_cmdline, simple_stop
+use simple_qsys_funs,    only: qsys_job_finished
 use simple_cmdline,        only: cmdline
 use simple_params,         only: params
 use simple_build,          only: build
@@ -79,7 +80,6 @@ contains
         use simple_oris,         only: oris
         use simple_ori,          only: ori
         use simple_math,         only: round2even
-        use simple_qsys_funs,    only: qsys_job_finished
         class(preproc_commander), intent(inout) :: self
         class(cmdline),           intent(inout) :: cline
         type(ctffind_iter)      :: cfiter
@@ -455,7 +455,6 @@ contains
         use simple_oris,        only: oris
         use simple_ori,         only: ori
         use simple_math,        only: round2even
-        use simple_qsys_funs,   only: qsys_job_finished
         class(unblur_commander), intent(inout) :: self
         class(cmdline),          intent(inout) :: cline !< command line input
         type(params)      :: p
@@ -531,7 +530,6 @@ contains
     subroutine exec_ctffind( self, cline )
         use simple_ctffind_iter, only: ctffind_iter
         use simple_oris,         only: oris
-        use simple_qsys_funs,    only: qsys_job_finished
         class(ctffind_commander), intent(inout) :: self
         class(cmdline),           intent(inout) :: cline  !< command line input
         type(params)                       :: p
@@ -651,7 +649,7 @@ contains
         end do
         if( file_exists('corrmat_select.bin') )then
             allocate(correlations(nsel,nall), stat=alloc_stat)
-            call alloc_errchk('In: exec_select; simple_commander_preproc', alloc_stat)
+            if(alloc_stat/=0)call alloc_errchk('In: exec_select; simple_commander_preproc', alloc_stat)
             ! read matrix
 
             call fopen(funit, status='OLD', action='READ', file='corrmat_select.bin', access='STREAM', iostat=io_stat)
@@ -680,7 +678,7 @@ contains
         ! find selected
         ! in addition to the index array, also make a logical array encoding the selection (to be able to reject)
         allocate(selected(nsel), lselected(nall),stat=alloc_stat)
-        call alloc_errchk("In commander_preproc::select selected lselected ",alloc_stat)
+        if(alloc_stat/=0)call alloc_errchk("In commander_preproc::select selected lselected ",alloc_stat)
         lselected = .false.
         do isel=1,nsel
             loc = maxloc(correlations(isel,:))
@@ -692,12 +690,8 @@ contains
             ! read filetable
             call read_filetable(p%filetab, imgnames)
             if( size(imgnames) /= nall ) stop 'nr of entries in filetab and stk not consistent'
-
             call fopen(funit, file=p%outfile,status="replace", action="write", access="sequential", iostat=io_stat)
             call fileio_errmsg('simple_commander_preproc ; fopen error when opening '//trim(p%outfile), ios)
-            !if( ios /= 0 )then
-            !    HALT("In exec_select; simple_commander_preproc Error opening file name"//trim(adjustl(p%outfile)) )
-            !endif
             call exec_cmdline('mkdir -p '//trim(adjustl(p%dir_select))//'|| true')
             call exec_cmdline('mkdir -p '//trim(adjustl(p%dir_reject))//'|| true')
             ! write outoput & move files
@@ -990,7 +984,7 @@ contains
 
             ! read box data
             allocate( boxdata(ndatlines,boxfile%get_nrecs_per_line()), pinds(ndatlines), stat=alloc_stat)
-            call alloc_errchk('In: simple_extract; boxdata etc., 2', alloc_stat)
+            if(alloc_stat/=0)call alloc_errchk('In: simple_extract; boxdata etc., 2', alloc_stat)
             do j=1,ndatlines
                 call boxfile%readNextDataLine(boxdata(j,:))
                 orig_box = nint(boxdata(j,3))

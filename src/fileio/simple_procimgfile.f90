@@ -85,13 +85,13 @@ contains
         call img%new(ldim,1.)
         D = img%get_npix(mskrad)
         allocate(pcavec(D), stat=alloc_stat)
-        call alloc_errchk('make_pattern_stack; simple_procimgfile, 1', alloc_stat)
+        if(alloc_stat/=0)call alloc_errchk('make_pattern_stack; simple_procimgfile, 1', alloc_stat)
         pcavec = 0.
         inquire(iolength=recsz) pcavec
         deallocate(pcavec)
         if( present(avg) )then
             allocate(avg(D), stat=alloc_stat)
-            call alloc_errchk('make_pattern_stack; simple_procimgfile, 2', alloc_stat)
+            if(alloc_stat/=0)call alloc_errchk('make_pattern_stack; simple_procimgfile, 2', alloc_stat)
             avg = 0.
         endif
         ! extract patterns and write to file
@@ -134,7 +134,7 @@ contains
         if( present(avg) )then
             avg = avg/real(n)
             allocate(pcavec(D), stat=alloc_stat)
-            call alloc_errchk('make_pattern_stack; simple_procimgfile, 3', alloc_stat)
+            if(alloc_stat/=0)call alloc_errchk('make_pattern_stack; simple_procimgfile, 3', alloc_stat)
             do i=1,n
                 read(fnum,rec=i) pcavec
                 pcavec = pcavec-avg

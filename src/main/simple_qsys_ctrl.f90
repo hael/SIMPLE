@@ -6,7 +6,7 @@ use simple_qsys_local,   only: qsys_local
 use simple_chash,        only: chash
 use simple_strings,      only: int2str, int2str_pad
 use simple_cmdline,      only: cmdline
-use simple_syslib,       only: alloc_errchk
+use simple_syslib,       only: alloc_errchk, simple_chmod
 use simple_fileio
 implicit none
 
@@ -116,7 +116,7 @@ contains
                     self%jobs_submitted(fromto_part(1):fromto_part(2)),&
                     self%script_names(fromto_part(1):fromto_part(2)),&
                     self%jobs_done_fnames(fromto_part(1):fromto_part(2)), stat=alloc_stat)
-        call alloc_errchk("In: simple_qsys_ctrl :: new", alloc_stat)
+        if(alloc_stat/=0)call alloc_errchk("In: simple_qsys_ctrl :: new", alloc_stat)
         if( self%stream )then
             self%jobs_done = .true.
         else
@@ -215,7 +215,8 @@ contains
                 call job_descr%set('part',    int2str(ipart))
                 call job_descr%set('nparts',  int2str(self%nparts_tot))
                 if( allocated(outfile_body_local) )then
-                    call job_descr%set('outfile', trim(trim(outfile_body_local)//int2str_pad(ipart,self%numlen)//'.txt'))
+                    call job_descr%set('outfile', trim(adjustl(outfile_body_local))&
+                        //int2str_pad(ipart,self%numlen)//'.txt' )
                 endif
             endif
             if( part_params_present  )then
@@ -255,7 +256,8 @@ contains
         class(chash),     intent(in)    :: q_descr
         character(len=512) :: io_msg
         integer :: ios, funit
-        call fopen(funit, file=self%script_names(ipart), iostat=ios, STATUS='REPLACE', action='WRITE', iomsg=io_msg)
+        call fopen(funit, file=self%script_names(ipart), iostat=ios, STATUS='REPLACE', &
+            action='WRITE', iomsg=io_msg)
         call fileio_errmsg('simple_qsys_ctrl :: gen_qsys_script; Error when opening file for writing: '&
              //trim(self%script_names(ipart))//' ; '//trim(io_msg),ios )
         ! need to specify shell
@@ -278,7 +280,7 @@ contains
         call fclose(funit, errmsg='simple_qsys_ctrl :: gen_qsys_script; Error when close file: '&
              //trim(self%script_names(ipart)) )
         if( q_descr%get('qsys_name').eq.'local' )then
-            call chmod(trim(self%script_names(ipart)),'+x')
+            ios= simple_chmod(trim(self%script_names(ipart)),'+x')
             if( ios .ne. 0 )then
                 write(*,'(a)',advance='no') 'simple_qsys_scripts :: gen_qsys_script; Error'
                 write(*,'(a)') 'chmoding submit script'//trim(self%script_names(ipart))
@@ -328,7 +330,7 @@ contains
             !!!!!!!!!
 
         if( trim(q_descr%get('qsys_name')).eq.'local' )then
-            call chmod(trim(script_name),'+x', status=ios)
+            ios=simple_chmod(trim(script_name),'+x')
             if( ios .ne. 0 )then
                 write(*,'(a)',advance='no') 'simple_qsys_ctrl :: generate_script_2; Error'
                 write(*,'(a)') 'chmoding submit script'//trim(script_name)
@@ -537,8 +539,9 @@ contains
             self%ncomputing_units_avail =  0
             self%numlen                 =  0
             self%cline_stacksz          =  0
-            deallocate(self%script_names, self%jobs_done, self%jobs_done_fnames, self%jobs_submitted, stat=alloc_stat)
-            call alloc_errchk("simple_qsys_ctrl::kill deallocating ", alloc_stat)
+            deallocate(self%script_names, self%jobs_done, self%jobs_done_fnames, self%jobs_submitted, &
+                stat=alloc_stat)
+            if(alloc_stat/=0)call alloc_errchk("simple_qsys_ctrl::kill deallocating ", alloc_stat)
             if(allocated(self%cline_stack))deallocate(self%cline_stack)
             self%existence = .false.
 

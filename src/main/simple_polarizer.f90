@@ -55,7 +55,7 @@ contains
                   &self%polcyc2_mat(1:pdim(1), pdim(2):pdim(3), 1:self%wdim),&
                   &self%polweights_mat(1:pdim(1), pdim(2):pdim(3), 1:wlen),&
                   &w(1:self%wdim,1:self%wdim), stat=alloc_stat)
-        call alloc_errchk('in simple_projector :: init_imgpolarizer', alloc_stat)
+        if(alloc_stat/=0)call alloc_errchk('in simple_projector :: init_imgpolarizer', alloc_stat)
         !$omp parallel do collapse(2) schedule(static) default(shared)&
         !$omp private(i,k,l,w,loc,cnt,win) proc_bind(close)
         do i=1,pdim(1)
@@ -71,7 +71,7 @@ contains
                     w(l,:) = w(l,:) * self%kbwin%apod( real(win(1,1)+l-1)-loc(1) )
                     w(:,l) = w(:,l) * self%kbwin%apod( real(win(2,1)+l-1)-loc(2) )
                     ! cyclic addresses
-                    self%polcyc1_mat(i, k, cnt) = cyci_1d(lims(1,:), win(1,1)+l-1)
+                    self%polcyc1_mat(i, k, cnt) = cyci_1d(lims(1,:), win(1,1)+l-1)  !! last system error is temp created here
                     self%polcyc2_mat(i, k, cnt) = cyci_1d(lims(2,:), win(2,1)+l-1)
                 end do
                 self%polweights_mat(i,k,:) = reshape(w,(/wlen/))
@@ -111,7 +111,7 @@ contains
         windim = 2*ceiling(self%harwin_exp) + 1
         vecdim = windim**2
         allocate( pft(pdim(1),pdim(2):pdim(3)), comps(1:windim,1:windim), stat=alloc_stat )
-        call alloc_errchk("In: imgpolarizer; simple_projector", alloc_stat)
+        if(alloc_stat/=0)call alloc_errchk("In: imgpolarizer; simple_projector", alloc_stat)
         lims = self%loop_lims(3)
         !$omp parallel do collapse(2) schedule(static) default(shared)&
         !$omp private(i,k,l,m,logi,phys,comps,addr_l) proc_bind(close)

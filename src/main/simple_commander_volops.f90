@@ -437,7 +437,7 @@ contains
             npairs = p%top-p%fromp+1
             DebugPrint 'allocating this number of similarities: ', npairs
             allocate(corrs(p%fromp:p%top), pairs(p%fromp:p%top,2), stat=alloc_stat)
-            call alloc_errchk('In: simple_volume_smat, 1', alloc_stat)
+            if(alloc_stat/=0)call alloc_errchk('In: simple_volume_smat, 1', alloc_stat)
             ! read the pairs
             allocate(fname, source='pairs_part'//int2str_pad(p%part,p%numlen)//'.bin')
             if( .not. file_exists(fname) ) stop 'I/O error; simple_volume_smat'

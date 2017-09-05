@@ -185,7 +185,7 @@ contains
             lfny = self%img%get_lfny(1)
             lfny_match = self%img_match%get_lfny(1)         
             allocate( self%fsc(p%nstates,lfny), source=0., stat=alloc_stat )
-            call alloc_errchk("In: build_general_tbox; simple_build, 1", alloc_stat)
+            if(alloc_stat/=0)call alloc_errchk("In: build_general_tbox; simple_build, 1", alloc_stat)
             ! set default amsklp
             if( .not. cline%defined('amsklp') .and. cline%defined('lp') )then
                 p%amsklp = self%img%get_lp(self%img%get_find(p%lp)-2)
@@ -200,7 +200,7 @@ contains
             partsz    = p%top - p%fromp + 1
             p%batchsz = nint(real(partsz) * p%batchfrac)
             allocate(self%pbatch(p%batchsz), stat=alloc_stat)
-            call alloc_errchk("In: build_general_tbox; simple_build, 2", alloc_stat)
+            if(alloc_stat/=0)call alloc_errchk("In: build_general_tbox; simple_build, 2", alloc_stat)
             ! select random indices
             rt = ran_tabu(partsz)
             call rt%ne_ran_iarr(self%pbatch)
@@ -255,14 +255,14 @@ contains
             ! make object for symmetrized orientations
             call self%a%symmetrize(p%nsym)
             allocate( self%imgs_sym(1:p%nsym*p%nptcls), self%ref_imgs(p%nstates,p%nspace), stat=alloc_stat )
-            call alloc_errchk( 'build_comlin_tbox; simple_build, 1', alloc_stat )
+            if(alloc_stat/=0)call alloc_errchk( 'build_comlin_tbox; simple_build, 1', alloc_stat )
             do i=1,p%nptcls*p%nsym
                 call self%imgs_sym(i)%new([p%box,p%box,1],p%smpd)
             end do
             self%clins = comlin(self%a, self%imgs_sym, p%lp)
         else ! set up assymetrical common lines-based alignment functionality
             allocate( self%imgs(1:p%nptcls), stat=alloc_stat )
-            call alloc_errchk( 'build_comlin_tbox; simple_build, 2', alloc_stat )
+            if(alloc_stat/=0)call alloc_errchk( 'build_comlin_tbox; simple_build, 2', alloc_stat )
             do i=1,p%nptcls
                 call self%imgs(i)%new([p%box,p%box,1],p%smpd)
             end do
@@ -365,7 +365,7 @@ contains
         call self%kill_hadamard_prime2D_tbox
         call self%raise_hard_ctf_exception(p)
         allocate( self%cavgs(p%ncls), self%ctfsqsums(p%ncls), stat=alloc_stat )
-        call alloc_errchk('build_hadamard_prime2D_tbox; simple_build, 1', alloc_stat)
+        if(alloc_stat/=0)call alloc_errchk('build_hadamard_prime2D_tbox; simple_build, 1', alloc_stat)
         do icls=1,p%ncls
             call self%cavgs(icls)%new([p%box,p%box,1],p%smpd)
             call self%ctfsqsums(icls)%new([p%box,p%box,1],p%smpd)
@@ -409,10 +409,10 @@ contains
         ! reconstruction objects
         if( p%eo .eq. 'yes' )then
             allocate( self%eorecvols(p%nstates), stat=alloc_stat )
-            call alloc_errchk('build_hadamard_prime3D_tbox; simple_build, 1', alloc_stat)
+            if(alloc_stat/=0)call alloc_errchk('build_hadamard_prime3D_tbox; simple_build, 1', alloc_stat)
         else
             allocate( self%recvols(p%nstates), stat=alloc_stat )
-            call alloc_errchk('build_hadamard_prime3D_tbox; simple_build, 2', alloc_stat)
+            if(alloc_stat/=0)call alloc_errchk('build_hadamard_prime3D_tbox; simple_build, 2', alloc_stat)
         endif
         if( str_has_substr(p%refine,'neigh') .or. trim(p%refine).eq.'exp' )then
             nnn = p%nnn
@@ -462,14 +462,14 @@ contains
         else
             if( p%eo .eq. 'yes' )then
                 allocate( self%eorecvols(p%nstates), stat=alloc_stat )
-                call alloc_errchk('build_hadamard_prime3D_tbox; simple_build, 1', alloc_stat)
+                if(alloc_stat/=0)call alloc_errchk('build_hadamard_prime3D_tbox; simple_build, 1', alloc_stat)
             else
                 allocate( self%recvols(p%nstates), stat=alloc_stat )
-                call alloc_errchk('build_hadamard_prime3D_tbox; simple_build, 2', alloc_stat)
+                if(alloc_stat/=0)call alloc_errchk('build_hadamard_prime3D_tbox; simple_build, 2', alloc_stat)
             endif
         endif
         allocate( self%refvols(p%nstates), stat=alloc_stat)
-        call alloc_errchk('build_cont3D_tbox; simple_build, 3', alloc_stat)
+        if(alloc_stat/=0)call alloc_errchk('build_cont3D_tbox; simple_build, 3', alloc_stat)
         do s=1,p%nstates
             call self%refvols(s)%new([p%boxmatch,p%boxmatch,p%boxmatch],p%smpd)
         end do
@@ -513,7 +513,7 @@ contains
         call self%kill_extremal3D_tbox
         call self%raise_hard_ctf_exception(p)
         allocate( self%recvols(1), stat=alloc_stat )
-        call alloc_errchk('build_hadamard_prime3D_tbox; simple_build, 2', alloc_stat)
+        if(alloc_stat/=0)call alloc_errchk('build_hadamard_prime3D_tbox; simple_build, 2', alloc_stat)
         call self%recvols(1)%new([p%boxpd,p%boxpd,p%boxpd],p%smpd)
         call self%recvols(1)%alloc_rho(p)
         if( p%balance > 0 )then

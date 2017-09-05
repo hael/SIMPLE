@@ -65,7 +65,7 @@ contains
         ndatlines = ctfparamfile%get_ndatalines()
         nrecs     = ctfparamfile%get_nrecs_per_line()
         allocate( ctfparams(ndatlines,nrecs) , stat=alloc_stat)
-        call alloc_errchk('In: iterate, module: simple_ctffind_iter', alloc_stat)
+        if(alloc_stat/=0)call alloc_errchk('In: iterate, module: simple_ctffind_iter', alloc_stat)
         do j=1,ndatlines
             call ctfparamfile%readNextDataLine(ctfparams(j,:))
         end do

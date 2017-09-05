@@ -199,7 +199,7 @@ DebugPrint 'Size of elapsed array ', size(elapsed_times)
          if (len_trim(COMMENT) .le. 128) then
             strcomment = trim(adjustl(COMMENT))
          else
-            HALT ("Timer loop error - comment string must be less than 128 characters")
+            call simple_stop ("Timer loop error - comment string must be less than 128 characters")
          end if
       end if
       if (.not. in_loop) then

@@ -58,7 +58,7 @@ contains
         character(len=STDLEN):: io_msg
         if( associated(self%head) ) call self%kill
         allocate(self%head,STAT=err,ERRMSG=io_msg)     ! allocate memory for the object
-        call alloc_errchk(" In simple_sll::new  deallocation fault "//trim(io_msg),err)
+        if(alloc_stat/=0)call alloc_errchk(" In simple_sll::new  deallocation fault "//trim(io_msg),err)
         nullify(self%head%next) ! start with an empty list
     end subroutine new
 
@@ -79,7 +79,7 @@ contains
             curr => curr%next
         end do
         allocate( curr ,STAT=err,ERRMSG=io_msg) ! insert it at the end of the list
-        call alloc_errchk(" In simple_sll::add  deallocation fault "//trim(io_msg),err)
+        if(alloc_stat/=0)call alloc_errchk(" In simple_sll::add  deallocation fault "//trim(io_msg),err)
         if( present(iarr) ) curr%content = iarr
         if( present(rarr) ) curr%content = rarr
         self%list_size = self%list_size+1
@@ -114,7 +114,7 @@ contains
             if( allocated(iarr) ) then
                 if(verbose.or.global_verbose)then
                     deallocate(iarr,STAT=err,ERRMSG=io_msg)
-                    call alloc_errchk(" In simple_sll::get  deallocation fault "//trim(io_msg),err)
+                    if(alloc_stat/=0)call alloc_errchk(" In simple_sll::get  deallocation fault "//trim(io_msg),err)
                 else !! only check deallocate in verbose mode
                     deallocate(iarr)
                 end if
@@ -126,7 +126,7 @@ contains
             if( allocated(rarr) )then
                 if(verbose.or.global_verbose)then
                     deallocate(rarr,STAT=err,ERRMSG=io_msg)
-                    call alloc_errchk(" In simple_sll::get  deallocation fault "//trim(io_msg),err)
+                    if(alloc_stat/=0)call alloc_errchk(" In simple_sll::get  deallocation fault "//trim(io_msg),err)
                 else
                     deallocate(rarr)
                 endif
@@ -195,7 +195,7 @@ contains
             call curr%content%kill          ! free space for the content
             if(verbose.or.global_verbose)then
                 deallocate( curr ,STAT=err,ERRMSG=io_msg)              ! free space for node
-                call alloc_errchk(" In simple_sll::del  deallocation fault "//trim(io_msg),err)
+                if(alloc_stat/=0)call alloc_errchk(" In simple_sll::del  deallocation fault "//trim(io_msg),err)
             else
                 deallocate(curr)
             end if
@@ -204,7 +204,7 @@ contains
             call curr%content%kill          ! free space for the list object
             if(verbose.or.global_verbose)then
                 deallocate( curr ,STAT=err,ERRMSG=io_msg)              ! free space for node
-                call alloc_errchk(" In simple_sll::del  deallocation fault "//trim(io_msg),err)
+                if(alloc_stat/=0)call alloc_errchk(" In simple_sll::del  deallocation fault "//trim(io_msg),err)
             else
                 deallocate(curr)
             end if
@@ -242,7 +242,7 @@ contains
         ! remove list 1
         if(verbose.or.global_verbose)then
             deallocate( self1%head,STAT=err,ERRMSG=io_msg )
-            call alloc_errchk(" In simple_sll::append  deallocation fault "//trim(io_msg),err)
+            if(alloc_stat/=0)call alloc_errchk(" In simple_sll::append  deallocation fault "//trim(io_msg),err)
         else
             deallocate(self1%head)
         end if
@@ -259,7 +259,7 @@ contains
         ! remove list 2
         if(verbose.or.global_verbose)then
             deallocate( self2%head ,STAT=err,ERRMSG=io_msg)
-            call alloc_errchk(" In simple_sll::append  deallocation fault "//trim(io_msg),err)
+            if(alloc_stat/=0)call alloc_errchk(" In simple_sll::append  deallocation fault "//trim(io_msg),err)
         else
             deallocate(self2%head)
         end if
@@ -302,7 +302,7 @@ contains
         endif
         if( associated(self%head) )then
             deallocate(self%head,STAT=err,ERRMSG=io_msg)
-            call alloc_errchk(" In simple_sll::kill  deallocation fault "//trim(io_msg),err)
+            if(alloc_stat/=0)call alloc_errchk(" In simple_sll::kill  deallocation fault "//trim(io_msg),err)
             nullify(self%head)
         endif
     end subroutine kill

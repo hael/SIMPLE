@@ -114,7 +114,7 @@ contains
         call self%img_dist%new(self%idim, self%get_smpd())
         call self%img_dist%cendist
         allocate(self%adamsks(self%n), stat=alloc_stat )
-        call alloc_errchk('in simple_masker::init2D 1', alloc_stat)
+        if(alloc_stat/=0)call alloc_errchk('in simple_masker::init2D 1', alloc_stat)
         self%adamsks = 0.
     end subroutine init2D
 

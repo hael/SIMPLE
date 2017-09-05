@@ -284,7 +284,7 @@ contains
         character(len=STDLEN) :: str
         logical               :: vol_defined
         allocate( cmderr(self%ncheck), stat=alloc_stat )
-        call alloc_errchk('check; simple_cmdline', alloc_stat)
+        if(alloc_stat/=0)call alloc_errchk('check; simple_cmdline', alloc_stat)
         cmderr = .false.
         do i=1,self%ncheck
            cmderr(i) = .not. self%defined(self%checker(i))

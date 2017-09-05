@@ -35,7 +35,7 @@ contains
         call self%kill
         ! allocate
         allocate(self%swarm(spec%npop,spec%ndim), self%velocities(spec%npop,spec%ndim), stat=alloc_stat)
-        call alloc_errchk("In: new_particle_swarm_opt, 1", alloc_stat)
+        if(alloc_stat/=0)call alloc_errchk("In: new_particle_swarm_opt, 1", alloc_stat)
         self%exists = .true. ! indicates existence
         if( spec%debug ) write(*,*) 'created new particle swarm (spec debug)'
         DebugPrint 'created new particle swarm (instance)'

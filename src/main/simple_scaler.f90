@@ -1,7 +1,7 @@
 ! downscaling of image stacks
 module simple_scaler
 use simple_defs     ! use all in there
-use simple_fileio
+!use simple_fileio
 use simple_cmdline, only: cmdline
 
 implicit none
@@ -72,7 +72,6 @@ contains
         use simple_commander_imgproc, only: scale_commander
         class(scaler)         :: self
         type(scale_commander) :: xscale
-        logical :: doscale
         write(*,'(A)') '>>>'
         write(*,'(A)') '>>> AUTO-SCALING IMAGES'
         write(*,'(A)') '>>>'
@@ -83,7 +82,6 @@ contains
         use simple_commander_distr_wflows, only: scale_stk_parts_commander
         class(scaler)                   :: self
         type(scale_stk_parts_commander) :: xscale_distr
-        logical :: doscale
         write(*,'(A)') '>>>'
         write(*,'(A)') '>>> AUTO-SCALING IMAGES'
         write(*,'(A)') '>>>'
