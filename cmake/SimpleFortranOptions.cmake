@@ -196,11 +196,11 @@ elseif (${CMAKE_Fortran_COMPILER_ID} STREQUAL "Intel" OR Fortran_COMPILER_NAME M
   ## INTEL fortran
   #
   #############################################
-  set(EXTRA_FLAGS "${EXTRA_FLAGS} -fpp -I${MKLROOT}/include -list-line-len=264 -assume realloc_lhs -assume source_include -diag-enable=openmp,vec,par,error  -diag-disable=warn -sox")
+  set(EXTRA_FLAGS "${EXTRA_FLAGS} -fpp -I${MKLROOT}/include -list-line-len=264 -assume realloc_lhs -assume source_include -diag-enable=openmp,vec,par,error  -diag-disable=warn -sox -qoverride-limits")
   # -diag-file-append=diagnostics.txt
   set(CMAKE_AR                           "xiar")
   set(CMAKE_CPP_COMPILER                 "fpp")
-  set(CMAKE_CPP_COMPILER_FLAGS           " -noJ -noB -noC ")  #Recognize C,C++,F90 style comments. 
+  set(CMAKE_CPP_COMPILER_FLAGS           " -noJ -B -C ")  #Recognize C,C++,F90 style comments. 
   set(CMAKE_Fortran_FLAGS                " ${EXTRA_FLAGS} ${CMAKE_Fortran_FLAGS_RELEASE_INIT}")
   set(CMAKE_Fortran_FLAGS_DEBUG          " ${EXTRA_FLAGS} ${CMAKE_Fortran_FLAGS_DEBUG_INIT}")
   # set(CMAKE_Fortran_FLAGS_MINSIZEREL    "-Os ${CMAKE_Fortran_FLAGS_RELEASE_INIT}")
@@ -585,8 +585,8 @@ endif()
 #set(CMAKE_FCPP_FLAGS " -C -P ") # Retain comments due to fortran slash-slash
 #set(CMAKE_Fortran_CREATE_PREPROCESSED_SOURCE "${CMAKE_FCPP_COMPILER} <DEFINES> <INCLUDES> <FLAGS> -E <SOURCE> > <PREPROCESSED_SOURCE>")
 
-add_definitions(" -D__FILENAME__='\"$(notdir $<)\"'")
-add_definitions(" -DHALT\\(X\\)='call simple_stop(X, __FILENAME__, __LINE__)'")
+add_definitions(" -D__FILENAME__='\"$(notdir $<)\"' ")
+# add_definitions(" -DHALT\\(X\\)='call simple_stop(X, __FILENAME__, __LINE__)'")
 
 
 
