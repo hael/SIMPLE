@@ -557,14 +557,12 @@ contains
             select case(byteperpix)
             case(1) ! Byte data
                 DebugPrint 'Allocating 8-bit array in rwSlices'
-                allocate(tmp_byte_array(dims(1),dims(2),dims(3)),stat=io_stat, errmsg=io_message)
-                if(io_stat /= 0)then
-                    ErrorPrint(io_message)
-                endif
+                allocate(tmp_byte_array(dims(1),dims(2),dims(3)),stat=alloc_stat, errmsg=io_message)
+                if(alloc_stat /= 0) call alloc_errchk("In simple_imgfile:: rwSlices ;  Byte data "//trim(io_message), alloc_stat)
+                
                 read(unit=self%funit,pos=first_byte,iostat=io_stat,iomsg=io_message) tmp_byte_array
-                if(io_stat /= 0)then
-                    ErrorPrint(io_message)
-                endif
+                if(io_stat /= 0) call fileio_errmsg("In simple_imgfile:: rwSlices ; Byte data "//trim(io_message), io_stat)
+                    
                 ! Conversion from unsigned byte integer (which MRC appears to be) is tricky because
                 ! Fortran doesn't do unsigned integer natively. The following IAND trick is courtesy
                 ! of Jim Dempsey at http://software.intel.com/en-us/forums/showthread.php?t=64400
@@ -578,50 +576,38 @@ contains
                 else
                     rarr(1:dims(1),:,:) = real(iand(int(tmp_byte_array(:,:,:),kind=4),int(255,kind=4)))
                 endif
-                deallocate(tmp_byte_array,stat=io_stat, errmsg=io_message)
-                if(io_stat /= 0)then
-                    ErrorPrint(io_message)
-                endif
+                deallocate(tmp_byte_array,stat=alloc_stat, errmsg=io_message)
+                if(alloc_stat /= 0)call alloc_errchk("In simple_imgfile:: rwSlices ; dealloc tmp_byte_array"//trim(io_message), alloc_stat)
+                
             case(2) ! 16-bit data
                 DebugPrint 'Allocating 32-bit array in rwSlices'
                 select case (self%overall_head%getPixType())
                 case(dataRinteger)
-                    allocate(tmp_16bit_int_array(dims(1),dims(2),dims(3)),stat=io_stat, errmsg=io_message)
-                    if(io_stat /= 0)then
-                        ErrorPrint(io_message)
-                    endif
+                    allocate(tmp_16bit_int_array(dims(1),dims(2),dims(3)),stat=alloc_stat, errmsg=io_message)
+                    if(alloc_stat /= 0) call alloc_errchk("In simple_imgfile:: rwSlices ; 16-bit data "//trim(io_message), alloc_stat)
                     read(unit=self%funit,pos=first_byte,iostat=io_stat,iomsg=io_message) tmp_16bit_int_array
-                    if(io_stat /= 0)then
-                        ErrorPrint(io_message)
-                    endif
+                    if(io_stat /= 0) call fileio_errmsg("In simple_imgfile:: rwSlices ; "//trim(io_message), io_stat)
                     if( self%overall_head%pixIsSigned() )then
                         rarr(1:dims(1),:,:) = real(tmp_16bit_int_array(:,:,:))
                     else
                         rarr(1:dims(1),:,:) = real(iand(int(tmp_16bit_int_array(:,:,:),kind=4),&
                              int(huge(int(1,kind=2)),kind=4)))
                     endif
-                    deallocate(tmp_16bit_int_array,stat=io_stat, errmsg=io_message)
-                    if(io_stat /= 0)then
-                        ErrorPrint(io_message)
-                    endif
+                    deallocate(tmp_16bit_int_array,stat=alloc_stat, errmsg=io_message)
+                    if(alloc_stat /= 0) call alloc_errchk("In simple_imgfile:: rwSlices ; tmp_16bit_int_array"//trim(io_message), alloc_stat)
                 case DEFAULT
                     stop 'Non-integer 16-bit data not supported; rwSlices; simple_imgfile'
                 end select
             case(4) ! 32-bit data (SPIDER data always has 4 bytes per pixel)
                 DebugPrint 'Allocating 32-bit array in rwSlices'
-                allocate(tmp_32bit_float_array(dims(1),dims(2),dims(3)),stat=io_stat, errmsg=io_message)
-                if(io_stat /= 0)then
-                    ErrorPrint(io_message)
-                endif
+                allocate(tmp_32bit_float_array(dims(1),dims(2),dims(3)),stat=alloc_stat, errmsg=io_message)
+                if(alloc_stat /= 0) call alloc_errchk("In simple_imgfile:: rwSlices ; 32-bit data "//trim(io_message), alloc_stat)
                 read(unit=self%funit,pos=first_byte,iostat=io_stat,iomsg=io_message) tmp_32bit_float_array
-                if(io_stat /= 0)then
-                    ErrorPrint(io_message)
-                endif
+                if(io_stat /= 0) call fileio_errmsg("In simple_imgfile:: rwSlices ; 32-bit data "//trim(io_message), io_stat)
                 rarr(1:dims(1),:,:) = tmp_32bit_float_array
-                deallocate(tmp_32bit_float_array,stat=io_stat, errmsg=io_message)
-                if(io_stat /= 0)then
-                    ErrorPrint(io_message)
-                endif
+                deallocate(tmp_32bit_float_array,stat=alloc_stat, errmsg=io_message)
+                if(alloc_stat /= 0)call alloc_errchk("In simple_imgfile:: rwSlices ; 32-bit data "//trim(io_message), alloc_stat)
+                 
             case DEFAULT
                 write(*,'(2a)') 'fname: ', self%fname
                 write(*,'(a,i0,a)') 'bit depth: ', self%overall_head%bytesPerPix(), ' bytes'

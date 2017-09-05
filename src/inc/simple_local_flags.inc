@@ -26,7 +26,7 @@
 #    define DebugPrint _WPRINT_FILE_LINE_(__FILENAME__,__LINE__);if(debug.or.global_debug) print *,
 #  elif defined(Intel)
 #    define LinePrint(N) #N
-#    define DebugPrint if(debug.or.global_debug) print *,__FILENAME__//":line ",__LINE__,':',
+#    define DebugPrint if(debug.or.global_debug) print *,__FILENAME__//":",__LINE__,
 #  else 
 #   define DebugPrint  _WPRINT_FILE_LINE_(__FILENAME__,__LINE__);if(debug.or.global_debug) print *,
 #  endif
@@ -38,7 +38,7 @@
 #ifndef VerbosePrint
 # define VerbosePrint if(verbose.or.global_verbose.or.debug.or.global_debug) print *, 
 #endif
-#ifndef ErrorPrint
-# define ErrorPrint(msg) write(*,'("Error in ",/,A,/," line ",I0,":",A)') __FILENAME__,__LINE__, msg
-#endif
+! #ifndef ErrorPrint
+! # define ErrorPrint(msg) write(*,'("Error in ",/,A,/," line ",I0,":",A)') __FILENAME__,__LINE__, msg
+! #endif
 
