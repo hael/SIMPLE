@@ -568,33 +568,33 @@ contains
         policy = for_set_fastmem_policy(FOR_K_FASTMEM_RETRY_WARN)
     end function fastmem_policy
 
-    integer function hbw_availability
-        use ifcore
-        !        integer(4) :: hbw_availability
-        hbw_availability = for_get_hbw_availability()
-        print *,"Results of for_get_hbw_availability():"
-        select case (hbw_availability)
-        case (FOR_K_HBW_AVAILABLE)
-            print *,"    HBM is available."
-        case (FOR_K_HBW_NO_ROUTINES)
-            print *,"    The libmemkind routines needed for hbw memory allocation are not linked-in."
-        case (FOR_K_HBW_NOT_AVAILABLE)
-            print *,"    HBM is NOT available on this node."
-        end select
-    end function hbw_availability
+    ! integer function hbw_availability
+    !     use ifcore
+    !     !        integer(4) :: hbw_availability
+    !     hbw_availability = for_get_hbw_availability()
+    !     print *,"Results of for_get_hbw_availability():"
+    !     select case (hbw_availability)
+    !     case (FOR_K_HBW_AVAILABLE)
+    !         print *,"    HBM is available."
+    !     case (FOR_K_HBW_NO_ROUTINES)
+    !         print *,"    The libmemkind routines needed for hbw memory allocation are not linked-in."
+    !     case (FOR_K_HBW_NOT_AVAILABLE)
+    !         print *,"    HBM is NOT available on this node."
+    !     end select
+    ! end function hbw_availability
 
-    function get_hbw_size (partition, total, free) result(istatus)
-        use ifcore
-        use, intrinsic :: iso_c_binding
-        integer(kind=4),         intent(in)  :: partition
-        integer(kind=int_ptr_kind()), intent(inout) :: total,free
-        integer(kind=C_INT) :: part, istatus
-        integer(kind=C_SIZE_T) :: tot, freemem
-        istatus = for_get_hbw_size(part,tot,freemem )
-        call simple_error_check(istatus, "syslib::get_hbw_size ")
-        total = tot
-        free = freemem
-    end function get_hbw_size
+    ! function get_hbw_size (partition, total, free) result(istatus)
+    !     use ifcore
+    !     use, intrinsic :: iso_c_binding
+    !     integer(kind=4),         intent(in)  :: partition
+    !     integer(kind=int_ptr_kind()), intent(inout) :: total,free
+    !     integer(kind=C_INT) :: part, istatus
+    !     integer(kind=C_SIZE_T) :: tot, freemem
+    !     istatus = for_get_hbw_size(part,tot,freemem )
+    !     call simple_error_check(istatus, "syslib::get_hbw_size ")
+    !     total = tot
+    !     free = freemem
+    ! end function get_hbw_size
 
 #endif
 
@@ -686,6 +686,19 @@ contains
 #endif        
     end subroutine simple_sleep
 
+    integer function simple_chmod(pathname, mode  )
+#if defined(INTEL)
+        use ifport
+#endif
+        character(len=*), intent(in) :: pathname, mode
+#if 1
+        
+        simple_chmod = chmod(pathname, mode)
+        call simple_error_check()
+#else
+        call chmod(pathname, mode, status=simple_chmod) !! intrinsic
+#endif        
+    end function simple_chmod
 
 
     ! !>  \brief  get logical unit of file
