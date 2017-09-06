@@ -154,7 +154,7 @@ if (${CMAKE_Fortran_COMPILER_ID} STREQUAL "GNU" ) #AND Fortran_COMPILER_NAME MAT
 
   set(CMAKE_CPP_COMPILER_FLAGS           "-E -C -CC -w -Wno-endif-labels -fopenmp") # only seen by preprocessor if #include is present
 
-  set(CMAKE_Fortran_FLAGS                " ${EXTRA_FLAGS} ") #${CMAKE_Fortran_FLAGS_RELEASE_INIT}")
+  set(CMAKE_Fortran_FLAGS                " ${EXTRA_FLAGS}  ${CMAKE_Fortran_FLAGS_RELEASE_INIT}")
   set(CMAKE_Fortran_FLAGS_DEBUG          " ${EXTRA_FLAGS} ${CMAKE_Fortran_FLAGS_DEBUG_INIT}" )
   # set(CMAKE_Fortran_FLAGS_MINSIZEREL     "-Os ${CMAKE_Fortran_FLAGS_RELEASE_INIT}")
   set(CMAKE_Fortran_FLAGS_RELEASE        " ${EXTRA_FLAGS} ${CMAKE_Fortran_FLAGS_RELEASE_INIT}")
@@ -585,7 +585,7 @@ endif()
 #set(CMAKE_FCPP_FLAGS " -C -P ") # Retain comments due to fortran slash-slash
 #set(CMAKE_Fortran_CREATE_PREPROCESSED_SOURCE "${CMAKE_FCPP_COMPILER} <DEFINES> <INCLUDES> <FLAGS> -E <SOURCE> > <PREPROCESSED_SOURCE>")
 
-add_definitions(" -D__FILENAME__='\"$(notdir $<)\"' ")
+# add_definitions(" -D__FILENAME__='\"$(notdir $<)\"' ")
 # add_definitions(" -DHALT\\(X\\)='call simple_stop(X, __FILENAME__, __LINE__)'")
 
 
@@ -599,26 +599,28 @@ else()
 set(CMAKE_Fortran_COMPILE_OBJECT "grep --silent -E '#include' <SOURCE> && ( ${CMAKE_CPP_COMPILER} ${CMAKE_CPP_COMPILER_FLAGS} -DOPENMP <DEFINES> <INCLUDES> <SOURCE> > <OBJECT>.f90 &&  <CMAKE_Fortran_COMPILER> <DEFINES> <INCLUDES> <FLAGS> -c <OBJECT>.f90 -o <OBJECT> ) || <CMAKE_Fortran_COMPILER> <DEFINES> <INCLUDES> <FLAGS> -c <SOURCE> -o <OBJECT>")
 endif()
 
+if(ENABLE_PROFILING)
+  SET(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -pg")
+endif()
 # Option for code coverage
-if(VERBOSE OR ${BUILD_WITH_COVERAGE})
+#if(VERBOSE OR ${BUILD_WITH_COVERAGE})
   option(CODE_COVERAGE "Build code coverage results, requires GCC compiler (forces Debug build)" OFF)
   if(CODE_COVERAGE OR ${BUILD_WITH_COVERAGE} )
-    if(CMAKE_COMPILER_IS_GNUC)
-      set(CMAKE_Fortran_FLAGS_DEBUG
-        "${CMAKE_Fortran_FLAGS_DEBUG} -fprofile-arcs -ftest-coverage")
-      set(CMAKE_BUILD_TYPE DEBUG CACHE STRING "" FORCE)
-      SET(CMAKE_EXE_LINKER_FLAGS      "-fprofile-arcs -ftest-coverage")
-      SET(CMAKE_SHARED_LINKER_FLAGS   "-fprofile-arcs -ftest-coverage")
-      SET(CMAKE_STATIC_LINKER_FLAGS   "-fprofile-arcs -ftest-coverage")
+    if (${CMAKE_Fortran_COMPILER_ID} STREQUAL "GNU" )
+      set(CMAKE_Fortran_FLAGS         "${CMAKE_Fortran_FLAGS} -O0 -g -pg -fprofile-arcs -ftest-coverage")
+     # set(CMAKE_BUILD_TYPE DEBUG CACHE STRING "" FORCE)
+      SET(CMAKE_EXE_LINKER_FLAGS      "${CMAKE_EXE_LINKER_FLAGS} -O0 -g -pg -fprofile-arcs -ftest-coverage")
+      SET(CMAKE_SHARED_LINKER_FLAGS   "${CMAKE_SHARED_LINKER_FLAGS} -O0 -g -pg -fprofile-arcs -ftest-coverage")
+      SET(CMAKE_STATIC_LINKER_FLAGS   "${CMAKE_STATIC_LINKER_FLAGS} -O0 -g -pg -fprofile-arcs -ftest-coverage")
       # Ensure that CDash targets are always enabled if coverage is enabled.
       if (NOT CDASH_SUPPORT)
         get_property(HELP_STRING CACHE CDASH_SUPPORT PROPERTY HELPSTRING)
         set(CDASH_SUPPORT ON CACHE BOOL "${HELP_STRING}" FORCE)
         message(STATUS "Enabling CDash targets as coverage has been enabled.")
       endif()
-    endif(CMAKE_COMPILER_IS_GNUC)
+    endif()
   endif()
-endif()
+#endif()
 
 
 set(CMAKE_INSTALL_DO_STRIP FALSE)

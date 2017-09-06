@@ -167,7 +167,7 @@ if (CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
   set(forpar   "-fopenmp  -Wp,-fopenmp")                                                        # parallel flags
   set(target   "${GNUNATIVE} -fPIC ")                                                           # target platform
 
-  set(common   "${preproc} ${dialect} ${target} ${checks}")
+  set(common   "${preproc} ${dialect} ${target} ")
 
   set(warnDebug "${warn} -Wextra -Wimplicit-interface  ${checks}")                              # extra warning flag
   set(fordebug "-O0 -g -pedantic -fno-inline -fno-f2c -Og -ggdb -fbacktrace  ${warnDebug} ")    # debug flags

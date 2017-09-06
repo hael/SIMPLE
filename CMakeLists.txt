@@ -50,20 +50,13 @@ include(ProcessorCount)
 ProcessorCount(NUM_JOBS)
 set(BUILD_NAME ${CMAKE_Fortran_COMPILER_ID}_${CMAKE_BUILD_TYPE} CACHE STRING "Build name with compiler, type and FFT backend ")
 set(CMAKE_Fortran_MODULE_DIRECTORY ${PROJECT_BINARY_DIR}/lib)
-#################################################################
-# INCLUDES
-#################################################################
-# include(CMakeAddFortranSubdirectory)
-include(CheckIncludeFiles)
-include(SimpleFortranOptions)
-
-
 ############################################################
 #
 # Add definition macros unique to compilation
 #
 ############################################################
 add_definitions("-DBUILD_NAME=\"${BUILD_NAME}\"")
+add_definitions(" -D__FILENAME__='\"$(notdir $<)\"' ")
 # use _DEBUG since DEBUG or debug is used as a variable in some files
 # _DEBUG is defined by Intel Fortran on Windows
 if(CMAKE_BUILD_TYPE STREQUAL "DEBUG")
@@ -89,6 +82,15 @@ set(SIMPLELIB "SIMPLE${${PROJECT_NAME}_VERSION}")
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src/inc)
 include_directories(${CMAKE_BINARY_DIR}/lib/simple)
 include_directories(${CMAKE_CURRENT_BINARY_DIR})
+
+#################################################################
+# INCLUDES
+#################################################################
+# include(CMakeAddFortranSubdirectory)
+include(CheckIncludeFiles)
+include(SimpleFortranOptions)
+
+
 
 #   cmake_add_fortran_subdirectory(
 #    ${SRC}                  # name of subdirectory
@@ -221,7 +223,7 @@ install(FILES  ${CMAKE_CURRENT_BINARY_DIR}/add2.bashrc ${CMAKE_CURRENT_BINARY_DI
 if(VERBOSE) #only for the fool-hardy
   option(ENABLE_LINK_TIME_OPTIMISATION "Enable link-time optimisation" OFF)
   OPTION(ENABLE_FAST_MATH_OPTIMISATION "Optimize code for fastmath." OFF)
-  OPTION(ENABLE_PROFILE_OPTIMISATION "Optimize code for PFO." OFF)
+  OPTION(ENABLE_PROFILE_OPTIMISATION "Optimize code for PFO. ( -fpfo )" OFF)
   OPTION(ENABLE_AUTO_PARALLELISE "Optimize code for parallel systems." OFF)
   #flags for optimization level. You can only turn one of following option to ON, or leave all of them to OFF.
   OPTION(ENABLE_PROFILING "enable symbol generation without debug support" OFF)
