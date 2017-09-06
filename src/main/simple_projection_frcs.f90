@@ -6,12 +6,12 @@ implicit none
 
 type projection_frcs
     private
-    integer           :: nprojs     = 0
-    integer           :: filtsz     = 0 
-    integer           :: box_target = 0
-    integer           :: nstates    = 1
-    real              :: smpd       = 0.0
-    real, allocatable :: res_target(:)
+    integer           :: nprojs       = 0
+    integer           :: filtsz       = 0 
+    integer           :: box4frc_calc = 0
+    integer           :: nstates      = 1
+    real              :: smpd         = 0.0
+    real, allocatable :: res4frc_calc(:)
     real, allocatable :: frcs(:,:,:)
     logical           :: l_frcs_set = .false.
     logical           :: exists     = .false.
@@ -38,21 +38,21 @@ contains
 
     ! constructor
 
-    subroutine new( self, nprojs, box_target, smpd, nstates )
+    subroutine new( self, nprojs, box4frc_calc, smpd, nstates )
         use simple_math, only: fdim, get_resarr
         class(projection_frcs), intent(inout) :: self
         integer,                intent(in)    :: nprojs
-        integer,                intent(in)    :: box_target
+        integer,                intent(in)    :: box4frc_calc
         real,                   intent(in)    :: smpd
         integer, optional,      intent(in)    :: nstates
         integer :: alloc_stat
         call self%kill
-        self%nprojs     = nprojs
-        self%box_target = box_target
-        self%smpd       = smpd
-        self%filtsz     = fdim(box_target)-1
-        self%res_target = get_resarr(self%box_target, self%smpd)
-        self%nstates    = 1
+        self%nprojs       = nprojs
+        self%box4frc_calc = box4frc_calc
+        self%smpd         = smpd
+        self%filtsz       = fdim(box4frc_calc)-1
+        self%res4frc_calc = get_resarr(box4frc_calc, self%smpd)
+        self%nstates      = 1
         if( present(nstates) ) self%nstates = nstates
         allocate( self%frcs(self%nstates,self%nprojs,self%filtsz), stat=alloc_stat)
         call alloc_errchk('new; simple_projection_frcs', alloc_stat)
@@ -89,36 +89,41 @@ contains
         is_set = self%l_frcs_set
     end function is_set
 
-    subroutine set_frc( self, box, proj, frc, state )
-        use simple_math, only: get_resarr
+    subroutine set_frc( self, proj, frc, state )
         class(projection_frcs), intent(inout) :: self
-        integer,                intent(in)    :: box, proj
+        integer,                intent(in)    :: proj
         real,                   intent(in)    :: frc(:)
         integer, optional,      intent(in)    :: state
-        real, allocatable :: res(:)
+        
         integer :: sstate
         sstate = 1
         if( present(state) ) sstate = state
         call self%raise_exception( proj, sstate, 'ERROR, out of bounds in set_frc')
-        if( box /= self%box_target )then
-            res = get_resarr(box, self%smpd)
-            self%frcs(sstate,proj,:) = resample_filter(frc, res, self%res_target) 
+        if( size(frc) /= self%filtsz )then
+            stop 'size of input frc not conforming; simple_projection_frcs :: set_frc'
         else
             self%frcs(sstate,proj,:) = frc
         endif
         self%l_frcs_set = .true.
     end subroutine set_frc
 
-    function get_frc( self, proj, state ) result( frc )
+    function get_frc( self, proj, box, state ) result( frc )
+        use simple_math, only: get_resarr
         class(projection_frcs), intent(in) :: self
-        integer,                intent(in) :: proj
+        integer,                intent(in) :: proj, box
         integer, optional,      intent(in) :: state
         real, allocatable :: frc(:)
+        real, allocatable :: res(:)
         integer :: sstate
         sstate = 1
         if( present(state) ) sstate = state
         call self%raise_exception( proj, sstate, 'ERROR, out of bounds in get_frc')
-        allocate(frc(self%filtsz), source=self%frcs(sstate,proj,:))
+        if( box /= self%box4frc_calc )then
+            res = get_resarr(box, self%smpd)
+            frc = resample_filter(self%frcs(sstate,proj,:), self%res4frc_calc, res)
+        else
+            allocate(frc(self%filtsz), source=self%frcs(sstate,proj,:))
+        endif
     end function get_frc
 
     subroutine estimate_res_1( self, proj, frc05, frc0143, state )
@@ -131,7 +136,7 @@ contains
         sstate = 1
         if( present(state) ) sstate = state
         call self%raise_exception( proj, sstate, 'ERROR, out of bounds in estimate_res')
-        call get_resolution(self%frcs(sstate,proj,:), self%res_target, frc05, frc0143 )
+        call get_resolution(self%frcs(sstate,proj,:), self%res4frc_calc, frc05, frc0143 )
     end subroutine estimate_res_1
 
     subroutine estimate_res_2( self, frc, res, frc05, frc0143, state )
@@ -149,8 +154,8 @@ contains
         sstate = 1
         if( present(state) ) sstate = state
         frc = sum(self%frcs(sstate,:,:),dim=1)/real(self%nprojs)
-        call get_resolution(frc, self%res_target, frc05, frc0143)
-        res = self%res_target
+        call get_resolution(frc, self%res4frc_calc, frc05, frc0143)
+        res = self%res4frc_calc
     end subroutine estimate_res_2
 
     ! I/O
@@ -189,11 +194,11 @@ contains
     subroutine kill( self )
         class(projection_frcs), intent(inout) :: self
         if( self%exists )then
-            deallocate(self%res_target, self%frcs)
-            self%nprojs     = 0 
-            self%filtsz     = 0
-            self%box_target = 0
-            self%exists     = .false.
+            deallocate(self%res4frc_calc, self%frcs)
+            self%nprojs       = 0 
+            self%filtsz       = 0
+            self%box4frc_calc = 0
+            self%exists        = .false.
         endif
     end subroutine kill
 

@@ -696,7 +696,7 @@ contains
                     call odd_img%mask(self%pp%msk, 'soft')
                 endif
                 call even_img%fsc(odd_img, res, frc)
-                call self%bp%projfrcs%set_frc(self%pp%box, icls, frc, istate)
+                call self%bp%projfrcs%set_frc(icls, frc, istate)
             end do
         end do
         call self%bp%projfrcs%write(fname)

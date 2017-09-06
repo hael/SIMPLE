@@ -331,16 +331,17 @@ contains
                 call b%a%add_shift2class(icls, -xyz(1:2))
             endif
         endif
+        ! DEVFRC
         ! filter
-        if( b%projfrcs%is_set() )then
-            frc = b%projfrcs%get_frc(icls)
-            if( any(frc > 0.143) )then
-                call b%img%fwd_ft ! needs to be here in case the shift was never applied (above)
-                filter = fsc2optlp(frc)
-                call b%img%shellnorm()
-                call b%img%apply_filter(filter)
-            endif
-        endif
+        ! if( b%projfrcs%is_set() )then
+        !     frc = b%projfrcs%get_frc(icls, p%box)
+        !     if( any(frc > 0.143) )then
+        !         call b%img%fwd_ft ! needs to be here in case the shift was never applied (above)
+        !         filter = fsc2optlp(frc)
+        !         call b%img%shellnorm()
+        !         call b%img%apply_filter(filter)
+        !     endif
+        ! endif
         ! ensure we are in real-space before clipping 
         call b%img%bwd_ft 
         ! clip image if needed
