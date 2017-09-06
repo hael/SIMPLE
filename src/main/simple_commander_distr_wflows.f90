@@ -484,7 +484,7 @@ contains
             refs = trim(trim(CAVGS_ITERFBODY)// trim(str_iter) //p_master%ext)
             call cline_cavgassemble%set('oritab', trim(oritab))
             call cline_cavgassemble%set('which_iter', real(iter))
-            call qenv%exec_simple_prg_in_queue(cline_cavgassemble, 'CAVGASSEMBLE', 'CAVGASSEMBLE_FINISHED')
+            call qenv%exec_simple_prg_in_queue(cline_cavgassemble, 'RESOLUTION'//trim(str_iter), 'CAVGASSEMBLE_FINISHED')
             ! remapping of empty classes
             call remap_empty_cavgs
             ! check convergence

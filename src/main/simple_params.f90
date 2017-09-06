@@ -34,6 +34,7 @@ type :: params
     character(len=3)      :: countvox='no'        !< count # voxels(yes|no){no}
     character(len=3)      :: ctfstats='no'        !< calculate ctf statistics(yes|no){no}
     character(len=3)      :: cure='no'
+    character(len=3)      :: dev='no'             !< development flag for experimental code(yes|no){no}
     character(len=3)      :: discrete='no'        !< be discrete(yes|no){no}
     character(len=3)      :: diverse='no'         !< diverse or not flag (yes|no){no}
     character(len=3)      :: doalign='yes'
@@ -199,7 +200,7 @@ type :: params
     integer :: mrcmode=2
     integer :: navgs=1
     integer :: ncunits=0           !< # computing units, can be < nparts{nparts}
-    integer :: nbest=100
+    integer :: nbest=10
     integer :: nboot=0
     integer :: ncls=500            !< # clusters
     integer :: ncomps=0
@@ -449,6 +450,7 @@ contains
         call check_carg('diverse',        self%diverse)
         call check_carg('doalign',        self%doalign)
         call check_carg('dockmode',       self%dockmode)
+        call check_carg('dev',            self%dev)
         call check_carg('dopca',          self%dopca)
         call check_carg('dopick',         self%dopick)
         call check_carg('doprint',        self%doprint)
@@ -997,6 +999,12 @@ contains
         ! set remap_classes flag
         self%l_remap_classes = .false.
         if( self%remap_classes .eq. 'yes' ) self%l_remap_classes = .true.
+        ! set nbest to 20% of ncls (if present) or 20% of NSPACE_BALANCE
+        if( cline%defined('ncls') )then
+            self%nbest = max(1,nint(real(self%ncls)*0.2))
+        else
+            self%nbest = max(1,nint(real(NSPACE_BALANCE)*0.2))
+        endif
         ! set to particle index if not defined in cmdlin
         if( .not. cline%defined('top') ) self%top = self%nptcls
         ! set the number of input orientations

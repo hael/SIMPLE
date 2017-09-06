@@ -93,14 +93,7 @@ contains
         endif
 
         ! READ FOURIER RING CORRELATIONS
-        if( which_iter >= LPLIM1ITERBOUND .and. frac_srch_space >= FRAC_INTERPOL )then
-            if( file_exists(p%fsc) )then
-                call b%projfrcs%read(p%fsc) ! spectral whitening + optiml low-pass filter activated on read
-            else
-                write(*,*) 'the FRC file does not exist in cwd: ', trim(p%fsc)
-                stop 'simple_hadamard2D_matcher :: prime2D_exec'
-            endif
-        endif
+        if( file_exists(p%fsc) ) call b%projfrcs%read(p%fsc)
 
         ! POPULATION BALANCING LOGICS
         ! this needs to be done prior to search such that each part

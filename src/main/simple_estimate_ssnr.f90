@@ -203,8 +203,8 @@ contains
 
     !> \brief  converts the FSC to the optimal low-pass filter
     function fsc2optlp( corrs ) result( filt )
-        real, intent(in)           :: corrs(:) !< fsc plot (correlations)
-        real, allocatable          :: filt(:)  !< output filter coefficients
+        real, intent(in)  :: corrs(:) !< fsc plot (correlations)
+        real, allocatable :: filt(:)  !< output filter coefficients
         integer :: nyq, k
         nyq = size(corrs)
         allocate( filt(nyq) )

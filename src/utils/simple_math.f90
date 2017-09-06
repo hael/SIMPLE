@@ -1000,7 +1000,7 @@ contains
 
     !>   returns the Fourier index of the resolution limit
     function get_lplim( fsc ) result( k )
-        real, intent(in) :: fsc(:)         !< Fourier shell correlation array
+        real, intent(in) :: fsc(:) !< Fourier shell correlation array
         integer :: n, k, h
         n = size(fsc)
         if( n < 3 )then

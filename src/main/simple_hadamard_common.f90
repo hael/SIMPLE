@@ -311,8 +311,8 @@ contains
         class(params),     intent(in)    :: p
         integer,           intent(in)    :: icls
         logical, optional, intent(in)    :: center
-        real, allocatable :: frc(:), filter(:)
-        real    :: xyz(3), sharg
+        real, allocatable :: frc(:), filter(:), res(:)
+        real    :: xyz(3), sharg, frc05, frc0143
         logical :: do_center
         ! normalise
         call b%img%norm
@@ -331,17 +331,17 @@ contains
                 call b%a%add_shift2class(icls, -xyz(1:2))
             endif
         endif
-        ! DEVFRC
         ! filter
-        ! if( b%projfrcs%is_set() )then
-        !     frc = b%projfrcs%get_frc(icls, p%box)
-        !     if( any(frc > 0.143) )then
-        !         call b%img%fwd_ft ! needs to be here in case the shift was never applied (above)
-        !         filter = fsc2optlp(frc)
-        !         call b%img%shellnorm()
-        !         call b%img%apply_filter(filter)
-        !     endif
-        ! endif
+        if( p%dev .eq. 'yes' )then
+            call b%projfrcs%estimate_res(p%nbest, frc, res, frc05, frc0143)
+            frc = b%projfrcs%get_frc(icls, p%box)
+            if( any(frc > 0.143) )then
+                call b%img%fwd_ft ! needs to be here in case the shift was never applied (above)
+                filter = fsc2optlp(frc)
+                call b%img%shellnorm()
+                call b%img%apply_filter(filter)
+            endif
+        endif
         ! ensure we are in real-space before clipping 
         call b%img%bwd_ft 
         ! clip image if needed

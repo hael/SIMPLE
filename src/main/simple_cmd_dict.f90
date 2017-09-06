@@ -59,6 +59,7 @@ contains
         call chdict%push('dcrit_rel',     'critical distance relative to box(0-1){0.5}')
         call chdict%push('defocus',       'defocus(in microns){3.}')
         call chdict%push('deftab',        'text file with CTF info(*.txt/*.asc)')
+        call chdict%push('dev',           'development flag for experimental code(yes|no){no}')
         call chdict%push('dfclose',       'close to focus limit for state flag(in microns){1}')
         call chdict%push('dffar',         'far from focus limit for state flag(in microns){4}')
         call chdict%push('dferr',         'defocus error(in microns){1.0}')

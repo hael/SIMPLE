@@ -13,20 +13,19 @@ type projection_frcs
     real              :: smpd         = 0.0
     real, allocatable :: res4frc_calc(:)
     real, allocatable :: frcs(:,:,:)
-    logical           :: l_frcs_set = .false.
-    logical           :: exists     = .false.
+    logical           :: exists       = .false.
 contains
     ! constructor
     procedure          :: new
     ! exception
     procedure, private :: raise_exception
     ! setters/getters
-    procedure          :: is_set
     procedure          :: set_frc
     procedure          :: get_frc
     procedure, private :: estimate_res_1
     procedure, private :: estimate_res_2
-    generic            :: estimate_res => estimate_res_1, estimate_res_2
+    procedure, private :: estimate_res_3
+    generic            :: estimate_res => estimate_res_1, estimate_res_2, estimate_res_3
     ! I/O
     procedure          :: read
     procedure          :: write
@@ -84,17 +83,11 @@ contains
 
     ! setters/getters
 
-    logical function is_set( self )
-        class(projection_frcs), intent(in) :: self
-        is_set = self%l_frcs_set
-    end function is_set
-
     subroutine set_frc( self, proj, frc, state )
         class(projection_frcs), intent(inout) :: self
         integer,                intent(in)    :: proj
         real,                   intent(in)    :: frc(:)
         integer, optional,      intent(in)    :: state
-        
         integer :: sstate
         sstate = 1
         if( present(state) ) sstate = state
@@ -104,7 +97,6 @@ contains
         else
             self%frcs(sstate,proj,:) = frc
         endif
-        self%l_frcs_set = .true.
     end subroutine set_frc
 
     function get_frc( self, proj, box, state ) result( frc )
@@ -142,8 +134,7 @@ contains
     subroutine estimate_res_2( self, frc, res, frc05, frc0143, state )
         use simple_math, only: get_resolution
         class(projection_frcs), intent(in)  :: self
-        real, allocatable,      intent(out) :: frc(:)
-        real, allocatable,      intent(out) :: res(:)
+        real, allocatable,      intent(out) :: frc(:), res(:)
         real,                   intent(out) :: frc05, frc0143
         integer, optional,      intent(in)  :: state
         integer :: alloc_stat, sstate
@@ -153,10 +144,45 @@ contains
         call alloc_errchk( 'estimate_res_2; simple_projection_frcs', alloc_stat )
         sstate = 1
         if( present(state) ) sstate = state
-        frc = sum(self%frcs(sstate,:,:),dim=1)/real(self%nprojs)
+        frc = sum(self%frcs(sstate,:,:),dim=1) / real(self%nprojs)
         call get_resolution(frc, self%res4frc_calc, frc05, frc0143)
         res = self%res4frc_calc
     end subroutine estimate_res_2
+
+    subroutine estimate_res_3( self, nbest, frc, res, frc05, frc0143, state )
+        use simple_math, only: get_resolution, hpsort, get_lplim
+        class(projection_frcs), intent(in)  :: self
+        integer,                intent(in)  :: nbest
+        real, allocatable,      intent(out) :: frc(:), res(:)
+        real,                   intent(out) :: frc05, frc0143
+        integer, optional,      intent(in)  :: state
+        integer :: alloc_stat, sstate, iproj
+        real,    allocatable :: lplims(:)
+        integer, allocatable :: order(:)
+        if( allocated(frc) ) deallocate(frc)
+        if( allocated(res) ) deallocate(res)
+        allocate( frc(self%filtsz), res(self%filtsz),&
+            &lplims(self%nprojs), order(self%nprojs), stat=alloc_stat )
+        call alloc_errchk( 'estimate_res_2; simple_projection_frcs', alloc_stat )
+        sstate = 1
+        if( present(state) ) sstate = state
+        ! order FRCs according to low-pass limit (best first)
+        do iproj=1,self%nprojs
+            lplims(iproj) = get_lplim(self%frcs(sstate,iproj,:))
+        end do
+        order = (/(iproj,iproj=1,self%nprojs)/)
+        call hpsort(self%nprojs, lplims, order)
+        ! average the nbest ones
+        frc = 0.0
+        do iproj=1,nbest
+            frc = frc + self%frcs(sstate,order(iproj),:)
+        end do
+        ! prep output
+        frc = frc / real(nbest)
+        call get_resolution(frc, self%res4frc_calc, frc05, frc0143)
+        res = self%res4frc_calc
+    end subroutine estimate_res_3
+
 
     ! I/O
 
@@ -172,7 +198,6 @@ contains
         call fileio_errmsg('projection_frcs; read; actual read', io_stat)
         if(.not.fclose(funit, iostat=io_stat))&
         &call fileio_errmsg('projection_frcs; read; fhandle cose', io_stat)
-        self%l_frcs_set = .true.
     end subroutine read
 
     subroutine write( self, fname )
