@@ -52,7 +52,7 @@ type :: build
     type(projector),        allocatable :: refvols(:)         !< reference volumes for quasi-continuous search
     type(reconstructor),    allocatable :: recvols(:)         !< array of volumes for reconstruction
     type(eo_reconstructor), allocatable :: eorecvols(:)       !< array of volumes for eo-reconstruction
-    real,    allocatable                :: fsc(:,:)           !< Fourier shell correlation
+    real,    allocatable                :: fsc(:,:)           !< Fourier Shell Correlation
     integer, allocatable                :: nnmat(:,:)         !< matrix with nearest neighbor indices
     integer, allocatable                :: pbatch(:)          !< particle index batch
     integer, allocatable                :: grid_projs(:)      !< projection directions for coarse grid search
