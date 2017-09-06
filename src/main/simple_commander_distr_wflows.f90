@@ -470,8 +470,10 @@ contains
             call cline%set('extr_iter', real(p_master%extr_iter))
             ! updates
             if( oritab .ne. '' ) call job_descr%set('oritab',  trim(oritab))
-            call job_descr%set('refs',    trim(refs))
+            call job_descr%set('refs', trim(refs))
             call job_descr%set('startit', int2str(iter))
+            ! the only FRC we have is from the previous iteration, hence the iter - 1
+            call job_descr%set('fsc', 'frcs_iter'//int2str_pad(iter - 1,3)//'.bin')
             ! schedule
             call qenv%gen_scripts_and_schedule_jobs(p_master, job_descr, algnfbody=ALGNFBODY)
             ! merge orientation documents
@@ -484,7 +486,7 @@ contains
             call cline_cavgassemble%set('which_iter', real(iter))
             call qenv%exec_simple_prg_in_queue(cline_cavgassemble, 'CAVGASSEMBLE', 'CAVGASSEMBLE_FINISHED')
             ! remapping of empty classes
-            call remaps_empty_cavgs
+            call remap_empty_cavgs
             ! check convergence
             call cline_check2D_conv%set('oritab', trim(oritab))
             call xcheck2D_conv%execute(cline_check2D_conv)
@@ -512,7 +514,7 @@ contains
 
         contains
 
-            subroutine remaps_empty_cavgs
+            subroutine remap_empty_cavgs
                 use simple_image, only: image
                 integer, allocatable :: fromtocls(:,:)
                 integer              :: icls
@@ -530,7 +532,7 @@ contains
                     call img_cavg%read(trim(refs), p_master%ncls)
                     call img_cavg%write(trim(refs), p_master%ncls) ! to preserve size
                 endif
-            end subroutine remaps_empty_cavgs
+            end subroutine remap_empty_cavgs
 
     end subroutine exec_prime2D_distr
 

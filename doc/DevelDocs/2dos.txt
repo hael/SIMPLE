@@ -7,3 +7,13 @@ prime2D in distributed mode, i.e. make sure that the first makecavgs has
 a remap statement
 
 tracker should set ncunits based on # entries in boxfile automatically
+
+need to reach consensus with the automsking
+no dynamics/enveloping in 2D but the postproc should report
+on a suitable mask radius (same logics as for the adamsk)
+
+need to insert a flag METADATFFORM = bin/txt and test before testing the cavger for prime3D with npeaks > 1
+
+need to sort extract/compress bug
+
+CAVGASSEMBLE > RESOLUTIONXXX & not deleted

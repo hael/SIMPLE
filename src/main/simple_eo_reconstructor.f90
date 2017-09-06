@@ -329,8 +329,8 @@ contains
         call get_resolution(corrs, res, self%fsc05, self%fsc0143)
         self%fsc05   = max(self%fsc05,self%fny)
         self%fsc0143 = max(self%fsc0143,self%fny)
-        write(*,'(A,1X,F6.2)') '>>> RESOLUTION AT FSC=0.143 DETERMINED TO:', self%fsc0143
         write(*,'(A,1X,F6.2)') '>>> RESOLUTION AT FSC=0.500 DETERMINED TO:', self%fsc05
+        write(*,'(A,1X,F6.2)') '>>> RESOLUTION AT FSC=0.143 DETERMINED TO:', self%fsc0143
         ! the end
         deallocate(corrs, res)
         call even%kill

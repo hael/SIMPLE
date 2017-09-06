@@ -133,6 +133,7 @@ contains
                 call cavger%write('startcavgs'//p%ext, 'merged')
             endif
         endif
+        ! calculate FRC:s 
         ! end gracefully
         call simple_end('**** SIMPLE_MAKECAVGS NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_makecavgs
@@ -187,10 +188,12 @@ contains
         use simple_classaverager, only: classaverager
         class(cavgassemble_commander), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
-        type(params)         :: p
-        type(build)          :: b
-        type(classaverager)  :: cavger
-        integer              :: fnr, file_stat
+        type(params)        :: p
+        type(build)         :: b
+        type(classaverager) :: cavger
+        integer             :: fnr, file_stat, j
+        real, allocatable   :: frc(:), res(:)
+        real                :: frc05, frc0143
         p = params(cline)                                 ! parameters generated
         call b%build_general_tbox(p, cline, do3d=.false.) ! general objects built
         call b%build_hadamard_prime2D_tbox(p)
@@ -198,6 +201,15 @@ contains
         call cavger%assemble_sums_from_parts()
         if( cline%defined('which_iter') )then
             p%refs = 'cavgs_iter'//int2str_pad(p%which_iter,3)//p%ext
+            if( .not. cline%defined('fsc') ) p%fsc  = 'frcs_iter'//int2str_pad(p%which_iter,3)//'.bin'
+            call cavger%calc_and_write_frcs(p%fsc)
+            call b%projfrcs%estimate_res(frc, res, frc05, frc0143)
+            do j=1,size(res)
+                write(*,'(A,1X,F6.2,1X,A,1X,F7.3)') '>>> RESOLUTION:', res(j), '>>> CORRELATION:', frc(j)
+            end do
+            write(*,'(A,1X,F6.2)') '>>> RESOLUTION AT FRC=0.500 DETERMINED TO:', frc05
+            write(*,'(A,1X,F6.2)') '>>> RESOLUTION AT FRC=0.143 DETERMINED TO:', frc0143 
+            deallocate(frc, res)
         else if( .not. cline%defined('refs') )then
             p%refs = 'startcavgs'//p%ext
         endif

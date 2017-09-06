@@ -29,23 +29,23 @@ end type ptcl_record
 
 type classaverager
     private
-    class(build),      pointer     :: bp => null()          !< pointer to build
-    class(params),     pointer     :: pp => null()          !< pointer to params
-    integer                        :: istart  = 0, iend = 0 !< particle index range
-    integer                        :: partsz  = 0           !< size of partition
-    integer                        :: ncls    = 0           !< number of classes
-    integer                        :: nstates = 0           !< number of states
-    type(ptcl_record), allocatable :: precs(:)              !< particle records     
-    type(image),       allocatable :: cavgs_even(:,:)       !< class averages
-    type(image),       allocatable :: cavgs_odd(:,:)        !< -"-
-    type(image),       allocatable :: cavgs_merged(:,:)     !< -"-
-    type(image),       allocatable :: ctfsqsums_even(:,:)   !< CTF**2 sums for Wiener normalisation
-    type(image),       allocatable :: ctfsqsums_odd(:,:)    !< -"-
-    type(image),       allocatable :: ctfsqsums_merged(:,:) !< -"-
-    logical                        :: l_is_class    = .true.
-    logical                        :: l_hard_assign = .true.
-    logical                        :: l_grid        = .true.
-    logical                        :: exists        = .false.
+    class(build),      pointer     :: bp => null()             !< pointer to build
+    class(params),     pointer     :: pp => null()             !< pointer to params
+    integer                        :: istart  = 0, iend = 0    !< particle index range
+    integer                        :: partsz  = 0              !< size of partition
+    integer                        :: ncls    = 0              !< # classes
+    integer                        :: nstates = 0              !< # states
+    type(ptcl_record), allocatable :: precs(:)                 !< particle records     
+    type(image),       allocatable :: cavgs_even(:,:)          !< class averages
+    type(image),       allocatable :: cavgs_odd(:,:)           !< -"-
+    type(image),       allocatable :: cavgs_merged(:,:)        !< -"-
+    type(image),       allocatable :: ctfsqsums_even(:,:)      !< CTF**2 sums for Wiener normalisation
+    type(image),       allocatable :: ctfsqsums_odd(:,:)       !< -"-
+    type(image),       allocatable :: ctfsqsums_merged(:,:)    !< -"-
+    logical                        :: l_is_class    = .true.   !< for prime2D or not
+    logical                        :: l_hard_assign = .true.   !< npeaks == 1 or not
+    logical                        :: l_grid        = .true.   !< use gridding interpolation or not
+    logical                        :: exists        = .false.  !< to flag instance existence 
   contains
     ! constructors
     procedure          :: new
@@ -61,7 +61,7 @@ type classaverager
     procedure          :: assemble_sums
     procedure, private :: apply_ctf_and_shift
     procedure          :: merge_eos_and_norm
-    procedure          :: calc_frcs
+    procedure          :: calc_and_write_frcs
     ! I/O
     procedure          :: write
     procedure          :: read
@@ -104,13 +104,11 @@ contains
                 self%ncls       = p%ncls
             case('proj')
                 self%l_is_class = .false.
-                if( p%nspace > NSPACE_BALANCE )then
-                    ! reduce the number of projection directions used 
-                    ! for the class average representation
-                    self%ncls = NSPACE_BALANCE
-                else
-                    self%ncls = p%nspace
-                endif
+                ! possible reduction of # projection directions used 
+                ! for the class average representation
+                self%ncls = min(NSPACE_BALANCE,p%nspace)
+            case DEFAULT
+                stop 'unsupported which flag; simple_classaverager :: new'
         end select
         ! work out range and partsz
         if( p%l_distr_exec )then
@@ -192,7 +190,7 @@ contains
         if( present(prime3Dsrchobj) )then
             l_reduce_projs = .false.
             if( self%pp%nspace > NSPACE_BALANCE )then
-                ! reduce the number of projection directions 
+                ! reduce # projection directions 
                 ! used for the class average representation
                 call a_here%reduce_projs(NSPACE_BALANCE, self%pp%nsym, self%pp%eullims)
                 l_reduce_projs = .true.
@@ -618,6 +616,9 @@ contains
         call ctfsq%set_ft(.true.)
         tfun = ctf(img%get_smpd(), self%precs(iprec)%kv, self%precs(iprec)%cs, self%precs(iprec)%fraca)
         call img%fwd_ft
+        ! prep indices
+        state = self%precs(iprec)%states(iori)
+        class = self%precs(iprec)%classes(iori)
         ! take care of the nominator
         x      = -self%precs(iprec)%shifts(iori,1)
         y      = -self%precs(iprec)%shifts(iori,2)
@@ -638,9 +639,6 @@ contains
         else
             pw = self%precs(iprec)%pw * self%precs(iprec)%ows(iori)
         endif
-        ! prep indices
-        state = self%precs(iprec)%states(iori)
-        class = self%precs(iprec)%classes(iori)
         ! add to sums
         select case(self%precs(iprec)%eo)
             case(0,-1)
@@ -664,9 +662,6 @@ contains
                 call self%ctfsqsums_merged(istate,icls)%add(self%ctfsqsums_even(istate,icls))
                 call self%ctfsqsums_merged(istate,icls)%add(self%ctfsqsums_odd(istate,icls))
                 ! (w*CTF)**2 density correction
-                ! call self%ctfsqsums_even(istate,icls)%add(1.0)
-                ! call self%ctfsqsums_odd(istate,icls)%add(1.0)
-                ! call self%ctfsqsums_merged(istate,icls)%add(1.0)
                 call self%cavgs_even(istate,icls)%fwd_ft
                 call self%cavgs_even(istate,icls)%ctf_dens_correct(self%ctfsqsums_even(istate,icls))
                 call self%cavgs_even(istate,icls)%bwd_ft
@@ -681,8 +676,9 @@ contains
     end subroutine merge_eos_and_norm
 
     !>  \brief  calculates Fourier ring correlations
-    subroutine calc_frcs( self )
+    subroutine calc_and_write_frcs( self, fname )
         class(classaverager), intent(inout) :: self
+        character(len=*),     intent(in)    :: fname
         type(image)       :: even_img, odd_img
         real, allocatable :: res(:), frc(:)
         integer           :: istate, icls
@@ -700,10 +696,11 @@ contains
                     call odd_img%mask(self%pp%msk, 'soft')
                 endif
                 call even_img%fsc(odd_img, res, frc)
-                call self%bp%projfrcs%set_frc(self%pp%box, istate, icls, frc)
+                call self%bp%projfrcs%set_frc(self%pp%box, icls, frc, istate)
             end do
         end do
-    end subroutine calc_frcs
+        call self%bp%projfrcs%write(fname)
+    end subroutine calc_and_write_frcs
 
     ! I/O
 

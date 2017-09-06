@@ -56,10 +56,10 @@ contains
                 do s=1,p%nstates
                     fsc_fname = 'fsc_state'//int2str_pad(s,2)//'.bin'
                     if( file_exists(trim(adjustl(fsc_fname))) )fsc_bin_exists( s ) = .true.
-                    if( b%a%get_pop( s, 'state' )>0 .and. .not.fsc_bin_exists(s))&
+                    if( b%a%get_pop(s, 'state') > 0 .and. .not.fsc_bin_exists(s))&
                         & all_fsc_bin_exist = .false.
                 enddo
-                if( p%oritab.eq.'')all_fsc_bin_exist = (count(fsc_bin_exists)==p%nstates)
+                if( p%oritab .eq. '' )all_fsc_bin_exist = (count(fsc_bin_exists)==p%nstates)
                 ! set low-pass Fourier index limit
                 if( all_fsc_bin_exist )then
                     ! we need the worst resolved fsc
@@ -140,12 +140,10 @@ contains
         real :: lplim
         p%kfromto(1) = max(2, calc_fourier_index(p%hp, p%boxmatch, p%smpd))
         if( cline%defined('lp') )then
-            ! set Fourier index range
             p%kfromto(2) = calc_fourier_index(p%lp, p%boxmatch, p%smpd)
             p%lp_dyn     = p%lp
             call b%a%set_all2single('lp',p%lp)
         else
-            ! set Fourier index range
             if( which_iter <= LPLIM1ITERBOUND )then
                 lplim = p%lplims2D(1)
             else if( frac_srch_space >= FRAC_SH_LIM .and. which_iter > LPLIM3ITERBOUND )then
@@ -242,9 +240,9 @@ contains
         type(ctf)         :: tfun
         real              :: x, y, dfx, dfy, angast
         integer           :: cls
-        x     = o%get('x')
-        y     = o%get('y')
-        cls   = nint(o%get('class'))
+        x   = o%get('x')
+        y   = o%get('y')
+        cls = nint(o%get('class'))
         ! move to Fourier space
         call b%img%fwd_ft
         ! set CTF parameters
@@ -307,36 +305,44 @@ contains
 
     !>  \brief  prepares one cluster centre image for alignment
     subroutine prep2Dref( b, p, icls, center )
-        use simple_image, only: image
+        use simple_image,         only: image
+        use simple_estimate_ssnr, only: fsc2optlp
         class(build),      intent(inout) :: b
         class(params),     intent(in)    :: p
         integer,           intent(in)    :: icls
         logical, optional, intent(in)    :: center
+        real, allocatable :: frc(:), filter(:)
         real    :: xyz(3), sharg
         logical :: do_center
-        ! p%center:  user gets opportunity to turn on/off centering
-        ! p%doshift: search space fraction controlled centering (or not)
-        ! REPLACED
-        ! if( p%center .eq. 'yes' .and. p%doshift )then
-        ! WITH
+        ! normalise
+        call b%img%norm
         do_center = (p%center .eq. 'yes')
-        if( present(center) )then
-            ! centering only performed if p%center.eq.'yes'
-            do_center = do_center .and. center
-        endif
+        ! centering only performed if p%center.eq.'yes'
+        if( present(center) ) do_center = do_center .and. center
         if( do_center )then
-        ! BECAUSE: typically you'd want to center the class averages
-        !          even though they're not good enough to search shifts
+            ! typically you'd want to center the class averages
+            ! even though they're not good enough to search shifts
             xyz   = b%img%center(p%cenlp, 'no', p%msk, doshift=.false.)
             sharg = arg(xyz)
             if( sharg > CENTHRESH )then
                 ! apply shift and update the corresponding class parameters
+                call b%img%fwd_ft
                 call b%img%shift(xyz(1), xyz(2))
                 call b%a%add_shift2class(icls, -xyz(1:2))
             endif
         endif
-        ! normalise
-        call b%img%norm
+        ! filter
+        if( b%projfrcs%is_set() )then
+            frc = b%projfrcs%get_frc(icls)
+            if( any(frc > 0.143) )then
+                call b%img%fwd_ft ! needs to be here in case the shift was never applied (above)
+                filter = fsc2optlp(frc)
+                call b%img%shellnorm()
+                call b%img%apply_filter(filter)
+            endif
+        endif
+        ! ensure we are in real-space before clipping 
+        call b%img%bwd_ft 
         ! clip image if needed
         call b%img%clip(b%img_match)
         ! apply mask
@@ -416,27 +422,28 @@ contains
         if( p%boxmatch < p%box )call b%vol%new([p%box,p%box,p%box],p%smpd) ! ensure correct dim
         call b%vol%read(p%vols(s))
         call b%vol%norm ! because auto-normalisation on read is taken out
-        ! Volume filtering
-        if( p%eo.eq.'yes' )then
-            if( any(b%fsc(s,:) > 0.143) )then
-                ! Rosenthal & Henderson, 2003 
-                call b%vol%fwd_ft
-                filter = fsc2optlp(b%fsc(s,:))
-                call b%vol%shellnorm()
-                call b%vol%apply_filter(filter)
-            endif
-        endif
         ! centering            
         do_center = .true.
         if( p%center .eq. 'no' .or. p%nstates > 1 .or. .not. p%doshift .or.&
-            p%pgrp(:1) .ne. 'c' .or. cline%defined('mskfile') ) do_center = .false.
+        &p%pgrp(:1) .ne. 'c' .or. cline%defined('mskfile') ) do_center = .false.
         if( do_center )then
             shvec = b%vol%center(p%cenlp,'no',p%msk,doshift=.false.) ! find center of mass shift
             if( arg(shvec) > CENTHRESH )then
+                call b%vol%fwd_ft
                 if( p%pgrp .ne. 'c1' ) shvec(1:2) = 0.         ! shifts only along z-axis for C2 and above
                 call b%vol%shift([shvec(1),shvec(2),shvec(3)]) ! performs shift
                 ! map back to particle oritentations
                 if( cline%defined('oritab') )call b%a%map3dshift22d(-shvec(:), state=s)
+            endif
+        endif
+        ! Volume filtering
+        if( p%eo.eq.'yes' )then
+            if( any(b%fsc(s,:) > 0.143) )then
+                ! Rosenthal & Henderson, 2003 
+                call b%vol%fwd_ft ! needs to be here in case the shift was never applied (above)
+                filter = fsc2optlp(b%fsc(s,:))
+                call b%vol%shellnorm()
+                call b%vol%apply_filter(filter)
             endif
         endif
         ! back to real space
@@ -451,7 +458,6 @@ contains
             call b%mskvol%new([p%box, p%box, p%box], p%smpd)
             call b%mskvol%read(p%mskfile)
             call b%mskvol%clip_inplace([p%boxmatch,p%boxmatch,p%boxmatch])
-            ! no need for the below line anymore as I (HE) removed auto-normalisation on read
             call b%vol%mul(b%mskvol)
             ! re-initialise the object for 2D envelope masking
             call b%mskvol%init_envmask2D(p%msk)
@@ -468,7 +474,7 @@ contains
         ! FT volume
         call b%vol%fwd_ft
         ! expand for fast interpolation
-        if( l_doexpand )call b%vol%expand_cmat     
+        if( l_doexpand ) call b%vol%expand_cmat     
     end subroutine preprefvol
     
     subroutine eonorm_struct_facts( b, p, res, which_iter )

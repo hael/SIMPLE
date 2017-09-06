@@ -40,8 +40,9 @@ contains
         integer,        intent(in)    :: which_iter
         logical,        intent(inout) :: converged
         logical, allocatable :: ptcl_mask(:)
-        integer :: iptcl, icls
-        real    :: corr_thresh, frac_srch_space, skewness, extr_thresh
+        real,    allocatable :: frc(:), res(:)
+        integer :: iptcl, icls, j
+        real    :: corr_thresh, frac_srch_space, skewness, extr_thresh, frc05, frc0143
         logical :: l_do_read
 
         ! PREP REFERENCES
@@ -89,6 +90,16 @@ contains
         else
             ! defaults to unitary weights
             call b%a%set_all2single('w', 1.0)
+        endif
+
+        ! READ FOURIER RING CORRELATIONS
+        if( which_iter >= LPLIM1ITERBOUND .and. frac_srch_space >= FRAC_INTERPOL )then
+            if( file_exists(p%fsc) )then
+                call b%projfrcs%read(p%fsc) ! spectral whitening + optiml low-pass filter activated on read
+            else
+                write(*,*) 'the FRC file does not exist in cwd: ', trim(p%fsc)
+                stop 'simple_hadamard2D_matcher :: prime2D_exec'
+            endif
         endif
 
         ! POPULATION BALANCING LOGICS
@@ -161,11 +172,14 @@ contains
         DebugPrint ' hadamard2D_matcher; completed alignment'
 
         ! SETUP (OVERWRITES) EVEN/ODD PARTITION
+        ! needs to be here since parameters just updated
+        ! need to be in the [p%fromp, p%top] range or it will be based on previous params
         call b%a%partition_eo('class', [p%fromp, p%top])
 
         ! REMAPPING OF HIGHEST POPULATED CLASSES
+        ! needs to be here since parameters just updated
         if( p%l_distr_exec )then
-            ! this is done in distributed workflow
+            ! this is done in the distributed workflow
         else
             call b%a%fill_empty_classes(p%ncls)
         endif
@@ -184,6 +198,22 @@ contains
             p%refs = 'cavgs_iter'//int2str_pad(which_iter,3)//p%ext
             if( p%chunktag .ne. '' ) p%refs = trim(p%chunktag)//trim(p%refs)
             call cavger%write(p%refs, 'merged')
+        endif
+
+        ! CALCULATE & WRITE TO DISK FOURIER RING CORRELATION
+        if( p%l_distr_exec )then
+            ! this is done in prime2D commander; cavgassemble
+        else
+            p%fsc = 'frcs_iter'//int2str_pad(which_iter,3)//'.bin'
+            if( p%chunktag .ne. '' ) p%fsc = trim(p%chunktag)//trim(p%fsc)
+            call cavger%calc_and_write_frcs(p%fsc)
+            call b%projfrcs%estimate_res(frc, res, frc05, frc0143)
+            do j=1,size(res)
+                write(*,'(A,1X,F6.2,1X,A,1X,F7.3)') '>>> RESOLUTION:', res(j), '>>> CORRELATION:', frc(j)
+            end do
+            write(*,'(A,1X,F6.2)') '>>> RESOLUTION AT FRC=0.500 DETERMINED TO:', frc05
+            write(*,'(A,1X,F6.2)') '>>> RESOLUTION AT FRC=0.143 DETERMINED TO:', frc0143 
+            deallocate(frc, res)
         endif
 
         ! DESTRUCT
@@ -217,6 +247,7 @@ contains
         call b%img_match%init_polarizer(pftcc)
         ! prepare the automasker
         if( p%l_envmsk .and. p%automsk .eq. 'cavg' ) call b%mskimg%init2D(p, p%ncls)
+
         ! PREPARATION OF REFERENCES IN PFTCC
         ! read references and transform into polar coordinates
         if( .not. p%l_distr_exec ) write(*,'(A)') '>>> BUILDING REFERENCES'
@@ -236,6 +267,7 @@ contains
                 call b%img_match%polarize(pftcc, icls, isptcl=.false.)
             endif
         end do
+
         ! PREPARATION OF PARTICLES IN PFTCC
         ! read particle images and create polar projections
         if( .not. p%l_distr_exec ) write(*,'(A)') '>>> BUILDING PARTICLES'
