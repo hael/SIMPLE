@@ -552,7 +552,7 @@ contains
             &fname_ctffind_ctrl, fname_ctffind_output, os)
             write(*,'(f4.0,1x,a)') 100.*(real(movie_counter)/real(ntot)), 'percent of the micrographs processed'
         end do
-        call binwrite_oritab(fname_ctffind_output, os, fromto)
+        call os%write(fname_ctffind_output)
         call os%kill
         deallocate(fname_ctffind_ctrl,fname_ctffind_output)
         call qsys_job_finished( p, 'simple_commander_preproc :: exec_ctffind' )
