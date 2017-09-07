@@ -757,7 +757,7 @@ contains
         endif
     end function csq_2
 
-    !>   is for calculating complex arg/abs/modulus, from numerical recepies
+    !>   is for calculating complex arg/abs/modulus, from numerical recipes
     elemental pure function mycabs( a ) result( myabs )
         complex, intent(in) :: a      !< complx component
         real                :: myabs, x, y, frac

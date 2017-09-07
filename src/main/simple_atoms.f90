@@ -1,0 +1,259 @@
+! atomic structures and pdb parser
+module simple_atoms
+!$ use omp_lib
+!$ use omp_lib_kinds
+use simple_defs
+use simple_strings, only: upperCase
+use simple_math,    only: hpsort, is_a_number, rad2deg
+use simple_syslib,  only: alloc_errchk, file_exists, simple_stop
+!use simple_stat,    only: moment
+use simple_fileio,  only: fopen, fclose, fileio_errmsg, file_exists, nlines
+implicit none
+
+public :: atoms
+private
+#include "simple_local_flags.inc"
+
+!character(len=74) :: pdbfmt = "(A6,I5,1X,A4,A1,A3,1X,A1,I4,A1,3X,3F8.3,2F6.2,10X,2A2)" ! v3.3
+character(len=74) :: pdbfmt = "(A6,I5,1X,A4,A1,A3,1X,A1,I4,A1,3X,3F8.3,2F6.2)" ! custom 3.3
+
+!>  \brief type for dealing with atomic structures
+type :: atoms
+    private
+    character(len=4), allocatable :: name(:)
+    character(len=1), allocatable :: altloc(:)
+    character(len=1), allocatable :: chain(:)
+    character(len=1), allocatable :: icode(:)
+    character(len=3), allocatable :: resname(:)
+    character(len=3), allocatable :: element(:)
+    real,             allocatable :: charge(:)
+    real,             allocatable :: xyz(:,:)
+    real,             allocatable :: mw(:)
+    real,             allocatable :: occupancy(:)
+    real,             allocatable :: beta(:)
+    integer,          allocatable :: num(:)  
+    integer,          allocatable :: resnum(:)  
+    integer,          allocatable :: Z(:)  
+    logical,          allocatable :: het(:)
+    logical                       :: exists = .false.
+    integer                       :: n = 0
+  contains
+    ! CONSTRUCTORS
+    procedure, private :: new_instance
+    procedure, private :: new_from_pdb
+    generic            :: new => new_from_pdb, new_instance
+    ! GETTERS
+    procedure          :: get_name
+    procedure          :: get_coord
+    ! I/O
+    procedure          :: print_atom
+    procedure          :: writepdb
+    ! CALCULATORS
+    procedure, private :: Z_from_name
+    ! MODIFIERS
+    ! DESTRUCTOR
+    procedure          :: kill
+end type atoms
+
+contains
+
+    subroutine new_from_pdb( self, fname )
+        class(atoms),     intent(inout) :: self
+        character(len=*), intent(in)    :: fname
+        character(len=STDLEN) :: line
+        character(len=6)      :: atom_field 
+        integer               :: i, l, nl, filnum, io_stat, n, cnt
+        call self%kill
+        nl = nlines(trim(fname))
+        if(nl == 0 .or. .not.file_exists(fname))then
+            print *, 'IO problem with file:', trim(fname)
+            stop 'simple_atoms :: new_from_pdb'
+        endif
+        if(.not.fopen(filnum, status='OLD', action='READ', file=fname, iostat=io_stat))&
+            call fileio_errmsg('new_from_pdb; simple_atoms opening '//trim(fname), io_stat)
+        ! first pass
+        n = 0
+        do i = 1, nl
+            read(filnum,'(A6)')atom_field
+            if(is_valid_entry(atom_field))n = n + 1
+        enddo
+        if( n == 0 )then
+            print *,'No atoms found in:'
+            stop 'simple_atoms :: new_from_pdb'
+        endif
+        ! instance
+        call self%new_instance(n)
+        ! second pass
+        rewind(filnum)
+        i = 0
+        do l = 1, nl
+            read(filnum,'(A)')line
+            if(.not.is_valid_entry(line(1:6)))cycle
+            i = i + 1
+            read(line,pdbfmt)atom_field, self%num(i), self%name(i), self%altloc(i),&
+            &self%resname(i), self%chain(i), self%resnum(i), self%icode(i), self%xyz(i,:),&
+            &self%occupancy(i), self%beta(i)
+            self%het(i) = atom_field == 'HETATM'
+        enddo
+        ! done
+        if(.not.fclose(filnum, iostat=io_stat))&
+             call fileio_errmsg('new_from_pdb; simple_atoms closing '//trim(fname), io_stat)
+        contains
+
+            logical function is_valid_entry( str )
+                character(len=6), intent(in) :: str
+                select case(str)
+                case( 'ATOM ', 'HETATM' )
+                    is_valid_entry = .true.
+                case DEFAULT
+                    is_valid_entry = .false.
+                end select
+            end function
+    end subroutine new_from_pdb
+
+    subroutine new_instance( self, n )
+        class(atoms), intent(inout) :: self
+        integer,      intent(inout) :: n
+        integer :: i, alloc_stat
+        call self%kill
+        allocate(self%name(n), self%chain(n), self%resname(n), self%xyz(n,3), self%mw(n),&
+            self%occupancy(n), self%beta(n), self%num(n), self%Z(n), self%het(n), self%icode(n),&
+            self%altloc(n), self%resnum(n), stat=alloc_stat)
+        call alloc_errchk('new_instance :: simple_atoms', alloc_stat)
+        self%name(:)    = '    '
+        self%resname(:) = '   '
+        self%chain(:)   = ' '
+        self%altloc(:)  = ' '
+        self%icode(:)   = ' '
+        self%mw        = 0.
+        self%xyz       = 0.
+        self%beta      = 0.
+        self%occupancy = 0.
+        self%num    = 0
+        self%resnum = 0
+        self%Z      = 0
+        self%n      = n
+        self%het    = .false.
+        self%exists = .true.
+    end subroutine new_instance
+
+    ! GETTERS
+
+    function get_coord( self, i )result( xyz )
+        class(atoms), intent(inout) :: self
+        integer,      intent(in)    :: i
+        real :: xyz(3)
+        xyz = self%xyz(i,:)
+    end function get_coord
+
+    character(len=4) function get_name( self, i )
+        class(atoms), intent(inout) :: self
+        integer,      intent(in)    :: i
+        get_name = self%name(i)
+    end function get_name
+
+    subroutine print_atom( self, i )
+        class(atoms), intent(inout) :: self
+        integer,      intent(in)    :: i
+        if(self%het(i))then
+            write(*,'(A6)',advance='no')'HETERO-ATOM '
+        else
+            write(*,'(A6)',advance='no')'ATOM        '
+        endif
+        write(*,'(I6,1X)',advance='no')self%num(i)
+        write(*,'(A4,1X)',advance='no')self%name(i)
+        write(*,'(A1,1X)',advance='no')self%altloc(i)
+        write(*,'(A3,1X)',advance='no')self%resname(i)
+        write(*,'(A1,1X)',advance='no')self%chain(i)
+        write(*,'(I4,1X)',advance='no')self%resnum(i)
+        write(*,'(A1,1X)',advance='no')self%icode(i)
+        write(*,'(3F8.3,1X)',advance='no')self%xyz(i,:)
+        write(*,'(2F6.2,1X)',advance='yes')self%occupancy(i), self%beta(i)
+    end subroutine print_atom
+
+    ! I/O
+
+    subroutine writepdb( self, fbody )
+        class(atoms),     intent(inout) :: self
+        character(len=*), intent(in)    :: fbody
+        character(len=STDLEN) :: fname
+        character(len=76)     :: line
+        integer               :: i, funit, io_stat
+        fname = trim(adjustl(fbody)) // '.pdb'
+        if(.not.self%exists)stop 'Cannot write non existent atoms type; simple_atoms :: writePDB'
+        if(.not.fopen(funit, status='REPLACE', action='WRITE', file=fname, iostat=io_stat))&
+            call fileio_errmsg('writepdb; simple_atoms opening '//trim(fname), io_stat)
+        do i = 1, self%n
+            write(funit,'(A76)')pdbstr(i)
+        enddo
+        if(.not.fclose(funit, iostat=io_stat))&
+             call fileio_errmsg('writepdb; simple_atoms closing '//trim(fname), io_stat)
+        contains
+            
+            character(len=76) function pdbstr( ind )
+                integer,           intent(in)  :: ind
+                integer :: i
+                character(len=6) :: atom_field
+                if(self%het(ind))then
+                    atom_field(1:6) = 'HETATM' 
+                else
+                    atom_field(1:6) = 'ATOM  ' 
+                endif
+                write(pdbstr,pdbfmt)atom_field,self%num(ind),self%name(ind),self%altloc(ind),&
+                    self%resname(ind),self%chain(ind), self%resnum(ind), self%icode(ind), self%xyz(ind,:),&
+                    self%occupancy(ind), self%beta(ind)
+            end function pdbstr
+    end subroutine writepdb
+
+    ! CALCULATORS
+
+    integer function Z_from_name( self, name )
+        class(atoms),     intent(inout) :: self
+        character(len=4), intent(in)    :: name
+        character(len=4) :: uppercase_name
+        uppercase_name = upperCase(name)
+        select case(trim(adjustl(uppercase_name)))
+        ! organic
+        case('H')
+            Z_from_name = 1
+        case('C')
+            Z_from_name = 6
+        case('N')
+            Z_from_name = 7
+        case('O')
+            Z_from_name = 8
+        case('P')
+            Z_from_name = 15
+        case('S')
+            Z_from_name = 16
+        ! metals
+        case('FE')
+            Z_from_name = 26
+        case('PD')
+            Z_from_name = 46
+        case('PT')
+            Z_from_name = 78
+        end select
+    end function Z_from_name
+
+    ! DESTRUCTOR
+    subroutine kill( self )
+        class(atoms), intent(inout) :: self
+        if( allocated(self%name) )deallocate(self%name)
+        if( allocated(self%altloc) )deallocate(self%altloc)
+        if( allocated(self%chain) )deallocate(self%chain)
+        if( allocated(self%icode) )deallocate(self%icode)
+        if( allocated(self%resname) )deallocate(self%resname)
+        if( allocated(self%xyz) )deallocate(self%xyz)
+        if( allocated(self%mw) )deallocate(self%mw)
+        if( allocated(self%occupancy) )deallocate(self%occupancy)
+        if( allocated(self%beta) )deallocate(self%beta)
+        if( allocated(self%num) )deallocate(self%num)
+        if( allocated(self%resnum) )deallocate(self%resnum)
+        if( allocated(self%Z) )deallocate(self%Z)
+        if( allocated(self%het) )deallocate(self%het)
+        self%n      = 0
+        self%exists = .false.
+    end subroutine kill
+
+end module

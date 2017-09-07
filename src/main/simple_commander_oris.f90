@@ -817,7 +817,7 @@ contains
             enddo
             close(funit)
         else
-            ! time series visualization
+            ! time series
             ! unit sphere tracking
             fname  = trim(p%fbody)//'_motion.bild'
             radius = 0.02
@@ -852,6 +852,8 @@ contains
                     ang = 0.
                 else
                     ang = rad2deg(o_prev.euldist.o)
+                    call o_prev%mirror2d
+                    ang = min(ang, rad2deg(o_prev.euldist.o))
                 endif
                 euldists(i) = ang
                 write(funit,'(I7,A1,F7.2)')i, ',', ang     
@@ -859,7 +861,7 @@ contains
             enddo
             close(funit)
             ! movie output
-            ! setting Rprev to south pole as it where how chimera opens
+            ! setting Rprev to south pole as it where chimera opens
             call o_prev%new
             call o_prev%mirror3d
             Rprev = o_prev%get_mat()

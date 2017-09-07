@@ -46,7 +46,7 @@ type, extends(image) :: reconstructor
     ! INTERPOLATION
     procedure, private :: inout_fcomp
     procedure, private :: calc_tfun_vals
-    procedure, private :: uneven_correct
+    procedure, private :: gridding_correct
     procedure          :: inout_fplane
     procedure          :: sampl_dens_correct
     procedure          :: compress_exp
@@ -268,91 +268,124 @@ contains
 
     !>  is for uneven distribution of orientations correction 
     !>  from Pipe & Manon 1999
-    subroutine uneven_correct( self )
-        use simple_gridding, only: mul_w_instr
-        use simple_math,     only: fdim
-        class(reconstructor), intent(inout) :: self         !< instance
-        type(image) :: rho_img, W_img, Wp_img
-        complex :: comp, zero
-        real    :: val, w
-        real, allocatable :: weights(:,:,:)
-        integer :: h, k, m, lims(3,2), logi(3), phys(3), iter
+    subroutine gridding_correct( self )
+        use simple_gridding,   only: mul_w_instr
+        use simple_math,       only: mycabs, hyp
+        use simple_kbinterpol, only: kbinterpol
+        class(reconstructor), intent(inout) :: self
+        type(kbinterpol) :: kbwin 
+        type(image)      :: W_img, Wprev_img
+        complex          :: comp, zero, one
+        real             :: Wnorm, winsz, alpha, val_prev, val, Wnorm_prev, invrho
+        integer          :: h, k, m, lims(3,2), logi(3), phys(3), iter, lfny, sh, cnt
+        integer, parameter :: maxits = 30
+        lfny = self%get_lfny(1)
         lims = self%loop_lims(2)
         zero = cmplx(0.,0.)
-        call rho_img%new(self%ldim_img, self%get_smpd())
+        one  = cmplx(1.,0.)
         call W_img%new(self%ldim_img, self%get_smpd())
-        call Wp_img%new(self%ldim_img, self%get_smpd())
-        call rho_img%set_ft(.true.)
+        call Wprev_img%new(self%ldim_img, self%get_smpd())
         call W_img%set_ft(.true.)
-        call Wp_img%set_ft(.true.)
-        ! rho -> image object
-        rho_img = zero
+        call Wprev_img%set_ft(.true.)
+        ! kernel
+        winsz = 2.
+        kbwin = kbinterpol(winsz, self%alpha)
+        ! weights init to 1.
+        W_img = zero
         do h = lims(1,1),lims(1,2)
             do k = lims(2,1),lims(2,2)
                 do m = lims(3,1),lims(3,2)
+                    sh = nint(hyp(real(h),real(k),real(m)))
+                    if( sh > lfny )cycle
                     logi = [h, k, m]
-                    phys = rho_img%comp_addr_phys(logi)
-                    val  = self%rho(phys(1),phys(2),phys(3))
-                    if(val .eq. 0.)cycle
-                    call rho_img%set_fcomp(logi, phys, cmplx(val, 0.))
+                    phys = W_img%comp_addr_phys(logi)
+                    call W_img%set_fcomp(logi, phys, one)
                 end do
             end do
         end do
-        ! Main loop
-        do iter = 1, 1
-            if(iter == 1)then
-                W_img = rho_img
-            else
-                ! W <- W * rho
-                call W_img%mul(rho_img)
-            endif
-            ! Wp <- W x kernel
-            Wp_img = W_img
-            call Wp_img%bwd_ft
-            call mul_w_instr(Wp_img, self%kbwin)
-            call Wp_img%fwd_ft
-            ! W <- W / (W x kernel)
-            call W_img%div(Wp_img)
+        ! main loop
+        Wnorm = 1.
+        do iter = 1, maxits
+            Wnorm_prev = Wnorm
+            Wprev_img  = W_img 
+            ! W <- W * rho
+            do h = lims(1,1),lims(1,2)
+                do k = lims(2,1),lims(2,2)
+                    do m = lims(3,1),lims(3,2)
+                        sh = nint(hyp(real(h),real(k),real(m)))
+                        !if( sh == 0 )cycle
+                        logi = [h, k, m]
+                        phys = W_img%comp_addr_phys(logi)
+                        if( sh > lfny )then
+                            call W_img%set_fcomp(logi, phys, zero)
+                        else
+                            call W_img%mul(logi, self%rho(phys(1),phys(2),phys(3)), phys_in=phys)
+                        endif
+                    end do
+                end do
+            end do
+            ! W <- (W / rho) x kernel
+            call W_img%bwd_ft
+            call mul_w_instr(W_img, kbwin)
+            call W_img%fwd_ft
+            ! W <- Wprev / ((Wprev / rho) x kernel)
+            Wnorm = 0.
+            cnt   = 0
+            do h = lims(1,1),lims(1,2)
+                do k = lims(2,1),lims(2,2)
+                    do m = lims(3,1),lims(3,2)
+                        sh = nint(hyp(real(h),real(k),real(m)))
+                        logi = [h, k, m]
+                        phys = W_img%comp_addr_phys(logi)
+                        if( sh > lfny )then
+                            call W_img%set_fcomp(logi, phys, zero)
+                        else
+                            val = mycabs(W_img%get_fcomp(logi, phys))
+                            if( val > 1.e-6 )then
+                                cnt      = cnt+1
+                                val_prev = real(Wprev_img%get_fcomp(logi, phys))
+                                ! Wprev / ((Wprev / rho) x kernel)
+                                val      = min(val_prev/val, 1.e12)
+                                call W_img%set_fcomp(logi, phys, cmplx(val, 0.)) 
+                                Wnorm = Wnorm + val**2.
+                            else
+                                call W_img%set_fcomp(logi, phys, zero)
+                            endif
+                        endif
+                    end do
+                end do
+            end do
+            Wnorm = sqrt(Wnorm / real(cnt))
+            ! convergence
+            print *, 'Wnorm', iter, log(1.+Wnorm), cnt
+            !if( abs(Wnorm-Wnorm_prev)/Wnorm < 0.01 )exit
         enddo
-        call Wp_img%kill
-        ! image object -> W * rho
-        ! self%rho = 0.
-        ! do h = lims(1,1),lims(1,2)
-        !     do k = lims(2,1),lims(2,2)
-        !         do m = lims(3,1),lims(3,2)
-        !             logi = [h, k, m]
-        !             phys = rho_img%comp_addr_phys(logi)
-        !             val  = rho_img%get_fcomp(logi, phys)
-        !             if(val <= 0.)cycle
-        !             w = W_img%get_fcomp(logi, phys)
-        !             if(w <= 0.)cycle
-        !             self%rho(phys(1),phys(2),phys(3)) = w * val
-        !         end do
-        !     end do
-        ! end do
+        call Wprev_img%kill
+        !
+        do h = lims(1,1),lims(1,2)
+            do k = lims(2,1),lims(2,2)
+                do m = lims(3,1),lims(3,2)
+                    sh = nint(hyp(real(h),real(k),real(m)))
+                    !if( sh == 0 )cycle
+                    logi = [h, k, m]
+                    phys = W_img%comp_addr_phys(logi)
+                    if( sh > lfny )then
+                        invrho = 0.
+                    else
+                        val = real(W_img%get_fcomp(logi, phys))
+                        if( val < 1.e-6 )then
+                            invrho = 0.
+                        else
+                            invrho = val
+                        endif
+                    endif
+                    call self%mul(logi,invrho,phys_in=phys)
+                end do
+            end do
+        end do
+        ! cleanup
         call W_img%kill
-        call rho_img%kill
-        ! straight up copy for visualization
-        ! rho_img     = 0.
-        ! lims        = 1
-        ! lims(1,2)   = fdim(self%ldim_img(1))
-        ! lims(2:3,2) = self%ldim_img(2:3)
-        ! ! set rho_img
-        ! !$omp parallel do collapse(3) default(shared) schedule(static)&
-        ! !$omp private(h,k,m,val,logi,phys) proc_bind(close)
-        ! do h = lims(1,1),lims(1,2)
-        !     do k = lims(2,1),lims(2,2)
-        !         do m = lims(3,1),lims(3,2)
-        !             val = self%rho(h,k,m)
-        !             if( val > TINY )then
-        !                 call rho_img%set([h, k, m], log(1.+val))
-        !             endif
-        !         end do
-        !     end do
-        ! end do
-        ! !$omp end parallel do
-        ! call rho_img%write('rho.mrc')
-    end subroutine uneven_correct
+    end subroutine gridding_correct
 
     !> insert or uninsert Fourier plane
     subroutine inout_fplane( self, o, inoutmode, fpl, pwght, mul )
@@ -548,7 +581,8 @@ contains
         else
             write(*,'(A)') '>>> SAMPLING DENSITY (RHO) CORRECTION (JACKSON) & WIENER NORMALIZATION'
             call self%compress_exp
-            call self%sampl_dens_correct
+            call self%gridding_correct
+            !call self%sampl_dens_correct
         endif
         call self%bwd_ft
         call img%kill
