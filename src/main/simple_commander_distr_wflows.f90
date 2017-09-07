@@ -266,11 +266,11 @@ contains
         ! prepare merge_algndocs command line
         cline_merge_algndocs = cline
         call cline_merge_algndocs%set( 'nthr', 1. )
-        call cline_merge_algndocs%set( 'fbody',    'ctffind_output_part'          )
-        call cline_merge_algndocs%set( 'nptcls',   real(p_master%nptcls)          )
-        call cline_merge_algndocs%set( 'ndocs',    real(p_master%nparts)          )
-        call cline_merge_algndocs%set( 'outfile',  'ctffind_output_merged'//'txt' )
-        call cline_merge_algndocs%set( 'ext_meta', '.txt'                         )
+        call cline_merge_algndocs%set( 'fbody',    'ctffind_output_part'           )
+        call cline_merge_algndocs%set( 'nptcls',   real(p_master%nptcls)           )
+        call cline_merge_algndocs%set( 'ndocs',    real(p_master%nparts)           )
+        call cline_merge_algndocs%set( 'outfile',  'ctffind_output_merged'//'.txt' )
+        call cline_merge_algndocs%set( 'ext_meta', '.txt'                          )
         ! setup the environment for distributed execution
         call qenv%new(p_master)
         ! prepare job description
@@ -280,7 +280,7 @@ contains
         ! merge docs
         call xmerge_algndocs%execute( cline_merge_algndocs )
         ! clean
-        call qsys_cleanup(p_master)
+        ! call qsys_cleanup(p_master)
         call simple_end('**** SIMPLE_DISTR_CTFFIND NORMAL STOP ****')
     end subroutine exec_ctffind_distr
 
@@ -610,7 +610,7 @@ contains
         do ipart=1,p_master%nparts
             chunktag = 'chunk'//int2str_pad(ipart,numlen)
             final_cavgs(ipart) = get_last_fname(trim(chunktag)//CAVGS_ITERFBODY, p_master%ext)
-            final_docs(ipart)  = get_last_fname(trim(chunktag)//ITERFBODY, 'txt')
+            final_docs(ipart)  = get_last_fname(trim(chunktag)//ITERFBODY, METADATEXT)
             if( ipart > 1 )then
                 ! the class indices need to be shifted by p_master%ncls
                 ishift = ishift + p_master%ncls
@@ -674,7 +674,7 @@ contains
         type(params)   :: p_master
         type(chash)    :: job_descr
         integer        :: nptcls
-                ! seed the random number generator
+        ! seed the random number generator
         call seed_rnd
         ! output command line executed
         write(*,'(a)') '>>> COMMAND LINE EXECUTED'
