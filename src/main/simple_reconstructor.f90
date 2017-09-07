@@ -581,8 +581,8 @@ contains
         else
             write(*,'(A)') '>>> SAMPLING DENSITY (RHO) CORRECTION (JACKSON) & WIENER NORMALIZATION'
             call self%compress_exp
-            call self%gridding_correct
-            !call self%sampl_dens_correct
+            !call self%gridding_correct
+            call self%sampl_dens_correct
         endif
         call self%bwd_ft
         call img%kill
