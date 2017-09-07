@@ -186,7 +186,7 @@ contains
             if( p%refine .eq. 'snhc')then
                 p%outfile = SNHCDOC
             else
-                p%outfile = 'prime3Ddoc_'//int2str_pad(which_iter,3)//'.txt'
+                p%outfile = 'prime3Ddoc_'//int2str_pad(which_iter,3)//METADATEXT
             endif
         endif
 
@@ -385,7 +385,7 @@ contains
         if( p%vols(1) == '' )then
             ! init volumes
             call preprecvols(b, p)
-            p%oritab = 'prime3D_startdoc.txt'
+            p%oritab = 'prime3D_startdoc'//METADATEXT
             call b%a%rnd_oris
             call b%a%zero_shifts
             if( p%l_distr_exec .and. p%part.ne.1 )then

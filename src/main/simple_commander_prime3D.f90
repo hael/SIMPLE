@@ -1,6 +1,5 @@
 ! concrete commander: prime3D for ab initio 3D reconstruction and 3D refinement
 module simple_commander_prime3D
-use simple_defs
 use simple_cmdline,        only: cmdline
 use simple_params,         only: params
 use simple_build,          only: build
@@ -9,6 +8,7 @@ use simple_qsys_funs       ! use all in there
 use simple_fileio          ! use all in there
 use simple_jiffys          ! use all in there
 use simple_binoris_io      ! use all in there
+use simple_defs            ! use all in there
 implicit none
 
 public :: resrange_commander
@@ -21,7 +21,6 @@ public :: cont3D_commander
 public :: check3D_conv_commander
 private
 
-!> generator type
 type, extends(commander_base) :: resrange_commander
   contains
     procedure :: execute      => exec_resrange
@@ -184,12 +183,10 @@ contains
             call exec_rec_master(b, p, cline, 'startvol')
         endif
         if( p%zero .eq. 'yes' ) call b%a%set_all2single('corr', 0.)
-        call b%a%write('multiptcl_startdoc.txt')
+        call binwrite_oritab('multiptcl_startdoc'//METADATEXT, b%a, [1,b%a%get_noris()])
         ! end gracefully
         call simple_end('**** SIMPLE_MULTIPTCL_INIT NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_multiptcl_init
-
-    !> PRIME3D is a SIMPLE program
 
     subroutine exec_prime3D( self, cline )
         use simple_math, only: calc_lowpass_lim, calc_fourier_index
@@ -274,7 +271,6 @@ contains
         call simple_end('**** SIMPLE_PRIME3D NORMAL STOP ****')
     end subroutine exec_prime3D
 
-    !> CONT3D is a SIMPLE program
     subroutine exec_cont3D( self, cline )
         use simple_cont3D_matcher, only: cont3D_exec
         class(cont3D_commander), intent(inout) :: self
@@ -310,7 +306,6 @@ contains
         call simple_end('**** SIMPLE_CONT3D NORMAL STOP ****')
     end subroutine exec_cont3D
     
-    !> CHECK3D_CONV is a SIMPLE program
     subroutine exec_check3D_conv( self, cline )
         use simple_math,    only: rad2deg, get_lplim
         class(check3D_conv_commander), intent(inout) :: self

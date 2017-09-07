@@ -118,7 +118,7 @@ contains
                 avg_ratio = avg_ratio+ratio
                 if( ratio < min_ratio )then
                     min_ratio = ratio
-                    call b%a%write('shc_clustering_ncls'//int2str_pad(ncls,numlen)//'.txt')
+                    call binwrite_oritab('shc_clustering_ncls'//int2str_pad(ncls,numlen)//METADATEXT, b%a, [1,p%nptcls])
                 endif
             end do
             validinds(ncls) = avg_ratio/real(NRESTARTS)
@@ -127,7 +127,7 @@ contains
         done = .false.
         do ncls=2,p%ncls
             write(*,'(a,1x,f9.3,8x,a,1x,i3)') 'COHESION/SEPARATION RATIO INDEX: ', validinds(ncls), ' NCLS: ', ncls
-            call b%a%read('shc_clustering_ncls'//int2str_pad(ncls,numlen)//'.txt')
+            call binread_oritab('shc_clustering_ncls'//int2str_pad(ncls,numlen)//METADATEXT, b%a, [1,b%a%get_noris()])
             do icls=1,ncls
                 pop = b%a%get_pop(icls, p%label)
                 write(*,'(a,3x,i5,1x,a,1x,i3)') '  CLUSTER POPULATION:', pop, 'CLUSTER:', icls
@@ -150,7 +150,7 @@ contains
         call simple_end('**** SIMPLE_CLUSTER_SMAT NORMAL STOP ****')
     end subroutine exec_cluster_smat
 
-    !> Calculate centre of mass 
+    !> centers base on centre of mass
     subroutine exec_masscen( self, cline )
         use simple_procimgfile, only: masscen_imgfile
         class(masscen_commander), intent(inout) :: self
@@ -179,7 +179,7 @@ contains
         call simple_end('**** SIMPLE_PRINT_CMD_DICT NORMAL STOP ****')
     end subroutine exec_print_cmd_dict
 
-    !> is a program for printing the dose weights applied to individual frames
+    !> for printing the dose weights applied to individual frames
     subroutine exec_print_dose_weights( self, cline )
         use simple_image,    only: image
         use simple_filterer, only: acc_dose2filter
@@ -206,7 +206,7 @@ contains
         call simple_end('**** SIMPLE_PRINT_DOSE_WEIGHTS NORMAL STOP ****')
     end subroutine exec_print_dose_weights
 
-    !> print_fsc  is a program for printing the binary FSC files produced by PRIME3D
+    !>  for printing the binary FSC files produced by PRIME3D
     subroutine exec_print_fsc( self, cline )
         use simple_math,  only: get_resolution, get_lplim
         use simple_image, only: image
@@ -232,7 +232,7 @@ contains
         call simple_end('**** SIMPLE_PRINT_FSC NORMAL STOP ****')
     end subroutine exec_print_fsc
 
-    !> print_magic_boxesis a program for printing magic box sizes (fast FFT)
+    !> for printing magic box sizes (fast FFT)
     subroutine exec_print_magic_boxes( self, cline )
         use simple_magic_boxes, only: print_magic_box_range
         class(print_magic_boxes_commander), intent(inout) :: self
@@ -244,7 +244,7 @@ contains
         call simple_end('**** SIMPLE_PRINT_MAGIC_BOXES NORMAL STOP ****')
     end subroutine exec_print_magic_boxes
 
-    !> find the resolution, or low-pass limit
+    !> find the resolution of a Fourier index
     subroutine exec_res( self, cline )
         class(res_commander), intent(inout) :: self
         class(cmdline),       intent(inout) :: cline
@@ -256,7 +256,7 @@ contains
         call simple_end('**** SIMPLE_RES NORMAL STOP ****')
     end subroutine exec_res
 
-    !> shift is a program for shifting a stack according to shifts in oritab
+    !> for shifting a stack according to shifts in oritab
     subroutine exec_shift( self, cline )
         use simple_procimgfile, only: shift_imgfile
         class(shift_commander), intent(inout) :: self
@@ -267,11 +267,11 @@ contains
         call b%build_general_tbox(p, cline, do3d=.false.) ! general objects built
         call shift_imgfile(p%stk, p%outstk, b%a, p%smpd, p%mul)
         call b%a%zero_shifts
-        call binwrite_oritab('shiftdoc.txt', b%a, [1,p%nptcls])
+        call binwrite_oritab('shiftdoc'//METADATEXT, b%a, [1,p%nptcls])
         call simple_end('**** SIMPLE_SHIFT NORMAL STOP ****')
     end subroutine exec_shift
 
-    !> sym_aggregateis a program for robust identifiaction of the symmetry axis
+    !> for robust identifiaction of the symmetry axis
     !> of a map using image-to-volume simiarity validation of the axis
     subroutine exec_sym_aggregate( self, cline )
         use simple_oris,  only: oris
@@ -309,7 +309,7 @@ contains
         ! identify top ranking symmetry peaks
         nl = binread_nlines(p%oritab2)
         sym_axes = oris(nl)
-        call sym_axes%read(p%oritab2)
+        call binread_oritab(p%oritab2, sym_axes, [1,sym_axes%get_noris()])
         call find_sym_peaks(sym_axes, sympeaks)
         ! reconstruct & correlate volumes
         do i = 1, sympeaks%get_noris()
@@ -402,8 +402,8 @@ contains
 
     end subroutine exec_sym_aggregate
 
-    !> dsymsrch is a program for identifying rotational symmetries in class averages
-    !> of D-symmetric molecules and generating a cylinder that matches the shape.
+    !> for identifying rotational symmetries in class averages
+    !> of D-symmetric molecules and generating a cylinder that matches the shape
     subroutine exec_dsymsrch( self, cline )
         use simple_symsrcher, only: dsym_cylinder
         class(dsymsrch_commander), intent(inout) :: self

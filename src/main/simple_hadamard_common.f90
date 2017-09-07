@@ -1,6 +1,5 @@
 ! common PRIME2D/PRIME3D routines used primarily by the Hadamard matchers
 module simple_hadamard_common
-use simple_defs
 use simple_cmdline,  only: cmdline
 use simple_build,    only: build
 use simple_params,   only: params
@@ -11,6 +10,7 @@ use simple_gridding, only: prep4cgrid
 use simple_strings   ! use all in there
 use simple_math      ! use all in there
 use simple_masker    ! use all in there
+use simple_defs      ! use all in there
 implicit none
 
 public :: read_img_from_stk, set_bp_range, set_bp_range2D, grid_ptcl, prepimg4align,&
@@ -19,7 +19,7 @@ private
 #include "simple_local_flags.inc"
 
 real, parameter :: SHTHRESH  = 0.0001
-real, parameter :: CENTHRESH = 0.5   ! threshold for performing volume/cavg centering in pixels
+real, parameter :: CENTHRESH = 0.5    ! threshold for performing volume/cavg centering in pixels
     
 contains
 

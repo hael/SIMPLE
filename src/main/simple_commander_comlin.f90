@@ -1,18 +1,17 @@
 ! concrete commander: common-lines based clustering and search
 module simple_commander_comlin
-use simple_defs
 use simple_cmdline,        only: cmdline
 use simple_params,         only: params
 use simple_build,          only: build
 use simple_commander_base, only: commander_base
 use simple_fileio          ! use all in there
 use simple_jiffys          ! use all in there
+use simple_defs            ! use all in there
 implicit none
 
 public :: comlin_smat_commander
 public :: symsrch_commander
 private
-
 #include "simple_local_flags.inc"
 
 type, extends(commander_base) :: comlin_smat_commander
@@ -91,7 +90,6 @@ contains
                 corrs(ipair) = comlin_srch_pair()
             end do
             ! write the similarities
-           
             allocate(fname, source='similarities_part'//int2str_pad(p%part,p%numlen)//'.bin')
             if(.not.fopen(funit, status='REPLACE', action='WRITE', file=fname, access='STREAM', iostat=io_stat))&
                  call fileio_errmsg('simple_comlin_smat opening  '//trim(fname), io_stat)
@@ -137,19 +135,7 @@ contains
         call simple_end('**** SIMPLE_COMLIN_SMAT NORMAL STOP ****')
     end subroutine exec_comlin_smat
 
-    !> symsrch commander for symmetry searching
-    !! is a program for searching for the principal symmetry axis of a volume
-    !! reconstructed without assuming any point-group symmetry. The program
-    !! takes as input an asymmetrical 3D reconstruction. The alignment document
-    !! for all the particle images that have gone into the 3D reconstruction and
-    !! the desired point-group symmetry needs to be inputted. The 3D
-    !! reconstruction is then projected in 50 (default option) even directions,
-    !! common lines-based optimisation is used to identify the principal
-    !! symmetry axis, the rotational transformation is applied to the inputted
-    !! orientations, and a new alignment document is produced. Input this
-    !! document to recvol together with the images and the point-group symmetry
-    !! to generate a symmetrised map
-
+    !> for identification of the principal symmetry axis
     subroutine exec_symsrch( self, cline )
         use simple_strings,        only: int2str_pad
         use simple_oris,           only: oris
@@ -169,9 +155,9 @@ contains
         integer                      :: bestloc(1), nbest_here, noris
         real                         :: shvec(3)
         character(len=STDLEN)        :: fname_finished
-        character(len=32), parameter :: SYMSHTAB   = 'sym_3dshift.txt'
+        character(len=32), parameter :: SYMSHTAB   = 'sym_3dshift'//METADATEXT
         character(len=32), parameter :: SYMPROJSTK = 'sym_projs.mrc'
-        character(len=32), parameter :: SYMPROJTAB = 'sym_projs.txt'
+        character(len=32), parameter :: SYMPROJTAB = 'sym_projs'//METADATEXT
         integer,           parameter :: NBEST = 30
         p = params(cline)                                   ! parameters generated
         call b%build_general_tbox(p, cline, .true., nooritab=.true.) ! general objects built (no oritab reading)
@@ -221,7 +207,7 @@ contains
             call comlin_srch_init( b, p, 'simplex', 'sym')
             call comlin_coarsesrch_symaxis( [p%fromp,p%top], symaxes)
             if( p%l_distr_exec )then
-                call binwrite_oritab(trim(p%fbody)//int2str_pad(p%part,p%numlen)//'.txt', symaxes, [p%fromp,p%top])
+                call binwrite_oritab(trim(p%fbody)//int2str_pad(p%part,p%numlen)//METADATEXT, symaxes, [p%fromp,p%top])
             else
                 noris      = symaxes%get_noris()
                 nbest_here = min(NBEST, noris)
@@ -233,7 +219,7 @@ contains
                     call tmp_os%set_ori(cnt, symaxes%get_ori(order(i)))
                 enddo
                 symaxes = tmp_os
-                call binwrite_oritab(trim('sympeaks.txt'), symaxes, [1,nbest_here])
+                call binwrite_oritab('sympeaks'//METADATEXT, symaxes, [1,nbest_here])
                 deallocate(order)
                 call tmp_os%kill
             endif
@@ -268,7 +254,7 @@ contains
                 call comlin_srch_init( b, p, 'simplex', 'sym')
                 call comlin_singlesrch_symaxis(orientation)
                 call orientation_best%set_ori(1, orientation)
-                call orientation_best%write(trim(p%fbody)//int2str_pad(p%part, p%numlen)//'.txt')
+                call binwrite_oritab(trim(p%fbody)//int2str_pad(p%part, p%numlen)//METADATEXT, orientation_best, [1,1])
             else
                 ! search selected peaks in non-distributed modes
                 write(*,'(A)') '>>> CONTINOUS SYMMETRY AXIS REFINEMENT'

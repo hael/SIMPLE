@@ -1,11 +1,3 @@
-! module with global variables
-! DEBUG and VERBOSE modes can be enabled at
-!  compile-time or run-time
-! BUILD_DESC uses the cmake build to describe compiler,
-!   build type and FFT library e.g.
-! <GNU/Intel/PGI>_<RELEASE/DEBUG>_<FFTW/MKL>
-! SimpleGitVersion include file contains the string definitions for SIMPLE_PATH
-! and version info
 module simple_defs
 use, intrinsic :: iso_c_binding
 use, intrinsic :: iso_fortran_env, only: &
@@ -50,57 +42,59 @@ real(dp), parameter :: DSMALL=1e-6
 real(dp), parameter :: pisqr = PI*PI   ! PI^2.
 real(sp), parameter :: ATHRES_LIM = 5.
 
-! constants for masks
-real, parameter :: COSMSKHALFWIDTH = 3.0
-
 ! plan for the CTF
 type :: ctfplan
-    character(len=STDLEN) :: mode='' !< astig/noastig
-    character(len=STDLEN) :: flag='' !< flag: <mul|flip|no>
+    character(len=STDLEN) :: mode=''            !< astig/noastig
+    character(len=STDLEN) :: flag=''            !< flag: <mul|flip|no>
 end type ctfplan
 
 ! constants for picker
-real,    parameter :: PICKER_SHRINK        = 4.
-real,    parameter :: PICKER_SHRINK_REFINE = 2.
-integer, parameter :: PICKER_OFFSET        = 3
+real,    parameter :: PICKER_SHRINK        = 4. !< picker shrink factor
+real,    parameter :: PICKER_SHRINK_REFINE = 2. !< picker shrink factor, peak refine step
+integer, parameter :: PICKER_OFFSET        = 3  !< picker offset for grid search
 
-! constants for interpolation
-real, parameter :: KBWINSZ = 1.5    !< interpolation window size
-real, parameter :: KBALPHA = 2.0    !< interpolation alpha (smoothing constant)
+! constants for masking/interpolation
+real, parameter :: COSMSKHALFWIDTH = 3.0        !< spherical soft masking
+real, parameter :: KBWINSZ         = 1.5        !< interpolation window size
+real, parameter :: KBALPHA         = 2.0        !< interpolation alpha (smoothing constant)
 
-! SNHC-related global vars
-character(len=32), parameter :: SNHCDOC = 'snhc_oris.txt'
-character(len=32), parameter :: SNHCVOL = 'snhc_recvol_state'
-integer,           parameter :: SZSN_INIT = 5
-integer,           parameter :: SZSN_STEP = 3
-integer,           parameter :: SZSN_MAX  = 20
+! SNHC-related global constants, PRIME3D, refine=snhc
+character(len=32), parameter :: SNHCDOC   = 'snhc_oris.txt'    
+character(len=32), parameter :: SNHCVOL   = 'snhc_recvol_state' 
+integer,           parameter :: SZSN_INIT = 5               
+integer,           parameter :: SZSN_STEP = 3                  
+integer,           parameter :: SZSN_MAX  = 20                 
 
-! constants that control search and convergence
-real,    parameter :: FRAC_SH_LIM      = 80.0 !< at what frac to turn on the shift search
-real,    parameter :: FRAC_INTERPOL    = 60.0 !< at what frac to turn on the gridding interpolation (2D)
-real,    parameter :: EXTRINITHRESH    = 0.5
-real,    parameter :: EXTRTHRESH_CONST = 0.2
-real,    parameter :: LP2SMPDFAC       = 0.4125
-real,    parameter :: NPEAKSATHRES     = 12.0
-integer, parameter :: LPLIM1ITERBOUND  = 5
-integer, parameter :: LPLIM3ITERBOUND  = 7
-integer, parameter :: GRIDNPEAKS       = 3
-integer, parameter :: MAXNPEAKS        = 40
-integer, parameter :: HETNREPEATS      = 5
-integer, parameter :: MINCLSPOPLIM     = 5
+! real constants that control search and convergence
+real, parameter :: FRAC_SH_LIM      = 80.0      !< at what frac to turn on the shift search
+real, parameter :: FRAC_INTERPOL    = 60.0      !< at what frac to turn on the gridding interpolation (2D)
+real, parameter :: EXTRINITHRESH    = 0.5       !< initial randomization threshold for extremal search
+real, parameter :: EXTRTHRESH_CONST = 0.2       !< threshold for factorial decay in extremal search
+real, parameter :: LP2SMPDFAC       = 0.4125    !< low-pass limit scaling constant
+real, parameter :: NPEAKSATHRES     = 12.0      !< angular threshold for determining npeaks (PRIME3D)
 
-! others
-integer, parameter :: SPECWMINPOP    = 2000 !< minimum population for spectral weighting
-integer, parameter :: NSPACE_BALANCE = 1000 !< # projection directions for applying the balancing constraint 
+! integer #/threshold constants
+integer, parameter :: LPLIM1ITERBOUND = 5       !< # iteration bound lplim stage 1 (PRIME2D)
+integer, parameter :: LPLIM3ITERBOUND = 7       !< # iteration bound lplim stage 2 (PRIME2D)
+integer, parameter :: MINCLSPOPLIM    = 5       !< limit for adaptive cluster splitting/spreading (PRIME2D)
+integer, parameter :: SPECWMINPOP     = 2000    !< minimum population for spectral weighting (PRIME2D/3D)
+integer, parameter :: GRIDNPEAKS      = 3       !< # peaks to consider in angular grid search (PRIME3D)
+integer, parameter :: MAXNPEAKS       = 40      !< maximum # peaks to be assigned weights (PRIME3D)
+integer, parameter :: NSPACE_BALANCE  = 1000    !< # projection directions for the balancing constraint (PRIME3D)
+integer, parameter :: HETNREPEATS     = 5       !< # repeats het_ensemble
 
-integer(kind=c_int)              :: nthr_glob         !< number of threads global variable
-logical                          :: l_distr_exec_glob !< global distributed execution flag
-character(len=STDLEN)            :: exec_abspath_glob !< global executable absolute path
-character(len=LONGSTRLEN)        :: cmdline_glob      !< global command line string
-character(len=32),     parameter :: STKPARTSDIR = 'stack_parts'
-character(len=STDLEN), parameter :: STKPARTFBODY=trim(STKPARTSDIR)//'/stack_part'
-character(len=STDLEN), parameter :: STKPARTFBODY_SC=trim(STKPARTSDIR)//'/stack_part_sc'
+! global  variables
+integer(kind=c_int)       :: nthr_glob          !< number of threads global variable
+logical                   :: l_distr_exec_glob  !< global distributed execution flag
+character(len=LONGSTRLEN) :: cmdline_glob       !< global command line string
 
+! stack part related and meta data file format constants
+character(len=32),     parameter :: STKPARTSDIR     = 'stack_parts'
+character(len=STDLEN), parameter :: STKPARTFBODY    = trim(STKPARTSDIR)//'/stack_part'
+character(len=STDLEN), parameter :: STKPARTFBODY_SC = trim(STKPARTSDIR)//'/stack_part_sc'
+character(len=4),      parameter :: METADATEXT      = '.txt'
+
+! precision constants
 #ifndef IMAGE_SINGLE_PRECISION
 integer, parameter :: img_kind = DP
 #else
@@ -108,19 +102,19 @@ integer, parameter :: img_kind = SP
 #endif
 integer, parameter :: fp_kind = DP
 
-! Debugging and print verbosity flags
+! debugging and print verbosity flags
 #ifdef _DEBUG
-logical :: global_debug=.true.          !< global debugging flag
-logical :: global_verbose=.true.        !< global flag for verbosity set to TRUE in debug mode
+logical :: global_debug   = .true.  !< global debugging flag
+logical :: global_verbose = .true.  !< global flag for verbosity set to TRUE in debug mode
 #else
-logical :: global_debug=.false.         !< global flag for debugging disabled
+logical :: global_debug   = .false. !< global flag for debugging disabled
 #ifdef VERBOSE
-logical :: global_verbose=.true.        !< global flag for verbosity TRUE with VERBOSE compilation flag
+logical :: global_verbose = .true.  !< global flag for verbosity TRUE with VERBOSE compilation flag
 #else
-logical :: global_verbose=.false.       !< global flag for verbosity FALSE by default
+logical :: global_verbose = .false. !< global flag for verbosity FALSE by default
 #endif
 #endif
-logical :: global_warn=.false.          !< warning flag
+logical :: global_warn    = .false. !< warning flag
 
 ! append SIMPLE_VERSION and SIMPLE_GIT_VERSION strings to simple_defs
 #include "SimpleGitVersion.h"

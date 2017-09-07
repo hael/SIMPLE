@@ -101,16 +101,17 @@ contains
         is = self%existence
     end function exists
 
-    subroutine gen_scripts_and_schedule_jobs( self, p_master, job_descr, part_params, algnfbody, chunkdistr )
+    subroutine gen_scripts_and_schedule_jobs( self, p_master, job_descr, part_params, algnfbody, ext_meta, chunkdistr )
         class(qsys_env)            :: self
         class(params)              :: p_master
         class(chash)               :: job_descr
         class(chash),     optional :: part_params(p_master%nparts)
         character(len=*), optional :: algnfbody
+        character(len=4), optional :: ext_meta
         logical,          optional :: chunkdistr
         call qsys_cleanup(p_master)
         call self%qscripts%generate_scripts(job_descr, p_master%ext, self%qdescr,&
-        outfile_body=algnfbody, part_params=part_params, chunkdistr=chunkdistr)
+        outfile_body=algnfbody, outfile_ext=ext_meta, part_params=part_params, chunkdistr=chunkdistr)
         call self%qscripts%schedule_jobs
     end subroutine gen_scripts_and_schedule_jobs
 

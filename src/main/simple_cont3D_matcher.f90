@@ -117,7 +117,7 @@ contains
         ! INITIALIZE
         write(*,'(A,1X,I3)')'>>> CONTINUOUS ORIENTATION SEARCH, ITERATION:', which_iter
         if( .not. p%l_distr_exec )then
-            p%outfile = 'cont3Ddoc_'//int2str_pad(which_iter,3)//'.txt'
+            p%outfile = 'cont3Ddoc_'//int2str_pad(which_iter,3)//METADATEXT
         endif
 
         ! BATCH PROCESSING
@@ -155,9 +155,6 @@ contains
             enddo
             !$omp end parallel do
             ! ORIENTATIONS OUTPUT: only here for now
-            ! do iptcl = fromp, top
-            !     call b%a%write(iptcl, p%outfile)
-            ! enddo
             call binwrite_oritab(p%outfile, b%a, [fromp,top])
 
             ! GRID & 3D REC
@@ -204,7 +201,7 @@ contains
         deallocate(batches, state_exists)
 
         ! ORIENTATIONS OUTPUT
-        !call b%a%write(p%outfile, [p%fromp,p%top])
+        ! call binwrite_oritab(p%outfile, b%a, [p%fromp,p%top])
         p%oritab = p%outfile
 
         ! NORMALIZE STRUCTURE FACTORS

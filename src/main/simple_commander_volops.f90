@@ -1,6 +1,5 @@
 ! concrete commander: operations on volumes
 module simple_commander_volops
-use simple_defs
 use simple_cmdline,        only: cmdline
 use simple_params,         only: params
 use simple_build,          only: build
@@ -8,6 +7,8 @@ use simple_commander_base, only: commander_base
 use simple_strings,        only: int2str, int2str_pad
 use simple_jiffys          ! use all in there
 use simple_fileio          ! use all in there
+use simple_binoris_io,     ! use all in there
+use simple_defs            ! use all in there
 implicit none
 
 public :: fsc_commander
@@ -56,7 +57,7 @@ end type dock_volpair_commander
 
 contains
 
-    !> Program to calculate Fourier shell correlation from Even/Odd Volume pairs
+    !> calculates Fourier shell correlation from Even/Odd Volume pairs
     subroutine exec_fsc( self, cline )
         use simple_image, only: image
         use simple_math,  only: get_resolution
@@ -88,7 +89,7 @@ contains
         call odd%kill
     end subroutine exec_fsc
 
-    !> Program to center 3D volume and associated particle document
+    !> centers a 3D volume and associated particle document
     subroutine exec_cenvol( self, cline )
         class(cenvol_commander), intent(inout) :: self
         class(cmdline),          intent(inout) :: cline
@@ -112,14 +113,13 @@ contains
             ! transfer the 3D shifts to 2D
             if( cline%defined('oritab') ) call b%a%map3dshift22d(-shvec(istate,:), state=istate)
         end do
-        if( cline%defined('oritab') ) call b%a%write(p%outfile)
+        if( cline%defined('oritab') )then
+            call binwrite_oritab(p%outfile, b%a, [1,b%a%get_noris()])
+        endif
         ! end gracefully
         call simple_end('**** SIMPLE_CENVOL NORMAL STOP ****')
     end subroutine exec_cenvol
 
-    !> exec_postproc_vol post-process volume program
-    !! \param cline commandline
-    !!
     subroutine exec_postproc_vol(self, cline)
         use simple_math,  only: get_resolution
         use simple_image, only: image
@@ -195,7 +195,6 @@ contains
     subroutine exec_projvol( self, cline )
         use simple_image,          only: image
         use simple_projector_hlev, only: projvol
-        use simple_binoris_io,     only: binread_oritab, binread_nlines
         class(projvol_commander), intent(inout) :: self
         class(cmdline),           intent(inout) :: cline
         type(params)             :: p
@@ -248,11 +247,11 @@ contains
             if( p%neg .eq. 'yes' ) call imgs(i)%neg
             call imgs(i)%write(p%outstk,i)
         end do
-        call b%a%write('projvol_oris.txt')
+        call binwrite_oritab('projvol_oris'//METADATEXT, b%a, [1,p%nptcls])
         call simple_end('**** SIMPLE_PROJVOL NORMAL STOP ****')
     end subroutine exec_projvol
 
-    !> exec_volaverager Create volume average
+    !> exec_volaverager create volume average
     !! \param cline
     !!
     subroutine exec_volaverager( self, cline )
@@ -326,7 +325,7 @@ contains
         call simple_end('**** SIMPLE_VOLAVERAGER NORMAL STOP ****')
     end subroutine exec_volaverager
 
-    !> exec_volops Volume calculations and operations - incl Guinier, snr, mirror or b-factor
+    !> volume calculations and operations - incl Guinier, snr, mirror or b-factor
     !! \param cline commandline
     !!
     subroutine exec_volops( self, cline )
@@ -405,7 +404,7 @@ contains
         call simple_end('**** SIMPLE_VOLOPS NORMAL STOP ****')
     end subroutine exec_volops
 
-    !> volume_smat Calculate similarity matrix between volumes
+    !> calculate similarity matrix between volumes
     subroutine exec_volume_smat( self, cline )
         use simple_projector, only: projector
         use simple_ori,       only: ori

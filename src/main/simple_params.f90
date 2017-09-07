@@ -94,15 +94,14 @@ type :: params
     ! other fixed length character variables in ascending alphabetical order
     character(len=STDLEN) :: angastunit='degrees' !< angle of astigmatism unit (radians|degrees){degrees}
     character(len=4)      :: automsk='no'
-    character(len=STDLEN) :: boxfile=''           !< file with EMAN particle coordinates(.txt/.asc)
-    character(len=STDLEN) :: boxtab=''            !< table (text file) of files with EMAN particle coordinates(.txt/.asc)
+    character(len=STDLEN) :: boxfile=''           !< file with EMAN particle coordinates(.txt)
+    character(len=STDLEN) :: boxtab=''            !< table (text file) of files with EMAN particle coordinates(.txt)
     character(len=STDLEN) :: boxtype='eman'
     character(len=STDLEN) :: chunktag=''
-    character(len=STDLEN) :: clsdoc=''
     character(len=STDLEN) :: comlindoc=''         !< shc_clustering_nclsX.txt
     character(len=STDLEN) :: ctf='no'             !< ctf flag(yes|no|flip)
     character(len=STDLEN) :: cwd=''
-    character(len=STDLEN) :: deftab=''            !< text file with CTF info(.txt/.asc)
+    character(len=STDLEN) :: deftab=''            !< file with CTF info(.txt|.bin)
     character(len=STDLEN) :: dfunit='microns'     !< defocus unit (A|microns){microns}
     character(len=STDLEN) :: dir=''               !< directory
     character(len=STDLEN) :: dir_movies=''        !< grab mrc mrcs files from here
@@ -115,23 +114,24 @@ type :: params
     character(len=STDLEN) :: exec_abspath=''
     character(len=STDLEN) :: exp_doc=''           !< specifying exp_time and dose_rate per tomogram
     character(len=4)      :: ext='.mrc'           !< file extension{.mrc}
+    character(len=4)      :: ext_meta=''          !< meta data file extension(.txt|.bin)
     character(len=STDLEN) :: extrmode='all'
     character(len=STDLEN) :: fbody=''             !< file body
     character(len=STDLEN) :: featstk='expecstk.bin'
-    character(len=STDLEN) :: filetab=''           !< list of files(.txt/.asc)
+    character(len=STDLEN) :: filetab=''           !< list of files(.txt)
     character(len=STDLEN) :: fname=''             !< file name
     character(len=STDLEN) :: fsc='fsc_state01.bin'!< binary file with FSC info{fsc_state01.bin}
     character(len=STDLEN) :: hfun='sigm'          !< function used for normalization(sigm|tanh|lin){sigm}
     character(len=STDLEN) :: hist='corr'          !< give variable for histogram plot
-    character(len=STDLEN) :: infile='infile.txt'  !< table (text file) of inputs(.asc/.txt)
+    character(len=STDLEN) :: infile=''            !< file with inputs(.txt|.bin)
     character(len=STDLEN) :: label='class'        !< discrete label(class|state){class}
     character(len=STDLEN) :: mskfile=''           !< maskfile.ext
     character(len=STDLEN) :: msktype='soft'       !< type of mask(hard|soft){soft}
     character(len=STDLEN) :: opt='simplex'        !< optimiser (powell|simplex|oasis|bforce|pso|de){simplex}
-    character(len=STDLEN) :: oritab=''            !< table  of orientations(.asc/.txt)
-    character(len=STDLEN) :: oritab2=''           !< 2nd table of orientations(.asc/.bin/.txt)
-    character(len=STDLEN) :: oritab3D=''          !< table of 3D orientations(.asc/.bin/.txt)
-    character(len=STDLEN) :: outfile='outfile.txt'!< output document
+    character(len=STDLEN) :: oritab=''            !< table  of orientations(.txt|.bin)
+    character(len=STDLEN) :: oritab2=''           !< 2nd table of orientations(.txt|.bin)
+    character(len=STDLEN) :: oritab3D=''          !< table of 3D orientations(.txt|.bin)
+    character(len=STDLEN) :: outfile=''           !< output document
     character(len=STDLEN) :: outstk=''            !< output image stack
     character(len=STDLEN) :: outstk2=''           !< output image stack 2nd
     character(len=STDLEN) :: outvol=''            !< output volume{outvol.ext}
@@ -155,10 +155,10 @@ type :: params
     character(len=STDLEN) :: tomoseries=''        !< filetable of filetables of tomograms
     character(len=STDLEN) :: unidoc=''            !< unified resources and orientations doc
     character(len=STDLEN) :: vol=''
-    character(len=STDLEN) :: vollist=''           !< table (text file) of volume files(.txt/.asc)
+    character(len=STDLEN) :: vollist=''           !< table (text file) of volume files(.txt)
     character(len=STDLEN) :: vols(MAXS)=''
-    character(len=STDLEN) :: voltab=''            !< table (text file) of volume files(.txt/.asc)
-    character(len=STDLEN) :: voltab2=''           !< 2nd table (text file) of volume files(.txt/.asc)
+    character(len=STDLEN) :: voltab=''            !< table (text file) of volume files(.txt)
+    character(len=STDLEN) :: voltab2=''           !< 2nd table (text file) of volume files(.txt)
     character(len=STDLEN) :: wfun='kb'
     ! integer variables in ascending alphabetical order
     integer :: astep=1
@@ -384,18 +384,16 @@ contains
         class(cmdline),    intent(inout) :: cline
         logical, optional, intent(in)    :: checkdistr, allow_mix
         type(binoris)                    :: bos
-        integer                          :: i, ncls, ifoo, lfoo(3), cntfile
-        logical                          :: ccheckdistr, aamix
         character(len=STDLEN)            :: cwd_local, debug_local, verbose_local
+        character(len=STDLEN)            :: stk_part_fname_sc, stk_part_fname
         character(len=1)                 :: checkupfile(50)
         character(len=:), allocatable    :: conv
-        logical                          :: nparts_set
-        logical                          :: vol_defined(MAXS)
-        character(len=STDLEN)            :: stk_part_fname_sc, stk_part_fname
+        integer                          :: i, ncls, ifoo, lfoo(3), cntfile
+        logical                          :: nparts_set, vol_defined(MAXS), ccheckdistr, aamix
         nparts_set        = .false.
         vol_defined(MAXS) = .false.
-        debug_local = 'no'
-        verbose_local = 'no'
+        debug_local       = 'no'
+        verbose_local     = 'no'
         ! take care of optionals
         ccheckdistr = .true.
         if( present(checkdistr) ) ccheckdistr = checkdistr
@@ -410,16 +408,19 @@ contains
         cwd_local = self%cwd
         ! get absolute path of executable
         call getarg(0,self%exec_abspath)
-        call check_carg('debug',          debug_local)
-        if (debug_local == 'yes')then
-            global_debug = .true.  ! from simple_params
-            debug = .true.         ! from simple_local_flags.inc
+        ! take care of debug/verbose flags
+        call check_carg('debug', debug_local)
+        if( debug_local == 'yes' )then
+            global_debug = .true. ! from simple_params
+            debug        = .true. ! from simple_local_flags.inc
         end if
-        call check_carg('verbose',        verbose_local)
+        call check_carg('verbose', verbose_local)
         if(verbose_local == 'yes')then
             global_verbose = .true.
-            verbose = .true.
+            verbose        = .true.
         end if
+        ! default initialisations that depend on meta-data file format
+        self%outfile = 'outfile'//METADATEXT
         ! checkers in ascending alphabetical order
         call check_carg('acf',            self%acf)
         call check_carg('angastunit',     self%angastunit)
@@ -480,7 +481,6 @@ contains
         call check_carg('odd',            self%odd)
         call check_carg('opt',            self%opt)
         call check_carg('order',          self%order)
-        call check_carg('outfile',        self%outfile)
         call check_carg('outside',        self%outside)
         call check_carg('pad',            self%pad)
         call check_carg('pgrp',           self%pgrp)
@@ -520,34 +520,35 @@ contains
         call check_carg('weights2D',      self%weights2D)
         call check_carg('zero',           self%zero)
         ! File args
-        call check_file('boxfile',        self%boxfile,'T')
-        call check_file('boxtab',         self%boxtab,'T')
-        call check_file('clsdoc',         self%clsdoc,'S','T')
-        call check_file('ctffind_doc',    self%ctffind_doc, 'T', 'B')
-        call check_file('comlindoc',      self%comlindoc,'T')
-        call check_file('deftab',         self%deftab, 'T', 'B')
-        call check_file('doclist',        self%doclist,'T')
-        call check_file('ext',            self%ext,  notAllowed='T')
-        call check_file('filetab',        self%filetab,'T')
+        call check_file('boxfile',        self%boxfile,      'T')
+        call check_file('boxtab',         self%boxtab,       'T')
+        call check_file('ctffind_doc',    self%ctffind_doc,  'T', 'B')
+        call check_file('comlindoc',      self%comlindoc,    'T')
+        call check_file('deftab',         self%deftab,       'T', 'B')
+        call check_file('doclist',        self%doclist,      'T')
+        call check_file('ext',            self%ext,          notAllowed='T')
+        call check_file('ext_meta',       self%ext,          'T', 'B')
+        call check_file('filetab',        self%filetab,      'T')
         call check_file('fname',          self%fname)
-        call check_file('fsc',            self%fsc,'B')
+        call check_file('fsc',            self%fsc,          'B')
         call check_file('infile',         self%infile)
-        call check_file('mskfile',        self%mskfile,  notAllowed='T')
-        call check_file('oritab',         self%oritab, 'T', 'B')
-        call check_file('oritab2',        self%oritab2,'T', 'B')
-        call check_file('oritab3D',       self%oritab3D,'T', 'B')
-        call check_file('outstk',         self%outstk,   notAllowed='T')
-        call check_file('outstk2',        self%outstk2,  notAllowed='T')
-        call check_file('outvol',         self%outvol,   notAllowed='T')
-        call check_file('plaintexttab',   self%plaintexttab,'T')
-        call check_file('stk',            self%stk,  notAllowed='T')
-        call check_file('stk2',           self%stk2, notAllowed='T')
-        call check_file('stk3',           self%stk3, notAllowed='T')
-        call check_file('stk_backgr',     self%stk_backgr, notAllowed='T')
-        call check_file('unidoc',         self%unidoc,  'T')
-        call check_file('vollist',        self%vollist, 'T')
-        call check_file('voltab',         self%voltab,  'T')
-        call check_file('voltab2',        self%voltab2, 'T')
+        call check_file('mskfile',        self%mskfile,      notAllowed='T')
+        call check_file('oritab',         self%oritab,       'T', 'B')
+        call check_file('oritab2',        self%oritab2,      'T', 'B')
+        call check_file('oritab3D',       self%oritab3D,     'T', 'B')
+        call check_file('outfile',        self%outfile,      'T', 'B')
+        call check_file('outstk',         self%outstk,       notAllowed='T')
+        call check_file('outstk2',        self%outstk2,      notAllowed='T')
+        call check_file('outvol',         self%outvol,       notAllowed='T')
+        call check_file('plaintexttab',   self%plaintexttab, 'T')
+        call check_file('stk',            self%stk,          notAllowed='T')
+        call check_file('stk2',           self%stk2,         notAllowed='T')
+        call check_file('stk3',           self%stk3,         notAllowed='T')
+        call check_file('stk_backgr',     self%stk_backgr,   notAllowed='T')
+        call check_file('unidoc',         self%unidoc,       'T')
+        call check_file('vollist',        self%vollist,      'T')
+        call check_file('voltab',         self%voltab,       'T')
+        call check_file('voltab2',        self%voltab2,      'T')
         ! Integer args
         call check_iarg('astep',          self%astep)
         call check_iarg('avgsz',          self%avgsz)
@@ -747,7 +748,7 @@ contains
             if( cline%defined('vol') )then
                 self%vols(1) = self%vol
             endif
-            if( cline%defined('vol') .or. any( vol_defined) )then
+            if( cline%defined('vol') .or. any(vol_defined) )then
                 do i=1,MAXS
                     call check_vol( i )
                 end do
@@ -779,7 +780,7 @@ contains
                     self%nptcls = nlines(self%oritab)
                 else
                     ! needed because use of binoris_io causes circular dependency
-                    ! because params is used by prime3D_srch
+                    ! since params is used by prime3D_srch
                     call bos%open(self%oritab)
                     self%nptcls = bos%get_n_records()
                     call bos%close
@@ -787,8 +788,7 @@ contains
             endif
         else if( self%refs .ne. '' )then
             if( file_exists(self%refs) )then
-                if( cline%defined('box') )then
-                else
+                if( .not. cline%defined('box') )then
                     call find_ldim_nptcls(self%refs, self%ldim, ifoo)
                     self%ldim(3) = 1
                     DebugPrint 'found logical dimension of refs: ', self%ldim
@@ -890,15 +890,15 @@ contains
         self%xdimpd = round2even(self%alpha*real(self%box/2))
         self%boxpd  = 2*self%xdimpd
         ! set derived Fourier related variables
-        self%dstep = real(self%box-1)*self%smpd                   ! first wavelength of FT
-        self%dsteppd = real(self%boxpd-1)*self%smpd               ! first wavelength of padded FT
-        if( .not. cline%defined('hp') ) self%hp = 0.7*self%dstep  ! high-pass limit
-        self%fny = 2.*self%smpd                                   ! Nyqvist limit
-        if( .not. cline%defined('lpstop') )then                   ! default highest resolution lp
-            self%lpstop = self%fny                                ! deafult lpstop
+        self%dstep   = real(self%box-1)*self%smpd                  ! first wavelength of FT
+        self%dsteppd = real(self%boxpd-1)*self%smpd                ! first wavelength of padded FT
+        if( .not. cline%defined('hp') ) self%hp = 0.7*self%dstep   ! high-pass limit
+        self%fny = 2.*self%smpd                                    ! Nyqvist limit
+        if( .not. cline%defined('lpstop') )then                    ! default highest resolution lp
+            self%lpstop = self%fny                                 ! deafult lpstop
         endif
         if( self%fny > 0. ) self%tofny = nint(self%dstep/self%fny) ! Nyqvist Fourier index
-        if( cline%defined('lp') ) self%dynlp = 'no'               ! override dynlp=yes and lpstop
+        if( cline%defined('lp') ) self%dynlp = 'no'                ! override dynlp=yes and lpstop
         ! set 2D low-pass limits and smpd_targets 4 scaling
         self%lplims2D(1)       = self%lpstart
         self%lplims2D(2)       = self%lplims2D(1) - (self%lpstart - self%lpstop)/2.

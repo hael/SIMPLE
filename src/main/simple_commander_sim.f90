@@ -87,7 +87,7 @@ contains
         if( cline%defined('part') )then
             if( .not. cline%defined('outfile') ) stop 'need unique output file for parallel jobs'
         else
-            if( .not. cline%defined('outfile') ) p%outfile = 'simoris.txt'
+            if( .not. cline%defined('outfile') ) p%outfile = 'simoris'//METADATEXT
         endif
         if( p%box == 0 ) stop 'box=0, something is fishy! Perhaps forgotten to input volume or stack?'
         ! generate orientation/CTF parameters
@@ -321,7 +321,7 @@ contains
         call base_image%write('optimal_movie_average'//p%ext, 1)
         if( p%vis .eq. 'yes' ) call base_image%vis
         ! output orientations
-        call b%a%write('simmovie_params.txt')
+        call binwrite_oritab('simmovie_params'//METADATEXT, b%a, [1,b%a%get_noris()])
         ! end gracefully
         call simple_end('**** SIMPLE_SIMMOVIE NORMAL STOP ****')
 

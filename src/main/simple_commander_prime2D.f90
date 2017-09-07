@@ -1,12 +1,13 @@
 ! concrete commander: prime2D for simultanous 2D alignment and clustering of single-particle images
 module simple_commander_prime2D
-use simple_defs
 use simple_cmdline,        only: cmdline
 use simple_params,         only: params
 use simple_build,          only: build
 use simple_commander_base, only: commander_base
+use simple_binoris_io      ! use all in there
 use simple_fileio          ! use all in there
 use simple_jiffys          ! use all in there
+use simple_defs            ! use all in there
 implicit none
 
 public :: makecavgs_commander
@@ -41,7 +42,6 @@ contains
 
     subroutine exec_makecavgs( self, cline )
         use simple_classaverager, only: classaverager
-        use simple_binoris_io,    only: binwrite_oritab
         use simple_qsys_funs,     only: qsys_job_finished
         class(makecavgs_commander), intent(inout) :: self
         class(cmdline),             intent(inout) :: cline
@@ -81,7 +81,7 @@ contains
         if( cline%defined('outfile') )then
             p%oritab = p%outfile
         else
-            p%oritab = 'prime2D_startdoc.txt'
+            p%oritab = 'prime2D_startdoc'//METADATEXT
         endif
         ! shift multiplication
         if( p%mul > 1. ) call b%a%mul_shifts(p%mul)
@@ -248,8 +248,7 @@ contains
     end subroutine exec_check2D_conv
     
     subroutine exec_rank_cavgs( self, cline )
-        use simple_oris,       only: oris
-        use simple_binoris_io, only: binread_oritab, binread_nlines
+        use simple_oris, only: oris
         class(rank_cavgs_commander), intent(inout) :: self
         class(cmdline),              intent(inout) :: cline
         type(params)         :: p

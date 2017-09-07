@@ -17,7 +17,7 @@ contains
 
     subroutine qsys_cleanup( p )
         use simple_params, only: params
-        class(params),     intent(in) :: p
+        class(params), intent(in) :: p
         character(len=:), allocatable :: rec_base_str, rho_base_str
         integer, parameter :: NUMLEN_STATE = 2, NUMLEN_ITER = 3
         integer :: istate
@@ -32,7 +32,7 @@ contains
         call del_file('SYMSRCH')
         ! part numbered files
         call del_files('OUT',                    p%nparts)
-        call del_files('algndoc_',               p%nparts, ext='.txt')
+        call del_files('algndoc_',               p%nparts, ext=METADATEXT)
         call del_files('unidoc_',                p%nparts, ext='.txt')
         call del_files('cavgs_even_part',        p%nparts, ext=p%ext )
         call del_files('cavgs_odd_part',         p%nparts, ext=p%ext )

@@ -10,8 +10,9 @@ use simple_fileio          ! use all in there
 use simple_jiffys          ! use all in there
 use simple_defs            ! use all in there
 use simple_syslib          ! use all in there
+use simple_binoris_io      ! use all in there
 implicit none
-#include "simple_local_flags.inc"
+
 public :: binarise_commander
 public :: convert_commander
 public :: corrcompare_commander
@@ -23,8 +24,8 @@ public :: scale_commander
 public :: stack_commander
 public :: stackops_commander
 private
+#include "simple_local_flags.inc"
 
-!> generator type
 type, extends(commander_base) :: binarise_commander
   contains
     procedure :: execute      => exec_binarise
@@ -68,7 +69,7 @@ end type stackops_commander
 
 contains
 
-    !> binarise is a program for binarisation of stacks and volumes
+    !> for binarisation of stacks and volumes
     subroutine exec_binarise( self, cline )
         class(binarise_commander), intent(inout) :: self
         class(cmdline),            intent(inout) :: cline
@@ -131,19 +132,7 @@ contains
 
     end subroutine exec_binarise
 
-    !> convert is a program for converting between SPIDER and MRC formats
-    !! \see http://simplecryoem.com/tutorials.html?#using-simple-in-the-wildpower-spectrum-analysis-and-movie-selection
-    !!
-    !! bash-3.2$ `simple_exec prg=convert'
-    !!USAGE:
-    !!bash-3.2$ simple_exec prg=simple_program key1=val1 key2=val2 ...
-    !!    
-    !!OPTIONAL
-    !!stk    = particle stack with all images(ptcls.ext)
-    !!vol1   = input volume no1(invol1.ext)
-    !!outstk = output image stack
-    !!outvol = output volume{outvol.ext}
-    !!
+    !> for converting between SPIDER and MRC formats
     subroutine exec_convert( self, cline )
         class(convert_commander), intent(inout) :: self
         class(cmdline),           intent(inout) :: cline
@@ -168,7 +157,6 @@ contains
         call simple_end('**** SIMPLE_CONVERT NORMAL STOP ****')
     end subroutine exec_convert
 
-    !> corrcompare is a wrapper program for CTFFIND4 (Grigorieff lab)
     subroutine exec_corrcompare( self, cline )
         use simple_image, only: image
         use simple_stat,  only: moment
@@ -247,7 +235,7 @@ contains
         call simple_end('**** SIMPLE_CORRCOMPARE NORMAL STOP ****')
     end subroutine exec_corrcompare
 
-    !> ctfops is a program for applying CTF to stacked images
+    !> for applying CTF to stacked images
     subroutine exec_ctfops( self, cline )
         use simple_procimgfile, only: apply_ctf_imgfile
         use simple_ctf,         only: ctf
@@ -303,7 +291,6 @@ contains
         call simple_end('**** SIMPLE_CTFOPS NORMAL STOP ****')
     end subroutine exec_ctfops
 
-    !> filter is a program for stacking individual images or multiple stacks into one
     subroutine exec_filter( self, cline )
         use simple_procimgfile, only: bp_imgfile, phase_rand_imgfile, real_filter_imgfile
         class(filter_commander), intent(inout) :: self
@@ -370,7 +357,7 @@ contains
         call simple_end('**** SIMPLE_FILTER NORMAL STOP ****')
     end subroutine exec_filter
 
-   !> volume/image_smat is a program for creating a similarity matrix based on volume2volume correlation
+    !> for creating a similarity matrix based on image2image correlation
     subroutine exec_image_smat(self, cline)
         use simple_corrmat  ! use all in there
         use simple_fileio, only: fopen,fclose,fileio_errmsg
@@ -416,12 +403,7 @@ contains
         call simple_end('**** SIMPLE_IMAGE_SMAT NORMAL STOP ****')
     end subroutine exec_image_smat
 
-    !> norm is a program for normalization of MRC or SPIDER stacks and volumes.
-    !! If you want to normalise your images inputted with stk, set norm=yes.
-    !! hfun (e.g. hfun=sigm) controls the normalisation function. If you want to
-    !! perform noise normalisation of the images set noise_norm=yes given a mask
-    !! radius msk (pixels). If you want to normalise your images or volume
-    !! (vol1) with respect to their power spectrum set shell_norm=yes
+    !> for normalization of MRC or SPIDER stacks and volumes
     subroutine exec_norm( self, cline )
         use simple_procimgfile,   only: norm_imgfile, noise_norm_imgfile, shellnorm_imgfile
         class(norm_commander), intent(inout) :: self
@@ -480,7 +462,7 @@ contains
         call simple_end('**** SIMPLE_NORM NORMAL STOP ****')    
     end subroutine exec_norm
 
-    !> scale is a program that provides re-scaling and clipping routines for MRC or SPIDER stacks and volumes
+    !> provides re-scaling and clipping routines for MRC or SPIDER stacks and volumes
     subroutine exec_scale( self, cline )
         use simple_procimgfile  ! use all in there
         use simple_image,       only: image
@@ -617,7 +599,7 @@ contains
         if( p%l_distr_exec ) call qsys_job_finished( p, 'simple_commander_imgproc :: exec_scale' )
     end subroutine exec_scale
 
-    !> stack is a program for stacking individual images or multiple stacks into one
+    !>  for stacking individual images or multiple stacks into one
     subroutine exec_stack( self, cline )
         use simple_imgfile,      only: imgfile
         use simple_image,        only: image
@@ -712,23 +694,8 @@ contains
         call simple_end('**** SIMPLE_STACK NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_stack
     
-    !> stackops is a program that provides standard single-particle image
+    !> provides standard single-particle image
     !> processing routines that are applied to MRC or SPIDER stacks.
-    !! If you want to extract a particular state, give an alignment document
-    !! (oritab) and set state to the state that you want' to extract. If you
-    !! want to select the fraction of best particles (according to t he goal
-    !! function), input an alignment doc (oritab) and set frac. You can combine
-    !! the state and frac options. If you want to apply noise to images, give
-    !! the desired signal-to-noise ratio via snr. If you want to calculate the
-    !! autocorrelation function of your images set acf=yes. If you want to
-    !! extract a contiguous subset of particle images from the stack, set fromp
-    !! and top. If you want to fish out a number of particle images from your
-    !! stack at random, set nran to some nonzero in teger number less than
-    !! nptcls. With avg=yes the global average of the input stack is calculated.
-    !! If you define nframesgrp to some integer number larger than one averages
-    !! with chunk sizes of nframesgrp are produced, which may be useful for
-    !! analysis of dose-fractionated image series. neg inverts the contrast of
-    !! the images
     subroutine exec_stackops( self, cline )
         use simple_ran_tabu,    only: ran_tabu
         use simple_procimgfile, only: neg_imgfile, acf_imgfile, frameavg_imgfile
@@ -741,7 +708,7 @@ contains
         type(build)                              :: b
         type(ran_tabu)                           :: rt
         type(image)                              :: img
-        type(oris)                               :: o_here
+        type(oris)                               :: o_here, os_ran
         integer,          allocatable            :: pinds(:)
         character(len=:), allocatable            :: fname
         integer :: i, s, ipst, cnt, cnt2, cnt3, nincl, alloc_stat, lfoo(3), np1,np2,ntot
@@ -759,14 +726,18 @@ contains
             if( cline%defined('oritab') .or. cline%defined('deftab') )then
                 call del_file(p%outfile)
             endif
+            call os_ran%new(p%nran)
             do i=1,p%nran
                 call progress(i, p%nran)
                 call img%read(p%stk, pinds(i))
                 call img%write(p%outstk, i)
                 if( cline%defined('oritab') .or. cline%defined('deftab') )then
-                    call b%a%write(pinds(i), p%outfile)
+                    call os_ran%set_ori(i, b%a%get_ori(pinds(i)))
                 endif
             end do
+            if( cline%defined('oritab') .or. cline%defined('deftab') )then
+                call binwrite_oritab(p%outfile, b%a, [1,p%nran])
+            endif
             goto 999
         endif
         ! fishing expeditions
@@ -819,7 +790,7 @@ contains
                         call o_here%set_ori(cnt, b%a%get_ori(pinds(i)))
                     endif
                 end do
-                allocate(fname, source='extracted_oris_state'//int2str_pad(p%state,2)//'.txt')
+                allocate(fname, source='extracted_oris_state'//int2str_pad(p%state,2)//METADATEXT)
             else if( cline%defined('class') )then
                 cnt = 0
                 do i=1,nincl
@@ -842,7 +813,7 @@ contains
                         call o_here%set_ori(cnt, b%a%get_ori(pinds(i)))
                     endif
                 end do
-                allocate(fname, source='extracted_oris_class'//int2str_pad(p%class,5)//'.txt')
+                allocate(fname, source='extracted_oris_class'//int2str_pad(p%class,5)//METADATEXT)
             else
                 o_here = oris(nincl)
                 do i=1,nincl
@@ -851,12 +822,12 @@ contains
                     call img%write(p%outstk, i)
                     call o_here%set_ori(i, b%a%get_ori(pinds(i)))
                 end do
-                allocate(fname, source='extracted_oris.txt')
+                allocate(fname, source='extracted_oris'//METADATEXT)
             endif
             if( cline%defined('outfile') )then
-                call o_here%write(p%outfile)
+                call binwrite_oritab(p%outfile, o_here, [1,o_here%get_noris()])
             else
-                call o_here%write(fname)
+                call binwrite_oritab(fname, o_here, [1,o_here%get_noris()])
             endif
             goto 999
         endif
@@ -885,7 +856,7 @@ contains
                         call o_here%set_ori(cnt, b%a%get_ori(i))
                     endif
                 end do
-                allocate(fname, source='extracted_oris_state'//int2str_pad(p%state,2)//'.txt')
+                allocate(fname, source='extracted_oris_state'//int2str_pad(p%state,2)//METADATEXT)
             else if( cline%defined('class') )then
                 cnt = 0
                 do i=1,p%nptcls
@@ -908,12 +879,12 @@ contains
                         call o_here%set_ori(cnt, b%a%get_ori(i))
                     endif
                 end do
-                allocate(fname, source='extracted_oris_class'//int2str_pad(p%class,5)//'.txt')
+                allocate(fname, source='extracted_oris_class'//int2str_pad(p%class,5)//METADATEXT)
             endif
             if( cline%defined('outfile') )then
-                call o_here%write(p%outfile)
+                call binwrite_oritab(p%outfile, o_here, [1,o_here%get_noris()])
             else
-                call o_here%write(fname)
+                call binwrite_oritab(fname, o_here, [1,o_here%get_noris()])
             endif
             goto 999
         endif
@@ -950,7 +921,7 @@ contains
             call add_noise_imgfile(p%stk, p%outstk, p%snr, p%smpd)
             goto 999
         endif
-        ! APPEND STK2 TO STK WHILE PRESERVING THE NAME OF STK
+        ! append stk2 to stk while preserving the name of stk
         if( p%append .eq. 'yes' )then
             if( cline%defined('stk') .and. cline%defined('stk2') )then
                 ! find out image dimension and number of particles
@@ -1016,12 +987,9 @@ contains
                 end do 
                 print *, 'ctfreslim + defocus limits --> ptcls set state 1: ', (p%nptcls-cnt3), ' ptcls set state 0: ', cnt3
             endif
-            !write the oritab with appropriate states
+            ! write the oritab with appropriate states
             call del_file(p%outfile)
-            do i=1,p%nptcls
-            call progress(i, p%nptcls)
-            call b%a%write(i, p%outfile)
-            end do
+            call binwrite_oritab(p%outfile, b%a, [1,p%nptcls])
             goto 999
         endif   
         ! default

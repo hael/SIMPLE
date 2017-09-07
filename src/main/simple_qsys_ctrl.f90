@@ -1,17 +1,18 @@
 ! batch-processing manager - control module
 module simple_qsys_ctrl
-use simple_defs
-use simple_qsys_base,    only: qsys_base
-use simple_chash,        only: chash
-use simple_strings,      only: int2str, int2str_pad
-use simple_cmdline,      only: cmdline
-use simple_syslib,       only: exec_cmdline, wait_for_closure, simple_sleep, simple_stop
-use simple_fileio
+use simple_defs       ! use all in there
+use simple_fileio     ! use all in there
+use simple_qsys_base, only: qsys_base
+use simple_chash,     only: chash
+use simple_strings,   only: int2str, int2str_pad
+use simple_cmdline,   only: cmdline
+use simple_syslib,    only: exec_cmdline, wait_for_closure, simple_sleep, simple_stop
 implicit none
 
 public :: qsys_ctrl
 private
 #include "simple_local_flags.inc"
+
 integer, parameter :: SHORTTIME = 3
 
 type qsys_ctrl
@@ -170,7 +171,7 @@ contains
         exists = self%existence
     end function exists
 
-    ! SETTER
+    ! SETTERS
 
     !> \brief for freeing all available computing units
     subroutine free_all_cunits( self )
@@ -189,12 +190,13 @@ contains
     ! SCRIPT GENERATORS
 
     !>  \brief  public script generator
-    subroutine generate_scripts( self, job_descr, ext, q_descr, outfile_body, part_params, chunkdistr )
+    subroutine generate_scripts( self, job_descr, ext, q_descr, outfile_body, outfile_ext, part_params, chunkdistr )
         class(qsys_ctrl),           intent(inout) :: self
         class(chash),               intent(inout) :: job_descr
         character(len=4),           intent(in)    :: ext
         class(chash),               intent(in)    :: q_descr
         character(len=*), optional, intent(in)    :: outfile_body
+        character(len=4), optional, intent(in)    :: outfile_ext
         class(chash),     optional, intent(in)    :: part_params(:)
         logical,          optional, intent(in)    :: chunkdistr
         character(len=:), allocatable :: outfile_body_local, key, val
@@ -215,7 +217,11 @@ contains
                 call job_descr%set('part',    int2str(ipart))
                 call job_descr%set('nparts',  int2str(self%nparts_tot))
                 if( allocated(outfile_body_local) )then
-                    call job_descr%set('outfile', trim(trim(outfile_body_local)//int2str_pad(ipart,self%numlen)//'.txt'))
+                    if( present(outfile_ext) )then
+                        call job_descr%set('outfile', trim(trim(outfile_body_local)//int2str_pad(ipart,self%numlen)//outfile_ext))
+                    else
+                        call job_descr%set('outfile', trim(trim(outfile_body_local)//int2str_pad(ipart,self%numlen)//METADATEXT))
+                    endif
                 endif
             endif
             if( part_params_present  )then
@@ -291,7 +297,6 @@ contains
         ! when we generate the script we also unflag jobs_submitted and jobs_done
         self%jobs_done(ipart)      = .false.
         self%jobs_submitted(ipart) = .false.
-        !
         call wait_for_closure(self%script_names(ipart))
     end subroutine generate_script_1
 
@@ -325,20 +330,20 @@ contains
         ! exit shell when done
         write(funit,'(a)',advance='yes') ''
         write(funit,'(a)',advance='yes') 'exit'
-        if(.not.fclose(funit, iostat=ios))&
+        if(.not.fclose(funit, iostat=ios))then
             call fileio_errmsg('simple_qsys_ctrl :: generate_script_2; Error when closing file: '&
             &//trim(script_name),ios )
-            !!!!!!!!!
-            call wait_for_closure(script_name)
-            !!!!!!!!!
-
-            if( trim(q_descr%get('qsys_name')).eq.'local' )then
-                call chmod(trim(script_name),'+x', status=ios)
-                if( ios .ne. 0 )then
-                    write(*,'(a)',advance='no') 'simple_qsys_ctrl :: generate_script_2; Error'
-                    write(*,'(a)') 'chmoding submit script'//trim(script_name)
-                    stop
-                end if
+        endif
+        !!!!!!!!!
+        call wait_for_closure(script_name)
+        !!!!!!!!!
+        if( trim(q_descr%get('qsys_name')).eq.'local' )then
+            call chmod(trim(script_name),'+x', status=ios)
+            if( ios .ne. 0 )then
+                write(*,'(a)',advance='no') 'simple_qsys_ctrl :: generate_script_2; Error'
+                write(*,'(a)') 'chmoding submit script'//trim(script_name)
+                stop
+            end if
         endif
     end subroutine generate_script_2
 

@@ -123,7 +123,7 @@ contains
         ! INITIALIZE
         write(*,'(A,1X,I3)') '>>> PRIME2D DISCRETE STOCHASTIC SEARCH, ITERATION:', which_iter
         if( .not. p%l_distr_exec )then
-            p%outfile = 'prime2Ddoc_'//int2str_pad(which_iter,3)//'.txt'
+            p%outfile = 'prime2Ddoc_'//int2str_pad(which_iter,3)//METADATEXT
             if( p%chunktag .ne. '' ) p%outfile= trim(p%chunktag)//trim(p%outfile)
         endif
 

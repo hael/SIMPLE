@@ -1,13 +1,13 @@
 ! concrete commander: checking routines
 module simple_commander_checks
-use simple_defs            ! singleton
-use simple_syslib
 use simple_cmdline,        only: cmdline
 use simple_params,         only: params
 use simple_build,          only: build
 use simple_commander_base, only: commander_base
 use simple_fileio          ! use all in there
 use simple_jiffys          ! use all in there
+use simple_defs            ! use all in there
+use simple_syslib          ! use all in there
 implicit none
 
 public :: check_box_commander
@@ -30,7 +30,7 @@ end type iminfo_commander
 
 contains
 
-    !> checkbox is a program for checking the image dimensions of MRC and SPIDER stacks and volumes
+    !> for checking the image dimensions of MRC and SPIDER stacks and volumes
     subroutine exec_check_box( self, cline )
         class(check_box_commander), intent(inout) :: self
         class(cmdline),             intent(inout) :: cline
@@ -59,7 +59,7 @@ contains
         call simple_end('**** SIMPLE_CHECK_NPTCLS NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_check_nptcls
 
-    !> iminfo is a program for printing header information in MRC and SPIDER stacks and volumes
+    !> for printing header information in MRC and SPIDER stacks and volumes
     subroutine exec_iminfo( self, cline)
         use simple_image,   only: image
         use simple_imgfile, only: imgfile, find_ldim_nptcls

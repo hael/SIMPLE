@@ -71,8 +71,6 @@ end type extract_commander
 
 contains
 
-    ! UNBLUR + CTFFIND + PICK + EXTRACT IN SEQUENCE
-    !> PREPROC is a pipelined unblur + ctffind  + pick + extract in sequence program
     subroutine exec_preproc( self, cline )
         use simple_unblur_iter,  only: unblur_iter
         use simple_ctffind_iter, only: ctffind_iter
@@ -165,8 +163,8 @@ contains
                 endif
                 call cline%set('fbody', trim(p%fbody))
             else
-                allocate(fname_ctffind_ctrl,  source='ctffind_ctrl_file.txt')
-                allocate(fname_unidoc_output, source='unidoc_output.txt')
+                allocate(fname_ctffind_ctrl,  source='ctffind_ctrl_file'//'.txt')
+                allocate(fname_unidoc_output, source='unidoc_output'//'.txt')
             endif
             ! determine loop range
             fromto(1) = 1
@@ -215,7 +213,7 @@ contains
                     call cline_extract%set('dir_ptcls', trim(dir_ptcls))
                     call cline_extract%set('smpd',      p%smpd)
                     call cline_extract%set('unidoc',    fname_unidoc_output)
-                    call cline_extract%set('outfile',   'extract_params_movie'//int2str_pad(movie_ind,p%numlen)//'.txt')
+                    call cline_extract%set('outfile',   'extract_params_movie'//int2str_pad(movie_ind,p%numlen)//METADATEXT)
                     call cline_extract%set('outstk',    'ptcls_from_movie'//int2str_pad(movie_ind,p%numlen)//p%ext)
                     call xextract%execute(cline_extract)
                 endif
@@ -233,7 +231,6 @@ contains
         call simple_end('**** SIMPLE_PREPROC NORMAL STOP ****')
     end subroutine exec_preproc
 
-    !> SELECT_FRAMESIS a program for selecting contiguous segments of frames from DDD movies
     subroutine exec_select_frames( self, cline )
         use simple_imgfile, only: imgfile
         use simple_image,   only: image
@@ -300,8 +297,6 @@ contains
         call simple_end('**** SIMPLE_SELECT_FRAMES NORMAL STOP ****')
     end subroutine exec_select_frames
 
-    !> BOXCONVS is a program for averaging overlapping boxes across a micrograph
-    !! in order to check if gain correction was appropriately done
     subroutine exec_boxconvs( self, cline )
         use simple_image, only: image
         class(boxconvs_commander), intent(inout) :: self
@@ -361,7 +356,6 @@ contains
         call simple_end('**** SIMPLE_BOXCONVS NORMAL STOP ****')
     end subroutine exec_boxconvs
 
-    !> POWERSPECS is a program for generating powerspectra from a stack or filetable
     subroutine exec_powerspecs( self, cline )
         use simple_imgfile, only: imgfile
         use simple_image,   only: image
@@ -428,29 +422,6 @@ contains
         call simple_end('**** SIMPLE_POWERSPECS NORMAL STOP ****')
     end subroutine exec_powerspecs
 
-    !> UNBLUR is a program for movie alignment or unblurring based the same principal strategy
-    !> as Grigorieffs program (hence the name).
-    !!
-    !! There are two important differences: automatic weighting of the frames
-    !! using a correlation-based M-estimator and continuous optimisation of the
-    !! shift parameters. Input is a text file with absolute paths to movie files
-    !! in addition to a few input parameters, some of which deserve a comment.
-    !! If dose_rate and exp_time are given the individual frames will be
-    !! low-pass filtered accordingly (dose-weighting strategy). If scale is
-    !! given, the movie will be Fourier cropped according to the down-scaling
-    !! factor (for super-resolution movies). If nframesgrp is given the frames
-    !! will be pre-averaged in the given chunk size (Falcon 3 movies). If
-    !! fromf/tof are given, a contiguous subset of frames will be averaged
-    !! without any dose-weighting applied.
-    !! \see http://simplecryoem.com/tutorials.html?#motion-correction
-    !! EXAMPLE:
-    !! ```sh
-    !! cat movies.txt 
-    !!    data/movie1.mrc
-    !!    data/movie2.mrc
-    !! simple_distr_exec prg=unblur filetab=movies.txt smpd=5.26 nparts=2 nthr=12 fbody=proteasome dose_rate=7 exp_time=7.6 kv=300
-    !!```
-    !! 
     subroutine exec_unblur( self, cline )
         use simple_unblur_iter, only: unblur_iter
         use simple_oris,        only: oris
@@ -527,8 +498,6 @@ contains
         call simple_end('**** SIMPLE_UNBLUR NORMAL STOP ****')
     end subroutine exec_unblur
 
-    !> ctffind  is a wrapper program for CTFFIND4 (Grigorieff lab)
-    !! \sa  http://simplecryoem.com/tutorials.html?#ctf-parameter-determination
     subroutine exec_ctffind( self, cline )
         use simple_ctffind_iter, only: ctffind_iter
         use simple_oris,         only: oris
@@ -591,27 +560,6 @@ contains
         call simple_end('**** SIMPLE_CTFFIND NORMAL STOP ****')
     end subroutine exec_ctffind
 
-    !> SELECT is a program for selecting files based on image correlation matching
-    !!
-    !! \sa http://simplecryoem.com/tutorials.html?#prime2d-analysis-of-trpv1-membrane-receptor-images
-    !! ```sh
-    !! simple_exec prg=select
-    !!  USAGE:
-    !!  bash-3.2$ simple_exec prg=simple_program key1=val1 key2=val2 ...
-    !!
-    !!  REQUIRED
-    !!  stk  = particle stack with all images(ptcls.ext)
-    !!  stk2 = 2nd stack(in map2ptcls/select: selected(cavgs).ext)
-    !!
-    !!  OPTIONAL
-    !!  nthr       = nr of OpenMP threads{1}
-    !!  stk3       = 3d stack (in map2ptcls/select: (cavgs)2selectfrom.ext)
-    !!  filetab    = list of files(*.txt / *.asc)
-    !!  outfile    = output document
-    !!  outstk     = output image stack
-    !!  dir_select = move selected files to here{selected}
-    !!  dir_reject = move rejected files to here{rejected}
-    !! ```
     subroutine exec_select( self, cline )
         use simple_image,    only: image
         use simple_corrmat   ! use all in there
@@ -654,7 +602,6 @@ contains
             allocate(correlations(nsel,nall), stat=alloc_stat)
             call alloc_errchk('In: exec_select; simple_commander_preproc', alloc_stat)
             ! read matrix
-            
             if(.not.fopen(funit, status='OLD', action='READ', file='corrmat_select.bin', access='STREAM', iostat=io_stat))&
              call fileio_errmsg('simple_commander_preproc ; fopen error when opening corrmat_select.bin  ', io_stat)
             read(unit=funit,pos=1,iostat=io_stat) correlations
@@ -669,7 +616,6 @@ contains
             write(*,'(a)') '>>> CALCULATING CORRELATIONS'
             call calc_cartesian_corrmat(imgs_sel, imgs_all, correlations)
             ! write matrix
-            
             if(.not.fopen(funit, status='REPLACE', action='WRITE', file='corrmat_select.bin', access='STREAM', iostat=io_stat))&
                  call fileio_errmsg('simple_commander_preproc ; fopen error when opening corrmat_select.bin  ', io_stat)
             write(unit=funit,pos=1,iostat=io_stat) correlations
@@ -694,7 +640,6 @@ contains
             ! read filetable
             call read_filetable(p%filetab, imgnames)
             if( size(imgnames) /= nall ) stop 'nr of entries in filetab and stk not consistent'
-            
             if(.not.fopen(funit, file=p%outfile,status="replace", action="write", access="sequential", iostat=io_stat))&
                  call fileio_errmsg('simple_commander_preproc ; fopen error when opening '//trim(p%outfile), ios)
             !if( ios /= 0 )then
@@ -730,7 +675,7 @@ contains
         call simple_end('**** SIMPLE_SELECT NORMAL STOP ****')
     end subroutine exec_select
 
-    !> MAKEPICKREFS is a program to make picker references
+    !> for making picker references
     subroutine exec_makepickrefs( self, cline )
         use simple_commander_volops,  only: projvol_commander
         use simple_commander_imgproc, only: stackops_commander, scale_commander
@@ -738,7 +683,7 @@ contains
         class(makepickrefs_commander), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline !< command line input
         integer, parameter           :: NREFS=100, NPROJS=20
-        character(STDLEN), parameter :: ORIFILE='pickrefs_oris.txt'
+        character(STDLEN), parameter :: ORIFILE='pickrefs_oris'//METADATEXT
         type(params)                 :: p
         type(build)                  :: b
         type(cmdline)                :: cline_projvol, cline_stackops
@@ -754,7 +699,7 @@ contains
                 p%nptcls = NPROJS
                 call b%a%new(NPROJS)
                 call b%a%spiral( p%nsym, p%eullims )
-                call b%a%write(trim(ORIFILE))
+                call binwrite_oritab(trim(ORIFILE), b%a, [1,NPROJS])
                 cline_projvol = cline
                 call cline_projvol%set('nspace', real(NPROJS))
                 p%stk = 'even_projs'//p%ext
@@ -793,7 +738,6 @@ contains
         call simple_end('**** SIMPLE_MAKEPICKREFS NORMAL STOP ****')
     end subroutine exec_makepickrefs
 
-    !> PICK is a program to pick particles
     subroutine exec_pick( self, cline)
         use simple_pick_iter, only: pick_iter
         class(pick_commander), intent(inout) :: self
@@ -828,14 +772,7 @@ contains
         end do
     end subroutine exec_pick
 
-    !> \brief EXTRACT is a program that extracts particle images from DDD movies or integrated movies.
-    !! Boxfiles are assumed to be in EMAN format but we provide a conversion
-    !! script (relion2emanbox.pl) for *.star files containing particle
-    !! coordinates obtained with Relion. The program creates one stack per movie
-    !! frame as well as a stack of corrected framesums. In addition to
-    !! single-particle image stacks, the program produces a parameter file
-    !! extract_params.txt that can be used in conjunction with other SIMPLE
-    !! programs. We obtain CTF parameters with CTFFIND4
+    !> for extracting particle images from integrated DDD movies 
     subroutine exec_extract( self, cline )
         use simple_nrtxtfile, only: nrtxtfile
         use simple_imgfile,   only: imgfile
@@ -900,9 +837,9 @@ contains
             endif
         else
             if( cline%defined('dir_ptcls') )then
-                outfile = trim(p%dir_ptcls)//'/extract_params.txt'
+                outfile = trim(p%dir_ptcls)//'/extract_params'//METADATEXT
             else
-                outfile = 'extract_params.txt'
+                outfile = 'extract_params'//METADATEXT
             endif
         endif
 

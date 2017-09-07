@@ -6,7 +6,7 @@ use simple_commander_base,        only: commander_base
 use simple_qsys_env,              only: qsys_env
 use simple_commander_distr_wflows ! use all in there
 use simple_fileio                 ! use all in there
-use simple_commander_distr        ! use all in 
+use simple_commander_distr        ! use all in there
 use simple_jiffys                 ! use all in there
 use simple_binoris_io             ! use all in there
 use simple_defs                   ! use all in there
@@ -32,8 +32,7 @@ end type het_ensemble_commander
 
 contains
 
-    ! PRIME2D WITH TWO-STAGE AUTO-SCALING
-
+    !> for distributed PRIME2D with two-stage autoscaling
     subroutine exec_prime2D_autoscale( self, cline )
         use simple_scaler,            only: scaler
         use simple_oris,              only: oris
@@ -43,7 +42,7 @@ contains
         ! constants
         integer,           parameter :: MAXITS_STAGE1   = 10
         character(len=32), parameter :: CAVGS_ITERFBODY = 'cavgs_iter'
-        character(len=32), parameter :: FINALDOC        = 'prime2Ddoc_final.txt'
+        character(len=32), parameter :: FINALDOC        = 'prime2Ddoc_final'//METADATEXT
         ! commanders
         type(split_commander)                        :: xsplit
         type(makecavgs_distr_commander)              :: xmakecavgs
@@ -135,21 +134,14 @@ contains
         call cline_rank_cavgs%set('outstk', 'cavgs_final_ranked'//p_master%ext)
         call xrank_cavgs%execute( cline_rank_cavgs )
         ! cleanup
-        call del_file('prime2D_startdoc.txt')
+        call del_file('prime2D_startdoc'//METADATEXT)
         call del_file('start2Drefs'//p_master%ext)
         call del_files(STKPARTFBODY_SC, p_master%nparts, ext=p_master%ext)
         ! end gracefully
         call simple_end('**** SIMPLE_PRIME2D NORMAL STOP ****')
     end subroutine exec_prime2D_autoscale
 
-    !> ini3D_from_cavgs is a SIMPLE program to generate initial 3d model from class averages
-    !! \see  http://simplecryoem.com/tutorials.html?#ab-initio-3d-reconstruction-from-class-averages
-    !!
-    !! Example:
-    !! ```sh
-    !!nohup simple_distr_exec prg=ini3D_from_cavgs stk=../2d/cavgs_selected.mrc \
-    !!    smpd=1.62 msk=88 pgrp=d2 pgrp_known=yes nparts=2 nthr=4 >& INI3DOUT &
-    !!```
+    !> for generation of an initial 3d model from class averages
     subroutine exec_ini3D_from_cavgs( self, cline )
         use simple_commander_volops, only: projvol_commander
         use simple_commander_rec,    only: recvol_commander
@@ -258,14 +250,14 @@ contains
             call cline_symsrch%set('nptcls',  real(NPROJS_SYMSRCH))
             call cline_symsrch%set('nspace',  real(NPROJS_SYMSRCH))
             call cline_symsrch%set('cenlp',   CENLP)
-            call cline_symsrch%set('outfile', 'symdoc.txt')
+            call cline_symsrch%set('outfile', 'symdoc'//METADATEXT)
             ! (4.5) RECONSTRUCT SYMMETRISED VOLUME
             call cline_recvol%set('prg', 'recvol')
             call cline_recvol%set('trs',  5.) ! to assure that shifts are being used
             call cline_recvol%set('ctf',  'no')
-            call cline_recvol%set('oritab', 'symdoc.txt')
+            call cline_recvol%set('oritab', 'symdoc'//METADATEXT)
             ! refinement step now uses the symmetrised vol and doc
-            call cline_prime3D_refine%set('oritab', 'symdoc.txt')
+            call cline_prime3D_refine%set('oritab', 'symdoc'//METADATEXT)
             call cline_prime3D_refine%set('vol1', 'rec_sym'//p_master%ext)
         endif
         ! (4) PRIME3D REFINE STEP
@@ -358,7 +350,7 @@ contains
             subroutine set_iter_dependencies
                 character(len=3) :: str_iter
                 str_iter = int2str_pad(nint(iter),3)
-                oritab   = trim(ITERFBODY)//trim(str_iter)//'.txt'
+                oritab   = trim(ITERFBODY)//trim(str_iter)//METADATEXT
                 vol_iter = trim(VOLFBODY)//trim(str_state)//'_iter'//trim(str_iter)//p_master%ext
             end subroutine set_iter_dependencies
 
@@ -383,8 +375,7 @@ contains
 
     end subroutine exec_ini3D_from_cavgs
 
-    ! ENSEMBLE HETEROGEINITY ANALYSIS
-    !> het_ensemble is a SIMPLE program for ensemble heterogeinity analysis
+    !> for ensemble heterogeinity analysis
     subroutine exec_het_ensemble( self, cline )
         use simple_commander_rec,    only: recvol_commander
         use simple_commander_volops, only: postproc_vol_commander
@@ -423,9 +414,9 @@ contains
         NREPEATS = nint(cline%get_rarg('nrepeats'))
         allocate(init_docs(NREPEATS), final_docs(NREPEATS), rep_corrs(NREPEATS), stat=alloc_stat)
         do irepeat=1,NREPEATS
-            oritab              = trim(REPEATFBODY)//'init_rep'//int2str_pad(irepeat,2)//'.txt'
+            oritab              = trim(REPEATFBODY)//'init_rep'//int2str_pad(irepeat,2)//METADATEXT
             init_docs(irepeat)  = trim(oritab)
-            oritab              = trim(REPEATFBODY)//'rep'//int2str_pad(irepeat,2)//'.txt'
+            oritab              = trim(REPEATFBODY)//'rep'//int2str_pad(irepeat,2)//METADATEXT
             final_docs(irepeat) = trim(oritab)
             call del_file(init_docs(irepeat))
             call del_file(final_docs(irepeat))
@@ -491,7 +482,7 @@ contains
             call xprime3D_distr%execute(cline_prime3D)
             ! HARVEST OUTCOME
             iter   = nint(cline_prime3D%get_rarg('endit'))
-            oritab = 'prime3Ddoc_'//int2str_pad(iter,3)//'.txt'
+            oritab = 'prime3Ddoc_'//int2str_pad(iter,3)//METADATEXT
             call rename(trim(oritab), trim(final_docs(irepeat)))
             call binread_oritab(trim(final_docs(irepeat)), os, [1,p_master%nptcls])
             ! updates labels & correlations
@@ -505,7 +496,7 @@ contains
         best_loc = maxloc(rep_corrs)
 
         ! GENERATE CONSENSUS DOCUMENT
-        oritab = trim(REPEATFBODY)//'consensus.txt'
+        oritab = trim(REPEATFBODY)//'consensus'//METADATEXT
         call del_file(oritab)
         write(*,'(A)')   '>>>'
         write(*,'(A,A)') '>>> GENERATING ENSEMBLE SOLUTION: ', trim(oritab)
@@ -563,7 +554,7 @@ contains
                         vol = trim(VOLFBODY)//int2str_pad(state,2)//'_iter'//int2str_pad(it,3)//p_master%ext
                         if(file_exists(vol))call del_file(vol)
                     enddo
-                    oritab = 'prime3Ddoc_'//int2str_pad(it,3)//'.txt'
+                    oritab = 'prime3Ddoc_'//int2str_pad(it,3)//METADATEXT
                     if(file_exists(oritab))call del_file(oritab)
                 enddo
             end subroutine prime3d_cleanup

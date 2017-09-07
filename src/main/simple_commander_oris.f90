@@ -73,10 +73,12 @@ contains
         use simple_math,        only: rad2deg
         use simple_clusterer,   only: shc_cluster_oris
         use simple_strings,     only: int2str, int2str_pad
+        use simple_oris,        only: oris
         class(cluster_oris_commander), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
         type(build)          :: b
         type(params)         :: p
+        type(oris)           :: os_class
         integer              :: icls, iptcl, numlen
         real                 :: avgd, sdevd, maxd, mind
         integer, allocatable :: clsarr(:)
@@ -94,24 +96,21 @@ contains
         do icls=1,p%ncls
             clsarr = b%a%get_pinds(icls, 'class')
             if( allocated(clsarr) )then
+                call os_class%new(size(clsarr))
                 do iptcl=1,size(clsarr)
-                    call b%a%write(clsarr(iptcl), 'oris_class'//int2str_pad(icls,numlen)//'.txt')
-                end do
+                    call os_class%set_ori(iptcl, b%a%get_ori(clsarr(iptcl)))
+                end do 
+                call binwrite_oritab('oris_class'//int2str_pad(icls,numlen)//METADATEXT,&
+                    &os_class, [1,size(clsarr)])
                 deallocate(clsarr)
+                call os_class%kill
             endif
         end do
         ! end gracefully
         call simple_end('**** SIMPLE_CLUSTER_ORIS NORMAL STOP ****')
     end subroutine exec_cluster_oris
 
-    !>  makedeftab is a program for creating a SIMPLE conformant file of CTF
-    !!  parameter values (deftab). Input is either an earlier SIMPLE
-    !!  deftab/oritab. The purpose is to get the kv, cs, and fraca parameters as
-    !!  part of the CTF input doc as that is the new convention. The other
-    !!  alternative is to input a plain text file with CTF parameters dfx, dfy,
-    !!  angast according to the Frealign convention. Unit conversions are dealt
-    !!  with using optional variables. The units refer to the units in the
-    !!  inputted d
+    !>  for creating a SIMPLE conformant file of CTF parameter values (deftab)
     subroutine exec_makedeftab( self, cline )
         use simple_nrtxtfile, only: nrtxtfile
         use simple_math,      only: rad2deg
@@ -196,20 +195,7 @@ contains
         call simple_end('**** SIMPLE_MAKEDEFTAB NORMAL STOP ****')
     end subroutine exec_makedeftab
 
-    !> makeoris is a program for making SIMPLE orientation/parameter files (text
-    !! files containing input parameters and/or parameters estimated by prime2D or
-    !! prime3D). The program generates random Euler angles e1.in.[0,360],
-    !! e2.in.[0,180], and e3.in.[0,360] and random origin shifts x.in.[-trs,yrs] and
-    !! y.in.[-trs,yrs]. If ndiscrete is set to an integer number > 0, the
-    !! orientations produced are randomly sampled from the set of ndiscrete
-    !! quasi-even projection directions, and the in-plane parameters are assigned
-    !! randomly. If even=yes, then all nptcls orientations are assigned quasi-even
-    !! projection directions,and random in-plane parameters. If nstates is set to
-    !! some integer number > 0, then states are assigned randomly .in.[1,nstates].
-    !! If zero=yes in this mode of execution, the projection directions are zeroed
-    !! and only the in-plane parameters are kept intact. If errify=yes and astigerr
-    !! is defined, then uniform random astigmatism errors are introduced
-    !! .in.[-astigerr,astigerr]
+    !> for making SIMPLE orientation/parameter files
     subroutine exec_makeoris( self, cline )
         use simple_ori,           only: ori
         use simple_oris,          only: oris
@@ -318,7 +304,7 @@ contains
             do i=1,nl
                 call o%set(i,'state', real(consensus(i)))
             end do
-            call o%write('aggregated_oris.txt')
+            call binwrite_oritab('aggregated_oris'//METADATEXT, o, [1,nl])
             return
         else
             call b%a%rnd_oris(p%trs)
@@ -337,10 +323,7 @@ contains
         call simple_end('**** SIMPLE_MAKEORIS NORMAL STOP ****')
     end subroutine exec_makeoris
 
-    !> map2ptcls is a program for mapping parameters that have been obtained using class averages
-    !!  to the individual particle images
-    !! \see http://simplecryoem.com/tutorials.html?#using-simple-in-the-wildselecting-good-class-averages-and-mapping-the-selection-to-the-particles
-    !! \see http://simplecryoem.com/tutorials.html?#resolution-estimate-from-single-particle-images
+    !> for mapping parameters that have been obtained using class averages to the individual particle images
     subroutine exec_map2ptcls( self, cline )
         use simple_oris,    only: oris
         use simple_ori,     only: ori
@@ -502,14 +485,7 @@ contains
         call simple_end('**** SIMPLE_ORISOPS NORMAL STOP ****')
     end subroutine exec_orisops
 
-    !> oristats is a program for analyzing SIMPLE orientation/parameter files (text files
-    !! containing input parameters and/or parameters estimated by prime2D or
-    !! prime3D). If two orientation tables (oritab and oritab2) are inputted, the
-    !! program provides statistics of the distances between the orientations in the
-    !! two documents. These statistics include the sum of angular distances between
-    !! the orientations, the average angular distance between the orientations, the
-    !! standard deviation of angular distances, the minimum angular distance, and
-    !! the maximum angular distance
+    !> for analyzing SIMPLE orientation/parameter files
     subroutine exec_oristats(self,cline)
         use simple_ori,  only: ori
         use simple_oris, only: oris
@@ -634,7 +610,7 @@ contains
                 allocate(clustering(noris), clustszs(p%ndiscrete))
                 call osubspace%new(p%ndiscrete)
                 call osubspace%spiral(p%nsym, p%eullims)
-                call osubspace%write('even_pdirs.txt')
+                call binwrite_oritab('even_pdirs'//METADATEXT, osubspace, [1,p%ndiscrete])
                 do iptcl=1,b%a%get_noris()
                     if( ptcl_mask(iptcl) )then
                         o_single = b%a%get_ori(iptcl)
@@ -750,7 +726,6 @@ contains
         call os%write(p%outfile)
     end subroutine exec_bin2txt
 
-    !> convert rotation matrix to orientation oris class
     subroutine exec_vizoris( self, cline )
         use simple_math,      only: rad2deg, myacos, rotmat2axis
         use simple_oris,      only: oris

@@ -1,13 +1,13 @@
 ! concrete commander: masking routines
 module simple_commander_mask
-use simple_defs
-use simple_syslib
 use simple_cmdline,        only: cmdline
 use simple_params,         only: params
 use simple_build,          only: build
 use simple_commander_base, only: commander_base
 use simple_fileio          ! use all in there
 use simple_jiffys          ! use all in there
+use simple_defs            ! use all in there
+use simple_syslib          ! use all in there
 implicit none
 
 public :: mask_commander
@@ -25,9 +25,7 @@ end type automask2D_commander
 
 contains
 
-    !> mask is a program for masking images and volumes.
-    !! If you want to mask your images with a spherical mask with a soft
-    !! falloff, set msk to the radius in pixels
+    !> for masking images and volumes
     subroutine exec_mask( self, cline )
         use simple_image,       only: image
         use simple_procimgfile, only: mask_imgfile
@@ -102,12 +100,7 @@ contains
         call simple_end('**** SIMPLE_MASK NORMAL STOP ****')
     end subroutine exec_mask
     
-    !> automask2D is a program for solvent flattening of class averages.
-    !! The algorithm for backgro und removal is based on low-pass filtering and
-    !! binarization. First, the class averages are low-pass filtered to amsklp.
-    !! Binary representatives are then generate d by assigning foreground pixels
-    !! using sortmeans. A cosine function softens the edge of the binary mask
-    !! before it is multiplied with the unmasked input average
+    !> for solvent flattening of class averages
     subroutine exec_automask2D( self, cline )
         !use simple_masker, only: automask2D
         class(automask2D_commander), intent(inout) :: self

@@ -33,10 +33,8 @@ contains
         if( .not. file_exists(moviename_forctf) )&
         & write(*,*) 'inputted micrograph does not exist: ', trim(adjustl(moviename_forctf))
         movie_counter = movie_counter + 1
-
         fname_diag    = add2fbody(moviename_forctf, p%ext, '_ctffind_diag')
         fname_param   = fname_new_ext(fname_diag, 'txt')
-
         if(.not.fopen(funit, status='REPLACE', action='WRITE', file=trim(fname_ctrl),iostat=file_stat))&
              call fileio_errmsg("ctffind_iter:: iterate fopen failed",file_stat)
         write(funit,'(a)') trim(moviename_forctf)      ! integrated movie used for fitting
@@ -54,11 +52,11 @@ contains
         write(funit,'(a)') 'no'                        ! do you know what astigmatism is present?
         write(funit,'(a)') 'yes'                       ! slower, more exhaustive search
         write(funit,'(a)') 'yes'                       ! use a restraint on astigmatism
-        write(funit,'(a)') real2str(1.0e4*p%astigtol)  ! defocus grid search step size, default 0.05 microns
+        write(funit,'(a)') real2str(1.0e4*p%astigtol)  ! astigmatism tolerance, default 0.05 microns
         write(funit,'(a)') trim(p%phaseplate)          ! phase-plate or not (yes|no) {no}
         write(funit,'(a)') 'no';                       ! set expert options
         if(.not.fclose(funit,iostat=file_stat))&
-             call fileio_errmsg("ctffind_iter:: iterate fopen failed",file_stat)
+             call fileio_errmsg("ctffind_iter :: iterate fopen failed",file_stat)
         cmd_str = 'cat ' // fname_ctrl//' | ctffind'
         call exec_cmdline(trim(cmd_str))
         call ctfparamfile%new(fname_param, 1)

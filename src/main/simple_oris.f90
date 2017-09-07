@@ -1820,13 +1820,17 @@ contains
 
     !>  \brief  reads orientation info from file
     subroutine read( self, orifile, nst )
+        use simple_strings, only: str_has_substr
         class(oris),       intent(inout) :: self
         character(len=*),  intent(in)    :: orifile
         integer, optional, intent(out)   :: nst
         character(len=100) :: io_message
         integer :: file_stat, i, fnr, state, recsz
         if( .not. file_exists(orifile) )then
-            call simple_stop ("oris ; read; The file you are trying to read: "//trim(orifile)//' does not exist in cwd' )
+            call simple_stop("oris ; read; The file you are trying to read: "//trim(orifile)//' does not exist in cwd' )
+        endif
+        if( str_has_substr(orifile,'.bin') )then
+            call simple_stop('this method does not support binary files; simple_oris :: read')
         endif
         io_message='No error'
         if(.not.fopen(fnr, FILE=orifile, STATUS='OLD', action='READ', iostat=file_stat,iomsg=io_message))then
@@ -1846,11 +1850,19 @@ contains
 
     !>  \brief  reads CTF parameters and state info from file
     subroutine read_ctfparams_and_state( self, ctfparamfile )
+        use simple_strings, only: str_has_substr
         class(oris),       intent(inout) :: self
         character(len=*),  intent(in)    :: ctfparamfile
         logical    :: params_are_there(10)
         integer    :: i
         type(oris) :: os_tmp
+        if( .not. file_exists(ctfparamfile) )then
+            call simple_stop ("oris ; read_ctfparams_and_state; The file you are trying to read: "&
+                &//trim(ctfparamfile)//' does not exist in cwd' )
+        endif
+        if( str_has_substr(ctfparamfile,'.bin') )then
+            call simple_stop('this method does not support binary files; simple_oris :: read_ctfparams_and_state')
+        endif
         call os_tmp%new(self%n)
         call os_tmp%read(ctfparamfile)
         params_are_there(1)  = os_tmp%isthere('smpd')
@@ -3226,23 +3238,23 @@ contains
         os = oris(100)
         os2 = oris(100)
         call os%rnd_oris(5.)
-        call os%write('test_oris_rndoris.txt')
-        call os2%read('test_oris_rndoris.txt')
-        call os2%write('test_oris_rndoris_copy.txt')
+        call os%write('test_oris_rndoris'//METADATEXT)
+        call os2%read('test_oris_rndoris'//METADATEXT)
+        call os2%write('test_oris_rndoris_copy'//METADATEXT)
         corr = corr_oris(os,os2)
         if( corr > 0.99 ) passed = .true.
         if( .not. passed ) stop 'read/write failed'
         passed = .false.
         call os%rnd_states(5)
-        call os%write('test_oris_rndoris_rndstates.txt')
+        call os%write('test_oris_rndoris_rndstates'//METADATEXT)
         if( corr_oris(os,os2) > 0.99 ) passed = .true.
         if( .not. passed ) stop 'statedoc read/write failed!'
         write(*,'(a)') '**info(simple_oris_unit_test, part3): testing calculators'
         passed = .false.
         call os%rnd_lps()
-        call os%write('test_oris_rndoris_rndstates_rndlps.txt')
+        call os%write('test_oris_rndoris_rndstates_rndlps'//METADATEXT)
         call os%spiral
-        call os%write('test_oris_rndoris_rndstates_rndlps_spiral.txt')
+        call os%write('test_oris_rndoris_rndstates_rndlps_spiral'//METADATEXT)
         call os%rnd_corrs()
         order = os%order()
         if( doprint )then

@@ -129,7 +129,6 @@ type(tseries_split_commander)        :: xtseries_split
 
 ! PARALLEL PROCESSING PROGRAMS
 type(merge_algndocs_commander)       :: xmerge_algndocs
-type(merge_binalgndocs_commander)    :: xmerge_binalgndocs
 type(merge_nnmat_commander)          :: xmerge_nnmat
 type(merge_similarities_commander)   :: xmerge_similarities  
 type(split_pairs_commander)          :: xsplit_pairs
@@ -600,7 +599,7 @@ select case(prg)
         ! a conversion script (relion2emanbox.pl) for *.star files containing
         ! particle coordinates obtained with Relion. The program creates one stack per movie
         ! frame as well as a stack of corrected framesums. In addition to single-particle
-        ! image stacks, the program produces a parameter file extract_params.txt
+        ! image stacks, the program produces a parameter file extract_params.ext
         ! that can be used in conjunction with other SIMPLE programs. We obtain CTF parameters 
         ! with CTFFIND4<extract/end> 
         !
@@ -2318,27 +2317,12 @@ select case(prg)
         keys_required(2) = 'nptcls'
         keys_required(3) = 'ndocs'
         keys_required(4) = 'outfile'
+        keys_required(5) = 'ext_meta'
         ! parse command line
         if( describe ) call print_doc_merge_algndocs
-        call cline%parse(keys_required(:4))
+        call cline%parse(keys_required(:5))
         ! execute
         call xmerge_algndocs%execute(cline)
-    case( 'merge_binalgndocs' )
-        !==Program merge_binalgndocs
-        !
-        ! <merge_binalgndocs/begin>is a program for merging alignment documents from SIMPLE
-        ! runs in distributed mode<merge_binalgndocs/end>
-        !
-        ! set required keys
-        keys_required(1) = 'fbody'
-        keys_required(2) = 'nptcls'
-        keys_required(3) = 'ndocs'
-        keys_required(4) = 'outfile'
-        ! parse command line
-        ! if( describe ) call print_doc_merge_binalgndocs
-        call cline%parse(keys_required(:4))
-        ! execute
-        call xmerge_binalgndocs%execute(cline)
     case( 'merge_nnmat' )
         !==Program merge_nnmat
         !

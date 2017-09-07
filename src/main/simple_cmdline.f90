@@ -70,7 +70,7 @@ contains
             ! do nothing
         else
             ! write the command line to a file (biological memory support)
-            if(.not.fopen(funit, status='replace', action='write', file='cmdline.txt', iostat=io_stat))&
+            if(.not.fopen(funit, status='append', action='write', file='cmdline.txt', iostat=io_stat))&
              call fileio_errmsg('cmdline ; parse fopen cmdline.txt', io_stat)
             write(funit,*) trim(self%entire_line)
             if(.not.fclose(funit, iostat=io_stat))&

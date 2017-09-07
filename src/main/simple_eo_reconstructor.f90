@@ -1,6 +1,6 @@
 ! 3D reconstruction of even-odd pairs for FSC estimation
 module simple_eo_reconstructor
-use simple_defs
+use simple_defs           ! use all in there
 use simple_reconstructor, only: reconstructor
 use simple_image,         only: image
 use simple_params,        only: params
@@ -17,8 +17,8 @@ type :: eo_reconstructor
     type(reconstructor) :: eosum
     type(image)         :: envmask
     character(len=4)    :: ext
-    real                :: fsc05      !<   target resolution at FSC=0.5
-    real                :: fsc0143    !<   target resolution at FSC=0.143
+    real                :: fsc05      !< target resolution at FSC=0.5
+    real                :: fsc0143    !< target resolution at FSC=0.143
     real                :: smpd, msk, fny, inner=0., width=10.
     integer             :: box=0, nstates=1, numlen=2, lfny=0
     logical             :: automsk = .false.
@@ -49,7 +49,7 @@ type :: eo_reconstructor
     procedure          :: grid_fplane
     procedure          :: compress_exp
     procedure          :: sum_eos !< for merging even and odd into sum
-    procedure          :: sum     !< for summing eo_recs obtained by parallell exec
+    procedure          :: sum     !< for summing eo_recs obtained by parallel exec
     procedure          :: sampl_dens_correct_eos
     procedure          :: sampl_dens_correct_sum
     ! RECONSTRUCTION

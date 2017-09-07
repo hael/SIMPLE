@@ -1,6 +1,5 @@
 ! concrete commander: 3D reconstruction routines
 module simple_commander_rec
-use simple_defs
 use simple_cmdline,         only: cmdline
 use simple_params,          only: params
 use simple_build,           only: build
@@ -10,6 +9,7 @@ use simple_syslib,          only: wait_for_closure
 use simple_hadamard_common  ! use all in there
 use simple_fileio           ! use all in there
 use simple_jiffys           ! use all in there
+use simple_defs             ! use all in there
 implicit none
 
 public :: recvol_commander
@@ -17,6 +17,7 @@ public :: eo_volassemble_commander
 public :: volassemble_commander
 private
 #include "simple_local_flags.inc"
+
 type, extends(commander_base) :: recvol_commander
   contains
     procedure :: execute      => exec_recvol
@@ -32,25 +33,7 @@ end type volassemble_commander
 
 contains
 
-    !> RECVOL is a SIMPLE program to reconstruct volumes from EM stacks and their estimated orientations
-    !!
-    !! \see http://simplecryoem.com/tutorials.html?#resolution-estimate-from-single-particle-images
-    !!
-    !! `map2ptcls' generates a document named mapped_params_ptcls.txt that we can directly use to reconstruct a new map from the particle images and calculate the resolution
-    !!
-    !! ```sh
-    !! simple_distr_exec prg=recvol eo=yes stk=../stack/sumstack.mrc \
-    !!    oritab=mapped_params_ptcls.txt smpd=1.62 msk=88 ctf=yes \
-    !!    pgrp=d2 nparts=2 nthr=4 >& EOREC
-    !!```
-    !!    This will only takes a few minutes and will print out the FSC values
-    !!    in the EOREC file. The eo=yes option specifies that the resolution
-    !!    will be calculated from the FSC between the even/odd halves of the
-    !!    dataset. The final reconstruction is the recvol_state01.mrc. The end
-    !!    of the RESOLUTION file produced gives you the calculated resolution
-    !!
-    !!    >>> RESOLUTION AT FSC=0.143 DETERMINED TO:    9.87
-    !!    >>> RESOLUTION AT FSC=0.500 DETERMINED TO:  13.38
+    !> for reconstructing volumes from image stacks and their estimated orientations
     subroutine exec_recvol( self, cline )
         use simple_rec_master, only: exec_rec_master
         class(recvol_commander), intent(inout) :: self
@@ -73,7 +56,7 @@ contains
         call simple_end('**** SIMPLE_RECVOL NORMAL STOP ****', print_simple=.false.) 
     end subroutine exec_recvol
 
-    !> EO_VOLASSEMBLE is a SIMPLE program to reconstruct volume with EO enabled
+    !> for assembling even/odd volumes generated with distributed execution
     subroutine exec_eo_volassemble( self, cline )
         use simple_eo_reconstructor, only: eo_reconstructor
         class(eo_volassemble_commander), intent(inout) :: self
@@ -97,7 +80,7 @@ contains
         ! rebuild b%vol according to box size (beacuse it is otherwise boxmatch)
         call b%vol%new([p%box,p%box,p%box], p%smpd)
         call eorecvol_read%new(p)
-        call eorecvol_read%kill_exp        ! reduced memory usage
+        call eorecvol_read%kill_exp ! reduced memory usage
         n = p%nstates*p%nparts
         do ss=1,p%nstates
             if( cline%defined('state') )then
@@ -106,7 +89,7 @@ contains
                 s = ss
             endif
             DebugPrint  'processing state: ', s
-            if( b%a%get_pop( s, 'state' ) == 0 )cycle           ! Empty state
+            if( b%a%get_pop( s, 'state' ) == 0 )cycle ! Empty state
             call b%eorecvol%reset_all
             do part=1,p%nparts
                 if( cline%defined('state') )then
@@ -160,7 +143,7 @@ contains
 
     end subroutine exec_eo_volassemble
 
-    !> VOLASSEMBLE is a SIMPLE program to reconstruct volumes
+    !> for assembling a volume generated with distributed execution
     subroutine exec_volassemble( self, cline )
         use simple_reconstructor, only: reconstructor
         class(volassemble_commander), intent(inout) :: self
@@ -171,7 +154,6 @@ contains
         character(len=STDLEN)         :: recvolname, rho_name
         integer                       :: part, s, ss, endit, i, state4name, file_stat, fnr
         type(reconstructor)           :: recvol_read
-        
         p = params(cline)                   ! parameters generated
         call b%build_general_tbox(p, cline) ! general objects built
         call b%build_rec_tbox(p)            ! reconstruction toolbox built
