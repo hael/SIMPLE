@@ -493,6 +493,7 @@ contains
             write(*,'(f4.0,1x,a)') 100.*(real(movie_counter)/real(ntot)), 'percent of the movies processed'
         end do
         call os_uni%write(p%outfile)
+        call os_uni%kill
         call qsys_job_finished( p, 'simple_commander_preproc :: exec_unblur' )
         ! end gracefully
         call simple_end('**** SIMPLE_UNBLUR NORMAL STOP ****')
@@ -813,7 +814,6 @@ contains
                 stop 'need output file (outfile) to be part of the command line in stream=yes mode'
             endif
         endif
-
         ! set output files
         if( cline%defined('outstk') )then
             if( cline%defined('dir_ptcls') )then
@@ -842,14 +842,13 @@ contains
                 outfile = 'extract_params'//METADATEXT
             endif
         endif
-
         ! check file inout existence and read filetables
         if( cline%defined('unidoc') )then
-            if( .not. file_exists(p%unidoc)  ) stop 'inputted unidoc does not exist in cwd'
+            if( .not. file_exists(p%unidoc) ) stop 'inputted unidoc does not exist in cwd'
             nmovies = nlines(p%unidoc)
             call os_uni%new(nmovies)
             call os_uni%read(p%unidoc)
-            movienames   = os_uni%extract_table('intg')
+            movienames = os_uni%extract_table('intg')
             if( os_uni%isthere('boxfile') )then
                 boxfilenames = os_uni%extract_table('boxfile')
             else
@@ -874,15 +873,12 @@ contains
             call read_filetable(p%boxtab,  boxfilenames)
         endif
         DebugPrint  'nmovies: ', nmovies
-
         ! remove possibly pre-existing output file
         call del_file(outfile)
-
         ! determine loop range
         fromto(1) = 1
         fromto(2) = nmovies
         ntot = fromto(2) - fromto(1) + 1
-
         ! count the number of particles & find ldim
         nptcls = 0
         do movie=fromto(1),fromto(2)
@@ -898,22 +894,17 @@ contains
                 write(*,*) trim(boxfilenames(movie))
             endif
         end do
-
         ! initialize
         call find_ldim_nptcls(movienames(1), ldim, ifoo)
         call micrograph%new([ldim(1),ldim(2),1], p%smpd)
         call outoris%new(nptcls)
-        pind = 0
-        DebugPrint  'made outoris'
-
-        ! loop over exposures (movies)
+        pind     = 0
         niter    = 0
         noutside = 0
+        ! loop over exposures (movies)
         do movie=fromto(1),fromto(2)
-
             ! get movie index (parsing the number string from the filename)
             call fname2ind(trim(adjustl(movienames(movie))), movie_ind)
-
             ! process boxfile
             ndatlines = 0
             if( file_exists(boxfilenames(movie)) )then
@@ -923,13 +914,10 @@ contains
                 endif
             endif
             if( ndatlines == 0 ) cycle
-
             ! update iteration counter (has to be after the cycle statements or suffer bug!!!)
             niter = niter + 1
-
             ! show progress
             if( niter > 1 ) call progress(niter,ntot)
-
             ! read box data
             allocate( boxdata(ndatlines,boxfile%get_nrecs_per_line()), pinds(ndatlines), stat=alloc_stat)
             call alloc_errchk('In: simple_extract; boxdata etc., 2', alloc_stat)
@@ -942,10 +930,7 @@ contains
                 if( j == 1 .and. .not. cline%defined('box') ) p%box = nint(boxdata(1,3)) ! use the box size from the box file
                 ! modify coordinates if change in box (shift by half the difference)
                 if( orig_box /= p%box ) boxdata(j,1:2) = boxdata(j,1:2)-real(p%box-orig_box)/2.
-            end do
-
-            ! create particle index list and set movie index
-            do j=1,ndatlines
+                ! update particle index list and set movie index
                 if( box_inside(ldim, nint(boxdata(j,1:2)), p%box) )then
                     pind     = pind + 1
                     pinds(j) = pind
@@ -954,7 +939,6 @@ contains
                     pinds(j) = 0
                 endif
             end do
-
             ! check box parsing
             if( .not. cline%defined('box') )then
                 if( niter == 1 )then
@@ -972,14 +956,11 @@ contains
                 endif
             endif
             DebugPrint  'did check box parsing'
-
             ! get number of frames from stack
             call find_ldim_nptcls(movienames(movie), lfoo, nframes )
             if( nframes > 1 ) stop 'multi-frame extraction no longer supported; simple_extract'
-
             ! build general objects
             if( niter == 1 ) call b%build_general_tbox(p,cline,do3d=.false.)
-
             ! extract ctf info
             if( b%a%isthere('dfx') )then
                 params_present(1) = b%a%isthere('kv')
@@ -1004,7 +985,6 @@ contains
                     dfy    = b%a%get(movie,'dfy')
                     angast = b%a%get(movie,'angast')
                 endif
-                ! set CTF info in outoris
                 do i=1,ndatlines
                     if( pinds(i) > 0 )then
                         call outoris%set(pinds(i), 'kv',         kv)
@@ -1021,9 +1001,7 @@ contains
                 end do
                 DebugPrint  'did set CTF parameters dfx/dfy/angast/ctfres: ', dfx, dfy, angast, ctfres
             endif
-
-            ! extract windows
-            ! integrated movie
+            ! extract windows from integrated movie
             call micrograph%read(movienames(movie),1,rwaction='READ')
             cnt = 0
             do j=1,ndatlines ! loop over boxes
@@ -1036,7 +1014,7 @@ contains
                     call b%img%write(trim(adjustl(sumstack)), pinds(j))
                 endif
             end do
-            ! integrated movie (subset of frames)
+            ! extract windows from integrated movie (subset of frames)
             if( allocated(movienames_frames) )then
                 call micrograph%read(movienames_frames(movie),1,rwaction='READ')
                 cnt = 0
@@ -1051,32 +1029,25 @@ contains
                     endif
                 end do
             endif
-
-            ! write output
-            allocate(oris_mask(ndatlines))
-            where(pinds > 0)
-                oris_mask = .true.
-            elsewhere
-                oris_mask = .false.
-            endwhere
-            noris = count(oris_mask)
-            call outoris%compress(oris_mask)
-            call binwrite_oritab(outfile, outoris, [1,noris])
-            ! OLD CODE
-            ! do j=1,ndatlines ! loop over boxes
-            !     if( pinds(j) > 0 )then
-            !         call outoris%write(pinds(j), outfile)
-            !     endif
-            ! end do
-
             ! destruct
             call boxfile%kill
-            deallocate(boxdata, pinds, oris_mask)
+            deallocate(boxdata, pinds)
         end do
         if( p%outside .eq. 'yes' .and. noutside > 0 )then
             write(*,'(a,1x,i5,1x,a)') 'WARNING!', noutside, 'boxes extend outside micrograph'
         endif
-
+        ! compress output (remove entries for boxes outside micrograph)
+        allocate(oris_mask(nptcls))
+        oris_mask = .false.
+        oris_mask(:pind) = .true.
+        noris = count(oris_mask)
+        call outoris%compress(oris_mask)
+        deallocate(oris_mask)
+        ! remove chash part
+        call outoris%kill_chash()
+        ! write output
+        call binwrite_oritab(outfile, outoris, [1,noris])
+        
         ! end gracefully
         call simple_end('**** SIMPLE_EXTRACT NORMAL STOP ****')
 

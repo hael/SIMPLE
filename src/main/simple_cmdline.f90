@@ -70,11 +70,16 @@ contains
             ! do nothing
         else
             ! write the command line to a file (biological memory support)
-            if(.not.fopen(funit, status='append', action='write', file='cmdline.txt', iostat=io_stat))&
-             call fileio_errmsg('cmdline ; parse fopen cmdline.txt', io_stat)
+            if( file_exists('cmdline.txt') )then
+                if(.not.fopen(funit, status='old', position='append', action='write', file='cmdline.txt', iostat=io_stat))&
+                &call fileio_errmsg('cmdline ; parse fopen cmdline.txt', io_stat)
+            else
+                if(.not.fopen(funit, status='new', action='write', file='cmdline.txt', iostat=io_stat))&
+                &call fileio_errmsg('cmdline ; parse fopen cmdline.txt', io_stat)
+            endif
             write(funit,*) trim(self%entire_line)
             if(.not.fclose(funit, iostat=io_stat))&
-             call fileio_errmsg('cmdline ; parse fclose cmdline.txt', io_stat)
+            call fileio_errmsg('cmdline ; parse fclose cmdline.txt', io_stat)
             ! store in global var
             cmdline_glob = trim(self%entire_line)
         endif

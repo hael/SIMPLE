@@ -527,7 +527,7 @@ contains
         call check_file('deftab',         self%deftab,       'T', 'B')
         call check_file('doclist',        self%doclist,      'T')
         call check_file('ext',            self%ext,          notAllowed='T')
-        call check_file('ext_meta',       self%ext,          'T', 'B')
+        call check_file('ext_meta',       self%ext_meta,     'T', 'B')
         call check_file('filetab',        self%filetab,      'T')
         call check_file('fname',          self%fname)
         call check_file('fsc',            self%fsc,          'B')

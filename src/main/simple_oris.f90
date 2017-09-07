@@ -179,7 +179,8 @@ type :: oris
     procedure, private :: diststat_2
     generic            :: diststat => diststat_1, diststat_2
     procedure          :: cluster_diststat
-    ! DESTRUCTOR
+    ! DESTRUCTORS
+    procedure          :: kill_chash
     procedure          :: kill
 end type oris
 
@@ -467,7 +468,11 @@ contains
         logical,     intent(in)    :: mask(:)
         type(oris) :: os_tmp
         integer    :: i, cnt
-        if( size(mask) /= self%n ) stop 'nonconforming mask size; oris :: compress'
+        if( size(mask) /= self%n )then
+            print *, 'self%n:     ', self%n
+            print *, 'size(mask): ', size(mask)
+            stop 'nonconforming mask size; oris :: compress'
+        endif
         call os_tmp%new(count(mask))
         cnt = 0
         do i=1,self%n
@@ -3274,7 +3279,18 @@ contains
         write(*,'(a)') 'SIMPLE_ORIS_UNIT_TEST COMPLETED SUCCESSFULLY ;-)'
     end subroutine test_oris
 
-    ! DESTRUCTOR
+    ! DESTRUCTORS
+
+    !>  \brief  is a destructor
+    subroutine kill_chash( self )
+        class(oris), intent(inout) :: self
+        integer :: i, alloc_stat
+        if( allocated(self%o) )then
+            do i=1,self%n
+                call self%o(i)%kill_chash
+            end do
+        endif
+    end subroutine kill_chash
 
     !>  \brief  is a destructor
     subroutine kill( self )
@@ -3284,8 +3300,7 @@ contains
             do i=1,self%n
                 call self%o(i)%kill
             end do
-            deallocate( self%o , stat=alloc_stat)
-            call alloc_errchk('In: kill, module: simple_oris', alloc_stat)
+            deallocate(self%o)
             self%n = 0
         endif
     end subroutine kill

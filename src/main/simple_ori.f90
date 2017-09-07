@@ -100,7 +100,8 @@ type :: ori
     generic            :: operator(.euldist.)     => euldist
     generic            :: operator(.inpldist.)    => inpldist
     generic            :: operator(.inplrotdist.) => inplrotdist
-    ! DESTRUCTOR
+    ! DESTRUCTORS
+    procedure          :: kill_chash
     procedure          :: kill
 end type ori
 
@@ -991,12 +992,21 @@ contains
         dist = myacos(dot_product(x1,x2))
     end function inplrotdist
 
-    ! DESTRUCTOR
+    ! DESTRUCTORS
+
+    !>  \brief  is a destructor
+    subroutine kill_chash( self )
+        class(ori), intent(inout) :: self
+        call self%chtab%kill
+    end subroutine kill_chash
 
     !>  \brief  is a destructor
     subroutine kill( self )
         class(ori), intent(inout) :: self
-        call self%chtab%kill
+        if( self%existence )then
+            call self%chtab%kill
+            self%existence = .false.
+        endif
     end subroutine kill
 
     ! PRIVATE STUFF

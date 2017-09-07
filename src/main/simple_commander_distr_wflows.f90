@@ -266,11 +266,11 @@ contains
         ! prepare merge_algndocs command line
         cline_merge_algndocs = cline
         call cline_merge_algndocs%set( 'nthr', 1. )
-        call cline_merge_algndocs%set( 'fbody',    'ctffind_output_part'           )
-        call cline_merge_algndocs%set( 'nptcls',   real(p_master%nptcls)           )
-        call cline_merge_algndocs%set( 'ndocs',    real(p_master%nparts)           )
-        call cline_merge_algndocs%set( 'outfile',  'ctffind_output_merged'//'.txt' )
-        call cline_merge_algndocs%set( 'ext_meta', '.txt'                          )
+        call cline_merge_algndocs%set( 'fbody',    'ctffind_output_part'       )
+        call cline_merge_algndocs%set( 'nptcls',   real(p_master%nptcls)       )
+        call cline_merge_algndocs%set( 'ndocs',    real(p_master%nparts)       )
+        call cline_merge_algndocs%set( 'outfile',  'ctffind_output_merged.txt' )
+        call cline_merge_algndocs%set( 'ext_meta', '.txt'                      )
         ! setup the environment for distributed execution
         call qenv%new(p_master)
         ! prepare job description
@@ -333,7 +333,7 @@ contains
         ! prepare job description
         call cline%gen_job_descr(job_descr)
         ! prepare command lines from prototype master
-        cline_cavgassemble   = cline
+        cline_cavgassemble = cline
         call cline_cavgassemble%set('nthr',1.)
         call cline_cavgassemble%set('prg', 'cavgassemble')
         if( cline%defined('outfile') )then

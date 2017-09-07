@@ -48,7 +48,9 @@ contains
         type(params)        :: p
         type(build)         :: b
         type(classaverager) :: cavger
-        integer :: ncls_in_oritab, icls, fnr, file_stat
+        real, allocatable   :: frc(:), res(:)
+        real    :: frc05, frc0143
+        integer :: ncls_in_oritab, icls, fnr, file_stat, j
         p = params(cline)                                 ! parameters generated
         call b%build_general_tbox(p, cline, do3d=.false.) ! general objects built
         call b%build_hadamard_prime2D_tbox(p)             ! 2D Hadamard matcher built
@@ -132,8 +134,16 @@ contains
             else
                 call cavger%write('startcavgs'//p%ext, 'merged')
             endif
+            call cavger%calc_and_write_frcs('frcs.bin')
+            call b%projfrcs%estimate_res(frc, res, frc05, frc0143)
+            do j=1,size(res)
+                write(*,'(A,1X,F6.2,1X,A,1X,F7.3)') '>>> RESOLUTION:', res(j), '>>> CORRELATION:', frc(j)
+            end do
+            write(*,'(A,1X,F6.2)') '>>> RESOLUTION AT FRC=0.500 DETERMINED TO:', frc05
+            write(*,'(A,1X,F6.2)') '>>> RESOLUTION AT FRC=0.143 DETERMINED TO:', frc0143 
+            deallocate(frc, res)
         endif
-        ! calculate FRC:s 
+        call cavger%kill
         ! end gracefully
         call simple_end('**** SIMPLE_MAKECAVGS NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_makecavgs
@@ -214,6 +224,7 @@ contains
             p%refs = 'startcavgs'//p%ext
         endif
         call cavger%write(trim(p%refs), 'merged')
+        call cavger%kill()
         ! end gracefully
         call simple_end('**** SIMPLE_CAVGASSEMBLE NORMAL STOP ****', print_simple=.false.)
         ! indicate completion (when run in a qsys env)

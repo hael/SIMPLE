@@ -2,7 +2,7 @@
 module simple_sll
 use simple_defs
 use simple_syslib, only: alloc_errchk
-use simple_arr, only: arr
+use simple_arr,    only: arr
 implicit none
 
 public :: sll
@@ -15,12 +15,13 @@ type sll_node
     type(arr) :: content
     type(sll_node), pointer :: next=>null()
 end type sll_node
+
 !> Singly-linked list
 !> contains the list. In this implementation I have separated the head of the
 !> list from the rest of the list (Donald Knuth-style)
 type sll
     private
-    integer                 :: list_size=0
+    integer :: list_size=0
     type(sll_node), pointer :: head=>null()
   contains
     procedure :: new
