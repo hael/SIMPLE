@@ -63,26 +63,27 @@ contains
         distr_exec = str_has_substr(exec_name,'distr')
         cmdargcnt = command_argument_count()
         call get_command(self%entire_line)
+        cmdline_glob = trim(self%entire_line)
         ! write the command line to file & store in global var
-        if( str_has_substr(self%entire_line,'part=' ) .and.&
-           &str_has_substr(self%entire_line,'fromp=') .and.&
-           &str_has_substr(self%entire_line,'top='  ) )then
+        ! if( str_ha.s_substr(self%entire_line,'part=' ) .and.&
+           ! &str_has_substr(self%entire_line,'fromp=') .and.&
+           ! &str_has_substr(self%entire_line,'top='  ) )then
             ! do nothing
-        else
+        ! else
             ! write the command line to a file (biological memory support)
-            if( file_exists('cmdline.txt') )then
-                if(.not.fopen(funit, status='old', position='append', action='write', file='cmdline.txt', iostat=io_stat))&
-                &call fileio_errmsg('cmdline ; parse fopen cmdline.txt', io_stat)
-            else
-                if(.not.fopen(funit, status='new', action='write', file='cmdline.txt', iostat=io_stat))&
-                &call fileio_errmsg('cmdline ; parse fopen cmdline.txt', io_stat)
-            endif
-            write(funit,*) trim(self%entire_line)
-            if(.not.fclose(funit, iostat=io_stat))&
-            call fileio_errmsg('cmdline ; parse fclose cmdline.txt', io_stat)
+            ! if( file_exists('cmdline.txt') )then
+            !     if(.not.fopen(funit, status='old', position='append', action='write', file='cmdline.txt', iostat=io_stat))&
+            !     &call fileio_errmsg('cmdline ; parse fopen cmdline.txt', io_stat)
+            ! else
+            !     if(.not.fopen(funit, status='new', action='write', file='cmdline.txt', iostat=io_stat))&
+            !     &call fileio_errmsg('cmdline ; parse fopen cmdline.txt', io_stat)
+            ! endif
+            ! write(funit,*) trim(self%entire_line)
+            ! if(.not.fclose(funit, iostat=io_stat))&
+            ! call fileio_errmsg('cmdline ; parse fclose cmdline.txt', io_stat)
             ! store in global var
-            cmdline_glob = trim(self%entire_line)
-        endif
+            ! cmdline_glob = trim(self%entire_line)
+        ! endif
         DebugPrint ' command_argument_count: ', cmdargcnt 
         if( present(keys_required) )then
             if( str_has_substr(self%entire_line,'prg=') )then

@@ -438,7 +438,7 @@ contains
         use simple_strings, only: strIsComment, strIsBlank
         class(chash), intent(inout)  :: self   !< instance
         character(len=*), intent(in) :: fname  !< name of file
-        character(len=line_max_len)  :: buffer !< will hold a line from the file
+        character(len=LINE_MAX_LEN)  :: buffer !< will hold a line from the file
         character(len=32)            :: key
         character(len=STDLEN)        :: val
         integer :: ios, pos, funit
@@ -468,7 +468,7 @@ contains
         use simple_fileio      , only: fopen,fclose, fileio_errmsg
         class(chash), intent(inout)  :: self   !< instance
         character(len=*), intent(in) :: fname  !< name of file
-        character(len=line_max_len)  :: buffer !< will hold a line from the file
+        character(len=LINE_MAX_LEN)  :: buffer !< will hold a line from the file
         character(len=512)           :: io_msg !< will hold the io error message
         integer :: ios, pos, funit
         if(.not.fopen(funit, fname, iostat=ios, status='replace', iomsg=io_msg))then

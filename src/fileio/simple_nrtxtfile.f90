@@ -37,7 +37,7 @@ contains
         character(len=*),  intent(in)    :: fname       !< filename
         integer,           intent(in)    :: access_type !< Either OPEN_TO_READ or OPEN_TO_WRITE
         integer, optional, intent(in)    :: wanted_recs_per_line
-        character(len=line_max_len)      :: buffer      !< will hold a line from the file
+        character(len=LINE_MAX_LEN)      :: buffer      !< will hold a line from the file
         integer                          :: recs_on_curr_line
         integer                          :: tot_nr_of_recs, tmpunit
         integer                          :: ios         !< ios is negative if an end of record condition is encountered or if
@@ -114,7 +114,7 @@ contains
     subroutine readNextDataLine( self, read_data )
         class(nrtxtfile), intent(inout) :: self
         real,             intent(inout) :: read_data(:) !< output data
-        character(len=line_max_len) :: buffer
+        character(len=LINE_MAX_LEN) :: buffer
         integer                     :: ios
         character(len=256)          :: io_message
         ! Check we are open to read

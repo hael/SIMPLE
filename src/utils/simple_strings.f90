@@ -502,7 +502,7 @@ contains
     function cntRecsPerLine( line, separators ) result( nrecs )
         character(len=*)            :: line        !<  line to be split
         character(len=*), optional  :: separators  !<  characters which separate words, if not present, default is blank characters (space, tabs...)
-        character(len=line_max_len) :: buffer
+        character(len=LINE_MAX_LEN) :: buffer
         integer :: nrecs, pos1, pos2
         if (strIsBlank(line) .or. strIsComment(line)) then
             nrecs = 0

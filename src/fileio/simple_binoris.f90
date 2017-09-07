@@ -81,13 +81,6 @@ contains
         integer   :: alloc_stat
         ! destruct possibly pre-existing
         call self%kill
-        ! set n_hash_vals
-        o = a%get_ori(1)
-        self%n_hash_vals = o%hash_size()
-        ! set hash keys
-        self%hash_keys = o%hash_keys()
-        if( size(self%hash_keys) /= self%n_hash_vals )&
-        &stop 'ERROR, n_hash_vals /= n_keys; binoris :: new_1'
         ! set range
         if( present(fromto) )then
             self%fromto = fromto
@@ -95,6 +88,13 @@ contains
             self%fromto(1) = 1
             self%fromto(2) = a%get_noris()
         endif
+        ! set n_hash_vals
+        o = a%get_ori(self%fromto(1))
+        self%n_hash_vals = o%hash_size()
+        ! set hash keys
+        self%hash_keys = o%hash_keys()
+        if( size(self%hash_keys) /= self%n_hash_vals )&
+        &stop 'ERROR, n_hash_vals /= n_keys; binoris :: new_1'
         ! set n_records
         self%n_records = self%fromto(2) - self%fromto(1) + 1
         if( self%n_records < 1 ) stop 'ERROR, input oritab (a) empty; binoris :: new_1'
@@ -325,8 +325,9 @@ contains
         vals    = o%hash_vals()
         sz_vals = size(vals)
         if( self%n_hash_vals /= sz_vals )then
-            print *, 'self%n_hash_vals: ', self%n_hash_vals
-            print *, 'sz_vals         : ', sz_vals
+            print *, 'trying to write record: ', i
+            print *, 'self%n_hash_vals:       ', self%n_hash_vals
+            print *, 'sz_vals         :       ', sz_vals
             stop 'nonconforming hash size; binoris :: write_record_2'
         endif
         self%record = 0.0

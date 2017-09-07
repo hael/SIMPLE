@@ -96,7 +96,7 @@ contains
         if( format_descriptor .ne. 'N' )then
             self%head_format = format_descriptor
         else
-            self%head_format  = default_file_format
+            self%head_format  = DEFAULT_FILE_FORMAT
         endif
         DebugPrint   'format: ', self%head_format
         ! Allocate head object

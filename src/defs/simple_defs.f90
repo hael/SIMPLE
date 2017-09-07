@@ -5,42 +5,37 @@ stderr=>ERROR_UNIT,&
 stdout=>OUTPUT_UNIT,&
 stdin=>INPUT_UNIT
 implicit none
-character(len=1), parameter :: default_file_format = 'M' !< I:imagic, M:mrc or S:spider
-integer, parameter  :: IMPORTANT=10 !< number of solutions considered important
-integer, parameter  :: MAXS=99      !< maximum number of states
-integer, parameter  :: STDLEN=256   !< standard string length
-integer, parameter  :: LONGSTRLEN = 2048 !< longer string length
-integer, parameter  :: short = selected_int_kind(4)
-integer, parameter  :: long  = selected_int_kind(9)
-integer, parameter  :: longer  = selected_int_kind(16)
-integer, parameter  :: I4B = SELECTED_INT_KIND(9)
-integer, parameter  :: I2B = SELECTED_INT_KIND(4)
-integer, parameter  :: I1B = SELECTED_INT_KIND(2)
-integer, parameter  :: SP = KIND(1.0)        !< single float precision
-integer, parameter  :: DP = KIND(1.0D0)      !< double float precision
-integer, parameter  :: DOUBLE = KIND(1.0D0)
-integer, parameter  :: SPC = KIND((1.0,1.0))
-integer, parameter  :: DPC = KIND((1.0D0,1.0D0))
-integer, parameter  :: LGT = KIND(.true.)
-integer, parameter  :: line_max_len = 8192 !< Max number of characters on line
-real(sp), parameter :: PI=acos(-1.)
-real(dp), parameter :: DPI=acos(-1.d0)
-real(sp), parameter :: PIO2=acos(-1.)/2.
-real(sp), parameter :: TWOPI=2.*acos(-1.)
-real(sp), parameter :: DTWOPI=2.d0*acos(-1.d0)
-real(sp), parameter :: FOURPI=4.*acos(-1.)
-real(sp), parameter :: SQRT2=sqrt(2.)
-real(sp), parameter :: EUL=0.5772156649015328606065120900824024310422_sp
-real(sp), parameter :: um2a = 10000.
-real(sp), parameter :: TINY=1e-10
-real(dp), parameter :: DTINY=1e-10
-real(sp), parameter :: SMALL=1e-6
-real(sp), parameter :: MINEULSDEV=3.
-real(sp), parameter :: MINTRSSDEV=0.5
-real(sp), parameter :: FTOL=1e-4
-real(dp), parameter :: DSMALL=1e-6
-real(dp), parameter :: pisqr = PI*PI   ! PI^2.
-real(sp), parameter :: ATHRES_LIM = 5.
+integer,  parameter :: MAXS         = 99   !< maximum number of states
+integer,  parameter :: STDLEN       = 256  !< standard string length
+integer,  parameter :: LONGSTRLEN   = 2048 !< longer string length
+integer,  parameter :: short        = selected_int_kind(4)
+integer,  parameter :: long         = selected_int_kind(9)
+integer,  parameter :: longer       = selected_int_kind(16)
+integer,  parameter :: I4B          = selected_int_kind(9)
+integer,  parameter :: I2B          = selected_int_kind(4)
+integer,  parameter :: I1B          = selected_int_kind(2)
+integer,  parameter :: SP           = kind(1.0)
+integer,  parameter :: DP           = kind(1.0d0)
+integer,  parameter :: DOUBLE       = kind(1.0d0)
+integer,  parameter :: SPC          = kind((1.0,1.0))
+integer,  parameter :: DPC          = kind((1.0d0,1.0d0))
+integer,  parameter :: LGT          = kind(.true.)
+integer,  parameter :: LINE_MAX_LEN = 8192
+real(sp), parameter :: PI           = acos(-1.)
+real(dp), parameter :: DPI          = acos(-1.d0)
+real(sp), parameter :: PIO2         = acos(-1.)/2.
+real(sp), parameter :: TWOPI        = 2.*acos(-1.)
+real(sp), parameter :: DTWOPI       = 2.d0*acos(-1.d0)
+real(sp), parameter :: FOURPI       = 4.*acos(-1.)
+real(sp), parameter :: SQRT2        = sqrt(2.)
+real(sp), parameter :: EUL          = 0.5772156649015328606065120900824024310422_sp
+real(sp), parameter :: TINY         = 1e-10
+real(dp), parameter :: DTINY        = 1e-10
+real(sp), parameter :: SMALL        = 1e-6
+real(sp), parameter :: FTOL         = 1e-4
+real(dp), parameter :: DSMALL       = 1e-6
+real(dp), parameter :: PISQR        = PI*PI
+real(sp), parameter :: ATHRES_LIM   = 5.
 
 ! plan for the CTF
 type :: ctfplan
@@ -57,14 +52,7 @@ integer, parameter :: PICKER_OFFSET        = 3  !< picker offset for grid search
 real, parameter :: COSMSKHALFWIDTH = 3.0        !< spherical soft masking
 real, parameter :: KBWINSZ         = 1.5        !< interpolation window size
 real, parameter :: KBALPHA         = 2.0        !< interpolation alpha (smoothing constant)
-
-! SNHC-related global constants, PRIME3D, refine=snhc
-character(len=32), parameter :: SNHCDOC   = 'snhc_oris.txt'    
-character(len=32), parameter :: SNHCVOL   = 'snhc_recvol_state' 
-integer,           parameter :: SZSN_INIT = 5               
-integer,           parameter :: SZSN_STEP = 3                  
-integer,           parameter :: SZSN_MAX  = 20                 
-
+              
 ! real constants that control search and convergence
 real, parameter :: FRAC_SH_LIM      = 80.0      !< at what frac to turn on the shift search
 real, parameter :: FRAC_INTERPOL    = 60.0      !< at what frac to turn on the gridding interpolation (2D)
@@ -88,11 +76,19 @@ integer(kind=c_int)       :: nthr_glob          !< number of threads global vari
 logical                   :: l_distr_exec_glob  !< global distributed execution flag
 character(len=LONGSTRLEN) :: cmdline_glob       !< global command line string
 
-! stack part related and meta data file format constants
-character(len=32),     parameter :: STKPARTSDIR     = 'stack_parts'
-character(len=STDLEN), parameter :: STKPARTFBODY    = trim(STKPARTSDIR)//'/stack_part'
-character(len=STDLEN), parameter :: STKPARTFBODY_SC = trim(STKPARTSDIR)//'/stack_part_sc'
-character(len=4),      parameter :: METADATEXT      = '.txt'
+! stack part related and file format constants
+character(len=32),     parameter :: STKPARTSDIR         = 'stack_parts'
+character(len=STDLEN), parameter :: STKPARTFBODY        = trim(STKPARTSDIR)//'/stack_part'
+character(len=STDLEN), parameter :: STKPARTFBODY_SC     = trim(STKPARTSDIR)//'/stack_part_sc'
+character(len=4),      parameter :: METADATEXT          = '.txt'
+character(len=1),      parameter :: DEFAULT_FILE_FORMAT = 'M'
+
+! SNHC-related global constants, PRIME3D, refine=snhc
+character(len=32), parameter :: SNHCDOC   = 'snhc_oris'//METADATEXT    
+character(len=32), parameter :: SNHCVOL   = 'snhc_recvol_state' 
+integer,           parameter :: SZSN_INIT = 5               
+integer,           parameter :: SZSN_STEP = 3                  
+integer,           parameter :: SZSN_MAX  = 20 
 
 ! precision constants
 #ifndef IMAGE_SINGLE_PRECISION
