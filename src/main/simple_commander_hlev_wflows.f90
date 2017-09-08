@@ -129,9 +129,10 @@ contains
             call xprime2D%execute(cline)
         endif
         ! ranking
-        call cline_rank_cavgs%set('oritab', trim(FINALDOC))
-        call cline_rank_cavgs%set('stk',    'cavgs_final'//p_master%ext)
-        call cline_rank_cavgs%set('outstk', 'cavgs_final_ranked'//p_master%ext)
+        call cline_rank_cavgs%set('oritab',   trim(FINALDOC))
+        call cline_rank_cavgs%set('stk',      'cavgs_final'//p_master%ext)
+        call cline_rank_cavgs%set('classdoc', 'classdoc.txt')
+        call cline_rank_cavgs%set('outstk',   'cavgs_final_ranked'//p_master%ext)
         call xrank_cavgs%execute( cline_rank_cavgs )
         ! cleanup
         call del_file('prime2D_startdoc'//METADATEXT)

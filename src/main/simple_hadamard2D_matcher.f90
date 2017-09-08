@@ -40,9 +40,8 @@ contains
         integer,        intent(in)    :: which_iter
         logical,        intent(inout) :: converged
         logical, allocatable :: ptcl_mask(:)
-        real,    allocatable :: frc(:), res(:)
         integer :: iptcl, icls, j
-        real    :: corr_thresh, frac_srch_space, skewness, extr_thresh, frc05, frc0143
+        real    :: corr_thresh, frac_srch_space, skewness, extr_thresh
         logical :: l_do_read
 
         ! PREP REFERENCES
@@ -200,13 +199,8 @@ contains
             p%fsc = 'frcs_iter'//int2str_pad(which_iter,3)//'.bin'
             if( p%chunktag .ne. '' ) p%fsc = trim(p%chunktag)//trim(p%fsc)
             call cavger%calc_and_write_frcs(p%fsc)
-            call b%projfrcs%estimate_res(frc, res, frc05, frc0143)
-            do j=1,size(res)
-                write(*,'(A,1X,F6.2,1X,A,1X,F7.3)') '>>> RESOLUTION:', res(j), '>>> CORRELATION:', frc(j)
-            end do
-            write(*,'(A,1X,F6.2)') '>>> RESOLUTION AT FRC=0.500 DETERMINED TO:', frc05
-            write(*,'(A,1X,F6.2)') '>>> RESOLUTION AT FRC=0.143 DETERMINED TO:', frc0143 
-            deallocate(frc, res)
+            call b%projfrcs%estimate_res()
+            call gen2Dclassdoc( b, p, 'classdoc.txt')
         endif
 
         ! DESTRUCT

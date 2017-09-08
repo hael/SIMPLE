@@ -14,7 +14,8 @@ use simple_defs      ! use all in there
 implicit none
 
 public :: read_img_from_stk, set_bp_range, set_bp_range2D, grid_ptcl, prepimg4align,&
-&eonorm_struct_facts, norm_struct_facts, preprefvol, prep2Dref, preprecvols, killrecvols
+&eonorm_struct_facts, norm_struct_facts, preprefvol, prep2Dref, gen2Dclassdoc,&
+&preprecvols, killrecvols
 private
 #include "simple_local_flags.inc"
 
@@ -364,6 +365,34 @@ contains
         call b%img_match%fwd_ft
     end subroutine prep2Dref
 
+    !>  \brief prepares a 2D class document with class index, resolution, 
+    !!         poulation, average correlation and weight
+    subroutine gen2Dclassdoc( b, p, fname )
+        class(build),     intent(inout) :: b
+        class(params),    intent(inout) :: p
+        character(len=*), intent(in)    :: fname
+        integer    :: icls, pop
+        real       :: frc05, frc0143
+        type(oris) :: classdoc
+        call classdoc%new_clean(p%ncls)            
+        do icls=1,p%ncls
+            call b%projfrcs%estimate_res(icls, frc05, frc0143)
+            call classdoc%set(icls, 'class', real(icls))
+            pop = b%a%get_pop(icls, 'class')
+            call classdoc%set(icls, 'pop',   real(pop))
+            call classdoc%set(icls, 'res',   frc0143)
+            if( pop > 1 )then
+                call classdoc%set(icls, 'corr',  b%a%get_avg('corr', class=icls))
+                call classdoc%set(icls, 'w',     b%a%get_avg('w',    class=icls))
+            else
+                call classdoc%set(icls, 'corr', -1.0)
+                call classdoc%set(icls, 'w',     0.0)
+            endif
+            call classdoc%write(fname)
+        end do
+        call classdoc%kill
+    end subroutine gen2Dclassdoc
+            
     !>  \brief  initializes all volumes for reconstruction
     subroutine preprecvols( b, p )
         class(build),   intent(inout) :: b

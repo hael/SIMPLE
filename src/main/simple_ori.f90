@@ -568,7 +568,7 @@ contains
 
     !>  \brief  whether orientation is part of the even partition
     logical function iseven( self )
-        class(ori),       intent(inout) :: self
+        class(ori), intent(inout) :: self
         real :: val
         val = self%htab%get('eo')
         iseven = (val > -0.5) .and. (val < 0.5)
@@ -598,19 +598,18 @@ contains
     function ori2str( self ) result( str )
         class(ori), intent(inout) :: self
         character(len=:), allocatable :: str, str_chtab, str_htab
-        integer :: sz_chash, sz_hash, alloc_stat
+        integer :: sz_chash, sz_hash
         sz_chash = self%chtab%size_of_chash()
         sz_hash  = self%htab%size_of_hash()
         if( sz_chash > 0 ) str_chtab = self%chtab%chash2str()
         if( sz_hash  > 0 ) str_htab  = self%htab%hash2str()
         if( sz_chash > 0 .and. sz_hash > 0 )then
-            allocate( str, source=str_chtab//' '//str_htab ,stat=alloc_stat)
+            allocate( str, source=str_chtab//' '//str_htab)
         else if( sz_hash > 0 )then
-            allocate( str, source=str_htab ,stat=alloc_stat)
+            allocate( str, source=str_htab)
         else if( sz_chash > 0 )then
-            allocate( str, source=str_chtab ,stat=alloc_stat)
+            allocate( str, source=str_chtab)
         endif
-        call alloc_errchk("in simple_ori::ori2str ",alloc_stat)
     end function ori2str
 
     !<  \brief  to print the rotation matrix

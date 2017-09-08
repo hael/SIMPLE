@@ -11,6 +11,7 @@ type projection_frcs
     integer           :: box4frc_calc = 0
     integer           :: nstates      = 1
     real              :: smpd         = 0.0
+    real              :: dstep        = 0.0
     real, allocatable :: res4frc_calc(:)
     real, allocatable :: frcs(:,:,:)
     logical           :: exists       = .false.
@@ -49,7 +50,8 @@ contains
         self%nprojs       = nprojs
         self%box4frc_calc = box4frc_calc
         self%smpd         = smpd
-        self%filtsz       = fdim(box4frc_calc)-1
+        self%filtsz       = fdim(box4frc_calc) - 1
+        self%dstep        = real(box4frc_calc - 1) * smpd ! first wavelength of FT
         self%res4frc_calc = get_resarr(box4frc_calc, self%smpd)
         self%nstates      = 1
         if( present(nstates) ) self%nstates = nstates
@@ -129,24 +131,30 @@ contains
         if( present(state) ) sstate = state
         call self%raise_exception( proj, sstate, 'ERROR, out of bounds in estimate_res')
         call get_resolution(self%frcs(sstate,proj,:), self%res4frc_calc, frc05, frc0143 )
+        if( frc05   < self%smpd ) frc05 = self%dstep
+        if( frc0143 < self%smpd ) frc05 = self%dstep
     end subroutine estimate_res_1
 
-    subroutine estimate_res_2( self, frc, res, frc05, frc0143, state )
+    subroutine estimate_res_2( self, state )
         use simple_math, only: get_resolution
         class(projection_frcs), intent(in)  :: self
-        real, allocatable,      intent(out) :: frc(:), res(:)
-        real,                   intent(out) :: frc05, frc0143
         integer, optional,      intent(in)  :: state
-        integer :: alloc_stat, sstate
-        if( allocated(frc) ) deallocate(frc)
-        if( allocated(res) ) deallocate(res)
-        allocate( frc(self%filtsz), res(self%filtsz), stat=alloc_stat )
+        integer :: alloc_stat, sstate, j
+        real    :: frc05, frc0143
+        real, allocatable :: frc(:)
+        allocate( frc(self%filtsz), stat=alloc_stat )
         call alloc_errchk( 'estimate_res_2; simple_projection_frcs', alloc_stat )
         sstate = 1
         if( present(state) ) sstate = state
         frc = sum(self%frcs(sstate,:,:),dim=1) / real(self%nprojs)
         call get_resolution(frc, self%res4frc_calc, frc05, frc0143)
-        res = self%res4frc_calc
+        do j=1,size(self%res4frc_calc)
+            write(*,'(A,1X,F6.2,1X,A,1X,F7.3)') '>>> RESOLUTION:', self%res4frc_calc(j), '>>> CORRELATION:', frc(j)
+        end do
+        if( frc05   < self%smpd ) frc05 = self%dstep
+        if( frc0143 < self%smpd ) frc05 = self%dstep
+        write(*,'(A,1X,F6.2)') '>>> RESOLUTION AT FRC=0.500 DETERMINED TO:', frc05
+        write(*,'(A,1X,F6.2)') '>>> RESOLUTION AT FRC=0.143 DETERMINED TO:', frc0143 
     end subroutine estimate_res_2
 
     subroutine estimate_res_3( self, nbest, frc, res, frc05, frc0143, state )
@@ -180,9 +188,10 @@ contains
         ! prep output
         frc = frc / real(nbest)
         call get_resolution(frc, self%res4frc_calc, frc05, frc0143)
+        if( frc05   < self%smpd ) frc05 = self%dstep
+        if( frc0143 < self%smpd ) frc05 = self%dstep
         res = self%res4frc_calc
     end subroutine estimate_res_3
-
 
     ! I/O
 
@@ -194,8 +203,7 @@ contains
         character(len=7) :: stat_str
         if(.not.fopen(funit,fname,access='STREAM',action='READ',status='OLD', iostat=io_stat))&
         &call fileio_errmsg('projection_frcs; read; open for read '//trim(fname), io_stat)
-        read(unit=funit,pos=1,iostat=io_stat) self%frcs
-        call fileio_errmsg('projection_frcs; read; actual read', io_stat)
+        read(unit=funit,pos=1) self%frcs
         if(.not.fclose(funit, iostat=io_stat))&
         &call fileio_errmsg('projection_frcs; read; fhandle cose', io_stat)
     end subroutine read
@@ -208,8 +216,7 @@ contains
         character(len=7) :: stat_str
         if(.not.fopen(funit,fname,access='STREAM',action='WRITE',status='REPLACE', iostat=io_stat))&
         &call fileio_errmsg('projection_frcs; write; open for write '//trim(fname), io_stat)
-        write(unit=funit,pos=1,iostat=io_stat) self%frcs
-        call fileio_errmsg('projection_frcs; write; actual write', io_stat)
+        write(unit=funit,pos=1) self%frcs
         if(.not.fclose(funit, iostat=io_stat))&
         &call fileio_errmsg('projection_frcs; write; fhandle cose', io_stat)
     end subroutine write

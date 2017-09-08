@@ -98,6 +98,7 @@ type :: params
     character(len=STDLEN) :: boxtab=''            !< table (text file) of files with EMAN particle coordinates(.txt)
     character(len=STDLEN) :: boxtype='eman'
     character(len=STDLEN) :: chunktag=''
+    character(len=STDLEN) :: classdoc=''          !< doc with per-class stats(.txt)
     character(len=STDLEN) :: comlindoc=''         !< shc_clustering_nclsX.txt
     character(len=STDLEN) :: ctf='no'             !< ctf flag(yes|no|flip)
     character(len=STDLEN) :: cwd=''
@@ -522,6 +523,7 @@ contains
         ! File args
         call check_file('boxfile',        self%boxfile,      'T')
         call check_file('boxtab',         self%boxtab,       'T')
+        call check_file('classdoc',       self%classdoc,     'T')
         call check_file('ctffind_doc',    self%ctffind_doc,  'T', 'B')
         call check_file('comlindoc',      self%comlindoc,    'T')
         call check_file('deftab',         self%deftab,       'T', 'B')

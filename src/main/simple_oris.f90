@@ -22,6 +22,7 @@ type :: oris
   contains
     ! CONSTRUCTORS
     procedure          :: new
+    procedure          :: new_clean
     ! GETTERS
     procedure          :: e1get
     procedure          :: e2get
@@ -217,6 +218,20 @@ contains
             call self%o(i)%new
         end do
     end subroutine new
+
+    !>  \brief  is a constructor
+    subroutine new_clean( self, n )
+        class(oris), intent(inout) :: self
+        integer,     intent(in)    :: n
+        integer :: alloc_stat, i
+        call self%kill
+        self%n = n
+        allocate( self%o(self%n), stat=alloc_stat )
+        call alloc_errchk('new_clean; simple_oris', alloc_stat)
+        do i=1,n
+            call self%o(i)%new_ori_clean
+        end do
+    end subroutine new_clean
 
     ! GETTERS
 

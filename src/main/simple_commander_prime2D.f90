@@ -41,15 +41,14 @@ end type rank_cavgs_commander
 contains
 
     subroutine exec_makecavgs( self, cline )
-        use simple_classaverager, only: classaverager
-        use simple_qsys_funs,     only: qsys_job_finished
+        use simple_classaverager,   only: classaverager
+        use simple_qsys_funs,       only: qsys_job_finished
+        use simple_hadamard_common, only: gen2Dclassdoc
         class(makecavgs_commander), intent(inout) :: self
         class(cmdline),             intent(inout) :: cline
         type(params)        :: p
         type(build)         :: b
         type(classaverager) :: cavger
-        real, allocatable   :: frc(:), res(:)
-        real    :: frc05, frc0143
         integer :: ncls_in_oritab, icls, fnr, file_stat, j
         p = params(cline)                                 ! parameters generated
         call b%build_general_tbox(p, cline, do3d=.false.) ! general objects built
@@ -135,13 +134,8 @@ contains
                 call cavger%write('startcavgs'//p%ext, 'merged')
             endif
             call cavger%calc_and_write_frcs('frcs.bin')
-            call b%projfrcs%estimate_res(frc, res, frc05, frc0143)
-            do j=1,size(res)
-                write(*,'(A,1X,F6.2,1X,A,1X,F7.3)') '>>> RESOLUTION:', res(j), '>>> CORRELATION:', frc(j)
-            end do
-            write(*,'(A,1X,F6.2)') '>>> RESOLUTION AT FRC=0.500 DETERMINED TO:', frc05
-            write(*,'(A,1X,F6.2)') '>>> RESOLUTION AT FRC=0.143 DETERMINED TO:', frc0143 
-            deallocate(frc, res)
+            call b%projfrcs%estimate_res()
+            call gen2Dclassdoc( b, p, 'classdoc.txt')
         endif
         call cavger%kill
         ! end gracefully
@@ -195,15 +189,14 @@ contains
     end subroutine exec_prime2D
 
     subroutine exec_cavgassemble( self, cline )
-        use simple_classaverager, only: classaverager
+        use simple_classaverager,   only: classaverager
+        use simple_hadamard_common, only: gen2Dclassdoc
         class(cavgassemble_commander), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
         type(params)        :: p
         type(build)         :: b
         type(classaverager) :: cavger
         integer             :: fnr, file_stat, j
-        real, allocatable   :: frc(:), res(:)
-        real                :: frc05, frc0143
         p = params(cline)                                 ! parameters generated
         call b%build_general_tbox(p, cline, do3d=.false.) ! general objects built
         call b%build_hadamard_prime2D_tbox(p)
@@ -213,13 +206,8 @@ contains
             p%refs = 'cavgs_iter'//int2str_pad(p%which_iter,3)//p%ext
             if( .not. cline%defined('fsc') ) p%fsc  = 'frcs_iter'//int2str_pad(p%which_iter,3)//'.bin'
             call cavger%calc_and_write_frcs(p%fsc)
-            call b%projfrcs%estimate_res(frc, res, frc05, frc0143)
-            do j=1,size(res)
-                write(*,'(A,1X,F6.2,1X,A,1X,F7.3)') '>>> RESOLUTION:', res(j), '>>> CORRELATION:', frc(j)
-            end do
-            write(*,'(A,1X,F6.2)') '>>> RESOLUTION AT FRC=0.500 DETERMINED TO:', frc05
-            write(*,'(A,1X,F6.2)') '>>> RESOLUTION AT FRC=0.143 DETERMINED TO:', frc0143 
-            deallocate(frc, res)
+            call b%projfrcs%estimate_res()
+            call gen2Dclassdoc( b, p, 'classdoc.txt')
         else if( .not. cline%defined('refs') )then
             p%refs = 'startcavgs'//p%ext
         endif
@@ -260,25 +248,67 @@ contains
     
     subroutine exec_rank_cavgs( self, cline )
         use simple_oris, only: oris
+        use simple_math, only: hpsort
         class(rank_cavgs_commander), intent(inout) :: self
         class(cmdline),              intent(inout) :: cline
-        type(params)         :: p
-        type(build)          :: b
-        integer              :: iclass
+        type(params) :: p
+        type(build)  :: b
+        integer      :: iclass, pop
+        type(oris)   :: clsdoc_ranked
         integer, allocatable :: order(:)
-        p = params(cline) ! parameters generated
+        real,    allocatable :: res(:)
+        p = params(cline)                                 ! parameters generated
         call b%build_general_tbox(p, cline, do3d=.false.) ! general objects built
-        p%ncls   = p%nptcls
-        p%nptcls = binread_nlines(p%oritab) 
-        call b%a%new(p%nptcls)
-        call binread_oritab(p%oritab, b%a, [1,p%nptcls])
-        order = b%a%order_cls(p%ncls)
-        do iclass=1,p%ncls
-            write(*,'(a,1x,i5,1x,a,1x,i5,1x,a,i5)') 'CLASS:', order(iclass),&
-            &'CLASS_RANK:', iclass ,'POP:', b%a%get_pop(order(iclass), 'class') 
-            call b%img%read(p%stk, order(iclass))
-            call b%img%write(p%outstk, iclass)
-        end do
+        p%ncls = p%nptcls
+        call clsdoc_ranked%new_clean(p%ncls)
+        if( cline%defined('classdoc') )then
+            ! all we need to do is fetch from classdoc
+            ! order according to resolution
+            call b%a%new(p%ncls)
+            call b%a%read(trim(p%classdoc))
+            res = b%a%get_all('res')
+            allocate(order(p%ncls))
+            order = (/(iclass,iclass=1,p%ncls)/)
+            call hpsort(p%ncls, res, order)
+            do iclass=1,p%ncls
+                call clsdoc_ranked%set(iclass, 'class', real(order(iclass)))
+                call clsdoc_ranked%set(iclass, 'rank',  real(iclass))
+                call clsdoc_ranked%set(iclass, 'pop',   b%a%get(order(iclass),  'pop'))
+                call clsdoc_ranked%set(iclass, 'res',   b%a%get(order(iclass),  'res'))
+                call clsdoc_ranked%set(iclass, 'corr',  b%a%get(order(iclass), 'corr'))
+                call clsdoc_ranked%set(iclass, 'w',     b%a%get(order(iclass),    'w'))
+                write(*,'(a,1x,i5,1x,a,1x,i5,1x,a,i5,1x,a,1x,f6.2)') 'CLASS:', order(iclass),&
+                &'RANK:', iclass ,'POP:', nint(b%a%get(order(iclass), 'pop')), 'RES:', b%a%get(order(iclass), 'res')
+                call b%img%read(p%stk, order(iclass))
+                call b%img%write(p%outstk, iclass)
+            end do
+        else
+            ! tries to provide similar stats (oldschool routine for bwd compatibility)
+            ! order according to population
+            p%nptcls = binread_nlines(p%oritab) 
+            call b%a%new(p%nptcls)
+            call binread_oritab(p%oritab, b%a, [1,p%nptcls])
+            order = b%a%order_cls(p%ncls)
+            do iclass=1,p%ncls
+                pop = b%a%get_pop(order(iclass), 'class')
+                call clsdoc_ranked%set(iclass, 'class', real(order(iclass)))
+                call clsdoc_ranked%set(iclass, 'rank',  real(iclass))
+                call clsdoc_ranked%set(iclass, 'pop',   real(pop))
+                if( pop > 1 )then
+                    call clsdoc_ranked%set(iclass, 'corr',  b%a%get_avg('corr', class=order(iclass)))
+                    call clsdoc_ranked%set(iclass, 'w',     b%a%get_avg('w',    class=order(iclass)))
+                else
+                    call clsdoc_ranked%set(iclass, 'corr', -1.0)
+                    call clsdoc_ranked%set(iclass, 'w',     0.0)
+                endif
+                write(*,'(a,1x,i5,1x,a,1x,i5,1x,a,i5)') 'CLASS:', order(iclass),&
+                &'RANK:', iclass ,'POP:', pop
+                call b%img%read(p%stk, order(iclass))
+                call b%img%write(p%outstk, iclass)
+            end do
+        endif
+        call clsdoc_ranked%write('classdoc_ranked.txt')
+        ! end gracefully
         call simple_end('**** SIMPLE_RANK_CAVGS NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_rank_cavgs
 

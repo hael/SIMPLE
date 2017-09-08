@@ -40,6 +40,7 @@ contains
         call chdict%push('center',        'center image(s)/class average(s)/volume(s)(yes|no){no}')
         call chdict%push('chunksz',       '# images/orientations in chunk')
         call chdict%push('class',         'cluster identity')
+        call chdict%push('classdoc',      'doc with per-class stats(.txt)')
         call chdict%push('classtats',     'calculate class population statistics(yes|no){no}')
         call chdict%push('clip',          'clipped image box size(in pixels)')
         call chdict%push('clustvalid',    'validate clustering(yes|homo|no){no}')
