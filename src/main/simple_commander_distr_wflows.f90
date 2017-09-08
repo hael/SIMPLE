@@ -461,7 +461,7 @@ contains
             call job_descr%set('refs', trim(refs))
             call job_descr%set('startit', int2str(iter))
             ! the only FRC we have is from the previous iteration, hence the iter - 1
-            call job_descr%set('fsc', 'frcs_iter'//int2str_pad(iter - 1,3)//'.bin')
+            call job_descr%set('frcs', 'frcs_iter'//int2str_pad(iter - 1,3)//'.bin')
             ! schedule
             call qenv%gen_scripts_and_schedule_jobs(p_master, job_descr, algnfbody=ALGNFBODY)
             ! merge orientation documents

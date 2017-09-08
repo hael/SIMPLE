@@ -26,7 +26,7 @@ contains
         class(params),     intent(inout) :: p       !< parameters
         integer, optional, intent(in)    :: top     !< stop index
         real,    optional, intent(inout) :: lp      !< low-pass
-        type(image),      allocatable :: imgs(:) !< resulting images
+        type(image),       allocatable :: imgs(:)   !< resulting images
         type(projector)  :: vol_pad, img_pad
         type(kbinterpol) :: kbwin
         integer          :: n, i, alloc_stat
@@ -54,6 +54,7 @@ contains
             call img_pad%bwd_ft
             call img_pad%clip(imgs(i))
         end do
+        call vol_pad%kill_expanded
         call vol_pad%kill
         call img_pad%kill
     end function projvol

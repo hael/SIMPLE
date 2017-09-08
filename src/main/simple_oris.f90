@@ -110,6 +110,7 @@ type :: oris
     procedure          :: symmetrize
     procedure          :: merge
     procedure          :: partition_eo
+    procedure          :: transf_proj2class
     ! I/O
     procedure          :: read
     procedure          :: read_ctfparams_and_state
@@ -1835,6 +1836,15 @@ contains
             enddo
         enddo
     end subroutine partition_eo
+
+    !>  \brief  transfers proj indices to class indices in self
+    subroutine transf_proj2class( self )
+        class(oris), intent(inout) :: self
+        integer :: i
+        do i=1,self%n
+            call self%o(i)%set('class', self%o(i)%get('proj'))
+        enddo
+    end subroutine transf_proj2class
 
     ! I/O
 

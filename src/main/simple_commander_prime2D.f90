@@ -204,8 +204,8 @@ contains
         call cavger%assemble_sums_from_parts()
         if( cline%defined('which_iter') )then
             p%refs = 'cavgs_iter'//int2str_pad(p%which_iter,3)//p%ext
-            if( .not. cline%defined('fsc') ) p%fsc  = 'frcs_iter'//int2str_pad(p%which_iter,3)//'.bin'
-            call cavger%calc_and_write_frcs(p%fsc)
+            if( .not. cline%defined('frcs') ) p%frcs  = 'frcs_iter'//int2str_pad(p%which_iter,3)//'.bin'
+            call cavger%calc_and_write_frcs(p%frcs)
             call b%projfrcs%estimate_res()
             call gen2Dclassdoc( b, p, 'classdoc.txt')
         else if( .not. cline%defined('refs') )then

@@ -378,7 +378,7 @@ contains
         use simple_strings, only: str_has_substr
         class(build),  intent(inout) :: self
         class(params), intent(in)    :: p
-        integer :: s, alloc_stat, nnn, ncls
+        integer :: s, alloc_stat, nnn
         call self%kill_hadamard_prime3D_tbox
         call self%raise_hard_ctf_exception(p)
         ! reconstruction objects
@@ -394,9 +394,7 @@ contains
             call self%se%nearest_neighbors(self%e, nnn, self%nnmat)
         endif
         if( .not. self%a%isthere('proj') ) call self%a%set_projs(self%e)
-        ! build projection frcs
-        ncls = min(NSPACE_BALANCE,p%nspace)
-        call self%projfrcs%new(ncls, p%boxpd, p%smpd, p%nstates)
+        call self%projfrcs%new(p%nspace, p%box, p%smpd, p%nstates)
         write(*,'(A)') '>>> DONE BUILDING HADAMARD PRIME3D TOOLBOX'
         self%hadamard_prime3D_tbox_exists = .true.
     end subroutine build_hadamard_prime3D_tbox

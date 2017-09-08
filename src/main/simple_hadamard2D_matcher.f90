@@ -92,7 +92,7 @@ contains
         endif
 
         ! READ FOURIER RING CORRELATIONS
-        if( file_exists(p%fsc) ) call b%projfrcs%read(p%fsc)
+        if( file_exists(p%frcs) ) call b%projfrcs%read(p%frcs)
 
         ! POPULATION BALANCING LOGICS
         ! this needs to be done prior to search such that each part
@@ -184,7 +184,7 @@ contains
         call cavger%transf_oridat(b%a)
         call cavger%set_grid_flag(frac_srch_space >= FRAC_INTERPOL)
         call cavger%assemble_sums()
-        if( p%l_distr_exec)then
+        if( p%l_distr_exec )then
             call cavger%write_partial_sums()
         else
             p%refs = 'cavgs_iter'//int2str_pad(which_iter,3)//p%ext
@@ -196,9 +196,9 @@ contains
         if( p%l_distr_exec )then
             ! this is done in prime2D commander; cavgassemble
         else
-            p%fsc = 'frcs_iter'//int2str_pad(which_iter,3)//'.bin'
-            if( p%chunktag .ne. '' ) p%fsc = trim(p%chunktag)//trim(p%fsc)
-            call cavger%calc_and_write_frcs(p%fsc)
+            p%frcs = 'frcs_iter'//int2str_pad(which_iter,3)//'.bin'
+            if( p%chunktag .ne. '' ) p%frcs = trim(p%chunktag)//trim(p%frcs)
+            call cavger%calc_and_write_frcs(p%frcs)
             call b%projfrcs%estimate_res()
             call gen2Dclassdoc( b, p, 'classdoc.txt')
         endif

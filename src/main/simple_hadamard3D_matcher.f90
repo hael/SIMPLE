@@ -4,6 +4,7 @@ module simple_hadamard3D_matcher
 !$ use omp_lib_kinds
 use simple_polarft_corrcalc, only: polarft_corrcalc
 use simple_prime3D_srch,     only: prime3D_srch
+use simple_classaverager,    only: classaverager
 use simple_ori,              only: ori
 use simple_build,            only: build
 use simple_params,           only: params
@@ -27,9 +28,6 @@ private
 
 type(polarft_corrcalc)          :: pftcc
 type(prime3D_srch), allocatable :: primesrch3D(:)
-real                            :: reslim
-type(ori)                       :: orientation, o_sym
-character(len=:), allocatable   :: ppfts_fname
 
 contains
 
@@ -70,15 +68,19 @@ contains
         class(cmdline), intent(inout) :: cline
         integer,        intent(in)    :: which_iter
         logical,        intent(inout) :: update_res, converged
-        logical , allocatable :: to_update(:)
+        logical,          allocatable :: to_update(:)
+        character(len=:), allocatable :: ppfts_fname
         type(oris) :: prime3D_oris
-        real       :: norm, corr_thresh, skewness, frac_srch_space, extr_thresh, update_frac
+        type(ori)  :: orientation
+        real       :: norm, corr_thresh, skewness, frac_srch_space
+        real       :: extr_thresh, update_frac, reslim
         integer    :: iptcl, inptcls, istate, alloc_stat, iextr_lim
         integer    :: update_ind, nupdates_target, nupdates
         integer    :: statecnt(p%nstates)
+
         inptcls = p%top - p%fromp + 1
 
-        ! SET BAND-PASS LIMIT RANGE
+        ! SET FOURIER INDEX RANGE
         call set_bp_range( b, p, cline )
 
         ! CALCULATE ANGULAR THRESHOLD (USED BY THE SPARSE WEIGHTING SCHEME)
@@ -120,6 +122,9 @@ contains
         else
             call b%a%calc_spectral_weights(p%frac)
         endif
+
+        ! READ FOURIER RING CORRELATIONS
+        if( file_exists(p%frcs) ) call b%projfrcs%read(p%frcs)
 
         ! POPULATION BALANCING LOGICS
         ! this needs to be done prior to search such that each part
@@ -305,6 +310,8 @@ contains
         call pftcc%kill
 
         ! SETUP (OVERWRITES) EVEN/ODD PARTITION
+        ! needs to be here since parameters just updated
+        ! need to be in the [p%fromp, p%top] range or it will be based on previous params
         if( p%eo.eq.'yes' )then
             ! weights & states assumed here
             call b%a%partition_eo('proj', [p%fromp, p%top])
@@ -379,6 +386,7 @@ contains
         class(params),     intent(inout) :: p         !< param object
         integer, optional, intent(in)    :: nsamp_in  !< num input samples
         type(ran_tabu)       :: rt
+        type(ori)            :: orientation, o_sym
         integer, allocatable :: sample(:)
         integer              :: i, k, nsamp, alloc_stat
         type(kbinterpol)     :: kbwin

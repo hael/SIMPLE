@@ -121,6 +121,7 @@ type :: params
     character(len=STDLEN) :: featstk='expecstk.bin'
     character(len=STDLEN) :: filetab=''           !< list of files(.txt)
     character(len=STDLEN) :: fname=''             !< file name
+    character(len=STDLEN) :: frcs=''              !< binary file with per-class/proj Fourier Ring Correlations(.bin) 
     character(len=STDLEN) :: fsc='fsc_state01.bin'!< binary file with FSC info{fsc_state01.bin}
     character(len=STDLEN) :: hfun='sigm'          !< function used for normalization(sigm|tanh|lin){sigm}
     character(len=STDLEN) :: hist='corr'          !< give variable for histogram plot
@@ -532,6 +533,7 @@ contains
         call check_file('ext_meta',       self%ext_meta,     'T', 'B')
         call check_file('filetab',        self%filetab,      'T')
         call check_file('fname',          self%fname)
+        call check_file('frcs',           self%frcs,         'B')
         call check_file('fsc',            self%fsc,          'B')
         call check_file('infile',         self%infile)
         call check_file('mskfile',        self%mskfile,      notAllowed='T')

@@ -6,11 +6,8 @@ tracker should set ncunits based on # entries in boxfile automatically
 
 need to reach consensus with the automsking no dynamics/enveloping in 2D but the postproc should report on a suitable mask radius (same logics as for the adamsk)
 
-need to insert a flag METADATFFORM = bin/txt and test before testing the cavger for prime3D with npeaks > 1
-
 self-validation based on subset refinement, i.e. the subset of particles are selected by some procedure and these are refined fore some iterations and then we match the static set with the refined model and check improvement, if improvement on average: good, particles that do not improve would be problematic ones and if this consistenly happens for a subset, they should be removed
 
 D wants the swap mode implemented again, i.e. no two class avgs allowed to occupy same proj. Simplest strategy: random init that satisfy constraints, SHC as usual but with forbidden orientations 
 
-need a class document with class, resolution (frc0143), class rank, class pop, class corr, class weight
-
+Need to give the projection_frc files a little header so that they can be re-scaled dynamically on read

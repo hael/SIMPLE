@@ -280,13 +280,14 @@ contains
     end subroutine compress_exp
 
     !> \brief  for sampling density correction of the eo pairs
-    subroutine sampl_dens_correct_eos( self, state )
+    subroutine sampl_dens_correct_eos( self, state, eonames )
         use simple_strings,      only: int2str_pad
         use simple_fileio,       only: arr2file
         use simple_math,         only: get_resolution, calc_fourier_index
         use simple_masker,       only: masker
-        class(eo_reconstructor), intent(inout) :: self  !< instance
-        integer,                 intent(in)    :: state !< state
+        class(eo_reconstructor),         intent(inout) :: self       !< instance
+        integer,                         intent(in)    :: state      !< state
+        character(len=STDLEN), optional, intent(in)    :: eonames(2) !< even/odd filenames
         real, allocatable :: res(:), corrs(:)
         type(image)       :: even, odd
         type(masker)      :: volmasker
@@ -315,6 +316,11 @@ contains
                 call even%mask(self%msk, 'soft') 
                 call odd%mask(self%msk, 'soft')
             endif
+        endif
+        ! write even/odd if eonames present
+        if( present(eonames) )then
+            call even%write(eonames(1))
+            call odd%write(eonames(2))
         endif
         ! forward FT
         call even%fwd_ft
