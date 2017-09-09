@@ -7,9 +7,11 @@ implicit none
 type projection_frcs
     private
     integer           :: nprojs       = 0
-    integer           :: filtsz       = 0 
+    integer           :: filtsz       = 0
     integer           :: box4frc_calc = 0
     integer           :: nstates      = 1
+    integer           :: headsz       = 0
+    real              :: file_header(4)
     real              :: smpd         = 0.0
     real              :: dstep        = 0.0
     real, allocatable :: res4frc_calc(:)
@@ -20,6 +22,7 @@ contains
     procedure          :: new
     ! exception
     procedure, private :: raise_exception
+    procedure, private :: bound_res
     ! setters/getters
     procedure          :: set_frc
     procedure          :: get_frc
@@ -46,6 +49,7 @@ contains
         real,                   intent(in)    :: smpd
         integer, optional,      intent(in)    :: nstates
         integer :: alloc_stat
+        ! init
         call self%kill
         self%nprojs       = nprojs
         self%box4frc_calc = box4frc_calc
@@ -55,6 +59,13 @@ contains
         self%res4frc_calc = get_resarr(box4frc_calc, self%smpd)
         self%nstates      = 1
         if( present(nstates) ) self%nstates = nstates
+        ! prep file header
+        self%file_header(1) = real(self%nprojs)
+        self%file_header(2) = real(self%box4frc_calc)
+        self%file_header(3) = self%smpd
+        self%file_header(4) = real(self%nstates)
+        self%headsz         = sizeof(self%file_header)
+        ! alloc
         allocate( self%frcs(self%nstates,self%nprojs,self%filtsz), stat=alloc_stat)
         call alloc_errchk('new; simple_projection_frcs', alloc_stat)
         self%frcs   = 1.0
@@ -82,6 +93,32 @@ contains
             stop 'simple_projection_frcs :: raise_exception'
         endif
     end subroutine raise_exception
+
+    ! bound res
+
+    subroutine bound_res( self, frc, frc05, frc0143 )
+        class(projection_frcs), intent(in)    :: self
+        real,                   intent(in)    :: frc(:)
+        real,                   intent(inout) :: frc05, frc0143  
+        if( all(frc >  0.5) )then
+            frc05   = 2. * self%smpd
+            frc0143 = frc05
+            return
+        endif
+        if( all(frc >  0.143) )then
+            frc0143 = 2. * self%smpd
+            return
+        endif
+        if( all(frc <=  0.143) )then
+            frc05   = self%dstep
+            frc0143 = frc05
+            return
+        endif
+        if( all(frc <=  0.5) )then
+            frc0143 = self%dstep
+            return
+        endif
+    end subroutine bound_res
 
     ! setters/getters
 
@@ -130,9 +167,8 @@ contains
         sstate = 1
         if( present(state) ) sstate = state
         call self%raise_exception( proj, sstate, 'ERROR, out of bounds in estimate_res')
-        call get_resolution(self%frcs(sstate,proj,:), self%res4frc_calc, frc05, frc0143 )
-        if( frc05   < self%smpd ) frc05 = self%dstep
-        if( frc0143 < self%smpd ) frc05 = self%dstep
+        call get_resolution(self%frcs(sstate,proj,:), self%res4frc_calc, frc05, frc0143)
+        call self%bound_res(self%frcs(sstate,proj,:), frc05, frc0143)
     end subroutine estimate_res_1
 
     subroutine estimate_res_2( self, state )
@@ -151,8 +187,7 @@ contains
         do j=1,size(self%res4frc_calc)
             write(*,'(A,1X,F6.2,1X,A,1X,F7.3)') '>>> RESOLUTION:', self%res4frc_calc(j), '>>> CORRELATION:', frc(j)
         end do
-        if( frc05   < self%smpd ) frc05 = self%dstep
-        if( frc0143 < self%smpd ) frc05 = self%dstep
+        call self%bound_res(frc, frc05, frc0143)
         write(*,'(A,1X,F6.2)') '>>> RESOLUTION AT FRC=0.500 DETERMINED TO:', frc05
         write(*,'(A,1X,F6.2)') '>>> RESOLUTION AT FRC=0.143 DETERMINED TO:', frc0143 
     end subroutine estimate_res_2
@@ -188,8 +223,7 @@ contains
         ! prep output
         frc = frc / real(nbest)
         call get_resolution(frc, self%res4frc_calc, frc05, frc0143)
-        if( frc05   < self%smpd ) frc05 = self%dstep
-        if( frc0143 < self%smpd ) frc05 = self%dstep
+        call self%bound_res(frc, frc05, frc0143)
         res = self%res4frc_calc
     end subroutine estimate_res_3
 
@@ -203,7 +237,10 @@ contains
         character(len=7) :: stat_str
         if(.not.fopen(funit,fname,access='STREAM',action='READ',status='OLD', iostat=io_stat))&
         &call fileio_errmsg('projection_frcs; read; open for read '//trim(fname), io_stat)
-        read(unit=funit,pos=1) self%frcs
+        read(unit=funit,pos=1) self%file_header
+        ! re-create the object according to file_header info
+        call self%new(nint(self%file_header(1)), nint(self%file_header(2)), self%file_header(3), nint(self%file_header(4)))
+        read(unit=funit,pos=self%headsz + 1) self%frcs
         if(.not.fclose(funit, iostat=io_stat))&
         &call fileio_errmsg('projection_frcs; read; fhandle cose', io_stat)
     end subroutine read
@@ -216,7 +253,8 @@ contains
         character(len=7) :: stat_str
         if(.not.fopen(funit,fname,access='STREAM',action='WRITE',status='REPLACE', iostat=io_stat))&
         &call fileio_errmsg('projection_frcs; write; open for write '//trim(fname), io_stat)
-        write(unit=funit,pos=1) self%frcs
+        write(unit=funit,pos=1) self%file_header
+        write(unit=funit,pos=self%headsz + 1) self%frcs
         if(.not.fclose(funit, iostat=io_stat))&
         &call fileio_errmsg('projection_frcs; write; fhandle cose', io_stat)
     end subroutine write
@@ -230,7 +268,7 @@ contains
             self%nprojs       = 0 
             self%filtsz       = 0
             self%box4frc_calc = 0
-            self%exists        = .false.
+            self%exists       = .false.
         endif
     end subroutine kill
 

@@ -4507,12 +4507,14 @@ contains
     !! \param res
     !! \param corrs
     !!
-    subroutine fsc( self1, self2, res, corrs )
+    subroutine fsc( self1, self2, res, corrs, serial )
+        use simple_math, only: csq
         class(image),      intent(inout) :: self1, self2
         real, allocatable, intent(inout) :: res(:), corrs(:)
-        real, allocatable                :: sumasq(:), sumbsq(:)
-        integer                          :: n, lims(3,2), alloc_stat, phys(3), sh, h, k, l
-        logical                          :: didft1, didft2
+        logical, optional, intent(in)    :: serial
+        real, allocatable :: sumasq(:), sumbsq(:)
+        integer           :: n, lims(3,2), alloc_stat, phys(3), sh, h, k, l
+        logical           :: didft1, didft2, sserial
         if( self1.eqdims.self2 )then
         else
             stop 'images of same dimension only! fsc; simple_image'
@@ -4528,6 +4530,8 @@ contains
             call self2%fwd_ft
             didft2 = .true.
         endif
+        sserial = .false.
+        if( present(serial) ) sserial = .true.
         n = self1%get_filtsz()
         if( allocated(corrs) ) deallocate(corrs)
         if( allocated(res) )   deallocate(res)
@@ -4538,25 +4542,48 @@ contains
         sumasq = 0.
         sumbsq = 0.
         lims   = self1%fit%loop_lims(2)
-        !$omp parallel do collapse(3) default(shared) private(h,k,l,phys,sh)&
-        !$omp schedule(static) proc_bind(close)
-        do h=lims(1,1),lims(1,2)
-            do k=lims(2,1),lims(2,2)
-                do l=lims(3,1),lims(3,2)
-                    ! compute physical address
-                    phys = self1%fit%comp_addr_phys([h,k,l])
-                    ! find shell
-                    sh = nint(hyp(real(h),real(k),real(l)))
-                    if( sh == 0 .or. sh > n ) cycle
-                    ! real part of the complex mult btw self1 and targ*
-                    corrs(sh) = corrs(sh)+&
-                    real(self1%cmat(phys(1),phys(2),phys(3))*conjg(self2%cmat(phys(1),phys(2),phys(3))))
-                    sumasq(sh) = sumasq(sh)+real(abs(self2%cmat(phys(1),phys(2),phys(3))))**2.
-                    sumbsq(sh) = sumbsq(sh)+real(abs(self1%cmat(phys(1),phys(2),phys(3))))**2.
+        if( sserial )then
+            do h=lims(1,1),lims(1,2)
+                do k=lims(2,1),lims(2,2)
+                    do l=lims(3,1),lims(3,2)
+                        ! compute physical address
+                        phys = self1%fit%comp_addr_phys([h,k,l])
+                        ! find shell
+                        sh = nint(hyp(real(h),real(k),real(l)))
+                        if( sh == 0 .or. sh > n ) cycle
+                        ! real part of the complex mult btw self1 and targ*
+                        corrs(sh) = corrs(sh)+&
+                        real(self1%cmat(phys(1),phys(2),phys(3))*conjg(self2%cmat(phys(1),phys(2),phys(3))))
+                        ! sumasq(sh) = sumasq(sh)+real(abs(self2%cmat(phys(1),phys(2),phys(3))))**2.
+                        ! sumbsq(sh) = sumbsq(sh)+real(abs(self1%cmat(phys(1),phys(2),phys(3))))**2.
+                        sumasq(sh) = sumasq(sh) + csq(self2%cmat(phys(1),phys(2),phys(3)))
+                        sumbsq(sh) = sumbsq(sh) + csq(self1%cmat(phys(1),phys(2),phys(3)))
+                    end do
                 end do
             end do
-        end do
-        !$omp end parallel do
+        else
+            !$omp parallel do collapse(3) default(shared) private(h,k,l,phys,sh)&
+            !$omp schedule(static) proc_bind(close) reduction(+:sumasq,sumbsq)
+            do h=lims(1,1),lims(1,2)
+                do k=lims(2,1),lims(2,2)
+                    do l=lims(3,1),lims(3,2)
+                        ! compute physical address
+                        phys = self1%fit%comp_addr_phys([h,k,l])
+                        ! find shell
+                        sh = nint(hyp(real(h),real(k),real(l)))
+                        if( sh == 0 .or. sh > n ) cycle
+                        ! real part of the complex mult btw self1 and targ*
+                        corrs(sh) = corrs(sh)+&
+                        real(self1%cmat(phys(1),phys(2),phys(3))*conjg(self2%cmat(phys(1),phys(2),phys(3))))
+                        ! sumasq(sh) = sumasq(sh)+real(abs(self2%cmat(phys(1),phys(2),phys(3))))**2.
+                        ! sumbsq(sh) = sumbsq(sh)+real(abs(self1%cmat(phys(1),phys(2),phys(3))))**2.
+                        sumasq(sh) = sumasq(sh) + csq(self2%cmat(phys(1),phys(2),phys(3)))
+                        sumbsq(sh) = sumbsq(sh) + csq(self1%cmat(phys(1),phys(2),phys(3)))
+                    end do
+                end do
+            end do
+            !$omp end parallel do
+        endif
         ! normalize correlations and compute resolutions
         do k=1,n
             corrs(k) = calc_corr(corrs(k),sumasq(k)*sumbsq(k))

@@ -33,14 +33,16 @@ contains
         even_imgs = projvol(even, e_space, p)
         odd_imgs  = projvol(even, e_space, p)
         ! calculate FRCs and fill-in projfrcs object
+        !$omp parallel do default(shared) private(iproj,res,frc) schedule(static) proc_bind(close)
         do iproj=1,p%nspace
             call even_imgs(iproj)%fwd_ft
             call odd_imgs(iproj)%fwd_ft
-            call even_imgs(iproj)%fsc(odd_imgs(iproj), res, frc)
+            call even_imgs(iproj)%fsc(odd_imgs(iproj), res, frc, serial=.true.)
             call projfrcs%set_frc(iproj, frc, state)
             call even_imgs(iproj)%kill
             call odd_imgs(iproj)%kill
         end do
+        !$omp end parallel do
         deallocate(even_imgs, odd_imgs)
         call even%kill
         call odd%kill
