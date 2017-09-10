@@ -42,7 +42,6 @@ type :: params
     character(len=3)      :: dopick='yes'
     character(len=3)      :: doprint='no'
     character(len=3)      :: dynlp='yes'          !< automatic resolution limit update(yes|no){yes}
-    character(len=3)      :: eo='yes'             !< use FSC for filtering and low-pass limit update(yes|no){no}
     character(len=3)      :: errify='no'          !< introduce error(yes|no){no}
     character(len=3)      :: even='no'            !< calculate even eo-pair(yes|no){no}
     character(len=3)      :: ft2img='no'          !< convert Fourier transform to real image of power(yes|no){no}
@@ -112,6 +111,7 @@ type :: params
     character(len=STDLEN) :: dir_ptcls=''
     character(len=STDLEN) :: dockmode='eul'       !< volume docking mode(eul|shift|eulshift|all){eul}
     character(len=STDLEN) :: doclist=''           !< list of oritabs for different states
+    character(len=STDLEN) :: eo='yes'             !< use FSC for filtering and low-pass limit update(yes|aniso|no){no}
     character(len=STDLEN) :: exec_abspath=''
     character(len=STDLEN) :: exp_doc=''           !< specifying exp_time and dose_rate per tomogram
     character(len=4)      :: ext='.mrc'           !< file extension{.mrc}

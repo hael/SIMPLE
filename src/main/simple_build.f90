@@ -325,6 +325,7 @@ contains
         call self%raise_hard_ctf_exception(p)
         call self%eorecvol%new(p)
         if( .not. self%a%isthere('proj') ) call self%a%set_projs(self%e)
+        call self%projfrcs%new(p%nspace, p%box, p%smpd, p%nstates)
         write(*,'(A)') '>>> DONE BUILDING EO RECONSTRUCTION TOOLBOX'
         self%eo_rec_tbox_exists = .true.
     end subroutine build_eo_rec_tbox
@@ -334,6 +335,7 @@ contains
         class(build), intent(inout) :: self
         if( self%eo_rec_tbox_exists )then
             call self%eorecvol%kill
+            call self%projfrcs%kill
             self%eo_rec_tbox_exists = .false.
         endif
     end subroutine kill_eo_rec_tbox
@@ -382,7 +384,7 @@ contains
         call self%kill_hadamard_prime3D_tbox
         call self%raise_hard_ctf_exception(p)
         ! reconstruction objects
-        if( p%eo .eq. 'yes' )then
+        if( p%eo .ne. 'no' )then
             allocate( self%eorecvols(p%nstates), stat=alloc_stat )
             call alloc_errchk('build_hadamard_prime3D_tbox; simple_build, 1', alloc_stat)
         else
@@ -433,7 +435,7 @@ contains
         if( p%norec .eq. 'yes' )then
             ! no reconstruction objects needed
         else
-            if( p%eo .eq. 'yes' )then
+            if( p%eo .ne. 'no' )then
                 allocate( self%eorecvols(p%nstates), stat=alloc_stat )
                 call alloc_errchk('build_hadamard_prime3D_tbox; simple_build, 1', alloc_stat)
             else

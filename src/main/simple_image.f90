@@ -3270,8 +3270,9 @@ contains
                         case('real')
                             spec(sh) = spec(sh) + real(self%cmat(phys(1),phys(2),phys(3)))
                         case('power')
-                            spec(sh) = spec(sh) + real(self%cmat(phys(1),phys(2),phys(3))&
-                                                  *conjg(self%cmat(phys(1),phys(2),phys(3))))
+                            ! spec(sh) = spec(sh) + real(self%cmat(phys(1),phys(2),phys(3))&
+                            !                       *conjg(self%cmat(phys(1),phys(2),phys(3))))
+                            spec(sh) = spec(sh) + csq(self%cmat(phys(1),phys(2),phys(3)))
                         case('absreal')
                             spec(sh) = spec(sh) + abs(real(self%cmat(phys(1),phys(2),phys(3))))
                         case('absimag')

@@ -799,8 +799,8 @@ contains
             &stop 'Incompatible options: nstates>1 and dynlp=yes'
         if( p_master%automsk.eq.'yes' .and. p_master%dynlp.eq.'yes' )&
             &stop 'Incompatible options: automsk=yes and dynlp=yes'
-        if( p_master%eo.eq.'yes' .and. p_master%dynlp.eq.'yes' )&
-            &stop 'Incompatible options: eo=yes and dynlp=yes'
+        if( p_master%eo.ne.'no' .and. p_master%dynlp.eq.'yes' )&
+            &stop 'Incompatible options: eo.ne.no and dynlp=yes'
 
         ! setup the environment for distributed execution
         call qenv%new(p_master)
@@ -963,7 +963,7 @@ contains
             else
                 ! ASSEMBLE VOLUMES
                 call cline_volassemble%set( 'oritab', trim(oritab) )
-                if( p_master%eo.eq.'yes' )then
+                if( p_master%eo.ne.'no' )then
                     do state = 1,p_master%nstates
                         str_state = int2str_pad(state,2)
                         call del_file('fsc_state'//trim(str_state)//'.bin')
@@ -972,7 +972,7 @@ contains
                 else
                     call cline_volassemble%set( 'prg', 'volassemble' )    ! required for cmdline exec
                 endif
-                if( p_master%eo .eq. 'yes' )then
+                if( p_master%eo .ne. 'no' )then
                     volassemble_output = 'RESOLUTION'//trim(str_iter)
                 else
                     volassemble_output = 'VOLASSEMBLE'
@@ -1010,7 +1010,7 @@ contains
                         vol = 'vol'//trim(int2str(state))
                         call cline_postproc_vol%set( 'vol1' , trim(vol_iter))
                         fsc_file = 'fsc_state'//trim(str_state)//'.bin'
-                        if( file_exists(fsc_file) .and. p_master%eo .eq. 'yes' )then
+                        if( file_exists(fsc_file) .and. p_master%eo .ne. 'no' )then
                             call cline_postproc_vol%delete('lp')
                             call cline_postproc_vol%set('fsc', trim(fsc_file))
                         else
@@ -1193,7 +1193,7 @@ contains
                 str_state = int2str_pad(state,2)
                 call del_file('fsc_state'//trim(str_state)//'.bin')
             enddo
-            if( p_master%eo .eq. 'yes' )then
+            if( p_master%eo .ne. 'no' )then
                 call cline_volassemble%set( 'prg', 'eo_volassemble' )
                 volassemble_output = 'RESOLUTION'//trim(str_iter)
             else
@@ -1283,7 +1283,7 @@ contains
         ! schedule
         call qenv%gen_scripts_and_schedule_jobs(p_master, job_descr)
         ! assemble volumes
-        if( p_master%eo .eq. 'yes' )then
+        if( p_master%eo .ne. 'no' )then
             call cline%set('prg', 'eo_volassemble')
             volassemble_output = 'RESOLUTION'
         else
@@ -1478,7 +1478,7 @@ contains
         call cline_aggregate%set( 'oritab2', trim(SYMTAB) )
         call cline_aggregate%set( 'stk' ,    trim(SYMPROJSTK) )
         call cline_aggregate%set( 'outfile', trim(SYMPEAKSTAB) )
-        call cline_aggregate%set( 'eo', 'no' )
+        call cline_aggregate%set( 'eo',      'no' )
         call qenv%exec_simple_prg_in_queue(cline_aggregate,&
         &'SYM_AGGREGATE', 'SYM_AGGREGATE_FINISHED')
         ! read and pick best

@@ -3,10 +3,10 @@ module simple_unblur
 !$ use omp_lib
 !$ use omp_lib_kinds
 use simple_defs
-use simple_ft_expanded, only: ft_expanded
-use simple_image,       only: image
-use simple_params,      only: params
-use simple_filterer     ! use all in there
+use simple_ft_expanded,   only: ft_expanded
+use simple_image,         only: image
+use simple_params,        only: params
+use simple_estimate_ssnr, only: acc_dose2filter
 implicit none
 
 public :: unblur_movie, unblur_calc_sums, unblur_calc_sums_tomo

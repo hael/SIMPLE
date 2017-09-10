@@ -15,7 +15,7 @@ implicit none
 
 public :: read_img_from_stk, set_bp_range, set_bp_range2D, grid_ptcl, prepimg4align,&
 &eonorm_struct_facts, norm_struct_facts, preprefvol, prep2Dref, gen2Dclassdoc,&
-&preprecvols, killrecvols
+&preprecvols, killrecvols, gen_projection_frcs
 private
 #include "simple_local_flags.inc"
 
@@ -468,8 +468,8 @@ contains
             if( any(b%fsc(s,:) > 0.143) )then
                 ! Rosenthal & Henderson, 2003 
                 call b%vol%fwd_ft ! needs to be here in case the shift was never applied (above)
-                filter = fsc2optlp(b%fsc(s,:))
                 call b%vol%shellnorm()
+                filter = fsc2optlp(b%fsc(s,:))
                 call b%vol%apply_filter(filter)
             endif
         endif
@@ -503,63 +503,6 @@ contains
         ! expand for fast interpolation
         if( l_doexpand ) call b%vol%expand_cmat     
     end subroutine preprefvol
-    
-    subroutine eonorm_struct_facts( b, p, res, which_iter )
-        use simple_image, only: image
-        use simple_fileio, only: add2fbody, file2rarr
-        class(build),      intent(inout) :: b
-        class(params),     intent(inout) :: p
-        real,              intent(inout) :: res
-        integer, optional, intent(in)    :: which_iter
-        real,     allocatable :: invctfsq(:)
-        integer               :: s
-        real                  :: res05s(p%nstates), res0143s(p%nstates)
-        character(len=STDLEN) :: pprocvol
-        ! init
-        res0143s = 0.
-        res05s   = 0.
-        ! cycle through states
-        do s=1,p%nstates
-            if( b%a%get_pop(s, 'state') == 0 )then
-                ! empty state
-                if( present(which_iter) )b%fsc(s,:) = 0.
-                cycle
-            endif
-            call b%eorecvols(s)%compress_exp
-            if( p%l_distr_exec )then
-                call b%eorecvols(s)%write_eos('recvol_state'//int2str_pad(s,2)//'_part'//int2str_pad(p%part,p%numlen))
-            else
-                if( present(which_iter) )then
-                    p%vols(s) = 'recvol_state'//int2str_pad(s,2)//'_iter'//int2str_pad(which_iter,3)//p%ext
-                else
-                    p%vols(s) = 'startvol_state'//int2str_pad(s,2)//p%ext
-                endif
-                call b%eorecvols(s)%sum_eos
-                call b%eorecvols(s)%sampl_dens_correct_eos(s)
-                call b%eorecvols(s)%sampl_dens_correct_sum(b%vol)
-                call b%vol%write(p%vols(s), del_if_exists=.true.)
-                ! update resolutions for local execution mode
-                call b%eorecvols(s)%get_res(res05s(s), res0143s(s))
-                if( present(which_iter) )then
-                    ! post-process volume
-                    pprocvol = add2fbody(trim(p%vols(s)), p%ext, 'pproc')
-                    b%fsc(s,:) = file2rarr('fsc_state'//int2str_pad(s,2)//'.bin')
-                    call b%vol%fwd_ft
-                    ! low-pass filter
-                    call b%vol%bp(0., p%lp)
-                    call b%vol%bwd_ft
-                    ! mask
-                    call b%vol%mask(p%msk, 'soft')
-                    call b%vol%write(pprocvol)
-                endif
-            endif
-        end do
-        if( .not. p%l_distr_exec )then
-            ! set the resolution limit according to the worst resolved model
-            res  = maxval(res0143s)
-            p%lp = min(p%lp,max(p%lpstop,res))
-        endif
-    end subroutine eonorm_struct_facts
 
     subroutine norm_struct_facts( b, p, which_iter )
          use simple_fileio, only: add2fbody
@@ -610,5 +553,116 @@ contains
             endif
         end do
     end subroutine norm_struct_facts
+    
+    subroutine eonorm_struct_facts( b, p, res, which_iter )
+        use simple_image,  only: image
+        use simple_fileio, only: add2fbody, file2rarr, del_file
+        class(build),      intent(inout) :: b
+        class(params),     intent(inout) :: p
+        real,              intent(inout) :: res
+        integer, optional, intent(in)    :: which_iter
+        real,     allocatable :: invctfsq(:)
+        integer               :: s
+        real                  :: res05s(p%nstates), res0143s(p%nstates)
+        character(len=STDLEN) :: pprocvol
+        character(len=32)     :: eonames(2)
+        ! init
+        res0143s = 0.
+        res05s   = 0.
+        ! cycle through states
+        do s=1,p%nstates
+            if( b%a%get_pop(s, 'state') == 0 )then
+                ! empty state
+                if( present(which_iter) )b%fsc(s,:) = 0.
+                cycle
+            endif
+            call b%eorecvols(s)%compress_exp
+            if( p%l_distr_exec )then
+                call b%eorecvols(s)%write_eos('recvol_state'//int2str_pad(s,2)//'_part'//int2str_pad(p%part,p%numlen))
+            else
+                if( present(which_iter) )then
+                    p%vols(s) = 'recvol_state'//int2str_pad(s,2)//'_iter'//int2str_pad(which_iter,3)//p%ext
+                else
+                    p%vols(s) = 'startvol_state'//int2str_pad(s,2)//p%ext
+                endif
+                call b%eorecvols(s)%sum_eos
+                if( p%eo .eq. 'aniso' )then
+                    ! anisotropic resolution model
+                    eonames(1) = 'tmpvoleven'//p%ext
+                    eonames(2) = 'tmpvolodd'//p%ext
+                    call b%eorecvols(s)%sampl_dens_correct_eos(s, eonames)
+                    call gen_projection_frcs( p, eonames(1), eonames(2), s, b%projfrcs)
+                    call del_file(eonames(1))
+                    call del_file(eonames(2))
+                else
+                    call b%eorecvols(s)%sampl_dens_correct_eos(s)
+                endif
+                call b%eorecvols(s)%sampl_dens_correct_sum(b%vol)
+                call b%vol%write(p%vols(s), del_if_exists=.true.)
+                ! update resolutions for local execution mode
+                call b%eorecvols(s)%get_res(res05s(s), res0143s(s))
+                if( present(which_iter) )then
+                    ! post-process volume
+                    pprocvol = add2fbody(trim(p%vols(s)), p%ext, 'pproc')
+                    b%fsc(s,:) = file2rarr('fsc_state'//int2str_pad(s,2)//'.bin')
+                    call b%vol%fwd_ft
+                    ! low-pass filter
+                    call b%vol%bp(0., p%lp)
+                    call b%vol%bwd_ft
+                    ! mask
+                    call b%vol%mask(p%msk, 'soft')
+                    call b%vol%write(pprocvol)
+                endif
+            endif
+        end do
+        if( .not. p%l_distr_exec )then
+            ! set the resolution limit according to the worst resolved model
+            res  = maxval(res0143s)
+            p%lp = min(p%lp,max(p%lpstop,res))
+        endif
+    end subroutine eonorm_struct_facts
+
+    !>  \brief generate projection FRCs from even/odd pairs
+    subroutine gen_projection_frcs( p, ename, oname, state, projfrcs )
+        use simple_params,          only: params
+        use simple_oris,            only: oris
+        use simple_projector_hlev,  only: projvol
+        use simple_projection_frcs, only: projection_frcs
+        use simple_image,           only: image
+        class(params),          intent(inout) :: p
+        character(len=*),       intent(in)    :: ename, oname
+        integer,                intent(in)    :: state
+        class(projection_frcs), intent(inout) :: projfrcs
+        type(oris)               :: e_space
+        type(image)              :: even, odd
+        type(image), allocatable :: even_imgs(:), odd_imgs(:)
+        real,        allocatable :: frc(:), res(:)
+        integer :: iproj
+        ! read even/odd pair
+        call even%new([p%box,p%box,p%box], p%smpd)
+        call odd%new([p%box,p%box,p%box], p%smpd)
+        call even%read(ename)
+        call odd%read(oname)
+        ! create e_space
+        call e_space%new(p%nspace)
+        call e_space%spiral(p%nsym, p%eullims)
+        ! generate even/odd projections
+        even_imgs = projvol(even, e_space, p)
+        odd_imgs  = projvol(odd, e_space, p)
+        ! calculate FRCs and fill-in projfrcs object
+        !$omp parallel do default(shared) private(iproj,res,frc) schedule(static) proc_bind(close)
+        do iproj=1,p%nspace
+            call even_imgs(iproj)%fwd_ft
+            call odd_imgs(iproj)%fwd_ft
+            call even_imgs(iproj)%fsc(odd_imgs(iproj), res, frc, serial=.true.)
+            call projfrcs%set_frc(iproj, frc, state)
+            call even_imgs(iproj)%kill
+            call odd_imgs(iproj)%kill
+        end do
+        !$omp end parallel do
+        deallocate(even_imgs, odd_imgs)
+        call even%kill
+        call odd%kill
+    end subroutine gen_projection_frcs
 
 end module simple_hadamard_common

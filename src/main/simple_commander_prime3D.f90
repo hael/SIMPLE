@@ -209,9 +209,9 @@ contains
         endif
         call b%build_general_tbox(p, cline)   ! general objects built
         if( .not. cline%defined('eo') ) p%eo = 'no' ! default
-        if( p%eo .eq. 'yes' ) p%dynlp = 'no'
+        if( p%eo .ne. 'no' ) p%dynlp = 'no'
         if( cline%defined('lp') .or. cline%defined('find')&
-        .or. p%eo .eq. 'yes' .or. p%dynlp .eq. 'yes' )then
+        .or. p%eo .ne. 'no' .or. p%dynlp .eq. 'yes' )then
             ! alles ok!
         else
            stop 'need a starting low-pass limit (set lp or find)!'
@@ -323,7 +323,7 @@ contains
         !    if( p%nstates /= b%a%get_nstates() ) stop 'Inconsistent number of states between command-line and oritab'
         !endif
         limset = .false. ;  update_res = .false.
-        if( p%eo .eq. 'yes' )then
+        if( p%eo .ne. 'no' )then
             allocate( maplp(p%nstates) )
             maplp = 0.
             do istate=1,p%nstates

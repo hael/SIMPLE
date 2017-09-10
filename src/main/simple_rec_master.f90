@@ -21,7 +21,7 @@ contains
         class(cmdline),             intent(inout) :: cline
         character(len=*), optional, intent(in)    :: fbody_in
         select case(p%eo)
-            case( 'yes' )
+            case( 'yes', 'aniso' )
                 call exec_eorec( b, p, cline, fbody_in )
             case( 'no' )
                 call exec_rec( b, p, cline, fbody_in )
@@ -59,21 +59,9 @@ contains
                     allocate(fbody, source='recvol_state'//int2str_pad(s,2)//&
                     &'_part'//int2str_pad(p%part,p%numlen))
                 endif
-                if( p%even .eq. 'yes' .and. p%odd .eq. 'no' )then
-                    p%vols(s) = fbody//'_even'//p%ext
-                    rho_name  = 'rho_'//fbody//'_even'//p%ext
-                    call b%recvol%rec(p%stk, p, b%a, b%se, s, mul=p%mul, eo=2, part=p%part)
-                else if( p%odd .eq. 'yes' .and. p%even .eq. 'no' )then
-                    p%vols(s) = fbody//'_odd'//p%ext
-                    rho_name  = 'rho_'//fbody//'_odd'//p%ext
-                    call b%recvol%rec(p%stk, p, b%a, b%se, s, mul=p%mul, eo=1, part=p%part)
-                else if( p%even .eq. 'yes' .and. p%odd .eq. 'yes' )then
-                    stop 'ERROR! even and odd cannot both be yes!'
-                else
-                    p%vols(s) = fbody//p%ext
-                    rho_name  = 'rho_'//fbody//p%ext
-                    call b%recvol%rec(p%stk, p, b%a, b%se, s, mul=p%mul, part=p%part)
-                endif
+                p%vols(s) = fbody//p%ext
+                rho_name  = 'rho_'//fbody//p%ext
+                call b%recvol%rec(p%stk, p, b%a, b%se, s, mul=p%mul, part=p%part)
                 call b%recvol%compress_exp
                 call b%recvol%write(p%vols(s), del_if_exists=.true.)
                 call b%recvol%write_rho(trim(rho_name))
@@ -83,7 +71,7 @@ contains
                 else
                     allocate(fbody, source='recvol_state')
                 endif
-                p%vols(s) = fbody//int2str_pad(s,2)//p%ext ! shared mem parallel rec
+                p%vols(s) = fbody//int2str_pad(s,2)//p%ext
                 call b%recvol%rec(p%stk, p, b%a, b%se, s, mul=p%mul)
                 call b%recvol%clip(b%vol)
                 call b%vol%write(p%vols(s), del_if_exists=.true.)
@@ -121,8 +109,8 @@ contains
                 else
                     allocate(fbody, source='recvol_state')
                 endif
-                call b%eorecvol%eorec(p%stk, p, b%a, b%se, s, b%vol, mul=p%mul,&
-                part=p%part, fbody=fbody)
+                call b%eorecvol%eorec(p%stk, p, b%a, b%se, s, b%vol,&
+                    &mul=p%mul, part=p%part, fbody=fbody)
             else
                 if( present(fbody_in) )then
                     allocate( fbody, source=trim(adjustl(fbody_in))//'_state' )

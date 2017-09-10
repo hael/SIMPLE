@@ -83,7 +83,7 @@ contains
         select case(p%refine)
             case('yes')
                 if( .not. cline%defined('npeaks') )then
-                    if( p%eo .eq. 'yes' )then
+                    if( p%eo .ne. 'no' )then
                         p%npeaks = min(b%e%find_npeaks_from_athres(NPEAKSATHRES), MAXNPEAKS)
                     else
                         p%npeaks = min(10,b%e%find_npeaks(p%lp, p%moldiam))
@@ -106,7 +106,7 @@ contains
         call prep_vols(b, p, cline)
         if(p%norec .eq. 'no')then
             call preprecvols(b, p)
-            if( p%eo.eq.'yes')call prep_eopairs(b, p, eopart)
+            if( p%eo .ne. 'no')call prep_eopairs(b, p, eopart)
         endif
 
         ! INIT IMGPOLARIZER
@@ -165,7 +165,7 @@ contains
                     if(state == 0)cycle
                     call b%img%copy(batch_imgs(iptcl))
                     if(p%npeaks == 1)then
-                        if( p%eo.eq.'yes' )then
+                        if( p%eo .ne. 'no' )then
                             ! call grid_ptcl(b, p, orientation, ran_eo=eopart(iptcl) )
                             call grid_ptcl(b, p, orientation )
                         else
@@ -173,7 +173,7 @@ contains
                         endif
                     else
                         softoris = cont3Dadasrch(iptcl)%get_peaks()
-                        if( p%eo.eq.'yes' )then
+                        if( p%eo .ne. 'no' )then
                             !call grid_ptcl(b, p, orientation, os=softoris, ran_eo=eopart(iptcl) )
                             call grid_ptcl(b, p, orientation, os=softoris)
                         else
@@ -207,7 +207,7 @@ contains
         ! NORMALIZE STRUCTURE FACTORS
         if(p%norec .eq. 'no')then
             call b%vol%new([p%box, p%box,p%box], p%smpd)
-            if( p%eo .eq. 'yes' )then
+            if( p%eo .ne. 'no' )then
                 call eonorm_struct_facts(b, p, reslim, which_iter)
             else
                 call norm_struct_facts(b, p, which_iter)

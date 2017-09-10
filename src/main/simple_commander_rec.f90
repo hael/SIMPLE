@@ -44,7 +44,7 @@ contains
         p = params(cline)                   ! parameters generated
         call b%build_general_tbox(p, cline) ! general objects built
         select case(p%eo)
-            case( 'yes' )
+            case( 'yes', 'aniso' )
                 call b%build_eo_rec_tbox(p) ! eo_reconstruction objs built
             case( 'no' )
                 call b%build_rec_tbox(p)    ! reconstruction objects built
@@ -112,7 +112,6 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_EO_VOLASSEMBLE NORMAL STOP ****', print_simple=.false.)
         ! indicate completion (when run in a qsys env)
-        
         if(.not.fopen(fnr, FILE='VOLASSEMBLE_FINISHED', STATUS='REPLACE', action='WRITE', iostat=file_stat))&
              call  fileio_errmsg('In: commander_rec :: eo_volassemble', file_stat )
         if(.not.fclose( fnr , iostat=file_stat))&
@@ -129,11 +128,27 @@ contains
             end subroutine assemble
             
             subroutine normalize( recname )
-                character(len=*), intent(in)  :: recname
+                use simple_filterer, only: gen_anisotropic_optlp
+                character(len=*), intent(in) :: recname
                 character(len=STDLEN) :: volname
+                character(len=32)     :: eonames(2)
                 volname = trim(recname)//trim(p%ext)
                 call b%eorecvol%sum_eos
-                call b%eorecvol%sampl_dens_correct_eos(s)
+                if( p%eo .eq. 'aniso' )then
+                    ! anisotropic resolution model
+                    eonames(1) = 'tmpvoleven'//p%ext
+                    eonames(2) = 'tmpvolodd'//p%ext
+                    call b%eorecvol%sampl_dens_correct_eos(s, eonames)
+                    call gen_projection_frcs( p, eonames(1), eonames(2), s, b%projfrcs)
+                    call del_file(eonames(1))
+                    call del_file(eonames(2))
+                    call b%projfrcs%write('frcs_state'//int2str_pad(s,2)//'.bin')
+                    ! generate the anisotropic 3D optimal low-pass filter
+                    call gen_anisotropic_optlp(b%vol, b%projfrcs, b%e, s)
+                    call b%vol%write('aniso_optlp_state'//int2str_pad(s,2)//p%ext)
+                else
+                    call b%eorecvol%sampl_dens_correct_eos(s)
+                endif
                 call b%eorecvol%get_res(res05s(s), res0143s(s))
                 call b%eorecvol%sampl_dens_correct_sum( b%vol )
                 call b%eorecvol%write_eos(recname)
@@ -152,7 +167,7 @@ contains
         type(build)                   :: b
         character(len=:), allocatable :: fbody
         character(len=STDLEN)         :: recvolname, rho_name
-        integer                       :: part, s, ss, endit, i, state4name, file_stat, fnr
+        integer                       :: part, s, ss, i, state4name, file_stat, fnr ! endit
         type(reconstructor)           :: recvol_read
         p = params(cline)                   ! parameters generated
         call b%build_general_tbox(p, cline) ! general objects built
@@ -164,8 +179,6 @@ contains
         endif
         call recvol_read%new([p%boxpd,p%boxpd,p%boxpd], p%smpd)
         call recvol_read%alloc_rho(p)
-        endit = 1
-        if( p%eo .eq. 'yes' ) endit = 2
         do ss=1,p%nstates
             if( cline%defined('state') )then
                 s = 1
@@ -183,47 +196,15 @@ contains
                 endif
                 allocate(fbody, source='recvol_state'//int2str_pad(state4name,2)//'_part'//int2str_pad(part,p%numlen))
                 DebugPrint  'processing fbody: ', fbody
-                do i=1,endit
-                    if( cline%defined('even') .or. cline%defined('odd') )then
-                        if( p%even .eq. 'yes' .and. p%odd .eq. 'no' )then
-                            p%vols(s) = fbody//'_even'//p%ext
-                            rho_name  = 'rho_'//fbody//'_even'//p%ext
-                        else if( p%odd .eq. 'yes' .and. p%even .eq. 'no' )then
-                            p%vols(s) = fbody//'_odd'//p%ext
-                            rho_name  = 'rho_'//fbody//'_odd'//p%ext
-                        else if( p%odd .eq. 'yes' .and. p%even .eq. 'yes' )then
-                            stop 'ERROR! Cannot have even=yes and odd=yes simultaneously'
-                        endif
-                    else
-                        if( p%eo .eq. 'yes' )then
-                            if( i == 1 )then
-                                p%vols(s) = fbody//'_odd'//p%ext
-                                rho_name  = 'rho_'//fbody//'_odd'//p%ext
-                            else
-                                p%vols(s) = fbody//'_even'//p%ext
-                                rho_name  = 'rho_'//fbody//'_even'//p%ext
-                            endif   
-                        else
-                            p%vols(s) = fbody//p%ext
-                            rho_name  = 'rho_'//fbody//p%ext
-                        endif
-                    endif
-                    call assemble(p%vols(s), trim(rho_name))
-                end do
+                p%vols(s) = fbody//p%ext
+                rho_name  = 'rho_'//fbody//p%ext
+                call assemble(p%vols(s), trim(rho_name))
                 deallocate(fbody)
             end do
-            if( p%nstates==1 .and. cline%defined('outvol') )then
+            if( p%nstates == 1 .and. cline%defined('outvol') )then
                 recvolname = trim(p%outvol)
             else
-                if( p%even .eq. 'yes' .and. p%odd .eq. 'no' )then
-                    recvolname = 'recvol_state'//int2str_pad(state4name,2)//'_even'//p%ext
-                else if( p%odd .eq. 'yes' .and. p%even .eq. 'no' )then
-                    recvolname = 'recvol_state'//int2str_pad(state4name,2)//'_odd'//p%ext
-                else if( p%odd .eq. 'yes' .and. p%even .eq. 'yes' )then
-                    stop 'ERROR! Cannot have even=yes and odd=yes simultaneously'
-                else
-                    recvolname = 'recvol_state'//int2str_pad(state4name,2)//p%ext
-                endif
+                recvolname = 'recvol_state'//int2str_pad(state4name,2)//p%ext
             endif
             call normalize( trim(recvolname) )
         end do

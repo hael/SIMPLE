@@ -285,9 +285,9 @@ contains
         use simple_fileio,       only: arr2file
         use simple_math,         only: get_resolution, calc_fourier_index
         use simple_masker,       only: masker
-        class(eo_reconstructor),         intent(inout) :: self       !< instance
-        integer,                         intent(in)    :: state      !< state
-        character(len=STDLEN), optional, intent(in)    :: eonames(2) !< even/odd filenames
+        class(eo_reconstructor),     intent(inout) :: self       !< instance
+        integer,                     intent(in)    :: state      !< state
+        character(len=32), optional, intent(in)    :: eonames(2) !< even/odd filenames
         real, allocatable :: res(:), corrs(:)
         type(image)       :: even, odd
         type(masker)      :: volmasker
@@ -319,8 +319,8 @@ contains
         endif
         ! write even/odd if eonames present
         if( present(eonames) )then
-            call even%write(eonames(1))
-            call odd%write(eonames(2))
+            call even%write(trim(eonames(1)))
+            call odd%write(trim(eonames(2)))
         endif
         ! forward FT
         call even%fwd_ft
@@ -348,6 +348,7 @@ contains
         class(eo_reconstructor), intent(inout) :: self      !< instance
         class(image),            intent(inout) :: reference !< reference volume
         write(*,'(A)') '>>> SAMPLING DENSITY (RHO) CORRECTION & WIENER NORMALIZATION'
+        call reference%set_ft(.false.)
         call self%eosum%sampl_dens_correct
         call self%eosum%bwd_ft
         call self%eosum%norm
@@ -359,15 +360,15 @@ contains
     !> \brief  for reconstructing Fourier volumes according to the orientations 
     !!         and states in o, assumes that stack is open   
     subroutine eorec( self, fname, p, o, se, state, vol, mul, part, fbody )
-        use simple_oris,       only: oris
-        use simple_fileio,     only: file_exists
-        use simple_sym,        only: sym
-        use simple_params,     only: params
-        use simple_gridding,   only: prep4cgrid
-        use simple_imgfile,    only: imgfile, find_ldim_nptcls
-        use simple_strings,    only: int2str_pad
-        use simple_jiffys,     only: progress
-        use simple_kbinterpol, only: kbinterpol
+        use simple_oris,            only: oris
+        use simple_fileio,          only: file_exists
+        use simple_sym,             only: sym
+        use simple_params,          only: params
+        use simple_gridding,        only: prep4cgrid
+        use simple_imgfile,         only: imgfile, find_ldim_nptcls
+        use simple_strings,         only: int2str_pad
+        use simple_jiffys,          only: progress
+        use simple_kbinterpol,      only: kbinterpol
         class(eo_reconstructor),    intent(inout) :: self      !< object
         character(len=*),           intent(in)    :: fname     !< spider/MRC stack filename
         class(params),              intent(in)    :: p         !< parameters
@@ -378,11 +379,12 @@ contains
         real,             optional, intent(in)    :: mul       !< shift multiplication factor
         integer,          optional, intent(in)    :: part      !< partition (4 parallel rec)
         character(len=*), optional, intent(in)    :: fbody     !< body of output file
-        type(image)      :: img, img_pad
-        type(kbinterpol) :: kbwin
-        real             :: skewness
-        integer          :: i, cnt, n, ldim(3), io_stat, filnum, state_glob
-        integer          :: statecnt(p%nstates), alloc_stat, state_here
+        type(image)       :: img, img_pad
+        type(kbinterpol)  :: kbwin
+        real              :: skewness
+        integer           :: i, cnt, n, ldim(3), io_stat, filnum, state_glob
+        integer           :: statecnt(p%nstates), alloc_stat, state_here
+        character(len=32) :: eonames(2)
         call find_ldim_nptcls(fname, ldim, n)
         if( n /= o%get_noris() ) stop 'inconsistent nr entries; eorec; simple_eo_reconstructor'
         kbwin = self%get_kbwin() 

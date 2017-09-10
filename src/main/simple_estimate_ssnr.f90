@@ -1,52 +1,9 @@
 ! spectral signal-to-noise ratio estimation routines
 module simple_estimate_ssnr
-use simple_defs   ! use all in there
-use simple_image, only: image
+use simple_defs ! use all in there
 implicit none
 
 contains
-
-    !>  \brief generate projection FRCs from even/odd pairs
-    subroutine gen_projection_frcs( p, ename, oname, state, projfrcs )
-        use simple_params,          only: params
-        use simple_oris,            only: oris
-        use simple_projector_hlev,  only: projvol
-        use simple_projection_frcs, only: projection_frcs
-        class(params),          intent(inout) :: p
-        character(len=*),       intent(in)    :: ename, oname
-        integer,                intent(in)    :: state
-        class(projection_frcs), intent(inout) :: projfrcs
-        type(oris)               :: e_space
-        type(image)              :: even, odd
-        type(image), allocatable :: even_imgs(:), odd_imgs(:)
-        real,        allocatable :: frc(:), res(:)
-        integer :: iproj
-        ! read even/odd pair
-        call even%new([p%box,p%box,p%box], p%smpd)
-        call odd%new([p%box,p%box,p%box], p%smpd)
-        call even%read(ename)
-        call odd%read(oname)
-        ! create e_space
-        call e_space%new(p%nspace)
-        call e_space%spiral(p%nsym, p%eullims)
-        ! generate even/odd projections
-        even_imgs = projvol(even, e_space, p)
-        odd_imgs  = projvol(even, e_space, p)
-        ! calculate FRCs and fill-in projfrcs object
-        !$omp parallel do default(shared) private(iproj,res,frc) schedule(static) proc_bind(close)
-        do iproj=1,p%nspace
-            call even_imgs(iproj)%fwd_ft
-            call odd_imgs(iproj)%fwd_ft
-            call even_imgs(iproj)%fsc(odd_imgs(iproj), res, frc, serial=.true.)
-            call projfrcs%set_frc(iproj, frc, state)
-            call even_imgs(iproj)%kill
-            call odd_imgs(iproj)%kill
-        end do
-        !$omp end parallel do
-        deallocate(even_imgs, odd_imgs)
-        call even%kill
-        call odd%kill
-    end subroutine gen_projection_frcs
 
     !> \brief  converts the FSC to SSNR (the 2.* is because of the division of the data)
     function fsc2ssnr( corrs ) result( ssnr )
@@ -97,5 +54,64 @@ contains
             w(k) = ssnr(k)/(ssnr(k)+1.)
         end do
     end function ssnr2optlp
+
+    !> DOSE FILTERING (Grant, Grigorieff eLife 2015)
+    !! input is template image, accumulative dose (in e/A2) and acceleration voltage
+    !!         output is filter coefficients
+    !! \f$  \mathrm{dose}_\mathrm{acc} = \int^{N}_{1} \mathrm{dose\_weight}(a,F,V),\ n_\mathrm{e}/\si{\angstrom\squared}  \f$
+    !! \param acc_dose accumulative dose (in \f$n_\mathrm{e}^- per \si{\angstrom\squared}\f$)
+    function acc_dose2filter( img, acc_dose, kV ) result( filter )
+        use simple_image, only: image
+        type(image), intent(in) :: img           !< input image
+        real,        intent(in) :: acc_dose, kV  !< acceleration voltage
+        real, allocatable       :: filter(:)
+        integer :: find, sz
+        sz = img%get_filtsz()
+        allocate(filter(sz))
+        do find=1,sz
+            filter(find) = dose_weight(acc_dose, img%get_spat_freq(find), kV)
+        end do
+    end function acc_dose2filter
+
+    !>  \brief Calculate dose weight. Input is accumulative dose (in e/A2) and
+    !>  spatial frequency (in 1/A)
+    !!         output is resolution dependent weight applied to individual frames
+    !!         before correlation search and averaging
+    !!
+    !! \f$  \mathrm{dose\_weight}(a,F,V) = \exp\left(- \frac{A_\mathrm{dose}}{k\times (2.0\times A\times f^B + C)} \right), \f$
+    !! where \f$k\f$ is 0.75 for \f$V<200\f$ kV, 1.0 for \f$200 \leqslant  V \leqslant  300\f$
+    real function dose_weight( acc_dose, spat_freq, kV )
+        real, intent(in) :: acc_dose                !< accumulative dose (in e/A2)
+        real, intent(in) :: spat_freq               !< spatial frequency (in 1/A)
+        real, intent(in) :: kV                      !< accelleration voltage
+        real, parameter  :: A=0.245, B=-1.665, C=2.81, kV_factor=0.75
+        real             :: critical_exp !< critical exposure (only depends on spatial frequency)
+        critical_exp = A*(spat_freq**B)+C
+        if( abs(kV-300.) < 0.001 )then
+            ! critical exposure does not need modification
+        else if( abs(kV-200.) < 0.001 )then
+            ! critical exposure at 200 kV expected to be ~25% lower
+            critical_exp = critical_exp*kV_factor
+        else
+            stop 'unsupported kV (acceleration voltage); simple_filterer :: dose_weight'
+        endif
+        dose_weight = exp(-acc_dose/(2.0*critical_exp))
+    end function dose_weight
+
+    !> \brief  re-samples a filter array
+    function resample_filter( filt_orig, res_orig, res_new ) result( filt_resamp )
+        use simple_math, only: find
+        real, intent(in)  :: filt_orig(:), res_orig(:), res_new(:)
+        real, allocatable :: filt_resamp(:) !< output filter array
+        integer :: filtsz_orig, filtsz_resamp, k, ind
+        real    :: dist
+        filtsz_orig   = size(filt_orig)
+        filtsz_resamp = size(res_new)
+        allocate(filt_resamp(filtsz_resamp))
+        do k=1,filtsz_resamp
+            call find(res_orig, filtsz_orig, res_new(k), ind, dist)
+            filt_resamp(k) = filt_orig(ind)
+        end do
+    end function resample_filter
 
 end module simple_estimate_ssnr

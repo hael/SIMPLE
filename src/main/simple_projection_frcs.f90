@@ -1,7 +1,7 @@
 module simple_projection_frcs
-use simple_filterer, only: resample_filter
-use simple_oris,     only: oris
-use simple_syslib,   only: alloc_errchk
+use simple_estimate_ssnr, only: resample_filter
+use simple_oris,          only: oris
+use simple_syslib,        only: alloc_errchk
 implicit none
 
 type projection_frcs
@@ -24,6 +24,7 @@ contains
     procedure, private :: raise_exception
     procedure, private :: bound_res
     ! setters/getters
+    procedure          :: get_nprojs
     procedure          :: set_frc
     procedure          :: get_frc
     procedure, private :: estimate_res_1
@@ -121,6 +122,11 @@ contains
     end subroutine bound_res
 
     ! setters/getters
+
+    integer function get_nprojs( self )
+        class(projection_frcs), intent(in) :: self
+        get_nprojs = self%nprojs
+    end function get_nprojs
 
     subroutine set_frc( self, proj, frc, state )
         class(projection_frcs), intent(inout) :: self

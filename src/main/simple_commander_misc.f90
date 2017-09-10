@@ -181,8 +181,8 @@ contains
 
     !> for printing the dose weights applied to individual frames
     subroutine exec_print_dose_weights( self, cline )
-        use simple_image,    only: image
-        use simple_filterer, only: acc_dose2filter
+        use simple_image,         only: image
+        use simple_estimate_ssnr, only: acc_dose2filter
         class(print_dose_weights_commander), intent(inout) :: self
         class(cmdline),                      intent(inout) :: cline
         real, allocatable :: filter(:)
