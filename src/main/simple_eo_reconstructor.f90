@@ -21,6 +21,7 @@ type :: eo_reconstructor
     real                :: fsc0143    !< target resolution at FSC=0.143
     real                :: smpd, msk, fny, inner=0., width=10.
     integer             :: box=0, nstates=1, numlen=2, lfny=0
+    integer             :: unevencorr_iter = 0
     logical             :: automsk = .false.
     logical             :: wiener  = .false.
     logical             :: exists  = .false.
@@ -84,6 +85,7 @@ contains
         self%numlen  = p%numlen
         self%msk     = p%msk
         self%automsk = file_exists(p%mskfile)
+        self%unevencorr_iter = p%unevencorr_iter
         ! create composites
         if( self%automsk )then
             call self%envmask%new([p%box,p%box,p%box], p%smpd)
@@ -349,7 +351,11 @@ contains
         class(image),            intent(inout) :: reference !< reference volume
         write(*,'(A)') '>>> SAMPLING DENSITY (RHO) CORRECTION & WIENER NORMALIZATION'
         call reference%set_ft(.false.)
-        call self%eosum%sampl_dens_correct
+        if( self%unevencorr_iter .eq. 0 )then
+            call self%eosum%sampl_dens_correct
+        else
+            call self%eosum%gridding_correct(maxits=self%unevencorr_iter)
+        endif
         call self%eosum%bwd_ft
         call self%eosum%norm
         call self%eosum%clip(reference)

@@ -746,8 +746,10 @@ contains
                 fname2format = 'B'
             case('dbin')
                 fname2format = 'D'
-            case ('txt', 'asc', 'box','dat')
+            case('txt', 'asc', 'box','dat')
                 fname2format = 'T'
+            case('pdb')
+                fname2format = 'P'                
             case DEFAULT
                 fname2format = 'N'
         end select

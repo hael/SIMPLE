@@ -139,6 +139,7 @@ type :: params
     character(len=STDLEN) :: outvol=''            !< output volume{outvol.ext}
     character(len=STDLEN) :: ctffind_doc=''       !< per-micrograph CTF parameters to transfer
     character(len=STDLEN) :: pcastk='pcavecinstk.bin'
+    character(len=STDLEN) :: pdbfile=''           !< PDB file
     character(len=STDLEN) :: pdfile='pdfile.bin'
     character(len=STDLEN) :: pgrp='c1'            !< point-group symmetry(cn|dn|t|o|i)
     character(len=STDLEN) :: plaintexttab=''      !< plain text file of input parameters
@@ -254,6 +255,7 @@ type :: params
     integer :: top=1
     integer :: tos=1
     integer :: trsstep=1
+    integer :: unevencorr_iter=0   !< uneven projection direction distribution correction iterations to perform
     integer :: update=1000
     integer :: which_iter=0        !< iteration nr
     integer :: xcoord=0            !< x coordinate{0}
@@ -544,6 +546,7 @@ contains
         call check_file('outstk',         self%outstk,       notAllowed='T')
         call check_file('outstk2',        self%outstk2,      notAllowed='T')
         call check_file('outvol',         self%outvol,       notAllowed='T')
+        call check_file('pdbfile',        self%pdbfile      )
         call check_file('plaintexttab',   self%plaintexttab, 'T')
         call check_file('stk',            self%stk,          notAllowed='T')
         call check_file('stk2',           self%stk2,         notAllowed='T')
@@ -626,6 +629,7 @@ contains
         call check_iarg('top',            self%top)
         call check_iarg('tos',            self%tos)
         call check_iarg('trsstep',        self%trsstep)
+        call check_iarg('unevencorr_iter',self%unevencorr_iter)
         call check_iarg('update',         self%update)
         call check_iarg('which_iter',     self%which_iter)
         call check_iarg('xdim',           self%xdim)
@@ -1142,6 +1146,8 @@ contains
                             ! text files are supported
                         case ('B')
                             ! binary files are supported
+                        case ('P')
+                            ! PDB files
                         case DEFAULT
                             write(*,*) 'file: ', trim(file)
                             stop 'This file format is not supported by SIMPLE; simple_params::check_file'

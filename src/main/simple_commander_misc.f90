@@ -12,6 +12,7 @@ use simple_defs            ! use all in there
 implicit none
 
 public :: cluster_smat_commander
+public :: intgpeaks_commander
 public :: masscen_commander
 public :: print_cmd_dict_commander
 public :: print_dose_weights_commander
@@ -28,6 +29,10 @@ type, extends(commander_base) :: cluster_smat_commander
   contains
     procedure :: execute      => exec_cluster_smat
 end type cluster_smat_commander
+type, extends(commander_base) :: intgpeaks_commander
+  contains
+    procedure :: execute       => exec_intgpeaks
+end type intgpeaks_commander
 type, extends(commander_base) :: masscen_commander
   contains
     procedure :: execute      => exec_masscen
@@ -149,6 +154,38 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_CLUSTER_SMAT NORMAL STOP ****')
     end subroutine exec_cluster_smat
+
+    !> 
+    subroutine exec_intgpeaks( self, cline )
+        use simple_intg_atompeak
+        use simple_atoms
+        class(intgpeaks_commander), intent(inout) :: self
+        class(cmdline),             intent(inout) :: cline
+        type(build)       :: b
+        type(params)      :: p
+        type(atoms)       :: mol
+        real, allocatable :: attribute(:)
+        real              :: xyz(3)
+        integer           :: i, natoms
+        p = params(cline)                   ! parameters generated
+        call b%build_general_tbox(p, cline) ! general objects built
+        call b%vol%read(p%vols(1))
+        call mol%new(p%pdbfile)
+        natoms = mol%get_n()
+        allocate(attribute(natoms), source=0.)
+        call set_intgvol(b%vol)
+        do i = 1, natoms
+            xyz = mol%get_coord(i)
+            if( cline%defined('inner') )then
+                attribute(i) = intg_shell(xyz, p%inner) 
+            else
+                attribute(i) = intg_nn(xyz) 
+
+            endif
+            print *,i,',',attribute(i)
+        enddo
+        deallocate(attribute)
+    end subroutine exec_intgpeaks
 
     !> centers base on centre of mass
     subroutine exec_masscen( self, cline )

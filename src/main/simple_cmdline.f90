@@ -159,6 +159,9 @@ contains
                 else if( index(arg(pos1+1:), '.box') /= 0 )then
                     ! text file with box coordinates
                     self%cmds(i)%carg = adjustl(arg(pos1+1:))
+                else if( index(arg(pos1+1:), '.pdb') /= 0 )then
+                    ! PDB file
+                    self%cmds(i)%carg = adjustl(arg(pos1+1:))
                 else if( index(arg(pos1+1:), '.') /= 0 )then
                     ! real number
                     self%cmds(i)%rarg = str2real(adjustl(arg(pos1+1:)))

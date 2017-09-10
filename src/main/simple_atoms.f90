@@ -20,6 +20,7 @@ character(len=74) :: pdbfmt = "(A6,I5,1X,A4,A1,A3,1X,A1,I4,A1,3X,3F8.3,2F6.2)" !
 !>  \brief type for dealing with atomic structures
 type :: atoms
     private
+    integer                       :: n = 0
     character(len=4), allocatable :: name(:)
     character(len=1), allocatable :: altloc(:)
     character(len=1), allocatable :: chain(:)
@@ -36,13 +37,16 @@ type :: atoms
     integer,          allocatable :: Z(:)  
     logical,          allocatable :: het(:)
     logical                       :: exists = .false.
-    integer                       :: n = 0
   contains
     ! CONSTRUCTORS
     procedure, private :: new_instance
     procedure, private :: new_from_pdb
     generic            :: new => new_from_pdb, new_instance
+    generic            :: assignment(=) => copy
+    procedure, private :: copy
     ! GETTERS
+    procedure          :: does_exist
+    procedure          :: get_n
     procedure          :: get_name
     procedure          :: get_coord
     ! I/O
@@ -57,12 +61,14 @@ end type atoms
 
 contains
 
+    ! CONSTRUCTORS
+
     subroutine new_from_pdb( self, fname )
         class(atoms),     intent(inout) :: self
         character(len=*), intent(in)    :: fname
         character(len=STDLEN) :: line
         character(len=6)      :: atom_field 
-        integer               :: i, l, nl, filnum, io_stat, n, cnt
+        integer               :: i, l, nl, filnum, io_stat, n
         call self%kill
         nl = nlines(trim(fname))
         if(nl == 0 .or. .not.file_exists(fname))then
@@ -137,12 +143,46 @@ contains
         self%exists = .true.
     end subroutine new_instance
 
+    subroutine copy( self, self_in )
+        class(atoms), intent(inout) :: self
+        class(atoms), intent(in)    :: self_in
+        integer :: n
+        if(.not.self_in%exists)stop 'Unallocated input instance; simple_atoms%copy'
+        n = self_in%n
+        call self%new_instance(n)
+        self%name(:)    = self_in%name
+        self%resname(:) = self_in%resname
+        self%chain(:)   = self_in%chain
+        self%altloc(:)  = self_in%altloc
+        self%icode(:)   = self_in%icode
+        self%mw         = self_in%mw
+        self%xyz        = self_in%xyz
+        self%beta       = self_in%beta
+        self%occupancy  = self_in%occupancy
+        self%num        = self_in%num
+        self%resnum     = self_in%resnum
+        self%Z          = self_in%Z
+        self%n          = n
+        self%het        = self_in%het
+    end subroutine copy
+
     ! GETTERS
+
+    logical function does_exist( self )
+        class(atoms), intent(inout) :: self
+        does_exist = self%exists
+    end function does_exist
+
+    integer function get_n( self )
+        class(atoms), intent(inout) :: self
+        get_n = self%n
+    end function get_n
 
     function get_coord( self, i )result( xyz )
         class(atoms), intent(inout) :: self
         integer,      intent(in)    :: i
         real :: xyz(3)
+        if(i.lt.1 .or. i.gt.self%n)stop 'index out of range; simple_atoms%get_coord'
         xyz = self%xyz(i,:)
     end function get_coord
 
@@ -192,7 +232,6 @@ contains
             
             character(len=76) function pdbstr( ind )
                 integer,           intent(in)  :: ind
-                integer :: i
                 character(len=6) :: atom_field
                 if(self%het(ind))then
                     atom_field(1:6) = 'HETATM' 

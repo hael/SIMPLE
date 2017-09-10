@@ -46,7 +46,7 @@ type, extends(image) :: reconstructor
     ! INTERPOLATION
     procedure, private :: inout_fcomp
     procedure, private :: calc_tfun_vals
-    procedure, private :: gridding_correct
+    procedure          :: gridding_correct
     procedure          :: inout_fplane
     procedure          :: sampl_dens_correct
     procedure          :: compress_exp
@@ -268,55 +268,63 @@ contains
 
     !>  is for uneven distribution of orientations correction 
     !>  from Pipe & Manon 1999
-    subroutine gridding_correct( self )
+    subroutine gridding_correct( self, maxits )
         use simple_gridding,   only: mul_w_instr
         use simple_math,       only: mycabs, hyp
         use simple_kbinterpol, only: kbinterpol
         class(reconstructor), intent(inout) :: self
+        integer,    optional, intent(in)    :: maxits
         type(kbinterpol) :: kbwin 
         type(image)      :: W_img, Wprev_img
         complex          :: comp, zero, one
-        real             :: Wnorm, winsz, alpha, val_prev, val, Wnorm_prev, invrho
-        integer          :: h, k, m, lims(3,2), logi(3), phys(3), iter, lfny, sh, cnt
-        integer, parameter :: maxits = 30
-        lfny = self%get_lfny(1)
-        lims = self%loop_lims(2)
-        zero = cmplx(0.,0.)
-        one  = cmplx(1.,0.)
+        real             :: Wnorm, val_prev, val, Wnorm_prev, invrho
+        integer          :: h, k, m, lims(3,2), logi(3), phys(3), iter, lfny, cnt
+        integer          :: maxits_here, lfny_sq, sh_sq
+        real,  parameter :: winsz  = 0.5
+        maxits_here = 25
+        if( present(maxits) )maxits_here = maxits
+        lfny    = self%get_lfny(1)
+        lfny_sq = lfny**2
+        lims    = self%loop_lims(2)
+        zero    = cmplx(0.,0.)
+        one     = cmplx(1.,0.)
         call W_img%new(self%ldim_img, self%get_smpd())
         call Wprev_img%new(self%ldim_img, self%get_smpd())
         call W_img%set_ft(.true.)
         call Wprev_img%set_ft(.true.)
         ! kernel
-        winsz = 2.
-        kbwin = kbinterpol(winsz, self%alpha)
+        kbwin = kbinterpol(winsz, 2.)
         ! weights init to 1.
         W_img = zero
+        !$omp parallel do collapse(3) default(shared) schedule(static)&
+        !$omp private(h,k,m,phys,logi,sh_sq) proc_bind(close)
         do h = lims(1,1),lims(1,2)
             do k = lims(2,1),lims(2,2)
                 do m = lims(3,1),lims(3,2)
-                    sh = nint(hyp(real(h),real(k),real(m)))
-                    if( sh > lfny )cycle
                     logi = [h, k, m]
+                    sh_sq = dot_product(logi,logi)
+                    if( sh_sq > lfny_sq )cycle
                     phys = W_img%comp_addr_phys(logi)
                     call W_img%set_fcomp(logi, phys, one)
                 end do
             end do
         end do
+        !$omp end parallel do
         ! main loop
-        Wnorm = 1.
-        do iter = 1, maxits
+        Wnorm = 1.0e-6
+        do iter = 1, maxits_here
             Wnorm_prev = Wnorm
             Wprev_img  = W_img 
             ! W <- W * rho
+            !$omp parallel do collapse(3) default(shared) schedule(static)&
+            !$omp private(h,k,m,sh_sq,phys,logi) proc_bind(close)
             do h = lims(1,1),lims(1,2)
                 do k = lims(2,1),lims(2,2)
                     do m = lims(3,1),lims(3,2)
-                        sh = nint(hyp(real(h),real(k),real(m)))
-                        !if( sh == 0 )cycle
-                        logi = [h, k, m]
-                        phys = W_img%comp_addr_phys(logi)
-                        if( sh > lfny )then
+                        logi  = [h, k, m]
+                        sh_sq = dot_product(logi,logi)                       
+                        phys  = W_img%comp_addr_phys(logi)
+                        if( sh_sq > lfny_sq )then
                             call W_img%set_fcomp(logi, phys, zero)
                         else
                             call W_img%mul(logi, self%rho(phys(1),phys(2),phys(3)), phys_in=phys)
@@ -324,6 +332,7 @@ contains
                     end do
                 end do
             end do
+            !$omp end parallel do
             ! W <- (W / rho) x kernel
             call W_img%bwd_ft
             call mul_w_instr(W_img, kbwin)
@@ -331,23 +340,26 @@ contains
             ! W <- Wprev / ((Wprev / rho) x kernel)
             Wnorm = 0.
             cnt   = 0
+            !$omp parallel do collapse(3) default(shared) schedule(static)&
+            !$omp private(h,k,m,sh_sq,phys,logi,val,val_prev) proc_bind(close)&
+            !$omp reduction(+:Wnorm,cnt)
             do h = lims(1,1),lims(1,2)
                 do k = lims(2,1),lims(2,2)
                     do m = lims(3,1),lims(3,2)
-                        sh = nint(hyp(real(h),real(k),real(m)))
-                        logi = [h, k, m]
-                        phys = W_img%comp_addr_phys(logi)
-                        if( sh > lfny )then
+                        logi  = [h, k, m]
+                        phys  = W_img%comp_addr_phys(logi)
+                        sh_sq = dot_product(logi,logi)
+                        if( sh_sq > lfny_sq )then
                             call W_img%set_fcomp(logi, phys, zero)
                         else
                             val = mycabs(W_img%get_fcomp(logi, phys))
                             if( val > 1.e-6 )then
-                                cnt      = cnt+1
-                                val_prev = real(Wprev_img%get_fcomp(logi, phys))
+                                cnt = cnt+1
                                 ! Wprev / ((Wprev / rho) x kernel)
-                                val      = min(val_prev/val, 1.e12)
+                                val_prev = real(Wprev_img%get_fcomp(logi, phys))
+                                val      = min(val_prev/val, 1.e20)
                                 call W_img%set_fcomp(logi, phys, cmplx(val, 0.)) 
-                                Wnorm = Wnorm + val**2.
+                                Wnorm = Wnorm + val ! values are positive, no need to square (numerical stability)
                             else
                                 call W_img%set_fcomp(logi, phys, zero)
                             endif
@@ -355,34 +367,37 @@ contains
                     end do
                 end do
             end do
-            Wnorm = sqrt(Wnorm / real(cnt))
+            !$omp end parallel do
+            Wnorm = log10(1.+Wnorm / sqrt(real(cnt)))
             ! convergence
-            print *, 'Wnorm', iter, log(1.+Wnorm), cnt
-            !if( abs(Wnorm-Wnorm_prev)/Wnorm < 0.01 )exit
+            print *, 'Log10 Wnorm', iter, Wnorm, Wnorm/Wnorm_prev
+            if( Wnorm/Wnorm_prev < 1.01 )exit
         enddo
         call Wprev_img%kill
-        !
+        ! Fourier comps / rho
+        !$omp parallel do collapse(3) default(shared) schedule(static)&
+        !$omp private(h,k,m,sh_sq,phys,logi,val,invrho) proc_bind(close)
         do h = lims(1,1),lims(1,2)
             do k = lims(2,1),lims(2,2)
                 do m = lims(3,1),lims(3,2)
-                    sh = nint(hyp(real(h),real(k),real(m)))
-                    !if( sh == 0 )cycle
-                    logi = [h, k, m]
-                    phys = W_img%comp_addr_phys(logi)
-                    if( sh > lfny )then
+                    logi  = [h, k, m]
+                    sh_sq = dot_product(logi,logi)
+                    phys  = W_img%comp_addr_phys(logi)
+                    if( sh_sq > lfny_sq )then
                         invrho = 0.
                     else
                         val = real(W_img%get_fcomp(logi, phys))
-                        if( val < 1.e-6 )then
-                            invrho = 0.
-                        else
+                        if( val > 1.e-6 )then
                             invrho = val
+                        else
+                            invrho = 0.
                         endif
                     endif
                     call self%mul(logi,invrho,phys_in=phys)
                 end do
             end do
         end do
+        !$omp end parallel do
         ! cleanup
         call W_img%kill
     end subroutine gridding_correct
@@ -581,8 +596,11 @@ contains
         else
             write(*,'(A)') '>>> SAMPLING DENSITY (RHO) CORRECTION (JACKSON) & WIENER NORMALIZATION'
             call self%compress_exp
-            !call self%gridding_correct
-            call self%sampl_dens_correct
+            if( p%unevencorr_iter > 0 )then
+                call self%gridding_correct(maxits=p%unevencorr_iter)
+            else
+                call self%sampl_dens_correct
+            endif
         endif
         call self%bwd_ft
         call img%kill

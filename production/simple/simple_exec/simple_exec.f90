@@ -101,6 +101,7 @@ type(stackops_commander)             :: xstackops
     
 ! MISCELLANOUS PROGRAMS
 type(cluster_smat_commander)         :: xcluster_smat
+type(intgpeaks_commander)            :: xintgpeaks
 type(masscen_commander)              :: xmasscen
 type(print_cmd_dict_commander)       :: xprint_cmd_dict
 type(print_dose_weights_commander)   :: xprint_dose_weights
@@ -1849,6 +1850,22 @@ select case(prg)
         call cline%parse(keys_required(:4), keys_optional(:1))
         ! execute
         call xcluster_smat%execute(cline)
+    case( 'intgpeaks' )
+        !==Program intgpeaks
+        !
+        ! <intgpeaks/begin>is a program for <intgpeaks/end>
+        !
+        ! set required keys
+        keys_required(1) = 'vol1'
+        keys_required(2) = 'pdbfile'
+        keys_required(3) = 'smpd'
+        ! set optional keys
+        keys_optional(1) = 'outfile'
+        ! parse command line
+        !if( describe ) call print_doc_cluster_smat
+        call cline%parse(keys_required(:3), keys_optional(:1))
+        ! execute
+        call xintgpeaks%execute(cline)
     case( 'masscen' )
         !==Program masscen
         !
