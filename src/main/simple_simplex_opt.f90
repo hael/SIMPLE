@@ -1,4 +1,5 @@
 ! The Nelder-Mead simplex method for continuous function minimisation
+#include "simple_lib.f08"
 module simple_simplex_opt
 use simple_defs
 use simple_optimizer, only: optimizer
@@ -31,7 +32,7 @@ contains
         real                              :: x
         call self%kill
         allocate(self%p(spec%ndim+1,spec%ndim), self%y(spec%ndim+1), self%pb(spec%ndim), stat=alloc_stat)
-        if(alloc_stat/=0)call alloc_errchk("In: new_simplex_opt", alloc_stat)
+        if(alloc_stat /= 0) allocchk("In: new_simplex_opt")
         ! initialize best cost to huge number
         self%yb = huge(x)
         self%exists = .true. ! indicates existence
@@ -111,15 +112,15 @@ contains
         alloc_stat=0
         if( allocated(self%p) )then
             deallocate(self%p, stat=alloc_stat)
-            if(alloc_stat/=0)call alloc_errchk("In: kill_simplex_opt p", alloc_stat)
+            if(alloc_stat /= 0) allocchk("In: kill_simplex_opt p")
         end if
         if( allocated(self%y) )then
             deallocate(self%y, stat=alloc_stat)
-            if(alloc_stat/=0)call alloc_errchk("In: kill_simplex_opt y ", alloc_stat)
+            if(alloc_stat /= 0) allocchk("In: kill_simplex_opt y ")
         end if
         if( allocated(self%pb) )then
             deallocate(self%pb, stat=alloc_stat)
-            if(alloc_stat/=0)call alloc_errchk("In: kill_simplex_opt pb ", alloc_stat)
+            if(alloc_stat /= 0) allocchk("In: kill_simplex_opt pb ")
         end if
         self%exists = .false.
     end subroutine kill_simplex_opt

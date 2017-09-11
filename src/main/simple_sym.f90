@@ -1,4 +1,5 @@
 ! defines protein point-group symmetries
+#include "simple_lib.f08"
 module simple_sym
 use simple_defs    ! use all in there
 use simple_oris,   only: oris
@@ -205,7 +206,7 @@ contains
         character(len=1)                      :: pgrp
         character(len=3),allocatable          :: pgrps(:), subgrps(:)
         allocate( pgrps(self%n), stat=alloc_stat )
-        if(alloc_stat/=0)call alloc_errchk( 'get_all_cd_subgrps; simple_sym; 1', alloc_stat )
+        if(alloc_stat /= 0) allocchk( 'get_all_cd_subgrps; simple_sym; 1')
         pgrp = self%pgrp(1:1)
         cnt  = 0
         if( pgrp=='c' )then
@@ -225,7 +226,7 @@ contains
             stop
         endif
         allocate( subgrps(cnt), stat=alloc_stat )
-        if(alloc_stat/=0)call alloc_errchk( 'get_all_cd_subgrps; simple_sym; 2', alloc_stat )
+        if(alloc_stat /= 0) allocchk( 'get_all_cd_subgrps; simple_sym; 2')
         do i=1,cnt
             subgrps(i) = pgrps(i)
         enddo
@@ -254,16 +255,16 @@ contains
             call self%get_all_cd_subgrps( subgrps )
         else if( pgrp=='t' )then
             allocate( subgrps(1), stat=alloc_stat )
-            if(alloc_stat/=0)call alloc_errchk( 'get_all_subgrps; simple_sym; 1', alloc_stat )
+            if(alloc_stat /= 0) allocchk( 'get_all_subgrps; simple_sym; 1')
             subgrps(1)  = 't'
         else if( pgrp=='o' )then
             allocate( subgrps(2), stat=alloc_stat )
-            if(alloc_stat/=0)call alloc_errchk( 'get_all_subgrps; simple_sym; 2', alloc_stat )
+            if(alloc_stat /= 0) allocchk( 'get_all_subgrps; simple_sym; 2')
             subgrps(1)  = 't'
             subgrps(2)  = 'o'
         else if( pgrp=='i' )then
             allocate( subgrps(3), stat=alloc_stat )
-            if(alloc_stat/=0)call alloc_errchk( 'get_all_subgrps; simple_sym; 3', alloc_stat )
+            if(alloc_stat /= 0) allocchk( 'get_all_subgrps; simple_sym; 3')
             subgrps(1)  = 't'
             subgrps(2)  = 'o'
             subgrps(3)  = 'i'
@@ -432,9 +433,9 @@ contains
         else
             n_os = asym_os%get_noris()
             allocate( nnmat(n_os,k), stat=alloc_stat )
-            if(alloc_stat/=0)call alloc_errchk("In: nearest_neighbors 1; simple_sym", alloc_stat)
+            if(alloc_stat /= 0) allocchk("In: nearest_neighbors 1; simple_sym")
             allocate(dists(n_os), inds(n_os), stat=alloc_stat)
-            if(alloc_stat/=0)call alloc_errchk("In: nearest_neighbors 2; simple_sym", alloc_stat)
+            if(alloc_stat /= 0) allocchk("In: nearest_neighbors 2; simple_sym")
             do i = 1, n_os
                 dists = 360.
                 oasym = asym_os%get_ori(i)

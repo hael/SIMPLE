@@ -6,11 +6,14 @@
 ! All rights reserved
 ! Use is subject to Janelia Farm Research Campus Software Copyright 1.1
 ! license terms ( http://license.janelia.org/license/jfrc_copyright_1_1.html )
+#include "simple_lib.f08"
 module simple_ctf
 !$ use omp_lib
 !$ use omp_lib_kinds
 use simple_defs
 use simple_jiffys,      only: progress
+use simple_syslib, only: alloc_errchk
+!use simple_params_l, only: CTFMODETYPE
 implicit none
 
 public :: ctf, test_ctf
@@ -214,8 +217,7 @@ contains
     !!          modes: abs, ctf, flip, flipneg, neg, square
     function ctf2spec( self, kfromto, box, dfx, mode, bfac ) result(spec)
         use simple_image,  only: image
-        use simple_fileio, only: alloc_errchk
-        class(ctf),       intent(inout) :: self       !< instance
+                class(ctf),       intent(inout) :: self       !< instance
         integer,          intent(in)    :: kfromto(2) !< Fourier index range
         integer,          intent(in)    :: box        !< box size
         real,             intent(in)    :: dfx        !< defocus
@@ -228,7 +230,7 @@ contains
         call self%init(dfx, dfx, 0.)
         ! allocate spectrum
         allocate( spec(kfromto(1):kfromto(2)), stat=alloc_stat )
-        if(alloc_stat/=0)call alloc_errchk('In: ctf2spec; simple_ctf', alloc_stat)
+        if(alloc_stat /= 0) allocchk('In: ctf2spec; simple_ctf')
         ! do the work
         do k=kfromto(1),kfromto(2) ! loop over resolution range
             kinv = real(k)/real(box)

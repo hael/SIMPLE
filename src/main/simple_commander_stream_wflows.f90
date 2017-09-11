@@ -1,4 +1,5 @@
 ! concrete commander: stream processing routines
+#include "simple_lib.f08"
 module simple_commander_stream_wflows
 use simple_defs
 use simple_syslib,            only: alloc_errchk,exec_cmdline, simple_sleep 

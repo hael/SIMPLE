@@ -1,4 +1,5 @@
 ! continuous function optimisation by Powell's method of conjugate search directions
+#include "simple_lib.f08"
 module simple_powell_opt
 use simple_defs
 use simple_optimizer, only: optimizer
@@ -32,7 +33,7 @@ contains
         real                             :: x
         call self%kill
         allocate(self%direction_set(spec%ndim,spec%ndim), stat=alloc_stat)
-        if(alloc_stat/=0)call alloc_errchk("In: new; simple_powell_opt", alloc_stat)
+        if(alloc_stat /= 0) allocchk("In: new; simple_powell_opt")
         self%direction_set = 0.
         self%yb            = huge(x) ! initialize best cost to huge number
         ! make line minimizer
@@ -122,7 +123,7 @@ contains
                 integer :: i,ibig,j,iter
                 real    :: del,fp,fptt,t
                 allocate(pt(spec%ndim),ptt(spec%ndim), stat=alloc_stat)
-                if(alloc_stat/=0)call alloc_errchk("In: powell; simple_powell_opt", alloc_stat)
+                if(alloc_stat /= 0) allocchk("In: powell; simple_powell_opt")
                 cost=spec%costfun(self%spec_linmin%x,spec%ndim) ! set initial costfun val
                 spec%nevals = spec%nevals+1
                 do j=1,spec%ndim

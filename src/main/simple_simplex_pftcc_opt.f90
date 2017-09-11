@@ -1,8 +1,10 @@
 ! The Nelder-Mead simplex method for continuous function minimisation
 ! with cost function defined in classes that extend pftcc_opt
+#include "simple_lib.f08"
 module simple_simplex_pftcc_opt
 use simple_defs
 use simple_pftcc_opt, only: pftcc_opt
+use simple_syslib,   only: alloc_errchk
 implicit none
 
 public :: simplex_pftcc_opt
@@ -28,13 +30,12 @@ contains
     !> \brief  is a constructor
     subroutine new( self, spec )
         use simple_opt_spec, only: opt_spec
-        use simple_syslib,   only: alloc_errchk
         class(simplex_pftcc_opt), intent(inout) :: self !< instance
         class(opt_spec),          intent(inout) :: spec   !< specification
         real    :: x
         call self%kill
         allocate(self%p(spec%ndim+1,spec%ndim), self%y(spec%ndim+1), self%pb(spec%ndim), stat=alloc_stat)
-        if(alloc_stat/=0)call alloc_errchk("In: new_simplex_opt_c", alloc_stat)
+        if(alloc_stat /= 0) allocchk("In:simple_simplex_pftcc_opt::new simplex_opt_c")
         ! initialize best cost to huge number
         self%yb = huge(x)
         self%exists = .true. ! indicates existence

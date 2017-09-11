@@ -1,4 +1,5 @@
 ! for calculation of band-pass limited cross-correlation of polar Fourier transforms
+#include "simple_lib.f08"
 module simple_polarft_corrcalc
 use simple_defs      ! use all in there
 use simple_params,   only: params
@@ -159,7 +160,7 @@ contains
         self%kfromto = kfromto                         !< Fourier index range
         ! generate polar coordinates
         allocate( self%polar(self%ptclsz,self%kfromto(1):self%kfromto(2)), self%angtab(self%nrots), stat=alloc_stat)
-        if(alloc_stat/=0)call alloc_errchk('polar coordinate arrays; new; simple_polarft_corrcalc', alloc_stat)
+        if(alloc_stat /= 0) allocchk('polar coordinate arrays; new; simple_polarft_corrcalc')
         ang = twopi/real(self%nrots)
         do irot=1,self%nrots
             self%angtab(irot) = real(irot-1)*ang
@@ -171,7 +172,7 @@ contains
         end do
         ! generate the argument transfer constants for shifting reference polarfts
         allocate( self%argtransf(self%nrots,self%kfromto(1):self%kfromto(2)), stat=alloc_stat)
-        if(alloc_stat/=0)call alloc_errchk('shift argument transfer array; new; simple_polarft_corrcalc', alloc_stat)
+        if(alloc_stat /= 0) allocchk('shift argument transfer array; new; simple_polarft_corrcalc')
         self%argtransf(:self%refsz,:)   = &
             self%polar(:self%refsz,:)   * &
             (PI/real(self%ldim(1)/2))    ! x-part
@@ -182,7 +183,7 @@ contains
         allocate(   self%pfts_refs(self%nrefs,self%refsz,self%kfromto(1):self%kfromto(2)),&
                     self%pfts_ptcls(self%pfromto(1):self%pfromto(2),self%ptclsz,self%kfromto(1):self%kfromto(2)),&
                     self%sqsums_ptcls(self%pfromto(1):self%pfromto(2)), stat=alloc_stat)
-        if(alloc_stat/=0)call alloc_errchk('polarfts and sqsums; new; simple_polarft_corrcalc', alloc_stat)
+        if(alloc_stat /= 0) allocchk('polarfts and sqsums; new; simple_polarft_corrcalc')
         self%pfts_refs    = zero
         self%pfts_ptcls   = zero
         self%sqsums_ptcls = 0.
@@ -398,7 +399,7 @@ contains
         where( dist>180. )dist = 360.-dist
         nrots = count(dist <= winsz)
         allocate( roind_vec(nrots), stat=alloc_stat )
-        if(alloc_stat/=0)call alloc_errchk("In: get_win_roind; simple_polarft_corrcalc", alloc_stat)
+        if(alloc_stat /= 0) allocchk("In: get_win_roind; simple_polarft_corrcalc")
         irot = 0
         do i = 1,self%nrots
             if( dist(i)<=winsz )then
@@ -427,7 +428,7 @@ contains
         complex(sp), allocatable :: pft(:,:)
         allocate(pft(self%refsz,self%kfromto(1):self%kfromto(2)),&
         source=self%pfts_ptcls(iptcl,irot:irot+self%winsz,:), stat=alloc_stat)
-        if(alloc_stat/=0)call alloc_errchk("In: get_ptcl_pft; simple_polarft_corrcalc", alloc_stat)
+        if(alloc_stat /= 0) allocchk("In: get_ptcl_pft; simple_polarft_corrcalc")
     end function get_ptcl_pft
 
     !>  \brief  returns polar Fourier transform of reference iref
@@ -438,7 +439,7 @@ contains
         complex(sp), allocatable :: pft(:,:)
         allocate(pft(self%refsz,self%kfromto(1):self%kfromto(2)),&
         source=self%pfts_refs(iref,:,:), stat=alloc_stat)
-        if(alloc_stat/=0)call alloc_errchk("In: get_ref_pft; simple_polarft_corrcalc", alloc_stat)
+        if(alloc_stat /= 0) allocchk("In: get_ref_pft; simple_polarft_corrcalc")
     end function get_ref_pft
 
     !>  \brief  checks for existence
@@ -615,7 +616,7 @@ contains
         astig = a%isthere('dfy')
         if( allocated(self%ctfmats) ) deallocate(self%ctfmats)
         allocate(self%ctfmats(self%pfromto(1):self%pfromto(2),self%refsz,self%kfromto(1):self%kfromto(2)), stat=alloc_stat)
-        if(alloc_stat/=0)call alloc_errchk("In: simple_polarft_corrcalc :: create_polar_ctfmats, 2", alloc_stat)
+        if(alloc_stat /= 0) allocchk("In: simple_polarft_corrcalc :: create_polar_ctfmats, 2")
         do iptcl=self%pfromto(1),self%pfromto(2)
             kv     = a%get(iptcl, 'kv'   )
             cs     = a%get(iptcl, 'cs'   )
@@ -854,7 +855,7 @@ contains
                         self%pfts_refs,    &
                         self%pfts_ptcls,   &
                         stat=alloc_stat)
-            if(alloc_stat/=0)call alloc_errchk("simple_polarft_corrcalc::kill ", alloc_stat)
+            if(alloc_stat /= 0) allocchk("simple_polarft_corrcalc::kill ")
             self%existence = .false.
         endif
     end subroutine kill

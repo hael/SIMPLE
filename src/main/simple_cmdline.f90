@@ -1,9 +1,12 @@
 ! command line parser
+#include "simple_lib.f08"
 module simple_cmdline
 use simple_defs     ! use all in there
 use simple_cmd_dict ! use all in there
 use simple_chash,   only: chash
 use simple_strings, only: str2int, str2real, str_has_substr, real2str, int2str
+use simple_syslib,  only: alloc_errchk
+use simple_fileio     
 implicit none
 
 public :: cmdline, cmdline_err
@@ -50,7 +53,6 @@ contains
     !> \brief for parsing the command line arguments passed as key=val
     subroutine parse( self, keys_required, keys_optional )
         use simple_args,         only: args
-        use simple_fileio     
         class(cmdline),             intent(inout) :: self
         character(len=*), optional, intent(in)    :: keys_required(:), keys_optional(:)
         character(len=STDLEN) :: arg
@@ -277,14 +279,13 @@ contains
 
     !> \brief  for checking that the passed array of keys are present in the struct
     subroutine check( self )
-        use simple_syslib,  only: alloc_errchk
         class(cmdline), intent(inout) :: self
         logical, allocatable  :: cmderr(:)
         integer               :: i, nstates
         character(len=STDLEN) :: str
         logical               :: vol_defined
         allocate( cmderr(self%ncheck), stat=alloc_stat )
-        if(alloc_stat/=0)call alloc_errchk('check; simple_cmdline', alloc_stat)
+        if(alloc_stat /= 0) allocchk('check; simple_cmdline')
         cmderr = .false.
         do i=1,self%ncheck
            cmderr(i) = .not. self%defined(self%checker(i))
@@ -335,7 +336,6 @@ contains
 
     !>  \brief  writes the hash to file
     subroutine write( self, fname )
-        use simple_chash
         class(cmdline),   intent(inout) :: self
         character(len=*), intent(inout) :: fname
         type(chash) :: hash
@@ -346,7 +346,6 @@ contains
 
     !>  \brief  reads a row of a text-file into the inputted hash, assuming key=value pairs
     subroutine read( self, fname, keys_required, keys_optional )
-        use simple_chash
         class(cmdline),             intent(inout) :: self
         character(len=*),           intent(inout) :: fname
         character(len=*), optional, intent(in)    :: keys_required(:), keys_optional(:)

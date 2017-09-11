@@ -1,4 +1,5 @@
 ! projection-matching based on Hadamard products, high-level search routines for PRIME2D
+#include "simple_lib.f08"
 module simple_hadamard2D_matcher
 !$ use omp_lib
 !$ use omp_lib_kinds

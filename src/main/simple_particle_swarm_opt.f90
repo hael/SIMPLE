@@ -1,9 +1,11 @@
 ! continuous particle swarm optimisation
+#include "simple_lib.f08"
 module simple_particle_swarm_opt
 use simple_defs
 use simple_optimizer, only: optimizer
 use simple_opt_spec,  only: opt_spec
 use simple_rnd,       only: ran3, irnd_uni
+use simple_syslib,   only: alloc_errchk
 implicit none
 
 public :: particle_swarm_opt
@@ -28,14 +30,13 @@ contains
 
     !> \brief  is a constructor
     subroutine new_particle_swarm( self, spec )
-        use simple_syslib,   only: alloc_errchk
         class(particle_swarm_opt), intent(inout) :: self !< instance
         class(opt_spec), intent(inout)           :: spec !< specification
         ! destruct if exists
         call self%kill
         ! allocate
         allocate(self%swarm(spec%npop,spec%ndim), self%velocities(spec%npop,spec%ndim), stat=alloc_stat)
-        if(alloc_stat/=0)call alloc_errchk("In: new_particle_swarm_opt, 1", alloc_stat)
+        if(alloc_stat /= 0) allocchk("In: new_particle_swarm_opt, 1")
         self%exists = .true. ! indicates existence
         if( spec%debug ) write(*,*) 'created new particle swarm (spec debug)'
         DebugPrint 'created new particle swarm (instance)'
@@ -151,7 +152,8 @@ contains
     subroutine kill_particle_swarm( self )
         class(particle_swarm_opt), intent(inout) :: self !< instance
         if( self%exists )then
-            deallocate(self%swarm, self%velocities)
+            deallocate(self%swarm, self%velocities, stat=alloc_stat)
+            if(alloc_stat /= 0) allocchk("simple_particle_swarm_opt::kill")
             self%exists = .false.
         endif
     end subroutine kill_particle_swarm

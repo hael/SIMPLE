@@ -1,4 +1,5 @@
 ! concrete commander: distributed workflows
+#include "simple_lib.f08"
 module simple_commander_distr_wflows
 use simple_rnd,            only: seed_rnd
 use simple_cmdline,        only: cmdline
@@ -104,7 +105,7 @@ contains
     ! PIPELINED UNBLUR + CTFFIND
     !> unblur_ctffind_distr is a distributed version of the pipelined unblur + ctffind programs
     subroutine exec_unblur_ctffind_distr( self, cline )
-        use simple_commander_preproc
+!        use simple_commander_preproc
         class(unblur_ctffind_distr_commander), intent(inout) :: self
         class(cmdline),                        intent(inout) :: cline
         character(len=32), parameter   :: UNIDOCFBODY = 'unidoc_'
@@ -146,7 +147,7 @@ contains
     ! UNBLUR SP DDDs
 
     subroutine exec_unblur_distr( self, cline )
-        use simple_commander_preproc
+ !       use simple_commander_preproc
         class(unblur_distr_commander), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
         character(len=32), parameter   :: UNIDOCFBODY = 'unidoc_'
@@ -188,7 +189,7 @@ contains
     ! UNBLUR TOMOGRAPHIC DDDs
 
     subroutine exec_unblur_tomo_movies_distr( self, cline )
-        use simple_commander_preproc
+!        use simple_commander_preproc
         use simple_oris,           only: oris
         use simple_strings,        only: real2str
         use simple_fileio,         only: read_filetable
@@ -231,7 +232,7 @@ contains
         p_master%nptcls = nseries
         ! prepare part-dependent parameters
         allocate(part_params(p_master%nparts), stat=alloc_stat) ! -1. is default excluded value
-        if(alloc_stat/=0)call alloc_errchk("simple_commander_distr_wflows::unblur_tomo_moview_distr ", alloc_stat)
+        if(alloc_stat /= 0) allocchk("simple_commander_distr_wflows::unblur_tomo_moview_distr ")
         do ipart=1,p_master%nparts
             call part_params(ipart)%new(4)
             call part_params(ipart)%set('filetab', trim(tomonames(ipart)))
@@ -293,7 +294,7 @@ contains
     ! PICKER
     !> distributed version of picker
     subroutine exec_pick_distr( self, cline )
-        use simple_commander_preproc
+!        use simple_commander_preproc
         class(pick_distr_commander), intent(inout) :: self
         class(cmdline),              intent(inout) :: cline
         type(qsys_env) :: qenv
@@ -321,7 +322,7 @@ contains
     !! PARALLEL CLASS AVERAGE GENERATION
     !> makecavgs_distr parallel class average generation
     subroutine exec_makecavgs_distr( self, cline )
-        use simple_commander_prime2D
+!        use simple_commander_prime2D
         use simple_commander_distr
         use simple_commander_mask
         class(makecavgs_distr_commander), intent(inout) :: self
@@ -1340,7 +1341,7 @@ contains
             ndatlines = boxfile%get_ndatalines()
             numlen    = len(int2str(ndatlines))
             allocate( boxdata(ndatlines,boxfile%get_nrecs_per_line()), stat=alloc_stat)
-            if(alloc_stat/=0)call alloc_errchk('In: simple_commander_tseries :: exec_tseries_track', alloc_stat)
+            if(alloc_stat /= 0) allocchk('In: simple_commander_tseries :: exec_tseries_track')
             do j=1,ndatlines
                 call boxfile%readNextDataLine(boxdata(j,:))
                 orig_box = nint(boxdata(j,3))

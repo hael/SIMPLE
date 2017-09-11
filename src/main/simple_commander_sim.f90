@@ -1,4 +1,5 @@
 ! concrete commander: simulation routines
+#include "simple_lib.f08"
 module simple_commander_sim
 use simple_defs            ! use all in there
 use simple_cmdline,        only: cmdline
@@ -246,7 +247,7 @@ contains
         DebugPrint  'initialized shifts'
         ! generate shifts
         allocate( shifts(p%nframes,2), stat=alloc_stat )
-        if(alloc_stat/=0)call alloc_errchk('In: simple_simmovie; shifts', alloc_stat)
+        if(alloc_stat /= 0) allocchk('In: simple_simmovie; shifts')
         x = 0.
         y = 0.
         do i=1,p%nframes
@@ -337,7 +338,7 @@ contains
                 logical                       :: occupied(xdim,ydim)
                 integer                       :: ix, iy, cnt, i, j
                 allocate( pos(npos,2), stat=alloc_stat )
-                if(alloc_stat/=0)call alloc_errchk("In: gen_ptcl_pos, simple_math", alloc_stat)
+                if(alloc_stat /= 0) allocchk("In: gen_ptcl_pos, simple_math")
                 occupied = .false.
                 cnt = 0
                 do

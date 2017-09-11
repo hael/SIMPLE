@@ -1,4 +1,5 @@
 ! 3D reconstruction from projections using convolution interpolation (gridding)
+#include "simple_lib.f08"
 module simple_reconstructor
 !$ use omp_lib
 !$ use omp_lib_kinds
@@ -13,9 +14,6 @@ implicit none
 
 public :: reconstructor
 private
-enum, bind(c) 
-    enumerator :: CTFMODE_NO = 0, CTFMODE_YES = 1, CTFMODE_MUL = 2,  CTFMODE_FLIP=3
-end enum
 
 type, extends(image) :: reconstructor
     private
@@ -115,11 +113,11 @@ contains
             allocate(self%cmat_exp( ldim_exp(1,1):ldim_exp(1,2),&
                                     &ldim_exp(2,1):ldim_exp(2,2),&
                                     &ldim_exp(3,1):ldim_exp(3,2)), stat=alloc_stat)
-            if(alloc_stat/=0)call alloc_errchk("In: alloc_rho; simple_reconstructor 1", alloc_stat)
+            if(alloc_stat /= 0) allocchk("In: alloc_rho; simple_reconstructor 1")
             allocate(self%rho_exp( rho_exp_lims(1,1):rho_exp_lims(1,2),&
                                     &rho_exp_lims(2,1):rho_exp_lims(2,2),&
                                     &rho_exp_lims(3,1):rho_exp_lims(3,2)), stat=alloc_stat)
-            if(alloc_stat/=0)call alloc_errchk("In: alloc_rho; simple_reconstructor 2", alloc_stat)
+            if(alloc_stat /= 0) allocchk("In: alloc_rho; simple_reconstructor 2")
             self%cmat_exp           = cmplx(0.,0.)
             self%rho_exp            = 0.
             self%cmat_exp_allocated = .true.
@@ -258,7 +256,7 @@ contains
             if( self%tfneg ) tval = -tval
         else
             tval   = 1.
-            tvalsq = tval
+            tvalsq = tval 
             if( self%tfneg ) tval = -tval
         endif
     end subroutine calc_tfun_vals

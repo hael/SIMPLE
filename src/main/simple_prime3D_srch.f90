@@ -1,13 +1,14 @@
 ! PRIME3D stochastic search routines
+#include "simple_lib.f08"
 module simple_prime3D_srch
+use simple_defs              ! use all in there
+use simple_math              ! use all in there
 use simple_oris,             only: oris
 use simple_ori,              only: ori
 use simple_strings,          only: str_has_substr, int2str_pad
 use simple_polarft_corrcalc, only: polarft_corrcalc
 use simple_pftcc_shsrch,     only: pftcc_shsrch
 use simple_pftcc_inplsrch,   only: pftcc_inplsrch
-use simple_math              ! use all in there
-use simple_defs              ! use all in there
 use simple_syslib,           only: alloc_errchk
 implicit none
 
@@ -153,7 +154,7 @@ contains
             self%state_exists = a%states_exist(self%nstates)
         else
             allocate(self%state_exists(self%nstates), stat=alloc_stat)
-            if(alloc_stat/=0)call alloc_errchk('In: new; simple_prime3D_srch, 1', alloc_stat)
+            if(alloc_stat /= 0) allocchk('In: new; simple_prime3D_srch, 1')
             self%state_exists = .true.
         endif
         ! multiple states
@@ -1272,7 +1273,7 @@ contains
         class(prime3D_srch), intent(inout) :: self
         integer,allocatable :: inds(:)
         allocate( inds(size(self%srch_order)), stat=alloc_stat )
-        if(alloc_stat/=0)call alloc_errchk( 'simple_prime3D_srch::get_srch_order', alloc_stat)
+        if(alloc_stat /= 0) allocchk( 'simple_prime3D_srch::get_srch_order')
         inds(:) = self%srch_order(:)
     end function get_srch_order
 
@@ -1402,7 +1403,7 @@ contains
     subroutine online_allocate( self )
         class(prime3D_srch), intent(inout) :: self
         allocate(self%proj_space_inds(self%nrefs), stat=alloc_stat)  
-        if(alloc_stat/=0)call alloc_errchk('In: prime3D_srch_allocate; simple_prime3D_srch', alloc_stat)
+        if(alloc_stat /= 0) allocchk('In: prime3D_srch_allocate; simple_prime3D_srch')
         self%proj_space_inds = 0
     end subroutine online_allocate
 

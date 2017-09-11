@@ -1,5 +1,6 @@
 ! abstract polar Fourier cross-correlation optimisation class
 module simple_pftcc_opt
+use simple_defs
 implicit none
 
 public :: pftcc_opt

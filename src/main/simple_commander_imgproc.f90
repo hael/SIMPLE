@@ -1,15 +1,18 @@
 ! concrete commander: general image processing routines
+#include "simple_lib.f08"
 module simple_commander_imgproc
+use simple_defs            ! use all in there
+use simple_syslib          ! use all in there
 use simple_cmdline,        only: cmdline
 use simple_params,         only: params
 use simple_build,          only: build
 use simple_commander_base, only: commander_base
 use simple_strings,        only: int2str, int2str_pad
 use simple_imgfile,        only: find_ldim_nptcls
+use simple_procimgfile
+!use simple_fileio, only: fopen,fclose,fileio_errmsg,file_exists,del_file
 use simple_fileio          ! use all in there
-use simple_jiffys          ! use all in there
-use simple_defs            ! use all in there
-use simple_syslib          ! use all in there
+use simple_jiffys,         only: progress, simple_end
 implicit none
 #include "simple_local_flags.inc"
 public :: binarise_commander
@@ -170,14 +173,14 @@ contains
 
     !> corrcompare is a wrapper program for CTFFIND4 (Grigorieff lab)
     subroutine exec_corrcompare( self, cline )
-        use simple_image, only: image
+!        use simple_image, only: image
         use simple_stat,  only: moment
         use simple_math,  only: get_resolution
         class(corrcompare_commander), intent(inout) :: self
         class(cmdline),               intent(inout) :: cline
         type(params)      :: p
         type(build)       :: b
-        integer           :: npix, iptcl, j
+        integer           :: iptcl, j
         real              :: corr, ave, sdev, var, fsc05, fsc0143
         real, allocatable :: res(:), corrs(:), corrs_sum(:)
         logical           :: err
@@ -186,7 +189,7 @@ contains
         if( cline%defined('msk') )then
             if( p%stats .eq. 'yes' )then
                 allocate(corrs(p%nptcls), stat=alloc_stat)
-                if(alloc_stat/=0)call alloc_errchk('In: simple_commander_imgproc::corrcompare 1 ', alloc_stat)
+                if(alloc_stat /= 0) allocchk('In: simple_commander_imgproc::corrcompare 1 ')
             endif
             do iptcl=1,p%nptcls
                 call b%img%read(p%stk, iptcl)
@@ -231,7 +234,7 @@ contains
                 call b%img%fsc(b%img_copy, res, corrs)
                 if( .not. allocated(corrs_sum) )then
                     allocate(corrs_sum(size(corrs)), stat=alloc_stat)
-                    if(alloc_stat/=0)call alloc_errchk('In: simple_commander_imgproc:: corrcompare , 2', alloc_stat)
+                    if(alloc_stat /= 0) allocchk('In: simple_commander_imgproc:: corrcompare , 2')
                     corrs_sum = 0.
                 endif
                 corrs_sum = corrs_sum+corrs
@@ -373,7 +376,7 @@ contains
 
    !> volume/image_smat is a program for creating a similarity matrix based on volume2volume correlation
     subroutine exec_image_smat(self, cline)
-        use simple_corrmat  ! use all in there
+        use simple_corrmat, only:   calc_cartesian_corrmat! use all in there
         use simple_fileio, only: fopen,fclose,fileio_errmsg
         use simple_ori,     only: ori
         use simple_imgfile, only: imgfile
@@ -387,7 +390,7 @@ contains
         p = params(cline, .false.)                           ! constants & derived constants produced
         call b%build_general_tbox(p, cline, .false., .true.) ! general objects built (no oritab reading)
         allocate(b%imgs_sym(p%nptcls), stat=alloc_stat)
-        if(alloc_stat/=0)call alloc_errchk('In: simple_image_smat, 1', alloc_stat)
+        if(alloc_stat /= 0) allocchk('In: simple_image_smat, 1')
         do iptcl=1,p%nptcls
             call b%imgs_sym(iptcl)%new([p%box,p%box,1], p%smpd)
             call b%imgs_sym(iptcl)%read(p%stk, iptcl)
@@ -479,7 +482,6 @@ contains
 
     !> scale is a program that provides re-scaling and clipping routines for MRC or SPIDER stacks and volumes
     subroutine exec_scale( self, cline )
-        use simple_procimgfile  ! use all in there
         use simple_image,       only: image
         use simple_math,        only: round2even
         use simple_qsys_funs,   only: qsys_job_finished
@@ -616,7 +618,6 @@ contains
 
     !> stack is a program for stacking individual images or multiple stacks into one
     subroutine exec_stack( self, cline )
-        use simple_imgfile,      only: imgfile
         use simple_image,        only: image
         class(stack_commander), intent(inout) :: self
         class(cmdline),         intent(inout) :: cline
@@ -728,8 +729,6 @@ contains
     !! the images
     subroutine exec_stackops( self, cline )
         use simple_ran_tabu,    only: ran_tabu
-        use simple_procimgfile, only: neg_imgfile, acf_imgfile, frameavg_imgfile
-        use simple_procimgfile  ! use all in there
         use simple_image,       only: image
         use simple_oris,        only: oris
         class(stackops_commander), intent(inout) :: self
@@ -750,7 +749,7 @@ contains
         if( cline%defined('nran') )then
             write(*,'(a)') '>>> RANDOMLY SELECTING IMAGES'
             allocate( pinds(p%nran), stat=alloc_stat )
-            if(alloc_stat/=0)call alloc_errchk('In: simple_commander; stackops', alloc_stat)
+            if(alloc_stat /= 0) allocchk('In: simple_commander; stackops')
             rt = ran_tabu(p%nptcls)
             call rt%ne_ran_iarr(pinds)
             if( cline%defined('oritab') .or. cline%defined('deftab') )then

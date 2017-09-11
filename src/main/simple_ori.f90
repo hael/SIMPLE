@@ -1,7 +1,8 @@
 ! an orientation
+#include "simple_lib.f08"
 module simple_ori
 use simple_defs    ! use all in there
-use simple_fileio  ! use all in there
+!use simple_fileio  ! use all in there
 use simple_syslib, only: alloc_errchk
 use simple_hash,   only: hash
 use simple_chash,  only: chash
@@ -384,7 +385,6 @@ contains
         use simple_rnd, only: ran3
         class(ori), intent(inout)  :: self
         real, intent(in), optional :: trs         !< threshold
-        real :: x, y
         if( present(trs) )call self%rnd_shift(trs)
         call self%e3set(ran3()*359.99)
     end subroutine rnd_inpl
@@ -604,12 +604,15 @@ contains
         if( sz_hash  > 0 ) str_htab  = self%htab%hash2str()
         if( sz_chash > 0 .and. sz_hash > 0 )then
             allocate( str, source=str_chtab//' '//str_htab ,stat=alloc_stat)
+            if(alloc_stat /= 0) allocchk("in simple_ori::ori2str 1 ")
         else if( sz_hash > 0 )then
             allocate( str, source=str_htab ,stat=alloc_stat)
+            if(alloc_stat /= 0) allocchk("in simple_ori::ori2str 2 ")
         else if( sz_chash > 0 )then
             allocate( str, source=str_chtab ,stat=alloc_stat)
+            if(alloc_stat /= 0) allocchk("in simple_ori::ori2str 3 ")
         endif
-        if(alloc_stat/=0)call alloc_errchk("in simple_ori::ori2str ",alloc_stat)
+        
     end function ori2str
 
     !<  \brief  to print the rotation matrix

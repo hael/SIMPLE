@@ -1,4 +1,5 @@
 ! projection-matching based on Hadamard products, high-level search routines for PRIME3D
+#include "simple_lib.f08"
 module simple_hadamard3D_matcher
 !$ use omp_lib
 !$ use omp_lib_kinds
@@ -48,7 +49,7 @@ contains
         call o%spiral
         lfny = b%img_match%get_lfny(1)
         allocate( peaks(lfny), stat=alloc_stat )
-        if(alloc_stat/=0)call alloc_errchk("In: prime3D_find_resrange, simple_hadamard3D_matcher", alloc_stat)
+        if(alloc_stat /= 0) allocchk("In: prime3D_find_resrange, simple_hadamard3D_matcher")
         do k=2,b%img_match%get_lfny(1)
             peaks(k) = real(o%find_npeaks(b%img_match%get_lp(k), p%moldiam))
         end do
@@ -194,7 +195,7 @@ contains
         ! STOCHASTIC IMAGE ALIGNMENT
         ! create the search objects, need to re-create every round because parameters are changing
         allocate( primesrch3D(p%fromp:p%top) , stat=alloc_stat)
-        if(alloc_stat/=0)call alloc_errchk("In hadamard3D_matcher::prime3D_exec primesrch3D objects ",alloc_stat)
+        if(alloc_stat /= 0) allocchk("In hadamard3D_matcher::prime3D_exec primesrch3D objects ")
         do iptcl=p%fromp,p%top
             call primesrch3D(iptcl)%new(b%a, p, pftcc)
         end do
@@ -403,7 +404,7 @@ contains
             nsamp = p%nptcls
             if( present(nsamp_in) ) nsamp = nsamp_in
             allocate( sample(nsamp), stat=alloc_stat )
-            if(alloc_stat/=0)call alloc_errchk("In: gen_random_model; simple_hadamard3D_matcher", alloc_stat)
+            if(alloc_stat /= 0) allocchk("In: gen_random_model; simple_hadamard3D_matcher")
             if( present(nsamp_in) )then
                 rt = ran_tabu(p%nptcls)
                 call rt%ne_ran_iarr(sample)

@@ -1,7 +1,9 @@
 ! spectral signal-to-noise ratio estimation routines
+#include "simple_lib.f08"
 module simple_estimate_ssnr
 use simple_defs
-use simple_image, only: image
+use simple_image,   only: image
+use simple_syslib,  only: alloc_errchk
 implicit none
 
 contains
@@ -19,7 +21,8 @@ contains
         wwidth = 7.
         if( present(width) ) wwidth = width
         nyq = img%get_nyq()
-        allocate(fsc(nyq), res(nyq))
+        allocate(fsc(nyq), res(nyq),stat=alloc_stat)
+        if(alloc_stat /= 0) allocchk("in simple_estimate_ssnr::fake_ssnr fsc res ")
         lplim_freq = real(img%get_find(lplim)) ! assuming square 4 now
         fsc = 1.0
         do k=1,nyq
@@ -97,7 +100,8 @@ contains
             if( allocated(specsum) )then
                 specsum = specsum+spec
             else
-                allocate(specsum(size(spec)), source=spec)
+                allocate(specsum(size(spec)), source=spec, stat=alloc_stat)
+                if(alloc_stat /= 0) allocchk("in simple_estimate_ssnr::estimate_ssnr specsum ")
             endif
             fdiff = imgs(iptcl)
             call fdiff%subtr(favg)
@@ -105,12 +109,14 @@ contains
             if( allocated(specdiffsum) )then
                 specdiffsum = specdiffsum+specdiff
             else
-                allocate(specdiffsum(size(specdiff)), source=specdiff)
+                allocate(specdiffsum(size(specdiff)), source=specdiff,stat=alloc_stat)
+                if(alloc_stat /= 0) allocchk("in simple_estimate_ssnr::estimate_ssnr specdiff ")
             endif
             deallocate(spec,specdiff)
         end do
         ! calculate ssnr
-        allocate(s(size(specsum)), ssnr(size(specsum)))
+        allocate(s(size(specsum)), ssnr(size(specsum)),stat=alloc_stat)
+        if(alloc_stat /= 0) allocchk("in simple_estimate_ssnr::estimate_ssnr s ssnr ")
         s    = 0.
         ssnr = 0.
         sc   = rnimgs/(rnimgs-1.)
@@ -120,7 +126,8 @@ contains
         where( s > 1.)
             ssnr = s-1.
         end where
-        deallocate(s,specsum,specdiffsum)
+        deallocate(s,specsum,specdiffsum,stat=alloc_stat)
+        if(alloc_stat /= 0) allocchk("in simple_estimate_ssnr::estimate_ssnr specsum s specdiffsum ")
         call fdiff%kill
         call favg%kill
     end function estimate_ssnr
@@ -194,7 +201,8 @@ contains
         integer :: nyq, k
         real    :: fsc
         nyq = size(corrs)
-        allocate( ssnr(nyq) )
+        allocate( ssnr(nyq),stat=alloc_stat)
+        if(alloc_stat /= 0) allocchk("in simple_estimate_ssnr::fsc2ssnr ssnr ")
         do k=1,nyq
             fsc = min(abs(corrs(k)),0.999)
             ssnr(k) = (2.*fsc)/(1.-fsc)
@@ -205,9 +213,10 @@ contains
     function fsc2optlp( corrs ) result( filt )
         real, intent(in)           :: corrs(:) !< fsc plot (correlations)
         real, allocatable          :: filt(:)  !< output filter coefficients
-        integer :: nyq, k
+        integer :: nyq
         nyq = size(corrs)
-        allocate( filt(nyq) )
+        allocate( filt(nyq),stat=alloc_stat)
+        if(alloc_stat /= 0) allocchk("in simple_estimate_ssnr::fsc2optlp filt ")
         filt = 0.
         where( corrs > 0. )    filt = sqrt( 2. * corrs / (corrs + 1.) )
         where( filt  > 0.9999 )filt = 0.99999
@@ -219,7 +228,8 @@ contains
         real, allocatable :: corrs(:) !< output FSC result
         integer :: nyq, k
         nyq = size(ssnr)
-        allocate( corrs(nyq) )
+        allocate( corrs(nyq),stat=alloc_stat)
+        if(alloc_stat /= 0) allocchk("in simple_estimate_ssnr::ssnr2fsc corrs ")
         do k=1,nyq
             corrs(k) = ssnr(k)/(ssnr(k)+1.)
         end do
@@ -231,7 +241,8 @@ contains
         real, allocatable :: w(:) !<  FIR low-pass filter
         integer :: nyq, k
         nyq = size(ssnr)
-        allocate( w(nyq) )
+        allocate( w(nyq),stat=alloc_stat)
+        if(alloc_stat /= 0) allocchk("in simple_estimate_ssnr::ssnr2optlp w ")
         do k=1,nyq
             w(k) = ssnr(k)/(ssnr(k)+1.)
         end do

@@ -1,4 +1,5 @@
 ! batch-processing manager - control module
+#include "simple_lib.f08"
 module simple_qsys_ctrl
 use simple_defs
 use simple_qsys_base,    only: qsys_base
@@ -6,8 +7,8 @@ use simple_qsys_local,   only: qsys_local
 use simple_chash,        only: chash
 use simple_strings,      only: int2str, int2str_pad
 use simple_cmdline,      only: cmdline
-use simple_syslib,       only: alloc_errchk, simple_chmod
-use simple_fileio
+use simple_syslib,       only: alloc_errchk, simple_chmod, simple_sleep, simple_getenv, exec_cmdline
+use simple_fileio, only: file_exists,del_file, fopen,fclose,fileio_errmsg, wait_for_closure
 implicit none
 
 public :: qsys_ctrl
@@ -116,7 +117,7 @@ contains
                     self%jobs_submitted(fromto_part(1):fromto_part(2)),&
                     self%script_names(fromto_part(1):fromto_part(2)),&
                     self%jobs_done_fnames(fromto_part(1):fromto_part(2)), stat=alloc_stat)
-        if(alloc_stat/=0)call alloc_errchk("In: simple_qsys_ctrl :: new", alloc_stat)
+        if(alloc_stat /= 0) allocchk("In: simple_qsys_ctrl :: new")
         if( self%stream )then
             self%jobs_done = .true.
         else
@@ -301,7 +302,7 @@ contains
         class(chash),     intent(in)    :: q_descr
         character(len=*), intent(in)    :: exec_bin, script_name, outfile
         character(len=512) :: io_msg
-        integer :: ios, funit, val
+        integer :: ios, funit
         call fopen(funit, file=script_name, iostat=ios, STATUS='REPLACE', action='WRITE', iomsg=io_msg)
         call fileio_errmsg('simple_qsys_ctrl :: generate_script_2; Error when opening file: '&
                  //trim(script_name)//' ; '//trim(io_msg),ios )
@@ -343,10 +344,9 @@ contains
 
     subroutine submit_scripts( self )
         class(qsys_ctrl),  intent(inout) :: self
-        class(qsys_base),        pointer :: pmyqsys
         character(len=LONGSTRLEN)        :: qsys_cmd
         character(len=STDLEN)            ::  script_name
-        integer               :: ipart, file_stat
+        integer               :: ipart
         logical               :: submit_or_not(self%fromto_part(1):self%fromto_part(2))
         ! make a submission mask
         submit_or_not = .false.
@@ -387,8 +387,6 @@ contains
     subroutine submit_script( self, script_name )
         class(qsys_ctrl), intent(inout) :: self
         character(len=*), intent(in)    :: script_name
-        class(qsys_base),      pointer  :: pmyqsys
-        integer :: ios
         character(len=STDLEN) :: cmd
         !!!!!!!!!!!
         if( .not.file_exists('./'//trim(script_name)))then
@@ -541,7 +539,7 @@ contains
             self%cline_stacksz          =  0
             deallocate(self%script_names, self%jobs_done, self%jobs_done_fnames, self%jobs_submitted, &
                 stat=alloc_stat)
-            if(alloc_stat/=0)call alloc_errchk("simple_qsys_ctrl::kill deallocating ", alloc_stat)
+            if(alloc_stat /= 0) allocchk("simple_qsys_ctrl::kill deallocating ")
             if(allocated(self%cline_stack))deallocate(self%cline_stack)
             self%existence = .false.
 

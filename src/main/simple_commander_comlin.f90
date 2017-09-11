@@ -1,4 +1,5 @@
 ! concrete commander: common-lines based clustering and search
+#include "simple_lib.f08"
 module simple_commander_comlin
 use simple_defs
 use simple_cmdline,        only: cmdline
@@ -47,7 +48,7 @@ contains
         p = params(cline, .false.)                           ! constants & derived constants produced
         call b%build_general_tbox(p, cline, .false., .true.) ! general objects built (no oritab reading)
         allocate(b%imgs_sym(p%nptcls), stat=alloc_stat)
-        if(alloc_stat/=0)call alloc_errchk('In: simple_comlin_smat, 1', alloc_stat)
+        if(alloc_stat /= 0) allocchk('In: simple_comlin_smat, 1')
         DebugPrint  'analysing this number of objects: ', p%nptcls
         do iptcl=1,p%nptcls
             call b%imgs_sym(iptcl)%new([p%box,p%box,1], p%smpd)
@@ -62,10 +63,10 @@ contains
             npairs = p%top - p%fromp + 1
             DebugPrint  'allocating this number of similarities: ', npairs
             allocate(corrs(p%fromp:p%top), pairs(p%fromp:p%top,2), stat=alloc_stat)
-            if(alloc_stat/=0)call alloc_errchk('In: simple_comlin_smat, 2', alloc_stat)
+            if(alloc_stat /= 0) allocchk('In: simple_comlin_smat, 2')
             ! read the pairs
             allocate(fname, source='pairs_part'//int2str_pad(p%part,p%numlen)//'.bin', stat=alloc_stat)
-            if(alloc_stat/=0)call alloc_errchk("In:  simple_comlin_smat, 3", alloc_stat)
+            if(alloc_stat /= 0) allocchk("In:  simple_comlin_smat, 3")
             if( .not. file_exists(fname) )then
                 write(*,*) 'file: ', fname, ' does not exist!'
                 write(*,*) 'If all pair_part* are not in cwd, please execute simple_split_pairs to generate the required files'
@@ -100,7 +101,7 @@ contains
             call qsys_job_finished(p,'simple_commander_comlin :: exec_comlin_smat')
         else
             allocate(corrmat(p%nptcls,p%nptcls), stat=alloc_stat)
-            if(alloc_stat/=0)call alloc_errchk('In: simple_comlin_smat, 3', alloc_stat)
+            if(alloc_stat /= 0) allocchk('In: simple_comlin_smat, 3')
             corrmat = 1.
             ntot = (p%nptcls*(p%nptcls-1))/2
             ! calculate the similarities

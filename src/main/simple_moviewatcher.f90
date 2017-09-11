@@ -1,6 +1,7 @@
 ! movie watcher for stream processing
+#include "simple_lib.f08"
 module simple_moviewatcher
-use simple_defs
+use simple_defs 
 use simple_syslib
 use simple_fileio
 use simple_params, only: params
@@ -198,15 +199,15 @@ contains
         if( .not.allocated(self%history) )then
             n = 0
             allocate(self%history(1), stat=alloc_stat)
-            if(alloc_stat/=0)call alloc_errchk("In: simple_moviewatcher%add2history 1", alloc_stat)
+            if(alloc_stat /= 0) allocchk("In: simple_moviewatcher%add2history 1")
         else
             n = size(self%history)
             allocate(tmp_farr(n), stat=alloc_stat)
-            if(alloc_stat/=0)call alloc_errchk("In: simple_moviewatcher%add2history 2", alloc_stat)
+            if(alloc_stat /= 0) allocchk("In: simple_moviewatcher%add2history 2")
             tmp_farr(:) = self%history
             deallocate(self%history)
             allocate(self%history(n+1), stat=alloc_stat)
-            if(alloc_stat/=0)call alloc_errchk("In: simple_moviewatcher%add2history 3", alloc_stat)
+            if(alloc_stat /= 0) allocchk("In: simple_moviewatcher%add2history 3")
             self%history(:n) = tmp_farr
             deallocate(tmp_farr)
         endif

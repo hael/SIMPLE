@@ -1,4 +1,5 @@
 ! concrete commander: prime3D for ab initio 3D reconstruction and 3D refinement
+#include "simple_lib.f08"
 module simple_commander_prime3D
 use simple_defs
 use simple_cmdline,        only: cmdline
@@ -332,7 +333,7 @@ contains
         limset = .false. ;  update_res = .false.
         if( p%eo .eq. 'yes' )then
             allocate( maplp(p%nstates) ,stat=alloc_stat)
-            if(alloc_stat/=0)call alloc_errchk("In commander_prime3D:: check3D_conv ", alloc_stat)
+            if(alloc_stat /= 0) allocchk("In commander_prime3D:: check3D_conv ")
             maplp = 0.
             do istate=1,p%nstates
                 if( b%a%get_pop( istate, 'state' ) == 0 )cycle ! empty state

@@ -6,7 +6,7 @@ use simple_params,         only: params
 use simple_build,          only: build
 use simple_commander_base, only: commander_base
 use simple_jiffys,         only: simple_end,progress
-use simple_syslib,         only: alloc_errchk, simple_stop
+use simple_syslib,         only: simple_stop
 
 implicit none
 

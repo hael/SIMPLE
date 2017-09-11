@@ -1,7 +1,9 @@
 ! brute force function minimisation
+#include "simple_lib.f08"
 module simple_bforce_opt
 use simple_defs
 use simple_optimizer, only: optimizer
+use simple_syslib,   only: alloc_errchk
 implicit none
 
 public :: bforce_opt
@@ -25,14 +27,13 @@ contains
     !> \brief  is a constructor
     subroutine new_bforce_opt( self, spec )
         use simple_opt_spec, only: opt_spec
-        use simple_syslib,   only: alloc_errchk
         class(bforce_opt), intent(inout) :: self !< instance
         class(opt_spec), intent(inout)   :: spec !< specification
         integer                          :: i
         real                             :: x
         call self%kill
         allocate(self%pb(spec%ndim), self%pc(spec%ndim), stat=alloc_stat)
-        if(alloc_stat/=0)call alloc_errchk("In: new_bforce_opt", alloc_stat)
+        if(alloc_stat /= 0) allocchk("In: new_bforce_opt")
         self%pb = spec%limits(:,1)
         self%pc = spec%limits(:,1)
         if( all(spec%stepsz == 0.) ) stop 'step size (stepsz) not set in&

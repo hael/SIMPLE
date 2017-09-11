@@ -247,11 +247,16 @@ contains
     ! LOGICAL<->PHYSICAL ADDRESS CONVERTERS
 
     !>  \brief  Convert logical address to physical address. Complex image.
-    function comp_addr_phys(self,logi) result(phys)
+    pure function comp_addr_phys(self,logi) result(phys)
         class(ftiter), intent(in) :: self
         integer,       intent(in) :: logi(3) !<  Logical address
         integer :: phys(3) !<  Physical address
-        integer :: i
+        integer :: i, factor
+        ! phys(1) = abs(logi(1)) + 1
+        ! factor = merge(1,-1,logi(1) .ge. 0) !! 
+        ! do i=2,3
+        !     phys(i) = abs(logi(i)) + 1 + self%ldim(i) * merge(1,0, factor * logi(i)  .lt. 0)
+        ! end do
         if (logi(1) .ge. 0) then
             phys = logi + 1
             ! The above is true except when in negative frequencies of
@@ -274,7 +279,7 @@ contains
     end function comp_addr_phys
 
     !> \brief Convert physical address to logical address. Complex image.
-    function comp_addr_logi(self,phys) result(logi)
+    pure function comp_addr_logi(self,phys) result(logi)
         class(ftiter), intent(in) :: self
         integer,       intent(in) :: phys(3) !<  Physical address
         integer :: logi(3) !<  Logical address

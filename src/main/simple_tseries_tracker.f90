@@ -1,4 +1,5 @@
 ! time series tracker intended for movies of nanoparticles spinning in solution
+#include "simple_lib.f08"
 module simple_tseries_tracker
 use simple_defs     ! use all in there
 use simple_syslib,  only: alloc_errchk ! use all in there
@@ -23,7 +24,7 @@ integer               :: ldim(3), nframes, box, nx, ny, offset
 real                  :: smpd, sxx, lp, cenlp, sumw
 character(len=3)      :: neg
 logical               :: l_neg
-character(len=STDLEN) :: fbody
+
 
 contains
 
@@ -62,7 +63,7 @@ contains
         ny = ldim(2) - box
         ! construct
         allocate(particle_locations(nframes,2), stat=alloc_stat)
-        if(alloc_stat/=0)call alloc_errchk("In: simple_tseries_tracker :: init_tracker", alloc_stat)
+        if(alloc_stat /= 0) allocchk("In: simple_tseries_tracker :: init_tracker")
         particle_locations = 0
         call frame_img%new(ldim, smpd)
         call tmp_img%new([box,box,1], smpd)
@@ -224,7 +225,7 @@ contains
 
     subroutine kill_tracker
         deallocate(particle_locations, framenames, stat=alloc_stat)
-        if(alloc_stat/=0)call alloc_errchk("simple_tseries_tracker::kill_tracker dealloc", alloc_stat)
+        if(alloc_stat /= 0) allocchk("simple_tseries_tracker::kill_tracker dealloc")
         call frame_img%kill
         call reference%kill
         call tmp_img%kill

@@ -1,4 +1,5 @@
 ! concrete commander: high-level workflows
+#include "simple_lib.f08"
 module simple_commander_hlev_wflows
 use simple_defs                   ! use all in there
 use simple_cmdline,               only: cmdline
@@ -10,7 +11,7 @@ use simple_fileio                 ! use all in there
 use simple_commander_distr        ! use all in 
 use simple_jiffys                 ! use all in there
 use simple_binoris_io             ! use all in there
-use simple_syslib,         only: alloc_errchk
+use simple_syslib,                only: alloc_errchk
 implicit none
 
 public :: prime2D_autoscale_commander
@@ -422,6 +423,7 @@ contains
         ! some init
         NREPEATS = nint(cline%get_rarg('nrepeats'))
         allocate(init_docs(NREPEATS), final_docs(NREPEATS), rep_corrs(NREPEATS), stat=alloc_stat)
+        if(alloc_stat /= 0) allocchk("simple_commander_hlev_wflows:: exec_het_ensemble init_docs(NREPEATS), final_docs(NREPEATS), rep_corrs(NREPEATS)")
         do irepeat=1,NREPEATS
             oritab              = trim(REPEATFBODY)//'init_rep'//int2str_pad(irepeat,2)//'.txt'
             init_docs(irepeat)  = trim(oritab)
@@ -516,6 +518,7 @@ contains
             ! solutions aggregation
             call binread_oritab(p_master%oritab, os, [1,p_master%nptcls])
             allocate(labels_incl(NREPEATS,n_incl), consensus(n_incl), stat=alloc_stat)
+            if(alloc_stat /= 0) allocchk("simple_commander_hlev_wflows::exec_het_ensemble labels_incl(NREPEATS,n_incl), consensus(n_incl)")
             do irepeat=1,NREPEATS
                 labels_incl(irepeat,:) = pack(labels(irepeat,:), mask=included)
             enddo

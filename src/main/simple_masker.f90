@@ -1,4 +1,5 @@
 ! 2D/3D envelope and adaptive masking
+#include "simple_lib.f08"
 module simple_masker
 use simple_defs    ! use all in there
 use simple_image,  only: image
@@ -114,7 +115,7 @@ contains
         call self%img_dist%new(self%idim, self%get_smpd())
         call self%img_dist%cendist
         allocate(self%adamsks(self%n), stat=alloc_stat )
-        if(alloc_stat/=0)call alloc_errchk('in simple_masker::init2D 1', alloc_stat)
+        if(alloc_stat /= 0) allocchk('in simple_masker::init2D 1')
         self%adamsks = 0.
     end subroutine init2D
 

@@ -1,7 +1,9 @@
 ! function minimization by L-BFGS (Limited memory Broyden–Fletcher–Goldfarb–Shannon optimisation)
+#include "simple_lib.f08"
 module simple_bfgs_opt
 use simple_defs
 use simple_optimizer, only: optimizer
+use simple_syslib,   only: alloc_errchk
 implicit none
 
 public :: bfgs_opt
@@ -28,7 +30,7 @@ contains
         call self%kill
         allocate(self%p(spec%ndim),self%dg(spec%ndim),self%hdg(spec%ndim),&
         self%hessin(spec%ndim,spec%ndim),self%pnew(spec%ndim),self%xi(spec%ndim),stat=alloc_stat)
-        if(alloc_stat/=0)call alloc_errchk('In: new_bfgs_opt; simple_bfgs_opt', alloc_stat)
+        if(alloc_stat /= 0) allocchk('In: new_bfgs_opt; simple_bfgs_opt')
         self%dg     = 0.
         self%hdg    = 0.
         self%hessin = 0.

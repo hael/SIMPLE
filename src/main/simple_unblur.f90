@@ -1,4 +1,5 @@
 ! unblur does motion correction, dose-weighting and frame-weighting of DDD movies 
+#include "simple_lib.f08"
 module simple_unblur
 !$ use omp_lib
 !$ use omp_lib_kinds
@@ -309,14 +310,14 @@ contains
         movie_frames_ftexp_sh(nframes), corrs(nframes), opt_shifts(nframes,2),&
         opt_shifts_saved(nframes,2), corrmat(nframes,nframes), frameweights(nframes),&
         frameweights_saved(nframes), stat=alloc_stat )
-        if(alloc_stat/=0)call alloc_errchk('unblur_init; simple_unblur', alloc_stat)
+        if(alloc_stat /= 0) allocchk('unblur_init; simple_unblur')
         corrmat = 0.
         corrs   = 0.
         call frame_tmp%new(ldim, smpd)
         ! allocate padded matrix
         winsz   = 2*HWINSZ+1
         allocate(rmat_pad(1-hwinsz:ldim(1)+hwinsz, 1-hwinsz:ldim(2)+hwinsz), win(winsz,winsz), stat=alloc_stat )
-        if(alloc_stat/=0)call alloc_errchk('unblur_init; simple_unblur, rmat_pad', alloc_stat)
+        if(alloc_stat /= 0) allocchk('unblur_init; simple_unblur, rmat_pad')
         ! calculate image sum and identify outliers
         if( doprint ) write(*,'(a)') '>>> READING & REMOVING DEAD/HOT PIXELS & FOURIER TRANSFORMING FRAMES'
         call tmpmovsum%new(ldim, smpd)
@@ -367,7 +368,7 @@ contains
         if( p%l_dose_weight )then
             do_dose_weight = .true.
             allocate( acc_doses(nframes), stat=alloc_stat )
-            if(alloc_stat/=0)call alloc_errchk('unblur_init; simple_unblur, acc_doses', alloc_stat)
+            if(alloc_stat /= 0) allocchk('unblur_init; simple_unblur, acc_doses')
             kV = p%kv
             time_per_frame = p%exp_time/real(nframes)           ! unit: s
             dose_rate      = p%dose_rate

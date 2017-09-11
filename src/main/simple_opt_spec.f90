@@ -1,4 +1,5 @@
 ! optimiser specification
+#include "simple_lib.f08"
 module simple_opt_spec
 use simple_defs
 use simple_syslib, only: alloc_errchk
@@ -140,14 +141,14 @@ contains
         if(present(nnn))       self%nnn       = nnn
         if(present(limits))    call self%set_limits( limits )
         allocate( self%cyclic(self%ndim), stat=alloc_stat )
-        if(alloc_stat/=0)call alloc_errchk('In: specify; simple_opt_spec, cyclic', alloc_stat)
+        if(alloc_stat /= 0) allocchk('In: specify; simple_opt_spec, cyclic')
         self%cyclic = .false.
         if( present(cyclic) )then
             self%cyclic = cyclic
         endif
         if(present(stepsz))then
             allocate( self%stepsz(ndim), stat=alloc_stat )
-            if(alloc_stat/=0)call alloc_errchk('In: specify; simple_opt_spec, stepsz', alloc_stat)
+            if(alloc_stat /= 0) allocchk('In: specify; simple_opt_spec, stepsz')
             self%stepsz = stepsz
         endif
         if(present(verbose_arg)) self%verbose = verbose_arg
@@ -158,17 +159,17 @@ contains
         ! allocate
         if( self%npeaks > 0 )then
             allocate( self%peaks(self%npeaks,self%ndim+1), source=1., stat=alloc_stat )
-            if(alloc_stat/=0)call alloc_errchk('In: specify; simple_opt_spec, peaks', alloc_stat)
+            if(alloc_stat /= 0) allocchk('In: specify; simple_opt_spec, peaks')
         endif
         select case(str_opt)
             case('linmin')
                 allocate( self%x(self%ndim), self%xi(self%ndim), self%xt(self%ndim), stat=alloc_stat )
-                if(alloc_stat/=0)call alloc_errchk('In: specify; simple_opt_spec, linmin', alloc_stat)
+                if(alloc_stat /= 0) allocchk('In: specify; simple_opt_spec, linmin')
                 self%xi = 0.
                 self%xt = 0.
             case DEFAULT
                 allocate( self%x(self%ndim), stat=alloc_stat )
-                if(alloc_stat/=0)call alloc_errchk('In: specify; simple_opt_spec, DEFAULT', alloc_stat)
+                if(alloc_stat /= 0) allocchk('In: specify; simple_opt_spec, DEFAULT')
         end select
         self%x  = 0.
         self%exists = .true.
@@ -198,7 +199,7 @@ contains
         end do
         if( .not.allocated(self%limits))then
             allocate( self%limits(self%ndim,2), stat=alloc_stat )
-            if(alloc_stat/=0)call alloc_errchk('In: specify; simple_opt_spec, limits', alloc_stat)
+            if(alloc_stat /= 0) allocchk('In: specify; simple_opt_spec, limits')
         endif
         self%limits = lims
     end subroutine set_limits

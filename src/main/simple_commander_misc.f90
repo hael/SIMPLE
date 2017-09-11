@@ -1,4 +1,5 @@
 ! concrete commander: miscallenaous routines
+#include "simple_lib.f08"
 module simple_commander_misc
 use simple_defs            ! use all in there
 use simple_cmdline,        only: cmdline
@@ -89,7 +90,7 @@ contains
         call b%build_general_tbox(p, cline, do3d=.false.)! general objects built
         ! obtain similarity matrix
         allocate(smat(p%nptcls,p%nptcls), stat=alloc_stat)
-        if(alloc_stat/=0)call alloc_errchk('In: simple_cluster_smat, 1', alloc_stat)
+        if(alloc_stat /= 0) allocchk('In: simple_cluster_smat, 1')
         smat = 1.
         call fopen(funit, status='OLD', action='READ', file=p%fname, access='STREAM',iostat=io_stat)
         call fileio_errmsg('commander_misc; cluster_smat fopen', io_stat)
@@ -100,7 +101,7 @@ contains
         endif
         call fclose(funit,errmsg='commander_misc; cluster_smat fclose ')
         allocate(validinds(2:p%ncls), stat=alloc_stat)
-        if(alloc_stat/=0)call alloc_errchk("In: simple_cluster_smat", alloc_stat)
+        if(alloc_stat /= 0) allocchk("In: simple_cluster_smat")
         validinds = 0
         ntot = (p%ncls-1)*NRESTARTS
         cnt = 0

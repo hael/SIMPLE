@@ -1,9 +1,11 @@
 ! ctffind iterator
+#include "simple_lib.f08"
 module simple_ctffind_iter
 use simple_defs
 use simple_strings,   only: real2str
-use simple_fileio       ! use all in there
+use simple_fileio,    only: fopen,fclose,fileio_errmsg,file_exists,add2fbody,fname_new_ext  ! use all in there
 use simple_nrtxtfile, only: nrtxtfile
+use simple_syslib,    only: exec_cmdline, alloc_errchk
 implicit none
 
 public :: ctffind_iter
@@ -19,7 +21,6 @@ contains
     subroutine iterate( self, p, imovie, movie_counter, moviename_forctf, fname_ctrl, fname_output, os )
         use simple_params, only: params
         use simple_oris,   only: oris
-        use simple_syslib,  only: exec_cmdline
         class(ctffind_iter),        intent(inout) :: self
         class(params),              intent(inout) :: p
         integer,                    intent(in)    :: imovie
@@ -39,7 +40,7 @@ contains
         fname_param   = fname_new_ext(fname_diag, 'txt')
 
         call fopen(funit, status='REPLACE', action='WRITE', file=trim(fname_ctrl),iostat=file_stat)
-        call fileio_errmsg("ctffind_iter:: iterate fopen failed "//trim(fname_ctrl),file_stat)
+        if(file_stat/=0) call fileio_errmsg("ctffind_iter:: iterate fopen failed "//trim(fname_ctrl),file_stat)
         write(funit,'(a)') trim(moviename_forctf)      ! integrated movie used for fitting
         write(funit,'(a)') trim(fname_diag)            ! diagnostic file
         write(funit,'(a)') real2str(p%smpd)            ! magnification dependent sampling distance
@@ -65,7 +66,7 @@ contains
         ndatlines = ctfparamfile%get_ndatalines()
         nrecs     = ctfparamfile%get_nrecs_per_line()
         allocate( ctfparams(ndatlines,nrecs) , stat=alloc_stat)
-        if(alloc_stat/=0)call alloc_errchk('In: iterate, module: simple_ctffind_iter', alloc_stat)
+        if(alloc_stat /= 0) allocchk('In: iterate, module: simple_ctffind_iter ctfparams')
         do j=1,ndatlines
             call ctfparamfile%readNextDataLine(ctfparams(j,:))
         end do

@@ -108,7 +108,6 @@ contains
     !! \param pind,j  indecies to normals
     !! \param corr,sumasq,sumbsq output statistics
     subroutine extr_comlin( self, pind, j, corr, sumasq, sumbsq, foundline )
-
         class(comlin), intent(inout) :: self
         integer,       intent(in)    :: pind,j
         real,          intent(out)   :: corr,sumasq,sumbsq

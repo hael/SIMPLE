@@ -122,7 +122,7 @@ contains
         integer, optional,     intent(in)    :: fromto(2)
         real, allocatable :: crxy(:)
         logical           :: irot_here, shvec_here, rxy_here
-        allocate(crxy(4))
+        allocate(crxy(4))         !! fixed size, not checking
         irot_here  = present(irot)
         shvec_here = present(shvec)
         rxy_here   = present(rxy)
@@ -167,7 +167,7 @@ contains
     subroutine inplsrch_get_peaks( self, peaks )
         class(pftcc_inplsrch), intent(inout) :: self
         real, allocatable,     intent(out)   :: peaks(:,:)
-        allocate(peaks(1,3))
+        allocate(peaks(1,3))   !! fixed size, not checking
         peaks(1,:) = self%ospec%x
     end subroutine inplsrch_get_peaks
     

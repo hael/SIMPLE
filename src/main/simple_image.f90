@@ -576,7 +576,7 @@ contains
             npix = (2*winsz+1)**2
         endif
         allocate(pixels(npix), stat=alloc_stat)
-        if(alloc_stat/=0)call alloc_errchk('In: win2arr; simple_image', alloc_stat)
+        if(alloc_stat /= 0) allocchk('In: win2arr; simple_image')
         cnt = 1
         do s=i-winsz,i+winsz
             ss = cyci_1d([1,self%ldim(1)], s)
@@ -1310,7 +1310,7 @@ contains
         else
             pack = .true.
             allocate( pcavec(npix), stat=alloc_stat )
-            if(alloc_stat/=0)call alloc_errchk('serialize; simple_image', alloc_stat)
+            if(alloc_stat /= 0) allocchk('serialize; simple_image')
             pcavec = 0.
         endif
         npix = 0
@@ -1411,7 +1411,7 @@ contains
                 else
                     pack = .true.
                     allocate( pcavec(npix), stat=alloc_stat )
-                    if(alloc_stat/=0)call alloc_errchk('winserialize; simple_image', alloc_stat)
+                    if(alloc_stat /= 0) allocchk('winserialize; simple_image')
                     pcavec = 0.
                 endif
             end subroutine set_action
@@ -2309,7 +2309,7 @@ contains
         real,              intent(in)    :: k
         integer, optional, intent(in)    :: phys_in(3)
         integer :: phys(3)
-        if( self%is_ft() )then
+        if( self%ft ) then
             if( present(phys_in) )then
                 phys = phys_in
             else
@@ -2754,7 +2754,7 @@ contains
         logical, allocatable        :: add_pixels(:,:,:)
         if( self%ft ) stop 'only for real images; grow_bin; simple image'
         allocate( add_pixels(self%ldim(1),self%ldim(2),self%ldim(3)), stat=alloc_stat )
-        if(alloc_stat/=0)call alloc_errchk('grow_bin; simple_image', alloc_stat)
+        if(alloc_stat /= 0) allocchk('grow_bin; simple_image')
         ! Figure out which pixels to add
         add_pixels = .false.
         if( self%ldim(3) == 1 )then
@@ -2803,7 +2803,7 @@ contains
         logical, allocatable        :: sub_pixels(:,:,:)
         if( self%ft ) stop 'only for real images; shrink_bin; simple image'
         allocate( sub_pixels(self%ldim(1),self%ldim(2),self%ldim(3)), stat=alloc_stat )
-        if(alloc_stat/=0)call alloc_errchk('shrink_bin; simple_image', alloc_stat)
+        if(alloc_stat /= 0) allocchk('shrink_bin; simple_image')
         ! Figure out which pixels to remove
         sub_pixels = .false.
         if( self%ldim(3) == 1 )then
@@ -2856,13 +2856,13 @@ contains
         tsz(:,2) = nlayers
         if(self%is_2d())tsz(3,:) = 1
         allocate( template(tsz(1,1):tsz(1,2), tsz(2,1):tsz(2,2), tsz(3,1):tsz(3,2)), stat=alloc_stat )
-        if(alloc_stat/=0)call alloc_errchk('grow_bins; simple_image 2', alloc_stat)
+        if(alloc_stat /= 0) allocchk('grow_bins; simple_image 2')
         pdsz(:,1) = 1 - nlayers
         pdsz(:,2) = self%ldim + nlayers
         if(self%is_2d())pdsz(3,:) = 1
         allocate( add_pixels(pdsz(1,1):pdsz(1,2), pdsz(2,1):pdsz(2,2),&
         &pdsz(3,1):pdsz(3,2)), stat=alloc_stat )
-        if(alloc_stat/=0)call alloc_errchk('grow_bins; simple_image 1', alloc_stat)
+        if(alloc_stat /= 0) allocchk('grow_bins; simple_image 1')
         ! template matrix
         template = .true.
         do i = tsz(1,1), tsz(1,2)
@@ -2930,13 +2930,13 @@ contains
         tsz(:,2) = nlayers
         if(self%is_2d())tsz(3,:) = 1
         allocate( template(tsz(1,1):tsz(1,2), tsz(2,1):tsz(2,2), tsz(3,1):tsz(3,2)), stat=alloc_stat )
-        if(alloc_stat/=0)call alloc_errchk('shrink_bins; simple_image 2', alloc_stat)
+        if(alloc_stat /= 0) allocchk('shrink_bins; simple_image 2')
         pdsz(:,1) = 1 - nlayers
         pdsz(:,2) = self%ldim + nlayers
         if(self%is_2d())pdsz(3,:) = 1
         allocate( sub_pixels(pdsz(1,1):pdsz(1,2), pdsz(2,1):pdsz(2,2),&
         &pdsz(3,1):pdsz(3,2)), stat=alloc_stat )
-        if(alloc_stat/=0)call alloc_errchk('shrink_bins; simple_image 1', alloc_stat)
+        if(alloc_stat /= 0) allocchk('shrink_bins; simple_image 1')
         ! template matrix
         template = .true.
         do i = tsz(1,1), tsz(1,2)
@@ -3222,7 +3222,7 @@ contains
         spec = self%spectrum('absreal')
         lfny = self%get_lfny(1)
         allocate( plot(lfny,2), stat=alloc_stat )
-        if(alloc_stat/=0)call alloc_errchk("In: guinier; simple_image", alloc_stat)
+        if(alloc_stat /= 0) allocchk("In: guinier; simple_image")
         do k=1,lfny
             plot(k,1) = 1./(self%get_lp(k)**2.)
             plot(k,2) = log(spec(k))
@@ -3256,7 +3256,7 @@ contains
         endif
         lfny = self%get_lfny(1)
         allocate( spec(lfny), counts(lfny), stat=alloc_stat )
-        allocchk('spectrum; simple_image')
+        if(alloc_stat /= 0) allocchk('spectrum; simple_image')
         spec   = 0.
         counts = 0.
         lims   = self%fit%loop_lims(2)
@@ -3599,7 +3599,7 @@ contains
         maxl = maxval(lims)
         kmax = maxl+int(oshoot*real(maxl))
         allocate( w(kmax), stat=alloc_stat )
-        if(alloc_stat/=0)call alloc_errchk("In: hannw; simple_image", alloc_stat)
+        if(alloc_stat /= 0) allocchk("In: hannw; simple_image")
         wstr = 'hann'
         wfuns = winfuns(wstr, real(kmax), 2.)
         do k=1,kmax
@@ -3740,7 +3740,7 @@ contains
         if( self%is_ft() )stop 'real space only; simple_image%sobel'
         if( self%ldim(3) == 1 )stop 'Volumes only; simple_image%sobel'
         allocate(rmat(self%ldim(1), self%ldim(2), self%ldim(3)), source=0., stat=alloc_stat)
-        if(alloc_stat/=0)call alloc_errchk("In: sobel; simple_image", alloc_stat)
+        if(alloc_stat /= 0) allocchk("In: sobel; simple_image")
         kernel      = 0.
         kernel(1,:) = -1
         kernel(1,2) = -2.
@@ -3855,7 +3855,7 @@ contains
             stop 'unrecognized parameter: which; stats; simple_image'
         endif
         allocate( pixels(product(self%ldim)), stat=alloc_stat )
-        if(alloc_stat/=0)call alloc_errchk('backgr; simple_image', alloc_stat)
+        if(alloc_stat /= 0) allocchk('backgr; simple_image')
         pixels = 0.
         npix = 0
         if( self%ldim(3) > 1 )then
@@ -4532,7 +4532,7 @@ contains
         if( allocated(corrs) ) deallocate(corrs)
         if( allocated(res) )   deallocate(res)
         allocate( corrs(n), res(n), sumasq(n), sumbsq(n), stat=alloc_stat )
-        if(alloc_stat/=0)call alloc_errchk('In: fsc, module: simple_image', alloc_stat)
+        if(alloc_stat /= 0) allocchk('In: fsc, module: simple_image')
         corrs  = 0.
         res    = 0.
         sumasq = 0.
@@ -4584,7 +4584,7 @@ contains
         n = self%get_filtsz()
         if( allocated(voxs) )deallocate(voxs)
         allocate( voxs(n), stat=alloc_stat )
-        if(alloc_stat/=0)call alloc_errchk('In: get_nvoxshell, module: simple_image', alloc_stat)
+        if(alloc_stat /= 0) allocchk('In: get_nvoxshell, module: simple_image')
         voxs = 0.
         lims = self%fit%loop_lims(2)
         !$omp parallel do collapse(3) default(shared) private(h,k,l,sh)&
@@ -4613,7 +4613,7 @@ contains
         integer                  :: n, k
         n = self%get_filtsz()
         allocate( res(n), stat=alloc_stat )
-        if(alloc_stat/=0)call alloc_errchk('In: get_res, module: simple_image', alloc_stat)
+        if(alloc_stat /= 0) allocchk('In: get_res, module: simple_image')
         do k=1,n
             res(k) = self%fit%get_lp(1,k)
         end do
@@ -4888,8 +4888,7 @@ contains
                       smooth_avg_curr_edge_start(self%ldim(dim2),self%ldim(dim3)),&
                       smooth_avg_curr_edge_stop (self%ldim(dim2),self%ldim(dim3)),&
                       stat=alloc_stat)
-            if(alloc_stat/=0)&
-                call alloc_errchk("In simple_image::taper_edges avg_curr etc.", alloc_stat)
+            if(alloc_stat /= 0) allocchk("In simple_image::taper_edges avg_curr etc.")
             avg_curr_edge_start        = 0.0e0
             avg_curr_edge_stop         = 0.0e0
             avg_curr_edge_avg          = 0.0e0
@@ -6174,8 +6173,7 @@ contains
         was_fted = self%is_ft()
         if( allocated(outliers) ) deallocate(outliers)
         allocate( outliers(self%ldim(1),self%ldim(2)), stat=alloc_stat)
-        if(alloc_stat/=0)&
-            call alloc_errchk("In simple_image::cure_outliers ", alloc_stat)
+        if(alloc_stat /= 0) allocchk("In simple_image::cure_outliers ")
         outliers = .false.
         call moment( self%rmat, ave, sdev, var, err )
         if( sdev<TINY )return
@@ -6186,7 +6184,7 @@ contains
             deadhot = 0
             allocate(rmat_pad(1-hwinsz:self%ldim(1)+hwinsz,1-hwinsz:self%ldim(2)+hwinsz),&
                 &win(winsz,winsz), stat=alloc_stat)
-            if(alloc_stat/=0)call alloc_errchk('In: cure_outliers; simple_image 1', alloc_stat)
+            if(alloc_stat /= 0) allocchk('In: cure_outliers; simple_image 1')
             rmat_pad(:,:) = median( reshape(self%rmat(:,:,1), (/(self%ldim(1)*self%ldim(2))/)) )
             rmat_pad(1:self%ldim(1), 1:self%ldim(2)) = &
                 &self%rmat(1:self%ldim(1),1:self%ldim(2),1)
@@ -6257,7 +6255,7 @@ contains
             deadhot = 0
             allocate(padded_image(1-hwinsz:self%ldim(1)+hwinsz,1-hwinsz:self%ldim(2)+hwinsz),&
                 &patch(winsz,winsz), stat=alloc_stat)
-            if(alloc_stat/=0)call alloc_errchk('In: cure_outliers; simple_image 1', alloc_stat)
+            if(alloc_stat /= 0) allocchk('In: cure_outliers; simple_image 1')
             padded_image(:,:) = median( reshape(self%rmat(:,:,1), (/(self%ldim(1)*self%ldim(2))/)) )
             padded_image(1:self%ldim(1), 1:self%ldim(2)) = &
                 &self%rmat(1:self%ldim(1),1:self%ldim(2),1)
@@ -6476,8 +6474,7 @@ contains
                 spec = img%spectrum('power')
                 lfny = size(spec)
                 allocate(res(lfny),stat=alloc_stat)
-                if(alloc_stat/=0)&
-                    call alloc_errchk("In simple_image::test_image res", alloc_stat)
+                if(alloc_stat /= 0) allocchk("In simple_image::test_image res")
                 do k=1,lfny
                     res(k) = (img%get_smpd())/img%get_lp(k)
                 end do

@@ -1,4 +1,5 @@
 ! concrete commander: routines for managing distributed SIMPLE execution
+#include "simple_lib.f08"
 module simple_commander_distr
 use simple_defs
 use simple_jiffys,         only: simple_end, progress
@@ -174,7 +175,7 @@ contains
         integer           :: filnum, io_stat
         p      = params(cline) ! parameters generated
         simmat = merge_similarities_from_parts(p%nptcls, p%nparts)           !! intel realloc warning
-       
+
         call fopen(filnum, status='REPLACE', action='WRITE', file='smat.bin', access='STREAM', iostat=io_stat)
         call fileio_errmsg('simple_merge_nnmat ; fopen error when opening smat.bin  ', io_stat)
         write(unit=filnum,pos=1,iostat=io_stat) simmat
@@ -197,7 +198,7 @@ contains
         call split_pairs_in_parts(p%nptcls, p%nparts)
         call simple_end('**** SIMPLE_SPLIT_PAIRS NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_split_pairs
-    
+
     !> split is a program for splitting of image stacks into partitions for parallel execution.
     !! This is done to reduce I/O latency
     subroutine exec_split( self, cline )
@@ -239,7 +240,7 @@ contains
 
             logical function stack_is_split()
                 character(len=:), allocatable :: stack_part_fname
-                logical,          allocatable :: stack_parts_exist(:) 
+                logical,          allocatable :: stack_parts_exist(:)
                 integer :: ipart, numlen, sz, sz_correct, ldim(3)
                 logical :: is_split, is_correct
                 allocate( stack_parts_exist(p%nparts) )

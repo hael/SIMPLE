@@ -1,4 +1,5 @@
 ! high-level continuous 3D projection matching
+#include "simple_lib.f08"
 module simple_cont3D_matcher
 use simple_defs              ! use all in there
 use simple_build,             only: build
@@ -60,7 +61,7 @@ contains
         nptcls = p%top - p%fromp + 1               ! number of particles processed
         ! states
         allocate(state_exists(p%nstates),stat=alloc_stat)
-        if(alloc_stat/=0)call alloc_errchk("simple_cont3D_matcher::cont3D_exec  ", alloc_stat)
+        if(alloc_stat /= 0) allocchk("simple_cont3D_matcher::cont3D_exec  ")
         state_exists = b%a%states_exist(p%nstates) ! state existence
         neff_states  = count(state_exists)         ! number of non-empty states
         ! number of references per particle
@@ -132,7 +133,7 @@ contains
             ! PREP BATCH
             allocate(pftccs(fromp:top), cont3Dadasrch(fromp:top),&
             &batch_imgs(fromp:top), stat=alloc_stat)
-            if(alloc_stat/=0)call alloc_errchk('In pcont3D_matcher::pcont3D_exec',alloc_stat)
+            if(alloc_stat /= 0) allocchk('In pcont3D_matcher::pcont3D_exec')
             do iptcl = fromp, top
                 state = nint(b%a%get(iptcl, 'state'))
                 if(state == 0)cycle
@@ -281,12 +282,12 @@ contains
         integer, allocatable :: part(:)
         integer              :: iptcl, cnt, n_recptcls
         allocate(eopart(p%fromp:p%top), source=-1., stat=alloc_stat) ! -1. is default excluded value
-        if(alloc_stat/=0)call alloc_errchk("simple_cont3D_matcher::prep_eopairs ", alloc_stat)
+        if(alloc_stat /= 0) allocchk("simple_cont3D_matcher::prep_eopairs ")
         rec_weights = b%a%get_all('w')
         n_recptcls  = count(rec_weights(p%fromp:p%top) > TINY)
         rt          = ran_tabu( n_recptcls )
         allocate(part(n_recptcls), source=0, stat=alloc_stat) ! 0 is default value
-        if(alloc_stat/=0)call alloc_errchk("simple_cont3D_matcher::prep_eopairs ", alloc_stat)
+        if(alloc_stat /= 0) allocchk("simple_cont3D_matcher::prep_eopairs ")
         call rt%balanced(2, part)
         part = part - 1 ! 0/1 outcome
         cnt = 0

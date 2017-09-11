@@ -1,4 +1,5 @@
 ! continuous function optimisation by differential evolution
+#include "simple_lib.f08"
 module simple_de_opt
 use simple_defs
 use simple_optimizer, only: optimizer
@@ -29,7 +30,7 @@ type, extends(optimizer) :: de_opt
 end type de_opt
 
 contains
-    
+
     !> \brief  is a constructor
     subroutine new_de( self, spec )
         use simple_syslib, only: alloc_errchk
@@ -62,24 +63,23 @@ contains
         end select
         ! allocate
         allocate(self%pop(spec%npop,spec%ndim), self%costs(spec%npop), stat=alloc_stat)
-        if(alloc_stat/=0)call alloc_errchk("In: new_de; simple_de_opt", alloc_stat)
+        if(alloc_stat /= 0) allocchk("In: new_de; simple_de_opt")
         self%exists = .true. ! indicates existence
         if( spec%DEBUG ) write(*,*) 'created new differential evolution population'
     end subroutine new_de
-    
+
     !> \brief  is the particle swarm minimize minimization routine
     subroutine de_minimize( self, spec, lowest_cost )
-        class(de_opt),   intent(inout) :: self        !< instance     
+        class(de_opt),   intent(inout) :: self        !< instance
         class(opt_spec), intent(inout) :: spec        !< specification
         real,            intent(out)   :: lowest_cost !< lowest cost
         integer :: t      ! iteration counter
         integer :: npeaks ! number of local minima
-        real    :: rtol   ! relative tolerance
         real    :: L
         integer :: loc(1), nworse, X, i, j
         if( .not. associated(spec%costfun) )then
             stop 'cost function not associated in opt_spec; de_minimize; simple_de_opt'
-        endif        
+        endif
         ! obtain initial solutions by randomized bounds
         do i=1,spec%npop
             do j=1,spec%ndim
@@ -117,15 +117,15 @@ contains
         spec%x = self%pop(self%best,:)
 
       contains
-        
+
         subroutine update_agent( X )
             integer, intent(in) :: X
             integer :: a, rb, b, i
-            real :: trial(spec%ndim), cost_trial, L
+            real :: trial(spec%ndim), cost_trial
             ! select random disjoint pair
             a  = irnd_uni(spec%npop)
             rb = irnd_uni(spec%npop-1)
-            b  = a+rb 
+            b  = a+rb
             if( b <= spec%npop )then
             else
                 b = a+rb-spec%npop
@@ -134,14 +134,14 @@ contains
             do i=1,spec%ndim
                 if( i == X .or. ran3() < self%CR )then
                     trial(i) = self%pop(self%best,i)+self%F*(self%pop(a,i)-self%pop(b,i))
-                    ! enforce limits 
+                    ! enforce limits
                     trial(i) = min(spec%limits(i,2),trial(i))
                     trial(i) = max(spec%limits(i,1),trial(i))
                 else
-                    trial(i) = self%pop(X,i) 
+                    trial(i) = self%pop(X,i)
                 endif
             end do
-            ! calculate cost 
+            ! calculate cost
             cost_trial  = spec%costfun(trial, spec%ndim)
             spec%nevals = spec%nevals + 1
             ! update pop if better solution is found
@@ -163,7 +163,7 @@ contains
                 nworse = nworse + 1
             endif
         end subroutine update_agent
-        
+
     end subroutine de_minimize
 
     ! GETTERS
@@ -171,7 +171,6 @@ contains
     !> \brief  is a destructor
     subroutine kill_de( self )
         class(de_opt), intent(inout) :: self !< instance
-        integer :: i
         if( self%exists )then
             deallocate(self%pop,self%costs)
             self%exists = .false.
