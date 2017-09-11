@@ -132,7 +132,7 @@ contains
         class(hash), intent(inout) :: self
         character(len=32), allocatable :: keys(:)
         allocate(keys(self%hash_index), source=self%keys(:self%hash_index),stat=alloc_stat)
-        allocchk("In get_keys")
+        if(alloc_stat /= 0) allocchk("In get_keys")
     end function get_keys
 
     !>  \brief  returns the values of the hash
@@ -140,7 +140,7 @@ contains
         class(hash), intent(inout) :: self
         real(kind=4), allocatable  :: vals(:)
         allocate(vals(self%hash_index), source=self%vals(:self%hash_index),stat=alloc_stat)
-        allocchk("In get_vals")
+        if(alloc_stat /= 0) allocchk("In get_vals")
     end function get_vals
 
     !>  \brief  convert hash to string
@@ -151,24 +151,24 @@ contains
         if( self%hash_index > 0 )then
             if( self%hash_index == 1 )then
                 allocate(str, source=trim(self%keys(1))//'='//trim(real2str(self%vals(1))),stat=alloc_stat)
-                allocchk("In hash2str 1")
+                if(alloc_stat /= 0) allocchk("In hash2str 1")
                 return
             endif
             allocate(str_moving, source=trim(self%keys(1))//'='//trim(real2str(self%vals(1)))//' ',stat=alloc_stat)
-            allocchk("In hash2str 2")
+            if(alloc_stat /= 0) allocchk("In hash2str 2")
             if( self%hash_index > 2 )then
                 do i=2,self%hash_index-1
                     allocate(str, source=str_moving//trim(self%keys(i))//'='//trim(real2str(self%vals(i)))//' ',stat=alloc_stat)
-                    allocchk("In hash2str 2")
+                    if(alloc_stat /= 0) allocchk("In hash2str 2")
                     deallocate(str_moving)
                     allocate(str_moving,source=str,stat=alloc_stat)
-                    allocchk("In hash2str 4")
+                    if(alloc_stat /= 0) allocchk("In hash2str 4")
                     deallocate(str)
                 end do
             endif
             allocate(str,source=trim(str_moving//trim(self%keys(self%hash_index))&
                 &//'='//trim(real2str(self%vals(self%hash_index)))),stat=alloc_stat)
-            allocchk("In hash2str 5")
+            if(alloc_stat /= 0) allocchk("In hash2str 5")
         endif
     end function hash2str
 

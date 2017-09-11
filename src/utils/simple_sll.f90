@@ -1,4 +1,5 @@
 ! runtime polymorphic singly linked list class
+#include "simple_lib.f08"
 module simple_sll
 use simple_defs
 use simple_syslib, only: alloc_errchk
@@ -32,7 +33,7 @@ contains
     generic :: assignment(=) => assign
     procedure :: append
     procedure :: display
-    procedure :: size
+!    procedure :: size
     procedure :: kill
 end type sll
 
@@ -41,6 +42,7 @@ interface sll
 end interface sll
 
 #include "simple_local_flags.inc"
+character(len=STDLEN):: io_msg
 contains
 
     !>  \brief  is a constructor that allocates the head of the list
@@ -54,11 +56,9 @@ contains
     !! and nullifies its pointer to the nextcoming node
     subroutine new(self)
         class(sll), intent(inout) :: self
-        integer              :: err
-        character(len=STDLEN):: io_msg
         if( associated(self%head) ) call self%kill
-        allocate(self%head,STAT=err,ERRMSG=io_msg)     ! allocate memory for the object
-        if(alloc_stat/=0)call alloc_errchk(" In simple_sll::new  deallocation fault "//trim(io_msg),err)
+        allocate(self%head,STAT=alloc_stat)     ! allocate memory for the object
+        if(alloc_stat /= 0) allocchk(" In simple_sll::new  deallocation fault ")
         nullify(self%head%next) ! start with an empty list
     end subroutine new
 
@@ -69,8 +69,6 @@ contains
         integer, optional, intent(in)    :: iarr(:)
         real, optional,    intent(in)    :: rarr(:)
         type(sll_node), pointer          :: prev, curr
-        integer              :: err
-        character(len=STDLEN):: io_msg
         ! initialization, begin at the 0:th position
         prev => self%head
         curr => prev%next
@@ -78,8 +76,8 @@ contains
             prev => curr
             curr => curr%next
         end do
-        allocate( curr ,STAT=err,ERRMSG=io_msg) ! insert it at the end of the list
-        if(alloc_stat/=0)call alloc_errchk(" In simple_sll::add  deallocation fault "//trim(io_msg),err)
+        allocate( curr ,STAT=alloc_stat,ERRMSG=io_msg) ! insert it at the end of the list
+        if(alloc_stat /= 0) allocchk(" In simple_sll::add  deallocation fault " )
         if( present(iarr) ) curr%content = iarr
         if( present(rarr) ) curr%content = rarr
         self%list_size = self%list_size+1
@@ -95,8 +93,6 @@ contains
         real,    allocatable, optional, intent(out) :: rarr(:)
         type(sll_node), pointer :: curr
         integer                 :: counter
-        integer              :: err
-        character(len=STDLEN):: io_msg
         if ( pos < 1 .or. pos > self%list_size ) then
             write(*,*) 'Variable pos is out of range!'
             write(*,*) 'get; simple_sll'
@@ -109,12 +105,11 @@ contains
             if( counter == pos ) exit
             curr => curr%next
         end do
-        err=0
         if( present(iarr) )then
             if( allocated(iarr) ) then
                 if(verbose.or.global_verbose)then
-                    deallocate(iarr,STAT=err,ERRMSG=io_msg)
-                    if(alloc_stat/=0)call alloc_errchk(" In simple_sll::get  deallocation fault "//trim(io_msg),err)
+                    deallocate(iarr,STAT=alloc_stat)
+                    if(alloc_stat /= 0) allocchk(" In simple_sll::get  deallocation fault " )
                 else !! only check deallocate in verbose mode
                     deallocate(iarr)
                 end if
@@ -125,8 +120,8 @@ contains
         if( present(rarr) )then
             if( allocated(rarr) )then
                 if(verbose.or.global_verbose)then
-                    deallocate(rarr,STAT=err,ERRMSG=io_msg)
-                    if(alloc_stat/=0)call alloc_errchk(" In simple_sll::get  deallocation fault "//trim(io_msg),err)
+                    deallocate(rarr,STAT=alloc_stat)
+                    if(alloc_stat /= 0) allocchk(" In simple_sll::get  deallocation fault " )
                 else
                     deallocate(rarr)
                 endif
@@ -165,8 +160,6 @@ contains
         integer,    intent(in)    :: pos
         type(sll_node), pointer   :: prev, curr
         integer                   :: counter
-        integer              :: err
-        character(len=STDLEN):: io_msg
         if ( pos < 1 .or. pos > self%list_size ) then
             write(*,*) 'Variable pos is out of range!'
             write(*,*) 'get; simple_sll'
@@ -194,8 +187,8 @@ contains
             prev%next => curr%next          ! redirect pointer
             call curr%content%kill          ! free space for the content
             if(verbose.or.global_verbose)then
-                deallocate( curr ,STAT=err,ERRMSG=io_msg)              ! free space for node
-                if(alloc_stat/=0)call alloc_errchk(" In simple_sll::del  deallocation fault "//trim(io_msg),err)
+                deallocate( curr ,STAT=alloc_stat)              ! free space for node
+                if(alloc_stat /= 0) allocchk(" In simple_sll::del  deallocation fault ")
             else
                 deallocate(curr)
             end if
@@ -203,8 +196,8 @@ contains
         else
             call curr%content%kill          ! free space for the list object
             if(verbose.or.global_verbose)then
-                deallocate( curr ,STAT=err,ERRMSG=io_msg)              ! free space for node
-                if(alloc_stat/=0)call alloc_errchk(" In simple_sll::del  deallocation fault "//trim(io_msg),err)
+                deallocate( curr ,STAT=alloc_stat)              ! free space for node
+                if(alloc_stat /= 0) allocchk(" In simple_sll::del  deallocation fault " )
             else
                 deallocate(curr)
             end if
@@ -232,8 +225,6 @@ contains
         class(sll), intent(inout)  :: self2
         type(sll)                  :: self
         type(sll_node), pointer    :: prev, curr
-        integer              :: err
-        character(len=STDLEN):: io_msg
         ! Make resulting list
         call self%new
         self%list_size = self1%list_size + self2%list_size
@@ -241,8 +232,8 @@ contains
         self%head%next => self1%head%next
         ! remove list 1
         if(verbose.or.global_verbose)then
-            deallocate( self1%head,STAT=err,ERRMSG=io_msg )
-            if(alloc_stat/=0)call alloc_errchk(" In simple_sll::append  deallocation fault "//trim(io_msg),err)
+            deallocate( self1%head,STAT=alloc_stat )
+            if(alloc_stat /= 0) allocchk(" In simple_sll::append  deallocation fault ")
         else
             deallocate(self1%head)
         end if
@@ -258,8 +249,8 @@ contains
         prev%next => self2%head%next
         ! remove list 2
         if(verbose.or.global_verbose)then
-            deallocate( self2%head ,STAT=err,ERRMSG=io_msg)
-            if(alloc_stat/=0)call alloc_errchk(" In simple_sll::append  deallocation fault "//trim(io_msg),err)
+            deallocate( self2%head ,STAT=alloc_stat)
+            if(alloc_stat /= 0) allocchk(" In simple_sll::append  deallocation fault " )
         else
             deallocate(self2%head)
         end if
@@ -284,25 +275,24 @@ contains
     end subroutine display
 
     !>  \brief  returns the size of the list
-    pure function size( self ) result( list_size )
-        class(sll), intent(in) :: self
-        integer                :: list_size
-        list_size = self%list_size
-    end function size
+    ! pure function numel( self ) result( list_size )
+    !     class(sll), intent(in) :: self
+    !     integer                :: list_size
+    !     list_size = self%list_size
+    ! end function numel
 
     !>  \brief  is a destructor
     subroutine kill( self )
         class(sll), intent(inout) :: self
-        integer                   :: i,err
-        character(len=STDLEN):: io_msg
+        integer                   :: i
         if( self%list_size >= 0 )then
             do i=1,self%list_size
                 call self%del(1)
             end do
         endif
         if( associated(self%head) )then
-            deallocate(self%head,STAT=err,ERRMSG=io_msg)
-            if(alloc_stat/=0)call alloc_errchk(" In simple_sll::kill  deallocation fault "//trim(io_msg),err)
+            deallocate(self%head,STAT=alloc_stat)
+            if(alloc_stat /= 0) allocchk(" In simple_sll::kill  deallocation fault ")
             nullify(self%head)
         endif
     end subroutine kill

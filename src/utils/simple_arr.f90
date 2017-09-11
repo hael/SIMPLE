@@ -1,4 +1,5 @@
 ! array class (container class for the singly linked list)
+#include "simple_lib.f08" 
 module simple_arr
     use simple_defs
     use simple_syslib, only: alloc_errchk
@@ -22,43 +23,37 @@ type :: arr
 end type arr
 
 #include "simple_local_flags.inc"
-
+character(len=STDLEN):: io_msg
 
 contains
     subroutine new_1( self, iarr )
         class(arr), intent(inout) :: self
         integer, intent(in) :: iarr(:)        !< input integer array
-        integer              :: err
-        character(len=STDLEN):: io_msg
         if( allocated(self%iarr) )then
-            deallocate( self%iarr,STAT=err,ERRMSG=io_msg)
-            if(alloc_stat/=0)call alloc_errchk(" In simple_arr::new_1  deallocation fault "//trim(io_msg),err)
+            deallocate( self%iarr,STAT=alloc_stat)
+            if(alloc_stat /= 0) allocchk(" In simple_arr::new_1  dealloc iarr " )
         end if
-        allocate( self%iarr(size(iarr)), source=iarr, stat=err,errmsg=io_msg)
-        if(alloc_stat/=0)call alloc_errchk(" In simple_arr::new_1  allocation fault "//trim(io_msg),err)
+        allocate( self%iarr(size(iarr)), source=iarr, stat=alloc_stat)
+        if(alloc_stat /= 0) allocchk(" In simple_arr::new_1  iarr " )
     end subroutine new_1
 
     subroutine new_2( self, rarr )
         class(arr), intent(inout) :: self
         real, intent(in) :: rarr(:)           !< input float array
-        integer              :: err
-        character(len=STDLEN):: io_msg
         if( allocated(self%rarr) ) then
-            deallocate( self%rarr ,STAT=err,ERRMSG=io_msg)
-            if(alloc_stat/=0)call alloc_errchk(" In simple_arr::new_2 deallocation fault"//trim(io_msg),err)
+            deallocate( self%rarr ,STAT=alloc_stat)
+            if(alloc_stat /= 0) allocchk(" In simple_arr::new_2 dealloc rarr" )
           end if
-        allocate( self%rarr(size(rarr)), source=rarr,STAT=err,ERRMSG=io_msg )
-        if(alloc_stat/=0)call alloc_errchk(" In simple_arr::new_2 allocation fault "//trim(io_msg),err)
+        allocate( self%rarr(size(rarr)), source=rarr,STAT=alloc_stat )
+        if(alloc_stat /= 0) allocchk(" In simple_arr::new_2 rarr ")
     end subroutine
 
     function iget( self ) result( iarr )
         class(arr), intent(in) :: self
         integer, allocatable   :: iarr(:)  !< output integer array
-        integer              :: err
-        character(len=STDLEN):: io_msg
         if( allocated(self%iarr) )then
-            allocate( iarr(size(self%iarr)), source=self%iarr ,stat=err,errmsg=io_msg)
-            if(alloc_stat/=0)call alloc_errchk(" In simple_arr::iget  allocation fault "//trim(io_msg),err)
+            allocate( iarr(size(self%iarr)), source=self%iarr ,stat=alloc_stat)
+            if(alloc_stat /= 0) allocchk(" In simple_arr::iget  iarr dealloc " )
         else
             stop 'no info in iarr; get_1; simple_arr'
         endif
@@ -67,11 +62,9 @@ contains
     function rget( self ) result( rarr )
         class(arr), intent(in) :: self
         real, allocatable      :: rarr(:) !< output float array
-        integer              :: err
-        character(len=STDLEN):: io_msg
         if( allocated(self%rarr) )then
-            allocate( rarr(size(self%rarr)), source=self%rarr,STAT=err,ERRMSG=io_msg)
-            if(alloc_stat/=0)call alloc_errchk(" In simple_arr::rget  allocation fault "//trim(io_msg),err)
+            allocate( rarr(size(self%rarr)), source=self%rarr,STAT=alloc_stat)
+            if(alloc_stat /= 0) allocchk(" In simple_arr::rget  allocation fault " )
         else
             stop 'no info in rarr; get_2; simple_arr'
         endif
@@ -85,17 +78,16 @@ contains
 
     subroutine kill( self )
         class(arr), intent(inout) :: self
-        integer              :: err
-        character(len=STDLEN):: io_msg
         if( allocated(self%iarr) ) then
-            deallocate( self%iarr ,stat=err,errmsg=io_msg)
-            if(alloc_stat/=0)call alloc_errchk(" In simple_arr::kill  deallocation fault "//trim(io_msg),err)
+            deallocate( self%iarr ,stat=alloc_stat)
+            if(alloc_stat /= 0) &
+                 allocchk(" In simple_arr::kill  deallocate iarr fault ")
         end if
           if( allocated(self%rarr) )then
-              deallocate( self%rarr, stat=err,errmsg=io_msg)
-              if(alloc_stat/=0)call alloc_errchk(" In simple_arr::kill  deallocation fault "//trim(io_msg),err)
+              deallocate( self%rarr, stat=alloc_stat)
+              if(alloc_stat /= 0) &
+                   allocchk(" In simple_arr::kill  deallocate rarr fault ")
           end if
-         
     end subroutine
 
 end module simple_arr

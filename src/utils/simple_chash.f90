@@ -75,7 +75,7 @@ contains
         call self%kill
         self%nmax = nmax
         allocate(self%keys(nmax), self%values(nmax), stat=alloc_stat)
-        allocchk("In simple_chash :: new")
+        if(alloc_stat /= 0) allocchk("In simple_chash :: new")
         self%exists = .true.
     end subroutine new
 
@@ -227,7 +227,7 @@ contains
         do i=1,self%chash_index
             if( trim(self%keys(i)) .eq. trim(key) )then
                 allocate(val, source=trim(self%values(i)),stat=alloc_stat)
-                allocchk ("In get_1")
+                if(alloc_stat /= 0) allocchk ("In get_1")
                 return
             endif
         end do
@@ -239,7 +239,7 @@ contains
         integer,      intent(in)      :: ival
         character(len=:), allocatable :: val
         allocate(val, source=trim(self%values(ival)),stat=alloc_stat)
-        allocchk("In get_2 val")
+        if(alloc_stat /= 0) allocchk("In get_2 val")
     end function get_2
 
     !>  \brief  gets the size of the hash
@@ -255,7 +255,7 @@ contains
         integer,      intent(in)      :: ikey
         character(len=:), allocatable :: val
         allocate(val, source=trim(self%keys(ikey)),stat=alloc_stat)
-        allocchk("In get_key")
+        if(alloc_stat /= 0) allocchk("In get_key")
     end function get_key
 
     !>  \brief  concatenates the chash into a string
@@ -266,25 +266,25 @@ contains
         if( self%chash_index > 0 )then
             if( self%chash_index == 1 )then
                 allocate(str, source=trim(self%keys(1))//'='//trim(self%values(1)),stat=alloc_stat)
-                allocchk("In chash2str 1 ")
+                if(alloc_stat /= 0) allocchk("In chash2str 1 ")
                 return
             endif
             allocate(str_moving, source=trim(self%keys(1))//'='//trim(self%values(1))//' ',stat=alloc_stat)
-            allocchk("In chash2str 2")
+            if(alloc_stat /= 0) allocchk("In chash2str 2")
             if( self%chash_index > 2 )then
                 do i=2,self%chash_index-1
                     allocate(str, source=str_moving//trim(self%keys(i))//'='//trim(self%values(i))//' ',&
                         &stat=alloc_stat)
-                    allocchk("In get_1")
+                    if(alloc_stat /= 0) allocchk("In get_1")
                     deallocate(str_moving)
                     allocate(str_moving,source=str,stat=alloc_stat)
-                    allocchk("In chash2str 4")
+                    if(alloc_stat /= 0) allocchk("In chash2str 4")
                     deallocate(str)
                 end do
             endif
             allocate(str,source=trim(str_moving//trim(self%keys(self%chash_index))//'='//&
                 &trim(self%values(self%chash_index))),stat=alloc_stat)
-            allocchk("In chash2str 5")
+            if(alloc_stat /= 0) allocchk("In chash2str 5")
         endif
     end function chash2str
 
@@ -310,7 +310,7 @@ contains
             call tmp%new(self%nmax)
             ! fill in keys
             allocate(keys_sorted(self%chash_index),stat=alloc_stat)
-            allocchk("In sort")
+            if(alloc_stat /= 0) allocchk("In sort")
             keys_sorted = self%keys(:self%chash_index)
             ! sort keys
             call lexSort(keys_sorted)
@@ -496,12 +496,12 @@ contains
         if( self%exists )then
             if(allocated(self%keys))then
                 deallocate(self%keys,stat=alloc_stat)
-                allocchk("In kill 1")
+                if(alloc_stat /= 0) allocchk("In kill 1")
             end if
 
             if(allocated(self%values))then
                 deallocate(self%values,stat=alloc_stat)
-                allocchk("In kill 2")
+                if(alloc_stat /= 0) allocchk("In kill 2")
             end if
             self%nmax        = 0
             self%chash_index = 0

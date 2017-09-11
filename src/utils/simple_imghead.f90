@@ -10,8 +10,10 @@
 ! Use is subject to Janelia Farm Research Campus Software Copyright 1.1
 ! license terms ( http://license.janelia.org/license/jfrc_copyright_1_1.html )
 ! Modifications by Cyril Reboul, Michael Eager & Hans Elmlund
+#include "simple_lib.f08"
 module simple_imghead
-use simple_defs
+    use simple_defs
+    use simple_syslib, only: alloc_errchk
 implicit none
 
 public :: ImgHead, MrcImgHead, SpiImgHead, test_imghead
@@ -185,7 +187,7 @@ contains
         class(ImgHead), target, intent(inout) :: self    !< instance
         integer, optional,      intent(in)    :: ldim(3) !< logical dims of image
         integer, optional,      intent(in)    :: length  !< length of the header record.
-        integer               :: ierr, llength, i
+        integer               :: llength, i
         character(len=STDLEN) :: err
         call self%kill
         select type( self )
@@ -200,12 +202,8 @@ contains
                     if( size(self%byte_array) .ne. llength ) deallocate(self%byte_array)
                 endif
                 if( .not. allocated(self%byte_array) )then
-                    allocate(self%byte_array(llength),stat=ierr,errmsg=err)
-                    if( ierr .ne. 0 )then
-                        write(*,'(a,i0,2a)') '**error(ImgHead::new): memory allocation failed with error ',&
-                             ierr, ': ', trim(adjustl(err))
-                        stop 'Memory allocation failed; new; simple_imghead'
-                    endif
+                    allocate(self%byte_array(llength),stat=alloc_stat,errmsg=err)
+                    if(alloc_stat .ne. 0) allocchk("simple_imghead::new byte_array "//trim(err))
                 endif
                 ! zero the byte array
                 self%byte_array = 0
@@ -312,7 +310,8 @@ contains
         if( present(pos) ) ppos = pos
         select type( self )
             type is( SpiImgHead )
-                allocate(spihed(self%getLabbyt()/4))
+                allocate(spihed(self%getLabbyt()/4),stat=alloc_stat)
+                if(alloc_stat .ne. 0) allocchk("simple_imghead::read spihead ")
                 cnt = 0
                 do i=ppos,ppos+self%getLabbyt()-1,4
                     cnt = cnt+1
@@ -1117,7 +1116,7 @@ contains
     end subroutine kill
 
     subroutine test_imghead
-        use simple_fileio      
+        use simple_fileio, only: fopen, fclose, fileio_errmsg      
         class(ImgHead), allocatable :: hed, hed2
         integer :: recsz, io_stat, funit, dims(3), dims2(3)
         write(*,'(a)') '**info(simple_imghead_unit_test): testing read/write capabilities'
@@ -1125,8 +1124,7 @@ contains
         call hed%new([120,120,1])
         call hed2%new([120,120,1])
         recsz = 120*4
-        call fopen(unit=funit,access='STREAM',file='test_imghed.spi',&
-             &action='READWRITE',status='UNKNOWN', iostat=io_stat)
+        call fopen(unit=funit,access='STREAM',file='test_imghed.spi',action='READWRITE',status='UNKNOWN',iostat=io_stat)
         call fileio_errmsg("simple_imghead_unit_test: testing read/write", io_stat)
         call hed%write(funit)
         call hed2%read(funit)
