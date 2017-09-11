@@ -57,7 +57,6 @@ type prime3D_srch
     character(len=STDLEN)   :: ctf            = ''      !< ctf flag
     character(len=STDLEN)   :: shbarr         = ''      !< shift barrier flag
     character(len=STDLEN)   :: pgrp           = 'c1'    !< point-group symmetry
-    character(len=STDLEN)   :: eo             = 'no'    !< wheteher to weigh distances
     logical                 :: doshift        = .true.  !< 2 indicate whether 2 serch shifts
     logical                 :: greedy_inpl    = .true.  !< 2 indicate whether in-plane search is greedy or not
     logical                 :: exists         = .false. !< 2 indicate existence
@@ -143,7 +142,6 @@ contains
         self%pgrp        =  p%pgrp
         self%kstop_grid  =  p%kstop_grid
         self%greedy_inpl = .true.
-        self%eo          =  p%eo
         if( str_has_substr(self%refine,'shc') )then
             if( self%npeaks > 1 ) stop 'npeaks must be equal to 1 with refine=shc|shcneigh'
             self%greedy_inpl = .false.

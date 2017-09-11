@@ -43,7 +43,7 @@ type :: params
     character(len=3)      :: doprint='no'
     character(len=3)      :: dynlp='yes'          !< automatic resolution limit update(yes|no){yes}
     character(len=3)      :: errify='no'          !< introduce error(yes|no){no}
-    character(len=3)      :: even='no'            !< calculate even eo-pair(yes|no){no}
+    character(len=3)      :: even='no'            !< even orientation distribution(yes|no){no}
     character(len=3)      :: ft2img='no'          !< convert Fourier transform to real image of power(yes|no){no}
     character(len=3)      :: guinier='no'         !< calculate Guinier plot(yes|no){no}
     character(len=3)      :: kmeans='yes'
@@ -56,7 +56,6 @@ type :: params
     character(len=3)      :: noise='no'           !< noise initialisation(yes|no){no}
     character(len=3)      :: norec='no'           !< do not reconstruct volume(s)(yes|no){no}
     character(len=3)      :: norm='no'            !< do statistical normalisation avg
-    character(len=3)      :: odd='no'             !< calculate odd eo-pair(yes|no){no}
     character(len=3)      :: order='no'           !< order ptcls according to correlation(yes|no){no}
     character(len=3)      :: outside='no'         !< extract boxes outside the micrograph boundaries(yes|no){no}
     character(len=3)      :: pad='no'
@@ -482,7 +481,6 @@ contains
         call check_carg('noise',          self%noise)
         call check_carg('norec',          self%norec)
         call check_carg('norm',           self%norm)
-        call check_carg('odd',            self%odd)
         call check_carg('opt',            self%opt)
         call check_carg('order',          self%order)
         call check_carg('outside',        self%outside)

@@ -533,7 +533,7 @@ contains
 
     ! RECONSTRUCTION
     !> reconstruction routine
-    subroutine rec( self, fname, p, o, se, state, mul, eo, part )
+    subroutine rec( self, fname, p, o, se, state, mul, part )
         use simple_oris,     only: oris
         use simple_sym,      only: sym
         use simple_params,   only: params
@@ -546,7 +546,6 @@ contains
         class(sym),           intent(inout) :: se        !< symmetry element
         integer,              intent(in)    :: state     !< state to reconstruct
         real,    optional,    intent(in)    :: mul       !< shift multiplication factor
-        integer, optional,    intent(in)    :: eo        !< even(2) or odd(1)
         integer, optional,    intent(in)    :: part      !< partition (4 parallel rec)
         type(image) :: img, img_pd
         real        :: skewness
@@ -579,15 +578,7 @@ contains
                 state_here = nint(o%get(i,'state'))
                 if( state_here > 0 .and. (state_here == state) )then
                     statecnt(state) = statecnt(state)+1
-                    if( present(eo) )then
-                        if( mod(cnt,2) == 0 .and. eo == 2 )then
-                            call rec_dens
-                        else if( mod(cnt,2) /= 0 .and. eo == 1 )then
-                            call rec_dens
-                        endif
-                    else
-                        call rec_dens
-                    endif
+                    call rec_dens
                 endif
             endif
         end do

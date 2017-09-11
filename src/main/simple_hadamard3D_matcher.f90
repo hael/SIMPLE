@@ -92,7 +92,7 @@ contains
         if( .not. cline%defined('npeaks') )then
             select case(p%refine)
                 case('no', 'neigh', 'greedy', 'greedyneigh', 'exp')
-                    if( p%eo .eq. 'yes' )then
+                    if( p%eo .ne. 'no' )then
                         p%npeaks = min(b%e%find_npeaks_from_athres(NPEAKSATHRES), MAXNPEAKS)
                     else
                         p%npeaks = min(10,b%e%find_npeaks(p%lp, p%moldiam))
@@ -312,7 +312,7 @@ contains
         ! SETUP (OVERWRITES) EVEN/ODD PARTITION
         ! needs to be here since parameters just updated
         ! need to be in the [p%fromp, p%top] range or it will be based on previous params
-        if( p%eo.eq.'yes' )then
+        if( p%eo.ne.'no' )then
             ! weights & states assumed here
             call b%a%partition_eo('proj', [p%fromp, p%top])
         else
@@ -351,7 +351,7 @@ contains
                 endif
             end do
             ! normalise structure factors
-            if( p%eo .eq. 'yes' )then
+            if( p%eo .ne. 'no' )then
                 call eonorm_struct_facts(b, p, reslim, which_iter)
             else
                 call norm_struct_facts(b, p, which_iter)

@@ -171,7 +171,7 @@ contains
         real             :: pw, w, eopart
         integer          :: jpeak, s, k, npeaks
         logical          :: l_softrec
-        if( p%eo .eq. 'yes' )then
+        if( p%eo .ne. 'no' )then
             kbwin = b%eorecvols(1)%get_kbwin()
         else
             kbwin = b%recvols(1)%get_kbwin()
@@ -188,7 +188,7 @@ contains
             ! pre-gridding correction for the kernel convolution
             call prep4cgrid(b%img, b%img_pad, p%msk, kbwin)
             DebugPrint  '*** simple_hadamard_common ***: prepared image for gridding'
-            if( p%eo .eq. 'yes' )then
+            if( p%eo .ne. 'no' )then
                 ! even/odd partitioning
                 eopart = ran3()
                 if( orientation%isthere('eo') )then
@@ -211,7 +211,7 @@ contains
                 if( p%frac < 0.99 ) w = w*pw
                 if( w > TINY )then
                     if( p%pgrp == 'c1' )then
-                        if( p%eo .eq. 'yes' )then
+                        if( p%eo .ne. 'no' )then
                             call b%eorecvols(s)%grid_fplane(orisoft, b%img_pad, pwght=w, ran=eopart)
                         else
                             call b%recvols(s)%inout_fplane(orisoft, .true., b%img_pad, pwght=w)
@@ -219,7 +219,7 @@ contains
                     else
                         do k=1,b%se%get_nsym()
                             o_sym = b%se%apply(orisoft, k)
-                            if( p%eo .eq. 'yes' )then
+                            if( p%eo .ne. 'no' )then
                                 call b%eorecvols(s)%grid_fplane(o_sym, b%img_pad, pwght=w, ran=eopart)
                             else
                                 call b%recvols(s)%inout_fplane(o_sym, .true., b%img_pad, pwght=w)
@@ -398,22 +398,23 @@ contains
         class(build),   intent(inout) :: b
         class(params),  intent(inout) :: p
         integer :: istate
-        if( p%eo .eq. 'yes' )then
-            do istate = 1, p%nstates
-                if( b%a%get_pop(istate, 'state') > 0)then
-                    call b%eorecvols(istate)%new(p)
-                    call b%eorecvols(istate)%reset_all
-                endif
-            end do
-        else
-            do istate = 1, p%nstates
-                if( b%a%get_pop(istate, 'state') > 0)then
-                    call b%recvols(istate)%new([p%boxpd, p%boxpd, p%boxpd], p%smpd)
-                    call b%recvols(istate)%alloc_rho(p)
-                    call b%recvols(istate)%reset
-                endif
-            end do
-        endif
+        select case(p%eo)
+            case('yes','aniso')
+                do istate = 1, p%nstates
+                    if( b%a%get_pop(istate, 'state') > 0)then
+                        call b%eorecvols(istate)%new(p)
+                        call b%eorecvols(istate)%reset_all
+                    endif
+                end do
+            case DEFAULT
+                do istate = 1, p%nstates
+                    if( b%a%get_pop(istate, 'state') > 0)then
+                        call b%recvols(istate)%new([p%boxpd, p%boxpd, p%boxpd], p%smpd)
+                        call b%recvols(istate)%alloc_rho(p)
+                        call b%recvols(istate)%reset
+                    endif
+                end do
+        end select
     end subroutine preprecvols
 
     !>  \brief  destructs all volumes for reconstruction
@@ -421,7 +422,7 @@ contains
         class(build),   intent(inout) :: b
         class(params),  intent(inout) :: p
         integer :: istate
-        if( p%eo .eq. 'yes' )then
+        if( p%eo .ne. 'no' )then
             do istate = 1, p%nstates
                 call b%eorecvols(istate)%kill
             end do
