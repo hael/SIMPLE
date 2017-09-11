@@ -8,6 +8,6 @@
 #endif
 
 #ifndef allocchk
-#define allocchk( X ) call alloc_errchk(X ,alloc_stat,__FILENAME__,__LINE__)
+#define allocchk( X ) call alloc_errchk (X, alloc_stat, __FILENAME__, __LINE__)
 #endif
 

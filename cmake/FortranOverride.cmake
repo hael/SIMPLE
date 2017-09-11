@@ -170,7 +170,7 @@ if (CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
   set(common   "${preproc} ${dialect} ${target} ")
 
   set(warnDebug "${warn} -Wextra -Wimplicit-interface  ${checks}")                              # extra warning flag
-  set(fordebug "-O0 -g -pedantic -fno-inline -fno-f2c -Og -ggdb -fbacktrace  ${warnDebug} ")    # debug flags
+  set(fordebug "-Og -g -pedantic -fno-inline -fno-f2c -Og -ggdb -fbacktrace  ${warnDebug} ")    # debug flags
   # -O0 -g3 -Warray-bounds -Wcharacter-truncation -Wline-truncation -Wimplicit-interface
   # -Wimplicit-procedure -Wunderflow -Wuninitialized -fcheck=all -fmodule-private -fbacktrace -dump-core -finit-real=nan -ffpe-trap=invalid,zero,overflow
   #
@@ -207,10 +207,10 @@ elseif (CMAKE_Fortran_COMPILER_ID STREQUAL "Intel")
   # ifort
   # set(FC "ifort" CACHE PATH "Intel Fortran compiler")
   set(preproc  "-fpp")
-  set(dialect  "-free -implicitnone -std08  -list-line-len=264 -diag-disable 6477  -gen-interfaces  ")
+  set(dialect  "-free -implicitnone -std08  -list-line-len=264 -diag-disable 6477  -diag-disable 406 -gen-interfaces  ")
   set(checks   "-check bounds -check uninit -assume buffered_io ") # -mcmodel=medium -shared-intel
   set(warn     "-warn all ")
-  set(fordebug "-g -debug -O0 -ftrapuv -debug all -check all ${warn} -assume byterecl -align sequence  -diag-disable 6477  -gen-interfaces ")
+  set(fordebug "-g -debug -O0 -ftrapuv -debug all -check all ${warn} -assume byterecl -align sequence ")
   set(forspeed "-O3 -fp-model fast=2 -inline all -unroll-aggressive ")
   set(forpar   "-qopenmp")
   set(target   "-no-prec-div -static -fPIC")
@@ -284,7 +284,7 @@ if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE RELEASE CACHE STRING
     "Choose the type of build, options are: NONE DEBUG RELEASE RELWITHDEBINFO"
     FORCE)
-  set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS NONE DEBUG RELEASE RELWITHDEBINFO)
+  set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS NONE DEBUG RELEASE RELWITHDEBINFO TESTING)
 endif(NOT CMAKE_BUILD_TYPE)
 
 if(BT STREQUAL "RELEASE")

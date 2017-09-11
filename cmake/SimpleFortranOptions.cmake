@@ -132,7 +132,8 @@ if(CMAKE_BUILD_TYPE STREQUAL "DEBUG")
 endif()
 #############################################
 
-add_definitions(-D${CMAKE_Fortran_COMPILER_ID})
+string(TOUPPER "${CMAKE_Fortran_COMPILER_ID}" ID_STRING)
+add_definitions(-D${ID_STRING})
 message(STATUS "Fortran compiler ${CMAKE_Fortran_COMPILER_ID}")
 
 
@@ -587,7 +588,7 @@ endif()
 
 # add_definitions(" -D__FILENAME__='\"$(notdir $<)\"' ")
 # add_definitions(" -DHALT\\(X\\)='call simple_stop(X, __FILENAME__, __LINE__)'")
-
+# add_definitions(" -Dallocchk\\(X\\)='call alloc_errchk(X,alloc_stat,\"$(notdir $<)\",__LINE__);' ")
 
 
 # Override Fortran preprocessor
@@ -607,11 +608,10 @@ endif()
   option(CODE_COVERAGE "Build code coverage results, requires GCC compiler (forces Debug build)" OFF)
   if(CODE_COVERAGE OR ${BUILD_WITH_COVERAGE} )
     if (${CMAKE_Fortran_COMPILER_ID} STREQUAL "GNU" )
-      set(CMAKE_Fortran_FLAGS         "${CMAKE_Fortran_FLAGS} -O0 -g -pg -fprofile-arcs -ftest-coverage")
+      set(CMAKE_Fortran_FLAGS         "${CMAKE_Fortran_FLAGS} -g -Og -pg -fprofile-arcs -ftest-coverage")
      # set(CMAKE_BUILD_TYPE DEBUG CACHE STRING "" FORCE)
-      SET(CMAKE_EXE_LINKER_FLAGS      "${CMAKE_EXE_LINKER_FLAGS} -O0 -g -pg -fprofile-arcs -ftest-coverage")
-      SET(CMAKE_SHARED_LINKER_FLAGS   "${CMAKE_SHARED_LINKER_FLAGS} -O0 -g -pg -fprofile-arcs -ftest-coverage")
-      SET(CMAKE_STATIC_LINKER_FLAGS   "${CMAKE_STATIC_LINKER_FLAGS} -O0 -g -pg -fprofile-arcs -ftest-coverage")
+      SET(CMAKE_EXE_LINKER_FLAGS      "${CMAKE_EXE_LINKER_FLAGS} -g -Og -pg -fprofile-arcs -ftest-coverage")
+      SET(CMAKE_SHARED_LINKER_FLAGS   "${CMAKE_SHARED_LINKER_FLAGS} -Og -g -pg -fprofile-arcs -ftest-coverage")
       # Ensure that CDash targets are always enabled if coverage is enabled.
       if (NOT CDASH_SUPPORT)
         get_property(HELP_STRING CACHE CDASH_SUPPORT PROPERTY HELPSTRING)

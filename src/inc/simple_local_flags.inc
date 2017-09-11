@@ -24,7 +24,7 @@
 # ifndef DebugPrint
 #  if defined(PGI)
 #    define DebugPrint _WPRINT_FILE_LINE_(__FILENAME__,__LINE__);if(debug.or.global_debug) print *,
-#  elif defined(Intel)
+#  elif defined(INTEL)
 #    define LinePrint(N) #N
 #    define DebugPrint if(debug.or.global_debug) print *,__FILENAME__//":",__LINE__,
 #  else 
