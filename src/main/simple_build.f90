@@ -26,7 +26,7 @@ private
 
 type :: build
     ! GENERAL TOOLBOX
-    type(oris)                          :: a, e               !< aligndata, discrete space
+    type(oris)                          :: a, e, e_bal        !< aligndata, discrete spaces
     type(sym)                           :: se                 !< symmetry elements object
     type(convergence)                   :: conv               !< object for convergence checking of the PRIME2D/3D approaches
     type(image)                         :: img                !< individual image objects 
@@ -153,6 +153,8 @@ contains
         ! generate discrete projection direction spaces
         call self%e%new( p%nspace )
         call self%e%spiral( p%nsym, p%eullims )
+        call self%e_bal%new(NSPACE_BALANCE)
+        call self%e_bal%spiral( p%nsym, p%eullims )
         self%grid_projs = self%e%create_proj_subspace(p%nsub, p%nsym, p%eullims )
         DebugPrint 'generated discrete projection direction space'
         if( p%box > 0 )then
@@ -325,7 +327,7 @@ contains
         call self%raise_hard_ctf_exception(p)
         call self%eorecvol%new(p)
         if( .not. self%a%isthere('proj') ) call self%a%set_projs(self%e)
-        call self%projfrcs%new(p%nspace, p%box, p%smpd, p%nstates)
+        call self%projfrcs%new(NSPACE_BALANCE, p%box, p%smpd, p%nstates)
         write(*,'(A)') '>>> DONE BUILDING EO RECONSTRUCTION TOOLBOX'
         self%eo_rec_tbox_exists = .true.
     end subroutine build_eo_rec_tbox
@@ -396,7 +398,7 @@ contains
             call self%se%nearest_neighbors(self%e, nnn, self%nnmat)
         endif
         if( .not. self%a%isthere('proj') ) call self%a%set_projs(self%e)
-        call self%projfrcs%new(p%nspace, p%box, p%smpd, p%nstates)
+        call self%projfrcs%new(NSPACE_BALANCE, p%box, p%smpd, p%nstates)
         write(*,'(A)') '>>> DONE BUILDING HADAMARD PRIME3D TOOLBOX'
         self%hadamard_prime3D_tbox_exists = .true.
     end subroutine build_hadamard_prime3D_tbox

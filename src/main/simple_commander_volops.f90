@@ -128,7 +128,7 @@ contains
         class(cmdline),                intent(inout) :: cline
         type(params)      :: p
         type(build)       :: b
-        type(image)       :: vol_copy
+        type(image)       :: vol_copy, vol_filt
         real, allocatable :: fsc(:), optlp(:), res(:)
         real              :: fsc0143, fsc05
         integer           :: k, state, ldim(3)
@@ -138,8 +138,8 @@ contains
         call b%build_general_tbox(p, cline)   ! general objects built
         call b%vol%read(p%vols(state))
         call b%vol%fwd_ft
-        ! optimal low-pass filt
         if( cline%defined('fsc') )then
+            ! optimal low-pass filter from FSC
             if( file_exists(p%fsc) )then
                 fsc   = file2rarr(p%fsc)
                 optlp = fsc2optlp(fsc)
@@ -150,18 +150,28 @@ contains
             res = b%vol%get_res()
             call get_resolution( fsc, res, fsc05, fsc0143 )
             where(res < TINY) optlp = 0.
+        endif    
+        if( cline%defined('vol_filt') )then
+            ! optimal low-pass filter from input vol_filt
+            call vol_filt%new(b%vol%get_ldim(), p%smpd)
+            call vol_filt%read(p%vol_filt)
+            call b%vol%apply_filter(vol_filt)
+            call vol_filt%kill
+        else if( cline%defined('fsc') )then
+            ! optimal low-pass filter from FSC
             call b%vol%apply_filter(optlp)
         else if( cline%defined('lp') )then
+            ! ad hoc low-pass filter
             call b%vol%bp(0., p%lp)
         else
-            write(*,*) 'no method for low-pass filtering defined; give fsc or lp on command line'
+            write(*,*) 'no method for low-pass filtering defined; give fsc|lp|vol_filt on command line'
             stop 'comple_commander_volops :: exec_postproc_vol'
         endif
         call vol_copy%copy(b%vol)
         ! B-fact
         if( cline%defined('bfac') ) call b%vol%apply_bfac(p%bfac)
         ! final low-pass filtering for smoothness
-        if( cline%defined('fsc') ) call b%vol%bp(0., fsc0143)
+        if( cline%defined('fsc')  ) call b%vol%bp(0., fsc0143)
         ! masking
         call b%vol%bwd_ft
         if( cline%defined('mskfile') )then

@@ -21,7 +21,7 @@ private
 
 ! CLASS PARAMETERS/VARIABLES
 logical, parameter :: shift_to_phase_origin=.true.
-!>  image parameter stuct and operations 
+
 type :: image
     private
     logical                                :: ft=.false.           !< Fourier transformed or not
@@ -3371,7 +3371,6 @@ contains
         lims = self%fit%loop_lims(2)
         !$omp parallel do collapse(3) default(shared) proc_bind(close)&
         !$omp private(k,j,i,res,phys,wght) schedule(static)
-
         do k=lims(3,1),lims(3,2)
             do j=lims(2,1),lims(2,2)
                 do i=lims(1,1),lims(1,2)
@@ -3504,7 +3503,7 @@ contains
         if( didft ) call self%bwd_ft
     end subroutine apply_filter_1
 
-    !> \brief apply_filter_2  is for application of an arbitrary 2D filter function
+    !> \brief apply_filter_2  is for application of an arbitrary filter function
     !! \param filter
     !!
     subroutine apply_filter_2( self, filter )
@@ -3515,7 +3514,7 @@ contains
         if( self.eqdims.filter )then
             if( filter%ft )then
                 if( .not. self%ft )then
-                    stop 'assumed that image 2 be filtered is in the Fourier domain; apply_filter_2; simple_image'
+                    stop 'assumed that the image to be filtered is in the Fourier domain; apply_filter_2; simple_image'
                 endif
                 lims = self%fit%loop_lims(2)
                 !$omp parallel do collapse(3) default(shared) private(h,k,l,comp,fwght,phys)&

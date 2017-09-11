@@ -14,7 +14,6 @@ complex(sp), parameter :: zero=cmplx(0.,0.) !< just a complex zero
 
 type :: polarft_corrcalc
     private
-    real, pointer            :: pfrcs(:,:) => null()    !< if associated, we use an anisotropic matched filter
     integer                  :: pfromto(2) = 1          !< from/to particle indices (in parallel execution)
     integer                  :: nptcls     = 1          !< the total number of particles in partition (logically indexded [fromp,top])
     integer                  :: nrefs      = 1          !< the number of references (logically indexded [1,nrefs])
@@ -101,13 +100,12 @@ contains
     !! \param ldim     logical dimensions of original cartesian image                              
     !! \param smpd     sampling distance                                                           
     !! \param kfromto  Fourier index range
-    subroutine new( self, nrefs, pfromto, ldim, smpd, kfromto, ring2, ctfflag, frcs )
+    subroutine new( self, nrefs, pfromto, ldim, smpd, kfromto, ring2, ctfflag )
         use simple_math, only: rad2deg, is_even, round2even
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: nrefs, pfromto(2), ldim(3), kfromto(2), ring2
         real,                    intent(in)    :: smpd
         character(len=*),        intent(in)    :: ctfflag
-        real, optional, target,  intent(in)    :: frcs(:,:)
         integer  :: alloc_stat, irot, k
         logical  :: even_dims, test(3)
         real(sp) :: ang
@@ -147,9 +145,6 @@ contains
             write(*,*) 'ldim: ', ldim
             call simple_stop ('only even logical dims supported; new; simple_polarft_corrcalc')
         endif
-        ! set pointer to projection frcs (decoration of object for anisotropic matched filter)
-        self%pfrcs => null()
-        if( present(frcs) ) self%pfrcs => frcs
         ! set constants
         self%pfromto = pfromto                         !< from/to particle indices (in parallel execution)
         self%nptcls  = pfromto(2) - pfromto(1) + 1     !< the total number of particles in partition (logically indexded [fromp,top])
@@ -571,27 +566,6 @@ contains
         real, allocatable :: filter(:)
         ! copy
         pft_ref = self%pfts_refs(iref,:,:)
-        ! anisotropic matched filter
-        if( associated(self%pfrcs) )then
-            ! shell normalise
-            ! first, calculate the expectation value of the signal power in each shell
-            expec_pow = 0.0
-            do k=self%kfromto(1),self%kfromto(2)
-                expec_pow(k) = sum(csq(pft_ref(:,k))) / real(self%refsz)
-            end do
-            ! then, normalise per-shell
-            do k=self%kfromto(1),self%kfromto(2)
-                if( expec_pow(k) > 0. )then
-                    pft_ref(:,k) = pft_ref(:,k) / sqrt(expec_pow(k))
-                endif
-            end do
-            ! filter
-            filter = fsc2optlp(self%pfrcs(iref,:))
-            do k=self%kfromto(1),self%kfromto(2)
-                pft_ref(:,k) = pft_ref(:,k) * filter(k)
-            end do
-            deallocate(filter)
-        endif
         ! multiply with CTF
         if( self%with_ctf ) pft_ref = pft_ref * self%ctfmats(iptcl,:,:)
         ! for corr normalisation

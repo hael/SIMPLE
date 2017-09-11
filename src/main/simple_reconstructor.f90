@@ -46,7 +46,6 @@ type, extends(image) :: reconstructor
     ! INTERPOLATION
     procedure, private :: inout_fcomp
     procedure, private :: calc_tfun_vals
-    procedure          :: gridding_correct
     procedure          :: inout_fplane
     procedure          :: sampl_dens_correct
     procedure          :: compress_exp
@@ -266,9 +265,66 @@ contains
         endif
     end subroutine calc_tfun_vals
 
+    !> insert or uninsert Fourier plane
+    subroutine inout_fplane( self, o, inoutmode, fpl, pwght, mul )
+        use simple_math, only: hyp
+        use simple_ori,  only: ori
+        class(reconstructor), intent(inout) :: self      !< instance
+        class(ori),           intent(inout) :: o         !< orientation
+        logical,              intent(in)    :: inoutmode !< add = .true., subtract = .false.
+        class(image),         intent(inout) :: fpl       !< Fourier plane
+        real,    optional,    intent(in)    :: pwght     !< external particle weight (affects both fplane and rho)
+        real,    optional,    intent(in)    :: mul       !< shift weight multiplier
+        integer :: h, k, lims(3,2), sh, lfny, logi(3), phys(3)
+        complex :: oshift
+        real    :: x, y, xtmp, ytmp, pw
+        logical :: pwght_present
+        if( .not. fpl%is_ft() )       stop 'image need to be FTed; inout_fplane; simple_reconstructor'
+        if( .not. (self.eqsmpd.fpl) ) stop 'scaling not yet implemented; inout_fplane; simple_reconstructor'
+        pwght_present = present(pwght)
+        if( self%ctfflag .ne. 'no' )then ! make CTF object & get CTF info
+            self%tfun = ctf(self%get_smpd(), o%get('kv'), o%get('cs'), o%get('fraca'))
+            dfx  = o%get('dfx')
+            if( self%tfastig )then ! astigmatic CTF model
+                dfy = o%get('dfy')
+                angast = o%get('angast')
+            else ! non-astigmatic CTF model
+                dfy = dfx
+                angast = 0.
+            endif
+        endif
+        oshift = cmplx(1.,0.)
+        lims   = self%loop_lims(2)
+        x      = o%get('x')
+        y      = o%get('y')
+        xtmp   = 0.
+        ytmp   = 0.
+        if( abs(x) > SHTHRESH .or. abs(y) > SHTHRESH )then ! shift the image prior to insertion
+            if( present(mul) )then
+                x = x*mul
+                y = y*mul
+            endif
+            xtmp = x
+            ytmp = y
+            if( abs(x) < 1e-6 ) xtmp = 0.
+            if( abs(y) < 1e-6 ) ytmp = 0.
+        endif
+        !$omp parallel do collapse(2) default(shared) schedule(static)&
+        !$omp private(h,k,oshift,logi,phys) proc_bind(close)
+        do h=lims(1,1),lims(1,2)
+            do k=lims(1,1),lims(1,2)
+                logi   = [h,k,0]
+                oshift = fpl%oshift(logi, [-xtmp,-ytmp,0.], ldim=2)
+                phys   = fpl%comp_addr_phys(logi)
+                call self%inout_fcomp(h,k,o,inoutmode,fpl%get_fcomp(logi,phys),oshift,pwght)
+            end do
+        end do
+        !$omp end parallel do
+    end subroutine inout_fplane
+
     !>  is for uneven distribution of orientations correction 
     !>  from Pipe & Manon 1999
-    subroutine gridding_correct( self, maxits )
+    subroutine sampl_dens_correct( self, maxits )
         use simple_gridding,   only: mul_w_instr
         use simple_math,       only: mycabs, hyp
         use simple_kbinterpol, only: kbinterpol
@@ -400,93 +456,37 @@ contains
         !$omp end parallel do
         ! cleanup
         call W_img%kill
-    end subroutine gridding_correct
+    end subroutine sampl_dens_correct
 
-    !> insert or uninsert Fourier plane
-    subroutine inout_fplane( self, o, inoutmode, fpl, pwght, mul )
-        use simple_math, only: hyp
-        use simple_ori,  only: ori
-        class(reconstructor), intent(inout) :: self      !< instance
-        class(ori),           intent(inout) :: o         !< orientation
-        logical,              intent(in)    :: inoutmode !< add = .true., subtract = .false.
-        class(image),         intent(inout) :: fpl       !< Fourier plane
-        real,    optional,    intent(in)    :: pwght     !< external particle weight (affects both fplane and rho)
-        real,    optional,    intent(in)    :: mul       !< shift weight multiplier
-        integer :: h, k, lims(3,2), sh, lfny, logi(3), phys(3)
-        complex :: oshift
-        real    :: x, y, xtmp, ytmp, pw
-        logical :: pwght_present
-        if( .not. fpl%is_ft() )       stop 'image need to be FTed; inout_fplane; simple_reconstructor'
-        if( .not. (self.eqsmpd.fpl) ) stop 'scaling not yet implemented; inout_fplane; simple_reconstructor'
-        pwght_present = present(pwght)
-        if( self%ctfflag .ne. 'no' )then ! make CTF object & get CTF info
-            self%tfun = ctf(self%get_smpd(), o%get('kv'), o%get('cs'), o%get('fraca'))
-            dfx  = o%get('dfx')
-            if( self%tfastig )then ! astigmatic CTF model
-                dfy = o%get('dfy')
-                angast = o%get('angast')
-            else ! non-astigmatic CTF model
-                dfy = dfx
-                angast = 0.
-            endif
-        endif
-        oshift = cmplx(1.,0.)
-        lims   = self%loop_lims(2)
-        x      = o%get('x')
-        y      = o%get('y')
-        xtmp   = 0.
-        ytmp   = 0.
-        if( abs(x) > SHTHRESH .or. abs(y) > SHTHRESH )then ! shift the image prior to insertion
-            if( present(mul) )then
-                x = x*mul
-                y = y*mul
-            endif
-            xtmp = x
-            ytmp = y
-            if( abs(x) < 1e-6 ) xtmp = 0.
-            if( abs(y) < 1e-6 ) ytmp = 0.
-        endif
-        !$omp parallel do collapse(2) default(shared) schedule(static)&
-        !$omp private(h,k,oshift,logi,phys) proc_bind(close)
-        do h=lims(1,1),lims(1,2)
-            do k=lims(1,1),lims(1,2)
-                logi   = [h,k,0]
-                oshift = fpl%oshift(logi, [-xtmp,-ytmp,0.], ldim=2)
-                phys   = fpl%comp_addr_phys(logi)
-                call self%inout_fcomp(h,k,o,inoutmode,fpl%get_fcomp(logi,phys),oshift,pwght)
-            end do
-        end do
-        !$omp end parallel do
-    end subroutine inout_fplane
-
+    ! OLD ROUTINE
     !> sampl_dens_correct Correct sample density
     !! \param self_out corrected image output
     !!
-    subroutine sampl_dens_correct( self, self_out )
-        class(reconstructor),   intent(inout) :: self !< this instance
-        class(image), optional, intent(inout) :: self_out  !< output image instance
-        integer :: h, k, l, lims(3,2), phys(3)
-        logical :: self_out_present
-        self_out_present = present(self_out)
-        ! set constants
-        lims = self%loop_lims(2)
-        if( self_out_present ) call self_out%copy(self)
-        !$omp parallel do collapse(3) default(shared) private(h,k,l,phys)&
-        !$omp schedule(static) proc_bind(close)
-        do h=lims(1,1),lims(1,2)
-            do k=lims(2,1),lims(2,2)
-                do l=lims(3,1),lims(3,2)
-                    phys = self%comp_addr_phys([h,k,l])
-                    if( self_out_present )then
-                        call self_out%div([h,k,l],self%rho(phys(1),phys(2),phys(3)),phys_in=phys)
-                    else
-                        call self%div([h,k,l],self%rho(phys(1),phys(2),phys(3)),phys_in=phys)
-                    endif
-                end do
-            end do
-        end do
-        !$omp end parallel do
-    end subroutine sampl_dens_correct
+    ! subroutine sampl_dens_correct( self, self_out )
+    !     class(reconstructor),   intent(inout) :: self !< this instance
+    !     class(image), optional, intent(inout) :: self_out  !< output image instance
+    !     integer :: h, k, l, lims(3,2), phys(3)
+    !     logical :: self_out_present
+    !     self_out_present = present(self_out)
+    !     ! set constants
+    !     lims = self%loop_lims(2)
+    !     if( self_out_present ) call self_out%copy(self)
+    !     !$omp parallel do collapse(3) default(shared) private(h,k,l,phys)&
+    !     !$omp schedule(static) proc_bind(close)
+    !     do h=lims(1,1),lims(1,2)
+    !         do k=lims(2,1),lims(2,2)
+    !             do l=lims(3,1),lims(3,2)
+    !                 phys = self%comp_addr_phys([h,k,l])
+    !                 if( self_out_present )then
+    !                     call self_out%div([h,k,l],self%rho(phys(1),phys(2),phys(3)),phys_in=phys)
+    !                 else
+    !                     call self%div([h,k,l],self%rho(phys(1),phys(2),phys(3)),phys_in=phys)
+    !                 endif
+    !             end do
+    !         end do
+    !     end do
+    !     !$omp end parallel do
+    ! end subroutine sampl_dens_correct
 
     subroutine compress_exp( self )
         class(reconstructor), intent(inout) :: self !< this instance
@@ -596,7 +596,7 @@ contains
         else
             write(*,'(A)') '>>> SAMPLING DENSITY (RHO) CORRECTION (JACKSON) & WIENER NORMALIZATION'
             call self%compress_exp
-            call self%gridding_correct
+            call self%sampl_dens_correct
         endif
         call self%bwd_ft
         call img%kill

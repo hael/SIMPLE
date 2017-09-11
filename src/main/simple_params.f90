@@ -158,6 +158,7 @@ type :: params
     character(len=STDLEN) :: tomoseries=''        !< filetable of filetables of tomograms
     character(len=STDLEN) :: unidoc=''            !< unified resources and orientations doc
     character(len=STDLEN) :: vol=''
+    character(len=STDLEN) :: vol_filt=''          !< input filter volume(vol_filt.ext)
     character(len=STDLEN) :: vollist=''           !< table (text file) of volume files(.txt)
     character(len=STDLEN) :: vols(MAXS)=''
     character(len=STDLEN) :: voltab=''            !< table (text file) of volume files(.txt)
@@ -552,6 +553,7 @@ contains
         call check_file('stk3',           self%stk3,         notAllowed='T')
         call check_file('stk_backgr',     self%stk_backgr,   notAllowed='T')
         call check_file('unidoc',         self%unidoc,       'T')
+        call check_file('vol_filt',       self%vol_filt,     notAllowed='T')
         call check_file('vollist',        self%vollist,      'T')
         call check_file('voltab',         self%voltab,       'T')
         call check_file('voltab2',        self%voltab2,      'T')

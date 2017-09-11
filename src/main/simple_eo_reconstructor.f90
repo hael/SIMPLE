@@ -237,12 +237,12 @@ contains
     subroutine grid_fplane(self, o, fpl, pwght, mul, ran )
         use simple_ori, only: ori
         use simple_rnd, only: ran3
-        class(eo_reconstructor), intent(inout) :: self    !< instance
-        class(ori),              intent(inout) :: o       !< orientation
-        class(image),            intent(inout) :: fpl     !< Fourier plane
-        real, optional,          intent(in)    :: pwght   !< external particle weight (affects both fplane and rho)
-        real, optional,          intent(in)    :: mul     !< shift multiplication factor
-        real, optional,          intent(in)    :: ran     !< external random number
+        class(eo_reconstructor), intent(inout) :: self  !< instance
+        class(ori),              intent(inout) :: o     !< orientation
+        class(image),            intent(inout) :: fpl   !< Fourier plane
+        real, optional,          intent(in)    :: pwght !< external particle weight (affects both fplane and rho)
+        real, optional,          intent(in)    :: mul   !< shift multiplication factor
+        real, optional,          intent(in)    :: ran   !< external random number
         real    :: rran
         if( present(ran) )then
             rran = ran
@@ -281,10 +281,10 @@ contains
 
     !> \brief  for sampling density correction of the eo pairs
     subroutine sampl_dens_correct_eos( self, state, eonames )
-        use simple_strings,      only: int2str_pad
-        use simple_fileio,       only: arr2file
-        use simple_math,         only: get_resolution, calc_fourier_index
-        use simple_masker,       only: masker
+        use simple_strings, only: int2str_pad
+        use simple_fileio,  only: arr2file
+        use simple_math,    only: get_resolution, calc_fourier_index
+        use simple_masker,  only: masker
         class(eo_reconstructor),     intent(inout) :: self       !< instance
         integer,                     intent(in)    :: state      !< state
         character(len=32), optional, intent(in)    :: eonames(2) !< even/odd filenames
@@ -296,8 +296,8 @@ contains
         call even%new([self%box,self%box,self%box],self%smpd)
         call odd%new([self%box,self%box,self%box],self%smpd)
         ! correct for the uneven sampling density
-        call self%even%gridding_correct(maxits=1)
-        call self%odd%gridding_correct(maxits=1)
+        call self%even%sampl_dens_correct(maxits=1)
+        call self%odd%sampl_dens_correct(maxits=1)
         ! reverse FT
         call self%even%bwd_ft
         call self%odd%bwd_ft
@@ -349,7 +349,7 @@ contains
         class(image),            intent(inout) :: reference !< reference volume
         write(*,'(A)') '>>> SAMPLING DENSITY (RHO) CORRECTION & WIENER NORMALIZATION'
         call reference%set_ft(.false.)
-        call self%eosum%gridding_correct
+        call self%eosum%sampl_dens_correct
         call self%eosum%bwd_ft
         call self%eosum%norm
         call self%eosum%clip(reference)
@@ -387,6 +387,9 @@ contains
         character(len=32) :: eonames(2)
         call find_ldim_nptcls(fname, ldim, n)
         if( n /= o%get_noris() ) stop 'inconsistent nr entries; eorec; simple_eo_reconstructor'
+        if( .not. present(part) )then
+            if( p%eo .eq. 'aniso' ) stop 'eo=aniso not supported here, use simple_distr_exec!'
+        endif
         kbwin = self%get_kbwin() 
         ! stash global state index
         state_glob = state

@@ -11,6 +11,7 @@ use simple_strings   ! use all in there
 use simple_math      ! use all in there
 use simple_masker    ! use all in there
 use simple_defs      ! use all in there
+use simple_fileio    ! use all in there
 implicit none
 
 public :: read_img_from_stk, set_bp_range, set_bp_range2D, grid_ptcl, prepimg4align,&
@@ -39,8 +40,7 @@ contains
     end subroutine read_img_from_stk
 
     subroutine set_bp_range( b, p, cline )
-        use simple_math,          only: calc_fourier_index
-        use simple_fileio,        only: file_exists,file2rarr
+        use simple_math, only: calc_fourier_index
         class(build),   intent(inout) :: b
         class(params),  intent(inout) :: p
         class(cmdline), intent(inout) :: cline
@@ -50,7 +50,7 @@ contains
         character(len=STDLEN) :: fsc_fname
         logical               :: fsc_bin_exists(p%nstates), all_fsc_bin_exist
         select case(p%eo)
-            case('yes')
+            case('yes','aniso')
                 ! check all fsc_state*.bin exist
                 all_fsc_bin_exist = .true.
                 fsc_bin_exists    = .false.
@@ -436,14 +436,17 @@ contains
     !>  \brief  prepares one volume for references extraction
     subroutine preprefvol( b, p, cline, s, doexpand )
         use simple_estimate_ssnr, only: fsc2optlp
+        use simple_image,         only: image
         class(build),      intent(inout) :: b
         class(params),     intent(inout) :: p
         class(cmdline),    intent(inout) :: cline
         integer,           intent(in)    :: s
         logical, optional, intent(in)    :: doexpand
-        real, allocatable :: filter(:)
-        logical :: l_doexpand, do_center
-        real    :: shvec(3)
+        type(image)                   :: vol_filter
+        real,             allocatable :: filter(:)
+        character(len=:), allocatable :: fname_vol_filter
+        logical                       :: l_doexpand, do_center
+        real                          :: shvec(3)
         l_doexpand = .true.
         if( present(doexpand) ) l_doexpand = doexpand
         if( p%boxmatch < p%box )call b%vol%new([p%box,p%box,p%box],p%smpd) ! ensure correct dim
@@ -465,13 +468,28 @@ contains
         endif
         ! Volume filtering
         if( p%eo.eq.'yes' )then
+            ! matched filter based on Rosenthal & Henderson, 2003 
             if( any(b%fsc(s,:) > 0.143) )then
-                ! Rosenthal & Henderson, 2003 
                 call b%vol%fwd_ft ! needs to be here in case the shift was never applied (above)
                 call b%vol%shellnorm()
                 filter = fsc2optlp(b%fsc(s,:))
                 call b%vol%apply_filter(filter)
             endif
+        else if( p%eo.eq.'aniso' )then
+            ! anisotropic matched filter
+            allocate(fname_vol_filter, source='aniso_optlp_state'//int2str_pad(s,2)//p%ext)
+            if( file_exists(fname_vol_filter) )then
+                call vol_filter%new([p%box,p%box,p%box],p%smpd)
+                call vol_filter%read(fname_vol_filter)
+                call b%vol%fwd_ft ! needs to be here in case the shift was never applied (above)
+                call b%vol%shellnorm()
+                call b%vol%apply_filter(vol_filter)
+                call vol_filter%kill
+            else
+                write(*,*) 'eo=aniso but file: ', fname_vol_filter
+                stop 'is not in cwd as required; hadamard_common :: preprefvol'
+            endif
+            deallocate(fname_vol_filter)
         endif
         ! back to real space
         call b%vol%bwd_ft
@@ -505,7 +523,6 @@ contains
     end subroutine preprefvol
 
     subroutine norm_struct_facts( b, p, which_iter )
-         use simple_fileio, only: add2fbody
         class(build),      intent(inout) :: b
         class(params),     intent(inout) :: p
         integer, optional, intent(in)    :: which_iter
@@ -535,9 +552,11 @@ contains
                     endif
                 endif
                 call b%recvols(s)%compress_exp
-                call b%recvols(s)%sampl_dens_correct(self_out=b%vol_pad) ! this preserves the recvol for online update
-                call b%vol_pad%bwd_ft
-                call b%vol_pad%clip(b%vol)
+                ! call b%recvols(s)%sampl_dens_correct(self_out=b%vol_pad) ! this preserves the recvol for online update
+                ! call b%vol_pad%bwd_ft
+                call b%recvols(s)%sampl_dens_correct
+                call b%recvols(s)%bwd_ft
+                call b%recvols(s)%clip(b%vol)
                 call b%vol%write(p%vols(s), del_if_exists=.true.)
                 if( present(which_iter) )then
                     ! post-process volume
@@ -555,8 +574,8 @@ contains
     end subroutine norm_struct_facts
     
     subroutine eonorm_struct_facts( b, p, res, which_iter )
-        use simple_image,  only: image
-        use simple_fileio, only: add2fbody, file2rarr, del_file
+        use simple_image,    only: image
+        use simple_filterer, only: gen_anisotropic_optlp
         class(build),      intent(inout) :: b
         class(params),     intent(inout) :: p
         real,              intent(inout) :: res
@@ -594,6 +613,10 @@ contains
                     call gen_projection_frcs( p, eonames(1), eonames(2), s, b%projfrcs)
                     call del_file(eonames(1))
                     call del_file(eonames(2))
+                    call b%projfrcs%write('frcs_state'//int2str_pad(s,2)//'.bin')
+                    ! generate the anisotropic 3D optimal low-pass filter
+                    call gen_anisotropic_optlp(b%vol, b%projfrcs, b%e_bal, s, p%pgrp)
+                    call b%vol%write('aniso_optlp_state'//int2str_pad(s,2)//p%ext)
                 else
                     call b%eorecvols(s)%sampl_dens_correct_eos(s)
                 endif
@@ -644,14 +667,14 @@ contains
         call even%read(ename)
         call odd%read(oname)
         ! create e_space
-        call e_space%new(p%nspace)
+        call e_space%new(NSPACE_BALANCE)
         call e_space%spiral(p%nsym, p%eullims)
         ! generate even/odd projections
         even_imgs = projvol(even, e_space, p)
         odd_imgs  = projvol(odd, e_space, p)
         ! calculate FRCs and fill-in projfrcs object
         !$omp parallel do default(shared) private(iproj,res,frc) schedule(static) proc_bind(close)
-        do iproj=1,p%nspace
+        do iproj=1,NSPACE_BALANCE
             call even_imgs(iproj)%fwd_ft
             call odd_imgs(iproj)%fwd_ft
             call even_imgs(iproj)%fsc(odd_imgs(iproj), res, frc, serial=.true.)
@@ -663,6 +686,7 @@ contains
         deallocate(even_imgs, odd_imgs)
         call even%kill
         call odd%kill
+        call e_space%kill
     end subroutine gen_projection_frcs
 
 end module simple_hadamard_common

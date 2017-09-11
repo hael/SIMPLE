@@ -68,7 +68,7 @@ integer, parameter :: MINCLSPOPLIM    = 5       !< limit for adaptive cluster sp
 integer, parameter :: SPECWMINPOP     = 2000    !< minimum population for spectral weighting (PRIME2D/3D)
 integer, parameter :: GRIDNPEAKS      = 3       !< # peaks to consider in angular grid search (PRIME3D)
 integer, parameter :: MAXNPEAKS       = 40      !< maximum # peaks to be assigned weights (PRIME3D)
-integer, parameter :: NSPACE_BALANCE  = 400     !< # projection directions for the balancing constraint (PRIME3D)
+integer, parameter :: NSPACE_BALANCE  = 600     !< # projection directions for the balancing constraint (PRIME3D)
 integer, parameter :: HETNREPEATS     = 5       !< # repeats het_ensemble
 integer, parameter :: GRIDCORR_MAXITS = 5       !< # iterations for reconstruction gridding correction
 

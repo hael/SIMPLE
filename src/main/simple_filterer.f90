@@ -12,25 +12,24 @@ contains
     !!         (1) taking the average filter coefficients for frequencies 1 & 2
     !!         (2) minimizing the angle between the vector defined by the 3D Fourier index
     !!         and the planes used for calculating FRCs to find a matching filter coeff
-
-
-    ! currently works only for C1, need to think about symmetry
-    ! probably expanding over the point-group in the angle_btw_vec_and_normal would do
-
-
-    subroutine gen_anisotropic_optlp( vol_filter, projfrcs, e_space, state )
+    subroutine gen_anisotropic_optlp( vol_filter, projfrcs, e_space, state, pgrp )
         use simple_estimate_ssnr,   only: fsc2optlp
         use simple_projection_frcs, only: projection_frcs
         use simple_oris,            only: oris
         use simple_math,            only: hyp
+        use simple_sym,             only: sym
+        use simple_ori,             only: ori
         class(image),           intent(inout) :: vol_filter
         class(projection_frcs), intent(in)    :: projfrcs
-        class(oris),            intent(in)    :: e_space
+        class(oris),            intent(inout) :: e_space
         integer,                intent(in)    :: state
-        integer           :: noris, iori, nprojs, ldim(3), lims(3,2)
+        character(len=*),       intent(in)    :: pgrp
+        type(sym)         :: se
+        type(ori)         :: orientation, o_sym
+        integer           :: noris, iori, nprojs, ldim(3), lims(3,2), isym, nsym
         integer           :: sh, logi(3), phys(3), imatch, filtsz, h, k, l
-        real, allocatable :: plane_normals(:,:), plane_normals_L2(:), filters2D(:,:)
-        real, allocatable :: frc(:), angles(:)
+        real, allocatable :: plane_normals(:,:,:), plane_normals_L2(:,:), filters2D(:,:)
+        real, allocatable :: frc(:)
         real              :: fwght, fwght_find0, fwght_find1, fwght_find2
         write(*,'(a)') '>>> GENERATING ANISOTROPIC OPTIMAL 3D LOW-PASS FILTER'
         ! sanity checking
@@ -43,21 +42,50 @@ contains
         frc    = projfrcs%get_frc(1, ldim(1), state)
         filtsz = size(frc)
         lims   = vol_filter%loop_lims(2)
-        ! extract plane normals and L2 norms from e_space & extract 2D filters from projfrcs
-        allocate( plane_normals(noris,3), plane_normals_L2(noris), filters2D(noris,filtsz) )
-        do iori=1,noris
-            ! plane normals & L2 norms
-            plane_normals(iori,:)  = e_space%get_normal(iori)
-            plane_normals_L2(iori) = sum(plane_normals(iori,:) * plane_normals(iori,:))
-            if( plane_normals_L2(iori) > TINY )then
-                plane_normals_L2(iori) = sqrt(plane_normals_L2(iori))
-            else
-                plane_normals_L2(iori) = 0.
-            endif
-            ! 2D filters
-            frc = projfrcs%get_frc(iori, ldim(1), state)
-            filters2D(iori,:) = fsc2optlp(frc)
-        end do
+        if( pgrp .eq. 'c1' )then
+            nsym = 1
+            ! extract plane normals and L2 norms from e_space & extract 2D filters from projfrcs
+            allocate( plane_normals(1,noris,3), plane_normals_L2(1,noris), filters2D(noris,filtsz) )
+            plane_normals    = 0.0
+            plane_normals_L2 = 0.0 
+            filters2D        = 0.0 
+            do iori=1,noris
+                ! plane normals & L2 norms
+                plane_normals(1,iori,:)  = e_space%get_normal(iori)
+                plane_normals_L2(1,iori) = sum(plane_normals(1,iori,:) * plane_normals(1,iori,:))
+                if( plane_normals_L2(1,iori) > TINY )then
+                    plane_normals_L2(1,iori) = sqrt(plane_normals_L2(1,iori))
+                endif
+                ! 2D filters
+                frc = projfrcs%get_frc(iori, ldim(1), state)
+                filters2D(iori,:) = fsc2optlp(frc)
+            end do
+        else
+            ! we need to expand over the symmetry group
+            call se%new(pgrp)
+            nsym = se%get_nsym()
+            ! extract plane normals and L2 norms from e_space & extract 2D filters from projfrcs
+            allocate( plane_normals(nsym,noris,3), plane_normals_L2(nsym,noris), filters2D(noris,filtsz) )
+            plane_normals    = 0.0
+            plane_normals_L2 = 0.0 
+            filters2D        = 0.0 
+            do iori=1,noris
+                orientation = e_space%get_ori(iori)
+                do isym=1,nsym
+                    o_sym = se%apply(orientation, isym)
+                    ! plane normals & L2 norms
+                    plane_normals(isym,iori,:) = o_sym%get_normal()
+                    plane_normals_L2(isym,iori) = sum(plane_normals(isym,iori,:) * plane_normals(isym,iori,:))
+                    if( plane_normals_L2(isym,iori) > TINY )then
+                        plane_normals_L2(isym,iori) = sqrt(plane_normals_L2(isym,iori))
+                    endif
+                end do
+                ! 2D filters
+                frc = projfrcs%get_frc(iori, ldim(1), state)
+                filters2D(iori,:) = fsc2optlp(frc)
+            end do
+            call se%kill
+        endif
         ! generate the 3D filter
         fwght_find0 = maxval(filters2D)
         fwght_find1 = sum(filters2D(:,1)) / real(noris)
@@ -96,6 +124,7 @@ contains
 
         contains
 
+            ! index of matching 2D filter
             integer function find2Dmatch( vec )
                 real, intent(in) :: vec(3)
                 integer :: iori, loc(1)
@@ -107,17 +136,22 @@ contains
                 find2Dmatch = loc(1)
             end function find2Dmatch
 
+            ! angle minimised over symmetry group
             real function angle_btw_vec_and_normal( vec, iori )
                 real,    intent(in) :: vec(3)
                 integer, intent(in) :: iori
-                real :: vec_L2, x
+                real    :: vec_L2, x, angle
+                integer :: isym
                 vec_L2 = sum(vec * vec)
-                if( vec_L2 > TINY .and. plane_normals_L2(iori) > TINY )then
+                angle_btw_vec_and_normal = huge(x)
+                if( vec_L2 > TINY )then
                     vec_L2 = sqrt(vec_L2)
-                    angle_btw_vec_and_normal =&
-                    &asin( abs(sum(plane_normals(iori,:) * vec(:))) / (vec_L2 * plane_normals_L2(iori)) )
-                else
-                    angle_btw_vec_and_normal = huge(x)
+                    do isym=1,nsym
+                        if( plane_normals_L2(isym,iori) > TINY )then
+                            angle = asin( abs(sum(plane_normals(isym,iori,:) * vec(:))) / (vec_L2 * plane_normals_L2(isym,iori)) )
+                            if( angle < angle_btw_vec_and_normal ) angle_btw_vec_and_normal = angle
+                        endif
+                    end do
                 endif
             end function angle_btw_vec_and_normal
 

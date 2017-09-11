@@ -1449,9 +1449,10 @@ select case(prg)
         keys_optional(9)  = 'frac_outliers'
         keys_optional(10) = 'thres'
         keys_optional(11) = 'mskfile'
+        keys_optional(12) = 'vol_filt'
         ! parse command line
         if( describe ) call print_doc_postproc_vol
-        call cline%parse(keys_required(:3), keys_optional(:11))
+        call cline%parse(keys_required(:3), keys_optional(:12))
         ! execute
         call xpostproc_vol%execute(cline)
     case( 'projvol' )

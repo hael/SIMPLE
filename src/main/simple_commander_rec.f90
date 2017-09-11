@@ -144,7 +144,7 @@ contains
                     call del_file(eonames(2))
                     call b%projfrcs%write('frcs_state'//int2str_pad(s,2)//'.bin')
                     ! generate the anisotropic 3D optimal low-pass filter
-                    call gen_anisotropic_optlp(b%vol, b%projfrcs, b%e, s)
+                    call gen_anisotropic_optlp(b%vol, b%projfrcs, b%e_bal, s, p%pgrp)
                     call b%vol%write('aniso_optlp_state'//int2str_pad(s,2)//p%ext)
                 else
                     call b%eorecvol%sampl_dens_correct_eos(s)
@@ -240,7 +240,7 @@ contains
     
             subroutine normalize( recname )
                 character(len=*), intent(in) :: recname
-                call b%recvol%gridding_correct
+                call b%recvol%sampl_dens_correct
                 call b%recvol%bwd_ft
                 call b%recvol%clip(b%vol)
                 call b%vol%write(recname, del_if_exists=.true.)

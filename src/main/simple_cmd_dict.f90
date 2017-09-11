@@ -232,6 +232,7 @@ contains
         call chdict%push('vis',           'visualise(yes|no)')
         call chdict%push('vol1',          'input volume no1(invol1.ext)')
         call chdict%push('vol2',          'input volume no2(invol2.ext)')
+        call chdict%push('vol_filt',      'input filter volume(vol_filt.ext)')
         call chdict%push('vollist',       'table (text file) of volume files(.txt)')
         call chdict%push('voltab',        'table (text file) of volume files(.txt)')
         call chdict%push('voltab2',       '2nd table (text file) of volume files(.txt)')

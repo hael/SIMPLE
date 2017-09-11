@@ -779,7 +779,7 @@ contains
         type(params)          :: p_master
         type(chash)           :: job_descr
         type(oris)            :: os
-        character(len=STDLEN) :: vol, vol_iter, oritab, str, str_iter
+        character(len=STDLEN) :: vol, vol_iter, oritab, str, str_iter, optlp_file
         character(len=STDLEN) :: str_state, fsc_file, volassemble_output
         real                  :: frac_srch_space, corr, corr_prev
         integer               :: s, state, iter, i
@@ -1009,8 +1009,17 @@ contains
                     if( p_master%pproc.eq.'yes' )then
                         vol = 'vol'//trim(int2str(state))
                         call cline_postproc_vol%set( 'vol1' , trim(vol_iter))
-                        fsc_file = 'fsc_state'//trim(str_state)//'.bin'
-                        if( file_exists(fsc_file) .and. p_master%eo .ne. 'no' )then
+                        fsc_file   = 'fsc_state'//trim(str_state)//'.bin'
+                        optlp_file = 'aniso_optlp_state'//trim(str_state)//p_master%ext
+                        if( file_exists(fsc_file) .and. p_master%eo .eq. 'aniso' )then
+                            if( .not. file_exists(optlp_file) )then
+                                write(*,*) 'eo=aniso but file: ', trim(optlp_file)
+                                stop 'is not in cwd as required; commander_distr_wflows :: exec_prime3D_distr'
+                            endif
+                            call cline_postproc_vol%delete('lp')
+                            call cline_postproc_vol%set('fsc', trim(fsc_file))
+                            call cline_postproc_vol%set('vol_filt', trim(optlp_file))
+                        else if( file_exists(fsc_file) .and. p_master%eo .eq. 'yes' )then
                             call cline_postproc_vol%delete('lp')
                             call cline_postproc_vol%set('fsc', trim(fsc_file))
                         else
