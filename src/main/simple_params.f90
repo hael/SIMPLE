@@ -255,7 +255,6 @@ type :: params
     integer :: top=1
     integer :: tos=1
     integer :: trsstep=1
-    integer :: unevencorr_iter=0   !< uneven projection direction distribution correction iterations to perform
     integer :: update=1000
     integer :: which_iter=0        !< iteration nr
     integer :: xcoord=0            !< x coordinate{0}
@@ -629,7 +628,6 @@ contains
         call check_iarg('top',            self%top)
         call check_iarg('tos',            self%tos)
         call check_iarg('trsstep',        self%trsstep)
-        call check_iarg('unevencorr_iter',self%unevencorr_iter)
         call check_iarg('update',         self%update)
         call check_iarg('which_iter',     self%which_iter)
         call check_iarg('xdim',           self%xdim)

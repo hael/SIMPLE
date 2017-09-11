@@ -70,6 +70,7 @@ integer, parameter :: GRIDNPEAKS      = 3       !< # peaks to consider in angula
 integer, parameter :: MAXNPEAKS       = 40      !< maximum # peaks to be assigned weights (PRIME3D)
 integer, parameter :: NSPACE_BALANCE  = 400     !< # projection directions for the balancing constraint (PRIME3D)
 integer, parameter :: HETNREPEATS     = 5       !< # repeats het_ensemble
+integer, parameter :: GRIDCORR_MAXITS = 5       !< # iterations for reconstruction gridding correction
 
 ! global  variables
 integer(kind=c_int)       :: nthr_glob          !< number of threads global variable

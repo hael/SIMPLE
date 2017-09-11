@@ -113,7 +113,6 @@ contains
             call calc_w(lims(2,:), ldim(2), w2)
             call calc_w(lims(3,:), ldim(3), w3)
         endif
-        print *,w1
         ! divide the image
         !$omp parallel do collapse(3) schedule(static) default(shared) private(i,j,k) proc_bind(close)
         do i=lims(1,1),lims(1,2)

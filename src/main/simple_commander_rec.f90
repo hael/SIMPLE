@@ -240,7 +240,7 @@ contains
     
             subroutine normalize( recname )
                 character(len=*), intent(in) :: recname
-                call b%recvol%sampl_dens_correct
+                call b%recvol%gridding_correct
                 call b%recvol%bwd_ft
                 call b%recvol%clip(b%vol)
                 call b%vol%write(recname, del_if_exists=.true.)

@@ -280,8 +280,8 @@ contains
         real             :: Wnorm, val_prev, val, Wnorm_prev, invrho
         integer          :: h, k, m, lims(3,2), logi(3), phys(3), iter, lfny, cnt
         integer          :: maxits_here, lfny_sq, sh_sq
-        real,  parameter :: winsz  = 0.5
-        maxits_here = 25
+        real,  parameter :: winsz  = 2.
+        maxits_here = GRIDCORR_MAXITS
         if( present(maxits) )maxits_here = maxits
         lfny    = self%get_lfny(1)
         lfny_sq = lfny**2
@@ -293,7 +293,7 @@ contains
         call W_img%set_ft(.true.)
         call Wprev_img%set_ft(.true.)
         ! kernel
-        kbwin = kbinterpol(winsz, 2.)
+        kbwin = kbinterpol(winsz, self%alpha)
         ! weights init to 1.
         W_img = zero
         !$omp parallel do collapse(3) default(shared) schedule(static)&
@@ -333,7 +333,7 @@ contains
                 end do
             end do
             !$omp end parallel do
-            ! W <- (W / rho) x kernel
+            ! W <- (Wprev / rho) x kernel
             call W_img%bwd_ft
             call mul_w_instr(W_img, kbwin)
             call W_img%fwd_ft
@@ -370,8 +370,8 @@ contains
             !$omp end parallel do
             Wnorm = log10(1.+Wnorm / sqrt(real(cnt)))
             ! convergence
-            print *, 'Log10 Wnorm', iter, Wnorm, Wnorm/Wnorm_prev
-            if( Wnorm/Wnorm_prev < 1.01 )exit
+            !print *, 'Log10 Wnorm', iter, Wnorm, Wnorm/Wnorm_prev
+            if( Wnorm/Wnorm_prev < 1.05 )exit
         enddo
         call Wprev_img%kill
         ! Fourier comps / rho
@@ -596,11 +596,7 @@ contains
         else
             write(*,'(A)') '>>> SAMPLING DENSITY (RHO) CORRECTION (JACKSON) & WIENER NORMALIZATION'
             call self%compress_exp
-            if( p%unevencorr_iter > 0 )then
-                call self%gridding_correct(maxits=p%unevencorr_iter)
-            else
-                call self%sampl_dens_correct
-            endif
+            call self%gridding_correct
         endif
         call self%bwd_ft
         call img%kill
