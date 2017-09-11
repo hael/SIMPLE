@@ -533,7 +533,6 @@ contains
             call hpsort(self%nrefs, projspace_corrs, self%proj_space_inds) 
             call self%inpl_srch(pftcc, iptcl) ! search shifts
             ! prepare weights and orientations
-            print *, 'IPTCL', iptcl
             call self%prep_npeaks_oris
             call self%stochastic_weights(wcorr)
             call self%update_best(pftcc, iptcl, a)
