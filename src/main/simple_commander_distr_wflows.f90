@@ -1399,7 +1399,7 @@ contains
         character(len=32),   parameter :: GRIDSYMTAB   = 'grid_symaxes'//METADATEXT !< 
         character(len=32),   parameter :: SYMFBODY     = 'symaxes_part'             !< symmetry axes doc (distributed mode)
         character(len=32),   parameter :: SYMTAB       = 'symaxes'//METADATEXT      !< gri
-        character(len=32),   parameter :: SYMPEAKSTAB  = 'sympeaks'                 !< symmetry peaks to refine
+        character(len=32),   parameter :: SYMPEAKSTAB  = 'sympeaks.txt'             !< symmetry peaks to refine
         character(len=32),   parameter :: SYMSHTAB     = 'sym_3dshift'//METADATEXT  !< volume 3D shift
         character(len=32),   parameter :: SYMPROJSTK   = 'sym_projs.mrc'            !< volume reference projections
         character(len=32),   parameter :: SYMPROJTAB   = 'sym_projs'//METADATEXT    !< volume reference projections doc
