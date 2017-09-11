@@ -10,7 +10,17 @@ module simple_syslib
         &IOSTAT_END, IOSTAT_EOR
     implicit none
 
-
+#if defined(INTEL)
+    ! interface
+    !     integer function ierrno()
+    !     end function ierrno
+    !     pure character*(24) function ctime(stime)
+    !         integer, intent(in) :: stime
+    !     end function ctime
+    !     pure integer function time()
+    !     end function time
+    ! end interface
+#endif
 #if defined(PGI)
     !! include lib3f.h without kill, bessel fns, etc
 
@@ -435,25 +445,26 @@ contains
             call perror(msg)
 #endif
         end if
-
-
     end function get_sys_error
 
 
 
     !> \brief  is for checking allocation
-    subroutine alloc_errchk( message, alloc_status, f,l )
+    subroutine alloc_errchk( message, alloc_status, file,line, iomsg )
         character(len=*), intent(in)           :: message
         integer,          intent(in)           :: alloc_status
-        character(len=*), intent(in), optional :: f !< filename of caller
-        integer,          intent(in), optional :: l !< line number from calling file
-        integer                      :: syserr
+        character(len=*), intent(in), optional :: file !< filename of caller
+        integer,          intent(in), optional :: line !< line number from calling file
+        character(len=*), intent(in), optional :: iomsg !< IO message
+        integer                                :: syserr
         
         if (alloc_status/=0)then
             write(stderr,'(a)') 'ERROR: Allocation failure!'
             call simple_error_check(alloc_status)
-            if(present(f).and.present(l))&
-                write(stderr,'("Stopping in file ",/,A,/," at line ",I0)') f,l
+            if(present(iomsg))&
+                write(stderr,'("IO Message ",A)') trim(adjustl(iomsg))
+            if(present(file).and.present(line))&
+                write(stderr,'("Stopping in file ",/,A,/," at line ",I0)') file,line
             call simple_stop(message)
         endif
     end subroutine alloc_errchk
@@ -502,6 +513,7 @@ contains
 
 
     subroutine print_compiler_info(file_unit)
+      use simple_strings, only: int2str
 #ifdef GNU
         use, intrinsic :: iso_fortran_env, only: compiler_version, &
             &compiler_options
@@ -527,11 +539,11 @@ contains
 #endif
 #ifdef INTEL
         res = for_ifcore_version( str )
-        write( file_unit_op, '(/2a/)' ) &
-            ' Intel IFCORE version ', str
+        if (res == 0 ) call simple_stop("print_compiler_info for_ifcore_version returned "//int2str(res))
+        write( file_unit_op, '(/2a/)' ) " Intel IFCORE version ", trim(adjustl(str))
         res = for_ifport_version( str )
-        write( file_unit_op, '(/2a/)' ) &
-            ' Intel IFPORT version ', str
+        if (res == 0 ) call simple_stop("print_compiler_info for_ifport_version returned "//int2str(res))
+        write( file_unit_op, '(/2a/)' ) ' Intel IFPORT version ', trim(adjustl(str))
 #endif
     end subroutine print_compiler_info
 
