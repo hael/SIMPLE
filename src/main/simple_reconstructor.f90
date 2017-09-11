@@ -47,6 +47,7 @@ type, extends(image) :: reconstructor
     procedure, private :: inout_fcomp
     procedure, private :: calc_tfun_vals
     procedure          :: inout_fplane
+    procedure          :: sampl_dens_correct_not_to_use
     procedure          :: sampl_dens_correct
     procedure          :: compress_exp
     ! SUMMATION
@@ -324,7 +325,7 @@ contains
 
     !>  is for uneven distribution of orientations correction 
     !>  from Pipe & Manon 1999
-    subroutine sampl_dens_correct( self, maxits )
+    subroutine sampl_dens_correct_not_to_use( self, maxits )
         use simple_gridding,   only: mul_w_instr
         use simple_math,       only: mycabs, hyp
         use simple_kbinterpol, only: kbinterpol
@@ -456,37 +457,37 @@ contains
         !$omp end parallel do
         ! cleanup
         call W_img%kill
-    end subroutine sampl_dens_correct
+    end subroutine sampl_dens_correct_not_to_use
 
     ! OLD ROUTINE
     !> sampl_dens_correct Correct sample density
     !! \param self_out corrected image output
     !!
-    ! subroutine sampl_dens_correct( self, self_out )
-    !     class(reconstructor),   intent(inout) :: self !< this instance
-    !     class(image), optional, intent(inout) :: self_out  !< output image instance
-    !     integer :: h, k, l, lims(3,2), phys(3)
-    !     logical :: self_out_present
-    !     self_out_present = present(self_out)
-    !     ! set constants
-    !     lims = self%loop_lims(2)
-    !     if( self_out_present ) call self_out%copy(self)
-    !     !$omp parallel do collapse(3) default(shared) private(h,k,l,phys)&
-    !     !$omp schedule(static) proc_bind(close)
-    !     do h=lims(1,1),lims(1,2)
-    !         do k=lims(2,1),lims(2,2)
-    !             do l=lims(3,1),lims(3,2)
-    !                 phys = self%comp_addr_phys([h,k,l])
-    !                 if( self_out_present )then
-    !                     call self_out%div([h,k,l],self%rho(phys(1),phys(2),phys(3)),phys_in=phys)
-    !                 else
-    !                     call self%div([h,k,l],self%rho(phys(1),phys(2),phys(3)),phys_in=phys)
-    !                 endif
-    !             end do
-    !         end do
-    !     end do
-    !     !$omp end parallel do
-    ! end subroutine sampl_dens_correct
+    subroutine sampl_dens_correct( self, self_out )
+        class(reconstructor),   intent(inout) :: self !< this instance
+        class(image), optional, intent(inout) :: self_out  !< output image instance
+        integer :: h, k, l, lims(3,2), phys(3)
+        logical :: self_out_present
+        self_out_present = present(self_out)
+        ! set constants
+        lims = self%loop_lims(2)
+        if( self_out_present ) call self_out%copy(self)
+        !$omp parallel do collapse(3) default(shared) private(h,k,l,phys)&
+        !$omp schedule(static) proc_bind(close)
+        do h=lims(1,1),lims(1,2)
+            do k=lims(2,1),lims(2,2)
+                do l=lims(3,1),lims(3,2)
+                    phys = self%comp_addr_phys([h,k,l])
+                    if( self_out_present )then
+                        call self_out%div([h,k,l],self%rho(phys(1),phys(2),phys(3)),phys_in=phys)
+                    else
+                        call self%div([h,k,l],self%rho(phys(1),phys(2),phys(3)),phys_in=phys)
+                    endif
+                end do
+            end do
+        end do
+        !$omp end parallel do
+    end subroutine sampl_dens_correct
 
     subroutine compress_exp( self )
         class(reconstructor), intent(inout) :: self !< this instance

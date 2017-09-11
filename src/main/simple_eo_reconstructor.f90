@@ -296,8 +296,8 @@ contains
         call even%new([self%box,self%box,self%box],self%smpd)
         call odd%new([self%box,self%box,self%box],self%smpd)
         ! correct for the uneven sampling density
-        call self%even%sampl_dens_correct(maxits=1)
-        call self%odd%sampl_dens_correct(maxits=1)
+        call self%even%sampl_dens_correct
+        call self%odd%sampl_dens_correct
         ! reverse FT
         call self%even%bwd_ft
         call self%odd%bwd_ft
