@@ -162,10 +162,10 @@ contains
     !>  \brief  grids one particle image to the volume
     subroutine grid_ptcl( b, p, orientation, os )
         use simple_kbinterpol, only: kbinterpol
-        class(build),              intent(inout) :: b
-        class(params),             intent(inout) :: p
-        class(ori),                intent(inout) :: orientation
-        class(oris),     optional, intent(inout) :: os
+        class(build),          intent(inout) :: b
+        class(params),         intent(inout) :: p
+        class(ori),            intent(inout) :: orientation
+        class(oris), optional, intent(inout) :: os
         type(ori)        :: orisoft, o_sym
         type(kbinterpol) :: kbwin
         real             :: pw, w, eopart
@@ -553,8 +553,6 @@ contains
                     endif
                 endif
                 call b%recvols(s)%compress_exp
-                ! call b%recvols(s)%sampl_dens_correct(self_out=b%vol_pad) ! this preserves the recvol for online update
-                ! call b%vol_pad%bwd_ft
                 call b%recvols(s)%sampl_dens_correct
                 call b%recvols(s)%bwd_ft
                 call b%recvols(s)%clip(b%vol)

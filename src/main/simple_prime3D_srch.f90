@@ -1088,17 +1088,18 @@ contains
         ! so that when diff==0 the weights are maximum and when
         ! diff==corrmax the weights are minimum
         corrs = self%o_peaks%get_all('corr')
+
         allocate(ws(self%npeaks),logws(self%npeaks),source=0.)
         ws    = exp(-(1.-corrs))
         logws = log(ws)
-        order = (/(ipeak,ipeak=1,self%npeaks)/)
+        allocate(order(self%npeaks), source=(/(ipeak,ipeak=1,self%npeaks)/))
         call hpsort(self%npeaks, logws, order)
         call reverse(order)
         call reverse(logws)
         forall(ipeak=1:self%npeaks) ws(order(ipeak)) = exp(sum(logws(:ipeak))) 
         ! thresholding of the weights
         allocate(included(self%npeaks), source=.true.)
-        included = (ws>=FACTWEIGHTS_THRESH)
+        included = (ws >= FACTWEIGHTS_THRESH)
         where( .not.included ) ws = 0.
         ! weighted corr
         wcorr = sum(ws*corrs,mask=included) / sum(ws,mask=included)
