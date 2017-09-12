@@ -110,7 +110,7 @@ contains
         endif
 
         ! INIT IMGPOLARIZER
-        call pftcc%new(nrefs_per_ptcl, [1,1], [p%boxmatch,p%boxmatch,1], p%smpd, p%kfromto, p%ring2, p%ctf)
+        call pftcc%new(nrefs_per_ptcl, p, prange=[1,1])
         call b%img_match%init_polarizer(pftcc)
         call pftcc%kill
 
@@ -248,7 +248,7 @@ contains
         class(params),              intent(inout) :: p        !< params object
         integer,                    intent(in)    :: iptcl    !< index to particle
         class(polarft_corrcalc),    intent(inout) :: pftcc    !< calculator object
-        call pftcc%new(nrefs_per_ptcl, [iptcl,iptcl], [p%boxmatch,p%boxmatch,1], p%smpd, p%kfromto, p%ring2, p%ctf)
+        call pftcc%new(nrefs_per_ptcl, p, prange=[iptcl,iptcl])
     end subroutine init_pftcc
 
     !>  \brief  particle projection into pftcc

@@ -91,7 +91,7 @@ contains
         ! DETERMINE THE NUMBER OF PEAKS
         if( .not. cline%defined('npeaks') )then
             select case(p%refine)
-                case('no', 'neigh', 'greedy', 'greedyneigh', 'exp')
+                case('no', 'neigh', 'greedy', 'greedyneigh')
                     if( p%eo .ne. 'no' )then
                         p%npeaks = min(b%e%find_npeaks_from_athres(NPEAKSATHRES), MAXNPEAKS)
                     else
@@ -200,7 +200,7 @@ contains
         allocate( primesrch3D(p%fromp:p%top) , stat=alloc_stat)
         call alloc_errchk("In hadamard3D_matcher::prime3D_exec ",alloc_stat)
         do iptcl=p%fromp,p%top
-            call primesrch3D(iptcl)%new(b%a, p, pftcc)
+            call primesrch3D(iptcl)%new(pftcc, b%a, b%e, p)
         end do
         ! prep ctf
         if(p%ctf .ne. 'no') call pftcc%create_polar_ctfmats(b%a)
@@ -211,7 +211,7 @@ contains
                 !$omp parallel do default(shared) schedule(guided) private(iptcl) proc_bind(close)
                 do iptcl=p%fromp,p%top
                     if( to_update(iptcl) )then
-                        call primesrch3D(iptcl)%exec_prime3D_srch(pftcc, iptcl, b%a, b%e, p%lp, szsn=p%szsn)
+                        call primesrch3D(iptcl)%exec_prime3D_srch(iptcl, p%lp, szsn=p%szsn)
                     endif
                 end do
                 !$omp end parallel do
@@ -219,14 +219,14 @@ contains
                 if( p%oritab .eq. '' )then
                     !$omp parallel do default(shared) schedule(guided) private(iptcl) proc_bind(close)
                     do iptcl=p%fromp,p%top
-                        call primesrch3D(iptcl)%exec_prime3D_srch(pftcc, iptcl, b%a, b%e, p%lp, greedy=.true.)
+                        call primesrch3D(iptcl)%exec_prime3D_srch(iptcl, p%lp, greedy=.true.)
                     end do
                     !$omp end parallel do
                 else
                     !$omp parallel do default(shared) schedule(guided) private(iptcl) proc_bind(close)
                     do iptcl=p%fromp,p%top
                         if( to_update(iptcl) )then
-                            call primesrch3D(iptcl)%exec_prime3D_srch(pftcc, iptcl, b%a, b%e, p%lp)
+                            call primesrch3D(iptcl)%exec_prime3D_srch(iptcl, p%lp)
                         endif
                     end do
                     !$omp end parallel do
@@ -236,8 +236,8 @@ contains
                 !$omp parallel do default(shared) schedule(guided) private(iptcl) proc_bind(close)
                 do iptcl=p%fromp,p%top
                     if( to_update(iptcl) )then
-                        call primesrch3D(iptcl)%exec_prime3D_srch(pftcc, iptcl, b%a,&
-                            b%e, p%lp, nnmat=b%nnmat, grid_projs=b%grid_projs)
+                        call primesrch3D(iptcl)%exec_prime3D_srch(iptcl, p%lp,&
+                            &nnmat=b%nnmat, grid_projs=b%grid_projs)
                     endif
                 end do
                 !$omp end parallel do
@@ -245,14 +245,14 @@ contains
                 if( p%oritab .eq. '' )then
                     !$omp parallel do default(shared) schedule(guided) private(iptcl) proc_bind(close)
                     do iptcl=p%fromp,p%top
-                        call primesrch3D(iptcl)%exec_prime3D_srch(pftcc, iptcl, b%a, b%e, p%lp, greedy=.true.)
+                        call primesrch3D(iptcl)%exec_prime3D_srch(iptcl, p%lp, greedy=.true.)
                     end do
                     !$omp end parallel do
                 else
                     !$omp parallel do default(shared) schedule(guided) private(iptcl) proc_bind(close)
                     do iptcl=p%fromp,p%top
                         if( to_update(iptcl) )then
-                            call primesrch3D(iptcl)%exec_prime3D_srch(pftcc, iptcl, b%a, b%e, p%lp, greedy=.true.)
+                            call primesrch3D(iptcl)%exec_prime3D_srch(iptcl, p%lp, greedy=.true.)
                         endif
                     end do
                     !$omp end parallel do
@@ -261,16 +261,16 @@ contains
                 if( p%oritab .eq. '' )then                
                     !$omp parallel do default(shared) schedule(guided) private(iptcl) proc_bind(close)
                     do iptcl=p%fromp,p%top
-                        call primesrch3D(iptcl)%exec_prime3D_srch(pftcc, iptcl, b%a, b%e, p%lp,&
-                            greedy=.true., nnmat=b%nnmat, grid_projs=b%grid_projs)
+                        call primesrch3D(iptcl)%exec_prime3D_srch(iptcl, p%lp,&
+                            &greedy=.true., nnmat=b%nnmat, grid_projs=b%grid_projs)
                     end do
                     !$omp end parallel do
                 else
                     !$omp parallel do default(shared) schedule(guided) private(iptcl) proc_bind(close)
                     do iptcl=p%fromp,p%top
                         if( to_update(iptcl) )then
-                            call primesrch3D(iptcl)%exec_prime3D_srch(pftcc, iptcl, b%a, b%e, p%lp,&
-                                greedy=.true., nnmat=b%nnmat, grid_projs=b%grid_projs)
+                            call primesrch3D(iptcl)%exec_prime3D_srch(iptcl, p%lp,&
+                                &greedy=.true., nnmat=b%nnmat, grid_projs=b%grid_projs)
                         endif
                     end do
                     !$omp end parallel do
@@ -283,7 +283,7 @@ contains
                 endif
                 !$omp parallel do default(shared) schedule(guided) private(iptcl) reduction(+:statecnt) proc_bind(close)
                 do iptcl=p%fromp,p%top
-                    call primesrch3D(iptcl)%exec_prime3D_srch_het(pftcc, iptcl, b%a, b%e, corr_thresh, statecnt)
+                    call primesrch3D(iptcl)%exec_prime3D_srch_het(iptcl, corr_thresh, statecnt)
                 end do
                 !$omp end parallel do
                 if( corr_thresh > TINY )then
@@ -293,16 +293,6 @@ contains
                             &'; pop=',statecnt(istate)
                     end do
                 endif
-            case ('exp')
-                if(p%oritab .eq. '') stop 'cannot run the refine=exp mode without input oridoc (oritab)'
-                !$omp parallel do default(shared) schedule(guided) private(iptcl) proc_bind(close)
-                do iptcl=p%fromp,p%top
-                    if( to_update(iptcl) )then
-                        call primesrch3D(iptcl)%exec_prime3D_srch(pftcc, iptcl, b%a, b%e, p%lp,&
-                            greedy=.true., nnmat=b%nnmat)
-                    endif
-                end do
-                !$omp end parallel do
             case DEFAULT
                 write(*,*) 'The refinement mode: ', trim(p%refine), ' is unsupported'
                 stop
@@ -451,8 +441,7 @@ contains
         ! must be done here since p%kfromto is dynamically set based on FSC from previous round
         ! or based on dynamic resolution limit update
         nrefs = p%nspace*p%nstates
-        call pftcc%new(nrefs, [p%fromp,p%top], [p%boxmatch,p%boxmatch,1],&
-        p%smpd, p%kfromto, p%ring2, p%ctf)
+        call pftcc%new(nrefs, p)
         call prep_refs_pftcc4align( b, p, cline )
         call prep_ptcls_pftcc4align( b, p, ppfts_fname )
         DebugPrint '*** hadamard3D_matcher ***: finished preppftcc4align'
