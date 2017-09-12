@@ -1,26 +1,47 @@
 #!/usr/bin/perl
-
 use warnings;
 use strict;
-
+#use File::Basename;
+#use File::Grep qw( fgrep );
 # read the simple_params.f90 into an array
 my @lines;
 my @vars;
-my$SIMPLE_PATH;
-$SIMPLE_PATH = $ENV{'SIMPLE_PATH'};
-if ( -e  $SIMPLE_PATH and -d $SIMPLE_PATH ){
-    die 'simple_args_varlist cannot find SIMPLE_PATH or is not set';
-}
+
 my$varlistfile;
+my$tmp_varlist;
+my$Gitversionfile;
 my$simple_argsfile;
-if ( -e  $SIMPLE_PATH.'/lib64' and -d $SIMPLE_PATH.'/lib64' ){
-$varlistfile=$SIMPLE_PATH.'/lib64/simple/simple_varlist.txt';
-$simple_argsfile=$SIMPLE_PATH.'/lib64/simple/simple_args.f90';
+my$source_dir="";
+my$sline="";
+
+if ( -d $ENV{'SIMPLE_PATH'}.'/lib64'){
+    $varlistfile=$ENV{'SIMPLE_PATH'}.'/lib64/simple/simple_varlist.txt';
 }else {
-$varlistfile=$SIMPLE_PATH.'/lib/simple/simple_varlist.txt';
-$simple_argsfile=$SIMPLE_PATH.'/lib/simple/simple_args.f90';
+    $varlistfile=$ENV{'SIMPLE_PATH'}.'/lib/simple/simple_varlist.txt';
 }
-open(PARAMS, "< simple_params.f90") or die "Cannot open simple_params.f90\n simple_args_varlist.pl must be called from <root>/src/simple_main ";
+$tmp_varlist=$ENV{'SIMPLE_PATH'}.'/simple_varlist.tmp';
+
+$Gitversionfile=$ENV{'SIMPLE_PATH'}."/lib/simple/SimpleGitVersion.h";
+# $source_dir = fgrep{ /SIMPLE_SOURCE_PATH/ } $Gitversionfile;
+open my $fh, '<', $Gitversionfile or die "Could not open file  $Gitversionfile:
++ $!";
+
+while ( my$line = <$fh> ) {
+    print $line;
+    if ( $line =~ m/SIMPLE_SOURCE_PATH/ ){
+        $sline = $line =~ s/SIMPLE_SOURCE_PATH=\"([^"]*)\"/$1/;
+        last;
+    }
+}
+print  $sline, "\n";
+$source_dir= $sline ;
+close $fh  or die "Could not close file $Gitversionfile: $!";
+#$source_dir =`sed 's/SIMPLE_SOURCE_PATH=\"\([^"]*\)\"/\1/'  $Gitversionfile`;
+
+print "SIMPLE SOURCE DIR", $source_dir, "\n";
+
+
+open(PARAMS, "< ".$source_dir."/src/main/simple_params.f90") or die "Cannot open simple_params.f90\n simple_args_varlist.pl must be called from <simple source directory>/src/main ";
 @lines = <PARAMS>;
 close(PARAMS);
 # extract the relevant lines
@@ -51,9 +72,16 @@ foreach my$i (1 .. 20){
   my$str = 'vol'.$i;
   push(@vars,$str);
 }
-unlink($SIMPLE_PATH."/lib/simple/simple_varlist.txt");
-open(VLIST, "> ".$SIMPLE_PATH."/lib/simple/simple_varlist.txt") or die "Cannot open simple_varlist.txt\n";
+
+
+unlink(${tmp_varlist});
+open(VLIST, "> ".${tmp_varlist}) or die "Cannot open simple_varlist.txt\n";
 foreach (@vars){
   print VLIST $_, "\n";
 }
 close(VLIST);
+if ( -e ${varlistfile} && (compare( ${varlistfile}, ${tmp_varlist})==0) ){
+    unlink(${tmp_varlist})# do nothing
+} else {
+    rename  ${tmp_varlist},${varlistfile}
+}

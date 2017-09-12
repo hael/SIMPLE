@@ -67,8 +67,11 @@ unlink(${tmp_varlist})# do nothing
 unlink($tmp_argsfile);
 open(MODULE, "> ".$tmp_argsfile) or die "Cannot open simple_args.f90\n";
 print MODULE "! for error checking of the SIMPLE command line arguments
+#include \"simple_lib.f08\"
 module simple_args
 use simple_defs
+use simple_fileio
+use simple_syslib, only: exec_cmdline, simple_file_stat
 implicit none
 
 public :: args, test_args
@@ -114,13 +117,11 @@ function is_present( self, arg ) result( yep )
         endif
     end do
 end function
-
+  
 subroutine test_args()
-    use simple_fileio, only: sys_stat, nlines
-    use simple_syslib, only: exec_cmdline, simple_getenv
-    type(args) :: as
-    character(len=STDLEN) :: vfilename,arg, errarg1, errarg2, errarg3, spath, srcpath
-    integer :: funit, n, i
+       type(args) :: as
+    character(len=STDLEN) :: vfilename,arg, errarg1, errarg2, errarg3, spath
+    integer :: funit, n, i,io_stat
     integer,allocatable :: buff(:)
     integer :: status,length1,length2
     character(len=STDLEN) :: varlist = 'simple/simple_varlist.txt'
@@ -128,39 +129,34 @@ subroutine test_args()
     write(*,'(a)') '**info(simple_args_unit_test, part 1): testing for args that should be present'
     as = args()
     write(*,'(a)') '**info(simple_args_unit_test): getting SIMPLE_PATH env variable'
-    spath= simple_getenv(\"SIMPLE_PATH\")
-    spath=adjustl(trim(spath))
+    spath = simple_getenv(\"SIMPLE_PATH\")
+    spath = trim(adjustl(spath))
     print *, 'get_environment_variable found SIMPLE_PATH    ', trim(spath)
-    print *, 'simple_defs compile-time variable SIMPLE_PATH:', trim(SIMPLE_PATH)
-    write(*,'(a)') '**info(simple_args_unit_test): getting SIMPLE_SOURCE_PATH variable'
-    print *, 'simple_defs variable SIMPLE_SOURCE_PATH', trim(SIMPLE_SOURCE_PATH)
-    srcpath = SIMPLE_SOURCE_PATH
-    srcpath=adjustl(trim(srcpath))
-
     print *, 'appending varlist '
     vfilename = trim(adjustl(spath)) // '/lib/' // trim(adjustl(varlist))
     vfilename = trim(adjustl(vfilename))
     print *, 'varlist: ', trim(adjustl(vfilename))
     write(*,'(a,a)') '**info(simple_args_unit_test): checking varlist file ',trim(adjustl(vfilename))
-    call sys_stat(vfilename,status,buff)
-    if(status /= 0)then
+    !call simple_file_stat(vfilename,status,buff)
+    if(.not. file_exists(vfilename))then
       print *,' varlist not in lib/simple/,  checking lib64/simple'
       vfilename = trim(adjustl(spath)) // '/lib64/' // trim(adjustl(varlist))
       vfilename = trim(adjustl(vfilename))
       print *, 'varlist: ', trim(adjustl(vfilename))
       write(*,'(a)') '**info(simple_args_unit_test): checking varlist file'
-      call sys_stat(vfilename,status,buff)
+      call simple_file_stat(vfilename,status,buff)
       if(status /= 0)then
         print *,' varlist not in lib64/simple/,  calling simple_args_varlist.pl'
-        call exec_cmdline(\"cd \"//srcpath//\";simple_args_varlist.pl\")
-        call sys_stat(vfilename,status,buff)
+        call exec_cmdline(\"simple_args_varlist.pl\")
+        call simple_file_stat(vfilename,status,buff)
         if(status /= 0)then
           print *,' varlist still not in lib/simple/ after calling simple_args_varlist.pl'
         end if
       end if
     end if
     n = nlines(vfilename)
-    open(newunit=funit, status='old', action='read', file=vfilename)
+    call fopen(funit, status='old', action='read', file=trim(adjustl(vfilename)), iostat=io_stat)
+    if(io_stat /= 0) call fileio_errmsg(\"simple_args::test  Unable to open \"//trim(vfilename),io_stat)
     do i=1,n
         read(funit,*) arg
         if( as%is_present(arg) )then
@@ -170,7 +166,7 @@ subroutine test_args()
             stop 'part 1 of the unit test failed'
         endif
     end do
-    close(funit)
+    call fclose(funit, errmsg=\"simple_args::test close\")
     errarg1 = 'XXXXXXX'
     errarg2 = 'YYYYYY'
     errarg3 = 'ZZZZZZ'
