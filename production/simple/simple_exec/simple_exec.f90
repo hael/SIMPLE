@@ -1011,7 +1011,7 @@ select case(prg)
         ! set defaults
         call cline%set('dynlp', 'no')
         if( cline%defined('eo') )then
-            if( cline%get_carg('eo').eq.'yes')then
+            if( cline%get_carg('eo').ne.'no')then
                 ! alles klar
             else
                 if( .not.cline%defined('lp'))stop 'Low-pass must be set with EO=NO'

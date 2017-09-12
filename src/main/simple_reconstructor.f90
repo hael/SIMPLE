@@ -539,7 +539,7 @@ contains
         if( present(part) )then
             return
         else
-            write(*,'(A)') '>>> SAMPLING DENSITY (RHO) CORRECTION (JACKSON) & WIENER NORMALIZATION'
+            write(*,'(A)') '>>> SAMPLING DENSITY (RHO) CORRECTION & WIENER NORMALIZATION'
             call self%compress_exp
             call self%sampl_dens_correct
         endif
