@@ -62,36 +62,43 @@ contains
         endif
     end subroutine fileio_errmsg
 
-    logical function is_io(unit)
-        integer, intent(in) :: unit
-        is_io=.false.
-        if (unit == stderr .or. unit == stdout .or. unit == stdin) is_io= .true.
-    end function is_io
-    !>  \brief  check whether a IO unit is currently opened
-    logical function is_open( unit_number )
-        integer, intent(in)   :: unit_number
-        integer               :: io_status
-        character(len=STDLEN) :: io_message
-        io_status = 0
-        inquire(unit=unit_number, opened=is_open,iostat=io_status,iomsg=io_message)
-        if (io_status .ne. 0) then
-            print *, 'is_open: IO error ', io_status, ': ', trim(adjustl(io_message))
-            call simple_stop ('IO error; is_open; simple_fileio      ')
-        endif
-    end function is_open
+    !>  \brief  check if a file exists on disk
+    ! logical function file_exists(fname)
+    !     character(len=*), intent(in) :: fname
+    !     inquire(file=trim(adjustl(fname)), exist=file_exists)
+    ! end function file_exists
+
+    ! logical function is_io(unit)
+    !     integer, intent(in) :: unit
+    !     is_io=.false.
+    !     if (unit == stderr .or. unit == stdout .or. unit == stdin) is_io= .true.
+    !   end function is_io
+
+    ! !>  \brief  check whether a IO unit is currently opened
+    ! logical function is_open( unit_number )
+    !     integer, intent(in)   :: unit_number
+    !     integer               :: io_status
+    !     character(len=STDLEN) :: io_message
+    !     io_status = 0
+    !     inquire(unit=unit_number, opened=is_open,iostat=io_status,iomsg=io_message)
+    !     if (io_status .ne. 0) then
+    !         print *, 'is_open: IO error ', io_status, ': ', trim(adjustl(io_message))
+    !         call simple_stop ('IO error; is_open; simple_fileio      ')
+    !     endif
+    ! end function is_open
     
-    !>  \brief  check whether a file is currently opened
-    logical function is_file_open( fname )
-        character(len=*), intent(in)  :: fname
-        integer               :: io_status
-        character(len=STDLEN) :: io_message
-        io_status = 0
-        inquire(file=fname, opened=is_file_open,iostat=io_status,iomsg=io_message)
-        if (io_status .ne. 0) then
-            print *, 'is_open: IO error ', io_status, ': ', trim(adjustl(io_message))
-            stop 'IO error; is_file_open; simple_fileio      '
-        endif
-    end function is_file_open
+    ! !>  \brief  check whether a file is currently opened
+    ! logical function is_file_open( fname )
+    !     character(len=*), intent(in)  :: fname
+    !     integer               :: io_status
+    !     character(len=STDLEN) :: io_message
+    !     io_status = 0
+    !     inquire(file=fname, opened=is_file_open,iostat=io_status,iomsg=io_message)
+    !     if (io_status .ne. 0) then
+    !         print *, 'is_open: IO error ', io_status, ': ', trim(adjustl(io_message))
+    !         stop 'IO error; is_file_open; simple_fileio      '
+    !     endif
+    ! end function is_file_open
 
     !> FOPEN enforce F2008 style open so that PGI/Intel behave correctly
     !!
@@ -226,7 +233,7 @@ contains
             end if
             call simple_error_check(iostat_this,"::fopen common open ACTION/STATUS/ACCESS")
             if(present(iostat))iostat=iostat_this
-            if(is_io(funit)) call simple_stop( "::fopen newunit returned "//int2str(funit) )
+            if(funit/=0 .and. is_io(funit)) call simple_stop( "::fopen newunit returned "//int2str(funit) )
             return
         end if
         ! err_this=2000
@@ -477,6 +484,10 @@ contains
 
     !> \brief  Rename or move file
     subroutine mv_file( filein, fileout , overwrite)
+#ifdef INTEL
+        use ifport
+#endif
+
         character(len=*), intent(in) :: filein, fileout !< input filename
         logical, intent(in), optional :: overwrite
         integer :: fnr, file_status
@@ -486,9 +497,15 @@ contains
         if( file_exists(filein) )then
             if( file_exists(fileout) .and. (.not. ovrwrite) )&
                 call fileio_errmsg( "mv_file failed to rename file,  designated output  filename already exists "//trim(fileout))
+#ifdef INTEL
+            file_status = rename(filein, fileout)
+            if(file_status /= 0) call fileio_errmsg( "mv_file failed to rename file "//trim(filein), file_status)
+#else
             call rename(filein, fileout) ! intrinsic
+#endif
+
         else
-            call fileio_errmsg( "mv_file failed to rename file,  designated input filename doesn't exist "//trim(filein))
+            call simple_stop( "simepl_fileio::mv_file failed to rename file,  designated input filename doesn't exist "//trim(filein))
         end if
     end subroutine mv_file
 
@@ -503,7 +520,7 @@ contains
             write(*,*) "simple_fileio::mkdir dir ", trim(path)
         else
             ! workaround: it calls an extern program...
-            call system('mkdir docs')
+            call exec_cmdline('mkdir docs')
         end if
     end function mkdir
 
@@ -598,102 +615,6 @@ contains
             yep = .true.
         endif
     end function file_kind
-
-    !>  \brief  check if a file exists on disk
-    logical function file_exists(fname)
-        character(len=*), intent(in) :: fname
-        inquire(file=trim(adjustl(fname)), exist=file_exists)
-    end function file_exists
-
-    !>  \brief  waits for file to be closed
-    subroutine wait_for_closure( fname )
-        character(len=*), intent(in)  :: fname
-        logical :: exists, closed
-        integer :: wait_time
-        wait_time = 0
-        do
-            if( wait_time == 60 )then
-                write(*,'(A,A)')'>>> WARNING: been waiting for a minute for file: ',trim(adjustl(fname))
-                wait_time = 0
-                flush(stdout)
-            endif
-            exists = file_exists(fname)
-            closed = .false.
-            if( exists )closed = .not. is_file_open(fname)
-            if( exists .and. closed )exit
-            call simple_sleep(1)
-            wait_time = wait_time + 1
-        enddo
-    end subroutine wait_for_closure
-
-    !>  Wrapper for POSIX system call stat
-    subroutine sys_stat( filename, status, buffer, doprint )
-#if defined(INTEL)
-        use ifport
-        use ifposix
-#endif
-        character(len=*),     intent(in) :: filename
-        integer,              intent(inout) :: status
-        integer, allocatable, intent(inout) :: buffer(:)  !< POSIX stat struct
-        logical, optional,    intent(in)    :: doprint
-        logical :: l_print = .true.
-#if defined(GNU)
-        allocate(buffer(13), source=0)
-        call stat(trim(adjustl(filename)), buffer, status)
-#elif defined(PGI)
-        integer,allocatable :: statb(:)
-        integer             :: stato
-#include "simple_local_flags.inc"
-        include 'lib3f.h'
-        status =  stat(trim(adjustl(filename)), buffer)
-        !        DebugPrint 'fileio       sys_stat PGI stato ', status
-        !        DebugPrint 'fileio       sys_stat PGI size of buffer ', size(statb)
-#elif defined(INTEL)
-        ! use ifport
-        ! integer(4) statarray(12), istat
-        ! ISTAT = STAT (1, statarray)
-        ! if (.NOT. istat) then
-        !     print *, statarray
-        ! end if
-        integer(4) :: ierror
-        integer(8) :: jhandle
-        allocate(buffer(13), source=0)
-        call pxfstat (trim(adjustl(filename)), len_trim(adjustl(filename)), jhandle, ierror)
-        call PXFSTRUCTCREATE('stat', jhandle, ierror)
-        if(ierror.EQ.0) then
-            if(ierror.EQ.0) then
-                CALL PXFINTGET (jhandle,'st_dev',buffer(1), ierror)    ! Device ID
-                CALL PXFINTGET (jhandle,'st_ino',buffer(2), ierror)    ! Inode number
-                CALL PXFINTGET (jhandle,'st_mode' , buffer(3), ierror) !  File mode
-                CALL PXFINTGET (jhandle,'st_nlink' ,buffer(4), ierror) ! Number of links
-                CALL PXFINTGET (jhandle,'st_uid' ,buffer(5), ierror)   ! Owner’s uid
-                CALL PXFINTGET (jhandle,'st_gid' ,buffer(6), ierror)   ! Owner’s gid
-                buffer(7)=0 ! ID of device containing directory entry for file (0 if not available)
-                CALL PXFINTGET (jhandle,'st_size',buffer(8), ierror)   ! File size (bytes)
-                CALL PXFINTGET (jhandle,'st_atime',buffer(9), ierror)  ! Last access time
-                CALL PXFINTGET (jhandle,'st_mtime',buffer(10), ierror) ! Last modification time
-                CALL PXFINTGET (jhandle,'st_ctime',buffer(11), ierror) ! Last file status change time
-                buffer(12)=0 ! Preferred I/O block size (-1 if not available)
-                buffer(13)=0 ! Number of blocks allocated (-1 if not available)
-                call PXFSTRUCTFREE(jhandle,ierror)
-            else
-                print *, 'Filehandling sys_stat PXFSTAT failed, file ', trim(adjustl(filename)),' error ', ierror
-            end if
-            if (ierror.NE.0)then
-                print *, 'Filehandling sys_stat PXFINTGET failed, file ', trim(adjustl(filename)),' error ', ierror
-            end if
-        else
-            call PXFSTRUCTFREE(jhandle,ierror)
-            stop 'Filehandling sys_stat  failed - cannot create structure for jhandle1'
-        end if
-        status=ierror
-#endif
-        if( present(doprint) )l_print = doprint
-        if( l_print )then
-            write(*,*) 'command: stat ', trim(adjustl(filename))
-            write(*,*) 'status of execution: ', status
-        endif
-    end subroutine sys_stat
 
     !> \brief  is for adding to filebody
     function add2fbody( fname, suffix, str ) result( newname )
@@ -880,7 +801,7 @@ contains
         call fopen_1(funit,filetable,'old','unknown',io_stat)
         call fileio_errmsg("read_filetable failed to open file "//trim(filetable),io_stat )
         allocate( filenames(nl), stat=alloc_stat )
-        allocchk ('In: read_filetable; simple_fileio  ')
+        if(alloc_stat /= 0) allocchk ('In: read_filetable; simple_fileio  ')
         do iline=1,nl
             read(funit,'(a256)') filenames(iline)
         end do
@@ -912,7 +833,7 @@ contains
         if( file_exists(trim(fnam)) )then
             n = nlines(fnam)
             allocate( arr(n), stat=alloc_stat )
-            allocchk('In: txtfile2rarr; simple_fileio  ')
+            if(alloc_stat /= 0) allocchk('In: txtfile2rarr; simple_fileio  ')
             call fopen_1(funit,fnam,'old','unknown',io_stat)
             call fileio_errmsg("txtfile2rarr failed to open  "//trim(fnam), io_stat)
             do i=1,n
@@ -939,7 +860,7 @@ contains
         if( file_exists(trim(file1)) ) n1 = nlines(file1)
         if( file_exists(trim(file2)) ) n2 = nlines(file2)
         allocate( arr(n1+n2), stat=alloc_stat )
-        allocchk('In: merge_txtfiles; simple_fileio  ')
+        if(alloc_stat /= 0) allocchk('In: merge_txtfiles; simple_fileio  ')
         if( here(1) )then
             call fopen_1(funit,file1,'old','unknown',io_stat)
             call fileio_errmsg("merge_txtfiles failed "//trim(file1), io_stat)
@@ -983,7 +904,7 @@ contains
             call fileio_errmsg("file2iarr fopen failed "//trim(fnam),io_stat)
             read(funit, rec=1) n
             allocate( arr(n), stat=alloc_stat )
-            allocchk('In: file2iarr; simple_fileio  ')
+            if(alloc_stat /= 0) allocchk('In: file2iarr; simple_fileio  ')
             do i=1,n
                 read(funit, rec=i+1) arr(i)
             end do
@@ -1025,7 +946,7 @@ contains
             read(funit, rec=1,iostat=io_stat) rval
             n = nint(rval)
             allocate( arr(n), stat=alloc_stat )
-            allocchk('In: file2arr; simple_fileio ')
+            if(alloc_stat /= 0) allocchk('In: file2arr; simple_fileio ')
             do i=1,n
                 read(funit, rec=i+1) arr(i)
             end do
@@ -1088,7 +1009,7 @@ contains
         dim2 = nint(dim2r)
         if( allocated(arr) ) deallocate(arr)
         allocate( arr(dim1,dim2), stat=alloc_stat )
-        allocchk('In: simple_fileio:: file22Darr arr ')
+        if(alloc_stat /= 0) allocchk('In: simple_fileio:: file22Darr arr ')
         read(unit=funit,pos=9,iostat=io_stat) arr(:,:)
         call fileio_errmsg("simple_fileio::file2arr2D  reading stream startbyte 9 from: "// trim(fname), io_stat)
         call fclose_1(funit,io_stat, errmsg="Error closing file "//trim(fname))

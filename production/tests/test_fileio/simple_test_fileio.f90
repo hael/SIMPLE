@@ -25,7 +25,7 @@ call exec_cmdline( trim(command) )
 call chdir( trim(folder) )
 
 
-print *,">>> Testing FOPEN"
+print *,">>> Testing FOPEN  (Expecting Error 24)"
 do i=1,1200
    write(fname,'("tmp_",i0,".txt")') i
    call fopen(un,file=trim(adjustl(fname)),iostat=iostat)

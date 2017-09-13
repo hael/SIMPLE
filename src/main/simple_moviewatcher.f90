@@ -2,7 +2,7 @@
 #include "simple_lib.f08"
 module simple_moviewatcher
 use simple_defs 
-use simple_syslib
+use simple_syslib, only: simple_file_stat, file_exists
 use simple_fileio
 use simple_params, only: params
 use simple_timer
@@ -79,7 +79,7 @@ contains
 
     !>  \brief  is the watching procedure
     subroutine watch( self, n_movies, movies )
-#ifdef PGI
+#if defined(PGI)
         include 'lib3f.h'
         procedure :: cast_time_char => ctime
 #endif
@@ -122,7 +122,7 @@ contains
                 is_new_movie(i) = .false.
             else
                 abs_fname = trim(self%cwd)//'/'//trim(adjustl(fname))
-                call sys_stat(abs_fname, io_stat, fileinfo, doprint=.false.)
+                call simple_file_stat(abs_fname, io_stat, fileinfo, doprint=.false.)
                 is_closed = .not. is_file_open(abs_fname)
                 if( io_stat.eq.0 )then
                     ! new movie

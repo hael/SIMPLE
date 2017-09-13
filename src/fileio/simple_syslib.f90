@@ -313,6 +313,8 @@ module simple_syslib
 
 contains
 
+    !! ERROR Routines
+
     subroutine simple_stop (msg,f,l)
         character(len=*),      intent(in) :: msg
         character(len=*),      intent(in), optional :: f !< filename of caller
@@ -447,8 +449,6 @@ contains
         end if
     end function get_sys_error
 
-
-
     !> \brief  is for checking allocation
     subroutine alloc_errchk( message, alloc_status, file,line, iomsg )
         character(len=*), intent(in)           :: message
@@ -511,6 +511,309 @@ contains
 
     end subroutine simple_error_check
 
+
+
+    !>  Wrapper for system call
+    subroutine exec_cmdline( cmdline, waitflag )
+#if defined(INTEL)
+        use ifport
+#endif
+        character(len=*),  intent(in) :: cmdline
+        logical, optional, intent(in) :: waitflag
+        character(len=STDLEN) :: cmsg
+        integer ::  cstat, exec_stat
+        logical :: l_doprint = .true., wwait = .true.
+        wwait = .true.
+        if( present(waitflag) ) wwait = waitflag
+
+#if defined(PGI)
+        ! include 'lib3f.h'  ! PGI declares kill,wait here
+        exec_stat = system(trim(adjustl(cmdline)))
+
+        ! #elif defined(INTEL)
+        !        exec_stat = system(trim(adjustl(cmdline)))
+
+#else
+        !! GNU
+        call execute_command_line( trim(adjustl(cmdline)), wait=wwait, exitstat=exec_stat, cmdstat=cstat, cmdmsg=cmsg)
+        call raise_sys_error( cmdline, exec_stat, cstat, cmsg )
+#endif
+
+        if( l_doprint )then
+            write(*,*) 'command: ', trim(adjustl(cmdline))
+            write(*,*) 'status of execution: ', exec_stat
+        endif
+
+    end subroutine exec_cmdline
+
+    !>  Handles error from system call
+    subroutine raise_sys_error( cmd, exitstat, cmdstat, cmdmsg )
+        integer,               intent(in) :: exitstat, cmdstat
+        character(len=*),      intent(in) :: cmd
+        character(len=STDLEN), intent(in) :: cmdmsg
+        logical :: err
+        err = .false.
+        if( exitstat /= 0 )then
+            write(*,*)'System error', exitstat,' for command: ', trim(adjustl(cmd))
+            err = .true.
+        endif
+        if( cmdstat /= 0 )then
+            call simple_error_check()
+            write(*,*)'cmdstat = ',cmdstat,' command could not be executed: ', trim(adjustl(cmd))
+            err = .true.
+        endif
+        ! if( err ) write(*,*) trim(adjustl(cmdmsg))
+    end subroutine raise_sys_error
+
+    character(len=STDLEN) function simple_getenv( name ) ! result( varval )
+        character(len=*), intent(in)  :: name
+        character(len=STDLEN)         :: value
+        character(len=:), allocatable :: varval
+        integer :: length, status
+
+#if defined(PGI)
+        call getenv( trim(name), value)
+#else
+        !! Intel and GNU F2003 included
+        call get_environment_variable( trim(name), value=value, length=length, status=status)
+        if( status == -1 ) write(*,*) 'value string too short; simple_syslib :: simple_getenv'
+        if( status ==  1 ) write(*,*) 'environment variable: ', trim(name), ' is not defined; simple_syslib :: simple_getenv'
+        if( status ==  2 ) write(*,*) 'environment variables not supported by system; simple_syslib :: simple_getenv'
+        if( length ==  0 .or. status /= 0 ) return
+#endif
+        
+        write(simple_getenv,'(A)') value
+        !        call alloc_errchk("In syslib::simple_getenv ", alloc_stat)
+    end function simple_getenv
+
+    subroutine simple_sleep( secs )
+#if defined(INTEL)
+        use ifport
+#endif
+        integer, intent(in) :: secs
+#if defined(INTEL)
+        integer  :: msecs
+        msecs = 1000*secs
+        call sleepqq(msecs)  !! milliseconds 
+#else
+        call sleep(secs) !! intrinsic
+#endif        
+    end subroutine simple_sleep
+
+
+    !! SYSTEM FILE OPERATIONS
+
+    integer function simple_chmod(pathname, mode  )
+#if defined(INTEL)
+        use ifport
+#endif
+        character(len=*), intent(in) :: pathname, mode
+#if 1
+        
+        simple_chmod = chmod(pathname, mode)
+        call simple_error_check(msg="simple_syslib::simple_chmod chmod failed"//trim(pathname))
+#else
+        call chmod(pathname, mode, status=simple_chmod) !! intrinsic
+        if(simple_status/=0)call simple_error_check(msg="simple_syslib::simple_chmod chmod failed "//trim(pathname))
+#endif        
+    end function simple_chmod
+
+
+    !>  Wrapper for POSIX system call stat
+    subroutine simple_file_stat( filename, status, buffer, doprint )
+#if defined(INTEL)
+        use ifport
+        use ifposix
+#endif
+        character(len=*),     intent(in) :: filename
+        integer,              intent(inout) :: status
+        integer, allocatable, intent(inout) :: buffer(:)  !< POSIX stat struct
+        logical, optional,    intent(in)    :: doprint
+        logical :: l_print = .true., currently_opened=.false.
+        integer :: funit
+        character(len=STDLEN) :: io_message
+
+#if defined(GNU)
+        allocate(buffer(13), source=0)
+        status =  stat(trim(adjustl(filename)), buffer)
+
+#elif defined(PGI)
+#include "simple_local_flags.inc"
+        include 'lib3f.h'
+        status =  stat(trim(adjustl(filename)), buffer)
+        !        DebugPrint 'fileio       sys_stat PGI stato ', status
+        !        DebugPrint 'fileio       sys_stat PGI size of buffer ', size(statb)
+#elif defined(INTEL)
+
+        inquire(file=trim(adjustl(filename)), opened=currently_opened, iostat=status)
+        if(status /= 0) call simple_error_check(status,"simple_syslib::simple_sys_stat inquire failed "//trim(filename))
+        if(.not.currently_opened) open(newunit=funit,file=trim(adjustl(filename)),status='old')
+        !allocate(buffer(13), source=0)
+        status = STAT (trim(adjustl(filename)) , buffer)
+        if (.NOT. status) then
+             call simple_error_check()
+             print *, buffer
+          end if
+         if(.not.currently_opened) close(funit)
+        ! integer(4) :: ierror, fsize
+        ! integer(jhandle_size) :: jhandle
+        ! fsize=len_trim(adjustl(filename))
+        ! allocate(buffer(13), source=0)
+        ! call PXFSTRUCTCREATE('stat', jhandle, ierror)
+        ! if(ierror.EQ.0) then
+        !    call pxfstat (trim(adjustl(filename)), fsize, jhandle, ierror)
+        !    if(ierror.EQ.0) then
+        !         CALL PXFINTGET (jhandle,'st_dev',buffer(1), ierror)    ! Device ID
+        !         CALL PXFINTGET (jhandle,'st_ino',buffer(2), ierror)    ! Inode number
+        !         CALL PXFINTGET (jhandle,'st_mode' , buffer(3), ierror) !  File mode
+        !         CALL PXFINTGET (jhandle,'st_nlink' ,buffer(4), ierror) ! Number of links
+        !         CALL PXFINTGET (jhandle,'st_uid' ,buffer(5), ierror)   ! Owner’s uid
+        !         CALL PXFINTGET (jhandle,'st_gid' ,buffer(6), ierror)   ! Owner’s gid
+        !         buffer(7)=0 ! ID of device containing directory entry for file (0 if not available)
+        !         CALL PXFINTGET (jhandle,'st_size',buffer(8), ierror)   ! File size (bytes)
+        !         CALL PXFINTGET (jhandle,'st_atime',buffer(9), ierror)  ! Last access time
+        !         CALL PXFINTGET (jhandle,'st_mtime',buffer(10), ierror) ! Last modification time
+        !         CALL PXFINTGET (jhandle,'st_ctime',buffer(11), ierror) ! Last file status change time
+        !         buffer(12)=0 ! Preferred I/O block size (-1 if not available)
+        !         buffer(13)=0 ! Number of blocks allocated (-1 if not available)
+        !         call PXFSTRUCTFREE(jhandle,ierror)
+        !     else
+        !         print *, 'Filehandling sys_stat PXFSTAT failed, file ', trim(adjustl(filename)),' error ', ierror
+        !     end if
+        !     if (ierror.NE.0)then
+        !         print *, 'Filehandling sys_stat PXFINTGET failed, file ', trim(adjustl(filename)),' error ', ierror
+        !     end if
+        ! else
+        !     call PXFSTRUCTFREE(jhandle,ierror)
+        !     stop 'Filehandling sys_stat  failed - cannot create structure for jhandle1'
+        ! end if
+        ! status=ierror
+#endif
+        if( present(doprint) )l_print = doprint
+        if( l_print )then
+            write(*,*) 'command: stat ', trim(adjustl(filename))
+            write(*,*) 'status of execution: ', status
+        endif
+    end subroutine simple_file_stat
+    logical function is_io(unit)
+         integer, intent(in) :: unit
+         is_io=.false.
+         if (unit == stderr .or. unit == stdout .or. unit == stdin) is_io= .true.
+    end function is_io
+
+    !>  \brief  check whether a IO unit is currently opened
+    logical function is_open( unit_number )
+        integer, intent(in)   :: unit_number
+        integer               :: io_status
+        character(len=STDLEN) :: io_message
+        io_status = 0
+        inquire(unit=unit_number, opened=is_open,iostat=io_status,iomsg=io_message)
+        if (io_status .ne. 0) then
+            print *, 'is_open: IO error ', io_status, ': ', trim(adjustl(io_message))
+            call simple_stop ('IO error; is_open; simple_fileio      ')
+        endif
+    end function is_open
+
+    !>  \brief  check if a file exists on disk
+    logical function file_exists(fname)
+        character(len=*), intent(in) :: fname
+        inquire(file=trim(adjustl(fname)), exist=file_exists)
+      end function file_exists
+
+    !>  \brief  check whether a file is currently opened
+    logical function is_file_open( fname )
+        character(len=*), intent(in)  :: fname
+        integer               :: io_status
+        character(len=STDLEN) :: io_message
+        io_status = 0
+        inquire(file=fname, opened=is_file_open,iostat=io_status,iomsg=io_message)
+        if (io_status .ne. 0) then
+            print *, 'is_open: IO error ', io_status, ': ', trim(adjustl(io_message))
+            stop 'IO error; is_file_open; simple_fileio      '
+        endif
+    end function is_file_open
+
+    !>  \brief  waits for file to be closed
+    subroutine wait_for_closure( fname )
+        character(len=*), intent(in)  :: fname
+        logical :: exists, closed
+        integer :: wait_time
+        wait_time = 0
+        do
+            if( wait_time == 60 )then
+                write(*,'(A,A)')'>>> WARNING: been waiting for a minute for file: ',trim(adjustl(fname))
+                wait_time = 0
+                flush(stdout)
+            endif
+            exists = file_exists(fname)
+            closed = .false.
+            if( exists )closed = .not. is_file_open(fname)
+            if( exists .and. closed )exit
+            call simple_sleep(1)
+            wait_time = wait_time + 1
+        enddo
+    end subroutine wait_for_closure
+
+
+    ! !>  \brief  get logical unit of file
+    ! integer function get_lunit( fname )
+    !     character(len=*), intent(in) :: fname
+
+    !     integer               :: io_status
+    !     character(len=STDLEN) :: io_message
+    !     io_status = 0
+    !     inquire(file=trim(adjustl(fname)),unit=get_lunit,iostat=io_status,iomsg=io_message)
+    !     if (io_status .ne. 0) then
+    !         print *, 'is_open: IO error ', io_status, ': ', trim(adjustl(io_message))
+    !         call simple_stop ('IO error; is_open; simple_fileio      ')
+    !     endif
+    ! end function get_lunit
+
+
+    function cpu_usage ()
+        real :: cpu_usage
+
+        integer :: ios, i
+        integer :: unit,oldidle, oldsum, sumtimes = 0
+        real :: percent = 0.
+        character(len = 4) lineID ! 'cpu '
+        integer, dimension(9) :: times = 0
+        cpu_usage=0.0
+#ifdef LINUX
+        write(*, *) 'CPU Usage'
+        open(newunit=unit, file = '/proc/stat', status = 'old', action = 'read', iostat = ios)
+        if (ios /= 0) then
+            print *, 'Error opening /proc/stat'
+            stop
+        else
+            read(unit, fmt = *, iostat = ios) lineID, (times(i), i = 1, 9)
+            if (ios /= 0) then
+                print *, 'Error reading /proc/stat'
+                stop
+            end if
+            close(unit, iostat = ios)
+            if (ios /= 0) then
+                print *, 'Error closing /proc/stat'
+                stop
+            end if
+            if (lineID /= 'cpu ') then
+                print *, 'Error reading /proc/stat'
+                stop
+            end if
+            sumtimes = sum(times)
+            percent = (1. - real((times(4) - oldidle)) / real((sumtimes - oldsum))) * 100.
+            write(*, fmt = '(F6.2,A2)') percent, '%'
+            oldidle = times(4)
+            oldsum = sumtimes
+        
+        end if
+        cpu_usage=percent
+#else
+        write(*, *) 'CPU Usage not available'
+#endif
+    end function cpu_usage
+
+    !! SYSTEM INFO ROUTINES
 
     subroutine print_compiler_info(file_unit)
       use simple_strings, only: int2str
@@ -609,167 +912,6 @@ contains
     ! end function get_hbw_size
 
 #endif
-
-
-    !>  Wrapper for system call
-    subroutine exec_cmdline( cmdline, waitflag )
-#if defined(INTEL)
-        use ifport
-#endif
-        character(len=*),  intent(in) :: cmdline
-        logical, optional, intent(in) :: waitflag
-        character(len=STDLEN) :: cmsg
-        integer ::  cstat, exec_stat
-        logical :: l_doprint = .true., wwait = .true.
-        wwait = .true.
-        if( present(waitflag) ) wwait = waitflag
-
-#if defined(PGI)
-        ! include 'lib3f.h'  ! PGI declares kill,wait here
-        exec_stat = system(trim(adjustl(cmdline)))
-
-        ! #elif defined(INTEL)
-        !        exec_stat = system(trim(adjustl(cmdline)))
-
-#else
-        !! GNU
-        call execute_command_line( trim(adjustl(cmdline)), wait=wwait, exitstat=exec_stat, cmdstat=cstat, cmdmsg=cmsg)
-        call raise_sys_error( cmdline, exec_stat, cstat, cmsg )
-#endif
-
-        if( l_doprint )then
-            write(*,*) 'command: ', trim(adjustl(cmdline))
-            write(*,*) 'status of execution: ', exec_stat
-        endif
-
-    end subroutine exec_cmdline
-
-    !>  Handles error from system call
-    subroutine raise_sys_error( cmd, exitstat, cmdstat, cmdmsg )
-        integer,               intent(in) :: exitstat, cmdstat
-        character(len=*),      intent(in) :: cmd
-        character(len=STDLEN), intent(in) :: cmdmsg
-        logical :: err
-        err = .false.
-        if( exitstat /= 0 )then
-            write(*,*)'System error', exitstat,' for command: ', trim(adjustl(cmd))
-            err = .true.
-        endif
-        if( cmdstat /= 0 )then
-            call simple_error_check()
-            write(*,*)'cmdstat = ',cmdstat,' command could not be executed: ', trim(adjustl(cmd))
-            err = .true.
-        endif
-        ! if( err ) write(*,*) trim(adjustl(cmdmsg))
-    end subroutine raise_sys_error
-
-    character(len=STDLEN) function simple_getenv( name ) ! result( varval )
-        character(len=*), intent(in)  :: name
-        character(len=STDLEN)         :: value
-        character(len=:), allocatable :: varval
-        integer :: length, status
-
-#if defined(PGI)
-        call getenv( trim(name), value)
-#else
-        !! Intel and GNU F2003 included
-        call get_environment_variable( trim(name), value=value, length=length, status=status)
-        if( status == -1 ) write(*,*) 'value string too short; simple_syslib :: simple_getenv'
-        if( status ==  1 ) write(*,*) 'environment variable: ', trim(name), ' is not defined; simple_syslib :: simple_getenv'
-        if( status ==  2 ) write(*,*) 'environment variables not supported by system; simple_syslib :: simple_getenv'
-        if( length ==  0 .or. status /= 0 ) return
-#endif
-        
-        write(simple_getenv,'(A)') value
-        !        call alloc_errchk("In syslib::simple_getenv ", alloc_stat)
-    end function simple_getenv
-
-    subroutine simple_sleep( secs )
-#if defined(INTEL)
-        use ifport
-#endif
-        integer, intent(in) :: secs
-#if defined(INTEL)
-        integer  :: msecs
-        msecs = 1000*secs
-        call sleepqq(msecs)  !! milliseconds 
-#else
-        call sleep(secs) !! intrinsic
-#endif        
-    end subroutine simple_sleep
-
-    integer function simple_chmod(pathname, mode  )
-#if defined(INTEL)
-        use ifport
-#endif
-        character(len=*), intent(in) :: pathname, mode
-#if 1
-        
-        simple_chmod = chmod(pathname, mode)
-        call simple_error_check()
-#else
-        call chmod(pathname, mode, status=simple_chmod) !! intrinsic
-#endif        
-    end function simple_chmod
-
-
-    ! !>  \brief  get logical unit of file
-    ! integer function get_lunit( fname )
-    !     character(len=*), intent(in) :: fname
-
-    !     integer               :: io_status
-    !     character(len=STDLEN) :: io_message
-    !     io_status = 0
-    !     inquire(file=trim(adjustl(fname)),unit=get_lunit,iostat=io_status,iomsg=io_message)
-    !     if (io_status .ne. 0) then
-    !         print *, 'is_open: IO error ', io_status, ': ', trim(adjustl(io_message))
-    !         call simple_stop ('IO error; is_open; simple_fileio      ')
-    !     endif
-    ! end function get_lunit
-
-
-    function cpu_usage ()
-        real :: cpu_usage
-
-        integer :: ios, i
-        integer :: unit,oldidle, oldsum, sumtimes = 0
-        real :: percent = 0.
-        character(len = 4) lineID ! 'cpu '
-        integer, dimension(9) :: times = 0
-        cpu_usage=0.0
-#ifdef LINUX
-        write(*, *) 'CPU Usage'
-        open(newunit=unit, file = '/proc/stat', status = 'old', action = 'read', iostat = ios)
-        if (ios /= 0) then
-            print *, 'Error opening /proc/stat'
-            stop
-        else
-            read(unit, fmt = *, iostat = ios) lineID, (times(i), i = 1, 9)
-            if (ios /= 0) then
-                print *, 'Error reading /proc/stat'
-                stop
-            end if
-            close(unit, iostat = ios)
-            if (ios /= 0) then
-                print *, 'Error closing /proc/stat'
-                stop
-            end if
-            if (lineID /= 'cpu ') then
-                print *, 'Error reading /proc/stat'
-                stop
-            end if
-            sumtimes = sum(times)
-            percent = (1. - real((times(4) - oldidle)) / real((sumtimes - oldsum))) * 100.
-            write(*, fmt = '(F6.2,A2)') percent, '%'
-            oldidle = times(4)
-            oldsum = sumtimes
-        
-        end if
-        cpu_usage=percent
-#else
-        write(*, *) 'CPU Usage not available'
-#endif
-    end function cpu_usage
 
 
 end module simple_syslib
