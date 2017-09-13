@@ -1,4 +1,5 @@
 ! stack image processing routines for SPIDER/MRC files
+#include "simple_lib.f08"
 module simple_procimgfile
 use simple_defs
 use simple_syslib,  only: alloc_errchk, simple_stop
@@ -60,6 +61,50 @@ contains
         call img%kill
     end subroutine copy_imgfile
 
+    !>  \brief  is for copying image file
+    !! \param fname2copy,fname Filenames to copy
+    subroutine diff_imgfiles( fname2copy1, fname2copy2, fname, smpd, fromto )
+        character(len=*),  intent(in) :: fname2copy1, fname2copy2, fname
+        real,              intent(in) :: smpd       !< sampling distance
+        integer, optional, intent(in) :: fromto(2)  !< ranges
+        type(image) :: img2, diffimg
+        integer     :: n, i, cnt, ldim(3), ldim2(3),n2
+        call find_ldim_nptcls(fname2copy1, ldim, n)
+        call find_ldim_nptcls(fname2copy2, ldim2, n2)
+        ldim(3) = 1; ldim2(3)=1
+        call raise_exception_imgfile(n, ldim, 'diff_imgfiles')
+        if ( n /= n2 .or. ldim(1) /=ldim2(1)  .or. ldim(2) /= ldim2(2)) &
+            call simple_stop ('procimgfile exception ; diff_imgfiles mismatch')
+        call diffimg%new(ldim,smpd)
+        call img2%new(ldim,smpd)
+        if( n >= 1 )then
+            write(*,'(a)') '>>> SUBTRACTING IMAGES'
+            if( present(fromto) )then
+                cnt = 0
+                do i=fromto(1),fromto(2)
+                    cnt = cnt+1
+                    call progress(cnt, fromto(2)-fromto(1)+1)
+                    call diffimg%read(fname2copy1, i)
+                    call img2%read(fname2copy2, i)
+                    diffimg = diffimg - img2
+                    call diffimg%write(fname, cnt)
+                end do
+            else
+                do i=1,n
+                   call progress(i, n)
+                    call diffimg%read(fname2copy1, i)
+                    call img2%read(fname2copy2, i)
+                    diffimg = diffimg - img2
+                    call diffimg%write(fname, cnt)
+                end do
+            endif
+         endif
+         call diffimg%kill
+         call img2%kill
+       end subroutine diff_imgfiles
+
+
+
     !>  \brief  is for making a stack of normalized vectors for PCA analysis
     !! \param fnameStack,fnamePatterns filenames for stacka and pattern
     subroutine make_pattern_stack( fnameStack, fnamePatterns, mskrad, D, recsz, avg, otab, hfun )
@@ -85,13 +130,13 @@ contains
         call img%new(ldim,1.)
         D = img%get_npix(mskrad)
         allocate(pcavec(D), stat=alloc_stat)
-        if(alloc_stat/=0)call alloc_errchk('make_pattern_stack; simple_procimgfile, 1', alloc_stat)
+        if(alloc_stat/=0) allocchk('make_pattern_stack; simple_procimgfile, 1')
         pcavec = 0.
         inquire(iolength=recsz) pcavec
         deallocate(pcavec)
         if( present(avg) )then
             allocate(avg(D), stat=alloc_stat)
-            if(alloc_stat/=0)call alloc_errchk('make_pattern_stack; simple_procimgfile, 2', alloc_stat)
+            if(alloc_stat /= 0) allocchk('make_pattern_stack; simple_procimgfile, 2')
             avg = 0.
         endif
         ! extract patterns and write to file
@@ -134,7 +179,7 @@ contains
         if( present(avg) )then
             avg = avg/real(n)
             allocate(pcavec(D), stat=alloc_stat)
-            if(alloc_stat/=0)call alloc_errchk('make_pattern_stack; simple_procimgfile, 3', alloc_stat)
+            if(alloc_stat /= 0) allocchk('make_pattern_stack; simple_procimgfile, 3')
             do i=1,n
                 read(fnum,rec=i) pcavec
                 pcavec = pcavec-avg

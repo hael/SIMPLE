@@ -93,6 +93,7 @@ type(convert_commander)              :: xconvert
 type(corrcompare_commander)          :: xcorrcompare
 type(ctfops_commander)               :: xctfops
 type(filter_commander)               :: xfilter
+type(image_diff_commander)           :: ximage_diff
 type(image_smat_commander)           :: ximage_smat
 type(norm_commander)                 :: xnorm
 type(scale_commander)                :: xscale
@@ -1663,6 +1664,25 @@ select case(prg)
         if( .not. cline%defined('stk') ) call cline%set('box', 256.)
         ! execute
         call xctfops%execute(cline)
+     case( 'image_diff' )
+        !==Program corrcompare
+        !
+        ! <corrcompare/begin>is a program for comparing stacked images using real-space and Fourier-based approaches
+        ! <corrcompare/end> 
+        !
+        ! set required keys
+        keys_required(1) = 'stk'
+        keys_required(2) = 'stk2'
+        ! set optional keys
+        keys_optional(1) = 'msk'
+        keys_optional(2) = 'stats'
+        keys_optional(3) = 'lp'
+        keys_optional(4) = 'smpd'
+        ! parse command line
+!        if( describe ) call print_doc_image_diff
+        call cline%parse(keys_required(:2), keys_optional(:4))
+        ! execute
+        call ximage_diff%execute(cline)
     case( 'filter' )
         !==Program filter
         !

@@ -20,6 +20,7 @@ public :: convert_commander
 public :: corrcompare_commander
 public :: ctfops_commander
 public :: filter_commander
+public :: image_diff_commander
 public :: image_smat_commander
 public :: norm_commander
 public :: scale_commander
@@ -52,6 +53,10 @@ type, extends(commander_base) :: image_smat_commander
  contains
    procedure :: execute      => exec_image_smat
 end type image_smat_commander
+type, extends(commander_base) :: image_diff_commander
+ contains
+   procedure :: execute      => exec_image_diff
+end type image_diff_commander
 type, extends(commander_base) :: norm_commander
   contains
     procedure :: execute      => exec_norm
@@ -415,6 +420,28 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_IMAGE_SMAT NORMAL STOP ****')
     end subroutine exec_image_smat
+
+    !> volume/image_diff is a program for creating a volume based on volume difference
+    !! this is purely for direct comparison of images in debugging
+    subroutine exec_image_diff(self, cline)
+        use simple_fileio, only: fopen,fclose,fileio_errmsg
+        use simple_ori,     only: ori
+        use simple_imgfile, only: imgfile
+        use simple_image,   only: image
+        class(image_diff_commander), intent(inout) :: self
+        class(cmdline),              intent(inout) :: cline
+        type(params)         :: p
+        type(build)          :: b
+        type(image)          :: diffimg
+        integer              :: iptcl, funit, io_stat
+        real, allocatable    :: corrs(:)
+        p = params(cline, .false.)                           ! constants & derived constants produced
+        call b%build_general_tbox(p, cline, .false., .true.) ! general objects built (no oritab reading)
+        if( cline%defined('stk') .and. cline%defined('vol1') )stop 'Cannot operate on images AND volume at once'
+        call diff_imgfiles(p%stk, p%stk2, p%outstk, p%smpd)
+        ! end gracefully
+        call simple_end('**** SIMPLE_IMAGE_DIFF NORMAL STOP ****')
+      end subroutine exec_image_diff
 
     !> norm is a program for normalization of MRC or SPIDER stacks and volumes.
     !! If you want to normalise your images inputted with stk, set norm=yes.
