@@ -1,20 +1,22 @@
 ! for manging orientation data using binary files
+#include "simple_lib.f08"
 module simple_binoris
 use, intrinsic :: iso_c_binding
 use simple_defs  ! use all in there
 use simple_ori,  only: ori
 use simple_oris, only: oris
-use simple_fileio
+use simple_fileio, only: file_exists, fopen, fclose, fileio_errmsg, funit_size, del_file
+use simple_syslib, only: alloc_errchk
 implicit none
 
 public :: binoris
 private
 
 type binoris
-    private 
+    private
     ! in header
     integer                        :: n_bytes_header  = 0
-    integer                        :: n_hash_vals     = 0 
+    integer                        :: n_hash_vals     = 0
     integer                        :: first_data_byte = 0
     integer                        :: n_records       = 0
     integer                        :: n_peaks         = 0
@@ -73,7 +75,6 @@ contains
     ! constructors
 
     subroutine new( self, a, fromto, os_peak )
-        use simple_syslib, only: alloc_errchk
         class(binoris),        intent(inout) :: self
         class(oris),           intent(inout) :: a
         integer,     optional, intent(in)    :: fromto(2)
@@ -85,7 +86,7 @@ contains
         o = a%get_ori(1)
         self%n_hash_vals = o%hash_size()
         ! set hash keys
-        self%hash_keys = o%hash_keys()               ! Intel warn: code for reallocating lhs
+        self%hash_keys = o%hash_keys()               !! Intel warn: code for reallocating lhs
         if( size(self%hash_keys) /= self%n_hash_vals )&
         &stop 'ERROR, n_hash_vals /= n_keys; binoris :: new_1'
         ! set range
@@ -111,7 +112,7 @@ contains
         ! allocate
         allocate( self%byte_array_header(self%n_bytes_header),&
                  &self%record(self%n_reals_per_record), stat=alloc_stat )
-        if(alloc_stat/=0)call alloc_errchk( 'In: binoris :: new_1', alloc_stat )
+        if(alloc_stat /= 0) allocchk( 'In: binoris :: new_1')
         ! set
         call self%header2byte_array
         self%record = 0.0
@@ -134,7 +135,7 @@ contains
         integer,        intent(in)    :: fromto(2) !< range
         if( fromto(1) > 1 .or. fromto(2) < fromto(1) )&
         &stop 'unallowed fromto range; binoris :: set_fromto'
-        self%fromto = fromto 
+        self%fromto = fromto
         ! set n_records
         self%n_records = self%fromto(2) - self%fromto(1) + 1
     end subroutine set_fromto
@@ -161,7 +162,7 @@ contains
         use simple_syslib, only: alloc_errchk
         class(binoris),    intent(inout) :: self          !< instance
         character(len=*),  intent(in)    :: fname         !< filename
-        logical, optional, intent(in)    :: del_if_exists !< If the file already exists on disk, replace 
+        logical, optional, intent(in)    :: del_if_exists !< If the file already exists on disk, replace
         integer(dp)            :: filesz
         integer            :: io_status
         character(len=512) :: io_message
@@ -181,12 +182,12 @@ contains
                 stop 'cannot open non-existing file using non-existing object; binoris :: open'
             endif
         endif
-        call self%kill        
+        call self%kill
         ! open file
         call self%open_local(trim(fname))
         ! check size
         filesz = funit_size(self%funit)
-        if( filesz == -1 )then 
+        if( filesz == -1 )then
             stop 'file_size cannot be inquired; binoris :: new_2'
         else if( filesz >= 28 )then
             ! ok
@@ -195,30 +196,27 @@ contains
         endif
         ! read first two header records (n_bytes_header & n_hash_vals)
         read(unit=self%funit,pos=1,iostat=io_status,iomsg=io_message) bytes
-        if( io_status .ne. 0 )then
-            write(*,'(a,i0,2a)') '**error(binoris::new_2): error ', io_status,&
-            &' when reading first two header record from disk: ', trim(io_message)
-            stop 'I/O error; new_2; simple_binoris'
-        endif
+        if( io_status .ne. 0 )&
+            call fileio_errmsg('simple_binoris::open  error when reading first two header records from disk. '&
+            //trim(io_message), io_status)
         ! allocate header byte array and hash_keys
         self%n_bytes_header = transfer(bytes(1:4), self%n_bytes_header)
         self%n_hash_vals    = transfer(bytes(5:8), self%n_hash_vals)
         allocate( self%byte_array_header(self%n_bytes_header),&
             &self%hash_keys(self%n_hash_vals), stat=alloc_stat )
-        if(alloc_stat/=0)call alloc_errchk( 'In: binoris :: new_2, 1', alloc_stat )
+        if(alloc_stat /= 0) allocchk( 'In: binoris :: new_2, 1')
         read(unit=self%funit,pos=1,iostat=io_status,iomsg=io_message) self%byte_array_header
-        if( io_status .ne. 0 )then
-            write(*,'(a,i0,2a)') '**error(binoris::new_2): error ', io_status,&
-            &' when reading header bytes from disk: ', trim(io_message)
-            stop 'I/O error; new_2; simple_binoris'
-        endif
+        if( io_status .ne. 0 )&
+            call fileio_errmsg('simple_binoris::open  error when reading header bytes to disk. '&
+            //trim(io_message), io_status)
+        
         call self%byte_array2header
         ! set derived
         self%n_bytes_hash_keys  = 32 * self%n_hash_vals
         self%n_reals_per_record = self%n_hash_vals + self%n_peaks * NOPEAKFLAGS
         ! allocate
         allocate( self%record(self%n_reals_per_record), stat=alloc_stat )
-        if(alloc_stat/=0)call alloc_errchk( 'In: binoris :: new_2, 2', alloc_stat )
+        if(alloc_stat /= 0) allocchk( 'In: binoris :: new_2, 2')
         ! set
         self%record = 0.0
         call set_o_peak_flags ! class variable
@@ -286,7 +284,7 @@ contains
         call self%header2byte_array
         write(unit=self%funit,pos=1,iostat=io_status) self%byte_array_header
         if( io_status .ne. 0 )&
-            call fileio_errmsg('simple_binoris::write_header: error when writing header bytes to disk', io_status) 
+            call fileio_errmsg('simple_binoris::write_header: error when writing header bytes to disk', io_status)
     end subroutine write_header
 
     subroutine write_record_1( self, i, self2 )
@@ -299,7 +297,7 @@ contains
         if( i < self%fromto(1) .or. i > self%fromto(2) ) stop 'index i out of bound; binoris :: write_record_1'
         write(unit=self%funit,pos=self%first_byte(i),iostat=io_status) self2%record
         if( io_status .ne. 0 )&
-             call fileio_errmsg('simple_binoris::write_record_1: error when writing record bytes to disk', io_status) 
+             call fileio_errmsg('simple_binoris::write_record_1: error when writing record bytes to disk', io_status)
     end subroutine write_record_1
 
     subroutine write_record_2( self, i, a, os_peak )
@@ -325,8 +323,8 @@ contains
         self%record(:self%n_hash_vals) = vals
         if( present(os_peak) )then
             ! transfer os_peak data to self%record
-            if( self%n_peaks /= os_peak%get_noris() ) stop 'nonconforming os_peak size; binoris :: write_record_2'        
-            cnt = self%n_hash_vals                
+            if( self%n_peaks /= os_peak%get_noris() ) stop 'nonconforming os_peak size; binoris :: write_record_2'
+            cnt = self%n_hash_vals
             do ipeak=1,self%n_peaks
                 do iflag=1,NOPEAKFLAGS
                     cnt = cnt + 1
@@ -340,7 +338,7 @@ contains
         endif
         write(unit=self%funit,pos=self%first_byte(i),iostat=io_status) self%record
         if( io_status .ne. 0 )&
-            call fileio_errmsg('binoris::write_record_2: error when writing record bytes to disk', io_status) 
+            call fileio_errmsg('binoris::write_record_2: error when writing record bytes to disk', io_status)
     end subroutine write_record_2
 
     subroutine read_record_1( self, i )
@@ -375,7 +373,7 @@ contains
                     euls(3) = self%record(j)
                 case DEFAULT
                     call a%set(i, trim(self%hash_keys(j)), self%record(j))
-            end select            
+            end select
         end do
         call a%set_euler(i, euls)
         if( present(nst) )then
@@ -417,7 +415,7 @@ contains
             select case(trim(self%hash_keys(j)))
                 case('smpd','kv','cs','fraca','phaseplate','dfx','dfy','angast','bfac','state')
                     call a%set(i, trim(self%hash_keys(j)), self%record(j))
-            end select            
+            end select
         end do
     end subroutine read_ctfparams_and_state
 

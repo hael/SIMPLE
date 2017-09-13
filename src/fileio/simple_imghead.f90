@@ -10,10 +10,12 @@
 ! Use is subject to Janelia Farm Research Campus Software Copyright 1.1
 ! license terms ( http://license.janelia.org/license/jfrc_copyright_1_1.html )
 ! Modifications by Cyril Reboul, Michael Eager & Hans Elmlund
+#include "simple_lib.f08"
 module simple_imghead
 use simple_defs
-use simple_syslib
-use simple_fileio
+use simple_syslib, only: alloc_errchk
+use simple_fileio, only: file_exists, fileio_errmsg
+use simple_strings, only: int2str
 implicit none
 
 public :: ImgHead, MrcImgHead, SpiImgHead, test_imghead
@@ -187,8 +189,8 @@ contains
         class(ImgHead), target, intent(inout) :: self    !< instance
         integer, optional,      intent(in)    :: ldim(3) !< logical dims of image
         integer, optional,      intent(in)    :: length  !< length of the header record.
-        integer               :: ierr, llength, i
-        character(len=STDLEN) :: err
+        integer               :: llength
+        character(len=STDLEN) :: errmsg
         call self%kill
         select type( self )
             type is( MrcImgHead )
@@ -202,12 +204,9 @@ contains
                     if( size(self%byte_array) .ne. llength ) deallocate(self%byte_array)
                 endif
                 if( .not. allocated(self%byte_array) )then
-                    allocate(self%byte_array(llength),stat=ierr,errmsg=err)
-                    if( ierr .ne. 0 )then
-                        write(*,'(a,i0,2a)') '**error(ImgHead::new): memory allocation failed with error ',&
-                             ierr, ': ', trim(adjustl(err))
-                        stop 'Memory allocation failed; new; simple_imghead'
-                    endif
+                    allocate(self%byte_array(llength),stat=alloc_stat,errmsg=errmsg)
+                    if(alloc_stat .ne. 0) &
+                         call alloc_errchk("simple_imghead::new byte_array ", alloc_stat,iomsg=trim(errmsg) )
                 endif
                 ! zero the byte array
                 self%byte_array = 0
@@ -306,15 +305,16 @@ contains
         integer,                   intent(in)    :: lun
         integer(kind=8), optional, intent(in)    :: pos
         logical,         optional, intent(in)    :: print_entire
-        integer                   :: io_status, ppos, i, cnt
-        integer                   :: labrec, dim1
+        integer(kind=8)                   ::  ppos, i, cnt
+        integer                   :: io_status,labrec, dim1
         character(len=512)        :: io_message
         real(kind=4), allocatable :: spihed(:)
         ppos = 1
         if( present(pos) ) ppos = pos
         select type( self )
             type is( SpiImgHead )
-                allocate(spihed(self%getLabbyt()/4))
+                allocate(spihed(self%getLabbyt()/4), stat=alloc_stat)
+                if(alloc_stat/=0) allocchk("In simple_imghead::read spihed ")
                 cnt = 0
                 do i=ppos,ppos+self%getLabbyt()-1,4
                     cnt = cnt+1
@@ -371,11 +371,8 @@ contains
                 deallocate(spihed)
             type is( MrcImgHead )
                 read(unit=lun,pos=ppos,iostat=io_status,iomsg=io_message) self%byte_array
-                if( io_status .ne. 0 ) then
-                    write(*,'(a,i0,2a)') '**error(ImgHead::read): error ', io_status, &
-                         ' when reading header bytes from disk: ', trim(io_message)
-                    stop 'I/O error; read; simple_imghead'
-                endif
+                call fileio_errmsg(" simple_imghead::read header bytes to disk , message "&
+                    //trim(io_message),io_status)
                 call self%transfer_byte_array2obj
             class DEFAULT
                 stop 'Format not supported; print; simle_imghead'
@@ -459,12 +456,8 @@ contains
         type is( MrcImgHead )
             call self%transfer_obj2byte_array
             write(unit=lun,pos=ppos,iostat=io_status) self%byte_array
-            if( io_status .ne. 0 )then
-                write(*,'(a,i0,a)') '**error(ImgHead::write): error ', io_status, ' when writing header bytes to disk'
-                print *, allocated(self%byte_array)
-                print *, lun
-                stop 'I/O error; write; simple_imghead'
-            endif
+            call fileio_errmsg(" simple_imghead::write  writing header bytes to disk , unit "//int2str(lun),io_status)
+           
         class DEFAULT
             stop 'Format not supported; print; simle_imghead'
         end select
@@ -1114,7 +1107,7 @@ contains
                 type is (MrcImgHead)
                     if( allocated(self%byte_array) )then
                         deallocate(self%byte_array, stat=alloc_stat)
-                        if(alloc_stat/=0)call alloc_errchk('In: simple_imghead; kill ', alloc_stat)
+                        if(alloc_stat /= 0) allocchk('In: simple_imghead; kill ')
                     end if
                 type is (SpiImgHead)
                     return

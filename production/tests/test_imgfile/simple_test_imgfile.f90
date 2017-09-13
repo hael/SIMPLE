@@ -1,11 +1,10 @@
 program simple_test_imgfile
 use simple_defs
-use simple_fileio
-use simple_syslib
+!use simple_fileio
+!use simple_syslib
 use simple_image,   only: image
     use simple_imgfile, only: imgfile
     use simple_imghead, only: imghead, SpiImgHead, test_imghead
-    use simple_defs
     integer       :: ldim(3), i, j, cnt
     real          :: smpd=2., corr, corrs(20)
     type(image)   :: img, img_2
@@ -13,8 +12,7 @@ use simple_image,   only: image
     logical       :: ft=.true.
     
     ! SELF-CONSISTENCY TESTS
-    allocate( endconv, source='NATIVE' )
-    
+       
     ! create a square
     ldim = [120,120,1]
     call img%new(ldim, smpd)
