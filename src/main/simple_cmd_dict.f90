@@ -176,6 +176,7 @@ contains
         call chdict%push('outstk',        'output image stack')
         call chdict%push('outstk2',       'output image stack 2nd')
         call chdict%push('outvol',        'output volume{outvol.ext}')
+        call chdict%push('pdbfile',       'input PDB formatted file')
         call chdict%push('pgrp',          'point-group symmetry(cn|dn|t|o|i)')
         call chdict%push('pgrp_known',    'point-group known a priori(yes|no){no}')
         call chdict%push('phaseplate',    'images obtained with phaseplate(yes|no){no}')

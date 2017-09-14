@@ -44,11 +44,16 @@ type :: atoms
     generic            :: new => new_from_pdb, new_instance
     generic            :: assignment(=) => copy
     procedure, private :: copy
-    ! GETTERS
+    ! GETTERS/SETTERS
     procedure          :: does_exist
     procedure          :: get_n
     procedure          :: get_name
     procedure          :: get_coord
+    procedure          :: get_num
+    procedure          :: set_coord
+    procedure          :: set_chain
+    procedure          :: set_num
+    procedure          :: set_resnum
     ! I/O
     procedure          :: print_atom
     procedure          :: writepdb
@@ -166,7 +171,7 @@ contains
         self%het        = self_in%het
     end subroutine copy
 
-    ! GETTERS
+    ! GETTERS / SETTERS
 
     logical function does_exist( self )
         class(atoms), intent(inout) :: self
@@ -186,11 +191,50 @@ contains
         xyz = self%xyz(i,:)
     end function get_coord
 
+    integer function get_num( self, i )
+        class(atoms), intent(inout) :: self
+        integer,      intent(in)    :: i
+        if(i.lt.1 .or. i.gt.self%n)stop 'index out of range; simple_atoms%get_coord'
+        get_num = self%num(i)
+    end function get_num
+
     character(len=4) function get_name( self, i )
         class(atoms), intent(inout) :: self
         integer,      intent(in)    :: i
         get_name = self%name(i)
     end function get_name
+
+    subroutine set_coord( self, i, xyz )
+        class(atoms), intent(inout) :: self
+        integer,      intent(in)    :: i
+        real,         intent(in)    :: xyz(3)
+        if(i.lt.1 .or. i.gt.self%n)stop 'index out of range; simple_atoms%set_coord'
+        self%xyz(i,:) = xyz
+    end subroutine set_coord
+
+    subroutine set_chain( self, i, chain )
+        class(atoms),     intent(inout) :: self
+        integer,          intent(in)    :: i
+        character(len=1), intent(in)    :: chain
+        if(i.lt.1 .or. i.gt.self%n)stop 'index out of range; simple_atoms%set_coord'
+        self%chain(i) = chain
+    end subroutine set_chain
+
+    subroutine set_num( self, i, num )
+        class(atoms),     intent(inout) :: self
+        integer,          intent(in)    :: i
+        integer,          intent(in)    :: num
+        if(i.lt.1 .or. i.gt.self%n)stop 'index out of range; simple_atoms%set_num'
+        self%num(i) = num
+    end subroutine set_num
+
+    subroutine set_resnum( self, i, resnum )
+        class(atoms),     intent(inout) :: self
+        integer,          intent(in)    :: i
+        integer,          intent(in)    :: resnum
+        if(i.lt.1 .or. i.gt.self%n)stop 'index out of range; simple_atoms%set_resnum'
+        self%resnum(i) = resnum
+    end subroutine set_resnum
 
     subroutine print_atom( self, i )
         class(atoms), intent(inout) :: self

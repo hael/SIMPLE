@@ -91,7 +91,7 @@ contains
         ! DETERMINE THE NUMBER OF PEAKS
         if( .not. cline%defined('npeaks') )then
             select case(p%refine)
-                case('no', 'neigh', 'greedy', 'greedyneigh')
+                case('no', 'neigh', 'greedy', 'greedyneigh', 'states')
                     if( p%eo .ne. 'no' )then
                         p%npeaks = min(b%e%find_npeaks_from_athres(NPEAKSATHRES), MAXNPEAKS)
                     else
@@ -293,6 +293,15 @@ contains
                             &'; pop=',statecnt(istate)
                     end do
                 endif
+            case ('states')
+                if(p%oritab .eq. '') stop 'cannot run the refine=states mode without input oridoc (oritab)'
+                !$omp parallel do default(shared) schedule(guided) private(iptcl) proc_bind(close)
+                do iptcl=p%fromp,p%top
+                    if( to_update(iptcl) )then
+                        call primesrch3D(iptcl)%exec_prime3D_srch(iptcl, p%lp, greedy=.true., nnmat=b%nnmat)
+                    endif
+                end do
+                !$omp end parallel do
             case DEFAULT
                 write(*,*) 'The refinement mode: ', trim(p%refine), ' is unsupported'
                 stop

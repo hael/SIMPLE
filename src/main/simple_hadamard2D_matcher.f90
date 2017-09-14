@@ -117,7 +117,7 @@ contains
         call set_bp_range2D( b, p, cline, which_iter, frac_srch_space )
 
         ! GENERATE REFERENCE & PARTICLE POLAR FTs
-        call preppftcc4align( b, p )
+        call preppftcc4align( b, p, which_iter )
 
         ! INITIALIZE
         write(*,'(A,1X,I3)') '>>> PRIME2D DISCRETE STOCHASTIC SEARCH, ITERATION:', which_iter
@@ -220,13 +220,15 @@ contains
     end subroutine prime2D_exec
 
     !>  \brief  prepares the polarft corrcalc object for search
-    subroutine preppftcc4align( b, p )
+    subroutine preppftcc4align( b, p, which_iter )
         use simple_syslib,       only: alloc_errchk
         class(build),  intent(inout) :: b
         class(params), intent(inout) :: p
+        integer,       intent(in)    :: which_iter
         type(ori) :: o
         integer   :: cnt, iptcl, icls, pop, istate
         integer   :: filtsz, alloc_stat, filnum, io_stat
+        logical   :: do_center
         if( .not. p%l_distr_exec ) write(*,'(A)') '>>> BUILDING PRIME2D SEARCH ENGINE'
         ! must be done here since constants in p are dynamically set
         call pftcc%new(p%ncls, p)
@@ -245,11 +247,8 @@ contains
             if( pop > 0 )then
                 ! prepare the reference
                 call cavger%get_cavg(icls, 'merged', b%img)
-                if( p%oritab /= '' )then
-                    call prep2Dref(b, p, icls, center=(pop > MINCLSPOPLIM))
-                else
-                    call prep2Dref(b, p, icls)
-                endif
+                do_center = (p%oritab /= '' .and. (pop > MINCLSPOPLIM) .and. (which_iter > 2))
+                call prep2Dref(b, p, icls, center=do_center)
                 ! transfer to polar coordinates
                 call b%img_match%polarize(pftcc, icls, isptcl=.false.)
             endif

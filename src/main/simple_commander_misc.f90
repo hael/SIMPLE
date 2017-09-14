@@ -159,32 +159,51 @@ contains
     subroutine exec_intgpeaks( self, cline )
         use simple_intg_atompeak
         use simple_atoms
+        use simple_fileio
         class(intgpeaks_commander), intent(inout) :: self
         class(cmdline),             intent(inout) :: cline
         type(build)       :: b
         type(params)      :: p
         type(atoms)       :: mol
         real, allocatable :: attribute(:)
+        character(len=STDLEN) :: fbody, csv_name
         real              :: xyz(3)
-        integer           :: i, natoms
+        integer           :: i, natoms, file_stat, fnr
         p = params(cline)                   ! parameters generated
         call b%build_general_tbox(p, cline) ! general objects built
         call b%vol%read(p%vols(1))
-        call mol%new(p%pdbfile)
-        natoms = mol%get_n()
-        allocate(attribute(natoms), source=0.)
-        call set_intgvol(b%vol)
-        do i = 1, natoms
-            xyz = mol%get_coord(i)
-            if( cline%defined('inner') )then
-                attribute(i) = intg_shell(xyz, p%inner) 
-            else
-                attribute(i) = intg_nn(xyz) 
-
-            endif
-            print *,i,',',attribute(i)
-        enddo
-        deallocate(attribute)
+        if(cline%defined('msk').and.cline%defined('inner'))then
+            ! peak finding
+            call set_intgvol(b%vol, p%msk)
+            call find_peaks(p%nptcls, p%inner, p%pdbfile)
+        else
+            ! peak integration
+            call mol%new(p%pdbfile)
+            natoms = mol%get_n()
+            allocate(attribute(natoms), source=0.)
+            call set_intgvol(b%vol)
+            do i = 1, natoms
+                xyz = mol%get_coord(i)
+                if( cline%defined('inner') )then
+                    attribute(i) = intg_shell(xyz, p%inner) 
+                else
+                    attribute(i) = intg_nn(xyz)
+                endif
+            enddo
+            ! output
+            fbody = trim(get_fbody(trim(p%pdbfile), trim('pdb')))
+            csv_name = './'//trim(adjustl(fbody))//'_intg.csv'
+            if(.not.fopen(fnr, FILE=csv_name, STATUS='REPLACE', action='WRITE', iostat=file_stat))&
+                 call fileio_errmsg('commander_misc; exec_intgpeaks ', file_stat)
+            do i = 1, natoms
+                write(fnr,'(I6,A1,I6,A1,F12.6)')i, ',', mol%get_num(i), ',', attribute(i)
+            enddo
+            if(.not.fclose( fnr, iostat=file_stat ))&
+                 call fileio_errmsg('commander_misc; exec_intgpeaks ', file_stat)
+            deallocate(attribute)
+        endif
+        ! the end
+        call simple_end('**** SIMPLE_INTGPEAKS NORMAL STOP ****')
     end subroutine exec_intgpeaks
 
     !> centers base on centre of mass

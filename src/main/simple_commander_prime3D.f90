@@ -202,7 +202,7 @@ contains
         update_res = .false.
         converged  = .false.
         p = params(cline) ! parameters generated
-        if( str_has_substr(p%refine,'neigh') )then
+        if( str_has_substr(p%refine,'neigh') .or. trim(p%refine).eq.'states' )then
             if( .not. cline%defined('oritab') )then
                 stop 'need oritab input for execution of prime3D with this refine mode'
             endif

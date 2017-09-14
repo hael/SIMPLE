@@ -1862,9 +1862,11 @@ select case(prg)
         keys_required(3) = 'smpd'
         ! set optional keys
         keys_optional(1) = 'outfile'
+        keys_optional(2) = 'msk'
+        keys_optional(3) = 'inner'
         ! parse command line
         !if( describe ) call print_doc_cluster_smat
-        call cline%parse(keys_required(:3), keys_optional(:1))
+        call cline%parse(keys_required(:3), keys_optional(:3))
         ! execute
         call xintgpeaks%execute(cline)
     case( 'masscen' )
