@@ -48,7 +48,7 @@ contains
             if( p%automsk.eq.'yes' )then
                 ! auto
                 if( .not. cline%defined('amsklp') )call cline%set('amsklp', 25.)
-                if( .not. cline%defined('edge')   )call cline%set('edge', 20.)
+                if( .not. cline%defined('edge')   )call cline%set('edge', 10.)
                 call exec_automask2D( automask2D, cline )
             else if( cline%defined('msk') .or. cline%defined('inner') )then
                 ! spherical
@@ -114,7 +114,6 @@ contains
         write(*,'(A,F8.2,A)') '>>> AUTOMASK LOW-PASS:',        p%amsklp, ' ANGSTROMS'
         write(*,'(A,I3,A)')   '>>> AUTOMASK SOFT EDGE WIDTH:', p%edge,   ' PIXELS'
         p%outstk = add2fbody(p%stk, p%ext, 'msk')
-        call b%mskimg%init2D(p, p%nptcls)
         do iptcl=1,p%nptcls
             call b%img%read(p%stk, iptcl)
             call b%mskimg%apply_2Denvmask22Dref(b%img, iptcl)

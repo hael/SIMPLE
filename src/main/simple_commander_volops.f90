@@ -185,6 +185,14 @@ contains
                 stop 'maskfile does not exists in cwd'
             endif
         else if( p%automsk .eq. 'yes' )then
+            if( .not. cline%defined('thresh') )then
+                write(*,*) 'Need a pixel threshold > 0. for the binarisation'
+                write(*,*) 'Procedure for obtaining thresh:'
+                write(*,*) '(1) postproc vol without bfac or automsk'
+                write(*,*) '(2) Use UCSF Chimera to look at the volume'
+                write(*,*) '(3) Identify the pixel threshold that excludes any background noise'
+                stop 'commander_volops :: postproc_vol'
+            endif
             call vol_copy%bwd_ft
             call b%mskvol%automask3D(p, vol_copy)
             call b%mskvol%write('automask'//p%ext)

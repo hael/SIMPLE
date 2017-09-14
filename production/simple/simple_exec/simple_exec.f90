@@ -1446,13 +1446,12 @@ select case(prg)
         keys_optional(6)  = 'amsklp'
         keys_optional(7)  = 'edge'
         keys_optional(8)  = 'binwidth'
-        keys_optional(9)  = 'frac_outliers'
-        keys_optional(10) = 'thres'
-        keys_optional(11) = 'mskfile'
-        keys_optional(12) = 'vol_filt'
+        keys_optional(9)  = 'thres'
+        keys_optional(10) = 'mskfile'
+        keys_optional(11) = 'vol_filt'
         ! parse command line
         if( describe ) call print_doc_postproc_vol
-        call cline%parse(keys_required(:3), keys_optional(:12))
+        call cline%parse(keys_required(:3), keys_optional(:11))
         ! execute
         call xpostproc_vol%execute(cline)
     case( 'projvol' )

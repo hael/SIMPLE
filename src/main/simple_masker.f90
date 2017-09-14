@@ -10,46 +10,28 @@ public :: masker
 private
 #include "simple_local_flags.inc"
 
-integer, parameter :: WINSZ = 3       !< real-space filter half-width window
+integer, parameter :: WINSZ = 3 !< real-space filter half-width window
 
 !> image child type
 type, extends(image) :: masker
     private
-    type(image)       :: img_dist             !< distances to center of image
-    real, allocatable :: adamsks(:)           !< evaluated circular masks   
     real              :: msk           = 0.   !< maximum circular mask
     real              :: amsklp        = 0.   !< maximum circular mask
     real              :: mw            = 0.   !< moleclular weight (in kDa)
-    real              :: frac_outliers = 0.   !< fraction of outlying voxels
     real              :: pix_thres     = 0.   !< binarisation threshold
     integer           :: edge          = 3    !< edge width
     integer           :: binwidth      = 1    !< additional layers to grow
     integer           :: n             = 0    !< number of classes
     integer           :: idim(3)       = 0    !< image dimension
   contains
-    ! CONSTRUCTORS
     procedure          :: automask3D
-    procedure          :: init2D
-    procedure          :: init_envmask2D
-    ! MASKING ROUTINES
-    procedure          :: apply_adamask2ptcl_2D
-    procedure          :: apply_adamask2ptcl_3D
-    procedure          :: apply_3Denvmask2ptcl
     procedure          :: apply_2Denvmask22Dref
-    ! BINARISATION ROUTINES
     procedure, private :: bin_cavg
-    procedure, private :: bin_vol_kmeans
     procedure, private :: bin_vol_thres
-    ! CALCULATORS
-    procedure, private :: calc_adamsk
     procedure, private :: env_rproject 
-    ! DESTRUCTOR
-    procedure          :: kill_masker
 end type masker
 
 contains
-
-    ! CONSTRUCTORS
 
     !>  \brief  is for 3D automasking. On output the parent volume is the envelope mask
     !!          The returned volume is envelope masked.
@@ -59,20 +41,12 @@ contains
         class(image),  intent(inout) :: vol_inout
         logical :: was_ft
         if( vol_inout%is_2d() )stop 'automask3D is intended for volumes only, simple_masker::automask3D'
-        call self%kill_masker
-        self%msk      = p%msk
-        self%amsklp   = p%amsklp
-        self%mw       = p%mw
-        self%binwidth = p%binwidth
-        self%edge     = p%edge
-        self%frac_outliers = 0.
-        if( p%frac_outliers > 0. ) self%frac_outliers = p%frac_outliers
-        self%pix_thres = 0.
-        if( p%thres > 0. ) self%pix_thres = p%thres
-        if( p%frac_outliers > 0. .and. p%thres > 0. )then
-            write(*,*) 'either tresholding or k-means (frac_outliers or thres), not both!'
-            stop 'simple_masker :: automask3D'
-        endif
+        self%msk       = p%msk
+        self%amsklp    = p%amsklp
+        self%mw        = p%mw
+        self%binwidth  = p%binwidth
+        self%edge      = p%edge
+        self%pix_thres = p%thres
         write(*,'(A,F7.1,A)') '>>> AUTOMASK LOW-PASS:           ', self%amsklp,  ' ANGSTROMS'
         write(*,'(A,I7,A)'  ) '>>> AUTOMASK SOFT EDGE WIDTH:    ', self%edge,    ' PIXEL(S)'
         write(*,'(A,I7,A)'  ) '>>> AUTOMASK BINARY LAYERS WIDTH:', self%binwidth,' PIXEL(S)'
@@ -81,11 +55,7 @@ contains
         if( vol_inout%is_ft() )call vol_inout%bwd_ft
         call self%copy(vol_inout)
         ! binarize volume
-        if( p%thres > 0. )then
-            call self%bin_vol_thres
-        else
-            call self%bin_vol_kmeans 
-        endif
+        call self%bin_vol_thres
         ! add volume soft edge
         call self%cos_edge(self%edge)
         ! apply mask to volume
@@ -94,102 +64,7 @@ contains
         if( was_ft )call vol_inout%fwd_ft
     end subroutine automask3D
 
-    !>  \brief  is a 2D constructor
-    !!          on exit the parent image is untouched
-    subroutine init2D(self, p, ncls)
-        use simple_syslib, only: alloc_errchk
-        class(masker), intent(inout) :: self
-        class(params), intent(in)    :: p
-        integer,       intent(in)    :: ncls
-        integer :: alloc_stat
-        if( .not. self%is_2d()    ) stop 'this routine is intended for 2D images only, simple_masker::init2D'
-        if( .not. self%even_dims()) stop 'even dimensions assumed; simple_masker::init2D'
-        if(       self%is_ft()    ) stop 'real space only; simple_masker::init2D'
-        call self%kill_masker
-        self%idim      = [p%boxmatch, p%boxmatch, 1]
-        self%n         = ncls
-        self%amsklp    = p%amsklp
-        self%msk       = p%msk
-        self%edge      = p%edge
-        self%binwidth  = p%binwidth
-        call self%img_dist%new(self%idim, self%get_smpd())
-        call self%img_dist%cendist
-        allocate(self%adamsks(self%n), stat=alloc_stat )
-        call alloc_errchk('in simple_masker::init2D 1', alloc_stat)
-        self%adamsks = 0.
-    end subroutine init2D
-
-    !>  \brief  is for initialising the 3D envelope mask used to extract 2D masks
-    !!          it is assumed that the mask is already set in the image part of the object
-    subroutine init_envmask2D( self, msk )
-        class(masker), intent(inout) :: self
-        real,          intent(in)    :: msk
-        integer :: ldim(3)
-        self%idim = self%get_ldim()
-        ldim      = self%idim
-        ldim(3)   = 1
-        self%msk  = msk
-        call self%remove_edge
-        call self%img_dist%new(ldim, self%get_smpd())
-        call self%img_dist%cendist
-    end subroutine init_envmask2D
-
-    ! MASKING ROUTINES
-
-    !> \brief  applies the adaptive circular mask, 2D case
-    subroutine apply_adamask2ptcl_2D( self, img, cls )
-        class(masker), intent(inout) :: self
-        class(image),  intent(inout) :: img
-        integer,       intent(in)    :: cls
-        integer :: ldim(3)
-        ldim = img%get_ldim()
-        if( .not.img%is_2d() )                stop 'only for 2D images; simple_masker::apply_adamask2ptcl_2D'
-        if( any(ldim(:2)-self%idim(:2).ne.0) )stop 'Incompatible dimensions; simple_masker::apply_adamask2ptcl_2D'
-        if( .not.self%is_2d() )               stop 'erroneous function call; simple_masker::apply_adamask2ptcl_2D'
-        if( cls > self%n )                    stop 'class index out of range; simple_masker::apply_adamask2ptcl_2D'
-        call img%mask(self%adamsks(cls), 'soft')
-    end subroutine apply_adamask2ptcl_2D
-
-    !> \brief  applies the adaptive circular mask, 3D case
-    subroutine apply_adamask2ptcl_3D( self, o, img )
-        class(masker),     intent(inout) :: self
-        class(ori),        intent(inout) :: o
-        class(image),      intent(inout) :: img
-        type(image) :: mask2D
-        integer     :: ldim(3)
-        real        :: smpd, mskrad
-        ldim    = self%get_ldim()
-        smpd    = self%get_smpd()
-        ldim(3) = 1
-        call mask2D%new(ldim, smpd)
-        call self%env_rproject(o, mask2D)
-        mskrad = self%calc_adamsk(mask2D)
-        call img%mask(mskrad, 'soft')
-    end subroutine apply_adamask2ptcl_3D
-
-    !> \brief  projects & applies the 3D envelope mask to particle image
-    subroutine apply_3Denvmask2ptcl( self, o, img, edge )
-        class(masker),     intent(inout) :: self
-        class(ori),        intent(inout) :: o
-        class(image),      intent(inout) :: img
-        integer, optional, intent(in)    :: edge
-        type(image) :: mask2D
-        integer     :: ldim(3), eedge
-        real        :: smpd
-        eedge = 10
-        if( present(edge) ) eedge = edge
-        ldim    = self%get_ldim()
-        smpd    = self%get_smpd()
-        ldim(3) = 1
-        call mask2D%new(ldim, smpd)
-        call self%env_rproject(o, mask2D)
-        ! add soft edge
-        call mask2D%cos_edge(eedge)
-        call img%mul(mask2D)
-    end subroutine apply_3Denvmask2ptcl
-
-    !>  \brief  is for envelope masking of the referecne in prime2D
-    !!          with memoization of the adaptive circular 2D mask radius
+    !>  \brief  is for envelope masking of the reference in prime2D
     subroutine apply_2Denvmask22Dref( self, ref, cls )
         class(masker), intent(inout) :: self
         class(image),  intent(inout) :: ref
@@ -199,8 +74,6 @@ contains
         ! binarize image
         img = ref
         call self%bin_cavg(img)
-        ! adaptive circular mask
-        self%adamsks(cls) = self%calc_adamsk(img)
         ! soft edge mask
         call img%cos_edge(self%edge)
         ! apply envelope mask to reference
@@ -228,32 +101,6 @@ contains
         if( DEBUG ) write(*,*)'simple_masker::bin_cavg done'
     end subroutine bin_cavg
 
-    !>  \brief  is for binarizing the 3D image using k-means
-    subroutine bin_vol_kmeans( self )
-        use simple_math, only: nvoxfind
-        class(masker), intent(inout) :: self
-        integer :: nnvox
-        ! normalize
-        call self%norm()
-        ! spherical mask first
-        call self%mask(self%msk, 'soft')
-        if( self%frac_outliers > 0. )then
-            call self%bin_kmeans(self%frac_outliers)
-        else
-            call self%bin_kmeans
-        endif
-        ! apply smoothening real-space filter (to be able to FT)
-        call self%real_space_filter( WINSZ, 'average')
-        call self%bp(0., self%amsklp)
-        ! find nr of voxels corresponding to mw
-        nnvox = nvoxfind(self%get_smpd(), self%mw)     
-        ! binarize again
-        call self%bin(nnvox)
-        ! binary layers
-        call self%grow_bins(self%binwidth)
-        if( DEBUG )write(*,*)'simple_masker::bin_vol done'
-    end subroutine bin_vol_kmeans
-
     !>  \brief  is for binarizing the 3D image using thresholding
     subroutine bin_vol_thres( self )
         use simple_math, only: nvoxfind
@@ -272,23 +119,6 @@ contains
     end subroutine bin_vol_thres
 
     ! CALCULATORS
-
-    !>  \brief  is for getting the adaptive circular mask
-    function calc_adamsk( self, img_msk )result( new_msk )
-        class(masker), intent(inout) :: self
-        class(image),  intent(inout) :: img_msk
-        type(image) :: img_dist, tmp_img
-        real        :: minmax(2), new_msk
-        integer     :: ldim(3)
-        tmp_img = img_msk
-        ! multiply envelope mask with square distance matrix
-        call tmp_img%mul(self%img_dist)
-        ! determine circular mask size
-        minmax  = tmp_img%minmax()
-        new_msk = real(ceiling(minmax(2) + COSMSKHALFWIDTH))
-        new_msk = min(new_msk, self%msk)
-        if( DEBUG )write(*,*)'simple_masker::calc_adamsk done'
-    end function calc_adamsk
 
     !>  \brief  volume mask projector
     subroutine env_rproject(self, e, img)
@@ -348,14 +178,5 @@ contains
         deallocate(rmat)
         if( DEBUG )write(*,*)'simple_masker::env_rproject done'
     end subroutine env_rproject
-
-    ! DESTRUCTOR
-
-    !>  \brief  is the destructor
-    subroutine kill_masker( self )
-        class(masker), intent(inout) :: self
-        call self%img_dist%kill
-        if( allocated(self%adamsks) ) deallocate(self%adamsks)
-    end subroutine kill_masker
 
 end module simple_masker

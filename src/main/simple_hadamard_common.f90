@@ -9,7 +9,6 @@ use simple_rnd,      only: ran3
 use simple_gridding, only: prep4cgrid
 use simple_strings   ! use all in there
 use simple_math      ! use all in there
-use simple_masker    ! use all in there
 use simple_defs      ! use all in there
 use simple_fileio    ! use all in there
 implicit none
@@ -283,21 +282,11 @@ contains
         ! clip image if needed
         call b%img%clip(b%img_match) ! SQUARE DIMS ASSUMED
         ! MASKING
-        if( p%l_envmsk .and. p%automsk .eq. 'cavg' )then
-            ! 2D adaptive cos-edge mask
-            call b%mskimg%apply_adamask2ptcl_2D(b%img_match, cls)
-        ! TOOK OUT: THE AUTOMASKING IS STILL NOT WORKING
-        ! BEST STRATEGY IS PROBABLY TO LEAVE PARTICLES ALONE AND MASK THE VOL
-        ! else if( p%l_envmsk )then
-        !     ! 3D adaptive cos-edge mask
-        !     call b%mskvol%apply_adamask2ptcl_3D(o, b%img_match)
-        else              
-            ! soft-edged mask
-            if( p%l_innermsk )then
-                call b%img_match%mask(p%msk, 'soft', inner=p%inner, width=p%width)
-            else
-                call b%img_match%mask(p%msk, 'soft')
-            endif
+        ! soft-edged mask
+        if( p%l_innermsk )then
+            call b%img_match%mask(p%msk, 'soft', inner=p%inner, width=p%width)
+        else
+            call b%img_match%mask(p%msk, 'soft')
         endif
         ! return in Fourier space
         call b%img_match%fwd_ft
@@ -505,10 +494,6 @@ contains
             call b%mskvol%read(p%mskfile)
             call b%mskvol%clip_inplace([p%boxmatch,p%boxmatch,p%boxmatch])
             call b%vol%mul(b%mskvol)
-            ! re-initialise the object for 2D envelope masking
-            call b%mskvol%init_envmask2D(p%msk)
-            ! don't use this for any 3D work from now on, because the soft edge is removed
-            ! on initialisation
         else
             ! circular masking
             if( p%l_innermsk )then

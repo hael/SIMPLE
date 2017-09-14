@@ -227,9 +227,7 @@ contains
             call self%img_pad%kill
             call self%vol%kill_expanded
             call self%vol%kill
-            call self%mskvol%kill_masker
             call self%mskvol%kill
-            call self%mskimg%kill_masker
             call self%mskimg%kill
             call self%vol_pad%kill_expanded
             call self%vol_pad%kill

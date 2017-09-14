@@ -180,7 +180,7 @@ type :: params
     integer :: clip=0              !< clipped image box size(in pixels)
     integer :: corner=0            !< corner size(in pixels){0}
     integer :: cube=0              !< side size(in pixels){0}
-    integer :: edge=3              !< edge size for softening molecular envelope(in pixels)
+    integer :: edge=6              !< edge size for softening molecular envelope(in pixels)
     integer :: extr_iter=1
     integer :: find=1              !< Fourier index
     integer :: nframesgrp=0        !< # frames to group before unblur(Falcon 3){0}
