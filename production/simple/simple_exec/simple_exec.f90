@@ -400,7 +400,6 @@ select case(prg)
         call cline%parse(keys_required(:2), keys_optional(:8))
         ! set defaults
         if( .not. cline%defined('pspecsz') ) call cline%set('pspecsz', 512.)
-        if( .not. cline%defined('lp')      ) call cline%set('lp',        6.)
         if( .not. cline%defined('clip')    ) call cline%set('clip',    256.)
         ! execute
         call xpowerspecs%execute(cline)
@@ -901,7 +900,7 @@ select case(prg)
         keys_optional(13) = 'center'
         ! parse command line
         if( describe ) call print_doc_multiptcl_init
-        call cline%parse(keys_required(:6), keys_optional(:14))
+        call cline%parse(keys_required(:7), keys_optional(:13))
         ! set defaults
         if( .not. cline%defined('trs') ) call cline%set('trs', 3.) ! to assure that shifts are being used
         !execute
