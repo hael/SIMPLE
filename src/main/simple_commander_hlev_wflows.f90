@@ -406,15 +406,24 @@ contains
         integer,               allocatable :: labels(:,:), labels_incl(:,:), consensus(:)
         character(len=STDLEN), allocatable :: init_docs(:), final_docs(:)
         logical,               allocatable :: included(:)
-        type(params)                  :: p_master
-        type(oris)                    :: os
-        character(len=STDLEN)         :: oritab, vol, fsc, str_state
-        integer                       :: irepeat, state, iter, n_incl, it, alloc_stat, NREPEATS
-        integer                       :: best_loc(1)
-        ! some init
-        NREPEATS = nint(cline%get_rarg('nrepeats'))
-        allocate(init_docs(NREPEATS), final_docs(NREPEATS), rep_corrs(NREPEATS), stat=alloc_stat)
-        do irepeat=1,NREPEATS
+        type(params)          :: p_master
+        type(oris)            :: os
+        character(len=STDLEN) :: oritab, vol, fsc_file, str_state, optlp_file
+        integer               :: irepeat, state, iter, n_incl, it, alloc_stat
+        integer               :: best_loc(1)
+
+        ! sanity check
+        if(nint(cline%get_rarg('nstates')) <= 1)&
+            &stop 'Non-sensical NSTATES argument for heterogeinity analysis!'
+
+        ! make master parameters
+        p_master = params(cline, checkdistr=.false.)
+
+        if( p_master%eo .eq. 'no' .and. .not. cline%defined('lp') )&
+            &stop 'need lp input when eo .ne. no; het_ensemble'
+
+        allocate(init_docs(p_master%nrepeats), final_docs(p_master%nrepeats), rep_corrs(p_master%nrepeats), stat=alloc_stat)
+        do irepeat=1,p_master%nrepeats
             oritab              = trim(REPEATFBODY)//'init_rep'//int2str_pad(irepeat,2)//METADATEXT
             init_docs(irepeat)  = trim(oritab)
             oritab              = trim(REPEATFBODY)//'rep'//int2str_pad(irepeat,2)//METADATEXT
@@ -422,14 +431,6 @@ contains
             call del_file(init_docs(irepeat))
             call del_file(final_docs(irepeat))
         enddo
-
-        ! set cline defaults
-        call cline%set('eo', 'no')
-        if(nint(cline%get_rarg('nstates')) <= 1)stop 'Non-sensical NSTATES argument for heterogeinity analysis!'
-
-        ! make master parameters
-        call cline%set('nrepeats', 1.)
-        p_master = params(cline, checkdistr=.false.)
 
         ! delete possibly pre-existing stack & pft parts
         call del_files(STKPARTFBODY, p_master%nparts, ext=p_master%ext)
@@ -439,49 +440,46 @@ contains
         ! prepare command lines from prototype
         cline_recvol_distr = cline
         call cline_recvol_distr%set('prg', 'recvol')
-        call cline_recvol_distr%set('eo', 'yes')
+        if( p_master%eo .eq. 'no' ) call cline_recvol_distr%set('eo', 'yes')
         call cline_recvol_distr%delete('lp')
         cline_postproc_vol = cline
         call cline_postproc_vol%set('prg', 'postproc_vol')
-        call cline_postproc_vol%set('eo', 'yes')
+        if( p_master%eo .eq. 'no' )  call cline_postproc_vol%set('eo', 'yes')
         call cline_postproc_vol%delete('lp')
         cline_postproc_repvol = cline
         call cline_postproc_repvol%set('prg', 'postproc_vol')
-        call cline_postproc_repvol%set('eo', 'no')
-        call cline_postproc_repvol%set('lp', p_master%lp)
         cline_prime3D_master = cline
         call cline_prime3D_master%set('prg', 'prime3D')
         call cline_prime3D_master%set('startit', 1.)
         call cline_prime3D_master%set('maxits', real(MAXITS_INIT))
         call cline_prime3D_master%set('refine', 'het')
         call cline_prime3D_master%set('dynlp', 'no')
-        call cline_prime3D_master%set('lp', p_master%lp)
         call cline_prime3D_master%set('pproc', 'no')
 
-        ! GENERATE DIVERSE INITIAL LABELS
+        ! generate diverse initial labels
         write(*,'(A)') '>>>'
         write(*,'(A)') '>>> GENERATING DIVERSE LABELING'
         call os%new(p_master%nptcls)
         call binread_oritab(p_master%oritab, os, [1,p_master%nptcls])
-        labels   = diverse_labeling(p_master%nptcls, p_master%nstates, NREPEATS)
+        labels   = diverse_labeling(p_master%nptcls, p_master%nstates, p_master%nrepeats)
         included = os%included()
         n_incl   = count(included)
-        do irepeat=1,NREPEATS
-            where( .not.included )labels(irepeat,:) = 0
+        do irepeat=1,p_master%nrepeats
+            where( .not.included ) labels(irepeat,:) = 0
             call os%set_all('state', real(labels(irepeat,:)))
             call binwrite_oritab(trim(init_docs(irepeat)), os, [1,p_master%nptcls])
         enddo
 
-        ! GENERATE CANDIDATE SOLUTIONS
-        do irepeat = 1,NREPEATS
+        ! generate candidate solutions
+        do irepeat = 1,p_master%nrepeats
             write(*,'(A)')    '>>>'
             write(*,'(A,I3)') '>>> PRIME3D REPEAT ', irepeat
             write(*,'(A)')    '>>>'
-            ! RUN PRIME3D
+            ! run prime3d
             cline_prime3D = cline_prime3D_master
             call cline_prime3D%set('oritab', init_docs(irepeat))
             call xprime3D_distr%execute(cline_prime3D)
-            ! HARVEST OUTCOME
+            ! harvest outcome
             iter   = nint(cline_prime3D%get_rarg('endit'))
             oritab = 'prime3Ddoc_'//int2str_pad(iter,3)//METADATEXT
             call rename(trim(oritab), trim(final_docs(irepeat)))
@@ -489,30 +487,30 @@ contains
             ! updates labels & correlations
             labels(irepeat,:)  = nint(os%get_all('state'))
             rep_corrs(irepeat) = sum(os%get_all('corr'), mask=included) / real(n_incl)
-            ! PROCESS FINAL VOLUMES
+            ! process final volumes
             call pproc_volumes
-            ! CLEANUP
+            ! cleanup
             call prime3d_cleanup
         enddo
         best_loc = maxloc(rep_corrs)
 
-        ! GENERATE CONSENSUS DOCUMENT
+        ! generate consensus document
         oritab = trim(REPEATFBODY)//'consensus'//METADATEXT
         call del_file(oritab)
         write(*,'(A)')   '>>>'
         write(*,'(A,A)') '>>> GENERATING ENSEMBLE SOLUTION: ', trim(oritab)
         write(*,'(A)')   '>>>'
-        if( NREPEATS == 1 )then
-            ! all done
+        if( p_master%nrepeats == 1 )then
+            ! done
         else 
-            ! solutions aggregation
+            ! aggregate solutions
             call binread_oritab(p_master%oritab, os, [1,p_master%nptcls])
-            allocate(labels_incl(NREPEATS,n_incl), consensus(n_incl), stat=alloc_stat)
-            do irepeat=1,NREPEATS
+            allocate(labels_incl(p_master%nrepeats,n_incl), consensus(n_incl), stat=alloc_stat)
+            do irepeat=1,p_master%nrepeats
                 labels_incl(irepeat,:) = pack(labels(irepeat,:), mask=included)
             enddo
             labels(1,:) = 0
-            call shc_aggregation(NREPEATS, n_incl, labels_incl, consensus, best_loc(1))
+            call shc_aggregation(p_master%nrepeats, n_incl, labels_incl, consensus, best_loc(1))
             call os%set_all('state', real(unpack(consensus, included, labels(1,:))) )
             deallocate(labels_incl, consensus, stat=alloc_stat)
         endif
@@ -520,10 +518,9 @@ contains
         call binwrite_oritab(trim(oritab), os, [1,p_master%nptcls])
         ! cleanup
         call os%kill
-        deallocate(init_docs, final_docs, labels, included, rep_corrs, stat=alloc_stat)
+        deallocate(init_docs, final_docs, labels, included, rep_corrs)
 
-        ! FINAL RECONSTRUCTION
-        ! distributed reconstruction
+        ! final distributed reconstruction
         call cline_recvol_distr%set('oritab', trim(oritab))
         call xrecvol_distr%execute(cline_recvol_distr)
         ! post-process
@@ -531,11 +528,24 @@ contains
             str_state = int2str_pad(state, 2)
             vol = 'recvol_state'//trim(str_state)//p_master%ext
             call cline_postproc_vol%set('vol1', trim(vol))
-            fsc = 'fsc_state'//trim(str_state)//'.bin'
-            call cline_postproc_vol%set('fsc', trim(fsc))
-            if(file_exists(vol) .and. file_exists(fsc))then
-                call xpostproc_vol%execute(cline_postproc_vol)
+            fsc_file   = 'fsc_state'//trim(str_state)//'.bin'
+            optlp_file = 'aniso_optlp_state'//trim(str_state)//p_master%ext
+            if( file_exists(fsc_file) .and. p_master%eo .eq. 'aniso' )then
+                if( .not. file_exists(optlp_file) )then
+                    write(*,*) 'eo=aniso but file: ', trim(optlp_file)
+                    stop 'is not in cwd as required; commander_hlev_wflows :: exec_het_ensemble'
+                endif
+                call cline_postproc_vol%delete('lp')
+                call cline_postproc_vol%set('fsc', trim(fsc_file))
+                call cline_postproc_vol%set('vol_filt', trim(optlp_file))
+            else if( file_exists(fsc_file) .and. p_master%eo .eq. 'yes' )then
+                call cline_postproc_vol%delete('lp')
+                call cline_postproc_vol%set('fsc', trim(fsc_file))
+            else
+                call cline_postproc_vol%delete('fsc')
+                call cline_postproc_vol%set('lp', p_master%lp)
             endif
+            call xpostproc_vol%execute(cline_postproc_vol)
         enddo
 
         ! end gracefully

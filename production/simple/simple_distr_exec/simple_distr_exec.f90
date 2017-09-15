@@ -763,26 +763,28 @@ select case(prg)
         keys_required(5)  = 'pgrp'
         keys_required(6)  = 'ctf'
         keys_required(7)  = 'nstates'
-        keys_required(8)  = 'lp'
-        keys_required(9)  = 'nparts'
+        keys_required(8)  = 'nparts'
         ! set optional keys
         keys_optional(1)  = 'nthr'
-        keys_optional(2)  = 'frac'
-        keys_optional(3)  = 'automsk'
-        keys_optional(4)  = 'amsklp'
-        keys_optional(5)  = 'edge'
-        keys_optional(6)  = 'binwidth'
-        keys_optional(7)  = 'inner'
-        keys_optional(8)  = 'width'
-        keys_optional(9)  = 'nspace'
-        keys_optional(10) = 'balance'
-        keys_optional(11) = 'nrepeats'
+        keys_optional(2)  = 'lp'
+        keys_optional(3)  = 'lpstop'
+        keys_optional(4)  = 'eo'
+        keys_optional(5)  = 'frac'
+        keys_optional(6)  = 'automsk'
+        keys_optional(7)  = 'amsklp'
+        keys_optional(8)  = 'edge'
+        keys_optional(9)  = 'binwidth'
+        keys_optional(10) = 'inner'
+        keys_optional(11) = 'width'
+        keys_optional(12) = 'nspace'
+        keys_optional(13) = 'balance'
+        keys_optional(14) = 'nrepeats'
         ! parse command line
         if( describe ) call print_doc_het_ensemble
-        call cline%parse(keys_required(:9), keys_optional(:11))
+        call cline%parse(keys_required(:8), keys_optional(:14))
         ! set defaults
         if( .not. cline%defined('amsklp')   ) call cline%set('amsklp',   20.)
-        if( .not. cline%defined('edge')     ) call cline%set('edge',     10.)
+        if( .not. cline%defined('edge')     ) call cline%set('edge',     6. )
         if( .not. cline%defined('nrepeats') ) call cline%set('nrepeats', real(HETNREPEATS))
         ! execute
         call xhet_ensemble%execute( cline )

@@ -597,6 +597,7 @@ contains
         call check_iarg('noris',          self%noris)
         call check_iarg('nran',           self%nran)
         call check_iarg('nrefs',          self%nrefs)
+        call check_iarg('nrepeats',       self%nrepeats)
         call check_iarg('nrestarts',      self%nrestarts)
         call check_iarg('nspace',         self%nspace)
         call check_iarg('nsub',           self%nsub)
