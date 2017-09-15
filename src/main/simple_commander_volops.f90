@@ -165,7 +165,7 @@ contains
             call b%vol%bp(0., p%lp)
         else
             write(*,*) 'no method for low-pass filtering defined; give fsc|lp|vol_filt on command line'
-            stop 'comple_commander_volops :: exec_postproc_vol'
+            stop 'simple_commander_volops :: exec_postproc_vol'
         endif
         call vol_copy%copy(b%vol)
         ! B-fact

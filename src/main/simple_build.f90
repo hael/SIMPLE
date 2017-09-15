@@ -135,6 +135,11 @@ contains
                 endif
             endif
         endif
+        if( self%a%get_n('state') > 1 )then
+            if( .not. cline%defined('nstates') )then
+                write(*,'(a)') 'WARNING, your input doc has multiple states but NSTATES is not given'
+            endif
+        endif
         DebugPrint   'created & filled object for orientations'
         DebugPrint   'read deftab'
         if( self%a%isthere('dfx') .and. self%a%isthere('dfy'))then

@@ -589,20 +589,18 @@ contains
                     p%vols(s) = 'startvol_state'//int2str_pad(s,2)//p%ext
                 endif
                 call b%eorecvols(s)%sum_eos
+                eonames(1) = add2fbody(p%vols(s), p%ext, '_odd')
+                eonames(2) = add2fbody(p%vols(s),  p%ext, '_even')
                 if( p%eo .eq. 'aniso' )then
                     ! anisotropic resolution model
-                    eonames(1) = 'tmpvoleven'//p%ext
-                    eonames(2) = 'tmpvolodd'//p%ext
                     call b%eorecvols(s)%sampl_dens_correct_eos(s, eonames)
                     call gen_projection_frcs( p, eonames(1), eonames(2), s, b%projfrcs)
-                    call del_file(eonames(1))
-                    call del_file(eonames(2))
                     call b%projfrcs%write('frcs_state'//int2str_pad(s,2)//'.bin')
                     ! generate the anisotropic 3D optimal low-pass filter
                     call gen_anisotropic_optlp(b%vol, b%projfrcs, b%e_bal, s, p%pgrp)
                     call b%vol%write('aniso_optlp_state'//int2str_pad(s,2)//p%ext)
                 else
-                    call b%eorecvols(s)%sampl_dens_correct_eos(s)
+                    call b%eorecvols(s)%sampl_dens_correct_eos(s, eonames)
                 endif
                 call b%eorecvols(s)%sampl_dens_correct_sum(b%vol)
                 call b%vol%write(p%vols(s), del_if_exists=.true.)

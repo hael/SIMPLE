@@ -285,9 +285,9 @@ contains
         use simple_fileio,  only: arr2file
         use simple_math,    only: get_resolution, calc_fourier_index
         use simple_masker,  only: masker
-        class(eo_reconstructor),     intent(inout) :: self       !< instance
-        integer,                     intent(in)    :: state      !< state
-        character(len=32), optional, intent(in)    :: eonames(2) !< even/odd filenames
+        class(eo_reconstructor), intent(inout) :: self       !< instance
+        integer,                 intent(in)    :: state      !< state
+        character(len=32),       intent(in)    :: eonames(2) !< even/odd filenames
         real, allocatable :: res(:), corrs(:)
         type(image)       :: even, odd
         type(masker)      :: volmasker
@@ -317,11 +317,9 @@ contains
                 call odd%mask(self%msk, 'soft')
             endif
         endif
-        ! write even/odd if eonames present
-        if( present(eonames) )then
-            call even%write(trim(eonames(1)))
-            call odd%write(trim(eonames(2)))
-        endif
+        ! write even/odd
+        call even%write(trim(eonames(1)))
+        call odd%write(trim(eonames(2)))
         ! forward FT
         call even%fwd_ft
         call odd%fwd_ft
@@ -431,8 +429,16 @@ contains
                 call self%write_eos('recvol_state'//int2str_pad(state,2)//'_part'//int2str_pad(part,self%numlen))
             endif
         else
+            if( present(fbody) )then
+                eonames(1) = fbody//int2str_pad(state,2)//'_odd'//p%ext
+                eonames(2) = fbody//int2str_pad(state,2)//'_even'//p%ext
+                
+            else
+                eonames(1) = 'recvol_state'//int2str_pad(state,2)//'_odd'//p%ext
+                eonames(2) = 'recvol_state'//int2str_pad(state,2)//'_even'//p%ext
+            endif
             call self%sum_eos
-            call self%sampl_dens_correct_eos(state)
+            call self%sampl_dens_correct_eos(state, eonames)
             call self%sampl_dens_correct_sum(vol)
         endif
         call img%kill

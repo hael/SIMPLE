@@ -624,11 +624,10 @@ select case(prg)
         keys_optional(5) = 'frac'
         keys_optional(6) = 'mskfile'
         keys_optional(7) = 'mul'
-        keys_optional(8) = 'state'
-        keys_optional(9) = 'balance'
+        keys_optional(8) = 'balance'
         ! parse command line
         if( describe ) call print_doc_recvol
-        call cline%parse(keys_required(:7), keys_optional(:9))
+        call cline%parse(keys_required(:7), keys_optional(:8))
         ! set defaults
         if( .not. cline%defined('trs') ) call cline%set('trs',  5.) ! to assure that shifts are being used
         if( .not. cline%defined('eo')  ) call cline%set('eo', 'no')
@@ -783,6 +782,7 @@ select case(prg)
         if( describe ) call print_doc_het_ensemble
         call cline%parse(keys_required(:8), keys_optional(:14))
         ! set defaults
+        if( .not. cline%defined('eo')       ) call cline%set('eo',       'no')
         if( .not. cline%defined('amsklp')   ) call cline%set('amsklp',   20.)
         if( .not. cline%defined('edge')     ) call cline%set('edge',     6. )
         if( .not. cline%defined('nrepeats') ) call cline%set('nrepeats', real(HETNREPEATS))

@@ -884,21 +884,21 @@ select case(prg)
         keys_required(4)  = 'pgrp'
         keys_required(5)  = 'nstates'
         keys_required(6)  = 'msk'
+        keys_required(7)  = 'oritab'
         ! set optionnal keys
         keys_optional(1)  = 'nthr'
-        keys_optional(2)  = 'oritab'
-        keys_optional(3)  = 'deftab'
-        keys_optional(4)  = 'inner'
-        keys_optional(5)  = 'width'
-        keys_optional(6)  = 'lp'
-        keys_optional(7)  = 'eo'
-        keys_optional(8)  = 'frac'
-        keys_optional(9)  = 'state2split'
-        keys_optional(10) = 'norec'
-        keys_optional(11) = 'mul'
-        keys_optional(12) = 'zero'
-        keys_optional(13) = 'tseries'
-        keys_optional(14) = 'center'
+        keys_optional(2)  = 'deftab'
+        keys_optional(3)  = 'inner'
+        keys_optional(4)  = 'width'
+        keys_optional(5)  = 'lp'
+        keys_optional(6)  = 'eo'
+        keys_optional(7)  = 'frac'
+        keys_optional(8)  = 'state2split'
+        keys_optional(9)  = 'norec'
+        keys_optional(10) = 'mul'
+        keys_optional(11) = 'zero'
+        keys_optional(12) = 'tseries'
+        keys_optional(13) = 'center'
         ! parse command line
         if( describe ) call print_doc_multiptcl_init
         call cline%parse(keys_required(:6), keys_optional(:14))
@@ -1272,12 +1272,11 @@ select case(prg)
         keys_optional(3) = 'deftab'
         keys_optional(4) = 'frac'
         keys_optional(5) = 'mul'
-        keys_optional(6) = 'state'
-        keys_optional(7) = 'mskfile'
-        keys_optional(8) = 'balance'
+        keys_optional(6) = 'mskfile'
+        keys_optional(7) = 'balance'
         ! parse command line
         if( describe ) call print_doc_recvol
-        call cline%parse(keys_required(:6), keys_optional(:8))
+        call cline%parse(keys_required(:6), keys_optional(:7))
         ! set defaults
         if( .not. cline%defined('trs') ) call cline%set('trs', 5.) ! to assure that shifts are being used
         if( .not. cline%defined('eo')  ) call cline%set('eo', 'no')
@@ -1294,24 +1293,19 @@ select case(prg)
         ! inner mask<eo_volassemble/end>
         !
         ! set required keys
-        keys_required(1)  = 'stk'
-        keys_required(2)  = 'nparts'
-        keys_required(3)  = 'smpd'
-        keys_required(4)  = 'msk'
-        keys_required(5)  = 'oritab'
-        keys_required(6)  = 'ctf'
+        keys_required(1) = 'stk'
+        keys_required(2) = 'nparts'
+        keys_required(3) = 'smpd'
+        keys_required(4) = 'msk'
+        keys_required(5) = 'oritab'
         ! set optional keys
-        keys_optional(1)  = 'nthr'
-        keys_optional(2)  = 'deftab'
-        keys_optional(3)  = 'mul'
-        keys_optional(4)  = 'state'
-        keys_optional(5)  = 'nstates'
-        keys_optional(6)  = 'mskfile'
+        keys_optional(1) = 'nthr'
+        keys_optional(2) = 'state'
+        keys_optional(3) = 'nstates'
+        keys_optional(4) = 'mskfile'
         ! parse command line
         if( describe ) call print_doc_eo_volassemble
-        call cline%parse(keys_required(:6), keys_optional(:6))
-        ! set defaults
-        if( cline%defined('state') ) call cline%set('nstates', 1.) ! to assure that shifts are being used
+        call cline%parse(keys_required(:5), keys_optional(:4))
         ! execute
         call xeo_volassemble%execute(cline)
     case( 'volassemble' )
@@ -1330,16 +1324,11 @@ select case(prg)
         keys_required(4) = 'oritab'
         ! set optional keys
         keys_optional(1) = 'nthr'
-        keys_optional(2) = 'even'
-        keys_optional(3) = 'odd'
-        keys_optional(4) = 'eo'
-        keys_optional(5) = 'state'
+        keys_optional(2) = 'state'
+        keys_optional(3) = 'nstates'
         ! parse command line
         if( describe ) call print_doc_volassemble
-        call cline%parse(keys_required(:4), keys_optional(:5))
-        ! set defaults
-        if( cline%defined('state')    ) call cline%set('nstates', 1.)
-        if( .not. cline%defined('eo') ) call cline%set('eo', 'no')
+        call cline%parse(keys_required(:4), keys_optional(:3))
         ! execute
         call xvolassemble%execute(cline)
 

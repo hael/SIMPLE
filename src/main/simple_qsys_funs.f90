@@ -18,41 +18,46 @@ contains
     subroutine qsys_cleanup( p )
         use simple_params, only: params
         class(params), intent(in) :: p
-        character(len=:), allocatable :: rec_base_str, rho_base_str
+        character(len=:), allocatable :: rec_base_str, rho_base_str, rec_base_str_part, rho_base_str_part
         integer, parameter :: NUMLEN_STATE = 2, NUMLEN_ITER = 3
         integer :: istate
         ! single files
         call del_file('FOO')
         call del_file('fort.0')
-        !call del_file('qsys_submit_jobs')
-        !call del_file('simple_script_single')
         call del_file('ftab_from_sys_find_last_fname.txt')
         call del_file('VOLASSEMBLE')
         call del_file('CAVGASSEMBLE')
         call del_file('SYMSRCH')
+        ! state numbered files
+        call del_files('VOLASSEMBLE_FINISHED_STATE', p%nstates, numlen=NUMLEN_STATE)
+        call del_files('simple_script_state',        p%nstates, numlen=NUMLEN_STATE)
         ! part numbered files
-        call del_files('OUT',                    p%nparts)
-        call del_files('algndoc_',               p%nparts, ext=METADATEXT)
-        call del_files('unidoc_',                p%nparts, ext='.txt')
-        call del_files('cavgs_even_part',        p%nparts, ext=p%ext )
-        call del_files('cavgs_odd_part',         p%nparts, ext=p%ext )
-        call del_files('JOB_FINISHED_',          p%nparts)
-        call del_files('ctfsqsums_even_part',    p%nparts, ext=p%ext )
-        call del_files('ctfsqsums_odd_part',     p%nparts, ext=p%ext )
-        call del_files('distr_simple_script_',   p%nparts)
-        call del_files('ctffind_output_part',    p%nparts, ext='.txt')
-        call del_files('ctffind_ctrl_file_part', p%nparts, ext='.txt')
+        call del_files('OUT',                        p%nparts)
+        call del_files('algndoc_',                   p%nparts, ext=METADATEXT)
+        call del_files('unidoc_',                    p%nparts, ext='.txt')
+        call del_files('cavgs_even_part',            p%nparts, ext=p%ext )
+        call del_files('cavgs_odd_part',             p%nparts, ext=p%ext )
+        call del_files('JOB_FINISHED_',              p%nparts)
+        call del_files('ctfsqsums_even_part',        p%nparts, ext=p%ext )
+        call del_files('ctfsqsums_odd_part',         p%nparts, ext=p%ext )
+        call del_files('distr_simple_script_',       p%nparts)
+        call del_files('ctffind_output_part',        p%nparts, ext='.txt')
+        call del_files('ctffind_ctrl_file_part',     p%nparts, ext='.txt')
         ! state and part numbered files
         do istate=1,MAXS
-            allocate(rec_base_str, source='recvol_state'//int2str_pad(istate,NUMLEN_STATE)//'_part')
+            allocate(rec_base_str, source='recvol_state'//int2str_pad(istate,NUMLEN_STATE))
             allocate(rho_base_str, source='rho_'//rec_base_str)
-            call del_files(rec_base_str, p%nparts, ext=p%ext)
-            call del_files(rho_base_str, p%nparts, ext=p%ext)
-            call del_files(rec_base_str, p%nparts, ext=p%ext, suffix='_even')
-            call del_files(rec_base_str, p%nparts, ext=p%ext, suffix='_odd')
-            call del_files(rho_base_str, p%nparts, ext=p%ext, suffix='_even')
-            call del_files(rho_base_str, p%nparts, ext=p%ext, suffix='_odd')
-            deallocate(rec_base_str,rho_base_str)
+            allocate(rec_base_str_part, source=rec_base_str//'_part')
+            allocate(rho_base_str_part, source='rho_'//rec_base_str_part)
+            call del_files(rec_base_str_part, p%nparts, ext=p%ext)
+            call del_files(rho_base_str_part, p%nparts, ext=p%ext)
+            call del_files(rec_base_str_part, p%nparts, ext=p%ext, suffix='_even')
+            call del_files(rec_base_str_part, p%nparts, ext=p%ext, suffix='_odd')
+            call del_files(rho_base_str_part, p%nparts, ext=p%ext, suffix='_even')
+            call del_files(rho_base_str_part, p%nparts, ext=p%ext, suffix='_odd')
+            call del_file(rho_base_str//'_even'//p%ext)
+            call del_file(rho_base_str//'_odd'//p%ext)
+            deallocate(rec_base_str,rho_base_str,rec_base_str_part,rho_base_str_part)
         end do
     end subroutine qsys_cleanup
 
@@ -222,31 +227,25 @@ contains
     end subroutine qsys_watcher_1
 
     !>  returns when the inputted files exist in cwd
-    subroutine qsys_watcher_2( fnames, files_exist, wtime )
+    subroutine qsys_watcher_2( fnames, wtime )
         character(len=STDLEN), intent(in)    :: fnames(:)
-        logical,               intent(inout) :: files_exist(:)
         integer, optional,     intent(in)    :: wtime
-        integer, parameter :: MAXITS=1000
-        integer            :: wwtime, nfiles, ifile, nlogic, i
-        logical            :: fexists, doreturn
+        integer, parameter   :: MAXITS=1000
+        integer              :: wwtime, nfiles, ifile, nlogic, i
+        logical              :: doreturn, fexists
         wwtime = SHORTTIME
         if( present(wtime) ) wwtime = wtime
         nfiles = size(fnames)
-        nlogic = size(files_exist)
-        if( nlogic .ne. nfiles ) stop 'nonconforming arrays in simple_qsys_funs :: qsys_watcher_2'
         do i=1,MAXITS
-            doreturn = .false.
+            doreturn = .true.
             do ifile=1,nfiles
                 fexists = file_exists(trim(fnames(ifile)))
-                if( fexists .neqv. files_exist(ifile) )then
-                    files_exist(ifile) = fexists
-                    doreturn = .true.
-                endif
+                if( .not. fexists ) doreturn = .false.
             end do
-            if( all(files_exist) .or. doreturn )then
+            if( doreturn )then
                 return
             else
-                call sleep(wtime)
+                call sleep(wwtime)
             endif
         end do
     end subroutine qsys_watcher_2

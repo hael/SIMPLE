@@ -408,7 +408,7 @@ contains
         logical,               allocatable :: included(:)
         type(params)          :: p_master
         type(oris)            :: os
-        character(len=STDLEN) :: oritab, vol, fsc_file, str_state, optlp_file
+        character(len=STDLEN) :: oritab, vol, str_state
         integer               :: irepeat, state, iter, n_incl, it, alloc_stat
         integer               :: best_loc(1)
 
@@ -528,23 +528,7 @@ contains
             str_state = int2str_pad(state, 2)
             vol = 'recvol_state'//trim(str_state)//p_master%ext
             call cline_postproc_vol%set('vol1', trim(vol))
-            fsc_file   = 'fsc_state'//trim(str_state)//'.bin'
-            optlp_file = 'aniso_optlp_state'//trim(str_state)//p_master%ext
-            if( file_exists(fsc_file) .and. p_master%eo .eq. 'aniso' )then
-                if( .not. file_exists(optlp_file) )then
-                    write(*,*) 'eo=aniso but file: ', trim(optlp_file)
-                    stop 'is not in cwd as required; commander_hlev_wflows :: exec_het_ensemble'
-                endif
-                call cline_postproc_vol%delete('lp')
-                call cline_postproc_vol%set('fsc', trim(fsc_file))
-                call cline_postproc_vol%set('vol_filt', trim(optlp_file))
-            else if( file_exists(fsc_file) .and. p_master%eo .eq. 'yes' )then
-                call cline_postproc_vol%delete('lp')
-                call cline_postproc_vol%set('fsc', trim(fsc_file))
-            else
-                call cline_postproc_vol%delete('fsc')
-                call cline_postproc_vol%set('lp', p_master%lp)
-            endif
+            call update_pproc_cline(cline_postproc_vol, str_state)
             call xpostproc_vol%execute(cline_postproc_vol)
         enddo
 
@@ -574,14 +558,39 @@ contains
             subroutine pproc_volumes
                 character(len=STDLEN) :: srcvol, destvol
                 do state=1,p_master%nstates
+                    str_state = int2str_pad(state, 2)
                     srcvol  = trim(VOLFBODY)//int2str_pad(state,2)//'_iter'//int2str_pad(iter,3)//p_master%ext
                     destvol = trim(HETFBODY)//int2str_pad(irepeat,2)//'_'//trim(VOLFBODY)//int2str_pad(state,2)//p_master%ext
                     if(file_exists(destvol))call del_file(destvol)
                     call rename(trim(srcvol), trim(destvol))
                     call cline_postproc_repvol%set('vol1', trim(destvol))
+                    call update_pproc_cline(cline_postproc_repvol, str_state)
                     call xpostproc_vol%execute(cline_postproc_repvol)
                 enddo
             end subroutine pproc_volumes
+
+            subroutine update_pproc_cline( cl, str_state )
+                class(cmdline),   intent(inout) :: cl
+                character(len=2), intent(in)    :: str_state
+                character(len=STDLEN) :: fsc_file, optlp_file
+                fsc_file   = 'fsc_state'//trim(str_state)//'.bin'
+                optlp_file = 'aniso_optlp_state'//trim(str_state)//p_master%ext
+                if( file_exists(fsc_file) .and. p_master%eo .eq. 'aniso' )then
+                    if( .not. file_exists(optlp_file) )then
+                        write(*,*) 'eo=aniso but file: ', trim(optlp_file)
+                        stop 'is not in cwd as required; commander_hlev_wflows :: exec_het_ensemble'
+                    endif
+                    call cl%delete('lp')
+                    call cl%set('fsc', trim(fsc_file))
+                    call cl%set('vol_filt', trim(optlp_file))
+                else if( file_exists(fsc_file) .and. p_master%eo .eq. 'yes' )then
+                    call cl%delete('lp')
+                    call cl%set('fsc', trim(fsc_file))
+                else
+                    call cl%delete('fsc')
+                    call cl%set('lp', p_master%lp)
+                endif
+            end subroutine update_pproc_cline
 
     end subroutine exec_het_ensemble
 

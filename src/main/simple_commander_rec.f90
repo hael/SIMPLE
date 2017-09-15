@@ -64,10 +64,13 @@ contains
         type(params)                  :: p
         type(build)                   :: b
         type(eo_reconstructor)        :: eorecvol_read
-        character(len=:), allocatable :: fname
+        character(len=:), allocatable :: fname, finished_fname
         real, allocatable             :: res05s(:), res0143s(:)
         real                          :: res
-        integer                       :: part, s, alloc_stat, n, ss, state4name, file_stat, fnr
+        integer                       :: part, s, alloc_stat, n, ss, file_stat, fnr, state
+        if( cline%defined('state') .and. cline%defined('nstates') )then
+            stop 'ERROR, state and nstates cannot both be given; commander_rec :: eo_volassemble'
+        endif
         p = params(cline)                   ! parameters generated
         call b%build_general_tbox(p, cline) ! general objects built
         call b%build_eo_rec_tbox(p)         ! reconstruction toolbox built
@@ -84,25 +87,22 @@ contains
         n = p%nstates*p%nparts
         do ss=1,p%nstates
             if( cline%defined('state') )then
-                s = 1
+                s     = 1        ! index in recvol
+                state = p%state  ! actual state
             else
-                s = ss
+                s     = ss
+                state = ss
             endif
             DebugPrint  'processing state: ', s
-            if( b%a%get_pop( s, 'state' ) == 0 )cycle ! Empty state
+            if( b%a%get_pop(state, 'state' ) == 0 )cycle ! Empty state
             call b%eorecvol%reset_all
             do part=1,p%nparts
-                if( cline%defined('state') )then
-                    state4name = p%state
-                else
-                    state4name = s
-                endif
-                allocate(fname, source='recvol_state'//int2str_pad(state4name,2)//'_part'//int2str_pad(part,p%numlen))
+                allocate(fname, source='recvol_state'//int2str_pad(state,2)//'_part'//int2str_pad(part,p%numlen))
                 DebugPrint  'processing file: ', fname
                 call assemble(fname)
                 deallocate(fname)
             end do
-            call normalize('recvol_state'//int2str_pad(state4name,2))
+            call normalize('recvol_state'//int2str_pad(state,2))
         end do
         ! set the resolution limit according to the worst resolved model
         res  = maxval(res0143s)
@@ -112,11 +112,16 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_EO_VOLASSEMBLE NORMAL STOP ****', print_simple=.false.)
         ! indicate completion (when run in a qsys env)
-        if(.not.fopen(fnr, FILE='VOLASSEMBLE_FINISHED', STATUS='REPLACE', action='WRITE', iostat=file_stat))&
+        if( cline%defined('state') )then
+            allocate( finished_fname, source='VOLASSEMBLE_FINISHED_STATE'//int2str_pad(state,2) )
+        else
+            allocate( finished_fname, source='VOLASSEMBLE_FINISHED' )
+        endif
+        if(.not.fopen(fnr, FILE=finished_fname, STATUS='REPLACE', action='WRITE', iostat=file_stat))&
              call  fileio_errmsg('In: commander_rec :: eo_volassemble', file_stat )
         if(.not.fclose( fnr , iostat=file_stat))&
              call  fileio_errmsg('In: commander_rec :: eo_volassemble', file_stat )
-        call wait_for_closure('VOLASSEMBLE_FINISHED')
+        call wait_for_closure(finished_fname)
         
         contains
 
@@ -134,24 +139,21 @@ contains
                 character(len=32)     :: eonames(2)
                 volname = trim(recname)//trim(p%ext)
                 call b%eorecvol%sum_eos
+                ! anisotropic resolution model
+                eonames(1) = trim(recname)//'_even'//trim(p%ext)
+                eonames(2) = trim(recname)//'_odd'//trim(p%ext)
                 if( p%eo .eq. 'aniso' )then
-                    ! anisotropic resolution model
-                    eonames(1) = 'tmpvoleven'//p%ext
-                    eonames(2) = 'tmpvolodd'//p%ext
-                    call b%eorecvol%sampl_dens_correct_eos(s, eonames)
+                    call b%eorecvol%sampl_dens_correct_eos(state, eonames)
                     call gen_projection_frcs( p, eonames(1), eonames(2), s, b%projfrcs)
-                    call del_file(eonames(1))
-                    call del_file(eonames(2))
-                    call b%projfrcs%write('frcs_state'//int2str_pad(s,2)//'.bin')
+                    call b%projfrcs%write('frcs_state'//int2str_pad(state,2)//'.bin')
                     ! generate the anisotropic 3D optimal low-pass filter
                     call gen_anisotropic_optlp(b%vol, b%projfrcs, b%e_bal, s, p%pgrp)
-                    call b%vol%write('aniso_optlp_state'//int2str_pad(s,2)//p%ext)
+                    call b%vol%write('aniso_optlp_state'//int2str_pad(state,2)//p%ext)
                 else
-                    call b%eorecvol%sampl_dens_correct_eos(s)
+                    call b%eorecvol%sampl_dens_correct_eos(state, eonames)
                 endif
                 call b%eorecvol%get_res(res05s(s), res0143s(s))
                 call b%eorecvol%sampl_dens_correct_sum( b%vol )
-                call b%eorecvol%write_eos(recname)
                 call b%vol%write( volname, del_if_exists=.true. )
                 call wait_for_closure( volname )
             end subroutine normalize
@@ -165,10 +167,13 @@ contains
         class(cmdline),               intent(inout) :: cline
         type(params)                  :: p
         type(build)                   :: b
-        character(len=:), allocatable :: fbody
+        character(len=:), allocatable :: fbody, finished_fname
         character(len=STDLEN)         :: recvolname, rho_name
-        integer                       :: part, s, ss, i, state4name, file_stat, fnr ! endit
+        integer                       :: part, s, ss, i, state, file_stat, fnr
         type(reconstructor)           :: recvol_read
+        if( cline%defined('state') .and. cline%defined('nstates') )then
+            stop 'ERROR, state and nstates cannot both be given; commander_rec :: volassemble'
+        endif
         p = params(cline)                   ! parameters generated
         call b%build_general_tbox(p, cline) ! general objects built
         call b%build_rec_tbox(p)            ! reconstruction toolbox built
@@ -181,20 +186,17 @@ contains
         call recvol_read%alloc_rho(p)
         do ss=1,p%nstates
             if( cline%defined('state') )then
-                s = 1
+                s     = 1        ! index in recvol
+                state = p%state  ! actual state
             else
-                s = ss
+                s     = ss
+                state = ss
             endif
-            DebugPrint  'processing state: ', s
-            if( b%a%get_pop( s, 'state' ) == 0 ) cycle ! Empty state
+            DebugPrint  'processing state: ', state
+            if( b%a%get_pop(state, 'state' ) == 0 ) cycle ! Empty state
             call b%recvol%reset
             do part=1,p%nparts
-                if( cline%defined('state') )then
-                    state4name = p%state
-                else
-                    state4name = s
-                endif
-                allocate(fbody, source='recvol_state'//int2str_pad(state4name,2)//'_part'//int2str_pad(part,p%numlen))
+                allocate(fbody, source='recvol_state'//int2str_pad(state,2)//'_part'//int2str_pad(part,p%numlen))
                 DebugPrint  'processing fbody: ', fbody
                 p%vols(s) = fbody//p%ext
                 rho_name  = 'rho_'//fbody//p%ext
@@ -204,7 +206,7 @@ contains
             if( p%nstates == 1 .and. cline%defined('outvol') )then
                 recvolname = trim(p%outvol)
             else
-                recvolname = 'recvol_state'//int2str_pad(state4name,2)//p%ext
+                recvolname = 'recvol_state'//int2str_pad(state,2)//p%ext
             endif
             call normalize( trim(recvolname) )
         end do
@@ -213,11 +215,16 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_VOLASSEMBLE NORMAL STOP ****', print_simple=.false.)
         ! indicate completion (when run in a qsys env)
-        if(.not.fopen(fnr, FILE='VOLASSEMBLE_FINISHED', STATUS='REPLACE', action='WRITE', iostat=file_stat))&
+        if( cline%defined('state') )then
+            allocate( finished_fname, source='VOLASSEMBLE_FINISHED_STATE'//int2str_pad(state,2) )
+        else
+            allocate( finished_fname, source='VOLASSEMBLE_FINISHED' )
+        endif
+        if(.not.fopen(fnr, FILE=finished_fname, STATUS='REPLACE', action='WRITE', iostat=file_stat))&
              call  fileio_errmsg('In: commander_rec :: volassemble', file_stat )
         if(.not.fclose( fnr , iostat=file_stat))&
              call  fileio_errmsg('In: commander_rec :: volassemble', file_stat )
-        call wait_for_closure('VOLASSEMBLE_FINISHED')
+        call wait_for_closure(finished_fname)
 
         contains
 

@@ -115,20 +115,32 @@ contains
         call self%qscripts%schedule_jobs
     end subroutine gen_scripts_and_schedule_jobs
 
-    subroutine exec_simple_prg_in_queue( self, cline, outfile, finish_indicator )
+    subroutine exec_simple_prg_in_queue( self, cline, outfile, finish_indicator, script_name )
         use simple_cmdline,   only: cmdline
-        class(qsys_env)  :: self
-        class(cmdline)   :: cline
-        character(len=*) :: outfile, finish_indicator
-        character(len=STDLEN), parameter :: script_name = 'simple_script_single'
-        type(chash) :: job_descr
-        call del_file(finish_indicator)
+        class(qsys_env)            :: self
+        class(cmdline)             :: cline
+        character(len=*)           :: outfile
+        character(len=*), optional :: finish_indicator, script_name
+        character(len=STDLEN), parameter   :: script_name_default = 'simple_script_single'
+        type(chash)                        :: job_descr
+        character(len=:),      allocatable :: halt_ind, script_name_here
+        if( present(finish_indicator) )then
+            allocate(halt_ind, source=trim(finish_indicator) )
+        endif
+        if( present(script_name) )then
+            allocate(script_name_here, source=trim(script_name))
+        else
+            allocate(script_name_here, source=script_name_default)
+        endif
+        if( allocated(halt_ind) ) call del_file(halt_ind)
         call cline%gen_job_descr(job_descr)
-        call self%qscripts%generate_script(job_descr, self%qdescr, self%simple_exec_bin, script_name, outfile)
-        call wait_for_closure(script_name) !!!!!
-        call self%qscripts%submit_script(script_name)
-        call qsys_watcher(finish_indicator)
-        call del_file(finish_indicator)
+        call self%qscripts%generate_script(job_descr, self%qdescr, self%simple_exec_bin, script_name_here, outfile)
+        call wait_for_closure(script_name_here) !!!!!
+        call self%qscripts%submit_script(script_name_here)
+        if( allocated(halt_ind) )then
+            call qsys_watcher(halt_ind)
+            call del_file(halt_ind)
+        endif
     end subroutine exec_simple_prg_in_queue
 
     subroutine kill( self )

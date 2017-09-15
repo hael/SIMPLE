@@ -779,6 +779,7 @@ contains
         type(params)          :: p_master
         type(chash)           :: job_descr
         type(oris)            :: os
+        character(len=STDLEN), allocatable :: state_assemble_finished(:)
         character(len=STDLEN) :: vol, vol_iter, oritab, str, str_iter, optlp_file
         character(len=STDLEN) :: str_state, fsc_file, volassemble_output
         real                  :: frac_srch_space, corr, corr_prev
@@ -828,13 +829,20 @@ contains
         call cline_check3D_conv%set( 'box', real(p_master%box)   )
         call cline_check3D_conv%set( 'nptcls', real(p_master%nptcls))
         call cline_postproc_vol%set( 'nstates', 1.)
-        ! removes unnecessary volume keys
+        call cline_volassemble%delete('nstates') ! to reduce memory use
+
+        ! for parallel volassemble over states
+        allocate(state_assemble_finished(p_master%nstates) )
+
+        ! removes unnecessary volume keys and generates volassemble finished names
         do state = 1,p_master%nstates
             vol = 'vol'//int2str( state )
             call cline_check3D_conv%delete( trim(vol) )
             call cline_merge_algndocs%delete( trim(vol) )
             call cline_volassemble%delete( trim(vol) )
+            state_assemble_finished(state) = 'VOLASSEMBLE_FINISHED_STATE'//int2str_pad(state,2)
         enddo
+
         ! SPLIT STACK
         call xsplit%execute(cline)
         ! GENERATE STARTING MODELS & ORIENTATIONS
@@ -964,21 +972,22 @@ contains
                 ! ASSEMBLE VOLUMES
                 call cline_volassemble%set( 'oritab', trim(oritab) )
                 if( p_master%eo.ne.'no' )then
-                    do state = 1,p_master%nstates
-                        str_state = int2str_pad(state,2)
-                        call del_file('fsc_state'//trim(str_state)//'.bin')
-                    enddo
                     call cline_volassemble%set( 'prg', 'eo_volassemble' ) ! required for cmdline exec
                 else
                     call cline_volassemble%set( 'prg', 'volassemble' )    ! required for cmdline exec
                 endif
-                if( p_master%eo .ne. 'no' )then
-                    volassemble_output = 'RESOLUTION'//trim(str_iter)
-                else
-                    volassemble_output = 'VOLASSEMBLE'
-                endif
-                call qenv%exec_simple_prg_in_queue(cline_volassemble,&
-                &trim(volassemble_output), 'VOLASSEMBLE_FINISHED')
+                do state = 1,p_master%nstates
+                    str_state = int2str_pad(state,2)
+                    if( p_master%eo .ne. 'no' )then
+                        volassemble_output = 'RESOLUTION_STATE'//trim(str_state)//'_ITER'//trim(str_iter)
+                    else
+                        volassemble_output = 'VOLASSEMBLE_STATE'//trim(str_state)//'_ITER'//trim(str_iter)
+                    endif
+                    call cline_volassemble%set( 'state', real(state) )
+                    call qenv%exec_simple_prg_in_queue(cline_volassemble, trim(volassemble_output),&
+                        &script_name='simple_script_state'//trim(str_state))
+                end do
+                call qsys_watcher(state_assemble_finished)                
             endif
             ! rename volumes, postprocess & update job_descr
             call binread_oritab(trim(oritab), os, [1,p_master%nptcls])
@@ -1272,11 +1281,13 @@ contains
         use simple_commander_rec
         class(recvol_distr_commander), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
-        type(split_commander) :: xsplit
-        type(qsys_env)        :: qenv
-        type(params)          :: p_master
-        character(len=STDLEN) :: volassemble_output
-        type(chash)           :: job_descr
+        type(split_commander)              :: xsplit
+        type(qsys_env)                     :: qenv
+        type(params)                       :: p_master
+        character(len=STDLEN)              :: volassemble_output, str_state
+        character(len=STDLEN), allocatable :: state_assemble_finished(:)
+        type(chash)                        :: job_descr
+        integer                            :: state
         ! seed the random number generator
         call seed_rnd
         ! output command line executed
@@ -1292,15 +1303,31 @@ contains
         ! schedule
         call qenv%gen_scripts_and_schedule_jobs(p_master, job_descr)
         ! assemble volumes
+        ! this is for parallel volassemble over states
+        allocate(state_assemble_finished(p_master%nstates) )
+        do state = 1, p_master%nstates
+            state_assemble_finished(state) = 'VOLASSEMBLE_FINISHED_STATE'//int2str_pad(state,2)
+        enddo
+        call cline%delete('nstates') ! to reduce memory use
         if( p_master%eo .ne. 'no' )then
             call cline%set('prg', 'eo_volassemble')
-            volassemble_output = 'RESOLUTION'
         else
             call cline%set('prg', 'volassemble')
-            volassemble_output = 'VOLASSEMBLE'
         endif
-        call qenv%exec_simple_prg_in_queue(cline,&
-        &trim(volassemble_output), 'VOLASSEMBLE_FINISHED')
+        ! parallel assembly
+        do state = 1, p_master%nstates
+            str_state = int2str_pad(state,2)
+            if( p_master%eo .ne. 'no' )then
+                volassemble_output = 'RESOLUTION_STATE'//trim(str_state)
+            else
+                volassemble_output = 'VOLASSEMBLE_STATE'//trim(str_state)
+            endif
+            call cline%set( 'state', real(state) )
+
+            call qenv%exec_simple_prg_in_queue(cline, trim(volassemble_output),&
+                &script_name='simple_script_state'//trim(str_state))
+        end do
+        call qsys_watcher(state_assemble_finished)
         ! termination
         call qsys_cleanup(p_master)
         call simple_end('**** SIMPLE_RECVOL NORMAL STOP ****', print_simple=.false.)
