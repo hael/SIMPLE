@@ -432,8 +432,7 @@ contains
             call del_file(final_docs(irepeat))
         enddo
 
-        ! delete possibly pre-existing stack & pft parts
-        call del_files(STKPARTFBODY, p_master%nparts, ext=p_master%ext)
+        ! delete possibly pre-existing scaled stack parts & pft parts
         call del_files(STKPARTFBODY_SC, p_master%nparts, ext=p_master%ext)
         call del_files('ppfts_memoized_part', p_master%nparts, ext='.bin')
 
