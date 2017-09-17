@@ -414,7 +414,7 @@ contains
 
         ! sanity check
         if(nint(cline%get_rarg('nstates')) <= 1)&
-            &stop 'Non-sensical NSTATES argument for heterogeinity analysis!'
+            &stop 'Non-sensical NSTATES argument for heterogeneity analysis!'
 
         ! make master parameters
         p_master = params(cline, checkdistr=.false.)

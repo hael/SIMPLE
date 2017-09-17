@@ -708,7 +708,9 @@ contains
         real      :: corr, mi_state, frac, corrs(self%nstates)
         self%prev_state = nint(self%a_ptr%get(iptcl, 'state'))
         if( self%prev_state > self%nstates ) stop 'previous best state outside boundary; stochastic_srch_het; simple_prime3D_srch'
-        if( .not. self%state_exists(self%prev_state) ) stop 'empty previous state; stochastic_srch_het; simple_prime3D_srch'
+        if( self%prev_state > 0 )then
+            if( .not. self%state_exists(self%prev_state) ) stop 'empty previous state; stochastic_srch_het; simple_prime3D_srch'
+        endif
         if( self%prev_state > 0 )then
             ! initialize
             o = self%a_ptr%get_ori(iptcl)
@@ -827,7 +829,9 @@ contains
         self%prev_shvec = o_prev%get_2Dshift()                                         ! shift vector
         self%prev_proj  = self%e_ptr%find_closest_proj(o_prev,1)                                ! projection direction
         if( self%prev_state > self%nstates ) stop 'previous best state outside boundary; prep4srch; simple_prime3D_srch'
-        if( .not. self%state_exists(self%prev_state) ) stop 'empty previous state; prep4srch; simple_prime3D_srch'
+        if( self%prev_state > 0 )then
+            if( .not. self%state_exists(self%prev_state) ) stop 'empty previous state; prep4srch; simple_prime3D_srch'
+        endif
         select case( self%refine )
             case( 'no','shc','snhc','greedy' )                                         ! DISCRETE CASE
                 call self%prep_reforis                                                 ! search space & order prep
