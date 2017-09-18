@@ -59,6 +59,7 @@ type prime3D_srch
     character(len=STDLEN)            :: ctf            = ''      !< ctf flag
     character(len=STDLEN)            :: shbarr         = ''      !< shift barrier flag
     character(len=STDLEN)            :: pgrp           = 'c1'    !< point-group symmetry
+    logical                          :: dev            = .false. !< development flag
     logical                          :: doshift        = .true.  !< 2 indicate whether 2 serch shifts
     logical                          :: greedy_inpl    = .true.  !< 2 indicate whether in-plane search is greedy or not
     logical                          :: exists         = .false. !< 2 indicate existence
@@ -76,6 +77,7 @@ type prime3D_srch
     procedure, private :: stochastic_srch_het
     procedure, private :: stochastic_srch_bystate
     procedure          :: inpl_srch
+    procedure, private :: inpl_grid_srch
     ! PREPARATION ROUTINES
     procedure          :: prep4srch
     procedure          :: prep_reforis
@@ -152,6 +154,8 @@ contains
             if( self%npeaks > 1 ) stop 'npeaks must be equal to 1 with refine=shc|shcneigh'
             self%greedy_inpl = .false.
         endif
+        self%dev = .false.
+        if( p%dev .eq. 'yes' ) self%dev = .true.
         ! construct composites
         if( p%oritab.ne.'' )then
             self%state_exists = self%a_ptr%states_exist(self%nstates)
@@ -769,38 +773,109 @@ contains
     subroutine inpl_srch( self, iptcl )
         class(prime3D_srch), intent(inout) :: self
         integer,             intent(in)    :: iptcl
-        real, allocatable :: cxy(:), crxy(:)
+        integer, allocatable :: inpl_inds(:)
+        real,    allocatable :: cxy(:), crxy(:), shvecs(:,:)
         type(ori) :: o
         real      :: cc
         integer   :: i, ref, inpl_ind
-        if( self%doshift )then
-            do i=self%nrefs,self%nrefs-self%npeaks+1,-1
-                ref      = self%proj_space_inds( i )
-                o        = self%o_refs%get_ori( ref )
-                cc       = o%get('corr')
-                inpl_ind = self%pftcc_ptr%get_roind( 360.-o%e3get() )
-                if( self%greedy_inpl )then
-                    call self%inplsrch_obj%set_indices(ref, iptcl)
-                    crxy = self%inplsrch_obj%minimize(irot=inpl_ind)
-                    if( crxy(1) >= cc )then
-                        call o%set( 'corr', crxy(1) )
-                        call o%e3set( 360.-crxy(2) )
-                        call o%set_shift( crxy(3:4) )
-                        call self%o_refs%set_ori( ref, o )
+        if( self%dev )then
+            if( self%doshift )then
+                call self%inpl_grid_srch(iptcl, inpl_inds, shvecs)
+                do i=self%nrefs,self%nrefs-self%npeaks+1,-1
+                    ref = self%proj_space_inds( i )
+                    o   = self%o_refs%get_ori( ref )
+                    cc  = self%o_refs%get( ref, 'corr' )
+                    if( self%greedy_inpl )then
+                        call self%inplsrch_obj%set_indices(ref, iptcl)
+                        crxy = self%inplsrch_obj%minimize(irot=inpl_inds(i), shvec=shvecs(i,:))
+                        if( crxy(1) >= cc )then
+                            call o%set( 'corr', crxy(1) )
+                            call o%e3set( 360.-crxy(2) )
+                            call o%set_shift( crxy(3:4) )
+                            call self%o_refs%set_ori( ref, o )
+                        endif
+                    else
+                        call self%shsrch_obj%set_indices(ref, iptcl, inpl_inds(i))
+                        cxy = self%shsrch_obj%minimize(shvec=shvecs(i,:))
+                        if( cxy(1) >= cc )then
+                            call o%set('corr', cxy(1))
+                            call o%set_shift( cxy(2:3) )
+                            call self%o_refs%set_ori( ref, o )
+                        endif
                     endif
-                else
-                    call self%shsrch_obj%set_indices(ref, iptcl, inpl_ind)
-                    cxy = self%shsrch_obj%minimize()
-                    if( cxy(1) >= cc )then
-                        call o%set('corr', cxy(1))
-                        call o%set_shift( cxy(2:3) )
-                        call self%o_refs%set_ori( ref, o )
+                end do
+            endif
+        else
+            if( self%doshift )then
+                do i=self%nrefs,self%nrefs-self%npeaks+1,-1
+                    ref      = self%proj_space_inds( i )
+                    o        = self%o_refs%get_ori( ref )
+                    cc       = o%get('corr')
+                    inpl_ind = self%pftcc_ptr%get_roind( 360.-o%e3get() )
+                    if( self%greedy_inpl )then
+                        call self%inplsrch_obj%set_indices(ref, iptcl)
+                        crxy = self%inplsrch_obj%minimize(irot=inpl_ind)
+                        if( crxy(1) >= cc )then
+                            call o%set( 'corr', crxy(1) )
+                            call o%e3set( 360.-crxy(2) )
+                            call o%set_shift( crxy(3:4) )
+                            call self%o_refs%set_ori( ref, o )
+                        endif
+                    else
+                        call self%shsrch_obj%set_indices(ref, iptcl, inpl_ind)
+                        cxy = self%shsrch_obj%minimize()
+                        if( cxy(1) >= cc )then
+                            call o%set('corr', cxy(1))
+                            call o%set_shift( cxy(2:3) )
+                            call self%o_refs%set_ori( ref, o )
+                        endif
                     endif
-                endif
-            end do
+                end do
+            endif
         endif
         DebugPrint '>>> PRIME3D_SRCH::FINISHED INPL SEARCH'
     end subroutine inpl_srch
+
+    !>  \brief  experiemental
+    subroutine inpl_grid_srch( self, iptcl, inpl_inds, shvecs )
+        class(prime3D_srch),    intent(inout) :: self
+        integer,                intent(in)    :: iptcl
+        integer, allocatable,   intent(out)   :: inpl_inds(:)
+        real,    allocatable,   intent(out)   :: shvecs(:,:)
+        real,    parameter :: TRSHWDTH  = 2.0 
+        real,    parameter :: TRSSTEPSZ = 0.2
+        integer, parameter :: INPLHWDTH = 2
+        real    :: cc, cc_best, xsh, ysh
+        integer :: i, j, jrot, ref, inpl_ind, istop
+        if( allocated(inpl_inds) ) deallocate(inpl_inds)
+        if( allocated(shvecs)    ) deallocate(shvecs)
+        istop = self%nrefs - self%npeaks + 1
+        allocate( shvecs(istop:self%nrefs,2), inpl_inds(istop:self%nrefs) )
+        do i=self%nrefs,istop,-1
+            ref      = self%proj_space_inds( i )
+            inpl_ind = self%pftcc_ptr%get_roind( 360.-self%o_refs%e3get(ref) )
+            cc_best  = -1.0
+            do j=inpl_ind-INPLHWDTH,inpl_ind+INPLHWDTH
+                jrot = cyci_1d([1,self%nrots], j)
+                xsh  = -TRSHWDTH
+                do while( xsh <= TRSHWDTH )
+                    ysh = -TRSHWDTH
+                    do while( ysh <= TRSHWDTH )
+                        cc = self%pftcc_ptr%corr(ref, iptcl, jrot, [xsh,ysh])
+                        if( cc > cc_best )then
+                            cc_best      = cc
+                            inpl_inds(i) = jrot
+                            shvecs(i,:)  = [xsh,ysh]
+                        endif
+                        ysh = ysh + TRSSTEPSZ
+                    end do
+                    xsh = xsh + TRSSTEPSZ
+                end do
+            end do
+        end do
+        DebugPrint '>>> PRIME3D_SRCH::FINISHED INPL GRID SEARCH'
+    end subroutine inpl_grid_srch
+
 
     !>  \brief  prepares reference indices for the search & fetches ctf
     !! \param iptcl particle index
@@ -974,8 +1049,8 @@ contains
             ! grab info
             state = nint( o%get('state') )
             if( .not. self%state_exists(state) )then
-                print *,'empty state:',state,' ; simple_prime3D_srch::prep_npeaks_oris'
-                stop
+                print *, 'empty state: ', state
+                stop 'simple_prime3D_srch::prep_npeaks_oris'
             endif
             proj  = nint( o%get('proj') )
             corr  = o%get('corr')
@@ -1098,8 +1173,8 @@ contains
         call se%kill
         state = nint( o_new%get('state') )
         if( .not. self%state_exists(state) )then
-            print *,'Empty state in simple_prime3d_srch; update_best'
-            stop
+            print *, 'empty state: ', state
+            stop 'simple_prime3d_srch; update_best'
         endif
         roind = self%pftcc_ptr%get_roind( 360.-o_new%e3get() )
         mi_proj  = 0.
@@ -1164,8 +1239,8 @@ contains
         rstate = self%o_peaks%get( ipeak, 'state')
         if( allocated(self%state_exists) )then
             if( .not. self%state_exists(nint(rstate)) )then
-                print *,'Empty state in simple_prime3d_srch; get_ori'
-                stop
+                print *, 'empty state: ', nint(rstate)
+                stop 'simple_prime3d_srch; get_ori'
             endif
         endif
         rproj = self%o_peaks%get( ipeak, 'proj' )
