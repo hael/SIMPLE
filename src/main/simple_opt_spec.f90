@@ -141,7 +141,7 @@ contains
         if(present(nrestarts))   self%nrestarts = nrestarts
         if(present(nstates))     self%nstates   = nstates
         if(present(nnn))         self%nnn       = nnn
-        if(present(limits))      call self%set_limits_init(limits_init)
+        if(present(limits))      call self%set_limits(limits)
         if(present(limits_init)) call self%set_limits_init(limits_init)
         allocate( self%cyclic(self%ndim), stat=alloc_stat )
         call alloc_errchk('In: specify; simple_opt_spec, cyclic', alloc_stat)
