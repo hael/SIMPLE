@@ -846,11 +846,12 @@ contains
         real,    parameter :: TRSSTEPSZ = 0.2
         integer, parameter :: INPLHWDTH = 2
         real    :: cc, cc_best, xsh, ysh
-        integer :: i, j, jrot, ref, inpl_ind, istop
+        integer :: i, j, jrot, ref, inpl_ind, istop, n_inpl_changes, n_trs_changes
         if( allocated(inpl_inds) ) deallocate(inpl_inds)
         if( allocated(shvecs)    ) deallocate(shvecs)
         istop = self%nrefs - self%npeaks + 1
         allocate( shvecs(istop:self%nrefs,2), inpl_inds(istop:self%nrefs) )
+        n_inpl_changes = 0
         do i=self%nrefs,istop,-1
             ref      = self%proj_space_inds( i )
             inpl_ind = self%pftcc_ptr%get_roind( 360.-self%o_refs%e3get(ref) )
@@ -872,7 +873,11 @@ contains
                     xsh = xsh + TRSSTEPSZ
                 end do
             end do
+            if( inpl_inds(i) /= inpl_ind )    n_inpl_changes = n_inpl_changes + 1
+            if( sum(abs(shvecs(i,:))) > 0.1 ) n_trs_changes  = n_trs_changes  + 1
         end do
+        call self%a_ptr%set(iptcl, 'inpl_changes', real(n_inpl_changes)/real(self%nrefs - istop + 1))
+        call self%a_ptr%set(iptcl, 'trs_changes',  real(n_inpl_changes)/real(self%nrefs - istop + 1))
         DebugPrint '>>> PRIME3D_SRCH::FINISHED INPL GRID SEARCH'
     end subroutine inpl_grid_srch
 
