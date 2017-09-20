@@ -39,43 +39,48 @@ real(sp), parameter :: ATHRES_LIM   = 5.
 
 ! plan for the CTF
 type :: ctfplan
-    character(len=STDLEN) :: mode=''            !< astig/noastig
-    character(len=STDLEN) :: flag=''            !< flag: <mul|flip|no>
+    character(len=STDLEN) :: mode=''                 !< astig/noastig
+    character(len=STDLEN) :: flag=''                 !< flag: <mul|flip|no>
 end type ctfplan
 
 ! constants for picker
-real,    parameter :: PICKER_SHRINK        = 4. !< picker shrink factor
-real,    parameter :: PICKER_SHRINK_REFINE = 2. !< picker shrink factor, peak refine step
-integer, parameter :: PICKER_OFFSET        = 3  !< picker offset for grid search
+real,    parameter :: PICKER_SHRINK        = 4.      !< picker shrink factor
+real,    parameter :: PICKER_SHRINK_REFINE = 2.      !< picker shrink factor, peak refine step
+integer, parameter :: PICKER_OFFSET        = 3       !< picker offset for grid search
 
 ! constants for masking/interpolation
-real, parameter :: COSMSKHALFWIDTH = 3.0        !< spherical soft masking
-real, parameter :: KBWINSZ         = 1.5        !< interpolation window size
-real, parameter :: KBALPHA         = 2.0        !< interpolation alpha (smoothing constant)
+real, parameter :: COSMSKHALFWIDTH         = 3.0     !< spherical soft masking
+real, parameter :: KBWINSZ                 = 1.5     !< interpolation window size
+real, parameter :: KBALPHA                 = 2.0     !< interpolation alpha (smoothing constant)
               
 ! real constants that control search and convergence
-real, parameter :: FRAC_SH_LIM      = 80.0      !< at what frac to turn on the shift search
-real, parameter :: FRAC_INTERPOL    = 60.0      !< at what frac to turn on the gridding interpolation (2D)
-real, parameter :: EXTRINITHRESH    = 0.5       !< initial randomization threshold for extremal search
-real, parameter :: EXTRTHRESH_CONST = 0.2       !< threshold for factorial decay in extremal search
-real, parameter :: LP2SMPDFAC       = 0.4125    !< low-pass limit scaling constant
-real, parameter :: NPEAKSATHRES     = 12.0      !< angular threshold for determining npeaks (PRIME3D)
+real, parameter :: FRAC_SH_LIM             = 80.0    !< at what frac to turn on the shift search
+real, parameter :: FRAC_INTERPOL           = 60.0    !< at what frac to turn on the gridding interpolation (2D)
+real, parameter :: EXTRINITHRESH           = 0.5     !< initial randomization threshold for extremal search
+real, parameter :: EXTRTHRESH_CONST        = 0.2     !< threshold for factorial decay in extremal search
+real, parameter :: LP2SMPDFAC              = 0.4125  !< low-pass limit scaling constant
+real, parameter :: NPEAKSATHRES            = 12.0    !< angular threshold for determining npeaks (PRIME3D)
 
 ! integer #/threshold constants
-integer, parameter :: LPLIM1ITERBOUND = 5       !< # iteration bound lplim stage 1 (PRIME2D)
-integer, parameter :: LPLIM3ITERBOUND = 7       !< # iteration bound lplim stage 2 (PRIME2D)
-integer, parameter :: MINCLSPOPLIM    = 5       !< limit for adaptive cluster splitting/spreading (PRIME2D)
-integer, parameter :: SPECWMINPOP     = 2000    !< minimum population for spectral weighting (PRIME2D/3D)
-integer, parameter :: GRIDNPEAKS      = 3       !< # peaks to consider in angular grid search (PRIME3D)
-integer, parameter :: MAXNPEAKS       = 40      !< maximum # peaks to be assigned weights (PRIME3D)
-integer, parameter :: NSPACE_BALANCE  = 600     !< # projection directions for the balancing constraint (PRIME3D)
-integer, parameter :: HETNREPEATS     = 1       !< # repeats het_ensemble
-integer, parameter :: GRIDCORR_MAXITS = 5       !< # iterations for reconstruction gridding correction
+integer, parameter :: LPLIM1ITERBOUND      = 5       !< # iteration bound lplim stage 1 (PRIME2D)
+integer, parameter :: LPLIM3ITERBOUND      = 7       !< # iteration bound lplim stage 2 (PRIME2D)
+integer, parameter :: MINCLSPOPLIM         = 5       !< limit for adaptive cluster splitting/spreading (PRIME2D)
+integer, parameter :: SPECWMINPOP          = 2000    !< minimum population for spectral weighting (PRIME2D/3D)
+integer, parameter :: GRIDNPEAKS           = 3       !< # peaks to consider in angular grid search (PRIME3D)
+integer, parameter :: MAXNPEAKS            = 40      !< maximum # peaks to be assigned weights (PRIME3D)
+integer, parameter :: NSPACE_BALANCE       = 600     !< # projection directions for the balancing constraint (PRIME3D)
+integer, parameter :: HETNREPEATS          = 1       !< # repeats het_ensemble
+integer, parameter :: GRIDCORR_MAXITS      = 5       !< # iterations for reconstruction gridding correction
+
+! constants for SHC inplane grid search
+real,    parameter :: SHC_INPL_TRSHWDTH    = 2.0     !< shift search halfwidht (pixels)
+real,    parameter :: SHC_INPL_TRSSTEPSZ   = 0.2     !< shift search step size (pixels)
+integer, parameter :: SHC_INPL_INPLHWDTH   = 2       !< in-plane rotation halfwidth (rotation index)
 
 ! global  variables
-integer(kind=c_int)       :: nthr_glob          !< number of threads global variable
-logical                   :: l_distr_exec_glob  !< global distributed execution flag
-character(len=LONGSTRLEN) :: cmdline_glob       !< global command line string
+integer(kind=c_int)       :: nthr_glob               !< number of threads global variable
+logical                   :: l_distr_exec_glob       !< global distributed execution flag
+character(len=LONGSTRLEN) :: cmdline_glob            !< global command line string
 
 ! stack part related and file format constants
 character(len=32),     parameter :: STKPARTSDIR         = 'stack_parts'

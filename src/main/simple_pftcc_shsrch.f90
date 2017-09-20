@@ -37,16 +37,15 @@ end type pftcc_shsrch
 contains
 
     !> Shift search constructor
-    subroutine shsrch_new( self, pftcc, lims, shbarrier, nrestarts, npeaks, maxits, vols )
+    subroutine shsrch_new( self, pftcc, lims, lims_init, shbarrier, nrestarts, maxits )
         use simple_projector, only: projector
-        class(pftcc_shsrch),                intent(inout) :: self
-        class(polarft_corrcalc),    target, intent(in)    :: pftcc     !< pointer to pftcc object
-        real,                               intent(in)    :: lims(:,:) !< logical dimension of Cartesian image
-        character(len=*), optional,         intent(in)    :: shbarrier !< shift barrier constraint or not
-        integer,          optional,         intent(in)    :: nrestarts !< simplex restarts (randomized bounds)
-        integer,          optional,         intent(in)    :: npeaks    !< # peaks
-        integer,          optional,         intent(in)    :: maxits    !< maximum iterations
-        class(projector), optional, target, intent(in)    :: vols(:)   !< projector volume objects
+        class(pftcc_shsrch),                intent(inout) :: self           !< instance
+        class(polarft_corrcalc),    target, intent(in)    :: pftcc          !< correlator
+        real,                               intent(in)    :: lims(:,:)      !< limits for barrier constraint
+        real,             optional,         intent(in)    :: lims_init(:,:) !< limits for simplex initialisation by randomised bounds
+        character(len=*), optional,         intent(in)    :: shbarrier      !< shift barrier constraint or not
+        integer,          optional,         intent(in)    :: nrestarts      !< simplex restarts (randomized bounds)
+        integer,          optional,         intent(in)    :: maxits         !< maximum iterations
         ! flag the barrier constraint
         self%shbarr = .true.
         if( present(shbarrier) )then
@@ -57,8 +56,13 @@ contains
         self%maxits = 100
         if( present(maxits) ) self%maxits = maxits
         ! make optimizer spec
-        call self%ospec%specify('simplex', 2, ftol=1e-4, gtol=1e-4,&
-            limits=lims, nrestarts=self%nrestarts, maxits=self%maxits)
+        if( present(lims_init) )then
+            call self%ospec%specify('simplex', 2, ftol=1e-4, gtol=1e-4, limits=lims,&
+                &limits_init=lims_init, nrestarts=self%nrestarts, maxits=self%maxits)
+        else
+            call self%ospec%specify('simplex', 2, ftol=1e-4, gtol=1e-4,&
+                &limits=lims, nrestarts=self%nrestarts, maxits=self%maxits)
+        endif
         ! generate the simplex optimizer object
         call self%nlopt%new(self%ospec)
         ! set pointer to corrcalc object

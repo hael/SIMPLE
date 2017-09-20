@@ -35,15 +35,15 @@ end type pftcc_inplsrch
 
 contains
 
-    subroutine inplsrch_new( self, pftcc, lims, shbarrier, nrestarts, npeaks, maxits, vols )
+    subroutine inplsrch_new( self, pftcc, lims, lims_init, shbarrier, nrestarts, maxits )
         use simple_projector, only: projector
-        class(pftcc_inplsrch),              intent(inout) :: self
-        class(polarft_corrcalc),    target, intent(in)    :: pftcc
-        real,                               intent(in)    :: lims(:,:)
-        character(len=*), optional,         intent(in)    :: shbarrier
-        integer,          optional,         intent(in)    :: nrestarts, npeaks, maxits
-        class(projector), optional, target, intent(in)    :: vols(:)
-        real :: inpllims(3,2)
+        class(pftcc_inplsrch),           intent(inout) :: self
+        class(polarft_corrcalc), target, intent(in)    :: pftcc
+        real,                            intent(in)    :: lims(:,:)
+        real,             optional,      intent(in)    :: lims_init(:,:)
+        character(len=*), optional,      intent(in)    :: shbarrier
+        integer,          optional,      intent(in)    :: nrestarts, maxits
+        real :: inpllims(3,2), inpllims_init(3,2)
         ! flag the barrier constraint
         self%shbarr = .true.
         if( present(shbarrier) )then
@@ -57,8 +57,16 @@ contains
         inpllims(1,1)  = 0.
         inpllims(1,2)  = 360.
         inpllims(2:,:) = lims
-        call self%ospec%specify('simplex', 3, ftol=1e-4, gtol=1e-4,&
-            limits=inpllims, nrestarts=self%nrestarts, maxits=self%maxits)
+        if( present(lims_init) )then
+            inpllims_init(1,1)  = 0.
+            inpllims_init(1,2)  = 360.
+            inpllims_init(2:,:) = lims_init
+            call self%ospec%specify('simplex', 3, ftol=1e-4, gtol=1e-4, limits=inpllims,&
+                &limits_init=inpllims_init, nrestarts=self%nrestarts, maxits=self%maxits)
+        else
+            call self%ospec%specify('simplex', 3, ftol=1e-4, gtol=1e-4, limits=inpllims,&
+                &nrestarts=self%nrestarts, maxits=self%maxits)
+        endif
         ! generate the simplex optimizer object 
         call self%nlopt%new(self%ospec)
         ! set pointer to corrcalc object

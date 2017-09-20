@@ -8,7 +8,6 @@ use simple_oris,             only: oris
 use simple_ori,              only: ori
 use simple_sym,              only: sym
 use simple_pftcc_inplsrch,   only: pftcc_inplsrch
-use simple_pftcc_shsrch,     only: pftcc_shsrch
 use simple_math              ! use all in there
 implicit none
 
@@ -25,7 +24,6 @@ type cont3D_ada_srch
     class(polarft_corrcalc), pointer :: pftcc_ptr   => null()  !< polar fourier correlation calculator
     class(projector),        pointer :: vols_ptr(:) => null()  !< volumes for projection
     type(pftcc_inplsrch)             :: inplsrch_obj           !< in-plane search object
-    type(pftcc_shsrch)               :: shiftsrch_obj          !< in-plane search object
     type(sym)                        :: se                     !< symmery object
     type(ori)                        :: o_in                   !< input orientation
     type(ori)                        :: o_out                  !< best orientation found

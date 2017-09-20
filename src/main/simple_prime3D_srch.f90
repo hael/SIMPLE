@@ -4,6 +4,7 @@ use simple_oris,             only: oris
 use simple_ori,              only: ori
 use simple_strings,          only: str_has_substr, int2str_pad
 use simple_polarft_corrcalc, only: polarft_corrcalc
+use simple_shc_inplane,      only: shc_inplane
 use simple_pftcc_shsrch,     only: pftcc_shsrch
 use simple_pftcc_inplsrch,   only: pftcc_inplsrch
 use simple_math              ! use all in there
@@ -25,6 +26,7 @@ type prime3D_srch
     class(oris), pointer             :: e_ptr     => null()      !< pointer to b%e (reference orientations)
     type(oris)                       :: o_refs                   !< projection directions search space
     type(oris)                       :: o_peaks                  !< orientations of best npeaks oris
+    type(shc_inplane)                :: shcgrid                  !< in-plane grid search object
     type(pftcc_shsrch)               :: shsrch_obj               !< origin shift search object
     type(pftcc_inplsrch)             :: inplsrch_obj             !< in-plane search object
     integer                          :: nrefs          = 0       !< total # references (nstates*nprojs)
@@ -47,7 +49,6 @@ type prime3D_srch
     real                             :: prev_corr      = 1.      !< previous best correlation
     real                             :: specscore      = 0.      !< spectral score
     real                             :: prev_shvec(2)  = 0.      !< previous origin shift vector
-    real                             :: lims(2,2)      = 0.      !< shift search range limit
     real                             :: athres         = 0.      !< angular threshold
     real                             :: dfx            = 0.      !< ctf x-defocus
     real                             :: dfy            = 0.      !< ctf y-defocus
@@ -78,6 +79,7 @@ type prime3D_srch
     procedure, private :: stochastic_srch_bystate
     procedure          :: inpl_srch
     procedure, private :: inpl_grid_srch
+    procedure, private :: inpl_grid_srch_exhaustive
     ! PREPARATION ROUTINES
     procedure          :: prep4srch
     procedure          :: prep_reforis
@@ -126,6 +128,7 @@ contains
         class(prime3D_srch),             intent(inout) :: self   !< instance
         class(params),                   intent(in)    :: p      !< parameters
         integer :: alloc_stat, nstates_eff
+        real    :: lims(2,2), lims_init(2,2)
         ! destroy possibly pre-existing instance
         call self%kill
         ! set constants
@@ -189,14 +192,15 @@ contains
         call self%o_peaks%new(self%npeaks)
         ! updates option to search shift
         self%doshift = p%doshift
-        if( self%doshift )then
-            self%lims(:,1) = -p%trs
-            self%lims(:,2) =  p%trs
-        endif
-        self%exists = .true.
         ! create in-plane search objects
-        call self%shsrch_obj%new(pftcc, self%lims, shbarrier=self%shbarr)
-        call self%inplsrch_obj%new(pftcc, self%lims, shbarrier=self%shbarr)
+        lims(:,1)      = -p%trs
+        lims(:,2)      =  p%trs
+        lims_init(:,1) = -SHC_INPL_TRSHWDTH
+        lims_init(:,2) =  SHC_INPL_TRSHWDTH
+        call self%shcgrid%new
+        call self%shsrch_obj%new(  pftcc, lims, lims_init=lims_init, shbarrier=self%shbarr)
+        call self%inplsrch_obj%new(pftcc, lims, lims_init=lims_init, shbarrier=self%shbarr)
+        self%exists = .true.
         DebugPrint '>>> PRIME3D_SRCH::CONSTRUCTED NEW SIMPLE_PRIME3D_SRCH OBJECT'
     end subroutine new
 
@@ -776,10 +780,10 @@ contains
         integer, allocatable :: inpl_inds(:)
         real,    allocatable :: cxy(:), crxy(:), shvecs(:,:)
         type(ori) :: o
-        real      :: cc
+        real      :: cc, e3
         integer   :: i, ref, inpl_ind
-        if( self%dev )then
-            if( self%doshift )then
+        if( self%doshift )then
+            if( self%dev )then
                 call self%inpl_grid_srch(iptcl, inpl_inds, shvecs)
                 do i=self%nrefs,self%nrefs-self%npeaks+1,-1
                     ref = self%proj_space_inds( i )
@@ -798,15 +802,15 @@ contains
                         call self%shsrch_obj%set_indices(ref, iptcl, inpl_inds(i))
                         cxy = self%shsrch_obj%minimize(shvec=shvecs(i,:))
                         if( cxy(1) >= cc )then
+                            e3 = 360. - self%pftcc_ptr%get_rot(inpl_inds(i)) ! psi
+                            call o%e3set(e3)                                 ! stash psi
                             call o%set('corr', cxy(1))
                             call o%set_shift( cxy(2:3) )
                             call self%o_refs%set_ori( ref, o )
                         endif
                     endif
                 end do
-            endif
-        else
-            if( self%doshift )then
+            else            
                 do i=self%nrefs,self%nrefs-self%npeaks+1,-1
                     ref      = self%proj_space_inds( i )
                     o        = self%o_refs%get_ori( ref )
@@ -842,9 +846,29 @@ contains
         integer,                intent(in)    :: iptcl
         integer, allocatable,   intent(out)   :: inpl_inds(:)
         real,    allocatable,   intent(out)   :: shvecs(:,:)
-        real,    parameter :: TRSHWDTH  = 2.0 
-        real,    parameter :: TRSSTEPSZ = 0.2
-        integer, parameter :: INPLHWDTH = 2
+        integer           :: i, ref, istop, prev_rot
+        if( allocated(inpl_inds) ) deallocate(inpl_inds)
+        if( allocated(shvecs)    ) deallocate(shvecs)
+        istop = self%nrefs - self%npeaks + 1
+        allocate( shvecs(istop:self%nrefs,2), inpl_inds(istop:self%nrefs) )
+        do i=self%nrefs,istop,-1
+            ref      = self%proj_space_inds(i)
+            prev_rot = self%pftcc_ptr%get_roind( 360.-self%o_refs%e3get(ref) )
+            call self%shcgrid%srch( self%pftcc_ptr, ref, iptcl, self%nrots, prev_rot, inpl_inds(i), shvecs(i,:))
+        end do
+        DebugPrint '>>> PRIME3D_SRCH::FINISHED INPL GRID SEARCH'
+    end subroutine inpl_grid_srch
+
+    !>  \brief  implemented to test wheter we had an in-plane search deficiency
+    !!          test on HCN took it from 5.4 A to 4.8 A with Nspace=1000 and refine=no
+    !!          but it is too slow to be feasible. Implemented the above routine for
+    !!          SHC-based grid search in the plane followed by more focused
+    !!          continuous simplex refinement
+    subroutine inpl_grid_srch_exhaustive( self, iptcl, inpl_inds, shvecs )
+        class(prime3D_srch),    intent(inout) :: self
+        integer,                intent(in)    :: iptcl
+        integer, allocatable,   intent(out)   :: inpl_inds(:)
+        real,    allocatable,   intent(out)   :: shvecs(:,:)
         real    :: cc, cc_best, xsh, ysh
         integer :: i, j, jrot, ref, inpl_ind, istop, n_inpl_changes, n_trs_changes
         if( allocated(inpl_inds) ) deallocate(inpl_inds)
@@ -856,21 +880,21 @@ contains
             ref      = self%proj_space_inds( i )
             inpl_ind = self%pftcc_ptr%get_roind( 360.-self%o_refs%e3get(ref) )
             cc_best  = -1.0
-            do j=inpl_ind-INPLHWDTH,inpl_ind+INPLHWDTH
+            do j=inpl_ind-SHC_INPL_INPLHWDTH,inpl_ind+SHC_INPL_INPLHWDTH
                 jrot = cyci_1d([1,self%nrots], j)
-                xsh  = -TRSHWDTH
-                do while( xsh <= TRSHWDTH )
-                    ysh = -TRSHWDTH
-                    do while( ysh <= TRSHWDTH )
+                xsh  = -SHC_INPL_TRSHWDTH
+                do while( xsh <= SHC_INPL_TRSHWDTH )
+                    ysh = -SHC_INPL_TRSHWDTH
+                    do while( ysh <= SHC_INPL_TRSHWDTH )
                         cc = self%pftcc_ptr%corr(ref, iptcl, jrot, [xsh,ysh])
                         if( cc > cc_best )then
                             cc_best      = cc
                             inpl_inds(i) = jrot
                             shvecs(i,:)  = [xsh,ysh]
                         endif
-                        ysh = ysh + TRSSTEPSZ
+                        ysh = ysh + SHC_INPL_TRSSTEPSZ
                     end do
-                    xsh = xsh + TRSSTEPSZ
+                    xsh = xsh + SHC_INPL_TRSSTEPSZ
                 end do
             end do
             if( inpl_inds(i) /= inpl_ind )    n_inpl_changes = n_inpl_changes + 1
@@ -879,7 +903,7 @@ contains
         call self%a_ptr%set(iptcl, 'inpl_changes', real(n_inpl_changes)/real(self%nrefs - istop + 1))
         call self%a_ptr%set(iptcl, 'trs_changes',  real(n_inpl_changes)/real(self%nrefs - istop + 1))
         DebugPrint '>>> PRIME3D_SRCH::FINISHED INPL GRID SEARCH'
-    end subroutine inpl_grid_srch
+    end subroutine inpl_grid_srch_exhaustive
 
 
     !>  \brief  prepares reference indices for the search & fetches ctf
@@ -1453,6 +1477,7 @@ contains
             self%e_ptr => null()
             call self%o_peaks%kill
             call self%online_destruct
+            call self%shcgrid%kill
             if( allocated(self%state_exists) ) deallocate(self%state_exists)
             self%exists = .false.
         endif        

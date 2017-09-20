@@ -345,6 +345,8 @@ contains
         integer,                 intent(in) :: roind !<  in-plane rotation index
         real(sp) :: rot
         if( roind < 1 .or. roind > self%nrots )then
+            print *, 'roind: ', roind
+            print *, 'nrots: ', self%nrots
             call simple_stop( 'roind is out of range; get_rot; simple_polarft_corrcalc')
         endif
         rot = self%angtab(roind)
@@ -786,7 +788,7 @@ contains
         ! generate the complex shift transformation matrix
         shmat = cmplx(cos(argmat),sin(argmat))
         ! shift
-        if( self%with_ctf)then
+        if( self%with_ctf )then
             pft_ref_sh = (self%pfts_refs(iref,:,:) * self%ctfmats(iptcl,:,:)) * shmat
         else
             pft_ref_sh = self%pfts_refs(iref,:,:) * shmat

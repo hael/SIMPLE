@@ -19,16 +19,16 @@ end type  pftcc_opt
 abstract interface
 
     !>  \brief  is a constructor
-    subroutine generic_new( self, pftcc, lims, shbarrier, nrestarts, npeaks, maxits, vols) 
+    subroutine generic_new( self, pftcc, lims, lims_init, shbarrier, nrestarts, maxits) 
         use simple_projector,        only: projector
         use simple_polarft_corrcalc, only: polarft_corrcalc
         import :: pftcc_opt
         class(pftcc_opt),                   intent(inout) :: self
         class(polarft_corrcalc),    target, intent(in)    :: pftcc
         real,                               intent(in)    :: lims(:,:)
+        real,             optional,         intent(in)    :: lims_init(:,:)
         character(len=*), optional,         intent(in)    :: shbarrier
-        integer,          optional,         intent(in)    :: nrestarts, npeaks, maxits
-        class(projector), optional, target, intent(in)    :: vols(:)
+        integer,          optional,         intent(in)    :: nrestarts, maxits
     end subroutine generic_new
 
     !>  \brief  is a virtual setter
