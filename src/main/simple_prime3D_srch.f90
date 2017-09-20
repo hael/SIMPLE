@@ -22,8 +22,8 @@ real,    parameter :: FACTWEIGHTS_THRESH = 0.001        !< threshold for factori
 type prime3D_srch
     private
     class(polarft_corrcalc), pointer :: pftcc_ptr => null()      !< pointer to pftcc (corrcalc) object
-    class(oris), pointer             :: a_ptr     => null()      !< pointer to b%a (primary particle orientation table)
-    class(oris), pointer             :: e_ptr     => null()      !< pointer to b%e (reference orientations)
+    class(oris),             pointer :: a_ptr     => null()      !< pointer to b%a (primary particle orientation table)
+    class(oris),             pointer :: e_ptr     => null()      !< pointer to b%e (reference orientations)
     type(oris)                       :: o_refs                   !< projection directions search space
     type(oris)                       :: o_peaks                  !< orientations of best npeaks oris
     type(shc_inplane)                :: shcgrid                  !< in-plane grid search object
@@ -122,10 +122,10 @@ contains
     !>  \brief  is a constructor
     subroutine new( self, pftcc, a, e, p )
         use simple_params, only: params
+        class(prime3D_srch),             intent(inout) :: self   !< instance
         class(polarft_corrcalc), target, intent(inout) :: pftcc  !< correlator
         class(oris),             target, intent(in)    :: a      !< primary particle orientation table
         class(oris),             target, intent(in)    :: e      !< reference orientations
-        class(prime3D_srch),             intent(inout) :: self   !< instance
         class(params),                   intent(in)    :: p      !< parameters
         integer :: alloc_stat, nstates_eff
         real    :: lims(2,2), lims_init(2,2)
@@ -772,8 +772,9 @@ contains
         DebugPrint '>>> PRIME3D_SRCH::FINISHED HET SEARCH'
     end subroutine stochastic_srch_het
 
-    !>  \brief  executes the in-plane search for discrete mode
-    !! \param iptcl particle index
+    !>  \brief  executes the in-plane search. This improved routine took HCN
+    !!          from stall @ 5.4 to close to convergence @ 4.5 after 10 iters 
+    !!          refine=no with 1000 referecnes
     subroutine inpl_srch( self, iptcl )
         class(prime3D_srch), intent(inout) :: self
         integer,             intent(in)    :: iptcl
@@ -783,64 +784,37 @@ contains
         real      :: cc, e3
         integer   :: i, ref, inpl_ind
         if( self%doshift )then
-            if( self%dev )then
-                call self%inpl_grid_srch(iptcl, inpl_inds, shvecs)
-                do i=self%nrefs,self%nrefs-self%npeaks+1,-1
-                    ref = self%proj_space_inds( i )
-                    o   = self%o_refs%get_ori( ref )
-                    cc  = self%o_refs%get( ref, 'corr' )
-                    if( self%greedy_inpl )then
-                        call self%inplsrch_obj%set_indices(ref, iptcl)
-                        crxy = self%inplsrch_obj%minimize(irot=inpl_inds(i), shvec=shvecs(i,:))
-                        if( crxy(1) >= cc )then
-                            call o%set( 'corr', crxy(1) )
-                            call o%e3set( 360.-crxy(2) )
-                            call o%set_shift( crxy(3:4) )
-                            call self%o_refs%set_ori( ref, o )
-                        endif
-                    else
-                        call self%shsrch_obj%set_indices(ref, iptcl, inpl_inds(i))
-                        cxy = self%shsrch_obj%minimize(shvec=shvecs(i,:))
-                        if( cxy(1) >= cc )then
-                            e3 = 360. - self%pftcc_ptr%get_rot(inpl_inds(i)) ! psi
-                            call o%e3set(e3)                                 ! stash psi
-                            call o%set('corr', cxy(1))
-                            call o%set_shift( cxy(2:3) )
-                            call self%o_refs%set_ori( ref, o )
-                        endif
+            call self%inpl_grid_srch(iptcl, inpl_inds, shvecs)
+            do i=self%nrefs,self%nrefs-self%npeaks+1,-1
+                ref = self%proj_space_inds( i )
+                o   = self%o_refs%get_ori( ref )
+                cc  = self%o_refs%get( ref, 'corr' )
+                if( self%greedy_inpl )then
+                    call self%inplsrch_obj%set_indices(ref, iptcl)
+                    crxy = self%inplsrch_obj%minimize(irot=inpl_inds(i), shvec=shvecs(i,:))
+                    if( crxy(1) >= cc )then
+                        call o%set( 'corr', crxy(1) )
+                        call o%e3set( 360.-crxy(2) )
+                        call o%set_shift( crxy(3:4) )
+                        call self%o_refs%set_ori( ref, o )
                     endif
-                end do
-            else            
-                do i=self%nrefs,self%nrefs-self%npeaks+1,-1
-                    ref      = self%proj_space_inds( i )
-                    o        = self%o_refs%get_ori( ref )
-                    cc       = o%get('corr')
-                    inpl_ind = self%pftcc_ptr%get_roind( 360.-o%e3get() )
-                    if( self%greedy_inpl )then
-                        call self%inplsrch_obj%set_indices(ref, iptcl)
-                        crxy = self%inplsrch_obj%minimize(irot=inpl_ind)
-                        if( crxy(1) >= cc )then
-                            call o%set( 'corr', crxy(1) )
-                            call o%e3set( 360.-crxy(2) )
-                            call o%set_shift( crxy(3:4) )
-                            call self%o_refs%set_ori( ref, o )
-                        endif
-                    else
-                        call self%shsrch_obj%set_indices(ref, iptcl, inpl_ind)
-                        cxy = self%shsrch_obj%minimize()
-                        if( cxy(1) >= cc )then
-                            call o%set('corr', cxy(1))
-                            call o%set_shift( cxy(2:3) )
-                            call self%o_refs%set_ori( ref, o )
-                        endif
+                else
+                    call self%shsrch_obj%set_indices(ref, iptcl, inpl_inds(i))
+                    cxy = self%shsrch_obj%minimize(shvec=shvecs(i,:))
+                    if( cxy(1) >= cc )then
+                        e3 = 360. - self%pftcc_ptr%get_rot(inpl_inds(i)) ! psi
+                        call o%e3set(e3)                                 ! stash psi
+                        call o%set('corr', cxy(1))
+                        call o%set_shift( cxy(2:3) )
+                        call self%o_refs%set_ori( ref, o )
                     endif
-                end do
-            endif
+                endif
+            end do
         endif
         DebugPrint '>>> PRIME3D_SRCH::FINISHED INPL SEARCH'
     end subroutine inpl_srch
 
-    !>  \brief  experiemental
+    !>  \brief  discrete stochastic hill-climbing for the in-plane search
     subroutine inpl_grid_srch( self, iptcl, inpl_inds, shvecs )
         class(prime3D_srch),    intent(inout) :: self
         integer,                intent(in)    :: iptcl
@@ -904,7 +878,6 @@ contains
         call self%a_ptr%set(iptcl, 'trs_changes',  real(n_inpl_changes)/real(self%nrefs - istop + 1))
         DebugPrint '>>> PRIME3D_SRCH::FINISHED INPL GRID SEARCH'
     end subroutine inpl_grid_srch_exhaustive
-
 
     !>  \brief  prepares reference indices for the search & fetches ctf
     !! \param iptcl particle index
@@ -1147,10 +1120,10 @@ contains
     subroutine stochastic_weights( self, wcorr )
         class(prime3D_srch),     intent(inout) :: self
         real,                    intent(out)   :: wcorr
-        real,    allocatable :: corrs(:)
-        real                 :: ws(self%npeaks), logws(self%npeaks)
-        integer              :: order(self%npeaks), ipeak
-        logical              :: included(self%npeaks)
+        real, allocatable :: corrs(:)
+        real              :: ws(self%npeaks), logws(self%npeaks)
+        integer           :: order(self%npeaks), ipeak
+        logical           :: included(self%npeaks)
         if( self%npeaks == 1 )then
             call self%o_peaks%set(1,'ow',1.0)
             wcorr = self%o_peaks%get(1,'corr')

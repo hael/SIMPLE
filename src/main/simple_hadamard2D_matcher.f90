@@ -129,7 +129,7 @@ contains
         ! STOCHASTIC IMAGE ALIGNMENT
         allocate( primesrch2D(p%fromp:p%top) )
         do iptcl=p%fromp,p%top
-            call primesrch2D(iptcl)%new(p, pftcc)
+            call primesrch2D(iptcl)%new(pftcc, b%a, p)
         end do
         ! calculate CTF matrices
         if( p%ctf .ne. 'no' ) call pftcc%create_polar_ctfmats(b%a)
@@ -139,14 +139,14 @@ contains
             case('neigh')
                 !$omp parallel do default(shared) schedule(guided) private(iptcl) proc_bind(close)
                 do iptcl=p%fromp,p%top
-                    call primesrch2D(iptcl)%nn_srch(pftcc, iptcl, b%a, b%nnmat)
+                    call primesrch2D(iptcl)%nn_srch(iptcl, b%nnmat)
                 end do
                 !$omp end parallel do
             case DEFAULT
                 if( p%oritab .eq. '' )then
                     !$omp parallel do default(shared) schedule(guided) private(iptcl) proc_bind(close)
                     do iptcl=p%fromp,p%top
-                        call primesrch2D(iptcl)%exec_prime2D_srch(pftcc, iptcl, b%a, greedy=.true.)
+                        call primesrch2D(iptcl)%exec_prime2D_srch(iptcl, greedy=.true.)
                     end do
                     !$omp end parallel do
                 else
@@ -156,7 +156,7 @@ contains
                     endif
                     !$omp parallel do default(shared) schedule(guided) private(iptcl) proc_bind(close)
                     do iptcl=p%fromp,p%top
-                        call primesrch2D(iptcl)%exec_prime2D_srch(pftcc, iptcl, b%a, extr_bound=corr_thresh)
+                        call primesrch2D(iptcl)%exec_prime2D_srch(iptcl, extr_bound=corr_thresh)
                     end do
                     !$omp end parallel do
                 endif
