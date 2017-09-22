@@ -3,31 +3,45 @@ module simple_picker
 !$ use omp_lib
 !$ use omp_lib_kinds
 use simple_defs
-use simple_math,         only: sortmeans, round2even
-use simple_image,        only: image
-use simple_math,         only: euclid, hpsort
-!use simple_fileio      
-use simple_syslib,       only: alloc_errchk
+use simple_math,   only: sortmeans, round2even
+use simple_image,  only: image
+use simple_math,   only: euclid, hpsort   
+use simple_syslib, only: alloc_errchk
 implicit none
 
 public :: init_picker, exec_picker, kill_picker
 private
 
-integer,          parameter   :: MAXKMIT  = 20
-integer,          parameter   :: SPECNCLS = 10
-real,             parameter   :: BOXFRAC  = 0.5
+! PEAK STATS INDICES
+integer,          parameter   :: AVE_BG  = 1
+integer,          parameter   :: SDEV_BG = 2
+integer,          parameter   :: MED_BG  = 3
+integer,          parameter   :: MINV_BG = 4
+integer,          parameter   :: MAXV_BG = 5
+integer,          parameter   :: AVE_FG  = 6
+integer,          parameter   :: SDEV_FG = 7
+integer,          parameter   :: MED_FG  = 8
+integer,          parameter   :: MINV_FG = 9
+integer,          parameter   :: MAXV_FG = 10
+integer,          parameter   :: CC2REF  = 11
+integer,          parameter   :: SSCORE  = 12
+! OTHER PARAMS
+integer,          parameter   :: NSTAT   = 12
+integer,          parameter   :: MAXKMIT = 20
+real,             parameter   :: BOXFRAC = 0.5
 logical,          parameter   :: WRITESHRUNKEN=.false., DOPRINT=.true.
+! VARS
 type(image)                   :: micrograph, mic_shrunken, mic_shrunken_refine, ptcl_target
 type(image),      allocatable :: refs(:), refs_refine(:)
-logical,          allocatable :: selected_peak_positions(:), is_a_peak(:,:)
-real,             allocatable :: sxx(:), sxx_refine(:), corrmat(:,:), specscores(:,:)
-integer,          allocatable :: peak_positions(:,:), peak_positions_refined(:,:)
-integer,          allocatable :: refmat(:,:), backgr_positions(:,:)
+logical,          allocatable :: selected_peak_positions(:)
+real,             allocatable :: sxx(:), sxx_refine(:), corrmat(:,:)
+integer,          allocatable :: peak_positions(:,:), peak_positions_refined(:,:), refmat(:,:)
 character(len=:), allocatable :: micname, refsname
+real, allocatable             :: peak_stats(:,:)
 character(len=STDLEN)         :: boxname
 integer                       :: ldim(3), ldim_refs(3), ldim_refs_refine(3), ldim_shrink(3)
 integer                       :: ldim_shrink_refine(3), ntargets, nx, ny, nx_refine, ny_refine
-integer                       :: nrefs, npeaks, orig_box, lfny, ncls, nbackgr
+integer                       :: nrefs, npeaks, npeaks_sel, orig_box, lfny, nbackgr
 real                          :: smpd, smpd_shrunken, smpd_shrunken_refine, corrmax, corrmin
 real                          :: msk, msk_refine, lp, distthr
 logical                       :: rm_outliers = .true.
@@ -35,8 +49,8 @@ logical                       :: rm_outliers = .true.
 contains
 
     subroutine init_picker( micfname, refsfname, smpd_in, lp_in, distthr_in, rm_outliers_in )
-    use simple_fileio,   only:  remove_abspath,fname_new_ext
-    use simple_imgfile,  only: find_ldim_nptcls
+        use simple_fileio,   only:  remove_abspath,fname_new_ext
+        use simple_imgfile,  only: find_ldim_nptcls
         character(len=*),           intent(in) :: micfname, refsfname
         real,                       intent(in) :: smpd_in
         real,             optional, intent(in) :: lp_in, distthr_in
@@ -44,7 +58,7 @@ contains
         type(image) :: refimg
         integer     :: alloc_stat, ifoo, iref
         allocate(micname,  source=trim(micfname), stat=alloc_stat)
-        call alloc_errchk('picker;init, 2', alloc_stat)
+        call alloc_errchk('picker;init, 1', alloc_stat)
         allocate(refsname, source=trim(refsfname), stat=alloc_stat)
         call alloc_errchk('picker;init, 2', alloc_stat)
         boxname = remove_abspath( fname_new_ext(micname,'box') )   
@@ -119,25 +133,26 @@ contains
     subroutine exec_picker( boxname_out, nptcls_out )
         character(len=STDLEN), intent(out) :: boxname_out
         integer,               intent(out) :: nptcls_out
-        call extract_peaks_and_background
+        call extract_peaks
         call distance_filter
         call refine_positions
+        call gather_stats
+        ! call one_cluster_clustering
         if( rm_outliers ) call remove_outliers
         nptcls_out = count(selected_peak_positions)
         ! bring back coordinates to original sampling
         peak_positions_refined = nint(PICKER_SHRINK_REFINE)*peak_positions_refined
-        backgr_positions = nint(PICKER_SHRINK_REFINE)*backgr_positions
         call write_boxfile
         boxname_out = boxname
     end subroutine exec_picker
 
-    subroutine extract_peaks_and_background
-        real    :: means(2), corrs(nrefs), spec_thresh
+    subroutine extract_peaks
+        real    :: means(2), corrs(nrefs)
         integer :: xind, yind, alloc_stat, funit, iref, i, loc(1), ind
         integer, allocatable :: labels(:), target_positions(:,:)
         real,    allocatable :: target_corrs(:), spec(:)
         logical :: outside
-        write(*,'(a)') '>>> EXTRACTING PEAKS & BACKGROUND'
+        write(*,'(a)') '>>> EXTRACTING PEAKS'
         ntargets = 0
         do xind=0,nx,PICKER_OFFSET
             do yind=0,ny,PICKER_OFFSET
@@ -145,13 +160,12 @@ contains
             end do
         end do
         allocate( target_corrs(ntargets), target_positions(ntargets,2),&
-                  corrmat(0:nx,0:ny), refmat(0:nx,0:ny), is_a_peak(0:nx,0:ny), stat=alloc_stat )
+                  corrmat(0:nx,0:ny), refmat(0:nx,0:ny), stat=alloc_stat )
         call alloc_errchk( 'In: simple_picker :: gen_corr_peaks, 1', alloc_stat )
         target_corrs     = 0.
         target_positions = 0
         corrmat          = -1.
         refmat           = 0
-        is_a_peak        = .false.
         ntargets         = 0
         corrmax          = -1.
         corrmin          = 1.
@@ -176,77 +190,17 @@ contains
         end do
         call sortmeans(target_corrs, MAXKMIT, means, labels)
         npeaks = count(labels == 2)
-        allocate( peak_positions(npeaks,2), specscores(0:nx,0:ny), stat=alloc_stat)
+        allocate( peak_positions(npeaks,2), stat=alloc_stat)
         call alloc_errchk( 'In: simple_picker :: gen_corr_peaks, 2', alloc_stat )
         peak_positions = 0
-        specscores     = 0.0
-        ! store peak positions
         npeaks = 0
         do i=1,ntargets
             if( labels(i) == 2 )then
                 npeaks = npeaks + 1
                 peak_positions(npeaks,:) = target_positions(i,:)
-                is_a_peak(target_positions(i,1),target_positions(i,2)) = .true.
             endif
         end do
-        ! calculate spectral scores for background images
-        call ptcl_target%new(ldim_refs, smpd_shrunken)
-        do xind=0,nx,ldim_refs(1)/2
-            do yind=0,ny,ldim_refs(1)/2
-                if( is_a_peak(xind,yind) )then
-                    ! this is a box with signal
-                else
-                    ! this is a background candidate
-                    call mic_shrunken%window_slim([xind,yind], ldim_refs(1), ptcl_target, outside)
-                    call ptcl_target%fwd_ft
-                    spec = ptcl_target%spectrum('power')
-                    specscores(xind,yind) = sum(spec)
-                    call ptcl_target%set_ft(.false.)
-                    deallocate(spec)
-                endif
-            end do
-        end do
-        ! remove zero spectral scores
-        do xind=0,nx
-            do yind=0,ny
-                if( specscores(xind,yind) > 0.0 )then
-                    ! this is a valid measurement
-                    is_a_peak(xind,yind) = .false.
-                else
-                    ! this is not & we filter it out by flagging it as a peak
-                    is_a_peak(xind,yind) = .true.
-                endif
-            end do
-        end do
-        spec = pack(specscores, mask=.not. is_a_peak)
-        call hpsort(size(spec), spec)
-        ind = min(100,size(spec))
-        spec_thresh = spec(ind)
-        ! remove high SNR imgs
-        nbackgr = 0
-        do xind=0,nx,ldim_refs(1)/2
-            do yind=0,ny,ldim_refs(1)/2
-                if( specscores(xind,yind) >= spec_thresh )then
-                    ! this is a high SNR peak, remove it 
-                    is_a_peak(xind,yind) = .true.
-                else
-                    nbackgr = nbackgr + 1
-                endif
-            end do
-        end do
-        allocate( backgr_positions(nbackgr,2), stat=alloc_stat)
-        call alloc_errchk( 'In: simple_picker :: gen_corr_peaks, 3', alloc_stat )
-        nbackgr = 0
-        do xind=0,nx,ldim_refs(1)/2
-            do yind=0,ny,ldim_refs(1)/2
-                if( is_a_peak(xind,yind) )then
-                else
-                    nbackgr = nbackgr + 1
-                    backgr_positions(nbackgr,:) = [xind,yind]
-                endif
-            end do
-        end do
-    end subroutine extract_peaks_and_background
+    end subroutine extract_peaks
 
     subroutine distance_filter
         integer :: ipeak, jpeak, ipos(2), jpos(2), alloc_stat, loc(1)
@@ -276,23 +230,25 @@ contains
                 selected_peak_positions = .false.
             end where
         end do
-        write(*,'(a,1x,I5)') 'peak positions left after distance filtering: ', count(selected_peak_positions)
+        npeaks_sel = count(selected_peak_positions)
+        write(*,'(a,1x,I5)') 'peak positions left after distance filtering: ', npeaks_sel
     end subroutine distance_filter
 
     subroutine refine_positions
-        integer :: ipeak, xrange(2), yrange(2), xind, yind, ref
-        real    :: corr, prev_corr, target_corr
+        integer :: ipeak, xrange(2), yrange(2), xind, yind, ref, cnt
+        real    :: corr, target_corr
         logical :: outside
-        write(*,'(a)') '>>> REFINING POSITIONS'
+        write(*,'(a)') '>>> REFINING POSITIONS & GATHERING FIRST STATS'
+        allocate( peak_stats(npeaks_sel,NSTAT) )
         ! bring back coordinates to refinement sampling
         allocate( peak_positions_refined(npeaks,2), source=nint(PICKER_SHRINK/PICKER_SHRINK_REFINE)*peak_positions)
-        backgr_positions = nint(PICKER_SHRINK/PICKER_SHRINK_REFINE)*backgr_positions
         call ptcl_target%new(ldim_refs_refine, smpd_shrunken_refine)
+        cnt = 0
         do ipeak=1,npeaks
             if( selected_peak_positions(ipeak) )then
+                cnt = cnt + 1
                 ! best match in crude first scan
-                ref       = refmat(peak_positions(ipeak,1),peak_positions(ipeak,2))
-                prev_corr = corrmat(peak_positions(ipeak,1),peak_positions(ipeak,2))
+                ref = refmat(peak_positions(ipeak,1),peak_positions(ipeak,2))
                 ! refinement range
                 call srch_range(peak_positions_refined(ipeak,:))
                 ! extract image, correlate, find peak
@@ -307,6 +263,7 @@ contains
                         endif
                     end do
                 end do
+                peak_stats(cnt,CC2REF) = corr
             endif
         end do
 
@@ -322,9 +279,71 @@ contains
 
     end subroutine refine_positions
 
+    subroutine gather_stats
+        use simple_stat, only: normalize_minmax
+        integer           :: ipeak, cnt, istat
+        logical           :: outside
+        real, allocatable :: spec(:)
+        write(*,'(a)') '>>> GATHERING REMAINING STATS'
+        call ptcl_target%new(ldim_refs_refine, smpd_shrunken_refine)
+        cnt = 0
+        do ipeak=1,npeaks
+            if( selected_peak_positions(ipeak) )then
+                cnt = cnt + 1
+                call mic_shrunken_refine%window_slim(peak_positions_refined(ipeak,:),&
+                    &ldim_refs_refine(1), ptcl_target, outside)
+                spec = ptcl_target%spectrum('power')
+                peak_stats(cnt,SSCORE) = sum(spec)/real(size(spec))
+                call ptcl_target%stats('background', peak_stats(cnt,AVE_BG),&
+                    &peak_stats(cnt,SDEV_BG), peak_stats(cnt,MAXV_BG),&
+                    &peak_stats(cnt,MINV_BG), med=peak_stats(cnt,MED_BG) )
+                call ptcl_target%stats('foreground', peak_stats(cnt,AVE_FG),&
+                    &peak_stats(cnt,SDEV_FG), peak_stats(cnt,MAXV_FG),&
+                    &peak_stats(cnt,MINV_FG), med=peak_stats(cnt,MED_FG) )
+            endif
+        end do
+        ! min/max normalise to get all vars on equal footing
+        do istat=1,NSTAT
+            call normalize_minmax(peak_stats(:,istat))
+        end do
+    end subroutine gather_stats
+
+    subroutine one_cluster_clustering
+        use simple_stat, only: median_dev_from_dmat
+        real, allocatable :: dmat(:,:)
+        integer           :: i_median, i, j, nnincl, cnt, ipeak
+        real              :: dmed, ddev
+        allocate(dmat(npeaks_sel,npeaks_sel), source=0.)
+        do i=1,npeaks_sel - 1
+            do j=i + 1,npeaks_sel
+                dmat(i,j) = euclid(peak_stats(i,:), peak_stats(j,:))
+                dmat(j,i) = dmat(i,j)
+            end do
+        end do
+        call median_dev_from_dmat(dmat, i_median, dmed, ddev)
+
+        print *, 'median distance:   ', dmed
+        print *, 'cluster deviation: ', ddev
+
+        cnt = 0
+        do ipeak=1,npeaks
+            if( selected_peak_positions(ipeak) )then
+                cnt = cnt + 1
+                if( dmat(i_median,cnt) <=  dmed + 0.2 * ddev )then
+                    ! we are keeping this one
+                else
+                    ! we are removing this one
+                    selected_peak_positions(ipeak) = .false.
+                endif
+            endif
+        end do
+        npeaks_sel = count(selected_peak_positions)
+        write(*,'(a,1x,I5)') 'peak positions left after one cluster clustering: ', npeaks_sel
+    end subroutine one_cluster_clustering
+
     subroutine remove_outliers
-        real,    allocatable :: sig_spec(:), noise_spec(:), spec(:)
-        real,    allocatable :: ssnr(:), res(:), pscores(:)
+        real,    allocatable :: spec(:)
+        real,    allocatable :: pscores(:)
         integer, allocatable :: labels(:), labels_bin(:)
         integer :: nsig, nnoise, ipeak, xind, yind, k, n
         integer, parameter :: NMEANS=10
@@ -342,16 +361,10 @@ contains
                 call ptcl_target%fwd_ft
                 spec = ptcl_target%spectrum('power')
                 pscores(nsig) = sum(spec)
-                if( allocated(sig_spec) )then
-                    sig_spec = sig_spec + spec
-                else
-                    allocate(sig_spec(size(spec)), source=spec)
-                endif
                 call ptcl_target%set_ft(.false.)
                 deallocate(spec)
             endif
         end do
-        sig_spec = sig_spec/real(nsig)
         if( nsig > NMEANS )then
             call sortmeans(pscores, MAXKMIT, means, labels)
             call sortmeans(means,   MAXKMIT, means_bin, labels_bin)
@@ -378,7 +391,6 @@ contains
             end do
             write(*,'(a,1x,I5)') 'peak positions left after outlier exclusion: ', count(selected_peak_positions)
         endif
-        write(*,'(a,1x,f7.3)') '>>> SPECTRAL SCORE:', sum(sig_spec)/real(size(sig_spec))
     end subroutine remove_outliers
 
     subroutine write_boxfile
@@ -396,26 +408,6 @@ contains
              call fileio_errmsg('picker; write_boxfile end', iostat)
     end subroutine write_boxfile
 
-    subroutine write_backgr_coords
-        use simple_fileio, only: fopen, fclose, fileio_errmsg
-        integer :: funit, xind, yind, iostat
-        if(.not.fopen(funit, status='REPLACE', action='WRITE', file='background.box',iostat=iostat))&
-             call fileio_errmsg('picker; write_backgr_coords ', iostat)
-        nbackgr = 0
-        do xind=0,nx,ldim_refs_refine(1)/2
-            do yind=0,ny,ldim_refs_refine(1)/2
-                if( is_a_peak(xind,yind) )then
-                else
-                    nbackgr = nbackgr + 1
-                    write(funit,'(I7,I7,I7,I7,I7)') backgr_positions(nbackgr,1),&
-                    backgr_positions(nbackgr,2), orig_box, orig_box, -3
-                endif
-            end do
-        end do
-        if(.not.fclose(funit,iostat=iostat))&
-             call fileio_errmsg('picker; write_backgr_coords end', iostat)
-    end subroutine write_backgr_coords
-
     subroutine kill_picker
         integer :: iref, alloc_stat
         if( allocated(micname) )then
@@ -423,16 +415,13 @@ contains
             call mic_shrunken%kill
             call mic_shrunken_refine%kill
             call ptcl_target%kill
-            deallocate(selected_peak_positions,is_a_peak,sxx,sxx_refine,corrmat,specscores, stat=alloc_stat)
-            call alloc_errchk('picker kill, 1', alloc_stat)
-            deallocate(peak_positions,peak_positions_refined,refmat,backgr_positions,micname,refsname, stat=alloc_stat)
-            call alloc_errchk('picker kill, 2', alloc_stat)
+            deallocate(selected_peak_positions,sxx,sxx_refine,corrmat,peak_positions,&
+                &peak_positions_refined,refmat,micname,refsname,peak_stats)
             do iref=1,nrefs
                 call refs(iref)%kill
                 call refs_refine(iref)%kill
             end do
-            deallocate(refs, refs_refine, stat=alloc_stat)
-            call alloc_errchk('picker; kill 3', alloc_stat)
+            deallocate(refs, refs_refine)
         endif
     end subroutine kill_picker
 

@@ -97,8 +97,6 @@ type, extends(commander_base) :: scale_stk_parts_commander
     procedure :: execute      => exec_scale_stk_parts
 end type scale_stk_parts_commander
 
-integer, parameter :: KEYLEN=32
-
 contains
 
     subroutine exec_unblur_ctffind_distr( self, cline )

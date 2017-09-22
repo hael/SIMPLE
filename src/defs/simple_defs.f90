@@ -43,6 +43,9 @@ type :: ctfplan
     character(len=STDLEN) :: flag=''                 !< flag: <mul|flip|no>
 end type ctfplan
 
+! command line
+integer, parameter :: MAXNKEYS=100, KEYLEN=32
+
 ! constants for picker
 real,    parameter :: PICKER_SHRINK        = 4.      !< picker shrink factor
 real,    parameter :: PICKER_SHRINK_REFINE = 2.      !< picker shrink factor, peak refine step

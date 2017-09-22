@@ -176,6 +176,7 @@ contains
         call chdict%push('outstk',        'output image stack')
         call chdict%push('outstk2',       'output image stack 2nd')
         call chdict%push('outvol',        'output volume{outvol.ext}')
+        call chdict%push('pcontrast',     'particle contrast(black|white){black}')
         call chdict%push('pdbfile',       'input PDB formatted file')
         call chdict%push('pgrp',          'point-group symmetry(cn|dn|t|o|i)')
         call chdict%push('pgrp_known',    'point-group known a priori(yes|no){no}')
@@ -264,10 +265,11 @@ contains
     end subroutine print_cmd_key_descr
 
     subroutine print_cmdline( keys_required, keys_optional, fhandle, distr )
-        use simple_strings, only: str_has_substr
-        character(len=*), optional, intent(in) :: keys_required(:), keys_optional(:)
-        integer,          optional, intent(in) :: fhandle
-        logical,          optional, intent(in) :: distr
+        use simple_strings, only: str_has_substr, lexSort
+        character(len=KEYLEN), optional, intent(in) :: keys_required(:), keys_optional(:)
+        integer,               optional, intent(in) :: fhandle
+        logical,               optional, intent(in) :: distr
+        character(len=KEYLEN), allocatable :: sorted_keys(:)
         integer :: nreq, nopt
         logical :: ddistr
         ddistr = .false.
@@ -287,7 +289,10 @@ contains
             if( nreq > 0 )then
                 write(*,'(a)') ''
                 write(*,'(a)') 'REQUIRED'
-                call chdict%print_key_val_pairs(keys_required, fhandle)
+                allocate(sorted_keys(nreq), source=keys_required)
+                call lexSort(sorted_keys)
+                call chdict%print_key_val_pairs(sorted_keys, fhandle)
+                deallocate(sorted_keys)
             endif
         endif
         ! print optionals
@@ -297,7 +302,10 @@ contains
             if( nopt > 0 )then
                 write(*,'(a)') ''
                 write(*,'(a)') 'OPTIONAL'
-                call chdict%print_key_val_pairs(keys_optional, fhandle)
+                allocate(sorted_keys(nopt), source=keys_optional)
+                call lexSort(sorted_keys)
+                call chdict%print_key_val_pairs(sorted_keys, fhandle)
+                deallocate(sorted_keys)
             endif
         endif
         write(*,'(a)') ''

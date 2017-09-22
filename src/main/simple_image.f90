@@ -3816,15 +3816,15 @@ contains
     !! \param med median
     !! \param errout error flag
     !!
-    subroutine stats( self, which, ave, sdev, var, msk, med, errout )
+    subroutine stats( self, which, ave, sdev, maxv, minv, msk, med, errout )
         class(image), intent(inout)    :: self
         character(len=*),  intent(in)  :: which
-        real,              intent(out) :: ave, sdev, var
+        real,              intent(out) :: ave, sdev, maxv, minv
         real,    optional, intent(in)  :: msk
         real,    optional, intent(out) :: med
         logical, optional, intent(out) :: errout
         integer           :: i, j, k, npix, alloc_stat, minlen
-        real              :: ci, cj, ck, mskrad, e
+        real              :: ci, cj, ck, mskrad, e, var
         logical           :: err, didft, background
         real, allocatable :: pixels(:)
         ! FT
@@ -3877,11 +3877,11 @@ contains
                                 pixels(npix) = self%rmat(i,j,k)
                             endif
                         endif
-                        ck = ck+1
+                        ck = ck + 1.
                     end do
-                    cj = cj+1.
+                    cj = cj + 1.
                 end do
-                ci = ci+1.
+                ci = ci + 1.
             end do
         else
             ! 2d
@@ -3901,11 +3901,13 @@ contains
                             pixels(npix) = self%rmat(i,j,1)
                         endif
                     endif
-                    cj = cj+1.
+                    cj = cj + 1.
                 end do
-                ci = ci+1.
+                ci = ci + 1.
             end do
         endif
+        maxv = maxval(pixels(:npix))
+        minv = minval(pixels(:npix))
         call moment( pixels(:npix), ave, sdev, var, err )
         if( present(med) ) med  = median_nocopy(pixels(:npix))
         deallocate( pixels )
@@ -6339,7 +6341,7 @@ contains
                 complex, allocatable :: fplane_simple(:,:), fplane_frealix(:,:)
                 integer              :: i, j, k, cnt, lfny, ldim(3)
                 real                 :: input, msk, ave, sdev, var, med, xyz(3), pow
-                real                 :: imcorr, recorr, corr, corr_lp
+                real                 :: imcorr, recorr, corr, corr_lp, maxv, minv
                 real, allocatable    :: pcavec1(:), pcavec2(:), spec(:), res(:)
                 real                 :: smpd=2.
                 logical              :: passed, test(6)
@@ -6487,7 +6489,7 @@ contains
                 write(*,'(a)') '**info(simple_image_unit_test, part 6): testing stats'
                 passed = .false.
                 call img%gauran( 5., 15. )
-                call img%stats( 'foreground', ave, sdev, var, 40., med )
+                call img%stats( 'foreground', ave, sdev, maxv, minv, 40., med )
                 if( ave >= 4. .and. ave <= 6. .and. sdev >= 14. .and.&
                 sdev <= 16. .and. med >= 4. .and. med <= 6. ) passed = .true.
                 if( .not. passed )  stop 'stats test failed'

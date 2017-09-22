@@ -159,7 +159,7 @@ contains
         real,             intent(in) :: smpd
         type(image)                  :: img, img_pad
         integer                      :: n, i, ldim(3)
-        real                         :: ave, sdev, var, med
+        real                         :: ave, sdev, maxv, minv, med
         call find_ldim_nptcls(fname2pad, ldim, n)
         ldim(3) = 1
         call raise_exception_imgfile( n, ldim, 'pad_imgfile' )
@@ -175,7 +175,7 @@ contains
                     call img%pad(img_pad) ! FT state preserved
                 else
                     ! get background statistics
-                    call img%stats('background', ave, sdev, var, med=med)
+                    call img%stats('background', ave, sdev, maxv, minv, med=med)
                     call img%pad(img_pad, backgr=med) ! FT state preserved
                 endif
                 call img_pad%write(fname, i)
@@ -473,11 +473,11 @@ contains
     !! \param ave,sdev,var,med output statistics
     !! \param msk mask threshold
     !!
-    subroutine stats_imgfile( fname, which, ave, sdev, var, med, msk )
+    subroutine stats_imgfile( fname, which, ave, sdev, maxv, minv, med, msk )
         character(len=*), intent(in)  :: fname, which
-        real,             intent(out) :: ave, sdev, var, med
+        real,             intent(out) :: ave, sdev, maxv, minv, med
         real, optional,   intent(in)  :: msk
-        real        :: ave_loc, sdev_loc, var_loc, med_loc
+        real        :: ave_loc, sdev_loc, var_loc, med_loc, minv_loc, maxv_loc
         type(image) :: img
         integer     :: i, n, ldim(3)
         call find_ldim_nptcls(fname, ldim, n)
@@ -487,20 +487,23 @@ contains
         write(*,'(a)') '>>> CALCULATING STACK STATISTICS'
         ave  = 0.
         sdev = 0.
-        var  = 0.
+        maxv = 0.
+        minv = 0.
         med  = 0.
         do i=1,n
             call progress(i,n)
             call img%read(fname,i)
-            call img%stats(which, ave_loc, sdev_loc, var_loc, msk=msk, med=med_loc)
+            call img%stats(which, ave_loc, sdev_loc, maxv_loc, minv_loc, msk=msk, med=med_loc)
             ave  = ave  + ave_loc
             sdev = sdev + sdev_loc
-            var  = var  + var_loc
+            maxv = maxv + maxv_loc
+            minv = minv + minv_loc
             med  = med  + med_loc
         end do
         ave  = ave/real(n)
         sdev = sdev/real(n)
-        var  = var/real(n)
+        maxv = maxv/real(n)
+        minv = minv/real(n)
         med  = med/real(n)
         call img%kill
     end subroutine stats_imgfile

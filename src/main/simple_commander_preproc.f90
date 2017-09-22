@@ -707,6 +707,7 @@ contains
                 call cline_projvol%set('outstk', trim(p%stk)  )
                 call cline_projvol%set('oritab', trim(ORIFILE))
                 call cline_projvol%set('smpd',   PICKER_SHRINK)
+                call cline_projvol%set('neg',    'no'         )
                 call xprojvol%execute(cline_projvol)
             endif
             ! expand in in-plane rotation

@@ -38,7 +38,7 @@ contains
         integer                       :: io_stat, partsz, hrs, mins, secs, ipart, nparts
         real                          :: rtpi, tot_time_sec
         logical                       :: sstream
-        integer, parameter            :: MAXNKEYS = 30
+        integer, parameter            :: MAXENVKEYS = 30
         call self%kill
         sstream = .false.
         if( present(stream) ) sstream = stream
@@ -64,7 +64,7 @@ contains
                 stop 'Unsupported split_mode'
         end select
         ! retrieve environment variables from file
-        call self%qdescr%new(MAXNKEYS)
+        call self%qdescr%new(MAXENVKEYS)
         call parse_env_file(self%qdescr) ! parse .env file
         ! deal with time
         if( self%qdescr%isthere('time_per_image') )then

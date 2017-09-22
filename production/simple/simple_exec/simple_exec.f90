@@ -1,8 +1,8 @@
 ! executes the shared-memory parallelised programs in SIMPLE
 program simple_exec
-use simple_defs
 use simple_cmdline, only: cmdline, cmdline_err
 use simple_strings, only: str_has_substr
+use simple_defs
 use simple_gen_doc
 use simple_commander_checks
 use simple_commander_comlin
@@ -135,9 +135,7 @@ type(merge_similarities_commander)   :: xmerge_similarities
 type(split_pairs_commander)          :: xsplit_pairs
 type(split_commander)                :: xsplit
 
-    
 ! OTHER DECLARATIONS
-integer, parameter    :: MAXNKEYS=100, KEYLEN=32
 character(len=KEYLEN) :: keys_required(MAXNKEYS)='', keys_optional(MAXNKEYS)=''
 character(len=STDLEN) :: arg, prg, entire_line
 type(cmdline)         :: cline
@@ -563,12 +561,11 @@ select case(prg)
         keys_optional(1) = 'nthr'
         keys_optional(2) = 'vol1'
         keys_optional(3) = 'stk'
-        keys_optional(4) = 'neg'
+        keys_optional(4) = 'pcontrast'
         ! parse command line
         if( describe ) call print_doc_makepickrefs
         call cline%parse(keys_required(:1), keys_optional(:4))
         ! set defaults
-        if( .not. cline%defined('neg') ) call cline%set('neg', 'yes')
         if( .not. cline%defined('pgrp')) call cline%set('pgrp', 'd1')
         ! execute
         call xmakepickrefs%execute(cline)

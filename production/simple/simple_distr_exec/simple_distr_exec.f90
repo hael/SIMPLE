@@ -1,9 +1,9 @@
 ! executes the parallel (or distributed workflows) of SIMPLE
 program simple_distr_exec
-use simple_defs
 use simple_cmdline,      only: cmdline,cmdline_err
 use simple_strings,      only: str_has_substr
 use simple_fileio,       only: extract_abspath
+use simple_defs
 use simple_gen_doc
 use simple_commander_stream_wflows
 use simple_commander_distr_wflows
@@ -37,7 +37,6 @@ type(het_ensemble_commander)             :: xhet_ensemble
 type(scale_stk_parts_commander)          :: xscale_stk_parts
 
 ! OTHER DECLARATIONS
-integer, parameter    :: MAXNKEYS=100, KEYLEN=32
 character(len=KEYLEN) :: keys_required(MAXNKEYS)='', keys_optional(MAXNKEYS)=''
 character(len=STDLEN) :: arg, prg, entire_line
 type(cmdline)         :: cline
