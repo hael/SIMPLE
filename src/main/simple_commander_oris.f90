@@ -604,13 +604,13 @@ contains
                 write(*,'(a,1x,f8.2)') 'MEDIAN  POPULATION        :', popmed
                 write(*,'(a,1x,f8.2)') 'AVERAGE POPULATION        :', popave
                 write(*,'(a,1x,f8.2)') 'SDEV OF POPULATION        :', popsdev
-                ! produce a histogram based on clustering into ndiscrete (default 100) even directions
+                ! produce a histogram based on clustering into NSPACE_BALANCE even directions
                 ! first, generate a mask based on state flag and w
                 ptcl_mask = b%a%included(consider_w=.true.)
-                allocate(clustering(noris), clustszs(p%ndiscrete))
-                call osubspace%new(p%ndiscrete)
+                allocate(clustering(noris), clustszs(NSPACE_BALANCE))
+                call osubspace%new(NSPACE_BALANCE)
                 call osubspace%spiral(p%nsym, p%eullims)
-                call binwrite_oritab('even_pdirs'//METADATEXT, osubspace, [1,p%ndiscrete])
+                call binwrite_oritab('even_pdirs'//METADATEXT, osubspace, [1,NSPACE_BALANCE])
                 do iptcl=1,b%a%get_noris()
                     if( ptcl_mask(iptcl) )then
                         o_single = b%a%get_ori(iptcl)
@@ -620,7 +620,7 @@ contains
                     endif
                 end do
                 ! determine cluster sizes
-                do icls=1,p%ndiscrete
+                do icls=1,NSPACE_BALANCE
                     clustszs(icls) = real(count(clustering == icls))
                 end do
                 szmax = maxval(clustszs)
@@ -630,7 +630,7 @@ contains
                     scale = scale - 0.001
                 end do
                 write(*,'(a)') '>>> HISTOGRAM OF SUBSPACE POPULATIONS (FROM NORTH TO SOUTH)'
-                do icls=1,p%ndiscrete
+                do icls=1,NSPACE_BALANCE
                     write(*,*) nint(clustszs(icls)),"|",('*', j=1,nint(clustszs(icls)*scale))  
                 end do
             endif

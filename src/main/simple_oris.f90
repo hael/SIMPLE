@@ -2338,7 +2338,7 @@ contains
             ! get class population
             pop = self%get_pop(i, 'class', consider_w=.true.)
             ! zero case
-            if( pop < 1 )cycle
+            if( pop < 1 ) cycle
             ! get indices of particles in class subject to weight not zero
             inds = self%get_pinds(i, 'class', consider_w=.true.)
             if( pop <= popmax )then ! all inclded

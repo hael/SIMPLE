@@ -185,7 +185,7 @@ contains
                 stop 'maskfile does not exists in cwd'
             endif
         else if( p%automsk .eq. 'yes' )then
-            if( .not. cline%defined('thresh') )then
+            if( .not. cline%defined('thres') )then
                 write(*,*) 'Need a pixel threshold > 0. for the binarisation'
                 write(*,*) 'Procedure for obtaining thresh:'
                 write(*,*) '(1) postproc vol without bfac or automsk'
