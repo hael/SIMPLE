@@ -566,7 +566,8 @@ select case(prg)
         if( describe ) call print_doc_makepickrefs
         call cline%parse(keys_required(:1), keys_optional(:4))
         ! set defaults
-        if( .not. cline%defined('pgrp')) call cline%set('pgrp', 'd1')
+        if( .not. cline%defined('pcontrast')) call cline%set('pcontrast', 'black')
+        if( .not. cline%defined('pgrp')     ) call cline%set('pgrp',      'd1'   )
         ! execute
         call xmakepickrefs%execute(cline)
     case( 'pick' )

@@ -217,6 +217,7 @@ type :: image
     procedure          :: real_corr_prenorm
     procedure          :: rank_corr
     procedure          :: real_dist
+    procedure          :: entropy
     procedure          :: fsc
     procedure          :: get_nvoxshell
     procedure          :: get_res
@@ -4502,6 +4503,33 @@ contains
         !$omp end parallel do
         r = sqrt(r)
     end function real_dist
+
+    !> \brief calculates the entropy of an image
+    real function entropy( self, nbins )
+        class(image),      intent(inout) :: self
+        integer, optional, intent(in)    :: nbins
+        integer              :: nnbins, cnt_i
+        real                 :: p_i
+        real,    allocatable :: means(:), pixvals(:)
+        integer, allocatable :: labels(:)
+        integer, parameter   :: MAXITS=20
+        integer :: i, npix
+        nnbins = self%ldim(1)
+        if( present(nbins) ) nnbins = nbins
+        allocate(means(nnbins), source=0.)
+        npix    = product(self%ldim)
+        pixvals = pack(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)), mask=.true.)
+        call sortmeans(pixvals, MAXITS, means, labels)
+        entropy = 0.0
+        do i=1,nnbins
+            cnt_i = count(labels == i)
+            if( cnt_i > 0 )then
+                p_i = real(cnt_i) / real(nnbins)
+                entropy = entropy + p_i * log(p_i)
+            endif
+        end do
+        entropy = -entropy
+    end function entropy
 
     !> \brief fsc is for calculation of Fourier ring/shell correlation
     !! \param self1 image object

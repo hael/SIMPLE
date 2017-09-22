@@ -138,7 +138,7 @@ type :: params
     character(len=STDLEN) :: outvol=''            !< output volume{outvol.ext}
     character(len=STDLEN) :: ctffind_doc=''       !< per-micrograph CTF parameters to transfer
     character(len=STDLEN) :: pcastk='pcavecinstk.bin'
-    character(len=STDLEN) :: pcontrast='black'    !< particle contrast(black|white){black}
+    character(len=STDLEN) :: pcontrast='white'    !< particle contrast(black|white){white}
     character(len=STDLEN) :: pdbfile=''           !< PDB file
     character(len=STDLEN) :: pdfile='pdfile.bin'
     character(len=STDLEN) :: pgrp='c1'            !< point-group symmetry(cn|dn|t|o|i)
