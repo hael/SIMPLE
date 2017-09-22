@@ -4514,18 +4514,20 @@ contains
         integer, allocatable :: labels(:)
         integer, parameter   :: MAXITS=20
         integer :: i, npix
+        real    :: logtwo
         nnbins = self%ldim(1)
         if( present(nbins) ) nnbins = nbins
         allocate(means(nnbins), source=0.)
         npix    = product(self%ldim)
         pixvals = pack(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)), mask=.true.)
         call sortmeans(pixvals, MAXITS, means, labels)
+        logtwo  = log(2.)
         entropy = 0.0
         do i=1,nnbins
             cnt_i = count(labels == i)
             if( cnt_i > 0 )then
                 p_i = real(cnt_i) / real(nnbins)
-                entropy = entropy + p_i * log(p_i)
+                entropy = entropy + p_i * (log(p_i)/logtwo)
             endif
         end do
         entropy = -entropy

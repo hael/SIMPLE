@@ -138,7 +138,7 @@ type :: params
     character(len=STDLEN) :: outvol=''            !< output volume{outvol.ext}
     character(len=STDLEN) :: ctffind_doc=''       !< per-micrograph CTF parameters to transfer
     character(len=STDLEN) :: pcastk='pcavecinstk.bin'
-    character(len=STDLEN) :: pcontrast='white'    !< particle contrast(black|white){white}
+    character(len=STDLEN) :: pcontrast='black'    !< particle contrast(black|white){black}
     character(len=STDLEN) :: pdbfile=''           !< PDB file
     character(len=STDLEN) :: pdfile='pdfile.bin'
     character(len=STDLEN) :: pgrp='c1'            !< point-group symmetry(cn|dn|t|o|i)
@@ -486,6 +486,7 @@ contains
         call check_carg('order',          self%order)
         call check_carg('outside',        self%outside)
         call check_carg('pad',            self%pad)
+        call check_carg('pcontrast',      self%pcontrast)
         call check_carg('pgrp',           self%pgrp)
         call check_carg('pgrp_known',     self%pgrp_known)
         call check_carg('phaseplate',     self%phaseplate)
@@ -1061,19 +1062,6 @@ contains
         ! set logical pick flag
         self%l_pick = .false.
         if( self%dopick .eq. 'yes' ) self%l_pick = .true.
-        ! set neg for makepickrefs based on pcontrast
-        if( cline%defined('pcontrast') .and. cline%defined('neg') )&
-            &stop 'neg and pcontrast flags cannot simultaneously be defined; simple_params :: new'
-        select case(self%pcontrast)
-            case('white')
-                self%neg = 'no'
-            case('black')
-                self%neg = 'yes'
-            case DEFAULT
-                stop 'unsupported pcontrast flag; use white or black; simple_params :: new'
-        end select
-
-
 !>>> END, IMAGE-PROCESSING-RELATED
 
         write(*,'(A)') '>>> DONE PROCESSING PARAMETERS'

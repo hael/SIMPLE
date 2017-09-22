@@ -166,12 +166,11 @@ contains
     end subroutine exec_simimgs
 
     subroutine exec_simmovie( self, cline )
-        use simple_ori,         only: ori
-        use simple_math,        only: deg2rad
-        use simple_image,       only: image
-        use simple_rnd,         only: ran3
-        use simple_procimgfile, only: stats_imgfile
-        use simple_ctf,         only: ctf
+        use simple_ori,   only: ori
+        use simple_math,  only: deg2rad
+        use simple_image, only: image
+        use simple_rnd,   only: ran3
+        use simple_ctf,   only: ctf
         class(simmovie_commander), intent(inout) :: self
         class(cmdline),            intent(inout) :: cline
         type(params)         :: p
@@ -204,19 +203,8 @@ contains
         endif
         write(*,'(a)') '>>> GENERATING PARTICLE POSITIONS'
         ptcl_positions = gen_ptcl_pos(p%nptcls, p%xdim, p%ydim, p%box)
-        ! calculate stack background stats
-        inquire(file=p%stk, exist=here)
-        if( .not. here )then
-            write(*,*) 'file does not exis:', p%stk
-            stop
-        endif
-        call stats_imgfile(p%stk, 'background', ave, sdev, var, med, p%msk)
-        write(*,'(a)') '>>> STACK BACKGROUND STATISTICS'
-        write(*,'(a,1x,f7.4)') 'ave: ', ave
-        write(*,'(a,1x,f7.4)') 'sdev:', sdev
-        write(*,'(a,1x,f7.4)') 'med: ', med
-        ! make a base image by inserting the projections at ptcl_positions and setting the background to med
-        call base_image%new([p%xdim,p%ydim,1], p%smpd, backgr=med)
+        ! make a base image by inserting the projections at ptcl_positions
+        call base_image%new([p%xdim,p%ydim,1], p%smpd)
         do i=1,p%nptcls
             call b%img%read(p%stk, i)
             call b%img%insert(ptcl_positions(i,:), base_image)
