@@ -326,6 +326,7 @@ type :: params
     real    :: msk=0.              !< mask radius(in pixels)
     real    :: mul=1.              !< origin shift multiplication factor{1}
     real    :: mw=0.               !< molecular weight(in kD)
+    real    :: ndev=2.0            !< # deviations in one-cluster clustering
     real    :: neigh=0.2
     real    :: nsig=2.5            !< # sigmas
     real    :: optlims(7,2)=0.
@@ -692,6 +693,7 @@ contains
         call check_rarg('msk',            self%msk)
         call check_rarg('mul',            self%mul)
         call check_rarg('mw',             self%mw)
+        call check_rarg('ndev',           self%ndev)
         call check_rarg('neigh',          self%neigh)
         call check_rarg('nsig',           self%nsig)
         call check_rarg('outer',          self%outer)

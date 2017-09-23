@@ -323,9 +323,10 @@ select case(prg)
         keys_optional(26)  = 'rm_outliers'
         keys_optional(27)  = 'nsig'
         keys_optional(28)  = 'dopick'
+        keys_optional(29)  = 'ndev'
         ! parse command line
         if( describe ) call print_doc_preproc
-        call cline%parse(keys_required(:5), keys_optional(:28))
+        call cline%parse(keys_required(:5), keys_optional(:29))
         ! set defaults
         if( .not. cline%defined('trs')             ) call cline%set('trs',                5.)
         if( .not. cline%defined('lpstart')         ) call cline%set('lpstart',           15.)
@@ -583,7 +584,7 @@ select case(prg)
         keys_optional(1) = 'nthr'
         keys_optional(2) = 'lp'
         keys_optional(3) = 'thres'
-        keys_optional(4) = 'rm_outliers'
+        keys_optional(4) = 'ndev'
         ! parse command line
         if( describe ) call print_doc_pick
         call cline%parse(keys_required(:3), keys_optional(:4))
@@ -1809,9 +1810,10 @@ select case(prg)
         keys_optional(22) = 'ctfreslim'
         keys_optional(23) = 'dfclose'
         keys_optional(24) = 'dffar'
+        keys_optional(25) = 'stats'
         ! parse command line
         if( describe ) call print_doc_stackops
-        call cline%parse( keys_required(:2),keys_optional(:24) )
+        call cline%parse( keys_required(:2),keys_optional(:25) )
         ! execute
         call xstackops%execute(cline)
 

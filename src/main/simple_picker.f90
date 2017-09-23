@@ -13,23 +13,15 @@ public :: init_picker, exec_picker, kill_picker
 private
 
 ! PEAK STATS INDICES
-integer,          parameter   :: AVE_BG  = 1
-integer,          parameter   :: SDEV_BG = 2
-integer,          parameter   :: MED_BG  = 3
-integer,          parameter   :: MINV_BG = 4
-integer,          parameter   :: MAXV_BG = 5
-integer,          parameter   :: AVE_FG  = 6
-integer,          parameter   :: SDEV_FG = 7
-integer,          parameter   :: MED_FG  = 8
-integer,          parameter   :: MINV_FG = 9
-integer,          parameter   :: MAXV_FG = 10
-integer,          parameter   :: CC2REF  = 11
-integer,          parameter   :: SSCORE  = 12
+integer,          parameter   :: CC2REF   = 1
+integer,          parameter   :: SDEV     = 2
+integer,          parameter   :: DYNRANGE = 3
+integer,          parameter   :: SSCORE   = 4
 ! OTHER PARAMS
-integer,          parameter   :: NSTAT   = 12
+integer,          parameter   :: NSTAT   = 4
 integer,          parameter   :: MAXKMIT = 20
 real,             parameter   :: BOXFRAC = 0.5
-logical,          parameter   :: WRITESHRUNKEN=.false., DOPRINT=.true.
+logical,          parameter   :: WRITESHRUNKEN = .false., DOPRINT = .true.
 ! VARS
 type(image)                   :: micrograph, mic_shrunken, mic_shrunken_refine, ptcl_target
 type(image),      allocatable :: refs(:), refs_refine(:)
@@ -43,18 +35,17 @@ integer                       :: ldim(3), ldim_refs(3), ldim_refs_refine(3), ldi
 integer                       :: ldim_shrink_refine(3), ntargets, nx, ny, nx_refine, ny_refine
 integer                       :: nrefs, npeaks, npeaks_sel, orig_box, lfny, nbackgr
 real                          :: smpd, smpd_shrunken, smpd_shrunken_refine, corrmax, corrmin
-real                          :: msk, msk_refine, lp, distthr
+real                          :: msk, msk_refine, lp, distthr, ndev
 logical                       :: rm_outliers = .true.
 
 contains
 
-    subroutine init_picker( micfname, refsfname, smpd_in, lp_in, distthr_in, rm_outliers_in )
+    subroutine init_picker( micfname, refsfname, smpd_in, lp_in, distthr_in, ndev_in )
         use simple_fileio,   only:  remove_abspath,fname_new_ext
         use simple_imgfile,  only: find_ldim_nptcls
         character(len=*),           intent(in) :: micfname, refsfname
         real,                       intent(in) :: smpd_in
-        real,             optional, intent(in) :: lp_in, distthr_in
-        character(len=*), optional, intent(in) :: rm_outliers_in
+        real,             optional, intent(in) :: lp_in, distthr_in, ndev_in
         type(image) :: refimg
         integer     :: alloc_stat, ifoo, iref
         allocate(micname,  source=trim(micfname), stat=alloc_stat)
@@ -65,10 +56,8 @@ contains
         smpd    = smpd_in
         lp      = 20.0
         if( present(lp_in) ) lp = lp_in
-        rm_outliers = .true.
-        if( present(rm_outliers_in) )then
-            if( rm_outliers_in .eq. 'no' ) rm_outliers = .false.
-        endif
+        ndev    = 2.0
+        if( present(ndev_in)) ndev = ndev_in
         ! read micrograph
         call find_ldim_nptcls(micname, ldim, ifoo)
         call micrograph%new(ldim, smpd)
@@ -137,8 +126,8 @@ contains
         call distance_filter
         call refine_positions
         call gather_stats
-        ! call one_cluster_clustering
-        if( rm_outliers ) call remove_outliers
+        call one_cluster_clustering
+        ! if( rm_outliers ) call remove_outliers
         nptcls_out = count(selected_peak_positions)
         ! bring back coordinates to original sampling
         peak_positions_refined = nint(PICKER_SHRINK_REFINE)*peak_positions_refined
@@ -283,6 +272,7 @@ contains
         use simple_stat, only: normalize_minmax
         integer           :: ipeak, cnt, istat
         logical           :: outside
+        real              :: ave, maxv, minv
         real, allocatable :: spec(:)
         write(*,'(a)') '>>> GATHERING REMAINING STATS'
         call ptcl_target%new(ldim_refs_refine, smpd_shrunken_refine)
@@ -294,12 +284,8 @@ contains
                     &ldim_refs_refine(1), ptcl_target, outside)
                 spec = ptcl_target%spectrum('power')
                 peak_stats(cnt,SSCORE) = sum(spec)/real(size(spec))
-                call ptcl_target%stats('background', peak_stats(cnt,AVE_BG),&
-                    &peak_stats(cnt,SDEV_BG), peak_stats(cnt,MAXV_BG),&
-                    &peak_stats(cnt,MINV_BG), med=peak_stats(cnt,MED_BG) )
-                call ptcl_target%stats('foreground', peak_stats(cnt,AVE_FG),&
-                    &peak_stats(cnt,SDEV_FG), peak_stats(cnt,MAXV_FG),&
-                    &peak_stats(cnt,MINV_FG), med=peak_stats(cnt,MED_FG) )
+                call ptcl_target%stats('background', ave, peak_stats(cnt,SDEV), maxv, minv)
+                peak_stats(cnt,DYNRANGE) = maxv - minv
             endif
         end do
         ! min/max normalise to get all vars on equal footing
@@ -309,7 +295,7 @@ contains
     end subroutine gather_stats
 
     subroutine one_cluster_clustering
-        use simple_stat, only: median_dev_from_dmat
+        use simple_stat, only: dev_from_dmat
         real, allocatable :: dmat(:,:)
         integer           :: i_median, i, j, nnincl, cnt, ipeak
         real              :: dmed, ddev
@@ -320,16 +306,12 @@ contains
                 dmat(j,i) = dmat(i,j)
             end do
         end do
-        call median_dev_from_dmat(dmat, i_median, dmed, ddev)
-
-        print *, 'median distance:   ', dmed
-        print *, 'cluster deviation: ', ddev
-
+        call dev_from_dmat( dmat, i_median, ddev )
         cnt = 0
         do ipeak=1,npeaks
             if( selected_peak_positions(ipeak) )then
                 cnt = cnt + 1
-                if( dmat(i_median,cnt) <=  dmed + 0.2 * ddev )then
+                if( dmat(i_median,cnt) <=  ndev * ddev )then
                     ! we are keeping this one
                 else
                     ! we are removing this one
@@ -340,58 +322,6 @@ contains
         npeaks_sel = count(selected_peak_positions)
         write(*,'(a,1x,I5)') 'peak positions left after one cluster clustering: ', npeaks_sel
     end subroutine one_cluster_clustering
-
-    subroutine remove_outliers
-        real,    allocatable :: spec(:)
-        real,    allocatable :: pscores(:)
-        integer, allocatable :: labels(:), labels_bin(:)
-        integer :: nsig, nnoise, ipeak, xind, yind, k, n
-        integer, parameter :: NMEANS=10
-        real    :: means(NMEANS), means_bin(2)
-        logical :: outside
-        n = count(selected_peak_positions)
-        allocate(pscores(n))
-        nsig = 0
-        call ptcl_target%new(ldim_refs_refine, smpd_shrunken_refine)
-        do ipeak=1,npeaks
-            if( selected_peak_positions(ipeak) )then
-                nsig = nsig + 1      
-                call mic_shrunken_refine%window_slim(peak_positions_refined(ipeak,:),&
-                    &ldim_refs_refine(1), ptcl_target, outside)
-                call ptcl_target%fwd_ft
-                spec = ptcl_target%spectrum('power')
-                pscores(nsig) = sum(spec)
-                call ptcl_target%set_ft(.false.)
-                deallocate(spec)
-            endif
-        end do
-        if( nsig > NMEANS )then
-            call sortmeans(pscores, MAXKMIT, means, labels)
-            call sortmeans(means,   MAXKMIT, means_bin, labels_bin)
-            if( DOPRINT )then
-                write(*,'(a)') '>>> SIGNAL STATISTICS'
-                do k=1,NMEANS
-                    write(*,*) 'quanta: ', k, 'mean: ', means(k), 'pop: ', count(labels == k), 'bin: ', labels_bin(k)
-                end do
-            endif
-            ! delete the outliers
-            nsig = 0
-            do ipeak=1,npeaks
-                if( selected_peak_positions(ipeak) )then
-                    nsig = nsig + 1
-                    ! remove outliers
-                    if( labels(nsig) == 1 .or. labels(nsig) == NMEANS )then
-                        selected_peak_positions(ipeak) = .false.
-                    endif
-                    ! remove too high contrast stuff
-                    if( labels_bin(labels(nsig)) == 2 )then
-                        selected_peak_positions(ipeak) = .false.
-                    endif
-                endif
-            end do
-            write(*,'(a,1x,I5)') 'peak positions left after outlier exclusion: ', count(selected_peak_positions)
-        endif
-    end subroutine remove_outliers
 
     subroutine write_boxfile
         use simple_fileio, only: fopen, fclose, fileio_errmsg

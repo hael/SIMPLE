@@ -491,12 +491,13 @@ contains
             spectrum = img%spectrum('power')
             spec = sum(spectrum)/real(size(spectrum))
             call os%set(i, 'ave',   ave)
-            call os%set(i, 'sdev',  ave)
-            call os%set(i, 'maxv',  ave)
-            call os%set(i, 'minv',  ave)
+            call os%set(i, 'sdev',  sdev)
+            call os%set(i, 'maxv',  maxv)
+            call os%set(i, 'minv',  minv)
             call os%set(i, 'med',   med)
             call os%set(i, 'ent',   ent)
             call os%set(i, 'spec',  spec)
+            call os%set(i, 'dynrange', maxv - minv)
         end do
         call img%kill
     end subroutine stats_imgfile

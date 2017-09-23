@@ -15,6 +15,7 @@ type(preproc_stream_commander)           :: xpreproc_stream
 type(unblur_ctffind_distr_commander)     :: xunblur_ctffind_distr
 type(unblur_distr_commander)             :: xunblur_distr
 type(unblur_tomo_movies_distr_commander) :: xunblur_tomo_distr
+type(powerspecs_distr_commander)         :: xpowerspecs_distr
 type(ctffind_distr_commander)            :: xctffind_distr
 type(pick_distr_commander)               :: xpick_distr
 ! PRIME2D
@@ -99,9 +100,10 @@ select case(prg)
         keys_optional(27) = 'nsig'
         keys_optional(28) = 'dopick'
         keys_optional(29) = 'fromm'
+        keys_optional(30) = 'ndev'
         ! parse command line
         if( describe ) call print_doc_preproc
-        call cline%parse(keys_required(:7), keys_optional(:29))
+        call cline%parse(keys_required(:7), keys_optional(:30))
         ! set defaults
         if( .not. cline%defined('trs')             ) call cline%set('trs',                5.)
         if( .not. cline%defined('lpstart')         ) call cline%set('lpstart',           15.)
@@ -256,6 +258,33 @@ select case(prg)
         ! execute
         call xunblur_tomo_distr%execute(cline)
 
+    ! GENERATE POWERSPECTRA
+
+    case( 'powerspecs' )
+        !==Program powerspecs
+        !
+        ! <powerspecs/begin>is a program for generating powerspectra from a stack or filetable<powerspecs/end>
+        !
+        ! set required keys
+        keys_required(1) = 'smpd'
+        keys_required(2) = 'fbody'
+        keys_required(3) = 'filetab'
+        keys_required(4) = 'nparts'
+        ! set optional keys
+        keys_optional(1) = 'pspecsz'
+        keys_optional(2) = 'speckind'
+        keys_optional(3) = 'lp'
+        keys_optional(4) = 'clip'
+        ! parse command line
+        if( describe ) call print_doc_powerspecs
+        call cline%parse(keys_required(:4), keys_optional(:4))
+        ! set defaults
+        call cline%set('nthr', 1.0)
+        if( .not. cline%defined('pspecsz') ) call cline%set('pspecsz', 512.)
+        if( .not. cline%defined('clip')    ) call cline%set('clip',    256.)
+        ! execute
+        call xpowerspecs_distr%execute(cline)
+
     ! CTFFIND
 
     case( 'ctffind' )
@@ -307,7 +336,7 @@ select case(prg)
         keys_optional(1) = 'nthr'
         keys_optional(2) = 'lp'
         keys_optional(3) = 'thres'
-        keys_optional(4) = 'rm_outliers'
+        keys_optional(4) = 'ndev'
         ! parse command line
         if( describe ) call print_doc_pick
         call cline%parse(keys_required(:4), keys_optional(:4))

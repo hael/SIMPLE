@@ -4512,7 +4512,7 @@ contains
         real                 :: p_i
         real,    allocatable :: means(:), pixvals(:)
         integer, allocatable :: labels(:)
-        integer, parameter   :: MAXITS=20
+        integer, parameter   :: MAXITS=5
         integer :: i, npix
         real    :: logtwo
         nnbins = self%ldim(1)

@@ -10,8 +10,8 @@ use simple_cmdline,        only: cmdline
 use simple_params,         only: params
 use simple_build,          only: build
 use simple_commander_base, only: commander_base
-use simple_strings,        only: int2str, int2str_pad
 use simple_imgfile,        only: find_ldim_nptcls
+use simple_qsys_funs,      only: qsys_job_finished
 implicit none
 
 public :: preproc_commander
@@ -78,7 +78,6 @@ contains
         use simple_oris,         only: oris
         use simple_ori,          only: ori
         use simple_math,         only: round2even
-        use simple_qsys_funs,    only: qsys_job_finished
         class(preproc_commander), intent(inout) :: self
         class(cmdline),           intent(inout) :: cline
         type(ctffind_iter)      :: cfiter
@@ -379,9 +378,16 @@ contains
         tmp = cmplx(1.,0.)
         call tmp%bp(0.,p%lp,0.)
         call tmp%ft2img('real', mask)
-        call mask%write('resolution_mask.mrc', 1)
+        if( p%l_distr_exec )then
+            if( p%part == 1 ) call mask%write('resolution_mask.mrc', 1)
+        else
+            call mask%write('resolution_mask.mrc', 1)
+        endif
         ! do the work
         if( cline%defined('stk') )then
+            if( p%l_distr_exec )then
+                stop 'stk input incompatible with distributed exection; commander_preproc :: powerspecs'
+            endif
             call b%img%new(p%ldim, p%smpd) ! img re-generated (to account for possible non-square)
             tmp = 0.0
             do iimg=1,p%nptcls
@@ -395,15 +401,25 @@ contains
             call read_filetable(p%filetab, imgnames)
             nimgs = size(imgnames)
             DebugPrint  'read the img filenames'
+            if( cline%defined('numlen') )then
+                ! nothing to do
+            else
+                p%numlen = len(int2str(nimgs))
+            endif
             ! get logical dimension of micrographs
             call find_ldim_nptcls(imgnames(1), ldim, ifoo)
             ldim(3) = 1 ! to correct for the stupide 3:d dim of mrc stacks
             DebugPrint  'logical dimension: ', ldim
             call b%img%new(ldim, p%smpd) ! img re-generated (to account for possible non-square)
             ! determine loop range
-            iimg_start = 1
-            if( cline%defined('startit') ) iimg_start = p%startit
-            iimg_stop  = nimgs
+            if( p%l_distr_exec )then
+                iimg_start = p%fromp
+                iimg_stop  = p%top
+            else
+                iimg_start = 1
+                if( cline%defined('startit') ) iimg_start = p%startit
+                iimg_stop  = nimgs
+            endif
             DebugPrint  'fromto: ', iimg_start, iimg_stop
             ! do it
             tmp = 0.0
@@ -414,10 +430,16 @@ contains
                 call b%img%read(imgnames(iimg), 1, rwaction='READ')
                 powspec = b%img%mic2spec(p%pspecsz, trim(adjustl(p%speckind)))
                 call powspec%clip(tmp)
-                call tmp%write(trim(adjustl(p%fbody))//p%ext, iimg)
-                call progress(iimg, nimgs)
+                if( p%l_distr_exec )then
+                    call tmp%write(trim(adjustl(p%fbody))//'_pspec'//int2str_pad(iimg,p%numlen)//p%ext)
+                    call progress(iimg, nimgs)
+                else
+                    call tmp%write(trim(adjustl(p%fbody))//p%ext, iimg)
+                    call progress(iimg, nimgs)
+                endif
             end do
         endif
+        call qsys_job_finished( p, 'simple_commander_preproc :: exec_powerspecs' )
         ! end gracefully
         call simple_end('**** SIMPLE_POWERSPECS NORMAL STOP ****')
     end subroutine exec_powerspecs
@@ -427,7 +449,7 @@ contains
         use simple_oris,        only: oris
         use simple_ori,         only: ori
         use simple_math,        only: round2even
-        use simple_qsys_funs,   only: qsys_job_finished
+        
         class(unblur_commander), intent(inout) :: self
         class(cmdline),          intent(inout) :: cline !< command line input
         type(params)      :: p
@@ -502,7 +524,6 @@ contains
     subroutine exec_ctffind( self, cline )
         use simple_ctffind_iter, only: ctffind_iter
         use simple_oris,         only: oris
-        use simple_qsys_funs,    only: qsys_job_finished
         class(ctffind_commander), intent(inout) :: self
         class(cmdline),           intent(inout) :: cline  !< command line input
         type(params)                       :: p

@@ -15,10 +15,10 @@ end type pick_iter
 contains
 
     subroutine iterate( self, cline, p, movie_counter, moviename_intg, boxfile, nptcls_out)
-        use simple_params,       only: params
-        use simple_oris,         only: oris
-        use simple_cmdline,      only: cmdline
-        use simple_fileio      , only: file_exists
+        use simple_params,  only: params
+        use simple_oris,    only: oris
+        use simple_cmdline, only: cmdline
+        use simple_fileio,  only: file_exists
         class(pick_iter),      intent(inout) :: self
         class(cmdline),        intent(in)    :: cline
         class(params),         intent(inout) :: p
@@ -33,10 +33,9 @@ contains
         write(*,'(a,1x,a)') '>>> PICKING MICROGRAPH:', trim(adjustl(moviename_intg))
         if( cline%defined('thres') )then
             call init_picker(moviename_intg, p%refs, p%smpd, lp_in=p%lp,&
-            distthr_in=p%thres, rm_outliers_in=p%rm_outliers)
+                &distthr_in=p%thres, ndev_in=p%ndev)
         else
-            call init_picker(moviename_intg, p%refs, p%smpd, lp_in=p%lp,&
-            rm_outliers_in=p%rm_outliers)
+            call init_picker(moviename_intg, p%refs, p%smpd, lp_in=p%lp, ndev_in=p%ndev)
         endif
         call exec_picker(boxfile, nptcls_out)
         call kill_picker

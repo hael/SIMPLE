@@ -898,6 +898,12 @@ contains
             call acf_imgfile(p%stk, p%outstk)
             goto 999
         endif
+        ! produce image statistics
+        if( p%stats .eq. 'yes' )then
+            call stats_imgfile(p%stk, b%a)
+            call b%a%write('image_statistics.txt')
+            goto 999
+        endif
         ! create frame averages
         if( p%nframesgrp > 0 )then
             call frameavg_imgfile(p%stk, p%outstk, p%nframesgrp, p%smpd)

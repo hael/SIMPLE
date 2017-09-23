@@ -17,6 +17,7 @@ implicit none
 public :: unblur_ctffind_distr_commander
 public :: unblur_distr_commander
 public :: unblur_tomo_movies_distr_commander
+public :: powerspecs_distr_commander
 public :: ctffind_distr_commander
 public :: pick_distr_commander
 public :: makecavgs_distr_commander
@@ -44,6 +45,10 @@ type, extends(commander_base) :: unblur_tomo_movies_distr_commander
   contains
     procedure :: execute      => exec_unblur_tomo_movies_distr
 end type unblur_tomo_movies_distr_commander
+type, extends(commander_base) :: powerspecs_distr_commander
+  contains
+    procedure :: execute      => exec_powerspecs_distr
+end type powerspecs_distr_commander
 type, extends(commander_base) :: ctffind_distr_commander
   contains
     procedure :: execute      => exec_ctffind_distr
@@ -243,6 +248,33 @@ contains
         call qsys_cleanup(p_master)
         call simple_end('**** SIMPLE_DISTR_UNBLUR_TOMO_MOVIES NORMAL STOP ****')
     end subroutine exec_unblur_tomo_movies_distr
+
+    subroutine exec_powerspecs_distr( self, cline )
+        class(powerspecs_distr_commander), intent(inout) :: self
+        class(cmdline),                    intent(inout) :: cline
+        type(qsys_env) :: qenv
+        type(params)   :: p_master
+        type(chash)    :: job_descr
+        ! seed the random number generator
+        call seed_rnd
+        ! output command line executed
+        write(*,'(a)') '>>> COMMAND LINE EXECUTED'
+        write(*,*) trim(cmdline_glob)
+        ! make master parameters
+        p_master = params(cline, checkdistr=.false.)
+        p_master%nptcls = nlines(p_master%filetab)
+        if( p_master%nparts > p_master%nptcls ) stop 'nr of partitions (nparts) mjust be < number of entries in filetable'
+        ! setup the environment for distributed execution
+        call qenv%new(p_master)
+        ! prepare job description
+        call cline%gen_job_descr(job_descr)
+        ! schedule & clean
+        call qenv%gen_scripts_and_schedule_jobs(p_master, job_descr)
+        ! clean
+        call qsys_cleanup(p_master)
+        ! end gracefully
+        call simple_end('**** SIMPLE_DISTR_POWERSPECS NORMAL STOP ****')
+    end subroutine exec_powerspecs_distr
 
     subroutine exec_ctffind_distr( self, cline )
         class(ctffind_distr_commander), intent(inout) :: self
