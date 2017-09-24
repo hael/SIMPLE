@@ -127,6 +127,7 @@ contains
         call chdict%push('lpstart',       'start low-pass limit(in A){15}')
         call chdict%push('lpstop',        'stop low-pass limit(in A){8}')
         call chdict%push('masscen',       'center using binarisation and mass centering(yes|no){no}')
+        call chdict%push('match_filt',    'matched filter on (yes|no){yes}')
         call chdict%push('maxits',        'maximum # iterations')
         call chdict%push('minp',          'minimum cluster population')
         call chdict%push('mirr',          'mirror(no|x|y){no}')

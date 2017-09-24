@@ -321,13 +321,15 @@ contains
                 call b%a%add_shift2class(icls, -xyz(1:2))
             endif
         endif
-        ! anisotropic matched filter
-        frc = b%projfrcs%get_frc(icls, p%box)
-        if( any(frc > 0.143) )then
-            call b%img%fwd_ft ! needs to be here in case the shift was never applied (above)
-            filter = fsc2optlp(frc)
-            call b%img%shellnorm()
-            call b%img%apply_filter(filter)
+        if( p%l_match_filt )then
+            ! anisotropic matched filter
+            frc = b%projfrcs%get_frc(icls, p%box)
+            if( any(frc > 0.143) )then
+                call b%img%fwd_ft ! needs to be here in case the shift was never applied (above)
+                filter = fsc2optlp(frc)
+                call b%img%shellnorm()
+                call b%img%apply_filter(filter)
+            endif
         endif
         ! ensure we are in real-space before clipping 
         call b%img%bwd_ft 
@@ -336,7 +338,7 @@ contains
         ! apply mask
         if( p%l_envmsk .and. p%automsk .eq. 'cavg' )then
             ! automasking
-            call b%mskimg%apply_2Denvmask22Dref(b%img_match, icls)
+            call b%mskimg%apply_2Denvmask22Dref(b%img_match)
             if( p%l_chunk_distr )then
                 call b%img_match%write(trim(p%chunktag)//'automasked_refs'//p%ext, icls)
             else if( (p%l_distr_exec .and. p%part.eq.1) .or. (.not. p%l_distr_exec) )then

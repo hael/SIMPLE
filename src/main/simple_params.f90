@@ -49,6 +49,7 @@ type :: params
     character(len=3)      :: kmeans='yes'
     character(len=3)      :: local='no'
     character(len=3)      :: masscen='no'         !< center using binarisation and mass centering(yes|no){no}
+    character(len=3)      :: match_filt='yes'     !< matched filter on (yes|no){yes}
     character(len=3)      :: merge='no'
     character(len=3)      :: mirr='no'            !< mirror(no|x|y){no}
     character(len=3)      :: neg='no'             !< invert contrast of images(yes|no)
@@ -353,6 +354,7 @@ type :: params
     logical :: cyclic(7)       = .false.
     logical :: l_distr_exec    = .false.
     logical :: l_chunk_distr   = .false.
+    logical :: l_match_filt    = .true.
     logical :: doshift         = .false.
     logical :: l_envmsk        = .false.
     logical :: l_autoscale     = .false.
@@ -475,6 +477,7 @@ contains
         call check_carg('label',          self%label)
         call check_carg('local',          self%local)
         call check_carg('masscen',        self%masscen)
+        call check_carg('match_filt',     self%match_filt)
         call check_carg('merge',          self%merge)
         call check_carg('mirr',           self%mirr)
         call check_carg('msktype',        self%msktype)
@@ -950,6 +953,13 @@ contains
         endif
         ! set default outer mask value
         if( .not. cline%defined('outer') ) self%outer = self%msk
+        ! matched filter flag
+        select case(self%match_filt)
+            case('no')
+                self%l_match_filt = .false.
+            case DEFAULT
+                self%l_match_filt = .true.
+        end select
         ! checks automask related values
         self%l_envmsk = .false.
         if( self%automsk .ne. 'no' ) self%l_envmsk = .true.

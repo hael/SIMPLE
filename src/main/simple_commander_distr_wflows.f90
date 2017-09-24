@@ -952,7 +952,7 @@ contains
         iter = p_master%startit-1
         corr = -1.
         do
-            iter = iter+1
+            iter = iter + 1
             str_iter = int2str_pad(iter,3)
             write(*,'(A)')   '>>>'
             write(*,'(A,I6)')'>>> ITERATION ', iter
@@ -1218,7 +1218,7 @@ contains
         ! MAIN LOOP
         iter = p_master%startit-1
         do
-            iter = iter+1
+            iter = iter + 1
             str_iter = int2str_pad(iter,3)
             write(*,'(A)')   '>>>'
             write(*,'(A,I6)')'>>> ITERATION ', iter

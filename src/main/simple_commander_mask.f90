@@ -116,7 +116,7 @@ contains
         p%outstk = add2fbody(p%stk, p%ext, 'msk')
         do iptcl=1,p%nptcls
             call b%img%read(p%stk, iptcl)
-            call b%mskimg%apply_2Denvmask22Dref(b%img, iptcl)
+            call b%mskimg%apply_2Denvmask22Dref(b%img)
             call b%img%write(p%outstk, iptcl)
         end do
         ! end gracefully

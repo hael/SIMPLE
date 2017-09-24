@@ -387,10 +387,10 @@ contains
         class(het_ensemble_commander), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
         ! constants
-        integer,               parameter :: MAXITS_INIT=50
-        character(len=32),     parameter :: HETFBODY    = 'hetrep_'
-        character(len=32),     parameter :: REPEATFBODY = 'hetdoc_'
-        character(len=32),     parameter :: VOLFBODY    = 'recvol_state'
+        integer,            parameter :: MAXITS_INIT=50
+        character(len=32),  parameter :: HETFBODY    = 'hetrep_'
+        character(len=32),  parameter :: REPEATFBODY = 'hetdoc_'
+        character(len=32),  parameter :: VOLFBODY    = 'recvol_state'
         ! distributed commanders
         type(prime3D_distr_commander) :: xprime3D_distr
         type(recvol_distr_commander)  :: xrecvol_distr

@@ -20,7 +20,7 @@ contains
         class(params), intent(in) :: p
         character(len=:), allocatable :: rec_base_str, rho_base_str, rec_base_str_part, rho_base_str_part
         integer, parameter :: NUMLEN_STATE = 2, NUMLEN_ITER = 3
-        integer :: istate
+        integer :: istate, iter
         ! single files
         call del_file('FOO')
         call del_file('fort.0')
@@ -58,6 +58,11 @@ contains
             call del_file(rho_base_str//'_even'//p%ext)
             call del_file(rho_base_str//'_odd'//p%ext)
             deallocate(rec_base_str,rho_base_str,rec_base_str_part,rho_base_str_part)
+        end do
+        ! iter numbered files
+        do iter=1,p%maxits
+            call del_file('VOLASSEMBLE_STATE'//int2str_pad(istate,NUMLEN_STATE)&
+                &//'ITER'//int2str_pad(iter,NUMLEN_ITER))
         end do
     end subroutine qsys_cleanup
 
