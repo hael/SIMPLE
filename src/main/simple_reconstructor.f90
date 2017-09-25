@@ -1,19 +1,36 @@
 ! 3D reconstruction from projections using convolution interpolation (gridding)
-#include "simple_lib.f08"
+
 module simple_reconstructor
 !$ use omp_lib
 !$ use omp_lib_kinds
-use simple_defs
-use simple_fftw3
-use simple_image,      only: image
+use, intrinsic :: iso_c_binding
+#include "simple_lib.f08"
+
+!!import functions
+use simple_fftw3,      only: fftwf_alloc_real, fftwf_free
+use simple_imghead,    only: find_ldim_nptcls
+use simple_timer,      only: tic, toc, timer_int_kind
+!! import classes
 use simple_ctf,        only: ctf
-use simple_syslib,     only: alloc_errchk
-use simple_imgfile,    only: find_ldim_nptcls
+use simple_ori,        only: ori
+use simple_oris,       only: oris
+use simple_params,     only: params
+use simple_sym,        only: sym
 use simple_kbinterpol, only: kbinterpol
+use simple_image,      only: image
 implicit none
 
 public :: reconstructor
 private
+ !! CTF flag type
+    enum, bind(c) 
+        enumerator :: CTFFLAG_NO = 0, CTFFLAG_YES = 1, CTFFLAG_MUL = 2,  CTFFLAG_FLIP=3
+    end enum
+
+    type :: CTFFLAGTYPE
+        private
+        integer(kind(CTFFLAG_NO)) :: flag=CTFFLAG_NO
+    end type CTFFLAGTYPE
 
 type, extends(image) :: reconstructor
     private
@@ -23,20 +40,24 @@ type, extends(image) :: reconstructor
     real(kind=c_float), pointer :: rho(:,:,:)=>null()           !< sampling+CTF**2 density
     complex, allocatable        :: cmat_exp(:,:,:)              !< Fourier components of expanded reconstructor
     real,    allocatable        :: rho_exp(:,:,:)               !< sampling+CTF**2 density of expanded reconstructor
+    real,    allocatable        :: w(:,:,:)
     real                        :: winsz         = 1.           !< window half-width
     real                        :: alpha         = 2.           !< oversampling ratio
     real                        :: dens_const    = 1.           !< density estimation constant, old val: 1/nptcls
     integer                     :: lfny          = 0            !< Nyqvist Fourier index
     integer                     :: ldim_img(3)   = 0            !< logical dimension of the original image
-    character(len=STDLEN)       :: ctfflag       = ''           !< ctf flag <yes|no|mul|flip>
-    integer                     :: ctfmode
+    !character(len=STDLEN)       :: ctfflag       = ''           !< ctf flag <yes|no|mul|flip>
+ !   integer(sp)                 :: wdim                         !< logical dimension of window
+!    integer(sp)                 :: dimplus                      !< logical dimension of image plus half window
+    integer, allocatable        :: physmat(:,:,:,:)
+    type(CTFFLAGTYPE)           :: ctf                          !< ctf flag <yes|no|mul|flip>
     logical                     :: tfneg              = .false. !< invert contrast or not
     logical                     :: tfastig            = .false. !< astigmatic CTF or not
     logical                     :: rho_allocated      = .false. !< existence of rho matrix
     logical                     :: rho_exp_allocated  = .false. !< existence of rho expanded matrix
-    logical                     :: cmat_exp_allocated = .false. !< existence of Fourien components expanded matrix
+    logical                     :: cmat_exp_allocated = .false. !< existence of Fourier components expanded matrix
   contains
-    ! CONSTRUCTORS
+    ! CONSTRUCTORS 
     procedure          :: alloc_rho
     ! SETTERS
     procedure          :: reset
@@ -50,6 +71,7 @@ type, extends(image) :: reconstructor
     procedure, private :: calc_tfun_vals
     procedure          :: inout_fplane
     procedure          :: sampl_dens_correct
+    procedure          :: sampl_dens_correct_old
     procedure          :: compress_exp
     ! SUMMATION
     procedure          :: sum
@@ -62,20 +84,18 @@ end type reconstructor
 
 real            :: dfx=0., dfy=0., angast=0.
 real, parameter :: SHTHRESH=0.0001
-
+#include "simple_local_flags.inc"
 contains
 
     ! CONSTRUCTOR
 
     subroutine alloc_rho( self, p, expand )
-        use simple_params, only: params
-        use simple_math,   only: fdim
         class(reconstructor), intent(inout) :: self  !< this instance
         class(params),        intent(in)    :: p     !< parameters object
         logical, optional,    intent(in)    :: expand !< expand flag
         character(len=:), allocatable :: ikind_tmp
         integer :: rho_shape(3), rho_lims(3,2), lims(3,2), rho_exp_lims(3,2), ldim_exp(3,2)
-        integer :: dim, maxlims
+        integer ::  dim, maxlims,h,k,m,logi(3),phys(3)
         logical :: l_expand
         l_expand = .true.
         if(.not. self%exists() ) stop 'construct image before allocating rho; alloc_rho; simple_reconstructor'
@@ -87,7 +107,16 @@ contains
         self%dens_const = 1./real(p%nptcls)
         self%winsz      = p%winsz
         self%alpha      = p%alpha
-        self%ctfflag    = p%ctf
+        select case(p%ctf)
+        case('no')
+            self%ctf%flag    =CTFFLAG_NO
+        case('yes')
+            self%ctf%flag    =CTFFLAG_YES
+        case('mul')
+            self%ctf%flag    =CTFFLAG_MUL
+        case('flip')
+            self%ctf%flag    =CTFFLAG_FLIP
+        end select
         self%tfneg      = .false.
         if( p%neg .eq. 'yes' ) self%tfneg = .true.
         self%tfastig = .false.
@@ -111,18 +140,36 @@ contains
             ldim_exp(3,:) = [-dim, dim]
             rho_exp_lims  = ldim_exp
             allocate(self%cmat_exp( ldim_exp(1,1):ldim_exp(1,2),&
-                                    &ldim_exp(2,1):ldim_exp(2,2),&
-                                    &ldim_exp(3,1):ldim_exp(3,2)), stat=alloc_stat)
-            if(alloc_stat /= 0) allocchk("In: alloc_rho; simple_reconstructor 1")
+                &ldim_exp(2,1):ldim_exp(2,2),&
+                &ldim_exp(3,1):ldim_exp(3,2)), stat=alloc_stat)
+            if(alloc_stat /= 0) allocchk("In: alloc_rho; simple_reconstructor cmat_exp")
+  
             allocate(self%rho_exp( rho_exp_lims(1,1):rho_exp_lims(1,2),&
-                                    &rho_exp_lims(2,1):rho_exp_lims(2,2),&
-                                    &rho_exp_lims(3,1):rho_exp_lims(3,2)), stat=alloc_stat)
-            if(alloc_stat /= 0) allocchk("In: alloc_rho; simple_reconstructor 2")
+                &rho_exp_lims(2,1):rho_exp_lims(2,2),&
+                &rho_exp_lims(3,1):rho_exp_lims(3,2)), stat=alloc_stat)
+            if(alloc_stat /= 0) allocchk("In: alloc_rho; simple_reconstructor rho_exp")
             self%cmat_exp           = cmplx(0.,0.)
             self%rho_exp            = 0.
             self%cmat_exp_allocated = .true.
             self%rho_exp_allocated  = .true.
-        endif
+        end if
+        ! allocate(self%physmat( ldim_exp(1,1):ldim_exp(1,2),&
+        !     &ldim_exp(2,1):ldim_exp(2,2),&
+        !     &ldim_exp(3,1):ldim_exp(3,2),3), stat=alloc_stat)
+        ! if(alloc_stat /= 0) allocchk("In: alloc_rho; simple_reconstructor physmat")
+        !     ! ! parallel do collapse(3) default(shared) schedule(static)&
+        !     ! ! private(h,k,m,logi,phys) proc_bind(close)
+        !     do h = -dim, dim
+        !         do k = -dim, dim
+        !             do m = -dim, dim
+        !                 logi  = [h, k, m]
+        !                 phys = self%comp_addr_phys(logi)
+        !                 self%physmat(h+dim+1,k+dim+1,m+dim+1,1:3) = phys(1:3)
+        !             end do
+        !         end do
+        !     end do
+        !     ! ! end parallel do
+       
         call self%reset
     end subroutine alloc_rho
 
@@ -146,43 +193,35 @@ contains
     ! I/O
     !>Write reconstructed image
     subroutine write_rho( self, kernam )
-        use simple_fileio, only: fopen, fclose, fileio_errmsg, del_file
         class(reconstructor), intent(in) :: self   !< this instance
         character(len=*),     intent(in) :: kernam !< kernel name
-        character(len=100) :: io_message
         integer :: filnum, ierr
         call del_file(trim(kernam))
-        call fopen(filnum, status='NEW', action='WRITE', file=trim(kernam), access='STREAM', iostat=ierr)
+        call fopen(filnum, trim(kernam), status='NEW', action='WRITE', access='STREAM', iostat=ierr)
         call fileio_errmsg( 'simple_reconstructor ; write rho '//trim(kernam), ierr)
-        write(filnum, pos=1, iostat=ierr, iomsg=io_message) self%rho
-        if( ierr .ne. 0 ) call fileio_errmsg('read_rho; simple_reconstructor writing '//trim(kernam)&
-            // 'IO error message was: '//trim(io_message), ierr)
-            
-        call fclose(filnum,errmsg= 'simple_reconstructor ; write rho  fclose ')
+        write(filnum, pos=1, iostat=ierr) self%rho
+        if( ierr .ne. 0 ) &
+            call fileio_errmsg('read_rho; simple_reconstructor writing '//trim(kernam), ierr)
+        call fclose(filnum,errmsg='simple_reconstructor ; write rho  fclose ')
     end subroutine write_rho
 
     !> Read sampling density matrix
     subroutine read_rho( self, kernam )
-        use simple_fileio, only: fopen, fclose, fileio_errmsg
         class(reconstructor), intent(inout) :: self !< this instance
         character(len=*),     intent(in)    :: kernam !< kernel name
-        character(len=100) :: io_message
         integer :: filnum, ierr
         call fopen(filnum, file=trim(kernam), status='OLD', action='READ', access='STREAM', iostat=ierr)
         call fileio_errmsg('read_rho; simple_reconstructor opening '//trim(kernam), ierr)
-        read(filnum, pos=1, iostat=ierr, iomsg=io_message) self%rho
+        read(filnum, pos=1, iostat=ierr) self%rho
         if( ierr .ne. 0 ) &
             call fileio_errmsg('simple_reconstructor::read_rho; simple_reconstructor reading '&
-            &// trim(kernam)&
-            &// 'IO error message was: '//trim(io_message), ierr)
+            &// trim(kernam), ierr)
         call fclose(filnum,errmsg='read_rho; simple_reconstructor closing '//trim(kernam))
     end subroutine read_rho
 
     ! INTERPOLATION
 
     subroutine inout_fcomp( self, h, k, e, inoutmode, comp, oshift, pwght)
-        use simple_ori,    only: ori
-        use simple_math,   only: sqwin_3d
         class(reconstructor), intent(inout) :: self      !< this object
         integer,              intent(in)    :: h, k      !< Fourier indices
         class(ori),           intent(inout) :: e         !< orientation
@@ -210,9 +249,9 @@ contains
             w = self%dens_const
         endif
         do i=1,wdim
-            where(w(i,:,:)>0.) w(i,:,:) = w(i,:,:) * self%kbwin%apod(real(win(1,1)+i-1)-loc(1))
-            where(w(:,i,:)>0.) w(:,i,:) = w(:,i,:) * self%kbwin%apod(real(win(2,1)+i-1)-loc(2))
-            where(w(:,:,i)>0.) w(:,:,i) = w(:,:,i) * self%kbwin%apod(real(win(3,1)+i-1)-loc(3))
+            where(w(i,:,:)>0.)w(i,:,:) = w(i,:,:) * self%kbwin%apod(real(win(1,1)+i-1)-loc(1))
+            where(w(:,i,:)>0.)w(:,i,:) = w(:,i,:) * self%kbwin%apod(real(win(2,1)+i-1)-loc(2))
+            where(w(:,:,i)>0.)w(:,:,i) = w(:,:,i) * self%kbwin%apod(real(win(3,1)+i-1)-loc(3))
         enddo
         ! expanded matrices update
         if( inoutmode )then
@@ -234,14 +273,12 @@ contains
     end subroutine inout_fcomp
 
     subroutine calc_tfun_vals( self, vec, tval, tvalsq )
-        use simple_math, only: hyp
-        use simple_ctf,  only: ctf
         class(reconstructor), intent(inout) :: self         !< instance
         real,                 intent(in)    :: vec(3)       !< nonuniform sampling location
         real,                 intent(out)   :: tval, tvalsq !< CTF and CTF**2.
         real    :: sqSpatFreq,ang,inv1,inv2
         integer :: ldim(3)
-        if( self%ctfflag .ne. 'no' )then
+        if( self%ctf%flag /= CTFFLAG_NO )then
             ldim       = self%get_ldim()
             inv1       = vec(1)*(1./real(ldim(1)))
             inv2       = vec(2)*(1./real(ldim(2)))
@@ -251,34 +288,32 @@ contains
             ! dfx, dfy, angast are class vars that are set by inout fplane
             tval   = self%tfun%eval(sqSpatFreq, dfx, dfy, angast, ang) ! no bfactor 4 now
             tvalsq = tval * tval
-            if( self%ctfflag .eq. 'flip' ) tval = abs(tval)
-            if( self%ctfflag .eq. 'mul'  ) tval = 1.
+            if( self%ctf%flag == CTFFLAG_FLIP ) tval = abs(tval)
+            if( self%ctf%flag == CTFFLAG_MUL  ) tval = 1.
             if( self%tfneg ) tval = -tval
         else
             tval   = 1.
-            tvalsq = tval 
+            tvalsq = tval
             if( self%tfneg ) tval = -tval
         endif
     end subroutine calc_tfun_vals
 
     !> insert or uninsert Fourier plane
     subroutine inout_fplane( self, o, inoutmode, fpl, pwght, mul )
-        use simple_math, only: hyp
-        use simple_ori,  only: ori
         class(reconstructor), intent(inout) :: self      !< instance
         class(ori),           intent(inout) :: o         !< orientation
         logical,              intent(in)    :: inoutmode !< add = .true., subtract = .false.
         class(image),         intent(inout) :: fpl       !< Fourier plane
         real,    optional,    intent(in)    :: pwght     !< external particle weight (affects both fplane and rho)
         real,    optional,    intent(in)    :: mul       !< shift weight multiplier
-        integer :: h, k, lims(3,2), logi(3), phys(3)
+        integer :: h, k, lims(3,2), sh, lfny, logi(3), phys(3)
         complex :: oshift
-        real    :: x, y, xtmp, ytmp
+        real    :: x, y, xtmp, ytmp, pw
         logical :: pwght_present
         if( .not. fpl%is_ft() )       stop 'image need to be FTed; inout_fplane; simple_reconstructor'
         if( .not. (self.eqsmpd.fpl) ) stop 'scaling not yet implemented; inout_fplane; simple_reconstructor'
         pwght_present = present(pwght)
-        if( self%ctfflag .ne. 'no' )then ! make CTF object & get CTF info
+        if( self%ctf%flag /= CTFFLAG_NO )then ! make CTF object & get CTF info
             self%tfun = ctf(self%get_smpd(), o%get('kv'), o%get('cs'), o%get('fraca'))
             dfx  = o%get('dfx')
             if( self%tfastig )then ! astigmatic CTF model
@@ -307,8 +342,8 @@ contains
         endif
         !$omp parallel do collapse(2) default(shared) schedule(static)&
         !$omp private(h,k,oshift,logi,phys) proc_bind(close)
-        do h=lims(1,1),lims(1,2)
-            do k=lims(1,1),lims(1,2)
+        do k=lims(1,1),lims(1,2)
+            do h=lims(1,1),lims(1,2)
                 logi   = [h,k,0]
                 oshift = fpl%oshift(logi, [-xtmp,-ytmp,0.], ldim=2)
                 phys   = fpl%comp_addr_phys(logi)
@@ -318,10 +353,98 @@ contains
         !$omp end parallel do
     end subroutine inout_fplane
 
+    !>  is for uneven distribution of orientations correction 
+    !>  from Pipe & Menon 1999
+    subroutine sampl_dens_correct( self, maxits )
+        use simple_gridding,   only: mul_w_instr
+        class(reconstructor), intent(inout) :: self
+        integer,    optional, intent(in)    :: maxits
+        type(kbinterpol)   :: kbwin 
+        type(image)        :: W_img, Wprev_img
+        complex            :: comp
+        real               :: Wnorm, val_prev, val, Wnorm_prev, invrho
+        integer            :: h, k, m, lims(3,2), logi(3), phys(3), iter
+        integer            :: maxits_here
+        complex, parameter :: zero = cmplx(0.,0.), one = cmplx(1.,0.)
+        real,    parameter :: winsz  = 2.
+        maxits_here = GRIDCORR_MAXITS
+        if( present(maxits) )maxits_here = maxits
+        lims = self%loop_lims(2)
+        call W_img%new(self%ldim_img, self%get_smpd())
+        call Wprev_img%new(self%ldim_img, self%get_smpd())
+        call W_img%set_ft(.true.)
+        call Wprev_img%set_ft(.true.)
+        ! kernel
+        kbwin = kbinterpol(winsz, self%alpha)
+        ! weights init to 1.
+        W_img = one
+        Wnorm = SMALL
+        do iter = 1, maxits_here
+            Wnorm_prev = Wnorm
+            Wprev_img  = W_img 
+            ! W <- W * rho
+            !$omp parallel do collapse(3) default(shared) schedule(static)&
+            !$omp private(h,k,m,logi,phys) proc_bind(close)
+            do h = lims(1,1),lims(1,2)
+                do k = lims(2,1),lims(2,2)
+                    do m = lims(3,1),lims(3,2)
+                        logi  = [h, k, m]                      
+                        phys  = W_img%comp_addr_phys(logi)
+                        call W_img%mul(logi, self%rho(phys(1),phys(2),phys(3)), phys_in=phys)
+                    end do
+                end do
+            end do
+            !$omp end parallel do
+            ! W <- (Wprev / rho) x kernel
+            call W_img%bwd_ft
+            call mul_w_instr(W_img, kbwin)
+            call W_img%fwd_ft
+            ! W <- Wprev / ((Wprev / rho) x kernel)
+            Wnorm = 0.
+            !$omp parallel do collapse(3) default(shared) schedule(static)&
+            !$omp private(h,k,m,logi,phys,val,val_prev) proc_bind(close)&
+            !$omp reduction(+:Wnorm)
+            do h = lims(1,1),lims(1,2)
+                do k = lims(2,1),lims(2,2)
+                    do m = lims(3,1),lims(3,2)
+                        logi     = [h, k, m]
+                        phys     = W_img%comp_addr_phys(logi)
+                        val      = mycabs(W_img%get_fcomp(logi, phys))
+                        val_prev = real(Wprev_img%get_fcomp(logi, phys))
+                        val      = min(val_prev/val, 1.e20)
+                        call W_img%set_fcomp(logi, phys, cmplx(val, 0.)) 
+                        Wnorm    = Wnorm + val ! values are positive, no need to square (numerical stability)
+                    end do
+                end do
+            end do
+            !$omp end parallel do
+            Wnorm = log10(1. + Wnorm / sqrt(real(product(lims(:,2) - lims(:,1)))))
+            if( Wnorm/Wnorm_prev < 1.05 ) exit
+        enddo
+        call Wprev_img%kill
+        ! Fourier comps / rho
+        !$omp parallel do collapse(3) default(shared) schedule(static)&
+        !$omp private(h,k,m,logi,phys,invrho) proc_bind(close)
+        do h = lims(1,1),lims(1,2)
+            do k = lims(2,1),lims(2,2)
+                do m = lims(3,1),lims(3,2)
+                    logi   = [h, k, m]
+                    phys   = W_img%comp_addr_phys(logi)
+                    invrho = real(W_img%get_fcomp(logi, phys))
+                    call self%mul(logi,invrho,phys_in=phys)
+                end do
+            end do
+        end do
+        !$omp end parallel do
+        ! cleanup
+        call W_img%kill
+    end subroutine sampl_dens_correct
+
+    ! OLD ROUTINE
     !> sampl_dens_correct Correct sample density
     !! \param self_out corrected image output
     !!
-    subroutine sampl_dens_correct( self, self_out )
+    subroutine sampl_dens_correct_old( self, self_out )
         class(reconstructor),   intent(inout) :: self !< this instance
         class(image), optional, intent(inout) :: self_out  !< output image instance
         integer :: h, k, l, lims(3,2), phys(3)
@@ -345,7 +468,7 @@ contains
             end do
         end do
         !$omp end parallel do
-    end subroutine sampl_dens_correct
+    end subroutine sampl_dens_correct_old
 
     subroutine compress_exp( self )
         class(reconstructor), intent(inout) :: self !< this instance
@@ -392,12 +515,7 @@ contains
 
     ! RECONSTRUCTION
     !> reconstruction routine
-    subroutine rec( self, fname, p, o, se, state, mul, eo, part )
-        use simple_oris,     only: oris
-        use simple_sym,      only: sym
-        use simple_params,   only: params
-        use simple_jiffys,   only: progress
-        use simple_gridding  ! use all in there
+    subroutine rec( self, fname, p, o, se, state, mul, part )
         class(reconstructor), intent(inout) :: self      !< this object
         character(len=*),     intent(inout) :: fname     !< spider/MRC stack filename
         class(params),        intent(in)    :: p         !< parameters
@@ -405,12 +523,14 @@ contains
         class(sym),           intent(inout) :: se        !< symmetry element
         integer,              intent(in)    :: state     !< state to reconstruct
         real,    optional,    intent(in)    :: mul       !< shift multiplication factor
-        integer, optional,    intent(in)    :: eo        !< even(2) or odd(1)
         integer, optional,    intent(in)    :: part      !< partition (4 parallel rec)
         type(image) :: img, img_pd
         real        :: skewness
         integer     :: statecnt(p%nstates), i, cnt, n, ldim(3)
         integer     :: state_here, state_glob
+        integer(timer_int_kind) :: trec, tsamp
+        verbose=.false.
+        if(verbose) trec=tic()
         call find_ldim_nptcls(fname, ldim, n)
         if( n /= o%get_noris() ) stop 'inconsistent nr entries; rec; simple_reconstructor'
         ! stash global state index
@@ -419,8 +539,6 @@ contains
         ! make the images
         call img_pd%new([p%boxpd,p%boxpd,1],self%get_smpd())
         call img%new([p%box,p%box,1],self%get_smpd())
-        ! calculate particle weights
-        call o%calc_spectral_weights(p%frac)
         ! population balancing logics
         if( p%balance > 0 )then
             call o%balance( p%balance, NSPACE_BALANCE, p%nsym, p%eullims, skewness )
@@ -440,25 +558,22 @@ contains
                 state_here = nint(o%get(i,'state'))
                 if( state_here > 0 .and. (state_here == state) )then
                     statecnt(state) = statecnt(state)+1
-                    if( present(eo) )then
-                        if( mod(cnt,2) == 0 .and. eo == 2 )then
-                            call rec_dens
-                        else if( mod(cnt,2) /= 0 .and. eo == 1 )then
-                            call rec_dens
-                        endif
-                    else
-                        call rec_dens
-                    endif
+                    call rec_dens
                 endif
             endif
         end do
+        if(verbose)write(*,'(A,1x,1ES20.5)') '>>> KAISER-BESSEL INTERPOLATION TIME ', toc(trec)
         if( present(part) )then
             return
         else
-            write(*,'(A)') '>>> SAMPLING DENSITY (RHO) CORRECTION (JACKSON) & WIENER NORMALIZATION'
+            if(verbose)tsamp=tic()
+            write(*,'(A)') '>>> SAMPLING DENSITY (RHO) CORRECTION & WIENER NORMALIZATION'
             call self%compress_exp
+            if(verbose)write(*,'(A,1x,1ES20.5)') '>>> RHO COMPRESSION EXPANDED ', toc()
             call self%sampl_dens_correct
+           if(verbose) write(*,'(A,1x,1ES20.5)') '>>>  UNEVEN DISTRIBUTION OF ORIENTATIONS CORRECTION  ', toc()
         endif
+        if(verbose)write(*,'(A,1x,1ES20.5)') '>>> SAMPLING DENSITY (RHO) CORRECTION & WIENER NORMALIZATION  TOTALTIME ', toc(tsamp)
         call self%bwd_ft
         call img%kill
         call img_pd%kill
@@ -466,18 +581,18 @@ contains
         if( p%nstates > 1 )then
             write(*,'(a,1x,i3,1x,a,1x,i6)') '>>> NR OF PARTICLES INCLUDED IN STATE:', state, 'WAS:', statecnt(state)
         endif
-
+        if(verbose)write(*,'(A,1x,1ES20.5)') '>>> RECONSTRUCTIONN  TOTALTIME ', toc(trec)
         contains
 
             !> \brief  the density reconstruction functionality
             subroutine rec_dens
-                use simple_ori, only: ori
+                use simple_gridding,  only: prep4cgrid
                 type(ori) :: orientation, o_sym
                 integer   :: j, state, state_balance
                 real      :: pw
-                state         = nint(o%get(i, 'state'))
+!                state         = nint(o%get(i, 'state'))
                 state_balance = nint(o%get(i, 'state_balance'))
-                if( state == 0 .or. state_balance == 0 ) return
+                if( state_balance == 0 ) return
                 pw = 1.
                 if( p%frac < 0.99 ) pw = o%get(i, 'w')
                 if( pw > 0. )then
@@ -503,12 +618,18 @@ contains
 
     ! DESTRUCTORS
 
-
     !>  \brief  is the expanded destructor
     subroutine dealloc_exp( self )
         class(reconstructor), intent(inout) :: self !< this instance
-        if(allocated(self%rho_exp)) deallocate(self%rho_exp)
-        if(allocated(self%cmat_exp))deallocate(self%cmat_exp)
+        if(allocated(self%rho_exp))then
+            deallocate(self%rho_exp,stat=alloc_stat)
+            if(alloc_stat /= 0) allocchk(" simple_reconstructor:: dealloc_exp; rho_exp ;")
+        endif
+        if(allocated(self%cmat_exp))then
+           deallocate(self%cmat_exp,stat=alloc_stat)
+            if(alloc_stat /= 0) allocchk(" simple_reconstructor:: dealloc_exp; cmat_exp ;")
+        endif
+
         self%rho_exp_allocated  = .false.
         self%cmat_exp_allocated = .false.
     end subroutine dealloc_exp
@@ -516,6 +637,10 @@ contains
     !>  \brief  is a destructor
     subroutine dealloc_rho( self )
         class(reconstructor), intent(inout) :: self !< this instance
+        if(allocated(self%physmat))then
+            deallocate(self%physmat,stat=alloc_stat)
+            if(alloc_stat /= 0) allocchk(" simple_reconstructor:: dealloc_exp; physmat ;")
+        endif
         call self%dealloc_exp
         if( self%rho_allocated )then
             call fftwf_free(self%kp)

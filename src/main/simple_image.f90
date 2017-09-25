@@ -1,18 +1,17 @@
 ! the abstract image data type and its methods. 2D/3D & FT/real all implemented by this class
 ! and Fourier transformations done in-place to reduce memory usage
-#include "simple_lib.f08"
+
 module simple_image
 !$ use omp_lib
 !$ use omp_lib_kinds
-use simple_defs
-use simple_fftw3
-use simple_math
-use simple_ftiter, only: ftiter
-use simple_syslib, only: alloc_errchk
-use simple_fileio, only: fname2format, file_exists, read_raw_image
-use gnufor2
-use simple_rnd,  only: ran3,gasdev
-use simple_stat,  only: pearsn, moment, normalize_sigm
+#include "simple_lib.f08"
+    use simple_fftw3
+    use gnufor2
+!!import classes
+use simple_ftiter,  only: ftiter
+use simple_imgfile, only: imgfile
+!!import functions
+!use simple_stat,    only: pearsn, moment, normalize_sigm
 use simple_winfuns, only: winfuns
 implicit none
 
@@ -22,7 +21,7 @@ private
 
 ! CLASS PARAMETERS/VARIABLES
 logical, parameter :: shift_to_phase_origin=.true.
-!>  image parameter stuct and operations 
+
 type :: image
     private
     logical                                :: ft=.false.           !< Fourier transformed or not
@@ -64,6 +63,9 @@ type :: image
     procedure          :: get
     procedure          :: get_rmat
     procedure          :: get_cmat
+    procedure          :: add2_cmat
+    procedure          :: div_cmat
+    procedure          :: mul_cmat
     procedure          :: print_cmat
     procedure          :: expand_ft
     procedure          :: set
@@ -316,7 +318,6 @@ contains
         call self%kill()
         self%ldim = ldim
         self%smpd = smpd
-        self%existence=.false.
         ! Make Fourier iterator
         call self%fit%new(ldim, smpd)
         ! Work out dimensions of the complex array
@@ -564,7 +565,6 @@ contains
     !! \return  pixels index array to pixels in window
     !!
     function win2arr( self, i, j, k, winsz ) result( pixels )
-        !use simple_math, only: cyci_1d
         class(image), intent(inout) :: self
         integer,      intent(in)    :: i, j, k, winsz
         real, allocatable :: pixels(:)
@@ -639,7 +639,6 @@ contains
     !! \param rwaction  read/write flag
     !!
     subroutine open( self, fname, ioimg, formatchar, readhead, rwaction )
-        use simple_imgfile,      only: imgfile
         class(image),               intent(inout) :: self
         character(len=*),           intent(in)    :: fname
         class(imgfile),             intent(inout) :: ioimg
@@ -701,7 +700,6 @@ contains
     !! \param read_failure     file i/o status
     !!
     subroutine read( self, fname, i, ioimg, formatchar, readhead, rwaction, read_failure )
-        use simple_imgfile,      only: imgfile
         class(image),               intent(inout) :: self
         character(len=*),           intent(in)    :: fname
         integer,          optional, intent(in)    :: i
@@ -712,12 +710,10 @@ contains
         logical,          optional, intent(out)   :: read_failure
         type(imgfile)         :: ioimg_local
         character(len=1)      :: form
-        integer               :: ldim(3), iform, first_slice, mode
+        integer               :: ldim(3), iform, first_slice
         integer               :: last_slice, ii
         real                  :: smpd
-        logical               :: isvol, err, ioimg_present
-        real(dp), allocatable :: tmpmat1(:,:,:)
-        real(sp), allocatable :: tmpmat2(:,:,:)
+        logical               :: isvol, ioimg_present
         ldim          = self%ldim
         smpd          = self%smpd
         ioimg_present = present(ioimg)
@@ -843,7 +839,6 @@ contains
     !! \param formatchar
     !! \todo fix optional args
     subroutine write( self, fname, i, del_if_exists, formatchar )
-        use simple_imgfile,      only: imgfile
         class(image),               intent(inout) :: self
         character(len=*),           intent(in)    :: fname
         integer,          optional, intent(in)    :: i
@@ -1059,7 +1054,43 @@ contains
         array_shape(1)   = self%get_filtsz()
         array_shape(2:3) = self%ldim(2:3)
         allocate(cmat(array_shape(1),array_shape(2),array_shape(3)), source=self%cmat)
-    end function get_cmat
+      end function get_cmat
+
+    !>  \brief   set_cmat get the image object's complex matrix
+    !! \return cmat a copy of this image object's cmat
+    !!
+    subroutine add2_cmat( self , phys , comp)
+        class(image), intent(in) :: self
+        integer, intent(in) :: phys(3)
+        complex, intent(in) :: comp
+        self%cmat(phys(1),phys(2),phys(3)) = self%cmat(phys(1),phys(2),phys(3)) + comp
+      end subroutine add2_cmat
+
+    !>  \brief div_cmat is for component-wise division of an image with a real number
+    !! \param logi coordinates
+    !! \param k divisor
+    !! \param phys_in
+    !!
+    subroutine div_cmat( self, k, phys )
+        class(image),      intent(inout) :: self
+        integer,           intent(in)    :: phys(3)
+        real,              intent(in)    :: k
+        if( abs(k) > TINY )then
+           self%cmat(phys(1),phys(2),phys(3)) = self%cmat(phys(1),phys(2),phys(3))/k
+        else
+           self%cmat(phys(1),phys(2),phys(3)) = cmplx(0.,0.) ! this is desirable for kernel division
+        endif
+    end subroutine div_cmat
+    subroutine mul_cmat( self, k, phys )
+        class(image),      intent(inout) :: self
+        integer,           intent(in)    :: phys(3)
+        real,              intent(in)    :: k
+        if( abs(k) > TINY )then
+           self%cmat(phys(1),phys(2),phys(3)) = self%cmat(phys(1),phys(2),phys(3))*k
+        else
+           self%cmat(phys(1),phys(2),phys(3)) = cmplx(0.,0.) ! this is desirable for kernel division
+        endif
+    end subroutine mul_cmat
 
     !> print_cmat
     !!
@@ -1414,7 +1445,7 @@ contains
                     if(alloc_stat /= 0) allocchk('winserialize; simple_image')
                     pcavec = 0.
                 endif
-            end subroutine set_action
+            end subroutine set_acti on
 
     end subroutine winserialize
 
@@ -1425,7 +1456,11 @@ contains
         do i=1,self%ldim(1)
             do j=1,self%ldim(2)
                 do k=1,self%ldim(3)
-                    if( self%rmat(i,j,k) == 0. ) self%rmat(i,j,k) = 1.
+#ifdef USETINY
+                   if( abs(self%rmat(i,j,k))< TINY ) self%rmat(i,j,k) = 1.
+#else
+                   if( self%rmat(i,j,k) == 0. ) self%rmat(i,j,k) = 1.
+#endif
                 end do
             end do
         end do
@@ -1559,9 +1594,13 @@ contains
         comp = sum(comps)
         deallocate(comps)
         ! origin shift
-        if( x == 0. .and. y == 0. )then
-        else
-            comp = comp*oshift_here(self%ldim(1)/2, h, k, x, y)
+#ifdef USETINY
+       if( abs(x) + abs(y) > TINY )then
+#else
+       if( x == 0. .and. y == 0. )then
+       else
+#endif
+           comp = comp*oshift_here(self%ldim(1)/2, h, k, x, y)
         endif
 
         contains
@@ -2050,7 +2089,7 @@ contains
         else
             comp_here = comp
         endif
-        if( abs(k(phys(1),phys(2),phys(3))) /= 0.)then
+        if( abs(k(phys(1),phys(2),phys(3))) > TINY )then
             self%cmat(phys(1),phys(2),phys(3)) = self%cmat(phys(1),phys(2),phys(3))-(comp_here/k(phys(1),phys(2),phys(3)))*w
         endif
     end subroutine subtr_3
@@ -2309,7 +2348,7 @@ contains
         real,              intent(in)    :: k
         integer, optional, intent(in)    :: phys_in(3)
         integer :: phys(3)
-        if( self%ft ) then
+        if( self%ft )then
             if( present(phys_in) )then
                 phys = phys_in
             else
@@ -2398,7 +2437,7 @@ contains
     function conjugate( self ) result ( self_out )
         class(image), intent(in) :: self
         type(image) :: self_out
-        if( self%is_ft() )then
+        if( self%ft )then
             call self_out%copy(self)
             self%cmat = conjg(self%cmat)
         else
@@ -2410,7 +2449,7 @@ contains
     !!
     subroutine sqpow( self )
         class(image), intent(inout) :: self
-        if( self%is_ft() )then
+        if( self%ft )then
             self%cmat = (self%cmat*conjg(self%cmat))**2.
         else
             self%rmat = self%rmat*self%rmat
@@ -2448,7 +2487,7 @@ contains
     !!
     function nforeground( self ) result( n )
         class(image), intent(in) :: self
-        integer :: n, i, j, k
+        integer :: n
         n = count(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) > 0.5)
     end function nforeground
 
@@ -2630,9 +2669,9 @@ contains
     !!
     subroutine cendist( self )
         class(image), intent(inout) :: self
-        real    :: centre(3), vec(3)
-        integer :: i, j, k
-        if( self%is_ft() ) stop 'real space only; simple_image%cendist'
+        real    :: centre(3)
+        integer :: i
+        if( self%ft ) stop 'real space only; simple_image%cendist'
         ! Builds square distance image
         self   = 0.
         centre = real(self%ldim-1)/2.
@@ -2762,10 +2801,10 @@ contains
                 il = max(1,i-1)
                 ir = min(self%ldim(1),i+1)
                 do j=1,self%ldim(2)
-                    if (self%rmat(i,j,1)==0.) then
+                    if (self%rmat(i,j,1) < TINY) then
                         jl = max(1,j-1)
                         jr = min(self%ldim(2),j+1)
-                        if( any(self%rmat(il:ir,jl:jr,1)==1.) )add_pixels(i,j,1) = .true.
+                        if( any(abs(self%rmat(il:ir,jl:jr,1)-1.) < TINY) )add_pixels(i,j,1) = .true.
                     end if
                 end do
             end do
@@ -2779,10 +2818,10 @@ contains
                     jl = max(1,j-1)
                     jr = min(self%ldim(2),j+1)
                     do k=1,self%ldim(3)
-                        if (self%rmat(i,j,k)==0.) then
+                        if (abs(self%rmat(i,j,k)) < TINY) then
                             kl = max(1,k-1)
                             kr = min(self%ldim(3),k+1)
-                            if( any(self%rmat(il:ir,jl:jr,kl:kr)==1.) )add_pixels(i,j,k) = .true.
+                            if( any(abs(self%rmat(il:ir,jl:jr,kl:kr)-1.) < TINY )) add_pixels(i,j,k) = .true.
                         end if
                     end do
                 end do
@@ -2811,11 +2850,19 @@ contains
                 il = max(1,i-1)
                 ir = min(self%ldim(1),i+1)
                 do j=1,self%ldim(2)
+#ifdef USETINY
+                    if (abs(self%rmat(i,j,1)) < TINY) then
+                          jl = max(1,j-1)
+                          jr = min(self%ldim(2),j+1)
+                          if( any(abs(self%rmat(il:ir,jl:jr,1)-1) < TINY )) sub_pixels(i,j,1) = .true.
+                    end if
+#else
                     if (self%rmat(i,j,1)==0.) then
                         jl = max(1,j-1)
                         jr = min(self%ldim(2),j+1)
                         if( any(self%rmat(il:ir,jl:jr,1)==1.) ) sub_pixels(i,j,1) = .true.
                     end if
+#endif
                 end do
             end do
             ! remove
@@ -2828,11 +2875,19 @@ contains
                     jl = max(1,j-1)
                     jr = min(self%ldim(2),j+1)
                     do k=1,self%ldim(3)
+#ifdef USETINY
+                        if (abs(self%rmat(i,j,k)) < TINY) then
+                            kl = max(1,k-1)
+                            kr = min(self%ldim(3),k+1)
+                            if( any(abs(self%rmat(il:ir,jl:jr,kl:kr)-1.)<TINY))sub_pixels(i,j,k) = .true.
+                        end if
+#else
                         if (self%rmat(i,j,k)==0.) then
                             kl = max(1,k-1)
                             kr = min(self%ldim(3),k+1)
                             if( any(self%rmat(il:ir,jl:jr,kl:kr)==1.) )sub_pixels(i,j,k) = .true.
                         end if
+#endif
                     end do
                 end do
             end do
@@ -2878,8 +2933,13 @@ contains
         enddo
         ! init paddedd logical array
         add_pixels = .false.
-        forall( i=1:self%ldim(1), j=1:self%ldim(2), k=1:self%ldim(3), self%rmat(i,j,k)==1. )&
+#ifdef USETINY
+        forall( i=1:self%ldim(1), j=1:self%ldim(2), k=1:self%ldim(3), abs(self%rmat(i,j,k)-1.)<TINY )&
             & add_pixels(i,j,k) = .true.
+#else
+          forall( i=1:self%ldim(1), j=1:self%ldim(2), k=1:self%ldim(3), self%rmat(i,j,k)==1. )&
+              & add_pixels(i,j,k) = .true.
+#endif
         ! cycle
         if( self%is_3d() )then
             do i = 1, self%ldim(1)
@@ -2952,8 +3012,14 @@ contains
         enddo
         ! init paddedd logical array
         sub_pixels = .false.
+
+#ifdef USETINY
+        forall( i=1:self%ldim(1), j=1:self%ldim(2), k=1:self%ldim(3), abs(self%rmat(i,j,k)-1.) < TINY )&
+            & sub_pixels(i,j,k) = .true.
+#else
         forall( i=1:self%ldim(1), j=1:self%ldim(2), k=1:self%ldim(3), self%rmat(i,j,k)==1. )&
             & sub_pixels(i,j,k) = .true.
+#endif
         ! cycle
         if( self%is_3d() )then
             do i = 1, self%ldim(1)
@@ -3063,7 +3129,11 @@ contains
             ie = min(i+1,self%ldim(1))       ! right neighbour
             il = max(1,i-falloff)            ! left bounding box limit
             ir = min(i+falloff,self%ldim(1)) ! right bounding box limit
+#ifdef USETINY
+            if( any(abs(rmat(i,:,:)-1.) > TINY) )cycle ! no values equal to one
+#else
             if(.not. any(rmat(i,:,:)==1.))cycle
+#endif
             do j=1,self%ldim(2)
                 js = max(1,j-1)
                 je = min(j+1,self%ldim(2))
@@ -3071,15 +3141,26 @@ contains
                 jr = min(j+falloff,self%ldim(2))
                 if( self%ldim(3)==1 )then
                     ! 2d
-                    if( rmat(i,j,1)/=1. )cycle
-                    ! within mask region
+#ifdef USETINY
+                   if( (abs(rmat(i,j,1)-1.) > TINY) )cycle
+#else
+                   if( rmat(i,j,1)/=1. )cycle
+#endif                     ! within mask region
                     ! update if has a masked neighbour
                     if( any( rmat(is:ie,js:je,1) < 1.) )call update_mask_2d
                 else
                     ! 3d
+#ifdef USETINY
+                    if(.not. any(abs(rmat(i,j,:)-1.) < TINY))cycle
+#else
                     if(.not. any(rmat(i,j,:)==1.))cycle
+#endif
                     do k=1,self%ldim(3)
+#ifdef USETINY
+                        if( abs(rmat(i,j,k)-1.)>TINY )cycle
+#else
                         if( rmat(i,j,k)/=1. )cycle
+#endif
                         ! within mask region
                         ks = max(1,k-1)
                         ke = min(k+1,self%ldim(3))
@@ -3165,7 +3246,7 @@ contains
     !!
     subroutine acf( self )
         class(image), intent(inout) :: self
-        if( .not. self%is_ft() )then
+        if( .not. self%ft )then
             call self%fwd_ft
         endif
         self%cmat = self%cmat*conjg(self%cmat)
@@ -3180,10 +3261,10 @@ contains
     function ccf( self1, self2 ) result( cc )
         class(image), intent(inout) :: self1, self2
         type(image) :: cc
-        if( .not. self1%is_ft() )then
+        if( .not. self1%ft )then
             call self1%fwd_ft
         endif
-        if( .not. self2%is_ft() )then
+        if( .not. self2%ft )then
             call self2%fwd_ft
         endif
         cc      = self1
@@ -3272,8 +3353,9 @@ contains
                         case('real')
                             spec(sh) = spec(sh) + real(self%cmat(phys(1),phys(2),phys(3)))
                         case('power')
-                            spec(sh) = spec(sh) + real(self%cmat(phys(1),phys(2),phys(3))&
-                                                  *conjg(self%cmat(phys(1),phys(2),phys(3))))
+                            ! spec(sh) = spec(sh) + real(self%cmat(phys(1),phys(2),phys(3))&
+                            !                       *conjg(self%cmat(phys(1),phys(2),phys(3))))
+                            spec(sh) = spec(sh) + csq(self%cmat(phys(1),phys(2),phys(3)))
                         case('absreal')
                             spec(sh) = spec(sh) + abs(real(self%cmat(phys(1),phys(2),phys(3))))
                         case('absimag')
@@ -3372,7 +3454,6 @@ contains
         lims = self%fit%loop_lims(2)
         !$omp parallel do collapse(3) default(shared) proc_bind(close)&
         !$omp private(k,j,i,res,phys,wght) schedule(static)
-
         do k=lims(3,1),lims(3,2)
             do j=lims(2,1),lims(2,2)
                 do i=lims(1,1),lims(1,2)
@@ -3412,7 +3493,11 @@ contains
             do k=lims(2,1),lims(2,2)
                 do l=lims(3,1),lims(3,2)
                     freq = hyp(real(h),real(k),real(l))
-                    if(hplim .ne. 0.)then ! Apply high-pass
+#ifdef USETINY
+                    if(abs(hplim) > TINY)then ! Apply high-pass
+#else
+                    if(hplim/=0.)then
+#endif
                         hplim_freq = self%fit%get_find(1,hplim) ! assuming square 4 now
                         if(freq .lt. hplim_freq) then
                             call self%mul([h,k,l], 0.)
@@ -3421,7 +3506,11 @@ contains
                             call self%mul([h,k,l], w)
                         endif
                     endif
-                    if(lplim .ne. 0.)then ! Apply low-pass
+#ifdef USETINY
+                    if(abs(lplim) > TINY)then ! Apply high-pass
+#else
+                    if(lplim/=0.)then
+#endif
                         lplim_freq = self%fit%get_find(1,lplim) ! assuming square 4 now
                         if(freq .gt. lplim_freq)then
                             call self%mul([h,k,l], 0.)
@@ -3475,7 +3564,7 @@ contains
         real                        :: fwght, wzero
         nyq = size(filter)
         didft = .false.
-        if( .not. self%is_ft() )then
+        if( .not. self%ft )then
             call self%fwd_ft
             didft = .true.
         endif
@@ -3505,7 +3594,7 @@ contains
         if( didft ) call self%bwd_ft
     end subroutine apply_filter_1
 
-    !> \brief apply_filter_2  is for application of an arbitrary 2D filter function
+    !> \brief apply_filter_2  is for application of an arbitrary filter function
     !! \param filter
     !!
     subroutine apply_filter_2( self, filter )
@@ -3516,7 +3605,7 @@ contains
         if( self.eqdims.filter )then
             if( filter%ft )then
                 if( .not. self%ft )then
-                    stop 'assumed that image 2 be filtered is in the Fourier domain; apply_filter_2; simple_image'
+                    stop 'assumed that the image to be filtered is in the Fourier domain; apply_filter_2; simple_image'
                 endif
                 lims = self%fit%loop_lims(2)
                 !$omp parallel do collapse(3) default(shared) private(h,k,l,comp,fwght,phys)&
@@ -3609,7 +3698,6 @@ contains
 
     !>  \brief average and median filtering in real-space
     subroutine real_space_filter( self, winsz, which )
-        
         class(image),     intent(inout) :: self
         integer,          intent(in)    :: winsz
         character(len=*), intent(in)    :: which
@@ -3736,8 +3824,8 @@ contains
         class(image), intent(inout) :: self
         integer                     :: i,j,k
         real, allocatable           :: rmat(:,:,:)
-        real                        :: val, dx, dy, dz, kernel(3,3)
-        if( self%is_ft() )stop 'real space only; simple_image%sobel'
+        real                        ::  dx, dy, dz, kernel(3,3)
+        if( self%ft )stop 'real space only; simple_image%sobel'
         if( self%ldim(3) == 1 )stop 'Volumes only; simple_image%sobel'
         allocate(rmat(self%ldim(1), self%ldim(2), self%ldim(3)), source=0., stat=alloc_stat)
         if(alloc_stat /= 0) allocchk("In: sobel; simple_image")
@@ -4296,10 +4384,10 @@ contains
         real, optional, intent(in)    :: lp_dyn, hp_dyn
         real                          :: r, sumasq, sumbsq
         complex                       :: shcomp
-        integer                       :: h, hh, k, kk, l, ll, phys(3), lims(3,2), sqarg, sqlp, sqhp
+        integer                       :: h, k, l, phys(3), lims(3,2), sqarg, sqlp, sqhp
         ! this is for highly optimised code, so we assume that images are always Fourier transformed beforehand
-        if( .not. self_ref%is_ft()  ) stop 'self_ref not FTed;  corr_shifted; simple_image'
-        if( .not. self_ptcl%is_ft() ) stop 'self_ptcl not FTed; corr_shifted; simple_image'
+        if( .not. self_ref%ft  ) stop 'self_ref not FTed;  corr_shifted; simple_image'
+        if( .not. self_ptcl%ft ) stop 'self_ptcl not FTed; corr_shifted; simple_image'
         r = 0.
         sumasq = 0.
         sumbsq = 0.
@@ -4376,7 +4464,7 @@ contains
         real,    allocatable        :: vec1(:), vec2(:)
         logical :: mask(self1%ldim(1),self1%ldim(2),self1%ldim(3))
         integer :: npix
-        real    :: r, ax, ay, sxx, syy, sxy, rnpix
+        real    :: r, sxx, syy, sxy, rnpix
         if( self1%ft .or. self2%ft ) stop 'cannot real-space correlate FTs; real_corr_mask; simple_image'
         if( .not. (self1.eqdims.self2) )then
             write(*,*) 'ldim self1: ', self1%ldim
@@ -4507,27 +4595,31 @@ contains
     !! \param res
     !! \param corrs
     !!
-    subroutine fsc( self1, self2, res, corrs )
+    subroutine fsc( self1, self2, res, corrs, serial )
+        use simple_math, only: csq
         class(image),      intent(inout) :: self1, self2
         real, allocatable, intent(inout) :: res(:), corrs(:)
-        real, allocatable                :: sumasq(:), sumbsq(:)
-        integer                          :: n, lims(3,2), phys(3), sh, h, k, l
-        logical                          :: didft1, didft2
+        logical, optional, intent(in)    :: serial
+        real, allocatable :: sumasq(:), sumbsq(:)
+        integer           :: n, lims(3,2), phys(3), sh, h, k, l
+        logical           :: didft1, didft2, sserial
         if( self1.eqdims.self2 )then
         else
             stop 'images of same dimension only! fsc; simple_image'
         endif
         if( .not. square_dims(self1) .or. .not. square_dims(self2) ) stop 'square dimensions only! fsc; simple_image'
         didft1 = .false.
-        if( .not. self1%is_ft() )then
+        if( .not. self1%ft )then
             call self1%fwd_ft
             didft1 = .true.
         endif
         didft2 = .false.
-        if( .not. self2%is_ft() )then
+        if( .not. self2%ft )then
             call self2%fwd_ft
             didft2 = .true.
         endif
+        sserial = .false.
+        if( present(serial) ) sserial = .true.
         n = self1%get_filtsz()
         if( allocated(corrs) ) deallocate(corrs)
         if( allocated(res) )   deallocate(res)
@@ -4538,25 +4630,48 @@ contains
         sumasq = 0.
         sumbsq = 0.
         lims   = self1%fit%loop_lims(2)
-        !$omp parallel do collapse(3) default(shared) private(h,k,l,phys,sh)&
-        !$omp schedule(static) proc_bind(close)
-        do h=lims(1,1),lims(1,2)
-            do k=lims(2,1),lims(2,2)
-                do l=lims(3,1),lims(3,2)
-                    ! compute physical address
-                    phys = self1%fit%comp_addr_phys([h,k,l])
-                    ! find shell
-                    sh = nint(hyp(real(h),real(k),real(l)))
-                    if( sh == 0 .or. sh > n ) cycle
-                    ! real part of the complex mult btw self1 and targ*
-                    corrs(sh) = corrs(sh)+&
-                    real(self1%cmat(phys(1),phys(2),phys(3))*conjg(self2%cmat(phys(1),phys(2),phys(3))))
-                    sumasq(sh) = sumasq(sh)+real(abs(self2%cmat(phys(1),phys(2),phys(3))))**2.
-                    sumbsq(sh) = sumbsq(sh)+real(abs(self1%cmat(phys(1),phys(2),phys(3))))**2.
+        if( sserial )then
+            do h=lims(1,1),lims(1,2)
+                do k=lims(2,1),lims(2,2)
+                    do l=lims(3,1),lims(3,2)
+                        ! compute physical address
+                        phys = self1%fit%comp_addr_phys([h,k,l])
+                        ! find shell
+                        sh = nint(hyp(real(h),real(k),real(l)))
+                        if( sh == 0 .or. sh > n ) cycle
+                        ! real part of the complex mult btw self1 and targ*
+                        corrs(sh) = corrs(sh)+&
+                        real(self1%cmat(phys(1),phys(2),phys(3))*conjg(self2%cmat(phys(1),phys(2),phys(3))))
+                        ! sumasq(sh) = sumasq(sh)+real(abs(self2%cmat(phys(1),phys(2),phys(3))))**2.
+                        ! sumbsq(sh) = sumbsq(sh)+real(abs(self1%cmat(phys(1),phys(2),phys(3))))**2.
+                        sumasq(sh) = sumasq(sh) + csq(self2%cmat(phys(1),phys(2),phys(3)))
+                        sumbsq(sh) = sumbsq(sh) + csq(self1%cmat(phys(1),phys(2),phys(3)))
+                    end do
                 end do
             end do
-        end do
-        !$omp end parallel do
+        else
+            !$omp parallel do collapse(3) default(shared) private(h,k,l,phys,sh)&
+            !$omp schedule(static) proc_bind(close) reduction(+:sumasq,sumbsq)
+            do h=lims(1,1),lims(1,2)
+                do k=lims(2,1),lims(2,2)
+                    do l=lims(3,1),lims(3,2)
+                        ! compute physical address
+                        phys = self1%fit%comp_addr_phys([h,k,l])
+                        ! find shell
+                        sh = nint(hyp(real(h),real(k),real(l)))
+                        if( sh == 0 .or. sh > n ) cycle
+                        ! real part of the complex mult btw self1 and targ*
+                        corrs(sh) = corrs(sh)+&
+                        real(self1%cmat(phys(1),phys(2),phys(3))*conjg(self2%cmat(phys(1),phys(2),phys(3))))
+                        ! sumasq(sh) = sumasq(sh)+real(abs(self2%cmat(phys(1),phys(2),phys(3))))**2.
+                        ! sumbsq(sh) = sumbsq(sh)+real(abs(self1%cmat(phys(1),phys(2),phys(3))))**2.
+                        sumasq(sh) = sumasq(sh) + csq(self2%cmat(phys(1),phys(2),phys(3)))
+                        sumbsq(sh) = sumbsq(sh) + csq(self1%cmat(phys(1),phys(2),phys(3)))
+                    end do
+                end do
+            end do
+            !$omp end parallel do
+        endif
         ! normalize correlations and compute resolutions
         do k=1,n
             corrs(k) = calc_corr(corrs(k),sumasq(k)*sumbsq(k))
@@ -5391,7 +5506,7 @@ contains
         real, optional,   intent(out)   :: msksum
         real    :: ci, cj, ck, e, wwidth
         real    :: cis(self%ldim(1)), cjs(self%ldim(2)), cks(self%ldim(3))
-        integer :: i, j, k, minlen, ir, jr, kr, vec(3)
+        integer :: i, j, k, minlen, ir, jr, kr
         logical :: didft, doinner, soft, domsksum
         ! width
         wwidth = 10.
