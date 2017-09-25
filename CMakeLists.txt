@@ -48,20 +48,8 @@ set(EXTRA_LIBS "")
 set(NUM_JOBS 1)
 include(ProcessorCount)
 ProcessorCount(NUM_JOBS)
-set(BUILD_NAME ${CMAKE_Fortran_COMPILER_ID}_${CMAKE_BUILD_TYPE} CACHE STRING "Build name with compiler, type and FFT backend ")
+set(BUILD_NAME "${CMAKE_Fortran_COMPILER_ID}_${CMAKE_BUILD_TYPE}" CACHE STRING "Build name with compiler, type and FFT backend ")
 set(CMAKE_Fortran_MODULE_DIRECTORY ${PROJECT_BINARY_DIR}/lib)
-############################################################
-#
-# Add definition macros unique to compilation
-#
-############################################################
-add_definitions("-DBUILD_NAME=\"${BUILD_NAME}\"")
-add_definitions(" -D__FILENAME__='\"$(notdir $<)\"' ")
-# use _DEBUG since DEBUG or debug is used as a variable in some files
-# _DEBUG is defined by Intel Fortran on Windows
-if(CMAKE_BUILD_TYPE STREQUAL "DEBUG")
-  add_definitions("-D_DEBUG")
-endif()
 
 ############################################################
 # Define the main targets
@@ -90,6 +78,18 @@ include_directories(${CMAKE_CURRENT_BINARY_DIR})
 include(CheckIncludeFiles)
 include(SimpleFortranOptions)
 
+############################################################
+#
+# Add definition macros unique to compilation
+#
+############################################################
+add_definitions("-DBUILD_NAME=\"${BUILD_NAME}\"")
+add_definitions(" -D__FILENAME__='\"$(notdir $<)\"' ")
+# use _DEBUG since DEBUG or debug is used as a variable in some files
+# _DEBUG is defined by Intel Fortran on Windows
+if(CMAKE_BUILD_TYPE STREQUAL "DEBUG")
+  add_definitions("-D_DEBUG")
+endif()
 
 
 #   cmake_add_fortran_subdirectory(
