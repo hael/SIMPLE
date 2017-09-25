@@ -1,11 +1,13 @@
 ! generic fileio       class
-#include "simple_lib.f08"
+
 module simple_fileio
-use simple_defs
-use simple_syslib
-!use ISO_C_BINDING
-use, intrinsic :: iso_fortran_env, only: stderr=>ERROR_UNIT, stdout=>OUTPUT_UNIT, stdin=>INPUT_UNIT
-use simple_strings, only: upperCase,stringsAreEqual, strIsBlank, int2str,int2str_pad,cpStr
+#include "simple_lib.f08"
+    use simple_defs
+    ! use ISO_C_BINDING
+    use, intrinsic :: iso_fortran_env, only: stderr=>ERROR_UNIT, stdout=>OUTPUT_UNIT, stdin=>INPUT_UNIT
+    use simple_strings, only: upperCase,stringsAreEqual, strIsBlank, int2str,int2str_pad,cpStr
+    use simple_syslib, only: file_exists, is_open, is_file_open, is_io, alloc_errchk, &
+        &exec_cmdline, simple_stop, simple_error_check
 implicit none
 
 interface arr2file
@@ -15,10 +17,11 @@ end interface arr2file
 
 interface fopen
     module procedure fopen_1
-    module procedure fopen_2
+!    module procedure fopen_2
 end interface fopen
 
 interface fclose
+
     module procedure fclose_1
     module procedure fclose_2
 end interface fclose
@@ -86,7 +89,7 @@ contains
     !         call simple_stop ('IO error; is_open; simple_fileio      ')
     !     endif
     ! end function is_open
-    
+
     ! !>  \brief  check whether a file is currently opened
     ! logical function is_file_open( fname )
     !     character(len=*), intent(in)  :: fname
@@ -106,34 +109,37 @@ contains
     !!        call fileio_errmsg('In: commander_rec :: eo_volassemble', file_stat )
     !!
     subroutine fopen_1(funit, file, status, action, iostat, access, form, recl, async, pad,&
-        &decimal, round, delim, blank, convert, iomsg, position)
+        &decimal, round, delim, blank, convert, iomsg, position, errmsg)
         integer,                    intent(inout) :: funit
         character(len=*),           intent(in)    :: file
         integer,          optional, intent(inout) :: iostat
         integer,          optional, intent(inout) :: recl
         character(len=*), optional, intent(in)    :: status, access, async, action, &
-            &blank, pad, form, decimal, round, delim, convert, iomsg, position
+            &blank, pad, form, decimal, round, delim, convert, iomsg, position, errmsg
         integer               :: iostat_this,  recl_this
         character(len=STDLEN) :: filename,iomsg_this
         character(len=30)     :: async_this, access_this, action_this, status_this,&
-            &blank_this, pad_this, decimal_this, delim_this, form_this, round_this, position_this
-    
+            &blank_this, pad_this, decimal_this, delim_this, form_this, round_this,&
+            &position_this, errmsg_this
+
         ! check to see if filename is empty
         write(filename,'(A)') trim(adjustl(file))
         if ( strIsBlank(filename) )then
             print *, 'simple_system::fopen filename blank'
             if(present(iomsg))  print *, trim(adjustl(iomsg))
+            if(present(errmsg))  print *, "Message: ", trim(adjustl(errmsg))
             return
         end if
-
+        errmsg_this="In simple_fileio::fopen "
+        if (present(errmsg)) errmsg_this=errmsg
         if (.not. (present(iostat) .or. present(form) .or. present(recl) .or.&
-            & present(async) .or. present(pad) .or. present(action) .or. present(status)&
-            & .or. present(position) .or. present(access) .or. present(decimal) .or. &
-            present(round) .or. present(delim) .or. present(blank) ) )then
+        & present(async) .or. present(pad) .or. present(action) .or. present(status)&
+        & .or. present(position) .or. present(access) .or. present(decimal) .or. &
+        present(round) .or. present(delim) .or. present(blank) ) )then
             open(NEWUNIT=funit, FILE=trim(adjustl(filename)),IOSTAT=iostat_this)
-            call simple_error_check(iostat_this,"simple_fileio::fopen basic open "//trim(filename))
+            call fileio_errmsg(trim(adjustl(errmsg_this))//" fopen basic open "//trim(filename), iostat_this,.false.)
             if(is_io(funit)) call simple_stop( "simple_fileio::fopen newunit returned "//int2str(funit) )
-            return ! if ok 
+            return ! if ok
         end if
         ! Optional args
         if(present(convert)) then
@@ -231,7 +237,7 @@ contains
                     end if
                 end if
             end if
-            call simple_error_check(iostat_this,"::fopen common open ACTION/STATUS/ACCESS")
+            call fileio_errmsg(trim(adjustl(errmsg_this))//" fopen common open "//trim(filename), iostat_this,.false.)
             if(present(iostat))iostat=iostat_this
             if(funit/=0 .and. is_io(funit)) call simple_stop( "::fopen newunit returned "//int2str(funit) )
             return
@@ -300,25 +306,27 @@ contains
                 end if
             end if
         end if
-        call simple_error_check(iostat_this,"fileio::fopen extra open ")
+        call fileio_errmsg(trim(adjustl(errmsg_this))//" fopen opening "//trim(filename), iostat_this, .false.) 
         if(is_io(funit)) call simple_stop( "::fopen newunit returned "//int2str(funit) )
         if(present(iostat))iostat=iostat_this
         if(present(recl))recl=recl_this
     end subroutine fopen_1
 
-    subroutine fopen_2(funit, file, status, iostat,  errmsg)
-        integer,                    intent(inout) :: funit
-        character(len=*),           intent(in)    :: file
-        integer,                    intent(inout) :: iostat
-        character(len=*),           intent(in)    :: errmsg
-        character(len=*), optional, intent(in)    :: status
-        character(len=STDLEN) :: filename,errmsg_this
-        character(len=30)     :: status_this
-        if (present(status)) write(status_this,'(A)')  upperCase(status)
-        filename=file
-        call fopen_1(funit,FILE=filename,STATUS=status,IOSTAT=iostat)
-        call fileio_errmsg(errmsg, iostat)
-    end subroutine fopen_2
+    ! subroutine fopen_2(funit, file, status, iostat,  errmsg)
+    !     integer,                    intent(inout) :: funit
+    !     character(len=*),           intent(in)    :: file
+    !     integer,                    intent(inout) :: iostat
+    !     character(len=*),           intent(in)    :: errmsg
+    !     character(len=*), optional, intent(in)    :: status
+    !     character(len=STDLEN) :: filename, errmsg_this
+    !     character(len=30)     :: status_this
+    !     if (present(status)) write(status_this,'(A)')  upperCase(status)
+        
+    !     errmsg_this=errmsg
+    !     filename=file
+    !     call fopen_1(funit,FILE=filename,STATUS=status,IOSTAT=iostat)
+    !     call fileio_errmsg(errmsg_this, iostat)
+    ! end subroutine fopen_2
 
     !> FCLOSE replacement for intrinsic close
     !!
@@ -331,7 +339,7 @@ contains
         character(len=STDLEN) :: msg_this
         msg_this="SIMPLE_FILEIO::fclose_1 failed closing unit "//int2str(funit)
         if (present(errmsg)) write(msg_this,'(A)') trim(adjustl(errmsg))
-        
+
         if (is_open(funit)) then
             CLOSE (funit,IOSTAT=iostat)
             call simple_error_check(iostat, trim(msg_this))
@@ -405,8 +413,22 @@ contains
     ! ! 92      print ERROR_UNIT, "fclose failed ", int2str(iostat_this)
     ! !         return
     !         end function fclose_2
-    
 
+
+    !> \brief Touch file, create file if necessary
+    subroutine simple_touch( fname , errmsg )
+        character(len=*), intent(in)    :: fname !< input filename
+        character(len=*), intent(in), optional :: errmsg
+        character(len=STDLEN) :: msg_this
+        character(len=:), allocatable   :: tfile
+        integer          :: funit, io_status
+        msg_this="simple_fileio::simple_touch "
+        if(present(errmsg)) write(msg_this,'(A)') errmsg
+        tfile=fname
+        call fopen_1(funit, trim(adjustl(tfile)), status='REPLACE', action='WRITE', iostat=io_status)
+        call fileio_errmsg("simple_fileio::simple_touch opening ; "//trim(adjustl(msg_this))//trim(tfile), io_status)
+        call fclose( funit , errmsg="simple_fileio::simple_touch opening ; "//trim(adjustl(msg_this))//trim(tfile))
+    end subroutine simple_touch
 
     !> \brief return the number of lines in a textfile
     function nlines( fname ) result( n )
@@ -483,31 +505,35 @@ contains
     end function file_size
 
     !> \brief  Rename or move file
-    subroutine mv_file( filein, fileout , overwrite)
+    subroutine simple_rename( filein, fileout , overwrite)
 #ifdef INTEL
         use ifport
+#elif PGI
+        use simple_syslib, only: rename
 #endif
 
         character(len=*), intent(in) :: filein, fileout !< input filename
         logical, intent(in), optional :: overwrite
-        integer :: fnr, file_status
+        integer :: file_status
         logical :: ovrwrite
         ovrwrite=.true.
         if(present(overwrite)) ovrwrite=overwrite
         if( file_exists(filein) )then
             if( file_exists(fileout) .and. (.not. ovrwrite) )&
-                call fileio_errmsg( "mv_file failed to rename file,  designated output  filename already exists "//trim(fileout))
-#ifdef INTEL
+                call fileio_errmsg( " simple_rename failed to rename file,  designated output  filename already exists "//trim(fileout))
+#if defined(INTEL)
             file_status = rename(filein, fileout)
-            if(file_status /= 0) call fileio_errmsg( "mv_file failed to rename file "//trim(filein), file_status)
+#elif defined(PGI)
+            file_status = rename(filein, fileout)
 #else
-            call rename(filein, fileout) ! intrinsic
+            file_status = rename(filein, fileout) ! intrinsic GNU Fortran extension
 #endif
 
         else
-            call simple_stop( "simepl_fileio::mv_file failed to rename file,  designated input filename doesn't exist "//trim(filein))
+            call simple_stop( "simple_fileio:: simple_rename failed to rename file,  designated input filename doesn't exist "//trim(filein))
         end if
-    end subroutine mv_file
+         if(file_status /= 0) call fileio_errmsg( " simple_rename failed to rename file "//trim(filein), file_status)
+    end subroutine simple_rename
 
     !> Make directory
     function mkdir (path)
