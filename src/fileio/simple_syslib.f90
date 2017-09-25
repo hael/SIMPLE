@@ -1,26 +1,23 @@
 !!
 !! System library functions and error checking
 !!
-#include "simple_lib.f08"
+
 module simple_syslib
     use simple_defs
-    use simple_strings, only: cpStr
+#if defined(GNU)
+    use, intrinsic :: iso_fortran_env, only: &
+        &stderr=>ERROR_UNIT, stdout=>OUTPUT_UNIT,&
+        &IOSTAT_END, IOSTAT_EOR, COMPILER_VERSION, COMPILER_OPTIONS
+#elif defined(INTEL) || defined(PGI)
     use, intrinsic :: iso_fortran_env, only: &
         &stderr=>ERROR_UNIT, stdout=>OUTPUT_UNIT,&
         &IOSTAT_END, IOSTAT_EOR
-    implicit none
-
-#if defined(INTEL)
-    ! interface
-    !     integer function ierrno()
-    !     end function ierrno
-    !     pure character*(24) function ctime(stime)
-    !         integer, intent(in) :: stime
-    !     end function ctime
-    !     pure integer function time()
-    !     end function time
-    ! end interface
 #endif
+#if defined(INTEL)
+    use ifport, killpid=>kill
+    use ifcore
+#endif
+    implicit none
 #if defined(PGI)
     !! include lib3f.h without kill, bessel fns, etc
 
@@ -296,19 +293,14 @@ module simple_syslib
 
     end interface
 #endif
-
-
     private :: raise_sys_error
-
     ! private
 
 #ifdef PGI
-
     ! include 'lib3f.h'
     ! public :: exec_cmdline, simple_getenv, ls_mrcfiletab, ls_filetab, &
     !    sys_del_files, sys_get_last_fname, simple_sleep, &
     !     sys_merge_docs
-
 #endif
 
 contains
@@ -327,13 +319,9 @@ contains
     end subroutine simple_stop
 
     function get_sys_error () result(err)
-#ifdef INTEL
-        use ifport
-        use ifcore
-#endif
         integer :: err
         CHARACTER(len=100) :: msg
-        err = INT( IERRNO(), kind=4 ) !! intrinsic,  no implicit type in INTEL
+        err = int( IERRNO(), kind=4 ) !!  EXTERNAL;  no implicit type in INTEL
 
         if( err < 0)then !! PGI likes to use negative error numbers
             !#ifdef PGI
@@ -345,8 +333,8 @@ contains
             write(stderr,*) trim(msg)
         else if (err /= 0) then
 #ifdef GNU
-            write(msg,'("SIMPLE_SYSLIB::SYSERROR ",I0)') err
-            call perror(msg)
+            write(msg,'("Last detected error (SIMPLE_SYSLIB::SYSERROR) ",I0,":")') err
+            call perror(trim(adjustl(msg)))
 
 #elif defined(INTEL)
             ! err= getlasterror()
@@ -469,41 +457,35 @@ contains
         endif
     end subroutine alloc_errchk
 
-
-
-    subroutine simple_error_check (iostat, msg)
-#ifdef INTEL
-        use ifport
-        use ifcore
-#endif
-        integer,          intent(in), optional :: iostat
+    subroutine simple_error_check (io_stat, msg)
+        integer,          intent(in), optional :: io_stat
         character(len=*), intent(in), optional :: msg
-        integer :: io_stat
+        integer :: io_stat_this
         character(len=STDLEN ) :: newmsg
-        if (present(iostat))then
-            io_stat = iostat
+        if (present(io_stat))then
+            io_stat_this = io_stat
         else
-            io_stat = get_sys_error()
+            io_stat_this = get_sys_error()
         end if
 
 #ifdef PGI
-        if(io_stat < 0)then
-            if (IS_IOSTAT_END(io_stat))then
+        if(io_stat_this < 0)then
+            if (IS_IOSTAT_END(io_stat_this))then
                 write(stderr,'(a)')"fclose EOF reached (PGI version)"
-                iostat=0
-            else if (IS_IOSTAT_EOR(io_stat)) then
+                io_stat_this=0
+            else if (IS_IOSTAT_EOR(io_stat_this)) then
                 write(stderr,'(a)')"fclose End-of-record reached (PGI version)"
-                iostat=0
+                io_stat_this=0
             end if
         end if
 #else
         !! Intel and GNU
-        if (io_stat==IOSTAT_END)  write(*,'(a,1x,I0 )') 'ERRCHECK: EOF reached, end-of-file reached IOS# ', io_stat
-        if (io_stat==IOSTAT_EOR)  write(*,'(a,1x,I0 )') 'ERRCHECK: EOR reached, read was short, IOS# ', io_stat
+        if (io_stat_this==IOSTAT_END)  write(*,'(a,1x,I0 )') 'ERRCHECK: EOF reached, end-of-file reached IOS# ', io_stat_this
+        if (io_stat_this==IOSTAT_EOR)  write(*,'(a,1x,I0 )') 'ERRCHECK: EOR reached, read was short, IOS# ', io_stat_this
 
 #endif
-        if( io_stat /= 0 ) then
-            write(stderr,'(a,1x,I0 )') 'ERROR: File I/O failure, IOS# ', io_stat
+        if( io_stat_this /= 0 ) then
+            write(stderr,'(a,1x,I0 )') 'ERROR: File I/O failure, IOS# ', io_stat_this
             if(present(msg)) write(stderr,'(a)') trim(adjustl(msg))
             !! do not stop yet -- let the fopen/fclose call to finish
             !! stop
@@ -515,9 +497,6 @@ contains
 
     !>  Wrapper for system call
     subroutine exec_cmdline( cmdline, waitflag )
-#if defined(INTEL)
-        use ifport
-#endif
         character(len=*),  intent(in) :: cmdline
         logical, optional, intent(in) :: waitflag
         character(len=STDLEN) :: cmsg
@@ -529,12 +508,10 @@ contains
 #if defined(PGI)
         ! include 'lib3f.h'  ! PGI declares kill,wait here
         exec_stat = system(trim(adjustl(cmdline)))
-
         ! #elif defined(INTEL)
         !        exec_stat = system(trim(adjustl(cmdline)))
-
 #else
-        !! GNU
+        !! GNU and INTEL
         call execute_command_line( trim(adjustl(cmdline)), wait=wwait, exitstat=exec_stat, cmdstat=cstat, cmdmsg=cmsg)
         call raise_sys_error( cmdline, exec_stat, cstat, cmsg )
 #endif
@@ -587,9 +564,6 @@ contains
     end function simple_getenv
 
     subroutine simple_sleep( secs )
-#if defined(INTEL)
-        use ifport
-#endif
         integer, intent(in) :: secs
 #if defined(INTEL)
         integer  :: msecs
@@ -603,26 +577,30 @@ contains
 
     !! SYSTEM FILE OPERATIONS
 
-    integer function simple_chmod(pathname, mode  )
-#if defined(INTEL)
-        use ifport
-#endif
+    function simple_chmod(pathname, mode ) result( status )
         character(len=*), intent(in) :: pathname, mode
-#if 1
-        
-        simple_chmod = chmod(pathname, mode)
-        call simple_error_check(msg="simple_syslib::simple_chmod chmod failed"//trim(pathname))
+        integer :: status
+#if defined(INTEL)
+        ! Function method
+        status = chmod(pathname, mode)
+#elif defined(PGI)
+        ! integer :: imode
+        ! imode=0 ! convert symbolic to octal
+        ! if ( index(mode, 'x') /=0) imode=o'110'
+        ! if ( index(mode, 'w') /=0) imode=o'220'
+        ! if ( index(mode, 'r') /=0) imode=o'440'
+        status = system("chmod "//trim(adjustl(mode))//" "//trim(adjustl(pathname)))
 #else
-        call chmod(pathname, mode, status=simple_chmod) !! intrinsic
-        if(simple_status/=0)call simple_error_check(msg="simple_syslib::simple_chmod chmod failed "//trim(pathname))
-#endif        
+        status= chmod(pathname, mode) !! intrinsic
+#endif
+        if(status/=0)&
+            call simple_error_check(status,"simple_syslib::simple_chmod chmod failed "//trim(pathname))
     end function simple_chmod
 
 
     !>  Wrapper for POSIX system call stat
     subroutine simple_file_stat( filename, status, buffer, doprint )
 #if defined(INTEL)
-        use ifport
         use ifposix
 #endif
         character(len=*),     intent(in) :: filename
@@ -651,7 +629,7 @@ contains
         !allocate(buffer(13), source=0)
         status = STAT (trim(adjustl(filename)) , buffer)
         if (.NOT. status) then
-             call simple_error_check()
+             call simple_error_check(status, "In simple_syslib::simple_file_stat "//trim(filename))
              print *, buffer
           end if
          if(.not.currently_opened) close(funit)
@@ -754,6 +732,27 @@ contains
         enddo
     end subroutine wait_for_closure
 
+    !> \brief  Get current working directory
+    subroutine simple_getcwd( cwd )
+        character(len=*), intent(inout) :: cwd   !< output pathname
+        integer :: io_status
+        io_status = getcwd(cwd)
+        if(io_status /= 0) call simple_error_check(io_status, &
+             "syslib:: simple_getcwd failed to get path "//trim(cwd))
+    end subroutine simple_getcwd
+
+    !> \brief  Change working directory
+    subroutine simple_chdir( newd )
+        character(len=*), intent(in) :: newd   !< output pathname
+        integer :: io_status
+#if defined(INTEL) || defined(PGI)
+        io_status = chdir(newd)
+        if(io_status /= 0) call simple_error_check(io_status, &
+            "syslib:: simple_getcwd failed to get path "//trim(newd))
+#else
+        call chdir(newd)
+#endif
+    end subroutine simple_chdir
 
     ! !>  \brief  get logical unit of file
     ! integer function get_lunit( fname )
@@ -816,38 +815,40 @@ contains
     !! SYSTEM INFO ROUTINES
 
     subroutine print_compiler_info(file_unit)
-      use simple_strings, only: int2str
-#ifdef GNU
-        use, intrinsic :: iso_fortran_env, only: compiler_version, &
-            &compiler_options
-#endif
+        use simple_strings, only: int2str
 #ifdef INTEL
-        use ifport
-        use ifcore
-        integer       :: res
         character*56  :: str
 #endif
-        integer , intent (in), optional :: file_unit
-        integer  :: file_unit_op
+
+#ifdef GNU
+    CHARACTER(*), PARAMETER :: compilation_cmd = COMPILER_OPTIONS()
+    CHARACTER(*), PARAMETER :: compiler_ver = COMPILER_VERSION()
+#endif
+    
+    integer , intent (in), optional :: file_unit
+    integer  :: file_unit_op
+    integer       :: status
+
 
         if (present(file_unit)) then
             file_unit_op = file_unit
         else
             file_unit_op = stdout
         end if
-#ifdef GNU
-        write( file_unit_op, '(/4a/)' ) &
-            ' This file was compiled by ', COMPILER_VERSION(), &
-            ' using the options ', COMPILER_OPTIONS()
+#if defined(GNU)
+        write( file_unit_op, '(A,A,A,A)' ) &
+            ' This file was compiled by ', trim(adjustl(compiler_ver)), &
+            ' using the options ', trim(adjustl(compilation_cmd))
 #endif
 #ifdef INTEL
-        res = for_ifcore_version( str )
-        if (res == 0 ) call simple_stop("print_compiler_info for_ifcore_version returned "//int2str(res))
-        write( file_unit_op, '(/2a/)' ) " Intel IFCORE version ", trim(adjustl(str))
-        res = for_ifport_version( str )
-        if (res == 0 ) call simple_stop("print_compiler_info for_ifport_version returned "//int2str(res))
-        write( file_unit_op, '(/2a/)' ) ' Intel IFPORT version ', trim(adjustl(str))
+        status = for_ifcore_version( str )
+        write( file_unit_op, '(A,A)' ) &
+            ' Intel IFCORE version ', trim(adjustl(str))
+        status = for_ifport_version( str )
+        write( file_unit_op, '(A,A)' ) &
+            ' Intel IFPORT version ', trim(adjustl(str))
 #endif
+
     end subroutine print_compiler_info
 
 
@@ -866,7 +867,6 @@ contains
 
     ! IFCORE checks
     function fastmem_policy() result (policy)
-        use ifcore
         integer(4) :: old_policy, policy
         print *,"Print the current Results of initial for_set_fastmem_policy(FOR_K_FASTMEM_INFO):"
         old_policy = for_set_fastmem_policy(FOR_K_FASTMEM_INFO)
