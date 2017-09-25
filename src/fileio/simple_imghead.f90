@@ -13,12 +13,12 @@
 #include "simple_lib.f08"
 module simple_imghead
 use simple_defs
-use simple_syslib, only: alloc_errchk
-use simple_fileio, only: file_exists, fileio_errmsg
+use simple_syslib, only: alloc_errchk, file_exists
+use simple_fileio, only: fopen, fileio_errmsg, fclose, fname2format
 use simple_strings, only: int2str
 implicit none
 
-public :: ImgHead, MrcImgHead, SpiImgHead, test_imghead
+public :: ImgHead, MrcImgHead, SpiImgHead, test_imghead, find_ldim_nptcls, has_ldim_nptcls
 private
 #include "simple_local_flags.inc"
 
@@ -190,7 +190,6 @@ contains
         integer, optional,      intent(in)    :: ldim(3) !< logical dims of image
         integer, optional,      intent(in)    :: length  !< length of the header record.
         integer               :: llength
-        character(len=STDLEN) :: errmsg
         call self%kill
         select type( self )
             type is( MrcImgHead )
@@ -204,9 +203,9 @@ contains
                     if( size(self%byte_array) .ne. llength ) deallocate(self%byte_array)
                 endif
                 if( .not. allocated(self%byte_array) )then
-                    allocate(self%byte_array(llength),stat=alloc_stat,errmsg=errmsg)
+                    allocate(self%byte_array(llength),stat=alloc_stat)
                     if(alloc_stat .ne. 0) &
-                         call alloc_errchk("simple_imghead::new byte_array ", alloc_stat,iomsg=trim(errmsg) )
+                         call alloc_errchk("simple_imghead::new byte_array ", alloc_stat )
                 endif
                 ! zero the byte array
                 self%byte_array = 0
@@ -306,7 +305,7 @@ contains
         integer(kind=8), optional, intent(in)    :: pos
         logical,         optional, intent(in)    :: print_entire
         integer(kind=8)                   ::  ppos, i, cnt
-        integer                   :: io_status,labrec, dim1
+        integer                   :: io_status
         character(len=512)        :: io_message
         real(kind=4), allocatable :: spihed(:)
         ppos = 1
@@ -1098,6 +1097,183 @@ contains
         end select
     end subroutine setRMSD
 
+
+    !>  \brief is for gettign a part of the info in a MRC image header
+    subroutine get_mrcfile_info( fname, ldim, form, smpd, doprint )
+        character(len=*), intent(in)  :: fname
+        character(len=1), intent(in)  :: form
+        integer,          intent(out) :: ldim(3)
+        real,             intent(out) :: smpd
+        logical,          intent(in)  :: doprint
+        class(imghead), allocatable   :: hed
+        integer :: filnum,ios
+        ldim = 0
+        smpd = 0.
+        if( file_exists(fname) )then
+            select case(form)
+                case('M')
+                    allocate(MrcImgHead :: hed)
+                    call hed%new
+                    call fopen(filnum, status='OLD', action='READ', file=fname, access='STREAM', iostat=ios)
+                    call fileio_errmsg(" get_mrcfile_info fopen error "//trim(fname),ios)
+                    call hed%read(filnum)
+                    call fclose(filnum,errmsg=" get_mrcfile_info close error "//trim(fname))
+                    ldim = hed%getDims()
+                    smpd = hed%getPixSz()
+                    if( doprint )then
+                        call hed%print_imghead
+                        write(*,'(a,3(i0,1x))') 'Number of columns, rows, sections: ', ldim(1), ldim(2), ldim(3)
+                        write(*,'(a,1x,f15.8)')  'Pixel size: ', smpd
+                    endif
+                case('F')
+                    allocate(MrcImgHead :: hed)
+                    call hed%new
+                    call fopen(filnum, status='OLD', action='READ', file=fname, access='STREAM', iostat=ios)
+                    call fileio_errmsg(" get_mrcfile_info fopen error "//trim(fname),ios)
+                    call hed%read(filnum)
+                    call fclose(filnum, errmsg=" get_mrcfile_info fclose error "//trim(fname))
+                    if( doprint ) call hed%print_imghead
+                case DEFAULT
+                    write(*,*) 'The inputted file is not an MRC file; get_mrcfile_info; simple_jiffys'
+                    write(*,*) fname
+                    stop
+            end select
+        else
+            write(*,*) 'The below file does not exists; get_mrcfile_info; simple_jiffys'
+            write(*,*) fname
+            stop
+        endif
+    end subroutine get_mrcfile_info
+
+    !>  \brief is for gettign a part of the info in a SPIDER image header
+    subroutine get_spifile_info( fname, ldim, iform, maxim, smpd, conv, doprint )
+        character(len=*), intent(in)               :: fname
+        integer, intent(out)                       :: ldim(3), maxim, iform
+        real, intent(out)                          :: smpd
+        character(len=:), allocatable, intent(out) :: conv
+        logical, intent(in)                        :: doprint
+        real    :: spihed(40)
+        integer :: filnum, cnt, i, ios
+        if( file_exists(fname) )then
+            if( fname2format(fname) .eq. 'S' )then
+                if( allocated(conv) ) deallocate(conv)
+                call fopen(filnum, status='OLD', action='READ', file=fname, access='STREAM',iostat=ios)
+                call fileio_errmsg(" get_spifile_info fopen error "//trim(fname),ios)
+                call read_spihed
+                call fclose(filnum,errmsg=" get_spifile_info fclose error "//trim(fname))
+                if( .not. any(ldim < 1) )then
+                    allocate(conv, source='NATIVE')
+                    call print_spihed
+                    return
+                endif
+                call fopen(filnum, status='OLD', action='READ', file=fname, access='STREAM', iostat=ios)
+                call fileio_errmsg(" get_spifile_info fopen error "//trim(fname),ios)
+                call read_spihed
+                call fclose(filnum,errmsg=" get_spifile_info fclose error "//trim(fname))
+                if( .not. any(ldim < 1) )then
+                    allocate(conv, source='BIG_ENDIAN')
+                    call print_spihed
+                    return
+                endif
+                call fopen(filnum, status='OLD', action='READ', file=fname,&
+                &access='STREAM', iostat=ios)
+                call fileio_errmsg(" get_spifile_info fopen error "//trim(fname),ios)
+                call read_spihed
+                call fclose(filnum,errmsg=" get_spifile_info fclose error "//trim(fname))
+                if( .not. any(ldim < 1) )then
+                    allocate(conv, source='LITTLE_ENDIAN')
+                    call print_spihed
+                    return
+                endif
+            else
+                write(*,*) 'The inputted file is not a SPIDER file; get_spifile_info; simple_jiffys'
+                write(*,*) fname
+                stop
+            endif
+        else
+            write(*,*) 'The below file does not exists; get_spifile_info; simple_jiffys'
+            write(*,*) fname
+            stop
+        endif
+
+        contains
+
+            subroutine read_spihed
+                cnt = 0
+                do i=1,40*4,4
+                    cnt = cnt+1
+                    read(unit=filnum ,pos=i) spihed(cnt)
+                end do
+                ldim  = int([spihed(12), spihed(2), spihed(1)])
+                iform = int(spihed(5))
+                maxim = int(spihed(26))
+                smpd  = spihed(38)
+            end subroutine
+
+            subroutine print_spihed
+                if( doprint )then
+                    write(*,'(a,3(i0,1x))') 'Number of columns, rows, sections: ', int(spihed(12)), int(spihed(2)), int(spihed(1))
+                    write(*,'(a,1x,i3)')    'Iform descriptor: ', int(spihed(5))
+                    write(*,'(a,1x,f7.0)')  'The number of the highest image currently used in the stack: ', spihed(26)
+                    write(*,'(a,1x,f7.3)')  'Pixel size: ', spihed(38)
+                endif
+            end subroutine
+
+    end subroutine get_spifile_info
+
+    !>  \brief  is for finding logical dimension and number of particles in stack
+    subroutine find_ldim_nptcls( fname, ldim, nptcls, doprint, formatchar )
+        character(len=*),           intent(in)  :: fname      !< filename
+        integer,                    intent(out) :: ldim(3)    !< logical dimension
+        integer,                    intent(out) :: nptcls     !< number of particles
+        logical,          optional, intent(in)  :: doprint    !< do print or not
+        character(len=1), optional, intent(in)  :: formatchar !< input format
+        integer                       :: iform, maxim
+        real                          :: smpd
+        character(len=:), allocatable :: conv
+        character(len=1)              :: form
+        logical                       :: ddoprint
+        ddoprint = .false.
+        if( present(doprint) ) ddoprint = doprint
+        if( present(formatchar) )then
+            form = formatchar
+        else
+            form = fname2format(fname)
+        endif
+        nptcls = 0
+        select case (form)
+            case('M','F')
+                call get_mrcfile_info(fname, ldim, form, smpd, ddoprint )
+                nptcls = ldim(3)
+            case('S')
+                call get_spifile_info(fname, ldim, iform, maxim, smpd, conv, ddoprint)
+                nptcls = maxim
+            case DEFAULT
+                write(*,*) 'fname: ', fname
+                write(*,*) 'format descriptor: ', fname2format(fname)
+                stop 'File format not supported; find_ldim_nptcls; simple_procimgfile'
+        end select
+    end subroutine find_ldim_nptcls
+
+    !>  \brief  is for checking logical dimension and number of particles in stack
+    logical function has_ldim_nptcls( fname, ldim, nptcls )
+        character(len=*), intent(in) :: fname   !< filename
+        integer,          intent(in) :: ldim(3) !< expected logical dimension
+        integer,          intent(in) :: nptcls  !< number of expected particles
+        integer :: ldim_found(3), nptcls_found
+        call find_ldim_nptcls( fname, ldim_found, nptcls_found )
+        if( ldim_found(1) /= ldim(1) .or. ldim_found(2) /= ldim(2) )then
+            has_ldim_nptcls = .false.
+            return
+        endif
+        if( nptcls_found /= nptcls )then
+            has_ldim_nptcls = .false.
+            return
+        endif
+        has_ldim_nptcls = .true.
+    end function has_ldim_nptcls
+    
+
     ! polymorphic destructor
 
     subroutine kill( self )
@@ -1121,7 +1297,7 @@ contains
     subroutine test_imghead
         use simple_fileio, only: fopen, fclose, fileio_errmsg
         class(ImgHead), allocatable :: hed, hed2
-        integer :: recsz, funit, dims(3), dims2(3),ios
+        integer :: recsz, funit, ios
         write(*,'(a)') '**info(simple_imghead_unit_test): testing read/write capabilities'
         allocate(SpiImgHead :: hed, hed2 )
         call hed%new([120,120,1])

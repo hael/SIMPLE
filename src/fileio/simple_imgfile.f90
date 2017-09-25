@@ -12,13 +12,13 @@
 #include "simple_lib.f08"
 module simple_imgfile
 use simple_defs
-use simple_syslib
-use simple_fileio
-use simple_imghead
+use simple_syslib,  only: alloc_errchk, file_exists, is_open
+use simple_fileio,  only: fileio_errmsg, fopen, fclose, file_size, fname2format, del_file
+use simple_imghead  ! only public ImgHead, MrcImgHead, SpiImgHead, test_imghead, find_ldim_nptcls
 use gnufor2
 implicit none
 
-public :: imgfile, find_ldim_nptcls, has_ldim_nptcls
+public :: imgfile
 private
 #include "simple_local_flags.inc"
 
@@ -30,7 +30,7 @@ type imgfile
     integer                     :: funit          = 0        !< Unit number
     logical                     :: was_written_to = .false.  !< Indicates whether data was written to the file since it was opened
     logical                     :: isvol          = .false.  !< Indicates if SPIDER file is volume or stack
-    logical    :: existence      = .false.  !< Set to true when the object exists, false when it's closed
+    logical                     :: existence      = .false.  !< Set to true when the object exists, false when it's closed
 contains
     ! CORE FUNCTIONALITY
     procedure          :: open
@@ -97,7 +97,7 @@ contains
         if( format_descriptor .ne. 'N' )then
             self%head_format = format_descriptor
         else
-            self%head_format  = default_file_format
+            self%head_format  = DEFAULT_FILE_FORMAT
         endif
         DebugPrint   'format: ', self%head_format
         ! Allocate head object
@@ -115,10 +115,6 @@ contains
         case DEFAULT
             stop 'Unsupported file format; new; simple_imgfile'
         end select
-        ! check endconv status
-        if( .not. allocated(endconv) )then
-            allocate(endconv, source='NATIVE')
-        endif
         ! open the file
         call self%open_local(del_if_exists, rwaction)
         ! read/write the header
@@ -148,7 +144,7 @@ contains
 
     !>  \brief is forprinting the header
     subroutine print_header( self )
-        class(imgfile), intent(in) :: self   !< Imagefile object
+        class(imgfile), intent(in) :: self   !< Imagefile object 
         call self%overall_head%print_imghead()
     end subroutine print_header
 
@@ -156,7 +152,7 @@ contains
 
     !>  \brief open the file(s) for the imgfile
     subroutine open_local( self, del_if_exists, rwaction )
-        class(imgfile),             intent(inout) :: self   !< Imagefile object
+        class(imgfile),             intent(inout) :: self   !< Imagefile object 
         logical, optional,          intent(in) :: del_if_exists !< overwrite flag
         character(len=*), optional, intent(in) :: rwaction      !< read/write flag
         character(len=9) :: rw_str
@@ -177,7 +173,7 @@ contains
         endif
         ! Get an IO unit number for the head file
         call fopen(self%funit,access='STREAM',file=self%fname,action=rw_str,&
-             status=stat_str,iostat=ios,convert=endconv)
+             status=stat_str,iostat=ios)
         call fileio_errmsg("imgfile::open_local fopen error",ios)
         self%was_written_to = .false.
     end subroutine open_local
@@ -212,7 +208,7 @@ contains
 
     !>  \brief  Check whether the file exists on disk
     logical function exists( self )
-        class(imgfile), intent(inout) :: self   !< Imagefile object
+        class(imgfile), intent(inout) :: self   !< Imagefile object 
         exists = file_exists(self%fname)
         if( exists) exists = exists .and. file_size(self%fname) .gt. 0
     end function exists
@@ -224,7 +220,7 @@ contains
     !!         if .hed: I
     !!         else: N
     pure function get_format( self )
-        class(imgfile), intent(in) :: self   !< Imagefile object
+        class(imgfile), intent(in) :: self   !< Imagefile object 
         character(len=1)           :: get_format
         get_format = self%head_format
     end function get_format
@@ -232,7 +228,7 @@ contains
     !>  \brief  for translating an image index to record indices in the stack
     !! \param[out] hedinds,iminds header and image indices in the stack
     subroutine slice2recpos( self, nr, hedinds, iminds )
-        class(imgfile), intent(in), target :: self   !< Imagefile object
+        class(imgfile), intent(in), target :: self   !< Imagefile object 
         integer, intent(in)                :: nr      !< num images
         integer(kind=8), intent(out)       :: hedinds(2), iminds(2)
         integer                            :: cnt, j, dims(3)
@@ -266,7 +262,7 @@ contains
     !>  \brief  for translating an image index to record indices in the stack
     !! \param[out] hedinds,iminds indices in the stack
     subroutine slice2bytepos( self, nr, hedinds, iminds )
-        class(imgfile), intent(in)     :: self   !< Imagefile object
+        class(imgfile), intent(in)     :: self   !< Imagefile object 
         integer, intent(in)            :: nr                    !< num in stack
         integer(kind=8), intent(inout) :: hedinds(2), iminds(2)
         if( nr < 0 )then
@@ -301,7 +297,7 @@ contains
 
     !>  \brief  read a slice of the image file from disk into memory
     subroutine rSlice( self, slice_nr, rarr )
-        class(imgfile), intent(inout)    :: self        !< Imagefile object
+        class(imgfile), intent(inout)    :: self        !< Imagefile object 
         integer, intent(in)              :: slice_nr    !< Number of the slice to read in (the first slice in the file is numbered 1)
         real, intent(inout), allocatable :: rarr(:,:,:) !< Array of reals. Will be (re)allocated if needed
         call self%rwSlices('r',slice_nr,slice_nr,rarr)
@@ -310,7 +306,7 @@ contains
 
     !>  \brief  write a slice of the image file from memory to disk
     subroutine wSlice( self, slice_nr, rarr, ldim )
-        class(imgfile), intent(inout) :: self        !< Imagefile object
+        class(imgfile), intent(inout) :: self        !< Imagefile object 
         integer, intent(in)           :: slice_nr    !<  Number of the slice to read in (the first slice in the file is numbered 1)
         real, intent(inout)           :: rarr(:,:,:) !<  Array of reals. Will be (re)allocated if needed
         integer, intent(in)           :: ldim(3)     !<  Logical size of the array. This will be written to disk: rarr(1:ldim_1,:,:)
@@ -320,7 +316,7 @@ contains
 
     !>  \brief  reads an image or stack header
     subroutine rHead( self, slice, head, ldim )
-        class(imgfile), intent(inout), target :: self      !< Imagefile object
+        class(imgfile), intent(inout), target :: self      !< Imagefile object 
         integer, intent(in)                   :: slice     !< stack slice or zero for individual
         class(ImgHead), intent(inout)         :: head      !< img head object
         integer, intent(inout), optional      :: ldim(3)   !< for reading the overall stack header of SPIDER files
@@ -375,7 +371,7 @@ contains
 
     !>  \brief  writes an image or stack header
     subroutine wHead( self, slice, head )
-        class(imgfile), intent(inout), target   :: self    !< Imagefile object
+        class(imgfile), intent(inout), target   :: self    !< Imagefile object 
         integer, intent(in)                     :: slice   !< stack slice
         class(ImgHead), intent(inout), optional :: head    !< img head object
         class(ImgHead), pointer                 :: ptr=>null()
@@ -422,7 +418,7 @@ contains
 #endif
         use simple_imghead !, only: ImgHead, SpiImgHead, MrcImgHead, dataRbytes, dataRinteger, dataRfloat
         use simple_math, only: is_even
-        class(imgfile), target, intent(inout) :: self         !< instance  Imagefile object
+        class(imgfile), target, intent(inout) :: self         !< instance  Imagefile object 
         character(len=1),       intent(in)    :: mode         !< read (r) or write (w)
         integer,                intent(in)    :: first_slice  !< First slice (the first slice in the file is numbered 1)
         integer,                intent(in)    :: last_slice   !< Last slice
@@ -435,7 +431,7 @@ contains
         integer(kind=1), allocatable :: tmp_byte_array(:,:,:)
         integer(kind=2), allocatable :: tmp_16bit_int_array(:,:,:)
         character(len=100)           :: io_message
-        integer                      :: io_stat,i,j,k,itmp, dims(3)
+        integer                      :: io_stat,i,j,k,itmp,dims(3)
         integer(kind=8)              :: first_byte,hedbyteinds(2),imbyteinds(2),first_hedbyte, byteperpix
         logical                      :: arr_is_ready, ft_indic
         real                         :: min_val,max_val
@@ -558,18 +554,14 @@ contains
             select case(byteperpix)
             case(1) ! Byte data
                 DebugPrint 'Allocating 8-bit array in rwSlices'
-                allocate(tmp_byte_array(dims(1),dims(2),dims(3)),stat=alloc_stat, errmsg=io_message)
+                allocate(tmp_byte_array(dims(1),dims(2),dims(3)),stat=alloc_stat)
                 if(alloc_stat /= 0) allocchk("In simple_imgfile:: rwSlices ;  Byte data ")
                 read(unit=self%funit,pos=first_byte,iostat=io_stat,iomsg=io_message) tmp_byte_array
                 if(io_stat /= 0) call fileio_errmsg("In simple_imgfile:: rwSlices ; Byte data "//trim(io_message), io_stat)
-                ! Conversion from unsigned byte integer (which MRC appears to be) is tricky because
-                ! Fortran doesn't do unsigned integer natively. The following IAND trick is courtesy
-                ! of Jim Dempsey at http://software.intel.com/en-us/forums/showthread.php?t=64400
-                ! Confusingly, the MRC format documentation implies that one should expect signed
-                ! integers, which seems to be incorrect:
-                ! http://www2.mrc-lmb.cam.ac.uk/image2000.html IMOD documentation indicates that
-                ! prior to IMOD 4.2.23, unsigned bytes were used and that one needs to inspect the
-                ! imodStamp head to check
+                ! Conversion from unsigned byte integer (which MRC appears to be) is tricky because Fortran doesn't do unsigned integer natively.
+                ! The following IAND trick is courtesy of Jim Dempsey at http://software.intel.com/en-us/forums/showthread.php?t=64400
+                ! Confusingly, the MRC format documentation implies that one should expect signed integers, which seems to be incorrect: http://www2.mrc-lmb.cam.ac.uk/image2000.html
+                ! IMOD documentation indicates that prior to IMOD 4.2.23, unsigned bytes were used and that one needs to inspect the imodStamp head to check
                 if( self%overall_head%pixIsSigned() )then
                     rarr(1:dims(1),:,:) = tmp_byte_array(:,:,:)
                 else
@@ -750,7 +742,7 @@ contains
 
     !>  \brief  Print out basic information about the file
     subroutine print_imgfile( self )
-        class(imgfile), intent(in) :: self   !< Imagefile object
+        class(imgfile), intent(in) :: self   !< Imagefile object 
         write(*,'(/2a)') 'Summary information for file ', trim(adjustl(self%fname))
         call self%overall_head%print_imghead()
         write(*,'(a)') ' '
@@ -758,7 +750,7 @@ contains
 
     !>  \brief  Return the dimension of the image stack
     function getDims( self )
-        class(imgfile), intent(in) :: self   !< Imagefile object
+        class(imgfile), intent(in) :: self   !< Imagefile object 
         integer :: getDims(3)
         getDims = self%overall_head%getDims()
     end function getDims
@@ -854,8 +846,7 @@ contains
                 case('M')
                     allocate(MrcImgHead :: hed)
                     call hed%new
-                    call fopen(filnum, status='OLD', action='READ', file=fname, &
-                         access='STREAM', iostat=ios,convert='NATIVE')
+                    call fopen(filnum, status='OLD', action='READ', file=fname, access='STREAM', iostat=ios)
                     call fileio_errmsg(" get_mrcfile_info fopen error "//trim(fname),ios)
                     call hed%read(filnum)
                     call fclose(filnum,ios,errmsg=" get_mrcfile_info close error "//trim(fname))
@@ -869,8 +860,7 @@ contains
                 case('F')
                     allocate(MrcImgHead :: hed)
                     call hed%new
-                    call fopen(filnum, status='OLD', action='READ', file=fname, &
-                         access='STREAM', convert='BIG_ENDIAN', iostat=ios)
+                    call fopen(filnum, status='OLD', action='READ', file=fname, access='STREAM', iostat=ios)
                     call fileio_errmsg(" get_mrcfile_info fopen error "//trim(fname),ios)
                     call hed%read(filnum)
                     call fclose(filnum, ios,errmsg=" get_mrcfile_info fclose error "//trim(fname))
@@ -899,8 +889,7 @@ contains
         if( file_exists(fname) )then
             if( fname2format(fname) .eq. 'S' )then
                 if( allocated(conv) ) deallocate(conv)
-                call fopen(filnum, status='OLD', action='READ', file=fname, &
-                &access='STREAM', convert='NATIVE',iostat=ios)
+                call fopen(filnum, status='OLD', action='READ', file=fname, access='STREAM',iostat=ios)
                 call fileio_errmsg(" get_spifile_info fopen error "//trim(fname),ios)
                 call read_spihed
                 call fclose(filnum,ios,errmsg=" get_spifile_info fclose error "//trim(fname))
@@ -909,8 +898,7 @@ contains
                     call print_spihed
                     return
                 endif
-                call fopen(filnum, status='OLD', action='READ', file=fname, &
-                         access='STREAM', convert='BIG_ENDIAN', iostat=ios)
+                call fopen(filnum, status='OLD', action='READ', file=fname, access='STREAM', iostat=ios)
                 call fileio_errmsg(" get_spifile_info fopen error "//trim(fname),ios)
                 call read_spihed
                 call fclose(filnum,ios,errmsg=" get_spifile_info fclose error "//trim(fname))
@@ -920,7 +908,7 @@ contains
                     return
                 endif
                 call fopen(filnum, status='OLD', action='READ', file=fname, &
-                         access='STREAM', convert='LITTLE_ENDIAN', iostat=ios)
+                         access='STREAM', iostat=ios)
                 call fileio_errmsg(" get_spifile_info fopen error "//trim(fname),ios)
                 call read_spihed
                 call fclose(filnum,iostat=ios,errmsg=" get_spifile_info fclose error "//trim(fname))
@@ -965,68 +953,5 @@ contains
             end subroutine
 
     end subroutine get_spifile_info
-
-    !>  \brief  is for finding logical dimension and number of particles in stack
-    subroutine find_ldim_nptcls( fname, ldim, nptcls, doprint, formatchar, endconv )
-        character(len=*),                        intent(in)  :: fname      !< filename
-        integer,                                 intent(out) :: ldim(3)    !< logical dimension
-        integer,                                 intent(out) :: nptcls     !< number of particles
-        logical,                       optional, intent(in)  :: doprint    !< do print or not
-        character(len=1),              optional, intent(in)  :: formatchar !< input format
-        character(len=:), allocatable, optional, intent(out) :: endconv    !< endian conversion
-        integer                       :: iform, maxim
-        real                          :: smpd
-        character(len=:), allocatable :: conv
-        character(len=1)              :: form
-        logical                       :: ddoprint
-        ddoprint = .false.
-        if( present(doprint) ) ddoprint = doprint
-        if( present(formatchar) )then
-            form = formatchar
-        else
-            form = fname2format(fname)
-        endif
-        nptcls = 0
-        select case (form)
-            case('M','F')
-                call get_mrcfile_info(fname, ldim, form, smpd, ddoprint )
-                nptcls = ldim(3)
-            case('S')
-                call get_spifile_info(fname, ldim, iform, maxim, smpd, conv, ddoprint)
-                nptcls = maxim
-            case DEFAULT
-                write(*,*) 'fname: ', fname
-                write(*,*) 'format descriptor: ', fname2format(fname)
-                stop 'File format not supported; find_ldim_nptcls; simple_procimgfile'
-        end select
-        if( present(endconv) )then
-            if( allocated(endconv) ) deallocate(endconv)
-            select case (form)
-                case('M','F')
-                    allocate(endconv, source='NATIVE')
-                case('S')
-                    allocate(endconv, source=conv)
-            end select
-        endif
-    end subroutine find_ldim_nptcls
-
-    !>  \brief  is for checking logical dimension and number of particles in stack
-    logical function has_ldim_nptcls( fname, ldim, nptcls )
-        character(len=*), intent(in) :: fname   !< filename
-        integer,          intent(in) :: ldim(3) !< expected logical dimension
-        integer,          intent(in) :: nptcls  !< number of expected particles
-        integer :: ldim_found(3), nptcls_found
-        call find_ldim_nptcls( fname, ldim_found, nptcls_found )
-        if( ldim_found(1) /= ldim(1) .or. ldim_found(2) /= ldim(2) )then
-            has_ldim_nptcls = .false.
-            return
-        endif
-        if( nptcls_found /= nptcls )then
-            has_ldim_nptcls = .false.
-            return
-        endif
-        has_ldim_nptcls = .true.
-    end function has_ldim_nptcls
-
 
 end module simple_imgfile
