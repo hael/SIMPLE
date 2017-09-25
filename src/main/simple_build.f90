@@ -1,7 +1,8 @@
 ! centralised builder (the main object constructor in SIMPLE)
-#include "simple_lib.f08"
+
 module simple_build
-use simple_defs
+#include "simple_lib.f08"
+    !!import classes
 use simple_cmdline,          only: cmdline
 use simple_comlin,           only: comlin
 use simple_image,            only: image
@@ -12,21 +13,23 @@ use simple_params,           only: params
 use simple_sym,              only: sym
 use simple_opt_spec,         only: opt_spec
 use simple_convergence,      only: convergence
-use simple_syslib,           only: alloc_errchk
 use simple_projector,        only: projector
 use simple_polarizer,        only: polarizer
 use simple_masker,           only: masker
-use simple_fileio            ! use all in there
-use simple_binoris_io        ! use all in there
+use simple_projection_frcs,  only: projection_frcs
+use simple_ran_tabu,         only: ran_tabu
+!! import functions
+use simple_timer,            only: tic, toc, timer_int_kind
+use simple_binoris_io,       only: binread_ctfparams_and_state, binread_oritab
 implicit none
 
 public :: build, test_build
 private
 #include "simple_local_flags.inc"
-
+integer(timer_int_kind) :: tbuild
 type :: build
     ! GENERAL TOOLBOX
-    type(oris)                          :: a, e               !< aligndata, discrete space
+    type(oris)                          :: a, e, e_bal        !< aligndata, discrete spaces
     type(sym)                           :: se                 !< symmetry elements object
     type(convergence)                   :: conv               !< object for convergence checking of the PRIME2D/3D approaches
     type(image)                         :: img                !< individual image objects 
@@ -39,6 +42,7 @@ type :: build
     type(projector)                     :: vol_pad            !< -"- image objects
     type(masker)                        :: mskimg             !< mask image
     type(masker)                        :: mskvol             !< mask volume
+    type(projection_frcs)               :: projfrcs           !< projection FRC's used in the anisotropic Wiener filter
     ! COMMON LINES TOOLBOX
     type(image), allocatable            :: imgs(:)            !< images (all should be read in)
     type(image), allocatable            :: imgs_sym(:)        !< images (all should be read in)
@@ -48,12 +52,10 @@ type :: build
     type(eo_reconstructor)              :: eorecvol           !< object for eo reconstruction
     type(reconstructor)                 :: recvol             !< object for reconstruction
     ! PRIME TOOLBOX
-    type(image),            allocatable :: cavgs(:)           !< class averages (Wiener normalised references)
-    type(image),            allocatable :: ctfsqsums(:)       !< CTF**2 sums for Wiener normalisation
     type(projector),        allocatable :: refvols(:)         !< reference volumes for quasi-continuous search
     type(reconstructor),    allocatable :: recvols(:)         !< array of volumes for reconstruction
     type(eo_reconstructor), allocatable :: eorecvols(:)       !< array of volumes for eo-reconstruction
-    real,    allocatable                :: fsc(:,:)           !< Fourier shell correlation
+    real,    allocatable                :: fsc(:,:)           !< Fourier Shell Correlation
     integer, allocatable                :: nnmat(:,:)         !< matrix with nearest neighbor indices
     integer, allocatable                :: pbatch(:)          !< particle index batch
     integer, allocatable                :: grid_projs(:)      !< projection directions for coarse grid search
@@ -92,18 +94,15 @@ contains
 
     !> \brief  constructs the general toolbox
     subroutine build_general_tbox( self, p, cline, do3d, nooritab, force_ctf )
-        use simple_ran_tabu, only: ran_tabu
-        use simple_math,     only: nvoxfind, rad2deg
-        use simple_rnd,      only: seed_rnd
-        use simple_strings,  only: str_has_substr
         class(build),      intent(inout) :: self
         class(params),     intent(inout) :: p
         class(cmdline),    intent(inout) :: cline
         logical, optional, intent(in)    :: do3d, nooritab, force_ctf
         type(ran_tabu) :: rt
         integer        :: lfny, partsz, lfny_match
-        real           :: slask(3)
-        logical        :: err, ddo3d, fforce_ctf
+        logical        :: ddo3d, fforce_ctf
+        verbose=.true.
+        if(verbose) tbuild=tic()
         call self%kill_general_tbox
         ddo3d = .true.
         if( present(do3d) ) ddo3d = do3d
@@ -134,13 +133,11 @@ contains
                 else
                     call binread_oritab(p%oritab, self%a, [1,p%nptcls])
                 endif
-                if( self%a%get_noris() > 1 )then
-                    call self%a%stats('corr', slask(1), slask(2), slask(3), err)
-                    if( err )then
-                    else
-                        if( p%frac < 0.99 ) call self%a%calc_hard_weights(p%var, bystate=.true.)
-                    endif
-                endif
+            endif
+        endif
+        if( self%a%get_n('state') > 1 )then
+            if( .not. cline%defined('nstates') )then
+                write(*,'(a)') 'WARNING, your input doc has multiple states but NSTATES is not given'
             endif
         endif
         DebugPrint   'created & filled object for orientations'
@@ -161,6 +158,8 @@ contains
         ! generate discrete projection direction spaces
         call self%e%new( p%nspace )
         call self%e%spiral( p%nsym, p%eullims )
+        call self%e_bal%new(NSPACE_BALANCE)
+        call self%e_bal%spiral( p%nsym, p%eullims )
         self%grid_projs = self%e%create_proj_subspace(p%nsub, p%nsym, p%eullims )
         DebugPrint 'generated discrete projection direction space'
         if( p%box > 0 )then
@@ -210,11 +209,13 @@ contains
             call rt%kill
         endif
         if( p%projstats .eq. 'yes' )then
-            if( .not. self%a%isthere('proj') )then
-                call self%a%set_projs(self%e)
-            endif
+            if( .not. self%a%isthere('proj') ) call self%a%set_projs(self%e)
         endif
-        write(*,'(A)') '>>> DONE BUILDING GENERAL TOOLBOX'
+        if (verbose)then
+            write(*,'(A,1x,1ES20.5)') '>>> DONE BUILDING GENERAL TOOLBOX  time (s):', toc(tbuild)
+        else
+            write(*,'(A)') '>>> DONE BUILDING GENERAL TOOLBOX'
+        endif
         self%general_tbox_exists = .true.
     end subroutine build_general_tbox
 
@@ -235,9 +236,7 @@ contains
             call self%img_pad%kill
             call self%vol%kill_expanded
             call self%vol%kill
-            call self%mskvol%kill_masker
             call self%mskvol%kill
-            call self%mskimg%kill_masker
             call self%mskimg%kill
             call self%vol_pad%kill_expanded
             call self%vol_pad%kill
@@ -308,16 +307,18 @@ contains
     subroutine build_rec_tbox( self, p )
         class(build),  intent(inout) :: self
         class(params), intent(in)    :: p
+        verbose=.true.
+        if(verbose) tbuild=tic()
         call self%kill_rec_tbox
         call self%raise_hard_ctf_exception(p)
         call self%recvol%new([p%boxpd,p%boxpd,p%boxpd],p%smpd)
         call self%recvol%alloc_rho(p)
-        if( p%balance > 0 )then
-            if( .not. self%a%isthere('proj') )then
-                call self%a%set_projs(self%e)
-            endif
+        if( .not. self%a%isthere('proj') ) call self%a%set_projs(self%e)
+        if (verbose)then
+            write(*,'(A,1x,1ES20.5)') '>>> DONE BUILDING RECONSTRUCTION TOOLBOX  time (s) ', toc(tbuild)
+        else
+            write(*,'(A)') '>>> DONE BUILDING RECONSTRUCTION TOOLBOX'
         endif
-        write(*,'(A)') '>>> DONE BUILDING RECONSTRUCTION TOOLBOX'
         self%rec_tbox_exists = .true.
     end subroutine build_rec_tbox
 
@@ -335,15 +336,17 @@ contains
     subroutine build_eo_rec_tbox( self, p )
         class(build),  intent(inout) :: self
         class(params), intent(in)    :: p
+        if(verbose) tbuild=tic()
         call self%kill_eo_rec_tbox
         call self%raise_hard_ctf_exception(p)
         call self%eorecvol%new(p)
-        if( p%balance > 0 )then
-            if( .not. self%a%isthere('proj') )then
-                call self%a%set_projs(self%e)
-            endif
+        if( .not. self%a%isthere('proj') ) call self%a%set_projs(self%e)
+        call self%projfrcs%new(NSPACE_BALANCE, p%box, p%smpd, p%nstates)
+        if (verbose)then
+            write(*,'(A,1x,1ES20.5)') '>>> DONE BUILDING EO RECONSTRUCTION TOOLBOX  time (s) ', toc(tbuild)
+        else
+            write(*,'(A)') '>>> DONE BUILDING EO RECONSTRUCTION TOOLBOX'
         endif
-        write(*,'(A)') '>>> DONE BUILDING EO RECONSTRUCTION TOOLBOX'
         self%eo_rec_tbox_exists = .true.
     end subroutine build_eo_rec_tbox
 
@@ -352,25 +355,20 @@ contains
         class(build), intent(inout) :: self
         if( self%eo_rec_tbox_exists )then
             call self%eorecvol%kill
+            call self%projfrcs%kill
             self%eo_rec_tbox_exists = .false.
         endif
     end subroutine kill_eo_rec_tbox
 
     !> \brief  constructs the prime2D toolbox
     subroutine build_hadamard_prime2D_tbox( self, p )
-        use simple_strings, only: str_has_substr
+        use simple_binoris_io, only: binread_oritab
         class(build),  intent(inout) :: self
         class(params), intent(inout) :: p
         type(oris) :: os
-        integer    :: icls
+        if(verbose) tbuild=tic()
         call self%kill_hadamard_prime2D_tbox
         call self%raise_hard_ctf_exception(p)
-        allocate( self%cavgs(p%ncls), self%ctfsqsums(p%ncls), stat=alloc_stat )
-        if(alloc_stat /= 0) allocchk('build_hadamard_prime2D_tbox; simple_build, 1')
-        do icls=1,p%ncls
-            call self%cavgs(icls)%new([p%box,p%box,1],p%smpd)
-            call self%ctfsqsums(icls)%new([p%box,p%box,1],p%smpd)
-        end do
         if( str_has_substr(p%refine,'neigh') )then
             if( file_exists(p%oritab3D) )then
                 call os%new(p%ncls)
@@ -381,50 +379,52 @@ contains
                 stop 'need oritab3D input for prime2D refine=neigh mode; simple_build :: build_hadamard_prime2D_tbox'
             endif
         endif
-        write(*,'(A)') '>>> DONE BUILDING HADAMARD PRIME2D TOOLBOX'
+        ! build projection frcs
+        call self%projfrcs%new(p%ncls, p%box, p%smpd, p%nstates)
+        if (verbose)then
+            write(*,'(A,1x,1ES20.5)') '>>> DONE BUILDING HADAMARD PRIME2D TOOLBOX  time (s) ', toc(tbuild)
+        else
+            write(*,'(A)') '>>> DONE BUILDING HADAMARD PRIME2D TOOLBOX'
+        endif
         self%hadamard_prime2D_tbox_exists = .true.
     end subroutine build_hadamard_prime2D_tbox
 
     !> \brief  destructs the prime2D toolbox
     subroutine kill_hadamard_prime2D_tbox( self )
         class(build), intent(inout) :: self
-        integer :: i
         if( self%hadamard_prime2D_tbox_exists )then
-            do i=1,size(self%cavgs)
-                call self%cavgs(i)%kill
-                call self%ctfsqsums(i)%kill
-            end do
-            deallocate(self%cavgs, self%ctfsqsums)
+            call self%projfrcs%kill
             self%hadamard_prime2D_tbox_exists = .false.
         endif
     end subroutine kill_hadamard_prime2D_tbox
 
     !> \brief  constructs the prime3D toolbox
     subroutine build_hadamard_prime3D_tbox( self, p )
-        use simple_strings, only: str_has_substr
         class(build),  intent(inout) :: self
         class(params), intent(in)    :: p
-        integer :: s, nnn
+        integer :: nnn
+        if(verbose) tbuild=tic()
         call self%kill_hadamard_prime3D_tbox
         call self%raise_hard_ctf_exception(p)
         ! reconstruction objects
-        if( p%eo .eq. 'yes' )then
+        if( p%eo .ne. 'no' )then
             allocate( self%eorecvols(p%nstates), stat=alloc_stat )
             if(alloc_stat /= 0) allocchk('build_hadamard_prime3D_tbox; simple_build, 1')
         else
             allocate( self%recvols(p%nstates), stat=alloc_stat )
             if(alloc_stat /= 0) allocchk('build_hadamard_prime3D_tbox; simple_build, 2')
         endif
-        if( str_has_substr(p%refine,'neigh') .or. trim(p%refine).eq.'exp' )then
+        if( str_has_substr(p%refine,'neigh') .or. trim(p%refine).eq.'states' )then
             nnn = p%nnn
             call self%se%nearest_neighbors(self%e, nnn, self%nnmat)
         endif
-        if( p%balance > 0 )then
-            if( .not. self%a%isthere('proj') )then
-                call self%a%set_projs(self%e)
-            endif
+        if( .not. self%a%isthere('proj') ) call self%a%set_projs(self%e)
+        call self%projfrcs%new(NSPACE_BALANCE, p%box, p%smpd, p%nstates)
+        if (verbose)then
+            write(*,'(A,1x,1ES20.5)') '>>> DONE BUILDING HADAMARD PRIME3D TOOLBOX  time (s) ', toc(tbuild)
+        else
+            write(*,'(A)') '>>> DONE BUILDING HADAMARD PRIME3D TOOLBOX'
         endif
-        write(*,'(A)') '>>> DONE BUILDING HADAMARD PRIME3D TOOLBOX'
         self%hadamard_prime3D_tbox_exists = .true.
     end subroutine build_hadamard_prime3D_tbox
 
@@ -447,6 +447,7 @@ contains
                 deallocate(self%recvols)
             endif
             if( allocated(self%nnmat) ) deallocate(self%nnmat)
+            call self%projfrcs%kill
             self%hadamard_prime3D_tbox_exists = .false.
         endif
     end subroutine kill_hadamard_prime3D_tbox
@@ -456,12 +457,13 @@ contains
         class(build),  intent(inout) :: self
         class(params), intent(in)    :: p
         integer :: s
+        if(verbose) tbuild=tic()
         call self%kill_cont3D_tbox
         call self%raise_hard_ctf_exception(p)
         if( p%norec .eq. 'yes' )then
             ! no reconstruction objects needed
         else
-            if( p%eo .eq. 'yes' )then
+            if( p%eo .ne. 'no' )then
                 allocate( self%eorecvols(p%nstates), stat=alloc_stat )
                 if(alloc_stat /= 0) allocchk('build_hadamard_prime3D_tbox; simple_build, 1')
             else
@@ -474,7 +476,11 @@ contains
         do s=1,p%nstates
             call self%refvols(s)%new([p%boxmatch,p%boxmatch,p%boxmatch],p%smpd)
         end do
-        write(*,'(A)') '>>> DONE BUILDING CONT3D TOOLBOX'
+        if (verbose)then
+            write(*,'(A,1x,1ES20.5)') '>>> DONE BUILDING CONT3D TOOLBOX  time (s) ', toc(tbuild)
+        else
+            write(*,'(A)') '>>> DONE BUILDING CONT3D TOOLBOX'
+        endif
         self%cont3D_tbox_exists = .true.
     end subroutine build_cont3D_tbox
 
@@ -511,18 +517,19 @@ contains
     subroutine build_extremal3D_tbox( self, p )
         class(build),  intent(inout) :: self
         class(params), intent(in)    :: p
+        if(verbose) tbuild=tic()
         call self%kill_extremal3D_tbox
         call self%raise_hard_ctf_exception(p)
         allocate( self%recvols(1), stat=alloc_stat )
         if(alloc_stat /= 0) allocchk('build_hadamard_prime3D_tbox; simple_build, 2')
         call self%recvols(1)%new([p%boxpd,p%boxpd,p%boxpd],p%smpd)
         call self%recvols(1)%alloc_rho(p)
-        if( p%balance > 0 )then
-            if( .not. self%a%isthere('proj') )then
-                call self%a%set_projs(self%e)
-            endif
-        endif
-        write(*,'(A)') '>>> DONE BUILDING EXTREMAL3D TOOLBOX'
+        if( .not. self%a%isthere('proj') ) call self%a%set_projs(self%e)
+        if (verbose)then
+            write(*,'(A,1x,1ES20.5)') '>>> DONE BUILDING EXTREMAL3D TOOLBOX  time (s) ', toc(tbuild)
+        else
+            write(*,'(A)') '>>> DONE BUILDING EXTREMAL3D TOOLBOX'
+        end if
         self%extremal3D_tbox_exists = .true.
     end subroutine build_extremal3D_tbox
 
