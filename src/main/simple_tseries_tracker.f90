@@ -1,13 +1,10 @@
 ! time series tracker intended for movies of nanoparticles spinning in solution
-#include "simple_lib.f08"
+
 module simple_tseries_tracker
-use simple_defs     ! use all in there
-use simple_syslib,  only: alloc_errchk ! use all in there
-use simple_fileio,  only: fopen, fclose, fileio_errmsg, read_filetable
+#include "simple_lib.f08"
+
 use simple_image,   only: image
-use simple_jiffys,  only: progress
-use simple_strings, only: int2str
-use simple_imgfile, only: find_ldim_nptcls
+use simple_imghead, only: find_ldim_nptcls
 implicit none
 
 public :: init_tracker, track_particle, write_tracked_series, kill_tracker
@@ -106,7 +103,7 @@ contains
     
     !> write results of time series tracker
     subroutine write_tracked_series( fbody )
-    character(len=*), intent(in) :: fbody
+        character(len=*), intent(in) :: fbody
         integer :: funit, io_stat, iframe, xind, yind, i
         logical :: outside
         call fopen(funit, status='REPLACE', action='WRITE', file=trim(fbody)//'.box',iostat=io_stat)

@@ -1,10 +1,9 @@
 ! clustering of a similarity matrix using stochastic hill-climbing
-#include "simple_lib.f08"
+
 module simple_shc_cluster
-use simple_defs
+#include "simple_lib.f08"
 use simple_oris, only: oris
 use simple_rnd,  only: irnd_uni
-use simple_syslib, only: alloc_errchk
 implicit none
 
 public :: shc_cluster, test_shc_cluster

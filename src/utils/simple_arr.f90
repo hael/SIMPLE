@@ -1,8 +1,7 @@
 ! array class (container class for the singly linked list)
-#include "simple_lib.f08" 
+
 module simple_arr
-    use simple_defs
-    use simple_syslib, only: alloc_errchk
+#include "simple_lib.f08" 
 implicit none
 
 public :: arr

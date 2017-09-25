@@ -10,7 +10,6 @@
 ! Use is subject to Janelia Farm Research Campus Software Copyright 1.1
 ! license terms ( http://license.janelia.org/license/jfrc_copyright_1_1.html )
 ! Modifications by Cyril Reboul, Michael Eager & Hans Elmlund
-#include "simple_lib.f08"
 module simple_imghead
     use simple_defs
     use simple_syslib, only: alloc_errchk
@@ -188,7 +187,6 @@ contains
         integer, optional,      intent(in)    :: ldim(3) !< logical dims of image
         integer, optional,      intent(in)    :: length  !< length of the header record.
         integer               :: llength, i
-        character(len=STDLEN) :: err
         call self%kill
         select type( self )
             type is( MrcImgHead )
@@ -202,8 +200,8 @@ contains
                     if( size(self%byte_array) .ne. llength ) deallocate(self%byte_array)
                 endif
                 if( .not. allocated(self%byte_array) )then
-                    allocate(self%byte_array(llength),stat=alloc_stat,errmsg=err)
-                    if(alloc_stat .ne. 0) allocchk("simple_imghead::new byte_array "//trim(err))
+                    allocate(self%byte_array(llength),stat=alloc_stat)
+                    if(alloc_stat .ne. 0) call alloc_errchk("simple_imghead::new  memory allocation failed byte_array ", alloc_stat)
                 endif
                 ! zero the byte array
                 self%byte_array = 0
@@ -311,7 +309,7 @@ contains
         select type( self )
             type is( SpiImgHead )
                 allocate(spihed(self%getLabbyt()/4),stat=alloc_stat)
-                if(alloc_stat .ne. 0) allocchk("simple_imghead::read spihead ")
+                if(alloc_stat .ne. 0) call alloc_errchk("simple_imghead::read spihead ", alloc_stat)
                 cnt = 0
                 do i=ppos,ppos+self%getLabbyt()-1,4
                     cnt = cnt+1

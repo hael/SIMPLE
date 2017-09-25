@@ -1,10 +1,11 @@
 ! continuous function optimisation by Powell's method of conjugate search directions
-#include "simple_lib.f08"
+
 module simple_powell_opt
-use simple_defs
+#include "simple_lib.f08"
+    
 use simple_optimizer, only: optimizer
 use simple_opt_spec,  only: opt_spec
-use simple_syslib,    only: alloc_errchk
+
 implicit none
 
 public :: powell_opt

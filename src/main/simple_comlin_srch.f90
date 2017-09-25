@@ -1,23 +1,25 @@
 ! for common-lines-based search
 module simple_comlin_srch
 use simple_defs
+use simple_jiffys,      only: progress
 use simple_build,       only: build
 use simple_params,      only: params
 use simple_optimizer,   only: optimizer
 use simple_opt_factory, only: opt_factory
 use simple_opt_spec,    only: opt_spec
-use simple_syslib,      only: simple_stop
+use simple_syslib,      only: alloc_errchk, simple_stop
 use simple_ori,         only: ori
 use simple_oris,        only: oris
 use simple_sym,         only: sym
 implicit none
 
 public :: comlin_srch_init, comlin_srch_get_nproj, comlin_srch_get_nbest, comlin_srch_write_resoris,&
-comlin_srch_symaxis, comlin_srch_pair
+comlin_coarsesrch_symaxis, comlin_singlesrch_symaxis, comlin_srch_pair
 private
 #include "simple_local_flags.inc"
+integer, parameter :: NPROJC1    = 400
 integer, parameter :: NPROJ      = 200
-integer, parameter :: NBEST      = 20
+integer, parameter :: NBEST      = 30
 integer, parameter :: NBEST_PAIR = 10
 integer, parameter :: ANGRES     = 10
 
@@ -33,6 +35,7 @@ type(oris)                :: resoris          !< for results storage and ranking
 type(oris)                :: espace           !< projection directions
 type(ori)                 :: oref             !< starting projection direction
 integer                   :: nptcls=0         !< nr of particles
+integer                   :: nproj_sym=0      !< number of reference projections within the asu
 real                      :: eullims(3,2)=0.  !< Euler limits; only used to setup optimizer
 real                      :: optlims(5,2)=0.  !< Euler limits; only used to setup optimizer
 real                      :: hp=0.            !< fixed high-pass limit
@@ -48,17 +51,19 @@ contains
         character(len=*),      intent(in) :: opt_str     !< 'simplex', 'de' or 'oasis' search type
         character(len=*),      intent(in) :: mode        !< 'sym' or 'pair' mode
         character(len=8) :: str_opt= 'simplex'
-        bp     => b
-        pp     => p
-        iptcl  => p%iptcl
-        jptcl  => p%jptcl
-        nptcls =  p%nptcls
-        hp     =  p%hp
-        lp     =  p%lp
-        trs    =  p%trs
-        a_copy = bp%a
-        call resoris%new(NPROJ)
-        call espace%new(NPROJ)
+        bp        => b
+        pp        => p
+        iptcl     => p%iptcl
+        jptcl     => p%jptcl
+        nptcls    =  p%nptcls
+        hp        =  p%hp
+        lp        =  p%lp
+        trs       =  p%trs
+        a_copy    =  bp%a
+        nproj_sym = comlin_srch_get_nproj( pgrp=trim(p%pgrp) )
+        write(*,'(A,I3)') '>>> NUMBER OF REFERENCE PROJECTIONS IN ASU: ', nproj_sym
+        call resoris%new(nproj_sym)
+        call espace%new(nproj_sym)
         ! make optimizer spec
         if( opt_str.ne.'simplex' .and. opt_str.ne.'de' .and. opt_str.ne.'oasis' )then
             call simple_stop ('Unsupported minimizer in simple_comlin_srch; comlin_srch_init')
@@ -70,7 +75,7 @@ contains
         eullims(:,2)   = [360., 180., 360.]
         if( mode .eq. 'sym' )then
             eullims(2,2)  = 90.
-            call espace%spiral(2,eullims)
+            call espace%spiral(2, eullims)
         else
             call espace%spiral
         endif
@@ -90,9 +95,16 @@ contains
         call ofac%new(ospec, nlopt)
     end subroutine comlin_srch_init
 
-    function comlin_srch_get_nproj( ) result( nprojout )
-        integer :: nprojout
-        nprojout = NPROJ
+    function comlin_srch_get_nproj( pgrp ) result( nprojout )
+        character(len=*), optional, intent(in) :: pgrp
+        type(sym) :: se
+        integer   :: nprojout
+        if( present(pgrp) )then
+            call se%new(trim(pgrp))
+            nprojout = ceiling( real(NPROJC1) / real(se%get_nsym()) )
+        else
+            nprojout = NPROJ
+        endif
     end function comlin_srch_get_nproj
 
     function comlin_srch_get_nbest( ) result( nbestout )
@@ -109,31 +121,21 @@ contains
     end subroutine comlin_srch_write_resoris
 
     !> common-line mode search symmetry axis
-    subroutine comlin_srch_symaxis( orientation_best, fromto )
-        use simple_jiffys, only: progress
-        class(ori)           :: orientation_best
-        integer, optional    :: fromto(2)
-        type(ori)            :: orientation
+    subroutine comlin_coarsesrch_symaxis( fromto, resoris )
+        integer,     intent(in)  :: fromto(2)
+        class(oris), intent(out) :: resoris
+        type(ori)            :: orientation, orientation_best
         real                 :: corr, corr_best, cxy(4)
-        integer              :: iproj, inpl, iloc, ffromto(2), cnt, ntot
-        integer, allocatable :: order(:)
-        logical              :: distr_exec
-        ! flag distributed/shmem exec & set range
-        distr_exec = present(fromto)
-        if( distr_exec )then
-            ffromto = fromto
-        else
-            ffromto(1) = 1
-            ffromto(2) = NPROJ
+        integer              :: iproj, inpl, cnt, ntot
+        if( fromto(1) < 1 .or. fromto(2) > nproj_sym )then
+            stop 'range out of bound; simple_comlin_srch :: comlin_coarsesrch_symaxis'
         endif
-        if( ffromto(1) < 1 .or. ffromto(2) > NPROJ )then
-            stop 'range out of bound; simple_comlin_srch :: comlin_srch_symaxis'
-        endif
-        ntot = ffromto(2) - ffromto(1) + 1
+        ntot = fromto(2) - fromto(1) + 1
+        call resoris%new(nproj_sym)
         ! grid search using the spiral geometry & ANGRES degree in-plane resolution
         write(*,'(A)') '>>> GLOBAL GRID SYMMETRY AXIS SEARCH'
         cnt = 0
-        do iproj=ffromto(1),ffromto(2)
+        do iproj=fromto(1),fromto(2)
             cnt = cnt + 1
             call progress(cnt, ntot)
             orientation = espace%get_ori(iproj)
@@ -151,40 +153,20 @@ contains
                 endif
             end do
             ! set local in-plane optimum for iproj
-            call resoris%set_ori(iproj,orientation_best)
+            call resoris%set_ori(iproj, orientation_best)
         end do
-        if( distr_exec )then
-            ! refine all local optima
-            do iloc=ffromto(1),ffromto(2)
-                orientation = resoris%get_ori(iloc)
-                cxy = comlin_srch_minimize(orientation)
-                call resoris%set_euler(iloc, cxy(2:))
-                call resoris%set(iloc, 'corr', cxy(1))
-            end do
-            ! order the local optima according to correlation
-            order = resoris%order_corr()
-            ! return best
-            orientation_best = resoris%get_ori(order(1))
-        else
-            write(*,'(A)') '>>> CONTINOUS SYMMETRY AXIS REFINEMENT'
-            ! refine the NBEST local optima
-            ! order the local optima according to correlation
-            order = resoris%order_corr()
-            ! refine the NBEST solutions
-            do iloc=1,NBEST
-                orientation = resoris%get_ori(order(iloc))
-                cxy = comlin_srch_minimize(orientation)
-                call resoris%set_euler(order(iloc), cxy(2:))
-                call resoris%set(order(iloc), 'corr', cxy(1))
-            end do
-            ! re-order
-            order = resoris%order_corr()
-            ! return best
-            orientation_best = resoris%get_ori(order(1))
-            write(*,'(A)') '>>> FOUND REFINED SYMMETRY AXIS ORIENTATION'
-            call orientation_best%print_ori()
-        endif
-    end subroutine comlin_srch_symaxis
+    end subroutine comlin_coarsesrch_symaxis
+
+    !> continuous single common-line search symmetry axis
+    subroutine comlin_singlesrch_symaxis( orientation )
+        class(ori), intent(inout) :: orientation
+        real                 :: corr, corr_best, cxy(4)
+        integer              :: iproj, inpl, iloc, ffromto(2), cnt, ntot
+        integer, allocatable :: order(:)
+        cxy = comlin_srch_minimize(orientation)
+        call orientation%set_euler(cxy(2:))
+        call orientation%set('corr', cxy(1))
+    end subroutine comlin_singlesrch_symaxis
 
     !> Calculate similarity between pairs
     function comlin_srch_pair() result( similarity )
@@ -193,7 +175,7 @@ contains
         real      :: corr, corr_best, similarity, cxy(6)
         integer   :: iproj, inpl, iloc
         ! grid search using the spiral geometry & ANGRES degree in-plane resolution
-        do iproj=1,NPROJ
+        do iproj = 1, nproj
             orientation = espace%get_ori(iproj)
             corr_best   = -1.
             do inpl=0,359,ANGRES

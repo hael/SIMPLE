@@ -23,9 +23,9 @@ implicit none
 type(cmdline)     :: cline
 real              :: starttime, stoptime
 logical           :: be_verbose=.false.
-character(STDLEN) :: time
-call date_and_time(TIME=time)
-starttime = str2real(time)
+character(STDLEN) :: timestr
+call date_and_time(TIME=timestr)
+starttime = str2real(timestr)
 !if( command_argument_count() < 0 )then
 !    write(*,'(a)') 'simple_test_timer [verbose=<yes|no{no}>]'
 !    stop
@@ -40,7 +40,7 @@ be_verbose = .true.
 !    endif
 !endif
 call exec_OpenMP_timer_test(be_verbose)
-call date_and_time(TIME=time)
-stoptime = str2real(time)
+call date_and_time(TIME=timestr)
+stoptime = str2real(timestr)
 write(*,'(a,1x,f9.2)') '<<< intrinsic date_and_time elapsed (s): ', stoptime - starttime
 end program simple_omp_timer_test

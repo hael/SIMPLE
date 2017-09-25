@@ -1,25 +1,22 @@
 ! projection-matching based on Hadamard products, high-level search routines for PRIME3D
-#include "simple_lib.f08"
+
 module simple_hadamard3D_matcher
 !$ use omp_lib
 !$ use omp_lib_kinds
-use simple_defs              ! use all in there
+#include "simple_lib.f08"
+    
 use simple_polarft_corrcalc, only: polarft_corrcalc
 use simple_prime3D_srch,     only: prime3D_srch
+use simple_classaverager,    only: classaverager
 use simple_ori,              only: ori
 use simple_build,            only: build
 use simple_params,           only: params
 use simple_cmdline,          only: cmdline
 use simple_gridding,         only: prep4cgrid
-use simple_strings,          only: int2str_pad
-use simple_jiffys,           only: progress
-use simple_binoris_io,       only: binwrite_oritab
+use simple_binoris_io
 use simple_cont3D_matcher    ! use all in there
 use simple_hadamard_common   ! use all in there
-use simple_math              ! use all in there
 
-!
-!use simple_syslib            ! use all in there
 implicit none
 
 public :: prime3D_find_resrange, prime3D_exec, gen_random_model
@@ -30,9 +27,6 @@ private
 
 type(polarft_corrcalc)          :: pftcc
 type(prime3D_srch), allocatable :: primesrch3D(:)
-real                            :: reslim
-type(ori)                       :: orientation, o_sym
-character(len=:), allocatable   :: ppfts_fname
 
 contains
 
@@ -73,14 +67,19 @@ contains
         class(cmdline), intent(inout) :: cline
         integer,        intent(in)    :: which_iter
         logical,        intent(inout) :: update_res, converged
-        logical , allocatable :: to_update(:)
+        logical,          allocatable :: to_update(:)
+        character(len=:), allocatable :: ppfts_fname
         type(oris) :: prime3D_oris
-        real       :: norm, corr_thresh, skewness, frac_srch_space, extr_thresh
+        type(ori)  :: orientation
+        real       :: norm, corr_thresh, skewness, frac_srch_space
+        real       :: extr_thresh, update_frac, reslim
         integer    :: iptcl, inptcls, istate, iextr_lim
+        integer    :: update_ind, nupdates_target, nupdates
         integer    :: statecnt(p%nstates)
+
         inptcls = p%top - p%fromp + 1
 
-        ! SET BAND-PASS LIMIT RANGE
+        ! SET FOURIER INDEX RANGE
         call set_bp_range( b, p, cline )
 
         ! CALCULATE ANGULAR THRESHOLD (USED BY THE SPARSE WEIGHTING SCHEME)
@@ -91,8 +90,8 @@ contains
         ! DETERMINE THE NUMBER OF PEAKS
         if( .not. cline%defined('npeaks') )then
             select case(p%refine)
-                case('no', 'neigh', 'greedy', 'greedyneigh', 'exp')
-                    if( p%eo .eq. 'yes' )then
+                case('no', 'neigh', 'greedy', 'greedyneigh', 'states')
+                    if( p%eo .ne. 'no' )then
                         p%npeaks = min(b%e%find_npeaks_from_athres(NPEAKSATHRES), MAXNPEAKS)
                     else
                         p%npeaks = min(10,b%e%find_npeaks(p%lp, p%moldiam))
@@ -122,6 +121,9 @@ contains
         else
             call b%a%calc_spectral_weights(p%frac)
         endif
+
+        ! READ FOURIER RING CORRELATIONS
+        if( file_exists(p%frcs) ) call b%projfrcs%read(p%frcs)
 
         ! POPULATION BALANCING LOGICS
         ! this needs to be done prior to search such that each part
@@ -188,7 +190,7 @@ contains
             if( p%refine .eq. 'snhc')then
                 p%outfile = SNHCDOC
             else
-                p%outfile = 'prime3Ddoc_'//int2str_pad(which_iter,3)//'.txt'
+                p%outfile = 'prime3Ddoc_'//int2str_pad(which_iter,3)//METADATEXT
             endif
         endif
 
@@ -197,7 +199,7 @@ contains
         allocate( primesrch3D(p%fromp:p%top) , stat=alloc_stat)
         if(alloc_stat /= 0) allocchk("In hadamard3D_matcher::prime3D_exec primesrch3D objects ")
         do iptcl=p%fromp,p%top
-            call primesrch3D(iptcl)%new(b%a, p, pftcc)
+            call primesrch3D(iptcl)%new(pftcc, b%a, b%e, p)
         end do
         ! prep ctf
         if(p%ctf .ne. 'no') call pftcc%create_polar_ctfmats(b%a)
@@ -208,7 +210,7 @@ contains
                 !$omp parallel do default(shared) schedule(guided) private(iptcl) proc_bind(close)
                 do iptcl=p%fromp,p%top
                     if( to_update(iptcl) )then
-                        call primesrch3D(iptcl)%exec_prime3D_srch(pftcc, iptcl, b%a, b%e, p%lp, szsn=p%szsn)
+                        call primesrch3D(iptcl)%exec_prime3D_srch(iptcl, p%lp, szsn=p%szsn)
                     endif
                 end do
                 !$omp end parallel do
@@ -216,14 +218,14 @@ contains
                 if( p%oritab .eq. '' )then
                     !$omp parallel do default(shared) schedule(guided) private(iptcl) proc_bind(close)
                     do iptcl=p%fromp,p%top
-                        call primesrch3D(iptcl)%exec_prime3D_srch(pftcc, iptcl, b%a, b%e, p%lp, greedy=.true.)
+                        call primesrch3D(iptcl)%exec_prime3D_srch(iptcl, p%lp, greedy=.true.)
                     end do
                     !$omp end parallel do
                 else
                     !$omp parallel do default(shared) schedule(guided) private(iptcl) proc_bind(close)
                     do iptcl=p%fromp,p%top
                         if( to_update(iptcl) )then
-                            call primesrch3D(iptcl)%exec_prime3D_srch(pftcc, iptcl, b%a, b%e, p%lp)
+                            call primesrch3D(iptcl)%exec_prime3D_srch(iptcl, p%lp)
                         endif
                     end do
                     !$omp end parallel do
@@ -233,8 +235,8 @@ contains
                 !$omp parallel do default(shared) schedule(guided) private(iptcl) proc_bind(close)
                 do iptcl=p%fromp,p%top
                     if( to_update(iptcl) )then
-                        call primesrch3D(iptcl)%exec_prime3D_srch(pftcc, iptcl, b%a,&
-                            b%e, p%lp, nnmat=b%nnmat, grid_projs=b%grid_projs)
+                        call primesrch3D(iptcl)%exec_prime3D_srch(iptcl, p%lp,&
+                            &nnmat=b%nnmat, grid_projs=b%grid_projs)
                     endif
                 end do
                 !$omp end parallel do
@@ -242,14 +244,14 @@ contains
                 if( p%oritab .eq. '' )then
                     !$omp parallel do default(shared) schedule(guided) private(iptcl) proc_bind(close)
                     do iptcl=p%fromp,p%top
-                        call primesrch3D(iptcl)%exec_prime3D_srch(pftcc, iptcl, b%a, b%e, p%lp, greedy=.true.)
+                        call primesrch3D(iptcl)%exec_prime3D_srch(iptcl, p%lp, greedy=.true.)
                     end do
                     !$omp end parallel do
                 else
                     !$omp parallel do default(shared) schedule(guided) private(iptcl) proc_bind(close)
                     do iptcl=p%fromp,p%top
                         if( to_update(iptcl) )then
-                            call primesrch3D(iptcl)%exec_prime3D_srch(pftcc, iptcl, b%a, b%e, p%lp, greedy=.true.)
+                            call primesrch3D(iptcl)%exec_prime3D_srch(iptcl, p%lp, greedy=.true.)
                         endif
                     end do
                     !$omp end parallel do
@@ -258,16 +260,16 @@ contains
                 if( p%oritab .eq. '' )then                
                     !$omp parallel do default(shared) schedule(guided) private(iptcl) proc_bind(close)
                     do iptcl=p%fromp,p%top
-                        call primesrch3D(iptcl)%exec_prime3D_srch(pftcc, iptcl, b%a, b%e, p%lp,&
-                            greedy=.true., nnmat=b%nnmat, grid_projs=b%grid_projs)
+                        call primesrch3D(iptcl)%exec_prime3D_srch(iptcl, p%lp,&
+                            &greedy=.true., nnmat=b%nnmat, grid_projs=b%grid_projs)
                     end do
                     !$omp end parallel do
                 else
                     !$omp parallel do default(shared) schedule(guided) private(iptcl) proc_bind(close)
                     do iptcl=p%fromp,p%top
                         if( to_update(iptcl) )then
-                            call primesrch3D(iptcl)%exec_prime3D_srch(pftcc, iptcl, b%a, b%e, p%lp,&
-                                greedy=.true., nnmat=b%nnmat, grid_projs=b%grid_projs)
+                            call primesrch3D(iptcl)%exec_prime3D_srch(iptcl, p%lp,&
+                                &greedy=.true., nnmat=b%nnmat, grid_projs=b%grid_projs)
                         endif
                     end do
                     !$omp end parallel do
@@ -280,7 +282,7 @@ contains
                 endif
                 !$omp parallel do default(shared) schedule(guided) private(iptcl) reduction(+:statecnt) proc_bind(close)
                 do iptcl=p%fromp,p%top
-                    call primesrch3D(iptcl)%exec_prime3D_srch_het(pftcc, iptcl, b%a, b%e, corr_thresh, statecnt)
+                    call primesrch3D(iptcl)%exec_prime3D_srch_het(iptcl, corr_thresh, statecnt)
                 end do
                 !$omp end parallel do
                 if( corr_thresh > TINY )then
@@ -290,13 +292,12 @@ contains
                             &'; pop=',statecnt(istate)
                     end do
                 endif
-            case ('exp')
-                if(p%oritab .eq. '') stop 'cannot run the refine=exp mode without input oridoc (oritab)'
+            case ('states')
+                if(p%oritab .eq. '') stop 'cannot run the refine=states mode without input oridoc (oritab)'
                 !$omp parallel do default(shared) schedule(guided) private(iptcl) proc_bind(close)
                 do iptcl=p%fromp,p%top
                     if( to_update(iptcl) )then
-                        call primesrch3D(iptcl)%exec_prime3D_srch(pftcc, iptcl, b%a, b%e, p%lp,&
-                            greedy=.true., nnmat=b%nnmat)
+                        call primesrch3D(iptcl)%exec_prime3D_srch(iptcl, p%lp, greedy=.true., nnmat=b%nnmat)
                     endif
                 end do
                 !$omp end parallel do
@@ -307,9 +308,11 @@ contains
         call pftcc%kill
 
         ! SETUP (OVERWRITES) EVEN/ODD PARTITION
-        if( p%eo.eq.'yes' )then
+        ! needs to be here since parameters just updated
+        ! need to be in the [p%fromp, p%top] range or it will be based on previous params
+        if( p%eo.ne.'no' )then
             ! weights & states assumed here
-            call b%a%partition_eo([p%fromp, p%top])
+            call b%a%partition_eo('proj', [p%fromp, p%top])
         else
             call b%a%set_all2single('eo', -1.)
         endif
@@ -346,7 +349,7 @@ contains
                 endif
             end do
             ! normalise structure factors
-            if( p%eo .eq. 'yes' )then
+            if( p%eo .ne. 'no' )then
                 call eonorm_struct_facts(b, p, reslim, which_iter)
             else
                 call norm_struct_facts(b, p, which_iter)
@@ -381,13 +384,14 @@ contains
         class(params),     intent(inout) :: p         !< param object
         integer, optional, intent(in)    :: nsamp_in  !< num input samples
         type(ran_tabu)       :: rt
+        type(ori)            :: orientation, o_sym
         integer, allocatable :: sample(:)
-        integer              :: i, k, nsamp
+        integer              :: i, k, nsamp, alloc_stat
         type(kbinterpol)     :: kbwin
         if( p%vols(1) == '' )then
             ! init volumes
             call preprecvols(b, p)
-            p%oritab = 'prime3D_startdoc.txt'
+            p%oritab = 'prime3D_startdoc'//METADATEXT
             call b%a%rnd_oris
             call b%a%zero_shifts
             if( p%l_distr_exec .and. p%part.ne.1 )then
@@ -404,7 +408,7 @@ contains
             nsamp = p%nptcls
             if( present(nsamp_in) ) nsamp = nsamp_in
             allocate( sample(nsamp), stat=alloc_stat )
-            if(alloc_stat /= 0) allocchk("In: gen_random_model; simple_hadamard3D_matcher")
+            call alloc_errchk("In: gen_random_model; simple_hadamard3D_matcher", alloc_stat)
             if( present(nsamp_in) )then
                 rt = ran_tabu(p%nptcls)
                 call rt%ne_ran_iarr(sample)
@@ -445,8 +449,7 @@ contains
         ! must be done here since p%kfromto is dynamically set based on FSC from previous round
         ! or based on dynamic resolution limit update
         nrefs = p%nspace*p%nstates
-        call pftcc%new(nrefs, [p%fromp,p%top], [p%boxmatch,p%boxmatch,1],&
-        p%smpd, p%kfromto, p%ring2, p%ctf)
+        call pftcc%new(nrefs, p)
         call prep_refs_pftcc4align( b, p, cline )
         call prep_ptcls_pftcc4align( b, p, ppfts_fname )
         DebugPrint '*** hadamard3D_matcher ***: finished preppftcc4align'

@@ -1,13 +1,12 @@
 ! concrete commander: stream processing routines
-#include "simple_lib.f08"
+
 module simple_commander_stream_wflows
-use simple_defs
-use simple_syslib,            only: alloc_errchk,exec_cmdline, simple_sleep 
+#include "simple_lib.f08"
+
 use simple_cmdline,           only: cmdline
 use simple_chash,             only: chash
 use simple_params,            only: params
 use simple_commander_base,    only: commander_base
-use simple_strings,           only: real2str
 use simple_commander_preproc, only: preproc_commander
 use simple_qsys_env,          only: qsys_env
 use simple_qsys_funs          ! use all in there
@@ -21,13 +20,13 @@ type, extends(commander_base) :: preproc_stream_commander
     procedure :: execute      => exec_preproc_stream
 end type preproc_stream_commander
 #include "simple_local_flags.inc"
-contains
 
-    ! PRE-PROCESS SINGLE-PARTICLE DDDs IN STREAMING MODE
+contains
 
     subroutine exec_preproc_stream( self, cline )
         use simple_commander_preproc, only: preproc_commander
         use simple_moviewatcher,      only: moviewatcher
+        use simple_build,             only: build
         class(preproc_stream_commander), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline
         integer,               parameter   :: SHORTTIME = 30   ! folder watched every minute

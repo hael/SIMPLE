@@ -1,9 +1,8 @@
 ! brute force function minimisation
-#include "simple_lib.f08"
+
 module simple_bforce_opt
-use simple_defs
+#include "simple_lib.f08"
 use simple_optimizer, only: optimizer
-use simple_syslib,   only: alloc_errchk
 implicit none
 
 public :: bforce_opt

@@ -1,14 +1,10 @@
 ! particle picker
-#include "simple_lib.f08"
+
 module simple_picker
 !$ use omp_lib
 !$ use omp_lib_kinds
-use simple_defs
-use simple_math,         only: sortmeans, round2even
+#include "simple_lib.f08"
 use simple_image,        only: image
-use simple_math,         only: euclid, hpsort
-!use simple_fileio      
-use simple_syslib,       only: alloc_errchk
 implicit none
 
 public :: init_picker, exec_picker, kill_picker
@@ -37,7 +33,7 @@ contains
 
     subroutine init_picker( micfname, refsfname, smpd_in, lp_in, distthr_in, rm_outliers_in )
     use simple_fileio,   only:  remove_abspath,fname_new_ext
-    use simple_imgfile,  only: find_ldim_nptcls
+    use simple_imghead,  only: find_ldim_nptcls
         character(len=*),           intent(in) :: micfname, refsfname
         real,                       intent(in) :: smpd_in
         real,             optional, intent(in) :: lp_in, distthr_in

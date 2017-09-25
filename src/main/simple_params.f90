@@ -1,13 +1,14 @@
 ! provides global distribution of constants and derived constants
 module simple_params
 use simple_defs         ! use all in there
+use simple_strings      ! use all in there
+use simple_fileio       ! use all in there
+use simple_syslib       ! use all in there
 use simple_ori,         only: ori
 use simple_cmdline,     only: cmdline
 use simple_magic_boxes, only: find_magic_box
-use simple_fileio,      only: fopen, fclose, fileio_errmsg, nlines, fname2format,file_exists
-use simple_imgfile,     only: find_ldim_nptcls
+use simple_imghead,     only: find_ldim_nptcls
 use simple_binoris,     only: binoris
-use simple_strings,     only: str_has_substr, int2str, int2str_pad
 implicit none
 
 public :: params
@@ -33,6 +34,7 @@ type :: params
     character(len=3)      :: countvox='no'        !< count # voxels(yes|no){no}
     character(len=3)      :: ctfstats='no'        !< calculate ctf statistics(yes|no){no}
     character(len=3)      :: cure='no'
+    character(len=3)      :: dev='no'             !< development flag for experimental code(yes|no){no}
     character(len=3)      :: discrete='no'        !< be discrete(yes|no){no}
     character(len=3)      :: diverse='no'         !< diverse or not flag (yes|no){no}
     character(len=3)      :: doalign='yes'
@@ -40,9 +42,8 @@ type :: params
     character(len=3)      :: dopick='yes'
     character(len=3)      :: doprint='no'
     character(len=3)      :: dynlp='yes'          !< automatic resolution limit update(yes|no){yes}
-    character(len=3)      :: eo='yes'             !< use FSC for filtering and low-pass limit update(yes|no){no}
     character(len=3)      :: errify='no'          !< introduce error(yes|no){no}
-    character(len=3)      :: even='no'            !< calculate even eo-pair(yes|no){no}
+    character(len=3)      :: even='no'            !< even orientation distribution(yes|no){no}
     character(len=3)      :: ft2img='no'          !< convert Fourier transform to real image of power(yes|no){no}
     character(len=3)      :: guinier='no'         !< calculate Guinier plot(yes|no){no}
     character(len=3)      :: kmeans='yes'
@@ -55,7 +56,6 @@ type :: params
     character(len=3)      :: noise='no'           !< noise initialisation(yes|no){no}
     character(len=3)      :: norec='no'           !< do not reconstruct volume(s)(yes|no){no}
     character(len=3)      :: norm='no'            !< do statistical normalisation avg
-    character(len=3)      :: odd='no'             !< calculate odd eo-pair(yes|no){no}
     character(len=3)      :: order='no'           !< order ptcls according to correlation(yes|no){no}
     character(len=3)      :: outside='no'         !< extract boxes outside the micrograph boundaries(yes|no){no}
     character(len=3)      :: pad='no'
@@ -92,15 +92,15 @@ type :: params
     ! other fixed length character variables in ascending alphabetical order
     character(len=STDLEN) :: angastunit='degrees' !< angle of astigmatism unit (radians|degrees){degrees}
     character(len=4)      :: automsk='no'
-    character(len=STDLEN) :: boxfile=''           !< file with EMAN particle coordinates(.txt/.asc)
-    character(len=STDLEN) :: boxtab=''            !< table (text file) of files with EMAN particle coordinates(.txt/.asc)
+    character(len=STDLEN) :: boxfile=''           !< file with EMAN particle coordinates(.txt)
+    character(len=STDLEN) :: boxtab=''            !< table (text file) of files with EMAN particle coordinates(.txt)
     character(len=STDLEN) :: boxtype='eman'
     character(len=STDLEN) :: chunktag=''
-    character(len=STDLEN) :: clsdoc=''
+    character(len=STDLEN) :: classdoc=''          !< doc with per-class stats(.txt)
     character(len=STDLEN) :: comlindoc=''         !< shc_clustering_nclsX.txt
     character(len=STDLEN) :: ctf='no'             !< ctf flag(yes|no|flip)
     character(len=STDLEN) :: cwd=''
-    character(len=STDLEN) :: deftab=''            !< text file with CTF info(.txt/.asc)
+    character(len=STDLEN) :: deftab=''            !< file with CTF info(.txt|.bin)
     character(len=STDLEN) :: dfunit='microns'     !< defocus unit (A|microns){microns}
     character(len=STDLEN) :: dir=''               !< directory
     character(len=STDLEN) :: dir_movies=''        !< grab mrc mrcs files from here
@@ -110,32 +110,35 @@ type :: params
     character(len=STDLEN) :: dir_ptcls=''
     character(len=STDLEN) :: dockmode='eul'       !< volume docking mode(eul|shift|eulshift|all){eul}
     character(len=STDLEN) :: doclist=''           !< list of oritabs for different states
-    character(len=STDLEN) :: endian='native'      !< endiannesss of files(big|little|native){native}
+    character(len=STDLEN) :: eo='yes'             !< use FSC for filtering and low-pass limit update(yes|aniso|no){no}
     character(len=STDLEN) :: exec_abspath=''
     character(len=STDLEN) :: exp_doc=''           !< specifying exp_time and dose_rate per tomogram
     character(len=4)      :: ext='.mrc'           !< file extension{.mrc}
+    character(len=4)      :: ext_meta=''          !< meta data file extension(.txt|.bin)
     character(len=STDLEN) :: extrmode='all'
     character(len=STDLEN) :: fbody=''             !< file body
     character(len=STDLEN) :: featstk='expecstk.bin'
-    character(len=STDLEN) :: filetab=''           !< list of files(.txt/.asc)
+    character(len=STDLEN) :: filetab=''           !< list of files(.txt)
     character(len=STDLEN) :: fname=''             !< file name
+    character(len=STDLEN) :: frcs=''              !< binary file with per-class/proj Fourier Ring Correlations(.bin) 
     character(len=STDLEN) :: fsc='fsc_state01.bin'!< binary file with FSC info{fsc_state01.bin}
     character(len=STDLEN) :: hfun='sigm'          !< function used for normalization(sigm|tanh|lin){sigm}
     character(len=STDLEN) :: hist='corr'          !< give variable for histogram plot
-    character(len=STDLEN) :: infile='infile.txt'  !< table (text file) of inputs(.asc/.txt)
+    character(len=STDLEN) :: infile=''            !< file with inputs(.txt|.bin)
     character(len=STDLEN) :: label='class'        !< discrete label(class|state){class}
     character(len=STDLEN) :: mskfile=''           !< maskfile.ext
     character(len=STDLEN) :: msktype='soft'       !< type of mask(hard|soft){soft}
     character(len=STDLEN) :: opt='simplex'        !< optimiser (powell|simplex|oasis|bforce|pso|de){simplex}
-    character(len=STDLEN) :: oritab=''            !< table  of orientations(.asc/.txt)
-    character(len=STDLEN) :: oritab2=''           !< 2nd table of orientations(.asc/.bin/.txt)
-    character(len=STDLEN) :: oritab3D=''          !< table of 3D orientations(.asc/.bin/.txt)
-    character(len=STDLEN) :: outfile='outfile.txt'!< output document
+    character(len=STDLEN) :: oritab=''            !< table  of orientations(.txt|.bin)
+    character(len=STDLEN) :: oritab2=''           !< 2nd table of orientations(.txt|.bin)
+    character(len=STDLEN) :: oritab3D=''          !< table of 3D orientations(.txt|.bin)
+    character(len=STDLEN) :: outfile=''           !< output document
     character(len=STDLEN) :: outstk=''            !< output image stack
     character(len=STDLEN) :: outstk2=''           !< output image stack 2nd
     character(len=STDLEN) :: outvol=''            !< output volume{outvol.ext}
     character(len=STDLEN) :: ctffind_doc=''       !< per-micrograph CTF parameters to transfer
     character(len=STDLEN) :: pcastk='pcavecinstk.bin'
+    character(len=STDLEN) :: pdbfile=''           !< PDB file
     character(len=STDLEN) :: pdfile='pdfile.bin'
     character(len=STDLEN) :: pgrp='c1'            !< point-group symmetry(cn|dn|t|o|i)
     character(len=STDLEN) :: plaintexttab=''      !< plain text file of input parameters
@@ -154,10 +157,11 @@ type :: params
     character(len=STDLEN) :: tomoseries=''        !< filetable of filetables of tomograms
     character(len=STDLEN) :: unidoc=''            !< unified resources and orientations doc
     character(len=STDLEN) :: vol=''
-    character(len=STDLEN) :: vollist=''           !< table (text file) of volume files(.txt/.asc)
+    character(len=STDLEN) :: vol_filt=''          !< input filter volume(vol_filt.ext)
+    character(len=STDLEN) :: vollist=''           !< table (text file) of volume files(.txt)
     character(len=STDLEN) :: vols(MAXS)=''
-    character(len=STDLEN) :: voltab=''            !< table (text file) of volume files(.txt/.asc)
-    character(len=STDLEN) :: voltab2=''           !< 2nd table (text file) of volume files(.txt/.asc)
+    character(len=STDLEN) :: voltab=''            !< table (text file) of volume files(.txt)
+    character(len=STDLEN) :: voltab2=''           !< 2nd table (text file) of volume files(.txt)
     character(len=STDLEN) :: wfun='kb'
     ! integer variables in ascending alphabetical order
     integer :: astep=1
@@ -168,6 +172,7 @@ type :: params
     integer :: box=0               !< square image size(in pixels)
     integer :: boxconvsz=256       !< size of box used for box-convolution(in pixels)
     integer :: boxmatch=0
+    integer :: box_original
     integer :: boxpd=0
     integer :: chunk=0
     integer :: chunksz=0           !< # images/orientations in chunk
@@ -175,7 +180,7 @@ type :: params
     integer :: clip=0              !< clipped image box size(in pixels)
     integer :: corner=0            !< corner size(in pixels){0}
     integer :: cube=0              !< side size(in pixels){0}
-    integer :: edge=3              !< edge size for softening molecular envelope(in pixels)
+    integer :: edge=6              !< edge size for softening molecular envelope(in pixels)
     integer :: extr_iter=1
     integer :: find=1              !< Fourier index
     integer :: nframesgrp=0        !< # frames to group before unblur(Falcon 3){0}
@@ -198,7 +203,7 @@ type :: params
     integer :: mrcmode=2
     integer :: navgs=1
     integer :: ncunits=0           !< # computing units, can be < nparts{nparts}
-    integer :: nbest=100
+    integer :: nbest=10
     integer :: nboot=0
     integer :: ncls=500            !< # clusters
     integer :: ncomps=0
@@ -337,7 +342,6 @@ type :: params
     real    :: time_per_frame=0.
     real    :: trs=0.              !< maximum halfwidth shift(in pixels)
     real    :: update_frac = 1.
-    real    :: var=1.
     real    :: width=10.           !< falloff of inner mask(in pixels){10}
     real    :: winsz=1.
     real    :: xsh=0.              !< x shift(in pixels){0}
@@ -378,23 +382,21 @@ contains
         !$ use omp_lib
         !$ use omp_lib_kinds
         use simple_math, only: round2even
- !       use simple_map_reduce  ! use all in there
+        use simple_map_reduce  ! use all in there
         class(params),     intent(inout) :: self
         class(cmdline),    intent(inout) :: cline
         logical, optional, intent(in)    :: checkdistr, allow_mix
         type(binoris)                    :: bos
-        integer                          :: i, ncls, ifoo, lfoo(3), cntfile
-        logical                          :: ccheckdistr, aamix
         character(len=STDLEN)            :: cwd_local, debug_local, verbose_local
+        character(len=STDLEN)            :: stk_part_fname_sc, stk_part_fname
         character(len=1)                 :: checkupfile(50)
         character(len=:), allocatable    :: conv
-        logical                          :: nparts_set
-        logical                          :: vol_defined(MAXS)
-        character(len=STDLEN)            :: stk_part_fname_sc, stk_part_fname
+        integer                          :: i, ncls, ifoo, lfoo(3), cntfile
+        logical                          :: nparts_set, vol_defined(MAXS), ccheckdistr, aamix
         nparts_set        = .false.
         vol_defined(MAXS) = .false.
-        debug_local = 'no'
-        verbose_local = 'no'
+        debug_local       = 'no'
+        verbose_local     = 'no'
         ! take care of optionals
         ccheckdistr = .true.
         if( present(checkdistr) ) ccheckdistr = checkdistr
@@ -405,20 +407,23 @@ contains
         ! make global ori
         call self%ori_glob%new
         ! get cwd
-        call getcwd(self%cwd)
+        call simple_getcwd(self%cwd)
         cwd_local = self%cwd
         ! get absolute path of executable
         call getarg(0,self%exec_abspath)
-        call check_carg('debug',          debug_local)
-        if (debug_local == 'yes')then
-            global_debug = .true.  ! from simple_params
-            debug = .true.         ! from simple_local_flags.inc
+        ! take care of debug/verbose flags
+        call check_carg('debug', debug_local)
+        if( debug_local == 'yes' )then
+            global_debug = .true. ! from simple_params
+            debug        = .true. ! from simple_local_flags.inc
         end if
-        call check_carg('verbose',        verbose_local)
+        call check_carg('verbose', verbose_local)
         if(verbose_local == 'yes')then
             global_verbose = .true.
-            verbose = .true.
+            verbose        = .true.
         end if
+        ! default initialisations that depend on meta-data file format
+        self%outfile = 'outfile'//METADATEXT
         ! checkers in ascending alphabetical order
         call check_carg('acf',            self%acf)
         call check_carg('angastunit',     self%angastunit)
@@ -449,11 +454,11 @@ contains
         call check_carg('diverse',        self%diverse)
         call check_carg('doalign',        self%doalign)
         call check_carg('dockmode',       self%dockmode)
+        call check_carg('dev',            self%dev)
         call check_carg('dopca',          self%dopca)
         call check_carg('dopick',         self%dopick)
         call check_carg('doprint',        self%doprint)
         call check_carg('dynlp',          self%dynlp)
-        call check_carg('endian',         self%endian)
         call check_carg('eo',             self%eo)
         call check_carg('errify',         self%errify)
         call check_carg('even',           self%even)
@@ -476,10 +481,8 @@ contains
         call check_carg('noise',          self%noise)
         call check_carg('norec',          self%norec)
         call check_carg('norm',           self%norm)
-        call check_carg('odd',            self%odd)
         call check_carg('opt',            self%opt)
         call check_carg('order',          self%order)
-        call check_carg('outfile',        self%outfile)
         call check_carg('outside',        self%outside)
         call check_carg('pad',            self%pad)
         call check_carg('pgrp',           self%pgrp)
@@ -519,34 +522,39 @@ contains
         call check_carg('weights2D',      self%weights2D)
         call check_carg('zero',           self%zero)
         ! File args
-        call check_file('boxfile',        self%boxfile,'T')
-        call check_file('boxtab',         self%boxtab,'T')
-        call check_file('clsdoc',         self%clsdoc,'S','T')
-        call check_file('ctffind_doc',    self%ctffind_doc, 'T', 'B')
-        call check_file('comlindoc',      self%comlindoc,'T')
-        call check_file('deftab',         self%deftab, 'T', 'B')
-        call check_file('doclist',        self%doclist,'T')
-        call check_file('ext',            self%ext,  notAllowed='T')
-        call check_file('filetab',        self%filetab,'T')
+        call check_file('boxfile',        self%boxfile,      'T')
+        call check_file('boxtab',         self%boxtab,       'T')
+        call check_file('classdoc',       self%classdoc,     'T')
+        call check_file('ctffind_doc',    self%ctffind_doc,  'T', 'B')
+        call check_file('comlindoc',      self%comlindoc,    'T')
+        call check_file('deftab',         self%deftab,       'T', 'B')
+        call check_file('doclist',        self%doclist,      'T')
+        call check_file('ext',            self%ext,          notAllowed='T')
+        call check_file('ext_meta',       self%ext_meta,     'T', 'B')
+        call check_file('filetab',        self%filetab,      'T')
         call check_file('fname',          self%fname)
-        call check_file('fsc',            self%fsc,'B')
+        call check_file('frcs',           self%frcs,         'B')
+        call check_file('fsc',            self%fsc,          'B')
         call check_file('infile',         self%infile)
-        call check_file('mskfile',        self%mskfile,  notAllowed='T')
-        call check_file('oritab',         self%oritab, 'T', 'B')
-        call check_file('oritab2',        self%oritab2,'T', 'B')
-        call check_file('oritab3D',       self%oritab3D,'T', 'B')
-        call check_file('outstk',         self%outstk,   notAllowed='T')
-        call check_file('outstk2',        self%outstk2,  notAllowed='T')
-        call check_file('outvol',         self%outvol,   notAllowed='T')
-        call check_file('plaintexttab',   self%plaintexttab,'T')
-        call check_file('stk',            self%stk,  notAllowed='T')
-        call check_file('stk2',           self%stk2, notAllowed='T')
-        call check_file('stk3',           self%stk3, notAllowed='T')
-        call check_file('stk_backgr',     self%stk_backgr, notAllowed='T')
-        call check_file('unidoc',         self%unidoc,  'T')
-        call check_file('vollist',        self%vollist, 'T')
-        call check_file('voltab',         self%voltab,  'T')
-        call check_file('voltab2',        self%voltab2, 'T')
+        call check_file('mskfile',        self%mskfile,      notAllowed='T')
+        call check_file('oritab',         self%oritab,       'T', 'B')
+        call check_file('oritab2',        self%oritab2,      'T', 'B')
+        call check_file('oritab3D',       self%oritab3D,     'T', 'B')
+        call check_file('outfile',        self%outfile,      'T', 'B')
+        call check_file('outstk',         self%outstk,       notAllowed='T')
+        call check_file('outstk2',        self%outstk2,      notAllowed='T')
+        call check_file('outvol',         self%outvol,       notAllowed='T')
+        call check_file('pdbfile',        self%pdbfile      )
+        call check_file('plaintexttab',   self%plaintexttab, 'T')
+        call check_file('stk',            self%stk,          notAllowed='T')
+        call check_file('stk2',           self%stk2,         notAllowed='T')
+        call check_file('stk3',           self%stk3,         notAllowed='T')
+        call check_file('stk_backgr',     self%stk_backgr,   notAllowed='T')
+        call check_file('unidoc',         self%unidoc,       'T')
+        call check_file('vol_filt',       self%vol_filt,     notAllowed='T')
+        call check_file('vollist',        self%vollist,      'T')
+        call check_file('voltab',         self%voltab,       'T')
+        call check_file('voltab2',        self%voltab2,      'T')
         ! Integer args
         call check_iarg('astep',          self%astep)
         call check_iarg('avgsz',          self%avgsz)
@@ -695,7 +703,6 @@ contains
         call check_rarg('time_per_image', self%time_per_image)
         call check_rarg('trs',            self%trs)
         call check_rarg('update_frac',    self%update_frac)
-        call check_rarg('var',            self%var)
         call check_rarg('width',          self%width)
         call check_rarg('winsz',          self%winsz)
         call check_rarg('xsh',            self%xsh)
@@ -747,7 +754,7 @@ contains
             if( cline%defined('vol') )then
                 self%vols(1) = self%vol
             endif
-            if( cline%defined('vol') .or. any( vol_defined) )then
+            if( cline%defined('vol') .or. any(vol_defined) )then
                 do i=1,MAXS
                     call check_vol( i )
                 end do
@@ -755,7 +762,7 @@ contains
         endif
         ! no stack given, get ldim from volume if present
         if( self%stk .eq. '' .and. self%vols(1) .ne. '' )then
-            call find_ldim_nptcls(self%vols(1), self%ldim, ifoo, endconv=conv)
+            call find_ldim_nptcls(self%vols(1), self%ldim, ifoo)
             self%box  = self%ldim(1)
             DebugPrint 'found logical dimension of volume: ', self%ldim
         endif
@@ -764,7 +771,7 @@ contains
             if( file_exists(self%stk) )then
                 if( .not. cline%defined('nptcls') )then
                     ! get number of particles from stack
-                     call find_ldim_nptcls(self%stk, lfoo, self%nptcls, endconv=conv)
+                     call find_ldim_nptcls(self%stk, lfoo, self%nptcls)
                      DebugPrint 'found logical dimension of stack: ', lfoo
                      DebugPrint 'found nr of ptcls from stack: ', self%nptcls
                 endif
@@ -779,7 +786,7 @@ contains
                     self%nptcls = nlines(self%oritab)
                 else
                     ! needed because use of binoris_io causes circular dependency
-                    ! because params is used by prime3D_srch
+                    ! since params is used by prime3D_srch
                     call bos%open(self%oritab)
                     self%nptcls = bos%get_n_records()
                     call bos%close
@@ -787,9 +794,8 @@ contains
             endif
         else if( self%refs .ne. '' )then
             if( file_exists(self%refs) )then
-                if( cline%defined('box') )then
-                else
-                    call find_ldim_nptcls(self%refs, self%ldim, ifoo, endconv=conv)
+                if( .not. cline%defined('box') )then
+                    call find_ldim_nptcls(self%refs, self%ldim, ifoo)
                     self%ldim(3) = 1
                     DebugPrint 'found logical dimension of refs: ', self%ldim
                     self%box = self%ldim(1)
@@ -806,25 +812,6 @@ contains
         call mkfnames
         ! check box
         if( self%box > 0 .and. self%box < 26 ) stop 'box size need to be larger than 26; simple_params'
-        ! set endconv in simple_defs
-        if( allocated(endconv) ) deallocate(endconv)
-        if( cline%defined('endian') )then
-            select case(self%endian)
-                case('big')
-                    allocate(endconv, source='BIG_ENDIAN')
-                case('little')
-                    allocate(endconv, source='LITTLE_ENDIAN')
-                case('native')
-                    allocate(endconv, source='NATIVE')
-                case DEFAULT
-                    stop 'unsupported endianness flag; simple_params :: constructor'
-            end select
-        else if( allocated(conv) )then
-            allocate(endconv, source=conv)
-        else
-            allocate(endconv, source='NATIVE')
-        endif
-        if( allocated(conv) ) deallocate(conv)
         ! fractional search and volume update
         if( self%update_frac <= .99)then
             if( self%update_frac < 0.01 )stop 'UPDATE_FRAC is too small 1; simple_params :: constructor'
@@ -860,10 +847,17 @@ contains
             endif
         endif
         ! set logical dimension
+        call set_ldim_box_from_stk( self%stk )
+        self%box_original = self%box
         if( file_exists(self%stk_part) .and. cline%defined('nparts') )then
             call set_ldim_box_from_stk( self%stk_part )
-        else
-            call set_ldim_box_from_stk( self%stk )
+            if( cline%defined('stk') .and. self%autoscale .eq. 'no' )then
+                if( self%box /= self%box_original )then
+                    write(*,*) 'original box:                ', self%box_original
+                    write(*,*) 'box read from partial stack: ', self%box
+                    stop 'dim mismatch; simple_params :: new'
+                endif
+            endif
         endif
         ! Check for the existance of this file if part is defined on the command line
         if( cline%defined('part') )then
@@ -902,15 +896,15 @@ contains
         self%xdimpd = round2even(self%alpha*real(self%box/2))
         self%boxpd  = 2*self%xdimpd
         ! set derived Fourier related variables
-        self%dstep = real(self%box-1)*self%smpd                   ! first wavelength of FT
-        self%dsteppd = real(self%boxpd-1)*self%smpd               ! first wavelength of padded FT
-        if( .not. cline%defined('hp') ) self%hp = 0.7*self%dstep  ! high-pass limit
-        self%fny = 2.*self%smpd                                   ! Nyqvist limit
-        if( .not. cline%defined('lpstop') )then                   ! default highest resolution lp
-            self%lpstop = self%fny                                ! deafult lpstop
+        self%dstep   = real(self%box-1)*self%smpd                  ! first wavelength of FT
+        self%dsteppd = real(self%boxpd-1)*self%smpd                ! first wavelength of padded FT
+        if( .not. cline%defined('hp') ) self%hp = 0.7*self%dstep   ! high-pass limit
+        self%fny = 2.*self%smpd                                    ! Nyqvist limit
+        if( .not. cline%defined('lpstop') )then                    ! default highest resolution lp
+            self%lpstop = self%fny                                 ! deafult lpstop
         endif
         if( self%fny > 0. ) self%tofny = nint(self%dstep/self%fny) ! Nyqvist Fourier index
-        if( cline%defined('lp') ) self%dynlp = 'no'               ! override dynlp=yes and lpstop
+        if( cline%defined('lp') ) self%dynlp = 'no'                ! override dynlp=yes and lpstop
         ! set 2D low-pass limits and smpd_targets 4 scaling
         self%lplims2D(1)       = self%lpstart
         self%lplims2D(2)       = self%lplims2D(1) - (self%lpstart - self%lpstop)/2.
@@ -999,7 +993,7 @@ contains
         ! error check ncls
         if( file_exists(self%refs) )then
             ! get number of particles from stack
-            call find_ldim_nptcls(self%refs, lfoo, ncls, endconv=conv)
+            call find_ldim_nptcls(self%refs, lfoo, ncls)
             DebugPrint 'found ncls from refs: ', ncls
             if( cline%defined('ncls') )then
                 if( ncls /= self%ncls ) stop 'inputtend number of clusters (ncls) not&
@@ -1011,6 +1005,12 @@ contains
         ! set remap_classes flag
         self%l_remap_classes = .false.
         if( self%remap_classes .eq. 'yes' ) self%l_remap_classes = .true.
+        ! set nbest to 20% of ncls (if present) or 20% of NSPACE_BALANCE
+        if( cline%defined('ncls') )then
+            self%nbest = max(1,nint(real(self%ncls)*0.2))
+        else
+            self%nbest = max(1,nint(real(NSPACE_BALANCE)*0.2))
+        endif
         ! set to particle index if not defined in cmdlin
         if( .not. cline%defined('top') ) self%top = self%nptcls
         ! set the number of input orientations
@@ -1085,9 +1085,10 @@ contains
                 filenam = cline%get_carg('vollist')
                 nl      = nlines(filenam)
                 call fopen(fnr, file=filenam, iostat=io_stat)
-                call fileio_errmsg("params ; read_vols error opening "//trim(filenam), io_stat)
+                if(io_stat /= 0) call fileio_errmsg("params ; read_vols error opening "//trim(filenam), io_stat)
                 do i=1,nl
                     read(fnr,*, iostat=io_stat) nam
+                    if(io_stat /= 0) call fileio_errmsg("params ; read_vols error reading "//trim(filenam), io_stat)
                     if( nam .ne. '' )then
                         self%vols(i) = nam
                     endif
@@ -1143,6 +1144,8 @@ contains
                             ! text files are supported
                         case ('B')
                             ! binary files are supported
+                        case ('P')
+                            ! PDB files
                         case DEFAULT
                             write(*,*) 'file: ', trim(file)
                             stop 'This file format is not supported by SIMPLE; simple_params::check_file'
@@ -1262,7 +1265,7 @@ contains
                     if( file_exists(stkfname) )then
                         if( cline%defined('box') )then
                         else
-                            call find_ldim_nptcls(stkfname, self%ldim, ifoo, endconv=conv)
+                            call find_ldim_nptcls(stkfname, self%ldim, ifoo)
                             self%ldim(3) = 1
                             DebugPrint 'found logical dimension of stack: ', self%ldim
                             self%box     = self%ldim(1)

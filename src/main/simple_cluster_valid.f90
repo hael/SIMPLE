@@ -1,8 +1,8 @@
 ! cluster validation
-#include "simple_lib.f08"
+
 module simple_cluster_valid
-use simple_defs
-use simple_syslib, only: alloc_errchk
+#include "simple_lib.f08"
+    
 use simple_oris,   only: oris
 implicit none
 #include "simple_local_flags.inc"

@@ -1,16 +1,20 @@
 ! concrete commander: high-level workflows
-#include "simple_lib.f08"
+
 module simple_commander_hlev_wflows
+#include "simple_lib.f08"
 use simple_defs                   ! use all in there
 use simple_cmdline,               only: cmdline
 use simple_params,                only: params
 use simple_commander_base,        only: commander_base
 use simple_qsys_env,              only: qsys_env
+use simple_oris,                  only: oris
+use simple_scaler,                only: scaler
+use simple_strings,               only: int2str_pad, str2int
 use simple_commander_distr_wflows ! use all in there
-use simple_fileio                 ! use all in there
-use simple_commander_distr        ! use all in 
-use simple_jiffys                 ! use all in there
-use simple_binoris_io             ! use all in there
+use simple_fileio,                only: file_exists, simple_rename, del_files, del_file
+use simple_commander_distr        ! use all in there
+use simple_jiffys,                only: progress, simple_end
+use simple_binoris_io,            only: binread_oritab, binwrite_oritab
 use simple_syslib,                only: alloc_errchk
 implicit none
 
@@ -34,18 +38,15 @@ end type het_ensemble_commander
 
 contains
 
-    ! PRIME2D WITH TWO-STAGE AUTO-SCALING
-
+    !> for distributed PRIME2D with two-stage autoscaling
     subroutine exec_prime2D_autoscale( self, cline )
-        use simple_scaler,            only: scaler
-        use simple_oris,              only: oris
         use simple_commander_prime2D, only: rank_cavgs_commander
         class(prime2D_autoscale_commander), intent(inout) :: self
         class(cmdline),                     intent(inout) :: cline
         ! constants
         integer,           parameter :: MAXITS_STAGE1   = 10
         character(len=32), parameter :: CAVGS_ITERFBODY = 'cavgs_iter'
-        character(len=32), parameter :: FINALDOC        = 'prime2Ddoc_final.txt'
+        character(len=32), parameter :: FINALDOC        = 'prime2Ddoc_final'//METADATEXT
         ! commanders
         type(split_commander)                        :: xsplit
         type(makecavgs_distr_commander)              :: xmakecavgs
@@ -62,7 +63,6 @@ contains
         type(oris)            :: os
         type(scaler)          :: scobj
         type(params)          :: p_master
-        character(len=STDLEN) :: refs
         real                  :: scale_stage1, scale_stage2
         integer               :: nparts
         ! make master parameters
@@ -111,7 +111,7 @@ contains
             call xprime2D%execute(cline_prime2D_stage2)
             ! delete downscaled stack parts (we are done with them)
             call del_files(trim(STKPARTFBODY_SC), p_master%nparts, ext=p_master%ext)
-            ! re-generate class averages at native sampling
+            ! re-generate class averages at original sampling
             call scobj%uninit(cline) ! puts back the old command line
             call binread_oritab(FINALDOC, os, [1,p_master%nptcls])
             call os%mul_shifts(1./scale_stage2)
@@ -132,31 +132,23 @@ contains
             call xprime2D%execute(cline)
         endif
         ! ranking
-        call cline_rank_cavgs%set('oritab', trim(FINALDOC))
-        call cline_rank_cavgs%set('stk',    'cavgs_final'//p_master%ext)
-        call cline_rank_cavgs%set('outstk', 'cavgs_final_ranked'//p_master%ext)
+        call cline_rank_cavgs%set('oritab',   trim(FINALDOC))
+        call cline_rank_cavgs%set('stk',      'cavgs_final'//p_master%ext)
+        call cline_rank_cavgs%set('classdoc', 'classdoc.txt')
+        call cline_rank_cavgs%set('outstk',   'cavgs_final_ranked'//p_master%ext)
         call xrank_cavgs%execute( cline_rank_cavgs )
         ! cleanup
-        call del_file('prime2D_startdoc.txt')
+        call del_file('prime2D_startdoc'//METADATEXT)
         call del_file('start2Drefs'//p_master%ext)
+        call del_files(STKPARTFBODY_SC, p_master%nparts, ext=p_master%ext)
         ! end gracefully
         call simple_end('**** SIMPLE_PRIME2D NORMAL STOP ****')
     end subroutine exec_prime2D_autoscale
 
-    !> ini3D_from_cavgs is a SIMPLE program to generate initial 3d model from class averages
-    !! \see  http://simplecryoem.com/tutorials.html?#ab-initio-3d-reconstruction-from-class-averages
-    !!
-    !! Example:
-    !! ```sh
-    !!nohup simple_distr_exec prg=ini3D_from_cavgs stk=../2d/cavgs_selected.mrc \
-    !!    smpd=1.62 msk=88 pgrp=d2 pgrp_known=yes nparts=2 nthr=4 >& INI3DOUT &
-    !!```
+    !> for generation of an initial 3d model from class averages
     subroutine exec_ini3D_from_cavgs( self, cline )
         use simple_commander_volops, only: projvol_commander
         use simple_commander_rec,    only: recvol_commander
-        use simple_strings,          only: int2str_pad, str2int
-        use simple_scaler,           only: scaler
-        use simple_oris,             only: oris
         class(ini3D_from_cavgs_commander), intent(inout) :: self
         class(cmdline),                    intent(inout) :: cline
         ! constants
@@ -184,7 +176,7 @@ contains
         type(scaler)          :: scobj
         type(params)          :: p_master
         type(oris)            :: os
-        real                  :: iter, lpstop, smpd_target, smpd
+        real                  :: iter, smpd_target
         character(len=2)      :: str_state
         character(len=STDLEN) :: vol_iter, oritab
         logical               :: srch4symaxis, doautoscale
@@ -259,14 +251,14 @@ contains
             call cline_symsrch%set('nptcls',  real(NPROJS_SYMSRCH))
             call cline_symsrch%set('nspace',  real(NPROJS_SYMSRCH))
             call cline_symsrch%set('cenlp',   CENLP)
-            call cline_symsrch%set('outfile', 'symdoc.txt')
+            call cline_symsrch%set('outfile', 'symdoc'//METADATEXT)
             ! (4.5) RECONSTRUCT SYMMETRISED VOLUME
             call cline_recvol%set('prg', 'recvol')
             call cline_recvol%set('trs',  5.) ! to assure that shifts are being used
             call cline_recvol%set('ctf',  'no')
-            call cline_recvol%set('oritab', 'symdoc.txt')
+            call cline_recvol%set('oritab', 'symdoc'//METADATEXT)
             ! refinement step now uses the symmetrised vol and doc
-            call cline_prime3D_refine%set('oritab', 'symdoc.txt')
+            call cline_prime3D_refine%set('oritab', 'symdoc'//METADATEXT)
             call cline_prime3D_refine%set('vol1', 'rec_sym'//p_master%ext)
         endif
         ! (4) PRIME3D REFINE STEP
@@ -282,7 +274,7 @@ contains
         call cline_projvol%set('outstk', 'reprojs'//p_master%ext)
         call cline_projvol%delete('stk')
         if( doautoscale )then
-            call scobj%update_smpd_msk(cline_projvol, 'native')
+            call scobj%update_smpd_msk(cline_projvol, 'original')
             ! scale class averages
             call scobj%scale_exec
         endif
@@ -310,7 +302,7 @@ contains
             write(*,'(A)') '>>> 3D RECONSTRUCTION OF SYMMETRISED VOLUME'
             write(*,'(A)') '>>>'
             call xrecvol%execute(cline_recvol)
-            call rename(trim(volfbody)//trim(str_state)//p_master%ext, 'rec_sym'//p_master%ext)
+            call simple_rename(trim(volfbody)//trim(str_state)//p_master%ext, 'rec_sym'//p_master%ext)
         else
             ! refinement step needs to use iter dependent vol/oritab
             call cline_prime3D_refine%set('oritab', trim(oritab))
@@ -328,7 +320,7 @@ contains
         call del_files(trim(STKPARTFBODY), p_master%nparts, ext=p_master%ext)
         if( doautoscale )then
             write(*,'(A)') '>>>'
-            write(*,'(A)') '>>> 3D RECONSTRUCTION AT NATIVE SAMPLING'
+            write(*,'(A)') '>>> 3D RECONSTRUCTION AT ORIGINAL SAMPLING'
             write(*,'(A)') '>>>'
             ! modulate shifts
             call os%new(p_master%nptcls)
@@ -336,13 +328,13 @@ contains
             call os%mul_shifts(1./scobj%get_scaled_var('scale'))
             call binwrite_oritab(oritab, os, [1,p_master%nptcls])
             ! prepare recvol command line
-            call scobj%update_stk_smpd_msk(cline_recvol, 'native')
+            call scobj%update_stk_smpd_msk(cline_recvol, 'original')
             call cline_recvol%set('oritab', trim(oritab))
             ! re-reconstruct volume
             call xrecvol%execute(cline_recvol)
-            call rename(trim(volfbody)//trim(str_state)//p_master%ext, 'rec_final'//p_master%ext)
+            call simple_rename(trim(volfbody)//trim(str_state)//p_master%ext, 'rec_final'//p_master%ext)
         else
-            call rename(trim(vol_iter), 'rec_final'//p_master%ext)
+            call simple_rename(trim(vol_iter), 'rec_final'//p_master%ext)
         endif
         write(*,'(A)') '>>>'
         write(*,'(A)') '>>> RE-PROJECTION OF THE FINAL VOLUME'
@@ -359,7 +351,7 @@ contains
             subroutine set_iter_dependencies
                 character(len=3) :: str_iter
                 str_iter = int2str_pad(nint(iter),3)
-                oritab   = trim(ITERFBODY)//trim(str_iter)//'.txt'
+                oritab   = trim(ITERFBODY)//trim(str_iter)//METADATEXT
                 vol_iter = trim(VOLFBODY)//trim(str_state)//'_iter'//trim(str_iter)//p_master%ext
             end subroutine set_iter_dependencies
 
@@ -384,15 +376,11 @@ contains
 
     end subroutine exec_ini3D_from_cavgs
 
-    ! ENSEMBLE HETEROGEINITY ANALYSIS
-    !> het_ensemble is a SIMPLE program for ensemble heterogeinity analysis
+    !> for ensemble heterogeinity analysis
     subroutine exec_het_ensemble( self, cline )
         use simple_commander_rec,    only: recvol_commander
         use simple_commander_volops, only: postproc_vol_commander
-        use simple_strings,          only: int2str_pad
-        use simple_oris,             only: oris
         use simple_combinatorics,    only: diverse_labeling, shc_aggregation
-        use simple_fileio,           only: file_exists, del_file
         class(het_ensemble_commander), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
         ! constants
@@ -417,124 +405,120 @@ contains
         logical,               allocatable :: included(:)
         type(params)                  :: p_master
         type(oris)                    :: os
-        character(len=STDLEN)         :: oritab, vol, fsc, str_state
-        integer                       :: irepeat, state, iter, n_incl, it, NREPEATS
+        character(len=STDLEN)         :: oritab, vol, str_state
+        integer                       :: irepeat, state, iter, n_incl, it
         integer                       :: best_loc(1)
-        ! some init
-        NREPEATS = nint(cline%get_rarg('nrepeats'))
-        allocate(init_docs(NREPEATS), final_docs(NREPEATS), rep_corrs(NREPEATS), stat=alloc_stat)
-        if(alloc_stat /= 0) allocchk("simple_commander_hlev_wflows:: exec_het_ensemble init_docs(NREPEATS), final_docs(NREPEATS), rep_corrs(NREPEATS)")
-        do irepeat=1,NREPEATS
-            oritab              = trim(REPEATFBODY)//'init_rep'//int2str_pad(irepeat,2)//'.txt'
+
+        ! sanity check
+        if(nint(cline%get_rarg('nstates')) <= 1)&
+            &stop 'Non-sensical NSTATES argument for heterogeneity analysis!'
+
+        ! make master parameters
+        p_master = params(cline, checkdistr=.false.)
+
+        if( p_master%eo .eq. 'no' .and. .not. cline%defined('lp') )&
+            &stop 'need lp input when eo .ne. no; het_ensemble'
+
+        allocate(init_docs(p_master%nrepeats), final_docs(p_master%nrepeats), rep_corrs(p_master%nrepeats), stat=alloc_stat)
+        do irepeat=1,p_master%nrepeats
+            oritab              = trim(REPEATFBODY)//'init_rep'//int2str_pad(irepeat,2)//METADATEXT
             init_docs(irepeat)  = trim(oritab)
-            oritab              = trim(REPEATFBODY)//'rep'//int2str_pad(irepeat,2)//'.txt'
+            oritab              = trim(REPEATFBODY)//'rep'//int2str_pad(irepeat,2)//METADATEXT
             final_docs(irepeat) = trim(oritab)
             call del_file(init_docs(irepeat))
             call del_file(final_docs(irepeat))
         enddo
 
-        ! set cline defaults
-        call cline%set('eo', 'no')
-        if(nint(cline%get_rarg('nstates')) <= 1)stop 'Non-sensical NSTATES argument for heterogeinity analysis!'
-
-        ! make master parameters
-        call cline%set('nrepeats', 1.)
-        p_master = params(cline, checkdistr=.false.)
-
-        ! delete possibly pre-existing stack & pft parts
-        call del_files(STKPARTFBODY, p_master%nparts, ext=p_master%ext)
+        ! delete possibly pre-existing scaled stack parts & pft parts
         call del_files(STKPARTFBODY_SC, p_master%nparts, ext=p_master%ext)
         call del_files('ppfts_memoized_part', p_master%nparts, ext='.bin')
 
         ! prepare command lines from prototype
         cline_recvol_distr = cline
         call cline_recvol_distr%set('prg', 'recvol')
-        call cline_recvol_distr%set('eo', 'yes')
+        if( p_master%eo .eq. 'no' ) call cline_recvol_distr%set('eo', 'yes')
         call cline_recvol_distr%delete('lp')
         cline_postproc_vol = cline
         call cline_postproc_vol%set('prg', 'postproc_vol')
-        call cline_postproc_vol%set('eo', 'yes')
+        if( p_master%eo .eq. 'no' )  call cline_postproc_vol%set('eo', 'yes')
         call cline_postproc_vol%delete('lp')
         cline_postproc_repvol = cline
         call cline_postproc_repvol%set('prg', 'postproc_vol')
-        call cline_postproc_repvol%set('eo', 'no')
-        call cline_postproc_repvol%set('lp', p_master%lp)
         cline_prime3D_master = cline
         call cline_prime3D_master%set('prg', 'prime3D')
         call cline_prime3D_master%set('startit', 1.)
         call cline_prime3D_master%set('maxits', real(MAXITS_INIT))
         call cline_prime3D_master%set('refine', 'het')
         call cline_prime3D_master%set('dynlp', 'no')
-        call cline_prime3D_master%set('lp', p_master%lp)
         call cline_prime3D_master%set('pproc', 'no')
 
-        ! GENERATE DIVERSE INITIAL LABELS
+        ! generate diverse initial labels
         write(*,'(A)') '>>>'
         write(*,'(A)') '>>> GENERATING DIVERSE LABELING'
         call os%new(p_master%nptcls)
         call binread_oritab(p_master%oritab, os, [1,p_master%nptcls])
-        labels   = diverse_labeling(p_master%nptcls, p_master%nstates, NREPEATS)
+        labels   = diverse_labeling(p_master%nptcls, p_master%nstates, p_master%nrepeats)
         included = os%included()
         n_incl   = count(included)
-        do irepeat=1,NREPEATS
-            where( .not.included )labels(irepeat,:) = 0
+        do irepeat=1,p_master%nrepeats
+            where( .not.included ) labels(irepeat,:) = 0
             call os%set_all('state', real(labels(irepeat,:)))
             call binwrite_oritab(trim(init_docs(irepeat)), os, [1,p_master%nptcls])
         enddo
 
-        ! GENERATE CANDIDATE SOLUTIONS
-        do irepeat = 1,NREPEATS
+        ! generate candidate solutions
+        do irepeat = 1,p_master%nrepeats
             write(*,'(A)')    '>>>'
             write(*,'(A,I3)') '>>> PRIME3D REPEAT ', irepeat
             write(*,'(A)')    '>>>'
-            ! RUN PRIME3D
+            ! run prime3d
             cline_prime3D = cline_prime3D_master
             call cline_prime3D%set('oritab', init_docs(irepeat))
             call xprime3D_distr%execute(cline_prime3D)
-            ! HARVEST OUTCOME
+            ! harvest outcome
             iter   = nint(cline_prime3D%get_rarg('endit'))
-            oritab = 'prime3Ddoc_'//int2str_pad(iter,3)//'.txt'
-            call rename(trim(oritab), trim(final_docs(irepeat)))
+            oritab = 'prime3Ddoc_'//int2str_pad(iter,3)//METADATEXT
+            call simple_rename(trim(oritab), trim(final_docs(irepeat)))
             call binread_oritab(trim(final_docs(irepeat)), os, [1,p_master%nptcls])
             ! updates labels & correlations
             labels(irepeat,:)  = nint(os%get_all('state'))
             rep_corrs(irepeat) = sum(os%get_all('corr'), mask=included) / real(n_incl)
-            ! PROCESS FINAL VOLUMES
+            ! process final volumes
             call pproc_volumes
-            ! CLEANUP
+            ! cleanup
             call prime3d_cleanup
         enddo
         best_loc = maxloc(rep_corrs)
 
-        ! GENERATE CONSENSUS DOCUMENT
-        oritab = trim(REPEATFBODY)//'consensus.txt'
+        ! generate consensus document
+        oritab = trim(REPEATFBODY)//'consensus'//METADATEXT
         call del_file(oritab)
         write(*,'(A)')   '>>>'
         write(*,'(A,A)') '>>> GENERATING ENSEMBLE SOLUTION: ', trim(oritab)
         write(*,'(A)')   '>>>'
-        if( NREPEATS == 1 )then
-            ! all done
+        if( p_master%nrepeats == 1 )then
+            ! done
         else 
-            ! solutions aggregation
+            ! aggregate solutions
             call binread_oritab(p_master%oritab, os, [1,p_master%nptcls])
-            allocate(labels_incl(NREPEATS,n_incl), consensus(n_incl), stat=alloc_stat)
-            if(alloc_stat /= 0) allocchk("simple_commander_hlev_wflows::exec_het_ensemble labels_incl(NREPEATS,n_incl), consensus(n_incl)")
-            do irepeat=1,NREPEATS
+            allocate(labels_incl(p_master%nrepeats,n_incl), consensus(n_incl), stat=alloc_stat)
+            if(alloc_stat /= 0) allocchk("simple_commander_hlev_wflows::exec_het_ensemble labels_incl, consensus")
+            do irepeat=1,p_master%nrepeats
                 labels_incl(irepeat,:) = pack(labels(irepeat,:), mask=included)
             enddo
             labels(1,:) = 0
-            call shc_aggregation(NREPEATS, n_incl, labels_incl, consensus, best_loc(1))
+            call shc_aggregation(p_master%nrepeats, n_incl, labels_incl, consensus, best_loc(1))
             call os%set_all('state', real(unpack(consensus, included, labels(1,:))) )
             deallocate(labels_incl, consensus, stat=alloc_stat)
+             if(alloc_stat /= 0) allocchk("hlev_wflows::exec_het_ensemble  dealloc labels_incl consensus")
         endif
         ! output
         call binwrite_oritab(trim(oritab), os, [1,p_master%nptcls])
         ! cleanup
         call os%kill
-        deallocate(init_docs, final_docs, labels, included, rep_corrs, stat=alloc_stat)
+        deallocate(init_docs, final_docs, labels, included, rep_corrs)
 
-        ! FINAL RECONSTRUCTION
-        ! distributed reconstruction
+        ! final distributed reconstruction
         call cline_recvol_distr%set('oritab', trim(oritab))
         call xrecvol_distr%execute(cline_recvol_distr)
         ! post-process
@@ -542,11 +526,8 @@ contains
             str_state = int2str_pad(state, 2)
             vol = 'recvol_state'//trim(str_state)//p_master%ext
             call cline_postproc_vol%set('vol1', trim(vol))
-            fsc = 'fsc_state'//trim(str_state)//'.bin'
-            call cline_postproc_vol%set('fsc', trim(fsc))
-            if(file_exists(vol) .and. file_exists(fsc))then
-                call xpostproc_vol%execute(cline_postproc_vol)
-            endif
+            call update_pproc_cline(cline_postproc_vol, str_state)
+            call xpostproc_vol%execute(cline_postproc_vol)
         enddo
 
         ! end gracefully
@@ -554,7 +535,7 @@ contains
         contains
 
             subroutine prime3d_cleanup
-                character(len=STDLEN) :: fname, vol
+                character(len=STDLEN) :: vol
                 ! delete starting volumes
                 do state = 1, p_master%nstates
                     vol = 'startvol_state'//int2str_pad(state,2)//p_master%ext
@@ -566,7 +547,7 @@ contains
                         vol = trim(VOLFBODY)//int2str_pad(state,2)//'_iter'//int2str_pad(it,3)//p_master%ext
                         if(file_exists(vol))call del_file(vol)
                     enddo
-                    oritab = 'prime3Ddoc_'//int2str_pad(it,3)//'.txt'
+                    oritab = 'prime3Ddoc_'//int2str_pad(it,3)//METADATEXT
                     if(file_exists(oritab))call del_file(oritab)
                 enddo
             end subroutine prime3d_cleanup
@@ -575,14 +556,39 @@ contains
             subroutine pproc_volumes
                 character(len=STDLEN) :: srcvol, destvol
                 do state=1,p_master%nstates
+                    str_state = int2str_pad(state, 2)
                     srcvol  = trim(VOLFBODY)//int2str_pad(state,2)//'_iter'//int2str_pad(iter,3)//p_master%ext
                     destvol = trim(HETFBODY)//int2str_pad(irepeat,2)//'_'//trim(VOLFBODY)//int2str_pad(state,2)//p_master%ext
                     if(file_exists(destvol))call del_file(destvol)
-                    call rename(trim(srcvol), trim(destvol))
+                    call simple_rename(trim(srcvol), trim(destvol))
                     call cline_postproc_repvol%set('vol1', trim(destvol))
+                    call update_pproc_cline(cline_postproc_repvol, str_state)
                     call xpostproc_vol%execute(cline_postproc_repvol)
                 enddo
             end subroutine pproc_volumes
+
+            subroutine update_pproc_cline( cl, str_state )
+                class(cmdline),   intent(inout) :: cl
+                character(len=2), intent(in)    :: str_state
+                character(len=STDLEN) :: fsc_file, optlp_file
+                fsc_file   = 'fsc_state'//trim(str_state)//'.bin'
+                optlp_file = 'aniso_optlp_state'//trim(str_state)//p_master%ext
+                if( file_exists(fsc_file) .and. p_master%eo .eq. 'aniso' )then
+                    if( .not. file_exists(optlp_file) )then
+                        write(*,*) 'eo=aniso but file: ', trim(optlp_file)
+                        stop 'is not in cwd as required; commander_hlev_wflows :: exec_het_ensemble'
+                    endif
+                    call cl%delete('lp')
+                    call cl%set('fsc', trim(fsc_file))
+                    call cl%set('vol_filt', trim(optlp_file))
+                else if( file_exists(fsc_file) .and. p_master%eo .eq. 'yes' )then
+                    call cl%delete('lp')
+                    call cl%set('fsc', trim(fsc_file))
+                else
+                    call cl%delete('fsc')
+                    call cl%set('lp', p_master%lp)
+                endif
+            end subroutine update_pproc_cline
 
     end subroutine exec_het_ensemble
 

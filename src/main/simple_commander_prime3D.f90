@@ -1,16 +1,18 @@
 ! concrete commander: prime3D for ab initio 3D reconstruction and 3D refinement
-#include "simple_lib.f08"
+
 module simple_commander_prime3D
+#include "simple_lib.f08"
 use simple_defs
+use simple_jiffys
+use simple_binoris_io      ! use all in there
+use simple_fileio          ! use all in there
+use simple_syslib,         only: alloc_errchk
 use simple_cmdline,        only: cmdline
 use simple_params,         only: params
 use simple_build,          only: build
+use simple_oris,           only: oris
 use simple_commander_base, only: commander_base
-use simple_jiffys,         only: simple_end,progress
-use simple_qsys_funs,      only: qsys_job_finished
-use simple_fileio,         only: fopen, fclose, fileio_errmsg, file_exists, file2rarr
-use simple_syslib,         only: alloc_errchk, simple_stop
-!use simple_binoris_io      ! use all in there
+use simple_qsys_funs       ! use all in there
 implicit none
 
 public :: resrange_commander
@@ -22,7 +24,7 @@ public :: prime3D_commander
 public :: cont3D_commander
 public :: check3D_conv_commander
 private
-
+#include "simple_local_flags.inc"
 !> generator type
 type, extends(commander_base) :: resrange_commander
   contains
@@ -84,7 +86,6 @@ contains
     end subroutine exec_resrange
 
     subroutine exec_npeaks( self, cline )
-        use simple_oris, only: oris
         class(npeaks_commander), intent(inout) :: self
         class(cmdline),          intent(inout) :: cline
         type(build)  :: b
@@ -99,7 +100,6 @@ contains
 
     subroutine exec_nspace(self,cline)
         use simple_math, only: resang
-        use simple_oris, only: oris
         class(nspace_commander), intent(inout) :: self
         class(cmdline),          intent(inout) :: cline
         type(oris)   :: o
@@ -117,24 +117,33 @@ contains
     end subroutine exec_nspace
 
     subroutine exec_prime3D_init( self, cline )
+        use simple_timer
         use simple_hadamard3D_matcher, only: gen_random_model, prime3D_find_resrange
         class(prime3D_init_commander), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
         type(params)       :: p
         type(build)        :: b
         integer, parameter :: MAXIMGS=1000
+        integer(dp) :: t1
+        verbose=.true.
+        t1=tic()
+        VerbosePrint '+++ prime3D_init timing '
         p = params(cline) ! parameters generated
         if( p%ctf .ne. 'no')then
             if( .not. cline%defined('deftab') )&
             &stop 'need texfile with defocus/astigmatism values for ctf .ne. no mode exec'
-        endif
+         endif
+        VerbosePrint '+++ prime3D_init timing: params ', toc()
         call b%build_general_tbox(p, cline)   ! general objects built
+        VerbosePrint '+++ prime3D_init timing: General toolbox ', toc()
         call b%build_hadamard_prime3D_tbox(p) ! prime3D objects built
+        VerbosePrint '+++ prime3D_init timing: Prime3D toolbox ', toc()
         ! determine resolution range 
         if( cline%defined('lp') ) call prime3D_find_resrange( b, p, p%lp, p%lpstop )
         ! determine the number of peaks
         if( .not. cline%defined('npeaks') ) p%npeaks = min(10,b%e%find_npeaks(p%lp, p%moldiam))
         ! generate the random model
+         VerbosePrint '+++ prime3D_init timing: npeaks ', toc()
         if( cline%defined('nran') )then
             call gen_random_model( b, p, p%nran )
         else
@@ -143,9 +152,11 @@ contains
             else
                 call gen_random_model( b, p )
             endif
-        endif
+         endif
+         VerbosePrint '+++ prime3D_init timing: gen_random_model ' ,toc()
         ! end gracefully
-        call qsys_job_finished( p, cline%get_carg('prg') )
+         call qsys_job_finished( p, cline%get_carg('prg') )
+         VerbosePrint '+++ prime3D_init timing: qsys finish ', toc()
         call simple_end('**** SIMPLE_PRIME3D_INIT NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_prime3D_init
 
@@ -186,12 +197,10 @@ contains
             call exec_rec_master(b, p, cline, 'startvol')
         endif
         if( p%zero .eq. 'yes' ) call b%a%set_all2single('corr', 0.)
-        call b%a%write('multiptcl_startdoc.txt')
+        call binwrite_oritab('multiptcl_startdoc'//METADATEXT, b%a, [1,b%a%get_noris()])
         ! end gracefully
         call simple_end('**** SIMPLE_MULTIPTCL_INIT NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_multiptcl_init
-
-    !> PRIME3D is a SIMPLE program
 
     subroutine exec_prime3D( self, cline )
         use simple_math, only: calc_lowpass_lim, calc_fourier_index
@@ -207,16 +216,16 @@ contains
         update_res = .false.
         converged  = .false.
         p = params(cline) ! parameters generated
-        if( str_has_substr(p%refine,'neigh') .or. p%refine .eq. 'exp' )then
+        if( str_has_substr(p%refine,'neigh') .or. trim(p%refine).eq.'states' )then
             if( .not. cline%defined('oritab') )then
                 stop 'need oritab input for execution of prime3D with this refine mode'
             endif
         endif
         call b%build_general_tbox(p, cline)   ! general objects built
         if( .not. cline%defined('eo') ) p%eo = 'no' ! default
-        if( p%eo .eq. 'yes' ) p%dynlp = 'no'
+        if( p%eo .ne. 'no' ) p%dynlp = 'no'
         if( cline%defined('lp') .or. cline%defined('find')&
-        .or. p%eo .eq. 'yes' .or. p%dynlp .eq. 'yes' )then
+        .or. p%eo .ne. 'no' .or. p%dynlp .eq. 'yes' )then
             ! alles ok!
         else
            stop 'need a starting low-pass limit (set lp or find)!'
@@ -276,7 +285,6 @@ contains
         call simple_end('**** SIMPLE_PRIME3D NORMAL STOP ****')
     end subroutine exec_prime3D
 
-    !> CONT3D is a SIMPLE program
     subroutine exec_cont3D( self, cline )
         use simple_cont3D_matcher, only: cont3D_exec
         class(cont3D_commander), intent(inout) :: self
@@ -312,10 +320,8 @@ contains
         call simple_end('**** SIMPLE_CONT3D NORMAL STOP ****')
     end subroutine exec_cont3D
     
-    !> CHECK3D_CONV is a SIMPLE program
     subroutine exec_check3D_conv( self, cline )
         use simple_math,    only: rad2deg, get_lplim
-        use simple_strings, only: int2str_pad
         class(check3D_conv_commander), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
         type(params)      :: p
@@ -331,9 +337,9 @@ contains
         !    if( p%nstates /= b%a%get_nstates() ) stop 'Inconsistent number of states between command-line and oritab'
         !endif
         limset = .false. ;  update_res = .false.
-        if( p%eo .eq. 'yes' )then
-            allocate( maplp(p%nstates) ,stat=alloc_stat)
-            if(alloc_stat /= 0) allocchk("In commander_prime3D:: check3D_conv ")
+        if( p%eo .ne. 'no' )then
+            allocate( maplp(p%nstates), stat=alloc_stat)
+            if(alloc_stat /= 0) allocchk("In simple_commander_prime3D:: exec_check3D_conv")
             maplp = 0.
             do istate=1,p%nstates
                 if( b%a%get_pop( istate, 'state' ) == 0 )cycle ! empty state

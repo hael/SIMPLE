@@ -23,9 +23,9 @@ implicit none
 type(cmdline)     :: cline
 real              :: starttime, stoptime
 logical           :: be_verbose=.false.
-character(STDLEN) :: time
-call date_and_time(TIME=time)
-starttime = str2real(time)
+character(STDLEN) :: timestr
+call date_and_time(TIME=timestr)
+starttime = str2real(timestr)
 !if( command_argument_count() < 0 )then
 !    write(*,'(a)') 'simple_test_timer [verbose=<yes|no{no}>]'
 !    stop
@@ -41,13 +41,13 @@ be_verbose = .true.
 !endif
 write(*,'(a)') '------------- Basic timer test ----------------- '
 call exec_timertest(be_verbose)
-call date_and_time(TIME=time)
-stoptime = str2real(time)
+call date_and_time(TIME=timestr)
+stoptime = str2real(timestr)
 write(*,'(a,1x,f9.2)') 'simple_test_timer_basic total runtime (s): ', stoptime - starttime
 starttime=stoptime
 write(*,'(a)') '------------- Profiling timer test ----------------- '
 call exec_profiletest(be_verbose)
-call date_and_time(TIME=time)
-stoptime = str2real(time)
+call date_and_time(TIME=timestr)
+stoptime = str2real(timestr)
 write(*,'(a,1x,f9.2)') 'simple_test_timer_basic total runtime (s): ', stoptime - starttime
 end program simple_test_timer

@@ -1,9 +1,7 @@
 ! real hash data structure
-#include "simple_lib.f08"
+
 module simple_hash
-use simple_defs    ! use all in there
-use simple_strings, only: real2str, parse
-use simple_syslib,  only: alloc_errchk
+#include "simple_lib.f08"
 implicit none
 
 public :: hash, test_hash
@@ -210,7 +208,7 @@ contains
         real    :: val
         integer :: j, pos1, nkeyvalpairs, io_stat
         read(fnr,fmt='(A)',advance='no',eor=100) line
-        100 call parse(line, ' ', keyvalpairs, nkeyvalpairs)
+        100 call parsestr(line, ' ', keyvalpairs, nkeyvalpairs)
         do j=1,nkeyvalpairs
             keyvalpair = keyvalpairs(j)
             pos1 = index(keyvalpair, '=') ! position of '='

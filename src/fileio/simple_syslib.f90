@@ -14,7 +14,7 @@ module simple_syslib
         &IOSTAT_END, IOSTAT_EOR
 #endif
 #if defined(INTEL)
-    use ifport, killpid=>kill
+    use ifport, killpid=>kill, intel_ran=>ran
     use ifcore
 #endif
     implicit none

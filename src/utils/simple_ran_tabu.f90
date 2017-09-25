@@ -1,10 +1,9 @@
 ! routines for generation of directed random numbers
-#include "simple_lib.f08"
-module simple_ran_tabu
-use simple_defs
-use simple_syslib, only: alloc_errchk
-implicit none
 
+module simple_ran_tabu
+#include "simple_lib.f08"
+implicit none
+private
 type :: ran_tabu
     private
     integer :: NP=0       !< integer ranges from 1 to NP
@@ -31,6 +30,7 @@ interface ran_tabu
     module procedure constructor
 end interface ran_tabu
 
+public :: ran_tabu
 contains
 
     !>  \brief  is a constructor
@@ -88,7 +88,6 @@ contains
     !>  \brief  generates a uniform random integer [_1_,_NP_] not tabu,
     !!          used to direct Monte Carlo search out of forbidden regions.
     function irnd( self ) result( ir )
-        use simple_rnd, only: irnd_uni
         class(ran_tabu), intent(in) :: self
         integer :: ir
         if( self%N_tabus == self%NP ) stop 'all numbers tabu; irnd; simple_ran_tabu'
@@ -115,7 +114,6 @@ contains
     !!  \param mean Gaussian mean
     !!  \param stdev Gaussian standard deviation
     function irnd_gau( self, mean, stdev ) result( irnd )
-        use simple_rnd, only: irnd_gasdev
         class(ran_tabu), intent(in) :: self
         real,            intent(in) :: mean, stdev
         integer :: irnd
@@ -128,7 +126,6 @@ contains
 
     !>  \brief  generates a multinomal random integer not tabu
     function mnomal( self, pvec ) result( irnd )
-        use simple_rnd, only: multinomal
         class(ran_tabu), intent(in) :: self
         real,            intent(in) :: pvec(self%NP) !< multinomal vector
         integer :: irnd, nrepeats
@@ -173,7 +170,7 @@ contains
         class(ran_tabu), intent(inout) :: self
         real,            intent(in)    :: pvec(self%NP) !< multinomal vector
         integer,         intent(out)   :: rndiarr(:) !< random integer array
-        integer        :: i, szrndiarr, nsample, irnd, cnt
+        integer        :: i, szrndiarr, irnd, cnt
         type(ran_tabu) :: rt4shuffle
         szrndiarr = size(rndiarr)
         if( szrndiarr + self%N_tabus > self%NP ) then

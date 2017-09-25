@@ -1,6 +1,8 @@
 ! random number generation module
+
 module simple_rnd
 use simple_defs ! singleton
+use simple_math
 use simple_syslib, only: alloc_errchk
 !use simple_jiffys
 implicit none
@@ -20,7 +22,7 @@ interface randn
 end interface
 
 integer(long), save   :: idum
-#include "simple_lib.f08"
+
 contains
 
     !>  \brief  random seed
@@ -54,7 +56,7 @@ contains
         real, allocatable   :: a(:)
         integer             :: i
         allocate( a(n), stat=alloc_stat )
-        if(alloc_stat /= 0) allocchk("In: randn_1; simple_rnd")
+        if(alloc_stat /= 0) call alloc_errchk("In: randn_1; simple_rnd", alloc_stat)
         do i=1,n
             a(i) = -1.+2.*ran3()
         end do
@@ -67,7 +69,7 @@ contains
         real, allocatable   :: a(:,:)
         integer             :: i, j
         allocate( a(n1,n2), stat=alloc_stat )
-        if(alloc_stat /= 0) allocchk("In: randn_2; simple_rnd")
+        if(alloc_stat /= 0) call alloc_errchk("In: randn_2; simple_rnd", alloc_stat)
         do i=1,n1
             do j=1,n2
                 a(i,j) = -1.+2.*ran3()

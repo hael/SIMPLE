@@ -19,10 +19,10 @@ contains
         integer :: nargs, iarg, nargs_pair, ival, io_stat
         real    :: rval
         allocate(line_trimmed, source=trim(line))
-        call parse(line_trimmed,' ',args,nargs)
+        call parsestr(line_trimmed,' ',args,nargs)
         allocate(keys(nargs), vals(nargs))
         do iarg=1,nargs
-            call parse(args(iarg),'=',args_pair,nargs_pair)
+            call parsestr(args(iarg),'=',args_pair,nargs_pair)
             if( nargs_pair > 2 ) write(*,'(a)')&
             &'WARNING! nr of args in key-val pair > 2; simple_strings :: simple_line_parser'
             if( nargs_pair < 1 ) write(*,'(a)')&

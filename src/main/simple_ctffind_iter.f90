@@ -1,11 +1,8 @@
 ! ctffind iterator
-#include "simple_lib.f08"
+
 module simple_ctffind_iter
-use simple_defs
-use simple_strings,   only: real2str
-use simple_fileio,    only: fopen,fclose,fileio_errmsg,file_exists,add2fbody,fname_new_ext  ! use all in there
+#include "simple_lib.f08"
 use simple_nrtxtfile, only: nrtxtfile
-use simple_syslib,    only: exec_cmdline, alloc_errchk
 implicit none
 
 public :: ctffind_iter
@@ -35,7 +32,6 @@ contains
         if( .not. file_exists(moviename_forctf) )&
         & write(*,*) 'inputted micrograph does not exist: ', trim(adjustl(moviename_forctf))
         movie_counter = movie_counter + 1
-
         fname_diag    = add2fbody(moviename_forctf, p%ext, '_ctffind_diag')
         fname_param   = fname_new_ext(fname_diag, 'txt')
 
@@ -56,7 +52,7 @@ contains
         write(funit,'(a)') 'no'                        ! do you know what astigmatism is present?
         write(funit,'(a)') 'yes'                       ! slower, more exhaustive search
         write(funit,'(a)') 'yes'                       ! use a restraint on astigmatism
-        write(funit,'(a)') real2str(1.0e4*p%astigtol)  ! defocus grid search step size, default 0.05 microns
+        write(funit,'(a)') real2str(1.0e4*p%astigtol)  ! astigmatism tolerance, default 0.05 microns
         write(funit,'(a)') trim(p%phaseplate)          ! phase-plate or not (yes|no) {no}
         write(funit,'(a)') 'no';                       ! set expert options
         call fclose(funit,errmsg="ctffind_iter:: iterate fopen failed "//trim(fname_ctrl))

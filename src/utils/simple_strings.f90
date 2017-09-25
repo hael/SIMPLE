@@ -65,7 +65,7 @@ contains
     !> \brief  parses the string 'str' into arguments args(1), ..., args(nargs) based on
     !!         the delimiters contained in the string 'delim'. The integer output variable
     !!         nargs contains the number of arguments found.
-    subroutine parse(str,delim,args,nargs)
+    subroutine parsestr(str,delim,args,nargs)
         character(len=*), intent(inout) :: str
         character(len=*), intent(in)    :: delim
         character(len=*)                :: args(:)
@@ -88,7 +88,7 @@ contains
             call split(str,delim,args(nargs))
         end do
         str=strsav
-    end subroutine parse
+    end subroutine parsestr
 
     !> \brief  converts multiple spaces and tabs to single spaces;
     !!         deletes control characters; removes initial spaces.
@@ -502,7 +502,7 @@ contains
     function cntRecsPerLine( line, separators ) result( nrecs )
         character(len=*)            :: line        !<  line to be split
         character(len=*), optional  :: separators  !<  characters which separate words, if not present, default is blank characters (space, tabs...)
-        character(len=line_max_len) :: buffer
+        character(len=LINE_MAX_LEN) :: buffer
         integer :: nrecs, pos1, pos2
         if (strIsBlank(line) .or. strIsComment(line)) then
             nrecs = 0

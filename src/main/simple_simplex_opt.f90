@@ -1,9 +1,10 @@
 ! The Nelder-Mead simplex method for continuous function minimisation
-#include "simple_lib.f08"
+
 module simple_simplex_opt
-use simple_defs
+#include "simple_lib.f08"
+
 use simple_optimizer, only: optimizer
-use simple_syslib,    only: alloc_errchk, simple_stop
+
 implicit none
 
 public :: simplex_opt

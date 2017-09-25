@@ -1,9 +1,9 @@
 ! statistics utility functions
-#include "simple_lib.f08"
+
 module simple_stat
-use simple_defs ! singleton
-use simple_syslib, only: alloc_errchk
-use simple_math, only: hpsort
+    use simple_defs ! singleton
+    use simple_syslib, only: alloc_errchk
+    use simple_math, only: hpsort
 implicit none
 
 private :: moment_1, moment_2, moment_3, normalize_1, normalize_2, normalize_3
@@ -215,14 +215,23 @@ contains
         real, intent(inout) :: arr(:)                    !< input data
         real                :: smin, smax, delta         ! temp stats
         real, parameter     :: NNET_CONST = exp(1.)-1.
+        if( size(arr) == 1 )then
+            arr(1) = max(0., min(arr(1), 1.))
+            return
+        endif
         ! find minmax
         smin  = minval(arr)
         smax  = maxval(arr)
         delta = smax-smin
-        ! create [0,1]-normalized vector
-        !$omp parallel workshare default(shared)
-        arr = (exp((arr-smin)/delta)-1.)/NNET_CONST
-        !$omp end parallel workshare
+        if( delta > TINY )then
+            ! create [0,1]-normalized vector
+            !$omp parallel workshare default(shared)
+            arr = (exp((arr-smin)/delta)-1.)/NNET_CONST
+            !$omp end parallel workshare
+        else
+            write(*,'(a)') 'WARNING! stat :: normalize_sigm_1, division with zero'
+            write(*,'(a)') 'no normalisation done'
+        endif
     end subroutine normalize_sigm_1
 
     !>    is for sigmoid normalisation [0,1]
@@ -234,10 +243,15 @@ contains
         smin  = minval(arr)
         smax  = maxval(arr)
         delta = smax-smin
-        ! create [0,1]-normalized vector
-        !$omp parallel workshare default(shared)
-        arr = (exp((arr-smin)/delta)-1.)/NNET_CONST
-        !$omp end parallel workshare
+        if( delta > TINY )then
+            ! create [0,1]-normalized vector
+            !$omp parallel workshare default(shared)
+            arr = (exp((arr-smin)/delta)-1.)/NNET_CONST
+            !$omp end parallel workshare
+        else
+            write(*,'(a)') 'WARNING! stat :: normalize_sigm_2, division with zero'
+            write(*,'(a)') 'no normalisation done'
+        endif
     end subroutine normalize_sigm_2
 
     !>    is for sigmoid normalisation [0,1]
@@ -249,10 +263,15 @@ contains
         smin  = minval(arr)
         smax  = maxval(arr)
         delta = smax-smin
-        ! create [0,1]-normalized vector
-        !$omp parallel workshare default(shared)
-        arr = (exp((arr-smin)/delta)-1.)/NNET_CONST
-        !$omp end parallel workshare
+        if( delta > TINY )then
+            ! create [0,1]-normalized vector
+            !$omp parallel workshare default(shared)
+            arr = (exp((arr-smin)/delta)-1.)/NNET_CONST
+            !$omp end parallel workshare
+        else
+            write(*,'(a)') 'WARNING! stat :: normalize_sigm_2, division with zero'
+            write(*,'(a)') 'no normalisation done'
+        endif
     end subroutine normalize_sigm_3
 
     !>    calculates the devation around point
@@ -295,13 +314,13 @@ contains
         integer, intent(in) :: winsz
         logical, intent(out) :: err              !< error status
         real, intent(in)     :: data(:,:)        !< input data
-        integer              :: nx, ny, i, j, h, k, px, py, tmpcnt,alstat
+        integer              :: nx, ny, i, j, h, k, px, py, tmpcnt
         real                 :: n, tmpave!, nrpatch
         err = .false.
         nx = size(data,1)
         ny = size(data,2)
-        allocate(ave(nx,ny),stat=alstat)
-        if(alloc_stat/=0)call alloc_errchk("In: mean_2D; simple_stat",alstat )
+        allocate(ave(nx,ny),stat=alloc_stat)
+        if(alloc_stat /= 0) call alloc_errchk("In: mean_2D; simple_stat" , alloc_stat)
         n  = nx*ny
         if( n <= 1 ) then
             write(*,*) 'ERROR: n must be at least 2'
@@ -356,13 +375,13 @@ contains
         real, intent(in)     :: data(:,:), ave(:,:)        !< input data
         real, intent(out), allocatable  :: stdev(:,:),var(:,:)
         logical, intent(out) :: err              !< error status
-        integer              :: nx, ny, i, j, h, k,px,py, tmpcnt, alstat
+        integer              :: nx, ny, i, j, h, k,px,py, tmpcnt
         real                 :: n, tmpdev, nr, tmpvar, ep
         err = .false.
         nx = size(data,1)
         ny = size(data,2)
         allocate(stdev(nx,ny),var(nx,ny),stat=alloc_stat)
-        if(alloc_stat /= 0) allocchk("In: stdev_2D; simple_stat")
+        if(alloc_stat /= 0) call alloc_errchk("In: stdev_2D; simple_stat" , alloc_stat)
         n  = nx*ny
         if( n <= 1 ) then
             write(*,*) 'ERROR: n must be at least 2'
@@ -532,7 +551,7 @@ contains
         integer :: icorr, ncorrs
         ncorrs = size(corrs)
         allocate(weights(ncorrs), corrs_copy(ncorrs), expnegdists(ncorrs),stat=alloc_stat)
-        if(alloc_stat /= 0) allocchk("In: corrs2weights; simple_stat")
+        if(alloc_stat /= 0) call alloc_errchk("In: corrs2weights; simple_stat" , alloc_stat)
         weights     = 0.
         corrs_copy  = corrs
         expnegdists = 0.
@@ -542,9 +561,8 @@ contains
             weights = 1./real(ncorrs)
             return
         endif
-        corrmin = minval(corrs_copy)
-        maxminratio = 2.0
-        if( corrmin > 0. ) maxminratio = corrmax/corrmin
+        corrmin = minval(corrs_copy, mask=corrs_copy > TINY)
+        maxminratio = corrmax/corrmin
         if( maxminratio >= THRESHOLD )then
            ! min/max normalise the correlations
            call normalize_sigm(corrs_copy)
@@ -563,13 +581,14 @@ contains
         normfac = sum(expnegdists)
         ! normalise and set weights where corrs==0 to 0
         do icorr=1,ncorrs
-            if( corrs_copy(icorr) >= 0. )then
+            if( corrs_copy(icorr) > TINY )then
                 weights(icorr) = expnegdists(icorr)/normfac
             else
                 weights(icorr) = 0.
             endif
         end do
-        deallocate(corrs_copy)
+        if(allocated(corrs_copy)) deallocate(corrs_copy)
+        if(allocated(expnegdists)) deallocate(expnegdists)
     end function corrs2weights
 
     ! INTEGER STUFF
@@ -582,7 +601,7 @@ contains
         real, allocatable    :: vals(:)
         n = size(arr)
         allocate( vals(n), order(n), stat=alloc_stat )
-        if(alloc_stat /= 0) allocchk("In: rank_transform_1; simple_stat")
+        if(alloc_stat /= 0) call alloc_errchk("In: rank_transform_1; simple_stat" , alloc_stat)
         do j=1,n
             order(j) = j
             vals(j)  = arr(j)
@@ -604,7 +623,7 @@ contains
         ny = size(mat,2)
         n = nx*ny
         allocate( vals(n), order(n), indices(n,2), stat=alloc_stat )
-        if(alloc_stat /= 0) allocchk("In: rank_transform_2; simple_stat")
+        if(alloc_stat /= 0) call alloc_errchk("In: rank_transform_2; simple_stat" , alloc_stat)
         cnt = 0
         do i=1,nx
             do j=1,ny
@@ -619,7 +638,8 @@ contains
         do j=1,n
             mat(indices(order(j),1),indices(order(j),2)) = real(j)
         end do
-        deallocate(vals, order, indices )
+        deallocate(vals, order, indices , stat=alloc_stat )
+        call alloc_errchk("In: rank_transform_2; simple_stat", alloc_stat )
     end subroutine rank_transform_2
 
     !>    Spearman rank correlation
@@ -794,7 +814,7 @@ contains
         maxv     = maxval(arr)
         binwidth = ( maxv - minv ) / real( nbins )
         allocate( h(nbins) , stat=alloc_stat )
-        if(alloc_stat /= 0) allocchk('In: simple_stat; get_hist')
+        if(alloc_stat /= 0) call alloc_errchk('In: simple_stat; get_hist' , alloc_stat)
         h = 0
         do i=1,n
             bin = nint((arr(i)-minv)/binwidth)   ! int(1.+(arr(i)-minv)/binwidth)
@@ -825,7 +845,7 @@ contains
         binwidth2 = ( maxval(y)-minv2 ) / real( nbins )
         ! Joint
         allocate( h(nbins,nbins) , stat=alloc_stat )
-        if(alloc_stat /= 0) allocchk('In: simple_stat; get_jointhist') 
+        if(alloc_stat /= 0) call alloc_errchk('In: simple_stat; get_jointhist' , alloc_stat) 
         h = 0
         do i=1,n
             bin1 = bin( x(i), minv1, binwidth1 )
@@ -879,7 +899,7 @@ contains
         integer, intent(in)  :: nbins         !< num histogram bins
         real,    allocatable :: rh(:,:), pxs(:), pys(:)
         real    :: mi, val, ex, ey, pxy, px, py, logtwo
-        integer :: i,  j,   n,  alstat
+        integer :: i,  j,   n
         if( nbins<2 )stop 'Invalid number of bins in simple_stat%nmi'
         ! Init
         logtwo  = log(2.)
@@ -888,9 +908,9 @@ contains
         mi = 0.
         ex = 0.
         ey = 0.
-        allocate( rh(nbins,nbins), pxs(nbins), pys(nbins),stat=alstat)
-        if(alloc_stat/=0)call alloc_errchk("In: nmi; simple_stat",alstat )
-        rh = real( get_jointhist( x, y, nbins ) ) / real( n )
+        allocate( rh(nbins,nbins),  pxs(nbins), pys(nbins),stat=alloc_stat)
+        if(alloc_stat /= 0) call alloc_errchk("In: nmi; simple_stat " , alloc_stat)
+        rh = real( get_jointhist( x, y, nbins ) ) / real( n ) !! rh will be reallocated
         ! marginal entropies
         do i=1,nbins
             px     = sum( rh(i,:) )

@@ -10,7 +10,7 @@
 ! Use is subject to Janelia Farm Research Campus Software Copyright 1.1
 ! license terms ( http://license.janelia.org/license/jfrc_copyright_1_1.html )
 ! Modifications by Cyril Reboul, Michael Eager & Hans Elmlund
-#include "simple_lib.f08"
+
 module simple_imghead
 use simple_defs
 use simple_syslib, only: alloc_errchk, file_exists
@@ -205,7 +205,7 @@ contains
                 if( .not. allocated(self%byte_array) )then
                     allocate(self%byte_array(llength),stat=alloc_stat)
                     if(alloc_stat .ne. 0) &
-                         call alloc_errchk("simple_imghead::new byte_array ", alloc_stat )
+                         call alloc_errchk("simple_imghead::new byte_array ", alloc_stat)
                 endif
                 ! zero the byte array
                 self%byte_array = 0
@@ -313,7 +313,7 @@ contains
         select type( self )
             type is( SpiImgHead )
                 allocate(spihed(self%getLabbyt()/4), stat=alloc_stat)
-                if(alloc_stat/=0) allocchk("In simple_imghead::read spihed ")
+                if(alloc_stat/=0) call alloc_errchk("In simple_imghead::read spihed ", alloc_stat)
                 cnt = 0
                 do i=ppos,ppos+self%getLabbyt()-1,4
                     cnt = cnt+1
@@ -1283,7 +1283,7 @@ contains
                 type is (MrcImgHead)
                     if( allocated(self%byte_array) )then
                         deallocate(self%byte_array, stat=alloc_stat)
-                        if(alloc_stat /= 0) allocchk('In: simple_imghead; kill ')
+                        if(alloc_stat /= 0) call alloc_errchk('In: simple_imghead; kill ', alloc_stat)
                     end if
                 type is (SpiImgHead)
                     return

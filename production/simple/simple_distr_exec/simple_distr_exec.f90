@@ -539,7 +539,7 @@ select case(prg)
         if( .not. cline%defined('eo') )then
             call cline%set('eo', 'no')
         else
-            if( cline%get_carg('eo').eq.'yes' )call cline%set('dynlp','no')
+            if( cline%get_carg('eo').ne.'no' )call cline%set('dynlp','no')
         endif
         ! execute
         call xprime3D_distr%execute(cline)
@@ -579,7 +579,7 @@ select case(prg)
         call cline%parse( keys_required(:8), keys_optional(:15) )
         ! set defaults
         if( cline%defined('eo') )then
-            if( cline%get_carg('eo').eq.'yes')then
+            if( cline%get_carg('eo').ne.'no')then
                 ! alles klar
             else
                 if( .not.cline%defined('lp'))stop 'Low-pass must be defined with EO=NO'

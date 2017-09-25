@@ -1,8 +1,8 @@
 ! combinatorics module
 module simple_combinatorics
-use simple_rnd
+#include "simple_lib.f08"
+
 use simple_ran_tabu, only: ran_tabu
-use simple_jiffys,   only: progress
 implicit none
 
 contains

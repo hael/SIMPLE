@@ -1,14 +1,13 @@
 ! an agglomeration of orientations
-#include "simple_lib.f08"
+
 module simple_oris
 !$ use omp_lib
 !$ use omp_lib_kinds
-use simple_defs
+#include "simple_lib.f08"
+
+use simple_stat,        only: moment, corrs2weights, pearsn
+use simple_ran_tabu,    only: ran_tabu
 use simple_ori,         only: ori
-use simple_math,        only: hpsort, is_a_number, rad2deg
-use simple_syslib,      only: alloc_errchk, simple_stop
-use simple_stat,        only: moment
-use simple_fileio,      only: fopen, fclose, fileio_errmsg, file_exists
 implicit none
 
 public :: oris, test_oris
@@ -23,6 +22,7 @@ type :: oris
   contains
     ! CONSTRUCTORS
     procedure          :: new
+    procedure          :: new_clean
     ! GETTERS
     procedure          :: e1get
     procedure          :: e2get
@@ -47,6 +47,7 @@ type :: oris
     procedure          :: get_pop
     procedure          :: get_pops
     procedure          :: get_pinds
+    procedure          :: gen_mask
     procedure          :: states_exist
     procedure          :: get_arr
     procedure, private :: calc_sum
@@ -109,6 +110,7 @@ type :: oris
     procedure          :: symmetrize
     procedure          :: merge
     procedure          :: partition_eo
+    procedure          :: transf_proj2class
     ! I/O
     procedure          :: read
     procedure          :: read_ctfparams_and_state
@@ -142,13 +144,12 @@ type :: oris
     procedure          :: order
     procedure          :: order_corr
     procedure          :: order_cls
+    procedure          :: reduce_projs
     procedure, private :: balance_1
     procedure, private :: balance_2
     generic            :: balance => balance_1, balance_2
     procedure          :: calc_hard_weights
     procedure          :: calc_spectral_weights
-    procedure, private :: calc_hard_weights_single
-    procedure, private :: calc_spectral_weights_single
     procedure          :: find_closest_proj
     procedure          :: find_closest_projs
     procedure          :: find_closest_ori
@@ -180,7 +181,8 @@ type :: oris
     procedure, private :: diststat_2
     generic            :: diststat => diststat_1, diststat_2
     procedure          :: cluster_diststat
-    ! DESTRUCTOR
+    ! DESTRUCTORS
+    procedure          :: kill_chash
     procedure          :: kill
 end type oris
 
@@ -217,6 +219,20 @@ contains
             call self%o(i)%new
         end do
     end subroutine new
+
+    !>  \brief  is a constructor
+    subroutine new_clean( self, n )
+        class(oris), intent(inout) :: self
+        integer,     intent(in)    :: n
+        integer :: alloc_stat, i
+        call self%kill
+        self%n = n
+        allocate( self%o(self%n), stat=alloc_stat )
+        if(alloc_stat /= 0) allocchk('new_clean; simple_oris')
+        do i=1,n
+            call self%o(i)%new_ori_clean
+        end do
+    end subroutine new_clean
 
     ! GETTERS
 
@@ -427,7 +443,7 @@ contains
         class(oris),       intent(inout) :: self
         character(len=*),  intent(in)    :: label
         logical, optional, intent(in)    :: consider_w
-        real, allocatable :: pops(:)
+        integer, allocatable :: pops(:)
         integer :: i, mystate, myval, n
         real    :: w
         logical :: cconsider_w
@@ -446,7 +462,7 @@ contains
             if( cconsider_w )  w = self%o(i)%get('w')
             if( mystate > 0 .and. w > TINY )then
                 myval = nint(self%o(i)%get(label))
-                pops(myval) = pops(myval) + 1.0  
+                pops(myval) = pops(myval) + 1 
             endif
         end do
     end function get_pops
@@ -468,7 +484,11 @@ contains
         logical,     intent(in)    :: mask(:)
         type(oris) :: os_tmp
         integer    :: i, cnt
-        if( size(mask) /= self%n ) stop 'nonconforming mask size; oris :: compress'
+        if( size(mask) /= self%n )then
+            print *, 'self%n:     ', self%n
+            print *, 'size(mask): ', size(mask)
+            stop 'nonconforming mask size; oris :: compress'
+        endif
         call os_tmp%new(count(mask))
         cnt = 0
         do i=1,self%n
@@ -483,7 +503,6 @@ contains
 
     !>  \brief  for balanced split of a state group
     subroutine split_state( self, which )
-        use simple_ran_tabu, only: ran_tabu
         class(oris), intent(inout) :: self
         integer,     intent(in)    :: which
         integer, allocatable :: ptcls_in_which(:)
@@ -513,7 +532,6 @@ contains
 
     !>  \brief  for balanced split of a class
     subroutine split_class( self, which )
-        use simple_ran_tabu, only: ran_tabu
         class(oris), intent(inout) :: self
         integer,     intent(in)    :: which
         integer, allocatable :: ptcls_in_which(:)
@@ -570,40 +588,42 @@ contains
     end subroutine expand_classes
 
     !>  \brief  is for filling empty classes from the highest populated ones
-    subroutine fill_empty_classes( self, fromtocls )
-        use simple_ran_tabu, only: ran_tabu
+    subroutine fill_empty_classes( self, ncls, fromtocls)
         class(oris),                    intent(inout) :: self
+        integer,                        intent(in)    :: ncls
         integer, allocatable, optional, intent(out)   :: fromtocls(:,:)
         integer, allocatable :: inds2split(:), membership(:), pops(:), fromtoall(:,:)
         type(ran_tabu)       :: rt
-        integer              :: iptcl, cls2split(1), maxpop, i, icls
-        integer              :: cnt, nempty, ncls, n_incl
-        ! 'true' ensures at least one image will have a non-zero weight
-        pops   = self%get_pops('class', consider_w=.true.)
+        integer              :: iptcl, cls2split(1)
+        integer              :: cnt, nempty, n_incl, maxpop, i, icls
+        pops   = self%get_pops('class', consider_w=.false.)
         nempty = count(pops == 0)
         if(nempty == 0)return
-        ncls = size(pops)
-        if( present(fromtocls) )allocate(fromtoall(ncls,2), source=0, stat=alloc_stat)
+        if( present(fromtocls) )then
+            if(allocated(fromtocls))deallocate(fromtocls)
+            allocate(fromtoall(ncls,2), source=0, stat=alloc_stat)
+            if(alloc_stat /= 0) allocchk("simple_oris:: fill_empty_classes fromtoall")
+        endif
         do icls = 1, ncls
-            if( pops(icls) > 0 )cycle
+            deallocate(pops, stat=alloc_stat)
+            pops = self%get_pops('class', consider_w=.false.)
+            if( pops(icls) /= 0 )cycle
             ! identify class to split
             cls2split  = maxloc(pops)
             maxpop     = pops(cls2split(1))
-            if( maxpop <= MINCLSPOPLIM )exit
+            if( maxpop <= 2*MINCLSPOPLIM )exit
             ! migration
-            inds2split = self%get_pinds(cls2split(1), 'class')
+            inds2split = self%get_pinds(cls2split(1), 'class', consider_w=.false.)
             rt = ran_tabu(maxpop)
             allocate(membership(maxpop), stat=alloc_stat)
             if(alloc_stat /= 0) allocchk("simple_oris:: fill_empty_classes membership")
             call rt%balanced(2, membership)
-            do i = 1, maxpop
+            do i=1,maxpop
                 if(membership(i) == 2)cycle
                 iptcl = inds2split(i)
                 call self%o(iptcl)%set('class', real(icls))
             enddo
             ! updates populations and migration
-            pops(icls) = count(membership == 1)
-            pops(cls2split(1)) = pops(cls2split(1)) - pops(icls)
             if(present(fromtocls))then
                 fromtoall(icls,1) = cls2split(1)
                 fromtoall(icls,2) = icls
@@ -758,8 +778,36 @@ contains
         endif
     end function get_pinds
 
+    !>  \brief  genrate a mask with the oris with mystate == state/ind == get(label)
+    subroutine gen_mask( self, state, ind, label, l_mask, consider_w, fromto )
+        class(oris),          intent(inout) :: self
+        integer,              intent(in)    :: state, ind
+        character(len=*),     intent(in)    :: label
+        logical, allocatable, intent(out)   :: l_mask(:)
+        logical, optional,    intent(in)    :: consider_w
+        integer, optional,    intent(in)    :: fromto(2)
+        logical :: cconsider_w
+        real    :: w
+        integer :: i, mystate, myval, ffromto(2)
+        cconsider_w = .false.
+        if( present(consider_w) ) cconsider_w = consider_w
+        ffromto(1) = 1
+        ffromto(2) = self%n
+        if( present(fromto) ) ffromto = fromto
+        if( allocated(l_mask) ) deallocate(l_mask)
+        allocate(l_mask(ffromto(1):ffromto(2)))
+        l_mask = .false.
+        do i=ffromto(1),ffromto(2)
+            w = 1.0
+            if( cconsider_w ) w = self%o(i)%get('w')
+            mystate = nint(self%o(i)%get('state'))
+            myval   = nint(self%o(i)%get(trim(label)))
+            if( mystate == state .and. (myval == ind .and. w > TINY) ) l_mask(i) = .true.
+        end do
+    end subroutine gen_mask
+
     !>  \brief  is for getting an array of 'which' variables with
-    !!          filtering based on class/state
+    !!          filtering based on class/state/proj
     function get_arr( self, which, class, state ) result( vals )
         class(oris),       intent(inout) :: self
         character(len=*),  intent(in)    :: which
@@ -1004,8 +1052,6 @@ contains
         contains
 
             function ang_sdev_state( istate )result( isdev )
-                use simple_math, only: rad2deg
-                use simple_stat, only: moment
                 integer, intent(in)  :: istate
                 type(ori)            :: o_best, o
                 type(oris)           :: os
@@ -1373,7 +1419,6 @@ contains
     !>  \brief  generates nnn stochastic projection direction neighbors to o_prev
     !!          with a sigma of the random Gaussian tilt angle of asig
     subroutine rnd_gau_neighbors( self, nnn, o_prev, asig, eullims )
-        use simple_rnd, only: gasdev
         class(oris),    intent(inout) :: self
         integer,        intent(in)    :: nnn
         class(ori),     intent(in)    :: o_prev
@@ -1399,7 +1444,6 @@ contains
 
     !>  \brief  generate random projection direction space around a given one
     subroutine rnd_proj_space( self, nsample, o_prev, thres, eullims )
-        use simple_math, only: rad2deg
         class(oris),          intent(inout) :: self
         integer,              intent(in)    :: nsample      !< # samples
         class(ori), optional, intent(inout) :: o_prev       !< orientation
@@ -1429,7 +1473,6 @@ contains
                     found = .true.
                     call o_stoch%e3set( 0.)
                     self%o( i ) = o_stoch
-                    ! call o_stoch%kill
                 end do
             end do
         else
@@ -1446,7 +1489,6 @@ contains
 
     !>  \brief  randomizes eulers in oris
     subroutine rnd_ori( self, i, trs, eullims )
-        use simple_rnd, only: ran3
         class(oris),    intent(inout) :: self
         integer,        intent(in)    :: i
         real, optional, intent(in)    :: trs
@@ -1490,7 +1532,6 @@ contains
 
     !>  \brief  randomizes eulers in oris
     subroutine rnd_oris_discrete( self, discrete, nsym, eullims )
-        use simple_rnd, only: irnd_uni
         class(oris), intent(inout) :: self
         integer,     intent(in)    :: discrete, nsym
         real,        intent(in)    :: eullims(3,2)
@@ -1511,7 +1552,6 @@ contains
 
     !>  \brief  randomizes the in-plane degrees of freedom
     subroutine rnd_inpls( self, trs )
-        use simple_rnd, only: ran3
         class(oris),    intent(inout) :: self
         real, optional, intent(in)    :: trs
         integer :: i
@@ -1537,7 +1577,6 @@ contains
 
     !>  \brief  randomizes the origin shifts
     subroutine rnd_trs( self, trs )
-        use simple_rnd, only: ran3
         class(oris), intent(inout) :: self
         real,        intent(in)    :: trs
         integer :: i
@@ -1552,7 +1591,6 @@ contains
 
     !>  \brief  randomizes the CTF parameters
     subroutine rnd_ctf( self, kv, cs, fraca, defocus, deferr, astigerr )
-        use simple_rnd, only: ran3
         class(oris),    intent(inout) :: self
         real,           intent(in)    :: kv, cs, fraca, defocus, deferr
         real, optional, intent(in)    :: astigerr
@@ -1591,7 +1629,6 @@ contains
 
     !>  \brief  balanced randomisation of states in oris
     subroutine rnd_states( self, nstates )
-        use simple_ran_tabu, only: ran_tabu
         class(oris), intent(inout) :: self
         integer,     intent(in)    :: nstates
         integer, allocatable       :: states(:)
@@ -1623,7 +1660,6 @@ contains
 
     !>  \brief  randomizes classes in oris
     subroutine rnd_classes( self, ncls )
-        use simple_ran_tabu, only: ran_tabu
         class(oris), intent(inout) :: self
         integer,     intent(in)    :: ncls
         integer, allocatable       :: classes(:)
@@ -1644,7 +1680,6 @@ contains
 
     !>  \brief  randomizes low-pass limits in oris
     subroutine rnd_lps( self )
-        use simple_rnd, only: ran3
         class(oris), intent(inout) :: self
         integer :: i
         do i=1,self%n
@@ -1654,7 +1689,6 @@ contains
 
     !>  \brief  randomizes correlations in oris
     subroutine rnd_corrs( self )
-        use simple_rnd, only: ran3
         class(oris), intent(inout) :: self
         integer :: i
         do i=1,self%n
@@ -1740,46 +1774,61 @@ contains
         call self2add%kill
     end subroutine merge
 
-    !>  \brief  for uniformly assigning even/odd partitions
-    subroutine partition_eo( self, fromto )
-        use simple_ran_tabu
-        class(oris),       intent(inout) :: self
-        integer, optional, intent(in)    :: fromto(2)
+    !>  \brief  for projection/class/state balanced assignment of even/odd partitions
+    subroutine partition_eo( self, which, fromto )
+        class(oris),      intent(inout) :: self      !< instance
+        character(len=*), intent(in)    :: which     !< class/proj
+        integer,          intent(in)    :: fromto(2) !< range
         type(ran_tabu)       :: rt
-        logical, allocatable :: to_assign(:)
-        real,    allocatable :: vals(:)
         integer, allocatable :: eopart(:)
-        integer :: i, n, from, to, cnt
-        from = 1
-        to   = self%n
-        if( present(fromto) )then
-            from = fromto(1)
-            to   = fromto(2)
-        endif
-        vals      = self%get_all('state')
-        to_assign = (vals(from:to) > 0.5)
-        deallocate(vals)
-        vals      = self%get_all('w')
-        to_assign = to_assign .and. (vals(from:to) > TINY)
-        deallocate(vals)
-        n = count(to_assign)
-        if( n == 0 )then
-            write(*,*) 'no valid state or weights for eo partition; simple_oris :: partition_eo'
-            return
-        endif
-        allocate(eopart(n), stat=alloc_stat)
-        if(alloc_stat /= 0) allocchk('eopart; simple_oris :: partition_eo')
-        rt = ran_tabu(n)
-        call rt%balanced(2, eopart)
-        call rt%kill
-        cnt = 0
-        do i = from, to
-            if( to_assign(i) )then
-                cnt = cnt + 1
-                call self%o(i)%set('eo', real(eopart(cnt)-1))
-            endif
+        logical, allocatable :: l_mask(:)
+        integer :: i, j, istate, n, cnt, nstates, sz  
+        select case(which)
+            case('proj')
+                if( .not. self%isthere('proj')  ) stop 'proj label must be set; simple_oris :: partition_eo'
+                n = self%get_n('proj')
+            case('class')
+                if( .not. self%isthere('class') ) stop 'class label must be set; simple_oris :: partition_eo'
+                n = self%get_n('class')
+            case DEFAULT
+                stop 'unsupported which flag; simple_oris :: partition_eo'
+        end select
+        nstates = self%get_n('state')
+        do istate=1,nstates
+            do i=1,n
+                call self%gen_mask(istate, i, which, l_mask, consider_w=.true., fromto=fromto)
+                sz = count(l_mask)
+                if( sz > 0 )then
+                    allocate(eopart(sz), stat=alloc_stat)
+                    if(alloc_stat /= 0) allocchk('eopart; simple_oris :: partition_eo')
+                    if( sz == 1 )then
+                        eopart(1) = irnd_uni(2)
+                    else
+                        rt = ran_tabu(sz)
+                        call rt%balanced(2, eopart)
+                        call rt%kill
+                    endif
+                    cnt = 0
+                    do j=fromto(1),fromto(2)
+                        if( l_mask(j) )then
+                            cnt = cnt + 1
+                            call self%o(j)%set('eo', real(eopart(cnt)-1))
+                        endif
+                    enddo
+                    deallocate(eopart)
+                endif
+            enddo
         enddo
     end subroutine partition_eo
+
+    !>  \brief  transfers proj indices to class indices in self
+    subroutine transf_proj2class( self )
+        class(oris), intent(inout) :: self
+        integer :: i
+        do i=1,self%n
+            call self%o(i)%set('class', self%o(i)%get('proj'))
+        enddo
+    end subroutine transf_proj2class
 
     ! I/O
 
@@ -1789,9 +1838,12 @@ contains
         character(len=*),  intent(in)    :: orifile
         integer, optional, intent(out)   :: nst
         character(len=100) :: io_message
-        integer :: file_stat, i, fnr, state, recsz
+        integer :: file_stat, i, fnr, state
         if( .not. file_exists(orifile) )then
-            call simple_stop ("oris ; read; The file you are trying to read: "//trim(orifile)//' does not exist in cwd' )
+            call simple_stop("oris ; read; The file you are trying to read: "//trim(orifile)//' does not exist in cwd' )
+        endif
+        if( str_has_substr(orifile,'.bin') )then
+            call simple_stop('this method does not support binary files; simple_oris :: read')
         endif
         io_message='No error'
         call fopen(fnr, FILE=orifile, STATUS='OLD', action='READ', iostat=file_stat,iomsg=io_message)
@@ -1814,6 +1866,13 @@ contains
         logical    :: params_are_there(10)
         integer    :: i
         type(oris) :: os_tmp
+        if( .not. file_exists(ctfparamfile) )then
+            call simple_stop ("oris ; read_ctfparams_and_state; The file you are trying to read: "&
+                &//trim(ctfparamfile)//' does not exist in cwd' )
+        endif
+        if( str_has_substr(ctfparamfile,'.bin') )then
+            call simple_stop('this method does not support binary files; simple_oris :: read_ctfparams_and_state')
+        endif
         call os_tmp%new(self%n)
         call os_tmp%read(ctfparamfile)
         params_are_there(1)  = os_tmp%isthere('smpd')
@@ -1847,7 +1906,7 @@ contains
         character(len=*),  intent(in)    :: orifile
         integer, optional, intent(in)    :: fromto(2)
         character(len=100) :: io_message
-        integer            :: file_stat, fnr, i, ffromto(2), recsz, cnt
+        integer            :: file_stat, fnr, i, ffromto(2), cnt
         ffromto(1) = 1
         ffromto(2) = self%n
         if( present(fromto) ) ffromto = fromto
@@ -1887,7 +1946,6 @@ contains
 
     !>  \brief  for introducing alignment errors
     subroutine introd_alig_err( self, angerr, sherr )
-        use simple_rnd, only: ran3
         class(oris), intent(inout) :: self
         real,        intent(in)    :: angerr, sherr
         real    :: x, y, e1, e2, e3
@@ -1916,7 +1974,6 @@ contains
 
     !>  \brief  for introducing CTF errors
     subroutine introd_ctf_err( self, dferr )
-        use simple_rnd, only: ran3
         class(oris), intent(inout) :: self
         real,        intent(in)    :: dferr
         real    :: dfx, dfy
@@ -1964,7 +2021,6 @@ contains
 
     !>  \brief  for identifying the median value of parameter which within the cluster class
     function median_1( self, which, class ) result( med )
-        use simple_math, only: median_nocopy
         class(oris),       intent(inout) :: self
         character(len=*),  intent(in)    :: which
         integer, optional, intent(in)    :: class
@@ -2038,8 +2094,7 @@ contains
 
     !>  \brief  is for generating evenly distributed projection directions
     subroutine spiral_1( self )
-        use simple_math, only: rad2deg
-        class(oris), intent(inout) :: self
+        class(oris),    intent(inout) :: self
         real    :: h, theta, psi
         integer :: k
         if( self%n == 1 )then
@@ -2069,30 +2124,70 @@ contains
         class(oris), intent(inout) :: self
         integer,     intent(in)    :: nsym
         real,        intent(in)    :: eullims(3,2)
+        logical, allocatable :: avail(:)
         type(oris) :: tmp
-        integer    :: cnt, i
-        real       :: e1lim, e2lim
+        integer    :: cnt, i, n, nprojs, lim
+        real       :: e1lim, e2lim, frac, frac1, frac2
         if( nsym == 1 )then
             call self%spiral_1
             return
         endif
-        e1lim = eullims(1,2)
-        e2lim = eullims(2,2)
-        tmp = oris(self%n*nsym)
-        call tmp%spiral_1
+        e1lim  = eullims(1,2)
+        e2lim  = eullims(2,2)
+        frac1  = 360./e1lim
+        frac2  = 1. / ( (1.-cos(deg2rad(e2lim))) /2. )
+        frac   = frac1 * frac2 ! area sphere / area asu
+        n      = ceiling(real(self%n) * frac) ! was n = nsym * self%n
+        call gen_c1
+        nprojs = count(avail)
+        if( nprojs < self%n )then
+            ! under sampling
+            n = n + self%n/2
+            call gen_c1
+            nprojs = count(avail)
+        endif
+        if( nprojs > self%n )then
+            ! over sampling
+            lim = max(2, floor(real(nprojs)/real(nprojs-self%n)))
+            cnt  = 0
+            do i = 1, n
+                if(.not.avail(i))cycle
+                cnt  = cnt + 1
+                if(cnt == lim) then
+                    avail(i) = .false.
+                    cnt      = 0
+                    nprojs   = nprojs-1
+                    if( nprojs == self%n )exit
+                endif
+            enddo
+        endif
+        ! copy asu
         cnt = 0
-        do i=1,self%n*nsym
-            if( tmp%o(i)%e1get() <= e1lim .and. tmp%o(i)%e2get() <= e2lim )then
-                cnt = cnt+1
+        do i = 1, n
+            if( avail(i) )then
+                cnt = cnt + 1
+                if(cnt > self%n)exit
                 self%o(cnt) = tmp%o(i)
-                if( cnt == self%n ) exit
             endif
-         end do
+        enddo
+
+        contains
+
+            subroutine gen_c1
+                integer :: i
+                if( allocated(avail) )deallocate(avail, stat=alloc_stat)
+                allocate(avail(n), source=.false., stat=alloc_stat)
+                call tmp%new(n)
+                call tmp%spiral_1
+                do i = 1, n
+                    if( tmp%o(i)%e1get() <= e1lim .and. tmp%o(i)%e2get() <= e2lim )&
+                    &avail(i) = .true.
+                end do
+            end subroutine gen_c1
     end subroutine spiral_2
 
     !>  \brief  is for generating a quasi-spiral within the asymetric unit
     subroutine qspiral( self, thresh, nsym, eullims )
-        use simple_math, only: rad2deg
         class(oris), intent(inout) :: self
         integer,     intent(in)    :: nsym
         real,        intent(inout) :: eullims(3,2)
@@ -2117,7 +2212,6 @@ contains
 
     !>  \brief  orders oris according to specscore
     function order( self ) result( inds )
-        use simple_math, only: reverse
         class(oris), intent(inout) :: self
         real,    allocatable :: specscores(:)
         integer, allocatable :: inds(:)
@@ -2145,7 +2239,6 @@ contains
 
     !>  \brief  orders clusters according to population
     function order_cls( self, ncls ) result( inds )
-        use simple_math, only: reverse
         class(oris), intent(inout) :: self
         integer,     intent(in)    :: ncls
         integer, allocatable :: inds(:)
@@ -2163,6 +2256,26 @@ contains
         call hpsort( ncls, classpops, inds )
         call reverse(inds)
     end function order_cls
+
+    !>  \brief  reduces the number of projection directions, useful for balancing 
+    !!          operations
+    subroutine reduce_projs( self, nprojs_reduced, nsym, eullims )
+        class(oris), intent(inout) :: self
+        integer,     intent(in)    :: nprojs_reduced, nsym
+        real,        intent(in)    :: eullims(3,2)
+        type(oris) :: osubspace
+        type(ori)  :: o_single
+        integer    :: iptcl
+        ! generate discrete projection direction space
+        call osubspace%new( nprojs_reduced )
+        call osubspace%spiral( nsym, eullims )
+        ! reduction
+        do iptcl=1,self%n
+            o_single = self%get_ori(iptcl)
+            call self%set(iptcl, 'proj', real(osubspace%find_closest_proj(o_single)))
+        end do
+        call osubspace%kill
+    end subroutine reduce_projs
 
     !>  \brief  applies a one-sided balance restraint on the number of particles
     !!          in 2D classes based on corr/specscore order
@@ -2318,101 +2431,62 @@ contains
         skewness = real(self%n - count(included))/real(self%n)
     end subroutine balance_2
 
-    !>  \brief  calculates hard weights based on ptcl ranking
-    subroutine calc_hard_weights( self, frac, bystate )
-        class(oris),       intent(inout) :: self
-        real,              intent(in)    :: frac
-        logical, optional, intent(in)    :: bystate
-        integer, allocatable :: inds(:)
-        type(oris) :: os
-        integer    :: i, nstates, s, pop
-        logical    :: l_bystate
-        l_bystate = .false.
-        if( present(bystate) ) l_bystate = bystate
-        if( .not.l_bystate )then
-            ! treated as single state
-            call self%calc_hard_weights_single( frac )
-        else
-            ! per state frac
+    !>  \brief  calculates spectral particle weights
+    subroutine calc_spectral_weights( self, frac )
+        class(oris), intent(inout) :: self
+        real,        intent(in)    :: frac
+        integer           :: i, nstates, istate, cnt, mystate
+        real, allocatable :: weights(:), specscores(:)
+        call self%calc_hard_weights( frac )
+        if( self%isthere('specscore') )then
             nstates = self%get_n('state')
-            if( nstates == 1 )then
-                call self%calc_hard_weights_single( frac )
-            else
-                do s=1,nstates
-                    pop = self%get_pop( s, 'state' )
-                    if( pop==0 )cycle
-                    inds = self%get_pinds( s, 'state' )
-                    os = oris( pop )
-                    do i=1,pop
-                        call os%set_ori( i, self%get_ori( inds(i) ))
+            if( nstates > 1 )then
+                do istate=1,nstates
+                    specscores = self%get_arr('specscore', state=istate)
+                    weights    = self%get_arr('w',         state=istate)
+                    where( weights < 0.5 )
+                        specscores = 0.
+                    end where
+                    weights = corrs2weights(specscores)
+                    cnt = 0
+                    do i=1,self%n
+                        mystate = nint(self%o(i)%get('state'))
+                        if( mystate == istate )then
+                            cnt = cnt + 1
+                            call self%o(i)%set('w', weights(i))
+                        else if( mystate == 0 )then
+                            call self%o(i)%set('w', 0.0)
+                        endif
                     enddo
-                    call os%calc_hard_weights_single( frac )
-                    do i=1,pop
-                        call self%set_ori( inds(i), os%get_ori( i ))
-                    enddo
-                    deallocate(inds)
+                    deallocate(specscores,weights)
                 enddo
+            else
+                specscores = self%get_all('specscore')
+                weights    = self%get_all('w')
+                where( weights < 0.5 )
+                    specscores = 0.
+                end where
+                weights = corrs2weights(specscores)
+                do i=1,self%n
+                    call self%o(i)%set('w', weights(i))
+                end do
+                deallocate(specscores,weights)
             endif
-        endif
-    end subroutine calc_hard_weights
-
-    !>  \brief  calculates hard weights based on ptcl ranking
-    subroutine calc_spectral_weights( self, frac, bystate )
-        class(oris),       intent(inout) :: self
-        real,              intent(in)    :: frac
-        logical, optional, intent(in)    :: bystate
-        integer, allocatable :: inds(:)
-        type(oris) :: os
-        integer    :: i, nstates, s, pop
-        logical    :: l_bystate
-        l_bystate = .false.
-        if( present(bystate) ) l_bystate = bystate
-        if( .not.l_bystate )then
-            ! treated as single state
-            call self%calc_spectral_weights_single(frac)
         else
-            ! per state frac
-            nstates = self%get_n('state')
-            if( nstates==1 )then
-                call self%calc_spectral_weights_single(frac)
-            else
-                do s=1,nstates
-                    pop = self%get_pop( s, 'state' )
-                    if( pop==0 )cycle
-                    inds = self%get_pinds( s, 'state' )
-                    os = oris( pop )
-                    do i=1,pop
-                        call os%set_ori( i, self%get_ori( inds(i) ))
-                    enddo
-                    call os%calc_spectral_weights_single(frac)
-                    do i=1,pop
-                        call self%set_ori( inds(i), os%get_ori( i ))
-                    enddo
-                    deallocate(inds)
-                enddo
-            endif
+            !stop 'specscore not part of oris; simple_oris :: calc_spectral_weights'
         endif
     end subroutine calc_spectral_weights
 
     !>  \brief  calculates hard weights based on ptcl ranking
-    subroutine calc_hard_weights_single( self, frac )
-        class(oris),       intent(inout) :: self
-        real,              intent(in)    :: frac
+    subroutine calc_hard_weights( self, frac )
+        class(oris), intent(inout) :: self
+        real,        intent(in)    :: frac
         integer, allocatable :: order(:)
-        integer :: i, lim, n, ind
+        integer :: i, lim, ind
         if( frac < 0.99 )then
-            n = 0
-            do i=1,self%n
-                if( nint(self%o(i)%get('state')) > 0 )then
-                    n = n + 1
-                else
-                    ! ensures rejected from frac threshold
-                    call self%o(i)%reject
-                endif
-            end do
-            lim   = nint(frac*real(n))
+            lim   = nint(frac*real(self%n))
             order = self%order() ! specscore ranking
-            do i = 1, self%n
+            do i=1,self%n
                 ind = order(i)
                 if( i <= lim )then
                     call self%o(ind)%set('w', 1.)
@@ -2423,33 +2497,7 @@ contains
         else
             call self%set_all2single('w', 1.)
         endif
-    end subroutine calc_hard_weights_single
-
-    !>  \brief  calculates hard weights based on ptcl ranking
-    subroutine calc_spectral_weights_single( self, frac )
-        use simple_stat, only: normalize_sigm
-        class(oris), intent(inout) :: self
-        real,        intent(in)    :: frac
-        real,    allocatable :: specscores(:), weights(:)
-        real    :: minscore
-        integer :: i
-        call self%calc_hard_weights_single(frac)
-        if( self%isthere('specscore') )then
-            specscores = self%get_all('specscore')
-            minscore   = minval(specscores, mask=(specscores > TINY))
-            weights    = self%get_all('w')
-            where( (weights > 0.5) .and. (specscores > minscore) )
-                weights = specscores
-            else where
-                weights = 0.
-            end where
-            call normalize_sigm(weights)
-            do i=1,self%n
-                call self%o(i)%set('w', weights(i))
-            end do
-            deallocate(specscores, weights)
-        endif
-    end subroutine calc_spectral_weights_single
+    end subroutine calc_hard_weights
 
     !>  \brief  to find the closest matching projection direction
     function find_closest_proj( self, o_in, state ) result( closest )
@@ -2614,7 +2662,6 @@ contains
 
     !>  \brief  to find angular resolution of an even orientation distribution (in degrees)
     function find_angres( self ) result( res )
-        use simple_math, only: rad2deg
         class(oris), intent(in) :: self
         real                    :: dists(self%n), res, x
         integer                 :: i, j
@@ -2635,7 +2682,6 @@ contains
 
     !>  \brief  to find angular resolution of an even orientation distribution (in degrees)
     function find_angres_geod( self ) result( res )
-        use simple_math, only: rad2deg
         class(oris), intent(in) :: self
         real                    :: dists(self%n), res, x
         integer                 :: i, j
@@ -2656,7 +2702,6 @@ contains
 
     !>  \brief  to find the correlation bound in extremal search
     function extremal_bound( self, thresh ) result( corr_bound )
-        use simple_math, only: hpsort
         class(oris),       intent(inout) :: self
         real,              intent(in)    :: thresh
         real,    allocatable       :: corrs(:), corrs_incl(:)
@@ -2769,7 +2814,6 @@ contains
 
     !>  \brief  modulates the shifts (additive) within a class
     subroutine add_shift2class( self, class, sh2d )
-        use simple_math, only: rotmat2d
         class(oris), intent(inout) :: self
         integer,     intent(in)    :: class
         real,        intent(in)    :: sh2d(2)
@@ -2786,7 +2830,6 @@ contains
 
     !>  \brief  for correlating oris objs, just for testing purposes
     function corr_oris( self1, self2 ) result( corr )
-        use simple_stat, only: pearsn
         class(oris), intent(inout) :: self1, self2
         real :: arr1(5), arr2(5), corr
         integer :: i
@@ -3184,23 +3227,23 @@ contains
         os = oris(100)
         os2 = oris(100)
         call os%rnd_oris(5.)
-        call os%write('test_oris_rndoris.txt')
-        call os2%read('test_oris_rndoris.txt')
-        call os2%write('test_oris_rndoris_copy.txt')
+        call os%write('test_oris_rndoris'//METADATEXT)
+        call os2%read('test_oris_rndoris'//METADATEXT)
+        call os2%write('test_oris_rndoris_copy'//METADATEXT)
         corr = corr_oris(os,os2)
         if( corr > 0.99 ) passed = .true.
         if( .not. passed ) stop 'read/write failed'
         passed = .false.
         call os%rnd_states(5)
-        call os%write('test_oris_rndoris_rndstates.txt')
+        call os%write('test_oris_rndoris_rndstates'//METADATEXT)
         if( corr_oris(os,os2) > 0.99 ) passed = .true.
         if( .not. passed ) stop 'statedoc read/write failed!'
         write(*,'(a)') '**info(simple_oris_unit_test, part3): testing calculators'
         passed = .false.
         call os%rnd_lps()
-        call os%write('test_oris_rndoris_rndstates_rndlps.txt')
+        call os%write('test_oris_rndoris_rndstates_rndlps'//METADATEXT)
         call os%spiral
-        call os%write('test_oris_rndoris_rndstates_rndlps_spiral.txt')
+        call os%write('test_oris_rndoris_rndstates_rndlps_spiral'//METADATEXT)
         call os%rnd_corrs()
         order = os%order()
         if( doprint )then
@@ -3220,7 +3263,18 @@ contains
         write(*,'(a)') 'SIMPLE_ORIS_UNIT_TEST COMPLETED SUCCESSFULLY ;-)'
     end subroutine test_oris
 
-    ! DESTRUCTOR
+    ! DESTRUCTORS
+
+    !>  \brief  is a destructor
+    subroutine kill_chash( self )
+        class(oris), intent(inout) :: self
+        integer :: i
+        if( allocated(self%o) )then
+            do i=1,self%n
+                call self%o(i)%kill_chash
+            end do
+        endif
+    end subroutine kill_chash
 
     !>  \brief  is a destructor
     subroutine kill( self )
@@ -3231,7 +3285,8 @@ contains
                 call self%o(i)%kill
             end do
             deallocate( self%o , stat=alloc_stat)
-            if(alloc_stat /= 0) allocchk('In: kill, module: simple_oris')
+            if(alloc_stat /= 0) allocchk('In: kill, module: simple_oris o')
+            self%n = 0
         endif
     end subroutine kill
 

@@ -1,14 +1,14 @@
 ! iterator for unblur (a program for motion correction, dose-weighting and frame-weighting of DDD movies)
 module simple_unblur_iter
 use simple_defs
-use simple_image,   only: image
-use simple_cmdline, only: cmdline
-use simple_params,  only: params
-use simple_strings, only: int2str_pad, int2str
-use simple_math,    only: round2even
-use simple_ori,     only: ori
-use simple_fileio,  only: file_exists
-use simple_procimgfile,  only:  frameavg_imgfile ! use all in there
+use simple_image,        only: image
+use simple_cmdline,      only: cmdline
+use simple_params,       only: params
+use simple_strings,      only: int2str_pad, int2str
+use simple_math,         only: round2even
+use simple_ori,          only: ori
+use simple_syslib,       only: file_exists
+use simple_procimgfile,  only: frameavg_imgfile 
 use simple_unblur       ! use all in there
 implicit none
 

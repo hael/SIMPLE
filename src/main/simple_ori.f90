@@ -1,9 +1,7 @@
 ! an orientation
-#include "simple_lib.f08"
+
 module simple_ori
-use simple_defs    ! use all in there
-!use simple_fileio  ! use all in there
-use simple_syslib, only: alloc_errchk
+#include "simple_lib.f08"
 use simple_hash,   only: hash
 use simple_chash,  only: chash
 implicit none
@@ -101,7 +99,8 @@ type :: ori
     generic            :: operator(.euldist.)     => euldist
     generic            :: operator(.inpldist.)    => inpldist
     generic            :: operator(.inplrotdist.) => inplrotdist
-    ! DESTRUCTOR
+    ! DESTRUCTORS
+    procedure          :: kill_chash
     procedure          :: kill
 end type ori
 
@@ -385,6 +384,7 @@ contains
         use simple_rnd, only: ran3
         class(ori), intent(inout)  :: self
         real, intent(in), optional :: trs         !< threshold
+        real :: x, y
         if( present(trs) )call self%rnd_shift(trs)
         call self%e3set(ran3()*359.99)
     end subroutine rnd_inpl
@@ -480,7 +480,7 @@ contains
         class(ori),                    intent(inout) :: self
         character(len=*),              intent(in)    :: key
         character(len=:), allocatable, intent(inout) :: val
-        if (allocated(val)) deallocate(val)
+        if( allocated(val) ) deallocate(val)
         val = self%chtab%get(key)
     end subroutine getter_1
 
@@ -567,7 +567,7 @@ contains
 
     !>  \brief  whether orientation is part of the even partition
     logical function iseven( self )
-        class(ori),       intent(inout) :: self
+        class(ori), intent(inout) :: self
         real :: val
         val = self%htab%get('eo')
         iseven = (val > -0.5) .and. (val < 0.5)
@@ -603,16 +603,12 @@ contains
         if( sz_chash > 0 ) str_chtab = self%chtab%chash2str()
         if( sz_hash  > 0 ) str_htab  = self%htab%hash2str()
         if( sz_chash > 0 .and. sz_hash > 0 )then
-            allocate( str, source=str_chtab//' '//str_htab ,stat=alloc_stat)
-            if(alloc_stat /= 0) allocchk("in simple_ori::ori2str 1 ")
+            allocate( str, source=str_chtab//' '//str_htab)
         else if( sz_hash > 0 )then
-            allocate( str, source=str_htab ,stat=alloc_stat)
-            if(alloc_stat /= 0) allocchk("in simple_ori::ori2str 2 ")
+            allocate( str, source=str_htab)
         else if( sz_chash > 0 )then
-            allocate( str, source=str_chtab ,stat=alloc_stat)
-            if(alloc_stat /= 0) allocchk("in simple_ori::ori2str 3 ")
+            allocate( str, source=str_chtab)
         endif
-        
     end function ori2str
 
     !<  \brief  to print the rotation matrix
@@ -996,12 +992,21 @@ contains
         dist = myacos(dot_product(x1,x2))
     end function inplrotdist
 
-    ! DESTRUCTOR
+    ! DESTRUCTORS
+
+    !>  \brief  is a destructor
+    subroutine kill_chash( self )
+        class(ori), intent(inout) :: self
+        call self%chtab%kill
+    end subroutine kill_chash
 
     !>  \brief  is a destructor
     subroutine kill( self )
         class(ori), intent(inout) :: self
-        call self%chtab%kill
+        if( self%existence )then
+            call self%chtab%kill
+            self%existence = .false.
+        endif
     end subroutine kill
 
     ! PRIVATE STUFF

@@ -9,7 +9,7 @@
 ! Use is subject to Janelia Farm Research Campus Software Copyright 1.1
 ! license terms ( http://license.janelia.org/license/jfrc_copyright_1_1.html )
 ! Modifications by Cyril Reboul, Michael Eager & Hans Elmlund
-#include "simple_lib.f08"
+
 module simple_imgfile
 use simple_defs
 use simple_syslib,  only: alloc_errchk, file_exists, is_open
@@ -555,7 +555,7 @@ contains
             case(1) ! Byte data
                 DebugPrint 'Allocating 8-bit array in rwSlices'
                 allocate(tmp_byte_array(dims(1),dims(2),dims(3)),stat=alloc_stat)
-                if(alloc_stat /= 0) allocchk("In simple_imgfile:: rwSlices ;  Byte data ")
+                if(alloc_stat /= 0) call alloc_errchk("In simple_imgfile:: rwSlices ;  Byte data ", alloc_stat)
                 read(unit=self%funit,pos=first_byte,iostat=io_stat,iomsg=io_message) tmp_byte_array
                 if(io_stat /= 0) call fileio_errmsg("In simple_imgfile:: rwSlices ; Byte data "//trim(io_message), io_stat)
                 ! Conversion from unsigned byte integer (which MRC appears to be) is tricky because Fortran doesn't do unsigned integer natively.
@@ -567,14 +567,14 @@ contains
                 else
                     rarr(1:dims(1),:,:) = real(iand(int(tmp_byte_array(:,:,:),kind=4),int(255,kind=4)))
                 endif
-                deallocate(tmp_byte_array,stat=alloc_stat, errmsg=io_message)
-                if(alloc_stat /= 0) allocchk("In simple_imgfile:: rwSlices ; dealloc tmp_byte_array" )
+                deallocate(tmp_byte_array,stat=alloc_stat)
+                if(alloc_stat /= 0) call alloc_errchk("In simple_imgfile:: rwSlices ; dealloc tmp_byte_array", alloc_stat )
             case(2) ! 16-bit data
                 DebugPrint 'Allocating 32-bit array in rwSlices'
                 select case (self%overall_head%getPixType())
                 case(dataRinteger)
-                    allocate(tmp_16bit_int_array(dims(1),dims(2),dims(3)),stat=alloc_stat, errmsg=io_message)
-                    if(alloc_stat /= 0) allocchk("In simple_imgfile:: rwSlices ; 16-bit data " )
+                    allocate(tmp_16bit_int_array(dims(1),dims(2),dims(3)),stat=alloc_stat)
+                    if(alloc_stat /= 0) call alloc_errchk("In simple_imgfile:: rwSlices ; 16-bit data ", alloc_stat )
                     read(unit=self%funit,pos=first_byte,iostat=io_stat,iomsg=io_message) tmp_16bit_int_array
                     if(io_stat /= 0) call fileio_errmsg("In simple_imgfile:: rwSlices ; "//trim(io_message), io_stat)
                     if( self%overall_head%pixIsSigned() )then
@@ -583,21 +583,21 @@ contains
                         rarr(1:dims(1),:,:) = real(iand(int(tmp_16bit_int_array(:,:,:),kind=4),&
                              int(huge(int(1,kind=2)),kind=4)))
                     endif
-                    deallocate(tmp_16bit_int_array,stat=alloc_stat, errmsg=io_message)
-                    if(alloc_stat /= 0) allocchk("In simple_imgfile:: rwSlices ; tmp_16bit_int_array" )
+                    deallocate(tmp_16bit_int_array,stat=alloc_stat)
+                    if(alloc_stat /= 0) call alloc_errchk("In simple_imgfile:: rwSlices ; tmp_16bit_int_array" , alloc_stat)
                 case DEFAULT
                     stop 'Non-integer 16-bit data not supported; rwSlices; simple_imgfile'
                 end select
             case(4) ! 32-bit data (SPIDER data always has 4 bytes per pixel)
                 DebugPrint 'Allocating 32-bit array in rwSlices'
-                allocate(tmp_32bit_float_array(dims(1),dims(2),dims(3)),stat=alloc_stat, errmsg=io_message)
-                if(alloc_stat /= 0) allocchk("In simple_imgfile:: rwSlices ; 32-bit data " )
+                allocate(tmp_32bit_float_array(dims(1),dims(2),dims(3)),stat=alloc_stat)
+                if(alloc_stat /= 0) call alloc_errchk("In simple_imgfile:: rwSlices ; 32-bit data ", alloc_stat )
                 read(unit=self%funit,pos=first_byte,iostat=io_stat,iomsg=io_message) tmp_32bit_float_array
                 if(io_stat /= 0) call fileio_errmsg("In simple_imgfile:: rwSlices ; 32-bit data "&
                      //trim(io_message), io_stat)
                 rarr(1:dims(1),:,:) = tmp_32bit_float_array
-                deallocate(tmp_32bit_float_array,stat=alloc_stat, errmsg=io_message)
-                if(alloc_stat /= 0) allocchk("In simple_imgfile:: rwSlices ; 32-bit data " )
+                deallocate(tmp_32bit_float_array,stat=alloc_stat)
+                if(alloc_stat /= 0) call alloc_errchk("In simple_imgfile:: rwSlices ; 32-bit data ", alloc_stat )
 
             case DEFAULT
                 write(*,'(2a)') 'fname: ', self%fname

@@ -1,12 +1,10 @@
 ! stack image processing routines for SPIDER/MRC files
-#include "simple_lib.f08"
+
 module simple_procimgfile
-use simple_defs
-use simple_syslib,  only: alloc_errchk, simple_stop
-use simple_fileio,  only: fopen, fclose, fileio_errmsg
+#include "simple_lib.f08"
 use simple_image,   only: image
-use simple_imgfile, only: find_ldim_nptcls
-use simple_jiffys,  only: progress
+use simple_imghead, only: find_ldim_nptcls
+
 implicit none
 
 private :: raise_exception_imgfile

@@ -8,7 +8,7 @@ contains
         use simple_params,      only: params
         use simple_projector,   only: projector
         use simple_magic_boxes, only: autoscale
-        use simple_imgfile,     only: find_ldim_nptcls
+        use simple_imghead,     only: find_ldim_nptcls
         class(params),    intent(in)    :: p
         class(projector), intent(inout) :: volprojobj
         character(len=*), intent(in)    :: volfname

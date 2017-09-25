@@ -1,7 +1,7 @@
 ! downscaling of image stacks
 module simple_scaler
 use simple_defs     ! use all in there
-!use simple_fileio
+use simple_fileio
 use simple_cmdline, only: cmdline
 
 implicit none
@@ -12,10 +12,10 @@ private
 type :: scaler
     private
     type(cmdline)         :: cline_scale
-    character(len=STDLEN) :: native_stk, stk_sc
-    real                  :: native_smpd, native_msk, smpd_sc, scale, msk_sc
+    character(len=STDLEN) :: original_stk, stk_sc
+    real                  :: original_smpd, original_msk, smpd_sc, scale, msk_sc
     logical               :: stkname_changed
-    integer               :: native_box, box_sc, nptcls
+    integer               :: original_box, box_sc, nptcls
   contains
     ! init/uninit
     procedure :: init
@@ -27,7 +27,7 @@ type :: scaler
     procedure :: update_smpd_msk
     procedure :: update_stk_smpd_msk
     procedure :: get_scaled_var
-    procedure :: get_native_var
+    procedure :: get_original_var
 end type scaler
 
 contains
@@ -41,13 +41,13 @@ contains
         real                       :: smpd_target
         character(len=*), optional :: stkscaledbody
         self%stkname_changed = present(stkscaledbody)
-        self%native_stk      = p_master%stk
-        self%native_smpd     = p_master%smpd
-        self%native_msk      = p_master%msk
-        self%native_box      = p_master%box
+        self%original_stk    = p_master%stk
+        self%original_smpd   = p_master%smpd
+        self%original_msk    = p_master%msk
+        self%original_box    = p_master%box_original
         self%nptcls          = p_master%nptcls
         self%cline_scale     = cline
-        call autoscale(p_master%box, p_master%smpd,&
+        call autoscale(self%original_box, p_master%smpd,&
         &smpd_target, self%box_sc, self%smpd_sc, self%scale)
         self%msk_sc = self%scale * p_master%msk
         if( self%stkname_changed )then
@@ -56,16 +56,16 @@ contains
             call cline%set('stk',  trim(self%stk_sc))
         endif
         call self%cline_scale%set('newbox', real(self%box_sc))
-        call cline%set('smpd',      self%smpd_sc)
-        call cline%set('msk',       self%msk_sc)
+        call cline%set('smpd', self%smpd_sc)
+        call cline%set('msk',  self%msk_sc)
     end subroutine init
 
     subroutine uninit( self, cline )
         class(scaler)  :: self
         class(cmdline) :: cline
-        if( self%stkname_changed )  call cline%set('stk',  trim(self%native_stk))
-        call cline%set('smpd', self%native_smpd)
-        call cline%set('msk',  self%native_msk)
+        if( self%stkname_changed )  call cline%set('stk',  trim(self%original_stk))
+        call cline%set('smpd', self%original_smpd)
+        call cline%set('msk',  self%original_msk)
     end subroutine uninit
 
     subroutine scale_exec( self )
@@ -96,9 +96,9 @@ contains
             case('scaled')
                 call cline%set('smpd', self%smpd_sc)
                 call cline%set('msk',  self%msk_sc)
-            case('native')
-                call cline%set('smpd', self%native_smpd)
-                call cline%set('msk',  self%native_msk)
+            case('original')
+                call cline%set('smpd', self%original_smpd)
+                call cline%set('msk',  self%original_msk)
             case DEFAULT
                  write(*,*) 'flag ', trim(which), ' is unsupported'
                 stop 'simple_scaler :: update_smpd_msk'
@@ -114,10 +114,10 @@ contains
                 if( self%stkname_changed ) call cline%set('stk',  self%stk_sc)
                 call cline%set('smpd', self%smpd_sc)
                 call cline%set('msk',  self%msk_sc)
-            case('native')
-                if( self%stkname_changed ) call cline%set('stk',  self%native_stk)
-                call cline%set('smpd', self%native_smpd)
-                call cline%set('msk',  self%native_msk)
+            case('original')
+                if( self%stkname_changed ) call cline%set('stk',  self%original_stk)
+                call cline%set('smpd', self%original_smpd)
+                call cline%set('msk',  self%original_msk)
             case DEFAULT
                  write(*,*) 'flag ', trim(which), ' is unsupported'
                 stop 'simple_scaler :: update_stk_smpd_msk'
@@ -142,20 +142,20 @@ contains
         end select
     end function get_scaled_var
 
-    real function get_native_var( self, which )
+    real function get_original_var( self, which )
         class(scaler)    :: self
         character(len=*) :: which
         select case(which)
             case('smpd')
-                get_native_var = self%native_smpd
+                get_original_var = self%original_smpd
             case('msk')
-                get_native_var = self%native_msk
+                get_original_var = self%original_msk
             case('box')
-                get_native_var = real(self%native_box)
+                get_original_var = real(self%original_box)
             case DEFAULT
                 write(*,*) 'flag ', trim(which), ' is unsupported'
-                stop 'simple_scaler :: get_native_var'
+                stop 'simple_scaler :: get_original_var'
         end select
-    end function get_native_var
+    end function get_original_var
 
 end module simple_scaler

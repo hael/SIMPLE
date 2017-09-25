@@ -1,13 +1,18 @@
 ! concrete commander: prime2D for simultanous 2D alignment and clustering of single-particle images
 module simple_commander_prime2D
-use simple_defs
-use simple_cmdline,        only: cmdline
-use simple_params,         only: params
-use simple_build,          only: build
-use simple_commander_base, only: commander_base
-use simple_jiffys,         only: simple_end,progress
-use simple_syslib,         only: simple_stop
-
+use simple_defs            ! use all in there
+use simple_fileio          ! use all in there
+use simple_binoris_io      ! use all in there
+use simple_syslib
+use simple_jiffys
+use simple_cmdline,         only: cmdline
+use simple_params,          only: params
+use simple_build,           only: build
+use simple_commander_base,  only: commander_base
+use simple_imghead,         only: find_ldim_nptcls
+use simple_hadamard_common, only: gen2Dclassdoc
+use simple_qsys_funs,       only: qsys_job_finished
+use simple_projection_frcs
 implicit none
 
 public :: makecavgs_commander
@@ -40,21 +45,19 @@ end type rank_cavgs_commander
 
 contains
 
-    !> MAKECAVGS is a SIMPLE program to create class-averages
     subroutine exec_makecavgs( self, cline )
-        use simple_hadamard2D_matcher, only: prime2D_assemble_sums, prime2D_write_sums, &
-        & prime2D_write_partial_sums
-        use simple_binoris_io, only: binwrite_oritab
-        use simple_qsys_funs,  only: qsys_job_finished
+        use simple_classaverager,   only: classaverager
         class(makecavgs_commander), intent(inout) :: self
         class(cmdline),             intent(inout) :: cline
-        type(params)  :: p
-        type(build)   :: b
-        integer       :: ncls_in_oritab, icls
-        p = params(cline)  ! parameters generated
+        type(params)        :: p
+        type(build)         :: b
+        type(classaverager) :: cavger
+        integer :: ncls_in_oritab, icls, fnr, file_stat, j
+        p = params(cline)                                 ! parameters generated
         call b%build_general_tbox(p, cline, do3d=.false.) ! general objects built
-        call b%build_hadamard_prime2D_tbox(p) ! 2D Hadamard matcher built
+        call b%build_hadamard_prime2D_tbox(p)             ! 2D Hadamard matcher built
         write(*,'(a)') '>>> GENERATING CLUSTER CENTERS'
+        ! deal with the orientations
         if( cline%defined('oritab') .and. p%l_remap_classes )then
             call b%a%remap_classes
             ncls_in_oritab = b%a%get_n('class')
@@ -82,11 +85,11 @@ contains
         if( cline%defined('outfile') )then
             p%oritab = p%outfile
         else
-            p%oritab = 'prime2D_startdoc.txt'
+            p%oritab = 'prime2D_startdoc'//METADATEXT
         endif
-        ! Multiplication
+        ! shift multiplication
         if( p%mul > 1. ) call b%a%mul_shifts(p%mul)
-        ! Setup weights
+        ! setup weights in case the 2D was run without them (specscore will still be there)
         if( p%weights2D.eq.'yes' )then
             if( p%nptcls <= SPECWMINPOP )then
                 call b%a%set_all2single('w', 1.0)
@@ -98,60 +101,52 @@ contains
         else
             call b%a%set_all2single('w', 1.0)
         endif
+        ! even/odd partitioning
+        if( b%a%get_nevenodd() == 0 ) call b%a%partition_eo('class', [p%fromp,p%top])
+        ! write
         if( p%l_distr_exec .and. nint(cline%get_rarg('part')) .eq. 1 )then
             call binwrite_oritab(p%oritab, b%a, [1,p%nptcls])
         else
             call binwrite_oritab(p%oritab, b%a, [1,p%nptcls])
         endif
+        ! create class averager
+        call cavger%new(b, p, 'class')
+        ! transfer ori data to object
+        call cavger%transf_oridat(b%a)
         if( cline%defined('filwidth') )then
+            ! filament option
             if( p%l_distr_exec)then
                 stop 'filwidth mode not implemented for distributed mode; simple_commander_prime2D.f90; exec_makecavgs'
             endif
+            call b%img%bin_filament(p%filwidth)
             do icls=1,p%ncls
-                call b%cavgs(icls)%bin_filament(p%filwidth)
+                call cavger%set_cavg(icls, 'merged', b%img)
             end do
-            if( cline%defined('refs') )then
-                call prime2D_write_sums(b, p, fname=p%refs)
-            else
-                call prime2D_write_sums(b, p)
-            endif
         else
-            call prime2D_assemble_sums(b, p)
-            if( p%l_distr_exec)then
-                call prime2D_write_partial_sums( b, p )
-                call qsys_job_finished( p, 'simple_commander_prime2D :: exec_makecavgs' )
-            else
-                if( cline%defined('refs') )then
-                    call prime2D_write_sums(b, p, fname=p%refs)
-                else
-                    call prime2D_write_sums(b, p)
-                endif
-            endif
+            ! standard cavg assembly
+            call cavger%assemble_sums()
         endif
+        ! write sums
+        if( p%l_distr_exec)then
+            call cavger%write_partial_sums()
+            call qsys_job_finished( p, 'simple_commander_prime2D :: exec_makecavgs' )
+        else
+            if( cline%defined('refs') )then
+                call cavger%write(p%refs, 'merged')
+            else
+                call cavger%write('startcavgs'//p%ext, 'merged')
+            endif
+            call cavger%calc_and_write_frcs('frcs.bin')
+            call b%projfrcs%estimate_res()
+            call gen2Dclassdoc( b, p, 'classdoc.txt')
+        endif
+        call cavger%kill
         ! end gracefully
         call simple_end('**** SIMPLE_MAKECAVGS NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_makecavgs
 
-    !> Prime2D  implementation of a bespoke probabilistic algorithm for simultaneous 2D alignment and clustering
-    !! \see http://simplecryoem.com/tutorials.html?#d-analysis-with-prime2d
-    !!
-    !!    Algorithms that can rapidly discover clusters corresponding to sets of
-    !!    images with similar projection direction and conformational state play
-    !!    an important role in single-particle analysis. Identification of such
-    !!    clusters allows for enhancement of the signal-to-noise ratio (SNR) by
-    !!    averaging and gives a first glimpse into the character of a dataset.
-    !!    Therefore, clustering algorithms play a pivotal role in initial data
-    !!    quality assessment, ab initio 3D reconstruction and analysis of
-    !!    heterogeneous single-particle populations. SIMPLE implements a
-    !!    probabilistic algorithm for simultaneous 2D alignment and clustering,
-    !!    called . The version we are going to use here is an improved version
-    !!    of the published code released in SIMPLE 2.1 (submitted manuscript).
-    !!    Grouping tens of thousands of images into several hundred clusters is
-    !!    a computationally intensive job.
     subroutine exec_prime2D( self, cline )
         use simple_hadamard2D_matcher, only: prime2D_exec
-        use simple_qsys_funs,          only: qsys_job_finished
-        use simple_imgfile,            only: find_ldim_nptcls
         class(prime2D_commander), intent(inout) :: self
         class(cmdline),           intent(inout) :: cline
         type(params) :: p
@@ -195,41 +190,33 @@ contains
     end subroutine exec_prime2D
 
     subroutine exec_cavgassemble( self, cline )
-        use simple_hadamard2D_matcher, only: prime2D_assemble_sums_from_parts, prime2D_write_sums
-        use simple_fileio,         only: fopen, fclose, fileio_errmsg
+        use simple_classaverager,   only: classaverager
         class(cavgassemble_commander), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
-        type(params)         :: p
-        type(build)          :: b
-        integer, allocatable :: fromtocls(:,:)
-        integer              :: fnr, file_stat, icls
-        p = params(cline) ! parameters generated
+        type(params)        :: p
+        type(build)         :: b
+        type(classaverager) :: cavger
+        integer             :: fnr, file_stat, j
+        p = params(cline)                                 ! parameters generated
         call b%build_general_tbox(p, cline, do3d=.false.) ! general objects built
         call b%build_hadamard_prime2D_tbox(p)
-        call prime2D_assemble_sums_from_parts(b, p)
-        ! remapping
-        call b%a%fill_empty_classes(fromtocls)
-        if( allocated(fromtocls) )then
-            ! updates document & classes
-            call b%a%write(p%oritab)
-            do icls = 1, size(fromtocls, dim=1), 1
-                call b%cavgs(fromtocls(icls, 2))%copy(b%cavgs(fromtocls(icls, 1)))
-            enddo
-        endif
-        ! output
+        call cavger%new(b, p, 'class')
+        call cavger%assemble_sums_from_parts()
         if( cline%defined('which_iter') )then
-            call prime2D_write_sums(b, p, p%which_iter)
-        else if( cline%defined('refs') )then
-            call prime2D_write_sums(b, p, fname=p%refs)
-        else
-            call prime2D_write_sums(b, p, fname='startcavgs'//p%ext)
+            p%refs = 'cavgs_iter'//int2str_pad(p%which_iter,3)//p%ext
+            if( .not. cline%defined('frcs') ) p%frcs  = 'frcs_iter'//int2str_pad(p%which_iter,3)//'.bin'
+            call cavger%calc_and_write_frcs(p%frcs)
+            call b%projfrcs%estimate_res()
+            call gen2Dclassdoc( b, p, 'classdoc.txt')
+        else if( .not. cline%defined('refs') )then
+            p%refs = 'startcavgs'//p%ext
         endif
+        call cavger%write(trim(p%refs), 'merged')
+        call cavger%kill()
         ! end gracefully
         call simple_end('**** SIMPLE_CAVGASSEMBLE NORMAL STOP ****', print_simple=.false.)
         ! indicate completion (when run in a qsys env)
-        call fopen(fnr, FILE='CAVGASSEMBLE_FINISHED', STATUS='REPLACE', action='WRITE', iostat=file_stat)
-        call fileio_errmsg('In: commander_rec :: eo_volassemble', file_stat )
-        call fclose( fnr ,errmsg='In: commander_rec :: eo_volassemble fclose')
+        call simple_touch('CAVGASSEMBLE_FINISHED', errmsg='In: commander_rec :: eo_volassemble ')
     end subroutine exec_cavgassemble
 
     subroutine exec_check2D_conv( self, cline )
@@ -257,27 +244,68 @@ contains
     end subroutine exec_check2D_conv
 
     subroutine exec_rank_cavgs( self, cline )
-        use simple_oris,       only: oris
-        use simple_binoris_io, only: binread_oritab, binread_nlines
+        use simple_oris, only: oris
+        use simple_math, only: hpsort
         class(rank_cavgs_commander), intent(inout) :: self
         class(cmdline),              intent(inout) :: cline
-        type(params)         :: p
-        type(build)          :: b
-        integer              :: iclass
+        type(params) :: p
+        type(build)  :: b
+        integer      :: iclass, pop
+        type(oris)   :: clsdoc_ranked
         integer, allocatable :: order(:)
-        p = params(cline) ! parameters generated
+        real,    allocatable :: res(:)
+        p = params(cline)                                 ! parameters generated
         call b%build_general_tbox(p, cline, do3d=.false.) ! general objects built
-        p%ncls   = p%nptcls
-        p%nptcls = binread_nlines(p%oritab)
-        call b%a%new(p%nptcls)
-        call binread_oritab(p%oritab, b%a, [1,p%nptcls])
-        order = b%a%order_cls(p%ncls)
-        do iclass=1,p%ncls
-            write(*,'(a,1x,i5,1x,a,1x,i5,1x,a,i5)') 'CLASS:', order(iclass),&
-            &'CLASS_RANK:', iclass ,'POP:', b%a%get_pop(order(iclass), 'class')
-            call b%img%read(p%stk, order(iclass))
-            call b%img%write(p%outstk, iclass)
-        end do
+        p%ncls = p%nptcls
+        call clsdoc_ranked%new_clean(p%ncls)
+        if( cline%defined('classdoc') )then
+            ! all we need to do is fetch from classdoc
+            ! order according to resolution
+            call b%a%new(p%ncls)
+            call b%a%read(trim(p%classdoc))
+            res = b%a%get_all('res')
+            allocate(order(p%ncls))
+            order = (/(iclass,iclass=1,p%ncls)/)
+            call hpsort(p%ncls, res, order)
+            do iclass=1,p%ncls
+                call clsdoc_ranked%set(iclass, 'class', real(order(iclass)))
+                call clsdoc_ranked%set(iclass, 'rank',  real(iclass))
+                call clsdoc_ranked%set(iclass, 'pop',   b%a%get(order(iclass),  'pop'))
+                call clsdoc_ranked%set(iclass, 'res',   b%a%get(order(iclass),  'res'))
+                call clsdoc_ranked%set(iclass, 'corr',  b%a%get(order(iclass), 'corr'))
+                call clsdoc_ranked%set(iclass, 'w',     b%a%get(order(iclass),    'w'))
+                write(*,'(a,1x,i5,1x,a,1x,i5,1x,a,i5,1x,a,1x,f6.2)') 'CLASS:', order(iclass),&
+                &'RANK:', iclass ,'POP:', nint(b%a%get(order(iclass), 'pop')), 'RES:', b%a%get(order(iclass), 'res')
+                call b%img%read(p%stk, order(iclass))
+                call b%img%write(p%outstk, iclass)
+            end do
+        else
+            ! tries to provide similar stats (oldschool routine for bwd compatibility)
+            ! order according to population
+            p%nptcls = binread_nlines(p%oritab)
+            call b%a%new(p%nptcls)
+            call binread_oritab(p%oritab, b%a, [1,p%nptcls])
+            order = b%a%order_cls(p%ncls)
+            do iclass=1,p%ncls
+                pop = b%a%get_pop(order(iclass), 'class')
+                call clsdoc_ranked%set(iclass, 'class', real(order(iclass)))
+                call clsdoc_ranked%set(iclass, 'rank',  real(iclass))
+                call clsdoc_ranked%set(iclass, 'pop',   real(pop))
+                if( pop > 1 )then
+                    call clsdoc_ranked%set(iclass, 'corr',  b%a%get_avg('corr', class=order(iclass)))
+                    call clsdoc_ranked%set(iclass, 'w',     b%a%get_avg('w',    class=order(iclass)))
+                else
+                    call clsdoc_ranked%set(iclass, 'corr', -1.0)
+                    call clsdoc_ranked%set(iclass, 'w',     0.0)
+                endif
+                write(*,'(a,1x,i5,1x,a,1x,i5,1x,a,i5)') 'CLASS:', order(iclass),&
+                &'RANK:', iclass ,'POP:', pop
+                call b%img%read(p%stk, order(iclass))
+                call b%img%write(p%outstk, iclass)
+            end do
+        endif
+        call clsdoc_ranked%write('classdoc_ranked.txt')
+        ! end gracefully
         call simple_end('**** SIMPLE_RANK_CAVGS NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_rank_cavgs
 

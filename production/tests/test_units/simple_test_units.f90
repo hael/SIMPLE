@@ -18,15 +18,15 @@ use simple_imghead,          only: test_imghead
 use simple_jiffys,           only: simple_end
 use simple_ftexp_shsrch,     only: test_ftexp_shsrch
 implicit none
-character(8)          :: date
+character(8)          :: datestr
 character(len=STDLEN) :: folder
 character(len=300)    :: command
 call seed_rnd
-call date_and_time(date=date)
-folder = './SIMPLE_TEST_UNITS_'//date
+call date_and_time(date=datestr)
+folder = './SIMPLE_TEST_UNITS_'//datestr
 command = 'mkdir '//folder//'|| true'
 call exec_cmdline( trim(command) )
-call chdir(folder)
+call simple_chdir(folder)
 call test_cmd_dict           ! pass with PGI
 call test_args               ! pass with PGI
 call test_build              ! NOT HAPPY: get_ldim in img class bails with PGI
@@ -45,7 +45,7 @@ call test_multinomal         ! pass with PGI
 call test_testfuns           ! pass with PGI
 call test_euler_shift        ! pass with PGI
 call simple_test_fit_line    ! pass with PGI
-call chdir('../')
+call simple_chdir( "../" )
 call simple_end('**** SIMPLE_UNIT_TEST NORMAL STOP ****')
 
 contains

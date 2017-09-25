@@ -1,9 +1,8 @@
 ! character hash
-#include "simple_lib.f08"
+
 module simple_chash
-use simple_defs
-use simple_fileio
-use simple_syslib, only: alloc_errchk
+#include "simple_lib.f08"
+
 implicit none
 
 public :: chash
@@ -69,7 +68,6 @@ contains
 
     !>  \brief  is a constructor
     subroutine new( self, nmax )
-        use simple_syslib, only: alloc_errchk
         class(chash), intent(inout) :: self !< instance
         integer,      intent(in)    :: nmax !< max nr of entries in hash table
         call self%kill
@@ -299,7 +297,6 @@ contains
 
     !>  \brief  sort chash lexographically based on the keys
     subroutine sort( self )
-        use simple_strings, only: lexSort
         class(chash), intent(inout)    :: self
         character(len=32), allocatable :: keys_sorted(:)
         character(len=:), allocatable  :: val
@@ -445,11 +442,9 @@ contains
 
     !>  \brief  for reading key-vals from a text file
     subroutine read( self, fname )
-        use simple_fileio,  only: fopen, fclose, fileio_errmsg
-        use simple_strings, only: strIsComment, strIsBlank
         class(chash), intent(inout)  :: self   !< instance
         character(len=*), intent(in) :: fname  !< name of file
-        character(len=line_max_len)  :: buffer !< will hold a line from the file
+        character(len=LINE_MAX_LEN)  :: buffer !< will hold a line from the file
         character(len=32)            :: key
         character(len=STDLEN)        :: val
         integer :: ios, pos, funit
@@ -475,10 +470,9 @@ contains
 
     !>  \brief  for writing key-vals to a text file
     subroutine write( self, fname )
-        use simple_fileio      , only: fopen,fclose, fileio_errmsg
         class(chash), intent(inout)  :: self   !< instance
         character(len=*), intent(in) :: fname  !< name of file
-        character(len=line_max_len)  :: buffer !< will hold a line from the file
+        character(len=LINE_MAX_LEN)  :: buffer !< will hold a line from the file
         character(len=512)           :: io_msg !< will hold the io error message
         integer :: ios, pos, funit
         call fopen(funit, fname, iostat=ios, status='replace', iomsg=io_msg)

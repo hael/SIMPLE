@@ -1,18 +1,28 @@
 ! concrete commander: distributed workflows
-#include "simple_lib.f08"
+
 module simple_commander_distr_wflows
+#include "simple_lib.f08"
+use simple_defs            ! use all in there
+use simple_strings
+use simple_math
+use simple_qsys_funs       ! use all in there
+use simple_syslib,         only: alloc_errchk, file_exists
+use simple_binoris_io,     only: binread_oritab, binwrite_oritab, binread_nlines
+use simple_jiffys,         only: simple_end, progress
+use simple_fileio,         only: fopen, fileio_errmsg, fclose, simple_rename
 use simple_rnd,            only: seed_rnd
 use simple_cmdline,        only: cmdline
 use simple_chash,          only: chash
 use simple_qsys_env,       only: qsys_env
+use simple_build,          only: build
 use simple_params,         only: params
 use simple_commander_base, only: commander_base
-use simple_jiffys,         only: simple_end
+use simple_commander_preproc
+use simple_commander_prime2D ! use all in there
+use simple_commander_distr   ! use all in there
+use simple_commander_mask    ! use all in there
 use simple_commander_distr ! use all in there
-use simple_qsys_funs       ! use all in there
-use simple_syslib          ! use all in there
-use simple_binoris_io      ! use all in there
-use simple_defs            ! use all in there
+
 implicit none
 
 public :: unblur_ctffind_distr_commander
@@ -104,8 +114,7 @@ contains
 
     ! PIPELINED UNBLUR + CTFFIND
     !> unblur_ctffind_distr is a distributed version of the pipelined unblur + ctffind programs
-    subroutine exec_unblur_ctffind_distr( self, cline )
-!        use simple_commander_preproc
+    subroutine exec_unblur_ctffind_distr( self, cline )       
         class(unblur_ctffind_distr_commander), intent(inout) :: self
         class(cmdline),                        intent(inout) :: cline
         character(len=32), parameter   :: UNIDOCFBODY = 'unidoc_'
@@ -125,17 +134,18 @@ contains
         if( p_master%nparts > p_master%nptcls ) stop 'nr of partitions (nparts) mjust be < number of entries in filetable'
         ! prepare merge_algndocs command line
         cline_merge_algndocs = cline
-        call cline_merge_algndocs%set( 'nthr',    1.                    )
-        call cline_merge_algndocs%set( 'fbody',   'unidoc_'             )
-        call cline_merge_algndocs%set( 'nptcls',  real(p_master%nptcls) )
-        call cline_merge_algndocs%set( 'ndocs',   real(p_master%nparts) )
-        call cline_merge_algndocs%set( 'outfile', 'simple_unidoc.txt'   )
+        call cline_merge_algndocs%set( 'nthr',     1.                    )
+        call cline_merge_algndocs%set( 'fbody',    'unidoc_'             )
+        call cline_merge_algndocs%set( 'nptcls',   real(p_master%nptcls) )
+        call cline_merge_algndocs%set( 'ndocs',    real(p_master%nparts) )
+        call cline_merge_algndocs%set( 'outfile',  'simple_unidoc.txt'   )
+        call cline_merge_algndocs%set( 'ext_meta', '.txt'                )
         ! setup the environment for distributed execution
         call qenv%new(p_master)
         ! prepare job description
         call cline%gen_job_descr(job_descr)
         ! schedule & clean
-        call qenv%gen_scripts_and_schedule_jobs(p_master, job_descr, algnfbody=UNIDOCFBODY)
+        call qenv%gen_scripts_and_schedule_jobs(p_master, job_descr, algnfbody=UNIDOCFBODY, ext_meta='.txt')
         ! merge docs
         call xmerge_algndocs%execute( cline_merge_algndocs )
         ! clean
@@ -143,8 +153,6 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_DISTR_UNBLUR_CTFFIND NORMAL STOP ****')
     end subroutine exec_unblur_ctffind_distr
-
-    ! UNBLUR SP DDDs
 
     subroutine exec_unblur_distr( self, cline )
  !       use simple_commander_preproc
@@ -172,12 +180,13 @@ contains
         call cline_merge_algndocs%set( 'nptcls',  real(p_master%nptcls) )
         call cline_merge_algndocs%set( 'ndocs',   real(p_master%nparts) )
         call cline_merge_algndocs%set( 'outfile', 'simple_unidoc.txt'   )
+        call cline_merge_algndocs%set( 'ext_meta', '.txt'               )
         ! setup the environment for distributed execution
         call qenv%new(p_master)
         ! prepare job description
         call cline%gen_job_descr(job_descr)
         ! schedule & clean
-        call qenv%gen_scripts_and_schedule_jobs(p_master, job_descr, algnfbody=UNIDOCFBODY)
+        call qenv%gen_scripts_and_schedule_jobs(p_master, job_descr, algnfbody=UNIDOCFBODY, ext_meta='.txt')
         ! merge docs
         call xmerge_algndocs%execute( cline_merge_algndocs )
         ! clean
@@ -186,12 +195,9 @@ contains
         call simple_end('**** SIMPLE_DISTR_UNBLUR NORMAL STOP ****')
     end subroutine exec_unblur_distr
 
-    ! UNBLUR TOMOGRAPHIC DDDs
-
     subroutine exec_unblur_tomo_movies_distr( self, cline )
 !        use simple_commander_preproc
         use simple_oris,           only: oris
-        use simple_strings,        only: real2str
         use simple_fileio,         only: read_filetable
         class(unblur_tomo_movies_distr_commander), intent(inout) :: self
         class(cmdline),                            intent(inout) :: cline
@@ -247,12 +253,10 @@ contains
         ! prepare job description
         call cline%gen_job_descr(job_descr)
         ! schedule & clean
-        call qenv%gen_scripts_and_schedule_jobs(p_master, job_descr, part_params=part_params)
+        call qenv%gen_scripts_and_schedule_jobs(p_master, job_descr, part_params=part_params, ext_meta='.txt')
         call qsys_cleanup(p_master)
         call simple_end('**** SIMPLE_DISTR_UNBLUR_TOMO_MOVIES NORMAL STOP ****')
     end subroutine exec_unblur_tomo_movies_distr
-
-    ! CTFFIND
 
     subroutine exec_ctffind_distr( self, cline )
         class(ctffind_distr_commander), intent(inout) :: self
@@ -274,25 +278,24 @@ contains
         ! prepare merge_algndocs command line
         cline_merge_algndocs = cline
         call cline_merge_algndocs%set( 'nthr', 1. )
-        call cline_merge_algndocs%set( 'fbody',  'ctffind_output_part')
-        call cline_merge_algndocs%set( 'nptcls', real(p_master%nptcls) )
-        call cline_merge_algndocs%set( 'ndocs',  real(p_master%nparts) )
-        call cline_merge_algndocs%set( 'outfile', 'ctffind_output_merged.txt' )
+        call cline_merge_algndocs%set( 'fbody',    'ctffind_output_part'       )
+        call cline_merge_algndocs%set( 'nptcls',   real(p_master%nptcls)       )
+        call cline_merge_algndocs%set( 'ndocs',    real(p_master%nparts)       )
+        call cline_merge_algndocs%set( 'outfile',  'ctffind_output_merged.txt' )
+        call cline_merge_algndocs%set( 'ext_meta', '.txt'                      )
         ! setup the environment for distributed execution
         call qenv%new(p_master)
         ! prepare job description
         call cline%gen_job_descr(job_descr)
         ! schedule
-        call qenv%gen_scripts_and_schedule_jobs(p_master, job_descr)
+        call qenv%gen_scripts_and_schedule_jobs(p_master, job_descr, ext_meta='.txt')
         ! merge docs
         call xmerge_algndocs%execute( cline_merge_algndocs )
         ! clean
-        call qsys_cleanup(p_master)
+        ! call qsys_cleanup(p_master)
         call simple_end('**** SIMPLE_DISTR_CTFFIND NORMAL STOP ****')
     end subroutine exec_ctffind_distr
 
-    ! PICKER
-    !> distributed version of picker
     subroutine exec_pick_distr( self, cline )
 !        use simple_commander_preproc
         class(pick_distr_commander), intent(inout) :: self
@@ -319,12 +322,7 @@ contains
         call simple_end('**** SIMPLE_DISTR_PICK NORMAL STOP ****')
     end subroutine exec_pick_distr
 
-    !! PARALLEL CLASS AVERAGE GENERATION
-    !> makecavgs_distr parallel class average generation
     subroutine exec_makecavgs_distr( self, cline )
-!        use simple_commander_prime2D
-        use simple_commander_distr
-        use simple_commander_mask
         class(makecavgs_distr_commander), intent(inout) :: self
         class(cmdline),                   intent(inout) :: cline
         type(split_commander) :: xsplit
@@ -344,7 +342,7 @@ contains
         ! prepare job description
         call cline%gen_job_descr(job_descr)
         ! prepare command lines from prototype master
-        cline_cavgassemble   = cline
+        cline_cavgassemble = cline
         call cline_cavgassemble%set('nthr',1.)
         call cline_cavgassemble%set('prg', 'cavgassemble')
         if( cline%defined('outfile') )then
@@ -352,7 +350,7 @@ contains
             call cline_cavgassemble%set('oritab', p_master%outfile)
         else
             ! because prime2D_startdoc.txt is default output in the absence of outfile
-            call cline_cavgassemble%set('oritab', 'prime2D_startdoc.txt')
+            call cline_cavgassemble%set('oritab', 'prime2D_startdoc'//METADATEXT)
         endif
         ! split stack
          call xsplit%execute(cline)
@@ -364,16 +362,8 @@ contains
         call simple_end('**** SIMPLE_DISTR_MAKECAVGS NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_makecavgs_distr
 
-    ! PRIME2D
-    !> parallel prime2d
-    !! Prime2D is a reference-free 2D alignment/clustering algorithm adopted
-    !! from the prime3D probabilistic ab initio 3D reconstruction algorithm
     subroutine exec_prime2D_distr( self, cline )
-        use simple_commander_prime2D ! use all in there
-        use simple_commander_distr   ! use all in there
-        use simple_commander_mask    ! use all in there
         use simple_procimgfile, only: random_selection_from_imgfile
-        use simple_strings,     only: str_has_substr, real2str
         class(prime2D_distr_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
         ! constants
@@ -393,17 +383,18 @@ contains
         ! other variables
         type(qsys_env)        :: qenv
         type(params)          :: p_master
+        type(build)           :: b
         character(len=STDLEN) :: refs, oritab, str, str_iter
-        integer               :: iter, i
+        integer               :: iter
         type(chash)           :: job_descr
         real                  :: frac_srch_space
-        ! seed the random number generator
-        call seed_rnd
         ! output command line executed
         write(*,'(a)') '>>> COMMAND LINE EXECUTED'
         write(*,*) trim(cmdline_glob)
         ! make master parameters
         p_master = params(cline, checkdistr=.false.)
+        ! make builder
+        call b%build_general_tbox(p_master, cline, do3d=.false.)
         ! setup the environment for distributed execution
         call qenv%new(p_master)
         ! prepare job description
@@ -427,10 +418,11 @@ contains
         cline_makecavgs      = cline
 
         ! initialise static command line parameters and static job description parameters
-        call cline_merge_algndocs%set('fbody',  ALGNFBODY)
-        call cline_merge_algndocs%set('nptcls', real(p_master%nptcls))
-        call cline_merge_algndocs%set('ndocs', real(p_master%nparts))
-        call cline_check2D_conv%set('box', real(p_master%box))
+        call cline_merge_algndocs%set('fbody',    ALGNFBODY            )
+        call cline_merge_algndocs%set('nptcls',   real(p_master%nptcls))
+        call cline_merge_algndocs%set('ndocs',    real(p_master%nparts))
+        call cline_merge_algndocs%set('ext_meta', METADATEXT           )
+        call cline_check2D_conv%set('box',    real(p_master%box)   )
         call cline_check2D_conv%set('nptcls', real(p_master%nptcls))
         call cline_cavgassemble%set('prg', 'cavgassemble')
         call cline_makecavgs%set('prg', 'makecavgs')
@@ -470,19 +462,23 @@ contains
             call cline%set('extr_iter', real(p_master%extr_iter))
             ! updates
             if( oritab .ne. '' ) call job_descr%set('oritab',  trim(oritab))
-            call job_descr%set('refs',    trim(refs))
+            call job_descr%set('refs', trim(refs))
             call job_descr%set('startit', int2str(iter))
+            ! the only FRC we have is from the previous iteration, hence the iter - 1
+            call job_descr%set('frcs', 'frcs_iter'//int2str_pad(iter - 1,3)//'.bin')
             ! schedule
             call qenv%gen_scripts_and_schedule_jobs(p_master, job_descr, algnfbody=ALGNFBODY)
             ! merge orientation documents
-            oritab = trim(ITERFBODY) // trim(str_iter) //'.txt'
+            oritab = trim(ITERFBODY)//trim(str_iter)//METADATEXT
             call cline_merge_algndocs%set('outfile', trim(oritab))
             call xmerge_algndocs%execute(cline_merge_algndocs)
             ! assemble class averages
             refs = trim(trim(CAVGS_ITERFBODY)// trim(str_iter) //p_master%ext)
             call cline_cavgassemble%set('oritab', trim(oritab))
             call cline_cavgassemble%set('which_iter', real(iter))
-            call qenv%exec_simple_prg_in_queue(cline_cavgassemble, 'CAVGASSEMBLE', 'CAVGASSEMBLE_FINISHED')
+            call qenv%exec_simple_prg_in_queue(cline_cavgassemble, 'RESOLUTION'//trim(str_iter), 'CAVGASSEMBLE_FINISHED')
+            ! remapping of empty classes
+            call remap_empty_cavgs
             ! check convergence
             call cline_check2D_conv%set('oritab', trim(oritab))
             call xcheck2D_conv%execute(cline_check2D_conv)
@@ -503,27 +499,43 @@ contains
             if( cline_check2D_conv%get_carg('converged').eq.'yes' .or. iter==p_master%maxits ) exit
         end do
         call qsys_cleanup(p_master)
-        call rename(trim(oritab), 'prime2Ddoc_final.txt' )
-        call rename(trim(refs),   'cavgs_final'//p_master%ext)
+        call simple_rename(trim(oritab), 'prime2Ddoc_final'//METADATEXT )
+        call simple_rename(trim(refs),   'cavgs_final'//p_master%ext)
         ! end gracefully
         call simple_end('**** SIMPLE_DISTR_PRIME2D NORMAL STOP ****')
+
+        contains
+
+            subroutine remap_empty_cavgs
+                use simple_image, only: image
+                integer, allocatable :: fromtocls(:,:)
+                integer              :: icls
+                type(image)          :: img_cavg
+                call binread_oritab(oritab, b%a, [1,p_master%nptcls])
+                call b%a%fill_empty_classes(p_master%ncls, fromtocls)
+                if( allocated(fromtocls) )then
+                    ! updates document & classes
+                    call binwrite_oritab(oritab, b%a, [1,p_master%nptcls])
+                    call img_cavg%new([p_master%box,p_master%box,1], p_master%smpd)
+                    do icls = 1, size(fromtocls, dim=1)
+                        call img_cavg%read(trim(refs), fromtocls(icls, 1))
+                        call img_cavg%write(trim(refs), fromtocls(icls, 2))
+                    enddo
+                    call img_cavg%read(trim(refs), p_master%ncls)
+                    call img_cavg%write(trim(refs), p_master%ncls) ! to preserve size
+                endif
+            end subroutine remap_empty_cavgs
+
     end subroutine exec_prime2D_distr
 
-    ! PRIME2D CHUNK-BASED DISTRIBUTION 
-    !> parallel Prime2D_chuck
-    !! prime2d chunk-based distribution 
     subroutine exec_prime2D_chunk_distr( self, cline )
-        use simple_commander_prime2D ! use all in there
-        use simple_commander_distr   ! use all in there
-        use simple_commander_mask    ! use all in there
+
         use simple_commander_imgproc, only: stack_commander
         use simple_oris,              only: oris
         use simple_ori,               only: ori
-        use simple_strings,           only: str_has_substr
-        use simple_fileio
         class(prime2D_chunk_distr_commander), intent(inout) :: self
         class(cmdline),                       intent(inout) :: cline
-        character(len=STDLEN), parameter   :: CAVGNAMES       = 'cavgs_final.txt'
+        character(len=STDLEN), parameter   :: CAVGNAMES       = 'cavgs_final'//METADATEXT
         character(len=32),     parameter   :: ITERFBODY       = 'prime2Ddoc_'
         character(len=32),     parameter   :: CAVGS_ITERFBODY = 'cavgs_iter'
         character(len=STDLEN), allocatable :: final_docs(:), final_cavgs(:)
@@ -575,12 +587,12 @@ contains
                 call part_params(ipart)%set('stk', trim(STKPARTFBODY)//int2str_pad(ipart,numlen)//p_master%ext)
             endif
             if( cline%defined('deftab') )then
-                call read_part_and_write(qenv%parts(ipart,:), p_master%deftab, trim(chunktag)//'deftab.txt')
-                call part_params(ipart)%set('deftab', trim(chunktag)//'deftab.txt')
+                call read_part_and_write(qenv%parts(ipart,:), p_master%deftab, trim(chunktag)//'deftab'//METADATEXT)
+                call part_params(ipart)%set('deftab', trim(chunktag)//'deftab'//METADATEXT)
             endif
             if( cline%defined('oritab') )then
-                call read_part_and_write(qenv%parts(ipart,:), p_master%oritab, trim(chunktag)//'oritab.txt', ishift)
-                call part_params(ipart)%set('oritab', trim(chunktag)//'oritab.txt')
+                call read_part_and_write(qenv%parts(ipart,:), p_master%oritab, trim(chunktag)//'oritab'//METADATEXT, ishift)
+                call part_params(ipart)%set('oritab', trim(chunktag)//'oritab'//METADATEXT)
                 ishift = ishift - p_master%ncls
             endif
         end do
@@ -598,7 +610,7 @@ contains
         do ipart=1,p_master%nparts
             chunktag = 'chunk'//int2str_pad(ipart,numlen)
             final_cavgs(ipart) = get_last_fname(trim(chunktag)//CAVGS_ITERFBODY, p_master%ext)
-            final_docs(ipart)  = get_last_fname(trim(chunktag)//ITERFBODY, 'txt')
+            final_docs(ipart)  = get_last_fname(trim(chunktag)//ITERFBODY, METADATEXT)
             if( ipart > 1 )then
                 ! the class indices need to be shifted by p_master%ncls
                 ishift = ishift + p_master%ncls
@@ -611,7 +623,7 @@ contains
             endif
         end do
         ! merge docs
-        call merge_docs(final_docs, 'prime2Ddoc_final.txt')
+        call merge_docs(final_docs, 'prime2Ddoc_final'//METADATEXT)
         ! merge class averages
         call write_filetable(CAVGNAMES, final_cavgs)
         call cline_stack%set('filetab', CAVGNAMES)
@@ -619,7 +631,7 @@ contains
         call xstack%execute(cline_stack)
         ! cleanup
         call del_file(CAVGNAMES)
-        call sys_del_files('chunk', '.txt')
+        call sys_del_files('chunk', METADATEXT)
         call sys_del_files('chunk', p_master%ext)
         ! end gracefully
         call simple_end('**** SIMPLE_DISTR_PRIME2D_CHUNK NORMAL STOP ****')
@@ -650,8 +662,6 @@ contains
 
     end subroutine exec_prime2D_chunk_distr
     
-    !> parallel comlin_smat
-    !! comlin_smat calculates the 3d similarity matrix generation with common lines
     subroutine exec_comlin_smat_distr( self, cline )
         use simple_commander_comlin, only: comlin_smat_commander
         use simple_commander_distr,  only: merge_similarities_commander
@@ -664,7 +674,7 @@ contains
         type(params)   :: p_master
         type(chash)    :: job_descr
         integer        :: nptcls
-                ! seed the random number generator
+        ! seed the random number generator
         call seed_rnd
         ! output command line executed
         write(*,'(a)') '>>> COMMAND LINE EXECUTED'
@@ -692,8 +702,6 @@ contains
         call simple_end('**** SIMPLE_DISTR_COMLIN_SMAT NORMAL STOP ****')
     end subroutine exec_comlin_smat_distr
 
-    ! PRIME3D_INIT
-    !> initialise prime3D in parallel
     subroutine exec_prime3D_init_distr( self, cline )
         use simple_commander_prime3D
         use simple_commander_rec
@@ -726,24 +734,16 @@ contains
         call xsplit%execute(cline)
         ! prepare command lines from prototype master
         cline_volassemble = cline
-        call cline_volassemble%set( 'outvol',  vol                  )
-        call cline_volassemble%set( 'eo',     'no'                  )
-        call cline_volassemble%set( 'prg',    'volassemble'         )
-        call cline_volassemble%set( 'oritab', 'prime3D_startdoc.txt')
+        call cline_volassemble%set( 'outvol',  vol)
+        call cline_volassemble%set( 'eo',     'no')
+        call cline_volassemble%set( 'prg',    'volassemble')
+        call cline_volassemble%set( 'oritab', 'prime3D_startdoc'//METADATEXT)
         call qenv%gen_scripts_and_schedule_jobs(p_master, job_descr)
         call qenv%exec_simple_prg_in_queue(cline_volassemble, 'VOLASSEMBLE', 'VOLASSEMBLE_FINISHED')
         call qsys_cleanup(p_master)
         call simple_end('**** SIMPLE_DISTR_PRIME3D_INIT NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_prime3D_init_distr
 
-    !> PRIME3D is an ab inito reconstruction/refinement program based on
-    !> probabilistic projection matching.
-    !! PRIME is short for PRobabilistic Initial 3D Model generation for
-    !! Single-particle cryo-Electron microscopy. There are a daunting number of
-    !! options in PRIME3D. If you are processing class averages we recommend
-    !! that you instead use the simple_distr_exec prg= ini3D_from_cavgs route
-    !! for executing PRIME3D. Automated workflows for single- and multi-particle
-    !! refinement using prime3D are planned for the next release (3.0)
     subroutine exec_prime3D_distr( self, cline )
         use simple_commander_prime3D
         use simple_commander_mask
@@ -779,10 +779,11 @@ contains
         type(params)          :: p_master
         type(chash)           :: job_descr
         type(oris)            :: os
-        character(len=STDLEN) :: vol, vol_iter, oritab, str, str_iter
+        character(len=STDLEN), allocatable :: state_assemble_finished(:)
+        character(len=STDLEN) :: vol, vol_iter, oritab, str, str_iter, optlp_file
         character(len=STDLEN) :: str_state, fsc_file, volassemble_output
         real                  :: frac_srch_space, corr, corr_prev
-        integer               :: s, state, iter, i
+        integer               :: s, state, iter
         logical               :: vol_defined
         ! seed the random number generator
         call seed_rnd
@@ -799,8 +800,8 @@ contains
             &stop 'Incompatible options: nstates>1 and dynlp=yes'
         if( p_master%automsk.eq.'yes' .and. p_master%dynlp.eq.'yes' )&
             &stop 'Incompatible options: automsk=yes and dynlp=yes'
-        if( p_master%eo.eq.'yes' .and. p_master%dynlp.eq.'yes' )&
-            &stop 'Incompatible options: eo=yes and dynlp=yes'
+        if( p_master%eo.ne.'no' .and. p_master%dynlp.eq.'yes' )&
+            &stop 'Incompatible options: eo.ne.no and dynlp=yes'
 
         ! setup the environment for distributed execution
         call qenv%new(p_master)
@@ -820,20 +821,27 @@ contains
         ! initialise static command line parameters and static job description parameter
         call cline_recvol_distr%set( 'prg', 'recvol' )       ! required for distributed call
         call cline_prime3D_init%set( 'prg', 'prime3D_init' ) ! required for distributed call
-        call cline_merge_algndocs%set( 'nthr', 1. )
-        call cline_merge_algndocs%set( 'fbody',  ALGNFBODY)
-        call cline_merge_algndocs%set( 'nptcls', real(p_master%nptcls) )
-        call cline_merge_algndocs%set( 'ndocs',  real(p_master%nparts) )
-        call cline_check3D_conv%set( 'box',    real(p_master%box))
+        call cline_merge_algndocs%set('nthr', 1.)
+        call cline_merge_algndocs%set('fbody', ALGNFBODY)
+        call cline_merge_algndocs%set('nptcls', real(p_master%nptcls))
+        call cline_merge_algndocs%set('ndocs', real(p_master%nparts))
+        call cline_merge_algndocs%set('ext_meta', METADATEXT)
+        call cline_check3D_conv%set( 'box', real(p_master%box)   )
         call cline_check3D_conv%set( 'nptcls', real(p_master%nptcls))
-        call cline_postproc_vol%set( 'nstates', 1. )
-        ! removes unnecessary volume keys
+        call cline_postproc_vol%set( 'nstates', 1.)
+        call cline_volassemble%delete('nstates') ! to reduce memory use
+
+        ! for parallel volassemble over states
+        allocate(state_assemble_finished(p_master%nstates) )
+
+        ! removes unnecessary volume keys and generates volassemble finished names
         do state = 1,p_master%nstates
             vol = 'vol'//int2str( state )
             call cline_check3D_conv%delete( trim(vol) )
             call cline_merge_algndocs%delete( trim(vol) )
             call cline_volassemble%delete( trim(vol) )
         enddo
+
         ! SPLIT STACK
         call xsplit%execute(cline)
         ! GENERATE STARTING MODELS & ORIENTATIONS
@@ -841,7 +849,7 @@ contains
         if( cline%defined('oritab') )then
             oritab=trim(p_master%oritab)
         else
-            oritab='prime3D_startdoc.txt'
+            oritab='prime3D_startdoc'//METADATEXT
         endif
         ! Models
         vol_defined = .false.
@@ -858,11 +866,11 @@ contains
             ! reconstructions needed
             call xrecvol_distr%execute( cline_recvol_distr )
             do state = 1,p_master%nstates
-                ! rename volumes and updates cline
+                ! simple_rename volumes and updates cline
                 str_state = int2str_pad(state,2)
                 vol = trim(VOLFBODY)//trim(str_state)//p_master%ext
                 str = 'startvol_state'//trim(str_state)//p_master%ext
-                call rename( trim(vol), trim(str) )
+                call simple_rename( trim(vol), trim(str) )
                 vol = 'vol'//trim(int2str(state))
                 call cline%set( trim(vol), trim(str) )
             enddo
@@ -945,7 +953,7 @@ contains
             if( p_master%refine .eq. 'snhc' )then
                 oritab = trim(SNHCDOC)
             else
-                oritab = trim(ITERFBODY)//trim(str_iter)//'.txt'
+                oritab = trim(ITERFBODY)//trim(str_iter)//METADATEXT
             endif
             call cline%set( 'oritab', oritab )
             call cline_merge_algndocs%set( 'outfile', trim(oritab) )
@@ -962,22 +970,23 @@ contains
             else
                 ! ASSEMBLE VOLUMES
                 call cline_volassemble%set( 'oritab', trim(oritab) )
-                if( p_master%eo.eq.'yes' )then
-                    do state = 1,p_master%nstates
-                        str_state = int2str_pad(state,2)
-                        call del_file('fsc_state'//trim(str_state)//'.bin')
-                    enddo
+                if( p_master%eo.ne.'no' )then
                     call cline_volassemble%set( 'prg', 'eo_volassemble' ) ! required for cmdline exec
                 else
                     call cline_volassemble%set( 'prg', 'volassemble' )    ! required for cmdline exec
                 endif
-                if( p_master%eo .eq. 'yes' )then
-                    volassemble_output = 'RESOLUTION'//trim(str_iter)
-                else
-                    volassemble_output = 'VOLASSEMBLE'
-                endif
-                call qenv%exec_simple_prg_in_queue(cline_volassemble,&
-                &trim(volassemble_output), 'VOLASSEMBLE_FINISHED')
+                do state = 1,p_master%nstates
+                    str_state = int2str_pad(state,2)
+                    if( p_master%eo .ne. 'no' )then
+                        volassemble_output = 'RESOLUTION_STATE'//trim(str_state)//'_ITER'//trim(str_iter)
+                    else
+                        volassemble_output = 'VOLASSEMBLE_STATE'//trim(str_state)//'_ITER'//trim(str_iter)
+                    endif
+                    call cline_volassemble%set( 'state', real(state) )
+                    call qenv%exec_simple_prg_in_queue(cline_volassemble, trim(volassemble_output),&
+                        &script_name='simple_script_state'//trim(str_state))
+                end do
+                call qsys_watcher(state_assemble_finished)                
             endif
             ! rename volumes, postprocess & update job_descr
             call binread_oritab(trim(oritab), os, [1,p_master%nptcls])
@@ -1003,13 +1012,22 @@ contains
                     else
                         vol_iter  = trim(VOLFBODY)//trim(str_state)//'_iter'//trim(str_iter)//p_master%ext
                     endif
-                    call rename( trim(vol), trim(vol_iter) )
+                    call simple_rename( trim(vol), trim(vol_iter) )
                     ! post-process
                     if( p_master%pproc.eq.'yes' )then
                         vol = 'vol'//trim(int2str(state))
                         call cline_postproc_vol%set( 'vol1' , trim(vol_iter))
-                        fsc_file = 'fsc_state'//trim(str_state)//'.bin'
-                        if( file_exists(fsc_file) .and. p_master%eo .eq. 'yes' )then
+                        fsc_file   = 'fsc_state'//trim(str_state)//'.bin'
+                        optlp_file = 'aniso_optlp_state'//trim(str_state)//p_master%ext
+                        if( file_exists(fsc_file) .and. p_master%eo .eq. 'aniso' )then
+                            if( .not. file_exists(optlp_file) )then
+                                write(*,*) 'eo=aniso but file: ', trim(optlp_file)
+                                stop 'is not in cwd as required; commander_distr_wflows :: exec_prime3D_distr'
+                            endif
+                            call cline_postproc_vol%delete('lp')
+                            call cline_postproc_vol%set('fsc', trim(fsc_file))
+                            call cline_postproc_vol%set('vol_filt', trim(optlp_file))
+                        else if( file_exists(fsc_file) .and. p_master%eo .eq. 'yes' )then
                             call cline_postproc_vol%delete('lp')
                             call cline_postproc_vol%set('fsc', trim(fsc_file))
                         else
@@ -1059,8 +1077,6 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_DISTR_PRIME3D NORMAL STOP ****')
     end subroutine exec_prime3D_distr
-
-    ! CONT3D
 
     subroutine exec_cont3D_distr( self, cline )
         use simple_commander_prime3D
@@ -1124,14 +1140,15 @@ contains
         cline_volassemble    = cline
         cline_postproc_vol   = cline
         ! initialise static command line parameters and static job description parameter
-        call cline_recvol_distr%set( 'prg', 'recvol' )       ! required for distributed call
-        call cline_merge_algndocs%set( 'nthr', 1. )
-        call cline_merge_algndocs%set( 'fbody',  ALGNFBODY)
-        call cline_merge_algndocs%set( 'nptcls', real(p_master%nptcls) )
-        call cline_merge_algndocs%set( 'ndocs',  real(p_master%nparts) )
-        call cline_check3D_conv%set( 'box',    real(p_master%box))
-        call cline_check3D_conv%set( 'nptcls', real(p_master%nptcls))
-        call cline_postproc_vol%set( 'nstates', 1. )
+        call cline_recvol_distr%set('prg', 'recvol') ! required for distributed call
+        call cline_merge_algndocs%set('nthr', 1.)
+        call cline_merge_algndocs%set('fbody', ALGNFBODY)
+        call cline_merge_algndocs%set('nptcls', real(p_master%nptcls))
+        call cline_merge_algndocs%set('ndocs', real(p_master%nparts))
+        call cline_merge_algndocs%set('ext_meta', METADATEXT)
+        call cline_check3D_conv%set('box', real(p_master%box))
+        call cline_check3D_conv%set('nptcls', real(p_master%nptcls))
+        call cline_postproc_vol%set('nstates', 1.)
         ! removes unnecessary volume keys
         do state = 1,p_master%nstates
             vol = 'vol'//int2str( state )
@@ -1158,7 +1175,7 @@ contains
                 str_state = int2str_pad(state,2)
                 vol = trim( VOLFBODY )//trim(str_state)//p_master%ext
                 str = 'startvol_state'//trim(str_state)//p_master%ext
-                call rename( trim(vol), trim(str) )
+                call simple_rename( trim(vol), trim(str) )
                 vol = 'vol'//trim(int2str(state))
                 call cline%set( trim(vol), trim(str) )
             enddo
@@ -1183,7 +1200,7 @@ contains
             ! schedule
             call qenv%gen_scripts_and_schedule_jobs(p_master, job_descr, algnfbody=ALGNFBODY)
             ! ASSEMBLE ALIGNMENT DOCS
-            oritab = trim(ITERFBODY)//trim(str_iter)//'.txt'    
+            oritab = trim(ITERFBODY)//trim(str_iter)//METADATEXT
             call cline%set( 'oritab', oritab )
             call cline_merge_algndocs%set('outfile', trim(oritab))
             call xmerge_algndocs%execute(cline_merge_algndocs)
@@ -1193,7 +1210,7 @@ contains
                 str_state = int2str_pad(state,2)
                 call del_file('fsc_state'//trim(str_state)//'.bin')
             enddo
-            if( p_master%eo .eq. 'yes' )then
+            if( p_master%eo .ne. 'no' )then
                 call cline_volassemble%set( 'prg', 'eo_volassemble' )
                 volassemble_output = 'RESOLUTION'//trim(str_iter)
             else
@@ -1222,7 +1239,7 @@ contains
                     ! rename state volume
                     vol       = trim(VOLFBODY)//trim(str_state)//p_master%ext
                     vol_iter  = trim(VOLFBODY)//trim(str_state)//'_iter'//trim(str_iter)//p_master%ext
-                    call rename( trim(vol), trim(vol_iter) )
+                    call simple_rename( trim(vol), trim(vol_iter) )
                     ! post-process
                     vol = 'vol'//trim(int2str(state))
                     call cline_postproc_vol%set('vol1' , trim(vol_iter))
@@ -1259,32 +1276,17 @@ contains
         call simple_end('**** SIMPLE_DISTR_CONT3D NORMAL STOP ****')
     end subroutine exec_cont3D_distr
 
-    !> parallel recvol
-    !! recvol is a program for reconstructing volumes from MRC and SPIDER
-    !! stacks, given input orientations and state assignments. The algorithm is
-    !! based on direct Fourier inversion with a Kaiser-Bessel (KB) interpolation
-    !! kernel. This window function reduces the real-space ripple artifacts
-    !! associated with direct moving windowed-sinc interpolation. The feature
-    !! sought when implementing this algorithm was to enable quick, reliable
-    !! reconstruction from aligned individual particle images. mul is used to
-    !! scale the origin shifts if down-sampled were used for alignment and the
-    !! original images are used for reconstruction. ctf=yes or ctf=flip turns on
-    !! the Wiener restoration. If the images were phase-flipped set ctf=flip.
-    !! amsklp, mw, and edge control the solvent mask: the low-pass limit used to
-    !! generate the envelope; the molecular weight of the molecule (protein
-    !! assumed but it works reasonably well also for RNA; slight modification of
-    !! mw might be needed). The inner parameter controls the radius of the
-    !! soft-edged mask used to remove the unordered DNA/RNA core of spherical
-    !! icosahedral viruses
     subroutine exec_recvol_distr( self, cline )
         use simple_commander_rec
         class(recvol_distr_commander), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
-        type(split_commander) :: xsplit
-        type(qsys_env)        :: qenv
-        type(params)          :: p_master
-        character(len=STDLEN) :: volassemble_output
-        type(chash)           :: job_descr
+        type(split_commander)              :: xsplit
+        type(qsys_env)                     :: qenv
+        type(params)                       :: p_master
+        character(len=STDLEN)              :: volassemble_output, str_state
+        character(len=STDLEN), allocatable :: state_assemble_finished(:)
+        type(chash)                        :: job_descr
+        integer                            :: state
         ! seed the random number generator
         call seed_rnd
         ! output command line executed
@@ -1300,22 +1302,36 @@ contains
         ! schedule
         call qenv%gen_scripts_and_schedule_jobs(p_master, job_descr)
         ! assemble volumes
-        if( p_master%eo .eq. 'yes' )then
+        ! this is for parallel volassemble over states
+        allocate(state_assemble_finished(p_master%nstates) )
+        do state = 1, p_master%nstates
+            state_assemble_finished(state) = 'VOLASSEMBLE_FINISHED_STATE'//int2str_pad(state,2)
+        enddo
+        call cline%delete('nstates') ! to reduce memory use
+        if( p_master%eo .ne. 'no' )then
             call cline%set('prg', 'eo_volassemble')
-            volassemble_output = 'RESOLUTION'
         else
             call cline%set('prg', 'volassemble')
-            volassemble_output = 'VOLASSEMBLE'
         endif
-        call qenv%exec_simple_prg_in_queue(cline,&
-        &trim(volassemble_output), 'VOLASSEMBLE_FINISHED')
+        ! parallel assembly
+        do state = 1, p_master%nstates
+            str_state = int2str_pad(state,2)
+            if( p_master%eo .ne. 'no' )then
+                volassemble_output = 'RESOLUTION_STATE'//trim(str_state)
+            else
+                volassemble_output = 'VOLASSEMBLE_STATE'//trim(str_state)
+            endif
+            call cline%set( 'state', real(state) )
+
+            call qenv%exec_simple_prg_in_queue(cline, trim(volassemble_output),&
+                &script_name='simple_script_state'//trim(str_state))
+        end do
+        call qsys_watcher(state_assemble_finished)
         ! termination
         call qsys_cleanup(p_master)
         call simple_end('**** SIMPLE_RECVOL NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_recvol_distr
 
-    !> parallel TIME-SERIES ROUTINES
-    !! tseries_track_distr  is a program for particle tracking in time-series data
     subroutine exec_tseries_track_distr( self, cline )
         use simple_nrtxtfile,         only: nrtxtfile
         use simple_strings,           only: real2str
@@ -1327,7 +1343,7 @@ contains
         type(nrtxtfile)               :: boxfile
         real,        allocatable      :: boxdata(:,:)
         type(chash), allocatable      :: part_params(:)
-        integer :: ndatlines, numlen, j, orig_box, ipart
+        integer :: ndatlines, numlen, alloc_stat, j, orig_box, ipart
         ! seed the random number generator
         call seed_rnd
         ! output command line executed
@@ -1379,22 +1395,9 @@ contains
         call simple_end('**** SIMPLE_TSERIES_TRACK NORMAL STOP ****')
     end subroutine exec_tseries_track_distr
 
-    !> parallel SYMMETRY SEARCH
-    !! symsrch_distr is a program for searching for the principal symmetry axis
-    !! of a volume reconstructed without assuming any point-group symmetry. The
-    !! program takes as input an asymmetrical 3D reconstruction. The alignment
-    !! document for all the particle images that have gone into the 3D
-    !! reconstruction and the desired point-group symmetry needs to be inputted.
-    !! The 3D reconstruction is then projected in 50 (default option) even
-    !! directions, common lines-based optimisation is used to identify the
-    !! principal symmetry axis, the rotational transformation is applied to the
-    !! inputted orientations, and a new alignment document is produced. Input
-    !! this document to recvol together with the images and the point-group
-    !! symmetry to generate a symmet
     subroutine exec_symsrch_distr( self, cline )
         use simple_comlin_srch,    only: comlin_srch_get_nproj
         use simple_commander_misc, only: sym_aggregate_commander
-        use simple_math,    only: hpsort
         use simple_sym,     only: sym
         use simple_ori,     only: ori
         use simple_oris,    only: oris
@@ -1403,77 +1406,125 @@ contains
         class(cmdline),                 intent(inout) :: cline
         type(merge_algndocs_commander) :: xmerge_algndocs
         type(cmdline)                  :: cline_merge_algndocs
-        type(cmdline)                  :: cline_sym_aggregate
-        type(qsys_env)          :: qenv
-        type(params)            :: p_master
-        type(chash)             :: job_descr
-        type(oris)              :: os, sym_os, o_shift, sym_os_ordered
-        type(ori)               :: o, symaxis_ori
-        type(sym)               :: syme
-        integer,    allocatable :: order_inds(:)
-        real                    :: shvec(3)
-        integer                 :: i, comlin_srch_nproj, nl, noris
-        character(len=STDLEN)   :: part_tab
-        character(len=32), parameter :: SYMFBODY    = 'symaxes_part'        !< symmetry axes doc (distributed mode)
-        character(len=32), parameter :: SYMTAB      = 'symaxes.txt'         !< continuous symmetry axes doc
-        character(len=32), parameter :: FINALSYMTAB = 'symaxes_final.txt'   !< final symmetry peaks doc
-        character(len=32), parameter :: SYMSHTAB    = 'sym_3dshift.txt'     !< volume 3D shift
-        character(len=32), parameter :: SYMPROJSTK  = 'sym_projs.mrc'       !< volume reference projections
-        character(len=32), parameter :: SYMPROJTAB  = 'sym_projs.txt'       !< volume reference projections doc
+        type(cmdline)                  :: cline_gridsrch
+        type(cmdline)                  :: cline_srch
+        type(cmdline)                  :: cline_aggregate
+        type(qsys_env)                 :: qenv
+        type(params)                   :: p_master
+        type(chash)                    :: job_descr
+        type(oris)                     :: tmp_os, os, sympeaks, o_shift, grid_symaxes
+        type(ori)                      :: symaxis
+        type(sym)                      :: syme
+        integer,    allocatable        :: order(:)
+        real,       allocatable        :: corrs(:)
+        real                           :: shvec(3)
+        integer                        :: i, comlin_srch_nproj, nl,  nbest_here
+        integer                        :: bestloc(1), cnt, numlen
+        character(len=STDLEN)          :: part_tab
+        character(len=32),   parameter :: GRIDSYMFBODY = 'grid_symaxes_part'        !< 
+        character(len=32),   parameter :: GRIDSYMTAB   = 'grid_symaxes'//METADATEXT !< 
+        character(len=32),   parameter :: SYMFBODY     = 'symaxes_part'             !< symmetry axes doc (distributed mode)
+        character(len=32),   parameter :: SYMTAB       = 'symaxes'//METADATEXT      !< gri
+        character(len=32),   parameter :: SYMPEAKSTAB  = 'sympeaks.txt'             !< symmetry peaks to refine
+        character(len=32),   parameter :: SYMSHTAB     = 'sym_3dshift'//METADATEXT  !< volume 3D shift
+        character(len=32),   parameter :: SYMPROJSTK   = 'sym_projs.mrc'            !< volume reference projections
+        character(len=32),   parameter :: SYMPROJTAB   = 'sym_projs'//METADATEXT    !< volume reference projections doc
+        integer,             parameter :: NBEST = 30
         ! seed the random number generator
         call seed_rnd
         ! output command line executed
         write(*,'(a)') '>>> COMMAND LINE EXECUTED'
         write(*,*) trim(cmdline_glob)
         ! make master parameters
-        p_master = params(cline, checkdistr=.false.)
-        comlin_srch_nproj = comlin_srch_get_nproj()
+        p_master          = params(cline, checkdistr=.false.)
+        comlin_srch_nproj = comlin_srch_get_nproj( pgrp=trim(p_master%pgrp) )
         p_master%nptcls   = comlin_srch_nproj
         if( p_master%nparts > p_master%nptcls )then
             stop 'number of partitions (npart) > nr of jobs, adjust!'
         endif
-        ! setup the environment for distributed execution
-        call cline%set('prg', 'symsrch')
+
+        ! 1. GRID SEARCH
+        cline_gridsrch = cline
+        call cline_gridsrch%set('prg', 'symsrch')
+        call cline_gridsrch%set('refine', 'no') !!
+        call cline_gridsrch%set('fbody', trim(GRIDSYMFBODY))
         call qenv%new(p_master)
-        call cline%gen_job_descr(job_descr)
+        call cline_gridsrch%gen_job_descr(job_descr)
         ! schedule
         call qenv%gen_scripts_and_schedule_jobs(p_master, job_descr)
-        ! prepare merge_algndocs command line
+        ! consolidate grid search
         cline_merge_algndocs = cline
-        call cline_merge_algndocs%set( 'nthr',    1.                      )
-        call cline_merge_algndocs%set( 'fbody',   trim(SYMFBODY)          )
-        call cline_merge_algndocs%set( 'nptcls',  real(comlin_srch_nproj) )
-        call cline_merge_algndocs%set( 'ndocs',   real(p_master%nparts)   )
-        call cline_merge_algndocs%set( 'outfile', trim(SYMTAB)            )
-        ! merge docs
+        call cline_merge_algndocs%set( 'nthr',     1. )
+        call cline_merge_algndocs%set( 'fbody',    trim(GRIDSYMFBODY) )
+        call cline_merge_algndocs%set( 'nptcls',   real(comlin_srch_nproj) )
+        call cline_merge_algndocs%set( 'ndocs',    real(p_master%nparts) )
+        call cline_merge_algndocs%set( 'outfile',  trim(GRIDSYMTAB) )
+        call cline_merge_algndocs%set( 'ext_meta', METADATEXT )
         call xmerge_algndocs%execute( cline_merge_algndocs )
-        ! prepare sym_aggregate command line
-        cline_sym_aggregate = cline
-        call cline_sym_aggregate%set( 'prg' ,    'sym_aggregate' )
-        call cline_sym_aggregate%set( 'oritab' , trim(SYMPROJTAB) )
-        call cline_sym_aggregate%set( 'oritab2', trim(SYMTAB) )
-        call cline_sym_aggregate%set( 'stk' ,    trim(SYMPROJSTK) )
-        call cline_sym_aggregate%set( 'outfile', trim(FINALSYMTAB) )
-        call cline_sym_aggregate%set( 'nspace',  real(p_master%nspace) )
-        call cline_sym_aggregate%set( 'eo', 'no' )
-        call qenv%exec_simple_prg_in_queue(cline_sym_aggregate,&
-        &'SYM_AGGREGATE', 'SYM_AGGREGATE_FINISHED')
-        ! read and sort
-        nl = binread_nlines(trim(FINALSYMTAB))
-        call sym_os%new(nl)
-        call binread_oritab(trim(FINALSYMTAB), sym_os, [1,nl])
-        order_inds  = sym_os%order_corr()
-        symaxis_ori = sym_os%get_ori(order_inds(1))
-        write(*,'(A)') '>>> FOUND SYMMETRY AXIS ORIENTATION:'
-        call symaxis_ori%print_ori()
-        call sym_os_ordered%new(sym_os%get_noris())
-        noris = sym_os%get_noris()
-        do i=1,noris 
-            o = sym_os%get_ori(order_inds(i))
-            call sym_os_ordered%set_ori(i,o)
+
+        ! 2. SELECTION OF SYMMETRY PEAKS TO REFINE
+        nl = binread_nlines(trim(GRIDSYMTAB))
+        nbest_here = min(NBEST, nl)
+        call grid_symaxes%new(nl)
+        call binread_oritab(trim(GRIDSYMTAB), grid_symaxes, [1,nl])
+        call del_file(trim(GRIDSYMTAB))
+        order = grid_symaxes%order_corr()
+        call tmp_os%new(nbest_here)
+        cnt = 0
+        do i = nl, nl-nbest_here+1, -1
+            cnt = cnt + 1
+            call tmp_os%set_ori(cnt, grid_symaxes%get_ori(order(i)))
         enddo
-        call del_file(trim(FINALSYMTAB))
-        call binwrite_oritab(trim(FINALSYMTAB), sym_os_ordered, [1,noris])
+        grid_symaxes = tmp_os
+        call binwrite_oritab(trim(GRIDSYMTAB), grid_symaxes, [1,nbest_here])
+        deallocate(order)
+        call tmp_os%kill
+
+        ! 3. REFINEMENT
+        cline_srch = cline
+        call qsys_cleanup(p_master)
+        call cline_srch%set('prg', 'symsrch')
+        call cline_srch%set('refine', 'yes') !!
+        call cline_srch%set('nptcls', real(comlin_srch_nproj))
+        call cline_srch%set('oritab', trim(GRIDSYMTAB)) 
+        call cline_srch%set('fbody',  trim(SYMFBODY)) 
+        ! switch to collection of single threaded jobs
+        p_master%ncunits = p_master%nparts * p_master%nthr
+        p_master%nparts  = nbest_here
+        p_master%nthr    = 1
+        call qenv%new(p_master)
+        call cline_srch%gen_job_descr(job_descr)
+        call qenv%gen_scripts_and_schedule_jobs(p_master, job_descr)
+        ! merge_algndocs command line
+        cline_merge_algndocs = cline
+        call cline_merge_algndocs%set( 'nthr',    1. )
+        call cline_merge_algndocs%set( 'fbody',   trim(SYMFBODY) )
+        call cline_merge_algndocs%set( 'nptcls',  real(nbest_here) )
+        call cline_merge_algndocs%set( 'ndocs',   real(p_master%nparts) )
+        call cline_merge_algndocs%set( 'outfile', trim(SYMTAB) )
+        call cline_merge_algndocs%set( 'ext_meta', METADATEXT )
+        call xmerge_algndocs%execute( cline_merge_algndocs )
+
+        ! 4. REAL-SPACE EVALUATION
+        cline_aggregate = cline
+        call cline_aggregate%set( 'prg' ,   'sym_aggregate' )
+        call cline_aggregate%set( 'nptcls',  real(p_master%nspace) )
+        call cline_aggregate%set( 'oritab' , trim(SYMPROJTAB) )
+        call cline_aggregate%set( 'oritab2', trim(SYMTAB) )
+        call cline_aggregate%set( 'stk' ,    trim(SYMPROJSTK) )
+        call cline_aggregate%set( 'outfile', trim(SYMPEAKSTAB) )
+        call cline_aggregate%set( 'eo',      'no' )
+        call qenv%exec_simple_prg_in_queue(cline_aggregate,&
+        &'SYM_AGGREGATE', 'SYM_AGGREGATE_FINISHED')
+        ! read and pick best
+        nl = binread_nlines(trim(SYMPEAKSTAB))
+        call sympeaks%new(nl)
+        call binread_oritab(trim(SYMPEAKSTAB), sympeaks, [1,nl])
+        corrs   = sympeaks%get_all('corr')
+        bestloc = maxloc(corrs)
+        symaxis = sympeaks%get_ori(bestloc(1))
+        write(*,'(A)') '>>> FOUND SYMMETRY AXIS ORIENTATION:'
+        call symaxis%print_ori()
         ! output
         if( cline%defined('oritab') )then
             ! transfer shift and symmetry to input orientations
@@ -1490,24 +1541,30 @@ contains
             os = oris(nl)
             call binread_oritab(p_master%oritab, os, [1,nl])
             if( cline%defined('state') )then
-                call syme%apply_sym_with_shift(os, symaxis_ori, shvec, p_master%state )
+                call syme%apply_sym_with_shift(os, symaxis, shvec, p_master%state )
             else
-                call syme%apply_sym_with_shift(os, symaxis_ori, shvec )
+                call syme%apply_sym_with_shift(os, symaxis, shvec )
             endif
             call binwrite_oritab(p_master%outfile, os, [1,nl])
         endif
-        ! cleanup
-        call syme%kill
-        call o_shift%kill
-        deallocate(order_inds)
+
+        ! THE END
+        call qsys_cleanup(p_master)
         call del_file(trim(SYMSHTAB))
-        do i = 1, p_master%nparts
-            part_tab = trim(SYMFBODY)//int2str_pad(i, p_master%numlen)//'.txt'
+        numlen =  len(int2str(nbest_here))
+        do i = 1, nbest_here
+            part_tab = trim(SYMFBODY)//int2str_pad(i, numlen)//METADATEXT
             call del_file(trim(part_tab))
         enddo
+        p_master%nparts = nint(cline%get_rarg('nparts'))
+        numlen =  len(int2str(p_master%nparts))
+        do i = 1, p_master%nparts
+            part_tab = trim(GRIDSYMFBODY)//int2str_pad(i, numlen)//METADATEXT
+            call del_file(trim(part_tab))
+        enddo
+        call del_file('SYM_AGGREGATE')
         ! end gracefully
-        call qsys_cleanup(p_master)
-        call simple_end('**** SIMPLE_SYMSRCH NORMAL STOP ****')
+        call simple_end('**** SIMPLE_DISTR_SYMSRCH NORMAL STOP ****')
     end subroutine exec_symsrch_distr
 
     subroutine exec_scale_stk_parts( self, cline )

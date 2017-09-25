@@ -1,25 +1,22 @@
 program simple_test_install
-use simple_defs              ! use all in there
+#include "simple_lib.f08"
+
 use simple_testfuns          ! use all in there
-use simple_rnd               ! use all in there
-use simple_syslib          ! use all in there
-use simple_jiffys,           only: simple_end
 use simple_image,            only: image
 use simple_commander_volops, only: projvol_commander
-use simple_strings,          only: real2str, int2str
 implicit none
 type( image )         :: cube, img
 real                  :: smpd
 integer               :: box, nspace, msk
-character(len=8)      :: date
+character(len=8)      :: datestr
 character(len=STDLEN) :: folder, cmd
 character(len=300)    :: command
 call seed_rnd
-call date_and_time(date=date)
-folder = trim('./SIMPLE_TEST_INSTALL_'//date)
+call date_and_time(date=datestr)
+folder = trim('./SIMPLE_TEST_INSTALL_'//datestr)
 command = 'mkdir ' // trim( folder )//'|| true'
 call exec_cmdline( trim(command) )
-call chdir( trim(folder) )
+call simple_chdir( folder )
 ! dummy data
 box    = 96
 smpd   = 2.
@@ -48,6 +45,6 @@ command = 'simple_test_srch vol1=cubes.mrc msk='//int2str(msk)//&
     & ' smpd='//real2str(smpd)//' verbose=no'
 call exec_cmdline( trim(command) )
 ! end
-call chdir('../')
+call simple_chdir('../')
 call simple_end('**** SIMPLE_TEST_INSTALL NORMAL STOP ****')
 end program simple_test_install

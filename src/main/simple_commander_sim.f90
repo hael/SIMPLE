@@ -1,16 +1,12 @@
 ! concrete commander: simulation routines
-#include "simple_lib.f08"
+
 module simple_commander_sim
-use simple_defs            ! use all in there
+#include "simple_lib.f08"
 use simple_cmdline,        only: cmdline
 use simple_params,         only: params
 use simple_build,          only: build
 use simple_commander_base, only: commander_base
-use simple_strings,        only: int2str, int2str_pad
-use simple_jiffys,         only: progress, simple_end
-use simple_syslib,         only: alloc_errchk
 use simple_binoris_io      ! use all in there
-!use simple_fileio          ! use all in there
 implicit none
 
 public :: noiseimgs_commander
@@ -89,7 +85,7 @@ contains
         if( cline%defined('part') )then
             if( .not. cline%defined('outfile') ) stop 'need unique output file for parallel jobs'
         else
-            if( .not. cline%defined('outfile') ) p%outfile = 'simoris.txt'
+            if( .not. cline%defined('outfile') ) p%outfile = 'simoris'//METADATEXT
         endif
         if( p%box == 0 ) stop 'box=0, something is fishy! Perhaps forgotten to input volume or stack?'
         ! generate orientation/CTF parameters
@@ -323,7 +319,7 @@ contains
         call base_image%write('optimal_movie_average'//p%ext, 1)
         if( p%vis .eq. 'yes' ) call base_image%vis
         ! output orientations
-        call b%a%write('simmovie_params.txt')
+        call binwrite_oritab('simmovie_params'//METADATEXT, b%a, [1,b%a%get_noris()])
         ! end gracefully
         call simple_end('**** SIMPLE_SIMMOVIE NORMAL STOP ****')
 

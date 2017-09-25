@@ -1,10 +1,9 @@
 ! continuous function optimisation by differential evolution
-#include "simple_lib.f08"
+
 module simple_de_opt
-use simple_defs
+#include "simple_lib.f08"
 use simple_optimizer, only: optimizer
 use simple_opt_spec,  only: opt_spec
-use simple_rnd,       only: ran3, irnd_uni
 implicit none
 
 public :: de_opt
@@ -70,7 +69,7 @@ contains
 
     !> \brief  is the particle swarm minimize minimization routine
     subroutine de_minimize( self, spec, lowest_cost )
-        class(de_opt),   intent(inout) :: self        !< instance
+        class(de_opt),   intent(inout) :: self        !< instance     
         class(opt_spec), intent(inout) :: spec        !< specification
         real,            intent(out)   :: lowest_cost !< lowest cost
         integer :: t      ! iteration counter

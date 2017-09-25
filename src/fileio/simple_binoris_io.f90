@@ -1,4 +1,4 @@
-#include "simple_lib.f08"
+
 module simple_binoris_io
 use simple_defs
 use simple_binoris,      only: binoris
@@ -6,7 +6,6 @@ use simple_ori,          only: ori
 use simple_oris,         only: oris
 use simple_prime3D_srch, only: prime3D_srch
 use simple_fileio,       only: file_exists, nlines, fileio_errmsg
-use simple_syslib,       only: alloc_errchk
 use simple_strings,      only: str_has_substr
 implicit none
 

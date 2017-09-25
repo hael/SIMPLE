@@ -1,17 +1,16 @@
 ! projection of 3D volumes in the Fourier domain by convolution interpolation
 ! to generate band-pass limited Cartesian and polar 2D Fourier transforms 
-#include "simple_lib.f08"
+
 module simple_projector
 !$ use omp_lib
 !$ use omp_lib_kinds
-use simple_defs       ! use all in there
+#include "simple_lib.f08"
+
 use simple_kbinterpol, only: kbinterpol
 use simple_image,      only: image
 use simple_ori,        only: ori
 use simple_oris,       only: oris
 use simple_params,     only: params
-use simple_syslib,     only: alloc_errchk
-use simple_math,       only: sqwin_3d
 implicit none
 
 public :: projector

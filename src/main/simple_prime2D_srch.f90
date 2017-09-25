@@ -171,8 +171,8 @@ contains
         select case(self%refine)
             case('no', 'yes')
                 ! optional reassignement to a better populated class
-                do while( a%get_pop(self%prev_class, 'class') <= MINCLSPOPLIM )
-                    self%prev_class = irnd_uni(self%nrefs)
+                do while( a%get_pop(self%prev_class, 'class', consider_w=.true.) <= MINCLSPOPLIM )
+                   self%prev_class = irnd_uni(self%nrefs)
                 enddo
             case DEFAULT
                 ! all good
@@ -337,6 +337,11 @@ contains
                 self%best_rot   = self%prev_rot
             endif
             if( do_inplsrch )call self%inpl_srch(pftcc, iptcl)
+        if( .not. is_a_number(self%best_corr) )then
+                print *, 'FLOATING POINT EXCEPTION ALARM; simple_prime2D_srch :: update_best'
+                print *, iptcl, self%best_class, self%best_corr, self%best_rot
+                print *, (corr_bound < 0. .or. self%prev_corr > corr_bound)
+        endif
             call self%update_best(pftcc, iptcl, a)
         else
             call a%reject(iptcl)

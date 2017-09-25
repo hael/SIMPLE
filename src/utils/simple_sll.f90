@@ -1,8 +1,7 @@
 ! runtime polymorphic singly linked list class
-#include "simple_lib.f08"
+
 module simple_sll
-use simple_defs
-use simple_syslib, only: alloc_errchk
+#include "simple_lib.f08"
 use simple_arr, only: arr
 implicit none
 
@@ -16,14 +15,15 @@ type sll_node
     type(arr) :: content
     type(sll_node), pointer :: next=>null()
 end type sll_node
+
 !> Singly-linked list
 !> contains the list. In this implementation I have separated the head of the
 !> list from the rest of the list (Donald Knuth-style)
 type sll
     private
-    integer                 :: list_size=0
+    integer :: list_size=0
     type(sll_node), pointer :: head=>null()
-contains
+  contains
     procedure :: new
     procedure :: add
     procedure :: get
@@ -42,7 +42,6 @@ interface sll
 end interface sll
 
 #include "simple_local_flags.inc"
-character(len=STDLEN):: io_msg
 contains
 
     !>  \brief  is a constructor that allocates the head of the list
@@ -73,10 +72,10 @@ contains
         prev => self%head
         curr => prev%next
         do while( associated(curr) )! find location to insert new node
-            prev => curr
-            curr => curr%next
+          prev => curr
+          curr => curr%next
         end do
-        allocate( curr ,STAT=alloc_stat,ERRMSG=io_msg) ! insert it at the end of the list
+        allocate( curr ,STAT=alloc_stat) ! insert it at the end of the list
         if(alloc_stat /= 0) allocchk(" In simple_sll::add  deallocation fault " )
         if( present(iarr) ) curr%content = iarr
         if( present(rarr) ) curr%content = rarr
@@ -174,13 +173,13 @@ contains
         endif
         counter = 0
         do ! find node to delete
-            counter = counter+1
-            if( pos == counter ) then
-                exit
-            else ! move to the next node of the list
-                prev => curr
-                curr => curr%next
-            endif
+          counter = counter+1
+          if( pos == counter ) then
+            exit
+          else ! move to the next node of the list
+            prev => curr
+            curr => curr%next
+          endif
         end do
         ! delete the node
         if( associated( curr%next ) ) then

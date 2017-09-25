@@ -1,13 +1,13 @@
 ! concrete commander: masking routines
 module simple_commander_mask
 use simple_defs
+use simple_fileio,         only: file_exists, add2fbody
+use simple_jiffys,         only: simple_end
 use simple_syslib,         only: alloc_errchk
 use simple_cmdline,        only: cmdline
 use simple_params,         only: params
 use simple_build,          only: build
 use simple_commander_base, only: commander_base
-use simple_fileio,         only: file_exists, add2fbody
-use simple_jiffys          ! use all in there
 implicit none
 
 public :: mask_commander
@@ -25,9 +25,7 @@ end type automask2D_commander
 
 contains
 
-    !> mask is a program for masking images and volumes.
-    !! If you want to mask your images with a spherical mask with a soft
-    !! falloff, set msk to the radius in pixels
+    !> for masking images and volumes
     subroutine exec_mask( self, cline )
         use simple_image,       only: image
         use simple_procimgfile, only: mask_imgfile
@@ -50,7 +48,7 @@ contains
             if( p%automsk.eq.'yes' )then
                 ! auto
                 if( .not. cline%defined('amsklp') )call cline%set('amsklp', 25.)
-                if( .not. cline%defined('edge')   )call cline%set('edge', 20.)
+                if( .not. cline%defined('edge')   )call cline%set('edge', 10.)
                 call exec_automask2D( automask2D, cline )
             else if( cline%defined('msk') .or. cline%defined('inner') )then
                 ! spherical
@@ -102,12 +100,7 @@ contains
         call simple_end('**** SIMPLE_MASK NORMAL STOP ****')
     end subroutine exec_mask
     
-    !> automask2D is a program for solvent flattening of class averages.
-    !! The algorithm for backgro und removal is based on low-pass filtering and
-    !! binarization. First, the class averages are low-pass filtered to amsklp.
-    !! Binary representatives are then generate d by assigning foreground pixels
-    !! using sortmeans. A cosine function softens the edge of the binary mask
-    !! before it is multiplied with the unmasked input average
+    !> for solvent flattening of class averages
     subroutine exec_automask2D( self, cline )
         !use simple_masker, only: automask2D
         class(automask2D_commander), intent(inout) :: self
@@ -121,7 +114,6 @@ contains
         write(*,'(A,F8.2,A)') '>>> AUTOMASK LOW-PASS:',        p%amsklp, ' ANGSTROMS'
         write(*,'(A,I3,A)')   '>>> AUTOMASK SOFT EDGE WIDTH:', p%edge,   ' PIXELS'
         p%outstk = add2fbody(p%stk, p%ext, 'msk')
-        call b%mskimg%init2D(p, p%nptcls)
         do iptcl=1,p%nptcls
             call b%img%read(p%stk, iptcl)
             call b%mskimg%apply_2Denvmask22Dref(b%img, iptcl)

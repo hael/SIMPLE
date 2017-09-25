@@ -1,12 +1,10 @@
 ! command line parser
-#include "simple_lib.f08"
+
 module simple_cmdline
-use simple_defs     ! use all in there
+#include "simple_lib.f08"
+
 use simple_cmd_dict ! use all in there
 use simple_chash,   only: chash
-use simple_strings, only: str2int, str2real, str_has_substr, real2str, int2str
-use simple_syslib,  only: alloc_errchk
-use simple_fileio     
 implicit none
 
 public :: cmdline, cmdline_err
@@ -65,20 +63,7 @@ contains
         distr_exec = str_has_substr(exec_name,'distr')
         cmdargcnt = command_argument_count()
         call get_command(self%entire_line)
-        ! write the command line to file & store in global var
-        if( str_has_substr(self%entire_line,'part=' ) .and.&
-           &str_has_substr(self%entire_line,'fromp=') .and.&
-           &str_has_substr(self%entire_line,'top='  ) )then
-            ! do nothing
-        else
-            ! write the command line to a file (biological memory support)
-            call fopen(funit, status='replace', action='write', file='cmdline.txt', iostat=io_stat)
-            call fileio_errmsg('cmdline ; parse fopen cmdline.txt', io_stat)
-            write(funit,*,iostat=io_stat) trim(self%entire_line)
-            call fclose(funit, errmsg='cmdline ; parse fclose cmdline.txt')
-            ! store in global var
-            cmdline_glob = trim(self%entire_line)
-        endif
+        cmdline_glob = trim(self%entire_line)
         DebugPrint ' command_argument_count: ', cmdargcnt 
         if( present(keys_required) )then
             if( str_has_substr(self%entire_line,'prg=') )then
@@ -173,6 +158,9 @@ contains
                     self%cmds(i)%carg = adjustl(arg(pos1+1:))
                 else if( index(arg(pos1+1:), '.box') /= 0 )then
                     ! text file with box coordinates
+                    self%cmds(i)%carg = adjustl(arg(pos1+1:))
+                else if( index(arg(pos1+1:), '.pdb') /= 0 )then
+                    ! PDB file
                     self%cmds(i)%carg = adjustl(arg(pos1+1:))
                 else if( index(arg(pos1+1:), '.') /= 0 )then
                     ! real number
@@ -336,6 +324,7 @@ contains
 
     !>  \brief  writes the hash to file
     subroutine write( self, fname )
+        use simple_chash
         class(cmdline),   intent(inout) :: self
         character(len=*), intent(inout) :: fname
         type(chash) :: hash
@@ -346,6 +335,7 @@ contains
 
     !>  \brief  reads a row of a text-file into the inputted hash, assuming key=value pairs
     subroutine read( self, fname, keys_required, keys_optional )
+        use simple_chash
         class(cmdline),             intent(inout) :: self
         character(len=*),           intent(inout) :: fname
         character(len=*), optional, intent(in)    :: keys_required(:), keys_optional(:)

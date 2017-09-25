@@ -1,11 +1,12 @@
 ! expanded Fourier transform class for improved cache utilisation
-#include "simple_lib.f08"
+
 module simple_ft_expanded
 !$ use omp_lib
 !$ use omp_lib_kinds
-use simple_defs
+#include "simple_lib.f08"
+    
 use simple_image,  only: image
-use simple_syslib, only: alloc_errchk
+
 implicit none
 
 public :: ft_expanded
@@ -139,7 +140,6 @@ contains
 
     !>  \brief  is a constructor
     subroutine new_2( self, ldim, smpd, hp, lp )
-        use simple_syslib, only: alloc_errchk
         class(ft_expanded), intent(inout) :: self
         integer,            intent(in)    :: ldim(3)
         real,               intent(in)    :: smpd
@@ -309,7 +309,6 @@ contains
 
     !>  \brief  is a correlation calculator
     function corr( self1, self2 ) result( r )
-        use simple_math, only: csq, calc_corr
         class(ft_expanded), intent(in) :: self1, self2
         real :: r,sumasq,sumbsq
         ! corr is real part of the complex mult btw 1 and 2*
@@ -323,7 +322,6 @@ contains
 
     !>  \brief  is a correlation calculator with origin shift of self2
     function corr_shifted( self1, self2, shvec ) result( r )
-        use simple_math, only: csq, calc_corr
         class(ft_expanded), intent(in) :: self1, self2 !< instances
         real,               intent(in) :: shvec(3)
         complex, allocatable :: shmat(:,:,:), cmat2sh(:,:,:)

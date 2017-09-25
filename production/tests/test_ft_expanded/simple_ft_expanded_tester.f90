@@ -1,7 +1,7 @@
 module simple_ft_expanded_tester
-    use simple_defs
-    use simple_ft_expanded, only: ft_expanded
-    use simple_image,       only: image
+#include "simple_lib.f08"
+use simple_ft_expanded, only: ft_expanded
+use simple_image,       only: image
 implicit none
 
 public :: exec_ft_expanded_test
@@ -104,16 +104,18 @@ contains
     end subroutine test_shifted_correlator
 
     subroutine profile_corrs
+#ifdef INTEL
+        use ifport
+#endif
+        
         !$ use omp_lib
         !$ use omp_lib_kinds
-        use simple_rnd
-        use simple_syslib
         integer, parameter   :: NTSTS=1000, NTHR=8
         integer              :: itst
         type(image)          :: img_ref, img_ptcl
         type(ft_expanded)    :: ftexp_ref, ftexp_ptcl
         real, allocatable    :: shvecs(:,:)
-        real    :: corr, actual, delta, shvec(3), tarray(2)
+        real(4)    :: corr, actual, delta, shvec(3), tarray(2)
 !$      call omp_set_num_threads(NTHR)
         call img_ref%new([4096,4096,1],SMPD)
         call img_ref%ran

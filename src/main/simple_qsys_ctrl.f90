@@ -1,14 +1,13 @@
 ! batch-processing manager - control module
-#include "simple_lib.f08"
+
 module simple_qsys_ctrl
-use simple_defs
+#include "simple_lib.f08"
+
 use simple_qsys_base,    only: qsys_base
-use simple_qsys_local,   only: qsys_local
 use simple_chash,        only: chash
-use simple_strings,      only: int2str, int2str_pad
 use simple_cmdline,      only: cmdline
-use simple_syslib,       only: alloc_errchk, simple_chmod, simple_sleep, simple_getenv, exec_cmdline
-use simple_fileio, only: file_exists,del_file, fopen,fclose,fileio_errmsg, wait_for_closure
+
+
 implicit none
 
 public :: qsys_ctrl
@@ -90,6 +89,7 @@ contains
 
     !>  \brief  is a constructor
     subroutine new( self, exec_binary, qsys_obj, parts, fromto_part, ncomputing_units, stream )
+        use simple_syslib,       only: simple_getenv
         class(qsys_ctrl),         intent(inout) :: self             !< the instance
         character(len=*),         intent(in)    :: exec_binary      !< the binary that we want to execute in parallel
         class(qsys_base), target, intent(in)    :: qsys_obj         !< the object that defines the qeueuing system
@@ -171,7 +171,7 @@ contains
         exists = self%existence
     end function exists
 
-    ! SETTER
+    ! SETTERS
 
     !> \brief for freeing all available computing units
     subroutine free_all_cunits( self )
@@ -190,12 +190,13 @@ contains
     ! SCRIPT GENERATORS
 
     !>  \brief  public script generator
-    subroutine generate_scripts( self, job_descr, ext, q_descr, outfile_body, part_params, chunkdistr )
+    subroutine generate_scripts( self, job_descr, ext, q_descr, outfile_body, outfile_ext, part_params, chunkdistr )
         class(qsys_ctrl),           intent(inout) :: self
         class(chash),               intent(inout) :: job_descr
         character(len=4),           intent(in)    :: ext
         class(chash),               intent(in)    :: q_descr
         character(len=*), optional, intent(in)    :: outfile_body
+        character(len=4), optional, intent(in)    :: outfile_ext
         class(chash),     optional, intent(in)    :: part_params(:)
         logical,          optional, intent(in)    :: chunkdistr
         character(len=:), allocatable :: outfile_body_local, key, val
@@ -216,8 +217,11 @@ contains
                 call job_descr%set('part',    int2str(ipart))
                 call job_descr%set('nparts',  int2str(self%nparts_tot))
                 if( allocated(outfile_body_local) )then
-                    call job_descr%set('outfile', trim(adjustl(outfile_body_local))&
-                        //int2str_pad(ipart,self%numlen)//'.txt' )
+                    if( present(outfile_ext) )then
+                        call job_descr%set('outfile', trim(trim(outfile_body_local)//int2str_pad(ipart,self%numlen)//outfile_ext))
+                    else
+                        call job_descr%set('outfile', trim(trim(outfile_body_local)//int2str_pad(ipart,self%numlen)//METADATEXT))
+                    endif
                 endif
             endif
             if( part_params_present  )then
@@ -251,6 +255,7 @@ contains
 
     !>  \brief  private part script generator
     subroutine generate_script_1( self, job_descr, ipart, q_descr )
+        use simple_syslib,       only: wait_for_closure
         class(qsys_ctrl), intent(inout) :: self
         class(chash),     intent(in)    :: job_descr
         integer,          intent(in)    :: ipart
@@ -281,7 +286,7 @@ contains
         call fclose(funit, errmsg='simple_qsys_ctrl :: gen_qsys_script; Error when close file: '&
              //trim(self%script_names(ipart)) )
         if( q_descr%get('qsys_name').eq.'local' )then
-            ios= simple_chmod(trim(self%script_names(ipart)),'+x')
+            ios = simple_chmod(trim(self%script_names(ipart)),'+x')
             if( ios .ne. 0 )then
                 write(*,'(a)',advance='no') 'simple_qsys_scripts :: gen_qsys_script; Error'
                 write(*,'(a)') 'chmoding submit script'//trim(self%script_names(ipart))
@@ -291,12 +296,12 @@ contains
         ! when we generate the script we also unflag jobs_submitted and jobs_done
         self%jobs_done(ipart)      = .false.
         self%jobs_submitted(ipart) = .false.
-        !
         call wait_for_closure(self%script_names(ipart))
     end subroutine generate_script_1
 
     !>  \brief  public script generator for single jobs
     subroutine generate_script_2( self, job_descr, q_descr, exec_bin, script_name, outfile )
+        use simple_syslib,       only: wait_for_closure
         class(qsys_ctrl), intent(inout) :: self
         class(chash),     intent(in)    :: job_descr
         class(chash),     intent(in)    :: q_descr
@@ -328,8 +333,7 @@ contains
             &//trim(script_name))
             !!!!!!!!!
         call wait_for_closure(script_name)
-            !!!!!!!!!
-
+        !!!!!!!!!
         if( trim(q_descr%get('qsys_name')).eq.'local' )then
             ios=simple_chmod(trim(script_name),'+x')
             if( ios .ne. 0 )then
@@ -343,7 +347,9 @@ contains
     ! SUBMISSION TO QSYS
 
     subroutine submit_scripts( self )
+        use simple_qsys_local,   only: qsys_local
         class(qsys_ctrl),  intent(inout) :: self
+ !       class(qsys_base),        pointer :: pmyqsys
         character(len=LONGSTRLEN)        :: qsys_cmd
         character(len=STDLEN)            ::  script_name
         integer               :: ipart
@@ -385,6 +391,7 @@ contains
     end subroutine submit_scripts
 
     subroutine submit_script( self, script_name )
+        use simple_qsys_local,   only: qsys_local
         class(qsys_ctrl), intent(inout) :: self
         character(len=*), intent(in)    :: script_name
         character(len=STDLEN) :: cmd
@@ -431,6 +438,7 @@ contains
     ! THE MASTER SCHEDULER
 
     subroutine schedule_jobs( self )
+        use simple_syslib, only: simple_sleep
         class(qsys_ctrl),  intent(inout) :: self
         do
             if( all(self%jobs_done) ) exit
@@ -537,8 +545,8 @@ contains
             self%ncomputing_units_avail =  0
             self%numlen                 =  0
             self%cline_stacksz          =  0
-            deallocate(self%script_names, self%jobs_done, self%jobs_done_fnames, self%jobs_submitted, &
-                stat=alloc_stat)
+            deallocate(self%script_names, self%jobs_done, self%jobs_done_fnames, &
+            self%jobs_submitted, stat=alloc_stat)
             if(alloc_stat /= 0) allocchk("simple_qsys_ctrl::kill deallocating ")
             if(allocated(self%cline_stack))deallocate(self%cline_stack)
             self%existence = .false.

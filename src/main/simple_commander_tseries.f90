@@ -1,15 +1,12 @@
 ! concrete commander: time-series analysis
-#include "simple_lib.f08"
+
 module simple_commander_tseries
-use simple_defs
+#include "simple_lib.f08"
+    
 use simple_cmdline,        only: cmdline
 use simple_params,         only: params
 use simple_build,          only: build
 use simple_commander_base, only: commander_base
-use simple_strings,        only: int2str, int2str_pad
-use simple_fileio          ! use all in there
-use simple_jiffys,         only: progress, simple_end
-use simple_syslib,         only: alloc_errchk
 implicit none
 
 public :: tseries_extract_commander
@@ -40,7 +37,7 @@ contains
 
     subroutine exec_tseries_extract( self, cline )
         use simple_image,   only: image
-        use simple_imgfile, only: find_ldim_nptcls
+        use simple_imghead, only: find_ldim_nptcls
         class(tseries_extract_commander), intent(inout) :: self
         class(cmdline),                   intent(inout) :: cline
         type(params) :: p
@@ -259,8 +256,8 @@ contains
             call progress(cnt,ntot)
             call os%new(p%chunksz)
             call exec_cmdline('mkdir -p '//'tseries_chunk'//int2str_pad(cnt,numlen)//'|| true')
-            allocate( stkname, source='./tseries_chunk'//int2str_pad(cnt,numlen)//'/imgs'//p%ext )
-            allocate( oriname, source='tseries_chunk'//int2str_pad(cnt,numlen)//'/oris'//'.txt' )
+            allocate( stkname, source='./tseries_chunk'//int2str_pad(cnt,numlen)//'/imgs'//p%ext)
+            allocate( oriname, source='tseries_chunk'//int2str_pad(cnt,numlen)//'/oris'//METADATEXT)
             call del_file( stkname )
             call del_file( oriname )
             cnt2 = 0

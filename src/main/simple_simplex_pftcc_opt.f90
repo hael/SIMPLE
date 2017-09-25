@@ -1,10 +1,11 @@
 ! The Nelder-Mead simplex method for continuous function minimisation
 ! with cost function defined in classes that extend pftcc_opt
-#include "simple_lib.f08"
+
 module simple_simplex_pftcc_opt
-use simple_defs
+#include "simple_lib.f08"
+
 use simple_pftcc_opt, only: pftcc_opt
-use simple_syslib,   only: alloc_errchk
+
 implicit none
 
 public :: simplex_pftcc_opt
@@ -31,9 +32,15 @@ contains
     subroutine new( self, spec )
         use simple_opt_spec, only: opt_spec
         class(simplex_pftcc_opt), intent(inout) :: self !< instance
-        class(opt_spec),          intent(inout) :: spec   !< specification
+        class(opt_spec),          intent(inout) :: spec !< specification
         real    :: x
         call self%kill
+        select case(spec%ndim)
+            case(2,3)
+                ! shift or in-planes
+            case DEFAULT
+                stop 'unsupported ndims for in-plane simplex search; simple_simplex_pftcc_opt :: new'
+        end select
         allocate(self%p(spec%ndim+1,spec%ndim), self%y(spec%ndim+1), self%pb(spec%ndim), stat=alloc_stat)
         if(alloc_stat /= 0) allocchk("In:simple_simplex_pftcc_opt::new simplex_opt_c")
         ! initialize best cost to huge number
@@ -50,9 +57,10 @@ contains
         class(opt_spec),          intent(inout) :: spec         !< specification
         class(pftcc_opt),         intent(inout) :: funcontainer !< container for the cost function
         real,                     intent(out)   :: lowest_cost  !< lowest cost
-        integer :: i, avgniter
-        integer :: niters(spec%nrestarts)
-        logical :: arezero(spec%ndim)
+        real, allocatable :: lims_dyn(:,:)
+        integer           :: i, avgniter
+        integer           :: niters(spec%nrestarts)
+        logical           :: arezero(spec%ndim)
         ! test if best point in spec is set
         arezero = .false.
         do i=1,spec%ndim
@@ -66,39 +74,66 @@ contains
             end do
         endif
         ! set best point to best point in spec
-        self%pb = spec%x
+        self%pb     = spec%x
         ! set best cost
         spec%nevals = 0
         self%yb     = funcontainer%costfun(self%pb, spec%ndim)
-        spec%nevals = spec%nevals+1
+        spec%nevals = spec%nevals + 1
+        ! initialise dynamic bounds
+        if( allocated(spec%limits_init) ) allocate(lims_dyn(spec%ndim,2), source=spec%limits_init)
         ! run nrestarts
         do i=1,spec%nrestarts
-            call init
+            if( allocated(lims_dyn) )then
+                call init( lims_dyn )
+            else
+                call init( spec%limits )
+            endif
             ! run the amoeba routine
             call amoeba_pftcc_opt(self%p,self%y,self%pb,self%yb,spec%ftol,funcontainer,niters(i),spec%maxits,spec%nevals)
+            if( allocated(lims_dyn) )then
+                ! movie the shift limits to around the best point
+                if( spec%ndim == 2 )then
+                    ! shift only search
+                    ! left limit
+                    lims_dyn(:,1) = self%pb - (lims_dyn(:,2) - lims_dyn(:,1)) / 2.0
+                    ! right limit
+                    lims_dyn(:,2) = self%pb + (lims_dyn(:,2) - lims_dyn(:,1)) / 2.0
+                    
+                else
+                    ! in-plane rotation in first dimension and shifts in 2 & 3
+                    ! left limit
+                    lims_dyn(2:,1) = self%pb(2:) - (lims_dyn(2:,2) - lims_dyn(2:,1)) / 2.0
+                    ! right limit
+                    lims_dyn(2:,2) = self%pb(2:) + (lims_dyn(2:,2) - lims_dyn(2:,1)) / 2.0
+                endif
+                ! bound according to spec%limits
+                where( lims_dyn(:,1) < spec%limits(:,1) ) lims_dyn(:,1) = spec%limits(:,1)
+                where( lims_dyn(:,2) > spec%limits(:,2) ) lims_dyn(:,2) = spec%limits(:,2)
+            endif
         end do
-        avgniter    = sum(niters)/spec%nrestarts
+        avgniter    = sum(niters) / spec%nrestarts
         spec%niter  = avgniter
-        spec%nevals = spec%nevals/spec%nrestarts
+        spec%nevals = spec%nevals / spec%nrestarts
         spec%x      = self%pb
         lowest_cost = self%yb
 
         contains
 
             !> \brief  initializes the simplex using randomized bounds
-            subroutine init
+            subroutine init( limits )
                 use simple_rnd, only: ran3
+                real, intent(in) :: limits(spec%ndim,2)
                 integer :: i, j
                 ! first vertex is the best-so-far solution solution
                 self%p(1,:) = self%pb
                 ! the others are obtained by randomized bounds
                 do i=2,spec%ndim+1
                     do j=1,spec%ndim
-                        self%p(i,j) = spec%limits(j,1)+ran3()*(spec%limits(j,2)-spec%limits(j,1))
+                        self%p(i,j) = limits(j,1) + ran3() * (limits(j,2) - limits(j,1))
                     end do
                 end do
                 ! calculate costs
-                do i=1,spec%ndim+1
+                do i=1,spec%ndim + 1
                     self%y(i) = funcontainer%costfun(self%p(i,:), spec%ndim)
                 end do
             end subroutine init

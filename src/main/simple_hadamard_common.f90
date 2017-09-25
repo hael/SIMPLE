@@ -1,25 +1,25 @@
 ! common PRIME2D/PRIME3D routines used primarily by the Hadamard matchers
+
 module simple_hadamard_common
-use simple_defs
+#include "simple_lib.f08"
+    
 use simple_cmdline,  only: cmdline
 use simple_build,    only: build
 use simple_params,   only: params
 use simple_ori,      only: ori
 use simple_oris,     only: oris
-use simple_rnd,      only: ran3
 use simple_gridding, only: prep4cgrid
-use simple_strings   ! use all in there
-use simple_math      ! use all in there
 use simple_masker    ! use all in there
 implicit none
 
 public :: read_img_from_stk, set_bp_range, set_bp_range2D, grid_ptcl, prepimg4align,&
-&eonorm_struct_facts, norm_struct_facts, preprefvol, prep2Dref, preprecvols, killrecvols
+&eonorm_struct_facts, norm_struct_facts, preprefvol, prep2Dref, gen2Dclassdoc,&
+&preprecvols, killrecvols, gen_projection_frcs
 private
 #include "simple_local_flags.inc"
 
 real, parameter :: SHTHRESH  = 0.0001
-real, parameter :: CENTHRESH = 0.5   ! threshold for performing volume/cavg centering in pixels
+real, parameter :: CENTHRESH = 0.5    ! threshold for performing volume/cavg centering in pixels
     
 contains
 
@@ -38,8 +38,7 @@ contains
     end subroutine read_img_from_stk
 
     subroutine set_bp_range( b, p, cline )
-        use simple_math,          only: calc_fourier_index
-        use simple_fileio,        only: file_exists,file2rarr
+        use simple_math, only: calc_fourier_index
         class(build),   intent(inout) :: b
         class(params),  intent(inout) :: p
         class(cmdline), intent(inout) :: cline
@@ -49,17 +48,17 @@ contains
         character(len=STDLEN) :: fsc_fname
         logical               :: fsc_bin_exists(p%nstates), all_fsc_bin_exist
         select case(p%eo)
-            case('yes')
+            case('yes','aniso')
                 ! check all fsc_state*.bin exist
                 all_fsc_bin_exist = .true.
                 fsc_bin_exists    = .false.
                 do s=1,p%nstates
                     fsc_fname = 'fsc_state'//int2str_pad(s,2)//'.bin'
                     if( file_exists(trim(adjustl(fsc_fname))) )fsc_bin_exists( s ) = .true.
-                    if( b%a%get_pop( s, 'state' )>0 .and. .not.fsc_bin_exists(s))&
+                    if( b%a%get_pop(s, 'state') > 0 .and. .not.fsc_bin_exists(s))&
                         & all_fsc_bin_exist = .false.
                 enddo
-                if( p%oritab.eq.'')all_fsc_bin_exist = (count(fsc_bin_exists)==p%nstates)
+                if( p%oritab .eq. '' )all_fsc_bin_exist = (count(fsc_bin_exists)==p%nstates)
                 ! set low-pass Fourier index limit
                 if( all_fsc_bin_exist )then
                     ! we need the worst resolved fsc
@@ -140,12 +139,10 @@ contains
         real :: lplim
         p%kfromto(1) = max(2, calc_fourier_index(p%hp, p%boxmatch, p%smpd))
         if( cline%defined('lp') )then
-            ! set Fourier index range
             p%kfromto(2) = calc_fourier_index(p%lp, p%boxmatch, p%smpd)
             p%lp_dyn     = p%lp
             call b%a%set_all2single('lp',p%lp)
         else
-            ! set Fourier index range
             if( which_iter <= LPLIM1ITERBOUND )then
                 lplim = p%lplims2D(1)
             else if( frac_srch_space >= FRAC_SH_LIM .and. which_iter > LPLIM3ITERBOUND )then
@@ -163,16 +160,16 @@ contains
     !>  \brief  grids one particle image to the volume
     subroutine grid_ptcl( b, p, orientation, os )
         use simple_kbinterpol, only: kbinterpol
-        class(build),              intent(inout) :: b
-        class(params),             intent(inout) :: p
-        class(ori),                intent(inout) :: orientation
-        class(oris),     optional, intent(inout) :: os
+        class(build),          intent(inout) :: b
+        class(params),         intent(inout) :: p
+        class(ori),            intent(inout) :: orientation
+        class(oris), optional, intent(inout) :: os
         type(ori)        :: orisoft, o_sym
         type(kbinterpol) :: kbwin
         real             :: pw, w, eopart
         integer          :: jpeak, s, k, npeaks
         logical          :: l_softrec
-        if( p%eo .eq. 'yes' )then
+        if( p%eo .ne. 'no' )then
             kbwin = b%eorecvols(1)%get_kbwin()
         else
             kbwin = b%recvols(1)%get_kbwin()
@@ -189,7 +186,7 @@ contains
             ! pre-gridding correction for the kernel convolution
             call prep4cgrid(b%img, b%img_pad, p%msk, kbwin)
             DebugPrint  '*** simple_hadamard_common ***: prepared image for gridding'
-            if( p%eo .eq. 'yes' )then
+            if( p%eo .ne. 'no' )then
                 ! even/odd partitioning
                 eopart = ran3()
                 if( orientation%isthere('eo') )then
@@ -212,7 +209,7 @@ contains
                 if( p%frac < 0.99 ) w = w*pw
                 if( w > TINY )then
                     if( p%pgrp == 'c1' )then
-                        if( p%eo .eq. 'yes' )then
+                        if( p%eo .ne. 'no' )then
                             call b%eorecvols(s)%grid_fplane(orisoft, b%img_pad, pwght=w, ran=eopart)
                         else
                             call b%recvols(s)%inout_fplane(orisoft, .true., b%img_pad, pwght=w)
@@ -220,7 +217,7 @@ contains
                     else
                         do k=1,b%se%get_nsym()
                             o_sym = b%se%apply(orisoft, k)
-                            if( p%eo .eq. 'yes' )then
+                            if( p%eo .ne. 'no' )then
                                 call b%eorecvols(s)%grid_fplane(o_sym, b%img_pad, pwght=w, ran=eopart)
                             else
                                 call b%recvols(s)%inout_fplane(o_sym, .true., b%img_pad, pwght=w)
@@ -242,9 +239,9 @@ contains
         type(ctf)         :: tfun
         real              :: x, y, dfx, dfy, angast
         integer           :: cls
-        x     = o%get('x')
-        y     = o%get('y')
-        cls   = nint(o%get('class'))
+        x   = o%get('x')
+        y   = o%get('y')
+        cls = nint(o%get('class'))
         ! move to Fourier space
         call b%img%fwd_ft
         ! set CTF parameters
@@ -284,21 +281,11 @@ contains
         ! clip image if needed
         call b%img%clip(b%img_match) ! SQUARE DIMS ASSUMED
         ! MASKING
-        if( p%l_envmsk .and. p%automsk .eq. 'cavg' )then
-            ! 2D adaptive cos-edge mask
-            call b%mskimg%apply_adamask2ptcl_2D(b%img_match, cls)
-        ! TOOK OUT: THE AUTOMASKING IS STILL NOT WORKING
-        ! BEST STRATEGY IS PROBABLY TO LEAVE PARTICLES ALONE AND MASK THE VOL
-        ! else if( p%l_envmsk )then
-        !     ! 3D adaptive cos-edge mask
-        !     call b%mskvol%apply_adamask2ptcl_3D(o, b%img_match)
-        else              
-            ! soft-edged mask
-            if( p%l_innermsk )then
-                call b%img_match%mask(p%msk, 'soft', inner=p%inner, width=p%width)
-            else
-                call b%img_match%mask(p%msk, 'soft')
-            endif
+        ! soft-edged mask
+        if( p%l_innermsk )then
+            call b%img_match%mask(p%msk, 'soft', inner=p%inner, width=p%width)
+        else
+            call b%img_match%mask(p%msk, 'soft')
         endif
         ! return in Fourier space
         call b%img_match%fwd_ft
@@ -307,36 +294,42 @@ contains
 
     !>  \brief  prepares one cluster centre image for alignment
     subroutine prep2Dref( b, p, icls, center )
-        use simple_image, only: image
+        use simple_image,         only: image
+        use simple_estimate_ssnr, only: fsc2optlp
         class(build),      intent(inout) :: b
         class(params),     intent(in)    :: p
         integer,           intent(in)    :: icls
         logical, optional, intent(in)    :: center
-        real    :: xyz(3), sharg
+        real, allocatable :: filter(:), frc(:), res(:)
+        real    :: xyz(3), sharg, frc05, frc0143
         logical :: do_center
-        ! p%center:  user gets opportunity to turn on/off centering
-        ! p%doshift: search space fraction controlled centering (or not)
-        ! REPLACED
-        ! if( p%center .eq. 'yes' .and. p%doshift )then
-        ! WITH
+        ! normalise
+        call b%img%norm
         do_center = (p%center .eq. 'yes')
-        if( present(center) )then
-            ! centering only performed if p%center.eq.'yes'
-            do_center = do_center .and. center
-        endif
+        ! centering only performed if p%center.eq.'yes'
+        if( present(center) ) do_center = do_center .and. center
         if( do_center )then
-        ! BECAUSE: typically you'd want to center the class averages
-        !          even though they're not good enough to search shifts
+            ! typically you'd want to center the class averages
+            ! even though they're not good enough to search shifts
             xyz   = b%img%center(p%cenlp, 'no', p%msk, doshift=.false.)
             sharg = arg(xyz)
             if( sharg > CENTHRESH )then
                 ! apply shift and update the corresponding class parameters
+                call b%img%fwd_ft
                 call b%img%shift(xyz(1), xyz(2))
                 call b%a%add_shift2class(icls, -xyz(1:2))
             endif
         endif
-        ! normalise
-        call b%img%norm
+        ! anisotropic matched filter
+        frc = b%projfrcs%get_frc(icls, p%box)
+        if( any(frc > 0.143) )then
+            call b%img%fwd_ft ! needs to be here in case the shift was never applied (above)
+            filter = fsc2optlp(frc)
+            call b%img%shellnorm()
+            call b%img%apply_filter(filter)
+        endif
+        ! ensure we are in real-space before clipping 
+        call b%img%bwd_ft 
         ! clip image if needed
         call b%img%clip(b%img_match)
         ! apply mask
@@ -360,27 +353,56 @@ contains
         call b%img_match%fwd_ft
     end subroutine prep2Dref
 
+    !>  \brief prepares a 2D class document with class index, resolution, 
+    !!         poulation, average correlation and weight
+    subroutine gen2Dclassdoc( b, p, fname )
+        class(build),     intent(inout) :: b
+        class(params),    intent(inout) :: p
+        character(len=*), intent(in)    :: fname
+        integer    :: icls, pop
+        real       :: frc05, frc0143
+        type(oris) :: classdoc
+        call classdoc%new_clean(p%ncls)            
+        do icls=1,p%ncls
+            call b%projfrcs%estimate_res(icls, frc05, frc0143)
+            call classdoc%set(icls, 'class', real(icls))
+            pop = b%a%get_pop(icls, 'class')
+            call classdoc%set(icls, 'pop',   real(pop))
+            call classdoc%set(icls, 'res',   frc0143)
+            if( pop > 1 )then
+                call classdoc%set(icls, 'corr',  b%a%get_avg('corr', class=icls))
+                call classdoc%set(icls, 'w',     b%a%get_avg('w',    class=icls))
+            else
+                call classdoc%set(icls, 'corr', -1.0)
+                call classdoc%set(icls, 'w',     0.0)
+            endif
+            call classdoc%write(fname)
+        end do
+        call classdoc%kill
+    end subroutine gen2Dclassdoc
+            
     !>  \brief  initializes all volumes for reconstruction
     subroutine preprecvols( b, p )
         class(build),   intent(inout) :: b
         class(params),  intent(inout) :: p
         integer :: istate
-        if( p%eo .eq. 'yes' )then
-            do istate = 1, p%nstates
-                if( b%a%get_pop(istate, 'state') > 0)then
-                    call b%eorecvols(istate)%new(p)
-                    call b%eorecvols(istate)%reset_all
-                endif
-            end do
-        else
-            do istate = 1, p%nstates
-                if( b%a%get_pop(istate, 'state') > 0)then
-                    call b%recvols(istate)%new([p%boxpd, p%boxpd, p%boxpd], p%smpd)
-                    call b%recvols(istate)%alloc_rho(p)
-                    call b%recvols(istate)%reset
-                endif
-            end do
-        endif
+        select case(p%eo)
+            case('yes','aniso')
+                do istate = 1, p%nstates
+                    if( b%a%get_pop(istate, 'state') > 0)then
+                        call b%eorecvols(istate)%new(p)
+                        call b%eorecvols(istate)%reset_all
+                    endif
+                end do
+            case DEFAULT
+                do istate = 1, p%nstates
+                    if( b%a%get_pop(istate, 'state') > 0)then
+                        call b%recvols(istate)%new([p%boxpd, p%boxpd, p%boxpd], p%smpd)
+                        call b%recvols(istate)%alloc_rho(p)
+                        call b%recvols(istate)%reset
+                    endif
+                end do
+        end select
     end subroutine preprecvols
 
     !>  \brief  destructs all volumes for reconstruction
@@ -388,7 +410,7 @@ contains
         class(build),   intent(inout) :: b
         class(params),  intent(inout) :: p
         integer :: istate
-        if( p%eo .eq. 'yes' )then
+        if( p%eo .ne. 'no' )then
             do istate = 1, p%nstates
                 call b%eorecvols(istate)%kill
             end do
@@ -403,41 +425,60 @@ contains
     !>  \brief  prepares one volume for references extraction
     subroutine preprefvol( b, p, cline, s, doexpand )
         use simple_estimate_ssnr, only: fsc2optlp
+        use simple_image,         only: image
         class(build),      intent(inout) :: b
         class(params),     intent(inout) :: p
         class(cmdline),    intent(inout) :: cline
         integer,           intent(in)    :: s
         logical, optional, intent(in)    :: doexpand
-        real, allocatable :: filter(:)
-        logical :: l_doexpand, do_center
-        real    :: shvec(3)
+        type(image)                   :: vol_filter
+        real,             allocatable :: filter(:)
+        character(len=:), allocatable :: fname_vol_filter
+        logical                       :: l_doexpand, do_center
+        real                          :: shvec(3)
         l_doexpand = .true.
         if( present(doexpand) ) l_doexpand = doexpand
         if( p%boxmatch < p%box )call b%vol%new([p%box,p%box,p%box],p%smpd) ! ensure correct dim
         call b%vol%read(p%vols(s))
         call b%vol%norm ! because auto-normalisation on read is taken out
-        ! Volume filtering
-        if( p%eo.eq.'yes' )then
-            if( any(b%fsc(s,:) > 0.143) )then
-                ! Rosenthal & Henderson, 2003 
-                call b%vol%fwd_ft
-                filter = fsc2optlp(b%fsc(s,:))
-                call b%vol%shellnorm()
-                call b%vol%apply_filter(filter)
-            endif
-        endif
         ! centering            
         do_center = .true.
         if( p%center .eq. 'no' .or. p%nstates > 1 .or. .not. p%doshift .or.&
-            p%pgrp(:1) .ne. 'c' .or. cline%defined('mskfile') ) do_center = .false.
+        &p%pgrp(:1) .ne. 'c' .or. cline%defined('mskfile') ) do_center = .false.
         if( do_center )then
             shvec = b%vol%center(p%cenlp,'no',p%msk,doshift=.false.) ! find center of mass shift
             if( arg(shvec) > CENTHRESH )then
+                call b%vol%fwd_ft
                 if( p%pgrp .ne. 'c1' ) shvec(1:2) = 0.         ! shifts only along z-axis for C2 and above
                 call b%vol%shift([shvec(1),shvec(2),shvec(3)]) ! performs shift
                 ! map back to particle oritentations
                 if( cline%defined('oritab') )call b%a%map3dshift22d(-shvec(:), state=s)
             endif
+        endif
+        ! Volume filtering
+        if( p%eo.eq.'yes' )then
+            ! matched filter based on Rosenthal & Henderson, 2003 
+            if( any(b%fsc(s,:) > 0.143) )then
+                call b%vol%fwd_ft ! needs to be here in case the shift was never applied (above)
+                call b%vol%shellnorm()
+                filter = fsc2optlp(b%fsc(s,:))
+                call b%vol%apply_filter(filter)
+            endif
+        else if( p%eo.eq.'aniso' )then
+            ! anisotropic matched filter
+            allocate(fname_vol_filter, source='aniso_optlp_state'//int2str_pad(s,2)//p%ext)
+            if( file_exists(fname_vol_filter) )then
+                call vol_filter%new([p%box,p%box,p%box],p%smpd)
+                call vol_filter%read(fname_vol_filter)
+                call b%vol%fwd_ft ! needs to be here in case the shift was never applied (above)
+                call b%vol%shellnorm()
+                call b%vol%apply_filter(vol_filter)
+                call vol_filter%kill
+            else
+                write(*,*) 'eo=aniso but file: ', fname_vol_filter
+                stop 'is not in cwd as required; hadamard_common :: preprefvol'
+            endif
+            deallocate(fname_vol_filter)
         endif
         ! back to real space
         call b%vol%bwd_ft
@@ -451,12 +492,7 @@ contains
             call b%mskvol%new([p%box, p%box, p%box], p%smpd)
             call b%mskvol%read(p%mskfile)
             call b%mskvol%clip_inplace([p%boxmatch,p%boxmatch,p%boxmatch])
-            ! no need for the below line anymore as I (HE) removed auto-normalisation on read
             call b%vol%mul(b%mskvol)
-            ! re-initialise the object for 2D envelope masking
-            call b%mskvol%init_envmask2D(p%msk)
-            ! don't use this for any 3D work from now on, because the soft edge is removed
-            ! on initialisation
         else
             ! circular masking
             if( p%l_innermsk )then
@@ -468,68 +504,10 @@ contains
         ! FT volume
         call b%vol%fwd_ft
         ! expand for fast interpolation
-        if( l_doexpand )call b%vol%expand_cmat     
+        if( l_doexpand ) call b%vol%expand_cmat     
     end subroutine preprefvol
-    
-    subroutine eonorm_struct_facts( b, p, res, which_iter )
-        use simple_image, only: image
-        use simple_fileio, only: add2fbody, file2rarr
-        class(build),      intent(inout) :: b
-        class(params),     intent(inout) :: p
-        real,              intent(inout) :: res
-        integer, optional, intent(in)    :: which_iter
-        real,     allocatable :: invctfsq(:)
-        integer               :: s
-        real                  :: res05s(p%nstates), res0143s(p%nstates)
-        character(len=STDLEN) :: pprocvol
-        ! init
-        res0143s = 0.
-        res05s   = 0.
-        ! cycle through states
-        do s=1,p%nstates
-            if( b%a%get_pop(s, 'state') == 0 )then
-                ! empty state
-                if( present(which_iter) )b%fsc(s,:) = 0.
-                cycle
-            endif
-            call b%eorecvols(s)%compress_exp
-            if( p%l_distr_exec )then
-                call b%eorecvols(s)%write_eos('recvol_state'//int2str_pad(s,2)//'_part'//int2str_pad(p%part,p%numlen))
-            else
-                if( present(which_iter) )then
-                    p%vols(s) = 'recvol_state'//int2str_pad(s,2)//'_iter'//int2str_pad(which_iter,3)//p%ext
-                else
-                    p%vols(s) = 'startvol_state'//int2str_pad(s,2)//p%ext
-                endif
-                call b%eorecvols(s)%sum_eos
-                call b%eorecvols(s)%sampl_dens_correct_eos(s)
-                call b%eorecvols(s)%sampl_dens_correct_sum(b%vol)
-                call b%vol%write(p%vols(s), del_if_exists=.true.)
-                ! update resolutions for local execution mode
-                call b%eorecvols(s)%get_res(res05s(s), res0143s(s))
-                if( present(which_iter) )then
-                    ! post-process volume
-                    pprocvol = add2fbody(trim(p%vols(s)), p%ext, 'pproc')
-                    b%fsc(s,:) = file2rarr('fsc_state'//int2str_pad(s,2)//'.bin')
-                    call b%vol%fwd_ft
-                    ! low-pass filter
-                    call b%vol%bp(0., p%lp)
-                    call b%vol%bwd_ft
-                    ! mask
-                    call b%vol%mask(p%msk, 'soft')
-                    call b%vol%write(pprocvol)
-                endif
-            endif
-        end do
-        if( .not. p%l_distr_exec )then
-            ! set the resolution limit according to the worst resolved model
-            res  = maxval(res0143s)
-            p%lp = min(p%lp,max(p%lpstop,res))
-        endif
-    end subroutine eonorm_struct_facts
 
     subroutine norm_struct_facts( b, p, which_iter )
-         use simple_fileio, only: add2fbody
         class(build),      intent(inout) :: b
         class(params),     intent(inout) :: p
         integer, optional, intent(in)    :: which_iter
@@ -559,9 +537,9 @@ contains
                     endif
                 endif
                 call b%recvols(s)%compress_exp
-                call b%recvols(s)%sampl_dens_correct(self_out=b%vol_pad) ! this preserves the recvol for online update
-                call b%vol_pad%bwd_ft
-                call b%vol_pad%clip(b%vol)
+                call b%recvols(s)%sampl_dens_correct
+                call b%recvols(s)%bwd_ft
+                call b%recvols(s)%clip(b%vol)
                 call b%vol%write(p%vols(s), del_if_exists=.true.)
                 if( present(which_iter) )then
                     ! post-process volume
@@ -577,5 +555,119 @@ contains
             endif
         end do
     end subroutine norm_struct_facts
+    
+    subroutine eonorm_struct_facts( b, p, res, which_iter )
+        use simple_image,    only: image
+        use simple_filterer, only: gen_anisotropic_optlp
+        class(build),      intent(inout) :: b
+        class(params),     intent(inout) :: p
+        real,              intent(inout) :: res
+        integer, optional, intent(in)    :: which_iter
+        real,     allocatable :: invctfsq(:)
+        integer               :: s
+        real                  :: res05s(p%nstates), res0143s(p%nstates)
+        character(len=STDLEN) :: pprocvol
+        character(len=32)     :: eonames(2)
+        ! init
+        res0143s = 0.
+        res05s   = 0.
+        ! cycle through states
+        do s=1,p%nstates
+            if( b%a%get_pop(s, 'state') == 0 )then
+                ! empty state
+                if( present(which_iter) )b%fsc(s,:) = 0.
+                cycle
+            endif
+            call b%eorecvols(s)%compress_exp
+            if( p%l_distr_exec )then
+                call b%eorecvols(s)%write_eos('recvol_state'//int2str_pad(s,2)//'_part'//int2str_pad(p%part,p%numlen))
+            else
+                if( present(which_iter) )then
+                    p%vols(s) = 'recvol_state'//int2str_pad(s,2)//'_iter'//int2str_pad(which_iter,3)//p%ext
+                else
+                    p%vols(s) = 'startvol_state'//int2str_pad(s,2)//p%ext
+                endif
+                call b%eorecvols(s)%sum_eos
+                eonames(1) = add2fbody(p%vols(s), p%ext, '_odd')
+                eonames(2) = add2fbody(p%vols(s),  p%ext, '_even')
+                if( p%eo .eq. 'aniso' )then
+                    ! anisotropic resolution model
+                    call b%eorecvols(s)%sampl_dens_correct_eos(s, eonames)
+                    call gen_projection_frcs( p, eonames(1), eonames(2), s, b%projfrcs)
+                    call b%projfrcs%write('frcs_state'//int2str_pad(s,2)//'.bin')
+                    ! generate the anisotropic 3D optimal low-pass filter
+                    call gen_anisotropic_optlp(b%vol, b%projfrcs, b%e_bal, s, p%pgrp)
+                    call b%vol%write('aniso_optlp_state'//int2str_pad(s,2)//p%ext)
+                else
+                    call b%eorecvols(s)%sampl_dens_correct_eos(s, eonames)
+                endif
+                call b%eorecvols(s)%sampl_dens_correct_sum(b%vol)
+                call b%vol%write(p%vols(s), del_if_exists=.true.)
+                ! update resolutions for local execution mode
+                call b%eorecvols(s)%get_res(res05s(s), res0143s(s))
+                if( present(which_iter) )then
+                    ! post-process volume
+                    pprocvol = add2fbody(trim(p%vols(s)), p%ext, 'pproc')
+                    b%fsc(s,:) = file2rarr('fsc_state'//int2str_pad(s,2)//'.bin')
+                    call b%vol%fwd_ft
+                    ! low-pass filter
+                    call b%vol%bp(0., p%lp)
+                    call b%vol%bwd_ft
+                    ! mask
+                    call b%vol%mask(p%msk, 'soft')
+                    call b%vol%write(pprocvol)
+                endif
+            endif
+        end do
+        if( .not. p%l_distr_exec )then
+            ! set the resolution limit according to the worst resolved model
+            res  = maxval(res0143s)
+            p%lp = min(p%lp,max(p%lpstop,res))
+        endif
+    end subroutine eonorm_struct_facts
+
+    !>  \brief generate projection FRCs from even/odd pairs
+    subroutine gen_projection_frcs( p, ename, oname, state, projfrcs )
+        use simple_params,          only: params
+        use simple_oris,            only: oris
+        use simple_projector_hlev,  only: projvol
+        use simple_projection_frcs, only: projection_frcs
+        use simple_image,           only: image
+        class(params),          intent(inout) :: p
+        character(len=*),       intent(in)    :: ename, oname
+        integer,                intent(in)    :: state
+        class(projection_frcs), intent(inout) :: projfrcs
+        type(oris)               :: e_space
+        type(image)              :: even, odd
+        type(image), allocatable :: even_imgs(:), odd_imgs(:)
+        real,        allocatable :: frc(:), res(:)
+        integer :: iproj
+        ! read even/odd pair
+        call even%new([p%box,p%box,p%box], p%smpd)
+        call odd%new([p%box,p%box,p%box], p%smpd)
+        call even%read(ename)
+        call odd%read(oname)
+        ! create e_space
+        call e_space%new(NSPACE_BALANCE)
+        call e_space%spiral(p%nsym, p%eullims)
+        ! generate even/odd projections
+        even_imgs = projvol(even, e_space, p)
+        odd_imgs  = projvol(odd, e_space, p)
+        ! calculate FRCs and fill-in projfrcs object
+        !$omp parallel do default(shared) private(iproj,res,frc) schedule(static) proc_bind(close)
+        do iproj=1,NSPACE_BALANCE
+            call even_imgs(iproj)%fwd_ft
+            call odd_imgs(iproj)%fwd_ft
+            call even_imgs(iproj)%fsc(odd_imgs(iproj), res, frc, serial=.true.)
+            call projfrcs%set_frc(iproj, frc, state)
+            call even_imgs(iproj)%kill
+            call odd_imgs(iproj)%kill
+        end do
+        !$omp end parallel do
+        deallocate(even_imgs, odd_imgs)
+        call even%kill
+        call odd%kill
+        call e_space%kill
+    end subroutine gen_projection_frcs
 
 end module simple_hadamard_common

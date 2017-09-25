@@ -1,9 +1,10 @@
 ! function minimization by L-BFGS (Limited memory Broyden–Fletcher–Goldfarb–Shannon optimisation)
-#include "simple_lib.f08"
+
 module simple_bfgs_opt
-use simple_defs
+#include "simple_lib.f08"
+    
 use simple_optimizer, only: optimizer
-use simple_syslib,   only: alloc_errchk
+
 implicit none
 
 public :: bfgs_opt

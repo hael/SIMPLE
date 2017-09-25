@@ -1,12 +1,11 @@
 ! for calculation of cartesian correlation matrices
-#include "simple_lib.f08"
+
 module simple_corrmat
 !$ use omp_lib
 !$ use omp_lib_kinds
-use simple_defs
-use simple_jiffys, only: progress
+#include "simple_lib.f08"
 use simple_image,  only: image
-use simple_syslib, only: alloc_errchk
+
 implicit none
 
 public :: calc_cartesian_corrmat

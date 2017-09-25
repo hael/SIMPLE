@@ -1,7 +1,6 @@
 ! generic fileio       class
 
 module simple_fileio
-#include "simple_lib.f08"
     use simple_defs
     ! use ISO_C_BINDING
     use, intrinsic :: iso_fortran_env, only: stderr=>ERROR_UNIT, stdout=>OUTPUT_UNIT, stdin=>INPUT_UNIT
@@ -827,7 +826,7 @@ contains
         call fopen_1(funit,filetable,'old','unknown',io_stat)
         call fileio_errmsg("read_filetable failed to open file "//trim(filetable),io_stat )
         allocate( filenames(nl), stat=alloc_stat )
-        if(alloc_stat /= 0) allocchk ('In: read_filetable; simple_fileio  ')
+        if(alloc_stat /= 0) call alloc_errchk ('In: read_filetable; simple_fileio  ', alloc_stat)
         do iline=1,nl
             read(funit,'(a256)') filenames(iline)
         end do
@@ -859,7 +858,7 @@ contains
         if( file_exists(trim(fnam)) )then
             n = nlines(fnam)
             allocate( arr(n), stat=alloc_stat )
-            if(alloc_stat /= 0) allocchk('In: txtfile2rarr; simple_fileio  ')
+            if(alloc_stat /= 0) call alloc_errchk('In: txtfile2rarr; simple_fileio  ', alloc_stat)
             call fopen_1(funit,fnam,'old','unknown',io_stat)
             call fileio_errmsg("txtfile2rarr failed to open  "//trim(fnam), io_stat)
             do i=1,n
@@ -886,7 +885,7 @@ contains
         if( file_exists(trim(file1)) ) n1 = nlines(file1)
         if( file_exists(trim(file2)) ) n2 = nlines(file2)
         allocate( arr(n1+n2), stat=alloc_stat )
-        if(alloc_stat /= 0) allocchk('In: merge_txtfiles; simple_fileio  ')
+        if(alloc_stat /= 0) call alloc_errchk('In: merge_txtfiles; simple_fileio  ', alloc_stat)
         if( here(1) )then
             call fopen_1(funit,file1,'old','unknown',io_stat)
             call fileio_errmsg("merge_txtfiles failed "//trim(file1), io_stat)
@@ -930,7 +929,7 @@ contains
             call fileio_errmsg("file2iarr fopen failed "//trim(fnam),io_stat)
             read(funit, rec=1) n
             allocate( arr(n), stat=alloc_stat )
-            if(alloc_stat /= 0) allocchk('In: file2iarr; simple_fileio  ')
+            if(alloc_stat /= 0) call alloc_errchk('In: file2iarr; simple_fileio  ', alloc_stat)
             do i=1,n
                 read(funit, rec=i+1) arr(i)
             end do
@@ -972,7 +971,7 @@ contains
             read(funit, rec=1,iostat=io_stat) rval
             n = nint(rval)
             allocate( arr(n), stat=alloc_stat )
-            if(alloc_stat /= 0) allocchk('In: file2arr; simple_fileio ')
+            if(alloc_stat /= 0) call alloc_errchk('In: file2arr; simple_fileio ', alloc_stat)
             do i=1,n
                 read(funit, rec=i+1) arr(i)
             end do
@@ -1035,7 +1034,7 @@ contains
         dim2 = nint(dim2r)
         if( allocated(arr) ) deallocate(arr)
         allocate( arr(dim1,dim2), stat=alloc_stat )
-        if(alloc_stat /= 0) allocchk('In: simple_fileio:: file22Darr arr ')
+        if(alloc_stat /= 0) call alloc_errchk('In: simple_fileio:: file22Darr arr ', alloc_stat)
         read(unit=funit,pos=9,iostat=io_stat) arr(:,:)
         call fileio_errmsg("simple_fileio::file2arr2D  reading stream startbyte 9 from: "// trim(fname), io_stat)
         call fclose_1(funit,io_stat, errmsg="Error closing file "//trim(fname))

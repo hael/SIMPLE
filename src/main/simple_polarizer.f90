@@ -1,14 +1,13 @@
 ! polar 2D Fourier transform generation by convolution interpolation (gridding)
-#include "simple_lib.f08"
+
 module simple_polarizer
 !$ use omp_lib
 !$ use omp_lib_kinds
-use simple_defs        ! use all in there
-use simple_syslib,     only: alloc_errchk
+#include "simple_lib.f08"
+    
 use simple_kbinterpol, only: kbinterpol
 use simple_image,      only: image
 use simple_params,     only: params
-
 implicit none
 
 public :: polarizer
@@ -71,7 +70,7 @@ contains
                     w(l,:) = w(l,:) * self%kbwin%apod( real(win(1,1)+l-1)-loc(1) )
                     w(:,l) = w(:,l) * self%kbwin%apod( real(win(2,1)+l-1)-loc(2) )
                     ! cyclic addresses
-                    self%polcyc1_mat(i, k, cnt) = cyci_1d(lims(1,:), win(1,1)+l-1)  !! last system error is temp created here
+                    self%polcyc1_mat(i, k, cnt) = cyci_1d(lims(1,:), win(1,1)+l-1)
                     self%polcyc2_mat(i, k, cnt) = cyci_1d(lims(2,:), win(2,1)+l-1)
                 end do
                 self%polweights_mat(i,k,:) = reshape(w,(/wlen/))

@@ -1,9 +1,9 @@
 ! defines protein point-group symmetries
-#include "simple_lib.f08"
+
 module simple_sym
-use simple_defs    ! use all in there
+#include "simple_lib.f08"
 use simple_oris,   only: oris
-use simple_syslib, only: alloc_errchk
+use simple_ori,   only: ori
 implicit none
 
 public :: sym
@@ -73,7 +73,6 @@ contains
 
     !>  \brief  is a constructor
     subroutine new( self, pgrp )
-        use simple_ori, only: ori
         class(sym), intent(inout)    :: self !< this instance
         character(len=*), intent(in) :: pgrp !< sym group string
         call self%kill
@@ -126,7 +125,6 @@ contains
 
     !>  \brief  builds the search range for the point-group
     function build_srchrange( self ) result( eullims )
-        use simple_ori, only: ori
         class(sym), intent(inout) :: self !< this instance
         real                      :: eullims(3,2) !< 3-axis search range
         eullims(:,1) = 0.
@@ -151,7 +149,6 @@ contains
 
     !>  \brief  returns the search range for the point-group
     function srchrange( self ) result( eullims )
-        use simple_ori, only: ori
         class(sym), intent(inout) :: self !< this instance
         real                      :: eullims(3,2) !< 3-axis search range
         eullims = self%eullims
@@ -273,7 +270,6 @@ contains
 
     !>  \brief  is a symmetry adaptor
     function apply( self, e_in, symop ) result( e_sym )
-        use simple_ori, only: ori
         class(sym), intent(inout) :: self
         class(ori), intent(inout) :: e_in  !< orientation object
         integer, intent(in)       :: symop !< sym operation
@@ -286,7 +282,6 @@ contains
 
     !>  \brief  rotates any orientation to the asymmetric unit
     subroutine rot_to_asym( self, osym )
-        use simple_ori, only: ori
         class(sym), intent(inout) :: self
         class(ori), intent(inout) :: osym !< orientation
         type(ori) :: oasym
@@ -304,7 +299,6 @@ contains
 
     !>  \brief  rotates orientations to the asymmetric unit
     subroutine rotall_to_asym( self, osyms )
-        use simple_ori, only: ori
         class(sym),  intent(inout) :: self     
         class(oris), intent(inout) :: osyms     !< orientations
         type(ori) :: o
@@ -319,7 +313,6 @@ contains
     !>  \brief  determines euler distance and corresponding symmetrized
     !>          orientation between two orientations
     subroutine sym_euldist( self, oref, oasym, euldist )
-        use simple_ori,  only: ori
         use simple_math, only: rad2deg
         class(sym), intent(inout) :: self
         class(ori), intent(in)    :: oref   !< is the untouched reference
@@ -348,7 +341,6 @@ contains
 
     !>  \brief  is a getter 
     function get_symori( self, symop ) result( e_sym )
-        use simple_ori, only: ori
         class(sym), intent(inout) :: self
         integer, intent(in)       :: symop !< symmetry orientation
         type(ori) :: e_sym
@@ -357,7 +349,6 @@ contains
 
     !>  \brief  is a symmetry adaptor
     subroutine apply2all( self, e_in )
-        use simple_ori, only: ori
         class(sym),  intent(inout) :: self
         class(oris), intent(inout) :: e_in !< symmetry orientations
         type(ori)                  :: orientation
@@ -373,7 +364,6 @@ contains
 
     !>  \brief  whether or not an orientation falls within the asymetric unit
     function within_asymunit( self, o )result( is_within )
-        use simple_ori, only: ori
         class(sym), intent(inout) :: self
         class(ori), intent(in)    :: o !< symmetry orientation
         logical :: is_within
@@ -391,7 +381,6 @@ contains
     
     !>  apply symmetry orientations with shift
     subroutine apply_sym_with_shift( self, os, symaxis_ori, shvec, state )
-        use simple_ori, only: ori
         class(sym),        intent(inout) :: self
         class(oris),       intent(inout) :: os          !< output orientations
         class(ori),        intent(in)    :: symaxis_ori !< input orientations
@@ -418,7 +407,6 @@ contains
 
     !>  \brief  is for retrieving nearest neighbors in symmetric cases 
     subroutine nearest_neighbors( self, asym_os, k, nnmat )
-        use simple_ori,  only: ori
         use simple_math, only: hpsort
         class(sym),           intent(inout) :: self
         type(oris),           intent(inout) :: asym_os !< sampled orientations from asymetric unit, eg from spiral with symmetry

@@ -1,15 +1,19 @@
 ! unblur does motion correction, dose-weighting and frame-weighting of DDD movies 
-#include "simple_lib.f08"
+
 module simple_unblur
 !$ use omp_lib
 !$ use omp_lib_kinds
-use simple_defs
-use simple_jiffys,      only: progress
-use simple_syslib,      only: alloc_errchk
-use simple_ft_expanded, only: ft_expanded
-use simple_image,       only: image
-use simple_params,      only: params
-use simple_filterer,    only: acc_dose2filter
+#include "simple_lib.f08"
+use simple_ft_expanded,  only: ft_expanded
+use simple_image,        only: image
+use simple_params,       only: params
+use simple_estimate_ssnr,only: acc_dose2filter
+use simple_oris,         only: oris
+use simple_strings,      only: int2str
+use simple_rnd,          only: ran3
+use simple_stat,         only: corrs2weights, moment
+use simple_math,         only: round2even, median
+use simple_imghead,      only: find_ldim_nptcls
 implicit none
 
 public :: unblur_movie, unblur_calc_sums, unblur_calc_sums_tomo
@@ -61,10 +65,6 @@ contains
 
     !> Unblur DDD movie
     subroutine unblur_movie( movie_stack_fname, p, corr, smpd_out, nsig )
-        use simple_oris,        only: oris
-        !use simple_strings,     only: int2str
-        use simple_rnd,         only: ran3
-        use simple_stat,        only: corrs2weights, moment
         use simple_ftexp_shsrch ! use all in there
         character(len=*), intent(in)    :: movie_stack_fname    !< filename 
         class(params),    intent(inout) :: p                    !< param object
@@ -265,8 +265,6 @@ contains
 
     !> Initialise unblur
     subroutine unblur_init( movie_stack_fname, p )
-        use simple_math,    only: round2even, median
-        use simple_imgfile, only: find_ldim_nptcls
         character(len=*), intent(in)    :: movie_stack_fname  !< input filename of stack
         class(params),    intent(inout) :: p                  !< params object
         type(image)          :: tmpmovsum
@@ -278,7 +276,7 @@ contains
         logical, allocatable :: outliers(:,:)
         call unblur_kill
         ! GET NUMBER OF FRAMES & DIM FROM STACK
-        call find_ldim_nptcls(movie_stack_fname, ldim, nframes, endconv=endconv)
+        call find_ldim_nptcls(movie_stack_fname, ldim, nframes)
         DebugPrint  'logical dimension: ', ldim
         ldim(3) = 1 ! to correct for the stupid 3:d dim of mrc stacks
         if( p%scale < 0.99 )then

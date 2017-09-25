@@ -1,8 +1,9 @@
 ! deals with text files of numbers
 module simple_nrtxtfile
 use simple_defs
-use simple_strings ! use all in there
-use simple_fileio
+use simple_strings, only: striscomment, cntrecsperline, strisblank ! use all in there
+use simple_fileio,  only: fopen, fclose, fileio_errmsg
+use simple_syslib,  only: is_open, simple_stop
 implicit none
 
 public :: nrtxtfile
@@ -37,7 +38,7 @@ contains
         character(len=*),  intent(in)    :: fname       !< filename
         integer,           intent(in)    :: access_type !< Either OPEN_TO_READ or OPEN_TO_WRITE
         integer, optional, intent(in)    :: wanted_recs_per_line
-        character(len=line_max_len)      :: buffer      !< will hold a line from the file
+        character(len=LINE_MAX_LEN)      :: buffer      !< will hold a line from the file
         integer                          :: recs_on_curr_line
         integer                          :: tot_nr_of_recs, tmpunit
         integer                          :: ios         !< ios is negative if an end of record condition is encountered or if
@@ -106,7 +107,7 @@ contains
     subroutine readNextDataLine( self, read_data )
         class(nrtxtfile), intent(inout) :: self
         real,             intent(inout) :: read_data(:) !< output data
-        character(len=line_max_len) :: buffer
+        character(len=LINE_MAX_LEN) :: buffer
         integer                     :: ios
         character(len=256)          :: io_message
         ! Check we are open to read
@@ -135,7 +136,6 @@ contains
         class(nrtxtfile), intent(inout) :: self
         real, intent(in)                :: data_to_write(:) !< input data
         integer                         :: record_counter, ios
-        character(len=256)              :: io_message
         if( self%access_type .ne. OPEN_TO_WRITE )then
             stop 'simple_nrtxtfile::writeDataLineReal; File is not OPEN_TO_WRITE'
         endif
@@ -143,9 +143,9 @@ contains
              call simple_stop( 'simple_nrtxtfile::writeDataLineReal; Supplied array is smaller than records per line')
         endif
         do record_counter = 1, self%recs_per_line
-            write(self%funit, '(g14.7,a)', advance='no',iostat=ios,iomsg=io_message) data_to_write(record_counter), ' '
+            write(self%funit, '(g14.7,a)', advance='no',iostat=ios) data_to_write(record_counter), ' '
             if( ios .ne. 0 )then
-                call fileio_errmsg('simple_nrtxtfile::writeNextDataLine; Encountered iostat error: '//trim(io_message),ios)
+                call fileio_errmsg('simple_nrtxtfile::writeNextDataLine; ',ios)
             endif
         enddo
         ! finish the line
@@ -209,7 +209,7 @@ contains
         class(nrtxtfile), intent(inout) :: self
         integer :: ios
         if( is_open(self%funit) )then
-            call fclose(self%funit,iostat=ios,errmsg="nrtxtfile; kill; Failed to close ")
+            call fclose(self%funit,iostat=ios,errmsg="nrtxtfile; kill;  ")
         end if
         self%recs_per_line = 0
         self%ndatalines = 0

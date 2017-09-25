@@ -1,187 +1,165 @@
 ! Fourier filtering routines
-#include "simple_lib.f08"
-module simple_filterer
-use simple_defs
-use simple_image,     only: image
-use simple_projector, only: projector
-use simple_syslib,    only: alloc_errchk
-implicit none
 
-real, private, parameter :: SHTHRESH=0.0001
+module simple_filterer
+#include "simple_lib.f08"
+use simple_image,     only: image
+implicit none
 
 contains
 
-    !> DOSE FILTERING (Grant, Grigorieff eLife 2015)
-    !! input is template image, accumulative dose (in e/A2) and acceleration voltage
-    !!         output is filter coefficients
-    !! \f$  \mathrm{dose}_\mathrm{acc} = \int^{N}_{1} \mathrm{dose\_weight}(a,F,V),\ n_\mathrm{e}/\si{\angstrom\squared}  \f$
-    !! \param acc_dose accumulative dose (in \f$n_\mathrm{e}^- per \si{\angstrom\squared}\f$)
-    function acc_dose2filter( img, acc_dose, kV ) result( filter )
-        type(image), intent(in) :: img           !< input image
-        real,        intent(in) :: acc_dose, kV  !< acceleration voltage
-        real, allocatable       :: filter(:)
-        integer :: find, sz
-        sz = img%get_filtsz()
-        allocate(filter(sz),stat=alloc_stat)
-        if(alloc_stat /= 0) allocchk("simple_filterer::acc_dose2filter ")
-        do find=1,sz
-            filter(find) = dose_weight(acc_dose, img%get_spat_freq(find), kV)
-        end do
-    end function acc_dose2filter
-
-    !>  \brief Calculate dose weight. Input is accumulative dose (in e/A2) and
-    !>  spatial frequency (in 1/A)
-    !!         output is resolution dependent weight applied to individual frames
-    !!         before correlation search and averaging
-    !!
-    !! \f$  \mathrm{dose\_weight}(a,F,V) = \exp\left(- \frac{A_\mathrm{dose}}{k\times (2.0\times A\times f^B + C)} \right), \f$
-    !! where \f$k\f$ is 0.75 for \f$V<200\f$ kV, 1.0 for \f$200 \leqslant  V \leqslant  300\f$
-    real function dose_weight( acc_dose, spat_freq, kV )
-        real, intent(in) :: acc_dose                !< accumulative dose (in e/A2)
-        real, intent(in) :: spat_freq               !< spatial frequency (in 1/A)
-        real, intent(in) :: kV                      !< accelleration voltage
-        real, parameter  :: A=0.245, B=-1.665, C=2.81, kV_factor=0.75
-        real             :: critical_exp !< critical exposure (only depends on spatial frequency)
-        critical_exp = A*(spat_freq**B)+C
-        if( abs(kV-300.) < 0.001 )then
-            ! critical exposure does not need modification
-        else if( abs(kV-200.) < 0.001 )then
-            ! critical exposure at 200 kV expected to be ~25% lower
-            critical_exp = critical_exp*kV_factor
+    !>  \brief generates an optimal low-pass filter (3D) from FRCs (2D) by 
+    !!         (1) taking the average filter coefficients for frequencies 1 & 2
+    !!         (2) minimizing the angle between the vector defined by the 3D Fourier index
+    !!         and the planes used for calculating FRCs to find a matching filter coeff
+    subroutine gen_anisotropic_optlp( vol_filter, projfrcs, e_space, state, pgrp )
+        use simple_estimate_ssnr,   only: fsc2optlp
+        use simple_projection_frcs, only: projection_frcs
+        use simple_oris,            only: oris
+        use simple_math,            only: hyp
+        use simple_sym,             only: sym
+        use simple_ori,             only: ori
+        class(image),           intent(inout) :: vol_filter
+        class(projection_frcs), intent(in)    :: projfrcs
+        class(oris),            intent(inout) :: e_space
+        integer,                intent(in)    :: state
+        character(len=*),       intent(in)    :: pgrp
+        type(sym)         :: se
+        type(ori)         :: orientation, o_sym
+        integer           :: noris, iori, nprojs, ldim(3), lims(3,2), isym, nsym
+        integer           :: sh, logi(3), phys(3), imatch, filtsz, h, k, l
+        real, allocatable :: plane_normals(:,:,:), plane_normals_L2(:,:), filters2D(:,:)
+        real, allocatable :: frc(:)
+        real              :: fwght, fwght_find0, fwght_find1, fwght_find2
+        write(*,'(a)') '>>> GENERATING ANISOTROPIC OPTIMAL 3D LOW-PASS FILTER'
+        ! sanity checking
+        noris  = e_space%get_noris()
+        nprojs = projfrcs%get_nprojs()
+        if( noris /= nprojs )&
+        &stop 'e_space & projfrcs objects non-conforming; filterer :: gen_anisotropic_optlp'
+        ldim   = vol_filter%get_ldim()
+        if( ldim(3) == 1 ) stop 'only for 3D filter generation; filterer :: gen_anisotropic_optlp'
+        frc    = projfrcs%get_frc(1, ldim(1), state)
+        filtsz = size(frc)
+        lims   = vol_filter%loop_lims(2)
+        if( pgrp .eq. 'c1' )then
+            nsym = 1
+            ! extract plane normals and L2 norms from e_space & extract 2D filters from projfrcs
+            allocate( plane_normals(1,noris,3), plane_normals_L2(1,noris), filters2D(noris,filtsz) )
+            plane_normals    = 0.0
+            plane_normals_L2 = 0.0 
+            filters2D        = 0.0 
+            do iori=1,noris
+                ! plane normals & L2 norms
+                plane_normals(1,iori,:)  = e_space%get_normal(iori)
+                plane_normals_L2(1,iori) = sum(plane_normals(1,iori,:) * plane_normals(1,iori,:))
+                if( plane_normals_L2(1,iori) > TINY )then
+                    plane_normals_L2(1,iori) = sqrt(plane_normals_L2(1,iori))
+                endif
+                ! 2D filters
+                frc = projfrcs%get_frc(iori, ldim(1), state)
+                filters2D(iori,:) = fsc2optlp(frc)
+            end do
         else
-            stop 'unsupported kV (acceleration voltage); simple_filterer :: dose_weight'
+            ! we need to expand over the symmetry group
+            call se%new(pgrp)
+            nsym = se%get_nsym()
+            ! extract plane normals and L2 norms from e_space & extract 2D filters from projfrcs
+            allocate( plane_normals(nsym,noris,3), plane_normals_L2(nsym,noris), filters2D(noris,filtsz) )
+            plane_normals    = 0.0
+            plane_normals_L2 = 0.0 
+            filters2D        = 0.0 
+            do iori=1,noris
+                orientation = e_space%get_ori(iori)
+                do isym=1,nsym
+                    o_sym = se%apply(orientation, isym)
+                    ! plane normals & L2 norms
+                    plane_normals(isym,iori,:) = o_sym%get_normal()
+                    plane_normals_L2(isym,iori) = sum(plane_normals(isym,iori,:) * plane_normals(isym,iori,:))
+                    if( plane_normals_L2(isym,iori) > TINY )then
+                        plane_normals_L2(isym,iori) = sqrt(plane_normals_L2(isym,iori))
+                    endif
+                end do
+                ! 2D filters
+                frc = projfrcs%get_frc(iori, ldim(1), state)
+                filters2D(iori,:) = fsc2optlp(frc)
+            end do
+            call se%kill
         endif
-        dose_weight = exp(-acc_dose/(2.0*critical_exp))
-    end function dose_weight
-
-    !> \brief  re-samples a filter array
-    function resample_filter( filt_orig, res_orig, res_new ) result( filt_resamp )
-        use simple_math, only: find
-        real, intent(in)  :: filt_orig(:), res_orig(:), res_new(:)
-        real, allocatable :: filt_resamp(:)                 !< output filter array
-        integer :: filtsz_orig, filtsz_resamp, k, ind
-        real    :: dist
-        filtsz_orig   = size(filt_orig)
-        filtsz_resamp = size(res_new)
-        allocate(filt_resamp(filtsz_resamp),stat=alloc_stat)
-        if(alloc_stat /= 0) allocchk("simple_filterer::resample_filter ")
-        do k=1,filtsz_resamp
-            call find(res_orig, filtsz_orig, res_new(k), ind, dist)
-            filt_resamp(k) = filt_orig(ind)
+        ! generate the 3D filter
+        fwght_find0 = maxval(filters2D)
+        fwght_find1 = sum(filters2D(:,1)) / real(noris)
+        fwght_find2 = sum(filters2D(:,2)) / real(noris)
+        vol_filter  = cmplx(0.0,0.0)
+        !$omp parallel do collapse(3) default(shared) private(h,k,l,sh,logi,phys,imatch,fwght)&
+        !$omp schedule(static) proc_bind(close)
+        do h=lims(1,1),lims(1,2)
+            do k=lims(2,1),lims(2,2)
+                do l=lims(3,1),lims(3,2)
+                    ! shell
+                    sh   = nint(hyp(real(h),real(k),real(l)))
+                    ! logical index
+                    logi = [h, k, l]
+                    ! physical index
+                    phys = vol_filter%comp_addr_phys(logi)
+                    ! set 3D filter coeff
+                    select case(sh)
+                        case(0)
+                            call vol_filter%set_fcomp(logi, phys, cmplx(fwght_find0,0.0))
+                        case(1)
+                            call vol_filter%set_fcomp(logi, phys, cmplx(fwght_find1,0.0))
+                        case(2)
+                            call vol_filter%set_fcomp(logi, phys, cmplx(fwght_find2,0.0))
+                        case DEFAULT
+                            if( sh <= filtsz )then
+                                imatch = find2Dmatch(real([h,k,l]))
+                                fwght  = filters2D(imatch,sh) ! filter coeff
+                                call vol_filter%set_fcomp(logi, phys, cmplx(fwght,0.0))
+                            endif
+                    end select
+                end do
+            end do
         end do
-    end function resample_filter
+        !$omp end parallel do
 
-    !> WIENER RESTORATION ROUTINES
+        contains
 
-    !>  \brief does the Wiener restoration of aligned images in 2D
-    !!   only for testing
-    subroutine wiener_restore2D( img_set, o_set, tfplan, img_rec, msk )
-        use simple_oris,  only: oris
-        use simple_ori,   only: ori
-        class(image),     intent(inout) :: img_set(:) !< input images
-        class(oris),      intent(inout) :: o_set      !< set of oris objects
-        type(ctfplan),    intent(in)    :: tfplan     !< CTF plan
-        class(image),     intent(inout) :: img_rec     !< reconstructed image
-        real,             intent(in)    :: msk         !< mask
-        integer           :: ldim(3), ldim_pad(3), nimgs, iptcl
-        type(ori)         :: o
-        type(image)       :: ctfsqsum
-        real              :: smpd         !< sampling distance
-        if( o_set%get_noris() /= size(img_set) )&
-        stop 'nr of imgs and oris not consistent; simple_filterer :: wiener_restore2D_1'
-        ! set constants
-        ldim     = img_set(1)%get_ldim()
-        smpd     = img_set(1)%get_smpd()
-        ldim_pad = img_rec%get_ldim()
-        nimgs    = size(img_set)
-        ! create & init objs
-        call img_rec%new(ldim_pad, smpd)
-        call ctfsqsum%new(ldim_pad, smpd)
-        ctfsqsum = cmplx(0.,0.)
-        ! average in the assumption of infinite signal
-        do iptcl=1,nimgs
-            o = o_set%get_ori(iptcl)
-            call wiener_restore2D_online(img_set(iptcl), o,&
-            &tfplan, img_rec, ctfsqsum, msk)
-        end do
-        ! do the density correction
-        call img_rec%fwd_ft
-        call img_rec%ctf_dens_correct(ctfsqsum)
-        call img_rec%bwd_ft
-        ! destroy objects
-        call ctfsqsum%kill
-    end subroutine wiener_restore2D
+            ! index of matching 2D filter
+            integer function find2Dmatch( vec )
+                real, intent(in) :: vec(3)
+                integer :: iori, loc(1)
+                real    :: angles(noris)
+                do iori=1,noris
+                    angles(iori) = angle_btw_vec_and_normal( vec, iori )
+                end do
+                loc = minloc(angles)
+                find2Dmatch = loc(1)
+            end function find2Dmatch
 
-    !>  \brief does the online Wiener restoration of 2D images, including shift+rotations
-    !!         the image is left shifted and Fourier transformed on output
-    subroutine wiener_restore2D_online( img, o, tfplan, img_rec, ctfsqsum, msk, add )
-        use simple_ori,            only: ori
-        use simple_ctf,            only: ctf
-        use simple_projector_hlev, only: rotimg
-        class(image),      intent(inout) :: img       !< input image
-        class(ori),        intent(inout) :: o         !< ori object
-        type(ctfplan),     intent(in)    :: tfplan    !< CTF plan object
-        class(image),      intent(inout) :: img_rec   !< reconstructed image
-        class(image),      intent(inout) :: ctfsqsum  !< instrument CTF filter
-        real,              intent(in)    :: msk       !< mask
-        logical, optional, intent(in)    :: add       !< add or subtr  rotation and ctfsumsq
-        type(image) :: roimg, ctfsq
-        type(ctf)   :: tfun
-        integer     :: ldim(3)
-        real        :: angast, dfx, dfy, x, y, smpd, w
-        logical     :: aadd
-        aadd = .true.
-        if( present(add) ) aadd = add
-        ! set constants
-        ldim = img%get_ldim()
-        smpd = img%get_smpd()
-        ! create & init objs
-        call ctfsq%new(ldim, smpd)
-        call ctfsq%set_ft(.true.)
-        if( tfplan%flag .ne. 'no' )&
-        tfun = ctf(img%get_smpd(), o%get('kv'), o%get('cs'), o%get('fraca'))
-        ! set CTF and shift parameters
-        select case(tfplan%mode)
-            case('astig') ! astigmatic CTF
-                dfx    = o%get('dfx')
-                dfy    = o%get('dfy')
-                angast = o%get('angast')
-            case('noastig') ! non-astigmatic CTF
-                dfx    = o%get('dfx')
-                dfy    = dfx
-                angast = 0.
-        end select
-        x = -o%get('x')
-        y = -o%get('y')
-        w = o%get('w')
-        ! apply
-        call img%fwd_ft
-        ! take care of the nominator
-        select case(tfplan%flag)
-            case('yes')  ! multiply with CTF
-                call tfun%apply_and_shift(img, ctfsq, x, y, dfx, 'ctf', dfy, angast)
-            case('flip') ! multiply with abs(CTF)
-                call tfun%apply_and_shift(img, ctfsq, x, y, dfx, 'abs', dfy, angast)
-            case('mul','no')
-                call tfun%apply_and_shift(img, ctfsq, x, y, dfx, '', dfy, angast)
-        end select
-        ! griding-based image rotation and filtering
-        call rotimg(img, -o%e3get(), msk, roimg)
-        ! assemble img_rec sum
-        if( aadd )then
-            call img_rec%add(roimg, w)
-            call ctfsqsum%add(ctfsq, w)
-        else
-            call img_rec%subtr(roimg, w)
-            call ctfsqsum%subtr(ctfsq, w)
-        endif
-        call roimg%kill
-        call ctfsq%kill
-    end subroutine wiener_restore2D_online
+            ! angle minimised over symmetry group
+            real function angle_btw_vec_and_normal( vec, iori )
+                real,    intent(in) :: vec(3)
+                integer, intent(in) :: iori
+                real    :: vec_L2, x, angle
+                integer :: isym
+                vec_L2 = sum(vec * vec)
+                angle_btw_vec_and_normal = huge(x)
+                if( vec_L2 > TINY )then
+                    vec_L2 = sqrt(vec_L2)
+                    do isym=1,nsym
+                        if( plane_normals_L2(isym,iori) > TINY )then
+                            angle = asin( abs(sum(plane_normals(isym,iori,:) * vec(:))) / (vec_L2 * plane_normals_L2(isym,iori)) )
+                            if( angle < angle_btw_vec_and_normal ) angle_btw_vec_and_normal = angle
+                        endif
+                    end do
+                endif
+            end function angle_btw_vec_and_normal
 
+    end subroutine gen_anisotropic_optlp
+
+    !> \brief fits B-factor, untested
     subroutine fit_bfac( img_ref, img_ptcl, o, tfplan, bfac_range, lp, msk, bfac_best )
-        use simple_ctf, only: ctf
-        use simple_ori, only: ori
+        use simple_ctf,   only: ctf
+        use simple_ori,   only: ori
         class(image),  intent(in)    :: img_ref, img_ptcl
         class(ori),    intent(inout) :: o
         type(ctfplan), intent(in)    :: tfplan

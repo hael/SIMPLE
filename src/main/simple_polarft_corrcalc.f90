@@ -1,10 +1,10 @@
 ! for calculation of band-pass limited cross-correlation of polar Fourier transforms
-#include "simple_lib.f08"
+
 module simple_polarft_corrcalc
-use simple_defs      ! use all in there
+#include "simple_lib.f08"
+    
 use simple_params,   only: params
 use simple_ran_tabu, only: ran_tabu
-use simple_syslib,   only: alloc_errchk, simple_stop
 implicit none
 
 public :: polarft_corrcalc
@@ -15,26 +15,26 @@ complex(sp), parameter :: zero=cmplx(0.,0.) !< just a complex zero
 
 type :: polarft_corrcalc
     private
-    integer                  :: pfromto(2) = 1         !< from/to particle indices (in parallel execution)
-    integer                  :: nptcls     = 1         !< the total number of particles in partition (logically indexded [fromp,top])
-    integer                  :: nrefs      = 1         !< the number of references (logically indexded [1,nrefs])
-    integer                  :: nrots      = 0         !< number of in-plane rotations for one pft (determined by radius of molecule)
-    integer                  :: ring2      = 0         !< radius of molecule
-    integer                  :: refsz      = 0         !< size of reference (nrots/2) (number of vectors used for matching)
-    integer                  :: ptclsz     = 0         !< size of particle (2*nrots)
-    integer                  :: winsz      = 0         !< size of moving window in correlation calculations
-    integer                  :: ldim(3)    = 0         !< logical dimensions of original cartesian image
-    integer                  :: kfromto(2) = 0         !< Fourier index range
-    real(sp)                 :: smpd       = 0.        !< sampling distance
-    real(sp),    allocatable :: sqsums_ptcls(:)        !< memoized square sums for the correlation calculations
-    real(sp),    allocatable :: angtab(:)              !< table of in-plane angles (in degrees)
-    real(sp),    allocatable :: argtransf(:,:)         !< argument transfer constants for shifting the references
-    real(sp),    allocatable :: polar(:,:)             !< table of polar coordinates (in Cartesian coordinates)
-    real(sp),    allocatable :: ctfmats(:,:,:)         !< expandd set of CTF matrices (for efficient parallel exec)
-    complex(sp), allocatable :: pfts_refs(:,:,:)       !< 3D complex matrix of polar reference sections (nrefs,refsz,nk)
-    complex(sp), allocatable :: pfts_ptcls(:,:,:)      !< 3D complex matrix of particle sections
-    logical                  :: with_ctf     = .false. !< CTF flag
-    logical                  :: existence    = .false. !< to indicate existence
+    integer                  :: pfromto(2) = 1          !< from/to particle indices (in parallel execution)
+    integer                  :: nptcls     = 1          !< the total number of particles in partition (logically indexded [fromp,top])
+    integer                  :: nrefs      = 1          !< the number of references (logically indexded [1,nrefs])
+    integer                  :: nrots      = 0          !< number of in-plane rotations for one pft (determined by radius of molecule)
+    integer                  :: ring2      = 0          !< radius of molecule
+    integer                  :: refsz      = 0          !< size of reference (nrots/2) (number of vectors used for matching)
+    integer                  :: ptclsz     = 0          !< size of particle (2*nrots)
+    integer                  :: winsz      = 0          !< size of moving window in correlation calculations
+    integer                  :: ldim(3)    = 0          !< logical dimensions of original cartesian image
+    integer                  :: kfromto(2) = 0          !< Fourier index range
+    real(sp)                 :: smpd       = 0.         !< sampling distance
+    real(sp),    allocatable :: sqsums_ptcls(:)         !< memoized square sums for the correlation calculations
+    real(sp),    allocatable :: angtab(:)               !< table of in-plane angles (in degrees)
+    real(sp),    allocatable :: argtransf(:,:)          !< argument transfer constants for shifting the references
+    real(sp),    allocatable :: polar(:,:)              !< table of polar coordinates (in Cartesian coordinates)
+    real(sp),    allocatable :: ctfmats(:,:,:)          !< expandd set of CTF matrices (for efficient parallel exec)
+    complex(sp), allocatable :: pfts_refs(:,:,:)      !< 3D complex matrix of polar reference sections (nrefs,refsz,nk)
+    complex(sp), allocatable :: pfts_ptcls(:,:,:)       !< 3D complex matrix of particle sections
+    logical                  :: with_ctf     = .false.  !< CTF flag
+    logical                  :: existence    = .false.  !< to indicate existence
   contains
     ! CONSTRUCTOR
     procedure          :: new
@@ -67,7 +67,7 @@ type :: polarft_corrcalc
     ! PRINTERS/VISUALISERS
     procedure          :: print
     procedure          :: vis_ptcl
-    procedure          :: vis_ref
+    procedure          :: vis_ref    
     ! MEMOIZER
     procedure, private :: memoize_sqsum_ptcl
     ! I/O
@@ -85,79 +85,66 @@ type :: polarft_corrcalc
     procedure, private :: corr_1
     procedure, private :: corr_2
     generic            :: corr => corr_1, corr_2
-    procedure          :: euclid
+    procedure          :: norm_euclid
     ! DESTRUCTOR
     procedure          :: kill
 end type polarft_corrcalc
 
 contains
-
+    
     ! CONSTRUCTORS
-
+    
     !>  \brief  is a constructor
-    !! \param pfromto  from/to particle indices (in parallel execution)
-    !! \param nrefs    the number of references (logically indexded [1,nrefs])
-    !! \param ring2    radius of molecule
-    !! \param ldim     logical dimensions of original cartesian image
-    !! \param smpd     sampling distance
-    !! \param kfromto  Fourier index range
-    subroutine new( self, nrefs, pfromto, ldim, smpd, kfromto, ring2, ctfflag )
-        use simple_math, only: rad2deg, is_even, round2even
-        class(polarft_corrcalc), intent(inout) :: self    !< this object
-        integer,                 intent(in)    :: nrefs, pfromto(2), ldim(3), kfromto(2), ring2
-        real,                    intent(in)    :: smpd
-        character(len=*),        intent(in)    :: ctfflag !< are we using ctf
-        integer  :: irot, k
-        logical  :: even_dims, test(3)
+    subroutine new( self, nrefs, p, prange )
+        use simple_math,   only: rad2deg, is_even, round2even
+        use simple_params, only: params
+        class(polarft_corrcalc), intent(inout) :: self
+        integer,                 intent(in)    :: nrefs
+        class(params),           intent(inout) :: p
+        integer, optional,       intent(in)    :: prange(2)
+        integer  :: alloc_stat, irot, k
+        logical  :: even_dims, test(2)
         real(sp) :: ang
         ! kill possibly pre-existing object
         call self%kill
         ! error check
-        if( kfromto(2) - kfromto(1) <= 2 )then
-            write(*,*) 'kfromto: ', kfromto(1), kfromto(2)
+        if( p%kfromto(2) - p%kfromto(1) <= 2 )then
+            write(*,*) 'p%kfromto: ', p%kfromto(1), p%kfromto(2)
             call simple_stop( 'resolution range too narrow; new; simple_polarft_corrcalc')
         endif
-        if( ring2 < 1 )then
-            write(*,*) 'ring2: ', ring2
-            call simple_stop ( 'ring2 must be > 0; new; simple_polarft_corrcalc')
+        if( p%ring2 < 1 )then
+            write(*,*) 'p%ring2: ', p%ring2
+            call simple_stop ( 'p%ring2 must be > 0; new; simple_polarft_corrcalc')
         endif
-        if( pfromto(2) - pfromto(1) + 1 < 1 )then
-            write(*,*) 'pfromto: ', pfromto(1), pfromto(2)
+        if( p%top - p%fromp + 1 < 1 )then
+            write(*,*) 'pfromto: ', p%fromp, p%top
             call simple_stop ('nptcls (# of particles) must be > 0; new; simple_polarft_corrcalc')
         endif
         if( nrefs < 1 )then
             write(*,*) 'nrefs: ', nrefs
             call simple_stop ('nrefs (# of reference sections) must be > 0; new; simple_polarft_corrcalc')
         endif
-        if( any(ldim == 0) )then
-            write(*,*) 'ldim: ', ldim
-            call simple_stop ('ldim is not conforming (is zero); new; simple_polarft_corrcalc')
-        endif
-        if( ldim(3) > 1 )then
-            write(*,*) 'ldim: ', ldim
-            call simple_stop ('3D polarfts are not yet supported; new; simple_polarft_corrcalc')
-        endif
+        self%ldim = [p%boxmatch,p%boxmatch,1]          !< logical dimensions of original cartesian image
         test    = .false.
-        test(1) = is_even(ldim(1))
-        test(2) = is_even(ldim(2))
-        test(3) = ldim(3) == 1
+        test(1) = is_even(self%ldim(1))
+        test(2) = is_even(self%ldim(2))
         even_dims = all(test)
         if( .not. even_dims )then
-            write(*,*) 'ldim: ', ldim
+            write(*,*) 'self%ldim: ', self%ldim
             call simple_stop ('only even logical dims supported; new; simple_polarft_corrcalc')
         endif
         ! set constants
-        self%pfromto = pfromto                         !< from/to particle indices (in parallel execution)
-        self%nptcls  = pfromto(2) - pfromto(1) + 1     !< the total number of particles in partition (logically indexded [fromp,top])
-        self%nrefs   = nrefs                           !< the number of references (logically indexded [1,nrefs])
-        self%ring2   = ring2                           !< radius of molecule
-        self%nrots   = round2even(twopi * real(ring2)) !< number of in-plane rotations for one pft  (determined by radius of molecule)
-        self%refsz   = self%nrots / 2                  !< size of reference (nrots/2) (number of vectors used for matching)
-        self%winsz   = self%refsz - 1                  !< size of moving window in correlation cacluations
-        self%ptclsz  = self%nrots * 2                  !< size of particle (2*nrots)
-        self%ldim    = ldim                            !< logical dimensions of original cartesian image
-        self%smpd    = smpd                            !< sampling distance
-        self%kfromto = kfromto                         !< Fourier index range
+        self%pfromto = [p%fromp,p%top]                   !< from/to particle indices (in parallel execution)
+        if( present(prange) ) self%pfromto = prange
+        self%nptcls  = p%top - p%fromp + 1               !< the total number of particles in partition (logically indexded [fromp,top])
+        self%nrefs   = nrefs                             !< the number of references (logically indexded [1,nrefs])
+        self%ring2   = p%ring2                           !< radius of molecule
+        self%nrots   = round2even(twopi * real(p%ring2)) !< number of in-plane rotations for one pft  (determined by radius of molecule)
+        self%refsz   = self%nrots / 2                    !< size of reference (nrots/2) (number of vectors used for matching)
+        self%winsz   = self%refsz - 1                    !< size of moving window in correlation cacluations
+        self%ptclsz  = self%nrots * 2                    !< size of particle (2*nrots)
+        self%smpd    = p%smpd                            !< sampling distance
+        self%kfromto = p%kfromto                         !< Fourier index range
         ! generate polar coordinates
         allocate( self%polar(self%ptclsz,self%kfromto(1):self%kfromto(2)), self%angtab(self%nrots), stat=alloc_stat)
         if(alloc_stat /= 0) allocchk('polar coordinate arrays; new; simple_polarft_corrcalc')
@@ -188,7 +175,7 @@ contains
         self%pfts_ptcls   = zero
         self%sqsums_ptcls = 0.
         self%with_ctf     = .false.
-        if( ctfflag .ne. 'no' ) self%with_ctf = .true.
+        if( p%ctf .ne. 'no' ) self%with_ctf = .true.
         self%existence    = .true.
     end subroutine new
 
@@ -214,7 +201,7 @@ contains
     end subroutine set_ptcl_pft
 
     !>  \brief set_ref_fcomp sets a reference Fourier component
-    !! \param iref reference index
+    !! \param iref reference index 
     !! \param irot rotation index
     !! \param k  index (third dim ptfs_refs)
     !! \param comp Fourier component
@@ -225,9 +212,9 @@ contains
         complex(sp),             intent(in)    :: comp
         self%pfts_refs(iref,irot,k) = comp
     end subroutine set_ref_fcomp
-
+    
     !>  \brief  sets a particle Fourier component
-    !! \param iptcl particle index
+    !! \param iptcl particle index 
     !! \param irot rotation index
     !! \param k  index (third dim ptfs_ptcls)
     !! \param comp Fourier component
@@ -244,7 +231,7 @@ contains
     subroutine cp_ptcls2refs( self )
         class(polarft_corrcalc), intent(inout) :: self
         if( self%nrefs .eq. self%nptcls )then
-            self%pfts_refs(:,:,:) = self%pfts_ptcls(:,:self%refsz,:)
+            self%pfts_refs(:,:,:) = self%pfts_ptcls(:,:self%refsz,:)         
         else
             call simple_stop ('pfts_refs and pfts_ptcls not congruent (nrefs .ne. nptcls)')
         endif
@@ -252,7 +239,7 @@ contains
 
     !>  \brief  copies the particles to the references
     !! \param iref reference index
-    !! \param iptcl particle index
+    !! \param iptcl particle index 
     !! \param irot rotation index
     !!
     subroutine cp_ptcl2ref( self, iptcl, iref, irot )
@@ -273,16 +260,16 @@ contains
         integer,                 intent(in)    :: iref
         self%pfts_refs(iref,:,:) = zero
     end subroutine zero_ref
-
+    
     ! GETTERS
-
+    
     !>  \brief  for getting the logical particle range
     function get_pfromto( self ) result( lim )
         class(polarft_corrcalc), intent(inout) :: self
         integer :: lim(2)
         lim = self%pfromto
     end function get_pfromto
-
+    
     !>  \brief  for getting the number of particles
     pure function get_nptcls( self ) result( nptcls )
         class(polarft_corrcalc), intent(in) :: self
@@ -359,6 +346,8 @@ contains
         integer,                 intent(in) :: roind !<  in-plane rotation index
         real(sp) :: rot
         if( roind < 1 .or. roind > self%nrots )then
+            print *, 'roind: ', roind
+            print *, 'nrots: ', self%nrots
             call simple_stop( 'roind is out of range; get_rot; simple_polarft_corrcalc')
         endif
         rot = self%angtab(roind)
@@ -368,7 +357,7 @@ contains
     !!         index corresponding to continuous rotation rot
     function get_roind( self, rot ) result( ind )
         class(polarft_corrcalc), intent(in) :: self
-        real(sp),                intent(in) :: rot !<  continuous rotation
+        real(sp),                intent(in) :: rot !<  continuous rotation 
         real(sp) :: dists(self%nrots)
         integer  :: ind, loc(1)
         dists = abs(self%angtab-rot)
@@ -388,7 +377,7 @@ contains
         use simple_math, only: rad2deg
         class(polarft_corrcalc), intent(in) :: self
         real(sp),                intent(in) :: ang, winsz
-        integer, allocatable :: roind_vec(:)
+        integer, allocatable :: roind_vec(:)  
         real(sp) :: dist(self%nrots)
         integer  :: i, irot, nrots
         if(ang>360. .or. ang<TINY)call simple_stop ('input angle outside of the conventional range; simple_polarft_corrcalc::get_win_roind')
@@ -481,7 +470,7 @@ contains
         write(*,*) "number of rotations                     (self%nrots): ", self%nrots
         write(*,*) "radius of molecule                      (self%ring2): ", self%ring2
         write(*,*) "nr of rots for ref (2nd dim of pftmat)  (self%refsz): ", self%refsz
-        write(*,*) "n rots for ptcl (2nd dim of pftmat)    (self%ptclsz): ", self%ptclsz
+        write(*,*) "n rots for ptcl (2nd dim of pftmat)    (self%ptclsz): ", self%ptclsz 
         write(*,*) "logical dim. of original Cartesian image (self%ldim): ", self%ldim
         write(*,*) "high-pass limit Fourier index      (self%kfromto(1)): ", self%kfromto(1)
         write(*,*) "low-pass limit Fourier index       (self%kfromto(2)): ", self%kfromto(2)
@@ -524,8 +513,8 @@ contains
         class(polarft_corrcalc), intent(inout) :: self
         character(len=*),        intent(in)    :: fname !< input filename
         integer :: funit, io_stat, iptcl
-         call fopen(funit, status='OLD', action='READ', file=trim(fname), access='STREAM', iostat=io_stat)
-         call fileio_errmsg('polarft_corrcalc read_ptfs_ptcls fopen '//trim(fname), io_stat)
+        call fopen(funit, status='OLD', action='READ', file=trim(fname), access='STREAM', iostat=io_stat)
+        call fileio_errmsg('polarft_corrcalc read_ptfs_ptcls fopen '//trim(fname), io_stat)
         read(unit=funit,pos=1,iostat=io_stat) self%pfts_ptcls
         ! Check if the read was successful
         if( io_stat .ne. 0 )then
@@ -541,25 +530,27 @@ contains
     end subroutine read_pfts_ptcls
 
     ! MODIFIERS
+
     !> prep_ref4corr
     !! \param iref reference index
-    !! \param iptcl particle index
+    !! \param iptcl particle index 
     !! \param pft_ref references
     !! \param sqsum_ref squared sum references
     !! \param kstop end point
     !!
     subroutine prep_ref4corr( self, iptcl, iref, pft_ref, sqsum_ref, kstop )
-        use simple_math, only: csq
+        use simple_math,          only: csq
+        use simple_estimate_ssnr, only: fsc2optlp
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iptcl, iref
         complex(sp),             intent(out)   :: pft_ref(self%refsz,self%kfromto(1):self%kfromto(2))
         real(sp),                intent(out)   :: sqsum_ref
         integer, optional,       intent(in)    :: kstop
-        if( self%with_ctf )then
-            pft_ref = self%pfts_refs(iref,:,:) * self%ctfmats(iptcl,:,:)
-        else
-            pft_ref = self%pfts_refs(iref,:,:)
-        endif
+        ! copy
+        pft_ref = self%pfts_refs(iref,:,:)
+        ! multiply with CTF
+        if( self%with_ctf ) pft_ref = pft_ref * self%ctfmats(iptcl,:,:)
+        ! for corr normalisation
         if( present(kstop) )then
             sqsum_ref = sum(csq(pft_ref(:,self%kfromto(1):kstop)))
         else
@@ -571,7 +562,7 @@ contains
 
     !>  \brief create_polar_ctfmat  is for generating a matrix of CTF values
     !! \param tfun transfer function object
-    !! \param dfx,dfy resolution along Fourier axes
+    !! \param dfx,dfy resolution along Fourier axes 
     !! \param angast astigmatic angle
     !! \param endrot number of rotations
     !! \return ctfmat matrix with CTF values
@@ -673,7 +664,7 @@ contains
     !! \param iptcl particle index
     !! \param roind_vec vector of rotational indices
     function gencorrs_2( self, iref, iptcl, kstop, roind_vec ) result( cc )
-    use simple_math, only: csq
+        use simple_math, only: csq
         class(polarft_corrcalc), intent(inout) :: self        !< instance
         integer,                 intent(in)    :: iref, iptcl
         integer,                 intent(in)    :: kstop    !< last frequency
@@ -692,7 +683,7 @@ contains
             do i = 1, size(roind_vec)
                 irot = roind_vec(i)
                 cc(irot) = sum(real( pft_ref(:,self%kfromto(1):kstop) * &
-                    conjg(self%pfts_ptcls(iptcl,irot:irot+self%winsz,self%kfromto(1):kstop)) ))
+                    conjg(self%pfts_ptcls(iptcl,irot:irot+self%winsz,self%kfromto(1):kstop)) ))      
                 cc(irot) = cc(irot) / sqrt(sqsum_ref * sqsum_ptcl)
             end do
         else
@@ -715,7 +706,7 @@ contains
         class(polarft_corrcalc), target, intent(inout) :: self              !< instance
         integer,                         intent(in)    :: iref, iptcl, irot !< rotation index
         real(sp), allocatable :: frc(:)
-        complex(sp) :: pft_ref_ctf(self%refsz,self%kfromto(1):self%kfromto(2))
+        complex(sp) :: pft_ref_ctf(self%refsz,self%kfromto(1):self%kfromto(2))        
         real(sp)    :: sumsqref, sumsqptcl
         integer     :: k
         allocate( frc(self%kfromto(1):self%kfromto(2)) )
@@ -751,7 +742,7 @@ contains
     !>  \brief  for calculating the correlation between reference iref and particle iptcl in rotation irot
     !! \param iref reference index
     !! \param iptcl particle index
-    !! \param irot rotational
+    !! \param irot rotational 
     function corr_1( self, iref, iptcl, irot ) result( cc )
         class(polarft_corrcalc), intent(inout) :: self              !< instance
         integer,                 intent(in)    :: iref, iptcl, irot !< reference, particle, rotation
@@ -790,7 +781,7 @@ contains
         ! generate the complex shift transformation matrix
         shmat = cmplx(cos(argmat),sin(argmat))
         ! shift
-        if( self%with_ctf)then
+        if( self%with_ctf )then
             pft_ref_sh = (self%pfts_refs(iref,:,:) * self%ctfmats(iptcl,:,:)) * shmat
         else
             pft_ref_sh = self%pfts_refs(iref,:,:) * shmat
@@ -809,7 +800,7 @@ contains
     !! \param iref reference index
     !! \param iptcl particle index
     !! \param irot rotational indices
-    function euclid( self, iref, iptcl, irot, bfac ) result( dist )
+    function norm_euclid( self, iref, iptcl, irot, bfac ) result( dist )
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iref, iptcl, irot
         real, optional,          intent(in)    :: bfac  !< B-factor
@@ -840,7 +831,7 @@ contains
                 eval_bfac = max(0.,exp(-(bfac/4.)*res*res))
             end function eval_bfac
 
-    end function euclid
+    end function norm_euclid
 
     ! DESTRUCTOR
 

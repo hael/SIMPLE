@@ -60,7 +60,8 @@ contains
     !> iminfo is a program for printing header information in MRC and SPIDER stacks and volumes
     subroutine exec_iminfo( self, cline)
         use simple_image,   only: image
-        use simple_imgfile, only: imgfile, find_ldim_nptcls
+        use simple_imgfile, only: imgfile
+        use simple_imghead, only: find_ldim_nptcls
         class(iminfo_commander), intent(inout) :: self
         class(cmdline),          intent(inout) :: cline
         type(params)      :: p

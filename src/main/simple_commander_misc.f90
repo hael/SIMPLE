@@ -1,19 +1,16 @@
 ! concrete commander: miscallenaous routines
-#include "simple_lib.f08"
+
 module simple_commander_misc
-use simple_defs            ! use all in there
+#include "simple_lib.f08"
+use simple_binoris_io      ! use all in there
 use simple_cmdline,        only: cmdline
 use simple_params,         only: params
 use simple_build,          only: build
 use simple_commander_base, only: commander_base
-use simple_strings,        only: int2str, int2str_pad
-use simple_fileio,         only: fopen, fclose, fileio_errmsg, file2rarr
-use simple_jiffys,         only: simple_end,progress
-use simple_binoris_io      ! use all in there
-use simple_syslib,         only: alloc_errchk, simple_stop
 implicit none
 
 public :: cluster_smat_commander
+public :: intgpeaks_commander
 public :: masscen_commander
 public :: print_cmd_dict_commander
 public :: print_dose_weights_commander
@@ -30,6 +27,10 @@ type, extends(commander_base) :: cluster_smat_commander
   contains
     procedure :: execute      => exec_cluster_smat
 end type cluster_smat_commander
+type, extends(commander_base) :: intgpeaks_commander
+  contains
+    procedure :: execute       => exec_intgpeaks
+end type intgpeaks_commander
 type, extends(commander_base) :: masscen_commander
   contains
     procedure :: execute      => exec_masscen
@@ -101,7 +102,7 @@ contains
         endif
         call fclose(funit,errmsg='commander_misc; cluster_smat fclose ')
         allocate(validinds(2:p%ncls), stat=alloc_stat)
-        if(alloc_stat /= 0) allocchk("In: simple_cluster_smat")
+        if(alloc_stat /= 0) allocchk("In: simple_commander_misc:: cluster_smat")
         validinds = 0
         ntot = (p%ncls-1)*NRESTARTS
         cnt = 0
@@ -119,7 +120,7 @@ contains
                 avg_ratio = avg_ratio+ratio
                 if( ratio < min_ratio )then
                     min_ratio = ratio
-                    call b%a%write('shc_clustering_ncls'//int2str_pad(ncls,numlen)//'.txt')
+                    call binwrite_oritab('shc_clustering_ncls'//int2str_pad(ncls,numlen)//METADATEXT, b%a, [1,p%nptcls])
                 endif
             end do
             validinds(ncls) = avg_ratio/real(NRESTARTS)
@@ -128,7 +129,7 @@ contains
         done = .false.
         do ncls=2,p%ncls
             write(*,'(a,1x,f9.3,8x,a,1x,i3)') 'COHESION/SEPARATION RATIO INDEX: ', validinds(ncls), ' NCLS: ', ncls
-            call b%a%read('shc_clustering_ncls'//int2str_pad(ncls,numlen)//'.txt')
+            call binread_oritab('shc_clustering_ncls'//int2str_pad(ncls,numlen)//METADATEXT, b%a, [1,b%a%get_noris()])
             do icls=1,ncls
                 pop = b%a%get_pop(icls, p%label)
                 write(*,'(a,3x,i5,1x,a,1x,i3)') '  CLUSTER POPULATION:', pop, 'CLUSTER:', icls
@@ -151,7 +152,57 @@ contains
         call simple_end('**** SIMPLE_CLUSTER_SMAT NORMAL STOP ****')
     end subroutine exec_cluster_smat
 
-    !> Calculate centre of mass 
+    !> 
+    subroutine exec_intgpeaks( self, cline )
+        use simple_intg_atompeak
+        use simple_atoms
+        class(intgpeaks_commander), intent(inout) :: self
+        class(cmdline),             intent(inout) :: cline
+        type(build)       :: b
+        type(params)      :: p
+        type(atoms)       :: mol
+        real, allocatable :: attribute(:)
+        character(len=STDLEN) :: fbody, csv_name
+        real              :: xyz(3)
+        integer           :: i, natoms, file_stat, fnr
+        p = params(cline)                   ! parameters generated
+        call b%build_general_tbox(p, cline) ! general objects built
+        call b%vol%read(p%vols(1))
+        if(cline%defined('msk').and.cline%defined('inner'))then
+            ! peak finding
+            call set_intgvol(b%vol, p%msk)
+            call find_peaks(p%nptcls, p%inner, p%pdbfile)
+        else
+            ! peak integration
+            call mol%new(p%pdbfile)
+            natoms = mol%get_n()
+            allocate(attribute(natoms), source=0.,stat=alloc_stat)
+            if(alloc_stat /= 0) allocchk("In: simple_commander_misc:: exec_intgpeaks attribute")
+            call set_intgvol(b%vol)
+            do i = 1, natoms
+                xyz = mol%get_coord(i)
+                if( cline%defined('inner') )then
+                    attribute(i) = intg_shell(xyz, p%inner) 
+                else
+                    attribute(i) = intg_nn(xyz)
+                endif
+            enddo
+            ! output
+            fbody = trim(get_fbody(trim(p%pdbfile), trim('pdb')))
+            csv_name = './'//trim(adjustl(fbody))//'_intg.csv'
+            call fopen(fnr, FILE=csv_name, STATUS='REPLACE', action='WRITE', iostat=file_stat)
+            call fileio_errmsg('commander_misc; exec_intgpeaks ', file_stat)
+            do i = 1, natoms
+                write(fnr,'(I6,A1,I6,A1,F12.6)')i, ',', mol%get_num(i), ',', attribute(i)
+            enddo
+            call fclose( fnr, errmsg='commander_misc; exec_intgpeaks ')
+            deallocate(attribute)
+        endif
+        ! the end
+        call simple_end('**** SIMPLE_INTGPEAKS NORMAL STOP ****')
+    end subroutine exec_intgpeaks
+
+    !> centers base on centre of mass
     subroutine exec_masscen( self, cline )
         use simple_procimgfile, only: masscen_imgfile
         class(masscen_commander), intent(inout) :: self
@@ -180,10 +231,10 @@ contains
         call simple_end('**** SIMPLE_PRINT_CMD_DICT NORMAL STOP ****')
     end subroutine exec_print_cmd_dict
 
-    !> is a program for printing the dose weights applied to individual frames
+    !> for printing the dose weights applied to individual frames
     subroutine exec_print_dose_weights( self, cline )
-        use simple_image,    only: image
-        use simple_filterer, only: acc_dose2filter
+        use simple_image,         only: image
+        use simple_estimate_ssnr, only: acc_dose2filter
         class(print_dose_weights_commander), intent(inout) :: self
         class(cmdline),                      intent(inout) :: cline
         real, allocatable :: filter(:)
@@ -207,7 +258,7 @@ contains
         call simple_end('**** SIMPLE_PRINT_DOSE_WEIGHTS NORMAL STOP ****')
     end subroutine exec_print_dose_weights
 
-    !> print_fsc  is a program for printing the binary FSC files produced by PRIME3D
+    !>  for printing the binary FSC files produced by PRIME3D
     subroutine exec_print_fsc( self, cline )
         use simple_math,  only: get_resolution, get_lplim
         use simple_image, only: image
@@ -233,7 +284,7 @@ contains
         call simple_end('**** SIMPLE_PRINT_FSC NORMAL STOP ****')
     end subroutine exec_print_fsc
 
-    !> print_magic_boxesis a program for printing magic box sizes (fast FFT)
+    !> for printing magic box sizes (fast FFT)
     subroutine exec_print_magic_boxes( self, cline )
         use simple_magic_boxes, only: print_magic_box_range
         class(print_magic_boxes_commander), intent(inout) :: self
@@ -245,7 +296,7 @@ contains
         call simple_end('**** SIMPLE_PRINT_MAGIC_BOXES NORMAL STOP ****')
     end subroutine exec_print_magic_boxes
 
-    !> find the resolution, or low-pass limit
+    !> find the resolution of a Fourier index
     subroutine exec_res( self, cline )
         class(res_commander), intent(inout) :: self
         class(cmdline),       intent(inout) :: cline
@@ -257,10 +308,9 @@ contains
         call simple_end('**** SIMPLE_RES NORMAL STOP ****')
     end subroutine exec_res
 
-    !> shift is a program for shifting a stack according to shifts in oritab
+    !> for shifting a stack according to shifts in oritab
     subroutine exec_shift( self, cline )
         use simple_procimgfile, only: shift_imgfile
-        use simple_binoris_io, only: binwrite_oritab
         class(shift_commander), intent(inout) :: self
         class(cmdline),         intent(inout) :: cline
         type(params) :: p
@@ -292,7 +342,7 @@ contains
         type(sym)          :: se_c1
         real               :: cc, rotmat(3,3)
         integer            :: i, fnr, file_stat, nl
-        integer, parameter :: MAXLABELS = 10   !< maximum numbers symmetry peaks
+        integer, parameter :: MAXLABELS = 9    !< maximum numbers symmetry peaks
         real,    parameter :: ANGTHRESH = 10.  !< maximum half-distance between symmetry peaks
         p = params(cline)                      ! parameters generated
         call b%build_general_tbox(p, cline)    ! general objects built
@@ -311,7 +361,7 @@ contains
         ! identify top ranking symmetry peaks
         nl = binread_nlines(p%oritab2)
         sym_axes = oris(nl)
-        call sym_axes%read(p%oritab2)
+        call binread_oritab(p%oritab2, sym_axes, [1,sym_axes%get_noris()])
         call find_sym_peaks(sym_axes, sympeaks)
         ! reconstruct & correlate volumes
         do i = 1, sympeaks%get_noris()
@@ -333,13 +383,9 @@ contains
             cc = symvol%real_corr(b%vol, b%mskvol)
             call sympeaks%set(i, 'corr', cc)
         enddo
-        ! output
-        call sympeaks%write('sympeaks.txt')
         call binwrite_oritab(p%outfile, sympeaks, [1,sympeaks%get_noris()])
         ! the end
-        call fopen(fnr, FILE='SYM_AGGREGATE_FINISHED', STATUS='REPLACE', action='WRITE', iostat=file_stat)
-        call fileio_errmsg('commander_misc; sym_aggregate ', file_stat)
-        call fclose( fnr,errmsg='commander_misc; sym_aggregate ')
+        call simple_touch('SYM_AGGREGATE_FINISHED', errmsg='commander_misc; sym_aggregate ')
         call simple_end('**** SIMPLE_SYM_AGGREGATE NORMAL STOP ****')
 
         contains
@@ -404,8 +450,8 @@ contains
 
     end subroutine exec_sym_aggregate
 
-    !> dsymsrch is a program for identifying rotational symmetries in class averages
-    !> of D-symmetric molecules and generating a cylinder that matches the shape.
+    !> for identifying rotational symmetries in class averages
+    !> of D-symmetric molecules and generating a cylinder that matches the shape
     subroutine exec_dsymsrch( self, cline )
         use simple_symsrcher, only: dsym_cylinder
         class(dsymsrch_commander), intent(inout) :: self

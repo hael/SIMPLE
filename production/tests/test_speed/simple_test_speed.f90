@@ -8,9 +8,9 @@ implicit none
 type(cmdline)     :: cline
 real              :: starttime, stoptime
 logical           :: be_verbose=.false.
-character(STDLEN) :: time
-call date_and_time(TIME=time)
-starttime = str2real(time)
+character(STDLEN) :: timestr
+call date_and_time(TIME=timestr)
+starttime = str2real(timestr)
 if( command_argument_count() < 1 )then
     write(*,'(a)') 'simple_test_speed nthr=<number of threads> [verbose=<yes|no{no}>]'
     stop
@@ -25,7 +25,7 @@ if( cline%defined('verbose') )then
     endif
 endif
 call exec_speedtest(cline, be_verbose)
-call date_and_time(TIME=time)
-stoptime = str2real(time)
+call date_and_time(TIME=timestr)
+stoptime = str2real(timestr)
 write(*,'(a,1x,f9.2)') 'time elapsed (s): ', stoptime - starttime
 end program simple_test_speed

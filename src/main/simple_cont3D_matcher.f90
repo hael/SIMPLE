@@ -1,17 +1,17 @@
 ! high-level continuous 3D projection matching
-#include "simple_lib.f08"
+
 module simple_cont3D_matcher
-use simple_defs              ! use all in there
+#include "simple_lib.f08"
+    
+use simple_binoris_io        ! use all in there
 use simple_build,             only: build
 use simple_params,            only: params
 use simple_cmdline,           only: cmdline
 use simple_polarft_corrcalc,  only: polarft_corrcalc
 use simple_cont3D_ada_srch,   only: cont3D_ada_srch
-use simple_syslib,            only: alloc_errchk
+use simple_oris,              only: oris
+use simple_ori,               only: ori
 use simple_hadamard_common   ! use all in there
-!use simple_math              ! use all in there
-use simple_binoris_io        ! use all in there
-
 implicit none
 
 public :: cont3D_exec
@@ -33,9 +33,6 @@ contains
         use simple_qsys_funs,  only: qsys_job_finished
         use simple_strings,    only: int2str_pad
         use simple_projector,  only: projector
-        use simple_fileio,     only: del_file
-        use simple_oris,       only: oris
-        use simple_ori,        only: ori
         !$ use omp_lib
         !$ use omp_lib_kinds
         class(build),   intent(inout) :: b               !< build object
@@ -87,7 +84,7 @@ contains
         select case(p%refine)
             case('yes')
                 if( .not. cline%defined('npeaks') )then
-                    if( p%eo .eq. 'yes' )then
+                    if( p%eo .ne. 'no' )then
                         p%npeaks = min(b%e%find_npeaks_from_athres(NPEAKSATHRES), MAXNPEAKS)
                     else
                         p%npeaks = min(10,b%e%find_npeaks(p%lp, p%moldiam))
@@ -110,18 +107,18 @@ contains
         call prep_vols(b, p, cline)
         if(p%norec .eq. 'no')then
             call preprecvols(b, p)
-            if( p%eo.eq.'yes')call prep_eopairs(b, p, eopart)
+            if( p%eo .ne. 'no')call prep_eopairs(b, p, eopart)
         endif
 
         ! INIT IMGPOLARIZER
-        call pftcc%new(nrefs_per_ptcl, [1,1], [p%boxmatch,p%boxmatch,1], p%smpd, p%kfromto, p%ring2, p%ctf)
+        call pftcc%new(nrefs_per_ptcl, p, prange=[1,1])
         call b%img_match%init_polarizer(pftcc)
         call pftcc%kill
 
         ! INITIALIZE
         write(*,'(A,1X,I3)')'>>> CONTINUOUS ORIENTATION SEARCH, ITERATION:', which_iter
         if( .not. p%l_distr_exec )then
-            p%outfile = 'cont3Ddoc_'//int2str_pad(which_iter,3)//'.txt'
+            p%outfile = 'cont3Ddoc_'//int2str_pad(which_iter,3)//METADATEXT
         endif
 
         ! BATCH PROCESSING
@@ -159,9 +156,6 @@ contains
             enddo
             !$omp end parallel do
             ! ORIENTATIONS OUTPUT: only here for now
-            ! do iptcl = fromp, top
-            !     call b%a%write(iptcl, p%outfile)
-            ! enddo
             call binwrite_oritab(p%outfile, b%a, [fromp,top])
 
             ! GRID & 3D REC
@@ -172,7 +166,7 @@ contains
                     if(state == 0)cycle
                     call b%img%copy(batch_imgs(iptcl))
                     if(p%npeaks == 1)then
-                        if( p%eo.eq.'yes' )then
+                        if( p%eo .ne. 'no' )then
                             ! call grid_ptcl(b, p, orientation, ran_eo=eopart(iptcl) )
                             call grid_ptcl(b, p, orientation )
                         else
@@ -180,7 +174,7 @@ contains
                         endif
                     else
                         softoris = cont3Dadasrch(iptcl)%get_peaks()
-                        if( p%eo.eq.'yes' )then
+                        if( p%eo .ne. 'no' )then
                             !call grid_ptcl(b, p, orientation, os=softoris, ran_eo=eopart(iptcl) )
                             call grid_ptcl(b, p, orientation, os=softoris)
                         else
@@ -208,13 +202,13 @@ contains
         deallocate(batches, state_exists)
 
         ! ORIENTATIONS OUTPUT
-        !call b%a%write(p%outfile, [p%fromp,p%top])
+        ! call binwrite_oritab(p%outfile, b%a, [p%fromp,p%top])
         p%oritab = p%outfile
 
         ! NORMALIZE STRUCTURE FACTORS
         if(p%norec .eq. 'no')then
             call b%vol%new([p%box, p%box,p%box], p%smpd)
-            if( p%eo .eq. 'yes' )then
+            if( p%eo .ne. 'no' )then
                 call eonorm_struct_facts(b, p, reslim, which_iter)
             else
                 call norm_struct_facts(b, p, which_iter)
@@ -255,12 +249,11 @@ contains
         class(params),              intent(inout) :: p        !< params object
         integer,                    intent(in)    :: iptcl    !< index to particle
         class(polarft_corrcalc),    intent(inout) :: pftcc    !< calculator object
-        call pftcc%new(nrefs_per_ptcl, [iptcl,iptcl], [p%boxmatch,p%boxmatch,1], p%smpd, p%kfromto, p%ring2, p%ctf)
+        call pftcc%new(nrefs_per_ptcl, p, prange=[iptcl,iptcl])
     end subroutine init_pftcc
 
     !>  \brief  particle projection into pftcc
     subroutine prep_pftcc_ptcl(b, p, iptcl, pftcc)
-        use simple_ori,               only: ori
         class(build),               intent(inout) :: b        !< build object
         class(params),              intent(inout) :: p        !< params object
         integer,                    intent(in)    :: iptcl       !< index to particle

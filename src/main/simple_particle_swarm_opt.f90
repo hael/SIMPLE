@@ -1,11 +1,9 @@
 ! continuous particle swarm optimisation
-#include "simple_lib.f08"
+
 module simple_particle_swarm_opt
-use simple_defs
+#include "simple_lib.f08"
 use simple_optimizer, only: optimizer
 use simple_opt_spec,  only: opt_spec
-use simple_rnd,       only: ran3, irnd_uni
-use simple_syslib,   only: alloc_errchk
 implicit none
 
 public :: particle_swarm_opt

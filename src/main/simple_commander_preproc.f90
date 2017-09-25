@@ -1,18 +1,28 @@
 ! concrete commander: pre-processing routines
-#include "simple_lib.f08"
+
 module simple_commander_preproc
-use simple_defs            ! use all in there
-use simple_jiffys,         only: progress, simple_end
-use simple_fileio         ! use all in there
-use simple_binoris_io,     only: binwrite_oritab
-use simple_strings,        only: int2str, int2str_pad
-use simple_syslib,         only: alloc_errchk,exec_cmdline, simple_stop
-use simple_qsys_funs,    only: qsys_job_finished
+#include "simple_lib.f08"
+    
+!! import classes
 use simple_cmdline,        only: cmdline
 use simple_params,         only: params
 use simple_build,          only: build
 use simple_commander_base, only: commander_base
-use simple_imgfile,        only: find_ldim_nptcls
+use simple_image,          only: image
+use simple_procimgfile,    only: neg_imgfile
+use simple_nrtxtfile,      only: nrtxtfile
+use simple_imgfile,        only: imgfile
+use simple_oris,           only: oris
+use simple_ori,            only: ori
+
+!! import functions
+use simple_imghead,        only: find_ldim_nptcls
+use simple_corrmat,        only: calc_cartesian_corrmat
+use simple_unblur_iter,    only: unblur_iter
+use simple_ctffind_iter,   only: ctffind_iter
+use simple_pick_iter,      only: pick_iter
+use simple_binoris_io,     only: binread_oritab, binwrite_oritab
+use simple_qsys_funs,      only: qsys_job_finished
 implicit none
 
 public :: preproc_commander
@@ -72,15 +82,7 @@ end type extract_commander
 
 contains
 
-    ! UNBLUR + CTFFIND + PICK + EXTRACT IN SEQUENCE
-    !> PREPROC is a pipelined unblur + ctffind  + pick + extract in sequence program
     subroutine exec_preproc( self, cline )
-        use simple_unblur_iter,  only: unblur_iter
-        use simple_ctffind_iter, only: ctffind_iter
-        use simple_pick_iter,    only: pick_iter
-        use simple_oris,         only: oris
-        use simple_ori,          only: ori
-        use simple_math,         only: round2even
         class(preproc_commander), intent(inout) :: self
         class(cmdline),           intent(inout) :: cline
         type(ctffind_iter)      :: cfiter
@@ -95,7 +97,7 @@ contains
         type(params) :: p
         type(oris)   :: os_uni
         type(ori)    :: orientation
-        real         :: smpd_native, smpd_scaled
+        real         :: smpd_original, smpd_scaled
         integer      :: nmovies, fromto(2), imovie, ntot, movie_counter
         integer      :: frame_counter, movie_ind, nptcls_out
         p = params(cline, checkdistr=.false.) ! constants & derived constants produced
@@ -165,8 +167,8 @@ contains
                 endif
                 call cline%set('fbody', trim(p%fbody))
             else
-                allocate(fname_ctffind_ctrl,  source='ctffind_ctrl_file.txt')
-                allocate(fname_unidoc_output, source='unidoc_output.txt')
+                allocate(fname_ctffind_ctrl,  source='ctffind_ctrl_file'//'.txt')
+                allocate(fname_unidoc_output, source='unidoc_output'//'.txt')
             endif
             ! determine loop range
             fromto(1) = 1
@@ -178,10 +180,10 @@ contains
         movie_counter = 0
         call orientation%new
         call os_uni%new(ntot)
-        smpd_native = p%smpd
+        smpd_original = p%smpd
         ! loop over exposures (movies)
         do imovie=fromto(1),fromto(2)
-            p%smpd    = smpd_native
+            p%smpd    = smpd_original
             p%pspecsz = p%pspecsz_unblur
             if( ntot == 1 )then
                 movie_ind = p%part ! streaming mode
@@ -215,7 +217,7 @@ contains
                     call cline_extract%set('dir_ptcls', trim(dir_ptcls))
                     call cline_extract%set('smpd',      p%smpd)
                     call cline_extract%set('unidoc',    fname_unidoc_output)
-                    call cline_extract%set('outfile',   'extract_params_movie'//int2str_pad(movie_ind,p%numlen)//'.txt')
+                    call cline_extract%set('outfile',   'extract_params_movie'//int2str_pad(movie_ind,p%numlen)//METADATEXT)
                     call cline_extract%set('outstk',    'ptcls_from_movie'//int2str_pad(movie_ind,p%numlen)//p%ext)
                     call xextract%execute(cline_extract)
                 endif
@@ -233,10 +235,7 @@ contains
         call simple_end('**** SIMPLE_PREPROC NORMAL STOP ****')
     end subroutine exec_preproc
 
-    !> SELECT_FRAMESIS a program for selecting contiguous segments of frames from DDD movies
     subroutine exec_select_frames( self, cline )
-        use simple_imgfile, only: imgfile
-        use simple_image,   only: image
         class(select_frames_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
         type(params)                       :: p
@@ -300,10 +299,7 @@ contains
         call simple_end('**** SIMPLE_SELECT_FRAMES NORMAL STOP ****')
     end subroutine exec_select_frames
 
-    !> BOXCONVS is a program for averaging overlapping boxes across a micrograph
-    !! in order to check if gain correction was appropriately done
     subroutine exec_boxconvs( self, cline )
-        use simple_image, only: image
         class(boxconvs_commander), intent(inout) :: self
         class(cmdline),            intent(inout) :: cline
         type(params)                       :: p
@@ -361,10 +357,7 @@ contains
         call simple_end('**** SIMPLE_BOXCONVS NORMAL STOP ****')
     end subroutine exec_boxconvs
 
-    !> POWERSPECS is a program for generating powerspectra from a stack or filetable
     subroutine exec_powerspecs( self, cline )
-        use simple_imgfile, only: imgfile
-        use simple_image,   only: image
         class(powerspecs_commander), intent(inout) :: self
         class(cmdline),              intent(inout) :: cline
         type(params)                       :: p
@@ -428,34 +421,7 @@ contains
         call simple_end('**** SIMPLE_POWERSPECS NORMAL STOP ****')
     end subroutine exec_powerspecs
 
-    !> UNBLUR is a program for movie alignment or unblurring based the same principal strategy
-    !> as Grigorieffs program (hence the name).
-    !!
-    !! There are two important differences: automatic weighting of the frames
-    !! using a correlation-based M-estimator and continuous optimisation of the
-    !! shift parameters. Input is a text file with absolute paths to movie files
-    !! in addition to a few input parameters, some of which deserve a comment.
-    !! If dose_rate and exp_time are given the individual frames will be
-    !! low-pass filtered accordingly (dose-weighting strategy). If scale is
-    !! given, the movie will be Fourier cropped according to the down-scaling
-    !! factor (for super-resolution movies). If nframesgrp is given the frames
-    !! will be pre-averaged in the given chunk size (Falcon 3 movies). If
-    !! fromf/tof are given, a contiguous subset of frames will be averaged
-    !! without any dose-weighting applied.
-    !! \see http://simplecryoem.com/tutorials.html?#motion-correction
-    !! EXAMPLE:
-    !! ```sh
-    !! cat movies.txt
-    !!    data/movie1.mrc
-    !!    data/movie2.mrc
-    !! simple_distr_exec prg=unblur filetab=movies.txt smpd=5.26 nparts=2 nthr=12 fbody=proteasome dose_rate=7 exp_time=7.6 kv=300
-    !!```
-    !!
     subroutine exec_unblur( self, cline )
-        use simple_unblur_iter, only: unblur_iter
-        use simple_oris,        only: oris
-        use simple_ori,         only: ori
-        use simple_math,        only: round2even
         class(unblur_commander), intent(inout) :: self
         class(cmdline),          intent(inout) :: cline !< command line input
         type(params)      :: p
@@ -505,7 +471,7 @@ contains
         ! for series of tomographic movies we need to calculate the time_per_frame
         if( p%tomo .eq. 'yes' )then
             ! get number of frames & dim from stack
-            call find_ldim_nptcls(movienames(1), lfoo, nframes, endconv=endconv)
+            call find_ldim_nptcls(movienames(1), lfoo, nframes)
             ! calculate time_per_frame
             p%time_per_frame = p%exp_time/real(nframes*nmovies)
         endif
@@ -521,16 +487,14 @@ contains
             write(*,'(f4.0,1x,a)') 100.*(real(movie_counter)/real(ntot)), 'percent of the movies processed'
         end do
         call os_uni%write(p%outfile)
+        call os_uni%kill
         call qsys_job_finished( p, 'simple_commander_preproc :: exec_unblur' )
         ! end gracefully
         call simple_end('**** SIMPLE_UNBLUR NORMAL STOP ****')
     end subroutine exec_unblur
 
-    !> ctffind  is a wrapper program for CTFFIND4 (Grigorieff lab)
-    !! \sa  http://simplecryoem.com/tutorials.html?#ctf-parameter-determination
     subroutine exec_ctffind( self, cline )
-        use simple_ctffind_iter, only: ctffind_iter
-        use simple_oris,         only: oris
+ 
         class(ctffind_commander), intent(inout) :: self
         class(cmdline),           intent(inout) :: cline  !< command line input
         type(params)                       :: p
@@ -581,7 +545,7 @@ contains
             &fname_ctffind_ctrl, fname_ctffind_output, os)
             write(*,'(f4.0,1x,a)') 100.*(real(movie_counter)/real(ntot)), 'percent of the micrographs processed'
         end do
-        call binwrite_oritab(fname_ctffind_output, os, fromto)
+        call os%write(fname_ctffind_output)
         call os%kill
         deallocate(fname_ctffind_ctrl,fname_ctffind_output)
         call qsys_job_finished( p, 'simple_commander_preproc :: exec_ctffind' )
@@ -589,30 +553,7 @@ contains
         call simple_end('**** SIMPLE_CTFFIND NORMAL STOP ****')
     end subroutine exec_ctffind
 
-    !> SELECT is a program for selecting files based on image correlation matching
-    !!
-    !! \sa http://simplecryoem.com/tutorials.html?#prime2d-analysis-of-trpv1-membrane-receptor-images
-    !! ```sh
-    !! simple_exec prg=select
-    !!  USAGE:
-    !!  bash-3.2$ simple_exec prg=simple_program key1=val1 key2=val2 ...
-    !!
-    !!  REQUIRED
-    !!  stk  = particle stack with all images(ptcls.ext)
-    !!  stk2 = 2nd stack(in map2ptcls/select: selected(cavgs).ext)
-    !!
-    !!  OPTIONAL
-    !!  nthr       = nr of OpenMP threads{1}
-    !!  stk3       = 3d stack (in map2ptcls/select: (cavgs)2selectfrom.ext)
-    !!  filetab    = list of files(*.txt / *.asc)
-    !!  outfile    = output document
-    !!  outstk     = output image stack
-    !!  dir_select = move selected files to here{selected}
-    !!  dir_reject = move rejected files to here{rejected}
-    !! ```
     subroutine exec_select( self, cline )
-        use simple_image,    only: image
-        use simple_corrmat,  only: calc_cartesian_corrmat
         class(select_commander), intent(inout) :: self
         class(cmdline),          intent(inout) :: cline !< command line input
         type(params)                       :: p
@@ -661,20 +602,20 @@ contains
                 call fileio_errmsg('**ERROR(simple_commander_preproc): I/O error reading corrmat_select.bin. Remove the file to override the memoization.', io_stat)
             endif
 
-            call fclose(funit,errmsg='simple_commander_preproc ; fopen error when closing corrmat_select.bin  ')
+            call fclose(funit,errmsg='simple_commander_preproc ; error when closing corrmat_select.bin  ')
         else
             write(*,'(a)') '>>> CALCULATING CORRELATIONS'
             call calc_cartesian_corrmat(imgs_sel, imgs_all, correlations)
             ! write matrix
 
             call fopen(funit, status='REPLACE', action='WRITE', file='corrmat_select.bin', access='STREAM', iostat=io_stat)
-            call fileio_errmsg('simple_commander_preproc ; fopen error when opening corrmat_select.bin  ', io_stat)
+            call fileio_errmsg('simple_commander_preproc ; error when opening corrmat_select.bin  ', io_stat)
             write(unit=funit,pos=1,iostat=io_stat) correlations
             ! Check if the write was successful
             if(io_stat/=0) then
                 call fileio_errmsg('**ERROR(simple_commander_preproc): I/O error writing corrmat_select.bin. Remove the file to override the memoization.', io_stat)
             endif
-            call fclose(funit,errmsg='simple_commander_preproc ; fopen error when closing corrmat_select.bin  ')
+            call fclose(funit,errmsg='simple_commander_preproc ; error when closing corrmat_select.bin  ')
         endif
         ! find selected
         ! in addition to the index array, also make a logical array encoding the selection (to be able to reject)
@@ -722,19 +663,18 @@ contains
         call simple_end('**** SIMPLE_SELECT NORMAL STOP ****')
     end subroutine exec_select
 
-    !> MAKEPICKREFS is a program to make picker references
+    !> for making picker references
     subroutine exec_makepickrefs( self, cline )
         use simple_commander_volops,  only: projvol_commander
-        use simple_commander_imgproc, only: stackops_commander, scale_commander
-        use simple_procimgfile,       only: neg_imgfile
         class(makepickrefs_commander), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline !< command line input
         integer, parameter           :: NREFS=100, NPROJS=20
-        character(STDLEN), parameter :: ORIFILE='pickrefs_oris.txt'
+        character(STDLEN), parameter :: ORIFILE='pickrefs_oris'//METADATEXT
         type(params)                 :: p
         type(build)                  :: b
-        type(cmdline)                :: cline_projvol
+        type(cmdline)                :: cline_projvol!, cline_stackops
         type(projvol_commander)      :: xprojvol
+        !type(stackops_commander)     :: xstackops
         integer                      :: nrots, cnt, iref, irot
         real                         :: ang, rot
         p = params(cline)                   ! parameters generated
@@ -745,7 +685,7 @@ contains
                 p%nptcls = NPROJS
                 call b%a%new(NPROJS)
                 call b%a%spiral( p%nsym, p%eullims )
-                call b%a%write(trim(ORIFILE))
+                call binwrite_oritab(trim(ORIFILE), b%a, [1,NPROJS])
                 cline_projvol = cline
                 call cline_projvol%set('nspace', real(NPROJS))
                 p%stk = 'even_projs'//p%ext
@@ -774,7 +714,7 @@ contains
             if( p%neg .eq. 'yes' )then
                 call neg_imgfile('rotated_from_makepickrefs'//p%ext, 'pickrefs'//p%ext, p%smpd)
             else
-                call mv_file('rotated_from_makepickrefs'//p%ext, 'pickrefs'//p%ext)
+                call simple_rename('rotated_from_makepickrefs'//p%ext, 'pickrefs'//p%ext)
             endif
         else
             stop 'need input volume (vol1) or class averages (stk) to generate picking references'
@@ -784,9 +724,7 @@ contains
         call simple_end('**** SIMPLE_MAKEPICKREFS NORMAL STOP ****')
     end subroutine exec_makepickrefs
 
-    !> PICK is a program to pick particles
     subroutine exec_pick( self, cline)
-        use simple_pick_iter, only: pick_iter
         class(pick_commander), intent(inout) :: self
         class(cmdline),        intent(inout) :: cline !< command line input
         type(params)    :: p
@@ -819,21 +757,8 @@ contains
         end do
     end subroutine exec_pick
 
-    !> \brief EXTRACT is a program that extracts particle images from DDD movies or integrated movies.
-    !! Boxfiles are assumed to be in EMAN format but we provide a conversion
-    !! script (relion2emanbox.pl) for *.star files containing particle
-    !! coordinates obtained with Relion. The program creates one stack per movie
-    !! frame as well as a stack of corrected framesums. In addition to
-    !! single-particle image stacks, the program produces a parameter file
-    !! extract_params.txt that can be used in conjunction with other SIMPLE
-    !! programs. We obtain CTF parameters with CTFFIND4
+    !> for extracting particle images from integrated DDD movies 
     subroutine exec_extract( self, cline )
-        use simple_nrtxtfile, only: nrtxtfile
-        use simple_imgfile,   only: imgfile
-        use simple_image,     only: image
-        use simple_math,      only: euclid, hpsort, median
-        use simple_oris,      only: oris
-        use simple_stat,      only: moment
         class(extract_commander), intent(inout) :: self
         class(cmdline),           intent(inout) :: cline !< command line input
         type(params)                       :: p
@@ -845,8 +770,9 @@ contains
         type(nrtxtfile)                    :: boxfile
         character(len=STDLEN)              :: sumstack, outfile, sumstack_frames
         character(len=STDLEN), allocatable :: movienames(:), boxfilenames(:), movienames_frames(:)
-        real, allocatable                  :: boxdata(:,:)
-        integer, allocatable               :: pinds(:)
+        real,                  allocatable :: boxdata(:,:)
+        integer,               allocatable :: pinds(:)
+        logical,               allocatable :: oris_mask(:)
         real                               :: kv, cs, fraca, dfx, dfy, angast, ctfres
         real                               ::  particle_position(2)
         type(image)                        :: micrograph
@@ -866,7 +792,6 @@ contains
                 stop 'need output file (outfile) to be part of the command line in stream=yes mode'
             endif
         endif
-
         ! set output files
         if( cline%defined('outstk') )then
             if( cline%defined('dir_ptcls') )then
@@ -890,19 +815,18 @@ contains
             endif
         else
             if( cline%defined('dir_ptcls') )then
-                outfile = trim(p%dir_ptcls)//'/extract_params.txt'
+                outfile = trim(p%dir_ptcls)//'/extract_params'//METADATEXT
             else
-                outfile = 'extract_params.txt'
+                outfile = 'extract_params'//METADATEXT
             endif
         endif
-
         ! check file inout existence and read filetables
         if( cline%defined('unidoc') )then
-            if( .not. file_exists(p%unidoc)  ) stop 'inputted unidoc does not exist in cwd'
+            if( .not. file_exists(p%unidoc) ) stop 'inputted unidoc does not exist in cwd'
             nmovies = nlines(p%unidoc)
             call os_uni%new(nmovies)
             call os_uni%read(p%unidoc)
-            movienames   = os_uni%extract_table('intg')
+            movienames = os_uni%extract_table('intg')
             if( os_uni%isthere('boxfile') )then
                 boxfilenames = os_uni%extract_table('boxfile')
             else
@@ -927,15 +851,12 @@ contains
             call read_filetable(p%boxtab,  boxfilenames)
         endif
         DebugPrint  'nmovies: ', nmovies
-
         ! remove possibly pre-existing output file
         call del_file(outfile)
-
         ! determine loop range
         fromto(1) = 1
         fromto(2) = nmovies
         ntot = fromto(2) - fromto(1) + 1
-
         ! count the number of particles & find ldim
         nptcls = 0
         do movie=fromto(1),fromto(2)
@@ -951,22 +872,17 @@ contains
                 write(*,*) trim(boxfilenames(movie))
             endif
         end do
-
         ! initialize
         call find_ldim_nptcls(movienames(1), ldim, ifoo)
         call micrograph%new([ldim(1),ldim(2),1], p%smpd)
         call outoris%new(nptcls)
-        pind = 0
-        DebugPrint  'made outoris'
-
-        ! loop over exposures (movies)
+        pind     = 0
         niter    = 0
         noutside = 0
+        ! loop over exposures (movies)
         do movie=fromto(1),fromto(2)
-
             ! get movie index (parsing the number string from the filename)
             call fname2ind(trim(adjustl(movienames(movie))), movie_ind)
-
             ! process boxfile
             ndatlines = 0
             if( file_exists(boxfilenames(movie)) )then
@@ -976,13 +892,10 @@ contains
                 endif
             endif
             if( ndatlines == 0 ) cycle
-
             ! update iteration counter (has to be after the cycle statements or suffer bug!!!)
             niter = niter + 1
-
             ! show progress
             if( niter > 1 ) call progress(niter,ntot)
-
             ! read box data
             allocate( boxdata(ndatlines,boxfile%get_nrecs_per_line()), pinds(ndatlines), stat=alloc_stat)
             if(alloc_stat /= 0) allocchk('In: simple_extract; boxdata etc., 2')
@@ -995,10 +908,7 @@ contains
                 if( j == 1 .and. .not. cline%defined('box') ) p%box = nint(boxdata(1,3)) ! use the box size from the box file
                 ! modify coordinates if change in box (shift by half the difference)
                 if( orig_box /= p%box ) boxdata(j,1:2) = boxdata(j,1:2)-real(p%box-orig_box)/2.
-            end do
-
-            ! create particle index list and set movie index
-            do j=1,ndatlines
+                ! update particle index list and set movie index
                 if( box_inside(ldim, nint(boxdata(j,1:2)), p%box) )then
                     pind     = pind + 1
                     pinds(j) = pind
@@ -1007,7 +917,6 @@ contains
                     pinds(j) = 0
                 endif
             end do
-
             ! check box parsing
             if( .not. cline%defined('box') )then
                 if( niter == 1 )then
@@ -1025,14 +934,11 @@ contains
                 endif
             endif
             DebugPrint  'did check box parsing'
-
             ! get number of frames from stack
             call find_ldim_nptcls(movienames(movie), lfoo, nframes )
             if( nframes > 1 ) stop 'multi-frame extraction no longer supported; simple_extract'
-
             ! build general objects
             if( niter == 1 ) call b%build_general_tbox(p,cline,do3d=.false.)
-
             ! extract ctf info
             if( b%a%isthere('dfx') )then
                 params_present(1) = b%a%isthere('kv')
@@ -1057,7 +963,6 @@ contains
                     dfy    = b%a%get(movie,'dfy')
                     angast = b%a%get(movie,'angast')
                 endif
-                ! set CTF info in outoris
                 do i=1,ndatlines
                     if( pinds(i) > 0 )then
                         call outoris%set(pinds(i), 'kv',         kv)
@@ -1074,9 +979,7 @@ contains
                 end do
                 DebugPrint  'did set CTF parameters dfx/dfy/angast/ctfres: ', dfx, dfy, angast, ctfres
             endif
-
-            ! extract windows
-            ! integrated movie
+            ! extract windows from integrated movie
             call micrograph%read(movienames(movie),1,rwaction='READ')
             cnt = 0
             do j=1,ndatlines ! loop over boxes
@@ -1089,7 +992,7 @@ contains
                     call b%img%write(trim(adjustl(sumstack)), pinds(j))
                 endif
             end do
-            ! integrated movie (subset of frames)
+            ! extract windows from integrated movie (subset of frames)
             if( allocated(movienames_frames) )then
                 call micrograph%read(movienames_frames(movie),1,rwaction='READ')
                 cnt = 0
@@ -1104,18 +1007,6 @@ contains
                     endif
                 end do
             endif
-
-            ! write output
-            noris = count(pinds > 0)
-            call outoris%compress(pinds > 0)
-            call binwrite_oritab(outfile, outoris, [1,noris])
-            ! OLD CODE
-            ! do j=1,ndatlines ! loop over boxes
-            !     if( pinds(j) > 0 )then
-            !         call outoris%write(pinds(j), outfile)
-            !     endif
-            ! end do
-
             ! destruct
             call boxfile%kill
             deallocate(boxdata, pinds)
@@ -1123,7 +1014,19 @@ contains
         if( p%outside .eq. 'yes' .and. noutside > 0 )then
             write(*,'(a,1x,i5,1x,a)') 'WARNING!', noutside, 'boxes extend outside micrograph'
         endif
-
+        ! compress output (remove entries for boxes outside micrograph)
+        allocate(oris_mask(nptcls),stat=alloc_stat)
+        if(alloc_stat /= 0) allocchk("In simple_extract oris_mask")
+        oris_mask = .false.
+        oris_mask(:pind) = .true.
+        noris = count(oris_mask)
+        call outoris%compress(oris_mask)
+        deallocate(oris_mask)
+        ! remove chash part
+        call outoris%kill_chash()
+        ! write output
+        call binwrite_oritab(outfile, outoris, [1,noris])
+        
         ! end gracefully
         call simple_end('**** SIMPLE_EXTRACT NORMAL STOP ****')
 

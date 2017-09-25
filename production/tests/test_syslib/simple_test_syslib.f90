@@ -1,7 +1,8 @@
-#include "simple_lib.f08"
+
 program test_syslib
-use simple_defs
-use simple_syslib
+#include "simple_lib.f08"
+
+
 implicit none
 real :: hbwsize
 integer :: policy

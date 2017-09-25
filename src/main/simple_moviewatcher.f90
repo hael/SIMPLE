@@ -1,10 +1,9 @@
 ! movie watcher for stream processing
-#include "simple_lib.f08"
+
 module simple_moviewatcher
-use simple_defs 
-use simple_syslib, only: simple_file_stat, file_exists
-use simple_fileio
-use simple_params, only: params
+#include "simple_lib.f08"
+
+use simple_params,        only: params
 use simple_timer
 implicit none
 
@@ -46,7 +45,7 @@ integer,               parameter   :: FAIL_THRESH = 50
 integer,               parameter   :: FAIL_TIME   = 7200 ! 2 hours
 
 contains
-    
+
     !>  \brief  is a constructor
     function constructor( p, report_time, print )result( self )
         class(params),     intent(in) :: p
@@ -63,7 +62,7 @@ contains
             print *, 'Directory does not exist: ', trim(adjustl(p%dir_target))
             stop
         endif
-        call getcwd(cwd)
+        call simple_getcwd(cwd)
         self%cwd         = trim(cwd)
         self%watch_dir   = trim(adjustl(p%dir_movies))
         self%target_dir  = trim(adjustl(p%dir_target))
@@ -79,10 +78,7 @@ contains
 
     !>  \brief  is the watching procedure
     subroutine watch( self, n_movies, movies )
-#if defined(PGI)
-        include 'lib3f.h'
-        procedure :: cast_time_char => ctime
-#endif
+         use simple_timer
         class(moviewatcher),           intent(inout) :: self
         integer,                       intent(out)   :: n_movies
         character(len=*), allocatable, intent(out)   :: movies(:)
@@ -93,10 +89,10 @@ contains
         integer               :: i, io_stat, n_lsfiles, cnt, fail_cnt
         character(len=STDLEN) :: fname, abs_fname
         logical               :: is_closed
-
+        integer(timer_int_kind) :: twatch
         ! init
         self%n_watch = self%n_watch + 1
-        tnow = gettime()
+        tnow = simple_gettime()
         if( self%n_watch .eq. 1 )then
             ! first call
             self%starttime  = tnow

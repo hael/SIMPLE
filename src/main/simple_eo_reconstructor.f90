@@ -1,12 +1,15 @@
 ! 3D reconstruction of even-odd pairs for FSC estimation
 module simple_eo_reconstructor
-use simple_defs
+#include "simple_lib.f08"
+
 use simple_reconstructor, only: reconstructor
 use simple_image,         only: image
 use simple_params,        only: params
 use simple_cmdline,       only: cmdline
-use simple_strings,       only: int2str_pad
-use simple_jiffys,        only: progress
+use simple_imghead,       only: find_ldim_nptcls
+use simple_imgfile,       only: imgfile
+use simple_kbinterpol,    only: kbinterpol
+
 implicit none
 
 public :: eo_reconstructor
@@ -19,8 +22,8 @@ type :: eo_reconstructor
     type(reconstructor) :: eosum
     type(image)         :: envmask
     character(len=4)    :: ext
-    real                :: fsc05      !<   target resolution at FSC=0.5
-    real                :: fsc0143    !<   target resolution at FSC=0.143
+    real                :: fsc05      !< target resolution at FSC=0.5
+    real                :: fsc0143    !< target resolution at FSC=0.143
     real                :: smpd, msk, fny, inner=0., width=10.
     integer             :: box=0, nstates=1, numlen=2, lfny=0
     logical             :: automsk = .false.
@@ -51,7 +54,7 @@ type :: eo_reconstructor
     procedure          :: grid_fplane
     procedure          :: compress_exp
     procedure          :: sum_eos !< for merging even and odd into sum
-    procedure          :: sum     !< for summing eo_recs obtained by parallell exec
+    procedure          :: sum     !< for summing eo_recs obtained by parallel exec
     procedure          :: sampl_dens_correct_eos
     procedure          :: sampl_dens_correct_sum
     ! RECONSTRUCTION
@@ -67,7 +70,6 @@ contains
 
     !>  \brief  is a constructor
     subroutine new(self, p )
-        use simple_fileio      , only: file_exists
         class(eo_reconstructor), intent(inout) :: self !< instance
         class(params), target,   intent(in)    :: p    !< parameters object (provides constants)
         type(image) :: imgtmp
@@ -197,7 +199,6 @@ contains
 
     !>  \brief  read the even reconstruction
     subroutine read_even( self, fbody )
-        use simple_fileio      , only: file_exists
         class(eo_reconstructor), intent(inout) :: self
         character(len=*),        intent(in)    :: fbody
         character(len=STDLEN)                  :: even_vol, even_rho
@@ -216,7 +217,6 @@ contains
 
     !>  \brief  read the odd reconstruction
     subroutine read_odd( self, fbody )
-        use simple_fileio      , only: file_exists
         class(eo_reconstructor), intent(inout) :: self
         character(len=*),        intent(in)    :: fbody
         character(len=STDLEN)                  :: odd_vol, odd_rho
@@ -239,12 +239,12 @@ contains
     subroutine grid_fplane(self, o, fpl, pwght, mul, ran )
         use simple_ori, only: ori
         use simple_rnd, only: ran3
-        class(eo_reconstructor), intent(inout) :: self    !< instance
-        class(ori),              intent(inout) :: o       !< orientation
-        class(image),            intent(inout) :: fpl     !< Fourier plane
-        real, optional,          intent(in)    :: pwght   !< external particle weight (affects both fplane and rho)
-        real, optional,          intent(in)    :: mul     !< shift multiplication factor
-        real, optional,          intent(in)    :: ran     !< external random number
+        class(eo_reconstructor), intent(inout) :: self  !< instance
+        class(ori),              intent(inout) :: o     !< orientation
+        class(image),            intent(inout) :: fpl   !< Fourier plane
+        real, optional,          intent(in)    :: pwght !< external particle weight (affects both fplane and rho)
+        real, optional,          intent(in)    :: mul   !< shift multiplication factor
+        real, optional,          intent(in)    :: ran   !< external random number
         real    :: rran
         if( present(ran) )then
             rran = ran
@@ -282,15 +282,14 @@ contains
     end subroutine compress_exp
 
     !> \brief  for sampling density correction of the eo pairs
-    subroutine sampl_dens_correct_eos( self, state )
-        use simple_fileio,       only: arr2file
-        use simple_math,         only: get_resolution, calc_fourier_index
-        use simple_masker,       only: masker
-        class(eo_reconstructor), intent(inout) :: self  !< instance
-        integer,                 intent(in)    :: state !< state
+    subroutine sampl_dens_correct_eos( self, state, eonames )
+        use simple_masker,  only: masker
+        class(eo_reconstructor), intent(inout) :: self       !< instance
+        integer,                 intent(in)    :: state      !< state
+        character(len=32),       intent(in)    :: eonames(2) !< even/odd filenames
         real, allocatable :: res(:), corrs(:)
         type(image)       :: even, odd
-        type(masker)      :: volmasker
+        !type(masker)      :: volmasker
         integer           :: j
         ! make clipped volumes
         call even%new([self%box,self%box,self%box],self%smpd)
@@ -317,6 +316,9 @@ contains
                 call odd%mask(self%msk, 'soft')
             endif
         endif
+        ! write even/odd
+        call even%write(trim(eonames(1)))
+        call odd%write(trim(eonames(2)))
         ! forward FT
         call even%fwd_ft
         call odd%fwd_ft
@@ -330,8 +332,8 @@ contains
         call get_resolution(corrs, res, self%fsc05, self%fsc0143)
         self%fsc05   = max(self%fsc05,self%fny)
         self%fsc0143 = max(self%fsc0143,self%fny)
-        write(*,'(A,1X,F6.2)') '>>> RESOLUTION AT FSC=0.143 DETERMINED TO:', self%fsc0143
         write(*,'(A,1X,F6.2)') '>>> RESOLUTION AT FSC=0.500 DETERMINED TO:', self%fsc05
+        write(*,'(A,1X,F6.2)') '>>> RESOLUTION AT FSC=0.143 DETERMINED TO:', self%fsc0143
         ! the end
         deallocate(corrs, res)
         call even%kill
@@ -343,6 +345,7 @@ contains
         class(eo_reconstructor), intent(inout) :: self      !< instance
         class(image),            intent(inout) :: reference !< reference volume
         write(*,'(A)') '>>> SAMPLING DENSITY (RHO) CORRECTION & WIENER NORMALIZATION'
+        call reference%set_ft(.false.)
         call self%eosum%sampl_dens_correct
         call self%eosum%bwd_ft
         call self%eosum%norm
@@ -354,13 +357,10 @@ contains
     !> \brief  for reconstructing Fourier volumes according to the orientations 
     !!         and states in o, assumes that stack is open   
     subroutine eorec( self, fname, p, o, se, state, vol, mul, part, fbody )
-        use simple_oris,       only: oris
-        use simple_fileio,     only: file_exists
-        use simple_sym,        only: sym
-        use simple_params,     only: params
-        use simple_gridding,   only: prep4cgrid
-        use simple_imgfile,    only: imgfile, find_ldim_nptcls
-        use simple_kbinterpol, only: kbinterpol
+        use simple_oris,            only: oris
+        use simple_sym,             only: sym
+        use simple_params,          only: params
+        use simple_gridding,        only: prep4cgrid
         class(eo_reconstructor),    intent(inout) :: self      !< object
         character(len=*),           intent(in)    :: fname     !< spider/MRC stack filename
         class(params),              intent(in)    :: p         !< parameters
@@ -374,20 +374,22 @@ contains
         type(image)      :: img, img_pad
         type(kbinterpol) :: kbwin
         real             :: skewness
-        integer          :: i, cnt, n, ldim(3), io_stat, filnum, state_glob
+        integer          :: i, cnt, n, ldim(3), state_glob
         integer          :: statecnt(p%nstates), state_here
+        character(len=32) :: eonames(2)
         call find_ldim_nptcls(fname, ldim, n)
         if( n /= o%get_noris() ) stop 'inconsistent nr entries; eorec; simple_eo_reconstructor'
+        if( .not. present(part) )then
+            if( p%eo .eq. 'aniso' ) stop 'eo=aniso not supported here, use simple_distr_exec!'
+        endif
         kbwin = self%get_kbwin() 
         ! stash global state index
         state_glob = state
         ! make the images
         call img%new([p%box,p%box,1],p%smpd)
         call img_pad%new([p%boxpd,p%boxpd,1],p%smpd)
-        ! calculate weights
-        call o%calc_spectral_weights(p%frac)
         ! even/odd partitioning
-        if( o%get_nevenodd() == 0 )call o%partition_eo
+        if( o%get_nevenodd() == 0 ) call o%partition_eo('proj', [p%fromp,p%top])
         ! population balancing logics
         if( p%balance > 0 )then
             call o%balance( p%balance, NSPACE_BALANCE, p%nsym, p%eullims, skewness )
@@ -421,8 +423,16 @@ contains
                 call self%write_eos('recvol_state'//int2str_pad(state,2)//'_part'//int2str_pad(part,self%numlen))
             endif
         else
+            if( present(fbody) )then
+                eonames(1) = fbody//int2str_pad(state,2)//'_odd'//p%ext
+                eonames(2) = fbody//int2str_pad(state,2)//'_even'//p%ext
+                
+            else
+                eonames(1) = 'recvol_state'//int2str_pad(state,2)//'_odd'//p%ext
+                eonames(2) = 'recvol_state'//int2str_pad(state,2)//'_even'//p%ext
+            endif
             call self%sum_eos
-            call self%sampl_dens_correct_eos(state)
+            call self%sampl_dens_correct_eos(state, eonames)
             call self%sampl_dens_correct_sum(vol)
         endif
         call img%kill
@@ -437,7 +447,6 @@ contains
             !> \brief  the density reconstruction functionality
             subroutine rec_dens
                 use simple_ori, only: ori
-                use simple_rnd, only: ran3
                 type(ori) :: o_sym, orientation
                 integer   :: j, state, state_balance
                 real      :: pw, eopart

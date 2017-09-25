@@ -6,13 +6,11 @@
 ! All rights reserved
 ! Use is subject to Janelia Farm Research Campus Software Copyright 1.1
 ! license terms ( http://license.janelia.org/license/jfrc_copyright_1_1.html )
-#include "simple_lib.f08"
+
 module simple_ctf
 !$ use omp_lib
 !$ use omp_lib_kinds
-use simple_defs
-use simple_jiffys,      only: progress
-use simple_syslib, only: alloc_errchk
+#include "simple_lib.f08"
 !use simple_params_l, only: CTFMODETYPE
 implicit none
 
@@ -217,7 +215,7 @@ contains
     !!          modes: abs, ctf, flip, flipneg, neg, square
     function ctf2spec( self, kfromto, box, dfx, mode, bfac ) result(spec)
         use simple_image,  only: image
-                class(ctf),       intent(inout) :: self       !< instance
+        class(ctf),       intent(inout) :: self       !< instance
         integer,          intent(in)    :: kfromto(2) !< Fourier index range
         integer,          intent(in)    :: box        !< box size
         real,             intent(in)    :: dfx        !< defocus
@@ -357,7 +355,7 @@ contains
                 if( imode <  3 ) tval = self%eval(spaFreqSq, dfx, ddfy, aangast, ang)
                 tvalsq = tval * tval
                 if( imode == 1 ) tval = abs(tval)
-                ! multiply image with CTF
+                ! multiply image
                 logi = [h,k,0]
                 phys = img%comp_addr_phys(logi)
                 comp = img%get_fcomp(logi, phys)

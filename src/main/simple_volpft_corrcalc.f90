@@ -1,10 +1,11 @@
 ! fast cross-correlation calculation between Fourier volumes using the icosahedral group
 ! as a sampling space
-#include "simple_lib.f08"
+
 module simple_volpft_corrcalc
 !$ use omp_lib
 !$ use omp_lib_kinds
-use simple_defs
+#include "simple_lib.f08"
+    
 use simple_projector, only: projector
 use simple_sym,       only: sym
 use simple_ori,       only: ori
@@ -46,12 +47,10 @@ contains
 
     !>  \brief  is a constructor
     subroutine new( self, vol_ref, vol_target, hp, lp )
-        use simple_syslib, only: alloc_errchk
-        use simple_math,   only: is_even
         class(volpft_corrcalc),    intent(inout) :: self
         class(projector), target , intent(in)    :: vol_ref, vol_target
         real,                      intent(in)    :: hp, lp
-        integer    :: isym, k, i
+        integer    :: isym, k
         real       :: vec(3)
         type(ori)  :: e
         call self%kill
@@ -103,7 +102,6 @@ contains
     
     !>  \brief  extracts the lines defined by the icosahedral group from the reference
     subroutine extract_ref( self )
-        use simple_math, only: csq
         class(volpft_corrcalc), intent(inout) :: self
         integer :: ispace, k
         !$omp parallel do collapse(2) schedule(static) default(shared)&
@@ -121,7 +119,6 @@ contains
     !>  \brief  extracts the lines required for matchiing
     !!          from the reference
     subroutine extract_target_1( self, e, serial )
-        use simple_math, only: csq
         class(volpft_corrcalc), intent(inout) :: self
         class(ori),             intent(in)    :: e
         logical, optional,      intent(in)    :: serial
@@ -155,7 +152,6 @@ contains
     !>  \brief  extracts the lines required for matchiing
     !!          from the reference
     subroutine extract_target_2( self, e, shvec, serial )
-        use simple_math, only: csq
         class(volpft_corrcalc), intent(inout) :: self
         class(ori),             intent(in)    :: e
         real,                   intent(in)    :: shvec(3)

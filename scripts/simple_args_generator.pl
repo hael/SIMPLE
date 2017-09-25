@@ -67,11 +67,9 @@ unlink(${tmp_varlist})# do nothing
 unlink($tmp_argsfile);
 open(MODULE, "> ".$tmp_argsfile) or die "Cannot open simple_args.f90\n";
 print MODULE "! for error checking of the SIMPLE command line arguments
-#include \"simple_lib.f08\"
+
 module simple_args
-use simple_defs
-use simple_fileio
-use simple_syslib, only: exec_cmdline, simple_file_stat
+#include \"simple_lib.f08\"
 implicit none
 
 public :: args, test_args

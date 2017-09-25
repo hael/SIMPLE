@@ -1,13 +1,15 @@
 ! batch-processing manager - environment module
+
 module simple_qsys_env
+#include "simple_lib.f08"
+use simple_qsys_funs,    only: qsys_watcher,qsys_cleanup,parse_env_file
+use simple_map_reduce   ! use all in there
 use simple_qsys_factory, only: qsys_factory
 use simple_qsys_base,    only: qsys_base
 use simple_qsys_ctrl,    only: qsys_ctrl
 use simple_chash,        only: chash
 use simple_params,       only: params
-use simple_qsys_funs     ! use all in there
-use simple_defs          ! use all in there   
-use simple_fileio        ! use all in there
+
 implicit none
 #include "simple_local_flags.inc"
 
@@ -30,12 +32,11 @@ end type qsys_env
 contains
 
     subroutine new( self, p_master, stream )
-        use simple_map_reduce   ! use all in there
         class(qsys_env)               :: self
         class(params)                 :: p_master
         logical, optional             :: stream
         character(len=:), allocatable :: qsnam, tpi, hrs_str, mins_str, secs_str
-        integer                       :: io_stat, partsz, hrs, mins, secs, ipart, nparts
+        integer                       :: partsz, hrs, mins, secs, nparts
         real                          :: rtpi, tot_time_sec
         logical                       :: sstream
         integer, parameter            :: MAXNKEYS = 30
@@ -101,27 +102,38 @@ contains
         is = self%existence
     end function exists
 
-    subroutine gen_scripts_and_schedule_jobs( self, p_master, job_descr, part_params, algnfbody, chunkdistr )
+    subroutine gen_scripts_and_schedule_jobs( self, p_master, job_descr, part_params, algnfbody, ext_meta, chunkdistr )
         class(qsys_env)            :: self
         class(params)              :: p_master
         class(chash)               :: job_descr
         class(chash),     optional :: part_params(p_master%nparts)
         character(len=*), optional :: algnfbody
+        character(len=4), optional :: ext_meta
         logical,          optional :: chunkdistr
         call qsys_cleanup(p_master)
         call self%qscripts%generate_scripts(job_descr, p_master%ext, self%qdescr,&
-        outfile_body=algnfbody, part_params=part_params, chunkdistr=chunkdistr)
+        outfile_body=algnfbody, outfile_ext=ext_meta, part_params=part_params, chunkdistr=chunkdistr)
         call self%qscripts%schedule_jobs
     end subroutine gen_scripts_and_schedule_jobs
 
-    subroutine exec_simple_prg_in_queue( self, cline, outfile, finish_indicator )
+    subroutine exec_simple_prg_in_queue( self, cline, outfile, finish_indicator, script_name )
         use simple_cmdline,   only: cmdline
-        class(qsys_env)  :: self
-        class(cmdline)   :: cline
-        character(len=*) :: outfile, finish_indicator
-        character(len=STDLEN), parameter :: script_name = 'simple_script_single'
-        type(chash) :: job_descr
-        call del_file(finish_indicator)
+        class(qsys_env)            :: self
+        class(cmdline)             :: cline
+        character(len=*)           :: outfile
+        character(len=*), optional :: finish_indicator, script_name
+        character(len=STDLEN), parameter   :: script_name_default = 'simple_script_single'
+        type(chash)                        :: job_descr
+        character(len=:),      allocatable :: halt_ind, script_name_here
+        if( present(finish_indicator) )then
+            allocate(halt_ind, source=trim(finish_indicator) )
+        endif
+        if( present(script_name) )then
+            allocate(script_name_here, source=trim(script_name))
+        else
+            allocate(script_name_here, source=script_name_default)
+        endif
+        if( allocated(halt_ind) ) call del_file(halt_ind)
         call cline%gen_job_descr(job_descr)
         call self%qscripts%generate_script(job_descr, self%qdescr, self%simple_exec_bin, script_name, outfile)
         call wait_for_closure(script_name) !!!!!

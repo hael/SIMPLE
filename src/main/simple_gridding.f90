@@ -1,10 +1,11 @@
 ! utilities for convolution interpolation (gridding)
-#include "simple_lib.f08"
+
 module simple_gridding
-use simple_defs        ! use all in there
+#include "simple_lib.f08"
+    
 use simple_image,      only: image
 use simple_kbinterpol, only: kbinterpol
-use simple_syslib,     only: alloc_errchk
+
 implicit none
 
 contains
@@ -13,7 +14,7 @@ contains
     subroutine prep4cgrid( img, img4grid, msk, kbwin )
         class(image),       intent(inout) :: img, img4grid
         real,               intent(in)    :: msk
-         class(kbinterpol), intent(in)    :: kbwin
+        class(kbinterpol), intent(in)     :: kbwin
         real  :: med
         call img%bwd_ft                      ! make sure not FTed
         med = img%median_pixel()
@@ -85,5 +86,61 @@ contains
             end subroutine calc_w
 
     end subroutine divide_w_instr
+
+    !> \brief  for dividing a real image with the instrument function
+    subroutine mul_w_instr( vol, kbwin )
+        !$ use omp_lib
+        !$ use omp_lib_kinds
+        class(image),      intent(inout) :: vol
+        class(kbinterpol), intent(in)    :: kbwin
+        real, allocatable :: w1(:), w2(:), w3(:)
+        integer :: ldim(3), i, j, k, lims(3,2)
+        real    :: arg
+        ! get the limits
+        ldim = vol%get_ldim()
+        if( vol%is_ft() )stop 'Volume must not be FTed'
+        lims(:,1) = 1
+        lims(:,2) = ldim
+        ! make the window
+        allocate( w1(lims(1,1):lims(1,2)), w2(lims(2,1):lims(2,2)),&
+        w3(lims(3,1):lims(3,2)), stat=alloc_stat )
+        if(alloc_stat /= 0) allocchk("In: divide_w_instr; simple_gridding w1 w2")
+        ! calculate the values
+        call calc_w(lims(1,:), ldim(1), w1)
+        if( vol%square_dims() )then
+            w2 = w1
+            w3 = w1
+        else
+            call calc_w(lims(2,:), ldim(2), w2)
+            call calc_w(lims(3,:), ldim(3), w3)
+        endif
+        ! divide the image
+        !$omp parallel do collapse(3) schedule(static) default(shared) private(i,j,k) proc_bind(close)
+        do i=lims(1,1),lims(1,2)
+            do j=lims(2,1),lims(2,2)
+                do k=lims(3,1),lims(3,2)
+                    call vol%mul([i,j,k], w1(i)*w2(j)*w3(k))
+                end do
+            end do
+        end do
+        !$omp end parallel do
+        deallocate(w1,w2,w3)
+
+        contains
+
+            subroutine calc_w( lims_here, ldim_here, w )
+                integer, intent(in)    :: lims_here(2), ldim_here
+                real,    intent(inout) :: w(lims_here(1):lims_here(2))
+                real    :: ci, w_zero
+                integer :: i
+                w_zero = kbwin%instr(0.)
+                ci = -real(ldim_here-1)/2.
+                do i=lims_here(1),lims_here(2)
+                    arg  = ci/real(ldim_here)
+                    w(i) = kbwin%instr(arg) / w_zero
+                    ci   = ci+1.
+                end do
+            end subroutine calc_w
+    end subroutine mul_w_instr
 
 end module simple_gridding

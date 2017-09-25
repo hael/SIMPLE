@@ -1,14 +1,20 @@
 ! concrete commander: operations on volumes
-#include "simple_lib.f08"
+
 module simple_commander_volops
-use simple_defs
-use simple_jiffys,         only: simple_end, progress
+#include "simple_lib.f08"
+    
+    !! import functions
+use simple_binoris_io,     only: binread_oritab, binwrite_oritab, binread_nlines
+use simple_imghead,        only: find_ldim_nptcls
+!! import classes
 use simple_cmdline,        only: cmdline
 use simple_params,         only: params
 use simple_build,          only: build
 use simple_commander_base, only: commander_base
-use simple_strings,        only: int2str, int2str_pad
-use simple_fileio
+use simple_image,          only: image
+use simple_projector_hlev, only: projvol, rotvol
+use simple_ori,            only: ori
+
 implicit none
 
 public :: fsc_commander
@@ -57,10 +63,8 @@ end type dock_volpair_commander
 
 contains
 
-    !> Program to calculate Fourier shell correlation from Even/Odd Volume pairs
+    !> calculates Fourier shell correlation from Even/Odd Volume pairs
     subroutine exec_fsc( self, cline )
-        use simple_image, only: image
-        use simple_math,  only: get_resolution
         class(fsc_commander), intent(inout) :: self
         class(cmdline),       intent(inout) :: cline
         type(params)      :: p
@@ -89,7 +93,7 @@ contains
         call odd%kill
     end subroutine exec_fsc
 
-    !> Program to center 3D volume and associated particle document
+    !> centers a 3D volume and associated particle document
     subroutine exec_cenvol( self, cline )
         class(cenvol_commander), intent(inout) :: self
         class(cmdline),          intent(inout) :: cline
@@ -113,34 +117,32 @@ contains
             ! transfer the 3D shifts to 2D
             if( cline%defined('oritab') ) call b%a%map3dshift22d(-shvec(istate,:), state=istate)
         end do
-        if( cline%defined('oritab') ) call b%a%write(p%outfile)
+        if( cline%defined('oritab') )then
+            call binwrite_oritab(p%outfile, b%a, [1,b%a%get_noris()])
+        endif
         ! end gracefully
         call simple_end('**** SIMPLE_CENVOL NORMAL STOP ****')
     end subroutine exec_cenvol
 
-    !> exec_postproc_vol post-process volume program
-    !! \param cline commandline
-    !!
     subroutine exec_postproc_vol(self, cline)
-        use simple_math,   only: get_resolution
-        use simple_image,  only: image
         use simple_estimate_ssnr, only: fsc2optlp
+        use simple_fileio,        only: file2rarr, add2fbody
         class(postproc_vol_commander), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
         type(params)      :: p
         type(build)       :: b
-        type(image)       :: vol_copy
+        type(image)       :: vol_copy, vol_filt
         real, allocatable :: fsc(:), optlp(:), res(:)
         real              :: fsc0143, fsc05
-        integer           :: k, state, ldim(3)
+        integer           :: state, ldim(3)
         state = 1
         ! pre-proc
         p = params(cline, checkdistr=.false.) ! constants & derived constants produced, mode=2
         call b%build_general_tbox(p, cline)   ! general objects built
         call b%vol%read(p%vols(state))
         call b%vol%fwd_ft
-        ! optimal low-pass filt
         if( cline%defined('fsc') )then
+            ! optimal low-pass filter from FSC
             if( file_exists(p%fsc) )then
                 fsc   = file2rarr(p%fsc)
                 optlp = fsc2optlp(fsc)
@@ -151,18 +153,28 @@ contains
             res = b%vol%get_res()
             call get_resolution( fsc, res, fsc05, fsc0143 )
             where(res < TINY) optlp = 0.
+        endif    
+        if( cline%defined('vol_filt') )then
+            ! optimal low-pass filter from input vol_filt
+            call vol_filt%new(b%vol%get_ldim(), p%smpd)
+            call vol_filt%read(p%vol_filt)
+            call b%vol%apply_filter(vol_filt)
+            call vol_filt%kill
+        else if( cline%defined('fsc') )then
+            ! optimal low-pass filter from FSC
             call b%vol%apply_filter(optlp)
         else if( cline%defined('lp') )then
+            ! ad hoc low-pass filter
             call b%vol%bp(0., p%lp)
         else
-            write(*,*) 'no method for low-pass filtering defined; give fsc or lp on command line'
+            write(*,*) 'no method for low-pass filtering defined; give fsc|lp|vol_filt on command line'
             stop 'comple_commander_volops :: exec_postproc_vol'
         endif
         call vol_copy%copy(b%vol)
         ! B-fact
         if( cline%defined('bfac') ) call b%vol%apply_bfac(p%bfac)
         ! final low-pass filtering for smoothness
-        if( cline%defined('fsc') ) call b%vol%bp(0., fsc0143)
+        if( cline%defined('fsc')  ) call b%vol%bp(0., fsc0143)
         ! masking
         call b%vol%bwd_ft
         if( cline%defined('mskfile') )then
@@ -176,6 +188,14 @@ contains
                 stop 'maskfile does not exists in cwd'
             endif
         else if( p%automsk .eq. 'yes' )then
+            if( .not. cline%defined('thresh') )then
+                write(*,*) 'Need a pixel threshold > 0. for the binarisation'
+                write(*,*) 'Procedure for obtaining thresh:'
+                write(*,*) '(1) postproc vol without bfac or automsk'
+                write(*,*) '(2) Use UCSF Chimera to look at the volume'
+                write(*,*) '(3) Identify the pixel threshold that excludes any background noise'
+                stop 'commander_volops :: postproc_vol'
+            endif
             call vol_copy%bwd_ft
             call b%mskvol%automask3D(p, vol_copy)
             call b%mskvol%write('automask'//p%ext)
@@ -194,16 +214,14 @@ contains
     !! \param cline command line
     !!
     subroutine exec_projvol( self, cline )
-        use simple_image,          only: image
-        use simple_projector_hlev, only: projvol
-        use simple_binoris_io,     only: binread_oritab, binread_nlines
+        use simple_fileio,  only: del_file
         class(projvol_commander), intent(inout) :: self
         class(cmdline),           intent(inout) :: cline
         type(params)             :: p
         type(build)              :: b
         type(image), allocatable :: imgs(:)
         integer                  :: i, loop_end
-        real                     :: x, y, dfx, dfy, angast
+        real                     :: x, y
         if( .not. cline%defined('oritab') )then
             if( .not. cline%defined('nspace') ) stop 'need nspace (for number of projections)!'
         endif
@@ -249,16 +267,15 @@ contains
             if( p%neg .eq. 'yes' ) call imgs(i)%neg
             call imgs(i)%write(p%outstk,i)
         end do
-        call b%a%write('projvol_oris.txt')
+        call binwrite_oritab('projvol_oris'//METADATEXT, b%a, [1,p%nptcls])
         call simple_end('**** SIMPLE_PROJVOL NORMAL STOP ****')
     end subroutine exec_projvol
 
-    !> exec_volaverager Create volume average
+    !> exec_volaverager create volume average
     !! \param cline
     !!
     subroutine exec_volaverager( self, cline )
-        use simple_image, only: image
-        use simple_imgfile,  only: find_ldim_nptcls
+        use simple_fileio,  only: fname2format
         class(volaverager_commander), intent(inout) :: self
         class(cmdline),               intent(inout) :: cline
         type(params) :: p
@@ -326,19 +343,17 @@ contains
         call simple_end('**** SIMPLE_VOLAVERAGER NORMAL STOP ****')
     end subroutine exec_volaverager
 
-    !> exec_volops Volume calculations and operations - incl Guinier, snr, mirror or b-factor
+    !> volume calculations and operations - incl Guinier, snr, mirror or b-factor
+    !! \param cline commandline
     !!
     subroutine exec_volops( self, cline )
-        use simple_projector_hlev, only: rotvol
-        use simple_ori,            only: ori
-        use simple_image,          only: image
         class(volops_commander), intent(inout) :: self
         class(cmdline),          intent(inout) :: cline
         type(params) :: p
         type(build)  :: b
         real, allocatable :: serialvol(:)
         integer           :: i, nvols, funit, iostat, npix
-        logical           :: here, fileop
+        logical           :: here
         type(ori)         :: o
         type(image)       :: vol_rot
         real              :: shvec(3)
@@ -404,20 +419,19 @@ contains
         call simple_end('**** SIMPLE_VOLOPS NORMAL STOP ****')
     end subroutine exec_volops
 
-    !> volume_smat Calculate similarity matrix between volumes
+    !> calculate similarity matrix between volumes
     subroutine exec_volume_smat( self, cline )
         use simple_projector, only: projector
         use simple_ori,       only: ori
-        use simple_imgfile,   only: find_ldim_nptcls
         use simple_volprep,   only: read_and_prep_vol
         use simple_volpft_srch ! singleton
         class(volume_smat_commander), intent(inout) :: self
         class(cmdline),               intent(inout) :: cline
         type(params), target :: p
-        integer              :: funit, io_stat, cnt, npairs, npix, nvols, box_sc, loc(1)
+        integer              :: funit, io_stat, cnt, npairs,  nvols, loc(1)
         integer              :: ivol, jvol, ldim(3), ipair, ifoo, i, spat_med
         integer              :: furthest_from_spat_med
-        real                 :: smpd_sc, scale, corr_max, corr_min, spat_med_corr
+        real                 :: corr_max, corr_min, spat_med_corr
         real                 :: furthest_from_spat_med_corr
         type(projector)      :: vol1, vol2
         type(ori)            :: o
@@ -425,7 +439,6 @@ contains
         integer,               allocatable :: pairs(:,:)
         character(len=STDLEN), allocatable :: vollist(:)
         character(len=:),      allocatable :: fname
-        complex,               allocatable :: cmat(:,:,:)
         p = params(cline, .false.)              ! constants & derived constants produced
         call read_filetable(p%vollist, vollist) ! reads in list of volumes
         nvols  = size(vollist)
@@ -522,7 +535,7 @@ contains
                 call fileio_errmsg('**ERROR(simple_volume_smat): I/O error writing to vol_smat.bin', io_stat)
             
             call fclose(funit, errmsg='volops; volume smat 3 closing ')
-            deallocate(corrmat)
+            if(allocated(corrmat))deallocate(corrmat)
         endif
         ! end gracefully
         call simple_end('**** SIMPLE_VOLUME_SMAT NORMAL STOP ****')

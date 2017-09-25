@@ -1,16 +1,13 @@
 ! routines for distributed SIMPLE execution
-#include "simple_lib.f08"
-module simple_map_reduce
-use simple_defs
-use simple_jiffys,      only: progress
-use simple_strings,     only: int2str, int2str_pad
-use simple_fileio,      only: fopen, fclose, fileio_errmsg
-use simple_syslib,      only: alloc_errchk
-implicit none
 
+module simple_map_reduce
+#include "simple_lib.f08"
+
+implicit none
+private
 #include "simple_local_flags.inc"
 public ::  split_nobjs_even,split_nobjs_in_chunks,split_pairs_in_parts,&
-&merge_similarities_from_parts,merge_rmat_from_parts
+&merge_similarities_from_parts,merge_rmat_from_parts, merge_nnmat_from_parts
 contains
 
     !>  \brief  for generating balanced partitions of nobjs objects
@@ -125,7 +122,7 @@ contains
         do ipart=1,nparts
             call progress(ipart,nparts)
             allocate(fname, source='pairs_part' // int2str_pad(ipart,numlen) // '.bin', stat=alloc_stat)
-            if(alloc_stat /= 0) allocchk("mapreduce ;split_pairs_in_parts creating fname "//int2str_pad(ipart,numlen))
+            if(alloc_stat /= 0) allocchk("mapreduce ;split_pairs_in_parts creating fname ")
             call fopen(funit, status='REPLACE', action='WRITE', file=fname, access='STREAM',iostat=io_stat)
             call fileio_errmsg('mapreduce ;split_pairs_in_parts '//trim(fname), io_stat)
             DebugPrint   'writing pairs in range: ', parts(ipart,1), parts(ipart,2)
@@ -138,7 +135,7 @@ contains
         end do
         deallocate(pairs, parts)
     end subroutine split_pairs_in_parts
-
+ 
     !>  \brief  for merging partial calculations of similarities
     function merge_similarities_from_parts( nobjs, nparts ) result( smat )
         integer, intent(in) :: nobjs  !< number objects to analyse in pairs
@@ -189,7 +186,7 @@ contains
             endif
             call fclose(funit, errmsg="In map_reduce merge_similarities_from_parts opening "//trim(fname))
             deallocate(fname)
-            if(alloc_stat /= 0) allocchk('In: simple_map_reduce::merge_similarities_from_parts, 2')
+            if(alloc_stat /= 0) allocchk('In: simple_map_reduce::merge_similarities_from_parts dealloc')
             ! set the similarity matrix components
             do i=parts(ipart,1),parts(ipart,2)
                 smat(pairs(i,1),pairs(i,2)) = sims(i)
@@ -216,6 +213,7 @@ contains
         parts  = split_nobjs_even(nobjs, nparts)                                        !! realloc lhs
         numlen = len(int2str(nparts))
         ! compress the partial nearest neighbour matrices into a single matrix
+        
         do ipart=1,nparts
             allocate(fname, source='nnmat_part'//int2str_pad(ipart,numlen)//'.bin')
             if(alloc_stat /= 0) allocchk('In: simple_map_reduce::merge_nnmat_from_parts, 1')
@@ -252,7 +250,7 @@ contains
         ! compress the partial matrices into a single matrix
         do ipart=1,nparts
             allocate(fname, source=trim(fbody)//int2str_pad(ipart,numlen)//'.bin', stat=alloc_stat)
-            if(alloc_stat /= 0) allocchk("In: simple_map_reduce :: merge_mat_from_parts"//int2str_pad(ipart,numlen))
+            if(alloc_stat /= 0) allocchk("In: simple_map_reduce :: merge_mat_from_parts ")
             call fopen(funit, status='OLD', action='READ', file=fname, access='STREAM',iostat=io_stat)
             call fileio_errmsg("In map_reduce merge_rmat_from_parts opening "//trim(fname), io_stat)
             read(unit=funit,pos=1,iostat=io_stat) mat_merged(parts(ipart,1):parts(ipart,2),:)

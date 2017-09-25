@@ -28,13 +28,14 @@ use simple_syslib, only: simple_stop
 !   use precision_m
 implicit none
 !  private :: raise_sys_error
-#ifndef TIMER_I4
-integer, parameter,public :: timer_int_kind = fp_kind
-#else
-integer, parameter,public :: timer_int_kind = sp
-#endif
-#include "simple_local_flags.inc"
+
 private
+#include "simple_local_flags.inc"
+#ifndef TIMER_I4
+integer, parameter :: timer_int_kind = fp_kind
+#else
+integer, parameter :: timer_int_kind = sp
+#endif
    integer(timer_int_kind), public   :: clock_ticks_per_second = INT(0, timer_int_kind) !< Number of counts per second
    integer(timer_int_kind), public   :: last_time_point = INT(0, timer_int_kind)        !< Current timesamp
    integer, public       :: idx_elapsed = 0, num_elapsed = 3
@@ -48,23 +49,29 @@ private
    integer(timer_int_kind), dimension(MAX_TOKENS), public :: profile_last_timerstamp !< storage of time stamps for profiler
    character(len=MAX_TOKEN_CHARSIZE), dimension(MAX_TOKENS), public :: profile_labels = ""
 
-   public :: gettime,cast_time_char
+   public :: simple_gettime,cast_time_char, timer_int_kind
    public :: tic, tickrate
    public :: toc, tdiff, tocprint
    public :: now, reset_timer
    public :: timer_loop_start, in_timer_loop, timer_loop_end
    public :: timer_profile_setup, timer_profile_start, timer_profile_break, timer_profile_report
-   public ::  tic_i4, toc_i4, tdiff_i4, tickrate_i4  !! Only for testing 32-bit system_clock (1 ms resolution)
+   public :: tic_i4, toc_i4, tdiff_i4, tickrate_i4  !! Only for testing 32-bit system_clock (1 ms resolution)
+
 contains
 
-integer function gettime ()
+integer function simple_gettime ()
 #ifdef PGI
     include 'lib3f.h'          ! time
+    simple_gettime= time()
 #elif defined(INTEL)
     use ifport
+    simple_gettime= time()
+#elif defined(GNU)
+    simple_gettime= time()
+#else
+    ! no support
 #endif
-    gettime= time()
-end function gettime
+end function simple_gettime
 
 function cast_time_char (arg)
 #if defined(INTEL)
@@ -157,6 +164,7 @@ end function cast_time_char
       write (*, '(A,A,A,A,A,A,A)') 'Date: ', date(7:8), '-', date(5:6), '-', date(1:4), '\n'
       write (*, '(A,A,A,A,A,A,A)') 'Time: ', time(1:2), ':', time(3:4), ':', time(5:10), '\n'
    end subroutine now
+
 
 !< in_timer_loop checks the time within a timer loop
 ! It does not start the timer or set the in_loop variable
@@ -266,11 +274,11 @@ DebugPrint 'Size of elapsed array ', size(elapsed_times)
           allocate(v(nargs_parse))
           ind = index(vin, ',')
           if( ind == 0 ) then
-              call parse(vin,' ', v,nargs_parse)
+              call parsestr(vin,' ', v,nargs_parse)
               DebugPrint " timer_profile_setup no-comma token input"
               DebugPrint vin
           else 
-              call parse(vin,',',v,tmp_nargs)
+              call parsestr(vin,',',v,tmp_nargs)
           end if
           DebugPrint " timer_profile_setup parsed tokens"
           DebugPrint v
