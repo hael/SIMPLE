@@ -3271,8 +3271,6 @@ contains
                         case('real')
                             spec(sh) = spec(sh) + real(self%cmat(phys(1),phys(2),phys(3)))
                         case('power')
-                            ! spec(sh) = spec(sh) + real(self%cmat(phys(1),phys(2),phys(3))&
-                            !                       *conjg(self%cmat(phys(1),phys(2),phys(3))))
                             spec(sh) = spec(sh) + csq(self%cmat(phys(1),phys(2),phys(3)))
                         case('absreal')
                             spec(sh) = spec(sh) + abs(real(self%cmat(phys(1),phys(2),phys(3))))
@@ -4266,8 +4264,8 @@ contains
                             phys = self1%fit%comp_addr_phys([h,k,l])
                             ! real part of the complex mult btw 1 and 2*
                             r = r+real(self1%cmat(phys(1),phys(2),phys(3))*conjg(self2%cmat(phys(1),phys(2),phys(3))))
-                            sumasq = sumasq+csq(self2%cmat(phys(1),phys(2),phys(3)))
-                            sumbsq = sumbsq+csq(self1%cmat(phys(1),phys(2),phys(3)))
+                            sumasq = sumasq + csq(self2%cmat(phys(1),phys(2),phys(3)))
+                            sumbsq = sumbsq + csq(self1%cmat(phys(1),phys(2),phys(3)))
                          endif
                     end do
                 end do
@@ -4586,8 +4584,6 @@ contains
                         ! real part of the complex mult btw self1 and targ*
                         corrs(sh) = corrs(sh)+&
                         real(self1%cmat(phys(1),phys(2),phys(3))*conjg(self2%cmat(phys(1),phys(2),phys(3))))
-                        ! sumasq(sh) = sumasq(sh)+real(abs(self2%cmat(phys(1),phys(2),phys(3))))**2.
-                        ! sumbsq(sh) = sumbsq(sh)+real(abs(self1%cmat(phys(1),phys(2),phys(3))))**2.
                         sumasq(sh) = sumasq(sh) + csq(self2%cmat(phys(1),phys(2),phys(3)))
                         sumbsq(sh) = sumbsq(sh) + csq(self1%cmat(phys(1),phys(2),phys(3)))
                     end do
@@ -4607,8 +4603,6 @@ contains
                         ! real part of the complex mult btw self1 and targ*
                         corrs(sh) = corrs(sh)+&
                         real(self1%cmat(phys(1),phys(2),phys(3))*conjg(self2%cmat(phys(1),phys(2),phys(3))))
-                        ! sumasq(sh) = sumasq(sh)+real(abs(self2%cmat(phys(1),phys(2),phys(3))))**2.
-                        ! sumbsq(sh) = sumbsq(sh)+real(abs(self1%cmat(phys(1),phys(2),phys(3))))**2.
                         sumasq(sh) = sumasq(sh) + csq(self2%cmat(phys(1),phys(2),phys(3)))
                         sumbsq(sh) = sumbsq(sh) + csq(self1%cmat(phys(1),phys(2),phys(3)))
                     end do

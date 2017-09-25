@@ -40,8 +40,9 @@ contains
         integer,            intent(inout) :: movie_counter, frame_counter
         character(len=*),   intent(in)    :: moviename
         real,               intent(out)   :: smpd_out
-        integer :: ldim(3), ldim_thumb(3)
-        real    :: corr, scale
+        real, allocatable :: shifts(:,:)
+        integer           :: ldim(3), ldim_thumb(3), iframe, nframes
+        real              :: corr, scale
         ! make names
         if( cline%defined('fbody') )then
             if( p%stream.eq.'yes' )then
@@ -94,8 +95,15 @@ contains
             self%moviename = trim(moviename)
         endif
         ! execute the unblurring
-        call unblur_movie(self%moviename, p, corr, smpd_out)
+        call unblur_movie(self%moviename, p, corr, smpd_out, shifts)
+        ! report new smpd & shifts to ori object
         call orientation%set('smpd', smpd_out)
+        nframes = size(shifts,1)
+        do iframe=1,nframes
+            call orientation%set('x'//int2str(iframe), shifts(iframe,1))
+            call orientation%set('y'//int2str(iframe), shifts(iframe,2))
+        end do
+        ! generate sums
         if( p%tomo .eq. 'yes' )then
             call unblur_calc_sums_tomo(frame_counter, p%time_per_frame,&
             &self%moviesum, self%moviesum_corrected, self%moviesum_ctf)

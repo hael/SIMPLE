@@ -57,17 +57,18 @@ real,    parameter :: SMALLSHIFT = 2. !< small initial shift to blur out fixed p
 contains
 
     !> Unblur DDD movie
-    subroutine unblur_movie( movie_stack_fname, p, corr, smpd_out, nsig )
+    subroutine unblur_movie( movie_stack_fname, p, corr, smpd_out, shifts, nsig )
         use simple_oris,        only: oris
         use simple_strings,     only: int2str
         use simple_rnd,         only: ran3
         use simple_stat,        only: corrs2weights, moment
         use simple_ftexp_shsrch ! use all in there
-        character(len=*), intent(in)    :: movie_stack_fname    !< filename 
-        class(params),    intent(inout) :: p                    !< param object
-        real,             intent(out)   :: corr                 !< ave correlation per frame
-        real,             intent(out)   :: smpd_out             !< sampling distance of the possibly scaled movies
-        real, optional,   intent(in)    :: nsig                 !<nr of sigmas (for outlier removal)
+        character(len=*),  intent(in)    :: movie_stack_fname !< filename 
+        class(params),     intent(inout) :: p                 !< param object
+        real,              intent(out)   :: corr              !< ave correlation per frame
+        real,              intent(out)   :: smpd_out          !< sampling distance of the possibly scaled movies
+        real, allocatable, intent(out)   :: shifts(:,:)       !< the nframes shifts identified
+        real, optional,    intent(in)    :: nsig              !<nr of sigmas (for outlier removal)
         real    :: ave, sdev, var, minw, maxw
         real    :: cxy(3), lims(2,2), corr_prev, frac_improved, corrfrac
         integer :: iframe, iter, nimproved, ires, updateres, i
@@ -148,6 +149,9 @@ contains
         opt_shifts   = opt_shifts_saved
         frameweights = frameweights_saved
         call shift_frames(opt_shifts)
+        ! output shifts
+        if( allocated(shifts) ) deallocate(shifts)
+        allocate(shifts(nframes,2), source=opt_shifts)
         ! print
         if( corr < 0. )then
             if( doprint ) write(*,'(a)') '>>> WARNING! OPTIMAL CORRELATION < 0.0'

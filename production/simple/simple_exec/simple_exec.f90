@@ -1755,19 +1755,19 @@ select case(prg)
         ! set required keys
         keys_required(1) = 'filetab'
         keys_required(2) = 'outstk'
+        keys_required(3) = 'smpd'
         ! set optional keys
         keys_optional(1) = 'lp'
-        keys_optional(2) = 'smpd'
-        keys_optional(3) = 'clip'
-        keys_optional(4) = 'nframes'
-        keys_optional(5) = 'fbody'
-        keys_optional(6) = 'numlen'
-        keys_optional(7) = 'xdim'
-        keys_optional(8) = 'ydim'
-        keys_optional(9) = 'endian'
+        keys_optional(2) = 'clip'
+        keys_optional(3) = 'nframes'
+        keys_optional(4) = 'fbody'
+        keys_optional(5) = 'numlen'
+        keys_optional(6) = 'xdim'
+        keys_optional(7) = 'ydim'
+        keys_optional(8) = 'endian'
         ! parse command line
         if( describe ) call print_doc_stack
-        call cline%parse(keys_required(:2), keys_optional(:9))
+        call cline%parse(keys_required(:3), keys_optional(:8))
         ! execute
         call xstack%execute(cline)
     case( 'stackops' )

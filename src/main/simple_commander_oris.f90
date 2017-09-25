@@ -598,6 +598,7 @@ contains
                 popmax         = maxval(pops)
                 popmed         = median_nocopy(pops)
                 call moment(pops, popave, popsdev, popvar, err)
+                write(*,'(a)') '>>> STATISTICS BEFORE CLUSTERING'
                 write(*,'(a,1x,f8.2)') 'FRAC POPULATED DIRECTIONS :', frac_populated
                 write(*,'(a,1x,f8.2)') 'MINIMUM POPULATION        :', popmin
                 write(*,'(a,1x,f8.2)') 'MAXIMUM POPULATION        :', popmax
@@ -623,10 +624,21 @@ contains
                 do icls=1,NSPACE_BALANCE
                     clustszs(icls) = real(count(clustering == icls))
                 end do
-                szmax = maxval(clustszs)
+                frac_populated = real(count(clustszs > 0.5))/real(NSPACE_BALANCE)
+                popmin         = minval(clustszs)
+                popmax         = maxval(clustszs)
+                popmed         = median_nocopy(clustszs)
+                call moment(clustszs, popave, popsdev, popvar, err)
+                write(*,'(a)') '>>> STATISTICS AFTER CLUSTERING'
+                write(*,'(a,1x,f8.2)') 'FRAC POPULATED DIRECTIONS :', frac_populated
+                write(*,'(a,1x,f8.2)') 'MINIMUM POPULATION        :', popmin
+                write(*,'(a,1x,f8.2)') 'MAXIMUM POPULATION        :', popmax
+                write(*,'(a,1x,f8.2)') 'MEDIAN  POPULATION        :', popmed
+                write(*,'(a,1x,f8.2)') 'AVERAGE POPULATION        :', popave
+                write(*,'(a,1x,f8.2)') 'SDEV OF POPULATION        :', popsdev
                 ! scale to max 50 *:s
                 scale = 1.0
-                do while( nint(scale*szmax) > hlen )
+                do while( nint(scale * popmax) > hlen )
                     scale = scale - 0.001
                 end do
                 write(*,'(a)') '>>> HISTOGRAM OF SUBSPACE POPULATIONS (FROM NORTH TO SOUTH)'

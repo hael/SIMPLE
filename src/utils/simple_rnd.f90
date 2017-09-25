@@ -81,8 +81,8 @@ contains
     !!          number _u_ drawn between zero and one, we take _b_ = _1_._0_
     !!          when _u_ <= _p_ and _b_ = _0_._0_ otherwise
     function bran( p ) result( b )
-        real, intent(in)       :: p !< probablility
-        real                   :: b
+        real, intent(in) :: p !< probablility
+        real             :: b !< coin flip outcomes
         ! generate the Bernoulli random number
         if( ran3() <= p ) then
             b = 1. ! success
@@ -90,6 +90,23 @@ contains
             b = 0. ! failure
         endif
     end function bran
+
+    !>  \brief  is for generating a Bernoulli random number
+    !!          vectorised version
+    function branarr( p ) result( b )
+        real, intent(in)  :: p(:) !< probablility array
+        real, allocatable :: b(:) !< coin flip outcomes
+        real, allocatable :: harvest(:)
+        integer :: sz
+        sz = size(p)
+        allocate(harvest(sz), b(sz))
+        call random_number(harvest)
+        where( harvest <= p )
+            b = 1.0 ! success
+        elsewhere
+            b = 0.0 ! failure
+        endwhere
+    end function branarr
 
     !>  \brief  generates a multinomal 1-of-K random number according to the
     !!          distribution in pvec
