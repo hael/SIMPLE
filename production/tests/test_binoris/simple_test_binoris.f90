@@ -29,21 +29,21 @@ call os_peak2%rnd_corrs()
 call os_peak2%set_all2single('ow', 0.5)
 call os_peak2%set_all2single('proj', 5.0)
 call os_peak2%write('os_peak2_facit.txt')
-do i=1,5
-    call psrch3D(i)%set_o_peaks(os_peak1)
-end do
-call binwrite_oritab('oris_fill_in.bin', a1, [1,5], psrch3D)
-do i=1,5
-    if( mask(i) ) call psrch3D(i)%set_o_peaks(os_peak2)
-end do
-call binwrite_oritab('oris_mixed.bin', a1, [1,5], psrch3D, mask, 'oris_fill_in.bin')
-call a2%new(5)
-call binread_oritab('oris_mixed.bin', a2, [1,5], psrch3D)
-call a2%write('oris_mixed.txt')
-do i=1,5
-    os_peak1 = psrch3D(i)%get_o_peaks()
-    call os_peak1%write('os_peak'//int2str(i)//'.txt')
-end do
+! do i=1,5
+!     call psrch3D(i)%set_o_peaks(os_peak1)
+! end do
+! call binwrite_oritab('oris_fill_in.bin', a1, [1,5], psrch3D)
+! do i=1,5
+!     if( mask(i) ) call psrch3D(i)%set_o_peaks(os_peak2)
+! end do
+! call binwrite_oritab('oris_mixed.bin', a1, [1,5], psrch3D, mask, 'oris_fill_in.bin')
+! call a2%new(5)
+! call binread_oritab('oris_mixed.bin', a2, [1,5], psrch3D)
+! call a2%write('oris_mixed.txt')
+! do i=1,5
+!     os_peak1 = psrch3D(i)%get_o_peaks()
+!     call os_peak1%write('os_peak'//int2str(i)//'.txt')
+! end do
 ! call a%new(10)
 ! call a%rnd_oris
 ! call a%write('oris1_facit.txt')

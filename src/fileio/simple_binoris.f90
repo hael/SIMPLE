@@ -2,10 +2,10 @@
 #include "simple_lib.f08"
 module simple_binoris
 use, intrinsic :: iso_c_binding
-use simple_defs  ! use all in there
-use simple_ori,  only: ori
-use simple_oris, only: oris
-use simple_fileio, only: file_exists, fopen, fclose, fileio_errmsg, funit_size, del_file
+use simple_defs    ! use all in there
+use simple_ori,    only: ori
+use simple_oris,   only: oris
+use simple_fileio, only: file_exists, del_file,funit_size, fopen,fileio_errmsg,fclose
 use simple_syslib, only: alloc_errchk
 implicit none
 
@@ -82,13 +82,6 @@ contains
         type(ori) :: o
         ! destruct possibly pre-existing
         call self%kill
-        ! set n_hash_vals
-        o = a%get_ori(1)
-        self%n_hash_vals = o%hash_size()
-        ! set hash keys
-        self%hash_keys = o%hash_keys()               !! Intel warn: code for reallocating lhs
-        if( size(self%hash_keys) /= self%n_hash_vals )&
-        &stop 'ERROR, n_hash_vals /= n_keys; binoris :: new_1'
         ! set range
         if( present(fromto) )then
             self%fromto = fromto
@@ -96,6 +89,13 @@ contains
             self%fromto(1) = 1
             self%fromto(2) = a%get_noris()
         endif
+        ! set n_hash_vals
+        o = a%get_ori(self%fromto(1))
+        self%n_hash_vals = o%hash_size()
+        ! set hash keys
+        self%hash_keys = o%hash_keys()
+        if( size(self%hash_keys) /= self%n_hash_vals )&
+        &stop 'ERROR, n_hash_vals /= n_keys; binoris :: new_1'
         ! set n_records
         self%n_records = self%fromto(2) - self%fromto(1) + 1
         if( self%n_records < 1 ) stop 'ERROR, input oritab (a) empty; binoris :: new_1'
@@ -159,7 +159,6 @@ contains
     ! I/O supporting ori + oris (peaks)
 
     subroutine open( self, fname, del_if_exists )
-        use simple_syslib, only: alloc_errchk
         class(binoris),    intent(inout) :: self          !< instance
         character(len=*),  intent(in)    :: fname         !< filename
         logical, optional, intent(in)    :: del_if_exists !< If the file already exists on disk, replace
@@ -209,7 +208,7 @@ contains
         if( io_status .ne. 0 )&
             call fileio_errmsg('simple_binoris::open  error when reading header bytes to disk. '&
             //trim(io_message), io_status)
-        
+
         call self%byte_array2header
         ! set derived
         self%n_bytes_hash_keys  = 32 * self%n_hash_vals
@@ -312,11 +311,12 @@ contains
         if( i < self%fromto(1) .or. i > self%fromto(2) ) stop 'index i out of bound; binoris :: write_record_2'
         ! transfer hash data to self%record
         o       = a%get_ori(i)
-        vals    = o%hash_vals()                  ! Intel warn: code for reallocating lhs
+        vals    = o%hash_vals()
         sz_vals = size(vals)
         if( self%n_hash_vals /= sz_vals )then
-            print *, 'self%n_hash_vals: ', self%n_hash_vals
-            print *, 'sz_vals         : ', sz_vals
+            print *, 'trying to write record: ', i
+            print *, 'self%n_hash_vals:       ', self%n_hash_vals
+            print *, 'sz_vals         :       ', sz_vals
             stop 'nonconforming hash size; binoris :: write_record_2'
         endif
         self%record = 0.0
