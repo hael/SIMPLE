@@ -741,9 +741,10 @@ contains
         integer, allocatable  :: pops(:)
         character(len=STDLEN) :: fname, ext
         integer               :: i, n, maxpop, funit, closest, alloc_stat
-        real                  :: radius, maxradius, ang, scale, col, trace, dp
+        real                  :: radius, maxradius, ang, scale, col, trace, dp, geodist
+        real                  :: avg_euldist, avg_geodist
         real                  :: xyz(3), xyz_end(3), xyz_start(3), vec(3), axis(3)
-        real :: R(3,3), Ri(3,3), Rprev(3,3)
+        real                  :: R(3,3), Ri(3,3), Rprev(3,3)
         p = params(cline)
         call b%build_general_tbox(p, cline, do3d=.false.)
         ! BELOW IS FOR TESTING ONLY
@@ -834,8 +835,9 @@ contains
                 else
                     vec = xyz - xyz_start
                     if( sqrt(dot_product(vec, vec)) > 0.01 )then
-                        write(funit,'(A,F7.3,F7.3,F7.3,F7.3,F7.3,F7.3,F6.3)')&
-                        &'.cylinder ', xyz_start, xyz, radius
+                        write(funit,'(A,F7.3,F7.3,F7.3,A)')".sphere ", xyz, " 0.02"
+                        !write(funit,'(A,F7.3,F7.3,F7.3,F7.3,F7.3,F7.3,F6.3)')&
+                        !&'.cylinder ', xyz_start, xyz, radius
                     endif
                 endif
                 xyz_start = xyz
@@ -843,51 +845,62 @@ contains
             write(funit,'(A,F7.3,F7.3,F7.3,A)')".sphere ", xyz, " 0.08"
             close(funit)
             ! distance output
+            avg_geodist = 0.
+            avg_euldist = 0.
             allocate(euldists(n), stat=alloc_stat)
             fname  = trim(p%fbody)//'_motion.csv'
             open(unit=funit, status='REPLACE', action='WRITE', file=trim(fname))
             do i = 1, n
                 o = b%a%get_ori(i)
                 if( i==1 )then
-                    ang = 0.
+                    ang     = 0.
+                    geodist = 0.
                 else
-                    ang = rad2deg(o_prev.euldist.o)
+                    ang     = rad2deg(o_prev.euldist.o)
+                    geodist = o_prev.geod.o
                     call o_prev%mirror2d
-                    ang = min(ang, rad2deg(o_prev.euldist.o))
+                    ang     = min(ang, rad2deg(o_prev.euldist.o))
+                    geodist = min(geodist, o_prev.geod.o)
+                    avg_euldist = avg_euldist + ang
+                    avg_geodist = avg_geodist + geodist
                 endif
                 euldists(i) = ang
-                write(funit,'(I7,A1,F7.2)')i, ',', ang     
+                write(funit,'(I7,A1,F8.3,A1,F8.3)')i, ',', ang, ',', geodist   
                 o_prev = o
             enddo
             close(funit)
+            avg_geodist = avg_geodist / real(n-1)
+            avg_euldist = avg_euldist / real(n-1)
+            write(*,'(A,F8.3)')'>>> AVERAGE EULER    DISTANCE: ',avg_euldist
+            write(*,'(A,F8.3)')'>>> AVERAGE GEODESIC DISTANCE: ',avg_geodist
             ! movie output
             ! setting Rprev to south pole as it where chimera opens
-            call o_prev%new
-            call o_prev%mirror3d
-            Rprev = o_prev%get_mat()
-            fname = trim(p%fbody)//'_movie.cmd'
-            open(unit=funit, status='REPLACE', action='WRITE', file=trim(fname))
-            do i = 1, n
-                o  = b%a%get_ori(i)
-                Ri = o%get_mat()
-                R  = matmul(Ri,transpose(Rprev))
-                call rotmat2axis(R, axis)
-                if( abs(euldists(i)) > 0.01 )then
-                    if(i==1)then
-                        euldists(1) = rad2deg(o.euldist.o_prev)
-                        write(funit,'(A,A,A1,A,A1,A,A1,F8.2,A2)')&
-                        &'roll ', trim(real2str(axis(1))),',', trim(real2str(axis(2))),',', trim(real2str(axis(3))),' ',&
-                        &euldists(i), ' 1'
-                    else
-                        write(funit,'(A,A,A1,A,A1,A,A1,F8.2,A)')&
-                        &'roll ', trim(real2str(axis(1))),',', trim(real2str(axis(2))),',', trim(real2str(axis(3))),' ',&
-                        &euldists(i), ' 2; wait 2'
-                    endif
-                    o_prev = o
-                    Rprev  = Ri
-                endif
-            enddo
-            close(funit)
+            ! call o_prev%new
+            ! call o_prev%mirror3d
+            ! Rprev = o_prev%get_mat()
+            ! fname = trim(p%fbody)//'_movie.cmd'
+            ! open(unit=funit, status='REPLACE', action='WRITE', file=trim(fname))
+            ! do i = 1, n
+            !     o  = b%a%get_ori(i)
+            !     Ri = o%get_mat()
+            !     R  = matmul(Ri,transpose(Rprev))
+            !     call rotmat2axis(R, axis)
+            !     if( abs(euldists(i)) > 0.01 )then
+            !         if(i==1)then
+            !             euldists(1) = rad2deg(o.euldist.o_prev)
+            !             write(funit,'(A,A,A1,A,A1,A,A1,F8.2,A2)')&
+            !             &'roll ', trim(real2str(axis(1))),',', trim(real2str(axis(2))),',', trim(real2str(axis(3))),' ',&
+            !             &euldists(i), ' 1'
+            !         else
+            !             write(funit,'(A,A,A1,A,A1,A,A1,F8.2,A)')&
+            !             &'roll ', trim(real2str(axis(1))),',', trim(real2str(axis(2))),',', trim(real2str(axis(3))),' ',&
+            !             &euldists(i), ' 2; wait 2'
+            !         endif
+            !         o_prev = o
+            !         Rprev  = Ri
+            !     endif
+            ! enddo
+            ! close(funit)
         endif
         call simple_end('**** VIZORIS NORMAL STOP ****')
     end subroutine exec_vizoris

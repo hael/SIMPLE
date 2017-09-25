@@ -5440,29 +5440,24 @@ contains
     !! \param msksum masking sum
     !!
     subroutine mask( self, mskrad, which, inner, width, msksum )
+        use simple_math, only: median_nocopy
         class(image),     intent(inout) :: self
         real,             intent(in)    :: mskrad
         character(len=*), intent(in)    :: which
         real, optional,   intent(in)    :: inner, width
         real, optional,   intent(out)   :: msksum
-        real    :: ci, cj, ck, e, wwidth
-        real    :: cis(self%ldim(1)), cjs(self%ldim(2)), cks(self%ldim(3))
-        integer :: i, j, k, minlen, ir, jr, kr, vec(3)
-        logical :: didft, doinner, soft, domsksum
+        type(image)       :: maskimg
+        real, allocatable :: pixels(:)
+        real              :: ci, cj, ck, e, e_bckgr, wwidth, med_bckgr
+        real              :: cis(self%ldim(1)), cjs(self%ldim(2)), cks(self%ldim(3))
+        integer           :: i, j, k, minlen, ir, jr, kr, npix, npix_tot, vec(3)
+        logical           :: didft, doinner, soft, bckgr, domsksum, err
         ! width
         wwidth = 10.
         if( present(width) ) wwidth = width
         ! inner
         doinner = .false.
         if( present(inner) ) doinner = .true.
-        ! soft/hard
-        if( which=='soft' )then
-            soft = .true.
-        else if( which=='hard' )then
-            soft = .false.
-        else
-            stop 'undefined which parameter; mask; simple_image'
-        endif
         ! msksum
         domsksum = .false.
         if( present(msksum) )then
@@ -5482,7 +5477,30 @@ contains
             minlen = minval(self%ldim(1:2))
         endif
         ! soft mask width limited to +/- COSMSKHALFWIDTH pixels
-        minlen = min(nint(2.*(mskrad+COSMSKHALFWIDTH)), minlen) 
+        minlen = min(nint(2.*(mskrad+COSMSKHALFWIDTH)), minlen)
+        ! soft/hard
+        select case(trim(which))
+        case('soft')
+            soft  = .true.
+            bckgr = .false.
+        case('softbckgr')
+            soft  = .true.
+            bckgr = .true. ! to perform background adjusted masking
+        case('hard')
+            soft  = .false.
+            bckgr = .false.
+        case DEFAULT
+            stop 'undefined which parameter; mask; simple_image'
+        end select
+        med_bckgr = 0.
+        if( bckgr )then
+            call maskimg%disc(self%ldim, self%smpd, mskrad, npix)
+            npix_tot = product(self%ldim)
+            pixels   = pack( self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)),&
+                &maskimg%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) < 0.5 )
+            med_bckgr = median_nocopy(pixels)
+            deallocate(pixels)
+        endif
         ! init center as origin
         forall(i=1:self%ldim(1)) cis(i) = -real(self%ldim(1)-1)/2. + real(i-1)
         forall(i=1:self%ldim(2)) cjs(i) = -real(self%ldim(2)-1)/2. + real(i-1)
@@ -5511,6 +5529,17 @@ contains
                                 self%rmat(ir,j,kr)  = e * self%rmat(ir,j,kr)
                                 self%rmat(ir,jr,k)  = e * self%rmat(ir,jr,k)
                                 self%rmat(ir,jr,kr) = e * self%rmat(ir,jr,kr)
+                                if( bckgr )then
+                                    e_bckgr = (1.-e) * med_bckgr
+                                    self%rmat(i,j,k)    = self%rmat(i,j,k)    + e_bckgr
+                                    self%rmat(i,j,kr)   = self%rmat(i,j,kr)   + e_bckgr
+                                    self%rmat(i,jr,k)   = self%rmat(i,jr,k)   + e_bckgr
+                                    self%rmat(i,jr,kr)  = self%rmat(i,jr,kr)  + e_bckgr
+                                    self%rmat(ir,j,k)   = self%rmat(ir,j,k)   + e_bckgr
+                                    self%rmat(ir,j,kr)  = self%rmat(ir,j,kr)  + e_bckgr
+                                    self%rmat(ir,jr,k)  = self%rmat(ir,jr,k)  + e_bckgr
+                                    self%rmat(ir,jr,kr) = self%rmat(ir,jr,kr) + e_bckgr
+                                endif
                             enddo
                         enddo
                     enddo
@@ -5527,6 +5556,13 @@ contains
                             self%rmat(i,jr,1)  = e * self%rmat(i,jr,1)
                             self%rmat(ir,j,1)  = e * self%rmat(ir,j,1)
                             self%rmat(ir,jr,1) = e * self%rmat(ir,jr,1)
+                            if( bckgr )then
+                                e_bckgr = (1.-e) * med_bckgr
+                                self%rmat(i,j,1)   = self%rmat(i,j,k)   + e_bckgr
+                                self%rmat(i,jr,1)  = self%rmat(i,jr,k)  + e_bckgr
+                                self%rmat(ir,j,1)  = self%rmat(ir,j,k)  + e_bckgr
+                                self%rmat(ir,jr,1) = self%rmat(ir,jr,k) + e_bckgr
+                            endif
                         enddo
                     enddo
                 endif

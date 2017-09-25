@@ -861,10 +861,11 @@ select case(prg)
         keys_optional(5) = 'width'
         keys_optional(6) = 'nspace'
         keys_optional(7) = 'nran'
-        keys_optional(8) = 'npeaks'    
+        keys_optional(8) = 'npeaks'
+        keys_optional(9) = 'refine'   
         ! parse command line
         if( describe ) call print_doc_prime3D_init
-        call cline%parse(keys_required(:5), keys_optional(:8))
+        call cline%parse(keys_required(:5), keys_optional(:9))
         ! set defaults
         if( .not. cline%defined('eo')     ) call cline%set('eo',      'no')
         if( .not. cline%defined('nspace') ) call cline%set('nspace', 1000.)

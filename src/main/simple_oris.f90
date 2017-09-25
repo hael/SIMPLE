@@ -154,6 +154,7 @@ type :: oris
     procedure          :: find_closest_projs
     procedure          :: find_closest_ori
     procedure          :: find_closest_oris
+    procedure          :: calc_euldists
     procedure, private :: create_proj_subspace_1
     procedure, private :: create_proj_subspace_2
     generic            :: create_proj_subspace => create_proj_subspace_1, create_proj_subspace_2
@@ -2607,6 +2608,25 @@ contains
             oriinds(i) = inds(i)
         end do
     end subroutine find_closest_oris
+
+    !>  \brief  to calculate all euler distances to one orientation
+    subroutine calc_euldists( self, o_in, dists )
+        class(oris),       intent(in)  :: self
+        class(ori),        intent(in)  :: o_in
+        real, allocatable, intent(out) :: dists(:)
+        integer :: i
+        if( allocated(dists) )then
+            if( size(dists).ne.self%n )then
+                deallocate(dists)
+                allocate(dists(self%n))
+            endif
+        else
+            allocate(dists(self%n))
+        endif
+        do i=1,self%n
+            dists(i) = self%o(i).euldist.o_in
+        end do
+    end subroutine calc_euldists
 
     !>  \brief  to identify a subspace of projection directions
     function create_proj_subspace_1( self, nsub ) result( subspace_projs )
