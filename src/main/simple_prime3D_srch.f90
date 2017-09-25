@@ -1015,12 +1015,12 @@ contains
             call rt%shuffle( self%srch_order ) ! ...& wizz it up
         else
             select case( trim(self%refine) )
-            case('no','shc','snhc')
+            case('no','shc','snhc','greedy')
                 call rt%ne_ran_iarr( self%srch_order )
             case('tseries')
                 call prep_tseries_srchorder
             case DEFAULT
-                stop 'Unknown refinement mode; simple_prime3d_srch%prep4srch'
+                stop 'Unknown refinement mode; simple_prime3d_srch%prep_reforis'
             end select
         endif
         if( any(self%srch_order == 0) ) stop 'Invalid index in srch_order; simple_prime3d_srch::prep_ref_oris'
