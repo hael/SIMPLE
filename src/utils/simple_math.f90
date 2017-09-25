@@ -1,5 +1,5 @@
 ! various mathematical subroutines and functions
-#include "simple_lib.f08"
+
 module simple_math
 use simple_defs
 use simple_syslib, only: alloc_errchk 
@@ -482,8 +482,8 @@ contains
         ncls = size(means)
         ndat = size(dat)
         if( allocated(labels) ) deallocate(labels)
-        allocate( mask(ndat), labels(ndat), stat=alloc_stat ) 
-        if(alloc_stat /= 0) allocchk("sortmeans; simple_math")
+        allocate(  mask(ndat), labels(ndat), stat=alloc_stat ) 
+        if(alloc_stat /= 0) call alloc_errchk("sortmeans; simple_math", alloc_stat)
         ! initialization by sorting
         dat_sorted = dat ! reallocation  dat_sorted(ndat),
         call hpsort(ndat, dat_sorted)
@@ -698,8 +698,13 @@ contains
         real :: nom, denom, phase
         nom = aimag(comp)
         denom = real(comp)
+#ifdef USETINY
+        if(  abs(denom) < TINY )then
+           if( abs(nom) < TINY )then
+#else
         if( denom == 0. )then
-            if( nom == 0. )then
+           if( nom == 0. )then
+#endif
                 phase = 0.
             else if( nom > 0. )then
                 phase = pi/2.
@@ -717,10 +722,16 @@ contains
         real(sp) :: sq, x, y, frac
         x = abs(real(a))
         y = abs(aimag(a))
+#ifdef USETINY
+        if( x < TINY ) then
+            sq = y*y
+        else if( y < TINY ) then
+#else
         if( x == 0.) then
             sq = y*y
         else if( y == 0. ) then
-            sq = x*x
+#endif
+           sq = x*x
         else if( x > y ) then
             frac = y/x
             sq = x*x*(1.+frac*frac)
@@ -736,9 +747,15 @@ contains
         real(dp) :: sq, x, y, frac
         x = abs(real(a))
         y = abs(aimag(a))
+#ifdef USETINY
+        if( x < TINY ) then
+            sq = y*y
+        else if( y < TINY ) then
+#else
         if( x == 0.) then
             sq = y*y
         else if( y == 0. ) then
+#endif  
             sq = x*x
         else if( x > y ) then
             frac = y/x
@@ -749,16 +766,22 @@ contains
         endif
     end function csq_2
 
-    !>   is for calculating complex arg/abs/modulus, from numerical recepies
+    !>   is for calculating complex arg/abs/modulus, from numerical recipes
     elemental pure function mycabs( a ) result( myabs )
         complex, intent(in) :: a      !< complx component
         real                :: myabs, x, y, frac
         x = abs(real(a))
         y = abs(aimag(a))
+#ifdef USETINY
+        if( x < TINY ) then
+            myabs = y
+        else if( y < TINY ) then
+#else
         if( x == 0. ) then
             myabs = y
         else if( y == 0. ) then
-            myabs = x
+#endif
+           myabs = x
         else if( x > y ) then
             frac = y/x
             myabs = x*sqrt(1.+frac*frac)
@@ -775,9 +798,14 @@ contains
         corr = 0.
         c1sq = csq(c1)
         c2sq = csq(c2)
-        if( c1sq /= 0. .and. c2sq /= 0. )&
-        corr = calc_corr(real(c1*conjg(c2)),sqrt(c1sq*c2sq))
-    end function
+#ifdef USETINY
+        if( c1sq > TINY .and. c2sq > TINY )then
+#else
+        if( c1sq /= 0. .and. c2sq /= 0. )then
+#endif
+            corr = calc_corr(real(c1*conjg(c2)),sqrt(c1sq*c2sq))
+        endif
+   end function
 
     ! edge functions
 
@@ -992,7 +1020,7 @@ contains
 
     !>   returns the Fourier index of the resolution limit
     function get_lplim( fsc ) result( k )
-        real, intent(in) :: fsc(:)         !< Fourier shell correlation array
+        real, intent(in) :: fsc(:) !< Fourier shell correlation array
         integer :: n, k, h
         n = size(fsc)
         if( n < 3 )then
@@ -1024,6 +1052,23 @@ contains
         real, intent(in)    :: smpd      !< smpd pixel size \f$ (\si{\angstrom}) \f$
         calc_lowpass_lim = (real(box-1)*smpd)/real(find)
     end function calc_lowpass_lim
+
+    !>  \brief get array of resolution steps
+    !> get_res
+    !! \return  res
+    !!
+    function get_resarr( box, smpd ) result( res )
+        integer, intent(in) :: box
+        real,    intent(in) :: smpd
+        real, allocatable   :: res(:)
+        integer :: n, k, alloc_stat
+        n = fdim(box) - 1
+        allocate( res(n), stat=alloc_stat )
+        call alloc_errchk('In: get_res, module: simple_math', alloc_stat)
+        do k=1,n
+            res(k) = calc_lowpass_lim(k, box, smpd)
+        end do
+    end function get_resarr
 
     !>   calculates a corr coeff based on sum cross prod and denominator
     !! \param sxy cross prod sum
@@ -1200,8 +1245,12 @@ contains
         end do
         ! reduce augmented matrix to upper traingular form
         do k=1,n-1
-            if( augmatrix(k,k) == 0. )then
-                flag = .false.
+#ifdef USETINY
+           if( abs(augmatrix(k,k)) < TINY )then
+#else
+              if( augmatrix(k,k) == 0. )then
+#endif
+                 flag = .false.
                 do i=k+1,n
                     if( augmatrix(i,k) > 0. )then
                         do j=1,2*n
@@ -1263,7 +1312,7 @@ contains
     !!         http://math.uww.edu/~mcfarlat/inverse.htm
     !!         http://www.tutor.ms.unimelb.edu.au/matrix/matrix_inverse.html
     subroutine matinv_D(matrix, inverse, n, errflg)
-      integer, intent(in)  :: n                          !< size of square matrix
+        integer, intent(in)  :: n                          !< size of square matrix
         integer, intent(out) :: errflg                   !< return error status. -1 for error, 0 for normal
         real(dp), intent(in), dimension(n,n)  :: matrix  !< input matrix
         real(dp), intent(out), dimension(n,n) :: inverse !< inverted matrix
@@ -1446,7 +1495,7 @@ contains
         integer, intent(in) :: n          !< matrix size
         real, allocatable   :: a(:)
         allocate( a(n), stat=alloc_stat )
-        if(alloc_stat /= 0) allocchk("In: zeros_1; simple_math")
+        if(alloc_stat /= 0) call alloc_errchk("In: zeros_1; simple_math", alloc_stat)
         a = 0.
     end function
 
@@ -1455,7 +1504,7 @@ contains
         integer, intent(in) :: n1, n2    !< matrix size
         real, allocatable   :: a(:,:)
         allocate( a(n1,n2), stat=alloc_stat )
-        if(alloc_stat /= 0) allocchk("In: zeros_2; simple_math")
+        if(alloc_stat /= 0) call alloc_errchk("In: zeros_2; simple_math", alloc_stat)
         a = 0.
     end function
 
@@ -2102,7 +2151,7 @@ contains
             deallocate(angtab)
         end if
         allocate( coords(nradial_lines,kfromto(1):kfromto(2),2), angtab(nradial_lines), stat=alloc_stat )
-        if(alloc_stat /= 0) allocchk("In: gen_polar_coords_1; simple_math coords/angtab alloc")
+        if(alloc_stat /= 0) call alloc_errchk("In: gen_polar_coords_1; simple_math coords/angtab alloc", alloc_stat)
         dang = twopi/real(nradial_lines)
         do i=1,nradial_lines
             angtab(i) = real(i-1)*dang
@@ -2130,7 +2179,7 @@ contains
         n = size(xa)
         if( n /= size(ya) ) stop 'incompatible array sizes; ratint; simple_math'
         allocate(c(n), d(n), stat=alloc_stat)
-        if(alloc_stat /= 0) allocchk("In: ratint; simple_math")
+        if(alloc_stat /= 0) call alloc_errchk("In: ratint; simple_math", alloc_stat)
         ns = 1
         hh = abs(x-xa(1))
         do i=1,n
@@ -2167,7 +2216,8 @@ contains
             endif
             y = y+dy
         end do
-        deallocate(c,d)
+        deallocate(c,d,stat=alloc_stat)
+        call alloc_errchk("In: ratint; simple_math", alloc_stat)
     end subroutine
 
     !>    quadratic interpolation in 2D, from spider
@@ -2260,7 +2310,7 @@ contains
         integer :: n, ipeak, loc(1)
         n = size(vals)
         allocate(peakpos(npeaks), mask(n),stat=alloc_stat)
-        if(alloc_stat /= 0) allocchk("In: peakfinder; simple_math")
+        if(alloc_stat /= 0) call alloc_errchk("In: peakfinder; simple_math", alloc_stat)
         mask = .true.
         do ipeak=1,npeaks
             loc = maxloc(vals, mask=mask)
@@ -2665,8 +2715,8 @@ contains
             pos2 = pos1
         endif
         !allocate( copy(n), stat=alloc_stat )
-        ! allocchk('In: median, module: simple_math')
-        copy = arr  ! compiler will realloc here
+        !if(alloc_stat /= 0) call alloc_errchk('In: median, module: simple_math', alloc_stat)
+        copy = arr  ! compiler will realloc here anyway
         if( pos1 == pos2 )then
             val  = selec(pos1,n,copy)
         else
