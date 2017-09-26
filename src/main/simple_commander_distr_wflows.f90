@@ -1314,6 +1314,7 @@ contains
         type(split_commander)              :: xsplit
         type(qsys_env)                     :: qenv
         type(params)                       :: p_master
+        type(cmdline)                      :: cline_volassemble
         character(len=STDLEN)              :: volassemble_output, str_state
         character(len=STDLEN), allocatable :: state_assemble_finished(:)
         type(chash)                        :: job_descr
@@ -1338,11 +1339,12 @@ contains
         do state = 1, p_master%nstates
             state_assemble_finished(state) = 'VOLASSEMBLE_FINISHED_STATE'//int2str_pad(state,2)
         enddo
-        call cline%delete('nstates') ! to reduce memory use
+        cline_volassemble = cline
+        call cline_volassemble%delete('nstates') ! to reduce memory use
         if( p_master%eo .ne. 'no' )then
-            call cline%set('prg', 'eo_volassemble')
+            call cline_volassemble%set('prg', 'eo_volassemble')
         else
-            call cline%set('prg', 'volassemble')
+            call cline_volassemble%set('prg', 'volassemble')
         endif
         ! parallel assembly
         do state = 1, p_master%nstates
@@ -1352,9 +1354,9 @@ contains
             else
                 volassemble_output = 'VOLASSEMBLE_STATE'//trim(str_state)
             endif
-            call cline%set( 'state', real(state) )
+            call cline_volassemble%set( 'state', real(state) )
 
-            call qenv%exec_simple_prg_in_queue(cline, trim(volassemble_output),&
+            call qenv%exec_simple_prg_in_queue(cline_volassemble, trim(volassemble_output),&
                 &script_name='simple_script_state'//trim(str_state))
         end do
         call qsys_watcher(state_assemble_finished)

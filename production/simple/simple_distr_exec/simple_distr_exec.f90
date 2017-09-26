@@ -34,6 +34,7 @@ type(tseries_track_distr_commander)      :: xtseries_track_distr
 ! HIGH-LEVEL WORKFLOWS
 type(ini3D_from_cavgs_commander)         :: xini3D_from_cavgs
 type(het_ensemble_commander)             :: xhet_ensemble
+type(cga_hres_sel_commander)             :: xcga_hres_sel
 ! SUPORTING DISTRIBUTED WORKFLOWS
 type(scale_stk_parts_commander)          :: xscale_stk_parts
 
@@ -817,8 +818,38 @@ select case(prg)
         if( .not. cline%defined('nrepeats') ) call cline%set('nrepeats', real(HETNREPEATS))
         ! execute
         call xhet_ensemble%execute( cline )
-
-    ! SUPORTING DISTRIBUTED WORKFLOWS
+    case( 'cga_hres_sel' )
+        !==Program cga_hres_sel
+        !
+        ! <cga_hres_sel/begin>is a distributed workflow for high-resolution particle selection
+        ! based on FSC optimisation with a compact genetic algorithm<cga_hres_sel/end> 
+        !
+        ! set required keys
+        keys_required(1) = 'ctf'
+        keys_required(2) = 'msk' 
+        keys_required(3) = 'nparts'
+        keys_required(4) = 'oritab' 
+        keys_required(5) = 'pgrp' 
+        keys_required(6) = 'smpd' 
+        keys_required(7) = 'stk'
+        ! set optional keys
+        keys_optional(1) = 'balance'
+        keys_optional(2) = 'eo'
+        keys_optional(3) = 'mskfile' 
+        keys_optional(4) = 'ncunits'
+        keys_optional(5) = 'nthr'
+        keys_optional(6) = 'maxits'
+        keys_optional(7) = 'eps'
+        ! parse command line
+        ! if( describe ) call print_doc_cga_hres_sel
+        call cline%parse(keys_required(:7), keys_optional(:7))
+        ! set defaults
+        if( .not. cline%defined('trs') ) call cline%set('trs',  5.) ! to assure that shifts are being used
+        if( .not. cline%defined('eo')  ) call cline%set('eo', 'no')
+        ! execute
+        call xcga_hres_sel%execute( cline )
+    
+    ! SUPPORTING DISTRIBUTED WORKFLOWS
 
     case( 'scale_stk_parts' )
         !==Program scale_stk_parts
