@@ -39,3 +39,5 @@ doc/html/
 *.pdf
 *.synctex.gz
 *.toc
+*.orig
+
