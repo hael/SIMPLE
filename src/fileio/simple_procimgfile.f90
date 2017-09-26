@@ -983,6 +983,30 @@ contains
         call img%kill
     end subroutine mask_imgfile
 
+    !>  \brief  is for tapering edges of all images in stack
+    !! \param fname2mask  output filename
+    !! \param fname  input filename
+    !! \param smpd sampling distance
+    subroutine taper_edges_imgfile( fname2mask, fname, smpd)
+        character(len=*),           intent(in) :: fname2mask, fname
+        real,                       intent(in) :: smpd
+        type(image)           :: img
+        integer               :: n, i, ldim(3)
+        call find_ldim_nptcls(fname2mask, ldim, n)
+        ldim(3) = 1
+        call raise_exception_imgfile( n, ldim, 'taper_edges_imgfile' )
+        ! do the work
+        call img%new(ldim,smpd)
+        write(*,'(a)') '>>> TAPERING EDGES OF IMAGES'
+        do i=1,n
+            call progress(i,n)
+            call img%read(fname2mask, i)
+            call img%taper_edges
+            call img%write(fname, i)
+        end do
+        call img%kill
+    end subroutine taper_edges_imgfile
+
     !>  \brief  is for binarizing all images in the stack
     !! \param fname2process  output filename
     !! \param fname  input filename

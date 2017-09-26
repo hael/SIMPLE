@@ -81,6 +81,7 @@ type :: params
     character(len=3)      :: stats='no'           !< provide statistics(yes|no){yes}
     character(len=3)      :: stream='no'          !< sream (real time) execution mode(yes|no){no}
     character(len=3)      :: swap='no'
+    character(len=3)      :: taper_edges='no'     !< self-explanatory
     character(len=3)      :: test='no'
     character(len=3)      :: tomo='no'            !< tomography mode(yes|no){no}
     character(len=3)      :: time='no'
@@ -516,6 +517,7 @@ contains
         call check_carg('stats',          self%stats)
         call check_carg('stream',         self%stream)
         call check_carg('swap',           self%swap)
+        call check_carg('taper_edges',    self%taper_edges)
         call check_carg('test',           self%test)
         call check_carg('time',           self%time)
         call check_carg('tomo',           self%tomo)

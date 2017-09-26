@@ -495,6 +495,7 @@ contains
             call b%mskvol%new([p%box, p%box, p%box], p%smpd)
             call b%mskvol%read(p%mskfile)
             call b%mskvol%clip_inplace([p%boxmatch,p%boxmatch,p%boxmatch])
+            call b%vol%zero_background(p%msk)
             call b%vol%mul(b%mskvol)
         else
             ! circular masking

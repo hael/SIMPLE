@@ -1192,8 +1192,7 @@ select case(prg)
        ! to the radius in pixels<mask/end> 
        !
        ! set required keys
-       keys_required(1)  = 'msk'
-       keys_required(2)  = 'smpd'
+       keys_required(1)  = 'smpd'
        ! set optional keys
        keys_optional(1)  = 'stk'
        keys_optional(2)  = 'vol1'
@@ -1210,9 +1209,11 @@ select case(prg)
        keys_optional(13) = 'outstk'
        keys_optional(14) = 'outvol'
        keys_optional(15) = 'mskfile'
+       keys_optional(16) = 'taper_edges'
+       keys_optional(17) = 'msk'
        ! parse command line
        if( describe ) call print_doc_mask
-       call cline%parse( keys_required(:2), keys_optional(:15))
+       call cline%parse( keys_required(:1), keys_optional(:17))
        ! execute
        call xmask%execute(cline)
     case( 'automask2D' )

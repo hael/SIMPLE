@@ -234,6 +234,7 @@ type :: image
     procedure          :: add_gauran
     procedure          :: dead_hot_positions
     procedure          :: taper_edges
+    procedure          :: zero_background
     procedure          :: salt_n_pepper
     procedure          :: square
     procedure          :: corners
@@ -243,9 +244,6 @@ type :: image
     procedure          :: ft2img
     procedure          :: fwd_logft
     procedure          :: mask
-    procedure, private :: fmaskv_1
-    procedure, private :: fmaskv_2
-    generic            :: fmaskv => fmaskv_1, fmaskv_2
     procedure          :: neg
     procedure          :: pad
     procedure          :: pad_mirr
@@ -4056,13 +4054,33 @@ contains
     !> median_pixel
     !! \return  med
     !!
-    function median_pixel( self ) result( med )
-        class(image), intent(inout) :: self
-        real, allocatable           :: pixels(:)
-        real :: med
+    function median_pixel( self, mskrad, which ) result( med )
+        class(image),               intent(inout) :: self
+        real,             optional, intent(in)    :: mskrad        
+        character(len=*), optional, intent(in)    :: which
+        type(image)       :: maskimg
+        real, allocatable :: pixels(:)
+        real              :: med
+        integer           :: npix, npix_tot
         if( self%ft ) stop 'not for FTs; simple_image::median'
-        pixels = pack(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)), mask=.true.)
-        med = median_nocopy(pixels)
+        if( .not.present(which) )then
+            pixels = pack(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)), mask=.true.)
+            med = median_nocopy(pixels)
+        else
+            if(.not.present(mskrad) )stop 'mskrad required; simple_image%median_pixel'
+            call maskimg%disc(self%ldim, self%smpd, mskrad, npix)
+            npix_tot = product(self%ldim)
+            if(trim(which).eq.'backgr')then
+                pixels   = pack( self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)),&
+                &maskimg%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) < 0.5 )
+            else if( trim(which).eq.'foregr')then
+                pixels   = pack( self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)),&
+                &maskimg%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) >= 0.5 )
+            else
+                stop 'unknown option; simple_image%median_pixel'
+            endif
+            med = median_nocopy(pixels)
+        endif
     end function median_pixel
 
     !>  \brief  is for checking the numerical soundness of an image
@@ -4897,6 +4915,17 @@ contains
     !>  \brief  Taper edges of image so that there are no sharp discontinuities in real space
     !!          This is a re-implementation of the MRC program taperedgek.for (Richard Henderson, 1987)
     !!          I stole it from CTFFIND4 (thanks Alexis for the beautiful re-implementation)
+    subroutine zero_background(self, msk)
+        class(image), intent(inout) :: self
+        real,         intent(in)    :: msk
+        real :: med
+        med = self%median_pixel(msk, 'backgr')
+        if(abs(med) > TINY)self%rmat = self%rmat - med
+    end subroutine zero_background
+
+    !>  \brief  Taper edges of image so that there are no sharp discontinuities in real space
+    !!          This is a re-implementation of the MRC program taperedgek.for (Richard Henderson, 1987)
+    !!          I stole it from CTFFIND4 (thanks Alexis for the beautiful re-implementation)
     subroutine taper_edges(self)
         class(image), intent(inout) :: self
         real, allocatable  :: avg_curr_edge_start(:,:)
@@ -5433,31 +5462,22 @@ contains
     !! \param width width of inner patch
     !! \param msksum masking sum
     !!
-    subroutine mask( self, mskrad, which, inner, width, msksum )
-        use simple_math, only: median_nocopy
+    subroutine mask( self, mskrad, which, inner, width )
         class(image),     intent(inout) :: self
         real,             intent(in)    :: mskrad
         character(len=*), intent(in)    :: which
         real, optional,   intent(in)    :: inner, width
-        real, optional,   intent(out)   :: msksum
-        type(image)       :: maskimg
         real, allocatable :: pixels(:)
-        real              :: ci, cj, ck, e, e_bckgr, wwidth, med_bckgr
+        real              :: ci, cj, ck, e, wwidth
         real              :: cis(self%ldim(1)), cjs(self%ldim(2)), cks(self%ldim(3))
         integer           :: i, j, k, minlen, ir, jr, kr, npix, npix_tot, vec(3)
-        logical           :: didft, doinner, soft, bckgr, domsksum, err
+        logical           :: didft, doinner, soft, err
         ! width
         wwidth = 10.
         if( present(width) ) wwidth = width
         ! inner
         doinner = .false.
         if( present(inner) ) doinner = .true.
-        ! msksum
-        domsksum = .false.
-        if( present(msksum) )then
-            msksum   = 0.
-            domsksum =  .true.
-        endif
         ! FT
         didft = .false.
         if( self%ft )then
@@ -5476,196 +5496,98 @@ contains
         select case(trim(which))
         case('soft')
             soft  = .true.
-            bckgr = .false.
-        case('softbckgr')
-            soft  = .true.
-            bckgr = .true. ! to perform background adjusted masking
         case('hard')
             soft  = .false.
-            bckgr = .false.
         case DEFAULT
             stop 'undefined which parameter; mask; simple_image'
         end select
-        med_bckgr = 0.
-        if( bckgr )then
-            call maskimg%disc(self%ldim, self%smpd, mskrad, npix)
-            npix_tot = product(self%ldim)
-            pixels   = pack( self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)),&
-                &maskimg%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) < 0.5 )
-            med_bckgr = median_nocopy(pixels)
-            deallocate(pixels)
-        endif
+        call self%zero_background(mskrad)
         ! init center as origin
         forall(i=1:self%ldim(1)) cis(i) = -real(self%ldim(1)-1)/2. + real(i-1)
         forall(i=1:self%ldim(2)) cjs(i) = -real(self%ldim(2)-1)/2. + real(i-1)
         if(self%is_3d())forall(i=1:self%ldim(3)) cks(i) = -real(self%ldim(3)-1)/2. + real(i-1)
-        ! Main loops
-        if( .not.domsksum )then
-            ! MASKING
-            if( soft )then
-                ! Soft masking
-                if( self%is_3d() )then
-                    ! 3d
-                    do i=1,self%ldim(1)/2
-                        ir = self%ldim(1)+1-i
-                        do j=1,self%ldim(2)/2
-                            jr = self%ldim(2)+1-j
-                            do k=1,self%ldim(3)/2
-                                kr = self%ldim(3)+1-k
-                                e = cosedge(cis(i),cjs(j),cks(k),minlen,mskrad)
-                                if( doinner )e = e * cosedge_inner(cis(i),cjs(j),cks(k),wwidth,inner)
-                                if(e > 0.9999) cycle
-                                self%rmat(i,j,k)    = e * self%rmat(i,j,k)
-                                self%rmat(i,j,kr)   = e * self%rmat(i,j,kr)
-                                self%rmat(i,jr,k)   = e * self%rmat(i,jr,k)
-                                self%rmat(i,jr,kr)  = e * self%rmat(i,jr,kr)
-                                self%rmat(ir,j,k)   = e * self%rmat(ir,j,k)
-                                self%rmat(ir,j,kr)  = e * self%rmat(ir,j,kr)
-                                self%rmat(ir,jr,k)  = e * self%rmat(ir,jr,k)
-                                self%rmat(ir,jr,kr) = e * self%rmat(ir,jr,kr)
-                                if( bckgr )then
-                                    e_bckgr = (1.-e) * med_bckgr
-                                    self%rmat(i,j,k)    = self%rmat(i,j,k)    + e_bckgr
-                                    self%rmat(i,j,kr)   = self%rmat(i,j,kr)   + e_bckgr
-                                    self%rmat(i,jr,k)   = self%rmat(i,jr,k)   + e_bckgr
-                                    self%rmat(i,jr,kr)  = self%rmat(i,jr,kr)  + e_bckgr
-                                    self%rmat(ir,j,k)   = self%rmat(ir,j,k)   + e_bckgr
-                                    self%rmat(ir,j,kr)  = self%rmat(ir,j,kr)  + e_bckgr
-                                    self%rmat(ir,jr,k)  = self%rmat(ir,jr,k)  + e_bckgr
-                                    self%rmat(ir,jr,kr) = self%rmat(ir,jr,kr) + e_bckgr
-                                endif
-                            enddo
+        ! MASKING
+        if( soft )then
+            ! Soft masking
+            if( self%is_3d() )then
+                ! 3d
+                do i=1,self%ldim(1)/2
+                    ir = self%ldim(1)+1-i
+                    do j=1,self%ldim(2)/2
+                        jr = self%ldim(2)+1-j
+                        do k=1,self%ldim(3)/2
+                            kr = self%ldim(3)+1-k
+                            e = cosedge(cis(i),cjs(j),cks(k),minlen,mskrad)
+                            if( doinner )e = e * cosedge_inner(cis(i),cjs(j),cks(k),wwidth,inner)
+                            if(e > 0.9999) cycle
+                            self%rmat(i,j,k)    = e * self%rmat(i,j,k)
+                            self%rmat(i,j,kr)   = e * self%rmat(i,j,kr)
+                            self%rmat(i,jr,k)   = e * self%rmat(i,jr,k)
+                            self%rmat(i,jr,kr)  = e * self%rmat(i,jr,kr)
+                            self%rmat(ir,j,k)   = e * self%rmat(ir,j,k)
+                            self%rmat(ir,j,kr)  = e * self%rmat(ir,j,kr)
+                            self%rmat(ir,jr,k)  = e * self%rmat(ir,jr,k)
+                            self%rmat(ir,jr,kr) = e * self%rmat(ir,jr,kr)
                         enddo
                     enddo
-                else
-                    ! 2d
-                    do i=1,self%ldim(1)/2
-                        ir = self%ldim(1)+1-i
-                        do j=1,self%ldim(2)/2
-                            jr = self%ldim(2)+1-j
-                            e = cosedge(cis(i),cjs(j),minlen,mskrad)
-                            if( doinner )e = e * cosedge_inner(cis(i),cjs(j),wwidth,inner)
-                            if(e > 0.9999)cycle
-                            self%rmat(i,j,1)   = e * self%rmat(i,j,1)
-                            self%rmat(i,jr,1)  = e * self%rmat(i,jr,1)
-                            self%rmat(ir,j,1)  = e * self%rmat(ir,j,1)
-                            self%rmat(ir,jr,1) = e * self%rmat(ir,jr,1)
-                            if( bckgr )then
-                                e_bckgr = (1.-e) * med_bckgr
-                                self%rmat(i,j,1)   = self%rmat(i,j,k)   + e_bckgr
-                                self%rmat(i,jr,1)  = self%rmat(i,jr,k)  + e_bckgr
-                                self%rmat(ir,j,1)  = self%rmat(ir,j,k)  + e_bckgr
-                                self%rmat(ir,jr,1) = self%rmat(ir,jr,k) + e_bckgr
-                            endif
-                        enddo
-                    enddo
-                endif
+                enddo
             else
-                ! Hard masking
-                if( self%is_3d() )then
-                    ! 3d
-                    do i=1,self%ldim(1)/2
-                        ir = self%ldim(1)+1-i
-                        do j=1,self%ldim(2)/2
-                            jr = self%ldim(2)+1-j
-                            do k=1,self%ldim(3)/2
-                                kr = self%ldim(3)+1-k
-                                e = hardedge(cis(i),cjs(j),cks(k),mskrad)
-                                if( doinner )e = e * hardedge_inner(cis(i),cjs(j),cks(k),inner)
-                                self%rmat(i,j,k)    = e * self%rmat(i,j,k)
-                                self%rmat(i,j,kr)   = e * self%rmat(i,j,kr)
-                                self%rmat(i,jr,k)   = e * self%rmat(i,jr,k)
-                                self%rmat(i,jr,kr)  = e * self%rmat(i,jr,kr)
-                                self%rmat(ir,j,k)   = e * self%rmat(ir,j,k)
-                                self%rmat(ir,j,kr)  = e * self%rmat(ir,j,kr)
-                                self%rmat(ir,jr,k)  = e * self%rmat(ir,jr,k)
-                                self%rmat(ir,jr,kr) = e * self%rmat(ir,jr,kr)
-                            enddo
-                        enddo
+                ! 2d
+                do i=1,self%ldim(1)/2
+                    ir = self%ldim(1)+1-i
+                    do j=1,self%ldim(2)/2
+                        jr = self%ldim(2)+1-j
+                        e = cosedge(cis(i),cjs(j),minlen,mskrad)
+                        if( doinner )e = e * cosedge_inner(cis(i),cjs(j),wwidth,inner)
+                        if(e > 0.9999)cycle
+                        self%rmat(i,j,1)   = e * self%rmat(i,j,1)
+                        self%rmat(i,jr,1)  = e * self%rmat(i,jr,1)
+                        self%rmat(ir,j,1)  = e * self%rmat(ir,j,1)
+                        self%rmat(ir,jr,1) = e * self%rmat(ir,jr,1)
                     enddo
-                else
-                    ! 2d
-                    do i=1,self%ldim(1)/2
-                        ir = self%ldim(1)+1-i
-                        do j=1,self%ldim(2)/2
-                            jr = self%ldim(2)+1-j
-                            e = hardedge(cis(i),cjs(j),mskrad)
-                            if( doinner )e = e * hardedge_inner(cis(i),cjs(j),inner)
-                            self%rmat(i,j,1)   = e * self%rmat(i,j,1)
-                            self%rmat(i,jr,1)  = e * self%rmat(i,jr,1)
-                            self%rmat(ir,j,1)  = e * self%rmat(ir,j,1)
-                            self%rmat(ir,jr,1) = e * self%rmat(ir,jr,1)
-                        enddo
-                    enddo
-                endif
+                enddo
             endif
         else
-            ! MASK SUM
-            do i=1,self%ldim(1)
-                ci = cis(i)
-                do j=1,self%ldim(2)
-                    cj = cjs(j)
-                    if( self%is_3d() )then
-                        ! 3D
-                        do k=1,self%ldim(3)
-                            ck = cks(k)
-                            if( soft )then ! soft
-                                e = cosedge(ci,cj,ck,minlen,mskrad)
-                                if( doinner )e = e*cosedge_inner(ci,cj,ck,wwidth,inner)
-                            else ! hard
-                                e = hardedge(ci,cj,ck,mskrad)
-                                if( doinner )e = e*hardedge_inner(ci,cj,ck,inner)
-                            endif
-                            msksum = msksum+e**2.
-                        end do
-                    else
-                        ! 2D
-                        if( soft )then ! soft
-                            e = cosedge(ci,cj,minlen,mskrad)
-                            if( doinner )e = e*cosedge_inner(ci,cj,wwidth,inner)
-                        else ! hard
-                            e = hardedge(ci,cj,mskrad)
-                            if( doinner )e = e*hardedge_inner(ci,cj,inner)
-                        endif
-                        msksum = msksum+e**2.
-                    endif
-                end do
-            end do
+            ! Hard masking
+            if( self%is_3d() )then
+                ! 3d
+                do i=1,self%ldim(1)/2
+                    ir = self%ldim(1)+1-i
+                    do j=1,self%ldim(2)/2
+                        jr = self%ldim(2)+1-j
+                        do k=1,self%ldim(3)/2
+                            kr = self%ldim(3)+1-k
+                            e = hardedge(cis(i),cjs(j),cks(k),mskrad)
+                            if( doinner )e = e * hardedge_inner(cis(i),cjs(j),cks(k),inner)
+                            self%rmat(i,j,k)    = e * self%rmat(i,j,k)
+                            self%rmat(i,j,kr)   = e * self%rmat(i,j,kr)
+                            self%rmat(i,jr,k)   = e * self%rmat(i,jr,k)
+                            self%rmat(i,jr,kr)  = e * self%rmat(i,jr,kr)
+                            self%rmat(ir,j,k)   = e * self%rmat(ir,j,k)
+                            self%rmat(ir,j,kr)  = e * self%rmat(ir,j,kr)
+                            self%rmat(ir,jr,k)  = e * self%rmat(ir,jr,k)
+                            self%rmat(ir,jr,kr) = e * self%rmat(ir,jr,kr)
+                        enddo
+                    enddo
+                enddo
+            else
+                ! 2d
+                do i=1,self%ldim(1)/2
+                    ir = self%ldim(1)+1-i
+                    do j=1,self%ldim(2)/2
+                        jr = self%ldim(2)+1-j
+                        e = hardedge(cis(i),cjs(j),mskrad)
+                        if( doinner )e = e * hardedge_inner(cis(i),cjs(j),inner)
+                        self%rmat(i,j,1)   = e * self%rmat(i,j,1)
+                        self%rmat(i,jr,1)  = e * self%rmat(i,jr,1)
+                        self%rmat(ir,j,1)  = e * self%rmat(ir,j,1)
+                        self%rmat(ir,jr,1) = e * self%rmat(ir,jr,1)
+                    enddo
+                enddo
+            endif
         endif
         if( didft ) call self%fwd_ft
     end subroutine mask
-
-    !>  \brief fmaskv_1 is for calculating the fractional area/volume of the mask
-    !>
-    !! \param mskrad mask radius
-    !! \param which image type
-    !! \param inner
-    !! \param width
-    !! \return  frac fraction of masked pixels
-    !!
-    function fmaskv_1( self, mskrad, which, inner, width ) result( frac )
-        class(image), intent(inout) :: self
-        real, intent(in)            :: mskrad
-        character(len=*)            :: which
-        real, intent(in), optional  :: inner, width
-        real                        :: frac, sum_masked, sum_unmasked
-        sum_unmasked = product( self%get_ldim() )
-        call self%mask(mskrad, which, inner=inner, width=width, msksum=sum_masked)
-        frac = sum_masked/sum_unmasked
-    end function fmaskv_1
-
-    !> \brief fmaskv_2 is for calculating the fractional area/volume of the mask
-    !> 
-    !! \return  frac fraction of masked pixels
-    !!
-    function fmaskv_2( self ) result( frac )
-        class(image), intent(inout) :: self
-        real                        :: frac, sum_masked, sum_unmasked
-        if( self%ft ) stop 'need real-valued mask; fmaskv_2; simple_image'
-        sum_unmasked = product(self%ldim)
-        sum_masked = sum(self%rmat(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3))**2.)
-        frac = sum_masked/sum_unmasked
-    end function fmaskv_2
 
     !> \brief neg  is for inverting the contrast
     !!
