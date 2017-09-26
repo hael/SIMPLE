@@ -1,8 +1,9 @@
 ! character hash
-
 module simple_chash
-#include "simple_lib.f08"
-
+use simple_defs
+use simple_syslib, only: alloc_errchk, is_open
+use simple_fileio, only: fopen, fileio_errmsg, fclose
+use simple_strings
 implicit none
 
 public :: chash
@@ -73,7 +74,7 @@ contains
         call self%kill
         self%nmax = nmax
         allocate(self%keys(nmax), self%values(nmax), stat=alloc_stat)
-        if(alloc_stat /= 0) allocchk("In simple_chash :: new")
+        if(alloc_stat /= 0) call alloc_errchk("In simple_chash :: new", alloc_stat)
         self%exists = .true.
     end subroutine new
 
@@ -225,7 +226,7 @@ contains
         do i=1,self%chash_index
             if( trim(self%keys(i)) .eq. trim(key) )then
                 allocate(val, source=trim(self%values(i)),stat=alloc_stat)
-                if(alloc_stat /= 0) allocchk ("In get_1")
+                if(alloc_stat /= 0) call alloc_errchk ("In simple_chash::get_1", alloc_stat)
                 return
             endif
         end do
@@ -237,7 +238,7 @@ contains
         integer,      intent(in)      :: ival
         character(len=:), allocatable :: val
         allocate(val, source=trim(self%values(ival)),stat=alloc_stat)
-        if(alloc_stat /= 0) allocchk("In get_2 val")
+        if(alloc_stat /= 0) call alloc_errchk("In simple_chash::get_2 val", alloc_stat)
     end function get_2
 
     !>  \brief  gets the size of the hash
@@ -253,7 +254,7 @@ contains
         integer,      intent(in)      :: ikey
         character(len=:), allocatable :: val
         allocate(val, source=trim(self%keys(ikey)),stat=alloc_stat)
-        if(alloc_stat /= 0) allocchk("In get_key")
+        if(alloc_stat /= 0) call alloc_errchk("In simple_chash::get_key", alloc_stat)
     end function get_key
 
     !>  \brief  concatenates the chash into a string
@@ -264,25 +265,25 @@ contains
         if( self%chash_index > 0 )then
             if( self%chash_index == 1 )then
                 allocate(str, source=trim(self%keys(1))//'='//trim(self%values(1)),stat=alloc_stat)
-                if(alloc_stat /= 0) allocchk("In chash2str 1 ")
+                if(alloc_stat /= 0) call alloc_errchk("In simple_chash::chash2str 1 ", alloc_stat)
                 return
             endif
             allocate(str_moving, source=trim(self%keys(1))//'='//trim(self%values(1))//' ',stat=alloc_stat)
-            if(alloc_stat /= 0) allocchk("In chash2str 2")
+            if(alloc_stat /= 0) call alloc_errchk("In simple_chash::chash2str 2", alloc_stat)
             if( self%chash_index > 2 )then
                 do i=2,self%chash_index-1
                     allocate(str, source=str_moving//trim(self%keys(i))//'='//trim(self%values(i))//' ',&
                         &stat=alloc_stat)
-                    if(alloc_stat /= 0) allocchk("In get_1")
+                    if(alloc_stat /= 0) call alloc_errchk("In simple_chash::get_1", alloc_stat)
                     deallocate(str_moving)
                     allocate(str_moving,source=str,stat=alloc_stat)
-                    if(alloc_stat /= 0) allocchk("In chash2str 4")
+                    if(alloc_stat /= 0) call alloc_errchk("In simple_chash::chash2str 4", alloc_stat)
                     deallocate(str)
                 end do
             endif
             allocate(str,source=trim(str_moving//trim(self%keys(self%chash_index))//'='//&
                 &trim(self%values(self%chash_index))),stat=alloc_stat)
-            if(alloc_stat /= 0) allocchk("In chash2str 5")
+            if(alloc_stat /= 0) call alloc_errchk("In simple_chash::chash2str 5", alloc_stat)
         endif
     end function chash2str
 
@@ -307,7 +308,7 @@ contains
             call tmp%new(self%nmax)
             ! fill in keys
             allocate(keys_sorted(self%chash_index),stat=alloc_stat)
-            if(alloc_stat /= 0) allocchk("In sort")
+            if(alloc_stat /= 0) call alloc_errchk("In simple_chash::sort", alloc_stat)
             keys_sorted = self%keys(:self%chash_index)
             ! sort keys
             call lexSort(keys_sorted)
@@ -472,12 +473,10 @@ contains
     subroutine write( self, fname )
         class(chash), intent(inout)  :: self   !< instance
         character(len=*), intent(in) :: fname  !< name of file
-        character(len=LINE_MAX_LEN)  :: buffer !< will hold a line from the file
-        character(len=512)           :: io_msg !< will hold the io error message
-        integer :: ios, pos, funit
-        call fopen(funit, fname, iostat=ios, status='replace', iomsg=io_msg)
+        integer :: ios, funit
+        call fopen(funit, fname, iostat=ios, status='replace')
         call fileio_errmsg('simple_chash :: write; Error when opening file for writing: '&
-            //trim(fname)//' ; '//trim(io_msg), ios)
+            //trim(fname), ios)
         call self%print_key_val_pairs(fhandle=funit)
         call fclose(funit, errmsg='simple_chash :: write; ')
     end subroutine write
@@ -490,12 +489,12 @@ contains
         if( self%exists )then
             if(allocated(self%keys))then
                 deallocate(self%keys,stat=alloc_stat)
-                if(alloc_stat /= 0) allocchk("In kill 1")
+                if(alloc_stat /= 0) call alloc_errchk("In simple_chash::kill keys", alloc_stat)
             end if
 
             if(allocated(self%values))then
                 deallocate(self%values,stat=alloc_stat)
-                if(alloc_stat /= 0) allocchk("In kill 2")
+                if(alloc_stat /= 0) call alloc_errchk("In simple_chash::kill values", alloc_stat)
             end if
             self%nmax        = 0
             self%chash_index = 0

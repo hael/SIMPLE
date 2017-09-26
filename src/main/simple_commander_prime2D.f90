@@ -1,10 +1,7 @@
 ! concrete commander: prime2D for simultanous 2D alignment and clustering of single-particle images
 module simple_commander_prime2D
-use simple_defs            ! use all in there
-use simple_fileio          ! use all in there
+#include "simple_lib.f08"
 use simple_binoris_io      ! use all in there
-use simple_syslib
-use simple_jiffys
 use simple_cmdline,         only: cmdline
 use simple_params,          only: params
 use simple_build,           only: build

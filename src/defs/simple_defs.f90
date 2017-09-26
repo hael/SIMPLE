@@ -1,17 +1,9 @@
-! module with global variables
-! DEBUG and VERBOSE modes can be enabled at
-!  compile-time or run-time
-! BUILD_DESC uses the cmake build to describe compiler,
-!   build type and FFT library e.g.
-! <GNU/Intel/PGI>_<RELEASE/DEBUG>_<FFTW/MKL>
-! SimpleGitVersion include file contains the string definitions for SIMPLE_PATH
-! and version info
 module simple_defs
 use, intrinsic :: iso_c_binding, only: c_int
 use, intrinsic :: iso_fortran_env, only: &
-     stderr=>ERROR_UNIT,&
-     stdout=>OUTPUT_UNIT,&
-     stdin=>INPUT_UNIT
+stderr=>ERROR_UNIT,&
+stdout=>OUTPUT_UNIT,&
+stdin=>INPUT_UNIT
 implicit none
 integer,  parameter :: MAXS         = 99   !< maximum number of states
 integer,  parameter :: STDLEN       = 256  !< standard string length
@@ -56,6 +48,9 @@ type :: ctfplan
     character(len=STDLEN) :: flag=''                 !< flag: <mul|flip|no>
 end type ctfplan
 
+! command line
+integer, parameter :: MAXNKEYS=100, KEYLEN=32
+
 ! constants for picker
 real,    parameter :: PICKER_SHRINK        = 4.      !< picker shrink factor
 real,    parameter :: PICKER_SHRINK_REFINE = 2.      !< picker shrink factor, peak refine step
@@ -65,7 +60,7 @@ integer, parameter :: PICKER_OFFSET        = 3       !< picker offset for grid s
 real, parameter :: COSMSKHALFWIDTH         = 3.0     !< spherical soft masking
 real, parameter :: KBWINSZ                 = 1.5     !< interpolation window size
 real, parameter :: KBALPHA                 = 2.0     !< interpolation alpha (smoothing constant)
-              
+
 ! real constants that control search and convergence
 real, parameter :: FRAC_SH_LIM             = 80.0    !< at what frac to turn on the shift search
 real, parameter :: FRAC_INTERPOL           = 60.0    !< at what frac to turn on the gridding interpolation (2D)
@@ -103,11 +98,11 @@ character(len=4),      parameter :: METADATEXT          = '.txt'
 character(len=1),      parameter :: DEFAULT_FILE_FORMAT = 'M'
 
 ! SNHC-related global constants, PRIME3D, refine=snhc
-character(len=32), parameter :: SNHCDOC   = 'snhc_oris'//METADATEXT    
-character(len=32), parameter :: SNHCVOL   = 'snhc_recvol_state' 
-integer,           parameter :: SZSN_INIT = 5               
-integer,           parameter :: SZSN_STEP = 3                  
-integer,           parameter :: SZSN_MAX  = 20 
+character(len=32), parameter :: SNHCDOC   = 'snhc_oris'//METADATEXT
+character(len=32), parameter :: SNHCVOL   = 'snhc_recvol_state'
+integer,           parameter :: SZSN_INIT = 5
+integer,           parameter :: SZSN_STEP = 3
+integer,           parameter :: SZSN_MAX  = 20
 
 ! precision constants
 #ifndef IMAGE_SINGLE_PRECISION

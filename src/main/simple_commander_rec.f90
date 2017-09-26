@@ -110,11 +110,9 @@ contains
         call simple_end('**** SIMPLE_EO_VOLASSEMBLE NORMAL STOP ****', print_simple=.false.)
         ! indicate completion (when run in a qsys env)
         if( cline%defined('state') )then
-            allocate( finished_fname, source='VOLASSEMBLE_FINISHED_STATE'//int2str_pad(state,2) , stat=alloc_stat)
-        if(alloc_stat /= 0) allocchk("In: simple_eo_volassemble finished state padded")
+            allocate( finished_fname, source='VOLASSEMBLE_FINISHED_STATE'//int2str_pad(state,2))
         else
-            allocate( finished_fname, source='VOLASSEMBLE_FINISHED' , stat=alloc_stat)
-        if(alloc_stat /= 0) allocchk("In: simple_eo_volassemble  finished state")
+            allocate( finished_fname, source='VOLASSEMBLE_FINISHED' )
         endif
         call simple_touch( finished_fname , errmsg='In: commander_rec::eo_volassemble')
         call wait_for_closure('VOLASSEMBLE_FINISHED')

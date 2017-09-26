@@ -1,17 +1,15 @@
 ! concrete commander: operations on orientations
-
 module simple_commander_oris
 #include "simple_lib.f08"
-use simple_fileio          ! use all in there
-use simple_jiffys          ! use all in there
-use simple_binoris_io      ! use all in there
+
+use simple_ori,            only: ori
+use simple_oris,           only: oris
+use simple_binoris_io,     only: binwrite_oritab, binread_oritab,binread_nlines
 use simple_cmdline,        only: cmdline
 use simple_params,         only: params
 use simple_build,          only: build
 use simple_commander_base, only: commander_base
 use simple_nrtxtfile,      only: nrtxtfile
-
-
 implicit none
 
 public :: cluster_oris_commander
@@ -199,8 +197,6 @@ contains
     subroutine exec_makeoris( self, cline )
         use simple_ori,           only: ori
         use simple_oris,          only: oris
-        use simple_math,          only: normvec
-        use simple_rnd,           only: irnd_uni, ran3
         use simple_combinatorics, only: shc_aggregation
         class(makeoris_commander), intent(inout) :: self
         class(cmdline),            intent(inout) :: cline
@@ -485,11 +481,7 @@ contains
 
     !> for analyzing SIMPLE orientation/parameter files
     subroutine exec_oristats(self,cline)
-        use simple_ori,  only: ori
-        use simple_oris, only: oris
-        use simple_stat, only: moment
-        use simple_math, only: median_nocopy, hpsort
-        class(oristats_commander), intent(inout) :: self
+         class(oristats_commander), intent(inout) :: self
         class(cmdline),            intent(inout) :: cline
         type(build)          :: b
         type(oris)           :: o, osubspace
@@ -596,19 +588,20 @@ contains
                 popmax         = maxval(pops)
                 popmed         = median_nocopy(pops)
                 call moment(pops, popave, popsdev, popvar, err)
+                write(*,'(a)') '>>> STATISTICS BEFORE CLUSTERING'
                 write(*,'(a,1x,f8.2)') 'FRAC POPULATED DIRECTIONS :', frac_populated
                 write(*,'(a,1x,f8.2)') 'MINIMUM POPULATION        :', popmin
                 write(*,'(a,1x,f8.2)') 'MAXIMUM POPULATION        :', popmax
                 write(*,'(a,1x,f8.2)') 'MEDIAN  POPULATION        :', popmed
                 write(*,'(a,1x,f8.2)') 'AVERAGE POPULATION        :', popave
                 write(*,'(a,1x,f8.2)') 'SDEV OF POPULATION        :', popsdev
-                ! produce a histogram based on clustering into ndiscrete (default 100) even directions
+                ! produce a histogram based on clustering into NSPACE_BALANCE even directions
                 ! first, generate a mask based on state flag and w
                 ptcl_mask = b%a%included(consider_w=.true.)
-                allocate(clustering(noris), clustszs(p%ndiscrete))
-                call osubspace%new(p%ndiscrete)
+                allocate(clustering(noris), clustszs(NSPACE_BALANCE))
+                call osubspace%new(NSPACE_BALANCE)
                 call osubspace%spiral(p%nsym, p%eullims)
-                call binwrite_oritab('even_pdirs'//METADATEXT, osubspace, [1,p%ndiscrete])
+                call binwrite_oritab('even_pdirs'//METADATEXT, osubspace, [1,NSPACE_BALANCE])
                 do iptcl=1,b%a%get_noris()
                     if( ptcl_mask(iptcl) )then
                         o_single = b%a%get_ori(iptcl)
@@ -618,17 +611,28 @@ contains
                     endif
                 end do
                 ! determine cluster sizes
-                do icls=1,p%ndiscrete
+                do icls=1,NSPACE_BALANCE
                     clustszs(icls) = real(count(clustering == icls))
                 end do
-                szmax = maxval(clustszs)
+                frac_populated = real(count(clustszs > 0.5))/real(NSPACE_BALANCE)
+                popmin         = minval(clustszs)
+                popmax         = maxval(clustszs)
+                popmed         = median_nocopy(clustszs)
+                call moment(clustszs, popave, popsdev, popvar, err)
+                write(*,'(a)') '>>> STATISTICS AFTER CLUSTERING'
+                write(*,'(a,1x,f8.2)') 'FRAC POPULATED DIRECTIONS :', frac_populated
+                write(*,'(a,1x,f8.2)') 'MINIMUM POPULATION        :', popmin
+                write(*,'(a,1x,f8.2)') 'MAXIMUM POPULATION        :', popmax
+                write(*,'(a,1x,f8.2)') 'MEDIAN  POPULATION        :', popmed
+                write(*,'(a,1x,f8.2)') 'AVERAGE POPULATION        :', popave
+                write(*,'(a,1x,f8.2)') 'SDEV OF POPULATION        :', popsdev
                 ! scale to max 50 *:s
                 scale = 1.0
-                do while( nint(scale*szmax) > hlen )
+                do while( nint(scale * popmax) > hlen )
                     scale = scale - 0.001
                 end do
                 write(*,'(a)') '>>> HISTOGRAM OF SUBSPACE POPULATIONS (FROM NORTH TO SOUTH)'
-                do icls=1,p%ndiscrete
+                do icls=1,NSPACE_BALANCE
                     write(*,*) nint(clustszs(icls)),"|",('*', j=1,nint(clustszs(icls)*scale))  
                 end do
             endif
@@ -725,24 +729,19 @@ contains
     end subroutine exec_bin2txt
 
     subroutine exec_vizoris( self, cline )
-        use simple_math,      only: rad2deg, myacos, rotmat2axis
         use simple_oris,      only: oris
         use simple_ori,       only: ori
-        use simple_strings,   only: real2str
-        use simple_fileio,    only: remove_abspath,fname2ext,get_fbody
         class(vizoris_commander),  intent(inout) :: self
         class(cmdline),            intent(inout) :: cline
         type(build)           :: b
         type(params)          :: p
         type(ori)             :: o, o_prev
-        !type(oris)            :: a
         real,    allocatable  :: euldists(:)
         integer, allocatable  :: pops(:)
         character(len=STDLEN) :: fname, ext
         integer               :: i, n, maxpop, funit, closest,io_stat
-        real                  :: radius, maxradius, ang, scale, col
-        real                  :: xyz(3), xyz_end(3), xyz_start(3), vec(3), axis(3)
-        real :: R(3,3), Ri(3,3), Rprev(3,3)
+        real                  :: radius, maxradius, ang, scale, col, avg_geodist,avg_euldist,geodist
+        real                  :: xyz(3), xyz_end(3), xyz_start(3), vec(3)
         p = params(cline)
         call b%build_general_tbox(p, cline, do3d=.false.)
         ! BELOW IS FOR TESTING ONLY
@@ -818,7 +817,7 @@ contains
             enddo
             call fclose(funit, errmsg="simple_commander_oris::exec_vizoris closing "//trim(fname))
         else
-            ! time series visualization
+            ! time series
             ! unit sphere tracking
             fname  = trim(p%fbody)//'_motion.bild'
             radius = 0.02
@@ -836,8 +835,9 @@ contains
                 else
                     vec = xyz - xyz_start
                     if( sqrt(dot_product(vec, vec)) > 0.01 )then
-                        write(funit,'(A,F7.3,F7.3,F7.3,F7.3,F7.3,F7.3,F6.3)')&
-                        &'.cylinder ', xyz_start, xyz, radius
+                        write(funit,'(A,F7.3,F7.3,F7.3,A)')".sphere ", xyz, " 0.02"
+                        !write(funit,'(A,F7.3,F7.3,F7.3,F7.3,F7.3,F7.3,F6.3)')&
+                        !&'.cylinder ', xyz_start, xyz, radius
                     endif
                 endif
                 xyz_start = xyz
@@ -845,6 +845,8 @@ contains
             write(funit,'(A,F7.3,F7.3,F7.3,A)')".sphere ", xyz, " 0.08"
             call fclose(funit, errmsg="simple_commander_oris::exec_vizoris closing "//trim(fname))
             ! distance output
+            avg_geodist = 0.
+            avg_euldist = 0.
             allocate(euldists(n), stat=alloc_stat)
             fname  = trim(p%fbody)//'_motion.csv'
             call fopen(funit, status='REPLACE', action='WRITE', file=trim(fname), iostat=io_stat)
@@ -852,46 +854,55 @@ contains
             do i = 1, n
                 o = b%a%get_ori(i)
                 if( i==1 )then
-                    ang = 0.
+                    ang     = 0.
+                    geodist = 0.
                 else
-                    ang = rad2deg(o_prev.euldist.o)
+                    ang     = rad2deg(o_prev.euldist.o)
+                    geodist = o_prev.geod.o
                     call o_prev%mirror2d
-                    ang = min(ang, rad2deg(o_prev.euldist.o))
+                    ang     = min(ang, rad2deg(o_prev.euldist.o))
+                    geodist = min(geodist, o_prev.geod.o)
+                    avg_euldist = avg_euldist + ang
+                    avg_geodist = avg_geodist + geodist
                 endif
                 euldists(i) = ang
-                write(funit,'(I7,A1,F7.2)')i, ',', ang     
+                write(funit,'(I7,A1,F8.3,A1,F8.3)')i, ',', ang, ',', geodist   
                 o_prev = o
             enddo
             call fclose(funit, errmsg="simple_commander_oris::exec_vizoris closing "//trim(fname))
+            avg_geodist = avg_geodist / real(n-1)
+            avg_euldist = avg_euldist / real(n-1)
+            write(*,'(A,F8.3)')'>>> AVERAGE EULER    DISTANCE: ',avg_euldist
+            write(*,'(A,F8.3)')'>>> AVERAGE GEODESIC DISTANCE: ',avg_geodist
             ! movie output
             ! setting Rprev to south pole as it where chimera opens
-            call o_prev%new
-            call o_prev%mirror3d
-            Rprev = o_prev%get_mat()
-            fname = trim(p%fbody)//'_movie.cmd'
-            call fopen(funit, status='REPLACE', action='WRITE', file=trim(fname), iostat=io_stat)
-            call fileio_errmsg("simple_commander_oris::exec_vizoris fopen failed "//trim(fname), io_stat)
-            do i = 1, n
-                o  = b%a%get_ori(i)
-                Ri = o%get_mat()
-                R  = matmul(Ri,transpose(Rprev))
-                call rotmat2axis(R, axis)
-                if( abs(euldists(i)) > 0.01 )then
-                    if(i==1)then
-                        euldists(1) = rad2deg(o.euldist.o_prev)
-                        write(funit,'(A,A,A1,A,A1,A,A1,F8.2,A2)')&
-                        &'roll ', trim(real2str(axis(1))),',', trim(real2str(axis(2))),',', trim(real2str(axis(3))),' ',&
-                        &euldists(i), ' 1'
-                    else
-                        write(funit,'(A,A,A1,A,A1,A,A1,F8.2,A)')&
-                        &'roll ', trim(real2str(axis(1))),',', trim(real2str(axis(2))),',', trim(real2str(axis(3))),' ',&
-                        &euldists(i), ' 2; wait 2'
-                    endif
-                    o_prev = o
-                    Rprev  = Ri
-                endif
-            enddo
-            call fclose(funit, errmsg="simple_commander_oris::exec_vizoris closing "//trim(fname))
+            ! call o_prev%new
+            ! call o_prev%mirror3d
+            ! Rprev = o_prev%get_mat()
+            ! fname = trim(p%fbody)//'_movie.cmd'
+            ! call fopen(funit, status='REPLACE', action='WRITE', file=trim(fname), iostat=io_stat)
+            ! call fileio_errmsg("simple_commander_oris::exec_vizoris fopen failed "//trim(fname), io_stat)
+            ! do i = 1, n
+            !     o  = b%a%get_ori(i)
+            !     Ri = o%get_mat()
+            !     R  = matmul(Ri,transpose(Rprev))
+            !     call rotmat2axis(R, axis)
+            !     if( abs(euldists(i)) > 0.01 )then
+            !         if(i==1)then
+            !             euldists(1) = rad2deg(o.euldist.o_prev)
+            !             write(funit,'(A,A,A1,A,A1,A,A1,F8.2,A2)')&
+            !             &'roll ', trim(real2str(axis(1))),',', trim(real2str(axis(2))),',', trim(real2str(axis(3))),' ',&
+            !             &euldists(i), ' 1'
+            !         else
+            !             write(funit,'(A,A,A1,A,A1,A,A1,F8.2,A)')&
+            !             &'roll ', trim(real2str(axis(1))),',', trim(real2str(axis(2))),',', trim(real2str(axis(3))),' ',&
+            !             &euldists(i), ' 2; wait 2'
+            !         endif
+            !         o_prev = o
+            !         Rprev  = Ri
+            !     endif
+            ! enddo
+            ! call fclose(funit, errmsg="simple_commander_oris::exec_vizoris closing "//trim(fname))
         endif
         call simple_end('**** VIZORIS NORMAL STOP ****')
     end subroutine exec_vizoris

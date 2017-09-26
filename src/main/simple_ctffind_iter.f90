@@ -1,5 +1,4 @@
 ! ctffind iterator
-
 module simple_ctffind_iter
 #include "simple_lib.f08"
 use simple_nrtxtfile, only: nrtxtfile
@@ -34,7 +33,6 @@ contains
         movie_counter = movie_counter + 1
         fname_diag    = add2fbody(moviename_forctf, p%ext, '_ctffind_diag')
         fname_param   = fname_new_ext(fname_diag, 'txt')
-
         call fopen(funit, status='REPLACE', action='WRITE', file=trim(fname_ctrl),iostat=file_stat)
         if(file_stat/=0) call fileio_errmsg("ctffind_iter:: iterate fopen failed "//trim(fname_ctrl),file_stat)
         write(funit,'(a)') trim(moviename_forctf)      ! integrated movie used for fitting

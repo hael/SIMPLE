@@ -1,9 +1,7 @@
 ! downscaling of image stacks
 module simple_scaler
-use simple_defs     ! use all in there
-use simple_fileio
+#include "simple_lib.f08"
 use simple_cmdline, only: cmdline
-
 implicit none
 
 public :: scaler
@@ -33,7 +31,6 @@ end type scaler
 contains
 
     subroutine init( self, p_master, cline, smpd_target, stkscaledbody )
-        use simple_magic_boxes, only: autoscale
         use simple_params,      only: params
         class(scaler)              :: self
         class(params)              :: p_master

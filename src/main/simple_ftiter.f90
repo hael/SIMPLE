@@ -1,6 +1,7 @@
 ! Fourier index iterator
 module simple_ftiter
-use simple_defs
+#include "simple_lib.f08"
+
 implicit none
 
 public :: ftiter, test_ftiter
@@ -63,7 +64,6 @@ contains
 
     !>  \brief  is a parameterized constructor
     subroutine new( self, ldim, smpd )
-        use simple_math, only: is_even, fdim
         class(ftiter), intent(inout) :: self
         real,          intent(in)    :: smpd
         integer,       intent(in)    :: ldim(:)

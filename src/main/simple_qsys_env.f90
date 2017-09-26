@@ -39,7 +39,7 @@ contains
         integer                       :: partsz, hrs, mins, secs, nparts
         real                          :: rtpi, tot_time_sec
         logical                       :: sstream
-        integer, parameter            :: MAXNKEYS = 30
+        integer, parameter            :: MAXENVKEYS = 30
         call self%kill
         sstream = .false.
         if( present(stream) ) sstream = stream
@@ -65,7 +65,7 @@ contains
                 stop 'Unsupported split_mode'
         end select
         ! retrieve environment variables from file
-        call self%qdescr%new(MAXNKEYS)
+        call self%qdescr%new(MAXENVKEYS)
         call parse_env_file(self%qdescr) ! parse .env file
         ! deal with time
         if( self%qdescr%isthere('time_per_image') )then
@@ -135,11 +135,13 @@ contains
         endif
         if( allocated(halt_ind) ) call del_file(halt_ind)
         call cline%gen_job_descr(job_descr)
-        call self%qscripts%generate_script(job_descr, self%qdescr, self%simple_exec_bin, script_name, outfile)
-        call wait_for_closure(script_name) !!!!!
-        call self%qscripts%submit_script(script_name)
-        call qsys_watcher(finish_indicator)
-        call del_file(finish_indicator)
+        call self%qscripts%generate_script(job_descr, self%qdescr, self%simple_exec_bin, script_name_here, outfile)
+        call wait_for_closure(script_name_here) !!!!!
+        call self%qscripts%submit_script(script_name_here)
+        if( allocated(halt_ind) )then
+            call qsys_watcher(halt_ind)
+            call del_file(halt_ind)
+        endif
     end subroutine exec_simple_prg_in_queue
 
     subroutine kill( self )

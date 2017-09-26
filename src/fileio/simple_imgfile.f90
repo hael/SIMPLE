@@ -11,9 +11,7 @@
 ! Modifications by Cyril Reboul, Michael Eager & Hans Elmlund
 
 module simple_imgfile
-use simple_defs
-use simple_syslib,  only: alloc_errchk, file_exists, is_open
-use simple_fileio,  only: fileio_errmsg, fopen, fclose, file_size, fname2format, del_file
+#include "simple_lib.f08"
 use simple_imghead  ! only public ImgHead, MrcImgHead, SpiImgHead, test_imghead, find_ldim_nptcls
 use gnufor2
 implicit none

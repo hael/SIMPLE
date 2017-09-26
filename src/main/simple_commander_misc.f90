@@ -1,5 +1,4 @@
 ! concrete commander: miscallenaous routines
-
 module simple_commander_misc
 #include "simple_lib.f08"
 use simple_binoris_io      ! use all in there
@@ -222,7 +221,7 @@ contains
 
     !> for printing the command line key dictonary
     subroutine exec_print_cmd_dict( self, cline )
-        use simple_cmd_dict, only:print_cmd_key_descr
+        use simple_cmd_dict, only: print_cmd_key_descr
         class(print_cmd_dict_commander), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline
         type(params) :: p
@@ -319,11 +318,11 @@ contains
         call b%build_general_tbox(p, cline, do3d=.false.) ! general objects built
         call shift_imgfile(p%stk, p%outstk, b%a, p%smpd, p%mul)
         call b%a%zero_shifts
-        call binwrite_oritab('shiftdoc.txt', b%a, [1,p%nptcls])
+        call binwrite_oritab('shiftdoc'//METADATEXT, b%a, [1,p%nptcls])
         call simple_end('**** SIMPLE_SHIFT NORMAL STOP ****')
     end subroutine exec_shift
 
-    !> sym_aggregateis a program for robust identifiaction of the symmetry axis
+    !> for robust identifiaction of the symmetry axis
     !> of a map using image-to-volume simiarity validation of the axis
     subroutine exec_sym_aggregate( self, cline )
         use simple_oris,  only: oris

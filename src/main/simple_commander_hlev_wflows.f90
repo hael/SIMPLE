@@ -2,7 +2,7 @@
 
 module simple_commander_hlev_wflows
 #include "simple_lib.f08"
-use simple_defs                   ! use all in there
+
 use simple_cmdline,               only: cmdline
 use simple_params,                only: params
 use simple_commander_base,        only: commander_base
@@ -11,16 +11,14 @@ use simple_oris,                  only: oris
 use simple_scaler,                only: scaler
 use simple_strings,               only: int2str_pad, str2int
 use simple_commander_distr_wflows ! use all in there
-use simple_fileio,                only: file_exists, simple_rename, del_files, del_file
 use simple_commander_distr        ! use all in there
-use simple_jiffys,                only: progress, simple_end
 use simple_binoris_io,            only: binread_oritab, binwrite_oritab
-use simple_syslib,                only: alloc_errchk
 implicit none
 
 public :: prime2D_autoscale_commander
 public :: ini3D_from_cavgs_commander
 public :: het_ensemble_commander
+public :: cga_hres_sel_commander
 private
 
 type, extends(commander_base) :: prime2D_autoscale_commander
@@ -35,6 +33,10 @@ type, extends(commander_base) :: het_ensemble_commander
   contains
     procedure :: execute      => exec_het_ensemble
 end type het_ensemble_commander
+type, extends(commander_base) :: cga_hres_sel_commander
+  contains
+    procedure :: execute      => exec_cga_hres_sel
+end type cga_hres_sel_commander
 
 contains
 
@@ -384,10 +386,10 @@ contains
         class(het_ensemble_commander), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
         ! constants
-        integer,               parameter :: MAXITS_INIT=50
-        character(len=32),     parameter :: HETFBODY    = 'hetrep_'
-        character(len=32),     parameter :: REPEATFBODY = 'hetdoc_'
-        character(len=32),     parameter :: VOLFBODY    = 'recvol_state'
+        integer,            parameter :: MAXITS_INIT = 50
+        character(len=32),  parameter :: HETFBODY    = 'hetrep_'
+        character(len=32),  parameter :: REPEATFBODY = 'hetdoc_'
+        character(len=32),  parameter :: VOLFBODY    = 'recvol_state'
         ! distributed commanders
         type(prime3D_distr_commander) :: xprime3D_distr
         type(recvol_distr_commander)  :: xrecvol_distr
@@ -591,5 +593,129 @@ contains
             end subroutine update_pproc_cline
 
     end subroutine exec_het_ensemble
+
+    subroutine exec_cga_hres_sel( self, cline )
+        use simple_commander_rec, only: recvol_commander
+        use simple_rnd,           only: branarr
+        use simple_oris,          only: oris
+        use simple_math,          only: fsc1_ge_fsc2
+        class(cga_hres_sel_commander), intent(inout) :: self
+        class(cmdline),                intent(inout) :: cline
+        ! constants
+        integer,           parameter :: MAXITS        = 50
+        character(len=32), parameter :: VOLFBODY      = 'recvol_state'
+        character(len=32), parameter :: ORIS_MODIFIED = 'oris_from_cga_hres_sel'//METADATEXT
+        character(len=32), parameter :: FSC_FILE      = 'fsc_state01.bin'
+        ! distributed commanders
+        type(recvol_distr_commander) :: xrecvol_distr
+        ! command lines
+        type(cmdline)                :: cline_recvol_distr
+        type(cmdline)                :: cline_postproc_vol
+        ! other variables
+        integer                      :: iter, iptcl
+        real                         :: eps, frac_srch_space, param_overlap, rstate
+        real,            allocatable :: probs(:), probs_conv(:), fsc1(:), fsc2(:)
+        integer, target, allocatable :: S1(:), S2(:)
+        integer,         allocatable :: Sbest(:), Sprev_best(:)
+        integer, pointer             :: Swinner(:) => null(), Sloser(:) => null()
+        type(params)                 :: p_master
+        type(oris)                   :: os, os_mod
+        ! default for now
+        call cline%set('eo', 'yes')
+        ! default always
+        if( .not. cline%defined('maxits') ) call cline%set('maxits', real(MAXITS))
+        if( .not. cline%defined('oritab') ) stop 'need oritab input; commander_hlev :: exec_cga_hres_sel'
+        ! make master parameters
+        p_master = params(cline, checkdistr=.false.)
+        ! set learning rate
+        if( .not. cline%defined('eps') ) p_master%eps = 1.0 / real(2.0 * p_master%maxits)
+        ! prep recvol cline
+        cline_recvol_distr = cline
+        call cline_recvol_distr%set('oritab', ORIS_MODIFIED)
+        ! prepare oris
+        call os%new(p_master%nptcls)
+        call binread_oritab(p_master%oritab, os, [1,p_master%nptcls])
+        os_mod = os
+        ! allocate and initialise arrays
+        allocate(probs(p_master%nptcls), probs_conv(p_master%nptcls), source=0.5)
+        allocate(Sbest(p_master%nptcls), Sprev_best(p_master%nptcls), source=1)
+        do iter=1,p_master%maxits
+            write(*,'(A)')   '>>>'
+            write(*,'(A,I6)')'>>> ITERATION ', iter
+            write(*,'(A)')   '>>>' 
+            ! make two Bernoulli samples from probs
+            S1   = branarr(probs)
+            S2   = branarr(probs)
+            ! distributed generation of FSC functions
+            fsc1 = gen_fsc(S1, iter)
+            fsc2 = gen_fsc(S2, iter)
+            ! stash previous best
+            Sprev_best = Sbest
+            if( fsc1_ge_fsc2(fsc1,fsc2) )then
+                Sbest   =  S1
+                Swinner => S1
+                Sloser  => S2
+            else
+                Sbest   =  S2
+                Swinner => S2
+                Sloser  => S1
+            endif
+            ! update probabilistic model
+            where( Swinner /= Sloser .and. Swinner == 1 )
+                probs = probs + p_master%eps
+            elsewhere( Swinner /= Sloser .and. Swinner == 0 )
+                probs = probs - p_master%eps
+            end where
+            ! check convergence
+            where( probs >= 0.5 )
+                probs_conv = probs
+            else where
+                probs_conv = 1.0 - probs
+            end where
+            frac_srch_space = (sum(probs_conv)/real(p_master%nptcls)) * 100.0
+            param_overlap   = real(count(Sbest == Sprev_best)) / real(p_master%nptcls)
+            write(*,'(A,1X,F7.4)') '>>> PARAMETER DISTRIBUTION OVERLAP:    ', param_overlap
+            write(*,'(A,1X,F7.1)') '>>> PERCENTAGE OF SEARCH SPACE SCANNED:', frac_srch_space
+        end do
+        ! generate final rec + FSC
+        fsc1 = gen_fsc(Sbest)
+        ! report the final solution as a state 1/0 labeling
+        do iptcl=1,p_master%nptcls
+            rstate = os%get(iptcl, 'state')
+            if( rstate > 0.5 .and. Sbest(iptcl) == 0 )then
+                call os%set(iptcl, 'state', 0.)
+            endif
+        end do
+        call binwrite_oritab('cga_hres_seldoc_final'//METADATEXT, os, [1,p_master%nptcls])
+        ! end gracefully
+        call simple_end('**** SIMPLE_CGA_HRES_SEL NORMAL STOP ****')
+
+        contains
+
+            function gen_fsc( S, iter ) result( fsc )
+                integer,           intent(in) :: S(p_master%nptcls)
+                integer, optional, intent(in) :: iter
+                real, allocatable   :: fsc(:)
+                call del_file(FSC_FILE)
+                ! set reconstruction weights according to Bernoulli sample
+                ! in this way any previous state 1/0 labeling will still be considered
+                call os_mod%set_all('w', real(S))
+                call binwrite_oritab(ORIS_MODIFIED, os_mod, [1,p_master%nptcls])
+                ! reconstruct
+                call xrecvol_distr%execute(cline_recvol_distr)
+                ! get FSC values
+                if( file_exists(FSC_FILE) )then
+                    fsc = file2rarr(FSC_FILE)
+                else
+                    write(*,*) 'ERROR, file: ', trim(FSC_FILE)
+                    stop 'does not exist in cwd; commander_hlev_wflows :: exec_cga_hres_sel'
+                endif
+                if( present(iter) )then
+                    call rename('RESOLUTION_STATE01', 'RESOLUTION_STATE01_ITER'//int2str_pad(iter,3))
+                endif
+            end function gen_fsc
+
+
+    end subroutine exec_cga_hres_sel
 
 end module simple_commander_hlev_wflows

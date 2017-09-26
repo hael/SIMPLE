@@ -1,8 +1,13 @@
 ! Fourier filtering routines
-
 module simple_filterer
+!$ use omp_lib
+!$ use omp_lib_kinds
 #include "simple_lib.f08"
+
 use simple_image,     only: image
+use simple_oris,      only: oris
+use simple_ori,       only: ori
+use simple_sym,       only: sym
 implicit none
 
 contains
@@ -14,10 +19,6 @@ contains
     subroutine gen_anisotropic_optlp( vol_filter, projfrcs, e_space, state, pgrp )
         use simple_estimate_ssnr,   only: fsc2optlp
         use simple_projection_frcs, only: projection_frcs
-        use simple_oris,            only: oris
-        use simple_math,            only: hyp
-        use simple_sym,             only: sym
-        use simple_ori,             only: ori
         class(image),           intent(inout) :: vol_filter
         class(projection_frcs), intent(in)    :: projfrcs
         class(oris),            intent(inout) :: e_space

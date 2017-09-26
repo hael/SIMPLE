@@ -1,9 +1,6 @@
 ! concrete commander: masking routines
 module simple_commander_mask
-use simple_defs
-use simple_fileio,         only: file_exists, add2fbody
-use simple_jiffys,         only: simple_end
-use simple_syslib,         only: alloc_errchk
+#include "simple_lib.f08"
 use simple_cmdline,        only: cmdline
 use simple_params,         only: params
 use simple_build,          only: build
@@ -116,7 +113,7 @@ contains
         p%outstk = add2fbody(p%stk, p%ext, 'msk')
         do iptcl=1,p%nptcls
             call b%img%read(p%stk, iptcl)
-            call b%mskimg%apply_2Denvmask22Dref(b%img, iptcl)
+            call b%mskimg%apply_2Denvmask22Dref(b%img)
             call b%img%write(p%outstk, iptcl)
         end do
         ! end gracefully

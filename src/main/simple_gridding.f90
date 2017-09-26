@@ -1,5 +1,4 @@
 ! utilities for convolution interpolation (gridding)
-
 module simple_gridding
 #include "simple_lib.f08"
     

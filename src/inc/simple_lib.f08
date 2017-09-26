@@ -18,3 +18,11 @@
     use simple_math
     use simple_rnd
     use simple_stat
+    use simple_combinatorics
+    use simple_magic_boxes
+    use simple_hash,    only: hash
+    use simple_sll,     only: sll
+    use simple_chash,   only: chash
+    use simple_arr,     only: arr
+    use simple_imghead, only: find_ldim_nptcls
+    

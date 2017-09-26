@@ -1,16 +1,9 @@
 ! concrete commander: distributed workflows
-
 module simple_commander_distr_wflows
 #include "simple_lib.f08"
-use simple_defs            ! use all in there
-use simple_strings
-use simple_math
+
 use simple_qsys_funs       ! use all in there
-use simple_syslib,         only: alloc_errchk, file_exists
 use simple_binoris_io,     only: binread_oritab, binwrite_oritab, binread_nlines
-use simple_jiffys,         only: simple_end, progress
-use simple_fileio,         only: fopen, fileio_errmsg, fclose, simple_rename
-use simple_rnd,            only: seed_rnd
 use simple_cmdline,        only: cmdline
 use simple_chash,          only: chash
 use simple_qsys_env,       only: qsys_env
@@ -28,6 +21,7 @@ implicit none
 public :: unblur_ctffind_distr_commander
 public :: unblur_distr_commander
 public :: unblur_tomo_movies_distr_commander
+public :: powerspecs_distr_commander
 public :: ctffind_distr_commander
 public :: pick_distr_commander
 public :: makecavgs_distr_commander
@@ -55,6 +49,10 @@ type, extends(commander_base) :: unblur_tomo_movies_distr_commander
   contains
     procedure :: execute      => exec_unblur_tomo_movies_distr
 end type unblur_tomo_movies_distr_commander
+type, extends(commander_base) :: powerspecs_distr_commander
+  contains
+    procedure :: execute      => exec_powerspecs_distr
+end type powerspecs_distr_commander
 type, extends(commander_base) :: ctffind_distr_commander
   contains
     procedure :: execute      => exec_ctffind_distr
@@ -108,13 +106,10 @@ type, extends(commander_base) :: scale_stk_parts_commander
     procedure :: execute      => exec_scale_stk_parts
 end type scale_stk_parts_commander
 
-integer, parameter :: KEYLEN=32
-
 contains
 
-    ! PIPELINED UNBLUR + CTFFIND
-    !> unblur_ctffind_distr is a distributed version of the pipelined unblur + ctffind programs
-    subroutine exec_unblur_ctffind_distr( self, cline )       
+    subroutine exec_unblur_ctffind_distr( self, cline )
+        use simple_commander_preproc
         class(unblur_ctffind_distr_commander), intent(inout) :: self
         class(cmdline),                        intent(inout) :: cline
         character(len=32), parameter   :: UNIDOCFBODY = 'unidoc_'
@@ -196,9 +191,7 @@ contains
     end subroutine exec_unblur_distr
 
     subroutine exec_unblur_tomo_movies_distr( self, cline )
-!        use simple_commander_preproc
         use simple_oris,           only: oris
-        use simple_fileio,         only: read_filetable
         class(unblur_tomo_movies_distr_commander), intent(inout) :: self
         class(cmdline),                            intent(inout) :: cline
         character(len=STDLEN), allocatable :: tomonames(:)
@@ -257,6 +250,33 @@ contains
         call qsys_cleanup(p_master)
         call simple_end('**** SIMPLE_DISTR_UNBLUR_TOMO_MOVIES NORMAL STOP ****')
     end subroutine exec_unblur_tomo_movies_distr
+
+    subroutine exec_powerspecs_distr( self, cline )
+        class(powerspecs_distr_commander), intent(inout) :: self
+        class(cmdline),                    intent(inout) :: cline
+        type(qsys_env) :: qenv
+        type(params)   :: p_master
+        type(chash)    :: job_descr
+        ! seed the random number generator
+        call seed_rnd
+        ! output command line executed
+        write(*,'(a)') '>>> COMMAND LINE EXECUTED'
+        write(*,*) trim(cmdline_glob)
+        ! make master parameters
+        p_master = params(cline, checkdistr=.false.)
+        p_master%nptcls = nlines(p_master%filetab)
+        if( p_master%nparts > p_master%nptcls ) stop 'nr of partitions (nparts) mjust be < number of entries in filetable'
+        ! setup the environment for distributed execution
+        call qenv%new(p_master)
+        ! prepare job description
+        call cline%gen_job_descr(job_descr)
+        ! schedule & clean
+        call qenv%gen_scripts_and_schedule_jobs(p_master, job_descr)
+        ! clean
+        call qsys_cleanup(p_master)
+        ! end gracefully
+        call simple_end('**** SIMPLE_DISTR_POWERSPECS NORMAL STOP ****')
+    end subroutine exec_powerspecs_distr
 
     subroutine exec_ctffind_distr( self, cline )
         class(ctffind_distr_commander), intent(inout) :: self
@@ -529,7 +549,6 @@ contains
     end subroutine exec_prime2D_distr
 
     subroutine exec_prime2D_chunk_distr( self, cline )
-
         use simple_commander_imgproc, only: stack_commander
         use simple_oris,              only: oris
         use simple_ori,               only: ori
@@ -840,6 +859,7 @@ contains
             call cline_check3D_conv%delete( trim(vol) )
             call cline_merge_algndocs%delete( trim(vol) )
             call cline_volassemble%delete( trim(vol) )
+            state_assemble_finished(state) = 'VOLASSEMBLE_FINISHED_STATE'//int2str_pad(state,2)
         enddo
 
         ! SPLIT STACK
@@ -921,7 +941,7 @@ contains
         iter = p_master%startit-1
         corr = -1.
         do
-            iter = iter+1
+            iter = iter + 1
             str_iter = int2str_pad(iter,3)
             write(*,'(A)')   '>>>'
             write(*,'(A,I6)')'>>> ITERATION ', iter
@@ -1187,7 +1207,7 @@ contains
         ! MAIN LOOP
         iter = p_master%startit-1
         do
-            iter = iter+1
+            iter = iter + 1
             str_iter = int2str_pad(iter,3)
             write(*,'(A)')   '>>>'
             write(*,'(A,I6)')'>>> ITERATION ', iter

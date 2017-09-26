@@ -1,9 +1,6 @@
 ! provides global distribution of constants and derived constants
 module simple_params
-use simple_defs         ! use all in there
-use simple_strings      ! use all in there
-use simple_fileio       ! use all in there
-use simple_syslib       ! use all in there
+#include "simple_lib.f08"
 use simple_ori,         only: ori
 use simple_cmdline,     only: cmdline
 use simple_magic_boxes, only: find_magic_box
@@ -49,6 +46,7 @@ type :: params
     character(len=3)      :: kmeans='yes'
     character(len=3)      :: local='no'
     character(len=3)      :: masscen='no'         !< center using binarisation and mass centering(yes|no){no}
+    character(len=3)      :: match_filt='yes'     !< matched filter on (yes|no){yes}
     character(len=3)      :: merge='no'
     character(len=3)      :: mirr='no'            !< mirror(no|x|y){no}
     character(len=3)      :: neg='no'             !< invert contrast of images(yes|no)
@@ -138,6 +136,7 @@ type :: params
     character(len=STDLEN) :: outvol=''            !< output volume{outvol.ext}
     character(len=STDLEN) :: ctffind_doc=''       !< per-micrograph CTF parameters to transfer
     character(len=STDLEN) :: pcastk='pcavecinstk.bin'
+    character(len=STDLEN) :: pcontrast='black'    !< particle contrast(black|white){black}
     character(len=STDLEN) :: pdbfile=''           !< PDB file
     character(len=STDLEN) :: pdfile='pdfile.bin'
     character(len=STDLEN) :: pgrp='c1'            !< point-group symmetry(cn|dn|t|o|i)
@@ -325,6 +324,7 @@ type :: params
     real    :: msk=0.              !< mask radius(in pixels)
     real    :: mul=1.              !< origin shift multiplication factor{1}
     real    :: mw=0.               !< molecular weight(in kD)
+    real    :: ndev=2.0            !< # deviations in one-cluster clustering
     real    :: neigh=0.2
     real    :: nsig=2.5            !< # sigmas
     real    :: optlims(7,2)=0.
@@ -351,6 +351,7 @@ type :: params
     logical :: cyclic(7)       = .false.
     logical :: l_distr_exec    = .false.
     logical :: l_chunk_distr   = .false.
+    logical :: l_match_filt    = .true.
     logical :: doshift         = .false.
     logical :: l_envmsk        = .false.
     logical :: l_autoscale     = .false.
@@ -473,6 +474,7 @@ contains
         call check_carg('label',          self%label)
         call check_carg('local',          self%local)
         call check_carg('masscen',        self%masscen)
+        call check_carg('match_filt',     self%match_filt)
         call check_carg('merge',          self%merge)
         call check_carg('mirr',           self%mirr)
         call check_carg('msktype',        self%msktype)
@@ -485,6 +487,7 @@ contains
         call check_carg('order',          self%order)
         call check_carg('outside',        self%outside)
         call check_carg('pad',            self%pad)
+        call check_carg('pcontrast',      self%pcontrast)
         call check_carg('pgrp',           self%pgrp)
         call check_carg('pgrp_known',     self%pgrp_known)
         call check_carg('phaseplate',     self%phaseplate)
@@ -597,6 +600,7 @@ contains
         call check_iarg('noris',          self%noris)
         call check_iarg('nran',           self%nran)
         call check_iarg('nrefs',          self%nrefs)
+        call check_iarg('nrepeats',       self%nrepeats)
         call check_iarg('nrestarts',      self%nrestarts)
         call check_iarg('nspace',         self%nspace)
         call check_iarg('nsub',           self%nsub)
@@ -689,6 +693,7 @@ contains
         call check_rarg('msk',            self%msk)
         call check_rarg('mul',            self%mul)
         call check_rarg('mw',             self%mw)
+        call check_rarg('ndev',           self%ndev)
         call check_rarg('neigh',          self%neigh)
         call check_rarg('nsig',           self%nsig)
         call check_rarg('outer',          self%outer)
@@ -945,6 +950,13 @@ contains
         endif
         ! set default outer mask value
         if( .not. cline%defined('outer') ) self%outer = self%msk
+        ! matched filter flag
+        select case(self%match_filt)
+            case('no')
+                self%l_match_filt = .false.
+            case DEFAULT
+                self%l_match_filt = .true.
+        end select
         ! checks automask related values
         self%l_envmsk = .false.
         if( self%automsk .ne. 'no' ) self%l_envmsk = .true.

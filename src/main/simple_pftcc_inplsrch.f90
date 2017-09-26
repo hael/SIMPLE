@@ -1,6 +1,6 @@
-! in-plane alignment of band-pass limited polar projections in the Fourier domain 
+! in-plane alignment of band-pass limited polar projections in the Fourier domain
 module simple_pftcc_inplsrch
-use simple_defs               ! use all in there
+#include "simple_lib.f08"
 use simple_opt_spec,          only: opt_spec
 use simple_pftcc_opt,         only: pftcc_opt
 use simple_polarft_corrcalc,  only: polarft_corrcalc
@@ -94,7 +94,6 @@ contains
     end subroutine inplsrch_set_inipop
 
     function inplsrch_costfun( self, vec, D ) result( cost )
-        use simple_math, only: enforce_cyclic_limit
         class(pftcc_inplsrch), intent(inout) :: self
         integer,               intent(in)    :: D
         real,                  intent(in)    :: vec(D)
@@ -122,8 +121,6 @@ contains
     end function inplsrch_costfun
     
     function inplsrch_minimize( self, irot, shvec, rxy, fromto ) result( crxy )
-        use simple_math, only: rotmat2d, enforce_cyclic_limit
-        use simple_rnd,  only: ran3
         class(pftcc_inplsrch), intent(inout) :: self
         integer, optional,     intent(in)    :: irot
         real,    optional,     intent(in)    :: shvec(:)

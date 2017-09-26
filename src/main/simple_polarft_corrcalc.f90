@@ -1,8 +1,7 @@
 ! for calculation of band-pass limited cross-correlation of polar Fourier transforms
-
 module simple_polarft_corrcalc
 #include "simple_lib.f08"
-    
+
 use simple_params,   only: params
 use simple_ran_tabu, only: ran_tabu
 implicit none
@@ -481,7 +480,6 @@ contains
     !>  \brief  is for memoization of the complex square sums required for correlation calculation
     !! \param iptcl particle index
     subroutine memoize_sqsum_ptcl( self, iptcl )
-        use simple_math, only: csq
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iptcl
         self%sqsums_ptcls(iptcl) = sum(csq(self%pfts_ptcls(iptcl,:self%refsz,:)))
@@ -491,7 +489,6 @@ contains
 
     !>  \brief  is for writing particle pfts to file
     subroutine write_pfts_ptcls( self, fname )
-        use simple_fileio, only: fopen,fclose,fileio_errmsg
         class(polarft_corrcalc), intent(in) :: self
         character(len=*),        intent(in) :: fname !< output filename
         integer :: funit, io_stat
@@ -509,7 +506,6 @@ contains
     subroutine read_pfts_ptcls( self, fname )
         !$ use omp_lib
         !$ use omp_lib_kinds
-        use simple_fileio, only: fopen,fclose,fileio_errmsg
         class(polarft_corrcalc), intent(inout) :: self
         character(len=*),        intent(in)    :: fname !< input filename
         integer :: funit, io_stat, iptcl
@@ -539,8 +535,7 @@ contains
     !! \param kstop end point
     !!
     subroutine prep_ref4corr( self, iptcl, iref, pft_ref, sqsum_ref, kstop )
-        use simple_math,          only: csq
-        use simple_estimate_ssnr, only: fsc2optlp
+         use simple_estimate_ssnr, only: fsc2optlp
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iptcl, iref
         complex(sp),             intent(out)   :: pft_ref(self%refsz,self%kfromto(1):self%kfromto(2))

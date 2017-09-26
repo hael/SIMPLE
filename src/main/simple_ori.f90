@@ -614,9 +614,9 @@ contains
     !<  \brief  to print the rotation matrix
     subroutine print_mat( self )
         class(ori), intent(inout) :: self
-        write(*,*) self%rmat(1,1), self%rmat(1,2), self%rmat(1,3),&
-                  &self%rmat(2,1), self%rmat(2,2), self%rmat(2,3),&
-                  &self%rmat(3,1), self%rmat(3,2), self%rmat(3,3) 
+        write(*,*) self%rmat(1,1), self%rmat(1,2), self%rmat(1,3), &
+            &      self%rmat(2,1), self%rmat(2,2), self%rmat(2,3), &
+            &      self%rmat(3,1), self%rmat(3,2), self%rmat(3,3)
     end subroutine print_mat
 
     !>  \brief prints oris data based on the existence of intent(in) character

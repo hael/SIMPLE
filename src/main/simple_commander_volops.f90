@@ -1,11 +1,7 @@
 ! concrete commander: operations on volumes
-
 module simple_commander_volops
 #include "simple_lib.f08"
-    
-    !! import functions
-use simple_binoris_io,     only: binread_oritab, binwrite_oritab, binread_nlines
-use simple_imghead,        only: find_ldim_nptcls
+
 !! import classes
 use simple_cmdline,        only: cmdline
 use simple_params,         only: params
@@ -14,6 +10,10 @@ use simple_commander_base, only: commander_base
 use simple_image,          only: image
 use simple_projector_hlev, only: projvol, rotvol
 use simple_ori,            only: ori
+
+!! import functions
+use simple_binoris_io,     only: binread_oritab, binwrite_oritab, binread_nlines
+use simple_imghead,        only: find_ldim_nptcls
 
 implicit none
 
@@ -126,7 +126,6 @@ contains
 
     subroutine exec_postproc_vol(self, cline)
         use simple_estimate_ssnr, only: fsc2optlp
-        use simple_fileio,        only: file2rarr, add2fbody
         class(postproc_vol_commander), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
         type(params)      :: p
@@ -214,7 +213,6 @@ contains
     !! \param cline command line
     !!
     subroutine exec_projvol( self, cline )
-        use simple_fileio,  only: del_file
         class(projvol_commander), intent(inout) :: self
         class(cmdline),           intent(inout) :: cline
         type(params)             :: p
@@ -275,7 +273,6 @@ contains
     !! \param cline
     !!
     subroutine exec_volaverager( self, cline )
-        use simple_fileio,  only: fname2format
         class(volaverager_commander), intent(inout) :: self
         class(cmdline),               intent(inout) :: cline
         type(params) :: p
@@ -422,7 +419,6 @@ contains
     !> calculate similarity matrix between volumes
     subroutine exec_volume_smat( self, cline )
         use simple_projector, only: projector
-        use simple_ori,       only: ori
         use simple_volprep,   only: read_and_prep_vol
         use simple_volpft_srch ! singleton
         class(volume_smat_commander), intent(inout) :: self

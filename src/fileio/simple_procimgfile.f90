@@ -201,7 +201,7 @@ contains
         real,             intent(in) :: smpd
         type(image)                  :: img, img_pad
         integer                      :: n, i, ldim(3)
-        real                         :: ave, sdev, var, med
+        real                         :: ave, sdev, maxv, minv, med
         call find_ldim_nptcls(fname2pad, ldim, n)
         ldim(3) = 1
         call raise_exception_imgfile( n, ldim, 'pad_imgfile' )
@@ -217,7 +217,7 @@ contains
                     call img%pad(img_pad) ! FT state preserved
                 else
                     ! get background statistics
-                    call img%stats('background', ave, sdev, var, med=med)
+                    call img%stats('background', ave, sdev, maxv, minv, med=med)
                     call img%pad(img_pad, backgr=med) ! FT state preserved
                 endif
                 call img_pad%write(fname, i)
@@ -508,42 +508,39 @@ contains
         call img%kill
     end subroutine shellnorm_imgfile
 
-    !>  \brief  is for calculating statistics
-    !> stats_imgfile
-    !! \param fname filename
-    !! \param which file type
-    !! \param ave,sdev,var,med output statistics
-    !! \param msk mask threshold
-    !!
-    subroutine stats_imgfile( fname, which, ave, sdev, var, med, msk )
-        character(len=*), intent(in)  :: fname, which
-        real,             intent(out) :: ave, sdev, var, med
+    !>  \brief  is for calculating image statistics
+    subroutine stats_imgfile( fname, os, msk )
+        use simple_oris, only: oris
+        character(len=*), intent(in)  :: fname
+        class(oris),      intent(out) :: os
         real, optional,   intent(in)  :: msk
-        real        :: ave_loc, sdev_loc, var_loc, med_loc
-        type(image) :: img
-        integer     :: i, n, ldim(3)
+        real              :: ave, sdev, var, med, minv, maxv, ent, spec
+        real, allocatable :: spectrum(:)
+        type(image)       :: img
+        integer           :: i, n, ldim(3)
         call find_ldim_nptcls(fname, ldim, n)
         ldim(3) = 1
         call raise_exception_imgfile( n, ldim, 'stats_imgfile' )
         call img%new(ldim,1.)
+        call os%new_clean(n)
         write(*,'(a)') '>>> CALCULATING STACK STATISTICS'
-        ave  = 0.
-        sdev = 0.
-        var  = 0.
-        med  = 0.
         do i=1,n
             call progress(i,n)
             call img%read(fname,i)
-            call img%stats(which, ave_loc, sdev_loc, var_loc, msk=msk, med=med_loc)
-            ave  = ave  + ave_loc
-            sdev = sdev + sdev_loc
-            var  = var  + var_loc
-            med  = med  + med_loc
+            call img%stats('foreground', ave, sdev, maxv, minv, med=med, msk=msk)
+            ent = img%entropy()
+            call img%fwd_ft
+            spectrum = img%spectrum('power')
+            spec = sum(spectrum)/real(size(spectrum))
+            call os%set(i, 'ave',   ave)
+            call os%set(i, 'sdev',  sdev)
+            call os%set(i, 'maxv',  maxv)
+            call os%set(i, 'minv',  minv)
+            call os%set(i, 'med',   med)
+            call os%set(i, 'ent',   ent)
+            call os%set(i, 'spec',  spec)
+            call os%set(i, 'dynrange', maxv - minv)
         end do
-        ave  = ave/real(n)
-        sdev = sdev/real(n)
-        var  = var/real(n)
-        med  = med/real(n)
         call img%kill
     end subroutine stats_imgfile
 

@@ -378,9 +378,16 @@ contains
         tmp = cmplx(1.,0.)
         call tmp%bp(0.,p%lp,0.)
         call tmp%ft2img('real', mask)
-        call mask%write('resolution_mask.mrc', 1)
+        if( p%l_distr_exec )then
+            if( p%part == 1 ) call mask%write('resolution_mask.mrc', 1)
+        else
+            call mask%write('resolution_mask.mrc', 1)
+        endif
         ! do the work
         if( cline%defined('stk') )then
+            if( p%l_distr_exec )then
+                stop 'stk input incompatible with distributed exection; commander_preproc :: powerspecs'
+            endif
             call b%img%new(p%ldim, p%smpd) ! img re-generated (to account for possible non-square)
             tmp = 0.0
             do iimg=1,p%nptcls
@@ -394,15 +401,25 @@ contains
             call read_filetable(p%filetab, imgnames)
             nimgs = size(imgnames)
             DebugPrint  'read the img filenames'
+            if( cline%defined('numlen') )then
+                ! nothing to do
+            else
+                p%numlen = len(int2str(nimgs))
+            endif
             ! get logical dimension of micrographs
             call find_ldim_nptcls(imgnames(1), ldim, ifoo)
             ldim(3) = 1 ! to correct for the stupide 3:d dim of mrc stacks
             DebugPrint  'logical dimension: ', ldim
             call b%img%new(ldim, p%smpd) ! img re-generated (to account for possible non-square)
             ! determine loop range
-            iimg_start = 1
-            if( cline%defined('startit') ) iimg_start = p%startit
-            iimg_stop  = nimgs
+            if( p%l_distr_exec )then
+                iimg_start = p%fromp
+                iimg_stop  = p%top
+            else
+                iimg_start = 1
+                if( cline%defined('startit') ) iimg_start = p%startit
+                iimg_stop  = nimgs
+            endif
             DebugPrint  'fromto: ', iimg_start, iimg_stop
             ! do it
             tmp = 0.0
@@ -413,10 +430,16 @@ contains
                 call b%img%read(imgnames(iimg), 1, rwaction='READ')
                 powspec = b%img%mic2spec(p%pspecsz, trim(adjustl(p%speckind)))
                 call powspec%clip(tmp)
-                call tmp%write(trim(adjustl(p%fbody))//p%ext, iimg)
-                call progress(iimg, nimgs)
+                if( p%l_distr_exec )then
+                    call tmp%write(trim(adjustl(p%fbody))//'_pspec'//int2str_pad(iimg,p%numlen)//p%ext)
+                    call progress(iimg, nimgs)
+                else
+                    call tmp%write(trim(adjustl(p%fbody))//p%ext, iimg)
+                    call progress(iimg, nimgs)
+                endif
             end do
         endif
+        call qsys_job_finished( p, 'simple_commander_preproc :: exec_powerspecs' )
         ! end gracefully
         call simple_end('**** SIMPLE_POWERSPECS NORMAL STOP ****')
     end subroutine exec_powerspecs
@@ -494,7 +517,6 @@ contains
     end subroutine exec_unblur
 
     subroutine exec_ctffind( self, cline )
- 
         class(ctffind_commander), intent(inout) :: self
         class(cmdline),           intent(inout) :: cline  !< command line input
         type(params)                       :: p
@@ -672,9 +694,8 @@ contains
         character(STDLEN), parameter :: ORIFILE='pickrefs_oris'//METADATEXT
         type(params)                 :: p
         type(build)                  :: b
-        type(cmdline)                :: cline_projvol!, cline_stackops
+        type(cmdline)                :: cline_projvol
         type(projvol_commander)      :: xprojvol
-        !type(stackops_commander)     :: xstackops
         integer                      :: nrots, cnt, iref, irot
         real                         :: ang, rot
         p = params(cline)                   ! parameters generated
@@ -692,6 +713,7 @@ contains
                 call cline_projvol%set('outstk', trim(p%stk)  )
                 call cline_projvol%set('oritab', trim(ORIFILE))
                 call cline_projvol%set('smpd',   PICKER_SHRINK)
+                call cline_projvol%set('neg',    'no'         )
                 call xprojvol%execute(cline_projvol)
             endif
             ! expand in in-plane rotation
@@ -711,7 +733,7 @@ contains
                 end do
                 call cline%set('stk', 'rotated_from_makepickrefs'//p%ext)
             endif
-            if( p%neg .eq. 'yes' )then
+            if( p%pcontrast .eq. 'black' )then
                 call neg_imgfile('rotated_from_makepickrefs'//p%ext, 'pickrefs'//p%ext, p%smpd)
             else
                 call simple_rename('rotated_from_makepickrefs'//p%ext, 'pickrefs'//p%ext)
@@ -774,7 +796,7 @@ contains
         integer,               allocatable :: pinds(:)
         logical,               allocatable :: oris_mask(:)
         real                               :: kv, cs, fraca, dfx, dfy, angast, ctfres
-        real                               ::  particle_position(2)
+        real                               :: particle_position(2)
         type(image)                        :: micrograph
         type(oris)                         :: outoris, os_uni
         logical                            :: params_present(3)

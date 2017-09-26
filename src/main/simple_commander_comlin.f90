@@ -7,14 +7,11 @@ use simple_cmdline,        only: cmdline
 use simple_params,         only: params
 use simple_build,          only: build
 use simple_commander_base, only: commander_base
-use simple_qsys_funs,      only: qsys_job_finished
-
 implicit none
 
 public :: comlin_smat_commander
 public :: symsrch_commander
 private
-
 #include "simple_local_flags.inc"
 
 type, extends(commander_base) :: comlin_smat_commander
@@ -34,6 +31,7 @@ contains
         use simple_ori,          only: ori
         use simple_imgfile,      only: imgfile
         use simple_comlin,       only: comlin
+        use simple_qsys_funs,      only: qsys_job_finished
         class(comlin_smat_commander), intent(inout) :: self
         class(cmdline),               intent(inout) :: cline
         type(params), target          :: p

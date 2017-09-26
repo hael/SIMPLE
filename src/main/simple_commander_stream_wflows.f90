@@ -1,5 +1,4 @@
 ! concrete commander: stream processing routines
-
 module simple_commander_stream_wflows
 #include "simple_lib.f08"
 
@@ -26,7 +25,6 @@ contains
     subroutine exec_preproc_stream( self, cline )
         use simple_commander_preproc, only: preproc_commander
         use simple_moviewatcher,      only: moviewatcher
-        use simple_build,             only: build
         class(preproc_stream_commander), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline
         integer,               parameter   :: SHORTTIME = 30   ! folder watched every minute
@@ -38,7 +36,7 @@ contains
         type(moviewatcher)       :: movie_buff
         integer                  :: nmovies, imovie, stacksz, prev_stacksz
         integer, parameter       :: TRAILING=5
-        debug=.true.  ! from local flags
+        debug=.true.  ! from local flags, for debugging
         ! make master parameters
         p_master = params(cline, checkdistr=.false.)
         ! set defaults

@@ -1,11 +1,9 @@
 ! an agglomeration of orientations
-
 module simple_oris
 !$ use omp_lib
 !$ use omp_lib_kinds
 #include "simple_lib.f08"
 
-use simple_stat,        only: moment, corrs2weights, pearsn
 use simple_ran_tabu,    only: ran_tabu
 use simple_ori,         only: ori
 implicit none
@@ -154,6 +152,7 @@ type :: oris
     procedure          :: find_closest_projs
     procedure          :: find_closest_ori
     procedure          :: find_closest_oris
+    procedure          :: calc_euldists
     procedure, private :: create_proj_subspace_1
     procedure, private :: create_proj_subspace_2
     generic            :: create_proj_subspace => create_proj_subspace_1, create_proj_subspace_2
@@ -462,7 +461,7 @@ contains
             if( cconsider_w )  w = self%o(i)%get('w')
             if( mystate > 0 .and. w > TINY )then
                 myval = nint(self%o(i)%get(label))
-                pops(myval) = pops(myval) + 1 
+                pops(myval) = pops(myval) + 1
             endif
         end do
     end function get_pops
@@ -1782,7 +1781,7 @@ contains
         type(ran_tabu)       :: rt
         integer, allocatable :: eopart(:)
         logical, allocatable :: l_mask(:)
-        integer :: i, j, istate, n, cnt, nstates, sz  
+        integer :: i, j, istate, n, cnt, nstates, sz
         select case(which)
             case('proj')
                 if( .not. self%isthere('proj')  ) stop 'proj label must be set; simple_oris :: partition_eo'
@@ -2305,7 +2304,7 @@ contains
             ! get class population
             pop = self%get_pop(i, 'class', consider_w=.true.)
             ! zero case
-            if( pop < 1 )cycle
+            if( pop < 1 ) cycle
             ! get indices of particles in class subject to weight not zero
             inds = self%get_pinds(i, 'class', consider_w=.true.)
             if( pop <= popmax )then ! all inclded
@@ -2572,6 +2571,27 @@ contains
             oriinds(i) = inds(i)
         end do
     end subroutine find_closest_oris
+
+    !>  \brief  to calculate all euler distances to one orientation
+    subroutine calc_euldists( self, o_in, dists )
+        class(oris),       intent(in)  :: self
+        class(ori),        intent(in)  :: o_in
+        real, allocatable, intent(out) :: dists(:)
+        integer :: i
+        if( allocated(dists) )then
+            if( size(dists).ne.self%n )then
+                deallocate(dists)
+                allocate(dists(self%n),stat=alloc_stat)
+                if(alloc_stat /= 0) allocchk('In: simple_oris::calc_euldists dists')
+            endif
+        else
+            allocate(dists(self%n),stat=alloc_stat)
+            if(alloc_stat /= 0) allocchk('In: simple_oris::calc_euldists dists')
+        endif
+        do i=1,self%n
+            dists(i) = self%o(i).euldist.o_in
+        end do
+    end subroutine calc_euldists
 
     !>  \brief  to identify a subspace of projection directions
     function create_proj_subspace_1( self, nsub ) result( subspace_projs )

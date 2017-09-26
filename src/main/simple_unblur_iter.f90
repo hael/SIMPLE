@@ -1,13 +1,11 @@
 ! iterator for unblur (a program for motion correction, dose-weighting and frame-weighting of DDD movies)
 module simple_unblur_iter
-use simple_defs
+#include "simple_lib.f08"
+
 use simple_image,        only: image
 use simple_cmdline,      only: cmdline
 use simple_params,       only: params
-use simple_strings,      only: int2str_pad, int2str
-use simple_math,         only: round2even
 use simple_ori,          only: ori
-use simple_syslib,       only: file_exists
 use simple_procimgfile,  only: frameavg_imgfile 
 use simple_unblur       ! use all in there
 implicit none
@@ -41,8 +39,9 @@ contains
         integer,            intent(inout) :: movie_counter, frame_counter
         character(len=*),   intent(in)    :: moviename
         real,               intent(out)   :: smpd_out
-        integer :: ldim(3), ldim_thumb(3)
-        real    :: corr, scale
+        real, allocatable :: shifts(:,:)
+        integer           :: ldim(3), ldim_thumb(3), iframe, nframes
+        real              :: corr, scale
         ! make names
         if( cline%defined('fbody') )then
             if( p%stream.eq.'yes' )then
@@ -95,8 +94,15 @@ contains
             self%moviename = trim(moviename)
         endif
         ! execute the unblurring
-        call unblur_movie(self%moviename, p, corr, smpd_out)
+        call unblur_movie(self%moviename, p, corr, smpd_out, shifts)
+        ! report new smpd & shifts to ori object
         call orientation%set('smpd', smpd_out)
+        nframes = size(shifts,1)
+        do iframe=1,nframes
+            call orientation%set('x'//int2str(iframe), shifts(iframe,1))
+            call orientation%set('y'//int2str(iframe), shifts(iframe,2))
+        end do
+        ! generate sums
         if( p%tomo .eq. 'yes' )then
             call unblur_calc_sums_tomo(frame_counter, p%time_per_frame,&
             &self%moviesum, self%moviesum_corrected, self%moviesum_ctf)

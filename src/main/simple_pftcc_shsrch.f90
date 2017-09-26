@@ -1,10 +1,10 @@
 ! rotational origin shift alignment of band-pass limited polar projections in the Fourier domain
 module simple_pftcc_shsrch
+#include "simple_lib.f08"
 use simple_opt_spec,          only: opt_spec
 use simple_pftcc_opt,         only: pftcc_opt
 use simple_polarft_corrcalc,  only: polarft_corrcalc
 use simple_simplex_pftcc_opt, only: simplex_pftcc_opt
-use simple_defs               ! use all in there
 implicit none
 
 public :: pftcc_shsrch
@@ -117,7 +117,6 @@ contains
 
     !> minimisation routine
     function shsrch_minimize( self, irot, shvec, rxy, fromto ) result( cxy )
-        use simple_math, only: rotmat2d
         class(pftcc_shsrch), intent(inout) :: self
         integer, optional,   intent(in)    :: irot        !< index of rotation (obsolete)
         real,    optional,   intent(in)    :: shvec(:)    !< search values vector (obsolete)

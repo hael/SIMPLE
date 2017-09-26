@@ -2,7 +2,7 @@
 
 module simple_build
 #include "simple_lib.f08"
-    !!import classes
+!!import classes
 use simple_cmdline,          only: cmdline
 use simple_comlin,           only: comlin
 use simple_image,            only: image

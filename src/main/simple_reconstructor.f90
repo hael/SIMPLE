@@ -1,5 +1,4 @@
 ! 3D reconstruction from projections using convolution interpolation (gridding)
-
 module simple_reconstructor
 !$ use omp_lib
 !$ use omp_lib_kinds
@@ -46,9 +45,9 @@ type, extends(image) :: reconstructor
     real                        :: dens_const    = 1.           !< density estimation constant, old val: 1/nptcls
     integer                     :: lfny          = 0            !< Nyqvist Fourier index
     integer                     :: ldim_img(3)   = 0            !< logical dimension of the original image
-    !character(len=STDLEN)       :: ctfflag       = ''           !< ctf flag <yes|no|mul|flip>
- !   integer(sp)                 :: wdim                         !< logical dimension of window
-!    integer(sp)                 :: dimplus                      !< logical dimension of image plus half window
+    ! character(len=STDLEN)       :: ctfflag       = ''           !< ctf flag <yes|no|mul|flip>
+    ! integer(sp)                 :: wdim                         !< logical dimension of window
+    ! integer(sp)                 :: dimplus                      !< logical dimension of image plus half window
     integer, allocatable        :: physmat(:,:,:,:)
     type(CTFFLAGTYPE)           :: ctf                          !< ctf flag <yes|no|mul|flip>
     logical                     :: tfneg              = .false. !< invert contrast or not

@@ -11,7 +11,7 @@ use simple_commander_base, only: commander_base
 use simple_imghead,        only: find_ldim_nptcls
 use simple_procimgfile     ! use all in there
 implicit none
-#include "simple_local_flags.inc"
+
 public :: binarise_commander
 public :: convert_commander
 public :: corrcompare_commander
@@ -24,8 +24,8 @@ public :: scale_commander
 public :: stack_commander
 public :: stackops_commander
 private
+#include "simple_local_flags.inc"
 
-!> generator type
 type, extends(commander_base) :: binarise_commander
   contains
     procedure :: execute      => exec_binarise
@@ -162,8 +162,6 @@ contains
     end subroutine exec_convert
 
     subroutine exec_corrcompare( self, cline )
-        use simple_stat,  only: moment
-        use simple_math,  only: get_resolution
         class(corrcompare_commander), intent(inout) :: self
         class(cmdline),               intent(inout) :: cline
         type(params)      :: p
@@ -241,7 +239,7 @@ contains
 
     !> for applying CTF to stacked images
     subroutine exec_ctfops( self, cline )
-      use simple_ctf,         only: ctf
+        use simple_ctf,         only: ctf
         class(ctfops_commander), intent(inout) :: self
         class(cmdline),          intent(inout) :: cline
         type(params) :: p
@@ -295,7 +293,7 @@ contains
     end subroutine exec_ctfops
 
     subroutine exec_filter( self, cline )
-      class(filter_commander), intent(inout) :: self
+        class(filter_commander), intent(inout) :: self
         class(cmdline),          intent(inout) :: cline
         type(params) :: p
         type(build)  :: b
@@ -424,7 +422,7 @@ contains
     !! radius msk (pixels). If you want to normalise your images or volume
     !! (vol1) with respect to their power spectrum set shell_norm=yes
     subroutine exec_norm( self, cline )
-      class(norm_commander), intent(inout) :: self
+        class(norm_commander), intent(inout) :: self
         class(cmdline),        intent(inout) :: cline
         type(build)       :: b
         type(params)      :: p
@@ -709,7 +707,7 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_STACK NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_stack
-
+    
     !> provides standard single-particle image
     !> processing routines that are applied to MRC or SPIDER stacks.
     subroutine exec_stackops( self, cline )
@@ -910,6 +908,12 @@ contains
         ! auto correlation function
         if( p%acf .eq. 'yes' )then
             call acf_imgfile(p%stk, p%outstk)
+            goto 999
+        endif
+        ! produce image statistics
+        if( p%stats .eq. 'yes' )then
+            call stats_imgfile(p%stk, b%a)
+            call b%a%write('image_statistics.txt')
             goto 999
         endif
         ! create frame averages

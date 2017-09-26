@@ -1,7 +1,8 @@
 ! routines for generation of directed random numbers
-
 module simple_ran_tabu
-#include "simple_lib.f08"
+use simple_defs
+use simple_syslib, only:alloc_errchk
+use simple_rnd, only: multinomal, irnd_gasdev, irnd_uni
 implicit none
 private
 type :: ran_tabu
@@ -41,7 +42,7 @@ contains
         self%NP = NP
         self%N_tabus = 0
         allocate( self%avail(NP), stat=alloc_stat )
-        if(alloc_stat /= 0) allocchk('In: new_ran_tabu, module: simple_ran_tabu.f90')
+        if(alloc_stat /= 0) call alloc_errchk('In: new_ran_tabu, module: simple_ran_tabu.f90', alloc_stat)
         self%avail = .true. ! all integers from 1 to NP made available
     end function constructor
 
@@ -211,7 +212,7 @@ contains
         integer, allocatable :: nnmat(:,:) !> output nearest neigh matrix
         integer :: iptcl
         allocate(nnmat(pfromto(1):pfromto(2),nnn), stat=alloc_stat)
-        if(alloc_stat /= 0) allocchk('In: simple_ran_tabu; stoch_nnmat')
+        if(alloc_stat /= 0) call alloc_errchk('In: simple_ran_tabu; stoch_nnmat', alloc_stat)
         do iptcl=pfromto(1),pfromto(2)
             call self%ne_mnomal_iarr( pmat(iptcl,:), nnmat(iptcl,:))
         end do
@@ -254,7 +255,7 @@ contains
         class(ran_tabu), intent(inout) :: self
         if( allocated(self%avail) )then
             deallocate( self%avail, stat=alloc_stat )
-            if(alloc_stat /= 0) allocchk('In: simple_ran_tabu; kill ')
+            if(alloc_stat /= 0) call alloc_errchk('In: simple_ran_tabu; kill ', alloc_stat)
         end if
     end subroutine kill
 

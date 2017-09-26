@@ -1,5 +1,4 @@
 ! 2D/3D envelope and adaptive masking
-
 module simple_masker
 #include "simple_lib.f08"
     
@@ -67,12 +66,10 @@ contains
     end subroutine automask3D
 
     !>  \brief  is for envelope masking of the reference in prime2D
-    subroutine apply_2Denvmask22Dref( self, ref, cls )
+    subroutine apply_2Denvmask22Dref( self, ref )
         class(masker), intent(inout) :: self
         class(image),  intent(inout) :: ref
-        integer,       intent(in)    :: cls
         type(image) :: img
-        if( cls > self%n ) stop 'class index out of range'
         ! binarize image
         img = ref
         call self%bin_cavg(img)

@@ -1,13 +1,10 @@
 ! 3D reconstruction - master module
 module simple_rec_master
-use simple_defs
-use simple_strings, only: int2str_pad
+#include "simple_lib.f08"
 use simple_build,     only: build
 use simple_params,    only: params
 use simple_cmdline,   only: cmdline
 use simple_qsys_funs, only: qsys_job_finished
-!use simple_math       ! use all in there
-!use simple_filterer   ! use all in there
 implicit none
 
 public :: exec_rec_master

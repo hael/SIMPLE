@@ -1,9 +1,8 @@
 ! statistics utility functions
-
 module simple_stat
-    use simple_defs ! singleton
-    use simple_syslib, only: alloc_errchk
-    use simple_math, only: hpsort
+use simple_defs ! singleton
+use simple_syslib, only: alloc_errchk
+use simple_math, only: hpsort, median
 implicit none
 
 private :: moment_1, moment_2, moment_3, normalize_1, normalize_2, normalize_3
@@ -212,8 +211,8 @@ contains
 
     !>    is for sigmoid normalisation [0,1]
     subroutine normalize_sigm_1( arr )
-        real, intent(inout) :: arr(:)                    !< input data
-        real                :: smin, smax, delta         ! temp stats
+        real, intent(inout) :: arr(:)
+        real                :: smin, smax, delta
         real, parameter     :: NNET_CONST = exp(1.)-1.
         if( size(arr) == 1 )then
             arr(1) = max(0., min(arr(1), 1.))
@@ -273,6 +272,27 @@ contains
             write(*,'(a)') 'no normalisation done'
         endif
     end subroutine normalize_sigm_3
+
+    subroutine normalize_minmax( arr )
+        real, intent(inout) :: arr(:)
+        real                :: smin, smax, delta
+        if( size(arr) == 1 )then
+            arr(1) = max(0., min(arr(1), 1.))
+            return
+        endif
+         ! find minmax
+        smin  = minval(arr)
+        smax  = maxval(arr)
+        delta = smax - smin
+        if( delta > TINY )then
+            !$omp parallel workshare default(shared)
+            arr = (arr - smin)/delta
+            !$omp end parallel workshare
+        else
+            write(*,'(a)') 'WARNING! stat :: normalize_minmax, division with zero'
+            write(*,'(a)') 'no normalisation done'
+        endif
+    end subroutine normalize_minmax
 
     !>    calculates the devation around point
     !! \param data input data
@@ -746,21 +766,18 @@ contains
         end do
     end subroutine analyze_smat
 
-    !>  median deviation (for use in one-class clustering)
-    !!  should be a robust metric for the spread of a cluster 
+    !>  measure of cluster spread (for use in one-class clustering)
     !!  (1) estimate median of cluster (member most similar to all others)
-    !!  (2) calculate the similarity between the median and all others
-    !!  (3) take the median of (2) to get the deviation
-    !!  suggested exclusion based on 2.5 * dev criterion
-    subroutine median_dev( smat, i_median, smed, sdev )
-        use simple_math, only: median
+    !!  (2) calculate the median of the similarities between the median and all others
+    !!  suggested exclusion based on 2 * ddev (sigma) criterion
+    subroutine dev_from_smat( smat, i_median, sdev )
         real,    intent(in)  :: smat(:,:)
         integer, intent(out) :: i_median
-        real,    intent(out) :: smed, sdev
+        real,    intent(out) :: sdev
         real, allocatable :: sims(:)
         integer :: loc(1), i, j, n
         n = size(smat,1)
-        if( n /= size(smat,2) ) stop 'symmetric similarity matrix assumed; stat :: mad'
+        if( n /= size(smat,2) ) stop 'symmetric similarity matrix assumed; stat :: dev_from_smat'
         allocate(sims(n))
         do i=1,n
             sims(i) = 0.0
@@ -772,9 +789,34 @@ contains
         end do
         loc      = maxloc(sims)
         i_median = loc(1)
-        smed     = sims(i_median)/real(n - 1)
         sdev     = median(smat(i_median,:))
-    end subroutine median_dev
+    end subroutine dev_from_smat
+
+    !>  measure of cluster spread (for use in one-class clustering)
+    !!  (1) estimate median of cluster (member most similar to all others)
+    !!  (2) calculate the median of the distances between the median and all others
+    !!  suggested exclusion based on 2 * ddev (sigma) criterion
+    subroutine dev_from_dmat( dmat, i_median, ddev )
+        real,    intent(in)  :: dmat(:,:)
+        integer, intent(out) :: i_median
+        real,    intent(out) :: ddev
+        real, allocatable :: dists(:)
+        integer :: loc(1), i, j, n
+        n = size(dmat,1)
+        if( n /= size(dmat,2) ) stop 'symmetric distance matrix assumed; stat :: median_dev_from_dmat'
+        allocate(dists(n))
+        do i=1,n
+            dists(i) = 0.0
+            do j=1,n
+                if( i /= j )then
+                    dists(i) = dists(i) + dmat(i,j)
+                endif
+            end do
+        end do
+        loc      = minloc(dists)
+        i_median = loc(1)
+        ddev     = median(dmat(i_median,:))
+    end subroutine dev_from_dmat
 
     ! SPECIAL FUNCTIONS
 

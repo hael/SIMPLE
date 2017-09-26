@@ -1,7 +1,8 @@
 ! command line dictonary
 module simple_cmd_dict
+#include "simple_lib.f08"
+
 use simple_chash, only: chash
-use simple_defs
 implicit none
 
 public :: print_cmdline, test_cmd_dict, print_cmd_key_descr
@@ -127,6 +128,7 @@ contains
         call chdict%push('lpstart',       'start low-pass limit(in A){15}')
         call chdict%push('lpstop',        'stop low-pass limit(in A){8}')
         call chdict%push('masscen',       'center using binarisation and mass centering(yes|no){no}')
+        call chdict%push('match_filt',    'matched filter on (yes|no){yes}')
         call chdict%push('maxits',        'maximum # iterations')
         call chdict%push('minp',          'minimum cluster population')
         call chdict%push('mirr',          'mirror(no|x|y){no}')
@@ -139,6 +141,7 @@ contains
         call chdict%push('ncls',          '# clusters')
         call chdict%push('ncunits',       '# computing units, can be < nparts{nparts}')
         call chdict%push('ndiscrete',     '# discrete orientations')
+        call chdict%push('ndev',          '# deviations in one-cluster clustering')
         call chdict%push('ndocs',         '# documents')
         call chdict%push('neg',           'invert contrast of images(yes|no)')
         call chdict%push('newbox',        'new box for scaling (by Fourier padding/clipping')
@@ -176,6 +179,7 @@ contains
         call chdict%push('outstk',        'output image stack')
         call chdict%push('outstk2',       'output image stack 2nd')
         call chdict%push('outvol',        'output volume{outvol.ext}')
+        call chdict%push('pcontrast',     'particle contrast(black|white){black}')
         call chdict%push('pdbfile',       'input PDB formatted file')
         call chdict%push('pgrp',          'point-group symmetry(cn|dn|t|o|i)')
         call chdict%push('pgrp_known',    'point-group known a priori(yes|no){no}')
@@ -264,10 +268,11 @@ contains
     end subroutine print_cmd_key_descr
 
     subroutine print_cmdline( keys_required, keys_optional, fhandle, distr )
-        use simple_strings, only: str_has_substr
-        character(len=*), optional, intent(in) :: keys_required(:), keys_optional(:)
-        integer,          optional, intent(in) :: fhandle
-        logical,          optional, intent(in) :: distr
+        use simple_strings, only: str_has_substr, lexSort
+        character(len=KEYLEN), optional, intent(in) :: keys_required(:), keys_optional(:)
+        integer,               optional, intent(in) :: fhandle
+        logical,               optional, intent(in) :: distr
+        character(len=KEYLEN), allocatable :: sorted_keys(:)
         integer :: nreq, nopt
         logical :: ddistr
         ddistr = .false.
@@ -287,7 +292,10 @@ contains
             if( nreq > 0 )then
                 write(*,'(a)') ''
                 write(*,'(a)') 'REQUIRED'
-                call chdict%print_key_val_pairs(keys_required, fhandle)
+                allocate(sorted_keys(nreq), source=keys_required)
+                call lexSort(sorted_keys)
+                call chdict%print_key_val_pairs(sorted_keys, fhandle)
+                deallocate(sorted_keys)
             endif
         endif
         ! print optionals
@@ -297,7 +305,10 @@ contains
             if( nopt > 0 )then
                 write(*,'(a)') ''
                 write(*,'(a)') 'OPTIONAL'
-                call chdict%print_key_val_pairs(keys_optional, fhandle)
+                allocate(sorted_keys(nopt), source=keys_optional)
+                call lexSort(sorted_keys)
+                call chdict%print_key_val_pairs(sorted_keys, fhandle)
+                deallocate(sorted_keys)
             endif
         endif
         write(*,'(a)') ''

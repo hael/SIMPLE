@@ -1,13 +1,11 @@
 ! for common-lines-based search
 module simple_comlin_srch
-use simple_defs
-use simple_jiffys,      only: progress
+#include "simple_lib.f08"
 use simple_build,       only: build
 use simple_params,      only: params
 use simple_optimizer,   only: optimizer
 use simple_opt_factory, only: opt_factory
 use simple_opt_spec,    only: opt_spec
-use simple_syslib,      only: alloc_errchk, simple_stop
 use simple_ori,         only: ori
 use simple_oris,        only: oris
 use simple_sym,         only: sym
@@ -21,7 +19,7 @@ integer, parameter :: NPROJC1    = 400
 integer, parameter :: NPROJ      = 200
 integer, parameter :: NBEST      = 30
 integer, parameter :: NBEST_PAIR = 10
-integer, parameter :: ANGRES     = 10
+integer, parameter :: ANGSTEP     = 10
 
 class(build),     pointer :: bp=>null()       !< pointer to builder
 class(params),    pointer :: pp=>null()       !< pointer to params
@@ -132,7 +130,7 @@ contains
         endif
         ntot = fromto(2) - fromto(1) + 1
         call resoris%new(nproj_sym)
-        ! grid search using the spiral geometry & ANGRES degree in-plane resolution
+        ! grid search using the spiral geometry & ANGSTEP degree in-plane resolution
         write(*,'(A)') '>>> GLOBAL GRID SYMMETRY AXIS SEARCH'
         cnt = 0
         do iproj=fromto(1),fromto(2)
@@ -140,7 +138,7 @@ contains
             call progress(cnt, ntot)
             orientation = espace%get_ori(iproj)
             corr_best   = -1.
-            do inpl=0,359,ANGRES
+            do inpl=0,359,ANGSTEP
                 call orientation%e3set(real(inpl))
                 bp%a = a_copy
                 call bp%a%rot(orientation)
@@ -174,14 +172,14 @@ contains
         type(ori) :: orientation, orientation_best
         real      :: corr, corr_best, similarity, cxy(6)
         integer   :: iproj, inpl, iloc
-        ! grid search using the spiral geometry & ANGRES degree in-plane resolution
+        ! grid search using the spiral geometry & ANGSTEP degree in-plane resolution
         do iproj = 1, nproj
             orientation = espace%get_ori(iproj)
             corr_best   = -1.
-            do inpl=0,359,ANGRES
+            do inpl=0,359,ANGSTEP
                 call orientation%e3set(real(inpl))
                 call bp%a%set_ori(jptcl, orientation)
-                corr = bp%clins%pcorr(iptcl, jptcl) 
+                corr = bp%clins%pcorr(iptcl, jptcl)
                 call orientation%set('corr',corr)
                 if( corr > corr_best )then
                     corr_best = corr
@@ -216,7 +214,7 @@ contains
         ospec%x = otarget%get_euler()
         ospec%nevals = 0
         call nlopt%minimize(ospec, cxy(1))
-        cxy(1)  = -cxy(1) ! correlation 
+        cxy(1)  = -cxy(1) ! correlation
         cxy(2:) = ospec%x ! euler set
     end function comlin_srch_minimize
 
@@ -229,7 +227,7 @@ contains
         ospec%x(5)   = 0.
         ospec%nevals = 0
         call nlopt%minimize(ospec, cxy(1))
-        cxy(1)  = -cxy(1) ! correlation 
+        cxy(1)  = -cxy(1) ! correlation
         cxy(2:) = ospec%x ! ori set
     end function comlin_pairsrch_minimize
 
@@ -261,7 +259,7 @@ contains
             bp%a = a_copy ! puts back unmodified oris
         endif
     end function comlin_srch_cost
-    
+
      !> Pair search cost function
     function comlin_pairsrch_cost( vec, D ) result( cost )
         integer, intent(in)  :: D   !< size of parameter vector
@@ -274,12 +272,12 @@ contains
             cost = 1.
         elseif( vec(4) < -trs .or. vec(4) > trs )then
             cost = 1.
-        elseif( vec(5) < -trs .or. vec(5) > trs )then 
+        elseif( vec(5) < -trs .or. vec(5) > trs )then
             cost = 1.
         else
             call bp%a%set_euler(jptcl, vec(1:3))
             call bp%a%set_shift(jptcl, vec(4:5))
-            cost = -bp%clins%pcorr(iptcl, jptcl) 
+            cost = -bp%clins%pcorr(iptcl, jptcl)
         endif
     end function comlin_pairsrch_cost
 

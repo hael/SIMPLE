@@ -12,7 +12,7 @@ private
 
 integer, parameter :: NPROJ  = 200
 integer, parameter :: NBEST  = 20
-integer, parameter :: ANGRES = 10
+integer, parameter :: ANGSTEP = 10
 
 type(volpft_corrcalc) :: vpftcc               !< corr calculator
 type(opt_spec)        :: ospec_eul            !< optimizer specification object, Euler angles
@@ -102,13 +102,13 @@ contains
         call espace%new(NPROJ)
         call espace%spiral
         allocate(corrs(ffromto(1):ffromto(2),0:359))
-        ! grid search using the spiral geometry & ANGRES degree in-plane resolution
+        ! grid search using the spiral geometry & ANGSTEP degree in-plane resolution
         serial = .true. ! since the below loop is parallel
         corrs  = -1.
         !$omp parallel do schedule(static) default(shared) private(iproj,euls,inpl) proc_bind(close)
         do iproj=ffromto(1),ffromto(2)
             euls = espace%get_euler(iproj)
-            do inpl=0,359,ANGRES
+            do inpl=0,359,ANGSTEP
                 euls(3) = real(inpl)
                 corrs(iproj,inpl) = vpftcc%corr(euls, serial)
             end do
@@ -118,7 +118,7 @@ contains
         do iproj=ffromto(1),ffromto(2)
             corr_best   = -1.
             config_best = 0
-            do inpl=0,359,ANGRES
+            do inpl=0,359,ANGSTEP
                 if( corrs(iproj,inpl) > corr_best )then
                     corr_best = corrs(iproj,inpl) 
                     config_best(1) = iproj

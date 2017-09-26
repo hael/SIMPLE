@@ -1,9 +1,10 @@
 ! for checking convergence
 module simple_convergence
+#include "simple_lib.f08"
+
 use simple_oris,     only: oris
 use simple_params,   only: params
 use simple_cmdline,  only: cmdline
-use simple_defs      ! use all in there
 use simple_defs_conv ! use all in there
 implicit none
 
@@ -104,7 +105,6 @@ contains
     end function check_conv2D
     
     function check_conv3D( self, update_res ) result( converged )
-        use simple_math, only: rad2deg
         class(convergence), intent(inout) :: self
         logical, optional,  intent(inout) :: update_res
         real, allocatable :: state_mi_joint(:), statepops(:)
@@ -274,7 +274,6 @@ contains
     end function check_conv_cont3D
 
     function check_conv_het( self ) result( converged )
-        use simple_math, only: rad2deg
         class(convergence), intent(inout) :: self
         real, allocatable :: statepops(:)
         logical           :: converged

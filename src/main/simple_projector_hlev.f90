@@ -1,7 +1,6 @@
 ! projection of 3D volumes in the Fourier domain by convolution interpolation
 ! to generate band-pass limited Cartesian and polar 2D Fourier transforms,
 ! high-level routines
-
 module simple_projector_hlev
 !$ use omp_lib
 !$ use omp_lib_kinds

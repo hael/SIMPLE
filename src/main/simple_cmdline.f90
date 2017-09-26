@@ -1,10 +1,8 @@
 ! command line parser
-
 module simple_cmdline
 #include "simple_lib.f08"
 
 use simple_cmd_dict ! use all in there
-use simple_chash,   only: chash
 implicit none
 
 public :: cmdline, cmdline_err
@@ -324,36 +322,34 @@ contains
 
     !>  \brief  writes the hash to file
     subroutine write( self, fname )
-        use simple_chash
         class(cmdline),   intent(inout) :: self
         character(len=*), intent(inout) :: fname
-        type(chash) :: hash
-        call self%gen_job_descr( hash )
-        call hash%write( trim(fname) )
-        call hash%kill
+        type(chash) :: h
+        call self%gen_job_descr( h )
+        call h%write( trim(fname) )
+        call h%kill
     end subroutine write
 
     !>  \brief  reads a row of a text-file into the inputted hash, assuming key=value pairs
     subroutine read( self, fname, keys_required, keys_optional )
-        use simple_chash
         class(cmdline),             intent(inout) :: self
         character(len=*),           intent(inout) :: fname
         character(len=*), optional, intent(in)    :: keys_required(:), keys_optional(:)
-        type(chash)       :: hash
+        type(chash)       :: h
         character(len=32) :: key,arg
         real              :: rval
         integer           :: i, io_stat, ri, ikey, nreq
-        call hash%new( self%NMAX )
-        call hash%read( trim(fname) )
-        self%entire_line = hash%chash2str()
-        self%argcnt = hash%size_of_chash()
+        call h%new( self%NMAX )
+        call h%read( trim(fname) )
+        self%entire_line = h%chash2str()
+        self%argcnt = h%size_of_chash()
         if( self%argcnt < 2 )then
             call print_cmdline(keys_required, keys_optional)
             stop
         endif
         do i=1,self%argcnt
-            key = hash%get_key( i )
-            arg = hash%get( i )
+            key = h%get_key( i )
+            arg = h%get( i )
             call str2int(adjustl(arg), io_stat, ri )
             if( io_stat == 0 )then
                 self%cmds(i)%rarg = real(ri)
@@ -369,7 +365,7 @@ contains
             self%totlen = self%totlen + len_trim( adjustl(arg) )
             self%cmds(i)%defined = .true.
         end do
-        call hash%kill
+        call h%kill
         if( present(keys_required) )then
             if( str_has_substr(self%entire_line,'prg=') )then
                 nreq = size(keys_required)+1 ! +1 because prg part of command line

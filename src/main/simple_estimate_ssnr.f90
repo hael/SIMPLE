@@ -1,5 +1,4 @@
 ! spectral signal-to-noise ratio estimation routines
-
 module simple_estimate_ssnr
 #include "simple_lib.f08"
 use simple_image,   only: image
@@ -33,8 +32,8 @@ contains
         allocate( filt(nyq),stat=alloc_stat)
         if(alloc_stat /= 0) allocchk("in simple_estimate_ssnr::fsc2optlp filt ")
         filt = 0.
-        where( corrs > 0. )    filt = sqrt( 2. * corrs / (corrs + 1.) )
-        where( filt  > 0.9999 )filt = 0.99999
+        where( corrs > 0. )     filt = sqrt( 2. * corrs / (corrs + 1.) )
+        where( filt  > 0.9999 ) filt = 0.99999
     end function fsc2optlp
 
     !> \brief  converts the SSNR to FSC

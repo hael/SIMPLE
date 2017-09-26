@@ -1,18 +1,16 @@
 ! batch-processing manager - control module
-
 module simple_qsys_ctrl
 #include "simple_lib.f08"
 
 use simple_qsys_base,    only: qsys_base
 use simple_chash,        only: chash
 use simple_cmdline,      only: cmdline
-
-
 implicit none
 
 public :: qsys_ctrl
 private
 #include "simple_local_flags.inc"
+
 integer, parameter :: SHORTTIME = 3
 
 type qsys_ctrl
@@ -89,7 +87,6 @@ contains
 
     !>  \brief  is a constructor
     subroutine new( self, exec_binary, qsys_obj, parts, fromto_part, ncomputing_units, stream )
-        use simple_syslib,       only: simple_getenv
         class(qsys_ctrl),         intent(inout) :: self             !< the instance
         character(len=*),         intent(in)    :: exec_binary      !< the binary that we want to execute in parallel
         class(qsys_base), target, intent(in)    :: qsys_obj         !< the object that defines the qeueuing system
@@ -255,7 +252,6 @@ contains
 
     !>  \brief  private part script generator
     subroutine generate_script_1( self, job_descr, ipart, q_descr )
-        use simple_syslib,       only: wait_for_closure
         class(qsys_ctrl), intent(inout) :: self
         class(chash),     intent(in)    :: job_descr
         integer,          intent(in)    :: ipart
@@ -301,7 +297,6 @@ contains
 
     !>  \brief  public script generator for single jobs
     subroutine generate_script_2( self, job_descr, q_descr, exec_bin, script_name, outfile )
-        use simple_syslib,       only: wait_for_closure
         class(qsys_ctrl), intent(inout) :: self
         class(chash),     intent(in)    :: job_descr
         class(chash),     intent(in)    :: q_descr
@@ -331,7 +326,7 @@ contains
         call fclose(funit, ios, &
             &errmsg='simple_qsys_ctrl :: generate_script_2; Error when closing file: '&
             &//trim(script_name))
-            !!!!!!!!!
+        !!!!!!!!!
         call wait_for_closure(script_name)
         !!!!!!!!!
         if( trim(q_descr%get('qsys_name')).eq.'local' )then
@@ -349,7 +344,6 @@ contains
     subroutine submit_scripts( self )
         use simple_qsys_local,   only: qsys_local
         class(qsys_ctrl),  intent(inout) :: self
- !       class(qsys_base),        pointer :: pmyqsys
         character(len=LONGSTRLEN)        :: qsys_cmd
         character(len=STDLEN)            ::  script_name
         integer               :: ipart
@@ -401,7 +395,7 @@ contains
         endif
         !!!!!!!!!!!!
         select type( pmyqsys => self%myqsys )
-            class is(qsys_local)
+            type is (qsys_local)
                 cmd = trim(adjustl(self%myqsys%submit_cmd()))//' '//trim(adjustl(self%pwd))&
                 &//'/'//trim(adjustl(script_name))//' &'
             class DEFAULT
@@ -438,7 +432,6 @@ contains
     ! THE MASTER SCHEDULER
 
     subroutine schedule_jobs( self )
-        use simple_syslib, only: simple_sleep
         class(qsys_ctrl),  intent(inout) :: self
         do
             if( all(self%jobs_done) ) exit

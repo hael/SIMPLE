@@ -1,12 +1,7 @@
 ! concrete commander: prime3D for ab initio 3D reconstruction and 3D refinement
-
 module simple_commander_prime3D
 #include "simple_lib.f08"
-use simple_defs
-use simple_jiffys
 use simple_binoris_io      ! use all in there
-use simple_fileio          ! use all in there
-use simple_syslib,         only: alloc_errchk
 use simple_cmdline,        only: cmdline
 use simple_params,         only: params
 use simple_build,          only: build
@@ -25,7 +20,7 @@ public :: cont3D_commander
 public :: check3D_conv_commander
 private
 #include "simple_local_flags.inc"
-!> generator type
+
 type, extends(commander_base) :: resrange_commander
   contains
     procedure :: execute      => exec_resrange
@@ -125,25 +120,25 @@ contains
         type(build)        :: b
         integer, parameter :: MAXIMGS=1000
         integer(dp) :: t1
-        verbose=.true.
+        verbose=.false.
         t1=tic()
-        VerbosePrint '+++ prime3D_init timing '
+        VerbosePrint '>> Prime3D_init timing '
         p = params(cline) ! parameters generated
         if( p%ctf .ne. 'no')then
             if( .not. cline%defined('deftab') )&
             &stop 'need texfile with defocus/astigmatism values for ctf .ne. no mode exec'
          endif
-        VerbosePrint '+++ prime3D_init timing: params ', toc()
+        VerbosePrint '>>> prime3D_init timing: params ', toc()
         call b%build_general_tbox(p, cline)   ! general objects built
-        VerbosePrint '+++ prime3D_init timing: General toolbox ', toc()
+        VerbosePrint '>>> prime3D_init timing: General toolbox ', toc()
         call b%build_hadamard_prime3D_tbox(p) ! prime3D objects built
-        VerbosePrint '+++ prime3D_init timing: Prime3D toolbox ', toc()
+        VerbosePrint '>>> prime3D_init timing: Prime3D toolbox ', toc()
         ! determine resolution range 
         if( cline%defined('lp') ) call prime3D_find_resrange( b, p, p%lp, p%lpstop )
         ! determine the number of peaks
         if( .not. cline%defined('npeaks') ) p%npeaks = min(10,b%e%find_npeaks(p%lp, p%moldiam))
         ! generate the random model
-         VerbosePrint '+++ prime3D_init timing: npeaks ', toc()
+         VerbosePrint '>>> prime3D_init timing: npeaks ', toc()
         if( cline%defined('nran') )then
             call gen_random_model( b, p, p%nran )
         else
@@ -153,10 +148,10 @@ contains
                 call gen_random_model( b, p )
             endif
          endif
-         VerbosePrint '+++ prime3D_init timing: gen_random_model ' ,toc()
+         VerbosePrint '>>> prime3D_init timing: gen_random_model ' ,toc()
         ! end gracefully
          call qsys_job_finished( p, cline%get_carg('prg') )
-         VerbosePrint '+++ prime3D_init timing: qsys finish ', toc()
+         VerbosePrint '>>> prime3D_init timing: qsys finish ', toc()
         call simple_end('**** SIMPLE_PRIME3D_INIT NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_prime3D_init
 

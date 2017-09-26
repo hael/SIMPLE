@@ -1,9 +1,9 @@
 ! for calculation of common-line correlations
 module simple_comlin
-use simple_defs    ! use all in there
+#include "simple_lib.f08"
+
 use simple_image,  only: image
 use simple_oris,   only: oris
-use simple_math,   only: csq, calc_corr, projz
 implicit none
 
 public :: comlin

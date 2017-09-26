@@ -1,7 +1,7 @@
 ! array class (container class for the singly linked list)
-
 module simple_arr
-#include "simple_lib.f08" 
+use simple_defs
+use simple_syslib, only: alloc_errchk
 implicit none
 
 public :: arr
@@ -22,7 +22,6 @@ type :: arr
 end type arr
 
 #include "simple_local_flags.inc"
-character(len=STDLEN):: io_msg
 
 contains
     subroutine new_1( self, iarr )
@@ -30,10 +29,10 @@ contains
         integer, intent(in) :: iarr(:)        !< input integer array
         if( allocated(self%iarr) )then
             deallocate( self%iarr,STAT=alloc_stat)
-            if(alloc_stat /= 0) allocchk(" In simple_arr::new_1  dealloc iarr " )
+            if(alloc_stat /= 0) call alloc_errchk(" In simple_arr::new_1  dealloc iarr ", alloc_stat )
         end if
         allocate( self%iarr(size(iarr)), source=iarr, stat=alloc_stat)
-        if(alloc_stat /= 0) allocchk(" In simple_arr::new_1  iarr " )
+        if(alloc_stat /= 0) call alloc_errchk(" In simple_arr::new_1  iarr " , alloc_stat)
     end subroutine new_1
 
     subroutine new_2( self, rarr )
@@ -41,10 +40,10 @@ contains
         real, intent(in) :: rarr(:)           !< input float array
         if( allocated(self%rarr) ) then
             deallocate( self%rarr ,STAT=alloc_stat)
-            if(alloc_stat /= 0) allocchk(" In simple_arr::new_2 dealloc rarr" )
+            if(alloc_stat /= 0) call alloc_errchk(" In simple_arr::new_2 dealloc rarr" , alloc_stat)
           end if
         allocate( self%rarr(size(rarr)), source=rarr,STAT=alloc_stat )
-        if(alloc_stat /= 0) allocchk(" In simple_arr::new_2 rarr ")
+        if(alloc_stat /= 0) call alloc_errchk(" In simple_arr::new_2 rarr ", alloc_stat)
     end subroutine
 
     function iget( self ) result( iarr )
@@ -52,7 +51,7 @@ contains
         integer, allocatable   :: iarr(:)  !< output integer array
         if( allocated(self%iarr) )then
             allocate( iarr(size(self%iarr)), source=self%iarr ,stat=alloc_stat)
-            if(alloc_stat /= 0) allocchk(" In simple_arr::iget  iarr dealloc " )
+            if(alloc_stat /= 0) call alloc_errchk(" In simple_arr::iget  iarr dealloc ", alloc_stat )
         else
             stop 'no info in iarr; get_1; simple_arr'
         endif
@@ -63,7 +62,7 @@ contains
         real, allocatable      :: rarr(:) !< output float array
         if( allocated(self%rarr) )then
             allocate( rarr(size(self%rarr)), source=self%rarr,STAT=alloc_stat)
-            if(alloc_stat /= 0) allocchk(" In simple_arr::rget  allocation fault " )
+            if(alloc_stat /= 0) call alloc_errchk(" In simple_arr::rget  allocation fault ", alloc_stat )
         else
             stop 'no info in rarr; get_2; simple_arr'
         endif
@@ -80,12 +79,12 @@ contains
         if( allocated(self%iarr) ) then
             deallocate( self%iarr ,stat=alloc_stat)
             if(alloc_stat /= 0) &
-                 allocchk(" In simple_arr::kill  deallocate iarr fault ")
+                 call alloc_errchk(" In simple_arr::kill  deallocate iarr fault ", alloc_stat)
         end if
           if( allocated(self%rarr) )then
               deallocate( self%rarr, stat=alloc_stat)
               if(alloc_stat /= 0) &
-                   allocchk(" In simple_arr::kill  deallocate rarr fault ")
+                   call alloc_errchk(" In simple_arr::kill  deallocate rarr fault ", alloc_stat)
           end if
     end subroutine
 

@@ -1,18 +1,16 @@
 ! the abstract image data type and its methods. 2D/3D & FT/real all implemented by this class
 ! and Fourier transformations done in-place to reduce memory usage
-
 module simple_image
 !$ use omp_lib
 !$ use omp_lib_kinds
 #include "simple_lib.f08"
-    use simple_fftw3
-    use gnufor2
 !!import classes
 use simple_ftiter,  only: ftiter
 use simple_imgfile, only: imgfile
 !!import functions
-!use simple_stat,    only: pearsn, moment, normalize_sigm
 use simple_winfuns, only: winfuns
+use simple_fftw3
+use gnufor2
 implicit none
 
 public :: image, test_image
@@ -220,6 +218,7 @@ type :: image
     procedure          :: real_corr_prenorm
     procedure          :: rank_corr
     procedure          :: real_dist
+    procedure          :: entropy
     procedure          :: fsc
     procedure          :: get_nvoxshell
     procedure          :: get_res
@@ -1445,7 +1444,7 @@ contains
                     if(alloc_stat /= 0) allocchk('winserialize; simple_image')
                     pcavec = 0.
                 endif
-            end subroutine set_acti on
+            end subroutine set_action
 
     end subroutine winserialize
 
@@ -3353,8 +3352,6 @@ contains
                         case('real')
                             spec(sh) = spec(sh) + real(self%cmat(phys(1),phys(2),phys(3)))
                         case('power')
-                            ! spec(sh) = spec(sh) + real(self%cmat(phys(1),phys(2),phys(3))&
-                            !                       *conjg(self%cmat(phys(1),phys(2),phys(3))))
                             spec(sh) = spec(sh) + csq(self%cmat(phys(1),phys(2),phys(3)))
                         case('absreal')
                             spec(sh) = spec(sh) + abs(real(self%cmat(phys(1),phys(2),phys(3))))
@@ -3905,15 +3902,15 @@ contains
     !! \param med median
     !! \param errout error flag
     !!
-    subroutine stats( self, which, ave, sdev, var, msk, med, errout )
+    subroutine stats( self, which, ave, sdev, maxv, minv, msk, med, errout )
         class(image), intent(inout)    :: self
         character(len=*),  intent(in)  :: which
-        real,              intent(out) :: ave, sdev, var
+        real,              intent(out) :: ave, sdev, maxv, minv
         real,    optional, intent(in)  :: msk
         real,    optional, intent(out) :: med
         logical, optional, intent(out) :: errout
-        integer           :: i, j, k, npix, minlen
-        real              :: ci, cj, ck, mskrad, e
+        integer           :: i, j, k, npix, alloc_stat, minlen
+        real              :: ci, cj, ck, mskrad, e, var
         logical           :: err, didft, background
         real, allocatable :: pixels(:)
         ! FT
@@ -3966,11 +3963,11 @@ contains
                                 pixels(npix) = self%rmat(i,j,k)
                             endif
                         endif
-                        ck = ck+1
+                        ck = ck + 1.
                     end do
-                    cj = cj+1.
+                    cj = cj + 1.
                 end do
-                ci = ci+1.
+                ci = ci + 1.
             end do
         else
             ! 2d
@@ -3990,11 +3987,13 @@ contains
                             pixels(npix) = self%rmat(i,j,1)
                         endif
                     endif
-                    cj = cj+1.
+                    cj = cj + 1.
                 end do
-                ci = ci+1.
+                ci = ci + 1.
             end do
         endif
+        maxv = maxval(pixels(:npix))
+        minv = minval(pixels(:npix))
         call moment( pixels(:npix), ave, sdev, var, err )
         if( present(med) ) med  = median_nocopy(pixels(:npix))
         deallocate( pixels )
@@ -4351,8 +4350,8 @@ contains
                             phys = self1%fit%comp_addr_phys([h,k,l])
                             ! real part of the complex mult btw 1 and 2*
                             r = r+real(self1%cmat(phys(1),phys(2),phys(3))*conjg(self2%cmat(phys(1),phys(2),phys(3))))
-                            sumasq = sumasq+csq(self2%cmat(phys(1),phys(2),phys(3)))
-                            sumbsq = sumbsq+csq(self1%cmat(phys(1),phys(2),phys(3)))
+                            sumasq = sumasq + csq(self2%cmat(phys(1),phys(2),phys(3)))
+                            sumbsq = sumbsq + csq(self1%cmat(phys(1),phys(2),phys(3)))
                          endif
                     end do
                 end do
@@ -4589,6 +4588,35 @@ contains
         r = sqrt(r)
     end function real_dist
 
+    !> \brief calculates the entropy of an image
+    real function entropy( self, nbins )
+        class(image),      intent(inout) :: self
+        integer, optional, intent(in)    :: nbins
+        integer              :: nnbins, cnt_i
+        real                 :: p_i
+        real,    allocatable :: means(:), pixvals(:)
+        integer, allocatable :: labels(:)
+        integer, parameter   :: MAXITS=5
+        integer :: i, npix
+        real    :: logtwo
+        nnbins = self%ldim(1)
+        if( present(nbins) ) nnbins = nbins
+        allocate(means(nnbins), source=0.)
+        npix    = product(self%ldim)
+        pixvals = pack(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)), mask=.true.)
+        call sortmeans(pixvals, MAXITS, means, labels)
+        logtwo  = log(2.)
+        entropy = 0.0
+        do i=1,nnbins
+            cnt_i = count(labels == i)
+            if( cnt_i > 0 )then
+                p_i = real(cnt_i) / real(nnbins)
+                entropy = entropy + p_i * (log(p_i)/logtwo)
+            endif
+        end do
+        entropy = -entropy
+    end function entropy
+
     !> \brief fsc is for calculation of Fourier ring/shell correlation
     !! \param self1 image object
     !! \param self2 image object
@@ -4631,8 +4659,8 @@ contains
         sumbsq = 0.
         lims   = self1%fit%loop_lims(2)
         if( sserial )then
-            do h=lims(1,1),lims(1,2)
-                do k=lims(2,1),lims(2,2)
+            do k=lims(2,1),lims(2,2)
+                do h=lims(1,1),lims(1,2)
                     do l=lims(3,1),lims(3,2)
                         ! compute physical address
                         phys = self1%fit%comp_addr_phys([h,k,l])
@@ -4642,8 +4670,6 @@ contains
                         ! real part of the complex mult btw self1 and targ*
                         corrs(sh) = corrs(sh)+&
                         real(self1%cmat(phys(1),phys(2),phys(3))*conjg(self2%cmat(phys(1),phys(2),phys(3))))
-                        ! sumasq(sh) = sumasq(sh)+real(abs(self2%cmat(phys(1),phys(2),phys(3))))**2.
-                        ! sumbsq(sh) = sumbsq(sh)+real(abs(self1%cmat(phys(1),phys(2),phys(3))))**2.
                         sumasq(sh) = sumasq(sh) + csq(self2%cmat(phys(1),phys(2),phys(3)))
                         sumbsq(sh) = sumbsq(sh) + csq(self1%cmat(phys(1),phys(2),phys(3)))
                     end do
@@ -4652,8 +4678,8 @@ contains
         else
             !$omp parallel do collapse(3) default(shared) private(h,k,l,phys,sh)&
             !$omp schedule(static) proc_bind(close) reduction(+:sumasq,sumbsq)
-            do h=lims(1,1),lims(1,2)
-                do k=lims(2,1),lims(2,2)
+            do k=lims(2,1),lims(2,2)
+                do h=lims(1,1),lims(1,2)
                     do l=lims(3,1),lims(3,2)
                         ! compute physical address
                         phys = self1%fit%comp_addr_phys([h,k,l])
@@ -4663,8 +4689,6 @@ contains
                         ! real part of the complex mult btw self1 and targ*
                         corrs(sh) = corrs(sh)+&
                         real(self1%cmat(phys(1),phys(2),phys(3))*conjg(self2%cmat(phys(1),phys(2),phys(3))))
-                        ! sumasq(sh) = sumasq(sh)+real(abs(self2%cmat(phys(1),phys(2),phys(3))))**2.
-                        ! sumbsq(sh) = sumbsq(sh)+real(abs(self1%cmat(phys(1),phys(2),phys(3))))**2.
                         sumasq(sh) = sumasq(sh) + csq(self2%cmat(phys(1),phys(2),phys(3)))
                         sumbsq(sh) = sumbsq(sh) + csq(self1%cmat(phys(1),phys(2),phys(3)))
                     end do
@@ -4976,6 +5000,7 @@ contains
         integer, parameter :: taper_strip_width(3) = 500
         integer, parameter :: smooth_half_width(3) = 1
         ndims = 2
+        ! initialise vars
         dim2 = 2;  dim3 = 3; nvals_runnavg = 0
         if (self%is_3d()) ndims = 3
         do curr_dim=1,ndims
@@ -5504,24 +5529,18 @@ contains
         character(len=*), intent(in)    :: which
         real, optional,   intent(in)    :: inner, width
         real, optional,   intent(out)   :: msksum
-        real    :: ci, cj, ck, e, wwidth
-        real    :: cis(self%ldim(1)), cjs(self%ldim(2)), cks(self%ldim(3))
-        integer :: i, j, k, minlen, ir, jr, kr
-        logical :: didft, doinner, soft, domsksum
+        type(image)       :: maskimg
+        real, allocatable :: pixels(:)
+        real              :: ci, cj, ck, e, e_bckgr, wwidth, med_bckgr
+        real              :: cis(self%ldim(1)), cjs(self%ldim(2)), cks(self%ldim(3))
+        integer           :: i, j, k, minlen, ir, jr, kr, npix, npix_tot, vec(3)
+        logical           :: didft, doinner, soft, bckgr, domsksum, err
         ! width
         wwidth = 10.
         if( present(width) ) wwidth = width
         ! inner
         doinner = .false.
         if( present(inner) ) doinner = .true.
-        ! soft/hard
-        if( which=='soft' )then
-            soft = .true.
-        else if( which=='hard' )then
-            soft = .false.
-        else
-            stop 'undefined which parameter; mask; simple_image'
-        endif
         ! msksum
         domsksum = .false.
         if( present(msksum) )then
@@ -5541,7 +5560,30 @@ contains
             minlen = minval(self%ldim(1:2))
         endif
         ! soft mask width limited to +/- COSMSKHALFWIDTH pixels
-        minlen = min(nint(2.*(mskrad+COSMSKHALFWIDTH)), minlen) 
+        minlen = min(nint(2.*(mskrad+COSMSKHALFWIDTH)), minlen)
+        ! soft/hard
+        select case(trim(which))
+        case('soft')
+            soft  = .true.
+            bckgr = .false.
+        case('softbckgr')
+            soft  = .true.
+            bckgr = .true. ! to perform background adjusted masking
+        case('hard')
+            soft  = .false.
+            bckgr = .false.
+        case DEFAULT
+            stop 'undefined which parameter; mask; simple_image'
+        end select
+        med_bckgr = 0.
+        if( bckgr )then
+            call maskimg%disc(self%ldim, self%smpd, mskrad, npix)
+            npix_tot = product(self%ldim)
+            pixels   = pack( self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)),&
+                &maskimg%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) < 0.5 )
+            med_bckgr = median_nocopy(pixels)
+            deallocate(pixels)
+        endif
         ! init center as origin
         forall(i=1:self%ldim(1)) cis(i) = -real(self%ldim(1)-1)/2. + real(i-1)
         forall(i=1:self%ldim(2)) cjs(i) = -real(self%ldim(2)-1)/2. + real(i-1)
@@ -5570,6 +5612,17 @@ contains
                                 self%rmat(ir,j,kr)  = e * self%rmat(ir,j,kr)
                                 self%rmat(ir,jr,k)  = e * self%rmat(ir,jr,k)
                                 self%rmat(ir,jr,kr) = e * self%rmat(ir,jr,kr)
+                                if( bckgr )then
+                                    e_bckgr = (1.-e) * med_bckgr
+                                    self%rmat(i,j,k)    = self%rmat(i,j,k)    + e_bckgr
+                                    self%rmat(i,j,kr)   = self%rmat(i,j,kr)   + e_bckgr
+                                    self%rmat(i,jr,k)   = self%rmat(i,jr,k)   + e_bckgr
+                                    self%rmat(i,jr,kr)  = self%rmat(i,jr,kr)  + e_bckgr
+                                    self%rmat(ir,j,k)   = self%rmat(ir,j,k)   + e_bckgr
+                                    self%rmat(ir,j,kr)  = self%rmat(ir,j,kr)  + e_bckgr
+                                    self%rmat(ir,jr,k)  = self%rmat(ir,jr,k)  + e_bckgr
+                                    self%rmat(ir,jr,kr) = self%rmat(ir,jr,kr) + e_bckgr
+                                endif
                             enddo
                         enddo
                     enddo
@@ -5586,6 +5639,13 @@ contains
                             self%rmat(i,jr,1)  = e * self%rmat(i,jr,1)
                             self%rmat(ir,j,1)  = e * self%rmat(ir,j,1)
                             self%rmat(ir,jr,1) = e * self%rmat(ir,jr,1)
+                            if( bckgr )then
+                                e_bckgr = (1.-e) * med_bckgr
+                                self%rmat(i,j,1)   = self%rmat(i,j,k)   + e_bckgr
+                                self%rmat(i,jr,1)  = self%rmat(i,jr,k)  + e_bckgr
+                                self%rmat(ir,j,1)  = self%rmat(ir,j,k)  + e_bckgr
+                                self%rmat(ir,jr,1) = self%rmat(ir,jr,k) + e_bckgr
+                            endif
                         enddo
                     enddo
                 endif
@@ -5787,7 +5847,6 @@ contains
     !! \param backgr
     !!
     subroutine pad( self_in, self_out, backgr )
-        !use simple_winfuns, only: winfuns
         class(image), intent(inout)   :: self_in, self_out
         real, intent(in), optional    :: backgr
         real                          :: w, ratio
@@ -5904,7 +5963,6 @@ contains
     !! \param self_out image object
     !!
     subroutine clip( self_in, self_out )
-        !use simple_winfuns, only: winfuns
         class(image), intent(inout) :: self_in, self_out
         real                        :: ratio
         integer                     :: starts(3), stops(3), lims(3,2)
@@ -6429,7 +6487,7 @@ contains
                 complex, allocatable :: fplane_simple(:,:), fplane_frealix(:,:)
                 integer              :: i, j, k, cnt, lfny, ldim(3)
                 real                 :: input, msk, ave, sdev, var, med, xyz(3), pow
-                real                 :: imcorr, recorr, corr, corr_lp
+                real                 :: imcorr, recorr, corr, corr_lp, maxv, minv
                 real, allocatable    :: pcavec1(:), pcavec2(:), spec(:), res(:)
                 real                 :: smpd=2.
                 logical              :: passed, test(6)
@@ -6577,7 +6635,7 @@ contains
                 write(*,'(a)') '**info(simple_image_unit_test, part 6): testing stats'
                 passed = .false.
                 call img%gauran( 5., 15. )
-                call img%stats( 'foreground', ave, sdev, var, 40., med )
+                call img%stats( 'foreground', ave, sdev, maxv, minv, 40., med )
                 if( ave >= 4. .and. ave <= 6. .and. sdev >= 14. .and.&
                 sdev <= 16. .and. med >= 4. .and. med <= 6. ) passed = .true.
                 if( .not. passed )  stop 'stats test failed'

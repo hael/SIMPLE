@@ -64,44 +64,6 @@ contains
         endif
     end subroutine fileio_errmsg
 
-    !>  \brief  check if a file exists on disk
-    ! logical function file_exists(fname)
-    !     character(len=*), intent(in) :: fname
-    !     inquire(file=trim(adjustl(fname)), exist=file_exists)
-    ! end function file_exists
-
-    ! logical function is_io(unit)
-    !     integer, intent(in) :: unit
-    !     is_io=.false.
-    !     if (unit == stderr .or. unit == stdout .or. unit == stdin) is_io= .true.
-    !   end function is_io
-
-    ! !>  \brief  check whether a IO unit is currently opened
-    ! logical function is_open( unit_number )
-    !     integer, intent(in)   :: unit_number
-    !     integer               :: io_status
-    !     character(len=STDLEN) :: io_message
-    !     io_status = 0
-    !     inquire(unit=unit_number, opened=is_open,iostat=io_status,iomsg=io_message)
-    !     if (io_status .ne. 0) then
-    !         print *, 'is_open: IO error ', io_status, ': ', trim(adjustl(io_message))
-    !         call simple_stop ('IO error; is_open; simple_fileio      ')
-    !     endif
-    ! end function is_open
-
-    ! !>  \brief  check whether a file is currently opened
-    ! logical function is_file_open( fname )
-    !     character(len=*), intent(in)  :: fname
-    !     integer               :: io_status
-    !     character(len=STDLEN) :: io_message
-    !     io_status = 0
-    !     inquire(file=fname, opened=is_file_open,iostat=io_status,iomsg=io_message)
-    !     if (io_status .ne. 0) then
-    !         print *, 'is_open: IO error ', io_status, ': ', trim(adjustl(io_message))
-    !         stop 'IO error; is_file_open; simple_fileio      '
-    !     endif
-    ! end function is_file_open
-
     !> FOPEN enforce F2008 style open so that PGI/Intel behave correctly
     !!
     !! Usage: if(.not.fopen(fnr, fname, STATUS='REPLACE', action='WRITE', iostat=file_stat))&
@@ -789,20 +751,22 @@ contains
         character(len=:), allocatable :: extension
         extension = fname2ext(fname)
         select case(extension)
-        case ('img','hed')
-            fname2format = 'I'
-        case ('mrc','map','st','ctf','mrcs')
-            fname2format = 'M'
-        case ('spi')
-            fname2format = 'S'
-        case('bin','raw','sbin')
-            fname2format = 'B'
-        case('dbin')
-            fname2format = 'D'
-        case ('txt', 'asc', 'box','dat')
-            fname2format = 'T'
-        case DEFAULT
-            fname2format = 'N'
+            case ('img','hed')
+                fname2format = 'I'
+            case ('mrc','map','st','ctf','mrcs')
+                fname2format = 'M'
+            case ('spi')
+                fname2format = 'S'
+            case('bin','raw','sbin')
+                fname2format = 'B'
+            case('dbin')
+                fname2format = 'D'
+            case('txt', 'asc', 'box','dat')
+                fname2format = 'T'
+            case('pdb')
+                fname2format = 'P'                
+            case DEFAULT
+                fname2format = 'N'
         end select
     end function fname2format
 

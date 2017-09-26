@@ -1,9 +1,9 @@
 ! executes the parallel (or distributed workflows) of SIMPLE
 program simple_distr_exec
-use simple_defs
 use simple_cmdline,      only: cmdline,cmdline_err
 use simple_strings,      only: str_has_substr
 use simple_fileio,       only: extract_abspath
+use simple_defs
 use simple_gen_doc
 use simple_commander_stream_wflows
 use simple_commander_distr_wflows
@@ -15,6 +15,7 @@ type(preproc_stream_commander)           :: xpreproc_stream
 type(unblur_ctffind_distr_commander)     :: xunblur_ctffind_distr
 type(unblur_distr_commander)             :: xunblur_distr
 type(unblur_tomo_movies_distr_commander) :: xunblur_tomo_distr
+type(powerspecs_distr_commander)         :: xpowerspecs_distr
 type(ctffind_distr_commander)            :: xctffind_distr
 type(pick_distr_commander)               :: xpick_distr
 ! PRIME2D
@@ -37,7 +38,6 @@ type(het_ensemble_commander)             :: xhet_ensemble
 type(scale_stk_parts_commander)          :: xscale_stk_parts
 
 ! OTHER DECLARATIONS
-integer, parameter    :: MAXNKEYS=100, KEYLEN=32
 character(len=KEYLEN) :: keys_required(MAXNKEYS)='', keys_optional(MAXNKEYS)=''
 character(len=STDLEN) :: arg, prg, entire_line
 type(cmdline)         :: cline
@@ -100,9 +100,10 @@ select case(prg)
         keys_optional(27) = 'nsig'
         keys_optional(28) = 'dopick'
         keys_optional(29) = 'fromm'
+        keys_optional(30) = 'ndev'
         ! parse command line
         if( describe ) call print_doc_preproc
-        call cline%parse(keys_required(:7), keys_optional(:29))
+        call cline%parse(keys_required(:7), keys_optional(:30))
         ! set defaults
         if( .not. cline%defined('trs')             ) call cline%set('trs',                5.)
         if( .not. cline%defined('lpstart')         ) call cline%set('lpstart',           15.)
@@ -257,6 +258,33 @@ select case(prg)
         ! execute
         call xunblur_tomo_distr%execute(cline)
 
+    ! GENERATE POWERSPECTRA
+
+    case( 'powerspecs' )
+        !==Program powerspecs
+        !
+        ! <powerspecs/begin>is a program for generating powerspectra from a stack or filetable<powerspecs/end>
+        !
+        ! set required keys
+        keys_required(1) = 'smpd'
+        keys_required(2) = 'fbody'
+        keys_required(3) = 'filetab'
+        keys_required(4) = 'nparts'
+        ! set optional keys
+        keys_optional(1) = 'pspecsz'
+        keys_optional(2) = 'speckind'
+        keys_optional(3) = 'lp'
+        keys_optional(4) = 'clip'
+        ! parse command line
+        if( describe ) call print_doc_powerspecs
+        call cline%parse(keys_required(:4), keys_optional(:4))
+        ! set defaults
+        call cline%set('nthr', 1.0)
+        if( .not. cline%defined('pspecsz') ) call cline%set('pspecsz', 512.)
+        if( .not. cline%defined('clip')    ) call cline%set('clip',    256.)
+        ! execute
+        call xpowerspecs_distr%execute(cline)
+
     ! CTFFIND
 
     case( 'ctffind' )
@@ -308,7 +336,7 @@ select case(prg)
         keys_optional(1) = 'nthr'
         keys_optional(2) = 'lp'
         keys_optional(3) = 'thres'
-        keys_optional(4) = 'rm_outliers'
+        keys_optional(4) = 'ndev'
         ! parse command line
         if( describe ) call print_doc_pick
         call cline%parse(keys_required(:4), keys_optional(:4))
@@ -388,9 +416,10 @@ select case(prg)
         keys_optional(25) = 'weights2D'
         keys_optional(26) = 'refine'
         keys_optional(27) = 'balance'
+        keys_optional(28) = 'match_filt'
         ! documentation
         if( describe ) call print_doc_prime2D
-        call cline%parse( keys_required(:5), keys_optional(:27) )
+        call cline%parse( keys_required(:5), keys_optional(:28) )
         ! set defaults
         if( .not. cline%defined('lpstart')   ) call cline%set('lpstart',    15.)
         if( .not. cline%defined('lpstop')    ) call cline%set('lpstop',     8.)
@@ -624,11 +653,10 @@ select case(prg)
         keys_optional(5) = 'frac'
         keys_optional(6) = 'mskfile'
         keys_optional(7) = 'mul'
-        keys_optional(8) = 'state'
-        keys_optional(9) = 'balance'
+        keys_optional(8) = 'balance'
         ! parse command line
         if( describe ) call print_doc_recvol
-        call cline%parse(keys_required(:7), keys_optional(:9))
+        call cline%parse(keys_required(:7), keys_optional(:8))
         ! set defaults
         if( .not. cline%defined('trs') ) call cline%set('trs',  5.) ! to assure that shifts are being used
         if( .not. cline%defined('eo')  ) call cline%set('eo', 'no')
@@ -763,26 +791,29 @@ select case(prg)
         keys_required(5)  = 'pgrp'
         keys_required(6)  = 'ctf'
         keys_required(7)  = 'nstates'
-        keys_required(8)  = 'lp'
-        keys_required(9)  = 'nparts'
+        keys_required(8)  = 'nparts'
         ! set optional keys
         keys_optional(1)  = 'nthr'
-        keys_optional(2)  = 'frac'
-        keys_optional(3)  = 'automsk'
-        keys_optional(4)  = 'amsklp'
-        keys_optional(5)  = 'edge'
-        keys_optional(6)  = 'binwidth'
-        keys_optional(7)  = 'inner'
-        keys_optional(8)  = 'width'
-        keys_optional(9)  = 'nspace'
-        keys_optional(10) = 'balance'
-        keys_optional(11) = 'nrepeats'
+        keys_optional(2)  = 'lp'
+        keys_optional(3)  = 'lpstop'
+        keys_optional(4)  = 'eo'
+        keys_optional(5)  = 'frac'
+        keys_optional(6)  = 'automsk'
+        keys_optional(7)  = 'amsklp'
+        keys_optional(8)  = 'edge'
+        keys_optional(9)  = 'binwidth'
+        keys_optional(10) = 'inner'
+        keys_optional(11) = 'width'
+        keys_optional(12) = 'nspace'
+        keys_optional(13) = 'balance'
+        keys_optional(14) = 'nrepeats'
         ! parse command line
         if( describe ) call print_doc_het_ensemble
-        call cline%parse(keys_required(:9), keys_optional(:11))
+        call cline%parse(keys_required(:8), keys_optional(:14))
         ! set defaults
+        if( .not. cline%defined('eo')       ) call cline%set('eo',       'no')
         if( .not. cline%defined('amsklp')   ) call cline%set('amsklp',   20.)
-        if( .not. cline%defined('edge')     ) call cline%set('edge',     10.)
+        if( .not. cline%defined('edge')     ) call cline%set('edge',     6. )
         if( .not. cline%defined('nrepeats') ) call cline%set('nrepeats', real(HETNREPEATS))
         ! execute
         call xhet_ensemble%execute( cline )

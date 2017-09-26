@@ -1,8 +1,8 @@
 ! runtime polymorphic singly linked list class
-
 module simple_sll
-#include "simple_lib.f08"
-use simple_arr, only: arr
+use simple_defs
+use simple_syslib, only:alloc_errchk
+use simple_arr,    only: arr
 implicit none
 
 public :: sll
@@ -11,7 +11,7 @@ private
 !> List node type
 !!
 type sll_node
-    ! contains the array _content_ and a pointer _next_ to the nextcoming node
+! contains the array _content_ and a pointer _next_ to the nextcoming node
     type(arr) :: content
     type(sll_node), pointer :: next=>null()
 end type sll_node
@@ -57,7 +57,7 @@ contains
         class(sll), intent(inout) :: self
         if( associated(self%head) ) call self%kill
         allocate(self%head,STAT=alloc_stat)     ! allocate memory for the object
-        if(alloc_stat /= 0) allocchk(" In simple_sll::new  deallocation fault ")
+        if(alloc_stat /= 0) call alloc_errchk(" In simple_sll::new  deallocation fault ", alloc_stat)
         nullify(self%head%next) ! start with an empty list
     end subroutine new
 
@@ -76,7 +76,7 @@ contains
           curr => curr%next
         end do
         allocate( curr ,STAT=alloc_stat) ! insert it at the end of the list
-        if(alloc_stat /= 0) allocchk(" In simple_sll::add  deallocation fault " )
+        if(alloc_stat /= 0) call alloc_errchk(" In simple_sll::add  deallocation fault ", alloc_stat )
         if( present(iarr) ) curr%content = iarr
         if( present(rarr) ) curr%content = rarr
         self%list_size = self%list_size+1
@@ -108,7 +108,7 @@ contains
             if( allocated(iarr) ) then
                 if(verbose.or.global_verbose)then
                     deallocate(iarr,STAT=alloc_stat)
-                    if(alloc_stat /= 0) allocchk(" In simple_sll::get  deallocation fault " )
+                    if(alloc_stat /= 0) call alloc_errchk(" In simple_sll::get  deallocation fault ", alloc_stat )
                 else !! only check deallocate in verbose mode
                     deallocate(iarr)
                 end if
@@ -120,7 +120,7 @@ contains
             if( allocated(rarr) )then
                 if(verbose.or.global_verbose)then
                     deallocate(rarr,STAT=alloc_stat)
-                    if(alloc_stat /= 0) allocchk(" In simple_sll::get  deallocation fault " )
+                    if(alloc_stat /= 0) call alloc_errchk(" In simple_sll::get  deallocation fault " , alloc_stat)
                 else
                     deallocate(rarr)
                 endif
@@ -185,21 +185,13 @@ contains
         if( associated( curr%next ) ) then
             prev%next => curr%next          ! redirect pointer
             call curr%content%kill          ! free space for the content
-            if(verbose.or.global_verbose)then
-                deallocate( curr ,STAT=alloc_stat)              ! free space for node
-                if(alloc_stat /= 0) allocchk(" In simple_sll::del  deallocation fault ")
-            else
-                deallocate(curr)
-            end if
+            deallocate( curr ,STAT=alloc_stat)              ! free space for node
+            if(alloc_stat /= 0) call alloc_errchk(" In simple_sll::del  deallocation fault ", alloc_stat)
             nullify( curr )
         else
             call curr%content%kill          ! free space for the list object
-            if(verbose.or.global_verbose)then
-                deallocate( curr ,STAT=alloc_stat)              ! free space for node
-                if(alloc_stat /= 0) allocchk(" In simple_sll::del  deallocation fault " )
-            else
-                deallocate(curr)
-            end if
+            deallocate( curr ,STAT=alloc_stat)              ! free space for node
+            if(alloc_stat /= 0) call alloc_errchk(" In simple_sll::del  deallocation fault ", alloc_stat )
             nullify( curr, prev%next )
         endif
         self%list_size = self%list_size-1 ! update the list size
@@ -230,12 +222,8 @@ contains
         ! make resulting list a replica of self1
         self%head%next => self1%head%next
         ! remove list 1
-        if(verbose.or.global_verbose)then
-            deallocate( self1%head,STAT=alloc_stat )
-            if(alloc_stat /= 0) allocchk(" In simple_sll::append  deallocation fault ")
-        else
-            deallocate(self1%head)
-        end if
+        deallocate( self1%head,STAT=alloc_stat )
+        if(alloc_stat /= 0) call alloc_errchk(" In simple_sll::append  deallocation fault ", alloc_stat)
         nullify( self1%head )
         self1%list_size = 0
         ! do the choka choka
@@ -247,12 +235,8 @@ contains
         end do
         prev%next => self2%head%next
         ! remove list 2
-        if(verbose.or.global_verbose)then
-            deallocate( self2%head ,STAT=alloc_stat)
-            if(alloc_stat /= 0) allocchk(" In simple_sll::append  deallocation fault " )
-        else
-            deallocate(self2%head)
-        end if
+        deallocate( self2%head ,STAT=alloc_stat)
+        if(alloc_stat /= 0) call alloc_errchk(" In simple_sll::append  deallocation fault ", alloc_stat )
         nullify( self2%head )
         self2%list_size = 0
     end function append
@@ -274,7 +258,7 @@ contains
     end subroutine display
 
     !>  \brief  returns the size of the list
-    ! pure function numel( self ) result( list_size )
+    ! pure function size( self ) result( list_size )
     !     class(sll), intent(in) :: self
     !     integer                :: list_size
     !     list_size = self%list_size
@@ -291,7 +275,7 @@ contains
         endif
         if( associated(self%head) )then
             deallocate(self%head,STAT=alloc_stat)
-            if(alloc_stat /= 0) allocchk(" In simple_sll::kill  deallocation fault ")
+            if(alloc_stat /= 0) call alloc_errchk(" In simple_sll::kill  deallocation fault ", alloc_stat)
             nullify(self%head)
         endif
     end subroutine kill

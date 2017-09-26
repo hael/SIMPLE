@@ -1,8 +1,7 @@
 ! executes the shared-memory parallelised programs in SIMPLE
 program simple_exec
-use simple_defs
+#include "simple_lib.f08"
 use simple_cmdline, only: cmdline, cmdline_err
-use simple_strings, only: str_has_substr
 use simple_gen_doc
 use simple_commander_checks
 use simple_commander_comlin
@@ -136,9 +135,7 @@ type(merge_similarities_commander)   :: xmerge_similarities
 type(split_pairs_commander)          :: xsplit_pairs
 type(split_commander)                :: xsplit
 
-    
 ! OTHER DECLARATIONS
-integer, parameter    :: MAXNKEYS=100, KEYLEN=32
 character(len=KEYLEN) :: keys_required(MAXNKEYS)='', keys_optional(MAXNKEYS)=''
 character(len=STDLEN) :: arg, prg, entire_line
 type(cmdline)         :: cline
@@ -326,9 +323,10 @@ select case(prg)
         keys_optional(26)  = 'rm_outliers'
         keys_optional(27)  = 'nsig'
         keys_optional(28)  = 'dopick'
+        keys_optional(29)  = 'ndev'
         ! parse command line
         if( describe ) call print_doc_preproc
-        call cline%parse(keys_required(:5), keys_optional(:28))
+        call cline%parse(keys_required(:5), keys_optional(:29))
         ! set defaults
         if( .not. cline%defined('trs')             ) call cline%set('trs',                5.)
         if( .not. cline%defined('lpstart')         ) call cline%set('lpstart',           15.)
@@ -401,7 +399,6 @@ select case(prg)
         call cline%parse(keys_required(:2), keys_optional(:8))
         ! set defaults
         if( .not. cline%defined('pspecsz') ) call cline%set('pspecsz', 512.)
-        if( .not. cline%defined('lp')      ) call cline%set('lp',        6.)
         if( .not. cline%defined('clip')    ) call cline%set('clip',    256.)
         ! execute
         call xpowerspecs%execute(cline)
@@ -565,13 +562,13 @@ select case(prg)
         keys_optional(1) = 'nthr'
         keys_optional(2) = 'vol1'
         keys_optional(3) = 'stk'
-        keys_optional(4) = 'neg'
+        keys_optional(4) = 'pcontrast'
         ! parse command line
         if( describe ) call print_doc_makepickrefs
         call cline%parse(keys_required(:1), keys_optional(:4))
         ! set defaults
-        if( .not. cline%defined('neg') ) call cline%set('neg', 'yes')
-        if( .not. cline%defined('pgrp')) call cline%set('pgrp', 'd1')
+        if( .not. cline%defined('pcontrast')) call cline%set('pcontrast', 'black')
+        if( .not. cline%defined('pgrp')     ) call cline%set('pgrp',      'd1'   )
         ! execute
         call xmakepickrefs%execute(cline)
     case( 'pick' )
@@ -587,7 +584,7 @@ select case(prg)
         keys_optional(1) = 'nthr'
         keys_optional(2) = 'lp'
         keys_optional(3) = 'thres'
-        keys_optional(4) = 'rm_outliers'
+        keys_optional(4) = 'ndev'
         ! parse command line
         if( describe ) call print_doc_pick
         call cline%parse(keys_required(:3), keys_optional(:4))
@@ -690,9 +687,10 @@ select case(prg)
         keys_optional(20) = 'weights2D'
         keys_optional(21) = 'refine'
         keys_optional(22) = 'balance'
+        keys_optional(23) = 'match_filt'
         ! parse command line
         if( describe ) call print_doc_prime2D
-        call cline%parse(keys_required(:5), keys_optional(:22))
+        call cline%parse(keys_required(:5), keys_optional(:23))
         ! set defaults
         if( .not. cline%defined('lpstart')   ) call cline%set('lpstart',   15.)
         if( .not. cline%defined('lpstop')    ) call cline%set('lpstop',     8.)
@@ -863,10 +861,11 @@ select case(prg)
         keys_optional(5) = 'width'
         keys_optional(6) = 'nspace'
         keys_optional(7) = 'nran'
-        keys_optional(8) = 'npeaks'    
+        keys_optional(8) = 'npeaks'
+        keys_optional(9) = 'refine'   
         ! parse command line
         if( describe ) call print_doc_prime3D_init
-        call cline%parse(keys_required(:5), keys_optional(:8))
+        call cline%parse(keys_required(:5), keys_optional(:9))
         ! set defaults
         if( .not. cline%defined('eo')     ) call cline%set('eo',      'no')
         if( .not. cline%defined('nspace') ) call cline%set('nspace', 1000.)
@@ -885,24 +884,24 @@ select case(prg)
         keys_required(4)  = 'pgrp'
         keys_required(5)  = 'nstates'
         keys_required(6)  = 'msk'
+        keys_required(7)  = 'oritab'
         ! set optionnal keys
         keys_optional(1)  = 'nthr'
-        keys_optional(2)  = 'oritab'
-        keys_optional(3)  = 'deftab'
-        keys_optional(4)  = 'inner'
-        keys_optional(5)  = 'width'
-        keys_optional(6)  = 'lp'
-        keys_optional(7)  = 'eo'
-        keys_optional(8)  = 'frac'
-        keys_optional(9)  = 'state2split'
-        keys_optional(10) = 'norec'
-        keys_optional(11) = 'mul'
-        keys_optional(12) = 'zero'
-        keys_optional(13) = 'tseries'
-        keys_optional(14) = 'center'
+        keys_optional(2)  = 'deftab'
+        keys_optional(3)  = 'inner'
+        keys_optional(4)  = 'width'
+        keys_optional(5)  = 'lp'
+        keys_optional(6)  = 'eo'
+        keys_optional(7)  = 'frac'
+        keys_optional(8)  = 'state2split'
+        keys_optional(9)  = 'norec'
+        keys_optional(10) = 'mul'
+        keys_optional(11) = 'zero'
+        keys_optional(12) = 'tseries'
+        keys_optional(13) = 'center'
         ! parse command line
         if( describe ) call print_doc_multiptcl_init
-        call cline%parse(keys_required(:6), keys_optional(:14))
+        call cline%parse(keys_required(:7), keys_optional(:13))
         ! set defaults
         if( .not. cline%defined('trs') ) call cline%set('trs', 3.) ! to assure that shifts are being used
         !execute
@@ -1273,12 +1272,11 @@ select case(prg)
         keys_optional(3) = 'deftab'
         keys_optional(4) = 'frac'
         keys_optional(5) = 'mul'
-        keys_optional(6) = 'state'
-        keys_optional(7) = 'mskfile'
-        keys_optional(8) = 'balance'
+        keys_optional(6) = 'mskfile'
+        keys_optional(7) = 'balance'
         ! parse command line
         if( describe ) call print_doc_recvol
-        call cline%parse(keys_required(:6), keys_optional(:8))
+        call cline%parse(keys_required(:6), keys_optional(:7))
         ! set defaults
         if( .not. cline%defined('trs') ) call cline%set('trs', 5.) ! to assure that shifts are being used
         if( .not. cline%defined('eo')  ) call cline%set('eo', 'no')
@@ -1295,24 +1293,19 @@ select case(prg)
         ! inner mask<eo_volassemble/end>
         !
         ! set required keys
-        keys_required(1)  = 'stk'
-        keys_required(2)  = 'nparts'
-        keys_required(3)  = 'smpd'
-        keys_required(4)  = 'msk'
-        keys_required(5)  = 'oritab'
-        keys_required(6)  = 'ctf'
+        keys_required(1) = 'stk'
+        keys_required(2) = 'nparts'
+        keys_required(3) = 'smpd'
+        keys_required(4) = 'msk'
+        keys_required(5) = 'oritab'
         ! set optional keys
-        keys_optional(1)  = 'nthr'
-        keys_optional(2)  = 'deftab'
-        keys_optional(3)  = 'mul'
-        keys_optional(4)  = 'state'
-        keys_optional(5)  = 'nstates'
-        keys_optional(6)  = 'mskfile'
+        keys_optional(1) = 'nthr'
+        keys_optional(2) = 'state'
+        keys_optional(3) = 'nstates'
+        keys_optional(4) = 'mskfile'
         ! parse command line
         if( describe ) call print_doc_eo_volassemble
-        call cline%parse(keys_required(:6), keys_optional(:6))
-        ! set defaults
-        if( cline%defined('state') ) call cline%set('nstates', 1.) ! to assure that shifts are being used
+        call cline%parse(keys_required(:5), keys_optional(:4))
         ! execute
         call xeo_volassemble%execute(cline)
     case( 'volassemble' )
@@ -1331,16 +1324,11 @@ select case(prg)
         keys_required(4) = 'oritab'
         ! set optional keys
         keys_optional(1) = 'nthr'
-        keys_optional(2) = 'even'
-        keys_optional(3) = 'odd'
-        keys_optional(4) = 'eo'
-        keys_optional(5) = 'state'
+        keys_optional(2) = 'state'
+        keys_optional(3) = 'nstates'
         ! parse command line
         if( describe ) call print_doc_volassemble
-        call cline%parse(keys_required(:4), keys_optional(:5))
-        ! set defaults
-        if( cline%defined('state')    ) call cline%set('nstates', 1.)
-        if( .not. cline%defined('eo') ) call cline%set('eo', 'no')
+        call cline%parse(keys_required(:4), keys_optional(:3))
         ! execute
         call xvolassemble%execute(cline)
 
@@ -1447,10 +1435,9 @@ select case(prg)
         keys_optional(6)  = 'amsklp'
         keys_optional(7)  = 'edge'
         keys_optional(8)  = 'binwidth'
-        keys_optional(9)  = 'frac_outliers'
-        keys_optional(10) = 'thres'
-        keys_optional(11) = 'mskfile'
-        keys_optional(12) = 'vol_filt'
+        keys_optional(9)  = 'thres'
+        keys_optional(10) = 'mskfile'
+        keys_optional(11) = 'vol_filt'
         ! parse command line
         if( describe ) call print_doc_postproc_vol
         call cline%parse(keys_required(:3), keys_optional(:12))
@@ -1787,19 +1774,19 @@ select case(prg)
         ! set required keys
         keys_required(1) = 'filetab'
         keys_required(2) = 'outstk'
+        keys_required(3) = 'smpd'
         ! set optional keys
         keys_optional(1) = 'lp'
-        keys_optional(2) = 'smpd'
-        keys_optional(3) = 'clip'
-        keys_optional(4) = 'nframes'
-        keys_optional(5) = 'fbody'
-        keys_optional(6) = 'numlen'
-        keys_optional(7) = 'xdim'
-        keys_optional(8) = 'ydim'
-        keys_optional(9) = 'endian'
+        keys_optional(2) = 'clip'
+        keys_optional(3) = 'nframes'
+        keys_optional(4) = 'fbody'
+        keys_optional(5) = 'numlen'
+        keys_optional(6) = 'xdim'
+        keys_optional(7) = 'ydim'
+        keys_optional(8) = 'endian'
         ! parse command line
         if( describe ) call print_doc_stack
-        call cline%parse(keys_required(:2), keys_optional(:9))
+        call cline%parse(keys_required(:3), keys_optional(:8))
         ! execute
         call xstack%execute(cline)
     case( 'stackops' )
@@ -1844,9 +1831,10 @@ select case(prg)
         keys_optional(22) = 'ctfreslim'
         keys_optional(23) = 'dfclose'
         keys_optional(24) = 'dffar'
+        keys_optional(25) = 'stats'
         ! parse command line
         if( describe ) call print_doc_stackops
-        call cline%parse( keys_required(:2),keys_optional(:24) )
+        call cline%parse( keys_required(:2),keys_optional(:25) )
         ! execute
         call xstackops%execute(cline)
 
@@ -1882,9 +1870,11 @@ select case(prg)
         keys_required(3) = 'smpd'
         ! set optional keys
         keys_optional(1) = 'outfile'
+        keys_optional(2) = 'msk'
+        keys_optional(3) = 'inner'
         ! parse command line
         !if( describe ) call print_doc_cluster_smat
-        call cline%parse(keys_required(:3), keys_optional(:1))
+        call cline%parse(keys_required(:3), keys_optional(:3))
         ! execute
         call xintgpeaks%execute(cline)
     case( 'masscen' )

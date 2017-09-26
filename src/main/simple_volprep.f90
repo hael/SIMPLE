@@ -1,5 +1,5 @@
 module simple_volprep
-use simple_defs ! use all in there
+#include "simple_lib.f08"
 implicit none
 
 contains

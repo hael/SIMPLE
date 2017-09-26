@@ -1,5 +1,4 @@
 ! concrete commander: time-series analysis
-
 module simple_commander_tseries
 #include "simple_lib.f08"
     

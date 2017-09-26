@@ -6,7 +6,6 @@
 ! All rights reserved
 ! Use is subject to Janelia Farm Research Campus Software Copyright 1.1
 ! license terms ( http://license.janelia.org/license/jfrc_copyright_1_1.html )
-
 module simple_ctf
 !$ use omp_lib
 !$ use omp_lib_kinds
@@ -273,7 +272,6 @@ contains
         real,             optional, intent(in)    :: angast      !< angle of astigmatism
         real,             optional, intent(in)    :: bfac        !< bfactor
         integer     :: ldim(3), ldim_pd(3)
-!        logical     :: didbwdft, ppad, didfwdft
         type(image) :: ctfimg, img_pd
         ldim = img%get_ldim()
         if( img%is_3d() )then

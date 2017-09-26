@@ -1,17 +1,14 @@
 ! The Nelder-Mead simplex method for continuous function minimisation
 ! with cost function defined in classes that extend pftcc_opt
-
 module simple_simplex_pftcc_opt
 #include "simple_lib.f08"
 
 use simple_pftcc_opt, only: pftcc_opt
-
 implicit none
 
 public :: simplex_pftcc_opt
 private
-
-logical, parameter :: WARN = .false.
+#include "simple_local_flags.inc"
 
 type :: simplex_pftcc_opt
     private

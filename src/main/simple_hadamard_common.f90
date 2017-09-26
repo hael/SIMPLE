@@ -1,5 +1,4 @@
 ! common PRIME2D/PRIME3D routines used primarily by the Hadamard matchers
-
 module simple_hadamard_common
 #include "simple_lib.f08"
     
@@ -328,14 +327,14 @@ contains
             call b%img%shellnorm()
             call b%img%apply_filter(filter)
         endif
-        ! ensure we are in real-space before clipping 
-        call b%img%bwd_ft 
+        ! ensure we are in real-space before clipping
+        call b%img%bwd_ft
         ! clip image if needed
         call b%img%clip(b%img_match)
         ! apply mask
         if( p%l_envmsk .and. p%automsk .eq. 'cavg' )then
             ! automasking
-            call b%mskimg%apply_2Denvmask22Dref(b%img_match, icls)
+            call b%mskimg%apply_2Denvmask22Dref(b%img_match)
             if( p%l_chunk_distr )then
                 call b%img_match%write(trim(p%chunktag)//'automasked_refs'//p%ext, icls)
             else if( (p%l_distr_exec .and. p%part.eq.1) .or. (.not. p%l_distr_exec) )then
