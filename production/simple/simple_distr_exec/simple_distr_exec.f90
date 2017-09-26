@@ -21,6 +21,7 @@ type(pick_distr_commander)               :: xpick_distr
 ! PRIME2D
 type(makecavgs_distr_commander)          :: xmakecavgs_distr
 type(prime2D_autoscale_commander)        :: xprime2D_distr
+type(prime2D_stream_distr_commander)     :: xprime2D_stream_distr
 ! 3D SIMILARITY MATRIX GENERATION WITH COMMON LINES
 type(comlin_smat_distr_commander)        :: xcomlin_smat_distr
 ! PRIME3D
@@ -441,6 +442,67 @@ select case(prg)
             stop 'eiter nparts or chunksz need to be part of command line'
         endif
         call xprime2D_distr%execute(cline)
+
+    case( 'prime2D_stream' )
+        !==Program prime2D
+        !
+        ! <prime2D/begin>is a distributed workflow implementing reference-free 2D alignment/clustering 
+        ! algorithm adopted from the prime3D probabilistic ab initio 3D reconstruction algorithm<prime2D/end>
+        !
+        ! set required keys
+        keys_required(1)  = 'stk'
+        keys_required(2)  = 'smpd'
+        keys_required(3)  = 'msk'
+        keys_required(4)  = 'ncls'
+        keys_required(5)  = 'ctf'
+        keys_optional(6)  = 'chunksz'
+        keys_required(7)  = 'dir_unidoc'
+        ! set optional keys
+        keys_optional(1)  = 'nparts'
+        keys_optional(2)  = 'nthr'
+        keys_optional(3)  = 'ncunits'
+        keys_optional(4)  = 'hp'
+        keys_optional(5)  = 'lp'
+        keys_optional(6)  = 'lpstart'
+        keys_optional(7)  = 'lpstop'
+        keys_optional(8)  = 'cenlp'
+        keys_optional(9)  = 'trs'
+        keys_optional(10) = 'automsk'
+        keys_optional(11) = 'amsklp'
+        keys_optional(12) = 'edge'
+        keys_optional(13) = 'inner'
+        keys_optional(14) = 'width'
+        keys_optional(15) = 'maxits'
+        keys_optional(16) = 'filwidth'
+        keys_optional(17) = 'center'
+        keys_optional(18) = 'autoscale'
+        keys_optional(19) = 'weights2D'
+        keys_optional(20) = 'refine'
+        keys_optional(21) = 'balance'
+        keys_optional(22) = 'match_filt'
+        ! documentation
+        if( describe ) call print_doc_prime2D
+        call cline%parse( keys_required(:7), keys_optional(:22) )
+        ! set defaults
+        if( .not. cline%defined('lpstart')   ) call cline%set('lpstart',    15.)
+        if( .not. cline%defined('lpstop')    ) call cline%set('lpstop',     8.)
+        if( .not. cline%defined('eo')        ) call cline%set('eo',         'no')
+        if( .not. cline%defined('amsklp')    ) call cline%set('amsklp',     20.)
+        if( .not. cline%defined('cenlp')     ) call cline%set('cenlp',      30.)
+        if( .not. cline%defined('edge')      ) call cline%set('edge',       10.)
+        if( .not. cline%defined('maxits')    ) call cline%set('maxits',     30.)
+        if( .not. cline%defined('weights2D') ) call cline%set('weights2D', 'no')
+        if( .not. cline%defined('autoscale') ) call cline%set('autoscale', 'yes')
+        if( cline%defined('nparts') .and. cline%defined('chunksz') )then
+            stop 'nparts and chunksz cannot simultaneously be part of command line'
+        else if(cline%defined('nparts') )then
+            ! ok
+        else if( cline%defined('chunksz') )then
+            ! ok
+        else
+            stop 'eiter nparts or chunksz need to be part of command line'
+        endif
+        call xprime2D_stream_distr%execute(cline)
 
     ! 3D SIMILARITY MATRIX GENERATION WITH COMMON LINES
 

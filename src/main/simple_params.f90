@@ -110,6 +110,7 @@ type :: params
     character(len=STDLEN) :: dir_select='selected'!< move selected files to here{selected}
     character(len=STDLEN) :: dir_target=''        !< put output here
     character(len=STDLEN) :: dir_ptcls=''
+    character(len=STDLEN) :: dir_unidoc=''        !< grab unidocs from here
     character(len=STDLEN) :: dockmode='eul'       !< volume docking mode(eul|shift|eulshift|all){eul}
     character(len=STDLEN) :: doclist=''           !< list of oritabs for different states
     character(len=STDLEN) :: eo='yes'             !< use FSC for filtering and low-pass limit update(yes|aniso|no){no}
@@ -455,6 +456,7 @@ contains
         call check_carg('dir_reject',     self%dir_reject)
         call check_carg('dir_select',     self%dir_select)
         call check_carg('dir_target',     self%dir_target)
+        call check_carg('dir_unidoc',     self%dir_unidoc)
         call check_carg('discrete',       self%discrete)
         call check_carg('diverse',        self%diverse)
         call check_carg('doalign',        self%doalign)

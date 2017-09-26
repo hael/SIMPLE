@@ -4921,7 +4921,6 @@ contains
         class(image), intent(inout) :: self
         real,         intent(in)    :: msk
         real :: med
-        !med = self%median_pixel(msk, 'backgr')
         med = self%median_pixel(msk, 'backgr')
         if(abs(med) > TINY)self%rmat = self%rmat - med
     end subroutine zero_background
