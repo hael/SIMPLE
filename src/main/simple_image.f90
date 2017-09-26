@@ -376,9 +376,13 @@ contains
         real,              intent(in)    :: smpd, radius
         integer, optional, intent(inout) :: npix
         call self%new(ldim, smpd)
-        self%rmat = 1.
-        call self%mask(radius, 'hard')
-        if( present(npix) )npix = nint(sum(self%rmat(:ldim(1),:ldim(2),:ldim(3))))
+        call self%cendist
+        where(self%rmat <= radius)
+            self%rmat = 1.
+        else where
+            self%rmat = 0.
+        end where
+        if( present(npix) )npix = count(self%rmat>0.5)
     end subroutine disc
 
     !>  \brief copy is a constructor that copies the input object
@@ -4054,32 +4058,30 @@ contains
     !> median_pixel
     !! \return  med
     !!
-    function median_pixel( self, mskrad, which ) result( med )
+    real function median_pixel( self, mskrad, which )
         class(image),               intent(inout) :: self
         real,             optional, intent(in)    :: mskrad        
         character(len=*), optional, intent(in)    :: which
         type(image)       :: maskimg
         real, allocatable :: pixels(:)
-        real              :: med
-        integer           :: npix, npix_tot
+        integer           :: npix
         if( self%ft ) stop 'not for FTs; simple_image::median'
         if( .not.present(which) )then
             pixels = pack(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)), mask=.true.)
-            med = median_nocopy(pixels)
+            median_pixel = median_nocopy(pixels)
         else
             if(.not.present(mskrad) )stop 'mskrad required; simple_image%median_pixel'
             call maskimg%disc(self%ldim, self%smpd, mskrad, npix)
-            npix_tot = product(self%ldim)
-            if(trim(which).eq.'backgr')then
+            if( trim(which).eq.'backgr' )then
                 pixels   = pack( self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)),&
-                &maskimg%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) < 0.5 )
+                &mask=maskimg%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) < 0.5 )
             else if( trim(which).eq.'foregr')then
                 pixels   = pack( self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)),&
-                &maskimg%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) >= 0.5 )
+                &mask=maskimg%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) >= 0.5 )
             else
                 stop 'unknown option; simple_image%median_pixel'
             endif
-            med = median_nocopy(pixels)
+            median_pixel = median_nocopy(pixels)
         endif
     end function median_pixel
 
@@ -4919,6 +4921,7 @@ contains
         class(image), intent(inout) :: self
         real,         intent(in)    :: msk
         real :: med
+        !med = self%median_pixel(msk, 'backgr')
         med = self%median_pixel(msk, 'backgr')
         if(abs(med) > TINY)self%rmat = self%rmat - med
     end subroutine zero_background
