@@ -504,7 +504,7 @@ contains
             ! aggregate solutions
             call binread_oritab(p_master%oritab, os, [1,p_master%nptcls])
             allocate(labels_incl(p_master%nrepeats,n_incl), consensus(n_incl), stat=alloc_stat)
-            if(alloc_stat /= 0) allocchk("simple_commander_hlev_wflows::exec_het_ensemble labels_incl, consensus")
+            allocchk("simple_commander_hlev_wflows::exec_het_ensemble labels_incl, consensus")
             do irepeat=1,p_master%nrepeats
                 labels_incl(irepeat,:) = pack(labels(irepeat,:), mask=included)
             enddo
@@ -512,7 +512,7 @@ contains
             call shc_aggregation(p_master%nrepeats, n_incl, labels_incl, consensus, best_loc(1))
             call os%set_all('state', real(unpack(consensus, included, labels(1,:))) )
             deallocate(labels_incl, consensus, stat=alloc_stat)
-             if(alloc_stat /= 0) allocchk("hlev_wflows::exec_het_ensemble  dealloc labels_incl consensus")
+             allocchk("hlev_wflows::exec_het_ensemble  dealloc labels_incl consensus")
         endif
         ! output
         call binwrite_oritab(trim(oritab), os, [1,p_master%nptcls])
@@ -628,9 +628,10 @@ contains
         ! make master parameters
         p_master = params(cline, checkdistr=.false.)
         ! set learning rate
-        if( .not. cline%defined('eps') ) p_master%eps = 1.0 / real(2.0 * p_master%maxits)
+        if( .not. cline%defined('eps') ) p_master%eps = 5.0 / real(2.0 * p_master%maxits)
         ! prep recvol cline
         cline_recvol_distr = cline
+        call cline_recvol_distr%set('prg',    'recvol')
         call cline_recvol_distr%set('oritab', ORIS_MODIFIED)
         ! prepare oris
         call os%new(p_master%nptcls)
@@ -651,6 +652,7 @@ contains
             fsc2 = gen_fsc(S2, iter)
             ! stash previous best
             Sprev_best = Sbest
+            ! compare FSCs and set winner/loser pointers
             if( fsc1_ge_fsc2(fsc1,fsc2) )then
                 Sbest   =  S1
                 Swinner => S1
@@ -711,7 +713,7 @@ contains
                     stop 'does not exist in cwd; commander_hlev_wflows :: exec_cga_hres_sel'
                 endif
                 if( present(iter) )then
-                    call rename('RESOLUTION_STATE01', 'RESOLUTION_STATE01_ITER'//int2str_pad(iter,3))
+                    call del_file('RESOLUTION_STATE01')
                 endif
             end function gen_fsc
 

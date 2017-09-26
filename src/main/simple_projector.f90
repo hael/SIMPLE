@@ -71,7 +71,7 @@ contains
                                 &cych(self%ldim_exp(1,1):self%ldim_exp(1,2)),&
                                 &cyck(self%ldim_exp(2,1):self%ldim_exp(2,2)),&
                                 &cycm(self%ldim_exp(3,1):self%ldim_exp(3,2)), stat=alloc_stat)
-        if(alloc_stat /= 0) allocchk("In: expand_cmat; simple_projector")
+        allocchk("In: expand_cmat; simple_projector")
         ! pre-compute addresses in 2nd and 3rd dimension
         do h = self%ldim_exp(1,1),self%ldim_exp(1,2)
             cych(h) = h

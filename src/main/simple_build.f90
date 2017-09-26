@@ -185,7 +185,7 @@ contains
             lfny = self%img%get_lfny(1)
             lfny_match = self%img_match%get_lfny(1)         
             allocate( self%fsc(p%nstates,lfny), source=0., stat=alloc_stat )
-            if(alloc_stat /= 0) allocchk("In: build_general_tbox; simple_build, 1")
+            allocchk("In: build_general_tbox; simple_build, 1")
             ! set default amsklp
             if( .not. cline%defined('amsklp') .and. cline%defined('lp') )then
                 p%amsklp = self%img%get_lp(self%img%get_find(p%lp)-2)
@@ -200,7 +200,7 @@ contains
             partsz    = p%top - p%fromp + 1
             p%batchsz = nint(real(partsz) * p%batchfrac)
             allocate(self%pbatch(p%batchsz), stat=alloc_stat)
-            if(alloc_stat /= 0) allocchk("In: build_general_tbox; simple_build, 2")
+            allocchk("In: build_general_tbox; simple_build, 2")
             ! select random indices
             rt = ran_tabu(partsz)
             call rt%ne_ran_iarr(self%pbatch)
@@ -255,14 +255,14 @@ contains
             ! make object for symmetrized orientations
             call self%a%symmetrize(p%nsym)
             allocate( self%imgs_sym(1:p%nsym*p%nptcls), self%ref_imgs(p%nstates,p%nspace), stat=alloc_stat )
-            if(alloc_stat /= 0) allocchk( 'build_comlin_tbox; simple_build, 1')
+            allocchk( 'build_comlin_tbox; simple_build, 1')
             do i=1,p%nptcls*p%nsym
                 call self%imgs_sym(i)%new([p%box,p%box,1],p%smpd)
             end do
             self%clins = comlin(self%a, self%imgs_sym, p%lp)
         else ! set up assymetrical common lines-based alignment functionality
             allocate( self%imgs(1:p%nptcls), stat=alloc_stat )
-            if(alloc_stat /= 0) allocchk( 'build_comlin_tbox; simple_build, 2')
+            allocchk( 'build_comlin_tbox; simple_build, 2')
             do i=1,p%nptcls
                 call self%imgs(i)%new([p%box,p%box,1],p%smpd)
             end do
@@ -409,10 +409,10 @@ contains
         ! reconstruction objects
         if( p%eo .ne. 'no' )then
             allocate( self%eorecvols(p%nstates), stat=alloc_stat )
-            if(alloc_stat /= 0) allocchk('build_hadamard_prime3D_tbox; simple_build, 1')
+            allocchk('build_hadamard_prime3D_tbox; simple_build, 1')
         else
             allocate( self%recvols(p%nstates), stat=alloc_stat )
-            if(alloc_stat /= 0) allocchk('build_hadamard_prime3D_tbox; simple_build, 2')
+            allocchk('build_hadamard_prime3D_tbox; simple_build, 2')
         endif
         if( str_has_substr(p%refine,'neigh') .or. trim(p%refine).eq.'states' )then
             nnn = p%nnn
@@ -465,14 +465,14 @@ contains
         else
             if( p%eo .ne. 'no' )then
                 allocate( self%eorecvols(p%nstates), stat=alloc_stat )
-                if(alloc_stat /= 0) allocchk('build_hadamard_prime3D_tbox; simple_build, 1')
+                allocchk('build_hadamard_prime3D_tbox; simple_build, 1')
             else
                 allocate( self%recvols(p%nstates), stat=alloc_stat )
-                if(alloc_stat /= 0) allocchk('build_hadamard_prime3D_tbox; simple_build, 2')
+                allocchk('build_hadamard_prime3D_tbox; simple_build, 2')
             endif
         endif
         allocate( self%refvols(p%nstates), stat=alloc_stat)
-        if(alloc_stat /= 0) allocchk('build_cont3D_tbox; simple_build, 3')
+        allocchk('build_cont3D_tbox; simple_build, 3')
         do s=1,p%nstates
             call self%refvols(s)%new([p%boxmatch,p%boxmatch,p%boxmatch],p%smpd)
         end do
@@ -521,7 +521,7 @@ contains
         call self%kill_extremal3D_tbox
         call self%raise_hard_ctf_exception(p)
         allocate( self%recvols(1), stat=alloc_stat )
-        if(alloc_stat /= 0) allocchk('build_hadamard_prime3D_tbox; simple_build, 2')
+        allocchk('build_hadamard_prime3D_tbox; simple_build, 2')
         call self%recvols(1)%new([p%boxpd,p%boxpd,p%boxpd],p%smpd)
         call self%recvols(1)%alloc_rho(p)
         if( .not. self%a%isthere('proj') ) call self%a%set_projs(self%e)

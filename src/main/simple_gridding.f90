@@ -16,8 +16,8 @@ contains
         class(kbinterpol), intent(in)     :: kbwin
         real  :: med
         call img%bwd_ft                      ! make sure not FTed
-        med = img%median_pixel()
-        call img%pad(img4grid, backgr=med)   ! padding in real space
+        call img%zero_background(msk)        ! remove median backround
+        call img%pad(img4grid, backgr=0.)    ! padding in real space
         call divide_w_instr(img4grid, kbwin) ! division w instr in real space
         call img4grid%fwd_ft                 ! return the Fourier transform
     end subroutine prep4cgrid
@@ -42,7 +42,7 @@ contains
         ! make the window
         allocate( w1(lims(1,1):lims(1,2)), w2(lims(2,1):lims(2,2)),&
         w3(lims(3,1):lims(3,2)), stat=alloc_stat )
-        if(alloc_stat /= 0) allocchk("In: divide_w_instr; simple_gridding")
+        allocchk("In: divide_w_instr; simple_gridding")
         ! calculate the values
         call calc_w(lims(1,:), ldim(1), w1)
         if( img%square_dims() )then
@@ -103,7 +103,7 @@ contains
         ! make the window
         allocate( w1(lims(1,1):lims(1,2)), w2(lims(2,1):lims(2,2)),&
         w3(lims(3,1):lims(3,2)), stat=alloc_stat )
-        if(alloc_stat /= 0) allocchk("In: divide_w_instr; simple_gridding w1 w2")
+        allocchk("In: divide_w_instr; simple_gridding w1 w2")
         ! calculate the values
         call calc_w(lims(1,:), ldim(1), w1)
         if( vol%square_dims() )then

@@ -34,7 +34,7 @@ contains
         call self%kill
         ! allocate
         allocate(self%swarm(spec%npop,spec%ndim), self%velocities(spec%npop,spec%ndim), stat=alloc_stat)
-        if(alloc_stat /= 0) allocchk("In: new_particle_swarm_opt, 1")
+        allocchk("In: new_particle_swarm_opt, 1")
         self%exists = .true. ! indicates existence
         if( spec%debug ) write(*,*) 'created new particle swarm (spec debug)'
         DebugPrint 'created new particle swarm (instance)'
@@ -151,7 +151,7 @@ contains
         class(particle_swarm_opt), intent(inout) :: self !< instance
         if( self%exists )then
             deallocate(self%swarm, self%velocities, stat=alloc_stat)
-            if(alloc_stat /= 0) allocchk("simple_particle_swarm_opt::kill")
+            allocchk("simple_particle_swarm_opt::kill")
             self%exists = .false.
         endif
     end subroutine kill_particle_swarm

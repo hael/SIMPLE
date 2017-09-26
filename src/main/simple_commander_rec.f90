@@ -74,7 +74,7 @@ contains
         call b%eorecvol%kill_exp            ! reduced meory usage
         call b%mskvol%kill                  ! reduced memory usage
         allocate(res05s(p%nstates), res0143s(p%nstates), stat=alloc_stat)
-        if(alloc_stat /= 0) allocchk("In: simple_eo_volassemble res05s res0143s")
+        allocchk("In: simple_eo_volassemble res05s res0143s")
         res0143s = 0.
         res05s   = 0.
         ! rebuild b%vol according to box size (beacuse it is otherwise boxmatch)

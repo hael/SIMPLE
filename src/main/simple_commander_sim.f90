@@ -231,7 +231,7 @@ contains
         DebugPrint  'initialized shifts'
         ! generate shifts
         allocate( shifts(p%nframes,2), stat=alloc_stat )
-        if(alloc_stat /= 0) allocchk('In: simple_simmovie; shifts')
+        allocchk('In: simple_simmovie; shifts')
         x = 0.
         y = 0.
         do i=1,p%nframes
@@ -322,7 +322,7 @@ contains
                 logical                       :: occupied(xdim,ydim)
                 integer                       :: ix, iy, cnt, i, j
                 allocate( pos(npos,2), stat=alloc_stat )
-                if(alloc_stat /= 0) allocchk("In: gen_ptcl_pos, simple_math")
+                allocchk("In: gen_ptcl_pos, simple_math")
                 occupied = .false.
                 cnt = 0
                 do

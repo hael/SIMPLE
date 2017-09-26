@@ -114,7 +114,7 @@ contains
                     self%jobs_submitted(fromto_part(1):fromto_part(2)),&
                     self%script_names(fromto_part(1):fromto_part(2)),&
                     self%jobs_done_fnames(fromto_part(1):fromto_part(2)), stat=alloc_stat)
-        if(alloc_stat /= 0) allocchk("In: simple_qsys_ctrl :: new")
+        allocchk("In: simple_qsys_ctrl :: new")
         if( self%stream )then
             self%jobs_done = .true.
         else
@@ -540,7 +540,7 @@ contains
             self%cline_stacksz          =  0
             deallocate(self%script_names, self%jobs_done, self%jobs_done_fnames, &
             self%jobs_submitted, stat=alloc_stat)
-            if(alloc_stat /= 0) allocchk("simple_qsys_ctrl::kill deallocating ")
+            allocchk("simple_qsys_ctrl::kill deallocating ")
             if(allocated(self%cline_stack))deallocate(self%cline_stack)
             self%existence = .false.
 

@@ -78,6 +78,7 @@ type :: params
     character(len=3)      :: stats='no'           !< provide statistics(yes|no){yes}
     character(len=3)      :: stream='no'          !< sream (real time) execution mode(yes|no){no}
     character(len=3)      :: swap='no'
+    character(len=3)      :: taper_edges='no'     !< self-explanatory
     character(len=3)      :: test='no'
     character(len=3)      :: tomo='no'            !< tomography mode(yes|no){no}
     character(len=3)      :: time='no'
@@ -106,6 +107,7 @@ type :: params
     character(len=STDLEN) :: dir_select='selected'!< move selected files to here{selected}
     character(len=STDLEN) :: dir_target=''        !< put output here
     character(len=STDLEN) :: dir_ptcls=''
+    character(len=STDLEN) :: dir_unidoc=''        !< grab unidocs from here
     character(len=STDLEN) :: dockmode='eul'       !< volume docking mode(eul|shift|eulshift|all){eul}
     character(len=STDLEN) :: doclist=''           !< list of oritabs for different states
     character(len=STDLEN) :: eo='yes'             !< use FSC for filtering and low-pass limit update(yes|aniso|no){no}
@@ -292,7 +294,7 @@ type :: params
     real    :: e1=0.               !< 1st Euler(in degrees){0}
     real    :: e2=0.               !< 2nd Euler(in degrees){0}
     real    :: e3=0.               !< 3d Euler(in degrees){0}
-    real    :: eps=0.003
+    real    :: eps=0.003           !< learning rate{0.003}
     real    :: eullims(3,2)=0.
     real    :: exp_time=2.0        !< exposure time(in s)
     real    :: filwidth=0.         !< width of filament (in A)
@@ -451,6 +453,7 @@ contains
         call check_carg('dir_reject',     self%dir_reject)
         call check_carg('dir_select',     self%dir_select)
         call check_carg('dir_target',     self%dir_target)
+        call check_carg('dir_unidoc',     self%dir_unidoc)
         call check_carg('discrete',       self%discrete)
         call check_carg('diverse',        self%diverse)
         call check_carg('doalign',        self%doalign)
@@ -513,6 +516,7 @@ contains
         call check_carg('stats',          self%stats)
         call check_carg('stream',         self%stream)
         call check_carg('swap',           self%swap)
+        call check_carg('taper_edges',    self%taper_edges)
         call check_carg('test',           self%test)
         call check_carg('time',           self%time)
         call check_carg('tomo',           self%tomo)

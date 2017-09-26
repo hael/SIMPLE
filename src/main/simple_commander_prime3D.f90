@@ -334,7 +334,7 @@ contains
         limset = .false. ;  update_res = .false.
         if( p%eo .ne. 'no' )then
             allocate( maplp(p%nstates), stat=alloc_stat)
-            if(alloc_stat /= 0) allocchk("In simple_commander_prime3D:: exec_check3D_conv")
+            allocchk("In simple_commander_prime3D:: exec_check3D_conv")
             maplp = 0.
             do istate=1,p%nstates
                 if( b%a%get_pop( istate, 'state' ) == 0 )cycle ! empty state

@@ -74,7 +74,7 @@ contains
         allocate( self%vpft_ref(self%nspace,self%kfromto_vpft(1):self%kfromto_vpft(2)),&
                   self%vpft_target(self%nspace,self%kfromto_vpft(1):self%kfromto_vpft(2)),&
                   self%locs_ref(self%nspace,self%kfromto_vpft(1):self%kfromto_vpft(2),3), stat=alloc_stat)
-        if(alloc_stat /= 0) allocchk("In: simple_volpft_corrcalc :: new")
+        allocchk("In: simple_volpft_corrcalc :: new")
         ! generate sampling space
         do isym=1,self%nspace
             ! get symmetry rotation matrix

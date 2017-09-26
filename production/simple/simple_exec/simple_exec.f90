@@ -53,7 +53,7 @@ type(multiptcl_init_commander)       :: xmultiptcl_init
 type(prime3D_commander)              :: xprime3D
 type(cont3D_commander)               :: xcont3D
 type(check3D_conv_commander)         :: xcheck3D_conv
-    
+
 ! COMMON-LINES PROGRAMS
 type(comlin_smat_commander)          :: xcomlin_smat
 type(symsrch_commander)              :: xsymsrch
@@ -61,17 +61,17 @@ type(symsrch_commander)              :: xsymsrch
 ! SYMMETRY PROGRAMS
 type(sym_aggregate_commander)        :: xsym_aggregate
 type(dsymsrch_commander)             :: xdsymsrch
-    
+
 ! MASK PROGRAMS
 type(mask_commander)                 :: xmask
 type(automask2D_commander)           :: xautomask2D
-    
+
 ! RECONSTRUCTION PROGRAMS
 type(eo_volassemble_commander)       :: xeo_volassemble
 type(recvol_commander)               :: xrecvol
 type(volassemble_commander)          :: xvolassemble
 
-! CHECKER PROGRAMS    
+! CHECKER PROGRAMS
 type(check_box_commander)            :: xcheck_box
 type(check_nptcls_commander)         :: xcheck_nptcls
 type(iminfo_commander)               :: ximinfo
@@ -98,7 +98,7 @@ type(norm_commander)                 :: xnorm
 type(scale_commander)                :: xscale
 type(stack_commander)                :: xstack
 type(stackops_commander)             :: xstackops
-    
+
 ! MISCELLANOUS PROGRAMS
 type(cluster_smat_commander)         :: xcluster_smat
 type(intgpeaks_commander)            :: xintgpeaks
@@ -131,24 +131,24 @@ type(tseries_split_commander)        :: xtseries_split
 ! PARALLEL PROCESSING PROGRAMS
 type(merge_algndocs_commander)       :: xmerge_algndocs
 type(merge_nnmat_commander)          :: xmerge_nnmat
-type(merge_similarities_commander)   :: xmerge_similarities  
+type(merge_similarities_commander)   :: xmerge_similarities
 type(split_pairs_commander)          :: xsplit_pairs
 type(split_commander)                :: xsplit
 
 ! OTHER DECLARATIONS
 character(len=KEYLEN) :: keys_required(MAXNKEYS)='', keys_optional(MAXNKEYS)=''
-character(len=STDLEN) :: arg, prg, entire_line
+character(len=STDLEN) :: xarg, prg, entire_line
 type(cmdline)         :: cline
 integer               :: cmdstat, cmdlen, pos
 logical               :: describe
-call get_command_argument(1, arg, cmdlen, cmdstat)
+call get_command_argument(1, xarg, cmdlen, cmdstat)
 call get_command(entire_line)
 if( str_has_substr(entire_line, 'prg=list') ) call list_all_simple_programs
 describe = str_has_substr(entire_line, 'describe=yes')
 
-pos = index(arg, '=') ! position of '='
-call cmdline_err( cmdstat, cmdlen, arg, pos )
-prg = arg(pos+1:)     ! this is the program name
+pos = index(xarg, '=') ! position of '='
+call cmdline_err( cmdstat, cmdlen, xarg, pos )
+prg = xarg(pos+1:)     ! this is the program name
 if( str_has_substr(prg, 'simple') ) stop 'giving program names with simple* prefix is depreciated'
 select case(prg)
 
@@ -170,12 +170,12 @@ select case(prg)
     case( 'simimgs' )
         !==Program simimgs
         !
-        ! <simimgs/begin>is a program for simulating cryo-EM images. It is not a very sophisticated simulator, but it is 
+        ! <simimgs/begin>is a program for simulating cryo-EM images. It is not a very sophisticated simulator, but it is
         ! nevertheless useful for testing purposes. It does not do any multi-slice simulation and it cannot be used for
-        ! simulating molecules containing heavy atoms. It does not even accept a PDB file as an input. Input is a cryo-EM 
-        ! map, which we usually generate from a PDB file using EMANs program pdb2mrc. simimgs then projects the 
-        ! volume using Fourier interpolation, adds 20% of the total noise to the images (pink noise), Fourier transforms 
-        ! them, and multiplies them with astigmatic CTF and B-factor. The images are inverse FTed before the remaining 80% 
+        ! simulating molecules containing heavy atoms. It does not even accept a PDB file as an input. Input is a cryo-EM
+        ! map, which we usually generate from a PDB file using EMANs program pdb2mrc. simimgs then projects the
+        ! volume using Fourier interpolation, adds 20% of the total noise to the images (pink noise), Fourier transforms
+        ! them, and multiplies them with astigmatic CTF and B-factor. The images are inverse FTed before the remaining 80%
         ! of the noise (white noise) is added<simimgs/end>
         !
         ! set required keys
@@ -409,11 +409,11 @@ select case(prg)
         ! Grigorieffs program (hence the name). There are two important differences: automatic weighting of
         ! the frames using a correlation-based M-estimator and continuous optimisation of the shift parameters.
         ! Input is a textfile with absolute paths to movie files in addition to a few input parameters, some
-        ! of which deserve a comment. If dose_rate and exp_time are given the individual frames will be 
-        ! low-pass filtered accordingly (dose-weighting strategy). If scale is given, the movie will be Fourier 
-        ! cropped according to the down-scaling factor (for super-resolution movies). If nframesgrp is given 
-        ! the frames will be pre-averaged in the given chunk size (Falcon 3 movies). If fromf/tof are given, 
-        ! a contiguous subset of frames will be averaged without any dose-weighting applied. 
+        ! of which deserve a comment. If dose_rate and exp_time are given the individual frames will be
+        ! low-pass filtered accordingly (dose-weighting strategy). If scale is given, the movie will be Fourier
+        ! cropped according to the down-scaling factor (for super-resolution movies). If nframesgrp is given
+        ! the frames will be pre-averaged in the given chunk size (Falcon 3 movies). If fromf/tof are given,
+        ! a contiguous subset of frames will be averaged without any dose-weighting applied.
         ! <unblur/end>
         !
         ! set required keys
@@ -450,7 +450,7 @@ select case(prg)
     case( 'ctffind' )
         !==Program ctffind
         !
-        ! <ctffind/begin>is a wrapper program for CTFFIND4 (Grigorieff lab)<ctffind/end> 
+        ! <ctffind/begin>is a wrapper program for CTFFIND4 (Grigorieff lab)<ctffind/end>
         !
         ! set required keys
         keys_required(1) = 'filetab'
@@ -479,7 +479,7 @@ select case(prg)
     case( 'unblur_ctffind' )
         !==Program unblur_ctffind
         !
-        ! <unblur_ctffind/begin>is a pipelined unblur + ctffind program<unblur_ctffind/end> 
+        ! <unblur_ctffind/begin>is a pipelined unblur + ctffind program<unblur_ctffind/end>
         !
         ! set required keys
         keys_required(1)  = 'filetab'
@@ -530,7 +530,7 @@ select case(prg)
     case( 'select' )
         !==Program select
         !
-        ! <select/begin>is a program for selecting files based on image correlation matching<select/end> 
+        ! <select/begin>is a program for selecting files based on image correlation matching<select/end>
         !
         ! set required keys
         keys_required(1) = 'stk'
@@ -553,7 +553,7 @@ select case(prg)
     case( 'makepickrefs' )
         !==Program pickrefs
         !
-        ! <makepickrefs/begin>is a program for generating references for template-based particle picking<makepickrefs/end> 
+        ! <makepickrefs/begin>is a program for generating references for template-based particle picking<makepickrefs/end>
         !
         ! set required keys
         keys_required(1) = 'pgrp'
@@ -574,7 +574,7 @@ select case(prg)
     case( 'pick' )
         !==Program pick
         !
-        ! <pick/begin>is a template-based picker program<pick/end> 
+        ! <pick/begin>is a template-based picker program<pick/end>
         !
         ! set required keys
         keys_required(1) = 'filetab'
@@ -599,8 +599,8 @@ select case(prg)
         ! particle coordinates obtained with Relion. The program creates one stack per movie
         ! frame as well as a stack of corrected framesums. In addition to single-particle
         ! image stacks, the program produces a parameter file extract_params.ext
-        ! that can be used in conjunction with other SIMPLE programs. We obtain CTF parameters 
-        ! with CTFFIND4<extract/end> 
+        ! that can be used in conjunction with other SIMPLE programs. We obtain CTF parameters
+        ! with CTFFIND4<extract/end>
         !
         ! set required keys
         keys_required(1) = 'smpd'
@@ -619,14 +619,14 @@ select case(prg)
         if( .not. cline%defined('neg') )call cline%set('neg', 'yes')
         ! execute
         call xextract%execute(cline)
-        
+
     ! PRIME2D PROGRAMS
 
     case( 'makecavgs' )
         !==Program makecavgs
         !
         ! <makecavgs/begin>is used  to produce class averages or initial random references
-        ! for prime2D execution. <makecavgs/end> 
+        ! for prime2D execution. <makecavgs/end>
         !
         ! set required keys
         keys_required(1)  = 'stk'
@@ -655,7 +655,7 @@ select case(prg)
     case( 'prime2D' )
         !==Program prime2D
         !
-        ! <prime2D/begin>is a reference-free 2D alignment/clustering algorithm adopted from the prime3D 
+        ! <prime2D/begin>is a reference-free 2D alignment/clustering algorithm adopted from the prime3D
         ! probabilistic ab initio 3D reconstruction algorithm<prime2D/end>
         !
         ! set required keys
@@ -705,7 +705,7 @@ select case(prg)
     case( 'cavgassemble' )
         !==Program cavgassemble
         !
-        ! <cavgassemble/begin>is a program that assembles class averages when the clustering 
+        ! <cavgassemble/begin>is a program that assembles class averages when the clustering
         ! program (prime2D) has been executed in distributed mode<cavgassemble/end>
         !
         ! set required keys
@@ -730,10 +730,10 @@ select case(prg)
         ! <check2D_conv/begin>is a program for checking if a PRIME2D run has converged.
         ! The statistics outputted include (1) the overlap between the distribution of parameters
         ! for succesive runs. (2) The percentage of search space scanned, i.e. how many reference
-        ! images are evaluated on average. (3) The average correlation between the images and 
+        ! images are evaluated on average. (3) The average correlation between the images and
         ! their corresponding best matching reference section. If convergence to a local optimum
         ! is achieved, the fraction increases. Convergence is achieved if the parameter distribution
-        ! overlap is larger than 0.95 and more than 99% of the reference sections need to be 
+        ! overlap is larger than 0.95 and more than 99% of the reference sections need to be
         ! searched to find an improving solution<check2D_conv/end>
         !
         ! set required keys
@@ -770,21 +770,21 @@ select case(prg)
         call xrank_cavgs%execute(cline)
 
     ! PRIME3D PROGRAMS
-    
+
     case( 'resrange' )
         !==Program resrange
         !
         ! <resrange/begin>is a program for estimating the resolution range used in the heuristic
         ! resolution-stepping scheme in the PRIME3D initial model production procedure. The initial
-        ! low-pass limit is set so that each image receives ten nonzero orientation weights. When 
+        ! low-pass limit is set so that each image receives ten nonzero orientation weights. When
         ! quasi-convergence has been reached, the limit is updated one Fourier index at the time,
         ! until PRIME reaches the condition where six nonzero orientation weights are assigned to
         ! each image. FSC-based filtering is unfortunately not possible to do in the ab initio
         ! 3D reconstruction step, because when the orientations are mostly random, the FSC overestimates
-        ! the resolution. This program is used internally when executing PRIME in distributed mode. We 
-        ! advise you to check the starting and stopping low-pass limits before executing PRIME3D using 
+        ! the resolution. This program is used internally when executing PRIME in distributed mode. We
+        ! advise you to check the starting and stopping low-pass limits before executing PRIME3D using
         ! this program. The resolution range estimate depends on the molecular diameter,
-        ! which is estimated based on the box size. If you want to override this estimate, set moldiam 
+        ! which is estimated based on the box size. If you want to override this estimate, set moldiam
         ! to the desired value (in A). This may be necessary if your images have a lot of background
         ! padding. However, for starting model generation it is probably better to clip the images snugly
         ! around the particle, because smaller images equal less computation<resrange/end>
@@ -807,7 +807,7 @@ select case(prg)
     case( 'npeaks' )
         !==Program npeaks
         !
-        ! <npeaks/begin>is a program for checking the number of nonzero orientation weights (number of correlation peaks 
+        ! <npeaks/begin>is a program for checking the number of nonzero orientation weights (number of correlation peaks
         ! included in the weighted reconstruction)<npeaks/end>
         !
         ! set required keys
@@ -843,9 +843,9 @@ select case(prg)
         !==Program prime3D_init
         !
         ! <prime3D_init/begin>is a program for generating a random initial model for initialisation of PRIME3D.
-        ! If the data set is large (>5000 images), generating a random model can be slow. To speedup, set 
-        ! nran to some smaller number, resulting in nran images selected randomly for 
-        ! reconstruction<prime3D_init/end> 
+        ! If the data set is large (>5000 images), generating a random model can be slow. To speedup, set
+        ! nran to some smaller number, resulting in nran images selected randomly for
+        ! reconstruction<prime3D_init/end>
         !
         ! set required keys
         keys_required(1) = 'stk'
@@ -862,7 +862,7 @@ select case(prg)
         keys_optional(6) = 'nspace'
         keys_optional(7) = 'nran'
         keys_optional(8) = 'npeaks'
-        keys_optional(9) = 'refine'   
+        keys_optional(9) = 'refine'
         ! parse command line
         if( describe ) call print_doc_prime3D_init
         call cline%parse(keys_required(:5), keys_optional(:9))
@@ -875,7 +875,7 @@ select case(prg)
         !==Program multiptcl_init
         !
         ! <multiptcl_init/begin>is a program for generating random initial models for initialisation of PRIME3D
-        ! when run in multiparticle mode<multiptcl_init/end> 
+        ! when run in multiparticle mode<multiptcl_init/end>
         !
         ! set required keys
         keys_required(1)  = 'stk'
@@ -1022,7 +1022,7 @@ select case(prg)
         if( .not.cline%defined('refine') )call cline%set('refine','yes')
         if( .not.cline%defined('nspace') )call cline%set('nspace',1000.)
         ! execute
-        call xcont3D%execute(cline)        
+        call xcont3D%execute(cline)
     case( 'check3D_conv' )
         !==Program check3D_conv
         !
@@ -1036,7 +1036,7 @@ select case(prg)
         ! the images and their corresponding best matching reference sections. (5) The average standard
         ! deviation of the Euler angles. Convergence is achieved if the angular distance between the
         ! orientations in successive iterations falls significantly below the angular resolution of the
-        ! search space and more than 99% of the reference sections need to be matched on average 
+        ! search space and more than 99% of the reference sections need to be matched on average
         ! <check3D_conv/end>
         !
         ! set required keys
@@ -1060,9 +1060,9 @@ select case(prg)
         if( .not. cline%defined('nspace') ) call cline%set('nspace', 1000.)
         ! execute
         call xcheck3D_conv%execute(cline)
-    
+
     ! COMMON-LINES PROGRAMS
-    
+
     case( 'comlin_smat' )
         !==Program comlin_smat
         !
@@ -1089,16 +1089,16 @@ select case(prg)
     case( 'symsrch' )
         !==Program symsrch
         !
-        ! <symsrch/begin>is a program for searching for the principal symmetry axis of a volume 
-        ! reconstructed without assuming any point-group symmetry. The program takes as input an 
-        ! asymmetrical 3D reconstruction. The alignment document for all the particle images 
-        ! that have gone into the 3D reconstruction and the desired point-group symmetry needs to 
-        ! be inputted. The 3D reconstruction is then projected in 50 (default option) even directions, 
-        ! common lines-based optimisation is used to identify the principal symmetry axis, the rotational 
-        ! transformation is applied to the inputted orientations, and a new alignment document is produced. 
-        ! Input this document to recvol together with the images and the point-group symmetry to generate a 
+        ! <symsrch/begin>is a program for searching for the principal symmetry axis of a volume
+        ! reconstructed without assuming any point-group symmetry. The program takes as input an
+        ! asymmetrical 3D reconstruction. The alignment document for all the particle images
+        ! that have gone into the 3D reconstruction and the desired point-group symmetry needs to
+        ! be inputted. The 3D reconstruction is then projected in 50 (default option) even directions,
+        ! common lines-based optimisation is used to identify the principal symmetry axis, the rotational
+        ! transformation is applied to the inputted orientations, and a new alignment document is produced.
+        ! Input this document to recvol together with the images and the point-group symmetry to generate a
         ! symmetrised map.<symsrch/end>
-        !        
+        !
         ! set required keys
         keys_required(1) = 'vol1'
         keys_required(2) = 'smpd'
@@ -1108,7 +1108,7 @@ select case(prg)
         keys_required(6) = 'outfile'
         keys_required(7) = 'lp'
         ! set optional keys
-        keys_optional(1) = 'nthr'        
+        keys_optional(1) = 'nthr'
         keys_optional(2) = 'cenlp'
         keys_optional(3) = 'hp'
         keys_optional(4) = 'nspace'
@@ -1133,9 +1133,9 @@ select case(prg)
     case( 'sym_aggregate' )
         !==Program symsrch
         !
-        ! <sym_aggregate/begin>is a program for robust identifiaction of the symmetry axis 
+        ! <sym_aggregate/begin>is a program for robust identifiaction of the symmetry axis
         ! of a map using image-to-volume simiarity validation of the axis<sym_aggregate/end>
-        !        
+        !
         ! set required keys
         keys_required(1) = 'vol1'
         keys_required(2) = 'smpd'
@@ -1147,7 +1147,7 @@ select case(prg)
         keys_required(8) = 'lp'
         keys_required(9) = 'stk'
         ! set optional keys
-        keys_optional(1) = 'nthr'        
+        keys_optional(1) = 'nthr'
         keys_optional(2) = 'cenlp'
         keys_optional(3) = 'hp'
         ! parse command line
@@ -1157,20 +1157,20 @@ select case(prg)
         call cline%set('eo','no')
         if( .not. cline%defined('cenlp') ) call cline%set('cenlp', 30.)
         ! execute
-        call xsym_aggregate%execute(cline)        
+        call xsym_aggregate%execute(cline)
     case( 'dsymsrch' )
         !==Program symsrch
         !
-        ! <dsymsrch/begin>is a program for identifying rotational symmetries in class averages of 
+        ! <dsymsrch/begin>is a program for identifying rotational symmetries in class averages of
         ! D-symmetric molecules and generating a cylinder that matches the shape.<dsymsrch/end>
-        !        
+        !
         ! set required keys
         keys_required(1) = 'smpd'
         keys_required(2) = 'msk'
         keys_required(3) = 'pgrp'
         keys_required(4) = 'stk'
         ! set optional keys
-        keys_optional(1) = 'nthr'        
+        keys_optional(1) = 'nthr'
         keys_optional(2) = 'cenlp'
         keys_optional(3) = 'outfile'
         keys_optional(4) = 'outvol'
@@ -1189,11 +1189,10 @@ select case(prg)
        !
        ! <mask/begin>is a program for masking images and volumes.
        ! If you want to mask your images with a spherical mask with a soft falloff, set msk
-       ! to the radius in pixels<mask/end> 
+       ! to the radius in pixels<mask/end>
        !
        ! set required keys
-       keys_required(1)  = 'msk'
-       keys_required(2)  = 'smpd'
+       keys_required(1)  = 'smpd'
        ! set optional keys
        keys_optional(1)  = 'stk'
        keys_optional(2)  = 'vol1'
@@ -1210,19 +1209,21 @@ select case(prg)
        keys_optional(13) = 'outstk'
        keys_optional(14) = 'outvol'
        keys_optional(15) = 'mskfile'
+       keys_optional(16) = 'taper_edges'
+       keys_optional(17) = 'msk'
        ! parse command line
        if( describe ) call print_doc_mask
-       call cline%parse( keys_required(:2), keys_optional(:15))
+       call cline%parse( keys_required(:1), keys_optional(:17))
        ! execute
        call xmask%execute(cline)
     case( 'automask2D' )
         !==Program automask2D
         !
-        ! <automask2D/begin>is a program for solvent flattening of class averages. 
-        ! The algorithm for background removal is based on low-pass filtering and binarization. 
-        ! First, the class averages are low-pass filtered to amsklp. Binary representatives 
+        ! <automask2D/begin>is a program for solvent flattening of class averages.
+        ! The algorithm for background removal is based on low-pass filtering and binarization.
+        ! First, the class averages are low-pass filtered to amsklp. Binary representatives
         ! are then generated by assigning foreground pixels using sortmeans. A cosine function
-        ! softens the edge of the binary mask before it is  multiplied with the unmasked input 
+        ! softens the edge of the binary mask before it is  multiplied with the unmasked input
         ! averages to accomplish flattening<automask2D/end>
         !
         ! set required keys
@@ -1248,15 +1249,15 @@ select case(prg)
     case( 'recvol' )
         !==Program recvol
         !
-        ! <recvol/begin>is a program for reconstructing volumes from MRC and SPIDER stacks, given input 
-        ! orientations and state assignments. The algorithm is based on direct Fourier inversion with a 
-        ! Kaiser-Bessel (KB) interpolation kernel. This window function reduces the real-space ripple 
-        ! artifacts associated with direct moving windowed-sinc interpolation. The feature sought when 
-        ! implementing this algorithm was to enable quick, reliable reconstruction from aligned individual 
-        ! particle images. mul is used to scale the origin shifts if down-sampled 
-        ! were used for alignment and the original images are used for reconstruction. ctf=yes or ctf=flip 
-        ! turns on the Wiener restoration. If the images were phase-flipped set ctf=flip. The inner parameter 
-        ! controls the radius of the soft-edged mask used to remove the unordered DNA/RNA core of spherical 
+        ! <recvol/begin>is a program for reconstructing volumes from MRC and SPIDER stacks, given input
+        ! orientations and state assignments. The algorithm is based on direct Fourier inversion with a
+        ! Kaiser-Bessel (KB) interpolation kernel. This window function reduces the real-space ripple
+        ! artifacts associated with direct moving windowed-sinc interpolation. The feature sought when
+        ! implementing this algorithm was to enable quick, reliable reconstruction from aligned individual
+        ! particle images. mul is used to scale the origin shifts if down-sampled
+        ! were used for alignment and the original images are used for reconstruction. ctf=yes or ctf=flip
+        ! turns on the Wiener restoration. If the images were phase-flipped set ctf=flip. The inner parameter
+        ! controls the radius of the soft-edged mask used to remove the unordered DNA/RNA core of spherical
         ! icosahedral viruses<recvol/end>
         !
         ! set required keys
@@ -1286,10 +1287,10 @@ select case(prg)
         !==Program eo_volassemble
         !
         ! <eo_volassemble/begin>is a program that assembles volume(s) when the reconstruction
-        ! program (recvol with eo=yes) has been executed in distributed mode. inner applies a soft-edged 
+        ! program (recvol with eo=yes) has been executed in distributed mode. inner applies a soft-edged
         ! inner mask. An inner mask is used for icosahedral virus reconstruction, because the
         ! DNA or RNA core is often unordered and  if not removed it may negatively impact the
-        ! alignment. The width parameter controls the fall-off of the edge of the 
+        ! alignment. The width parameter controls the fall-off of the edge of the
         ! inner mask<eo_volassemble/end>
         !
         ! set required keys
@@ -1311,12 +1312,12 @@ select case(prg)
     case( 'volassemble' )
         !==Program volassemble
         !
-        ! <volassemble/begin>is a program that assembles volume(s) when the reconstruction program 
-        ! (recvol) has been executed in distributed mode. odd is used to assemble the odd reconstruction, 
-        ! even is used to assemble the even reconstruction, eo is used to assemble both the even and the 
-        ! odd reconstruction and state is used to assemble the inputted state. Normally, you do not fiddle with 
+        ! <volassemble/begin>is a program that assembles volume(s) when the reconstruction program
+        ! (recvol) has been executed in distributed mode. odd is used to assemble the odd reconstruction,
+        ! even is used to assemble the even reconstruction, eo is used to assemble both the even and the
+        ! odd reconstruction and state is used to assemble the inputted state. Normally, you do not fiddle with
         ! these parameters. They are used internally<volassemble/end>
-        ! 
+        !
         ! set required keys
         keys_required(1) = 'stk'
         keys_required(2) = 'nparts'
@@ -1333,7 +1334,7 @@ select case(prg)
         call xvolassemble%execute(cline)
 
     ! CHECKER PROGRAMS
-        
+
     case( 'check_box' )
         !==Program check_box
         !
@@ -1360,11 +1361,11 @@ select case(prg)
         if( describe ) call print_doc_check_nptcls
         call cline%parse(keys_required(:1))
         ! execute
-        call xcheck_nptcls%execute(cline) 
+        call xcheck_nptcls%execute(cline)
     case( 'iminfo' )
         !==Program iminfo
         !
-        ! <iminfo/begin>is a program for printing header information in MRC and SPIDER stacks 
+        ! <iminfo/begin>is a program for printing header information in MRC and SPIDER stacks
         ! and volumes<iminfo/end>
         !
         ! set required keys
@@ -1379,14 +1380,14 @@ select case(prg)
         call cline%parse(keys_required(:1), keys_optional(:4))
         ! execute
         call ximinfo%execute(cline)
-        
+
     ! VOLOPS PROGRAMS
 
     case( 'fsc' )
         !==Program fsc
         !
-        ! <fsc/begin>is a program for calculating the FSC between the two input volumes. No modifications 
-        ! are done to the volumes, which allow you to test different masking options and see how they 
+        ! <fsc/begin>is a program for calculating the FSC between the two input volumes. No modifications
+        ! are done to the volumes, which allow you to test different masking options and see how they
         ! affect the FSCs<fsc/end>
         !
         keys_required(1) = 'smpd'
@@ -1453,8 +1454,8 @@ select case(prg)
         ! oritab parameter allows you to input the orientations that you wish to have your volume projected in. If
         ! rnd=yes, random rather than quasi-even projections are generated, trs then controls the halfwidth of
         ! the random origin shift. Less commonly used parameters are pgrp, which controls the point-group symmetry
-        ! c (rotational), d (dihedral), t (tetrahedral), o (octahedral) or i (icosahedral). The point-group symmetry is 
-        ! used to restrict the set of projections to within the asymmetric unit. 
+        ! c (rotational), d (dihedral), t (tetrahedral), o (octahedral) or i (icosahedral). The point-group symmetry is
+        ! used to restrict the set of projections to within the asymmetric unit.
         ! neg inverts the contrast of the projections. <projvol/end>
         !
         ! set required keys
@@ -1484,7 +1485,7 @@ select case(prg)
         !==Program volaverager
         !
         ! <volaverager/begin>is a program for averaging volumes according to state label in oritab
-        ! <volaverager/end> 
+        ! <volaverager/end>
         !
         ! set required keys
         keys_required(1) = 'vollist'
@@ -1570,13 +1571,13 @@ select case(prg)
         ! execute
         ! execute
         call xdock_volpair%execute(cline)
-        
+
     ! GENERAL IMAGE PROCESSING PROGRAMS
-    
+
     case( 'binarise' )
         !==Program binarise
         !
-        ! <binarise/begin>is a program for binarisation of stacks and volumes<binarise/end> 
+        ! <binarise/begin>is a program for binarisation of stacks and volumes<binarise/end>
         !
         ! set optional keys
         keys_optional(1)  = 'nthr'
@@ -1598,8 +1599,8 @@ select case(prg)
     case( 'convert' )
         !==Program convert
         !
-        ! <convert/begin>is a program for converting between SPIDER and MRC formats 
-        ! <convert/end> 
+        ! <convert/begin>is a program for converting between SPIDER and MRC formats
+        ! <convert/end>
         !
         ! set optional keys
         keys_optional(1) = 'stk'
@@ -1615,7 +1616,7 @@ select case(prg)
         !==Program corrcompare
         !
         ! <corrcompare/begin>is a program for comparing stacked images using real-space and Fourier-based approaches
-        ! <corrcompare/end> 
+        ! <corrcompare/end>
         !
         ! set required keys
         keys_required(1) = 'stk'
@@ -1634,7 +1635,7 @@ select case(prg)
         !==Program ctfops
         !
         ! <ctfops/begin>is a program for applying CTF to stacked images
-        ! <ctfops/end> 
+        ! <ctfops/end>
         !
         ! Required keys
         keys_required(1) = 'smpd'
@@ -1645,7 +1646,7 @@ select case(prg)
         keys_optional(3) = 'neg'
         keys_optional(4) = 'oritab'
         keys_optional(5) = 'deftab'
-        keys_optional(6) = 'bfac'        
+        keys_optional(6) = 'bfac'
         ! parse command line
         if( describe ) call print_doc_ctfops
         call cline%parse(keys_required(:2), keys_optional(:6))
@@ -1657,7 +1658,7 @@ select case(prg)
         !==Program corrcompare
         !
         ! <corrcompare/begin>is a program for comparing stacked images using real-space and Fourier-based approaches
-        ! <corrcompare/end> 
+        ! <corrcompare/end>
         !
         ! set required keys
         keys_required(1) = 'stk'
@@ -1676,7 +1677,7 @@ select case(prg)
         !==Program filter
         !
         ! <filter/begin>is a program for filtering stacks/volumes
-        ! <filter/end> 
+        ! <filter/end>
         !
         ! Required keys
         keys_required(1)  = 'smpd'
@@ -1722,10 +1723,10 @@ select case(prg)
         !
         ! <norm/begin>is a program for normalization of MRC or SPIDER stacks and volumes. If you want to
         ! normalise your images inputted with stk, set norm=yes. hfun (e.g. hfun=sigm) controls
-        ! the normalisation function. If you want to perform noise normalisation of the images set 
+        ! the normalisation function. If you want to perform noise normalisation of the images set
         ! noise_norm=yes given a mask radius msk (pixels). If you want to normalise your
         ! images or volume (vol1) with respect to their power spectrum set shell_norm=yes
-        ! <norm/end> 
+        ! <norm/end>
         !
         ! set required keys
         keys_required(1) = 'smpd'
@@ -1746,7 +1747,7 @@ select case(prg)
         !==Program scale
         !
         ! <scale/begin>is a program that provides re-scaling and clipping routines for MRC or SPIDER stacks
-        ! and volumes<scale/end> 
+        ! and volumes<scale/end>
         !
         keys_required(1)  = 'smpd'
         ! set optional keys
@@ -1797,7 +1798,7 @@ select case(prg)
         ! to the state that you want to extract. If you want to select the fraction of best particles (according to the goal function), input
         ! an alignment doc (oritab) and set frac. You can combine the state and frac options. If you
         ! want to apply noise to images, give the desired signal-to-noise ratio via snr. If you want to calculate the autocorrelation
-        ! function of your images set acf=yes. If you want to extract a contiguous subset of particle images from the stack, set 
+        ! function of your images set acf=yes. If you want to extract a contiguous subset of particle images from the stack, set
         ! fromp and top. If you want to fish out a number of particle images from your stack at random, set nran to
         ! some nonzero integer number less than nptcls. With avg=yes the global average of the inputted stack is calculated.
         ! If you define nframesgrp to some integer number larger than one averages with chunk sizes of nframesgrp are produced,
@@ -1839,7 +1840,7 @@ select case(prg)
         call xstackops%execute(cline)
 
     ! MISCELLANOUS PROGRAMS
-        
+
     case( 'cluster_smat' )
         !==Program cluster_smat
         !
@@ -1884,7 +1885,7 @@ select case(prg)
         ! centre of mass<masscen/end>
         !
         ! set required keys
-        keys_required(1) = 'stk' 
+        keys_required(1) = 'stk'
         keys_required(2) = 'smpd'
         keys_required(3) = 'lp'
         ! set optional keys
@@ -1915,7 +1916,7 @@ select case(prg)
         ! <print_dose_weights/begin>is a program for printing the dose weights applied to individual frames<print_dose_weights/end>
         !
         ! set required keys
-        keys_required(1) = 'nframes' 
+        keys_required(1) = 'nframes'
         keys_required(2) = 'exp_time'
         keys_required(3) = 'dose_rate'
         keys_required(4) = 'box'
@@ -1974,7 +1975,7 @@ select case(prg)
         ! <shift/begin>is a program for shifting a stack according to shifts in oritab<shift/end>
         !
         ! set required keys
-        keys_required(1) = 'stk' 
+        keys_required(1) = 'stk'
         keys_required(2) = 'smpd'
         keys_required(3) = 'oritab'
         ! set optional keys
@@ -2009,7 +2010,7 @@ select case(prg)
         ! <makedeftab/begin>is a program for creating a SIMPLE conformant file of CTF parameter values (deftab).
         ! Input is either an earlier SIMPLE deftab/oritab. The purpose is to get the kv, cs, and fraca parameters
         ! as part of the CTF input doc as that is the new convention. The other alternative is to input a plain text
-        ! file with CTF parameters dfx, dfy, angast according to the Frealign convention. Unit conversions are dealt 
+        ! file with CTF parameters dfx, dfy, angast according to the Frealign convention. Unit conversions are dealt
         ! with using optional variables. The units refer to the units in the inputted document<makedeftab/end>
         !
         ! Required keys
@@ -2032,15 +2033,15 @@ select case(prg)
     case( 'makeoris' )
         !==Program makeoris
         !
-        ! <makeoris/begin>is a program for making SIMPLE orientation/parameter files (text files containing input parameters and/or 
+        ! <makeoris/begin>is a program for making SIMPLE orientation/parameter files (text files containing input parameters and/or
         ! parameters estimated by prime2D or prime3D). The program generates random
-        ! Euler angles e1.in.[0,360], e2.in.[0,180], and e3.in.[0,360] and random origin 
-        ! shifts x.in.[-trs,yrs] and y.in.[-trs,yrs]. If ndiscrete is set to an integer number > 0, the 
-        ! orientations produced are randomly sampled from the set of ndiscrete quasi-even projection directions, and the in-plane 
-        ! parameters are assigned randomly. If even=yes, then all nptcls orientations are assigned 
-        ! quasi-even projection directions,and random in-plane parameters. If nstates is set to some integer number > 0, then 
-        ! states are assigned randomly .in.[1,nstates]. If zero=yes in this mode of execution, the projection 
-        ! directions are zeroed and only the in-plane parameters are kept intact. If errify=yes and astigerr is defined, 
+        ! Euler angles e1.in.[0,360], e2.in.[0,180], and e3.in.[0,360] and random origin
+        ! shifts x.in.[-trs,yrs] and y.in.[-trs,yrs]. If ndiscrete is set to an integer number > 0, the
+        ! orientations produced are randomly sampled from the set of ndiscrete quasi-even projection directions, and the in-plane
+        ! parameters are assigned randomly. If even=yes, then all nptcls orientations are assigned
+        ! quasi-even projection directions,and random in-plane parameters. If nstates is set to some integer number > 0, then
+        ! states are assigned randomly .in.[1,nstates]. If zero=yes in this mode of execution, the projection
+        ! directions are zeroed and only the in-plane parameters are kept intact. If errify=yes and astigerr is defined,
         ! then uniform random astigmatism errors are introduced .in.[-astigerr,astigerr]<makeoris/end>
         !
         ! Required keys
@@ -2074,8 +2075,8 @@ select case(prg)
     case( 'map2ptcls' )
         !==Program map2ptcls
        !
-       ! <map2ptcls/begin>is a program for mapping parameters that have been obtained using class averages to 
-       ! the individual particle images<map2ptcls/end> 
+       ! <map2ptcls/begin>is a program for mapping parameters that have been obtained using class averages to
+       ! the individual particle images<map2ptcls/end>
        !
        ! set required keys
        keys_required(1)  = 'stk'
@@ -2098,19 +2099,19 @@ select case(prg)
     case( 'orisops' )
         !==Program orisops
         !
-        ! <orisops/begin>is a program for analyzing SIMPLE orientation/parameter files (text files containing input parameters 
-        ! and/or parameters estimated by prime2D or prime3D). If only oritab is inputted, there 
-        ! are a few options available. If errify=yes, then the program introduces uniform random angular errors 
-        ! .in.[-angerr,angerr], and uniform origin shift errors 
-        ! .in.[-sherr,sherr], and uniform random defocus errors .in.[-dferr,dferr]. If nstates > 1 
-        ! then random states are assigned .in.[1,nstates]. If mirr=2d, then the Euler angles in oritab 
-        ! are mirrored according to the relation e1=e1, e2=180.+e2, e3=-e3. If mirr=3d, then the Euler angles in 
-        ! oritab are mirrored according to the relation R=M(M*R), where R is the rotation matrix calculated from 
-        ! the Euler angle triplet and M is a 3D reflection matrix (like a unit matrix but with the 3,3-component sign swapped). 
-        ! If e1, e2, or e3 is inputted, the orientations in oritab are rotated correspondingly. If 
-        ! you input state as well, you rotate only the orientations assigned to state state. If mul 
-        ! is defined, you multiply the origin shifts with mul. If zero=yes, then the shifts are zeroed. If none of 
-        ! the above described parameter are defined, and oritab is still defined, the program projects the 3D orientation into 
+        ! <orisops/begin>is a program for analyzing SIMPLE orientation/parameter files (text files containing input parameters
+        ! and/or parameters estimated by prime2D or prime3D). If only oritab is inputted, there
+        ! are a few options available. If errify=yes, then the program introduces uniform random angular errors
+        ! .in.[-angerr,angerr], and uniform origin shift errors
+        ! .in.[-sherr,sherr], and uniform random defocus errors .in.[-dferr,dferr]. If nstates > 1
+        ! then random states are assigned .in.[1,nstates]. If mirr=2d, then the Euler angles in oritab
+        ! are mirrored according to the relation e1=e1, e2=180.+e2, e3=-e3. If mirr=3d, then the Euler angles in
+        ! oritab are mirrored according to the relation R=M(M*R), where R is the rotation matrix calculated from
+        ! the Euler angle triplet and M is a 3D reflection matrix (like a unit matrix but with the 3,3-component sign swapped).
+        ! If e1, e2, or e3 is inputted, the orientations in oritab are rotated correspondingly. If
+        ! you input state as well, you rotate only the orientations assigned to state state. If mul
+        ! is defined, you multiply the origin shifts with mul. If zero=yes, then the shifts are zeroed. If none of
+        ! the above described parameter are defined, and oritab is still defined, the program projects the 3D orientation into
         ! the xy-plane and plots the resulting vector (this is useful for checking orientation coverage)<orisops/end>
         !
         ! set optional keys
@@ -2146,11 +2147,11 @@ select case(prg)
     case( 'oristats' )
         !==Program oristats
         !
-        ! <oristats/begin>is a program for analyzing SIMPLE orientation/parameter files (text files containing input 
-        ! parameters and/or parameters estimated by prime2D or prime3D). If two orientation 
-        ! tables (oritab and oritab2) are inputted, the program provides statistics of the distances between the orientations 
-        ! in the two documents. These statistics include the sum of angular distances between the orientations, the average 
-        ! angular distance between the orientations, the standard deviation of angular distances, the minimum angular 
+        ! <oristats/begin>is a program for analyzing SIMPLE orientation/parameter files (text files containing input
+        ! parameters and/or parameters estimated by prime2D or prime3D). If two orientation
+        ! tables (oritab and oritab2) are inputted, the program provides statistics of the distances between the orientations
+        ! in the two documents. These statistics include the sum of angular distances between the orientations, the average
+        ! angular distance between the orientations, the standard deviation of angular distances, the minimum angular
         ! distance, and the maximum angular distance<oristats/end>
         !
         ! Required keys
@@ -2182,7 +2183,7 @@ select case(prg)
     case( 'rotmats2oris' )
         !==Program rotmats2oris
         !
-        ! <rotmats2oris/begin>converts a text file (9 records per line) describing 
+        ! <rotmats2oris/begin>converts a text file (9 records per line) describing
         ! rotation matrices into a SIMPLE oritab<rotmats2oris/end>
         !
         ! Required keys
@@ -2205,7 +2206,7 @@ select case(prg)
         keys_optional(1)  = 'outfile'
         ! if( describe ) call print_doc_txt2bin
         call cline%parse(keys_required(:1), keys_optional(:1))
-        ! set defaults  
+        ! set defaults
         if( .not. cline%defined('outfile') ) call cline%set('outfile', 'outfile.bin')
         ! execute
         call xtxt2bin%execute(cline)
@@ -2248,7 +2249,7 @@ select case(prg)
         !==Program tseries_extract
         !
         ! <tseries_extract/begin>is a program for creating overlapping chunks of nframesgrp frames from time-series data
-        ! <tseries_extract/end> 
+        ! <tseries_extract/end>
         !
         ! set required keys
         keys_required(1) = 'filetab'
@@ -2263,7 +2264,7 @@ select case(prg)
         !==Program tseries_track
         !
         ! <tseries_track/begin>is a program for particle tracking in time-series data
-        ! <tseries_track/end> 
+        ! <tseries_track/end>
         !
         ! set required keys
         keys_required(1) = 'filetab'
@@ -2291,9 +2292,9 @@ select case(prg)
         !==Program tseries_backgr_subtr
         !
         ! <tseries_backgr_subtr/begin>is a program for background subtraction in time-series data.
-        ! The goal is to subtract the two graphene peaks @ 2.14 A and @ 1.23 A. This is done by 
+        ! The goal is to subtract the two graphene peaks @ 2.14 A and @ 1.23 A. This is done by
         ! band-pass filtering the background image, recommended (and default settings) are hp=5.0
-        ! lp=1.1 and width=5.0. <tseries_backgr_subtr/end> 
+        ! lp=1.1 and width=5.0. <tseries_backgr_subtr/end>
         !
         ! set required keys
         keys_required(1) = 'stk'
@@ -2318,7 +2319,7 @@ select case(prg)
     case( 'tseries_split' )
         !==Program tseries_split
         !
-        ! <tseries_split/begin>is a program for splitting a time-series stack and its associated orientations 
+        ! <tseries_split/begin>is a program for splitting a time-series stack and its associated orientations
         ! <tseries_split/end>
         !
         ! set required keys
@@ -2334,7 +2335,7 @@ select case(prg)
         call xtseries_split%execute(cline)
 
     ! PARALLEL PROCESSING PROGRAMS
-    
+
     case( 'merge_algndocs' )
         !==Program merge_algndocs
         !
@@ -2355,7 +2356,7 @@ select case(prg)
     case( 'merge_nnmat' )
         !==Program merge_nnmat
         !
-        ! <merge_nnmat/begin>is a program for merging partial nearest neighbour matrices calculated 
+        ! <merge_nnmat/begin>is a program for merging partial nearest neighbour matrices calculated
         ! in distributed mode<merge_nnmat/end>
         !
         ! set required keys
@@ -2370,7 +2371,7 @@ select case(prg)
     case( 'merge_similarities' )
         !==Program merge_similarities
         !
-        ! <merge_similarities/begin>is a program for merging similarities calculated between pairs of objects 
+        ! <merge_similarities/begin>is a program for merging similarities calculated between pairs of objects
         ! into a similarity matrix that can be inputted to cluster_smat<merge_similarities/end>
         !
         ! set required keys
@@ -2381,11 +2382,11 @@ select case(prg)
         if( describe ) call print_doc_merge_similarities
         call cline%parse(keys_required(:1), keys_optional(:1))
         ! execute
-        call xmerge_similarities%execute(cline)    
+        call xmerge_similarities%execute(cline)
     case( 'split_pairs' )
         !==Program split_pairs
         !
-        ! <split_pairs/begin>is a program for splitting calculations between pairs of objects 
+        ! <split_pairs/begin>is a program for splitting calculations between pairs of objects
         ! into balanced partitions<split_pairs/end>
         !
         ! set required keys

@@ -229,7 +229,7 @@ elseif(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR Fortran_COMPILER_NAME MATC
   set(EXTRA_FLAGS "${EXTRA_FLAGS} -module ${CMAKE_Fortran_MODULE_DIRECTORY} -I${CMAKE_Fortran_MODULE_DIRECTORY}")
   # NVIDIA PGI Linux compiler
 #  set(CMAKE_AR                           "pgfortran")
-  set(CMAKE_CPP_COMPILER                 "pgcc -E ")
+  set(CMAKE_CPP_COMPILER                 "cpp -C -CC -E ")
   set(CMAKE_CPP_COMPILER_FLAGS           "  ")
   set(CMAKE_Fortran_FLAGS                " ${EXTRA_FLAGS} ${CMAKE_Fortran_FLAGS_RELEASE_INIT}")
   set(CMAKE_Fortran_FLAGS_DEBUG          " ${EXTRA_FLAGS} ${CMAKE_Fortran_FLAGS_DEBUG_INIT}")
@@ -593,12 +593,12 @@ endif()
 
 # Override Fortran preprocessor
 # block constructs (F2008), unlimited polymorphism and variadic macros (not included in F2003 -- but is part of C99 )
-if (${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI")
-set(CMAKE_Fortran_COMPILE_OBJECT "grep --silent -E '#include' <SOURCE> && ( ${CMAKE_CPP_COMPILER} ${CMAKE_CPP_COMPILER_FLAGS} -DOPENMP <DEFINES> <INCLUDES> <SOURCE> > <OBJECT>.f90 &&  <CMAKE_Fortran_COMPILER> <DEFINES> <INCLUDES> <FLAGS> -c <OBJECT>.f90 -o <OBJECT> ) || <CMAKE_Fortran_COMPILER> <DEFINES> <INCLUDES> <FLAGS> -c <SOURCE> -o <OBJECT>")
-else()
-#elseif (${CMAKE_Fortran_COMPILER_ID} STREQUAL "Intel")
-set(CMAKE_Fortran_COMPILE_OBJECT "grep --silent -E '#include' <SOURCE> && ( ${CMAKE_CPP_COMPILER} ${CMAKE_CPP_COMPILER_FLAGS} -DOPENMP <DEFINES> <INCLUDES> <SOURCE> > <OBJECT>.f90 &&  <CMAKE_Fortran_COMPILER> <DEFINES> <INCLUDES> <FLAGS> -c <OBJECT>.f90 -o <OBJECT> ) || <CMAKE_Fortran_COMPILER> <DEFINES> <INCLUDES> <FLAGS> -c <SOURCE> -o <OBJECT>")
-endif()
+# if (${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI")
+# set(CMAKE_Fortran_COMPILE_OBJECT "grep --silent -E '#include' <SOURCE> && ( ${CMAKE_CPP_COMPILER} ${CMAKE_CPP_COMPILER_FLAGS} -DOPENMP <DEFINES> <INCLUDES> <SOURCE> > <OBJECT>.f90 &&  <CMAKE_Fortran_COMPILER> <DEFINES> <INCLUDES> <FLAGS> -c <OBJECT>.f90 -o <OBJECT> ) || <CMAKE_Fortran_COMPILER> <DEFINES> <INCLUDES> <FLAGS> -c <SOURCE> -o <OBJECT>")
+# else()
+# #elseif (${CMAKE_Fortran_COMPILER_ID} STREQUAL "Intel")
+# set(CMAKE_Fortran_COMPILE_OBJECT "grep --silent -E '#include' <SOURCE> && ( ${CMAKE_CPP_COMPILER} ${CMAKE_CPP_COMPILER_FLAGS} -DOPENMP <DEFINES> <INCLUDES> <SOURCE> > <OBJECT>.f90 &&  <CMAKE_Fortran_COMPILER> <DEFINES> <INCLUDES> <FLAGS> -c <OBJECT>.f90 -o <OBJECT> ) || <CMAKE_Fortran_COMPILER> <DEFINES> <INCLUDES> <FLAGS> -c <SOURCE> -o <OBJECT>")
+# endif()
 
 if(ENABLE_PROFILING)
   SET(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -pg")

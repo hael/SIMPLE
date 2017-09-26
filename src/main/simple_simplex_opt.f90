@@ -33,7 +33,7 @@ contains
         real                              :: x
         call self%kill
         allocate(self%p(spec%ndim+1,spec%ndim), self%y(spec%ndim+1), self%pb(spec%ndim), stat=alloc_stat)
-        if(alloc_stat /= 0) allocchk("In: new_simplex_opt")
+        allocchk("In: new_simplex_opt")
         ! initialize best cost to huge number
         self%yb = huge(x)
         self%exists = .true. ! indicates existence
@@ -113,15 +113,15 @@ contains
         alloc_stat=0
         if( allocated(self%p) )then
             deallocate(self%p, stat=alloc_stat)
-            if(alloc_stat /= 0) allocchk("In: kill_simplex_opt p")
+            allocchk("In: kill_simplex_opt p")
         end if
         if( allocated(self%y) )then
             deallocate(self%y, stat=alloc_stat)
-            if(alloc_stat /= 0) allocchk("In: kill_simplex_opt y ")
+            allocchk("In: kill_simplex_opt y ")
         end if
         if( allocated(self%pb) )then
             deallocate(self%pb, stat=alloc_stat)
-            if(alloc_stat /= 0) allocchk("In: kill_simplex_opt pb ")
+            allocchk("In: kill_simplex_opt pb ")
         end if
         self%exists = .false.
     end subroutine kill_simplex_opt

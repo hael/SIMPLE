@@ -16,7 +16,7 @@ contains
         integer, allocatable :: parts(:,:)
         integer :: nobjs_per_part, leftover, istop, istart, ipart
         allocate(parts(nparts,2), stat=alloc_stat)
-        if(alloc_stat /= 0) allocchk('In: simple_map_reduce :: split_nobjs_even')
+        allocchk('In: simple_map_reduce :: split_nobjs_even')
         nobjs_per_part = nobjs/nparts
         DebugPrint   'nobjs_per_part: ', nobjs_per_part
         leftover = nobjs-nobjs_per_part*nparts
@@ -71,7 +71,7 @@ contains
         endif
         ! generate output
         allocate(parts(nparts,2), stat=alloc_stat)
-        if(alloc_stat /= 0) allocchk("In: simple_map_reduce :: split_nobjs_in_chunks")
+        allocchk("In: simple_map_reduce :: split_nobjs_in_chunks")
         ! count the number of parts
         cnt   = 0
         ipart = 0
@@ -106,7 +106,7 @@ contains
         npairs = (nobjs*(nobjs-1))/2
         DebugPrint  'split_pairs_in_parts, npairs: ', npairs
         allocate( pairs(npairs,2), stat=alloc_stat )
-        if(alloc_stat /= 0) allocchk('mapreduce ;split_pairs_in_parts  1')
+        allocchk('mapreduce ;split_pairs_in_parts  1')
         cnt = 0
         do i=1,nobjs-1
             do j=i+1,nobjs
@@ -122,7 +122,7 @@ contains
         do ipart=1,nparts
             call progress(ipart,nparts)
             allocate(fname, source='pairs_part' // int2str_pad(ipart,numlen) // '.bin', stat=alloc_stat)
-            if(alloc_stat /= 0) allocchk("mapreduce ;split_pairs_in_parts creating fname ")
+            allocchk("mapreduce ;split_pairs_in_parts creating fname ")
             call fopen(funit, status='REPLACE', action='WRITE', file=fname, access='STREAM',iostat=io_stat)
             call fileio_errmsg('mapreduce ;split_pairs_in_parts '//trim(fname), io_stat)
             DebugPrint   'writing pairs in range: ', parts(ipart,1), parts(ipart,2)
@@ -149,7 +149,7 @@ contains
         DebugPrint   'analysing this number of objects: ', nobjs
         DebugPrint   'analysing this number of pairs: ', npairs
         allocate( smat(nobjs,nobjs), pairs(npairs,2), stat=alloc_stat )
-        if(alloc_stat /= 0) allocchk('In: simple_map_reduce::merge_similarities_from_parts, 1')
+        allocchk('In: simple_map_reduce::merge_similarities_from_parts, 1')
         ! initialise similarities
         smat = -1.
         do i=1,nobjs
@@ -174,7 +174,7 @@ contains
             ! retrieve the similarities
             DebugPrint   'allocating this number of similarities: ', parts(ipart,2)-parts(ipart,1)+1
             allocate(sims(parts(ipart,1):parts(ipart,2)), stat=alloc_stat)
-            if(alloc_stat /= 0) allocchk("In: simple_map_reduce::merge_similarities_from_parts, sims(:) 2")
+            allocchk("In: simple_map_reduce::merge_similarities_from_parts, sims(:) 2")
             allocate(fname, source='similarities_part'//int2str_pad(ipart,numlen)//'.bin')
             call fopen(funit, status='OLD', action='READ', file=fname, access='STREAM',iostat=io_stat)
             call fileio_errmsg("In map_reduce merge_rmat_from_parts opening "//trim(fname), io_stat)
@@ -186,14 +186,14 @@ contains
             endif
             call fclose(funit, errmsg="In map_reduce merge_similarities_from_parts opening "//trim(fname))
             deallocate(fname)
-            if(alloc_stat /= 0) allocchk('In: simple_map_reduce::merge_similarities_from_parts dealloc')
+            allocchk('In: simple_map_reduce::merge_similarities_from_parts dealloc')
             ! set the similarity matrix components
             do i=parts(ipart,1),parts(ipart,2)
                 smat(pairs(i,1),pairs(i,2)) = sims(i)
                 smat(pairs(i,2),pairs(i,1)) = sims(i)
             end do
             deallocate(sims)
-            if(alloc_stat /= 0) allocchk('In: simple_map_reduce::merge_similarities_from_parts, 2')
+            allocchk('In: simple_map_reduce::merge_similarities_from_parts, 2')
         end do
         deallocate(parts,pairs)
     end function merge_similarities_from_parts
@@ -208,7 +208,7 @@ contains
         integer :: numlen, ipart, funit, io_stat
         ! allocate nearest neighbour matrix
         allocate(nnmat(nobjs,nnn), stat=alloc_stat)
-        if(alloc_stat /= 0) allocchk("In: simple_map_reduce :: merge_nnmat_from_parts")
+        allocchk("In: simple_map_reduce :: merge_nnmat_from_parts")
         ! repeat the generation of balanced partitions
         parts  = split_nobjs_even(nobjs, nparts)                                        !! realloc lhs
         numlen = len(int2str(nparts))
@@ -216,7 +216,7 @@ contains
         
         do ipart=1,nparts
             allocate(fname, source='nnmat_part'//int2str_pad(ipart,numlen)//'.bin')
-            if(alloc_stat /= 0) allocchk('In: simple_map_reduce::merge_nnmat_from_parts, 1')
+            allocchk('In: simple_map_reduce::merge_nnmat_from_parts, 1')
             call fopen(funit, status='OLD', action='READ', file=fname, access='STREAM',iostat=io_stat)
             call fileio_errmsg("In map_reduce merge_nnmat_from_parts opening "//trim(fname), io_stat)
             read(unit=funit,pos=1,iostat=io_stat) nnmat(parts(ipart,1):parts(ipart,2),:)
@@ -243,14 +243,14 @@ contains
         integer :: numlen, ipart, funit, io_stat
         ! allocate merged matrix
         allocate(mat_merged(nobjs,ydim), stat=alloc_stat)
-        if(alloc_stat /= 0) allocchk("In: simple_map_reduce :: merge_mat_from_parts")
+        allocchk("In: simple_map_reduce :: merge_mat_from_parts")
         ! repeat the generation of balanced partitions
         parts  = split_nobjs_even(nobjs, nparts)
         numlen = len(int2str(nparts))
         ! compress the partial matrices into a single matrix
         do ipart=1,nparts
             allocate(fname, source=trim(fbody)//int2str_pad(ipart,numlen)//'.bin', stat=alloc_stat)
-            if(alloc_stat /= 0) allocchk("In: simple_map_reduce :: merge_mat_from_parts ")
+            allocchk("In: simple_map_reduce :: merge_mat_from_parts ")
             call fopen(funit, status='OLD', action='READ', file=fname, access='STREAM',iostat=io_stat)
             call fileio_errmsg("In map_reduce merge_rmat_from_parts opening "//trim(fname), io_stat)
             read(unit=funit,pos=1,iostat=io_stat) mat_merged(parts(ipart,1):parts(ipart,2),:)

@@ -16,7 +16,7 @@ contains
         real    :: fsc
         nyq = size(corrs)
         allocate( ssnr(nyq),stat=alloc_stat)
-        if(alloc_stat /= 0) allocchk("in simple_estimate_ssnr::fsc2ssnr ssnr ")
+        allocchk("in simple_estimate_ssnr::fsc2ssnr ssnr ")
         do k=1,nyq
             fsc = min(abs(corrs(k)),0.999)
             ssnr(k) = (2.*fsc)/(1.-fsc)
@@ -30,7 +30,7 @@ contains
         integer :: nyq
         nyq = size(corrs)
         allocate( filt(nyq),stat=alloc_stat)
-        if(alloc_stat /= 0) allocchk("in simple_estimate_ssnr::fsc2optlp filt ")
+        allocchk("in simple_estimate_ssnr::fsc2optlp filt ")
         filt = 0.
         where( corrs > 0. )     filt = sqrt( 2. * corrs / (corrs + 1.) )
         where( filt  > 0.9999 ) filt = 0.99999
@@ -43,7 +43,7 @@ contains
         integer :: nyq, k
         nyq = size(ssnr)
         allocate( corrs(nyq),stat=alloc_stat)
-        if(alloc_stat /= 0) allocchk("in simple_estimate_ssnr::ssnr2fsc corrs ")
+        allocchk("in simple_estimate_ssnr::ssnr2fsc corrs ")
         do k=1,nyq
             corrs(k) = ssnr(k)/(ssnr(k)+1.)
         end do
@@ -56,7 +56,7 @@ contains
         integer :: nyq, k
         nyq = size(ssnr)
         allocate( w(nyq),stat=alloc_stat)
-        if(alloc_stat /= 0) allocchk("in simple_estimate_ssnr::ssnr2optlp w ")
+        allocchk("in simple_estimate_ssnr::ssnr2optlp w ")
         do k=1,nyq
             w(k) = ssnr(k)/(ssnr(k)+1.)
         end do
@@ -74,7 +74,7 @@ contains
         integer :: find, sz
         sz = img%get_filtsz()
         allocate(filter(sz),stat=alloc_stat)
-        if(alloc_stat /= 0) allocchk("simple_estimate_ssnr::acc_dose2filter ")
+        allocchk("simple_estimate_ssnr::acc_dose2filter ")
         do find=1,sz
             filter(find) = dose_weight(acc_dose, img%get_spat_freq(find), kV)
         end do
@@ -115,7 +115,7 @@ contains
         filtsz_orig   = size(filt_orig)
         filtsz_resamp = size(res_new)
         allocate(filt_resamp(filtsz_resamp),stat=alloc_stat)
-        if(alloc_stat /= 0) allocchk("simple_estimate_ssnr::resample_filter ")
+        allocchk("simple_estimate_ssnr::resample_filter ")
         do k=1,filtsz_resamp
             call find(res_orig, filtsz_orig, res_new(k), ind, dist)
             filt_resamp(k) = filt_orig(ind)

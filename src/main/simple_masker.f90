@@ -54,6 +54,7 @@ contains
         write(*,'(A,F7.1,A)') '>>> AUTOMASK MOLECULAR WEIGHT:   ', self%mw,      ' kDa'
         was_ft = vol_inout%is_ft()
         if( vol_inout%is_ft() )call vol_inout%bwd_ft
+        call self%zero_background(self%msk)
         call self%copy(vol_inout)
         ! binarize volume
         call self%bin_vol_thres

@@ -39,7 +39,7 @@ contains
                 stop 'unsupported ndims for in-plane simplex search; simple_simplex_pftcc_opt :: new'
         end select
         allocate(self%p(spec%ndim+1,spec%ndim), self%y(spec%ndim+1), self%pb(spec%ndim), stat=alloc_stat)
-        if(alloc_stat /= 0) allocchk("In:simple_simplex_pftcc_opt::new simplex_opt_c")
+        allocchk("In:simple_simplex_pftcc_opt::new simplex_opt_c")
         ! initialize best cost to huge number
         self%yb = huge(x)
         self%exists = .true. ! indicates existence

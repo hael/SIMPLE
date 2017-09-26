@@ -25,7 +25,7 @@ contains
     !> for masking images and volumes
     subroutine exec_mask( self, cline )
         use simple_image,       only: image
-        use simple_procimgfile, only: mask_imgfile
+        use simple_procimgfile, only: mask_imgfile, taper_edges_imgfile
         class(mask_commander), intent(inout) :: self
         class(cmdline),        intent(inout) :: cline
         type(build)                :: b
@@ -39,7 +39,7 @@ contains
         if( cline%defined('stk') .and. cline%defined('vol1') )stop 'Cannot operate on images AND volume at once'
         if( p%automsk.eq.'yes' .and..not.cline%defined('mw')  )stop 'Missing mw argument for automasking'
         if( p%msktype.ne.'soft' .and. p%msktype.ne.'hard' .and. p%msktype.ne.'cavg' )stop 'Invalid mask type'
-        call b%vol%new([p%box,p%box,p%box], p%smpd) ! reallocate vol (boxmatch issue)
+        call b%vol%new([p%box, p%box, p%box], p%smpd) ! reallocate vol (boxmatch issue)
         if( cline%defined('stk') )then
             ! 2D
             if( p%automsk.eq.'yes' )then
@@ -58,6 +58,8 @@ contains
                 else
                     call mask_imgfile(p%stk, p%outstk, p%msk, p%smpd, which=p%msktype)
                 endif
+            else if( p%taper_edges.eq.'yes' )then
+                call taper_edges_imgfile(p%stk, p%outstk, p%smpd)
             else
                 stop 'Nothing to do!'
             endif

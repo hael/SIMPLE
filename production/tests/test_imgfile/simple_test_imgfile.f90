@@ -2,7 +2,7 @@ program simple_test_imgfile
 #include "simple_lib.f08"
 use simple_image,   only: image
 use simple_imgfile, only: imgfile
-use simple_imghead, only: imghead, SpiImgHead, test_imghead
+use simple_imghead
 integer       :: ldim(3), i, j, cnt
 real          :: smpd=2., corr, corrs(20)
 type(image)   :: img, img_2
@@ -21,7 +21,6 @@ do i=1,5
     if( ft ) call img%fwd_ft
     call img%write('squares_spider.spi',i)
     call img%write('squares_mrc.mrc',i)
-end do
 end do
 ! create a cube
 ldim = [120,120,120]

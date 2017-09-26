@@ -79,7 +79,7 @@ contains
         allocate( self%labels(self%nptcls), self%centers(self%ncls), self%maxdists(self%ncls),&
         self%avgdists(self%ncls), self%sepmat(self%ncls,self%ncls), self%mindists(self%ncls,self%ncls),&
         self%avgdists_cen(self%ncls), self%maxdists_cen(self%ncls), stat=alloc_stat )
-        if(alloc_stat /= 0) allocchk( 'In: simple_cluster_valid::new')
+        allocchk( 'In: simple_cluster_valid::new')
         ! fill-up labels
         do iptcl=1,self%nptcls
             self%labels(iptcl) = nint(o%get(iptcl, which))
@@ -129,7 +129,7 @@ contains
         integer, allocatable :: arr(:)
         integer :: cnt, iptcl
         allocate( arr(pop), stat=alloc_stat )
-        if(alloc_stat /= 0) allocchk( 'In: simple_cluster_valid::get_clsarr')
+        allocchk( 'In: simple_cluster_valid::get_clsarr')
         cnt = 0
         do iptcl=1,self%nptcls
             if( self%labels(iptcl) == class )then

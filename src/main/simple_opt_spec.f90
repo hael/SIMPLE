@@ -140,14 +140,14 @@ contains
         if(present(limits))      call self%set_limits(limits)
         if(present(limits_init)) call self%set_limits_init(limits_init)
         allocate( self%cyclic(self%ndim), stat=alloc_stat )
-        if(alloc_stat /= 0) allocchk('In: specify; simple_opt_spec, cyclic')
+        allocchk('In: specify; simple_opt_spec, cyclic')
         self%cyclic = .false.
         if( present(cyclic) )then
             self%cyclic = cyclic
         endif
         if(present(stepsz))then
             allocate( self%stepsz(ndim), stat=alloc_stat )
-            if(alloc_stat /= 0) allocchk('In: specify; simple_opt_spec, stepsz')
+            allocchk('In: specify; simple_opt_spec, stepsz')
             self%stepsz = stepsz
         endif
         if(present(verbose_arg)) self%verbose = verbose_arg
@@ -158,17 +158,17 @@ contains
         ! allocate
         if( self%npeaks > 0 )then
             allocate( self%peaks(self%npeaks,self%ndim+1), source=1., stat=alloc_stat )
-            if(alloc_stat /= 0) allocchk('In: specify; simple_opt_spec, peaks')
+            allocchk('In: specify; simple_opt_spec, peaks')
         endif
         select case(str_opt)
             case('linmin')
                 allocate( self%x(self%ndim), self%xi(self%ndim), self%xt(self%ndim), stat=alloc_stat )
-                if(alloc_stat /= 0) allocchk('In: specify; simple_opt_spec, linmin')
+                allocchk('In: specify; simple_opt_spec, linmin')
                 self%xi = 0.
                 self%xt = 0.
             case DEFAULT
                 allocate( self%x(self%ndim), stat=alloc_stat )
-                if(alloc_stat /= 0) allocchk('In: specify; simple_opt_spec, DEFAULT')
+                allocchk('In: specify; simple_opt_spec, DEFAULT')
         end select
         self%x  = 0.
         self%exists = .true.
@@ -197,7 +197,7 @@ contains
         end do
         if( allocated(self%limits) ) deallocate(self%limits)
         allocate( self%limits(self%ndim,2), source=lims, stat=alloc_stat )
-        if(alloc_stat /= 0) allocchk('In: specify; simple_opt_spec, limits')
+        allocchk('In: specify; simple_opt_spec, limits')
     end subroutine set_limits
 
     !>  \brief  sets the limits for initialisation (randomized bounds)

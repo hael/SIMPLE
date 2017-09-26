@@ -179,6 +179,7 @@ contains
         if( cline%defined('mskfile') )then
             if( file_exists(p%mskfile) )then
                 ldim = b%vol%get_ldim()
+                call b%vol%zero_background(p%msk)
                 call b%mskvol%new(ldim, p%smpd)
                 call b%mskvol%read(p%mskfile)
                 call b%vol%mul(b%mskvol)
@@ -198,6 +199,7 @@ contains
             call vol_copy%bwd_ft
             call b%mskvol%automask3D(p, vol_copy)
             call b%mskvol%write('automask'//p%ext)
+            call b%vol%zero_background(p%msk)
             call b%vol%mul(b%mskvol)
         else
             call b%vol%mask(p%msk, 'soft')
@@ -446,7 +448,7 @@ contains
             npairs = p%top-p%fromp+1
             DebugPrint 'allocating this number of similarities: ', npairs
             allocate(corrs(p%fromp:p%top), pairs(p%fromp:p%top,2), stat=alloc_stat)
-            if(alloc_stat /= 0) allocchk('In: simple_volume_smat, 1')
+            allocchk('In: simple_volume_smat, 1')
             ! read the pairs
             allocate(fname, source='pairs_part'//int2str_pad(p%part,p%numlen)//'.bin')
             if( .not. file_exists(fname) ) stop 'I/O error; simple_volume_smat'
@@ -475,7 +477,7 @@ contains
             DebugPrint   'did set this number of similarities: ', cnt
             ! write the similarities
             allocate(fname, source='similarities_part'//int2str_pad(p%part,p%numlen)//'.bin',stat=alloc_stat)
-            if(alloc_stat /= 0) allocchk( 'volops; volume smat ')
+            allocchk( 'volops; volume smat ')
             call fopen(funit, status='REPLACE', action='WRITE', &
                  file=fname, access='STREAM', iostat=io_stat)
             call fileio_errmsg('volops; volume smat 2  opening ', io_stat)
@@ -488,7 +490,7 @@ contains
         else
             ! generate similarity matrix
             allocate(corrmat(nvols,nvols), corrs_avg(nvols), stat=alloc_stat)
-            if(alloc_stat /= 0) allocchk('In: simple_volume_smat, 2')
+            allocchk('In: simple_volume_smat, 2')
             corrmat = -1.
             forall(i=1:nvols) corrmat(i,i) = 1.0
             cnt = 0

@@ -168,7 +168,7 @@ contains
             self%state_exists = self%a_ptr%states_exist(self%nstates)
         else
             allocate(self%state_exists(self%nstates), stat=alloc_stat)
-            if(alloc_stat /= 0) allocchk('In: new; simple_prime3D_srch, 1')
+            allocchk('In: new; simple_prime3D_srch, 1')
             self%state_exists = .true.
         endif
         ! multiple states
@@ -1349,7 +1349,7 @@ contains
         class(prime3D_srch), intent(inout) :: self
         integer,allocatable :: inds(:)
         allocate( inds(size(self%srch_order)), stat=alloc_stat )
-        if(alloc_stat /= 0) allocchk( 'simple_prime3D_srch::get_srch_order')
+        allocchk( 'simple_prime3D_srch::get_srch_order')
         inds(:) = self%srch_order(:)
     end function get_srch_order
 
@@ -1479,7 +1479,7 @@ contains
     subroutine online_allocate( self )
         class(prime3D_srch), intent(inout) :: self
         allocate(self%proj_space_inds(self%nrefs), stat=alloc_stat)
-        if(alloc_stat /= 0) allocchk('In: prime3D_srch_allocate; simple_prime3D_srch')
+        allocchk('In: prime3D_srch_allocate; simple_prime3D_srch')
         self%proj_space_inds = 0
     end subroutine online_allocate
 

@@ -1,7 +1,6 @@
 ! command line parser
 module simple_cmdline
 #include "simple_lib.f08"
-
 use simple_cmd_dict ! use all in there
 implicit none
 
@@ -48,7 +47,7 @@ contains
 
     !> \brief for parsing the command line arguments passed as key=val
     subroutine parse( self, keys_required, keys_optional )
-        use simple_args,         only: args
+        use simple_args,  only: args
         class(cmdline),             intent(inout) :: self
         character(len=*), optional, intent(in)    :: keys_required(:), keys_optional(:)
         character(len=STDLEN) :: arg
@@ -123,7 +122,7 @@ contains
                     stop
                 endif
                 if( index(arg(pos1+1:), '/') /= 0  )then
-                    ! directory or absolute path       
+                    ! directory or absolute path
                     self%cmds(i)%carg = adjustl(arg(pos1+1:))
                 else if( index(arg(pos1+1:), '.spi') /= 0 )then
                     ! SPIDER image file
@@ -271,7 +270,7 @@ contains
         character(len=STDLEN) :: str
         logical               :: vol_defined
         allocate( cmderr(self%ncheck), stat=alloc_stat )
-        if(alloc_stat /= 0) allocchk('check; simple_cmdline')
+        allocchk('check; simple_cmdline')
         cmderr = .false.
         do i=1,self%ncheck
            cmderr(i) = .not. self%defined(self%checker(i))

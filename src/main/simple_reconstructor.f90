@@ -141,12 +141,12 @@ contains
             allocate(self%cmat_exp( ldim_exp(1,1):ldim_exp(1,2),&
                 &ldim_exp(2,1):ldim_exp(2,2),&
                 &ldim_exp(3,1):ldim_exp(3,2)), stat=alloc_stat)
-            if(alloc_stat /= 0) allocchk("In: alloc_rho; simple_reconstructor cmat_exp")
+            allocchk("In: alloc_rho; simple_reconstructor cmat_exp")
   
             allocate(self%rho_exp( rho_exp_lims(1,1):rho_exp_lims(1,2),&
                 &rho_exp_lims(2,1):rho_exp_lims(2,2),&
                 &rho_exp_lims(3,1):rho_exp_lims(3,2)), stat=alloc_stat)
-            if(alloc_stat /= 0) allocchk("In: alloc_rho; simple_reconstructor rho_exp")
+            allocchk("In: alloc_rho; simple_reconstructor rho_exp")
             self%cmat_exp           = cmplx(0.,0.)
             self%rho_exp            = 0.
             self%cmat_exp_allocated = .true.
@@ -155,7 +155,7 @@ contains
         ! allocate(self%physmat( ldim_exp(1,1):ldim_exp(1,2),&
         !     &ldim_exp(2,1):ldim_exp(2,2),&
         !     &ldim_exp(3,1):ldim_exp(3,2),3), stat=alloc_stat)
-        ! if(alloc_stat /= 0) allocchk("In: alloc_rho; simple_reconstructor physmat")
+        ! allocchk("In: alloc_rho; simple_reconstructor physmat")
         !     ! ! parallel do collapse(3) default(shared) schedule(static)&
         !     ! ! private(h,k,m,logi,phys) proc_bind(close)
         !     do h = -dim, dim
@@ -383,13 +383,13 @@ contains
             Wprev_img  = W_img 
             ! W <- W * rho
             !$omp parallel do collapse(3) default(shared) schedule(static)&
-            !$omp private(h,k,m,logi,phys) proc_bind(close)
-            do h = lims(1,1),lims(1,2)
-                do k = lims(2,1),lims(2,2)
+            !$omp private(k,h,m,logi,phys) proc_bind(close)
+            do k = lims(2,1),lims(2,2)
+                do h = lims(1,1),lims(1,2)
                     do m = lims(3,1),lims(3,2)
                         logi  = [h, k, m]                      
                         phys  = W_img%comp_addr_phys(logi)
-                        call W_img%mul(logi, self%rho(phys(1),phys(2),phys(3)), phys_in=phys)
+                        call W_img%mul_cmat( self%rho(phys(1),phys(2),phys(3)), phys)
                     end do
                 end do
             end do
@@ -403,15 +403,16 @@ contains
             !$omp parallel do collapse(3) default(shared) schedule(static)&
             !$omp private(h,k,m,logi,phys,val,val_prev) proc_bind(close)&
             !$omp reduction(+:Wnorm)
-            do h = lims(1,1),lims(1,2)
-                do k = lims(2,1),lims(2,2)
+            
+            do k = lims(2,1),lims(2,2)
+                do h = lims(1,1),lims(1,2)
                     do m = lims(3,1),lims(3,2)
                         logi     = [h, k, m]
                         phys     = W_img%comp_addr_phys(logi)
                         val      = mycabs(W_img%get_fcomp(logi, phys))
                         val_prev = real(Wprev_img%get_fcomp(logi, phys))
                         val      = min(val_prev/val, 1.e20)
-                        call W_img%set_fcomp(logi, phys, cmplx(val, 0.)) 
+                        call W_img%add2_cmat(phys, cmplx(val, 0.)) 
                         Wnorm    = Wnorm + val ! values are positive, no need to square (numerical stability)
                     end do
                 end do
@@ -424,13 +425,13 @@ contains
         ! Fourier comps / rho
         !$omp parallel do collapse(3) default(shared) schedule(static)&
         !$omp private(h,k,m,logi,phys,invrho) proc_bind(close)
-        do h = lims(1,1),lims(1,2)
-            do k = lims(2,1),lims(2,2)
+        do k = lims(2,1),lims(2,2)
+            do h = lims(1,1),lims(1,2)
                 do m = lims(3,1),lims(3,2)
                     logi   = [h, k, m]
                     phys   = W_img%comp_addr_phys(logi)
                     invrho = real(W_img%get_fcomp(logi, phys))
-                    call self%mul(logi,invrho,phys_in=phys)
+                    call self%mul_cmat(invrho,phys)
                 end do
             end do
         end do
@@ -481,23 +482,43 @@ contains
         zero = cmplx(0.,0.)
         ! Fourier components & rho matrices compression
         ! Can't be threaded because of add_fcomp
-        do h = lims(1,1),lims(1,2)
+        !$omp parallel do collapse(3) private(k,h,m,phys,comp) schedule(static) default(shared) proc_bind(close)
+        
             do k = lims(2,1),lims(2,2)
-                if(any(self%cmat_exp(h,k,:).ne.zero))then
+                do h = lims(1,1),lims(1,2)
+                    ! if(any(self%cmat_exp(h,k,:).ne.zero))then
                     do m = lims(3,1),lims(3,2)
                         comp = self%cmat_exp(h,k,m)
                         if(comp .eq. zero)cycle
                         logi = [h, k, m]
                         phys = self%comp_addr_phys(logi)
-                        ! addition because FC and its Friedel mate must be summed
-                        ! as the expansion updates one or the other
-                        call self%add_fcomp(logi, phys, comp)
-                        self%rho(phys(1),phys(2),phys(3)) = &
-                            &self%rho(phys(1),phys(2),phys(3)) + self%rho_exp(h,k,m)
+                        ! ! addition because FC and its Friedel mate must be summed
+                        ! ! as the expansion updates one or the other
+                        !if (h < 0) then
+                        !          phys(1) = h + 1
+                        !          phys(2) = k + 1 + self%ldim_img(2) *  MERGE(1,0,-k  < 0)
+                        !          phys(3) = m + 1 + self%ldim_img(3) *  MERGE(1,0,-m  < 0)
+                        !                ! addition because FC and its Friedel mate must be summed
+                        !                ! as the expansion updates one or the other
+                        !  call self%add2_cmat(phys, conjg(comp))
+                        !  self%rho(phys(1),phys(2),phys(3)) = &
+                        !       &self%rho(phys(1),phys(2),phys(3)) + self%rho_exp(h,k,m)
+                        !       else
+                        !          phys(1) = -h + 1
+                        !          phys(2) = -k + 1 + self%ldim_img(2) *  MERGE(1,0,k  < 0)
+                        !          phys(3) = -m + 1 + self%ldim_img(3) *  MERGE(1,0,m  < 0)
+                        ! call self%add2_cmat(phys, comp)
+                        !  self%rho(phys(1),phys(2),phys(3)) = &
+                        !      &self%rho(phys(1),phys(2),phys(3)) + self%rho_exp(h,k,m)
+                        !      endif
+                         call self%add_fcomp(logi, phys, comp)
+                         self%rho(phys(1),phys(2),phys(3)) = &
+                             &self%rho(phys(1),phys(2),phys(3)) + self%rho_exp(h,k,m)
                     end do
-                endif
+                !endif
             end do
         end do
+        !$omp end parallel do
     end subroutine compress_exp
 
     ! SUMMATION
@@ -622,11 +643,11 @@ contains
         class(reconstructor), intent(inout) :: self !< this instance
         if(allocated(self%rho_exp))then
             deallocate(self%rho_exp,stat=alloc_stat)
-            if(alloc_stat /= 0) allocchk(" simple_reconstructor:: dealloc_exp; rho_exp ;")
+            allocchk(" simple_reconstructor:: dealloc_exp; rho_exp ;")
         endif
         if(allocated(self%cmat_exp))then
            deallocate(self%cmat_exp,stat=alloc_stat)
-            if(alloc_stat /= 0) allocchk(" simple_reconstructor:: dealloc_exp; cmat_exp ;")
+            allocchk(" simple_reconstructor:: dealloc_exp; cmat_exp ;")
         endif
 
         self%rho_exp_allocated  = .false.
@@ -638,7 +659,7 @@ contains
         class(reconstructor), intent(inout) :: self !< this instance
         if(allocated(self%physmat))then
             deallocate(self%physmat,stat=alloc_stat)
-            if(alloc_stat /= 0) allocchk(" simple_reconstructor:: dealloc_exp; physmat ;")
+            allocchk(" simple_reconstructor:: dealloc_exp; physmat ;")
         endif
         call self%dealloc_exp
         if( self%rho_allocated )then

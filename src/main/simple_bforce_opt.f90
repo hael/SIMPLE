@@ -32,7 +32,7 @@ contains
         real                             :: x
         call self%kill
         allocate(self%pb(spec%ndim), self%pc(spec%ndim), stat=alloc_stat)
-        if(alloc_stat /= 0) allocchk("In: new_bforce_opt")
+        allocchk("In: new_bforce_opt")
         self%pb = spec%limits(:,1)
         self%pc = spec%limits(:,1)
         if( all(spec%stepsz == 0.) ) stop 'step size (stepsz) not set in&

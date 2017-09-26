@@ -128,13 +128,13 @@ contains
         call img%new(ldim,1.)
         D = img%get_npix(mskrad)
         allocate(pcavec(D), stat=alloc_stat)
-        if(alloc_stat/=0) allocchk('make_pattern_stack; simple_procimgfile, 1')
+        allocchk('make_pattern_stack; simple_procimgfile, 1')
         pcavec = 0.
         inquire(iolength=recsz) pcavec
         deallocate(pcavec)
         if( present(avg) )then
             allocate(avg(D), stat=alloc_stat)
-            if(alloc_stat /= 0) allocchk('make_pattern_stack; simple_procimgfile, 2')
+            allocchk('make_pattern_stack; simple_procimgfile, 2')
             avg = 0.
         endif
         ! extract patterns and write to file
@@ -177,7 +177,7 @@ contains
         if( present(avg) )then
             avg = avg/real(n)
             allocate(pcavec(D), stat=alloc_stat)
-            if(alloc_stat /= 0) allocchk('make_pattern_stack; simple_procimgfile, 3')
+            allocchk('make_pattern_stack; simple_procimgfile, 3')
             do i=1,n
                 read(fnum,rec=i) pcavec
                 pcavec = pcavec-avg
@@ -1021,6 +1021,30 @@ contains
         end do
         call img%kill
     end subroutine mask_imgfile
+
+    !>  \brief  is for tapering edges of all images in stack
+    !! \param fname2mask  output filename
+    !! \param fname  input filename
+    !! \param smpd sampling distance
+    subroutine taper_edges_imgfile( fname2mask, fname, smpd)
+        character(len=*),           intent(in) :: fname2mask, fname
+        real,                       intent(in) :: smpd
+        type(image)           :: img
+        integer               :: n, i, ldim(3)
+        call find_ldim_nptcls(fname2mask, ldim, n)
+        ldim(3) = 1
+        call raise_exception_imgfile( n, ldim, 'taper_edges_imgfile' )
+        ! do the work
+        call img%new(ldim,smpd)
+        write(*,'(a)') '>>> TAPERING EDGES OF IMAGES'
+        do i=1,n
+            call progress(i,n)
+            call img%read(fname2mask, i)
+            call img%taper_edges
+            call img%write(fname, i)
+        end do
+        call img%kill
+    end subroutine taper_edges_imgfile
 
     !>  \brief  is for binarizing all images in the stack
     !! \param fname2process  output filename

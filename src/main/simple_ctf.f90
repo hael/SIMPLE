@@ -227,7 +227,7 @@ contains
         call self%init(dfx, dfx, 0.)
         ! allocate spectrum
         allocate( spec(kfromto(1):kfromto(2)), stat=alloc_stat )
-        if(alloc_stat /= 0) allocchk('In: ctf2spec; simple_ctf')
+        allocchk('In: ctf2spec; simple_ctf')
         ! do the work
         do k=kfromto(1),kfromto(2) ! loop over resolution range
             kinv = real(k)/real(box)

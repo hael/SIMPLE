@@ -213,7 +213,7 @@ contains
         call self%kill
         self%n = n
         allocate( self%o(self%n), stat=alloc_stat )
-        if(alloc_stat /= 0) allocchk('new; simple_oris')
+        allocchk('new; simple_oris')
         do i=1,n
             call self%o(i)%new
         end do
@@ -227,7 +227,7 @@ contains
         call self%kill
         self%n = n
         allocate( self%o(self%n), stat=alloc_stat )
-        if(alloc_stat /= 0) allocchk('new_clean; simple_oris')
+        allocchk('new_clean; simple_oris')
         do i=1,n
             call self%o(i)%new_ori_clean
         end do
@@ -325,7 +325,7 @@ contains
         ffromto(2) = self%n
         if( present(fromto) ) ffromto = fromto
         allocate( arr(ffromto(1):ffromto(2)), stat=alloc_stat)
-        if(alloc_stat /= 0) allocchk('get_all; simple_oris')
+        allocchk('get_all; simple_oris')
         do i=ffromto(1),ffromto(2)
             arr(i) = self%o(i)%get(key)
         enddo
@@ -339,7 +339,7 @@ contains
         integer :: i
         if( allocated(vals) ) deallocate(vals)
         allocate( vals(self%n), stat=alloc_stat)
-        if(alloc_stat /= 0) allocchk('getter_all_1; simple_oris')
+        allocchk('getter_all_1; simple_oris')
         do i=1,self%n
             call self%o(i)%getter(key, vals(i))
         enddo
@@ -354,7 +354,7 @@ contains
         character(len=:), allocatable :: tmp
         if( allocated(vals) ) deallocate(vals)
         allocate( vals(self%n), stat=alloc_stat)
-        if(alloc_stat /= 0) allocchk('getter_all_2; simple_oris')
+        allocchk('getter_all_2; simple_oris')
         do i=1,self%n
             call self%o(i)%getter(key, tmp)
             vals(i) = tmp
@@ -453,7 +453,7 @@ contains
         endif
         n = self%get_n(label)
         allocate(pops(n),stat=alloc_stat)
-        if(alloc_stat /= 0) allocchk('In: get_pops, module: simple_oris')
+        allocchk('In: get_pops, module: simple_oris')
         pops = 0.0
         do i=1,self%n
             mystate = nint(self%o(i)%get('state'))
@@ -515,7 +515,7 @@ contains
         ptcls_in_which = self%get_pinds(which, 'state')
         n = size(ptcls_in_which)
         allocate(states(n), stat=alloc_stat)
-        if(alloc_stat /= 0) allocchk("simple_oris::split_state")
+        allocchk("simple_oris::split_state")
         rt = ran_tabu(n)
         call rt%balanced(2, states)
         do iptcl=1,n
@@ -544,7 +544,7 @@ contains
         ptcls_in_which = self%get_pinds(which, 'class')
         n = size(ptcls_in_which)
         allocate(members(n), stat=alloc_stat)
-        if(alloc_stat /= 0) allocchk("simple_oris::split_class")
+        allocchk("simple_oris::split_class")
         rt = ran_tabu(n)
         call rt%balanced(2, members)
         do iptcl=1,n
@@ -568,7 +568,7 @@ contains
         if( ncls_target <= ncls ) stop 'Number of target classes cannot be <= original number'
         ! calculate class populations
         allocate(pops(ncls_target),stat=alloc_stat)
-        if(alloc_stat /= 0) allocchk('In: expand_classes, module: simple_oris')
+        allocchk('In: expand_classes, module: simple_oris')
         pops = 0
         do icls=1,ncls
             pops(icls) = self%get_pop(icls, 'class')
@@ -601,7 +601,7 @@ contains
         if( present(fromtocls) )then
             if(allocated(fromtocls))deallocate(fromtocls)
             allocate(fromtoall(ncls,2), source=0, stat=alloc_stat)
-            if(alloc_stat /= 0) allocchk("simple_oris:: fill_empty_classes fromtoall")
+            allocchk("simple_oris:: fill_empty_classes fromtoall")
         endif
         do icls = 1, ncls
             deallocate(pops, stat=alloc_stat)
@@ -615,7 +615,7 @@ contains
             inds2split = self%get_pinds(cls2split(1), 'class', consider_w=.false.)
             rt = ran_tabu(maxpop)
             allocate(membership(maxpop), stat=alloc_stat)
-            if(alloc_stat /= 0) allocchk("simple_oris:: fill_empty_classes membership")
+            allocchk("simple_oris:: fill_empty_classes membership")
             call rt%balanced(2, membership)
             do i=1,maxpop
                 if(membership(i) == 2)cycle
@@ -634,7 +634,7 @@ contains
             n_incl = count(fromtoall(:,1)>0)
             if(n_incl>0)then
                 allocate(fromtocls(n_incl,2), stat=alloc_stat)
-                if(alloc_stat /= 0) allocchk("simple_oris:: fill_empty_classes fromtocls")
+                allocchk("simple_oris:: fill_empty_classes fromtocls")
                 cnt = 0
                 do icls = 1,ncls
                     if( fromtoall(icls,1) > 0 )then
@@ -653,7 +653,7 @@ contains
         integer , allocatable :: clspops(:)
         ncls = self%get_n('class')
         allocate(clspops(ncls),stat=alloc_stat)
-        if(alloc_stat /= 0) allocchk('In: remap_classes, module: simple_oris')
+        allocchk('In: remap_classes, module: simple_oris')
         do icls=1,ncls
             clspops(icls) = self%get_pop(icls, 'class')
         end do
@@ -760,7 +760,7 @@ contains
         pop = self%get_pop(ind, label, consider_w ) 
         if( pop > 0 )then
             allocate( indices(pop), stat=alloc_stat )
-            if(alloc_stat /= 0) allocchk('get_pinds; simple_oris')
+            allocchk('get_pinds; simple_oris')
             cnt = 0
             do i=1,self%n
                 mystate = nint(self%o(i)%get('state'))
@@ -827,7 +827,7 @@ contains
         endif
         if( pop > 0 )then
             allocate( vals(pop), stat=alloc_stat )
-            if(alloc_stat /= 0) allocchk('get_arr; simple_oris')
+            allocchk('get_arr; simple_oris')
             cnt = 0
             do i=1,self%n
                 val = self%get(i, which)
@@ -1023,7 +1023,7 @@ contains
         character(len=:),      allocatable :: str
         integer :: i
         allocate(table(self%n), stat=alloc_stat)
-        if(alloc_stat /= 0) allocchk('In: extract_table, module: simple_oris')
+        allocchk('In: extract_table, module: simple_oris')
         do i=1,self%n
             call self%getter(i, which, str)
             table(i) = str
@@ -1065,7 +1065,7 @@ contains
                 if( n < 3 )return ! because one is excluded in the next step & moment needs at least 2 objs
                 call os%new( n )
                 allocate( ws(n), dists(n-1), stat=alloc_stat )
-                if(alloc_stat /= 0) allocchk( 'ang_sdev_state; simple_oris')
+                allocchk( 'ang_sdev_state; simple_oris')
                 ws    = 0.
                 dists = 0.
                 ! get best ori
@@ -1104,7 +1104,7 @@ contains
             if( .not. self%isthere('w') ) stop 'ERROR, oris :: included with optional consider_w assumes w set'
         endif
         allocate(incl(self%n), stat=alloc_stat)
-        if(alloc_stat /= 0) allocchk('In: included, module: simple_oris')
+        allocchk('In: included, module: simple_oris')
         incl = .false.
         do i=1,self%n
             istate = nint(self%o(i)%get('state'))
@@ -1635,7 +1635,7 @@ contains
         integer :: i, state
         if( nstates > 1 )then
             allocate( states(self%n), stat=alloc_stat )
-            if(alloc_stat /= 0) allocchk("simple_oris::rnd_states")
+            allocchk("simple_oris::rnd_states")
             rt = ran_tabu(self%n)
             call rt%balanced(nstates, states)
             do i=1,self%n
@@ -1666,7 +1666,7 @@ contains
         integer :: i
         if( ncls > 1 )then
             allocate(classes(self%n), stat=alloc_stat)
-            if(alloc_stat /= 0) allocchk("simple_oris::rnd_classes")
+            allocchk("simple_oris::rnd_classes")
             rt = ran_tabu(self%n)
             call rt%balanced(ncls, classes)
             do i=1,self%n
@@ -1799,7 +1799,7 @@ contains
                 sz = count(l_mask)
                 if( sz > 0 )then
                     allocate(eopart(sz), stat=alloc_stat)
-                    if(alloc_stat /= 0) allocchk('eopart; simple_oris :: partition_eo')
+                    allocchk('eopart; simple_oris :: partition_eo')
                     if( sz == 1 )then
                         eopart(1) = irnd_uni(2)
                     else
@@ -2041,7 +2041,7 @@ contains
             endif
         else
             allocate( vals(self%n), stat=alloc_stat )
-            if(alloc_stat /= 0) allocchk('In: median_1, module: simple_oris')
+            allocchk('In: median_1, module: simple_oris')
             vals = 0.
             do i=1,self%n
                 vals(i) = self%o(i)%get(which)
@@ -2075,7 +2075,7 @@ contains
         real, allocatable :: vals(:)
         integer           :: i, cnt, mystate
         allocate( vals(self%n), stat=alloc_stat )
-        if(alloc_stat /= 0) allocchk('In: minmax, module: simple_oris')
+        allocchk('In: minmax, module: simple_oris')
         vals = 0.
         ! fish values
         cnt = 0
@@ -2216,7 +2216,7 @@ contains
         integer, allocatable :: inds(:)
         integer :: i
         allocate( inds(self%n), stat=alloc_stat )
-        if(alloc_stat /= 0) allocchk('order; simple_oris')
+        allocchk('order; simple_oris')
         specscores = self%get_all('specscore')
         inds = (/(i,i=1,self%n)/)
         call hpsort( self%n, specscores, inds )
@@ -2230,7 +2230,7 @@ contains
         integer, allocatable :: inds(:)
         integer :: i
         allocate( inds(self%n), stat=alloc_stat )
-        if(alloc_stat /= 0) allocchk('order; simple_oris')
+        allocchk('order; simple_oris')
         corrs = self%get_all('corr')
         inds = (/(i,i=1,self%n)/)
         call hpsort( self%n, corrs, inds )
@@ -2245,7 +2245,7 @@ contains
         integer :: i
         if(ncls <= 0) stop 'invalid number of classes; simple_oris%order_cls'
         allocate(inds(ncls), stat=alloc_stat)
-        if(alloc_stat /= 0) allocchk('order_cls; simple_oris')
+        allocchk('order_cls; simple_oris')
         classpops = 0.0
         ! calculate class populations
         do i=1,ncls
@@ -2298,7 +2298,7 @@ contains
         if( .not. self%isthere('class') ) stop 'class label must be set; oris :: balance_1'
         n = self%get_n('class')
         allocate(included(self%n),stat=alloc_stat)
-        if(alloc_stat /= 0) allocchk('In: balance, module: simple_oris')
+        allocchk('In: balance, module: simple_oris')
         included = .false.
         do i=1,n ! n is number of classes
             ! get class population
@@ -2366,7 +2366,7 @@ contains
         n = self%get_n('proj')
         ptcl_mask = self%included(consider_w=.true.)
         allocate(clustering(self%n), clustszs(nspace_bal), included(self%n), stat=alloc_stat)
-        if(alloc_stat /= 0) allocchk('In oris :: balance')
+        allocchk('In oris :: balance')
         clustering = 0
         clustszs   = 0
         included   = .false.
@@ -2582,11 +2582,11 @@ contains
             if( size(dists).ne.self%n )then
                 deallocate(dists)
                 allocate(dists(self%n),stat=alloc_stat)
-                if(alloc_stat /= 0) allocchk('In: simple_oris::calc_euldists dists')
+                allocchk('In: simple_oris::calc_euldists dists')
             endif
         else
             allocate(dists(self%n),stat=alloc_stat)
-            if(alloc_stat /= 0) allocchk('In: simple_oris::calc_euldists dists')
+            allocchk('In: simple_oris::calc_euldists dists')
         endif
         do i=1,self%n
             dists(i) = self%o(i).euldist.o_in
@@ -2604,7 +2604,7 @@ contains
         call suboris%new(nsub)
         call suboris%spiral
         allocate( subspace_projs(nsub) ,stat=alloc_stat)
-        if(alloc_stat /= 0) allocchk('In: create_proj_subspace_1, module: simple_oris')
+        allocchk('In: create_proj_subspace_1, module: simple_oris')
         do isub=1,nsub
             o = suboris%get_ori(isub)
             subspace_projs(isub) = self%find_closest_proj(o)
@@ -2624,7 +2624,7 @@ contains
         call suboris%new(nsub)
         call suboris%spiral(nsym, eullims)
         allocate( subspace_projs(nsub) , stat=alloc_stat)
-        if(alloc_stat /= 0) allocchk('In: create_proj_subspace_2, module: simple_oris')
+        allocchk('In: create_proj_subspace_2, module: simple_oris')
         do isub=1,nsub
             o = suboris%get_ori(isub)
             subspace_projs(isub) = self%find_closest_proj(o)
@@ -2662,7 +2662,7 @@ contains
         if( k >= self%n ) stop 'need to identify fewer nearest_neighbors; simple_oris'
         if( allocated(nnmat) ) deallocate(nnmat)
         allocate( nnmat(self%n,k), stat=alloc_stat )
-        if(alloc_stat /= 0) allocchk("In: nearest_neighbors; simple_oris")
+        allocchk("In: nearest_neighbors; simple_oris")
         do i=1,self%n
             o = self%get_ori(i)
             do j=1,self%n
@@ -2878,7 +2878,7 @@ contains
         ! create the first diverse pair
         call o1%oripair_diverse(o2)
         allocate(o_is_set(self%n), stat=alloc_stat)
-        if(alloc_stat /= 0) allocchk('In: gen_diverse, module: simple_oris')
+        allocchk('In: gen_diverse, module: simple_oris')
         o_is_set = .false.
         call self%set_ori(1,o1)
         call self%set_ori(2,o2)
@@ -2952,14 +2952,14 @@ contains
             allocate(class_part_of_set(self%n), stat=alloc_stat)
             class_part_of_set = .true.
         endif
-        if(alloc_stat /= 0) allocchk('In: ori_generator, module: simple_oris part_of_set')
+        allocchk('In: ori_generator, module: simple_oris part_of_set')
         if( present(weights) )then
             allocate(class_weights(self%n), source=weights, stat=alloc_stat)
         else
             allocate(class_weights(self%n), stat=alloc_stat)
             class_weights = 1.0
         endif
-        if(alloc_stat /= 0) allocchk('In: ori_generator, module: simple_oris weights')
+        allocchk('In: ori_generator, module: simple_oris weights')
         ! set globals
         ops => self
         call o_glob%new
@@ -2997,7 +2997,7 @@ contains
         real, allocatable :: smat(:,:)
         integer :: i, j
         allocate( smat(self%n,self%n), stat=alloc_stat )
-        if(alloc_stat /= 0) allocchk("In: simple_oris :: gen_smat")
+        allocchk("In: simple_oris :: gen_smat")
         smat = 0.
         !$omp parallel do schedule(guided) default(shared) private(i,j) proc_bind(close)
         do i=1,self%n-1
@@ -3305,7 +3305,7 @@ contains
                 call self%o(i)%kill
             end do
             deallocate( self%o , stat=alloc_stat)
-            if(alloc_stat /= 0) allocchk('In: kill, module: simple_oris o')
+            allocchk('In: kill, module: simple_oris o')
             self%n = 0
         endif
     end subroutine kill

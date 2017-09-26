@@ -1,9 +1,7 @@
-! movie watcher for stream processing
-
-module simple_moviewatcher
+! particles watcher for stream processing
+module simple_stackwatcher
 #include "simple_lib.f08"
-
-use simple_params,        only: params
+use simple_params, only: params
 use simple_timer
 implicit none
 
@@ -15,15 +13,12 @@ type moviewatcher
     character(len=STDLEN), allocatable :: history(:)             !< history of movies detected
     character(len=STDLEN)              :: cwd            = ''    !< CWD
     character(len=STDLEN)              :: watch_dir      = ''    !< movies directory to watch
-    character(len=STDLEN)              :: target_dir     = ''    !< target directory
-    character(len=STDLEN)              :: ext            = ''    !< target directory
     integer                            :: n_history      = 0     !< history of movies detected
     integer                            :: report_time    = 600   !< time ellapsed prior to processing
     integer                            :: starttime      = 0     !< time of first watch
     integer                            :: ellapsedtime   = 0     !< time ellapsed between last and first watch
     integer                            :: lastreporttime = 0     !< time ellapsed between last and first watch
     integer                            :: n_watch        = 0     !< number of times the folder has been watched
-    logical                            :: dopick         = .false.
     logical                            :: doprint        = .false.
 contains
 
@@ -36,16 +31,16 @@ contains
     procedure          :: kill
 end type
 
-interface moviewatcher
+interface stackwatcher
     module procedure constructor
-end interface moviewatcher
+end interface stackwatcher
 
-character(len=STDLEN), parameter   :: FILETABNAME = 'movieftab_preproc_stream.txt'
+character(len=STDLEN), parameter   :: FILETABNAME = 'unidocs_stream.txt'
 integer,               parameter   :: FAIL_THRESH = 50
 integer,               parameter   :: FAIL_TIME   = 7200 ! 2 hours
 
 contains
-
+    
     !>  \brief  is a constructor
     function constructor( p, report_time, print )result( self )
         class(params),     intent(in) :: p
@@ -54,21 +49,14 @@ contains
         type(moviewatcher)            :: self
         character(len=STDLEN)         :: cwd
         call self%kill
-        if( .not. file_exists(trim(adjustl(p%dir_movies))) )then
-            print *, 'Directory does not exist: ', trim(adjustl(p%dir_movies))
-            stop
-        endif
-        if( .not. file_exists(trim(adjustl(p%dir_target))) )then
-            print *, 'Directory does not exist: ', trim(adjustl(p%dir_target))
+        if( .not. file_exists(trim(adjustl(p%dir_unidoc))) )then
+            print *, 'Directory does not exist: ', trim(adjustl(p%dir_unidoc))
             stop
         endif
         call simple_getcwd(cwd)
         self%cwd         = trim(cwd)
-        self%watch_dir   = trim(adjustl(p%dir_movies))
-        self%target_dir  = trim(adjustl(p%dir_target))
+        self%watch_dir   = trim(adjustl(p%dir_unidoc))
         self%report_time = report_time
-        self%dopick      = p%l_pick
-        self%ext         = trim(adjustl(p%ext))
         if( present(print) )then
             self%doprint = print
         else
@@ -78,18 +66,20 @@ contains
 
     !>  \brief  is the watching procedure
     subroutine watch( self, n_movies, movies )
-         use simple_timer
+#ifdef PGI
+        include 'lib3f.h'
+        procedure :: cast_time_char => ctime
+#endif
         class(moviewatcher),           intent(inout) :: self
         integer,                       intent(out)   :: n_movies
         character(len=*), allocatable, intent(out)   :: movies(:)
         character(len=STDLEN), allocatable :: farray(:)
         integer,               allocatable :: fileinfo(:)
-        logical,               allocatable :: is_new_movie(:)
+        logical,               allocatable :: is_new_doc(:)
         integer               :: tnow, last_accessed, last_modified, last_status_change ! in seconds
         integer               :: i, io_stat, n_lsfiles, cnt, fail_cnt
         character(len=STDLEN) :: fname, abs_fname
         logical               :: is_closed
-        integer(timer_int_kind) :: twatch
         ! init
         self%n_watch = self%n_watch + 1
         tnow = simple_gettime()
@@ -102,7 +92,7 @@ contains
         n_movies = 0
         fail_cnt = 0
         ! builds files array
-        call ls_mrcfiletab(self%watch_dir, trim(FILETABNAME))
+        call ls_filetab(trim(self%watch_dir//'/unidoc_'), '.txt', trim(FILETABNAME))
         call read_filetable( trim(FILETABNAME), farray )
         n_lsfiles = size(farray)
         if( n_lsfiles .eq. 0 )then
@@ -111,11 +101,11 @@ contains
             return
         endif
         ! identifies closed and untouched files
-        allocate(is_new_movie(n_lsfiles), source=.false.)
+        allocate(is_new_doc(n_lsfiles), source=.false.)
         do i = 1, n_lsfiles
             fname = trim(adjustl(farray(i)))
             if( self%is_past(fname) )then
-                is_new_movie(i) = .false.
+                is_new_doc(i) = .false.
             else
                 abs_fname = trim(self%cwd)//'/'//trim(adjustl(fname))
                 call simple_file_stat(abs_fname, io_stat, fileinfo, doprint=.false.)
@@ -128,7 +118,7 @@ contains
                     if(    (last_accessed      > self%report_time)&
                     &.and. (last_modified      > self%report_time)&
                     &.and. (last_status_change > self%report_time)&
-                    &.and. is_closed ) is_new_movie(i) = .true.                     
+                    &.and. is_closed ) is_new_doc(i) = .true.
                 else
                     ! some error occured
                     fail_cnt = fail_cnt + 1
@@ -139,19 +129,19 @@ contains
         enddo
         ! identifies already processed files for restart
         do i = 1, n_lsfiles
-            if( is_new_movie(i) )then
-                is_new_movie(i) = self%to_process( farray(i) )
-                if( is_new_movie(i) )write(*,'(A,A,A,A)')'>>> NEW MOVIE: ',&
+            if( is_new_doc(i) )then
+                is_new_doc(i) = self%to_process( farray(i) )
+                if( is_new_doc(i) )write(*,'(A,A,A,A)')'>>> NEW UNIDOC: ',&
                 &trim(adjustl(farray(i))), '; ', cast_time_char(tnow)
             endif
         enddo
         ! report
-        n_movies = count(is_new_movie)
+        n_movies = count(is_new_doc)
         if( n_movies > 0 )then
             allocate(movies(n_movies))
             cnt = 0
             do i = 1, n_lsfiles
-                if( .not.is_new_movie(i) )cycle
+                if( .not.is_new_doc(i) )cycle
                 cnt   = cnt + 1
                 fname = trim(adjustl(farray(i)))
                 call self%add2history( fname )
@@ -165,25 +155,12 @@ contains
     logical function to_process( self, fname )
         class(moviewatcher), intent(inout) :: self
         character(len=*),    intent(in)    :: fname
-        character(len=STDLEN) :: fname_here, fbody, ext, unblur_name, unidoc_name, picker_name
-        logical :: unblur_done, ctffind_done, picker_done
+        character(len=STDLEN) :: fname_here, fbody, ext
         fname_here = remove_abspath(trim(adjustl(fname)))
         ext        = trim(fname2ext(fname_here))
         fbody      = trim(get_fbody(trim(fname_here), trim(ext)))
-        ! unblur
-        unblur_name = trim(self%target_dir)//'/'//trim(adjustl(fbody))//'_thumb'//trim(self%ext)
-        unblur_done = file_exists(trim(unblur_name))
-        ! ctffind
-        unidoc_name  = trim(self%target_dir)//'/unidoc_output_'//trim(adjustl(fbody))//'.txt'
-        ctffind_done = file_exists(trim(unidoc_name))
-        if( self%dopick )then
-            ! picker
-            picker_name = trim(self%target_dir)//'/'//trim(adjustl(fbody))//'_intg.box'
-            picker_done = file_exists(picker_name)
-            to_process = .not. (unblur_done .and. ctffind_done .and. picker_done)
-        else
-            to_process = .not. (unblur_done .and. ctffind_done)
-        endif
+        ! to check wheteher extract stack is here
+        to_process = .true.
     end function to_process
 
     !>  \brief  is for adding to the history of already reported files
@@ -191,7 +168,7 @@ contains
         class(moviewatcher), intent(inout) :: self
         character(len=*),    intent(in)    :: fname
         character(len=STDLEN), allocatable :: tmp_farr(:)
-        integer :: n
+        integer :: n, alloc_stat
         if( .not.allocated(self%history) )then
             n = 0
             allocate(self%history(1), stat=alloc_stat)
@@ -232,8 +209,6 @@ contains
         class(moviewatcher), intent(inout) :: self
         self%cwd        = ''
         self%watch_dir  = ''
-        self%target_dir = ''
-        self%ext        = ''
         if(allocated(self%history))deallocate(self%history)
         self%report_time    = 0
         self%starttime      = 0
@@ -244,4 +219,4 @@ contains
         self%doprint        = .false.
     end subroutine kill
 
-end module simple_moviewatcher
+end module simple_stackwatcher

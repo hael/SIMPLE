@@ -125,7 +125,7 @@ contains
         allocate(self%name(n), self%chain(n), self%resname(n), self%xyz(n,3), self%mw(n),&
             self%occupancy(n), self%beta(n), self%num(n), self%Z(n), self%het(n), self%icode(n),&
             self%altloc(n), self%resnum(n), stat=alloc_stat)
-        if(alloc_stat /= 0) allocchk('new_instance :: simple_atoms')
+        allocchk('new_instance :: simple_atoms')
         self%name(:)    = '    '
         self%resname(:) = '   '
         self%chain(:)   = ' '

@@ -209,7 +209,7 @@ contains
         if( allocated(res) ) deallocate(res)
         allocate( frc(self%filtsz), res(self%filtsz),&
             &lplims(self%nprojs), order(self%nprojs), stat=alloc_stat )
-        if(alloc_stat /= 0)allocchk( 'estimate_res_2; simple_projection_frcs allocating frc, res, order and lplims' )
+        allocchk( 'estimate_res_2; simple_projection_frcs allocating frc, res, order and lplims' )
         sstate = 1
         if( present(state) ) sstate = state
         ! order FRCs according to low-pass limit (best first)

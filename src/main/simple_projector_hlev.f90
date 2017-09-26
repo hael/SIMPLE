@@ -38,7 +38,7 @@ contains
             n = o%get_noris()
         endif
         allocate( imgs(n), stat=alloc_stat )
-        if(alloc_stat /= 0) allocchk('projvol; simple_projector')
+        allocchk('projvol; simple_projector')
         call vol_pad%expand_cmat
         write(*,'(A)') '>>> GENERATES PROJECTIONS' 
         do i=1,n

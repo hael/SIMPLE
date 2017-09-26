@@ -6,7 +6,11 @@
 
 #if defined(allocchk)
 #else
-#define allocchk( X ) call alloc_errchk (X, alloc_stat, __FILENAME__, __LINE__)
+# if defined(INTEL)
+#  define allocchk( X ) !!
+# else
+#  define allocchk( X ) if(alloc_stat.ne.0)call alloc_errchk(X, alloc_stat, __FILENAME__, __LINE__)
+# endif
 #endif
     use, intrinsic :: iso_fortran_env, only: stderr=>ERROR_UNIT, stdout=>OUTPUT_UNIT, stdin=>INPUT_UNIT
     ! use ISO_C_BINDING
