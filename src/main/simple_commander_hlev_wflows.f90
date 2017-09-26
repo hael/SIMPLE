@@ -632,9 +632,10 @@ contains
         ! make master parameters
         p_master = params(cline, checkdistr=.false.)
         ! set learning rate
-        if( .not. cline%defined('eps') ) p_master%eps = 1.0 / real(2.0 * p_master%maxits)
+        if( .not. cline%defined('eps') ) p_master%eps = 5.0 / real(2.0 * p_master%maxits)
         ! prep recvol cline
         cline_recvol_distr = cline
+        call cline_recvol_distr%set('prg',    'recvol')
         call cline_recvol_distr%set('oritab', ORIS_MODIFIED)
         ! prepare oris
         call os%new(p_master%nptcls)
@@ -655,6 +656,7 @@ contains
             fsc2 = gen_fsc(S2, iter)
             ! stash previous best
             Sprev_best = Sbest
+            ! compare FSCs and set winner/loser pointers
             if( fsc1_ge_fsc2(fsc1,fsc2) )then
                 Sbest   =  S1
                 Swinner => S1
@@ -715,7 +717,7 @@ contains
                     stop 'does not exist in cwd; commander_hlev_wflows :: exec_cga_hres_sel'
                 endif
                 if( present(iter) )then
-                    call rename('RESOLUTION_STATE01', 'RESOLUTION_STATE01_ITER'//int2str_pad(iter,3))
+                    call del_file('RESOLUTION_STATE01')
                 endif
             end function gen_fsc
 

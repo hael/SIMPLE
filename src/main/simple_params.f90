@@ -296,7 +296,7 @@ type :: params
     real    :: e1=0.               !< 1st Euler(in degrees){0}
     real    :: e2=0.               !< 2nd Euler(in degrees){0}
     real    :: e3=0.               !< 3d Euler(in degrees){0}
-    real    :: eps=0.003
+    real    :: eps=0.003           !< learning rate{0.003}
     real    :: eullims(3,2)=0.
     real    :: exp_time=2.0        !< exposure time(in s)
     real    :: filwidth=0.         !< width of filament (in A)
