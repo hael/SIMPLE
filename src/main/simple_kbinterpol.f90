@@ -8,7 +8,7 @@ private
 
 type :: kbinterpol
    private
-#ifndef USETINY
+#if 0
    double precision   :: ps(7) = 0.d0
    double precision   :: qs(9) = 0.d0
    double precision   :: thresh = 0.d0
@@ -112,6 +112,7 @@ contains
     endif
   end function instr
 #if 0
+
   !>  \brief returns the modified Bessel function I0(x) for any real x
   function bessi0( self, x ) result( bess )
     class(kbinterpol), intent(in) :: self
@@ -129,7 +130,9 @@ contains
             &y*(self%qs(4)+y*(self%qs(5)+y*(self%qs(6)+y*(self%qs(7)+y*(self%qs(8)+y*self%qs(9)))))))),sp)
     endif
   end function bessi0
+
 #else
+
   !>  \brief returns the modified Bessel function I0(x) for any real x
   !! p.378 Handbook of Mathematical Functions, Abramowitz and Stegun
   elemental pure real(dp) function bessi0( x )
@@ -143,7 +146,6 @@ contains
        bessi0=1.0d0+&
               y*(3.5156229d0 + y*(3.0899424d0 + y*(1.2067492d0 +&
               y*(0.2659732d0 + y*(0.0360768d0 + y* 0.0045813d0)))))
-              
     else
        y=3.75d0/ax
        bessi0=( 0.39894228d0 + y*(  0.01328592d0 +&

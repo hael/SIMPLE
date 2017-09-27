@@ -44,6 +44,7 @@ type :: ftiter
     ! LOGICAL<->PHYSICAL ADDRESS CONVERTERS
     procedure :: comp_addr_phys
     procedure :: comp_addr_logi
+    procedure :: comp_addr_phys_orig
     ! TESTS
     procedure, private :: test_addr
 end type ftiter
@@ -280,19 +281,19 @@ contains
           integer,       intent(in) :: logi(3) !<  Logical address
           integer :: phys(3) !<  Physical address
           !integer ::  factor
-          if (logi(1) > 0) then
+          if (logi(1) .ge. 0) then
               phys(1) = logi(1) + 1
-              phys(2) = logi(2) + 1 + self%ldim(2) *  MERGE(1,0,logi(2)  < 0)
-              phys(3) = logi(3) + 1 + self%ldim(3) *  MERGE(1,0,logi(3)  < 0)
+              phys(2) = logi(2) + 1 + MERGE(self%ldim(2),0, logi(2) < 0)
+              phys(3) = logi(3) + 1 + MERGE(self%ldim(3),0, logi(3) < 0)
           else
               phys(1) = -logi(1) + 1
-              phys(2) = -logi(2) + 1 + self%ldim(2) *  MERGE(1,0,-logi(2)  < 0)
-              phys(3) = -logi(3) + 1 + self%ldim(3) *  MERGE(1,0,-logi(3)  < 0)
+              phys(2) = -logi(2) + 1 + MERGE(self%ldim(2),0, -logi(2) < 0)
+              phys(3) = -logi(3) + 1 + MERGE(self%ldim(3),0, -logi(3) < 0)
           endif
           ! if( logi(1) < 0 ) factor=-1
           ! phys(1) = factor*logi(1) + 1
-          ! phys(2) = factor*logi(2) + 1 + self%ldim(2) * MERGE(1,0,factor *logi(2)  < 0)
-          ! phys(3) = factor*logi(3) + 1 + self%ldim(3) * MERGE(1,0,factor *logi(3)  < 0)
+          ! phys(2) = factor*logi(2) + 1 + (self%ldim(2)) * MERGE(1,0,factor *logi(2)  < 0)
+          ! phys(3) = factor*logi(3) + 1 + (self%ldim(3)) * MERGE(1,0,factor *logi(3)  < 0)
       end function comp_addr_phys
 
     !> \brief Convert physical address to logical address. Complex image.
