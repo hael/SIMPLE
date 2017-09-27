@@ -18,15 +18,16 @@
 #define DEV_NULL "/dev/null"
 #endif
 
-#include "simple_timer.h"
+
 
 module simple_timer_profile_test
-   use simple_defs
+#include "simple_lib.f08"
    use simple_timer
    implicit none
    public:: exec_profiletest
+private
 #include "simple_local_flags.inc"
-   
+#include "simple_timer.h"   
 contains
 
     subroutine exec_profiletest(be_verbose)
@@ -35,8 +36,6 @@ contains
       real(dp)    :: c, cfac, b
       common b, c, cfac
       real(dp)    :: xx
-
-    
 
       if(present(be_verbose)) verbose=be_verbose
       !    The following is a Statement function

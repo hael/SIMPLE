@@ -9,6 +9,7 @@ use, intrinsic :: iso_c_binding
 use simple_fftw3,      only: fftwf_alloc_real, fftwf_free
 use simple_imghead,    only: find_ldim_nptcls
 use simple_timer,      only: tic, toc, timer_int_kind
+use simple_gridding,  only: prep4cgrid
 !! import classes
 use simple_ctf,        only: ctf
 use simple_ori,        only: ori
@@ -92,9 +93,8 @@ contains
         class(reconstructor), intent(inout) :: self  !< this instance
         class(params),        intent(in)    :: p     !< parameters object
         logical, optional,    intent(in)    :: expand !< expand flag
-        character(len=:), allocatable :: ikind_tmp
-        integer :: rho_shape(3), rho_lims(3,2), lims(3,2), rho_exp_lims(3,2), ldim_exp(3,2)
-        integer ::  dim, maxlims,h,k,m,logi(3),phys(3)
+        integer :: rho_shape(3), lims(3,2), rho_exp_lims(3,2), ldim_exp(3,2)
+        integer ::  dim, maxlims
         logical :: l_expand
         l_expand = .true.
         if(.not. self%exists() ) stop 'construct image before allocating rho; alloc_rho; simple_reconstructor'
@@ -231,7 +231,7 @@ contains
         real, allocatable :: w(:,:,:)
         real              :: vec(3), loc(3), tval, tvalsq
         integer           :: i, win(3,2), wdim
-        if(comp == cmplx(0.,0.)) return
+        if(abs(comp) < TINY) return
         ! calculate non-uniform sampling location
         vec = [real(h), real(k), 0.]
         loc = matmul(vec, e%get_mat())
@@ -305,9 +305,9 @@ contains
         class(image),         intent(inout) :: fpl       !< Fourier plane
         real,    optional,    intent(in)    :: pwght     !< external particle weight (affects both fplane and rho)
         real,    optional,    intent(in)    :: mul       !< shift weight multiplier
-        integer :: h, k, lims(3,2), sh, lfny, logi(3), phys(3)
+        integer :: h, k, lims(3,2), logi(3), phys(3)
         complex :: oshift
-        real    :: x, y, xtmp, ytmp, pw
+        real    :: x, y, xtmp, ytmp
         logical :: pwght_present
         if( .not. fpl%is_ft() )       stop 'image need to be FTed; inout_fplane; simple_reconstructor'
         if( .not. (self.eqsmpd.fpl) ) stop 'scaling not yet implemented; inout_fplane; simple_reconstructor'
@@ -360,9 +360,8 @@ contains
         integer,    optional, intent(in)    :: maxits
         type(kbinterpol)   :: kbwin 
         type(image)        :: W_img, Wprev_img
-        complex            :: comp
         real               :: Wnorm, val_prev, val, Wnorm_prev, invrho
-        integer            :: h, k, m, lims(3,2), logi(3), phys(3), iter
+        integer            :: h, k, m, lims(3,2),  phys(3), iter
         integer            :: maxits_here
         complex, parameter :: zero = cmplx(0.,0.), one = cmplx(1.,0.)
         real,    parameter :: winsz  = 2.
@@ -383,13 +382,12 @@ contains
             Wprev_img  = W_img 
             ! W <- W * rho
             !$omp parallel do collapse(3) default(shared) schedule(static)&
-            !$omp private(k,h,m,logi,phys) proc_bind(close)
+            !$omp private(h,k,m,phys) proc_bind(close)
             do k = lims(2,1),lims(2,2)
                 do h = lims(1,1),lims(1,2)
                     do m = lims(3,1),lims(3,2)
-                        logi  = [h, k, m]                      
-                        phys  = W_img%comp_addr_phys(logi)
-                        call W_img%mul_cmat( self%rho(phys(1),phys(2),phys(3)), phys)
+                        phys  = W_img%comp_addr_phys([h,k,m])
+                        call W_img%mul_cmat_at(self%rho(phys(1),phys(2),phys(3)), phys)
                     end do
                 end do
             end do
@@ -401,18 +399,16 @@ contains
             ! W <- Wprev / ((Wprev / rho) x kernel)
             Wnorm = 0.
             !$omp parallel do collapse(3) default(shared) schedule(static)&
-            !$omp private(h,k,m,logi,phys,val,val_prev) proc_bind(close)&
+            !$omp private(h,k,m,phys,val,val_prev) proc_bind(close)&
             !$omp reduction(+:Wnorm)
-            
             do k = lims(2,1),lims(2,2)
                 do h = lims(1,1),lims(1,2)
                     do m = lims(3,1),lims(3,2)
-                        logi     = [h, k, m]
-                        phys     = W_img%comp_addr_phys(logi)
-                        val      = mycabs(W_img%get_fcomp(logi, phys))
-                        val_prev = real(Wprev_img%get_fcomp(logi, phys))
+                        phys     = W_img%comp_addr_phys([h, k, m])
+                        val      = mycabs(W_img%get_cmat_at( phys))   !! ||C|| == ||C*||
+                        val_prev = real(Wprev_img%get_cmat_at( phys)) !! Real(C) == Real(C*)
                         val      = min(val_prev/val, 1.e20)
-                        call W_img%add2_cmat(phys, cmplx(val, 0.)) 
+                        call W_img%set_cmat_at( phys, cmplx(val, 0.)) 
                         Wnorm    = Wnorm + val ! values are positive, no need to square (numerical stability)
                     end do
                 end do
@@ -424,14 +420,13 @@ contains
         call Wprev_img%kill
         ! Fourier comps / rho
         !$omp parallel do collapse(3) default(shared) schedule(static)&
-        !$omp private(h,k,m,logi,phys,invrho) proc_bind(close)
+        !$omp private(h,k,m,phys,invrho) proc_bind(close)
         do k = lims(2,1),lims(2,2)
             do h = lims(1,1),lims(1,2)
                 do m = lims(3,1),lims(3,2)
-                    logi   = [h, k, m]
-                    phys   = W_img%comp_addr_phys(logi)
-                    invrho = real(W_img%get_fcomp(logi, phys))
-                    call self%mul_cmat(invrho,phys)
+                    phys   = W_img%comp_addr_phys([h, k, m])
+                    invrho = real(W_img%get_cmat_at( phys)) !! Real(C) == Real(C*)
+                    call self%mul_cmat_at(invrho,phys)
                 end do
             end do
         end do
@@ -473,7 +468,7 @@ contains
     subroutine compress_exp( self )
         class(reconstructor), intent(inout) :: self !< this instance
         complex :: comp, zero
-        integer :: lims(3,2), logi(3), phys(3), h, k, m
+        integer :: lims(3,2), phys(3), h, k, m
         if(.not. self%cmat_exp_allocated .or. .not.self%rho_allocated)then
             stop 'expanded complex or rho matrices do not exist; simple_reconstructor::compress_exp'
         endif
@@ -481,40 +476,29 @@ contains
         lims = self%loop_lims(3)
         zero = cmplx(0.,0.)
         ! Fourier components & rho matrices compression
-        ! Can't be threaded because of add_fcomp
-        !$omp parallel do collapse(3) private(k,h,m,phys,comp) schedule(static) default(shared) proc_bind(close)
-        
-            do k = lims(2,1),lims(2,2)
-                do h = lims(1,1),lims(1,2)
-                    ! if(any(self%cmat_exp(h,k,:).ne.zero))then
-                    do m = lims(3,1),lims(3,2)
-                        comp = self%cmat_exp(h,k,m)
-                        if(comp .eq. zero)cycle
-                        logi = [h, k, m]
-                        phys = self%comp_addr_phys(logi)
-                        ! ! addition because FC and its Friedel mate must be summed
-                        ! ! as the expansion updates one or the other
-                        !if (h < 0) then
-                        !          phys(1) = h + 1
-                        !          phys(2) = k + 1 + self%ldim_img(2) *  MERGE(1,0,-k  < 0)
-                        !          phys(3) = m + 1 + self%ldim_img(3) *  MERGE(1,0,-m  < 0)
-                        !                ! addition because FC and its Friedel mate must be summed
-                        !                ! as the expansion updates one or the other
-                        !  call self%add2_cmat(phys, conjg(comp))
-                        !  self%rho(phys(1),phys(2),phys(3)) = &
-                        !       &self%rho(phys(1),phys(2),phys(3)) + self%rho_exp(h,k,m)
-                        !       else
-                        !          phys(1) = -h + 1
-                        !          phys(2) = -k + 1 + self%ldim_img(2) *  MERGE(1,0,k  < 0)
-                        !          phys(3) = -m + 1 + self%ldim_img(3) *  MERGE(1,0,m  < 0)
-                        ! call self%add2_cmat(phys, comp)
-                        !  self%rho(phys(1),phys(2),phys(3)) = &
-                        !      &self%rho(phys(1),phys(2),phys(3)) + self%rho_exp(h,k,m)
-                        !      endif
-                         call self%add_fcomp(logi, phys, comp)
-                         self%rho(phys(1),phys(2),phys(3)) = &
-                             &self%rho(phys(1),phys(2),phys(3)) + self%rho_exp(h,k,m)
-                    end do
+        !$omp parallel do collapse(3) private(h,k,m,phys,comp) schedule(static) default(shared) proc_bind(close)
+        do k = lims(2,1),lims(2,2)
+            ! if(any(self%cmat_exp(h,k,:).ne.zero))then
+            do h = lims(1,1),lims(1,2)
+                do m = lims(3,1),lims(3,2)
+                    comp = self%cmat_exp(h,k,m)
+                    if(abs(comp) < TINY)cycle
+                    !  addition because FC and its Friedel mate must be summed
+                    !  as the expansion updates one or the other
+                    if (h > 0) then
+                        phys(1) = h + 1
+                        phys(2) = k + 1 + self%ldim_img(2) *  MERGE(1,0,k  < 0)
+                        phys(3) = m + 1 + self%ldim_img(3) *  MERGE(1,0,m  < 0)
+                        call self%add2_cmat_at(phys, comp)
+                    else
+                        phys(1) = -h + 1
+                        phys(2) = -k + 1 + self%ldim_img(2) *  MERGE(1,0,-k  < 0)
+                        phys(3) = -m + 1 + self%ldim_img(3) *  MERGE(1,0,-m  < 0)
+                        call self%add2_cmat_at(phys, conjg(comp))
+                    endif
+                    self%rho(phys(1),phys(2),phys(3)) = &
+                        &self%rho(phys(1),phys(2),phys(3)) + self%rho_exp(h,k,m)
+                end do
                 !endif
             end do
         end do
@@ -582,7 +566,7 @@ contains
                 endif
             endif
         end do
-        if(verbose)write(*,'(A,1x,1ES20.5)') '>>> KAISER-BESSEL INTERPOLATION TIME ', toc(trec)
+        if(verbose)write(*,'(A,1x,1ES20.5)') '>>> DONE KAISER-BESSEL INTERPOLATION time(s) ', toc(trec)
         if( present(part) )then
             return
         else
@@ -591,7 +575,7 @@ contains
             call self%compress_exp
             if(verbose)write(*,'(A,1x,1ES20.5)') '>>> RHO COMPRESSION EXPANDED ', toc()
             call self%sampl_dens_correct
-           if(verbose) write(*,'(A,1x,1ES20.5)') '>>>  UNEVEN DISTRIBUTION OF ORIENTATIONS CORRECTION  ', toc()
+            if(verbose) write(*,'(A,1x,1ES20.5)') '>>>  SAMPLING DENSITY CORRECTION  time(s) ', toc()
         endif
         if(verbose)write(*,'(A,1x,1ES20.5)') '>>> SAMPLING DENSITY (RHO) CORRECTION & WIENER NORMALIZATION  TOTALTIME ', toc(tsamp)
         call self%bwd_ft
@@ -601,14 +585,13 @@ contains
         if( p%nstates > 1 )then
             write(*,'(a,1x,i3,1x,a,1x,i6)') '>>> NR OF PARTICLES INCLUDED IN STATE:', state, 'WAS:', statecnt(state)
         endif
-        if(verbose)write(*,'(A,1x,1ES20.5)') '>>> RECONSTRUCTIONN  TOTALTIME ', toc(trec)
+        if(verbose)write(*,'(A,1x,1ES20.5)') '>>> RECONSTRUCTION  TOTAL TIME ', toc(trec)
         contains
 
             !> \brief  the density reconstruction functionality
             subroutine rec_dens
-                use simple_gridding,  only: prep4cgrid
                 type(ori) :: orientation, o_sym
-                integer   :: j, state, state_balance
+                integer   :: j, state_balance
                 real      :: pw
 !                state         = nint(o%get(i, 'state'))
                 state_balance = nint(o%get(i, 'state_balance'))

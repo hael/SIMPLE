@@ -101,8 +101,8 @@ contains
         type(ran_tabu) :: rt
         integer        :: lfny, partsz, lfny_match
         logical        :: ddo3d, fforce_ctf
-        verbose=.true.
-        if(verbose) tbuild=tic()
+        verbose=.false.
+        if(verbose.or.global_verbose) tbuild=tic()
         call self%kill_general_tbox
         ddo3d = .true.
         if( present(do3d) ) ddo3d = do3d
@@ -211,8 +211,8 @@ contains
         if( p%projstats .eq. 'yes' )then
             if( .not. self%a%isthere('proj') ) call self%a%set_projs(self%e)
         endif
-        if (verbose)then
-            write(*,'(A,1x,1ES20.5)') '>>> DONE BUILDING GENERAL TOOLBOX  time (s):', toc(tbuild)
+        if (verbose.or.global_verbose)then
+            write(*,'(A,1x,1ES20.5)') '>>> DONE BUILDING GENERAL TOOLBOX             time (s)', toc(tbuild)
         else
             write(*,'(A)') '>>> DONE BUILDING GENERAL TOOLBOX'
         endif
@@ -307,15 +307,15 @@ contains
     subroutine build_rec_tbox( self, p )
         class(build),  intent(inout) :: self
         class(params), intent(in)    :: p
-        verbose=.true.
-        if(verbose) tbuild=tic()
+        verbose=.false.
+        if(verbose.or.global_verbose) tbuild=tic()
         call self%kill_rec_tbox
         call self%raise_hard_ctf_exception(p)
         call self%recvol%new([p%boxpd,p%boxpd,p%boxpd],p%smpd)
         call self%recvol%alloc_rho(p)
         if( .not. self%a%isthere('proj') ) call self%a%set_projs(self%e)
-        if (verbose)then
-            write(*,'(A,1x,1ES20.5)') '>>> DONE BUILDING RECONSTRUCTION TOOLBOX  time (s) ', toc(tbuild)
+        if (verbose.or.global_verbose)then
+            write(*,'(A,1x,1ES20.5)') '>>> DONE BUILDING RECONSTRUCTION TOOLBOX      time (s)', toc(tbuild)
         else
             write(*,'(A)') '>>> DONE BUILDING RECONSTRUCTION TOOLBOX'
         endif
@@ -336,14 +336,14 @@ contains
     subroutine build_eo_rec_tbox( self, p )
         class(build),  intent(inout) :: self
         class(params), intent(in)    :: p
-        if(verbose) tbuild=tic()
+        if(verbose.or.global_verbose) tbuild=tic()
         call self%kill_eo_rec_tbox
         call self%raise_hard_ctf_exception(p)
         call self%eorecvol%new(p)
         if( .not. self%a%isthere('proj') ) call self%a%set_projs(self%e)
         call self%projfrcs%new(NSPACE_BALANCE, p%box, p%smpd, p%nstates)
-        if (verbose)then
-            write(*,'(A,1x,1ES20.5)') '>>> DONE BUILDING EO RECONSTRUCTION TOOLBOX  time (s) ', toc(tbuild)
+        if (verbose.or.global_verbose)then
+            write(*,'(A,1x,1ES20.5)') '>>> DONE BUILDING EO RECONSTRUCTION TOOLBOX   time (s)', toc(tbuild)
         else
             write(*,'(A)') '>>> DONE BUILDING EO RECONSTRUCTION TOOLBOX'
         endif
@@ -366,7 +366,7 @@ contains
         class(build),  intent(inout) :: self
         class(params), intent(inout) :: p
         type(oris) :: os
-        if(verbose) tbuild=tic()
+        if(verbose.or.global_verbose) tbuild=tic()
         call self%kill_hadamard_prime2D_tbox
         call self%raise_hard_ctf_exception(p)
         if( str_has_substr(p%refine,'neigh') )then
@@ -381,8 +381,8 @@ contains
         endif
         ! build projection frcs
         call self%projfrcs%new(p%ncls, p%box, p%smpd, p%nstates)
-        if (verbose)then
-            write(*,'(A,1x,1ES20.5)') '>>> DONE BUILDING HADAMARD PRIME2D TOOLBOX  time (s) ', toc(tbuild)
+        if (verbose.or.global_verbose)then
+            write(*,'(A,1x,1ES20.5)') '>>> DONE BUILDING HADAMARD PRIME2D TOOLBOX    time (s)', toc(tbuild)
         else
             write(*,'(A)') '>>> DONE BUILDING HADAMARD PRIME2D TOOLBOX'
         endif
@@ -403,7 +403,7 @@ contains
         class(build),  intent(inout) :: self
         class(params), intent(in)    :: p
         integer :: nnn
-        if(verbose) tbuild=tic()
+        if(verbose.or.global_verbose) tbuild=tic()
         call self%kill_hadamard_prime3D_tbox
         call self%raise_hard_ctf_exception(p)
         ! reconstruction objects
@@ -420,8 +420,8 @@ contains
         endif
         if( .not. self%a%isthere('proj') ) call self%a%set_projs(self%e)
         call self%projfrcs%new(NSPACE_BALANCE, p%box, p%smpd, p%nstates)
-        if (verbose)then
-            write(*,'(A,1x,1ES20.5)') '>>> DONE BUILDING HADAMARD PRIME3D TOOLBOX  time (s) ', toc(tbuild)
+        if (verbose.or.global_verbose)then
+            write(*,'(A,1x,1ES20.5)') '>>> DONE BUILDING HADAMARD PRIME3D TOOLBOX    time (s)', toc(tbuild)
         else
             write(*,'(A)') '>>> DONE BUILDING HADAMARD PRIME3D TOOLBOX'
         endif
@@ -457,7 +457,7 @@ contains
         class(build),  intent(inout) :: self
         class(params), intent(in)    :: p
         integer :: s
-        if(verbose) tbuild=tic()
+        if(verbose.or.global_verbose) tbuild=tic()
         call self%kill_cont3D_tbox
         call self%raise_hard_ctf_exception(p)
         if( p%norec .eq. 'yes' )then
@@ -476,8 +476,8 @@ contains
         do s=1,p%nstates
             call self%refvols(s)%new([p%boxmatch,p%boxmatch,p%boxmatch],p%smpd)
         end do
-        if (verbose)then
-            write(*,'(A,1x,1ES20.5)') '>>> DONE BUILDING CONT3D TOOLBOX  time (s) ', toc(tbuild)
+        if (verbose.or.global_verbose)then
+            write(*,'(A,1x,1ES20.5)') '>>> DONE BUILDING CONT3D TOOLBOX              time (s)', toc(tbuild)
         else
             write(*,'(A)') '>>> DONE BUILDING CONT3D TOOLBOX'
         endif
@@ -517,7 +517,7 @@ contains
     subroutine build_extremal3D_tbox( self, p )
         class(build),  intent(inout) :: self
         class(params), intent(in)    :: p
-        if(verbose) tbuild=tic()
+        if(verbose.or.global_verbose) tbuild=tic()
         call self%kill_extremal3D_tbox
         call self%raise_hard_ctf_exception(p)
         allocate( self%recvols(1), stat=alloc_stat )
@@ -525,8 +525,8 @@ contains
         call self%recvols(1)%new([p%boxpd,p%boxpd,p%boxpd],p%smpd)
         call self%recvols(1)%alloc_rho(p)
         if( .not. self%a%isthere('proj') ) call self%a%set_projs(self%e)
-        if (verbose)then
-            write(*,'(A,1x,1ES20.5)') '>>> DONE BUILDING EXTREMAL3D TOOLBOX  time (s) ', toc(tbuild)
+        if (verbose.or.global_verbose)then
+            write(*,'(A,1x,1ES20.5)') '>>> DONE BUILDING EXTREMAL3D TOOLBOX          time (s)', toc(tbuild)
         else
             write(*,'(A)') '>>> DONE BUILDING EXTREMAL3D TOOLBOX'
         end if

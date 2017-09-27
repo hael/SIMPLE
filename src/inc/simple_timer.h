@@ -40,12 +40,12 @@
 
 #define TPROFILER(NLOOPS,IDX,...)  block;\
   use simple_timer;\
-  character(len=20)::p_tmp;\
-  character(len=255)::p_comment;\
+  character(len=20) :: p_tmp;\
+  character(len=255) :: p_comment;\
   integer :: IDX,np;\
-  integer(timer_int_kind):: tn;\
+  integer(timer_int_kind) :: tn;\
   integer,parameter :: nv=c99_count (__VA_ARGS__);\
-  character(255)::p_tokens= STRINGIFY(__VA_ARGS__) ; \
+  character(255) :: p_tokens= STRINGIFY(__VA_ARGS__) ; \
   tn=tic();\
   np=NLOOPS;\
   call timer_profile_setup(np,nv,p_tokens);
@@ -58,16 +58,16 @@
  character(len=255)::p_comment;\
  integer :: IDX,np;\
  integer(timer_int_kind):: tn;\
- character(len=255)::p_tokens= STRINGIFY(TOKENS); \
+ character(len=255) :: p_tokens= STRINGIFY(TOKENS); \
  tn=tic();\
  np=NLOOPS;\
  call timer_profile_setup(np,-1,p_tokens);
 
 #endif
 
-#define TBEG(TOKEN) p_tmp = STRINGIFY (TOKEN); call timer_profile_start(trim(p_tmp))
+#define TBEG(TOKEN) p_tmp = STRINGIFY(TOKEN); call timer_profile_start(trim(p_tmp))
 
-#define TEND(TOKEN) p_tmp = STRINGIFY (TOKEN); \
+#define TEND(TOKEN) p_tmp = STRINGIFY(TOKEN); \
  call timer_profile_break(trim(p_tmp))
 
 #define TREPORT(COMMENT) p_comment = STRINGIFY (COMMENT); \

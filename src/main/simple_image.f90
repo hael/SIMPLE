@@ -61,9 +61,11 @@ type :: image
     procedure          :: get
     procedure          :: get_rmat
     procedure          :: get_cmat
-    procedure          :: add2_cmat
-    procedure          :: div_cmat
-    procedure          :: mul_cmat
+    procedure          :: get_cmat_at
+    procedure          :: set_cmat_at
+    procedure          :: add2_cmat_at
+    procedure          :: div_cmat_at
+    procedure          :: mul_cmat_at
     procedure          :: print_cmat
     procedure          :: expand_ft
     procedure          :: set
@@ -1057,32 +1059,46 @@ contains
         allocate(cmat(array_shape(1),array_shape(2),array_shape(3)), source=self%cmat)
       end function get_cmat
 
-    !>  \brief   set_cmat get the image object's complex matrix
-    !! \return cmat a copy of this image object's cmat
-    !!
-    subroutine add2_cmat( self , phys , comp)
+
+    !! get cmat value at index phys
+    function get_cmat_at( self, phys ) result( comp )
+        class(image), intent(in)  :: self
+        integer,      intent(in)  ::  phys(3)
+        complex :: comp
+        comp = self%cmat(phys(1),phys(2),phys(3))
+    end function get_cmat_at
+
+
+    !> add comp to cmat at index phys
+    subroutine add2_cmat_at( self , phys , comp)
         class(image), intent(in) :: self
         integer, intent(in) :: phys(3)
         complex, intent(in) :: comp
         self%cmat(phys(1),phys(2),phys(3)) = self%cmat(phys(1),phys(2),phys(3)) + comp
-      end subroutine add2_cmat
+    end subroutine add2_cmat_at
 
-    !>  \brief div_cmat is for component-wise division of an image with a real number
-    !! \param logi coordinates
-    !! \param k divisor
-    !! \param phys_in
-    !!
-    subroutine div_cmat( self, k, phys )
+    !! set comp to cmat at index phys
+    subroutine set_cmat_at( self , phys , comp)
+        class(image), intent(in) :: self
+        integer, intent(in) :: phys(3)
+        complex, intent(in) :: comp
+        self%cmat(phys(1),phys(2),phys(3)) = comp
+    end subroutine set_cmat_at
+
+    !! divide comp by cmat at index phys
+    subroutine div_cmat_at( self, k, phys )
         class(image),      intent(inout) :: self
         integer,           intent(in)    :: phys(3)
         real,              intent(in)    :: k
-        if( abs(k) > TINY )then
+        if( abs(k) > 1e-6 )then
            self%cmat(phys(1),phys(2),phys(3)) = self%cmat(phys(1),phys(2),phys(3))/k
         else
            self%cmat(phys(1),phys(2),phys(3)) = cmplx(0.,0.) ! this is desirable for kernel division
         endif
-    end subroutine div_cmat
-    subroutine mul_cmat( self, k, phys )
+    end subroutine div_cmat_at
+
+    !! multiply comp by cmat at index phys
+    subroutine mul_cmat_at( self, k, phys )
         class(image),      intent(inout) :: self
         integer,           intent(in)    :: phys(3)
         real,              intent(in)    :: k
@@ -1091,7 +1107,7 @@ contains
         else
            self%cmat(phys(1),phys(2),phys(3)) = cmplx(0.,0.) ! this is desirable for kernel division
         endif
-    end subroutine mul_cmat
+    end subroutine mul_cmat_at
 
     !> print_cmat
     !!
