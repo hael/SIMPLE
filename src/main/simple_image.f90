@@ -3162,7 +3162,8 @@ contains
                    if( (abs(rmat(i,j,1)-1.) > TINY) )cycle
 #else
                    if( rmat(i,j,1)/=1. )cycle
-#endif                     ! within mask region
+#endif
+                    ! within mask region
                     ! update if has a masked neighbour
                     if( any( rmat(is:ie,js:je,1) < 1.) )call update_mask_2d
                 else
