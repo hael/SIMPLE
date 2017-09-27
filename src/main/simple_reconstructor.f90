@@ -4,7 +4,6 @@ module simple_reconstructor
 !$ use omp_lib_kinds
 use, intrinsic :: iso_c_binding
 #include "simple_lib.f08"
-
 !!import functions
 use simple_fftw3,      only: fftwf_alloc_real, fftwf_free
 use simple_imghead,    only: find_ldim_nptcls
@@ -22,15 +21,16 @@ implicit none
 
 public :: reconstructor
 private
- !! CTF flag type
-    enum, bind(c) 
-        enumerator :: CTFFLAG_NO = 0, CTFFLAG_YES = 1, CTFFLAG_MUL = 2,  CTFFLAG_FLIP=3
-    end enum
 
-    type :: CTFFLAGTYPE
-        private
-        integer(kind(CTFFLAG_NO)) :: flag=CTFFLAG_NO
-    end type CTFFLAGTYPE
+!! CTF flag type
+enum, bind(c) 
+    enumerator :: CTFFLAG_NO = 0, CTFFLAG_YES = 1, CTFFLAG_MUL = 2,  CTFFLAG_FLIP = 3
+end enum
+
+type :: CTFFLAGTYPE
+    private
+    integer(kind(CTFFLAG_NO)) :: flag=CTFFLAG_NO
+end type CTFFLAGTYPE
 
 type, extends(image) :: reconstructor
     private
@@ -46,9 +46,6 @@ type, extends(image) :: reconstructor
     real                        :: dens_const    = 1.           !< density estimation constant, old val: 1/nptcls
     integer                     :: lfny          = 0            !< Nyqvist Fourier index
     integer                     :: ldim_img(3)   = 0            !< logical dimension of the original image
-    ! character(len=STDLEN)       :: ctfflag       = ''           !< ctf flag <yes|no|mul|flip>
-    ! integer(sp)                 :: wdim                         !< logical dimension of window
-    ! integer(sp)                 :: dimplus                      !< logical dimension of image plus half window
     integer, allocatable        :: physmat(:,:,:,:)
     type(CTFFLAGTYPE)           :: ctf                          !< ctf flag <yes|no|mul|flip>
     logical                     :: tfneg              = .false. !< invert contrast or not
@@ -71,7 +68,6 @@ type, extends(image) :: reconstructor
     procedure, private :: calc_tfun_vals
     procedure          :: inout_fplane
     procedure          :: sampl_dens_correct
-    procedure          :: sampl_dens_correct_old
     procedure          :: compress_exp
     ! SUMMATION
     procedure          :: sum
@@ -85,6 +81,7 @@ end type reconstructor
 real            :: dfx=0., dfy=0., angast=0.
 real, parameter :: SHTHRESH=0.0001
 #include "simple_local_flags.inc"
+
 contains
 
     ! CONSTRUCTOR
@@ -151,24 +148,7 @@ contains
             self%rho_exp            = 0.
             self%cmat_exp_allocated = .true.
             self%rho_exp_allocated  = .true.
-        end if
-        ! allocate(self%physmat( ldim_exp(1,1):ldim_exp(1,2),&
-        !     &ldim_exp(2,1):ldim_exp(2,2),&
-        !     &ldim_exp(3,1):ldim_exp(3,2),3), stat=alloc_stat)
-        ! allocchk("In: alloc_rho; simple_reconstructor physmat")
-        !     ! ! parallel do collapse(3) default(shared) schedule(static)&
-        !     ! ! private(h,k,m,logi,phys) proc_bind(close)
-        !     do h = -dim, dim
-        !         do k = -dim, dim
-        !             do m = -dim, dim
-        !                 logi  = [h, k, m]
-        !                 phys = self%comp_addr_phys(logi)
-        !                 self%physmat(h+dim+1,k+dim+1,m+dim+1,1:3) = phys(1:3)
-        !             end do
-        !         end do
-        !     end do
-        !     ! ! end parallel do
-       
+        end if       
         call self%reset
     end subroutine alloc_rho
 
@@ -435,38 +415,8 @@ contains
         call W_img%kill
     end subroutine sampl_dens_correct
 
-    ! OLD ROUTINE
-    !> sampl_dens_correct Correct sample density
-    !! \param self_out corrected image output
-    !!
-    subroutine sampl_dens_correct_old( self, self_out )
-        class(reconstructor),   intent(inout) :: self !< this instance
-        class(image), optional, intent(inout) :: self_out  !< output image instance
-        integer :: h, k, l, lims(3,2), phys(3)
-        logical :: self_out_present
-        self_out_present = present(self_out)
-        ! set constants
-        lims = self%loop_lims(2)
-        if( self_out_present ) call self_out%copy(self)
-        !$omp parallel do collapse(3) default(shared) private(h,k,l,phys)&
-        !$omp schedule(static) proc_bind(close)
-        do h=lims(1,1),lims(1,2)
-            do k=lims(2,1),lims(2,2)
-                do l=lims(3,1),lims(3,2)
-                    phys = self%comp_addr_phys([h,k,l])
-                    if( self_out_present )then
-                        call self_out%div([h,k,l],self%rho(phys(1),phys(2),phys(3)),phys_in=phys)
-                    else
-                        call self%div([h,k,l],self%rho(phys(1),phys(2),phys(3)),phys_in=phys)
-                    endif
-                end do
-            end do
-        end do
-        !$omp end parallel do
-    end subroutine sampl_dens_correct_old
-
     subroutine compress_exp( self )
-        class(reconstructor), intent(inout) :: self !< this instance
+        class(reconstructor), intent(inout) :: self
         complex :: comp, zero
         integer :: lims(3,2), phys(3), h, k, m
         if(.not. self%cmat_exp_allocated .or. .not.self%rho_allocated)then
@@ -478,7 +428,6 @@ contains
         ! Fourier components & rho matrices compression
         !$omp parallel do collapse(3) private(h,k,m,phys,comp) schedule(static) default(shared) proc_bind(close)
         do k = lims(2,1),lims(2,2)
-            ! if(any(self%cmat_exp(h,k,:).ne.zero))then
             do h = lims(1,1),lims(1,2)
                 do m = lims(3,1),lims(3,2)
                     comp = self%cmat_exp(h,k,m)
@@ -499,7 +448,6 @@ contains
                     self%rho(phys(1),phys(2),phys(3)) = &
                         &self%rho(phys(1),phys(2),phys(3)) + self%rho_exp(h,k,m)
                 end do
-                !endif
             end do
         end do
         !$omp end parallel do
@@ -590,20 +538,26 @@ contains
 
             !> \brief  the density reconstruction functionality
             subroutine rec_dens
+                character(len=:), allocatable :: stkname
                 type(ori) :: orientation, o_sym
-                integer   :: j, state_balance
+                integer   :: j, state_balance, ind
                 real      :: pw
-!                state         = nint(o%get(i, 'state'))
                 state_balance = nint(o%get(i, 'state_balance'))
                 if( state_balance == 0 ) return
                 pw = 1.
                 if( p%frac < 0.99 ) pw = o%get(i, 'w')
                 if( pw > 0. )then
                     orientation = o%get_ori(i)
-                    if( p%l_distr_exec )then
-                        call img%read(p%stk_part, cnt)
+                    ! read image
+                    if( p%l_stktab_input )then
+                        call p%stkhandle%get_stkname_and_ind(i, stkname, ind)
+                        call img%read(stkname, ind)
                     else
-                        call img%read(fname, i)
+                        if( p%l_distr_exec )then
+                            call img%read(p%stk_part, cnt)
+                        else
+                            call img%read(fname, i)
+                        endif
                     endif
                     call prep4cgrid(img, img_pd, p%msk, self%kbwin)
                     if( p%pgrp == 'c1' )then
@@ -624,15 +578,8 @@ contains
     !>  \brief  is the expanded destructor
     subroutine dealloc_exp( self )
         class(reconstructor), intent(inout) :: self !< this instance
-        if(allocated(self%rho_exp))then
-            deallocate(self%rho_exp,stat=alloc_stat)
-            allocchk(" simple_reconstructor:: dealloc_exp; rho_exp ;")
-        endif
-        if(allocated(self%cmat_exp))then
-           deallocate(self%cmat_exp,stat=alloc_stat)
-            allocchk(" simple_reconstructor:: dealloc_exp; cmat_exp ;")
-        endif
-
+        if( allocated(self%rho_exp) ) deallocate(self%rho_exp)
+        if( allocated(self%cmat_exp) ) deallocate(self%cmat_exp)
         self%rho_exp_allocated  = .false.
         self%cmat_exp_allocated = .false.
     end subroutine dealloc_exp
@@ -640,10 +587,7 @@ contains
     !>  \brief  is a destructor
     subroutine dealloc_rho( self )
         class(reconstructor), intent(inout) :: self !< this instance
-        if(allocated(self%physmat))then
-            deallocate(self%physmat,stat=alloc_stat)
-            allocchk(" simple_reconstructor:: dealloc_exp; physmat ;")
-        endif
+        if( allocated(self%physmat) ) deallocate(self%physmat)
         call self%dealloc_exp
         if( self%rho_allocated )then
             call fftwf_free(self%kp)

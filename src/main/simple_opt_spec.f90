@@ -37,7 +37,7 @@ type :: opt_spec
     real, allocatable     :: inipopulation(:,:)               !< input population for the evolutionary approaches
     real, allocatable     :: population(:,:)                  !< output solution population from the evolutionary approaches
     real, allocatable     :: peaks(:,:)                       !< output peaks (local optimal solutions)
-#include "simple_local_flags.inc"                             !< debugging mode on/off unique to opt_spec
+#include "simple_local_flags.inc"
     logical               :: converged = .false.              !< converged status
     logical               :: exists    = .false.              !< to indicate existence
   contains

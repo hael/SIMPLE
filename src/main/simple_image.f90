@@ -1057,8 +1057,7 @@ contains
         array_shape(1)   = self%get_filtsz()
         array_shape(2:3) = self%ldim(2:3)
         allocate(cmat(array_shape(1),array_shape(2),array_shape(3)), source=self%cmat)
-      end function get_cmat
-
+    end function get_cmat
 
     !! get cmat value at index phys
     function get_cmat_at( self, phys ) result( comp )
@@ -1067,7 +1066,6 @@ contains
         complex :: comp
         comp = self%cmat(phys(1),phys(2),phys(3))
     end function get_cmat_at
-
 
     !> add comp to cmat at index phys
     subroutine add2_cmat_at( self , phys , comp)
@@ -1261,7 +1259,7 @@ contains
         fnyl = self%fit%get_lfny(which)
     end function get_lfny
 
-     !>  \brief   get_lhp
+    !>  \brief   get_lhp
     !! \param which
     !! \return lhp
     !!
@@ -1612,15 +1610,16 @@ contains
         deallocate(comps)
         ! origin shift
 #ifdef USETINY
-       if( abs(x) + abs(y) > TINY )then
+        if( abs(x) + abs(y) > TINY )then
 #else
-       if( x == 0. .and. y == 0. )then
-       else
+        if( x == 0. .and. y == 0. )then
+        else
 #endif
            comp = comp*oshift_here(self%ldim(1)/2, h, k, x, y)
         endif
 
         contains
+
             !> oshift_here
             !! \param xdim
             !! \param x,y Image coords
@@ -1674,7 +1673,6 @@ contains
                 end do
             end do
         endif
-
     end function packer
 
     ! CHECKUPS
@@ -3162,7 +3160,8 @@ contains
                    if( (abs(rmat(i,j,1)-1.) > TINY) )cycle
 #else
                    if( rmat(i,j,1)/=1. )cycle
-#endif                     ! within mask region
+#endif
+                    ! within mask region
                     ! update if has a masked neighbour
                     if( any( rmat(is:ie,js:je,1) < 1.) )call update_mask_2d
                 else
@@ -6350,7 +6349,6 @@ contains
             retl1norm=.true.
             selfcopy = self    ! create copy for comparision
         end if
-
         hwinsz   = 6
         nsigma = 1.0/ sqrt(1.0)
         was_fted = self%is_ft()
@@ -6359,8 +6357,6 @@ contains
         outliers = .false.
         call moment( self%rmat, ave, sdev, var, err )
         if( sdev<TINY )return
-
-
         lthresh = ave - nsigma * sdev
         uthresh = ave + nsigma * sdev
         if( any(self%rmat<=lthresh) .or. any(self%rmat>=uthresh) )then

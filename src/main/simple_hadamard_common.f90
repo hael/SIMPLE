@@ -1,14 +1,13 @@
 ! common PRIME2D/PRIME3D routines used primarily by the Hadamard matchers
 module simple_hadamard_common
 #include "simple_lib.f08"
-    
+use simple_image,    only: image
 use simple_cmdline,  only: cmdline
 use simple_build,    only: build
 use simple_params,   only: params
 use simple_ori,      only: ori
 use simple_oris,     only: oris
 use simple_gridding, only: prep4cgrid
-use simple_masker    ! use all in there
 implicit none
 
 public :: read_img_from_stk, set_bp_range, set_bp_range2D, grid_ptcl, prepimg4align,&
@@ -23,15 +22,20 @@ real, parameter :: CENTHRESH = 0.5    ! threshold for performing volume/cavg cen
 contains
 
     subroutine read_img_from_stk( b, p, iptcl )
-        class(build),   intent(inout) :: b
-        class(params),  intent(inout) :: p
-        integer,        intent(in)    :: iptcl
-        integer :: stack_index
-        if( p%l_distr_exec )then
-            stack_index = iptcl - p%fromp + 1
-            call b%img%read(p%stk_part, stack_index)
+        class(build),  intent(inout)  :: b
+        class(params), intent(inout)  :: p
+        integer,       intent(in)     :: iptcl
+        character(len=:), allocatable :: stkname
+        integer :: ind
+        if( p%l_stktab_input )then
+            call p%stkhandle%get_stkname_and_ind(iptcl, stkname, ind)
+            call b%img%read(stkname, ind)
         else
-            call b%img%read(p%stk, iptcl)
+            if( p%l_distr_exec )then
+                call b%img%read(p%stk_part, iptcl - p%fromp + 1)
+            else
+                call b%img%read(p%stk, iptcl)
+            endif
         endif
         call b%img%norm
     end subroutine read_img_from_stk
@@ -293,7 +297,6 @@ contains
 
     !>  \brief  prepares one cluster centre image for alignment
     subroutine prep2Dref( b, p, icls, center )
-        use simple_image,         only: image
         use simple_estimate_ssnr, only: fsc2optlp
         class(build),      intent(inout) :: b
         class(params),     intent(in)    :: p
@@ -424,7 +427,6 @@ contains
     !>  \brief  prepares one volume for references extraction
     subroutine preprefvol( b, p, cline, s, doexpand )
         use simple_estimate_ssnr, only: fsc2optlp
-        use simple_image,         only: image
         class(build),      intent(inout) :: b
         class(params),     intent(inout) :: p
         class(cmdline),    intent(inout) :: cline
@@ -557,7 +559,6 @@ contains
     end subroutine norm_struct_facts
     
     subroutine eonorm_struct_facts( b, p, res, which_iter )
-        use simple_image,    only: image
         use simple_filterer, only: gen_anisotropic_optlp
         class(build),      intent(inout) :: b
         class(params),     intent(inout) :: p
@@ -632,7 +633,6 @@ contains
         use simple_oris,            only: oris
         use simple_projector_hlev,  only: projvol
         use simple_projection_frcs, only: projection_frcs
-        use simple_image,           only: image
         class(params),          intent(inout) :: p
         character(len=*),       intent(in)    :: ename, oname
         integer,                intent(in)    :: state

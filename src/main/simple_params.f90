@@ -1,11 +1,12 @@
 ! provides global distribution of constants and derived constants
 module simple_params
 #include "simple_lib.f08"
-use simple_ori,         only: ori
-use simple_cmdline,     only: cmdline
-use simple_magic_boxes, only: find_magic_box
-use simple_imghead,     only: find_ldim_nptcls
-use simple_binoris,     only: binoris
+use simple_ori,            only: ori
+use simple_cmdline,        only: cmdline
+use simple_magic_boxes,    only: find_magic_box
+use simple_imghead,        only: find_ldim_nptcls
+use simple_binoris,        only: binoris
+use simple_stktab_handler, only: stktab_handler
 implicit none
 
 public :: params
@@ -17,6 +18,7 @@ type :: params
     ! global objects
     type(ori)             :: ori_glob
     type(ctfplan)         :: tfplan
+    type(stktab_handler)  :: stkhandle
     ! yes/no decision variables in ascending alphabetical order
     character(len=3)      :: acf='no'             !< calculate autocorrelation function(yes|no){no}
     character(len=3)      :: append='no'          !< append in context of files(yes|no){no}
@@ -107,7 +109,7 @@ type :: params
     character(len=STDLEN) :: dir_select='selected'!< move selected files to here{selected}
     character(len=STDLEN) :: dir_target=''        !< put output here
     character(len=STDLEN) :: dir_ptcls=''
-    character(len=STDLEN) :: dir_unidoc=''        !< grab unidocs from here
+    character(len=STDLEN) :: dir_mics=''          !< grab micrographs from here
     character(len=STDLEN) :: dockmode='eul'       !< volume docking mode(eul|shift|eulshift|all){eul}
     character(len=STDLEN) :: doclist=''           !< list of oritabs for different states
     character(len=STDLEN) :: eo='yes'             !< use FSC for filtering and low-pass limit update(yes|aniso|no){no}
@@ -152,6 +154,7 @@ type :: params
     character(len=STDLEN) :: split_mode='even'
     character(len=STDLEN) :: stk_part=''
     character(len=STDLEN) :: stk=''               !< particle stack with all images(ptcls.ext)
+    character(len=STDLEN) :: stktab=''            !< list of per-micrograph stacks
     character(len=STDLEN) :: stk2=''              !< 2nd stack(in map2ptcls/select: selected(cavgs).ext)
     character(len=STDLEN) :: stk3=''              !< 3d stack (in map2ptcls/select: (cavgs)2selectfrom.ext)
     character(len=STDLEN) :: stk_backgr=''        !< stack with image for background subtraction
@@ -215,6 +218,7 @@ type :: params
     integer :: nframes=0           !< # frames{30}
     integer :: nmembers=0
     integer :: nnn=50              !< # nearest neighbors{500}
+    integer :: nmics=0             !< # micographs
     integer :: noris=0
     integer :: nparts=1            !< # partitions in distributed exection
     integer :: npeaks=1            !< # nonzero orientation weights{1}
@@ -362,6 +366,7 @@ type :: params
     logical :: l_innermsk      = .false. 
     logical :: l_pick          = .false.
     logical :: l_remap_classes = .false.
+    logical :: l_stktab_input  = .false.
   contains
     procedure :: new
 end type params
@@ -453,7 +458,7 @@ contains
         call check_carg('dir_reject',     self%dir_reject)
         call check_carg('dir_select',     self%dir_select)
         call check_carg('dir_target',     self%dir_target)
-        call check_carg('dir_unidoc',     self%dir_unidoc)
+        call check_carg('dir_mics',       self%dir_mics)
         call check_carg('discrete',       self%discrete)
         call check_carg('diverse',        self%diverse)
         call check_carg('doalign',        self%doalign)
@@ -551,9 +556,10 @@ contains
         call check_file('outstk',         self%outstk,       notAllowed='T')
         call check_file('outstk2',        self%outstk2,      notAllowed='T')
         call check_file('outvol',         self%outvol,       notAllowed='T')
-        call check_file('pdbfile',        self%pdbfile      )
+        call check_file('pdbfile',        self%pdbfile)
         call check_file('plaintexttab',   self%plaintexttab, 'T')
         call check_file('stk',            self%stk,          notAllowed='T')
+        call check_file('stktab',         self%stktab,       'T')
         call check_file('stk2',           self%stk2,         notAllowed='T')
         call check_file('stk3',           self%stk3,         notAllowed='T')
         call check_file('stk_backgr',     self%stk_backgr,   notAllowed='T')
@@ -846,37 +852,50 @@ contains
         if( .not. cline%defined('numlen') )then
             if( nparts_set ) self%numlen = len(int2str(self%nparts))
         endif
-        ! set name of partial files in parallel execution
-        stk_part_fname_sc = trim(STKPARTFBODY_SC)//int2str_pad(self%part,self%numlen)//self%ext
-        stk_part_fname    = trim(STKPARTFBODY)//int2str_pad(self%part,self%numlen)//self%ext
-        self%stk_part     = stk_part_fname
-        if( self%autoscale .eq. 'yes' )then
-            if( file_exists(stk_part_fname_sc) )then
-                self%stk_part = stk_part_fname_sc
-            endif
-        endif
-        ! set logical dimension
-        call set_ldim_box_from_stk( self%stk )
-        self%box_original = self%box
-        if( file_exists(self%stk_part) .and. cline%defined('nparts') )then
-            call set_ldim_box_from_stk( self%stk_part )
-            if( cline%defined('stk') .and. self%autoscale .eq. 'no' )then
-                if( self%box /= self%box_original )then
-                    write(*,*) 'original box:                ', self%box_original
-                    write(*,*) 'box read from partial stack: ', self%box
-                    stop 'dim mismatch; simple_params :: new'
+        self%l_stktab_input = .false.
+        if( cline%defined('stktab') )then
+            if( cline%defined('stk') )&
+                &stop 'stk and stktab cannot simultaneously be defined; params :: new'
+            ! prepare stktab handler and set everything accordingly in this instance
+            call self%stkhandle%new(trim(self%stktab))
+            self%nmics   = self%stkhandle%get_nmics()
+            self%nptcls  = self%stkhandle%get_nptcls()
+            self%ldim    = self%stkhandle%get_ldim()
+            self%ldim(3) = 1
+            self%box     = self%ldim(1)
+            self%l_stktab_input = .true.
+        else
+            ! set name of partial files in parallel execution
+            stk_part_fname_sc = trim(STKPARTFBODY_SC)//int2str_pad(self%part,self%numlen)//self%ext
+            stk_part_fname    = trim(STKPARTFBODY)//int2str_pad(self%part,self%numlen)//self%ext
+            self%stk_part     = stk_part_fname
+            if( self%autoscale .eq. 'yes' )then
+                if( file_exists(stk_part_fname_sc) )then
+                    self%stk_part = stk_part_fname_sc
                 endif
             endif
-        endif
-        ! Check for the existance of this file if part is defined on the command line
-        if( cline%defined('part') )then
-            if( ccheckdistr )then
-                if(trim(self%prg).eq.'simple_symsrch')then
-                    ! no need for split stack with prg=symsrch
-                else if( .not. file_exists(self%stk_part) )then
-                    write(*,*) 'Need partial stacks to be generated for parallel execution'
-                    write(*,*) 'Use simple_exec prg=split'
-                    stop
+            call set_ldim_box_from_stk( self%stk )
+            self%box_original = self%box
+            if( file_exists(self%stk_part) .and. cline%defined('nparts') )then
+                call set_ldim_box_from_stk( self%stk_part )
+                if( cline%defined('stk') .and. self%autoscale .eq. 'no' )then
+                    if( self%box /= self%box_original )then
+                        write(*,*) 'original box:                ', self%box_original
+                        write(*,*) 'box read from partial stack: ', self%box
+                        stop 'dim mismatch; simple_params :: new'
+                    endif
+                endif
+            endif
+            ! Check for the existance of this file if part is defined on the command line
+            if( cline%defined('part') )then
+                if( ccheckdistr )then
+                    if(trim(self%prg).eq.'simple_symsrch')then
+                        ! no need for split stack with prg=symsrch
+                    else if( .not. file_exists(self%stk_part) )then
+                        write(*,*) 'Need partial stacks to be generated for parallel execution'
+                        write(*,*) 'Use simple_exec prg=split'
+                        stop
+                    endif
                 endif
             endif
         endif

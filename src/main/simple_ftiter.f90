@@ -25,8 +25,6 @@ type :: ftiter
     integer :: lims(3,2)=0                  !< Fourier index limits
     real    :: dsteps(3)=0.                 !< wavelengths of first components
     real    :: smpd=0.                      !< sampling distance (Angstroms per pixel)
-!    real, allocatable :: first,second,third
-    
   contains
     ! CONSTRUCTOR
     procedure :: new
@@ -256,10 +254,10 @@ contains
         integer :: phys(3) !<  Physical address
         integer :: i
         if (logi(1) .ge. 0) then
-           phys = logi + 1
+            phys = logi + 1
             ! The above is true except when in negative frequencies of
             ! 2nd or 3rd dimension
-           do i=2,3
+            do i=2,3
                 if (logi(i) .lt. 0) phys(i) = logi(i) + self%ldim(i) + 1
             enddo
         else
@@ -267,14 +265,14 @@ contains
             ! which are not defined by the output of FFTW's fwd FT,
             ! so we need to look for the Friedel mate in the positive frequencies
             ! of the first dimension
-           phys = -logi + 1
+            phys = -logi + 1
             ! The above is true except when in negative frequencies of
             ! 2nd or 3rd dimension
             do i=2,3
                 if (-logi(i) .lt. 0) phys(i) = -logi(i) + self%ldim(i) + 1
             enddo
         endif
-      end function comp_addr_phys_orig
+    end function comp_addr_phys_orig
 
       pure function comp_addr_phys(self,logi) result(phys)
           class(ftiter), intent(in) :: self
@@ -290,10 +288,6 @@ contains
               phys(2) = -logi(2) + 1 + MERGE(self%ldim(2),0, -logi(2) < 0)
               phys(3) = -logi(3) + 1 + MERGE(self%ldim(3),0, -logi(3) < 0)
           endif
-          ! if( logi(1) < 0 ) factor=-1
-          ! phys(1) = factor*logi(1) + 1
-          ! phys(2) = factor*logi(2) + 1 + (self%ldim(2)) * MERGE(1,0,factor *logi(2)  < 0)
-          ! phys(3) = factor*logi(3) + 1 + (self%ldim(3)) * MERGE(1,0,factor *logi(3)  < 0)
       end function comp_addr_phys
 
     !> \brief Convert physical address to logical address. Complex image.

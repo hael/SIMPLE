@@ -613,11 +613,19 @@ contains
     end function add2fbody
 
     !> \brief  is for extracting the body of a file
-    function get_fbody( fname, suffix ) result( fbody )
+    function get_fbody( fname, suffix, separator ) result( fbody )
         character(len=*), intent(in) :: fname, suffix !< file extension
         character(len=STDLEN)        :: fbody
+        logical,            optional :: separator
         integer :: pos
-        pos = index(fname, '.'//suffix) ! position of suffix
+        logical :: l_separator
+        l_separator = .true.
+        if(present(separator))l_separator = separator
+        if( l_separator )then
+            pos = index(fname, '.'//suffix) ! position of suffix
+        else
+            pos = index(fname, suffix) ! position of suffix
+        endif
         fbody = fname(:pos-1)
     end function get_fbody
 
@@ -1017,10 +1025,7 @@ contains
         call fclose_1(funit,io_stat, errmsg="Error closing file "//trim(fname))
     end subroutine arr2txtfile
 
-
-
     ! FILE-HANDLING JIFFYS
-
 
     !> \brief  for reading raw images using stream access
     subroutine read_raw_image( fname, mat, first_byte )

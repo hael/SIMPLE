@@ -450,15 +450,14 @@ select case(prg)
         ! algorithm adopted from the prime3D probabilistic ab initio 3D reconstruction algorithm<prime2D/end>
         !
         ! set required keys
-        keys_required(1)  = 'stk'
-        keys_required(2)  = 'smpd'
-        keys_required(3)  = 'msk'
-        keys_required(4)  = 'ncls'
-        keys_required(5)  = 'ctf'
-        keys_optional(6)  = 'chunksz'
-        keys_required(7)  = 'dir_unidoc'
+        keys_required(1)  = 'smpd'
+        keys_required(2)  = 'msk'
+        keys_required(3)  = 'ncls'
+        keys_required(4)  = 'ctf'
+        keys_required(5)  = 'nparts'
+        keys_required(6)  = 'dir_mics'
         ! set optional keys
-        keys_optional(1)  = 'nparts'
+        keys_optional(1)  = 'match_filt'
         keys_optional(2)  = 'nthr'
         keys_optional(3)  = 'ncunits'
         keys_optional(4)  = 'hp'
@@ -475,14 +474,11 @@ select case(prg)
         keys_optional(15) = 'maxits'
         keys_optional(16) = 'filwidth'
         keys_optional(17) = 'center'
-        keys_optional(18) = 'autoscale'
-        keys_optional(19) = 'weights2D'
-        keys_optional(20) = 'refine'
-        keys_optional(21) = 'balance'
-        keys_optional(22) = 'match_filt'
+        keys_optional(18) = 'refine'
+        keys_optional(19) = 'balance'
         ! documentation
         if( describe ) call print_doc_prime2D
-        call cline%parse( keys_required(:7), keys_optional(:22) )
+        call cline%parse( keys_required(:6), keys_optional(:19) )
         ! set defaults
         if( .not. cline%defined('lpstart')   ) call cline%set('lpstart',    15.)
         if( .not. cline%defined('lpstop')    ) call cline%set('lpstop',     8.)
@@ -491,17 +487,8 @@ select case(prg)
         if( .not. cline%defined('cenlp')     ) call cline%set('cenlp',      30.)
         if( .not. cline%defined('edge')      ) call cline%set('edge',       10.)
         if( .not. cline%defined('maxits')    ) call cline%set('maxits',     30.)
-        if( .not. cline%defined('weights2D') ) call cline%set('weights2D', 'no')
-        if( .not. cline%defined('autoscale') ) call cline%set('autoscale', 'yes')
-        if( cline%defined('nparts') .and. cline%defined('chunksz') )then
-            stop 'nparts and chunksz cannot simultaneously be part of command line'
-        else if(cline%defined('nparts') )then
-            ! ok
-        else if( cline%defined('chunksz') )then
-            ! ok
-        else
-            stop 'eiter nparts or chunksz need to be part of command line'
-        endif
+        call cline%set('weights2D', 'no')
+        call cline%set('autoscale', 'no')
         call xprime2D_stream_distr%execute(cline)
 
     ! 3D SIMILARITY MATRIX GENERATION WITH COMMON LINES
