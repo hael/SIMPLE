@@ -432,7 +432,7 @@ contains
             do i=1,nsamp
                 call progress(i, nsamp)
                 orientation = b%a%get_ori(sample(i))
-                call b%img%read(p%stk, sample(i))
+                call read_img_from_stk(b, p, sample(i))
                 call prep4cgrid(b%img, b%img_pad, p%msk, kbwin)
                 if( p%pgrp == 'c1' )then
                     call b%recvols(1)%inout_fplane(orientation, .true., b%img_pad)

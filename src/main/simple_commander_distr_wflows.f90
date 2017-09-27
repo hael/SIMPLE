@@ -372,8 +372,10 @@ contains
             ! because prime2D_startdoc.txt is default output in the absence of outfile
             call cline_cavgassemble%set('oritab', 'prime2D_startdoc'//METADATEXT)
         endif
-        ! split stack
-         call xsplit%execute(cline)
+        if( .not. cline%defined('stktab') )then
+            ! split stack
+            call xsplit%execute(cline)
+        endif
         ! schedule
         call qenv%gen_scripts_and_schedule_jobs(p_master, job_descr)
         ! assemble class averages
@@ -448,8 +450,10 @@ contains
         call cline_makecavgs%set('prg', 'makecavgs')
         if( job_descr%isthere('automsk') ) call job_descr%delete('automsk')
 
-        ! split stack
-        call xsplit%execute(cline)
+        if( .not. cline%defined('stktab') )then
+            ! split stack
+            call xsplit%execute(cline)
+        endif
         ! execute initialiser
         if( .not. cline%defined('refs') )then
             p_master%refs = 'start2Drefs'//p_master%ext
@@ -457,8 +461,13 @@ contains
                 call cline_makecavgs%set('refs', p_master%refs)
                 call xmakecavgs%execute(cline_makecavgs)
             else
-                call random_selection_from_imgfile(p_master%stk, p_master%refs,&
-                    &p_master%ncls, p_master%box, p_master%smpd)             
+                if( cline%defined('stktab') )then
+                    call random_selection_from_imgfile(p_master%stk, p_master%refs,&
+                        &p_master%ncls, p_master%box, p_master%smpd)
+                else
+                    call random_selection_from_imgfile(p_master%stktab, p_master%refs,&
+                        &p_master%ncls, p_master%box, p_master%smpd)
+                endif
             endif
         endif
         ! extremal dynamics
@@ -615,8 +624,10 @@ contains
                 ishift = ishift - p_master%ncls
             endif
         end do
-        ! split stack
-        call xsplit%execute(cline)
+        if( .not. cline%defined('stktab') )then
+            ! split stack
+            call xsplit%execute(cline)
+        endif
         ! schedule & clean
         write(*,'(A)') '>>>'
         write(*,'(A)') '>>> EXECUTING PRIME2D IN CHUNK-BASED DISTRIBUTION MODE'
@@ -749,8 +760,10 @@ contains
         else
             vol = trim('startvol_state01'//p_master%ext)
         endif
-        ! split stack
-        call xsplit%execute(cline)
+        if( .not. cline%defined('stktab') )then
+            ! split stack
+            call xsplit%execute(cline)
+        endif
         ! prepare command lines from prototype master
         cline_volassemble = cline
         call cline_volassemble%set( 'outvol',  vol)
@@ -862,8 +875,10 @@ contains
             state_assemble_finished(state) = 'VOLASSEMBLE_FINISHED_STATE'//int2str_pad(state,2)
         enddo
 
-        ! SPLIT STACK
-        call xsplit%execute(cline)
+        if( .not. cline%defined('stktab') )then
+            ! split stack
+            call xsplit%execute(cline)
+        endif
         ! GENERATE STARTING MODELS & ORIENTATIONS
         ! Orientations
         if( cline%defined('oritab') )then
@@ -1176,8 +1191,10 @@ contains
             call cline_merge_algndocs%delete( trim(vol) )
             call cline_volassemble%delete( trim(vol) )
         enddo
-        ! SPLIT STACK
-        call xsplit%execute(cline)
+        if( .not. cline%defined('stktab') )then
+            ! split stack
+            call xsplit%execute(cline)
+        endif
         ! GENERATE STARTING MODELS & ORIENTATIONS
         ! Orientations
         oritab=trim(p_master%oritab)
@@ -1318,8 +1335,10 @@ contains
         ! setup the environment for distributed execution
         call qenv%new(p_master)
         call cline%gen_job_descr(job_descr)
-        ! split stack
-        call xsplit%execute(cline)
+        if( .not. cline%defined('stktab') )then
+            ! split stack
+            call xsplit%execute(cline)
+        endif
         ! schedule
         call qenv%gen_scripts_and_schedule_jobs(p_master, job_descr)
         ! assemble volumes

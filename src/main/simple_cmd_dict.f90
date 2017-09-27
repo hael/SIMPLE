@@ -219,6 +219,7 @@ contains
         call chdict%push('stats',         'provide statistics(yes|no){yes}')
         call chdict%push('stepsz',        'size of step{0}')
         call chdict%push('stk',           'particle stack with all images(ptcls.ext)')
+        call chdict%push('stktab',        'list of per-micrograph stacks')
         call chdict%push('stk2',          '2nd stack(in map2ptcls/select: selected(cavgs).ext)')
         call chdict%push('stk3',          '3d stack (in map2ptcls/select: (cavgs)2selectfrom.ext)')
         call chdict%push('stk_backgr',    'stack with image for background subtraction')

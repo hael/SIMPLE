@@ -449,8 +449,9 @@ contains
             !> \brief  the density reconstruction functionality
             subroutine rec_dens
                 use simple_ori, only: ori
+                character(len=:), allocatable :: stkname
                 type(ori) :: o_sym, orientation
-                integer   :: j, state, state_balance
+                integer   :: j, state, state_balance, ind
                 real      :: pw, eopart
                 state         = nint(o%get(i, 'state'))
                 state_balance = nint(o%get(i, 'state_balance'))
@@ -460,10 +461,15 @@ contains
                 if( pw > 0. )then
                     orientation = o%get_ori(i)
                     ! read image
-                    if( p%l_distr_exec )then
-                        call img%read(p%stk_part, cnt)
+                    if( p%l_stktab_input )then
+                        call p%stkhandle%get_stkname_and_ind(i, stkname, ind)
+                        call img%read(stkname, ind)
                     else
-                        call img%read(fname, i)
+                        if( p%l_distr_exec )then
+                            call img%read(p%stk_part, cnt)
+                        else
+                            call img%read(fname, i)
+                        endif
                     endif
                     ! gridding
                     call prep4cgrid(img, img_pad, p%msk, kbwin)

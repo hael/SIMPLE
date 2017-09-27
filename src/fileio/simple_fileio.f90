@@ -1025,10 +1025,7 @@ contains
         call fclose_1(funit,io_stat, errmsg="Error closing file "//trim(fname))
     end subroutine arr2txtfile
 
-
-
     ! FILE-HANDLING JIFFYS
-
 
     !> \brief  for reading raw images using stream access
     subroutine read_raw_image( fname, mat, first_byte )

@@ -25,8 +25,6 @@ type :: ftiter
     integer :: lims(3,2)=0                  !< Fourier index limits
     real    :: dsteps(3)=0.                 !< wavelengths of first components
     real    :: smpd=0.                      !< sampling distance (Angstroms per pixel)
-!    real, allocatable :: first,second,third
-    
   contains
     ! CONSTRUCTOR
     procedure :: new
@@ -289,10 +287,6 @@ contains
               phys(2) = -logi(2) + 1 + self%ldim(2) *  MERGE(1,0,-logi(2)  < 0)
               phys(3) = -logi(3) + 1 + self%ldim(3) *  MERGE(1,0,-logi(3)  < 0)
           endif
-          ! if( logi(1) < 0 ) factor=-1
-          ! phys(1) = factor*logi(1) + 1
-          ! phys(2) = factor*logi(2) + 1 + self%ldim(2) * MERGE(1,0,factor *logi(2)  < 0)
-          ! phys(3) = factor*logi(3) + 1 + self%ldim(3) * MERGE(1,0,factor *logi(3)  < 0)
       end function comp_addr_phys
 
     !> \brief Convert physical address to logical address. Complex image.

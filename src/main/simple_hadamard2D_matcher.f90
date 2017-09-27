@@ -59,7 +59,11 @@ contains
                     p%refs = 'start2Drefs'//p%ext
                     if( p%chunktag .ne. '' ) p%refs = trim(p%chunktag)//trim(p%refs)
                     ptcl_mask = b%a%included()
-                    call random_selection_from_imgfile(p%stk, p%refs, p%ncls, p%box, p%smpd, ptcl_mask)
+                    if( cline%defined('stktab') )then
+                        call random_selection_from_imgfile(p%stktab, p%refs, p%ncls, p%box, p%smpd, ptcl_mask)
+                    else
+                        call random_selection_from_imgfile(p%stk, p%refs, p%ncls, p%box, p%smpd, ptcl_mask)
+                    endif
                     deallocate(ptcl_mask)
                 endif
             endif
