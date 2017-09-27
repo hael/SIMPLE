@@ -122,7 +122,7 @@ contains
         type(chash)                        :: job_descr
         type(oris)                         :: os
         integer :: ipart, nl, ishift, nparts, iter, ncls, n_newmics
-        integer :: nptcls_glob, nstacks_glob, ncls_glob
+        integer :: nptcls_glob, nstacks_glob, ncls_glob, box_glob, smpd_glob, msk_glob
         character(len=STDLEN), parameter :: DEFTAB         = 'deftab.txt'
         integer,               parameter :: NCLS_INIT_LIM  = 10
         integer,               parameter :: NPTCLS_PER_CLS = 400
@@ -195,7 +195,9 @@ contains
         contains
 
             subroutine add_newstacks
-                use simple_binoris_io, only: binwrite_oritab, binread_oritab
+                use simple_commander_imgproc, only: scale_commander
+                use simple_binoris_io,        only: binwrite_oritab, binread_oritab
+                type(scale_commander)              :: xscale
                 type(oris)                         :: deftab_glob
                 character(len=STDLEN), allocatable :: new_deftabs(:), new_stacks(:), tmp(:)
                 integer                            :: i, nl, nptcls, cnt
@@ -222,11 +224,8 @@ contains
                 ! update & write stack list
                 if( nstacks_glob == 0 )then
                     allocate(stacktab(n_newmics))
+                    ! BOX SIZE AND SMPD GLOB NEED TO BE DETERMINED HERE
                 else
-                    ! down scale stacks here
-                    do i = 1, n_newmics
-                        !
-                    enddo
                     ! updates stacks array
                     tmp = stacktab
                     deallocate(stacktab)
@@ -236,6 +235,8 @@ contains
                 cnt = 0
                 do i = nstacks_glob, nstacks_glob + n_newmics
                     cnt = cnt + 1
+                    ! down scale stacks here and update names !!!!!!!!1
+                    !!!!!1
                     stacktab(i) = new_stacks(cnt)
                 enddo
                 nstacks_glob = nstacks_glob + n_newmics
