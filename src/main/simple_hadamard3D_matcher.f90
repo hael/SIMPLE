@@ -416,12 +416,12 @@ contains
                 call b%vol%write(p%vols(1), del_if_exists=.true.)
                 return
             endif
-            nsamp = p%nptcls
+            nsamp = p%top - p%fromp + 1
             if( present(nsamp_in) ) nsamp = nsamp_in
             allocate( sample(nsamp), stat=alloc_stat )
             call alloc_errchk("In: gen_random_model; simple_hadamard3D_matcher", alloc_stat)
             if( present(nsamp_in) )then
-                rt = ran_tabu(p%nptcls)
+                rt = ran_tabu(p%top - p%fromp + 1)
                 call rt%ne_ran_iarr(sample)
                 call rt%kill
             else
@@ -431,8 +431,8 @@ contains
             kbwin = b%recvols(1)%get_kbwin()
             do i=1,nsamp
                 call progress(i, nsamp)
-                orientation = b%a%get_ori(sample(i))
-                call read_img_from_stk(b, p, sample(i))
+                orientation = b%a%get_ori(sample(i) + p%fromp - 1)
+                call read_img_from_stk(b, p, sample(i) + p%fromp - 1)
                 call prep4cgrid(b%img, b%img_pad, p%msk, kbwin)
                 if( p%pgrp == 'c1' )then
                     call b%recvols(1)%inout_fplane(orientation, .true., b%img_pad)

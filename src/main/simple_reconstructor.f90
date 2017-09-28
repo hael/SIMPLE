@@ -104,16 +104,16 @@ contains
         self%winsz      = p%winsz
         self%alpha      = p%alpha
         select case(p%ctf)
-        case('no')
-            self%ctf%flag    =CTFFLAG_NO
-        case('yes')
-            self%ctf%flag    =CTFFLAG_YES
-        case('mul')
-            self%ctf%flag    =CTFFLAG_MUL
-        case('flip')
-            self%ctf%flag    =CTFFLAG_FLIP
+            case('no')
+                self%ctf%flag = CTFFLAG_NO
+            case('yes')
+                self%ctf%flag = CTFFLAG_YES
+            case('mul')
+                self%ctf%flag = CTFFLAG_MUL
+            case('flip')
+                self%ctf%flag = CTFFLAG_FLIP
         end select
-        self%tfneg      = .false.
+        self%tfneg = .false.
         if( p%neg .eq. 'yes' ) self%tfneg = .true.
         self%tfastig = .false.
         if( p%tfplan%mode .eq. 'astig' ) self%tfastig = .true.
@@ -139,7 +139,6 @@ contains
                 &ldim_exp(2,1):ldim_exp(2,2),&
                 &ldim_exp(3,1):ldim_exp(3,2)), stat=alloc_stat)
             allocchk("In: alloc_rho; simple_reconstructor cmat_exp")
-  
             allocate(self%rho_exp( rho_exp_lims(1,1):rho_exp_lims(1,2),&
                 &rho_exp_lims(2,1):rho_exp_lims(2,2),&
                 &rho_exp_lims(3,1):rho_exp_lims(3,2)), stat=alloc_stat)
@@ -385,8 +384,8 @@ contains
                 do h = lims(1,1),lims(1,2)
                     do m = lims(3,1),lims(3,2)
                         phys     = W_img%comp_addr_phys([h, k, m])
-                        val      = mycabs(W_img%get_cmat_at( phys))   !! ||C|| == ||C*||
-                        val_prev = real(Wprev_img%get_cmat_at( phys)) !! Real(C) == Real(C*)
+                        val      = mycabs(W_img%get_cmat_at(phys))   !! ||C|| == ||C*||
+                        val_prev = real(Wprev_img%get_cmat_at(phys)) !! Real(C) == Real(C*)
                         val      = min(val_prev/val, 1.e20)
                         call W_img%set_cmat_at( phys, cmplx(val, 0.)) 
                         Wnorm    = Wnorm + val ! values are positive, no need to square (numerical stability)
@@ -405,7 +404,7 @@ contains
             do h = lims(1,1),lims(1,2)
                 do m = lims(3,1),lims(3,2)
                     phys   = W_img%comp_addr_phys([h, k, m])
-                    invrho = real(W_img%get_cmat_at( phys)) !! Real(C) == Real(C*)
+                    invrho = real(W_img%get_cmat_at(phys)) !! Real(C) == Real(C*)
                     call self%mul_cmat_at(invrho,phys)
                 end do
             end do

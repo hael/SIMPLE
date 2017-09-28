@@ -289,14 +289,13 @@ contains
         character(len=32),       intent(in)    :: eonames(2) !< even/odd filenames
         real, allocatable :: res(:), corrs(:)
         type(image)       :: even, odd
-        !type(masker)      :: volmasker
         integer           :: j
         ! make clipped volumes
         call even%new([self%box,self%box,self%box],self%smpd)
         call odd%new([self%box,self%box,self%box],self%smpd)
         ! correct for the uneven sampling density
-        call self%even%sampl_dens_correct(maxits=3)
-        call self%odd%sampl_dens_correct(maxits=3)
+        call self%even%sampl_dens_correct(maxits=1)
+        call self%odd%sampl_dens_correct(maxits=1)
         ! reverse FT
         call self%even%bwd_ft
         call self%odd%bwd_ft
@@ -428,7 +427,6 @@ contains
             if( present(fbody) )then
                 eonames(1) = fbody//int2str_pad(state,2)//'_odd'//p%ext
                 eonames(2) = fbody//int2str_pad(state,2)//'_even'//p%ext
-                
             else
                 eonames(1) = 'recvol_state'//int2str_pad(state,2)//'_odd'//p%ext
                 eonames(2) = 'recvol_state'//int2str_pad(state,2)//'_even'//p%ext

@@ -277,8 +277,7 @@ contains
       pure function comp_addr_phys(self,logi) result(phys)
           class(ftiter), intent(in) :: self
           integer,       intent(in) :: logi(3) !<  Logical address
-          integer :: phys(3) !<  Physical address
-          !integer ::  factor
+          integer :: phys(3)                   !<  Physical address
           if (logi(1) .ge. 0) then
               phys(1) = logi(1) + 1
               phys(2) = logi(2) + 1 + MERGE(self%ldim(2),0, logi(2) < 0)
@@ -294,7 +293,7 @@ contains
     function comp_addr_logi(self,phys) result(logi)
         class(ftiter), intent(in) :: self
         integer,       intent(in) :: phys(3) !<  Physical address
-        integer :: logi(3) !<  Logical address
+        integer :: logi(3)                   !<  Logical address
         integer :: i
         logi = phys - 1
         ! The above is true except when in negative frequencies of
