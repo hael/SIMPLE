@@ -119,8 +119,8 @@ contains
         character(len=32), parameter :: STK_FILETAB     = 'stktab.txt'
         character(len=32), parameter :: DEFTAB          = 'deftab.txt'
         character(len=32), parameter :: STK_DIR         = './stacks/'
-        integer,           parameter :: NCLS_INIT_LIM   = 1    ! FOR TESTING ONLY
-        integer,           parameter :: NPTCLS_PER_CLS  = 400
+        integer,           parameter :: NCLS_INIT_LIM   = 5    ! FOR TESTING ONLY
+        integer,           parameter :: NPTCLS_PER_CLS  = 100
         type(prime2D_distr_commander)      :: xprime2D_distr
         type(micwatcher)                   :: mic_watcher
         character(len=STDLEN), allocatable :: newstacks(:), stktab(:)
@@ -129,9 +129,9 @@ contains
         type(qsys_env)                     :: qenv
         type(params)                       :: p_master, p_prime2D
         type(chash)                        :: job_descr
-        real    :: scale, smpd_glob
+        real    :: scale, smpd_glob, msk_glob
         integer :: nparts, iter, ncls, n_newmics, ldim(3), nptcls, box_original
-        integer :: nptcls_glob, nstacks_glob, ncls_glob, box_glob, msk_glob
+        integer :: nptcls_glob, nstacks_glob, ncls_glob, box_glob
         integer :: nptcls_glob_prev, ncls_glob_prev
         ! seed the random number generator
         call seed_rnd
@@ -175,6 +175,7 @@ contains
                     box_glob     = find_magic_box(nint(scale*real(ldim(2))))
                     scale        = real(box_glob) / real(box_original)
                     smpd_glob    = p_master%smpd / scale
+                    msk_glob     = p_master%msk * scale
                     deallocate(stktab)
                     call cline_scale%set('newbox', real(box_glob))
                 endif
@@ -188,8 +189,9 @@ contains
         call cline_prime2D%set('ncls', real(ncls_glob))
         call cline_prime2D%set('box',  real(box_glob))
         call cline_prime2D%set('smpd', real(smpd_glob))
+        call cline_prime2D%set('msk',  real(msk_glob))
         ! setup the environment for distributed execution
-        p_prime2D = params(cline, checkdistr=.false.)
+        p_prime2D = params(cline_prime2D, checkdistr=.false.)
         call qenv%new(p_prime2D)
         ! prepare job description
         call cline_prime2D%gen_job_descr(job_descr)

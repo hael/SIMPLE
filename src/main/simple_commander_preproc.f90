@@ -166,8 +166,8 @@ contains
                     allocate(fname_unidoc_output, source='unidoc_output_'//trim(movie_fbody)//'.txt')
                     p%fbody = trim(movie_fbody)
                 endif
-                allocate(fname_stk_extract,   source='ptcls_from_'//trim(movie_fbody)//trim(movie_ext))
-                allocate(fname_ctf_extract,   source='extract_params_'//trim(movie_fbody)//METADATEXT)
+                allocate(fname_stk_extract, source='ptcls_from_'//trim(movie_fbody)//'.'//trim(movie_ext))
+                allocate(fname_ctf_extract, source='extract_params_'//trim(movie_fbody)//METADATEXT)
                 call cline%set('fbody', trim(p%fbody))
             else
                 allocate(fname_ctffind_ctrl,  source='ctffind_ctrl_file'//'.txt')

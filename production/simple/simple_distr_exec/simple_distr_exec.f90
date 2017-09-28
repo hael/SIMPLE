@@ -385,11 +385,10 @@ select case(prg)
         ! algorithm adopted from the prime3D probabilistic ab initio 3D reconstruction algorithm<prime2D/end>
         !
         ! set required keys
-        keys_required(1)  = 'stk'
-        keys_required(2)  = 'smpd'
-        keys_required(3)  = 'msk'
-        keys_required(4)  = 'ncls'
-        keys_required(5)  = 'ctf'
+        keys_required(1)  = 'smpd'
+        keys_required(2)  = 'msk'
+        keys_required(3)  = 'ncls'
+        keys_required(4)  = 'ctf'
         ! set optional keys
         keys_optional(1)  = 'nparts'
         keys_optional(2)  = 'chunksz'
@@ -419,9 +418,17 @@ select case(prg)
         keys_optional(26) = 'refine'
         keys_optional(27) = 'balance'
         keys_optional(28) = 'match_filt'
+        keys_optional(29) = 'stk'
+        keys_optional(30) = 'stktab'
         ! documentation
         if( describe ) call print_doc_prime2D
-        call cline%parse( keys_required(:5), keys_optional(:28) )
+        call cline%parse( keys_required(:4), keys_optional(:30) )
+        ! sanity check
+        if( cline%defined('stk') .or. cline%defined('stktab') )then
+            ! all ok
+        else
+            stop 'stk or stktab need to be part of command line!'
+        endif
         ! set defaults
         if( .not. cline%defined('lpstart')   ) call cline%set('lpstart',    15.)
         if( .not. cline%defined('lpstop')    ) call cline%set('lpstop',     8.)
