@@ -135,12 +135,14 @@ type :: image
     procedure, private :: subtr_3
     procedure, private :: subtr_4
     generic            :: subtr => subtr_1, subtr_2, subtr_3, subtr_4
+    procedure          :: div_rmat_at
     procedure, private :: div_1
     procedure, private :: div_2
     procedure, private :: div_3
     procedure, private :: div_4
     generic            :: div => div_1, div_2, div_3, div_4
     procedure          :: ctf_dens_correct
+    procedure          :: mul_rmat_at
     procedure, private :: mul_1
     procedure, private :: mul_2
     procedure, private :: mul_3
@@ -211,6 +213,7 @@ type :: image
     generic            :: cure => cure_1, cure_2
     procedure          :: loop_lims
     procedure          :: comp_addr_phys
+    procedure          :: phys_index_mem
     procedure          :: corr
     procedure          :: corr_shifted
     procedure, private :: real_corr_1
@@ -2142,6 +2145,14 @@ contains
         endif
     end function multiplication
 
+    ! elementwise multiplication in real-space
+    subroutine mul_rmat_at( self, logi, rc )
+        class(image), intent(inout) :: self
+        integer,      intent(in)    :: logi(3)
+        real,         intent(in)    :: rc
+        self%rmat(logi(1),logi(2),logi(3)) = self%rmat(logi(1),logi(2),logi(3))*rc
+    end subroutine mul_rmat_at
+
     !>  \brief mul_1 is for component-wise multiplication of an image with a real constant
     !! \param logi
     !! \param rc
@@ -2303,6 +2314,16 @@ contains
             stop 'cannot divide images of different dims; division(/); simple_image'
         endif
     end function division
+
+    ! component-wise division of an image with a real number
+    subroutine div_rmat_at( self, logi, k )
+        class(image), intent(inout) :: self
+        integer,      intent(in)    :: logi(3)
+        real,         intent(in)    :: k
+        if( abs(k) > 1e-6 )then
+            self%rmat(logi(1),logi(2),logi(3)) = self%rmat(logi(1),logi(2),logi(3))/k
+        endif
+    end subroutine div_rmat_at
 
     !>  \brief div_1 is for dividing image with real constant, not overloaded
     !! \param c divisor
@@ -4331,6 +4352,27 @@ contains
         integer                   :: phys(3) !<  Physical address
         phys = self%fit%comp_addr_phys(logi)
     end function comp_addr_phys
+
+    ! memoization of physical indices for Fourier trasnforms
+    ! ftiter mode controls Friedel redundancy
+    subroutine phys_index_mem( self, lims, indmat )
+        class(image),         intent(in)    :: self
+        integer,              intent(in)    :: lims(3,2)
+        integer, allocatable, intent(inout) :: indmat(:,:,:,:)
+        integer :: h, k, l
+        if( allocated(indmat) ) deallocate(indmat)
+        allocate(indmat(lims(1,1):lims(1,2),lims(2,1):lims(2,2),lims(3,1):lims(3,2),3), stat=alloc_stat)
+        allocchk('In: simple_image :: phys_index_mem')
+        !$omp parallel do default(shared) proc_bind(close) collapse(3) private(h,k,l)
+        do h=lims(1,1),lims(1,2)
+            do k=lims(2,1),lims(2,2)
+                do l=lims(3,1),lims(3,2)
+                    indmat(h,k,l,:) = self%fit%comp_addr_phys([h,k,l])
+                end do
+            end do
+        end do
+        !$omp end parallel do
+    end subroutine phys_index_mem
 
     !>  \brief corr is for correlating two images
     !! \param self1 input image 1

@@ -274,20 +274,20 @@ contains
         endif
     end function comp_addr_phys_orig
 
-      pure function comp_addr_phys(self,logi) result(phys)
-          class(ftiter), intent(in) :: self
-          integer,       intent(in) :: logi(3) !<  Logical address
-          integer :: phys(3)                   !<  Physical address
-          if (logi(1) .ge. 0) then
-              phys(1) = logi(1) + 1
-              phys(2) = logi(2) + 1 + MERGE(self%ldim(2),0, logi(2) < 0)
-              phys(3) = logi(3) + 1 + MERGE(self%ldim(3),0, logi(3) < 0)
-          else
-              phys(1) = -logi(1) + 1
-              phys(2) = -logi(2) + 1 + MERGE(self%ldim(2),0, -logi(2) < 0)
-              phys(3) = -logi(3) + 1 + MERGE(self%ldim(3),0, -logi(3) < 0)
-          endif
-      end function comp_addr_phys
+    pure function comp_addr_phys(self,logi) result(phys)
+        class(ftiter), intent(in) :: self
+        integer,       intent(in) :: logi(3) !<  Logical address
+        integer :: phys(3)                   !<  Physical address
+        if (logi(1) .ge. 0) then
+            phys(1) = logi(1) + 1
+            phys(2) = logi(2) + 1 + MERGE(self%ldim(2),0, logi(2) < 0)
+            phys(3) = logi(3) + 1 + MERGE(self%ldim(3),0, logi(3) < 0)
+        else
+            phys(1) = -logi(1) + 1
+            phys(2) = -logi(2) + 1 + MERGE(self%ldim(2),0, -logi(2) < 0)
+            phys(3) = -logi(3) + 1 + MERGE(self%ldim(3),0, -logi(3) < 0)
+        endif
+    end function comp_addr_phys
 
     !> \brief Convert physical address to logical address. Complex image.
     function comp_addr_logi(self,phys) result(logi)

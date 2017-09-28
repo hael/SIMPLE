@@ -30,7 +30,7 @@ type :: polarft_corrcalc
     real(sp),    allocatable :: argtransf(:,:)          !< argument transfer constants for shifting the references
     real(sp),    allocatable :: polar(:,:)              !< table of polar coordinates (in Cartesian coordinates)
     real(sp),    allocatable :: ctfmats(:,:,:)          !< expandd set of CTF matrices (for efficient parallel exec)
-    complex(sp), allocatable :: pfts_refs(:,:,:)      !< 3D complex matrix of polar reference sections (nrefs,refsz,nk)
+    complex(sp), allocatable :: pfts_refs(:,:,:)        !< 3D complex matrix of polar reference sections (nrefs,refsz,nk)
     complex(sp), allocatable :: pfts_ptcls(:,:,:)       !< 3D complex matrix of particle sections
     logical                  :: with_ctf     = .false.  !< CTF flag
     logical                  :: existence    = .false.  !< to indicate existence

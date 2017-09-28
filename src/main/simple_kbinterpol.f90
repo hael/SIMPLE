@@ -10,11 +10,11 @@ type :: kbinterpol
    private
    real :: alpha, beta, betasq, oneoW, piW, twooW, W, Whalf
  contains
-    procedure          :: new
-    procedure          :: get_winsz
-    procedure          :: get_alpha
-    procedure          :: apod
-    procedure          :: instr
+    procedure :: new
+    procedure :: get_winsz
+    procedure :: get_alpha
+    procedure :: apod
+    procedure :: instr
 end type kbinterpol
 
 interface kbinterpol

@@ -58,7 +58,7 @@ contains
         do i=lims(1,1),lims(1,2)
             do j=lims(2,1),lims(2,2)
                 do k=lims(3,1),lims(3,2)
-                    call img%div([i,j,k], w1(i)*w2(j)*w3(k))
+                    call img%div_rmat_at([i,j,k], w1(i)*w2(j)*w3(k))
                 end do
             end do
         end do
@@ -118,7 +118,7 @@ contains
         do i=lims(1,1),lims(1,2)
             do j=lims(2,1),lims(2,2)
                 do k=lims(3,1),lims(3,2)
-                    call vol%mul([i,j,k], w1(i)*w2(j)*w3(k))
+                    call vol%mul_rmat_at([i,j,k], w1(i)*w2(j)*w3(k))
                 end do
             end do
         end do
@@ -140,6 +140,7 @@ contains
                     ci   = ci+1.
                 end do
             end subroutine calc_w
+
     end subroutine mul_w_instr
 
 end module simple_gridding

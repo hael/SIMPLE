@@ -1,21 +1,19 @@
 ! concrete commander: distributed workflows
 module simple_commander_distr_wflows
 #include "simple_lib.f08"
-
-use simple_qsys_funs       ! use all in there
-use simple_binoris_io,     only: binread_oritab, binwrite_oritab, binread_nlines
-use simple_cmdline,        only: cmdline
-use simple_chash,          only: chash
-use simple_qsys_env,       only: qsys_env
-use simple_build,          only: build
-use simple_params,         only: params
-use simple_commander_base, only: commander_base
-use simple_commander_preproc
+use simple_binoris_io,       only: binread_oritab, binwrite_oritab, binread_nlines
+use simple_cmdline,          only: cmdline
+use simple_chash,            only: chash
+use simple_qsys_env,         only: qsys_env
+use simple_build,            only: build
+use simple_params,           only: params
+use simple_commander_base,   only: commander_base
+use simple_commander_preproc ! use all in there
 use simple_commander_prime2D ! use all in there
 use simple_commander_distr   ! use all in there
 use simple_commander_mask    ! use all in there
-use simple_commander_distr ! use all in there
-
+use simple_commander_distr   ! use all in there
+use simple_qsys_funs         ! use all in there
 implicit none
 
 public :: unblur_ctffind_distr_commander
@@ -316,7 +314,6 @@ contains
     end subroutine exec_ctffind_distr
 
     subroutine exec_pick_distr( self, cline )
-!        use simple_commander_preproc
         class(pick_distr_commander), intent(inout) :: self
         class(cmdline),              intent(inout) :: cline
         type(qsys_env) :: qenv

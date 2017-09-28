@@ -33,17 +33,17 @@ type, extends(image) :: projector
     logical               :: expanded_exists=.false.             !< indicates FT matrix existence
   contains
     ! CONSTRUCTORS
-    procedure          :: expand_cmat
+    procedure :: expand_cmat
     ! SETTERS
-    procedure          :: reset_expanded
+    procedure :: reset_expanded
     ! INTERPOLATOR
-    procedure          :: extr_gridfcomp
+    procedure :: extr_gridfcomp
     ! FOURIER PROJECTORS
-    procedure          :: fproject
-    procedure          :: fproject_polar
-    procedure          :: interp_fcomp
+    procedure :: fproject
+    procedure :: fproject_polar
+    procedure :: interp_fcomp
     ! DESTRUCTOR
-    procedure          :: kill_expanded
+    procedure :: kill_expanded
 end type projector
 
 contains
@@ -143,12 +143,12 @@ contains
                 comp = self%interp_fcomp(loc)
                 if (h > 0) then
                     phys(1) = h + 1
-                    phys(2) = k + 1 + MERGE(ldim(2),0,k  < 0)
+                    phys(2) = k + 1 + MERGE(ldim(2),0,k < 0)
                     phys(3) = 1
                     call fplane%set_cmat_at(phys, comp)
                 else
                     phys(1) = -h + 1
-                    phys(2) = -k + 1 + MERGE(ldim(2),0,-k  < 0)
+                    phys(2) = -k + 1 + MERGE(ldim(2),0,-k < 0)
                     phys(3) = 1
                     call fplane%set_cmat_at(phys, conjg(comp))
                 endif

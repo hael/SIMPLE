@@ -4,11 +4,11 @@ module simple_reconstructor
 !$ use omp_lib_kinds
 use, intrinsic :: iso_c_binding
 #include "simple_lib.f08"
-!!import functions
+!! import functions
 use simple_fftw3,      only: fftwf_alloc_real, fftwf_free
 use simple_imghead,    only: find_ldim_nptcls
 use simple_timer,      only: tic, toc, timer_int_kind
-use simple_gridding,  only: prep4cgrid
+use simple_gridding,   only: prep4cgrid
 !! import classes
 use simple_ctf,        only: ctf
 use simple_ori,        only: ori
@@ -40,13 +40,11 @@ type, extends(image) :: reconstructor
     real(kind=c_float), pointer :: rho(:,:,:)=>null()           !< sampling+CTF**2 density
     complex, allocatable        :: cmat_exp(:,:,:)              !< Fourier components of expanded reconstructor
     real,    allocatable        :: rho_exp(:,:,:)               !< sampling+CTF**2 density of expanded reconstructor
-    real,    allocatable        :: w(:,:,:)
     real                        :: winsz         = 1.           !< window half-width
     real                        :: alpha         = 2.           !< oversampling ratio
     real                        :: dens_const    = 1.           !< density estimation constant, old val: 1/nptcls
     integer                     :: lfny          = 0            !< Nyqvist Fourier index
     integer                     :: ldim_img(3)   = 0            !< logical dimension of the original image
-    integer, allocatable        :: physmat(:,:,:,:)
     type(CTFFLAGTYPE)           :: ctf                          !< ctf flag <yes|no|mul|flip>
     logical                     :: tfneg              = .false. !< invert contrast or not
     logical                     :: tfastig            = .false. !< astigmatic CTF or not
@@ -87,15 +85,15 @@ contains
     ! CONSTRUCTOR
 
     subroutine alloc_rho( self, p, expand )
-        class(reconstructor), intent(inout) :: self  !< this instance
-        class(params),        intent(in)    :: p     !< parameters object
+        class(reconstructor), intent(inout) :: self   !< this instance
+        class(params),        intent(in)    :: p      !< parameters object
         logical, optional,    intent(in)    :: expand !< expand flag
         integer :: rho_shape(3), lims(3,2), rho_exp_lims(3,2), ldim_exp(3,2)
-        integer ::  dim, maxlims
+        integer :: dim, maxlims
         logical :: l_expand
         l_expand = .true.
-        if(.not. self%exists() ) stop 'construct image before allocating rho; alloc_rho; simple_reconstructor'
-        if(      self%is_2d()  ) stop 'only for volumes; alloc_rho; simple_reconstructor'
+        if(.not. self%exists()   ) stop 'construct image before allocating rho; alloc_rho; simple_reconstructor'
+        if(      self%is_2d()    ) stop 'only for volumes; alloc_rho; simple_reconstructor'
         if( present(expand) )l_expand = expand
         self%ldim_img = self%get_ldim()
         if( self%ldim_img(3) < 2 ) stop 'reconstructor need to be 3D 4 now; alloc_rho; simple_reconstructor'
@@ -227,10 +225,6 @@ contains
             w = self%dens_const
         endif
         do i=1,wdim
-            ! NO NEED FOR WHERE SINCE PW > TINY ALWAYS TRUE HERE
-            ! where(w(i,:,:)>0.)w(i,:,:) = w(i,:,:) * self%kbwin%apod(real(win(1,1)+i-1)-loc(1))
-            ! where(w(:,i,:)>0.)w(:,i,:) = w(:,i,:) * self%kbwin%apod(real(win(2,1)+i-1)-loc(2))
-            ! where(w(:,:,i)>0.)w(:,:,i) = w(:,:,i) * self%kbwin%apod(real(win(3,1)+i-1)-loc(3))
             w(i,:,:) = w(i,:,:) * self%kbwin%apod(real(win(1,1)+i-1)-loc(1))
             w(:,i,:) = w(:,i,:) * self%kbwin%apod(real(win(2,1)+i-1)-loc(2))
             w(:,:,i) = w(:,:,i) * self%kbwin%apod(real(win(3,1)+i-1)-loc(3))
@@ -301,7 +295,7 @@ contains
             if( self%tfastig )then ! astigmatic CTF model
                 dfy = o%get('dfy')
                 angast = o%get('angast')
-            else ! non-astigmatic CTF model
+            else                   ! non-astigmatic CTF model
                 dfy = dfx
                 angast = 0.
             endif
@@ -341,13 +335,13 @@ contains
         use simple_gridding,   only: mul_w_instr
         class(reconstructor), intent(inout) :: self
         integer,    optional, intent(in)    :: maxits
-        type(kbinterpol)   :: kbwin 
-        type(image)        :: W_img, Wprev_img
-        real               :: Wnorm, val_prev, val, Wnorm_prev, invrho
-        integer            :: h, k, m, lims(3,2),  phys(3), iter
-        integer            :: maxits_here
-        complex, parameter :: zero = cmplx(0.,0.), one = cmplx(1.,0.)
-        real,    parameter :: winsz  = 2.
+        type(kbinterpol)     :: kbwin 
+        type(image)          :: W_img, Wprev_img
+        real                 :: Wnorm, val_prev, val, Wnorm_prev, invrho
+        integer              :: h, k, m, lims(3,2),  phys(3), iter
+        integer              :: maxits_here
+        complex, parameter   :: zero = cmplx(0.,0.), one = cmplx(1.,0.)
+        real,    parameter   :: winsz  = 2.
         maxits_here = GRIDCORR_MAXITS
         if( present(maxits) )maxits_here = maxits
         lims = self%loop_lims(2)
@@ -366,8 +360,8 @@ contains
             ! W <- W * rho
             !$omp parallel do collapse(3) default(shared) schedule(static)&
             !$omp private(h,k,m,phys) proc_bind(close)
-            do k = lims(2,1),lims(2,2)
-                do h = lims(1,1),lims(1,2)
+            do h = lims(1,1),lims(1,2)
+                do k = lims(2,1),lims(2,2)
                     do m = lims(3,1),lims(3,2)
                         phys  = W_img%comp_addr_phys([h,k,m])
                         call W_img%mul_cmat_at(self%rho(phys(1),phys(2),phys(3)), phys)
@@ -384,8 +378,8 @@ contains
             !$omp parallel do collapse(3) default(shared) schedule(static)&
             !$omp private(h,k,m,phys,val,val_prev) proc_bind(close)&
             !$omp reduction(+:Wnorm)
-            do k = lims(2,1),lims(2,2)
-                do h = lims(1,1),lims(1,2)
+            do h = lims(1,1),lims(1,2)
+                do k = lims(2,1),lims(2,2)
                     do m = lims(3,1),lims(3,2)
                         phys     = W_img%comp_addr_phys([h, k, m])
                         val      = mycabs(W_img%get_cmat_at(phys))   !! ||C|| == ||C*||
@@ -404,8 +398,8 @@ contains
         ! Fourier comps / rho
         !$omp parallel do collapse(3) default(shared) schedule(static)&
         !$omp private(h,k,m,phys,invrho) proc_bind(close)
-        do k = lims(2,1),lims(2,2)
-            do h = lims(1,1),lims(1,2)
+        do h = lims(1,1),lims(1,2)
+            do k = lims(2,1),lims(2,2)
                 do m = lims(3,1),lims(3,2)
                     phys   = W_img%comp_addr_phys([h, k, m])
                     invrho = real(W_img%get_cmat_at(phys)) !! Real(C) == Real(C*)
@@ -434,18 +428,18 @@ contains
             do h = lims(1,1),lims(1,2)
                 do m = lims(3,1),lims(3,2)
                     comp = self%cmat_exp(h,k,m)
-                    if(abs(comp) < TINY)cycle
+                    if(abs(comp) < TINY) cycle
                     !  addition because FC and its Friedel mate must be summed
                     !  as the expansion updates one or the other
                     if (h > 0) then
                         phys(1) = h + 1
-                        phys(2) = k + 1 + self%ldim_img(2) *  MERGE(1,0,k  < 0)
-                        phys(3) = m + 1 + self%ldim_img(3) *  MERGE(1,0,m  < 0)
+                        phys(2) = k + 1 + self%ldim_img(2) * MERGE(1,0,k < 0)
+                        phys(3) = m + 1 + self%ldim_img(3) * MERGE(1,0,m < 0)
                         call self%add2_cmat_at(phys, comp)
                     else
                         phys(1) = -h + 1
-                        phys(2) = -k + 1 + self%ldim_img(2) *  MERGE(1,0,-k  < 0)
-                        phys(3) = -m + 1 + self%ldim_img(3) *  MERGE(1,0,-m  < 0)
+                        phys(2) = -k + 1 + self%ldim_img(2) * MERGE(1,0,-k < 0)
+                        phys(3) = -m + 1 + self%ldim_img(3) * MERGE(1,0,-m < 0)
                         call self%add2_cmat_at(phys, conjg(comp))
                     endif
                     self%rho(phys(1),phys(2),phys(3)) = &
@@ -590,7 +584,6 @@ contains
     !>  \brief  is a destructor
     subroutine dealloc_rho( self )
         class(reconstructor), intent(inout) :: self !< this instance
-        if( allocated(self%physmat) ) deallocate(self%physmat)
         call self%dealloc_exp
         if( self%rho_allocated )then
             call fftwf_free(self%kp)
