@@ -115,7 +115,6 @@ contains
             allocate( finished_fname, source='VOLASSEMBLE_FINISHED' )
         endif
         call simple_touch( finished_fname , errmsg='In: commander_rec::eo_volassemble')
-        call wait_for_closure( finished_fname )
 
         contains
 
@@ -215,7 +214,6 @@ contains
             allocate( finished_fname, source='VOLASSEMBLE_FINISHED' )
         endif
         call simple_touch( finished_fname, errmsg='In: commander_rec :: volassemble')
-        call wait_for_closure(finished_fname)
 
         contains
 
