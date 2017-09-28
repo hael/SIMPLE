@@ -1088,7 +1088,7 @@ contains
         class(image),      intent(inout) :: self
         integer,           intent(in)    :: phys(3)
         real,              intent(in)    :: k
-        if( abs(k) > 1e-6 )then
+        if( abs(k) > 1.e-6 )then
            self%cmat(phys(1),phys(2),phys(3)) = self%cmat(phys(1),phys(2),phys(3))/k
         else
            self%cmat(phys(1),phys(2),phys(3)) = cmplx(0.,0.) ! this is desirable for kernel division
@@ -1100,11 +1100,7 @@ contains
         class(image),      intent(inout) :: self
         integer,           intent(in)    :: phys(3)
         real,              intent(in)    :: k
-        if( abs(k) > TINY )then
-           self%cmat(phys(1),phys(2),phys(3)) = self%cmat(phys(1),phys(2),phys(3))*k
-        else
-           self%cmat(phys(1),phys(2),phys(3)) = cmplx(0.,0.) ! this is desirable for kernel division
-        endif
+        self%cmat(phys(1),phys(2),phys(3)) = self%cmat(phys(1),phys(2),phys(3))*k
     end subroutine mul_cmat_at
 
     !> print_cmat

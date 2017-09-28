@@ -378,17 +378,16 @@ contains
 
     !> \brief Touch file, create file if necessary
     subroutine simple_touch( fname , errmsg )
-        character(len=*), intent(in)    :: fname !< input filename
+        character(len=*), intent(in)           :: fname !< input filename
         character(len=*), intent(in), optional :: errmsg
         character(len=STDLEN) :: msg_this
-        character(len=:), allocatable   :: tfile
-        integer          :: funit, io_status
-        msg_this="simple_fileio::simple_touch "
-        if(present(errmsg)) write(msg_this,'(A)') errmsg
-        tfile=fname
-        call fopen_1(funit, trim(adjustl(tfile)), status='REPLACE', action='WRITE', iostat=io_status)
-        call fileio_errmsg("simple_fileio::simple_touch opening ; "//trim(adjustl(msg_this))//trim(tfile), io_status)
-        call fclose( funit , errmsg="simple_fileio::simple_touch opening ; "//trim(adjustl(msg_this))//trim(tfile))
+        integer               :: funit, io_status
+        call exec_cmdline(trim('touch '//trim(adjustl(fname))))
+        ! msg_this = "simple_fileio::simple_touch "
+        ! if(present(errmsg)) write(msg_this,'(A)') errmsg
+        ! call fopen_1(funit, trim(adjustl(fname)), status='REPLACE', action='WRITE', iostat=io_status)
+        ! call fileio_errmsg("simple_fileio::simple_touch opening ; "//trim(adjustl(msg_this))//trim(fname), io_status)
+        ! call fclose( funit , errmsg="simple_fileio::simple_touch opening ; "//trim(adjustl(msg_this))//trim(fname))
     end subroutine simple_touch
 
     !> \brief return the number of lines in a textfile

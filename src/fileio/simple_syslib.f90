@@ -501,10 +501,10 @@ contains
         logical, optional, intent(in) :: waitflag
         character(len=STDLEN) :: cmsg
         integer ::  cstat, exec_stat
-        logical :: l_doprint = .true., wwait = .true.
-        wwait = .true.
+        logical :: l_doprint, wwait
+        l_doprint = .false.
+        wwait     = .true.
         if( present(waitflag) ) wwait = waitflag
-
 #if defined(PGI)
         ! include 'lib3f.h'  ! PGI declares kill,wait here
         exec_stat = system(trim(adjustl(cmdline)))
@@ -515,12 +515,10 @@ contains
         call execute_command_line( trim(adjustl(cmdline)), wait=wwait, exitstat=exec_stat, cmdstat=cstat, cmdmsg=cmsg)
         call raise_sys_error( cmdline, exec_stat, cstat, cmsg )
 #endif
-
         if( l_doprint )then
             write(*,*) 'command: ', trim(adjustl(cmdline))
             write(*,*) 'status of execution: ', exec_stat
         endif
-
     end subroutine exec_cmdline
 
     !>  Handles error from system call
