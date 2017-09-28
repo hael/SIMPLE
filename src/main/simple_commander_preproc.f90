@@ -93,6 +93,7 @@ contains
         character(len=STDLEN), allocatable :: movienames(:)
         character(len=:),      allocatable :: fname_ctffind_ctrl, fname_unidoc_output
         character(len=:),      allocatable :: moviename_forctf, moviename_intg
+        character(len=:),      allocatable :: fname_stk_extract, fname_ctf_extract
         character(len=STDLEN) :: boxfile, dir_ptcls, movie_fbody, movie_ext, movie_fname
         type(params) :: p
         type(oris)   :: os_uni
@@ -165,6 +166,8 @@ contains
                     allocate(fname_unidoc_output, source='unidoc_output_'//trim(movie_fbody)//'.txt')
                     p%fbody = trim(movie_fbody)
                 endif
+                allocate(fname_stk_extract,   source='ptcls_from_'//trim(movie_fbody)//trim(movie_ext))
+                allocate(fname_ctf_extract,   source='extract_params_'//trim(movie_fbody)//METADATEXT)
                 call cline%set('fbody', trim(p%fbody))
             else
                 allocate(fname_ctffind_ctrl,  source='ctffind_ctrl_file'//'.txt')
@@ -217,8 +220,8 @@ contains
                     call cline_extract%set('dir_ptcls', trim(dir_ptcls))
                     call cline_extract%set('smpd',      p%smpd)
                     call cline_extract%set('unidoc',    fname_unidoc_output)
-                    call cline_extract%set('outfile',   'extract_params_movie'//int2str_pad(movie_ind,p%numlen)//METADATEXT)
-                    call cline_extract%set('outstk',    'ptcls_from_movie'//int2str_pad(movie_ind,p%numlen)//p%ext)
+                    call cline_extract%set('outfile',   fname_ctf_extract)
+                    call cline_extract%set('outstk',    fname_stk_extract)
                     call xextract%execute(cline_extract)
                 endif
             endif
@@ -960,7 +963,9 @@ contains
             call find_ldim_nptcls(movienames(movie), lfoo, nframes )
             if( nframes > 1 ) stop 'multi-frame extraction no longer supported; simple_extract'
             ! build general objects
-            if( niter == 1 ) call b%build_general_tbox(p,cline,do3d=.false.)
+            if( niter == 1 )then
+                call b%build_general_tbox(p,cline,do3d=.false.)
+            endif
             ! extract ctf info
             if( b%a%isthere('dfx') )then
                 params_present(1) = b%a%isthere('kv')

@@ -644,7 +644,7 @@ contains
         use simple_sauron, only: sauron_line_parser
         class(ori), intent(inout) :: self
         integer,    intent(in)    :: fhandle
-        character(len=1024) :: line
+        character(len=2048) :: line
         integer :: istate
         read(fhandle,fmt='(A)') line
         call sauron_line_parser( line, self%htab, self%chtab )

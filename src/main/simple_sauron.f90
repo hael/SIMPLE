@@ -15,7 +15,7 @@ contains
         character(len=32),     allocatable :: keys(:)
         character(len=STDLEN), allocatable :: vals(:)
         character(len=:),      allocatable :: line_trimmed
-        character(len=STDLEN) :: args(100), args_pair(5), format
+        character(len=STDLEN) :: args(128), args_pair(5), format
         integer :: nargs, iarg, nargs_pair, ival, io_stat
         real    :: rval
         allocate(line_trimmed, source=trim(line))

@@ -118,7 +118,8 @@ contains
         character(len=32), parameter :: CAVGS_ITERFBODY = 'cavgs_iter'
         character(len=32), parameter :: STK_FILETAB     = 'stktab.txt'
         character(len=32), parameter :: DEFTAB          = 'deftab.txt'
-        integer,           parameter :: NCLS_INIT_LIM   = 10
+        character(len=32), parameter :: STK_DIR         = './stacks/'
+        integer,           parameter :: NCLS_INIT_LIM   = 1    ! FOR TESTING ONLY
         integer,           parameter :: NPTCLS_PER_CLS  = 400
         type(prime2D_distr_commander)      :: xprime2D_distr
         type(micwatcher)                   :: mic_watcher
@@ -137,13 +138,15 @@ contains
         ! output command line executed
         write(*,'(a)') '>>> COMMAND LINE EXECUTED'
         write(*,*) trim(cmdline_glob)
+        ! make target directory
+        call exec_cmdline('mkdir -p '//trim(adjustl(STK_DIR))//'|| true')
         ! make master parameters
         p_master = params(cline, checkdistr=.false.)
         ! init command-lines
         cline_scale   = cline
         cline_prime2D = cline
-        !call cline_prime2D%set('stream',    'yes')
-        !call cline_prime2D%set('autoscale', 'no')
+        call cline_prime2D%set('prg',       'prime2D')
+        call cline_prime2D%set('autoscale', 'no')
         call cline_prime2D%set('stktab',    STK_FILETAB)
         call cline_prime2D%set('extr_iter', 100.) ! no extremal randomization
         if( p_master%ctf.ne.'no' )then
@@ -177,7 +180,7 @@ contains
                 endif
                 call add_newstacks
                 ncls = nint(real(nptcls_glob) / real(NPTCLS_PER_CLS))
-                if(ncls > NCLS_INIT_LIM) exit
+                if(ncls >= NCLS_INIT_LIM) exit
             endif
             call simple_sleep(60) ! parameter instead
         enddo
@@ -222,30 +225,41 @@ contains
             subroutine add_newstacks
                 use simple_commander_imgproc, only: scale_commander
                 type(scale_commander)              :: xscale
-                type(oris)                         :: deftab_glob
+                type(oris)                         :: deftab_glob, deftab_here
                 character(len=STDLEN), allocatable :: new_deftabs(:), new_stacks(:), tmp(:)
-                character(len=STDLEN) :: stk_scaled, fbody
-                integer               :: i, nl, nptcls, cnt
+                character(len=STDLEN) :: stk_scaled, fbody, ext
+                integer               :: i, j, nl, nptcls, cnt, cnt2, n, ldim(3)
                 call mic_watcher%get_new_stacks(new_stacks)
-                call mic_watcher%get_new_deftabs(new_deftabs)
                 ! number of new particles
                 nptcls = 0
                 do i = 1, n_newmics
-                    nptcls = nptcls + nlines(new_deftabs(i))
+                    call find_ldim_nptcls(new_stacks(i), ldim, n)
+                    nptcls = nptcls + n
                 enddo
                 nptcls_glob = nptcls_glob + nptcls
-                ! consolidate deftabs
-                call deftab_glob%new(nptcls_glob)
-                if( nptcls_glob_prev > 0 )then
-                    call binread_oritab(trim(deftab), deftab_glob, [1, nptcls_glob_prev])
+                print *, 'n_newmics, nptcls_glob', n_newmics, nptcls_glob
+                if( p_master%ctf.ne.'no' )then
+                    ! consolidate deftabs
+                    call mic_watcher%get_new_deftabs(new_deftabs)
+                    call deftab_glob%new(nptcls_glob)
+                    if( nptcls_glob_prev > 0 )then
+                        call binread_oritab(trim(deftab), deftab_glob, [1, nptcls_glob_prev])
+                    endif
+                    cnt = nptcls_glob_prev
+                    do i = 1, n_newmics
+                        nl = nlines(new_deftabs(i))
+                        call deftab_here%new(nl)
+                        call binread_oritab(trim(new_deftabs(i)), deftab_here, [1, nl])
+                        cnt2 = 0
+                        do j = cnt+1, cnt+nl
+                            cnt2 = cnt2 + 1
+                            call deftab_glob%set_ori(j, deftab_here%get_ori(cnt2))
+                        enddo
+                        cnt = cnt + nl
+                    enddo
+                    call deftab_here%kill
+                    call binwrite_oritab(trim(deftab), deftab_glob, [1, nptcls_glob])
                 endif
-                cnt = nptcls_glob_prev
-                do i = 1, n_newmics
-                    nl = nlines(new_deftabs(i))
-                    call binread_oritab(trim(new_deftabs(i)), deftab_glob, [cnt+1, cnt+nl])
-                    cnt = cnt + nl
-                enddo
-                call binwrite_oritab(trim(deftab), deftab_glob, [1, nptcls_glob])
                 ! stacks
                 if( nstacks_glob == 0 )then
                     allocate(stktab(n_newmics))
@@ -258,17 +272,18 @@ contains
                 endif
                 ! down-scaling and name updates
                 cnt = 0
-                do i = nstacks_glob, nstacks_glob + n_newmics
-                    cnt = cnt + 1
-                    fbody      = get_fbody(new_stacks(cnt), p_master%ext)
-                    stk_scaled = trim(fbody) // trim('_sc') // trim(p_master%ext)
+                do i = nstacks_glob+1, nstacks_glob+n_newmics
+                    cnt   = cnt + 1
+                    ext   = fname2ext(trim(remove_abspath(trim(new_stacks(cnt)))))
+                    fbody = get_fbody(trim(remove_abspath(trim(new_stacks(cnt)))), trim(ext))
+                    stk_scaled = trim(STK_DIR)//trim(fbody)// trim('_sc') // trim(p_master%ext)
                     stktab(i)  = trim(stk_scaled)
                     call cline_scale%set('stk', trim(new_stacks(cnt)))
                     call cline_scale%set('outstk', trim(stk_scaled))
                     call xscale%execute(cline_scale)
                 enddo
                 nstacks_glob = nstacks_glob + n_newmics
-                ! writes down-scaled stacks
+                ! writes down-scaled stacks list
                 call write_filetable(STK_FILETAB, stktab)
             end subroutine add_newstacks
 

@@ -467,11 +467,12 @@ select case(prg)
         keys_optional(8)  = 'width'
         keys_optional(9)  = 'filwidth'
         keys_optional(10) = 'center'
+        keys_optional(11) = 'dir_ptcls'
         ! documentation
         if( describe ) call print_doc_prime2D
         call cline%parse( keys_required(:6), keys_optional(:10) )
         ! set defaults
-        if( .not. cline%defined('lp')     ) call cline%set('lp',    15.)
+        if( .not. cline%defined('lp')     ) call cline%set('lp',     15.)
         if( .not. cline%defined('eo')     ) call cline%set('eo',     'no')
         if( .not. cline%defined('cenlp')  ) call cline%set('cenlp',  30.)
         if( .not. cline%defined('edge')   ) call cline%set('edge',   10.)
