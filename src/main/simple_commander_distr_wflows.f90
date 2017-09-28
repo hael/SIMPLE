@@ -462,10 +462,10 @@ contains
                 call xmakecavgs%execute(cline_makecavgs)
             else
                 if( cline%defined('stktab') )then
-                    call random_selection_from_imgfile(p_master%stk, p_master%refs,&
+                    call random_selection_from_imgfile(p_master%stktab, p_master%refs,&
                         &p_master%ncls, p_master%box, p_master%smpd)
                 else
-                    call random_selection_from_imgfile(p_master%stktab, p_master%refs,&
+                    call random_selection_from_imgfile(p_master%stk, p_master%refs,&
                         &p_master%ncls, p_master%box, p_master%smpd)
                 endif
             endif

@@ -227,9 +227,13 @@ contains
             w = self%dens_const
         endif
         do i=1,wdim
-            where(w(i,:,:)>0.)w(i,:,:) = w(i,:,:) * self%kbwin%apod(real(win(1,1)+i-1)-loc(1))
-            where(w(:,i,:)>0.)w(:,i,:) = w(:,i,:) * self%kbwin%apod(real(win(2,1)+i-1)-loc(2))
-            where(w(:,:,i)>0.)w(:,:,i) = w(:,:,i) * self%kbwin%apod(real(win(3,1)+i-1)-loc(3))
+            ! NO NEED FOR WHERE SINCE PW > TINY ALWAYS TRUE HERE
+            ! where(w(i,:,:)>0.)w(i,:,:) = w(i,:,:) * self%kbwin%apod(real(win(1,1)+i-1)-loc(1))
+            ! where(w(:,i,:)>0.)w(:,i,:) = w(:,i,:) * self%kbwin%apod(real(win(2,1)+i-1)-loc(2))
+            ! where(w(:,:,i)>0.)w(:,:,i) = w(:,:,i) * self%kbwin%apod(real(win(3,1)+i-1)-loc(3))
+            w(i,:,:) = w(i,:,:) * self%kbwin%apod(real(win(1,1)+i-1)-loc(1))
+            w(:,i,:) = w(:,i,:) * self%kbwin%apod(real(win(2,1)+i-1)-loc(2))
+            w(:,:,i) = w(:,:,i) * self%kbwin%apod(real(win(3,1)+i-1)-loc(3))
         enddo
         ! expanded matrices update
         if( inoutmode )then
