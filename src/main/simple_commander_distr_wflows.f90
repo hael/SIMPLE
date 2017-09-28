@@ -150,7 +150,6 @@ contains
     end subroutine exec_unblur_ctffind_distr
 
     subroutine exec_unblur_distr( self, cline )
- !       use simple_commander_preproc
         class(unblur_distr_commander), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
         character(len=32), parameter   :: UNIDOCFBODY = 'unidoc_'
