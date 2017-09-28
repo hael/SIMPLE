@@ -119,6 +119,7 @@ contains
         character(len=32), parameter :: STK_FILETAB     = 'stktab.txt'
         character(len=32), parameter :: DEFTAB          = 'deftab.txt'
         character(len=32), parameter :: STK_DIR         = './stacks/'
+        character(len=32), parameter :: PTCLS_DIR       = 'particles/'
         integer,           parameter :: NCLS_INIT_LIM   = 5    ! FOR TESTING ONLY
         integer,           parameter :: NPTCLS_PER_CLS  = 100
         type(prime2D_distr_commander)      :: xprime2D_distr
@@ -126,9 +127,7 @@ contains
         character(len=STDLEN), allocatable :: newstacks(:), stktab(:)
         character(len=STDLEN)              :: oritab_glob, str_iter, refs_glob
         type(cmdline)                      :: cline_prime2D, cline_scale
-        type(qsys_env)                     :: qenv
-        type(params)                       :: p_master, p_prime2D
-        type(chash)                        :: job_descr
+        type(params)                       :: p_master
         real    :: scale, smpd_glob, msk_glob
         integer :: nparts, iter, ncls, n_newmics, ldim(3), nptcls, box_original
         integer :: nptcls_glob, nstacks_glob, ncls_glob, box_glob
@@ -178,7 +177,11 @@ contains
                     msk_glob     = p_master%msk * scale
                     deallocate(stktab)
                     call cline_scale%set('newbox', real(box_glob))
+                    call cline_prime2D%set('box',  real(box_glob))
+                    call cline_prime2D%set('smpd', real(smpd_glob))
+                    call cline_prime2D%set('msk',  real(msk_glob))
                 endif
+                nptcls_glob_prev = nptcls_glob
                 call add_newstacks
                 ncls = nint(real(nptcls_glob) / real(NPTCLS_PER_CLS))
                 if(ncls >= NCLS_INIT_LIM) exit
@@ -187,39 +190,34 @@ contains
         enddo
         ncls_glob = ncls
         call cline_prime2D%set('ncls', real(ncls_glob))
-        call cline_prime2D%set('box',  real(box_glob))
-        call cline_prime2D%set('smpd', real(smpd_glob))
-        call cline_prime2D%set('msk',  real(msk_glob))
-        ! setup the environment for distributed execution
-        p_prime2D = params(cline_prime2D, checkdistr=.false.)
-        call qenv%new(p_prime2D)
-        ! prepare job description
-        call cline_prime2D%gen_job_descr(job_descr)
         ! Main loop
         do iter = 1, 999
             str_iter = int2str_pad(iter,3)
             ! prime2D
-            call job_descr%set('startit', int2str(iter))
-            call job_descr%set('maxits',  int2str(iter))
+            call cline_prime2D%set('startit', real(iter))
+            call cline_prime2D%set('maxits',  real(iter))
             call xprime2D_distr%execute(cline_prime2D)
             oritab_glob = trim(ITERFBODY)//trim(str_iter)//trim(METADATEXT)
+            call rename('prime2Ddoc_final.txt', oritab_glob)
             refs_glob   = trim(CAVGS_ITERFBODY)// trim(str_iter)//trim(p_master%ext)
-            call job_descr%set('oritab', trim(oritab_glob))
-            call job_descr%set('refs',   trim(refs_glob))
+            call cline_prime2D%set('oritab', trim(oritab_glob))
+            call cline_prime2D%set('refs',   trim(refs_glob))
             call remap_empty_classes
             ! detects new images
             call mic_watcher%watch(n_newmics)
             if(n_newmics > 0)then
                 nptcls_glob_prev = nptcls_glob
-                ncls_glob_prev   = ncls_glob
                 call add_newstacks
+                write(*,'(A,I6)')'>>> NEW PARTICLES COUNT: ', nptcls_glob 
                 ! updates particles classes & references
-                ncls_glob = nint(real(nptcls_glob) / real(NPTCLS_PER_CLS))
+                ncls_glob_prev = ncls_glob
+                ncls_glob      = nint(real(nptcls_glob) / real(NPTCLS_PER_CLS))
                 call remap_new_classes
-                call job_descr%set('ncls', int2str(ncls_glob))
+                call cline_prime2D%set('ncls', real(ncls_glob))
+                write(*,'(A,I6)')'>>> NEW CLASSES COUNT: ', ncls_glob 
             endif
         enddo
-
+        ! end gracefully
         call simple_end('**** SIMPLE_DISTR_PRIME2D_STREAM NORMAL STOP ****')
 
         contains
@@ -227,10 +225,10 @@ contains
             subroutine add_newstacks
                 use simple_commander_imgproc, only: scale_commander
                 type(scale_commander)              :: xscale
-                type(oris)                         :: deftab_glob, deftab_here
+                type(oris)                         :: deftab_prev, deftab_glob, deftab_here
                 character(len=STDLEN), allocatable :: new_deftabs(:), new_stacks(:), tmp(:)
                 character(len=STDLEN) :: stk_scaled, fbody, ext
-                integer               :: i, j, nl, nptcls, cnt, cnt2, n, ldim(3)
+                integer               :: i, j, nl, nptcls, cnt, cnt2, n, ldim(3), iptcl
                 call mic_watcher%get_new_stacks(new_stacks)
                 ! number of new particles
                 nptcls = 0
@@ -239,14 +237,20 @@ contains
                     nptcls = nptcls + n
                 enddo
                 nptcls_glob = nptcls_glob + nptcls
-                print *, 'n_newmics, nptcls_glob', n_newmics, nptcls_glob
                 if( p_master%ctf.ne.'no' )then
                     ! consolidate deftabs
                     call mic_watcher%get_new_deftabs(new_deftabs)
                     call deftab_glob%new(nptcls_glob)
                     if( nptcls_glob_prev > 0 )then
-                        call binread_oritab(trim(deftab), deftab_glob, [1, nptcls_glob_prev])
+                        ! transfer previous ctf params to new object
+                        call deftab_prev%new(nptcls_glob_prev)
+                        call binread_oritab(trim(deftab), deftab_prev, [1, nptcls_glob_prev])
+                        do iptcl = 1, nptcls_glob_prev
+                            call deftab_glob%set_ori(iptcl, deftab_prev%get_ori(iptcl))
+                        enddo 
+                        call deftab_prev%kill
                     endif
+                    ! transfer new ctf params to new object
                     cnt = nptcls_glob_prev
                     do i = 1, n_newmics
                         nl = nlines(new_deftabs(i))
@@ -294,6 +298,7 @@ contains
                 integer              :: icls
                 type(oris)           :: os
                 type(image)          :: img_cavg
+                call os%new(nptcls_glob)
                 call binread_oritab(oritab_glob, os, [1, nptcls_glob])
                 call os%fill_empty_classes(ncls_glob, fromtocls)
                 if( allocated(fromtocls) )then
@@ -311,13 +316,17 @@ contains
 
             subroutine remap_new_classes
                 use simple_ran_tabu, only: ran_tabu
+                type(ran_tabu)       :: rt
+                type(oris)           :: os, os_prev
+                type(image)          :: img_cavg
                 integer, allocatable :: fromtocls(:,:), cls(:), pops(:)
                 integer              :: icls, ncls_prev, n, iptcl, i
-                type(ran_tabu)       :: rt
-                type(oris)           :: os
-                type(image)          :: img_cavg
                 call os%new(nptcls_glob)
-                call binread_oritab(oritab_glob, os, [1, nptcls_glob_prev])
+                call os_prev%new(nptcls_glob_prev)
+                call binread_oritab(oritab_glob, os_prev, [1, nptcls_glob_prev])
+                do iptcl = 1, nptcls_glob_prev
+                    call os%set_ori(iptcl, os_prev%get_ori(iptcl))
+                enddo
                 n = nptcls_glob - nptcls_glob_prev
                 ! randomize new ptcls to previous references
                 allocate(cls(n))
