@@ -16,6 +16,7 @@ use simple_oris,       only: oris
 use simple_params,     only: params
 use simple_sym,        only: sym
 use simple_kbinterpol, only: kbinterpol
+use simple_kbfast,     only: kbfast
 use simple_image,      only: image
 implicit none
 
@@ -43,6 +44,7 @@ type, extends(image) :: reconstructor
     real                        :: winsz         = 1.           !< window half-width
     real                        :: alpha         = 2.           !< oversampling ratio
     real                        :: dens_const    = 1.           !< density estimation constant, old val: 1/nptcls
+    integer                     :: wdim          = 0            !< dim of interpolation matrix
     integer                     :: lfny          = 0            !< Nyqvist Fourier index
     integer                     :: ldim_img(3)   = 0            !< logical dimension of the original image
     type(CTFFLAGTYPE)           :: ctf                          !< ctf flag <yes|no|mul|flip>
@@ -100,6 +102,7 @@ contains
         call self%dealloc_rho
         self%dens_const = 1./real(p%nptcls)
         self%winsz      = p%winsz
+        self%wdim       = 2*ceiling(self%winsz) + 1
         self%alpha      = p%alpha
         select case(p%ctf)
             case('no')
@@ -204,27 +207,20 @@ contains
         logical,              intent(in)    :: inoutmode !< add = .true., subtract = .false.
         complex,              intent(in)    :: comp      !< input component, if not given only sampling density calculation
         complex,              intent(in)    :: oshift    !< origin shift
-        real, optional,       intent(in)    :: pwght     !< external particle weight (affects both fplane and rho)
-        real, allocatable :: w(:,:,:)
-        real              :: vec(3), loc(3), tval, tvalsq
-        integer           :: i, win(3,2), wdim
-        if(abs(comp) < TINY) return
+        real,                 intent(in)    :: pwght     !< external particle weight (affects both fplane and rho)
+        real    :: w(self%wdim,self%wdim,self%wdim)
+        real    :: vec(3), loc(3), tval, tvalsq
+        integer :: i, win(3,2)
         ! calculate non-uniform sampling location
         vec = [real(h), real(k), 0.]
         loc = matmul(vec, e%get_mat())
         ! evaluate the transfer function
         call self%calc_tfun_vals(vec, tval, tvalsq)
         ! initiate kernel matrix
-        win  = sqwin_3d(loc(1), loc(2), loc(3), self%winsz)
-        wdim = 2*ceiling(self%winsz) + 1
-        allocate(w(wdim, wdim, wdim))
+        win = sqwin_3d(loc(1), loc(2), loc(3), self%winsz)
         ! (weighted) kernel values
-        if(present(pwght))then
-            w = self%dens_const*pwght
-        else
-            w = self%dens_const
-        endif
-        do i=1,wdim
+        w = self%dens_const * pwght
+        do i=1,self%wdim
             w(i,:,:) = w(i,:,:) * self%kbwin%apod(real(win(1,1)+i-1)-loc(1))
             w(:,i,:) = w(:,i,:) * self%kbwin%apod(real(win(2,1)+i-1)-loc(2))
             w(:,:,i) = w(:,:,i) * self%kbwin%apod(real(win(3,1)+i-1)-loc(3))
@@ -245,7 +241,6 @@ contains
             self%rho_exp(win(1,1):win(1,2), win(2,1):win(2,2), win(3,1):win(3,2)) =&
             &self%rho_exp(win(1,1):win(1,2), win(2,1):win(2,2), win(3,1):win(3,2)) - tvalsq*w
         endif
-        deallocate(w)
     end subroutine inout_fcomp
 
     subroutine calc_tfun_vals( self, vec, tval, tvalsq )
@@ -275,20 +270,15 @@ contains
     end subroutine calc_tfun_vals
 
     !> insert or uninsert Fourier plane
-    subroutine inout_fplane( self, o, inoutmode, fpl, pwght, mul )
+    subroutine inout_fplane( self, o, inoutmode, fpl, pwght )
         class(reconstructor), intent(inout) :: self      !< instance
         class(ori),           intent(inout) :: o         !< orientation
         logical,              intent(in)    :: inoutmode !< add = .true., subtract = .false.
         class(image),         intent(inout) :: fpl       !< Fourier plane
-        real,    optional,    intent(in)    :: pwght     !< external particle weight (affects both fplane and rho)
-        real,    optional,    intent(in)    :: mul       !< shift weight multiplier
+        real,                 intent(in)    :: pwght     !< external particle weight (affects both fplane and rho)
         integer :: h, k, lims(3,2), logi(3), phys(3)
         complex :: oshift
-        real    :: x, y, xtmp, ytmp
-        logical :: pwght_present
-        if( .not. fpl%is_ft() )       stop 'image need to be FTed; inout_fplane; simple_reconstructor'
-        if( .not. (self.eqsmpd.fpl) ) stop 'scaling not yet implemented; inout_fplane; simple_reconstructor'
-        pwght_present = present(pwght)
+        real    :: x, y
         if( self%ctf%flag /= CTFFLAG_NO )then ! make CTF object & get CTF info
             self%tfun = ctf(self%get_smpd(), o%get('kv'), o%get('cs'), o%get('fraca'))
             dfx  = o%get('dfx')
@@ -300,28 +290,15 @@ contains
                 angast = 0.
             endif
         endif
-        oshift = cmplx(1.,0.)
-        lims   = self%loop_lims(2)
-        x      = o%get('x')
-        y      = o%get('y')
-        xtmp   = 0.
-        ytmp   = 0.
-        if( abs(x) > SHTHRESH .or. abs(y) > SHTHRESH )then ! shift the image prior to insertion
-            if( present(mul) )then
-                x = x*mul
-                y = y*mul
-            endif
-            xtmp = x
-            ytmp = y
-            if( abs(x) < 1e-6 ) xtmp = 0.
-            if( abs(y) < 1e-6 ) ytmp = 0.
-        endif
+        lims = self%loop_lims(2)
+        x    = o%get('x')
+        y    = o%get('y')
         !$omp parallel do collapse(2) default(shared) schedule(static)&
         !$omp private(h,k,oshift,logi,phys) proc_bind(close)
         do k=lims(1,1),lims(1,2)
             do h=lims(1,1),lims(1,2)
                 logi   = [h,k,0]
-                oshift = fpl%oshift(logi, [-xtmp,-ytmp,0.], ldim=2)
+                oshift = fpl%oshift(logi, [-x,-y,0.])
                 phys   = fpl%comp_addr_phys(logi)
                 call self%inout_fcomp(h,k,o,inoutmode,fpl%get_fcomp(logi,phys),oshift,pwght)
             end do
@@ -478,7 +455,7 @@ contains
         integer     :: statecnt(p%nstates), i, cnt, n, ldim(3)
         integer     :: state_here, state_glob
         integer(timer_int_kind) :: trec, tsamp
-        verbose=.false.
+        verbose=.true.
         if(verbose) trec=tic()
         call find_ldim_nptcls(fname, ldim, n)
         if( n /= o%get_noris() ) stop 'inconsistent nr entries; rec; simple_reconstructor'
@@ -558,11 +535,11 @@ contains
                     endif
                     call prep4cgrid(img, img_pd, p%msk, self%kbwin)
                     if( p%pgrp == 'c1' )then
-                        call self%inout_fplane(orientation, .true., img_pd, pwght=pw, mul=mul)
+                        call self%inout_fplane(orientation, .true., img_pd, pwght=pw)
                     else
                         do j=1,se%get_nsym()
                             o_sym = se%apply(orientation, j)
-                            call self%inout_fplane(o_sym, .true., img_pd, pwght=pw, mul=mul)
+                            call self%inout_fplane(o_sym, .true., img_pd, pwght=pw)
                         end do
                     endif
                 endif

@@ -18,6 +18,7 @@ contains
         class(params),              intent(inout) :: p
         class(cmdline),             intent(inout) :: cline
         character(len=*), optional, intent(in)    :: fbody_in
+        if( cline%defined('mul') ) call b%a%mul_shifts(p%mul)
         select case(p%eo)
             case( 'yes', 'aniso' )
                 call exec_eorec( b, p, cline, fbody_in )
@@ -26,6 +27,7 @@ contains
             case DEFAULT
                 stop 'unknonw eo flag; simple_rec_master :: exec_rec_master'
         end select
+        if( cline%defined('mul') ) call b%a%mul_shifts(1.0/p%mul) ! 4 safety
     end subroutine exec_rec_master
 
     subroutine exec_rec( b, p, cline, fbody_in )
@@ -56,7 +58,7 @@ contains
                 endif
                 p%vols(s) = fbody//p%ext
                 rho_name  = 'rho_'//fbody//p%ext
-                call b%recvol%rec(p%stk, p, b%a, b%se, s, mul=p%mul, part=p%part)
+                call b%recvol%rec(p%stk, p, b%a, b%se, s, part=p%part)
                 VerbosePrint ' simple_rec_master :: exec_rec rec ', toc()
                 call b%recvol%compress_exp
                 VerbosePrint ' simple_rec_master :: exec_rec compress_exp ', toc()
@@ -71,7 +73,7 @@ contains
                     allocate(fbody, source='recvol_state')
                 endif
                 p%vols(s) = fbody//int2str_pad(s,2)//p%ext
-                call b%recvol%rec(p%stk, p, b%a, b%se, s, mul=p%mul)
+                call b%recvol%rec(p%stk, p, b%a, b%se, s)
                 VerbosePrint ' simple_rec_master :: exec_rec rec ', toc()
                 call b%recvol%clip(b%vol)
                 VerbosePrint ' simple_rec_master :: exec_rec clip ', toc()
@@ -104,15 +106,14 @@ contains
                 else
                     allocate(fbody, source='recvol_state')
                 endif
-                call b%eorecvol%eorec(p%stk, p, b%a, b%se, s, b%vol,&
-                    &mul=p%mul, part=p%part, fbody=fbody)
+                call b%eorecvol%eorec(p%stk, p, b%a, b%se, s, b%vol, part=p%part, fbody=fbody)
             else
                 if( present(fbody_in) )then
                     allocate( fbody, source=trim(adjustl(fbody_in))//'_state' )
                 else
                     allocate( fbody, source='recvol_state' )
                 endif
-                call b%eorecvol%eorec(p%stk, p, b%a, b%se, s, b%vol, mul=p%mul)
+                call b%eorecvol%eorec(p%stk, p, b%a, b%se, s, b%vol)
                 allocate(fname, source=fbody//int2str_pad(s,2)//p%ext)
                 call b%vol%write(fname, del_if_exists=.true.)
                 deallocate(fname)

@@ -1,5 +1,4 @@
 ! an orientation
-
 module simple_ori
 #include "simple_lib.f08"
 use simple_hash,   only: hash
@@ -79,6 +78,7 @@ type :: ori
     procedure          :: read
     ! CALCULATORS
     procedure          :: round_shifts
+    procedure          :: mul_shifts
     procedure, private :: shift
     procedure, private :: compeuler
     procedure          :: compose3d2d
@@ -661,6 +661,14 @@ contains
         call self%set('x', real(nint(self%get('x'))))
         call self%set('y', real(nint(self%get('y'))))
     end subroutine round_shifts
+
+    !>  \brief  rounds the origin shifts
+    subroutine mul_shifts( self, mul )
+        class(ori), intent(inout) :: self
+        real,       intent(in)    :: mul
+        call self%set('x', mul * self%get('x'))
+        call self%set('y', mul * self%get('y'))
+    end subroutine mul_shifts
 
     !>  \brief  corrects the Euler angle bounds
     subroutine shift( self )

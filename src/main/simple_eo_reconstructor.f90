@@ -236,14 +236,13 @@ contains
     ! INTERPOLATION
 
     !> \brief  for gridding a Fourier plane
-    subroutine grid_fplane(self, o, fpl, pwght, mul, ran )
+    subroutine grid_fplane(self, o, fpl, pwght, ran )
         use simple_ori, only: ori
         use simple_rnd, only: ran3
         class(eo_reconstructor), intent(inout) :: self  !< instance
         class(ori),              intent(inout) :: o     !< orientation
         class(image),            intent(inout) :: fpl   !< Fourier plane
         real, optional,          intent(in)    :: pwght !< external particle weight (affects both fplane and rho)
-        real, optional,          intent(in)    :: mul   !< shift multiplication factor
         real, optional,          intent(in)    :: ran   !< external random number
         real    :: rran
         if( present(ran) )then
@@ -252,9 +251,9 @@ contains
             rran = ran3()
         endif
         if( rran > 0.5 )then
-            call self%even%inout_fplane(o, .true., fpl, pwght=pwght, mul=mul)
+            call self%even%inout_fplane(o, .true., fpl, pwght=pwght)
         else
-            call self%odd%inout_fplane(o, .true., fpl, pwght=pwght, mul=mul)
+            call self%odd%inout_fplane(o, .true., fpl, pwght=pwght)
         endif
     end subroutine grid_fplane
 
@@ -357,7 +356,7 @@ contains
     
     !> \brief  for reconstructing Fourier volumes according to the orientations 
     !!         and states in o, assumes that stack is open   
-    subroutine eorec( self, fname, p, o, se, state, vol, mul, part, fbody )
+    subroutine eorec( self, fname, p, o, se, state, vol, part, fbody )
         use simple_oris,            only: oris
         use simple_sym,             only: sym
         use simple_params,          only: params
@@ -369,7 +368,6 @@ contains
         class(sym),                 intent(inout) :: se        !< symmetry element
         integer,                    intent(in)    :: state     !< state to reconstruct
         class(image),               intent(inout) :: vol       !< reconstructed volume
-        real,             optional, intent(in)    :: mul       !< shift multiplication factor
         integer,          optional, intent(in)    :: part      !< partition (4 parallel rec)
         character(len=*), optional, intent(in)    :: fbody     !< body of output file
         type(image)      :: img, img_pad
@@ -478,11 +476,11 @@ contains
                     endif
                     ! interpolation
                     if( p%pgrp == 'c1' )then
-                        call self%grid_fplane(orientation, img_pad, pwght=pw, mul=mul, ran=eopart)
+                        call self%grid_fplane(orientation, img_pad, pwght=pw, ran=eopart)
                     else
                         do j=1,se%get_nsym()
                             o_sym = se%apply(orientation, j)
-                            call self%grid_fplane(o_sym, img_pad, pwght=pw, mul=mul)
+                            call self%grid_fplane(o_sym, img_pad, pwght=pw)
                         end do
                     endif
                  endif

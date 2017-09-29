@@ -17,7 +17,13 @@ type :: kbfast
     procedure :: kill
 end type kbfast
 
-integer, parameter :: NGRID_DEFAULT = 100000
+integer, parameter :: NGRID_DEFAULT = 50000
+! ngrid = 2500   => avgerr = 3e-2 maxerr = 0.1  speedup = 3.0
+! ngrid = 5000   => avgerr = 2e-2 maxerr = 5e-2 speedup = 3.0
+! ngrid = 10000  => avgerr = 9e-3 maxerr = 3e-2 speedup = 3.0
+! ngrid = 50000  => avgerr = 2e-3 maxerr = 5e-3 speedup = 2.6
+! ngrid = 100000 => avgerr = 8e-4 maxerr = 3e-3 speedup = 2.5
+logical, parameter :: WARN=.true.
 
 contains
     
@@ -30,6 +36,7 @@ contains
         real    :: Whalf, stepsz, x
         integer :: cnt
         logical :: l_calc_apod
+        call self%kill
         if( present(ngrid) )then
         	self%ngrid = ngrid
         else
@@ -43,14 +50,15 @@ contains
             case DEFAULT
                 stop 'unsupported which flag (apod or instr); new; simple_kbfast'
         end select
-        allocate(self%grid(ngrid), self%vals(ngrid), source=0., stat=alloc_stat)
+        allocate(self%grid(self%ngrid), self%vals(self%ngrid), source=0., stat=alloc_stat)
         allocchk('In: new; simple_kbfast')
         Whalf  = kbexact%get_winsz()
-        stepsz = (2.0 * Whalf) / real(ngrid)
+        stepsz = (2.0 * Whalf) / real(self%ngrid)
         x      = -Whalf
         cnt    = 0
         do while(x <= Whalf)
             cnt = cnt + 1
+            if( cnt > self%ngrid ) exit
             self%grid(cnt) = x
             if( l_calc_apod )then
                 self%vals(cnt) = kbexact%apod(x)
@@ -67,22 +75,13 @@ contains
         class(kbfast), intent(in) :: self
         real,          intent(in) :: x
         integer :: ind
-        real    :: x0, x1, y0, y1
+        real    :: dist
         ind = locate(self%grid, self%ngrid, x)
-        ! ind means x is between self%vals(ind) and self%vals(ind + 1)
-        ! ind = 0 or ind == self%ngrid means out of bound
-        if( ind == 0 .or. ind == self%ngrid )then
-            print *, 'WARNING! out of bounds; simple_kbfast :: lookup'
-            if( ind == 0 ) ind = 1
+        if( ind < self%ngrid )then
+            lookup = (self%vals(ind) + self%vals(ind + 1)) / 2.0
+        else
             lookup = self%vals(ind)
-            return
         endif
-        x0 = self%grid(ind)
-        x1 = self%grid(ind + 1)
-        y0 = self%vals(ind)
-        y1 = self%vals(ind + 1)
-        ! lookup by linear interpolation
-        lookup = (y0 * (x1 - x) + y1 * (x - x0)) / (x1 - x0)
     end function lookup
 
     subroutine kill( self )
@@ -95,11 +94,14 @@ contains
 
     subroutine test_kbfast
         use simple_kbinterpol, only: kbinterpol
-        use simple_rnd,        only: ran3
-        type(kbinterpol)   :: kbobj
-        type(kbfast)       :: kbfastobj
-        integer, parameter :: NTESTS=1000
-        integer :: i
+        use simple_rnd,        only: ran3, ran3arr
+        use simple_timer,      only: tic, toc, timer_int_kind
+        type(kbinterpol)        :: kbobj
+        type(kbfast)            :: kbfastobj
+        integer, parameter      :: NTESTS=1000, NTESTS_TIME=1000000
+        integer(timer_int_kind) :: tslow, tfast
+        real    :: ranarr(NTESTS_TIME)
+        integer :: i, j, k
         real    :: x, val, diff, val_true, diffsum, maxdiff, mindiff
         call kbobj%new(1.5, 2.0)
         diffsum = 0
@@ -116,6 +118,26 @@ contains
             if( diff < mindiff ) mindiff = diff
         end do
         print *,'avg/max,min ', diffsum/real(NTESTS), maxdiff,mindiff
+        call ran3arr(ranarr)
+        ranarr = ranarr * 3.0 - 1.5
+        tslow=tic()
+        do i=1,NTESTS_TIME
+            do j=1,NTESTS_TIME
+                do k=1,NTESTS_TIME
+                    val_true = kbobj%apod(x)
+                end do
+            end do
+        end do
+        print *, 'toc(tslow): ', toc(tslow)
+        tfast=tic()
+        do i=1,NTESTS_TIME
+            do j=1,NTESTS_TIME
+                do k=1,NTESTS_TIME
+                    val = kbfastobj%lookup(ranarr(k))
+                end do
+            end do
+        end do
+        print *, 'toc(tfast): ', toc(tfast)
         call kbfastobj%kill
     end subroutine test_kbfast
 

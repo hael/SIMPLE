@@ -71,6 +71,7 @@ contains
         call chdict%push('dfstep',        'step size for defocus grid search(in microns){0.05}')
         call chdict%push('dir',           'directory')
         call chdict%push('dir_movies',    'grab .mrc/.mrcs files from here')
+        call chdict%push('dir_ptcls',     'grab pre-micrograph stacks and docs from here')
         call chdict%push('dir_reject',    'move rejected files to here{rejected}')
         call chdict%push('dir_select',    'move selected files to here{selected}')
         call chdict%push('dir_target',    'put output here')

@@ -4835,23 +4835,21 @@ contains
     !> oshift_1
     !! \param logi index in Fourier domain
     !! \param shvec origin shift
-    !! \param ldim image dimensions
     !! \return  comp
     !!
-    function oshift_1( self, logi, shvec, ldim ) result( comp )
-        class(image), intent(in)      :: self
-        real,    intent(in)           :: logi(3)
-        real,    intent(in)           :: shvec(3)
-        integer, intent(in), optional :: ldim
-        complex                       :: comp
-        real                          :: arg, shvec_here(3)
-        shvec_here = shvec
-        if( self%ldim(3) == 1 ) shvec_here(3) = 0.
-        if( present(ldim) )then
-            arg = sum(logi(:ldim)*shvec_here(:ldim)*self%shconst(:ldim))
+    function oshift_1( self, logi, shvec ) result( comp )
+        class(image), intent(in) :: self
+        real,         intent(in) :: logi(3)
+        real,         intent(in) :: shvec(3)
+        complex :: comp
+        real    :: arg
+        integer :: ldim
+        if( self%ldim(3) == 1 )then
+            ldim = 2
         else
-            arg = sum(logi*shvec_here*self%shconst)
+            ldim = 3
         endif
+        arg  = sum(logi(:ldim)*shvec(:ldim)*self%shconst(:ldim))
         comp = cmplx(cos(arg),sin(arg))
     end function oshift_1
 
@@ -4860,16 +4858,14 @@ contains
     !> oshift_2
     !! \param logi index in Fourier domain
     !! \param shvec origin shift
-    !! \param ldim image dimensions
     !! \return  comp
     !!
-    function oshift_2( self, logi, shvec, ldim ) result( comp )
-        class(image), intent(in)      :: self
-        integer, intent(in)           :: logi(3)
-        real, intent(in)              :: shvec(3)
-        integer, intent(in), optional :: ldim
-        complex                       :: comp
-        comp = self%oshift_1(real(logi), shvec, ldim)
+    function oshift_2( self, logi, shvec ) result( comp )
+        class(image), intent(in) :: self
+        integer,      intent(in) :: logi(3)
+        real,         intent(in) :: shvec(3)
+        complex :: comp
+        comp = self%oshift_1(real(logi), shvec)
     end function oshift_2
 
     !>  \brief  returns the real argument transfer matrix components at point logi in a Fourier transform
