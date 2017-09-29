@@ -242,7 +242,7 @@ contains
         class(eo_reconstructor), intent(inout) :: self  !< instance
         class(ori),              intent(inout) :: o     !< orientation
         class(image),            intent(inout) :: fpl   !< Fourier plane
-        real, optional,          intent(in)    :: pwght !< external particle weight (affects both fplane and rho)
+        real,                    intent(in)    :: pwght !< external particle weight (affects both fplane and rho)
         real, optional,          intent(in)    :: ran   !< external random number
         real    :: rran
         if( present(ran) )then
@@ -251,9 +251,9 @@ contains
             rran = ran3()
         endif
         if( rran > 0.5 )then
-            call self%even%inout_fplane(o, .true., fpl, pwght=pwght)
+            call self%even%inout_fplane(o, .true., fpl, pwght)
         else
-            call self%odd%inout_fplane(o, .true., fpl, pwght=pwght)
+            call self%odd%inout_fplane(o, .true., fpl, pwght)
         endif
     end subroutine grid_fplane
 
@@ -476,11 +476,11 @@ contains
                     endif
                     ! interpolation
                     if( p%pgrp == 'c1' )then
-                        call self%grid_fplane(orientation, img_pad, pwght=pw, ran=eopart)
+                        call self%grid_fplane(orientation, img_pad, pw, ran=eopart)
                     else
                         do j=1,se%get_nsym()
                             o_sym = se%apply(orientation, j)
-                            call self%grid_fplane(o_sym, img_pad, pwght=pw)
+                            call self%grid_fplane(o_sym, img_pad, pw)
                         end do
                     endif
                  endif
