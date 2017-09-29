@@ -86,8 +86,8 @@ contains
             scale_stage1 = scobj%get_scaled_var('scale')
             ! scale images in parallel
             call scobj%scale_distr_exec
-            ! update stktab if needed
             if( cline%defined('stktab') )then
+                ! update stktab
                 call p_master%stkhandle%add_scale_tag
                 call p_master%stkhandle%write_stktab(p_master%stktab)
             endif
@@ -97,10 +97,20 @@ contains
             call cline_prime2D_stage1%set('maxits', real(MAXITS_STAGE1))
             call xprime2D%execute(cline_prime2D_stage1)
             ! prepare stage 2 input -- re-scale
+            if( cline%defined('stktab') )then
+                 ! update stktab
+                call p_master%stkhandle%del_scale_tag
+                call p_master%stkhandle%write_stktab(p_master%stktab)
+            endif
             call scobj%uninit(cline) ! puts back the old command line
             call scobj%init(p_master, cline, p_master%box, p_master%smpd_targets2D(2))
             scale_stage2 = scobj%get_scaled_var('scale')
             call scobj%scale_distr_exec
+            if( cline%defined('stktab') )then
+                ! update stktab
+                call p_master%stkhandle%add_scale_tag
+                call p_master%stkhandle%write_stktab(p_master%stktab)
+            endif
             ! prepare stage 2 input -- shift modulation
             call os%new(p_master%nptcls)
             call binread_oritab(FINALDOC, os, [1,p_master%nptcls])
