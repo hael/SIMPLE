@@ -1,5 +1,4 @@
 ! concrete commander: routines for managing distributed SIMPLE execution
-
 module simple_commander_distr
 #include "simple_lib.f08"
 use simple_cmdline,        only: cmdline
@@ -8,7 +7,6 @@ use simple_build,          only: build
 use simple_commander_base, only: commander_base
 use simple_oris,           only: oris
 use simple_binoris,        only: binoris
-!use simple_map_reduce      ! use all in there
 use simple_imghead,        only: find_ldim_nptcls
 implicit none
 

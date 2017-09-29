@@ -1,8 +1,6 @@
 ! concrete commander: high-level workflows
-
 module simple_commander_hlev_wflows
 #include "simple_lib.f08"
-
 use simple_cmdline,               only: cmdline
 use simple_params,                only: params
 use simple_commander_base,        only: commander_base
@@ -10,9 +8,9 @@ use simple_qsys_env,              only: qsys_env
 use simple_oris,                  only: oris
 use simple_scaler,                only: scaler
 use simple_strings,               only: int2str_pad, str2int
+use simple_binoris_io,            only: binread_oritab, binwrite_oritab
 use simple_commander_distr_wflows ! use all in there
 use simple_commander_distr        ! use all in there
-use simple_binoris_io,            only: binread_oritab, binwrite_oritab
 implicit none
 
 public :: prime2D_autoscale_commander
@@ -730,7 +728,6 @@ contains
                     call del_file('RESOLUTION_STATE01')
                 endif
             end function gen_fsc
-
 
     end subroutine exec_cga_hres_sel
 

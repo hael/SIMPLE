@@ -86,7 +86,6 @@ type :: params
     character(len=3)      :: time='no'
     character(len=3)      :: trsstats='no'        !< provide origin shift statistics(yes|no){no}
     character(len=3)      :: tseries='no'         !< images represent a time-series(yes|no){no}
-!    character(len=3)      :: verbose='no'        !< verbosity flag (yes|no){no}
     character(len=3)      :: vis='no'             !< visualise(yes|no)
     character(len=3)      :: weights2D='no'
     character(len=3)      :: zero='no'            !< zeroing(yes|no){no}
