@@ -57,7 +57,7 @@ real,    parameter :: PICKER_SHRINK_REFINE = 2.      !< picker shrink factor, pe
 integer, parameter :: PICKER_OFFSET        = 3       !< picker offset for grid search
 
 ! constants for masking/interpolation
-real, parameter :: COSMSKHALFWIDTH         = 3.0     !< spherical soft masking
+real, parameter :: COSMSKHALFWIDTH         = 6.0     !< spherical soft masking
 real, parameter :: KBWINSZ                 = 1.5     !< interpolation window size
 real, parameter :: KBALPHA                 = 2.0     !< interpolation alpha (smoothing constant)
 

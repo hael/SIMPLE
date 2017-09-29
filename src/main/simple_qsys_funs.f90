@@ -114,6 +114,8 @@ contains
                 ! all ok
             else
                 write(*,*) 'WARNING! simple absolute paths in shell and simple_distr_config.env do not agree'
+                write(*,*) 'In env:   ', trim(simple_path_env)
+                write(*,*) 'In shell: ', trim(simple_path)
             endif
         endif
         ! Queue keys
