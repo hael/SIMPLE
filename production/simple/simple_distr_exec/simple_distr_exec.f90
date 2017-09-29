@@ -474,10 +474,9 @@ select case(prg)
         ! set required keys
         keys_required(1)  = 'smpd'
         keys_required(2)  = 'msk'
-        keys_required(3)  = 'ncls'
-        keys_required(4)  = 'ctf'
-        keys_required(5)  = 'nparts'
-        keys_required(6)  = 'dir_mics'
+        keys_required(3)  = 'ctf'
+        keys_required(4)  = 'nparts'
+        keys_required(5)  = 'dir_ptcls'
         ! set optional keys
         keys_optional(1)  = 'match_filt'
         keys_optional(2)  = 'nthr'
@@ -489,16 +488,13 @@ select case(prg)
         keys_optional(8)  = 'width'
         keys_optional(9)  = 'filwidth'
         keys_optional(10) = 'center'
-        keys_optional(11) = 'dir_ptcls'
         ! documentation
         if( describe ) call print_doc_prime2D
-        call cline%parse( keys_required(:6), keys_optional(:11) )
+        call cline%parse( keys_required(:5), keys_optional(:10) )
         ! set defaults
         if( .not. cline%defined('lp')     ) call cline%set('lp',     15.)
         if( .not. cline%defined('eo')     ) call cline%set('eo',     'no')
         if( .not. cline%defined('cenlp')  ) call cline%set('cenlp',  30.)
-        if( .not. cline%defined('edge')   ) call cline%set('edge',   10.)
-        if( .not. cline%defined('maxits') ) call cline%set('maxits', 30.)
         call cline%set('weights2D', 'no')
         call cline%set('autoscale', 'no')
         call xprime2D_stream_distr%execute(cline)

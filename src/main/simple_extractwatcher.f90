@@ -1,6 +1,6 @@
 ! particles watcher for stream processing
 
-module simple_micwatcher
+module simple_extractwatcher
 #include "simple_lib.f08"
 use simple_defs
 use simple_syslib
@@ -9,13 +9,13 @@ use simple_params, only: params
 use simple_timer
 implicit none
 
-public :: micwatcher
+public :: extractwatcher
 private
 
-type micwatcher
+type extractwatcher
     private
     character(len=STDLEN), allocatable :: history(:)             !< history of micrographs detected
-    character(len=STDLEN), allocatable :: new_mics(:)             !< new micrographs
+    character(len=STDLEN), allocatable :: new_stks(:)            !< new extracted stacks
     character(len=STDLEN)              :: cwd            = ''    !< CWD
     character(len=STDLEN)              :: watch_dir      = ''    !< movies directory to watch
     character(len=4)                   :: ext            = ''    !< 
@@ -35,21 +35,19 @@ contains
     procedure, private :: is_past
     procedure, private :: add2history
     procedure, private :: to_process
-    procedure, private :: stack_from_mic
-    procedure, private :: deftab_from_mic
+    procedure, private :: deftab_from_stk
     ! GETTERS
-    procedure          :: get_new_mics
     procedure          :: get_new_stacks
     procedure          :: get_new_deftabs
     ! DESTRUCTOR
     procedure          :: kill
 end type
 
-interface micwatcher
+interface extractwatcher
     module procedure constructor
-end interface micwatcher
+end interface extractwatcher
 
-character(len=STDLEN), parameter   :: FILETABNAME = 'mics_stream.txt'
+character(len=STDLEN), parameter   :: FILETABNAME = 'extractwatcher.txt'
 integer,               parameter   :: FAIL_THRESH = 50
 integer,               parameter   :: FAIL_TIME   = 7200 ! 2 hours
 
@@ -60,19 +58,18 @@ contains
         class(params),     intent(in) :: p
         integer,           intent(in) :: report_time  ! in seconds
         logical, optional, intent(in) :: print
-        type(micwatcher)            :: self
-        character(len=STDLEN)         :: cwd
+        type(extractwatcher)      :: self
+        character(len=STDLEN) :: cwd
         call self%kill
-        if( .not. file_exists(trim(adjustl(p%dir_mics))) )then
-            print *, 'Directory does not exist: ', trim(adjustl(p%dir_mics))
+        call simple_getcwd(cwd)
+        self%cwd       = trim(cwd)
+        self%watch_dir = trim(p%dir_ptcls)//'/'
+        if( .not. file_exists(trim(adjustl(self%watch_dir))) )then
+            print *, 'Directory does not exist: ', trim(adjustl(self%watch_dir))
             stop
         endif
-        call simple_getcwd(cwd)
-        self%cwd         = trim(cwd)
-        self%watch_dir   = trim(adjustl(p%dir_mics))
         self%report_time = report_time
-        self%ext         = p%ext
-        self%mic_ext     = trim('_intg')//trim(self%ext)
+        self%ext         = trim(p%ext)
         if( present(print) )then
             self%doprint = print
         else
@@ -81,16 +78,16 @@ contains
     end function constructor
 
     !>  \brief  is the watching procedure
-    subroutine watch( self, n_mics )
+    subroutine watch( self, n_stks )
 #ifdef PGI
         include 'lib3f.h'
         procedure :: cast_time_char => ctime
 #endif
-        class(micwatcher),   intent(inout) :: self
-        integer,             intent(out)   :: n_mics
-        character(len=STDLEN), allocatable :: farray(:)
-        integer,               allocatable :: fileinfo(:)
-        logical,               allocatable :: is_new_mic(:)
+        class(extractwatcher), intent(inout) :: self
+        integer,               intent(out)   :: n_stks
+        character(len=STDLEN),   allocatable :: farray(:)
+        integer,                 allocatable :: fileinfo(:)
+        logical,                 allocatable :: is_new_stk(:)
         integer               :: tnow, last_accessed, last_modified, last_status_change ! in seconds
         integer               :: i, io_stat, alloc_stat, n_lsfiles, cnt, fail_cnt
         character(len=STDLEN) :: fname, abs_fname, fbody, ext
@@ -103,11 +100,11 @@ contains
             self%starttime  = tnow
         endif
         self%ellapsedtime = tnow - self%starttime
-        n_mics   = 0
+        n_stks   = 0
         fail_cnt = 0
         ! builds mics array
-        fbody = trim(self%watch_dir) // trim('/')
-        call ls_filetab(trim(fbody), trim(self%mic_ext), trim(FILETABNAME))
+        fbody = trim(self%watch_dir) // trim('/ptcls_from_')
+        call ls_filetab(trim(fbody), trim(self%ext), trim(FILETABNAME))
         call read_filetable( trim(FILETABNAME), farray )
         n_lsfiles = size(farray)
         if( n_lsfiles .eq. 0 )then
@@ -116,11 +113,11 @@ contains
             return
         endif
         ! identifies closed and untouched files
-        allocate(is_new_mic(n_lsfiles), source=.false.)
+        allocate(is_new_stk(n_lsfiles), source=.false.)
         do i = 1, n_lsfiles
             fname = trim(adjustl(farray(i)))
             if( self%is_past(fname) )then
-                is_new_mic(i) = .false.
+                is_new_stk(i) = .false.
             else
                 abs_fname = trim(self%cwd)//'/'//trim(adjustl(fname))
                 call simple_file_stat(abs_fname, io_stat, fileinfo, doprint=.false.)
@@ -133,7 +130,7 @@ contains
                     if(    (last_accessed      > self%report_time)&
                     &.and. (last_modified      > self%report_time)&
                     &.and. (last_status_change > self%report_time)&
-                    &.and. is_closed ) is_new_mic(i) = .true.
+                    &.and. is_closed ) is_new_stk(i) = .true.
                 else
                     ! some error occured
                     fail_cnt = fail_cnt + 1
@@ -144,24 +141,24 @@ contains
         enddo
         ! identifies already processed files for restart
         do i = 1, n_lsfiles
-            if( is_new_mic(i) )then
-                is_new_mic(i) = self%to_process( farray(i) )
-                if( is_new_mic(i) )write(*,'(A,A,A,A)')'>>> NEW MICROGRAPH: ',&
+            if( is_new_stk(i) )then
+                is_new_stk(i) = self%to_process( farray(i) )
+                if( is_new_stk(i) )write(*,'(A,A,A,A)')'>>> NEW EXTRACTED STACK: ',&
                 &trim(adjustl(farray(i))), '; ', cast_time_char(tnow)
             endif
         enddo
         ! report
-        n_mics = count(is_new_mic)
-        if( n_mics > 0 )then
-            if(allocated(self%new_mics))deallocate(self%new_mics)
-            allocate(self%new_mics(n_mics))
+        n_stks = count(is_new_stk)
+        if( n_stks > 0 )then
+            if(allocated(self%new_stks))deallocate(self%new_stks)
+            allocate(self%new_stks(n_stks))
             cnt = 0
             do i = 1, n_lsfiles
-                if( .not.is_new_mic(i) )cycle
+                if( .not.is_new_stk(i) )cycle
                 cnt   = cnt + 1
                 fname = trim(adjustl(farray(i)))
                 call self%add2history( fname )
-                self%new_mics(cnt) = trim(fname)
+                self%new_stks(cnt) = trim(fname)
             enddo
         endif
     end subroutine watch
@@ -169,25 +166,23 @@ contains
     !>  \brief whether the movie should be processed or not
     !!         if one file is missing it is re-processed  
     logical function to_process( self, fname )
-        class(micwatcher), intent(inout) :: self
+        class(extractwatcher), intent(inout) :: self
         character(len=*),    intent(in)  :: fname
-        character(len=STDLEN) :: ctf_name, picker_name
-        integer :: n
+        character(len=STDLEN) :: ctf_name
+        integer :: nl, ldim(3), nptcls
         logical :: stack_done, ctf_done
         to_process  = .false.
-        ctf_name    = self%deftab_from_mic(fname)
-        picker_name = self%stack_from_mic(fname)
-        print *, trim(ctf_name), file_exists(ctf_name)
-        print *, trim(picker_name), file_exists(picker_name)
+        ctf_name    = self%deftab_from_stk(fname)
         if( .not.file_exists(trim(ctf_name)) )return
-        if( .not.file_exists(trim(picker_name)) )return
-        n = nlines(trim(ctf_name))
+        nl = nlines(trim(ctf_name))
+        call find_ldim_nptcls(trim(fname), ldim, nptcls)
+        if( nptcls.ne.nl )return
         to_process = .true.
     end function to_process
 
     !>  \brief  is for adding to the history of already reported files
     subroutine add2history( self, fname )
-        class(micwatcher),   intent(inout) :: self
+        class(extractwatcher),   intent(inout) :: self
         character(len=*),    intent(in)    :: fname
         character(len=STDLEN), allocatable :: tmp_farr(:)
         integer :: n, alloc_stat
@@ -212,7 +207,7 @@ contains
 
     !>  \brief  is for checking a file has already been reported
     logical function is_past( self, fname )
-        class(micwatcher), intent(inout) :: self
+        class(extractwatcher), intent(inout) :: self
         character(len=*),    intent(in)    :: fname
         integer :: i
         is_past = .false.
@@ -226,69 +221,49 @@ contains
         endif
     end function is_past
 
-    character(len=STDLEN) function stack_from_mic( self, fname )
-        class(micwatcher), intent(inout) :: self
+    character(len=STDLEN) function deftab_from_stk( self, fname )
+        class(extractwatcher), intent(inout) :: self
         character(len=*),  intent(in)    :: fname
         character(len=STDLEN) :: fname_here, fbody
         fname_here = remove_abspath(trim(adjustl(fname)))
-        fbody      = get_fbody(trim(fname_here), trim(self%mic_ext), separator=.false.)
-        stack_from_mic = trim(self%watch_dir) // trim('/particles/ptcls_from_') // trim(fbody) // trim(self%ext)
-    end function stack_from_mic
-
-    character(len=STDLEN) function deftab_from_mic( self, fname )
-        class(micwatcher), intent(inout) :: self
-        character(len=*),  intent(in)    :: fname
-        character(len=STDLEN) :: fname_here, fbody
-        fname_here = remove_abspath(trim(adjustl(fname)))
-        fbody      = get_fbody(trim(fname_here), trim(self%mic_ext), separator=.false.)
-        deftab_from_mic = trim(self%watch_dir) // trim('/particles/extract_params_') // trim(fbody) // trim('.txt')
-    end function deftab_from_mic
+        fbody      = get_fbody(trim(fname_here), trim(self%ext), separator=.false.)
+        fbody      = fbody(12:) ! removes the 'ptcls_from_'
+        deftab_from_stk = trim(self%watch_dir) // trim('extract_params_') // trim(fbody) // trim('.txt')
+    end function deftab_from_stk
 
     ! GETTERS
 
-    subroutine get_new_mics( self, mics )
-        class(micwatcher),             intent(inout) :: self
-        character(len=*), allocatable, intent(out)   :: mics(:)
-        if( allocated(mics) )deallocate(mics)
-        if( allocated(self%new_mics) )then
-            mics = self%new_mics
-        endif
-    end subroutine get_new_mics
-
     subroutine get_new_deftabs( self, deftabs )
-        class(micwatcher),             intent(inout) :: self
+        class(extractwatcher),             intent(inout) :: self
         character(len=*), allocatable, intent(out)   :: deftabs(:)
         integer :: i, n
         if( allocated(deftabs) )deallocate(deftabs)
-        if( allocated(self%new_mics) )then
-            n = size(self%new_mics)
+        if( allocated(self%new_stks) )then
+            n = size(self%new_stks)
             allocate(deftabs(n))
             do i = 1, n
-                deftabs(i) = self%deftab_from_mic( self%new_mics(i) )
+                deftabs(i) = self%deftab_from_stk( self%new_stks(i) )
             enddo
         endif
     end subroutine get_new_deftabs
 
     subroutine get_new_stacks( self, stacks )
-        class(micwatcher),             intent(inout) :: self
+        class(extractwatcher),             intent(inout) :: self
         character(len=*), allocatable, intent(out)   :: stacks(:)
         integer :: i, n
         if( allocated(stacks) )deallocate(stacks)
-        if( allocated(self%new_mics) )then
-            n = size(self%new_mics)
-            allocate(stacks(n))
-            do i = 1, n
-                stacks(i) = self%stack_from_mic( self%new_mics(i) )
-            enddo
+        if( allocated(self%new_stks) )then
+            stacks = self%new_stks
         endif
     end subroutine get_new_stacks
 
     !>  \brief  is a destructor
     subroutine kill( self )
-        class(micwatcher), intent(inout) :: self
+        class(extractwatcher), intent(inout) :: self
         self%cwd        = ''
         self%watch_dir  = ''
         if(allocated(self%history))deallocate(self%history)
+        if(allocated(self%new_stks))deallocate(self%new_stks)
         self%report_time    = 0
         self%starttime      = 0
         self%ellapsedtime   = 0
@@ -298,4 +273,4 @@ contains
         self%doprint        = .false.
     end subroutine kill
 
-end module simple_micwatcher
+end module simple_extractwatcher

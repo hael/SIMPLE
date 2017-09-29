@@ -591,11 +591,19 @@ contains
         class(oris),                    intent(inout) :: self
         integer,                        intent(in)    :: ncls
         integer, allocatable, optional, intent(out)   :: fromtocls(:,:)
-        integer, allocatable :: inds2split(:), membership(:), pops(:), fromtoall(:,:)
+        integer, allocatable :: inds2split(:), membership(:), pops(:), fromtoall(:,:), tmp(:)
         type(ran_tabu)       :: rt
         integer              :: iptcl, cls2split(1)
-        integer              :: cnt, nempty, n_incl, maxpop, i, icls
-        pops   = self%get_pops('class', consider_w=.false.)
+        integer              :: cnt, nempty, n_incl, maxpop, i, icls, ncls_here
+        ncls_here = self%get_n('class')
+        if( ncls > ncls_here )then
+            tmp = self%get_pops('class', consider_w=.false.)
+            allocate(pops(1:ncls), source=0)
+            pops(1:ncls_here) = tmp(1:ncls_here)
+            deallocate(tmp)
+        else
+            pops = self%get_pops('class', consider_w=.false.)            
+        endif
         nempty = count(pops == 0)
         if(nempty == 0)return
         if( present(fromtocls) )then
@@ -605,7 +613,15 @@ contains
         endif
         do icls = 1, ncls
             deallocate(pops, stat=alloc_stat)
-            pops = self%get_pops('class', consider_w=.false.)
+            !pops = self%get_pops('class', consider_w=.false.)
+            if( ncls > ncls_here )then
+                tmp = self%get_pops('class', consider_w=.false.)
+                allocate(pops(1:ncls), source=0)
+                pops(1:ncls_here) = tmp(1:ncls_here)
+                deallocate(tmp)
+            else
+                pops = self%get_pops('class', consider_w=.false.)            
+            endif
             if( pops(icls) /= 0 )cycle
             ! identify class to split
             cls2split  = maxloc(pops)
@@ -1832,12 +1848,13 @@ contains
     ! I/O
 
     !>  \brief  reads orientation info from file
-    subroutine read( self, orifile, nst )
+    subroutine read( self, orifile, fromto, nst )
         class(oris),       intent(inout) :: self
         character(len=*),  intent(in)    :: orifile
+        integer, optional, intent(in)    :: fromto(2)
         integer, optional, intent(out)   :: nst
         character(len=100) :: io_message
-        integer :: file_stat, i, fnr, state
+        integer :: file_stat, i, fnr, state, istart, iend
         if( .not. file_exists(orifile) )then
             call simple_stop("oris ; read; The file you are trying to read: "//trim(orifile)//' does not exist in cwd' )
         endif
@@ -1848,7 +1865,16 @@ contains
         call fopen(fnr, FILE=orifile, STATUS='OLD', action='READ', iostat=file_stat,iomsg=io_message)
         call fileio_errmsg("oris ; read ,Error when opening file for reading: "//trim(orifile)//':'//trim(io_message), file_stat)
         if( present(nst) ) nst = 0
-        do i=1,self%n
+        if( present(fromto) )then
+            istart = fromto(1)
+            iend   = fromto(2)
+            if(istart < 1) stop 'Invalid index; simple_oris%read'
+            if(iend > self%n) stop 'Invalid index; simple_oris%read'
+        else
+            istart = 1
+            iend   = self%n 
+        endif
+        do i = istart, iend
             call self%o(i)%read(fnr)
             if( present(nst) )then
                 state = int(self%o(i)%get('state'))

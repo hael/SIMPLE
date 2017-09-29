@@ -35,7 +35,7 @@ contains
             stop 'does not exist in cwd; binoris_io :: binread_oritab_1'
         endif
         if( str_has_substr(fname,'.txt') )then
-            call a%read(fname, nst)
+            call a%read(fname, fromto=fromto, nst=nst)
         else
             call bos%open(fname)
             do irec=fromto(1),fromto(2)

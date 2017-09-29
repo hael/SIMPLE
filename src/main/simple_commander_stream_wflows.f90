@@ -105,31 +105,34 @@ contains
     end subroutine exec_preproc_stream
 
     subroutine exec_prime2D_stream_distr( self, cline )
+        use simple_defs_conv
         use simple_commander_distr_wflows, only: prime2D_distr_commander
         use simple_oris,                   only: oris
         use simple_image,                  only: image
         use simple_binoris_io,             only: binwrite_oritab, binread_oritab
-        use simple_micwatcher        ! use all in there
+        use simple_extractwatcher        ! use all in there
         use simple_commander_distr   ! use all in there
         use simple_fileio            ! use all in there
         class(prime2D_stream_distr_commander), intent(inout) :: self
         class(cmdline),                        intent(inout) :: cline
-        character(len=32), parameter :: ITERFBODY       = 'prime2Ddoc_'
-        character(len=32), parameter :: CAVGS_ITERFBODY = 'cavgs_iter'
-        character(len=32), parameter :: STK_FILETAB     = 'stktab.txt'
-        character(len=32), parameter :: DEFTAB          = 'deftab.txt'
-        character(len=32), parameter :: STK_DIR         = './stacks/'
-        character(len=32), parameter :: PTCLS_DIR       = 'particles/'
-        integer,           parameter :: NCLS_INIT_LIM   = 5    ! FOR TESTING ONLY
-        integer,           parameter :: NPTCLS_PER_CLS  = 100
+        character(len=32),       parameter :: ITERFBODY       = 'prime2Ddoc_'
+        character(len=32),       parameter :: CAVGS_ITERFBODY = 'cavgs_iter'
+        character(len=32),       parameter :: FRCS_ITERFBODY  = 'frcs_iter'
+        character(len=32),       parameter :: STK_FILETAB     = 'stkstreamtab.txt'
+        character(len=32),       parameter :: DEFTAB          = 'deftab.txt'
+        character(len=32),       parameter :: STK_DIR         = './stacks/'
+        integer,                 parameter :: NCLS_INIT_LIM   = 5    ! FOR TESTING ONLY
+        integer,                 parameter :: NPTCLS_PER_CLS  = 100  ! FOR TESTING ONLY
+        integer,                 parameter :: SHIFTSRCH_LIM   = 1000 ! # of ptcls required to turm on shift search
+        integer,                 parameter :: WAIT_WATCHER    = 60   ! seconds prior to new stack detection
         type(prime2D_distr_commander)      :: xprime2D_distr
-        type(micwatcher)                   :: mic_watcher
-        character(len=STDLEN), allocatable :: newstacks(:), stktab(:)
-        character(len=STDLEN)              :: oritab_glob, str_iter, refs_glob
+        type(extractwatcher)                   :: mic_watcher
         type(cmdline)                      :: cline_prime2D, cline_scale
         type(params)                       :: p_master
+        character(len=STDLEN), allocatable :: newstacks(:), stktab(:)
+        character(len=STDLEN)              :: oritab_glob, str_iter, refs_glob, frcs_glob
         real    :: scale, smpd_glob, msk_glob
-        integer :: nparts, iter, ncls, n_newmics, ldim(3), nptcls, box_original
+        integer :: iter, ncls, n_newstks, ldim(3), nptcls, box_original
         integer :: nptcls_glob, nstacks_glob, ncls_glob, box_glob
         integer :: nptcls_glob_prev, ncls_glob_prev
         ! seed the random number generator
@@ -137,7 +140,7 @@ contains
         ! output command line executed
         write(*,'(a)') '>>> COMMAND LINE EXECUTED'
         write(*,*) trim(cmdline_glob)
-        ! make target directory
+        ! make scaled stacks directory
         call exec_cmdline('mkdir -p '//trim(adjustl(STK_DIR))//'|| true')
         ! make master parameters
         p_master = params(cline, checkdistr=.false.)
@@ -161,13 +164,13 @@ contains
         smpd_glob = LP2SMPDFAC * p_master%lp
         scale     = p_master%smpd / smpd_glob
         ! Instantiate watcher
-        mic_watcher = micwatcher(p_master, 30, print=.true.)
+        mic_watcher = extractwatcher(p_master, 30, print=.true.)
         ! Wait for NCLS_INIT_LIM classes
         do 
-            call mic_watcher%watch(n_newmics)
-            if(n_newmics > 0)then
+            call mic_watcher%watch(n_newstks)
+            if(n_newstks > 0)then
                 if( nptcls_glob .eq. 0 )then
-                    ! determines scaling parms
+                    ! determines & updates scaling parms
                     call mic_watcher%get_new_stacks(stktab)
                     call find_ldim_nptcls(stktab(1), ldim, nptcls)
                     box_original = ldim(1)
@@ -186,7 +189,7 @@ contains
                 ncls = nint(real(nptcls_glob) / real(NPTCLS_PER_CLS))
                 if(ncls >= NCLS_INIT_LIM) exit
             endif
-            call simple_sleep(60) ! parameter instead
+            call simple_sleep(WAIT_WATCHER) ! parameter instead
         enddo
         ncls_glob = ncls
         call cline_prime2D%set('ncls', real(ncls_glob))
@@ -196,25 +199,30 @@ contains
             ! prime2D
             call cline_prime2D%set('startit', real(iter))
             call cline_prime2D%set('maxits',  real(iter))
+            call cline_prime2D%set('ncls',    real(ncls_glob))
+            call cline_prime2D%set('nparts',  real(min(ncls,p_master%nparts)))
+            if(nptcls_glob > SHIFTSRCH_LIM)then
+                call cline_prime2D%set('trs', MINSHIFT)
+            endif
             call xprime2D_distr%execute(cline_prime2D)
             oritab_glob = trim(ITERFBODY)//trim(str_iter)//trim(METADATEXT)
+            refs_glob   = trim(CAVGS_ITERFBODY)//trim(str_iter)//trim(p_master%ext)
+            frcs_glob   = trim(FRCS_ITERFBODY)//trim(str_iter)//'.bin'
             call rename('prime2Ddoc_final.txt', oritab_glob)
-            refs_glob   = trim(CAVGS_ITERFBODY)// trim(str_iter)//trim(p_master%ext)
+            call rename(trim('cavgs_final')//trim(p_master%ext), refs_glob)
+            call rename('classdoc.txt', trim('classdoc_')//trim(str_iter)//trim('.txt'))
             call cline_prime2D%set('oritab', trim(oritab_glob))
             call cline_prime2D%set('refs',   trim(refs_glob))
             call remap_empty_classes
             ! detects new images
-            call mic_watcher%watch(n_newmics)
-            if(n_newmics > 0)then
+            call mic_watcher%watch(n_newstks)
+            if(n_newstks > 0)then
                 nptcls_glob_prev = nptcls_glob
                 call add_newstacks
-                write(*,'(A,I6)')'>>> NEW PARTICLES COUNT: ', nptcls_glob 
                 ! updates particles classes & references
                 ncls_glob_prev = ncls_glob
                 ncls_glob      = nint(real(nptcls_glob) / real(NPTCLS_PER_CLS))
                 call remap_new_classes
-                call cline_prime2D%set('ncls', real(ncls_glob))
-                write(*,'(A,I6)')'>>> NEW CLASSES COUNT: ', ncls_glob 
             endif
         enddo
         ! end gracefully
@@ -225,34 +233,30 @@ contains
             subroutine add_newstacks
                 use simple_commander_imgproc, only: scale_commander
                 type(scale_commander)              :: xscale
-                type(oris)                         :: deftab_prev, deftab_glob, deftab_here
+                type(oris)                         :: deftab_glob, deftab_here!, deftab_prev
                 character(len=STDLEN), allocatable :: new_deftabs(:), new_stacks(:), tmp(:)
                 character(len=STDLEN) :: stk_scaled, fbody, ext
                 integer               :: i, j, nl, nptcls, cnt, cnt2, n, ldim(3), iptcl
                 call mic_watcher%get_new_stacks(new_stacks)
                 ! number of new particles
                 nptcls = 0
-                do i = 1, n_newmics
+                do i = 1, n_newstks
                     call find_ldim_nptcls(new_stacks(i), ldim, n)
                     nptcls = nptcls + n
                 enddo
                 nptcls_glob = nptcls_glob + nptcls
+                write(*,'(A,I6)')'>>> NEW PARTICLES COUNT: ', nptcls_glob
                 if( p_master%ctf.ne.'no' )then
                     ! consolidate deftabs
                     call mic_watcher%get_new_deftabs(new_deftabs)
                     call deftab_glob%new(nptcls_glob)
                     if( nptcls_glob_prev > 0 )then
                         ! transfer previous ctf params to new object
-                        call deftab_prev%new(nptcls_glob_prev)
-                        call binread_oritab(trim(deftab), deftab_prev, [1, nptcls_glob_prev])
-                        do iptcl = 1, nptcls_glob_prev
-                            call deftab_glob%set_ori(iptcl, deftab_prev%get_ori(iptcl))
-                        enddo 
-                        call deftab_prev%kill
+                        call binread_oritab(trim(deftab), deftab_glob, [1, nptcls_glob_prev])
                     endif
                     ! transfer new ctf params to new object
                     cnt = nptcls_glob_prev
-                    do i = 1, n_newmics
+                    do i = 1, n_newstks
                         nl = nlines(new_deftabs(i))
                         call deftab_here%new(nl)
                         call binread_oritab(trim(new_deftabs(i)), deftab_here, [1, nl])
@@ -268,17 +272,17 @@ contains
                 endif
                 ! stacks
                 if( nstacks_glob == 0 )then
-                    allocate(stktab(n_newmics))
+                    allocate(stktab(n_newstks))
                 else
                     ! updates stacks array
                     tmp = stktab
                     deallocate(stktab)
-                    allocate(stktab(nstacks_glob+n_newmics))
+                    allocate(stktab(nstacks_glob+n_newstks))
                     stktab(1:nstacks_glob) = tmp(1:nstacks_glob)
                 endif
                 ! down-scaling and name updates
                 cnt = 0
-                do i = nstacks_glob+1, nstacks_glob+n_newmics
+                do i = nstacks_glob+1, nstacks_glob+n_newstks
                     cnt   = cnt + 1
                     ext   = fname2ext(trim(remove_abspath(trim(new_stacks(cnt)))))
                     fbody = get_fbody(trim(remove_abspath(trim(new_stacks(cnt)))), trim(ext))
@@ -286,9 +290,10 @@ contains
                     stktab(i)  = trim(stk_scaled)
                     call cline_scale%set('stk', trim(new_stacks(cnt)))
                     call cline_scale%set('outstk', trim(stk_scaled))
+                    call cline_scale%set('ctf','no') ! to clear up display
                     call xscale%execute(cline_scale)
                 enddo
-                nstacks_glob = nstacks_glob + n_newmics
+                nstacks_glob = nstacks_glob + n_newstks
                 ! writes down-scaled stacks list
                 call write_filetable(STK_FILETAB, stktab)
             end subroutine add_newstacks
@@ -315,19 +320,18 @@ contains
             end subroutine remap_empty_classes
 
             subroutine remap_new_classes
-                use simple_ran_tabu, only: ran_tabu
-                type(ran_tabu)       :: rt
-                type(oris)           :: os, os_prev
-                type(image)          :: img_cavg
-                integer, allocatable :: fromtocls(:,:), cls(:), pops(:)
-                integer              :: icls, ncls_prev, n, iptcl, i
+                use simple_ran_tabu,        only: ran_tabu
+                use simple_projection_frcs, only: projection_frcs
+                type(ran_tabu)        :: rt
+                type(oris)            :: os!, os_prev
+                type(projection_frcs) :: frcs_prev, frcs
+                type(image)           :: img_cavg
+                integer, allocatable  :: fromtocls(:,:), cls(:), pops(:)
+                integer               :: icls, ncls_prev, n, iptcl, i, state
                 call os%new(nptcls_glob)
-                call os_prev%new(nptcls_glob_prev)
-                call binread_oritab(oritab_glob, os_prev, [1, nptcls_glob_prev])
-                do iptcl = 1, nptcls_glob_prev
-                    call os%set_ori(iptcl, os_prev%get_ori(iptcl))
-                enddo
+                call binread_oritab(oritab_glob, os, [1, nptcls_glob_prev])
                 n = nptcls_glob - nptcls_glob_prev
+                state = 1
                 ! randomize new ptcls to previous references
                 allocate(cls(n))
                 rt = ran_tabu(n)
@@ -339,20 +343,39 @@ contains
                     call os%set(iptcl, 'corr',  0.)
                 enddo
                 deallocate(cls)
-                ! updates references
+                ! updates doc, references &FRCs
                 if( ncls_glob.eq.ncls_glob_prev )then
                     ! nothing to do
                 else
+                    write(*,'(A,I6)')'>>> NEW CLASSES COUNT: ', ncls_glob 
                     call os%fill_empty_classes(ncls_glob, fromtocls)
                     if( allocated(fromtocls) )then
+                        ! references
                         call img_cavg%new([box_glob, box_glob,1], smpd_glob)
                         do icls = 1, size(fromtocls, dim=1)
-                            call img_cavg%read(trim(refs_glob), fromtocls(icls, 1))
-                            call img_cavg%write(trim(refs_glob), fromtocls(icls, 2))
+                            call img_cavg%read(trim(refs_glob), fromtocls(icls,1))
+                            call img_cavg%write(trim(refs_glob), fromtocls(icls,2))
                         enddo
+                        call img_cavg%read(trim(refs_glob), ncls_glob)
+                        call img_cavg%write(trim(refs_glob), ncls_glob)
+                        ! FRCs
+                        if( p_master%match_filt.eq.'yes')then
+                            call frcs_prev%new(ncls_glob_prev, box_glob, smpd_glob, state)
+                            call frcs%new(ncls_glob, box_glob, smpd_glob, state)
+                            call frcs_prev%read(frcs_glob)
+                            do icls = 1, ncls_glob_prev
+                                call frcs%set_frc(icls,&
+                                &frcs_prev%get_frc(icls, box_glob, state), state)
+                            enddo
+                            do icls = 1, size(fromtocls, dim=1)
+                                call frcs%set_frc( fromtocls(icls,2),&
+                                &frcs%get_frc(fromtocls(icls,1), box_glob, state), state)
+                            enddo
+                            call frcs%write(frcs_glob)
+                        endif
                     endif
                 endif
-                ! updates document
+                ! document
                 call binwrite_oritab(oritab_glob, os, [1, nptcls_glob])
             end subroutine remap_new_classes
 
