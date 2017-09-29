@@ -2,9 +2,9 @@
 program simple_distr_exec
 use simple_defs
 use simple_gen_doc
-use simple_cmdline,      only: cmdline,cmdline_err
-use simple_strings,      only: str_has_substr
-use simple_fileio,       only: extract_abspath
+use simple_cmdline, only: cmdline,cmdline_err
+use simple_strings, only: str_has_substr
+use simple_fileio,  only: extract_abspath
 use simple_commander_stream_wflows
 use simple_commander_distr_wflows
 use simple_commander_hlev_wflows
@@ -111,9 +111,10 @@ select case(prg)
         keys_optional(28) = 'dopick'
         keys_optional(29) = 'fromm'
         keys_optional(30) = 'ndev'
+        keys_optional(31)  = 'pcontrast'
         ! parse command line
         if( describe ) call print_doc_preproc
-        call cline%parse(keys_required(:7), keys_optional(:30))
+        call cline%parse(keys_required(:7), keys_optional(:31))
         ! set defaults
         if( .not. cline%defined('trs')             ) call cline%set('trs',                5.)
         if( .not. cline%defined('lpstart')         ) call cline%set('lpstart',           15.)
@@ -124,6 +125,7 @@ select case(prg)
         if( .not. cline%defined('lp_ctffind')      ) call cline%set('lp_ctffind',         5.)
         if( .not. cline%defined('lp_pick')         ) call cline%set('lp_pick',           20.)
         if( .not. cline%defined('stream')          ) call cline%set('stream',  'yes')
+        if( .not. cline%defined('pcontrast')       ) call cline%set('pcontrast', 'black')
         call xpreproc_stream%execute(cline)
 
     ! PIPELINED UNBLUR + CTFFIND

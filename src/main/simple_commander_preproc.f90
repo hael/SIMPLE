@@ -222,6 +222,7 @@ contains
                     call cline_extract%set('unidoc',    fname_unidoc_output)
                     call cline_extract%set('outfile',   fname_ctf_extract)
                     call cline_extract%set('outstk',    fname_stk_extract)
+                    call cline_extract%set('pcontrast', p%pcontrast)
                     call xextract%execute(cline_extract)
                 endif
             endif
@@ -1014,7 +1015,7 @@ contains
                     ! extract the window
                     particle_position = boxdata(j,1:2)
                     call micrograph%window(nint(particle_position), p%box, b%img, noutside)
-                    if( p%neg .eq. 'yes' ) call b%img%neg
+                    if( p%pcontrast .eq. 'black' ) call b%img%neg
                     call b%img%norm
                     call b%img%write(trim(adjustl(sumstack)), pinds(j))
                 endif
@@ -1028,7 +1029,7 @@ contains
                         ! extract the window
                         particle_position = boxdata(j,1:2)
                         call micrograph%window(nint(particle_position), p%box, b%img)
-                        if( p%neg .eq. 'yes' ) call b%img%neg
+                        if( p%pcontrast .eq. 'black' ) call b%img%neg
                         call b%img%norm
                         call b%img%write(trim(adjustl(sumstack_frames)), pinds(j))
                     endif

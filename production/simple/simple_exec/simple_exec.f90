@@ -325,9 +325,10 @@ select case(prg)
         keys_optional(27)  = 'nsig'
         keys_optional(28)  = 'dopick'
         keys_optional(29)  = 'ndev'
+        keys_optional(30)  = 'pcontrast'
         ! parse command line
         if( describe ) call print_doc_preproc
-        call cline%parse(keys_required(:5), keys_optional(:29))
+        call cline%parse(keys_required(:5), keys_optional(:30))
         ! set defaults
         if( .not. cline%defined('trs')             ) call cline%set('trs',                5.)
         if( .not. cline%defined('lpstart')         ) call cline%set('lpstart',           15.)
@@ -338,6 +339,7 @@ select case(prg)
         if( .not. cline%defined('lp_ctffind')      ) call cline%set('lp_ctffind',         5.)
         if( .not. cline%defined('lp_pick')         ) call cline%set('lp_pick',           20.)
         if( .not. cline%defined('outfile')         ) call cline%set('outfile', 'simple_unidoc.txt')
+        if( .not. cline%defined('pcontrast')       ) call cline%set('pcontrast', 'black')
         call xpreproc%execute(cline)
     case( 'select_frames' )
         !==Program select_frames
@@ -610,14 +612,14 @@ select case(prg)
         keys_optional(2) = 'filetab'
         keys_optional(3) = 'boxtab'
         keys_optional(4) = 'ctffind_doc'
-        keys_optional(5) = 'neg'
+        keys_optional(5) = 'pcontrast'
         keys_optional(6) = 'box'
         keys_optional(7) = 'outside'
         ! parse command line
         if( describe ) call print_doc_extract
         call cline%parse(keys_required(:1),keys_optional(:7))
         ! parse command line
-        if( .not. cline%defined('neg') )call cline%set('neg', 'yes')
+        if( .not. cline%defined('pcontrast') )call cline%set('pcontrast', 'black')
         ! execute
         call xextract%execute(cline)
 
@@ -1540,7 +1542,7 @@ select case(prg)
         keys_optional(6)  = 'trs'
         keys_optional(7)  = 'pgrp'
         keys_optional(8)  = 'neg'
-        keys_optional(9) = 'top'
+        keys_optional(9)  = 'top'
         keys_optional(10) = 'msk'
         ! parse command line
         if( describe ) call print_doc_projvol
