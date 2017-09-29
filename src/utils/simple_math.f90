@@ -155,50 +155,48 @@ contains
         vol_per_pix = smpd**3.
         vol = (mwkda*1000.)/dens
         nvox = nint(vol/vol_per_pix)
-    end function
+    end function nvoxfind_2
 
     !>   converts between radians and degrees
-    pure function deg2rad( deg ) result( rad )
+    elemental function deg2rad( deg ) result( rad )
         real, intent(in) :: deg  !< angle (degrees)
         real             :: rad  !< angle (radians)
         rad = (deg/180.)*pi
-    end function
+    end function deg2rad
 
     !>   converts from radians to degrees
-    pure function rad2deg_1( rad ) result( deg )
+    elemental function rad2deg_1( rad ) result( deg )
         real(sp), intent(in) :: rad  !< angle (radians)
         real(sp)             :: deg  !< angle (degrees)
         deg = (rad/PI)*180.
-    end function
+    end function rad2deg_1
 
     !>   converts from radians to degrees
-    pure function rad2deg_2( rad ) result( deg )
+    elemental function rad2deg_2( rad ) result( deg )
         real(dp), intent(in) :: rad  !< angle (radians)
         real(dp)             :: deg  !< angle (degrees)
         deg = (rad/DPI)*180.d0
-    end function
+    end function rad2deg_2
 
     !>   converts from correlation to euclidean distance
-    pure function corr2dist( corr ) result( dist )
-        real, intent(in) :: corr   !< query correlation
-        real :: dist
-        dist = 1.-corr
-    end function
+    ! pure function corr2dist( corr ) result( dist )
+    !     real, intent(in) :: corr   !< query correlation
+    !     real :: dist
+    !     dist = 1. - corr
+    ! end function corr2dist
 
-    !>   converts from euclidean distance to correlation
-    pure function dist2corr( dist ) result( corr )
-        real, intent(in) :: dist  !< query distance
-        real :: corr
-        corr = dist+1
-    end function
+    ! !>   converts from euclidean distance to correlation
+    ! pure function dist2corr( dist ) result( corr )
+    !     real, intent(in) :: dist  !< query distance
+    !     real :: corr
+    !     corr = dist + 1
+    ! end function
 
     !>   to check if val is even
-    pure function is_even_1( val ) result( is )
+    elemental logical function is_even_1( val )
         integer, intent(in) :: val  !< query val
-        logical :: is
-        is = .false.
-        if( mod(val,2) == 0 ) is = .true.
-    end function
+        is_even_1 = mod(val,2) == 0
+    end function is_even_1
 
     !>   to check if all vals in array are even
     pure function is_even_2( arr ) result( yep )
@@ -211,7 +209,7 @@ contains
             test(i) = is_even_1(arr(i))
         end do
         yep = all(test)
-    end function
+    end function is_even_2
 
     !>    is for checking the numerical soundness of an vector
     subroutine check4nans3D_1( arr )
@@ -220,7 +218,7 @@ contains
         arr1d = pack(arr, .true.)
         call check4nans_1(arr1d)
         deallocate(arr1d)
-    end subroutine
+    end subroutine check4nans3D_1
 
     !>    is for checking the numerical soundness of an vector
     subroutine check4nans3D_2( arr )
@@ -229,7 +227,7 @@ contains
         arr1d = pack(arr, .true.)
         call check4nans_2(arr1d)
         deallocate(arr1d)
-    end subroutine
+    end subroutine check4nans3D_2
 
     !>    is for checking the numerical soundness of an vector
     subroutine check4nans2D_1( arr )
@@ -238,7 +236,7 @@ contains
         arr1d = pack(arr, .true.)
         call check4nans_1(arr1d)
         deallocate(arr1d)
-    end subroutine
+    end subroutine check4nans2D_1
 
     !>    is for checking the numerical soundness of an vector
     subroutine check4nans2D_2( arr )
@@ -247,7 +245,7 @@ contains
         arr1d = pack(arr, .true.)  
         call check4nans_2(arr1d)
         deallocate(arr1d)
-    end subroutine
+    end subroutine check4nans2D_2
 
     !>    is for checking the numerical soundness of an vector
     subroutine check4nans_1( arr )
@@ -264,7 +262,7 @@ contains
         if( n_nans > 0 )then
             write(*,*) 'found NaNs in inputted vector; simple_math::check4nans_1', n_nans
         endif
-    end subroutine
+    end subroutine check4nans_1
 
     !>    is for checking the numerical soundness of an vector
     subroutine check4nans_2( arr )
@@ -281,16 +279,16 @@ contains
         if( n_nans > 0 )then
             write(*,*) 'found NaNs in inputted vector; simple_math::check4nans_2', n_nans
         endif
-    end subroutine
+    end subroutine check4nans_2
 
     !>  returns true if the argument is odd
-    pure elemental logical function is_odd(i)
+    elemental logical function is_odd(i)
         integer, intent(in) :: i    !< query value
         is_odd = btest(i,0)
-    end function
+    end function is_odd
 
     !>   for rounding to closest even
-    function round2even( val ) result( ev )
+    elemental function round2even( val ) result( ev )
         real, intent(in) :: val            !< query value
         integer :: ev, rounded, remainer
         rounded = nint(val)
@@ -304,10 +302,10 @@ contains
                 ev = rounded+1
             endif
         endif
-    end function
+    end function round2even
 
-     !>   for rounding to closest even
-    function round2odd( val ) result( ev )
+    !>   for rounding to closest even
+    elemental function round2odd( val ) result( ev )
         real, intent(in) :: val          !< query value
         integer :: ev, rounded, remainer
         rounded = nint(val)
@@ -321,7 +319,7 @@ contains
                 ev = rounded+1
             endif
         endif
-    end function
+    end function round2odd
 
     !>   get the angular resultion in degrees, given diameter and resolution
     !! \param res,diam spatial resolution (\f$\si{\per\angstrom}\f$)
@@ -330,7 +328,7 @@ contains
         real, intent(in)  :: res, diam
         real :: ang                     !< angular resolution in degrees
         ang = (res/(pi*diam))*360.
-    end function
+    end function angres
 
     !>   get the resolution in angstrom, given angle and diameter
     !! \param ang,diam angular resolution (degrees) and diameter (\f$\si{\angstrom}\f$)
@@ -338,7 +336,7 @@ contains
         real, intent(in)  :: ang, diam
         real :: res                      !< spatial resolution (\f$\si{\per\angstrom}\f$)
         res = (ang/360.)*(pi*diam)
-    end function
+    end function resang
 
      !>   checking for is_a_number
     pure function is_a_number_1( number ) result( is )
@@ -350,14 +348,14 @@ contains
         else
             is = .false.
         endif
-    end function
+    end function is_a_number_1
 
     !>   validity check of complex number (so that it is not nan)
     pure function is_a_number_2( complex_number ) result( is )
         complex, intent(in) :: complex_number !< input variable for checking
         logical             :: is
         is = is_a_number_1(real(complex_number)) .and. is_a_number_1(aimag(complex_number))
-    end function
+    end function is_a_number_2
 
     !>   converts string descriptors of c and d pointgroups to euler angle limits
     !! \param  t1,t2,p1,p2  euler angle limits
@@ -379,7 +377,7 @@ contains
         read(pgroup(2:),'(i2)') csym
         p1 = 0.
         p2 = 359.9999/real(csym)
-    end subroutine
+    end subroutine pgroup_to_lim
 
     !>   to put the which element (if it exists) last in the array,
     !!         swapping it with its present position
@@ -400,7 +398,7 @@ contains
                 arr(sz)  = which
             endif
         endif
-    end subroutine
+    end subroutine put_last
 
     !>   reverses an integer array
     subroutine reverse_iarr( iarr )
@@ -422,7 +420,7 @@ contains
             iarr(j) = iarr(i)
             iarr(i) = iswap
         end do
-    end subroutine
+    end subroutine reverse_iarr
 
     !>   reverses a real array
     subroutine reverse_rarr( rarr )
@@ -445,7 +443,7 @@ contains
             rarr(j) = rarr(i)
             rarr(i) = rswap
         end do
-    end subroutine
+    end subroutine reverse_rarr
 
     !>   reverses a complex array
     subroutine reverse_carr( carr )
@@ -467,8 +465,8 @@ contains
             cswap   = carr(j)
             carr(j) = carr(i)
             carr(i) = cswap
-        end do
-    end subroutine
+        end do 
+    end subroutine reverse_carr
 
     !>   implements the sortmeans algorithm
     subroutine sortmeans( dat, maxits, means, labels )
@@ -525,10 +523,10 @@ contains
         n = 0
         do i=1,size(arr1)
             do j=1,size(arr2)
-                if( arr1(i) == arr2(j) ) n = n+1
+                if( arr1(i) == arr2(j) ) n = n + 1
             end do
         end do
-    end function
+    end function common_ints
 
     !>   to enforce cyclic limit
     pure subroutine enforce_cyclic_limit( x, lim )
@@ -555,7 +553,7 @@ contains
             del = lims(1)-ind
             ind = lims(2)-del+1
         endif
-    end function
+    end function cyci_1d
 
     !>   4 shifting variables
     subroutine shft(a,b,c,d)
@@ -565,7 +563,7 @@ contains
         a = b
         b = c
         c = d
-    end subroutine
+    end subroutine shft
 
     ! !>    one-dimensional symmetric hard window
     pure function sqwin_1d( x, winsz ) result( win )
@@ -576,7 +574,7 @@ contains
         iwinsz = ceiling(winsz)
         win(1) = win(1)-iwinsz
         win(2) = win(2)+iwinsz
-    end function
+    end function sqwin_1d
 
     !>    two-dimensional symmetric hard window
     !! \param x,y      input points
@@ -586,7 +584,7 @@ contains
         integer          :: win(2,2) !< starts & stops
         win(1,:) = sqwin_1d(x,winsz)
         win(2,:) = sqwin_1d(y,winsz)
-    end function
+    end function sqwin_2d
 
     !>    three-dimensional symmetric hard window
     !! \param x,y,z      input points
@@ -597,7 +595,7 @@ contains
         win(1,:) = sqwin_1d(x,winsz)
         win(2,:) = sqwin_1d(y,winsz)
         win(3,:) = sqwin_1d(z,winsz)
-    end function
+    end function sqwin_3d
 
     !>    one-dimensional hard window
     pure function recwin_1d( x, winsz ) result( win )
@@ -606,7 +604,7 @@ contains
         integer          :: win(2) !< starts & stops
         win(1) = floor(x-real(winsz))
         win(2) = ceiling(x+real(winsz))
-    end function
+    end function recwin_1d
 
     !>    two-dimensional hard window
     !! \param x,y      input points
@@ -616,7 +614,7 @@ contains
         integer          :: win(2,2) !< starts & stops
         win(1,:) = recwin_1d(x,winsz)
         win(2,:) = recwin_1d(y,winsz)
-    end function
+    end function recwin_2d
 
     !>    three-dimensional hard window
     !! \param x,y,z      input points
@@ -627,7 +625,7 @@ contains
         win(1,:) = recwin_1d(x,winsz)
         win(2,:) = recwin_1d(y,winsz)
         win(3,:) = recwin_1d(z,winsz)
-    end function
+    end function recwin_3d
 
     ! USEFUL MATHEMATICAL FUNCTIONS
 
@@ -640,7 +638,7 @@ contains
                 arr(i) = log(arr(i))
             endif
         end do
-    end subroutine
+    end subroutine logarr
 
     !>   returns acos with the argument's absolute value limited to 1.
     !!         this seems to be necessary due to small numerical inaccuracies.
@@ -650,7 +648,7 @@ contains
         x = min(1.,abs(arg))
         y = sign(x,arg)
         r = acos(y)
-    end function
+    end function myacos
 
     !>   sinc function
     function sinc( x ) result( r )
@@ -661,16 +659,16 @@ contains
         else
             arg = pi*x
             r = sin(arg)/(arg)
-        endif
-    end function
+        endif 
+    end function sinc
 
-    !>   is a truncated Gaussian window function (used for masking in simple_image)
+    !>   is a truncated Gaussian window function
     function gauwfun( x, alpha ) result( w )
         real, intent(in) :: x, alpha
         real             :: w, var
         var = alpha*2.
         w = 2.**(-(x/var)**2.)
-    end function
+    end function gauwfun
 
     !>   is a Gaussian function (for calculating the probability given
     !! \param x input value
@@ -680,20 +678,20 @@ contains
         real, intent(in) :: x, mean, sigma
         real :: r
         r = (1./(sigma*sqrt(twopi)))*exp(-(x-mean)**2./(2.*(sigma*sigma)))
-    end function
+    end function gaussian_1
 
     !>   is a Gaussian function (for calculating the probability given dist & sigma)
     function gaussian_2( dist, sigma ) result( r )
         real, intent(in) :: dist, sigma
         real :: r
         r = (1./(sigma*sqrt(twopi)))*exp(-dist/(2.*(sigma*sigma)))
-    end function
+    end function gaussian_2
 
     ! COMPLEX STUFF
 
     !>   is for calculating the phase angle of a Fourier component
     !! \return phase phase angle only meaningful when cabs(comp) is well above the noise level
-    elemental pure function phase_angle( comp ) result( phase )
+    elemental function phase_angle( comp ) result( phase )
         complex, intent(in) :: comp !< Fourier component
         real :: nom, denom, phase
         nom = aimag(comp)
@@ -714,10 +712,10 @@ contains
             return
         endif
         phase = atan(nom/denom)
-    end function
+    end function phase_angle
 
     !>   is for complex squaring
-    elemental pure function csq_1( a ) result( sq )
+    elemental function csq_1( a ) result( sq )
         complex(sp), intent(in) :: a !< complx component
         real(sp) :: sq, x, y, frac
         x = abs(real(a))
@@ -742,7 +740,7 @@ contains
     end function csq_1
 
     !>  is for double complex squaring
-    elemental pure function csq_2( a ) result( sq )
+    elemental function csq_2( a ) result( sq )
         complex(dp), intent(in) :: a !< complx component
         real(dp) :: sq, x, y, frac
         x = abs(real(a))
@@ -767,7 +765,7 @@ contains
     end function csq_2
 
     !>   is for calculating complex arg/abs/modulus, from numerical recipes
-    elemental pure function mycabs( a ) result( myabs )
+    elemental function mycabs( a ) result( myabs )
         complex, intent(in) :: a      !< complx component
         real                :: myabs, x, y, frac
         x = abs(real(a))
@@ -789,7 +787,7 @@ contains
             frac = x/y
             myabs = y*sqrt(1.+frac*frac)
         endif
-    end function
+    end function mycabs
 
     !>   normalized correlation coefficient between two complex numbers
     function ccorr( c1, c2 ) result( corr )
@@ -805,7 +803,7 @@ contains
 #endif
             corr = calc_corr(real(c1*conjg(c2)),sqrt(c1sq*c2sq))
         endif
-   end function
+   end function ccorr
 
     ! edge functions
 
@@ -820,8 +818,8 @@ contains
         real,intent(in) :: x, y, mskrad
         real :: w
         w = 1.
-        if( x**2.+y**2. > mskrad**2. ) w = 0.
-    end function
+        if( x * x + y * y > mskrad * mskrad ) w = 0.
+    end function hardedge_1
 
     !>   three-dimensional hard edge
     !! \f$r^2 < x^2+y^2+z^2\f$.
@@ -834,8 +832,8 @@ contains
         real,intent(in) :: x, y, z, mskrad
         real :: w
         w = 1.
-        if( x**2.+y**2.+z**2. > mskrad**2. ) w = 0.
-    end function
+        if( x * x + y * y + z * z > mskrad * mskrad ) w = 0.
+    end function hardedge_2
 
     !>   two-dimensional hard edge
     !! \f$r < \sqrt{x^2+y^2}\f$.
@@ -848,8 +846,8 @@ contains
         real,intent(in) :: x, y, mskrad
         real :: w
         w = 0.
-        if( sqrt(x**2+y**2) > mskrad ) w = 1.
-    end function
+        if( x * x + y * y > mskrad * mskrad ) w = 1.
+    end function hardedge_inner_1
 
     !>   three-dimensional hard edge
     !! \f$r < \sqrt{ x^2+y^2+z^2 }\f$.
@@ -863,7 +861,7 @@ contains
         real,intent(in) :: x, y, z, mskrad
         real :: w
         w = 0.
-        if( sqrt(x**2.+y**2.+z**2.) > mskrad ) w = 1.
+        if( x * x + y * y + z * z > mskrad * mskrad ) w = 1.
     end function
 
     !>   low-end one-dimensional gaussian edge
@@ -936,7 +934,7 @@ contains
         else
             w = (1.+cos(pi*(mskrad-rad)/width))/2.0
         endif
-    end function
+    end function cosedge_inner_1
 
     !>   two-dimensional gaussian edge
     !! \param x x position
@@ -954,7 +952,7 @@ contains
         else
             w = (1.+cos(pi*(mskrad-rad)/width))/2.0
         endif
-    end function
+    end function cosedge_inner_2
 
     ! FOURIER STUFF
 
@@ -967,7 +965,7 @@ contains
         else
             fd = (d-1)/2+1
         endif
-    end function
+    end function fdim
 
     !>   returns the shell to which the voxel with address h,k,l belongs
     !! \f$s = \nint{\sqrt{h^2+k^2+l^2}}\f$.
@@ -976,7 +974,7 @@ contains
         integer, intent(in) :: h, k, l
         integer :: sh
         sh = nint(sqrt(real(h**2+k**2+l**2)))
-    end function
+    end function shell
 
     !>   calculates the resolution values given corrs and res params
     !! \param corrs Fourier shell correlations
@@ -1016,7 +1014,7 @@ contains
         else
             fsc05 = res(ires05)
         endif
-    end subroutine
+    end subroutine get_resolution
 
     !>   returns the Fourier index of the resolution limit
     function get_lplim( fsc ) result( k )
@@ -1035,7 +1033,7 @@ contains
                 exit
             endif
         end do
-    end function
+    end function get_lplim
 
     !>   compares two Fourier Shell Correlation (FSC) functions
     logical function fsc1_ge_fsc2( fsc1, fsc2 )
@@ -1114,7 +1112,7 @@ contains
         else
             corr = 0.
         endif
-    end function
+    end function calc_corr
 
     ! NUMERICAL STUFF
 
@@ -1154,7 +1152,7 @@ contains
             end do
             s = 0.5*(s+(b-a)*sum/tnm) ! replaces s by its refined value
         endif
-    end subroutine
+    end subroutine trapzd
 
     !>    Returns as s the integral of the function func from a to b. The parameters EPS
     !!          can be set to the desired fractional accuracy and JMAX so that 2 to the power
@@ -1185,7 +1183,7 @@ contains
             ost = st
         end do
         !write(*,'(a)') 'too many steps in qsimp; simple_math'
-    end function
+    end function qsimp
 
     !>    Returns the derivative of a function func at a point x by Ridders'
     !!          method of polynomial extrapolation. The value h is input as an estimated
@@ -1236,7 +1234,7 @@ contains
             ! If higher order is worse by a significant factor SAFE, then quit early
             if( abs(a(i,i)-a(i-1,i-1)) .ge. SAFE*err ) return
         end do
-    end subroutine
+    end subroutine numderiv
 
     ! LINEAR ALGEBRA STUFF
 
@@ -1327,7 +1325,7 @@ contains
             end do
         end do
         errflg = 0
-    end subroutine
+    end subroutine matinv
 
     !>   subroutine to find the inverse of a square matrix
     !!         author : louisda16th a.k.a ashwith j. rego
@@ -1451,7 +1449,7 @@ contains
         slope     = real(ss_xy/ss_xx)
         intercept = real(ave_y-slope*ave_x)
         corr      = real((ss_xy*ss_xy)/(ss_xx*ss_yy))
-    end subroutine
+    end subroutine fit_straight_line
 
     !>   trace of a square matrix
     pure function tr( matrix, n ) result( sum )
@@ -1481,7 +1479,7 @@ contains
         do j=1,n
             d = d*matrix(j,j) ! this returns d as +-1
         end do
-    end function
+    end function det
 
     !>   determinant of a square matrix, matrix is modified
     function det_D( matrix, n ) result( d )
@@ -1511,7 +1509,7 @@ contains
         do i=1,n
             mat(i,i) = diagvals(i)
         end do
-    end function
+    end function diag
 
     !>   to allocate a one-dim array with zeros
     function zeros_1( n ) result( a )
@@ -1520,7 +1518,7 @@ contains
         allocate( a(n), stat=alloc_stat )
         if(alloc_stat /= 0) call alloc_errchk("In: zeros_1; simple_math", alloc_stat)
         a = 0.
-    end function
+    end function zeros_1
 
     !>   to allocate a two-dim array with zeros
     function zeros_2( n1, n2 ) result( a )
@@ -1529,7 +1527,7 @@ contains
         allocate( a(n1,n2), stat=alloc_stat )
         if(alloc_stat /= 0) call alloc_errchk("In: zeros_2; simple_math", alloc_stat)
         a = 0.
-    end function
+    end function zeros_2
 
     !>   lu decomposition, nr
     !! \see Numerical recipes
@@ -2043,7 +2041,7 @@ contains
             norm = norm+normstep
             ang  = ang+angstep
         end do
-    end subroutine
+    end subroutine spiral_2d
 
     !>    is for calculating the radius
     function hyp( x1, x2, x3 ) result( h )
@@ -2055,14 +2053,14 @@ contains
         else
             h = sqrt(x1**2.+x2**2.)
         endif
-    end function
+    end function hyp
 
     !>   calculates the euclidean distance between two vectors of dimension _n_
     pure function euclid( vec1, vec2 ) result( dist )
         real, intent(in)    :: vec1(:), vec2(:)
         real                :: dist
         dist = sqrt(sum((vec1-vec2)**2.))
-    end function
+    end function euclid
 
     !>   calculates the summmed difference between two vectors
     pure function sum_diff( vec1, vec2 ) result( diff_sum )
@@ -2083,13 +2081,13 @@ contains
         real, intent(in) :: vec(:)
         real :: length
         length = sqrt(sum(vec**2.))
-    end function
+    end function arg
 
     !>   normalizes the length of a vector to 1
     subroutine normvec( vec )
         real, intent(inout) :: vec(:)
         vec = vec/arg(vec)
-    end subroutine
+    end subroutine normvec
 
     !>   projects a 3d vector in the _z_-direction
     subroutine projz( vec3, vec2 )
@@ -2097,7 +2095,7 @@ contains
         real, intent(out) :: vec2(2)
         vec2(1) = vec3(1)
         vec2(2) = vec3(2)
-    end subroutine
+    end subroutine projz
 
     !>   calculates a 2d vector in the _xy_ plane rotated _ang_ degrees.
     subroutine get_radial_line( ang, lin )
@@ -2108,7 +2106,7 @@ contains
         u(1) = 0.
         u(2) = 1.
         lin = matmul(u,mat)
-    end subroutine
+    end subroutine get_radial_line
 
     !>   is for 2d rotation matrix generation
     pure function rotmat2d( ang ) result( mat )
@@ -2119,7 +2117,7 @@ contains
         mat(1,2) = sin(ang_in_rad)
         mat(2,1) = -mat(1,2)
         mat(2,2) = mat(1,1)
-    end function
+    end function rotmat2d
 
     !>  extracts in-plane parameters from transformation matrix
     subroutine transfmat2inpls( R, psi, tx, ty )
@@ -2241,7 +2239,7 @@ contains
         end do
         deallocate(c,d,stat=alloc_stat)
         call alloc_errchk("In: ratint; simple_math", alloc_stat)
-    end subroutine
+    end subroutine ratint
 
     !>    quadratic interpolation in 2D, from spider
     function quadri(xx, yy, fdata, nx, ny) result(q)
@@ -2293,7 +2291,7 @@ contains
         c5 = ((fdata(ic,jc)-f0-hxc*c1-(hxc*(hxc-1.0))&
         *c2-hyc*c3-(hyc*(hyc-1.0))*c4)*(hxc*hyc))
         q = f0+dx0*(c1+dxb*c2+dy0*c5)+dy0*(c3+dyb*c4)
-    end function
+    end function quadri
 
     subroutine parabl(z,xsh,ysh,peakv)
         real, intent(in) :: z(3,3)
@@ -2321,7 +2319,7 @@ contains
         if(ysh .gt.  1.) ysh = 1.
         if(xsh .lt. -1.) xsh = -1.
         if(xsh .gt.  1.) xsh = 1.
-    end subroutine
+    end subroutine parabl
 
     ! SORTING
 
@@ -2387,7 +2385,7 @@ contains
                 iarr(i) = ia
             end do
         end do
-    end subroutine
+    end subroutine hpsort_1
 
     !>   rheapsort from numerical recepies (largest last)
     subroutine hpsort_2( n, iarr )
@@ -2426,7 +2424,7 @@ contains
                 iarr(i) = ra
             end do
         end do
-    end subroutine
+    end subroutine hpsort_2
 
     !>   rheapsort from numerical recepies (largest last)
     subroutine hpsort_3( n, iarr, p1_lt_p2 )
@@ -2471,7 +2469,7 @@ contains
                 iarr(i) = ra
             end do
         end do
-    end subroutine
+    end subroutine hpsort_3
 
     !>   rheapsort from numerical recepies (largest last)
     subroutine hpsort_4( n, rarr )
@@ -2511,7 +2509,7 @@ contains
                 rarr(i) = ra
             end do
         end do
-    end subroutine
+    end subroutine hpsort_4
 
     !>   rheapsort from numerical recepies (largest last)
     subroutine hpsort_5( n, rarr, rarr2 )
@@ -2557,7 +2555,7 @@ contains
                 rarr2(i) = ra2
             end do
         end do
-    end subroutine
+    end subroutine hpsort_5
 
     !>   selecting the size(rheap) largest
     subroutine hpsel_1( rarr, rheap )
@@ -2588,8 +2586,8 @@ contains
                     j=k
                 end do
             endif
-        end do
-    end subroutine
+        end do 
+    end subroutine hpsel_1
 
     !>   selecting the size(rheap) largest
     subroutine hpsel_2( rarr, rheap, iheap )
@@ -2631,7 +2629,7 @@ contains
                 end do
             endif
         end do
-    end subroutine
+    end subroutine hpsel_2
 
     ! SEARCHING
 
@@ -2659,7 +2657,7 @@ contains
         else
             j = jl
         endif
-    end function
+    end function locate_1
 
     !>   given an array arr(1:n), and given value x, locate returns a value j such that x is
     ! between arr(j) and arr(j+1). arr(1:n) must be monotonic, either increasing or decreasing.
@@ -2685,7 +2683,7 @@ contains
         else
             j = jl
         endif
-    end function
+    end function locate_2
 
     !>   for finding closest element in an ordered list
     subroutine find_1( arr, n, x, j, dist1 )
@@ -2748,7 +2746,7 @@ contains
             val  = (val1+val2)/2.
         endif
         deallocate(copy)
-    end function
+    end function median
 
     !>   for calculating the median
     function median_nocopy( arr ) result( val )
@@ -2770,7 +2768,7 @@ contains
             val2 = selec(pos2,n,arr)
             val  = (val1+val2)/2.
         endif
-    end function
+    end function median_nocopy
 
     !>   for selecting kth largest, array is modified
     real function selec_1(k,n,arr)
@@ -2830,7 +2828,7 @@ contains
          if (j.le.k) l = i
       endif
       goto 2
-    end function
+    end function selec_1
 
     !>   selecting kth largest, array is modified
     integer function selec_2(k,n,arr)
@@ -2890,6 +2888,6 @@ contains
          if (j.le.k) l = i
       endif
       goto 2
-    end function
+    end function selec_2
 
 end module simple_math

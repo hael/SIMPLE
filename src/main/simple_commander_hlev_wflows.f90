@@ -78,17 +78,24 @@ contains
             nparts = p_master%nparts
             xprime2D => xprime2D_distr
         endif
-        ! split stack
-        call xsplit%execute(cline)
+        if( .not. cline%defined('stktab') )then
+            ! split stack
+            call xsplit%execute(cline)
+        endif
         if( p_master%l_autoscale )then
             ! auto-scaling prep (cline is modified by scobj%init)
             call scobj%init(p_master, cline, p_master%smpd_targets2D(1))
             scale_stage1 = scobj%get_scaled_var('scale')
             ! scale images in parallel
             call scobj%scale_distr_exec
+            ! update stktab if needed
+            if( cline%defined('stktab') )then
+                call p_master%stkhandle%add_scale_tag
+                call p_master%stkhandle%write_stktab(p_master%stktab)
+            endif
             ! execute stage 1
             cline_prime2D_stage1 = cline
-            call cline_prime2D_stage1%delete('automsk') ! deletes possible automsk flag from stage 1
+            call cline_prime2D_stage1%delete('automsk') ! delete possible automsk flag from stage 1
             call cline_prime2D_stage1%set('maxits', real(MAXITS_STAGE1))
             call xprime2D%execute(cline_prime2D_stage1)
             ! prepare stage 2 input -- re-scale
@@ -111,8 +118,16 @@ contains
             call cline_prime2D_stage2%set('oritab',  trim(FINALDOC))
             call cline_prime2D_stage2%set('startit', real(MAXITS_STAGE1 + 1))
             call xprime2D%execute(cline_prime2D_stage2)
-            ! delete downscaled stack parts (we are done with them)
-            call del_files(trim(STKPARTFBODY_SC), p_master%nparts, ext=p_master%ext)
+            if( cline%defined('stktab') )then
+                ! delete downscaled stack parts (we are done with them)
+                call p_master%stkhandle%del_stktab_files
+                ! put back original stktab
+                call p_master%stkhandle%del_scale_tag
+                call p_master%stkhandle%write_stktab(p_master%stktab)
+            else
+                ! delete downscaled stack parts (we are done with them)
+                call del_files(trim(STKPARTFBODY_SC), p_master%nparts, ext=p_master%ext)
+            endif
             ! re-generate class averages at original sampling
             call scobj%uninit(cline) ! puts back the old command line
             call binread_oritab(FINALDOC, os, [1,p_master%nptcls])
@@ -130,7 +145,7 @@ contains
             call cline_makecavgs%set('nparts',  real(nparts))
             call cline_makecavgs%set('refs',    'cavgs_final'//p_master%ext)
             call xmakecavgs%execute(cline_makecavgs)
-        else
+        else ! no auto-scaling
             call xprime2D%execute(cline)
         endif
         ! ranking
@@ -142,7 +157,6 @@ contains
         ! cleanup
         call del_file('prime2D_startdoc'//METADATEXT)
         call del_file('start2Drefs'//p_master%ext)
-        call del_files(STKPARTFBODY_SC, p_master%nparts, ext=p_master%ext)
         ! end gracefully
         call simple_end('**** SIMPLE_PRIME2D NORMAL STOP ****')
     end subroutine exec_prime2D_autoscale

@@ -2,7 +2,7 @@ module simple_stktab_handler
 use simple_defs
 implicit none
 
-public :: stktab_handler
+public :: stktab_handler, test_stktab_handler
 private
 
 type :: mic_stk
@@ -29,8 +29,14 @@ type :: stktab_handler
     procedure :: get_nmics
     procedure :: get_nptcls
     procedure :: get_ldim
-    ! reader
+   	procedure :: get_stkname
     procedure :: get_stkname_and_ind
+    ! setters
+    procedure :: add_scale_tag
+    procedure :: del_scale_tag
+    ! I/O
+    procedure :: write_stktab
+    procedure :: del_stktab_files
     ! destructor
     procedure :: kill
 end type
@@ -98,6 +104,19 @@ contains
 		ldim = self%ldim
 	end function get_ldim
 
+	function get_stkname( self, imic ) result( stkname )
+		class(stktab_handler), intent(in) :: self
+		integer,               intent(in) :: imic
+		character(len=:), allocatable :: stkname
+		! sanity check
+		if( imic < 1 .or. imic > self%nmics )then
+			print *, 'imic:       ', imic
+			print *, 'self%nmics: ', self%nmics
+			stop 'imic index out of range; simple_stktab_handler :: get_stkname'
+		endif
+		allocate(stkname, source=self%mics(imic)%stkname)
+	end function get_stkname
+
 	subroutine get_stkname_and_ind( self, iptcl, stkname, ind )
 		class(stktab_handler),         intent(in)  :: self
 		integer,                       intent(in)  :: iptcl
@@ -124,6 +143,53 @@ contains
 		allocate(stkname, source=self%pens(iptcl)%msp%stkname)
 	end subroutine get_stkname_and_ind
 
+	subroutine add_scale_tag( self )
+		use simple_fileio, only: fname2ext, add2fbody
+		class(stktab_handler), intent(inout) :: self
+		character(len=:), allocatable :: ext, newname
+		integer :: imic
+		do imic=1,self%nmics
+        	ext     = fname2ext(trim(self%mics(imic)%stkname))
+        	newname = add2fbody(self%mics(imic)%stkname, '.'//ext, '_sc')
+        	deallocate(self%mics(imic)%stkname)
+        	allocate(self%mics(imic)%stkname, source=newname)
+		end do
+	end subroutine add_scale_tag
+
+	subroutine del_scale_tag( self )
+		use simple_fileio, only: fname2ext, del_from_fbody
+		class(stktab_handler), intent(inout) :: self
+		character(len=:), allocatable :: ext, newname
+		integer :: imic
+		do imic=1,self%nmics
+			ext     = fname2ext(trim(self%mics(imic)%stkname))
+			newname = del_from_fbody(self%mics(imic)%stkname, '.'//ext, '_sc')
+			deallocate(self%mics(imic)%stkname)
+			allocate(self%mics(imic)%stkname, source=newname)
+		end do
+	end subroutine del_scale_tag
+
+	subroutine write_stktab( self, tabname )
+		use simple_fileio, only: fopen, fclose
+		class(stktab_handler), intent(in) :: self
+		character(len=*),      intent(in) :: tabname
+		integer :: fnr, imic
+		call fopen(fnr, file=trim(tabname), status='replace', action='write')
+        do imic=1,self%nmics
+            write(fnr,'(a)') self%mics(imic)%stkname
+        end do
+        call fclose(fnr)
+    end subroutine write_stktab
+
+    subroutine del_stktab_files( self )
+		use simple_fileio, only: del_file
+		class(stktab_handler), intent(in) :: self
+		integer :: imic
+        do imic=1,self%nmics
+            call del_file(self%mics(imic)%stkname)
+        end do
+    end subroutine del_stktab_files
+
 	subroutine kill( self )
 		class(stktab_handler), intent(inout) :: self
 		integer :: imic, iptcl
@@ -141,5 +207,30 @@ contains
 			self%exists = .false.
 		endif
 	end subroutine kill
+
+	subroutine test_stktab_handler
+		use simple_fileio, only: make_filenames
+		character(len=STDLEN), allocatable :: names(:)
+		type(stktab_handler) :: stkhandle
+		integer, parameter   :: NMICS=10
+		integer :: imic
+		names = make_filenames('stack_mic', NMICS, '.mrc')
+		allocate(stkhandle%mics(NMICS))
+		stkhandle%nmics = NMICS
+		do imic=1,NMICS
+			allocate(stkhandle%mics(imic)%stkname, source=trim(names(imic)))
+			print *, stkhandle%mics(imic)%stkname
+		end do
+		print *, '*******************'
+		call stkhandle%add_scale_tag
+		do imic=1,NMICS
+			print *, stkhandle%mics(imic)%stkname
+		end do
+		print *, '*******************'
+		call stkhandle%del_scale_tag
+		do imic=1,NMICS
+			print *, stkhandle%mics(imic)%stkname
+		end do
+	end subroutine test_stktab_handler
 
 end module simple_stktab_handler

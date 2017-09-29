@@ -1607,10 +1607,12 @@ contains
     subroutine exec_scale_stk_parts( self, cline )
         class(scale_stk_parts_commander), intent(inout) :: self
         class(cmdline),                   intent(inout) :: cline
-        type(qsys_env)           :: qenv
-        type(params)             :: p_master
-        type(chash)              :: job_descr
-        type(chash), allocatable :: part_params(:)
+        type(qsys_env)                :: qenv
+        type(params)                  :: p_master
+        type(chash)                   :: job_descr
+        type(cmdline)                 :: cline_scale
+        type(chash),      allocatable :: part_params(:)
+        character(len=:), allocatable :: stkname, outstkname
         integer :: ipart
         ! seed the random number generator
         call seed_rnd
@@ -1619,17 +1621,36 @@ contains
         write(*,*) trim(cmdline_glob)
         ! make master parameters
         p_master = params(cline, checkdistr=.false.)
+        ! copy command line
+        cline_scale = cline
         ! prepare part-dependent parameters
-        allocate(part_params(p_master%nparts))
-        do ipart=1,p_master%nparts
-            call part_params(ipart)%new(2)
-            call part_params(ipart)%set('stk',    trim(STKPARTFBODY)//int2str_pad(ipart,p_master%numlen)//p_master%ext)
-            call part_params(ipart)%set('outstk', trim(STKPARTFBODY_SC)//int2str_pad(ipart,p_master%numlen)//p_master%ext)
-        end do
+        if( cline%defined('stktab') )then
+            p_master%nparts = p_master%nmics
+            allocate(part_params(p_master%nparts))
+            do ipart=1,p_master%nparts
+                call part_params(ipart)%new(2)
+                stkname = p_master%stkhandle%get_stkname(ipart)
+                outstkname = add2fbody(stkname, p_master%ext, '_sc')
+                call part_params(ipart)%set('stk',    stkname)
+                call part_params(ipart)%set('outstk', outstkname)
+                deallocate(stkname, outstkname)
+            end do
+            call cline_scale%delete('stktab')
+        else
+            ! prepare part-dependent parameters
+            allocate(part_params(p_master%nparts))
+            do ipart=1,p_master%nparts
+                call part_params(ipart)%new(2)
+                call part_params(ipart)%set('stk',&
+                    &trim(STKPARTFBODY)//int2str_pad(ipart,p_master%numlen)//p_master%ext)
+                call part_params(ipart)%set('outstk',&
+                    &trim(STKPARTFBODY_SC)//int2str_pad(ipart,p_master%numlen)//p_master%ext)
+            end do
+        endif
         ! setup the environment for distributed execution
         call qenv%new(p_master)
         ! prepare job description
-        call cline%gen_job_descr(job_descr)
+        call cline_scale%gen_job_descr(job_descr)
         call job_descr%set('prg', 'scale')
         call job_descr%set('autoscale', 'no')
         ! schedule & clean

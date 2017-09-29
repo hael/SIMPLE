@@ -1,5 +1,4 @@
-! generic fileio       class
-
+! generic fileio module
 module simple_fileio
     use simple_defs
     ! use ISO_C_BINDING
@@ -240,7 +239,6 @@ contains
             if (stringsAreEqual(round, 'UNDEFINED',.false.)) write( round_this ,'(A)') upperCase(round)
         end if
         if(present(iomsg)) iomsg_this=iomsg
-
         ! execute open under specific conditions
         if (stringsAreEqual(form_this, 'FORMATTED',.false.)) then
             open( NEWUNIT=funit,FILE=filename,IOSTAT=iostat_this,&
@@ -442,14 +440,6 @@ contains
         endif
     end function filelength
 
-    !> \brief  return the record size of a binary file
-    ! function reclength( fname, nentries ) result( recsz )
-    !     character(len=*), intent(in) :: fname     !< input filename
-    !     integer,          intent(in) :: nentries  !< total num of entries
-    !     integer                      :: recsz
-    !     recsz = filelength(fname)/nentries
-    ! end function reclength
-
     !> \brief  return file size in bytes
     function funit_size(unit) result(sz)
         integer, intent(in)          :: unit !< input file unit
@@ -471,7 +461,6 @@ contains
 #elif PGI
         use simple_syslib, only: rename
 #endif
-
         character(len=*), intent(in) :: filein, fileout !< input filename
         logical, intent(in), optional :: overwrite
         integer :: file_status
@@ -575,8 +564,8 @@ contains
         if( present(tab3) ) ntabs = 3
         if( present(tab4) ) ntabs = 4
         n = size(tab1)
-       call fopen_1(fnr,tabname, status='replace', action='write', iostat=ios)
-       call fileio_errmsg('simple_fileio :: make_multitab_filetable '//trim(tabname), ios)
+        call fopen_1(fnr,tabname, status='replace', action='write', iostat=ios)
+        call fileio_errmsg('simple_fileio :: make_multitab_filetable '//trim(tabname), ios)
         do ifile=1,n
             if( ntabs == 2 ) write(fnr,'(a)') trim(tab1(ifile))//' '//trim(tab2(ifile))
             if( ntabs == 3 ) write(fnr,'(a)') trim(tab1(ifile))//' '//trim(tab2(ifile))&
@@ -610,6 +599,15 @@ contains
         pos = index(fname, suffix) ! position of suffix
         allocate(newname, source=fname(:pos-1)//trim(str)//trim(suffix))
     end function add2fbody
+
+    !> \brief  is for deleting from fbody
+    function del_from_fbody( fname, suffix, str ) result( newname )
+        character(len=*), intent(in)  :: fname, suffix, str
+        character(len=:), allocatable :: newname
+        integer :: pos
+        pos = index(fname, str) ! position of str
+        allocate(newname, source=fname(:pos-1)//trim(suffix))
+    end function del_from_fbody
 
     !> \brief  is for extracting the body of a file
     function get_fbody( fname, suffix, separator ) result( fbody )
@@ -1115,6 +1113,5 @@ contains
             call exec_cmdline(cmd)
         end do
     end subroutine merge_docs
-
 
 end module simple_fileio

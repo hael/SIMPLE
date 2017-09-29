@@ -18,24 +18,30 @@ type(unblur_tomo_movies_distr_commander) :: xunblur_tomo_distr
 type(powerspecs_distr_commander)         :: xpowerspecs_distr
 type(ctffind_distr_commander)            :: xctffind_distr
 type(pick_distr_commander)               :: xpick_distr
+
 ! PRIME2D
 type(makecavgs_distr_commander)          :: xmakecavgs_distr
 type(prime2D_autoscale_commander)        :: xprime2D_distr
 type(prime2D_stream_distr_commander)     :: xprime2D_stream_distr
+
 ! 3D SIMILARITY MATRIX GENERATION WITH COMMON LINES
 type(comlin_smat_distr_commander)        :: xcomlin_smat_distr
+
 ! PRIME3D
 type(prime3D_init_distr_commander)       :: xprime3D_init_distr
 type(prime3D_distr_commander)            :: xprime3D_distr
 type(cont3D_distr_commander)             :: xcont3D_distr
 type(recvol_distr_commander)             :: xrecvol_distr
 type(symsrch_distr_commander)            :: xsymsrch_distr
+
 ! TIME-SERIES WORKFLOWS
 type(tseries_track_distr_commander)      :: xtseries_track_distr
+
 ! HIGH-LEVEL WORKFLOWS
 type(ini3D_from_cavgs_commander)         :: xini3D_from_cavgs
 type(het_ensemble_commander)             :: xhet_ensemble
 type(cga_hres_sel_commander)             :: xcga_hres_sel
+
 ! SUPORTING DISTRIBUTED WORKFLOWS
 type(scale_stk_parts_commander)          :: xscale_stk_parts
 
@@ -45,6 +51,8 @@ character(len=STDLEN) :: arg, prg, entire_line
 type(cmdline)         :: cline
 integer               :: cmdstat, cmdlen, pos
 logical               :: describe
+
+! parse command line
 call get_command_argument(1, arg, cmdlen, cmdstat)
 call get_command(entire_line)
 if( str_has_substr(entire_line, 'prg=list') ) call list_all_simple_distr_programs
@@ -350,14 +358,13 @@ select case(prg)
     case( 'makecavgs' )
         !==Program makecavgs
         !
-        ! <makecavgs/begin>is a distributed workflowused for producing class averages or 
+        ! <makecavgs/begin>is a distributed workflow used for producing class averages or 
         ! initial random references for prime2D execution. <makecavgs/end> 
         !
         ! set required keys
-        keys_required(1)  = 'stk'
-        keys_required(2)  = 'smpd'
-        keys_required(3)  = 'ctf'
-        keys_required(4)  = 'nparts'
+        keys_required(1)  = 'smpd'
+        keys_required(2)  = 'ctf'
+        keys_required(3)  = 'nparts'
         ! set optional keys
         keys_optional(1)  = 'nthr'
         keys_optional(2)  = 'ncunits'
@@ -371,9 +378,17 @@ select case(prg)
         keys_optional(10) = 'remap_classes'
         keys_optional(11) = 'weights2D'
         keys_optional(12) = 'balance'
+        keys_optional(13) = 'stk'
+        keys_optional(14) = 'stktab'
         ! parse command line
         if( describe ) call print_doc_makecavgs
-        call cline%parse(keys_required(:4), keys_optional(:12))
+        call cline%parse(keys_required(:3), keys_optional(:14))
+        ! sanity check
+        if( cline%defined('stk') .or. cline%defined('stktab') )then
+            ! all ok
+        else
+            stop 'stk or stktab need to be part of command line!'
+        endif
         ! set defaults
         if( .not. cline%defined('weights2D') ) call cline%set('weights2D', 'no')
         ! execute
@@ -381,7 +396,7 @@ select case(prg)
     case( 'prime2D' )
         !==Program prime2D
         !
-        ! <prime2D/begin>is a distributed workflow implementing reference-free 2D alignment/clustering 
+        ! <prime2D/begin>is a distributed workflow implementing a reference-free 2D alignment/clustering 
         ! algorithm adopted from the prime3D probabilistic ab initio 3D reconstruction algorithm<prime2D/end>
         !
         ! set required keys
@@ -423,11 +438,20 @@ select case(prg)
         ! documentation
         if( describe ) call print_doc_prime2D
         call cline%parse( keys_required(:4), keys_optional(:30) )
-        ! sanity check
+        ! sanity checks 
         if( cline%defined('stk') .or. cline%defined('stktab') )then
             ! all ok
         else
             stop 'stk or stktab need to be part of command line!'
+        endif
+        if( cline%defined('nparts') .and. cline%defined('chunksz') )then
+            stop 'nparts and chunksz cannot simultaneously be part of command line'
+        else if(cline%defined('nparts') )then
+            ! ok
+        else if( cline%defined('chunksz') )then
+            ! ok
+        else
+            stop 'eiter nparts or chunksz need to be part of command line'
         endif
         ! set defaults
         if( .not. cline%defined('lpstart')   ) call cline%set('lpstart',    15.)
@@ -439,17 +463,8 @@ select case(prg)
         if( .not. cline%defined('maxits')    ) call cline%set('maxits',     30.)
         if( .not. cline%defined('weights2D') ) call cline%set('weights2D', 'no')
         if( .not. cline%defined('autoscale') ) call cline%set('autoscale', 'yes')
-        if( cline%defined('nparts') .and. cline%defined('chunksz') )then
-            stop 'nparts and chunksz cannot simultaneously be part of command line'
-        else if(cline%defined('nparts') )then
-            ! ok
-        else if( cline%defined('chunksz') )then
-            ! ok
-        else
-            stop 'eiter nparts or chunksz need to be part of command line'
-        endif
+        ! execute
         call xprime2D_distr%execute(cline)
-
     case( 'prime2D_stream' )
         !==Program prime2D
         !
@@ -477,7 +492,7 @@ select case(prg)
         keys_optional(11) = 'dir_ptcls'
         ! documentation
         if( describe ) call print_doc_prime2D
-        call cline%parse( keys_required(:6), keys_optional(:10) )
+        call cline%parse( keys_required(:6), keys_optional(:11) )
         ! set defaults
         if( .not. cline%defined('lp')     ) call cline%set('lp',     15.)
         if( .not. cline%defined('eo')     ) call cline%set('eo',     'no')
@@ -527,12 +542,11 @@ select case(prg)
         ! selected randomly for reconstruction<prime3D_init/end> 
         !
         ! set required keys
-        keys_required(1)  = 'stk'
-        keys_required(2)  = 'smpd'
-        keys_required(3)  = 'msk'
-        keys_required(4)  = 'ctf'
-        keys_required(5)  = 'pgrp' 
-        keys_required(6)  = 'nparts'
+        keys_required(1)  = 'smpd'
+        keys_required(2)  = 'msk'
+        keys_required(3)  = 'ctf'
+        keys_required(4)  = 'pgrp' 
+        keys_required(5)  = 'nparts'
         ! set optional keys
         keys_optional(1)  = 'nthr'
         keys_optional(2)  = 'ncunits'
@@ -542,10 +556,18 @@ select case(prg)
         keys_optional(6)  = 'width'
         keys_optional(7)  = 'nspace'
         keys_optional(8)  = 'nran'
-        keys_optional(9)  = 'npeaks'      
+        keys_optional(9)  = 'npeaks'
+        keys_optional(10) = 'stk'
+        keys_optional(11) = 'stktab'
         ! parse command line
         if( describe ) call print_doc_prime3D_init
-        call cline%parse(keys_required(:6), keys_optional(:9))
+        call cline%parse(keys_required(:5), keys_optional(:11))
+        ! sanity check
+        if( cline%defined('stk') .or. cline%defined('stktab') )then
+            ! all ok
+        else
+            stop 'stk or stktab need to be part of command line!'
+        endif
         ! set defaults
         if( .not. cline%defined('nspace') ) call cline%set('nspace', 1000.)
         ! execute
@@ -562,12 +584,11 @@ select case(prg)
         ! next release (3.0)<prime3D/end>
         !
         ! set required keys
-        keys_required(1)  = 'stk'
-        keys_required(2)  = 'smpd'
-        keys_required(3)  = 'msk'
-        keys_required(4)  = 'ctf'
-        keys_required(5)  = 'pgrp'
-        keys_required(6)  = 'nparts'
+        keys_required(1)  = 'smpd'
+        keys_required(2)  = 'msk'
+        keys_required(3)  = 'ctf'
+        keys_required(4)  = 'pgrp'
+        keys_required(5)  = 'nparts'
         ! set optional keys
         keys_optional(1)  = 'nthr'
         keys_optional(2)  = 'ncunits'
@@ -602,10 +623,18 @@ select case(prg)
         keys_optional(31) = 'balance'
         keys_optional(32) = 'center'
         keys_optional(33) = 'pproc'
+        keys_optional(34) = 'stk'
+        keys_optional(35) = 'stktab'
         ! documentation
         if( describe ) call print_doc_prime3D
         ! parse command line
-        call cline%parse( keys_required(:6), keys_optional(:33) )
+        call cline%parse( keys_required(:5), keys_optional(:35) )
+        ! sanity check
+        if( cline%defined('stk') .or. cline%defined('stktab') )then
+            ! all ok
+        else
+            stop 'stk or stktab need to be part of command line!'
+        endif
         ! set defaults
         if( .not. cline%defined('nspace')                  ) call cline%set('nspace', 1000.)
         if( cline%defined('lp') .or. cline%defined('find') ) call cline%set('dynlp',   'no')
@@ -625,14 +654,13 @@ select case(prg)
         ! <cont3D/begin><cont3D/end>
         !
         ! set required keys
-        keys_required(1)  = 'stk'
-        keys_required(2)  = 'smpd'
-        keys_required(3)  = 'msk'
-        keys_required(4)  = 'ctf'
-        keys_required(5)  = 'pgrp'
-        keys_required(6)  = 'oritab'
-        keys_required(7)  = 'trs'
-        keys_required(8)  = 'nparts'
+        keys_required(1)  = 'smpd'
+        keys_required(2)  = 'msk'
+        keys_required(3)  = 'ctf'
+        keys_required(4)  = 'pgrp'
+        keys_required(5)  = 'oritab'
+        keys_required(6)  = 'trs'
+        keys_required(7)  = 'nparts'
         ! set optional keys
         keys_optional(1)  = 'nthr'
         keys_optional(2)  = 'deftab'
@@ -649,10 +677,18 @@ select case(prg)
         keys_optional(13) = 'refine'
         keys_optional(14) = 'eo'
         keys_optional(15) = 'athres'
+        keys_optional(16) = 'stk'
+        keys_optional(17) = 'stktab'
         ! documentation
         if( describe ) call print_doc_cont3D
         ! parse command line
-        call cline%parse( keys_required(:8), keys_optional(:15) )
+        call cline%parse( keys_required(:7), keys_optional(:17) )
+        ! sanity check
+        if( cline%defined('stk') .or. cline%defined('stktab') )then
+            ! all ok
+        else
+            stop 'stk or stktab need to be part of command line!'
+        endif
         ! set defaults
         if( cline%defined('eo') )then
             if( cline%get_carg('eo').ne.'no')then
@@ -685,25 +721,32 @@ select case(prg)
         ! the unordered DNA/RNA core of spherical icosahedral viruses<recvol/end>
         !
         ! set required keys
-        keys_required(1) = 'stk'
-        keys_required(2) = 'smpd'
-        keys_required(3) = 'oritab'
-        keys_required(4) = 'msk'
-        keys_required(5) = 'ctf'
-        keys_required(6) = 'pgrp'
-        keys_required(7) = 'nparts'
+        keys_required(1)  = 'smpd'
+        keys_required(2)  = 'oritab'
+        keys_required(3)  = 'msk'
+        keys_required(4)  = 'ctf'
+        keys_required(5)  = 'pgrp'
+        keys_required(6)  = 'nparts'
         ! set optional keys
-        keys_optional(1) = 'nthr'
-        keys_optional(2) = 'ncunits'
-        keys_optional(3) = 'eo'
-        keys_optional(4) = 'deftab'
-        keys_optional(5) = 'frac'
-        keys_optional(6) = 'mskfile'
-        keys_optional(7) = 'mul'
-        keys_optional(8) = 'balance'
+        keys_optional(1)  = 'nthr'
+        keys_optional(2)  = 'ncunits'
+        keys_optional(3)  = 'eo'
+        keys_optional(4)  = 'deftab'
+        keys_optional(5)  = 'frac'
+        keys_optional(6)  = 'mskfile'
+        keys_optional(7)  = 'mul'
+        keys_optional(8)  = 'balance'
+        keys_optional(9)  = 'stk'
+        keys_optional(10) = 'stktab'
         ! parse command line
         if( describe ) call print_doc_recvol
-        call cline%parse(keys_required(:7), keys_optional(:8))
+        call cline%parse(keys_required(:6), keys_optional(:10))
+        ! sanity check
+        if( cline%defined('stk') .or. cline%defined('stktab') )then
+            ! all ok
+        else
+            stop 'stk or stktab need to be part of command line!'
+        endif
         ! set defaults
         if( .not. cline%defined('trs') ) call cline%set('trs',  5.) ! to assure that shifts are being used
         if( .not. cline%defined('eo')  ) call cline%set('eo', 'no')
@@ -741,7 +784,7 @@ select case(prg)
         ! parse command line
         if( describe ) call print_doc_symsrch
         call cline%parse(keys_required(:8), keys_optional(:4))
-        ! set defaults
+        ! sanity check
         if(cline%defined('compare'))stop 'Distributed execution of SYMSRCH does not support the COMPARE argument'
         ! set defaults
         if( .not. cline%defined('nspace') )then
@@ -828,17 +871,16 @@ select case(prg)
         !==Program het_ensemble
         !
         ! <het_ensemble/begin>is a distributed workflow for heterogeneity analysis 
-        ! based on ensemble learning<het_ensemble/end> 
+        ! <het_ensemble/end> 
         !
         ! set required keys
-        keys_required(1)  = 'stk'
-        keys_required(2)  = 'smpd'
-        keys_required(3)  = 'oritab'
-        keys_required(4)  = 'msk'
-        keys_required(5)  = 'pgrp'
-        keys_required(6)  = 'ctf'
-        keys_required(7)  = 'nstates'
-        keys_required(8)  = 'nparts'
+        keys_required(1)  = 'smpd'
+        keys_required(2)  = 'oritab'
+        keys_required(3)  = 'msk'
+        keys_required(4)  = 'pgrp'
+        keys_required(5)  = 'ctf'
+        keys_required(6)  = 'nstates'
+        keys_required(7)  = 'nparts'
         ! set optional keys
         keys_optional(1)  = 'nthr'
         keys_optional(2)  = 'lp'
@@ -854,9 +896,17 @@ select case(prg)
         keys_optional(12) = 'nspace'
         keys_optional(13) = 'balance'
         keys_optional(14) = 'nrepeats'
+        keys_optional(15) = 'stk'
+        keys_optional(16) = 'stktab'
         ! parse command line
         if( describe ) call print_doc_het_ensemble
-        call cline%parse(keys_required(:8), keys_optional(:14))
+        call cline%parse(keys_required(:7), keys_optional(:16))
+        ! sanity check
+        if( cline%defined('stk') .or. cline%defined('stktab') )then
+            ! all ok
+        else
+            stop 'stk or stktab need to be part of command line!'
+        endif
         ! set defaults
         if( .not. cline%defined('eo')       ) call cline%set('eo',       'no')
         if( .not. cline%defined('amsklp')   ) call cline%set('amsklp',   20.)
@@ -877,7 +927,6 @@ select case(prg)
         keys_required(4) = 'oritab' 
         keys_required(5) = 'pgrp' 
         keys_required(6) = 'smpd' 
-        keys_required(7) = 'stk'
         ! set optional keys
         keys_optional(1) = 'balance'
         keys_optional(2) = 'eo'
@@ -886,9 +935,17 @@ select case(prg)
         keys_optional(5) = 'nthr'
         keys_optional(6) = 'maxits'
         keys_optional(7) = 'eps'
+        keys_optional(8) = 'stk'
+        keys_optional(9) = 'stktab'
         ! parse command line
         ! if( describe ) call print_doc_cga_hres_sel
-        call cline%parse(keys_required(:7), keys_optional(:7))
+        call cline%parse(keys_required(:6), keys_optional(:9))
+        ! sanity check
+        if( cline%defined('stk') .or. cline%defined('stktab') )then
+            ! all ok
+        else
+            stop 'stk or stktab need to be part of command line!'
+        endif
         ! set defaults
         if( .not. cline%defined('trs') ) call cline%set('trs',  5.) ! to assure that shifts are being used
         if( .not. cline%defined('eo')  ) call cline%set('eo', 'no')
@@ -905,17 +962,25 @@ select case(prg)
         !
         ! set required keys
         keys_required(1) = 'smpd'
-        keys_required(2) = 'nparts'
-        keys_required(3) = 'newbox'
+        keys_required(2) = 'newbox'
         ! set optional keys
-        keys_optional(1)  = 'nthr'
+        keys_optional(1) = 'nthr'
+        keys_optional(2) = 'stktab'
+        keys_optional(3) = 'nparts'
         ! parse command line
         ! if( describe ) call print_doc_scale_stk_parts
-        call cline%parse(keys_required(:3), keys_optional(:1))
-         ! execute
+        call cline%parse(keys_required(:2), keys_optional(:3))
+        ! sanity check
+        if( cline%defined('nparts') .or. cline%defined('stktab') )then
+            ! all ok
+        else
+            stop 'nparts or stktab need to be part of command line!'
+        endif
+        ! execute
         call xscale_stk_parts%execute( cline )
     case DEFAULT
         write(*,'(a,a)') 'program key (prg) is: ', trim(prg)
         stop 'unsupported program'
     end select
+
 end program simple_distr_exec
