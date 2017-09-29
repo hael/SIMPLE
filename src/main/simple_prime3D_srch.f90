@@ -943,18 +943,19 @@ contains
                 if( .not. is_a_number(corr) ) corr = 0.
                 call o_prev%print_ori()
             endif
-            if( (self%refine.eq.'no' .or. self%refine.eq.'tseries') .and. self%nstates==1 )then
-                ! moving average for single state only
-                cc_t_min_1 = -1.
-                if( o_prev%isthere('corr') ) cc_t_min_1 = o_prev%get('corr')
-                if( o_prev%isthere('lp') )then
-                    if( abs(o_prev%get('lp') - lp) < 0.5 )then   ! previous and present correlations comparable
-                        if( cc_t_min_1 > 0. )then
-                            corr = 0.5 * corr + 0.5 * cc_t_min_1 ! diversifying limit
-                        endif
-                    endif
-                endif
-            endif
+            ! MOMENTUM NOT NEEDED AS WE DO SNHC-BASED INITIAL MODEL GENERATION AND HRES REFINEMENT WILL SUFFER
+            ! if( (self%refine.eq.'no' .or. self%refine.eq.'tseries') .and. self%nstates==1 )then
+            !     ! moving average for single state only
+            !     cc_t_min_1 = -1.
+            !     if( o_prev%isthere('corr') ) cc_t_min_1 = o_prev%get('corr')
+            !     if( o_prev%isthere('lp') )then
+            !         if( abs(o_prev%get('lp') - lp) < 0.5 )then   ! previous and present correlations comparable
+            !             if( cc_t_min_1 > 0. )then
+            !                 corr = 0.5 * corr + 0.5 * cc_t_min_1 ! diversifying limit
+            !             endif
+            !         endif
+            !     endif
+            ! endif
             self%prev_corr = corr
         endif
         DebugPrint '>>> PRIME3D_SRCH::PREPARED FOR SIMPLE_PRIME3D_SRCH'
