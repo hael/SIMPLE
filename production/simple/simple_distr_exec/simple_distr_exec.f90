@@ -477,6 +477,8 @@ select case(prg)
         keys_required(3)  = 'ctf'
         keys_required(4)  = 'nparts'
         keys_required(5)  = 'dir_ptcls'
+        keys_required(6)  = 'ncls_start'
+        keys_required(7)  = 'nptcls_per_cls'
         ! set optional keys
         keys_optional(1)  = 'match_filt'
         keys_optional(2)  = 'nthr'
@@ -490,9 +492,10 @@ select case(prg)
         keys_optional(10) = 'center'
         ! documentation
         if( describe ) call print_doc_prime2D
-        call cline%parse( keys_required(:5), keys_optional(:10) )
+        call cline%parse( keys_required(:7), keys_optional(:10) )
         ! set defaults
         if( .not. cline%defined('lp')     ) call cline%set('lp',     15.)
+        if( .not. cline%defined('lpstop') ) call cline%set('lpstop', 8.)
         if( .not. cline%defined('eo')     ) call cline%set('eo',     'no')
         if( .not. cline%defined('cenlp')  ) call cline%set('cenlp',  30.)
         call cline%set('weights2D', 'no')

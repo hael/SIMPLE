@@ -209,6 +209,7 @@ type :: params
     integer :: nbest=10
     integer :: nboot=0
     integer :: ncls=500            !< # clusters
+    integer :: ncls_start=10       !< minimum # clusters for 2D streaming
     integer :: ncomps=0
     integer :: ndiscrete=0         !< # discrete orientations
     integer :: ndocs=0             !< # documents
@@ -223,6 +224,7 @@ type :: params
     integer :: npeaks=1            !< # nonzero orientation weights{1}
     integer :: npix=0              !< # pixles/voxels in binary representation
     integer :: nptcls=1            !< # images in stk/# orientations in oritab
+    integer :: nptcls_per_cls=400  !< # images in stk/# orientations in oritab
     integer :: nran=0              !< # random images to select
     integer :: nrefs=100           !< # references used for picking{100}
     integer :: nrestarts=1
@@ -599,6 +601,7 @@ contains
         call check_iarg('nbest',          self%nbest)
         call check_iarg('nboot',          self%nboot)
         call check_iarg('ncls',           self%ncls)
+        call check_iarg('ncls_start',     self%ncls_start)
         call check_iarg('ncunits',        self%ncunits)
         call check_iarg('ndiscrete',      self%ndiscrete)
         call check_iarg('ndocs',          self%ndocs)
@@ -619,6 +622,7 @@ contains
         call check_iarg('npeaks',         self%npeaks)
         call check_iarg('npix',           self%npix)
         call check_iarg('nptcls',         self%nptcls)
+        call check_iarg('nptcls_per_cls', self%nptcls_per_cls)
         call check_iarg('nthr',           self%nthr)
         call check_iarg('numlen',         self%numlen)
         call check_iarg('numlen_tomo',    self%numlen_tomo)

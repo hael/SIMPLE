@@ -106,13 +106,13 @@ contains
 
     subroutine exec_prime2D_stream_distr( self, cline )
         use simple_defs_conv
-        use simple_commander_distr_wflows, only: prime2D_distr_commander
+        use simple_commander_distr_wflows, only: prime2D_distr_commander, makecavgs_distr_commander
         use simple_oris,                   only: oris
         use simple_image,                  only: image
         use simple_binoris_io,             only: binwrite_oritab, binread_oritab
-        use simple_extractwatcher        ! use all in there
-        use simple_commander_distr   ! use all in there
-        use simple_fileio            ! use all in there
+        use simple_extractwatcher          ! use all in there
+        use simple_commander_distr         ! use all in there
+        use simple_fileio                  ! use all in there
         class(prime2D_stream_distr_commander), intent(inout) :: self
         class(cmdline),                        intent(inout) :: cline
         character(len=32),       parameter :: ITERFBODY       = 'prime2Ddoc_'
@@ -121,17 +121,19 @@ contains
         character(len=32),       parameter :: STK_FILETAB     = 'stkstreamtab.txt'
         character(len=32),       parameter :: DEFTAB          = 'deftab.txt'
         character(len=32),       parameter :: STK_DIR         = './stacks/'
-        integer,                 parameter :: NCLS_INIT_LIM   = 5    ! FOR TESTING ONLY
-        integer,                 parameter :: NPTCLS_PER_CLS  = 100  ! FOR TESTING ONLY
-        integer,                 parameter :: SHIFTSRCH_LIM   = 1000 ! # of ptcls required to turm on shift search
+        character(len=32),       parameter :: FINALDOC        = 'prime2Ddoc_final'//METADATEXT
+        integer,                 parameter :: SHIFTSRCH_PTCLSLIM = 1000 ! # of ptcls required to turm on shift search
+        integer,                 parameter :: SHIFTSRCH_ITERLIM  = 5    ! # of iterations prior to turm on shift search
         integer,                 parameter :: WAIT_WATCHER    = 60   ! seconds prior to new stack detection
         type(prime2D_distr_commander)      :: xprime2D_distr
-        type(extractwatcher)                   :: mic_watcher
-        type(cmdline)                      :: cline_prime2D, cline_scale
+        type(makecavgs_distr_commander)    :: xmakecavgs
+        type(extractwatcher)               :: mic_watcher
+        type(cmdline)                      :: cline_prime2D, cline_scale, cline_makecavgs
         type(params)                       :: p_master
+        type(oris)                         :: os
         character(len=STDLEN), allocatable :: newstacks(:), stktab(:)
         character(len=STDLEN)              :: oritab_glob, str_iter, refs_glob, frcs_glob
-        real    :: scale, smpd_glob, msk_glob
+        real    :: scale, smpd_glob, msk_glob, mul
         integer :: iter, ncls, n_newstks, ldim(3), nptcls, box_original
         integer :: nptcls_glob, nstacks_glob, ncls_glob, box_glob
         integer :: nptcls_glob_prev, ncls_glob_prev
@@ -145,8 +147,9 @@ contains
         ! make master parameters
         p_master = params(cline, checkdistr=.false.)
         ! init command-lines
-        cline_scale   = cline
-        cline_prime2D = cline
+        cline_scale     = cline
+        cline_prime2D   = cline
+        cline_makecavgs = cline
         call cline_prime2D%set('prg',       'prime2D')
         call cline_prime2D%set('autoscale', 'no')
         call cline_prime2D%set('stktab',    STK_FILETAB)
@@ -154,6 +157,10 @@ contains
         if( p_master%ctf.ne.'no' )then
             call cline_prime2D%set('deftab', DEFTAB)
         endif
+        call cline_makecavgs%set('prg',    'makecavgs')
+        call cline_makecavgs%set('stktab', STK_FILETAB)
+        call cline_makecavgs%set('refs',   'cavgs_final'//p_master%ext)
+        call cline_makecavgs%delete('autoscale')
         ! init
         ncls_glob        = 0
         ncls_glob_prev   = 0
@@ -165,7 +172,7 @@ contains
         scale     = p_master%smpd / smpd_glob
         ! Instantiate watcher
         mic_watcher = extractwatcher(p_master, 30, print=.true.)
-        ! Wait for NCLS_INIT_LIM classes
+        ! Wait for sufficient number of classes
         do 
             call mic_watcher%watch(n_newstks)
             if(n_newstks > 0)then
@@ -186,8 +193,8 @@ contains
                 endif
                 nptcls_glob_prev = nptcls_glob
                 call add_newstacks
-                ncls = nint(real(nptcls_glob) / real(NPTCLS_PER_CLS))
-                if(ncls >= NCLS_INIT_LIM) exit
+                ncls = nint(real(nptcls_glob) / p_master%nptcls_per_cls)
+                if(ncls >= p_master%ncls_start) exit
             endif
             call simple_sleep(WAIT_WATCHER) ! parameter instead
         enddo
@@ -201,7 +208,7 @@ contains
             call cline_prime2D%set('maxits',  real(iter))
             call cline_prime2D%set('ncls',    real(ncls_glob))
             call cline_prime2D%set('nparts',  real(min(ncls,p_master%nparts)))
-            if(nptcls_glob > SHIFTSRCH_LIM)then
+            if(nptcls_glob > SHIFTSRCH_PTCLSLIM .and. iter > SHIFTSRCH_ITERLIM)then
                 call cline_prime2D%set('trs', MINSHIFT)
             endif
             call xprime2D_distr%execute(cline_prime2D)
@@ -221,10 +228,17 @@ contains
                 call add_newstacks
                 ! updates particles classes & references
                 ncls_glob_prev = ncls_glob
-                ncls_glob      = nint(real(nptcls_glob) / real(NPTCLS_PER_CLS))
+                ncls_glob      = nint(real(nptcls_glob) / p_master%nptcls_per_cls)
                 call remap_new_classes
             endif
         enddo
+        ! class averages at original sampling
+        call binread_oritab(oritab_glob, os, [1,nptcls_glob])
+        call os%mul_shifts(1./scale)
+        call binwrite_oritab(FINALDOC, os, [1,nptcls_glob])
+        call cline_makecavgs%set('oritab',  trim(FINALDOC))
+        call cline_makecavgs%set('ncls', real(ncls_glob))
+        call xmakecavgs%execute(cline_makecavgs)
         ! end gracefully
         call simple_end('**** SIMPLE_DISTR_PRIME2D_STREAM NORMAL STOP ****')
 
