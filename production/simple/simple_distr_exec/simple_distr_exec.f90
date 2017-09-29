@@ -967,9 +967,10 @@ select case(prg)
         keys_optional(1) = 'nthr'
         keys_optional(2) = 'stktab'
         keys_optional(3) = 'nparts'
+        keys_optional(4) = 'ncunits'
         ! parse command line
         ! if( describe ) call print_doc_scale_stk_parts
-        call cline%parse(keys_required(:2), keys_optional(:3))
+        call cline%parse(keys_required(:2), keys_optional(:4))
         ! sanity check
         if( cline%defined('nparts') .or. cline%defined('stktab') )then
             ! all ok

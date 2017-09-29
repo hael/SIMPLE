@@ -1626,6 +1626,10 @@ contains
         ! prepare part-dependent parameters
         if( cline%defined('stktab') )then
             p_master%nparts = p_master%nmics
+            call cline_scale%set('nparts', real(p_master%nparts))
+            if( cline%defined('ncunits') )then
+                call cline_scale%set('ncunits', cline%get_rarg('ncunits'))
+            endif
             allocate(part_params(p_master%nparts))
             do ipart=1,p_master%nparts
                 call part_params(ipart)%new(2)

@@ -84,7 +84,7 @@ contains
         endif
         if( p_master%l_autoscale )then
             ! auto-scaling prep (cline is modified by scobj%init)
-            call scobj%init(p_master, cline, p_master%smpd_targets2D(1))
+            call scobj%init(p_master, cline, p_master%box, p_master%smpd_targets2D(1))
             scale_stage1 = scobj%get_scaled_var('scale')
             ! scale images in parallel
             call scobj%scale_distr_exec
@@ -100,7 +100,7 @@ contains
             call xprime2D%execute(cline_prime2D_stage1)
             ! prepare stage 2 input -- re-scale
             call scobj%uninit(cline) ! puts back the old command line
-            call scobj%init(p_master, cline, p_master%smpd_targets2D(2))
+            call scobj%init(p_master, cline, p_master%box, p_master%smpd_targets2D(2))
             scale_stage2 = scobj%get_scaled_var('scale')
             call scobj%scale_distr_exec
             ! prepare stage 2 input -- shift modulation
@@ -230,7 +230,7 @@ contains
             else
                 smpd_target = LPLIMS(2)*LP2SMPDFAC
             endif
-            call scobj%init(p_master, cline, smpd_target, STKSCALEDBODY)
+            call scobj%init(p_master, cline, p_master%box, smpd_target, STKSCALEDBODY)
         endif
         ! prepare command lines from prototype master
         cline_prime3D_snhc   = cline

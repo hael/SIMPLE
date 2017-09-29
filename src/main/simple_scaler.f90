@@ -28,25 +28,45 @@ type :: scaler
     procedure :: get_original_var
 end type scaler
 
+logical, parameter :: DEBUG=.true.
+
 contains
 
-    subroutine init( self, p_master, cline, smpd_target, stkscaledbody )
-        use simple_params,      only: params
-        class(scaler)              :: self
-        class(params)              :: p_master
-        class(cmdline)             :: cline
-        real                       :: smpd_target
-        character(len=*), optional :: stkscaledbody
+    subroutine init( self, p_master, cline, box_original, smpd_target, stkscaledbody )
+        use simple_params, only: params
+        class(scaler),              intent(inout) :: self
+        class(params),              intent(in)    :: p_master
+        class(cmdline),             intent(inout) :: cline
+        integer,                    intent(in)    :: box_original
+        real,                       intent(in)    :: smpd_target
+        character(len=*), optional, intent(in)    :: stkscaledbody
+        ! set constants
         self%stkname_changed = present(stkscaledbody)
-        self%original_stk    = p_master%stk
-        self%original_smpd   = p_master%smpd
-        self%original_msk    = p_master%msk
-        self%original_box    = p_master%box_original
-        self%nptcls          = p_master%nptcls
-        self%cline_scale     = cline
+        self%original_stk = ''
+        if( cline%defined('stk') ) self%original_stk = p_master%stk
+        self%original_smpd = p_master%smpd
+        self%original_msk  = p_master%msk
+        self%original_box  = box_original
+        self%nptcls        = p_master%nptcls
+        ! prep scale command line
+        self%cline_scale   = cline
+        if( cline%defined('nparts') .and. cline%defined('stktab') )then
+            ! # substacks typically >> nparts, so control via ncunits
+            call self%cline_scale%set('ncunits', real(p_master%nparts)) 
+        endif
+        ! identify scaling params
         call autoscale(self%original_box, p_master%smpd,&
         &smpd_target, self%box_sc, self%smpd_sc, self%scale)
         self%msk_sc = self%scale * p_master%msk
+        if( DEBUG )then
+            print *, 'original box: ', self%original_box
+            print *, 'smpd        : ', p_master%smpd
+            print *, 'smpd_target : ', smpd_target
+            print *, 'box_sc      : ', self%box_sc
+            print *, 'smpd_sc     : ', self%smpd_sc
+            print *, 'msk_sc      : ', self%msk_sc
+        endif
+        ! update command lines
         if( self%stkname_changed )then
             self%stk_sc = trim(stkscaledbody)//p_master%ext
             call self%cline_scale%set('outstk', trim(self%stk_sc))
