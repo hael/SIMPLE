@@ -227,6 +227,7 @@ contains
         call chdict%push('stream',        'sream (real time) execution mode(yes|no){no}')
         call chdict%push('szsn',          'size of stochastic neighborhood{5}')
         call chdict%push('taper_edges',   'to taper edges(yes|no){no}')
+        call chdict%push('time_inactive', 'end time limit(in seconds){7200}')
         call chdict%push('thres',         'threshold (binarisation: 0-1; distance filer: # pixels; post-proc: pix val)')
         call chdict%push('tof',           'stop frame index')
         call chdict%push('tomo',          'tomography mode(yes|no){no}')

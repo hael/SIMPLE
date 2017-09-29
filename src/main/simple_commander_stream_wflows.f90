@@ -106,6 +106,7 @@ contains
 
     subroutine exec_prime2D_stream_distr( self, cline )
         use simple_defs_conv
+        use simple_timer
         use simple_commander_distr_wflows, only: prime2D_distr_commander, makecavgs_distr_commander
         use simple_oris,                   only: oris
         use simple_image,                  only: image
@@ -124,7 +125,7 @@ contains
         character(len=32),       parameter :: FINALDOC        = 'prime2Ddoc_final'//METADATEXT
         integer,                 parameter :: SHIFTSRCH_PTCLSLIM = 1000 ! # of ptcls required to turm on shift search
         integer,                 parameter :: SHIFTSRCH_ITERLIM  = 5    ! # of iterations prior to turm on shift search
-        integer,                 parameter :: WAIT_WATCHER    = 60   ! seconds prior to new stack detection
+        integer,                 parameter :: WAIT_WATCHER       = 60   ! seconds prior to new stack detection
         type(prime2D_distr_commander)      :: xprime2D_distr
         type(makecavgs_distr_commander)    :: xmakecavgs
         type(extractwatcher)               :: mic_watcher
@@ -136,7 +137,7 @@ contains
         real    :: scale, smpd_glob, msk_glob, mul
         integer :: iter, ncls, n_newstks, ldim(3), nptcls, box_original
         integer :: nptcls_glob, nstacks_glob, ncls_glob, box_glob
-        integer :: nptcls_glob_prev, ncls_glob_prev
+        integer :: nptcls_glob_prev, ncls_glob_prev, last_injection, tnow
         ! seed the random number generator
         call seed_rnd
         ! output command line executed
@@ -200,9 +201,16 @@ contains
         enddo
         ncls_glob = ncls
         call cline_prime2D%set('ncls', real(ncls_glob))
+        last_injection = simple_gettime()
         ! Main loop
         do iter = 1, 999
             str_iter = int2str_pad(iter,3)
+            ! time limit
+            tnow = simple_gettime()
+            if(tnow-last_injection > p_master%time_inactive)then
+                write(*,*)'>>> TIME LIMIT WITHOUT NEW PARTICLES ADDITION REACHED'
+                exit
+            endif
             ! prime2D
             call cline_prime2D%set('startit', real(iter))
             call cline_prime2D%set('maxits',  real(iter))
@@ -230,6 +238,7 @@ contains
                 ncls_glob_prev = ncls_glob
                 ncls_glob      = nint(real(nptcls_glob) / p_master%nptcls_per_cls)
                 call remap_new_classes
+                last_injection = simple_gettime()
             endif
         enddo
         ! class averages at original sampling

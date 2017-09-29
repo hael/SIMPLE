@@ -102,7 +102,7 @@ contains
         self%ellapsedtime = tnow - self%starttime
         n_stks   = 0
         fail_cnt = 0
-        ! builds mics array
+        ! builds extracted stacks array
         fbody = trim(self%watch_dir) // trim('/ptcls_from_')
         call ls_filetab(trim(fbody), trim(self%ext), trim(FILETABNAME))
         call read_filetable( trim(FILETABNAME), farray )

@@ -256,6 +256,7 @@ type :: params
     integer :: state2split=0       !< state group to split
     integer :: stepsz=1            !< size of step{0}
     integer :: szsn=SZSN_INIT      !< size of stochastic neighborhood{5}
+    integer :: time_inactive=7200  !< end time limit(secs)
     integer :: tofny=0
     integer :: tof=1               !< stop frame index
     integer :: top=1
@@ -641,6 +642,7 @@ contains
         call check_iarg('state2split',    self%state2split)
         call check_iarg('stepsz',         self%stepsz)
         call check_iarg('szsn',           self%szsn)
+        call check_iarg('time_inactive',  self%time_inactive)
         call check_iarg('tof',            self%tof)
         call check_iarg('top',            self%top)
         call check_iarg('tos',            self%tos)
