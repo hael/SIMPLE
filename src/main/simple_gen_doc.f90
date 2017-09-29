@@ -735,6 +735,7 @@ contains
         write(*,'(A)') 'pick'
         write(*,'(A)') 'preproc'
         write(*,'(A)') 'prime2D'
+        write(*,'(A)') 'prime2D_stream'
         write(*,'(A)') 'prime3D'
         write(*,'(A)') 'prime3D_init'
         write(*,'(A)') 'recvol'
