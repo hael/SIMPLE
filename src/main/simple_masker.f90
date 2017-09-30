@@ -54,13 +54,14 @@ contains
         write(*,'(A,F7.1,A)') '>>> AUTOMASK MOLECULAR WEIGHT:   ', self%mw,      ' kDa'
         was_ft = vol_inout%is_ft()
         if( vol_inout%is_ft() )call vol_inout%bwd_ft
-        call self%zero_background(self%msk)
         call self%copy(vol_inout)
         ! binarize volume
         call self%bin_vol_thres
         ! add volume soft edge
         call self%cos_edge(self%edge)
         ! apply mask to volume
+        call vol_inout%norm
+        call vol_inout%zero_background(self%msk)
         call vol_inout%mul(self)
         ! the end
         if( was_ft )call vol_inout%fwd_ft

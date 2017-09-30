@@ -1016,7 +1016,8 @@ contains
         do i=1,n
             call progress(i,n)
             call img%read(fname2mask, i)
-            call img%mask(mskrad, which, inner, width) ! FT state preserved
+            call img%norm
+            call img%mask(mskrad, which, inner, width)
             call img%write(fname, i)
         end do
         call img%kill

@@ -1513,7 +1513,7 @@ select case(prg)
         keys_optional(11) = 'vol_filt'
         ! parse command line
         if( describe ) call print_doc_postproc_vol
-        call cline%parse(keys_required(:3), keys_optional(:12))
+        call cline%parse(keys_required(:3), keys_optional(:11))
         ! execute
         call xpostproc_vol%execute(cline)
     case( 'projvol' )

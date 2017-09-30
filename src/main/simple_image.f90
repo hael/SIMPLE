@@ -4228,48 +4228,6 @@ contains
         endif
     end subroutine checkimg4nans
 
-    !>  \brief  is for checking the numerical soundness of an image and curing it if necessary
-    ! subroutine cure_1( self )
-    !     class(image), intent(inout) :: self
-    !     integer                     :: i, j, k, npix, n_nans
-    !     real                        :: ave
-    !     if( self%ft )then
-    !         write(*,*) 'WARNING: Cannot cure FTs; cure_1; simple_image'
-    !         return
-    !     endif
-    !     npix   = product(self%ldim)
-    !     n_nans = 0
-    !     ave    = 0.
-    !     do i=1,self%ldim(1)
-    !         do j=1,self%ldim(2)
-    !             do k=1,self%ldim(3)
-    !                 if( is_a_number(self%rmat(i,j,k)) )then
-    !                     ! alles gut
-    !                 else
-    !                     n_nans = n_nans+1
-    !                 endif
-    !                 ave = ave+self%rmat(i,j,k)
-    !             end do
-    !         end do
-    !     end do
-    !     if( n_nans > 0 )then
-    !         write(*,*) 'found NaNs in simple_image; cure_1:', n_nans
-    !     endif
-    !     ave = ave/real(npix)
-    !     ! cure
-    !     do i=1,self%ldim(1)
-    !         do j=1,self%ldim(2)
-    !             do k=1,self%ldim(3)
-    !                 if( is_a_number(self%rmat(i,j,k)) )then
-    !                     ! alles gut
-    !                 else
-    !                    self%rmat(i,j,k) = ave
-    !                 endif
-    !             end do
-    !         end do
-    !     end do
-    ! end subroutine cure_1
-
     !> \brief cure_2  is for checking the numerical soundness of an image and curing it if necessary
     !! \param maxv
     !! \param minv
