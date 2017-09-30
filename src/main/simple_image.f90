@@ -4421,7 +4421,7 @@ contains
                         if( sqarg <= sqlp .and. sqarg >= sqhp  )then
                             phys = self1%fit%comp_addr_phys([h,k,l])
                             ! real part of the complex mult btw 1 and 2*
-                            r = r+real(self1%cmat(phys(1),phys(2),phys(3))*conjg(self2%cmat(phys(1),phys(2),phys(3))))
+                            r = r + real(self1%cmat(phys(1),phys(2),phys(3))*conjg(self2%cmat(phys(1),phys(2),phys(3))))
                             sumasq = sumasq + csq(self2%cmat(phys(1),phys(2),phys(3)))
                             sumbsq = sumbsq + csq(self1%cmat(phys(1),phys(2),phys(3)))
                          endif
@@ -4429,7 +4429,11 @@ contains
                 end do
             end do
             !$omp end parallel do
-            r = calc_corr(r,sumasq*sumbsq)
+            if( sumasq < TINY .or. sumbsq < TINY )then
+                r = 0.
+            else
+                r = r / sqrt(sumasq * sumbsq)
+            endif
             if( didft1 ) call self1%bwd_ft
             if( didft2 ) call self2%bwd_ft
         else
@@ -4493,7 +4497,11 @@ contains
             end do
         end do
         !$omp end parallel do
-        r = calc_corr(r,sumasq*sumbsq)
+        if( sumasq < TINY .or. sumbsq < TINY )then
+            r = 0.
+        else
+            r = r / sqrt(sumasq * sumbsq)
+        endif
     end function corr_shifted
 
     !>  \brief is for calculating a real-space correlation coefficient between images
@@ -4519,7 +4527,11 @@ contains
         sxx      = sum(diffmat1 * diffmat1)
         syy      = sum(diffmat2 * diffmat2)
         sxy      = sum(diffmat1 * diffmat2)
-        r = calc_corr(sxy,sxx*syy)
+        if( sxx < TINY .or. syy < TINY )then
+            r = 0.
+        else
+            r = sxy / sqrt(sxx * syy)
+        endif
     end function real_corr_1
 
     !>  \brief real_corr_2 is for calculating a real-space correlation coefficient between images within a mask
@@ -4562,7 +4574,11 @@ contains
         sxx  = sum(vec1 * vec1)
         syy  = sum(vec2 * vec2)
         sxy  = sum(vec1 * vec2)
-        r    = calc_corr(sxy,sxx*syy)
+        if( sxx < TINY .or. syy < TINY )then
+            r = 0.
+        else
+            r = sxy / sqrt(sxx * syy)
+        endif
     end function real_corr_2
 
     !> \brief prenorm4real_corr is pre-normalise the reference in preparation for real_corr_prenorm
@@ -4600,7 +4616,11 @@ contains
         diffmat = self_ptcl%rmat(:self_ptcl%ldim(1),:self_ptcl%ldim(2),:self_ptcl%ldim(3))-ay
         syy     = sum(diffmat * diffmat)
         sxy     = sum(self_ref%rmat(:self_ref%ldim(1),:self_ref%ldim(2),:self_ref%ldim(3))*diffmat)
-        r = calc_corr(sxy,sxx_ref*syy)
+        if( sxx_ref < TINY .or. syy < TINY )then
+            r = 0.
+        else
+            r = sxy / sqrt(sxx_ref * syy)
+        endif
     end function real_corr_prenorm
 
     !>  \brief rank_corr is for calculating a rank correlation coefficient between 'rankified' images
@@ -4770,8 +4790,12 @@ contains
         endif
         ! normalize correlations and compute resolutions
         do k=1,n
-            corrs(k) = calc_corr(corrs(k),sumasq(k)*sumbsq(k))
-            res(k)   = self1%fit%get_lp(1,k)
+            if( sumasq(k) < TINY .or. sumbsq(k) < TINY )then
+                corrs(k) = 0.
+            else
+                corrs(k) = corrs(k)/sqrt(sumasq(k) * sumbsq(k))
+            endif
+            res(k) = self1%fit%get_lp(1,k)
         end do
         deallocate(sumasq, sumbsq)
         if( didft1 ) call self1%bwd_ft
@@ -5056,7 +5080,7 @@ contains
         real,         intent(in)    :: msk
         real :: med
         med = self%median_pixel(msk, 'backgr')
-        if(abs(med) > TINY)self%rmat = self%rmat - med
+        if(abs(med) > TINY) self%rmat = self%rmat - med
     end subroutine zero_background
 
     !>  \brief  Taper edges of image so that there are no sharp discontinuities in real space

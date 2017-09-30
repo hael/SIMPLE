@@ -1,8 +1,6 @@
 ! concrete commander: pre-processing routines
-
 module simple_commander_preproc
-#include "simple_lib.f08"
-    
+#include "simple_lib.f08"   
 !! import classes
 use simple_cmdline,        only: cmdline
 use simple_params,         only: params
@@ -14,7 +12,6 @@ use simple_nrtxtfile,      only: nrtxtfile
 use simple_imgfile,        only: imgfile
 use simple_oris,           only: oris
 use simple_ori,            only: ori
-
 !! import functions
 use simple_imghead,        only: find_ldim_nptcls
 use simple_corrmat,        only: calc_cartesian_corrmat
@@ -38,7 +35,6 @@ public :: extract_commander
 private
 #include "simple_local_flags.inc"
 
-!> generator type
 type, extends(commander_base) :: preproc_commander
   contains
     procedure :: execute      => exec_preproc

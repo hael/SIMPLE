@@ -789,22 +789,6 @@ contains
         endif
     end function mycabs
 
-    !>   normalized correlation coefficient between two complex numbers
-    function ccorr( c1, c2 ) result( corr )
-        complex, intent(in) :: c1, c2 !< complx components
-        real    :: corr, c1sq, c2sq
-        corr = 0.
-        c1sq = csq(c1)
-        c2sq = csq(c2)
-#ifdef USETINY
-        if( c1sq > TINY .and. c2sq > TINY )then
-#else
-        if( c1sq /= 0. .and. c2sq /= 0. )then
-#endif
-            corr = calc_corr(real(c1*conjg(c2)),sqrt(c1sq*c2sq))
-        endif
-   end function ccorr
-
     ! edge functions
 
     !>   two-dimensional hard edge
@@ -1090,29 +1074,6 @@ contains
             res(k) = calc_lowpass_lim(k, box, smpd)
         end do
     end function get_resarr
-
-    !>   calculates a corr coeff based on sum cross prod and denominator
-    !! \param sxy cross prod sum
-    !! \param den denominator
-    function calc_corr( sxy, den ) result( corr )
-        real, intent(in) :: sxy, den
-        real :: corr                 !< output corr coeff
-        if( den > 0. )then
-            corr = sxy/sqrt(den)
-            if( is_a_number(corr) )then
-                if( corr > 1. .and. warn )then
-                    write(*,*) 'WARNING! corr > 1, numerical errors', corr
-                else if( corr < -1. .and. warn )then
-                    write(*,*) 'WARNING! corr < -1, numerical errors', corr
-                endif
-                corr = min(1.,max(-1.,corr))
-            else
-                corr = 0.
-            endif
-        else
-            corr = 0.
-        endif
-    end function calc_corr
 
     ! NUMERICAL STUFF
 

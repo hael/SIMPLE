@@ -317,7 +317,11 @@ contains
         sumasq = sum(csq(self1%cmat))
         sumbsq = sum(csq(self2%cmat))
         ! finalise the correlation coefficient
-        r = calc_corr(r,sumasq*sumbsq)
+        if( sumasq < TINY .or. sumbsq < TINY )then
+            r = 0.
+        else
+            r = r / sqrt(sumasq * sumbsq)
+        endif
     end function corr
 
     !>  \brief  is a correlation calculator with origin shift of self2
@@ -357,7 +361,11 @@ contains
             sumasq = sum(csq(self1%cmat))
             sumbsq = sum(csq(cmat2sh))
             ! finalise the correlation coefficient
-            r = calc_corr(r,sumasq*sumbsq)
+            if( sumasq < TINY .or. sumbsq < TINY )then
+                r = 0.
+            else
+                r = r / sqrt(sumasq * sumbsq)
+            endif
             deallocate(shmat,cmat2sh)
         else
             write(*,*) 'self1 flims: ', self1%flims(1,1), self1%flims(1,2), self1%flims(2,1),&

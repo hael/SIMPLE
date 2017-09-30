@@ -65,16 +65,24 @@ contains
         !$ use omp_lib_kinds
         class(comlin), intent(inout) :: self
         real    :: cc,corrs(self%nptcls),sums1(self%nptcls),sums2(self%nptcls),ccarr(self%nptcls)
+        real    :: sum1, sum2, r
         integer :: i,j
         logical :: foundlines(self%nptcls)
-        !$omp parallel do default(shared) private(i,j,corrs,sums1,sums2,foundlines) &
+        !$omp parallel do default(shared) private(i,j,corrs,sums1,sums2,foundlines,sum1,sum2,r)&
         !$omp schedule(static) proc_bind(close)
         do i=1,self%nptcls
             do j=1,self%nptcls
                 call self%extr_comlin(i, j, corrs(j), sums1(j), sums2(j), foundlines(j))
             end do
             if(any(foundlines)) then
-                ccarr(i) = calc_corr(sum(corrs,mask=foundlines),sum(sums1,mask=foundlines)*sum(sums2,mask=foundlines))
+                sum1 = sum(sums1,mask=foundlines)
+                sum2 = sum(sums2,mask=foundlines)
+                r    = sum(corrs,mask=foundlines)
+                if( sum1 < TINY .or. sum2 < TINY )then
+                    ccarr(i) = 0.
+                else
+                    ccarr(i) = r / sqrt(sum1 * sum2)
+                endif
             else
                 ccarr(i) = -1.
             endif
@@ -95,7 +103,11 @@ contains
         sums2 = 0.
         call self%extr_comlin( iptcl, jptcl, corr, sums1, sums2, foundline )
         if( foundline )then
-            corr = calc_corr(corr,sums1*sums2)
+            if( sums1 < TINY .or. sums2 < TINY )then
+                corr = 0.
+            else
+                corr = corr / sqrt(sums1 * sums2)
+            endif
         else
             corr = -1.
         endif
