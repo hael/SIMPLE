@@ -322,13 +322,15 @@ contains
                 call b%a%add_shift2class(icls, -xyz(1:2))
             endif
         endif
-        ! anisotropic matched filter
-        frc = b%projfrcs%get_frc(icls, p%box)
-        if( any(frc > 0.143) )then
-            call b%img%fwd_ft ! needs to be here in case the shift was never applied (above)
-            filter = fsc2optlp(frc)
-            call b%img%shellnorm()
-            call b%img%apply_filter(filter)
+        if( p%l_match_filt )then
+            ! anisotropic matched filter
+            frc = b%projfrcs%get_frc(icls, p%box)
+            if( any(frc > 0.143) )then
+                call b%img%fwd_ft ! needs to be here in case the shift was never applied (above)
+                filter = fsc2optlp(frc)
+                call b%img%shellnorm()
+                call b%img%apply_filter(filter)
+            endif
         endif
         ! ensure we are in real-space before clipping
         call b%img%bwd_ft
