@@ -208,9 +208,7 @@ type :: image
     procedure          :: median_pixel
     procedure          :: contains_nans
     procedure          :: checkimg4nans
-    procedure, private :: cure_1
-    procedure, private :: cure_2
-    generic            :: cure => cure_1, cure_2
+    procedure          :: cure
     procedure          :: loop_lims
     procedure          :: comp_addr_phys
     procedure          :: phys_index_mem
@@ -4231,46 +4229,46 @@ contains
     end subroutine checkimg4nans
 
     !>  \brief  is for checking the numerical soundness of an image and curing it if necessary
-    subroutine cure_1( self )
-        class(image), intent(inout) :: self
-        integer                     :: i, j, k, npix, n_nans
-        real                        :: ave
-        if( self%ft )then
-            write(*,*) 'WARNING: Cannot cure FTs; cure_1; simple_image'
-            return
-        endif
-        npix   = product(self%ldim)
-        n_nans = 0
-        ave    = 0.
-        do i=1,self%ldim(1)
-            do j=1,self%ldim(2)
-                do k=1,self%ldim(3)
-                    if( is_a_number(self%rmat(i,j,k)) )then
-                        ! alles gut
-                    else
-                        n_nans = n_nans+1
-                    endif
-                    ave = ave+self%rmat(i,j,k)
-                end do
-            end do
-        end do
-        if( n_nans > 0 )then
-            write(*,*) 'found NaNs in simple_image; cure_1:', n_nans
-        endif
-        ave = ave/real(npix)
-        ! cure
-        do i=1,self%ldim(1)
-            do j=1,self%ldim(2)
-                do k=1,self%ldim(3)
-                    if( is_a_number(self%rmat(i,j,k)) )then
-                        ! alles gut
-                    else
-                       self%rmat(i,j,k) = ave
-                    endif
-                end do
-            end do
-        end do
-    end subroutine cure_1
+    ! subroutine cure_1( self )
+    !     class(image), intent(inout) :: self
+    !     integer                     :: i, j, k, npix, n_nans
+    !     real                        :: ave
+    !     if( self%ft )then
+    !         write(*,*) 'WARNING: Cannot cure FTs; cure_1; simple_image'
+    !         return
+    !     endif
+    !     npix   = product(self%ldim)
+    !     n_nans = 0
+    !     ave    = 0.
+    !     do i=1,self%ldim(1)
+    !         do j=1,self%ldim(2)
+    !             do k=1,self%ldim(3)
+    !                 if( is_a_number(self%rmat(i,j,k)) )then
+    !                     ! alles gut
+    !                 else
+    !                     n_nans = n_nans+1
+    !                 endif
+    !                 ave = ave+self%rmat(i,j,k)
+    !             end do
+    !         end do
+    !     end do
+    !     if( n_nans > 0 )then
+    !         write(*,*) 'found NaNs in simple_image; cure_1:', n_nans
+    !     endif
+    !     ave = ave/real(npix)
+    !     ! cure
+    !     do i=1,self%ldim(1)
+    !         do j=1,self%ldim(2)
+    !             do k=1,self%ldim(3)
+    !                 if( is_a_number(self%rmat(i,j,k)) )then
+    !                     ! alles gut
+    !                 else
+    !                    self%rmat(i,j,k) = ave
+    !                 endif
+    !             end do
+    !         end do
+    !     end do
+    ! end subroutine cure_1
 
     !> \brief cure_2  is for checking the numerical soundness of an image and curing it if necessary
     !! \param maxv
@@ -4279,7 +4277,7 @@ contains
     !! \param sdev
     !! \param n_nans
     !!
-    subroutine cure_2( self, maxv, minv, ave, sdev, n_nans )
+    subroutine cure( self, maxv, minv, ave, sdev, n_nans )
         class(image), intent(inout) :: self
         real,         intent(out)   :: maxv, minv, ave, sdev
         integer,      intent(out)   :: n_nans
@@ -4292,40 +4290,46 @@ contains
         npix   = product(self%ldim)
         n_nans = 0
         ave    = 0.
+        !$omp parallel do default(shared) private(i,j,k) schedule(static)&
+        !$omp collapse(3) proc_bind(close) reduction(+:n_nans,ave)
         do i=1,self%ldim(1)
             do j=1,self%ldim(2)
                 do k=1,self%ldim(3)
                     if( .not. is_a_number(self%rmat(i,j,k)) )then
-                        n_nans = n_nans+1
+                        n_nans = n_nans + 1
                     else
-                        ave = ave+self%rmat(i,j,k)
+                        ave = ave + self%rmat(i,j,k)
                     endif
                 end do
             end do
         end do
+        !$omp end parallel do
         if( n_nans > 0 )then
             write(*,*) 'found NaNs in simple_image; cure:', n_nans
         endif
-        ave = ave/real(npix)
-        maxv = maxval( self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) )
-        minv = minval( self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) )
+        ave       = ave/real(npix)
+        maxv      = maxval( self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) )
+        minv      = minval( self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) )
         self%rmat = self%rmat - ave
         ! calc sum of devs and sum of devs squared
         ep = 0.
         var = 0.
+        !$omp parallel do default(shared) private(i,j,k,dev) schedule(static)&
+        !$omp collapse(3) proc_bind(close) reduction(+:ep,var)
         do i=1,self%ldim(1)
             do j=1,self%ldim(2)
                 do k=1,self%ldim(3)
                     dev = self%rmat(i,j,k)
-                    ep  = ep+dev
-                    var = var+dev*dev
+                    ep  = ep + dev
+                    var = var + dev * dev
                 end do
             end do
         end do
+        !$omp end parallel do
         var  = (var-ep**2./real(npix))/(real(npix)-1.) ! corrected two-pass formula
         sdev = sqrt(var)
         if( sdev > 0. ) self%rmat = self%rmat/sdev
-    end subroutine cure_2
+    end subroutine cure
 
     !>  \brief loop_lims is for determining loop limits for transforms
     !! \param mode
