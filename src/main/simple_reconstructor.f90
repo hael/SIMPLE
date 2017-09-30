@@ -43,7 +43,6 @@ type, extends(image) :: reconstructor
     real,    allocatable        :: rho_exp(:,:,:)               !< sampling+CTF**2 density of expanded reconstructor
     real                        :: winsz         = 1.           !< window half-width
     real                        :: alpha         = 2.           !< oversampling ratio
-    real                        :: dens_const    = 1.           !< density estimation constant, old val: 1/nptcls
     integer                     :: wdim          = 0            !< dim of interpolation matrix
     integer                     :: lfny          = 0            !< Nyqvist Fourier index
     integer                     :: ldim_img(3)   = 0            !< logical dimension of the original image
@@ -100,10 +99,9 @@ contains
         self%ldim_img = self%get_ldim()
         if( self%ldim_img(3) < 2 ) stop 'reconstructor need to be 3D 4 now; alloc_rho; simple_reconstructor'
         call self%dealloc_rho
-        self%dens_const = 1./real(p%nptcls)
-        self%winsz      = p%winsz
-        self%wdim       = 2*ceiling(self%winsz) + 1
-        self%alpha      = p%alpha
+        self%winsz = p%winsz
+        self%wdim  = 2*ceiling(self%winsz) + 1
+        self%alpha = p%alpha
         select case(p%ctf)
             case('no')
                 self%ctf%flag = CTFFLAG_NO
@@ -219,7 +217,7 @@ contains
         ! initiate kernel matrix
         win = sqwin_3d(loc(1), loc(2), loc(3), self%winsz)
         ! (weighted) kernel values
-        w = self%dens_const * pwght
+        w = pwght
         do i=1,self%wdim
             w(i,:,:) = w(i,:,:) * self%kbwin%apod(real(win(1,1)+i-1)-loc(1))
             w(:,i,:) = w(:,i,:) * self%kbwin%apod(real(win(2,1)+i-1)-loc(2))

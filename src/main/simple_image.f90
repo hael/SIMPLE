@@ -4790,6 +4790,9 @@ contains
         endif
         ! normalize correlations and compute resolutions
         do k=1,n
+
+            print *, sumasq(k), sumbsq(k) 
+            
             if( sumasq(k) < TINY .or. sumbsq(k) < TINY )then
                 corrs(k) = 0.
             else
