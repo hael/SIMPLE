@@ -460,14 +460,17 @@ contains
             ! 3D
             if( .not.file_exists(p%vols(1)) )stop 'Cannot find input volume'
             call b%vol%read(p%vols(1))
-            if( p%shellnorm.eq.'yes' )then
+            if( p%norm.eq.'yes' )then
+                call b%vol%norm
+                call b%vol%write(p%outvol, del_if_exists=.true.)
+            else if( p%shellnorm.eq.'yes' )then
                 ! shell normalization
                 call b%vol%shellnorm
                 spec = b%vol%spectrum('power')
                 do k=1,size(spec)
                     print *, k, spec(k)
                 end do
-                if( p%outvol .ne. '' )call b%vol%write(p%outvol, del_if_exists=.true.)
+                call b%vol%write(p%outvol, del_if_exists=.true.)
             else
                 stop 'Normalization type not implemented yet'
             endif

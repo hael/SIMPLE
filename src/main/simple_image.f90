@@ -4497,10 +4497,10 @@ contains
             end do
         end do
         !$omp end parallel do
-        if( sumasq < TINY .or. sumbsq < TINY )then
-            r = 0.
-        else
+        if( sumasq > 0. .and. sumbsq > 0. )then
             r = r / sqrt(sumasq * sumbsq)
+        else
+            r = 0.
         endif
     end function corr_shifted
 
@@ -4527,10 +4527,10 @@ contains
         sxx      = sum(diffmat1 * diffmat1)
         syy      = sum(diffmat2 * diffmat2)
         sxy      = sum(diffmat1 * diffmat2)
-        if( sxx < TINY .or. syy < TINY )then
-            r = 0.
-        else
+        if( sxx > 0. .and. syy > 0. )then
             r = sxy / sqrt(sxx * syy)
+        else
+            r = 0.
         endif
     end function real_corr_1
 
@@ -4574,10 +4574,10 @@ contains
         sxx  = sum(vec1 * vec1)
         syy  = sum(vec2 * vec2)
         sxy  = sum(vec1 * vec2)
-        if( sxx < TINY .or. syy < TINY )then
-            r = 0.
-        else
+        if( sxx > 0. .and. syy > 0. )then
             r = sxy / sqrt(sxx * syy)
+        else
+            r = 0.
         endif
     end function real_corr_2
 
@@ -4616,10 +4616,10 @@ contains
         diffmat = self_ptcl%rmat(:self_ptcl%ldim(1),:self_ptcl%ldim(2),:self_ptcl%ldim(3))-ay
         syy     = sum(diffmat * diffmat)
         sxy     = sum(self_ref%rmat(:self_ref%ldim(1),:self_ref%ldim(2),:self_ref%ldim(3))*diffmat)
-        if( sxx_ref < TINY .or. syy < TINY )then
-            r = 0.
-        else
+        if( sxx_ref > 0. .or. syy > 0. )then
             r = sxy / sqrt(sxx_ref * syy)
+        else
+            r = 0.
         endif
     end function real_corr_prenorm
 
@@ -4790,13 +4790,10 @@ contains
         endif
         ! normalize correlations and compute resolutions
         do k=1,n
-
-            print *, sumasq(k), sumbsq(k) 
-            
-            if( sumasq(k) < TINY .or. sumbsq(k) < TINY )then
-                corrs(k) = 0.
-            else
+            if( sumasq(k) > 0. .and. sumbsq(k) > 0. )then
                 corrs(k) = corrs(k)/sqrt(sumasq(k) * sumbsq(k))
+            else
+                corrs(k) = 0.
             endif
             res(k) = self1%fit%get_lp(1,k)
         end do

@@ -301,6 +301,9 @@ contains
         ! clip
         call self%even%clip(even)
         call self%odd%clip(odd)
+        ! always normalise before masking
+        call self%even%norm
+        call self%odd%norm
         if( self%automsk )then
             call even%zero_background(self%msk)
             call odd%zero_background(self%msk)

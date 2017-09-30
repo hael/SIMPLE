@@ -317,10 +317,10 @@ contains
         sumasq = sum(csq(self1%cmat))
         sumbsq = sum(csq(self2%cmat))
         ! finalise the correlation coefficient
-        if( sumasq < TINY .or. sumbsq < TINY )then
-            r = 0.
-        else
+        if( sumasq > 0. .and. sumbsq > 0. )then
             r = r / sqrt(sumasq * sumbsq)
+        else
+            r = 0.
         endif
     end function corr
 
@@ -361,10 +361,10 @@ contains
             sumasq = sum(csq(self1%cmat))
             sumbsq = sum(csq(cmat2sh))
             ! finalise the correlation coefficient
-            if( sumasq < TINY .or. sumbsq < TINY )then
-                r = 0.
-            else
+            if( sumasq > 0. .and. sumbsq > 0. )then
                 r = r / sqrt(sumasq * sumbsq)
+            else
+                r = 0.
             endif
             deallocate(shmat,cmat2sh)
         else

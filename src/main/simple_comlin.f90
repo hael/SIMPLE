@@ -78,10 +78,10 @@ contains
                 sum1 = sum(sums1,mask=foundlines)
                 sum2 = sum(sums2,mask=foundlines)
                 r    = sum(corrs,mask=foundlines)
-                if( sum1 < TINY .or. sum2 < TINY )then
-                    ccarr(i) = 0.
-                else
+                if( sum1 > 0. .and. sum2 > 0. )then
                     ccarr(i) = r / sqrt(sum1 * sum2)
+                else
+                    ccarr(i) = 0.
                 endif
             else
                 ccarr(i) = -1.
@@ -103,10 +103,10 @@ contains
         sums2 = 0.
         call self%extr_comlin( iptcl, jptcl, corr, sums1, sums2, foundline )
         if( foundline )then
-            if( sums1 < TINY .or. sums2 < TINY )then
-                corr = 0.
-            else
+            if( sums1 > 0. .and. sums2 > 0. )then
                 corr = corr / sqrt(sums1 * sums2)
+            else
+                corr = 0.
             endif
         else
             corr = -1.

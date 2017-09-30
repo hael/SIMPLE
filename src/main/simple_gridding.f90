@@ -10,30 +10,30 @@ implicit none
 contains
 
     !>  \brief  prepare image for gridding interpolation in Fourier space
-    ! subroutine prep4cgrid( img, img4grid, msk, kbwin )
-    !     class(image),       intent(inout) :: img, img4grid
-    !     real,               intent(in)    :: msk
-    !     class(kbinterpol), intent(in)     :: kbwin
-    !     real  :: med
-    !     call img%bwd_ft                      ! make sure not FTed
-    !     call img%zero_background(msk)        ! remove median backround
-    !     call img%pad(img4grid, backgr=0.)    ! padding in real space
-    !     call divide_w_instr(img4grid, kbwin) ! division w instr in real space
-    !     call img4grid%fwd_ft                 ! return the Fourier transform
-    ! end subroutine prep4cgrid
-
-    !>  \brief  prepare image for gridding interpolation in Fourier space
     subroutine prep4cgrid( img, img4grid, msk, kbwin )
         class(image),       intent(inout) :: img, img4grid
         real,               intent(in)    :: msk
         class(kbinterpol), intent(in)     :: kbwin
         real  :: med
         call img%bwd_ft                      ! make sure not FTed
-        med = img%median_pixel()
-        call img%pad(img4grid, backgr=med)   ! padding in real space
+        call img%zero_background(msk)        ! remove median backround
+        call img%pad(img4grid, backgr=0.)    ! padding in real space
         call divide_w_instr(img4grid, kbwin) ! division w instr in real space
         call img4grid%fwd_ft                 ! return the Fourier transform
     end subroutine prep4cgrid
+
+    !>  \brief  prepare image for gridding interpolation in Fourier space
+    ! subroutine prep4cgrid( img, img4grid, msk, kbwin )
+    !     class(image),      intent(inout) :: img, img4grid
+    !     real,              intent(in)    :: msk
+    !     class(kbinterpol), intent(in)    :: kbwin
+    !     real  :: med
+    !     call img%bwd_ft                      ! make sure not FTed
+    !     med = img%median_pixel()
+    !     call img%pad(img4grid, backgr=med)   ! padding in real space
+    !     call divide_w_instr(img4grid, kbwin) ! division w instr in real space
+    !     call img4grid%fwd_ft                 ! return the Fourier transform
+    ! end subroutine prep4cgrid
 
     !> \brief  for dividing a real or complex image with the instrument function
     subroutine divide_w_instr( img, kbwin )

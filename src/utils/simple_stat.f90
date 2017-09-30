@@ -65,7 +65,8 @@ contains
         ! calc sum of devs and sum of devs squared
         ep = 0.
         var = 0.
-        !$omp parallel do default(shared) private(i,dev) schedule(auto) reduction(+:ep,var)
+        !$omp parallel do default(shared) private(i,dev) schedule(static)&
+        !$omp reduction(+:ep,var) proc_bind(close)
         do i=1,n
             dev = data(i)-ave
             ep = ep+dev
@@ -110,7 +111,8 @@ contains
         ! calc sum of devs and sum of devs squared
         ep = 0.
         var = 0.
-        !$omp parallel do default(shared) private(i,j,dev) schedule(auto) reduction(+:ep,var)
+        !$omp parallel do default(shared) private(i,j,dev) schedule(static)&
+        !$omp reduction(+:ep,var) proc_bind(close) collapse(2)
         do i=1,nx
             do j=1,ny
                 dev = data(i,j)-ave
@@ -157,7 +159,8 @@ contains
         ! calc sum of devs and sum of devs squared
         ep = 0.
         var = 0.
-        !$omp parallel do default(shared) private(i,j,k,dev) schedule(auto) reduction(+:ep,var)
+        !$omp parallel do default(shared) private(i,j,k,dev) schedule(static)&
+        !$omp reduction(+:ep,var) proc_bind(close) collapse(3)
         do i=1,nx
             do j=1,ny
                 do k=1,nz
@@ -311,7 +314,8 @@ contains
         ! calc sum of devs and sum of devs squared
         ep = 0.
         var = 0.
-        !$omp parallel do default(shared) private(i,dev) schedule(auto) reduction(+:ep,var)
+        !$omp parallel do default(shared) private(i,dev) schedule(static)&
+        !$omp reduction(+:ep,var) proc_bind(close)
         do i=1,n
             dev = data(i)-point
             ep = ep+dev
@@ -353,7 +357,8 @@ contains
             stop
         endif
         ! calc average
-        !$omp parallel do default(shared) private(i,j) schedule(auto)
+        !omp parallel do default(shared) private(i,j) schedule(auto)
+        ! TOOK OUT THIS OMP STATEMENT AS IT IS INCORRECT (HE)
         do i=1,nx
             do j=1,ny
                 tmpave=0.
@@ -376,7 +381,7 @@ contains
 
             end do
         end do
-        !$omp end parallel do
+        !omp end parallel do
     
     end subroutine mean_2D
 
@@ -414,7 +419,8 @@ contains
             stop
         endif
         ! calc average
-        !$omp parallel do default(shared) private(i,j) schedule(auto)
+        !omp parallel do default(shared) private(i,j) schedule(auto)
+        ! TOOK OUT THIS OMP STATEMENT AS IT IS INCORRECT (HE)
         do i=1,nx
             do j=1,ny
                 ep=0.;tmpdev=0.; tmpvar=0.
@@ -438,7 +444,7 @@ contains
                 stdev(i,j) = sqrt(var(i,j)); if( abs(var(i,j)) < TINY ) err = .true.
             end do
         end do
-        !$omp end parallel do
+        !omp end parallel do
     
     end subroutine stdev_2D
     
@@ -459,7 +465,7 @@ contains
         syy = 0.
         sxy = 0.
         !$omp parallel do default(shared) private(j,xt,yt) &
-        !$omp reduction(+:sxx,syy,sxy) schedule(auto)
+        !$omp reduction(+:sxx,syy,sxy) schedule(static) proc_bind(close)
         do j=1,n
             xt  = x(j)-ax
             yt  = y(j)-ay
@@ -486,8 +492,8 @@ contains
         sxx = 0.
         syy = 0.
         sxy = 0.
-        !$omp parallel do default(shared) private(i,j,xt,yt) &
-        !$omp reduction(+:sxx,syy,sxy) schedule(auto)
+        !$omp parallel do default(shared) private(i,j,xt,yt) collapse(2)&
+        !$omp reduction(+:sxx,syy,sxy) schedule(static) proc_bind(close)
         do i=1,nx
             do j=1,ny
                 xt  = x(i,j)-ax
@@ -518,8 +524,8 @@ contains
         sxx = 0.
         syy = 0.
         sxy = 0.
-        !$omp parallel do default(shared) private(i,j,k,xt,yt) &
-        !$omp reduction(+:sxx,syy,sxy) schedule(auto)
+        !$omp parallel do default(shared) private(i,j,k,xt,yt) collapse(2)&
+        !$omp reduction(+:sxx,syy,sxy) schedule(static) proc_bind(close)
         do i=1,nx
             do j=1,ny
                 do k=1,nz
@@ -548,7 +554,7 @@ contains
         syy = 0.
         sxy = 0.
         !$omp parallel do default(shared) private(j) &
-        !$omp reduction(+:sxx,syy,sxy) schedule(auto)
+        !$omp reduction(+:sxx,syy,sxy) schedule(static) proc_bind(close)
         do j=1,n
             sxx = sxx+x(j)**2
             syy = syy+y(j)**2
