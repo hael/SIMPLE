@@ -100,6 +100,7 @@ contains
                 deallocate(fname)
             end do
             call normalize('recvol_state'//int2str_pad(state,2))
+            if( cline%defined('state') )exit
         end do
         ! set the resolution limit according to the worst resolved model
         res  = maxval(res0143s)
@@ -202,6 +203,7 @@ contains
                 recvolname = 'recvol_state'//int2str_pad(state,2)//p%ext
             endif
             call normalize( trim(recvolname) )
+            if( cline%defined('state') )exit
         end do
         call recvol_read%dealloc_rho
         call recvol_read%kill

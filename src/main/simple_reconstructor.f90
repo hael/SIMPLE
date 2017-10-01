@@ -276,7 +276,7 @@ contains
         real,                 intent(in)    :: pwght     !< external particle weight (affects both fplane and rho)
         integer :: h, k, lims(3,2), logi(3), phys(3)
         complex :: oshift
-        real    :: x, y
+        real    :: x, y, xtmp
         if( self%ctf%flag /= CTFFLAG_NO )then ! make CTF object & get CTF info
             self%tfun = ctf(self%get_smpd(), o%get('kv'), o%get('cs'), o%get('fraca'))
             dfx  = o%get('dfx')
@@ -389,14 +389,13 @@ contains
 
     subroutine compress_exp( self )
         class(reconstructor), intent(inout) :: self
-        complex :: comp, zero
+        complex :: comp
         integer :: lims(3,2), phys(3), h, k, m
         if(.not. self%cmat_exp_allocated .or. .not.self%rho_allocated)then
             stop 'expanded complex or rho matrices do not exist; simple_reconstructor::compress_exp'
         endif
         call self%reset
         lims = self%loop_lims(3)
-        zero = cmplx(0.,0.)
         ! Fourier components & rho matrices compression
         !$omp parallel do collapse(3) private(h,k,m,phys,comp) schedule(static) default(shared) proc_bind(close)
         do k = lims(2,1),lims(2,2)
