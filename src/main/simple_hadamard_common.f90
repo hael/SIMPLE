@@ -233,21 +233,30 @@ contains
         endif
     end subroutine grid_ptcl
 
-    !>  \brief  prepares one particle image for alignment 
-    subroutine prepimg4align( b, p, o )
+    !>  \brief  prepares one particle image for alignment
+    subroutine prepimg4align( b, p, o, is3D )
         use simple_estimate_ssnr, only: fsc2optlp
         use simple_ctf,           only: ctf
-        class(build),      intent(inout) :: b
-        class(params),     intent(inout) :: p
-        type(ori),         intent(inout) :: o
+        class(build),  intent(inout) :: b
+        class(params), intent(inout) :: p
+        type(ori),     intent(inout) :: o
+        logical,       intent(in)    :: is3D
         real, allocatable :: filter(:), frc(:)
         type(ctf)         :: tfun
         real              :: x, y, dfx, dfy, angast
-        integer           :: cls, proj
+        integer           :: cls, frcind
         x    = o%get('x')
         y    = o%get('y')
         cls  = nint(o%get('class'))
-        proj = nint(o%get('proj'))
+        if( is3D )then
+            if( p%nspace /= NSPACE_BALANCE )then
+                frcind = b%e_bal%find_closest_proj(o)
+            else
+                frcind = nint(o%get('proj'))
+            endif
+        else
+            frcind = cls
+        endif
         ! move to Fourier space
         call b%img%fwd_ft
         ! set CTF parameters
@@ -282,10 +291,10 @@ contains
         end select
         ! shift image to rotational origin
         if(abs(x) > SHTHRESH .or. abs(y) > SHTHRESH) call b%img%shift([-x,-y,0.])
-        if( p%dev .eq. 'yes' )then
-            if( .not. p%eo .eq. 'aniso' ) stop 'particle fom filtering not supported unless eo=aniso'
+        if( p%dev .eq. 'yes' .and. frcind > 0 )then
+            if( .not. p%eo .eq. 'aniso' .and. is3D ) stop 'particle FOM filtering not supported unless eo=aniso'
             ! anisotropic matched filter
-            frc = b%projfrcs%get_frc(proj, p%box)
+            frc = b%projfrcs%get_frc(frcind, p%box)
             if( any(frc > 0.143) )then
                 filter = fsc2optlp(frc)
                 call b%img%shellnorm()

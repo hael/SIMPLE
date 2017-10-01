@@ -260,7 +260,7 @@ contains
         class(polarft_corrcalc),    intent(inout) :: pftcc    !< calculator object
         type(ori)  :: optcl
         optcl = b%a%get_ori(iptcl)
-        call prepimg4align(b, p, optcl)
+        call prepimg4align(b, p, optcl, is3D=.true.)
         call b%img_match%polarize(pftcc, iptcl, isptcl=.true.)
     end subroutine prep_pftcc_ptcl
 

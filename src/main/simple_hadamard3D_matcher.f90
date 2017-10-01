@@ -543,7 +543,7 @@ contains
                         if( istate /= s ) cycle
                         call progress(cnt, ntot)
                         call read_img_from_stk( b, p, iptcl )
-                        call prepimg4align(b, p, o)
+                        call prepimg4align(b, p, o, is3D=.true.)
                         call b%img_match%polarize(pftcc, iptcl)
                     end do
                 end do

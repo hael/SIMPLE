@@ -438,10 +438,10 @@ contains
         use simple_math, only: hpsort
         class(orisops_commander), intent(inout) :: self
         class(cmdline),           intent(inout) :: cline
-        type(build)       :: b
-        type(ori)         :: orientation
-        type(params)      :: p
-        integer           :: s, i
+        type(build)  :: b
+        type(ori)    :: orientation
+        type(params) :: p
+        integer      :: s, i
         p = params(cline)
         call b%build_general_tbox(p, cline)
         if( p%errify .eq. 'yes' )then   ! introduce error in input orientations
@@ -466,7 +466,7 @@ contains
         if( cline%defined('mul') )then
             call b%a%mul_shifts(p%mul)
         endif
-        if( p%zero  .eq. 'yes' ) call b%a%zero_shifts
+        if( p%zero .eq. 'yes' ) call b%a%zero_shifts
         if( p%discrete .eq. 'yes' )then
             if( cline%defined('ndiscrete') )then
                 call b%a%discretize(p%ndiscrete)

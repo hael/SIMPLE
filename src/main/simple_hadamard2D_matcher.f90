@@ -260,7 +260,7 @@ contains
             call progress(cnt, p%top-p%fromp+1)
             call read_img_from_stk( b, p, iptcl )
             o = b%a%get_ori(iptcl)
-            call prepimg4align(b, p, o)
+            call prepimg4align(b, p, o, is3D=.false.)
             ! transfer to polar coordinates
             call b%img_match%polarize(pftcc, iptcl)
         end do
