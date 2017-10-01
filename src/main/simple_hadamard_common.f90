@@ -235,16 +235,19 @@ contains
 
     !>  \brief  prepares one particle image for alignment 
     subroutine prepimg4align( b, p, o )
-        use simple_ctf,      only: ctf
+        use simple_estimate_ssnr, only: fsc2optlp
+        use simple_ctf,           only: ctf
         class(build),      intent(inout) :: b
         class(params),     intent(inout) :: p
         type(ori),         intent(inout) :: o
+        real, allocatable :: filter(:), frc(:)
         type(ctf)         :: tfun
         real              :: x, y, dfx, dfy, angast
-        integer           :: cls
-        x   = o%get('x')
-        y   = o%get('y')
-        cls = nint(o%get('class'))
+        integer           :: cls, proj
+        x    = o%get('x')
+        y    = o%get('y')
+        cls  = nint(o%get('class'))
+        proj = nint(o%get('proj'))
         ! move to Fourier space
         call b%img%fwd_ft
         ! set CTF parameters
@@ -279,6 +282,16 @@ contains
         end select
         ! shift image to rotational origin
         if(abs(x) > SHTHRESH .or. abs(y) > SHTHRESH) call b%img%shift([-x,-y,0.])
+        if( p%dev .eq. 'yes' )then
+            if( .not. p%eo .eq. 'aniso' ) stop 'particle fom filtering not supported unless eo=aniso'
+            ! anisotropic matched filter
+            frc = b%projfrcs%get_frc(proj, p%box)
+            if( any(frc > 0.143) )then
+                filter = fsc2optlp(frc)
+                call b%img%shellnorm()
+                call b%img%apply_filter(filter)
+            endif
+        endif
         ! back to real-space
         call b%img%bwd_ft
         ! clip image if needed
