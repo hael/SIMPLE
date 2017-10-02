@@ -246,6 +246,9 @@ type :: image
     procedure          :: gauimg
     procedure          :: fwd_ft
     procedure          :: ft2img
+    procedure          :: dampen_central_cross
+    procedure          :: subtr_backgr
+    procedure          :: resmsk
     procedure          :: fwd_logft
     procedure          :: mask
     procedure          :: neg
@@ -439,7 +442,7 @@ contains
         do xind=0,self%ldim(1)-box,box/2
             do yind=0,self%ldim(2)-box,box/2
                 call self%window([xind,yind],box,tmp)
-                call tmp%taper_edges
+                ! call tmp%taper_edges
                 call tmp%fwd_ft
                 call tmp%ft2img(speckind, tmp2)
                 call img_out%add(tmp2)
@@ -3494,7 +3497,6 @@ contains
             end do
         end do
         !$omp end parallel do
-        ! if( b < 0. ) call self%bp(0., 2.*self%smpd, 4.)
         if( didft ) call self%bwd_ft
     end subroutine apply_bfac
 
@@ -3517,17 +3519,18 @@ contains
             call self%fwd_ft
             didft = .true.
         endif
+        hplim_freq = self%fit%get_find(1,hplim)
+        lplim_freq = self%fit%get_find(1,lplim) 
         lims = self%fit%loop_lims(2)
         do h=lims(1,1),lims(1,2)
             do k=lims(2,1),lims(2,2)
                 do l=lims(3,1),lims(3,2)
                     freq = hyp(real(h),real(k),real(l))
 #ifdef USETINY
-                    if(abs(hplim) > TINY)then ! Apply high-pass
+                    if(abs(hplim) > TINY)then
 #else
                     if(hplim/=0.)then
 #endif
-                        hplim_freq = self%fit%get_find(1,hplim) ! assuming square 4 now
                         if(freq .lt. hplim_freq) then
                             call self%mul([h,k,l], 0.)
                         else if(freq .le. hplim_freq+wwidth) then
@@ -3536,11 +3539,10 @@ contains
                         endif
                     endif
 #ifdef USETINY
-                    if(abs(lplim) > TINY)then ! Apply high-pass
+                    if(abs(lplim) > TINY)then
 #else
                     if(lplim/=0.)then
 #endif
-                        lplim_freq = self%fit%get_find(1,lplim) ! assuming square 4 now
                         if(freq .gt. lplim_freq)then
                             call self%mul([h,k,l], 0.)
                         else if(freq .ge. lplim_freq-wwidth)then
@@ -5422,6 +5424,67 @@ contains
         end do
         if( didft ) call self%bwd_ft
     end subroutine ft2img
+
+    !> \brief ft2img  dampens the central cross of a powerspectrum by median filtering
+    subroutine dampen_central_cross( self )
+        class(image), intent(inout) :: self
+        integer            :: h,mh,k,mk,lims(3,2),inds(3)
+        integer, parameter :: XDAMPWINSZ=2
+        real, allocatable  :: pixels(:)
+        if( self%ft )          stop 'not intended for FTs; simple_image :: dampen_central_cross'
+        if( self%ldim(3) > 1 ) stop 'not intended for 3D imgs; simple_image :: dampen_central_cross'
+        lims = self%loop_lims(3)
+        mh = maxval(lims(1,:))
+        mk = maxval(lims(2,:))
+        inds = 1
+        do h=lims(1,1),lims(1,2)
+            do k=lims(2,1),lims(2,2)
+                if( h == 0 .or. k == 0 )then
+                    inds(1) = min(max(1,h+mh+1),self%ldim(1))
+                    inds(2) = min(max(1,k+mk+1),self%ldim(2))
+                    pixels = self%win2arr(inds(1), inds(2), 1, XDAMPWINSZ)
+                    call self%set(inds, median_nocopy(pixels))
+                endif
+            end do
+        end do
+    end subroutine dampen_central_cross
+
+    !> \brief subtracts the background of an image by subtracting a low-pass filtered
+    !!        version of itself
+    subroutine subtr_backgr( self, lp )
+        class(image), intent(inout) :: self
+        real,         intent(in)    :: lp
+        type(image) :: tmp
+        call tmp%new(self%ldim, self%smpd)
+        call tmp%bp(0., lp)
+        self%rmat = self%rmat - tmp%rmat
+        call tmp%kill
+    end subroutine subtr_backgr
+
+    !> \brief generates a real-space resolution mask for matching power-spectra
+    subroutine resmsk( self, hplim, lplim )
+        class(image), intent(inout) :: self
+        real,         intent(in)    :: hplim, lplim
+        integer :: h, k, lims(3,2), mh, mk, inds(3)
+        real    :: freq, hplim_freq, lplim_freq
+        hplim_freq = self%fit%get_find(1,hplim)
+        lplim_freq = self%fit%get_find(1,lplim)
+        lims = self%loop_lims(3)
+        mh = maxval(lims(1,:))
+        mk = maxval(lims(2,:))
+        inds = 1
+        self%rmat = 1.0
+        do h=lims(1,1),lims(1,2)
+            do k=lims(2,1),lims(2,2)
+                inds(1) = min(max(1,h+mh+1),self%ldim(1))
+                inds(2) = min(max(1,k+mk+1),self%ldim(2))
+                freq = hyp(real(h),real(k))                        
+                if(freq .lt. hplim_freq .or. freq .gt. lplim_freq )then
+                    call self%set(inds, 0.)
+                endif
+            end do
+        end do
+    end subroutine resmsk
 
     !> \brief fwd_logft  forward log Fourier transform
     !!

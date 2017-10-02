@@ -26,6 +26,25 @@ contains
         endif
     end subroutine raise_exception_imgfile
 
+    subroutine dev_imgfile( fname, fname_out, smpd )
+        character(len=*), intent(in) :: fname, fname_out
+        real,             intent(in) :: smpd
+        type(image) :: img
+        integer     :: n, i, ldim(3)
+        call find_ldim_nptcls(fname, ldim, n)
+        ldim(3) = 1
+        call raise_exception_imgfile(n, ldim, 'dev_imgfile')
+        call img%new(ldim,smpd)
+        do i=1,n
+            call progress(i,n)
+            call img%read(fname, i)
+            call img%dampen_central_cross
+            call img%subtr_backgr(50.)
+            call img%write(fname_out, i)
+        end do
+        call img%kill
+    end subroutine dev_imgfile
+
     !>  \brief  is for copying image file
     !! \param fname2copy,fname Filenames to copy
     subroutine copy_imgfile( fname2copy, fname, smpd, fromto )
@@ -59,16 +78,14 @@ contains
         call img%kill
     end subroutine copy_imgfile
 
-    !>  \brief  is for copying image file
-    !! \param fname2copy,fname Filenames to copy
-    subroutine diff_imgfiles( fname2copy1, fname2copy2, fname, smpd, fromto )
-        character(len=*),  intent(in) :: fname2copy1, fname2copy2, fname
+    subroutine diff_imgfiles( fname, fname2subtr, fname_out, smpd, fromto )
+        character(len=*),  intent(in) :: fname, fname2subtr, fname_out
         real,              intent(in) :: smpd       !< sampling distance
         integer, optional, intent(in) :: fromto(2)  !< ranges
         type(image) :: img2, diffimg
         integer     :: n, i, cnt, ldim(3), ldim2(3),n2
-        call find_ldim_nptcls(fname2copy1, ldim, n)
-        call find_ldim_nptcls(fname2copy2, ldim2, n2)
+        call find_ldim_nptcls(fname, ldim, n)
+        call find_ldim_nptcls(fname2subtr, ldim2, n2)
         ldim(3) = 1; ldim2(3)=1
         call raise_exception_imgfile(n, ldim, 'diff_imgfiles')
         if ( n /= n2 .or. ldim(1) /=ldim2(1)  .or. ldim(2) /= ldim2(2)) &
@@ -82,26 +99,24 @@ contains
                 do i=fromto(1),fromto(2)
                     cnt = cnt+1
                     call progress(cnt, fromto(2)-fromto(1)+1)
-                    call diffimg%read(fname2copy1, i)
-                    call img2%read(fname2copy2, i)
+                    call diffimg%read(fname, i)
+                    call img2%read(fname2subtr, i)
                     diffimg = diffimg - img2
-                    call diffimg%write(fname, cnt)
+                    call diffimg%write(fname_out, cnt)
                 end do
             else
                 do i=1,n
                    call progress(i, n)
-                    call diffimg%read(fname2copy1, i)
-                    call img2%read(fname2copy2, i)
+                    call diffimg%read(fname, i)
+                    call img2%read(fname2subtr, i)
                     diffimg = diffimg - img2
-                    call diffimg%write(fname, cnt)
+                    call diffimg%write(fname_out, cnt)
                 end do
             endif
-         endif
-         call diffimg%kill
-         call img2%kill
-       end subroutine diff_imgfiles
-
-
+        endif
+        call diffimg%kill
+        call img2%kill
+    end subroutine diff_imgfiles
 
     !>  \brief  is for making a stack of normalized vectors for PCA analysis
     !! \param fnameStack,fnamePatterns filenames for stacka and pattern
@@ -904,44 +919,6 @@ contains
         end do
         call img%kill
     end subroutine apply_ctf_imgfile
-
-    !>  \brief  is for visualization of the CTF power spectrum
-    !! \param fname2process output filename
-    !! \param fname input filename
-    !! \param smpd sampling distance
-    !! \param tfun,bfac ctf transfer function and bfac args
-    !! \param o orientation object used for ctf
-    subroutine ctf2imgfile( fname2process, fname, o, smpd, tfun, bfac )
-        use simple_math,  only: deg2rad
-        use simple_oris,  only: oris
-        use simple_ctf,   only: ctf
-        character(len=*), intent(in)    :: fname2process, fname
-        class(oris),      intent(inout) :: o
-        real,             intent(in)    :: smpd
-        class(ctf),       intent(inout) :: tfun
-        real, optional,   intent(in)    :: bfac
-        type(image) :: img, img2
-        integer     :: i, n, ldim(3)
-        call find_ldim_nptcls(fname2process, ldim, n)
-        ldim(3) = 1
-        call raise_exception_imgfile( n, ldim, 'ctf2imgfile' )
-        ! do the work
-        call img%new(ldim,smpd)
-        call img2%new(ldim,smpd)
-        write(*,'(a)') '>>> MAKING CTF POWSPEC IMAGES'
-        do i=1,n
-            call progress(i,n)
-            if( o%isthere('dfy') )then ! astigmatic CTF
-                call tfun%ctf2img(img, o%get(i,'dfx'), 'square', dfy=o%get(i,'dfy'), angast=o%get(i,'angast'), bfac=bfac)
-            else
-                call tfun%ctf2img(img, o%get(i,'dfx'), 'square', bfac=bfac)
-            endif
-            call img%ft2img('real', img2)
-            call img2%write(fname, i)
-        end do
-        call img%kill
-        call img2%kill
-    end subroutine ctf2imgfile
 
     !>  \brief  is for origin shifting and rotating a stack
     !!          according to info in o

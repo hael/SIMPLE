@@ -3,7 +3,6 @@ use simple_syslib          ! use all in there
 use simple_defs              ! use all in there
 use simple_testfuns          ! use all in there
 use simple_rnd               ! use all in there
-use simple_ctf,              only: test_ctf
 use simple_cmd_dict,         only: test_cmd_dict
 use simple_build,            only: test_build
 use simple_ftiter,           only: test_ftiter

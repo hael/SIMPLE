@@ -1078,7 +1078,7 @@ contains
         character(len=STDLEN), parameter   :: ftab = 'ftab_from_sys_del_files.txt'
         integer :: i, last
         call ls_filetab(fbody, ext, ftab) ! filetable written to disc
-        call read_filetable(ftab, fnames)      ! filetable read back in
+        call read_filetable(ftab, fnames) ! filetable read back in
         last = size(fnames)
         do i=1,last
             call del_file(fnames(i))

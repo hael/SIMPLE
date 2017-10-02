@@ -41,6 +41,7 @@ type :: oris
     procedure, private :: isthere_1
     procedure, private :: isthere_2
     generic            :: isthere => isthere_1, isthere_2
+    procedure          :: max_hash_size
     procedure          :: get_n
     procedure          :: get_pop
     procedure          :: get_pops
@@ -398,6 +399,17 @@ contains
         logical :: is
         is = self%o(i)%isthere(key)
     end function isthere_2
+
+    !>  \brief  is for getting the maximum hash size
+    integer function max_hash_size( self )
+        class(oris),      intent(inout) :: self
+        integer :: sz, i
+        max_hash_size = 0
+        do i=1,self%n
+            sz = self%o(i)%hash_size()
+            if( sz > max_hash_size ) max_hash_size = sz
+        end do
+    end function max_hash_size
 
     !>  \brief  is for getting the max val of integer label
     function get_n( self, label ) result( n )

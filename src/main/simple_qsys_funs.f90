@@ -55,12 +55,9 @@ contains
             call del_file(rho_base_str//'_even'//p%ext)
             call del_file(rho_base_str//'_odd'//p%ext)
             deallocate(rec_base_str,rho_base_str,rec_base_str_part,rho_base_str_part)
-            ! iter numbered files
-            do iter=1,p%maxits
-                call del_file('VOLASSEMBLE_STATE'//int2str_pad(istate,NUMLEN_STATE)&
-                    &//'ITER'//int2str_pad(iter,NUMLEN_ITER))
-            end do
         end do
+        ! syscalls to del files
+        call sys_del_files('VOLASSEMBLE_STATE', '')
     end subroutine qsys_cleanup
 
     subroutine terminate_if_prg_in_cwd( prg )

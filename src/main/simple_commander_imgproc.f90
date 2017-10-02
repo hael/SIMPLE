@@ -903,6 +903,11 @@ contains
             endif
             goto 999
         endif
+        ! for development
+        if( p%dev .eq. 'yes' )then
+            call dev_imgfile(p%stk, p%outstk, p%smpd)
+            goto 999
+        endif
         ! invert contrast
         if( p%neg .eq. 'yes' )then
             call neg_imgfile(p%stk, p%outstk, p%smpd)

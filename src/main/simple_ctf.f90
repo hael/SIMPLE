@@ -13,7 +13,7 @@ module simple_ctf
 !use simple_params_l, only: CTFMODETYPE
 implicit none
 
-public :: ctf, test_ctf
+public :: ctf
 private
 
 type ctf
@@ -37,6 +37,7 @@ type ctf
     procedure, private :: eval_df
     ! CTF APPLICATION
     procedure          :: ctf2img
+    procedure          :: ctf2pspecimg
     procedure          :: ctf2spec
     procedure          :: apply
     procedure          :: apply_and_shift
@@ -209,6 +210,45 @@ contains
         !$omp end parallel do
         if( present(bfac) ) call img%apply_bfac(bfac)
     end subroutine ctf2img
+
+    !>  \brief  is for making a CTF power-spec image
+    subroutine ctf2pspecimg( self, img, dfx, dfy, angast )
+        use simple_image, only: image
+        class(ctf),       intent(inout) :: self   !< instance
+        class(image),     intent(inout) :: img    !< image (output)
+        real,             intent(in)    :: dfx    !< defocus x-axis
+        real,             intent(in)    :: dfy    !< defocus y-axis
+        real,             intent(in)    :: angast !< angle of astigmatism
+        integer :: lims(3,2),h,mh,k,mk,phys(3),ldim(3),inds(3)
+        real    :: ang, tval, spaFreqSq, hinv
+        real    :: kinv, inv_ldim(3)
+        ! initialize
+        call self%init(dfx, dfy, angast)
+        img      = 0.
+        lims     = img%loop_lims(3)
+        mh       = maxval(lims(1,:))
+        mk       = maxval(lims(2,:))
+        inds     = 1
+        ldim     = img%get_ldim()
+        inv_ldim = 1./real(ldim)
+        !$omp parallel do collapse(2) default(shared) private(h,hinv,k,kinv,inds,spaFreqSq,ang,tval,phys) &
+        !$omp schedule(static) proc_bind(close)
+        do h=lims(1,1),lims(1,2)
+            do k=lims(2,1),lims(2,2)
+                inds(1)   = min(max(1,h+mh+1),ldim(1))
+                inds(2)   = min(max(1,k+mk+1),ldim(2))
+                inds(3)   = 1
+                hinv      = real(h) * inv_ldim(1)
+                kinv      = real(k) * inv_ldim(2)
+                spaFreqSq = hinv * hinv + kinv * kinv
+                ang       = atan2(real(k),real(h))
+                tval      = self%eval(spaFreqSq, dfx, dfy, angast, ang)
+                tval      = sqrt(min(1.,max(tval**2.,0.001)))
+                call img%set(inds, tval)
+            end do
+        end do
+        !$omp end parallel do
+    end subroutine ctf2pspecimg
 
     !>  \brief  is for making a CTF spectrum (1d)
     !!          modes: abs, ctf, flip, flipneg, neg, square
@@ -522,43 +562,5 @@ contains
                 endif
         end select
     end subroutine sqSf4PhSh
-
-    !>  \brief  ctf class unit test
-    subroutine test_ctf( nthr )
-        use simple_image,  only: image
-        use simple_rnd,    only: ran3
-        integer, intent(in) :: nthr
-        integer, parameter :: BOX_SIZES(4) = [64,128,256,512]
-        real,    parameter :: SMPDS(4)     = [3.7,2.2,1.07,0.6]
-        real,    parameter :: MAX_DF       = 10.
-        real,    parameter :: CS           = 2.7
-        real,    parameter :: FRACA        = 0.07
-        real,    parameter :: KVS(3)       = [120.,200.,300.]
-        integer, parameter :: NTESTS       = 10000
-        real               :: dfx, dfy, angast
-        integer            :: ibox, itst, ldim(3), ikv, ntot, cnt
-        type(image)        :: img
-        type(ctf)          :: tfun
-        write(*,'(a)') '**info(simple_ctf_unit_test): testing the ctf2img routine'
-!$      call omp_set_num_threads(nthr)
-        ntot = size(KVS)*size(BOX_SIZES)*NTESTS
-        cnt  = 0
-        do ikv=1,size(KVS)
-            do ibox=1,size(BOX_SIZES)
-                ldim = [BOX_SIZES(ibox),BOX_SIZES(ibox),1]
-                call img%new(ldim,SMPDS(ibox))
-                tfun = ctf(SMPDS(ibox), KVS(ikv), CS, FRACA)
-                do itst=1,NTESTS
-                    cnt    = cnt + 1
-                    call progress(cnt,ntot)
-                    dfx    = ran3()*MAX_DF+0.1
-                    dfy    = ran3()*MAX_DF+0.1
-                    angast = ran3()*360.
-                    call tfun%ctf2img(img, dfx, 'ctf', dfy, angast)
-                end do
-            end do
-        end do
-        write(*,'(a)') 'SIMPLE_CTF_UNIT_TEST COMPLETED SUCCESSFULLY ;-)'
-    end subroutine test_ctf
 
 end module simple_ctf

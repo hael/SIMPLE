@@ -90,8 +90,7 @@ contains
             self%fromto(2) = a%get_noris()
         endif
         ! set n_hash_vals
-        o = a%get_ori(self%fromto(1))
-        self%n_hash_vals = o%hash_size()
+        self%n_hash_vals = a%max_hash_size()
         ! set hash keys
         self%hash_keys = o%hash_keys()
         if( size(self%hash_keys) /= self%n_hash_vals )&

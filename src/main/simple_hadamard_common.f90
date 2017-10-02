@@ -245,17 +245,16 @@ contains
         type(ctf)         :: tfun
         real              :: x, y, dfx, dfy, angast
         integer           :: cls, frcind
-        x    = o%get('x')
-        y    = o%get('y')
-        cls  = nint(o%get('class'))
+        x      = o%get('x')
+        y      = o%get('y')
+        cls    = nint(o%get('class'))
+        frcind = 0 
         if( is3D )then
             if( p%nspace /= NSPACE_BALANCE )then
                 frcind = b%e_bal%find_closest_proj(o)
             else
                 frcind = nint(o%get('proj'))
             endif
-        else
-            frcind = cls
         endif
         ! move to Fourier space
         call b%img%fwd_ft
@@ -291,7 +290,7 @@ contains
         end select
         ! shift image to rotational origin
         if(abs(x) > SHTHRESH .or. abs(y) > SHTHRESH) call b%img%shift([-x,-y,0.])
-        if( p%dev .eq. 'yes' .and. frcind > 0 )then
+        if( p%dev .eq. 'yes' .and. is3D .and. frcind > 0 )then
             if( .not. p%eo .eq. 'aniso' .and. is3D ) stop 'particle FOM filtering not supported unless eo=aniso'
             ! anisotropic matched filter
             frc = b%projfrcs%get_frc(frcind, p%box)
