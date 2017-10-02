@@ -21,7 +21,7 @@ type :: ft_expanded
     real                 :: hp                 !< high-pass limit
     real                 :: lp                 !< low-pass limit
     real                 :: smpd=0.            !< sampling distance of originating image
-    real, allocatable    :: transfmat(:,:,:,:) !< shift transfer matrix
+    real,    allocatable :: transfmat(:,:,:,:) !< shift transfer matrix
     complex, allocatable :: cmat(:,:,:)        !< Fourier components
     logical              :: existence=.false.  !< existence
   contains

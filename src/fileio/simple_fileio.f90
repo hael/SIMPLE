@@ -1048,7 +1048,6 @@ contains
         integer,          intent(in) :: first_byte
         integer :: filnum, io_stat
         character(len=100) :: io_message
-
         call fopen_1(filnum,fname, 'REPLACE', 'WRITE', io_stat, 'STREAM')
         call fileio_errmsg("Error opening file "//trim(fname), io_stat )
         write(unit=filnum,pos=first_byte,iostat=io_stat,iomsg=io_message) mat
@@ -1061,14 +1060,14 @@ contains
     subroutine ls_mrcfiletab( dir, filetabname )
         character(len=*),intent(in)  :: dir, filetabname
         character(len=STDLEN) :: cmd
-        cmd = 'ls -tr '//trim(dir)//'/*.mrc*'//' > '//trim(filetabname)
+        cmd = 'ls -tr '//trim(dir)//'/*.mrc*'//' > '//trim(filetabname)//' 2>/dev/null'
         call exec_cmdline(cmd)
     end subroutine ls_mrcfiletab
 
     subroutine ls_filetab( fbody, ext, filetabname )
         character(len=*), intent(in)  :: fbody, ext, filetabname
         character(len=STDLEN) :: cmd
-        cmd = 'ls -tr '//trim(fbody)//'*'//trim(ext)//' > '//trim(filetabname)
+        cmd = 'ls -tr '//trim(fbody)//'*'//trim(ext)//' > '//trim(filetabname)//' 2>/dev/null'
         call exec_cmdline(cmd)
     end subroutine ls_filetab
 

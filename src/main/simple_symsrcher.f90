@@ -23,6 +23,7 @@ contains
         type(sym)            :: se
         real,    allocatable :: corrs(:), forsort(:), e2(:), radii(:)
         integer, allocatable :: labels(:)
+        logical, allocatable :: l_msk(:,:,:)
         integer  :: halfnoris, cnt1, cnt2, i, l, noris
         real     :: cen1, cen2, sum1, sum2, sumvals
         real     :: minmax(2), width, height, sh1(3), ang
@@ -46,6 +47,8 @@ contains
         call img_msk%new([p%box,p%box,1],p%smpd)
         img_msk = 1.
         call img_msk%mask(p%msk, 'hard')
+        l_msk = img_msk%bin2logical()
+        call img_msk%kill
         ! centers, calculates self to rotational averages images & radii
         do i = 1, noris
             call read_img%read(p%stk,i)
@@ -56,7 +59,8 @@ contains
             ! rotational image
             call read_img%roavg(ang, roavg_img)
             call roavg_img%write('roavg.mrc',i)
-            corrs(i) = read_img%real_corr(roavg_img, img_msk)
+            
+            corrs(i) = read_img%real_corr(roavg_img, l_msk)
             ! radii
             call read_img%bp(0., p%cenlp)
             call read_img%mask(p%msk, 'hard')
@@ -132,7 +136,6 @@ contains
         ! cleanup
         deallocate(corrs, e2, radii, labels)
         call dist_img%kill
-        call img_msk%kill
         call read_img%kill
         call se%kill
         call roavg_img%kill

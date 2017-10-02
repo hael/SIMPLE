@@ -177,6 +177,7 @@ type :: image
     procedure          :: cos_edge
     procedure          :: remove_edge
     procedure          :: increment
+    procedure          :: bin2logical
     ! FILTERS
     procedure          :: acf
     procedure          :: ccf
@@ -217,8 +218,12 @@ type :: image
     procedure, private :: real_corr_1
     procedure, private :: real_corr_2
     generic            :: real_corr => real_corr_1, real_corr_2
-    procedure          :: prenorm4real_corr
-    procedure          :: real_corr_prenorm
+    procedure          :: prenorm4real_corr_1
+    procedure          :: prenorm4real_corr_2
+    generic            :: prenorm4real_corr => prenorm4real_corr_1, prenorm4real_corr_2
+    procedure, private :: real_corr_prenorm_1
+    procedure, private :: real_corr_prenorm_2
+    generic            :: real_corr_prenorm => real_corr_prenorm_1, real_corr_prenorm_2
     procedure          :: rank_corr
     procedure          :: real_dist
     procedure          :: entropy
@@ -3269,10 +3274,22 @@ contains
     !!
     subroutine increment( self, logi, incr )
         class(image), intent(inout) :: self
-        integer, intent(in)         :: logi(3)
-        real, intent(in)            :: incr
+        integer,      intent(in)    :: logi(3)
+        real,         intent(in)    :: incr
         self%rmat(logi(1),logi(2),logi(3)) = self%rmat(logi(1),logi(2),logi(3))+incr
     end subroutine increment
+
+    !>  \brief  generates a logical mask from a binary one
+    function bin2logical( self ) result( mask )
+        class(image), intent(in) :: self
+        logical, allocatable :: mask(:,:,:)
+        allocate(mask(self%ldim(1),self%ldim(2),self%ldim(3)))
+        where( self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) > 0.0 )
+            mask = .true.
+        else where
+            mask = .false.
+        end where
+    end function bin2logical
 
     ! FILTERS
 
@@ -4474,23 +4491,17 @@ contains
     !!
     function real_corr_1( self1, self2 ) result( r )
         class(image), intent(inout) :: self1, self2
-        real :: diffmat1(self1%ldim(1),self1%ldim(2),self1%ldim(3))
-        real :: diffmat2(self2%ldim(1),self2%ldim(2),self2%ldim(3))
-        real :: r,ax,ay,sxx,syy,sxy,rnpix
-        if( self1%ft .or. self2%ft ) stop 'cannot real-space correlate FTs; real_corr; simple_image'
-        if( .not. (self1.eqdims.self2) )then
-            write(*,*) 'ldim self1: ', self1%ldim
-            write(*,*) 'ldim self2: ', self2%ldim
-            stop 'images to be correlated need to have same dims; real_corr; simple_image'
-        endif
-        rnpix     = real(product(self1%ldim))
-        ax       = sum(self1%rmat(:self1%ldim(1),:self1%ldim(2),:self1%ldim(3)))/rnpix
-        ay       = sum(self2%rmat(:self2%ldim(1),:self2%ldim(2),:self2%ldim(3)))/rnpix
-        diffmat1 = self1%rmat(:self1%ldim(1),:self1%ldim(2),:self1%ldim(3))-ax
-        diffmat2 = self2%rmat(:self2%ldim(1),:self2%ldim(2),:self2%ldim(3))-ay
-        sxx      = sum(diffmat1 * diffmat1)
-        syy      = sum(diffmat2 * diffmat2)
-        sxy      = sum(diffmat1 * diffmat2)
+        real :: diff1(self1%ldim(1),self1%ldim(2),self1%ldim(3))
+        real :: diff2(self2%ldim(1),self2%ldim(2),self2%ldim(3))
+        real :: r, ax, ay, sxx, syy, sxy, npix
+        npix  = real(product(self1%ldim))
+        ax    = sum(self1%rmat(:self1%ldim(1),:self1%ldim(2),:self1%ldim(3))) / npix
+        ay    = sum(self2%rmat(:self2%ldim(1),:self2%ldim(2),:self2%ldim(3))) / npix
+        diff1 = self1%rmat(:self1%ldim(1),:self1%ldim(2),:self1%ldim(3)) - ax
+        diff2 = self2%rmat(:self2%ldim(1),:self2%ldim(2),:self2%ldim(3)) - ay
+        sxx   = sum(diff1 * diff1)
+        syy   = sum(diff2 * diff2)
+        sxy   = sum(diff1 * diff2)
         if( sxx > 0. .and. syy > 0. )then
             r = sxy / sqrt(sxx * syy)
         else
@@ -4505,39 +4516,22 @@ contains
     !! \param maskimg
     !! \return  r
     !!
-    function real_corr_2( self1, self2, maskimg ) result( r )
+    function real_corr_2( self1, self2, mask ) result( r )
         class(image), intent(inout) :: self1, self2
-        class(image), intent(in)    :: maskimg
-        real,    allocatable        :: vec1(:), vec2(:)
-        logical :: mask(self1%ldim(1),self1%ldim(2),self1%ldim(3))
-        integer :: npix
-        real    :: r, sxx, syy, sxy, rnpix
-        if( self1%ft .or. self2%ft ) stop 'cannot real-space correlate FTs; real_corr_mask; simple_image'
-        if( .not. (self1.eqdims.self2) )then
-            write(*,*) 'ldim self1: ', self1%ldim
-            write(*,*) 'ldim self2: ', self2%ldim
-            stop 'images to be correlated need to have same dims; real_corr_mask; simple_image'
-        endif
-        if( .not. (self1.eqdims.maskimg) )then
-            stop 'images and mask do have same dims; real_corr_mask; simple_image'
-        endif
-        ! build logical mask
-        where(maskimg%rmat(:self1%ldim(1),:self1%ldim(2),:self1%ldim(3)) > 0.5)
-            mask = .true.
-        elsewhere
-            mask = .false.
-        end where
-        npix  = count(mask)
-        rnpix = real(npix)
-        ! vectorize
-        vec1 = pack(self1%rmat(:self1%ldim(1),:self1%ldim(2),:self1%ldim(3)), mask)
-        vec2 = pack(self2%rmat(:self1%ldim(1),:self1%ldim(2),:self1%ldim(3)), mask)
-        ! correlation
-        vec1 = vec1 - sum(vec1)/rnpix
-        vec2 = vec2 - sum(vec2)/rnpix
-        sxx  = sum(vec1 * vec1)
-        syy  = sum(vec2 * vec2)
-        sxy  = sum(vec1 * vec2)
+        logical,      intent(in)    :: mask(self1%ldim(1),self1%ldim(2),self1%ldim(3))
+        real :: diff1(self1%ldim(1),self1%ldim(2),self1%ldim(3))
+        real :: diff2(self2%ldim(1),self2%ldim(2),self2%ldim(3))
+        real :: r, sxx, syy, sxy, npix, ax, ay
+        diff1 = 0.
+        diff2 = 0.
+        npix  = real(count(mask))
+        ax    = sum(self1%rmat(:self1%ldim(1),:self1%ldim(2),:self1%ldim(3)), mask=mask) / npix
+        ay    = sum(self2%rmat(:self2%ldim(1),:self2%ldim(2),:self2%ldim(3)), mask=mask) / npix
+        diff1 = self1%rmat(:self1%ldim(1),:self1%ldim(2),:self1%ldim(3)) - ax
+        diff2 = self2%rmat(:self2%ldim(1),:self2%ldim(2),:self2%ldim(3)) - ay
+        sxx   = sum(diff1 * diff1, mask=mask)
+        syy   = sum(diff2 * diff2, mask=mask)
+        sxy   = sum(diff1 * diff2, mask=mask)
         if( sxx > 0. .and. syy > 0. )then
             r = sxy / sqrt(sxx * syy)
         else
@@ -4545,18 +4539,35 @@ contains
         endif
     end function real_corr_2
 
-    !> \brief prenorm4real_corr is pre-normalise the reference in preparation for real_corr_prenorm
+    !> \brief prenorm4real_corr pre-normalises the reference in preparation for real_corr_prenorm
     !! \param sxx
     !!
-    subroutine prenorm4real_corr( self, sxx )
+    subroutine prenorm4real_corr_1( self, sxx )
         class(image), intent(inout) :: self
         real,         intent(out)   :: sxx
+        real :: diff(self%ldim(1),self%ldim(2),self%ldim(3))
         real :: npix, ax
         npix = real(product(self%ldim))
-        ax   = sum(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)))/npix
-        self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) = self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3))-ax
-        sxx  = sum(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3))**2.)
-    end subroutine prenorm4real_corr
+        ax   = sum(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3))) / npix
+        diff = self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) - ax
+        sxx  = sum(diff * diff)
+    end subroutine prenorm4real_corr_1
+
+    !> \brief prenorm4real_corr pre-normalises the reference in preparation for real_corr_prenorm
+    !! \param sxx
+    !!
+    subroutine prenorm4real_corr_2( self, sxx, mask )
+        class(image), intent(inout) :: self
+        real,         intent(out)   :: sxx
+        logical,      intent(in)    :: mask(self%ldim(1),self%ldim(2),self%ldim(3))
+        real :: diff(self%ldim(1),self%ldim(2),self%ldim(3))
+        real :: npix, ax
+        diff = 0.
+        npix = real(count(mask))
+        ax   = sum(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)), mask=mask) / npix
+        diff = self%rmat - ax
+        sxx  = sum(diff * diff, mask=mask)
+    end subroutine prenorm4real_corr_2
 
     !>  \brief real_corr_prenorm is for calculating a real-space correlation coefficient between images (reference is pre-normalised)
     !! \param self_ref image object
@@ -4564,28 +4575,47 @@ contains
     !! \param sxx_ref
     !! \return  r
     !!
-    function real_corr_prenorm( self_ref, self_ptcl, sxx_ref ) result( r )
+    function real_corr_prenorm_1( self_ref, self_ptcl, sxx_ref ) result( r )
         class(image), intent(inout) :: self_ref, self_ptcl
         real,         intent(in)    :: sxx_ref
-        real                        :: diffmat(self_ptcl%ldim(1),self_ptcl%ldim(2),self_ptcl%ldim(3))
-        real                        :: r,ay,syy,sxy,npix
-        if( self_ref%ft .or. self_ptcl%ft ) stop 'cannot real-space correlate FTs; real_corr_prenorm; simple_image'
-        if( .not. (self_ref.eqdims.self_ptcl) )then
-            write(*,*) 'ldim self_ref: ', self_ref%ldim
-            write(*,*) 'ldim self_ptcl: ', self_ptcl%ldim
-            stop 'images to be correlated need to have same dims; real_corr_prenorm; simple_image'
-        endif
-        npix    = real(product(self_ptcl%ldim))
-        ay      = sum(self_ptcl%rmat(:self_ptcl%ldim(1),:self_ptcl%ldim(2),:self_ptcl%ldim(3)))/npix
-        diffmat = self_ptcl%rmat(:self_ptcl%ldim(1),:self_ptcl%ldim(2),:self_ptcl%ldim(3))-ay
-        syy     = sum(diffmat * diffmat)
-        sxy     = sum(self_ref%rmat(:self_ref%ldim(1),:self_ref%ldim(2),:self_ref%ldim(3))*diffmat)
+        real :: diff(self_ptcl%ldim(1),self_ptcl%ldim(2),self_ptcl%ldim(3))
+        real :: r, ay, syy, sxy, npix
+        npix = real(product(self_ptcl%ldim))
+        ay   = sum(self_ptcl%rmat(:self_ptcl%ldim(1),:self_ptcl%ldim(2),:self_ptcl%ldim(3))) / npix
+        diff = self_ptcl%rmat(:self_ptcl%ldim(1),:self_ptcl%ldim(2),:self_ptcl%ldim(3)) - ay
+        syy  = sum(diff * diff)
+        sxy  = sum(self_ref%rmat(:self_ref%ldim(1),:self_ref%ldim(2),:self_ref%ldim(3)) * diff)
         if( sxx_ref > 0. .or. syy > 0. )then
             r = sxy / sqrt(sxx_ref * syy)
         else
             r = 0.
         endif
-    end function real_corr_prenorm
+    end function real_corr_prenorm_1
+
+    !>  \brief real_corr_prenorm is for calculating a real-space correlation coefficient between images (reference is pre-normalised)
+    !! \param self_ref image object
+    !! \param self_ptcl image object
+    !! \param sxx_ref
+    !! \return  r
+    !!
+    function real_corr_prenorm_2( self_ref, self_ptcl, sxx_ref, mask ) result( r )
+        class(image), intent(inout) :: self_ref, self_ptcl
+        real,         intent(in)    :: sxx_ref
+        logical,      intent(in)    :: mask(self_ptcl%ldim(1),self_ptcl%ldim(2),self_ptcl%ldim(3))
+        real :: diff(self_ptcl%ldim(1),self_ptcl%ldim(2),self_ptcl%ldim(3))
+        real :: r, ay, syy, sxy, npix
+        diff = 0.
+        npix = real(count(mask))
+        ay   = sum(self_ptcl%rmat(:self_ptcl%ldim(1),:self_ptcl%ldim(2),:self_ptcl%ldim(3)), mask=mask) / npix
+        diff = self_ptcl%rmat(:self_ptcl%ldim(1),:self_ptcl%ldim(2),:self_ptcl%ldim(3)) - ay
+        syy  = sum(diff * diff, mask=mask)
+        sxy  = sum(self_ref%rmat(:self_ref%ldim(1),:self_ref%ldim(2),:self_ref%ldim(3)) * diff, mask=mask)
+        if( sxx_ref > 0. .or. syy > 0. )then
+            r = sxy / sqrt(sxx_ref * syy)
+        else
+            r = 0.
+        endif
+    end function real_corr_prenorm_2
 
     !>  \brief rank_corr is for calculating a rank correlation coefficient between 'rankified' images
     !! \param self1 image object

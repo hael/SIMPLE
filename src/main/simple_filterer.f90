@@ -171,6 +171,7 @@ contains
         type(image)           :: ref, ptcl, maskimg, ref_tmp
         real                  :: dfx, dfy, angast, bfac_range_refine(2), smpd, corr_best, bfac, cc
         integer               :: npix, ldim(3), imode
+        logical, allocatable  :: l_msk(:,:,:)
         real, parameter       :: BFAC_STEPSZ = 5.0, BFAC_STEPSZ_REFINE = 1.0
         if( .not. (img_ref.eqdims.img_ptcl)) stop 'ref & ptcl imgs not of same dims; filterer :: fit_bfac'
         ! extract image info
@@ -193,6 +194,8 @@ contains
         angast = o%get('angast')
         ! make hard mask
         call maskimg%disc(ldim, smpd, msk, npix)
+        l_msk = maskimg%bin2logical()
+        call maskimg%kill
         ! make CTF object
         tfun = ctf(smpd, o%get('kv'), o%get('cs'), o%get('fraca'))
         ! prepare particle image
@@ -231,7 +234,7 @@ contains
                 endif
                 call ref_tmp%bp(0.,lp)
                 call ref_tmp%bwd_ft
-                cc = ref_tmp%real_corr(ptcl, maskimg)
+                cc = ref_tmp%real_corr(ptcl, l_msk)
                 if( cc > corr_best )then
                     corr_best = cc
                     bfac_best = bfac

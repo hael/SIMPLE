@@ -332,19 +332,20 @@ contains
         use simple_projector_hlev, only: rotvol
         class(sym_aggregate_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
-        type(cmdline)      :: cline_c1
-        type(params)       :: p, p_c1
-        type(build)        :: b
-        type(oris)         :: e, sympeaks, sym_axes
-        type(ori)          :: symaxis, o
-        type(image)        :: symvol, asym_vol
-        type(sym)          :: se_c1
-        real               :: cc, rotmat(3,3)
-        integer            :: i, fnr, file_stat, nl
-        integer, parameter :: MAXLABELS = 9    !< maximum numbers symmetry peaks
-        real,    parameter :: ANGTHRESH = 10.  !< maximum half-distance between symmetry peaks
-        p = params(cline)                      ! parameters generated
-        call b%build_general_tbox(p, cline)    ! general objects built
+        type(cmdline)        :: cline_c1
+        type(params)         :: p, p_c1
+        type(build)          :: b
+        type(oris)           :: e, sympeaks, sym_axes
+        type(ori)            :: symaxis, o
+        type(image)          :: symvol, asym_vol
+        type(sym)            :: se_c1
+        real                 :: cc, rotmat(3,3)
+        integer              :: i, fnr, file_stat, nl
+        logical, allocatable :: l_msk(:,:,:)
+        integer, parameter   :: MAXLABELS = 9    !< maximum numbers symmetry peaks
+        real,    parameter   :: ANGTHRESH = 10.  !< maximum half-distance between symmetry peaks
+        p = params(cline)                        ! parameters generated
+        call b%build_general_tbox(p, cline)      ! general objects built
         ! init
         e = b%a ! b%a contains the orientations of the references projections
         cline_c1 = cline
@@ -357,6 +358,8 @@ contains
         call b%mskvol%new([p%box,p%box,p%box], p%smpd)
         b%mskvol = 1.
         call b%mskvol%mask(p%msk, 'hard')
+        l_msk = b%mskvol%bin2logical()
+        call b%mskvol%kill
         ! identify top ranking symmetry peaks
         nl = binread_nlines(p%oritab2)
         sym_axes = oris(nl)
@@ -379,7 +382,7 @@ contains
             call b%vol%mask(p%msk, 'soft')
             call b%vol%write('asym_vol'//int2str_pad(i,2)//p%ext)
             ! correlation
-            cc = symvol%real_corr(b%vol, b%mskvol)
+            cc = symvol%real_corr(b%vol, l_msk)
             call sympeaks%set(i, 'corr', cc)
         enddo
         call binwrite_oritab(p%outfile, sympeaks, [1,sympeaks%get_noris()])
