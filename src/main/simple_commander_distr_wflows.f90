@@ -873,6 +873,7 @@ contains
         call cline_check3D_conv%set( 'box', real(p_master%box)   )
         call cline_check3D_conv%set( 'nptcls', real(p_master%nptcls))
         call cline_postproc_vol%set( 'nstates', 1.)
+        !call cline_volassemble%delete('nstates') ! to reduce memory use
 
         ! for parallel volassemble over states
         allocate(state_assemble_finished(p_master%nstates) )

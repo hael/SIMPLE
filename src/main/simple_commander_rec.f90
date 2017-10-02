@@ -65,9 +65,9 @@ contains
         real, allocatable             :: res05s(:), res0143s(:)
         real                          :: res
         integer                       :: part, s, n, ss, state
-        if( cline%defined('state') .and. cline%defined('nstates') )then
-            stop 'ERROR, state and nstates cannot both be given; commander_rec :: eo_volassemble'
-        endif
+        ! if( cline%defined('state') .and. cline%defined('nstates') )then
+        !     stop 'ERROR, state and nstates cannot both be given; commander_rec :: eo_volassemble'
+        ! endif
         p = params(cline)                   ! parameters generated
         call b%build_general_tbox(p, cline) ! general objects built
         call b%build_eo_rec_tbox(p)         ! reconstruction toolbox built
@@ -165,9 +165,9 @@ contains
         character(len=STDLEN)         :: recvolname, rho_name
         integer                       :: part, s, ss, state
         type(reconstructor)           :: recvol_read
-        if( cline%defined('state') .and. cline%defined('nstates') )then
-            stop 'ERROR, state and nstates cannot both be given; commander_rec :: volassemble'
-        endif
+        ! if( cline%defined('state') .and. cline%defined('nstates') )then
+        !     stop 'ERROR, state and nstates cannot both be given; commander_rec :: volassemble'
+        ! endif
         p = params(cline)                   ! parameters generated
         call b%build_general_tbox(p, cline) ! general objects built
         call b%build_rec_tbox(p)            ! reconstruction toolbox built
