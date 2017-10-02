@@ -613,7 +613,6 @@ contains
         endif
         do icls = 1, ncls
             deallocate(pops, stat=alloc_stat)
-            !pops = self%get_pops('class', consider_w=.false.)
             if( ncls > ncls_here )then
                 tmp = self%get_pops('class', consider_w=.false.)
                 allocate(pops(1:ncls), source=0)

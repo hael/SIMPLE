@@ -346,7 +346,7 @@ contains
                 use simple_ran_tabu,        only: ran_tabu
                 use simple_projection_frcs, only: projection_frcs
                 type(ran_tabu)        :: rt
-                type(oris)            :: os!, os_prev
+                type(oris)            :: os
                 type(projection_frcs) :: frcs_prev, frcs
                 type(image)           :: img_cavg
                 integer, allocatable  :: fromtocls(:,:), cls(:), pops(:)
