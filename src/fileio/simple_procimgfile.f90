@@ -407,16 +407,28 @@ contains
         call img_resized2%kill
     end subroutine resize_imgfile_double
 
-    !>  \brief norm_imgfile is for normalization plus sigmoid contrast enhancement
-    !! \param fname2norm  output filename
-    !! \param fname  input filename
-    !! \param smpd  sampling distance
-    !! \param hfun normalisation type
-    !!
-    subroutine norm_imgfile( fname2norm, fname, smpd, hfun )
-        character(len=*),           intent(in) :: fname2norm, fname
-        real,                       intent(in) :: smpd
-        character(len=*), optional, intent(in) :: hfun
+    subroutine norm_bin_imgfile( fname2norm, fname, smpd )
+        character(len=*), intent(in) :: fname2norm, fname
+        real,             intent(in) :: smpd
+        type(image) :: img
+        integer     :: i, n, ldim(3)
+        call find_ldim_nptcls(fname2norm, ldim, n)
+        ldim(3) = 1
+        call raise_exception_imgfile( n, ldim, 'norm_imgfile' )
+        call img%new(ldim,smpd)
+        write(*,'(a)') '>>> BIN NORMALIZING IMAGES'
+        do i=1,n
+            call progress(i,n)
+            call img%read(fname2norm, i)
+            call img%norm_bin
+            call img%write(fname, i)
+        end do
+        call img%kill
+    end subroutine norm_bin_imgfile
+
+    subroutine norm_imgfile( fname2norm, fname, smpd )
+        character(len=*), intent(in) :: fname2norm, fname
+        real,             intent(in) :: smpd
         type(image) :: img
         integer     :: i, n, ldim(3)
         call find_ldim_nptcls(fname2norm, ldim, n)
@@ -427,7 +439,7 @@ contains
         do i=1,n
             call progress(i,n)
             call img%read(fname2norm, i)
-            call img%norm(hfun)
+            call img%norm
             call img%write(fname, i)
         end do
         call img%kill
@@ -524,7 +536,6 @@ contains
             call progress(i,n)
             call img%read(fname,i)
             call img%stats('foreground', ave, sdev, maxv, minv, med=med, msk=msk)
-            ent = img%entropy()
             call img%fwd_ft
             spectrum = img%spectrum('power')
             spec = sum(spectrum)/real(size(spectrum))
@@ -533,7 +544,6 @@ contains
             call os%set(i, 'maxv',  maxv)
             call os%set(i, 'minv',  minv)
             call os%set(i, 'med',   med)
-            call os%set(i, 'ent',   ent)
             call os%set(i, 'spec',  spec)
             call os%set(i, 'dynrange', maxv - minv)
         end do

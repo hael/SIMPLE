@@ -203,8 +203,6 @@ type :: image
     procedure          :: rmsd
     procedure          :: stats
     procedure          :: noisesdev
-    procedure          :: est_noise_pow
-    procedure          :: est_noise_pow_norm
     procedure          :: mean
     procedure          :: median_pixel
     procedure          :: contains_nans
@@ -212,7 +210,6 @@ type :: image
     procedure          :: cure
     procedure          :: loop_lims
     procedure          :: comp_addr_phys
-    procedure          :: phys_index_mem
     procedure          :: corr
     procedure          :: corr_shifted
     procedure, private :: real_corr_1
@@ -224,9 +221,6 @@ type :: image
     procedure, private :: real_corr_prenorm_1
     procedure, private :: real_corr_prenorm_2
     generic            :: real_corr_prenorm => real_corr_prenorm_1, real_corr_prenorm_2
-    procedure          :: rank_corr
-    procedure          :: real_dist
-    procedure          :: entropy
     procedure          :: fsc
     procedure          :: get_nvoxshell
     procedure          :: get_res
@@ -254,13 +248,10 @@ type :: image
     procedure          :: dampen_central_cross
     procedure          :: subtr_backgr
     procedure          :: resmsk
-    procedure          :: fwd_logft
     procedure          :: mask
     procedure          :: neg
     procedure          :: pad
     procedure          :: pad_mirr
-    procedure          :: resize_nn
-    procedure          :: resize_bilin
     procedure          :: clip
     procedure          :: clip_inplace
     procedure          :: mirror
@@ -273,7 +264,6 @@ type :: image
     procedure          :: rtsq
     procedure          :: shift_phorig
     procedure          :: bwd_ft
-    procedure          :: bwd_logft
     procedure          :: shift
     ! DENOISING FUNCTIONS
     procedure          :: cure_outliers
@@ -447,6 +437,7 @@ contains
         do xind=0,self%ldim(1)-box,box/2
             do yind=0,self%ldim(2)-box,box/2
                 call self%window([xind,yind],box,tmp)
+                call tmp%norm
                 call tmp%fwd_ft
                 call tmp%ft2img(speckind, tmp2)
                 call img_out%add(tmp2)
@@ -459,10 +450,6 @@ contains
         if( didft ) call self%fwd_ft
     end function mic2spec
 
-    !>   boxconv  calculates the average powerspectrum over a micrograph
-    !! \param box  boxwidth filter size
-    !! \return  img_out 2D ave power spectrum image object
-    !!
     function boxconv( self, box ) result( img_out )
         class(image), intent(inout) :: self
         integer,      intent(in)    :: box
@@ -3146,7 +3133,6 @@ contains
     !! \param falloff
     !!
     subroutine cos_edge( self, falloff )
-        !use simple_math, only: cosedge
         class(image), intent(inout) :: self
         integer, intent(in)         :: falloff
         real, allocatable           :: rmat(:,:,:)
@@ -4131,47 +4117,6 @@ contains
         if( didft ) call self%fwd_ft
     end function noisesdev
 
-    !> \brief est_noise_pow is for estimating the noise power of an image by
-    !!          (1) online estimation of the noise variance from background pixels (outside mask)
-    !!          (2) generation of a noise image from the estimated distribution
-    !!          (3) taking the median of the power spectrum as an estimate of the noise power
-    !!              (assumption of white nosie=constant power)
-    !! \param msk  mask threshold
-    !! \return  pow
-    !!
-    function est_noise_pow( self, msk ) result( pow )
-        class(image), intent(inout) :: self
-        real, intent(in)            :: msk
-        real                        :: sdev, pow
-        type(image)                 :: tmp
-        real, allocatable           :: spec(:)
-        sdev = self%noisesdev(msk)
-        call tmp%new(self%ldim, self%smpd)
-        call tmp%gauran(0., sdev)
-        spec = tmp%spectrum('power')
-        pow = median_nocopy(spec)
-        deallocate(spec)
-        call tmp%kill()
-    end function est_noise_pow
-
-    !>  \brief  is for estimating the noise power of an noise normalized image (noise sdev=1)
-    !> est_noise_pow_norm
-    !! \return  pow
-    !!
-    function est_noise_pow_norm( self ) result( pow )
-        class(image), intent(inout) :: self
-        real                        :: pow
-        type(image)                 :: tmp
-        real, parameter             :: sdev = 1.
-        real, allocatable           :: spec(:)
-        call tmp%new(self%ldim, self%smpd)
-        call tmp%gauran(0., sdev)
-        spec = tmp%spectrum('power')
-        pow = median_nocopy(spec)
-        deallocate(spec)
-        call tmp%kill()
-    end function est_noise_pow_norm
-
     !>  \brief  is for calculating the mean of an image
     !> mean
     !! \return  avg
@@ -4332,27 +4277,6 @@ contains
         integer                   :: phys(3) !<  Physical address
         phys = self%fit%comp_addr_phys(logi)
     end function comp_addr_phys
-
-    ! memoization of physical indices for Fourier trasnforms
-    ! ftiter mode controls Friedel redundancy
-    subroutine phys_index_mem( self, lims, indmat )
-        class(image),         intent(in)    :: self
-        integer,              intent(in)    :: lims(3,2)
-        integer, allocatable, intent(inout) :: indmat(:,:,:,:)
-        integer :: h, k, l
-        if( allocated(indmat) ) deallocate(indmat)
-        allocate(indmat(lims(1,1):lims(1,2),lims(2,1):lims(2,2),lims(3,1):lims(3,2),3), stat=alloc_stat)
-        allocchk('In: simple_image :: phys_index_mem')
-        !$omp parallel do default(shared) proc_bind(close) collapse(3) private(h,k,l)
-        do h=lims(1,1),lims(1,2)
-            do k=lims(2,1),lims(2,2)
-                do l=lims(3,1),lims(3,2)
-                    indmat(h,k,l,:) = self%fit%comp_addr_phys([h,k,l])
-                end do
-            end do
-        end do
-        !$omp end parallel do
-    end subroutine phys_index_mem
 
     !>  \brief corr is for correlating two images
     !! \param self1 input image 1
@@ -4614,92 +4538,6 @@ contains
         endif
     end function real_corr_prenorm_2
 
-    !>  \brief rank_corr is for calculating a rank correlation coefficient between 'rankified' images
-    !! \param self1 image object
-    !! \param self2 image object
-    !! \return  r
-    !!
-    function rank_corr( self1, self2 ) result( r )
-        class(image), intent(inout) :: self1, self2
-        integer                     :: i,j,k,npix
-        real                        :: sqsum,npixr, r
-        if( self1%ft .or. self2%ft ) stop 'cannot rank correlate FTs; rank_corr; simple_image'
-        if( .not. (self1.eqdims.self2) ) stop 'images to be correlated need to have same dims; rank_corr; simple_image'
-        npix  = product(self1%ldim)
-        npixr = real(npix)
-        sqsum = 0.
-        !$omp parallel do collapse(3) default(shared) private(i,j,k)&
-        !$omp reduction(+:sqsum) schedule(static) proc_bind(close)
-        do i=1,self1%ldim(1)
-            do j=1,self1%ldim(2)
-                do k=1,self1%ldim(3)
-                    sqsum = sqsum+(self1%rmat(i,j,k)-self2%rmat(i,j,k))**2.
-                end do
-            end do
-        end do
-        !$omp end parallel do
-        r = 1.-(6.*sqsum)/(npixr**3.-npixr)
-    end function rank_corr
-
-    !>  \brief is for calculate a real-space distance between images within a mask
-    !!         assumes that images are normalized
-    !> real_dist
-    !! \param self1 image object
-    !! \param self2 image object
-    !! \param msk
-    !! \return  r
-    !!
-    function real_dist( self1, self2, msk ) result( r )
-        class(image), intent(inout) :: self1, self2, msk
-        integer                     :: i, j, k
-        real                        :: r
-        if( self1%ft .or. self2%ft ) stop 'cannot calculate distance between FTs; real_dist; simple_image'
-        if( .not. (self1.eqdims.self2) ) stop 'images to be analyzed need to have same dims; real_dist; simple_image'
-        r = 0.
-        !$omp parallel do collapse(3) default(shared) private(i,j,k) &
-        !$omp reduction(+:r) schedule(static) proc_bind(close)
-        do i=1,self1%ldim(1)
-            do j=1,self1%ldim(2)
-                do k=1,self1%ldim(3)
-                    if( msk%rmat(i,j,k) > 0.5 )then
-                        r = r+(self1%rmat(i,j,k)-self2%rmat(i,j,k))**2
-                    endif
-                end do
-            end do
-        end do
-        !$omp end parallel do
-        r = sqrt(r)
-    end function real_dist
-
-    !> \brief calculates the entropy of an image
-    real function entropy( self, nbins )
-        class(image),      intent(inout) :: self
-        integer, optional, intent(in)    :: nbins
-        integer              :: nnbins, cnt_i
-        real                 :: p_i
-        real,    allocatable :: means(:), pixvals(:)
-        integer, allocatable :: labels(:)
-        integer, parameter   :: MAXITS=5
-        integer :: i, npix
-        real    :: logtwo
-        nnbins = self%ldim(1)
-        if( present(nbins) ) nnbins = nbins
-        allocate(means(nnbins), source=0.)
-        npix    = product(self%ldim)
-        pixvals = pack(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)), mask=.true.)
-        call sortmeans(pixvals, MAXITS, means, labels)
-        logtwo  = log(2.)
-        entropy = 0.0
-        do i=1,nnbins
-            cnt_i = count(labels == i)
-            if( cnt_i > 0 )then
-                p_i = real(cnt_i) / real(nnbins)
-                entropy = entropy + p_i * (log(p_i)/logtwo)
-            endif
-        end do
-        entropy = -entropy
-    end function entropy
-
     !> \brief fsc is for calculation of Fourier ring/shell correlation
     !! \param self1 image object
     !! \param self2 image object
@@ -4928,7 +4766,7 @@ contains
         do h=lims(1,1),lims(1,2)
             do k=lims(2,1),lims(2,2)
                 do l=lims(3,1),lims(3,2)
-                    arg = self%gen_argtransf_comp(real([h,k,l]))
+                    arg  = self%gen_argtransf_comp(real([h,k,l]))
                     phys = self%fit%comp_addr_phys([h,k,l])
                     transfmats(1)%cmat(phys(1),phys(2),phys(3)) = cmplx(arg(1),0.)
                     transfmats(2)%cmat(phys(1),phys(2),phys(3)) = cmplx(arg(2),0.)
@@ -5242,7 +5080,7 @@ contains
         logical, intent(in)         :: pos(:,:)
         integer :: ipix, jpix
         if( .not. self%is_2d() ) stop 'only for 2D images; salt_n_pepper; simple_image'
-        call self%norm('sigm')
+        call self%norm_bin
         do ipix=1,self%ldim(1)
             do jpix=1,self%ldim(2)
                 if( pos(ipix,jpix) )then
@@ -5512,43 +5350,6 @@ contains
             end do
         end do
     end subroutine resmsk
-
-    !> \brief fwd_logft  forward log Fourier transform
-    !!
-    subroutine fwd_logft( self )
-        class(image), intent(inout) :: self
-        integer :: lims(3,2), h, k, l, phys(3)
-        call self%fwd_ft
-        lims = self%fit%loop_lims(2)
-        do h=lims(1,1),lims(1,2)
-            do k=lims(2,1),lims(2,2)
-                do l=lims(3,1),lims(3,2)
-                    phys = self%fit%comp_addr_phys([h,k,l])
-                    if( cabs(self%cmat(phys(1),phys(2),phys(3))) /= 0. )then
-                        self%cmat(phys(1),phys(2),phys(3)) = clog(self%cmat(phys(1),phys(2),phys(3)))
-                    endif
-                end do
-            end do
-        end do
-    end subroutine fwd_logft
-
-    !>  \brief  forward log Fourier transform
-    subroutine bwd_logft( self )
-        class(image), intent(inout) :: self
-        integer :: lims(3,2), h, k, l, phys(3)
-        if( self%ft )then
-            lims = self%fit%loop_lims(2)
-            do h=lims(1,1),lims(1,2)
-                do k=lims(2,1),lims(2,2)
-                    do l=lims(3,1),lims(3,2)
-                        phys = self%fit%comp_addr_phys([h,k,l])
-                        self%cmat(phys(1),phys(2),phys(3)) = cexp(self%cmat(phys(1),phys(2),phys(3)))
-                    end do
-                end do
-            end do
-            call self%bwd_ft
-        endif
-    end subroutine bwd_logft
 
     !>  \brief  an image shifter to prepare for Fourier transformation
     subroutine shift_phorig( self )
@@ -5820,76 +5621,6 @@ contains
         if( didft ) call self%bwd_ft
     end subroutine neg
 
-    !> \brief resize_nn for image resizing using nearest neighbor interpolation
-    !! \param self_in image object
-    !! \param self_out image object
-    !!
-    subroutine resize_nn( self_in, self_out )
-        class(image), intent(inout) :: self_in, self_out
-        real    :: tx, ty, tz
-        integer :: i, j, k, x, y, z
-        logical :: didft
-        didft = .false.
-        if( self_in%ft )then
-            call self_in%bwd_ft
-            didft = .true.
-        endif
-        tx = real(self_in%ldim(1))/real(self_out%ldim(1))
-        ty = real(self_in%ldim(2))/real(self_out%ldim(2))
-        tz = real(self_in%ldim(3))/real(self_out%ldim(3))
-        do i=1,self_out%ldim(1)
-            do j=1,self_out%ldim(2)
-                do k=1,self_out%ldim(3)
-                    x = ceiling(real(i)*tx)
-                    y = ceiling(real(j)*ty)
-                    z = ceiling(real(k)*tz)
-                    self_out%rmat(i,j,k) = self_in%rmat(x,y,z)
-                end do
-            end do
-        end do
-        if( didft ) call self_in%fwd_ft
-        self_out%ft = .false.
-    end subroutine resize_nn
-
-    !>  \brief for image resizing using bilinear interpolation
-    subroutine resize_bilin( self_in, self_out )
-        class(image), intent(inout) :: self_in, self_out
-        real    :: tx, ty, x_diff, y_diff !, maxpix, minpix
-        integer :: i, j, x, y
-        logical :: didft
-        if( self_in%is_2d() .and. self_out%is_2d() )then
-        else
-            stop 'only 4 2D images; resize_bilin; simple_image'
-        endif
-        didft = .false.
-        if( self_in%ft )then
-            call self_in%bwd_ft
-            didft = .true.
-        endif
-        tx = real(self_in%ldim(1))/real(self_out%ldim(1))
-        ty = real(self_in%ldim(2))/real(self_out%ldim(2))
-        do i=1,self_out%ldim(1)
-            do j=1,self_out%ldim(2)
-                x = int(real(i)*tx)
-                y = int(real(j)*ty)
-                x_diff = real(i)*tx-real(x)
-                y_diff = real(j)*ty-real(y)
-                self_out%rmat(i,j,1) = self_in%rmat(x,y,1)*(1.-x_diff)*(1.-y_diff)+&
-                self_in%rmat(x+1,y,1)*(1.-y_diff)*x_diff+&
-                self_in%rmat(x,y+1,1)*y_diff*(1.-x_diff)+&
-                self_in%rmat(x+1,y+1,1)*x_diff*y_diff
-                if( is_a_number(self_out%rmat(i,j,1)) )then
-                else
-                    x = ceiling(real(i)*tx)
-                    y = ceiling(real(j)*ty)
-                    self_out%rmat(i,j,1) = self_in%rmat(x,y,1)
-                endif
-            end do
-        end do
-        if( didft ) call self_in%fwd_ft
-        self_out%ft = .false.
-    end subroutine resize_bilin
-
     !> \brief pad is a constructor that pads the input image to input ldim
     !! \param self_in image object
     !! \param self_out image object
@@ -6109,10 +5840,9 @@ contains
     !! \param hfun
     !! \param err error flag
     !!
-    subroutine norm( self, hfun, err )
-        class(image), intent(inout)            :: self
-        character(len=*), intent(in), optional :: hfun
-        logical, intent(out), optional         :: err
+    subroutine norm( self, err )
+        class(image),      intent(inout) :: self
+        logical, optional, intent(out)   :: err
         integer :: n_nans
         real    :: maxv, minv, ave, sdev
         if( self%ft )then
@@ -6120,11 +5850,6 @@ contains
             return
         endif
         call self%cure(maxv, minv, ave, sdev, n_nans)
-        if( self%ldim(3) > 1 )then
-            if( present(hfun) ) call normalize_sigm(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)))
-        else
-            if( present(hfun) ) call normalize_sigm(self%rmat(:self%ldim(1),:self%ldim(2),1))
-        endif
         if( sdev > 0. )then
             if( present(err) ) err = .false.
         else
@@ -6539,8 +6264,6 @@ contains
                 logical              :: passed, test(6)
 
                 write(*,'(a)') '**info(simple_image_unit_test, part 1): testing basal constructors'
-!img = image([ld1,ld2], 1.)     ! Program received signal SIGSEGV: Segmentation fault - invalid memory reference. Need to update gfortran.
-!img3d = image([ld1,ld2,ld3], 1.) ! Program received signal SIGBUS: Access to an undefined portion of a memory object. Need to update gfortran.
                 call img%new([ld1,ld2,1], 1.)
                 call img_3%new([ld1,ld2,1], 1.)
                 call img3d%new([ld1,ld2,ld3], 1.)
@@ -6686,24 +6409,6 @@ contains
                 sdev <= 16. .and. med >= 4. .and. med <= 6. ) passed = .true.
                 if( .not. passed )  stop 'stats test failed'
 
-                write(*,'(a)') '**info(simple_image_unit_test, part 7): testing noise power estimation'
-                passed = .false.
-                call img%new([ld1,ld2,1], 1.)
-                call img%gauran(0., 2.)
-                spec = img%spectrum('power')
-                lfny = size(spec)
-                allocate(res(lfny),stat=alloc_stat)
-                allocchk("In simple_image::test_image res")
-                do k=1,lfny
-                    res(k) = (img%get_smpd())/img%get_lp(k)
-                end do
-                spec = sum(spec)/real(lfny)
-                write(*,*) 'correct noise power:', spec(1)
-                pow = img%est_noise_pow(40.)
-                write(*,*) 'estimated noise power:', pow
-                if( abs(spec(1)-pow) < 1e-4 ) passed = .true.
-                if( .not. passed )  stop 'noise power estimation test failed'
-
                 write(*,'(a)') '**info(simple_image_unit_test, part 7): testing origin shift'
                 if( allocated(pcavec1) ) deallocate(pcavec1)
                 if( allocated(pcavec2) ) deallocate(pcavec2)
@@ -6848,17 +6553,6 @@ contains
                     if( doplot ) call img_2%vis
                 endif
 
-                write(*,'(a)') '**info(simple_image_unit_test, part 18): testing logft'
-                call img%square( 10 )
-                if( doplot ) call img%vis
-                call img%fwd_ft
-                if( doplot ) call img%vis
-                call img%square( 10 )
-                call img%fwd_logft
-                if( doplot ) call img%vis
-                call img%bwd_logft
-                if( doplot ) call img%vis
-
                 if( img%square_dims() )then
                     write(*,'(a)') '**info(simple_image_unit_test, part 19): testing rotational averager'
                     call img%square( 10 )
@@ -6968,16 +6662,12 @@ contains
                 real, allocatable    :: pcavec1(:), pcavec2(:), spec(:), res(:)
                 real                 :: smpd=2.
                 logical              :: passed, test(6)
-
                 write(*,'(a)') '**info(simple_image ops ): testing fft'
-       
                 call img%new([ld1,ld2,1], 1.)
                 call img_3%new([ld1,ld2,1], 1.)
                 call img3d%new([ld1,ld2,ld3], 1.)
                 if( .not. img%exists() ) stop 'ERROR, in constructor or in exists function, 1'
                 if( .not. img3d%exists() ) stop 'ERROR, in constructor or in exists function, 2'
-
-
              end subroutine test_image_ops
 
     end subroutine test_image

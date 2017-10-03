@@ -1794,9 +1794,8 @@ select case(prg)
         !==Program norm
         !
         ! <norm/begin>is a program for normalization of MRC or SPIDER stacks and volumes. If you want to
-        ! normalise your images inputted with stk, set norm=yes. hfun (e.g. hfun=sigm) controls
-        ! the normalisation function. If you want to perform noise normalisation of the images set
-        ! noise_norm=yes given a mask radius msk (pixels). If you want to normalise your
+        ! normalise your images inputted with stk, set norm=yes. If you want to perform noise normalisation 
+        ! of the images set noise_norm=yes given a mask radius msk (pixels). If you want to normalise your
         ! images or volume (vol1) with respect to their power spectrum set shell_norm=yes
         ! <norm/end>
         !
@@ -1808,11 +1807,10 @@ select case(prg)
         keys_optional(3) = 'norm'
         keys_optional(4) = 'noise_norm'
         keys_optional(5) = 'shell_norm'
-        keys_optional(6) = 'hfun'
-        keys_optional(7) = 'nthr'
+        keys_optional(6) = 'nthr'
         ! parse command line
         if( describe ) call print_doc_norm
-        call cline%parse(keys_required(:1), keys_optional(:7))
+        call cline%parse(keys_required(:1), keys_optional(:6))
         ! execute
         call xnorm%execute(cline)
     case( 'scale' )

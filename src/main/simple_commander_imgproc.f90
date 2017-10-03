@@ -437,11 +437,7 @@ contains
             ! 2D
             if( p%norm.eq.'yes' )then
                 ! Normalization
-                if( cline%defined('hfun') )then
-                    call norm_imgfile(p%stk, p%outstk, p%smpd, hfun=p%hfun)
-                else
-                    call norm_imgfile(p%stk, p%outstk, p%smpd)
-                endif
+                call norm_imgfile(p%stk, p%outstk, p%smpd)
             else if( p%noise_norm.eq.'yes' )then
                 ! Noise normalization
                 if( cline%defined('msk') )then
