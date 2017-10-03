@@ -447,7 +447,6 @@ contains
         do xind=0,self%ldim(1)-box,box/2
             do yind=0,self%ldim(2)-box,box/2
                 call self%window([xind,yind],box,tmp)
-                ! call tmp%taper_edges
                 call tmp%fwd_ft
                 call tmp%ft2img(speckind, tmp2)
                 call img_out%add(tmp2)
@@ -3954,12 +3953,12 @@ contains
     !! \param errout error flag
     !!
     subroutine stats( self, which, ave, sdev, maxv, minv, msk, med, errout )
-        class(image), intent(inout)    :: self
-        character(len=*),  intent(in)  :: which
-        real,              intent(out) :: ave, sdev, maxv, minv
-        real,    optional, intent(in)  :: msk
-        real,    optional, intent(out) :: med
-        logical, optional, intent(out) :: errout
+        class(image),      intent(inout) :: self
+        character(len=*),  intent(in)    :: which
+        real,              intent(out)   :: ave, sdev, maxv, minv
+        real,    optional, intent(in)    :: msk
+        real,    optional, intent(out)   :: med
+        logical, optional, intent(out)   :: errout
         integer           :: i, j, k, npix, alloc_stat, minlen
         real              :: ci, cj, ck, mskrad, e, var
         logical           :: err, didft, background
@@ -4562,10 +4561,9 @@ contains
         logical,      intent(in)    :: mask(self%ldim(1),self%ldim(2),self%ldim(3))
         real :: diff(self%ldim(1),self%ldim(2),self%ldim(3))
         real :: npix, ax
-        diff = 0.
         npix = real(count(mask))
         ax   = sum(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)), mask=mask) / npix
-        diff = self%rmat - ax
+        where( mask ) diff = self%rmat - ax
         sxx  = sum(diff * diff, mask=mask)
     end subroutine prenorm4real_corr_2
 
@@ -4604,10 +4602,9 @@ contains
         logical,      intent(in)    :: mask(self_ptcl%ldim(1),self_ptcl%ldim(2),self_ptcl%ldim(3))
         real :: diff(self_ptcl%ldim(1),self_ptcl%ldim(2),self_ptcl%ldim(3))
         real :: r, ay, syy, sxy, npix
-        diff = 0.
         npix = real(count(mask))
         ay   = sum(self_ptcl%rmat(:self_ptcl%ldim(1),:self_ptcl%ldim(2),:self_ptcl%ldim(3)), mask=mask) / npix
-        diff = self_ptcl%rmat(:self_ptcl%ldim(1),:self_ptcl%ldim(2),:self_ptcl%ldim(3)) - ay
+        where( mask ) diff = self_ptcl%rmat(:self_ptcl%ldim(1),:self_ptcl%ldim(2),:self_ptcl%ldim(3)) - ay
         syy  = sum(diff * diff, mask=mask)
         sxy  = sum(self_ref%rmat(:self_ref%ldim(1),:self_ref%ldim(2),:self_ref%ldim(3)) * diff, mask=mask)
         if( sxx_ref > 0. .or. syy > 0. )then
@@ -5455,7 +5452,7 @@ contains
         if( didft ) call self%bwd_ft
     end subroutine ft2img
 
-    !> \brief ft2img  dampens the central cross of a powerspectrum by median filtering
+    !> \brief dampens the central cross of a powerspectrum by median filtering
     subroutine dampen_central_cross( self )
         class(image), intent(inout) :: self
         integer            :: h,mh,k,mk,lims(3,2),inds(3)

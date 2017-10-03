@@ -1,7 +1,6 @@
 ! concrete commander: operations on volumes
 module simple_commander_volops
 #include "simple_lib.f08"
-
 !! import classes
 use simple_cmdline,        only: cmdline
 use simple_params,         only: params
@@ -10,11 +9,9 @@ use simple_commander_base, only: commander_base
 use simple_image,          only: image
 use simple_projector_hlev, only: projvol, rotvol
 use simple_ori,            only: ori
-
 !! import functions
 use simple_binoris_io,     only: binread_oritab, binwrite_oritab, binread_nlines
 use simple_imghead,        only: find_ldim_nptcls
-
 implicit none
 
 public :: fsc_commander

@@ -27,6 +27,7 @@ public :: build, test_build
 private
 #include "simple_local_flags.inc"
 integer(timer_int_kind) :: tbuild
+
 type :: build
     ! GENERAL TOOLBOX
     type(oris)                          :: a, e, e_bal        !< aligndata, discrete spaces
@@ -44,10 +45,10 @@ type :: build
     type(masker)                        :: mskvol             !< mask volume
     type(projection_frcs)               :: projfrcs           !< projection FRC's used in the anisotropic Wiener filter
     ! COMMON LINES TOOLBOX
-    type(image), allocatable            :: imgs(:)            !< images (all should be read in)
-    type(image), allocatable            :: imgs_sym(:)        !< images (all should be read in)
+    type(image),            allocatable :: imgs(:)            !< images (all should be read in)
+    type(image),            allocatable :: imgs_sym(:)        !< images (all should be read in)
     type(comlin)                        :: clins              !< common lines data structure
-    type(image), allocatable            :: ref_imgs(:,:)      !< array of reference images
+    type(image),            allocatable :: ref_imgs(:,:)      !< array of reference images
     ! RECONSTRUCTION TOOLBOX
     type(eo_reconstructor)              :: eorecvol           !< object for eo reconstruction
     type(reconstructor)                 :: recvol             !< object for reconstruction
@@ -55,10 +56,10 @@ type :: build
     type(projector),        allocatable :: refvols(:)         !< reference volumes for quasi-continuous search
     type(reconstructor),    allocatable :: recvols(:)         !< array of volumes for reconstruction
     type(eo_reconstructor), allocatable :: eorecvols(:)       !< array of volumes for eo-reconstruction
-    real,    allocatable                :: fsc(:,:)           !< Fourier Shell Correlation
-    integer, allocatable                :: nnmat(:,:)         !< matrix with nearest neighbor indices
-    integer, allocatable                :: pbatch(:)          !< particle index batch
-    integer, allocatable                :: grid_projs(:)      !< projection directions for coarse grid search
+    real,                   allocatable :: fsc(:,:)           !< Fourier Shell Correlation
+    integer,                allocatable :: nnmat(:,:)         !< matrix with nearest neighbor indices
+    integer,                allocatable :: pbatch(:)          !< particle index batch
+    integer,                allocatable :: grid_projs(:)      !< projection directions for coarse grid search
     ! PRIVATE EXISTENCE VARIABLES
     logical, private                    :: general_tbox_exists          = .false.
     logical, private                    :: cluster_tbox_exists          = .false.

@@ -290,8 +290,7 @@ contains
         end select
         ! shift image to rotational origin
         if(abs(x) > SHTHRESH .or. abs(y) > SHTHRESH) call b%img%shift([-x,-y,0.])
-        if( p%dev .eq. 'yes' .and. is3D .and. frcind > 0 )then
-            if( .not. p%eo .eq. 'aniso' .and. is3D ) stop 'particle FOM filtering not supported unless eo=aniso'
+        if( is3D .and. frcind > 0 )then
             ! anisotropic matched filter
             frc = b%projfrcs%get_frc(frcind, p%box)
             if( any(frc > 0.143) )then
@@ -480,15 +479,7 @@ contains
             endif
         endif
         ! Volume filtering
-        if( p%eo.eq.'yes' )then
-            ! matched filter based on Rosenthal & Henderson, 2003 
-            if( any(b%fsc(s,:) > 0.143) )then
-                call b%vol%fwd_ft ! needs to be here in case the shift was never applied (above)
-                call b%vol%shellnorm()
-                filter = fsc2optlp(b%fsc(s,:))
-                call b%vol%apply_filter(filter)
-            endif
-        else if( p%eo.eq.'aniso' )then
+        if( p%eo.ne.'no' )then
             ! anisotropic matched filter
             allocate(fname_vol_filter, source='aniso_optlp_state'//int2str_pad(s,2)//p%ext)
             if( file_exists(fname_vol_filter) )then
@@ -499,8 +490,13 @@ contains
                 call b%vol%apply_filter(vol_filter)
                 call vol_filter%kill
             else
-                write(*,*) 'eo=aniso but file: ', fname_vol_filter
-                stop 'is not in cwd as required; hadamard_common :: preprefvol'
+                ! matched filter based on Rosenthal & Henderson, 2003 
+                if( any(b%fsc(s,:) > 0.143) )then
+                    call b%vol%fwd_ft ! needs to be here in case the shift was never applied (above)
+                    call b%vol%shellnorm()
+                    filter = fsc2optlp(b%fsc(s,:))
+                    call b%vol%apply_filter(filter)
+                endif
             endif
             deallocate(fname_vol_filter)
         endif
@@ -614,17 +610,13 @@ contains
                 call b%eorecvols(s)%sum_eos
                 eonames(1) = add2fbody(p%vols(s), p%ext, '_odd')
                 eonames(2) = add2fbody(p%vols(s),  p%ext, '_even')
-                if( p%eo .eq. 'aniso' )then
-                    ! anisotropic resolution model
-                    call b%eorecvols(s)%sampl_dens_correct_eos(s, eonames)
-                    call gen_projection_frcs( p, eonames(1), eonames(2), s, b%projfrcs)
-                    call b%projfrcs%write('frcs_state'//int2str_pad(s,2)//'.bin')
-                    ! generate the anisotropic 3D optimal low-pass filter
-                    call gen_anisotropic_optlp(b%vol, b%projfrcs, b%e_bal, s, p%pgrp)
-                    call b%vol%write('aniso_optlp_state'//int2str_pad(s,2)//p%ext)
-                else
-                    call b%eorecvols(s)%sampl_dens_correct_eos(s, eonames)
-                endif
+                ! anisotropic resolution model
+                call b%eorecvols(s)%sampl_dens_correct_eos(s, eonames)
+                call gen_projection_frcs( p, eonames(1), eonames(2), s, b%projfrcs)
+                call b%projfrcs%write('frcs_state'//int2str_pad(s,2)//'.bin')
+                ! generate the anisotropic 3D optimal low-pass filter
+                call gen_anisotropic_optlp(b%vol, b%projfrcs, b%e_bal, s, p%pgrp)
+                call b%vol%write('aniso_optlp_state'//int2str_pad(s,2)//p%ext)
                 call b%eorecvols(s)%sampl_dens_correct_sum(b%vol)
                 call b%vol%write(p%vols(s), del_if_exists=.true.)
                 ! update resolutions for local execution mode

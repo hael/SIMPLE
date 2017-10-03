@@ -7,15 +7,14 @@ use simple_polarft_corrcalc, only: polarft_corrcalc
 use simple_shc_inplane,      only: shc_inplane
 use simple_pftcc_shsrch,     only: pftcc_shsrch
 use simple_pftcc_inplsrch,   only: pftcc_inplsrch
-
 implicit none
 
 public :: prime3D_srch
 private
 #include "simple_local_flags.inc"
 
-real,    parameter :: FACTWEIGHTS_THRESH = 0.001        !< threshold for factorial weights
-real,    parameter :: E3HALFWINSZ        = 60.      !< in-plane angle half window size
+real,    parameter :: FACTWEIGHTS_THRESH = 0.001 !< threshold for factorial weights
+real,    parameter :: E3HALFWINSZ        = 60.   !< in-plane angle half window size
 
 !> struct for prime3d params
 type prime3D_srch
@@ -908,7 +907,7 @@ contains
         self%prev_state = nint(o_prev%get('state'))                                    ! state index
         self%prev_roind = self%pftcc_ptr%get_roind(360.-o_prev%e3get())                ! in-plane angle index
         self%prev_shvec = o_prev%get_2Dshift()                                         ! shift vector
-        self%prev_proj  = self%e_ptr%find_closest_proj(o_prev,1)                                ! projection direction
+        self%prev_proj  = self%e_ptr%find_closest_proj(o_prev,1)                       ! projection direction
         if( self%prev_state > self%nstates ) stop 'previous best state outside boundary; prep4srch; simple_prime3D_srch'
         if( self%prev_state > 0 )then
             if( .not. self%state_exists(self%prev_state) ) stop 'empty previous state; prep4srch; simple_prime3D_srch'
@@ -943,19 +942,6 @@ contains
                 if( .not. is_a_number(corr) ) corr = 0.
                 call o_prev%print_ori()
             endif
-            ! MOMENTUM NOT NEEDED AS WE DO SNHC-BASED INITIAL MODEL GENERATION AND HRES REFINEMENT WILL SUFFER
-            ! if( (self%refine.eq.'no' .or. self%refine.eq.'tseries') .and. self%nstates==1 )then
-            !     ! moving average for single state only
-            !     cc_t_min_1 = -1.
-            !     if( o_prev%isthere('corr') ) cc_t_min_1 = o_prev%get('corr')
-            !     if( o_prev%isthere('lp') )then
-            !         if( abs(o_prev%get('lp') - lp) < 0.5 )then   ! previous and present correlations comparable
-            !             if( cc_t_min_1 > 0. )then
-            !                 corr = 0.5 * corr + 0.5 * cc_t_min_1 ! diversifying limit
-            !             endif
-            !         endif
-            !     endif
-            ! endif
             self%prev_corr = corr
         endif
         DebugPrint '>>> PRIME3D_SRCH::PREPARED FOR SIMPLE_PRIME3D_SRCH'

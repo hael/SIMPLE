@@ -3,7 +3,6 @@ module simple_hadamard3D_matcher
 !$ use omp_lib
 !$ use omp_lib_kinds
 #include "simple_lib.f08"
-    
 use simple_polarft_corrcalc, only: polarft_corrcalc
 use simple_prime3D_srch,     only: prime3D_srch
 use simple_classaverager,    only: classaverager
@@ -15,7 +14,6 @@ use simple_gridding,         only: prep4cgrid
 use simple_binoris_io,       only: binwrite_oritab
 use simple_cont3D_matcher    ! use all in there
 use simple_hadamard_common   ! use all in there
-
 implicit none
 
 public :: prime3D_find_resrange, prime3D_exec, gen_random_model

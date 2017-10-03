@@ -1,17 +1,38 @@
 program simple_test_ctf
+#include "simple_lib.f08"
 use simple_ctf,   only: ctf
 use simple_image, only: image
+use simple_rnd,   only: ran3
+use simple_ctffit
+use simple_timer
 implicit none
-type(ctf)   :: tfun
-type(image) :: img, img_msk
-integer, parameter :: BOX=256
-real,    parameter :: SMPD=1.26, KV=300., CS=2.0, AC=0.1, DFX=2.5, DFY=2.1, ANGAST=30., HPLIM=20.0, LPLIM=5.0
+! erravg(microns):    4.33278084E-03
+! errmax(microns):    3.85665894E-03
+! time(s)        :    200.82303665800001
+type(ctf)               :: tfun
+type(image)             :: img, img_msk
+real                    :: dfx_found, dfy_found, angast_found, cc, err, errmax, erravg, dfx_ran
+integer, parameter      :: BOX=512, NTST=5
+real,    parameter      :: SMPD=1.26, KV=300., CS=2.0, AC=0.1, DFX=2.23, DFY=2.21, ANGAST=30., HPLIM=20.0, LPLIM=5.0
+integer                 :: itst
+integer(timer_int_kind) :: tctf
 call img%new([BOX,BOX,1], SMPD)
 call img_msk%new([BOX,BOX,1], SMPD)
-tfun = ctf(SMPD, KV, CS, AC)
-call tfun%ctf2pspecimg(img, DFX, DFY, ANGAST)
-call img%vis
-call img_msk%resmsk(HPLIM, LPLIM)
-call img%mul(img_msk)
-call img%vis
+tfun   = ctf(SMPD, KV, CS, AC)
+tctf   = tic()
+errmax = 0.
+erravg = 0.
+do itst=1,NTST
+	print *, 'test: ', itst
+	dfx_ran = 0.5 + ran3() * 4.5
+	call tfun%ctf2pspecimg(img, dfx_ran, dfx_ran, 0.)
+	call ctffit_init(img, SMPD, KV, CS, AC)
+	call ctffit_srch( dfx_found, dfy_found, angast_found, cc )
+	err = abs(dfx_found - dfx_ran)
+	if( err > errmax ) errmax = err
+	erravg = erravg + err
+end do
+print *, 'erravg(microns): ', erravg
+print *, 'errmax(microns): ', errmax
+print *, 'time(s)        : ', toc(tctf)
 end program simple_test_ctf

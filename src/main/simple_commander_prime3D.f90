@@ -112,33 +112,24 @@ contains
     end subroutine exec_nspace
 
     subroutine exec_prime3D_init( self, cline )
-        use simple_timer
         use simple_hadamard3D_matcher, only: gen_random_model, prime3D_find_resrange
         class(prime3D_init_commander), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
         type(params)       :: p
         type(build)        :: b
         integer, parameter :: MAXIMGS=1000
-        integer(dp) :: t1
-        verbose=.false.
-        t1=tic()
-        VerbosePrint '>> Prime3D_init timing '
         p = params(cline) ! parameters generated
         if( p%ctf .ne. 'no')then
             if( .not. cline%defined('deftab') )&
             &stop 'need texfile with defocus/astigmatism values for ctf .ne. no mode exec'
-         endif
-        VerbosePrint '>>> prime3D_init timing: params ', toc()
+        endif
         call b%build_general_tbox(p, cline)   ! general objects built
-        VerbosePrint '>>> prime3D_init timing: General toolbox ', toc()
         call b%build_hadamard_prime3D_tbox(p) ! prime3D objects built
-        VerbosePrint '>>> prime3D_init timing: Prime3D toolbox ', toc()
         ! determine resolution range 
         if( cline%defined('lp') ) call prime3D_find_resrange( b, p, p%lp, p%lpstop )
         ! determine the number of peaks
         if( .not. cline%defined('npeaks') ) p%npeaks = min(10,b%e%find_npeaks(p%lp, p%moldiam))
         ! generate the random model
-         VerbosePrint '>>> prime3D_init timing: npeaks ', toc()
         if( cline%defined('nran') )then
             call gen_random_model( b, p, p%nran )
         else
@@ -147,11 +138,9 @@ contains
             else
                 call gen_random_model( b, p )
             endif
-         endif
-         VerbosePrint '>>> prime3D_init timing: gen_random_model ' ,toc()
+        endif
         ! end gracefully
-         call qsys_job_finished( p, cline%get_carg('prg') )
-         VerbosePrint '>>> prime3D_init timing: qsys finish ', toc()
+        call qsys_job_finished( p, cline%get_carg('prg') )
         call simple_end('**** SIMPLE_PRIME3D_INIT NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_prime3D_init
 
@@ -326,11 +315,6 @@ contains
         logical           :: limset, converged, update_res
         p = params(cline)                   ! parameters generated
         call b%build_general_tbox(p, cline) ! general objects built
-        ! nstates consistency check
-        ! Now incompatible with empty states
-        !if( cline%defined('nstates') )then
-        !    if( p%nstates /= b%a%get_nstates() ) stop 'Inconsistent number of states between command-line and oritab'
-        !endif
         limset = .false. ;  update_res = .false.
         if( p%eo .ne. 'no' )then
             allocate( maplp(p%nstates), stat=alloc_stat)

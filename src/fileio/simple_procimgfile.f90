@@ -26,25 +26,6 @@ contains
         endif
     end subroutine raise_exception_imgfile
 
-    subroutine dev_imgfile( fname, fname_out, smpd )
-        character(len=*), intent(in) :: fname, fname_out
-        real,             intent(in) :: smpd
-        type(image) :: img
-        integer     :: n, i, ldim(3)
-        call find_ldim_nptcls(fname, ldim, n)
-        ldim(3) = 1
-        call raise_exception_imgfile(n, ldim, 'dev_imgfile')
-        call img%new(ldim,smpd)
-        do i=1,n
-            call progress(i,n)
-            call img%read(fname, i)
-            call img%dampen_central_cross
-            call img%subtr_backgr(50.)
-            call img%write(fname_out, i)
-        end do
-        call img%kill
-    end subroutine dev_imgfile
-
     !>  \brief  is for copying image file
     !! \param fname2copy,fname Filenames to copy
     subroutine copy_imgfile( fname2copy, fname, smpd, fromto )

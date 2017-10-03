@@ -57,9 +57,9 @@ contains
 
     !>  \brief  is a constructor
     function constructor( smpd, kV, Cs, amp_contr ) result( self )
-        real, intent(in) :: smpd !< sampling distance
-        real, intent(in) :: kV   !< accelleration voltage
-        real, intent(in) :: Cs   !< constant
+        real, intent(in) :: smpd      !< sampling distance
+        real, intent(in) :: kV        !< accelleration voltage
+        real, intent(in) :: Cs        !< constant
         real, intent(in) :: amp_contr !< amplitude contrast
         type(ctf) :: self
         ! set constants

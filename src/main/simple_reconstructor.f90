@@ -451,14 +451,10 @@ contains
         real        :: skewness
         integer     :: statecnt(p%nstates), i, cnt, n, ldim(3)
         integer     :: state_here, state_glob
-        integer(timer_int_kind) :: trec, tsamp
-        verbose=.true.
-        if(verbose) trec=tic()
         call find_ldim_nptcls(fname, ldim, n)
         if( n /= o%get_noris() ) stop 'inconsistent nr entries; rec; simple_reconstructor'
         ! stash global state index
         state_glob = state
-        ! make random number generator
         ! make the images
         call img_pd%new([p%boxpd,p%boxpd,1],self%get_smpd())
         call img%new([p%box,p%box,1],self%get_smpd())
@@ -485,18 +481,13 @@ contains
                 endif
             endif
         end do
-        if(verbose)write(*,'(A,1x,1ES20.5)') '>>> DONE KAISER-BESSEL INTERPOLATION time(s) ', toc(trec)
         if( present(part) )then
             return
         else
-            if(verbose)tsamp=tic()
             write(*,'(A)') '>>> SAMPLING DENSITY (RHO) CORRECTION & WIENER NORMALIZATION'
             call self%compress_exp
-            if(verbose)write(*,'(A,1x,1ES20.5)') '>>> RHO COMPRESSION EXPANDED ', toc()
             call self%sampl_dens_correct
-            if(verbose) write(*,'(A,1x,1ES20.5)') '>>>  SAMPLING DENSITY CORRECTION  time(s) ', toc()
         endif
-        if(verbose)write(*,'(A,1x,1ES20.5)') '>>> SAMPLING DENSITY (RHO) CORRECTION & WIENER NORMALIZATION  TOTALTIME ', toc(tsamp)
         call self%bwd_ft
         call img%kill
         call img_pd%kill
@@ -504,7 +495,6 @@ contains
         if( p%nstates > 1 )then
             write(*,'(a,1x,i3,1x,a,1x,i6)') '>>> NR OF PARTICLES INCLUDED IN STATE:', state, 'WAS:', statecnt(state)
         endif
-        if(verbose)write(*,'(A,1x,1ES20.5)') '>>> RECONSTRUCTION  TOTAL TIME ', toc(trec)
         contains
 
             !> \brief  the density reconstruction functionality
@@ -519,7 +509,6 @@ contains
                 if( p%frac < 0.99 ) pw = o%get(i, 'w')
                 if( pw > 0. )then
                     orientation = o%get_ori(i)
-                    ! read image
                     if( p%l_stktab_input )then
                         call p%stkhandle%get_stkname_and_ind(i, stkname, ind)
                         call img%read(stkname, ind)

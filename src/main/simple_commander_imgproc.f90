@@ -1,15 +1,13 @@
 ! concrete commander: general image processing routines
-
 module simple_commander_imgproc
 #include "simple_lib.f08"
-    
 use simple_binoris_io      ! use all in there
+use simple_procimgfile     ! use all in there
 use simple_cmdline,        only: cmdline
 use simple_params,         only: params
 use simple_build,          only: build
 use simple_commander_base, only: commander_base
 use simple_imghead,        only: find_ldim_nptcls
-use simple_procimgfile     ! use all in there
 implicit none
 
 public :: binarise_commander
@@ -99,7 +97,7 @@ contains
                 call b%img%write(p%outstk, iptcl)
             end do
         else if( cline%defined('vol1') )then
-            call b%build_general_tbox(p, cline)              ! general objects built
+            call b%build_general_tbox(p, cline)               ! general objects built
             call b%vol%read(p%vols(1))
             call doit(b%vol)
             call b%vol%write(p%outvol)
@@ -901,11 +899,6 @@ contains
             else
                 call binwrite_oritab(fname, o_here, [1,o_here%get_noris()])
             endif
-            goto 999
-        endif
-        ! for development
-        if( p%dev .eq. 'yes' )then
-            call dev_imgfile(p%stk, p%outstk, p%smpd)
             goto 999
         endif
         ! invert contrast

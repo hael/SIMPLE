@@ -39,14 +39,9 @@ contains
         character(len=:), allocatable :: fbody
         character(len=STDLEN)         :: rho_name
         integer :: s
-        integer(timer_int_kind) :: t1
-        verbose=.false.
-        if(verbose)t1=tic()
         ! rebuild b%vol according to box size (beacuse it is otherwise boxmatch)
         call b%vol%new([p%box,p%box,p%box], p%smpd)
-         VerbosePrint ' simple_rec_master :: exec_rec new ', toc()
         do s=1,p%nstates
-            DebugPrint  'processing state: ', s
             if( b%a%get_pop(s, 'state') == 0 ) cycle ! empty state
             if( p%l_distr_exec )then ! embarrasingly parallel rec
                 if( present(fbody_in) )then
@@ -59,13 +54,9 @@ contains
                 p%vols(s) = fbody//p%ext
                 rho_name  = 'rho_'//fbody//p%ext
                 call b%recvol%rec(p%stk, p, b%a, b%se, s, part=p%part)
-                VerbosePrint ' simple_rec_master :: exec_rec rec ', toc()
                 call b%recvol%compress_exp
-                VerbosePrint ' simple_rec_master :: exec_rec compress_exp ', toc()
                 call b%recvol%write(p%vols(s), del_if_exists=.true.)
-                VerbosePrint ' simple_rec_master :: exec_rec write ', toc()
                 call b%recvol%write_rho(trim(rho_name))
-                VerbosePrint ' simple_rec_master :: exec_rec write_rho ', toc()
             else ! shared-mem parallel rec
                 if( present(fbody_in) )then
                     allocate(fbody, source=trim(adjustl(fbody_in))//'_state')
@@ -74,16 +65,12 @@ contains
                 endif
                 p%vols(s) = fbody//int2str_pad(s,2)//p%ext
                 call b%recvol%rec(p%stk, p, b%a, b%se, s)
-                VerbosePrint ' simple_rec_master :: exec_rec rec ', toc()
                 call b%recvol%clip(b%vol)
-                VerbosePrint ' simple_rec_master :: exec_rec clip ', toc()
                 call b%vol%write(p%vols(s), del_if_exists=.true.)
-                VerbosePrint ' simple_rec_master :: exec_rec write ', toc()
             endif
             deallocate(fbody)
         end do
         write(*,'(a)') "GENERATED VOLUMES: recvol*.ext"
-        VerbosePrint ' simple_rec_master :: exec_rec  total time  ', toc(t1)
         call qsys_job_finished( p, 'simple_rec_master :: exec_rec')
     end subroutine exec_rec
 

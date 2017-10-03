@@ -1,7 +1,6 @@
 ! for calculation of band-pass limited cross-correlation of polar Fourier transforms
 module simple_polarft_corrcalc
 #include "simple_lib.f08"
-
 use simple_params,   only: params
 use simple_ran_tabu, only: ran_tabu
 implicit none

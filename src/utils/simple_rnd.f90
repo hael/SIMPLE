@@ -10,6 +10,11 @@ implicit none
 private :: idum, r8po_fa
 public
 
+interface ran3arr
+    module procedure ran3arr_1
+    module procedure ran3arr_2
+end interface
+
 interface gasdev
     module procedure gasdev_1
     module procedure gasdev_2
@@ -44,10 +49,16 @@ contains
     end function ran3
 
     !>  \brief  returns a random matrix
-    subroutine ran3arr( harvest )
+    subroutine ran3arr_1( harvest )
         real, intent(inout) :: harvest(:)
         call random_number(harvest)
-    end subroutine ran3arr
+    end subroutine ran3arr_1
+
+     !>  \brief  returns a random matrix
+    subroutine ran3arr_2( harvest )
+        real, intent(inout) :: harvest(:,:)
+        call random_number(harvest)
+    end subroutine ran3arr_2
 
     !>  \brief  returns a random array [-1,1]
     !! \param n dimension of required rand array
