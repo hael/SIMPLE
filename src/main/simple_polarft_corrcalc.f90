@@ -3,6 +3,8 @@ module simple_polarft_corrcalc
 #include "simple_lib.f08"
 use simple_params,   only: params
 use simple_ran_tabu, only: ran_tabu
+use simple_syslib,   only: alloc_errchk, simple_stop
+use simple_fftw3
 implicit none
 
 public :: polarft_corrcalc
@@ -79,6 +81,7 @@ type :: polarft_corrcalc
     procedure, private :: gencorrs_1
     procedure, private :: gencorrs_2
     generic            :: gencorrs => gencorrs_1, gencorrs_2
+    procedure          :: gencorrs_fft
     procedure          :: genfrc
     procedure, private :: corr_1
     procedure, private :: corr_2
@@ -652,6 +655,76 @@ contains
             cc = cc / sqrt(sqsum_ref * self%sqsums_ptcls(iptcl))
         endif
     end function gencorrs_1
+
+    !>  \brief gencorrs is for generating rotational correlations
+    !! \param iref reference index
+    !! \param iptcl particle index
+    !! \param roind_vec vector of rotational indices
+    function gencorrs_fft( self, iref, iptcl, roind_vec ) result( cc )
+        use simple_math, only: csq
+        class(polarft_corrcalc), intent(inout) :: self        !< instance
+        integer,                 intent(in)    :: iref, iptcl !< ref & ptcl indices
+        integer,       optional, intent(in)    :: roind_vec(:)
+        complex(sp) :: pft_ref(self%refsz,self%kfromto(1):self%kfromto(2))
+        real(sp)    :: cc(self%nrots), sqsum_ref
+        integer     :: irot, i
+        type(c_ptr) :: p_ref      !< pointer for pfts_refs_tmp array
+        type(c_ptr) :: p_ptcl     !< pointer for pfts_ptcls_tmp array
+        type(c_ptr) :: p_ref_fft  !< pointer for pfts_refs_tmp array
+        type(c_ptr) :: p_ptcl_fft !< pointer for pfts_ptcls_tmp array                
+        complex(kind=c_float_complex), pointer :: ref(:)      => null()    !< temporary fields for fourier transform
+        complex(kind=c_float_complex), pointer :: ref_fft(:)  => null()    !< see above
+        complex(kind=c_float_complex), pointer :: ptcl(:)     => null()    !< see above        
+        complex(kind=c_float_complex), pointer :: ptcl_fft(:) => null()    !< see above
+        type(c_ptr)                            :: plan_fwd, plan_bwd        
+        real                                   :: corrs_over_k(self%nrots)
+        integer                                :: ik, nk 
+        corrs_over_k = 0.        
+        nk = self%kfromto(2)-self%kfromto(1)+1
+        p_ref  = fftwf_alloc_complex(int(self%nrots, kind=8))
+        p_ptcl = fftwf_alloc_complex(int(self%nrots, kind=8))
+        p_ref_fft  = fftwf_alloc_complex(int(self%nrots, kind=8))
+        p_ptcl_fft = fftwf_alloc_complex(int(self%nrots, kind=8))       
+        call c_f_pointer(p_ref,  ref,  [self%nrots])
+        call c_f_pointer(p_ptcl, ptcl, [self%nrots])
+        call c_f_pointer(p_ref_fft,  ref_fft,  [self%nrots])
+        call c_f_pointer(p_ptcl_fft, ptcl_fft, [self%nrots])       
+        call self%prep_ref4corr(iptcl, iref, pft_ref, sqsum_ref)        
+        if( present(roind_vec) )then
+            ! calculates only corrs for rotational indices provided in roind_vec
+            ! see get_win_roind. returns -1. when not calculated
+            if( any(roind_vec<=0) .or. any(roind_vec>self%nrots) )&
+                &stop 'index out of range; simple_polarft_corrcalc2::gencorrs'
+            cc = -1.
+            do i = 1, size(roind_vec)
+                irot = roind_vec(i)
+                cc(irot) = sum(real( pft_ref * conjg(self%pfts_ptcls(iptcl,irot:irot+self%winsz,:)) ))
+                cc(irot) = cc(irot) / sqrt(sqsum_ref * self%sqsums_ptcls(iptcl))
+            end do
+        else
+           ! all rotations
+           ! numerator
+           plan_fwd = fftwf_plan_dft_1d(self%nrots, ref,     ref_fft, fftw_forward,  fftw_estimate )
+           plan_bwd = fftwf_plan_dft_1d(self%nrots, ref_fft, ref,     fftw_backward, fftw_estimate )           
+           do ik = self%kfromto(1), self%kfromto(2)
+              ref(1:self%refsz )            = pft_ref(1:self%refsz, ik)
+              ref(self%refsz+1:self%nrots ) = conjg(ref(1:self%refsz))       
+              ptcl(1:self%nrots) = self%pfts_ptcls(iptcl,1:self%nrots, ik)
+              call fftwf_execute_dft(plan_fwd,ref,  ref_fft)
+              call fftwf_execute_dft(plan_fwd,ptcl, ptcl_fft)
+              ref_fft = ref_fft * ptcl_fft
+              call fftwf_execute_dft(plan_bwd,ref_fft, ref)
+              corrs_over_k = corrs_over_k + real(ref)             
+           end do
+           cc = corrs_over_k /  sqrt(sqsum_ref * self%sqsums_ptcls(iptcl))                     
+           call fftwf_destroy_plan(plan_fwd)
+           call fftwf_destroy_plan(plan_bwd)
+           call fftwf_free(p_ref)
+           call fftwf_free(p_ptcl)
+           call fftwf_free(p_ref_fft)
+           call fftwf_free(p_ptcl_fft)
+        endif
+    end function gencorrs_fft
 
     !>  \brief  is for generating rotational correlations
     !! \param iref reference index
