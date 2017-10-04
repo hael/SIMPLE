@@ -3,7 +3,6 @@ module simple_polarft_corrcalc
 #include "simple_lib.f08"
 use simple_params,   only: params
 use simple_ran_tabu, only: ran_tabu
-use simple_syslib,   only: alloc_errchk, simple_stop
 use simple_fftw3
 implicit none
 
@@ -678,11 +677,11 @@ contains
         complex(kind=c_float_complex), pointer :: ptcl_fft(:) => null()    !< see above
         type(c_ptr)                            :: plan_fwd, plan_bwd        
         real                                   :: corrs_over_k(self%nrots)
-        integer                                :: ik, nk 
+        integer                                :: ik, nk, idx
         corrs_over_k = 0.        
-        nk = self%kfromto(2)-self%kfromto(1)+1
-        p_ref  = fftwf_alloc_complex(int(self%nrots, kind=8))
-        p_ptcl = fftwf_alloc_complex(int(self%nrots, kind=8))
+        nk         = self%kfromto(2)-self%kfromto(1)+1
+        p_ref      = fftwf_alloc_complex(int(self%nrots, kind=8))
+        p_ptcl     = fftwf_alloc_complex(int(self%nrots, kind=8))
         p_ref_fft  = fftwf_alloc_complex(int(self%nrots, kind=8))
         p_ptcl_fft = fftwf_alloc_complex(int(self%nrots, kind=8))       
         call c_f_pointer(p_ref,  ref,  [self%nrots])
@@ -708,11 +707,21 @@ contains
            plan_bwd = fftwf_plan_dft_1d(self%nrots, ref_fft, ref,     fftw_backward, fftw_estimate )           
            do ik = self%kfromto(1), self%kfromto(2)
               ref(1:self%refsz )            = pft_ref(1:self%refsz, ik)
-              ref(self%refsz+1:self%nrots ) = conjg(ref(1:self%refsz))       
-              ptcl(1:self%nrots) = self%pfts_ptcls(iptcl,1:self%nrots, ik)
+              ref(self%refsz+1:self%nrots ) = conjg(ref(1:self%refsz)) 
+              print *, '[ ..'
+              do idx = 1,self%nrots
+                 print *, real(ref(idx)), '+', aimag(ref(idx)), '* %i, ..'
+              end do
+              print *, ']'
+              write(*,*) '------------------------'
+              ptcl(1:self%nrots) = self%pfts_ptcls(iptcl,1:self%nrots, ik)           
               call fftwf_execute_dft(plan_fwd,ref,  ref_fft)
+              do idx = 1,self%refsz
+                 write (*, *) ref_fft(idx)
+              end do             
+              stop("stop")   
               call fftwf_execute_dft(plan_fwd,ptcl, ptcl_fft)
-              ref_fft = ref_fft * ptcl_fft
+              ref_fft = ref_fft * conjg(ptcl_fft)
               call fftwf_execute_dft(plan_bwd,ref_fft, ref)
               corrs_over_k = corrs_over_k + real(ref)             
            end do

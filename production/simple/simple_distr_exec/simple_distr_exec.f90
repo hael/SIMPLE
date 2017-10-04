@@ -17,6 +17,7 @@ type(unblur_distr_commander)             :: xunblur_distr
 type(unblur_tomo_movies_distr_commander) :: xunblur_tomo_distr
 type(powerspecs_distr_commander)         :: xpowerspecs_distr
 type(ctffind_distr_commander)            :: xctffind_distr
+! type(ctffit_distr_commander)             :: xctffit_distr
 type(pick_distr_commander)               :: xpick_distr
 
 ! PRIME2D
@@ -330,6 +331,35 @@ select case(prg)
         if( .not. cline%defined('lp')      ) call cline%set('lp',        5.)
         ! execute
         call xctffind_distr%execute(cline)
+    ! case( 'ctffit' )
+    !     !==Program ctffit
+    !     !
+    !     ! <ctffit/begin>is a distributed SIMPLE workflow for fitting the CTF<ctffit/end>
+    !     !
+    !     ! set required keys
+    !     keys_required(1) = 'filetab'
+    !     keys_required(2) = 'smpd'
+    !     keys_required(3) = 'kv'
+    !     keys_required(4) = 'cs'
+    !     keys_required(5) = 'fraca'
+    !     keys_required(6) = 'nparts'
+    !     ! set optional keys
+    !     keys_optional(1) = 'ncunits'
+    !     keys_optional(2) = 'pspecsz'
+    !     keys_optional(3) = 'hp'
+    !     keys_optional(4) = 'lp'
+    !     keys_optional(5) = 'dfmin'
+    !     keys_optional(6) = 'dfmax'
+    !     ! parse command line
+    !     if( describe ) call print_doc_ctffind
+    !     call cline%parse(keys_required(:6), keys_optional(:6))
+    !     ! set defaults
+    !     call cline%set('nthr', 1.0)
+    !     if( .not. cline%defined('pspecsz') ) call cline%set('pspecsz', 512.)
+    !     if( .not. cline%defined('hp')      ) call cline%set('hp',       30.)
+    !     if( .not. cline%defined('lp')      ) call cline%set('lp',        5.)
+    !     ! execute
+    !     call xctffit_distr%execute(cline)
 
     ! PARTICLE PICKER
 

@@ -21,6 +21,7 @@ public :: unblur_distr_commander
 public :: unblur_tomo_movies_distr_commander
 public :: powerspecs_distr_commander
 public :: ctffind_distr_commander
+! public :: ctffit_distr_commander
 public :: pick_distr_commander
 public :: makecavgs_distr_commander
 public :: comlin_smat_distr_commander
@@ -54,6 +55,10 @@ type, extends(commander_base) :: ctffind_distr_commander
   contains
     procedure :: execute      => exec_ctffind_distr
 end type ctffind_distr_commander
+! type, extends(commander_base) :: ctffit_distr_commander
+!   contains
+!     procedure :: execute      => exec_ctffit_distr
+! end type ctffit_distr_commander
 type, extends(commander_base) :: pick_distr_commander
   contains
     procedure :: execute      => exec_pick_distr

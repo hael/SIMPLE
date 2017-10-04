@@ -32,6 +32,7 @@ type(boxconvs_commander)             :: xboxconvs
 type(powerspecs_commander)           :: xpowerspecs
 type(unblur_commander)               :: xunblur
 type(ctffind_commander)              :: xctffind
+type(ctffit_commander)               :: xctffit
 type(select_commander)               :: xselect
 type(makepickrefs_commander)         :: xmakepickrefs
 type(pick_commander)                 :: xpick
@@ -478,6 +479,33 @@ select case(prg)
         if( .not. cline%defined('lp')      ) call cline%set('lp',        5.)
         ! execute
         call xctffind%execute(cline)
+    case( 'ctffit' )
+        !==Program ctffit
+        !
+        ! <ctffit/begin>is a SIMPLE program for fitting the CTF<ctffit/end>
+        !
+        ! set required keys
+        keys_required(1) = 'filetab'
+        keys_required(2) = 'smpd'
+        keys_required(3) = 'kv'
+        keys_required(4) = 'cs'
+        keys_required(5) = 'fraca'
+        ! set optional keys
+        keys_optional(1) = 'pspecsz'
+        keys_optional(2) = 'hp'
+        keys_optional(3) = 'lp'
+        keys_optional(4) = 'dfmin'
+        keys_optional(5) = 'dfmax'
+        ! parse command line
+        ! if( describe ) call print_doc_ctffit
+        call cline%parse(keys_required(:5), keys_optional(:5))
+        ! set defaults
+        if( .not. cline%defined('pspecsz') ) call cline%set('pspecsz', 512.)
+        if( .not. cline%defined('hp')      ) call cline%set('hp',       30.)
+        if( .not. cline%defined('lp')      ) call cline%set('lp',        5.)
+        ! execute
+        call xctffit%execute(cline)
+
     case( 'unblur_ctffind' )
         !==Program unblur_ctffind
         !

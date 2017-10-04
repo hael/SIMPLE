@@ -992,7 +992,6 @@ contains
         real, allocatable :: arr(:,:)          !< array of data
         real    :: dim1r, dim2r
         integer :: dim1, dim2, funit, io_stat
-
         call fopen_1(funit,fname,'old','read',io_stat,'STREAM')
         call fileio_errmsg("simple_fileio::file2arr2D fopen failed "//trim(fname),io_stat)
         read(unit=funit,pos=1,iostat=io_stat) dim1r
@@ -1060,14 +1059,14 @@ contains
     subroutine ls_mrcfiletab( dir, filetabname )
         character(len=*),intent(in)  :: dir, filetabname
         character(len=STDLEN) :: cmd
-        cmd = 'ls -tr '//trim(dir)//'/*.mrc*'//' > '//trim(filetabname)//' 2>/dev/null'
+        cmd = 'ls -tr '//trim(dir)//'/*.mrc*'//' > '//trim(filetabname)
         call exec_cmdline(cmd)
     end subroutine ls_mrcfiletab
 
     subroutine ls_filetab( fbody, ext, filetabname )
         character(len=*), intent(in)  :: fbody, ext, filetabname
         character(len=STDLEN) :: cmd
-        cmd = 'ls -tr '//trim(fbody)//'*'//trim(ext)//' > '//trim(filetabname)//' 2>/dev/null'
+        cmd = 'ls -tr '//trim(fbody)//'*'//trim(ext)//' > '//trim(filetabname)
         call exec_cmdline(cmd)
     end subroutine ls_filetab
 
@@ -1093,7 +1092,7 @@ contains
         character(len=STDLEN) :: fname
         integer :: last
         call ls_filetab(fbody, ext, ftab) ! filetable written to disc
-        call read_filetable(ftab, fnames)      ! filetable read back in
+        call read_filetable(ftab, fnames) ! filetable read back in
         last = size(fnames)
         fname = fnames(last)
         call del_file(ftab)

@@ -17,6 +17,7 @@ use simple_imghead,        only: find_ldim_nptcls
 use simple_corrmat,        only: calc_cartesian_corrmat
 use simple_unblur_iter,    only: unblur_iter
 use simple_ctffind_iter,   only: ctffind_iter
+use simple_ctffit_iter,    only: ctffit_iter
 use simple_pick_iter,      only: pick_iter
 use simple_binoris_io,     only: binread_oritab, binwrite_oritab
 use simple_qsys_funs,      only: qsys_job_finished
@@ -28,6 +29,7 @@ public :: boxconvs_commander
 public :: powerspecs_commander
 public :: unblur_commander
 public :: ctffind_commander
+public :: ctffit_commander
 public :: select_commander
 public :: makepickrefs_commander
 public :: pick_commander
@@ -59,6 +61,10 @@ type, extends(commander_base) :: ctffind_commander
   contains
     procedure :: execute      => exec_ctffind
 end type ctffind_commander
+type, extends(commander_base) :: ctffit_commander
+  contains
+    procedure :: execute      => exec_ctffit
+end type ctffit_commander
 type, extends(commander_base) :: select_commander
   contains
     procedure :: execute      => exec_select
@@ -574,6 +580,60 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_CTFFIND NORMAL STOP ****')
     end subroutine exec_ctffind
+
+    subroutine exec_ctffit( self, cline )
+        class(ctffit_commander), intent(inout) :: self
+        class(cmdline),          intent(inout) :: cline  !< command line input
+        type(params)                       :: p
+        type(ctffit_iter)                  :: cfiter
+        character(len=STDLEN), allocatable :: movienames_forctf(:)
+        character(len=:),      allocatable :: fname_ctffit_output
+        character(len=STDLEN) :: movie_fbody, movie_ext, movie_name
+        type(oris)            :: os
+        integer               :: nmovies, fromto(2), imovie, ntot, movie_counter
+        p = params(cline, checkdistr=.false.) ! constants & derived constants produced
+        call read_filetable(p%filetab, movienames_forctf)
+        nmovies = size(movienames_forctf)
+        if( p%l_distr_exec )then
+            ! determine loop range
+            if( cline%defined('fromp') .and. cline%defined('top') )then
+                fromto(1) = p%fromp
+                fromto(2) = p%top
+            else
+                stop 'fromp & top args need to be defined in parallel execution; simple_ctffit'
+            endif
+        else
+            if(p%stream.eq.'yes')then
+                ! determine loop range
+                fromto(1) = 1
+                fromto(2) = 1
+                movie_name  = remove_abspath(trim(movienames_forctf(1)))
+                movie_ext   = fname2ext(trim(movie_name))
+                movie_fbody = get_fbody(trim(movie_name), trim(movie_ext))
+                allocate(fname_ctffit_output, source='ctffit_output_'//trim(movie_fbody)//'.txt')
+            else
+                ! determine loop range
+                fromto(1) = 1
+                if( cline%defined('startit') ) fromto(1) = p%startit
+                fromto(2) = nmovies
+                allocate(fname_ctffit_output, source='ctffit_output.txt')
+            endif
+        endif
+        ntot = fromto(2) - fromto(1) + 1
+        call os%new(ntot)
+        ! loop over exposures (movies)
+        movie_counter = 0
+        do imovie=fromto(1),fromto(2)
+            call cfiter%iterate(p, imovie, movie_counter, movienames_forctf(imovie), os)
+            write(*,'(f4.0,1x,a)') 100.*(real(movie_counter)/real(ntot)), 'percent of the micrographs processed'
+        end do
+        call os%write(fname_ctffit_output)
+        call os%kill
+        deallocate(fname_ctffit_output)
+        call qsys_job_finished( p, 'simple_commander_preproc :: exec_ctffit' )
+        ! end gracefully
+        call simple_end('**** SIMPLE_CTFFIT NORMAL STOP ****')
+    end subroutine exec_ctffit
 
     subroutine exec_select( self, cline )
         class(select_commander), intent(inout) :: self

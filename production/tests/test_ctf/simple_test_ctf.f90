@@ -6,9 +6,9 @@ use simple_rnd,   only: ran3
 use simple_ctffit
 use simple_timer
 implicit none
-! erravg(microns):    4.33278084E-03
-! errmax(microns):    3.85665894E-03
-! time(s)        :    200.82303665800001
+! erravg(microns):    2.11304426E-03
+! errmax(microns):    9.35137272E-04
+! time(s)        :    32.833357161999999
 type(ctf)               :: tfun
 type(image)             :: img, img_msk
 real                    :: dfx_found, dfy_found, angast_found, cc, err, errmax, erravg, dfx_ran
@@ -27,7 +27,7 @@ do itst=1,NTST
 	dfx_ran = 0.5 + ran3() * 4.5
 	call tfun%ctf2pspecimg(img, dfx_ran, dfx_ran, 0.)
 	call ctffit_init(img, SMPD, KV, CS, AC)
-	call ctffit_srch( dfx_found, dfy_found, angast_found, cc )
+	call ctffit_srch( dfx_found, dfy_found, angast_found, cc, 'diag'//int2str(itst)//'.mrc' )
 	err = abs(dfx_found - dfx_ran)
 	if( err > errmax ) errmax = err
 	erravg = erravg + err
