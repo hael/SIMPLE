@@ -358,9 +358,7 @@ contains
         call b%mskvol%new([p%box,p%box,p%box], p%smpd)
         b%mskvol = 1.
         call b%mskvol%mask(p%msk, 'hard')
-        call b%mskvol%write('mask.mrc')
         l_msk = b%mskvol%bin2logical()
-        print *,count(l_msk)
         call b%mskvol%kill
         ! identify top ranking symmetry peaks
         nl = binread_nlines(p%oritab2)
@@ -429,7 +427,6 @@ contains
                     enddo
                     if(iaxis > naxes)exit
                     axis = axes%get_ori(axis_ind)
-                    call axis%print_ori
                     n_sympeaks = n_sympeaks + 1
                     call tmp_axes%set_ori(ilabel, axis)
                     ! flags axes within threshold
