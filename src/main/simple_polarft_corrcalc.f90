@@ -655,7 +655,7 @@ contains
         endif
     end function gencorrs_1
 
-    !>  \brief gencorrs is for generating rotational correlations
+    !>  \brief gencorrs is for generating rotational correlations. this is done using techniques of Fourier transform.
     !! \param iref reference index
     !! \param iptcl particle index
     !! \param roind_vec vector of rotational indices
@@ -676,8 +676,8 @@ contains
         complex(kind=c_float_complex), pointer :: ptcl(:)     => null()    !< see above        
         complex(kind=c_float_complex), pointer :: ptcl_fft(:) => null()    !< see above
         type(c_ptr)                            :: plan_fwd, plan_bwd        
-        real                                   :: corrs_over_k(self%nrots)
-        integer                                :: ik, nk, idx
+        real                                   :: corrs_over_k(self%nrots) !< sum up correlations over slices of kx
+        integer                                :: ik, nk                   !< nk: number of k-values
         corrs_over_k = 0.        
         nk         = self%kfromto(2)-self%kfromto(1)+1
         p_ref      = fftwf_alloc_complex(int(self%nrots, kind=8))
@@ -701,31 +701,22 @@ contains
                 cc(irot) = cc(irot) / sqrt(sqsum_ref * self%sqsums_ptcls(iptcl))
             end do
         else
-           ! all rotations
-           ! numerator
-           plan_fwd = fftwf_plan_dft_1d(self%nrots, ref,     ref_fft, fftw_forward,  fftw_estimate )
-           plan_bwd = fftwf_plan_dft_1d(self%nrots, ref_fft, ref,     fftw_backward, fftw_estimate )           
+           plan_fwd = fftwf_plan_dft_1d(self%nrots, ref,     ref_fft, fftw_forward,  fftw_estimate)
+           plan_bwd = fftwf_plan_dft_1d(self%nrots, ref_fft, ref,     fftw_backward, fftw_estimate)           
            do ik = self%kfromto(1), self%kfromto(2)
-              ref(1:self%refsz )            = pft_ref(1:self%refsz, ik)
-              ref(self%refsz+1:self%nrots ) = conjg(ref(1:self%refsz)) 
-              print *, '[ ..'
-              do idx = 1,self%nrots
-                 print *, real(ref(idx)), '+', aimag(ref(idx)), '* %i, ..'
-              end do
-              print *, ']'
-              write(*,*) '------------------------'
-              ptcl(1:self%nrots) = self%pfts_ptcls(iptcl,1:self%nrots, ik)           
+              ref(1:self%refsz)            = pft_ref(1:self%refsz, ik)
+              ref(self%refsz+1:self%nrots) = conjg(ref(1:self%refsz))        !< construct second half of ref from first half
+              ptcl(1:self%nrots) = self%pfts_ptcls(iptcl,1:self%nrots, ik)                         
               call fftwf_execute_dft(plan_fwd,ref,  ref_fft)
-              do idx = 1,self%refsz
-                 write (*, *) ref_fft(idx)
-              end do             
-              stop("stop")   
-              call fftwf_execute_dft(plan_fwd,ptcl, ptcl_fft)
+              call fftwf_execute_dft(plan_fwd,ptcl, ptcl_fft)              
               ref_fft = ref_fft * conjg(ptcl_fft)
               call fftwf_execute_dft(plan_bwd,ref_fft, ref)
               corrs_over_k = corrs_over_k + real(ref)             
            end do
-           cc = corrs_over_k /  sqrt(sqsum_ref * self%sqsums_ptcls(iptcl))                     
+           cc = corrs_over_k / real(self%nrots * 2) &   !< fftw3 routines are not properly normalized, hence division by self%nrots.
+                / sqrt(sqsum_ref * self%sqsums_ptcls(iptcl))  
+           cc = cc(self%nrots:1:-1)      !< in the fft approach to correlation calculation, cc needs to be reordered. step 1 is reversing
+           cc = cshift(cc, -1)           !< step 2 is circular shift by 1.
            call fftwf_destroy_plan(plan_fwd)
            call fftwf_destroy_plan(plan_bwd)
            call fftwf_free(p_ref)
