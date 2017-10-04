@@ -53,7 +53,6 @@ type :: build
     type(eo_reconstructor)              :: eorecvol           !< object for eo reconstruction
     type(reconstructor)                 :: recvol             !< object for reconstruction
     ! PRIME TOOLBOX
-    type(projector),        allocatable :: refvols(:)         !< reference volumes for quasi-continuous search
     type(reconstructor),    allocatable :: recvols(:)         !< array of volumes for reconstruction
     type(eo_reconstructor), allocatable :: eorecvols(:)       !< array of volumes for eo-reconstruction
     real,                   allocatable :: fsc(:,:)           !< Fourier Shell Correlation
@@ -68,7 +67,6 @@ type :: build
     logical, private                    :: eo_rec_tbox_exists           = .false.
     logical, private                    :: hadamard_prime3D_tbox_exists = .false.
     logical, private                    :: hadamard_prime2D_tbox_exists = .false.
-    logical, private                    :: cont3D_tbox_exists           = .false.
     logical, private                    :: extremal3D_tbox_exists       = .false.
     logical, private                    :: read_features_exists         = .false.
   contains
@@ -84,8 +82,6 @@ type :: build
     procedure                           :: kill_hadamard_prime3D_tbox
     procedure                           :: build_hadamard_prime2D_tbox
     procedure                           :: kill_hadamard_prime2D_tbox
-    procedure                           :: build_cont3D_tbox
-    procedure                           :: kill_cont3D_tbox
     procedure                           :: build_extremal3D_tbox
     procedure                           :: kill_extremal3D_tbox
     procedure                           :: raise_hard_ctf_exception
@@ -126,11 +122,11 @@ contains
             if( p%deftab /= '' ) call binread_ctfparams_and_state(p%deftab, self%a, [1,p%nptcls])
             if( p%oritab /= '' )then
                 if( .not. cline%defined('nstates') )then
-                    call binread_oritab(p%oritab, self%a, [1,p%nptcls], p%nstates)
-                    if( p%nstates>1 .and. str_has_substr(p%refine,'shc') )then
+                    if( p%nstates > 1 )then
                         print *,'Multiple states detected, please input the NSTATES key'
                         stop
                     endif
+                    call binread_oritab(p%oritab, self%a, [1,p%nptcls], p%nstates)
                 else
                     call binread_oritab(p%oritab, self%a, [1,p%nptcls])
                 endif
@@ -453,67 +449,6 @@ contains
         endif
     end subroutine kill_hadamard_prime3D_tbox
 
-    !> \brief  constructs the toolbox for continuous refinement
-    subroutine build_cont3D_tbox( self, p )
-        class(build),  intent(inout) :: self
-        class(params), intent(in)    :: p
-        integer :: s
-        if(verbose.or.global_verbose) tbuild=tic()
-        call self%kill_cont3D_tbox
-        call self%raise_hard_ctf_exception(p)
-        if( p%norec .eq. 'yes' )then
-            ! no reconstruction objects needed
-        else
-            if( p%eo .ne. 'no' )then
-                allocate( self%eorecvols(p%nstates), stat=alloc_stat )
-                allocchk('build_hadamard_prime3D_tbox; simple_build, 1')
-            else
-                allocate( self%recvols(p%nstates), stat=alloc_stat )
-                allocchk('build_hadamard_prime3D_tbox; simple_build, 2')
-            endif
-        endif
-        allocate( self%refvols(p%nstates), stat=alloc_stat)
-        allocchk('build_cont3D_tbox; simple_build, 3')
-        do s=1,p%nstates
-            call self%refvols(s)%new([p%boxmatch,p%boxmatch,p%boxmatch],p%smpd)
-        end do
-        if (verbose.or.global_verbose)then
-            write(*,'(A,1x,1ES20.5)') '>>> DONE BUILDING CONT3D TOOLBOX              time (s)', toc(tbuild)
-        else
-            write(*,'(A)') '>>> DONE BUILDING CONT3D TOOLBOX'
-        endif
-        self%cont3D_tbox_exists = .true.
-    end subroutine build_cont3D_tbox
-
-    !> \brief  destructs the toolbox for continuous refinement
-    subroutine kill_cont3D_tbox( self )
-        class(build), intent(inout) :: self
-        integer :: i
-        if( self%cont3D_tbox_exists )then
-            if( allocated(self%eorecvols) )then
-                do i=1,size(self%eorecvols)
-                    call self%eorecvols(i)%kill
-                end do
-                deallocate(self%eorecvols)
-            endif
-            if( allocated(self%recvols) )then
-                do i=1,size(self%recvols)
-                    call self%recvols(i)%dealloc_rho
-                    call self%recvols(i)%kill
-                end do
-                deallocate(self%recvols)
-            endif
-            if( allocated(self%refvols) )then
-                do i=1,size(self%refvols)
-                    call self%refvols(i)%kill_expanded
-                    call self%refvols(i)%kill
-                end do
-                deallocate(self%refvols)
-            endif
-            self%cont3D_tbox_exists = .false.
-        endif
-    end subroutine kill_cont3D_tbox
-
     !> \brief  constructs the extremal3D toolbox
     subroutine build_extremal3D_tbox( self, p )
         class(build),  intent(inout) :: self
@@ -721,10 +656,6 @@ contains
               call myb%build_hadamard_prime2D_tbox(myp)
               call myb%kill_hadamard_prime2D_tbox
               write(*,'(a)') 'build_hadamard_prime2D_tbox passed'
-              call myb%build_cont3D_tbox(myp)
-              call myb%build_cont3D_tbox(myp)
-              call myb%kill_cont3D_tbox
-              write(*,'(a)') 'build_cont3D_tbox passed'
               call myb%build_extremal3D_tbox(myp)
               call myb%build_extremal3D_tbox(myp)
               call myb%kill_extremal3D_tbox

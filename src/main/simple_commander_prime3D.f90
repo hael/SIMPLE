@@ -16,7 +16,6 @@ public :: nspace_commander
 public :: prime3D_init_commander
 public :: multiptcl_init_commander
 public :: prime3D_commander
-public :: cont3D_commander
 public :: check3D_conv_commander
 private
 #include "simple_local_flags.inc"
@@ -45,10 +44,6 @@ type, extends(commander_base) :: prime3D_commander
   contains
     procedure :: execute      => exec_prime3D
 end type prime3D_commander
-type, extends(commander_base) :: cont3D_commander
-  contains
-    procedure :: execute      => exec_cont3D
-end type cont3D_commander
 type, extends(commander_base) :: check3D_conv_commander
   contains
     procedure :: execute      => exec_check3D_conv
@@ -268,41 +263,6 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_PRIME3D NORMAL STOP ****')
     end subroutine exec_prime3D
-
-    subroutine exec_cont3D( self, cline )
-        use simple_cont3D_matcher, only: cont3D_exec
-        class(cont3D_commander), intent(inout) :: self
-        class(cmdline),          intent(inout) :: cline
-        type(params) :: p
-        type(build)  :: b
-        integer      :: i, startit
-        logical      :: converged
-        converged = .false.
-        p = params(cline) ! parameters generated
-        select case(p%refine)
-            case('yes')
-                ! alles klar  
-            case DEFAULT
-                stop 'unknown refinement mode; simple_commander_prime3D%exec_cont3D'
-        end select
-        call b%build_general_tbox(p, cline)
-        call b%build_cont3D_tbox(p)
-        startit = 1
-        if( cline%defined('startit') )startit = p%startit
-        if( cline%defined('part') )then
-            if( .not. cline%defined('outfile') ) stop 'need unique output file for parallel jobs'
-            call cont3D_exec(b, p, cline, startit, converged)   
-        else
-            startit = 1
-            if( cline%defined('startit') )startit = p%startit
-            do i=startit,p%maxits
-                call cont3D_exec(b, p, cline, i, converged)
-                if(converged) exit
-            end do
-        endif
-        ! end gracefully
-        call simple_end('**** SIMPLE_CONT3D NORMAL STOP ****')
-    end subroutine exec_cont3D
     
     subroutine exec_check3D_conv( self, cline )
         use simple_math,    only: rad2deg, get_lplim
@@ -366,19 +326,12 @@ contains
             if( cline%get_carg('update_res').eq.'no' .and. p%refine.eq.'het')then
                 converged = b%conv%check_conv_het()
             else
-                select case(p%refine)
-                    case('yes','de')
-                        converged = b%conv%check_conv_cont3D()
-                    case DEFAULT
-                        converged = b%conv%check_conv3D()
-                end select
+                converged = b%conv%check_conv3D()
             endif
         else
             select case(p%refine)
                 case('het')
                     converged = b%conv%check_conv_het()
-                case('yes','de')
-                    converged = b%conv%check_conv_cont3D()
                 case DEFAULT
                     converged = b%conv%check_conv3D()
             end select                 

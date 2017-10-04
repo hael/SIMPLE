@@ -29,7 +29,6 @@ type convergence
   contains
     procedure :: check_conv2D
     procedure :: check_conv3D
-    procedure :: check_conv_cont3D
     procedure :: check_conv_het
     procedure :: get
     procedure :: kill
@@ -230,48 +229,6 @@ contains
             deallocate( state_mi_joint, statepops )
         endif
     end function check_conv3D
-
-    function check_conv_cont3D( self ) result( converged )
-        use simple_math, only: rad2deg
-        class(convergence), intent(inout) :: self
-        real, allocatable :: state_mi_joint(:), statepops(:)
-        real              :: min_state_mi_joint
-        logical           :: converged, update_res
-        integer           :: iptcl, istate
-        if( .not.self%pcline%defined('athres') )then
-            ! required for distributed mode
-            self%pp%athres = max(self%pp%lp, ATHRES_LIM)
-        endif
-        select case(self%pp%refine)
-            case('yes')
-                self%corr      = self%bap%get_avg('corr')
-                self%dist      = self%bap%get_avg('dist')
-                self%frac      = self%bap%get_avg('frac')
-                self%sdev      = self%bap%get_avg('sdev')
-                self%mi_proj   = self%bap%get_avg('mi_proj')
-                self%mi_state  = self%bap%get_avg('mi_state')
-                write(*,'(A,1X,F7.1)') '>>> ANGLE OF FEASIBLE REGION:          ', self%pp%athres
-                write(*,'(A,1X,F7.4)') '>>> PROJ     DISTRIBUTION OVERLAP:     ', self%mi_proj
-                if( self%pp%nstates > 1 )&
-                write(*,'(A,1X,F7.4)') '>>> STATE DISTRIBUTION OVERLAP:        ', self%mi_state
-                write(*,'(A,1X,F7.1)') '>>> AVERAGE ANGULAR DISTANCE BTW ORIS: ', self%dist
-                write(*,'(A,1X,F7.1)') '>>> PERCENTAGE OF SEARCH SPACE SCANNED:', self%frac
-                write(*,'(A,1X,F7.4)') '>>> CORRELATION:                       ', self%corr
-                write(*,'(A,1X,F7.2)') '>>> ANGULAR SDEV OF MODEL:             ', self%sdev
-                if( self%pp%nstates == 1 )then
-                    if( (self%mi_proj > MI_CLASS_LIM_3D) .and.&
-                        &( self%frac  >  FRAC_LIM) )then
-                        write(*,'(A)') '>>> CONVERGED: .YES.'
-                        converged = .true.
-                    else
-                        write(*,'(A)') '>>> CONVERGED: .NO.'
-                        converged = .false.
-                    endif
-                endif
-            case DEFAULT
-                stop 'Unknown refinement in simple_convergence%check_conv_cont3D'
-        end select
-    end function check_conv_cont3D
 
     function check_conv_het( self ) result( converged )
         class(convergence), intent(inout) :: self

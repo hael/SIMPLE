@@ -12,7 +12,6 @@ use simple_params,           only: params
 use simple_cmdline,          only: cmdline
 use simple_gridding,         only: prep4cgrid
 use simple_binoris_io,       only: binwrite_oritab
-use simple_cont3D_matcher    ! use all in there
 use simple_hadamard_common   ! use all in there
 implicit none
 

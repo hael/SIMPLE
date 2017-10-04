@@ -97,11 +97,6 @@ contains
         stop
     end subroutine print_doc_comlin_smat
 
-    subroutine print_doc_cont3D
-        write(*,'(A)') 'is a continuous refinement code under development'
-        stop
-    end subroutine print_doc_cont3D
-
     subroutine print_doc_convert
         write(*,'(A)') 'is a program for converting between SPIDER and MRC formats'
         stop
@@ -654,7 +649,6 @@ contains
         write(*,'(A)') 'cluster_oris'
         write(*,'(A)') 'cluster_smat'
         write(*,'(A)') 'comlin_smat'
-        write(*,'(A)') 'cont3D'
         write(*,'(A)') 'convert'
         write(*,'(A)') 'corrcompare'
         write(*,'(A)') 'ctffind'
@@ -727,7 +721,6 @@ contains
 
     subroutine list_all_simple_distr_programs
         write(*,'(A)') 'comlin_smat'
-        write(*,'(A)') 'cont3D'
         write(*,'(A)') 'ctffind'
         write(*,'(A)') 'het_ensemble'
         write(*,'(A)') 'ini3D_from_cavgs'

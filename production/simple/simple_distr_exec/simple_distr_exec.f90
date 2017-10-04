@@ -30,7 +30,6 @@ type(comlin_smat_distr_commander)        :: xcomlin_smat_distr
 ! PRIME3D
 type(prime3D_init_distr_commander)       :: xprime3D_init_distr
 type(prime3D_distr_commander)            :: xprime3D_distr
-type(cont3D_distr_commander)             :: xcont3D_distr
 type(recvol_distr_commander)             :: xrecvol_distr
 type(symsrch_distr_commander)            :: xsymsrch_distr
 
@@ -649,62 +648,6 @@ select case(prg)
         endif
         ! execute
         call xprime3D_distr%execute(cline)
-    case( 'cont3D' )
-        !==Program cont3D
-        !
-        ! <cont3D/begin><cont3D/end>
-        !
-        ! set required keys
-        keys_required(1)  = 'smpd'
-        keys_required(2)  = 'msk'
-        keys_required(3)  = 'ctf'
-        keys_required(4)  = 'pgrp'
-        keys_required(5)  = 'oritab'
-        keys_required(6)  = 'trs'
-        keys_required(7)  = 'nparts'
-        ! set optional keys
-        keys_optional(1)  = 'nthr'
-        keys_optional(2)  = 'deftab'
-        keys_optional(3)  = 'vol1'
-        keys_optional(4)  = 'hp'
-        keys_optional(5)  = 'lp'
-        keys_optional(6)  = 'lpstop'
-        keys_optional(7)  = 'frac'
-        keys_optional(8)  = 'mskfile'
-        keys_optional(9)  = 'inner'
-        keys_optional(10) = 'width'
-        keys_optional(11) = 'startit'
-        keys_optional(12) = 'maxits'
-        keys_optional(13) = 'refine'
-        keys_optional(14) = 'eo'
-        keys_optional(15) = 'athres'
-        keys_optional(16) = 'stk'
-        keys_optional(17) = 'stktab'
-        ! documentation
-        if( describe ) call print_doc_cont3D
-        ! parse command line
-        call cline%parse( keys_required(:7), keys_optional(:17) )
-        ! sanity check
-        if( cline%defined('stk') .or. cline%defined('stktab') )then
-            ! all ok
-        else
-            stop 'stk or stktab need to be part of command line!'
-        endif
-        ! set defaults
-        if( cline%defined('eo') )then
-            if( cline%get_carg('eo').ne.'no')then
-                ! alles klar
-            else
-                if( .not.cline%defined('lp'))stop 'Low-pass must be defined with EO=NO'
-            endif
-        else
-            call cline%set('eo','no')
-        endif
-        call cline%set('dynlp', 'no')
-        if(.not.cline%defined('nspace'))call cline%set('nspace', 1000.)
-        if(.not.cline%defined('refine'))call cline%set('refine', 'yes')
-        ! execute
-        call xcont3D_distr%execute(cline)
     case( 'recvol' )
         !==Program recvol
         !
