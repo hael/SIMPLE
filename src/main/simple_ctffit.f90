@@ -37,18 +37,18 @@ contains
         ! set constants
         if( present(dfrange) )then
             if( dfrange(1) < dfrange(2) )then
-        		    df_min = dfrange(1)
-        		    df_max = dfrange(2)
+                    df_min = dfrange(1)
+                    df_max = dfrange(2)
             else
                 stop 'invalid defocuis range; simple_ctffit :: new'
             endif
         endif
         if( present(resrange) )then
           	if( resrange(1) > resrange(2) )then
-          		  hp = resrange(1)
-          		  lp = resrange(2)
+                hp = resrange(1)
+                lp = resrange(2)
           	else
-          		  stop 'invalid resolution range; simple_ctffit :: new'
+                stop 'invalid resolution range; simple_ctffit :: new'
           	endif
         endif
         ! construct CTF object
@@ -77,25 +77,25 @@ contains
   	end subroutine ctffit_init
 
   	subroutine ctffit_srch( dfx, dfy, angast, cc )
-    		real, intent(out) :: dfx, dfy, angast, cc
-    		real :: cost
-    		ospec%x = 0. ! automatic initialisation within the DE
+            real, intent(out) :: dfx, dfy, angast, cc
+            real :: cost
+            ospec%x = 0. ! automatic initialisation within the DE
         ! optimisation by DE (Differential Evolution)
-    		call diffevol%minimize(ospec, cost)
-    		dfx    = ospec%x(1)
-    		dfy    = ospec%x(2)
-    		angast = rad2deg(ospec%x(3))
-    		cc     = -cost
-  	end subroutine ctffit_srch
+            call diffevol%minimize(ospec, cost)
+            dfx    = ospec%x(1)
+            dfy    = ospec%x(2)
+            angast = rad2deg(ospec%x(3))
+            cc     = -cost
+    end subroutine ctffit_srch
 
     ! cost function is real-space correlation within resolution mask between the CTF
     ! powerspectrum (the model) and the pre-processed micrograph powerspectrum (the data)
-  	function ctffit_cost( vec, D ) result( cost )
-    		integer, intent(in) :: D
-    		real,    intent(in) :: vec(D)
-    		real :: cost
-    		call tfun%ctf2pspecimg(pspec_ctf, vec(1), vec(2), rad2deg(vec(3)))
-    		cost = -pspec_ref%real_corr_prenorm(pspec_ctf, sxx, cc_msk)
-  	end function ctffit_cost
+    function ctffit_cost( vec, D ) result( cost )
+            integer, intent(in) :: D
+            real,    intent(in) :: vec(D)
+            real :: cost
+            call tfun%ctf2pspecimg(pspec_ctf, vec(1), vec(2), rad2deg(vec(3)))
+            cost = -pspec_ref%real_corr_prenorm(pspec_ctf, sxx, cc_msk)
+    end function ctffit_cost
 
 end module simple_ctffit

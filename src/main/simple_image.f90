@@ -5513,12 +5513,12 @@ contains
         select case(trim(which))
         case('soft')
             soft  = .true.
+            call self%zero_background(mskrad)
         case('hard')
             soft  = .false.
         case DEFAULT
             stop 'undefined which parameter; mask; simple_image'
         end select
-        call self%zero_background(mskrad)
         ! init center as origin
         forall(i=1:self%ldim(1)) cis(i) = -real(self%ldim(1)-1)/2. + real(i-1)
         forall(i=1:self%ldim(2)) cjs(i) = -real(self%ldim(2)-1)/2. + real(i-1)

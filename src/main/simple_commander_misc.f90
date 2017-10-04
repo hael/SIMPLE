@@ -358,7 +358,9 @@ contains
         call b%mskvol%new([p%box,p%box,p%box], p%smpd)
         b%mskvol = 1.
         call b%mskvol%mask(p%msk, 'hard')
+        call b%mskvol%write('mask.mrc')
         l_msk = b%mskvol%bin2logical()
+        print *,count(l_msk)
         call b%mskvol%kill
         ! identify top ranking symmetry peaks
         nl = binread_nlines(p%oritab2)
@@ -415,9 +417,10 @@ contains
                 tmp_axes   = oris(MAXLABELS)
                 n_sympeaks = 0
                 ! geometric clustering
-                call axes%set_all2single('state', 0.)
                 call axes%swape1e3
                 sort_inds = axes%order_corr()
+                call reverse(sort_inds)
+                call axes%set_all2single('state', 0.)
                 do ilabel = 1, MAXLABELS
                     ! identify next best axis
                     do iaxis = 1, naxes
@@ -426,6 +429,7 @@ contains
                     enddo
                     if(iaxis > naxes)exit
                     axis = axes%get_ori(axis_ind)
+                    call axis%print_ori
                     n_sympeaks = n_sympeaks + 1
                     call tmp_axes%set_ori(ilabel, axis)
                     ! flags axes within threshold
