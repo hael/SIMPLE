@@ -120,6 +120,7 @@ contains
         character(len=32),       parameter :: CAVGS_ITERFBODY = 'cavgs_iter'
         character(len=32),       parameter :: FRCS_ITERFBODY  = 'frcs_iter'
         character(len=32),       parameter :: STK_FILETAB     = 'stkstreamtab.txt'
+        character(len=32),       parameter :: SCALE_FILETAB   = 'stkscale.txt'
         character(len=32),       parameter :: DEFTAB          = 'deftab.txt'
         character(len=32),       parameter :: STK_DIR         = './stacks/'
         character(len=32),       parameter :: FINALDOC        = 'prime2Ddoc_final'//METADATEXT
@@ -130,7 +131,7 @@ contains
         type(makecavgs_distr_commander)    :: xmakecavgs
         type(extractwatcher)               :: mic_watcher
         type(cmdline)                      :: cline_prime2D, cline_scale, cline_makecavgs
-        type(params)                       :: p_master
+        type(params)                       :: p_master, p_scale
         type(oris)                         :: os
         character(len=STDLEN), allocatable :: newstacks(:), stktab(:)
         character(len=STDLEN)              :: oritab_glob, str_iter, refs_glob, frcs_glob
@@ -158,6 +159,11 @@ contains
         if( p_master%ctf.ne.'no' )then
             call cline_prime2D%set('deftab', DEFTAB)
         endif
+        call cline_scale%set('prg', 'scale')
+        call cline_scale%set('ctf','no') ! to clear up display
+        call cline_scale%set('filetab', SCALE_FILETAB)
+        call cline_scale%set('stream', 'yes')
+        call cline_scale%set('numlen', 1.)
         call cline_makecavgs%set('prg',    'makecavgs')
         call cline_makecavgs%set('stktab', STK_FILETAB)
         call cline_makecavgs%set('refs',   'cavgs_final'//p_master%ext)
@@ -255,8 +261,8 @@ contains
 
             subroutine add_newstacks
                 use simple_commander_imgproc, only: scale_commander
-                type(scale_commander)              :: xscale
-                type(oris)                         :: deftab_glob, deftab_here!, deftab_prev
+                type(qsys_env)                     :: qenv
+                type(oris)                         :: deftab_glob, deftab_here
                 character(len=STDLEN), allocatable :: new_deftabs(:), new_stacks(:), tmp(:)
                 character(len=STDLEN) :: stk_scaled, fbody, ext
                 integer               :: i, j, nl, nptcls, cnt, cnt2, n, ldim(3), iptcl
@@ -304,18 +310,27 @@ contains
                     stktab(1:nstacks_glob) = tmp(1:nstacks_glob)
                 endif
                 ! down-scaling and name updates
+                call write_filetable(SCALE_FILETAB, new_stacks)
+                call qenv%new(p_master)
                 cnt = 0
                 do i = nstacks_glob+1, nstacks_glob+n_newstks
                     cnt   = cnt + 1
                     ext   = fname2ext(trim(remove_abspath(trim(new_stacks(cnt)))))
                     fbody = get_fbody(trim(remove_abspath(trim(new_stacks(cnt)))), trim(ext))
-                    stk_scaled = trim(STK_DIR)//trim(fbody)// trim('_sc') // trim(p_master%ext)
+                    stk_scaled = trim(STK_DIR)//trim(fbody)// trim('_sc') // trim(p_master%ext) ! congruence with scale app
                     stktab(i)  = trim(stk_scaled)
-                    call cline_scale%set('stk', trim(new_stacks(cnt)))
-                    call cline_scale%set('outstk', trim(stk_scaled))
-                    call cline_scale%set('ctf','no') ! to clear up display
-                    call xscale%execute(cline_scale)
                 enddo
+                call qenv%exec_simple_prg_in_queue(cline_scale, 'OUT1','JOB_FINISHED_1')
+                cnt = 0
+                do i = nstacks_glob+1, nstacks_glob+n_newstks
+                    cnt   = cnt + 1
+                    ext   = fname2ext(trim(remove_abspath(trim(new_stacks(cnt)))))
+                    fbody = get_fbody(trim(remove_abspath(trim(new_stacks(cnt)))), trim(ext))
+                    stk_scaled = trim(fbody)// trim('_sc') // trim(p_master%ext) ! congruence with scale app
+                    call rename( stk_scaled, stktab(i))
+                enddo
+                call qsys_cleanup(p_master)
+                call del_file(SCALE_FILETAB)
                 nstacks_glob = nstacks_glob + n_newstks
                 ! writes down-scaled stacks list
                 call write_filetable(STK_FILETAB, stktab)

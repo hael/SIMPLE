@@ -575,20 +575,25 @@ contains
         else if( cline%defined('filetab') )then
             call read_filetable(p%filetab, filenames)
             nfiles = size(filenames)
-            if( cline%defined('scale') )then
-                call find_ldim_nptcls(filenames(1),ldim,nframes)
-                ldim(3)          = 1 ! to correct for the stupide 3:d dim of mrc stacks
+            call find_ldim_nptcls(filenames(1),ldim,nframes)
+            ldim(3) = 1 ! to correct for the stupide 3:d dim of mrc stacks
+            if( cline%defined('newbox') )then
+                ldim_scaled = [p%newbox,p%newbox,1] ! dimension of scaled
+                p%scale = real(p%newbox) / real(ldim(1))
+            else if( cline%defined('scale') )then
                 ldim_scaled(1) = round2even(real(ldim(1))*p%scale)
                 ldim_scaled(2) = round2even(real(ldim(2))*p%scale)
                 ldim_scaled(3)   = 1
             else
-                stop 'need scale factor for this mode of execution; simple_commander_imgproc :: exec_scale'
+                stop 'filetab key only in combination with scale or newbox!'
             endif
             call img%new(ldim,p%smpd)
             call img2%new(ldim_scaled,p%smpd/p%scale)
             do ifile=1,nfiles
                 call progress(ifile, nfiles)
                 fname = add2fbody(remove_abspath(filenames(ifile)), p%ext, '_sc')
+                call find_ldim_nptcls(filenames(ifile),ldim,nframes)
+                ldim(3) = 1 ! to correct for the stupide 3:d dim of mrc stacks
                 do iframe=1,nframes
                     call img%read(filenames(ifile), iframe)
                     call img%fwd_ft
@@ -607,7 +612,7 @@ contains
         endif
         ! end gracefully
         call simple_end('**** SIMPLE_SCALE NORMAL STOP ****', print_simple=.false.)
-        if( p%l_distr_exec ) call qsys_job_finished( p, 'simple_commander_imgproc :: exec_scale' )
+        call qsys_job_finished( p, 'simple_commander_imgproc :: exec_scale' )
     end subroutine exec_scale
 
     !>  for stacking individual images or multiple stacks into one
