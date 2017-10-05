@@ -574,10 +574,14 @@ contains
                 if( .not. cline%defined('nspace') ) stop 'need nspace command line arg to provide projstats'
                 noris = b%a%get_noris()
                 ! setup weights
-                if( noris <= SPECWMINPOP )then
-                    call b%a%calc_hard_weights(p%frac)
+                if( p%weights3D.eq.'yes' )then
+                    if( noris <= SPECWMINPOP )then
+                        call b%a%calc_hard_weights(p%frac)
+                    else
+                        call b%a%calc_spectral_weights(p%frac)
+                    endif
                 else
-                    call b%a%calc_spectral_weights(p%frac)
+                    call b%a%calc_hard_weights(p%frac)
                 endif
                 ! generate population stats
                 tmp            = b%a%get_pops('proj', consider_w=.true.)!! realloc warning

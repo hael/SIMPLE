@@ -87,7 +87,8 @@ type :: params
     character(len=3)      :: trsstats='no'        !< provide origin shift statistics(yes|no){no}
     character(len=3)      :: tseries='no'         !< images represent a time-series(yes|no){no}
     character(len=3)      :: vis='no'             !< visualise(yes|no)
-    character(len=3)      :: weights2D='no'
+    character(len=3)      :: weights2D='no'       !< to use 2d spectral weights(yes|no){no}
+    character(len=3)      :: weights3D='yes'      !< to use 3d spectral weights(yes|no){yes}
     character(len=3)      :: zero='no'            !< zeroing(yes|no){no}
     ! other fixed length character variables in ascending alphabetical order
     character(len=STDLEN) :: angastunit='degrees' !< angle of astigmatism unit (radians|degrees){degrees}
@@ -534,6 +535,7 @@ contains
         call check_carg('vol',            self%vol)
         call check_carg('wfun',           self%wfun)
         call check_carg('weights2D',      self%weights2D)
+        call check_carg('weights3D',      self%weights3D)
         call check_carg('zero',           self%zero)
         ! File args
         call check_file('boxfile',        self%boxfile,      'T')

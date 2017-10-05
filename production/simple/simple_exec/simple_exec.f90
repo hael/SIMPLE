@@ -2215,10 +2215,11 @@ select case(prg)
         keys_optional(13) = 'pgrp'
         keys_optional(14) = 'ndiscrete'
         keys_optional(15) = 'weights2D'
-        keys_optional(16) = 'classtats'
+        keys_optional(16) = 'weights3D'
+        keys_optional(17) = 'classtats'
         ! parse command line
         if( describe ) call print_doc_oristats
-        call cline%parse( keys_required(:1), keys_optional(:16) )
+        call cline%parse( keys_required(:1), keys_optional(:17) )
         ! set defaults
         if( .not. cline%defined('ndiscrete') ) call cline%set('ndiscrete', 100.)
         ! execute

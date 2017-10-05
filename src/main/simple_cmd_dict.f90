@@ -248,6 +248,7 @@ contains
         call chdict%push('voltab',        'table (text file) of volume files(.txt)')
         call chdict%push('voltab2',       '2nd table (text file) of volume files(.txt)')
         call chdict%push('weights2D',     'spectral weighting in 2D (yes|no){no}')
+        call chdict%push('weights3D',     'spectral weighting in 3D (yes|no){yes}')
         call chdict%push('which_iter',    'iteration nr')
         call chdict%push('width',         'falloff of inner mask or filter(in pixels){10}')
         call chdict%push('wiener',        'Wiener restoration mode(full|highres){highres}')

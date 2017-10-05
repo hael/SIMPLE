@@ -112,10 +112,14 @@ contains
         frac_srch_space = b%a%get_avg('frac')
 
         ! SETUP WEIGHTS
-        if( p%nptcls <= SPECWMINPOP )then
-            call b%a%calc_hard_weights(p%frac)
+        if( p%weights3D.eq.'yes' )then
+            if( p%nptcls <= SPECWMINPOP )then
+                call b%a%calc_hard_weights(p%frac)
+            else
+                call b%a%calc_spectral_weights(p%frac)
+            endif
         else
-            call b%a%calc_spectral_weights(p%frac)
+            call b%a%calc_hard_weights(p%frac)
         endif
 
         ! READ FOURIER RING CORRELATIONS
