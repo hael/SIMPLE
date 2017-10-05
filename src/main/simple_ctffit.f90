@@ -12,6 +12,7 @@ private
 
 type(image)          :: pspec_ref
 type(image)          :: pspec_ctf
+type(image)          :: imgmsk
 type(ctf)            :: tfun
 type(opt_spec)       :: ospec_de
 type(opt_spec)       :: ospec_simplex
@@ -35,7 +36,7 @@ contains
         real,           intent(in) :: amp_contr   !< amplitude contrast
         real, optional, intent(in) :: dfrange(2)  !< defocus range, [30.0,5.0] default
         real, optional, intent(in) :: resrange(2) !< resolution range, [30.0,5.0] default
-        type(image) :: tmpimg
+        
         real        :: limits(3,2)
         ! set constants
         if( present(dfrange) )then
@@ -48,7 +49,6 @@ contains
         endif
         if( present(resrange) )then
           	if( resrange(1) > resrange(2) )then
-
           		hp = resrange(1)
           		lp = resrange(2)
           	else
@@ -64,10 +64,9 @@ contains
         call pspec_ref%subtr_backgr(hp)
         call pspec_ctf%new(ldim, smpd)
         ! generate correlation mask
-        call tmpimg%new(ldim, smpd)
-        call tmpimg%resmsk(hp, lp)
-        cc_msk = tmpimg%bin2logical()
-        call tmpimg%kill
+        call imgmsk%new(ldim, smpd)
+        call imgmsk%resmsk(hp, lp)
+        cc_msk = imgmsk%bin2logical()
         ! memoize reference corr components
         call pspec_ref%prenorm4real_corr(sxx, cc_msk)
         ! contruct optimiser
@@ -75,7 +74,7 @@ contains
         limits(1:2,2) = df_max
         limits(3,1)   = 0.
         limits(3,2)   = twopi ! miminise in radians so that the df:s are roughly on the same scale
-        call ospec_de%specify('de', 3, limits=limits, maxits=200)
+        call ospec_de%specify('de', 3, limits=limits, maxits=400)
         call ospec_de%set_costfun(ctffit_cost)
         call diffevol%new(ospec_de)
         call ospec_simplex%specify('simplex', 3, limits=limits, maxits=60, nrestarts=3)
@@ -86,21 +85,47 @@ contains
   	subroutine ctffit_srch( dfx, dfy, angast, cc, diagfname )
 		real,             intent(out) :: dfx, dfy, angast, cc
         character(len=*), intent(in)  :: diagfname
-		real        :: cost
+		real        :: cost, df, cost_lowest
         type(image) :: pspec_half_n_half
-		ospec_de%x = 0. ! automatic initialisation within the DE
+
+
+
+        ! do a grid search assuming no astigmatism
+        df = df_min
+
+        cost_lowest =  ctffit_cost([df,df,0.], 3)
+        do while( df <= df_max )
+            cost = ctffit_cost([df,df,0.], 3)
+            if( cost < cost_lowest )then
+                cost_lowest = cost
+                ospec_de%x  = [df,df,0.]
+            endif
+            df = df + 0.05
+        end do
+
+
         ! optimisation by DE (Differential Evolution)
 		call diffevol%minimize(ospec_de, cost)
-        ! refinement with unconstrained Nelder-Mead
-        ospec_simplex%x = ospec_de%x
-        call simplexsrch%minimize(ospec_simplex, cost)
-        ! report final solution
-        dfx    = ospec_simplex%x(1)
-        dfy    = ospec_simplex%x(2)
-        angast = rad2deg(ospec_simplex%x(3))
+
+        dfx    = ospec_de%x(1)
+        dfy    = ospec_de%x(2)
+        angast = rad2deg(ospec_de%x(3))
         cc     = -cost
+
+        ! refinement with unconstrained Nelder-Mead
+        ! ospec_simplex%x = ospec_de%x
+        ! call simplexsrch%minimize(ospec_simplex, cost)
+        ! ! report solution
+        ! dfx    = ospec_simplex%x(1)
+        ! dfy    = ospec_simplex%x(2)
+        ! angast = rad2deg(ospec_simplex%x(3))
+        ! cc     = -cost
         ! make a half-n-half diagnostic
         call tfun%ctf2pspecimg(pspec_ctf, dfx, dfy, angast)
+        call pspec_ctf%norm
+        call pspec_ref%norm
+        call pspec_ctf%mul(imgmsk)
+        call pspec_ref%mul(imgmsk)
         pspec_half_n_half = pspec_ref%before_after(pspec_ctf)
         call pspec_half_n_half%write(trim(diagfname), 1)
         call pspec_half_n_half%kill
@@ -123,6 +148,7 @@ contains
         call ospec_simplex%kill
         call diffevol%kill
         call simplexsrch%kill
+        call imgmsk%kill
         if( allocated(cc_msk) ) deallocate(cc_msk)
     end subroutine ctffit_kill
 

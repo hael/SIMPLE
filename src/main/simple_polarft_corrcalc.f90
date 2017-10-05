@@ -14,26 +14,37 @@ complex(sp), parameter :: zero=cmplx(0.,0.) !< just a complex zero
 
 type :: polarft_corrcalc
     private
-    integer                  :: pfromto(2) = 1          !< from/to particle indices (in parallel execution)
-    integer                  :: nptcls     = 1          !< the total number of particles in partition (logically indexded [fromp,top])
-    integer                  :: nrefs      = 1          !< the number of references (logically indexded [1,nrefs])
-    integer                  :: nrots      = 0          !< number of in-plane rotations for one pft (determined by radius of molecule)
-    integer                  :: ring2      = 0          !< radius of molecule
-    integer                  :: refsz      = 0          !< size of reference (nrots/2) (number of vectors used for matching)
-    integer                  :: ptclsz     = 0          !< size of particle (2*nrots)
-    integer                  :: winsz      = 0          !< size of moving window in correlation calculations
-    integer                  :: ldim(3)    = 0          !< logical dimensions of original cartesian image
-    integer                  :: kfromto(2) = 0          !< Fourier index range
-    real(sp)                 :: smpd       = 0.         !< sampling distance
-    real(sp),    allocatable :: sqsums_ptcls(:)         !< memoized square sums for the correlation calculations
-    real(sp),    allocatable :: angtab(:)               !< table of in-plane angles (in degrees)
-    real(sp),    allocatable :: argtransf(:,:)          !< argument transfer constants for shifting the references
-    real(sp),    allocatable :: polar(:,:)              !< table of polar coordinates (in Cartesian coordinates)
-    real(sp),    allocatable :: ctfmats(:,:,:)          !< expandd set of CTF matrices (for efficient parallel exec)
-    complex(sp), allocatable :: pfts_refs(:,:,:)        !< 3D complex matrix of polar reference sections (nrefs,refsz,nk)
-    complex(sp), allocatable :: pfts_ptcls(:,:,:)       !< 3D complex matrix of particle sections
-    logical                  :: with_ctf     = .false.  !< CTF flag
-    logical                  :: existence    = .false.  !< to indicate existence
+    integer                                :: pfromto(2) = 1          !< from/to particle indices (in parallel execution)
+    integer                                :: nptcls     = 1          !< the total number of particles in partition (logically indexded [fromp,top])
+    integer                                :: nrefs      = 1          !< the number of references (logically indexded [1,nrefs])
+    integer                                :: nrots      = 0          !< number of in-plane rotations for one pft (determined by radius of molecule)
+    integer                                :: ring2      = 0          !< radius of molecule
+    integer                                :: refsz      = 0          !< size of reference (nrots/2) (number of vectors used for matching)
+    integer                                :: ptclsz     = 0          !< size of particle (2*nrots)
+    integer                                :: nk         = 0          !< # resolution elements in the band-pass limited PFTs
+    integer                                :: winsz      = 0          !< size of moving window in correlation calculations
+    integer                                :: ldim(3)    = 0          !< logical dimensions of original cartesian image
+    integer                                :: kfromto(2) = 0          !< Fourier index range
+    real(sp)                               :: smpd       = 0.         !< sampling distance
+    real(sp),    allocatable               :: sqsums_ptcls(:)         !< memoized square sums for the correlation calculations
+    real(sp),    allocatable               :: angtab(:)               !< table of in-plane angles (in degrees)
+    real(sp),    allocatable               :: argtransf(:,:)          !< argument transfer constants for shifting the references
+    real(sp),    allocatable               :: polar(:,:)              !< table of polar coordinates (in Cartesian coordinates)
+    real(sp),    allocatable               :: ctfmats(:,:,:)          !< expandd set of CTF matrices (for efficient parallel exec)
+    complex(sp), allocatable               :: pfts_refs(:,:,:)        !< 3D complex matrix of polar reference sections (nrefs,refsz,nk)
+    complex(sp), allocatable               :: pfts_ptcls(:,:,:)       !< 3D complex matrix of particle sections
+    ! 4 gencorrs_fft
+    type(c_ptr)                            :: p_ref                   !< pointer for C-style allocation
+    type(c_ptr)                            :: p_ptcl                  !< -"-
+    type(c_ptr)                            :: p_ref_fft               !< -"-
+    type(c_ptr)                            :: p_ptcl_fft              !< -"-
+    complex(kind=c_float_complex), pointer :: ref(:)      => null()   !< temporary fields for fourier transform
+    complex(kind=c_float_complex), pointer :: ref_fft(:)  => null()   !< -"-
+    complex(kind=c_float_complex), pointer :: ptcl(:)     => null()   !< -"-        
+    complex(kind=c_float_complex), pointer :: ptcl_fft(:) => null()   !< -"-
+    type(c_ptr)                            :: plan_fwd, plan_bwd      !< FFTW plans for gencorrs_fft
+    logical                                :: with_ctf     = .false.  !< CTF flag
+    logical                                :: existence    = .false.  !< to indicate existence
   contains
     ! CONSTRUCTOR
     procedure          :: new
@@ -145,6 +156,9 @@ contains
         self%ptclsz  = self%nrots * 2                    !< size of particle (2*nrots)
         self%smpd    = p%smpd                            !< sampling distance
         self%kfromto = p%kfromto                         !< Fourier index range
+
+        print *, '# in-plane rots: ', self%nrots
+
         ! generate polar coordinates
         allocate( self%polar(self%ptclsz,self%kfromto(1):self%kfromto(2)), self%angtab(self%nrots), stat=alloc_stat)
         allocchk('polar coordinate arrays; new; simple_polarft_corrcalc')
@@ -176,6 +190,18 @@ contains
         self%sqsums_ptcls = 0.
         self%with_ctf     = .false.
         if( p%ctf .ne. 'no' ) self%with_ctf = .true.
+        ! c-style allocatables for gencorrs_fft
+        self%nk         = self%kfromto(2)-self%kfromto(1)+1
+        self%p_ref      = fftwf_alloc_complex(int(self%nrots, kind=8))
+        self%p_ptcl     = fftwf_alloc_complex(int(self%nrots, kind=8))
+        self%p_ref_fft  = fftwf_alloc_complex(int(self%nrots, kind=8))
+        self%p_ptcl_fft = fftwf_alloc_complex(int(self%nrots, kind=8))       
+        call c_f_pointer(self%p_ref,      self%ref,      [self%nrots])
+        call c_f_pointer(self%p_ptcl,     self%ptcl,     [self%nrots])
+        call c_f_pointer(self%p_ref_fft,  self%ref_fft,  [self%nrots])
+        call c_f_pointer(self%p_ptcl_fft, self%ptcl_fft, [self%nrots])
+        self%plan_fwd = fftwf_plan_dft_1d(self%nrots, self%ref,     self%ref_fft, FFTW_FORWARD,  FFTW_MEASURE)
+        self%plan_bwd = fftwf_plan_dft_1d(self%nrots, self%ref_fft, self%ref,     FFTW_BACKWARD, FFTW_MEASURE)
         self%existence    = .true.
     end subroutine new
 
@@ -666,28 +692,10 @@ contains
         integer,       optional, intent(in)    :: roind_vec(:)
         complex(sp) :: pft_ref(self%refsz,self%kfromto(1):self%kfromto(2))
         real(sp)    :: cc(self%nrots), sqsum_ref
-        integer     :: irot, i
-        type(c_ptr) :: p_ref      !< pointer for pfts_refs_tmp array
-        type(c_ptr) :: p_ptcl     !< pointer for pfts_ptcls_tmp array
-        type(c_ptr) :: p_ref_fft  !< pointer for pfts_refs_tmp array
-        type(c_ptr) :: p_ptcl_fft !< pointer for pfts_ptcls_tmp array                
-        complex(kind=c_float_complex), pointer :: ref(:)      => null()    !< temporary fields for fourier transform
-        complex(kind=c_float_complex), pointer :: ref_fft(:)  => null()    !< see above
-        complex(kind=c_float_complex), pointer :: ptcl(:)     => null()    !< see above        
-        complex(kind=c_float_complex), pointer :: ptcl_fft(:) => null()    !< see above
-        type(c_ptr)                            :: plan_fwd, plan_bwd        
-        real                                   :: corrs_over_k(self%nrots) !< sum up correlations over slices of kx
-        integer                                :: ik, nk                   !< nk: number of k-values
+        integer     :: irot, i     
+        real        :: corrs_over_k(self%nrots) !< sum up correlations over slices of kx
+        integer     :: ik
         corrs_over_k = 0.        
-        nk         = self%kfromto(2)-self%kfromto(1)+1
-        p_ref      = fftwf_alloc_complex(int(self%nrots, kind=8))
-        p_ptcl     = fftwf_alloc_complex(int(self%nrots, kind=8))
-        p_ref_fft  = fftwf_alloc_complex(int(self%nrots, kind=8))
-        p_ptcl_fft = fftwf_alloc_complex(int(self%nrots, kind=8))       
-        call c_f_pointer(p_ref,  ref,  [self%nrots])
-        call c_f_pointer(p_ptcl, ptcl, [self%nrots])
-        call c_f_pointer(p_ref_fft,  ref_fft,  [self%nrots])
-        call c_f_pointer(p_ptcl_fft, ptcl_fft, [self%nrots])       
         call self%prep_ref4corr(iptcl, iref, pft_ref, sqsum_ref)        
         if( present(roind_vec) )then
             ! calculates only corrs for rotational indices provided in roind_vec
@@ -701,28 +709,23 @@ contains
                 cc(irot) = cc(irot) / sqrt(sqsum_ref * self%sqsums_ptcls(iptcl))
             end do
         else
-           plan_fwd = fftwf_plan_dft_1d(self%nrots, ref,     ref_fft, fftw_forward,  fftw_estimate)
-           plan_bwd = fftwf_plan_dft_1d(self%nrots, ref_fft, ref,     fftw_backward, fftw_estimate)           
+                      
            do ik = self%kfromto(1), self%kfromto(2)
-              ref(1:self%refsz)            = pft_ref(1:self%refsz, ik)
-              ref(self%refsz+1:self%nrots) = conjg(ref(1:self%refsz))        !< construct second half of ref from first half
-              ptcl(1:self%nrots) = self%pfts_ptcls(iptcl,1:self%nrots, ik)                         
-              call fftwf_execute_dft(plan_fwd,ref,  ref_fft)
-              call fftwf_execute_dft(plan_fwd,ptcl, ptcl_fft)              
-              ref_fft = ref_fft * conjg(ptcl_fft)
-              call fftwf_execute_dft(plan_bwd,ref_fft, ref)
-              corrs_over_k = corrs_over_k + real(ref)             
+              self%ref(1:self%refsz) = pft_ref(1:self%refsz, ik)
+              !< construct second half of ref from first half
+              self%ref(self%refsz+1:self%nrots) = conjg(self%ref(1:self%refsz)) 
+              self%ptcl(1:self%nrots) = self%pfts_ptcls(iptcl,1:self%nrots, ik)                         
+              call fftwf_execute_dft(self%plan_fwd, self%ref,  self%ref_fft)
+              call fftwf_execute_dft(self%plan_fwd, self%ptcl, self%ptcl_fft)              
+              self%ref_fft = self%ref_fft * conjg(self%ptcl_fft)
+              call fftwf_execute_dft(self%plan_bwd, self%ref_fft, self%ref)
+              corrs_over_k = corrs_over_k + real(self%ref)             
            end do
-           cc = corrs_over_k / real(self%nrots * 2) &   !< fftw3 routines are not properly normalized, hence division by self%nrots.
-                / sqrt(sqsum_ref * self%sqsums_ptcls(iptcl))  
-           cc = cc(self%nrots:1:-1)      !< in the fft approach to correlation calculation, cc needs to be reordered. step 1 is reversing
-           cc = cshift(cc, -1)           !< step 2 is circular shift by 1.
-           call fftwf_destroy_plan(plan_fwd)
-           call fftwf_destroy_plan(plan_bwd)
-           call fftwf_free(p_ref)
-           call fftwf_free(p_ptcl)
-           call fftwf_free(p_ref_fft)
-           call fftwf_free(p_ptcl_fft)
+           !< fftw3 routines are not properly normalized, hence division by self%nrots
+           cc = corrs_over_k / real(self%nrots * 2) & 
+                / sqrt(sqsum_ref * self%sqsums_ptcls(iptcl))   
+           cc = cc(self%nrots:1:-1) !< cc needs to be reordered. step 1 is reversing
+           cc = cshift(cc, -1)      !< step 2 is circular shift by 1.
         endif
     end function gencorrs_fft
 
@@ -914,6 +917,12 @@ contains
                         self%pfts_ptcls,   &
                         stat=alloc_stat)
             allocchk("simple_polarft_corrcalc::kill ")
+            call fftwf_destroy_plan(self%plan_fwd)
+            call fftwf_destroy_plan(self%plan_bwd)
+            call fftwf_free(self%p_ref)
+            call fftwf_free(self%p_ptcl)
+            call fftwf_free(self%p_ref_fft)
+            call fftwf_free(self%p_ptcl_fft)
             self%existence = .false.
         endif
     end subroutine kill

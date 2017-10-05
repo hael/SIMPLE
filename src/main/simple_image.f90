@@ -5208,6 +5208,46 @@ contains
         self%ft = .false.
     end subroutine gauimg
 
+
+
+    ! function spectrum_box_convolute( self, min_rad_sq ) result( boxconv )
+    !     class(image), intent(in) :: self
+    !     type(image) :: boxconv
+    !     real :: h, k, half_boxsz
+
+    !     call boxconv%new(self%ldim, self%smpd)
+    !     half_boxsz = real(self%ldim(1))/2.0
+
+
+    !     h = -real(self%ldim(1))/2.
+    !     do i=1,self%ldim(1)
+
+    !         hh = h * h
+
+    !         k = -real(self%ldim(2))/2.
+    !         do i=1,self%ldim(1)
+
+    !             kk = k * k
+    !             rad_sq = hh + kk
+
+    !             if( rad_sq <= min_rad_sq )then
+    !                 boxconv%rmat(i,j,1) = self%rmat(i,j,1)
+    !             else
+    !                 boxconv%rmat(i,j,1) = 0.
+
+
+    !             endif
+
+
+    !             k = k + 1.
+    !         end do
+
+    !         h = h + 1.
+    !     end do
+
+
+    ! end function spectrum_box_convolute
+
     !> \brief fwd_ft  forward Fourier transform
     !!
     subroutine fwd_ft( self )
@@ -5320,8 +5360,10 @@ contains
         class(image), intent(inout) :: self
         real,         intent(in)    :: lp
         type(image) :: tmp
-        call tmp%new(self%ldim, self%smpd)
-        call tmp%bp(0., lp)
+        integer     :: winsz
+        call tmp%copy(self)
+        winsz = nint((self%ldim(1) * self%smpd) / lp)
+        call tmp%real_space_filter(winsz, 'average')
         self%rmat = self%rmat - tmp%rmat
         call tmp%kill
     end subroutine subtr_backgr

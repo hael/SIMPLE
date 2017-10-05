@@ -21,7 +21,7 @@ public :: unblur_distr_commander
 public :: unblur_tomo_movies_distr_commander
 public :: powerspecs_distr_commander
 public :: ctffind_distr_commander
-! public :: ctffit_distr_commander
+public :: ctffit_distr_commander
 public :: pick_distr_commander
 public :: makecavgs_distr_commander
 public :: comlin_smat_distr_commander
@@ -55,10 +55,10 @@ type, extends(commander_base) :: ctffind_distr_commander
   contains
     procedure :: execute      => exec_ctffind_distr
 end type ctffind_distr_commander
-! type, extends(commander_base) :: ctffit_distr_commander
-!   contains
-!     procedure :: execute      => exec_ctffit_distr
-! end type ctffit_distr_commander
+type, extends(commander_base) :: ctffit_distr_commander
+  contains
+    procedure :: execute      => exec_ctffit_distr
+end type ctffit_distr_commander
 type, extends(commander_base) :: pick_distr_commander
   contains
     procedure :: execute      => exec_pick_distr
@@ -309,9 +309,46 @@ contains
         ! merge docs
         call xmerge_algndocs%execute( cline_merge_algndocs )
         ! clean
-        ! call qsys_cleanup(p_master)
+        call qsys_cleanup(p_master)
         call simple_end('**** SIMPLE_DISTR_CTFFIND NORMAL STOP ****')
     end subroutine exec_ctffind_distr
+
+    subroutine exec_ctffit_distr( self, cline )
+        class(ctffit_distr_commander), intent(inout) :: self
+        class(cmdline),                intent(inout) :: cline
+        type(merge_algndocs_commander) :: xmerge_algndocs
+        type(cmdline)                  :: cline_merge_algndocs
+        type(params)                   :: p_master
+        type(chash)                    :: job_descr
+        type(qsys_env)                 :: qenv
+        ! seed the random number generator
+        call seed_rnd
+        ! output command line executed
+        write(*,'(a)') '>>> COMMAND LINE EXECUTED'
+        write(*,*) trim(cmdline_glob)
+        ! make master parameters
+        p_master = params(cline, checkdistr=.false.)
+        p_master%nptcls = nlines(p_master%filetab)
+        if( p_master%nparts > p_master%nptcls ) stop 'nr of partitions (nparts) mjust be < number of entries in filetable'
+        ! prepare merge_algndocs command line
+        cline_merge_algndocs = cline
+        call cline_merge_algndocs%set( 'fbody',    'ctffit_output_part'       )
+        call cline_merge_algndocs%set( 'nptcls',   real(p_master%nptcls)       )
+        call cline_merge_algndocs%set( 'ndocs',    real(p_master%nparts)       )
+        call cline_merge_algndocs%set( 'outfile',  'ctffit_output_merged.txt' )
+        call cline_merge_algndocs%set( 'ext_meta', '.txt'                      )
+        ! setup the environment for distributed execution
+        call qenv%new(p_master)
+        ! prepare job description
+        call cline%gen_job_descr(job_descr)
+        ! schedule
+        call qenv%gen_scripts_and_schedule_jobs(p_master, job_descr, ext_meta='.txt')
+        ! merge docs
+        call xmerge_algndocs%execute( cline_merge_algndocs )
+        ! clean
+        call qsys_cleanup(p_master)
+        call simple_end('**** SIMPLE_DISTR_CTFFIT NORMAL STOP ****')
+    end subroutine exec_ctffit_distr
 
     subroutine exec_pick_distr( self, cline )
         class(pick_distr_commander), intent(inout) :: self

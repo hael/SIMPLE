@@ -595,6 +595,7 @@ contains
         call read_filetable(p%filetab, movienames_forctf)
         nmovies = size(movienames_forctf)
         if( p%l_distr_exec )then
+            allocate(fname_ctffit_output, source='ctffit_output_part'//int2str_pad(p%part,p%numlen)//'.txt')
             ! determine loop range
             if( cline%defined('fromp') .and. cline%defined('top') )then
                 fromto(1) = p%fromp
@@ -837,6 +838,9 @@ contains
             call piter%iterate(cline, p, movie_counter, movienames_intg(imovie), boxfile, nptcls_out)
             write(*,'(f4.0,1x,a)') 100.*(real(movie_counter)/real(ntot)), 'percent of the micrographs processed'
         end do
+        call qsys_job_finished( p, 'simple_commander_preproc :: exec_pick' )
+        ! end gracefully
+        call simple_end('**** SIMPLE_PICK NORMAL STOP ****')
     end subroutine exec_pick
 
     !> for extracting particle images from integrated DDD movies 

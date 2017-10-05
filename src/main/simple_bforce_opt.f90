@@ -1,5 +1,4 @@
 ! brute force function minimisation
-
 module simple_bforce_opt
 #include "simple_lib.f08"
 use simple_optimizer, only: optimizer
@@ -11,14 +10,14 @@ private
 
 type, extends(optimizer) :: bforce_opt
     private
-    real, allocatable    :: pb(:)          !< best point
-    real, allocatable    :: pc(:)          !< current point
-    real                 :: yb=0.          !< best cost function value
-    logical              :: exists=.false. !< to indicate existence
+    real, allocatable :: pb(:)          !< best point
+    real, allocatable :: pc(:)          !< current point
+    real              :: yb=0.          !< best cost function value
+    logical           :: exists=.false. !< to indicate existence
   contains
-    procedure :: new          => new_bforce_opt
-    procedure :: minimize     => bforce_minimize
-    procedure :: kill         => kill_bforce_opt
+    procedure :: new      => new_bforce_opt
+    procedure :: minimize => bforce_minimize
+    procedure :: kill     => kill_bforce_opt
 end type
 
 contains
@@ -41,7 +40,7 @@ contains
         self%yb = huge(x)
         self%exists = .true. ! indicates existence
         DebugPrint  'created new bforce_opt object'
-    end subroutine
+    end subroutine new_bforce_opt
     
     !> \brief  brute force minimization
     subroutine bforce_minimize( self, spec, lowest_cost )
@@ -107,7 +106,7 @@ contains
                 DebugPrint  'New configuration:', self%pc(:)
             end function
             
-    end subroutine
+    end subroutine bforce_minimize
 
     !> \brief  is a destructor
     subroutine kill_bforce_opt( self )
@@ -116,6 +115,6 @@ contains
             deallocate(self%pb, self%pc)
             self%exists = .false.
         endif
-    end subroutine
+    end subroutine kill_bforce_opt
     
 end module simple_bforce_opt
