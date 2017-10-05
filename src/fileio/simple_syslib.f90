@@ -552,7 +552,10 @@ contains
         !! Intel and GNU F2003 included
         call get_environment_variable( trim(name), value=value, length=length, status=status)
         if( status == -1 ) write(*,*) 'value string too short; simple_syslib :: simple_getenv'
-        if( status ==  1 ) write(*,*) 'environment variable: ', trim(name), ' is not defined; simple_syslib :: simple_getenv'
+        if( status ==  1 )then
+            write(*,*) 'environment variable: ', trim(name), ' is not defined; simple_syslib :: simple_getenv'
+            value = 'undefined'
+        endif
         if( status ==  2 ) write(*,*) 'environment variables not supported by system; simple_syslib :: simple_getenv'
         if( length ==  0 .or. status /= 0 ) return
 #endif

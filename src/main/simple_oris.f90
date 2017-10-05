@@ -2489,7 +2489,7 @@ contains
                         mystate = nint(self%o(i)%get('state'))
                         if( mystate == istate )then
                             cnt = cnt + 1
-                            call self%o(i)%set('w', weights(i))
+                            call self%o(i)%set('w', weights(cnt))
                         else if( mystate == 0 )then
                             call self%o(i)%set('w', 0.0)
                         endif

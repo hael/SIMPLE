@@ -344,11 +344,11 @@ contains
                 end do
             end do
             !$omp end parallel do
-            ! W <- (Wprev / rho) x kernel
+            ! W <- (W / rho) x kernel
             call W_img%bwd_ft
             call mul_w_instr(W_img, kbwin)
             call W_img%fwd_ft
-            ! W <- Wprev / ((Wprev / rho) x kernel)
+            ! W <- Wprev / ((W/ rho) x kernel)
             Wnorm = 0.
             !$omp parallel do collapse(3) default(shared) schedule(static)&
             !$omp private(h,k,m,phys,val,val_prev) proc_bind(close)&

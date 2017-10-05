@@ -983,7 +983,7 @@ contains
             allocate(self%srch_order(self%nnnrefs), source=0)
             rt = ran_tabu(self%nnnrefs)
         else if( trim(self%refine).eq.'states' )then
-            allocate(self%srch_order(self%nnnrefs), source=0)
+            allocate(self%srch_order(self%nnn), source=0)
             rt = ran_tabu(self%nnn)
         else
             allocate(self%srch_order(self%nrefs), source=0)
