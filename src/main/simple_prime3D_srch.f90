@@ -99,6 +99,7 @@ type prime3D_srch
     procedure          :: get_ntotrefs
     procedure          :: get_nrefs
     procedure          :: get_nrots
+    procedure          :: get_npeaks
     procedure          :: get_prevstate
     procedure          :: get_prevcorr
     procedure          :: get_prevroind
@@ -310,7 +311,7 @@ contains
                 integer, intent(in) :: iref
                 real    :: corrs(self%nrots), inpl_corr
                 integer :: loc(1), inpl_ind, state
-                state = self%o_refs%get(iref, 'state')
+                state = nint(self%o_refs%get(iref, 'state'))
                 if(state .ne. self%prev_state )then
                     ! checker that will need to go
                     print *,self%iptcl, self%prev_ref, self%prev_proj, self%prev_state, iref, state
@@ -789,7 +790,7 @@ contains
         real,    allocatable :: cxy(:), crxy(:), shvecs(:,:)
         type(ori) :: o
         real      :: cc, e3
-        integer   :: i, ref, inpl_ind
+        integer   :: i, ref
         if( self%doshift )then
             call self%inpl_grid_srch(inpl_inds, shvecs)
             do i=self%nrefs,self%nrefs-self%npeaks+1,-1
@@ -1201,7 +1202,7 @@ contains
         type(ori)         :: o_new, o_old, o_new_copy
         real, allocatable :: corrs(:)
         real              :: euldist, mi_joint, mi_proj, mi_inpl, mi_state, dist_inpl
-        integer           :: roind, state, best_loc(1), iref
+        integer           :: roind, state, best_loc(1)
         o_old    = self%a_ptr%get_ori(self%iptcl)
         corrs    = self%o_peaks%get_all('corr')
         best_loc = maxloc(corrs)
@@ -1288,8 +1289,7 @@ contains
         corr  = self%o_peaks%get( ipeak, 'corr' )
         ow    = self%o_peaks%get( ipeak, 'ow'   )
         call o2update%set_euler( euls )
-        call o2update%set( 'x',     x      )
-        call o2update%set( 'y',     y      )
+        call o2update%set_shift([x, y])
         call o2update%set( 'state', rstate )
         call o2update%set( 'proj',  rproj  )
         call o2update%set( 'corr',  corr   )
@@ -1301,11 +1301,11 @@ contains
         class(prime3D_srch), intent(inout) :: self
         class(oris),         intent(out)   :: os    !< search orientation list
         class(ori),          intent(in)    :: o_in  !< search orientation
-        type(ori) :: o, o_peak
-        integer   :: ipeak, npeaks
-        npeaks = self%o_peaks%get_noris()
-        call os%new( npeaks )
-        do ipeak=1,npeaks
+        type(ori) :: o
+        integer   :: ipeak!, npeaks
+        !npeaks = self%o_peaks%get_noris()
+        call os%new( self%npeaks )
+        do ipeak=1,self%npeaks
             o = o_in
             call self%get_ori(ipeak, o)
             call os%set_ori(ipeak, o)
@@ -1379,27 +1379,29 @@ contains
         enddo
     end function get_o_refs
 
-    function get_ntotrefs( self )result( nrefs )
+    integer function get_ntotrefs( self )
         class(prime3D_srch), intent(inout) :: self
-        integer :: nrefs
-        nrefs = self%nrefs
+        get_ntotrefs = self%nrefs
     end function get_ntotrefs
 
-    function get_nrefs( self )result( nrefs )
+    integer function get_nrefs( self )
         class(prime3D_srch), intent(inout) :: self
-        integer :: nrefs
         if( str_has_substr(self%refine,'neigh') )then
-            nrefs = self%nnn_static * self%nstates
+            get_nrefs = self%nnn_static * self%nstates
         else
-            nrefs = self%nrefs
+            get_nrefs = self%nrefs
         endif
     end function get_nrefs
 
-    function get_nrots( self )result( nrots )
+    integer function get_nrots( self )
         class(prime3D_srch), intent(inout) :: self
-        integer :: nrots
-        nrots = self%nrots
+        get_nrots = self%nrots
     end function get_nrots
+
+    integer function get_npeaks( self )
+        class(prime3D_srch), intent(inout) :: self
+        get_npeaks = self%npeaks
+    end function get_npeaks
 
     function get_prevshvec( self )result( vec )
         class(prime3D_srch), intent(inout) :: self

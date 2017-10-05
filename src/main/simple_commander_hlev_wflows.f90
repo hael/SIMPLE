@@ -45,7 +45,6 @@ contains
         class(cmdline),                     intent(inout) :: cline
         ! constants
         integer,           parameter :: MAXITS_STAGE1   = 10
-        character(len=32), parameter :: CAVGS_ITERFBODY = 'cavgs_iter'
         character(len=32), parameter :: FINALDOC        = 'prime2Ddoc_final'//METADATEXT
         ! commanders
         type(split_commander)                        :: xsplit
@@ -625,7 +624,6 @@ contains
         class(cmdline),                intent(inout) :: cline
         ! constants
         integer,           parameter :: MAXITS        = 50
-        character(len=32), parameter :: VOLFBODY      = 'recvol_state'
         character(len=32), parameter :: ORIS_MODIFIED = 'oris_from_cga_hres_sel'//METADATEXT
         character(len=32), parameter :: FSC_FILE      = 'fsc_state01.bin'
         ! distributed commanders
