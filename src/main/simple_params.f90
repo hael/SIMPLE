@@ -41,6 +41,7 @@ type :: params
     character(len=3)      :: dopick='yes'
     character(len=3)      :: doprint='no'
     character(len=3)      :: dynlp='yes'          !< automatic resolution limit update(yes|no){yes}
+    character(len=3)      :: dyncls='yes'         !< dynamic class update(yes|no){yes}
     character(len=3)      :: errify='no'          !< introduce error(yes|no){no}
     character(len=3)      :: even='no'            !< even orientation distribution(yes|no){no}
     character(len=3)      :: ft2img='no'          !< convert Fourier transform to real image of power(yes|no){no}
@@ -471,6 +472,7 @@ contains
         call check_carg('dopick',         self%dopick)
         call check_carg('doprint',        self%doprint)
         call check_carg('dynlp',          self%dynlp)
+        call check_carg('dyncls',         self%dyncls)
         call check_carg('eo',             self%eo)
         call check_carg('errify',         self%errify)
         call check_carg('even',           self%even)

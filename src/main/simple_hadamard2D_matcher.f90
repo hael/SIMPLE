@@ -36,6 +36,7 @@ contains
         class(cmdline), intent(inout) :: cline
         integer,        intent(in)    :: which_iter
         logical,        intent(inout) :: converged
+        integer, allocatable :: prev_pops(:), pinds(:)
         logical, allocatable :: ptcl_mask(:)
         integer :: iptcl, icls, j
         real    :: corr_thresh, frac_srch_space, skewness, extr_thresh
@@ -83,9 +84,24 @@ contains
             if( p%nptcls <= SPECWMINPOP )then
                 call b%a%set_all2single('w', 1.0)
             else
+                prev_pops = b%a%get_pops('class', consider_w=.true., maxn=p%ncls)
                 ! frac is one by default in prime2D (no option to set frac)
                 ! so spectral weighting is done over all images
                 call b%a%calc_spectral_weights(1.0)
+                if( any(prev_pops == 0) )then
+                    ! now ensuring the spectral re-ranking does not re-populates 
+                    ! zero-populated classes, for congruence with empty cavgs
+                    do icls = 1, p%ncls
+                        if( prev_pops(icls) > 0 )cycle
+                        if( b%a%get_pop(icls, 'class', consider_w=.false.) == 0 )cycle
+                        pinds = b%a%get_pinds(icls, 'class', consider_w=.false.)
+                        do iptcl = 1, size(pinds)
+                            call b%a%set(pinds(iptcl), 'w', 0.)
+                        enddo
+                        deallocate(pinds)
+                    enddo
+                endif
+                deallocate(prev_pops)
             endif
         else
             ! defaults to unitary weights
@@ -113,6 +129,7 @@ contains
         else
             corr_thresh = -huge(corr_thresh)
         endif
+        print *,'corr_thresh ',corr_thresh
 
         ! SET FOURIER INDEX RANGE
         call set_bp_range2D( b, p, cline, which_iter, frac_srch_space )
@@ -171,10 +188,12 @@ contains
 
         ! REMAPPING OF HIGHEST POPULATED CLASSES
         ! needs to be here since parameters just updated
-        if( p%l_distr_exec )then
-            ! this is done in the distributed workflow
-        else
-            call b%a%fill_empty_classes(p%ncls)
+        if( p%dyncls.eq.'yes' )then
+            if( p%l_distr_exec )then
+                ! this is done in the distributed workflow
+            else
+                call b%a%fill_empty_classes(p%ncls)
+            endif
         endif
 
         ! OUTPUT ORIENTATIONS

@@ -465,9 +465,10 @@ select case(prg)
         keys_optional(28) = 'match_filt'
         keys_optional(29) = 'stk'
         keys_optional(30) = 'stktab'
+        keys_optional(31) = 'dyncls'
         ! documentation
         if( describe ) call print_doc_prime2D
-        call cline%parse( keys_required(:4), keys_optional(:30) )
+        call cline%parse( keys_required(:4), keys_optional(:31) )
         ! sanity checks 
         if( cline%defined('stk') .or. cline%defined('stktab') )then
             ! all ok

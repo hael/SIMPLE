@@ -83,6 +83,7 @@ contains
         call chdict%push('doprint',       'whether to print(yes|no){no}')
         call chdict%push('dose_rate',     'dose rate(in e/A2/s)')
         call chdict%push('dynlp',         'automatic resolution limit update(yes|no){yes}')
+        call chdict%push('dyncls',        'dynamic classes update(yes|no){yes}')
         call chdict%push('e1',            '1st Euler(in degrees){0}')
         call chdict%push('e2',            '2nd Euler(in degrees){0}')
         call chdict%push('e3',            '3d Euler(in degrees){0}')

@@ -450,10 +450,11 @@ contains
     end function get_pop
 
     !>  \brief  is for checking discrete label populations
-    function get_pops( self, label, consider_w ) result( pops )
+    function get_pops( self, label, consider_w, maxn ) result( pops )
         class(oris),       intent(inout) :: self
         character(len=*),  intent(in)    :: label
         logical, optional, intent(in)    :: consider_w
+        integer, optional, intent(in)    :: maxn ! max label, for the case where the last class/state is missing
         integer, allocatable :: pops(:)
         integer :: i, mystate, myval, n
         real    :: w
@@ -464,9 +465,12 @@ contains
             if( .not. self%isthere('w') ) stop 'ERROR, oris :: get_pops with optional consider_w assumes w set'
         endif
         n = self%get_n(label)
-        allocate(pops(n),stat=alloc_stat)
+        if( present(maxn) )then
+            n = max(n, maxn)
+        endif
+        if(allocated(pops))deallocate(pops)
+        allocate(pops(n),source=0,stat=alloc_stat)
         allocchk('In: get_pops, module: simple_oris')
-        pops = 0.0
         do i=1,self%n
             mystate = nint(self%o(i)%get('state'))
             w = 1.0
@@ -599,24 +603,18 @@ contains
     end subroutine expand_classes
 
     !>  \brief  is for filling empty classes from the highest populated ones
-    subroutine fill_empty_classes( self, ncls, fromtocls)
+    subroutine fill_empty_classes( self, ncls, fromtocls )
         class(oris),                    intent(inout) :: self
         integer,                        intent(in)    :: ncls
         integer, allocatable, optional, intent(out)   :: fromtocls(:,:)
-        integer, allocatable :: inds2split(:), membership(:), pops(:), fromtoall(:,:), tmp(:)
+        integer, allocatable :: inds2split(:), membership(:), pops(:), fromtoall(:,:)
         type(ran_tabu)       :: rt
         integer              :: iptcl, cls2split(1)
         integer              :: cnt, nempty, n_incl, maxpop, i, icls, ncls_here
-        ncls_here = self%get_n('class')
-        if( ncls > ncls_here )then
-            tmp = self%get_pops('class', consider_w=.false.)
-            allocate(pops(1:ncls), source=0)
-            pops(1:ncls_here) = tmp(1:ncls_here)
-            deallocate(tmp)
-        else
-            pops = self%get_pops('class', consider_w=.false.)            
-        endif
-        nempty = count(pops == 0)
+        logical              :: consider_w_here
+        ncls_here = max(self%get_n('class'), ncls)
+        pops      = self%get_pops('class', consider_w=.true., maxn=ncls_here)            
+        nempty    = count(pops == 0)
         if(nempty == 0)return
         if( present(fromtocls) )then
             if(allocated(fromtocls))deallocate(fromtocls)
@@ -625,21 +623,14 @@ contains
         endif
         do icls = 1, ncls
             deallocate(pops, stat=alloc_stat)
-            if( ncls > ncls_here )then
-                tmp = self%get_pops('class', consider_w=.false.)
-                allocate(pops(1:ncls), source=0)
-                pops(1:ncls_here) = tmp(1:ncls_here)
-                deallocate(tmp)
-            else
-                pops = self%get_pops('class', consider_w=.false.)            
-            endif
+            pops = self%get_pops('class', consider_w=.true., maxn=ncls_here)
             if( pops(icls) /= 0 )cycle
             ! identify class to split
             cls2split  = maxloc(pops)
             maxpop     = pops(cls2split(1))
             if( maxpop <= 2*MINCLSPOPLIM )exit
             ! migration
-            inds2split = self%get_pinds(cls2split(1), 'class', consider_w=.false.)
+            inds2split = self%get_pinds(cls2split(1), 'class', consider_w=.false.) ! needs to be false
             rt = ran_tabu(maxpop)
             allocate(membership(maxpop), stat=alloc_stat)
             allocchk("simple_oris:: fill_empty_classes membership")
@@ -784,7 +775,7 @@ contains
         if( cconsider_w )then
             if( .not. self%isthere('w') ) stop 'ERROR, oris :: get_pinds with optional consider_w assumes w set'
         endif
-        pop = self%get_pop(ind, label, consider_w ) 
+        pop = self%get_pop(ind, label, cconsider_w ) 
         if( pop > 0 )then
             allocate( indices(pop), stat=alloc_stat )
             allocchk('get_pinds; simple_oris')

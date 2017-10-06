@@ -34,8 +34,10 @@ type prime2D_srch
     real                             :: prev_corr     = -1.  !< previous best correlation
     real                             :: best_corr     = -1.  !< best corr found by search
     real                             :: specscore     =  0.  !< spectral score
+    integer, allocatable             :: cls_pops(:)          !< classes populations prior to search
     integer, allocatable             :: srch_order(:)        !< stochastic search order
     character(len=STDLEN)            :: refine        = ''   !< refinement flag
+    logical                          :: dyncls  = .true.     !< whether to turn on dynamic class update (use of low population threshold)
     logical                          :: doshift = .true.     !< origin shift search indicator
     logical                          :: exists  = .false.    !< 2 indicate existence
   contains
@@ -84,6 +86,7 @@ contains
         self%fromp      =  p%fromp
         self%top        =  p%top
         self%nnn        =  p%nnn
+        self%dyncls     =  (p%dyncls.eq.'yes')
         ! construct composites
         lims(:,1)       = -p%trs
         lims(:,2)       =  p%trs
@@ -91,6 +94,15 @@ contains
         lims_init(:,2)  =  SHC_INPL_TRSHWDTH
         call self%shcgrid%new
         call self%inplsrch_obj%new(pftcc, lims, lims_init=lims_init, nrestarts=3, maxits=30)
+        ! gather classes population: has to be done on instantiation
+        ! so all ptcls have the same information
+        if( self%a_ptr%isthere('class') )then
+            self%cls_pops = self%a_ptr%get_pops('class', consider_w=.true., maxn=self%nrefs)
+        else
+            ! first iteration
+            allocate(self%cls_pops(self%nrefs), source=MINCLSPOPLIM+1, stat=alloc_stat)
+            allocchk("simple_prime2D_srch%new")
+        endif
         ! the instance now exists
         self%exists = .true.
         DebugPrint '>>> PRIME2D_SRCH::CONSTRUCTED NEW SIMPLE_PRIME2D_SRCH OBJECT'
@@ -164,17 +176,21 @@ contains
         use simple_ran_tabu, only: ran_tabu
         class(prime2D_srch), intent(inout) :: self
         integer,             intent(in)    :: iptcl
-        type(ran_tabu)    :: rt
-        real, allocatable :: frc(:)
-        integer           :: icls, clspop
+        type(ran_tabu)        :: rt
+        real,     allocatable :: frc(:)
+        integer               :: icls
         ! find previous discrete alignment parameters
         self%prev_class = nint(self%a_ptr%get(iptcl,'class')) ! class index
         select case(self%refine)
             case('no', 'yes')
-                ! reassignement to a class with higher population
-                do while( self%a_ptr%get_pop(self%prev_class, 'class', consider_w=.true.) <= MINCLSPOPLIM )
-                   self%prev_class = irnd_uni(self%nrefs)
-                enddo
+                if( self%dyncls )then
+                    ! reassignement to a class with higher population
+                    do while( self%cls_pops(self%prev_class) <= MINCLSPOPLIM )
+                       self%prev_class = irnd_uni(self%nrefs)
+                    enddo
+                else
+                    ! all good
+                endif
             case DEFAULT
                 ! all good
         end select
@@ -242,6 +258,7 @@ contains
             call self%prep4srch(iptcl)
             corr = self%prev_corr
             do iref=1,self%nrefs
+                if( self%cls_pops(iref) == 0 )cycle
                 corrs     = self%pftcc_ptr%gencorrs(iref, iptcl) 
                 loc       = maxloc(corrs)
                 inpl_ind  = loc(1)
@@ -285,6 +302,8 @@ contains
                     iref = self%srch_order( isample )
                     ! keep track of how many references we are evaluating
                     self%nrefs_eval = self%nrefs_eval + 1
+                    ! passes empty classes
+                    if( self%cls_pops(iref) == 0 )cycle
                     ! shc update
                     corrs     = self%pftcc_ptr%gencorrs(iref, iptcl) 
                     inpl_ind  = shcloc(self%nrots, corrs, self%prev_corr)
@@ -313,9 +332,21 @@ contains
                 end do
             else
                 ! random move
-                self%nrefs_eval = 1       ! evaluate one random ref
-                iref = self%srch_order(1) ! random .ne. prev
-                if( self%a_ptr%get_pop(iref, 'class') == 0 )then
+                self%nrefs_eval = 1 ! evaluate one random ref
+                isample = 1         ! random .ne. prev
+                iref    = self%srch_order(isample)
+                if( self%dyncls )then
+                    ! all good
+                else
+                    ! makes sure the ptcl does not land in an empty class
+                    ! such that a search is performed
+                    do while( self%cls_pops(iref) == 0 )
+                        isample = isample + 1
+                        iref    = self%srch_order(isample)
+                        if( isample.eq.self%nrefs )exit
+                    enddo
+                endif
+                if( self%cls_pops(iref) == 0 )then
                     ! empty class
                     do_inplsrch = .false.               ! no in-plane search
                     inpl_ind    = irnd_uni(self%nrots)  ! random in-plane
@@ -387,6 +418,7 @@ contains
             ! evaluate neighbors (greedy selection)
             do inn=1,self%nnn
                 iref      = nnmat(self%prev_class,inn)
+                if( self%cls_pops(iref) == 0 )cycle
                 corrs     = self%pftcc_ptr%gencorrs(iref, iptcl) 
                 loc       = maxloc(corrs)
                 inpl_ind  = loc(1)
@@ -441,6 +473,7 @@ contains
         if( self%exists )then
             call self%shcgrid%kill
             if( allocated(self%srch_order) ) deallocate(self%srch_order)
+            if( allocated(self%cls_pops) ) deallocate(self%cls_pops)
             self%exists = .false.
         endif
     end subroutine kill

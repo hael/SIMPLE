@@ -576,30 +576,32 @@ contains
                 integer, allocatable  :: fromtocls(:,:)
                 character(len=STDLEN) :: frcs_iter
                 integer               :: icls, state
-                call binread_oritab(oritab, b%a, [1,p_master%nptcls])
-                call b%a%fill_empty_classes(p_master%ncls, fromtocls)
-                if( allocated(fromtocls) )then
-                    ! updates document
-                    call binwrite_oritab(oritab, b%a, [1,p_master%nptcls])
-                    ! updates refs
-                    call img_cavg%new([p_master%box,p_master%box,1], p_master%smpd)
-                    do icls = 1, size(fromtocls, dim=1)
-                        call img_cavg%read(trim(refs), fromtocls(icls, 1))
-                        call img_cavg%write(trim(refs), fromtocls(icls, 2))
-                    enddo
-                    call img_cavg%read(trim(refs), p_master%ncls)
-                    call img_cavg%write(trim(refs), p_master%ncls) ! to preserve size
-                    if( p_master%match_filt.eq.'yes')then
-                        ! updates FRCs
-                        state     = 1
-                        frcs_iter = 'frcs_iter'//int2str_pad(iter,3)//'.bin'
-                        call frcs%new(p_master%ncls, p_master%box, p_master%smpd, state)
-                        call frcs%read(frcs_iter)
+                if( p_master%dyncls.eq.'yes' )then
+                    call binread_oritab(oritab, b%a, [1,p_master%nptcls])
+                    call b%a%fill_empty_classes(p_master%ncls, fromtocls)
+                    if( allocated(fromtocls) )then
+                        ! updates document
+                        call binwrite_oritab(oritab, b%a, [1,p_master%nptcls])
+                        ! updates refs
+                        call img_cavg%new([p_master%box,p_master%box,1], p_master%smpd)
                         do icls = 1, size(fromtocls, dim=1)
-                            call frcs%set_frc( fromtocls(icls,2),&
-                            &frcs%get_frc(fromtocls(icls,1), p_master%box, state), state)
+                            call img_cavg%read(trim(refs), fromtocls(icls, 1))
+                            call img_cavg%write(trim(refs), fromtocls(icls, 2))
                         enddo
-                        call frcs%write(frcs_iter)
+                        call img_cavg%read(trim(refs), p_master%ncls)
+                        call img_cavg%write(trim(refs), p_master%ncls) ! to preserve size
+                        if( p_master%match_filt.eq.'yes')then
+                            ! updates FRCs
+                            state     = 1
+                            frcs_iter = 'frcs_iter'//int2str_pad(iter,3)//'.bin'
+                            call frcs%new(p_master%ncls, p_master%box, p_master%smpd, state)
+                            call frcs%read(frcs_iter)
+                            do icls = 1, size(fromtocls, dim=1)
+                                call frcs%set_frc( fromtocls(icls,2),&
+                                &frcs%get_frc(fromtocls(icls,1), p_master%box, state), state)
+                            enddo
+                            call frcs%write(frcs_iter)
+                        endif
                     endif
                 endif
             end subroutine remap_empty_cavgs
