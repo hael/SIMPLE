@@ -1,0 +1,36 @@
+Whenever you create a plan, the FFTW planner accumulates wisdom, which is information sufficient to reconstruct the plan. After planning, you can save this information to disk by means of the function:
+
+int fftw_export_wisdom_to_filename(const char *filename);
+The next time you run the program, you can restore the wisdom with fftw_import_wisdom_from_filename (which also returns non-zero on success), and then recreate the plan using the same flags as before.
+
+int fftw_import_wisdom_from_filename(const char *filename)
+
+
+You should thus include the FFTW_USE_WISDOM planner flag as follows:
+
+  call dfftw_plan_dft_r2c_2d(fwd,ny,nx,omega,fftomega,&
+     &ior(FFTW_PATIENT, FFTW_USE_WISDOM))
+or
+
+  call dfftw_plan_dft_r2c_2d(fwd,ny,nx,omega,fftomega,&
+     &FFTW_PATIENT + FFTW_USE_WISDOM)
+
+wisdom export
+
+int fftw_export_wisdom_to_filename(const char *filename);
+void fftw_export_wisdom_to_file(FILE *output_file);
+char *fftw_export_wisdom_to_string(void);
+void fftw_export_wisdom(void (*write_char)(char c, void *), void *data);
+
+wisdom import
+
+int fftw_import_system_wisdom(void);
+int fftw_import_wisdom_from_filename(const char *filename);
+int fftw_import_wisdom_from_string(const char *input_string);
+int fftw_import_wisdom(int (*read_char)(void *), void *data);
+
+integer(C_INT) :: ret
+  ret = fftw_export_wisdom_to_filename(C_CHAR_'my_wisdom.dat' // C_NULL_CHAR)
+  if (ret .eq. 0) stop 'error exporting wisdom to file'
+  ret = fftw_import_wisdom_from_filename(C_CHAR_'my_wisdom.dat' // C_NULL_CHAR)
+  if (ret .eq. 0) stop 'error importing wisdom from file'

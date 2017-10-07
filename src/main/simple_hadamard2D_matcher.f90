@@ -269,7 +269,6 @@ contains
                 call b%img_match%polarize(pftcc, icls, isptcl=.false.)
             endif
         end do
-
         ! PREPARATION OF PARTICLES IN PFTCC
         ! read particle images and create polar projections
         if( .not. p%l_distr_exec ) write(*,'(A)') '>>> BUILDING PARTICLES'

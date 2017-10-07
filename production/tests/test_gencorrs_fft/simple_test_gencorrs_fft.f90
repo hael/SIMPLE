@@ -10,8 +10,9 @@ type(polarft_corrcalc)  :: pftcc
 type(cmdline)           :: cline
 type(build)             :: b
 real, allocatable       :: cc(:), cc_fft(:)
-integer                 :: iptcl, jptcl, irot, loc_cc(1), loc_cc_fft(1), nerrors
+integer                 :: iptcl, jptcl, irot, loc_cc(1), loc_cc_fft(1), nerrors, cnt
 integer(timer_int_kind) :: torig, tfft
+real                    :: err, erravg, errmax
 if( command_argument_count() < 3 )then
     write(*,'(a)',advance='no') 'simple_test_srch stk=<particles.mrc> msk=<mask radius(in pixels)>'
     write(*,'(a)') ' smpd=<sampling distance(in A)>'
@@ -36,19 +37,43 @@ do iptcl=1,p%nptcls
     call b%img_match%polarize(pftcc, iptcl)
 end do
 allocate(cc(pftcc%get_nrots()), cc_fft(pftcc%get_nrots()))
-torig = tic()
+
+!### TIMING
+
+! torig = tic()
+! do iptcl=1,p%nptcls - 1
+! 	do jptcl=iptcl + 1, p%nptcls
+! 		cc = pftcc%gencorrs(iptcl, jptcl)
+! 	end do
+! end do
+! print *, 'time of original: ', toc(torig)
+! tfft= tic()
+! do iptcl=1,p%nptcls - 1
+! 	do jptcl=iptcl + 1, p%nptcls
+! 		cc_fft = pftcc%gencorrs_fft(iptcl, jptcl)
+! 	end do
+! end do
+! print *, 'time of fft: ', toc(tfft)
+erravg = 0.
+errmax = 0.
+cnt    = 0
 do iptcl=1,p%nptcls - 1
 	do jptcl=iptcl + 1, p%nptcls
 		cc = pftcc%gencorrs(iptcl, jptcl)
-	end do
-end do
-print *, 'time of original: ', toc(torig)
-tfft= tic()
-do iptcl=1,p%nptcls - 1
-	do jptcl=iptcl + 1, p%nptcls
 		cc_fft = pftcc%gencorrs_fft(iptcl, jptcl)
+		do irot=1,pftcc%get_nrots()
+			err    = abs(cc(irot) - cc_fft(irot))
+
+			print *, cc(irot), cc_fft(irot), err
+
+			if( err > errmax ) errmax = err
+			erravg = erravg + err
+			cnt = cnt + 1
+		end do
+		stop
 	end do
 end do
-print *, 'time of fft: ', toc(tfft)
+print *, 'errmax: ', errmax
+print *, 'erravg: ', erravg
 end program simple_test_gencorrs_fft
 

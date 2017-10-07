@@ -8,9 +8,11 @@ implicit none
 
 public :: polarft_corrcalc
 private
+#include "simple_local_flags.inc"    
 
 ! CLASS PARAMETERS/VARIABLES
 complex(sp), parameter :: zero=cmplx(0.,0.) !< just a complex zero
+logical,     parameter :: USE_GENCORRS_FFT = .false.
 
 type :: polarft_corrcalc
     private
@@ -38,9 +40,9 @@ type :: polarft_corrcalc
     type(c_ptr)                            :: p_ptcl                  !< -"-
     type(c_ptr)                            :: p_ref_fft               !< -"-
     type(c_ptr)                            :: p_ptcl_fft              !< -"-
-    complex(kind=c_float_complex), pointer :: ref(:)      => null()   !< temporary fields for fourier transform
+    complex(kind=c_float_complex), pointer :: ref(:)      => null()   !< correspnding Fortran pointers
     complex(kind=c_float_complex), pointer :: ref_fft(:)  => null()   !< -"-
-    complex(kind=c_float_complex), pointer :: ptcl(:)     => null()   !< -"-        
+    complex(kind=c_float_complex), pointer :: ptcl(:)     => null()   !< -"-
     complex(kind=c_float_complex), pointer :: ptcl_fft(:) => null()   !< -"-
     type(c_ptr)                            :: plan_fwd, plan_bwd      !< FFTW plans for gencorrs_fft
     logical                                :: with_ctf     = .false.  !< CTF flag
@@ -77,7 +79,7 @@ type :: polarft_corrcalc
     ! PRINTERS/VISUALISERS
     procedure          :: print
     procedure          :: vis_ptcl
-    procedure          :: vis_ref    
+    procedure          :: vis_ref
     ! MEMOIZER
     procedure, private :: memoize_sqsum_ptcl
     ! I/O
@@ -88,10 +90,12 @@ type :: polarft_corrcalc
     ! CALCULATORS
     procedure, private :: create_polar_ctfmat
     procedure          :: create_polar_ctfmats
+    procedure, private :: gencorrs_fft_1
+    procedure, private :: gencorrs_fft_2
+    generic            :: gencorrs_fft => gencorrs_fft_1, gencorrs_fft_2
     procedure, private :: gencorrs_1
     procedure, private :: gencorrs_2
     generic            :: gencorrs => gencorrs_1, gencorrs_2
-    procedure          :: gencorrs_fft
     procedure          :: genfrc
     procedure, private :: corr_1
     procedure, private :: corr_2
@@ -102,9 +106,9 @@ type :: polarft_corrcalc
 end type polarft_corrcalc
 
 contains
-    
+
     ! CONSTRUCTORS
-    
+
     !>  \brief  is a constructor
     subroutine new( self, nrefs, p, prange )
         use simple_math,   only: rad2deg, is_even, round2even
@@ -156,9 +160,6 @@ contains
         self%ptclsz  = self%nrots * 2                    !< size of particle (2*nrots)
         self%smpd    = p%smpd                            !< sampling distance
         self%kfromto = p%kfromto                         !< Fourier index range
-
-        print *, '# in-plane rots: ', self%nrots
-
         ! generate polar coordinates
         allocate( self%polar(self%ptclsz,self%kfromto(1):self%kfromto(2)), self%angtab(self%nrots), stat=alloc_stat)
         allocchk('polar coordinate arrays; new; simple_polarft_corrcalc')
@@ -192,16 +193,18 @@ contains
         if( p%ctf .ne. 'no' ) self%with_ctf = .true.
         ! c-style allocatables for gencorrs_fft
         self%nk         = self%kfromto(2)-self%kfromto(1)+1
-        self%p_ref      = fftwf_alloc_complex(int(self%nrots, kind=8))
-        self%p_ptcl     = fftwf_alloc_complex(int(self%nrots, kind=8))
-        self%p_ref_fft  = fftwf_alloc_complex(int(self%nrots, kind=8))
-        self%p_ptcl_fft = fftwf_alloc_complex(int(self%nrots, kind=8))       
+        !$omp critical (FFTW_OMP_CRIT)
+        self%p_ref      = fftwf_alloc_complex(int(self%nrots, c_size_t))
+        self%p_ptcl     = fftwf_alloc_complex(int(self%nrots, c_size_t))
+        self%p_ref_fft  = fftwf_alloc_complex(int(self%nrots, c_size_t))
+        self%p_ptcl_fft = fftwf_alloc_complex(int(self%nrots, c_size_t))
         call c_f_pointer(self%p_ref,      self%ref,      [self%nrots])
         call c_f_pointer(self%p_ptcl,     self%ptcl,     [self%nrots])
         call c_f_pointer(self%p_ref_fft,  self%ref_fft,  [self%nrots])
         call c_f_pointer(self%p_ptcl_fft, self%ptcl_fft, [self%nrots])
-        self%plan_fwd = fftwf_plan_dft_1d(self%nrots, self%ref,     self%ref_fft, FFTW_FORWARD,  FFTW_MEASURE)
-        self%plan_bwd = fftwf_plan_dft_1d(self%nrots, self%ref_fft, self%ref,     FFTW_BACKWARD, FFTW_MEASURE)
+        self%plan_fwd = fftwf_plan_dft_1d(self%nrots, self%ref,     self%ref_fft, FFTW_FORWARD,  FFTW_PATIENT)
+        self%plan_bwd = fftwf_plan_dft_1d(self%nrots, self%ref_fft, self%ref,     FFTW_BACKWARD, FFTW_PATIENT)
+        !$omp end critical (FFTW_OMP_CRIT)
         self%existence    = .true.
     end subroutine new
 
@@ -217,8 +220,8 @@ contains
 
     !>  \brief  sets particle pft iptcl
     subroutine set_ptcl_pft( self, iptcl, pft )
-        class(polarft_corrcalc), intent(inout) :: self  !< this object
-        integer,                 intent(in)    :: iptcl  !< particle index
+        class(polarft_corrcalc), intent(inout) :: self     !< this object
+        integer,                 intent(in)    :: iptcl    !< particle index
         complex(sp),             intent(in)    :: pft(:,:) !< particle's pft
         self%pfts_ptcls(iptcl,:self%nrots,:)   = pft
         self%pfts_ptcls(iptcl,self%nrots+1:,:) = pft ! because rot dim is expanded
@@ -227,20 +230,20 @@ contains
     end subroutine set_ptcl_pft
 
     !>  \brief set_ref_fcomp sets a reference Fourier component
-    !! \param iref reference index 
+    !! \param iref reference index
     !! \param irot rotation index
     !! \param k  index (third dim ptfs_refs)
     !! \param comp Fourier component
     !!
     subroutine set_ref_fcomp( self, iref, irot, k, comp )
-        class(polarft_corrcalc), intent(inout) :: self  !< this object
+        class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iref, irot, k
         complex(sp),             intent(in)    :: comp
         self%pfts_refs(iref,irot,k) = comp
     end subroutine set_ref_fcomp
-    
+
     !>  \brief  sets a particle Fourier component
-    !! \param iptcl particle index 
+    !! \param iptcl particle index
     !! \param irot rotation index
     !! \param k  index (third dim ptfs_ptcls)
     !! \param comp Fourier component
@@ -257,7 +260,7 @@ contains
     subroutine cp_ptcls2refs( self )
         class(polarft_corrcalc), intent(inout) :: self
         if( self%nrefs .eq. self%nptcls )then
-            self%pfts_refs(:,:,:) = self%pfts_ptcls(:,:self%refsz,:)         
+            self%pfts_refs(:,:,:) = self%pfts_ptcls(:,:self%refsz,:)
         else
             call simple_stop ('pfts_refs and pfts_ptcls not congruent (nrefs .ne. nptcls)')
         endif
@@ -265,7 +268,7 @@ contains
 
     !>  \brief  copies the particles to the references
     !! \param iref reference index
-    !! \param iptcl particle index 
+    !! \param iptcl particle index
     !! \param irot rotation index
     !!
     subroutine cp_ptcl2ref( self, iptcl, iref, irot )
@@ -286,16 +289,16 @@ contains
         integer,                 intent(in)    :: iref
         self%pfts_refs(iref,:,:) = zero
     end subroutine zero_ref
-    
+
     ! GETTERS
-    
+
     !>  \brief  for getting the logical particle range
     function get_pfromto( self ) result( lim )
         class(polarft_corrcalc), intent(inout) :: self
         integer :: lim(2)
         lim = self%pfromto
     end function get_pfromto
-    
+
     !>  \brief  for getting the number of particles
     pure function get_nptcls( self ) result( nptcls )
         class(polarft_corrcalc), intent(in) :: self
@@ -383,7 +386,7 @@ contains
     !!         index corresponding to continuous rotation rot
     function get_roind( self, rot ) result( ind )
         class(polarft_corrcalc), intent(in) :: self
-        real(sp),                intent(in) :: rot !<  continuous rotation 
+        real(sp),                intent(in) :: rot !<  continuous rotation
         real(sp) :: dists(self%nrots)
         integer  :: ind, loc(1)
         dists = abs(self%angtab-rot)
@@ -403,7 +406,7 @@ contains
         use simple_math, only: rad2deg
         class(polarft_corrcalc), intent(in) :: self
         real(sp),                intent(in) :: ang, winsz
-        integer, allocatable :: roind_vec(:)  
+        integer, allocatable :: roind_vec(:)
         real(sp) :: dist(self%nrots)
         integer  :: i, irot, nrots
         if(ang>360. .or. ang<TINY)call simple_stop ('input angle outside of the conventional range; simple_polarft_corrcalc::get_win_roind')
@@ -496,7 +499,7 @@ contains
         write(*,*) "number of rotations                     (self%nrots): ", self%nrots
         write(*,*) "radius of molecule                      (self%ring2): ", self%ring2
         write(*,*) "nr of rots for ref (2nd dim of pftmat)  (self%refsz): ", self%refsz
-        write(*,*) "n rots for ptcl (2nd dim of pftmat)    (self%ptclsz): ", self%ptclsz 
+        write(*,*) "n rots for ptcl (2nd dim of pftmat)    (self%ptclsz): ", self%ptclsz
         write(*,*) "logical dim. of original Cartesian image (self%ldim): ", self%ldim
         write(*,*) "high-pass limit Fourier index      (self%kfromto(1)): ", self%kfromto(1)
         write(*,*) "low-pass limit Fourier index       (self%kfromto(2)): ", self%kfromto(2)
@@ -556,7 +559,7 @@ contains
 
     !> prep_ref4corr
     !! \param iref reference index
-    !! \param iptcl particle index 
+    !! \param iptcl particle index
     !! \param pft_ref references
     !! \param sqsum_ref squared sum references
     !! \param kstop end point
@@ -584,7 +587,7 @@ contains
 
     !>  \brief create_polar_ctfmat  is for generating a matrix of CTF values
     !! \param tfun transfer function object
-    !! \param dfx,dfy resolution along Fourier axes 
+    !! \param dfx,dfy resolution along Fourier axes
     !! \param angast astigmatic angle
     !! \param endrot number of rotations
     !! \return ctfmat matrix with CTF values
@@ -621,7 +624,7 @@ contains
         use simple_ctf,  only: ctf
         use simple_oris, only: oris
         class(polarft_corrcalc), intent(inout) :: self
-        class(oris),             intent(inout) :: a !< oris object
+        class(oris),             intent(inout) :: a
         type(ctf) :: tfun
         integer   :: iptcl
         real(sp)  :: kv,cs,fraca,dfx,dfy,angast
@@ -646,88 +649,136 @@ contains
         end do
     end subroutine create_polar_ctfmats
 
+    !>  \brief gencorrs is for generating rotational correlations using 1D FTs of the PFT along rings
+    !! \param iref reference index
+    !! \param iptcl particle index
+    !! \param roind_vec vector of rotational indices
+    function gencorrs_fft_1( self, iref, iptcl ) result( cc )
+        use simple_math, only: csq
+        class(polarft_corrcalc), intent(inout) :: self
+        integer,                 intent(in)    :: iref, iptcl
+        complex(sp) :: pft_ref(self%refsz,self%kfromto(1):self%kfromto(2))
+        real(sp)    :: cc(self%nrots), sqsum_ref
+        integer     :: irot, i, ik
+        real        :: corrs_over_k(self%nrots)
+        corrs_over_k = 0.
+        call self%prep_ref4corr(iptcl, iref, pft_ref, sqsum_ref)
+        ! sum up correlations over k-rings
+        !$omp critical (FFTW_OMP_CRIT)
+        do ik = self%kfromto(1),self%kfromto(2)
+            ! first half of ref
+            self%ref(1:self%refsz) = pft_ref(1:self%refsz, ik)
+            ! construct second half of ref from first half
+            self%ref(self%refsz+1:self%nrots) = conjg(self%ref(1:self%refsz))
+            ! particle
+            self%ptcl(1:self%nrots) = self%pfts_ptcls(iptcl,1:self%nrots, ik)
+            ! movie into Fouirer Fourier space
+            call fftwf_execute_dft(self%plan_fwd, self%ref,  self%ref_fft)
+            call fftwf_execute_dft(self%plan_fwd, self%ptcl, self%ptcl_fft)
+            ! correlate
+            self%ref_fft = self%ref_fft * conjg(self%ptcl_fft)
+            ! back transform to Fourier space
+            call fftwf_execute_dft(self%plan_bwd, self%ref_fft, self%ref)
+            ! accumulate corrs
+            corrs_over_k = corrs_over_k + real(self%ref)
+        end do
+        !$omp end critical (FFTW_OMP_CRIT)
+        ! fftw3 routines are not properly normalized, hence division by self%nrots * 2
+        cc = corrs_over_k  / real(self%nrots * 2)
+        ! standard normalisation 
+        cc = cc  / sqrt(sqsum_ref * self%sqsums_ptcls(iptcl))
+        ! cc needs to be reordered
+        cc = cc(self%nrots:1:-1) ! step 1 is reversing
+        cc = cshift(cc, -1)      ! step 2 is circular shift by 1
+    end function gencorrs_fft_1
+
+    !>  \brief gencorrs is for generating rotational correlations using 1D FTs of the PFT along rings
+    !! \param iref reference index
+    !! \param iptcl particle index
+    !! \param roind_vec vector of rotational indices
+    function gencorrs_fft_2( self, iref, iptcl, kstop ) result( cc )
+        use simple_math, only: csq
+        class(polarft_corrcalc), intent(inout) :: self
+        integer,                 intent(in)    :: iref, iptcl, kstop
+        complex(sp) :: pft_ref(self%refsz,self%kfromto(1):self%kfromto(2))
+        real(sp)    :: cc(self%nrots), sqsum_ref
+        integer     :: irot, i, ik
+        real        :: sqsum_ptcl, corrs_over_k(self%nrots)
+        corrs_over_k = 0.
+        call self%prep_ref4corr(iptcl, iref, pft_ref, sqsum_ref, kstop)
+        sqsum_ptcl = sum(csq(self%pfts_ptcls(iptcl,:self%refsz,self%kfromto(1):kstop)))
+        do ik = self%kfromto(1),kstop
+            self%ref(1:self%refsz) = pft_ref(1:self%refsz, ik)
+            self%ref(self%refsz+1:self%nrots) = conjg(self%ref(1:self%refsz))
+            self%ptcl(1:self%nrots) = self%pfts_ptcls(iptcl,1:self%nrots, ik)
+            call fftwf_execute_dft(self%plan_fwd, self%ref,  self%ref_fft)
+            call fftwf_execute_dft(self%plan_fwd, self%ptcl, self%ptcl_fft)
+            self%ref_fft = self%ref_fft * conjg(self%ptcl_fft)
+            call fftwf_execute_dft(self%plan_bwd, self%ref_fft, self%ref)
+            corrs_over_k = corrs_over_k + real(self%ref)
+        end do
+        ! fftw3 routines are not properly normalized, hence division by self%nrots * 2
+        cc = corrs_over_k  / real(self%nrots * 2)
+        ! standard normalisation 
+        cc = cc  / sqrt(sqsum_ref * sqsum_ptcl)
+        ! cc needs to be reordered
+        cc = cc(self%nrots:1:-1) ! step 1 is reversing
+        cc = cshift(cc, -1)      ! step 2 is circular shift by 1
+    end function gencorrs_fft_2
+
     !>  \brief gencorrs is for generating rotational correlations
     !! \param iref reference index
     !! \param iptcl particle index
     !! \param roind_vec vector of rotational indices
     function gencorrs_1( self, iref, iptcl, roind_vec ) result( cc )
         use simple_math, only: csq
-        class(polarft_corrcalc), intent(inout) :: self        !< instance
-        integer,                 intent(in)    :: iref, iptcl !< ref & ptcl indices
+        class(polarft_corrcalc), intent(inout) :: self
+        integer,                 intent(in)    :: iref, iptcl
         integer,       optional, intent(in)    :: roind_vec(:)
         complex(sp) :: pft_ref(self%refsz,self%kfromto(1):self%kfromto(2))
-        real(sp)    :: cc(self%nrots), sqsum_ref
-        integer     :: irot, i
-        call self%prep_ref4corr(iptcl, iref, pft_ref, sqsum_ref)
-        if( present(roind_vec) )then
-            ! calculates only corrs for rotational indices provided in roind_vec
-            ! see get_win_roind. returns -1. when not calculated
-            if( any(roind_vec<=0) .or. any(roind_vec>self%nrots) )&
-                &stop 'index out of range; simple_polarft_corrcalc::gencorrs'
-            cc = -1.
-            do i = 1, size(roind_vec)
-                irot = roind_vec(i)
-                cc(irot) = sum(real( pft_ref * conjg(self%pfts_ptcls(iptcl,irot:irot+self%winsz,:)) ))
-                cc(irot) = cc(irot) / sqrt(sqsum_ref * self%sqsums_ptcls(iptcl))
-            end do
+        real(sp)    :: cc(self%nrots), sqsum_ref, cc_orig(self%nrots)
+        integer     :: i, irot, roinds(self%nrots)
+        real        :: erravg, errmax
+        if( USE_GENCORRS_FFT )then
+            cc = self%gencorrs_fft_1(iref, iptcl)
+            if( present(roind_vec) )then
+                ! calculates only corrs for rotational indices provided in roind_vec
+                ! see get_win_roind. returns -1. when not calculated
+                if( any(roind_vec<=0) .or. any(roind_vec>self%nrots) )&
+                    &stop 'index out of range; simple_polarft_corrcalc::gencorrs_1'
+                ! index array all rotations
+                roinds = [(irot,irot=1,self%nrots)]
+                ! zero the ones we want
+                do irot = 1, size(roind_vec)
+                    roinds(roind_vec(irot)) = 0
+                end do
+                ! take out the non-zero ones from cc
+                where(roinds /= 0) cc = -1.
+            endif
         else
-            ! all rotations
-            ! numerator
-            do irot = 1, self%nrots
-                cc(irot) = sum(real( pft_ref * conjg(self%pfts_ptcls(iptcl,irot:irot+self%winsz,:)) ))
-            end do
-            ! denominator
-            cc = cc / sqrt(sqsum_ref * self%sqsums_ptcls(iptcl))
+            call self%prep_ref4corr(iptcl, iref, pft_ref, sqsum_ref)
+            if( present(roind_vec) )then
+                ! calculates only corrs for rotational indices provided in roind_vec
+                ! see get_win_roind. returns -1. when not calculated
+                if( any(roind_vec<=0) .or. any(roind_vec>self%nrots) )&
+                    &stop 'index out of range; simple_polarft_corrcalc::gencorrs_1'
+                cc = -1.
+                do i = 1, size(roind_vec)
+                    irot = roind_vec(i)
+                    cc(irot) = sum(real( pft_ref * conjg(self%pfts_ptcls(iptcl,irot:irot+self%winsz,:)) ))
+                    cc(irot) = cc(irot) / sqrt(sqsum_ref * self%sqsums_ptcls(iptcl))
+                end do
+            else
+                ! all rotations
+                ! numerator
+                do irot = 1, self%nrots
+                    cc(irot) = sum(real( pft_ref * conjg(self%pfts_ptcls(iptcl,irot:irot+self%winsz,:)) ))
+                end do
+                ! denominator
+                cc = cc / sqrt(sqsum_ref * self%sqsums_ptcls(iptcl))
+            endif
         endif
     end function gencorrs_1
-
-    !>  \brief gencorrs is for generating rotational correlations. this is done using techniques of Fourier transform.
-    !! \param iref reference index
-    !! \param iptcl particle index
-    !! \param roind_vec vector of rotational indices
-    function gencorrs_fft( self, iref, iptcl, roind_vec ) result( cc )
-        use simple_math, only: csq
-        class(polarft_corrcalc), intent(inout) :: self        !< instance
-        integer,                 intent(in)    :: iref, iptcl !< ref & ptcl indices
-        integer,       optional, intent(in)    :: roind_vec(:)
-        complex(sp) :: pft_ref(self%refsz,self%kfromto(1):self%kfromto(2))
-        real(sp)    :: cc(self%nrots), sqsum_ref
-        integer     :: irot, i     
-        real        :: corrs_over_k(self%nrots) !< sum up correlations over slices of kx
-        integer     :: ik
-        corrs_over_k = 0.        
-        call self%prep_ref4corr(iptcl, iref, pft_ref, sqsum_ref)        
-        if( present(roind_vec) )then
-            ! calculates only corrs for rotational indices provided in roind_vec
-            ! see get_win_roind. returns -1. when not calculated
-            if( any(roind_vec<=0) .or. any(roind_vec>self%nrots) )&
-                &stop 'index out of range; simple_polarft_corrcalc2::gencorrs'
-            cc = -1.
-            do i = 1, size(roind_vec)
-                irot = roind_vec(i)
-                cc(irot) = sum(real( pft_ref * conjg(self%pfts_ptcls(iptcl,irot:irot+self%winsz,:)) ))
-                cc(irot) = cc(irot) / sqrt(sqsum_ref * self%sqsums_ptcls(iptcl))
-            end do
-        else
-                      
-           do ik = self%kfromto(1), self%kfromto(2)
-              self%ref(1:self%refsz) = pft_ref(1:self%refsz, ik)
-              !< construct second half of ref from first half
-              self%ref(self%refsz+1:self%nrots) = conjg(self%ref(1:self%refsz)) 
-              self%ptcl(1:self%nrots) = self%pfts_ptcls(iptcl,1:self%nrots, ik)                         
-              call fftwf_execute_dft(self%plan_fwd, self%ref,  self%ref_fft)
-              call fftwf_execute_dft(self%plan_fwd, self%ptcl, self%ptcl_fft)              
-              self%ref_fft = self%ref_fft * conjg(self%ptcl_fft)
-              call fftwf_execute_dft(self%plan_bwd, self%ref_fft, self%ref)
-              corrs_over_k = corrs_over_k + real(self%ref)             
-           end do
-           !< fftw3 routines are not properly normalized, hence division by self%nrots
-           cc = corrs_over_k / real(self%nrots * 2) & 
-                / sqrt(sqsum_ref * self%sqsums_ptcls(iptcl))   
-           cc = cc(self%nrots:1:-1) !< cc needs to be reordered. step 1 is reversing
-           cc = cshift(cc, -1)      !< step 2 is circular shift by 1.
-        endif
-    end function gencorrs_fft
 
     !>  \brief  is for generating rotational correlations
     !! \param iref reference index
@@ -735,36 +786,53 @@ contains
     !! \param roind_vec vector of rotational indices
     function gencorrs_2( self, iref, iptcl, kstop, roind_vec ) result( cc )
         use simple_math, only: csq
-        class(polarft_corrcalc), intent(inout) :: self        !< instance
-        integer,                 intent(in)    :: iref, iptcl
-        integer,                 intent(in)    :: kstop    !< last frequency
+        class(polarft_corrcalc), intent(inout) :: self
+        integer,                 intent(in)    :: iref, iptcl, kstop
         integer,       optional, intent(in)    :: roind_vec(:)
         complex(sp) :: pft_ref(self%refsz,self%kfromto(1):self%kfromto(2))
         real(sp)    :: cc(self%nrots), sqsum_ref, sqsum_ptcl
-        integer     :: irot, i
-        call self%prep_ref4corr(iptcl, iref, pft_ref, sqsum_ref, kstop)
-        sqsum_ptcl = sum(csq(self%pfts_ptcls(iptcl,:self%refsz,self%kfromto(1):kstop)))
-        if( present(roind_vec) )then
-            ! calculates only corrs for rotational indices provided in roind_vec
-            ! see get_win_roind. returns -1. when not calculated
-            if( any(roind_vec<=0) .or. any(roind_vec>self%nrots) )&
-                &call simple_stop ('index out of range; simple_polarft_corrcalc::gencorrs')
-            cc = -1.
-            do i = 1, size(roind_vec)
-                irot = roind_vec(i)
-                cc(irot) = sum(real( pft_ref(:,self%kfromto(1):kstop) * &
-                    conjg(self%pfts_ptcls(iptcl,irot:irot+self%winsz,self%kfromto(1):kstop)) ))      
-                cc(irot) = cc(irot) / sqrt(sqsum_ref * sqsum_ptcl)
-            end do
+        integer     :: i, irot, roinds(self%nrots)
+        if( USE_GENCORRS_FFT )then
+            cc = self%gencorrs_fft_2(iref, iptcl, kstop)
+            if( present(roind_vec) )then
+                ! calculates only corrs for rotational indices provided in roind_vec
+                ! see get_win_roind. returns -1. when not calculated
+                if( any(roind_vec<=0) .or. any(roind_vec>self%nrots) )&
+                    &stop 'index out of range; simple_polarft_corrcalc::gencorrs_2'
+                ! index array all rotations
+                roinds = [(irot,irot=1,self%nrots)]
+                ! zero the ones we want
+                do irot = 1, size(roind_vec)
+                    roinds(roind_vec(irot)) = 0
+                end do
+                ! take out the non-zero ones from cc
+                where(roinds /= 0) cc = -1.
+            endif
         else
-            ! all rotations
-            ! numerator
-            do irot = 1, self%nrots
-                cc(irot) = sum(real( pft_ref(:,self%kfromto(1):kstop) * &
-                    conjg(self%pfts_ptcls(iptcl,irot:irot+self%winsz,self%kfromto(1):kstop)) ))
-            end do
-            ! denominator
-            cc = cc / sqrt(sqsum_ref * sqsum_ptcl)
+            call self%prep_ref4corr(iptcl, iref, pft_ref, sqsum_ref, kstop)
+            sqsum_ptcl = sum(csq(self%pfts_ptcls(iptcl,:self%refsz,self%kfromto(1):kstop)))
+            if( present(roind_vec) )then
+                ! calculates only corrs for rotational indices provided in roind_vec
+                ! see get_win_roind. returns -1. when not calculated
+                if( any(roind_vec<=0) .or. any(roind_vec>self%nrots) )&
+                    &call simple_stop ('index out of range; simple_polarft_corrcalc::gencorrs_2')
+                cc = -1.
+                do i = 1, size(roind_vec)
+                    irot = roind_vec(i)
+                    cc(irot) = sum(real( pft_ref(:,self%kfromto(1):kstop) * &
+                        conjg(self%pfts_ptcls(iptcl,irot:irot+self%winsz,self%kfromto(1):kstop)) ))
+                    cc(irot) = cc(irot) / sqrt(sqsum_ref * sqsum_ptcl)
+                end do
+            else
+                ! all rotations
+                ! numerator
+                do irot = 1, self%nrots
+                    cc(irot) = sum(real( pft_ref(:,self%kfromto(1):kstop) * &
+                        conjg(self%pfts_ptcls(iptcl,irot:irot+self%winsz,self%kfromto(1):kstop)) ))
+                end do
+                ! denominator
+                cc = cc / sqrt(sqsum_ref * sqsum_ptcl)
+            endif
         endif
     end function gencorrs_2
 
@@ -776,7 +844,7 @@ contains
         class(polarft_corrcalc), target, intent(inout) :: self              !< instance
         integer,                         intent(in)    :: iref, iptcl, irot !< rotation index
         real(sp), allocatable :: frc(:)
-        complex(sp) :: pft_ref_ctf(self%refsz,self%kfromto(1):self%kfromto(2))        
+        complex(sp) :: pft_ref_ctf(self%refsz,self%kfromto(1):self%kfromto(2))
         real(sp)    :: sumsqref, sumsqptcl
         integer     :: k
         allocate( frc(self%kfromto(1):self%kfromto(2)) )
@@ -812,7 +880,7 @@ contains
     !>  \brief  for calculating the correlation between reference iref and particle iptcl in rotation irot
     !! \param iref reference index
     !! \param iptcl particle index
-    !! \param irot rotational 
+    !! \param irot rotational
     function corr_1( self, iref, iptcl, irot ) result( cc )
         class(polarft_corrcalc), intent(inout) :: self              !< instance
         integer,                 intent(in)    :: iref, iptcl, irot !< reference, particle, rotation
@@ -917,12 +985,14 @@ contains
                         self%pfts_ptcls,   &
                         stat=alloc_stat)
             allocchk("simple_polarft_corrcalc::kill ")
+            !$omp critical (FFTW_OMP_CRIT)
             call fftwf_destroy_plan(self%plan_fwd)
             call fftwf_destroy_plan(self%plan_bwd)
             call fftwf_free(self%p_ref)
             call fftwf_free(self%p_ptcl)
             call fftwf_free(self%p_ref_fft)
             call fftwf_free(self%p_ptcl_fft)
+            !$omp end critical (FFTW_OMP_CRIT)
             self%existence = .false.
         endif
     end subroutine kill

@@ -320,7 +320,7 @@ contains
         call self%fit%new(ldim, smpd)
         ! Work out dimensions of the complex array
         self%array_shape(1)   = fdim(self%ldim(1))
-        self%array_shape(2:3) = self%ldim(2:3)        
+        self%array_shape(2:3) = self%ldim(2:3)
         self%nc = int(product(self%array_shape)) ! nr of components
         ! Letting FFTW do the allocation in C ensures that we will be using aligned memory
         self%p = fftwf_alloc_complex(int(product(self%array_shape),c_size_t))
@@ -3522,7 +3522,7 @@ contains
             didft = .true.
         endif
         hplim_freq = self%fit%get_find(1,hplim)
-        lplim_freq = self%fit%get_find(1,lplim) 
+        lplim_freq = self%fit%get_find(1,lplim)
         lims = self%fit%loop_lims(2)
         do h=lims(1,1),lims(1,2)
             do k=lims(2,1),lims(2,2)
@@ -3736,7 +3736,7 @@ contains
         character(len=*), intent(in)    :: which
         real, allocatable     :: pixels(:), wfvals(:)
         integer               :: n, i, j, k, cnt
-        real                  :: rn, wfun(-winsz:winsz), norm 
+        real                  :: rn, wfun(-winsz:winsz), norm
         type(winfuns)         :: fwin
         character(len=STDLEN) :: wstr
         type(image)           :: img_filt
@@ -3818,7 +3818,7 @@ contains
                             do k=1,self%ldim(3)
                                 pixels = self%win2arr(i, j, k, winsz)
                                 img_filt%rmat(i,j,k) = median_nocopy(pixels)
-                            end do 
+                            end do
                         end do
                     end do
                     !$omp end parallel do
@@ -3829,7 +3829,7 @@ contains
                             do k=1,self%ldim(3)
                                 pixels = self%win2arr(i, j, k, winsz)
                                 img_filt%rmat(i,j,k) = sum(pixels)/rn
-                            end do 
+                            end do
                         end do
                     end do
                     !$omp end parallel do
@@ -3840,7 +3840,7 @@ contains
                             do k=1,self%ldim(3)
                                 pixels = self%win2arr(i, j, k, winsz)
                                 img_filt%rmat(i,j,k) = sum(pixels * wfvals) / norm
-                            end do 
+                            end do
                         end do
                     end do
                     !$omp end parallel do
@@ -4138,7 +4138,7 @@ contains
     !!
     real function median_pixel( self, mskrad, which )
         class(image),               intent(inout) :: self
-        real,             optional, intent(in)    :: mskrad        
+        real,             optional, intent(in)    :: mskrad
         character(len=*), optional, intent(in)    :: which
         type(image)       :: maskimg
         real, allocatable :: pixels(:)
@@ -4159,6 +4159,7 @@ contains
             else
                 stop 'unknown option; simple_image%median_pixel'
             endif
+            if( size(pixels) == 0 ) stop 'WEIRD ERROR! pixels not allocated; simple_imge :: median_pixel'
             median_pixel = median_nocopy(pixels)
         endif
     end function median_pixel
@@ -4751,7 +4752,7 @@ contains
     end function gen_argtransf_comp
 
     !> \brief gen_argtransf_mats  is for generating the argument transfer matrix for fast shifting of a FT
-    !! \param transfmats transfer matrix 
+    !! \param transfmats transfer matrix
     !!
     subroutine gen_argtransf_mats( self, transfmats )
         class(image), intent(inout) :: self, transfmats(3)
@@ -5095,7 +5096,7 @@ contains
     end subroutine salt_n_pepper
 
     !>  \brief square just a binary square for testing purposes
-    !! \param sqrad half width of square 
+    !! \param sqrad half width of square
     !!
     subroutine square( self, sqrad )
         class(image), intent(inout) :: self
@@ -5385,7 +5386,7 @@ contains
             do k=lims(2,1),lims(2,2)
                 inds(1) = min(max(1,h+mh+1),self%ldim(1))
                 inds(2) = min(max(1,k+mk+1),self%ldim(2))
-                freq = hyp(real(h),real(k))                        
+                freq = hyp(real(h),real(k))
                 if(freq .lt. hplim_freq .or. freq .gt. lplim_freq )then
                     call self%set(inds, 0.)
                 endif
@@ -5682,7 +5683,7 @@ contains
         if( self_out%ldim(1) >= self_in%ldim(1) .and. self_out%ldim(2) >= self_in%ldim(2)&
         .and. self_out%ldim(3) >= self_in%ldim(3) )then
             if( self_in%ft )then
-                self_out = cmplx(0.,0.)                
+                self_out = cmplx(0.,0.)
                 antialw = self_in%hannw()
                 lims = self_in%fit%loop_lims(2)
                 !$omp parallel do collapse(3) schedule(static) default(shared)&
