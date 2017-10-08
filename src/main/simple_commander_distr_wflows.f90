@@ -547,7 +547,7 @@ contains
             frac_srch_space = 0.
             if( iter > 1 ) frac_srch_space = cline_check2D_conv%get_rarg('frac')
             ! the below activates shifting & automasking
-            if( frac_srch_space >= FRAC_SH_LIM .or. cline_check2D_conv%defined('trs') )then
+            if( iter > 3 .and. (frac_srch_space >= FRAC_SH_LIM .or. cline_check2D_conv%defined('trs')) )then
                 if( .not.job_descr%isthere('trs') )then
                     ! activates shift search
                     str = real2str(cline_check2D_conv%get_rarg('trs'))

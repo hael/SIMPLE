@@ -190,7 +190,7 @@ contains
                         rt_refloop_sum = 0.
                         rt_tot_sum     = 0.
                     endif
-                    !omp parallel do default(shared) schedule(guided) private(iptcl) proc_bind(close)
+                    !$omp parallel do default(shared) schedule(guided) private(iptcl) proc_bind(close)
                     do iptcl=p%fromp,p%top
                         call primesrch2D(iptcl)%exec_prime2D_srch(iptcl, extr_bound=corr_thresh)
                         call primesrch2D(iptcl)%get_times(rt_refloop, rt_inpl, rt_tot)
@@ -200,7 +200,7 @@ contains
                             rt_tot_sum     = rt_tot_sum     + rt_tot
                         endif
                     end do
-                    !omp end parallel do
+                    !$omp end parallel do
                 endif
         end select
         if( L_BENCH ) rt_align = toc(t_align)
