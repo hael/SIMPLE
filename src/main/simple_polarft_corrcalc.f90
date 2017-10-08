@@ -27,7 +27,6 @@ type fftw_arrs
     complex(kind=c_float_complex), pointer :: ref_fft(:)  => null()   !< -"-
     complex(kind=c_float_complex), pointer :: ptcl(:)     => null()   !< -"-
     complex(kind=c_float_complex), pointer :: ptcl_fft(:) => null()   !< -"-
-    type(c_ptr)                            :: plan_fwd, plan_bwd      !< FFTW plans for gencorrs_fft
 end type fftw_arrs
 
 type :: polarft_corrcalc
@@ -52,7 +51,8 @@ type :: polarft_corrcalc
     real(sp),        allocatable :: ctfmats(:,:,:)       !< expandd set of CTF matrices (for efficient parallel exec)
     complex(sp),     allocatable :: pfts_refs(:,:,:)     !< 3D complex matrix of polar reference sections (nrefs,refsz,nk)
     complex(sp),     allocatable :: pfts_ptcls(:,:,:)    !< 3D complex matrix of particle sections
-    type(fftw_arrs), allocatable :: fftdat(:)            !< arrays and plans for thread-safe FFTW exec
+    type(fftw_arrs), allocatable :: fftdat(:)            !< arrays for thread-safe FFTW exec
+    type(c_ptr)                  :: plan_fwd, plan_bwd   !< FFTW plans for gencorrs_fft
     logical                      :: with_ctf  = .false.  !< CTF flag
     logical                      :: existence = .false.  !< to indicate existence
   contains
@@ -194,7 +194,7 @@ contains
         ! allocate polarfts, sqsums & fftdat array
         allocate(   self%pfts_refs(self%nrefs,self%refsz,self%kfromto(1):self%kfromto(2)),&
                     self%pfts_ptcls(self%pfromto(1):self%pfromto(2),self%ptclsz,self%kfromto(1):self%kfromto(2)),&
-                    self%sqsums_ptcls(self%pfromto(1):self%pfromto(2)), self%fftdat(self%nk), stat=alloc_stat)
+                    self%sqsums_ptcls(self%pfromto(1):self%pfromto(2)), self%fftdat(self%nthr), stat=alloc_stat)
         allocchk('polarfts and sqsums; new; simple_polarft_corrcalc')
         self%pfts_refs    = zero
         self%pfts_ptcls   = zero
@@ -212,12 +212,13 @@ contains
             call c_f_pointer(self%fftdat(ithr)%p_ptcl,     self%fftdat(ithr)%ptcl,     [self%nrots])
             call c_f_pointer(self%fftdat(ithr)%p_ref_fft,  self%fftdat(ithr)%ref_fft,  [self%nrots])
             call c_f_pointer(self%fftdat(ithr)%p_ptcl_fft, self%fftdat(ithr)%ptcl_fft, [self%nrots])
-            self%fftdat(ithr)%plan_fwd = fftwf_plan_dft_1d(self%nrots, self%fftdat(ithr)%ref,&
-                &self%fftdat(ithr)%ref_fft, FFTW_FORWARD,  FFTW_PATIENT)
-            self%fftdat(ithr)%plan_bwd = fftwf_plan_dft_1d(self%nrots, self%fftdat(ithr)%ref_fft,&
-                self%fftdat(ithr)%ref,     FFTW_BACKWARD, FFTW_PATIENT)
             !$omp end critical (FFTW_OMP_CRIT)
-        end do
+         end do
+         self%plan_fwd = fftwf_plan_dft_1d(self%nrots, self%fftdat(1)%ref,&
+              &self%fftdat(1)%ref_fft, FFTW_FORWARD,  FFTW_PATIENT)
+         self%plan_bwd = fftwf_plan_dft_1d(self%nrots, self%fftdat(1)%ref_fft,&
+              self%fftdat(1)%ref,     FFTW_BACKWARD, FFTW_PATIENT)
+
         ! flag existence
         self%existence    = .true.
     end subroutine new
@@ -689,12 +690,12 @@ contains
             ! particle
             self%fftdat(ithr)%ptcl(1:self%nrots) = self%pfts_ptcls(iptcl,1:self%nrots, ik)
             ! movie into Fourier Fourier space
-            call fftwf_execute_dft(self%fftdat(ithr)%plan_fwd, self%fftdat(ithr)%ref,  self%fftdat(ithr)%ref_fft)
-            call fftwf_execute_dft(self%fftdat(ithr)%plan_fwd, self%fftdat(ithr)%ptcl, self%fftdat(ithr)%ptcl_fft)
+            call fftwf_execute_dft(self%plan_fwd, self%fftdat(ithr)%ref,  self%fftdat(ithr)%ref_fft)
+            call fftwf_execute_dft(self%plan_fwd, self%fftdat(ithr)%ptcl, self%fftdat(ithr)%ptcl_fft)
             ! correlate
             self%fftdat(ithr)%ref_fft = self%fftdat(ithr)%ref_fft * conjg(self%fftdat(ithr)%ptcl_fft)
             ! back transform to Fourier space
-            call fftwf_execute_dft(self%fftdat(ithr)%plan_bwd, self%fftdat(ithr)%ref_fft, self%fftdat(ithr)%ref)
+            call fftwf_execute_dft(self%plan_bwd, self%fftdat(ithr)%ref_fft, self%fftdat(ithr)%ref)
             ! accumulate corrs
             corrs_over_k = corrs_over_k + real( self%fftdat(ithr)%ref )
         end do
@@ -734,12 +735,12 @@ contains
             ! particle
             self%fftdat(ithr)%ptcl(1:self%nrots) = self%pfts_ptcls(iptcl,1:self%nrots, ik)
             ! movie into Fourier Fourier space
-            call fftwf_execute_dft(self%fftdat(ithr)%plan_fwd, self%fftdat(ithr)%ref,  self%fftdat(ithr)%ref_fft)
-            call fftwf_execute_dft(self%fftdat(ithr)%plan_fwd, self%fftdat(ithr)%ptcl, self%fftdat(ithr)%ptcl_fft)
+            call fftwf_execute_dft(self%plan_fwd, self%fftdat(ithr)%ref,  self%fftdat(ithr)%ref_fft)
+            call fftwf_execute_dft(self%plan_fwd, self%fftdat(ithr)%ptcl, self%fftdat(ithr)%ptcl_fft)
             ! correlate
             self%fftdat(ithr)%ref_fft = self%fftdat(ithr)%ref_fft * conjg(self%fftdat(ithr)%ptcl_fft)
             ! back transform to Fourier space
-            call fftwf_execute_dft(self%fftdat(ithr)%plan_bwd, self%fftdat(ithr)%ref_fft, self%fftdat(ithr)%ref)
+            call fftwf_execute_dft(self%plan_bwd, self%fftdat(ithr)%ref_fft, self%fftdat(ithr)%ref)
             ! accumulate corrs
             corrs_over_k = corrs_over_k + real( self%fftdat(ithr)%ref )
         end do
@@ -795,12 +796,12 @@ contains
             ! particle
             self%fftdat(ithr)%ptcl(1:self%nrots) = self%pfts_ptcls(iptcl,1:self%nrots, ik)
             ! movie into Fourier Fourier space
-            call fftwf_execute_dft(self%fftdat(ithr)%plan_fwd, self%fftdat(ithr)%ref,  self%fftdat(ithr)%ref_fft)
-            call fftwf_execute_dft(self%fftdat(ithr)%plan_fwd, self%fftdat(ithr)%ptcl, self%fftdat(ithr)%ptcl_fft)
+            call fftwf_execute_dft(self%plan_fwd, self%fftdat(ithr)%ref,  self%fftdat(ithr)%ref_fft)
+            call fftwf_execute_dft(self%plan_fwd, self%fftdat(ithr)%ptcl, self%fftdat(ithr)%ptcl_fft)
             ! correlate
             self%fftdat(ithr)%ref_fft = self%fftdat(ithr)%ref_fft * conjg(self%fftdat(ithr)%ptcl_fft)
             ! back transform to Fourier space
-            call fftwf_execute_dft(self%fftdat(ithr)%plan_bwd, self%fftdat(ithr)%ref_fft, self%fftdat(ithr)%ref)
+            call fftwf_execute_dft(self%plan_bwd, self%fftdat(ithr)%ref_fft, self%fftdat(ithr)%ref)
             ! accumulate corrs
             corrs_over_k = corrs_over_k + real( self%fftdat(ithr)%ref )
         end do
@@ -1038,14 +1039,14 @@ contains
             allocchk("simple_polarft_corrcalc::kill ")
             do ithr=1,self%nthr
                 !$omp critical (FFTW_OMP_CRIT)
-                call fftwf_destroy_plan(self%fftdat(ithr)%plan_fwd)
-                call fftwf_destroy_plan(self%fftdat(ithr)%plan_bwd)
                 call fftwf_free(self%fftdat(ithr)%p_ref)
                 call fftwf_free(self%fftdat(ithr)%p_ptcl)
                 call fftwf_free(self%fftdat(ithr)%p_ref_fft)
                 call fftwf_free(self%fftdat(ithr)%p_ptcl_fft)
                 !$omp end critical (FFTW_OMP_CRIT)
-            end do
+             end do
+             call fftwf_destroy_plan(self%plan_fwd)
+             call fftwf_destroy_plan(self%plan_bwd)
             self%existence = .false.
         endif
     end subroutine kill
