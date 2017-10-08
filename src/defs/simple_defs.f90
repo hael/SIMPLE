@@ -82,8 +82,6 @@ integer, parameter :: GRIDCORR_MAXITS      = 5       !< # iterations for reconst
 
 ! constants for SHC inplane grid search
 real,    parameter :: SHC_INPL_TRSHWDTH    = 2.0     !< shift search halfwidht (pixels)
-real,    parameter :: SHC_INPL_TRSSTEPSZ   = 0.2     !< shift search step size (pixels)
-integer, parameter :: SHC_INPL_INPLHWDTH   = 2       !< in-plane rotation halfwidth (rotation index)
 
 ! global  variables
 integer(kind=c_int)       :: nthr_glob               !< number of threads global variable

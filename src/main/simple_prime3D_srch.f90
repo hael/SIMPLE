@@ -80,7 +80,6 @@ type prime3D_srch
     procedure, private :: stochastic_srch_bystate
     procedure          :: inpl_srch
     procedure, private :: inpl_grid_srch
-    procedure, private :: inpl_grid_srch_exhaustive
     ! PREPARATION ROUTINES
     procedure          :: prep4srch
     procedure          :: prep_reforis
@@ -839,51 +838,6 @@ contains
         end do
         DebugPrint '>>> PRIME3D_SRCH::FINISHED INPL GRID SEARCH'
     end subroutine inpl_grid_srch
-
-    !>  \brief  implemented to test wheter we had an in-plane search deficiency
-    !!          test on HCN took it from 5.4 A to 4.8 A with Nspace=1000 and refine=no
-    !!          but it is too slow to be feasible. Implemented the above routine for
-    !!          SHC-based grid search in the plane followed by more focused
-    !!          continuous simplex refinement
-    subroutine inpl_grid_srch_exhaustive( self, inpl_inds, shvecs )
-        class(prime3D_srch),    intent(inout) :: self
-        integer, allocatable,   intent(out)   :: inpl_inds(:)
-        real,    allocatable,   intent(out)   :: shvecs(:,:)
-        real    :: cc, cc_best, xsh, ysh
-        integer :: i, j, jrot, ref, inpl_ind, istop, n_inpl_changes, n_trs_changes
-        if( allocated(inpl_inds) ) deallocate(inpl_inds)
-        if( allocated(shvecs)    ) deallocate(shvecs)
-        istop = self%nrefs - self%npeaks + 1
-        allocate( shvecs(istop:self%nrefs,2), inpl_inds(istop:self%nrefs) )
-        n_inpl_changes = 0
-        do i=self%nrefs,istop,-1
-            ref      = self%proj_space_inds( i )
-            inpl_ind = self%pftcc_ptr%get_roind( 360.-self%o_refs%e3get(ref) )
-            cc_best  = -1.0
-            do j=inpl_ind-SHC_INPL_INPLHWDTH,inpl_ind+SHC_INPL_INPLHWDTH
-                jrot = cyci_1d([1,self%nrots], j)
-                xsh  = -SHC_INPL_TRSHWDTH
-                do while( xsh <= SHC_INPL_TRSHWDTH )
-                    ysh = -SHC_INPL_TRSHWDTH
-                    do while( ysh <= SHC_INPL_TRSHWDTH )
-                        cc = self%pftcc_ptr%corr(ref, self%iptcl, jrot, [xsh,ysh])
-                        if( cc > cc_best )then
-                            cc_best      = cc
-                            inpl_inds(i) = jrot
-                            shvecs(i,:)  = [xsh,ysh]
-                        endif
-                        ysh = ysh + SHC_INPL_TRSSTEPSZ
-                    end do
-                    xsh = xsh + SHC_INPL_TRSSTEPSZ
-                end do
-            end do
-            if( inpl_inds(i) /= inpl_ind )    n_inpl_changes = n_inpl_changes + 1
-            if( sum(abs(shvecs(i,:))) > 0.1 ) n_trs_changes  = n_trs_changes  + 1
-        end do
-        call self%a_ptr%set(self%iptcl, 'inpl_changes', real(n_inpl_changes)/real(self%nrefs - istop + 1))
-        call self%a_ptr%set(self%iptcl, 'trs_changes',  real(n_inpl_changes)/real(self%nrefs - istop + 1))
-        DebugPrint '>>> PRIME3D_SRCH::FINISHED INPL GRID SEARCH'
-    end subroutine inpl_grid_srch_exhaustive
 
     !>  \brief  prepares reference indices for the search & fetches ctf
     !! \param lp low-pass cutoff freq

@@ -100,7 +100,8 @@ type :: polarft_corrcalc
     procedure          :: create_polar_ctfmats
     procedure, private :: gencorrs_fft_1
     procedure, private :: gencorrs_fft_2
-    generic            :: gencorrs_fft => gencorrs_fft_1, gencorrs_fft_2
+    procedure, private :: gencorrs_fft_3
+    generic            :: gencorrs_fft => gencorrs_fft_1, gencorrs_fft_2, gencorrs_fft_3
     procedure, private :: gencorrs_1
     procedure, private :: gencorrs_2
     generic            :: gencorrs => gencorrs_1, gencorrs_2
@@ -750,6 +751,67 @@ contains
         cc = cc(self%nrots:1:-1) ! step 1 is reversing
         cc = cshift(cc, -1)      ! step 2 is circular shift by 1
     end function gencorrs_fft_2
+
+    !>  \brief gencorrs is for generating rotational correlations using 1D FTs of the PFT along rings
+    !! \param iref reference index
+    !! \param iptcl particle index
+    !! \param roind_vec vector of rotational indices
+    function gencorrs_fft_3( self, iref, iptcl, shvec ) result( cc )
+        use simple_math, only: csq
+        class(polarft_corrcalc), intent(inout) :: self
+        integer,                 intent(in)    :: iref, iptcl
+        real(sp),                intent(in)    :: shvec(2)
+        complex(sp) :: pft_ref(self%refsz,self%kfromto(1):self%kfromto(2))
+        complex(sp) :: shmat(self%refsz,self%kfromto(1):self%kfromto(2))
+        integer     :: irot, i, ik, ithr
+        real(sp)    :: corrs_over_k(self%nrots), argmat(self%refsz,self%kfromto(1):self%kfromto(2))
+        real(sp)    :: cc(self%nrots), sqsum_ref
+        cc = 0.
+        ! floating point check
+        if( self%sqsums_ptcls(iptcl) < TINY ) return
+        ! generate the argument matrix from memoized components in argtransf
+        argmat = self%argtransf(:self%refsz,:) * shvec(1) + self%argtransf(self%refsz+1:,:) * shvec(2)
+        ! generate the complex shift transformation matrix
+        shmat = cmplx(cos(argmat),sin(argmat))
+        ! shift
+        if( self%with_ctf )then
+            pft_ref = (self%pfts_refs(iref,:,:) * self%ctfmats(iptcl,:,:)) * shmat
+        else
+            pft_ref = self%pfts_refs(iref,:,:) * shmat
+        endif
+        ! calculate correlation precursors
+        sqsum_ref = sum(csq(pft_ref))
+        ! floating point check
+        if( sqsum_ref < TINY  ) return
+        ! get thread index
+        ithr = omp_get_thread_num() + 1
+        ! sum up correlations over k-rings
+        corrs_over_k = 0.
+        do ik = self%kfromto(1),self%kfromto(2)
+            ! first half of ref
+            self%fftdat(ithr)%ref(1:self%refsz) = pft_ref(1:self%refsz, ik)
+            ! construct second half of ref from first half
+            self%fftdat(ithr)%ref(self%refsz+1:self%nrots) = conjg(self%fftdat(ithr)%ref(1:self%refsz))
+            ! particle
+            self%fftdat(ithr)%ptcl(1:self%nrots) = self%pfts_ptcls(iptcl,1:self%nrots, ik)
+            ! movie into Fourier Fourier space
+            call fftwf_execute_dft(self%fftdat(ithr)%plan_fwd, self%fftdat(ithr)%ref,  self%fftdat(ithr)%ref_fft)
+            call fftwf_execute_dft(self%fftdat(ithr)%plan_fwd, self%fftdat(ithr)%ptcl, self%fftdat(ithr)%ptcl_fft)
+            ! correlate
+            self%fftdat(ithr)%ref_fft = self%fftdat(ithr)%ref_fft * conjg(self%fftdat(ithr)%ptcl_fft)
+            ! back transform to Fourier space
+            call fftwf_execute_dft(self%fftdat(ithr)%plan_bwd, self%fftdat(ithr)%ref_fft, self%fftdat(ithr)%ref)
+            ! accumulate corrs
+            corrs_over_k = corrs_over_k + real( self%fftdat(ithr)%ref )
+        end do
+        ! fftw3 routines are not properly normalized, hence division by self%nrots * 2
+        cc = corrs_over_k  / real(self%nrots * 2)
+        ! correlation normalisation 
+        cc = cc  / sqrt(sqsum_ref * self%sqsums_ptcls(iptcl))
+        ! cc needs to be reordered
+        cc = cc(self%nrots:1:-1) ! step 1 is reversing
+        cc = cshift(cc, -1)      ! step 2 is circular shift by 1
+    end function gencorrs_fft_3
 
     !>  \brief gencorrs is for generating rotational correlations
     !! \param iref reference index

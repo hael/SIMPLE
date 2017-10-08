@@ -110,6 +110,11 @@ interface csq
     module procedure csq_2
 end interface
 
+interface gen_polar_coords
+    module procedure gen_polar_coords_1
+    module procedure gen_polar_coords_2
+end interface
+
 logical, parameter,private :: warn=.false.
 
 contains
@@ -2119,31 +2124,49 @@ contains
     end subroutine rotmat2axis
 
     !>   generates polar coordinates
-    subroutine gen_polar_coords( kfromto, ring2, coords, angtab )
-        integer, intent(in)            :: kfromto(2), ring2
+    subroutine gen_polar_coords_1( kfromto, ring2, coords, angtab )
+        integer,           intent(in)  :: kfromto(2), ring2
         real, allocatable, intent(out) :: coords(:,:,:), angtab(:)
-        integer                        :: nradial_lines
-        real                           :: dang
-        integer                        :: i, j
+        integer :: nradial_lines, i, j
+        real    :: ang 
         nradial_lines = round2even(twopi*real(ring2))
-        if( allocated(coords) )then
-            deallocate(coords)
-        end if
-        if( allocated(angtab) ) then
-            deallocate(angtab)
-        end if
+        if( allocated(coords) ) deallocate(coords)
+        if( allocated(angtab) ) deallocate(angtab)
         allocate( coords(nradial_lines,kfromto(1):kfromto(2),2), angtab(nradial_lines), stat=alloc_stat )
         if(alloc_stat /= 0) call alloc_errchk("In: gen_polar_coords_1; simple_math coords/angtab alloc", alloc_stat)
-        dang = twopi/real(nradial_lines)
+        ang = twopi/real(nradial_lines)
         do i=1,nradial_lines
-            angtab(i) = real(i-1)*dang
+            angtab(i) = real(i-1)*ang
             do j=kfromto(1),kfromto(2)
-                coords(i,j,1) = cos(angtab(i))*real(j)
-                coords(i,j,2) = sin(angtab(i))*real(j)
+                coords(i,j,1) = cos(angtab(i)) * real(j)
+                coords(i,j,2) = sin(angtab(i)) * real(j)
             end do
             angtab(i) = rad2deg(angtab(i))
         end do
-    end subroutine gen_polar_coords
+    end subroutine gen_polar_coords_1
+
+    !>   generates polar coordinates
+    subroutine gen_polar_coords_2( kvec, nradial_lines, coords, angtab )
+        real,              intent(in)  :: kvec(:)
+        integer,           intent(in)  :: nradial_lines
+        real, allocatable, intent(out) :: coords(:,:,:), angtab(:)
+        integer :: i, j, nk
+        real    :: ang
+        nk = size(kvec)
+        if( allocated(coords) ) deallocate(coords)
+        if( allocated(angtab) ) deallocate(angtab)
+        allocate( coords(nradial_lines,nk,2), angtab(nradial_lines), stat=alloc_stat )
+        if(alloc_stat /= 0) call alloc_errchk("In: gen_polar_coords_2; simple_math coords/angtab alloc", alloc_stat)
+        ang = twopi/real(nradial_lines)
+        do i=1,nradial_lines
+            angtab(i) = real(i-1)*ang
+            do j=1,nk
+                coords(i,j,1) = cos(angtab(i)) * kvec(j)
+                coords(i,j,2) = sin(angtab(i)) * kvec(j)
+            end do
+            angtab(i) = rad2deg(angtab(i))
+        end do
+    end subroutine gen_polar_coords_2
 
     ! INTERPOLATION
 
@@ -2260,12 +2283,12 @@ contains
         real(dp) :: c1,c2,c3,c4,c5,c6,denom,dpeakv
         real,intent(out) :: xsh, ysh, peakv
         dz = dble(z)
-          c1 = (26.*dz(1,1)-dz(1,2)+2*dz(1,3)-dz(2,1)-19.*dz(2,2)-7.*dz(2,3)+2.*dz(3,1)-7.*dz(3,2)+14.*dz(3,3))/9.
-          c2 = (8.* dz(1,1)-8.*dz(1,2)+5.*dz(2,1)-8.*dz(2,2)+3.*dz(2,3)+2.*dz(3,1)-8.*dz(3,2)+6.*dz(3,3))/(-6.)
-          c3 = (dz(1,1)-2.*dz(1,2)+dz(1,3)+dz(2,1)-2.*dz(2,2)+dz(2,3)+dz(3,1)-2.*dz(3,2)+dz(3,3))/6.
-          c4 = (8.*dz(1,1)+5.*dz(1,2)+2.*dz(1,3)-8.*dz(2,1)-8.*dz(2,2)-8.*dz(2,3)+3.*dz(3,2)+6.*dz(3,3))/(-6.)
-          c5 = (dz(1,1)-dz(1,3)-dz(3,1)+dz(3,3))/4.
-          c6 = (dz(1,1)+dz(1,2)+dz(1,3)-2.*dz(2,1)-2.*dz(2,2)-2.*dz(2,3)+dz(3,1)+dz(3,2)+dz(3,3))/6.
+        c1 = (26.*dz(1,1)-dz(1,2)+2*dz(1,3)-dz(2,1)-19.*dz(2,2)-7.*dz(2,3)+2.*dz(3,1)-7.*dz(3,2)+14.*dz(3,3))/9.
+        c2 = (8.* dz(1,1)-8.*dz(1,2)+5.*dz(2,1)-8.*dz(2,2)+3.*dz(2,3)+2.*dz(3,1)-8.*dz(3,2)+6.*dz(3,3))/(-6.)
+        c3 = (dz(1,1)-2.*dz(1,2)+dz(1,3)+dz(2,1)-2.*dz(2,2)+dz(2,3)+dz(3,1)-2.*dz(3,2)+dz(3,3))/6.
+        c4 = (8.*dz(1,1)+5.*dz(1,2)+2.*dz(1,3)-8.*dz(2,1)-8.*dz(2,2)-8.*dz(2,3)+3.*dz(3,2)+6.*dz(3,3))/(-6.)
+        c5 = (dz(1,1)-dz(1,3)-dz(3,1)+dz(3,3))/4.
+        c6 = (dz(1,1)+dz(1,2)+dz(1,3)-2.*dz(2,1)-2.*dz(2,2)-2.*dz(2,3)+dz(3,1)+dz(3,2)+dz(3,3))/6.
         ! the peak coordinates of the paraboloid can now be evaluated as:
         ysh = 0.
         xsh = 0.
