@@ -5,11 +5,14 @@ use simple_polarft_corrcalc, only: polarft_corrcalc
 use simple_shc_inplane,      only: shc_inplane
 use simple_pftcc_inplsrch,   only: pftcc_inplsrch
 use simple_oris,             only: oris
+use simple_timer             ! use all in there
 implicit none
 
 public :: prime2D_srch
 private
 #include "simple_local_flags.inc"
+
+logical, parameter :: L_BENCH = .false.
 
 type prime2D_srch
     private
@@ -37,6 +40,10 @@ type prime2D_srch
     integer, allocatable             :: cls_pops(:)          !< classes populations prior to search
     integer, allocatable             :: srch_order(:)        !< stochastic search order
     character(len=STDLEN)            :: refine        = ''   !< refinement flag
+    ! timer vars
+    real(timer_int_kind)             :: rt_refloop, rt_inpl, rt_tot
+    integer(timer_int_kind)          :: t_refloop, t_inpl, t_tot
+    ! logical flags
     logical                          :: dyncls  = .true.     !< whether to turn on dynamic class update (use of low population threshold)
     logical                          :: doshift = .true.     !< origin shift search indicator
     logical                          :: exists  = .false.    !< 2 indicate existence
@@ -46,6 +53,7 @@ type prime2D_srch
     ! GETTERS
     procedure          :: get_nrots
     procedure          :: update_best
+    procedure          :: get_times
     ! PREPARATION ROUTINE
     procedure          :: prep4srch
     ! SEARCH ROUTINES
@@ -102,6 +110,12 @@ contains
             ! first iteration
             allocate(self%cls_pops(self%nrefs), source=MINCLSPOPLIM+1, stat=alloc_stat)
             allocchk("simple_prime2D_srch%new")
+        endif
+        if( L_BENCH )then
+            ! init timers
+            self%rt_refloop = 0.
+            self%rt_inpl    = 0.
+            self%rt_tot     = 0. 
         endif
         ! the instance now exists
         self%exists = .true.
@@ -168,6 +182,14 @@ contains
         call o_new%kill
         DebugPrint '>>> PRIME2D_SRCH::GOT BEST ORI'
     end subroutine update_best
+
+    subroutine get_times( self, rt_refloop, rt_inpl, rt_tot )
+        class(prime2D_srch),  intent(in) :: self
+        real(timer_int_kind), intent(out):: rt_refloop, rt_inpl, rt_tot
+        rt_refloop = self%rt_refloop
+        rt_inpl    = self%rt_inpl
+        rt_tot     = self%rt_tot
+    end subroutine get_times
 
     ! PREPARATION ROUTINES
 
@@ -288,6 +310,7 @@ contains
         real    :: corrs(self%nrots), inpl_corr, corr_bound, cc_glob
         logical :: found_better, do_inplsrch, glob_best_set
         if( nint(self%a_ptr%get(iptcl,'state')) > 0 )then
+            if( L_BENCH ) self%t_tot = tic()
             do_inplsrch   = .true.
             corr_bound    = -1.
             cc_glob       = -1.
@@ -298,6 +321,7 @@ contains
                 ! SHC move
                 found_better = .false.
                 self%nrefs_eval = 0
+                if( L_BENCH ) self%t_refloop = tic()
                 do isample=1,self%nrefs
                     iref = self%srch_order( isample )
                     ! keep track of how many references we are evaluating
@@ -305,7 +329,7 @@ contains
                     ! passes empty classes
                     if( self%cls_pops(iref) == 0 )cycle
                     ! shc update
-                    corrs     = self%pftcc_ptr%gencorrs(iref, iptcl) 
+                    corrs     = self%pftcc_ptr%gencorrs(iref, iptcl)
                     inpl_ind  = shcloc(self%nrots, corrs, self%prev_corr)
                     if( inpl_ind == 0 )then
                         ! update inpl_ind & inpl_corr to greedy best
@@ -330,6 +354,7 @@ contains
                     ! first improvement heuristic
                     if( found_better ) exit
                 end do
+                if( L_BENCH ) self%rt_refloop = self%rt_refloop + toc(self%t_refloop)
             else
                 ! random move
                 self%nrefs_eval = 1 ! evaluate one random ref
@@ -382,13 +407,18 @@ contains
                     self%best_rot   = self%prev_rot
                 endif
             endif
-            if( do_inplsrch )call self%inpl_srch(iptcl)
+            if( do_inplsrch )then
+                if( L_BENCH ) self%t_inpl = tic()
+                call self%inpl_srch(iptcl)
+                if( L_BENCH ) self%rt_inpl = self%rt_inpl + toc(self%t_inpl)
+            endif
             if( .not. is_a_number(self%best_corr) )then
                 print *, 'FLOATING POINT EXCEPTION ALARM; simple_prime2D_srch :: stochastic_srch'
                 print *, iptcl, self%best_class, self%best_corr, self%best_rot
                 print *, (corr_bound < 0. .or. self%prev_corr > corr_bound)
             endif
             call self%update_best(iptcl)
+            if( L_BENCH ) self%rt_tot = self%rt_tot + toc(self%t_tot)
         else
             call self%a_ptr%reject(iptcl)
         endif

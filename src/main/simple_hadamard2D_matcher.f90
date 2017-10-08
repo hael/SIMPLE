@@ -3,7 +3,6 @@ module simple_hadamard2D_matcher
 !$ use omp_lib
 !$ use omp_lib_kinds
 #include "simple_lib.f08"
-    
 use simple_polarft_corrcalc, only: polarft_corrcalc
 use simple_prime2D_srch,     only: prime2D_srch
 use simple_classaverager,    only: classaverager
@@ -13,7 +12,7 @@ use simple_params,           only: params
 use simple_cmdline,          only: cmdline
 use simple_hadamard_common   ! use all in there
 use simple_filterer          ! use all in there
-
+use simple_timer             ! use all in there
 implicit none
 
 public :: prime2D_exec, preppftcc4align, pftcc
@@ -23,6 +22,12 @@ private
 type(polarft_corrcalc)          :: pftcc
 type(prime2D_srch), allocatable :: primesrch2D(:)
 type(classaverager)             :: cavger
+integer(timer_int_kind)         :: t_init, t_prep_pftcc, t_align, t_cavg, t_ctfmat, t_tot
+logical, parameter              :: L_BENCH = .false.
+logical, parameter              :: L_BENCH_PRIME2D = .false.
+real(timer_int_kind)            :: rt_init, rt_prep_pftcc, rt_align, rt_cavg, rt_ctfmat 
+real(timer_int_kind)            :: rt_tot, rt_refloop, rt_inpl, rt_tot_sum, rt_refloop_sum, rt_inpl_sum
+character(len=STDLEN)           :: benchfname
 
 contains
 
@@ -38,11 +43,15 @@ contains
         logical,        intent(inout) :: converged
         integer, allocatable :: prev_pops(:), pinds(:)
         logical, allocatable :: ptcl_mask(:)
-        integer :: iptcl, icls, j
+        integer :: iptcl, icls, j, fnr
         real    :: corr_thresh, frac_srch_space, skewness, extr_thresh
-        logical :: l_do_read
+        logical :: l_do_read, doprint
 
         ! PREP REFERENCES
+        if( L_BENCH )then
+            t_init = tic()
+            t_tot  = tic()
+        endif
         call cavger%new(b, p, 'class')
         l_do_read = .true.
         if( p%l_distr_exec )then
@@ -129,13 +138,15 @@ contains
         else
             corr_thresh = -huge(corr_thresh)
         endif
-        print *,'corr_thresh ',corr_thresh
 
         ! SET FOURIER INDEX RANGE
         call set_bp_range2D( b, p, cline, which_iter, frac_srch_space )
+        if( L_BENCH ) rt_init = toc(t_init)
 
         ! GENERATE REFERENCE & PARTICLE POLAR FTs
+        if( L_BENCH ) t_prep_pftcc = tic()
         call preppftcc4align( b, p, which_iter )
+        if( L_BENCH ) rt_prep_pftcc = toc(t_prep_pftcc)
 
         ! INITIALIZE
         write(*,'(A,1X,I3)') '>>> PRIME2D DISCRETE STOCHASTIC SEARCH, ITERATION:', which_iter
@@ -150,9 +161,12 @@ contains
             call primesrch2D(iptcl)%new(pftcc, b%a, p)
         end do
         ! calculate CTF matrices
+        if( L_BENCH ) t_ctfmat = tic()
         if( p%ctf .ne. 'no' ) call pftcc%create_polar_ctfmats(b%a)
+        if( L_BENCH ) rt_ctfmat = toc(t_ctfmat)
         ! execute the search
         call del_file(p%outfile)
+        if( L_BENCH ) t_align = tic()
         select case(trim(p%refine))
             case('neigh')
                 !$omp parallel do default(shared) schedule(guided) private(iptcl) proc_bind(close)
@@ -172,13 +186,24 @@ contains
                         write(*,'(A,F8.2)') '>>> PARTICLE RANDOMIZATION(%):', 100.*extr_thresh
                         write(*,'(A,F8.2)') '>>> CORRELATION THRESHOLD:    ', corr_thresh
                     endif
-                    !$omp parallel do default(shared) schedule(guided) private(iptcl) proc_bind(close)
+                    if( L_BENCH_PRIME2D )then
+                        rt_refloop_sum = 0.
+                        rt_tot_sum     = 0.
+                    endif
+                    !omp parallel do default(shared) schedule(guided) private(iptcl) proc_bind(close)
                     do iptcl=p%fromp,p%top
                         call primesrch2D(iptcl)%exec_prime2D_srch(iptcl, extr_bound=corr_thresh)
+                        call primesrch2D(iptcl)%get_times(rt_refloop, rt_inpl, rt_tot)
+                        if( L_BENCH_PRIME2D )then
+                            rt_refloop_sum = rt_refloop_sum + rt_refloop
+                            rt_inpl_sum    = rt_inpl_sum    + rt_inpl
+                            rt_tot_sum     = rt_tot_sum     + rt_tot
+                        endif
                     end do
-                    !$omp end parallel do
+                    !omp end parallel do
                 endif
         end select
+        if( L_BENCH ) rt_align = toc(t_align)
         DebugPrint ' hadamard2D_matcher; completed alignment'
 
         ! SETUP (OVERWRITES) EVEN/ODD PARTITION
@@ -201,8 +226,9 @@ contains
         p%oritab = p%outfile
 
         ! WIENER RESTORATION OF CLASS AVERAGES
+        if( L_BENCH ) t_cavg = tic()
         call cavger%transf_oridat(b%a)
-        call cavger%set_grid_flag(frac_srch_space >= FRAC_INTERPOL)
+        call cavger%set_grid_flag(frac_srch_space >= FRAC_INTERPOL .and. which_iter > 3)
         call cavger%assemble_sums()
         if( p%l_distr_exec )then
             call cavger%write_partial_sums()
@@ -211,6 +237,7 @@ contains
             if( p%chunktag .ne. '' ) p%refs = trim(p%chunktag)//trim(p%refs)
             call cavger%write(p%refs, 'merged')
         endif
+        if( L_BENCH ) rt_cavg = toc(t_cavg)
 
         ! CALCULATE & WRITE TO DISK FOURIER RING CORRELATION
         if( p%l_distr_exec )then
@@ -236,6 +263,46 @@ contains
             call qsys_job_finished(p, 'simple_hadamard2D_matcher :: prime2D_exec')
         else
             converged = b%conv%check_conv2D()
+        endif
+        if( L_BENCH )then
+            rt_tot  = toc(t_tot)
+            doprint = .true.
+            if( p%l_distr_exec .and. p%part /= 1 ) doprint = .false.
+            if( doprint )then
+                benchfname = 'HADAMARD2D_BENCH_ITER'//int2str_pad(which_iter,3)//'.txt'
+                call fopen(fnr, FILE=trim(benchfname), STATUS='REPLACE', action='WRITE')
+                write(fnr,'(a)') '*** TIMINGS (s) ***'
+                write(fnr,'(a,1x,f9.2)') 'initialisation       : ', rt_init
+                write(fnr,'(a,1x,f9.2)') 'pftcc preparation    : ', rt_prep_pftcc
+                write(fnr,'(a,1x,f9.2)') 'stochastic alignment : ', rt_align
+                write(fnr,'(a,1x,f9.2)') 'class averaging      : ', rt_cavg
+                write(fnr,'(a,1x,f9.2)') 'CTF matrix generation: ', rt_ctfmat
+                write(fnr,'(a,1x,f9.2)') 'total time           : ', rt_tot
+                write(fnr,'(a)') ''
+                write(fnr,'(a)') '*** REATIVE TIMINGS (%) ***'
+                write(fnr,'(a,1x,f9.2)') 'initialisation       : ', (rt_init/rt_tot)       * 100.
+                write(fnr,'(a,1x,f9.2)') 'pftcc preparation    : ', (rt_prep_pftcc/rt_tot) * 100.
+                write(fnr,'(a,1x,f9.2)') 'stochastic alignment : ', (rt_align/rt_tot)      * 100.
+                write(fnr,'(a,1x,f9.2)') 'class averaging      : ', (rt_cavg/rt_tot)       * 100.
+                write(fnr,'(a,1x,f9.2)') 'CTF matrix generation: ', (rt_ctfmat/rt_tot)     * 100.
+                call fclose(fnr)
+            endif
+        endif
+        if( L_BENCH_PRIME2D )then
+            doprint = .true.
+            if( p%l_distr_exec .and. p%part /= 1 ) doprint = .false.
+            if( doprint )then
+                benchfname = 'PRIME2D_BENCH_ITER'//int2str_pad(which_iter,3)//'.txt'
+                call fopen(fnr, FILE=trim(benchfname), STATUS='REPLACE', action='WRITE')
+                write(fnr,'(a)') '*** TIMINGS (s) ***'
+                write(fnr,'(a,1x,f9.2)') 'refloop : ', rt_refloop_sum
+                write(fnr,'(a,1x,f9.2)') 'in-plane: ', rt_inpl_sum
+                write(fnr,'(a,1x,f9.2)') 'tot     : ', rt_tot_sum
+                write(fnr,'(a)') ''
+                write(fnr,'(a)') '*** REATIVE TIMINGS (%) ***'
+                write(fnr,'(a,1x,f9.2)') 'refloop : ', (rt_refloop_sum/rt_tot_sum) * 100.
+                write(fnr,'(a,1x,f9.2)') 'in-plane: ', (rt_inpl_sum/rt_tot_sum)    * 100.
+            endif
         endif
     end subroutine prime2D_exec
 

@@ -7,6 +7,8 @@ use simple_magic_boxes,    only: find_magic_box
 use simple_imghead,        only: find_ldim_nptcls
 use simple_binoris,        only: binoris
 use simple_stktab_handler, only: stktab_handler
+!$ use omp_lib
+!$ use omp_lib_kinds
 implicit none
 
 public :: params
@@ -391,8 +393,6 @@ contains
 
     !> \brief  is a constructor
     subroutine new( self, cline, checkdistr, allow_mix )
-        !$ use omp_lib
-        !$ use omp_lib_kinds
         use simple_math, only: round2even
         use simple_map_reduce  ! use all in there
         class(params),     intent(inout) :: self
