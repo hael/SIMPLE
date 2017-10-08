@@ -41,8 +41,8 @@ type prime2D_srch
     integer, allocatable             :: srch_order(:)        !< stochastic search order
     character(len=STDLEN)            :: refine        = ''   !< refinement flag
     ! timer vars
-    real(timer_int_kind)             :: rt_refloop, rt_inpl, rt_tot
-    integer(timer_int_kind)          :: t_refloop, t_inpl, t_tot
+    real(timer_int_kind)             :: rt_refloop, rt_inpl, rt_tot, rt_inpl_shc, rt_inpl_simplex
+    integer(timer_int_kind)          :: t_refloop, t_inpl, t_tot, t_inpl_shc, t_inpl_simplex
     ! logical flags
     logical                          :: dyncls  = .true.     !< whether to turn on dynamic class update (use of low population threshold)
     logical                          :: doshift = .true.     !< origin shift search indicator
@@ -113,9 +113,11 @@ contains
         endif
         if( L_BENCH )then
             ! init timers
-            self%rt_refloop = 0.
-            self%rt_inpl    = 0.
-            self%rt_tot     = 0. 
+            self%rt_refloop      = 0.
+            self%rt_inpl         = 0.
+            self%rt_tot          = 0. 
+            self%rt_inpl_shc     = 0. 
+            self%rt_inpl_simplex = 0. 
         endif
         ! the instance now exists
         self%exists = .true.
@@ -183,12 +185,14 @@ contains
         DebugPrint '>>> PRIME2D_SRCH::GOT BEST ORI'
     end subroutine update_best
 
-    subroutine get_times( self, rt_refloop, rt_inpl, rt_tot )
+    subroutine get_times( self, rt_refloop, rt_inpl, rt_inpl_shc, rt_inpl_simplex, rt_tot )
         class(prime2D_srch),  intent(in) :: self
-        real(timer_int_kind), intent(out):: rt_refloop, rt_inpl, rt_tot
-        rt_refloop = self%rt_refloop
-        rt_inpl    = self%rt_inpl
-        rt_tot     = self%rt_tot
+        real(timer_int_kind), intent(out):: rt_refloop, rt_inpl, rt_inpl_shc, rt_inpl_simplex, rt_tot
+        rt_refloop      = self%rt_refloop
+        rt_inpl         = self%rt_inpl
+        rt_inpl_shc     = self%rt_inpl_shc
+        rt_inpl_simplex = self%rt_inpl_simplex
+        rt_tot          = self%rt_tot
     end subroutine get_times
 
     ! PREPARATION ROUTINES
@@ -479,11 +483,15 @@ contains
         self%best_shvec = [0.,0.]
         if( self%doshift )then
             corr_before = self%best_corr
+            if( L_BENCH ) self%t_inpl_shc = tic()
             call self%shcgrid%srch(self%pftcc_ptr, self%best_class,&
             iptcl, self%nrots, self%best_rot, new_rot, self%best_shvec)
-            self%best_rot = new_rot            
+            if( L_BENCH ) self%rt_inpl_shc = self%rt_inpl_shc + toc(self%t_inpl_shc)
+            self%best_rot = new_rot
+            if( L_BENCH ) self%t_inpl_simplex = tic()            
             call self%inplsrch_obj%set_indices(self%best_class, iptcl)
             crxy = self%inplsrch_obj%minimize(irot=self%best_rot, shvec=self%best_shvec)
+            if( L_BENCH ) self%rt_inpl_simplex = self%rt_inpl_simplex + toc(self%t_inpl_simplex)
             corr_after = crxy(1)
             if( corr_after >= corr_before )then
                 self%best_corr  = crxy(1)
@@ -503,7 +511,7 @@ contains
         if( self%exists )then
             call self%shcgrid%kill
             if( allocated(self%srch_order) ) deallocate(self%srch_order)
-            if( allocated(self%cls_pops) ) deallocate(self%cls_pops)
+            if( allocated(self%cls_pops) )   deallocate(self%cls_pops)
             self%exists = .false.
         endif
     end subroutine kill

@@ -19,14 +19,16 @@ public :: prime2D_exec, preppftcc4align, pftcc
 private
 #include "simple_local_flags.inc"
 
+logical, parameter              :: L_BENCH         = .false.
+logical, parameter              :: L_BENCH_PRIME2D = .false.
 type(polarft_corrcalc)          :: pftcc
 type(prime2D_srch), allocatable :: primesrch2D(:)
 type(classaverager)             :: cavger
 integer(timer_int_kind)         :: t_init, t_prep_pftcc, t_align, t_cavg, t_ctfmat, t_tot
-logical, parameter              :: L_BENCH = .false.
-logical, parameter              :: L_BENCH_PRIME2D = .false.
 real(timer_int_kind)            :: rt_init, rt_prep_pftcc, rt_align, rt_cavg, rt_ctfmat 
-real(timer_int_kind)            :: rt_tot, rt_refloop, rt_inpl, rt_tot_sum, rt_refloop_sum, rt_inpl_sum
+real(timer_int_kind)            :: rt_tot, rt_refloop, rt_inpl, rt_tot_sum, rt_refloop_sum
+real(timer_int_kind)            :: rt_inpl_sum, rt_inpl_shc, rt_inpl_simplex, rt_inpl_shc_sum
+real(timer_int_kind)            :: rt_inpl_simplex_sum
 character(len=STDLEN)           :: benchfname
 
 contains
@@ -193,11 +195,13 @@ contains
                     !$omp parallel do default(shared) schedule(guided) private(iptcl) proc_bind(close)
                     do iptcl=p%fromp,p%top
                         call primesrch2D(iptcl)%exec_prime2D_srch(iptcl, extr_bound=corr_thresh)
-                        call primesrch2D(iptcl)%get_times(rt_refloop, rt_inpl, rt_tot)
+                        call primesrch2D(iptcl)%get_times(rt_refloop, rt_inpl, rt_inpl_shc, rt_inpl_simplex, rt_tot)
                         if( L_BENCH_PRIME2D )then
-                            rt_refloop_sum = rt_refloop_sum + rt_refloop
-                            rt_inpl_sum    = rt_inpl_sum    + rt_inpl
-                            rt_tot_sum     = rt_tot_sum     + rt_tot
+                            rt_refloop_sum      = rt_refloop_sum      + rt_refloop
+                            rt_inpl_sum         = rt_inpl_sum         + rt_inpl
+                            rt_inpl_shc_sum     = rt_inpl_shc_sum     + rt_inpl_shc
+                            rt_inpl_simplex_sum = rt_inpl_simplex_sum + rt_inpl_simplex
+                            rt_tot_sum          = rt_tot_sum          + rt_tot
                         endif
                     end do
                     !$omp end parallel do
@@ -295,13 +299,17 @@ contains
                 benchfname = 'PRIME2D_BENCH_ITER'//int2str_pad(which_iter,3)//'.txt'
                 call fopen(fnr, FILE=trim(benchfname), STATUS='REPLACE', action='WRITE')
                 write(fnr,'(a)') '*** TIMINGS (s) ***'
-                write(fnr,'(a,1x,f9.2)') 'refloop : ', rt_refloop_sum
-                write(fnr,'(a,1x,f9.2)') 'in-plane: ', rt_inpl_sum
-                write(fnr,'(a,1x,f9.2)') 'tot     : ', rt_tot_sum
+                write(fnr,'(a,1x,f9.2)') 'refloop          : ', rt_refloop_sum
+                write(fnr,'(a,1x,f9.2)') 'in-plane, shc    : ', rt_inpl_shc_sum
+                write(fnr,'(a,1x,f9.2)') 'in-plane, simplex: ', rt_inpl_simplex_sum
+                write(fnr,'(a,1x,f9.2)') 'in-plane, tot    : ', rt_inpl_sum
+                write(fnr,'(a,1x,f9.2)') 'tot              : ', rt_tot_sum
                 write(fnr,'(a)') ''
                 write(fnr,'(a)') '*** REATIVE TIMINGS (%) ***'
-                write(fnr,'(a,1x,f9.2)') 'refloop : ', (rt_refloop_sum/rt_tot_sum) * 100.
-                write(fnr,'(a,1x,f9.2)') 'in-plane: ', (rt_inpl_sum/rt_tot_sum)    * 100.
+                write(fnr,'(a,1x,f9.2)') 'refloop          : ', (rt_refloop_sum/rt_tot_sum)      * 100.
+                write(fnr,'(a,1x,f9.2)') 'in-plane, shc    : ', (rt_inpl_shc_sum/rt_tot_sum)     * 100.
+                write(fnr,'(a,1x,f9.2)') 'in-plane, simplex: ', (rt_inpl_simplex_sum/rt_tot_sum) * 100.
+                write(fnr,'(a,1x,f9.2)') 'in-plane, tot    : ', (rt_inpl_sum/rt_tot_sum)         * 100.
             endif
         endif
     end subroutine prime2D_exec
