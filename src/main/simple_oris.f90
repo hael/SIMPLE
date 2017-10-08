@@ -149,6 +149,7 @@ type :: oris
     generic            :: balance => balance_1, balance_2
     procedure          :: calc_hard_weights
     procedure          :: calc_spectral_weights
+    procedure          :: reject_above
     procedure          :: find_closest_proj
     procedure          :: find_closest_projs
     procedure          :: find_closest_ori
@@ -2503,6 +2504,23 @@ contains
             !stop 'specscore not part of oris; simple_oris :: calc_spectral_weights'
         endif
     end subroutine calc_spectral_weights
+
+    subroutine reject_above( self, which, thres )
+        class(oris),      intent(inout) :: self
+        character(len=*), intent(in)    :: which
+        real,             intent(in)    :: thres
+        integer :: i
+        real    :: val
+        if( self%isthere(which) )then
+            do i=1,self%n
+                val = self%o(i)%get(which)
+                if( val > thres ) call self%o(i)%set('state_balance', 0.)
+            end do
+        else
+            print *, 'which: ', trim(which)
+            stop 'variable not part of oris; simple_oris :: reject_above'
+        endif
+    end subroutine reject_above
 
     !>  \brief  calculates hard weights based on ptcl ranking
     subroutine calc_hard_weights( self, frac )

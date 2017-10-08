@@ -656,10 +656,11 @@ select case(prg)
         keys_optional(34) = 'stk'
         keys_optional(35) = 'stktab'
         keys_optional(36) = 'weights3D'
+        keys_optional(37) = 'sdev_thres'
         ! documentation
         if( describe ) call print_doc_prime3D
         ! parse command line
-        call cline%parse( keys_required(:5), keys_optional(:36) )
+        call cline%parse( keys_required(:5), keys_optional(:37) )
         ! sanity check
         if( cline%defined('stk') .or. cline%defined('stktab') )then
             ! all ok

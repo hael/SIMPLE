@@ -206,6 +206,7 @@ contains
         call chdict%push('rrate',         'randomization rate{0.8}')
         call chdict%push('scale',         'image scale factor{1}')
         call chdict%push('scale2',        'image scale factor 2nd{1}')
+        call chdict%push('sdev_thres',    'angular standard deviation threshold(in degrees)')
         call chdict%push('shalgn',        'do 2D shift alignment(yes|no){no}')
         call chdict%push('shbarrier',     'use shift search barrier constraint(yes|no){yes}')
         call chdict%push('shell_norm',    'normalise based on power spectrum (yes|no){no}')

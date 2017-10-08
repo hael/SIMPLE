@@ -480,8 +480,8 @@ contains
     end subroutine exec_orisops
 
     !> for analyzing SIMPLE orientation/parameter files
-    subroutine exec_oristats(self,cline)
-         class(oristats_commander), intent(inout) :: self
+    subroutine exec_oristats(self, cline)
+        class(oristats_commander), intent(inout) :: self
         class(cmdline),            intent(inout) :: cline
         type(build)          :: b
         type(oris)           :: o, osubspace
@@ -492,7 +492,7 @@ contains
         real                 :: popmin, popmax, popmed, popave, popsdev, popvar, frac_populated, szmax
         integer              :: nprojs, iptcl, icls, j 
         integer              :: noris, ncls
-        real,    allocatable :: pops(:), tmp(:), clustszs(:)
+        real,    allocatable :: pops(:), tmp(:), clustszs(:), sdevs(:)
         integer, allocatable :: clustering(:)
         logical, allocatable :: ptcl_mask(:)
         integer, parameter   :: hlen=50
@@ -650,9 +650,12 @@ contains
                 write(*,'(a,1x,f8.2)') 'MINIMUM TRS               :', (mind+mind2)/2.
                 write(*,'(a,1x,f8.2)') 'MAXIMUM TRS               :', (maxd+maxd2)/2.
                 goto 999
-            endif            
+            endif
+            if( cline%defined('sdev_thres') )then
+                sdevs = b%a%get_all('sdev')
+                write(*,'(a,1x,i9)') '# particles included:', count(sdevs <= p%sdev_thres)
+            endif
         endif
-        call binwrite_oritab(p%outfile, b%a, [1,b%a%get_noris()])
         999 call simple_end('**** SIMPLE_ORISTATS NORMAL STOP ****')
     end subroutine exec_oristats
 

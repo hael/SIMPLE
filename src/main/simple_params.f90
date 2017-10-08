@@ -345,6 +345,7 @@ type :: params
     real    :: power=2.
     real    :: scale=1.            !< image scale factor{1}
     real    :: scale2=1.           !< image scale factor 2nd{1}
+    real    :: sdev_thres=180.     !< angular standard deviation threshold(degrees)
     real    :: sherr=0.            !< shift error(in pixels){2}
     real    :: smpd=2.             !< sampling distance, same as EMANs apix(in A)
     real    :: smpd_targets2D(2)
@@ -720,6 +721,7 @@ contains
         call check_rarg('power',          self%power)
         call check_rarg('scale',          self%scale)
         call check_rarg('scale2',         self%scale2)
+        call check_rarg('sdev_thres',     self%sdev_thres)
         call check_rarg('sherr',          self%sherr)
         call check_rarg('smpd',           self%smpd)
         call check_rarg('snr',            self%snr)

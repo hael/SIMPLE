@@ -325,6 +325,11 @@ contains
             call b%a%set_all2single('eo', -1.)
         endif
 
+        ! PARTICLE REJECTION BASED ON ALIGNABILITY (SDEV OF ANGULAR ORIS)
+        if( cline%defined('sdev_thres') )then
+            call b%a%reject_above('sdev', p%sdev_thres)
+        endif
+
         ! OUTPUT ORIENTATIONS
         call binwrite_oritab(p%outfile, b%a, [p%fromp,p%top])
         p%oritab = p%outfile
