@@ -15,6 +15,7 @@ implicit none
 
 public :: prime2D_autoscale_commander
 public :: ini3D_from_cavgs_commander
+public :: auto_refine3D_commander
 public :: het_ensemble_commander
 public :: cga_hres_sel_commander
 private
@@ -27,6 +28,10 @@ type, extends(commander_base) :: ini3D_from_cavgs_commander
   contains
     procedure :: execute      => exec_ini3D_from_cavgs
 end type ini3D_from_cavgs_commander
+type, extends(commander_base) :: auto_refine3D_commander
+  contains
+    procedure :: execute      => exec_auto_refine3D
+end type auto_refine3D_commander
 type, extends(commander_base) :: het_ensemble_commander
   contains
     procedure :: execute      => exec_het_ensemble
@@ -167,6 +172,114 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_PRIME2D NORMAL STOP ****')
     end subroutine exec_prime2D_autoscale
+
+    !> for generation of an initial 3d model from class averages
+    subroutine exec_auto_refine3D( self, cline )
+        use simple_defs_conv
+        !use simple_commander_rec, only: recvol_commander
+        class(auto_refine3D_commander), intent(inout) :: self
+        class(cmdline),                 intent(inout) :: cline
+        ! constants
+        integer,               parameter :: MAXITS_REFINE1=20, MAXITS_REFINE2=20
+        integer,               parameter :: STATE=1
+        character(len=32),     parameter :: ITERFBODY     = 'prime3Ddoc_'
+        character(len=32),     parameter :: VOLFBODY      = 'recvol_state'
+        ! distributed commanders
+        type(prime3D_distr_commander) :: xprime3D_distr
+        ! shared-mem commanders
+        !type(recvol_commander)        :: xrecvol
+        ! command lines
+        type(cmdline)         :: cline_prime3D_1, cline_prime3D_2, cline_prime3D_3
+        type(cmdline)         :: cline_recvol
+        ! other variables
+        type(params)          :: p_master
+        real                  :: iter, trs_lim, greedytrs_lim
+        character(len=2)      :: str_state
+        character(len=3)      :: str_iter
+        character(len=STDLEN) :: vol_iter, oritab, vol_pproc
+        ! set cline defaults
+        call cline%set('eo', 'yes')
+        call cline%set('dynlp', 'no') ! better be explicit about the dynlp
+        ! make master parameters
+        p_master = params(cline, checkdistr=.false.)
+        ! delete possibly pre-existing stack_parts
+        call del_files(STKPARTFBODY, p_master%nparts, ext=p_master%ext)
+        ! set global state string
+        str_state = int2str_pad(STATE,2)
+        ! prepare command lines from prototype master
+        cline_prime3D_1 = cline
+        cline_prime3D_2 = cline
+        cline_prime3D_3 = cline
+        ! determines shift limits
+        if( cline%defined('trs') )then
+            ! all good
+        else
+            trs_lim = MSK_FRAC*real(p_master%msk)
+            trs_lim = max(MINSHIFT, trs_lim)
+            trs_lim = min(MAXSHIFT, trs_lim)
+        endif
+        greedytrs_lim = min(MAXSHIFT, 2.*trs_lim)
+        ! REFINEMENT FROM MODEL - STEP 1
+        call cline_prime3D_1%set('prg', 'prime3D')
+        call cline_prime3D_1%set('refine', 'greedy')
+        call cline_prime3D_1%set('trs', greedytrs_lim)
+        ! REFINEMENT FROM MODEL - STEP 2
+        call cline_prime3D_2%set('prg', 'prime3D')
+        call cline_prime3D_2%set('refine', 'no')
+        call cline_prime3D_2%set('trs', trs_lim)
+        ! REFINEMENT FROM MODEL - STEP 3
+        call cline_prime3D_3%set('prg', 'prime3D')
+        call cline_prime3D_3%set('refine', 'greedyneigh')
+        call cline_prime3D_3%set('trs', trs_lim)
+        ! execute commanders
+        write(*,'(A)') '>>>'
+        write(*,'(A)') '>>> PRIME3D REFINEMENT STEP 1'
+        write(*,'(A)') '>>>'
+        call cline_prime3D_1%set('startit', 1.)
+        call cline_prime3D_1%set('maxits', 1.)
+        call xprime3D_distr%execute(cline_prime3D_1)
+        iter = cline_prime3D_1%get_rarg('endit')
+        call set_iter_dependencies
+        write(*,'(A)') '>>>'
+        write(*,'(A)') '>>> PRIME3D REFINEMENT STEP 2'
+        write(*,'(A)') '>>>'
+        iter = iter + 1
+        call cline_prime3D_2%set('startit', real(iter))
+        call cline_prime3D_2%set('maxits', real(MAXITS_REFINE1)+iter-1)
+        call cline_prime3D_2%set('oritab', oritab)
+        call cline_prime3D_2%set('vol1', vol_iter)
+        call xprime3D_distr%execute(cline_prime3D_2)
+        iter = cline_prime3D_2%get_rarg('endit')
+        call set_iter_dependencies
+        write(*,'(A)') '>>>'
+        write(*,'(A)') '>>> PRIME3D REFINEMENT STEP 3'
+        write(*,'(A)') '>>>'
+        iter = iter + 1
+        call cline_prime3D_2%set('maxits', real(MAXITS_REFINE2)+iter-1)
+        call cline_prime3D_3%set('startit', real(iter))
+        call cline_prime3D_3%set('oritab', oritab)
+        call cline_prime3D_3%set('vol1', vol_iter)
+        call xprime3D_distr%execute(cline_prime3D_3)
+        iter = cline_prime3D_3%get_rarg('endit')
+        call set_iter_dependencies
+        vol_pproc = trim(VOLFBODY)//trim(str_state)//'_iter'//trim(str_iter)//'_pproc'//p_master%ext
+        call simple_rename(trim(vol_iter), 'rec_final'//p_master%ext)
+        call simple_rename(trim(vol_pproc), 'rec_final_pproc'//p_master%ext)
+        call simple_rename(trim(oritab), 'prime3Ddoc_final'//METADATEXT)
+        ! delete stack parts (we are done with them)
+        call del_files(trim(STKPARTFBODY), p_master%nparts, ext=p_master%ext)
+        ! end gracefully
+        call simple_end('**** SIMPLE_AUTO_REFINE3D NORMAL STOP ****')
+
+        contains
+
+            subroutine set_iter_dependencies
+                str_iter = int2str_pad(nint(iter),3)
+                oritab   = trim(ITERFBODY)//trim(str_iter)//METADATEXT
+                vol_iter = trim(VOLFBODY)//trim(str_state)//'_iter'//trim(str_iter)//p_master%ext
+            end subroutine set_iter_dependencies
+
+    end subroutine exec_auto_refine3D
 
     !> for generation of an initial 3d model from class averages
     subroutine exec_ini3D_from_cavgs( self, cline )

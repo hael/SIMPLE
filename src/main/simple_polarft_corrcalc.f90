@@ -794,7 +794,7 @@ contains
             self%fftdat(ithr)%ref(self%refsz+1:self%nrots) = conjg(self%fftdat(ithr)%ref(1:self%refsz))
             ! particle
             self%fftdat(ithr)%ptcl(1:self%nrots) = self%pfts_ptcls(iptcl,1:self%nrots, ik)
-            ! movie into Fourier Fourier space
+            ! move into Fourier Fourier space
             call fftwf_execute_dft(self%plan_fwd, self%fftdat(ithr)%ref,  self%fftdat(ithr)%ref_fft)
             call fftwf_execute_dft(self%plan_fwd, self%fftdat(ithr)%ptcl, self%fftdat(ithr)%ptcl_fft)
             ! correlate

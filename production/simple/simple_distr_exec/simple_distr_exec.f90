@@ -31,6 +31,7 @@ type(comlin_smat_distr_commander)        :: xcomlin_smat_distr
 ! PRIME3D
 type(prime3D_init_distr_commander)       :: xprime3D_init_distr
 type(prime3D_distr_commander)            :: xprime3D_distr
+type(auto_refine3D_commander)            :: xauto_refine3D
 type(recvol_distr_commander)             :: xrecvol_distr
 type(symsrch_distr_commander)            :: xsymsrch_distr
 
@@ -646,21 +647,20 @@ select case(prg)
         keys_optional(24) = 'shbarrier'
         keys_optional(25) = 'noise'
         keys_optional(26) = 'nnn'
-        keys_optional(27) = 'rrate'
-        keys_optional(28) = 'norec'
-        keys_optional(29) = 'nsub'
-        keys_optional(30) = 'lp_grid'
-        keys_optional(31) = 'balance'
-        keys_optional(32) = 'center'
-        keys_optional(33) = 'pproc'
-        keys_optional(34) = 'stk'
-        keys_optional(35) = 'stktab'
-        keys_optional(36) = 'weights3D'
-        keys_optional(37) = 'sdev_thres'
+        keys_optional(27) = 'norec'
+        keys_optional(28) = 'nsub'
+        keys_optional(29) = 'lp_grid'
+        keys_optional(30) = 'balance'
+        keys_optional(31) = 'center'
+        keys_optional(32) = 'pproc'
+        keys_optional(33) = 'stk'
+        keys_optional(34) = 'stktab'
+        keys_optional(35) = 'weights3D'
+        keys_optional(36) = 'sdev_thres'
         ! documentation
         if( describe ) call print_doc_prime3D
         ! parse command line
-        call cline%parse( keys_required(:5), keys_optional(:37) )
+        call cline%parse( keys_required(:5), keys_optional(:36) )
         ! sanity check
         if( cline%defined('stk') .or. cline%defined('stktab') )then
             ! all ok
@@ -680,6 +680,65 @@ select case(prg)
         endif
         ! execute
         call xprime3D_distr%execute(cline)
+    case( 'auto_refine3D' )
+        !==Program auto_refine3D
+        !
+        ! <auto_refine3D/begin><auto_refine3D/end>
+        !
+        ! set required keys
+        keys_required(1)  = 'smpd'
+        keys_required(2)  = 'msk'
+        keys_required(3)  = 'ctf'
+        keys_required(4)  = 'pgrp'
+        keys_required(5)  = 'nparts'
+        ! set optional keys
+        keys_optional(1)  = 'nthr'
+        keys_optional(2)  = 'deftab'
+        keys_optional(3)  = 'vol1'
+        keys_optional(4)  = 'oritab'
+        keys_optional(5)  = 'trs'
+        keys_optional(6)  = 'hp'
+        keys_optional(7)  = 'lp'
+        keys_optional(8)  = 'cenlp'
+        keys_optional(9) = 'lpstop'
+        keys_optional(10) = 'eo'
+        keys_optional(11) = 'frac'
+        keys_optional(12) = 'mskfile'
+        keys_optional(13) = 'inner'
+        keys_optional(14) = 'width'
+        keys_optional(15) = 'nspace'
+        keys_optional(16) = 'npeaks'
+        keys_optional(17) = 'startit'
+        keys_optional(18) = 'maxits'
+        keys_optional(19) = 'shbarrier'
+        keys_optional(20) = 'nnn'
+        keys_optional(21) = 'norec'
+        keys_optional(22) = 'nsub'
+        keys_optional(23) = 'lp_grid'
+        keys_optional(24) = 'balance'
+        keys_optional(25) = 'center'
+        keys_optional(26) = 'pproc'
+        keys_optional(27) = 'stk'
+        keys_optional(28) = 'stktab'
+        keys_optional(29) = 'weights3D'
+        keys_optional(30) = 'sdev_thres'
+        ! documentation
+        if( describe ) call print_doc_prime3D
+        ! parse command line
+        call cline%parse( keys_required(:5), keys_optional(:37) )
+        ! sanity check
+        if( cline%defined('stk') .or. cline%defined('stktab') )then
+            ! all ok
+        else
+            stop 'stk or stktab need to be part of command line!'
+        endif
+        ! set defaults
+        if( .not. cline%defined('nspace') ) call cline%set('nspace', 1000.)
+        if( .not. cline%defined('cenlp')  ) call cline%set('cenlp',    30.)
+        if( .not. cline%defined('pproc')  ) call cline%set('pproc',  'yes')
+        if( .not. cline%defined('eo')     ) call cline%set('eo', 'yes')
+        ! execute
+        call xauto_refine3D%execute(cline)
     case( 'recvol' )
         !==Program recvol
         !

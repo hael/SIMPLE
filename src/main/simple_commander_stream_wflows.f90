@@ -124,9 +124,10 @@ contains
         character(len=32),       parameter :: DEFTAB          = 'deftab.txt'
         character(len=32),       parameter :: STK_DIR         = './stacks/'
         character(len=32),       parameter :: FINALDOC        = 'prime2Ddoc_final'//METADATEXT
-        integer,                 parameter :: SHIFTSRCH_PTCLSLIM = 1000 ! # of ptcls required to turm on shift search
+        integer,                 parameter :: SHIFTSRCH_PTCLSLIM = 2000 ! # of ptcls required to turm on shift search
         integer,                 parameter :: SHIFTSRCH_ITERLIM  = 5    ! # of iterations prior to turm on shift search
         integer,                 parameter :: WAIT_WATCHER       = 60   ! seconds prior to new stack detection
+        integer,                 parameter :: MAXNCLS            = 1000 ! maximum # of classes
         type(prime2D_distr_commander)      :: xprime2D_distr
         type(makecavgs_distr_commander)    :: xmakecavgs
         type(extractwatcher)               :: mic_watcher
@@ -243,6 +244,7 @@ contains
                 ! updates particles classes & references
                 ncls_glob_prev = ncls_glob
                 ncls_glob      = nint(real(nptcls_glob) / p_master%nptcls_per_cls)
+                ncls_glob      = min(ncls_glob, MAXNCLS)
                 call remap_new_classes
                 last_injection = simple_gettime()
             endif
