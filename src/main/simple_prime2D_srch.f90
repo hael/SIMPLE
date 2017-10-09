@@ -2,7 +2,6 @@
 module simple_prime2D_srch
 #include "simple_lib.f08"
 use simple_polarft_corrcalc, only: polarft_corrcalc
-use simple_shc_inplane,      only: shc_inplane
 use simple_pftcc_shsrch,     only: pftcc_shsrch
 use simple_oris,             only: oris
 use simple_timer             ! use all in there
@@ -102,7 +101,6 @@ contains
         lims(:,2)       =  p%trs
         lims_init(:,1)  = -SHC_INPL_TRSHWDTH
         lims_init(:,2)  =  SHC_INPL_TRSHWDTH
-        ! call self%shcgrid%new
         call self%shsrch_obj%new(pftcc, lims, lims_init=lims_init, nrestarts=3, maxits=60)
         ! gather classes population: has to be done on instantiation
         ! so all ptcls have the same information
@@ -431,9 +429,9 @@ contains
         real              :: corrs(self%nrots),inpl_corr,corr
         if( nint(self%a_ptr%get(self%iptcl,'state')) > 0 )then
             ! find previous discrete alignment parameters
-            self%prev_class = nint(self%a_ptr%get(self%iptcl,'class'))                    ! class index
-            self%prev_rot   = self%pftcc_ptr%get_roind(360.-self%a_ptr%e3get(self%iptcl)) ! in-plane angle index
-            self%prev_shvec = [self%a_ptr%get(self%iptcl,'x'),self%a_ptr%get(self%iptcl,'y')]       ! shift vector
+            self%prev_class = nint(self%a_ptr%get(self%iptcl,'class'))                        ! class index
+            self%prev_rot   = self%pftcc_ptr%get_roind(360.-self%a_ptr%e3get(self%iptcl))     ! in-plane angle index
+            self%prev_shvec = [self%a_ptr%get(self%iptcl,'x'),self%a_ptr%get(self%iptcl,'y')] ! shift vector
             ! set best to previous best by default
             self%best_class = self%prev_class         
             self%best_rot   = self%prev_rot
@@ -489,7 +487,6 @@ contains
     subroutine kill( self )
         class(prime2D_srch), intent(inout) :: self !< instance
         if( self%exists )then
-            ! call self%shcgrid%kill
             if( allocated(self%srch_order) ) deallocate(self%srch_order)
             if( allocated(self%cls_pops) )   deallocate(self%cls_pops)
             self%exists = .false.

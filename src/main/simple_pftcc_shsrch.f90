@@ -26,12 +26,8 @@ type, extends(pftcc_opt) :: pftcc_shsrch
   contains
     procedure :: new         => shsrch_new
     procedure :: set_indices => shsrch_set_indices
-    procedure :: set_inipop  => shsrch_set_inipop
     procedure :: costfun     => shsrch_costfun
     procedure :: minimize    => shsrch_minimize
-    procedure :: get_nevals  => shsrch_get_nevals
-    procedure :: get_peaks   => shsrch_get_peaks
-    procedure :: kill
 end type pftcc_shsrch
 
 contains
@@ -81,20 +77,12 @@ contains
     !! \param rot rotational index
     !! \param state current state
     !!
-    subroutine shsrch_set_indices( self, ref, ptcl, rot, state )
+    subroutine shsrch_set_indices( self, ref, ptcl )
         class(pftcc_shsrch), intent(inout) :: self
         integer,             intent(in)    :: ref, ptcl
-        integer, optional,   intent(in)    :: rot, state
         self%reference = ref
         self%particle  = ptcl
     end subroutine shsrch_set_indices
-
-    !> shsrch_set_inipop Set init population for shift search
-    subroutine shsrch_set_inipop( self, inipop )
-        class(pftcc_shsrch), intent(inout) :: self
-        real,                intent(in)    :: inipop(:,:) !< initial population
-        stop 'Not for simplex use; simple_pftcc_shsrch%srch_set_inipop'
-    end subroutine shsrch_set_inipop
 
     !> Cost function
     function shsrch_costfun( self, vec, D ) result( cost )
@@ -117,15 +105,12 @@ contains
     end function shsrch_costfun
 
     !> minimisation routine
-    function shsrch_minimize( self, irot, shvec, rxy, fromto ) result( cxy )
+    function shsrch_minimize( self, irot ) result( cxy )
         class(pftcc_shsrch), intent(inout) :: self
-        integer, optional,   intent(inout) :: irot        !< index of rotation
-        real,    optional,   intent(in)    :: shvec(:)    !< search values vector (obsolete)
-        real,    optional,   intent(in)    :: rxy(:)      !< (obsolete)
-        integer, optional,   intent(in)    :: fromto(2)   !< (obsolete)
+        integer,             intent(out)   :: irot
         real, allocatable :: cxy(:)
         real              :: cost, cost_init, corrs(self%nrots)
-        integer           :: loc(1), rot
+        integer           :: loc(1)
         allocate(cxy(3))
         ! minimisation
         self%ospec%x      = 0.
@@ -136,19 +121,18 @@ contains
             ! get rotation index
             corrs = self%pftcc_ptr%gencorrs_fft(self%reference, self%particle, self%ospec%x)
             loc   = maxloc(corrs)
-            rot   = loc(1)
-            if( present(irot) ) irot = rot
+            irot  = loc(1)
             ! set output corr & shift
             cxy(1)  = -cost        ! correlation
             cxy(2:) = self%ospec%x ! shift
             ! rotate the shift vector to the frame of reference
-            cxy(2:) = matmul(cxy(2:), rotmat2d(self%pftcc_ptr%get_rot(rot)))
+            cxy(2:) = matmul(cxy(2:), rotmat2d(self%pftcc_ptr%get_rot(irot)))
             if( any(cxy(2:) > self%maxshift) .or. any(cxy(2:) < -self%maxshift) )then
                 cxy(1)  = -1.
                 cxy(2:) = 0.
             endif
         else
-            if( present(irot) ) irot = 0
+            irot    = 0
             cxy(1)  = -cost_init ! correlation
             cxy(2:) = 0.
         endif
@@ -166,10 +150,5 @@ contains
         allocate(peaks(1,2))
         peaks(1,:) = self%ospec%x
     end subroutine shsrch_get_peaks
-
-    subroutine kill( self )
-        class(pftcc_shsrch), intent(inout) :: self
-        self%pftcc_ptr => null()
-    end subroutine kill
 
 end module simple_pftcc_shsrch

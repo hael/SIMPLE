@@ -4,9 +4,7 @@ module simple_prime3D_srch
 use simple_oris,             only: oris
 use simple_ori,              only: ori
 use simple_polarft_corrcalc, only: polarft_corrcalc
-use simple_shc_inplane,      only: shc_inplane
 use simple_pftcc_shsrch,     only: pftcc_shsrch
-use simple_pftcc_inplsrch,   only: pftcc_inplsrch
 implicit none
 
 public :: prime3D_srch
@@ -24,9 +22,7 @@ type prime3D_srch
     class(oris),             pointer :: e_ptr     => null()      !< pointer to b%e (reference orientations)
     type(oris)                       :: o_refs                   !< projection directions search space
     type(oris)                       :: o_peaks                  !< orientations of best npeaks oris
-    type(shc_inplane)                :: shcgrid                  !< in-plane grid search object
     type(pftcc_shsrch)               :: shsrch_obj               !< origin shift search object
-    type(pftcc_inplsrch)             :: inplsrch_obj             !< in-plane search object
     integer                          :: iptcl          = 0       !< global particle index
     integer                          :: nrefs          = 0       !< total # references (nstates*nprojs)
     integer                          :: nnnrefs        = 0       !< total # neighboring references (nstates*nnn)
@@ -79,7 +75,6 @@ type prime3D_srch
     procedure, private :: stochastic_srch_het
     procedure, private :: stochastic_srch_bystate
     procedure          :: inpl_srch
-    procedure, private :: inpl_grid_srch
     ! PREPARATION ROUTINES
     procedure          :: prep4srch
     procedure          :: prep_reforis
@@ -207,9 +202,7 @@ contains
         lims(:,2)      =  p%trs
         lims_init(:,1) = -SHC_INPL_TRSHWDTH
         lims_init(:,2) =  SHC_INPL_TRSHWDTH
-        call self%shcgrid%new
-        call self%shsrch_obj%new(  pftcc, lims, lims_init=lims_init, shbarrier=self%shbarr)
-        call self%inplsrch_obj%new(pftcc, lims, lims_init=lims_init, shbarrier=self%shbarr)
+        call self%shsrch_obj%new(  pftcc, lims, lims_init=lims_init, shbarrier=self%shbarr, nrestarts=3, maxits=60)
         self%exists = .true.
         DebugPrint '>>> PRIME3D_SRCH::CONSTRUCTED NEW SIMPLE_PRIME3D_SRCH OBJECT'
     end subroutine new
@@ -791,70 +784,23 @@ contains
         real      :: cc, e3
         integer   :: i, ref, irot
         if( self%doshift )then
-            if( self%dev )then
-                do i=self%nrefs,self%nrefs-self%npeaks+1,-1
-                    ref = self%proj_space_inds( i )
-                    o   = self%o_refs%get_ori( ref )
-                    cc  = self%o_refs%get( ref, 'corr' )
-                    call self%shsrch_obj%set_indices(ref, self%iptcl)
-                    cxy = self%shsrch_obj%minimize(irot=irot)
-                    if( irot > 0 )then
-                        e3 = 360. - self%pftcc_ptr%get_rot(irot) ! psi
-                        call o%e3set(e3)                         ! stash psi
-                        call o%set('corr', cxy(1))
-                        call o%set_shift( cxy(2:3) )
-                        call self%o_refs%set_ori( ref, o )
-                    endif
-                end do
-            else
-                call self%inpl_grid_srch(inpl_inds, shvecs)
-                do i=self%nrefs,self%nrefs-self%npeaks+1,-1
-                    ref = self%proj_space_inds( i )
-                    o   = self%o_refs%get_ori( ref )
-                    cc  = self%o_refs%get( ref, 'corr' )
-                    if( self%greedy_inpl )then
-                        call self%inplsrch_obj%set_indices(ref, self%iptcl)
-                        crxy = self%inplsrch_obj%minimize(irot=inpl_inds(i), shvec=shvecs(i,:))
-                        if( crxy(1) >= cc )then
-                            call o%set( 'corr', crxy(1) )
-                            call o%e3set( 360.-crxy(2) )
-                            call o%set_shift( crxy(3:4) )
-                            call self%o_refs%set_ori( ref, o )
-                        endif
-                    else
-                        call self%shsrch_obj%set_indices(ref, self%iptcl, inpl_inds(i))
-                        cxy = self%shsrch_obj%minimize(shvec=shvecs(i,:))
-                        if( cxy(1) >= cc )then
-                            e3 = 360. - self%pftcc_ptr%get_rot(inpl_inds(i)) ! psi
-                            call o%e3set(e3)                                 ! stash psi
-                            call o%set('corr', cxy(1))
-                            call o%set_shift( cxy(2:3) )
-                            call self%o_refs%set_ori( ref, o )
-                        endif
-                    endif
-                end do
-            endif
+            do i=self%nrefs,self%nrefs-self%npeaks+1,-1
+                ref = self%proj_space_inds( i )
+                o   = self%o_refs%get_ori( ref )
+                cc  = self%o_refs%get( ref, 'corr' )
+                call self%shsrch_obj%set_indices(ref, self%iptcl)
+                cxy = self%shsrch_obj%minimize(irot=irot)
+                if( irot > 0 )then
+                    e3 = 360. - self%pftcc_ptr%get_rot(irot) ! psi
+                    call o%e3set(e3)                         ! stash psi
+                    call o%set('corr', cxy(1))
+                    call o%set_shift( cxy(2:3) )
+                    call self%o_refs%set_ori( ref, o )
+                endif
+            end do
         endif
         DebugPrint '>>> PRIME3D_SRCH::FINISHED INPL SEARCH'
     end subroutine inpl_srch
-
-    !>  \brief  discrete stochastic hill-climbing for the in-plane search
-    subroutine inpl_grid_srch( self, inpl_inds, shvecs )
-        class(prime3D_srch),    intent(inout) :: self
-        integer, allocatable,   intent(out)   :: inpl_inds(:)
-        real,    allocatable,   intent(out)   :: shvecs(:,:)
-        integer           :: i, ref, istop, prev_rot
-        if( allocated(inpl_inds) ) deallocate(inpl_inds)
-        if( allocated(shvecs)    ) deallocate(shvecs)
-        istop = self%nrefs - self%npeaks + 1
-        allocate( shvecs(istop:self%nrefs,2), inpl_inds(istop:self%nrefs) )
-        do i=self%nrefs,istop,-1
-            ref      = self%proj_space_inds(i)
-            prev_rot = self%pftcc_ptr%get_roind( 360.-self%o_refs%e3get(ref) )
-            call self%shcgrid%srch( self%pftcc_ptr, ref, self%iptcl, self%nrots, prev_rot, inpl_inds(i), shvecs(i,:))
-        end do
-        DebugPrint '>>> PRIME3D_SRCH::FINISHED INPL GRID SEARCH'
-    end subroutine inpl_grid_srch
 
     !>  \brief  prepares reference indices for the search & fetches ctf
     !! \param lp low-pass cutoff freq
@@ -1460,7 +1406,6 @@ contains
             self%e_ptr => null()
             call self%o_peaks%kill
             call self%online_destruct
-            call self%shcgrid%kill
             if( allocated(self%state_exists) ) deallocate(self%state_exists)
             self%exists = .false.
         endif
