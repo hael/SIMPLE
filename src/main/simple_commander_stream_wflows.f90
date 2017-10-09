@@ -189,7 +189,7 @@ contains
                     call mic_watcher%get_new_stacks(stktab)
                     call find_ldim_nptcls(stktab(1), ldim, nptcls)
                     box_original = ldim(1)
-                    box_glob     = find_magic_box(nint(scale*real(ldim(2))))
+                    box_glob     = max(64, min(64, find_magic_box(nint(scale*real(ldim(2)))))) ! TO PUT IN DEFS
                     scale        = real(box_glob) / real(box_original)
                     smpd_glob    = p_master%smpd / scale
                     msk_glob     = p_master%msk * scale
