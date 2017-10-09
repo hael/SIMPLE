@@ -33,8 +33,8 @@ contains
         use simple_moviewatcher,      only: moviewatcher
         class(preproc_stream_commander), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline
-        integer,               parameter   :: SHORTTIME = 30   ! folder watched every minute
-        integer,               parameter   :: LONGTIME  = 15  ! 15 mins before processing a new movie
+        integer,               parameter   :: SHORTTIME = 60   ! folder watched every minute
+        integer,               parameter   :: LONGTIME  = 900  ! 15 mins before processing a new movie
         character(len=STDLEN), allocatable :: movies(:)
         character(len=STDLEN)    :: movie
         type(qsys_env)           :: qenv
