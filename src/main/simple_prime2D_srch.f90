@@ -3,7 +3,7 @@ module simple_prime2D_srch
 #include "simple_lib.f08"
 use simple_polarft_corrcalc, only: polarft_corrcalc
 use simple_shc_inplane,      only: shc_inplane
-use simple_pftcc_inplsrch,   only: pftcc_inplsrch
+use simple_pftcc_shsrch,     only: pftcc_shsrch
 use simple_oris,             only: oris
 use simple_timer             ! use all in there
 implicit none
@@ -18,8 +18,7 @@ type prime2D_srch
     private
     class(polarft_corrcalc), pointer :: pftcc_ptr => null()  !< pointer to pftcc (corrcalc) object
     class(oris),             pointer :: a_ptr     => null()  !< pointer to b%a (primary particle orientation table)
-    type(shc_inplane)                :: shcgrid              !< in-plane grid search object
-    type(pftcc_inplsrch)             :: inplsrch_obj         !< in-plane search object
+    type(pftcc_shsrch)               :: shsrch_obj           !< shift search object (in-plane rot for free)
     integer                          :: nrefs         =  0   !< number of references
     integer                          :: nrots         =  0   !< number of in-plane rotations in polar representation
     integer                          :: nrefs_eval    =  0   !< nr of references evaluated
@@ -31,6 +30,7 @@ type prime2D_srch
     integer                          :: fromp         =  1   !< from particle index
     integer                          :: top           =  1   !< to particle index
     integer                          :: nnn           =  0   !< # nearest neighbors
+    integer                          :: iptcl         =  0   !< global particle index 
     real                             :: trs           =  0.  !< shift range parameter [-trs,trs]
     real                             :: prev_shvec(2) =  0.  !< previous origin shift vector
     real                             :: best_shvec(2) =  0.  !< best shift vector found by search
@@ -41,8 +41,8 @@ type prime2D_srch
     integer, allocatable             :: srch_order(:)        !< stochastic search order
     character(len=STDLEN)            :: refine        = ''   !< refinement flag
     ! timer vars
-    real(timer_int_kind)             :: rt_refloop, rt_inpl, rt_tot, rt_inpl_shc, rt_inpl_simplex
-    integer(timer_int_kind)          :: t_refloop, t_inpl, t_tot, t_inpl_shc, t_inpl_simplex
+    real(timer_int_kind)             :: rt_refloop, rt_inpl, rt_tot
+    integer(timer_int_kind)          :: t_refloop, t_inpl, t_tot
     ! logical flags
     logical                          :: dyncls  = .true.     !< whether to turn on dynamic class update (use of low population threshold)
     logical                          :: doshift = .true.     !< origin shift search indicator
@@ -71,9 +71,10 @@ contains
     ! CONSTRUCTOR
     
     !>  \brief  is a constructor
-    subroutine new( self, pftcc, a, p )
+    subroutine new( self, iptcl, pftcc, a, p )
         use simple_params, only: params
         class(prime2D_srch),             intent(inout) :: self   !< instance
+        integer,                         intent(in)    :: iptcl  !< global particle index
         class(polarft_corrcalc), target, intent(inout) :: pftcc  !< correlator
         class(oris),             target, intent(in)    :: a      !< primary particle orientation table
         class(params),                   intent(in)    :: p      !< parameters
@@ -84,6 +85,7 @@ contains
         ! set constants
         self%pftcc_ptr  => pftcc
         self%a_ptr      => a
+        self%iptcl      =  iptcl
         self%nrefs      =  p%ncls
         self%nrots      =  round2even(twopi*real(p%ring2))
         self%nrefs_eval =  0
@@ -100,8 +102,8 @@ contains
         lims(:,2)       =  p%trs
         lims_init(:,1)  = -SHC_INPL_TRSHWDTH
         lims_init(:,2)  =  SHC_INPL_TRSHWDTH
-        call self%shcgrid%new
-        call self%inplsrch_obj%new(pftcc, lims, lims_init=lims_init, nrestarts=3, maxits=30)
+        ! call self%shcgrid%new
+        call self%shsrch_obj%new(pftcc, lims, lims_init=lims_init, nrestarts=3, maxits=60)
         ! gather classes population: has to be done on instantiation
         ! so all ptcls have the same information
         if( self%a_ptr%isthere('class') )then
@@ -113,11 +115,9 @@ contains
         endif
         if( L_BENCH )then
             ! init timers
-            self%rt_refloop      = 0.
-            self%rt_inpl         = 0.
-            self%rt_tot          = 0. 
-            self%rt_inpl_shc     = 0. 
-            self%rt_inpl_simplex = 0. 
+            self%rt_refloop = 0.
+            self%rt_inpl    = 0.
+            self%rt_tot     = 0.  
         endif
         ! the instance now exists
         self%exists = .true.
@@ -133,14 +133,13 @@ contains
     end function get_nrots
     
     !>  \brief  to get the class
-    subroutine update_best( self, iptcl )
+    subroutine update_best( self )
         use simple_ori,  only: ori
         class(prime2D_srch), intent(in) :: self
-        integer,             intent(in) :: iptcl
         type(ori) :: o_new, o_old
         real      :: euls(3), mi_class, mi_inpl, mi_joint
         ! get previous orientation
-        o_old = self%a_ptr%get_ori(iptcl)
+        o_old = self%a_ptr%get_ori(self%iptcl)
         o_new = o_old
         ! get in-plane angle
         euls     = 0.
@@ -178,35 +177,32 @@ contains
             call o_new%set('corr', 1.)
         endif
         ! updates orientation
-        call self%a_ptr%set_ori(iptcl, o_new)
+        call self%a_ptr%set_ori(self%iptcl, o_new)
         ! cleanup
         call o_old%kill
         call o_new%kill
         DebugPrint '>>> PRIME2D_SRCH::GOT BEST ORI'
     end subroutine update_best
 
-    subroutine get_times( self, rt_refloop, rt_inpl, rt_inpl_shc, rt_inpl_simplex, rt_tot )
+    subroutine get_times( self, rt_refloop, rt_inpl, rt_tot )
         class(prime2D_srch),  intent(in) :: self
-        real(timer_int_kind), intent(out):: rt_refloop, rt_inpl, rt_inpl_shc, rt_inpl_simplex, rt_tot
-        rt_refloop      = self%rt_refloop
-        rt_inpl         = self%rt_inpl
-        rt_inpl_shc     = self%rt_inpl_shc
-        rt_inpl_simplex = self%rt_inpl_simplex
-        rt_tot          = self%rt_tot
+        real(timer_int_kind), intent(out):: rt_refloop, rt_inpl, rt_tot
+        rt_refloop = self%rt_refloop
+        rt_inpl    = self%rt_inpl
+        rt_tot     = self%rt_tot
     end subroutine get_times
 
     ! PREPARATION ROUTINES
 
     !>  \brief  prepares for the search
-    subroutine prep4srch( self, iptcl )
+    subroutine prep4srch( self )
         use simple_ran_tabu, only: ran_tabu
         class(prime2D_srch), intent(inout) :: self
-        integer,             intent(in)    :: iptcl
         type(ran_tabu)        :: rt
         real,     allocatable :: frc(:)
         integer               :: icls
         ! find previous discrete alignment parameters
-        self%prev_class = nint(self%a_ptr%get(iptcl,'class')) ! class index
+        self%prev_class = nint(self%a_ptr%get(self%iptcl,'class')) ! class index
         select case(self%refine)
             case('no', 'yes')
                 if( self%dyncls )then
@@ -220,14 +216,14 @@ contains
             case DEFAULT
                 ! all good
         end select
-        self%prev_rot   = self%pftcc_ptr%get_roind(360.-self%a_ptr%e3get(iptcl)) ! in-plane angle index
-        self%prev_shvec = [self%a_ptr%get(iptcl,'x'),self%a_ptr%get(iptcl,'y')]  ! shift vector
+        self%prev_rot   = self%pftcc_ptr%get_roind(360.-self%a_ptr%e3get(self%iptcl))     ! in-plane angle index
+        self%prev_shvec = [self%a_ptr%get(self%iptcl,'x'),self%a_ptr%get(self%iptcl,'y')] ! shift vector
         ! set best to previous best by default
         self%best_class = self%prev_class
         self%best_rot   = self%prev_rot
         ! calculate previous best corr (treshold for better)
         if( self%prev_class > 0 )then
-            self%prev_corr  = max( 0., self%pftcc_ptr%corr(self%prev_class, iptcl, self%prev_rot) )
+            self%prev_corr  = max( 0., self%pftcc_ptr%corr(self%prev_class, self%iptcl, self%prev_rot) )
             self%best_corr  = self%prev_corr
         else
             self%prev_class = irnd_uni(self%nrefs)
@@ -235,7 +231,7 @@ contains
             self%best_corr  = 0.
         endif
         ! calculate spectral score
-        frc = self%pftcc_ptr%genfrc(self%prev_class, iptcl, self%prev_rot)
+        frc = self%pftcc_ptr%genfrc(self%prev_class, self%iptcl, self%prev_rot)
         self%specscore = max(0.,median_nocopy(frc))
         ! make random reference direction order
         rt = ran_tabu(self%nrefs)
@@ -252,9 +248,8 @@ contains
     ! SEARCH ROUTINES
 
     !>  \brief the master prime search routine
-    subroutine exec_prime2D_srch( self, iptcl, greedy, extr_bound )
+    subroutine exec_prime2D_srch( self, greedy, extr_bound )
         class(prime2D_srch), intent(inout) :: self
-        integer,             intent(in)    :: iptcl
         logical, optional,   intent(in)    :: greedy
         real,    optional,   intent(in)    :: extr_bound
         logical :: ggreedy
@@ -265,9 +260,9 @@ contains
             if( present(greedy) ) ggreedy = greedy
         endif
         if( ggreedy )then
-            call self%greedy_srch(iptcl)
+            call self%greedy_srch
         else
-            call self%stochastic_srch(iptcl, extr_bound)
+            call self%stochastic_srch(extr_bound)
         endif
         ! memory management (important for ompenMP distr over arrays of prime2D_srch objects)
         if( allocated(self%srch_order) ) deallocate(self%srch_order)
@@ -275,17 +270,16 @@ contains
     end subroutine exec_prime2D_srch
 
     !>  \brief  executes greedy rotational search (for initialisation)
-    subroutine greedy_srch( self, iptcl )
+    subroutine greedy_srch( self )
         class(prime2D_srch), intent(inout) :: self
-        integer,             intent(in)    :: iptcl
         integer :: iref,loc(1),inpl_ind
         real    :: corrs(self%nrots),inpl_corr,corr
-        if( nint(self%a_ptr%get(iptcl,'state')) > 0 )then
-            call self%prep4srch(iptcl)
+        if( nint(self%a_ptr%get(self%iptcl,'state')) > 0 )then
+            call self%prep4srch
             corr = self%prev_corr
             do iref=1,self%nrefs
                 if( self%cls_pops(iref) == 0 )cycle
-                corrs     = self%pftcc_ptr%gencorrs(iref, iptcl) 
+                corrs     = self%pftcc_ptr%gencorrs(iref, self%iptcl) 
                 loc       = maxloc(corrs)
                 inpl_ind  = loc(1)
                 inpl_corr = corrs(inpl_ind)         
@@ -297,30 +291,29 @@ contains
                 endif    
             end do
             self%nrefs_eval = self%nrefs
-            call self%inpl_srch(iptcl)
-            call self%update_best(iptcl)
+            call self%inpl_srch
+            call self%update_best
         else
-            call self%a_ptr%reject(iptcl)
+            call self%a_ptr%reject(self%iptcl)
         endif
         DebugPrint '>>> PRIME2D_SRCH::FINISHED STOCHASTIC SEARCH'
     end subroutine greedy_srch
 
     !>  \brief  executes stochastic rotational search
-    subroutine stochastic_srch( self, iptcl, extr_bound )
+    subroutine stochastic_srch( self, extr_bound )
         class(prime2D_srch), intent(inout) :: self
-        integer,             intent(in)    :: iptcl
         real, optional,      intent(in)    :: extr_bound
         integer :: iref, loc(1), isample, inpl_ind, nptcls, class_glob, inpl_glob
         real    :: corrs(self%nrots), inpl_corr, corr_bound, cc_glob
         logical :: found_better, do_inplsrch, glob_best_set
-        if( nint(self%a_ptr%get(iptcl,'state')) > 0 )then
+        if( nint(self%a_ptr%get(self%iptcl,'state')) > 0 )then
             if( L_BENCH ) self%t_tot = tic()
             do_inplsrch   = .true.
             corr_bound    = -1.
             cc_glob       = -1.
             glob_best_set = .false. 
             if( present(extr_bound) ) corr_bound = extr_bound
-            call self%prep4srch(iptcl)
+            call self%prep4srch
             if( corr_bound < 0. .or. self%prev_corr > corr_bound )then
                 ! SHC move
                 found_better = .false.
@@ -333,7 +326,7 @@ contains
                     ! passes empty classes
                     if( self%cls_pops(iref) == 0 )cycle
                     ! shc update
-                    corrs     = self%pftcc_ptr%gencorrs(iref, iptcl)
+                    corrs     = self%pftcc_ptr%gencorrs(iref, self%iptcl)
                     inpl_ind  = shcloc(self%nrots, corrs, self%prev_corr)
                     if( inpl_ind == 0 )then
                         ! update inpl_ind & inpl_corr to greedy best
@@ -386,7 +379,7 @@ contains
                     enddo
                 else
                     ! populated class
-                    corrs     = self%pftcc_ptr%gencorrs(iref, iptcl) 
+                    corrs     = self%pftcc_ptr%gencorrs(iref, self%iptcl) 
                     loc       = maxloc(corrs)
                     inpl_ind  = loc(1)
                     inpl_corr = corrs(inpl_ind)
@@ -413,47 +406,46 @@ contains
             endif
             if( do_inplsrch )then
                 if( L_BENCH ) self%t_inpl = tic()
-                call self%inpl_srch(iptcl)
+                call self%inpl_srch
                 if( L_BENCH ) self%rt_inpl = self%rt_inpl + toc(self%t_inpl)
             endif
             if( .not. is_a_number(self%best_corr) )then
                 print *, 'FLOATING POINT EXCEPTION ALARM; simple_prime2D_srch :: stochastic_srch'
-                print *, iptcl, self%best_class, self%best_corr, self%best_rot
+                print *, self%iptcl, self%best_class, self%best_corr, self%best_rot
                 print *, (corr_bound < 0. .or. self%prev_corr > corr_bound)
             endif
-            call self%update_best(iptcl)
+            call self%update_best
             if( L_BENCH ) self%rt_tot = self%rt_tot + toc(self%t_tot)
         else
-            call self%a_ptr%reject(iptcl)
+            call self%a_ptr%reject(self%iptcl)
         endif
         DebugPrint '>>> PRIME2D_SRCH::FINISHED STOCHASTIC SEARCH'
     end subroutine stochastic_srch
 
     !>  \brief  executes nearest-neighbor rotational search
-    subroutine nn_srch( self, iptcl, nnmat )
+    subroutine nn_srch( self, nnmat )
         class(prime2D_srch), intent(inout) :: self
-        integer,             intent(in)    :: iptcl
         integer,             intent(in)    :: nnmat(self%nrefs,self%nnn)
         real, allocatable :: frc(:)
         integer           :: iref,loc(1),inpl_ind,inn
         real              :: corrs(self%nrots),inpl_corr,corr
-        if( nint(self%a_ptr%get(iptcl,'state')) > 0 )then
+        if( nint(self%a_ptr%get(self%iptcl,'state')) > 0 )then
             ! find previous discrete alignment parameters
-            self%prev_class = nint(self%a_ptr%get(iptcl,'class'))                    ! class index
-            self%prev_rot   = self%pftcc_ptr%get_roind(360.-self%a_ptr%e3get(iptcl)) ! in-plane angle index
-            self%prev_shvec = [self%a_ptr%get(iptcl,'x'),self%a_ptr%get(iptcl,'y')]  ! shift vector
+            self%prev_class = nint(self%a_ptr%get(self%iptcl,'class'))                    ! class index
+            self%prev_rot   = self%pftcc_ptr%get_roind(360.-self%a_ptr%e3get(self%iptcl)) ! in-plane angle index
+            self%prev_shvec = [self%a_ptr%get(self%iptcl,'x'),self%a_ptr%get(self%iptcl,'y')]       ! shift vector
             ! set best to previous best by default
             self%best_class = self%prev_class         
             self%best_rot   = self%prev_rot
             ! calculate spectral score
-            frc             = self%pftcc_ptr%genfrc(self%prev_class, iptcl, self%prev_rot)
+            frc             = self%pftcc_ptr%genfrc(self%prev_class, self%iptcl, self%prev_rot)
             self%specscore  = max(0.,median_nocopy(frc))
             corr            = -1.
             ! evaluate neighbors (greedy selection)
             do inn=1,self%nnn
                 iref      = nnmat(self%prev_class,inn)
                 if( self%cls_pops(iref) == 0 )cycle
-                corrs     = self%pftcc_ptr%gencorrs(iref, iptcl) 
+                corrs     = self%pftcc_ptr%gencorrs(iref, self%iptcl) 
                 loc       = maxloc(corrs)
                 inpl_ind  = loc(1)
                 inpl_corr = corrs(inpl_ind)         
@@ -465,39 +457,27 @@ contains
                 endif    
             end do
             self%nrefs_eval = self%nrefs
-            call self%inpl_srch(iptcl)
-            call self%update_best(iptcl)
+            call self%inpl_srch
+            call self%update_best
         else
-            call self%a_ptr%reject(iptcl)
+            call self%a_ptr%reject(self%iptcl)
         endif
         DebugPrint '>>> PRIME2D_SRCH::FINISHED NEAREST-NEIGHBOR SEARCH'
     end subroutine nn_srch
 
     !>  \brief  executes the shift search over the best matching reference
-    subroutine inpl_srch( self, iptcl )
+    subroutine inpl_srch( self )
         class(prime2D_srch), intent(inout) :: self
-        integer,             intent(in)    :: iptcl
-        real, allocatable :: crxy(:)
-        real              :: corr_before, corr_after
-        integer           :: new_rot
+        real, allocatable :: cxy(:)
+        integer           :: irot
         self%best_shvec = [0.,0.]
-        if( self%doshift )then
-            corr_before = self%best_corr
-            if( L_BENCH ) self%t_inpl_shc = tic()
-            call self%shcgrid%srch(self%pftcc_ptr, self%best_class,&
-            iptcl, self%nrots, self%best_rot, new_rot, self%best_shvec)
-            if( L_BENCH ) self%rt_inpl_shc = self%rt_inpl_shc + toc(self%t_inpl_shc)
-            self%best_rot = new_rot
-            if( L_BENCH ) self%t_inpl_simplex = tic()            
-            call self%inplsrch_obj%set_indices(self%best_class, iptcl)
-            crxy = self%inplsrch_obj%minimize(irot=self%best_rot, shvec=self%best_shvec)
-            if( L_BENCH ) self%rt_inpl_simplex = self%rt_inpl_simplex + toc(self%t_inpl_simplex)
-            corr_after = crxy(1)
-            if( corr_after >= corr_before )then
-                self%best_corr  = crxy(1)
-                ! no negation of angle here, see pftcc_inplsrch class
-                self%best_rot   = self%pftcc_ptr%get_roind( crxy(2) ) 
-                self%best_shvec = crxy(3:4)
+        if( self%doshift )then          
+            call self%shsrch_obj%set_indices(self%best_class, self%iptcl)
+            cxy = self%shsrch_obj%minimize(irot=irot)
+            if( irot > 0 )then
+                self%best_corr  = cxy(1)
+                self%best_rot   = irot
+                self%best_shvec = cxy(2:3)
             endif
         endif
         if( DEBUG ) write(*,'(A)') '>>> PRIME2D_SRCH::FINISHED SHIFT SEARCH'
@@ -509,7 +489,7 @@ contains
     subroutine kill( self )
         class(prime2D_srch), intent(inout) :: self !< instance
         if( self%exists )then
-            call self%shcgrid%kill
+            ! call self%shcgrid%kill
             if( allocated(self%srch_order) ) deallocate(self%srch_order)
             if( allocated(self%cls_pops) )   deallocate(self%cls_pops)
             self%exists = .false.

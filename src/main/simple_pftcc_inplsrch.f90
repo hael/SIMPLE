@@ -122,7 +122,7 @@ contains
     
     function inplsrch_minimize( self, irot, shvec, rxy, fromto ) result( crxy )
         class(pftcc_inplsrch), intent(inout) :: self
-        integer, optional,     intent(in)    :: irot
+        integer, optional,     intent(inout) :: irot
         real,    optional,     intent(in)    :: shvec(:)
         real,    optional,     intent(in)    :: rxy(:)
         integer, optional,     intent(in)    :: fromto(2)

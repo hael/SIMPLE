@@ -59,7 +59,7 @@ abstract interface
     function generic_minimize( self, irot, shvec, rxy, fromto ) result( crxy )
         import :: pftcc_opt
         class(pftcc_opt),  intent(inout) :: self
-        integer, optional, intent(in)    :: irot
+        integer, optional, intent(inout) :: irot
         real,    optional, intent(in)    :: shvec(:)
         real,    optional, intent(in)    :: rxy(:)
         integer, optional, intent(in)    :: fromto(2)

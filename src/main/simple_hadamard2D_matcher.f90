@@ -27,8 +27,7 @@ type(classaverager)             :: cavger
 integer(timer_int_kind)         :: t_init, t_prep_pftcc, t_align, t_cavg, t_ctfmat, t_tot
 real(timer_int_kind)            :: rt_init, rt_prep_pftcc, rt_align, rt_cavg, rt_ctfmat 
 real(timer_int_kind)            :: rt_tot, rt_refloop, rt_inpl, rt_tot_sum, rt_refloop_sum
-real(timer_int_kind)            :: rt_inpl_sum, rt_inpl_shc, rt_inpl_simplex, rt_inpl_shc_sum
-real(timer_int_kind)            :: rt_inpl_simplex_sum
+real(timer_int_kind)            :: rt_inpl_sum
 character(len=STDLEN)           :: benchfname
 
 contains
@@ -160,7 +159,7 @@ contains
         ! STOCHASTIC IMAGE ALIGNMENT
         allocate( primesrch2D(p%fromp:p%top) )
         do iptcl=p%fromp,p%top
-            call primesrch2D(iptcl)%new(pftcc, b%a, p)
+            call primesrch2D(iptcl)%new(iptcl, pftcc, b%a, p)
         end do
         ! calculate CTF matrices
         if( L_BENCH ) t_ctfmat = tic()
@@ -173,14 +172,14 @@ contains
             case('neigh')
                 !$omp parallel do default(shared) schedule(guided) private(iptcl) proc_bind(close)
                 do iptcl=p%fromp,p%top
-                    call primesrch2D(iptcl)%nn_srch(iptcl, b%nnmat)
+                    call primesrch2D(iptcl)%nn_srch(b%nnmat)
                 end do
                 !$omp end parallel do
             case DEFAULT
                 if( p%oritab .eq. '' )then
                     !$omp parallel do default(shared) schedule(guided) private(iptcl) proc_bind(close)
                     do iptcl=p%fromp,p%top
-                        call primesrch2D(iptcl)%exec_prime2D_srch(iptcl, greedy=.true.)
+                        call primesrch2D(iptcl)%exec_prime2D_srch(greedy=.true.)
                     end do
                     !$omp end parallel do
                 else
@@ -194,13 +193,11 @@ contains
                     endif
                     !$omp parallel do default(shared) schedule(guided) private(iptcl) proc_bind(close)
                     do iptcl=p%fromp,p%top
-                        call primesrch2D(iptcl)%exec_prime2D_srch(iptcl, extr_bound=corr_thresh)
-                        call primesrch2D(iptcl)%get_times(rt_refloop, rt_inpl, rt_inpl_shc, rt_inpl_simplex, rt_tot)
+                        call primesrch2D(iptcl)%exec_prime2D_srch(extr_bound=corr_thresh)
+                        call primesrch2D(iptcl)%get_times(rt_refloop, rt_inpl, rt_tot)
                         if( L_BENCH_PRIME2D )then
                             rt_refloop_sum      = rt_refloop_sum      + rt_refloop
                             rt_inpl_sum         = rt_inpl_sum         + rt_inpl
-                            rt_inpl_shc_sum     = rt_inpl_shc_sum     + rt_inpl_shc
-                            rt_inpl_simplex_sum = rt_inpl_simplex_sum + rt_inpl_simplex
                             rt_tot_sum          = rt_tot_sum          + rt_tot
                         endif
                     end do
@@ -299,17 +296,13 @@ contains
                 benchfname = 'PRIME2D_BENCH_ITER'//int2str_pad(which_iter,3)//'.txt'
                 call fopen(fnr, FILE=trim(benchfname), STATUS='REPLACE', action='WRITE')
                 write(fnr,'(a)') '*** TIMINGS (s) ***'
-                write(fnr,'(a,1x,f9.2)') 'refloop          : ', rt_refloop_sum
-                write(fnr,'(a,1x,f9.2)') 'in-plane, shc    : ', rt_inpl_shc_sum
-                write(fnr,'(a,1x,f9.2)') 'in-plane, simplex: ', rt_inpl_simplex_sum
-                write(fnr,'(a,1x,f9.2)') 'in-plane, tot    : ', rt_inpl_sum
-                write(fnr,'(a,1x,f9.2)') 'tot              : ', rt_tot_sum
+                write(fnr,'(a,1x,f9.2)') 'refloop : ', rt_refloop_sum
+                write(fnr,'(a,1x,f9.2)') 'in-plane: ', rt_inpl_sum
+                write(fnr,'(a,1x,f9.2)') 'tot     : ', rt_tot_sum
                 write(fnr,'(a)') ''
                 write(fnr,'(a)') '*** REATIVE TIMINGS (%) ***'
-                write(fnr,'(a,1x,f9.2)') 'refloop          : ', (rt_refloop_sum/rt_tot_sum)      * 100.
-                write(fnr,'(a,1x,f9.2)') 'in-plane, shc    : ', (rt_inpl_shc_sum/rt_tot_sum)     * 100.
-                write(fnr,'(a,1x,f9.2)') 'in-plane, simplex: ', (rt_inpl_simplex_sum/rt_tot_sum) * 100.
-                write(fnr,'(a,1x,f9.2)') 'in-plane, tot    : ', (rt_inpl_sum/rt_tot_sum)         * 100.
+                write(fnr,'(a,1x,f9.2)') 'refloop : ', (rt_refloop_sum/rt_tot_sum)      * 100.
+                write(fnr,'(a,1x,f9.2)') 'in-plane: ', (rt_inpl_sum/rt_tot_sum)         * 100.
             endif
         endif
     end subroutine prime2D_exec

@@ -218,7 +218,6 @@ contains
               &self%fftdat(1)%ref_fft, FFTW_FORWARD,  FFTW_PATIENT)
          self%plan_bwd = fftwf_plan_dft_1d(self%nrots, self%fftdat(1)%ref_fft,&
               self%fftdat(1)%ref,     FFTW_BACKWARD, FFTW_PATIENT)
-
         ! flag existence
         self%existence    = .true.
     end subroutine new
@@ -392,7 +391,7 @@ contains
         if( roind < 1 .or. roind > self%nrots )then
             print *, 'roind: ', roind
             print *, 'nrots: ', self%nrots
-            call simple_stop( 'roind is out of range; get_rot; simple_polarft_corrcalc')
+            stop 'roind is out of range; get_rot; simple_polarft_corrcalc'
         endif
         rot = self%angtab(roind)
     end function get_rot
@@ -780,7 +779,7 @@ contains
         else
             pft_ref = self%pfts_refs(iref,:,:) * shmat
         endif
-        ! calculate correlation precursors
+        ! calculate correlation precursor
         sqsum_ref = sum(csq(pft_ref))
         ! floating point check
         if( sqsum_ref < TINY  ) return

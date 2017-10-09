@@ -789,34 +789,51 @@ contains
         real,    allocatable :: cxy(:), crxy(:), shvecs(:,:)
         type(ori) :: o
         real      :: cc, e3
-        integer   :: i, ref
+        integer   :: i, ref, irot
         if( self%doshift )then
-            call self%inpl_grid_srch(inpl_inds, shvecs)
-            do i=self%nrefs,self%nrefs-self%npeaks+1,-1
-                ref = self%proj_space_inds( i )
-                o   = self%o_refs%get_ori( ref )
-                cc  = self%o_refs%get( ref, 'corr' )
-                if( self%greedy_inpl )then
-                    call self%inplsrch_obj%set_indices(ref, self%iptcl)
-                    crxy = self%inplsrch_obj%minimize(irot=inpl_inds(i), shvec=shvecs(i,:))
-                    if( crxy(1) >= cc )then
-                        call o%set( 'corr', crxy(1) )
-                        call o%e3set( 360.-crxy(2) )
-                        call o%set_shift( crxy(3:4) )
-                        call self%o_refs%set_ori( ref, o )
-                    endif
-                else
-                    call self%shsrch_obj%set_indices(ref, self%iptcl, inpl_inds(i))
-                    cxy = self%shsrch_obj%minimize(shvec=shvecs(i,:))
-                    if( cxy(1) >= cc )then
-                        e3 = 360. - self%pftcc_ptr%get_rot(inpl_inds(i)) ! psi
-                        call o%e3set(e3)                                 ! stash psi
+            if( self%dev )then
+                do i=self%nrefs,self%nrefs-self%npeaks+1,-1
+                    ref = self%proj_space_inds( i )
+                    o   = self%o_refs%get_ori( ref )
+                    cc  = self%o_refs%get( ref, 'corr' )
+                    call self%shsrch_obj%set_indices(ref, self%iptcl)
+                    cxy = self%shsrch_obj%minimize(irot=irot)
+                    if( irot > 0 )then
+                        e3 = 360. - self%pftcc_ptr%get_rot(irot) ! psi
+                        call o%e3set(e3)                         ! stash psi
                         call o%set('corr', cxy(1))
                         call o%set_shift( cxy(2:3) )
                         call self%o_refs%set_ori( ref, o )
                     endif
-                endif
-            end do
+                end do
+            else
+                call self%inpl_grid_srch(inpl_inds, shvecs)
+                do i=self%nrefs,self%nrefs-self%npeaks+1,-1
+                    ref = self%proj_space_inds( i )
+                    o   = self%o_refs%get_ori( ref )
+                    cc  = self%o_refs%get( ref, 'corr' )
+                    if( self%greedy_inpl )then
+                        call self%inplsrch_obj%set_indices(ref, self%iptcl)
+                        crxy = self%inplsrch_obj%minimize(irot=inpl_inds(i), shvec=shvecs(i,:))
+                        if( crxy(1) >= cc )then
+                            call o%set( 'corr', crxy(1) )
+                            call o%e3set( 360.-crxy(2) )
+                            call o%set_shift( crxy(3:4) )
+                            call self%o_refs%set_ori( ref, o )
+                        endif
+                    else
+                        call self%shsrch_obj%set_indices(ref, self%iptcl, inpl_inds(i))
+                        cxy = self%shsrch_obj%minimize(shvec=shvecs(i,:))
+                        if( cxy(1) >= cc )then
+                            e3 = 360. - self%pftcc_ptr%get_rot(inpl_inds(i)) ! psi
+                            call o%e3set(e3)                                 ! stash psi
+                            call o%set('corr', cxy(1))
+                            call o%set_shift( cxy(2:3) )
+                            call self%o_refs%set_ori( ref, o )
+                        endif
+                    endif
+                end do
+            endif
         endif
         DebugPrint '>>> PRIME3D_SRCH::FINISHED INPL SEARCH'
     end subroutine inpl_srch
