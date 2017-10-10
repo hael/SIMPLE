@@ -553,7 +553,7 @@ contains
         p_master = params(cline, checkdistr=.false.)
 
         if( p_master%eo .eq. 'no' .and. .not. cline%defined('lp') )&
-            &stop 'need lp input when eo .ne. no; het_ensemble'
+            &stop 'need lp input when eo .eq. no; het_ensemble'
 
         allocate(init_docs(p_master%nrepeats), final_docs(p_master%nrepeats), rep_corrs(p_master%nrepeats), stat=alloc_stat)
         do irepeat=1,p_master%nrepeats

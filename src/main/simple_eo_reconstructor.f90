@@ -35,6 +35,7 @@ type :: eo_reconstructor
     ! SETTERS
     procedure          :: reset_all
     procedure          :: reset_eos
+    procedure, private :: reset_eoexp
     procedure, private :: reset_even
     procedure, private :: reset_odd
     procedure          :: reset_sum
@@ -124,6 +125,13 @@ contains
         call self%even%reset
         call self%odd%reset
     end subroutine reset_eos
+
+    !>  \brief  resets the even odd pairs expanded matrices
+    subroutine reset_eoexp( self )
+        class(eo_reconstructor), intent(inout) :: self
+        call self%even%reset_exp
+        call self%odd%reset_exp
+    end subroutine reset_eoexp
 
     !>  \brief  resets the even
     subroutine reset_even( self )
@@ -401,6 +409,7 @@ contains
         endif
         ! zero the Fourier volumes and rhos
         call self%reset_all
+        call self%reset_eoexp
         write(*,'(A)') '>>> KAISER-BESSEL INTERPOLATION'
         statecnt = 0
         cnt      = 0

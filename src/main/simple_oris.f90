@@ -796,7 +796,7 @@ contains
         endif
     end function get_pinds
 
-    !>  \brief  genrate a mask with the oris with mystate == state/ind == get(label)
+    !>  \brief  generate a mask with the oris with mystate == state/ind == get(label)
     subroutine gen_mask( self, state, ind, label, l_mask, consider_w, fromto )
         class(oris),          intent(inout) :: self
         integer,              intent(in)    :: state, ind

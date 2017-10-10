@@ -57,6 +57,7 @@ type, extends(image) :: reconstructor
     procedure          :: alloc_rho
     ! SETTERS
     procedure          :: reset
+    procedure          :: reset_exp
     ! GETTER
     procedure          :: get_kbwin
     ! I/O
@@ -158,6 +159,13 @@ contains
         self     = cmplx(0.,0.)
         self%rho = 0.
     end subroutine reset
+
+    ! resets the reconstructor expanded matrices before reconstruction
+    subroutine reset_exp( self )
+        class(reconstructor), intent(inout) :: self !< this instance
+        if(allocated(self%cmat_exp))self%cmat_exp = cmplx(0.,0.)
+        if(allocated(self%rho_exp)) self%rho_exp  = 0.
+    end subroutine reset_exp
 
     ! GETTERS
     !> get the kbintpol window
@@ -467,6 +475,7 @@ contains
         endif
         ! zero the Fourier volume and rho
         call self%reset
+        call self%reset_exp
         write(*,'(A)') '>>> KAISER-BESSEL INTERPOLATION'
         statecnt = 0
         cnt      = 0

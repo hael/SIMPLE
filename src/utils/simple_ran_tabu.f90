@@ -240,6 +240,13 @@ contains
         integer,         intent(inout) :: iarr(self%NP) !< integer array for partitioning
         integer :: i, s
         i = 0
+        ! random init
+        do s = irnd_uni(nstates),nstates
+            i = i+1
+            if( i > self%NP ) exit
+            iarr(i) = s
+        end do
+        ! elongation
         do while( i < self%NP )
             do s=1,nstates
                 i = i+1

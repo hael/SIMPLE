@@ -244,12 +244,11 @@ contains
         real, allocatable :: filter(:), frc(:)
         type(ctf)         :: tfun
         real              :: x, y, dfx, dfy, angast
-        integer           :: cls, frcind
+        integer           :: frcind
         x      = o%get('x')
         y      = o%get('y')
-        cls    = nint(o%get('class'))
         frcind = 0 
-        if( is3D )then
+        if( is3D .and. p%nstates==1 )then
             if( p%nspace /= NSPACE_BALANCE )then
                 frcind = b%e_bal%find_closest_proj(o)
             else
@@ -490,7 +489,7 @@ contains
                 call b%vol%apply_filter(vol_filter)
                 call vol_filter%kill
             else
-                ! matched filter based on Rosenthal & Henderson, 2003 
+                ! matched filter based on Rosenthal & Henderson, 2003
                 if( any(b%fsc(s,:) > 0.143) )then
                     call b%vol%fwd_ft ! needs to be here in case the shift was never applied (above)
                     call b%vol%shellnorm()
