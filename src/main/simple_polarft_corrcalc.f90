@@ -13,7 +13,7 @@ private
 #include "simple_local_flags.inc"    
 
 ! CLASS PARAMETERS/VARIABLES
-complex(sp), parameter :: zero=cmplx(0.,0.)         !< just a complex zero
+complex(sp), parameter :: zero=cmplx(0.,0.)          !< just a complex zero
 logical,     parameter :: USE_GENCORRS_FFT = .true. !< 4 now
 
 ! This type is needed for thread safe FFT execution. Letting OpenMP automatically copy arrays leads to 
