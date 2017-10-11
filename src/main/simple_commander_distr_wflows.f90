@@ -1101,18 +1101,14 @@ contains
                     ! post-process
                     if( p_master%pproc.eq.'yes' )then
                         vol = 'vol'//trim(int2str(state))
-                        call cline_postproc_vol%set( 'vol1' , trim(vol_iter))
+                        call cline_postproc_vol%set( 'vol1', trim(vol_iter))
                         fsc_file   = 'fsc_state'//trim(str_state)//'.bin'
                         optlp_file = 'aniso_optlp_state'//trim(str_state)//p_master%ext
-                        if( file_exists(fsc_file) .and. p_master%eo .eq. 'aniso' )then
-                            if( .not. file_exists(optlp_file) )then
-                                write(*,*) 'eo=aniso but file: ', trim(optlp_file)
-                                stop 'is not in cwd as required; commander_distr_wflows :: exec_prime3D_distr'
-                            endif
+                        if( file_exists(optlp_file) .and. p_master%eo .ne. 'no' )then
                             call cline_postproc_vol%delete('lp')
                             call cline_postproc_vol%set('fsc', trim(fsc_file))
                             call cline_postproc_vol%set('vol_filt', trim(optlp_file))
-                        else if( file_exists(fsc_file) .and. p_master%eo .eq. 'yes' )then
+                        else if( file_exists(fsc_file) .and. p_master%eo .ne. 'no' )then
                             call cline_postproc_vol%delete('lp')
                             call cline_postproc_vol%set('fsc', trim(fsc_file))
                         else

@@ -136,15 +136,13 @@ contains
                 ! anisotropic resolution model
                 eonames(1) = trim(recname)//'_even'//trim(p%ext)
                 eonames(2) = trim(recname)//'_odd'//trim(p%ext)
-                if( p%eo .eq. 'aniso' )then
+                if( p%eo .ne. 'no' )then
                     call b%eorecvol%sampl_dens_correct_eos(state, eonames)
                     call gen_projection_frcs( p, eonames(1), eonames(2), s, b%projfrcs)
                     call b%projfrcs%write('frcs_state'//int2str_pad(state,2)//'.bin')
                     ! generate the anisotropic 3D optimal low-pass filter
                     call gen_anisotropic_optlp(b%vol, b%projfrcs, b%e_bal, s, p%pgrp)
                     call b%vol%write('aniso_optlp_state'//int2str_pad(state,2)//p%ext)
-                else
-                    call b%eorecvol%sampl_dens_correct_eos(state, eonames)
                 endif
                 call b%eorecvol%get_res(res05s(s), res0143s(s))
                 call b%eorecvol%sampl_dens_correct_sum( b%vol )

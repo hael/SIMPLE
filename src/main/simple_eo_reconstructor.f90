@@ -390,7 +390,7 @@ contains
         call find_ldim_nptcls(fname, ldim, n)
         if( n /= o%get_noris() ) stop 'inconsistent nr entries; eorec; simple_eo_reconstructor'
         if( .not. present(part) )then
-            if( p%eo .eq. 'aniso' ) stop 'eo=aniso not supported here, use simple_distr_exec!'
+            if( p%eo .ne. 'no' ) stop 'eo .ne. no not supported here, use simple_distr_exec!'
         endif
         kbwin = self%get_kbwin() 
         ! stash global state index
