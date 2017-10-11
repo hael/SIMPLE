@@ -67,6 +67,7 @@ contains
         use simple_simulator,  only: simimg
         use simple_ctf,        only: ctf
         use simple_kbinterpol, only: kbinterpol
+        use simple_projector,  only: projector
         class(simimgs_commander), intent(inout) :: self
         class(cmdline),           intent(inout) :: cline
         type(params)       :: p
@@ -74,6 +75,7 @@ contains
         type(ori)          :: orientation
         type(ctf)          :: tfun
         type(kbinterpol)   :: kbwin
+        type(projector)    :: vol_pad
         real               :: snr_pink, snr_detector, bfac, bfacerr
         integer            :: i, cnt, ntot
         debug=.false. ! declared in local flags
@@ -118,9 +120,10 @@ contains
         ! prepare for image generation
         call b%vol%read(p%vols(1))
         call b%vol%mask(p%msk, 'soft')
+        call vol_pad%new([p%boxpd, p%boxpd, p%boxpd], p%smpd)
         DebugPrint  '>>> DID READ VOL'
-        call prep4cgrid(b%vol, b%vol_pad, p%msk, kbwin)
-        call b%vol_pad%expand_cmat
+        call prep4cgrid(b%vol, vol_pad, p%msk, kbwin)
+        call vol_pad%expand_cmat
         DebugPrint  '>>> DONE PREPARING FOR IMAGE GENERATION'
         write(*,'(A)') '>>> GENERATING IMAGES'
         cnt = 0
@@ -134,7 +137,7 @@ contains
             ! extract ori
             orientation = b%a%get_ori(i)
             ! project vol
-            call b%vol_pad%fproject(orientation, b%img_pad)
+            call vol_pad%fproject(orientation, b%img_pad)
             ! shift
             call b%img_pad%shift([orientation%get('x'),orientation%get('y'),0.])
             if( cline%defined('bfac') )then
@@ -158,7 +161,7 @@ contains
                 call b%img%write(p%outstk, i)
             endif
         end do
-        call b%vol_pad%kill_expanded
+        call vol_pad%kill_expanded
         ! end gracefully
         call simple_end('**** SIMPLE_SIMIMGS NORMAL STOP ****')
     end subroutine exec_simimgs

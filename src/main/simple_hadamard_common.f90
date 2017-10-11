@@ -45,7 +45,7 @@ contains
         class(build),   intent(inout) :: b
         class(params),  intent(inout) :: p
         class(cmdline), intent(inout) :: cline
-        real, allocatable     :: resarr(:), tmp_arr(:)
+        real, allocatable     :: resarr(:), fsc_arr(:)
         real                  :: fsc0143, fsc05, mapres(p%nstates)
         integer               :: s, loc(1), lp_ind
         character(len=STDLEN) :: fsc_fname
@@ -70,9 +70,9 @@ contains
                         if( fsc_bin_exists(s) )then
                             ! these are the 'classical' resolution measures
                             fsc_fname   = 'fsc_state'//int2str_pad(s,2)//'.bin'
-                            tmp_arr     = file2rarr(trim(adjustl(fsc_fname)))
-                            b%fsc(s,:)  = tmp_arr(:)
-                            deallocate(tmp_arr)
+                            fsc_arr     = file2rarr(trim(adjustl(fsc_fname)))
+                            b%fsc(s,:)  = fsc_arr(:)
+                            deallocate(fsc_arr)
                             call get_resolution(b%fsc(s,:), resarr, fsc05, fsc0143)
                             mapres(s)   = fsc0143
                         else
@@ -81,11 +81,25 @@ contains
                             b%fsc(s,:)  = 0.
                         endif
                     end do
-                    loc    = maxloc(mapres)
+                    loc    = maxloc(mapres) ! worst resolved
                     lp_ind = get_lplim(b%fsc(loc(1),:))
+                    ! low pass limit
                     p%kfromto(2) = calc_fourier_index( resarr(lp_ind), p%boxmatch, p%smpd )
                     if( p%kfromto(2) == 1 )then
                         stop 'simple_math::get_lplim gives nonsensical result (==1)'
+                    endif
+                    ! filters for multiple states
+                    if( p%nstates > 1 )then
+                        ! averaging
+                        fsc_arr = sum(b%fsc(:,:), dim=1)
+                        fsc_arr = fsc_arr / real(count(fsc_bin_exists))
+                        do s=1,p%nstates
+                            if( fsc_bin_exists(s) )then
+                                b%fsc(s,:) = fsc_arr
+                            else
+                                b%fsc(s,:) = 0.
+                            endif
+                        enddo
                     endif
                     DebugPrint ' extracted FSC info'
                 else if( cline%defined('lp') )then

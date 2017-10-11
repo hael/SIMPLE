@@ -40,7 +40,6 @@ type :: build
     type(image)                         :: img_msk            !< -"- image objects
     type(image)                         :: img_copy           !< -"- image objects
     type(projector)                     :: vol                !< -"- image objects
-    type(projector)                     :: vol_pad            !< -"- image objects
     type(masker)                        :: mskimg             !< mask image
     type(masker)                        :: mskvol             !< mask volume
     type(projection_frcs)               :: projfrcs           !< projection FRC's used in the anisotropic Wiener filter
@@ -175,7 +174,6 @@ contains
             call self%img_pad%new([p%boxpd,p%boxpd,1],p%smpd)
             if( ddo3d )then
                 call self%vol%new([p%box,p%box,p%box], p%smpd)
-                call self%vol_pad%new([p%boxpd,p%boxpd,p%boxpd],p%smpd)
             endif
             DebugPrint  'did build boxpd-sized image objects'
             ! build arrays
@@ -235,8 +233,6 @@ contains
             call self%vol%kill
             call self%mskvol%kill
             call self%mskimg%kill
-            call self%vol_pad%kill_expanded
-            call self%vol_pad%kill
             if( allocated(self%fsc) )deallocate(self%fsc)
             self%general_tbox_exists = .false.
         endif
