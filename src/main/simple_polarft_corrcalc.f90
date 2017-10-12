@@ -17,67 +17,63 @@ complex(sp), parameter :: zero=cmplx(0.,0.) !< just a complex zero
 
 ! the fftw_arrs data structures are needed for thread-safe FFTW exec. Letting OpenMP copy out the per-threads
 ! arrays leads to bugs because of inconsistency between data in memory and the fftw_plan
+type fftw_carr
+    type(c_ptr)                            :: p_re             !< pointer for C-style allocation
+    type(c_ptr)                            :: p_im             !< -"-
+    real(kind=c_float),            pointer :: re(:) => null()  !< corresponding Fortran pointers
+    complex(kind=c_float_complex), pointer :: im(:) => null()  !< -"-
+end type fftw_carr
+
+type fftw_carr_fft
+    type(c_ptr)                            :: p_re             !< pointer for C-style allocation
+    type(c_ptr)                            :: p_im             !< -"-
+    complex(kind=c_float_complex), pointer :: re(:) => null()  !< corresponding Fortran pointers
+    complex(kind=c_float_complex), pointer :: im(:) => null()  !< -"-
+end type fftw_carr_fft
+
 type fftw_arrs
     type(c_ptr)                            :: p_ref_re                  !< pointer for C-style allocation
     type(c_ptr)                            :: p_ref_im                  !< -"-
-    type(c_ptr)                            :: p_ptcl_re                 !< -"-
-    type(c_ptr)                            :: p_ptcl_im                 !< -"-
     type(c_ptr)                            :: p_ref_fft_re              !< -"-
     type(c_ptr)                            :: p_ref_fft_im              !< -"-
-    type(c_ptr)                            :: p_ptcl_fft_re             !< -"-
-    type(c_ptr)                            :: p_ptcl_fft_im             !< -"-
     type(c_ptr)                            :: p_product_fft             !< -"-
     type(c_ptr)                            :: p_backtransf              !< -"-
     real(kind=c_float),            pointer :: ref_re(:)      => null()  !< corresponding Fortran pointers
     complex(kind=c_float_complex), pointer :: ref_im(:)      => null()  !< -"-
-    real(kind=c_float),            pointer :: ptcl_re(:)     => null()  !< -"-
-    complex(kind=c_float_complex), pointer :: ptcl_im(:)     => null()  !< -"-
     complex(kind=c_float_complex), pointer :: ref_fft_re(:)  => null()  !< -"-
     complex(kind=c_float_complex), pointer :: ref_fft_im(:)  => null()  !< -"-
-    complex(kind=c_float_complex), pointer :: ptcl_fft_re(:) => null()  !< -"-
-    complex(kind=c_float_complex), pointer :: ptcl_fft_im(:) => null()  !< -"-
     complex(kind=c_float_complex), pointer :: product_fft(:) => null()  !< -"-
     real(kind=c_float),            pointer :: backtransf(:)  => null()  !< -"-
 end type fftw_arrs
 
-type fftw_arrs_ptcl
-    type(c_ptr)                            :: p_ptcl_re                 !< pointer for C-style allocation
-    type(c_ptr)                            :: p_ptcl_im                 !< -"-
-    type(c_ptr)                            :: p_ptcl_fft_re             !< -"-
-    type(c_ptr)                            :: p_ptcl_fft_im             !< -"-
-    real(kind=c_float),            pointer :: ptcl_re(:)     => null()  !< corresponding Fortran pointers
-    complex(kind=c_float_complex), pointer :: ptcl_im(:)     => null()  !< -"-
-    complex(kind=c_float_complex), pointer :: ptcl_fft_re(:) => null()  !< -"-
-    complex(kind=c_float_complex), pointer :: ptcl_fft_im(:) => null()  !< -"-
-end type fftw_arrs_ptcl
-
 type :: polarft_corrcalc
   private
-    integer                           :: pfromto(2) = 1      !< from/to particle indices (in parallel execution)
-    integer                           :: nptcls     = 1      !< the total number of particles in partition (logically indexded [fromp,top])
-    integer                           :: nrefs      = 1      !< the number of references (logically indexded [1,nrefs])
-    integer                           :: nrots      = 0      !< number of in-plane rotations for one pft (determined by radius of molecule)
-    integer                           :: ring2      = 0      !< radius of molecule
-    integer                           :: pftsz      = 0      !< size of reference and particle pft (nrots/2)
-    integer                           :: nk         = 0      !< # resolution elements in the band-pass limited PFTs
-    integer                           :: nthr       = 0      !< # OpenMP threads
-    integer                           :: winsz      = 0      !< size of moving window in correlation calculations
-    integer                           :: ldim(3)    = 0      !< logical dimensions of original cartesian image
-    integer                           :: kfromto(2) = 0      !< Fourier index range
-    real(sp)                          :: smpd       = 0.     !< sampling distance
-    real(sp),             allocatable :: sqsums_ptcls(:)     !< memoized square sums for the correlation calculations
-    real(sp),             allocatable :: angtab(:)           !< table of in-plane angles (in degrees)
-    real(sp),             allocatable :: argtransf(:,:)      !< argument transfer constants for shifting the references
-    real(sp),             allocatable :: polar(:,:)          !< table of polar coordinates (in Cartesian coordinates)
-    complex(sp),          allocatable :: pfts_refs(:,:,:)    !< 3D complex matrix of polar reference sections (nrefs,pftsz,nk)
-    complex(sp),          allocatable :: pfts_ptcls(:,:,:)   !< 3D complex matrix of particle sections
-    type(fftw_arrs),      allocatable :: fftdat(:)           !< arrays for gencorrs_fft exec
-    type(fftw_arrs_ptcl), allocatable :: fftdat_ptcls(:,:)   !< arrays for gencorrs_fft exec, particle FFTs
-    type(c_ptr)                       :: plan_fwd_1          !< FFTW plans for gencorrs_fft
-    type(c_ptr)                       :: plan_fwd_2          !< -"-
-    type(c_ptr)                       :: plan_bwd            !< -"-
-    complex(double),      allocatable :: fft_factors(:)      !< phase factors for modified fft routines
-    logical                           :: existence = .false. !< to indicate existence
+    integer                          :: pfromto(2) = 1      !< from/to particle indices (in parallel execution)
+    integer                          :: nptcls     = 1      !< the total number of particles in partition (logically indexded [fromp,top])
+    integer                          :: nrefs      = 1      !< the number of references (logically indexded [1,nrefs])
+    integer                          :: nrots      = 0      !< number of in-plane rotations for one pft (determined by radius of molecule)
+    integer                          :: ring2      = 0      !< radius of molecule
+    integer                          :: pftsz      = 0      !< size of reference and particle pft (nrots/2)
+    integer                          :: nk         = 0      !< # resolution elements in the band-pass limited PFTs
+    integer                          :: nthr       = 0      !< # OpenMP threads
+    integer                          :: winsz      = 0      !< size of moving window in correlation calculations
+    integer                          :: ldim(3)    = 0      !< logical dimensions of original cartesian image
+    integer                          :: kfromto(2) = 0      !< Fourier index range
+    real(sp)                         :: smpd       = 0.     !< sampling distance
+    real(sp),            allocatable :: sqsums_ptcls(:)     !< memoized square sums for the correlation calculations
+    real(sp),            allocatable :: angtab(:)           !< table of in-plane angles (in degrees)
+    real(sp),            allocatable :: argtransf(:,:)      !< argument transfer constants for shifting the references
+    real(sp),            allocatable :: polar(:,:)          !< table of polar coordinates (in Cartesian coordinates)
+    complex(sp),         allocatable :: pfts_refs(:,:,:)    !< 3D complex matrix of polar reference sections (nrefs,pftsz,nk)
+    complex(sp),         allocatable :: pfts_ptcls(:,:,:)   !< 3D complex matrix of particle sections
+    complex(sp),         allocatable :: fft_factors(:)      !< phase factors for accelerated gencorrs routines
+    type(fftw_arrs),     allocatable :: fftdat(:)           !< arrays for accelerated gencorrs routines
+    type(fftw_carr_fft), allocatable :: fftdat_ptcls(:,:)   !< for memoization of particle  FFTs in accelerated gencorrs routines
+    type(fftw_carr_fft), allocatable :: fftdat_refs(:,:)    !< for memoization of reference FFTs in accelerated gencorrs routines
+    type(c_ptr)                      :: plan_fwd_1          !< FFTW plans for gencorrs
+    type(c_ptr)                      :: plan_fwd_2          !< -"-
+    type(c_ptr)                      :: plan_bwd            !< -"-
+    logical                          :: existence = .false. !< to indicate existence
   contains
     ! CONSTRUCTOR
     procedure          :: new
@@ -109,14 +105,16 @@ type :: polarft_corrcalc
     procedure          :: vis_ref
     ! MEMOIZER
     procedure, private :: memoize_sqsum_ptcl
+    procedure          :: memoize_ffts
     ! I/O
     procedure          :: write_pfts_ptcls
     procedure          :: read_pfts_ptcls
     ! CALCULATORS
     procedure, private :: create_polar_ctfmat
-    procedure          :: apply_ctfs_to_ptcls
+    procedure          :: apply_ctf_to_ptcls
     procedure, private :: calc_corrs_over_k
-    procedure, private :: calc_k_corr
+    procedure, private :: calc_corrs_over_k_wrefmem
+    procedure, private :: calc_k_corrs_wrefmem
     procedure, private :: gencorrs_1
     procedure, private :: gencorrs_2
     procedure, private :: gencorrs_3
@@ -138,7 +136,7 @@ contains
         integer,                 intent(in)    :: nrefs
         class(params),           intent(inout) :: p
         integer, optional,       intent(in)    :: prange(2)
-        integer  :: alloc_stat, irot, k, ithr
+        integer  :: alloc_stat, irot, k, ithr, iptcl, ik, iref
         logical  :: even_dims, test(2)
         real(sp) :: ang
         ! kill possibly pre-existing object
@@ -203,61 +201,60 @@ contains
         self%argtransf(self%pftsz+1:,:) = &
             self%polar(self%nrots+1:self%nrots+self%pftsz,:) * &
             (PI/real(self%ldim(2)/2))    ! y-part
-        ! allocate polarfts, sqsums & fftdat array
-        allocate(   self%pfts_refs(self%nrefs,self%pftsz,self%kfromto(1):self%kfromto(2)),&
-                    self%pfts_ptcls(self%pfromto(1):self%pfromto(2),self%pftsz,self%kfromto(1):self%kfromto(2)),&
-                    self%sqsums_ptcls(self%pfromto(1):self%pfromto(2)), self%fftdat(self%nthr), stat=alloc_stat)
+        ! allocate others
+        allocate( self%pfts_refs(self%nrefs,self%pftsz,self%kfromto(1):self%kfromto(2)),&
+                  self%pfts_ptcls(self%pfromto(1):self%pfromto(2),self%pftsz,self%kfromto(1):self%kfromto(2)),&
+                  self%sqsums_ptcls(self%pfromto(1):self%pfromto(2)), self%fftdat(self%nthr),&
+                  self%fftdat_ptcls(self%pfromto(1):self%pfromto(2),self%kfromto(1):self%kfromto(2)),&
+                  self%fftdat_refs(1:self%nrefs,self%kfromto(1):self%kfromto(2)), stat=alloc_stat)
         allocchk('polarfts and sqsums; new; simple_polarft_corrcalc')
         self%pfts_refs    = zero
         self%pfts_ptcls   = zero
         self%sqsums_ptcls = 0.
-        ! self%with_ctf     = .false.
-        ! if( p%ctf .ne. 'no' ) self%with_ctf = .true.
-        ! thread-safe c-style allocatables for gencorrs_fft
+        ! thread-safe c-style allocatables for gencorrs
         do ithr=1,self%nthr
             self%fftdat(ithr)%p_ref_re      = fftwf_alloc_real   (int(self%pftsz, c_size_t))
             self%fftdat(ithr)%p_ref_im      = fftwf_alloc_complex(int(self%pftsz, c_size_t))
-            self%fftdat(ithr)%p_ptcl_re     = fftwf_alloc_real   (int(self%pftsz, c_size_t))
-            self%fftdat(ithr)%p_ptcl_im     = fftwf_alloc_complex(int(self%pftsz, c_size_t))
             self%fftdat(ithr)%p_ref_fft_re  = fftwf_alloc_complex(int(self%pftsz, c_size_t))
             self%fftdat(ithr)%p_ref_fft_im  = fftwf_alloc_complex(int(self%pftsz, c_size_t))
-            self%fftdat(ithr)%p_ptcl_fft_re = fftwf_alloc_complex(int(self%pftsz, c_size_t))
-            self%fftdat(ithr)%p_ptcl_fft_im = fftwf_alloc_complex(int(self%pftsz, c_size_t))
             self%fftdat(ithr)%p_product_fft = fftwf_alloc_complex(int(self%nrots, c_size_t))
             self%fftdat(ithr)%p_backtransf  = fftwf_alloc_real   (int(self%nrots, c_size_t))
             call c_f_pointer(self%fftdat(ithr)%p_ref_re,      self%fftdat(ithr)%ref_re,      [self%pftsz])
             call c_f_pointer(self%fftdat(ithr)%p_ref_im,      self%fftdat(ithr)%ref_im,      [self%pftsz])
-            call c_f_pointer(self%fftdat(ithr)%p_ptcl_re,     self%fftdat(ithr)%ptcl_re,     [self%pftsz])
-            call c_f_pointer(self%fftdat(ithr)%p_ptcl_im,     self%fftdat(ithr)%ptcl_im,     [self%pftsz])
             call c_f_pointer(self%fftdat(ithr)%p_ref_fft_re,  self%fftdat(ithr)%ref_fft_re,  [self%pftsz])
             call c_f_pointer(self%fftdat(ithr)%p_ref_fft_im,  self%fftdat(ithr)%ref_fft_im,  [self%pftsz])
-            call c_f_pointer(self%fftdat(ithr)%p_ptcl_fft_re, self%fftdat(ithr)%ptcl_fft_re, [self%pftsz])
-            call c_f_pointer(self%fftdat(ithr)%p_ptcl_fft_im, self%fftdat(ithr)%ptcl_fft_im, [self%pftsz])
             call c_f_pointer(self%fftdat(ithr)%p_product_fft, self%fftdat(ithr)%product_fft, [self%nrots])
             call c_f_pointer(self%fftdat(ithr)%p_backtransf,  self%fftdat(ithr)%backtransf,  [self%nrots])
         end do
-
-
-        ! do iptcl=self%pfromto(1),self%pfromto(2)
-        !     self%fftdat_ptcls(iptcl,ithr)%p_ptcl_re     = fftwf_alloc_real   (int(self%pftsz, c_size_t))
-        !     self%fftdat_ptcls(iptcl,ithr)%p_ptcl_im     = fftwf_alloc_complex(int(self%pftsz, c_size_t))
-        !     self%fftdat_ptcls(iptcl,ithr)%p_ptcl_fft_re = fftwf_alloc_complex(int(self%pftsz, c_size_t))
-        !     self%fftdat_ptcls(iptcl,ithr)%p_ptcl_fft_im = fftwf_alloc_complex(int(self%pftsz, c_size_t))
-        !     call c_f_pointer(self%fftdat_ptcls(iptcl,ithr)%p_ptcl_re,     self%fftdat(ithr)%ptcl_re,     [self%pftsz])
-        !     call c_f_pointer(self%fftdat_ptcls(iptcl,ithr)%p_ptcl_im,     self%fftdat(ithr)%ptcl_im,     [self%pftsz])
-        !     call c_f_pointer(self%fftdat_ptcls(iptcl,ithr)%p_ptcl_fft_re, self%fftdat(ithr)%ptcl_fft_re, [self%pftsz])
-        !     call c_f_pointer(self%fftdat_ptcls(iptcl,ithr)%p_ptcl_fft_im, self%fftdat(ithr)%ptcl_fft_im, [self%pftsz])
-        ! end do
-
+        ! thread-safe c-style allocatables for gencorrs, particle memoization
+        do iptcl = self%pfromto(1),self%pfromto(2)
+            do ik = self%kfromto(1),self%kfromto(2)
+                self%fftdat_ptcls(iptcl,ik)%p_re = fftwf_alloc_complex(int(self%pftsz, c_size_t))
+                self%fftdat_ptcls(iptcl,ik)%p_im = fftwf_alloc_complex(int(self%pftsz, c_size_t))
+                call c_f_pointer(self%fftdat_ptcls(iptcl,ik)%p_re, self%fftdat_ptcls(iptcl,ik)%re, [self%pftsz])
+                call c_f_pointer(self%fftdat_ptcls(iptcl,ik)%p_im, self%fftdat_ptcls(iptcl,ik)%im, [self%pftsz])
+            end do
+        end do
+        ! thread-safe c-style allocatables for gencorrs, reference memoization
+        do iref = 1,self%nrefs
+            do ik = self%kfromto(1),self%kfromto(2)
+                self%fftdat_refs(iref,ik)%p_re = fftwf_alloc_complex(int(self%pftsz, c_size_t))
+                self%fftdat_refs(iref,ik)%p_im = fftwf_alloc_complex(int(self%pftsz, c_size_t))
+                call c_f_pointer(self%fftdat_refs(iref,ik)%p_re, self%fftdat_refs(iref,ik)%re, [self%pftsz])
+                call c_f_pointer(self%fftdat_refs(iref,ik)%p_im, self%fftdat_refs(iref,ik)%im, [self%pftsz])
+            end do
+        end do
+        ! FFTW plans
         self%plan_fwd_1 = fftwf_plan_dft_r2c_1d(self%pftsz, self%fftdat(1)%ref_re, &
             self%fftdat(1)%ref_fft_re, FFTW_PATIENT)
         self%plan_fwd_2 = fftwf_plan_dft_1d    (self%pftsz, self%fftdat(1)%ref_im, &
             self%fftdat(1)%ref_fft_im, FFTW_FORWARD, FFTW_PATIENT)
         self%plan_bwd   = fftwf_plan_dft_c2r_1d(self%nrots, self%fftdat(1)%product_fft, &
             self%fftdat(1)%backtransf, FFTW_PATIENT)
+        ! factors for expansion of phase terms
         allocate(self%fft_factors(self%pftsz))
         do irot = 1,self%pftsz
-            self%fft_factors(irot) = exp(-(0., 1.)*PI*real(irot-1)/real(self%pftsz))
+            self%fft_factors(irot) = exp(-(0.,1.)*PI*real(irot-1)/real(self%pftsz))
         end do
         ! flag existence
         self%existence    = .true.
@@ -496,6 +493,57 @@ contains
         self%sqsums_ptcls(iptcl) = sum(csq(self%pfts_ptcls(iptcl,:,:)))
     end subroutine memoize_sqsum_ptcl
 
+    !>  \brief  is for memoization of the particle ffts used in gencorrs
+    subroutine memoize_ffts( self )
+        class(polarft_corrcalc), intent(inout) :: self
+        type(fftw_carr) :: carray(self%nthr)
+        integer         :: iref, iptcl, ik, ithr
+        ! allocate local memory in a thread-safe manner
+        do ithr = 1,self%nthr
+            carray(ithr)%p_re = fftwf_alloc_real(int(self%pftsz, c_size_t))
+            call c_f_pointer(carray(ithr)%p_re, carray(ithr)%re, [self%pftsz])
+            carray(ithr)%p_im = fftwf_alloc_complex(int(self%pftsz, c_size_t))
+            call c_f_pointer(carray(ithr)%p_im, carray(ithr)%im, [self%pftsz])
+        end do
+        ! memoize reference FFTs in parallel
+        !$omp parallel default(shared) private(iref,iptcl,ik,ithr) proc_bind(close)
+        !$omp do collapse(2) schedule(static)
+        do iref = 1,self%nrefs
+            do ik = self%kfromto(1),self%kfromto(2)
+                ! get thread index
+                ithr = omp_get_thread_num() + 1
+                ! copy reference pfts
+                carray(ithr)%re = real(self%pfts_refs(iref,:,ik))
+                carray(ithr)%im = aimag(self%pfts_refs(iref,:,ik)) * self%fft_factors
+                ! FFT
+                call fftwf_execute_dft_r2c(self%plan_fwd_1, carray(ithr)%re, self%fftdat_refs(iref,ik)%re)
+                call fftwf_execute_dft    (self%plan_fwd_2, carray(ithr)%im, self%fftdat_refs(iref,ik)%im)
+            end do
+        end do
+        !$omp end do nowait
+        ! memoize particle FFTs in parallel
+        !$omp do collapse(2) schedule(static)
+        do iptcl = self%pfromto(1),self%pfromto(2)
+            do ik = self%kfromto(1),self%kfromto(2)
+                ! get thread index
+                ithr = omp_get_thread_num() + 1
+                ! copy particle pfts
+                carray(ithr)%re = real(self%pfts_ptcls(iptcl,:,ik))
+                carray(ithr)%im = aimag(self%pfts_ptcls(iptcl,:,ik)) * self%fft_factors
+                ! FFT
+                call fftwf_execute_dft_r2c(self%plan_fwd_1, carray(ithr)%re, self%fftdat_ptcls(iptcl,ik)%re)
+                call fftwf_execute_dft    (self%plan_fwd_2, carray(ithr)%im, self%fftdat_ptcls(iptcl,ik)%im)
+            end do
+        end do
+        !$omp end do
+        !$omp end parallel
+        ! free memory
+        do ithr = 1,self%nthr
+            call fftwf_free(carray(ithr)%p_re)
+            call fftwf_free(carray(ithr)%p_im)
+        end do
+    end subroutine memoize_ffts
+
     ! I/O
 
     !>  \brief  is for writing particle pfts to file
@@ -572,7 +620,7 @@ contains
         !$omp end parallel do
     end function create_polar_ctfmat
 
-    subroutine apply_ctfs_to_ptcls( self, a )
+    subroutine apply_ctf_to_ptcls( self, a )
         use simple_ctf,  only: ctf
         use simple_oris, only: oris
         class(polarft_corrcalc), intent(inout) :: self
@@ -598,7 +646,7 @@ contains
             ctfmat = self%create_polar_ctfmat(tfun, dfx, dfy, angast, self%pftsz)
             self%pfts_ptcls(iptcl,:,:) = self%pfts_ptcls(iptcl,:,:) * ctfmat
         end do
-    end subroutine apply_ctfs_to_ptcls
+    end subroutine apply_ctf_to_ptcls
 
     subroutine calc_corrs_over_k( self, pft_ref, iptcl, kstop, corrs_over_k )
         class(polarft_corrcalc), intent(inout) :: self
@@ -611,26 +659,19 @@ contains
         ! sum up correlations over k-rings
         corrs_over_k = 0.
         do ik = self%kfromto(1),kstop
-            ! reference
-            self%fftdat(ithr)%ref_re(1:self%pftsz)  =  real(pft_ref(1:self%pftsz, ik))
-            self%fftdat(ithr)%ref_im(1:self%pftsz)  = aimag(pft_ref(1:self%pftsz, ik)) * self%fft_factors(1:self%pftsz)
-            ! particle
-            self%fftdat(ithr)%ptcl_re(1:self%pftsz) =  real(self%pfts_ptcls(iptcl,1:self%pftsz, ik))
-            self%fftdat(ithr)%ptcl_im(1:self%pftsz) = aimag(self%pfts_ptcls(iptcl,1:self%pftsz, ik)) * &
-                self%fft_factors(1:self%pftsz)
-            ! movie into Fourier Fourier space
-            call fftwf_execute_dft_r2c(self%plan_fwd_1, self%fftdat(ithr)%ref_re,  self%fftdat(ithr)%ref_fft_re)
-            call fftwf_execute_dft    (self%plan_fwd_2, self%fftdat(ithr)%ref_im,  self%fftdat(ithr)%ref_fft_im)
-            call fftwf_execute_dft_r2c(self%plan_fwd_1, self%fftdat(ithr)%ptcl_re, self%fftdat(ithr)%ptcl_fft_re)
-            call fftwf_execute_dft    (self%plan_fwd_2, self%fftdat(ithr)%ptcl_im, self%fftdat(ithr)%ptcl_fft_im)
+            ! move reference into Fourier Fourier space (particles are memoized)
+            self%fftdat(ithr)%ref_re(:) =  real(pft_ref(:,ik))
+            self%fftdat(ithr)%ref_im(:) = aimag(pft_ref(:,ik)) * self%fft_factors
+            call fftwf_execute_dft_r2c(self%plan_fwd_1, self%fftdat(ithr)%ref_re, self%fftdat(ithr)%ref_fft_re)
+            call fftwf_execute_dft    (self%plan_fwd_2, self%fftdat(ithr)%ref_im, self%fftdat(ithr)%ref_fft_im)
             ! correlate
-            self%fftdat(ithr)%ref_fft_re = self%fftdat(ithr)%ref_fft_re * conjg(self%fftdat(ithr)%ptcl_fft_re)
-            self%fftdat(ithr)%ref_fft_im = self%fftdat(ithr)%ref_fft_im * conjg(self%fftdat(ithr)%ptcl_fft_im)
+            self%fftdat(ithr)%ref_fft_re = self%fftdat(ithr)%ref_fft_re * conjg(self%fftdat_ptcls(iptcl,ik)%re)
+            self%fftdat(ithr)%ref_fft_im = self%fftdat(ithr)%ref_fft_im * conjg(self%fftdat_ptcls(iptcl,ik)%im)
             self%fftdat(ithr)%product_fft(1:1+2*int(self%pftsz/2):2) = &
                 4. * self%fftdat(ithr)%ref_fft_re(1:1+int(self%pftsz/2))
             self%fftdat(ithr)%product_fft(2:2+2*int(self%pftsz/2):2) = &
                 4. * self%fftdat(ithr)%ref_fft_im(1:int(self%pftsz/2)+1)
-            ! back transform from Fourier space
+            ! back transform
             call fftwf_execute_dft_c2r(self%plan_bwd, self%fftdat(ithr)%product_fft, self%fftdat(ithr)%backtransf)
             ! accumulate corrs
             corrs_over_k = corrs_over_k + self%fftdat(ithr)%backtransf
@@ -642,41 +683,57 @@ contains
         corrs_over_k = cshift(corrs_over_k, -1)      ! step 2 is circular shift by 1
     end subroutine calc_corrs_over_k
 
-    subroutine calc_k_corr( self, pft_ref, iptcl, k, kcorrs )
+    subroutine calc_corrs_over_k_wrefmem( self, iref, iptcl, kstop, corrs_over_k )
         class(polarft_corrcalc), intent(inout) :: self
-        integer,                 intent(in)    :: iptcl, k
-        complex(sp),             intent(in)    :: pft_ref(1:self%pftsz,self%kfromto(1):self%kfromto(2))
+        integer,                 intent(in)    :: iref, iptcl, kstop
+        real,                    intent(out)   :: corrs_over_k(self%nrots)
+        integer :: ithr, ik
+        ! get thread index
+        ithr = omp_get_thread_num() + 1
+        ! sum up correlations over k-rings
+        corrs_over_k = 0.
+        do ik = self%kfromto(1),kstop
+            ! correlate FFTs
+            self%fftdat(ithr)%ref_fft_re = self%fftdat_refs(iref,ik)%re * conjg(self%fftdat_ptcls(iptcl,ik)%re)
+            self%fftdat(ithr)%ref_fft_im = self%fftdat_refs(iref,ik)%im * conjg(self%fftdat_ptcls(iptcl,ik)%im)
+            self%fftdat(ithr)%product_fft(1:1+2*int(self%pftsz/2):2) = &
+                4. * self%fftdat(ithr)%ref_fft_re(1:1+int(self%pftsz/2))
+            self%fftdat(ithr)%product_fft(2:2+2*int(self%pftsz/2):2) = &
+                4. * self%fftdat(ithr)%ref_fft_im(1:int(self%pftsz/2)+1)
+            ! back transform
+            call fftwf_execute_dft_c2r(self%plan_bwd, self%fftdat(ithr)%product_fft, self%fftdat(ithr)%backtransf)
+            ! accumulate corrs
+            corrs_over_k = corrs_over_k + self%fftdat(ithr)%backtransf
+        end do
+        ! fftw3 routines are not properly normalized, hence division by self%nrots * 2
+        corrs_over_k = corrs_over_k  / real(self%nrots * 2)
+        ! corrs_over_k needs to be reordered
+        corrs_over_k = corrs_over_k(self%nrots:1:-1) ! step 1 is reversing
+        corrs_over_k = cshift(corrs_over_k, -1)      ! step 2 is circular shift by 1
+    end subroutine calc_corrs_over_k_wrefmem
+
+    subroutine calc_k_corrs_wrefmem( self, iref, iptcl, k, kcorrs )
+        class(polarft_corrcalc), intent(inout) :: self
+        integer,                 intent(in)    :: iref, iptcl, k
         real,                    intent(out)   :: kcorrs(self%nrots)
         integer :: ithr
         ! get thread index
         ithr = omp_get_thread_num() + 1
-        ! reference
-        self%fftdat(ithr)%ref_re(1:self%pftsz)  =  real(pft_ref(1:self%pftsz, k))
-        self%fftdat(ithr)%ref_im(1:self%pftsz)  = aimag(pft_ref(1:self%pftsz, k)) * self%fft_factors(1:self%pftsz)
-        ! particle
-        self%fftdat(ithr)%ptcl_re(1:self%pftsz) =  real(self%pfts_ptcls(iptcl,1:self%pftsz, k))
-        self%fftdat(ithr)%ptcl_im(1:self%pftsz) = aimag(self%pfts_ptcls(iptcl,1:self%pftsz, k)) * &
-            self%fft_factors(1:self%pftsz)
-        ! movie into Fourier Fourier space
-        call fftwf_execute_dft_r2c(self%plan_fwd_1, self%fftdat(ithr)%ref_re,  self%fftdat(ithr)%ref_fft_re)
-        call fftwf_execute_dft    (self%plan_fwd_2, self%fftdat(ithr)%ref_im,  self%fftdat(ithr)%ref_fft_im)
-        call fftwf_execute_dft_r2c(self%plan_fwd_1, self%fftdat(ithr)%ptcl_re, self%fftdat(ithr)%ptcl_fft_re)
-        call fftwf_execute_dft    (self%plan_fwd_2, self%fftdat(ithr)%ptcl_im, self%fftdat(ithr)%ptcl_fft_im)
-        ! correlate
-        self%fftdat(ithr)%ref_fft_re = self%fftdat(ithr)%ref_fft_re * conjg(self%fftdat(ithr)%ptcl_fft_re)
-        self%fftdat(ithr)%ref_fft_im = self%fftdat(ithr)%ref_fft_im * conjg(self%fftdat(ithr)%ptcl_fft_im)
+        ! correlate FFTs
+        self%fftdat(ithr)%ref_fft_re = self%fftdat_refs(iref,k)%re * conjg(self%fftdat_ptcls(iptcl,k)%re)
+        self%fftdat(ithr)%ref_fft_im = self%fftdat_refs(iref,k)%im * conjg(self%fftdat_ptcls(iptcl,k)%im)
         self%fftdat(ithr)%product_fft(1:1+2*int(self%pftsz/2):2) = &
             4. * self%fftdat(ithr)%ref_fft_re(1:1+int(self%pftsz/2))
         self%fftdat(ithr)%product_fft(2:2+2*int(self%pftsz/2):2) = &
             4. * self%fftdat(ithr)%ref_fft_im(1:int(self%pftsz/2)+1)
-        ! back transform from Fourier space
+        ! back transform
         call fftwf_execute_dft_c2r(self%plan_bwd, self%fftdat(ithr)%product_fft, self%fftdat(ithr)%backtransf)
         ! fftw3 routines are not properly normalized, hence division by self%nrots * 2
         kcorrs = self%fftdat(ithr)%backtransf / real(self%nrots * 2)
         ! kcorrs needs to be reordered
         kcorrs = kcorrs(self%nrots:1:-1) ! step 1 is reversing
         kcorrs = cshift(kcorrs, -1)      ! step 2 is circular shift by 1
-    end subroutine calc_k_corr
+    end subroutine calc_k_corrs_wrefmem
 
     function gencorrs_1( self, iref, iptcl ) result( cc )
         use simple_math, only: csq
@@ -684,9 +741,8 @@ contains
         integer,                 intent(in)    :: iref, iptcl
         real(sp) :: cc(self%nrots), sqsum_ref
         real     :: corrs_over_k(self%nrots)
-        call self%calc_corrs_over_k(self%pfts_refs(iref, 1:self%pftsz,&
-            &self%kfromto(1):self%kfromto(2)), iptcl, self%kfromto(2), corrs_over_k)
-        sqsum_ref = sum(csq(self%pfts_refs(iref, 1:self%pftsz, self%kfromto(1):self%kfromto(2))))
+        call self%calc_corrs_over_k_wrefmem(iref, iptcl, self%kfromto(2), corrs_over_k)
+        sqsum_ref = sum(csq(self%pfts_refs(iref,:,:)))
         cc = corrs_over_k / sqrt(sqsum_ref * self%sqsums_ptcls(iptcl))
     end function gencorrs_1
 
@@ -696,10 +752,9 @@ contains
         integer,                 intent(in)    :: iref, iptcl, kstop
         real(sp)    :: cc(self%nrots), sqsum_ref, sqsum_ptcl
         real        :: corrs_over_k(self%nrots)
-        call self%calc_corrs_over_k(self%pfts_refs(iref, 1:self%pftsz,&
-            &self%kfromto(1):kstop), iptcl, kstop, corrs_over_k)
-        sqsum_ptcl = sum(csq(self%pfts_ptcls(iptcl, 1:self%pftsz, self%kfromto(1):kstop)))
-        sqsum_ref  = sum(csq(self%pfts_refs(iref,   1:self%pftsz, self%kfromto(1):kstop)))
+        call self%calc_corrs_over_k_wrefmem(iref, iptcl, kstop, corrs_over_k)
+        sqsum_ptcl = sum(csq(self%pfts_ptcls(iptcl, :, self%kfromto(1):kstop)))
+        sqsum_ref  = sum(csq(self%pfts_refs(iref,   :, self%kfromto(1):kstop)))
         cc = corrs_over_k / sqrt(sqsum_ref * sqsum_ptcl)
     end function gencorrs_2
 
@@ -712,36 +767,33 @@ contains
         complex(sp) :: shmat(self%pftsz,self%kfromto(1):self%kfromto(2))
         real(sp)    :: corrs_over_k(self%nrots), argmat(self%pftsz,self%kfromto(1):self%kfromto(2))
         real(sp)    :: cc(self%nrots), sqsum_ref
-        cc = 0.
-        if( self%sqsums_ptcls(iptcl) < TINY ) return
         ! generate the argument matrix from memoized components in argtransf
         argmat    = self%argtransf(:self%pftsz,:) * shvec(1) + self%argtransf(self%pftsz+1:,:) * shvec(2)
         ! generate the complex shift transformation matrix
         shmat     = cmplx(cos(argmat),sin(argmat))
         ! shift
-        pft_ref   = self%pfts_refs(iref, 1:self%pftsz, self%kfromto(1):self%kfromto(2)) * shmat
+        pft_ref   = self%pfts_refs(iref,:,:) * shmat
         sqsum_ref = sum(csq(pft_ref))
-        if( sqsum_ref < TINY  ) return
-        call self%calc_corrs_over_k(pft_ref(1:self%pftsz,&
-            &self%kfromto(1):self%kfromto(2)), iptcl, self%kfromto(2), corrs_over_k)
+        ! correlate
+        call self%calc_corrs_over_k(pft_ref, iptcl, self%kfromto(2), corrs_over_k)
         cc = corrs_over_k  / sqrt(sqsum_ref * self%sqsums_ptcls(iptcl))
     end function gencorrs_3
 
     !>  \brief  is for generating resolution dependent correlations
     function genfrc( self, iref, iptcl, irot ) result( frc )
         use simple_math, only: csq
-        class(polarft_corrcalc), target, intent(inout) :: self              !< instance
-        integer,                         intent(in)    :: iref, iptcl, irot !< rotation index
+        class(polarft_corrcalc), target, intent(inout) :: self
+        integer,                         intent(in)    :: iref, iptcl, irot
         real(sp), allocatable :: frc(:)
         real(sp)              :: kcorrs(self%nrots), sumsqref, sumsqptcl
         integer               :: k
         allocate( frc(self%kfromto(1):self%kfromto(2)) )
         ! calc k-corrs and norms
         do k=self%kfromto(1),self%kfromto(2)
-            call self%calc_k_corr(self%pfts_refs(iref,1:self%pftsz,self%kfromto(1):self%kfromto(2)), iptcl, k, kcorrs)
-            sumsqref  = sum(csq(self%pfts_refs(iref,  1:self%pftsz,k)))
-            sumsqptcl = sum(csq(self%pfts_ptcls(iptcl,1:self%pftsz,k)))
-            frc(k)    = kcorrs(irot)/sqrt(sumsqref*sumsqptcl)
+            call self%calc_k_corrs_wrefmem(iref, iptcl, k, kcorrs)
+            sumsqref  = sum(csq(self%pfts_refs(iref,  :,k)))
+            sumsqptcl = sum(csq(self%pfts_ptcls(iptcl,:,k)))
+            frc(k)    = kcorrs(irot) / sqrt(sumsqref * sumsqptcl)
         end do
     end function genfrc
 
@@ -750,30 +802,25 @@ contains
     !>  \brief  is a destructor
     subroutine kill( self )
         class(polarft_corrcalc), intent(inout) :: self
-        integer :: ithr
+        integer :: ithr, iptcl, ik
         if( self%existence )then
-            deallocate( self%sqsums_ptcls,    &
-                        self%angtab,          &
-                        self%argtransf,       &
-                        self%polar,           &
-                        self%pfts_refs,       &
-                        self%pfts_ptcls,      &
-                        self%fft_factors,     &
-                        stat=alloc_stat)
-            allocchk("simple_polarft_corrcalc::kill ")
             do ithr=1,self%nthr
                 call fftwf_free(self%fftdat(ithr)%p_ref_re)
                 call fftwf_free(self%fftdat(ithr)%p_ref_im)
-                call fftwf_free(self%fftdat(ithr)%p_ptcl_re)
-                call fftwf_free(self%fftdat(ithr)%p_ptcl_im)
                 call fftwf_free(self%fftdat(ithr)%p_ref_fft_re)
                 call fftwf_free(self%fftdat(ithr)%p_ref_fft_im)
-                call fftwf_free(self%fftdat(ithr)%p_ptcl_fft_re)
-                call fftwf_free(self%fftdat(ithr)%p_ptcl_fft_im)
                 call fftwf_free(self%fftdat(ithr)%p_product_fft)
                 call fftwf_free(self%fftdat(ithr)%p_backtransf)
             end do
-            deallocate(self%fftdat)
+            do iptcl = self%pfromto(1),self%pfromto(2)
+                do ik = self%kfromto(1),self%kfromto(2)
+                    call fftwf_free(self%fftdat_ptcls(iptcl,ik)%p_re)
+                    call fftwf_free(self%fftdat_ptcls(iptcl,ik)%p_im)
+                end do
+            end do
+            deallocate( self%sqsums_ptcls, self%angtab, self%argtransf,&
+                &self%polar, self%pfts_refs, self%pfts_ptcls, self%fft_factors,&
+                &self%fftdat, self%fftdat_ptcls)
             call fftwf_destroy_plan(self%plan_bwd)
             call fftwf_destroy_plan(self%plan_fwd_1)
             call fftwf_destroy_plan(self%plan_fwd_2)

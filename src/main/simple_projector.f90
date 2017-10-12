@@ -170,11 +170,11 @@ contains
         real    :: vec(3), loc(3)
         logical :: l_serial = .false.
         if( present(serial) )l_serial = serial
-        ldim = self%get_ldim()
+        ldim            = self%get_ldim()
         if(ldim(3) == 1)stop 'only for interpolation from 3D images; fproject_polar_1; simple_projector'
         ldim_polft(1:2) = ldim(1:2)
         ldim_polft(3)   = 1
-        pdim   = pftcc%get_pdim()
+        pdim            = pftcc%get_pdim()
         if( l_serial )then
             ! this is the serial version of the threaded version just below
             do irot=1,pdim(1)
