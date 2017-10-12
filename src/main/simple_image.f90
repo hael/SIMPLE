@@ -61,6 +61,7 @@ type :: image
     procedure          :: get
     procedure          :: get_rmat
     procedure          :: get_cmat
+    procedure          :: set_cmat
     procedure          :: get_cmat_at
     procedure          :: set_cmat_at
     procedure          :: add2_cmat_at
@@ -1047,12 +1048,15 @@ contains
     !!
     function get_cmat( self ) result( cmat )
         class(image), intent(in) :: self
-        integer :: array_shape(3)
         complex, allocatable :: cmat(:,:,:)
-        array_shape(1)   = self%get_filtsz()
-        array_shape(2:3) = self%ldim(2:3)
-        allocate(cmat(array_shape(1),array_shape(2),array_shape(3)), source=self%cmat)
+        allocate(cmat(self%array_shape(1),self%array_shape(2),self%array_shape(3)), source=self%cmat)
     end function get_cmat
+
+    subroutine set_cmat( self, cmat )
+        class(image), intent(inout) :: self
+        complex,      intent(in)    :: cmat(self%array_shape(1),self%array_shape(2),self%array_shape(3))
+        self%cmat = cmat
+    end subroutine set_cmat
 
     !! get cmat value at index phys
     function get_cmat_at( self, phys ) result( comp )

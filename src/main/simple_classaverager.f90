@@ -413,7 +413,7 @@ contains
         type(image)                  :: batch_imgsum_even, batch_imgsum_odd
         type(image),     allocatable :: batch_imgs(:)
         type(projector), allocatable :: padded_imgs(:)
-        complex,         allocatable :: cmat_even(:,:), cmat_odd(:,:), comps(:,:)
+        complex,         allocatable :: cmat_even(:,:,:), cmat_odd(:,:,:), comps(:,:)
         real,            allocatable :: w(:,:)
         integer,         allocatable :: ptcls_inds(:), batches(:,:), iprecs(:)
         integer,         allocatable :: ioris(:), cyc1(:), cyc2(:)
@@ -470,12 +470,14 @@ contains
                     if( self%l_grid )then ! Fourier rotation
                         lims     = padded_imgs(1)%loop_lims(2)
                         cyc_lims = padded_imgs(1)%loop_lims(3)
-                        allocate(cmat_even(lims(1,1):lims(1,2), lims(2,1):lims(2,2)),&
-                                &cmat_odd(lims(1,1):lims(1,2), lims(2,1):lims(2,2)),&
-                                &cyc1(wdim), cyc2(wdim), w(wdim, wdim), comps(wdim, wdim), stat=alloc_stat)
+                        allocate(cyc1(wdim), cyc2(wdim), w(wdim, wdim), comps(wdim, wdim), stat=alloc_stat)
                         call alloc_errchk('assemble_sums; simple_classaverager', alloc_stat)
-                        cmat_even = zero
-                        cmat_odd  = zero
+                        call batch_imgsum_even%new(ldim_pd, self%pp%smpd)
+                        call batch_imgsum_odd%new(ldim_pd, self%pp%smpd)
+                        batch_imgsum_even = zero
+                        batch_imgsum_odd  = zero
+                        cmat_even         = batch_imgsum_even%get_cmat()
+                        cmat_odd          = batch_imgsum_odd%get_cmat()
                         !$omp parallel do default(shared) private(i,iprec,iori,h,k,l,m,loc,mat,logi,phys,cyc1,cyc2,w,comps,win,incr,pw)&
                         !$omp schedule(static) reduction(+:cmat_even,cmat_odd) proc_bind(close)
                         ! batch loop, convolution interpolation
@@ -515,36 +517,20 @@ contains
                                         end do
                                     end do
                                     ! SUM( kernel x components )
+                                    phys = padded_imgs(i)%comp_addr_phys([h,k,0])
                                     select case(self%precs(iprec)%eo)
                                         case(0,-1)
-                                            cmat_even(h,k) = cmat_even(h,k) + pw * sum(w * comps)
+                                            cmat_even(phys(1),phys(2),phys(3)) = cmat_even(phys(1),phys(2),phys(3)) + pw * sum(w * comps)
                                         case(1)
-                                            cmat_odd(h,k)  = cmat_odd(h,k)  + pw * sum(w * comps)
+                                            cmat_odd(phys(1),phys(2),phys(3))  = cmat_odd(phys(1),phys(2),phys(3))  + pw * sum(w * comps)
                                     end select
                                 end do
                             end do
                         enddo
                         !$omp end parallel do
-                        ! transfer to images
-                        call batch_imgsum_even%new(ldim_pd, self%pp%smpd)
-                        call batch_imgsum_odd%new(ldim_pd, self%pp%smpd)
-                        call batch_imgsum_even%set_ft(.true.)
-                        call batch_imgsum_odd%set_ft(.true.)
-                        batch_imgsum_even = zero
-                        batch_imgsum_odd  = zero
-                        !$omp parallel do collapse(2) default(shared) private(h,k,logi,phys,comp)&
-                        !$omp schedule(static) proc_bind(close)
-                        do h=lims(1,1),lims(1,2)
-                            do k=lims(2,1),lims(2,2)
-                                logi = [h, k, 0]
-                                phys = batch_imgsum_even%comp_addr_phys(logi)
-                                comp = cmat_even(h, k)
-                                call batch_imgsum_even%set_fcomp(logi, phys, comp)
-                                comp = cmat_odd(h, k)
-                                call batch_imgsum_odd%set_fcomp(logi, phys, comp)
-                            end do 
-                        end do
-                        !$omp end parallel do
+                        ! put back cmats
+                        call batch_imgsum_even%set_cmat(cmat_even)
+                        call batch_imgsum_odd%set_cmat(cmat_odd )
                         ! real space & clipping
                         call batch_imgsum_even%bwd_ft
                         call batch_imgsum_odd%bwd_ft
