@@ -48,7 +48,7 @@ contains
         call self%kill_polarizer
         self%kbwin = kbinterpol(KBWINSZ, KBALPHA)
         wlen       = self%wdim**2
-        pdim       = pftcc%get_pdim(.true.)
+        pdim       = pftcc%get_pdim()
         lims       = self%loop_lims(3)
         allocate( self%polcyc1_mat(1:pdim(1), pdim(2):pdim(3), 1:self%wdim),&
                   &self%polcyc2_mat(1:pdim(1), pdim(2):pdim(3), 1:self%wdim),&
@@ -106,7 +106,7 @@ contains
             stop 'logical dimensions do not match; imgpolarizer; simple_projector'
         endif
         if( .not.self%is_ft() ) stop 'image needs to FTed before this operation; simple_projector :: imgpolarizer'
-        pdim   = pftcc%get_pdim(iisptcl)
+        pdim   = pftcc%get_pdim()
         windim = 2*ceiling(self%harwin_exp) + 1
         vecdim = windim**2
         allocate( pft(pdim(1),pdim(2):pdim(3)), comps(1:windim,1:windim), stat=alloc_stat )

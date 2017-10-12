@@ -202,7 +202,11 @@ contains
             call primesrch3D(iptcl)%new(iptcl, pftcc, b%a, b%e, p)
         end do
         ! prep ctf
-        if(p%ctf .ne. 'no') call pftcc%create_polar_ctfmats(b%a)
+
+
+        ! if(p%ctf .ne. 'no') call pftcc%create_polar_ctfmats(b%a)
+
+        if( p%ctf .ne. 'no' ) call pftcc%apply_ctfs_to_ptcls(b%a)
         ! execute the search
         call del_file(p%outfile)
         select case(p%refine)

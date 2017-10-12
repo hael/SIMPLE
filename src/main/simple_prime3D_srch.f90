@@ -12,7 +12,6 @@ private
 #include "simple_local_flags.inc"
 
 real,    parameter :: FACTWEIGHTS_THRESH = 0.001 !< threshold for factorial weights
-real,    parameter :: E3HALFWINSZ        = 60.   !< in-plane angle half window size
 
 !> struct for prime3d params
 type prime3D_srch
@@ -59,7 +58,6 @@ type prime3D_srch
     logical                          :: dev            = .false. !< development flag
     logical                          :: doshift        = .true.  !< 2 indicate whether 2 serch shifts
     logical                          :: greedy_inpl    = .true.  !< 2 indicate whether in-plane search is greedy or not
-    logical                          :: inpl_neigh     = .false. !< 2 indicate whether to use implane neighbourhood search
     logical                          :: exists         = .false. !< 2 indicate existence
   contains
     ! CONSTRUCTOR
@@ -186,13 +184,6 @@ contains
         else
             self%npeaks_grid = min(self%npeaks_grid,self%nrefs)
         endif
-        ! in-plane neighbourhood
-        select case(trim(self%refine))
-        case('tseries')
-            self%inpl_neigh = .true.
-        case DEFAULT
-            self%inpl_neigh = .false.
-        end select
         ! generate oris oject in which the best npeaks refs will be stored
         call self%o_peaks%new(self%npeaks)
         ! updates option to search shift
@@ -488,7 +479,6 @@ contains
         class(prime3D_srch), intent(inout) :: self
         real,                intent(in)    :: lp
         integer, optional,   intent(in)    :: nnmat(self%nprojs,self%nnn_static), grid_projs(:)
-        integer, allocatable :: roind_vec(:)    ! in-plane neighbourhood
         real                 :: projspace_corrs(self%nrefs),wcorr,e3_prev
         integer              :: iref,isample,nrefs,target_projs(self%npeaks_grid)
         ! execute search
@@ -504,11 +494,6 @@ contains
                 ! initialize
                 call self%prep4srch(lp)
                 nrefs = self%nrefs
-            endif
-            if( self%inpl_neigh )then
-                ! in-plane neighbourhood
-                e3_prev = 360. - self%pftcc_ptr%get_rot(self%prev_roind)
-                roind_vec = self%pftcc_ptr%get_win_roind(e3_prev, E3HALFWINSZ)
             endif
             ! initialize, ctd
             self%nbetter         = 0
@@ -547,11 +532,7 @@ contains
                 if( self%nstates > 1 ) state = nint( self%o_refs%get(iref, 'state') )
                 if( self%state_exists(state) )then
                     ! In-plane correlations
-                    if( self%inpl_neigh )then
-                        corrs = self%pftcc_ptr%gencorrs(iref, self%iptcl, roind_vec=roind_vec)
-                    else
-                        corrs = self%pftcc_ptr%gencorrs(iref, self%iptcl)
-                    endif
+                    corrs     = self%pftcc_ptr%gencorrs(iref, self%iptcl)
                     loc       = maxloc(corrs)   ! greedy in-plane
                     inpl_ind  = loc(1)          ! in-plane angle index
                     inpl_corr = corrs(inpl_ind) ! max in plane correlation
@@ -716,7 +697,8 @@ contains
         integer,             intent(inout) :: statecnt(self%nstates)
         type(ori) :: o
         integer   :: iref, state
-        real      :: corr, mi_state, frac, corrs(self%nstates)
+        real      :: corrs_inpl(self%pftcc_ptr%get_nrots())
+        real      :: corr, mi_state, frac, corrs_state(self%nstates)
         self%prev_state = nint(self%a_ptr%get(self%iptcl, 'state'))
         if( self%prev_state > self%nstates ) stop 'previous best state outside boundary; stochastic_srch_het; simple_prime3D_srch'
         if( self%prev_state > 0 )then
@@ -733,21 +715,23 @@ contains
                 do while(state == self%prev_state .or. .not.self%state_exists(state))
                     state = irnd_uni(self%nstates)
                 enddo
-                iref = (state - 1) * self%nprojs + self%prev_proj
-                corr = self%pftcc_ptr%corr(iref, self%iptcl, self%prev_roind)
+                iref  = (state - 1) * self%nprojs + self%prev_proj
+                corrs_inpl = self%pftcc_ptr%gencorrs(iref, self%iptcl)
+                corr       = corrs_inpl(self%prev_roind)
             else
                 ! SHC
-                corrs = -1.
+                corrs_state = -1.
                 do state = 1, self%nstates
                     if( .not.self%state_exists(state) )cycle
                     iref = (state-1) * self%nprojs + self%prev_proj
-                    corrs(state) = self%pftcc_ptr%corr(iref, self%iptcl, self%prev_roind)
+                    corrs_inpl = self%pftcc_ptr%gencorrs(iref, self%iptcl)
+                    corrs_state(state) = corrs_inpl(self%prev_roind)
                 enddo
-                self%prev_corr = corrs(self%prev_state)
-                state          = shcloc(self%nstates, corrs, self%prev_corr)
+                self%prev_corr = corrs_state(self%prev_state)
+                state          = shcloc(self%nstates, corrs_state, self%prev_corr)
                 if(state == 0)state = self%prev_state ! numerical stability
-                corr            = corrs(state)
-                self%nrefs_eval = count(corrs <= self%prev_corr)
+                corr            = corrs_state(state)
+                self%nrefs_eval = count(corrs_state <= self%prev_corr)
             endif
             ! updates orientation
             frac = 100.*real(self%nrefs_eval) / real(self%nstates)
@@ -813,6 +797,7 @@ contains
         integer, optional,   intent(in)    :: nnmat(self%nprojs,self%nnn_static), target_projs(self%npeaks_grid)
         integer, allocatable :: nnvec(:)
         real,    allocatable :: frc(:)
+        real      :: corrs(self%pftcc_ptr%get_nrots())
         type(ori) :: o_prev
         real      :: cc_t_min_1, corr
         if( str_has_substr(self%refine,'neigh') )then
@@ -851,7 +836,8 @@ contains
         self%specscore = max(0., median_nocopy(frc))
         ! prep corr
         if( self%refine .ne. 'het' )then
-            corr = max( 0., self%pftcc_ptr%corr(self%prev_ref, self%iptcl, self%prev_roind) )
+            corrs = self%pftcc_ptr%gencorrs(self%prev_ref, self%iptcl)
+            corr  = max(0.,maxval(corrs))
             if( corr - 1.0 > 1.0e-5 .or. .not. is_a_number(corr) )then
                 print *, 'FLOATING POINT EXCEPTION ALARM; simple_prime3D_srch :: prep4srch'
                 print *, 'corr > 1. or isNaN'

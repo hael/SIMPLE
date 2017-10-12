@@ -40,20 +40,15 @@ allocate(cc(pftcc%get_nrots()), cc_fft(pftcc%get_nrots()))
 
 !### TIMING
 
-torig = tic()
+
+tfft = tic()
 do iptcl=1,p%nptcls - 1
 	do jptcl=iptcl + 1, p%nptcls
-		cc = pftcc%gencorrs(iptcl, jptcl)
+		cc_fft = pftcc%gencorrs(iptcl, jptcl)
 	end do
 end do
-print *, 'time of original: ', toc(torig)
-tfft= tic()
-do iptcl=1,p%nptcls - 1
-	do jptcl=iptcl + 1, p%nptcls
-		cc_fft = pftcc%gencorrs_fft(iptcl, jptcl)
-	end do
-end do
-print *, 'time of fft: ', toc(tfft)
+print *, 'time of fft_mod: ', toc(tfft)
+
 ! erravg = 0.
 ! errmax = 0.
 ! cnt    = 0

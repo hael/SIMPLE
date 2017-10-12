@@ -196,9 +196,10 @@ contains
     subroutine prep4srch( self )
         use simple_ran_tabu, only: ran_tabu
         class(prime2D_srch), intent(inout) :: self
-        type(ran_tabu)        :: rt
-        real,     allocatable :: frc(:)
-        integer               :: icls
+        type(ran_tabu)   :: rt
+        real,allocatable :: frc(:)
+        integer          :: icls
+        real             :: corrs(self%pftcc_ptr%get_nrots())
         ! find previous discrete alignment parameters
         self%prev_class = nint(self%a_ptr%get(self%iptcl,'class')) ! class index
         select case(self%refine)
@@ -221,7 +222,8 @@ contains
         self%best_rot   = self%prev_rot
         ! calculate previous best corr (treshold for better)
         if( self%prev_class > 0 )then
-            self%prev_corr  = max( 0., self%pftcc_ptr%corr(self%prev_class, self%iptcl, self%prev_rot) )
+            corrs = self%pftcc_ptr%gencorrs(self%prev_class, self%iptcl)
+            self%prev_corr  = max(0., corrs(self%prev_rot))
             self%best_corr  = self%prev_corr
         else
             self%prev_class = irnd_uni(self%nrefs)

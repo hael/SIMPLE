@@ -100,7 +100,7 @@ contains
                 return
             endif
         endif
-        corrs = self%pftcc_ptr%gencorrs_fft(self%reference, self%particle, vec_here)
+        corrs = self%pftcc_ptr%gencorrs(self%reference, self%particle, vec_here)
         cost = -maxval(corrs)
     end function shsrch_costfun
 
@@ -119,7 +119,7 @@ contains
         call self%nlopt%minimize(self%ospec, self, cost)
         if( cost <= cost_init )then
             ! get rotation index
-            corrs = self%pftcc_ptr%gencorrs_fft(self%reference, self%particle, self%ospec%x)
+            corrs = self%pftcc_ptr%gencorrs(self%reference, self%particle, self%ospec%x)
             loc   = maxloc(corrs)
             irot  = loc(1)
             ! set output corr & shift

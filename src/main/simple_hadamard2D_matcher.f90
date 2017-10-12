@@ -19,7 +19,7 @@ public :: prime2D_exec, preppftcc4align, pftcc
 private
 #include "simple_local_flags.inc"
 
-logical, parameter              :: L_BENCH         = .false.
+logical, parameter              :: L_BENCH         = .true.
 logical, parameter              :: L_BENCH_PRIME2D = .false.
 type(polarft_corrcalc)          :: pftcc
 type(prime2D_srch), allocatable :: primesrch2D(:)
@@ -163,7 +163,12 @@ contains
         end do
         ! calculate CTF matrices
         if( L_BENCH ) t_ctfmat = tic()
-        if( p%ctf .ne. 'no' ) call pftcc%create_polar_ctfmats(b%a)
+
+
+        ! if( p%ctf .ne. 'no' ) call pftcc%create_polar_ctfmats(b%a)
+
+
+        if( p%ctf .ne. 'no' ) call pftcc%apply_ctfs_to_ptcls(b%a)
         if( L_BENCH ) rt_ctfmat = toc(t_ctfmat)
         ! execute the search
         call del_file(p%outfile)
