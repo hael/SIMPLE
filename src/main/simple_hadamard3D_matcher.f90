@@ -64,7 +64,6 @@ contains
         integer,        intent(in)    :: which_iter
         logical,        intent(inout) :: update_res, converged
         logical,          allocatable :: to_update(:)
-        character(len=:), allocatable :: ppfts_fname
         type(oris) :: prime3D_oris
         type(ori)  :: orientation
         real       :: norm, corr_thresh, skewness, frac_srch_space
@@ -169,20 +168,7 @@ contains
         endif
 
         ! PREPARE THE POLARFT_CORRCALC DATA STRUCTURE
-        if( p%refine.eq.'het' )then
-            ! generate filename for memoization of particle pfts
-            if( allocated(ppfts_fname) ) deallocate(ppfts_fname)
-            if( p%l_distr_exec )then
-                allocate( ppfts_fname, source='ppfts_memoized_part'//int2str_pad(p%part,p%numlen)//'.bin' )
-            else
-                allocate( ppfts_fname, source='ppfts_memoized.bin' )
-            endif
-            ! generate projections (polar FTs)
-            call preppftcc4align( b, p, cline, ppfts_fname )
-        else
-            ! generate projections (polar FTs)
-            call preppftcc4align( b, p, cline )
-        endif
+        call preppftcc4align( b, p, cline )
 
         ! INITIALIZE
         write(*,'(A,1X,I3)') '>>> PRIME3D DISCRETE STOCHASTIC SEARCH, ITERATION:', which_iter
@@ -517,46 +503,29 @@ contains
         class(build),               intent(inout) :: b          !< build object
         class(params),              intent(inout) :: p          !< param object
         character(len=*), optional, intent(in)    :: ppfts_fname
-        ! read particle images and create polar projections
-        if( present(ppfts_fname) )then
-            if( file_exists(ppfts_fname) )then
-                call pftcc%read_pfts_ptcls(ppfts_fname)
-            else
-                call prep_pftcc_local
-                call pftcc%write_pfts_ptcls(ppfts_fname)
+        type(ori) :: o
+        integer   :: cnt, s, iptcl, istate, ntot
+        if( .not. p%l_distr_exec ) write(*,'(A)') '>>> BUILDING PARTICLES'
+        ! initialize
+        call b%img_match%init_polarizer(pftcc)
+        ntot = (p%top-p%fromp+1) * p%nstates
+        cnt  = 0
+        do s=1,p%nstates
+            if( b%a%get_pop(s, 'state') == 0 )then
+                ! empty state
+                cycle
             endif
-        else
-            call prep_pftcc_local
-        endif
-
-        contains
-
-            subroutine prep_pftcc_local
-                type(ori) :: o
-                integer   :: cnt, s, iptcl, istate, ntot
-                if( .not. p%l_distr_exec ) write(*,'(A)') '>>> BUILDING PARTICLES'
-                ! initialize
-                call b%img_match%init_polarizer(pftcc)
-                ntot = (p%top-p%fromp+1) * p%nstates
-                cnt  = 0
-                do s=1,p%nstates
-                    if( b%a%get_pop(s, 'state') == 0 )then
-                        ! empty state
-                        cycle
-                    endif
-                    do iptcl=p%fromp,p%top
-                        o      = b%a%get_ori(iptcl)
-                        istate = nint(o%get('state'))
-                        cnt = cnt + 1
-                        if( istate /= s ) cycle
-                        call progress(cnt, ntot)
-                        call read_img_from_stk( b, p, iptcl )
-                        call prepimg4align(b, p, o, is3D=.true.)
-                        call b%img_match%polarize(pftcc, iptcl)
-                    end do
-                end do
-            end subroutine prep_pftcc_local
-
+            do iptcl=p%fromp,p%top
+                o      = b%a%get_ori(iptcl)
+                istate = nint(o%get('state'))
+                cnt = cnt + 1
+                if( istate /= s ) cycle
+                call progress(cnt, ntot)
+                call read_img_from_stk( b, p, iptcl )
+                call prepimg4align(b, p, o, is3D=.true.)
+                call b%img_match%polarize(pftcc, iptcl)
+            end do
+        end do
     end subroutine prep_ptcls_pftcc4align
 
 end module simple_hadamard3D_matcher

@@ -131,7 +131,7 @@ contains
         if( iisptcl )then
             call pftcc%set_ptcl_pft(img_ind, pft)
         else
-            call pftcc%set_ref_pft(img_ind, pft)
+            call pftcc%set_ref_pft(img_ind, pft, .true.) ! 4 now @@@@@
         endif
         ! kill the remains
         deallocate(pft, comps)

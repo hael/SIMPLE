@@ -48,6 +48,15 @@ type :: ctfplan
     character(len=STDLEN) :: flag=''                 !< flag: <mul|flip|no>
 end type ctfplan
 
+!! CTF flag type
+enum, bind(c) 
+    enumerator :: CTFFLAG_NO = 0, CTFFLAG_YES = 1, CTFFLAG_MUL = 2,  CTFFLAG_FLIP = 3
+end enum
+
+type :: CTFFLAGTYPE
+    integer(kind(CTFFLAG_NO)) :: flag=CTFFLAG_NO
+end type CTFFLAGTYPE
+
 ! command line
 integer, parameter :: MAXNKEYS=100, KEYLEN=32
 

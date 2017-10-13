@@ -239,6 +239,7 @@ type :: image
     procedure          :: dead_hot_positions
     procedure          :: taper_edges
     procedure          :: zero_background
+    procedure          :: subtr_backgr_pad_divwinstr_fft
     procedure          :: salt_n_pepper
     procedure          :: square
     procedure          :: corners
@@ -304,17 +305,22 @@ contains
     !!\param backgr constant initial background
     !!
     !!\return new image object
-    subroutine new( self, ldim, smpd, backgr )
+    subroutine new( self, ldim, smpd, backgr, wthreads )
     !! have to have a type-bound constructor here because we get a sigbus error with the function construct
     !! "program received signal sigbus: access to an undefined portion of a memory object."
     !! this seems to be related to how the cstyle-allocated matrix is referenced by the gfortran compiler
-        class(image),   intent(inout) :: self
-        integer,        intent(in)    :: ldim(3)
-        real,           intent(in)    :: smpd
-        real, optional, intent(in)    :: backgr
+        class(image),      intent(inout) :: self
+        integer,           intent(in)    :: ldim(3)
+        real,              intent(in)    :: smpd
+        real,    optional, intent(in)    :: backgr
+        logical, optional, intent(in)    :: wthreads
         integer(kind=c_int) :: rc
         integer :: i
+        logical :: wwthreads
         call self%kill()
+        wwthreads = .true.
+        if( present(wthreads) ) wwthreads = wthreads
+        wwthreads = wwthreads .and. nthr_glob > 1
         self%ldim = ldim
         self%smpd = smpd
         ! Make Fourier iterator
@@ -340,7 +346,7 @@ contains
         endif
         self%ft = .false.
         ! make fftw plans
-        if( (any(ldim > 500) .or. ldim(3) > 200) .and. nthr_glob > 1 )then
+        if( wwthreads .and. (any(ldim > 500) .or. ldim(3) > 200) )then
             rc = fftwf_init_threads()
             call fftwf_plan_with_nthreads(nthr_glob)
         endif
@@ -1902,13 +1908,9 @@ contains
             if( self.eqdims.self_to_add )then
                 if( self%ft .eqv. self_to_add%ft )then
                     if( self%ft )then
-                        !$omp parallel workshare proc_bind(close)
                         self%cmat = self%cmat+ww*self_to_add%cmat
-                        !$omp end parallel workshare
                     else
-                        !$omp parallel workshare proc_bind(close)
                         self%rmat = self%rmat+ww*self_to_add%rmat
-                        !$omp end parallel workshare
                     endif
                 else
                     stop 'cannot sum images with different FT status; add_1; simple_image'
@@ -4916,6 +4918,28 @@ contains
         med = self%median_pixel(msk, 'backgr')
         if(abs(med) > TINY) self%rmat = self%rmat - med
     end subroutine zero_background
+
+    subroutine subtr_backgr_pad_divwinstr_fft( self, mskimg, instr_fun, self_out )
+        class(image), intent(inout) :: self
+        class(image), intent(in)    :: mskimg
+        real,         intent(in)    :: instr_fun(:,:,:)
+        class(image), intent(inout) :: self_out
+        real, allocatable :: pixels(:)
+        integer :: starts(3), stops(3)
+        real    :: med
+        pixels   = pack( self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)),&
+                &mask=mskimg%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) < 0.5 )
+        med = median_nocopy(pixels)
+        if(abs(med) > TINY) self%rmat = self%rmat - med
+        starts        = (self_out%ldim - self%ldim) / 2 + 1
+        stops         = self_out%ldim - starts + 1
+        self_out%rmat = 0.
+        self_out%rmat(starts(1):stops(1),starts(2):stops(2),1)=&
+            &self%rmat(:self%ldim(1),:self%ldim(2),1)
+        self_out%rmat(:self_out%ldim(1),:self_out%ldim(2),1) = &
+            &self_out%rmat(:self_out%ldim(1),:self_out%ldim(2),1) / instr_fun(:self_out%ldim(1),:self_out%ldim(2),1)
+        call self_out%fwd_ft
+    end subroutine subtr_backgr_pad_divwinstr_fft
 
     !>  \brief  Taper edges of image so that there are no sharp discontinuities in real space
     !!          This is a re-implementation of the MRC program taperedgek.for (Richard Henderson, 1987)

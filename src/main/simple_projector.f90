@@ -182,7 +182,7 @@ contains
                     vec(:2) = pftcc%get_coord(irot,k)
                     vec(3)  = 0.
                     loc     = matmul(vec,e%get_mat())
-                    call pftcc%set_ref_fcomp(iref, irot, k, self%interp_fcomp(loc))
+                    call pftcc%set_ref_fcomp(iref, irot, k, self%interp_fcomp(loc), .true. ) ! 4 now @@@
                 end do
             end do
         else
@@ -194,7 +194,7 @@ contains
                     vec(:2) = pftcc%get_coord(irot,k)
                     vec(3)  = 0.
                     loc     = matmul(vec,e%get_mat())
-                    call pftcc%set_ref_fcomp(iref, irot, k, self%interp_fcomp(loc))
+                    call pftcc%set_ref_fcomp(iref, irot, k, self%interp_fcomp(loc), .true. ) ! 4 now @@@
                 end do
             end do
             !$omp end parallel do

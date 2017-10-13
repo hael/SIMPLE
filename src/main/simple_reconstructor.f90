@@ -23,16 +23,6 @@ implicit none
 public :: reconstructor
 private
 
-!! CTF flag type
-enum, bind(c) 
-    enumerator :: CTFFLAG_NO = 0, CTFFLAG_YES = 1, CTFFLAG_MUL = 2,  CTFFLAG_FLIP = 3
-end enum
-
-type :: CTFFLAGTYPE
-    private
-    integer(kind(CTFFLAG_NO)) :: flag=CTFFLAG_NO
-end type CTFFLAGTYPE
-
 type, extends(image) :: reconstructor
     private
     type(kbinterpol)            :: kbwin                        !< window function object
@@ -43,11 +33,11 @@ type, extends(image) :: reconstructor
     real,    allocatable        :: rho_exp(:,:,:)               !< sampling+CTF**2 density of expanded reconstructor
     real                        :: winsz         = 1.           !< window half-width
     real                        :: alpha         = 2.           !< oversampling ratio
+    real                        :: dfx=0., dfy=0., angast=0.    !< CTF params
     integer                     :: wdim          = 0            !< dim of interpolation matrix
     integer                     :: lfny          = 0            !< Nyqvist Fourier index
     integer                     :: ldim_img(3)   = 0            !< logical dimension of the original image
     type(CTFFLAGTYPE)           :: ctf                          !< ctf flag <yes|no|mul|flip>
-    logical                     :: tfneg              = .false. !< invert contrast or not
     logical                     :: tfastig            = .false. !< astigmatic CTF or not
     logical                     :: rho_allocated      = .false. !< existence of rho matrix
     logical                     :: rho_exp_allocated  = .false. !< existence of rho expanded matrix
@@ -78,7 +68,6 @@ type, extends(image) :: reconstructor
     procedure          :: dealloc_rho
 end type reconstructor
 
-real            :: dfx=0., dfy=0., angast=0.
 real, parameter :: SHTHRESH=0.0001
 #include "simple_local_flags.inc"
 
@@ -109,12 +98,10 @@ contains
             case('yes')
                 self%ctf%flag = CTFFLAG_YES
             case('mul')
-                self%ctf%flag = CTFFLAG_MUL
+                stop 'ERROR! ctf=mul deprecated; simple_reconstructor :: alloc_rho'
             case('flip')
                 self%ctf%flag = CTFFLAG_FLIP
         end select
-        self%tfneg = .false.
-        if( p%neg .eq. 'yes' ) self%tfneg = .true.
         self%tfastig = .false.
         if( p%tfplan%mode .eq. 'astig' ) self%tfastig = .true.
         self%kbwin = kbinterpol(self%winsz,self%alpha)
@@ -262,16 +249,12 @@ contains
             sqSpatFreq = inv1*inv1+inv2*inv2
             ang        = atan2(vec(2), vec(1))
             ! calculate CTF and CTF**2 values
-            ! dfx, dfy, angast are class vars that are set by inout fplane
-            tval   = self%tfun%eval(sqSpatFreq, dfx, dfy, angast, ang) ! no bfactor 4 now
+            tval   = self%tfun%eval(sqSpatFreq, self%dfx, self%dfy, self%angast, ang) ! no bfactor 4 now
             tvalsq = tval * tval
             if( self%ctf%flag == CTFFLAG_FLIP ) tval = abs(tval)
-            if( self%ctf%flag == CTFFLAG_MUL  ) tval = 1.
-            if( self%tfneg ) tval = -tval
         else
             tval   = 1.
             tvalsq = tval
-            if( self%tfneg ) tval = -tval
         endif
     end subroutine calc_tfun_vals
 
@@ -287,13 +270,13 @@ contains
         real    :: x, y, xtmp
         if( self%ctf%flag /= CTFFLAG_NO )then ! make CTF object & get CTF info
             self%tfun = ctf(self%get_smpd(), o%get('kv'), o%get('cs'), o%get('fraca'))
-            dfx  = o%get('dfx')
+            self%dfx  = o%get('dfx')
             if( self%tfastig )then ! astigmatic CTF model
-                dfy = o%get('dfy')
-                angast = o%get('angast')
+                self%dfy = o%get('dfy')
+                self%angast = o%get('angast')
             else                   ! non-astigmatic CTF model
-                dfy = dfx
-                angast = 0.
+                self%dfy = self%dfx
+                self%angast = 0.
             endif
         endif
         lims = self%loop_lims(2)

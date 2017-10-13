@@ -48,32 +48,35 @@ end type fftw_arrs
 
 type :: polarft_corrcalc
   private
-    integer                          :: pfromto(2) = 1      !< from/to particle indices (in parallel execution)
-    integer                          :: nptcls     = 1      !< the total number of particles in partition (logically indexded [fromp,top])
-    integer                          :: nrefs      = 1      !< the number of references (logically indexded [1,nrefs])
-    integer                          :: nrots      = 0      !< number of in-plane rotations for one pft (determined by radius of molecule)
-    integer                          :: ring2      = 0      !< radius of molecule
-    integer                          :: pftsz      = 0      !< size of reference and particle pft (nrots/2)
-    integer                          :: nk         = 0      !< # resolution elements in the band-pass limited PFTs
-    integer                          :: nthr       = 0      !< # OpenMP threads
-    integer                          :: winsz      = 0      !< size of moving window in correlation calculations
-    integer                          :: ldim(3)    = 0      !< logical dimensions of original cartesian image
-    integer                          :: kfromto(2) = 0      !< Fourier index range
-    real(sp)                         :: smpd       = 0.     !< sampling distance
-    real(sp),            allocatable :: sqsums_ptcls(:)     !< memoized square sums for the correlation calculations
-    real(sp),            allocatable :: angtab(:)           !< table of in-plane angles (in degrees)
-    real(sp),            allocatable :: argtransf(:,:)      !< argument transfer constants for shifting the references
-    real(sp),            allocatable :: polar(:,:)          !< table of polar coordinates (in Cartesian coordinates)
-    complex(sp),         allocatable :: pfts_refs(:,:,:)    !< 3D complex matrix of polar reference sections (nrefs,pftsz,nk)
-    complex(sp),         allocatable :: pfts_ptcls(:,:,:)   !< 3D complex matrix of particle sections
-    complex(sp),         allocatable :: fft_factors(:)      !< phase factors for accelerated gencorrs routines
-    type(fftw_arrs),     allocatable :: fftdat(:)           !< arrays for accelerated gencorrs routines
-    type(fftw_carr_fft), allocatable :: fftdat_ptcls(:,:)   !< for memoization of particle  FFTs in accelerated gencorrs routines
-    type(fftw_carr_fft), allocatable :: fftdat_refs(:,:)    !< for memoization of reference FFTs in accelerated gencorrs routines
-    type(c_ptr)                      :: plan_fwd_1          !< FFTW plans for gencorrs
-    type(c_ptr)                      :: plan_fwd_2          !< -"-
-    type(c_ptr)                      :: plan_bwd            !< -"-
-    logical                          :: existence = .false. !< to indicate existence
+    integer                          :: pfromto(2) = 1        !< from/to particle indices (in parallel execution)
+    integer                          :: nptcls     = 1        !< the total number of particles in partition (logically indexded [fromp,top])
+    integer                          :: nrefs      = 1        !< the number of references (logically indexded [1,nrefs])
+    integer                          :: nrots      = 0        !< number of in-plane rotations for one pft (determined by radius of molecule)
+    integer                          :: ring2      = 0        !< radius of molecule
+    integer                          :: pftsz      = 0        !< size of reference and particle pft (nrots/2)
+    integer                          :: nk         = 0        !< # resolution elements in the band-pass limited PFTs
+    integer                          :: nthr       = 0        !< # OpenMP threads
+    integer                          :: winsz      = 0        !< size of moving window in correlation calculations
+    integer                          :: ldim(3)    = 0        !< logical dimensions of original cartesian image
+    integer                          :: kfromto(2) = 0        !< Fourier index range
+    real(sp)                         :: smpd       = 0.       !< sampling distance
+    real(sp),            allocatable :: sqsums_ptcls(:)       !< memoized square sums for the correlation calculations
+    real(sp),            allocatable :: angtab(:)             !< table of in-plane angles (in degrees)
+    real(sp),            allocatable :: argtransf(:,:)        !< argument transfer constants for shifting the references
+    real(sp),            allocatable :: polar(:,:)            !< table of polar coordinates (in Cartesian coordinates)
+    complex(sp),         allocatable :: pfts_refs_even(:,:,:) !< 3D complex matrix of polar reference sections (nrefs,pftsz,nk), even
+    complex(sp),         allocatable :: pfts_refs_odd(:,:,:)  !< -"-, odd
+    complex(sp),         allocatable :: pfts_ptcls(:,:,:)     !< 3D complex matrix of particle sections
+    complex(sp),         allocatable :: fft_factors(:)        !< phase factors for accelerated gencorrs routines
+    type(fftw_arrs),     allocatable :: fftdat(:)             !< arrays for accelerated gencorrs routines
+    type(fftw_carr_fft), allocatable :: fftdat_ptcls(:,:)     !< for memoization of particle  FFTs in accelerated gencorrs routines
+    type(fftw_carr_fft), allocatable :: fftdat_refs_even(:,:) !< for memoization of reference FFTs in accelerated gencorrs routines, even
+    type(fftw_carr_fft), allocatable :: fftdat_refs_odd(:,:)  !< -"-, odd
+    logical,             allocatable :: iseven(:)             !< eo assignment for gold-standard FSC
+    type(c_ptr)                      :: plan_fwd_1            !< FFTW plans for gencorrs
+    type(c_ptr)                      :: plan_fwd_2            !< -"-
+    type(c_ptr)                      :: plan_bwd              !< -"-
+    logical                          :: existence = .false.   !< to indicate existence
   contains
     ! CONSTRUCTOR
     procedure          :: new
@@ -106,9 +109,6 @@ type :: polarft_corrcalc
     ! MEMOIZER
     procedure, private :: memoize_sqsum_ptcl
     procedure          :: memoize_ffts
-    ! I/O
-    procedure          :: write_pfts_ptcls
-    procedure          :: read_pfts_ptcls
     ! CALCULATORS
     procedure, private :: create_polar_ctfmat
     procedure          :: apply_ctf_to_ptcls
@@ -129,13 +129,13 @@ contains
     ! CONSTRUCTORS
 
     !>  \brief  is a constructor
-    subroutine new( self, nrefs, p, prange )
+    subroutine new( self, nrefs, p, eoarr )
         use simple_math,   only: rad2deg, is_even, round2even
         use simple_params, only: params
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: nrefs
         class(params),           intent(inout) :: p
-        integer, optional,       intent(in)    :: prange(2)
+        integer, optional,       intent(in)    :: eoarr(p%fromp:p%top)
         integer  :: alloc_stat, irot, k, ithr, iptcl, ik, iref
         logical  :: even_dims, test(2)
         real(sp) :: ang
@@ -168,20 +168,19 @@ contains
             call simple_stop ('only even logical dims supported; new; simple_polarft_corrcalc')
         endif
         ! set constants
-        self%pfromto = [p%fromp,p%top]                   !< from/to particle indices (in parallel execution)
-        if( present(prange) ) self%pfromto = prange      !< -"-
-        self%nptcls  = p%top - p%fromp + 1               !< the total number of particles in partition (logically indexded [fromp,top])
-        self%nrefs   = nrefs                             !< the number of references (logically indexded [1,nrefs])
-        self%ring2   = p%ring2                           !< radius of molecule
-        self%nrots   = round2even(twopi * real(p%ring2)) !< number of in-plane rotations for one pft  (determined by radius of molecule)
-        self%pftsz   = self%nrots / 2                    !< size of reference (nrots/2) (number of vectors used for matching)
-        self%winsz   = self%pftsz - 1                    !< size of moving window in correlation cacluations
-        self%smpd    = p%smpd                            !< sampling distance
-        self%kfromto = p%kfromto                         !< Fourier index range
-        self%nk      = self%kfromto(2)-self%kfromto(1)+1 !< # resolution elements
-        self%nthr    = p%nthr                            !< # OpenMP threads
-        ! generate polar coordinates
-        allocate( self%polar(2*self%nrots,self%kfromto(1):self%kfromto(2)), self%angtab(self%nrots), stat=alloc_stat)
+        self%pfromto = [p%fromp,p%top]                       !< from/to particle indices (in parallel execution)
+        self%nptcls  = p%top - p%fromp + 1                   !< the total number of particles in partition (logically indexded [fromp,top])
+        self%nrefs   = nrefs                                 !< the number of references (logically indexded [1,nrefs])
+        self%ring2   = p%ring2                               !< radius of molecule
+        self%nrots   = round2even(twopi * real(p%ring2))     !< number of in-plane rotations for one pft  (determined by radius of molecule)
+        self%pftsz   = self%nrots / 2                        !< size of reference (nrots/2) (number of vectors used for matching)
+        self%smpd    = p%smpd                                !< sampling distance
+        self%kfromto = p%kfromto                             !< Fourier index range
+        self%nk      = self%kfromto(2) - self%kfromto(1) + 1 !< # resolution elements
+        self%nthr    = p%nthr                                !< # OpenMP threads
+        ! generate polar coordinates & eo assignment
+        allocate( self%polar(2*self%nrots,self%kfromto(1):self%kfromto(2)),&
+                 &self%angtab(self%nrots), self%iseven(self%pfromto(1):self%pfromto(2)), stat=alloc_stat)
         allocchk('polar coordinate arrays; new; simple_polarft_corrcalc')
         ang = twopi/real(self%nrots)
         do irot=1,self%nrots
@@ -192,6 +191,16 @@ contains
             end do
             self%angtab(irot) = rad2deg(self%angtab(irot)) ! angle (in degrees)
         end do
+        ! eo assignment
+        if( present(eoarr) )then
+            where(eoarr == 0)
+                self%iseven = .true.
+            else where
+                self%iseven = .false.
+            end where
+        else
+            self%iseven = .true.
+        endif
         ! generate the argument transfer constants for shifting reference polarfts
         allocate( self%argtransf(self%nrots,self%kfromto(1):self%kfromto(2)), stat=alloc_stat)
         allocchk('shift argument transfer array; new; simple_polarft_corrcalc')
@@ -202,16 +211,18 @@ contains
             self%polar(self%nrots+1:self%nrots+self%pftsz,:) * &
             (PI/real(self%ldim(2)/2))    ! y-part
         ! allocate others
-        allocate( self%pfts_refs(self%nrefs,self%pftsz,self%kfromto(1):self%kfromto(2)),&
-                  self%pfts_ptcls(self%pfromto(1):self%pfromto(2),self%pftsz,self%kfromto(1):self%kfromto(2)),&
-                  self%sqsums_ptcls(self%pfromto(1):self%pfromto(2)), self%fftdat(self%nthr),&
-                  self%fftdat_ptcls(self%pfromto(1):self%pfromto(2),self%kfromto(1):self%kfromto(2)), stat=alloc_stat)
-        allocchk('polarfts and sqsums; new; simple_polarft_corrcalc 1')
-        allocate(self%fftdat_refs(1:self%nrefs,self%kfromto(1):self%kfromto(2)), stat=alloc_stat)
-        allocchk('polarfts and sqsums; new; simple_polarft_corrcalc 2')
-        self%pfts_refs    = zero
-        self%pfts_ptcls   = zero
-        self%sqsums_ptcls = 0.
+        allocate( self%pfts_refs_even(self%nrefs,self%pftsz,self%kfromto(1):self%kfromto(2)),&
+                 &self%pfts_refs_odd(self%nrefs,self%pftsz,self%kfromto(1):self%kfromto(2)),&
+                 &self%pfts_ptcls(self%pfromto(1):self%pfromto(2),self%pftsz,self%kfromto(1):self%kfromto(2)),&
+                 &self%sqsums_ptcls(self%pfromto(1):self%pfromto(2)), self%fftdat(self%nthr),&
+                 &self%fftdat_ptcls(self%pfromto(1):self%pfromto(2),self%kfromto(1):self%kfromto(2)),&
+                 &self%fftdat_refs_even(1:self%nrefs,self%kfromto(1):self%kfromto(2)),&
+                 &self%fftdat_refs_odd(1:self%nrefs,self%kfromto(1):self%kfromto(2)), stat=alloc_stat)
+        allocchk('polarfts and sqsums; new; simple_polarft_corrcalc')
+        self%pfts_refs_even = zero
+        self%pfts_refs_odd  = zero
+        self%pfts_ptcls     = zero
+        self%sqsums_ptcls   = 0.
         ! thread-safe c-style allocatables for gencorrs
         do ithr=1,self%nthr
             self%fftdat(ithr)%p_ref_re      = fftwf_alloc_real   (int(self%pftsz, c_size_t))
@@ -239,10 +250,14 @@ contains
         ! thread-safe c-style allocatables for gencorrs, reference memoization
         do iref = 1,self%nrefs
             do ik = self%kfromto(1),self%kfromto(2)
-                self%fftdat_refs(iref,ik)%p_re = fftwf_alloc_complex(int(self%pftsz, c_size_t))
-                self%fftdat_refs(iref,ik)%p_im = fftwf_alloc_complex(int(self%pftsz, c_size_t))
-                call c_f_pointer(self%fftdat_refs(iref,ik)%p_re, self%fftdat_refs(iref,ik)%re, [self%pftsz])
-                call c_f_pointer(self%fftdat_refs(iref,ik)%p_im, self%fftdat_refs(iref,ik)%im, [self%pftsz])
+                self%fftdat_refs_even(iref,ik)%p_re = fftwf_alloc_complex(int(self%pftsz, c_size_t))
+                self%fftdat_refs_even(iref,ik)%p_im = fftwf_alloc_complex(int(self%pftsz, c_size_t))
+                call c_f_pointer(self%fftdat_refs_even(iref,ik)%p_re, self%fftdat_refs_even(iref,ik)%re, [self%pftsz])
+                call c_f_pointer(self%fftdat_refs_even(iref,ik)%p_im, self%fftdat_refs_even(iref,ik)%im, [self%pftsz])
+                self%fftdat_refs_odd(iref,ik)%p_re = fftwf_alloc_complex(int(self%pftsz, c_size_t))
+                self%fftdat_refs_odd(iref,ik)%p_im = fftwf_alloc_complex(int(self%pftsz, c_size_t))
+                call c_f_pointer(self%fftdat_refs_odd(iref,ik)%p_re, self%fftdat_refs_odd(iref,ik)%re, [self%pftsz])
+                call c_f_pointer(self%fftdat_refs_odd(iref,ik)%p_im, self%fftdat_refs_odd(iref,ik)%im, [self%pftsz])
             end do
         end do
         ! FFTW plans
@@ -264,11 +279,16 @@ contains
     ! SETTERS
 
     !>  \brief  sets reference pft iref
-    subroutine set_ref_pft( self, iref, pft )
+    subroutine set_ref_pft( self, iref, pft, iseven )
         class(polarft_corrcalc), intent(inout) :: self     !< this object
         integer,                 intent(in)    :: iref     !< reference index
         complex(sp),             intent(in)    :: pft(:,:) !< reference pft
-        self%pfts_refs(iref,:,:) = pft
+        logical,                 intent(in)    :: iseven   !< logical eo-flag
+        if( iseven )then
+            self%pfts_refs_even(iref,:,:) = pft
+        else
+            self%pfts_refs_odd(iref,:,:)  = pft
+        endif
     end subroutine set_ref_pft
 
     !>  \brief  sets particle pft iptcl
@@ -287,11 +307,16 @@ contains
     !! \param k  index (third dim ptfs_refs)
     !! \param comp Fourier component
     !!
-    subroutine set_ref_fcomp( self, iref, irot, k, comp )
+    subroutine set_ref_fcomp( self, iref, irot, k, comp, iseven )
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iref, irot, k
         complex(sp),             intent(in)    :: comp
-        self%pfts_refs(iref,irot,k) = comp
+        logical,                 intent(in)    :: iseven
+        if( iseven )then
+            self%pfts_refs_even(iref,irot,k) = comp
+        else
+            self%pfts_refs_odd(iref,irot,k)  = comp
+        endif
     end subroutine set_ref_fcomp
 
     !>  \brief  sets a particle Fourier component
@@ -312,7 +337,8 @@ contains
     subroutine zero_ref( self, iref )
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iref
-        self%pfts_refs(iref,:,:) = zero
+        self%pfts_refs_even(iref,:,:) = zero
+        self%pfts_refs_odd(iref,:,:)  = zero
     end subroutine zero_ref
 
     ! GETTERS
@@ -352,7 +378,7 @@ contains
         ring2 = self%ring2
     end function get_ring2
 
-    !>  \brief  for getting the number of reference rotations (size of second dim of self%pfts_refs)
+    !>  \brief  for getting the number of reference rotations (size of second dim of self%pfts_refs_even)
     function get_pftsz( self ) result( pftsz )
         class(polarft_corrcalc), intent(in) :: self
         integer :: pftsz
@@ -432,12 +458,18 @@ contains
 
     !>  \brief  returns polar Fourier transform of reference iref
     !! \param iref reference index
-    function get_ref_pft( self, iref ) result( pft )
+    function get_ref_pft( self, iref, iseven ) result( pft )
         class(polarft_corrcalc), intent(in) :: self
         integer,                 intent(in) :: iref
+        logical,                 intent(in) :: iseven
         complex(sp), allocatable :: pft(:,:)
-        allocate(pft(self%pftsz,self%kfromto(1):self%kfromto(2)),&
-        source=self%pfts_refs(iref,:,:), stat=alloc_stat)
+        if( iseven )then
+            allocate(pft(self%pftsz,self%kfromto(1):self%kfromto(2)),&
+            source=self%pfts_refs_even(iref,:,:), stat=alloc_stat)
+        else
+            allocate(pft(self%pftsz,self%kfromto(1):self%kfromto(2)),&
+            source=self%pfts_refs_odd(iref,:,:), stat=alloc_stat)
+        endif
         allocchk("In: get_ref_pft; simple_polarft_corrcalc")
     end function get_ref_pft
 
@@ -462,12 +494,18 @@ contains
 
     !>  \brief  is for plotting a particle polar FT
     !! \param iref reference index
-    subroutine vis_ref( self, iref )
+    subroutine vis_ref( self, iref, iseven )
         use gnufor2
         class(polarft_corrcalc), intent(in) :: self
         integer,                 intent(in) :: iref
-        call gnufor_image(real(self%pfts_refs(iref,:,:)),  palette='gray')
-        call gnufor_image(aimag(self%pfts_refs(iref,:,:)), palette='gray')
+        logical,                 intent(in) :: iseven
+        if( iseven )then
+            call gnufor_image(real(self%pfts_refs_even(iref,:,:)),  palette='gray')
+            call gnufor_image(aimag(self%pfts_refs_even(iref,:,:)), palette='gray')
+        else
+            call gnufor_image(real(self%pfts_refs_odd(iref,:,:)),  palette='gray')
+            call gnufor_image(aimag(self%pfts_refs_odd(iref,:,:)), palette='gray')
+        endif
     end subroutine vis_ref
 
     !>  \brief  for printing info about the object
@@ -494,7 +532,7 @@ contains
         self%sqsums_ptcls(iptcl) = sum(csq(self%pfts_ptcls(iptcl,:,:)))
     end subroutine memoize_sqsum_ptcl
 
-    !>  \brief  is for memoization of the particle ffts used in gencorrs
+    !>  \brief  is for memoization of the ffts used in gencorrs
     subroutine memoize_ffts( self )
         class(polarft_corrcalc), intent(inout) :: self
         type(fftw_carr) :: carray(self%nthr)
@@ -513,12 +551,18 @@ contains
             do ik = self%kfromto(1),self%kfromto(2)
                 ! get thread index
                 ithr = omp_get_thread_num() + 1
-                ! copy reference pfts
-                carray(ithr)%re = real(self%pfts_refs(iref,:,ik))
-                carray(ithr)%im = aimag(self%pfts_refs(iref,:,ik)) * self%fft_factors
+                ! copy even reference pfts
+                carray(ithr)%re = real(self%pfts_refs_even(iref,:,ik))
+                carray(ithr)%im = aimag(self%pfts_refs_even(iref,:,ik)) * self%fft_factors
                 ! FFT
-                call fftwf_execute_dft_r2c(self%plan_fwd_1, carray(ithr)%re, self%fftdat_refs(iref,ik)%re)
-                call fftwf_execute_dft    (self%plan_fwd_2, carray(ithr)%im, self%fftdat_refs(iref,ik)%im)
+                call fftwf_execute_dft_r2c(self%plan_fwd_1, carray(ithr)%re, self%fftdat_refs_even(iref,ik)%re)
+                call fftwf_execute_dft    (self%plan_fwd_2, carray(ithr)%im, self%fftdat_refs_even(iref,ik)%im)
+                ! copy odd reference pfts
+                carray(ithr)%re = real(self%pfts_refs_odd(iref,:,ik))
+                carray(ithr)%im = aimag(self%pfts_refs_odd(iref,:,ik)) * self%fft_factors
+                ! FFT
+                call fftwf_execute_dft_r2c(self%plan_fwd_1, carray(ithr)%re, self%fftdat_refs_odd(iref,ik)%re)
+                call fftwf_execute_dft    (self%plan_fwd_2, carray(ithr)%im, self%fftdat_refs_odd(iref,ik)%im)
             end do
         end do
         !$omp end do nowait
@@ -544,46 +588,6 @@ contains
             call fftwf_free(carray(ithr)%p_im)
         end do
     end subroutine memoize_ffts
-
-    ! I/O
-
-    !>  \brief  is for writing particle pfts to file
-    subroutine write_pfts_ptcls( self, fname )
-        class(polarft_corrcalc), intent(in) :: self
-        character(len=*),        intent(in) :: fname !< output filename
-        integer :: funit, io_stat
-        call fopen(funit, status='REPLACE', action='WRITE', file=trim(fname), access='STREAM', iostat=io_stat)
-        call fileio_errmsg('polarft_corrcalc write_ptfs_ptcls  ', io_stat)
-        write(unit=funit,pos=1,iostat=io_stat) self%pfts_ptcls
-        ! Check if the write was successful
-        if( io_stat .ne. 0 )then
-            call fileio_errmsg('**ERROR(simple_polarft_corrcalc): I/O error when writing file: '// trim(fname), io_stat)
-        endif
-        call fclose(funit, errmsg='polarft_corrcalc write_ptfs_ptcls  ')
-    end subroutine write_pfts_ptcls
-
-    !>  \brief  is for reading particle pfts from file
-    subroutine read_pfts_ptcls( self, fname )
-        !$ use omp_lib
-        !$ use omp_lib_kinds
-        class(polarft_corrcalc), intent(inout) :: self
-        character(len=*),        intent(in)    :: fname !< input filename
-        integer :: funit, io_stat, iptcl
-        call fopen(funit, status='OLD', action='READ', file=trim(fname), access='STREAM', iostat=io_stat)
-        call fileio_errmsg('polarft_corrcalc read_ptfs_ptcls fopen '//trim(fname), io_stat)
-        read(unit=funit,pos=1,iostat=io_stat) self%pfts_ptcls
-        ! Check if the read was successful
-        if( io_stat .ne. 0 )then
-            call fileio_errmsg('**ERROR(simple_polarft_corrcalc): I/O error when reading file: '// trim(fname), io_stat)
-        endif
-        call fclose(funit, errmsg='polarft_corrcalc read_ptfs_ptcls fclose '//trim(fname))
-        ! memoize sqsum_ptcls
-        !$omp parallel do schedule(static) default(shared) private(iptcl) proc_bind(close)
-        do iptcl=self%pfromto(1),self%pfromto(2)
-            call self%memoize_sqsum_ptcl(iptcl)
-        end do
-        !$omp end parallel do
-    end subroutine read_pfts_ptcls
 
     ! CALCULATORS
 
@@ -675,7 +679,7 @@ contains
             ! back transform
             call fftwf_execute_dft_c2r(self%plan_bwd, self%fftdat(ithr)%product_fft, self%fftdat(ithr)%backtransf)
             ! accumulate corrs
-            corrs_over_k = corrs_over_k + self%fftdat(ithr)%backtransf
+            corrs_over_k = corrs_over_k + self%fftdat(ithr)%backtransf !!!!!!!! * real(ik) due to Jacobian or sqrt(real(ik))
         end do
         ! fftw3 routines are not properly normalized, hence division by self%nrots * 2
         corrs_over_k = corrs_over_k  / real(self%nrots * 2)
@@ -695,8 +699,13 @@ contains
         corrs_over_k = 0.
         do ik = self%kfromto(1),kstop
             ! correlate FFTs
-            self%fftdat(ithr)%ref_fft_re = self%fftdat_refs(iref,ik)%re * conjg(self%fftdat_ptcls(iptcl,ik)%re)
-            self%fftdat(ithr)%ref_fft_im = self%fftdat_refs(iref,ik)%im * conjg(self%fftdat_ptcls(iptcl,ik)%im)
+            if( self%iseven(iptcl) )then
+                self%fftdat(ithr)%ref_fft_re = self%fftdat_refs_even(iref,ik)%re * conjg(self%fftdat_ptcls(iptcl,ik)%re)
+                self%fftdat(ithr)%ref_fft_im = self%fftdat_refs_even(iref,ik)%im * conjg(self%fftdat_ptcls(iptcl,ik)%im)
+            else
+                self%fftdat(ithr)%ref_fft_re = self%fftdat_refs_odd(iref,ik)%re * conjg(self%fftdat_ptcls(iptcl,ik)%re)
+                self%fftdat(ithr)%ref_fft_im = self%fftdat_refs_odd(iref,ik)%im * conjg(self%fftdat_ptcls(iptcl,ik)%im)
+            endif
             self%fftdat(ithr)%product_fft(1:1+2*int(self%pftsz/2):2) = &
                 4. * self%fftdat(ithr)%ref_fft_re(1:1+int(self%pftsz/2))
             self%fftdat(ithr)%product_fft(2:2+2*int(self%pftsz/2):2) = &
@@ -721,8 +730,13 @@ contains
         ! get thread index
         ithr = omp_get_thread_num() + 1
         ! correlate FFTs
-        self%fftdat(ithr)%ref_fft_re = self%fftdat_refs(iref,k)%re * conjg(self%fftdat_ptcls(iptcl,k)%re)
-        self%fftdat(ithr)%ref_fft_im = self%fftdat_refs(iref,k)%im * conjg(self%fftdat_ptcls(iptcl,k)%im)
+        if( self%iseven(iptcl) )then
+            self%fftdat(ithr)%ref_fft_re = self%fftdat_refs_even(iref,k)%re * conjg(self%fftdat_ptcls(iptcl,k)%re)
+            self%fftdat(ithr)%ref_fft_im = self%fftdat_refs_even(iref,k)%im * conjg(self%fftdat_ptcls(iptcl,k)%im)
+        else
+            self%fftdat(ithr)%ref_fft_re = self%fftdat_refs_odd(iref,k)%re * conjg(self%fftdat_ptcls(iptcl,k)%re)
+            self%fftdat(ithr)%ref_fft_im = self%fftdat_refs_odd(iref,k)%im * conjg(self%fftdat_ptcls(iptcl,k)%im)
+        endif
         self%fftdat(ithr)%product_fft(1:1+2*int(self%pftsz/2):2) = &
             4. * self%fftdat(ithr)%ref_fft_re(1:1+int(self%pftsz/2))
         self%fftdat(ithr)%product_fft(2:2+2*int(self%pftsz/2):2) = &
@@ -743,7 +757,11 @@ contains
         real(sp) :: cc(self%nrots), sqsum_ref
         real     :: corrs_over_k(self%nrots)
         call self%calc_corrs_over_k_wrefmem(iref, iptcl, self%kfromto(2), corrs_over_k)
-        sqsum_ref = sum(csq(self%pfts_refs(iref,:,:)))
+        if( self%iseven(iptcl) )then
+            sqsum_ref = sum(csq(self%pfts_refs_even(iref,:,:)))
+        else
+            sqsum_ref = sum(csq(self%pfts_refs_odd(iref,:,:)))
+        endif
         cc = corrs_over_k / sqrt(sqsum_ref * self%sqsums_ptcls(iptcl))
     end function gencorrs_1
 
@@ -755,7 +773,11 @@ contains
         real        :: corrs_over_k(self%nrots)
         call self%calc_corrs_over_k_wrefmem(iref, iptcl, kstop, corrs_over_k)
         sqsum_ptcl = sum(csq(self%pfts_ptcls(iptcl, :, self%kfromto(1):kstop)))
-        sqsum_ref  = sum(csq(self%pfts_refs(iref,   :, self%kfromto(1):kstop)))
+        if( self%iseven(iptcl) )then
+            sqsum_ref = sum(csq(self%pfts_refs_even(iref,:,self%kfromto(1):kstop)))
+        else
+            sqsum_ref = sum(csq(self%pfts_refs_odd(iref,:,self%kfromto(1):kstop)))
+        endif
         cc = corrs_over_k / sqrt(sqsum_ref * sqsum_ptcl)
     end function gencorrs_2
 
@@ -773,7 +795,11 @@ contains
         ! generate the complex shift transformation matrix
         shmat     = cmplx(cos(argmat),sin(argmat))
         ! shift
-        pft_ref   = self%pfts_refs(iref,:,:) * shmat
+        if( self%iseven(iptcl) )then
+            pft_ref = self%pfts_refs_even(iref,:,:) * shmat
+        else
+            pft_ref = self%pfts_refs_odd(iref,:,:) * shmat
+        endif
         sqsum_ref = sum(csq(pft_ref))
         ! correlate
         call self%calc_corrs_over_k(pft_ref, iptcl, self%kfromto(2), corrs_over_k)
@@ -792,9 +818,13 @@ contains
         ! calc k-corrs and norms
         do k=self%kfromto(1),self%kfromto(2)
             call self%calc_k_corrs_wrefmem(iref, iptcl, k, kcorrs)
-            sumsqref  = sum(csq(self%pfts_refs(iref,  :,k)))
             sumsqptcl = sum(csq(self%pfts_ptcls(iptcl,:,k)))
-            frc(k)    = kcorrs(irot) / sqrt(sumsqref * sumsqptcl)
+            if( self%iseven(iptcl) )then
+                sumsqref = sum(csq(self%pfts_refs_even(iref,:,k)))
+            else
+                sumsqref = sum(csq(self%pfts_refs_odd(iref,:,k)))
+            endif
+            frc(k) = kcorrs(irot) / sqrt(sumsqref * sumsqptcl)
         end do
     end function genfrc
 
@@ -803,7 +833,7 @@ contains
     !>  \brief  is a destructor
     subroutine kill( self )
         class(polarft_corrcalc), intent(inout) :: self
-        integer :: ithr, iptcl, ik
+        integer :: ithr, iptcl, ik, iref
         if( self%existence )then
             do ithr=1,self%nthr
                 call fftwf_free(self%fftdat(ithr)%p_ref_re)
@@ -819,15 +849,18 @@ contains
                     call fftwf_free(self%fftdat_ptcls(iptcl,ik)%p_im)
                 end do
             end do
-            do iptcl = 1,self%nrefs
+            do iref = 1,self%nrefs
                 do ik = self%kfromto(1),self%kfromto(2)
-                    call fftwf_free(self%fftdat_refs(iptcl,ik)%p_re)
-                    call fftwf_free(self%fftdat_refs(iptcl,ik)%p_im)
+                    call fftwf_free(self%fftdat_refs_even(iref,ik)%p_re)
+                    call fftwf_free(self%fftdat_refs_even(iref,ik)%p_im)
+                    call fftwf_free(self%fftdat_refs_odd(iref,ik)%p_re)
+                    call fftwf_free(self%fftdat_refs_odd(iref,ik)%p_im)
                 end do
             end do
             deallocate( self%sqsums_ptcls, self%angtab, self%argtransf,&
-                &self%polar, self%pfts_refs, self%pfts_ptcls, self%fft_factors,&
-                &self%fftdat, self%fftdat_ptcls,  self%fftdat_refs)
+                &self%polar, self%pfts_refs_even, self%pfts_refs_odd, self%pfts_ptcls,&
+                &self%fft_factors, self%fftdat, self%fftdat_ptcls, self%fftdat_refs_even,&
+                &self%fftdat_refs_odd)
             call fftwf_destroy_plan(self%plan_bwd)
             call fftwf_destroy_plan(self%plan_fwd_1)
             call fftwf_destroy_plan(self%plan_fwd_2)
