@@ -88,19 +88,6 @@ contains
                     if( p%kfromto(2) == 1 )then
                         stop 'simple_math::get_lplim gives nonsensical result (==1)'
                     endif
-                    ! filters for multiple states
-                    if( p%nstates > 1 )then
-                        ! averaging
-                        fsc_arr = sum(b%fsc(:,:), dim=1)
-                        fsc_arr = fsc_arr / real(count(fsc_bin_exists))
-                        do s=1,p%nstates
-                            if( fsc_bin_exists(s) )then
-                                b%fsc(s,:) = fsc_arr
-                            else
-                                b%fsc(s,:) = 0.
-                            endif
-                        enddo
-                    endif
                     DebugPrint ' extracted FSC info'
                 else if( cline%defined('lp') )then
                     p%kfromto(2) = calc_fourier_index( p%lp, p%boxmatch, p%smpd )

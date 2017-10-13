@@ -205,9 +205,10 @@ contains
         allocate( self%pfts_refs(self%nrefs,self%pftsz,self%kfromto(1):self%kfromto(2)),&
                   self%pfts_ptcls(self%pfromto(1):self%pfromto(2),self%pftsz,self%kfromto(1):self%kfromto(2)),&
                   self%sqsums_ptcls(self%pfromto(1):self%pfromto(2)), self%fftdat(self%nthr),&
-                  self%fftdat_ptcls(self%pfromto(1):self%pfromto(2),self%kfromto(1):self%kfromto(2)),&
-                  self%fftdat_refs(1:self%nrefs,self%kfromto(1):self%kfromto(2)), stat=alloc_stat)
-        allocchk('polarfts and sqsums; new; simple_polarft_corrcalc')
+                  self%fftdat_ptcls(self%pfromto(1):self%pfromto(2),self%kfromto(1):self%kfromto(2)), stat=alloc_stat)
+        allocchk('polarfts and sqsums; new; simple_polarft_corrcalc 1')
+        allocate(self%fftdat_refs(1:self%nrefs,self%kfromto(1):self%kfromto(2)), stat=alloc_stat)
+        allocchk('polarfts and sqsums; new; simple_polarft_corrcalc 2')
         self%pfts_refs    = zero
         self%pfts_ptcls   = zero
         self%sqsums_ptcls = 0.
@@ -818,9 +819,15 @@ contains
                     call fftwf_free(self%fftdat_ptcls(iptcl,ik)%p_im)
                 end do
             end do
+            do iptcl = 1,self%nrefs
+                do ik = self%kfromto(1),self%kfromto(2)
+                    call fftwf_free(self%fftdat_refs(iptcl,ik)%p_re)
+                    call fftwf_free(self%fftdat_refs(iptcl,ik)%p_im)
+                end do
+            end do
             deallocate( self%sqsums_ptcls, self%angtab, self%argtransf,&
                 &self%polar, self%pfts_refs, self%pfts_ptcls, self%fft_factors,&
-                &self%fftdat, self%fftdat_ptcls)
+                &self%fftdat, self%fftdat_ptcls,  self%fftdat_refs)
             call fftwf_destroy_plan(self%plan_bwd)
             call fftwf_destroy_plan(self%plan_fwd_1)
             call fftwf_destroy_plan(self%plan_fwd_2)

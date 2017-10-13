@@ -457,7 +457,7 @@ contains
         endif
     end subroutine alloc_errchk
 
-    subroutine simple_error_check (io_stat, msg)
+    subroutine simple_error_check(io_stat, msg)
         integer,          intent(in), optional :: io_stat
         character(len=*), intent(in), optional :: msg
         integer :: io_stat_this
