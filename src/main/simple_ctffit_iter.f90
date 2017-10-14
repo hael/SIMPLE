@@ -24,10 +24,10 @@ contains
         integer,            intent(inout) :: movie_counter
         character(len=*),   intent(in)    :: moviename_forctf
         class(oris),        intent(inout) :: os
-        integer                       :: nframes, ldim(3)
-        character(len=:), allocatable :: fname_diag
-        type(image)                   :: micrograph, pspec
-        real                          :: dfx, dfy, angast, cc
+        integer                           :: nframes, ldim(3)
+        character(len=:), allocatable     :: fname_diag
+        type(image)                       :: micrograph, pspec
+        real                              :: dfx, dfy, angast, phshift, cc
         if( .not. file_exists(moviename_forctf) )&
         & write(*,*) 'inputted micrograph does not exist: ', trim(adjustl(moviename_forctf))
         call find_ldim_nptcls(trim(adjustl(moviename_forctf)), ldim, nframes)
@@ -41,8 +41,8 @@ contains
         pspec         = micrograph%mic2spec(p%pspecsz, 'sqrt')
         movie_counter = movie_counter + 1
         fname_diag    = add2fbody(moviename_forctf, p%ext, '_ctffit_diag')
-        call ctffit_init(pspec, p%smpd, p%kv, p%cs, p%fraca, [p%dfmin,p%dfmax], [p%hp,p%lp])
-        call ctffit_srch(dfx, dfy, angast, cc, fname_diag)
+        call ctffit_init(pspec, p%smpd, p%kv, p%cs, p%fraca, [p%dfmin,p%dfmax], [p%hp,p%lp], p%phaseplate)
+        call ctffit_srch(dfx, dfy, angast, phshift, cc, fname_diag)
         call ctffit_kill
         call os%set(movie_counter, 'kv',       p%kv   )
         call os%set(movie_counter, 'cs',       p%cs   )
@@ -50,6 +50,7 @@ contains
         call os%set(movie_counter, 'dfx',      dfx    ) 
         call os%set(movie_counter, 'dfy',      dfy    )
         call os%set(movie_counter, 'angast',   angast )
+        call os%set(movie_counter, 'phshift',  phshift)
         call os%set(movie_counter, 'ctffitcc', cc     )
     end subroutine iterate
 

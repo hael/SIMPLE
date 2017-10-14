@@ -496,9 +496,10 @@ select case(prg)
         keys_optional(3) = 'lp'
         keys_optional(4) = 'dfmin'
         keys_optional(5) = 'dfmax'
+        keys_optional(6) = 'phaseplate'
         ! parse command line
         ! if( describe ) call print_doc_ctffit
-        call cline%parse(keys_required(:5), keys_optional(:5))
+        call cline%parse(keys_required(:5), keys_optional(:6))
         ! set defaults
         if( .not. cline%defined('pspecsz') ) call cline%set('pspecsz', 512.)
         if( .not. cline%defined('hp')      ) call cline%set('hp',       30.)

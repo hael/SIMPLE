@@ -63,7 +63,7 @@ type :: params
     character(len=3)      :: outside='no'         !< extract boxes outside the micrograph boundaries(yes|no){no}
     character(len=3)      :: pad='no'
     character(len=3)      :: pgrp_known='no'      !< point-group known a priori(yes|no){no}
-    character(len=3)      :: phaseplate='no'      !< images obtained with phaseplate(yes|no){no}
+    character(len=3)      :: phaseplate='no'      !< images obtained with Volta phaseplate(yes|no){no}
     character(len=3)      :: phrand='no'          !< phase randomize(yes|no){no}
     character(len=3)      :: plot='no'            !< make plot(yes|no){no}
     character(len=3)      :: pproc='yes'          !< whether to perform volume post-processing(yes|no){yes}
