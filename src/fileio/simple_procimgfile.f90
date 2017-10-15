@@ -29,33 +29,23 @@ contains
     !>  \brief  is for copying image file
     !! \param fname2copy,fname Filenames to copy
     subroutine copy_imgfile( fname2copy, fname, smpd, fromto )
-        character(len=*),  intent(in) :: fname2copy, fname
-        real,              intent(in) :: smpd       !< sampling distance
-        integer, optional, intent(in) :: fromto(2)  !< ranges
+        character(len=*), intent(in) :: fname2copy, fname
+        real,             intent(in) :: smpd       !< sampling distance
+        integer,          intent(in) :: fromto(2)  !< range
         type(image) :: img
         integer     :: n, i, cnt, ldim(3)
         call find_ldim_nptcls(fname2copy, ldim, n)
         ldim(3) = 1
         call raise_exception_imgfile(n, ldim, 'copy_imgfile')
         call img%new(ldim,smpd)
-        if( n >= 1 )then
-            write(*,'(a)') '>>> COPYING IMAGES'
-            if( present(fromto) )then
-                cnt = 0
-                do i=fromto(1),fromto(2)
-                    cnt = cnt+1
-                    call progress(cnt, fromto(2)-fromto(1)+1)
-                    call img%read(fname2copy, i)
-                    call img%write(fname, cnt)
-                end do
-            else
-                do i=1,n
-                    call progress(i, n)
-                    call img%read(fname2copy, i)
-                    call img%write(fname, cnt)
-                end do
-            endif
-        endif
+        write(*,'(a)') '>>> COPYING IMAGES'
+        cnt = 0
+        do i=fromto(1),fromto(2)
+            cnt = cnt+1
+            call progress(cnt, fromto(2)-fromto(1)+1)
+            call img%read(fname2copy, i)
+            call img%write(fname, cnt)
+        end do
         call img%kill
     end subroutine copy_imgfile
 

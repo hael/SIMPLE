@@ -81,21 +81,24 @@ contains
     end subroutine init_polarizer
 
     !> \brief  creates the polar Fourier transform
-    subroutine polarize( self, pftcc, img_ind, isptcl )
+    subroutine polarize( self, pftcc, img_ind, isptcl, iseven )
         use simple_math, only: sqwin_2d, cyci_1d
         use simple_polarft_corrcalc, only: polarft_corrcalc
-        class(polarizer),        intent(inout) :: self   !< projector instance
-        class(polarft_corrcalc), intent(inout) :: pftcc  !< polarft_corrcalc object to be filled
+        class(polarizer),        intent(inout) :: self    !< projector instance
+        class(polarft_corrcalc), intent(inout) :: pftcc   !< polarft_corrcalc object to be filled
         integer,                 intent(in)    :: img_ind !< image index
-        logical, optional,       intent(in)    :: isptcl !< is the input in polarised coords
+        logical, optional,       intent(in)    :: isptcl  !< is ptcl (or reference)
+        logical, optional,       intent(in)    :: iseven  !< is even (or odd)
         complex, allocatable :: pft(:,:), comps(:,:)
         integer :: i, k, l, m, windim, vecdim, addr_l
         integer :: lims(3,2), ldim_img(3), ldim_pft(3), pdim(3), logi(3), phys(3)
-        logical :: iisptcl
+        logical :: iisptcl, iiseven
         if( .not. allocated(self%polweights_mat) )&
         &stop 'the imgpolarizer has not been initialized!; simple_projector :: imgpolarizer'
         iisptcl = .true.
         if( present(isptcl) ) iisptcl = isptcl
+        iiseven = .true.
+        if( present(iseven) ) iiseven = iseven
         ldim_img = self%get_ldim()
         if( ldim_img(3) > 1 )      stop 'only for interpolation from 2D images; imgpolarizer; simple_projector'
         if( .not. pftcc%exists() ) stop 'polarft_corrcalc object needs to be created; imgpolarizer; simple_projector'
@@ -131,7 +134,7 @@ contains
         if( iisptcl )then
             call pftcc%set_ptcl_pft(img_ind, pft)
         else
-            call pftcc%set_ref_pft(img_ind, pft, .true.) ! 4 now @@@@@
+            call pftcc%set_ref_pft(img_ind, pft, iiseven)
         endif
         ! kill the remains
         deallocate(pft, comps)

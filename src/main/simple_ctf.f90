@@ -56,11 +56,11 @@ contains
         ! set constants
         self%kV        = kV
         self%wl        = self%kV2wl() / smpd
-        self%Cs        = (Cs*1.0e7) /smpd
+        self%Cs        = (Cs*1.0e7) / smpd
         self%amp_contr = amp_contr
         self%smpd      = smpd
         ! compute derived constants (phase and amplitude contrast weights)
-        self%phaseq    = sqrt(1.-amp_contr**2.)
+        self%phaseq    = sqrt(1. - amp_contr * amp_contr)
         self%ampliq    = amp_contr
     end function constructor
 

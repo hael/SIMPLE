@@ -72,6 +72,13 @@ contains
         integer    :: update_ind, nupdates_target, nupdates
         integer    :: statecnt(p%nstates)
 
+        ! check that we have an even/odd partitioning
+        if( p%l_distr_exec )then
+            if( b%a%get_nevenodd() == 0 ) stop 'ERROR! no eo partitioning available; hadamard3D_matcher :: prime2D_exec'
+        else
+            if( b%a%get_nevenodd() == 0 ) call b%a%partition_eo
+        endif
+
         inptcls = p%top - p%fromp + 1
 
         ! SET FOURIER INDEX RANGE
@@ -302,16 +309,6 @@ contains
                 stop
         end select
         call pftcc%kill
-
-        ! SETUP (OVERWRITES) EVEN/ODD PARTITION
-        ! needs to be here since parameters just updated
-        ! need to be in the [p%fromp, p%top] range or it will be based on previous params
-        if( p%eo.ne.'no' )then
-            ! weights & states assumed here
-            call b%a%partition_eo('proj', [p%fromp, p%top])
-        else
-            call b%a%set_all2single('eo', -1.)
-        endif
 
         ! PARTICLE REJECTION BASED ON ALIGNABILITY (SDEV OF ANGULAR ORIS)
         if( cline%defined('sdev_thres') )then

@@ -418,7 +418,7 @@ contains
     end subroutine exec_makecavgs_distr
 
     subroutine exec_prime2D_distr( self, cline )
-        use simple_procimgfile, only: random_selection_from_imgfile
+        use simple_procimgfile, only: random_selection_from_imgfile, copy_imgfile
         class(prime2D_distr_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
         ! constants
@@ -489,7 +489,9 @@ contains
         endif
         ! execute initialiser
         if( .not. cline%defined('refs') )then
-            p_master%refs = 'start2Drefs'//p_master%ext
+            p_master%refs      = 'start2Drefs'//p_master%ext
+            p_master%refs_even = 'start2Drefs_even'//p_master%ext
+            p_master%refs_odd  = 'start2Drefs_odd'//p_master%ext
             if( cline%defined('oritab') )then
                 call cline_makecavgs%set('refs', p_master%refs)
                 call xmakecavgs%execute(cline_makecavgs)
@@ -501,6 +503,8 @@ contains
                     call random_selection_from_imgfile(p_master%stk, p_master%refs,&
                         &p_master%ncls, p_master%box, p_master%smpd)
                 endif
+                call copy_imgfile(trim(p_master%refs), trim(p_master%refs_even), p_master%smpd, [1,p_master%ncls])
+                call copy_imgfile(trim(p_master%refs), trim(p_master%refs_odd),  p_master%smpd, [1,p_master%ncls])
             endif
         endif
         ! extremal dynamics

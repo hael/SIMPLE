@@ -425,22 +425,29 @@ contains
     end function get_n
 
     !>  \brief  is for checking label population
-    function get_pop( self, ind, label, consider_w ) result( pop )
+    function get_pop( self, ind, label, consider_w, eo ) result( pop )
         class(oris),       intent(inout) :: self
         integer,           intent(in)    :: ind
         character(len=*),  intent(in)    :: label
         logical, optional, intent(in)    :: consider_w
-        integer :: mylab, pop, i, mystate
-        logical :: cconsider_w
+        integer, optional, intent(in)    :: eo
+        integer :: mylab, pop, i, mystate, myeo
+        logical :: cconsider_w, consider_eo
         real    :: w
         cconsider_w = .false.
         if( present(consider_w) ) cconsider_w = consider_w
         if( cconsider_w )then
             if( .not. self%isthere('w') ) stop 'ERROR, oris :: get_pop with optional consider_w assumes w set'
         endif
+        consider_eo = .false.
+        if( present(eo) ) consider_eo = .true.
         pop = 0
         do i=1,self%n
             mystate = nint(self%o(i)%get('state'))
+            myeo    = nint(self%o(i)%get('eo'))
+            if( consider_eo )then
+                if( myeo /= eo ) cycle
+            endif
             w = 1.0
             if( cconsider_w ) w = self%o(i)%get('w')
             if( mystate > 0 .and. w > TINY )then
@@ -451,20 +458,23 @@ contains
     end function get_pop
 
     !>  \brief  is for checking discrete label populations
-    function get_pops( self, label, consider_w, maxn ) result( pops )
+    function get_pops( self, label, consider_w, maxn, eo ) result( pops )
         class(oris),       intent(inout) :: self
         character(len=*),  intent(in)    :: label
         logical, optional, intent(in)    :: consider_w
         integer, optional, intent(in)    :: maxn ! max label, for the case where the last class/state is missing
+        integer, optional, intent(in)    :: eo
         integer, allocatable :: pops(:)
-        integer :: i, mystate, myval, n
+        integer :: i, mystate, myval, n, myeo
         real    :: w
-        logical :: cconsider_w
+        logical :: cconsider_w, consider_eo
         cconsider_w = .false.
         if( present(consider_w) ) cconsider_w = consider_w
         if( cconsider_w )then
             if( .not. self%isthere('w') ) stop 'ERROR, oris :: get_pops with optional consider_w assumes w set'
         endif
+        consider_eo = .false.
+        if( present(eo) ) consider_eo = .true.
         n = self%get_n(label)
         if( present(maxn) )then
             n = max(n, maxn)
@@ -474,6 +484,10 @@ contains
         allocchk('In: get_pops, module: simple_oris')
         do i=1,self%n
             mystate = nint(self%o(i)%get('state'))
+            myeo    = nint(self%o(i)%get('eo'))
+            if( consider_eo )then
+                if( myeo /= eo ) cycle
+            endif
             w = 1.0
             if( cconsider_w )  w = self%o(i)%get('w')
             if( mystate > 0 .and. w > TINY )then
@@ -1134,52 +1148,67 @@ contains
     end function included
 
     !>  \brief  is getting the number of oris assigned to the even partion
-    integer function get_neven( self, fromto )
-        class(oris),       intent(inout) :: self
-        integer, optional, intent(in)    :: fromto(2)
-        integer :: i, from, to
-        from = 1
-        to   = self%n
-        if(present(fromto))then
-            from = fromto(1)
-            to   = fromto(2)
-        endif
-        get_neven = 0
-        do i = from, to
-            if( self%o(i)%isthere('eo') )then
-                if( self%o(i)%get('state') < 0.5 )cycle
-                if( self%o(i)%get('weights') < TINY )cycle
-                if( self%o(i)%iseven() )get_neven = get_neven + 1
-            endif
-        enddo
+    ! integer function get_neven( self, fromto )
+    !     class(oris),       intent(inout) :: self
+    !     integer, optional, intent(in)    :: fromto(2)
+    !     integer :: i, from, to
+    !     from = 1
+    !     to   = self%n
+    !     if(present(fromto))then
+    !         from = fromto(1)
+    !         to   = fromto(2)
+    !     endif
+    !     get_neven = 0
+    !     do i = from, to
+    !         if( self%o(i)%isthere('eo') )then
+    !             if( self%o(i)%get('state') < 0.5 )cycle
+    !             if( self%o(i)%get('weights') < TINY )cycle
+    !             if( self%o(i)%iseven() )get_neven = get_neven + 1
+    !         endif
+    !     enddo
+    ! end function get_neven
+
+    integer function get_neven( self )
+        class(oris), intent(inout) :: self
+        integer, allocatable :: eopart(:)
+        eopart = nint(self%get_all('eo'))
+        get_neven = count(eopart == 0)
     end function get_neven
 
     !>  \brief  is getting the number of oris assigned to the odd partion
-    integer function get_nodd( self, fromto )
-        class(oris),       intent(inout) :: self
-        integer, optional, intent(in)    :: fromto(2)
-        integer :: i, from, to
-        from = 1
-        to   = self%n
-        if(present(fromto))then
-            from = fromto(1)
-            to   = fromto(2)
-        endif
-        get_nodd = 0
-        do i = from, to
-            if( self%o(i)%isthere('eo') )then
-                if( self%o(i)%get('state') < 0.5 )cycle
-                if( self%o(i)%get('weights') < TINY )cycle
-                if( self%o(i)%isodd() )get_nodd = get_nodd + 1
-            endif
-        enddo
+    ! integer function get_nodd( self, fromto )
+    !     class(oris),       intent(inout) :: self
+    !     integer, optional, intent(in)    :: fromto(2)
+    !     integer :: i, from, to
+    !     from = 1
+    !     to   = self%n
+    !     if(present(fromto))then
+    !         from = fromto(1)
+    !         to   = fromto(2)
+    !     endif
+    !     get_nodd = 0
+    !     do i = from, to
+    !         if( self%o(i)%isthere('eo') )then
+    !             if( self%o(i)%get('state') < 0.5 )cycle
+    !             if( self%o(i)%get('weights') < TINY )cycle
+    !             if( self%o(i)%isodd() )get_nodd = get_nodd + 1
+    !         endif
+    !     enddo
+    ! end function get_nodd
+
+    !>  \brief  is getting the number of oris assigned to the odd partion
+    integer function get_nodd( self )
+        class(oris), intent(inout) :: self
+        integer, allocatable :: eopart(:)
+        eopart = nint(self%get_all('eo'))
+        get_nodd = count(eopart == 1)
     end function get_nodd
 
     !>  \brief  is getting the number of oris assigned to the odd partion
     integer function get_nevenodd( self, fromto )
         class(oris),       intent(inout) :: self
         integer, optional, intent(in)    :: fromto(2)
-        get_nevenodd = self%get_neven(fromto) + self%get_nodd(fromto)
+        get_nevenodd = self%get_neven() + self%get_nodd()
     end function get_nevenodd
 
     !>  \brief  is for printing
@@ -1792,51 +1821,32 @@ contains
         call self2add%kill
     end subroutine merge
 
-    !>  \brief  for projection/class/state balanced assignment of even/odd partitions
-    subroutine partition_eo( self, which, fromto )
-        class(oris),      intent(inout) :: self      !< instance
-        character(len=*), intent(in)    :: which     !< class/proj
-        integer,          intent(in)    :: fromto(2) !< range
+    !>  \brief  for balanced assignment of even/odd partitions
+    subroutine partition_eo( self, tseries )
+        class(oris),       intent(inout) :: self    !< instance
+        logical, optional, intent(in)    :: tseries !< logical tseries flag
         type(ran_tabu)       :: rt
         integer, allocatable :: eopart(:)
-        logical, allocatable :: l_mask(:)
-        integer :: i, j, istate, n, cnt, nstates, sz
-        select case(which)
-            case('proj')
-                if( .not. self%isthere('proj')  ) stop 'proj label must be set; simple_oris :: partition_eo'
-                n = self%get_n('proj')
-            case('class')
-                if( .not. self%isthere('class') ) stop 'class label must be set; simple_oris :: partition_eo'
-                n = self%get_n('class')
-            case DEFAULT
-                stop 'unsupported which flag; simple_oris :: partition_eo'
-        end select
-        nstates = self%get_n('state')
-        do istate=1,nstates
-            do i=1,n
-                call self%gen_mask(istate, i, which, l_mask, consider_w=.true., fromto=fromto)
-                sz = count(l_mask)
-                if( sz > 0 )then
-                    allocate(eopart(sz), stat=alloc_stat)
-                    allocchk('eopart; simple_oris :: partition_eo')
-                    if( sz == 1 )then
-                        eopart(1) = irnd_uni(2)
-                    else
-                        rt = ran_tabu(sz)
-                        call rt%balanced(2, eopart)
-                        call rt%kill
-                    endif
-                    cnt = 0
-                    do j=fromto(1),fromto(2)
-                        if( l_mask(j) )then
-                            cnt = cnt + 1
-                            call self%o(j)%set('eo', real(eopart(cnt)-1))
-                        endif
-                    enddo
-                    deallocate(eopart)
-                endif
-            enddo
-        enddo
+        logical              :: ttseries
+        integer              :: i, i_incr
+        ttseries = .false.
+        if( present(tseries) ) ttseries = tseries
+        allocate(eopart(self%n))
+        if( ttseries )then
+            do i=1,self%n,2
+                eopart(i) = 1
+                i_incr = i + 1 
+                if(i_incr > self%n) exit
+                eopart(i_incr) = 2
+            end do
+        else
+            rt = ran_tabu(self%n)
+            call rt%balanced(2, eopart)
+            call rt%kill
+        endif
+        eopart = eopart - 1 ! 0 is even 1 is odd
+        call self%set_all('eo', real(eopart))
+        deallocate(eopart)
     end subroutine partition_eo
 
     !>  \brief  transfers proj indices to class indices in self

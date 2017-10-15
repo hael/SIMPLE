@@ -860,7 +860,7 @@ contains
             deallocate( self%sqsums_ptcls, self%angtab, self%argtransf,&
                 &self%polar, self%pfts_refs_even, self%pfts_refs_odd, self%pfts_ptcls,&
                 &self%fft_factors, self%fftdat, self%fftdat_ptcls, self%fftdat_refs_even,&
-                &self%fftdat_refs_odd)
+                &self%fftdat_refs_odd, self%iseven)
             call fftwf_destroy_plan(self%plan_bwd)
             call fftwf_destroy_plan(self%plan_fwd_1)
             call fftwf_destroy_plan(self%plan_fwd_2)

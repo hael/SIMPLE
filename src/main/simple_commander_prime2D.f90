@@ -73,6 +73,7 @@ contains
                 stop '# class averages (ncls) need to be part of command line when tseries=yes'
             endif
             call b%a%ini_tseries(p%ncls, 'class')
+            call b%a%partition_eo(tseries=.true.)
         else
             if( .not. cline%defined('ncls') )then
                 stop 'If no oritab is provided ncls (# class averages) need to be part of command line'
@@ -99,7 +100,7 @@ contains
             call b%a%set_all2single('w', 1.0)
         endif
         ! even/odd partitioning
-        if( b%a%get_nevenodd() == 0 ) call b%a%partition_eo('class', [p%fromp,p%top])
+        if( b%a%get_nevenodd() == 0 ) call b%a%partition_eo
         ! write
         if( p%l_distr_exec .and. nint(cline%get_rarg('part')) .eq. 1 )then
             call binwrite_oritab(p%oritab, b%a, [1,p%nptcls])
@@ -129,9 +130,13 @@ contains
             call qsys_job_finished( p, 'simple_commander_prime2D :: exec_makecavgs' )
         else
             if( cline%defined('refs') )then
-                call cavger%write(p%refs, 'merged')
+                call cavger%write(p%refs,      'merged')
+                call cavger%write(p%refs_even, 'even'  )
+                call cavger%write(p%refs_odd,  'odd'   )
             else
-                call cavger%write('startcavgs'//p%ext, 'merged')
+                call cavger%write('startcavgs'//p%ext,      'merged')
+                call cavger%write('startcavgs_even'//p%ext, 'even'  )
+                call cavger%write('startcavgs_odd'//p%ext,  'odd'   )
             endif
             call cavger%calc_and_write_frcs('frcs.bin')
             call b%projfrcs%estimate_res()
@@ -200,15 +205,21 @@ contains
         call cavger%new(b, p, 'class')
         call cavger%assemble_sums_from_parts()
         if( cline%defined('which_iter') )then
-            p%refs = 'cavgs_iter'//int2str_pad(p%which_iter,3)//p%ext
+            p%refs      = 'cavgs_iter'//int2str_pad(p%which_iter,3)//p%ext
+            p%refs_even = 'cavgs_iter'//int2str_pad(p%which_iter,3)//'_even'//p%ext
+            p%refs_odd  = 'cavgs_iter'//int2str_pad(p%which_iter,3)//'_odd'//p%ext
             if( .not. cline%defined('frcs') ) p%frcs  = 'frcs_iter'//int2str_pad(p%which_iter,3)//'.bin'
             call cavger%calc_and_write_frcs(p%frcs)
             call b%projfrcs%estimate_res()
             call gen2Dclassdoc( b, p, 'classdoc.txt')
         else if( .not. cline%defined('refs') )then
-            p%refs = 'startcavgs'//p%ext
+            p%refs      = 'startcavgs'//p%ext
+            p%refs_even = 'startcavgs_even'//p%ext
+            p%refs_odd  = 'startcavgs_odd'//p%ext
         endif
-        call cavger%write(trim(p%refs), 'merged')
+        call cavger%write(trim(p%refs),      'merged')
+        call cavger%write(trim(p%refs_even), 'even'  )
+        call cavger%write(trim(p%refs_odd),  'odd'   )
         call cavger%kill()
         ! end gracefully
         call simple_end('**** SIMPLE_CAVGASSEMBLE NORMAL STOP ****', print_simple=.false.)

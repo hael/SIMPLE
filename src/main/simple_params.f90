@@ -151,8 +151,9 @@ type :: params
     character(len=STDLEN) :: prg=''               !< SIMPLE program to execute
     character(len=STDLEN) :: real_filter=''
     character(len=STDLEN) :: refine='no'
-    character(len=STDLEN) :: refs_msk=''
     character(len=STDLEN) :: refs=''              !< initial2Dreferences.ext
+    character(len=STDLEN) :: refs_even=''
+    character(len=STDLEN) :: refs_odd=''
     character(len=STDLEN) :: speckind='sqrt'      !< power spectrum kind(amp|square|phase|real|log|sqrt){sqrt}
     character(len=STDLEN) :: split_mode='even'
     character(len=STDLEN) :: stk_part=''
@@ -845,6 +846,12 @@ contains
                 &stop 'UPDATE_FRAC is too small 2; simple_params :: constructor'
             self%l_frac_update = .true.
         endif
+        ! set refs_even and refs_odd
+        if( cline%defined('refs') )then
+            self%refs_even = add2fbody(self%refs, self%ext, '_even')
+            self%refs_odd  = add2fbody(self%refs, self%ext, '_odd')
+        endif
+
 !<<< END, SANITY CHECKING AND PARAMETER EXTRACTION FROM VOL(S)/STACK(S)
 
 !>>> START, PARALLELISATION-RELATED

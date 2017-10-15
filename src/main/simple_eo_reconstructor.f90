@@ -399,7 +399,7 @@ contains
         call img%new([p%box,p%box,1],p%smpd)
         call img_pad%new([p%boxpd,p%boxpd,1],p%smpd)
         ! even/odd partitioning
-        if( o%get_nevenodd() == 0 ) call o%partition_eo('proj', [p%fromp,p%top])
+        if( o%get_nevenodd() == 0 ) call o%partition_eo
         ! population balancing logics
         if( p%balance > 0 )then
             call o%balance( p%balance, NSPACE_BALANCE, p%nsym, p%eullims, skewness )

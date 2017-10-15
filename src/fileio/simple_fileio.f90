@@ -559,7 +559,6 @@ contains
         character(len=STDLEN),           intent(in) :: tab1(:), tab2(:)
         character(len=STDLEN), optional, intent(in) :: tab3(:), tab4(:)
         integer :: ntabs, n, fnr, ifile, ios
-
         ntabs = 2
         if( present(tab3) ) ntabs = 3
         if( present(tab4) ) ntabs = 4

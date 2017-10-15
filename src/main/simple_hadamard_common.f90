@@ -18,7 +18,7 @@ private
 
 real, parameter :: SHTHRESH  = 0.0001
 real, parameter :: CENTHRESH = 0.5    ! threshold for performing volume/cavg centering in pixels
-    
+
 contains
 
     subroutine read_img_from_stk( b, p, iptcl )
@@ -316,12 +316,14 @@ contains
     end subroutine prepimg4align
 
     !>  \brief  prepares one cluster centre image for alignment
-    subroutine prep2Dref( b, p, icls, center )
+    subroutine prep2Dref( b, p, icls, center, xyz_in, xyz_out )
         use simple_estimate_ssnr, only: fsc2optlp
         class(build),      intent(inout) :: b
         class(params),     intent(in)    :: p
         integer,           intent(in)    :: icls
         logical, optional, intent(in)    :: center
+        real,    optional, intent(in)    :: xyz_in(3)
+        real,    optional, intent(out)   :: xyz_out(3)
         real, allocatable :: filter(:), frc(:), res(:)
         real    :: xyz(3), sharg, frc05, frc0143
         logical :: do_center
@@ -331,16 +333,24 @@ contains
         ! centering only performed if p%center.eq.'yes'
         if( present(center) ) do_center = do_center .and. center
         if( do_center )then
-            ! typically you'd want to center the class averages
-            ! even though they're not good enough to search shifts
-            xyz   = b%img%center(p%cenlp, 'no', p%msk, doshift=.false.)
-            sharg = arg(xyz)
-            if( sharg > CENTHRESH )then
-                ! apply shift and update the corresponding class parameters
-                call b%img%fwd_ft
-                call b%img%shift(xyz(1), xyz(2))
-                call b%a%add_shift2class(icls, -xyz(1:2))
-            endif
+            if( present(xyz_in) )then 
+                sharg = arg(xyz_in)
+                if( sharg > CENTHRESH )then
+                    ! apply shift and do NOT update the corresponding class parameters
+                    call b%img%fwd_ft
+                    call b%img%shift(xyz_in(1), xyz_in(2))
+                endif
+            else
+                xyz = b%img%center(p%cenlp, 'no', p%msk, doshift=.false.)
+                sharg = arg(xyz)
+                if( sharg > CENTHRESH )then
+                    ! apply shift and update the corresponding class parameters
+                    call b%img%fwd_ft
+                    call b%img%shift(xyz(1), xyz(2))
+                    call b%a%add_shift2class(icls, -xyz(1:2))
+                endif
+                if( present(xyz_out) ) xyz_out = xyz 
+            endif            
         endif
         if( p%l_match_filt )then
             ! anisotropic matched filter
@@ -360,11 +370,6 @@ contains
         if( p%l_envmsk .and. p%automsk .eq. 'cavg' )then
             ! automasking
             call b%mskimg%apply_2Denvmask22Dref(b%img_match)
-            if( p%l_chunk_distr )then
-                call b%img_match%write(trim(p%chunktag)//'automasked_refs'//p%ext, icls)
-            else if( (p%l_distr_exec .and. p%part.eq.1) .or. (.not. p%l_distr_exec) )then
-                call b%img_match%write('automasked_refs'//p%ext, icls)
-            endif
         else
             ! soft masking
             if( p%l_innermsk )then

@@ -56,10 +56,10 @@ contains
         select case(trim(phaseplate))
             case('yes')
                 l_phaseplate = .true.
-                ndim          = 4
+                ndim         = 4
             case DEFAULT 
                 l_phaseplate = .false.
-                ndim          = 3
+                ndim         = 3
         end select
         ! construct CTF object
         tfun = ctf(smpd, kV, Cs, amp_contr)

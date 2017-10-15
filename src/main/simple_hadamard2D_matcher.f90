@@ -35,7 +35,7 @@ contains
     !>  \brief  is the prime2D algorithm
     subroutine prime2D_exec( b, p, cline, which_iter, converged )
         use simple_qsys_funs,   only: qsys_job_finished
-        use simple_procimgfile, only: random_selection_from_imgfile
+        use simple_procimgfile, only: random_selection_from_imgfile, copy_imgfile
         use simple_binoris_io,  only: binwrite_oritab
         class(build),   intent(inout) :: b
         class(params),  intent(inout) :: p
@@ -56,9 +56,15 @@ contains
         call cavger%new(b, p, 'class')
         l_do_read = .true.
         if( p%l_distr_exec )then
+            if( b%a%get_nevenodd() == 0 )then
+                stop 'ERROR! no eo partitioning available; hadamard3D_matcher :: prime2D_exec'
+            endif
             if( .not. cline%defined('refs') )&
             &stop 'need refs to be part of command line for distributed prime2D execution'
         else
+            if( b%a%get_nevenodd() == 0 )then
+                call b%a%partition_eo
+            endif
             if( which_iter == p%startit )then
                 if( .not. cline%defined('refs') .and. cline%defined('oritab') )then
                     ! we make references
@@ -67,21 +73,26 @@ contains
                     l_do_read = .false.
                 else
                     ! we randomly select particle images as initial references
-                    p%refs = 'start2Drefs'//p%ext
-                    if( p%chunktag .ne. '' ) p%refs = trim(p%chunktag)//trim(p%refs)
-                    ptcl_mask = b%a%included()
+                    p%refs      = 'start2Drefs'//p%ext
+                    p%refs_even = 'start2Drefs_even'//p%ext
+                    p%refs_odd  = 'start2Drefs_odd'//p%ext
+                    ptcl_mask   = b%a%included()
                     if( cline%defined('stktab') )then
                         call random_selection_from_imgfile(p%stktab, p%refs, p%ncls, p%box, p%smpd, ptcl_mask)
                     else
                         call random_selection_from_imgfile(p%stk, p%refs, p%ncls, p%box, p%smpd, ptcl_mask)
                     endif
                     deallocate(ptcl_mask)
+                    call copy_imgfile(trim(p%refs), trim(p%refs_even), p%smpd, [1,p%ncls])
+                    call copy_imgfile(trim(p%refs), trim(p%refs_odd),  p%smpd, [1,p%ncls])
                 endif
             endif
         endif
         if( l_do_read )then
             if( .not. file_exists(p%refs) ) stop 'input references (refs) does not exist in cwd'
-            call cavger%read(p%refs, 'merged')
+            call cavger%read(p%refs,      'merged')
+            call cavger%read(p%refs_even, 'even'  )
+            call cavger%read(p%refs_odd,  'odd'   )
         endif
 
         ! SET FRACTION OF SEARCH SPACE
@@ -153,7 +164,6 @@ contains
         write(*,'(A,1X,I3)') '>>> PRIME2D DISCRETE STOCHASTIC SEARCH, ITERATION:', which_iter
         if( .not. p%l_distr_exec )then
             p%outfile = 'prime2Ddoc_'//int2str_pad(which_iter,3)//METADATEXT
-            if( p%chunktag .ne. '' ) p%outfile= trim(p%chunktag)//trim(p%outfile)
         endif
 
         ! STOCHASTIC IMAGE ALIGNMENT
@@ -209,11 +219,6 @@ contains
         if( L_BENCH ) rt_align = toc(t_align)
         DebugPrint ' hadamard2D_matcher; completed alignment'
 
-        ! SETUP (OVERWRITES) EVEN/ODD PARTITION
-        ! needs to be here since parameters just updated
-        ! need to be in the [p%fromp, p%top] range or it will be based on previous params
-        call b%a%partition_eo('class', [p%fromp, p%top])
-
         ! REMAPPING OF HIGHEST POPULATED CLASSES
         ! needs to be here since parameters just updated
         if( p%dyncls.eq.'yes' )then
@@ -236,9 +241,12 @@ contains
         if( p%l_distr_exec )then
             call cavger%write_partial_sums()
         else
-            p%refs = 'cavgs_iter'//int2str_pad(which_iter,3)//p%ext
-            if( p%chunktag .ne. '' ) p%refs = trim(p%chunktag)//trim(p%refs)
-            call cavger%write(p%refs, 'merged')
+            p%refs      = 'cavgs_iter'//int2str_pad(which_iter,3)//p%ext
+            p%refs_even = 'cavgs_iter'//int2str_pad(which_iter,3)//'_even'//p%ext
+            p%refs_odd  = 'cavgs_iter'//int2str_pad(which_iter,3)//'_odd'//p%ext
+            call cavger%write(p%refs,      'merged')
+            call cavger%write(p%refs_even, 'even'  )
+            call cavger%write(p%refs_odd,  'odd'   )
         endif
         if( L_BENCH ) rt_cavg = toc(t_cavg)
 
@@ -247,7 +255,6 @@ contains
             ! this is done in prime2D commander; cavgassemble
         else
             p%frcs = 'frcs_iter'//int2str_pad(which_iter,3)//'.bin'
-            if( p%chunktag .ne. '' ) p%frcs = trim(p%chunktag)//trim(p%frcs)
             call cavger%calc_and_write_frcs(p%frcs)
             call b%projfrcs%estimate_res()
             call gen2Dclassdoc( b, p, 'classdoc.txt')
@@ -316,11 +323,14 @@ contains
         integer   :: cnt, iptcl, icls, pop, istate
         integer   :: filtsz, filnum, io_stat
         logical   :: do_center
+        real      :: xyz(3)
         if( .not. p%l_distr_exec ) write(*,'(A)') '>>> BUILDING PRIME2D SEARCH ENGINE'
         ! must be done here since constants in p are dynamically set
+        call pftcc%new(p%ncls, p, nint(b%a%get_all('eo', [p%fromp,p%top])))
         call pftcc%new(p%ncls, p)
         ! prepare the polarizers
         call b%img_match%init_polarizer(pftcc)
+
         ! PREPARATION OF REFERENCES IN PFTCC
         ! read references and transform into polar coordinates
         if( .not. p%l_distr_exec ) write(*,'(A)') '>>> BUILDING REFERENCES'
@@ -329,14 +339,24 @@ contains
             pop = 1
             if( p%oritab /= '' ) pop = b%a%get_pop(icls, 'class')
             if( pop > 0 )then
-                ! prepare the reference
-                call cavger%get_cavg(icls, 'merged', b%img)
+                ! prepare the references
                 do_center = (p%oritab /= '' .and. (pop > MINCLSPOPLIM) .and. (which_iter > 2))
+
+                call cavger%get_cavg(icls, 'merged', b%img)
                 call prep2Dref(b, p, icls, center=do_center)
-                ! transfer to polar coordinates
-                call b%img_match%polarize(pftcc, icls, isptcl=.false.)
+                call b%img_match%polarize(pftcc, icls, isptcl=.false., iseven=.true.) ! 2 polar coords
+
+                ! call cavger%get_cavg(icls, 'even', b%img)
+                ! ! here we are determining the shifts and maps them back to classes
+                ! call prep2Dref(b, p, icls, center=do_center, xyz_out=xyz) 
+                ! call b%img_match%polarize(pftcc, icls, isptcl=.false., iseven=.true.) ! 2 polar coords
+                ! call cavger%get_cavg(icls, 'odd', b%img)
+                ! ! here we are using the shifts obtained for even (above) and do NOT map them back to classes
+                ! call prep2Dref(b, p, icls, center=do_center, xyz_in=xyz)
+                ! call b%img_match%polarize(pftcc, icls, isptcl=.false., iseven=.false.) ! 2 polar coords
             endif
         end do
+
         ! PREPARATION OF PARTICLES IN PFTCC
         ! read particle images and create polar projections
         if( .not. p%l_distr_exec ) write(*,'(A)') '>>> BUILDING PARTICLES'
