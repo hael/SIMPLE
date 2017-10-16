@@ -130,15 +130,15 @@ contains
             call img%read(fnameStack, i)
             if( present(otab) )then
                 ! shift image
-                call img%fwd_ft
+                call img%fft()
                 x = otab%get(i, 'x')
                 y = otab%get(i, 'y')
                 call img%shift([-x,-y,0.])
                 ! rotate image
-                call img%bwd_ft
+                call img%ifft()
                 call img%rtsq(-otab%e3get(i), 0., 0.)
             else
-                if( img%is_ft() ) call img%bwd_ft
+                if( img%is_ft() ) call img%ifft()
             endif
             call img%serialize(pcavec, mskrad)
             err = .false.
@@ -168,8 +168,7 @@ contains
             end do
             deallocate(pcavec)
         endif
-        call fclose(fnum,iostat=ier)
-        call fileiochk('make_pattern_stack; simple_procimgfile', ier)
+        call fclose(fnum,errmsg='make_pattern_stack; simple_procimgfile')
         call img%kill
     end subroutine make_pattern_stack
 
@@ -243,14 +242,14 @@ contains
             cnt = cnt+1
             call progress(cnt,sz)
             call img%read(fname2resize, i)
-            call img%fwd_ft
+            call img%fft()
             if( ldim_new(1) <= ldim(1) .and. ldim_new(2) <= ldim(2)&
                  .and. ldim_new(3) <= ldim(3) )then
                 call img%clip(img_resized)
             else
                 call img%pad(img_resized)
             endif
-            call img_resized%bwd_ft
+            call img_resized%ifft()
             call img_resized%write(fname, cnt)
         end do
         smpd_new = img_resized%get_smpd()
@@ -326,9 +325,9 @@ contains
             cnt = cnt+1
             call progress(cnt,sz)
             call img%read(fname2resize, i)
-            call img%fwd_ft
+            call img%fft()
             call img%clip(img_resized)
-            call img_resized%bwd_ft
+            call img_resized%ifft()
             call img_clip%new(ldim_clip,img_resized%get_smpd())
             if( ldim_clip(1) <= ldim_new(1) .and. ldim_clip(2) <= ldim_new(2)&
                  .and. ldim_clip(3) <= ldim_new(3) )then
@@ -379,11 +378,11 @@ contains
             cnt = cnt+1
             call progress(cnt,sz)
             call img%read(fname2resize, i)
-            call img%fwd_ft
+            call img%fft()
             call img%clip(img_resized1)
             call img%clip(img_resized2)
-            call img_resized1%bwd_ft
-            call img_resized2%bwd_ft
+            call img_resized1%ifft()
+            call img_resized2%ifft()
             call img_resized1%write(fname1, cnt)
             call img_resized2%write(fname2, cnt)
         end do
@@ -426,7 +425,7 @@ contains
         do i=1,n
             call progress(i,n)
             call img%read(fname2norm, i)
-            call img%norm
+            call img%norm()
             call img%write(fname, i)
         end do
         call img%kill
@@ -523,7 +522,7 @@ contains
             call progress(i,n)
             call img%read(fname,i)
             call img%stats('foreground', ave, sdev, maxv, minv, med=med, msk=msk)
-            call img%fwd_ft
+            call img%fft()
             spectrum = img%spectrum('power')
             spec = sum(spectrum)/real(size(spectrum))
             call os%set(i, 'ave',   ave)
@@ -611,7 +610,7 @@ contains
                  'MIN:', minv, 'AVE:', ave, 'SDEV:', sdev, 'NANS:', n_nans
             call img%write(fname, i)
         end do
-        call fclose(filnum,io_stat,errmsg="cure_imgfile close error")
+        call fclose(filnum,errmsg="cure_imgfile close error")
         call img%kill
     end subroutine cure_imgfile
 
@@ -926,7 +925,7 @@ contains
         do i=1,n
             call progress(i,n)
             call img%read(fname2process, i)
-            call img%fwd_ft
+            call img%fft()
             x = o%get(i, 'x')
             y = o%get(i, 'y')
             if( present(mul) )then
@@ -934,7 +933,7 @@ contains
             else
                 call img%shift([-x,-y,0.])
             endif
-            call img%bwd_ft
+            call img%ifft()
             call img%rtsq(-o%e3get(i), 0., 0., img_rot)
             call img_rot%write(fname, i)
         end do
@@ -969,7 +968,7 @@ contains
         do i=1,n
             call progress(i,n)
             call img%read(fname2mask, i)
-            call img%norm
+            call img%norm()
             call img%mask(mskrad, which, inner, width)
             call img%write(fname, i)
         end do
@@ -1023,7 +1022,7 @@ contains
             call img%read(fname2process, i)
             didft = .false.
             if( img%is_ft() )then
-                call img%bwd_ft
+                call img%ifft()
                 didft = .true.
             endif
             if( present(thres) )then
@@ -1031,7 +1030,7 @@ contains
             else
                 call img%bin_kmeans
             endif
-            if( didft ) call img%fwd_ft
+            if( didft ) call img%fft()
             call img%write(fname, i)
         end do
         call img%kill
@@ -1110,14 +1109,14 @@ contains
             call spproj%get_stkname_and_ind('ptcl2D', ii, stkname, ind)
             call img%read(stkname, ind)
             if( doscale )then
-                call img%fwd_ft
+                call img%fft()
                 if( ldim_scaled(1) <= ldim(1) .and. ldim_scaled(2) <= ldim(2)&
                      .and. ldim_scaled(3) <= ldim(3) )then
                     call img%clip(img_scaled)
                 else
                     call img%pad(img_scaled)
                 endif
-                call img_scaled%bwd_ft
+                call img_scaled%ifft()
                 call img_scaled%write(fname, i)
             else
                 call img%write(fname, i)
