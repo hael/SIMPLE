@@ -50,36 +50,28 @@ contains
         class(cmdline),                     intent(inout) :: cline
         ! constants
         integer,           parameter :: MAXITS_STAGE1   = 10
-        character(len=32), parameter :: FINALDOC        = 'prime2Ddoc_final'//METADATEXT
+        character(len=32), parameter :: ALGNFBODY       = 'algndoc_'
+        character(len=32), parameter :: ITERFBODY       = 'prime2Ddoc_'
+        character(len=32), parameter :: CAVGS_ITERFBODY = 'cavgs_iter'
         ! commanders
-        type(split_commander)                        :: xsplit
-        type(makecavgs_distr_commander)              :: xmakecavgs
-        type(prime2D_distr_commander),       target  :: xprime2D_distr
-        type(prime2D_chunk_distr_commander), target  :: xprime2D_chunk_distr
-        class(commander_base),               pointer :: xprime2D => null()
-        type(rank_cavgs_commander)                   :: xrank_cavgs
+        type(split_commander)           :: xsplit
+        type(makecavgs_distr_commander) :: xmakecavgs
+        type(prime2D_distr_commander)   :: xprime2D_distr
+        type(rank_cavgs_commander)      :: xrank_cavgs
         ! command lines
         type(cmdline) :: cline_prime2D_stage1
         type(cmdline) :: cline_prime2D_stage2
         type(cmdline) :: cline_makecavgs
         type(cmdline) :: cline_rank_cavgs
         ! other variables
+        character(len=STDLEN) :: finaldoc, finalcavgs, finalcavgs_ranked
         type(oris)            :: os
         type(scaler)          :: scobj
         type(params)          :: p_master
         real                  :: scale_stage1, scale_stage2
-        integer               :: nparts
-        ! make master parameters
+        integer               :: nparts, last_iter_stage1, last_iter_stage2
         p_master = params(cline, checkdistr=.false.)
-        ! set pointer to the right commander
-        if( cline%defined('chunksz') )then
-            nparts = nint(real(p_master%nptcls)/real(p_master%chunksz))
-            xprime2D => xprime2D_chunk_distr
-            call cline%set('nparts', real(nparts))
-        else
-            nparts = p_master%nparts
-            xprime2D => xprime2D_distr
-        endif
+        nparts   = p_master%nparts
         if( .not. cline%defined('stktab') )then
             ! split stack
             call xsplit%execute(cline)
@@ -99,7 +91,10 @@ contains
             cline_prime2D_stage1 = cline
             call cline_prime2D_stage1%delete('automsk') ! delete possible automsk flag from stage 1
             call cline_prime2D_stage1%set('maxits', real(MAXITS_STAGE1))
-            call xprime2D%execute(cline_prime2D_stage1)
+            call xprime2D_distr%execute(cline_prime2D_stage1)
+            last_iter_stage1 = nint(cline_prime2D_stage1%get_rarg('endit'))
+            finaldoc         = trim(ITERFBODY)//int2str_pad(last_iter_stage1,3)//METADATEXT
+            finalcavgs       = trim(trim(CAVGS_ITERFBODY)//int2str_pad(last_iter_stage1,3)//p_master%ext)
             ! prepare stage 2 input -- re-scale
             if( cline%defined('stktab') )then
                  ! update stktab
@@ -117,9 +112,9 @@ contains
             endif
             ! prepare stage 2 input -- shift modulation
             call os%new(p_master%nptcls)
-            call binread_oritab(FINALDOC, os, [1,p_master%nptcls])
+            call binread_oritab(finaldoc, os, [1,p_master%nptcls])
             call os%mul_shifts(scale_stage2/scale_stage1)
-            call binwrite_oritab(FINALDOC, os, [1,p_master%nptcls])
+            call binwrite_oritab(finaldoc, os, [1,p_master%nptcls])
             ! prepare stage 2 input -- command line
             cline_prime2D_stage2 = cline
             ! if automsk .eq. yes, we need to replace it with cavg
@@ -127,9 +122,12 @@ contains
                 call cline_prime2D_stage2%set('automsk', 'cavg')
             endif
             call cline_prime2D_stage2%delete('deftab')
-            call cline_prime2D_stage2%set('oritab',  trim(FINALDOC))
+            call cline_prime2D_stage2%set('oritab',  trim(finaldoc))
             call cline_prime2D_stage2%set('startit', real(MAXITS_STAGE1 + 1))
-            call xprime2D%execute(cline_prime2D_stage2)
+            call xprime2D_distr%execute(cline_prime2D_stage2)
+            last_iter_stage2 = nint(cline_prime2D_stage2%get_rarg('endit'))
+            finaldoc         = trim(ITERFBODY)//int2str_pad(last_iter_stage2,3)//METADATEXT
+            finalcavgs       = trim(trim(CAVGS_ITERFBODY)//int2str_pad(last_iter_stage2,3)//p_master%ext)
             if( cline%defined('stktab') )then
                 ! delete downscaled stack parts (we are done with them)
                 call p_master%stkhandle%del_stktab_files
@@ -142,9 +140,9 @@ contains
             endif
             ! re-generate class averages at original sampling
             call scobj%uninit(cline) ! puts back the old command line
-            call binread_oritab(FINALDOC, os, [1,p_master%nptcls])
+            call binread_oritab(finaldoc, os, [1,p_master%nptcls])
             call os%mul_shifts(1./scale_stage2)
-            call binwrite_oritab(FINALDOC, os, [1,p_master%nptcls])
+            call binwrite_oritab(finaldoc, os, [1,p_master%nptcls])
             cline_makecavgs = cline
             call cline_makecavgs%delete('autoscale')
             call cline_makecavgs%delete('balance')
@@ -153,18 +151,22 @@ contains
                 call cline_makecavgs%delete('ncls')
             endif
             call cline_makecavgs%set('prg',     'makecavgs')
-            call cline_makecavgs%set('oritab',  trim(FINALDOC))
+            call cline_makecavgs%set('oritab',  trim(finaldoc))
             call cline_makecavgs%set('nparts',  real(nparts))
-            call cline_makecavgs%set('refs',    'cavgs_final'//p_master%ext)
+            call cline_makecavgs%set('refs',    trim(finalcavgs))
             call xmakecavgs%execute(cline_makecavgs)
         else ! no auto-scaling
-            call xprime2D%execute(cline)
+            call xprime2D_distr%execute(cline)
+            last_iter_stage2 = nint(cline_prime2D_stage2%get_rarg('endit'))
+            finaldoc         = trim(ITERFBODY)//int2str_pad(last_iter_stage2,3)//METADATEXT
+            finalcavgs       = trim(trim(CAVGS_ITERFBODY)//int2str_pad(last_iter_stage2,3)//p_master%ext)
         endif
         ! ranking
-        call cline_rank_cavgs%set('oritab',   trim(FINALDOC))
-        call cline_rank_cavgs%set('stk',      'cavgs_final'//p_master%ext)
+        finalcavgs_ranked = trim(trim(CAVGS_ITERFBODY)//int2str_pad(last_iter_stage2,3)//'_ranked'//p_master%ext)
+        call cline_rank_cavgs%set('oritab',   trim(finaldoc))
+        call cline_rank_cavgs%set('stk',      trim(finalcavgs))
         call cline_rank_cavgs%set('classdoc', 'classdoc.txt')
-        call cline_rank_cavgs%set('outstk',   'cavgs_final_ranked'//p_master%ext)
+        call cline_rank_cavgs%set('outstk',   trim(finalcavgs_ranked))
         call xrank_cavgs%execute( cline_rank_cavgs )
         ! cleanup
         call del_file('prime2D_startdoc'//METADATEXT)

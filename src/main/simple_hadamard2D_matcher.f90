@@ -57,9 +57,6 @@ contains
         l_do_read = .true.
         if( p%l_distr_exec )then
             if( b%a%get_nevenodd() == 0 )then
-
-                print *, b%a%get_all('eo')
-
                 stop 'ERROR! no eo partitioning available; hadamard3D_matcher :: prime2D_exec'
             endif
             if( .not. cline%defined('refs') )&
