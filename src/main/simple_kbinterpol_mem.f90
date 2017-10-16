@@ -91,4 +91,29 @@ contains
 		endif
 	end subroutine kill
 
+	subroutine test_kbinterpol_mem
+		use simple_ftiter, only: ftiter
+		use simple_timer   ! use all in there
+		type(kbinterpol_mem) :: kbmem
+		type(ftiter)         :: fit
+		integer, parameter   :: NROTS=359, NTST=100
+		real    :: lims(3,2)
+		real    :: inpl_rots(NROTS)
+		integer :: jrot, itst
+		integer(timer_int_kind) :: t_init, t_prep_pftcc
+		real(timer_int_kind)    :: rt_init, rt_prep_pftcc
+		do jrot=1,NROTS
+			inpl_rots(jrot) = real(jrot)
+		end do
+		call fit%new([240,240,1], 1.06)
+		lims = fit%loop_lims(3)
+		call kbmem%new(inpl_rots, lims(:2,:))
+		do itst=1,NTST
+
+		end do
+
+
+
+	end subroutine test_kbinterpol_mem
+
 end module simple_kbinterpol_mem
