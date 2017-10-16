@@ -26,7 +26,6 @@ public :: pick_distr_commander
 public :: makecavgs_distr_commander
 public :: comlin_smat_distr_commander
 public :: prime2D_distr_commander
-! public :: prime2D_chunk_distr_commander
 public :: prime3D_init_distr_commander
 public :: prime3D_distr_commander
 public :: recvol_distr_commander
@@ -75,10 +74,6 @@ type, extends(commander_base) :: prime2D_distr_commander
   contains
     procedure :: execute      => exec_prime2D_distr
 end type prime2D_distr_commander
-! type, extends(commander_base) :: prime2D_chunk_distr_commander
-!   contains
-!     procedure :: execute      => exec_prime2D_chunk_distr
-! end type prime2D_chunk_distr_commander
 type, extends(commander_base) :: prime3D_init_distr_commander
   contains
     procedure :: execute      => exec_prime3D_init_distr
@@ -439,7 +434,7 @@ contains
         type(qsys_env)        :: qenv
         type(params)          :: p_master
         type(build)           :: b
-        character(len=STDLEN) :: refs, oritab, str, str_iter
+        character(len=STDLEN) :: refs, refs_even, refs_odd, oritab, str, str_iter
         integer               :: iter
         type(chash)           :: job_descr
         real                  :: frac_srch_space
@@ -557,7 +552,9 @@ contains
             call cline_merge_algndocs%set('outfile', trim(oritab))
             call xmerge_algndocs%execute(cline_merge_algndocs)
             ! assemble class averages
-            refs = trim(trim(CAVGS_ITERFBODY)// trim(str_iter) //p_master%ext)
+            refs      = trim(trim(CAVGS_ITERFBODY) // trim(str_iter)            // p_master%ext)
+            refs_even = trim(trim(CAVGS_ITERFBODY) // trim(str_iter) // '_even' // p_master%ext)
+            refs_odd  = trim(trim(CAVGS_ITERFBODY) // trim(str_iter) // '_odd'  // p_master%ext)
             call cline_cavgassemble%set('oritab', trim(oritab))
             call cline_cavgassemble%set('which_iter', real(iter))
             call qenv%exec_simple_prg_in_queue(cline_cavgassemble, 'RESOLUTION'//trim(str_iter), 'CAVGASSEMBLE_FINISHED')
@@ -612,7 +609,19 @@ contains
                             call img_cavg%write(trim(refs), fromtocls(icls, 2))
                         enddo
                         call img_cavg%read(trim(refs), p_master%ncls)
-                        call img_cavg%write(trim(refs), p_master%ncls) ! to preserve size
+                        call img_cavg%write(trim(refs), p_master%ncls)     ! to preserve size
+                        do icls = 1, size(fromtocls, dim=1)
+                            call img_cavg%read(trim(refs_even), fromtocls(icls, 1))
+                            call img_cavg%write(trim(refs_even), fromtocls(icls, 2))
+                        enddo
+                        call img_cavg%read(trim(refs_even), p_master%ncls)
+                        call img_cavg%write(trim(refs_even), p_master%ncls) ! to preserve size
+                        do icls = 1, size(fromtocls, dim=1)
+                            call img_cavg%read(trim(refs_odd), fromtocls(icls, 1))
+                            call img_cavg%write(trim(refs_odd), fromtocls(icls, 2))
+                        enddo
+                        call img_cavg%read(trim(refs_odd), p_master%ncls)
+                        call img_cavg%write(trim(refs_odd), p_master%ncls)  ! to preserve size
                         if( p_master%match_filt.eq.'yes')then
                             ! updates FRCs
                             state     = 1
@@ -630,141 +639,6 @@ contains
             end subroutine remap_empty_cavgs
 
     end subroutine exec_prime2D_distr
-
-    ! subroutine exec_prime2D_chunk_distr( self, cline )
-    !     use simple_commander_imgproc, only: stack_commander
-    !     use simple_oris,              only: oris
-    !     use simple_ori,               only: ori
-    !     class(prime2D_chunk_distr_commander), intent(inout) :: self
-    !     class(cmdline),                       intent(inout) :: cline
-    !     character(len=STDLEN), parameter   :: CAVGNAMES       = 'cavgs_final'//METADATEXT
-    !     character(len=32),     parameter   :: ITERFBODY       = 'prime2Ddoc_'
-    !     character(len=32),     parameter   :: CAVGS_ITERFBODY = 'cavgs_iter'
-    !     character(len=STDLEN), allocatable :: final_docs(:), final_cavgs(:)
-    !     character(len=STDLEN)              :: chunktag
-    !     type(split_commander)              :: xsplit
-    !     type(stack_commander)              :: xstack
-    !     type(cmdline)                      :: cline_stack
-    !     type(qsys_env)                     :: qenv
-    !     type(params)                       :: p_master
-    !     type(chash), allocatable           :: part_params(:)
-    !     type(chash)                        :: job_descr
-    !     type(oris)                         :: os
-    !     integer :: ipart, numlen, nl, ishift, nparts, npart_params
-    !     ! seed the random number generator
-    !     call seed_rnd
-    !     ! output command line executed
-    !     write(*,'(a)') '>>> COMMAND LINE EXECUTED'
-    !     write(*,*) trim(cmdline_glob)
-    !     ! make master parameters
-    !     p_master = params(cline, checkdistr=.false.)
-    !     ! determine the number of partitions
-    !     nparts = nint(real(p_master%nptcls)/real(p_master%chunksz))
-    !     numlen = len(int2str(nparts))
-    !     call cline%set('nparts', real(nparts))
-    !     call cline%set('numlen', real(numlen))
-    !     ! re-make the master parameters to accomodate nparts/numlen
-    !     p_master = params(cline, checkdistr=.false.)
-    !     ! setup the environment for distributed execution
-    !     call qenv%new(p_master)
-    !     ! prepare job description
-    !     call cline%gen_job_descr(job_descr)
-    !     ! prepare part-dependent parameters and docs
-    !     npart_params = 3
-    !     if( cline%defined('deftab') .and. cline%defined('oritab') )then
-    !         stop 'ERROR, deftab or oritab can be part of of command line, not both; exec_prime2D_chunk_distr'
-    !     else if( cline%defined('deftab') .or. cline%defined('oritab') )then
-    !         npart_params = npart_params + 1
-    !     endif
-    !     allocate(part_params(p_master%nparts))
-    !     ishift = 0
-    !     do ipart=1,p_master%nparts
-    !         call part_params(ipart)%new(npart_params)
-    !         chunktag = 'chunk'//int2str_pad(ipart,numlen)
-    !         call part_params(ipart)%set('chunk',    int2str(ipart))
-    !         call part_params(ipart)%set('chunktag', chunktag)
-    !         if( p_master%autoscale .eq. 'yes' )then
-    !             call part_params(ipart)%set('stk', trim(STKPARTFBODY_SC)//int2str_pad(ipart,numlen)//p_master%ext)
-    !         else
-    !             call part_params(ipart)%set('stk', trim(STKPARTFBODY)//int2str_pad(ipart,numlen)//p_master%ext)
-    !         endif
-    !         if( cline%defined('deftab') )then
-    !             call read_part_and_write(qenv%parts(ipart,:), p_master%deftab, trim(chunktag)//'deftab'//METADATEXT)
-    !             call part_params(ipart)%set('deftab', trim(chunktag)//'deftab'//METADATEXT)
-    !         endif
-    !         if( cline%defined('oritab') )then
-    !             call read_part_and_write(qenv%parts(ipart,:), p_master%oritab, trim(chunktag)//'oritab'//METADATEXT, ishift)
-    !             call part_params(ipart)%set('oritab', trim(chunktag)//'oritab'//METADATEXT)
-    !             ishift = ishift - p_master%ncls
-    !         endif
-    !     end do
-    !     if( .not. cline%defined('stktab') )then
-    !         ! split stack
-    !         call xsplit%execute(cline)
-    !     endif
-    !     ! schedule & clean
-    !     write(*,'(A)') '>>>'
-    !     write(*,'(A)') '>>> EXECUTING PRIME2D IN CHUNK-BASED DISTRIBUTION MODE'
-    !     write(*,'(A)') '>>>'
-    !     call qenv%gen_scripts_and_schedule_jobs(p_master, job_descr, part_params=part_params, chunkdistr=.true.)
-    !     call qsys_cleanup(p_master)
-    !     ! merge final stacks of cavgs and orientation documents
-    !     allocate(final_docs(p_master%nparts), final_cavgs(p_master%nparts))
-    !     ishift = 0
-    !     do ipart=1,p_master%nparts
-    !         chunktag = 'chunk'//int2str_pad(ipart,numlen)
-    !         final_cavgs(ipart) = get_last_fname(trim(chunktag)//CAVGS_ITERFBODY, p_master%ext)
-    !         final_docs(ipart)  = get_last_fname(trim(chunktag)//ITERFBODY, METADATEXT)
-    !         if( ipart > 1 )then
-    !             ! the class indices need to be shifted by p_master%ncls
-    !             ishift = ishift + p_master%ncls
-    !             ! modify the doc accordingly
-    !             nl = binread_nlines(final_docs(ipart))
-    !             call os%new(nl)
-    !             call binread_oritab(final_docs(ipart), os, [1,nl])
-    !             call os%shift_classes(ishift)
-    !             call binwrite_oritab(final_docs(ipart), os, [1,nl])
-    !         endif
-    !     end do
-    !     ! merge docs
-    !     call merge_docs(final_docs, 'prime2Ddoc_final'//METADATEXT)
-    !     ! merge class averages
-    !     call write_filetable(CAVGNAMES, final_cavgs)
-    !     call cline_stack%set('filetab', CAVGNAMES)
-    !     call cline_stack%set('outstk', 'cavgs_final'//p_master%ext)
-    !     call xstack%execute(cline_stack)
-    !     ! cleanup
-    !     call del_file(CAVGNAMES)
-    !     call sys_del_files('chunk', METADATEXT)
-    !     call sys_del_files('chunk', p_master%ext)
-    !     ! end gracefully
-    !     call simple_end('**** SIMPLE_DISTR_PRIME2D_CHUNK NORMAL STOP ****')
-
-    !     contains
-
-    !         subroutine read_part_and_write( pfromto, file_in, file_out, ishift )
-    !             integer,           intent(in) :: pfromto(2)
-    !             character(len=*),  intent(in) :: file_in, file_out
-    !             integer, optional, intent(in) :: ishift
-    !             integer    :: nl, cnt, i, noris
-    !             type(oris) :: os_in, os_out
-    !             type(ori)  :: o
-    !             nl = binread_nlines(file_in)
-    !             call os_in%new(nl)
-    !             call binread_oritab(file_in, os_in, [1,nl])
-    !             noris = pfromto(2) - pfromto(1) + 1
-    !             call os_out%new(noris)
-    !             cnt = 0
-    !             do i=pfromto(1),pfromto(2)
-    !                 cnt = cnt + 1
-    !                 o   = os_in%get_ori(i)
-    !                 call os_out%set_ori(cnt, o)
-    !             end do
-    !             if( present(ishift) ) call os_out%shift_classes(ishift)
-    !             call binwrite_oritab(file_out, os_out, [1,noris])
-    !         end subroutine read_part_and_write
-
-    ! end subroutine exec_prime2D_chunk_distr
 
     subroutine exec_comlin_smat_distr( self, cline )
         use simple_commander_comlin, only: comlin_smat_commander

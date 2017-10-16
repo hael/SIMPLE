@@ -244,7 +244,6 @@ contains
         else
             p%frcs = 'frcs_iter'//int2str_pad(which_iter,3)//'.bin'
             call cavger%calc_and_write_frcs(p%frcs)
-            call b%projfrcs%estimate_res()
             call gen2Dclassdoc( b, p, 'classdoc.txt')
             call cavger%eoavg
             p%refs      = 'cavgs_iter'//int2str_pad(which_iter,3)//p%ext

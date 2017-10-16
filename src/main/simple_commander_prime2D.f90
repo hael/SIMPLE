@@ -130,7 +130,6 @@ contains
             call qsys_job_finished( p, 'simple_commander_prime2D :: exec_makecavgs' )
         else
             call cavger%calc_and_write_frcs('frcs.bin')
-            call b%projfrcs%estimate_res()
             call gen2Dclassdoc( b, p, 'classdoc.txt')
             call cavger%eoavg
             if( cline%defined('refs') )then
@@ -211,7 +210,6 @@ contains
             p%refs_odd  = 'cavgs_iter'//int2str_pad(p%which_iter,3)//'_odd'//p%ext
             if( .not. cline%defined('frcs') ) p%frcs  = 'frcs_iter'//int2str_pad(p%which_iter,3)//'.bin'
             call cavger%calc_and_write_frcs(p%frcs)
-            call b%projfrcs%estimate_res()
             call gen2Dclassdoc( b, p, 'classdoc.txt')
             call cavger%eoavg
         else if( .not. cline%defined('refs') )then
@@ -220,7 +218,6 @@ contains
             p%refs_odd  = 'startcavgs_odd'//p%ext
             if( .not. cline%defined('frcs') ) p%frcs  = 'frcs.bin'
             call cavger%calc_and_write_frcs(p%frcs)
-            call b%projfrcs%estimate_res()
             call gen2Dclassdoc( b, p, 'classdoc.txt')
             call cavger%eoavg
         endif
