@@ -605,7 +605,7 @@ contains
     !! \param tfun transfer function object
     !! \param dfx,dfy resolution along Fourier axes
     !! \param angast astigmatic angle (degrees)
-    !! \param add_phshift additional phase shift (radians) introduced by the Volta
+    !! \param add_phshift additional phase shift (radians) introduced by the Volta 
     !! \param endrot number of rotations
     !! \return ctfmat matrix with CTF values
     function create_polar_ctfmat( self, tfun, dfx, dfy, angast, add_phshift, endrot ) result( ctfmat )
@@ -695,7 +695,7 @@ contains
             ! back transform
             call fftwf_execute_dft_c2r(self%plan_bwd, self%fftdat(ithr)%product_fft, self%fftdat(ithr)%backtransf)
             ! accumulate corrs
-            corrs_over_k = corrs_over_k + self%fftdat(ithr)%backtransf !!!!!!!! * real(ik) due to Jacobian or sqrt(real(ik))
+            corrs_over_k = corrs_over_k + self%fftdat(ithr)%backtransf
         end do
         ! fftw3 routines are not properly normalized, hence division by self%nrots * 2
         corrs_over_k = corrs_over_k  / real(self%nrots * 2)
