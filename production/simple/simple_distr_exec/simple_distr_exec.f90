@@ -112,7 +112,7 @@ select case(prg)
         keys_optional(28) = 'dopick'
         keys_optional(29) = 'fromm'
         keys_optional(30) = 'ndev'
-        keys_optional(31)  = 'pcontrast'
+        keys_optional(31) = 'pcontrast'
         ! parse command line
         if( describe ) call print_doc_preproc
         call cline%parse(keys_required(:7), keys_optional(:31))
@@ -353,7 +353,7 @@ select case(prg)
         keys_optional(6) = 'dfmax'
         keys_optional(7) = 'phaseplate'
         ! parse command line
-        ! if( describe ) call print_doc_ctffit
+        if( describe ) call print_doc_ctffit
         call cline%parse(keys_required(:6), keys_optional(:7))
         ! set defaults
         if( .not. cline%defined('pspecsz') ) call cline%set('pspecsz', 512.)
@@ -412,9 +412,10 @@ select case(prg)
         keys_optional(12) = 'balance'
         keys_optional(13) = 'stk'
         keys_optional(14) = 'stktab'
+        keys_optional(15) = 'phaseplate'
         ! parse command line
         if( describe ) call print_doc_makecavgs
-        call cline%parse(keys_required(:3), keys_optional(:14))
+        call cline%parse(keys_required(:3), keys_optional(:15))
         ! sanity check
         if( cline%defined('stk') .or. cline%defined('stktab') )then
             ! all ok
@@ -468,9 +469,10 @@ select case(prg)
         keys_optional(29) = 'stk'
         keys_optional(30) = 'stktab'
         keys_optional(31) = 'dyncls'
+        keys_optional(32) = 'phaseplate'
         ! documentation
         if( describe ) call print_doc_prime2D
-        call cline%parse( keys_required(:4), keys_optional(:31) )
+        call cline%parse( keys_required(:4), keys_optional(:32) )
         ! sanity checks 
         if( cline%defined('stk') .or. cline%defined('stktab') )then
             ! all ok
@@ -523,9 +525,10 @@ select case(prg)
         keys_optional(8)  = 'width'
         keys_optional(9)  = 'filwidth'
         keys_optional(10) = 'center'
+        keys_optional(11) = 'phaseplate'
         ! documentation
         if( describe ) call print_doc_prime2D
-        call cline%parse( keys_required(:7), keys_optional(:10) )
+        call cline%parse( keys_required(:7), keys_optional(:11) )
         ! set defaults
         if( .not. cline%defined('lp')     ) call cline%set('lp',     15.)
         if( .not. cline%defined('lpstop') ) call cline%set('lpstop', 8.)
@@ -591,9 +594,10 @@ select case(prg)
         keys_optional(9)  = 'npeaks'
         keys_optional(10) = 'stk'
         keys_optional(11) = 'stktab'
+        keys_optional(12) = 'phaseplate'
         ! parse command line
         if( describe ) call print_doc_prime3D_init
-        call cline%parse(keys_required(:5), keys_optional(:11))
+        call cline%parse(keys_required(:5), keys_optional(:12))
         ! sanity check
         if( cline%defined('stk') .or. cline%defined('stktab') )then
             ! all ok
@@ -658,10 +662,11 @@ select case(prg)
         keys_optional(34) = 'stktab'
         keys_optional(35) = 'weights3D'
         keys_optional(36) = 'sdev_thres'
+        keys_optional(37) = 'phaseplate'
         ! documentation
         if( describe ) call print_doc_prime3D
         ! parse command line
-        call cline%parse( keys_required(:5), keys_optional(:36) )
+        call cline%parse( keys_required(:5), keys_optional(:37) )
         ! sanity check
         if( cline%defined('stk') .or. cline%defined('stktab') )then
             ! all ok
@@ -701,7 +706,7 @@ select case(prg)
         keys_optional(6)  = 'hp'
         keys_optional(7)  = 'lp'
         keys_optional(8)  = 'cenlp'
-        keys_optional(9) = 'lpstop'
+        keys_optional(9)  = 'lpstop'
         keys_optional(10) = 'eo'
         keys_optional(11) = 'frac'
         keys_optional(12) = 'mskfile'
@@ -723,10 +728,11 @@ select case(prg)
         keys_optional(28) = 'stktab'
         keys_optional(29) = 'weights3D'
         keys_optional(30) = 'sdev_thres'
+        keys_optional(31) = 'phaseplate'
         ! documentation
         if( describe ) call print_doc_prime3D
         ! parse command line
-        call cline%parse( keys_required(:5), keys_optional(:37) )
+        call cline%parse( keys_required(:5), keys_optional(:31) )
         ! sanity check
         if( cline%defined('stk') .or. cline%defined('stktab') )then
             ! all ok
@@ -774,9 +780,10 @@ select case(prg)
         keys_optional(8)  = 'balance'
         keys_optional(9)  = 'stk'
         keys_optional(10) = 'stktab'
+        keys_optional(11) = 'phaseplate'
         ! parse command line
         if( describe ) call print_doc_recvol
-        call cline%parse(keys_required(:6), keys_optional(:10))
+        call cline%parse(keys_required(:6), keys_optional(:11))
         ! sanity check
         if( cline%defined('stk') .or. cline%defined('stktab') )then
             ! all ok
@@ -934,9 +941,10 @@ select case(prg)
         keys_optional(14) = 'nrepeats'
         keys_optional(15) = 'stk'
         keys_optional(16) = 'stktab'
+        keys_optional(17) = 'phaseplate'
         ! parse command line
         if( describe ) call print_doc_het_ensemble
-        call cline%parse(keys_required(:7), keys_optional(:16))
+        call cline%parse(keys_required(:7), keys_optional(:17))
         ! sanity check
         if( cline%defined('stk') .or. cline%defined('stktab') )then
             ! all ok
@@ -957,25 +965,26 @@ select case(prg)
         ! based on FSC optimisation with a compact genetic algorithm<cga_hres_sel/end> 
         !
         ! set required keys
-        keys_required(1) = 'ctf'
-        keys_required(2) = 'msk' 
-        keys_required(3) = 'nparts'
-        keys_required(4) = 'oritab' 
-        keys_required(5) = 'pgrp' 
-        keys_required(6) = 'smpd' 
+        keys_required(1)  = 'ctf'
+        keys_required(2)  = 'msk' 
+        keys_required(3)  = 'nparts'
+        keys_required(4)  = 'oritab' 
+        keys_required(5)  = 'pgrp' 
+        keys_required(6)  = 'smpd' 
         ! set optional keys
-        keys_optional(1) = 'balance'
-        keys_optional(2) = 'eo'
-        keys_optional(3) = 'mskfile' 
-        keys_optional(4) = 'ncunits'
-        keys_optional(5) = 'nthr'
-        keys_optional(6) = 'maxits'
-        keys_optional(7) = 'eps'
-        keys_optional(8) = 'stk'
-        keys_optional(9) = 'stktab'
+        keys_optional(1)  = 'balance'
+        keys_optional(2)  = 'eo'
+        keys_optional(3)  = 'mskfile' 
+        keys_optional(4)  = 'ncunits'
+        keys_optional(5)  = 'nthr'
+        keys_optional(6)  = 'maxits'
+        keys_optional(7)  = 'eps'
+        keys_optional(8)  = 'stk'
+        keys_optional(9)  = 'stktab'
+        keys_optional(10) = 'phaseplate'
         ! parse command line
-        ! if( describe ) call print_doc_cga_hres_sel
-        call cline%parse(keys_required(:6), keys_optional(:9))
+        if( describe ) call print_doc_cga_hres_sel
+        call cline%parse(keys_required(:6), keys_optional(:10))
         ! sanity check
         if( cline%defined('stk') .or. cline%defined('stktab') )then
             ! all ok
@@ -1005,7 +1014,7 @@ select case(prg)
         keys_optional(3) = 'nparts'
         keys_optional(4) = 'ncunits'
         ! parse command line
-        ! if( describe ) call print_doc_scale_stk_parts
+        if( describe ) call print_doc_scale_stk_parts
         call cline%parse(keys_required(:2), keys_optional(:4))
         ! sanity check
         if( cline%defined('nparts') .or. cline%defined('stktab') )then

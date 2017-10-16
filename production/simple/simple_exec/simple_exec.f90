@@ -498,7 +498,7 @@ select case(prg)
         keys_optional(5) = 'dfmax'
         keys_optional(6) = 'phaseplate'
         ! parse command line
-        ! if( describe ) call print_doc_ctffit
+        if( describe ) call print_doc_ctffit
         call cline%parse(keys_required(:5), keys_optional(:6))
         ! set defaults
         if( .not. cline%defined('pspecsz') ) call cline%set('pspecsz', 512.)
@@ -677,9 +677,10 @@ select case(prg)
         keys_optional(12) = 'balance'
         keys_optional(13) = 'stk'
         keys_optional(14) = 'stktab'
+        keys_optional(15) = 'phaseplate'
         ! parse command line
         if( describe ) call print_doc_makecavgs
-        call cline%parse(keys_required(:2), keys_optional(:14))
+        call cline%parse(keys_required(:2), keys_optional(:15))
         ! sanity check
         if( cline%defined('stk') .or. cline%defined('stktab') )then
             ! all ok
@@ -728,9 +729,10 @@ select case(prg)
         keys_optional(24) = 'stk'
         keys_optional(25) = 'stktab'
         keys_optional(26) = 'dyncls'
+        keys_optional(27) = 'phaseplate'
         ! parse command line
         if( describe ) call print_doc_prime2D
-        call cline%parse(keys_required(:4), keys_optional(:26))
+        call cline%parse(keys_required(:4), keys_optional(:27))
         ! sanity check
         if( cline%defined('stk') .or. cline%defined('stktab') )then
             ! all ok
@@ -766,9 +768,10 @@ select case(prg)
         keys_optional(3) = 'refs'
         keys_optional(4) = 'stk'
         keys_optional(5) = 'stktab'
+        keys_optional(6) = 'phaseplate'
         ! parse command line
         if( describe ) call print_doc_cavgassemble
-        call cline%parse(keys_required(:5), keys_optional(:5))
+        call cline%parse(keys_required(:5), keys_optional(:6))
         ! sanity check
         if( cline%defined('stk') .or. cline%defined('stktab') )then
             ! all ok
@@ -864,13 +867,13 @@ select case(prg)
         ! included in the weighted reconstruction)<npeaks/end>
         !
         ! set required keys
-        keys_required(1)  = 'smpd'
-        keys_required(2)  = 'box'
-        keys_required(3)  = 'lp'
+        keys_required(1) = 'smpd'
+        keys_required(2) = 'box'
+        keys_required(3) = 'lp'
         ! set optional keys
-        keys_optional(1)  = 'nspace'
-        keys_optional(2)  = 'moldiam'
-        keys_optional(3)  = 'pgrp'
+        keys_optional(1) = 'nspace'
+        keys_optional(2) = 'moldiam'
+        keys_optional(3) = 'pgrp'
         ! parse command line
         if( describe ) call print_doc_npeaks
         call cline%parse(keys_required(:3), keys_optional(:3))
@@ -917,9 +920,10 @@ select case(prg)
         keys_optional(9)  = 'refine'
         keys_optional(10) = 'stk'
         keys_optional(11) = 'stktab'
+        keys_optional(12) = 'phaseplate'
         ! parse command line
         if( describe ) call print_doc_prime3D_init
-        call cline%parse(keys_required(:4), keys_optional(:11))
+        call cline%parse(keys_required(:4), keys_optional(:12))
         ! sanity check
         if( cline%defined('stk') .or. cline%defined('stktab') )then
             ! all ok
@@ -960,9 +964,10 @@ select case(prg)
         keys_optional(13) = 'center'
         keys_optional(14) = 'stk'
         keys_optional(15) = 'stktab'
+        keys_optional(16) = 'phaseplate'
         ! parse command line
         if( describe ) call print_doc_multiptcl_init
-        call cline%parse(keys_required(:6), keys_optional(:15))
+        call cline%parse(keys_required(:6), keys_optional(:16))
         ! sanity check
         if( cline%defined('stk') .or. cline%defined('stktab') )then
             ! all ok
@@ -1025,9 +1030,10 @@ select case(prg)
         keys_optional(33) = 'stk'
         keys_optional(34) = 'stktab'
         keys_optional(35) = 'sdev_thres'
+        keys_optional(36) = 'phaseplate'
         ! parse command line
         if( describe ) call print_doc_prime3D
-        call cline%parse(keys_required(:5), keys_optional(:35))
+        call cline%parse(keys_required(:5), keys_optional(:36))
         ! sanity check
         if( cline%defined('stk') .or. cline%defined('stktab') )then
             ! all ok
@@ -1288,24 +1294,25 @@ select case(prg)
         ! icosahedral viruses<recvol/end>
         !
         ! set required keys
-        keys_required(1) = 'smpd'
-        keys_required(2) = 'oritab'
-        keys_required(3) = 'msk'
-        keys_required(4) = 'ctf'
-        keys_required(5) = 'pgrp'
+        keys_required(1)  = 'smpd'
+        keys_required(2)  = 'oritab'
+        keys_required(3)  = 'msk'
+        keys_required(4)  = 'ctf'
+        keys_required(5)  = 'pgrp'
         ! set optional keys
-        keys_optional(1) = 'nthr'
-        keys_optional(2) = 'eo'
-        keys_optional(3) = 'deftab'
-        keys_optional(4) = 'frac'
-        keys_optional(5) = 'mul'
-        keys_optional(6) = 'mskfile'
-        keys_optional(7) = 'balance'
-        keys_optional(8) = 'stk'
-        keys_optional(9) = 'stktab'
+        keys_optional(1)  = 'nthr'
+        keys_optional(2)  = 'eo'
+        keys_optional(3)  = 'deftab'
+        keys_optional(4)  = 'frac'
+        keys_optional(5)  = 'mul'
+        keys_optional(6)  = 'mskfile'
+        keys_optional(7)  = 'balance'
+        keys_optional(8)  = 'stk'
+        keys_optional(9)  = 'stktab'
+        keys_optional(10) = 'phaseplate'
         ! parse command line
         if( describe ) call print_doc_recvol
-        call cline%parse(keys_required(:5), keys_optional(:9))
+        call cline%parse(keys_required(:5), keys_optional(:10))
         ! sanity check
         if( cline%defined('stk') .or. cline%defined('stktab') )then
             ! all ok
@@ -1442,7 +1449,7 @@ select case(prg)
         keys_required(2) = 'vol1'
         keys_required(3) = 'vol2'
         ! parse command line
-        ! if( describe ) call print_doc_fsc
+        if( describe ) call print_doc_fsc
         call cline%parse(keys_required(:3))
         ! execute
         call xfsc%execute(cline)
@@ -1553,14 +1560,14 @@ select case(prg)
         !
         ! set optional keys
         keys_optional(1)  = 'vol1'
-        keys_optional(2) = 'nthr'
-        keys_optional(3) = 'guinier'
-        keys_optional(4) = 'smpd'
-        keys_optional(5) = 'hp'
-        keys_optional(6) = 'lp'
-        keys_optional(7) = 'msk'
-        keys_optional(8) = 'neg'
-        keys_optional(9) = 'snr'
+        keys_optional(2)  = 'nthr'
+        keys_optional(3)  = 'guinier'
+        keys_optional(4)  = 'smpd'
+        keys_optional(5)  = 'hp'
+        keys_optional(6)  = 'lp'
+        keys_optional(7)  = 'msk'
+        keys_optional(8)  = 'neg'
+        keys_optional(9)  = 'snr'
         keys_optional(10) = 'mirr'
         keys_optional(11) = 'bfac'
         keys_optional(12) = 'e1'
@@ -1603,6 +1610,7 @@ select case(prg)
         !
         ! <dock_volpair/begin>is a program for docking a pair of volumes. vol1 is reference and vol2 target.
         ! <dock_volpair/end>
+        !
         ! set required keys
         keys_required(1) = 'vol1'
         keys_required(2) = 'vol2'
@@ -1614,9 +1622,8 @@ select case(prg)
         keys_optional(2) = 'dockmode'
         keys_optional(3) = 'outvol'
         ! parse command line
-        ! if( describe ) call print_doc_volpair
+        if( describe ) call print_doc_dock_volpair
         call cline%parse(keys_required(:5), keys_optional(:3))
-        ! execute
         ! execute
         call xdock_volpair%execute(cline)
 
@@ -1705,8 +1712,8 @@ select case(prg)
      case( 'image_diff' )
         !==Program corrcompare
         !
-        ! <corrcompare/begin>is a program for comparing stacked images using real-space and Fourier-based approaches
-        ! <corrcompare/end>
+        ! <image_diff/begin>is a program for comparing stacked images using differences
+        ! <image_diff/end>
         !
         ! set required keys
         keys_required(1) = 'stk'
@@ -1717,7 +1724,7 @@ select case(prg)
         keys_optional(3) = 'lp'
         keys_optional(4) = 'smpd'
         ! parse command line
-!        if( describe ) call print_doc_image_diff
+        if( describe ) call print_doc_image_diff
         call cline%parse(keys_required(:2), keys_optional(:4))
         ! execute
         call ximage_diff%execute(cline)
@@ -1754,13 +1761,13 @@ select case(prg)
         ! by only operating on class averages and find averages that fit well together in 3D<image_smat/end>
         !
         ! set required keys
-        keys_required(1)  = 'stk'
-        keys_required(2)  = 'smpd'
+        keys_required(1) = 'stk'
+        keys_required(2) = 'smpd'
         ! set optional keys
-        keys_optional(1)  = 'lp'
-        keys_optional(2)  = 'msk'
-        keys_optional(3)  = 'hp'
-        keys_optional(4)  = 'nthr'
+        keys_optional(1) = 'lp'
+        keys_optional(2) = 'msk'
+        keys_optional(3) = 'hp'
+        keys_optional(4) = 'nthr'
         ! parse command line
         if( describe ) call print_doc_image_smat
         call cline%parse(keys_required(:2), keys_optional(:4))
@@ -1806,7 +1813,7 @@ select case(prg)
         keys_optional(7)  = 'newbox'
         keys_optional(8)  = 'clip'
         keys_optional(9)  = 'outvol'
-        keys_optional(10)  = 'outstk'
+        keys_optional(10) = 'outstk'
         keys_optional(11) = 'outstk2'
         ! parse command line
         if( describe ) call print_doc_scale
@@ -1851,7 +1858,7 @@ select case(prg)
         ! which may be useful for analysis of dose-fractionated image series. neg inverts the contrast of the images<stackops/end>
         !
         ! Required keys
-        keys_required(1) = 'stk'
+        keys_required(1)  = 'stk'
         keys_required(2)  = 'smpd'
         ! set optional keys
         keys_optional(1)  = 'oritab'
@@ -1920,7 +1927,7 @@ select case(prg)
         keys_optional(2) = 'msk'
         keys_optional(3) = 'inner'
         ! parse command line
-        !if( describe ) call print_doc_cluster_smat
+        if( describe ) call print_doc_cluster_smat
         call cline%parse(keys_required(:3), keys_optional(:3))
         ! execute
         call xintgpeaks%execute(cline)
@@ -1994,8 +2001,8 @@ select case(prg)
         ! <print_magic_boxes/begin>is a program for printing magic box sizes (fast FFT)<print_magic_boxes/end>
         !
         ! set required keys
-        keys_required(1)  = 'smpd'
-        keys_required(2)  = 'moldiam'
+        keys_required(1) = 'smpd'
+        keys_required(2) = 'moldiam'
         ! parse command line
         if( describe ) call print_doc_print_magic_boxes
         call cline%parse(keys_required(:2))
@@ -2007,9 +2014,9 @@ select case(prg)
         ! <res/begin>is a program for checking the low-pass resolution limit for a given Fourier index<res/end>
         !
         !set required keys
-        keys_required(1)  = 'smpd'
-        keys_required(2)  = 'find'
-        keys_required(3)  = 'box'
+        keys_required(1) = 'smpd'
+        keys_required(2) = 'find'
+        keys_required(3) = 'box'
         ! parse command line
         if( describe ) call print_doc_res
         call cline%parse(keys_required(:3))
@@ -2041,8 +2048,8 @@ select case(prg)
         ! <cluster_oris/begin>is a program for clustering orientations based on geodesic distance<cluster_oris/end>
         !
         ! Required keys
-        keys_required(1)  = 'oritab'
-        keys_required(2)  = 'ncls'
+        keys_required(1) = 'oritab'
+        keys_required(2) = 'ncls'
         ! set optional keys
         keys_optional(1) = 'nthr'
         ! parse command line
@@ -2056,7 +2063,7 @@ select case(prg)
         ! <makedeftab/begin>is a program for creating a SIMPLE conformant file of CTF parameter values (deftab).
         ! Input is either an earlier SIMPLE deftab/oritab. The purpose is to get the kv, cs, and fraca parameters
         ! as part of the CTF input doc as that is the new convention. The other alternative is to input a plain text
-        ! file with CTF parameters dfx, dfy, angast according to the Frealign convention. Unit conversions are dealt
+        ! file with CTF parameters dfx, dfy, angast, phshift according to the Frealign convention. Unit conversions are dealt
         ! with using optional variables. The units refer to the units in the inputted document<makedeftab/end>
         !
         ! Required keys
@@ -2071,9 +2078,11 @@ select case(prg)
         keys_optional(3) = 'deftab'
         keys_optional(4) = 'dfunit'
         keys_optional(5) = 'angastunit'
+        keys_optional(6) = 'phaseplate'
+        keys_optional(7) = 'phshiftunit'
         ! parse command line
         if( describe ) call print_doc_makedeftab
-        call cline%parse(keys_required(:5),keys_optional(:5))
+        call cline%parse(keys_required(:5),keys_optional(:7))
         ! execute
         call xmakedeftab%execute(cline)
     case( 'makeoris' )
@@ -2125,16 +2134,16 @@ select case(prg)
        ! the individual particle images<map2ptcls/end>
        !
        ! set required keys
-       keys_required(1)  = 'stk'
-       keys_required(2)  = 'stk2'
-       keys_required(3)  = 'stk3'
-       keys_required(4)  = 'oritab'
+       keys_required(1) = 'stk'
+       keys_required(2) = 'stk2'
+       keys_required(3) = 'stk3'
+       keys_required(4) = 'oritab'
        ! set optional keys
-       keys_optional(1)  = 'nthr'
-       keys_optional(2)  = 'oritab3D'
-       keys_optional(3)  = 'deftab'
-       keys_optional(4)  = 'outfile'
-       keys_optional(5)  = 'mul'
+       keys_optional(1) = 'nthr'
+       keys_optional(2) = 'oritab3D'
+       keys_optional(3) = 'deftab'
+       keys_optional(4) = 'outfile'
+       keys_optional(5) = 'mul'
        ! parse command line
        if( describe ) call print_doc_map2ptcls
        call cline%parse(keys_required(:4), keys_optional(:5))
@@ -2252,7 +2261,7 @@ select case(prg)
         keys_required(1)  = 'oritab'
         ! set optional keys
         keys_optional(1)  = 'outfile'
-        ! if( describe ) call print_doc_txt2bin
+        if( describe ) call print_doc_txt2bin
         call cline%parse(keys_required(:1), keys_optional(:1))
         ! set defaults
         if( .not. cline%defined('outfile') ) call cline%set('outfile', 'outfile.bin')
@@ -2267,7 +2276,7 @@ select case(prg)
         keys_required(1)  = 'oritab'
         ! set optional keys
         keys_optional(1)  = 'outfile'
-        ! if( describe ) call print_doc_bin2txt
+        if( describe ) call print_doc_bin2txt
         call cline%parse(keys_required(:1), keys_optional(:1))
         ! set defaults
         if( .not. cline%defined('outfile') ) call cline%set('outfile', 'outfile.txt')
@@ -2280,13 +2289,13 @@ select case(prg)
         ! for visualization in UCSF Chimera<vizoris/end>
         !
         ! Required keys
-        keys_required(1)  = 'oritab'
+        keys_required(1) = 'oritab'
         ! set optional keys
-        keys_optional(1)  = 'nspace'
-        keys_optional(2)  = 'pgrp'
-        keys_optional(3)  = 'tseries'
+        keys_optional(1) = 'nspace'
+        keys_optional(2) = 'pgrp'
+        keys_optional(3) = 'tseries'
         ! parse command line
-        !if( describe ) call print_doc_vizoris
+        if( describe ) call print_doc_vizoris
         call cline%parse( keys_required(:1), keys_optional(:3) )
         ! execute
         call xvizoris%execute(cline)
@@ -2319,14 +2328,14 @@ select case(prg)
         keys_required(2) = 'fbody'
         keys_required(3) = 'smpd'
         ! set optional keys
-        keys_optional(1)  = 'lp'
-        keys_optional(2)  = 'boxfile'
-        keys_optional(3)  = 'xcoord'
-        keys_optional(4)  = 'ycoord'
-        keys_optional(5)  = 'offset'
-        keys_optional(6)  = 'box'
-        keys_optional(7)  = 'neg'
-        keys_optional(8)  = 'cenlp'
+        keys_optional(1) = 'lp'
+        keys_optional(2) = 'boxfile'
+        keys_optional(3) = 'xcoord'
+        keys_optional(4) = 'ycoord'
+        keys_optional(5) = 'offset'
+        keys_optional(6) = 'box'
+        keys_optional(7) = 'neg'
+        keys_optional(8) = 'cenlp'
         ! parse command line
         if( describe ) call print_doc_tseries_track
         call cline%parse(keys_required(:3), keys_optional(:8))
@@ -2356,7 +2365,7 @@ select case(prg)
         keys_optional(5) = 'deftab'
         keys_optional(6) = 'outstk'
         ! parse command line
-        ! if( describe ) call print_doc_tseries_backgr_subtr
+        if( describe ) call print_doc_tseries_backgr_subtr
         call cline%parse(keys_required(:3), keys_optional(:6))
         ! set defaults
         if( .not. cline%defined('hp')    ) call cline%set('hp',    5.0)
@@ -2423,9 +2432,9 @@ select case(prg)
         ! into a similarity matrix that can be inputted to cluster_smat<merge_similarities/end>
         !
         ! set required keys
-        keys_required(1)  = 'nptcls'
+        keys_required(1) = 'nptcls'
         ! set optional keys
-        keys_optional(1)  = 'nparts'
+        keys_optional(1) = 'nparts'
         ! parse command line
         if( describe ) call print_doc_merge_similarities
         call cline%parse(keys_required(:1), keys_optional(:1))

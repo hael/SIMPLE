@@ -14,6 +14,11 @@ contains
         stop
     end subroutine print_doc_automask2D
 
+    subroutine print_doc_bin2txt
+        write(*,'(A)') 'converts a binary oritab to a text oritab'
+        stop
+    end subroutine print_doc_bin2txt
+
     subroutine print_doc_binarise
         write(*,'(A)') 'is a program for binarisation of stacks and volumes'
         stop
@@ -113,10 +118,20 @@ contains
         stop
     end subroutine print_doc_ctffind
 
+    subroutine print_doc_ctffit
+        write(*,'(A)') 'is a SIMPLE program for fitting the CTF'
+        stop
+    end subroutine print_doc_ctffit
+
     subroutine print_doc_ctfops
         write(*,'(A)') 'is a program for applying CTF to stacked images'
         stop
     end subroutine print_doc_ctfops
+
+    subroutine print_doc_dock_volpair
+        write(*,'(A)') 'is a program for docking a pair of volumes. vol1 is reference and vol2 target.'
+        stop
+    end subroutine print_doc_dock_volpair
 
     subroutine print_doc_dsymsrch
         write(*,'(A)', advance='no') 'is a program for identifying rotational symmetries in class averages of D-symmet'
@@ -140,7 +155,7 @@ contains
         write(*,'(A)', advance='no') 'elion2emanbox.pl) for *.star files containing particle coordinates obtained with'
         write(*,'(A)', advance='no') ' Relion. The program creates one stack per movie frame as well as a stack of cor'
         write(*,'(A)', advance='no') 'rected framesums. In addition to single-particle image stacks, the program produ'
-        write(*,'(A)', advance='no') 'ces a parameter file extract_params.txt that can be used in conjunction with oth'
+        write(*,'(A)', advance='no') 'ces a parameter file extract_params.ext that can be used in conjunction with oth'
         write(*,'(A)') 'er SIMPLE programs. We obtain CTF parameters with CTFFIND4'
         stop
     end subroutine print_doc_extract
@@ -157,6 +172,11 @@ contains
         stop
     end subroutine print_doc_fsc
 
+    subroutine print_doc_image_diff
+        write(*,'(A)') 'is a program for comparing stacked images using differences'
+        stop
+    end subroutine print_doc_image_diff
+
     subroutine print_doc_image_smat
         write(*,'(A)', advance='no') 'is a program for creating a similarity matrix based on common line correlation.'
         write(*,'(A)', advance='no') 'The idea being that it should be possible to cluster images based on their 3D si'
@@ -171,6 +191,11 @@ contains
         stop
     end subroutine print_doc_iminfo
 
+    subroutine print_doc_intgpeaks
+        write(*,'(A)') 'is a program for'
+        stop
+    end subroutine print_doc_intgpeaks
+
     subroutine print_doc_makecavgs
         write(*,'(A)', advance='no') 'is used  to produce class averages or initial random references for prime2D exec'
         write(*,'(A)') 'ution.'
@@ -182,9 +207,9 @@ contains
         write(*,'(A)', advance='no') 'ab). Input is either an earlier SIMPLE deftab/oritab. The purpose is to get the'
         write(*,'(A)', advance='no') 'kv, cs, and fraca parameters as part of the CTF input doc as that is the new con'
         write(*,'(A)', advance='no') 'vention. The other alternative is to input a plain text file with CTF parameters'
-        write(*,'(A)', advance='no') ' dfx, dfy, angast according to the Frealign convention. Unit conversions are dea'
-        write(*,'(A)', advance='no') 'lt with using optional variables. The units refer to the units in the inputted d'
-        write(*,'(A)') 'ocument'
+        write(*,'(A)', advance='no') ' dfx, dfy, angast, phshift according to the Frealign convention. Unit conversion'
+        write(*,'(A)', advance='no') 's are dealt with using optional variables. The units refer to the units in the i'
+        write(*,'(A)') 'nputted document'
         stop
     end subroutine print_doc_makedeftab
 
@@ -258,11 +283,10 @@ contains
 
     subroutine print_doc_norm
         write(*,'(A)', advance='no') 'is a program for normalization of MRC or SPIDER stacks and volumes. If you want'
-        write(*,'(A)', advance='no') 'to normalise your images inputted with stk, set norm=yes. hfun (e.g. hfun=sigm)'
-        write(*,'(A)', advance='no') 'controls the normalisation function. If you want to perform noise normalisation'
-        write(*,'(A)', advance='no') 'of the images set noise_norm=yes given a mask radius msk (pixels). If you want t'
-        write(*,'(A)', advance='no') 'o normalise your images or volume (vol1) with respect to their power spectrum se'
-        write(*,'(A)') 't shell_norm=yes'
+        write(*,'(A)', advance='no') 'to normalise your images inputted with stk, set norm=yes. If you want to perform'
+        write(*,'(A)', advance='no') ' noise normalisation of the images set noise_norm=yes given a mask radius msk (p'
+        write(*,'(A)', advance='no') 'ixels). If you want to normalise your images or volume (vol1) with respect to th'
+        write(*,'(A)') 'eir power spectrum set shell_norm=yes'
         stop
     end subroutine print_doc_norm
 
@@ -388,9 +412,7 @@ contains
         write(*,'(A)', advance='no') 'ift. Less commonly used parameters are pgrp, which controls the point-group symm'
         write(*,'(A)', advance='no') 'etry c (rotational), d (dihedral), t (tetrahedral), o (octahedral) or i (icosahe'
         write(*,'(A)', advance='no') 'dral). The point-group symmetry is used to restrict the set of projections to wi'
-        write(*,'(A)', advance='no') 'thin the asymmetric unit. neg inverts the contrast of the projections. mirr=yes'
-        write(*,'(A)', advance='no') 'mirrors the projection by modifying the Euler angles. If mirr=x or mirr=y the pr'
-        write(*,'(A)') 'ojection is physically mirrored after it has been generated'
+        write(*,'(A)') 'thin the asymmetric unit. neg inverts the contrast of the projections.'
         stop
     end subroutine print_doc_projvol
 
@@ -550,6 +572,14 @@ contains
         stop
     end subroutine print_doc_symsrch
 
+    subroutine print_doc_tseries_backgr_subtr
+        write(*,'(A)', advance='no') 'is a program for background subtraction in time-series data. The goal is to subt'
+        write(*,'(A)', advance='no') 'ract the two graphene peaks @ 2.14 A and @ 1.23 A. This is done by band-pass fil'
+        write(*,'(A)', advance='no') 'tering the background image, recommended (and default settings) are hp=5.0 lp=1.'
+        write(*,'(A)') '1 and width=5.0.'
+        stop
+    end subroutine print_doc_tseries_backgr_subtr
+
     subroutine print_doc_tseries_extract
         write(*,'(A)', advance='no') 'is a program for creating overlapping chunks of nframesgrp frames from time-seri'
         write(*,'(A)') 'es data'
@@ -565,6 +595,11 @@ contains
         write(*,'(A)') 'is a program for particle tracking in time-series data'
         stop
     end subroutine print_doc_tseries_track
+
+    subroutine print_doc_txt2bin
+        write(*,'(A)') 'converts a text oritab to a binary oritab'
+        stop
+    end subroutine print_doc_txt2bin
 
     subroutine print_doc_unblur
         write(*,'(A)', advance='no') 'is a program for movie alignment or unblurring based the same principal strategy'
@@ -585,6 +620,12 @@ contains
         write(*,'(A)') 'is a pipelined unblur + ctffind program'
         stop
     end subroutine print_doc_unblur_ctffind
+
+    subroutine print_doc_vizoris
+        write(*,'(A)', advance='no') 'extract projection direction from an orientation direction for visualization in'
+        write(*,'(A)') 'UCSF Chimera'
+        stop
+    end subroutine print_doc_vizoris
 
     subroutine print_doc_volassemble
         write(*,'(A)', advance='no') 'is a program that assembles volume(s) when the reconstruction program (recvol) h'
@@ -612,8 +653,14 @@ contains
         stop
     end subroutine print_doc_volume_smat
 
+    subroutine print_doc_cga_hres_sel
+        write(*,'(A)', advance='no') 'is a distributed workflow for high-resolution particle selection based on FSC op'
+        write(*,'(A)') 'timisation with a compact genetic algorithm'
+        stop
+    end subroutine print_doc_cga_hres_sel
+
     subroutine print_doc_het_ensemble
-        write(*,'(A)') 'is a distributed workflow for heterogeneity analysis based on ensemble learning'
+        write(*,'(A)') 'is a distributed workflow for heterogeneity analysis'
         stop
     end subroutine print_doc_het_ensemble
 
@@ -622,6 +669,11 @@ contains
         write(*,'(A)') ' obtained with prime2D'
         stop
     end subroutine print_doc_ini3D_from_cavgs
+
+    subroutine print_doc_scale_stk_parts
+        write(*,'(A)') 'is a distributed workflow for scaling balanced partial stacks'
+        stop
+    end subroutine print_doc_scale_stk_parts
 
     subroutine print_doc_unblur_tomo
         write(*,'(A)', advance='no') 'is a distributed workflow for movie alignment or unblurring of tomographic movie'
@@ -638,6 +690,7 @@ contains
 
     subroutine list_all_simple_programs
         write(*,'(A)') 'automask2D'
+        write(*,'(A)') 'bin2txt'
         write(*,'(A)') 'binarise'
         write(*,'(A)') 'boxconvs'
         write(*,'(A)') 'cavgassemble'
@@ -652,14 +705,18 @@ contains
         write(*,'(A)') 'convert'
         write(*,'(A)') 'corrcompare'
         write(*,'(A)') 'ctffind'
+        write(*,'(A)') 'ctffit'
         write(*,'(A)') 'ctfops'
+        write(*,'(A)') 'dock_volpair'
         write(*,'(A)') 'dsymsrch'
         write(*,'(A)') 'eo_volassemble'
         write(*,'(A)') 'extract'
         write(*,'(A)') 'filter'
         write(*,'(A)') 'fsc'
+        write(*,'(A)') 'image_diff'
         write(*,'(A)') 'image_smat'
         write(*,'(A)') 'iminfo'
+        write(*,'(A)') 'intgpeaks'
         write(*,'(A)') 'makecavgs'
         write(*,'(A)') 'makedeftab'
         write(*,'(A)') 'makeoris'
@@ -707,11 +764,14 @@ contains
         write(*,'(A)') 'stackops'
         write(*,'(A)') 'sym_aggregate'
         write(*,'(A)') 'symsrch'
+        write(*,'(A)') 'tseries_backgr_subtr'
         write(*,'(A)') 'tseries_extract'
         write(*,'(A)') 'tseries_split'
         write(*,'(A)') 'tseries_track'
+        write(*,'(A)') 'txt2bin'
         write(*,'(A)') 'unblur'
         write(*,'(A)') 'unblur_ctffind'
+        write(*,'(A)') 'vizoris'
         write(*,'(A)') 'volassemble'
         write(*,'(A)') 'volaverager'
         write(*,'(A)') 'volops'
@@ -720,18 +780,23 @@ contains
     end subroutine list_all_simple_programs
 
     subroutine list_all_simple_distr_programs
+        write(*,'(A)') 'auto_refine3D'
+        write(*,'(A)') 'cga_hres_sel'
         write(*,'(A)') 'comlin_smat'
         write(*,'(A)') 'ctffind'
+        write(*,'(A)') 'ctffit'
         write(*,'(A)') 'het_ensemble'
         write(*,'(A)') 'ini3D_from_cavgs'
         write(*,'(A)') 'makecavgs'
         write(*,'(A)') 'pick'
+        write(*,'(A)') 'powerspecs'
         write(*,'(A)') 'preproc'
         write(*,'(A)') 'prime2D'
         write(*,'(A)') 'prime2D_stream'
         write(*,'(A)') 'prime3D'
         write(*,'(A)') 'prime3D_init'
         write(*,'(A)') 'recvol'
+        write(*,'(A)') 'scale_stk_parts'
         write(*,'(A)') 'symsrch'
         write(*,'(A)') 'tseries_track'
         write(*,'(A)') 'unblur'

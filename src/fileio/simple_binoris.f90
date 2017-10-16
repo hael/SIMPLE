@@ -412,7 +412,7 @@ contains
         ! transfer hash data
         do j=1,self%n_hash_vals
             select case(trim(self%hash_keys(j)))
-                case('smpd','kv','cs','fraca','phaseplate','dfx','dfy','angast','bfac','state','eo')
+                case('smpd','kv','cs','fraca','dfx','dfy','angast','bfac','state','eo','phshift')
                     call a%set(i, trim(self%hash_keys(j)), self%record(j))
             end select
         end do

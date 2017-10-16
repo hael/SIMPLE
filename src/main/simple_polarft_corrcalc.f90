@@ -73,6 +73,7 @@ type :: polarft_corrcalc
     type(fftw_carr_fft), allocatable :: fftdat_refs_even(:,:) !< for memoization of reference FFTs in accelerated gencorrs routines, even
     type(fftw_carr_fft), allocatable :: fftdat_refs_odd(:,:)  !< -"-, odd
     logical,             allocatable :: iseven(:)             !< eo assignment for gold-standard FSC
+    logical                          :: phaseplate            !< images obtained with the Volta
     type(c_ptr)                      :: plan_fwd_1            !< FFTW plans for gencorrs
     type(c_ptr)                      :: plan_fwd_2            !< -"-
     type(c_ptr)                      :: plan_bwd              !< -"-
@@ -169,16 +170,17 @@ contains
             call simple_stop ('only even logical dims supported; new; simple_polarft_corrcalc')
         endif
         ! set constants
-        self%pfromto = [p%fromp,p%top]                       !< from/to particle indices (in parallel execution)
-        self%nptcls  = p%top - p%fromp + 1                   !< the total number of particles in partition (logically indexded [fromp,top])
-        self%nrefs   = nrefs                                 !< the number of references (logically indexded [1,nrefs])
-        self%ring2   = p%ring2                               !< radius of molecule
-        self%nrots   = round2even(twopi * real(p%ring2))     !< number of in-plane rotations for one pft  (determined by radius of molecule)
-        self%pftsz   = self%nrots / 2                        !< size of reference (nrots/2) (number of vectors used for matching)
-        self%smpd    = p%smpd                                !< sampling distance
-        self%kfromto = p%kfromto                             !< Fourier index range
-        self%nk      = self%kfromto(2) - self%kfromto(1) + 1 !< # resolution elements
-        self%nthr    = p%nthr                                !< # OpenMP threads
+        self%pfromto    = [p%fromp,p%top]                       !< from/to particle indices (in parallel execution)
+        self%nptcls     = p%top - p%fromp + 1                   !< the total number of particles in partition (logically indexded [fromp,top])
+        self%nrefs      = nrefs                                 !< the number of references (logically indexded [1,nrefs])
+        self%ring2      = p%ring2                               !< radius of molecule
+        self%nrots      = round2even(twopi * real(p%ring2))     !< number of in-plane rotations for one pft  (determined by radius of molecule)
+        self%pftsz      = self%nrots / 2                        !< size of reference (nrots/2) (number of vectors used for matching)
+        self%smpd       = p%smpd                                !< sampling distance
+        self%kfromto    = p%kfromto                             !< Fourier index range
+        self%nk         = self%kfromto(2) - self%kfromto(1) + 1 !< # resolution elements
+        self%nthr       = p%nthr                                !< # OpenMP threads
+        self%phaseplate = p%tfplan%l_phaseplate                 !< images obtained with the Volta
         ! generate polar coordinates & eo assignment
         allocate( self%polar(2*self%nrots,self%kfromto(1):self%kfromto(2)),&
                  &self%angtab(self%nrots), self%iseven(self%pfromto(1):self%pfromto(2)), stat=alloc_stat)
@@ -311,7 +313,6 @@ contains
     !! \param irot rotation index
     !! \param k  index (third dim ptfs_refs)
     !! \param comp Fourier component
-    !!
     subroutine set_ref_fcomp( self, iref, irot, k, comp, iseven )
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iref, irot, k
@@ -329,7 +330,6 @@ contains
     !! \param irot rotation index
     !! \param k  index (third dim ptfs_ptcls)
     !! \param comp Fourier component
-    !!
     subroutine set_ptcl_fcomp( self, iptcl, irot, k, comp )
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iptcl, irot, k
@@ -396,8 +396,7 @@ contains
         pftsz = self%pftsz
     end function get_pftsz
 
-    !>  \brief  for getting the logical dimension of the original
-    !!          Cartesian image
+    !>  \brief  for getting the logical dimension of the original Cartesian image
     function get_ldim( self ) result( ldim )
         class(polarft_corrcalc), intent(in) :: self
         integer :: ldim(3)
@@ -605,17 +604,17 @@ contains
     !>  \brief create_polar_ctfmat  is for generating a matrix of CTF values
     !! \param tfun transfer function object
     !! \param dfx,dfy resolution along Fourier axes
-    !! \param angast astigmatic angle
+    !! \param angast astigmatic angle (degrees)
+    !! \param add_phshift additional phase shift (radians) introduced by the Volta
     !! \param endrot number of rotations
     !! \return ctfmat matrix with CTF values
-    !!
-    function create_polar_ctfmat( self, tfun, dfx, dfy, angast, endrot ) result( ctfmat )
+    function create_polar_ctfmat( self, tfun, dfx, dfy, angast, add_phshift, endrot ) result( ctfmat )
         !$ use omp_lib
         !$ use omp_lib_kinds
         use simple_ctf, only: ctf
         class(polarft_corrcalc), intent(inout) :: self
         class(ctf),              intent(inout) :: tfun
-        real(sp),                intent(in)    :: dfx, dfy, angast
+        real(sp),                intent(in)    :: dfx, dfy, angast, add_phshift
         integer,                 intent(in)    :: endrot
         real(sp), allocatable :: ctfmat(:,:)
         real(sp)              :: inv_ldim(3),hinv,kinv,spaFreqSq,ang
@@ -630,7 +629,11 @@ contains
                 kinv           = self%polar(irot+self%nrots,k)*inv_ldim(2)
                 spaFreqSq      = hinv*hinv+kinv*kinv
                 ang            = atan2(self%polar(irot+self%nrots,k),self%polar(irot,k))
-                ctfmat(irot,k) = tfun%eval(spaFreqSq,dfx,dfy,angast,ang)
+                if( self%phaseplate )then
+                    ctfmat(irot,k) = tfun%eval(spaFreqSq,dfx,dfy,angast,ang,add_phshift)
+                else
+                    ctfmat(irot,k) = tfun%eval(spaFreqSq,dfx,dfy,angast,ang)
+                endif
             end do
         end do
         !$omp end parallel do
@@ -643,7 +646,7 @@ contains
         class(oris),             intent(inout) :: a
         type(ctf)             :: tfun
         integer               :: iptcl
-        real(sp)              :: kv,cs,fraca,dfx,dfy,angast
+        real(sp)              :: kv,cs,fraca,dfx,dfy,angast,phshift
         logical               :: astig
         real(sp), allocatable :: ctfmat(:,:)
         astig = a%isthere('dfy')
@@ -658,8 +661,10 @@ contains
                 dfy    = a%get(iptcl, 'dfy'   )
                 angast = a%get(iptcl, 'angast')
             endif
+            phshift = 0.
+            if( self%phaseplate ) phshift = a%get(iptcl, 'phshift')
             tfun   = ctf(self%smpd, kv, cs, fraca)
-            ctfmat = self%create_polar_ctfmat(tfun, dfx, dfy, angast, self%pftsz)
+            ctfmat = self%create_polar_ctfmat(tfun, dfx, dfy, angast, phshift, self%pftsz)
             self%pfts_ptcls(iptcl,:,:) = self%pfts_ptcls(iptcl,:,:) * ctfmat
         end do
     end subroutine apply_ctf_to_ptcls

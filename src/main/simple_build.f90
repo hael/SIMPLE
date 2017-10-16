@@ -136,8 +136,8 @@ contains
                 write(*,'(a)') 'WARNING, your input doc has multiple states but NSTATES is not given'
             endif
         endif
-        DebugPrint   'created & filled object for orientations'
-        DebugPrint   'read deftab'
+        DebugPrint 'created & filled object for orientations'
+        DebugPrint 'read deftab'
         if( self%a%isthere('dfx') .and. self%a%isthere('dfy'))then
             p%tfplan%mode = 'astig'
         else if( self%a%isthere('dfx') )then
@@ -149,7 +149,7 @@ contains
             write(*,'(a)') 'WARNING! It looks like you want to do Wiener restoration (p%ctf .ne. no)'
             write(*,'(a)') 'but your input orientation table lacks defocus values'
         endif
-        DebugPrint   'did set number of dimensions and ctfmode'
+        DebugPrint 'did set number of dimensions and ctfmode'
         if( fforce_ctf ) call self%raise_hard_ctf_exception(p)
         ! generate discrete projection direction spaces
         call self%e%new( p%nspace )
@@ -493,6 +493,12 @@ contains
                 if( .not. params_present(2) ) write(*,*) 'ERROR! ctf .ne. no and input doc lacks cs'
                 if( .not. params_present(3) ) write(*,*) 'ERROR! ctf .ne. no and input doc lacks fraca'
                 if( .not. params_present(4) ) write(*,*) 'ERROR! ctf .ne. no and input doc lacks defocus'
+                stop
+            endif
+        endif
+        if( p%tfplan%l_phaseplate )then
+            if( .not. self%a%isthere('phshift') )then
+                write(*,*) 'ERROR! l_phaseplate = .true. and input doc lacks radian phshift'
                 stop
             endif
         endif

@@ -34,11 +34,13 @@ type, extends(image) :: reconstructor
     real                        :: winsz         = 1.           !< window half-width
     real                        :: alpha         = 2.           !< oversampling ratio
     real                        :: dfx=0., dfy=0., angast=0.    !< CTF params
+    real                        :: phshift       = 0.           !< additional phase shift from the Volta  
     integer                     :: wdim          = 0            !< dim of interpolation matrix
     integer                     :: lfny          = 0            !< Nyqvist Fourier index
     integer                     :: ldim_img(3)   = 0            !< logical dimension of the original image
     type(CTFFLAGTYPE)           :: ctf                          !< ctf flag <yes|no|mul|flip>
     logical                     :: tfastig            = .false. !< astigmatic CTF or not
+    logical                     :: phaseplate         = .false. !< Volta phaseplate images or not
     logical                     :: rho_allocated      = .false. !< existence of rho matrix
     logical                     :: rho_exp_allocated  = .false. !< existence of rho expanded matrix
     logical                     :: cmat_exp_allocated = .false. !< existence of Fourier components expanded matrix
@@ -104,6 +106,7 @@ contains
         end select
         self%tfastig = .false.
         if( p%tfplan%mode .eq. 'astig' ) self%tfastig = .true.
+        self%phaseplate = p%tfplan%l_phaseplate
         self%kbwin = kbinterpol(self%winsz,self%alpha)
         ! Work out dimensions of the rho array
         rho_shape(1)   = fdim(self%ldim_img(1))
@@ -249,7 +252,11 @@ contains
             sqSpatFreq = inv1*inv1+inv2*inv2
             ang        = atan2(vec(2), vec(1))
             ! calculate CTF and CTF**2 values
-            tval   = self%tfun%eval(sqSpatFreq, self%dfx, self%dfy, self%angast, ang) ! no bfactor 4 now
+            if( self%phaseplate )then
+                tval = self%tfun%eval(sqSpatFreq, self%dfx, self%dfy, self%angast, ang, self%phshift)
+            else
+                tval = self%tfun%eval(sqSpatFreq, self%dfx, self%dfy, self%angast, ang)
+            endif
             tvalsq = tval * tval
             if( self%ctf%flag == CTFFLAG_FLIP ) tval = abs(tval)
         else
@@ -278,6 +285,9 @@ contains
                 self%dfy = self%dfx
                 self%angast = 0.
             endif
+            ! additional phase shift from the Volta
+            self%phshift = 0.
+            if( self%phaseplate ) self%phshift = o%get('phshift')
         endif
         lims = self%loop_lims(2)
         x    = o%get('x')

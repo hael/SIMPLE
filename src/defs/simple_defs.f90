@@ -44,8 +44,9 @@ real(sp), parameter :: ATHRES_LIM   = 5.
 
 ! plan for the CTF
 type :: ctfplan
-    character(len=STDLEN) :: mode=''                 !< astig/noastig
-    character(len=STDLEN) :: flag=''                 !< flag: <mul|flip|no>
+    character(len=STDLEN) :: mode=''                !< astig/noastig
+    character(len=STDLEN) :: flag=''                !< flag: <mul|flip|no>
+    logical               :: l_phaseplate = .false. !< image obtained with Volta phaseplate
 end type ctfplan
 
 !! CTF flag type

@@ -190,6 +190,7 @@ contains
         call chdict%push('pgrp_known',    'point-group known a priori(yes|no){no}')
         call chdict%push('phaseplate',    'images obtained with Volta phaseplate(yes|no){no}')
         call chdict%push('phrand',        'phase randomize(yes|no){no}')
+        call chdict%push('phshiftunit',   'additional phase-shift unit (radians|degrees){radians}')
         call chdict%push('plaintexttab',  'plain text file of input parameters')
         call chdict%push('plot',          'make plot(yes|no){no}')
         call chdict%push('pproc',         'whether to perform volume post-processing(yes|no){yes}')

@@ -147,6 +147,7 @@ type :: params
     character(len=STDLEN) :: pdbfile=''           !< PDB file
     character(len=STDLEN) :: pdfile='pdfile.bin'
     character(len=STDLEN) :: pgrp='c1'            !< point-group symmetry(cn|dn|t|o|i)
+    character(len=STDLEN) :: phshiftunit='radians' !< additional phase-shift unit (radians|degrees){radians}
     character(len=STDLEN) :: plaintexttab=''      !< plain text file of input parameters
     character(len=STDLEN) :: prg=''               !< SIMPLE program to execute
     character(len=STDLEN) :: real_filter=''
@@ -507,6 +508,7 @@ contains
         call check_carg('pgrp_known',     self%pgrp_known)
         call check_carg('phaseplate',     self%phaseplate)
         call check_carg('phrand',         self%phrand)
+        call check_carg('phshiftunit',    self%phshiftunit)
         call check_carg('prg',            self%prg)
         call check_carg('projstats',      self%projstats)
         call check_carg('readwrite',      self%readwrite)
@@ -1108,7 +1110,9 @@ contains
             self%l_dose_weight = .true.
         endif
         ! prepare CTF plan
-        self%tfplan%flag = self%ctf
+        self%tfplan%flag         = self%ctf
+        self%tfplan%l_phaseplate = .false.
+        if( self%phaseplate .eq. 'yes' ) self%tfplan%l_phaseplate = .true.
         ! set logical pick flag
         self%l_pick = .false.
         if( self%dopick .eq. 'yes' ) self%l_pick = .true.

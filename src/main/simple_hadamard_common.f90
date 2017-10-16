@@ -244,7 +244,7 @@ contains
         logical,       intent(in)    :: is3D
         real, allocatable :: filter(:), frc(:)
         type(ctf)         :: tfun
-        real              :: x, y, dfx, dfy, angast
+        real              :: x, y, dfx, dfy, angast, phshift
         integer           :: frcind
         x      = o%get('x')
         y      = o%get('y')
@@ -276,6 +276,8 @@ contains
                     write(*,*) 'Unsupported p%tfplan%mode: ', trim(p%tfplan%mode)
                     stop 'simple_hadamard_common :: prepimg4align'
             end select
+            phshift = 0.
+            if( p%tfplan%l_phaseplate ) phshift = o%get('phshift')
         endif
         ! deal with CTF
         select case(p%ctf)
@@ -284,7 +286,7 @@ contains
             case('no')   ! do nothing
             case('yes')  ! do nothing
             case('flip') ! flip back
-                call tfun%apply(b%img, dfx, 'flip', dfy, angast)
+                call tfun%apply(b%img, dfx, 'flip', dfy, angast, add_phshift=phshift)
             case DEFAULT
                 stop 'Unsupported ctf mode; simple_hadamard_common :: prepimg4align'
         end select

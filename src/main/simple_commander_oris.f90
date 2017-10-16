@@ -140,6 +140,12 @@ contains
                 write(*,*) 'defocus params (dfx, dfy, anagst) need to be in inputted via oritab/deftab'
                 stop 'simple_commander_oris :: exec_makedeftab'
             endif
+            if( p%tfplan%l_phaseplate )then
+                if( .not. b%a%isthere('phshift') )then
+                    write(*,*) 'ERROR! l_phaseplate = .true. and input doc lacks radian phshift'
+                    stop
+                endif
+            endif
             do iptcl=1,nptcls
                 call b%a%set(iptcl, 'smpd',  p%smpd )
                 call b%a%set(iptcl, 'kv',    p%kv   )
@@ -150,7 +156,7 @@ contains
             call ctfparamfile%new(p%plaintexttab, 1)
             ndatlines = ctfparamfile%get_ndatalines()
             nrecs     = ctfparamfile%get_nrecs_per_line()
-            if( nrecs < 1 .or. nrecs > 3 .or. nrecs == 2 )then
+            if( nrecs < 1 .or. nrecs > 4 .or. nrecs == 2 )then
                 write(*,*) 'unsupported nr of rec:s in plaintexttab'
                 stop 'simple_commander_oris :: exec_makedeftab'
             endif
@@ -175,6 +181,14 @@ contains
                     case DEFAULT
                         stop 'unsupported angastunit; simple_commander_oris :: exec_makedeftab'
                 end select
+                select case(p%phshiftunit)
+                    case( 'radians' )
+                        ! nothing to do
+                    case( 'degrees' )
+                        if( nrecs == 4 ) line(4) = deg2rad(line(4))
+                    case DEFAULT
+                        stop 'unsupported phshiftunit; simple_commander_oris :: exec_makedeftab'
+                end select
                 call b%a%set(iptcl, 'smpd',  p%smpd )
                 call b%a%set(iptcl, 'kv',    p%kv   )
                 call b%a%set(iptcl, 'cs',    p%cs   )
@@ -183,6 +197,9 @@ contains
                 if( nrecs > 1 )then
                     call b%a%set(iptcl, 'dfy',    line(2))
                     call b%a%set(iptcl, 'angast', line(3))
+                endif
+                if( nrecs > 3 )then
+                    call b%a%set(iptcl, 'phshift', line(4))
                 endif
             end do
         else

@@ -21,10 +21,7 @@ if( scalar(@ARGV) < 1 ){
     die "Need to know which kind of documentation to generate (tex|web|f90)\n";
 }
 my $doc = $ARGV[0];
-my $SIMPLE_SOURCE_PATH = dirname($script_dirname);
-#print "Simple source path: ".$SIMPLE_SOURCE_PATH;
-#print "Working directory: ".$ENV{PWD};
-
+my $SIMPLE_SOURCE_PATH = '../';
 my $SIMPLE_INSTALL_PATH = $ENV{SIMPLE_PATH}; # must be the installation path
 my $simple_exec_src_abspath = $SIMPLE_SOURCE_PATH."/production/simple/simple_exec/simple_exec.f90";
 my $simple_distr_exec_src_abspath = $SIMPLE_SOURCE_PATH."/production/simple/simple_distr_exec/simple_distr_exec.f90";
