@@ -314,7 +314,7 @@ contains
         call b%img_match%fwd_ft
         DebugPrint  '*** simple_hadamard_common ***: finished prepimg4align'
     end subroutine prepimg4align
-
+    
     !>  \brief  prepares one cluster centre image for alignment
     subroutine prep2Dref( b, p, icls, center, xyz_in, xyz_out )
         use simple_estimate_ssnr, only: fsc2optlp

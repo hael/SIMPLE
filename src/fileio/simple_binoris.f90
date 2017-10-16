@@ -56,7 +56,7 @@ type binoris
     procedure, private :: read_record_1
     procedure, private :: read_record_2
     generic            :: read_record => read_record_1, read_record_2
-    procedure          :: read_ctfparams_and_state
+    procedure          :: read_ctfparams_state_eo
     ! byte indexing
     procedure          :: first_byte
     procedure          :: last_byte
@@ -403,7 +403,7 @@ contains
         endif
     end subroutine read_record_2
 
-    subroutine read_ctfparams_and_state( self, i, a )
+    subroutine read_ctfparams_state_eo( self, i, a )
         class(binoris), intent(inout) :: self
         integer,        intent(in)    :: i
         class(oris),    intent(inout) :: a
@@ -412,11 +412,11 @@ contains
         ! transfer hash data
         do j=1,self%n_hash_vals
             select case(trim(self%hash_keys(j)))
-                case('smpd','kv','cs','fraca','phaseplate','dfx','dfy','angast','bfac','state')
+                case('smpd','kv','cs','fraca','phaseplate','dfx','dfy','angast','bfac','state','eo')
                     call a%set(i, trim(self%hash_keys(j)), self%record(j))
             end select
         end do
-    end subroutine read_ctfparams_and_state
+    end subroutine read_ctfparams_state_eo
 
     ! byte indexing
 

@@ -27,8 +27,6 @@ contains
         integer,     optional, intent(out)   :: nst
         type(binoris) :: bos
         integer       :: irec
-        ! if( .not. file_exists(fname) )&
-!            call fileio_errmsg('binoris_io :: binread_oritab_1  '//  trim(fname) // 'does not exist in cwd') 
         if( .not. file_exists(fname) )then
             write(*,*) 'file: ', trim(fname)
             stop 'does not exist in cwd; binoris_io :: binread_oritab_1'
@@ -54,8 +52,6 @@ contains
         type(binoris) :: bos
         integer       :: irec
         type(oris)    :: os_peak
-        !if( .not. file_exists(fname))&
-         !   call fileio_errmsg('binoris_io :: binread_oritab_2  '//  trim(fname) // 'does not exist in cwd')
         if( .not. file_exists(fname) )then
             write(*,*) 'file: ', trim(fname)
             stop 'does not exist in cwd; binoris_io :: binread_oritab_2'
@@ -68,28 +64,26 @@ contains
         call bos%close
     end subroutine binread_oritab_2
  
-    subroutine binread_ctfparams_and_state( fname, a, fromto )
+    subroutine binread_ctfparams_state_eo( fname, a, fromto )
         character(len=*), intent(in)    :: fname
         class(oris),      intent(inout) :: a
         integer,          intent(in)    :: fromto(2)
         type(binoris) :: bos
         integer       :: irec
-     !   if( .not. file_exists(fname) )&
-     !       call fileio_errmsg('binoris_io :: binread_ctfparams_and_state  '//  trim(fname) // 'does not exist in cwd')
-                if( .not. file_exists(fname) )then
+        if( .not. file_exists(fname) )then
             write(*,*) 'file: ', trim(fname)
             stop 'does not exist in cwd; binoris_io :: binread_ctfparams_and_state'
         endif
         if( str_has_substr(fname,'.txt') )then
-            call a%read_ctfparams_and_state(fname)
+            call a%read_ctfparams_state_eo(fname)
         else
             call bos%open(fname)
             do irec=fromto(1),fromto(2)
-                call bos%read_ctfparams_and_state(irec, a)
+                call bos%read_ctfparams_state_eo(irec, a)
             end do
             call bos%close
         endif
-    end subroutine binread_ctfparams_and_state
+    end subroutine binread_ctfparams_state_eo
 
     function binread_nlines( fname ) result( nl )
         character(len=*), intent(in) :: fname
@@ -127,9 +121,7 @@ contains
         if( present(mask) )then
             mmask = mask
             if( .not. present(fname_fill_in) )&
-            &stop 'need fill in file in conjunction with mask; binoris_io :: binwrite_oritab_2'
-           ! if( .not. file_exists(fname_fill_in) )&
-            !    call fileio_errmsg('binoris_io :: binwrite_oritab_1  '//trim(fname_fill_in)// 'does not exist in cwd')
+                &stop 'need fill in file in conjunction with mask; binoris_io :: binwrite_oritab_2'
             if( .not. file_exists(fname_fill_in) )then
                 write(*,*) 'file: ', trim(fname_fill_in)
                 stop 'does not exist in cwd; binoris_io :: binwrite_oritab_2'
@@ -179,10 +171,8 @@ contains
         if( present(mask) )then
             mmask = mask
             if( .not. present(fname_fill_in) )&
-            &stop 'need fill in file in conjunction with mask; binoris_io :: binwrite_oritab_2'
-          !  if( .not. file_exists(fname_fill_in) )&
-           !     call fileio_errmsg('binoris_io :: binwrite_oritab_2  '//trim(fname_fill_in)//'does not exist in cwd')
-                        if( .not. file_exists(fname_fill_in) )then
+                &stop 'need fill in file in conjunction with mask; binoris_io :: binwrite_oritab_2'
+            if( .not. file_exists(fname_fill_in) )then
                 write(*,*) 'file: ', trim(fname_fill_in)
                 stop 'does not exist in cwd; binoris_io :: binwrite_oritab_2'
             endif

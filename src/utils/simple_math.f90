@@ -1024,6 +1024,25 @@ contains
         end do
     end function get_lplim
 
+    !>   returns the Fourier index of the resolution limit at corr
+    function get_lplim_at_corr( fsc, corr ) result( k )
+        real, intent(in) :: fsc(:), corr
+        integer :: n, k, h
+        n = size(fsc)
+        if( n < 3 )then
+            stop 'nonconforming size of fsc array; get_lplim_at_corr; simple_math'
+        endif
+        k = n-1
+        do h=3,n-1
+            if( fsc(h) >= corr )then
+                cycle
+            else
+                k = h
+                exit
+            endif
+        end do
+    end function get_lplim_at_corr
+
     !>   compares two Fourier Shell Correlation (FSC) functions
     logical function fsc1_ge_fsc2( fsc1, fsc2 )
         real, intent(in) :: fsc1(:), fsc2(:) !< Fourier shell correlation arrays

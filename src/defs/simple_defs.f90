@@ -92,6 +92,10 @@ integer, parameter :: GRIDCORR_MAXITS      = 5       !< # iterations for reconst
 ! constants for SHC inplane grid search
 real,    parameter :: SHC_INPL_TRSHWDTH    = 2.0     !< shift search halfwidht (pixels)
 
+! criterion for even/odd averaging in gold-FSC
+real,    parameter :: FSC4EOAVG = 0.7
+integer, parameter :: K4EOAVGLB = 4    ! Fourier index lower-bound
+
 ! global  variables
 integer(kind=c_int)       :: nthr_glob               !< number of threads global variable
 logical                   :: l_distr_exec_glob       !< global distributed execution flag

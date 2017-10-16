@@ -86,6 +86,7 @@ type :: polarft_corrcalc
     procedure          :: set_ref_fcomp
     procedure          :: set_ptcl_fcomp
     procedure          :: zero_ref
+    procedure          :: cp_even2odd_ref
     ! GETTERS
     procedure          :: get_pfromto
     procedure          :: get_nptcls
@@ -193,11 +194,15 @@ contains
         end do
         ! eo assignment
         if( present(eoarr) )then
-            where(eoarr == 0)
+            if( all(eoarr == - 1) )then
                 self%iseven = .true.
-            else where
-                self%iseven = .false.
-            end where
+            else
+                where(eoarr == 0)
+                    self%iseven = .true.
+                else where
+                    self%iseven = .false.
+                end where
+            endif
         else
             self%iseven = .true.
         endif
@@ -340,6 +345,12 @@ contains
         self%pfts_refs_even(iref,:,:) = zero
         self%pfts_refs_odd(iref,:,:)  = zero
     end subroutine zero_ref
+
+    subroutine cp_even2odd_ref( self, iref )
+        class(polarft_corrcalc), intent(inout) :: self
+        integer,                 intent(in)    :: iref
+        self%pfts_refs_odd(iref,:,:) = self%pfts_refs_even(iref,:,:)
+    end subroutine cp_even2odd_ref
 
     ! GETTERS
 

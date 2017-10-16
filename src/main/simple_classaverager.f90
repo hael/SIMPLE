@@ -61,6 +61,7 @@ type classaverager
     procedure, private :: apply_ctf_and_shift
     procedure          :: merge_eos_and_norm
     procedure          :: calc_and_write_frcs
+    procedure          :: eoavg
     ! I/O
     procedure          :: write
     procedure          :: read
@@ -678,12 +679,35 @@ contains
                     call even_img%mask(self%pp%msk, 'soft')
                     call odd_img%mask(self%pp%msk, 'soft')
                 endif
+                call even_img%fwd_ft
+                call odd_img%fwd_ft
                 call even_img%fsc(odd_img, res, frc)
                 call self%bp%projfrcs%set_frc(icls, frc, istate)
+                call even_img%kill
+                call odd_img%kill
             end do
         end do
         call self%bp%projfrcs%write(fname)
     end subroutine calc_and_write_frcs
+
+    !> \brief average low-resolution info between eo pairs
+    subroutine eoavg( self )
+        class(classaverager), intent(inout) :: self
+        integer :: find, istate, icls
+        do istate=1,self%nstates
+            do icls=1,self%ncls
+                find = self%bp%projfrcs%estimate_find_for_eoavg(icls, istate)
+                call self%cavgs_merged(istate,icls)%fwd_ft
+                call self%cavgs_even(istate,icls)%fwd_ft
+                call self%cavgs_odd(istate,icls)%fwd_ft
+                call self%cavgs_even(istate,icls)%insert_lowres(self%cavgs_merged(istate,icls), find)
+                call self%cavgs_odd(istate,icls)%insert_lowres(self%cavgs_merged(istate,icls), find)
+                call self%cavgs_merged(istate,icls)%bwd_ft
+                call self%cavgs_even(istate,icls)%bwd_ft
+                call self%cavgs_odd(istate,icls)%bwd_ft
+            end do
+        end do
+    end subroutine eoavg
 
     ! I/O
 

@@ -232,6 +232,7 @@ type :: image
     procedure          :: gen_argtransf_mats
     ! MODIFIERS
     procedure          :: insert
+    procedure          :: insert_lowres
     procedure          :: inv
     procedure          :: ran
     procedure          :: gauran
@@ -4821,6 +4822,32 @@ contains
         ! insert particle image matrix into micrograph image matrix
         self_out%rmat(xllim:xulim,yllim:yulim,1) = self_in%rmat(1:self_in%ldim(1),1:self_in%ldim(2),1)
     end subroutine insert
+
+    ! inserts the low-resolution information from one image into another
+    subroutine insert_lowres( self, self2insert, find )
+        class(image), intent(inout) :: self
+        class(image), intent(in)    :: self2insert
+        integer,      intent(in)    :: find
+        integer :: lims(3,2), phys(3), h, k, l, sh
+        complex :: comp
+        if( .not. self%ft        ) stop 'image to be modified assumed to be FTed; image :: insert_lowres'
+        if( .not. self2insert%ft ) stop 'image to insert assumed to be FTed; image :: insert_lowres'
+        lims = self%fit%loop_lims(2)
+        do h=lims(1,1),lims(1,2)
+            do k=lims(2,1),lims(2,2)
+                do l=lims(3,1),lims(3,2)
+                    ! find shell
+                    sh = nint(hyp(real(h),real(k),real(l)))
+                    if( sh <= find )then
+                        ! insert component
+                        phys = self%comp_addr_phys([h,k,l])
+                        comp = self2insert%get_fcomp([h,k,l],phys)
+                        call self%set_fcomp([h,k,l],phys,comp)
+                    endif
+                end do
+            end do
+        end do
+    end subroutine insert_lowres
 
     !>  \brief  is for inverting an image
     subroutine inv( self )

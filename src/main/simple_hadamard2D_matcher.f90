@@ -57,6 +57,9 @@ contains
         l_do_read = .true.
         if( p%l_distr_exec )then
             if( b%a%get_nevenodd() == 0 )then
+
+                print *, b%a%get_all('eo')
+
                 stop 'ERROR! no eo partitioning available; hadamard3D_matcher :: prime2D_exec'
             endif
             if( .not. cline%defined('refs') )&
@@ -238,9 +241,15 @@ contains
         call cavger%transf_oridat(b%a)
         call cavger%set_grid_flag(frac_srch_space >= FRAC_INTERPOL .and. which_iter > 3)
         call cavger%assemble_sums()
+        ! write results to disk
         if( p%l_distr_exec )then
             call cavger%write_partial_sums()
         else
+            p%frcs = 'frcs_iter'//int2str_pad(which_iter,3)//'.bin'
+            call cavger%calc_and_write_frcs(p%frcs)
+            call b%projfrcs%estimate_res()
+            call gen2Dclassdoc( b, p, 'classdoc.txt')
+            call cavger%eoavg
             p%refs      = 'cavgs_iter'//int2str_pad(which_iter,3)//p%ext
             p%refs_even = 'cavgs_iter'//int2str_pad(which_iter,3)//'_even'//p%ext
             p%refs_odd  = 'cavgs_iter'//int2str_pad(which_iter,3)//'_odd'//p%ext
@@ -249,16 +258,6 @@ contains
             call cavger%write(p%refs_odd,  'odd'   )
         endif
         if( L_BENCH ) rt_cavg = toc(t_cavg)
-
-        ! CALCULATE & WRITE TO DISK FOURIER RING CORRELATION
-        if( p%l_distr_exec )then
-            ! this is done in prime2D commander; cavgassemble
-        else
-            p%frcs = 'frcs_iter'//int2str_pad(which_iter,3)//'.bin'
-            call cavger%calc_and_write_frcs(p%frcs)
-            call b%projfrcs%estimate_res()
-            call gen2Dclassdoc( b, p, 'classdoc.txt')
-        endif
 
         ! DESTRUCT
         do iptcl=p%fromp,p%top
@@ -320,14 +319,12 @@ contains
         class(params), intent(inout) :: p
         integer,       intent(in)    :: which_iter
         type(ori) :: o
-        integer   :: cnt, iptcl, icls, pop, istate
-        integer   :: filtsz, filnum, io_stat
+        integer   :: cnt, iptcl, icls, pop, pop_even, pop_odd, istate, filtsz, filnum, io_stat
         logical   :: do_center
         real      :: xyz(3)
         if( .not. p%l_distr_exec ) write(*,'(A)') '>>> BUILDING PRIME2D SEARCH ENGINE'
         ! must be done here since constants in p are dynamically set
         call pftcc%new(p%ncls, p, nint(b%a%get_all('eo', [p%fromp,p%top])))
-        call pftcc%new(p%ncls, p)
         ! prepare the polarizers
         call b%img_match%init_polarizer(pftcc)
 
@@ -336,24 +333,34 @@ contains
         if( .not. p%l_distr_exec ) write(*,'(A)') '>>> BUILDING REFERENCES'
         do icls=1,p%ncls
             call progress(icls, p%ncls)
-            pop = 1
-            if( p%oritab /= '' ) pop = b%a%get_pop(icls, 'class')
+            pop      = 1
+            pop_even = 0
+            pop_odd  = 0
+            if( p%oritab /= '' )then
+                pop      = b%a%get_pop(icls, 'class'      )
+                pop_even = b%a%get_pop(icls, 'class', eo=0)
+                pop_odd  = b%a%get_pop(icls, 'class', eo=1)
+            endif
             if( pop > 0 )then
                 ! prepare the references
                 do_center = (p%oritab /= '' .and. (pop > MINCLSPOPLIM) .and. (which_iter > 2))
-
                 call cavger%get_cavg(icls, 'merged', b%img)
-                call prep2Dref(b, p, icls, center=do_center)
-                call b%img_match%polarize(pftcc, icls, isptcl=.false., iseven=.true.) ! 2 polar coords
-
-                ! call cavger%get_cavg(icls, 'even', b%img)
-                ! ! here we are determining the shifts and maps them back to classes
-                ! call prep2Dref(b, p, icls, center=do_center, xyz_out=xyz) 
-                ! call b%img_match%polarize(pftcc, icls, isptcl=.false., iseven=.true.) ! 2 polar coords
-                ! call cavger%get_cavg(icls, 'odd', b%img)
-                ! ! here we are using the shifts obtained for even (above) and do NOT map them back to classes
-                ! call prep2Dref(b, p, icls, center=do_center, xyz_in=xyz)
-                ! call b%img_match%polarize(pftcc, icls, isptcl=.false., iseven=.false.) ! 2 polar coords
+                ! here we are determining the shifts and map them back to classes
+                call prep2Dref(b, p, icls, center=do_center, xyz_out=xyz)
+                if( pop_even >= MINCLSPOPLIM .and. pop_odd >= MINCLSPOPLIM )then
+                    call cavger%get_cavg(icls, 'even', b%img)
+                    ! here we are passing in the shifts and do NOT map them back to classes
+                    call prep2Dref(b, p, icls, center=do_center, xyz_in=xyz) 
+                    call b%img_match%polarize(pftcc, icls, isptcl=.false., iseven=.true.) ! 2 polar coords
+                    call cavger%get_cavg(icls, 'odd', b%img)
+                    ! here we are passing in the shifts and do NOT map them back to classes
+                    call prep2Dref(b, p, icls, center=do_center, xyz_in=xyz)
+                    call b%img_match%polarize(pftcc, icls, isptcl=.false., iseven=.false.) ! 2 polar coords
+                else
+                    ! put the merged class average in both even and odd positions
+                    call b%img_match%polarize(pftcc, icls, isptcl=.false., iseven=.true. ) ! 2 polar coords
+                    call pftcc%cp_even2odd_ref(icls)
+                endif   
             endif
         end do
 

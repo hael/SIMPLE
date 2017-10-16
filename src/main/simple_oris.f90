@@ -112,7 +112,7 @@ type :: oris
     procedure          :: transf_proj2class
     ! I/O
     procedure          :: read
-    procedure          :: read_ctfparams_and_state
+    procedure          :: read_ctfparams_state_eo
     procedure, private :: write_1
     procedure, private :: write_2
     generic            :: write => write_1, write_2
@@ -1898,18 +1898,18 @@ contains
     end subroutine read
 
     !>  \brief  reads CTF parameters and state info from file
-    subroutine read_ctfparams_and_state( self, ctfparamfile )
+    subroutine read_ctfparams_state_eo( self, ctfparamfile )
         class(oris),       intent(inout) :: self
         character(len=*),  intent(in)    :: ctfparamfile
-        logical    :: params_are_there(10)
+        logical    :: params_are_there(11)
         integer    :: i
         type(oris) :: os_tmp
         if( .not. file_exists(ctfparamfile) )then
-            call simple_stop ("oris ; read_ctfparams_and_state; The file you are trying to read: "&
+            call simple_stop ("oris ; read_ctfparams_state_eo; The file you are trying to read: "&
                 &//trim(ctfparamfile)//' does not exist in cwd' )
         endif
         if( str_has_substr(ctfparamfile,'.bin') )then
-            call simple_stop('this method does not support binary files; simple_oris :: read_ctfparams_and_state')
+            call simple_stop('this method does not support binary files; simple_oris :: read_ctfparams_state_eo')
         endif
         call os_tmp%new(self%n)
         call os_tmp%read(ctfparamfile)
@@ -1923,6 +1923,7 @@ contains
         params_are_there(8)  = os_tmp%isthere('angast')
         params_are_there(9)  = os_tmp%isthere('bfac')
         params_are_there(10) = os_tmp%isthere('state')
+        params_are_there(11) = os_tmp%isthere('eo')
         do i=1,self%n
             if( params_are_there(1) )  call self%set(i, 'smpd',       os_tmp%get(i, 'smpd')      )
             if( params_are_there(2) )  call self%set(i, 'kv',         os_tmp%get(i, 'kv')        )
@@ -1934,9 +1935,10 @@ contains
             if( params_are_there(8) )  call self%set(i, 'angast',     os_tmp%get(i, 'angast')    )
             if( params_are_there(9) )  call self%set(i, 'bfac',       os_tmp%get(i, 'bfac')      )
             if( params_are_there(10) ) call self%set(i, 'state',      os_tmp%get(i, 'state')     )
+            if( params_are_there(11) ) call self%set(i, 'eo',         os_tmp%get(i, 'eo')        )
         end do
         call os_tmp%kill
-    end subroutine read_ctfparams_and_state
+    end subroutine read_ctfparams_state_eo
 
     !>  \brief  writes orientation info to file
     subroutine write_1( self, orifile, fromto )

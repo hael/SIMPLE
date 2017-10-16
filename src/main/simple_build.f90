@@ -20,7 +20,7 @@ use simple_projection_frcs,  only: projection_frcs
 use simple_ran_tabu,         only: ran_tabu
 !! import functions
 use simple_timer,            only: tic, toc, timer_int_kind
-use simple_binoris_io,       only: binread_ctfparams_and_state, binread_oritab
+use simple_binoris_io,       only: binread_ctfparams_state_eo, binread_oritab
 implicit none
 
 public :: build, test_build
@@ -118,7 +118,7 @@ contains
             call self%a%spiral(p%nsym, p%eullims)
         else
             ! we need the oritab to override the deftab in order not to loose parameters
-            if( p%deftab /= '' ) call binread_ctfparams_and_state(p%deftab, self%a, [1,p%nptcls])
+            if( p%deftab /= '' ) call binread_ctfparams_state_eo(p%deftab, self%a, [1,p%nptcls])
             if( p%oritab /= '' )then
                 if( .not. cline%defined('nstates') )then
                     if( p%nstates > 1 )then
