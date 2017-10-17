@@ -10,13 +10,14 @@ public :: classaverager
 private
 
 type ptcl_record
-    integer              :: pind   = 0      !< particle index in stack
-    integer              :: eo     = -1     !< even is 0, odd is 1, default is -1
-    real                 :: pw     = 0.0    !< particle weight
     type(ctf)            :: tfun            !< transfer function
-    real                 :: dfx    = 0.0    !< defocus in x (microns)
-    real                 :: dfy    = 0.0    !< defocus in y (microns)
-    real                 :: angast = 0.0    !< angle of astigmatism (in degrees)
+    integer              :: pind    = 0     !< particle index in stack
+    integer              :: eo      = -1    !< even is 0, odd is 1, default is -1
+    real                 :: pw      = 0.0   !< particle weight
+    real                 :: dfx     = 0.0   !< defocus in x (microns)
+    real                 :: dfy     = 0.0   !< defocus in y (microns)
+    real                 :: angast  = 0.0   !< angle of astigmatism (in degrees)
+    real                 :: phshift = 0.0   !< additional phase shift from the Volta
     integer, allocatable :: classes(:)      !< class assignments (can be many per particle in 3D case, hence the array)
     integer, allocatable :: states(:)       !< state assignments
     real,    allocatable :: ows(:)          !< orientation weights
@@ -28,14 +29,14 @@ type classaverager
     private
     class(build),      pointer     :: bp => null()             !< pointer to build
     class(params),     pointer     :: pp => null()             !< pointer to params
-    type(CTFFLAGTYPE)              :: ctf                          !< ctf flag <yes|no|mul|flip>
-    integer                        :: istart  = 0, iend = 0    !< particle index range
-    integer                        :: partsz  = 0              !< size of partition
-    integer                        :: ncls    = 0              !< # classes
+    type(CTFFLAGTYPE)              :: ctf                      !< ctf flag <yes|no|mul|flip>
+    integer                        :: istart     = 0, iend = 0 !< particle index range
+    integer                        :: partsz     = 0           !< size of partition
+    integer                        :: ncls       = 0           !< # classes
     integer                        :: nstates    = 0           !< # states
     integer                        :: ldim(3)    = [0,0,0]     !< logical dimension of image
     integer                        :: ldim_pd(3) = [0,0,0]     !< logical dimension of image, padded
-    real                           :: smpd       = 0.
+    real                           :: smpd       = 0.          !< sampling distance
     type(ptcl_record), allocatable :: precs(:)                 !< particle records     
     type(image),       allocatable :: cavgs_even(:,:)          !< class averages
     type(image),       allocatable :: cavgs_odd(:,:)           !< -"-
@@ -43,6 +44,7 @@ type classaverager
     type(image),       allocatable :: ctfsqsums_even(:,:)      !< CTF**2 sums for Wiener normalisation
     type(image),       allocatable :: ctfsqsums_odd(:,:)       !< -"-
     type(image),       allocatable :: ctfsqsums_merged(:,:)    !< -"-
+    logical                        :: phaseplate    = .false.  !< Volta phaseplate images or not
     logical                        :: l_is_class    = .true.   !< for prime2D or not
     logical                        :: l_hard_assign = .true.   !< npeaks == 1 or not
     logical                        :: exists        = .false.  !< to flag instance existence 
@@ -126,8 +128,9 @@ contains
             case('flip')
                 self%ctf%flag = CTFFLAG_FLIP
         end select
+        self%phaseplate = p%tfplan%l_phaseplate
         ! smpd
-        self%smpd = p%smpd
+        self%smpd       = p%smpd
         ! set ldims
         self%ldim       = [self%pp%box,self%pp%box,1]
         self%ldim_pd    = nint(KBALPHA) * self%ldim
@@ -195,6 +198,8 @@ contains
                     self%precs(cnt)%dfy    = self%precs(cnt)%dfx
                     self%precs(cnt)%angast = 0.
             end select
+            self%precs(cnt)%phshift = 0.
+            if( self%phaseplate ) self%precs(cnt)%phshift = a_here%get(iptcl,'phshift')
         end do
         self%l_hard_assign = .true.
         if( present(prime3Dsrchobj) )then
@@ -424,20 +429,17 @@ contains
         integer,         allocatable :: ioris(:)
         complex   :: comp, zero, oshift
         real      :: loc(2), mat(2,2), winsz, pw, tval, tvalsq, vec(2)
-        integer   :: icls, iptcl, icls_pop, iprec, iori, cnt_progress
-        integer   :: i, nbatches, batch, batchsz, lims(3,2), istate, sh, nyq
-        integer   :: logi(3), phys(3), win(2,2), win4w(2,2)
-        integer   :: cyc_lims(3,2), alloc_stat, wdim, h, k, hh, kk
-        if( .not. self%pp%l_distr_exec )then
-            write(*,'(a)') '>>> ASSEMBLING CLASS SUMS'
-        endif
+        integer   :: cnt_progress, nbatches, batch, icls_pop, iprec, iori, i, batchsz
+        integer   :: lims(3,2), istate, sh, nyq, logi(3), phys(3), win(2,2), win4w(2,2)
+        integer   :: cyc_lims(3,2), alloc_stat, wdim, h, k, hh, kk, icls, iptcl
+        if( .not. self%pp%l_distr_exec ) write(*,'(a)') '>>> ASSEMBLING CLASS SUMS'
         ! init
         call self%init_cavgs_sums
-        kbwin      = kbinterpol(KBWINSZ, KBALPHA)
-        zero       = cmplx(0.,0.)
-        !winsz      = KBWINSZ
-        winsz      = 1.
-        wdim       = ceiling(KBALPHA*winsz) + 1
+        kbwin = kbinterpol(KBWINSZ, KBALPHA)
+        zero  = cmplx(0.,0.)
+        winsz = KBWINSZ
+        winsz = 1. ! 4 now
+        wdim  = ceiling(KBALPHA*winsz) + 1
         ! state loop 
         cnt_progress = 0
         do istate=1,self%nstates
@@ -463,16 +465,19 @@ contains
                         call read_img_from_stk( self%bp, self%pp, iptcl )
                         ! create padded imgs
                         call padded_imgs(i)%new(self%ldim_pd, self%pp%smpd)
+
+                        ! @@@@@@@@@@@@@@@@@@@@@
                         call prep4cgrid(self%bp%img, padded_imgs(i), self%pp%msk, kbwin)
+                        ! @@@@@@@@@@@@@@@@@@@@@
                     enddo
                     lims     = padded_imgs(1)%loop_lims(2)
                     cyc_lims = padded_imgs(1)%loop_lims(3)
                     nyq      = padded_imgs(1)%get_lfny(1)
                     allocate(cmat_even(cyc_lims(1,1):cyc_lims(1,2),cyc_lims(2,1):cyc_lims(2,2)),&
-                        &cmat_odd(cyc_lims(1,1):cyc_lims(1,2),cyc_lims(2,1):cyc_lims(2,2)),&
-                        &rho_even(cyc_lims(1,1):cyc_lims(1,2),cyc_lims(2,1):cyc_lims(2,2)),&
-                        &rho_odd(cyc_lims(1,1):cyc_lims(1,2),cyc_lims(2,1):cyc_lims(2,2)),&
-                        &w(wdim, wdim), stat=alloc_stat)
+                            &cmat_odd(cyc_lims(1,1):cyc_lims(1,2),cyc_lims(2,1):cyc_lims(2,2)),&
+                            &rho_even(cyc_lims(1,1):cyc_lims(1,2),cyc_lims(2,1):cyc_lims(2,2)),&
+                            &rho_odd(cyc_lims(1,1):cyc_lims(1,2),cyc_lims(2,1):cyc_lims(2,2)),&
+                            &w(wdim, wdim), stat=alloc_stat)
                     call alloc_errchk('assemble_sums; simple_classaverager', alloc_stat)
                     cmat_even = zero
                     cmat_odd  = zero
@@ -496,16 +501,16 @@ contains
                             do k=cyc_lims(2,1),cyc_lims(2,2)
                                 sh = nint(hyp(real(h),real(k)))
                                 if( sh > nyq + 1 )cycle
-                                ! fetch component & shift
-                                logi   = [h,k,0]
-                                phys   = padded_imgs(i)%comp_addr_phys(logi)
-                                comp   = padded_imgs(i)%get_fcomp(logi, phys)
-                                oshift = padded_imgs(i)%oshift(logi, [-self%precs(iprec)%shifts(iori,1),-self%precs(iprec)%shifts(iori,2),0.])
+                                ! fetch component & calc shift
+                                logi     = [h,k,0]
+                                phys     = padded_imgs(i)%comp_addr_phys(logi)
+                                comp     = padded_imgs(i)%get_fcomp(logi, phys)
+                                oshift   = padded_imgs(i)%oshift(logi, [-self%precs(iprec)%shifts(iori,1),-self%precs(iprec)%shifts(iori,2),0.])
                                 ! rotation
-                                vec    = real([h,k])
-                                loc    = matmul(vec,mat)
+                                vec      = real([h,k])
+                                loc      = matmul(vec,mat)
                                 ! kernel limits
-                                win    = sqwin_2d(loc(1),loc(2), winsz )
+                                win      = sqwin_2d(loc(1),loc(2), winsz )
                                 win(1,1) = max(win(1,1), cyc_lims(1,1))
                                 win(1,2) = min(win(1,2), cyc_lims(1,2))
                                 win(2,1) = max(win(2,1), cyc_lims(2,1))
@@ -562,10 +567,10 @@ contains
                     enddo
                     !!$omp end parallel do
                     ! batch summation
-                    call self%cavgs_even(istate,icls)%add( batch_imgsum_even )
-                    call self%cavgs_odd(istate,icls)%add( batch_imgsum_odd )
-                    call self%ctfsqsums_even(istate,icls)%add( batch_rhosum_even )
-                    call self%ctfsqsums_odd(istate,icls)%add( batch_rhosum_odd )
+                    call self%cavgs_even(istate,icls)%add( batch_imgsum_even)
+                    call self%cavgs_odd(istate,icls)%add( batch_imgsum_odd)
+                    call self%ctfsqsums_even(istate,icls)%add( batch_rhosum_even)
+                    call self%ctfsqsums_odd(istate,icls)%add( batch_rhosum_odd)
                     ! batch cleanup
                     do i=1,batchsz
                         call padded_imgs(i)%kill
@@ -653,8 +658,13 @@ contains
             sqSpatFreq = inv1*inv1+inv2*inv2
             ang        = atan2(vec(2), vec(1))
             ! calculate CTF and CTF**2 values
-            tval = self%precs(iprec)%tfun%eval(sqSpatFreq, self%precs(iprec)%dfx,&
-                &self%precs(iprec)%dfy, self%precs(iprec)%angast, ang) ! no bfactor 4 now
+            if( self%phaseplate )then
+                tval = self%precs(iprec)%tfun%eval(sqSpatFreq, self%precs(iprec)%dfx,&
+                    &self%precs(iprec)%dfy, self%precs(iprec)%angast, ang, self%precs(iprec)%phshift)
+            else
+                tval = self%precs(iprec)%tfun%eval(sqSpatFreq, self%precs(iprec)%dfx,&
+                    &self%precs(iprec)%dfy, self%precs(iprec)%angast, ang)
+            endif
             tvalsq = tval * tval
             if( self%ctf%flag == CTFFLAG_FLIP ) tval = abs(tval)
         else
