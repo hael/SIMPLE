@@ -41,6 +41,7 @@ add_custom_target(simple_gen_doc_f90
 file(GLOB DEFS_src "${CMAKE_CURRENT_SOURCE_DIR}/defs/*.f[90][08]" PARENT_SCOPE)
 file(GLOB FILEIO_src "${CMAKE_CURRENT_SOURCE_DIR}/fileio/*.f[90][08]" PARENT_SCOPE)
 file(GLOB UTILS_src "${CMAKE_CURRENT_SOURCE_DIR}/utils/*.f90" PARENT_SCOPE)
+file(GLOB FGSL_src "${CMAKE_CURRENT_SOURCE_DIR}/external_libs/fgsl/*.f90" "${CMAKE_CURRENT_SOURCE_DIR}/external_libs/fgsl/*.c" PARENT_SCOPE)
 if ( USE_CUDA )
   file(GLOB CUDA_src "${CMAKE_CURRENT_SOURCE_DIR}/cuda/*.f[90][08]" PARENT_SCOPE)
 #  list(APPEND UTILS_src ${UTILS_src} ${CUDA_src})
@@ -57,7 +58,7 @@ list(APPEND SIMPLE_src
   "${CMAKE_BINARY_DIR}/lib/simple/simple_args.f90")
 
 #set(CORELIB_src  ${DEFS_src} ${UTILS_src} ${SIMPLE_src})
-list(APPEND SIMPLECORELIB  ${DEFS_src} ${UTILS_src} ${FILEIO_src} ${SIMPLE_src})
+list(APPEND SIMPLECORELIB  ${DEFS_src} ${UTILS_src} ${FILEIO_src} ${SIMPLE_src} ${FGSL_src})
 # message(STATUS "SIMPLE LIBRARY SOURCES: ${SIMPLECORELIB}")
 
 ##########################################################################

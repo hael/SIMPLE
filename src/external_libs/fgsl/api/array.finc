@@ -1,0 +1,338 @@
+!-*-f90-*-
+!
+!  API: Array support
+!
+! vectors (real)
+!
+  function fgsl_vector_init(type)
+    real(fgsl_double), intent(in) :: type
+    type(fgsl_vector) :: fgsl_vector_init
+    fgsl_vector_init%gsl_vector = fgsl_aux_vector_double_init()
+  end function fgsl_vector_init
+! Note: The following requires the actual argument
+! array having the TARGET attribute. Otherwise
+! being passed by reference is not guaranteed by the Fortran standard.
+  function fgsl_vector_align(array, len, fvec, size, offset, stride)
+    integer(fgsl_size_t), intent(in) :: len, size, offset, stride
+    real(fgsl_double), dimension(len), target, intent(in) :: array
+    type(fgsl_vector), intent(inout) :: fvec
+    integer(fgsl_int) :: fgsl_vector_align
+!
+    fgsl_vector_align = fgsl_aux_vector_double_align(array, len, &
+         fvec%gsl_vector, size, offset, stride)
+  end function fgsl_vector_align
+  function fgsl_vector_pointer_align(ptr, fvec)
+    real(fgsl_double), pointer, intent(out) :: ptr(:)
+    type(fgsl_vector), intent(in) :: fvec
+    integer(fgsl_int) :: fgsl_vector_pointer_align
+!
+    real(fgsl_double), pointer :: fp_local(:)
+    type(c_ptr) :: cp
+    integer(fgsl_size_t) :: size, stride
+! tests
+!    real(fgsl_double) :: cc(3)
+    size = fgsl_aux_vector_double_size(fvec%gsl_vector)
+    stride = fgsl_aux_vector_double_stride(fvec%gsl_vector)
+    if (stride == 0) then
+       fgsl_vector_pointer_align = fgsl_einval
+    else
+       cp = gsl_vector_ptr(fvec%gsl_vector,0_fgsl_size_t)
+!       cc(1) = gsl_vector_get(fvec%gsl_vector,0_c_size_t)
+!       cc(2) = gsl_vector_get(fvec%gsl_vector,1_c_size_t)
+!       cc(3) = gsl_vector_get(fvec%gsl_vector,2_c_size_t)
+       call c_f_pointer(cp, fp_local, (/ size*stride /))
+!       write(6, *) 'size, stride, fp_local: ',size,stride,fp_local(1:3),cc(1:3)
+       ptr => fp_local(1:size*stride:stride)
+       fgsl_vector_pointer_align = fgsl_success
+    end if
+  end function fgsl_vector_pointer_align
+  subroutine fgsl_vector_to_array(result, source)
+    real(fgsl_double), intent(inout) :: result(:)
+    type(fgsl_vector), intent(in) :: source
+!
+    integer(fgsl_size_t) :: i, n, k
+    k = size(result)
+    n = min(k,fgsl_aux_vector_double_size(source%gsl_vector))
+!    write(6,*) 'result length: ',size(result)
+!    write(6,*) 'vector length: ', &
+!    fgsl_aux_vector_double_size(source%gsl_vector)
+    do i=1,n
+       result(i) = gsl_vector_get(source%gsl_vector,i-1)
+    end do
+    do i=n+1,size(result)
+       result(i) = 0.0_fgsl_double
+    end do
+  end subroutine fgsl_vector_to_array
+  subroutine fgsl_vector_free(fvec)
+    type(fgsl_vector), intent(inout) :: fvec
+!    call gsl_vector_free(fvec%gsl_vector)
+    call fgsl_aux_vector_double_free(fvec%gsl_vector)
+  end subroutine fgsl_vector_free
+  subroutine fgsl_vector_c_ptr(res, src) 
+    type(c_ptr), intent(in) :: src
+    type(fgsl_vector), intent(out) :: res
+    res%gsl_vector = src
+  end subroutine fgsl_vector_c_ptr
+  function fgsl_vector_status(vector)
+    type(fgsl_vector), intent(in) :: vector
+    logical :: fgsl_vector_status
+    fgsl_vector_status = .true.
+    if (.not. c_associated(vector%gsl_vector)) fgsl_vector_status = .false.
+  end function fgsl_vector_status
+  function fgsl_sizeof_vector(w)
+    type(fgsl_vector), intent(in) :: w
+    integer(fgsl_size_t) :: fgsl_sizeof_vector
+    fgsl_sizeof_vector = gsl_aux_sizeof_vector()
+  end function fgsl_sizeof_vector
+!
+! vectors (complex)
+!
+  function fgsl_vector_complex_init(type)
+    complex(fgsl_double_complex), intent(in) :: type
+    type(fgsl_vector_complex) :: fgsl_vector_complex_init
+    fgsl_vector_complex_init%gsl_vector_complex = fgsl_aux_vector_complex_init()
+  end function fgsl_vector_complex_init
+! Note: The following requires the actual argument
+! array having the TARGET attribute. Otherwise
+! being passed by reference is not guaranteed by the Fortran standard.
+  function fgsl_vector_complex_align(array, len, fvec, size, offset, stride)
+    integer(fgsl_size_t), intent(in) :: len, size, offset, stride
+    complex(fgsl_double_complex), dimension(len), target, intent(in) :: array
+    type(fgsl_vector_complex), intent(inout) :: fvec
+    integer(fgsl_int) :: fgsl_vector_complex_align
+!
+    fgsl_vector_complex_align = &
+         fgsl_aux_vector_complex_align(c_loc(array), len, &
+         fvec%gsl_vector_complex, size, offset, stride)
+  end function fgsl_vector_complex_align
+  function fgsl_vector_complex_pointer_align(ptr, fvec)
+    complex(fgsl_double_complex), pointer, intent(out) :: ptr(:)
+    type(fgsl_vector_complex), intent(in) :: fvec
+    integer(fgsl_int) :: fgsl_vector_complex_pointer_align
+!
+    complex(fgsl_double_complex), pointer :: fp_local(:)
+    type(c_ptr) :: cp
+    integer(fgsl_size_t) :: size, stride
+! tests
+!    real(fgsl_double) :: cc(3)
+    size = fgsl_aux_vector_complex_size(fvec%gsl_vector_complex)
+    stride = fgsl_aux_vector_complex_stride(fvec%gsl_vector_complex)
+    if (stride == 0) then
+       fgsl_vector_complex_pointer_align = fgsl_einval
+    else
+       cp = gsl_vector_complex_ptr(fvec%gsl_vector_complex,0_fgsl_size_t)
+!       cc(1) = gsl_vector_complex_get(fvec%gsl_vector_complex,0_c_size_t)
+!       cc(2) = gsl_vector_complex_get(fvec%gsl_vector_complex,1_c_size_t)
+!       cc(3) = gsl_vector_complex_get(fvec%gsl_vector_complex,2_c_size_t)
+       call c_f_pointer(cp, fp_local, (/ size*stride /))
+!       write(6, *) 'size, stride, fp_local: ',size,stride,fp_local(1:3),cc(1:3)
+       ptr => fp_local(1:size*stride:stride)
+       fgsl_vector_complex_pointer_align = fgsl_success
+    end if
+  end function fgsl_vector_complex_pointer_align
+  subroutine fgsl_vector_complex_to_array(result, source)
+    complex(fgsl_double_complex), intent(inout) :: result(:)
+    type(fgsl_vector_complex), intent(in) :: source
+!    type(gsl_complex) :: aux
+!
+    integer(fgsl_size_t) :: i, n, k
+    k = size(result)
+    n = min(k,fgsl_aux_vector_complex_size(source%gsl_vector_complex))
+!    write(6,*) 'result length: ',size(result)
+!    write(6,*) 'vector_complex length: ', &
+!         fgsl_aux_vector_complex_size(source%gsl_vector_complex)
+    do i=1,n
+       result(i) = gsl_vector_complex_get(source%gsl_vector_complex,i-1)
+!       aux = gsl_vector_complex_get(source%gsl_vector_complex,i-1)
+!       result(i) = aux
+!       write(6, *) 'i=',i,' res = ',result(i)
+    end do
+    do i=n+1,size(result)
+       result(i) = 0.0_fgsl_double
+    end do
+  end subroutine fgsl_vector_complex_to_array
+  subroutine fgsl_vector_complex_free(fvec)
+    type(fgsl_vector_complex), intent(inout) :: fvec
+!    call gsl_vector_complex_free(fvec%gsl_vector_complex)
+    call fgsl_aux_vector_complex_free(fvec%gsl_vector_complex)
+  end subroutine fgsl_vector_complex_free
+  subroutine fgsl_vector_complex_c_ptr(res, src) 
+    type(c_ptr), intent(in) :: src
+    type(fgsl_vector_complex), intent(out) :: res
+    res%gsl_vector_complex = src
+  end subroutine fgsl_vector_complex_c_ptr
+  function fgsl_vector_complex_status(vector_complex)
+    type(fgsl_vector_complex), intent(in) :: vector_complex
+    logical :: fgsl_vector_complex_status
+    fgsl_vector_complex_status = .true.
+    if (.not. c_associated(vector_complex%gsl_vector_complex)) fgsl_vector_complex_status = .false.
+  end function fgsl_vector_complex_status
+  function fgsl_sizeof_vector_complex(w)
+    type(fgsl_vector_complex), intent(in) :: w
+    integer(fgsl_size_t) :: fgsl_sizeof_vector_complex
+    fgsl_sizeof_vector_complex = gsl_aux_sizeof_vector_complex()
+  end function fgsl_sizeof_vector_complex
+
+!
+! matrices (real)
+!
+  function fgsl_matrix_init(type)
+    real(fgsl_double), intent(in) :: type
+    type(fgsl_matrix) :: fgsl_matrix_init
+    fgsl_matrix_init%gsl_matrix = fgsl_aux_matrix_double_init()
+  end function fgsl_matrix_init
+! here again, TARGET needed for actual argument
+  function fgsl_matrix_align(array, lda, n, m, fmat)
+    integer(fgsl_size_t), intent(in) :: lda, n, m
+    real(fgsl_double), dimension(lda, m), target, intent(in) :: array
+    type(fgsl_matrix), intent(inout) :: fmat
+    integer(fgsl_int) :: fgsl_matrix_align
+!
+    fgsl_matrix_align = fgsl_aux_matrix_double_align(c_loc(array), lda, &
+         n, m, fmat%gsl_matrix)
+  end function fgsl_matrix_align
+  function fgsl_matrix_pointer_align(ptr, fmat)
+    real(fgsl_double), pointer, intent(out) :: ptr(:,:)
+    type(fgsl_matrix), intent(in) :: fmat
+    integer(fgsl_int) :: fgsl_matrix_pointer_align
+!
+    real(fgsl_double), pointer :: fp_local(:,:)
+    type(c_ptr) :: cp
+    integer(fgsl_size_t) :: m, n, lda
+    call fgsl_aux_matrix_double_size(fmat%gsl_matrix, lda, n, m)
+    cp = gsl_matrix_ptr(fmat%gsl_matrix,0_fgsl_size_t,0_fgsl_size_t)
+    call c_f_pointer(cp, fp_local, (/ lda , m /))
+    ptr => fp_local(1:n,1:m)
+    fgsl_matrix_pointer_align = fgsl_success
+  end function fgsl_matrix_pointer_align
+  subroutine fgsl_matrix_to_array(result, source)
+    real(fgsl_double), intent(inout) :: result(:,:)
+    type(fgsl_matrix), intent(in) :: source
+!
+    integer(fgsl_size_t) :: i, j, kl, m, n, ml, nl, lda
+    call fgsl_aux_matrix_double_size(source%gsl_matrix, lda, n, m)
+    
+    kl = size(result,1)
+    nl = min(kl,n)
+    kl = size(result,2)
+    ml = min(kl,m)
+!    write(6, *) 'Number of rows: ', nl, n
+!    write(6, *) 'Number of cols: ', ml, m
+    do j=1,ml
+       do i=1,nl
+          result(i,j) = gsl_matrix_get(source%gsl_matrix,j-1,i-1)
+       end do
+    end do
+    do j=1,ml
+       do i=nl+1,size(result,1)
+          result(i,j) = 0.0_fgsl_double
+       end do
+    end do
+    do j=ml+1,size(result,2)
+       do i=1,size(result,1)
+          result(i,j) = 0.0_fgsl_double
+       end do
+    end do
+  end subroutine fgsl_matrix_to_array
+  subroutine fgsl_matrix_free(fvec)
+    type(fgsl_matrix), intent(inout) :: fvec
+    call fgsl_aux_matrix_double_free(fvec%gsl_matrix)
+  end subroutine fgsl_matrix_free
+  subroutine fgsl_matrix_c_ptr(res, src) 
+    type(c_ptr), intent(in) :: src
+    type(fgsl_matrix), intent(out) :: res
+    res%gsl_matrix = src
+  end subroutine fgsl_matrix_c_ptr
+  function fgsl_matrix_status(matrix)
+    type(fgsl_matrix), intent(in) :: matrix
+    logical :: fgsl_matrix_status
+    fgsl_matrix_status = .true.
+    if (.not. c_associated(matrix%gsl_matrix)) fgsl_matrix_status = .false.
+  end function fgsl_matrix_status
+  function fgsl_sizeof_matrix(w)
+    type(fgsl_matrix), intent(in) :: w
+    integer(fgsl_size_t) :: fgsl_sizeof_matrix
+    fgsl_sizeof_matrix = gsl_aux_sizeof_matrix()
+  end function fgsl_sizeof_matrix
+!
+! matrices (complex)
+!
+  function fgsl_matrix_complex_init(type)
+    complex(fgsl_double_complex), intent(in) :: type
+    type(fgsl_matrix_complex) :: fgsl_matrix_complex_init
+    fgsl_matrix_complex_init%gsl_matrix_complex = fgsl_aux_matrix_complex_init()
+  end function fgsl_matrix_complex_init
+! here again, TARGET needed for actual argument
+  function fgsl_matrix_complex_align(array, lda, n, m, fmat)
+    integer(fgsl_size_t), intent(in) :: lda, n, m
+    complex(fgsl_double_complex), dimension(lda, m), target, intent(in) :: array
+    type(fgsl_matrix_complex), intent(inout) :: fmat
+    integer(fgsl_int) :: fgsl_matrix_complex_align
+!
+    fgsl_matrix_complex_align = &
+         fgsl_aux_matrix_complex_align(c_loc(array), lda, &
+         n, m, fmat%gsl_matrix_complex)
+  end function fgsl_matrix_complex_align
+  function fgsl_matrix_complex_pointer_align(ptr, fmat)
+    complex(fgsl_double_complex), pointer, intent(out) :: ptr(:,:)
+    type(fgsl_matrix_complex), intent(in) :: fmat
+    integer(fgsl_int) :: fgsl_matrix_complex_pointer_align
+!
+    complex(fgsl_double_complex), pointer :: fp_local(:,:)
+    type(c_ptr) :: cp
+    integer(fgsl_size_t) :: m, n, lda
+    call fgsl_aux_matrix_complex_size(fmat%gsl_matrix_complex, lda, n, m)
+    cp = gsl_matrix_complex_ptr(fmat%gsl_matrix_complex,0_fgsl_size_t,0_fgsl_size_t)
+    call c_f_pointer(cp, fp_local, (/ lda , m /))
+    ptr => fp_local(1:n,1:m)
+    fgsl_matrix_complex_pointer_align = fgsl_success
+  end function fgsl_matrix_complex_pointer_align
+  subroutine fgsl_matrix_complex_to_array(result, source)
+    complex(fgsl_double_complex), intent(inout) :: result(:,:)
+    type(fgsl_matrix_complex), intent(in) :: source
+!
+    integer(fgsl_size_t) :: i, j, kl, m, n, ml, nl, lda
+    call fgsl_aux_matrix_complex_size(source%gsl_matrix_complex, lda, n, m)
+    
+    kl = size(result,1)
+    nl = min(kl,n)
+    kl = size(result,2)
+    ml = min(kl,m)
+!    write(6, *) 'Number of rows: ', nl, n
+!    write(6, *) 'Number of cols: ', ml, m
+    do j=1,ml
+       do i=1,nl
+          result(i,j) = gsl_matrix_complex_get(source%gsl_matrix_complex,j-1,i-1)
+       end do
+    end do
+    do j=1,ml
+       do i=nl+1,size(result,1)
+          result(i,j) = 0.0_fgsl_double
+       end do
+    end do
+    do j=ml+1,size(result,2)
+       do i=1,size(result,1)
+          result(i,j) = 0.0_fgsl_double
+       end do
+    end do
+  end subroutine fgsl_matrix_complex_to_array
+  subroutine fgsl_matrix_complex_free(fvec)
+    type(fgsl_matrix_complex), intent(inout) :: fvec
+    call fgsl_aux_matrix_complex_free(fvec%gsl_matrix_complex)
+  end subroutine fgsl_matrix_complex_free
+  subroutine fgsl_matrix_complex_c_ptr(res, src) 
+    type(c_ptr), intent(in) :: src
+    type(fgsl_matrix_complex), intent(out) :: res
+    res%gsl_matrix_complex = src
+  end subroutine fgsl_matrix_complex_c_ptr
+  function fgsl_matrix_complex_status(matrix_complex)
+    type(fgsl_matrix_complex), intent(in) :: matrix_complex
+    logical :: fgsl_matrix_complex_status
+    fgsl_matrix_complex_status = .true.
+    if (.not. c_associated(matrix_complex%gsl_matrix_complex)) fgsl_matrix_complex_status = .false.
+  end function fgsl_matrix_complex_status
+  function fgsl_sizeof_matrix_complex(w)
+    type(fgsl_matrix_complex), intent(in) :: w
+    integer(fgsl_size_t) :: fgsl_sizeof_matrix_complex
+    fgsl_sizeof_matrix_complex = gsl_aux_sizeof_matrix_complex()
+  end function fgsl_sizeof_matrix_complex

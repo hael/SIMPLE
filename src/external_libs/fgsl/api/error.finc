@@ -1,0 +1,56 @@
+!-*-f90-*-
+!
+!  API: Error treatment
+!  FIXME: introduction of own error handler requires
+!
+  function fgsl_set_error_handler(new_handler)
+    type(fgsl_error_handler_t), intent(in) :: new_handler
+    type(fgsl_error_handler_t) :: fgsl_set_error_handler
+    fgsl_set_error_handler%gsl_error_handler_t = &
+         gsl_set_error_handler(new_handler%gsl_error_handler_t)
+  end function fgsl_set_error_handler
+  function fgsl_set_error_handler_off()
+    type(fgsl_error_handler_t) :: fgsl_set_error_handler_off
+    fgsl_set_error_handler_off%gsl_error_handler_t = &
+         gsl_set_error_handler_off()
+  end function fgsl_set_error_handler_off
+  function fgsl_strerror(errno) 
+    integer(fgsl_int), intent(in) :: errno
+    character(kind=fgsl_char,len=fgsl_strmax) :: fgsl_strerror
+!
+    type(c_ptr) :: name
+!
+!    write(6, *) 'Error is ',errno
+    name = gsl_strerror(errno)
+    fgsl_strerror = fgsl_name(name)
+  end function fgsl_strerror
+  subroutine fgsl_error(reason, file, line, errno)
+    character(kind=fgsl_char,len=*), intent(in) :: &
+         reason, file
+    integer(fgsl_int), intent(in) :: line, errno
+    call gsl_error(reason//c_null_char, file//c_null_char, line, errno)
+  end subroutine fgsl_error
+  function fgsl_error_handler_status(error_handler_t)
+    type(fgsl_error_handler_t), intent(in) :: error_handler_t
+    logical :: fgsl_error_handler_status
+    fgsl_error_handler_status = .true.
+    if (.not. c_associated(error_handler_t%gsl_error_handler_t)) &
+         fgsl_error_handler_status = .false.
+  end function fgsl_error_handler_status
+!
+! initialize own error handler
+!
+  function fgsl_error_handler_init(handler_sr)
+    interface
+       subroutine handler_sr(reason, file, line, errno) bind(c)
+         import :: c_ptr, c_int
+         type(c_ptr), value :: reason, file
+         integer(c_int), value :: line, errno
+       end subroutine handler_sr
+    end interface
+    type(fgsl_error_handler_t) :: fgsl_error_handler_init
+!
+    type(c_funptr) :: fptr
+    fptr = c_funloc(handler_sr)
+    fgsl_error_handler_init%gsl_error_handler_t = fptr
+  end function fgsl_error_handler_init
