@@ -2,7 +2,7 @@ module simple_kbinterpol_mem
 #include "simple_lib.f08"
 implicit none
 
-public :: kbinterpol_mem
+public :: kbinterpol_mem, test_kbinterpol_mem
 private
 
 type kbinterpol_mem
@@ -13,6 +13,7 @@ type kbinterpol_mem
 contains
 	procedure :: new
 	procedure :: get_wdim
+	procedure :: get_w
 	procedure :: memoize_kb
 	procedure :: fetch
 	procedure :: kill
@@ -23,7 +24,7 @@ contains
 	subroutine new( self, inpl_rots, lims )
 		class(kbinterpol_mem), intent(inout) :: self
 		real,                  intent(in)    :: inpl_rots(:)
-		real,                  intent(in)    :: lims(2,2)
+		integer,               intent(in)    :: lims(2,2)
 		! set constants
 		self%nrots = size(inpl_rots)
         self%wdim  = ceiling(KBALPHA * KBWINSZ) + 1
@@ -40,6 +41,12 @@ contains
 		class(kbinterpol_mem), intent(in) :: self
 		get_wdim = self%wdim
 	end function get_wdim
+
+	function get_w( self ) result( w )
+		class(kbinterpol_mem), intent(in) :: self
+		real, allocatable :: w(:,:)
+		allocate(w(self%wdim,self%wdim))
+	end function get_w
 
 	subroutine memoize_kb( self, kbwin )
 		use simple_kbinterpol, only: kbinterpol
@@ -76,12 +83,12 @@ contains
 	    !$omp end parallel do
 	end subroutine memoize_kb
 
-	function fetch( self, irot, h, k ) result( w )
+	subroutine fetch( self, irot, h, k, w )
 		class(kbinterpol_mem), intent(in) :: self
 		integer,               intent(in) :: irot, h, k
-		real :: w(self%wdim,self%wdim)
+		real,                  intent(out):: w(self%wdim,self%wdim)
 		w = self%w(irot,h,k,:,:)
-	end function fetch
+	end subroutine fetch
 
 	subroutine kill( self )
 		class(kbinterpol_mem), intent(inout) :: self
@@ -92,28 +99,49 @@ contains
 	end subroutine kill
 
 	subroutine test_kbinterpol_mem
-		use simple_ftiter, only: ftiter
-		use simple_timer   ! use all in there
-		type(kbinterpol_mem) :: kbmem
-		type(ftiter)         :: fit
-		integer, parameter   :: NROTS=359, NTST=100
-		real    :: lims(3,2)
-		real    :: inpl_rots(NROTS)
-		integer :: jrot, itst
-		integer(timer_int_kind) :: t_init, t_prep_pftcc
-		real(timer_int_kind)    :: rt_init, rt_prep_pftcc
+		use simple_ftiter,     only: ftiter
+		use simple_timer       ! use all in there
+		use simple_kbinterpol, only: kbinterpol
+		type(kbinterpol_mem)    :: kbmem
+		type(kbinterpol)        :: kbwin
+		type(ftiter)            :: fit
+		integer, parameter      :: NROTS=359, NTST=100
+		real                    :: inpl_rots(NROTS)
+		real, allocatable       :: w(:,:)
+		integer                 :: jrot, itst, h, k, lims(3,2)
+		integer(timer_int_kind) :: t_mem, t_sample
+		real(timer_int_kind)    :: rt_mem, rt_sample
+		kbwin = kbinterpol(KBWINSZ, KBALPHA)
 		do jrot=1,NROTS
 			inpl_rots(jrot) = real(jrot)
 		end do
 		call fit%new([240,240,1], 1.06)
 		lims = fit%loop_lims(3)
 		call kbmem%new(inpl_rots, lims(:2,:))
+		w = kbmem%get_w()
+		t_mem = tic()
 		do itst=1,NTST
-
+			call kbmem%memoize_kb(kbwin)
 		end do
-
-
-
+		rt_mem = toc(t_mem)
+		print *, 't(memoize): ', rt_mem
+		t_sample = tic()
+		call kbmem%memoize_kb(kbwin)
+		do itst=1,NTST
+			!$omp parallel do default(shared) private(jrot,h,k,w)&
+			!$omp schedule(static) proc_bind(close) collapse(3)
+			do jrot=1,NROTS
+				do h=lims(1,1),lims(1,2)
+					do k=lims(2,1),lims(2,2)
+						call kbmem%fetch(jrot, h, k, w)
+					end do
+				end do
+			end do
+			!$omp end parallel do
+		end do
+		rt_sample = toc(t_sample)
+		print *, 't(sample): ', rt_sample
+		print *, 'speedup  : ', rt_mem/rt_sample
 	end subroutine test_kbinterpol_mem
 
 end module simple_kbinterpol_mem

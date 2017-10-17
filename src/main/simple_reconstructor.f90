@@ -410,15 +410,14 @@ contains
                         phys(1) = h + 1
                         phys(2) = k + 1 + self%ldim_img(2) * MERGE(1,0,k < 0)
                         phys(3) = m + 1 + self%ldim_img(3) * MERGE(1,0,m < 0)
-                        call self%add2_cmat_at(phys, comp)
+                        call self%set_cmat_at(phys, comp)
                     else
                         phys(1) = -h + 1
                         phys(2) = -k + 1 + self%ldim_img(2) * MERGE(1,0,-k < 0)
                         phys(3) = -m + 1 + self%ldim_img(3) * MERGE(1,0,-m < 0)
-                        call self%add2_cmat_at(phys, conjg(comp))
+                        call self%set_cmat_at(phys, conjg(comp))
                     endif
-                    self%rho(phys(1),phys(2),phys(3)) = &
-                        &self%rho(phys(1),phys(2),phys(3)) + self%rho_exp(h,k,m)
+                    self%rho(phys(1),phys(2),phys(3)) = self%rho_exp(h,k,m)
                 end do
             end do
         end do
