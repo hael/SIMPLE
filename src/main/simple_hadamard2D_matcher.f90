@@ -236,7 +236,6 @@ contains
         ! WIENER RESTORATION OF CLASS AVERAGES
         if( L_BENCH ) t_cavg = tic()
         call cavger%transf_oridat(b%a)
-        call cavger%set_grid_flag(frac_srch_space >= FRAC_INTERPOL .and. which_iter > 3)
         call cavger%assemble_sums()
         ! write results to disk
         if( p%l_distr_exec )then
