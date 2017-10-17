@@ -2429,19 +2429,21 @@ contains
         class(image),           intent(inout) :: self_sum
         class(image),           intent(inout) :: self_rho
         class(image), optional, intent(inout) :: self_out
-        integer :: h, k, l, lims(3,2), phys(3)
+        integer :: h, k, l, lims(3,2), phys(3), nyq, sh
         logical :: self_out_present
         ! set constants
         lims = self_sum%loop_lims(2)
+        nyq  = self_sum%get_lfny(1)
         self_out_present = present(self_out)
-        if( self_out_present ) call self_out%copy(self_sum)
-        !$omp parallel do collapse(3) default(shared) private(h,k,l,phys)&
+        if( self_out_present )call self_out%copy(self_sum)
+        !$omp parallel do collapse(3) default(shared) private(sh,h,k,l,phys)&
         !$omp schedule(static) proc_bind(close)
         do h=lims(1,1),lims(1,2)
             do k=lims(2,1),lims(2,2)
                 do l=lims(3,1),lims(3,2)
+                    sh = nint(hyp(real(h),real(k),real(l)))
                     phys = self_sum%comp_addr_phys([h,k,l])
-                    if( abs(real(self_rho%cmat(phys(1),phys(2),phys(3)))) > 1e-6 )then
+                    if(sh <= nyq .and. abs(real(self_rho%cmat(phys(1),phys(2),phys(3)))) > 1.e-20 )then
                         if( self_out_present )then
                             call self_out%div([h,k,l],&
                             real(self_rho%cmat(phys(1),phys(2),phys(3))),phys_in=phys)

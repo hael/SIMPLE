@@ -443,7 +443,7 @@ contains
         integer,         allocatable :: ioris(:)
         complex   :: comp, zero, oshift
         real      :: loc(2), mat(2,2), winsz, pw, tval, tvalsq, vec(2)
-        integer   :: icls, iptcl, icls_pop, iprec, iori, cnt_progress
+        integer   :: icls, iptcl, icls_pop, iprec, iori, cnt_progress, dim_exp
         integer   :: i, nbatches, batch, batchsz, cnt, lims(3,2), lims_alloc(3,2), istate
         integer   :: logi(3), phys(3), win(2,2)
         integer   :: cyc_lims(3,2), alloc_stat, wdim, incr, h, k, l, m
@@ -487,10 +487,11 @@ contains
                         call prep4cgrid(batch_imgs(i), padded_imgs(i), self%pp%msk, kbwin)
                     enddo
                     if( self%l_grid )then ! Fourier rotation
-                        lims       = padded_imgs(1)%loop_lims(2)
-                        lims_alloc(:,1) = lims(:,1) - wdim
-                        lims_alloc(:,2) = lims(:,2) + wdim
-                        cyc_lims = padded_imgs(1)%loop_lims(3)
+                        cyc_lims        = padded_imgs(1)%loop_lims(3)
+                        dim_exp         = ceiling(sqrt(2.) * maxval(abs(lims)) + winsz)
+                        lims            = padded_imgs(1)%loop_lims(2)
+                        lims_alloc(:,1) = -dim_exp
+                        lims_alloc(:,2) = dim_exp
                         allocate( cmat_even(lims_alloc(1,1):lims_alloc(1,2),lims_alloc(2,1):lims_alloc(2,2)),&
                                  &cmat_odd(lims_alloc(1,1):lims_alloc(1,2),lims_alloc(2,1):lims_alloc(2,2)),&
                                  &rho_even(lims_alloc(1,1):lims_alloc(1,2),lims_alloc(2,1):lims_alloc(2,2)),&
@@ -557,23 +558,44 @@ contains
                         call batch_imgsum_odd%set_ft(.true.)
                         call batch_rhosum_even%set_ft(.true.)
                         call batch_rhosum_odd%set_ft(.true.)
-                        !$omp parallel do collapse(2) default(shared) private(h,k,logi,phys,comp)&
+                        phys(3) = 0
+                        !$omp parallel do collapse(2) default(shared) private(h,k,phys,comp)&
                         !$omp schedule(static) proc_bind(close)
-                        do h=lims(1,1),lims(1,2)
-                            do k=lims(2,1),lims(2,2)
-                                logi = [h, k, 0]
-                                phys = batch_imgsum_even%comp_addr_phys(logi)
-                                comp = cmat_even(h, k)
-                                call batch_imgsum_even%set_fcomp(logi, phys, comp)
-                                comp = cmat_odd(h, k)
-                                call batch_imgsum_odd%set_fcomp(logi, phys, comp)
-                                comp = cmplx(rho_even(h, k),0.)
-                                call batch_rhosum_even%set_fcomp(logi, phys, comp)
-                                comp = cmplx(rho_odd(h, k),0.)
-                                call batch_rhosum_odd%set_fcomp(logi, phys, comp)
+                        do h=cyc_lims(1,1),cyc_lims(1,2)
+                            do k=cyc_lims(2,1),cyc_lims(2,2)
+                                if (h > 0) then
+                                    phys(1) = h + 1
+                                    phys(2) = k + 1 + self%ldim_pd(2) * MERGE(1,0,k < 0)
+                                    call batch_imgsum_even%add2_cmat_at(phys, cmat_even(h,k))
+                                    call batch_imgsum_odd%add2_cmat_at( phys, cmat_odd(h,k) )
+                                else
+                                    phys(1) = -h + 1
+                                    phys(2) = -k + 1 + self%ldim_pd(2) * MERGE(1,0,-k < 0)
+                                    call batch_imgsum_even%add2_cmat_at(phys, conjg(cmat_even(h,k)))
+                                    call batch_imgsum_odd%add2_cmat_at( phys, conjg(cmat_odd(h,k)) )
+                                endif
+                                call batch_rhosum_even%add2_cmat_at(phys, cmplx(rho_even(h,k),0.))
+                                call batch_rhosum_odd%add2_cmat_at( phys, cmplx(rho_odd(h,k) ,0.))
                             end do 
                         end do
                         !$omp end parallel do
+                        ! !$omp parallel do collapse(2) default(shared) private(h,k,logi,phys,comp)&
+                        ! !$omp schedule(static) proc_bind(close)
+                        ! do h=lims(1,1),lims(1,2)
+                        !     do k=lims(2,1),lims(2,2)
+                        !         logi = [h, k, 0]
+                        !         phys = batch_imgsum_even%comp_addr_phys(logi)
+                        !         comp = cmat_even(h, k)
+                        !         call batch_imgsum_even%set_fcomp(logi, phys, comp)
+                        !         comp = cmat_odd(h, k)
+                        !         call batch_imgsum_odd%set_fcomp(logi, phys, comp)
+                        !         comp = cmplx(rho_even(h, k),0.)
+                        !         call batch_rhosum_even%set_fcomp(logi, phys, comp)
+                        !         comp = cmplx(rho_odd(h, k),0.)
+                        !         call batch_rhosum_odd%set_fcomp(logi, phys, comp)
+                        !     end do 
+                        ! end do
+                        ! !$omp end parallel do
                         ! gridding cleanup
                         deallocate(cmat_even, cmat_odd, rho_even, rho_odd, w)
                     else

@@ -679,12 +679,8 @@ contains
                     call even_img%mask(self%pp%msk, 'soft')
                     call odd_img%mask(self%pp%msk, 'soft')
                 endif
-                call even_img%fwd_ft
-                call odd_img%fwd_ft
                 call even_img%fsc(odd_img, res, frc)
                 call self%bp%projfrcs%set_frc(icls, frc, istate)
-                call even_img%kill
-                call odd_img%kill
             end do
         end do
         call self%bp%projfrcs%write(fname)
