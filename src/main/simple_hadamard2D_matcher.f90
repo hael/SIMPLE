@@ -48,15 +48,12 @@ contains
         real    :: corr_thresh, frac_srch_space, skewness, extr_thresh
         logical :: l_do_read, doprint
 
-        ! CREATE THE POLARFT_CORRCALC OBJECT
-        call pftcc%new(p%ncls, p, nint(b%a%get_all('eo', [p%fromp,p%top])))
-
         ! PREP REFERENCES
         if( L_BENCH )then
             t_init = tic()
             t_tot  = tic()
         endif
-        call cavger%new(b, p, 'class', pftcc%get_rots_for_applic())
+        call cavger%new(b, p, 'class')
         l_do_read = .true.
         if( p%l_distr_exec )then
             if( b%a%get_nevenodd() == 0 )then
@@ -321,6 +318,9 @@ contains
         logical   :: do_center
         real      :: xyz(3)
         if( .not. p%l_distr_exec ) write(*,'(A)') '>>> BUILDING PRIME2D SEARCH ENGINE'
+
+        ! CREATE THE POLARFT_CORRCALC OBJECT
+        call pftcc%new(p%ncls, p, nint(b%a%get_all('eo', [p%fromp,p%top])))
         ! prepare the polarizer
         call b%img_match%init_polarizer(pftcc)
 
