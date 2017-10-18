@@ -25,6 +25,7 @@ contains
 		class(kbinterpol_mem), intent(inout) :: self
 		real,                  intent(in)    :: inpl_rots(:)
 		integer,               intent(in)    :: lims(2,2)
+		call self%kill
 		! set constants
 		self%nrots = size(inpl_rots)
         self%wdim  = ceiling(KBALPHA * KBWINSZ) + 1
@@ -58,15 +59,15 @@ contains
 		!$omp parallel do default(shared) private(irot,mat,h,k,vec,loc,win,l,incr)&
 		!$omp schedule(static) proc_bind(close)
 		do irot=1,self%nrots
-			mat = rotmat2d( -self%inpl_rots(irot) )
+			mat = rotmat2d( self%inpl_rots(irot) )
 			! Fourier components loop
 	        do h=self%lims(1,1),self%lims(1,2)
 	            do k=self%lims(2,1),self%lims(2,2)
 	                ! calculate non-uniform sampling location
-	                vec   = [real(h), real(k)]
-	                loc   = matmul(vec,mat)
+	                vec = [real(h),real(k)]
+	                loc = matmul(vec,mat)
 	                ! window
-	                win = sqwin_2d(loc(1),loc(2), KBWINSZ)
+	                win = sqwin_2d(loc(1),loc(2), kbwin%get_winsz(), self%lims)
 	                ! kernel values
 	                self%w(irot,h,k,:,:) = 1.
 	                do l=1,self%wdim

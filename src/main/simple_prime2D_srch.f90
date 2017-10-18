@@ -137,8 +137,8 @@ contains
         type(ori) :: o_new, o_old
         real      :: euls(3), mi_class, mi_inpl, mi_joint
         ! get previous orientation
-        o_old = self%a_ptr%get_ori(self%iptcl)
-        o_new = o_old
+        o_old    = self%a_ptr%get_ori(self%iptcl)
+        o_new    = o_old
         ! get in-plane angle
         euls     = 0.
         euls(3)  = 360. - self%pftcc_ptr%get_rot(self%best_rot) ! change sgn to fit convention
@@ -157,16 +157,17 @@ contains
             mi_joint = mi_joint + 1.
         endif 
         mi_joint = mi_joint / 2.
-        ! updates parameters
+        ! update parameters
         call o_new%set_shift(self%prev_shvec + self%best_shvec) ! shifts must be obtained by vector addition
-        call o_new%set('class',     real(self%best_class))
-        call o_new%set('corr',      self%best_corr)
-        call o_new%set('specscore', self%specscore)
-        call o_new%set('dist_inpl', rad2deg( o_old.inplrotdist.o_new ))
-        call o_new%set('mi_class',  mi_class)
-        call o_new%set('mi_inpl',   mi_inpl)
-        call o_new%set('mi_joint',  mi_joint)
-        call o_new%set('frac',      100.*(real(self%nrefs_eval)/real(self%nrefs)))
+        call o_new%set('inpl',       real(self%best_rot))
+        call o_new%set('class',      real(self%best_class))
+        call o_new%set('corr',       self%best_corr)
+        call o_new%set('specscore',  self%specscore)
+        call o_new%set('dist_inpl',  rad2deg( o_old.inplrotdist.o_new ))
+        call o_new%set('mi_class',   mi_class)
+        call o_new%set('mi_inpl',    mi_inpl)
+        call o_new%set('mi_joint',   mi_joint)
+        call o_new%set('frac',       100.*(real(self%nrefs_eval)/real(self%nrefs)))
         ! checker
         if( .not. is_a_number(self%best_corr) )then
             print *, 'FLOATING POINT EXCEPTION ALARM; simple_prime2D_srch :: update_best'

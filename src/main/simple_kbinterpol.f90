@@ -47,12 +47,12 @@ contains
         self%oneoW  = 1.0 / self%W
     end subroutine new
 
-    real function get_winsz( self )
+    pure real function get_winsz( self )
         class(kbinterpol), intent(in) :: self
         get_winsz = self%Whalf
     end function get_winsz
 
-    real function get_alpha( self )
+    pure real function get_alpha( self )
         class(kbinterpol), intent(in) :: self
         get_alpha = self%alpha
     end function get_alpha

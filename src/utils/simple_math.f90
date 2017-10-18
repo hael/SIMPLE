@@ -115,6 +115,21 @@ interface gen_polar_coords
     module procedure gen_polar_coords_2
 end interface
 
+interface sqwin_1d
+    module procedure sqwin_1d_1
+    module procedure sqwin_1d_2
+end interface
+
+interface sqwin_2d
+    module procedure sqwin_2d_1
+    module procedure sqwin_2d_2
+end interface
+
+interface sqwin_3d
+    module procedure sqwin_3d_1
+    module procedure sqwin_3d_2
+end interface
+
 logical, parameter,private :: warn=.false.
 
 contains
@@ -570,67 +585,68 @@ contains
         c = d
     end subroutine shft
 
-    ! !>    one-dimensional symmetric hard window
-    pure function sqwin_1d( x, winsz ) result( win )
+    !> one-dimensional symmetric hard window
+    pure function sqwin_1d_1( x, winsz ) result( win )
         real, intent(in) :: x       !< input point
         real, intent(in) :: winsz   !< window size
-        integer          :: iwinsz, win(2) !< starts & stops
+        integer :: iwinsz, win(2) 
         win(:) = nint(x)
-        iwinsz = ceiling(winsz)
+        iwinsz = ceiling(winsz - 0.5)
         win(1) = win(1)-iwinsz
         win(2) = win(2)+iwinsz
-    end function sqwin_1d
+    end function sqwin_1d_1
 
-    !>    two-dimensional symmetric hard window
-    !! \param x,y      input points
-    pure function sqwin_2d( x, y, winsz ) result( win )
+    !> one-dimensional symmetric hard window with limits
+    pure function sqwin_1d_2( x, winsz, lims ) result( win )
+        real,    intent(in) :: x       !< input point
+        real,    intent(in) :: winsz   !< window size
+        integer, intent(in) :: lims(2) !< bounds 
+        integer :: iwinsz, win(2) 
+        win(:) = nint(x)
+        iwinsz = ceiling(winsz - 0.5)
+        win(1) = max(lims(1), win(1) - iwinsz)
+        win(2) = min(lims(2), win(2) + iwinsz)
+    end function sqwin_1d_2
+
+    !> two-dimensional symmetric hard window
+    pure function sqwin_2d_1( x, y, winsz ) result( win )
         real, intent(in) :: x,y      !< input point
         real, intent(in) :: winsz    !< window size
-        integer          :: win(2,2) !< starts & stops
+        integer :: win(2,2) 
         win(1,:) = sqwin_1d(x,winsz)
         win(2,:) = sqwin_1d(y,winsz)
-    end function sqwin_2d
+    end function sqwin_2d_1
 
-    !>    three-dimensional symmetric hard window
-    !! \param x,y,z      input points
-    pure function sqwin_3d( x, y, z, winsz ) result( win )
+    !> two-dimensional symmetric hard window with limits
+    pure function sqwin_2d_2( x, y, winsz, lims ) result( win )
+        real,    intent(in) :: x,y       !< input point
+        real,    intent(in) :: winsz     !< window size
+        integer, intent(in) :: lims(2,2) !< bounds 
+        integer :: win(2,2) 
+        win(1,:) = sqwin_1d(x,winsz,lims(1,:))
+        win(2,:) = sqwin_1d(y,winsz,lims(2,:))
+    end function sqwin_2d_2
+
+    !> three-dimensional symmetric hard window
+    pure function sqwin_3d_1( x, y, z, winsz ) result( win )
         real, intent(in) :: x,y,z    !< input point
         real, intent(in) :: winsz    !< window size
-        integer          :: win(3,2) !< starts & stops
+        integer :: win(3,2)
         win(1,:) = sqwin_1d(x,winsz)
         win(2,:) = sqwin_1d(y,winsz)
         win(3,:) = sqwin_1d(z,winsz)
-    end function sqwin_3d
+    end function sqwin_3d_1
 
-    !>    one-dimensional hard window
-    pure function recwin_1d( x, winsz ) result( win )
-        real, intent(in) :: x       !< input point
-        real, intent(in) :: winsz   !< window size
-        integer          :: win(2) !< starts & stops
-        win(1) = floor(x-real(winsz))
-        win(2) = ceiling(x+real(winsz))
-    end function recwin_1d
-
-    !>    two-dimensional hard window
-    !! \param x,y      input points
-    pure function recwin_2d( x, y, winsz ) result( win )
-        real, intent(in) :: x, y      !< input point
-        real, intent(in) :: winsz     !< window size
-        integer          :: win(2,2) !< starts & stops
-        win(1,:) = recwin_1d(x,winsz)
-        win(2,:) = recwin_1d(y,winsz)
-    end function recwin_2d
-
-    !>    three-dimensional hard window
-    !! \param x,y,z      input points
-    pure function recwin_3d( x, y, z, winsz ) result( win )
-        real, intent(in) :: x, y, z   !< input point
-        real, intent(in) :: winsz     !< window size
-        integer          :: win(3,2) !< starts & stops
-        win(1,:) = recwin_1d(x,winsz)
-        win(2,:) = recwin_1d(y,winsz)
-        win(3,:) = recwin_1d(z,winsz)
-    end function recwin_3d
+    !> three-dimensional symmetric hard window with limits
+    pure function sqwin_3d_2( x, y, z, winsz, lims ) result( win )
+        real,    intent(in) :: x,y,z     !< input point
+        real,    intent(in) :: winsz     !< window size
+        integer, intent(in) :: lims(3,2) !< bounds 
+        integer :: win(3,2)
+        win(1,:) = sqwin_1d(x,winsz,lims(1,:))
+        win(2,:) = sqwin_1d(y,winsz,lims(2,:))
+        win(3,:) = sqwin_1d(z,winsz,lims(3,:))
+    end function sqwin_3d_2
 
     ! USEFUL MATHEMATICAL FUNCTIONS
 

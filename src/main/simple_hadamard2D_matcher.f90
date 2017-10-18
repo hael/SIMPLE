@@ -19,7 +19,7 @@ public :: prime2D_exec, preppftcc4align, pftcc
 private
 #include "simple_local_flags.inc"
 
-logical, parameter              :: L_BENCH         = .false.
+logical, parameter              :: L_BENCH         = .true.
 logical, parameter              :: L_BENCH_PRIME2D = .false.
 type(polarft_corrcalc)          :: pftcc
 type(prime2D_srch), allocatable :: primesrch2D(:)
@@ -48,12 +48,15 @@ contains
         real    :: corr_thresh, frac_srch_space, skewness, extr_thresh
         logical :: l_do_read, doprint
 
+        ! CREATE THE POLARFT_CORRCALC OBJECT
+        call pftcc%new(p%ncls, p, nint(b%a%get_all('eo', [p%fromp,p%top])))
+
         ! PREP REFERENCES
         if( L_BENCH )then
             t_init = tic()
             t_tot  = tic()
         endif
-        call cavger%new(b, p, 'class')
+        call cavger%new(b, p, 'class', pftcc%get_rots_for_applic())
         l_do_read = .true.
         if( p%l_distr_exec )then
             if( b%a%get_nevenodd() == 0 )then
@@ -208,9 +211,9 @@ contains
                         call primesrch2D(iptcl)%exec_prime2D_srch(extr_bound=corr_thresh)
                         call primesrch2D(iptcl)%get_times(rt_refloop, rt_inpl, rt_tot)
                         if( L_BENCH_PRIME2D )then
-                            rt_refloop_sum      = rt_refloop_sum      + rt_refloop
-                            rt_inpl_sum         = rt_inpl_sum         + rt_inpl
-                            rt_tot_sum          = rt_tot_sum          + rt_tot
+                            rt_refloop_sum      = rt_refloop_sum + rt_refloop
+                            rt_inpl_sum         = rt_inpl_sum    + rt_inpl
+                            rt_tot_sum          = rt_tot_sum     + rt_tot
                         endif
                     end do
                     !$omp end parallel do
@@ -318,9 +321,7 @@ contains
         logical   :: do_center
         real      :: xyz(3)
         if( .not. p%l_distr_exec ) write(*,'(A)') '>>> BUILDING PRIME2D SEARCH ENGINE'
-        ! must be done here since constants in p are dynamically set
-        call pftcc%new(p%ncls, p, nint(b%a%get_all('eo', [p%fromp,p%top])))
-        ! prepare the polarizers
+        ! prepare the polarizer
         call b%img_match%init_polarizer(pftcc)
 
         ! PREPARATION OF REFERENCES IN PFTCC

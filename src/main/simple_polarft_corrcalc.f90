@@ -99,6 +99,7 @@ type :: polarft_corrcalc
     procedure          :: get_kfromto
     procedure          :: get_pdim
     procedure          :: get_rot
+    procedure          :: get_rots_for_applic
     procedure          :: get_roind
     procedure          :: get_coord
     procedure          :: get_ptcl_pft
@@ -430,6 +431,14 @@ contains
         endif
         rot = self%angtab(roind)
     end function get_rot
+
+    !>  \brief is for getting the (sign inversed) rotations for application in
+    !!         classaverager/reconstructor
+    function get_rots_for_applic( self ) result( inplrots )
+        class(polarft_corrcalc), intent(in) :: self
+        real, allocatable :: inplrots(:)
+        allocate(inplrots(self%nrots), source=360. - self%angtab)
+    end function get_rots_for_applic
 
     !>  \brief is for getting the discrete in-plane rotational
     !!         index corresponding to continuous rotation rot

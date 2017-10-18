@@ -1596,7 +1596,7 @@ contains
         if( self%ldim(3) > 1 )         stop 'only 4 2D images; extr_fcomp; simple_image'
         if( .not. self%ft )            stop 'image need to be FTed; extr_fcomp; simple_image'
         ! evenness and squareness are checked in the comlin class
-        win  = recwin_2d(h, k, 1.)
+        win  = sqwin_2d(h, k, 1.)
         allocate( comps(win(1,1):win(1,2),win(2,1):win(2,2)) )
         do i=win(1,1),win(1,2)
             do j=win(2,1),win(2,2)
