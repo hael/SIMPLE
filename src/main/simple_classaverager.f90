@@ -47,7 +47,9 @@ type classaverager
     type(image),       allocatable :: ctfsqsums_even(:,:)      !< CTF**2 sums for Wiener normalisation
     type(image),       allocatable :: ctfsqsums_odd(:,:)       !< -"-
     type(image),       allocatable :: ctfsqsums_merged(:,:)    !< -"-
+    real,              allocatable :: inpl_rots(:)             !< in-plane rotations (sign shifted)
     logical                        :: phaseplate    = .false.  !< Volta phaseplate images or not
+    logical                        :: use_kbmem     = .false.  !< use memoization of K-B kernel or not
     logical                        :: l_is_class    = .true.   !< for prime2D or not
     logical                        :: l_hard_assign = .true.   !< npeaks == 1 or not
     logical                        :: exists        = .false.  !< to flag instance existence 
@@ -88,11 +90,12 @@ contains
     !!          data is now managed so that all exclusions are taken care of here
     !!          which means properly balanced batches can be produced for both soft
     !!          and hard clustering solutions
-    subroutine new( self, b, p, which )
+    subroutine new( self, b, p, which, inpl_rots )
         class(classaverager),  intent(inout) :: self         !< instance
         class(build),  target, intent(inout) :: b            !< builder
         class(params), target, intent(inout) :: p            !< params
         character(len=*),      intent(in)    :: which        !< class/proj
+        real, optional,        intent(in)    :: inpl_rots(:) !< in-plane rotations
         integer :: alloc_stat, istate, icls
         ! destruct possibly pre-existing instance
         call self%kill
@@ -101,6 +104,12 @@ contains
         self%pp => p
         ! set nstates
         self%nstates = p%nstates
+        ! take care of in-plane rots
+        if( present(inpl_rots) )then
+            self%use_kbmem = .true.
+            self%nrots = size(inpl_rots)
+            allocate(self%inpl_rots(self%nrots), source=inpl_rots)
+        endif
         ! class or proj
         select case(which)
             case('class')
@@ -429,8 +438,10 @@ contains
         use simple_prep4cgrid,      only: prep4cgrid
         use simple_map_reduce,      only: split_nobjs_even
         use simple_hadamard_common, only: read_img_from_stk
+        use simple_kbinterpol_mem,  only: kbinterpol_mem
         class(classaverager), intent(inout) :: self
         type(kbinterpol)         :: kbwin
+        type(kbinterpol_mem)     :: kbmem
         type(prep4cgrid)         :: gridprep
         type(image)              :: batch_imgsum_even, batch_imgsum_odd
         type(image)              :: batch_rhosum_even, batch_rhosum_odd
@@ -443,8 +454,9 @@ contains
         real      :: loc(2), mat(2,2), winsz, pw, tval, tvalsq, vec(2)
         integer   :: cnt_progress, nbatches, batch, icls_pop, iprec, iori, i, batchsz, fnr, icls_popmax
         integer   :: lims(3,2), istate, sh, nyq, logi(3), phys(3), win(2,2), win4w(2,2), win_tst(2,2)
-        integer   :: cyc_lims(3,2), alloc_stat, wdim, h, k, hh, kk, icls, iptcl, nbatches_max, batchsz_max
+        integer   :: cyc_lims(3,2), alloc_stat, wdim, h, k, hh, kk, icls, iptcl, batchsz_max
         if( .not. self%pp%l_distr_exec ) write(*,'(a)') '>>> ASSEMBLING CLASS SUMS'
+        ! init
         call self%init_cavgs_sums
         cyc_lims  = self%ctfsqsums_even(1,1)%loop_lims(3)
         lims      = cyc_lims
@@ -465,24 +477,33 @@ contains
         call batch_rhosum_even%new(self%ldim_pd, self%pp%smpd)
         call batch_rhosum_odd%new(self%ldim_pd, self%pp%smpd)
         call gridprep%new(self%bp%img, kbwin)
+        if( self%use_kbmem )then
+            ! memoize K-B kernel
+            call kbmem%new(self%inpl_rots, cyc_lims)
+            call kbmem%memoize_kb(kbwin)
+        endif
         if( L_BENCH )then
             rt_batch_loop = 0.
             rt_gridding   = 0.
             rt_tot        = 0.
             t_tot         = tic()
         endif
-        ! get maximum class population
-        icls_popmax = 0
+        ! find maximum batch size
+        batchsz_max = 0
         do istate=1,self%nstates
+            ! class loop
             do icls=1,self%ncls
-                icls_pop = self%class_pop(istate, icls)
-                if( icls_pop > icls_popmax ) icls_popmax = icls_pop
+                ! batch planning
+                nbatches = ceiling(real(icls_pop)/real(self%pp%nthr*BATCHTHRSZ))
+                batches  = split_nobjs_even(icls_pop, nbatches)
+                ! batch loop, prep
+                do batch=1,nbatches
+                    ! prep batch
+                    batchsz = batches(batch,2) - batches(batch,1) + 1
+                    if( batchsz > batchsz_max ) batchsz_max = batchsz
+                end do
             end do
         end do
-        ! calculate maximum batch size
-        nbatches_max = ceiling(real(icls_popmax )/real(self%pp%nthr*BATCHTHRSZ))
-        batches      = split_nobjs_even(icls_popmax, nbatches_max)
-        batchsz_max  = batches(1,2) - batches(1,1) + 1
         ! pre-create images based on maximum batchsz
         allocate(padded_imgs(batchsz_max), batch_imgs(batchsz_max))
         do i=1,batchsz_max
@@ -554,13 +575,18 @@ contains
                                 ! kernel
                                 win4w(1,:) = win(1,:) - win(1,1) + 1
                                 win4w(2,:) = win(2,:) - win(2,1) + 1
-                                w = pw
-                                do hh=win4w(1,1),win4w(1,2)
-                                    w(hh,:) = w(hh,:) * kbwin%apod( real(win(1,1)-1 + hh)-loc(1) )
-                                end do
-                                do kk=win4w(2,1),win4w(2,2)
-                                    w(:,kk) = w(:,kk) * kbwin%apod( real(win(2,1)-1 + kk)-loc(2) )
-                                end do
+                                if( self%use_kbmem )then
+                                    call kbmem%fetch(self%precs(iprec)%inpl_inds(iori), h, k, w)
+                                    w = w * pw
+                                else
+                                    w = pw
+                                    do hh=win4w(1,1),win4w(1,2)
+                                        w(hh,:) = w(hh,:) * kbwin%apod( real(win(1,1)-1 + hh)-loc(1) )
+                                    end do
+                                    do kk=win4w(2,1),win4w(2,2)
+                                        w(:,kk) = w(:,kk) * kbwin%apod( real(win(2,1)-1 + kk)-loc(2) )
+                                    end do
+                                endif
                                 ! summation
                                 select case(self%precs(iprec)%eo)
                                 case(0,-1)
@@ -629,6 +655,7 @@ contains
             call batch_imgs(i)%kill
         enddo
         deallocate(padded_imgs, batch_imgs)
+        if( self%use_kbmem ) call kbmem%kill
         call batch_imgsum_even%kill
         call batch_imgsum_odd%kill
         call batch_rhosum_even%kill
@@ -937,6 +964,7 @@ contains
                 if( allocated(self%precs(iprec)%shifts)  ) deallocate(self%precs(iprec)%shifts)
             end do
             deallocate(self%precs)
+            if( allocated(self%inpl_rots) ) deallocate(self%inpl_rots)
             self%istart        = 0
             self%iend          = 0
             self%partsz        = 0

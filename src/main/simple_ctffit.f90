@@ -42,16 +42,16 @@ contains
         real :: limits(4,2)
         ! set constants
         if( dfrange(1) < dfrange(2) )then
-    		df_min = dfrange(1)
-    		df_max = dfrange(2)
+            df_min = dfrange(1)
+            df_max = dfrange(2)
         else
             stop 'invalid defocus range; simple_ctffit :: new'
         endif
       	if( resrange(1) > resrange(2) )then
-      		hp = resrange(1)
-      		lp = resrange(2)
+              hp = resrange(1)
+              lp = resrange(2)
       	else
-      		stop 'invalid resolution range; simple_ctffit :: new'
+              stop 'invalid resolution range; simple_ctffit :: new'
       	endif
         select case(trim(phaseplate))
             case('yes')
@@ -99,9 +99,9 @@ contains
   	end subroutine ctffit_init
 
   	subroutine ctffit_srch( dfx, dfy, angast, phshift, cc, diagfname )
-		real,             intent(out) :: dfx, dfy, angast, phshift, cc
+        real,             intent(out) :: dfx, dfy, angast, phshift, cc
         character(len=*), intent(in)  :: diagfname
-		real        :: cost, df, df_step, cost_lowest, dfstep
+        real        :: cost, df, df_step, cost_lowest, dfstep
         type(image) :: pspec_half_n_half
         dfstep = (df_max - df_min) / 100.
         if( l_phaseplate )then
@@ -131,7 +131,7 @@ contains
             end do
         endif
         ! refinement by DE (Differential Evolution)
-		call diffevol%minimize(ospec_de, cost)
+        call diffevol%minimize(ospec_de, cost)
         dfx     = ospec_de%x(1)
         dfy     = ospec_de%x(2)
         angast  = rad2deg(ospec_de%x(3))
@@ -164,11 +164,11 @@ contains
     ! cost function is real-space correlation within resolution mask between the CTF
     ! powerspectrum (the model) and the pre-processed micrograph powerspectrum (the data)
   	function ctffit_cost( vec, D ) result( cost )
-		integer, intent(in) :: D
-		real,    intent(in) :: vec(D)
-		real :: cost
-		call tfun%ctf2pspecimg(pspec_ctf, vec(1), vec(2), rad2deg(vec(3)))
-		cost = -pspec_ref%real_corr_prenorm(pspec_ctf, sxx, cc_msk)
+        integer, intent(in) :: D
+        real,    intent(in) :: vec(D)
+        real :: cost
+        call tfun%ctf2pspecimg(pspec_ctf, vec(1), vec(2), rad2deg(vec(3)))
+        cost = -pspec_ref%real_corr_prenorm(pspec_ctf, sxx, cc_msk)
   	end function ctffit_cost
 
     ! cost function is real-space correlation within resolution mask between the CTF

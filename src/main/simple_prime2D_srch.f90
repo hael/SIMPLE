@@ -206,10 +206,12 @@ contains
         select case(self%refine)
             case('no', 'yes')
                 if( self%dyncls )then
-                    ! reassignement to a class with higher population
-                    do while( self%cls_pops(self%prev_class) <= MINCLSPOPLIM )
-                       self%prev_class = irnd_uni(self%nrefs)
-                    enddo
+                    if( self%prev_class > 0 )then
+                        ! reassignement to a class with higher population
+                        do while( self%cls_pops(self%prev_class) <= MINCLSPOPLIM )
+                           self%prev_class = irnd_uni(self%nrefs)
+                        enddo
+                    endif
                 else
                     ! all good
                 endif
@@ -226,21 +228,22 @@ contains
             corrs = self%pftcc_ptr%gencorrs(self%prev_class, self%iptcl)
             self%prev_corr  = max(0., corrs(self%prev_rot))
             self%best_corr  = self%prev_corr
+            ! calculate spectral score
+            frc = self%pftcc_ptr%genfrc(self%prev_class, self%iptcl, self%prev_rot)
+            self%specscore = max(0.,median_nocopy(frc))
         else
             self%prev_class = irnd_uni(self%nrefs)
             self%prev_corr  = 0.
             self%best_corr  = 0.
+            self%specscore  = 0.
         endif
-        ! calculate spectral score
-        frc = self%pftcc_ptr%genfrc(self%prev_class, self%iptcl, self%prev_rot)
-        self%specscore = max(0.,median_nocopy(frc))
         ! make random reference direction order
         rt = ran_tabu(self%nrefs)
         if( allocated(self%srch_order) ) deallocate(self%srch_order)
         allocate(self%srch_order(self%nrefs))
         call rt%ne_ran_iarr(self%srch_order)
         ! put prev_best last to avoid cycling
-        call put_last(self%prev_class, self%srch_order)
+        if( self%prev_class > 0 ) call put_last(self%prev_class, self%srch_order)
         call rt%kill
         if( any(self%srch_order == 0) ) stop 'Invalid index in srch_order; simple_prime2D_srch :: prep4srch'
         DebugPrint '>>> PRIME2D_SRCH::PREPARED FOR SIMPLE_PRIME2D_SRCH'
