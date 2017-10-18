@@ -479,7 +479,7 @@ contains
         call gridprep%new(self%bp%img, kbwin)
         if( self%use_kbmem )then
             ! memoize K-B kernel
-            call kbmem%new(self%inpl_rots, cyc_lims)
+            call kbmem%new(self%inpl_rots, cyc_lims(1:2,1:2))
             call kbmem%memoize_kb(kbwin)
         endif
         if( L_BENCH )then
