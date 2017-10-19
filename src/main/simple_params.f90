@@ -909,13 +909,16 @@ contains
             ! Check for the existance of this file if part is defined on the command line
             if( cline%defined('part') )then
                 if( ccheckdistr )then
-                    if(trim(self%prg).eq.'simple_symsrch')then
+                    select case(trim(self%prg))
+                    case('simple_symsrch','simple_scale')
                         ! no need for split stack with prg=symsrch
-                    else if( .not. file_exists(self%stk_part) )then
-                        write(*,*) 'Need partial stacks to be generated for parallel execution'
-                        write(*,*) 'Use simple_exec prg=split'
-                        stop
-                    endif
+                    case DEFAULT
+                        if( .not. file_exists(self%stk_part) )then
+                            write(*,*) 'Need partial stacks to be generated for parallel execution; simple_params'
+                            write(*,*) 'Use simple_exec prg=split'
+                            stop
+                        endif
+                    end select
                 endif
             endif
         endif

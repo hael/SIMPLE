@@ -716,7 +716,7 @@ contains
             call read_filetable(p%filetab, imgnames)
             if( size(imgnames) /= nall ) stop 'nr of entries in filetab and stk not consistent'
             call fopen(funit, file=p%outfile,status="replace", action="write", access="sequential", iostat=io_stat)
-            call fileio_errmsg('simple_commander_preproc ; fopen error when opening '//trim(p%outfile), ios)
+            call fileio_errmsg('simple_commander_preproc ; fopen error when opening '//trim(p%outfile), io_stat)
             call exec_cmdline('mkdir -p '//trim(adjustl(p%dir_select))//'|| true')
             call exec_cmdline('mkdir -p '//trim(adjustl(p%dir_reject))//'|| true')
             ! write outoput & move files
