@@ -30,10 +30,6 @@ contains
             self%nrots = size(inpl_rots)
             self%wdim  = ceiling(KBALPHA * KBWINSZ) + 1
             self%lims  = lims
-
-            print *, 'dim1 in kbmem: ', self%lims(1,1), self%lims(1,2)
-            print *, 'dim2 in kbmem: ', self%lims(2,2), self%lims(2,2)
-
             ! allocate
             allocate( self%w(self%nrots,self%lims(1,1):self%lims(1,2),&
                      &self%lims(2,1):self%lims(2,2),self%wdim,self%wdim), source=1.0 )
