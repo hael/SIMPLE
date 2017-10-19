@@ -18,6 +18,7 @@ use simple_polarizer,        only: polarizer
 use simple_masker,           only: masker
 use simple_projection_frcs,  only: projection_frcs
 use simple_ran_tabu,         only: ran_tabu
+ use simple_prep4cgrid,      only: prep4cgrid
 !! import functions
 use simple_timer,            only: tic, toc, timer_int_kind
 use simple_binoris_io,       only: binread_ctfparams_state_eo, binread_oritab
@@ -43,6 +44,7 @@ type :: build
     type(masker)                        :: mskimg             !< mask image
     type(masker)                        :: mskvol             !< mask volume
     type(projection_frcs)               :: projfrcs           !< projection FRC's used in the anisotropic Wiener filter
+    type(prep4cgrid)                    :: gridprep           !< gridding preparation (2D)
     ! COMMON LINES TOOLBOX
     type(image),            allocatable :: imgs(:)            !< images (all should be read in)
     type(image),            allocatable :: imgs_sym(:)        !< images (all should be read in)
@@ -306,6 +308,7 @@ contains
         call self%raise_hard_ctf_exception(p)
         call self%recvol%new([p%boxpd,p%boxpd,p%boxpd],p%smpd)
         call self%recvol%alloc_rho(p)
+        call self%gridprep%new(self%img, self%recvol%get_kbwin())
         if( .not. self%a%isthere('proj') ) call self%a%set_projs(self%e)
         if (verbose.or.global_verbose)then
             write(*,'(A,1x,1ES20.5)') '>>> DONE BUILDING RECONSTRUCTION TOOLBOX      time (s)', toc(tbuild)
@@ -321,6 +324,7 @@ contains
         if( self%rec_tbox_exists )then
             call self%recvol%dealloc_rho
             call self%recvol%kill
+            call self%gridprep%kill
             self%rec_tbox_exists = .false.
         endif
     end subroutine kill_rec_tbox
@@ -340,6 +344,7 @@ contains
         else
             write(*,'(A)') '>>> DONE BUILDING EO RECONSTRUCTION TOOLBOX'
         endif
+        call self%gridprep%new(self%img, self%eorecvol%get_kbwin())
         self%eo_rec_tbox_exists = .true.
     end subroutine build_eo_rec_tbox
 
@@ -349,6 +354,7 @@ contains
         if( self%eo_rec_tbox_exists )then
             call self%eorecvol%kill
             call self%projfrcs%kill
+            call self%gridprep%kill
             self%eo_rec_tbox_exists = .false.
         endif
     end subroutine kill_eo_rec_tbox
@@ -456,6 +462,7 @@ contains
         allocchk('build_hadamard_prime3D_tbox; simple_build, 2')
         call self%recvols(1)%new([p%boxpd,p%boxpd,p%boxpd],p%smpd)
         call self%recvols(1)%alloc_rho(p)
+        call self%gridprep%new(self%img, self%recvols(1)%get_kbwin())
         if( .not. self%a%isthere('proj') ) call self%a%set_projs(self%e)
         if (verbose.or.global_verbose)then
             write(*,'(A,1x,1ES20.5)') '>>> DONE BUILDING EXTREMAL3D TOOLBOX          time (s)', toc(tbuild)
@@ -471,6 +478,7 @@ contains
         if( self%extremal3D_tbox_exists )then
             call self%recvols(1)%dealloc_rho
             call self%recvols(1)%kill
+            call self%gridprep%kill
             deallocate(self%recvols)
             self%extremal3D_tbox_exists = .false.
         endif

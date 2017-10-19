@@ -8,7 +8,6 @@ use, intrinsic :: iso_c_binding
 use simple_fftw3,      only: fftwf_alloc_real, fftwf_free
 use simple_imghead,    only: find_ldim_nptcls
 use simple_timer,      only: tic, toc, timer_int_kind
-use simple_gridding,   only: prep4cgrid
 !! import classes
 use simple_ctf,        only: ctf
 use simple_ori,        only: ori
@@ -16,7 +15,6 @@ use simple_oris,       only: oris
 use simple_params,     only: params
 use simple_sym,        only: sym
 use simple_kbinterpol, only: kbinterpol
-use simple_kbfast,     only: kbfast
 use simple_image,      only: image
 implicit none
 
@@ -85,8 +83,8 @@ contains
         integer :: dim, maxlims
         logical :: l_expand
         l_expand = .true.
-        if(.not. self%exists()   ) stop 'construct image before allocating rho; alloc_rho; simple_reconstructor'
-        if(      self%is_2d()    ) stop 'only for volumes; alloc_rho; simple_reconstructor'
+        if(.not. self%exists()) stop 'construct image before allocating rho; alloc_rho; simple_reconstructor'
+        if(      self%is_2d() ) stop 'only for volumes; alloc_rho; simple_reconstructor'
         if( present(expand) )l_expand = expand
         self%ldim_img = self%get_ldim()
         if( self%ldim_img(3) < 2 ) stop 'reconstructor need to be 3D 4 now; alloc_rho; simple_reconstructor'
@@ -213,7 +211,7 @@ contains
         ! evaluate the transfer function
         call self%calc_tfun_vals(vec, tval, tvalsq)
         ! initiate kernel matrix
-        win = sqwin_3d(loc(1), loc(2), loc(3), self%winsz)
+        call sqwin_3d(loc(1), loc(2), loc(3), self%winsz, win)
         ! (weighted) kernel values
         w = pwght
         do i=1,self%wdim
@@ -246,9 +244,8 @@ contains
         real    :: sqSpatFreq,ang,inv1,inv2
         integer :: ldim(3)
         if( self%ctf%flag /= CTFFLAG_NO )then
-            ldim       = self%get_ldim()
-            inv1       = vec(1)*(1./real(ldim(1)))
-            inv2       = vec(2)*(1./real(ldim(2)))
+            inv1       = vec(1)*(1./real(self%ldim_img(1)))
+            inv2       = vec(2)*(1./real(self%ldim_img(2)))
             sqSpatFreq = inv1*inv1+inv2*inv2
             ang        = atan2(vec(2), vec(1))
             ! calculate CTF and CTF**2 values
@@ -289,7 +286,7 @@ contains
             self%phshift = 0.
             if( self%phaseplate ) self%phshift = o%get('phshift')
         endif
-        lims = self%loop_lims(2)
+        lims = self%loop_lims(3)
         x    = o%get('x')
         y    = o%get('y')
         !$omp parallel do collapse(2) default(shared) schedule(static)&
@@ -308,7 +305,7 @@ contains
     !>  is for uneven distribution of orientations correction 
     !>  from Pipe & Menon 1999
     subroutine sampl_dens_correct( self, maxits )
-        use simple_gridding,   only: mul_w_instr
+        use simple_gridding, only: mul_w_instr
         class(reconstructor), intent(inout) :: self
         integer,    optional, intent(in)    :: maxits
         type(kbinterpol)     :: kbwin 
@@ -391,33 +388,31 @@ contains
     subroutine compress_exp( self )
         class(reconstructor), intent(inout) :: self
         complex :: comp
-        integer :: lims(3,2), phys(3), h, k, m
+        integer :: lims(3,2), phys(3), h, k, m, logi(3)
         if(.not. self%cmat_exp_allocated .or. .not.self%rho_allocated)then
             stop 'expanded complex or rho matrices do not exist; simple_reconstructor::compress_exp'
         endif
         call self%reset
-        lims = self%loop_lims(3)
+        lims = self%loop_lims(2)
         ! Fourier components & rho matrices compression
-        !$omp parallel do collapse(3) private(h,k,m,phys,comp) schedule(static) default(shared) proc_bind(close)
-        do k = lims(2,1),lims(2,2)
-            do h = lims(1,1),lims(1,2)
+        !$omp parallel do collapse(3) private(h,k,m,phys,logi) schedule(static) default(shared) proc_bind(close)
+        do h = lims(1,1),lims(1,2)
+            do k = lims(2,1),lims(2,2)
                 do m = lims(3,1),lims(3,2)
-                    comp = self%cmat_exp(h,k,m)
-                    if(abs(comp) < TINY) cycle
-                    !  addition because FC and its Friedel mate must be summed
-                    !  as the expansion updates one or the other
+                    logi = [h,k,m]
+                    if(abs(self%cmat_exp(h,k,m)) < TINY) cycle
                     if (h > 0) then
                         phys(1) = h + 1
-                        phys(2) = k + 1 + self%ldim_img(2) * MERGE(1,0,k < 0)
-                        phys(3) = m + 1 + self%ldim_img(3) * MERGE(1,0,m < 0)
-                        call self%add2_cmat_at(phys, comp)
+                        phys(2) = k + 1 + MERGE(self%ldim_img(2),0,k < 0)
+                        phys(3) = m + 1 + MERGE(self%ldim_img(3),0,m < 0)
+                        call self%set_cmat_at(phys, self%cmat_exp(h,k,m))
                     else
                         phys(1) = -h + 1
-                        phys(2) = -k + 1 + self%ldim_img(2) * MERGE(1,0,-k < 0)
-                        phys(3) = -m + 1 + self%ldim_img(3) * MERGE(1,0,-m < 0)
-                        call self%add2_cmat_at(phys, conjg(comp))
+                        phys(2) = -k + 1 + MERGE(self%ldim_img(2),0,-k < 0)
+                        phys(3) = -m + 1 + MERGE(self%ldim_img(3),0,-m < 0)
+                        call self%set_cmat_at(phys, conjg(self%cmat_exp(h,k,m)))
                     endif
-                    self%rho(phys(1),phys(2),phys(3)) = self%rho(phys(1),phys(2),phys(3)) + self%rho_exp(h,k,m)
+                    self%rho(phys(1),phys(2),phys(3)) = self%rho_exp(h,k,m)
                 end do
             end do
         end do
@@ -428,7 +423,7 @@ contains
 
     !> for summing reconstructors generated by parallel execution
     subroutine sum( self, self_in )
-         class(reconstructor), intent(inout) :: self !< this instance
+         class(reconstructor), intent(inout) :: self    !< this instance
          class(reconstructor), intent(in)    :: self_in !< other instance
          call self%add(self_in)
          !$omp parallel workshare proc_bind(close)
@@ -439,6 +434,7 @@ contains
     ! RECONSTRUCTION
     !> reconstruction routine
     subroutine rec( self, fname, p, o, se, state, mul, part )
+        use simple_prep4cgrid, only: prep4cgrid
         class(reconstructor), intent(inout) :: self      !< this object
         character(len=*),     intent(inout) :: fname     !< spider/MRC stack filename
         class(params),        intent(in)    :: p         !< parameters
@@ -447,10 +443,10 @@ contains
         integer,              intent(in)    :: state     !< state to reconstruct
         real,    optional,    intent(in)    :: mul       !< shift multiplication factor
         integer, optional,    intent(in)    :: part      !< partition (4 parallel rec)
-        type(image) :: img, img_pd
-        real        :: skewness
-        integer     :: statecnt(p%nstates), i, cnt, n, ldim(3)
-        integer     :: state_here, state_glob
+        type(image)      :: img, img_pd
+        type(prep4cgrid) :: gridprep
+        real             :: skewness
+        integer          :: statecnt(p%nstates), i, cnt, n, ldim(3), state_here, state_glob
         call find_ldim_nptcls(fname, ldim, n)
         if( n /= o%get_noris() ) stop 'inconsistent nr entries; rec; simple_reconstructor'
         ! stash global state index
@@ -458,6 +454,8 @@ contains
         ! make the images
         call img_pd%new([p%boxpd,p%boxpd,1],self%get_smpd())
         call img%new([p%box,p%box,1],self%get_smpd())
+        ! make the gridding prepper
+        call gridprep%new(img, self%kbwin)
         ! population balancing logics
         if( p%balance > 0 )then
             call o%balance( p%balance, NSPACE_BALANCE, p%nsym, p%eullims, skewness )
@@ -520,7 +518,7 @@ contains
                             call img%read(fname, i)
                         endif
                     endif
-                    call prep4cgrid(img, img_pd, p%msk, self%kbwin)
+                    call gridprep%prep(img, img_pd)
                     if( p%pgrp == 'c1' )then
                         call self%inout_fplane(orientation, .true., img_pd, pwght=pw)
                     else

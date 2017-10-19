@@ -168,16 +168,10 @@ contains
         class(params),         intent(inout) :: p
         class(ori),            intent(inout) :: orientation
         class(oris), optional, intent(inout) :: os
-        type(ori)        :: orisoft, o_sym
-        type(kbinterpol) :: kbwin
-        real             :: pw, w, eopart
-        integer          :: jpeak, s, k, npeaks
-        logical          :: l_softrec
-        if( p%eo .ne. 'no' )then
-            kbwin = b%eorecvols(1)%get_kbwin()
-        else
-            kbwin = b%recvols(1)%get_kbwin()
-        endif
+        type(ori) :: orisoft, o_sym
+        real      :: pw, w, eopart
+        integer   :: jpeak, s, k, npeaks
+        logical   :: l_softrec
         l_softrec = .false.
         npeaks    = 1
         if( present(os) )then
@@ -188,7 +182,7 @@ contains
         if( orientation%isthere('w') ) pw = orientation%get('w')
         if( pw > TINY )then
             ! pre-gridding correction for the kernel convolution
-            call prep4cgrid(b%img, b%img_pad, p%msk, kbwin)
+            call b%gridprep%prep(b%img, b%img_pad)
             DebugPrint  '*** simple_hadamard_common ***: prepared image for gridding'
             if( p%eo .ne. 'no' )then
                 ! even/odd partitioning
@@ -210,7 +204,7 @@ contains
                 endif
                 s = nint(orisoft%get('state'))
                 DebugPrint  '*** simple_hadamard_common ***: got orientation'
-                if( p%frac < 0.99 ) w = w*pw
+                if( p%frac < 0.99 ) w = w * pw
                 if( w > TINY )then
                     if( p%pgrp == 'c1' )then
                         if( p%eo .ne. 'no' )then
@@ -425,6 +419,7 @@ contains
                         call b%eorecvols(istate)%reset_all
                     endif
                 end do
+                call b%gridprep%new(b%img, b%eorecvols(1)%get_kbwin())
             case DEFAULT
                 do istate = 1, p%nstates
                     if( b%a%get_pop(istate, 'state') > 0)then
@@ -433,6 +428,7 @@ contains
                         call b%recvols(istate)%reset
                     endif
                 end do
+                call b%gridprep%new(b%img, b%recvols(1)%get_kbwin())
         end select
     end subroutine preprecvols
 
@@ -451,6 +447,7 @@ contains
                 call b%recvols(istate)%kill
             end do
         endif
+        call b%gridprep%kill
     end subroutine killrecvols
 
     !>  \brief  prepares one volume for references extraction

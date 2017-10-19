@@ -586,67 +586,69 @@ contains
     end subroutine shft
 
     !> one-dimensional symmetric hard window
-    pure function sqwin_1d_1( x, winsz ) result( win )
-        real, intent(in) :: x       !< input point
-        real, intent(in) :: winsz   !< window size
-        integer :: iwinsz, win(2) 
+    pure subroutine sqwin_1d_1( x, winsz, win )
+        real,    intent(in)  :: x      !< input point
+        real,    intent(in)  :: winsz  !< window size
+        integer, intent(out) :: win(2) !< window
+        integer :: iwinsz
         win(:) = nint(x)
         iwinsz = ceiling(winsz - 0.5)
         win(1) = win(1)-iwinsz
         win(2) = win(2)+iwinsz
-    end function sqwin_1d_1
+    end subroutine sqwin_1d_1
 
     !> one-dimensional symmetric hard window with limits
-    pure function sqwin_1d_2( x, winsz, lims ) result( win )
-        real,    intent(in) :: x       !< input point
-        real,    intent(in) :: winsz   !< window size
-        integer, intent(in) :: lims(2) !< bounds 
-        integer :: iwinsz, win(2) 
+    pure subroutine sqwin_1d_2( x, winsz, lims, win )
+        real,    intent(in)  :: x       !< input point
+        real,    intent(in)  :: winsz   !< window size
+        integer, intent(in)  :: lims(2) !< bounds
+        integer, intent(out) :: win(2)  !< window
+        integer :: iwinsz
         win(:) = nint(x)
         iwinsz = ceiling(winsz - 0.5)
         win(1) = max(lims(1), win(1) - iwinsz)
         win(2) = min(lims(2), win(2) + iwinsz)
-    end function sqwin_1d_2
+    end subroutine sqwin_1d_2
 
     !> two-dimensional symmetric hard window
-    pure function sqwin_2d_1( x, y, winsz ) result( win )
-        real, intent(in) :: x,y      !< input point
-        real, intent(in) :: winsz    !< window size
-        integer :: win(2,2) 
-        win(1,:) = sqwin_1d(x,winsz)
-        win(2,:) = sqwin_1d(y,winsz)
-    end function sqwin_2d_1
+    pure subroutine sqwin_2d_1( x, y, winsz, win )
+        real,    intent(in)  :: x,y      !< input point
+        real,    intent(in)  :: winsz    !< window size
+        integer, intent(out) :: win(2,2) !< window
+        call sqwin_1d(x, winsz, win(1,:))
+        call sqwin_1d(y, winsz, win(2,:))
+    end subroutine sqwin_2d_1
 
     !> two-dimensional symmetric hard window with limits
-    pure function sqwin_2d_2( x, y, winsz, lims ) result( win )
-        real,    intent(in) :: x,y       !< input point
-        real,    intent(in) :: winsz     !< window size
-        integer, intent(in) :: lims(2,2) !< bounds 
-        integer :: win(2,2) 
-        win(1,:) = sqwin_1d(x,winsz,lims(1,:))
-        win(2,:) = sqwin_1d(y,winsz,lims(2,:))
-    end function sqwin_2d_2
+    pure subroutine sqwin_2d_2( x, y, winsz, lims, win )
+        real,    intent(in)  :: x,y       !< input point
+        real,    intent(in)  :: winsz     !< window size
+        integer, intent(in)  :: lims(2,2) !< bounds 
+        integer, intent(out) :: win(2,2)  !< window
+        call sqwin_1d(x,winsz,lims(1,:), win(1,:))
+        call sqwin_1d(y,winsz,lims(2,:), win(2,:))
+    end subroutine sqwin_2d_2
 
     !> three-dimensional symmetric hard window
-    pure function sqwin_3d_1( x, y, z, winsz ) result( win )
-        real, intent(in) :: x,y,z    !< input point
-        real, intent(in) :: winsz    !< window size
-        integer :: win(3,2)
-        win(1,:) = sqwin_1d(x,winsz)
-        win(2,:) = sqwin_1d(y,winsz)
-        win(3,:) = sqwin_1d(z,winsz)
-    end function sqwin_3d_1
+    pure subroutine sqwin_3d_1( x, y, z, winsz, win )
+        real,    intent(in)  :: x,y,z    !< input point
+        real,    intent(in)  :: winsz    !< window size
+        integer, intent(out) :: win(3,2) !< window
+        call sqwin_1d(x, winsz, win(1,:))
+        call sqwin_1d(y, winsz, win(2,:))
+        call sqwin_1d(z, winsz, win(3,:))
+    end subroutine sqwin_3d_1
 
     !> three-dimensional symmetric hard window with limits
-    pure function sqwin_3d_2( x, y, z, winsz, lims ) result( win )
-        real,    intent(in) :: x,y,z     !< input point
-        real,    intent(in) :: winsz     !< window size
-        integer, intent(in) :: lims(3,2) !< bounds 
-        integer :: win(3,2)
-        win(1,:) = sqwin_1d(x,winsz,lims(1,:))
-        win(2,:) = sqwin_1d(y,winsz,lims(2,:))
-        win(3,:) = sqwin_1d(z,winsz,lims(3,:))
-    end function sqwin_3d_2
+    pure subroutine sqwin_3d_2( x, y, z, winsz, lims, win )
+        real,    intent(in)  :: x,y,z     !< input point
+        real,    intent(in)  :: winsz     !< window size
+        integer, intent(in)  :: lims(3,2) !< bounds 
+        integer, intent(out) :: win(3,2)  !< window
+        call sqwin_1d(x,winsz,lims(1,:), win(1,:))
+        call sqwin_1d(y,winsz,lims(2,:), win(2,:))
+        call sqwin_1d(z,winsz,lims(3,:), win(3,:))
+    end subroutine sqwin_3d_2
 
     ! USEFUL MATHEMATICAL FUNCTIONS
 

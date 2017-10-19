@@ -1611,7 +1611,7 @@ contains
         if( self%ldim(3) > 1 )         stop 'only 4 2D images; extr_fcomp; simple_image'
         if( .not. self%ft )            stop 'image need to be FTed; extr_fcomp; simple_image'
         ! evenness and squareness are checked in the comlin class
-        win  = sqwin_2d(h, k, 1.)
+        call sqwin_2d(h, k, 1., win)
         allocate( comps(win(1,1):win(1,2),win(2,1):win(2,2)) )
         do i=win(1,1),win(1,2)
             do j=win(2,1),win(2,2)
@@ -4981,10 +4981,12 @@ contains
         pixels   = pack( self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)),&
                 &mask=mskimg%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) < 0.5 )
         med = median_nocopy(pixels)
-        if(abs(med) > TINY) self%rmat = self%rmat - med
+        if(abs(med) > TINY) self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) =&
+        self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) - med
         starts        = (self_out%ldim - self%ldim) / 2 + 1
         stops         = self_out%ldim - starts + 1
         self_out%rmat = 0.
+        self_out%ft   = .false.
         self_out%rmat(starts(1):stops(1),starts(2):stops(2),1)=&
             &self%rmat(:self%ldim(1),:self%ldim(2),1)
         self_out%rmat(:self_out%ldim(1),:self_out%ldim(2),1) = &

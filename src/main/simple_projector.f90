@@ -219,7 +219,7 @@ contains
         self%kbwin  = kbinterpol(KBWINSZ, KBALPHA)
         ! init
         harwin_here = self%harwin_exp
-        win         = sqwin_3d(loc(1),loc(2),loc(3), harwin_here)
+        call sqwin_3d(loc(1),loc(2),loc(3), harwin_here, win)
         wdim        = win(1,2) - win(1,1) + 1
         lims        = self%loop_lims(3)
         if( self%is_2d() )then
@@ -292,7 +292,7 @@ contains
         real    :: w(1:self%wdim,1:self%wdim,1:self%wdim)
         integer :: i, win(3,2)
         ! interpolation kernel window
-        win  = sqwin_3d(loc(1), loc(2), loc(3), self%harwin_exp)
+        call sqwin_3d(loc(1), loc(2), loc(3), self%harwin_exp, win)
         ! interpolation kernel matrix
         w = 1.
         do i=1,self%wdim
