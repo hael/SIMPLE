@@ -19,7 +19,7 @@ module simple_cufft
      subroutine cufftDestroy(plan) bind(C,name='cufftDestroy')
 #ifdef _WIN32
        !dec$ attributes stdcall, decorate :: cufftDestroy
-#endif 
+#endif
        use iso_c_binding
        integer(c_int),value:: plan
      end subroutine cufftDestroy
@@ -27,18 +27,18 @@ module simple_cufft
 
   ! A generic interface such as "cufftExec" which contained all the R2C, C2C, ...
   ! subroutine variants would work fine as long as transforms were not done in place.
-  ! The types and kinds associated with idata and odata would determine the 
+  ! The types and kinds associated with idata and odata would determine the
   ! correct routine.
   !
   ! However, this appoach would break down when performing in-place transforms.
   ! For example, suppose one wanted to perform a real to complex transform in-place.
   ! The soubroutine call:
-  !    call cufftExec(plan, data, data) 
+  !    call cufftExec(plan, data, data)
   ! would result in a compile time error if "data" were of type real or
-  ! the cufftExecC2C would be executed if "data" were of type complex 
+  ! the cufftExecC2C would be executed if "data" were of type complex
 
-  ! So, we define a separate interface for each R2C, C2C, ... variant and 
-  ! use the "!dir$ ignore_tkr" directive to ignore compile-time checks of 
+  ! So, we define a separate interface for each R2C, C2C, ... variant and
+  ! use the "!dir$ ignore_tkr" directive to ignore compile-time checks of
   ! data type, kind, and ranks.
 
   ! ----------------------------------
@@ -178,12 +178,12 @@ module simple_cufft
   end interface cufftPlan3d
 
   interface cufftPlanMany
-     subroutine cufftPlanMany(plan, rank, n, inembed, istride, idist, & 
+     subroutine cufftPlanMany(plan, rank, n, inembed, istride, idist, &
           onembed, ostride, odist,  &
           type, batch) bind(C,name='cufftPlanMany')
        use iso_c_binding
        implicit none
-       !pgi$ ignore_tkr n, inembed, onembed       
+       !pgi$ ignore_tkr n, inembed, onembed
        type(c_ptr) :: plan
        integer(c_int) :: n, inembed, onembed
        integer(c_int), value:: rank, istride, ostride, idist, odist, type, batch
@@ -205,16 +205,16 @@ module simple_cufft
 
 contains
 
-  subroutine cufftPlan2Dswap(plan,nx,ny, type) 
+  subroutine cufftPlan2Dswap(plan,nx,ny, type)
     use iso_c_binding
     type(c_ptr):: plan
     integer(c_int),value:: nx, ny, type
-    call cufftPlan2dC(plan,ny,nx,type) 
+    call cufftPlan2dC(plan,ny,nx,type)
   end subroutine cufftPlan2Dswap
 
 end module simple_cufft
 
-! A general subroutine that uses the transform type passed in "transform" to 
+! A general subroutine that uses the transform type passed in "transform" to
 ! determine which routine to call.  The interfaces for the routines specified
 ! above use the "!dir$ ignore_tkr" directive to remove checking of
 ! type, kind, and rank to facilitate certain in-place transforms (eg. cufftExecR2C)
@@ -227,12 +227,12 @@ subroutine cufftExec(plan, transform, idata, odata, direction)
   integer :: plan, transform
   real, device :: idata(*), odata(*)
   integer, optional :: direction
-   
+
 
   select case (transform)
-  case (CUFFT_R2C) 
+  case (CUFFT_R2C)
      call cufftExecR2C(plan, idata, odata)
-  case (CUFFT_C2R) 
+  case (CUFFT_C2R)
      call cufftExecC2R(plan, idata, odata)
   case (CUFFT_C2C)
      if (.not. present(direction)) then
@@ -240,16 +240,16 @@ subroutine cufftExec(plan, transform, idata, odata, direction)
         stop
      end if
      call cufftExecC2C(plan, idata, odata, direction)
-  case (CUFFT_D2Z) 
+  case (CUFFT_D2Z)
      call cufftExecD2Z(plan, idata, odata)
-  case (CUFFT_Z2D) 
+  case (CUFFT_Z2D)
      call cufftExecZ2D(plan, idata, odata)
   case (CUFFT_Z2Z)
      if (.not. present(direction)) then
         write(*,*) 'Error in cufft: Z2Z transform called without specifying direction'
         stop
      end if
-     call cufftExecZ2Z(plan, idata, odata, direction)  
+     call cufftExecZ2Z(plan, idata, odata, direction)
   case default
      write(*,*) 'Invalid transform type passed to cufftExec'
   end select
@@ -299,7 +299,7 @@ contains
     ! Summation using intrinsic
     sum_intrinsic=sum(x)
 
-    ! Recursive summation 
+    ! Recursive summation
     sum_cpu=0.
     sum_cpu_dp=0.d0
     do i=1,N
@@ -380,4 +380,3 @@ end subroutine test_cufft
 !                                                  cufftExecC2R(), cufftExecZ2D()
 !-----------------------------------------------------------------
 !   fftw_destroy_plan()                            cufftDestroy()
-

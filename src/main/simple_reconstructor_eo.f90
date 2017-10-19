@@ -350,8 +350,8 @@ contains
         call self%even%sampl_dens_correct(maxits=3)
         call self%odd%sampl_dens_correct(maxits=3)
         ! reverse FT
-        call self%even%bwd_ft
-        call self%odd%bwd_ft
+        call self%even%ifft()
+        call self%odd%ifft()
         ! clip
         call self%even%clip(even)
         call self%odd%clip(odd)
@@ -378,8 +378,8 @@ contains
             endif
         endif
         ! forward FT
-        call even%fwd_ft
-        call odd%fwd_ft
+        call even%fft()
+        call odd%fft()
         ! calculate FSC
         res = even%get_res()
         allocate(corrs(even%get_filtsz()))
@@ -409,7 +409,7 @@ contains
         call odd%kill
     end subroutine sampl_dens_correct_eos
 
-    !> \brief  for sampling density correction, antialiasing, bwd_ft & normalization of the sum
+    !> \brief  for sampling density correction, antialiasing, ifft & normalization of the sum
     subroutine sampl_dens_correct_sum( self, reference )
         class(reconstructor_eo), intent(inout) :: self      !< instance
         class(image),            intent(inout) :: reference !< reference volume

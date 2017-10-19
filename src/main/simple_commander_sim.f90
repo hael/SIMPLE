@@ -258,17 +258,17 @@ contains
             ! shift base image
             shifted_base_image = base_image
             call shifted_base_image%shift([shifts(i,1),shifts(i,2),0.])
-            call shifted_base_image%bwd_ft
+            call shifted_base_image%ifft()
             ! add pink noise
             call shifted_base_image%add_gauran(snr_pink)
             ! multiply with CTF
-            call shifted_base_image%fwd_ft
+            call shifted_base_image%fft()
             if( p%neg .eq. 'yes' )then
                 call tfun%apply(shifted_base_image, dfx, 'neg', dfy, angast, p%bfac)
             else
                 call tfun%apply(shifted_base_image, dfx, 'ctf', dfy, angast, p%bfac)
             endif
-            call shifted_base_image%bwd_ft
+            call shifted_base_image%ifft()
             ! add the detector noise
             call shifted_base_image%add_gauran(snr_detector)
             if( p%vis .eq. 'yes' ) call shifted_base_image%vis()

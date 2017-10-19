@@ -129,11 +129,11 @@ contains
 !$      call omp_set_num_threads(NTHR)
         call img_ref%new([4096,4096,1],SMPD)
         call img_ref%ran
-        call img_ref%fwd_ft
+        call img_ref%fft()
         call ftexp_ref%new(img_ref, HP, LP)
         call img_ptcl%new([4096,4096,1],SMPD)
         call img_ptcl%ran
-        call img_ptcl%fwd_ft
+        call img_ptcl%fft()
         call ftexp_ptcl%new(img_ptcl, HP, LP)
         allocate(shvecs(NTSTS,3))
         do itst=1,NTSTS

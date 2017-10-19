@@ -205,10 +205,10 @@ contains
         ! prepare particle image
         ptcl = img_ptcl
         call ptcl%bp(0.,lp)
-        call ptcl%bwd_ft
+        call ptcl%ifft()
         ! prepare reference image
         ref = img_ref
-        call ref%fwd_ft
+        call ref%fft()
         ! init
         corr_best = -1.
         bfac_best =  0.
@@ -237,7 +237,7 @@ contains
                     call ref_tmp%apply_bfac(bfac)
                 endif
                 call ref_tmp%bp(0.,lp)
-                call ref_tmp%bwd_ft
+                call ref_tmp%ifft()
                 cc = ref_tmp%real_corr(ptcl, l_msk)
                 if( cc > corr_best )then
                     corr_best = cc

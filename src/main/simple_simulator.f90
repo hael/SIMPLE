@@ -16,10 +16,10 @@ contains
         real, optional,   intent(in)    :: bfac
         real :: dfx, dfy, angast
         ! back FT (to make sure)
-        call img%bwd_ft
+        call img%ifft()
         ! add pink noise
         if( snr < 3. ) call img%add_gauran(snr_pink)
-        call img%fwd_ft
+        call img%fft()
         ! apply ctf/bfactor
         if( orientation%isthere('dfx') .and. orientation%isthere('dfy') )then
             dfx = orientation%get('dfx')
@@ -35,18 +35,18 @@ contains
             if( present(bfac) ) call img%apply_bfac(bfac)
         endif
         ! add detector noise
-        call img%bwd_ft
+        call img%ifft()
         if( snr < 3. ) call img%add_gauran(snr_detector)
         if( ctfflag .eq. 'flip' )then
             ! simulate phase-flipped images
-            call img%fwd_ft
+            call img%fft()
             call tfun%apply(img, dfx, 'flip', dfy, angast)
-            call img%bwd_ft
+            call img%ifft()
         else if( ctfflag .eq. 'mul' )then
             ! simulate CTF multiplied images
-            call img%fwd_ft
+            call img%fft()
             call tfun%apply(img, dfx, 'ctf', dfy, angast)
-            call img%bwd_ft
+            call img%ifft()
         endif
     end subroutine simimg
 

@@ -684,7 +684,7 @@ contains
             call self%compress_exp
             call self%sampl_dens_correct
         endif
-        call self%bwd_ft
+        call self%ifft()
         call img%kill
         call img_pad%kill
         ! report how many particles were used to reconstruct each state

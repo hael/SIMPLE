@@ -15,7 +15,7 @@ real                 :: cxy(3), x, y, diff_old, diff_recast, diff_corr, old_corr
 ! make a square for testing the shift alignment
 call img1%new([200,200,1], 1.77)
 call img1%square(40)
-call img1%fwd_ft
+call img1%fft()
 img2 = img1
 tmp  = img1
 ! prepare objects for corrcalc
@@ -23,7 +23,7 @@ call ftexp1%new(img1,hp,lp)
 ! test
 diff_old    = 0.
 diff_recast = 0.
-diff_corr   = 0. 
+diff_corr   = 0.
 do i=1,nits
     DebugPrint  'iteration: ', i
     x           = real(nint(ran3()*2.0*TRS-TRS))
@@ -45,7 +45,7 @@ write(*,*) 'diff_old:    ', diff_old
 write(*,*) 'diff_recast: ', diff_recast
 write(*,*) 'diff_corr:   ', diff_corr
 contains
-    
+
     function find_shift_old() result( cxy )
         integer :: sh,xsh,ysh
         real :: cxy(3), corr, shvec(3)
@@ -63,7 +63,7 @@ contains
             end do
         end do
     end function find_shift_old
-    
+
     function find_shift_recast() result( cxy )
         integer :: sh,xsh,ysh
         real :: cxy(3), corr, shvec(3)

@@ -437,7 +437,7 @@ contains
         ! shift image to rotational origin
         if(abs(x) > SHTHRESH .or. abs(y) > SHTHRESH) call img_in%shift2Dserial([-x,-y])
         ! back to real-space
-        call img_in%bwd_ft
+        call img_in%ifft()
         ! clip image if needed
         call img_in%clip(img_out)
         ! soft-edged mask
@@ -451,7 +451,7 @@ contains
             endif
         endif
         ! return in Fourier space
-        call img_out%fwd_ft
+        call img_out%fft()
         DebugPrint  '*** simple_strategy2D3D_common ***: finished prepimg4align'
     end subroutine prepimg4align
 
@@ -713,7 +713,7 @@ contains
             deallocate(fname_vol_filter)
         endif
         ! back to real space
-        call b%vol%bwd_ft
+        call b%vol%ifft()
         ! clip
         if( p%boxmatch < p%box ) call b%vol%clip_inplace([p%boxmatch,p%boxmatch,p%boxmatch])
         ! masking
@@ -734,7 +734,7 @@ contains
             endif
         endif
         ! FT volume
-        call b%vol%fwd_ft
+        call b%vol%fft()
         ! expand for fast interpolation
         call b%vol%expand_cmat(p%alpha)
     end subroutine preprefvol
@@ -770,7 +770,7 @@ contains
                 endif
                 call b%recvols(s)%compress_exp
                 call b%recvols(s)%sampl_dens_correct
-                call b%recvols(s)%bwd_ft
+                call b%recvols(s)%ifft()
                 call b%recvols(s)%clip(b%vol)
                 call b%vol%write(p%vols(s), del_if_exists=.true.)
                 if( present(which_iter) )then
@@ -779,7 +779,7 @@ contains
                     call b%vol%fwd_ft
                     ! low-pass filter
                     call b%vol%bp(0., p%lp)
-                    call b%vol%bwd_ft
+                    call b%vol%ifft()
                     ! mask
                     call b%vol%mask(p%msk, 'soft')
                     call b%vol%write(pprocvol)
@@ -850,7 +850,7 @@ contains
                     b%fsc(s,:) = file2rarr('fsc_state'//int2str_pad(s,2)//'.bin')
                     ! low-pass filter
                     call b%vol%bp(0., p%lp)
-                    call b%vol%bwd_ft
+                    call b%vol%ifft()
                     ! mask
                     call b%vol%mask(p%msk, 'soft')
                     call b%vol%write(pprocvol)

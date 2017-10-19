@@ -119,7 +119,7 @@ contains
         ! prepare image
         didft = .false.
         if( .not. img%is_ft() )then
-            call img%fwd_ft
+            call img%fft()
             didft = .true.
         endif
         ! allocate instance variables
@@ -153,7 +153,7 @@ contains
                 end do
             end do
         end do
-        if( didft ) call img%bwd_ft
+        if( didft ) call img%ifft()
         self%existence = .true.
     end subroutine new_1
 

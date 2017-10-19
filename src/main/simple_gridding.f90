@@ -21,7 +21,7 @@ contains
         VerbosePrint "In simple_gridding::prep4cgrid padded"
         call divide_w_instr(img4grid, kbwin) ! division w instr in real space
         VerbosePrint "In simple_gridding::prep4cgrid div intr"
-        call img4grid%fwd_ft()               ! return the Fourier transform
+        call img4grid%fft()               ! return the Fourier transform
         VerbosePrint "In simple_gridding::prep4cgrid FFT to Fourier domain"
       end subroutine prep4cgrid
 

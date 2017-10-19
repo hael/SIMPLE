@@ -291,7 +291,7 @@ contains
             subroutine correct_for_sampling_density( recname )
                 character(len=*), intent(in) :: recname
                 call b%recvol%sampl_dens_correct
-                call b%recvol%bwd_ft
+                call b%recvol%ifft()
                 call b%recvol%clip(b%vol)
                 call b%vol%write(recname, del_if_exists=.true.)
             end subroutine correct_for_sampling_density

@@ -9,7 +9,7 @@
 !!     tn = tic()
 !!     ...
 !!     write(*,'(A,F20.10)') ">>> Elapsed time (sec) ", toc()
-!! 
+!!
 !! \author Michael Eager 2017
 !! REVISIONS:
 !! Version 0.1:  64 bit INT implementation of system_clock
@@ -38,10 +38,10 @@ integer, parameter :: timer_int_kind = sp
 #endif
    integer(timer_int_kind), public   :: clock_ticks_per_second = INT(0, timer_int_kind) !< Number of counts per second
    integer(timer_int_kind), public   :: last_time_point = INT(0, timer_int_kind)        !< Current timesamp
-   integer, public       :: idx_elapsed = 0, num_elapsed = 3
-   integer, public       :: num_profile_loops, num_profile_vars
-   logical, public       :: in_loop = .false.
-   integer, public       :: profile_counter
+   integer               :: idx_elapsed = 0, num_elapsed = 3
+   integer               :: num_profile_loops, num_profile_vars
+   logical               :: in_loop = .false.
+   integer               :: profile_counter
    integer, parameter, public :: MAX_TOKENS = 10                          !< number of entries in token dictionary
    integer, parameter, public :: MAX_TOKEN_CHARSIZE = 30                  !< max char length of tokens
    real(timer_int_kind), allocatable, public :: elapsed_times(:)                 !< timer loop storage of elapsed times
@@ -277,7 +277,7 @@ DebugPrint 'Size of elapsed array ', size(elapsed_times)
               call parsestr(vin,' ', v,nargs_parse)
               DebugPrint " timer_profile_setup no-comma token input"
               DebugPrint vin
-          else 
+          else
               call parsestr(vin,',',v,tmp_nargs)
           end if
           DebugPrint " timer_profile_setup parsed tokens"
@@ -385,7 +385,7 @@ DebugPrint 'Size of elapsed array ', size(elapsed_times)
       DebugPrint profile_matrix(1:10, 1:2)
    end subroutine timer_profile_setup
 
-   !< Within profile loop - start timer with token 
+   !< Within profile loop - start timer with token
    subroutine timer_profile_start(token)
       character(len=*), intent(in) :: token
       integer ::  ival
@@ -535,4 +535,3 @@ DebugPrint 'Size of elapsed array ', size(elapsed_times)
 
 
 end module simple_timer
-

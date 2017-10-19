@@ -52,13 +52,13 @@ contains
         p = params(cline) ! constants & derived constants produced, mode=2
         call b%build_general_tbox(p,cline)   ! general objects built
         ! generate images
-        ! deal with reference 
+        ! deal with reference
         call vol_ref%new([p%box,p%box,p%box], p%smpd)
         call vol_ref%read(p%vols(1))
         call vol_ref%add_gauran(SNR)
         call vol_ref%mask(p%msk,'soft')
         call vol_ref%write('vol_ref.mrc')
-        call vol_ref%fwd_ft
+        call vol_ref%fft()
         ! deal with target (randomly rotated version of vols(1))
         call vol_tmp%new([p%box,p%box,p%box], p%smpd)
         call vol_tmp%read(p%vols(1))
@@ -69,7 +69,7 @@ contains
         call b%vol%write('vol_target_2.mrc')
         call b%vol%mask(p%msk,'soft')
         call b%vol%write('vol_target_3.mrc')
-        call b%vol%fwd_ft
+        call b%vol%fft()
         call volpft_srch_init(vol_ref,b%vol,p%hp,p%lp,0.)
         call vol_tmp%kill
     end subroutine setup_testenv
@@ -84,7 +84,7 @@ contains
             call progress(itest,NTESTS)
             call ranori%rnd_ori
             o_best  = volpft_srch_minimize_eul()
-            corr    = o_best%get('corr') 
+            corr    = o_best%get('corr')
             sumcorr = sumcorr + corr
             dist    = o_best.euldist.ranori
             sumdist = sumdist + dist

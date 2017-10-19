@@ -5,7 +5,7 @@ module simple_volpft_corrcalc
 !$ use omp_lib
 !$ use omp_lib_kinds
 include 'simple_lib.f08'
-    
+
 use simple_projector, only: projector
 use simple_sym,       only: sym
 use simple_ori,       only: ori
@@ -13,7 +13,7 @@ implicit none
 
 type :: volpft_corrcalc
     private
-    class(projector), pointer :: vol_ref=>null()          !< pointer to reference volume 
+    class(projector), pointer :: vol_ref=>null()          !< pointer to reference volume
     class(projector), pointer :: vol_target=>null()       !< pointer to target volume
     type(sym)                 :: ico                      !< defines the icosahedral group
     integer                   :: nspace          = 0      !< number of vec:s in representation
@@ -89,17 +89,17 @@ contains
             end do
         end do
         ! prepare for fast interpolation
-        call self%vol_ref%fwd_ft
+        call self%vol_ref%fft()
         call self%vol_ref%expand_cmat(alpha)
-        call self%vol_target%fwd_ft
+        call self%vol_target%fft()
         call self%vol_target%expand_cmat(alpha)
         ! extract the reference lines
         call self%extract_ref
         self%existence_vpft = .true.
     end subroutine new
-    
+
     ! INTERPOLATION METHODS
-    
+
     !>  \brief  extracts the lines defined by the icosahedral group from the reference
     subroutine extract_ref( self )
         class(volpft_corrcalc), intent(inout) :: self
@@ -115,7 +115,7 @@ contains
         !$omp end parallel do
         self%sqsum_ref = sum(csq(self%vpft_ref))
     end subroutine extract_ref
-    
+
     !>  \brief  extracts the lines required for matchiing
     !!          from the reference
     subroutine extract_target_1( self, e, serial )
@@ -184,7 +184,7 @@ contains
         endif
         self%sqsum_target = sum(csq(self%vpft_target))
     end subroutine extract_target_2
-    
+
     !>  \brief  continous rotational correlator
     function corr_1( self, e, serial ) result( cc )
         class(volpft_corrcalc), intent(inout) :: self

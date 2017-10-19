@@ -65,7 +65,7 @@ contains
         call vol_inout%zero_background()
         call vol_inout%mul(self)
         ! the end
-        if( was_ft )call vol_inout%fwd_ft
+        if( was_ft )call vol_inout%fft()
     end subroutine automask3D
 
     !>  \brief  envelope mask for resolution estimation

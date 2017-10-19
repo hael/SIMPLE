@@ -191,9 +191,9 @@ contains
     subroutine update_frame( iframe )
         integer, intent(in) :: iframe
         call frame_img%read(framenames(iframe),1)
-        call frame_img%fwd_ft
+        call frame_img%fft()
         call frame_img%bp(0., lp)
-        call frame_img%bwd_ft
+        call frame_img%ifft()
     end subroutine update_frame
 
     subroutine refine_position( pos, pos_refined )

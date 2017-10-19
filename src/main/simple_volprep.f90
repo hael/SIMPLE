@@ -23,7 +23,7 @@ contains
         ! mask
         call volprojobj%mask(p%msk,'soft')
         ! FT
-        call volprojobj%fwd_ft
+        call volprojobj%fft()
         ! scale
         smpd_target = p%lp*LP2SMPDFAC
         call autoscale(p%boxmatch, p%smpd, smpd_target, box_sc, smpd_sc, scale)

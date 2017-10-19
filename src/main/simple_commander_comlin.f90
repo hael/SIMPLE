@@ -65,7 +65,7 @@ contains
             endif
             ! generate projections
             call b%vol%mask(p%msk, 'soft')
-            call b%vol%fwd_ft
+            call b%vol%fft()
             call b%vol%expand_cmat(p%alpha)
             b%ref_imgs(1,:) = project(b%vol, b%e, p)
             if( p%l_distr_exec .and. p%part > 1 )then
@@ -85,7 +85,7 @@ contains
                 do j=1,p%nsym
                     cnt = cnt+1
                     b%imgs_sym(cnt) = b%ref_imgs(1,i)
-                    call b%imgs_sym(cnt)%fwd_ft
+                    call b%imgs_sym(cnt)%fft()
                 end do
             end do
         endif
@@ -134,7 +134,7 @@ contains
                     do j=1,p%nsym
                         cnt = cnt+1
                         b%imgs_sym(cnt) = b%ref_imgs(1,i)
-                        call b%imgs_sym(cnt)%fwd_ft
+                        call b%imgs_sym(cnt)%fft()
                     end do
                 end do
                 ! search

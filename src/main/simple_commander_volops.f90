@@ -101,8 +101,8 @@ contains
             endif
         endif
         ! forward FT
-        call even%fwd_ft
-        call odd%fwd_ft
+        call even%fft()
+        call odd%fft()
         ! calculate FSC
         res = even%get_res()
         allocate(corrs(even%get_filtsz()))
@@ -161,7 +161,7 @@ contains
         p = params(cline) ! constants & derived constants produced, mode=2
         call b%build_general_tbox(p, cline) ! general objects built
         call b%vol%read(p%vols(state))
-        call b%vol%fwd_ft
+        call b%vol%fft()
         if( cline%defined('fsc') )then
             ! optimal low-pass filter from FSC
             if( file_exists(p%fsc) )then
@@ -197,7 +197,7 @@ contains
         ! final low-pass filtering for smoothness
         if( cline%defined('fsc')  ) call b%vol%bp(0., fsc0143)
         ! masking
-        call b%vol%bwd_ft
+        call b%vol%ifft()
         if( cline%defined('mskfile') )then
             if( file_exists(p%mskfile) )then
                 ldim = b%vol%get_ldim()

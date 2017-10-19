@@ -116,7 +116,7 @@ contains
             end do
         end do
         !$omp end parallel do
-        call rovol_pad%bwd_ft
+        call rovol_pad%ifft()
         call rovol_pad%clip(rovol)
         call rovol%norm()
         call vol_pad%kill_expanded

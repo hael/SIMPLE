@@ -115,9 +115,9 @@ contains
         ldim_thumb(2) = round2even(real(ldim(2))*scale)
         ldim_thumb(3) = 1
         call self%thumbnail%new(ldim_thumb, p%smpd)
-        call self%moviesum_corrected%fwd_ft
+        call self%moviesum_corrected%fft()
         call self%moviesum_corrected%clip(self%thumbnail)
-        call self%thumbnail%bwd_ft
+        call self%thumbnail%ifft()
         call self%thumbnail%write(self%moviename_thumb)
         ! destruct
         call self%moviesum%kill

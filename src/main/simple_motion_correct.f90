@@ -298,7 +298,7 @@ a       corrmat = 0.
                 !$omp end parallel do
                 call frame_tmp%set_rmat(rmat)
                 call movie_frames_scaled(iframe)%new(ldim_scaled, smpd_scaled)
-                call frame_tmp%fwd_ft
+                call frame_tmp%fft()
                 call frame_tmp%clip(movie_frames_scaled(iframe))
                 call movie_frames_ftexp(iframe)%new(movie_frames_scaled(iframe), hp, lp)
                 call movie_frames_ftexp_sh(iframe)%new(movie_frames_ftexp(iframe))

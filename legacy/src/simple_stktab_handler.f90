@@ -42,7 +42,7 @@ type :: stktab_handler
     procedure :: del_stktab_files
     ! destructor
     procedure :: kill
-end type
+end type stktab_handler
 
 contains
 

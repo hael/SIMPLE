@@ -314,7 +314,8 @@ contains
                     call bp_imgfile(p%stk, p%outstk, p%smpd, p%hp, 0., width=width)
                 ! real-space
                 else if( cline%defined('real_filter') )then
-                    if( .not. cline%defined('winsz') ) stop 'need winsz input for real-space filtering; commander_imgproc :: exec_filter'
+                    if( .not. cline%defined('winsz') )&
+                    call simple_stop('need winsz input for real-space filtering; commander_imgproc :: exec_filter')
                     call real_filter_imgfile(p%stk, p%outstk, p%smpd, trim(p%real_filter), nint(p%winsz))
                 else
                     stop 'Nothing to do!'
@@ -342,7 +343,8 @@ contains
                     call b%vol%bp(0., p%lp, width=width)
                 ! real-space
                 else if( cline%defined('real_filter') )then
-                    if( .not. cline%defined('winsz') ) stop 'need winsz input for real-space filtering; commander_imgproc :: exec_filter'
+                    if( .not. cline%defined('winsz') )&
+                        call simple_stop('need winsz input for real-space filtering; commander_imgproc :: exec_filter')
                     call b%vol%real_space_filter(nint(p%winsz), p%real_filter)
                 else
                     stop 'Nothing to do!'
@@ -542,7 +544,7 @@ contains
             if( cline%defined('scale') .or. cline%defined('newbox') )then
                 ! Rescaling
                 call vol2%new([p%newbox,p%newbox,p%newbox],p%smpd)
-                call b%vol%fwd_ft
+                call b%vol%fft()
                 call vol2%set_ft(.true.)
                 if( p%newbox < p%box )then
                     call b%vol%clip(vol2)
@@ -552,7 +554,7 @@ contains
                     call vol2%copy(b%vol)
                 endif
                 call b%vol%copy(vol2)
-                call b%vol%bwd_ft
+                call b%vol%ifft()
                 scale = real(p%newbox)/real(p%box)
                 p%box = p%newbox
                 smpd_new = p%smpd/scale
@@ -600,13 +602,13 @@ contains
                 ldim(3) = 1 ! to correct for the stupide 3:d dim of mrc stacks
                 do iframe= 1, nframes
                     call img%read(filenames(ifile), iframe)
-                    call img%fwd_ft
+                    call img%fft()
                     if( ldim_scaled(1) <= ldim(1) .and. ldim_scaled(2) <= ldim(2) .and. ldim_scaled(3) <= ldim(3) )then
                         call img%clip(img2)
                     else
                         call img%pad(img2)
                     endif
-                    call img2%bwd_ft
+                    call img2%ifft()
                     call img2%write(fname, iframe)
                 end do
                 deallocate(fname)
@@ -957,8 +959,10 @@ contains
                 print *, 'ctfreslim                  --> ptcls set state 1: ', (p%nptcls-cnt), ' ptcls set state 0: ', cnt
             endif
             !now select on defocus limits
-            if( cline%defined('dfclose') .and. .not. cline%defined('dffar') ) stop 'need both dfclose and dffar for state setting on basis of defocus values'
-            if( cline%defined('dffar') .and. .not. cline%defined('dfclose') ) stop 'need both dfclose and dffar for state setting on basis of defocus values'
+            if( cline%defined('dfclose') .and. .not. cline%defined('dffar') ) &
+                stop 'need both dfclose and dffar for state setting on basis of defocus values'
+            if( cline%defined('dffar') .and. .not. cline%defined('dfclose') ) &
+                stop 'need both dfclose and dffar for state setting on basis of defocus values'
             if( cline%defined('dfclose') ) then
                 cnt2=0
                 do i=1,p%nptcls

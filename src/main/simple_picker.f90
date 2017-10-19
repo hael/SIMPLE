@@ -96,11 +96,11 @@ contains
             call refs_refine(iref)%new(ldim_refs_refine, smpd_shrunken_refine)
             call refimg%new([orig_box,orig_box,1], smpd)
             call refimg%read(refsname, iref)
-            call refimg%fwd_ft
+            call refimg%fft()
             call refimg%clip(refs(iref))
             call refimg%clip(refs_refine(iref))
-            call refs(iref)%bwd_ft
-            call refs_refine(iref)%bwd_ft
+            call refs(iref)%ifft()
+            call refs_refine(iref)%ifft()
             call refs(iref)%mask(msk, 'hard')
             call refs_refine(iref)%mask(msk_refine, 'hard')
             call refs(iref)%prenorm4real_corr(sxx(iref))

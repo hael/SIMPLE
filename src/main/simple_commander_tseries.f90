@@ -208,14 +208,14 @@ contains
                 endif
             endif
             ! fwd ft
-            call b%img%fwd_ft()
-            call img_backgr_wctf%fwd_ft()
+            call b%img%fft()
+            call img_backgr_wctf%fft()
             ! filter background image
             call img_backgr_wctf%bp(p%hp,p%lp,width=p%width)
             ! subtract background
             call b%img%subtr(img_backgr_wctf)
             ! bwd ft
-            call b%img%bwd_ft()
+            call b%img%ifft()
             ! normalise
             call b%img%norm()
             ! output corrected image

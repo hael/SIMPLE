@@ -35,7 +35,7 @@ contains
                 ! apply a soft-edged mask
                 call imgs(iptcl)%mask(msk, 'soft')
                 ! Fourier transform
-                call imgs(iptcl)%fwd_ft
+                call imgs(iptcl)%fft()
             endif
         end do
         if( allocated(corrmat) ) deallocate(corrmat)
@@ -96,7 +96,7 @@ contains
                 ! apply a soft-edged mask
                 call imgs_sel(iptcl)%mask(msk, 'soft')
                 ! Fourier transform
-                call imgs_sel(iptcl)%fwd_ft
+                call imgs_sel(iptcl)%fft()
             endif
         end do
         ! prep orig imgs for corrcalc
@@ -105,7 +105,7 @@ contains
                 ! apply a soft-edged mask
                 call imgs_orig(iptcl)%mask(msk, 'soft')
                 ! Fourier transform
-                call imgs_orig(iptcl)%fwd_ft
+                call imgs_orig(iptcl)%fft()
             endif
         end do
         if( allocated(corrmat) ) deallocate(corrmat)

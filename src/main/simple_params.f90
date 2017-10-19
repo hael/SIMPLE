@@ -1392,7 +1392,7 @@ contains
                                 ! all ok
                             else
                                 if( .not. allow_mix )then
-                                    call simple_stop('The inputted file names have nonconforming format (mixed formats not yet allowed)!')
+                                    call simple_stop('The input file names have nonconforming format (mixed formats not allowed)')
                                 endif
                             endif
                         end do
@@ -1427,7 +1427,7 @@ contains
                                 self%ext = '.spi'
                             case DEFAULT
                                 write(*,*) 'format string is ', form
-                                call simple_stop('This file format is not supported by SIMPLE; double_check_file_formats; simple_params')
+                                call simple_stop('File format is not supported by SIMPLE; double_check_file_formats; simple_params')
                         end select
                     endif
                 endif

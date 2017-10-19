@@ -175,7 +175,7 @@ contains
         call img_ref%new([100,100,1], 2.)
         call img_ptcl%new([100,100,1], 2.)
         call img_ref%square(20)
-        call img_ref%fwd_ft
+        call img_ref%fft()
         call ftexp_ref%new(img_ref, hp, lp)
         call ftexp_ptcl%new(img_ptcl, hp, lp)
         call ftexp_shsrch_init(ftexp_ref, ftexp_ptcl, lims, 'simplex', 3)
