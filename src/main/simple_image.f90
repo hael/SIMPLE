@@ -4512,7 +4512,7 @@ contains
         real :: npix, ax
         npix = real(count(mask))
         ax   = sum(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)), mask=mask) / npix
-        where( mask ) diff = self%rmat - ax
+        where( mask ) diff = self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) - ax
         sxx  = sum(diff * diff, mask=mask)
     end subroutine prenorm4real_corr_2
 
