@@ -860,10 +860,11 @@ contains
         integer,               allocatable :: pinds(:)
         logical,               allocatable :: oris_mask(:)
         real                               :: kv, cs, fraca, dfx, dfy, angast, ctfres
-        real                               :: particle_position(2)
+        real                               :: particle_position(2), ctffitcc, phshift
         type(image)                        :: micrograph
         type(oris)                         :: outoris, os_uni
-        logical                            :: params_present(3)
+        logical                            :: params_present(3), ctffitcc_is_there, phshift_is_there
+        logical                            :: ctfres_is_there
         noutside = 0
         p = params(cline, checkdistr=.false.) ! constants & derived constants produced
         if( p%stream .eq. 'yes' )then
@@ -1044,7 +1045,12 @@ contains
                 cs     = b%a%get(movie,'cs')
                 fraca  = b%a%get(movie,'fraca')
                 dfx    = b%a%get(movie,'dfx')
-                ctfres = b%a%get(movie,'ctfres')
+                ctffitcc_is_there = b%a%isthere('ctffitcc')
+                phshift_is_there  = b%a%isthere('phshift')
+                ctfres_is_there   = b%a%isthere('ctfres')
+                if( ctffitcc_is_there ) ctffitcc = b%a%get(movie,'ctffitcc')
+                if( phshift_is_there  ) phshift  = b%a%get(movie,'phshift')
+                if( ctfres_is_there   ) ctfres   = b%a%get(movie,'ctfres')
                 angast = 0.
                 if( b%a%isthere('dfy') )then ! astigmatic CTF
                     if( .not. b%a%isthere('angast') ) stop 'need angle of astigmatism for CTF correction'
@@ -1063,6 +1069,9 @@ contains
                             call outoris%set(pinds(i), 'angast', angast)
                             call outoris%set(pinds(i), 'dfy',       dfy)
                         endif
+                        if( ctffitcc_is_there ) call outoris%set(pinds(i), 'ctffitcc', ctffitcc)
+                        if( phshift_is_there  ) call outoris%set(pinds(i), 'phshift',  phshift)
+                        if( ctfres_is_there   ) call outoris%set(pinds(i), 'ctfres',   ctfres)
                     endif
                 end do
                 DebugPrint  'did set CTF parameters dfx/dfy/angast/ctfres: ', dfx, dfy, angast, ctfres
