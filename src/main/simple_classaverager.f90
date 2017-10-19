@@ -495,6 +495,7 @@ contains
             do icls=1,self%ncls
                 ! batch planning
                 icls_pop = self%class_pop(istate, icls)
+                if( icls_pop < 2 ) cycle
                 nbatches = ceiling(real(icls_pop)/real(self%pp%nthr*BATCHTHRSZ))
                 batches  = split_nobjs_even(icls_pop, nbatches)
                 ! batch loop
