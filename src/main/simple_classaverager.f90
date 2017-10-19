@@ -141,7 +141,7 @@ contains
         self%smpd       = p%smpd
         ! set ldims
         self%ldim       = [self%pp%box,self%pp%box,1]
-        self%ldim_pd    = nint(KBALPHA) * self%ldim
+        self%ldim_pd    = [self%pp%boxpd,self%pp%boxpd,1]
         self%ldim_pd(3) = 1
         ! build arrays
         allocate(self%precs(self%partsz), self%cavgs_even(p%nstates,self%ncls), self%cavgs_odd(p%nstates,self%ncls),&

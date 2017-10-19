@@ -34,7 +34,7 @@ type, extends(image) :: reconstructor
     real                        :: dfx=0., dfy=0., angast=0.    !< CTF params
     real                        :: phshift       = 0.           !< additional phase shift from the Volta  
     integer                     :: wdim          = 0            !< dim of interpolation matrix
-    integer                     :: lfny          = 0            !< Nyqvist Fourier index
+    integer                     :: nyq           = 0            !< Nyqvist Fourier index
     integer                     :: ldim_img(3)   = 0            !< logical dimension of the original image
     type(CTFFLAGTYPE)           :: ctf                          !< ctf flag <yes|no|mul|flip>
     logical                     :: tfastig            = .false. !< astigmatic CTF or not
@@ -87,6 +87,7 @@ contains
         if(      self%is_2d() ) stop 'only for volumes; alloc_rho; simple_reconstructor'
         if( present(expand) )l_expand = expand
         self%ldim_img = self%get_ldim()
+        self%nyq      = self%get_lfny(1)
         if( self%ldim_img(3) < 2 ) stop 'reconstructor need to be 3D 4 now; alloc_rho; simple_reconstructor'
         call self%dealloc_rho
         self%winsz = p%winsz
@@ -241,8 +242,7 @@ contains
         class(reconstructor), intent(inout) :: self         !< instance
         real,                 intent(in)    :: vec(3)       !< nonuniform sampling location
         real,                 intent(out)   :: tval, tvalsq !< CTF and CTF**2.
-        real    :: sqSpatFreq,ang,inv1,inv2
-        integer :: ldim(3)
+        real :: sqSpatFreq, ang, inv1, inv2
         if( self%ctf%flag /= CTFFLAG_NO )then
             inv1       = vec(1)*(1./real(self%ldim_img(1)))
             inv2       = vec(2)*(1./real(self%ldim_img(2)))
@@ -269,7 +269,7 @@ contains
         logical,              intent(in)    :: inoutmode !< add = .true., subtract = .false.
         class(image),         intent(inout) :: fpl       !< Fourier plane
         real,                 intent(in)    :: pwght     !< external particle weight (affects both fplane and rho)
-        integer :: h, k, lims(3,2), logi(3), phys(3)
+        integer :: h, k, lims(3,2), logi(3), phys(3), sh
         complex :: oshift
         real    :: x, y, xtmp
         if( self%ctf%flag /= CTFFLAG_NO )then ! make CTF object & get CTF info
@@ -286,13 +286,15 @@ contains
             self%phshift = 0.
             if( self%phaseplate ) self%phshift = o%get('phshift')
         endif
-        lims = self%loop_lims(3)
+        lims = fpl%loop_lims(3)
         x    = o%get('x')
         y    = o%get('y')
         !$omp parallel do collapse(2) default(shared) schedule(static)&
-        !$omp private(h,k,oshift,logi,phys) proc_bind(close)
+        !$omp private(h,k,sh,oshift,logi,phys) proc_bind(close)
         do k=lims(1,1),lims(1,2)
             do h=lims(1,1),lims(1,2)
+                sh = nint(hyp(real(h),real(k)))
+                if( sh > self%nyq + 1 )cycle
                 logi   = [h,k,0]
                 oshift = fpl%oshift(logi, [-x,-y,0.])
                 phys   = fpl%comp_addr_phys(logi)
@@ -399,8 +401,8 @@ contains
         do h = lims(1,1),lims(1,2)
             do k = lims(2,1),lims(2,2)
                 do m = lims(3,1),lims(3,2)
-                    logi = [h,k,m]
                     if(abs(self%cmat_exp(h,k,m)) < TINY) cycle
+                    logi = [h,k,m]
                     if (h > 0) then
                         phys(1) = h + 1
                         phys(2) = k + 1 + MERGE(self%ldim_img(2),0,k < 0)

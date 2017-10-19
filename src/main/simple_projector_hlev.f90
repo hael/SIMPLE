@@ -71,7 +71,7 @@ contains
         logical          :: l_shvec_present
         kbwin           = kbinterpol(KBWINSZ, KBALPHA)
         ldim            = vol%get_ldim()
-        ldim_pd         = nint(KBALPHA)*ldim
+        ldim_pd         = [p%boxpd,p%boxpd,p%boxpd]
         l_shvec_present = present(shvec)
         call vol_pad%new(ldim_pd, p%smpd)
         call rovol_pad%new(ldim_pd, p%smpd)
@@ -103,48 +103,5 @@ contains
         call vol_pad%kill
         call rovol_pad%kill
     end function rotvol
-
-    !>  \brief  rotates an image by angle ang using Fourier gridding
-    subroutine rotimg( img, ang, msk, roimg )
-        use simple_math, only: hyp
-        class(image),     intent(inout) :: img   !< image to rotate
-        real,             intent(in)    :: ang   !< angle of rotation
-        real,             intent(in)    :: msk   !< mask radius (in pixels)
-        class(image),     intent(out)   :: roimg !< rotated image
-        type(projector)  :: img_pad 
-        type(image)      :: roimg_pad
-        type(kbinterpol) :: kbwin
-        integer          :: h,k,lims(3,2),ldim(3),ldim_pd(3),logi(3),phys(3),sh,nyq
-        real             :: loc(3),mat(2,2),smpd
-        kbwin      = kbinterpol(KBWINSZ, KBALPHA)
-        ldim       = img%get_ldim()
-        ldim_pd    = 2*ldim
-        ldim_pd(3) = 1
-        smpd       = img%get_smpd()
-        call roimg%new(ldim, smpd)
-        call img_pad%new(ldim_pd, smpd)
-        call roimg_pad%new(ldim_pd, smpd)
-        nyq        = img_pad%get_nyq()
-        roimg_pad  = cmplx(0.,0.)
-        call prep4cgrid(img, img_pad, msk, kbwin)
-        lims       = img_pad%loop_lims(2)
-        mat        = rotmat2d(ang) 
-        !$omp parallel do collapse(2) default(shared) private(h,k,loc,logi,phys,sh)&
-        !$omp schedule(static) proc_bind(close)
-        do h=lims(1,1),lims(1,2)
-            do k=lims(2,1),lims(2,2)                
-                loc(:2) = matmul(real([h,k]),mat)
-                loc(3)  = 0.
-                logi    = [h,k,0]
-                phys    = img_pad%comp_addr_phys(logi)
-                call roimg_pad%set_fcomp(logi, phys, img_pad%extr_gridfcomp(loc))
-            end do
-        end do
-        !$omp end parallel do
-        call roimg_pad%bwd_ft
-        call roimg_pad%clip(roimg)
-        call img_pad%kill
-        call roimg_pad%kill
-    end subroutine rotimg
 
 end module simple_projector_hlev

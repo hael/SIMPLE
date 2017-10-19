@@ -260,7 +260,7 @@ contains
             call find_ldim_nptcls(movienames(p%startit), ldim, ifoo)
         endif
         DebugPrint  'logical dimension: ', ldim
-        ldim(3) = 1 ! to correct for the stupide 3:d dim of mrc stacks
+        ldim(3) = 1 ! to correct for the stupid 3:d dim of mrc stacks
         numlen = len(int2str(nmovies))
         DebugPrint  'length of number string: ', numlen
         ! determine loop range
@@ -337,7 +337,7 @@ contains
             DebugPrint  'read the img filenames'
             ! get logical dimension of micrographs
             call find_ldim_nptcls(imgnames(1), ldim, ifoo)
-            ldim(3) = 1 ! to correct for the stupide 3:d dim of mrc stacks
+            ldim(3) = 1 ! to correct for the stupid 3:d dim of mrc stacks
             DebugPrint  'logical dimension: ', ldim
             call b%img%new(ldim, p%smpd) ! img re-generated (to account for possible non-square)
             ! determine loop range
@@ -414,7 +414,7 @@ contains
             endif
             ! get logical dimension of micrographs
             call find_ldim_nptcls(imgnames(1), ldim, ifoo)
-            ldim(3) = 1 ! to correct for the stupide 3:d dim of mrc stacks
+            ldim(3) = 1 ! to correct for the stupid 3:d dim of mrc stacks
             DebugPrint  'logical dimension: ', ldim
             call b%img%new(ldim, p%smpd) ! img re-generated (to account for possible non-square)
             ! determine loop range

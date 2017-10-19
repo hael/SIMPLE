@@ -276,7 +276,7 @@ type :: params
     integer :: xdimpd=0
     integer :: ydim=0              !< y dimension(in pixles)
     ! real variables in ascending alphabetical order
-    real    :: alpha=2.
+    real    :: alpha=KBALPHA
     real    :: amsklp=15.          !< low-pass limit for envelope mask generation(in A)
     real    :: angerr=0.           !< angular error(in degrees){0}
     real    :: ares=7.

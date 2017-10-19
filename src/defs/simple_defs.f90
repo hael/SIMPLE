@@ -69,7 +69,8 @@ integer, parameter :: PICKER_OFFSET        = 3       !< picker offset for grid s
 ! constants for masking/interpolation
 real, parameter :: COSMSKHALFWIDTH         = 6.0     !< spherical soft masking
 real, parameter :: KBWINSZ                 = 1.5     !< interpolation window size
-real, parameter :: KBALPHA                 = 2.0     !< interpolation alpha (smoothing constant)
+! real, parameter :: KBALPHA                 = 1.4     !< interpolation alpha (oversampling constant)
+real, parameter :: KBALPHA                 = 2.0     !< interpolation alpha (oversampling constant)
 
 ! real constants that control search and convergence
 real, parameter :: FRAC_SH_LIM             = 80.0    !< at what frac to turn on the shift search
