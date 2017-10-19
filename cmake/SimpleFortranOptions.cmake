@@ -583,9 +583,6 @@ else()
   set(BUILD_NAME "${BUILD_NAME}_FFTW" )
 endif()
 
-FIND_PACKAGE(GSL REQUIRED)
-set(EXTRA_LIBS ${EXTRA_LIBS} ${GSL_LIBRARIES})
-
 
 #set(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS}  ")\
 #set(CMAKE_FCPP_FLAGS " -C -P ") # Retain comments due to fortran slash-slash
