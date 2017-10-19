@@ -494,9 +494,10 @@ contains
             ! class loop
             do icls=1,self%ncls
                 ! batch planning
+                icls_pop = self%class_pop(istate, icls)
                 nbatches = ceiling(real(icls_pop)/real(self%pp%nthr*BATCHTHRSZ))
                 batches  = split_nobjs_even(icls_pop, nbatches)
-                ! batch loop, prep
+                ! batch loop
                 do batch=1,nbatches
                     ! prep batch
                     batchsz = batches(batch,2) - batches(batch,1) + 1
@@ -532,8 +533,8 @@ contains
                     do i=1,batchsz
                         iptcl = ptcls_inds(batches(batch,1) + i - 1)
                         call read_img_from_stk( self%bp, self%pp, iptcl )
-                        batch_imgs(i)  = self%bp%img
-                        padded_imgs(i) = 0.
+                        call batch_imgs(i)%copy_slim(self%bp%img)
+                        call padded_imgs(i)%zero_and_unflag_ft
                     enddo
                     if( L_BENCH ) rt_batch_loop = rt_batch_loop + toc(t_batch_loop)
                     if( L_BENCH ) t_gridding = tic()

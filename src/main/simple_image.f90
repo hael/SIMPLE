@@ -40,6 +40,7 @@ type :: image
     procedure          :: new
     procedure          :: disc
     procedure          :: copy
+    procedure          :: copy_slim
     procedure          :: mic2spec
     procedure          :: boxconv
     procedure          :: window
@@ -239,6 +240,7 @@ type :: image
     procedure          :: add_gauran
     procedure          :: dead_hot_positions
     procedure          :: taper_edges
+    procedure          :: zero_and_unflag_ft
     procedure          :: zero_background
     procedure          :: subtr_backgr_pad_divwinstr_fft
     procedure          :: salt_n_pepper
@@ -411,12 +413,25 @@ contains
             else
                 call self%new(self_in%ldim, self_in%smpd)
             endif
-            self%rmat = self_in%rmat
+            self%rmat(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)) =&
+                &self_in%rmat(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3))
             self%ft   = self_in%ft
         else
             stop 'cannot copy nonexistent image; copy; simple_image'
         endif
     end subroutine copy
+
+    !>  \brief copy is a constructor that copies the input object
+    !! \param self image object
+    !! \param self_in rhs object
+    !!
+    subroutine copy_slim( self, self_in )
+        class(image), intent(inout) :: self
+        class(image), intent(in)    :: self_in
+        self%rmat(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)) =&
+            &self_in%rmat(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3))
+        self%ft = self_in%ft
+    end subroutine copy_slim
 
     !> mic2spec calculates the average powerspectrum over a micrograph
     !! \param self image object
@@ -4936,6 +4951,13 @@ contains
             end do
         end do
     end function dead_hot_positions
+
+    !>  \brief zero image
+    subroutine zero_and_unflag_ft(self)
+        class(image), intent(inout) :: self
+        self%rmat = 0.
+        self%ft   = .false.
+    end subroutine zero_and_unflag_ft
 
     !>  \brief  Taper edges of image so that there are no sharp discontinuities in real space
     !!          This is a re-implementation of the MRC program taperedgek.for (Richard Henderson, 1987)
