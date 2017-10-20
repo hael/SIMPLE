@@ -145,8 +145,6 @@ contains
         ! output command line executed
         write(*,'(a)') '>>> COMMAND LINE EXECUTED'
         write(*,*) trim(cmdline_glob)
-        ! make scaled stacks directory
-        call exec_cmdline('mkdir -p '//trim(adjustl(STK_DIR))//'|| true')
         ! make master parameters
         p_master = params(cline, checkdistr=.false.)
         ! init command-lines
@@ -178,6 +176,8 @@ contains
         if( p_master%autoscale.eq.'yes' )then
             smpd_glob = LP2SMPDFAC * p_master%lp
             scale     = p_master%smpd / smpd_glob
+            ! make scaled stacks directory
+            call exec_cmdline('mkdir -p '//trim(adjustl(STK_DIR))//'|| true')
         else
             msk_glob  = p_master%msk
             smpd_glob = p_master%smpd
@@ -230,6 +230,7 @@ contains
             ! prime2D
             call cline_prime2D%set('startit', real(iter))
             call cline_prime2D%set('maxits',  real(iter))
+            call cline_prime2D%delete('endit')
             call cline_prime2D%set('ncls',    real(ncls_glob))
             call cline_prime2D%set('nparts',  real(min(ncls,p_master%nparts)))
             if(nptcls_glob > SHIFTSRCH_PTCLSLIM .and. iter > SHIFTSRCH_ITERLIM)then
@@ -343,6 +344,12 @@ contains
                     enddo
                     call qsys_cleanup(p_master)
                     call del_file(SCALE_FILETAB)
+                else
+                    cnt = 0
+                    do i = nstacks_glob+1, nstacks_glob+n_newstks
+                        cnt   = cnt + 1
+                        stktab(i) = trim(new_stacks(cnt))
+                    enddo                    
                 endif
                 nstacks_glob = nstacks_glob + n_newstks
                 call write_filetable(STK_FILETAB, stktab)

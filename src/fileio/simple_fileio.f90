@@ -1062,6 +1062,14 @@ contains
         call exec_cmdline(cmd)
     end subroutine ls_mrcfiletab
 
+    subroutine ls_fbody_mrcfiletab( fbody, filetabname )
+        character(len=*),intent(in)  :: fbody, filetabname
+        character(len=STDLEN) :: cmd
+        cmd = 'ls -tr '//trim(fbody)//'*.mrc*'//' > '//trim(filetabname)
+        print *,trim(cmd)
+        call exec_cmdline(cmd)
+    end subroutine ls_fbody_mrcfiletab
+
     subroutine ls_filetab( fbody, ext, filetabname )
         character(len=*), intent(in)  :: fbody, ext, filetabname
         character(len=STDLEN) :: cmd
