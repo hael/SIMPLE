@@ -23,6 +23,8 @@ type :: simplex_pftcc_opt
     procedure :: kill
 end type simplex_pftcc_opt
 
+integer, parameter :: NDIM = 2
+
 contains
 
     !> \brief  is a constructor
@@ -32,13 +34,8 @@ contains
         class(opt_spec),          intent(inout) :: spec !< specification
         real    :: x
         call self%kill
-        select case(spec%ndim)
-            case(2,3)
-                ! shift or in-planes
-            case DEFAULT
-                stop 'unsupported ndims for in-plane simplex search; simple_simplex_pftcc_opt :: new'
-        end select
-        allocate(self%p(spec%ndim+1,spec%ndim), self%y(spec%ndim+1), self%pb(spec%ndim), stat=alloc_stat)
+        if(spec%ndim .ne. NDIM) stop 'Inconsistent dimensions in simple_simplex_pftcc_opt; new'
+        allocate(self%p(NDIM+1,NDIM), self%y(NDIM+1), self%pb(NDIM), stat=alloc_stat)
         allocchk("In:simple_simplex_pftcc_opt::new simplex_opt_c")
         ! initialize best cost to huge number
         self%yb = huge(x)
@@ -57,15 +54,15 @@ contains
         real, allocatable :: lims_dyn(:,:)
         integer           :: i, avgniter
         integer           :: niters(spec%nrestarts)
-        logical           :: arezero(spec%ndim)
+        logical           :: arezero(NDIM)
         ! test if best point in spec is set
         arezero = .false.
-        do i=1,spec%ndim
+        do i=1,NDIM
             if( spec%x(i) == 0. ) arezero(i) = .true.
         end do
         ! generate initial vector
         if( all(arezero) )then
-            do i=1,spec%ndim
+            do i=1,NDIM
                 ! initialize each variable by randomized bounds
                 spec%x(i) = spec%limits(i,1)+ran3()*(spec%limits(i,2)-spec%limits(i,1))
             end do
@@ -74,10 +71,10 @@ contains
         self%pb     = spec%x
         ! set best cost
         spec%nevals = 0
-        self%yb     = funcontainer%costfun(self%pb, spec%ndim)
+        self%yb     = funcontainer%costfun(self%pb)
         spec%nevals = spec%nevals + 1
         ! initialise dynamic bounds
-        if( allocated(spec%limits_init) ) allocate(lims_dyn(spec%ndim,2), source=spec%limits_init)
+        if( allocated(spec%limits_init) ) allocate(lims_dyn(NDIM,2), source=spec%limits_init)
         ! run nrestarts
         do i=1,spec%nrestarts
             if( allocated(lims_dyn) )then
@@ -89,20 +86,10 @@ contains
             call amoeba_pftcc_opt(self%p,self%y,self%pb,self%yb,spec%ftol,funcontainer,niters(i),spec%maxits,spec%nevals)
             if( allocated(lims_dyn) )then
                 ! movie the shift limits to around the best point
-                if( spec%ndim == 2 )then
-                    ! shift only search
-                    ! left limit
-                    lims_dyn(:,1) = self%pb - (lims_dyn(:,2) - lims_dyn(:,1)) / 2.0
-                    ! right limit
-                    lims_dyn(:,2) = self%pb + (lims_dyn(:,2) - lims_dyn(:,1)) / 2.0
-                    
-                else
-                    ! in-plane rotation in first dimension and shifts in 2 & 3
-                    ! left limit
-                    lims_dyn(2:,1) = self%pb(2:) - (lims_dyn(2:,2) - lims_dyn(2:,1)) / 2.0
-                    ! right limit
-                    lims_dyn(2:,2) = self%pb(2:) + (lims_dyn(2:,2) - lims_dyn(2:,1)) / 2.0
-                endif
+                ! left limit
+                lims_dyn(:,1) = self%pb - (lims_dyn(:,2) - lims_dyn(:,1)) / 2.0
+                ! right limit
+                lims_dyn(:,2) = self%pb + (lims_dyn(:,2) - lims_dyn(:,1)) / 2.0
                 ! bound according to spec%limits
                 where( lims_dyn(:,1) < spec%limits(:,1) ) lims_dyn(:,1) = spec%limits(:,1)
                 where( lims_dyn(:,2) > spec%limits(:,2) ) lims_dyn(:,2) = spec%limits(:,2)
@@ -119,19 +106,19 @@ contains
             !> \brief  initializes the simplex using randomized bounds
             subroutine init( limits )
                 use simple_rnd, only: ran3
-                real, intent(in) :: limits(spec%ndim,2)
+                real, intent(in) :: limits(NDIM,2)
                 integer :: i, j
                 ! first vertex is the best-so-far solution solution
                 self%p(1,:) = self%pb
                 ! the others are obtained by randomized bounds
-                do i=2,spec%ndim+1
-                    do j=1,spec%ndim
+                do i=2,NDIM+1
+                    do j=1,NDIM
                         self%p(i,j) = limits(j,1) + ran3() * (limits(j,2) - limits(j,1))
                     end do
                 end do
                 ! calculate costs
-                do i=1,spec%ndim + 1
-                    self%y(i) = funcontainer%costfun(self%p(i,:), spec%ndim)
+                do i=1,NDIM + 1
+                    self%y(i) = funcontainer%costfun(self%p(i,:))
                 end do
             end subroutine init
 
@@ -162,9 +149,8 @@ contains
         integer, intent(inout)  :: nevals       !< number of costfun evals counter
         real, parameter :: tiny=1.0e-10
         real, dimension(size(p,2)) :: psum
-        integer :: i,ilo,inhi,loc(1),ihi,ndim
+        integer :: i,ilo,inhi,loc(1),ihi
         real :: rtol,ysave,ytry,ytmp
-        ndim=assert_eq(size(p,2),size(p,1)-1,size(y)-1,size(pb),'amoeba; simple_opt_subs')
         iter=0
         psum(:)=sum(p(:,:),dim=1)
         do
@@ -204,13 +190,13 @@ contains
                 iter=iter+1
                 if(ytry >= ysave)then ! can’t seem to get rid of that high point
                     p(:,:)=0.5*(p(:,:)+spread(p(ilo,:),1,size(p,1))) ! better contract around the lowest (best) point
-                    do i=1,ndim+1
+                    do i=1,NDIM+1
                         if(i /= ilo)then
-                            y(i)=funcontainer%costfun(p(i,:),ndim)
+                            y(i)=funcontainer%costfun(p(i,:))
                             nevals = nevals+1
                         endif
                     end do
-                    iter=iter+ndim ! keep track of function evaluations
+                    iter=iter+NDIM ! keep track of function evaluations
                     psum(:)=sum(p(:,:),dim=1) ! recompute psum
                 end if
             end if
@@ -230,10 +216,10 @@ contains
             real :: amotry
             real :: fac1,fac2,ytry
             real, dimension(size(p,2)) :: ptry
-            fac1=(1.0-fac)/ndim
+            fac1=(1.0-fac)/real(NDIM)
             fac2=fac1-fac
             ptry(:)=psum(:)*fac1-p(ihi,:)*fac2
-            ytry=funcontainer%costfun(ptry,ndim) ! evaluate the function at the trial point
+            ytry=funcontainer%costfun(ptry) ! evaluate the function at the trial point
             nevals = nevals+1
             if(ytry < y(ihi))then ! if it is better than the highest, then replace the highest
                 y(ihi)=ytry

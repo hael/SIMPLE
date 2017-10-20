@@ -154,7 +154,6 @@ contains
         cline_prime2D   = cline
         cline_makecavgs = cline
         call cline_prime2D%set('prg',       'prime2D')
-        call cline_prime2D%set('autoscale', 'no')
         call cline_prime2D%set('stktab',    STK_FILETAB)
         call cline_prime2D%set('extr_iter', 100.) ! no extremal randomization
         if( p_master%ctf.ne.'no' )then
@@ -169,15 +168,21 @@ contains
         call cline_makecavgs%set('stktab', STK_FILETAB)
         call cline_makecavgs%set('refs',   'cavgs_final'//p_master%ext)
         call cline_makecavgs%delete('autoscale')
-        ! init
+        ! scope init
         ncls_glob        = 0
         ncls_glob_prev   = 0
         nptcls_glob      = 0
         nptcls_glob_prev = 0
         nstacks_glob     = 0
         ! prep scaling parameters
-        smpd_glob = LP2SMPDFAC * p_master%lp
-        scale     = p_master%smpd / smpd_glob
+        if( p_master%autoscale.eq.'yes' )then
+            smpd_glob = LP2SMPDFAC * p_master%lp
+            scale     = p_master%smpd / smpd_glob
+        else
+            msk_glob  = p_master%msk
+            smpd_glob = p_master%smpd
+            scale     = 1.
+        endif
         ! Instantiate watcher
         mic_watcher = extractwatcher(p_master, 30, print=.true.)
         ! Wait for sufficient number of classes
@@ -189,12 +194,16 @@ contains
                     call mic_watcher%get_new_stacks(stktab)
                     call find_ldim_nptcls(stktab(1), ldim, nptcls)
                     box_original = ldim(1)
-                    box_glob     = max(64, min(64, find_magic_box(nint(scale*real(ldim(2)))))) ! TO PUT IN DEFS
-                    scale        = real(box_glob) / real(box_original)
-                    smpd_glob    = p_master%smpd / scale
-                    msk_glob     = p_master%msk * scale
+                    if( p_master%autoscale.eq.'yes' )then
+                        box_glob  = max(64, min(64, find_magic_box(nint(scale*real(ldim(2)))))) ! TO PUT IN DEFS
+                        scale     = real(box_glob) / real(box_original)
+                        smpd_glob = p_master%smpd / scale
+                        msk_glob  = p_master%msk * scale
+                        call cline_scale%set('newbox', real(box_glob))
+                    else
+                        box_glob = box_original
+                    endif
                     deallocate(stktab)
-                    call cline_scale%set('newbox', real(box_glob))
                     call cline_prime2D%set('box',  real(box_glob))
                     call cline_prime2D%set('smpd', real(smpd_glob))
                     call cline_prime2D%set('msk',  real(msk_glob))
@@ -312,29 +321,30 @@ contains
                     stktab(1:nstacks_glob) = tmp(1:nstacks_glob)
                 endif
                 ! down-scaling and name updates
-                call write_filetable(SCALE_FILETAB, new_stacks)
-                call qenv%new(p_master)
-                cnt = 0
-                do i = nstacks_glob+1, nstacks_glob+n_newstks
-                    cnt   = cnt + 1
-                    ext   = fname2ext(trim(remove_abspath(trim(new_stacks(cnt)))))
-                    fbody = get_fbody(trim(remove_abspath(trim(new_stacks(cnt)))), trim(ext))
-                    stk_scaled = trim(STK_DIR)//trim(fbody)// trim('_sc') // trim(p_master%ext) ! congruence with scale app
-                    stktab(i)  = trim(stk_scaled)
-                enddo
-                call qenv%exec_simple_prg_in_queue(cline_scale, 'OUT1','JOB_FINISHED_1')
-                cnt = 0
-                do i = nstacks_glob+1, nstacks_glob+n_newstks
-                    cnt   = cnt + 1
-                    ext   = fname2ext(trim(remove_abspath(trim(new_stacks(cnt)))))
-                    fbody = get_fbody(trim(remove_abspath(trim(new_stacks(cnt)))), trim(ext))
-                    stk_scaled = trim(fbody)// trim('_sc') // trim(p_master%ext) ! congruence with scale app
-                    call rename( stk_scaled, stktab(i))
-                enddo
-                call qsys_cleanup(p_master)
-                call del_file(SCALE_FILETAB)
+                if( p_master%autoscale.eq.'yes' )then
+                    call write_filetable(SCALE_FILETAB, new_stacks)
+                    call qenv%new(p_master)
+                    cnt = 0
+                    do i = nstacks_glob+1, nstacks_glob+n_newstks
+                        cnt   = cnt + 1
+                        ext   = fname2ext(trim(remove_abspath(trim(new_stacks(cnt)))))
+                        fbody = get_fbody(trim(remove_abspath(trim(new_stacks(cnt)))), trim(ext))
+                        stk_scaled = trim(STK_DIR)//trim(fbody)// trim('_sc') // trim(p_master%ext) ! congruence with scale app
+                        stktab(i)  = trim(stk_scaled)
+                    enddo
+                    call qenv%exec_simple_prg_in_queue(cline_scale, 'OUT1','JOB_FINISHED_1')
+                    cnt = 0
+                    do i = nstacks_glob+1, nstacks_glob+n_newstks
+                        cnt   = cnt + 1
+                        ext   = fname2ext(trim(remove_abspath(trim(new_stacks(cnt)))))
+                        fbody = get_fbody(trim(remove_abspath(trim(new_stacks(cnt)))), trim(ext))
+                        stk_scaled = trim(fbody)// trim('_sc') // trim(p_master%ext) ! congruence with scale app
+                        call rename( stk_scaled, stktab(i))
+                    enddo
+                    call qsys_cleanup(p_master)
+                    call del_file(SCALE_FILETAB)
+                endif
                 nstacks_glob = nstacks_glob + n_newstks
-                ! writes down-scaled stacks list
                 call write_filetable(STK_FILETAB, stktab)
             end subroutine add_newstacks
 

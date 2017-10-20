@@ -526,16 +526,16 @@ select case(prg)
         keys_optional(9)  = 'filwidth'
         keys_optional(10) = 'center'
         keys_optional(11) = 'phaseplate'
+        keys_optional(12) = 'autoscale'
         ! documentation
         if( describe ) call print_doc_prime2D
-        call cline%parse( keys_required(:7), keys_optional(:11) )
+        call cline%parse( keys_required(:7), keys_optional(:12) )
         ! set defaults
         if( .not. cline%defined('lp')     ) call cline%set('lp',     15.)
         if( .not. cline%defined('lpstop') ) call cline%set('lpstop', 8.)
         if( .not. cline%defined('eo')     ) call cline%set('eo',     'no')
         if( .not. cline%defined('cenlp')  ) call cline%set('cenlp',  30.)
         call cline%set('weights2D', 'no')
-        call cline%set('autoscale', 'no')
         call xprime2D_stream_distr%execute(cline)
 
     ! 3D SIMILARITY MATRIX GENERATION WITH COMMON LINES

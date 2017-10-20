@@ -85,10 +85,9 @@ contains
     end subroutine shsrch_set_indices
 
     !> Cost function
-    function shsrch_costfun( self, vec, D ) result( cost )
+    function shsrch_costfun( self, vec ) result( cost )
         class(pftcc_shsrch), intent(inout) :: self
-        integer,             intent(in)    :: D          !< size of vec
-        real,                intent(in)    :: vec(D)     !< input search values
+        real,                intent(in)    :: vec(2)     !< input search values
         real :: vec_here(2) !< current set of values
         real :: cost, corrs(self%nrots)
         vec_here = vec
@@ -115,7 +114,7 @@ contains
         ! minimisation
         self%ospec%x      = 0.
         self%ospec%nevals = 0
-        cost_init         = self%costfun(self%ospec%x, self%ospec%ndim)
+        cost_init         = self%costfun(self%ospec%x)
         call self%nlopt%minimize(self%ospec, self, cost)
         if( cost <= cost_init )then
             ! get rotation index

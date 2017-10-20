@@ -15,8 +15,9 @@ logical, parameter :: L_BENCH = .false.
 
 type prime2D_srch
     private
-    class(polarft_corrcalc), pointer :: pftcc_ptr => null()  !< pointer to pftcc (corrcalc) object
-    class(oris),             pointer :: a_ptr     => null()  !< pointer to b%a (primary particle orientation table)
+    class(polarft_corrcalc), pointer :: pftcc_ptr       => null() !< pointer to pftcc (corrcalc) object
+    class(oris),             pointer :: a_ptr           => null() !< pointer to b%a (primary particle orientation table)
+    integer,                 pointer :: cls_pops_ptr(:) => null() !< pointer to class population array
     type(pftcc_shsrch)               :: shsrch_obj           !< shift search object (in-plane rot for free)
     integer                          :: nrefs         =  0   !< number of references
     integer                          :: nrots         =  0   !< number of in-plane rotations in polar representation
@@ -36,7 +37,6 @@ type prime2D_srch
     real                             :: prev_corr     = -1.  !< previous best correlation
     real                             :: best_corr     = -1.  !< best corr found by search
     real                             :: specscore     =  0.  !< spectral score
-    integer, allocatable             :: cls_pops(:)          !< classes populations prior to search
     integer, allocatable             :: srch_order(:)        !< stochastic search order
     character(len=STDLEN)            :: refine        = ''   !< refinement flag
     ! timer vars
@@ -70,20 +70,22 @@ contains
     ! CONSTRUCTOR
     
     !>  \brief  is a constructor
-    subroutine new( self, iptcl, pftcc, a, p )
+    subroutine new( self, iptcl, pftcc, a, p, cls_pops )
         use simple_params, only: params
-        class(prime2D_srch),             intent(inout) :: self   !< instance
-        integer,                         intent(in)    :: iptcl  !< global particle index
-        class(polarft_corrcalc), target, intent(inout) :: pftcc  !< correlator
-        class(oris),             target, intent(in)    :: a      !< primary particle orientation table
-        class(params),                   intent(in)    :: p      !< parameters
+        class(prime2D_srch),             intent(inout) :: self        !< instance
+        integer,                         intent(in)    :: iptcl       !< global particle index
+        class(polarft_corrcalc), target, intent(inout) :: pftcc       !< correlator
+        class(oris),             target, intent(in)    :: a           !< primary particle orientation table
+        class(params),                   intent(in)    :: p           !< parameters
+        integer,                 target, intent(in)    :: cls_pops(:) !< class population array
         integer :: alloc_stat, i
         real    :: lims(2,2), lims_init(2,2)
         ! destroy possibly pre-existing instance
         call self%kill
         ! set constants
-        self%pftcc_ptr  => pftcc
-        self%a_ptr      => a
+        self%pftcc_ptr    => pftcc
+        self%a_ptr        => a
+        self%cls_pops_ptr => cls_pops
         self%iptcl      =  iptcl
         self%nrefs      =  p%ncls
         self%nrots      =  round2even(twopi*real(p%ring2))
@@ -101,16 +103,7 @@ contains
         lims(:,2)       =  p%trs
         lims_init(:,1)  = -SHC_INPL_TRSHWDTH
         lims_init(:,2)  =  SHC_INPL_TRSHWDTH
-        call self%shsrch_obj%new(pftcc, lims, lims_init=lims_init, nrestarts=3, maxits=60)
-        ! gather classes population: has to be done on instantiation
-        ! so all ptcls have the same information
-        if( self%a_ptr%isthere('class') )then
-            self%cls_pops = self%a_ptr%get_pops('class', consider_w=.true., maxn=self%nrefs)
-        else
-            ! first iteration
-            allocate(self%cls_pops(self%nrefs), source=MINCLSPOPLIM+1, stat=alloc_stat)
-            allocchk("simple_prime2D_srch%new")
-        endif
+        call self%shsrch_obj%new(self%pftcc_ptr, lims, lims_init=lims_init, nrestarts=3, maxits=60)
         if( L_BENCH )then
             ! init timers
             self%rt_refloop = 0.
@@ -208,7 +201,7 @@ contains
                 if( self%dyncls )then
                     if( self%prev_class > 0 )then
                         ! reassignement to a class with higher population
-                        do while( self%cls_pops(self%prev_class) <= MINCLSPOPLIM )
+                        do while( self%cls_pops_ptr(self%prev_class) <= MINCLSPOPLIM )
                            self%prev_class = irnd_uni(self%nrefs)
                         enddo
                     endif
@@ -282,7 +275,7 @@ contains
             call self%prep4srch
             corr = self%prev_corr
             do iref=1,self%nrefs
-                if( self%cls_pops(iref) == 0 )cycle
+                if( self%cls_pops_ptr(iref) == 0 )cycle
                 corrs     = self%pftcc_ptr%gencorrs(iref, self%iptcl) 
                 loc       = maxloc(corrs)
                 inpl_ind  = loc(1)
@@ -328,7 +321,7 @@ contains
                     ! keep track of how many references we are evaluating
                     self%nrefs_eval = self%nrefs_eval + 1
                     ! passes empty classes
-                    if( self%cls_pops(iref) == 0 )cycle
+                    if( self%cls_pops_ptr(iref) == 0 )cycle
                     ! shc update
                     corrs     = self%pftcc_ptr%gencorrs(iref, self%iptcl)
                     inpl_ind  = shcloc(self%nrots, corrs, self%prev_corr)
@@ -366,13 +359,13 @@ contains
                 else
                     ! makes sure the ptcl does not land in an empty class
                     ! such that a search is performed
-                    do while( self%cls_pops(iref) == 0 )
+                    do while( self%cls_pops_ptr(iref) == 0 )
                         isample = isample + 1
                         iref    = self%srch_order(isample)
                         if( isample.eq.self%nrefs )exit
                     enddo
                 endif
-                if( self%cls_pops(iref) == 0 )then
+                if( self%cls_pops_ptr(iref) == 0 )then
                     ! empty class
                     do_inplsrch = .false.               ! no in-plane search
                     inpl_ind    = irnd_uni(self%nrots)  ! random in-plane
@@ -448,7 +441,7 @@ contains
             ! evaluate neighbors (greedy selection)
             do inn=1,self%nnn
                 iref      = nnmat(self%prev_class,inn)
-                if( self%cls_pops(iref) == 0 )cycle
+                if( self%cls_pops_ptr(iref) == 0 )cycle
                 corrs     = self%pftcc_ptr%gencorrs(iref, self%iptcl) 
                 loc       = maxloc(corrs)
                 inpl_ind  = loc(1)
@@ -494,7 +487,6 @@ contains
         class(prime2D_srch), intent(inout) :: self !< instance
         if( self%exists )then
             if( allocated(self%srch_order) ) deallocate(self%srch_order)
-            if( allocated(self%cls_pops) )   deallocate(self%cls_pops)
             self%exists = .false.
         endif
     end subroutine kill

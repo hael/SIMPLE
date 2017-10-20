@@ -145,8 +145,7 @@ contains
         if( p%refine.eq.'het' )then
             iextr_lim = ceiling(2.*log(real(p%nptcls)))
             if( frac_srch_space < 98. .or. p%extr_iter <= iextr_lim )then
-                ! extr_thresh = EXTRINITHRESH * (1.-EXTRTHRESH_CONST)**real(p%extr_iter-1)  ! factorial decay
-                extr_thresh = EXTRINITHRESH * cos(PI/2. * real(p%extr_iter-1)/real(iextr_lim))    ! cosine decay
+                extr_thresh = EXTRINITHRESH * cos(PI/2. * real(p%extr_iter-1)/real(iextr_lim)) ! cosine decay
                 extr_thresh = min(EXTRINITHRESH, max(0., extr_thresh))
                 corr_thresh = b%a%extremal_bound(extr_thresh)
                 statecnt(:) = 0

@@ -42,7 +42,7 @@ contains
         class(cmdline), intent(inout) :: cline
         integer,        intent(in)    :: which_iter
         logical,        intent(inout) :: converged
-        integer, allocatable :: prev_pops(:), pinds(:)
+        integer, allocatable :: prev_pops(:), pinds(:), cls_pops(:)
         logical, allocatable :: ptcl_mask(:)
         integer :: iptcl, icls, j, fnr
         real    :: corr_thresh, frac_srch_space, skewness, extr_thresh
@@ -167,11 +167,19 @@ contains
         endif
 
         ! STOCHASTIC IMAGE ALIGNMENT
+        ! gather class populations
+        if( b%a%isthere('class') )then
+            cls_pops = b%a%get_pops('class', consider_w=.true., maxn=p%ncls)
+        else
+            ! first iteration, no class assignment: all classes are up for grab
+            allocate(cls_pops(p%ncls), source=MINCLSPOPLIM+1, stat=alloc_stat)
+            allocchk("simple_hadamard2D_matcher; prime2D_exec cls_pops")
+        endif
         ! create the search objects, need to re-create every round because parameters are changing
         allocate( primesrch2D(p%fromp:p%top), stat=alloc_stat)
         allocchk("In hadamard2D_matcher::prime2D_exec primesrch2D objects ")
         do iptcl=p%fromp,p%top
-            call primesrch2D(iptcl)%new(iptcl, pftcc, b%a, p)
+            call primesrch2D(iptcl)%new(iptcl, pftcc, b%a, p, cls_pops)
         end do
         ! apply CTF to particles
         if( p%ctf .ne. 'no' ) call pftcc%apply_ctf_to_ptcls(b%a)
@@ -258,7 +266,7 @@ contains
         do iptcl=p%fromp,p%top
             call primesrch2D(iptcl)%kill
         end do
-        deallocate( primesrch2D )
+        deallocate( primesrch2D, cls_pops )
         call pftcc%kill
         call cavger%kill
 
