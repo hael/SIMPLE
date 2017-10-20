@@ -19,7 +19,7 @@ public :: prime2D_exec, preppftcc4align, pftcc
 private
 #include "simple_local_flags.inc"
 
-logical, parameter              :: L_BENCH         = .false.
+logical, parameter              :: L_BENCH         = .true.
 logical, parameter              :: L_BENCH_PRIME2D = .false.
 type(polarft_corrcalc)          :: pftcc
 type(prime2D_srch), allocatable :: primesrch2D(:)
@@ -262,7 +262,6 @@ contains
         endif
         if( L_BENCH ) rt_cavg = toc(t_cavg)
 
-
         ! DESTRUCT
         if( .not. p%l_distr_exec )then
             do iptcl=p%fromp,p%top
@@ -298,6 +297,8 @@ contains
                 write(fnr,'(a,1x,f9.2)') 'pftcc preparation    : ', (rt_prep_pftcc/rt_tot) * 100.
                 write(fnr,'(a,1x,f9.2)') 'stochastic alignment : ', (rt_align/rt_tot)      * 100.
                 write(fnr,'(a,1x,f9.2)') 'class averaging      : ', (rt_cavg/rt_tot)       * 100.
+                write(fnr,'(a,1x,f9.2)') '% accounted for      : ',&
+                    &((rt_init+rt_prep_pftcc+rt_align+rt_cavg)/rt_tot) * 100.
                 call fclose(fnr)
             endif
         endif
