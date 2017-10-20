@@ -531,10 +531,11 @@ select case(prg)
         if( describe ) call print_doc_prime2D
         call cline%parse( keys_required(:7), keys_optional(:12) )
         ! set defaults
-        if( .not. cline%defined('lp')     ) call cline%set('lp',     15.)
-        if( .not. cline%defined('lpstop') ) call cline%set('lpstop', 8.)
-        if( .not. cline%defined('eo')     ) call cline%set('eo',     'no')
-        if( .not. cline%defined('cenlp')  ) call cline%set('cenlp',  30.)
+        if( .not. cline%defined('lp')        ) call cline%set('lp',     15.)
+        if( .not. cline%defined('lpstop')    ) call cline%set('lpstop', 8.)
+        if( .not. cline%defined('eo')        ) call cline%set('eo',     'no')
+        if( .not. cline%defined('cenlp')     ) call cline%set('cenlp',  30.)
+        if( .not. cline%defined('autoscale') ) call cline%set('autoscale', 'yes')
         call cline%set('weights2D', 'no')
         call xprime2D_stream_distr%execute(cline)
 
