@@ -320,6 +320,7 @@ contains
         integer(kind=c_int) :: rc
         integer :: i
         logical :: wwthreads
+        integer(kind=c_int) :: wsdm_ret
         call self%kill()
         wwthreads = .true.
         if( present(wthreads) ) wwthreads = wthreads
@@ -353,6 +354,7 @@ contains
             rc = fftwf_init_threads()
             call fftwf_plan_with_nthreads(nthr_glob)
         endif
+        wsdm_ret = fftw_import_wisdom_from_filename(WISDOM_FNAME)
         if(self%ldim(3) > 1)then
             self%plan_fwd = fftwf_plan_dft_r2c_3d(self%ldim(3), self%ldim(2), self%ldim(1), self%rmat, self%cmat, FFTW_ESTIMATE)
             self%plan_bwd = fftwf_plan_dft_c2r_3d(self%ldim(3), self%ldim(2), self%ldim(1), self%cmat, self%rmat, FFTW_ESTIMATE)
@@ -360,6 +362,10 @@ contains
             self%plan_fwd = fftwf_plan_dft_r2c_2d(self%ldim(2), self%ldim(1), self%rmat, self%cmat, FFTW_ESTIMATE)
             self%plan_bwd = fftwf_plan_dft_c2r_2d(self%ldim(2), self%ldim(1), self%cmat, self%rmat, FFTW_ESTIMATE)
         endif
+        wsdm_ret = fftw_export_wisdom_to_filename(WISDOM_FNAME)
+        if (wsdm_ret == 0) then
+            write (*, *) 'Error: could not write FFTW3 wisdom file! Check permissions.'
+        end if
         ! set shift constant (shconst)
         do i=1,3
             if( self%ldim(i) == 1 )then

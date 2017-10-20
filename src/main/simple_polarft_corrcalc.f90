@@ -142,6 +142,7 @@ contains
         integer  :: alloc_stat, irot, k, ithr, iptcl, ik, iref
         logical  :: even_dims, test(2)
         real(sp) :: ang
+        integer(kind=c_int) :: wsdm_ret
         ! kill possibly pre-existing object
         call self%kill
         ! error check
@@ -269,12 +270,17 @@ contains
             end do
         end do
         ! FFTW plans
+        wsdm_ret = fftw_import_wisdom_from_filename(WISDOM_FNAME)
         self%plan_fwd_1 = fftwf_plan_dft_r2c_1d(self%pftsz, self%fftdat(1)%ref_re, &
-            self%fftdat(1)%ref_fft_re, FFTW_PATIENT)
+             self%fftdat(1)%ref_fft_re, FFTW_PATIENT)
         self%plan_fwd_2 = fftwf_plan_dft_1d    (self%pftsz, self%fftdat(1)%ref_im, &
-            self%fftdat(1)%ref_fft_im, FFTW_FORWARD, FFTW_PATIENT)
+             self%fftdat(1)%ref_fft_im, FFTW_FORWARD, FFTW_PATIENT)
         self%plan_bwd   = fftwf_plan_dft_c2r_1d(self%nrots, self%fftdat(1)%product_fft, &
-            self%fftdat(1)%backtransf, FFTW_PATIENT)
+             self%fftdat(1)%backtransf, FFTW_PATIENT)
+        wsdm_ret = fftw_export_wisdom_to_filename(WISDOM_FNAME)
+        if (wsdm_ret == 0) then
+           write (*, *) 'Error: could not write FFTW3 wisdom file! Check permissions.'
+        end if
         ! factors for expansion of phase terms
         allocate(self%fft_factors(self%pftsz))
         do irot = 1,self%pftsz
@@ -614,7 +620,7 @@ contains
     !! \param tfun transfer function object
     !! \param dfx,dfy resolution along Fourier axes
     !! \param angast astigmatic angle (degrees)
-    !! \param add_phshift additional phase shift (radians) introduced by the Volta 
+    !! \param add_phshift additional phase shift (radians) introduced by the Volta
     !! \param endrot number of rotations
     !! \return ctfmat matrix with CTF values
     function create_polar_ctfmat( self, tfun, dfx, dfy, angast, add_phshift, endrot ) result( ctfmat )

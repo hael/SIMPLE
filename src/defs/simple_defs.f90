@@ -1,5 +1,5 @@
 module simple_defs
-use, intrinsic :: iso_c_binding, only: c_int
+use, intrinsic :: iso_c_binding, only: c_int, c_char, c_null_char
 use, intrinsic :: iso_fortran_env, only: &
 stderr=>ERROR_UNIT,&
 stdout=>OUTPUT_UNIT,&
@@ -123,6 +123,9 @@ integer, parameter :: img_kind = DP
 integer, parameter :: img_kind = SP
 #endif
 integer, parameter :: fp_kind = DP
+
+! FFTW3 wisdom filename
+character(kind=c_char, len=*), parameter :: WISDOM_FNAME = 'wisdom.dat' // c_null_char
 
 ! debugging and print verbosity flags
 #ifdef _DEBUG
