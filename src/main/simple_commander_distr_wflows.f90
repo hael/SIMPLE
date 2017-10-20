@@ -1,7 +1,6 @@
 ! concrete commander: distributed workflows
 module simple_commander_distr_wflows
 #include "simple_lib.f08"
-use simple_binoris_io,       only: binread_oritab, binwrite_oritab, binread_nlines
 use simple_cmdline,          only: cmdline
 use simple_chash,            only: chash
 use simple_qsys_env,         only: qsys_env
@@ -14,6 +13,7 @@ use simple_commander_distr   ! use all in there
 use simple_commander_mask    ! use all in there
 use simple_commander_distr   ! use all in there
 use simple_qsys_funs         ! use all in there
+use simple_binoris_io,       ! use all in there
 implicit none
 
 public :: unblur_ctffind_distr_commander
@@ -557,7 +557,7 @@ contains
             refs_odd  = trim(trim(CAVGS_ITERFBODY) // trim(str_iter) // '_odd'  // p_master%ext)
             call cline_cavgassemble%set('oritab', trim(oritab))
             call cline_cavgassemble%set('which_iter', real(iter))
-            call qenv%exec_simple_prg_in_queue(cline_cavgassemble, 'RESOLUTION'//trim(str_iter), 'CAVGASSEMBLE_FINISHED')
+            call qenv%exec_simple_prg_in_queue(cline_cavgassemble, 'CAVGASSEMBLE', 'CAVGASSEMBLE_FINISHED')
             ! remapping of empty classes
             call remap_empty_cavgs
             ! check convergence
@@ -759,6 +759,7 @@ contains
         type(params)          :: p_master
         type(chash)           :: job_descr
         type(oris)            :: os
+        type(build)           :: b
         character(len=STDLEN), allocatable :: state_assemble_finished(:)
         character(len=STDLEN) :: vol, vol_iter, oritab, str, str_iter, optlp_file
         character(len=STDLEN) :: str_state, fsc_file, volassemble_output
@@ -896,6 +897,26 @@ contains
             p_master%extr_iter = p_master%extr_iter - 1
         else
             p_master%extr_iter = p_master%startit - 1
+        endif
+        ! deal with eo partitioning
+        if( cline%defined('deftab') ) call binread_ctfparams_state_eo(p_master%deftab, os, [1,p_master%nptcls])
+        if( cline%defined('oritab') ) call binread_oritab(p_master%oritab, os, [1,p_master%nptcls])
+        if( os%get_nevenodd() == 0 )then
+            if( p_master%tseries .eq. 'yes' )then
+                call os%partition_eo(tseries=.true.)
+            else
+                call os%partition_eo
+            endif
+        endif
+        if( cline%defined('oritab') )then
+            call binwrite_oritab(p_master%oritab, os, [1,p_master%nptcls])
+        else if( cline%defined('deftab') )then
+            call binwrite_oritab(p_master%deftab, os, [1,p_master%nptcls])
+        else
+            p_master%deftab = 'deftab_from_distr_wflow'//METADATEXT
+            call binwrite_oritab(p_master%deftab, os, [1,p_master%nptcls])
+            call job_descr%set('deftab', trim(p_master%deftab))
+            call cline%set('deftab', trim(p_master%deftab))
         endif
         ! prepare Prime3D job description
         call cline%gen_job_descr(job_descr)

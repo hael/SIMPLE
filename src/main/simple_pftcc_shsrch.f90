@@ -20,9 +20,9 @@ type, extends(pftcc_opt) :: pftcc_shsrch
     integer                          :: ldim(3)        = [0,0,0] !< logical dimension of Cartesian image
     integer                          :: nrots          = 0       !< # rotations
     integer                          :: maxits         = 100     !< max # iterations
-    real                             :: maxshift       = 0.      !< maximal shift
     logical                          :: shbarr         = .true.  !< shift barrier constraint or not
     integer                          :: nrestarts      =  5      !< simplex restarts (randomized bounds)
+    real                             :: maxshift       = 0.      !< maximal shift
   contains
     procedure :: new         => shsrch_new
     procedure :: set_indices => shsrch_set_indices

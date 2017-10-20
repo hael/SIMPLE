@@ -91,16 +91,16 @@ integer, parameter :: HETNREPEATS          = 1         !< # repeats het_ensemble
 integer, parameter :: GRIDCORR_MAXITS      = 5         !< # iterations for reconstruction gridding correction
 
 ! constants for SHC inplane grid search
-real,    parameter :: SHC_INPL_TRSHWDTH    = 2.0     !< shift search halfwidht (pixels)
+real,    parameter :: SHC_INPL_TRSHWDTH    = 2.0       !< shift search halfwidht (pixels)
 
 ! criterion for even/odd averaging in gold-FSC
 real,    parameter :: FSC4EOAVG = 0.7
-integer, parameter :: K4EOAVGLB = 4    ! Fourier index lower-bound
+integer, parameter :: K4EOAVGLB = 4    				   !< Fourier index lower-bound
 
 ! global  variables
-integer(kind=c_int)       :: nthr_glob               !< number of threads global variable
-logical                   :: l_distr_exec_glob       !< global distributed execution flag
-character(len=LONGSTRLEN) :: cmdline_glob            !< global command line string
+integer(kind=c_int)       :: nthr_glob                 !< number of threads global variable
+logical                   :: l_distr_exec_glob         !< global distributed execution flag
+character(len=LONGSTRLEN) :: cmdline_glob              !< global command line string
 
 ! stack part related and file format constants
 character(len=32),     parameter :: STKPARTSDIR         = 'stack_parts'

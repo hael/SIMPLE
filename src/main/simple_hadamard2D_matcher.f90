@@ -24,8 +24,8 @@ logical, parameter              :: L_BENCH_PRIME2D = .false.
 type(polarft_corrcalc)          :: pftcc
 type(prime2D_srch), allocatable :: primesrch2D(:)
 type(classaverager)             :: cavger
-integer(timer_int_kind)         :: t_init, t_prep_pftcc, t_align, t_cavg, t_tot
-real(timer_int_kind)            :: rt_init, rt_prep_pftcc, rt_align, rt_cavg
+integer(timer_int_kind)         :: t_init, t_prep_pftcc, t_align, t_cavg, t_tot, t_alloc
+real(timer_int_kind)            :: rt_init, rt_prep_pftcc, rt_align, rt_cavg, rt_alloc
 real(timer_int_kind)            :: rt_tot, rt_refloop, rt_inpl, rt_tot_sum, rt_refloop_sum
 real(timer_int_kind)            :: rt_inpl_sum
 character(len=STDLEN)           :: benchfname
@@ -51,7 +51,7 @@ contains
         ! PREP REFERENCES
         if( L_BENCH )then
             t_init = tic()
-            t_tot  = tic()
+            t_tot  = t_init
         endif
         call cavger%new(b, p, 'class')
         l_do_read = .true.
@@ -176,11 +176,13 @@ contains
             allocchk("simple_hadamard2D_matcher; prime2D_exec cls_pops")
         endif
         ! create the search objects, need to re-create every round because parameters are changing
+        if( L_BENCH ) t_alloc = tic()
         allocate( primesrch2D(p%fromp:p%top), stat=alloc_stat)
         allocchk("In hadamard2D_matcher::prime2D_exec primesrch2D objects ")
         do iptcl=p%fromp,p%top
             call primesrch2D(iptcl)%new(iptcl, pftcc, b%a, p, cls_pops)
         end do
+        if( L_BENCH ) rt_alloc = toc(t_alloc)
         ! apply CTF to particles
         if( p%ctf .ne. 'no' ) call pftcc%apply_ctf_to_ptcls(b%a)
         ! memoize FFTs for improved performance
@@ -262,13 +264,16 @@ contains
         endif
         if( L_BENCH ) rt_cavg = toc(t_cavg)
 
+
         ! DESTRUCT
-        do iptcl=p%fromp,p%top
-            call primesrch2D(iptcl)%kill
-        end do
-        deallocate( primesrch2D, cls_pops )
-        call pftcc%kill
-        call cavger%kill
+        if( .not. p%l_distr_exec )then
+            do iptcl=p%fromp,p%top
+                call primesrch2D(iptcl)%kill
+            end do
+            deallocate( primesrch2D )
+            call pftcc%kill
+            call cavger%kill
+        endif
 
         ! REPORT CONVERGENCE
         if( p%l_distr_exec )then
@@ -286,6 +291,7 @@ contains
                 write(fnr,'(a)') '*** TIMINGS (s) ***'
                 write(fnr,'(a,1x,f9.2)') 'initialisation       : ', rt_init
                 write(fnr,'(a,1x,f9.2)') 'pftcc preparation    : ', rt_prep_pftcc
+                write(fnr,'(a,1x,f9.2)') 'prime2D search alloc : ', rt_alloc
                 write(fnr,'(a,1x,f9.2)') 'stochastic alignment : ', rt_align
                 write(fnr,'(a,1x,f9.2)') 'class averaging      : ', rt_cavg
                 write(fnr,'(a,1x,f9.2)') 'total time           : ', rt_tot
@@ -293,6 +299,7 @@ contains
                 write(fnr,'(a)') '*** REATIVE TIMINGS (%) ***'
                 write(fnr,'(a,1x,f9.2)') 'initialisation       : ', (rt_init/rt_tot)       * 100.
                 write(fnr,'(a,1x,f9.2)') 'pftcc preparation    : ', (rt_prep_pftcc/rt_tot) * 100.
+                write(fnr,'(a,1x,f9.2)') 'prime2D search alloc : ', (rt_alloc/rt_tot)      * 100.
                 write(fnr,'(a,1x,f9.2)') 'stochastic alignment : ', (rt_align/rt_tot)      * 100.
                 write(fnr,'(a,1x,f9.2)') 'class averaging      : ', (rt_cavg/rt_tot)       * 100.
                 call fclose(fnr)

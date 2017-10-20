@@ -90,10 +90,8 @@ contains
                     phys = rovol_pad%comp_addr_phys(logi)
                     loc  = matmul(real(logi), o%get_mat())
                     if( l_shvec_present )then
-                        ! call rovol_pad%set_fcomp(logi, phys, vol_pad%extr_gridfcomp(loc) * rovol_pad%oshift(loc, shvec))
                         call rovol_pad%set_fcomp(logi, phys, vol_pad%interp_fcomp(loc) * rovol_pad%oshift(loc, shvec))
                     else
-                        ! call rovol_pad%set_fcomp(logi, phys, vol_pad%extr_gridfcomp(loc))
                         call rovol_pad%set_fcomp(logi, phys, vol_pad%interp_fcomp(loc))
                     endif
                 end do 
