@@ -952,6 +952,53 @@ contains
         call fclose_1(filnum, io_stat,errmsg="Error closing file "//trim(fname))
     end subroutine write_raw_image
 
+    !> From flibs file_list
+    ! Copyright (c) 2008, Arjen Markus
+    subroutine file_list( dir, list , suppress_errors, outfile)
+        character(len=*), intent(in)            :: dir
+        character(len=*), pointer, dimension(:) :: list
+        logical, intent(in), optional           :: suppress_errors
+        character(len=*), intent(inout), optional  :: outfile
+        character(len=200)                      :: cmd,redirect,tmpfile
+        character(len=1)                        :: line
+        integer                                 :: luntmp
+        integer                                 :: i
+        integer                                 :: ierr
+        integer                                 :: count
+        redirect=" "
+        if (present(suppress_errors))redirect="2>/dev/null "
+        if (.not. present(outfile))then
+            open( newunit = luntmp, status = 'scratch' )
+            inquire( luntmp, name = tmpfile ) ! Hope this is okay
+            close( luntmp )
+        else
+            tmpfile = trim(adjustl(outfile))
+            if( file_exists(tmpfile) ) call del_file(tmpfile)
+        end if
+        cmd = 'ls -tr ' // ' ' // trim(dir) // ' ' // trim(redirect) // tmpfile
+        call system( cmd )
+        open( newunit = luntmp, file = tmpfile )
+        !
+        ! First count the number of files, then allocate and fill the array
+        !
+        do
+            read( luntmp, '(a)', iostat = ierr ) line
+            if ( ierr == 0 ) then
+                count = count + 1
+            else
+                exit
+            end if
+        end do
+        rewind( luntmp )
+        allocate( list(count) )
+        do i = 1,count
+            read( luntmp, '(a)' ) list(i)
+        end do
+        close( luntmp, status = 'delete' )
+    end subroutine file_list
+
+
+
     subroutine ls_mrcfiletab( dir, filetabname )
         character(len=*),intent(in)  :: dir, filetabname
         character(len=STDLEN) :: cmd
