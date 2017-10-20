@@ -23,15 +23,16 @@ end type prep4cgrid
 
 contains
 
-	subroutine new( self, img, kbwin )
+	subroutine new( self, img, kbwin, ldim_pd )
 		class(prep4cgrid), intent(inout) :: self
 		class(image),      intent(in)    :: img
 		class(kbinterpol), intent(in)    :: kbwin
+        integer,           intent(in)    :: ldim_pd(3)
 		integer :: npix
 		call self%kill
 		! set logical dimensions of images
         self%ldim    = img%get_ldim()
-        self%ldim_pd = nint(KBALPHA) * self%ldim
+        self%ldim_pd = ldim_pd
         ! checks
         if( .not. img%square_dims() ) stop 'ERROR, square dims assumed; simple_prep4cgrid :: new'
         if( .not. img%is_2d()       ) stop 'ERROR, only for 2D images; simple_prep4cgrid :: new'

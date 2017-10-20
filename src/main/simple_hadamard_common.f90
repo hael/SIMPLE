@@ -419,7 +419,7 @@ contains
                         call b%eorecvols(istate)%reset_all
                     endif
                 end do
-                call b%gridprep%new(b%img, b%eorecvols(1)%get_kbwin())
+                call b%gridprep%new(b%img, b%eorecvols(1)%get_kbwin(), [p%boxpd,p%boxpd,1])
             case DEFAULT
                 do istate = 1, p%nstates
                     if( b%a%get_pop(istate, 'state') > 0)then
@@ -428,7 +428,7 @@ contains
                         call b%recvols(istate)%reset
                     endif
                 end do
-                call b%gridprep%new(b%img, b%recvols(1)%get_kbwin())
+                call b%gridprep%new(b%img, b%recvols(1)%get_kbwin(), [p%boxpd,p%boxpd,1])
         end select
     end subroutine preprecvols
 
@@ -529,7 +529,7 @@ contains
         ! FT volume
         call b%vol%fwd_ft
         ! expand for fast interpolation
-        if( l_doexpand ) call b%vol%expand_cmat     
+        if( l_doexpand ) call b%vol%expand_cmat(p%alpha)    
     end subroutine preprefvol
 
     subroutine norm_struct_facts( b, p, which_iter )

@@ -38,7 +38,7 @@ p%kfromto(2) = 40
 call b%build_general_tbox(p, cline)
 call pftcc%new(8, p)
 allocate(corrs(pftcc%get_nrots()))
-call img_copy%init_polarizer(pftcc)
+call img_copy%init_polarizer(pftcc, p%alpha)
 call b%img%read(p%stk, 1)
 img_copy = b%img
 call img_copy%fwd_ft

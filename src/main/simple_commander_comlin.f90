@@ -167,7 +167,7 @@ contains
             ! generate projections
             call b%vol%mask(p%msk, 'soft')
             call b%vol%fwd_ft
-            call b%vol%expand_cmat
+            call b%vol%expand_cmat(p%alpha)
             b%ref_imgs(1,:) = projvol(b%vol, b%e, p)
             if( p%l_distr_exec .and. p%part > 1 )then
                 ! do nothing

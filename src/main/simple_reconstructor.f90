@@ -30,7 +30,7 @@ type, extends(image) :: reconstructor
     complex, allocatable        :: cmat_exp(:,:,:)              !< Fourier components of expanded reconstructor
     real,    allocatable        :: rho_exp(:,:,:)               !< sampling+CTF**2 density of expanded reconstructor
     real                        :: winsz         = 1.           !< window half-width
-    real                        :: alpha         = 2.           !< oversampling ratio
+    real                        :: alpha         = KBALPHA           !< oversampling ratio
     real                        :: dfx=0., dfy=0., angast=0.    !< CTF params
     real                        :: phshift       = 0.           !< additional phase shift from the Volta  
     integer                     :: wdim          = 0            !< dim of interpolation matrix
@@ -79,20 +79,17 @@ contains
         class(reconstructor), intent(inout) :: self   !< this instance
         class(params),        intent(in)    :: p      !< parameters object
         logical, optional,    intent(in)    :: expand !< expand flag
-        integer :: rho_shape(3), lims(3,2), rho_exp_lims(3,2), ldim_exp(3,2)
-        integer :: dim, maxlims
+        integer :: rho_shape(3), lims(3,2), rho_exp_lims(3,2), ldim_exp(3,2), dim
         logical :: l_expand
-        l_expand = .true.
         if(.not. self%exists()) stop 'construct image before allocating rho; alloc_rho; simple_reconstructor'
         if(      self%is_2d() ) stop 'only for volumes; alloc_rho; simple_reconstructor'
-        if( present(expand) )l_expand = expand
+        call self%dealloc_rho
+        l_expand = .true.
+        if( present(expand) ) l_expand = expand
         self%ldim_img = self%get_ldim()
         self%nyq      = self%get_lfny(1)
-        if( self%ldim_img(3) < 2 ) stop 'reconstructor need to be 3D 4 now; alloc_rho; simple_reconstructor'
-        call self%dealloc_rho
-        self%winsz = p%winsz
-        self%wdim  = 2*ceiling(self%winsz) + 1
-        self%alpha = p%alpha
+        self%winsz    = p%winsz
+        self%alpha    = p%alpha
         select case(p%ctf)
             case('no')
                 self%ctf%flag = CTFFLAG_NO
@@ -106,10 +103,11 @@ contains
         self%tfastig = .false.
         if( p%tfplan%mode .eq. 'astig' ) self%tfastig = .true.
         self%phaseplate = p%tfplan%l_phaseplate
-        self%kbwin = kbinterpol(self%winsz,self%alpha)
+        self%kbwin      = kbinterpol(self%winsz,self%alpha)
+        self%wdim       = self%kbwin%get_wdim()
         ! Work out dimensions of the rho array
-        rho_shape(1)   = fdim(self%ldim_img(1))
-        rho_shape(2:3) = self%ldim_img(2:3)
+        rho_shape(1)    = fdim(self%ldim_img(1))
+        rho_shape(2:3)  = self%ldim_img(2:3)
         ! Letting FFTW do the allocation in C ensures that we will be using aligned memory
         self%kp = fftwf_alloc_real(int(product(rho_shape),c_size_t))
         ! Set up the rho array which will point at the allocated memory
@@ -117,23 +115,20 @@ contains
         self%rho_allocated = .true.
         if( l_expand )then
             ! setup expanded matrices
-            lims    = self%loop_lims(2)
-            maxlims = maxval(abs(lims))
-            dim     = ceiling(sqrt(2.)*maxlims + self%winsz)
+            lims = self%loop_lims(2)
+            dim  = maxval(abs(lims)) + ceiling(KBWINSZ)
             ldim_exp(1,:) = [-dim, dim]
             ldim_exp(2,:) = [-dim, dim]
             ldim_exp(3,:) = [-dim, dim]
             rho_exp_lims  = ldim_exp
             allocate(self%cmat_exp( ldim_exp(1,1):ldim_exp(1,2),&
                 &ldim_exp(2,1):ldim_exp(2,2),&
-                &ldim_exp(3,1):ldim_exp(3,2)), stat=alloc_stat)
+                &ldim_exp(3,1):ldim_exp(3,2)), source=cmplx(0.,0.), stat=alloc_stat)
             allocchk("In: alloc_rho; simple_reconstructor cmat_exp")
             allocate(self%rho_exp( rho_exp_lims(1,1):rho_exp_lims(1,2),&
                 &rho_exp_lims(2,1):rho_exp_lims(2,2),&
-                &rho_exp_lims(3,1):rho_exp_lims(3,2)), stat=alloc_stat)
+                &rho_exp_lims(3,1):rho_exp_lims(3,2)), source=0., stat=alloc_stat)
             allocchk("In: alloc_rho; simple_reconstructor rho_exp")
-            self%cmat_exp           = cmplx(0.,0.)
-            self%rho_exp            = 0.
             self%cmat_exp_allocated = .true.
             self%rho_exp_allocated  = .true.
         end if       
@@ -246,7 +241,7 @@ contains
         if( self%ctf%flag /= CTFFLAG_NO )then
             inv1       = vec(1)*(1./real(self%ldim_img(1)))
             inv2       = vec(2)*(1./real(self%ldim_img(2)))
-            sqSpatFreq = inv1*inv1+inv2*inv2
+            sqSpatFreq = inv1 * inv1 + inv2 * inv2
             ang        = atan2(vec(2), vec(1))
             ! calculate CTF and CTF**2 values
             if( self%phaseplate )then
@@ -457,7 +452,7 @@ contains
         call img_pd%new([p%boxpd,p%boxpd,1],self%get_smpd())
         call img%new([p%box,p%box,1],self%get_smpd())
         ! make the gridding prepper
-        call gridprep%new(img, self%kbwin)
+        call gridprep%new(img, self%kbwin, [p%boxpd,p%boxpd,1])
         ! population balancing logics
         if( p%balance > 0 )then
             call o%balance( p%balance, NSPACE_BALANCE, p%nsym, p%eullims, skewness )

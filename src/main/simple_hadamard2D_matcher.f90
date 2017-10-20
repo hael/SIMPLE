@@ -322,7 +322,7 @@ contains
         ! CREATE THE POLARFT_CORRCALC OBJECT
         call pftcc%new(p%ncls, p, nint(b%a%get_all('eo', [p%fromp,p%top])))
         ! prepare the polarizer
-        call b%img_match%init_polarizer(pftcc)
+        call b%img_match%init_polarizer(pftcc, p%alpha)
 
         ! PREPARATION OF REFERENCES IN PFTCC
         ! read references and transform into polar coordinates

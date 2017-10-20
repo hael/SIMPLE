@@ -485,7 +485,7 @@ contains
                 cnt = cnt+1
                 call progress(cnt, nrefs)
                 o = b%e%get_ori(iref)
-                call b%vol%fproject_polar(cnt, o, pftcc)
+                call b%vol%fproject_polar(cnt, o, pftcc, iseven=.true.) ! @@@@@@@@@@@@@
             end do
         end do
         ! cleanup
@@ -504,7 +504,7 @@ contains
         integer   :: cnt, s, iptcl, istate, ntot
         if( .not. p%l_distr_exec ) write(*,'(A)') '>>> BUILDING PARTICLES'
         ! initialize
-        call b%img_match%init_polarizer(pftcc)
+        call b%img_match%init_polarizer(pftcc, p%alpha)
         ntot = (p%top-p%fromp+1) * p%nstates
         cnt  = 0
         do s=1,p%nstates

@@ -441,9 +441,9 @@ contains
         integer,     allocatable :: ptcls_inds(:), batches(:,:), iprecs(:)
         integer,     allocatable :: ioris(:)
         complex   :: comp, zero, oshift
-        real      :: loc(2), mat(2,2), winsz, pw, tval, tvalsq, vec(2)
+        real      :: loc(2), mat(2,2), pw, tval, tvalsq, vec(2)
         integer   :: cnt_progress, nbatches, batch, icls_pop, iprec, iori, i, batchsz, fnr, icls_popmax
-        integer   :: lims(3,2), istate, sh, nyq, logi(3), phys(3), win(2,2), win4w(2,2), win_tst(2,2)
+        integer   :: lims(3,2), istate, sh, nyq, logi(3), phys(3), win(2,2), win4w(2,2)
         integer   :: cyc_lims(3,2), alloc_stat, wdim, h, k, hh, kk, icls, iptcl, batchsz_max
         if( .not. self%pp%l_distr_exec ) write(*,'(a)') '>>> ASSEMBLING CLASS SUMS'
         ! init
@@ -452,10 +452,9 @@ contains
         lims      = cyc_lims
         lims(1,1) = 0
         nyq       = self%ctfsqsums_even(1,1)%get_lfny(1)
-        kbwin     = kbinterpol(KBWINSZ, KBALPHA)
+        kbwin     = kbinterpol(KBWINSZ, self%pp%alpha)
         zero      = cmplx(0.,0.)
-        winsz     = KBWINSZ
-        wdim      = ceiling(KBALPHA*winsz) + 1
+        wdim      = kbwin%get_wdim()
         allocate(cmat_even(cyc_lims(1,1):cyc_lims(1,2),cyc_lims(2,1):cyc_lims(2,2)),&
                 &cmat_odd(cyc_lims(1,1):cyc_lims(1,2),cyc_lims(2,1):cyc_lims(2,2)),&
                 &rho_even(cyc_lims(1,1):cyc_lims(1,2),cyc_lims(2,1):cyc_lims(2,2)),&
@@ -466,7 +465,7 @@ contains
         call batch_imgsum_odd%new(self%ldim_pd, self%pp%smpd)
         call batch_rhosum_even%new(self%ldim_pd, self%pp%smpd)
         call batch_rhosum_odd%new(self%ldim_pd, self%pp%smpd)
-        call gridprep%new(self%bp%img, kbwin)
+        call gridprep%new(self%bp%img, kbwin, self%ldim_pd)
         if( L_BENCH )then
             rt_batch_loop = 0.
             rt_gridding   = 0.
@@ -529,7 +528,7 @@ contains
                     rho_odd   = 0.
                     rho_even  = 0.
                     !$omp parallel do default(shared) schedule(static) reduction(+:cmat_even,cmat_odd,rho_even,rho_odd) proc_bind(close)&
-                    !$omp private(sh,i,iprec,iori,h,k,loc,mat,logi,phys,w,win4w,win,pw,tval,tvalsq,vec,hh,kk,oshift,comp,win_tst)
+                    !$omp private(sh,i,iprec,iori,h,k,loc,mat,logi,phys,w,win4w,win,pw,tval,tvalsq,vec,hh,kk,oshift,comp)
                     ! batch loop, convolution interpolation
                     do i=1,batchsz
                         call gridprep%prep(batch_imgs(i), padded_imgs(i))
@@ -556,7 +555,7 @@ contains
                                 vec      = real([h,k])
                                 loc      = matmul(vec,mat)
                                 ! kernel limits
-                                call sqwin_2d(loc(1),loc(2), winsz, cyc_lims(1:2,1:2), win)
+                                call sqwin_2d(loc(1),loc(2), KBWINSZ, cyc_lims(1:2,1:2), win)
                                 ! evaluate the transfer function
                                 call self%calc_tfun_vals(iprec, vec, tval, tvalsq)
                                 ! kernel

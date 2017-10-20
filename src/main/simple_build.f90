@@ -308,7 +308,7 @@ contains
         call self%raise_hard_ctf_exception(p)
         call self%recvol%new([p%boxpd,p%boxpd,p%boxpd],p%smpd)
         call self%recvol%alloc_rho(p)
-        call self%gridprep%new(self%img, self%recvol%get_kbwin())
+        call self%gridprep%new(self%img, self%recvol%get_kbwin(), [p%boxpd,p%boxpd,1])
         if( .not. self%a%isthere('proj') ) call self%a%set_projs(self%e)
         if (verbose.or.global_verbose)then
             write(*,'(A,1x,1ES20.5)') '>>> DONE BUILDING RECONSTRUCTION TOOLBOX      time (s)', toc(tbuild)
@@ -344,7 +344,7 @@ contains
         else
             write(*,'(A)') '>>> DONE BUILDING EO RECONSTRUCTION TOOLBOX'
         endif
-        call self%gridprep%new(self%img, self%eorecvol%get_kbwin())
+        call self%gridprep%new(self%img, self%eorecvol%get_kbwin(), [p%boxpd,p%boxpd,1])
         self%eo_rec_tbox_exists = .true.
     end subroutine build_eo_rec_tbox
 
@@ -462,7 +462,7 @@ contains
         allocchk('build_hadamard_prime3D_tbox; simple_build, 2')
         call self%recvols(1)%new([p%boxpd,p%boxpd,p%boxpd],p%smpd)
         call self%recvols(1)%alloc_rho(p)
-        call self%gridprep%new(self%img, self%recvols(1)%get_kbwin())
+        call self%gridprep%new(self%img, self%recvols(1)%get_kbwin(), [p%boxpd,p%boxpd,1])
         if( .not. self%a%isthere('proj') ) call self%a%set_projs(self%e)
         if (verbose.or.global_verbose)then
             write(*,'(A,1x,1ES20.5)') '>>> DONE BUILDING EXTREMAL3D TOOLBOX          time (s)', toc(tbuild)

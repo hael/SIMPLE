@@ -136,7 +136,7 @@ contains
         ! simulate images
         call b%vol%read(p%vols(1))
         call b%vol%fwd_ft
-        call b%vol%expand_cmat
+        call b%vol%expand_cmat(p%alpha)
         imgs_ptcls = projvol(b%vol, o_ptcls, p)
         call b%vol%kill_expanded
         do i=1,NPROJS
@@ -163,7 +163,7 @@ contains
         call b%a%calc_hard_weights(p%frac)
         b%a = o_ptcls
         call pftcc%new(NPROJS, p)
-        call b%img_match%init_polarizer( pftcc )
+        call b%img_match%init_polarizer( pftcc, p%alpha )
         do i=1,NPROJS
             call imgs_ptcls(i)%clip(b%img_match)
             call b%img_match%mask(p%msk,'soft')

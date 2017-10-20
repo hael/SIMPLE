@@ -28,7 +28,7 @@ contains
         type(projector)  :: vol_pad, img_pad
         type(kbinterpol) :: kbwin
         integer          :: n, i
-        kbwin = kbinterpol(KBWINSZ, KBALPHA)
+        kbwin = kbinterpol(KBWINSZ, p%alpha)
         call vol_pad%new([p%boxpd,p%boxpd,p%boxpd], p%smpd)
         call prep4cgrid(vol, vol_pad, p%msk, kbwin)
         call img_pad%new([p%boxpd,p%boxpd,1], p%smpd)
@@ -39,7 +39,7 @@ contains
         endif
         allocate( imgs(n), stat=alloc_stat )
         allocchk('projvol; simple_projector')
-        call vol_pad%expand_cmat
+        call vol_pad%expand_cmat(p%alpha)
         write(*,'(A)') '>>> GENERATES PROJECTIONS' 
         do i=1,n
             call progress(i, n)
@@ -69,7 +69,7 @@ contains
         integer          :: h,k,l,lims(3,2),logi(3),phys(3),ldim(3),ldim_pd(3)
         real             :: loc(3)
         logical          :: l_shvec_present
-        kbwin           = kbinterpol(KBWINSZ, KBALPHA)
+        kbwin           = kbinterpol(KBWINSZ, p%alpha)
         ldim            = vol%get_ldim()
         ldim_pd         = [p%boxpd,p%boxpd,p%boxpd]
         l_shvec_present = present(shvec)
@@ -78,6 +78,7 @@ contains
         call rovol_pad%set_ft(.true.)
         call rovol%new(ldim, p%smpd)
         call prep4cgrid(vol, vol_pad, p%msk, kbwin)
+        call vol_pad%expand_cmat(p%alpha)
         lims = vol_pad%loop_lims(2)
         write(*,'(A)') '>>> ROTATING VOLUME'
         !$omp parallel do collapse(3) default(shared) private(h,k,l,loc,logi,phys)&
@@ -89,9 +90,11 @@ contains
                     phys = rovol_pad%comp_addr_phys(logi)
                     loc  = matmul(real(logi), o%get_mat())
                     if( l_shvec_present )then
-                        call rovol_pad%set_fcomp(logi, phys, vol_pad%extr_gridfcomp(loc) * rovol_pad%oshift(loc, shvec))
+                        ! call rovol_pad%set_fcomp(logi, phys, vol_pad%extr_gridfcomp(loc) * rovol_pad%oshift(loc, shvec))
+                        call rovol_pad%set_fcomp(logi, phys, vol_pad%interp_fcomp(loc) * rovol_pad%oshift(loc, shvec))
                     else
-                        call rovol_pad%set_fcomp(logi, phys, vol_pad%extr_gridfcomp(loc))
+                        ! call rovol_pad%set_fcomp(logi, phys, vol_pad%extr_gridfcomp(loc))
+                        call rovol_pad%set_fcomp(logi, phys, vol_pad%interp_fcomp(loc))
                     endif
                 end do 
             end do
@@ -100,6 +103,7 @@ contains
         call rovol_pad%bwd_ft
         call rovol_pad%clip(rovol)
         call rovol%norm()
+        call vol_pad%kill_expanded
         call vol_pad%kill
         call rovol_pad%kill
     end function rotvol

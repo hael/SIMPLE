@@ -8,7 +8,6 @@ use simple_kbinterpol, only: kbinterpol
 use simple_image,      only: image
 use simple_ori,        only: ori
 use simple_oris,       only: oris
-use simple_params,     only: params
 implicit none
 
 public :: projector
@@ -16,26 +15,20 @@ private
 
 type, extends(image) :: projector
     private
-    type(kbinterpol)      :: kbwin                               !< window function object
-    integer               :: ldim_exp(3,2) = 0                   !< expanded FT matrix limits
-    complex, allocatable  :: cmat_exp(:,:,:)                     !< expanded FT matrix
-    real,    allocatable  :: polweights_mat(:,:,:)               !< polar weights matrix for the image to polar transformer
-    integer, allocatable  :: polcyc1_mat(:,:,:)                  !< image cyclic adresses for the image to polar transformer
-    integer, allocatable  :: polcyc2_mat(:,:,:)                  !< image cyclic adresses for the image to polar transformer
-    logical, allocatable  :: is_in_mask(:,:,:)                   !< neighbour matrix for the shape mask projector
-    real                  :: winsz      = KBWINSZ                !< window half-width
-    real                  :: alpha      = KBALPHA                !< oversampling ratio
-    real                  :: harwin     = real(ceiling(KBWINSZ)) !< rounded window half-width
-    real                  :: harwin_exp = 1.0                    !< rounded window half-width in expanded routines
-    integer               :: wdim       = 2*ceiling(1.0) + 1     !< harwin_exp is argument to ceiling
-    logical               :: expanded_exists=.false.             !< indicates FT matrix existence
+    type(kbinterpol)      :: kbwin                   !< window function object
+    integer               :: ldim_exp(3,2) = 0       !< expanded FT matrix limits
+    complex, allocatable  :: cmat_exp(:,:,:)         !< expanded FT matrix
+    real,    allocatable  :: polweights_mat(:,:,:)   !< polar weights matrix for the image to polar transformer
+    integer, allocatable  :: polcyc1_mat(:,:,:)      !< image cyclic adresses for the image to polar transformer
+    integer, allocatable  :: polcyc2_mat(:,:,:)      !< image cyclic adresses for the image to polar transformer
+    logical, allocatable  :: is_in_mask(:,:,:)       !< neighbour matrix for the shape mask projector
+    integer               :: wdim = 0                !< dimension of K-B window
+    logical               :: expanded_exists=.false. !< indicates FT matrix existence
   contains
     ! CONSTRUCTORS
     procedure :: expand_cmat
     ! SETTERS
     procedure :: reset_expanded
-    ! INTERPOLATOR
-    procedure :: extr_gridfcomp
     ! FOURIER PROJECTORS
     procedure :: fproject
     procedure :: fproject_polar
@@ -49,9 +42,10 @@ contains
     ! CONSTRUCTOR
 
     !>  \brief  is a constructor of the expanded Fourier matrix
-    subroutine expand_cmat( self )
+    subroutine expand_cmat( self, alpha )
         use simple_math, only: cyci_1d
-        class(projector), intent(inout) :: self
+        class(projector), intent(inout) :: self 
+        real,             intent(in)    :: alpha !< oversampling factor
         integer, allocatable :: cyck(:), cycm(:), cych(:)
         integer :: h, k, m, phys(3), logi(3)
         integer :: lims(3,2), ldim(3)
@@ -59,9 +53,10 @@ contains
         ldim = self%get_ldim()
         if( .not.self%is_ft() ) stop 'volume needs to be FTed before call; expand_cmat; simple_projector'
         if( ldim(3) == 1      ) stop 'only for volumes; expand_cmat; simple_projector'
-        self%kbwin         = kbinterpol(KBWINSZ, KBALPHA)
+        self%kbwin         = kbinterpol(KBWINSZ, alpha)
+        self%wdim          = self%kbwin%get_wdim()
         lims               = self%loop_lims(3)
-        self%ldim_exp(:,2) = maxval(abs(lims)) + ceiling(self%harwin_exp)
+        self%ldim_exp(:,2) = maxval(abs(lims)) + ceiling(KBWINSZ)
         self%ldim_exp(:,1) = -self%ldim_exp(:,2)
         allocate( self%cmat_exp( self%ldim_exp(1,1):self%ldim_exp(1,2),&
                                 &self%ldim_exp(2,1):self%ldim_exp(2,2),&
@@ -156,13 +151,14 @@ contains
     end subroutine fproject
 
     !> \brief  extracts a polar FT from a volume's expanded FT (self)
-    subroutine fproject_polar( self, iref, e, pftcc, serial )
+    subroutine fproject_polar( self, iref, e, pftcc, iseven, serial )
         use simple_polarft_corrcalc, only: polarft_corrcalc
         use simple_math,             only: deg2rad
         class(projector),        intent(inout) :: self   !< projector object
         integer,                 intent(in)    :: iref   !< which reference
         class(ori),              intent(inout) :: e      !< orientation
         class(polarft_corrcalc), intent(inout) :: pftcc  !< object that holds the polar image
+        logical,                 intent(in)    :: iseven !< eo flag
         logical, optional,       intent(in)    :: serial !< thread or serial
         integer :: irot, k, ldim(3), pdim(3), ldim_polft(3)
         real    :: vec(3), loc(3)
@@ -180,7 +176,7 @@ contains
                     vec(:2) = pftcc%get_coord(irot,k)
                     vec(3)  = 0.
                     loc     = matmul(vec,e%get_mat())
-                    call pftcc%set_ref_fcomp(iref, irot, k, self%interp_fcomp(loc), .true. ) ! 4 now @@@
+                    call pftcc%set_ref_fcomp(iref, irot, k, self%interp_fcomp(loc), iseven)
                 end do
             end do
         else
@@ -192,7 +188,7 @@ contains
                     vec(:2) = pftcc%get_coord(irot,k)
                     vec(3)  = 0.
                     loc     = matmul(vec,e%get_mat())
-                    call pftcc%set_ref_fcomp(iref, irot, k, self%interp_fcomp(loc), .true. ) ! 4 now @@@
+                    call pftcc%set_ref_fcomp(iref, irot, k, self%interp_fcomp(loc), iseven)
                 end do
             end do
             !$omp end parallel do
@@ -200,87 +196,6 @@ contains
     end subroutine fproject_polar
 
     ! INTERPOLATORS
-    
-    !> \brief  extracts a Fourier component from a transform (self) by gridding
-    !!         not expanded
-    function extr_gridfcomp( self, loc ) result( comp_sum )
-        use simple_math, only: cyci_1d
-        class(projector), intent(inout) :: self
-        real,             intent(in)    :: loc(3)
-        complex, allocatable :: comps(:,:,:)
-        real,    allocatable :: w(:,:,:)
-        integer, allocatable :: cyc1(:), cyc2(:), cyc3(:)
-        complex  :: comp_sum
-        integer  :: i, j, m, wdim, incr, lims(3,2), win(3,2), logi(3), phys(3)
-        real     :: harwin_here
-        ! this is neeed in case expand_cmat hasn't been called
-        self%kbwin  = kbinterpol(KBWINSZ, KBALPHA)
-        ! init
-        harwin_here = self%harwin_exp
-        call sqwin_3d(loc(1),loc(2),loc(3), harwin_here, win)
-        wdim        = win(1,2) - win(1,1) + 1
-        lims        = self%loop_lims(3)
-        if( self%is_2d() )then
-            ! 2D
-            ! init
-            allocate( cyc1(wdim), cyc2(wdim), w(wdim, wdim, 1), comps(wdim, wdim, 1))
-            comps = cmplx(0.,0.)
-            w     = 1.
-            do i=1,wdim
-                incr = i-1
-                ! circular addresses
-                cyc1(i)  = cyci_1d(lims(1,:), win(1,1)+incr)
-                cyc2(i)  = cyci_1d(lims(2,:), win(2,1)+incr)
-                ! interpolation kernel matrix
-                w(i,:,1) = w(i,:,1) * self%kbwin%apod( real(win(1,1)+incr)-loc(1) )
-                w(:,i,1) = w(:,i,1) * self%kbwin%apod( real(win(2,1)+incr)-loc(2) )
-            enddo
-            ! fetch fourier components
-            do i=1, wdim
-                do j=1, wdim
-                    if(w(i,j,1) == 0.)cycle
-                    logi = [cyc1(i), cyc2(j), 0]
-                    phys = self%comp_addr_phys(logi)
-                    comps(i,j,1) = self%get_fcomp(logi, phys)
-                end do
-            end do
-            ! SUM( kernel x components )
-            comp_sum = sum(w * comps)
-            deallocate( w,comps,cyc1,cyc2 )
-        else
-            ! 3D
-            ! init
-            allocate( cyc1(wdim), cyc2(wdim), cyc3(wdim), w(wdim, wdim, wdim),comps(wdim, wdim, wdim))
-            comps = cmplx(0.,0.)
-            w     = 1.
-            do i=1, wdim
-                incr = i-1
-                ! circular addresses
-                cyc1(i)  = cyci_1d(lims(1,:), win(1,1)+incr)
-                cyc2(i)  = cyci_1d(lims(2,:), win(2,1)+incr)
-                cyc3(i)  = cyci_1d(lims(3,:), win(3,1)+incr)
-                ! interpolation kernel matrix
-                w(i,:,:) = w(i,:,:) * self%kbwin%apod( real(win(1,1)+incr)-loc(1) )
-                w(:,i,:) = w(:,i,:) * self%kbwin%apod( real(win(2,1)+incr)-loc(2) )
-                w(:,:,i) = w(:,:,i) * self%kbwin%apod( real(win(3,1)+incr)-loc(3) )
-            enddo
-            ! fetch fourier components
-            do i=1, wdim
-                do j=1, wdim
-                    if(all(w(i,j,:) == 0.))cycle
-                    do m=1, wdim
-                        if(w(i,j,m) == 0.)cycle
-                        logi = [cyc1(i), cyc2(j), cyc3(m)]
-                        phys = self%comp_addr_phys(logi)
-                        comps(i,j,m) = self%get_fcomp(logi, phys)
-                    enddo
-                end do
-            end do
-            ! SUM( kernel x components )
-            comp_sum = sum(w * comps)
-            deallocate( w,comps,cyc1,cyc2,cyc3 )
-        endif
-    end function extr_gridfcomp
 
     !>  \brief is to interpolate from the expanded complex matrix 
     function interp_fcomp( self, loc )result( comp )
@@ -290,7 +205,7 @@ contains
         real    :: w(1:self%wdim,1:self%wdim,1:self%wdim)
         integer :: i, win(3,2)
         ! interpolation kernel window
-        call sqwin_3d(loc(1), loc(2), loc(3), self%harwin_exp, win)
+        call sqwin_3d(loc(1), loc(2), loc(3), KBWINSZ, win)
         ! interpolation kernel matrix
         w = 1.
         do i=1,self%wdim

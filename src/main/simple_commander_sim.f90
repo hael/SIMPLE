@@ -81,7 +81,7 @@ contains
         debug=.false. ! declared in local flags
         p = params(cline, .false.)          ! parameters generated
         call b%build_general_tbox(p, cline) ! general objects built
-        kbwin = kbinterpol(KBWINSZ, KBALPHA)
+        kbwin = kbinterpol(KBWINSZ, p%alpha)
         tfun  = ctf(p%smpd, p%kv, p%cs, p%fraca)
         if( .not. cline%defined('outstk') ) p%outstk = 'simimgs'//p%ext
         if( cline%defined('part') )then
@@ -123,7 +123,7 @@ contains
         call vol_pad%new([p%boxpd, p%boxpd, p%boxpd], p%smpd)
         DebugPrint  '>>> DID READ VOL'
         call prep4cgrid(b%vol, vol_pad, p%msk, kbwin)
-        call vol_pad%expand_cmat
+        call vol_pad%expand_cmat(p%alpha)
         DebugPrint  '>>> DONE PREPARING FOR IMAGE GENERATION'
         write(*,'(A)') '>>> GENERATING IMAGES'
         cnt = 0

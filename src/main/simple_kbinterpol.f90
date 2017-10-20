@@ -13,6 +13,7 @@ type :: kbinterpol
     procedure :: new
     procedure :: get_winsz
     procedure :: get_alpha
+    procedure :: get_wdim
     procedure :: apod
     procedure :: instr
 end type kbinterpol
@@ -56,6 +57,14 @@ contains
         class(kbinterpol), intent(in) :: self
         get_alpha = self%alpha
     end function get_alpha
+
+    pure integer function get_wdim( self )
+        use simple_math, only: sqwin_1d
+        class(kbinterpol), intent(in) :: self
+        integer :: win(2)
+        call sqwin_1d(0., self%Whalf, win)
+        get_wdim = win(2) - win(1) + 1
+    end function get_wdim
 
     !>  \brief  is the Kaiser-Bessel apodization function, abs(x) <= Whalf
     function apod( self, x ) result( r )

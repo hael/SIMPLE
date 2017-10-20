@@ -46,10 +46,10 @@ end type volpft_corrcalc
 contains
 
     !>  \brief  is a constructor
-    subroutine new( self, vol_ref, vol_target, hp, lp )
+    subroutine new( self, vol_ref, vol_target, hp, lp, alpha )
         class(volpft_corrcalc),    intent(inout) :: self
         class(projector), target , intent(in)    :: vol_ref, vol_target
-        real,                      intent(in)    :: hp, lp
+        real,                      intent(in)    :: hp, lp, alpha
         integer    :: isym, k
         real       :: vec(3)
         type(ori)  :: e
@@ -90,9 +90,9 @@ contains
         end do
         ! prepare for fast interpolation
         call self%vol_ref%fwd_ft
-        call self%vol_ref%expand_cmat
+        call self%vol_ref%expand_cmat(alpha)
         call self%vol_target%fwd_ft
-        call self%vol_target%expand_cmat
+        call self%vol_target%expand_cmat(alpha)
         ! extract the reference lines
         call self%extract_ref
         self%existence_vpft = .true.

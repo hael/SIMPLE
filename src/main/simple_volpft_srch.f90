@@ -5,6 +5,7 @@ use simple_pftcc_opt,       only: pftcc_opt
 use simple_volpft_corrcalc, only: volpft_corrcalc
 use simple_simplex_opt,     only: simplex_opt
 use simple_ori,             only: ori
+use simple_defs             ! use all in there
 implicit none
 
 public :: volpft_srch_init, volpft_srch_minimize_eul, volpft_srch_minimize_shift, volpft_srch_minimize_all
@@ -37,7 +38,7 @@ contains
         integer,          optional, intent(in) :: nrestarts_in
         real :: lims_eul(3,2), lims_shift(3,2), lims_all(6,2)
         ! create the correlator
-        call vpftcc%new( vol_ref, vol_target, hp, lp )
+        call vpftcc%new( vol_ref, vol_target, hp, lp, KBALPHA )
         ! flag the barrier constraint
         shbarr = .true.
         if( present(shbarrier) )then

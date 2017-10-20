@@ -15,15 +15,11 @@ private
 
 type, extends(image) :: polarizer
     private
-    type(kbinterpol)      :: kbwin                               !< window function object
-    real,    allocatable  :: polweights_mat(:,:,:)               !< polar weights matrix for the image to polar transformer
-    integer, allocatable  :: polcyc1_mat(:,:,:)                  !< image cyclic adresses for the image to polar transformer
-    integer, allocatable  :: polcyc2_mat(:,:,:)                  !< image cyclic adresses for the image to polar transformer
-    real                  :: winsz      = KBWINSZ                !< window half-width
-    real                  :: alpha      = KBALPHA                !< oversampling ratio
-    real                  :: harwin     = real(ceiling(KBWINSZ)) !< rounded window half-width
-    real                  :: harwin_exp = 1.0                    !< rounded window half-width in expanded routines
-    integer               :: wdim       = 2*ceiling(1.0) + 1     !< harwin_exp is argument to ceiling!< win dim
+    type(kbinterpol)      :: kbwin                 !< window function object
+    real,    allocatable  :: polweights_mat(:,:,:) !< polar weights matrix for the image to polar transformer
+    integer, allocatable  :: polcyc1_mat(:,:,:)    !< image cyclic adresses for the image to polar transformer
+    integer, allocatable  :: polcyc2_mat(:,:,:)    !< image cyclic adresses for the image to polar transformer
+    integer               :: wdim = 0              !< dimension of K-B window
   contains
     procedure :: init_polarizer
     procedure :: polarize
@@ -35,18 +31,20 @@ contains
     ! IMAGE TO POLAR FT TRANSFORMER
 
     !> \brief  initialises the image polarizer
-    subroutine init_polarizer( self, pftcc )
+    subroutine init_polarizer( self, pftcc, alpha )
         use simple_math,             only: sqwin_2d, cyci_1d
         use simple_polarft_corrcalc, only: polarft_corrcalc
         class(polarizer),        intent(inout) :: self   !< projector instance
         class(polarft_corrcalc), intent(inout) :: pftcc  !< polarft_corrcalc object to be filled
+        real,                    intent(in)    :: alpha  !< oversampling factor
         real, allocatable :: w(:,:)
         real              :: loc(2)
         integer           :: pdim(3), win(2,2), lims(3,2)
         integer           :: i, k, l, wlen, cnt
         if( .not. pftcc%exists() ) stop 'polarft_corrcalc object needs to be created; init_imgpolarizer; simple_projector'
         call self%kill_polarizer
-        self%kbwin = kbinterpol(KBWINSZ, KBALPHA)
+        self%kbwin = kbinterpol(KBWINSZ, alpha)
+        self%wdim  = self%kbwin%get_wdim()
         wlen       = self%wdim**2
         pdim       = pftcc%get_pdim()
         lims       = self%loop_lims(3)
@@ -61,7 +59,7 @@ contains
             do k=pdim(2),pdim(3)
                 ! polar coordinates
                 loc = pftcc%get_coord(i,k)
-                call sqwin_2d(loc(1), loc(2), self%harwin_exp, win)
+                call sqwin_2d(loc(1), loc(2), KBWINSZ, win)
                 w   = 1.
                 cnt = 0
                 do l=1,self%wdim
@@ -90,7 +88,7 @@ contains
         logical, optional,       intent(in)    :: isptcl  !< is ptcl (or reference)
         logical, optional,       intent(in)    :: iseven  !< is even (or odd)
         complex, allocatable :: pft(:,:), comps(:,:)
-        integer :: i, k, l, m, windim, vecdim, addr_l
+        integer :: i, k, l, m, vecdim, addr_l
         integer :: lims(3,2), ldim_img(3), ldim_pft(3), pdim(3), logi(3), phys(3)
         logical :: iisptcl, iiseven
         if( .not. allocated(self%polweights_mat) )&
@@ -110,18 +108,17 @@ contains
         endif
         if( .not.self%is_ft() ) stop 'image needs to FTed before this operation; simple_projector :: imgpolarizer'
         pdim   = pftcc%get_pdim()
-        windim = 2*ceiling(self%harwin_exp) + 1
-        vecdim = windim**2
-        allocate( pft(pdim(1),pdim(2):pdim(3)), comps(1:windim,1:windim), stat=alloc_stat )
+        vecdim = self%wdim**2
+        allocate( pft(pdim(1),pdim(2):pdim(3)), comps(1:self%wdim,1:self%wdim), stat=alloc_stat )
         allocchk("In: imgpolarizer; simple_projector")
         lims = self%loop_lims(3)
         !$omp parallel do collapse(2) schedule(static) default(shared)&
         !$omp private(i,k,l,m,logi,phys,comps,addr_l) proc_bind(close)
         do i=1,pdim(1)
             do k=pdim(2),pdim(3)
-                do l=1,windim
+                do l=1,self%wdim
                     addr_l = self%polcyc1_mat(i,k,l)
-                    do m=1,windim
+                    do m=1,self%wdim
                         logi = [addr_l,self%polcyc2_mat(i,k,m),0]
                         phys = self%comp_addr_phys(logi)
                         comps(l,m) = self%get_fcomp(logi,phys)
