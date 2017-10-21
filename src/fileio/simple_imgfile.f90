@@ -38,7 +38,8 @@ contains
     procedure, private :: get_format
     procedure, private :: slice2recpos
     procedure, private :: slice2bytepos
-    procedure          :: rwSlices
+    procedure          :: rSlices
+    procedure          :: wSlices
     procedure          :: print_imgfile
     procedure          :: getDims
     procedure          :: getDim
@@ -257,57 +258,37 @@ contains
         endif
     end subroutine slice2bytepos
 
-    !>  \brief  read/write a set of contiguous slices of the image file from disk into memory.
+    !>  \brief  reads a set of contiguous slices of the image file from disk into memory.
     !!          The array of reals should have +2 elements in the first dimension.
-    subroutine rwSlices( self, mode, first_slice, last_slice, rarr, ldim, is_ft, smpd )
+    subroutine rSlices( self, first_slice, last_slice, rarr )
         use simple_strings, only: int2str
-        use simple_math,    only: is_odd, is_a_number
+        use simple_math,    only: is_odd, is_a_number, is_even
+        use simple_imghead  ! use all in there
 #ifdef PGI
         use ISO_C_BINDING
 #else
         use, intrinsic :: iso_c_binding
 #endif
-        use simple_imghead !, only: ImgHead, SpiImgHead, MrcImgHead, dataRbytes, dataRinteger, dataRfloat
-        use simple_math, only: is_even
         class(imgfile), target, intent(inout) :: self         !< instance  Imagefile object 
-        character(len=1),       intent(in)    :: mode         !< read (r) or write (w)
         integer,                intent(in)    :: first_slice  !< First slice (the first slice in the file is numbered 1)
         integer,                intent(in)    :: last_slice   !< Last slice
         real,                   intent(inout) :: rarr(:,:,:)  !< Array of reals. Will be (re)allocated if needed
-        integer,                intent(in)    :: ldim(3)      !< Logical size of the array. This will be written to disk: rarr(1:ldim(1),:,:)
-        logical,                intent(in)    :: is_ft        !< to indicate FT status of image
-        real,                   intent(in)    :: smpd         !< sampling distance
         character(len=100)          :: io_message
-        integer                     :: io_stat,i,j,k,itmp,dims(3),dims_stored(3),tmparrdims(3)
-        integer(kind=8)             :: first_byte,hedbyteinds(2),imbyteinds(2),first_hedbyte, byteperpix
+        integer                     :: io_stat,itmp,dims(3),tmparrdims(3)
+        integer(kind=8)             :: first_byte,hedbyteinds(2),imbyteinds(2),first_hedbyte,byteperpix
         logical                     :: arr_is_ready,alloc_tmparr
-        real                        :: min_val,max_val
         class(ImgHead), pointer     :: ptr=>null()
         class(ImgHead), allocatable :: imghed
 #ifdef PGI
         include 'lib3f.h'
 #endif
         ! Check that the first and last slice numbers given make sense
-        if( first_slice > 0 .and. (first_slice .gt. last_slice) ) stop 'Last < first slice; rwSlices; simple_imgfile'
+        if( first_slice > 0 .and. (first_slice .gt. last_slice) ) stop 'Last < first slice; rSlices; simple_imgfile'
         ! Get the dims of the image file
         dims = self%overall_head%getDims()
         ! set pointer to overall header
         ptr  => self%overall_head
-        select case(mode)
-            case('r')
-                dims(3) = last_slice - first_slice + 1
-            case('w')
-                select type(ptr)
-                    type is (MrcImgHead)
-                        ! Redefine the file dims (to keep track of the index of the last image of the stack)
-                        dims_stored = dims
-                        dims(1)     = ldim(1)
-                        dims(2)     = size(rarr,2)
-                        dims(3)     = max(last_slice,dims(3))
-                        call self%overall_head%setDims(dims)
-                        dims = dims_stored ! safety
-                end select
-        end select
+        dims(3) = last_slice - first_slice + 1
         if( is_odd(dims(1)) )then
             arr_is_ready = (size(rarr,1) .eq. dims(1) + 1) .and. size(rarr,2) .eq. dims(2)
         else
@@ -316,7 +297,7 @@ contains
         if( .not. arr_is_ready )then
             write(*,*) 'Array size: ', size(rarr,1), size(rarr,2), size(rarr,3)
             write(*,*) 'Dimensions: ', dims(1), dims(2), dims(3)
-            stop 'Array is not properly allocated; rwSlices; simple_imgfile'
+            stop 'Array is not properly allocated; rSlices; simple_imgfile'
         endif
         byteperpix = int(self%overall_head%bytesPerPix(),kind=8)
         ! Work out the position of the first byte
@@ -334,144 +315,216 @@ contains
                     first_hedbyte = hedbyteinds(1) ! first header byte
                 endif
             case DEFAULT
-                stop 'Format not supported; rwSlices; simple_imgfile'
+                stop 'Format not supported; rSlices; simple_imgfile'
         end select
-        select case(mode)
-            case('r')
-                rarr = 0. ! initialize to zero
-                select case(byteperpix)
-                    case(1) ! Byte data
-                        if( allocated(tmp_byte_array) )then
-                            tmparrdims(1) = size(tmp_byte_array,1)
-                            tmparrdims(2) = size(tmp_byte_array,2)
-                            tmparrdims(3) = size(tmp_byte_array,3)
-                            alloc_tmparr  = .false.
-                            if( any(tmparrdims .ne. dims) )then
-                                deallocate(tmp_byte_array)
-                                alloc_tmparr = .true.
-                            endif
-                        else
-                            alloc_tmparr = .true.
-                        endif
-                        if( alloc_tmparr )then 
-                            allocate(tmp_byte_array(dims(1),dims(2),dims(3)),stat=alloc_stat)
-                            call alloc_errchk("In simple_imgfile:: rwSlices ;  Byte data ", alloc_stat)
-                        endif
-                        read(unit=self%funit,pos=first_byte,iostat=io_stat,iomsg=io_message) tmp_byte_array(:dims(1),:dims(2),:dims(3))
-                        ! Conversion from unsigned byte integer (which MRC appears to be) is tricky because Fortran 
-                        ! doesn't do unsigned integer natively. The following IAND trick is courtesy of Jim Dempsey 
-                        ! at http://software.intel.com/en-us/forums/showthread.php?t=64400 Confusingly, the MRC format 
-                        ! documentation implies that one should expect signed integers, which seems to be incorrect: 
-                        ! http://www2.mrc-lmb.cam.ac.uk/image2000.html IMOD documentation indicates that prior to IMOD 
-                        ! 4.2.23, unsigned bytes were used and that one needs to inspect the imodStamp head to check
-                        if( self%overall_head%pixIsSigned() )then
-                            rarr(1:dims(1),:,:) = tmp_byte_array(:dims(1),:dims(2),:dims(3))
-                        else
-                            rarr(1:dims(1),:,:) = real(iand(int(tmp_byte_array(:dims(1),:dims(2),:dims(3)),kind=4),int(255,kind=4)))
-                        endif
-                    case(2) ! 16-bit data, assumed to be integer
-                        if( allocated(tmp_16bit_int_array) )then
-                            tmparrdims(1) = size(tmp_16bit_int_array,1)
-                            tmparrdims(2) = size(tmp_16bit_int_array,2)
-                            tmparrdims(3) = size(tmp_16bit_int_array,3)
-                            alloc_tmparr  = .false.
-                            if( any(tmparrdims .ne. dims) )then
-                                deallocate(tmp_16bit_int_array)
-                                alloc_tmparr = .true.
-                            endif
-                        else
-                            alloc_tmparr = .true.
-                        endif
-                        if( alloc_tmparr )then 
-                            allocate(tmp_16bit_int_array(dims(1),dims(2),dims(3)),stat=alloc_stat)
-                            call alloc_errchk("In simple_imgfile:: rwSlices ; 16-bit data ", alloc_stat )
-                        endif
-                        read(unit=self%funit,pos=first_byte,iostat=io_stat,iomsg=io_message) tmp_16bit_int_array(:dims(1),:dims(2),:dims(3))
-                        if( self%overall_head%pixIsSigned() )then
-                            rarr(1:dims(1),:,:) = real(tmp_16bit_int_array(:dims(1),:dims(2),:dims(3)))
-                        else
-                            rarr(1:dims(1),:,:) = real(iand(int(tmp_16bit_int_array(:dims(1),:dims(2),:dims(3)),kind=4), int(huge(int(1,kind=2)), kind=4)))
-                        endif
-                    case(4)
-                        read(unit=self%funit,pos=first_byte,iostat=io_stat,iomsg=io_message) rarr(:dims(1),:,:) 
-                    case DEFAULT
-                        write(*,'(2a)') 'fname: ', trim(self%fname)
-                        write(*,'(a,i0,a)') 'bit depth: ', self%overall_head%bytesPerPix(), ' bytes'
-                        stop 'Unsupported bit-depth; rSlices; simple_imgfile'
-                end select
-                ! Check the read was successful
-                if( io_stat .ne. 0 )then
-                    write(*,'(a,i0,2a)') '**ERROR(rwSlices): I/O error ', io_stat, ' when reading from: ', trim(self%fname)
-                    write(*,'(2a)') 'IO error message was: ', trim(io_message)
-                    stop 'I/O error; rwSlices; simple_imgfile'
-                endif
-            case('w')
-                ! find minmax
-                max_val = maxval(rarr)
-                min_val = minval(rarr)
-                select case(self%head_format)
-                    case('M','F')
-                        ! nothing to do
-                    case('S')
-                        if( .not. self%isvol )then
-                        ! for SPIDER stack we also need to create and write an image header
-                        allocate( SpiImgHead :: imghed )
-                        call imghed%new(ldim=ldim)
-                        call imghed%setMinimal(ldim, is_ft, smpd)
-                        call imghed%setMinPixVal(min_val)
-                        call imghed%setMaxPixVal(max_val)
-                        call imghed%write(self%funit, pos=first_hedbyte)
-                        call imghed%kill
-                        deallocate(imghed)
+        rarr = 0. ! initialize to zero
+        select case(byteperpix)
+            case(1) ! Byte data
+                if( allocated(tmp_byte_array) )then
+                    tmparrdims(1) = size(tmp_byte_array,1)
+                    tmparrdims(2) = size(tmp_byte_array,2)
+                    tmparrdims(3) = size(tmp_byte_array,3)
+                    alloc_tmparr  = .false.
+                    if( any(tmparrdims .ne. dims) )then
+                        deallocate(tmp_byte_array)
+                        alloc_tmparr = .true.
                     endif
-                end select
-                write(unit=self%funit,pos=first_byte,iostat=io_stat) rarr(1:dims(1),:,:)
-                ! Check the write was successful
-                if( io_stat .ne. 0 )then
-                    write(*,'(a,i0,2a)') '**ERROR(wSlices): I/O error ', io_stat, ' when writing to: ', trim(self%fname)
-                    stop 'I/O error; rwSlices; simple_imgfile'
+                else
+                    alloc_tmparr = .true.
                 endif
-                ! May need to update file dims
-                select case(self%head_format)
-                    case('M')
-                        dims(3) = max(dims(3),last_slice)
-                        call self%overall_head%setDims(dims)
-                    case('S')
-                        if( .not. self%isvol )then
-                            itmp = self%overall_head%getMaxim()
-                            call self%overall_head%setMaxim(max(itmp,last_slice))
-                        endif
-                end select
-                ! May need to update FT status in the overall header head
-                select type(ptr)
-                    type is (MrcImgHead)
-                        if( is_ft ) call self%overall_head%setMode(4)
-                    type is (SpiImgHead)
-                        dims(1) = size(rarr,1)
-                        dims(2) = size(rarr,2)
-                        dims(3) = size(rarr,3)
-                        if( .not. self%isvol .and. .not. is_ft )then
-                            call self%overall_head%setIform(1)
-                        else if( self%isvol .and. .not. is_ft )then
-                            call self%overall_head%setIform(3)
-                        else if( .not. self%isvol .and. is_ft .and. .not. is_even(dims(1:2)) )then
-                            call self%overall_head%setIform(-11)
-                        else if( .not. self%isvol .and. is_ft .and. is_even(dims(1:2)) )then
-                            call self%overall_head%setIform(-12)
-                        else if( self%isvol .and. is_ft .and. .not. is_even(dims(1:2)) )then
-                            call self%overall_head%setIform(-21)
-                        else if( self%isvol .and. is_ft .and. is_even(dims(1:2)) )then
-                            call self%overall_head%setIform(-22)
-                        else
-                            stop 'undefined file type, rwSlices; simple_imgfile'
-                        endif
-                end select
-                ! Remember that we wrote to the file
-                self%was_written_to = .true.
+                if( alloc_tmparr )then 
+                    allocate(tmp_byte_array(dims(1),dims(2),dims(3)),stat=alloc_stat)
+                    call alloc_errchk("In simple_imgfile:: rSlices ;  Byte data ", alloc_stat)
+                endif
+                read(unit=self%funit,pos=first_byte,iostat=io_stat,iomsg=io_message) tmp_byte_array(:dims(1),:dims(2),:dims(3))
+                ! Conversion from unsigned byte integer (which MRC appears to be) is tricky because Fortran 
+                ! doesn't do unsigned integer natively. The following IAND trick is courtesy of Jim Dempsey 
+                ! at http://software.intel.com/en-us/forums/showthread.php?t=64400 Confusingly, the MRC format 
+                ! documentation implies that one should expect signed integers, which seems to be incorrect: 
+                ! http://www2.mrc-lmb.cam.ac.uk/image2000.html IMOD documentation indicates that prior to IMOD 
+                ! 4.2.23, unsigned bytes were used and that one needs to inspect the imodStamp head to check
+                if( self%overall_head%pixIsSigned() )then
+                    rarr(1:dims(1),:,:) = tmp_byte_array(:dims(1),:dims(2),:dims(3))
+                else
+                    rarr(1:dims(1),:,:) = real(iand(int(tmp_byte_array(:dims(1),:dims(2),:dims(3)),kind=4),int(255,kind=4)))
+                endif
+            case(2) ! 16-bit data, assumed to be integer
+                if( allocated(tmp_16bit_int_array) )then
+                    tmparrdims(1) = size(tmp_16bit_int_array,1)
+                    tmparrdims(2) = size(tmp_16bit_int_array,2)
+                    tmparrdims(3) = size(tmp_16bit_int_array,3)
+                    alloc_tmparr  = .false.
+                    if( any(tmparrdims .ne. dims) )then
+                        deallocate(tmp_16bit_int_array)
+                        alloc_tmparr = .true.
+                    endif
+                else
+                    alloc_tmparr = .true.
+                endif
+                if( alloc_tmparr )then 
+                    allocate(tmp_16bit_int_array(dims(1),dims(2),dims(3)),stat=alloc_stat)
+                    call alloc_errchk("In simple_imgfile:: rSlices ; 16-bit data ", alloc_stat )
+                endif
+                read(unit=self%funit,pos=first_byte,iostat=io_stat,iomsg=io_message) tmp_16bit_int_array(:dims(1),:dims(2),:dims(3))
+                if( self%overall_head%pixIsSigned() )then
+                    rarr(1:dims(1),:,:) = real(tmp_16bit_int_array(:dims(1),:dims(2),:dims(3)))
+                else
+                    rarr(1:dims(1),:,:) = real(iand(int(tmp_16bit_int_array(:dims(1),:dims(2),:dims(3)),kind=4), int(huge(int(1,kind=2)), kind=4)))
+                endif
+            case(4)
+                read(unit=self%funit,pos=first_byte,iostat=io_stat,iomsg=io_message) rarr(:dims(1),:,:) 
+            case DEFAULT
+                write(*,'(2a)') 'fname: ', trim(self%fname)
+                write(*,'(a,i0,a)') 'bit depth: ', self%overall_head%bytesPerPix(), ' bytes'
+                stop 'Unsupported bit-depth; rSlices; simple_imgfile'
         end select
-    end subroutine rwSlices
+        ! Check the read was successful
+        if( io_stat .ne. 0 )then
+            write(*,'(a,i0,2a)') '**ERROR(rSlices): I/O error ', io_stat, ' when reading from: ', trim(self%fname)
+            write(*,'(2a)') 'IO error message was: ', trim(io_message)
+            stop 'I/O error; rSlices; simple_imgfile'
+        endif
+    end subroutine rSlices
 
-    ! GETTERS, SETTERS, PRINTERS
+    !>  \brief  read/write a set of contiguous slices of the image file from disk into memory.
+    !!          The array of reals should have +2 elements in the first dimension.
+    subroutine wSlices( self, first_slice, last_slice, rarr, ldim, is_ft, smpd )
+        use simple_strings, only: int2str
+        use simple_math,    only: is_odd, is_a_number, is_even
+        use simple_imghead  ! use all in there
+#ifdef PGI
+        use ISO_C_BINDING
+#else
+        use, intrinsic :: iso_c_binding
+#endif
+        class(imgfile), target, intent(inout) :: self         !< instance  Imagefile object 
+        integer,                intent(in)    :: first_slice  !< First slice (the first slice in the file is numbered 1)
+        integer,                intent(in)    :: last_slice   !< Last slice
+        real,                   intent(inout) :: rarr(:,:,:)  !< Array of reals. Will be (re)allocated if needed
+        integer,                intent(in)    :: ldim(3)      !< Logical size of the array. This will be written to disk: rarr(1:ldim(1),:,:)
+        logical,                intent(in)    :: is_ft        !< to indicate FT status of image
+        real,                   intent(in)    :: smpd         !< sampling distance
+        character(len=100)          :: io_message
+        integer                     :: io_stat,itmp,dims(3),dims_stored(3)
+        integer(kind=8)             :: first_byte,hedbyteinds(2),imbyteinds(2),first_hedbyte,byteperpix
+        logical                     :: arr_is_ready
+        real                        :: min_val,max_val
+        class(ImgHead), pointer     :: ptr=>null()
+        class(ImgHead), allocatable :: imghed
+#ifdef PGI
+        include 'lib3f.h'
+#endif
+        ! Check that the first and last slice numbers given make sense
+        if( first_slice > 0 .and. (first_slice .gt. last_slice) ) stop 'Last < first slice; wSlices; simple_imgfile'
+        ! Get the dims of the image file
+        dims = self%overall_head%getDims()
+        ! set pointer to overall header
+        ptr  => self%overall_head
+        select type(ptr)
+            type is (MrcImgHead)
+                ! Redefine the file dims (to keep track of the index of the last image of the stack)
+                dims_stored = dims
+                dims(1)     = ldim(1)
+                dims(2)     = size(rarr,2)
+                dims(3)     = max(last_slice,dims(3))
+                call self%overall_head%setDims(dims)
+                dims = dims_stored ! safety
+        end select
+        if( is_odd(dims(1)) )then
+            arr_is_ready = (size(rarr,1) .eq. dims(1) + 1) .and. size(rarr,2) .eq. dims(2)
+        else
+            arr_is_ready = (size(rarr,1) .eq. dims(1) + 2) .and. size(rarr,2) .eq. dims(2)
+        endif
+        if( .not. arr_is_ready )then
+            write(*,*) 'Array size: ', size(rarr,1), size(rarr,2), size(rarr,3)
+            write(*,*) 'Dimensions: ', dims(1), dims(2), dims(3)
+            stop 'Array is not properly allocated; wSlices; simple_imgfile'
+        endif
+        byteperpix = int(self%overall_head%bytesPerPix(),kind=8)
+        ! Work out the position of the first byte
+        select case(self%head_format)
+            case('M','F')
+                first_byte = int(self%overall_head%firstDataByte(),kind=8)+int((first_slice-1),kind=8)&
+                    &*int(product(dims(1:2)),kind=8)*byteperpix
+            case('S')
+                if( self%isvol )then
+                    first_byte = int(self%overall_head%firstDataByte(),kind=8)+int((first_slice-1),kind=8)&
+                        &*int(product(dims(1:2)),kind=8)*byteperpix
+                else
+                    call self%slice2bytepos(first_slice, hedbyteinds, imbyteinds)
+                    first_byte    = imbyteinds(1)  ! first image byte
+                    first_hedbyte = hedbyteinds(1) ! first header byte
+                endif
+            case DEFAULT
+                stop 'Format not supported; wSlices; simple_imgfile'
+        end select
+        ! find minmax
+        max_val = maxval(rarr)
+        min_val = minval(rarr)
+        select case(self%head_format)
+            case('M','F')
+                max_val = max(max_val, self%overall_head%getMaxPixVal())
+                min_val = min(min_val, self%overall_head%getMinPixVal())
+                call self%overall_head%setMinPixVal(min_val)
+                call self%overall_head%setMaxPixVal(max_val)
+                ! nothing to do
+            case('S')
+                if( .not. self%isvol )then
+                ! for SPIDER stack we also need to create and write an image header
+                allocate( SpiImgHead :: imghed )
+                call imghed%new(ldim=ldim)
+                call imghed%setMinimal(ldim, is_ft, smpd)
+                call imghed%setMinPixVal(min_val)
+                call imghed%setMaxPixVal(max_val)
+                call imghed%write(self%funit, pos=first_hedbyte)
+                call imghed%kill
+                deallocate(imghed)
+            endif
+        end select
+        write(unit=self%funit,pos=first_byte,iostat=io_stat) rarr(1:dims(1),:,:)
+        ! Check the write was successful
+        if( io_stat .ne. 0 )then
+            write(*,'(a,i0,2a)') '**ERROR(wSlices): I/O error ', io_stat, ' when writing to: ', trim(self%fname)
+            stop 'I/O error; wSlices; simple_imgfile'
+        endif
+        ! May need to update file dims
+        select case(self%head_format)
+            case('M')
+                dims(3) = max(dims(3),last_slice)
+                call self%overall_head%setDims(dims)
+            case('S')
+                if( .not. self%isvol )then
+                    itmp = self%overall_head%getMaxim()
+                    call self%overall_head%setMaxim(max(itmp,last_slice))
+                endif
+        end select
+        ! May need to update FT status in the overall header head
+        select type(ptr)
+            type is (MrcImgHead)
+                if( is_ft ) call self%overall_head%setMode(4)
+            type is (SpiImgHead)
+                dims(1) = size(rarr,1)
+                dims(2) = size(rarr,2)
+                dims(3) = size(rarr,3)
+                if( .not. self%isvol .and. .not. is_ft )then
+                    call self%overall_head%setIform(1)
+                else if( self%isvol .and. .not. is_ft )then
+                    call self%overall_head%setIform(3)
+                else if( .not. self%isvol .and. is_ft .and. .not. is_even(dims(1:2)) )then
+                    call self%overall_head%setIform(-11)
+                else if( .not. self%isvol .and. is_ft .and. is_even(dims(1:2)) )then
+                    call self%overall_head%setIform(-12)
+                else if( self%isvol .and. is_ft .and. .not. is_even(dims(1:2)) )then
+                    call self%overall_head%setIform(-21)
+                else if( self%isvol .and. is_ft .and. is_even(dims(1:2)) )then
+                    call self%overall_head%setIform(-22)
+                else
+                    stop 'undefined file type, rwSlices; simple_imgfile'
+                endif
+        end select
+        ! Remember that we wrote to the file
+        self%was_written_to = .true.
+    end subroutine wSlices
 
     !>  \brief  Print out basic information about the file
     subroutine print_imgfile( self )

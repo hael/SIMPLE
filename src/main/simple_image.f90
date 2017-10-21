@@ -362,10 +362,10 @@ contains
             self%plan_fwd = fftwf_plan_dft_r2c_2d(self%ldim(2), self%ldim(1), self%rmat, self%cmat, FFTW_ESTIMATE)
             self%plan_bwd = fftwf_plan_dft_c2r_2d(self%ldim(2), self%ldim(1), self%cmat, self%rmat, FFTW_ESTIMATE)
         endif
-        ! wsdm_ret = fftw_export_wisdom_to_filename(WISDOM_FNAME)
-        ! if (wsdm_ret == 0) then
-        !     write (*, *) 'Error: could not write FFTW3 wisdom file! Check permissions.'
-        ! end if
+        wsdm_ret = fftw_export_wisdom_to_filename(WISDOM_FNAME)
+        if( wsdm_ret == 0 )then
+            write (*, *) 'Error: could not write FFTW3 wisdom file! Check permissions.'
+        end if
         ! set shift constant (shconst)
         do i=1,3
             if( self%ldim(i) == 1 )then
@@ -765,7 +765,7 @@ contains
                     first_slice = ii
                     last_slice = ii
                 endif
-                call ioimg%rwSlices('r',first_slice,last_slice,self%rmat,self%ldim,self%ft,self%smpd)
+                call ioimg%rSlices(first_slice,last_slice,self%rmat)
                 call ioimg%close
             end subroutine read_local
 
@@ -939,7 +939,7 @@ contains
                 last_slice = ii
             endif
             ! write slice(s) to disk
-            call ioimg%rwSlices('w',first_slice,last_slice,self%rmat,self%ldim,self%ft,self%smpd)
+            call ioimg%wSlices(first_slice,last_slice,self%rmat,self%ldim,self%ft,self%smpd)
             call ioimg%close
         else
             stop 'ERROR, nonexisting image cannot be written to disk; write; simple_image'

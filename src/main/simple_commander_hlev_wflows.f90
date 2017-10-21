@@ -157,7 +157,7 @@ contains
             call xmakecavgs%execute(cline_makecavgs)
         else ! no auto-scaling
             call xprime2D_distr%execute(cline)
-            last_iter_stage2 = nint(cline_prime2D_stage2%get_rarg('endit'))
+            last_iter_stage2 = nint(cline%get_rarg('endit'))
             finaldoc         = trim(ITERFBODY)//int2str_pad(last_iter_stage2,3)//METADATEXT
             finalcavgs       = trim(trim(CAVGS_ITERFBODY)//int2str_pad(last_iter_stage2,3)//p_master%ext)
         endif
