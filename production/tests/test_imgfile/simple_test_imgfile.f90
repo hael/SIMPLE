@@ -7,7 +7,7 @@ integer       :: ldim(3), i, j, cnt
 real          :: smpd=2., corr, corrs(20)
 type(image)   :: img, img_2
 type(image)   :: imgs(20)
-logical       :: ft=.true.
+logical       :: ft=.false.
 
 ! SELF-CONSISTENCY TESTS
 
@@ -58,7 +58,8 @@ do i=1,3
         endif
     end do
 end do
-stop
+
+stop 
 
 ! EXTERNAL TESTS
 !****(1) downloaded my favourite molecule (RNA olymerase II, PDB: 1WCM)

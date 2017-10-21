@@ -958,7 +958,6 @@ contains
             stop
         endif
         DebugPrint 'imghead::setDim check type of ImgHead'
-        
         select type( self )
         class is( MrcImgHead )
             select case( which_dim )
@@ -1096,7 +1095,6 @@ contains
                 self%rms = RMSD
         end select
     end subroutine setRMSD
-
 
     !>  \brief is for gettign a part of the info in a MRC image header
     subroutine get_mrcfile_info( fname, ldim, form, smpd, doprint )
@@ -1272,10 +1270,8 @@ contains
         endif
         has_ldim_nptcls = .true.
     end function has_ldim_nptcls
-    
 
     ! polymorphic destructor
-
     subroutine kill( self )
         class(ImgHead), intent(inout) :: self
         if( self%exists )then

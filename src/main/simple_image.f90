@@ -362,10 +362,10 @@ contains
             self%plan_fwd = fftwf_plan_dft_r2c_2d(self%ldim(2), self%ldim(1), self%rmat, self%cmat, FFTW_ESTIMATE)
             self%plan_bwd = fftwf_plan_dft_c2r_2d(self%ldim(2), self%ldim(1), self%cmat, self%rmat, FFTW_ESTIMATE)
         endif
-        wsdm_ret = fftw_export_wisdom_to_filename(WISDOM_FNAME)
-        if (wsdm_ret == 0) then
-            write (*, *) 'Error: could not write FFTW3 wisdom file! Check permissions.'
-        end if
+        ! wsdm_ret = fftw_export_wisdom_to_filename(WISDOM_FNAME)
+        ! if (wsdm_ret == 0) then
+        !     write (*, *) 'Error: could not write FFTW3 wisdom file! Check permissions.'
+        ! end if
         ! set shift constant (shconst)
         do i=1,3
             if( self%ldim(i) == 1 )then
@@ -674,9 +674,9 @@ contains
         character(len=*), optional, intent(in)    :: rwaction
         character(len=1) :: form
         integer          :: mode
-        logical          :: debug=.false.
         if( self%existence )then
             if( .not. file_exists(fname) )then
+                print *, 'file: ', trim(fname)
                 stop 'The file you are trying to open does not exists; open; simple_image'
             endif
             if( present(formatchar) )then
@@ -688,10 +688,6 @@ contains
             select case(form)
                 case('M')
                     call ioimg%open(fname, self%ldim, self%smpd, formatchar=formatchar, readhead=readhead, rwaction=rwaction)
-                    if( debug )then
-                        write(*,*) '**** DEBUG **** file info right after opening the file'
-                        call ioimg%print_imgfile()
-                    endif
                     ! data type: 0 image: signed 8-bit bytes rante -128 to 127
                     !            1 image: 16-bit halfwords
                     !            2 image: 32-bit reals (DEFAULT MODE)
@@ -699,18 +695,8 @@ contains
                     !            4 transform: complex 32-bit reals (THIS WOULD BE THE DEFAULT FT MODE)
                     mode = ioimg%getMode()
                     if( mode == 3 .or. mode == 4 ) self%ft = .true.
-                case('F')
+                case('F','S')
                     call ioimg%open(fname, self%ldim, self%smpd, formatchar=formatchar, readhead=readhead, rwaction=rwaction)
-                    if( debug )then
-                        write(*,*) '**** DEBUG **** file info right after opening the file'
-                        call ioimg%print_imgfile()
-                    endif
-                case('S')
-                    call ioimg%open(fname, self%ldim, self%smpd, formatchar=formatchar, readhead=readhead, rwaction=rwaction)
-                    if( debug )then
-                        write(*,*) '**** DEBUG **** file info right after opening the file'
-                        call ioimg%print_imgfile()
-                    endif
             end select
         else
             stop 'ERROR, image need to be constructed before read/write; open; simple_image'
@@ -724,26 +710,22 @@ contains
     !! \param formatchar       image type (M,F,S)
     !! \param readhead         get header info flag
     !! \param rwaction         read mode flag
-    !! \param read_failure     file i/o status
     !!
-    subroutine read( self, fname, i, ioimg, formatchar, readhead, rwaction, read_failure )
+    subroutine read( self, fname, i, formatchar, readhead, rwaction )
         class(image),               intent(inout) :: self
         character(len=*),           intent(in)    :: fname
         integer,          optional, intent(in)    :: i
-        class(imgfile),   optional, intent(inout) :: ioimg
         character(len=1), optional, intent(in)    :: formatchar
         logical,          optional, intent(in)    :: readhead
         character(len=*), optional, intent(in)    :: rwaction
-        logical,          optional, intent(out)   :: read_failure
-        type(imgfile)         :: ioimg_local
+        type(imgfile)         :: ioimg
         character(len=1)      :: form
         integer               :: ldim(3), iform, first_slice
         integer               :: last_slice, ii
         real                  :: smpd
-        logical               :: isvol, ioimg_present
+        logical               :: isvol
         ldim          = self%ldim
         smpd          = self%smpd
-        ioimg_present = present(ioimg)
         isvol = .true. ! assume volume by default
         ii    = 1      ! default location
         if( present(i) )then
@@ -757,20 +739,15 @@ contains
         else
             form = fname2format(fname)
         endif
-        if( ioimg_present )then
-            call exception_handler(ioimg)
-            call read_local(ioimg)
-        else
-            select case(form)
-                case('M', 'F', 'S')
-                    call self%open(fname, ioimg_local, formatchar, readhead, rwaction)
-                case DEFAULT
-                    write(*,*) 'Trying to read from file: ', fname
-                    stop 'ERROR, unsupported file format; read; simple_image'
-            end select
-            call exception_handler(ioimg_local)
-            call read_local(ioimg_local)
-        endif
+        select case(form)
+            case('M', 'F', 'S')
+                call self%open(fname, ioimg, formatchar, readhead, rwaction)
+            case DEFAULT
+                write(*,*) 'Trying to read from file: ', trim(fname)
+                stop 'ERROR, unsupported file format; read; simple_image'
+        end select
+        call exception_handler(ioimg)
+        call read_local(ioimg)
 
         contains
 
@@ -788,9 +765,8 @@ contains
                     first_slice = ii
                     last_slice = ii
                 endif
-                call ioimg%rwSlices('r',first_slice,last_slice,self%rmat,&
-                &self%ldim,self%ft,self%smpd,read_failure=read_failure)
-                if( .not. ioimg_present ) call ioimg%close
+                call ioimg%rwSlices('r',first_slice,last_slice,self%rmat,self%ldim,self%ft,self%smpd)
+                call ioimg%close
             end subroutine read_local
 
             !> exception_handler
