@@ -11,7 +11,7 @@ public :: prime2D_srch
 private
 
 logical, parameter :: L_BENCH = .false.
-logical, parameter :: DEBUG   = .true.
+logical, parameter :: DEBUG   = .false.
 
 type prime2D_srch
     private
