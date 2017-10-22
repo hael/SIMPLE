@@ -40,7 +40,7 @@ contains
         character(len=STDLEN)         :: rho_name
         integer :: s
         ! rebuild b%vol according to box size (beacuse it is otherwise boxmatch)
-        call b%vol%new([p%box,p%box,p%box], p%smpd)
+        if( p%boxmatch < p%box ) call b%vol%new([p%box,p%box,p%box], p%smpd)
         do s=1,p%nstates
             if( b%a%get_pop(s, 'state') == 0 ) cycle ! empty state
             if( p%l_distr_exec )then ! embarrasingly parallel rec
@@ -83,7 +83,7 @@ contains
         character(len=:), allocatable :: fbody, fname
         integer :: s
         ! rebuild b%vol according to box size (beacuse it is otherwise boxmatch)
-        call b%vol%new([p%box,p%box,p%box], p%smpd)
+        if( p%boxmatch < p%box ) call b%vol%new([p%box,p%box,p%box], p%smpd)
         do s=1,p%nstates
             DebugPrint  'processing state: ', s
             if( b%a%get_pop(s, 'state') == 0 ) cycle ! empty state

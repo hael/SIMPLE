@@ -428,11 +428,12 @@ contains
         integer           :: k
         p = params(cline)                           ! parameters generated
         call b%build_general_tbox(p, cline)         ! general objects built
-        if( cline%defined('stk') .and. cline%defined('vol1') )stop 'Cannot operate on images AND volume at once'
-        if( p%norm.eq.'yes' .and. p%noise_norm.eq.'yes' )stop 'Invalid normalization type'
-        if( p%norm.eq.'yes' .and. p%shellnorm.eq.'yes' )stop 'Invalid normalization type'
-        if( p%noise_norm.eq.'yes' .and. p%shellnorm.eq.'yes' )stop 'Invalid normalization type'
-        call b%vol%new([p%box,p%box,p%box], p%smpd) ! reallocate vol (boxmatch issue)
+        if( cline%defined('stk')  .and. cline%defined('vol1') )stop 'Cannot operate on images AND volume at once'
+        if( p%norm.eq.'yes'       .and. p%noise_norm.eq.'yes' )stop 'Invalid normalization type'
+        if( p%norm.eq.'yes'       .and. p%shellnorm .eq.'yes' )stop 'Invalid normalization type'
+        if( p%noise_norm.eq.'yes' .and. p%shellnorm .eq.'yes' )stop 'Invalid normalization type'
+        ! reallocate vol (boxmatch issue)
+        call b%vol%new([p%box,p%box,p%box], p%smpd) 
         if( cline%defined('stk') )then
             ! 2D
             if( p%norm.eq.'yes' )then
@@ -489,9 +490,10 @@ contains
         integer      :: ldims_scaled(2,3)
         character(len=:), allocatable      :: fname
         character(len=STDLEN), allocatable :: filenames(:)
-        p = params(cline)                               ! parameters generated
-        call b%build_general_tbox(p, cline)             ! general objects built
-        call b%vol%new([p%box,p%box,p%box], p%smpd)     ! reallocate vol (boxmatch issue)
+        p = params(cline)                   ! parameters generated
+        call b%build_general_tbox(p, cline) ! general objects built
+        ! reallocate vol (boxmatch issue)
+        call b%vol%new([p%box,p%box,p%box], p%smpd)     
         call img%new([p%box,p%box,1],p%smpd)  ! image created
         call img2%new([p%box,p%box,1],p%smpd) ! image created
         if( cline%defined('stk') .and. cline%defined('vol1') )stop 'Cannot operate on images AND volume at once'

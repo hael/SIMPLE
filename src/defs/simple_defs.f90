@@ -124,9 +124,6 @@ integer, parameter :: img_kind = SP
 #endif
 integer, parameter :: fp_kind = DP
 
-! FFTW3 wisdom filename
-character(kind=c_char, len=*), parameter :: WISDOM_FNAME = 'fftw_wisdoms.dat' // c_null_char
-
 ! debugging and print verbosity flags
 #ifdef _DEBUG
 logical :: global_debug   = .true.  !< global debugging flag

@@ -36,10 +36,11 @@ contains
         p = params(cline)                   ! parameters generated
         p%boxmatch = p%box                  ! turns off boxmatch logics
         call b%build_general_tbox(p, cline) ! general objects built
-        if( cline%defined('stk') .and. cline%defined('vol1') )stop 'Cannot operate on images AND volume at once'
-        if( p%automsk.eq.'yes' .and..not.cline%defined('mw')  )stop 'Missing mw argument for automasking'
-        if( p%msktype.ne.'soft' .and. p%msktype.ne.'hard' .and. p%msktype.ne.'cavg' )stop 'Invalid mask type'
-        call b%vol%new([p%box, p%box, p%box], p%smpd) ! reallocate vol (boxmatch issue)
+        if( cline%defined('stk') .and. cline%defined('vol1')   ) stop 'Cannot operate on images AND volume at once'
+        if( p%automsk.eq.'yes'   .and..not.cline%defined('mw') ) stop 'Missing mw argument for automasking'
+        if( p%msktype.ne.'soft'  .and. p%msktype.ne.'hard' .and. p%msktype.ne.'cavg' ) stop 'Invalid mask type'
+        ! reallocate vol (boxmatch issue)
+        call b%vol%new([p%box, p%box, p%box], p%smpd) 
         if( cline%defined('stk') )then
             ! 2D
             if( p%automsk.eq.'yes' )then

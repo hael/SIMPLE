@@ -289,11 +289,11 @@ contains
     end subroutine compress_exp
 
     !> \brief  for sampling density correction of the eo pairs
-    subroutine sampl_dens_correct_eos( self, state, eonames )
+    subroutine sampl_dens_correct_eos( self, state, fname_even, fname_odd )
         use simple_masker,  only: masker
-        class(eo_reconstructor), intent(inout) :: self       !< instance
-        integer,                 intent(in)    :: state      !< state
-        character(len=32),       intent(in)    :: eonames(2) !< even/odd filenames
+        class(eo_reconstructor), intent(inout) :: self                  !< instance
+        integer,                 intent(in)    :: state                 !< state
+        character(len=*),        intent(in)    :: fname_even, fname_odd !< even/odd filenames
         real, allocatable :: res(:), corrs(:)
         type(image)       :: even, odd
         integer           :: j
@@ -309,6 +309,9 @@ contains
         ! clip
         call self%even%clip(even)
         call self%odd%clip(odd)
+        ! write unnormalised unmasked even/odd volumes
+        call even%write(trim(fname_even), del_if_exists=.true.)
+        call odd%write(trim(fname_odd),   del_if_exists=.true.)
         ! always normalise before masking
         call even%norm
         call odd%norm
@@ -327,9 +330,6 @@ contains
                 call odd%mask(self%msk, 'soft')
             endif
         endif
-        ! write even/odd
-        call even%write(trim(eonames(1)))
-        call odd%write(trim(eonames(2)))
         ! forward FT
         call even%fwd_ft
         call odd%fwd_ft
@@ -435,14 +435,15 @@ contains
             endif
         else
             if( present(fbody) )then
-                eonames(1) = fbody//int2str_pad(state,2)//'_odd'//p%ext
-                eonames(2) = fbody//int2str_pad(state,2)//'_even'//p%ext
+                eonames(1) = fbody//int2str_pad(state,2)//'_even'//p%ext
+                eonames(2) = fbody//int2str_pad(state,2)//'_odd'//p%ext
+                
             else
-                eonames(1) = 'recvol_state'//int2str_pad(state,2)//'_odd'//p%ext
-                eonames(2) = 'recvol_state'//int2str_pad(state,2)//'_even'//p%ext
+                eonames(1) = 'recvol_state'//int2str_pad(state,2)//'_even'//p%ext
+                eonames(2) = 'recvol_state'//int2str_pad(state,2)//'_odd'//p%ext
             endif
             call self%sum_eos
-            call self%sampl_dens_correct_eos(state, eonames)
+            call self%sampl_dens_correct_eos(state, eonames(1), eonames(2))
             call self%sampl_dens_correct_sum(vol)
         endif
         call img%kill

@@ -73,10 +73,12 @@ contains
         integer    :: statecnt(p%nstates)
 
         ! check that we have an even/odd partitioning
-        if( p%l_distr_exec )then
-            if( b%a%get_nevenodd() == 0 ) stop 'ERROR! no eo partitioning available; hadamard3D_matcher :: prime2D_exec'
-        else
-            if( b%a%get_nevenodd() == 0 ) call b%a%partition_eo
+        if( p%eo .ne. 'no' )then
+            if( p%l_distr_exec )then
+                if( b%a%get_nevenodd() == 0 ) stop 'ERROR! no eo partitioning available; hadamard3D_matcher :: prime2D_exec'
+            else
+                if( b%a%get_nevenodd() == 0 ) call b%a%partition_eo
+            endif
         endif
 
         inptcls = p%top - p%fromp + 1
@@ -347,7 +349,7 @@ contains
             end do
             ! normalise structure factors
             if( p%eo .ne. 'no' )then
-                call eonorm_struct_facts(b, p, reslim, which_iter)
+                call eonorm_struct_facts(b, p, cline, reslim, which_iter)
             else
                 call norm_struct_facts(b, p, which_iter)
             endif
@@ -464,7 +466,9 @@ contains
         class(params),  intent(inout) :: p          !< param object
         class(cmdline), intent(inout) :: cline      !< command line
         type(ori) :: o
-        integer   :: cnt, s, iref, nrefs
+        integer   :: cnt, s, iref, nrefs, ldim(3)
+        logical   :: do_center
+        real      :: xyz(3)
         ! PREPARATION OF REFERENCES IN PFTCC
         ! read reference volumes and create polar projections
         nrefs = p%nspace * p%nstates
@@ -480,7 +484,8 @@ contains
                     cycle
                 endif
             endif
-            call preprefvol( b, p, cline, s ) !!!!!!!!!!!! need to be optimised
+            call cenrefvol_and_mapshifts2ptcls(b, p, cline, s, p%vols(s), do_center, xyz)
+            call preprefvol(b, p, cline, s, p%vols(s), do_center, xyz )
             ! generate discrete projections
             do iref=1,p%nspace
                 cnt = cnt + 1
@@ -492,7 +497,7 @@ contains
         ! cleanup
         call b%vol%kill_expanded
         ! bring back the original b%vol size for clean exit
-        if( p%boxmatch < p%box )call b%vol%new([p%box,p%box,p%box], p%smpd)
+        call b%vol%new([p%box,p%box,p%box], p%smpd)
     end subroutine prep_refs_pftcc4align
 
     !> Prepare particle images and create polar projections

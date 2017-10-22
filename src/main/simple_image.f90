@@ -292,12 +292,13 @@ contains
     !! \param backgr  constant initial background
     !! \return  self new image object
     !!
-    function constructor( ldim, smpd, backgr ) result( self ) !(FAILS W PRESENT GFORTRAN)
+    function constructor( ldim, smpd, backgr, wthreads ) result( self ) !(FAILS W PRESENT GFORTRAN)
         integer,           intent(in) :: ldim(:)
         real,              intent(in) :: smpd
         real,    optional, intent(in) :: backgr
+        logical, optional, intent(in) :: wthreads
         type(image) :: self
-        call self%new( ldim, smpd, backgr )
+        call self%new( ldim, smpd, backgr, wthreads )
     end function constructor
 
     !>  \brief  Constructor for simple_image class
@@ -318,10 +319,22 @@ contains
         real,    optional, intent(in)    :: backgr
         logical, optional, intent(in)    :: wthreads
         integer(kind=c_int) :: rc
-        integer :: i
-        logical :: wwthreads
+        integer             :: i
+        logical             :: wwthreads, do_allocate
         integer(kind=c_int) :: wsdm_ret
-        call self%kill()
+        ! we need to be clever about allocation (because it is costly)
+        if( self%existence )then
+            if( any(self%ldim /= ldim) )then
+                do_allocate = .true.
+                call self%kill()
+            else
+                do_allocate = .false.
+                call fftwf_destroy_plan(self%plan_fwd)
+                call fftwf_destroy_plan(self%plan_bwd)
+            endif
+        else
+            do_allocate = .true.
+        endif
         wwthreads = .true.
         if( present(wthreads) ) wwthreads = wthreads
         wwthreads = wwthreads .and. nthr_glob > 1
@@ -332,15 +345,17 @@ contains
         ! Work out dimensions of the complex array
         self%array_shape(1)   = fdim(self%ldim(1))
         self%array_shape(2:3) = self%ldim(2:3)
-        self%nc = int(product(self%array_shape)) ! nr of components
-        ! Letting FFTW do the allocation in C ensures that we will be using aligned memory
-        self%p = fftwf_alloc_complex(int(product(self%array_shape),c_size_t))
-        ! Set up the complex array which will point at the allocated memory
-        call c_f_pointer(self%p,self%cmat,self%array_shape)
-        ! Work out the shape of the real array
-        self%array_shape(1) = 2*(self%array_shape(1))
-        ! Set up the real array
-        call c_f_pointer(self%p,self%rmat,self%array_shape)
+        self%nc = int(product(self%array_shape)) ! # components
+        if( do_allocate )then
+            ! Letting FFTW do the allocation in C ensures that we will be using aligned memory
+            self%p = fftwf_alloc_complex(int(product(self%array_shape),c_size_t))
+            ! Set up the complex array which will point at the allocated memory
+            call c_f_pointer(self%p,self%cmat,self%array_shape)
+            ! Work out the shape of the real array
+            self%array_shape(1) = 2*(self%array_shape(1))
+            ! Set up the real array
+            call c_f_pointer(self%p,self%rmat,self%array_shape)
+        endif
         ! put back the shape of the complex array
         self%array_shape(1) = fdim(self%ldim(1))
         if( present(backgr) )then
@@ -354,7 +369,6 @@ contains
             rc = fftwf_init_threads()
             call fftwf_plan_with_nthreads(nthr_glob)
         endif
-        wsdm_ret = fftw_import_wisdom_from_filename(WISDOM_FNAME)
         if(self%ldim(3) > 1)then
             self%plan_fwd = fftwf_plan_dft_r2c_3d(self%ldim(3), self%ldim(2), self%ldim(1), self%rmat, self%cmat, FFTW_ESTIMATE)
             self%plan_bwd = fftwf_plan_dft_c2r_3d(self%ldim(3), self%ldim(2), self%ldim(1), self%cmat, self%rmat, FFTW_ESTIMATE)
@@ -362,10 +376,6 @@ contains
             self%plan_fwd = fftwf_plan_dft_r2c_2d(self%ldim(2), self%ldim(1), self%rmat, self%cmat, FFTW_ESTIMATE)
             self%plan_bwd = fftwf_plan_dft_c2r_2d(self%ldim(2), self%ldim(1), self%cmat, self%rmat, FFTW_ESTIMATE)
         endif
-        wsdm_ret = fftw_export_wisdom_to_filename(WISDOM_FNAME)
-        if( wsdm_ret == 0 )then
-            write (*, *) 'Error: could not write FFTW3 wisdom file! Check permissions.'
-        end if
         ! set shift constant (shconst)
         do i=1,3
             if( self%ldim(i) == 1 )then

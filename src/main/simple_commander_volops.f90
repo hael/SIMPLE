@@ -353,9 +353,10 @@ contains
         type(ori)         :: o
         type(image)       :: vol_rot
         real              :: shvec(3)
-        p = params(cline,checkdistr=.false.)        ! constants & derived constants produced, mode=2
-        call b%build_general_tbox(p, cline)         ! general objects built
-        call b%vol%new([p%box,p%box,p%box], p%smpd) ! reallocate vol (boxmatch issue)
+        p = params(cline,checkdistr=.false.) ! constants & derived constants produced, mode=2
+        call b%build_general_tbox(p, cline)  ! general objects built
+        ! reallocate vol (boxmatch issue)
+        call b%vol%new([p%box,p%box,p%box], p%smpd) 
         if( .not.cline%defined('vollist') )then
             inquire(FILE=p%vols(1), EXIST=here)
             if( here )then

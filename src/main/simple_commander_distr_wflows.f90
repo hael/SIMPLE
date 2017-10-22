@@ -897,25 +897,27 @@ contains
         else
             p_master%extr_iter = p_master%startit - 1
         endif
-        ! deal with eo partitioning
-        if( cline%defined('deftab') ) call binread_ctfparams_state_eo(p_master%deftab, os, [1,p_master%nptcls])
-        if( cline%defined('oritab') ) call binread_oritab(p_master%oritab, os, [1,p_master%nptcls])
-        if( os%get_nevenodd() == 0 )then
-            if( p_master%tseries .eq. 'yes' )then
-                call os%partition_eo(tseries=.true.)
-            else
-                call os%partition_eo
+        if( p_master%eo .ne. 'no' )then
+            ! deal with eo partitioning
+            if( cline%defined('deftab') ) call binread_ctfparams_state_eo(p_master%deftab, os, [1,p_master%nptcls])
+            if( cline%defined('oritab') ) call binread_oritab(p_master%oritab, os, [1,p_master%nptcls])
+            if( os%get_nevenodd() == 0 )then
+                if( p_master%tseries .eq. 'yes' )then
+                    call os%partition_eo(tseries=.true.)
+                else
+                    call os%partition_eo
+                endif
             endif
-        endif
-        if( cline%defined('oritab') )then
-            call binwrite_oritab(p_master%oritab, os, [1,p_master%nptcls])
-        else if( cline%defined('deftab') )then
-            call binwrite_oritab(p_master%deftab, os, [1,p_master%nptcls])
-        else
-            p_master%deftab = 'deftab_from_distr_wflow'//METADATEXT
-            call binwrite_oritab(p_master%deftab, os, [1,p_master%nptcls])
-            call job_descr%set('deftab', trim(p_master%deftab))
-            call cline%set('deftab', trim(p_master%deftab))
+            if( cline%defined('oritab') )then
+                call binwrite_oritab(p_master%oritab, os, [1,p_master%nptcls])
+            else if( cline%defined('deftab') )then
+                call binwrite_oritab(p_master%deftab, os, [1,p_master%nptcls])
+            else
+                p_master%deftab = 'deftab_from_distr_wflow'//METADATEXT
+                call binwrite_oritab(p_master%deftab, os, [1,p_master%nptcls])
+                call job_descr%set('deftab', trim(p_master%deftab))
+                call cline%set('deftab', trim(p_master%deftab))
+            endif
         endif
         ! prepare Prime3D job description
         call cline%gen_job_descr(job_descr)

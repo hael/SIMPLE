@@ -64,7 +64,7 @@ contains
         character(len=:), allocatable :: fname, finished_fname
         real, allocatable             :: res05s(:), res0143s(:)
         real                          :: res
-        integer                       :: part, s, n, ss, state
+        integer                       :: part, s, n, ss, state, ldim(3)
         p = params(cline)                   ! parameters generated
         call b%build_general_tbox(p, cline) ! general objects built
         call b%build_eo_rec_tbox(p)         ! reconstruction toolbox built
@@ -134,8 +134,8 @@ contains
                 eonames(1) = trim(recname)//'_even'//trim(p%ext)
                 eonames(2) = trim(recname)//'_odd'//trim(p%ext)
                 if( p%eo .ne. 'no' )then
-                    call b%eorecvol%sampl_dens_correct_eos(state, eonames)
-                    call gen_projection_frcs( p, eonames(1), eonames(2), s, b%projfrcs)
+                    call b%eorecvol%sampl_dens_correct_eos(state, eonames(1), eonames(2))
+                    call gen_projection_frcs( b, p, cline, eonames(1), eonames(2), s, b%projfrcs)
                     call b%projfrcs%write('frcs_state'//int2str_pad(state,2)//'.bin')
                     ! generate the anisotropic 3D optimal low-pass filter
                     call gen_anisotropic_optlp(b%vol, b%projfrcs, b%e_bal, s, p%pgrp)
@@ -158,7 +158,7 @@ contains
         type(build)                   :: b
         character(len=:), allocatable :: fbody, finished_fname
         character(len=STDLEN)         :: recvolname, rho_name
-        integer                       :: part, s, ss, state
+        integer                       :: part, s, ss, state, ldim(3)
         type(reconstructor)           :: recvol_read
         p = params(cline)                   ! parameters generated
         call b%build_general_tbox(p, cline) ! general objects built

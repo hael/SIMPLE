@@ -34,13 +34,14 @@ type :: build
     type(oris)                          :: a, e, e_bal        !< aligndata, discrete spaces
     type(sym)                           :: se                 !< symmetry elements object
     type(convergence)                   :: conv               !< object for convergence checking of the PRIME2D/3D approaches
-    type(image)                         :: img                !< individual image objects 
-    type(polarizer)                     :: img_match          !< -"- image objects
-    type(image)                         :: img_pad            !< -"- image objects
-    type(image)                         :: img_tmp            !< -"- image objects
-    type(image)                         :: img_msk            !< -"- image objects
-    type(image)                         :: img_copy           !< -"- image objects
-    type(projector)                     :: vol                !< -"- image objects
+    type(image)                         :: img                !< individual image/projector objects 
+    type(polarizer)                     :: img_match          !< -"-
+    type(image)                         :: img_pad            !< -"-
+    type(image)                         :: img_tmp            !< -"-
+    type(image)                         :: img_msk            !< -"-
+    type(image)                         :: img_copy           !< -"-
+    type(projector)                     :: vol                !< -"-
+    type(image)                         :: vol2               !< -"-
     type(masker)                        :: mskimg             !< mask image
     type(masker)                        :: mskvol             !< mask volume
     type(projection_frcs)               :: projfrcs           !< projection FRC's used in the anisotropic Wiener filter
@@ -178,6 +179,7 @@ contains
             call self%img_pad%new([p%boxpd,p%boxpd,1],p%smpd)
             if( ddo3d )then
                 call self%vol%new([p%box,p%box,p%box], p%smpd)
+                call self%vol2%new([p%box,p%box,p%box], p%smpd)
             endif
             DebugPrint  'did build boxpd-sized image objects'
             ! build arrays
@@ -235,6 +237,7 @@ contains
             call self%img_pad%kill
             call self%vol%kill_expanded
             call self%vol%kill
+            call self%vol2%kill
             call self%mskvol%kill
             call self%mskimg%kill
             if( allocated(self%fsc) )deallocate(self%fsc)

@@ -169,6 +169,8 @@ type :: params
     character(len=STDLEN) :: vol_filt=''          !< input filter volume(vol_filt.ext)
     character(len=STDLEN) :: vollist=''           !< table (text file) of volume files(.txt)
     character(len=STDLEN) :: vols(MAXS)=''
+    character(len=STDLEN) :: vols_even(MAXS)=''
+    character(len=STDLEN) :: vols_odd(MAXS)=''
     character(len=STDLEN) :: voltab=''            !< table (text file) of volume files(.txt)
     character(len=STDLEN) :: voltab2=''           !< 2nd table (text file) of volume files(.txt)
     character(len=STDLEN) :: wfun='kb'
@@ -406,8 +408,8 @@ contains
         character(len=STDLEN)            :: stk_part_fname_sc, stk_part_fname
         character(len=1)                 :: checkupfile(50)
         character(len=:), allocatable    :: conv
-        integer                          :: i, ncls, ifoo, lfoo(3), cntfile
-        logical                          :: nparts_set, vol_defined(MAXS), ccheckdistr, aamix
+        integer                          :: i, ncls, ifoo, lfoo(3), cntfile, istate
+        logical                          :: nparts_set, vol_defined(MAXS), ccheckdistr, aamix 
         nparts_set        = .false.
         vol_defined(MAXS) = .false.
         debug_local       = 'no'
@@ -852,6 +854,13 @@ contains
         if( cline%defined('refs') )then
             self%refs_even = add2fbody(self%refs, self%ext, '_even')
             self%refs_odd  = add2fbody(self%refs, self%ext, '_odd')
+        endif
+        ! set vols_even and vols_odd
+        if( cline%defined('vol1') )then
+            do istate=1,self%nstates
+                self%vols_even(istate) = add2fbody(self%vols(istate), self%ext, '_even')
+                self%vols_odd(istate)  = add2fbody(self%vols(istate), self%ext, '_odd' )
+            end do
         endif
 
 !<<< END, SANITY CHECKING AND PARAMETER EXTRACTION FROM VOL(S)/STACK(S)

@@ -11,12 +11,12 @@ use simple_gridding, only: prep4cgrid
 implicit none
 
 public :: read_img_and_norm, read_imgbatch, set_bp_range, set_bp_range2D, grid_ptcl, prepimg4align,&
-&eonorm_struct_facts, norm_struct_facts, preprefvol, prep2Dref, gen2Dclassdoc, preprecvols,&
-&killrecvols, gen_projection_frcs
+&eonorm_struct_facts, norm_struct_facts, cenrefvol_and_mapshifts2ptcls, preprefvol, prep2Dref,&
+&gen2Dclassdoc, preprecvols, killrecvols, gen_projection_frcs
 private
 #include "simple_local_flags.inc"
 
-real, parameter :: SHTHRESH  = 0.0001
+real, parameter :: SHTHRESH  = 0.001
 real, parameter :: CENTHRESH = 0.5    ! threshold for performing volume/cavg centering in pixels
 
 contains
@@ -508,56 +508,83 @@ contains
         endif
     end subroutine prepimgbatch
 
-    !>  \brief  prepares one volume for references extraction
-    subroutine preprefvol( b, p, cline, s, doexpand )
-        use simple_estimate_ssnr, only: fsc2optlp
-        class(build),      intent(inout) :: b
-        class(params),     intent(inout) :: p
-        class(cmdline),    intent(inout) :: cline
-        integer,           intent(in)    :: s
-        logical, optional, intent(in)    :: doexpand
-        type(image)                   :: vol_filter
-        real,             allocatable :: filter(:)
-        character(len=:), allocatable :: fname_vol_filter
-        logical                       :: l_doexpand, do_center
-        real                          :: shvec(3)
-        l_doexpand = .true.
-        if( present(doexpand) ) l_doexpand = doexpand
-        if( p%boxmatch < p%box )call b%vol%new([p%box,p%box,p%box],p%smpd) ! ensure correct dim
-        call b%vol%read(p%vols(s))
-        call b%vol%norm ! because auto-normalisation on read is taken out
+    !>  \brief  center the reference volume and map shifts back to particles 
+    subroutine cenrefvol_and_mapshifts2ptcls( b, p, cline, s, volfname, do_center, xyz )
+        class(build),     intent(inout) :: b
+        class(params),    intent(inout) :: p
+        class(cmdline),   intent(inout) :: cline
+        integer,          intent(in)    :: s
+        character(len=*), intent(in)    :: volfname
+        logical,          intent(out)   :: do_center
+        real,             intent(out)   :: xyz(3)
+        integer :: ldim(3)
+        ! ensure correct b%vol dim
+        call b%vol%new([p%box,p%box,p%box],p%smpd)
         ! centering            
         do_center = .true.
         if( p%center .eq. 'no' .or. p%nstates > 1 .or. .not. p%doshift .or.&
-        &p%pgrp(:1) .ne. 'c' .or. cline%defined('mskfile') ) do_center = .false.
+        &p%pgrp(:1) .ne. 'c' .or. cline%defined('mskfile') )then
+            do_center = .false.
+            xyz       = 0.
+            return
+        endif
+        call b%vol%read(volfname)
+        call b%vol%norm ! because auto-normalisation on read is taken out
+        xyz = b%vol%center(p%cenlp,'no',p%msk,doshift=.false.) ! find center of mass shift
+        if( arg(xyz) <= CENTHRESH )then
+            do_center = .false.
+            xyz = 0.
+            return
+        endif
+        call b%vol%fwd_ft
+        if( p%pgrp .ne. 'c1' ) xyz(1:2) = 0.     ! shifts only along z-axis for C2 and above
+        call b%vol%shift([xyz(1),xyz(2),xyz(3)]) ! performs shift
+        ! map back to particle oritentations
+        if( cline%defined('oritab') ) call b%a%map3dshift22d(-xyz(:), state=s)
+    end subroutine cenrefvol_and_mapshifts2ptcls
+
+    !>  \brief  prepares one volume for references extraction
+    subroutine preprefvol( b, p, cline, s, volfname, do_center, xyz )
+        use simple_estimate_ssnr, only: fsc2optlp
+        class(build),     intent(inout) :: b
+        class(params),    intent(inout) :: p
+        class(cmdline),   intent(inout) :: cline
+        integer,          intent(in)    :: s
+        character(len=*), intent(in)    :: volfname
+        logical,          intent(in)    :: do_center
+        real,             intent(in)    :: xyz(3)
+        real,             allocatable   :: filter(:)
+        character(len=:), allocatable   :: fname_vol_filter
+        real    :: shvec(3)
+        integer :: ldim(3)
+        ! ensure correct b%vol dim
+        call b%vol%new([p%box,p%box,p%box],p%smpd)
+        call b%vol%read(volfname)
+        call b%vol%norm ! because auto-normalisation on read is taken out
         if( do_center )then
-            shvec = b%vol%center(p%cenlp,'no',p%msk,doshift=.false.) ! find center of mass shift
-            if( arg(shvec) > CENTHRESH )then
-                call b%vol%fwd_ft
-                if( p%pgrp .ne. 'c1' ) shvec(1:2) = 0.         ! shifts only along z-axis for C2 and above
-                call b%vol%shift([shvec(1),shvec(2),shvec(3)]) ! performs shift
-                ! map back to particle oritentations
-                if( cline%defined('oritab') )call b%a%map3dshift22d(-shvec(:), state=s)
-            endif
+            call b%vol%fwd_ft
+            call b%vol%shift([xyz(1),xyz(2),xyz(3)])
         endif
         ! Volume filtering
-        if( p%eo.ne.'no' )then
+        if( p%eo .ne. 'no' )then
             ! anisotropic matched filter
             allocate(fname_vol_filter, source='aniso_optlp_state'//int2str_pad(s,2)//p%ext)
             if( file_exists(fname_vol_filter) )then
-                call vol_filter%new([p%box,p%box,p%box],p%smpd)
-                call vol_filter%read(fname_vol_filter)
+                call b%vol2%read(fname_vol_filter)
                 call b%vol%fwd_ft ! needs to be here in case the shift was never applied (above)
+                !@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
                 call b%vol%shellnorm()
-                call b%vol%apply_filter(vol_filter)
-                call vol_filter%kill
+                call b%vol%apply_filter(b%vol2)
+                !@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ THESE TWO ROUTINES COULD BE MERGED
             else
                 ! matched filter based on Rosenthal & Henderson, 2003
                 if( any(b%fsc(s,:) > 0.143) )then
                     call b%vol%fwd_ft ! needs to be here in case the shift was never applied (above)
-                    call b%vol%shellnorm()
                     filter = fsc2optlp(b%fsc(s,:))
+                    !@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+                    call b%vol%shellnorm()
                     call b%vol%apply_filter(filter)
+                    !@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ THESE TWO ROUTINES COULD BE MERGED
                 endif
             endif
             deallocate(fname_vol_filter)
@@ -565,15 +592,13 @@ contains
         ! back to real space
         call b%vol%bwd_ft
         ! clip
-        if( p%boxmatch < p%box )then
-            call b%vol%clip_inplace([p%boxmatch,p%boxmatch,p%boxmatch]) ! SQUARE DIMS ASSUMED
-        endif
+        if( p%boxmatch < p%box ) call b%vol%clip_inplace([p%boxmatch,p%boxmatch,p%boxmatch])
         ! masking
         if( cline%defined('mskfile') )then
             ! mask provided
             call b%mskvol%new([p%box, p%box, p%box], p%smpd)
             call b%mskvol%read(p%mskfile)
-            call b%mskvol%clip_inplace([p%boxmatch,p%boxmatch,p%boxmatch])
+            if( p%boxmatch < p%box ) call b%mskvol%clip_inplace([p%boxmatch,p%boxmatch,p%boxmatch])
             call b%vol%zero_background(p%msk)
             call b%vol%mul(b%mskvol)
         else
@@ -587,7 +612,7 @@ contains
         ! FT volume
         call b%vol%fwd_ft
         ! expand for fast interpolation
-        if( l_doexpand ) call b%vol%expand_cmat(p%alpha)    
+        call b%vol%expand_cmat(p%alpha)    
     end subroutine preprefvol
 
     subroutine norm_struct_facts( b, p, which_iter )
@@ -639,17 +664,16 @@ contains
         end do
     end subroutine norm_struct_facts
     
-    subroutine eonorm_struct_facts( b, p, res, which_iter )
+    subroutine eonorm_struct_facts( b, p, cline, res, which_iter )
         use simple_filterer, only: gen_anisotropic_optlp
         class(build),      intent(inout) :: b
         class(params),     intent(inout) :: p
+        class(cmdline),    intent(inout) :: cline
         real,              intent(inout) :: res
         integer, optional, intent(in)    :: which_iter
-        real,     allocatable :: invctfsq(:)
         integer               :: s
         real                  :: res05s(p%nstates), res0143s(p%nstates)
         character(len=STDLEN) :: pprocvol
-        character(len=32)     :: eonames(2)
         ! init
         res0143s = 0.
         res05s   = 0.
@@ -657,7 +681,7 @@ contains
         do s=1,p%nstates
             if( b%a%get_pop(s, 'state') == 0 )then
                 ! empty state
-                if( present(which_iter) )b%fsc(s,:) = 0.
+                if( present(which_iter) ) b%fsc(s,:) = 0.
                 cycle
             endif
             call b%eorecvols(s)%compress_exp
@@ -665,20 +689,20 @@ contains
                 call b%eorecvols(s)%write_eos('recvol_state'//int2str_pad(s,2)//'_part'//int2str_pad(p%part,p%numlen))
             else
                 if( present(which_iter) )then
-                    p%vols(s) = 'recvol_state'//int2str_pad(s,2)//'_iter'//int2str_pad(which_iter,3)//p%ext
+                    p%vols(s)      = 'recvol_state'//int2str_pad(s,2)//'_iter'//int2str_pad(which_iter,3)//p%ext 
                 else
                     p%vols(s) = 'startvol_state'//int2str_pad(s,2)//p%ext
                 endif
+                p%vols_even(s) = add2fbody(p%vols(s), p%ext, '_even')
+                p%vols_odd(s)  = add2fbody(p%vols(s), p%ext, '_odd')
                 call b%eorecvols(s)%sum_eos
-                eonames(1) = add2fbody(p%vols(s), p%ext, '_odd')
-                eonames(2) = add2fbody(p%vols(s),  p%ext, '_even')
                 ! anisotropic resolution model
-                call b%eorecvols(s)%sampl_dens_correct_eos(s, eonames)
-                call gen_projection_frcs( p, eonames(1), eonames(2), s, b%projfrcs)
+                call b%eorecvols(s)%sampl_dens_correct_eos(s, p%vols_even(s), p%vols_odd(s))
+                call gen_projection_frcs( b, p, cline, p%vols_even(s), p%vols_odd(s), s, b%projfrcs)
                 call b%projfrcs%write('frcs_state'//int2str_pad(s,2)//'.bin')
                 ! generate the anisotropic 3D optimal low-pass filter
-                call gen_anisotropic_optlp(b%vol, b%projfrcs, b%e_bal, s, p%pgrp)
-                call b%vol%write('aniso_optlp_state'//int2str_pad(s,2)//p%ext)
+                call gen_anisotropic_optlp(b%vol2, b%projfrcs, b%e_bal, s, p%pgrp)
+                call b%vol2%write('aniso_optlp_state'//int2str_pad(s,2)//p%ext)
                 call b%eorecvols(s)%sampl_dens_correct_sum(b%vol)
                 call b%vol%write(p%vols(s), del_if_exists=.true.)
                 ! update resolutions for local execution mode
@@ -705,12 +729,13 @@ contains
     end subroutine eonorm_struct_facts
 
     !>  \brief generate projection FRCs from even/odd pairs
-    subroutine gen_projection_frcs( p, ename, oname, state, projfrcs )
-        use simple_params,          only: params
+    subroutine gen_projection_frcs( b, p, cline, ename, oname, state, projfrcs )
         use simple_oris,            only: oris
         use simple_projector_hlev,  only: projvol
         use simple_projection_frcs, only: projection_frcs
+        class(build),           intent(inout) :: b
         class(params),          intent(inout) :: p
+        class(cmdline),         intent(inout) :: cline
         character(len=*),       intent(in)    :: ename, oname
         integer,                intent(in)    :: state
         class(projection_frcs), intent(inout) :: projfrcs
@@ -718,18 +743,20 @@ contains
         type(image)              :: even, odd
         type(image), allocatable :: even_imgs(:), odd_imgs(:)
         real,        allocatable :: frc(:), res(:)
-        integer :: iproj
-        ! read even/odd pair
-        call even%new([p%box,p%box,p%box], p%smpd)
-        call odd%new([p%box,p%box,p%box], p%smpd)
-        call even%read(ename)
-        call odd%read(oname)
+        integer :: iproj, ldim(3)
+        ! ensure correct b%vol dim
+        call b%vol%new([p%box,p%box,p%box],p%smpd) 
+        ! read & prep even/odd pair
+        call b%vol%read(ename)
+        call b%vol2%read(oname)
+        call prepeovol(b%vol)
+        call prepeovol(b%vol2)
         ! create e_space
         call e_space%new(NSPACE_BALANCE)
         call e_space%spiral(p%nsym, p%eullims)
         ! generate even/odd projections
-        even_imgs = projvol(even, e_space, p)
-        odd_imgs  = projvol(odd, e_space, p)
+        even_imgs = projvol(b%vol,  e_space, p)
+        odd_imgs  = projvol(b%vol2, e_space, p)
         ! calculate FRCs and fill-in projfrcs object
         !$omp parallel do default(shared) private(iproj,res,frc) schedule(static) proc_bind(close)
         do iproj=1,NSPACE_BALANCE
@@ -742,9 +769,31 @@ contains
         end do
         !$omp end parallel do
         deallocate(even_imgs, odd_imgs)
-        call even%kill
-        call odd%kill
         call e_space%kill
+
+        contains
+
+            !>  \brief  prepares even/odd volume for FSC/FRC calcualtion
+            subroutine prepeovol( vol )
+                class(image), intent(inout) :: vol
+                call vol%norm ! because auto-normalisation on read is taken out
+                ! masking
+                if( cline%defined('mskfile') )then
+                    ! mask provided
+                    call b%mskvol%new([p%box, p%box, p%box], p%smpd)
+                    call b%mskvol%read(p%mskfile)
+                    call vol%zero_background(p%msk)
+                    call vol%mul(b%mskvol)
+                else
+                    ! circular masking
+                    if( p%l_innermsk )then
+                        call vol%mask(p%msk, 'soft', inner=p%inner, width=p%width)
+                    else
+                        call vol%mask(p%msk, 'soft')
+                    endif
+                endif 
+        end subroutine prepeovol
+
     end subroutine gen_projection_frcs
 
 end module simple_hadamard_common

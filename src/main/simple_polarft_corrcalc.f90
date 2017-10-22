@@ -72,7 +72,7 @@ type :: polarft_corrcalc
     type(fftw_carr_fft), allocatable :: fftdat_ptcls(:,:)     !< for memoization of particle  FFTs in accelerated gencorrs routines
     type(fftw_carr_fft), allocatable :: fftdat_refs_even(:,:) !< for memoization of reference FFTs in accelerated gencorrs routines, even
     type(fftw_carr_fft), allocatable :: fftdat_refs_odd(:,:)  !< -"-, odd
-    logical,             allocatable :: iseven(:)             !< eo assignment for gold-standard FSC
+    logical,             allocatable :: iseven(:)             !< eo assignment for gold-standard FSC    
     logical                          :: phaseplate            !< images obtained with the Volta
     type(c_ptr)                      :: plan_fwd_1            !< FFTW plans for gencorrs
     type(c_ptr)                      :: plan_fwd_2            !< -"-
@@ -139,9 +139,10 @@ contains
         integer,                 intent(in)    :: nrefs
         class(params),           intent(inout) :: p
         integer, optional,       intent(in)    :: eoarr(p%fromp:p%top)
-        integer  :: alloc_stat, irot, k, ithr, iptcl, ik, iref
-        logical  :: even_dims, test(2)
-        real(sp) :: ang
+        character(kind=c_char, len=:), allocatable :: fft_wisdoms_fname ! FFTW wisdoms (per part or suffer I/O lag)
+        integer             :: alloc_stat, irot, k, ithr, iptcl, ik, iref
+        logical             :: even_dims, test(2)
+        real(sp)            :: ang
         integer(kind=c_int) :: wsdm_ret
         ! kill possibly pre-existing object
         call self%kill
@@ -269,15 +270,22 @@ contains
                 call c_f_pointer(self%fftdat_refs_odd(iref,ik)%p_im, self%fftdat_refs_odd(iref,ik)%im, [self%pftsz])
             end do
         end do
+        ! FFTW3 wisdoms file
+        if( p%l_distr_exec )then 
+            allocate(fft_wisdoms_fname, source='fft_wisdoms_part'//int2str_pad(p%part,p%numlen)//'.dat'//c_null_char)
+        else 
+            allocate(fft_wisdoms_fname, source='fft_wisdoms.dat'//c_null_char)
+        endif
         ! FFTW plans
-        wsdm_ret = fftw_import_wisdom_from_filename(WISDOM_FNAME)
+        wsdm_ret = fftw_import_wisdom_from_filename(fft_wisdoms_fname)
         self%plan_fwd_1 = fftwf_plan_dft_r2c_1d(self%pftsz, self%fftdat(1)%ref_re, &
              self%fftdat(1)%ref_fft_re, FFTW_PATIENT)
         self%plan_fwd_2 = fftwf_plan_dft_1d    (self%pftsz, self%fftdat(1)%ref_im, &
              self%fftdat(1)%ref_fft_im, FFTW_FORWARD, FFTW_PATIENT)
         self%plan_bwd   = fftwf_plan_dft_c2r_1d(self%nrots, self%fftdat(1)%product_fft, &
              self%fftdat(1)%backtransf, FFTW_PATIENT)
-        wsdm_ret = fftw_export_wisdom_to_filename(WISDOM_FNAME)
+        wsdm_ret = fftw_export_wisdom_to_filename(fft_wisdoms_fname)
+        deallocate(fft_wisdoms_fname)
         if (wsdm_ret == 0) then
            write (*, *) 'Error: could not write FFTW3 wisdom file! Check permissions.'
         end if
