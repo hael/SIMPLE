@@ -379,7 +379,7 @@ contains
         do iptcl=p%fromp,p%top
             cnt = cnt+1
             call progress(cnt, p%top-p%fromp+1)
-            call read_img_from_stk( b, p, iptcl )
+            call read_img_and_norm( b, p, iptcl )
             o = b%a%get_ori(iptcl)
             call prepimg4align(b, p, o, is3D=.false.)
             ! transfer to polar coordinates

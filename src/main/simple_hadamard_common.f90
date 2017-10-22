@@ -10,9 +10,9 @@ use simple_oris,     only: oris
 use simple_gridding, only: prep4cgrid
 implicit none
 
-public :: read_img_from_stk, set_bp_range, set_bp_range2D, grid_ptcl, prepimg4align,&
-&eonorm_struct_facts, norm_struct_facts, preprefvol, prep2Dref, gen2Dclassdoc,&
-&preprecvols, killrecvols, gen_projection_frcs
+public :: read_img_and_norm, read_imgbatch, set_bp_range, set_bp_range2D, grid_ptcl, prepimg4align,&
+&eonorm_struct_facts, norm_struct_facts, preprefvol, prep2Dref, gen2Dclassdoc, preprecvols,&
+&killrecvols, gen_projection_frcs
 private
 #include "simple_local_flags.inc"
 
@@ -21,7 +21,7 @@ real, parameter :: CENTHRESH = 0.5    ! threshold for performing volume/cavg cen
 
 contains
 
-    subroutine read_img_from_stk( b, p, iptcl )
+    subroutine read_img_and_norm( b, p, iptcl )
         class(build),  intent(inout)  :: b
         class(params), intent(inout)  :: p
         integer,       intent(in)     :: iptcl
@@ -38,7 +38,36 @@ contains
             endif
         endif
         call b%img%norm
-    end subroutine read_img_from_stk
+    end subroutine read_img_and_norm
+
+    subroutine read_imgbatch( b, p, fromptop )
+        class(build),  intent(inout)  :: b
+        class(params), intent(inout)  :: p
+        integer,       intent(in)     :: fromptop(2)
+        character(len=:), allocatable :: stkname
+        integer :: iptcl, ind_in_batch, ind_in_stk
+        if( p%l_stktab_input )then
+            do iptcl=fromptop(1),fromptop(2)
+                ind_in_batch = iptcl - fromptop(1) + 1
+                call p%stkhandle%get_stkname_and_ind(iptcl, stkname, ind_in_stk)
+                call b%imgbatch(ind_in_batch)%read(stkname, ind_in_stk)
+            end do
+        else
+            if( p%l_distr_exec )then
+                do iptcl=fromptop(1),fromptop(2)
+                    ind_in_batch = iptcl - fromptop(1) + 1
+                    ind_in_stk   = iptcl - p%fromp + 1
+                    call b%imgbatch(ind_in_batch)%read(p%stk_part, ind_in_stk)
+                end do
+            else
+                do iptcl=fromptop(1),fromptop(2)
+                    ind_in_batch = iptcl - fromptop(1) + 1
+                    ind_in_stk   = iptcl
+                    call b%imgbatch(ind_in_batch)%read(p%stk, ind_in_stk)
+                end do
+            endif
+        endif
+    end subroutine read_imgbatch
 
     subroutine set_bp_range( b, p, cline )
         use simple_math, only: calc_fourier_index
@@ -449,6 +478,35 @@ contains
         endif
         call b%gridprep%kill
     end subroutine killrecvols
+
+    !>  \brief  prepares a batch of images and padded images
+    subroutine prepimgbatch( b, p, batchsz )
+        class(build),   intent(inout) :: b
+        class(params),  intent(inout) :: p
+        integer,        intent(in)    :: batchsz
+        integer :: currsz, ibatch
+        logical :: doprep
+        if( allocated(b%imgbatch) )then
+            currsz = size(b%imgbatch,1)
+            if( batchsz > currsz )then
+                do ibatch=1,currsz
+                    call b%imgbatch(ibatch)%kill
+                    call b%imgbatch_pad(ibatch)%kill
+                end do
+                deallocate(b%imgbatch,b%imgbatch_pad)
+                doprep = .true.
+            endif
+        else
+            doprep = .true. 
+        endif
+        if( doprep )then
+            allocate(b%imgbatch(batchsz), b%imgbatch_pad(batchsz))
+            do ibatch=1,batchsz
+                call b%imgbatch(ibatch)%new([p%box,p%box,1], p%smpd)
+                call b%imgbatch_pad(ibatch)%new([p%boxpd,p%boxpd,1], p%smpd)
+            end do
+        endif
+    end subroutine prepimgbatch
 
     !>  \brief  prepares one volume for references extraction
     subroutine preprefvol( b, p, cline, s, doexpand )

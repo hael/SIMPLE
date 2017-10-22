@@ -45,6 +45,8 @@ type :: build
     type(masker)                        :: mskvol             !< mask volume
     type(projection_frcs)               :: projfrcs           !< projection FRC's used in the anisotropic Wiener filter
     type(prep4cgrid)                    :: gridprep           !< gridding preparation (2D)
+    type(image),            allocatable :: imgbatch(:)        !< batch of images
+    type(image),            allocatable :: imgbatch_pad(:)    !< batch of padded images
     ! COMMON LINES TOOLBOX
     type(image),            allocatable :: imgs(:)            !< images (all should be read in)
     type(image),            allocatable :: imgs_sym(:)        !< images (all should be read in)

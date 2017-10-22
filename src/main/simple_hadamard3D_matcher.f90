@@ -326,7 +326,7 @@ contains
                 ! need to read in part volumes & rho
                 ! todo in simple_hadamard_common
                 ! call readrecvols_for_update(p)
-                ! discarding contribution to volume shiuld be done within grid_ptcl
+                ! discarding contribution to volume should be done within grid_ptcl
             endif
             ! reconstruction
             do iptcl=p%fromp,p%top
@@ -334,7 +334,7 @@ contains
                     orientation = b%a%get_ori(iptcl)
                     if( nint(orientation%get('state')) == 0 .or.&
                        &nint(orientation%get('state_balance')) == 0 ) cycle
-                    call read_img_from_stk( b, p, iptcl )
+                    call read_img_and_norm( b, p, iptcl )
                     if( p%npeaks > 1 )then
                         call primesrch3D(iptcl)%get_oris(prime3D_oris, orientation)
                         call grid_ptcl(b, p, orientation, os=prime3D_oris)
@@ -356,11 +356,13 @@ contains
         endif
 
         ! DESTRUCT
-        do iptcl=p%fromp,p%top
-            call primesrch3D(iptcl)%kill
-        end do
-        deallocate( primesrch3D )
-        call prime3D_oris%kill
+        if( .not. p%l_distr_exec )then
+            do iptcl=p%fromp,p%top
+                call primesrch3D(iptcl)%kill
+            end do
+            deallocate( primesrch3D )
+            call prime3D_oris%kill
+        endif
 
         ! REPORT CONVERGENCE
         if( p%l_distr_exec )then
@@ -422,7 +424,7 @@ contains
             do i=1,nsamp
                 call progress(i, nsamp)
                 orientation = b%a%get_ori(sample(i) + p%fromp - 1)
-                call read_img_from_stk(b, p, sample(i) + p%fromp - 1)
+                call read_img_and_norm(b, p, sample(i) + p%fromp - 1)
                 call prep4cgrid(b%img, b%img_pad, p%msk, kbwin)
                 if( p%pgrp == 'c1' )then
                     call b%recvols(1)%inout_fplane(orientation, .true., b%img_pad, pwght=1.0)
@@ -465,7 +467,7 @@ contains
         integer   :: cnt, s, iref, nrefs
         ! PREPARATION OF REFERENCES IN PFTCC
         ! read reference volumes and create polar projections
-        nrefs = p%nspace*p%nstates
+        nrefs = p%nspace * p%nstates
         cnt   = 0
         if( .not. p%l_distr_exec ) write(*,'(A)') '>>> BUILDING REFERENCES'
         do s=1,p%nstates
@@ -478,10 +480,10 @@ contains
                     cycle
                 endif
             endif
-            call preprefvol( b, p, cline, s )
+            call preprefvol( b, p, cline, s ) !!!!!!!!!!!! need to be optimised
             ! generate discrete projections
             do iref=1,p%nspace
-                cnt = cnt+1
+                cnt = cnt + 1
                 call progress(cnt, nrefs)
                 o = b%e%get_ori(iref)
                 call b%vol%fproject_polar(cnt, o, pftcc, iseven=.true.) ! @@@@@@@@@@@@@
@@ -517,7 +519,7 @@ contains
                 cnt = cnt + 1
                 if( istate /= s ) cycle
                 call progress(cnt, ntot)
-                call read_img_from_stk( b, p, iptcl )
+                call read_img_and_norm( b, p, iptcl )
                 call prepimg4align(b, p, o, is3D=.true.)
                 call b%img_match%polarize(pftcc, iptcl)
             end do

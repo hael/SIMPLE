@@ -30,20 +30,16 @@ type imgfile
     logical                     :: existence      = .false.  !< Set to true when the object exists, false when it's closed
 contains
     procedure          :: open
-    procedure          :: print_header
-    procedure          :: close
     procedure, private :: open_local
+    procedure          :: close
     procedure, private :: close_nowrite
-    procedure, private :: exists
-    procedure, private :: get_format
     procedure, private :: slice2recpos
     procedure, private :: slice2bytepos
     procedure          :: rSlices
     procedure          :: wSlices
-    procedure          :: print_imgfile
+    procedure          :: print_header
     procedure          :: getDims
     procedure          :: getDim
-    procedure          :: getFname
     procedure          :: getPixSz
     procedure          :: getIform
     procedure          :: getMode
@@ -70,16 +66,16 @@ contains
         character(len=*), optional, intent(in)    :: rwaction      !< action flag
         character(len=1) :: format_descriptor
         logical          :: rreadhead, write_enabled
+        call self%close_nowrite
         rreadhead = .true.
         if( present(readhead) ) rreadhead = readhead
         write_enabled = .true.
         if( present(rwaction) )then
             if( rwaction .eq. 'READ' ) write_enabled = .false.
         endif
-        call self%close_nowrite
         ! set file name
         self%fname = trim(adjustl(fname))
-        ! Work out which file format to use
+        ! work out which file format to use
         if( present(formatchar) )then
             format_descriptor = formatchar
         else
@@ -123,17 +119,11 @@ contains
         self%existence = .true.
     end subroutine open
 
-    !>  \brief is forprinting the header
-    subroutine print_header( self )
-        class(imgfile), intent(in) :: self   !< Imagefile object 
-        call self%overall_head%print_imghead()
-    end subroutine print_header
-
     !>  \brief open the file(s) for the imgfile
     subroutine open_local( self, del_if_exists, rwaction )
-        class(imgfile),             intent(inout) :: self       !< Imagefile object 
-        logical, optional,          intent(in) :: del_if_exists !< overwrite flag
-        character(len=*), optional, intent(in) :: rwaction      !< read/write flag
+        class(imgfile),             intent(inout) :: self          !< Imagefile object 
+        logical, optional,          intent(in)    :: del_if_exists !< overwrite flag
+        character(len=*), optional, intent(in)    :: rwaction      !< read/write flag
         character(len=9) :: rw_str
         character(len=7) :: stat_str
         integer          :: ios
@@ -170,38 +160,19 @@ contains
         if( allocated(self%overall_head) ) call self%overall_head%kill
         if( allocated(self%overall_head) ) deallocate(self%overall_head)
         self%was_written_to = .false.
-        self%existence = .false.
+        self%existence      = .false.
     end subroutine close
 
     !>  \brief  close the file(s)
     subroutine close_nowrite( self )
-        class(imgfile), intent(inout) :: self   !< Imagefile object
+        class(imgfile), intent(inout) :: self
         integer :: ios
         call fclose( self%funit, ios,errmsg="simple_imgfile close nowrite error")
         if( allocated(self%overall_head) ) call self%overall_head%kill
         if( allocated(self%overall_head) ) deallocate(self%overall_head)
         self%was_written_to = .false.
-        self%existence = .false.
+        self%existence      = .false.
     end subroutine close_nowrite
-
-    !>  \brief  Check whether the file exists on disk
-    logical function exists( self )
-        class(imgfile), intent(inout) :: self   !< Imagefile object 
-        exists = file_exists(self%fname)
-        if( exists) exists = exists .and. file_size(self%fname) .gt. 0
-    end function exists
-
-    !>  \brief Return a one letter code for the file format designated by the extension in the fname
-    !!         if .mrc: M
-    !!         if .spi: S
-    !!         if .img: I
-    !!         if .hed: I
-    !!         else: N
-    pure function get_format( self )
-        class(imgfile), intent(in) :: self   !< Imagefile object 
-        character(len=1)           :: get_format
-        get_format = self%head_format
-    end function get_format
 
     !>  \brief  for translating an image index to record indices in the stack
     !! \param[out] hedinds,iminds header and image indices in the stack
@@ -224,12 +195,12 @@ contains
                 iminds     = 0 ! no image associated with the stack header
             else
                 do j=1,nr
-                    hedinds(1) = cnt+1 ! hed from
-                    cnt = cnt+self%overall_head%getLabrec()
-                    hedinds(2) = cnt   ! hed to
-                    iminds(1) = cnt+1  ! im from
-                    cnt = cnt+dims(2)
-                    iminds(2) = cnt    ! im to
+                    hedinds(1) = cnt + 1 ! hed from
+                    cnt        = cnt + self%overall_head%getLabrec()
+                    hedinds(2) = cnt     ! hed to
+                    iminds(1)  = cnt + 1 ! im from
+                    cnt        = cnt + dims(2)
+                    iminds(2)  = cnt     ! im to
                 end do
             endif
         class DEFAULT
@@ -261,9 +232,8 @@ contains
     !>  \brief  reads a set of contiguous slices of the image file from disk into memory.
     !!          The array of reals should have +2 elements in the first dimension.
     subroutine rSlices( self, first_slice, last_slice, rarr )
-        use simple_strings, only: int2str
-        use simple_math,    only: is_odd, is_a_number, is_even
-        use simple_imghead  ! use all in there
+        use simple_math,   only: is_odd
+        use simple_imghead ! use all in there
 #ifdef PGI
         use ISO_C_BINDING
 #else
@@ -369,7 +339,8 @@ contains
                 if( self%overall_head%pixIsSigned() )then
                     rarr(1:dims(1),:,:) = real(tmp_16bit_int_array(:dims(1),:dims(2),:dims(3)))
                 else
-                    rarr(1:dims(1),:,:) = real(iand(int(tmp_16bit_int_array(:dims(1),:dims(2),:dims(3)),kind=4), int(huge(int(1,kind=2)), kind=4)))
+                    rarr(1:dims(1),:,:) = real(iand(int(tmp_16bit_int_array(:dims(1),:dims(2),:dims(3)),kind=4),&
+                        &int(huge(int(1,kind=2)), kind=4)))
                 endif
             case(4)
                 read(unit=self%funit,pos=first_byte,iostat=io_stat,iomsg=io_message) rarr(:dims(1),:,:) 
@@ -389,8 +360,7 @@ contains
     !>  \brief  read/write a set of contiguous slices of the image file from disk into memory.
     !!          The array of reals should have +2 elements in the first dimension.
     subroutine wSlices( self, first_slice, last_slice, rarr, ldim, is_ft, smpd )
-        use simple_strings, only: int2str
-        use simple_math,    only: is_odd, is_a_number, is_even
+        use simple_math,    only: is_odd, is_even
         use simple_imghead  ! use all in there
 #ifdef PGI
         use ISO_C_BINDING
@@ -405,7 +375,7 @@ contains
         logical,                intent(in)    :: is_ft        !< to indicate FT status of image
         real,                   intent(in)    :: smpd         !< sampling distance
         character(len=100)          :: io_message
-        integer                     :: io_stat,itmp,dims(3),dims_stored(3)
+        integer                     :: io_stat,itmp,dims(3)!,dims_stored(3)
         integer(kind=8)             :: first_byte,hedbyteinds(2),imbyteinds(2),first_hedbyte,byteperpix
         logical                     :: arr_is_ready
         real                        :: min_val,max_val
@@ -423,12 +393,12 @@ contains
         select type(ptr)
             type is (MrcImgHead)
                 ! Redefine the file dims (to keep track of the index of the last image of the stack)
-                dims_stored = dims
+                ! dims_stored = dims
                 dims(1)     = ldim(1)
                 dims(2)     = size(rarr,2)
                 dims(3)     = max(last_slice,dims(3))
                 call self%overall_head%setDims(dims)
-                dims = dims_stored ! safety
+                ! dims = dims_stored ! safety
         end select
         if( is_odd(dims(1)) )then
             arr_is_ready = (size(rarr,1) .eq. dims(1) + 1) .and. size(rarr,2) .eq. dims(2)
@@ -467,19 +437,18 @@ contains
                 min_val = min(min_val, self%overall_head%getMinPixVal())
                 call self%overall_head%setMinPixVal(min_val)
                 call self%overall_head%setMaxPixVal(max_val)
-                ! nothing to do
             case('S')
                 if( .not. self%isvol )then
-                ! for SPIDER stack we also need to create and write an image header
-                allocate( SpiImgHead :: imghed )
-                call imghed%new(ldim=ldim)
-                call imghed%setMinimal(ldim, is_ft, smpd)
-                call imghed%setMinPixVal(min_val)
-                call imghed%setMaxPixVal(max_val)
-                call imghed%write(self%funit, pos=first_hedbyte)
-                call imghed%kill
-                deallocate(imghed)
-            endif
+                    ! for SPIDER stack we also need to create and write an image header
+                    allocate( SpiImgHead :: imghed )
+                    call imghed%new(ldim=ldim)
+                    call imghed%setMinimal(ldim, is_ft, smpd)
+                    call imghed%setMinPixVal(min_val)
+                    call imghed%setMaxPixVal(max_val)
+                    call imghed%write(self%funit, pos=first_hedbyte)
+                    call imghed%kill
+                    deallocate(imghed)
+                endif
         end select
         write(unit=self%funit,pos=first_byte,iostat=io_stat) rarr(1:dims(1),:,:)
         ! Check the write was successful
@@ -527,12 +496,12 @@ contains
     end subroutine wSlices
 
     !>  \brief  Print out basic information about the file
-    subroutine print_imgfile( self )
+    subroutine print_header( self )
         class(imgfile), intent(in) :: self   !< Imagefile object 
         write(*,'(/2a)') 'Summary information for file ', trim(adjustl(self%fname))
         call self%overall_head%print_imghead()
         write(*,'(a)') ' '
-    end subroutine print_imgfile
+    end subroutine print_header
 
     !>  \brief  Return the dimension of the image stack
     function getDims( self )
@@ -548,13 +517,6 @@ contains
         integer :: getDim
         getDim = self%overall_head%getDim(which_dim)
     end function getDim
-
-    !>  \brief Return the fname
-    function getFname( self )
-        class(imgfile), intent(in) :: self   !< Imagefile object
-        character(len=STDLEN)      :: getFname
-        getFname = self%fname
-    end function getFname
 
     !>  \brief  Return the pixel size of the image data (in Angstroms)
     real function getPixSz( self )

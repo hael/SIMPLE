@@ -526,7 +526,6 @@ contains
             call job_descr%set('deftab', trim(p_master%deftab))
             call cline%set('deftab', trim(p_master%deftab))
         endif
-
         ! main loop
         iter = p_master%startit - 1
         do

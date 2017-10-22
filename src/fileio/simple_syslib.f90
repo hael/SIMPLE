@@ -696,8 +696,8 @@ contains
     !>  \brief  check if a file exists on disk
     logical function file_exists(fname)
         character(len=*), intent(in) :: fname
-        inquire(file=trim(adjustl(fname)), exist=file_exists)
-      end function file_exists
+        inquire(file=trim(adjustl(fname)), exist = file_exists)
+    end function file_exists
 
     !>  \brief  check whether a file is currently opened
     logical function is_file_open( fname )

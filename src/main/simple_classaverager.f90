@@ -378,7 +378,7 @@ contains
 
     !>  \brief  is for getting a class average
     subroutine get_cavg( self, class, which, img, state )
-        class(classaverager), intent(inout) :: self
+        class(classaverager), intent(in)    :: self
         integer,              intent(in)    :: class
         character(len=*),     intent(in)    :: which
         class(image),         intent(inout) :: img
@@ -388,11 +388,11 @@ contains
         if( present(state) ) sstate = state
         select case(which)
             case('even')
-                img = self%cavgs_even(sstate,class)
+                call img%copy_slim(self%cavgs_even(sstate,class))
             case('odd')
-                img = self%cavgs_odd(sstate,class)
+                call img%copy_slim(self%cavgs_odd(sstate,class))
             case('merged')
-                img = self%cavgs_merged(sstate,class)
+                call img%copy_slim(self%cavgs_merged(sstate,class))
             case DEFAULT
                 stop 'unsupported which flag; simple_classaverager :: get_cavg'
         end select
@@ -410,11 +410,11 @@ contains
         if( present(state) ) sstate = state
         select case(which)
             case('even')
-                self%cavgs_even(sstate,class)   = img
+                call self%cavgs_even(sstate,class)%copy_slim(img)
             case('odd')
-                self%cavgs_odd(sstate,class)    = img
+                call self%cavgs_odd(sstate,class)%copy_slim(img)
             case('merged')
-                self%cavgs_merged(sstate,class) = img
+                call self%cavgs_merged(sstate,class)%copy_slim(img)
             case DEFAULT
                 stop 'unsupported which flag; simple_classaverager :: set_cavg'
         end select
@@ -429,7 +429,7 @@ contains
         use simple_kbinterpol,      only: kbinterpol
         use simple_prep4cgrid,      only: prep4cgrid
         use simple_map_reduce,      only: split_nobjs_even
-        use simple_hadamard_common, only: read_img_from_stk
+        use simple_hadamard_common, only: read_img_and_norm
         class(classaverager), intent(inout) :: self
         type(kbinterpol)         :: kbwin
         type(prep4cgrid)         :: gridprep
@@ -517,7 +517,7 @@ contains
                     if( L_BENCH ) t_batch_loop = tic()
                     do i=1,batchsz
                         iptcl = ptcls_inds(batches(batch,1) + i - 1)
-                        call read_img_from_stk( self%bp, self%pp, iptcl )
+                        call read_img_and_norm( self%bp, self%pp, iptcl )
                         call batch_imgs(i)%copy_slim(self%bp%img)
                         call padded_imgs(i)%zero_and_unflag_ft
                     enddo

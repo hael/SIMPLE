@@ -472,7 +472,7 @@ contains
                 cnt = cnt+1
                 state_here = nint(o%get(i,'state'))
                 if( state_here > 0 .and. (state_here == state) )then
-                    statecnt(state) = statecnt(state)+1
+                    statecnt(state) = statecnt(state) + 1
                     call rec_dens
                 endif
             endif

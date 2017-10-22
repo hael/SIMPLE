@@ -1145,39 +1145,35 @@ contains
 
     !>  \brief is for gettign a part of the info in a SPIDER image header
     subroutine get_spifile_info( fname, ldim, iform, maxim, smpd, conv, doprint )
-        character(len=*), intent(in)               :: fname
-        integer, intent(out)                       :: ldim(3), maxim, iform
-        real, intent(out)                          :: smpd
+        character(len=*),              intent(in)  :: fname
+        integer,                       intent(out) :: ldim(3), maxim, iform
+        real,                          intent(out) :: smpd
         character(len=:), allocatable, intent(out) :: conv
-        logical, intent(in)                        :: doprint
+        logical,                       intent(in)  :: doprint
         real    :: spihed(40)
-        integer :: filnum, cnt, i, ios
+        integer :: filnum, cnt, i
         if( file_exists(fname) )then
             if( fname2format(fname) .eq. 'S' )then
                 if( allocated(conv) ) deallocate(conv)
-                call fopen(filnum, status='OLD', action='READ', file=fname, access='STREAM',iostat=ios)
-                call fileio_errmsg(" get_spifile_info fopen error "//trim(fname),ios)
+                open(NEWUNIT=filnum, status='OLD', action='READ', file=fname, access='STREAM', convert='NATIVE')
                 call read_spihed
-                call fclose(filnum,errmsg=" get_spifile_info fclose error "//trim(fname))
+                close(filnum)
                 if( .not. any(ldim < 1) )then
                     allocate(conv, source='NATIVE')
                     call print_spihed
                     return
                 endif
-                call fopen(filnum, status='OLD', action='READ', file=fname, access='STREAM', iostat=ios)
-                call fileio_errmsg(" get_spifile_info fopen error "//trim(fname),ios)
+                open(NEWUNIT=filnum, status='OLD', action='READ', file=fname, access='STREAM', convert='BIG_ENDIAN') ! 
                 call read_spihed
-                call fclose(filnum,errmsg=" get_spifile_info fclose error "//trim(fname))
+                close(filnum)
                 if( .not. any(ldim < 1) )then
                     allocate(conv, source='BIG_ENDIAN')
                     call print_spihed
                     return
                 endif
-                call fopen(filnum, status='OLD', action='READ', file=fname,&
-                &access='STREAM', iostat=ios)
-                call fileio_errmsg(" get_spifile_info fopen error "//trim(fname),ios)
+                open(NEWUNIT=filnum, status='OLD', action='READ', file=fname, access='STREAM', convert='LITTLE_ENDIAN') ! 
                 call read_spihed
-                call fclose(filnum,errmsg=" get_spifile_info fclose error "//trim(fname))
+                close(filnum)
                 if( .not. any(ldim < 1) )then
                     allocate(conv, source='LITTLE_ENDIAN')
                     call print_spihed
@@ -1193,9 +1189,9 @@ contains
             write(*,*) fname
             stop
         endif
-
+        
         contains
-
+            
             subroutine read_spihed
                 cnt = 0
                 do i=1,40*4,4
@@ -1207,7 +1203,7 @@ contains
                 maxim = int(spihed(26))
                 smpd  = spihed(38)
             end subroutine
-
+            
             subroutine print_spihed
                 if( doprint )then
                     write(*,'(a,3(i0,1x))') 'Number of columns, rows, sections: ', int(spihed(12)), int(spihed(2)), int(spihed(1))
@@ -1216,7 +1212,7 @@ contains
                     write(*,'(a,1x,f7.3)')  'Pixel size: ', spihed(38)
                 endif
             end subroutine
-
+            
     end subroutine get_spifile_info
 
     !>  \brief  is for finding logical dimension and number of particles in stack
