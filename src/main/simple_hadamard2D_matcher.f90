@@ -216,8 +216,8 @@ contains
                     !$omp parallel do default(shared) schedule(guided) private(iptcl) proc_bind(close)
                     do iptcl=p%fromp,p%top
                         call primesrch2D(iptcl)%exec_prime2D_srch(extr_bound=corr_thresh)
-                        call primesrch2D(iptcl)%get_times(rt_refloop, rt_inpl, rt_tot)
                         if( L_BENCH_PRIME2D )then
+                            call primesrch2D(iptcl)%get_times(rt_refloop, rt_inpl, rt_tot)
                             rt_refloop_sum      = rt_refloop_sum + rt_refloop
                             rt_inpl_sum         = rt_inpl_sum    + rt_inpl
                             rt_tot_sum          = rt_tot_sum     + rt_tot
