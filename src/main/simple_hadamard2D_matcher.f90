@@ -171,7 +171,11 @@ contains
         ! STOCHASTIC IMAGE ALIGNMENT
         ! gather class populations
         if( b%a%isthere('class') )then
-            cls_pops = b%a%get_pops('class', consider_w=.true., maxn=p%ncls)
+            if( p%weights2D .eq. 'yes' .and. which_iter > 3 )then
+                cls_pops = b%a%get_pops('class', consider_w=.true., maxn=p%ncls)
+            else
+                cls_pops = b%a%get_pops('class', consider_w=.false., maxn=p%ncls)
+            endif
         else
             ! first iteration, no class assignment: all classes are up for grab
             allocate(cls_pops(p%ncls), source=MINCLSPOPLIM+1, stat=alloc_stat)
