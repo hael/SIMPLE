@@ -40,7 +40,6 @@ type :: image
     procedure          :: new
     procedure          :: disc
     procedure          :: copy
-    procedure          :: copy_slim
     procedure          :: mic2spec
     procedure          :: boxconv
     procedure          :: window
@@ -420,34 +419,15 @@ contains
     subroutine copy( self, self_in )
         class(image), intent(inout) :: self
         class(image), intent(in)    :: self_in
-        if( self_in%exists() )then
-            if( self%exists() )then
-                if( (self.eqsmpd.self_in) .and. (self.eqdims.self_in) )then
-                else
-                    call self%new(self_in%ldim, self_in%smpd)
-                endif
-            else
-                call self%new(self_in%ldim, self_in%smpd)
-            endif
-            self%rmat(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)) =&
-                &self_in%rmat(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3))
-            self%ft   = self_in%ft
-        else
-            stop 'cannot copy nonexistent image; copy; simple_image'
+        if( .not. self_in%existence )then
+            call self%kill
+            return
         endif
-    end subroutine copy
-
-    !>  \brief copy is a constructor that copies the input object
-    !! \param self image object
-    !! \param self_in rhs object
-    !!
-    subroutine copy_slim( self, self_in )
-        class(image), intent(inout) :: self
-        class(image), intent(in)    :: self_in
+        call self%new(self_in%ldim, self_in%smpd)
         self%rmat(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)) =&
             &self_in%rmat(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3))
         self%ft = self_in%ft
-    end subroutine copy_slim
+    end subroutine copy
 
     !> mic2spec calculates the average powerspectrum over a micrograph
     !! \param self image object

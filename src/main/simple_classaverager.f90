@@ -388,11 +388,11 @@ contains
         if( present(state) ) sstate = state
         select case(which)
             case('even')
-                call img%copy_slim(self%cavgs_even(sstate,class))
+                call img%copy(self%cavgs_even(sstate,class))
             case('odd')
-                call img%copy_slim(self%cavgs_odd(sstate,class))
+                call img%copy(self%cavgs_odd(sstate,class))
             case('merged')
-                call img%copy_slim(self%cavgs_merged(sstate,class))
+                call img%copy(self%cavgs_merged(sstate,class))
             case DEFAULT
                 stop 'unsupported which flag; simple_classaverager :: get_cavg'
         end select
@@ -410,11 +410,11 @@ contains
         if( present(state) ) sstate = state
         select case(which)
             case('even')
-                call self%cavgs_even(sstate,class)%copy_slim(img)
+                call self%cavgs_even(sstate,class)%copy(img)
             case('odd')
-                call self%cavgs_odd(sstate,class)%copy_slim(img)
+                call self%cavgs_odd(sstate,class)%copy(img)
             case('merged')
-                call self%cavgs_merged(sstate,class)%copy_slim(img)
+                call self%cavgs_merged(sstate,class)%copy(img)
             case DEFAULT
                 stop 'unsupported which flag; simple_classaverager :: set_cavg'
         end select
@@ -518,7 +518,7 @@ contains
                     do i=1,batchsz
                         iptcl = ptcls_inds(batches(batch,1) + i - 1)
                         call read_img_and_norm( self%bp, self%pp, iptcl )
-                        call batch_imgs(i)%copy_slim(self%bp%img)
+                        call batch_imgs(i)%copy(self%bp%img)
                         call padded_imgs(i)%zero_and_unflag_ft
                     enddo
                     if( L_BENCH ) rt_batch_loop = rt_batch_loop + toc(t_batch_loop)

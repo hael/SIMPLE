@@ -9,9 +9,9 @@ implicit none
 
 public :: prime2D_srch
 private
-#include "simple_local_flags.inc"
 
 logical, parameter :: L_BENCH = .false.
+logical, parameter :: DEBUG   = .true.
 
 type prime2D_srch
     private
@@ -112,7 +112,7 @@ contains
         endif
         ! the instance now exists
         self%exists = .true.
-        DebugPrint '>>> PRIME2D_SRCH::CONSTRUCTED NEW SIMPLE_PRIME2D_SRCH OBJECT'
+        if( DEBUG ) print *, '>>> PRIME2D_SRCH::CONSTRUCTED NEW SIMPLE_PRIME2D_SRCH OBJECT'
     end subroutine new
 
     ! GETTERS
@@ -173,7 +173,7 @@ contains
         ! cleanup
         call o_old%kill
         call o_new%kill
-        DebugPrint '>>> PRIME2D_SRCH::GOT BEST ORI'
+        if( DEBUG ) print *, '>>> PRIME2D_SRCH::GOT BEST ORI'
     end subroutine update_best
 
     subroutine get_times( self, rt_refloop, rt_inpl, rt_tot )
@@ -239,7 +239,7 @@ contains
         if( self%prev_class > 0 ) call put_last(self%prev_class, self%srch_order)
         call rt%kill
         if( any(self%srch_order == 0) ) stop 'Invalid index in srch_order; simple_prime2D_srch :: prep4srch'
-        DebugPrint '>>> PRIME2D_SRCH::PREPARED FOR SIMPLE_PRIME2D_SRCH'
+        if( DEBUG ) print *, '>>> PRIME2D_SRCH::PREPARED FOR SIMPLE_PRIME2D_SRCH'
     end subroutine prep4srch
 
     ! SEARCH ROUTINES
@@ -263,7 +263,7 @@ contains
         endif
         ! memory management (important for ompenMP distr over arrays of prime2D_srch objects)
         if( allocated(self%srch_order) ) deallocate(self%srch_order)
-        DebugPrint '>>> PRIME2D_SRCH::EXECUTED PRIME2D_SRCH'
+        if( DEBUG ) print *, '>>> PRIME2D_SRCH::EXECUTED PRIME2D_SRCH'
     end subroutine exec_prime2D_srch
 
     !>  \brief  executes greedy rotational search (for initialisation)
@@ -293,7 +293,7 @@ contains
         else
             call self%a_ptr%reject(self%iptcl)
         endif
-        DebugPrint '>>> PRIME2D_SRCH::FINISHED STOCHASTIC SEARCH'
+        if( DEBUG ) print *, '>>> PRIME2D_SRCH::FINISHED STOCHASTIC SEARCH'
     end subroutine greedy_srch
 
     !>  \brief  executes stochastic rotational search
@@ -416,7 +416,7 @@ contains
         else
             call self%a_ptr%reject(self%iptcl)
         endif
-        DebugPrint '>>> PRIME2D_SRCH::FINISHED STOCHASTIC SEARCH'
+        if( DEBUG ) print *, '>>> PRIME2D_SRCH::FINISHED STOCHASTIC SEARCH'
     end subroutine stochastic_srch
 
     !>  \brief  executes nearest-neighbor rotational search
@@ -459,7 +459,7 @@ contains
         else
             call self%a_ptr%reject(self%iptcl)
         endif
-        DebugPrint '>>> PRIME2D_SRCH::FINISHED NEAREST-NEIGHBOR SEARCH'
+        if( DEBUG ) print *, '>>> PRIME2D_SRCH::FINISHED NEAREST-NEIGHBOR SEARCH'
     end subroutine nn_srch
 
     !>  \brief  executes the shift search over the best matching reference

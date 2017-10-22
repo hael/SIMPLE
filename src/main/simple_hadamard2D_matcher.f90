@@ -71,6 +71,8 @@ contains
                     call cavger%transf_oridat(b%a)
                     call cavger%assemble_sums()
                     l_do_read = .false.
+                else if( cline%defined('refs') )then
+                    ! do nothing
                 else
                     ! we randomly select particle images as initial references
                     p%refs      = 'start2Drefs'//p%ext
