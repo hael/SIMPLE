@@ -515,16 +515,16 @@ contains
             else
                 call b%a%partition_eo
             endif
-        endif
-        if( cline%defined('oritab') )then
-            call binwrite_oritab(p_master%oritab, b%a, [1,p_master%nptcls])
-        else if( cline%defined('deftab') )then
-            call binwrite_oritab(p_master%deftab, b%a, [1,p_master%nptcls])
-        else
-            p_master%deftab = 'deftab_from_distr_wflow'//METADATEXT
-            call binwrite_oritab(p_master%deftab, b%a, [1,p_master%nptcls])
-            call job_descr%set('deftab', trim(p_master%deftab))
-            call cline%set('deftab', trim(p_master%deftab))
+            if( cline%defined('oritab') )then
+                call binwrite_oritab(p_master%oritab, b%a, [1,p_master%nptcls])
+            else if( cline%defined('deftab') )then
+                call binwrite_oritab(p_master%deftab, b%a, [1,p_master%nptcls])
+            else
+                p_master%deftab = 'deftab_from_distr_wflow'//METADATEXT
+                call binwrite_oritab(p_master%deftab, b%a, [1,p_master%nptcls])
+                call job_descr%set('deftab', trim(p_master%deftab))
+                call cline%set('deftab', trim(p_master%deftab))
+            endif
         endif
         ! main loop
         iter = p_master%startit - 1
@@ -897,8 +897,8 @@ contains
         else
             p_master%extr_iter = p_master%startit - 1
         endif
+        ! EO PARTITIONING
         if( p_master%eo .ne. 'no' )then
-            ! deal with eo partitioning
             if( cline%defined('deftab') ) call binread_ctfparams_state_eo(p_master%deftab, os, [1,p_master%nptcls])
             if( cline%defined('oritab') ) call binread_oritab(p_master%oritab, os, [1,p_master%nptcls])
             if( os%get_nevenodd() == 0 )then
@@ -907,16 +907,16 @@ contains
                 else
                     call os%partition_eo
                 endif
-            endif
-            if( cline%defined('oritab') )then
-                call binwrite_oritab(p_master%oritab, os, [1,p_master%nptcls])
-            else if( cline%defined('deftab') )then
-                call binwrite_oritab(p_master%deftab, os, [1,p_master%nptcls])
-            else
-                p_master%deftab = 'deftab_from_distr_wflow'//METADATEXT
-                call binwrite_oritab(p_master%deftab, os, [1,p_master%nptcls])
-                call job_descr%set('deftab', trim(p_master%deftab))
-                call cline%set('deftab', trim(p_master%deftab))
+                if( cline%defined('oritab') )then
+                    call binwrite_oritab(p_master%oritab, os, [1,p_master%nptcls])
+                else if( cline%defined('deftab') )then
+                    call binwrite_oritab(p_master%deftab, os, [1,p_master%nptcls])
+                else
+                    p_master%deftab = 'deftab_from_distr_wflow'//METADATEXT
+                    call binwrite_oritab(p_master%deftab, os, [1,p_master%nptcls])
+                    call job_descr%set('deftab', trim(p_master%deftab))
+                    call cline%set('deftab', trim(p_master%deftab))
+                endif
             endif
         endif
         ! prepare Prime3D job description
@@ -1080,6 +1080,7 @@ contains
 
     subroutine exec_recvol_distr( self, cline )
         use simple_commander_rec
+        use simple_oris, only: oris
         class(recvol_distr_commander), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
         type(split_commander)              :: xsplit
@@ -1088,6 +1089,7 @@ contains
         type(cmdline)                      :: cline_volassemble
         character(len=STDLEN)              :: volassemble_output, str_state
         character(len=STDLEN), allocatable :: state_assemble_finished(:)
+        type(oris)                         :: os
         type(chash)                        :: job_descr
         integer                            :: state
         ! seed the random number generator
@@ -1098,12 +1100,26 @@ contains
         ! make master parameters
         call cline%delete('refine')
         p_master = params(cline, checkdistr=.false.)
+        ! make oritab
+        call os%new(p_master%nptcls)
         ! setup the environment for distributed execution
         call qenv%new(p_master)
         call cline%gen_job_descr(job_descr)
         if( .not. cline%defined('stktab') )then
             ! split stack
             call xsplit%execute(cline)
+        endif
+        ! eo partitioning
+        if( p_master%eo .ne. 'no' )then
+            call binread_oritab(p_master%oritab, os, [1,p_master%nptcls])
+            if( os%get_nevenodd() == 0 )then
+                if( p_master%tseries .eq. 'yes' )then
+                    call os%partition_eo(tseries=.true.)
+                else
+                    call os%partition_eo
+                endif
+                call binwrite_oritab(p_master%oritab, os, [1,p_master%nptcls])
+            endif
         endif
         ! schedule
         call qenv%gen_scripts_and_schedule_jobs(p_master, job_descr)

@@ -5,7 +5,6 @@ module simple_hadamard3D_matcher
 #include "simple_lib.f08"
 use simple_polarft_corrcalc, only: polarft_corrcalc
 use simple_prime3D_srch,     only: prime3D_srch
-use simple_classaverager,    only: classaverager
 use simple_ori,              only: ori
 use simple_build,            only: build
 use simple_params,           only: params
@@ -13,6 +12,7 @@ use simple_cmdline,          only: cmdline
 use simple_gridding,         only: prep4cgrid
 use simple_binoris_io,       only: binwrite_oritab
 use simple_hadamard_common   ! use all in there
+use simple_timer             ! use all in there
 implicit none
 
 public :: prime3D_find_resrange, prime3D_exec, gen_random_model
@@ -21,8 +21,13 @@ public :: preppftcc4align, prep_refs_pftcc4align, pftcc
 private
 #include "simple_local_flags.inc"
 
+logical, parameter              :: L_BENCH = .false.
 type(polarft_corrcalc)          :: pftcc
 type(prime3D_srch), allocatable :: primesrch3D(:)
+integer(timer_int_kind)         :: t_init, t_prep_pftcc, t_align, t_rec, t_tot
+real(timer_int_kind)            :: rt_init, rt_prep_pftcc, rt_align, rt_rec
+real(timer_int_kind)            :: rt_tot
+character(len=STDLEN)           :: benchfname
 
 contains
 
@@ -69,10 +74,16 @@ contains
         real       :: norm, corr_thresh, skewness, frac_srch_space
         real       :: extr_thresh, update_frac, reslim
         integer    :: iptcl, inptcls, istate, iextr_lim
-        integer    :: update_ind, nupdates_target, nupdates
+        integer    :: update_ind, nupdates_target, nupdates, fnr
         integer    :: statecnt(p%nstates)
+        logical    :: doprint
 
-        ! check that we have an even/odd partitioning
+        if( L_BENCH )then
+            t_init = tic()
+            t_tot  = t_init
+        endif
+
+        ! CHECK THAT WE HAVE AN EVEN/ODD PARTITIONING
         if( p%eo .ne. 'no' )then
             if( p%l_distr_exec )then
                 if( b%a%get_nevenodd() == 0 ) stop 'ERROR! no eo partitioning available; hadamard3D_matcher :: prime2D_exec'
@@ -174,9 +185,12 @@ contains
         else
             ! all done
         endif
+        if( L_BENCH ) rt_init = toc(t_init)
 
         ! PREPARE THE POLARFT_CORRCALC DATA STRUCTURE
+        if( L_BENCH ) t_prep_pftcc = tic()
         call preppftcc4align( b, p, cline )
+        if( L_BENCH ) rt_prep_pftcc = toc(t_prep_pftcc)
 
         ! INITIALIZE
         write(*,'(A,1X,I3)') '>>> PRIME3D DISCRETE STOCHASTIC SEARCH, ITERATION:', which_iter
@@ -201,6 +215,7 @@ contains
         call pftcc%memoize_ffts
         ! execute the search
         call del_file(p%outfile)
+        if( L_BENCH ) t_align = tic()
         select case(p%refine)
             case( 'snhc' )
                 !$omp parallel do default(shared) schedule(guided) private(iptcl) proc_bind(close)
@@ -309,7 +324,8 @@ contains
                 write(*,*) 'The refinement mode: ', trim(p%refine), ' is unsupported'
                 stop
         end select
-        call pftcc%kill
+        if( L_BENCH ) rt_align = toc(t_align)
+        
 
         ! PARTICLE REJECTION BASED ON ALIGNABILITY (SDEV OF ANGULAR ORIS)
         if( cline%defined('sdev_thres') )then
@@ -321,6 +337,7 @@ contains
         p%oritab = p%outfile
 
         ! VOLUMETRIC 3D RECONSTRUCTION
+        if( L_BENCH ) t_rec = tic()
         if( p%norec .eq. 'no' )then
             ! init volumes
             call preprecvols(b, p)
@@ -353,9 +370,8 @@ contains
             else
                 call norm_struct_facts(b, p, which_iter)
             endif
-            ! destruct volumes
-            call killrecvols(b, p)
         endif
+        if( L_BENCH ) rt_rec = toc(t_rec)
 
         ! DESTRUCT
         if( .not. p%l_distr_exec )then
@@ -363,7 +379,9 @@ contains
                 call primesrch3D(iptcl)%kill
             end do
             deallocate( primesrch3D )
+            call pftcc%kill
             call prime3D_oris%kill
+            call killrecvols(b, p)
         endif
 
         ! REPORT CONVERGENCE
@@ -374,6 +392,30 @@ contains
                 converged = b%conv%check_conv_het()
             else
                 converged = b%conv%check_conv3D(update_res)
+            endif
+        endif
+        if( L_BENCH )then
+            rt_tot  = toc(t_tot)
+            doprint = .true.
+            if( p%l_distr_exec .and. p%part /= 1 ) doprint = .false.
+            if( doprint )then
+                benchfname = 'HADAMARD3D_BENCH_ITER'//int2str_pad(which_iter,3)//'.txt'
+                call fopen(fnr, FILE=trim(benchfname), STATUS='REPLACE', action='WRITE')
+                write(fnr,'(a)') '*** TIMINGS (s) ***'
+                write(fnr,'(a,1x,f9.2)') 'initialisation       : ', rt_init
+                write(fnr,'(a,1x,f9.2)') 'pftcc preparation    : ', rt_prep_pftcc
+                write(fnr,'(a,1x,f9.2)') 'stochastic alignment : ', rt_align
+                write(fnr,'(a,1x,f9.2)') 'reconstruction       : ', rt_rec
+                write(fnr,'(a,1x,f9.2)') 'total time           : ', rt_tot
+                write(fnr,'(a)') ''
+                write(fnr,'(a)') '*** REATIVE TIMINGS (%) ***'
+                write(fnr,'(a,1x,f9.2)') 'initialisation       : ', (rt_init/rt_tot)        * 100.
+                write(fnr,'(a,1x,f9.2)') 'pftcc preparation    : ', (rt_prep_pftcc/rt_tot)  * 100.
+                write(fnr,'(a,1x,f9.2)') 'stochastic alignment : ', (rt_align/rt_tot)       * 100.
+                write(fnr,'(a,1x,f9.2)') 'reconstruction       : ', (rt_rec/rt_tot)        * 100.
+                write(fnr,'(a,1x,f9.2)') '% accounted for      : ',&
+                    &((rt_init+rt_prep_pftcc+rt_align+rt_rec)/rt_tot) * 100.
+                call fclose(fnr)
             endif
         endif
     end subroutine prime3D_exec
