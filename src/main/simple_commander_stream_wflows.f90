@@ -356,10 +356,11 @@ contains
             end subroutine add_newstacks
 
             subroutine remap_empty_classes
-                integer, allocatable :: fromtocls(:,:)
-                integer              :: icls
-                type(oris)           :: os
-                type(image)          :: img_cavg
+                integer, allocatable  :: fromtocls(:,:)
+                integer               :: icls
+                type(oris)            :: os
+                type(image)           :: img_cavg
+                character(len=STDLEN) :: stk
                 call os%new(nptcls_glob)
                 call binread_oritab(oritab_glob, os, [1, nptcls_glob])
                 call os%fill_empty_classes(ncls_glob, fromtocls)
@@ -368,11 +369,26 @@ contains
                     call binwrite_oritab(oritab_glob, os, [1, nptcls_glob])
                     call img_cavg%new([box_glob, box_glob,1], smpd_glob)
                     do icls = 1, size(fromtocls, dim=1)
+                        ! cavg
                         call img_cavg%read(trim(refs_glob), fromtocls(icls, 1))
                         call img_cavg%write(trim(refs_glob), fromtocls(icls, 2))
+                        ! even & odd
+                        stk = add2fbody(trim(refs_glob),p_master%ext,'_even')
+                        call img_cavg%read(stk, fromtocls(icls, 1))
+                        call img_cavg%write(stk, fromtocls(icls, 2))
+                        stk = add2fbody(trim(refs_glob),p_master%ext,'_odd')
+                        call img_cavg%read(stk, fromtocls(icls, 1))
+                        call img_cavg%write(stk, fromtocls(icls, 2))
                     enddo
+                    ! stack size preservation
                     call img_cavg%read(trim(refs_glob), ncls_glob)
-                    call img_cavg%write(trim(refs_glob), ncls_glob) ! to preserve size
+                    call img_cavg%write(trim(refs_glob), ncls_glob)
+                    stk = add2fbody(trim(refs_glob),p_master%ext,'_even')
+                    call img_cavg%read(stk, ncls_glob)
+                    call img_cavg%write(stk, ncls_glob)
+                    stk = add2fbody(trim(refs_glob),p_master%ext,'_odd')
+                    call img_cavg%read(stk, ncls_glob)
+                    call img_cavg%write(stk, ncls_glob)
                 endif
             end subroutine remap_empty_classes
 
@@ -385,6 +401,7 @@ contains
                 type(image)           :: img_cavg
                 integer, allocatable  :: fromtocls(:,:), cls(:), pops(:)
                 integer               :: icls, ncls_prev, n, iptcl, i, state
+                character(len=STDLEN) :: stk
                 call os%new(nptcls_glob)
                 call binread_oritab(oritab_glob, os, [1, nptcls_glob_prev])
                 n = nptcls_glob - nptcls_glob_prev
@@ -410,11 +427,26 @@ contains
                         ! references
                         call img_cavg%new([box_glob, box_glob,1], smpd_glob)
                         do icls = 1, size(fromtocls, dim=1)
-                            call img_cavg%read(trim(refs_glob), fromtocls(icls,1))
-                            call img_cavg%write(trim(refs_glob), fromtocls(icls,2))
+                            ! cavg
+                            call img_cavg%read(trim(refs_glob), fromtocls(icls, 1))
+                            call img_cavg%write(trim(refs_glob), fromtocls(icls, 2))
+                            ! even & odd
+                            stk = add2fbody(trim(refs_glob),p_master%ext,'_even')
+                            call img_cavg%read(stk, fromtocls(icls, 1))
+                            call img_cavg%write(stk, fromtocls(icls, 2))
+                            stk = add2fbody(trim(refs_glob),p_master%ext,'_odd')
+                            call img_cavg%read(stk, fromtocls(icls, 1))
+                            call img_cavg%write(stk, fromtocls(icls, 2))
                         enddo
+                        ! stack size preservation
                         call img_cavg%read(trim(refs_glob), ncls_glob)
                         call img_cavg%write(trim(refs_glob), ncls_glob)
+                        stk = add2fbody(trim(refs_glob),p_master%ext,'_even')
+                        call img_cavg%read(stk, ncls_glob)
+                        call img_cavg%write(stk, ncls_glob)
+                        stk = add2fbody(trim(refs_glob),p_master%ext,'_odd')
+                        call img_cavg%read(stk, ncls_glob)
+                        call img_cavg%write(stk, ncls_glob)
                         ! FRCs
                         if( p_master%match_filt.eq.'yes')then
                             call frcs_prev%new(ncls_glob_prev, box_glob, smpd_glob, state)
