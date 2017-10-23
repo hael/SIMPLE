@@ -772,6 +772,14 @@ contains
                 stop
             endif
         endif
+        ! turns off 3D weights when nstates>1 and not provided
+        if( self%nstates > 1 )then
+            if( cline%defined('weights3D') .and. self%weights3D.eq.'yes' )then
+                ! all good
+            else
+                self%weights3D = 'no'
+            endif
+        endif
         ! determines whether at least one volume is on the cmdline
         do i=1,self%nstates
             if( cline%defined( trim('vol')//int2str(i) ))vol_defined(i) = .true.

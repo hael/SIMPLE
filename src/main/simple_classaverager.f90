@@ -65,6 +65,7 @@ type classaverager
     ! calculators
     procedure          :: assemble_sums
     procedure, private :: calc_tfun_vals
+    procedure, private :: sampl_dens_correct
     procedure          :: merge_eos_and_norm
     procedure          :: calc_and_write_frcs
     procedure          :: eoavg
@@ -624,7 +625,6 @@ contains
                     call self%cavgs_odd(istate,icls)%add( batch_imgsum_odd)
                     call self%ctfsqsums_even(istate,icls)%add( batch_rhosum_even)
                     call self%ctfsqsums_odd(istate,icls)%add( batch_rhosum_odd)
-                    
                 enddo
                 ! class cleanup
                 deallocate(ptcls_inds, batches, iprecs, ioris)
@@ -673,17 +673,84 @@ contains
                 call self%ctfsqsums_merged(istate,icls)%add(self%ctfsqsums_odd(istate,icls))
                 ! (w*CTF)**2 density correction
                 call self%cavgs_even(istate,icls)%ctf_dens_correct(self%ctfsqsums_even(istate,icls))
+                !call self%sampl_dens_correct(self%cavgs_even(istate,icls), self%ctfsqsums_even(istate,icls))
                 call self%cavgs_even(istate,icls)%bwd_ft
                 call self%cavgs_even(istate,icls)%clip_inplace(self%ldim)
                 call self%cavgs_odd(istate,icls)%ctf_dens_correct(self%ctfsqsums_odd(istate,icls))
+                ! call self%sampl_dens_correct(self%cavgs_odd(istate,icls), self%ctfsqsums_odd(istate,icls))
                 call self%cavgs_odd(istate,icls)%bwd_ft
                 call self%cavgs_odd(istate,icls)%clip_inplace(self%ldim)
                 call self%cavgs_merged(istate,icls)%ctf_dens_correct(self%ctfsqsums_merged(istate,icls))
+                ! call self%sampl_dens_correct(self%cavgs_merged(istate,icls), self%ctfsqsums_merged(istate,icls))
                 call self%cavgs_merged(istate,icls)%bwd_ft
                 call self%cavgs_merged(istate,icls)%clip_inplace(self%ldim)
             end do
          end do
     end subroutine merge_eos_and_norm
+
+    !>  is for uneven distribution of orientations correction 
+    !>  from Pipe & Menon 1999
+    subroutine sampl_dens_correct( self, cavg, ctfsqsum, maxits )
+        use simple_gridding, only: mul_w_instr
+        use simple_kbinterpol,      only: kbinterpol
+        class(classaverager), intent(inout) :: self
+        class(image),         intent(inout) :: cavg
+        class(image),         intent(inout) :: ctfsqsum
+        integer,    optional, intent(in)    :: maxits
+        type(kbinterpol)     :: kbwin 
+        type(image)          :: W_img, Wprev_img
+        real                 :: val_prev, val, invrho
+        integer              :: h, k, lims(3,2),  phys(3), iter
+        integer              :: maxits_here
+        complex, parameter   :: one   = cmplx(1.,0.)
+        real,    parameter   :: winsz = 2.
+        maxits_here = GRIDCORR_MAXITS*2
+        if( present(maxits) )maxits_here = maxits
+        lims = cavg%loop_lims(2)
+        call W_img%new(self%ldim_pd, self%pp%smpd)
+        call Wprev_img%new(self%ldim_pd, self%pp%smpd)
+        call W_img%set_ft(.true.)
+        call Wprev_img%set_ft(.true.)
+        ! kernel
+        kbwin = kbinterpol(winsz, KBALPHA)
+        ! weights init to 1.
+        W_img = one
+        do iter = 1, maxits_here
+            Wprev_img  = W_img 
+            ! W <- W * rho
+            call W_img%mul(ctfsqsum)
+            ! W <- (W / rho) x kernel
+            call W_img%bwd_ft
+            call mul_w_instr(W_img, kbwin)
+            call W_img%fwd_ft
+            ! W <- Wprev / ((W/ rho) x kernel)
+            !$omp parallel do collapse(2) default(shared) schedule(static)&
+            !$omp private(h,k,phys,val,val_prev) proc_bind(close)
+            do h = lims(1,1),lims(1,2)
+                do k = lims(2,1),lims(2,2)
+                    phys     = W_img%comp_addr_phys([h, k, 0])
+                    val      = mycabs(W_img%get_cmat_at(phys)) 
+                    val_prev = real(Wprev_img%get_cmat_at(phys))
+                    val      = min(val_prev/val, 1.e20)
+                    call W_img%set_cmat_at( phys, cmplx(val, 0.)) 
+                end do
+            end do
+            !$omp end parallel do
+        enddo
+        ! Fourier comps / rho
+        !$omp parallel do collapse(2) default(shared) schedule(static)&
+        !$omp private(h,k,phys,invrho) proc_bind(close)
+        do h = lims(1,1),lims(1,2)
+            do k = lims(2,1),lims(2,2)
+                phys   = W_img%comp_addr_phys([h, k, 0])
+                invrho = real(W_img%get_cmat_at(phys)) !! Real(C) == Real(C*)
+                call cavg%mul_cmat_at(invrho,phys)
+            end do
+        end do
+        !$omp end parallel do        ! cleanup
+        call W_img%kill
+        call Wprev_img%kill
+    end subroutine sampl_dens_correct
 
     !>  \brief  calculates Fourier ring correlations
     subroutine calc_and_write_frcs( self, fname )

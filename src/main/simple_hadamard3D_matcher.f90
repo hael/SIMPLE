@@ -569,7 +569,7 @@ contains
                     call b%vol%fproject_polar(cnt, o, pftcc, iseven=.false.) ! polar central sections
                 end do
             else
-                call preprefvol(b, p, cline, s, p%vols_even(s), do_center, xyz )
+                call preprefvol(b, p, cline, s, p%vols(s), do_center, xyz )
                 do iref=1,p%nspace
                     cnt = cnt + 1
                     call progress(cnt, nrefs)

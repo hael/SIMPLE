@@ -21,7 +21,8 @@ type prime3D_srch
     class(oris),             pointer :: a_ptr               => null()   !< pointer to b%a (primary particle orientation table)
     class(oris),             pointer :: e_ptr               => null()   !< pointer to b%e (reference orientations)
     integer,                 pointer :: proj_space_inds(:)  => null()   !< projection space index array
-    integer,                 pointer :: srch_order(:)       => null()   !< stochastic search order
+    !integer,                 pointer :: srch_order(:)       => null()   !< stochastic search order
+    integer,            allocatable  :: srch_order(:)        !< stochastic search order
     logical,                 pointer :: state_exists_ptr(:) => null()   !< pointer to b%e (reference orientations)
     class(oris),             pointer :: o_refs              => null()   !< projection directions search space
     class(sym),              pointer :: se                  => null()   !< projection directions search space
@@ -134,7 +135,7 @@ contains
         self%e_ptr            => e
         self%se               => se
         self%proj_space_inds  => proj_space_inds
-        self%srch_order       => srch_order
+        !self%srch_order       => srch_order
         self%o_refs           => o_refs
         self%state_exists_ptr => state_exists
         self%iptcl       =  iptcl
@@ -857,7 +858,6 @@ contains
         type(ori)      :: o
         ! prepare discrete reforis
         ! The underlying principle here is that o_refs is congruent with pftcc
-        call self%o_refs%new( self%nrefs )          ! init references object
         cnt = 0
         do istate=1,self%nstates
             do iproj=1,self%nprojs
@@ -1359,7 +1359,7 @@ contains
             self%a_ptr            => null()
             self%e_ptr            => null()
             self%state_exists_ptr => null()
-            self%srch_order       => null()
+            !self%srch_order       => null()
             self%proj_space_inds  => null()
             self%o_refs           => null()
             self%se               => null()

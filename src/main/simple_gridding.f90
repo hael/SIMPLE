@@ -40,7 +40,7 @@ contains
         endif
         ! make the window
         allocate( w1(lims(1,1):lims(1,2)), w2(lims(2,1):lims(2,2)),&
-        w3(lims(3,1):lims(3,2)), stat=alloc_stat )
+        w3(lims(3,1):lims(3,2)), source=1., stat=alloc_stat )
         allocchk("In: divide_w_instr; simple_gridding")
         ! calculate the values
         call calc_w(lims(1,:), ldim(1), w1)
@@ -49,9 +49,8 @@ contains
             if(img%is_3d()) w3 = w1
         else
             call calc_w(lims(2,:), ldim(2), w2)
-            call calc_w(lims(3,:), ldim(3), w3)
+            if( img%is_3d() )call calc_w(lims(3,:), ldim(3), w3)
         endif
-        if( img%is_2d() ) w3 = 1.
         ! divide the image
         !$omp parallel do collapse(3) schedule(static) default(shared) private(i,j,k) proc_bind(close)
         do i=lims(1,1),lims(1,2)
@@ -101,16 +100,16 @@ contains
         lims(:,2) = ldim
         ! make the window
         allocate( w1(lims(1,1):lims(1,2)), w2(lims(2,1):lims(2,2)),&
-        w3(lims(3,1):lims(3,2)), stat=alloc_stat )
-        allocchk("In: divide_w_instr; simple_gridding w1 w2")
+        w3(lims(3,1):lims(3,2)), source=1., stat=alloc_stat )
+        allocchk("In: divide_w_instr; simple_gridding")
         ! calculate the values
         call calc_w(lims(1,:), ldim(1), w1)
         if( vol%square_dims() )then
             w2 = w1
-            w3 = w1
+            if( vol%is_3d() ) w3 = w1
         else
             call calc_w(lims(2,:), ldim(2), w2)
-            call calc_w(lims(3,:), ldim(3), w3)
+            if( vol%is_3d() )call calc_w(lims(3,:), ldim(3), w3)
         endif
         ! divide the image
         !$omp parallel do collapse(3) schedule(static) default(shared) private(i,j,k) proc_bind(close)
