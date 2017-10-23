@@ -186,28 +186,28 @@ contains
         nrefs = primesrch3D%get_ntotrefs()
         nrots = primesrch3D%get_nrots()
         ! refine=no,shc; states=1
-        do i=1,NPROJS
-            call primesrch3D%new(i, pftcc, b%a, b%e, p)
-            o = b%a%get_ori(i)
-            o_saved = o 
-            call o%rnd_inpl( p%trs )
-            call o%set('proj',real(i))
-            state = nint(o%get('state'))
-            e3    = o%e3get()
-            ind   = pftcc%get_roind( 360.-e3 )
-            x     = o%get('x')
-            y     = o%get('y')
-            proj  = b%e%find_closest_proj( o, 1 )
-            call b%a%set_ori(i, o)
-            call primesrch3D%prep4srch(p%lp )
-            if(state.ne.primesrch3D%get_prevstate())stop 'Failed simple_prime3D_srch_tester:: test_prep4srch 1'
-            shvec = primesrch3D%get_prevshvec()
-            if( x.ne.shvec(1) )stop 'Failed simple_prime3D_srch_tester:: test_prep4srch 2'
-            if( y.ne.shvec(2) )stop 'Failed simple_prime3D_srch_tester:: test_prep4srch 3'
-            if( ind.ne.primesrch3D%get_prevroind() )stop 'Failed simple_prime3D_srch_tester:: test_prep4srch 4'
-            if( proj.ne.primesrch3d%get_prevref() )stop 'Failed simple_prime3D_srch_tester:: test_prep4srch 5'
-            call b%a%set_ori(i,o_saved)
-        enddo
+        ! do i=1,NPROJS
+        !     call primesrch3D%new(i, pftcc, b%a, b%e, p)
+        !     o = b%a%get_ori(i)
+        !     o_saved = o 
+        !     call o%rnd_inpl( p%trs )
+        !     call o%set('proj',real(i))
+        !     state = nint(o%get('state'))
+        !     e3    = o%e3get()
+        !     ind   = pftcc%get_roind( 360.-e3 )
+        !     x     = o%get('x')
+        !     y     = o%get('y')
+        !     proj  = b%e%find_closest_proj( o, 1 )
+        !     call b%a%set_ori(i, o)
+        !     call primesrch3D%prep4srch(p%lp )
+        !     if(state.ne.primesrch3D%get_prevstate())stop 'Failed simple_prime3D_srch_tester:: test_prep4srch 1'
+        !     shvec = primesrch3D%get_prevshvec()
+        !     if( x.ne.shvec(1) )stop 'Failed simple_prime3D_srch_tester:: test_prep4srch 2'
+        !     if( y.ne.shvec(2) )stop 'Failed simple_prime3D_srch_tester:: test_prep4srch 3'
+        !     if( ind.ne.primesrch3D%get_prevroind() )stop 'Failed simple_prime3D_srch_tester:: test_prep4srch 4'
+        !     if( proj.ne.primesrch3d%get_prevref() )stop 'Failed simple_prime3D_srch_tester:: test_prep4srch 5'
+        !     call b%a%set_ori(i,o_saved)
+        ! enddo
         ! other cases
         VerbosePrint 'end setup_prep4srch' 
     end subroutine test_prep4srch
@@ -219,41 +219,41 @@ contains
         integer   :: nrefs, nrots,i,j !, ind,state, proj
         nrefs = primesrch3D%get_ntotrefs()
         nrots = primesrch3D%get_nrots()
-        if( p%refine.eq.'no' .and. p%ctf.eq.'no' )then
-            ! refine=no; states=1
-            do j=1,10
-                do i=1,p%nptcls
-                    call primesrch3D%new(i, pftcc, b%a, b%e, p)
-                    o = b%a%get_ori(i)
-                    prev_corr = ran3()
-                    call b%a%set(i,'corr',prev_corr)
-                    call primesrch3D%prep4srch(p%lp )
-                    corr = primesrch3D%get_prevcorr()
-                    if( p%nstates==1 )then
-                        if( abs(2.* corr - prev_corr) < 0.0001 )then
-                            print *, 'corr = ', corr
-                            stop 'Failed in test_prepcorr4srch::simple_prime3D_srch_tester 1'
-                        endif
-                    else
+        ! if( p%refine.eq.'no' .and. p%ctf.eq.'no' )then
+        !     ! refine=no; states=1
+        !     do j=1,10
+        !         do i=1,p%nptcls
+        !             call primesrch3D%new(i, pftcc, b%a, b%e, p)
+        !             o = b%a%get_ori(i)
+        !             prev_corr = ran3()
+        !             call b%a%set(i,'corr',prev_corr)
+        !             call primesrch3D%prep4srch(p%lp )
+        !             corr = primesrch3D%get_prevcorr()
+        !             if( p%nstates==1 )then
+        !                 if( abs(2.* corr - prev_corr) < 0.0001 )then
+        !                     print *, 'corr = ', corr
+        !                     stop 'Failed in test_prepcorr4srch::simple_prime3D_srch_tester 1'
+        !                 endif
+        !             else
                         
-                        if( corr < 0.99 )then
-                            print *, 'corr = ', corr
-                            stop 'Failed in test_prepcorr4srch::simple_prime3D_srch_tester 2'
-                        endif
-                    endif
-                enddo
-            enddo
-        else
-            do i=1,p%nptcls
-                call primesrch3D%new(i, pftcc, b%a, b%e, p)
-                call primesrch3D%prep4srch(p%lp )
-                corr = primesrch3D%get_prevcorr()
-                if( corr < 0.99 )then
-                    print *, 'corr = ', corr
-                    stop 'Failed in test_prepcorr4srch::simple_prime3D_srch_tester 3'
-                endif
-            enddo
-        endif
+        !                 if( corr < 0.99 )then
+        !                     print *, 'corr = ', corr
+        !                     stop 'Failed in test_prepcorr4srch::simple_prime3D_srch_tester 2'
+        !                 endif
+        !             endif
+        !         enddo
+        !     enddo
+        ! else
+        !     do i=1,p%nptcls
+        !         call primesrch3D%new(i, pftcc, b%a, b%e, p)
+        !         call primesrch3D%prep4srch(p%lp )
+        !         corr = primesrch3D%get_prevcorr()
+        !         if( corr < 0.99 )then
+        !             print *, 'corr = ', corr
+        !             stop 'Failed in test_prepcorr4srch::simple_prime3D_srch_tester 3'
+        !         endif
+        !     enddo
+        ! endif
         VerbosePrint 'end setup_prepcorr4srch' 
     end subroutine test_prepcorr4srch
 
@@ -265,60 +265,59 @@ contains
         !real,allocatable :: vals(:), test_vals(:)
         !integer,allocatable :: ivals(:), test_ivals(:)
         integer,allocatable :: srch_order(:),nnmat(:,:)
-        ! real :: euldist
         select case(p%refine)
             case('no','shc')
-                if( p%nstates==1 )then
-
-                else
-                    test_os = oris( p%nspace*p%nstates )
-                    do iptcl=1,p%nptcls
-                        call primesrch3D%new(iptcl, pftcc, b%a, b%e, p)
-                        call primesrch3D%prep4srch(p%lp)
-                        test_os = primesrch3D%get_o_refs( p%nspace*p%nstates )
-                        do ref=1,p%nspace
-                            oref = test_os%get_ori(ref)
-                            do s=1,NSTATES-1
-                                orefs = test_os%get_ori(s*NPROJS+ref)
-                                if( (orefs.euldist.oref)>.001)stop 'Failed test_prep_reforis 21'
-                            enddo
-                        enddo
-                        call test_os%nearest_neighbors( NSTATES, nnmat )
-                        do ref=1,p%nspace
-                            oref = test_os%get_ori(ref)
-                            do s=1,NSTATES
-                                orefs = test_os%get_ori(nnmat(ref,s))
-                                if( (orefs.euldist.oref)>.001 .or. nint(oref%get('class')).ne.nint(orefs%get('class')) &
-                                    & .or. nint(orefs%get('state'))>NSTATES )stop 'Failed test_prep_reforis 22'
-                            enddo
-                        enddo
-                        deallocate(nnmat)
-                        call test_os%kill
-                    enddo
-                endif
-                srch_order = primesrch3D%get_srch_order()
-                if( minval(srch_order)<1 )stop 'Failed test_prep_reforis 23'
-                if( maxval(srch_order)>primesrch3D%get_ntotrefs() )stop 'Failed test_prep_reforis 24'
-                do i=1,primesrch3D%get_ntotrefs()
-                    if( count(srch_order==i) /= 1 )stop 'Failed test_prep_reforis 25'
-                enddo
-                deallocate( srch_order )
+                ! if( p%nstates==1 )then
+                ! 
+                ! else
+                !     test_os = oris( p%nspace*p%nstates )
+                !     do iptcl=1,p%nptcls
+                !         call primesrch3D%new(iptcl, pftcc, b%a, b%e, p)
+                !         call primesrch3D%prep4srch(p%lp)
+                !         test_os = primesrch3D%get_o_refs( p%nspace*p%nstates )
+                !         do ref=1,p%nspace
+                !             oref = test_os%get_ori(ref)
+                !             do s=1,NSTATES-1
+                !                 orefs = test_os%get_ori(s*NPROJS+ref)
+                !                 if( (orefs.euldist.oref)>.001)stop 'Failed test_prep_reforis 21'
+                !             enddo
+                !         enddo
+                !         call test_os%nearest_neighbors( NSTATES, nnmat )
+                !         do ref=1,p%nspace
+                !             oref = test_os%get_ori(ref)
+                !             do s=1,NSTATES
+                !                 orefs = test_os%get_ori(nnmat(ref,s))
+                !                 if( (orefs.euldist.oref)>.001 .or. nint(oref%get('class')).ne.nint(orefs%get('class')) &
+                !                     & .or. nint(orefs%get('state'))>NSTATES )stop 'Failed test_prep_reforis 22'
+                !             enddo
+                !         enddo
+                !         deallocate(nnmat)
+                !         call test_os%kill
+                !     enddo
+                ! endif
+                ! srch_order = primesrch3D%get_srch_order()
+                ! if( minval(srch_order)<1 )stop 'Failed test_prep_reforis 23'
+                ! if( maxval(srch_order)>primesrch3D%get_ntotrefs() )stop 'Failed test_prep_reforis 24'
+                ! do i=1,primesrch3D%get_ntotrefs()
+                !     if( count(srch_order==i) /= 1 )stop 'Failed test_prep_reforis 25'
+                ! enddo
+                ! deallocate( srch_order )
             case('neigh','shcneigh')
-                if( p%nstates==1 )then
-                    do iptcl=1,p%nptcls
-                        call primesrch3D%new(iptcl, pftcc, b%a, b%e, p)
-                        o = b%a%get_ori( iptcl )
-                        call primesrch3D%prep4srch(p%lp, b%nnmat)
-                        srch_order = primesrch3D%get_srch_order()
-                        if( minval(srch_order)<1 )stop 'Failed test_prep_reforis 32'
-                        if( maxval(srch_order)>primesrch3D%get_ntotrefs() )stop 'Failed test_prep_reforis 33'
-                        do ind=1,p%nnn
-                            ref = srch_order(ind)
-                            if( count(srch_order==ref) /= 1 )stop 'Failed test_prep_reforis 34'
-                        enddo
-                        deallocate( srch_order )
-                    enddo
-                endif    
+                ! if( p%nstates==1 )then
+                !     do iptcl=1,p%nptcls
+                !         call primesrch3D%new(iptcl, pftcc, b%a, b%e, p)
+                !         o = b%a%get_ori( iptcl )
+                !         call primesrch3D%prep4srch(p%lp, b%nnmat)
+                !         srch_order = primesrch3D%get_srch_order()
+                !         if( minval(srch_order)<1 )stop 'Failed test_prep_reforis 32'
+                !         if( maxval(srch_order)>primesrch3D%get_ntotrefs() )stop 'Failed test_prep_reforis 33'
+                !         do ind=1,p%nnn
+                !             ref = srch_order(ind)
+                !             if( count(srch_order==ref) /= 1 )stop 'Failed test_prep_reforis 34'
+                !         enddo
+                !         deallocate( srch_order )
+                !     enddo
+                ! endif    
             case DEFAULT
                 stop 'not implemented yet'
         end select

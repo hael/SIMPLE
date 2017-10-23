@@ -63,7 +63,9 @@ contains
         class(cmdline), intent(inout) :: cline
         integer,        intent(in)    :: which_iter
         logical,        intent(inout) :: update_res, converged
-        logical,          allocatable :: to_update(:)
+        integer,          allocatable :: proj_space_inds(:,:), proj_srch_order(:,:)
+        logical,          allocatable :: state_exists(:), to_update(:)
+        type(oris),       allocatable :: reforis(:)
         type(oris) :: prime3D_oris
         type(ori)  :: orientation
         real       :: norm, corr_thresh, skewness, frac_srch_space
@@ -189,11 +191,29 @@ contains
         endif
 
         ! STOCHASTIC IMAGE ALIGNMENT
+        ! reference projections indices, here to avoid online allocation in prime3d_srch
+        allocate(reforis(p%fromp:p%top))
+        do iptcl = p%fromp, p%top
+            call reforis(iptcl)%new(p%nstates*p%nspace)
+        enddo
+        ! reference projections indices, here to avoid online allocation in prime3d_srch
+        allocate(proj_space_inds(p%fromp:p%top,1:p%nspace*p%nstates), source=0)
+        ! reference projection search order, here to avoid online allocation in prime3d_srch
+        allocate(proj_srch_order(p%fromp:p%top,1:p%nspace*p%nstates), source=0)
+        ! states existence
+        if( p%oritab.ne.'' )then
+            state_exists = b%a%states_exist(p%nstates)
+        else
+            allocate(state_exists(p%nstates), source=.true.)
+        endif
         ! create the search objects, need to re-create every round because parameters are changing
         allocate( primesrch3D(p%fromp:p%top) , stat=alloc_stat)
         allocchk("In hadamard3D_matcher::prime3D_exec primesrch3D objects ")
         do iptcl=p%fromp,p%top
-            call primesrch3D(iptcl)%new(iptcl, pftcc, b%a, b%e, p)
+            call primesrch3D(iptcl)%new(iptcl, pftcc, b%a, b%e, p, b%se,&
+                &proj_space_inds(iptcl,1:p%nspace*p%nstates),&
+                &proj_srch_order(iptcl,1:p%nspace*p%nstates),&
+                &reforis(iptcl), state_exists)
         end do
         ! apply CTF to particles
         if( p%ctf .ne. 'no' ) call pftcc%apply_ctf_to_ptcls(b%a)
@@ -361,8 +381,9 @@ contains
         if( .not. p%l_distr_exec )then
             do iptcl=p%fromp,p%top
                 call primesrch3D(iptcl)%kill
+                call reforis(iptcl)%kill
             end do
-            deallocate( primesrch3D )
+            deallocate( primesrch3D, state_exists, proj_space_inds, reforis )
             call prime3D_oris%kill
         endif
 

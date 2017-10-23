@@ -10,20 +10,18 @@ public :: simplex_pftcc_opt
 private
 #include "simple_local_flags.inc"
 
+integer, parameter :: NDIM = 2
+
 type :: simplex_pftcc_opt
     private
-    real, allocatable :: p(:,:)         !< vertices of the simplex
-    real, allocatable :: y(:)           !< cost function vals
-    real, allocatable :: pb(:)          !< best point
-    real              :: yb=0.          !< best cost function value
-    logical           :: exists=.false. !< to indicate existence
+    real      :: p(NDIM+1,NDIM) !< vertices of the simplex
+    real      :: y(NDIM+1)      !< cost function vals
+    real      :: pb(NDIM)       !< best point
+    real      :: yb=0.          !< best cost function value
   contains
     procedure :: new
     procedure :: minimize
-    procedure :: kill
 end type simplex_pftcc_opt
-
-integer, parameter :: NDIM = 2
 
 contains
 
@@ -33,13 +31,9 @@ contains
         class(simplex_pftcc_opt), intent(inout) :: self !< instance
         class(opt_spec),          intent(inout) :: spec !< specification
         real    :: x
-        call self%kill
         if(spec%ndim .ne. NDIM) stop 'Inconsistent dimensions in simple_simplex_pftcc_opt; new'
-        allocate(self%p(NDIM+1,NDIM), self%y(NDIM+1), self%pb(NDIM), stat=alloc_stat)
-        allocchk("In:simple_simplex_pftcc_opt::new simplex_opt_c")
         ! initialize best cost to huge number
         self%yb = huge(x)
-        self%exists = .true. ! indicates existence
     end subroutine new
 
     !> \brief  restarted simplex minimization
@@ -51,7 +45,7 @@ contains
         class(opt_spec),          intent(inout) :: spec         !< specification
         class(pftcc_opt),         intent(inout) :: funcontainer !< container for the cost function
         real,                     intent(out)   :: lowest_cost  !< lowest cost
-        real, allocatable :: lims_dyn(:,:)
+        real              :: lims_dyn(NDIM,2)
         integer           :: i, avgniter
         integer           :: niters(spec%nrestarts)
         logical           :: arezero(NDIM)
@@ -74,17 +68,17 @@ contains
         self%yb     = funcontainer%costfun(self%pb)
         spec%nevals = spec%nevals + 1
         ! initialise dynamic bounds
-        if( allocated(spec%limits_init) ) allocate(lims_dyn(NDIM,2), source=spec%limits_init)
+        if(allocated(spec%limits_init))lims_dyn(:NDIM,:) = spec%limits_init
         ! run nrestarts
         do i=1,spec%nrestarts
-            if( allocated(lims_dyn) )then
+            if( allocated(spec%limits_init) )then
                 call init( lims_dyn )
             else
                 call init( spec%limits )
             endif
             ! run the amoeba routine
             call amoeba_pftcc_opt(self%p,self%y,self%pb,self%yb,spec%ftol,funcontainer,niters(i),spec%maxits,spec%nevals)
-            if( allocated(lims_dyn) )then
+            if( allocated(spec%limits_init) )then
                 ! movie the shift limits to around the best point
                 ! left limit
                 lims_dyn(:,1) = self%pb - (lims_dyn(:,2) - lims_dyn(:,1)) / 2.0
@@ -123,15 +117,6 @@ contains
             end subroutine init
 
     end subroutine minimize
-
-    !> \brief  is a destructor
-    subroutine kill( self )
-        class(simplex_pftcc_opt), intent(inout) :: self
-        if( allocated(self%p) )  deallocate(self%p)
-        if( allocated(self%y) )  deallocate(self%y)
-        if( allocated(self%pb) ) deallocate(self%pb)
-        self%exists = .false.
-    end subroutine kill
 
     !> \brief  is a private optimisation routine
     subroutine amoeba_pftcc_opt(p,y,pb,yb,ftol,funcontainer,iter,itmax,nevals)
