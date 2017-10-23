@@ -2,7 +2,7 @@
 module simple_stat
 use simple_defs ! singleton
 use simple_syslib, only: alloc_errchk
-use simple_math, only: hpsort, median
+use simple_math,   only: hpsort, median
 implicit none
 
 private :: moment_1, moment_2, moment_3, normalize_1, normalize_2, normalize_3

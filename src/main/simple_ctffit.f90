@@ -48,10 +48,10 @@ contains
             stop 'invalid defocus range; simple_ctffit :: new'
         endif
       	if( resrange(1) > resrange(2) )then
-              hp = resrange(1)
-              lp = resrange(2)
+            hp = resrange(1)
+            lp = resrange(2)
       	else
-              stop 'invalid resolution range; simple_ctffit :: new'
+            stop 'invalid resolution range; simple_ctffit :: new'
       	endif
         select case(trim(phaseplate))
             case('yes')
@@ -85,8 +85,8 @@ contains
             limits(4,1)   = 0.
             limits(4,2)   = 3.15 ! little over pi as max lim
         endif
-        call ospec_de%specify('de', ndim, limits=limits, maxits=400)
-        call ospec_simplex%specify('simplex', ndim, limits=limits, maxits=60, nrestarts=3)
+        call ospec_de%specify('de', ndim, limits=limits(1:ndim,:), maxits=400)
+        call ospec_simplex%specify('simplex', ndim, limits=limits(1:ndim,:), maxits=60, nrestarts=3)
         if( l_phaseplate )then
             call ospec_de%set_costfun(ctffit_cost_phaseplate)
             call ospec_simplex%set_costfun(ctffit_cost_phaseplate)
@@ -98,11 +98,13 @@ contains
         call simplexsrch%new(ospec_de)
   	end subroutine ctffit_init
 
-  	subroutine ctffit_srch( dfx, dfy, angast, phshift, cc, diagfname )
-        real,             intent(out) :: dfx, dfy, angast, phshift, cc
+  	subroutine ctffit_srch( dfx, dfy, angast, phshift, cc, ctfres, diagfname )
+        real,             intent(out) :: dfx, dfy, angast, phshift, cc, ctfres
         character(len=*), intent(in)  :: diagfname
-        real        :: cost, df, df_step, cost_lowest, dfstep
-        type(image) :: pspec_half_n_half
+        real              :: cost, df, df_step, cost_lowest, dfstep
+        real, allocatable :: frc(:)
+        type(image)       :: pspec_half_n_half
+        integer           :: find
         dfstep = (df_max - df_min) / 100.
         if( l_phaseplate )then
             ! do a first grid search assuming no astigmatism
@@ -150,8 +152,12 @@ contains
         ! phshift = 0.
         ! if( l_phaseplate ) phshift = ospec_simplex%x(4)
 
-        ! make a half-n-half diagnostic
+        ! calculate CTFres diagnostic
         call tfun%ctf2pspecimg(pspec_ctf, dfx, dfy, angast, phshift)
+        frc    = pspec_ctf%frc_pspec(pspec_ctf)
+        find   = get_lplim_at_corr(frc, 0.5)
+        ctfres = pspec_ctf%get_lp(find)
+        ! make a half-n-half diagnostic
         call pspec_ctf%norm
         call pspec_ref%norm
         call pspec_ctf%mul(imgmsk)

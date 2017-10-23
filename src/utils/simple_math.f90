@@ -198,20 +198,6 @@ contains
         deg = (rad/DPI)*180.d0
     end function rad2deg_2
 
-    !>   converts from correlation to euclidean distance
-    ! pure function corr2dist( corr ) result( dist )
-    !     real, intent(in) :: corr   !< query correlation
-    !     real :: dist
-    !     dist = 1. - corr
-    ! end function corr2dist
-
-    ! !>   converts from euclidean distance to correlation
-    ! pure function dist2corr( dist ) result( corr )
-    !     real, intent(in) :: dist  !< query distance
-    !     real :: corr
-    !     corr = dist + 1
-    ! end function
-
     !>   to check if val is even
     elemental logical function is_even_1( val )
         integer, intent(in) :: val  !< query val

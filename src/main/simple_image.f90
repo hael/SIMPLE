@@ -252,6 +252,7 @@ type :: image
     procedure          :: dampen_central_cross
     procedure          :: subtr_backgr
     procedure          :: resmsk
+    procedure          :: frc_pspec
     procedure          :: mask
     procedure          :: neg
     procedure          :: pad
@@ -5262,46 +5263,6 @@ contains
         self%ft = .false.
     end subroutine gauimg
 
-
-
-    ! function spectrum_box_convolute( self, min_rad_sq ) result( boxconv )
-    !     class(image), intent(in) :: self
-    !     type(image) :: boxconv
-    !     real :: h, k, half_boxsz
-
-    !     call boxconv%new(self%ldim, self%smpd)
-    !     half_boxsz = real(self%ldim(1))/2.0
-
-
-    !     h = -real(self%ldim(1))/2.
-    !     do i=1,self%ldim(1)
-
-    !         hh = h * h
-
-    !         k = -real(self%ldim(2))/2.
-    !         do i=1,self%ldim(1)
-
-    !             kk = k * k
-    !             rad_sq = hh + kk
-
-    !             if( rad_sq <= min_rad_sq )then
-    !                 boxconv%rmat(i,j,1) = self%rmat(i,j,1)
-    !             else
-    !                 boxconv%rmat(i,j,1) = 0.
-
-
-    !             endif
-
-
-    !             k = k + 1.
-    !         end do
-
-    !         h = h + 1.
-    !     end do
-
-
-    ! end function spectrum_box_convolute
-
     !> \brief fwd_ft  forward Fourier transform
     !!
     subroutine fwd_ft( self )
@@ -5447,6 +5408,42 @@ contains
         end do
     end subroutine resmsk
 
+    function frc_pspec( self1, self2 ) result( frc )
+        class(image), intent(in) :: self1, self2
+        real              :: cis(self1%ldim(1)),cjs(self2%ldim(2)),xt,yt
+        integer           :: i,j,sh,nyq
+        real, allocatable :: ax(:),ay(:),norm(:),sxx(:),syy(:),sxy(:),frc(:)
+        if( .not. (self1.eqdims.self2) ) stop 'ERROR, non-equal dimensions; image :: frc_pspec'
+        forall(i=1:self1%ldim(1)) cis(i) = -real(self1%ldim(1)-1)/2. + real(i-1)
+        forall(i=1:self1%ldim(2)) cjs(i) = -real(self1%ldim(2)-1)/2. + real(i-1)
+        nyq = nint(maxval(cis)-1.0)
+        allocate(ax(nyq),ay(nyq),norm(nyq),sxx(nyq),syy(nyq),sxy(nyq),frc(nyq),source=0.)
+        do i=1,self1%ldim(1)/2
+            do j=1,self1%ldim(2)/2          
+                sh       = nint(hyp(cis(i),cjs(j)))
+                if( sh > nyq .or. sh < 1 ) cycle
+                ax(sh)   = ax(sh)   + self1%rmat(i,j,1)
+                ay(sh)   = ay(sh)   + self2%rmat(i,j,1)
+                norm(sh) = norm(sh) + 1.0
+            end do
+        end do
+        where( norm > 0. ) ax = ax / norm
+        where( norm > 0. ) ay = ay / norm
+        do i=1,self1%ldim(1)/2
+            do j=1,self1%ldim(2)/2       
+                sh      = nint(hyp(cis(i),cjs(j)))
+                if( sh > nyq .or. sh < 1 ) cycle
+                xt      = self1%rmat(i,j,1) - ax(sh)
+                yt      = self2%rmat(i,j,1) - ay(sh)
+                sxx(sh) = sxx(sh) + xt * xt
+                syy(sh) = syy(sh) + yt * yt
+                sxy(sh) = sxy(sh) + xt * yt
+            end do
+        end do
+        where(sxx > 0. .and. syy > 0.) frc = sxy / sqrt(sxx * syy)
+        deallocate(ax, ay, norm, sxx, syy, sxy)
+    end function frc_pspec
+
     !>  \brief  an image shifter to prepare for Fourier transformation
     subroutine shift_phorig( self )
         class(image), intent(inout) :: self
@@ -5567,6 +5564,10 @@ contains
             if( imgout_present ) call imgout%bwd_ft
         endif
     end subroutine shift
+
+
+
+
 
     !> \brief mask  is for spherical masking
     !! \param mskrad mask radius
