@@ -43,7 +43,7 @@ end type rank_cavgs_commander
 contains
 
     subroutine exec_makecavgs( self, cline )
-        use simple_classaverager,   only: classaverager
+        use simple_classaverager, only: classaverager
         class(makecavgs_commander), intent(inout) :: self
         class(cmdline),             intent(inout) :: cline
         type(params)        :: p
@@ -137,9 +137,9 @@ contains
                 call cavger%write(p%refs_even, 'even'  )
                 call cavger%write(p%refs_odd,  'odd'   )
             else
-                call cavger%write('startcavgs'//p%ext,      'merged')
-                call cavger%write('startcavgs_even'//p%ext, 'even'  )
-                call cavger%write('startcavgs_odd'//p%ext,  'odd'   )
+                call cavger%write('startcavgs'      //p%ext, 'merged')
+                call cavger%write('startcavgs_even' //p%ext, 'even'  )
+                call cavger%write('startcavgs_odd'  //p%ext, 'odd'   )
             endif
         endif
         call cavger%kill
@@ -209,18 +209,15 @@ contains
             p%refs_even = 'cavgs_iter'//int2str_pad(p%which_iter,3)//'_even'//p%ext
             p%refs_odd  = 'cavgs_iter'//int2str_pad(p%which_iter,3)//'_odd'//p%ext
             if( .not. cline%defined('frcs') ) p%frcs  = 'frcs_iter'//int2str_pad(p%which_iter,3)//'.bin'
-            call cavger%calc_and_write_frcs(p%frcs)
-            call gen2Dclassdoc( b, p, 'classdoc.txt')
-            call cavger%eoavg
         else if( .not. cline%defined('refs') )then
             p%refs      = 'startcavgs'//p%ext
             p%refs_even = 'startcavgs_even'//p%ext
             p%refs_odd  = 'startcavgs_odd'//p%ext
             if( .not. cline%defined('frcs') ) p%frcs  = 'frcs.bin'
-            call cavger%calc_and_write_frcs(p%frcs)
-            call gen2Dclassdoc( b, p, 'classdoc.txt')
-            call cavger%eoavg
         endif
+        call cavger%calc_and_write_frcs(p%frcs)
+        call gen2Dclassdoc( b, p, 'classdoc.txt')
+        call cavger%eoavg
         call cavger%write(trim(p%refs),      'merged')
         call cavger%write(trim(p%refs_even), 'even'  )
         call cavger%write(trim(p%refs_odd),  'odd'   )
@@ -228,7 +225,7 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_CAVGASSEMBLE NORMAL STOP ****', print_simple=.false.)
         ! indicate completion (when run in a qsys env)
-        call simple_touch('CAVGASSEMBLE_FINISHED', errmsg='In: commander_rec :: eo_volassemble ')
+        call simple_touch('CAVGASSEMBLE_FINISHED', errmsg='In: commander_rec :: eo_cavgassemble ')
     end subroutine exec_cavgassemble
 
     subroutine exec_check2D_conv( self, cline )

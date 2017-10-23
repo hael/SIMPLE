@@ -165,7 +165,7 @@ contains
             call b%a%rnd_states(p%nstates)
             if( p%nstates < 2 ) stop 'Nonsensical to have nstates < 2; simple_multiptcl_init'
         endif
-        if( p%norec .eq. 'no' )then
+        if( p%norec .ne. 'yes' )then
             if( cline%defined('lp') )then
                 call b%build_rec_tbox(p)
                 p%eo = 'no'

@@ -64,7 +64,7 @@ contains
         character(len=:), allocatable :: fname, finished_fname
         real, allocatable             :: res05s(:), res0143s(:)
         real                          :: res
-        integer                       :: part, s, n, ss, state, ldim(3)
+        integer                       :: part, s, n, ss, state, ldim(3), find4eoavg
         p = params(cline)                   ! parameters generated
         call b%build_general_tbox(p, cline) ! general objects built
         call b%build_eo_rec_tbox(p)         ! reconstruction toolbox built
@@ -96,7 +96,7 @@ contains
                 call assemble(fname)
                 deallocate(fname)
             end do
-            call normalize('recvol_state'//int2str_pad(state,2))
+            call correct_for_sampling_density_and_estimate_res('recvol_state'//int2str_pad(state,2))
             if( cline%defined('state') )exit
         end do
         ! set the resolution limit according to the worst resolved model
@@ -123,29 +123,39 @@ contains
                 call b%eorecvol%sum(eorecvol_read)
             end subroutine assemble
 
-            subroutine normalize( recname )
+            subroutine correct_for_sampling_density_and_estimate_res( recname )
                 use simple_filterer, only: gen_anisotropic_optlp
                 character(len=*), intent(in) :: recname
-                character(len=STDLEN) :: volname
-                character(len=32)     :: eonames(2)
-                volname = trim(recname)//trim(p%ext)
-                call b%eorecvol%sum_eos
-                ! anisotropic resolution model
+                character(len=STDLEN)        :: volname
+                character(len=32)            :: eonames(2)
+                volname    = trim(recname)//trim(p%ext)
                 eonames(1) = trim(recname)//'_even'//trim(p%ext)
                 eonames(2) = trim(recname)//'_odd'//trim(p%ext)
-                if( p%eo .ne. 'no' )then
-                    call b%eorecvol%sampl_dens_correct_eos(state, eonames(1), eonames(2))
-                    call gen_projection_frcs( b, p, cline, eonames(1), eonames(2), s, b%projfrcs)
-                    call b%projfrcs%write('frcs_state'//int2str_pad(state,2)//'.bin')
-                    ! generate the anisotropic 3D optimal low-pass filter
-                    call gen_anisotropic_optlp(b%vol, b%projfrcs, b%e_bal, s, p%pgrp)
-                    call b%vol%write('aniso_optlp_state'//int2str_pad(state,2)//p%ext)
-                endif
+                call b%eorecvol%sum_eos
+                call b%eorecvol%sampl_dens_correct_eos(state, eonames(1), eonames(2), find4eoavg)
+                call gen_projection_frcs( b, p, cline, eonames(1), eonames(2), s, b%projfrcs)
+                call b%projfrcs%write('frcs_state'//int2str_pad(state,2)//'.bin')
+                call gen_anisotropic_optlp(b%vol2, b%projfrcs, b%e_bal, s, p%pgrp)
+                call b%vol2%write('aniso_optlp_state'//int2str_pad(state,2)//p%ext)
                 call b%eorecvol%get_res(res05s(s), res0143s(s))
                 call b%eorecvol%sampl_dens_correct_sum( b%vol )
                 call b%vol%write( volname, del_if_exists=.true. )
                 call wait_for_closure( volname )
-            end subroutine normalize
+                ! need to put the sum back at lowres for the eo pairs 
+                call b%vol%fwd_ft
+                call b%vol2%zero_and_unflag_ft
+                call b%vol2%read(eonames(1))
+                call b%vol2%fwd_ft
+                call b%vol2%insert_lowres(b%vol, find4eoavg)
+                call b%vol2%bwd_ft
+                call b%vol2%write(eonames(1), del_if_exists=.true.)
+                call b%vol2%zero_and_unflag_ft
+                call b%vol2%read(eonames(2))
+                call b%vol2%fwd_ft
+                call b%vol2%insert_lowres(b%vol, find4eoavg)
+                call b%vol2%bwd_ft
+                call b%vol2%write(eonames(2), del_if_exists=.true.)
+            end subroutine correct_for_sampling_density_and_estimate_res
 
     end subroutine exec_eo_volassemble
 
@@ -194,7 +204,7 @@ contains
             else
                 recvolname = 'recvol_state'//int2str_pad(state,2)//p%ext
             endif
-            call normalize( trim(recvolname) )
+            call correct_for_sampling_density( trim(recvolname) )
             if( cline%defined('state') )exit
         end do
         call recvol_read%dealloc_rho
@@ -228,14 +238,14 @@ contains
                 endif
             end subroutine assemble
 
-            subroutine normalize( recname )
+            subroutine correct_for_sampling_density( recname )
                 character(len=*), intent(in) :: recname
                 call b%recvol%sampl_dens_correct
                 call b%recvol%bwd_ft
                 call b%recvol%clip(b%vol)
                 call b%vol%write(recname, del_if_exists=.true.)
                 call wait_for_closure(recname)
-            end subroutine normalize
+            end subroutine correct_for_sampling_density
 
     end subroutine exec_volassemble
 

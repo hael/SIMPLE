@@ -21,7 +21,7 @@ contains
         if( cline%defined('mul') ) call b%a%mul_shifts(p%mul)
         select case(p%eo)
             case( 'yes', 'aniso' )
-                call exec_eorec( b, p, cline, fbody_in )
+                call exec_eorec_distr( b, p, cline, fbody_in )
             case( 'no' )
                 call exec_rec( b, p, cline, fbody_in )
             case DEFAULT
@@ -40,7 +40,7 @@ contains
         character(len=STDLEN)         :: rho_name
         integer :: s
         ! rebuild b%vol according to box size (beacuse it is otherwise boxmatch)
-        if( p%boxmatch < p%box ) call b%vol%new([p%box,p%box,p%box], p%smpd)
+        call b%vol%new([p%box,p%box,p%box], p%smpd)
         do s=1,p%nstates
             if( b%a%get_pop(s, 'state') == 0 ) cycle ! empty state
             if( p%l_distr_exec )then ! embarrasingly parallel rec
@@ -74,7 +74,7 @@ contains
         call qsys_job_finished( p, 'simple_rec_master :: exec_rec')
     end subroutine exec_rec
 
-    subroutine exec_eorec( b, p, cline, fbody_in )
+    subroutine exec_eorec_distr( b, p, cline, fbody_in )
         use simple_strings, only: int2str_pad
         class(build),               intent(inout) :: b
         class(params),              intent(inout) :: p
@@ -82,33 +82,22 @@ contains
         character(len=*), optional, intent(in)    :: fbody_in
         character(len=:), allocatable :: fbody, fname
         integer :: s
+        if( .not. p%l_distr_exec ) stop 'eo .ne. no not supported here, use simple_distr_exec!'
         ! rebuild b%vol according to box size (beacuse it is otherwise boxmatch)
-        if( p%boxmatch < p%box ) call b%vol%new([p%box,p%box,p%box], p%smpd)
+        call b%vol%new([p%box,p%box,p%box], p%smpd)
         do s=1,p%nstates
             DebugPrint  'processing state: ', s
             if( b%a%get_pop(s, 'state') == 0 ) cycle ! empty state
-            if( p%l_distr_exec )then ! embarrasingly parallel exec
-                if( present(fbody_in) )then
-                    allocate(fbody, source=trim(adjustl(fbody_in))//'_state')
-                else
-                    allocate(fbody, source='recvol_state')
-                endif
-                call b%eorecvol%eorec(p%stk, p, b%a, b%se, s, b%vol, part=p%part, fbody=fbody)
+            if( present(fbody_in) )then
+                allocate(fbody, source=trim(adjustl(fbody_in))//'_state')
             else
-                if( present(fbody_in) )then
-                    allocate( fbody, source=trim(adjustl(fbody_in))//'_state' )
-                else
-                    allocate( fbody, source='recvol_state' )
-                endif
-                call b%eorecvol%eorec(p%stk, p, b%a, b%se, s, b%vol)
-                allocate(fname, source=fbody//int2str_pad(s,2)//p%ext)
-                call b%vol%write(fname, del_if_exists=.true.)
-                deallocate(fname)
+                allocate(fbody, source='recvol_state')
             endif
+            call b%eorecvol%eorec_distr(p%stk, p, b%a, b%se, s, b%vol, fbody=fbody)
             deallocate(fbody)
         end do
         call qsys_job_finished( p, 'simple_rec_master :: exec_eorec')
         write(*,'(a,1x,a)') "GENERATED VOLUMES: recvol*.ext"
-    end subroutine exec_eorec
+    end subroutine exec_eorec_distr
 
 end module simple_rec_master

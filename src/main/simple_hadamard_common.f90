@@ -198,7 +198,7 @@ contains
         class(ori),            intent(inout) :: orientation
         class(oris), optional, intent(inout) :: os
         type(ori) :: orisoft, o_sym
-        real      :: pw, w, eopart
+        real      :: pw, w
         integer   :: jpeak, s, k, npeaks
         logical   :: l_softrec
         l_softrec = .false.
@@ -212,18 +212,9 @@ contains
         if( pw > TINY )then
             ! pre-gridding correction for the kernel convolution
             call b%gridprep%prep(b%img, b%img_pad)
-            DebugPrint  '*** simple_hadamard_common ***: prepared image for gridding'
-            if( p%eo .ne. 'no' )then
-                ! even/odd partitioning
-                eopart = ran3()
-                if( orientation%isthere('eo') )then
-                    if( orientation%isevenodd() )eopart = orientation%get('eo')
-                endif
-            endif
             ! weighted interpolation
             orisoft = orientation
             do jpeak=1,npeaks
-                DebugPrint  '*** simple_hadamard_common ***: gridding, iteration:', jpeak
                 ! get ori info
                 if( l_softrec )then
                     orisoft = os%get_ori(jpeak)
@@ -232,12 +223,11 @@ contains
                     w = 1.
                 endif
                 s = nint(orisoft%get('state'))
-                DebugPrint  '*** simple_hadamard_common ***: got orientation'
                 if( p%frac < 0.99 ) w = w * pw
                 if( w > TINY )then
                     if( p%pgrp == 'c1' )then
                         if( p%eo .ne. 'no' )then
-                            call b%eorecvols(s)%grid_fplane(orisoft, b%img_pad, pwght=w, ran=eopart)
+                            call b%eorecvols(s)%grid_fplane(orisoft, b%img_pad, pwght=w)
                         else
                             call b%recvols(s)%inout_fplane(orisoft, .true., b%img_pad, pwght=w)
                         endif
@@ -245,14 +235,13 @@ contains
                         do k=1,b%se%get_nsym()
                             o_sym = b%se%apply(orisoft, k)
                             if( p%eo .ne. 'no' )then
-                                call b%eorecvols(s)%grid_fplane(o_sym, b%img_pad, pwght=w, ran=eopart)
+                                call b%eorecvols(s)%grid_fplane(o_sym, b%img_pad, pwght=w)
                             else
                                 call b%recvols(s)%inout_fplane(o_sym, .true., b%img_pad, pwght=w)
                             endif
                         end do
                     endif
                 endif
-                DebugPrint  '*** simple_hadamard_common ***: gridded ptcl'
             end do
         endif
     end subroutine grid_ptcl
@@ -671,7 +660,7 @@ contains
         class(cmdline),    intent(inout) :: cline
         real,              intent(inout) :: res
         integer, optional, intent(in)    :: which_iter
-        integer               :: s
+        integer               :: s, find4eoavg
         real                  :: res05s(p%nstates), res0143s(p%nstates)
         character(len=STDLEN) :: pprocvol
         ! init
@@ -696,28 +685,40 @@ contains
                 p%vols_even(s) = add2fbody(p%vols(s), p%ext, '_even')
                 p%vols_odd(s)  = add2fbody(p%vols(s), p%ext, '_odd')
                 call b%eorecvols(s)%sum_eos
-                ! anisotropic resolution model
-                call b%eorecvols(s)%sampl_dens_correct_eos(s, p%vols_even(s), p%vols_odd(s))
+                call b%eorecvols(s)%sampl_dens_correct_eos(s, p%vols_even(s), p%vols_odd(s), find4eoavg)
                 call gen_projection_frcs( b, p, cline, p%vols_even(s), p%vols_odd(s), s, b%projfrcs)
                 call b%projfrcs%write('frcs_state'//int2str_pad(s,2)//'.bin')
-                ! generate the anisotropic 3D optimal low-pass filter
                 call gen_anisotropic_optlp(b%vol2, b%projfrcs, b%e_bal, s, p%pgrp)
                 call b%vol2%write('aniso_optlp_state'//int2str_pad(s,2)//p%ext)
+                call b%eorecvols(s)%get_res(res05s(s), res0143s(s))
                 call b%eorecvols(s)%sampl_dens_correct_sum(b%vol)
                 call b%vol%write(p%vols(s), del_if_exists=.true.)
-                ! update resolutions for local execution mode
-                call b%eorecvols(s)%get_res(res05s(s), res0143s(s))
+                 ! need to put the sum back at lowres for the eo pairs 
+                call b%vol%fwd_ft
+                call b%vol2%zero_and_unflag_ft
+                call b%vol2%read(p%vols_even(s))
+                call b%vol2%fwd_ft
+                call b%vol2%insert_lowres(b%vol, find4eoavg)
+                call b%vol2%bwd_ft
+                call b%vol2%write(p%vols_even(s), del_if_exists=.true.)
+                call b%vol2%zero_and_unflag_ft
+                call b%vol2%read(p%vols_odd(s))
+                call b%vol2%fwd_ft
+                call b%vol2%insert_lowres(b%vol, find4eoavg)
+                call b%vol2%bwd_ft
+                call b%vol2%write(p%vols_odd(s), del_if_exists=.true.)
                 if( present(which_iter) )then
                     ! post-process volume
                     pprocvol = add2fbody(trim(p%vols(s)), p%ext, 'pproc')
                     b%fsc(s,:) = file2rarr('fsc_state'//int2str_pad(s,2)//'.bin')
-                    call b%vol%fwd_ft
                     ! low-pass filter
                     call b%vol%bp(0., p%lp)
                     call b%vol%bwd_ft
                     ! mask
                     call b%vol%mask(p%msk, 'soft')
                     call b%vol%write(pprocvol)
+                else
+                    call b%vol%zero_and_unflag_ft
                 endif
             endif
         end do

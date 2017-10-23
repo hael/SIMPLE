@@ -31,7 +31,6 @@ character(len=STDLEN)           :: benchfname
 
 contains
 
-    !> Find resolution range in Prime3D search
     subroutine prime3D_find_resrange( b, p, lp_start, lp_finish )
         use simple_oris, only: oris
         class(build),  intent(inout) :: b
@@ -57,7 +56,6 @@ contains
         call o%kill
     end subroutine prime3D_find_resrange
 
-    !> Execute prime3D (Hadamard method)
     subroutine prime3D_exec( b, p, cline, which_iter, update_res, converged )
         use simple_qsys_funs, only: qsys_job_finished
         use simple_oris,      only: oris
@@ -68,7 +66,9 @@ contains
         class(cmdline), intent(inout) :: cline
         integer,        intent(in)    :: which_iter
         logical,        intent(inout) :: update_res, converged
-        logical,          allocatable :: to_update(:)
+        integer,          allocatable :: proj_space_inds(:,:), proj_srch_order(:,:)
+        logical,          allocatable :: state_exists(:), to_update(:)
+        type(oris),       allocatable :: reforis(:)
         type(oris) :: prime3D_oris
         type(ori)  :: orientation
         real       :: norm, corr_thresh, skewness, frac_srch_space
@@ -118,7 +118,7 @@ contains
         endif
 
         ! RANDOM MODEL GENERATION
-        if( p%vols(1) .eq. '' .and. p%nstates==1 )then
+        if( p%vols(1) .eq. '' .and. p%nstates == 1 )then
             if( p%nptcls > 1000 )then
                 call gen_random_model(b, p, 1000)
             else
@@ -203,11 +203,29 @@ contains
         endif
 
         ! STOCHASTIC IMAGE ALIGNMENT
+        ! reference projections indices, here to avoid online allocation in prime3d_srch
+        allocate(reforis(p%fromp:p%top))
+        do iptcl = p%fromp, p%top
+            call reforis(iptcl)%new(p%nstates*p%nspace)
+        enddo
+        ! reference projections indices, here to avoid online allocation in prime3d_srch
+        allocate(proj_space_inds(p%fromp:p%top,1:p%nspace*p%nstates), source=0)
+        ! reference projection search order, here to avoid online allocation in prime3d_srch
+        allocate(proj_srch_order(p%fromp:p%top,1:p%nspace*p%nstates), source=0)
+        ! states existence
+        if( p%oritab.ne.'' )then
+            state_exists = b%a%states_exist(p%nstates)
+        else
+            allocate(state_exists(p%nstates), source=.true.)
+        endif
         ! create the search objects, need to re-create every round because parameters are changing
         allocate( primesrch3D(p%fromp:p%top) , stat=alloc_stat)
         allocchk("In hadamard3D_matcher::prime3D_exec primesrch3D objects ")
         do iptcl=p%fromp,p%top
-            call primesrch3D(iptcl)%new(iptcl, pftcc, b%a, b%e, p)
+            call primesrch3D(iptcl)%new(iptcl, pftcc, b%a, b%e, p, b%se,&
+                &proj_space_inds(iptcl,1:p%nspace*p%nstates),&
+                &proj_srch_order(iptcl,1:p%nspace*p%nstates),&
+                &reforis(iptcl), state_exists)
         end do
         ! apply CTF to particles
         if( p%ctf .ne. 'no' ) call pftcc%apply_ctf_to_ptcls(b%a)
@@ -338,7 +356,7 @@ contains
 
         ! VOLUMETRIC 3D RECONSTRUCTION
         if( L_BENCH ) t_rec = tic()
-        if( p%norec .eq. 'no' )then
+        if( p%norec .ne. 'yes' )then
             ! init volumes
             call preprecvols(b, p)
             if( p%l_frac_update )then
@@ -377,9 +395,10 @@ contains
         if( .not. p%l_distr_exec )then
             do iptcl=p%fromp,p%top
                 call primesrch3D(iptcl)%kill
+                call reforis(iptcl)%kill
             end do
-            deallocate( primesrch3D )
             call pftcc%kill
+            deallocate( primesrch3D, state_exists, proj_space_inds, reforis )
             call prime3D_oris%kill
             call killrecvols(b, p)
         endif
@@ -495,8 +514,12 @@ contains
         if( .not. p%l_distr_exec ) write(*,'(A)') '>>> BUILDING PRIME3D SEARCH ENGINE'
         ! must be done here since p%kfromto is dynamically set based on FSC from previous round
         ! or based on dynamic resolution limit update
-        nrefs = p%nspace*p%nstates
-        call pftcc%new(nrefs, p)
+        nrefs = p%nspace * p%nstates
+        if( p%eo .ne. 'no' )then
+            call pftcc%new(nrefs, p, nint(b%a%get_all('eo', [p%fromp,p%top])))
+        else
+            call pftcc%new(nrefs, p)
+        endif
         call prep_refs_pftcc4align( b, p, cline )
         call prep_ptcls_pftcc4align( b, p, ppfts_fname )
         DebugPrint '*** hadamard3D_matcher ***: finished preppftcc4align'
@@ -518,7 +541,6 @@ contains
         if( .not. p%l_distr_exec ) write(*,'(A)') '>>> BUILDING REFERENCES'
         do s=1,p%nstates
             if( p%oritab .ne. '' )then
-                ! greedy start
                 if( b%a%get_pop(s, 'state') == 0 )then
                     ! empty state
                     cnt = cnt + p%nspace
@@ -527,14 +549,34 @@ contains
                 endif
             endif
             call cenrefvol_and_mapshifts2ptcls(b, p, cline, s, p%vols(s), do_center, xyz)
-            call preprefvol(b, p, cline, s, p%vols(s), do_center, xyz )
-            ! generate discrete projections
-            do iref=1,p%nspace
-                cnt = cnt + 1
-                call progress(cnt, nrefs)
-                o = b%e%get_ori(iref)
-                call b%vol%fproject_polar(cnt, o, pftcc, iseven=.true.) ! @@@@@@@@@@@@@
-            end do
+            if( p%eo .ne. 'no' )then
+                if( .not. p%l_distr_exec ) write(*,'(A)') '>>> BUILDING EVEN REFERENCES'
+                call preprefvol(b, p, cline, s, p%vols_even(s), do_center, xyz)
+                cnt = 0
+                do iref=1,p%nspace
+                    cnt = cnt + 1
+                    call progress(cnt, p%nspace)
+                    o = b%e%get_ori(iref)
+                    call b%vol%fproject_polar(cnt, o, pftcc, iseven=.true.) ! polar central sections
+                end do
+                if( .not. p%l_distr_exec ) write(*,'(A)') '>>> BUILDING ODD REFERENCES'
+                call preprefvol(b, p, cline, s, p%vols_odd(s), do_center, xyz)
+                cnt = 0
+                do iref=1,p%nspace
+                    cnt = cnt + 1
+                    call progress(cnt, p%nspace)
+                    o = b%e%get_ori(iref)
+                    call b%vol%fproject_polar(cnt, o, pftcc, iseven=.false.) ! polar central sections
+                end do
+            else
+                call preprefvol(b, p, cline, s, p%vols_even(s), do_center, xyz )
+                do iref=1,p%nspace
+                    cnt = cnt + 1
+                    call progress(cnt, nrefs)
+                    o = b%e%get_ori(iref)
+                    call b%vol%fproject_polar(cnt, o, pftcc, iseven=.true.) ! polar central sections
+                end do
+            endif
         end do
         ! cleanup
         call b%vol%kill_expanded

@@ -734,9 +734,9 @@ contains
         class(prime3D_distr_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
         ! constants
-        character(len=32), parameter :: ALGNFBODY    = 'algndoc_'
-        character(len=32), parameter :: VOLFBODY     = 'recvol_state'
-        character(len=32), parameter :: ITERFBODY    = 'prime3Ddoc_'
+        character(len=32), parameter :: ALGNFBODY = 'algndoc_'
+        character(len=32), parameter :: VOLFBODY  = 'recvol_state'
+        character(len=32), parameter :: ITERFBODY = 'prime3Ddoc_'
         ! commanders
         type(prime3D_init_distr_commander)  :: xprime3D_init_distr
         type(recvol_distr_commander)        :: xrecvol_distr
@@ -760,7 +760,8 @@ contains
         type(oris)            :: os
         type(build)           :: b
         character(len=STDLEN), allocatable :: state_assemble_finished(:)
-        character(len=STDLEN) :: vol, vol_iter, oritab, str, str_iter, optlp_file
+        character(len=STDLEN) :: vol, vol_even, vol_odd, vol_iter, vol_iter_even
+        character(len=STDLEN) :: vol_iter_odd, oritab, str, str_iter, optlp_file
         character(len=STDLEN) :: str_state, fsc_file, volassemble_output
         real                  :: frac_srch_space, corr, corr_prev
         integer               :: s, state, iter
@@ -848,13 +849,21 @@ contains
             ! reconstructions needed
             call xrecvol_distr%execute( cline_recvol_distr )
             do state = 1,p_master%nstates
-                ! simple_rename volumes and updates cline
+                ! rename volumes and update cline
                 str_state = int2str_pad(state,2)
                 vol = trim(VOLFBODY)//trim(str_state)//p_master%ext
                 str = 'startvol_state'//trim(str_state)//p_master%ext
                 call simple_rename( trim(vol), trim(str) )
                 vol = 'vol'//trim(int2str(state))
                 call cline%set( trim(vol), trim(str) )
+                if( p_master%eo .ne. 'no' )then
+                    vol_even = trim(VOLFBODY)//trim(str_state)//'_even'//p_master%ext
+                    str = 'startvol_state'//trim(str_state)//'_even'//p_master%ext
+                    call simple_rename( trim(vol_even), trim(str) )
+                    vol_odd  = trim(VOLFBODY)//trim(str_state)//'_odd' //p_master%ext
+                    str = 'startvol_state'//trim(str_state)//'_odd'//p_master%ext
+                    call simple_rename( trim(vol_odd), trim(str) )
+                endif
             enddo
         else if( .not.cline%defined('oritab') .and. vol_defined )then
             ! projection matching
@@ -1010,13 +1019,21 @@ contains
                         enddo
                     endif
                     ! rename state volume
-                    vol = trim(VOLFBODY)//trim(str_state)//p_master%ext
+                    vol      = trim(VOLFBODY)//trim(str_state)//p_master%ext
+                    vol_even = trim(VOLFBODY)//trim(str_state)//'_even'//p_master%ext
+                    vol_odd  = trim(VOLFBODY)//trim(str_state)//'_odd' //p_master%ext
                     if( p_master%refine .eq. 'snhc' )then
                         vol_iter  = trim(SNHCVOL)//trim(str_state)//p_master%ext
                     else
-                        vol_iter  = trim(VOLFBODY)//trim(str_state)//'_iter'//trim(str_iter)//p_master%ext
+                        vol_iter      = trim(VOLFBODY)//trim(str_state)//'_iter'//trim(str_iter)//p_master%ext
+                        vol_iter_even = trim(VOLFBODY)//trim(str_state)//'_iter'//trim(str_iter)//'_even'//p_master%ext
+                        vol_iter_odd  = trim(VOLFBODY)//trim(str_state)//'_iter'//trim(str_iter)//'_odd' //p_master%ext
                     endif
                     call simple_rename( trim(vol), trim(vol_iter) )
+                    if( p_master%eo .ne. 'no' )then
+                        call simple_rename( trim(vol_even), trim(vol_iter_even) )
+                        call simple_rename( trim(vol_odd),  trim(vol_iter_odd)  )
+                    endif
                     ! post-process
                     if( p_master%pproc.eq.'yes' )then
                         vol = 'vol'//trim(int2str(state))

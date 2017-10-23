@@ -202,7 +202,7 @@ contains
             call b%vol%mask(p%msk, 'soft')
         endif
         ! output
-        p%outvol = add2fbody(trim(p%vols(state)), p%ext, 'pproc')
+        p%outvol = add2fbody(trim(p%vols(state)), p%ext, '_pproc')
         call b%vol%write(p%outvol)
         call vol_copy%kill
         call simple_end('**** SIMPLE_POSTPROC_VOL NORMAL STOP ****', print_simple=.false.)

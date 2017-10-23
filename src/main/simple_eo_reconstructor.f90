@@ -17,18 +17,18 @@ private
 
 type :: eo_reconstructor
     private
-    type(reconstructor) :: even
-    type(reconstructor) :: odd
-    type(reconstructor) :: eosum
-    type(image)         :: envmask
-    character(len=4)    :: ext
-    real                :: fsc05      !< target resolution at FSC=0.5
-    real                :: fsc0143    !< target resolution at FSC=0.143
-    real                :: smpd, msk, fny, inner=0., width=10.
-    integer             :: box=0, nstates=1, numlen=2, lfny=0
-    logical             :: automsk = .false.
-    logical             :: wiener  = .false.
-    logical             :: exists  = .false.
+    type(reconstructor)  :: even
+    type(reconstructor)  :: odd
+    type(reconstructor)  :: eosum
+    type(image)          :: envmask
+    character(len=4)     :: ext
+    real                 :: fsc05          !< target resolution at FSC=0.5
+    real                 :: fsc0143        !< target resolution at FSC=0.143
+    real                 :: smpd, msk, fny, inner=0., width=10.
+    integer              :: box=0, nstates=1, numlen=2, lfny=0
+    logical              :: automsk = .false.
+    logical              :: wiener  = .false.
+    logical              :: exists  = .false.
   contains
     ! CONSTRUCTOR
     procedure          :: new
@@ -59,7 +59,7 @@ type :: eo_reconstructor
     procedure          :: sampl_dens_correct_eos
     procedure          :: sampl_dens_correct_sum
     ! RECONSTRUCTION
-    procedure          :: eorec
+    procedure          :: eorec_distr
     ! DESTRUCTOR
     procedure          :: kill_exp
     procedure          :: kill
@@ -244,25 +244,22 @@ contains
     ! INTERPOLATION
 
     !> \brief  for gridding a Fourier plane
-    subroutine grid_fplane(self, o, fpl, pwght, ran )
+    subroutine grid_fplane(self, o, fpl, pwght )
         use simple_ori, only: ori
-        use simple_rnd, only: ran3
         class(eo_reconstructor), intent(inout) :: self  !< instance
         class(ori),              intent(inout) :: o     !< orientation
         class(image),            intent(inout) :: fpl   !< Fourier plane
         real,                    intent(in)    :: pwght !< external particle weight (affects both fplane and rho)
-        real, optional,          intent(in)    :: ran   !< external random number
-        real    :: rran
-        if( present(ran) )then
-            rran = ran
-        else
-            rran = ran3()
-        endif
-        if( rran > 0.5 )then
-            call self%even%inout_fplane(o, .true., fpl, pwght)
-        else
-            call self%odd%inout_fplane(o, .true., fpl, pwght)
-        endif
+        integer :: eo
+        eo = o%get('eo')
+        select case(eo)
+            case(-1,0)
+                call self%even%inout_fplane(o, .true., fpl, pwght)
+            case(1)
+                call self%odd%inout_fplane(o, .true., fpl, pwght)
+            case DEFAULT
+                stop 'unsupported eo flag; eo_reconstructor :: grid_fplane'
+        end select
     end subroutine grid_fplane
 
     !> \brief  for summing the even odd pairs, resulting sum in self%even
@@ -289,11 +286,12 @@ contains
     end subroutine compress_exp
 
     !> \brief  for sampling density correction of the eo pairs
-    subroutine sampl_dens_correct_eos( self, state, fname_even, fname_odd )
+    subroutine sampl_dens_correct_eos( self, state, fname_even, fname_odd, find4eoavg )
         use simple_masker,  only: masker
         class(eo_reconstructor), intent(inout) :: self                  !< instance
         integer,                 intent(in)    :: state                 !< state
         character(len=*),        intent(in)    :: fname_even, fname_odd !< even/odd filenames
+        integer,                 intent(out)   :: find4eoavg            !< Fourier index for eo averaging
         real, allocatable :: res(:), corrs(:)
         type(image)       :: even, odd
         integer           :: j
@@ -345,7 +343,8 @@ contains
         self%fsc0143 = max(self%fsc0143,self%fny)
         write(*,'(A,1X,F6.2)') '>>> RESOLUTION AT FSC=0.500 DETERMINED TO:', self%fsc05
         write(*,'(A,1X,F6.2)') '>>> RESOLUTION AT FSC=0.143 DETERMINED TO:', self%fsc0143
-        ! the end
+        ! Fourier index for eo averaging
+        find4eoavg = max(K4EOAVGLB,get_lplim_at_corr(corrs, FSC4EOAVG))
         deallocate(corrs, res)
         call even%kill
         call odd%kill
@@ -359,47 +358,39 @@ contains
         call reference%set_ft(.false.)
         call self%eosum%sampl_dens_correct
         call self%eosum%bwd_ft
-        call self%eosum%norm
         call self%eosum%clip(reference)
     end subroutine sampl_dens_correct_sum
 
     ! RECONSTRUCTION
     
-    !> \brief  for reconstructing Fourier volumes according to the orientations 
-    !!         and states in o, assumes that stack is open   
-    subroutine eorec( self, fname, p, o, se, state, vol, part, fbody )
+    !> \brief  for distributed reconstruction of even/odd maps  
+    subroutine eorec_distr( self, fname, p, o, se, state, vol, fbody )
         use simple_oris,            only: oris
         use simple_sym,             only: sym
         use simple_params,          only: params
         use simple_gridding,        only: prep4cgrid
-        class(eo_reconstructor),    intent(inout) :: self      !< object
-        character(len=*),           intent(in)    :: fname     !< spider/MRC stack filename
-        class(params),              intent(in)    :: p         !< parameters
-        class(oris),                intent(inout) :: o         !< orientations
-        class(sym),                 intent(inout) :: se        !< symmetry element
-        integer,                    intent(in)    :: state     !< state to reconstruct
-        class(image),               intent(inout) :: vol       !< reconstructed volume
-        integer,          optional, intent(in)    :: part      !< partition (4 parallel rec)
-        character(len=*), optional, intent(in)    :: fbody     !< body of output file
-        type(image)      :: img, img_pad
-        type(kbinterpol) :: kbwin
-        real             :: skewness
-        integer          :: i, cnt, n, ldim(3), state_glob
-        integer          :: statecnt(p%nstates), state_here
+        class(eo_reconstructor),    intent(inout) :: self   !< object
+        character(len=*),           intent(in)    :: fname  !< spider/MRC stack filename
+        class(params),              intent(in)    :: p      !< parameters
+        class(oris),                intent(inout) :: o      !< orientations
+        class(sym),                 intent(inout) :: se     !< symmetry element
+        integer,                    intent(in)    :: state  !< state to reconstruct
+        class(image),               intent(inout) :: vol    !< reconstructed volume
+        character(len=*), optional, intent(in)    :: fbody  !< body of output file
+        type(image)       :: img, img_pad
+        type(kbinterpol)  :: kbwin
+        real              :: skewness
+        integer           :: i, cnt, n, ldim(3), state_glob
+        integer           :: statecnt(p%nstates), state_here
         character(len=32) :: eonames(2)
         call find_ldim_nptcls(fname, ldim, n)
         if( n /= o%get_noris() ) stop 'inconsistent nr entries; eorec; simple_eo_reconstructor'
-        if( .not. present(part) )then
-            if( p%eo .ne. 'no' ) stop 'eo .ne. no not supported here, use simple_distr_exec!'
-        endif
         kbwin = self%get_kbwin() 
         ! stash global state index
         state_glob = state
         ! make the images
         call img%new([p%box,p%box,1],p%smpd)
         call img_pad%new([p%boxpd,p%boxpd,1],p%smpd)
-        ! even/odd partitioning
-        if( o%get_nevenodd() == 0 ) call o%partition_eo
         ! population balancing logics
         if( p%balance > 0 )then
             call o%balance( p%balance, NSPACE_BALANCE, p%nsym, p%eullims, skewness )
@@ -427,24 +418,12 @@ contains
         ! undo fourier components expansion
         call self%compress_exp
         ! proceeds with density correction & output
-        if( present(part) )then
+        if( p%l_distr_exec )then
             if( present(fbody) )then
-                call self%write_eos(fbody//int2str_pad(state,2)//'_part'//int2str_pad(part,self%numlen))
+                call self%write_eos(fbody//int2str_pad(state,2)//'_part'//int2str_pad(p%part,self%numlen))
             else
-                call self%write_eos('recvol_state'//int2str_pad(state,2)//'_part'//int2str_pad(part,self%numlen))
+                call self%write_eos('recvol_state'//int2str_pad(state,2)//'_part'//int2str_pad(p%part,self%numlen))
             endif
-        else
-            if( present(fbody) )then
-                eonames(1) = fbody//int2str_pad(state,2)//'_even'//p%ext
-                eonames(2) = fbody//int2str_pad(state,2)//'_odd'//p%ext
-                
-            else
-                eonames(1) = 'recvol_state'//int2str_pad(state,2)//'_even'//p%ext
-                eonames(2) = 'recvol_state'//int2str_pad(state,2)//'_odd'//p%ext
-            endif
-            call self%sum_eos
-            call self%sampl_dens_correct_eos(state, eonames(1), eonames(2))
-            call self%sampl_dens_correct_sum(vol)
         endif
         call img%kill
         call img_pad%kill
@@ -461,7 +440,7 @@ contains
                 character(len=:), allocatable :: stkname
                 type(ori) :: o_sym, orientation
                 integer   :: j, state, state_balance, ind
-                real      :: pw, eopart
+                real      :: pw
                 state         = nint(o%get(i, 'state'))
                 state_balance = nint(o%get(i, 'state_balance'))
                 if( state == 0 .or. state_balance == 0 ) return
@@ -482,14 +461,9 @@ contains
                     endif
                     ! gridding
                     call prep4cgrid(img, img_pad, p%msk, kbwin)
-                    ! e/o partitioning
-                    eopart = ran3()
-                    if( orientation%isthere('eo') )then
-                        if( orientation%isevenodd() )eopart = orientation%get('eo')
-                    endif
                     ! interpolation
                     if( p%pgrp == 'c1' )then
-                        call self%grid_fplane(orientation, img_pad, pw, ran=eopart)
+                        call self%grid_fplane(orientation, img_pad, pw)
                     else
                         do j=1,se%get_nsym()
                             o_sym = se%apply(orientation, j)
@@ -499,7 +473,7 @@ contains
                  endif
             end subroutine rec_dens
             
-    end subroutine eorec
+    end subroutine eorec_distr
 
     ! DESTRUCTOR
 

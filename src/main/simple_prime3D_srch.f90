@@ -3,6 +3,7 @@ module simple_prime3D_srch
 #include "simple_lib.f08"
 use simple_oris,             only: oris
 use simple_ori,              only: ori
+use simple_sym,              only: sym
 use simple_polarft_corrcalc, only: polarft_corrcalc
 use simple_pftcc_shsrch,     only: pftcc_shsrch
 implicit none
@@ -16,10 +17,14 @@ real,    parameter :: FACTWEIGHTS_THRESH = 0.001 !< threshold for factorial weig
 !> struct for prime3d params
 type prime3D_srch
     private
-    class(polarft_corrcalc), pointer :: pftcc_ptr => null()      !< pointer to pftcc (corrcalc) object
-    class(oris),             pointer :: a_ptr     => null()      !< pointer to b%a (primary particle orientation table)
-    class(oris),             pointer :: e_ptr     => null()      !< pointer to b%e (reference orientations)
-    type(oris)                       :: o_refs                   !< projection directions search space
+    class(polarft_corrcalc), pointer :: pftcc_ptr           => null()   !< pointer to pftcc (corrcalc) object
+    class(oris),             pointer :: a_ptr               => null()   !< pointer to b%a (primary particle orientation table)
+    class(oris),             pointer :: e_ptr               => null()   !< pointer to b%e (reference orientations)
+    integer,                 pointer :: proj_space_inds(:)  => null()   !< projection space index array
+    integer,                 pointer :: srch_order(:)       => null()   !< stochastic search order
+    logical,                 pointer :: state_exists_ptr(:) => null()   !< pointer to b%e (reference orientations)
+    class(oris),             pointer :: o_refs              => null()   !< projection directions search space
+    class(sym),              pointer :: se                  => null()   !< projection directions search space
     type(oris)                       :: o_peaks                  !< orientations of best npeaks oris
     type(pftcc_shsrch)               :: shsrch_obj               !< origin shift search object
     integer                          :: iptcl          = 0       !< global particle index
@@ -35,7 +40,6 @@ type prime3D_srch
     integer                          :: nnn_static     = 0       !< # nearest neighbors (static)
     integer                          :: nnn            = 0       !< # nearest neighbors (dynamic)
     integer                          :: ntn            = 1       !< # of time neighbors
-    integer                          :: nsym           = 0       !< symmetry order
     integer                          :: prev_roind     = 0       !< previous in-plane rotation index
     integer                          :: prev_state     = 0       !< previous state index
     integer                          :: prev_ref       = 0       !< previous reference index
@@ -48,13 +52,9 @@ type prime3D_srch
     real                             :: dfx            = 0.      !< ctf x-defocus
     real                             :: dfy            = 0.      !< ctf y-defocus
     real                             :: angast         = 0.      !< ctf astigmatism
-    integer, allocatable             :: proj_space_inds(:)       !< projection space index array
-    integer, allocatable             :: srch_order(:)            !< stochastic search order
-    logical, allocatable             :: state_exists(:)          !< indicates whether each state is populated
     character(len=STDLEN)            :: refine         = ''      !< refinement flag
     character(len=STDLEN)            :: ctf            = ''      !< ctf flag
     character(len=STDLEN)            :: shbarr         = ''      !< shift barrier flag
-    character(len=STDLEN)            :: pgrp           = 'c1'    !< point-group symmetry
     logical                          :: dev            = .false. !< development flag
     logical                          :: doshift        = .true.  !< 2 indicate whether 2 serch shifts
     logical                          :: greedy_inpl    = .true.  !< 2 indicate whether in-plane search is greedy or not
@@ -102,9 +102,6 @@ type prime3D_srch
     procedure          :: get_dfy
     procedure          :: set_ctf
     procedure          :: set_greedy_inpl
-    ! MEMORY MANAGEMENT
-    procedure          :: online_allocate
-    procedure          :: online_destruct
     ! DESTRUCTOR
     procedure          :: kill
 end type prime3D_srch
@@ -114,7 +111,7 @@ contains
     ! CONSTRUCTOR
 
     !>  \brief  is a constructor
-    subroutine new( self, iptcl, pftcc, a, e, p )
+    subroutine new( self, iptcl, pftcc, a, e, p, se, proj_space_inds, srch_order, o_refs, state_exists )
         use simple_params, only: params
         class(prime3D_srch),             intent(inout) :: self   !< instance
         integer,                         intent(in)    :: iptcl  !< global particle index
@@ -122,14 +119,24 @@ contains
         class(oris),             target, intent(in)    :: a      !< primary particle orientation table
         class(oris),             target, intent(in)    :: e      !< reference orientations
         class(params),                   intent(in)    :: p      !< parameters
+        class(sym),              target, intent(in)    :: se
+        integer,                 target, intent(in)    :: proj_space_inds(:) !< references indices
+        integer,                 target, intent(in)    :: srch_order(:)      !< references search order
+        class(oris),             target, intent(in)    :: o_refs             !< references orientations
+        logical,                 target, intent(in)    :: state_exists(:)    !< state existence
         integer :: alloc_stat, nstates_eff
         real    :: lims(2,2), lims_init(2,2)
         ! destroy possibly pre-existing instance
         call self%kill
         ! set constants
-        self%pftcc_ptr   => pftcc
-        self%a_ptr       => a
-        self%e_ptr       => e
+        self%pftcc_ptr        => pftcc
+        self%a_ptr            => a
+        self%e_ptr            => e
+        self%se               => se
+        self%proj_space_inds  => proj_space_inds
+        self%srch_order       => srch_order
+        self%o_refs           => o_refs
+        self%state_exists_ptr => state_exists
         self%iptcl       =  iptcl
         self%nstates     =  p%nstates
         self%nprojs      =  p%nspace
@@ -146,7 +153,6 @@ contains
         self%nnn         =  p%nnn
         self%nnnrefs     =  self%nnn*self%nstates
         self%shbarr      =  p%shbarrier
-        self%pgrp        =  p%pgrp
         self%kstop_grid  =  p%kstop_grid
         self%greedy_inpl = .true.
         if( str_has_substr(self%refine,'shc') )then
@@ -155,20 +161,12 @@ contains
         endif
         self%dev = .false.
         if( p%dev .eq. 'yes' ) self%dev = .true.
-        ! construct composites
-        if( p%oritab.ne.'' )then
-            self%state_exists = self%a_ptr%states_exist(self%nstates)
-        else
-            allocate(self%state_exists(self%nstates), stat=alloc_stat)
-            allocchk('In: new; simple_prime3D_srch, 1')
-            self%state_exists = .true.
-        endif
         ! multiple states
         if( self%nstates == 1 )then
             self%npeaks_grid = GRIDNPEAKS
         else
             ! number of populated states
-            nstates_eff = count(self%state_exists)
+            nstates_eff = count(self%state_exists_ptr)
             select case(trim(p%refine))
                 case('het')
                     self%npeaks_grid = 1
@@ -214,7 +212,6 @@ contains
         logical :: ggreedy
         ggreedy = .false.
         if( present(greedy) ) ggreedy = greedy
-        call self%online_allocate
         if( ggreedy )then
             if( trim(self%refine).eq.'states' )then
                 call self%stochastic_srch_bystate(lp, nnmat)
@@ -231,7 +228,6 @@ contains
         else
             call self%stochastic_srch(lp, nnmat, grid_projs)
         endif
-        call self%online_destruct
         DebugPrint '>>> PRIME3D_SRCH::EXECUTED PRIME3D_SRCH'
     end subroutine exec_prime3D_srch
 
@@ -241,7 +237,6 @@ contains
         real,                intent(in)    :: extr_bound
         integer,             intent(inout) :: statecnt(self%nstates)
         call self%stochastic_srch_het(extr_bound, statecnt)
-        call self%online_destruct
         DebugPrint '>>> PRIME3D_SRCH::EXECUTED PRIME3D_HET_SRCH'
     end subroutine exec_prime3D_srch_het
 
@@ -374,7 +369,7 @@ contains
                 integer :: loc(1), inpl_ind, state
                 state = 1
                 if( self%nstates > 1 ) state = nint( self%o_refs%get(iref, 'state') )
-                if( self%state_exists(state) )then
+                if( self%state_exists_ptr(state) )then
                     corrs     = self%pftcc_ptr%gencorrs(iref, self%iptcl) ! In-plane correlations
                     loc       = maxloc(corrs)                        ! greedy in-plane
                     inpl_ind  = loc(1)                               ! in-plane angle index
@@ -440,7 +435,7 @@ contains
                     iref_state = self%proj_space_inds(isample)          ! reference index to multi-state space
                     istate     = ceiling(real(iref_state)/real(self%nprojs))
                     iref       = iref_state - (istate-1)*self%nprojs    ! reference index to single state space
-                    if( .not.self%state_exists(istate) )cycle
+                    if( .not.self%state_exists_ptr(istate) )cycle
                     if( any(target_projs == iref) )cycle                ! direction is already set
                     if( state_cnt(istate) >= GRIDNPEAKS )cycle          ! state is already filled
                     cnt = cnt + 1
@@ -459,7 +454,7 @@ contains
                 integer, intent(in) :: iref
                 real    :: corrs(self%nrots), inpl_corr
                 integer :: loc(1), inpl_ind
-                if( self%state_exists(istate) )then
+                if( self%state_exists_ptr(istate) )then
                     corrs     = self%pftcc_ptr%gencorrs(iref, self%iptcl, self%kstop_grid) ! In-plane correlations
                     loc       = maxloc(corrs)                                         ! greedy in-plane
                     inpl_ind  = loc(1)                                                ! in-plane angle index
@@ -530,7 +525,7 @@ contains
                 integer :: loc(1), inpl_ind, state
                 state = 1
                 if( self%nstates > 1 ) state = nint( self%o_refs%get(iref, 'state') )
-                if( self%state_exists(state) )then
+                if( self%state_exists_ptr(state) )then
                     ! In-plane correlations
                     corrs     = self%pftcc_ptr%gencorrs(iref, self%iptcl)
                     loc       = maxloc(corrs)   ! greedy in-plane
@@ -623,7 +618,7 @@ contains
                 inpl_corr = 0.                                           ! init correlation
                 state     = 1
                 if( self%nstates > 1 ) state = nint( self%o_refs%get(iref, 'state') )
-                if( self%state_exists( state ) )then
+                if( self%state_exists_ptr( state ) )then
                     corrs    = self%pftcc_ptr%gencorrs( iref, self%iptcl ) ! in-plane correlations
                     inpl_ind = shcloc(self%nrots, corrs, self%prev_corr) ! first improving in-plane index
                     if( inpl_ind > 0 ) inpl_corr = corrs( inpl_ind )     ! improving correlation found
@@ -674,7 +669,7 @@ contains
                 integer :: loc(1), inpl_ind, state
                 state = 1
                 if( self%nstates > 1 ) state = nint( self%o_refs%get(iref, 'state') )
-                if( self%state_exists(state) )then
+                if( self%state_exists_ptr(state) )then
                     corrs     = self%pftcc_ptr%gencorrs(iref, self%iptcl) ! In-plane correlations
                     loc       = maxloc(corrs)               ! greedy in-plane
                     inpl_ind  = loc(1)                      ! in-plane angle index
@@ -702,7 +697,7 @@ contains
         self%prev_state = nint(self%a_ptr%get(self%iptcl, 'state'))
         if( self%prev_state > self%nstates ) stop 'previous best state outside boundary; stochastic_srch_het; simple_prime3D_srch'
         if( self%prev_state > 0 )then
-            if( .not. self%state_exists(self%prev_state) ) stop 'empty previous state; stochastic_srch_het; simple_prime3D_srch'
+            if( .not. self%state_exists_ptr(self%prev_state) ) stop 'empty previous state; stochastic_srch_het; simple_prime3D_srch'
             ! initialize
             o = self%a_ptr%get_ori(self%iptcl)
             self%prev_roind = self%pftcc_ptr%get_roind(360.-o%e3get())
@@ -712,7 +707,7 @@ contains
                 statecnt(self%prev_state) = statecnt(self%prev_state) + 1
                 self%nrefs_eval = 1
                 state = irnd_uni(self%nstates)
-                do while(state == self%prev_state .or. .not.self%state_exists(state))
+                do while(state == self%prev_state .or. .not.self%state_exists_ptr(state))
                     state = irnd_uni(self%nstates)
                 enddo
                 iref  = (state - 1) * self%nprojs + self%prev_proj
@@ -722,7 +717,7 @@ contains
                 ! SHC
                 corrs_state = -1.
                 do state = 1, self%nstates
-                    if( .not.self%state_exists(state) )cycle
+                    if( .not.self%state_exists_ptr(state) )cycle
                     iref = (state-1) * self%nprojs + self%prev_proj
                     corrs_inpl = self%pftcc_ptr%gencorrs(iref, self%iptcl)
                     corrs_state(state) = corrs_inpl(self%prev_roind)
@@ -813,7 +808,7 @@ contains
         self%prev_proj  = self%e_ptr%find_closest_proj(o_prev,1)                       ! projection direction
         if( self%prev_state > self%nstates ) stop 'previous best state outside boundary; prep4srch; simple_prime3D_srch'
         if( self%prev_state > 0 )then
-            if( .not. self%state_exists(self%prev_state) ) stop 'empty previous state; prep4srch; simple_prime3D_srch'
+            if( .not. self%state_exists_ptr(self%prev_state) ) stop 'empty previous state; prep4srch; simple_prime3D_srch'
         endif
         select case( self%refine )
             case( 'no','shc','snhc','greedy','tseries' )                               ! DISCRETE CASE
@@ -970,11 +965,9 @@ contains
 
     !>  \brief retrieves and preps npeaks orientations for reconstruction
     subroutine prep_npeaks_oris( self )
-        use simple_sym, only: sym
         class(prime3D_srch),   intent(inout) :: self
         type(ori)  :: o, o_best, o_new
         type(oris) :: sym_os, o_peaks
-        type(sym)  :: se
         real, allocatable :: corrs(:)
         real       :: euls(3), shvec(2)
         real       :: corr, frac, ang_sdev, dist
@@ -982,9 +975,8 @@ contains
         integer    :: neff_states ! number of effective (populated) states
         ! empty states
         neff_states = 1
-        if(self%nstates > 1) neff_states = count(self%state_exists)
-        ! init npeaks
-        call o_peaks%new(self%npeaks)
+        if(self%nstates > 1) neff_states = count(self%state_exists_ptr)
+        call o_peaks%new(self%npeaks) 
         do ipeak = 1, self%npeaks
             ! get ipeak-th ori
             cnt = self%nrefs - self%npeaks + ipeak
@@ -996,7 +988,7 @@ contains
             o = self%o_refs%get_ori( ref )
             ! grab info
             state = nint( o%get('state') )
-            if( .not. self%state_exists(state) )then
+            if( .not. self%state_exists_ptr(state) )then
                 print *, 'empty state: ', state
                 stop 'simple_prime3D_srch::prep_npeaks_oris'
             endif
@@ -1031,19 +1023,18 @@ contains
         call o_peaks%set_all2single('dist',    0.   )
         ! angular standard deviation
         ang_sdev = 0.
-        if( trim(self%pgrp).eq.'c1' )then
+        if( trim(self%se%get_pgrp()).eq.'c1' )then
             ang_sdev = o_peaks%ang_sdev(self%refine, self%nstates, self%npeaks)
         else
             if( self%npeaks > 2 )then
                 corrs  = o_peaks%get_all('corr')
                 loc    = maxloc(corrs)
                 o_best = o_peaks%get_ori(loc(1))
-                call se%new(trim(self%pgrp))
                 sym_os = o_peaks
                 do ipeak = 1, self%npeaks
                     if(ipeak == loc(1))cycle
                     o = o_peaks%get_ori(ipeak)
-                    call se%sym_euldist(o_best, o, dist)
+                    call self%se%sym_euldist(o_best, o, dist)
                     call sym_os%set_ori(ipeak, o)
                 enddo
                 ang_sdev = sym_os%ang_sdev(self%refine, self%nstates, self%npeaks)
@@ -1099,9 +1090,7 @@ contains
 
     !>  \brief  to get the best orientation
     subroutine update_best( self )
-        use simple_sym,  only: sym
         class(prime3D_srch), intent(inout) :: self
-        type(sym)         :: se
         type(ori)         :: o_new, o_old, o_new_copy
         real, allocatable :: corrs(:)
         real              :: euldist, mi_joint, mi_proj, mi_inpl, mi_state, dist_inpl
@@ -1112,12 +1101,10 @@ contains
         o_new    = self%o_peaks%get_ori(best_loc(1))
         ! angular distances
         o_new_copy = o_new
-        call se%new(trim(self%pgrp))
-        call se%sym_euldist( o_old, o_new_copy, euldist )
+        call self%se%sym_euldist( o_old, o_new_copy, euldist )
         dist_inpl = rad2deg( o_new_copy.inplrotdist.o_old )
-        call se%kill
         state = nint( o_new%get('state') )
-        if( .not. self%state_exists(state) )then
+        if( .not. self%state_exists_ptr(state) )then
             print *, 'empty state: ', state
             stop 'simple_prime3d_srch; update_best'
         endif
@@ -1182,11 +1169,9 @@ contains
         x      = self%o_peaks%get( ipeak, 'x'    )
         y      = self%o_peaks%get( ipeak, 'y'    )
         rstate = self%o_peaks%get( ipeak, 'state')
-        if( allocated(self%state_exists) )then
-            if( .not. self%state_exists(nint(rstate)) )then
-                print *, 'empty state: ', nint(rstate)
-                stop 'simple_prime3d_srch; get_ori'
-            endif
+        if( .not. self%state_exists_ptr(nint(rstate)) )then
+            print *, 'empty state: ', nint(rstate)
+            stop 'simple_prime3d_srch; get_ori'
         endif
         rproj = self%o_peaks%get( ipeak, 'proj' )
         corr  = self%o_peaks%get( ipeak, 'corr' )
@@ -1205,8 +1190,7 @@ contains
         class(oris),         intent(out)   :: os    !< search orientation list
         class(ori),          intent(in)    :: o_in  !< search orientation
         type(ori) :: o
-        integer   :: ipeak!, npeaks
-        !npeaks = self%o_peaks%get_noris()
+        integer   :: ipeak
         call os%new( self%npeaks )
         do ipeak=1,self%npeaks
             o = o_in
@@ -1366,33 +1350,20 @@ contains
         self%greedy_inpl = log
     end subroutine set_greedy_inpl
 
-    ! MEMORY MANAGEMENT
-
-    subroutine online_allocate( self )
-        class(prime3D_srch), intent(inout) :: self
-        allocate(self%proj_space_inds(self%nrefs), stat=alloc_stat)
-        allocchk('In: prime3D_srch_allocate; simple_prime3D_srch')
-        self%proj_space_inds = 0
-    end subroutine online_allocate
-
-    subroutine online_destruct( self )
-        class(prime3D_srch), intent(inout) :: self
-        if( allocated(self%proj_space_inds)) deallocate(self%proj_space_inds)
-        if( allocated(self%srch_order )    ) deallocate(self%srch_order     )
-        call self%o_refs%kill
-    end subroutine online_destruct
-
     ! DESTRUCTOR
 
     !>  \brief  is a destructor
     subroutine kill( self )
         class(prime3D_srch), intent(inout) :: self !< instance
         if( self%exists )then
-            self%a_ptr => null()
-            self%e_ptr => null()
+            self%a_ptr            => null()
+            self%e_ptr            => null()
+            self%state_exists_ptr => null()
+            self%srch_order       => null()
+            self%proj_space_inds  => null()
+            self%o_refs           => null()
+            self%se               => null()
             call self%o_peaks%kill
-            call self%online_destruct
-            if( allocated(self%state_exists) ) deallocate(self%state_exists)
             self%exists = .false.
         endif
     end subroutine kill
