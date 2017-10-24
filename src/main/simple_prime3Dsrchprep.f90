@@ -38,7 +38,7 @@ contains
                 enddo
             enddo
         enddo
-        ! projection direction peaks
+        ! projection direction peaks & weights transfer
         allocate(o_peaks(p%fromp:p%top))
         do iptcl = p%fromp, p%top
             call o_peaks(iptcl)%new_clean(p%npeaks)
@@ -124,20 +124,24 @@ contains
     end subroutine prime3D_prepsrch
 
     subroutine prime3D_prepsrch_clean
-        integer :: i
+        integer :: i, fromp(1), top(1)
         if(allocated(o_refs))then
-            do i = 1, size(o_refs)
+            fromp = lbound(o_refs) 
+            top   = ubound(o_refs)
+            do i = fromp(1), top(1)
                 call o_refs(i)%kill
             enddo
         endif
         if(allocated(o_peaks))then
-            do i = 1, size(o_peaks)
+            fromp = lbound(o_peaks) 
+            top   = ubound(o_peak)
+            do i = fromp(1), top(1)
                 call o_peaks(i)%kill
             enddo
         endif
-        if( allocated(srch_order) )deallocate(srch_order)
+        if( allocated(srch_order) )     deallocate(srch_order)
         if( allocated(proj_space_inds) )deallocate(proj_space_inds)
-        if( allocated(state_exists) )deallocate(state_exists)
+        if( allocated(state_exists) )   deallocate(state_exists)
     end subroutine prime3D_prepsrch_clean
 
 end module simple_prime3Dsrchprep
