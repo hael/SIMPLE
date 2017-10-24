@@ -10,12 +10,12 @@ implicit none
 
 interface binread_oritab
     module procedure binread_oritab_1
-    module procedure binread_oritab_2
+    !module procedure binread_oritab_2
 end interface
 
 interface binwrite_oritab
     module procedure binwrite_oritab_1
-    module procedure binwrite_oritab_2
+    !module procedure binwrite_oritab_2
 end interface
 
 contains
@@ -42,27 +42,27 @@ contains
         endif
     end subroutine binread_oritab_1
 
-    subroutine binread_oritab_2( fname, a, fromto, primesrch3D, nst )
-        use simple_prime3D_srch, only: prime3D_srch
-        character(len=*),    intent(in)    :: fname
-        class(oris),         intent(inout) :: a
-        integer,             intent(in)    :: fromto(2)
-        class(prime3D_srch), intent(inout) :: primesrch3D(fromto(1):fromto(2))
-        integer, optional,   intent(out)   :: nst
-        type(binoris) :: bos
-        integer       :: irec
-        type(oris)    :: os_peak
-        if( .not. file_exists(fname) )then
-            write(*,*) 'file: ', trim(fname)
-            stop 'does not exist in cwd; binoris_io :: binread_oritab_2'
-        endif 
-        call bos%open(fname)
-        do irec=fromto(1),fromto(2)
-            call bos%read_record(irec, a, os_peak, nst)
-            call primesrch3D(irec)%set_o_peaks(os_peak)
-        end do
-        call bos%close
-    end subroutine binread_oritab_2
+    ! subroutine binread_oritab_2( fname, a, fromto, primesrch3D, nst )
+    !     use simple_prime3D_srch, only: prime3D_srch
+    !     character(len=*),    intent(in)    :: fname
+    !     class(oris),         intent(inout) :: a
+    !     integer,             intent(in)    :: fromto(2)
+    !     class(prime3D_srch), intent(inout) :: primesrch3D(fromto(1):fromto(2))
+    !     integer, optional,   intent(out)   :: nst
+    !     type(binoris) :: bos
+    !     integer       :: irec
+    !     type(oris)    :: os_peak
+    !     if( .not. file_exists(fname) )then
+    !         write(*,*) 'file: ', trim(fname)
+    !         stop 'does not exist in cwd; binoris_io :: binread_oritab_2'
+    !     endif 
+    !     call bos%open(fname)
+    !     do irec=fromto(1),fromto(2)
+    !         call bos%read_record(irec, a, os_peak, nst)
+    !         call primesrch3D(irec)%set_o_peaks(os_peak)
+    !     end do
+    !     call bos%close
+    ! end subroutine binread_oritab_2
  
     subroutine binread_ctfparams_state_eo( fname, a, fromto )
         character(len=*), intent(in)    :: fname
@@ -149,72 +149,72 @@ contains
         call bos%close
     end subroutine binwrite_oritab_1
  
-    subroutine binwrite_oritab_2( fname, a, fromto, primesrch3D, mask, fname_fill_in )
-        use simple_prime3D_srch, only: prime3D_srch
-        character(len=*),           intent(in)    :: fname
-        class(oris),                intent(inout) :: a
-        integer,                    intent(in)    :: fromto(2)
-        class(prime3D_srch),        intent(inout) :: primesrch3D(fromto(1):fromto(2))
-        logical,          optional, intent(in)    :: mask(fromto(1):fromto(2))
-        character(len=*), optional, intent(in)    :: fname_fill_in
-        type(binoris) :: bos
-        type(binoris) :: bos_fill_in
-        type(oris)    :: os_peak, os_peak_fill_in, os_peak_conforming
-        type(ori)     :: o_single
-        integer       :: npeaks, npeaks_fill_in, irec
-        logical       :: reshape_fill_in, mmask(fromto(1):fromto(2)), l_fill_in
-        if( str_has_substr(fname,'.txt') )then
-            stop 'not intended for text file output; binoris_io :: binwrite_oritab_2'
-        endif
-        mmask     = .true.
-        l_fill_in = .false.
-        if( present(mask) )then
-            mmask = mask
-            if( .not. present(fname_fill_in) )&
-                &stop 'need fill in file in conjunction with mask; binoris_io :: binwrite_oritab_2'
-            if( .not. file_exists(fname_fill_in) )then
-                write(*,*) 'file: ', trim(fname_fill_in)
-                stop 'does not exist in cwd; binoris_io :: binwrite_oritab_2'
-            endif
-            l_fill_in = .true.
-        endif
-        ! establish outfile header
-        o_single = a%get_ori(fromto(1))
-        call primesrch3D(fromto(1))%get_oris(os_peak, o_single)
-        npeaks = primesrch3D(fromto(1))%get_npeaks()
-        call bos%new(a, fromto, os_peak)
-        call bos%open(fname, del_if_exists=.true.)
-        call bos%write_header()
-        if( l_fill_in )then
-            ! establish fill-in filehandler
-            call bos_fill_in%open(fname_fill_in)
-            npeaks_fill_in  = bos_fill_in%get_n_peaks()
-            reshape_fill_in = npeaks_fill_in /= npeaks
-        endif
-        do irec=fromto(1),fromto(2)
-            if( mmask(irec) )then
-                ! particle has been subjected to update
-                o_single = a%get_ori(irec)
-                call primesrch3D(irec)%get_oris(os_peak, o_single)
-                call bos%write_record(irec, a, os_peak)
-            else
-                ! info in fill-in file is needed
-                if( reshape_fill_in )then
-                    call bos_fill_in%read_record(irec, a, os_peak_fill_in)
-                    os_peak_conforming =&
-                    &os_peak_fill_in%create_conforming_npeaks_set(npeaks)
-                    call bos%write_record(irec, a, os_peak_conforming)
-                else
-                    call bos_fill_in%read_record(irec)
-                    call bos%write_record(irec, bos_fill_in)
-                endif
-            endif
-        end do
-        call bos%kill
-        call bos_fill_in%kill
-        call os_peak%kill
-        call os_peak_fill_in%kill
-        call os_peak_conforming%kill
-    end subroutine binwrite_oritab_2
+    ! subroutine binwrite_oritab_2( fname, a, fromto, primesrch3D, mask, fname_fill_in )
+    !     use simple_prime3D_srch, only: prime3D_srch
+    !     character(len=*),           intent(in)    :: fname
+    !     class(oris),                intent(inout) :: a
+    !     integer,                    intent(in)    :: fromto(2)
+    !     class(prime3D_srch),        intent(inout) :: primesrch3D(fromto(1):fromto(2))
+    !     logical,          optional, intent(in)    :: mask(fromto(1):fromto(2))
+    !     character(len=*), optional, intent(in)    :: fname_fill_in
+    !     type(binoris) :: bos
+    !     type(binoris) :: bos_fill_in
+    !     type(oris)    :: os_peak, os_peak_fill_in, os_peak_conforming
+    !     type(ori)     :: o_single
+    !     integer       :: npeaks, npeaks_fill_in, irec
+    !     logical       :: reshape_fill_in, mmask(fromto(1):fromto(2)), l_fill_in
+    !     if( str_has_substr(fname,'.txt') )then
+    !         stop 'not intended for text file output; binoris_io :: binwrite_oritab_2'
+    !     endif
+    !     mmask     = .true.
+    !     l_fill_in = .false.
+    !     if( present(mask) )then
+    !         mmask = mask
+    !         if( .not. present(fname_fill_in) )&
+    !             &stop 'need fill in file in conjunction with mask; binoris_io :: binwrite_oritab_2'
+    !         if( .not. file_exists(fname_fill_in) )then
+    !             write(*,*) 'file: ', trim(fname_fill_in)
+    !             stop 'does not exist in cwd; binoris_io :: binwrite_oritab_2'
+    !         endif
+    !         l_fill_in = .true.
+    !     endif
+    !     ! establish outfile header
+    !     o_single = a%get_ori(fromto(1))
+    !     call primesrch3D(fromto(1))%get_oris(os_peak, o_single)
+    !     npeaks = primesrch3D(fromto(1))%get_npeaks()
+    !     call bos%new(a, fromto, os_peak)
+    !     call bos%open(fname, del_if_exists=.true.)
+    !     call bos%write_header()
+    !     if( l_fill_in )then
+    !         ! establish fill-in filehandler
+    !         call bos_fill_in%open(fname_fill_in)
+    !         npeaks_fill_in  = bos_fill_in%get_n_peaks()
+    !         reshape_fill_in = npeaks_fill_in /= npeaks
+    !     endif
+    !     do irec=fromto(1),fromto(2)
+    !         if( mmask(irec) )then
+    !             ! particle has been subjected to update
+    !             o_single = a%get_ori(irec)
+    !             call primesrch3D(irec)%get_oris(os_peak, o_single)
+    !             call bos%write_record(irec, a, os_peak)
+    !         else
+    !             ! info in fill-in file is needed
+    !             if( reshape_fill_in )then
+    !                 call bos_fill_in%read_record(irec, a, os_peak_fill_in)
+    !                 os_peak_conforming =&
+    !                 &os_peak_fill_in%create_conforming_npeaks_set(npeaks)
+    !                 call bos%write_record(irec, a, os_peak_conforming)
+    !             else
+    !                 call bos_fill_in%read_record(irec)
+    !                 call bos%write_record(irec, bos_fill_in)
+    !             endif
+    !         endif
+    !     end do
+    !     call bos%kill
+    !     call bos_fill_in%kill
+    !     call os_peak%kill
+    !     call os_peak_fill_in%kill
+    !     call os_peak_conforming%kill
+    ! end subroutine binwrite_oritab_2
  
 end module simple_binoris_io

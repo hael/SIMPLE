@@ -251,7 +251,7 @@ contains
         class(image),            intent(inout) :: fpl   !< Fourier plane
         real,                    intent(in)    :: pwght !< external particle weight (affects both fplane and rho)
         integer :: eo
-        eo = o%get('eo')
+        eo = nint(o%get('eo'))
         select case(eo)
             case(-1,0)
                 call self%even%inout_fplane(o, .true., fpl, pwght)

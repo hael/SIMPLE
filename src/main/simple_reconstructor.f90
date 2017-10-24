@@ -266,7 +266,7 @@ contains
         real,                 intent(in)    :: pwght     !< external particle weight (affects both fplane and rho)
         integer :: h, k, lims(3,2), logi(3), phys(3), sh
         complex :: oshift
-        real    :: x, y, xtmp
+        real    :: x, y
         if( self%ctf%flag /= CTFFLAG_NO )then ! make CTF object & get CTF info
             self%tfun = ctf(self%get_smpd(), o%get('kv'), o%get('cs'), o%get('fraca'))
             self%dfx  = o%get('dfx')
@@ -310,7 +310,7 @@ contains
         real                 :: Wnorm, val_prev, val, Wnorm_prev, invrho
         integer              :: h, k, m, lims(3,2),  phys(3), iter
         integer              :: maxits_here
-        complex, parameter   :: zero = cmplx(0.,0.), one = cmplx(1.,0.)
+        complex, parameter   :: one = cmplx(1.,0.)
         real,    parameter   :: winsz  = 2.
         maxits_here = GRIDCORR_MAXITS
         if( present(maxits) )maxits_here = maxits
@@ -384,7 +384,6 @@ contains
 
     subroutine compress_exp( self )
         class(reconstructor), intent(inout) :: self
-        complex :: comp
         integer :: lims(3,2), phys(3), h, k, m, logi(3)
         if(.not. self%cmat_exp_allocated .or. .not.self%rho_allocated)then
             stop 'expanded complex or rho matrices do not exist; simple_reconstructor::compress_exp'

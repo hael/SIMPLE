@@ -123,6 +123,7 @@ type :: polarft_corrcalc
     procedure, private :: gencorrs_3
     generic            :: gencorrs => gencorrs_1, gencorrs_2, gencorrs_3
     procedure          :: genfrc
+    procedure          :: specscore
     ! DESTRUCTOR
     procedure          :: kill
 end type polarft_corrcalc
@@ -846,14 +847,13 @@ contains
     end function gencorrs_3
 
     !>  \brief  is for generating resolution dependent correlations
-    function genfrc( self, iref, iptcl, irot ) result( frc )
+    subroutine genfrc( self, iref, iptcl, irot, frc )
         use simple_math, only: csq
-        class(polarft_corrcalc), target, intent(inout) :: self
-        integer,                         intent(in)    :: iref, iptcl, irot
-        real(sp), allocatable :: frc(:)
+        class(polarft_corrcalc),  intent(inout) :: self
+        integer,                  intent(in)    :: iref, iptcl, irot
+        real(sp),                 intent(out)   :: frc(self%kfromto(1):self%kfromto(2))
         real(sp)              :: kcorrs(self%nrots), sumsqref, sumsqptcl
         integer               :: k
-        allocate( frc(self%kfromto(1):self%kfromto(2)) )
         ! calc k-corrs and norms
         do k=self%kfromto(1),self%kfromto(2)
             call self%calc_k_corrs_wrefmem(iref, iptcl, k, kcorrs)
@@ -865,7 +865,17 @@ contains
             endif
             frc(k) = kcorrs(irot) / sqrt(sumsqref * sumsqptcl)
         end do
-    end function genfrc
+    end subroutine genfrc
+
+    !>  \brief  is for generating resolution dependent correlations
+    real function specscore( self, iref, iptcl, irot )
+        use simple_math, only: median_nocopy
+        class(polarft_corrcalc), intent(inout) :: self
+        integer,                 intent(in)    :: iref, iptcl, irot
+        real :: frc(self%kfromto(1):self%kfromto(2))
+        call self%genfrc(iref, iptcl, irot, frc)
+        specscore = max(0.,median_nocopy(frc))
+    end function specscore
 
     ! DESTRUCTOR
 

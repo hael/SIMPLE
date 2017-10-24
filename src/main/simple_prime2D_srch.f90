@@ -191,7 +191,6 @@ contains
         use simple_ran_tabu, only: ran_tabu
         class(prime2D_srch), intent(inout) :: self
         type(ran_tabu)   :: rt
-        real,allocatable :: frc(:)
         integer          :: icls
         real             :: corrs(self%pftcc_ptr%get_nrots())
         ! find previous discrete alignment parameters
@@ -221,8 +220,7 @@ contains
             self%specscore  = 0.
         endif
         ! calculate spectral score
-        frc = self%pftcc_ptr%genfrc(self%prev_class, self%iptcl, self%prev_rot)
-        self%specscore = max(0.,median_nocopy(frc))
+        self%specscore = self%pftcc_ptr%specscore(self%prev_class, self%iptcl, self%prev_rot)
         ! make random reference direction order
         rt = ran_tabu(self%nrefs)
         if( allocated(self%srch_order) ) deallocate(self%srch_order)
@@ -416,7 +414,6 @@ contains
     subroutine nn_srch( self, nnmat )
         class(prime2D_srch), intent(inout) :: self
         integer,             intent(in)    :: nnmat(self%nrefs,self%nnn)
-        real, allocatable :: frc(:)
         integer           :: iref,loc(1),inpl_ind,inn
         real              :: corrs(self%nrots),inpl_corr,corr
         if( nint(self%a_ptr%get(self%iptcl,'state')) > 0 )then
@@ -428,8 +425,7 @@ contains
             self%best_class = self%prev_class         
             self%best_rot   = self%prev_rot
             ! calculate spectral score
-            frc             = self%pftcc_ptr%genfrc(self%prev_class, self%iptcl, self%prev_rot)
-            self%specscore  = max(0.,median_nocopy(frc))
+            self%specscore  = self%pftcc_ptr%specscore(self%prev_class, self%iptcl, self%prev_rot)
             corr            = -1.
             ! evaluate neighbors (greedy selection)
             do inn=1,self%nnn

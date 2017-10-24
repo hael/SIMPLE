@@ -65,7 +65,6 @@ type classaverager
     ! calculators
     procedure          :: assemble_sums
     procedure, private :: calc_tfun_vals
-    procedure, private :: sampl_dens_correct
     procedure          :: merge_eos_and_norm
     procedure          :: calc_and_write_frcs
     procedure          :: eoavg
@@ -166,16 +165,18 @@ contains
     ! setters/getters
 
     !>  \brief  transfers orientation data to the instance
-    subroutine transf_oridat( self, a, prime3Dsrchobj )
+    ! subroutine transf_oridat( self, a, prime3Dsrchobj )
+    subroutine transf_oridat( self, a )
         use simple_ori,          only: ori
         use simple_oris,         only: oris
-        use simple_prime3D_srch, only: prime3D_srch
+        !use simple_prime3D_srch, only: prime3D_srch
         class(classaverager),          intent(inout) :: self  !< instance
         class(oris),                   intent(in)    :: a
-        class(prime3D_srch), optional, intent(inout) :: prime3Dsrchobj(self%istart:self%iend)
+        ! class(prime3D_srch), optional, intent(inout) :: prime3Dsrchobj(self%istart:self%iend)
         real, allocatable :: ori_weights(:)
         type(ori)         :: orientation
-        type(oris)        :: prime3D_oris, a_here
+        type(oris)        :: a_here
+        ! type(oris)        :: prime3D_oris
         integer           :: alloc_stat, cnt, n_incl, iori
         integer           :: cnt_ori, istate, icls, iptcl
         logical           :: l_reduce_projs
@@ -211,88 +212,88 @@ contains
             if( self%phaseplate ) self%precs(cnt)%phshift = a_here%get(iptcl,'phshift')
         end do
         self%l_hard_assign = .true.
-        if( present(prime3Dsrchobj) )then
-            l_reduce_projs = .false.
-            if( self%pp%nspace > NSPACE_BALANCE )then
-                ! reduce # projection directions 
-                ! used for the class average representation
-                call a_here%reduce_projs(NSPACE_BALANCE, self%pp%nsym, self%pp%eullims)
-                l_reduce_projs = .true.
+        ! if( present(prime3Dsrchobj) )then
+        !     l_reduce_projs = .false.
+        !     if( self%pp%nspace > NSPACE_BALANCE )then
+        !         ! reduce # projection directions 
+        !         ! used for the class average representation
+        !         call a_here%reduce_projs(NSPACE_BALANCE, self%pp%nsym, self%pp%eullims)
+        !         l_reduce_projs = .true.
+        !     endif
+        !     cnt = 0
+        !     do iptcl=self%istart,self%iend
+        !         cnt = cnt + 1
+        !         ! inclusion condition
+        !         if( self%precs(cnt)%pind > 0 )then
+        !             ! ori template
+        !             orientation = a_here%get_ori(iptcl)
+        !             if( self%pp%npeaks > 1 )then
+        !                 self%l_hard_assign = .false.
+        !                 ! get orientation distribution
+        !                 call prime3Dsrchobj(iptcl)%get_oris(prime3D_oris, orientation)
+        !                 if( l_reduce_projs ) call prime3D_oris%reduce_projs(NSPACE_BALANCE, self%pp%nsym, self%pp%eullims)
+        !                 ori_weights = prime3D_oris%get_all('ow')
+        !                 n_incl = count(ori_weights > TINY)
+        !                 if( n_incl >= 1 )then
+        !                     ! allocate & set info in record
+        !                     if( allocated(self%precs(cnt)%classes)  ) deallocate(self%precs(cnt)%classes)
+        !                     if( allocated(self%precs(cnt)%inpl_inds)) deallocate(self%precs(cnt)%inpl_inds)
+        !                     if( allocated(self%precs(cnt)%states)   ) deallocate(self%precs(cnt)%states)
+        !                     if( allocated(self%precs(cnt)%ows)      ) deallocate(self%precs(cnt)%ows)
+        !                     if( allocated(self%precs(cnt)%e3s)      ) deallocate(self%precs(cnt)%e3s)
+        !                     if( allocated(self%precs(cnt)%shifts)   ) deallocate(self%precs(cnt)%shifts)
+        !                     allocate( self%precs(cnt)%classes(n_incl),  self%precs(cnt)%states(n_incl),&
+        !                               self%precs(cnt)%ows(n_incl),      self%precs(cnt)%e3s(n_incl),&
+        !                               self%precs(cnt)%shifts(n_incl,2), self%precs(cnt)%inpl_inds(n_incl), stat=alloc_stat )
+        !                     call alloc_errchk('new; simple_classaverager, record arrays', alloc_stat)
+        !                     cnt_ori = 0
+        !                     do iori=1,prime3D_oris%get_noris()
+        !                         if( ori_weights(iori) > TINY )then
+        !                             cnt_ori = cnt_ori + 1
+        !                             self%precs(cnt)%classes(cnt_ori)   = nint(prime3D_oris%get(iori, 'proj'))
+        !                             self%precs(cnt)%inpl_inds(cnt_ori) = nint(prime3D_oris%get(iori, 'proj'))
+        !                             self%precs(cnt)%states(cnt_ori)    = nint(prime3D_oris%get(iori, 'inpl'))
+        !                             self%precs(cnt)%ows(cnt_ori)       = prime3D_oris%get(iori, 'w')
+        !                             self%precs(cnt)%e3s(cnt_ori)       = prime3D_oris%e3get(iori)
+        !                             self%precs(cnt)%shifts(cnt_ori,1)  = prime3D_oris%get(iori, 'x')
+        !                             self%precs(cnt)%shifts(cnt_ori,2)  = prime3D_oris%get(iori, 'y')
+        !                         endif
+        !                     end do
+        !                 else
+        !                     self%precs(cnt)%pind = 0
+        !                 endif
+        !                 deallocate(ori_weights)
+        !                 call prime3D_oris%kill
+        !             endif
+        !         endif
+        !     end do
+        ! else
+        cnt = 0
+        do iptcl=self%istart,self%iend
+            cnt = cnt + 1
+            ! inclusion condition
+            if( self%precs(cnt)%pind > 0 )then
+                ! allocate & set info in record
+                if( allocated(self%precs(cnt)%classes) )  deallocate(self%precs(cnt)%classes)
+                if( allocated(self%precs(cnt)%inpl_inds)) deallocate(self%precs(cnt)%inpl_inds)
+                if( allocated(self%precs(cnt)%states)  )  deallocate(self%precs(cnt)%states)
+                if( allocated(self%precs(cnt)%ows)     )  deallocate(self%precs(cnt)%ows)
+                if( allocated(self%precs(cnt)%e3s)     )  deallocate(self%precs(cnt)%e3s)
+                if( allocated(self%precs(cnt)%shifts)  )  deallocate(self%precs(cnt)%shifts)
+                allocate( self%precs(cnt)%classes(1),  self%precs(cnt)%states(1),&
+                          self%precs(cnt)%ows(1),      self%precs(cnt)%e3s(1),&
+                          self%precs(cnt)%shifts(1,2), self%precs(cnt)%inpl_inds(1), stat=alloc_stat )
+                call alloc_errchk('new; simple_classaverager, record arrays', alloc_stat)
+                self%precs(cnt)%classes(1)   = nint(a_here%get(iptcl, 'class'))
+                self%precs(cnt)%inpl_inds(1) = nint(a_here%get(iptcl, 'inpl'))
+                self%precs(cnt)%states(1)    = nint(a_here%get(iptcl, 'state'))
+                self%precs(cnt)%ows(1)       = a_here%get(iptcl, 'w')
+                self%precs(cnt)%e3s(1)       = a_here%e3get(iptcl)
+                self%precs(cnt)%shifts(1,1)  = a_here%get(iptcl, 'x')
+                self%precs(cnt)%shifts(1,2)  = a_here%get(iptcl, 'y')
             endif
-            cnt = 0
-            do iptcl=self%istart,self%iend
-                cnt = cnt + 1
-                ! inclusion condition
-                if( self%precs(cnt)%pind > 0 )then
-                    ! ori template
-                    orientation = a_here%get_ori(iptcl)
-                    if( self%pp%npeaks > 1 )then
-                        self%l_hard_assign = .false.
-                        ! get orientation distribution
-                        call prime3Dsrchobj(iptcl)%get_oris(prime3D_oris, orientation)
-                        if( l_reduce_projs ) call prime3D_oris%reduce_projs(NSPACE_BALANCE, self%pp%nsym, self%pp%eullims)
-                        ori_weights = prime3D_oris%get_all('ow')
-                        n_incl = count(ori_weights > TINY)
-                        if( n_incl >= 1 )then
-                            ! allocate & set info in record
-                            if( allocated(self%precs(cnt)%classes)  ) deallocate(self%precs(cnt)%classes)
-                            if( allocated(self%precs(cnt)%inpl_inds)) deallocate(self%precs(cnt)%inpl_inds)
-                            if( allocated(self%precs(cnt)%states)   ) deallocate(self%precs(cnt)%states)
-                            if( allocated(self%precs(cnt)%ows)      ) deallocate(self%precs(cnt)%ows)
-                            if( allocated(self%precs(cnt)%e3s)      ) deallocate(self%precs(cnt)%e3s)
-                            if( allocated(self%precs(cnt)%shifts)   ) deallocate(self%precs(cnt)%shifts)
-                            allocate( self%precs(cnt)%classes(n_incl),  self%precs(cnt)%states(n_incl),&
-                                      self%precs(cnt)%ows(n_incl),      self%precs(cnt)%e3s(n_incl),&
-                                      self%precs(cnt)%shifts(n_incl,2), self%precs(cnt)%inpl_inds(n_incl), stat=alloc_stat )
-                            call alloc_errchk('new; simple_classaverager, record arrays', alloc_stat)
-                            cnt_ori = 0
-                            do iori=1,prime3D_oris%get_noris()
-                                if( ori_weights(iori) > TINY )then
-                                    cnt_ori = cnt_ori + 1
-                                    self%precs(cnt)%classes(cnt_ori)   = nint(prime3D_oris%get(iori, 'proj'))
-                                    self%precs(cnt)%inpl_inds(cnt_ori) = nint(prime3D_oris%get(iori, 'proj'))
-                                    self%precs(cnt)%states(cnt_ori)    = nint(prime3D_oris%get(iori, 'inpl'))
-                                    self%precs(cnt)%ows(cnt_ori)       = prime3D_oris%get(iori, 'w')
-                                    self%precs(cnt)%e3s(cnt_ori)       = prime3D_oris%e3get(iori)
-                                    self%precs(cnt)%shifts(cnt_ori,1)  = prime3D_oris%get(iori, 'x')
-                                    self%precs(cnt)%shifts(cnt_ori,2)  = prime3D_oris%get(iori, 'y')
-                                endif
-                            end do
-                        else
-                            self%precs(cnt)%pind = 0
-                        endif
-                        deallocate(ori_weights)
-                        call prime3D_oris%kill
-                    endif
-                endif
-            end do
-        else
-            cnt = 0
-            do iptcl=self%istart,self%iend
-                cnt = cnt + 1
-                ! inclusion condition
-                if( self%precs(cnt)%pind > 0 )then
-                    ! allocate & set info in record
-                    if( allocated(self%precs(cnt)%classes) )  deallocate(self%precs(cnt)%classes)
-                    if( allocated(self%precs(cnt)%inpl_inds)) deallocate(self%precs(cnt)%inpl_inds)
-                    if( allocated(self%precs(cnt)%states)  )  deallocate(self%precs(cnt)%states)
-                    if( allocated(self%precs(cnt)%ows)     )  deallocate(self%precs(cnt)%ows)
-                    if( allocated(self%precs(cnt)%e3s)     )  deallocate(self%precs(cnt)%e3s)
-                    if( allocated(self%precs(cnt)%shifts)  )  deallocate(self%precs(cnt)%shifts)
-                    allocate( self%precs(cnt)%classes(1),  self%precs(cnt)%states(1),&
-                              self%precs(cnt)%ows(1),      self%precs(cnt)%e3s(1),&
-                              self%precs(cnt)%shifts(1,2), self%precs(cnt)%inpl_inds(1), stat=alloc_stat )
-                    call alloc_errchk('new; simple_classaverager, record arrays', alloc_stat)
-                    self%precs(cnt)%classes(1)   = nint(a_here%get(iptcl, 'class'))
-                    self%precs(cnt)%inpl_inds(1) = nint(a_here%get(iptcl, 'inpl'))
-                    self%precs(cnt)%states(1)    = nint(a_here%get(iptcl, 'state'))
-                    self%precs(cnt)%ows(1)       = a_here%get(iptcl, 'w')
-                    self%precs(cnt)%e3s(1)       = a_here%e3get(iptcl)
-                    self%precs(cnt)%shifts(1,1)  = a_here%get(iptcl, 'x')
-                    self%precs(cnt)%shifts(1,2)  = a_here%get(iptcl, 'y')
-                endif
-            end do
-        endif
+        end do
+        ! endif
         call a_here%kill
     end subroutine transf_oridat
 
@@ -625,6 +626,7 @@ contains
                     call self%cavgs_odd(istate,icls)%add( batch_imgsum_odd)
                     call self%ctfsqsums_even(istate,icls)%add( batch_rhosum_even)
                     call self%ctfsqsums_odd(istate,icls)%add( batch_rhosum_odd)
+                    
                 enddo
                 ! class cleanup
                 deallocate(ptcls_inds, batches, iprecs, ioris)
@@ -673,84 +675,17 @@ contains
                 call self%ctfsqsums_merged(istate,icls)%add(self%ctfsqsums_odd(istate,icls))
                 ! (w*CTF)**2 density correction
                 call self%cavgs_even(istate,icls)%ctf_dens_correct(self%ctfsqsums_even(istate,icls))
-                !call self%sampl_dens_correct(self%cavgs_even(istate,icls), self%ctfsqsums_even(istate,icls))
                 call self%cavgs_even(istate,icls)%bwd_ft
                 call self%cavgs_even(istate,icls)%clip_inplace(self%ldim)
                 call self%cavgs_odd(istate,icls)%ctf_dens_correct(self%ctfsqsums_odd(istate,icls))
-                ! call self%sampl_dens_correct(self%cavgs_odd(istate,icls), self%ctfsqsums_odd(istate,icls))
                 call self%cavgs_odd(istate,icls)%bwd_ft
                 call self%cavgs_odd(istate,icls)%clip_inplace(self%ldim)
                 call self%cavgs_merged(istate,icls)%ctf_dens_correct(self%ctfsqsums_merged(istate,icls))
-                ! call self%sampl_dens_correct(self%cavgs_merged(istate,icls), self%ctfsqsums_merged(istate,icls))
                 call self%cavgs_merged(istate,icls)%bwd_ft
                 call self%cavgs_merged(istate,icls)%clip_inplace(self%ldim)
             end do
          end do
     end subroutine merge_eos_and_norm
-
-    !>  is for uneven distribution of orientations correction 
-    !>  from Pipe & Menon 1999
-    subroutine sampl_dens_correct( self, cavg, ctfsqsum, maxits )
-        use simple_gridding, only: mul_w_instr
-        use simple_kbinterpol,      only: kbinterpol
-        class(classaverager), intent(inout) :: self
-        class(image),         intent(inout) :: cavg
-        class(image),         intent(inout) :: ctfsqsum
-        integer,    optional, intent(in)    :: maxits
-        type(kbinterpol)     :: kbwin 
-        type(image)          :: W_img, Wprev_img
-        real                 :: val_prev, val, invrho
-        integer              :: h, k, lims(3,2),  phys(3), iter
-        integer              :: maxits_here
-        complex, parameter   :: one   = cmplx(1.,0.)
-        real,    parameter   :: winsz = 2.
-        maxits_here = GRIDCORR_MAXITS*2
-        if( present(maxits) )maxits_here = maxits
-        lims = cavg%loop_lims(2)
-        call W_img%new(self%ldim_pd, self%pp%smpd)
-        call Wprev_img%new(self%ldim_pd, self%pp%smpd)
-        call W_img%set_ft(.true.)
-        call Wprev_img%set_ft(.true.)
-        ! kernel
-        kbwin = kbinterpol(winsz, KBALPHA)
-        ! weights init to 1.
-        W_img = one
-        do iter = 1, maxits_here
-            Wprev_img  = W_img 
-            ! W <- W * rho
-            call W_img%mul(ctfsqsum)
-            ! W <- (W / rho) x kernel
-            call W_img%bwd_ft
-            call mul_w_instr(W_img, kbwin)
-            call W_img%fwd_ft
-            ! W <- Wprev / ((W/ rho) x kernel)
-            !$omp parallel do collapse(2) default(shared) schedule(static)&
-            !$omp private(h,k,phys,val,val_prev) proc_bind(close)
-            do h = lims(1,1),lims(1,2)
-                do k = lims(2,1),lims(2,2)
-                    phys     = W_img%comp_addr_phys([h, k, 0])
-                    val      = mycabs(W_img%get_cmat_at(phys)) 
-                    val_prev = real(Wprev_img%get_cmat_at(phys))
-                    val      = min(val_prev/val, 1.e20)
-                    call W_img%set_cmat_at( phys, cmplx(val, 0.)) 
-                end do
-            end do
-            !$omp end parallel do
-        enddo
-        ! Fourier comps / rho
-        !$omp parallel do collapse(2) default(shared) schedule(static)&
-        !$omp private(h,k,phys,invrho) proc_bind(close)
-        do h = lims(1,1),lims(1,2)
-            do k = lims(2,1),lims(2,2)
-                phys   = W_img%comp_addr_phys([h, k, 0])
-                invrho = real(W_img%get_cmat_at(phys)) !! Real(C) == Real(C*)
-                call cavg%mul_cmat_at(invrho,phys)
-            end do
-        end do
-        !$omp end parallel do        ! cleanup
-        call W_img%kill
-        call Wprev_img%kill
-    end subroutine sampl_dens_correct
 
     !>  \brief  calculates Fourier ring correlations
     subroutine calc_and_write_frcs( self, fname )

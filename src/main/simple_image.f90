@@ -2787,8 +2787,12 @@ contains
             call tmp%bin(thres)
         else
             call tmp%mask(rmsk, 'soft')
+            call tmp%write('tmp.mrc')
+        print *,'center 0a'
             call tmp%bin_kmeans
+        print *,'center 0b'
         endif
+        print *,'center 1'
         xyz = tmp%masscen()
         if( l_doshift )then
             if( self%is_2d() )then

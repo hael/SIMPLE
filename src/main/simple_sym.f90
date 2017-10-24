@@ -30,7 +30,7 @@ type sym
     procedure          :: apply2all
     procedure          :: rot_to_asym
     procedure          :: rotall_to_asym
-    procedure          :: sym_euldist
+    procedure          :: sym_dists
     procedure          :: get_symori
     procedure          :: get_nsubgrp
     procedure          :: get_subgrp
@@ -271,8 +271,8 @@ contains
     !>  \brief  is a symmetry adaptor
     function apply( self, e_in, symop ) result( e_sym )
         class(sym), intent(inout) :: self
-        class(ori), intent(inout) :: e_in  !< orientation object
-        integer, intent(in)       :: symop !< sym operation
+        class(ori), intent(in)    :: e_in  !< orientation object
+        integer,    intent(in)    :: symop !< index of sym operation
         type(ori)                 :: e_sym, e_symop, e_tmp
         e_sym   = e_in ! transfer of parameters
         e_symop = self%e_sym%get_ori(symop)
@@ -312,16 +312,18 @@ contains
 
     !>  \brief  determines euler distance and corresponding symmetrized
     !>          orientation between two orientations
-    subroutine sym_euldist( self, oref, oasym, euldist )
+    subroutine sym_dists( self, oref, oasym, euldist, inplrotdist )
         use simple_math, only: rad2deg
         class(sym), intent(inout) :: self
         class(ori), intent(in)    :: oref   !< is the untouched reference
-        class(ori), intent(inout) :: oasym  !< is outputted as symmetrized
+        class(ori), intent(in)    :: oasym  !< is outputted as symmetrized
         real,       intent(out)   :: euldist !< Euler distance
+        real,       intent(out)   :: inplrotdist !< in-plane rotational distance
         type(ori) :: o, osym
         real      :: dist
         integer   :: isym
-        euldist = oasym.euldist.oref
+        euldist     = oasym.euldist.oref
+        inplrotdist = oasym.inplrotdist.oref
         if( self%n == 1 )then
             ! C1: nothing to do
         else
@@ -334,10 +336,11 @@ contains
                     osym = o
                 endif
             enddo
-            oasym = osym
+            inplrotdist = osym.inplrotdist.oref
         endif
-        euldist = rad2deg( euldist )
-    end subroutine sym_euldist
+        euldist     = rad2deg( euldist )
+        inplrotdist = rad2deg( inplrotdist )
+    end subroutine sym_dists
 
     !>  \brief  is a getter 
     function get_symori( self, symop ) result( e_sym )

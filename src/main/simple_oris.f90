@@ -38,6 +38,7 @@ type :: oris
     generic            :: getter_all => getter_all_1, getter_all_2
     procedure          :: get_mat
     procedure          :: get_normal
+    procedure          :: get_2Dshift
     procedure, private :: isthere_1
     procedure, private :: isthere_2
     generic            :: isthere => isthere_1, isthere_2
@@ -378,6 +379,14 @@ contains
         real :: normal(3)
         normal = self%o(i)%get_normal()
     end function get_normal
+
+    !>  \brief  is a setter
+    function get_2Dshift( self, i )  result(shvec)
+        class(oris), intent(inout) :: self
+        integer,     intent(in)    :: i
+        real :: shvec(2)
+        shvec = self%o(i)%get_2Dshift()
+    end function get_2Dshift
 
     !>  \brief  is for checking if parameter is present
     function isthere_1( self, key ) result( is )
@@ -2634,18 +2643,8 @@ contains
     subroutine calc_euldists( self, o_in, dists )
         class(oris),       intent(in)  :: self
         class(ori),        intent(in)  :: o_in
-        real, allocatable, intent(out) :: dists(:)
+        real,              intent(out) :: dists(self%n)
         integer :: i
-        if( allocated(dists) )then
-            if( size(dists).ne.self%n )then
-                deallocate(dists)
-                allocate(dists(self%n),stat=alloc_stat)
-                allocchk('In: simple_oris::calc_euldists dists')
-            endif
-        else
-            allocate(dists(self%n),stat=alloc_stat)
-            allocchk('In: simple_oris::calc_euldists dists')
-        endif
         do i=1,self%n
             dists(i) = self%o(i).euldist.o_in
         end do
