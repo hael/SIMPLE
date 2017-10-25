@@ -517,26 +517,19 @@ contains
             xyz       = 0.
             return
         endif
-        print *,'cenrefvol_and_mapshifts2ptcls 0' 
         call b%vol%read(volfname)
-        print *,'cenrefvol_and_mapshifts2ptcls 1' 
         call b%vol%norm ! because auto-normalisation on read is taken out
-        print *,'cenrefvol_and_mapshifts2ptcls 2' 
         xyz = b%vol%center(p%cenlp,'no',p%msk,doshift=.false.) ! find center of mass shift
         if( arg(xyz) <= CENTHRESH )then
             do_center = .false.
             xyz = 0.
             return
         endif
-        print *,'cenrefvol_and_mapshifts2ptcls 3' 
         call b%vol%fwd_ft
-        print *,'cenrefvol_and_mapshifts2ptcls 4' 
         if( p%pgrp .ne. 'c1' ) xyz(1:2) = 0.     ! shifts only along z-axis for C2 and above
         call b%vol%shift([xyz(1),xyz(2),xyz(3)]) ! performs shift
-        print *,'cenrefvol_and_mapshifts2ptcls 5' 
         ! map back to particle oritentations
         if( cline%defined('oritab') ) call b%a%map3dshift22d(-xyz(:), state=s)
-        print *,'cenrefvol_and_mapshifts2ptcls 6' 
     end subroutine cenrefvol_and_mapshifts2ptcls
 
     !>  \brief  prepares one volume for references extraction

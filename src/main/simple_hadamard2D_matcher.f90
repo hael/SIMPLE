@@ -188,7 +188,7 @@ contains
             call primesrch2D(iptcl)%new(iptcl, pftcc, b%a, p, cls_pops)
         end do
         ! apply CTF to particles
-        if( p%ctf .ne. 'no' ) call pftcc%apply_ctf_to_ptcls(b%a)
+        if( p%ctf .ne. 'no' ) call pftcc%create_polar_ctfmats(b%a)
         ! memoize FFTs for improved performance
         call pftcc%memoize_ffts
         ! execute the search

@@ -867,17 +867,7 @@ contains
         if( cline%defined('vol1') )then
             do istate=1,self%nstates
                 self%vols_even(istate) = add2fbody(self%vols(istate), self%ext, '_even')
-                if( self%eo .ne. 'no' .and. .not. file_exists(self%vols_even(istate)) )then
-                    print *, 'eo .ne. no and even volume file does not exist in cwd'
-                    print *, 'file: ', trim(self%vols_even(istate))
-                    stop 'In: simple_params :: new'
-                endif
                 self%vols_odd(istate) = add2fbody(self%vols(istate), self%ext, '_odd' )
-                if( self%eo .ne. 'no' .and. .not. file_exists(self%vols_odd(istate)) )then
-                    print *, 'eo .ne. no and odd volume file does not exist in cwd'
-                    print *, 'file: ', trim(self%vols_odd(istate))
-                    stop 'In: simple_params :: new'
-                endif
             end do
         endif
 

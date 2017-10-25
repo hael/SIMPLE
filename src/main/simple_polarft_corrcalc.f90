@@ -64,6 +64,7 @@ type :: polarft_corrcalc
     real(sp),            allocatable :: angtab(:)             !< table of in-plane angles (in degrees)
     real(sp),            allocatable :: argtransf(:,:)        !< argument transfer constants for shifting the references
     real(sp),            allocatable :: polar(:,:)            !< table of polar coordinates (in Cartesian coordinates)
+    real(sp),            allocatable :: ctfmats(:,:,:)      !< expandd set of CTF matrices (for efficient parallel exec)
     complex(sp),         allocatable :: pfts_refs_even(:,:,:) !< 3D complex matrix of polar reference sections (nrefs,pftsz,nk), even
     complex(sp),         allocatable :: pfts_refs_odd(:,:,:)  !< -"-, odd
     complex(sp),         allocatable :: pfts_ptcls(:,:,:)     !< 3D complex matrix of particle sections
@@ -77,6 +78,7 @@ type :: polarft_corrcalc
     type(c_ptr)                      :: plan_fwd_1            !< FFTW plans for gencorrs
     type(c_ptr)                      :: plan_fwd_2            !< -"-
     type(c_ptr)                      :: plan_bwd              !< -"-
+    logical                          :: with_ctf  = .false. !< CTF flag
     logical                          :: existence = .false.   !< to indicate existence
   contains
     ! CONSTRUCTOR
@@ -114,9 +116,12 @@ type :: polarft_corrcalc
     procedure          :: memoize_ffts
     ! CALCULATORS
     procedure, private :: create_polar_ctfmat
+    procedure          :: create_polar_ctfmats
     procedure          :: apply_ctf_to_ptcls
+    procedure, private :: prep_ref4corr
     procedure, private :: calc_corrs_over_k
     procedure, private :: calc_corrs_over_k_wrefmem
+    procedure, private :: calc_k_corrs
     procedure, private :: calc_k_corrs_wrefmem
     procedure, private :: gencorrs_1
     procedure, private :: gencorrs_2
@@ -295,6 +300,8 @@ contains
         do irot = 1,self%pftsz
             self%fft_factors(irot) = exp(-(0.,1.)*PI*real(irot-1)/real(self%pftsz))
         end do
+        self%with_ctf = .false.
+        if( p%ctf .ne. 'no' ) self%with_ctf = .true.
         ! flag existence
         self%existence    = .true.
     end subroutine new
@@ -663,6 +670,39 @@ contains
         !$omp end parallel do
     end function create_polar_ctfmat
 
+    !>  \brief  is for generating all matrices of CTF values
+    subroutine create_polar_ctfmats( self, a )
+        use simple_ctf,  only: ctf
+        use simple_oris, only: oris
+        class(polarft_corrcalc), intent(inout) :: self
+        class(oris),             intent(inout) :: a
+        type(ctf) :: tfun
+        integer   :: iptcl
+        real(sp)  :: kv,cs,fraca,dfx,dfy,angast,phshift
+        logical   :: astig
+        astig = a%isthere('dfy')
+        if( allocated(self%ctfmats) ) deallocate(self%ctfmats)
+        allocate(self%ctfmats(self%pfromto(1):self%pfromto(2),self%pftsz,self%kfromto(1):self%kfromto(2)), stat=alloc_stat)
+        allocchk("In: simple_polarft_corrcalc :: create_polar_ctfmats, 2")
+        do iptcl=self%pfromto(1),self%pfromto(2)
+            kv     = a%get(iptcl, 'kv'   )
+            cs     = a%get(iptcl, 'cs'   )
+            fraca  = a%get(iptcl, 'fraca')
+            dfx    = a%get(iptcl, 'dfx'  )
+            dfy    = dfx
+            angast = 0.
+            if( astig )then
+                dfy    = a%get(iptcl, 'dfy'   )
+                angast = a%get(iptcl, 'angast')
+            endif
+            phshift = 0.
+            if( self%phaseplate ) phshift = a%get(iptcl, 'phshift')
+
+            tfun = ctf(self%smpd, kv, cs, fraca)
+            self%ctfmats(iptcl,:,:) = self%create_polar_ctfmat(tfun, dfx, dfy, angast, phshift, self%pftsz)
+        end do
+    end subroutine create_polar_ctfmats
+
     subroutine apply_ctf_to_ptcls( self, a )
         use simple_ctf,  only: ctf
         use simple_oris, only: oris
@@ -690,8 +730,28 @@ contains
             tfun   = ctf(self%smpd, kv, cs, fraca)
             ctfmat = self%create_polar_ctfmat(tfun, dfx, dfy, angast, phshift, self%pftsz)
             self%pfts_ptcls(iptcl,:,:) = self%pfts_ptcls(iptcl,:,:) * ctfmat
+            call self%memoize_sqsum_ptcl(iptcl)
         end do
     end subroutine apply_ctf_to_ptcls
+
+    subroutine prep_ref4corr( self, iref, iptcl, pft_ref, sqsum_ref, kstop )
+         use simple_estimate_ssnr, only: fsc2optlp
+        class(polarft_corrcalc), intent(inout) :: self
+        integer,                 intent(in)    :: iref, iptcl
+        complex(sp),             intent(out)   :: pft_ref(self%pftsz,self%kfromto(1):kstop)
+        real(sp),                intent(out)   :: sqsum_ref
+        integer,                 intent(in)    :: kstop
+        ! copy
+        if( self%iseven(iptcl) )then
+            pft_ref = self%pfts_refs_even(iref,:,:)
+        else
+            pft_ref = self%pfts_refs_odd(iref,:,:)
+        endif
+        ! multiply with CTF
+        if( self%with_ctf ) pft_ref = pft_ref * self%ctfmats(iptcl,:,:)
+        ! for corr normalisation
+        sqsum_ref = sum(csq(pft_ref(:,self%kfromto(1):kstop)))
+    end subroutine prep_ref4corr
 
     subroutine calc_corrs_over_k( self, pft_ref, iptcl, kstop, corrs_over_k )
         class(polarft_corrcalc), intent(inout) :: self
@@ -762,6 +822,35 @@ contains
         corrs_over_k = cshift(corrs_over_k, -1)      ! step 2 is circular shift by 1
     end subroutine calc_corrs_over_k_wrefmem
 
+    subroutine calc_k_corrs( self, pft_ref, iptcl, k, kcorrs )
+        class(polarft_corrcalc), intent(inout) :: self
+        complex(sp),             intent(in)    :: pft_ref(1:self%pftsz,self%kfromto(1):self%kfromto(2))
+        integer,                 intent(in)    :: iptcl, k
+        real,                    intent(out)   :: kcorrs(self%nrots)
+        integer :: ithr
+        ! get thread index
+        ithr = omp_get_thread_num() + 1
+        ! move reference into Fourier Fourier space (particles are memoized)
+        self%fftdat(ithr)%ref_re(:) =  real(pft_ref(:,k))
+        self%fftdat(ithr)%ref_im(:) = aimag(pft_ref(:,k)) * self%fft_factors
+        call fftwf_execute_dft_r2c(self%plan_fwd_1, self%fftdat(ithr)%ref_re, self%fftdat(ithr)%ref_fft_re)
+        call fftwf_execute_dft    (self%plan_fwd_2, self%fftdat(ithr)%ref_im, self%fftdat(ithr)%ref_fft_im)
+        ! correlate FFTs
+        self%fftdat(ithr)%ref_fft_re = self%fftdat(ithr)%ref_fft_re * conjg(self%fftdat_ptcls(iptcl,k)%re)
+        self%fftdat(ithr)%ref_fft_im = self%fftdat(ithr)%ref_fft_im * conjg(self%fftdat_ptcls(iptcl,k)%im)
+        self%fftdat(ithr)%product_fft(1:1+2*int(self%pftsz/2):2) = &
+            4. * self%fftdat(ithr)%ref_fft_re(1:1+int(self%pftsz/2))
+        self%fftdat(ithr)%product_fft(2:2+2*int(self%pftsz/2):2) = &
+            4. * self%fftdat(ithr)%ref_fft_im(1:int(self%pftsz/2)+1)
+        ! back transform
+        call fftwf_execute_dft_c2r(self%plan_bwd, self%fftdat(ithr)%product_fft, self%fftdat(ithr)%backtransf)
+        ! fftw3 routines are not properly normalized, hence division by self%nrots * 2
+        kcorrs = self%fftdat(ithr)%backtransf / real(self%nrots * 2)
+        ! kcorrs needs to be reordered
+        kcorrs = kcorrs(self%nrots:1:-1) ! step 1 is reversing
+        kcorrs = cshift(kcorrs, -1)      ! step 2 is circular shift by 1
+    end subroutine calc_k_corrs
+
     subroutine calc_k_corrs_wrefmem( self, iref, iptcl, k, kcorrs )
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iref, iptcl, k
@@ -794,14 +883,11 @@ contains
         use simple_math, only: csq
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iref, iptcl
-        real(sp) :: cc(self%nrots), sqsum_ref
-        real     :: corrs_over_k(self%nrots)
-        call self%calc_corrs_over_k_wrefmem(iref, iptcl, self%kfromto(2), corrs_over_k)
-        if( self%iseven(iptcl) )then
-            sqsum_ref = sum(csq(self%pfts_refs_even(iref,:,:)))
-        else
-            sqsum_ref = sum(csq(self%pfts_refs_odd(iref,:,:)))
-        endif
+        complex(sp) :: pft_ref(self%pftsz,self%kfromto(1):self%kfromto(2))
+        real(sp)    :: cc(self%nrots), sqsum_ref
+        real        :: corrs_over_k(self%nrots)
+        call self%prep_ref4corr(iref, iptcl, pft_ref, sqsum_ref, self%kfromto(2))
+        call self%calc_corrs_over_k(pft_ref, iptcl, self%kfromto(2), corrs_over_k)
         cc = corrs_over_k / sqrt(sqsum_ref * self%sqsums_ptcls(iptcl))
     end function gencorrs_1
 
@@ -809,15 +895,12 @@ contains
         use simple_math, only: csq
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iref, iptcl, kstop
+        complex(sp) :: pft_ref(self%pftsz,self%kfromto(1):self%kfromto(2))
         real(sp)    :: cc(self%nrots), sqsum_ref, sqsum_ptcl
         real        :: corrs_over_k(self%nrots)
-        call self%calc_corrs_over_k_wrefmem(iref, iptcl, kstop, corrs_over_k)
+        call self%prep_ref4corr(iref, iptcl, pft_ref, sqsum_ref, kstop)
+        call self%calc_corrs_over_k(pft_ref, iptcl, kstop, corrs_over_k)
         sqsum_ptcl = sum(csq(self%pfts_ptcls(iptcl, :, self%kfromto(1):kstop)))
-        if( self%iseven(iptcl) )then
-            sqsum_ref = sum(csq(self%pfts_refs_even(iref,:,self%kfromto(1):kstop)))
-        else
-            sqsum_ref = sum(csq(self%pfts_refs_odd(iref,:,self%kfromto(1):kstop)))
-        endif
         cc = corrs_over_k / sqrt(sqsum_ref * sqsum_ptcl)
     end function gencorrs_2
 
@@ -836,9 +919,17 @@ contains
         shmat     = cmplx(cos(argmat),sin(argmat))
         ! shift
         if( self%iseven(iptcl) )then
-            pft_ref = self%pfts_refs_even(iref,:,:) * shmat
+            if( self%with_ctf )then
+                pft_ref = (self%pfts_refs_even(iref,:,:) * self%ctfmats(iptcl,:,:)) * shmat
+            else
+                pft_ref = self%pfts_refs_even(iref,:,:) * shmat
+            endif
         else
-            pft_ref = self%pfts_refs_odd(iref,:,:) * shmat
+            if( self%with_ctf )then
+                pft_ref = (self%pfts_refs_odd(iref,:,:) * self%ctfmats(iptcl,:,:)) * shmat
+            else
+                pft_ref = self%pfts_refs_odd(iref,:,:) * shmat
+            endif
         endif
         sqsum_ref = sum(csq(pft_ref))
         ! correlate
@@ -852,11 +943,13 @@ contains
         class(polarft_corrcalc),  intent(inout) :: self
         integer,                  intent(in)    :: iref, iptcl, irot
         real(sp),                 intent(out)   :: frc(self%kfromto(1):self%kfromto(2))
-        real(sp)              :: kcorrs(self%nrots), sumsqref, sumsqptcl
-        integer               :: k
+        complex(sp) :: pft_ref(self%pftsz,self%kfromto(1):self%kfromto(2))
+        real(sp)    :: kcorrs(self%nrots), sumsqref, sumsqptcl, sqsum_ref
+        integer     :: k
         ! calc k-corrs and norms
+        call self%prep_ref4corr(iref, iptcl, pft_ref, sqsum_ref, self%kfromto(2))
         do k=self%kfromto(1),self%kfromto(2)
-            call self%calc_k_corrs_wrefmem(iref, iptcl, k, kcorrs)
+            call self%calc_k_corrs(pft_ref, iptcl, k, kcorrs)
             sumsqptcl = sum(csq(self%pfts_ptcls(iptcl,:,k)))
             if( self%iseven(iptcl) )then
                 sumsqref = sum(csq(self%pfts_refs_even(iref,:,k)))

@@ -4,8 +4,8 @@ module simple_hadamard3D_matcher
 !$ use omp_lib_kinds
 #include "simple_lib.f08"
 use simple_polarft_corrcalc, only: polarft_corrcalc
-use simple_prime3D_srch,     only: prime3D_srch
 use simple_ori,              only: ori
+use simple_oris,             only: oris
 use simple_build,            only: build
 use simple_params,           only: params
 use simple_cmdline,          only: cmdline
@@ -13,6 +13,7 @@ use simple_gridding,         only: prep4cgrid
 use simple_binoris_io,       only: binwrite_oritab
 use simple_hadamard_common   ! use all in there
 use simple_timer             ! use all in there
+use simple_prime3D_srch,     ! use all in there
 implicit none
 
 public :: prime3D_find_resrange, prime3D_exec, gen_random_model
@@ -28,6 +29,13 @@ integer(timer_int_kind)         :: t_init, t_prep_pftcc, t_align, t_rec, t_tot
 real(timer_int_kind)            :: rt_init, rt_prep_pftcc, rt_align, rt_rec
 real(timer_int_kind)            :: rt_tot
 character(len=STDLEN)           :: benchfname
+
+! allocatables for prime3D_srch (here to improve chacheing)
+type(oris), allocatable :: o_refs(:)
+type(oris), allocatable :: o_peaks(:)
+integer,    allocatable :: srch_order(:,:)
+integer,    allocatable :: proj_space_inds(:,:)
+logical,    allocatable :: state_exists(:)
 
 contains
 
@@ -57,7 +65,6 @@ contains
     end subroutine prime3D_find_resrange
 
     subroutine prime3D_exec( b, p, cline, which_iter, update_res, converged )
-        use simple_prime3Dsrchprep ! singleton
         use simple_qsys_funs, only: qsys_job_finished
         use simple_oris,      only: oris
         use simple_fileio,    only: del_file
@@ -205,17 +212,11 @@ contains
         ! create the search objects, need to re-create every round because parameters are changing
         allocate( primesrch3D(p%fromp:p%top) , stat=alloc_stat)
         allocchk("In hadamard3D_matcher::prime3D_exec primesrch3D objects ")
-        ! NEW
-        ! call prime3D_prepsrch(b, p)
-        ! do iptcl=p%fromp,p%top
-        !     call primesrch3D(iptcl)%new(iptcl, pftcc, b%a, b%e, p, b%se )
-        ! end do
-        ! OLD
         do iptcl=p%fromp,p%top
-            call primesrch3D(iptcl)%new(iptcl, pftcc, b%a, b%e, p )
+            call primesrch3D(iptcl)%new(iptcl, pftcc, b%a, b%e, p)
         end do
         ! apply CTF to particles
-        if( p%ctf .ne. 'no' ) call pftcc%apply_ctf_to_ptcls(b%a)
+        if( p%ctf .ne. 'no' ) call pftcc%create_polar_ctfmats(b%a)
         ! memoize FFTs for improved performance
         call pftcc%memoize_ffts
         ! execute the search
@@ -223,7 +224,7 @@ contains
         if( L_BENCH ) t_align = tic()
         select case(p%refine)
             case( 'snhc' )
-                !$omp parallel do default(shared) schedule(guided) private(iptcl) proc_bind(close)
+                !$omp parallel do default(shared) private(iptcl) schedule(guided) proc_bind(close)
                 do iptcl=p%fromp,p%top
                     if( to_update(iptcl) )then
                         call primesrch3D(iptcl)%exec_prime3D_srch(p%lp, szsn=p%szsn)
@@ -232,13 +233,13 @@ contains
                 !$omp end parallel do
             case( 'no','shc' )
                 if( p%oritab .eq. '' )then
-                    !$omp parallel do default(shared) schedule(guided) private(iptcl) proc_bind(close)
+                    !$omp parallel do default(shared) private(iptcl) schedule(guided) proc_bind(close)
                     do iptcl=p%fromp,p%top
                         call primesrch3D(iptcl)%exec_prime3D_srch(p%lp, greedy=.true.)
                     end do
                     !$omp end parallel do
                 else
-                    !$omp parallel do default(shared) schedule(guided) private(iptcl) proc_bind(close)
+                    !$omp parallel do default(shared) private(iptcl) schedule(guided) proc_bind(close)
                     do iptcl=p%fromp,p%top
                         if( to_update(iptcl) )then
                             call primesrch3D(iptcl)%exec_prime3D_srch(p%lp)
@@ -248,7 +249,7 @@ contains
                 endif
             case('neigh','shcneigh')
                 if( p%oritab .eq. '' ) stop 'cannot run the refine=neigh mode without input oridoc (oritab)'
-                !$omp parallel do default(shared) schedule(guided) private(iptcl) proc_bind(close)
+                !$omp parallel do default(shared) private(iptcl) schedule(guided) proc_bind(close)
                 do iptcl=p%fromp,p%top
                     if( to_update(iptcl) )then
                         call primesrch3D(iptcl)%exec_prime3D_srch(p%lp, nnmat=b%nnmat, grid_projs=b%grid_projs)
@@ -257,13 +258,13 @@ contains
                 !$omp end parallel do
             case('greedy')
                 if( p%oritab .eq. '' )then
-                    !$omp parallel do default(shared) schedule(guided) private(iptcl) proc_bind(close)
+                    !$omp parallel do default(shared) private(iptcl) schedule(guided) proc_bind(close)
                     do iptcl=p%fromp,p%top
                         call primesrch3D(iptcl)%exec_prime3D_srch(p%lp, greedy=.true.)
                     end do
                     !$omp end parallel do
                 else
-                    !$omp parallel do default(shared) schedule(guided) private(iptcl) proc_bind(close)
+                    !$omp parallel do default(shared) private(iptcl) schedule(guided) proc_bind(close)
                     do iptcl=p%fromp,p%top
                         if( to_update(iptcl) )then
                             call primesrch3D(iptcl)%exec_prime3D_srch(p%lp, greedy=.true.)
@@ -273,14 +274,14 @@ contains
                 endif
             case('greedyneigh')
                 if( p%oritab .eq. '' )then                
-                    !$omp parallel do default(shared) schedule(guided) private(iptcl) proc_bind(close)
+                    !$omp parallel do default(shared) private(iptcl) schedule(guided) proc_bind(close)
                     do iptcl=p%fromp,p%top
                         call primesrch3D(iptcl)%exec_prime3D_srch(p%lp,&
                             &greedy=.true., nnmat=b%nnmat, grid_projs=b%grid_projs)
                     end do
                     !$omp end parallel do
                 else
-                    !$omp parallel do default(shared) schedule(guided) private(iptcl) proc_bind(close)
+                    !$omp parallel do default(shared) private(iptcl) schedule(guided) proc_bind(close)
                     do iptcl=p%fromp,p%top
                         if( to_update(iptcl) )then
                             call primesrch3D(iptcl)%exec_prime3D_srch(p%lp,&
@@ -295,7 +296,7 @@ contains
                     write(*,'(A,F8.2)') '>>> PARTICLE RANDOMIZATION(%):', 100.*extr_thresh
                     write(*,'(A,F8.2)') '>>> CORRELATION THRESHOLD:    ', corr_thresh
                 endif
-                !$omp parallel do default(shared) schedule(guided) private(iptcl) reduction(+:statecnt) proc_bind(close)
+                !$omp parallel do default(shared) private(iptcl) schedule(guided) reduction(+:statecnt) proc_bind(close)
                 do iptcl=p%fromp,p%top
                     call primesrch3D(iptcl)%exec_prime3D_srch_het(corr_thresh, statecnt)
                 end do
@@ -309,7 +310,7 @@ contains
                 endif
             case ('states')
                 if(p%oritab .eq. '') stop 'cannot run the refine=states mode without input oridoc (oritab)'
-                !$omp parallel do default(shared) schedule(guided) private(iptcl) proc_bind(close)
+                !$omp parallel do default(shared) private(iptcl) schedule(guided) proc_bind(close)
                 do iptcl=p%fromp,p%top
                     if( to_update(iptcl) )then
                         call primesrch3D(iptcl)%exec_prime3D_srch(p%lp, greedy=.true., nnmat=b%nnmat)
@@ -318,7 +319,7 @@ contains
                 !$omp end parallel do
             case ('tseries')
                 if(p%oritab .eq. '') stop 'cannot run the refine=tseries mode without input oridoc (oritab)'
-                !$omp parallel do default(shared) schedule(guided) private(iptcl) proc_bind(close)
+                !$omp parallel do default(shared) private(iptcl) schedule(guided) proc_bind(close)
                 do iptcl=p%fromp,p%top
                     if( to_update(iptcl) )then
                         call primesrch3D(iptcl)%exec_prime3D_srch(p%lp, greedy=.false.)
@@ -360,7 +361,6 @@ contains
                        &nint(orientation%get('state_balance')) == 0 ) cycle
                     call read_img_and_norm( b, p, iptcl )
                     if( p%npeaks > 1 )then
-                        ! call grid_ptcl(b, p, orientation, os=o_peaks(iptcl))
                         call primesrch3D(iptcl)%get_oris(prime3D_oris, orientation)
                         call grid_ptcl(b, p, orientation, os=prime3D_oris)
                     else
@@ -381,13 +381,10 @@ contains
 
         ! DESTRUCT
         if( .not. p%l_distr_exec )then
-            call prime3D_prepsrch_clean
-            do iptcl=p%fromp,p%top
-                call primesrch3D(iptcl)%kill
-            end do
+            call clean_after_primesrch3D
             call pftcc%kill
             deallocate( primesrch3D )
-            call prime3D_oris%kill
+            ! call prime3D_oris%kill
             call killrecvols(b, p)
         endif
 
@@ -602,5 +599,135 @@ contains
             end do
         end do
     end subroutine prep_ptcls_pftcc4align
+
+    subroutine prep4primesrch3D( b, p )
+        use simple_ran_tabu,  only: ran_tabu
+        class(build),   intent(inout) :: b
+        class(params),  intent(inout) :: p
+        type(ran_tabu) :: rt
+        real    :: euldists(p%nspace)
+        integer :: i, istate, iproj, iptcl, prev_state, nnnrefs, cnt, prev_proj, prev_ref
+        call clean_after_primesrch3D
+        ! reference projections indices, here to avoid online allocation in prime3d_srch
+        allocate(o_refs(p%fromp:p%top))
+        do iptcl = p%fromp, p%top
+            call o_refs(iptcl)%new_clean(p%nstates*p%nspace)
+            cnt = 0
+            do istate=1,p%nstates
+                do iproj=1,p%nspace
+                    cnt = cnt + 1
+                    call o_refs(iptcl)%set( cnt, 'state', real(istate) ) ! Updates state
+                    call o_refs(iptcl)%set( cnt, 'proj', real(iproj) )   ! Updates proj
+                    call o_refs(iptcl)%set_euler( cnt, b%e%get_euler(iproj) )
+                enddo
+            enddo
+        enddo
+        ! projection direction peaks & weights transfer
+        allocate(o_peaks(p%fromp:p%top))
+        do iptcl = p%fromp, p%top
+            call o_peaks(iptcl)%new_clean(p%npeaks)
+            if( p%ctf.ne.'no' )then
+                call o_peaks(iptcl)%set_all2single('kv', b%a%get(iptcl,'kv'))
+                call o_peaks(iptcl)%set_all2single('cs', b%a%get(iptcl,'cs'))
+                call o_peaks(iptcl)%set_all2single('fraca', b%a%get(iptcl,'fraca'))
+                call o_peaks(iptcl)%set_all2single('dfx', b%a%get(iptcl,'dfx'))
+                if( p%tfplan%mode .eq. 'astig' )then
+                    call o_peaks(iptcl)%set_all2single('dfy', b%a%get(iptcl,'dfy'))
+                    call o_peaks(iptcl)%set_all2single('angast', b%a%get(iptcl,'angast'))
+                else
+                    call o_peaks(iptcl)%set_all2single('dfy', b%a%get(iptcl,'dfx'))
+                    call o_peaks(iptcl)%set_all2single('angast', 0.)
+                endif
+                if( p%tfplan%l_phaseplate )then
+                    call o_peaks(iptcl)%set_all2single('phshift', b%a%get(iptcl,'phshift'))
+                endif
+            endif
+        enddo
+        ! reference projection directions indices
+        allocate(proj_space_inds(p%fromp:p%top, p%nspace*p%nstates), source=0)
+        ! nearest neighbours
+        select case( trim(p%refine) )
+            case( 'states' )
+                allocate(srch_order(p%fromp:p%top, p%nnn), source=0)
+                rt = ran_tabu(p%nnn)
+                do iptcl = p%fromp, p%top
+                    prev_state = nint(b%a%get(iptcl, 'state'))
+                    srch_order(iptcl,:) = b%nnmat(iptcl,:) + (prev_state-1)*p%nspace
+                    call rt%shuffle( srch_order(iptcl,:) )
+                    prev_ref = (prev_state-1)*p%nspace + b%e%find_closest_proj(b%a%get_ori(iptcl))
+                    call put_last(prev_ref, srch_order(iptcl,:))
+                enddo
+            case( 'neigh','shcneigh', 'greedyneigh' )
+                nnnrefs =  p%nnn * p%nstates
+                allocate(srch_order(p%fromp:p%top, nnnrefs), source=0)
+                rt = ran_tabu(nnnrefs)
+                do iptcl = p%fromp, p%top
+                    prev_state = nint(b%a%get(iptcl, 'state'))
+                    prev_proj  = b%e%find_closest_proj(b%a%get_ori(iptcl))
+                    prev_ref   = (prev_state-1)*p%nspace + prev_proj
+                    do istate = 0, p%nstates-1
+                        i = istate*p%nnn+1
+                        srch_order(iptcl,i:i+p%nnn-1) = b%nnmat(prev_proj,:) + istate*p%nspace
+                    enddo
+                    call rt%shuffle( srch_order(iptcl,:) )
+                    call put_last(prev_ref, srch_order(iptcl,:))
+                enddo                
+            case( 'yes' )
+                allocate(srch_order(p%fromp:p%top,p%nspace*p%nstates), source=0)
+                do iptcl = p%fromp, p%top
+                    prev_state = nint(b%a%get(iptcl, 'state'))
+                    call b%e%calc_euldists(b%a%get_ori(iptcl), euldists)
+                    call hpsort( p%nspace, euldists, srch_order(iptcl,:p%nspace) )
+                    prev_ref = (prev_state-1)*p%nspace + srch_order(iptcl,1)
+                    do istate = 0, p%nstates-1
+                        i = istate*p%nspace+1
+                        srch_order(iptcl,i:i+p%nspace-1) = srch_order(iptcl,1:p%nspace) + istate*p%nspace
+                    enddo
+                    call put_last(prev_ref, srch_order(iptcl,:))
+                enddo
+            case('no','shc','snhc','greedy')
+                allocate(srch_order(p%fromp:p%top,p%nspace*p%nstates), source=0)
+                rt = ran_tabu(p%nspace*p%nstates)
+                do iptcl = p%fromp, p%top
+                    prev_state = nint(b%a%get(iptcl, 'state'))
+                    call rt%ne_ran_iarr( srch_order(iptcl,:) )
+                    prev_ref = (prev_state-1)*p%nspace + b%e%find_closest_proj(b%a%get_ori(iptcl))
+                    call put_last(prev_ref, srch_order(iptcl,:))
+                enddo
+            case DEFAULT
+                stop 'Unknown refinement mode; simple_prime3D_srch; prep4srch'
+        end select
+        if( any(srch_order == 0) ) stop 'Invalid index in srch_order; simple_prime3d_srch::prep_ref_oris'
+        call rt%kill
+        ! states existence
+        if( p%oritab.ne.'' )then
+            state_exists = b%a%states_exist(p%nstates)
+        else
+            allocate(state_exists(p%nstates), source=.true.)
+        endif
+    end subroutine prep4primesrch3D
+
+    subroutine clean_after_primesrch3D
+        integer :: i, fromp(1), top(1)
+        if( allocated(o_refs) )then
+            fromp = lbound(o_refs) 
+            top   = ubound(o_refs)
+            do i = fromp(1), top(1)
+                call o_refs(i)%kill
+            enddo
+            deallocate(o_refs)
+        endif
+        if( allocated(o_peaks) )then
+            fromp = lbound(o_peaks) 
+            top   = ubound(o_peaks)
+            do i = fromp(1), top(1)
+                call o_peaks(i)%kill
+            enddo
+            deallocate(o_peaks)
+        endif
+        if( allocated(srch_order)      ) deallocate(srch_order)
+        if( allocated(proj_space_inds) ) deallocate(proj_space_inds)
+        if( allocated(state_exists)    ) deallocate(state_exists)
+    end subroutine clean_after_primesrch3D
 
 end module simple_hadamard3D_matcher
