@@ -25,8 +25,8 @@ private
 logical, parameter              :: L_BENCH = .false.
 type(polarft_corrcalc)          :: pftcc
 type(prime3D_srch), allocatable :: primesrch3D(:)
-integer(timer_int_kind)         :: t_init, t_prep_pftcc, t_align, t_rec, t_tot
-real(timer_int_kind)            :: rt_init, rt_prep_pftcc, rt_align, rt_rec
+integer(timer_int_kind)         :: t_init, t_prep_pftcc, t_align, t_rec, t_tot, t_prep_primesrch3D
+real(timer_int_kind)            :: rt_init, rt_prep_pftcc, rt_align, rt_rec, rt_prep_primesrch3D
 real(timer_int_kind)            :: rt_tot
 character(len=STDLEN)           :: benchfname
 
@@ -79,10 +79,10 @@ contains
         type(ori)  :: orientation
         real       :: norm, corr_thresh, skewness, frac_srch_space
         real       :: extr_thresh, update_frac, reslim
-        integer    :: iptcl, inptcls, istate, iextr_lim
+        integer    :: iptcl, inptcls, istate, iextr_lim, i, fromp(1), top(1)
         integer    :: update_ind, nupdates_target, nupdates, fnr
         integer    :: statecnt(p%nstates)
-        logical    :: doprint
+        logical    :: doprint 
 
         if( L_BENCH )then
             t_init = tic()
@@ -210,10 +210,14 @@ contains
 
         ! STOCHASTIC IMAGE ALIGNMENT
         ! create the search objects, need to re-create every round because parameters are changing
+        if( L_BENCH ) t_prep_primesrch3D = tic()
+        call prep4primesrch3D( b, p )
+        if( L_BENCH ) rt_prep_primesrch3D = toc(t_prep_primesrch3D)
+        call associate_prime3D_srch_ptrs(pftcc, b%a, b%e, b%se, o_refs, o_peaks, srch_order, proj_space_inds, state_exists) 
         allocate( primesrch3D(p%fromp:p%top) , stat=alloc_stat)
         allocchk("In hadamard3D_matcher::prime3D_exec primesrch3D objects ")
         do iptcl=p%fromp,p%top
-            call primesrch3D(iptcl)%new(iptcl, pftcc, b%a, b%e, p)
+            call primesrch3D(iptcl)%new(iptcl, p)
         end do
         ! apply CTF to particles
         if( p%ctf .ne. 'no' ) call pftcc%create_polar_ctfmats(b%a)
@@ -330,9 +334,13 @@ contains
                 write(*,*) 'The refinement mode: ', trim(p%refine), ' is unsupported'
                 stop
         end select
+        ! pftcc & primesrch3D not needed anymore
+        call pftcc%kill
+        deallocate(primesrch3D)
+        ! nullify pointers
+        call nullify_prime3D_srch_ptrs
         if( L_BENCH ) rt_align = toc(t_align)
         
-
         ! PARTICLE REJECTION BASED ON ALIGNABILITY (SDEV OF ANGULAR ORIS)
         if( cline%defined('sdev_thres') )then
             call b%a%reject_above('sdev', p%sdev_thres)
@@ -361,8 +369,7 @@ contains
                        &nint(orientation%get('state_balance')) == 0 ) cycle
                     call read_img_and_norm( b, p, iptcl )
                     if( p%npeaks > 1 )then
-                        call primesrch3D(iptcl)%get_oris(prime3D_oris, orientation)
-                        call grid_ptcl(b, p, orientation, os=prime3D_oris)
+                        call grid_ptcl(b, p, orientation, os= o_peaks(iptcl))
                     else
                         call grid_ptcl(b, p, orientation)
                     endif
@@ -376,17 +383,10 @@ contains
             else
                 call norm_struct_facts(b, p, which_iter)
             endif
-        endif
-        if( L_BENCH ) rt_rec = toc(t_rec)
-
-        ! DESTRUCT
-        if( .not. p%l_distr_exec )then
-            call clean_after_primesrch3D
-            call pftcc%kill
-            deallocate( primesrch3D )
-            ! call prime3D_oris%kill
+            ! recvols not needed anymore
             call killrecvols(b, p)
         endif
+        if( L_BENCH ) rt_rec = toc(t_rec)
 
         ! REPORT CONVERGENCE
         if( p%l_distr_exec )then
@@ -406,19 +406,21 @@ contains
                 benchfname = 'HADAMARD3D_BENCH_ITER'//int2str_pad(which_iter,3)//'.txt'
                 call fopen(fnr, FILE=trim(benchfname), STATUS='REPLACE', action='WRITE')
                 write(fnr,'(a)') '*** TIMINGS (s) ***'
-                write(fnr,'(a,1x,f9.2)') 'initialisation       : ', rt_init
-                write(fnr,'(a,1x,f9.2)') 'pftcc preparation    : ', rt_prep_pftcc
-                write(fnr,'(a,1x,f9.2)') 'stochastic alignment : ', rt_align
-                write(fnr,'(a,1x,f9.2)') 'reconstruction       : ', rt_rec
-                write(fnr,'(a,1x,f9.2)') 'total time           : ', rt_tot
+                write(fnr,'(a,1x,f9.2)') 'initialisation          : ', rt_init
+                write(fnr,'(a,1x,f9.2)') 'pftcc preparation       : ', rt_prep_pftcc
+                write(fnr,'(a,1x,f9.2)') 'primesrch3D preparation : ', rt_prep_primesrch3D
+                write(fnr,'(a,1x,f9.2)') 'stochastic alignment    : ', rt_align
+                write(fnr,'(a,1x,f9.2)') 'reconstruction          : ', rt_rec
+                write(fnr,'(a,1x,f9.2)') 'total time              : ', rt_tot
                 write(fnr,'(a)') ''
                 write(fnr,'(a)') '*** REATIVE TIMINGS (%) ***'
-                write(fnr,'(a,1x,f9.2)') 'initialisation       : ', (rt_init/rt_tot)        * 100.
-                write(fnr,'(a,1x,f9.2)') 'pftcc preparation    : ', (rt_prep_pftcc/rt_tot)  * 100.
-                write(fnr,'(a,1x,f9.2)') 'stochastic alignment : ', (rt_align/rt_tot)       * 100.
-                write(fnr,'(a,1x,f9.2)') 'reconstruction       : ', (rt_rec/rt_tot)        * 100.
-                write(fnr,'(a,1x,f9.2)') '% accounted for      : ',&
-                    &((rt_init+rt_prep_pftcc+rt_align+rt_rec)/rt_tot) * 100.
+                write(fnr,'(a,1x,f9.2)') 'initialisation          : ', (rt_init/rt_tot)             * 100.
+                write(fnr,'(a,1x,f9.2)') 'pftcc preparation       : ', (rt_prep_pftcc/rt_tot)       * 100.
+                write(fnr,'(a,1x,f9.2)') 'primesrch3D preparation : ', (rt_prep_primesrch3D/rt_tot) * 100.
+                write(fnr,'(a,1x,f9.2)') 'stochastic alignment    : ', (rt_align/rt_tot)            * 100.
+                write(fnr,'(a,1x,f9.2)') 'reconstruction          : ', (rt_rec/rt_tot)              * 100.
+                write(fnr,'(a,1x,f9.2)') '% accounted for         : ',&
+                    &((rt_init+rt_prep_pftcc+rt_prep_primesrch3D+rt_align+rt_rec)/rt_tot) * 100.
                 call fclose(fnr)
             endif
         endif
@@ -607,7 +609,22 @@ contains
         type(ran_tabu) :: rt
         real    :: euldists(p%nspace)
         integer :: i, istate, iproj, iptcl, prev_state, nnnrefs, cnt, prev_proj, prev_ref
-        call clean_after_primesrch3D
+        ! clean all shared arrays
+        if( allocated(o_refs) )then
+            do i=p%fromp,p%top
+                call o_refs(i)%kill
+            enddo
+            deallocate(o_refs)
+        endif
+        if( allocated(o_peaks) )then
+            do i=p%fromp,p%top
+                call o_peaks(i)%kill
+            enddo
+            deallocate(o_peaks)
+        endif
+        if( allocated(proj_space_inds) ) deallocate(proj_space_inds)
+        if( allocated(srch_order)      ) deallocate(srch_order)
+        if( allocated(state_exists)    ) deallocate(state_exists)
         ! reference projections indices, here to avoid online allocation in prime3d_srch
         allocate(o_refs(p%fromp:p%top))
         do iptcl = p%fromp, p%top
@@ -626,6 +643,7 @@ contains
         allocate(o_peaks(p%fromp:p%top))
         do iptcl = p%fromp, p%top
             call o_peaks(iptcl)%new_clean(p%npeaks)
+            ! transfer CTF params
             if( p%ctf.ne.'no' )then
                 call o_peaks(iptcl)%set_all2single('kv', b%a%get(iptcl,'kv'))
                 call o_peaks(iptcl)%set_all2single('cs', b%a%get(iptcl,'cs'))
@@ -642,6 +660,8 @@ contains
                     call o_peaks(iptcl)%set_all2single('phshift', b%a%get(iptcl,'phshift'))
                 endif
             endif
+            ! transfer eo flag
+            call o_peaks(iptcl)%set_all2single('eo', b%a%get(iptcl,'eo'))
         enddo
         ! reference projection directions indices
         allocate(proj_space_inds(p%fromp:p%top, p%nspace*p%nstates), source=0)
@@ -695,9 +715,9 @@ contains
                     call put_last(prev_ref, srch_order(iptcl,:))
                 enddo
             case DEFAULT
-                stop 'Unknown refinement mode; simple_prime3D_srch; prep4srch'
+                stop 'Unknown refinement mode; simple_hadamard3D_matcher; prep4primesrch3D'
         end select
-        if( any(srch_order == 0) ) stop 'Invalid index in srch_order; simple_prime3d_srch::prep_ref_oris'
+        if( any(srch_order == 0) ) stop 'Invalid index in srch_order; simple_hadamard3D_matcher :: prep4primesrch3D'
         call rt%kill
         ! states existence
         if( p%oritab.ne.'' )then
@@ -706,28 +726,5 @@ contains
             allocate(state_exists(p%nstates), source=.true.)
         endif
     end subroutine prep4primesrch3D
-
-    subroutine clean_after_primesrch3D
-        integer :: i, fromp(1), top(1)
-        if( allocated(o_refs) )then
-            fromp = lbound(o_refs) 
-            top   = ubound(o_refs)
-            do i = fromp(1), top(1)
-                call o_refs(i)%kill
-            enddo
-            deallocate(o_refs)
-        endif
-        if( allocated(o_peaks) )then
-            fromp = lbound(o_peaks) 
-            top   = ubound(o_peaks)
-            do i = fromp(1), top(1)
-                call o_peaks(i)%kill
-            enddo
-            deallocate(o_peaks)
-        endif
-        if( allocated(srch_order)      ) deallocate(srch_order)
-        if( allocated(proj_space_inds) ) deallocate(proj_space_inds)
-        if( allocated(state_exists)    ) deallocate(state_exists)
-    end subroutine clean_after_primesrch3D
 
 end module simple_hadamard3D_matcher

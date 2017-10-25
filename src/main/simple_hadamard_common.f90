@@ -199,7 +199,7 @@ contains
         class(oris), optional, intent(inout) :: os
         type(ori) :: orisoft, o_sym
         real      :: pw, w
-        integer   :: jpeak, s, k, npeaks
+        integer   :: jpeak, s, k, npeaks, eo
         logical   :: l_softrec
         l_softrec = .false.
         npeaks    = 1
@@ -209,6 +209,8 @@ contains
         endif
         pw = 1.0
         if( orientation%isthere('w') ) pw = orientation%get('w')
+        eo = 0
+        if( p%eo .ne. 'no' ) eo = nint(orientation%get('eo'))
         if( pw > TINY )then
             ! pre-gridding correction for the kernel convolution
             call b%gridprep%prep(b%img, b%img_pad)
@@ -218,16 +220,16 @@ contains
                 ! get ori info
                 if( l_softrec )then
                     orisoft = os%get_ori(jpeak)
-                    w = orisoft%get('ow')
+                    w       = orisoft%get('ow')
                 else
-                    w = 1.
+                    w       = 1.
                 endif
                 s = nint(orisoft%get('state'))
                 if( p%frac < 0.99 ) w = w * pw
                 if( w > TINY )then
                     if( p%pgrp == 'c1' )then
                         if( p%eo .ne. 'no' )then
-                            call b%eorecvols(s)%grid_fplane(orisoft, b%img_pad, pwght=w)
+                            call b%eorecvols(s)%grid_fplane(orisoft, b%img_pad, eo, pwght=w)
                         else
                             call b%recvols(s)%inout_fplane(orisoft, .true., b%img_pad, pwght=w)
                         endif
@@ -235,7 +237,7 @@ contains
                         do k=1,b%se%get_nsym()
                             o_sym = b%se%apply(orisoft, k)
                             if( p%eo .ne. 'no' )then
-                                call b%eorecvols(s)%grid_fplane(o_sym, b%img_pad, pwght=w)
+                                call b%eorecvols(s)%grid_fplane(o_sym, b%img_pad, eo, pwght=w)
                             else
                                 call b%recvols(s)%inout_fplane(o_sym, .true., b%img_pad, pwght=w)
                             endif
@@ -640,7 +642,7 @@ contains
                 call b%vol%write(p%vols(s), del_if_exists=.true.)
                 if( present(which_iter) )then
                     ! post-process volume
-                    pprocvol = add2fbody(trim(p%vols(s)), p%ext, 'pproc')
+                    pprocvol = add2fbody(trim(p%vols(s)), p%ext, '_pproc')
                     call b%vol%fwd_ft
                     ! low-pass filter
                     call b%vol%bp(0., p%lp)
@@ -709,7 +711,7 @@ contains
                 call b%vol2%write(p%vols_odd(s), del_if_exists=.true.)
                 if( present(which_iter) )then
                     ! post-process volume
-                    pprocvol = add2fbody(trim(p%vols(s)), p%ext, 'pproc')
+                    pprocvol   = add2fbody(trim(p%vols(s)), p%ext, '_pproc')
                     b%fsc(s,:) = file2rarr('fsc_state'//int2str_pad(s,2)//'.bin')
                     ! low-pass filter
                     call b%vol%bp(0., p%lp)

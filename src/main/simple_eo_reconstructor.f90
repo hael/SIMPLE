@@ -244,14 +244,13 @@ contains
     ! INTERPOLATION
 
     !> \brief  for gridding a Fourier plane
-    subroutine grid_fplane(self, o, fpl, pwght )
+    subroutine grid_fplane(self, o, fpl, eo, pwght )
         use simple_ori, only: ori
         class(eo_reconstructor), intent(inout) :: self  !< instance
         class(ori),              intent(inout) :: o     !< orientation
         class(image),            intent(inout) :: fpl   !< Fourier plane
+        integer,                 intent(in)    :: eo    !< eo flag
         real,                    intent(in)    :: pwght !< external particle weight (affects both fplane and rho)
-        integer :: eo
-        eo = nint(o%get('eo'))
         select case(eo)
             case(-1,0)
                 call self%even%inout_fplane(o, .true., fpl, pwght)
@@ -439,7 +438,7 @@ contains
                 use simple_ori, only: ori
                 character(len=:), allocatable :: stkname
                 type(ori) :: o_sym, orientation
-                integer   :: j, state, state_balance, ind
+                integer   :: j, state, state_balance, ind, eo
                 real      :: pw
                 state         = nint(o%get(i, 'state'))
                 state_balance = nint(o%get(i, 'state_balance'))
@@ -448,6 +447,7 @@ contains
                 if( p%frac < 0.99 ) pw = o%get(i, 'w')
                 if( pw > 0. )then
                     orientation = o%get_ori(i)
+                    eo          = nint(orientation%get('eo'))
                     ! read image
                     if( p%l_stktab_input )then
                         call p%stkhandle%get_stkname_and_ind(i, stkname, ind)
@@ -463,11 +463,11 @@ contains
                     call prep4cgrid(img, img_pad, p%msk, kbwin)
                     ! interpolation
                     if( p%pgrp == 'c1' )then
-                        call self%grid_fplane(orientation, img_pad, pw)
+                        call self%grid_fplane(orientation, img_pad, eo, pw)
                     else
                         do j=1,se%get_nsym()
                             o_sym = se%apply(orientation, j)
-                            call self%grid_fplane(o_sym, img_pad, pw)
+                            call self%grid_fplane(o_sym, img_pad, eo, pw)
                         end do
                     endif
                  endif
