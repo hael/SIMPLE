@@ -105,9 +105,9 @@ contains
             do istate=1,p%nstates
                 do iproj=1,p%nspace
                     cnt = cnt + 1
-                    call o_refs(iptcl)%set( cnt, 'state', real(istate) ) ! Updates state
-                    call o_refs(iptcl)%set( cnt, 'proj', real(iproj) )   ! Updates proj
-                    call o_refs(iptcl)%set_euler( cnt, b%e%get_euler(iproj) )
+                    call o_refs(iptcl)%set( cnt, 'state', real(istate) )      ! Updates state
+                    call o_refs(iptcl)%set( cnt, 'proj', real(iproj) )        ! Updates proj
+                    call o_refs(iptcl)%set_euler( cnt, b%e%get_euler(iproj) ) ! Updates Euler
                 enddo
             enddo
         enddo
@@ -142,50 +142,59 @@ contains
             case( 'states' )
                 allocate(srch_order(p%fromp:p%top, p%nnn), source=0)
                 rt = ran_tabu(p%nnn)
+                !$omp parallel do default(shared) private(iptcl,prev_state,rt,prev_ref) schedule(static) proc_bind(close)
                 do iptcl = p%fromp, p%top
-                    prev_state = nint(b%a%get(iptcl, 'state'))
-                    srch_order(iptcl,:) = b%nnmat(iptcl,:) + (prev_state-1)*p%nspace
+                    prev_state          = nint(b%a%get(iptcl, 'state'))
+                    srch_order(iptcl,:) = b%nnmat(iptcl,:) + (prev_state - 1) * p%nspace
                     call rt%shuffle( srch_order(iptcl,:) )
-                    prev_ref = (prev_state-1)*p%nspace + b%e%find_closest_proj(b%a%get_ori(iptcl))
+                    prev_ref = (prev_state - 1) * p%nspace + b%e%find_closest_proj(b%a%get_ori(iptcl))
                     call put_last(prev_ref, srch_order(iptcl,:))
                 enddo
+                !$omp end parallel do
             case( 'neigh','shcneigh', 'greedyneigh' )
                 nnnrefs =  p%nnn * p%nstates
                 allocate(srch_order(p%fromp:p%top, nnnrefs), source=0)
                 rt = ran_tabu(nnnrefs)
+                !$omp parallel do default(shared) private(iptcl,prev_state,prev_proj,prev_ref,istate,i,rt) schedule(static) proc_bind(close)
                 do iptcl = p%fromp, p%top
                     prev_state = nint(b%a%get(iptcl, 'state'))
                     prev_proj  = b%e%find_closest_proj(b%a%get_ori(iptcl))
-                    prev_ref   = (prev_state-1)*p%nspace + prev_proj
-                    do istate = 0, p%nstates-1
-                        i = istate*p%nnn+1
-                        srch_order(iptcl,i:i+p%nnn-1) = b%nnmat(prev_proj,:) + istate*p%nspace
+                    prev_ref   = (prev_state - 1)*p%nspace + prev_proj
+                    do istate = 0, p%nstates - 1
+                        i = istate * p%nnn + 1
+                        srch_order(iptcl,i:i + p%nnn - 1) = b%nnmat(prev_proj,:) + istate * p%nspace
                     enddo
-                    call rt%shuffle( srch_order(iptcl,:) )
+                    call rt%shuffle(srch_order(iptcl,:))
                     call put_last(prev_ref, srch_order(iptcl,:))
-                enddo                
+                enddo
+                !$omp end parallel do
             case( 'yes' )
                 allocate(srch_order(p%fromp:p%top,p%nspace*p%nstates), source=0)
+                !$omp parallel do default(shared) private(iptcl,prev_state,euldists,prev_ref,istate,i) schedule(static) proc_bind(close)
                 do iptcl = p%fromp, p%top
                     prev_state = nint(b%a%get(iptcl, 'state'))
                     call b%e%calc_euldists(b%a%get_ori(iptcl), euldists)
+                    srch_order(iptcl,:p%nspace) = (/(i,i=1,p%nspace)/)
                     call hpsort( p%nspace, euldists, srch_order(iptcl,:p%nspace) )
-                    prev_ref = (prev_state-1)*p%nspace + srch_order(iptcl,1)
-                    do istate = 0, p%nstates-1
-                        i = istate*p%nspace+1
-                        srch_order(iptcl,i:i+p%nspace-1) = srch_order(iptcl,1:p%nspace) + istate*p%nspace
+                    prev_ref = (prev_state - 1) * p%nspace + srch_order(iptcl,1)
+                    do istate = 0, p%nstates - 1
+                        i = istate * p%nspace + 1
+                        srch_order(iptcl,i:i + p%nspace - 1) = srch_order(iptcl,:p%nspace) + istate * p%nspace
                     enddo
                     call put_last(prev_ref, srch_order(iptcl,:))
                 enddo
+                !$omp end parallel do
             case('no','shc','snhc','greedy')
                 allocate(srch_order(p%fromp:p%top,p%nspace*p%nstates), source=0)
                 rt = ran_tabu(p%nspace*p%nstates)
+                !$omp parallel do default(shared) private(iptcl,prev_state,prev_ref,istate,i) schedule(static) proc_bind(close)
                 do iptcl = p%fromp, p%top
                     prev_state = nint(b%a%get(iptcl, 'state'))
                     call rt%ne_ran_iarr( srch_order(iptcl,:) )
-                    prev_ref = (prev_state-1)*p%nspace + b%e%find_closest_proj(b%a%get_ori(iptcl))
+                    prev_ref = (prev_state - 1) * p%nspace + b%e%find_closest_proj(b%a%get_ori(iptcl))
                     call put_last(prev_ref, srch_order(iptcl,:))
                 enddo
+                !$omp end parallel do
             case DEFAULT
                 stop 'Unknown refinement mode; simple_hadamard3D_matcher; prep4primesrch3D'
         end select
@@ -248,7 +257,7 @@ contains
                     self%npeaks_grid = GRIDNPEAKS
                 case DEFAULT
                     ! "-(nstates_eff-1)" because all states share the same previous orientation
-                    self%npeaks_grid = GRIDNPEAKS*nstates_eff - (nstates_eff-1)
+                    self%npeaks_grid = GRIDNPEAKS * nstates_eff - (nstates_eff - 1)
             end select
         endif
         if(str_has_substr(self%refine,'neigh'))then
@@ -257,7 +266,7 @@ contains
             self%npeaks_grid = min(self%npeaks_grid,self%nrefs)
         endif
         ! updates option to search shift
-        self%doshift = p%doshift
+        self%doshift   = p%doshift
         ! create in-plane search objects
         lims(:,1)      = -p%trs
         lims(:,2)      =  p%trs

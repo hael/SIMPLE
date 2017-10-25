@@ -889,7 +889,7 @@ select case(prg)
         keys_optional(1)  = 'nthr'
         keys_optional(2)  = 'ncunits'
         keys_optional(3)  = 'hp'
-        keys_optional(4)  = 'lp'
+        keys_optional(4)  = 'lpstart'
         keys_optional(5)  = 'lpstop' 
         keys_optional(6)  = 'frac'
         keys_optional(7)  = 'automsk'

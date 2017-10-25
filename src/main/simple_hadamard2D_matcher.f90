@@ -19,7 +19,7 @@ public :: prime2D_exec, preppftcc4align, pftcc
 private
 #include "simple_local_flags.inc"
 
-logical, parameter              :: L_BENCH         = .false.
+logical, parameter              :: L_BENCH         = .true.
 logical, parameter              :: L_BENCH_PRIME2D = .false.
 type(polarft_corrcalc)          :: pftcc
 type(prime2D_srch), allocatable :: primesrch2D(:)
@@ -187,7 +187,7 @@ contains
         do iptcl=p%fromp,p%top
             call primesrch2D(iptcl)%new(iptcl, pftcc, b%a, p, cls_pops)
         end do
-        ! apply CTF to particles
+        ! generate CTF matrices
         if( p%ctf .ne. 'no' ) call pftcc%create_polar_ctfmats(b%a)
         ! memoize FFTs for improved performance
         call pftcc%memoize_ffts

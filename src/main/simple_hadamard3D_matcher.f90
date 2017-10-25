@@ -211,7 +211,7 @@ contains
         do iptcl=p%fromp,p%top
             call primesrch3D(iptcl)%new(iptcl, p, pftcc, b%a, b%e, b%se)
         end do
-        ! apply CTF to particles
+        ! generate CTF matrices
         if( p%ctf .ne. 'no' ) call pftcc%create_polar_ctfmats(b%a)
         ! memoize FFTs for improved performance
         call pftcc%memoize_ffts
@@ -227,7 +227,7 @@ contains
                     endif
                 end do
                 !$omp end parallel do
-            case( 'no','shc' )
+            case( 'no','shc','yes' )
                 if( p%oritab .eq. '' )then
                     !$omp parallel do default(shared) private(iptcl) schedule(guided) proc_bind(close)
                     do iptcl=p%fromp,p%top

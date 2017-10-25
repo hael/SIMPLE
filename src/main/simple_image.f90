@@ -5724,12 +5724,12 @@ contains
     !! \param backgr
     !!
     subroutine pad( self_in, self_out, backgr )
-        class(image), intent(inout)   :: self_in, self_out
-        real, intent(in), optional    :: backgr
-        real                          :: w, ratio
-        integer                       :: starts(3), stops(3), lims(3,2)
-        integer                       :: h, k, l, phys_in(3), phys_out(3)
-        real, allocatable             :: antialw(:)
+        class(image),  intent(inout) :: self_in, self_out
+        real, optional, intent(in)   :: backgr
+        real              :: w, ratio
+        integer           :: starts(3), stops(3), lims(3,2)
+        integer           :: h, k, l, phys_in(3), phys_out(3)
+        real, allocatable :: antialw(:)
         if( self_in.eqdims.self_out )then
             call self_out%copy(self_in)
             return
