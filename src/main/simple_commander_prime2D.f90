@@ -204,16 +204,16 @@ contains
         call b%build_hadamard_prime2D_tbox(p)
         call cavger%new(b, p, 'class')
         call cavger%assemble_sums_from_parts()
+        p%frcs  = 'frcs.bin'
         if( cline%defined('which_iter') )then
             p%refs      = 'cavgs_iter'//int2str_pad(p%which_iter,3)//p%ext
             p%refs_even = 'cavgs_iter'//int2str_pad(p%which_iter,3)//'_even'//p%ext
             p%refs_odd  = 'cavgs_iter'//int2str_pad(p%which_iter,3)//'_odd'//p%ext
-            if( .not. cline%defined('frcs') ) p%frcs  = 'frcs_iter'//int2str_pad(p%which_iter,3)//'.bin'
+            p%frcs  = 'frcs_iter'//int2str_pad(p%which_iter,3)//'.bin'
         else if( .not. cline%defined('refs') )then
             p%refs      = 'startcavgs'//p%ext
             p%refs_even = 'startcavgs_even'//p%ext
             p%refs_odd  = 'startcavgs_odd'//p%ext
-            if( .not. cline%defined('frcs') ) p%frcs  = 'frcs.bin'
         endif
         call cavger%calc_and_write_frcs(p%frcs)
         call gen2Dclassdoc( b, p, 'classdoc.txt')

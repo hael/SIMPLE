@@ -694,12 +694,15 @@ contains
         type(image)       :: even_img, odd_img
         real, allocatable :: res(:), frc(:)
         integer           :: istate, icls
+        logical           :: err
         do istate=1,self%nstates
             do icls=1,self%ncls
                 even_img = self%cavgs_even(istate,icls)
                 odd_img  = self%cavgs_odd(istate,icls)
-                call even_img%norm
-                call odd_img%norm
+                call even_img%norm(err=err)
+                if( err ) call even_img%ran
+                call odd_img%norm(err=err)
+                if( err ) call odd_img%ran
                 if( self%pp%l_innermsk )then
                     call even_img%mask(self%pp%msk, 'soft', inner=self%pp%inner, width=self%pp%width)
                     call odd_img%mask(self%pp%msk, 'soft', inner=self%pp%inner, width=self%pp%width)
@@ -828,8 +831,8 @@ contains
     !>  \brief  writes partial class averages to disk (distributed execution)
     subroutine write_partial_sums( self )
         class(classaverager), intent(inout) :: self
-        integer :: istate, icls
-        character(len=:), allocatable :: cae, cao, cte, cto
+        integer                             :: istate, icls
+        character(len=:), allocatable       :: cae, cao, cte, cto
         do istate=1,self%nstates
             if( self%nstates > 1 )then
                 allocate(cae, source='cavgs'//'_state'//int2str_pad(istate,2)//'_even_part'//int2str_pad(self%pp%part,self%pp%numlen)//self%pp%ext)

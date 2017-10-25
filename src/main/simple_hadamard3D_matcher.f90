@@ -22,20 +22,13 @@ public :: preppftcc4align, prep_refs_pftcc4align, pftcc
 private
 #include "simple_local_flags.inc"
 
-logical, parameter              :: L_BENCH = .false.
+logical, parameter              :: L_BENCH = .true.
 type(polarft_corrcalc)          :: pftcc
 type(prime3D_srch), allocatable :: primesrch3D(:)
 integer(timer_int_kind)         :: t_init, t_prep_pftcc, t_align, t_rec, t_tot, t_prep_primesrch3D
 real(timer_int_kind)            :: rt_init, rt_prep_pftcc, rt_align, rt_rec, rt_prep_primesrch3D
 real(timer_int_kind)            :: rt_tot
 character(len=STDLEN)           :: benchfname
-
-! allocatables for prime3D_srch (here to improve chacheing)
-type(oris), allocatable :: o_refs(:)
-type(oris), allocatable :: o_peaks(:)
-integer,    allocatable :: srch_order(:,:)
-integer,    allocatable :: proj_space_inds(:,:)
-logical,    allocatable :: state_exists(:)
 
 contains
 
@@ -79,7 +72,7 @@ contains
         type(ori)  :: orientation
         real       :: norm, corr_thresh, skewness, frac_srch_space
         real       :: extr_thresh, update_frac, reslim
-        integer    :: iptcl, inptcls, istate, iextr_lim, i, fromp(1), top(1)
+        integer    :: iptcl, inptcls, istate, iextr_lim, i
         integer    :: update_ind, nupdates_target, nupdates, fnr
         integer    :: statecnt(p%nstates)
         logical    :: doprint 
@@ -211,13 +204,12 @@ contains
         ! STOCHASTIC IMAGE ALIGNMENT
         ! create the search objects, need to re-create every round because parameters are changing
         if( L_BENCH ) t_prep_primesrch3D = tic()
-        call prep4primesrch3D( b, p )
+        call prep4prime3D_srch( b, p )
         if( L_BENCH ) rt_prep_primesrch3D = toc(t_prep_primesrch3D)
-        call associate_prime3D_srch_ptrs(pftcc, b%a, b%e, b%se, o_refs, o_peaks, srch_order, proj_space_inds, state_exists) 
         allocate( primesrch3D(p%fromp:p%top) , stat=alloc_stat)
         allocchk("In hadamard3D_matcher::prime3D_exec primesrch3D objects ")
         do iptcl=p%fromp,p%top
-            call primesrch3D(iptcl)%new(iptcl, p)
+            call primesrch3D(iptcl)%new(iptcl, p, pftcc, b%a, b%e, b%se)
         end do
         ! apply CTF to particles
         if( p%ctf .ne. 'no' ) call pftcc%create_polar_ctfmats(b%a)
@@ -337,8 +329,6 @@ contains
         ! pftcc & primesrch3D not needed anymore
         call pftcc%kill
         deallocate(primesrch3D)
-        ! nullify pointers
-        call nullify_prime3D_srch_ptrs
         if( L_BENCH ) rt_align = toc(t_align)
         
         ! PARTICLE REJECTION BASED ON ALIGNABILITY (SDEV OF ANGULAR ORIS)
@@ -601,130 +591,5 @@ contains
             end do
         end do
     end subroutine prep_ptcls_pftcc4align
-
-    subroutine prep4primesrch3D( b, p )
-        use simple_ran_tabu,  only: ran_tabu
-        class(build),   intent(inout) :: b
-        class(params),  intent(inout) :: p
-        type(ran_tabu) :: rt
-        real    :: euldists(p%nspace)
-        integer :: i, istate, iproj, iptcl, prev_state, nnnrefs, cnt, prev_proj, prev_ref
-        ! clean all shared arrays
-        if( allocated(o_refs) )then
-            do i=p%fromp,p%top
-                call o_refs(i)%kill
-            enddo
-            deallocate(o_refs)
-        endif
-        if( allocated(o_peaks) )then
-            do i=p%fromp,p%top
-                call o_peaks(i)%kill
-            enddo
-            deallocate(o_peaks)
-        endif
-        if( allocated(proj_space_inds) ) deallocate(proj_space_inds)
-        if( allocated(srch_order)      ) deallocate(srch_order)
-        if( allocated(state_exists)    ) deallocate(state_exists)
-        ! reference projections indices, here to avoid online allocation in prime3d_srch
-        allocate(o_refs(p%fromp:p%top))
-        do iptcl = p%fromp, p%top
-            call o_refs(iptcl)%new_clean(p%nstates*p%nspace)
-            cnt = 0
-            do istate=1,p%nstates
-                do iproj=1,p%nspace
-                    cnt = cnt + 1
-                    call o_refs(iptcl)%set( cnt, 'state', real(istate) ) ! Updates state
-                    call o_refs(iptcl)%set( cnt, 'proj', real(iproj) )   ! Updates proj
-                    call o_refs(iptcl)%set_euler( cnt, b%e%get_euler(iproj) )
-                enddo
-            enddo
-        enddo
-        ! projection direction peaks & weights transfer
-        allocate(o_peaks(p%fromp:p%top))
-        do iptcl = p%fromp, p%top
-            call o_peaks(iptcl)%new_clean(p%npeaks)
-            ! transfer CTF params
-            if( p%ctf.ne.'no' )then
-                call o_peaks(iptcl)%set_all2single('kv', b%a%get(iptcl,'kv'))
-                call o_peaks(iptcl)%set_all2single('cs', b%a%get(iptcl,'cs'))
-                call o_peaks(iptcl)%set_all2single('fraca', b%a%get(iptcl,'fraca'))
-                call o_peaks(iptcl)%set_all2single('dfx', b%a%get(iptcl,'dfx'))
-                if( p%tfplan%mode .eq. 'astig' )then
-                    call o_peaks(iptcl)%set_all2single('dfy', b%a%get(iptcl,'dfy'))
-                    call o_peaks(iptcl)%set_all2single('angast', b%a%get(iptcl,'angast'))
-                else
-                    call o_peaks(iptcl)%set_all2single('dfy', b%a%get(iptcl,'dfx'))
-                    call o_peaks(iptcl)%set_all2single('angast', 0.)
-                endif
-                if( p%tfplan%l_phaseplate )then
-                    call o_peaks(iptcl)%set_all2single('phshift', b%a%get(iptcl,'phshift'))
-                endif
-            endif
-            ! transfer eo flag
-            call o_peaks(iptcl)%set_all2single('eo', b%a%get(iptcl,'eo'))
-        enddo
-        ! reference projection directions indices
-        allocate(proj_space_inds(p%fromp:p%top, p%nspace*p%nstates), source=0)
-        ! nearest neighbours
-        select case( trim(p%refine) )
-            case( 'states' )
-                allocate(srch_order(p%fromp:p%top, p%nnn), source=0)
-                rt = ran_tabu(p%nnn)
-                do iptcl = p%fromp, p%top
-                    prev_state = nint(b%a%get(iptcl, 'state'))
-                    srch_order(iptcl,:) = b%nnmat(iptcl,:) + (prev_state-1)*p%nspace
-                    call rt%shuffle( srch_order(iptcl,:) )
-                    prev_ref = (prev_state-1)*p%nspace + b%e%find_closest_proj(b%a%get_ori(iptcl))
-                    call put_last(prev_ref, srch_order(iptcl,:))
-                enddo
-            case( 'neigh','shcneigh', 'greedyneigh' )
-                nnnrefs =  p%nnn * p%nstates
-                allocate(srch_order(p%fromp:p%top, nnnrefs), source=0)
-                rt = ran_tabu(nnnrefs)
-                do iptcl = p%fromp, p%top
-                    prev_state = nint(b%a%get(iptcl, 'state'))
-                    prev_proj  = b%e%find_closest_proj(b%a%get_ori(iptcl))
-                    prev_ref   = (prev_state-1)*p%nspace + prev_proj
-                    do istate = 0, p%nstates-1
-                        i = istate*p%nnn+1
-                        srch_order(iptcl,i:i+p%nnn-1) = b%nnmat(prev_proj,:) + istate*p%nspace
-                    enddo
-                    call rt%shuffle( srch_order(iptcl,:) )
-                    call put_last(prev_ref, srch_order(iptcl,:))
-                enddo                
-            case( 'yes' )
-                allocate(srch_order(p%fromp:p%top,p%nspace*p%nstates), source=0)
-                do iptcl = p%fromp, p%top
-                    prev_state = nint(b%a%get(iptcl, 'state'))
-                    call b%e%calc_euldists(b%a%get_ori(iptcl), euldists)
-                    call hpsort( p%nspace, euldists, srch_order(iptcl,:p%nspace) )
-                    prev_ref = (prev_state-1)*p%nspace + srch_order(iptcl,1)
-                    do istate = 0, p%nstates-1
-                        i = istate*p%nspace+1
-                        srch_order(iptcl,i:i+p%nspace-1) = srch_order(iptcl,1:p%nspace) + istate*p%nspace
-                    enddo
-                    call put_last(prev_ref, srch_order(iptcl,:))
-                enddo
-            case('no','shc','snhc','greedy')
-                allocate(srch_order(p%fromp:p%top,p%nspace*p%nstates), source=0)
-                rt = ran_tabu(p%nspace*p%nstates)
-                do iptcl = p%fromp, p%top
-                    prev_state = nint(b%a%get(iptcl, 'state'))
-                    call rt%ne_ran_iarr( srch_order(iptcl,:) )
-                    prev_ref = (prev_state-1)*p%nspace + b%e%find_closest_proj(b%a%get_ori(iptcl))
-                    call put_last(prev_ref, srch_order(iptcl,:))
-                enddo
-            case DEFAULT
-                stop 'Unknown refinement mode; simple_hadamard3D_matcher; prep4primesrch3D'
-        end select
-        if( any(srch_order == 0) ) stop 'Invalid index in srch_order; simple_hadamard3D_matcher :: prep4primesrch3D'
-        call rt%kill
-        ! states existence
-        if( p%oritab.ne.'' )then
-            state_exists = b%a%states_exist(p%nstates)
-        else
-            allocate(state_exists(p%nstates), source=.true.)
-        endif
-    end subroutine prep4primesrch3D
 
 end module simple_hadamard3D_matcher

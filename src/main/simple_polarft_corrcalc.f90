@@ -18,17 +18,17 @@ complex(sp), parameter :: zero=cmplx(0.,0.) !< just a complex zero
 ! the fftw_arrs data structures are needed for thread-safe FFTW exec. Letting OpenMP copy out the per-threads
 ! arrays leads to bugs because of inconsistency between data in memory and the fftw_plan
 type fftw_carr
-    type(c_ptr)                            :: p_re             !< pointer for C-style allocation
-    type(c_ptr)                            :: p_im             !< -"-
-    real(kind=c_float),            pointer :: re(:) => null()  !< corresponding Fortran pointers
-    complex(kind=c_float_complex), pointer :: im(:) => null()  !< -"-
+    type(c_ptr)                            :: p_re                      !< pointer for C-style allocation
+    type(c_ptr)                            :: p_im                      !< -"-
+    real(kind=c_float),            pointer :: re(:) => null()           !< corresponding Fortran pointers
+    complex(kind=c_float_complex), pointer :: im(:) => null()           !< -"-
 end type fftw_carr
 
 type fftw_carr_fft
-    type(c_ptr)                            :: p_re             !< pointer for C-style allocation
-    type(c_ptr)                            :: p_im             !< -"-
-    complex(kind=c_float_complex), pointer :: re(:) => null()  !< corresponding Fortran pointers
-    complex(kind=c_float_complex), pointer :: im(:) => null()  !< -"-
+    type(c_ptr)                            :: p_re                      !< pointer for C-style allocation
+    type(c_ptr)                            :: p_im                      !< -"-
+    complex(kind=c_float_complex), pointer :: re(:) => null()           !< corresponding Fortran pointers
+    complex(kind=c_float_complex), pointer :: im(:) => null()           !< -"-
 end type fftw_carr_fft
 
 type fftw_arrs
@@ -64,21 +64,19 @@ type :: polarft_corrcalc
     real(sp),            allocatable :: angtab(:)             !< table of in-plane angles (in degrees)
     real(sp),            allocatable :: argtransf(:,:)        !< argument transfer constants for shifting the references
     real(sp),            allocatable :: polar(:,:)            !< table of polar coordinates (in Cartesian coordinates)
-    real(sp),            allocatable :: ctfmats(:,:,:)      !< expandd set of CTF matrices (for efficient parallel exec)
+    real(sp),            allocatable :: ctfmats(:,:,:)        !< expand set of CTF matrices (for efficient parallel exec)
     complex(sp),         allocatable :: pfts_refs_even(:,:,:) !< 3D complex matrix of polar reference sections (nrefs,pftsz,nk), even
     complex(sp),         allocatable :: pfts_refs_odd(:,:,:)  !< -"-, odd
     complex(sp),         allocatable :: pfts_ptcls(:,:,:)     !< 3D complex matrix of particle sections
     complex(sp),         allocatable :: fft_factors(:)        !< phase factors for accelerated gencorrs routines
     type(fftw_arrs),     allocatable :: fftdat(:)             !< arrays for accelerated gencorrs routines
     type(fftw_carr_fft), allocatable :: fftdat_ptcls(:,:)     !< for memoization of particle  FFTs in accelerated gencorrs routines
-    type(fftw_carr_fft), allocatable :: fftdat_refs_even(:,:) !< for memoization of reference FFTs in accelerated gencorrs routines, even
-    type(fftw_carr_fft), allocatable :: fftdat_refs_odd(:,:)  !< -"-, odd
     logical,             allocatable :: iseven(:)             !< eo assignment for gold-standard FSC    
     logical                          :: phaseplate            !< images obtained with the Volta
     type(c_ptr)                      :: plan_fwd_1            !< FFTW plans for gencorrs
     type(c_ptr)                      :: plan_fwd_2            !< -"-
     type(c_ptr)                      :: plan_bwd              !< -"-
-    logical                          :: with_ctf  = .false. !< CTF flag
+    logical                          :: with_ctf  = .false.   !< CTF flag
     logical                          :: existence = .false.   !< to indicate existence
   contains
     ! CONSTRUCTOR
@@ -120,9 +118,7 @@ type :: polarft_corrcalc
     procedure          :: apply_ctf_to_ptcls
     procedure, private :: prep_ref4corr
     procedure, private :: calc_corrs_over_k
-    procedure, private :: calc_corrs_over_k_wrefmem
     procedure, private :: calc_k_corrs
-    procedure, private :: calc_k_corrs_wrefmem
     procedure, private :: gencorrs_1
     procedure, private :: gencorrs_2
     procedure, private :: gencorrs_3
@@ -231,14 +227,15 @@ contains
                  &self%pfts_refs_odd(self%nrefs,self%pftsz,self%kfromto(1):self%kfromto(2)),&
                  &self%pfts_ptcls(self%pfromto(1):self%pfromto(2),self%pftsz,self%kfromto(1):self%kfromto(2)),&
                  &self%sqsums_ptcls(self%pfromto(1):self%pfromto(2)), self%fftdat(self%nthr),&
-                 &self%fftdat_ptcls(self%pfromto(1):self%pfromto(2),self%kfromto(1):self%kfromto(2)),&
-                 &self%fftdat_refs_even(1:self%nrefs,self%kfromto(1):self%kfromto(2)),&
-                 &self%fftdat_refs_odd(1:self%nrefs,self%kfromto(1):self%kfromto(2)), stat=alloc_stat)
+                 &self%fftdat_ptcls(self%pfromto(1):self%pfromto(2),self%kfromto(1):self%kfromto(2)), stat=alloc_stat)
         allocchk('polarfts and sqsums; new; simple_polarft_corrcalc')
         self%pfts_refs_even = zero
         self%pfts_refs_odd  = zero
         self%pfts_ptcls     = zero
         self%sqsums_ptcls   = 0.
+        ! set CTF flag
+        self%with_ctf = .false.
+        if( p%ctf .ne. 'no' ) self%with_ctf = .true.
         ! thread-safe c-style allocatables for gencorrs
         do ithr=1,self%nthr
             self%fftdat(ithr)%p_ref_re      = fftwf_alloc_real   (int(self%pftsz, c_size_t))
@@ -261,19 +258,6 @@ contains
                 self%fftdat_ptcls(iptcl,ik)%p_im = fftwf_alloc_complex(int(self%pftsz, c_size_t))
                 call c_f_pointer(self%fftdat_ptcls(iptcl,ik)%p_re, self%fftdat_ptcls(iptcl,ik)%re, [self%pftsz])
                 call c_f_pointer(self%fftdat_ptcls(iptcl,ik)%p_im, self%fftdat_ptcls(iptcl,ik)%im, [self%pftsz])
-            end do
-        end do
-        ! thread-safe c-style allocatables for gencorrs, reference memoization
-        do iref = 1,self%nrefs
-            do ik = self%kfromto(1),self%kfromto(2)
-                self%fftdat_refs_even(iref,ik)%p_re = fftwf_alloc_complex(int(self%pftsz, c_size_t))
-                self%fftdat_refs_even(iref,ik)%p_im = fftwf_alloc_complex(int(self%pftsz, c_size_t))
-                call c_f_pointer(self%fftdat_refs_even(iref,ik)%p_re, self%fftdat_refs_even(iref,ik)%re, [self%pftsz])
-                call c_f_pointer(self%fftdat_refs_even(iref,ik)%p_im, self%fftdat_refs_even(iref,ik)%im, [self%pftsz])
-                self%fftdat_refs_odd(iref,ik)%p_re = fftwf_alloc_complex(int(self%pftsz, c_size_t))
-                self%fftdat_refs_odd(iref,ik)%p_im = fftwf_alloc_complex(int(self%pftsz, c_size_t))
-                call c_f_pointer(self%fftdat_refs_odd(iref,ik)%p_re, self%fftdat_refs_odd(iref,ik)%re, [self%pftsz])
-                call c_f_pointer(self%fftdat_refs_odd(iref,ik)%p_im, self%fftdat_refs_odd(iref,ik)%im, [self%pftsz])
             end do
         end do
         ! FFTW3 wisdoms file
@@ -300,10 +284,8 @@ contains
         do irot = 1,self%pftsz
             self%fft_factors(irot) = exp(-(0.,1.)*PI*real(irot-1)/real(self%pftsz))
         end do
-        self%with_ctf = .false.
-        if( p%ctf .ne. 'no' ) self%with_ctf = .true.
         ! flag existence
-        self%existence    = .true.
+        self%existence = .true.
     end subroutine new
 
     ! SETTERS
@@ -585,30 +567,8 @@ contains
             carray(ithr)%p_im = fftwf_alloc_complex(int(self%pftsz, c_size_t))
             call c_f_pointer(carray(ithr)%p_im, carray(ithr)%im, [self%pftsz])
         end do
-        ! memoize reference FFTs in parallel
-        !$omp parallel default(shared) private(iref,iptcl,ik,ithr) proc_bind(close)
-        !$omp do collapse(2) schedule(static)
-        do iref = 1,self%nrefs
-            do ik = self%kfromto(1),self%kfromto(2)
-                ! get thread index
-                ithr = omp_get_thread_num() + 1
-                ! copy even reference pfts
-                carray(ithr)%re = real(self%pfts_refs_even(iref,:,ik))
-                carray(ithr)%im = aimag(self%pfts_refs_even(iref,:,ik)) * self%fft_factors
-                ! FFT
-                call fftwf_execute_dft_r2c(self%plan_fwd_1, carray(ithr)%re, self%fftdat_refs_even(iref,ik)%re)
-                call fftwf_execute_dft    (self%plan_fwd_2, carray(ithr)%im, self%fftdat_refs_even(iref,ik)%im)
-                ! copy odd reference pfts
-                carray(ithr)%re = real(self%pfts_refs_odd(iref,:,ik))
-                carray(ithr)%im = aimag(self%pfts_refs_odd(iref,:,ik)) * self%fft_factors
-                ! FFT
-                call fftwf_execute_dft_r2c(self%plan_fwd_1, carray(ithr)%re, self%fftdat_refs_odd(iref,ik)%re)
-                call fftwf_execute_dft    (self%plan_fwd_2, carray(ithr)%im, self%fftdat_refs_odd(iref,ik)%im)
-            end do
-        end do
-        !$omp end do nowait
         ! memoize particle FFTs in parallel
-        !$omp do collapse(2) schedule(static)
+        !$omp parallel do default(shared) private(iptcl,ik,ithr) proc_bind(close) collapse(2) schedule(static)
         do iptcl = self%pfromto(1),self%pfromto(2)
             do ik = self%kfromto(1),self%kfromto(2)
                 ! get thread index
@@ -621,8 +581,7 @@ contains
                 call fftwf_execute_dft    (self%plan_fwd_2, carray(ithr)%im, self%fftdat_ptcls(iptcl,ik)%im)
             end do
         end do
-        !$omp end do
-        !$omp end parallel
+        !$omp end parallel do
         ! free memory
         do ithr = 1,self%nthr
             call fftwf_free(carray(ithr)%p_re)
@@ -788,40 +747,6 @@ contains
         corrs_over_k = cshift(corrs_over_k, -1)      ! step 2 is circular shift by 1
     end subroutine calc_corrs_over_k
 
-    subroutine calc_corrs_over_k_wrefmem( self, iref, iptcl, kstop, corrs_over_k )
-        class(polarft_corrcalc), intent(inout) :: self
-        integer,                 intent(in)    :: iref, iptcl, kstop
-        real,                    intent(out)   :: corrs_over_k(self%nrots)
-        integer :: ithr, ik
-        ! get thread index
-        ithr = omp_get_thread_num() + 1
-        ! sum up correlations over k-rings
-        corrs_over_k = 0.
-        do ik = self%kfromto(1),kstop
-            ! correlate FFTs
-            if( self%iseven(iptcl) )then
-                self%fftdat(ithr)%ref_fft_re = self%fftdat_refs_even(iref,ik)%re * conjg(self%fftdat_ptcls(iptcl,ik)%re)
-                self%fftdat(ithr)%ref_fft_im = self%fftdat_refs_even(iref,ik)%im * conjg(self%fftdat_ptcls(iptcl,ik)%im)
-            else
-                self%fftdat(ithr)%ref_fft_re = self%fftdat_refs_odd(iref,ik)%re * conjg(self%fftdat_ptcls(iptcl,ik)%re)
-                self%fftdat(ithr)%ref_fft_im = self%fftdat_refs_odd(iref,ik)%im * conjg(self%fftdat_ptcls(iptcl,ik)%im)
-            endif
-            self%fftdat(ithr)%product_fft(1:1+2*int(self%pftsz/2):2) = &
-                4. * self%fftdat(ithr)%ref_fft_re(1:1+int(self%pftsz/2))
-            self%fftdat(ithr)%product_fft(2:2+2*int(self%pftsz/2):2) = &
-                4. * self%fftdat(ithr)%ref_fft_im(1:int(self%pftsz/2)+1)
-            ! back transform
-            call fftwf_execute_dft_c2r(self%plan_bwd, self%fftdat(ithr)%product_fft, self%fftdat(ithr)%backtransf)
-            ! accumulate corrs
-            corrs_over_k = corrs_over_k + self%fftdat(ithr)%backtransf
-        end do
-        ! fftw3 routines are not properly normalized, hence division by self%nrots * 2
-        corrs_over_k = corrs_over_k  / real(self%nrots * 2)
-        ! corrs_over_k needs to be reordered
-        corrs_over_k = corrs_over_k(self%nrots:1:-1) ! step 1 is reversing
-        corrs_over_k = cshift(corrs_over_k, -1)      ! step 2 is circular shift by 1
-    end subroutine calc_corrs_over_k_wrefmem
-
     subroutine calc_k_corrs( self, pft_ref, iptcl, k, kcorrs )
         class(polarft_corrcalc), intent(inout) :: self
         complex(sp),             intent(in)    :: pft_ref(1:self%pftsz,self%kfromto(1):self%kfromto(2))
@@ -850,34 +775,6 @@ contains
         kcorrs = kcorrs(self%nrots:1:-1) ! step 1 is reversing
         kcorrs = cshift(kcorrs, -1)      ! step 2 is circular shift by 1
     end subroutine calc_k_corrs
-
-    subroutine calc_k_corrs_wrefmem( self, iref, iptcl, k, kcorrs )
-        class(polarft_corrcalc), intent(inout) :: self
-        integer,                 intent(in)    :: iref, iptcl, k
-        real,                    intent(out)   :: kcorrs(self%nrots)
-        integer :: ithr
-        ! get thread index
-        ithr = omp_get_thread_num() + 1
-        ! correlate FFTs
-        if( self%iseven(iptcl) )then
-            self%fftdat(ithr)%ref_fft_re = self%fftdat_refs_even(iref,k)%re * conjg(self%fftdat_ptcls(iptcl,k)%re)
-            self%fftdat(ithr)%ref_fft_im = self%fftdat_refs_even(iref,k)%im * conjg(self%fftdat_ptcls(iptcl,k)%im)
-        else
-            self%fftdat(ithr)%ref_fft_re = self%fftdat_refs_odd(iref,k)%re * conjg(self%fftdat_ptcls(iptcl,k)%re)
-            self%fftdat(ithr)%ref_fft_im = self%fftdat_refs_odd(iref,k)%im * conjg(self%fftdat_ptcls(iptcl,k)%im)
-        endif
-        self%fftdat(ithr)%product_fft(1:1+2*int(self%pftsz/2):2) = &
-            4. * self%fftdat(ithr)%ref_fft_re(1:1+int(self%pftsz/2))
-        self%fftdat(ithr)%product_fft(2:2+2*int(self%pftsz/2):2) = &
-            4. * self%fftdat(ithr)%ref_fft_im(1:int(self%pftsz/2)+1)
-        ! back transform
-        call fftwf_execute_dft_c2r(self%plan_bwd, self%fftdat(ithr)%product_fft, self%fftdat(ithr)%backtransf)
-        ! fftw3 routines are not properly normalized, hence division by self%nrots * 2
-        kcorrs = self%fftdat(ithr)%backtransf / real(self%nrots * 2)
-        ! kcorrs needs to be reordered
-        kcorrs = kcorrs(self%nrots:1:-1) ! step 1 is reversing
-        kcorrs = cshift(kcorrs, -1)      ! step 2 is circular shift by 1
-    end subroutine calc_k_corrs_wrefmem
 
     function gencorrs_1( self, iref, iptcl ) result( cc )
         use simple_math, only: csq
@@ -913,27 +810,24 @@ contains
         complex(sp) :: shmat(self%pftsz,self%kfromto(1):self%kfromto(2))
         real(sp)    :: corrs_over_k(self%nrots), argmat(self%pftsz,self%kfromto(1):self%kfromto(2))
         real(sp)    :: cc(self%nrots), sqsum_ref
-        ! generate the argument matrix from memoized components in argtransf
-        argmat    = self%argtransf(:self%pftsz,:) * shvec(1) + self%argtransf(self%pftsz+1:,:) * shvec(2)
-        ! generate the complex shift transformation matrix
-        shmat     = cmplx(cos(argmat),sin(argmat))
-        ! shift
-        if( self%iseven(iptcl) )then
-            if( self%with_ctf )then
+        argmat = self%argtransf(:self%pftsz,:) * shvec(1) + self%argtransf(self%pftsz+1:,:) * shvec(2)
+        shmat  = cmplx(cos(argmat),sin(argmat))
+
+        if( self%with_ctf )then
+            if( self%iseven(iptcl) )then
                 pft_ref = (self%pfts_refs_even(iref,:,:) * self%ctfmats(iptcl,:,:)) * shmat
             else
-                pft_ref = self%pfts_refs_even(iref,:,:) * shmat
+                pft_ref = (self%pfts_refs_odd(iref,:,:)  * self%ctfmats(iptcl,:,:)) * shmat
             endif
         else
-            if( self%with_ctf )then
-                pft_ref = (self%pfts_refs_odd(iref,:,:) * self%ctfmats(iptcl,:,:)) * shmat
+            if( self%iseven(iptcl) )then
+                pft_ref = self%pfts_refs_even(iref,:,:) * shmat
             else
-                pft_ref = self%pfts_refs_odd(iref,:,:) * shmat
+                pft_ref = self%pfts_refs_odd(iref,:,:)  * shmat
             endif
         endif
         sqsum_ref = sum(csq(pft_ref))
-        ! correlate
-        call self%calc_corrs_over_k(pft_ref, iptcl, self%kfromto(2), corrs_over_k)
+        call self%calc_corrs_over_k(pft_ref, iptcl, self%kfromto(2), corrs_over_k)        
         cc = corrs_over_k  / sqrt(sqsum_ref * self%sqsums_ptcls(iptcl))
     end function gencorrs_3
 
@@ -946,7 +840,6 @@ contains
         complex(sp) :: pft_ref(self%pftsz,self%kfromto(1):self%kfromto(2))
         real(sp)    :: kcorrs(self%nrots), sumsqref, sumsqptcl, sqsum_ref
         integer     :: k
-        ! calc k-corrs and norms
         call self%prep_ref4corr(iref, iptcl, pft_ref, sqsum_ref, self%kfromto(2))
         do k=self%kfromto(1),self%kfromto(2)
             call self%calc_k_corrs(pft_ref, iptcl, k, kcorrs)
@@ -991,18 +884,10 @@ contains
                     call fftwf_free(self%fftdat_ptcls(iptcl,ik)%p_im)
                 end do
             end do
-            do iref = 1,self%nrefs
-                do ik = self%kfromto(1),self%kfromto(2)
-                    call fftwf_free(self%fftdat_refs_even(iref,ik)%p_re)
-                    call fftwf_free(self%fftdat_refs_even(iref,ik)%p_im)
-                    call fftwf_free(self%fftdat_refs_odd(iref,ik)%p_re)
-                    call fftwf_free(self%fftdat_refs_odd(iref,ik)%p_im)
-                end do
-            end do
             deallocate( self%sqsums_ptcls, self%angtab, self%argtransf,&
                 &self%polar, self%pfts_refs_even, self%pfts_refs_odd, self%pfts_ptcls,&
-                &self%fft_factors, self%fftdat, self%fftdat_ptcls, self%fftdat_refs_even,&
-                &self%fftdat_refs_odd, self%iseven)
+                &self%fft_factors, self%fftdat, self%fftdat_ptcls,&
+                &self%iseven)
             call fftwf_destroy_plan(self%plan_bwd)
             call fftwf_destroy_plan(self%plan_fwd_1)
             call fftwf_destroy_plan(self%plan_fwd_2)
