@@ -8,38 +8,41 @@ private
 
 !> struct for all opt specifications
 type :: opt_spec
-    procedure(costfun),  pointer, nopass :: costfun  =>null() !< defines cost function
-    procedure(gcostfun), pointer, nopass :: gcostfun =>null() !< defines the gradient of the cost function
-    character(len=STDLEN) :: str_opt=''                       !< string descriptor (of optimization routine to be used)
-    character(len=STDLEN) :: str_mode=''                      !< mode string descriptor
-    integer               :: ndim=0, ldim=0                   !< dimension parameters
-    real                  :: ftol=1e-5, gtol=1e-5             !< fractional convergence tolerance to be achieved in costfun/gradient
-    real                  :: eps=0.5                          !< learning rate
-    real                  :: cfac=0.1                         !< convergence factor bfgs
-    real                  :: yb                               !< best cost obtained so far
-    integer               :: maxits=100                       !< maximum number of iterations
-    integer               :: nbest=0                          !< number of best solutions used to re-estimate the model in CE
-    integer               :: niter=0                          !< actual number of iterations
-    integer               :: nrestarts=1                      !< number of restarts
-    integer               :: nevals=0                         !< total number of cost function evaluations
-    integer               :: nstates=1                        !< number of states
-    integer               :: npeaks=0                         !< number of peaks (local optima to identify)
-    integer               :: npop=0                           !< population size (4 evolutionary optimizers)
-    integer               :: nnn=0                            !< number of nearest neighbors
-    integer               :: peakcnt=0                        !< peak counter
-    logical, allocatable  :: cyclic(:)                        !< to indicate which variables are cyclic (Euler angles)
-    real, allocatable     :: limits(:,:)                      !< variable bounds
-    real, allocatable     :: limits_init(:,:)                 !< variable bounds for initialisation (randomized bounds)
-    real, allocatable     :: stepsz(:)                        !< step sizes for brute force search
-    real, allocatable     :: x(:)                             !< best/final solution
-    real, allocatable     :: xi(:)                            !< search direction used in linmin
-    real, allocatable     :: xt(:)                            !< test point, used in linmin
-    real, allocatable     :: inipopulation(:,:)               !< input population for the evolutionary approaches
-    real, allocatable     :: population(:,:)                  !< output solution population from the evolutionary approaches
-    real, allocatable     :: peaks(:,:)                       !< output peaks (local optimal solutions)
+    procedure(costfun),  pointer, nopass   :: costfun  =>null()   !< defines cost function
+    procedure(gcostfun), pointer, nopass   :: gcostfun =>null()   !< defines the gradient of the cost function
+    procedure(fdfcostfun), pointer, nopass :: fdfcostfun =>null() !< defines the gradient of the cost function
+    character(len=STDLEN) :: str_opt=''                           !< string descriptor (of optimization routine to be used)
+    character(len=STDLEN) :: str_mode=''                          !< mode string descriptor
+    integer               :: ndim=0, ldim=0                       !< dimension parameters
+    real                  :: ftol=1e-5, gtol=1e-5                 !< fractional convergence tolerance to be achieved in costfun/gradient
+    real                  :: eps=0.5                              !< learning rate
+    real                  :: cfac=0.1                             !< convergence factor bfgs
+    real                  :: yb                                   !< best cost obtained so far
+    real                  :: max_step=0.01                        !< maximum step size
+    integer               :: maxits=100                           !< maximum number of iterations
+    integer               :: nbest=0                              !< number of best solutions used to re-estimate the model in CE
+    integer               :: niter=0                              !< actual number of iterations
+    integer               :: nrestarts=1                          !< number of restarts
+    integer               :: nevals=0                             !< total number of cost function evaluations
+    integer               :: ngevals=0                            !< total number of gradient function evaluations
+    integer               :: nstates=1                            !< number of states
+    integer               :: npeaks=0                             !< number of peaks (local optima to identify)
+    integer               :: npop=0                               !< population size (4 evolutionary optimizers)
+    integer               :: nnn=0                                !< number of nearest neighbors
+    integer               :: peakcnt=0                            !< peak counter
+    logical, allocatable  :: cyclic(:)                            !< to indicate which variables are cyclic (Euler angles)
+    real, allocatable     :: limits(:,:)                          !< variable bounds
+    real, allocatable     :: limits_init(:,:)                     !< variable bounds for initialisation (randomized bounds)
+    real, allocatable     :: stepsz(:)                            !< step sizes for brute force search
+    real, allocatable     :: x(:)                                 !< best/final solution
+    real, allocatable     :: xi(:)                                !< search direction used in linmin
+    real, allocatable     :: xt(:)                                !< test point, used in linmin
+    real, allocatable     :: inipopulation(:,:)                   !< input population for the evolutionary approaches
+    real, allocatable     :: population(:,:)                      !< output solution population from the evolutionary approaches
+    real, allocatable     :: peaks(:,:)                           !< output peaks (local optimal solutions)
 #include "simple_local_flags.inc"
-    logical               :: converged = .false.              !< converged status
-    logical               :: exists    = .false.              !< to indicate existence
+    logical               :: converged = .false.                  !< converged status
+    logical               :: exists    = .false.                  !< to indicate existence
   contains
     procedure :: specify
     procedure :: change_opt
@@ -47,7 +50,9 @@ type :: opt_spec
     procedure :: set_limits_init
     procedure :: set_costfun
     procedure :: set_gcostfun
+    procedure :: set_fdfcostfun
     procedure :: set_inipop
+    procedure :: eval_fdf
     procedure :: kill
 end type opt_spec
 
@@ -67,6 +72,15 @@ abstract interface
         real,    intent(inout) :: vec(D)
         real                   :: grad(D)
     end function
+end interface
+
+!>  \brief  defines the cost function with simultaneous gradient interface
+abstract interface
+    subroutine fdfcostfun( vec, f, grad, D )
+        integer, intent(in)    :: D
+        real,    intent(inout) :: vec(D)
+        real,    intent(out)   :: f, grad(D)
+    end subroutine
 end interface
 
 contains
@@ -102,7 +116,15 @@ contains
         ! take care of optimizer specifics
         select case(str_opt)
             case('bfgs')
-               ! do nothing
+                ! do nothing
+            case('fr_cg')
+                ! do nothing
+            case('pr_cg')
+                ! do nothing
+            case('bfgs2')
+                ! do nothing
+            case('stde')
+                ! do nothing
             case('powell')
                 self%maxits   = ndim*1000
             case('simplex')
@@ -218,7 +240,7 @@ contains
         allocate( self%limits_init(self%ndim,2), source=lims_init, stat=alloc_stat )
         call alloc_errchk('In: set_limits_init; simple_opt_spec', alloc_stat)
     end subroutine set_limits_init
-    
+
     !>  \brief  sets the initialization population for de
     subroutine set_inipop( self, pop )
         class(opt_spec), intent(inout) :: self              !< instance
@@ -229,6 +251,23 @@ contains
         if(allocated(self%inipopulation))deallocate(self%inipopulation)
         self%inipopulation = pop
     end subroutine set_inipop
+
+    !> \brief  evaluate the cost function and gradient simultaneously, if associated, or subsequently otherwise
+    subroutine eval_fdf( self, x, f, gradient )
+        class(opt_spec), intent(in)    :: self
+        real,            intent(inout) :: x(:)
+        real,            intent(out)   :: f, gradient(:)
+        if ((.not. associated(self%costfun)).or.(.not. associated(self%gcostfun))) then
+            write (*,*) 'error : simple_opt_spec: costfun or gcostfun not associated'
+            return
+        end if
+        if (associated(self%fdfcostfun)) then
+            call self%fdfcostfun(x, f, gradient, self%ndim)
+        else
+            f        = self%costfun(x, self%ndim)
+            gradient = self%gcostfun(x, self%ndim)
+        end if
+    end subroutine eval_fdf
 
     !>  \brief  sets the cost function in the spec object
     subroutine set_costfun( self, fun )
@@ -269,6 +308,26 @@ contains
 #endif
         self%gcostfun => fun
     end subroutine set_gcostfun
+
+    !>  \brief  sets the cost and simultaneous gradient function in the spec object
+    subroutine set_fdfcostfun( self, fun )
+        class(opt_spec), intent(inout) :: self !< instance
+#if defined (PGI)
+        ! GNU COMPILER DOES NOT COPE W EXTERNAL
+        subroutine, external  :: fun !< defines cost function with simultaneous gradient interface
+#else
+        ! PGI COMPILER DOES NOT COPE W INTERFACE
+        interface
+            !< defines cost function gradient interface
+            subroutine fun( vec, f, grad, D )
+                integer, intent(in)    :: D
+                real,    intent(inout) :: vec(D)
+                real,    intent(out)   :: f, grad(D)
+            end subroutine fun
+        end interface
+#endif
+        self%fdfcostfun => fun
+    end subroutine set_fdfcostfun
 
     !>  \brief  is a destructor
     subroutine kill( self )

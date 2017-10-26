@@ -3,6 +3,10 @@ module simple_opt_factory
 use simple_optimizer,          only: optimizer
 use simple_opt_spec,           only: opt_spec
 use simple_bfgs_opt,           only: bfgs_opt
+use simple_bfgs2_opt,          only: bfgs2_opt
+use simple_fr_cg_opt,          only: fr_cg_opt
+use simple_pr_cg_opt,          only: pr_cg_opt
+use simple_stde_opt,           only: stde_opt
 use simple_powell_opt,         only: powell_opt
 use simple_simplex_opt,        only: simplex_opt
 use simple_bforce_opt,         only: bforce_opt
@@ -44,6 +48,14 @@ contains
                 allocate(particle_swarm_opt :: self%optimizer_type)
             case('de')
                 allocate(de_opt             :: self%optimizer_type)
+            case('fr_cg')
+                allocate(fr_cg_opt          :: self%optimizer_type)
+            case('pr_cg')
+                allocate(pr_cg_opt          :: self%optimizer_type)
+            case('bfgs2')
+                allocate(bfgs2_opt          :: self%optimizer_type)
+            case('stde')
+                allocate(stde_opt          :: self%optimizer_type)                
             case DEFAULT
                 write(*,*) 'class:', spec%str_opt
                 stop 'unsupported in opt_factory constructor'
