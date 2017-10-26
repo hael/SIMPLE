@@ -25,8 +25,8 @@ contains
 
     !> \brief  converts the FSC to the optimal low-pass filter
     function fsc2optlp( corrs ) result( filt )
-        real, intent(in)           :: corrs(:) !< fsc plot (correlations)
-        real, allocatable          :: filt(:)  !< output filter coefficients
+        real, intent(in)  :: corrs(:) !< fsc plot (correlations)
+        real, allocatable :: filt(:)  !< output filter coefficients
         integer :: nyq
         nyq = size(corrs)
         allocate( filt(nyq),stat=alloc_stat)
@@ -35,6 +35,16 @@ contains
         where( corrs > 0. )     filt = sqrt( 2. * corrs / (corrs + 1.) )
         where( filt  > 0.9999 ) filt = 0.99999
     end function fsc2optlp
+
+    !> \brief  converts the FSC to the optimal low-pass filter
+    subroutine fsc2optlp_sub( filtsz, corrs, filt )
+        integer, intent(in)  :: filtsz        !< sz of filter
+        real,    intent(in)  :: corrs(filtsz) !< fsc plot (correlations)
+        real,    intent(out) :: filt(filtsz)  !< output filter coefficients
+        filt = 0.
+        where( corrs > 0. )     filt = sqrt( 2. * corrs / (corrs + 1.) )
+        where( filt  > 0.9999 ) filt = 0.99999
+    end subroutine fsc2optlp_sub
 
     !> \brief  converts the SSNR to FSC
     function ssnr2fsc( ssnr ) result( corrs )

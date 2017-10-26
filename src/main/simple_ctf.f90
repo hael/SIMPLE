@@ -37,6 +37,7 @@ type ctf
     procedure          :: ctf2img
     procedure          :: ctf2pspecimg
     procedure          :: apply
+    procedure          :: apply_serial
     procedure          :: apply_and_shift
     procedure          :: kV2wl
 end type ctf
@@ -218,6 +219,10 @@ contains
         if( present(bfac) ) call img%apply_bfac(bfac)
     end subroutine ctf2img
 
+    
+
+
+
     !>  \brief  is for making a CTF power-spec image
     subroutine ctf2pspecimg( self, img, dfx, dfy, angast, add_phshift )
         use simple_image, only: image
@@ -297,6 +302,105 @@ contains
         endif
         call ctfimg%kill
     end subroutine apply
+
+    !>  \brief  is for optimised serial application of CTF
+    !!          modes: abs, ctf, flip, flipneg, neg, square
+    subroutine apply_serial( self, img, dfx, mode, dfy, angast, add_phshift )
+        use simple_image, only: image
+        class(ctf),       intent(inout) :: self        !< instance
+        class(image),     intent(inout) :: img         !< image (output)
+        real,             intent(in)    :: dfx         !< defocus x-axis
+        character(len=*), intent(in)    :: mode        !< abs, ctf, flip, flipneg, neg, square
+        real,             intent(in)    :: dfy         !< defocus y-axis
+        real,             intent(in)    :: angast      !< angle of astigmatism
+        real,             intent(in)    :: add_phshift !< aditional phase shift (radians), for phase plate
+        integer :: lims(3,2),h,k,phys(3),ldim(3)
+        real    :: ang,tval,spaFreqSq,hinv,kinv,inv_ldim(3)
+        ! init object
+        call self%init(dfx, dfy, angast)
+        ! initialize
+        img      = cmplx(0.,0.)
+        lims     = img%loop_lims(2)
+        ldim     = img%get_ldim()
+        inv_ldim = 1./real(ldim)
+        select case(mode)
+            case('abs')
+                do h=lims(1,1),lims(1,2)
+                    do k=lims(2,1),lims(2,2)
+                        hinv      = real(h) * inv_ldim(1)
+                        kinv      = real(k) * inv_ldim(2)
+                        spaFreqSq = hinv * hinv + kinv * kinv
+                        ang       = atan2(real(k),real(h))
+                        tval      = self%eval(spaFreqSq, dfx, dfy, angast, ang, add_phshift)
+                        phys = img%comp_addr_phys([h,k,0])
+                        call img%mul_cmat_at(abs(tval), phys)
+                    end do
+                end do
+            case('ctf')
+                do h=lims(1,1),lims(1,2)
+                    do k=lims(2,1),lims(2,2)
+                        hinv      = real(h) * inv_ldim(1)
+                        kinv      = real(k) * inv_ldim(2)
+                        spaFreqSq = hinv * hinv + kinv * kinv
+                        ang       = atan2(real(k),real(h))
+                        tval      = self%eval(spaFreqSq, dfx, dfy, angast, ang, add_phshift)
+                        phys = img%comp_addr_phys([h,k,0])
+                        call img%mul_cmat_at(tval, phys)
+                    end do
+                end do
+            case('flip')
+                do h=lims(1,1),lims(1,2)
+                    do k=lims(2,1),lims(2,2)
+                        hinv      = real(h) * inv_ldim(1)
+                        kinv      = real(k) * inv_ldim(2)
+                        spaFreqSq = hinv * hinv + kinv * kinv
+                        ang       = atan2(real(k),real(h))
+                        tval      = self%eval(spaFreqSq, dfx, dfy, angast, ang, add_phshift)
+                        phys = img%comp_addr_phys([h,k,0])
+                        call img%mul_cmat_at(sign(1.,tval), phys)
+                    end do
+                end do
+            case('flipneg')
+                do h=lims(1,1),lims(1,2)
+                    do k=lims(2,1),lims(2,2)
+                        hinv      = real(h) * inv_ldim(1)
+                        kinv      = real(k) * inv_ldim(2)
+                        spaFreqSq = hinv * hinv + kinv * kinv
+                        ang       = atan2(real(k),real(h))
+                        tval      = self%eval(spaFreqSq, dfx, dfy, angast, ang, add_phshift)
+                        phys = img%comp_addr_phys([h,k,0])
+                        call img%mul_cmat_at(-sign(1.,tval), phys)
+                    end do
+                end do
+            case('neg')
+                do h=lims(1,1),lims(1,2)
+                    do k=lims(2,1),lims(2,2)
+                        hinv      = real(h) * inv_ldim(1)
+                        kinv      = real(k) * inv_ldim(2)
+                        spaFreqSq = hinv * hinv + kinv * kinv
+                        ang       = atan2(real(k),real(h))
+                        tval      = self%eval(spaFreqSq, dfx, dfy, angast, ang, add_phshift)
+                        phys = img%comp_addr_phys([h,k,0])
+                        call img%mul_cmat_at(-tval, phys)
+                    end do
+                end do
+            case('square')
+                do h=lims(1,1),lims(1,2)
+                    do k=lims(2,1),lims(2,2)
+                        hinv      = real(h) * inv_ldim(1)
+                        kinv      = real(k) * inv_ldim(2)
+                        spaFreqSq = hinv * hinv + kinv * kinv
+                        ang       = atan2(real(k),real(h))
+                        tval      = self%eval(spaFreqSq, dfx, dfy, angast, ang, add_phshift)
+                        phys = img%comp_addr_phys([h,k,0])
+                        call img%mul_cmat_at(min(1.,max(tval**2.,0.001)), phys)
+                    end do
+                end do
+            case DEFAULT
+                write(*,*) 'mode:', mode
+                stop 'unsupported in ctf2img; simple_ctf'
+        end select
+    end subroutine apply_serial
 
     !>  \brief  is for applying CTF to an image and shifting it
     subroutine apply_and_shift( self, img, imgctfsq, x, y, dfx, mode, dfy, angast, add_phshift )

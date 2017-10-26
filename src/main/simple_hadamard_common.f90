@@ -313,12 +313,13 @@ contains
                 filter = fsc2optlp(frc)
                 call b%img%shellnorm()
                 call b%img%apply_filter(filter)
+                call b%img%shellnorm_and_apply_filter_serial(filter)
             endif
         endif
         ! back to real-space
         call b%img%bwd_ft
         ! clip image if needed
-        call b%img%clip(b%img_match) ! SQUARE DIMS ASSUMED
+        call b%img%clip(b%img_match)
         ! MASKING
         ! soft-edged mask
         if( p%l_innermsk )then
@@ -330,6 +331,88 @@ contains
         call b%img_match%fwd_ft
         DebugPrint  '*** simple_hadamard_common ***: finished prepimg4align'
     end subroutine prepimg4align
+
+    !>  \brief  prepares one particle image for alignment
+    subroutine prepimg4align_serial( b, p, o, is3D )
+        use simple_estimate_ssnr, only: fsc2optlp_sub
+        use simple_ctf,           only: ctf
+        class(build),  intent(inout) :: b
+        class(params), intent(inout) :: p
+        type(ori),     intent(inout) :: o
+        logical,       intent(in)    :: is3D
+        real      :: frc(b%projfrcs%get_filtsz()), filter(b%projfrcs%get_filtsz())
+        type(ctf) :: tfun
+        real      :: x, y, dfx, dfy, angast, phshift
+        integer   :: frcind
+        x      = o%get('x')
+        y      = o%get('y')
+        frcind = 0 
+        if( is3D .and. p%nstates==1 )then
+            if( p%nspace /= NSPACE_BALANCE )then
+                frcind = b%e_bal%find_closest_proj(o)
+            else
+                frcind = nint(o%get('proj'))
+            endif
+        endif
+        ! move to Fourier space
+        call b%img%fwd_ft
+        ! set CTF parameters
+        if( p%ctf .ne. 'no' )then
+            ! we here need to re-create the CTF object as kV/cs/fraca are now per-particle params
+            ! that these parameters are part of the doc is checked in the params class
+            tfun = ctf(p%smpd, o%get('kv'), o%get('cs'), o%get('fraca'))
+            select case(p%tfplan%mode)
+                case('astig') ! astigmatic CTF
+                    dfx    = o%get('dfx')
+                    dfy    = o%get('dfy')
+                    angast = o%get('angast')
+                case('noastig') ! non-astigmatic CTF
+                    dfx    = o%get('dfx')
+                    dfy    = dfx
+                    angast = 0.
+                case DEFAULT
+                    write(*,*) 'Unsupported p%tfplan%mode: ', trim(p%tfplan%mode)
+                    stop 'simple_hadamard_common :: prepimg4align'
+            end select
+            phshift = 0.
+            if( p%tfplan%l_phaseplate ) phshift = o%get('phshift')
+        endif
+        ! deal with CTF
+        select case(p%ctf)
+            case('mul')  ! images have been multiplied with the CTF, no CTF-dependent weighting of the correlations
+                stop 'ctf=mul is not supported; simple_hadamard_common :: prepimg4align'
+            case('no')   ! do nothing
+            case('yes')  ! do nothing
+            case('flip') ! flip back
+                call tfun%apply_serial(b%img, dfx, 'flip', dfy, angast, phshift)
+            case DEFAULT
+                stop 'Unsupported ctf mode; simple_hadamard_common :: prepimg4align'
+        end select
+        ! shift image to rotational origin
+        if(abs(x) > SHTHRESH .or. abs(y) > SHTHRESH) call b%img%shift2Dserial([-x,-y])
+        if( is3D .and. frcind > 0 )then
+            ! anisotropic matched filter
+            call b%projfrcs%frc_getter(frcind, frc)
+            if( any(frc > 0.143) )then
+                call fsc2optlp_sub(b%projfrcs%get_filtsz(), frc, filter)
+                call b%img%shellnorm_and_apply_filter_serial(filter)
+            endif
+        endif
+        ! back to real-space
+        call b%img%bwd_ft
+        ! clip image if needed
+        call b%img%clip(b%img_match)
+        ! MASKING
+        ! soft-edged mask
+        if( p%l_innermsk )then
+            call b%img_match%mask(p%msk, 'soft', inner=p%inner, width=p%width)
+        else
+            call b%img_match%mask(p%msk, 'soft')
+        endif
+        ! return in Fourier space
+        call b%img_match%fwd_ft
+        DebugPrint  '*** simple_hadamard_common ***: finished prepimg4align'
+    end subroutine prepimg4align_serial
     
     !>  \brief  prepares one cluster centre image for alignment
     subroutine prep2Dref( b, p, icls, center, xyz_in, xyz_out )
@@ -340,7 +423,7 @@ contains
         logical, optional, intent(in)    :: center
         real,    optional, intent(in)    :: xyz_in(3)
         real,    optional, intent(out)   :: xyz_out(3)
-        real, allocatable :: filter(:), frc(:), res(:)
+        real, allocatable :: filter(:), frc(:)
         real    :: xyz(3), sharg, frc05, frc0143
         logical :: do_center
         ! normalise
@@ -383,20 +466,74 @@ contains
         ! clip image if needed
         call b%img%clip(b%img_match)
         ! apply mask
-        if( p%l_envmsk .and. p%automsk .eq. 'cavg' )then
-            ! automasking
-            call b%mskimg%apply_2Denvmask22Dref(b%img_match)
+        if( p%l_innermsk )then
+            call b%img_match%mask(p%msk, 'soft', inner=p%inner, width=p%width)
         else
-            ! soft masking
-            if( p%l_innermsk )then
-                call b%img_match%mask(p%msk, 'soft', inner=p%inner, width=p%width)
-            else
-                call b%img_match%mask(p%msk, 'soft')
-            endif
+            call b%img_match%mask(p%msk, 'soft')
         endif
         ! move to Fourier space
         call b%img_match%fwd_ft
     end subroutine prep2Dref
+
+    !>  \brief  prepares one cluster centre image for alignment
+    subroutine prep2Dref_serial( b, p, icls, center, xyz_in, xyz_out )
+        use simple_estimate_ssnr, only: fsc2optlp_sub
+        class(build),      intent(inout) :: b
+        class(params),     intent(in)    :: p
+        integer,           intent(in)    :: icls
+        logical, optional, intent(in)    :: center
+        real,    optional, intent(in)    :: xyz_in(3)
+        real,    optional, intent(out)   :: xyz_out(3)
+        real    :: frc(b%projfrcs%get_filtsz()), filter(b%projfrcs%get_filtsz())
+        real    :: xyz(3), sharg, frc05, frc0143
+        logical :: do_center
+        ! normalise
+        call b%img%norm_serial
+        do_center = (p%center .eq. 'yes')
+        ! centering only performed if p%center.eq.'yes'
+        if( present(center) ) do_center = do_center .and. center
+        if( do_center )then
+            if( present(xyz_in) )then 
+                sharg = arg(xyz_in)
+                if( sharg > CENTHRESH )then
+                    ! apply shift and do NOT update the corresponding class parameters
+                    call b%img%fwd_ft
+                    call b%img%shift2Dserial(xyz_in(1:2))
+                endif
+            else
+                xyz = b%img%center_serial(p%cenlp, p%msk)
+                sharg = arg(xyz)
+                if( sharg > CENTHRESH )then
+                    ! apply shift and update the corresponding class parameters
+                    call b%img%fwd_ft
+                    call b%img%shift2Dserial(xyz(1:2))
+                    call b%a%add_shift2class(icls, -xyz(1:2))
+                endif
+                if( present(xyz_out) ) xyz_out = xyz 
+            endif            
+        endif
+        if( p%l_match_filt )then
+            ! anisotropic matched filter
+            call b%projfrcs%frc_getter(icls, frc)
+            if( any(frc > 0.143) )then
+                call b%img%fwd_ft ! needs to be here in case the shift was never applied (above)
+                call fsc2optlp_sub(b%projfrcs%get_filtsz(), frc, filter)
+                call b%img%shellnorm_and_apply_filter_serial(filter)
+            endif
+        endif
+        ! ensure we are in real-space before clipping
+        call b%img%bwd_ft
+        ! clip image if needed
+        call b%img%clip(b%img_match)
+        ! apply mask
+        if( p%l_innermsk )then
+            call b%img_match%mask(p%msk, 'soft', inner=p%inner, width=p%width)
+        else
+            call b%img_match%mask(p%msk, 'soft')
+        endif
+        ! move to Fourier space
+        call b%img_match%fwd_ft
+    end subroutine prep2Dref_serial
 
     !>  \brief prepares a 2D class document with class index, resolution, 
     !!         poulation, average correlation and weight

@@ -166,17 +166,17 @@ contains
         if( p%box > 0 )then
             ! build image objects
             ! box-sized ones
-            call self%img%new([p%box,p%box,1],p%smpd)
-            call self%img_match%new([p%boxmatch,p%boxmatch,1],p%smpd)
-            call self%img_copy%new([p%boxmatch,p%boxmatch,1],p%smpd)
+            call self%img%new([p%box,p%box,1],p%smpd,                 wthreads=.false.)
+            call self%img_match%new([p%boxmatch,p%boxmatch,1],p%smpd, wthreads=.false.)
+            call self%img_copy%new([p%boxmatch,p%boxmatch,1],p%smpd,  wthreads=.false.)
             DebugPrint   'did build box-sized image objects'
             ! boxmatch-sized ones
-            call self%img_tmp%new([p%boxmatch,p%boxmatch,1],p%smpd)
-            call self%img_msk%new([p%boxmatch,p%boxmatch,1],p%smpd)
-            call self%mskimg%new([p%boxmatch, p%boxmatch, 1],p%smpd)
+            call self%img_tmp%new([p%boxmatch,p%boxmatch,1],p%smpd,   wthreads=.false.)
+            call self%img_msk%new([p%boxmatch,p%boxmatch,1],p%smpd,   wthreads=.false.)
+            call self%mskimg%new([p%boxmatch, p%boxmatch, 1],p%smpd,  wthreads=.false.)
             DebugPrint  'did build boxmatch-sized image objects'
             ! boxpd-sized ones
-            call self%img_pad%new([p%boxpd,p%boxpd,1],p%smpd)
+            call self%img_pad%new([p%boxpd,p%boxpd,1],p%smpd,         wthreads=.false.)
             if( ddo3d )then
                 call self%vol%new([p%box,p%box,p%box], p%smpd)
                 call self%vol2%new([p%box,p%box,p%box], p%smpd)

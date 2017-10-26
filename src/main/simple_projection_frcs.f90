@@ -26,8 +26,10 @@ contains
     procedure, private :: bound_res
     ! setters/getters
     procedure          :: get_nprojs
+    procedure          :: get_filtsz
     procedure          :: set_frc
     procedure          :: get_frc
+    procedure          :: frc_getter
     procedure, private :: estimate_res_1
     procedure, private :: estimate_res_2
     procedure, private :: estimate_res_3
@@ -124,10 +126,15 @@ contains
 
     ! setters/getters
 
-    integer function get_nprojs( self )
+    pure integer function get_nprojs( self )
         class(projection_frcs), intent(in) :: self
         get_nprojs = self%nprojs
     end function get_nprojs
+
+    pure integer function get_filtsz( self )
+        class(projection_frcs), intent(in) :: self
+        get_filtsz = self%filtsz
+    end function get_filtsz
 
     subroutine set_frc( self, proj, frc, state )
         class(projection_frcs), intent(inout) :: self
@@ -162,6 +169,18 @@ contains
             allocate(frc(self%filtsz), source=self%frcs(sstate,proj,:))
         endif
     end function get_frc
+
+    subroutine frc_getter( self, proj, frc, state )
+        class(projection_frcs), intent(in)  :: self
+        integer,                intent(in)  :: proj
+        real,                   intent(out) :: frc(self%filtsz)
+        integer, optional,      intent(in)  :: state
+        integer :: sstate
+        sstate = 1
+        if( present(state) ) sstate = state
+        call self%raise_exception( proj, sstate, 'ERROR, out of bounds in get_frc')
+        frc = self%frcs(sstate,proj,:)
+    end subroutine frc_getter
 
     subroutine estimate_res_1( self, proj, frc05, frc0143, state )
         class(projection_frcs), intent(in)  :: self

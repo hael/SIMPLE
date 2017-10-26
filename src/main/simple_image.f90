@@ -66,7 +66,9 @@ type :: image
     procedure          :: set_cmat_at
     procedure          :: add2_cmat_at
     procedure          :: div_cmat_at
-    procedure          :: mul_cmat_at
+    procedure, private :: mul_cmat_at_1
+    procedure, private :: mul_cmat_at_2
+    generic            :: mul_cmat_at => mul_cmat_at_1, mul_cmat_at_2
     procedure          :: print_cmat
     procedure          :: expand_ft
     procedure          :: set
@@ -166,6 +168,7 @@ type :: image
     procedure          :: cendist
     procedure          :: masscen
     procedure          :: center
+    procedure          :: center_serial
     procedure          :: bin_inv
     procedure          :: grow_bin
     procedure          :: grow_bins
@@ -186,6 +189,7 @@ type :: image
     procedure          :: guinier
     procedure          :: spectrum
     procedure          :: shellnorm
+    procedure          :: shellnorm_and_apply_filter_serial
     procedure          :: apply_bfac
     procedure          :: bp
     procedure          :: gen_lpfilt
@@ -261,6 +265,7 @@ type :: image
     procedure          :: clip_inplace
     procedure          :: mirror
     procedure          :: norm
+    procedure          :: norm_serial
     procedure          :: norm_ext
     procedure          :: radius_norm
     procedure          :: noise_norm
@@ -270,6 +275,7 @@ type :: image
     procedure          :: shift_phorig
     procedure          :: bwd_ft
     procedure          :: shift
+    procedure          :: shift2Dserial
     ! DENOISING FUNCTIONS
     procedure          :: cure_outliers
     procedure          :: denoise_NLM
@@ -1089,13 +1095,21 @@ contains
         endif
     end subroutine div_cmat_at
 
-    !! multiply comp by cmat at index phys
-    subroutine mul_cmat_at( self, k, phys )
+    !! multiply cmat with real k at index phys
+    subroutine mul_cmat_at_1( self, k, phys )
         class(image),      intent(inout) :: self
         integer,           intent(in)    :: phys(3)
         real,              intent(in)    :: k
-        self%cmat(phys(1),phys(2),phys(3)) = self%cmat(phys(1),phys(2),phys(3))*k
-    end subroutine mul_cmat_at
+        self%cmat(phys(1),phys(2),phys(3)) = self%cmat(phys(1),phys(2),phys(3)) * k
+    end subroutine mul_cmat_at_1
+
+    !! multiply cmat with complex k at index phys
+    subroutine mul_cmat_at_2( self, k, phys )
+        class(image),      intent(inout) :: self
+        integer,           intent(in)    :: phys(3)
+        complex,           intent(in)    :: k
+        self%cmat(phys(1),phys(2),phys(3)) = self%cmat(phys(1),phys(2),phys(3)) * k
+    end subroutine mul_cmat_at_2
 
     !> print_cmat
     !!
@@ -2799,6 +2813,23 @@ contains
         endif
     end function center
 
+    function center_serial( self, lp, msk ) result( xyz )
+        class(image),     intent(inout) :: self
+        real,             intent(in)    :: lp
+        real,             intent(in)    :: msk
+        type(image) :: tmp
+        real        :: xyz(3)
+        integer     :: dims(3)
+        logical     :: l_doshif
+        call tmp%copy(self)
+        dims = tmp%get_ldim()
+        call tmp%bp(0., lp)
+        if( tmp%ft ) call tmp%bwd_ft
+        call tmp%mask(msk, 'soft')
+        call tmp%bin_kmeans
+        xyz = tmp%masscen() 
+    end function center_serial
+
     !>  \brief bin_inv inverts a binary image
     subroutine bin_inv( self )
         class(image), intent(inout) :: self
@@ -3374,37 +3405,95 @@ contains
         spec   = 0.
         counts = 0.
         lims   = self%fit%loop_lims(2)
-        do h=lims(1,1),lims(1,2)
-            do k=lims(2,1),lims(2,2)
-                do l=lims(3,1),lims(3,2)
-                    ! compute physical address
-                    phys = self%fit%comp_addr_phys([h,k,l])
-                    ! find shell
-                    sh = nint(hyp(real(h),real(k),real(l)))
-                    if( sh == 0 .or. sh > lfny ) cycle
-                    select case(which)
-                        case('real')
+        select case(which)
+            case('real')
+                do h=lims(1,1),lims(1,2)
+                    do k=lims(2,1),lims(2,2)
+                        do l=lims(3,1),lims(3,2)
+                            phys = self%fit%comp_addr_phys([h,k,l])
+                            sh = nint(hyp(real(h),real(k),real(l)))
+                            if( sh == 0 .or. sh > lfny ) cycle
                             spec(sh) = spec(sh) + real(self%cmat(phys(1),phys(2),phys(3)))
-                        case('power')
-                            spec(sh) = spec(sh) + csq(self%cmat(phys(1),phys(2),phys(3)))
-                        case('absreal')
-                            spec(sh) = spec(sh) + abs(real(self%cmat(phys(1),phys(2),phys(3))))
-                        case('absimag')
-                            spec(sh) = spec(sh) + abs(aimag(self%cmat(phys(1),phys(2),phys(3))))
-                        case('abs')
-                            spec(sh) = spec(sh) + cabs(self%cmat(phys(1),phys(2),phys(3)))
-                        case('phase')
-                            spec(sh) = spec(sh) + phase_angle(self%cmat(phys(1),phys(2),phys(3)))
-                        case('count')
-                            spec(sh) = spec(sh) + 1.
-                        case DEFAULT
-                            write(*,*) 'Spectrum kind: ', trim(which)
-                            stop 'Unsupported spectrum kind; simple_image; spectrum'
-                    end select
-                    counts(sh) = counts(sh)+1.
+                            counts(sh) = counts(sh)+1.
+                        end do
+                    end do
                 end do
-            end do
-        end do
+            case('power')
+                do h=lims(1,1),lims(1,2)
+                    do k=lims(2,1),lims(2,2)
+                        do l=lims(3,1),lims(3,2)
+                            phys = self%fit%comp_addr_phys([h,k,l])
+                            sh = nint(hyp(real(h),real(k),real(l)))
+                            if( sh == 0 .or. sh > lfny ) cycle
+                            spec(sh) = spec(sh) + csq(self%cmat(phys(1),phys(2),phys(3)))
+                            counts(sh) = counts(sh)+1.
+                        end do
+                    end do
+                end do
+            case('absreal')
+                do h=lims(1,1),lims(1,2)
+                    do k=lims(2,1),lims(2,2)
+                        do l=lims(3,1),lims(3,2)
+                            phys = self%fit%comp_addr_phys([h,k,l])
+                            sh = nint(hyp(real(h),real(k),real(l)))
+                            if( sh == 0 .or. sh > lfny ) cycle
+                            spec(sh) = spec(sh) + abs(real(self%cmat(phys(1),phys(2),phys(3))))
+                            counts(sh) = counts(sh)+1.
+                        end do
+                    end do
+                end do
+            case('absimag')
+                do h=lims(1,1),lims(1,2)
+                    do k=lims(2,1),lims(2,2)
+                        do l=lims(3,1),lims(3,2)
+                            phys = self%fit%comp_addr_phys([h,k,l])
+                            sh = nint(hyp(real(h),real(k),real(l)))
+                            if( sh == 0 .or. sh > lfny ) cycle
+                            spec(sh) = spec(sh) + abs(aimag(self%cmat(phys(1),phys(2),phys(3))))
+                            counts(sh) = counts(sh)+1.
+                        end do
+                    end do
+                end do
+            case('abs')
+                do h=lims(1,1),lims(1,2)
+                    do k=lims(2,1),lims(2,2)
+                        do l=lims(3,1),lims(3,2)
+                            phys = self%fit%comp_addr_phys([h,k,l])
+                            sh = nint(hyp(real(h),real(k),real(l)))
+                            if( sh == 0 .or. sh > lfny ) cycle
+                            spec(sh) = spec(sh) + cabs(self%cmat(phys(1),phys(2),phys(3)))
+                            counts(sh) = counts(sh)+1.
+                        end do
+                    end do
+                end do
+            case('phase')
+                do h=lims(1,1),lims(1,2)
+                    do k=lims(2,1),lims(2,2)
+                        do l=lims(3,1),lims(3,2)
+                            phys = self%fit%comp_addr_phys([h,k,l])
+                            sh = nint(hyp(real(h),real(k),real(l)))
+                            if( sh == 0 .or. sh > lfny ) cycle
+                            spec(sh) = spec(sh) + phase_angle(self%cmat(phys(1),phys(2),phys(3)))
+                            counts(sh) = counts(sh)+1.
+                        end do
+                    end do
+                end do
+            case('count')
+                do h=lims(1,1),lims(1,2)
+                    do k=lims(2,1),lims(2,2)
+                        do l=lims(3,1),lims(3,2)
+                            phys = self%fit%comp_addr_phys([h,k,l])
+                            sh = nint(hyp(real(h),real(k),real(l)))
+                            if( sh == 0 .or. sh > lfny ) cycle
+                            spec(sh) = spec(sh) + 1.
+                            counts(sh) = counts(sh)+1.
+                        end do
+                    end do
+                end do
+            case DEFAULT
+                write(*,*) 'Spectrum kind: ', trim(which)
+                stop 'Unsupported spectrum kind; simple_image; spectrum'
+        end select
         if( which .ne. 'count' .and. nnorm )then
             where(counts > 0.)
                 spec = spec/counts
@@ -3467,6 +3556,53 @@ contains
             call self%bwd_ft
         endif
     end subroutine shellnorm
+
+    !> \brief  for normalising each shell to uniform (=1) power
+    !!        (assuming average has been subtracted in real-space) and applying a filter function 
+    subroutine shellnorm_and_apply_filter_serial( self, filter )
+        class(image), intent(inout) :: self
+        real,         intent(in)    :: filter(:)
+        real, allocatable  :: expec_pow(:)
+        logical            :: didbwdft
+        integer            :: sh, h, k, l, phys(3), lfny, lims(3,2), filtsz
+        real               :: icomp, avg, wzero, fwght
+        filtsz    = size(filter)
+        wzero     = maxval(filter)
+        lfny      = self%get_lfny(1)
+        lims      = self%fit%loop_lims(2)
+        ! calculate the expectation value of the signal power in each shell
+        expec_pow = self%spectrum('power')
+        ! normalise
+        do h=lims(1,1),lims(1,2)
+            do k=lims(2,1),lims(2,2)
+                do l=lims(3,1),lims(3,2)
+                    sh   = nint(hyp(real(h),real(k),real(l)))
+                    phys = self%fit%comp_addr_phys([h,k,l])
+                     ! set filter weight
+                    if( sh > filtsz )then
+                        fwght = 0.
+                    else if( sh == 0 )then
+                        fwght = wzero
+                    else
+                        fwght = filter(sh)
+                    endif
+                    if( sh > lfny )then
+                        self%cmat(phys(1),phys(2),phys(3)) = cmplx(0.,0.)
+                    else
+                        if( sh == 0 ) cycle
+                        if( expec_pow(sh) > 0. )then
+                            self%cmat(phys(1),phys(2),phys(3)) =&
+                                &fwght * (self%cmat(phys(1),phys(2),phys(3)) / sqrt(expec_pow(sh)))
+                        endif
+                    endif
+                end do
+            end do
+        end do
+        ! take care of the central spot
+        phys  = self%fit%comp_addr_phys([0,0,0])
+        icomp = aimag(self%cmat(phys(1),phys(2),phys(3)))
+        self%cmat(phys(1),phys(2),phys(3)) = cmplx(wzero,icomp)
+    end subroutine shellnorm_and_apply_filter_serial
 
     !> \brief apply_bfac  is for applying bfactor to an image
     !! \param b
@@ -5565,9 +5701,28 @@ contains
         endif
     end subroutine shift
 
-
-
-
+    !> \brief shift  is for origin shifting an image
+    !! \param x position in axis 0
+    !! \param y position in axis 1
+    !! \param z position in axis 2
+    !! \param lp_dyn low-pass cut-off freq
+    !! \param imgout processed image
+    !!
+    subroutine shift2Dserial( self, shvec  )
+        class(image), intent(inout) :: self
+        real,         intent(in)    :: shvec(2)
+        integer :: h, k, lims(3,2), phys(3)
+        real    :: shvec_here(3)
+        lims            = self%fit%loop_lims(2)
+        shvec_here(1:2) = shvec
+        shvec_here(3)   = 0.
+        do h=lims(1,1),lims(1,2)
+            do k=lims(2,1),lims(2,2)
+                phys = self%fit%comp_addr_phys([h,k,0])
+                call self%mul_cmat_at_2(self%oshift([h,k,0], shvec_here), phys)
+            end do
+        end do
+    end subroutine shift2Dserial
 
     !> \brief mask  is for spherical masking
     !! \param mskrad mask radius
@@ -5836,6 +5991,7 @@ contains
     end subroutine pad_mirr
 
     !> \brief clip is a constructor that clips the input image to input ldim
+    !!             DO NOT PARALLELISE
     !! \param self_in image object
     !! \param self_out image object
     !!
@@ -5852,8 +6008,6 @@ contains
         .and. self_out%ldim(3) <= self_in%ldim(3) )then
             if( self_in%ft )then
                 lims = self_out%fit%loop_lims(2)
-                !$omp parallel do collapse(3) schedule(static) default(shared)&
-                !$omp private(h,k,l,phys_out,phys_in) proc_bind(close)
                 do h=lims(1,1),lims(1,2)
                     do k=lims(2,1),lims(2,2)
                         do l=lims(3,1),lims(3,2)
@@ -5864,7 +6018,6 @@ contains
                         end do
                     end do
                 end do
-                !$omp end parallel do
                 ratio = real(self_in%ldim(1))/real(self_out%ldim(1))
                 self_out%smpd = self_in%smpd*ratio ! clipping Fourier transform, so sampling is coarser
                 self_out%ft = .true.
@@ -5875,10 +6028,8 @@ contains
                     starts(3) = 1
                     stops(3)  = 1
                 endif
-                !$omp parallel workshare proc_bind(close)
                 self_out%rmat(:self_out%ldim(1),:self_out%ldim(2),:self_out%ldim(3))&
                 = self_in%rmat(starts(1):stops(1),starts(2):stops(2),starts(3):stops(3))
-                !$omp end parallel workshare
                 self_out%ft = .false.
             endif
         endif
@@ -5954,6 +6105,30 @@ contains
             if( present(err) ) err = .true.
         endif
     end subroutine norm
+
+
+     !> \brief cure_2  is for checking the numerical soundness of an image and curing it if necessary
+    !! \param maxv
+    !! \param minv
+    !! \param ave
+    !! \param sdev
+    !! \param n_nans
+    !!
+    subroutine norm_serial( self  )
+        class(image), intent(inout) :: self
+        integer :: i, j, k, npix
+        real    :: ave, sdev, var, ep, dev
+        npix   = product(self%ldim)
+        ave    = sum(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3))) / real(npix)
+        if( abs(ave) > TINY ) self%rmat = self%rmat - ave
+        ep     = sum(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)))
+        var    = sum(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3))**2.0)
+        var    = (var-ep**2./real(npix))/(real(npix)-1.) ! corrected two-pass formula
+        sdev   = sqrt(var)
+        if( is_a_number(sdev) )then
+            if( sdev > 0. ) self%rmat = self%rmat/sdev
+        endif
+    end subroutine norm_serial
 
     !> \brief norm_ext  is for normalization of an image using inputted average and standard deviation
     !! \param avg Average
