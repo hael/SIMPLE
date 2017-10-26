@@ -124,8 +124,6 @@ contains
             self%delta_f    = 0.
             ! Use the gradient as the initial direction
             call spec%eval_fdf(spec%x, self%f, self%gradient)
-            spec%nevals     = spec%nevals  + 1
-            spec%ngevals    = spec%ngevals + 1
             self%x0         = spec%x
             self%g0         = self%gradient
             self%g0norm     = norm2(self%g0)
@@ -341,8 +339,7 @@ contains
                 return
             end if
             call moveto(alpha)
-            self%wrapper%f_alpha     = spec%costfun(self%wrapper%x_alpha, spec%ndim)
-            spec%nevals              = spec%nevals + 1
+            self%wrapper%f_alpha     = spec%eval_f(self%wrapper%x_alpha)
             self%wrapper%f_cache_key = alpha
             res = self%wrapper%f_alpha
         end function wrap_f
@@ -356,8 +353,7 @@ contains
             end if
             call moveto(alpha)
             if (alpha .ne. self%wrapper%g_cache_key) then
-                self%wrapper%g_alpha     = spec%gcostfun(self%wrapper%x_alpha, spec%ndim)
-                spec%ngevals             = spec%ngevals + 1
+                call spec%eval_df(self%wrapper%x_alpha, self%wrapper%g_alpha)
                 self%wrapper%g_cache_key = alpha
             end if
             self%wrapper%df_alpha = slope()
@@ -381,8 +377,6 @@ contains
             end if
             call moveto(alpha)
             call spec%eval_fdf(self%wrapper%x_alpha, self%wrapper%f_alpha, self%wrapper%g_alpha)
-            spec%nevals     = spec%nevals  + 1
-            spec%ngevals    = spec%ngevals + 1            
             self%wrapper%f_cache_key  = alpha
             self%wrapper%g_cache_key  = alpha
             self%wrapper%df_alpha     = slope()
