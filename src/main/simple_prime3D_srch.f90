@@ -141,9 +141,9 @@ contains
         select case( trim(p%refine) )
             case( 'states' )
                 allocate(srch_order(p%fromp:p%top, p%nnn), source=0)
-                rt = ran_tabu(p%nnn)
                 !$omp parallel do default(shared) private(iptcl,prev_state,rt,prev_ref) schedule(static) proc_bind(close)
                 do iptcl = p%fromp, p%top
+                    rt                  = ran_tabu(p%nnn)
                     prev_state          = nint(b%a%get(iptcl, 'state'))
                     srch_order(iptcl,:) = b%nnmat(iptcl,:) + (prev_state - 1) * p%nspace
                     call rt%shuffle( srch_order(iptcl,:) )
@@ -153,10 +153,10 @@ contains
                 !$omp end parallel do
             case( 'neigh','shcneigh', 'greedyneigh' )
                 nnnrefs =  p%nnn * p%nstates
-                allocate(srch_order(p%fromp:p%top, nnnrefs), source=0)
-                rt = ran_tabu(nnnrefs)
+                allocate(srch_order(p%fromp:p%top, nnnrefs), source=0)   
                 !$omp parallel do default(shared) private(iptcl,prev_state,prev_proj,prev_ref,istate,i,rt) schedule(static) proc_bind(close)
                 do iptcl = p%fromp, p%top
+                    rt         = ran_tabu(nnnrefs)
                     prev_state = nint(b%a%get(iptcl, 'state'))
                     prev_proj  = b%e%find_closest_proj(b%a%get_ori(iptcl))
                     prev_ref   = (prev_state - 1)*p%nspace + prev_proj
@@ -186,12 +186,12 @@ contains
                 !$omp end parallel do
             case('no','shc','snhc','greedy')
                 allocate(srch_order(p%fromp:p%top,p%nspace*p%nstates), source=0)
-                rt = ran_tabu(p%nspace*p%nstates)
-                !$omp parallel do default(shared) private(iptcl,prev_state,prev_ref,istate,i) schedule(static) proc_bind(close)
+                !$omp parallel do default(shared) private(iptcl,rt,prev_state,prev_ref) schedule(static) proc_bind(close)
                 do iptcl = p%fromp, p%top
-                    prev_state = nint(b%a%get(iptcl, 'state'))
+                    rt = ran_tabu(p%nspace*p%nstates)
                     call rt%ne_ran_iarr( srch_order(iptcl,:) )
-                    prev_ref = (prev_state - 1) * p%nspace + b%e%find_closest_proj(b%a%get_ori(iptcl))
+                    prev_state = nint(b%a%get(iptcl, 'state'))
+                    prev_ref   = (prev_state - 1) * p%nspace + b%e%find_closest_proj(b%a%get_ori(iptcl))
                     call put_last(prev_ref, srch_order(iptcl,:))
                 enddo
                 !$omp end parallel do
