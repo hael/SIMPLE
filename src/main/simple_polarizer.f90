@@ -20,6 +20,8 @@ type, extends(image) :: polarizer
     integer, allocatable  :: polcyc1_mat(:,:,:)    !< image cyclic adresses for the image to polar transformer
     integer, allocatable  :: polcyc2_mat(:,:,:)    !< image cyclic adresses for the image to polar transformer
     integer               :: wdim = 0              !< dimension of K-B window
+    integer               :: pdim(3) = 0           ! Polar-FT matrix dimensions
+    complex, allocatable  :: pft(:,:), comps(:,:)
   contains
     procedure :: init_polarizer
     procedure :: polarize
@@ -39,24 +41,25 @@ contains
         real,                    intent(in)    :: alpha  !< oversampling factor
         real, allocatable :: w(:,:)
         real              :: loc(2)
-        integer           :: pdim(3), win(2,2), lims(3,2)
+        integer           :: win(2,2), lims(3,2)
         integer           :: i, k, l, wlen, cnt
         if( .not. pftcc%exists() ) stop 'polarft_corrcalc object needs to be created; init_imgpolarizer; simple_projector'
         call self%kill_polarizer
         self%kbwin = kbinterpol(KBWINSZ, alpha)
         self%wdim  = self%kbwin%get_wdim()
         wlen       = self%wdim**2
-        pdim       = pftcc%get_pdim()
+        self%pdim  = pftcc%get_pdim()
         lims       = self%loop_lims(3)
-        allocate( self%polcyc1_mat(1:pdim(1), pdim(2):pdim(3), 1:self%wdim),&
-                  &self%polcyc2_mat(1:pdim(1), pdim(2):pdim(3), 1:self%wdim),&
-                  &self%polweights_mat(1:pdim(1), pdim(2):pdim(3), 1:wlen),&
-                  &w(1:self%wdim,1:self%wdim), stat=alloc_stat)
+        allocate( self%polcyc1_mat(1:self%pdim(1), self%pdim(2):self%pdim(3), 1:self%wdim),&
+                  &self%polcyc2_mat(1:self%pdim(1), self%pdim(2):self%pdim(3), 1:self%wdim),&
+                  &self%polweights_mat(1:self%pdim(1), self%pdim(2):self%pdim(3), 1:wlen),&
+                  &w(1:self%wdim,1:self%wdim), self%comps(1:self%wdim,1:self%wdim),&
+                  &self%pft(self%pdim(1),self%pdim(2):self%pdim(3)), stat=alloc_stat)
         allocchk('in simple_projector :: init_imgpolarizer')
         !$omp parallel do collapse(2) schedule(static) default(shared)&
         !$omp private(i,k,l,w,loc,cnt,win) proc_bind(close)
-        do i=1,pdim(1)
-            do k=pdim(2),pdim(3)
+        do i=1,self%pdim(1)
+            do k=self%pdim(2),self%pdim(3)
                 ! polar coordinates
                 loc = pftcc%get_coord(i,k)
                 call sqwin_2d(loc(1), loc(2), KBWINSZ, win)
@@ -85,56 +88,31 @@ contains
         class(polarizer),        intent(inout) :: self    !< projector instance
         class(polarft_corrcalc), intent(inout) :: pftcc   !< polarft_corrcalc object to be filled
         integer,                 intent(in)    :: img_ind !< image index
-        logical, optional,       intent(in)    :: isptcl  !< is ptcl (or reference)
-        logical, optional,       intent(in)    :: iseven  !< is even (or odd)
-        complex, allocatable :: pft(:,:), comps(:,:)
-        integer :: i, k, l, m, vecdim, addr_l
-        integer :: lims(3,2), ldim_img(3), ldim_pft(3), pdim(3), logi(3), phys(3)
-        logical :: iisptcl, iiseven
-        if( .not. allocated(self%polweights_mat) )&
-        &stop 'the imgpolarizer has not been initialized!; simple_projector :: imgpolarizer'
-        iisptcl = .true.
-        if( present(isptcl) ) iisptcl = isptcl
-        iiseven = .true.
-        if( present(iseven) ) iiseven = iseven
-        ldim_img = self%get_ldim()
-        if( ldim_img(3) > 1 )      stop 'only for interpolation from 2D images; imgpolarizer; simple_projector'
-        if( .not. pftcc%exists() ) stop 'polarft_corrcalc object needs to be created; imgpolarizer; simple_projector'
-        ldim_pft = pftcc%get_ldim()
-        if( .not. all(ldim_img == ldim_pft) )then
-            print *, 'ldim_img: ', ldim_img
-            print *, 'ldim_pft: ', ldim_pft
-            stop 'logical dimensions do not match; imgpolarizer; simple_projector'
-        endif
-        if( .not.self%is_ft() ) stop 'image needs to FTed before this operation; simple_projector :: imgpolarizer'
-        pdim   = pftcc%get_pdim()
-        vecdim = self%wdim**2
-        allocate( pft(pdim(1),pdim(2):pdim(3)), comps(1:self%wdim,1:self%wdim), stat=alloc_stat )
-        allocchk("In: imgpolarizer; simple_projector")
-        lims = self%loop_lims(3)
-        !$omp parallel do collapse(2) schedule(static) default(shared)&
-        !$omp private(i,k,l,m,logi,phys,comps,addr_l) proc_bind(close)
-        do i=1,pdim(1)
-            do k=pdim(2),pdim(3)
+        logical,                 intent(in)    :: isptcl  !< is ptcl (or reference)
+        logical,                 intent(in)    :: iseven  !< is even (or odd)
+        integer :: logi(3), phys(3), i, k, l, m, vecdim, addr_l
+        vecdim   = self%wdim**2
+        !!$omp parallel do collapse(2) schedule(static) default(shared)&
+        !!$omp private(i,k,l,m,logi,phys,comps,addr_l) proc_bind(close)
+        do i=1,self%pdim(1)
+            do k=self%pdim(2),self%pdim(3)
                 do l=1,self%wdim
                     addr_l = self%polcyc1_mat(i,k,l)
                     do m=1,self%wdim
                         logi = [addr_l,self%polcyc2_mat(i,k,m),0]
                         phys = self%comp_addr_phys(logi)
-                        comps(l,m) = self%get_fcomp(logi,phys)
+                        self%comps(l,m) = self%get_fcomp(logi,phys)
                     enddo
                 enddo
-                pft(i,k) = dot_product(self%polweights_mat(i,k,:), reshape(comps,(/vecdim/)))
+                self%pft(i,k) = dot_product(self%polweights_mat(i,k,:), reshape(self%comps,(/vecdim/)))
             end do
         end do
-        !$omp end parallel do
-        if( iisptcl )then
-            call pftcc%set_ptcl_pft(img_ind, pft)
+        !!$omp end parallel do
+        if( isptcl )then
+            call pftcc%set_ptcl_pft(img_ind, self%pft)
         else
-            call pftcc%set_ref_pft(img_ind, pft, iiseven)
+            call pftcc%set_ref_pft(img_ind, self%pft, iseven)
         endif
-        ! kill the remains
-        deallocate(pft, comps)
     end subroutine polarize
 
     ! DESTRUCTOR
@@ -145,6 +123,8 @@ contains
         if( allocated(self%polweights_mat) ) deallocate(self%polweights_mat)
         if( allocated(self%polcyc1_mat)    ) deallocate(self%polcyc1_mat)
         if( allocated(self%polcyc2_mat)    ) deallocate(self%polcyc2_mat)
+        if( allocated(self%pft)            ) deallocate(self%pft)
+        if( allocated(self%comps)          ) deallocate(self%comps)
     end subroutine kill_polarizer
 
 end module simple_polarizer

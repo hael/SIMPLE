@@ -106,6 +106,7 @@ contains
 
     subroutine exec_prime2D_stream_distr( self, cline )
         use simple_defs_conv
+        use simple_defs_fname
         use simple_timer
         use simple_commander_distr_wflows, only: prime2D_distr_commander, makecavgs_distr_commander
         use simple_oris,                   only: oris
@@ -116,9 +117,6 @@ contains
         use simple_fileio                  ! use all in there
         class(prime2D_stream_distr_commander), intent(inout) :: self
         class(cmdline),                        intent(inout) :: cline
-        character(len=32),       parameter :: ITERFBODY       = 'prime2Ddoc_'
-        character(len=32),       parameter :: CAVGS_ITERFBODY = 'cavgs_iter'
-        character(len=32),       parameter :: FRCS_ITERFBODY  = 'frcs_iter'
         character(len=32),       parameter :: STK_FILETAB     = 'stkstreamtab.txt'
         character(len=32),       parameter :: SCALE_FILETAB   = 'stkscale.txt'
         character(len=32),       parameter :: DEFTAB          = 'deftab.txt'
@@ -237,9 +235,9 @@ contains
                 call cline_prime2D%set('trs', MINSHIFT)
             endif
             call xprime2D_distr%execute(cline_prime2D)
-            oritab_glob = trim(ITERFBODY)//trim(str_iter)//trim(METADATEXT)
-            refs_glob   = trim(CAVGS_ITERFBODY)//trim(str_iter)//trim(p_master%ext)
-            frcs_glob   = trim(FRCS_ITERFBODY)//trim(str_iter)//'.bin'
+            oritab_glob = trim(PRIME2D_ITER_FBODY)//trim(str_iter)//trim(METADATEXT)
+            refs_glob   = trim(CAVGS_ITER_FBODY)//trim(str_iter)//trim(p_master%ext)
+            frcs_glob   = trim(FRCS_ITER_FBODY)//trim(str_iter)//'.bin'
             call rename('prime2Ddoc_final.txt', oritab_glob)
             call rename(trim('cavgs_final')//trim(p_master%ext), refs_glob)
             call rename('classdoc.txt', trim('classdoc_')//trim(str_iter)//trim('.txt'))

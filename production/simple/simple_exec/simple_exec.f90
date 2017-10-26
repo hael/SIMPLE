@@ -644,9 +644,10 @@ select case(prg)
         keys_optional(5) = 'pcontrast'
         keys_optional(6) = 'box'
         keys_optional(7) = 'outside'
+        keys_optional(8) = 'ctfreslim'
         ! parse command line
         if( describe ) call print_doc_extract
-        call cline%parse(keys_required(:1),keys_optional(:7))
+        call cline%parse(keys_required(:1),keys_optional(:8))
         ! parse command line
         if( .not. cline%defined('pcontrast') )call cline%set('pcontrast', 'black')
         ! execute

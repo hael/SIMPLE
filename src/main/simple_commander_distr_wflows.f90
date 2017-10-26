@@ -7,6 +7,7 @@ use simple_qsys_env,         only: qsys_env
 use simple_build,            only: build
 use simple_params,           only: params
 use simple_commander_base,   only: commander_base
+use simple_defs_fname
 use simple_commander_preproc ! use all in there
 use simple_commander_prime2D ! use all in there
 use simple_commander_distr   ! use all in there
@@ -421,10 +422,6 @@ contains
         use simple_procimgfile, only: random_selection_from_imgfile, copy_imgfile
         class(prime2D_distr_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
-        ! constants
-        character(len=32),     parameter :: ALGNFBODY       = 'algndoc_'
-        character(len=32),     parameter :: ITERFBODY       = 'prime2Ddoc_'
-        character(len=32),     parameter :: CAVGS_ITERFBODY = 'cavgs_iter'
         ! commanders
         type(check2D_conv_commander)    :: xcheck2D_conv
         type(merge_algndocs_commander)  :: xmerge_algndocs
@@ -473,7 +470,7 @@ contains
         cline_makecavgs      = cline
 
         ! initialise static command line parameters and static job description parameters
-        call cline_merge_algndocs%set('fbody',    ALGNFBODY            )
+        call cline_merge_algndocs%set('fbody',    ALGN_FBODY           )
         call cline_merge_algndocs%set('nptcls',   real(p_master%nptcls))
         call cline_merge_algndocs%set('ndocs',    real(p_master%nparts))
         call cline_merge_algndocs%set('ext_meta', METADATEXT           )
@@ -548,17 +545,17 @@ contains
             call job_descr%set('refs', trim(refs))
             call job_descr%set('startit', int2str(iter))
             ! the only FRC we have is from the previous iteration, hence the iter - 1
-            call job_descr%set('frcs', 'frcs_iter'//int2str_pad(iter - 1,3)//'.bin')
+            call job_descr%set('frcs', FRCS_ITER_FBODY//int2str_pad(iter - 1,3)//'.bin')
             ! schedule
-            call qenv%gen_scripts_and_schedule_jobs(p_master, job_descr, algnfbody=ALGNFBODY)
+            call qenv%gen_scripts_and_schedule_jobs(p_master, job_descr, algnfbody=ALGN_FBODY)
             ! merge orientation documents
-            oritab = trim(ITERFBODY)//trim(str_iter)//METADATEXT
+            oritab = trim(PRIME2D_ITER_FBODY)//trim(str_iter)//METADATEXT
             call cline_merge_algndocs%set('outfile', trim(oritab))
             call xmerge_algndocs%execute(cline_merge_algndocs)
             ! assemble class averages
-            refs      = trim(trim(CAVGS_ITERFBODY) // trim(str_iter)            // p_master%ext)
-            refs_even = trim(trim(CAVGS_ITERFBODY) // trim(str_iter) // '_even' // p_master%ext)
-            refs_odd  = trim(trim(CAVGS_ITERFBODY) // trim(str_iter) // '_odd'  // p_master%ext)
+            refs      = trim(trim(CAVGS_ITER_FBODY) // trim(str_iter)            // p_master%ext)
+            refs_even = trim(trim(CAVGS_ITER_FBODY) // trim(str_iter) // '_even' // p_master%ext)
+            refs_odd  = trim(trim(CAVGS_ITER_FBODY) // trim(str_iter) // '_odd'  // p_master%ext)
             call cline_cavgassemble%set('oritab', trim(oritab))
             call cline_cavgassemble%set('which_iter', real(iter))
             call qenv%exec_simple_prg_in_queue(cline_cavgassemble, 'CAVGASSEMBLE', 'CAVGASSEMBLE_FINISHED')
@@ -629,7 +626,7 @@ contains
                         if( p_master%match_filt.eq.'yes')then
                             ! updates FRCs
                             state     = 1
-                            frcs_iter = 'frcs_iter'//int2str_pad(iter,3)//'.bin'
+                            frcs_iter = FRCS_ITER_FBODY//int2str_pad(iter,3)//'.bin'
                             call frcs%new(p_master%ncls, p_master%box, p_master%smpd, state)
                             call frcs%read(frcs_iter)
                             do icls = 1, size(fromtocls, dim=1)
@@ -738,10 +735,6 @@ contains
         use simple_strings,        only: real2str
         class(prime3D_distr_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
-        ! constants
-        character(len=32), parameter :: ALGNFBODY = 'algndoc_'
-        character(len=32), parameter :: VOLFBODY  = 'recvol_state'
-        character(len=32), parameter :: ITERFBODY = 'prime3Ddoc_'
         ! commanders
         type(prime3D_init_distr_commander)  :: xprime3D_init_distr
         type(recvol_distr_commander)        :: xrecvol_distr
@@ -780,7 +773,6 @@ contains
         p_master = params(cline, checkdistr=.false.)
         ! make oritab
         call os%new(p_master%nptcls)
-
         ! options check
         if( p_master%nstates>1 .and. p_master%dynlp.eq.'yes' )&
             &stop 'Incompatible options: nstates>1 and dynlp=yes'
@@ -808,7 +800,7 @@ contains
         call cline_recvol_distr%set( 'prg', 'recvol' )       ! required for distributed call
         call cline_prime3D_init%set( 'prg', 'prime3D_init' ) ! required for distributed call
         call cline_merge_algndocs%set('nthr', 1.)
-        call cline_merge_algndocs%set('fbody', ALGNFBODY)
+        call cline_merge_algndocs%set('fbody', ALGN_FBODY)
         call cline_merge_algndocs%set('nptcls', real(p_master%nptcls))
         call cline_merge_algndocs%set('ndocs', real(p_master%nparts))
         call cline_merge_algndocs%set('ext_meta', METADATEXT)
@@ -856,16 +848,16 @@ contains
             do state = 1,p_master%nstates
                 ! rename volumes and update cline
                 str_state = int2str_pad(state,2)
-                vol = trim(VOLFBODY)//trim(str_state)//p_master%ext
+                vol = trim(VOL_FBODY)//trim(str_state)//p_master%ext
                 str = 'startvol_state'//trim(str_state)//p_master%ext
                 call simple_rename( trim(vol), trim(str) )
                 vol = 'vol'//trim(int2str(state))
                 call cline%set( trim(vol), trim(str) )
                 if( p_master%eo .ne. 'no' )then
-                    vol_even = trim(VOLFBODY)//trim(str_state)//'_even'//p_master%ext
+                    vol_even = trim(VOL_FBODY)//trim(str_state)//'_even'//p_master%ext
                     str = 'startvol_state'//trim(str_state)//'_even'//p_master%ext
                     call simple_rename( trim(vol_even), trim(str) )
-                    vol_odd  = trim(VOLFBODY)//trim(str_state)//'_odd' //p_master%ext
+                    vol_odd  = trim(VOL_FBODY)//trim(str_state)//'_odd' //p_master%ext
                     str = 'startvol_state'//trim(str_state)//'_odd'//p_master%ext
                     call simple_rename( trim(vol_odd), trim(str) )
                 endif
@@ -966,12 +958,12 @@ contains
             call job_descr%set( 'startit', trim(int2str(iter)) )
             call cline%set( 'startit', real(iter) )
             ! schedule
-            call qenv%gen_scripts_and_schedule_jobs(p_master, job_descr, algnfbody=ALGNFBODY)
+            call qenv%gen_scripts_and_schedule_jobs(p_master, job_descr, algnfbody=ALGN_FBODY)
             ! ASSEMBLE ALIGNMENT DOCS
             if( p_master%refine .eq. 'snhc' )then
                 oritab = trim(SNHCDOC)
             else
-                oritab = trim(ITERFBODY)//trim(str_iter)//METADATEXT
+                oritab = trim(PRIME3D_ITER_FBODY)//trim(str_iter)//METADATEXT
             endif
             call cline%set( 'oritab', oritab )
             call cline_merge_algndocs%set( 'outfile', trim(oritab) )
@@ -1024,15 +1016,15 @@ contains
                         enddo
                     endif
                     ! rename state volume
-                    vol      = trim(VOLFBODY)//trim(str_state)//p_master%ext
-                    vol_even = trim(VOLFBODY)//trim(str_state)//'_even'//p_master%ext
-                    vol_odd  = trim(VOLFBODY)//trim(str_state)//'_odd' //p_master%ext
+                    vol      = trim(VOL_FBODY)//trim(str_state)//p_master%ext
+                    vol_even = trim(VOL_FBODY)//trim(str_state)//'_even'//p_master%ext
+                    vol_odd  = trim(VOL_FBODY)//trim(str_state)//'_odd' //p_master%ext
                     if( p_master%refine .eq. 'snhc' )then
                         vol_iter  = trim(SNHCVOL)//trim(str_state)//p_master%ext
                     else
-                        vol_iter      = trim(VOLFBODY)//trim(str_state)//'_iter'//trim(str_iter)//p_master%ext
-                        vol_iter_even = trim(VOLFBODY)//trim(str_state)//'_iter'//trim(str_iter)//'_even'//p_master%ext
-                        vol_iter_odd  = trim(VOLFBODY)//trim(str_state)//'_iter'//trim(str_iter)//'_odd' //p_master%ext
+                        vol_iter      = trim(VOL_FBODY)//trim(str_state)//'_iter'//trim(str_iter)//p_master%ext
+                        vol_iter_even = trim(VOL_FBODY)//trim(str_state)//'_iter'//trim(str_iter)//'_even'//p_master%ext
+                        vol_iter_odd  = trim(VOL_FBODY)//trim(str_state)//'_iter'//trim(str_iter)//'_odd' //p_master%ext
                     endif
                     call simple_rename( trim(vol), trim(vol_iter) )
                     if( p_master%eo .ne. 'no' )then

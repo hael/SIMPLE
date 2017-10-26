@@ -587,7 +587,7 @@ contains
                 call progress(cnt, ntot)
                 call read_img_and_norm( b, p, iptcl )
                 call prepimg4align(b, p, o, is3D=.true.)
-                call b%img_match%polarize(pftcc, iptcl)
+                call b%img_match%polarize(pftcc, iptcl, .true., .true.)
             end do
         end do
     end subroutine prep_ptcls_pftcc4align

@@ -1,5 +1,5 @@
 ! PRIME3D stochastic search routines
-module simple_prime3D_srch
+module simple_prime3D_srch_dev
 #include "simple_lib.f08"
 use simple_oris,             only: oris
 use simple_ori,              only: ori

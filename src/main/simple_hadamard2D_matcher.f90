@@ -389,7 +389,7 @@ contains
             o = b%a%get_ori(iptcl)
             call prepimg4align(b, p, o, is3D=.false.)
             ! transfer to polar coordinates
-            call b%img_match%polarize(pftcc, iptcl)
+            call b%img_match%polarize(pftcc, iptcl, .true., .true.)
         end do
         DebugPrint '*** hadamard2D_matcher ***: finished preppftcc4align'
     end subroutine preppftcc4align
