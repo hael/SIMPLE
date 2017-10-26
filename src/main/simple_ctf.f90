@@ -219,10 +219,6 @@ contains
         if( present(bfac) ) call img%apply_bfac(bfac)
     end subroutine ctf2img
 
-    
-
-
-
     !>  \brief  is for making a CTF power-spec image
     subroutine ctf2pspecimg( self, img, dfx, dfy, angast, add_phshift )
         use simple_image, only: image

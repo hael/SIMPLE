@@ -313,14 +313,12 @@ contains
                 filter = fsc2optlp(frc)
                 call b%img%shellnorm()
                 call b%img%apply_filter(filter)
-                call b%img%shellnorm_and_apply_filter_serial(filter)
             endif
         endif
         ! back to real-space
         call b%img%bwd_ft
         ! clip image if needed
         call b%img%clip(b%img_match)
-        ! MASKING
         ! soft-edged mask
         if( p%l_innermsk )then
             call b%img_match%mask(p%msk, 'soft', inner=p%inner, width=p%width)
@@ -402,7 +400,6 @@ contains
         call b%img%bwd_ft
         ! clip image if needed
         call b%img%clip(b%img_match)
-        ! MASKING
         ! soft-edged mask
         if( p%l_innermsk )then
             call b%img_match%mask(p%msk, 'soft', inner=p%inner, width=p%width)

@@ -189,7 +189,10 @@ type :: image
     procedure          :: guinier
     procedure          :: spectrum
     procedure          :: shellnorm
-    procedure          :: shellnorm_and_apply_filter_serial
+    procedure, private :: shellnorm_and_apply_filter_serial_1
+    procedure, private :: shellnorm_and_apply_filter_serial_2
+    generic            :: shellnorm_and_apply_filter_serial =>&
+            &shellnorm_and_apply_filter_serial_1, shellnorm_and_apply_filter_serial_2
     procedure          :: apply_bfac
     procedure          :: bp
     procedure          :: gen_lpfilt
@@ -3557,13 +3560,12 @@ contains
         endif
     end subroutine shellnorm
 
-    !> \brief  for normalising each shell to uniform (=1) power
-    !!        (assuming average has been subtracted in real-space) and applying a filter function 
-    subroutine shellnorm_and_apply_filter_serial( self, filter )
+    !> \brief  for normalising each shell to uniform (=1) power (assuming average has been 
+    !!         subtracted in real-space) and applying a filter function       
+    subroutine shellnorm_and_apply_filter_serial_1( self, filter )
         class(image), intent(inout) :: self
         real,         intent(in)    :: filter(:)
         real, allocatable  :: expec_pow(:)
-        logical            :: didbwdft
         integer            :: sh, h, k, l, phys(3), lfny, lims(3,2), filtsz
         real               :: icomp, avg, wzero, fwght
         filtsz    = size(filter)
@@ -3602,7 +3604,46 @@ contains
         phys  = self%fit%comp_addr_phys([0,0,0])
         icomp = aimag(self%cmat(phys(1),phys(2),phys(3)))
         self%cmat(phys(1),phys(2),phys(3)) = cmplx(wzero,icomp)
-    end subroutine shellnorm_and_apply_filter_serial
+    end subroutine shellnorm_and_apply_filter_serial_1
+
+     !> \brief  for normalising each shell to uniform (=1) power (assuming average has been 
+    !!         subtracted in real-space) and applying a filter function       
+    subroutine shellnorm_and_apply_filter_serial_2( self, filter )
+        class(image), intent(inout) :: self, filter
+        real, allocatable  :: expec_pow(:)
+        complex            :: comp
+        integer            :: sh, h, k, l, phys(3), lfny, lims(3,2), filtsz
+        real               :: icomp, avg, fwght
+        lfny      = self%get_lfny(1)
+        lims      = self%fit%loop_lims(2)
+        ! calculate the expectation value of the signal power in each shell
+        expec_pow = self%spectrum('power')
+        ! normalise
+        do h=lims(1,1),lims(1,2)
+            do k=lims(2,1),lims(2,2)
+                do l=lims(3,1),lims(3,2)
+                    sh   = nint(hyp(real(h),real(k),real(l)))
+                    phys = self%fit%comp_addr_phys([h,k,l])
+                    comp  = filter%get_fcomp([h,k,l],phys)
+                    fwght = real(comp)
+                    if( sh > lfny )then
+                        self%cmat(phys(1),phys(2),phys(3)) = cmplx(0.,0.)
+                    else
+                        if( sh == 0 ) cycle
+                        if( expec_pow(sh) > 0. )then
+                            self%cmat(phys(1),phys(2),phys(3)) =&
+                                &fwght * (self%cmat(phys(1),phys(2),phys(3)) / sqrt(expec_pow(sh)))
+                        endif
+                    endif
+                end do
+            end do
+        end do
+        ! take care of the central spot
+        phys  = self%fit%comp_addr_phys([0,0,0])
+        comp  = filter%get_fcomp([0,0,0],phys)
+        icomp = aimag(self%cmat(phys(1),phys(2),phys(3)))
+        self%cmat(phys(1),phys(2),phys(3)) = cmplx(real(comp),icomp)
+    end subroutine shellnorm_and_apply_filter_serial_2
 
     !> \brief apply_bfac  is for applying bfactor to an image
     !! \param b
@@ -5701,13 +5742,6 @@ contains
         endif
     end subroutine shift
 
-    !> \brief shift  is for origin shifting an image
-    !! \param x position in axis 0
-    !! \param y position in axis 1
-    !! \param z position in axis 2
-    !! \param lp_dyn low-pass cut-off freq
-    !! \param imgout processed image
-    !!
     subroutine shift2Dserial( self, shvec  )
         class(image), intent(inout) :: self
         real,         intent(in)    :: shvec(2)
@@ -5719,7 +5753,8 @@ contains
         do h=lims(1,1),lims(1,2)
             do k=lims(2,1),lims(2,2)
                 phys = self%fit%comp_addr_phys([h,k,0])
-                call self%mul_cmat_at_2(self%oshift([h,k,0], shvec_here), phys)
+                self%cmat(phys(1),phys(2),phys(3)) = self%cmat(phys(1),phys(2),phys(3)) *&
+                    &self%oshift([h,k,0], shvec_here)
             end do
         end do
     end subroutine shift2Dserial
@@ -6106,14 +6141,6 @@ contains
         endif
     end subroutine norm
 
-
-     !> \brief cure_2  is for checking the numerical soundness of an image and curing it if necessary
-    !! \param maxv
-    !! \param minv
-    !! \param ave
-    !! \param sdev
-    !! \param n_nans
-    !!
     subroutine norm_serial( self  )
         class(image), intent(inout) :: self
         integer :: i, j, k, npix
