@@ -47,6 +47,7 @@ type :: params
     character(len=3)      :: errify='no'          !< introduce error(yes|no){no}
     character(len=3)      :: even='no'            !< even orientation distribution(yes|no){no}
     character(len=3)      :: ft2img='no'          !< convert Fourier transform to real image of power(yes|no){no}
+    character(len=3)      :: for3D='yes'          !< for 3D analysis(yes|no){yes}
     character(len=3)      :: guinier='no'         !< calculate Guinier plot(yes|no){no}
     character(len=3)      :: kmeans='yes'
     character(len=3)      :: local='no'
@@ -484,6 +485,7 @@ contains
         call check_carg('exp_doc',        self%exp_doc)
         call check_carg('extrmode',       self%extrmode)
         call check_carg('fbody',          self%fbody)
+        call check_carg('for3D',          self%for3D)
         call check_carg('ft2img',         self%ft2img)
         call check_carg('guinier',        self%guinier)
         call check_carg('hfun',           self%hfun)

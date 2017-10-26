@@ -68,8 +68,9 @@ integer, parameter :: PICKER_OFFSET        = 3         !< picker offset for grid
 
 ! constants for masking/interpolation
 real, parameter :: COSMSKHALFWIDTH         = 6.0       !< spherical soft masking
-real, parameter :: KBWINSZ                 = 1.5       !< interpolation window size
+real, parameter :: KBWINSZ                 = 1.5       !< interpolation window size for 2D
 real, parameter :: KBALPHA                 = sqrt(2.0) !< interpolation alpha (oversampling constant)
+real, parameter :: RECWINSZ                = 1.0       !< half-window size for 3D reconstruction
 
 ! real constants that control search and convergence
 real, parameter :: FRAC_SH_LIM             = 80.0      !< at what frac to turn on the shift search
@@ -107,6 +108,7 @@ character(len=LONGSTRLEN) :: cmdline_glob              !< global command line st
 character(len=32),     parameter :: STKPARTSDIR         = 'stack_parts'
 character(len=STDLEN), parameter :: STKPARTFBODY        = trim(STKPARTSDIR)//'/stack_part'
 character(len=STDLEN), parameter :: STKPARTFBODY_SC     = trim(STKPARTSDIR)//'/stack_part_sc'
+character(len=STDLEN), parameter :: STKPARTFBODY_CGRID  = trim(STKPARTSDIR)//'/stack_part_cgrid'
 character(len=4),      parameter :: METADATEXT          = '.txt'
 character(len=1),      parameter :: DEFAULT_FILE_FORMAT = 'M'
 

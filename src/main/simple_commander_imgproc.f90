@@ -8,6 +8,7 @@ use simple_params,         only: params
 use simple_build,          only: build
 use simple_commander_base, only: commander_base
 use simple_imghead,        only: find_ldim_nptcls
+use simple_qsys_funs,      only: qsys_job_finished
 implicit none
 
 public :: binarise_commander
@@ -19,6 +20,7 @@ public :: image_diff_commander
 public :: image_smat_commander
 public :: norm_commander
 public :: scale_commander
+public :: prep4cgrid_commander
 public :: stack_commander
 public :: stackops_commander
 private
@@ -56,10 +58,15 @@ type, extends(commander_base) :: norm_commander
   contains
     procedure :: execute      => exec_norm
 end type norm_commander
+
 type, extends(commander_base) :: scale_commander
   contains
     procedure :: execute      => exec_scale
 end type scale_commander
+type, extends(commander_base) :: prep4cgrid_commander
+  contains
+    procedure :: execute      => exec_prep4cgrid
+end type prep4cgrid_commander
 type, extends(commander_base) :: stack_commander
   contains
     procedure :: execute      => exec_stack
@@ -168,8 +175,8 @@ contains
         real              :: corr, ave, sdev, var, fsc05, fsc0143
         real, allocatable :: res(:), corrs(:), corrs_sum(:)
         logical           :: err
-        p = params(cline)                   ! parameters generated
-        call b%build_general_tbox(p, cline) ! general objects built
+        p = params(cline)                                 ! parameters generated
+        call b%build_general_tbox(p, cline, do3d=.false.) ! general objects built
         if( cline%defined('msk') )then
             if( p%stats .eq. 'yes' )then
                 allocate(corrs(p%nptcls), stat=alloc_stat)
@@ -244,8 +251,8 @@ contains
         type(build)  :: b
         type(ctf)    :: tfun
         real         :: dfx, dfy, angast
-        p = params(cline)                     ! parameters generated
-        call b%build_general_tbox(p, cline)   ! general objects built
+        p = params(cline)                                 ! parameters generated
+        call b%build_general_tbox(p, cline, do3d=.false.) ! general objects built
         if( cline%defined('oritab') .or. cline%defined('deftab') )then
             call b%raise_hard_ctf_exception(p)
         else
@@ -479,7 +486,6 @@ contains
     !> provides re-scaling and clipping routines for MRC or SPIDER stacks and volumes
     subroutine exec_scale( self, cline )
         use simple_image,       only: image
-        use simple_qsys_funs,   only: qsys_job_finished
         class(scale_commander), intent(inout) :: self
         class(cmdline),         intent(inout) :: cline
         type(params) :: p
@@ -496,7 +502,7 @@ contains
         call b%vol%new([p%box,p%box,p%box], p%smpd)     
         call img%new([p%box,p%box,1],p%smpd)  ! image created
         call img2%new([p%box,p%box,1],p%smpd) ! image created
-        if( cline%defined('stk') .and. cline%defined('vol1') )stop 'Cannot operate on images AND volume at once'
+        if( cline%defined('stk') .and. cline%defined('vol1') ) stop 'Cannot operate on images AND volume at once'
         if( cline%defined('stk') )then
             ! 2D
             if( cline%defined('scale2') )then
@@ -596,7 +602,7 @@ contains
                 fname = add2fbody(remove_abspath(filenames(ifile)), p%ext, '_sc')
                 call find_ldim_nptcls(filenames(ifile),ldim,nframes)
                 ldim(3) = 1 ! to correct for the stupide 3:d dim of mrc stacks
-                do iframe=1,nframes
+                do iframe= 1, nframes
                     call img%read(filenames(ifile), iframe)
                     call img%fwd_ft
                     if( ldim_scaled(1) <= ldim(1) .and. ldim_scaled(2) <= ldim(2) .and. ldim_scaled(3) <= ldim(3) )then
@@ -616,6 +622,35 @@ contains
         call simple_end('**** SIMPLE_SCALE NORMAL STOP ****', print_simple=.false.)
         call qsys_job_finished( p, 'simple_commander_imgproc :: exec_scale' )
     end subroutine exec_scale
+
+    !>  for preparing images for gridding in the Fourier domain
+    subroutine exec_prep4cgrid( self, cline )
+        use simple_prep4cgrid, only: prep4cgrid
+        use simple_kbinterpol, only: kbinterpol
+        class(prep4cgrid_commander), intent(inout) :: self
+        class(cmdline),              intent(inout) :: cline
+        type(params)     :: p
+        type(build)      :: b
+        type(prep4cgrid) :: gridprep
+        type(kbinterpol) :: kbwin
+        integer          :: iptcl
+        p = params(cline)                                 ! parameters generated
+        call b%build_general_tbox(p, cline, do3d=.false.) ! general objects built
+        if( p%for3D.eq.'yes' )then
+            kbwin = kbinterpol(RECWINSZ, p%alpha)
+        else
+            kbwin = kbinterpol(KBWINSZ, p%alpha)
+        endif
+        call gridprep%new(b%img, kbwin, [p%boxpd,p%boxpd,1])
+        do iptcl=1,p%nptcls
+            call b%img%read(p%stk, iptcl)
+            call gridprep%prep(b%img, b%img_pad)
+            call b%img_pad%write(p%outstk, iptcl)
+        end do
+        ! end gracefully
+        call simple_end('**** SIMPLE_PREP4CGRID NORMAL STOP ****', print_simple=.false.)
+        call qsys_job_finished( p, 'simple_commander_imgproc :: exec_prep4cgrid' )
+    end subroutine exec_prep4cgrid
 
     !>  for stacking individual images or multiple stacks into one
     subroutine exec_stack( self, cline )
@@ -729,9 +764,9 @@ contains
         character(len=:), allocatable            :: fname
         integer :: i, s, ipst, cnt, cnt2, cnt3, nincl, lfoo(3), np1,np2,ntot
         real    :: p_ctf, p_dfx
-        p = params(cline)                    ! parameters generated
-        call b%build_general_tbox(p, cline)  ! general objects built
-        call img%new([p%box,p%box,1],p%smpd) ! image created
+        p = params(cline)                                ! parameters generated
+        call b%build_general_tbox(p, cline,do3d=.false.) ! general objects built
+        call img%new([p%box,p%box,1],p%smpd)             ! image created
         ! random selection
         if( cline%defined('nran') )then
             write(*,'(a)') '>>> RANDOMLY SELECTING IMAGES'

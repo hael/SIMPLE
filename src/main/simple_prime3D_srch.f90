@@ -922,7 +922,7 @@ contains
             endif
             ! add shift
             shvec = self%prev_shvec
-            if( self%doshift )shvec = shvec + o_refs(self%iptcl)%get_2Dshift(ipeak)
+            if( self%doshift )shvec = shvec + o_refs(self%iptcl)%get_2Dshift(ref)
             where( abs(shvec) < 1e-6 ) shvec = 0.
             ! transfer to solution set
             corrs(ipeak) = o_refs(self%iptcl)%get(ref, 'corr')

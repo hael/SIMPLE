@@ -96,6 +96,7 @@ type(image_diff_commander)           :: ximage_diff
 type(image_smat_commander)           :: ximage_smat
 type(norm_commander)                 :: xnorm
 type(scale_commander)                :: xscale
+type(prep4cgrid_commander)           :: xprep4cgrid
 type(stack_commander)                :: xstack
 type(stackops_commander)             :: xstackops
 
@@ -1802,6 +1803,7 @@ select case(prg)
         ! <scale/begin>is a program that provides re-scaling and clipping routines for MRC or SPIDER stacks
         ! and volumes<scale/end>
         !
+        ! set required keys
         keys_required(1)  = 'smpd'
         ! set optional keys
         keys_optional(1)  = 'stk'
@@ -1820,6 +1822,23 @@ select case(prg)
         call cline%parse(keys_required(:1),keys_optional(:11))
         ! execute
         call xscale%execute(cline)
+    case( 'prep4cgrid' )
+        !==Program prep4cgrid
+        !
+        ! <prep4cgrid/begin>is a program that prepares images (on disk) for gridding in the Fourier domain
+        ! <prep4cgrid/end>
+        !
+        ! set required keys
+        keys_required(1)  = 'stk'
+        keys_required(2)  = 'for3D'
+        keys_required(3)  = 'outstk'
+        ! set optional keys
+        keys_optional(1)  = 'alpha'
+        ! parse command line
+        ! if( describe ) call print_doc_prep4cgrid
+        call cline%parse(keys_required(:3),keys_optional(:1))
+        ! execute
+        call xprep4cgrid%execute(cline)
     case( 'stack' )
         !==Program stack
         !

@@ -102,6 +102,7 @@ contains
         call chdict%push('filwidth',      'width of filament (in Angstroms)')
         call chdict%push('find',          'Fourier index')
         call chdict%push('fname',         'file name')
+        call chdict%push('for3D',         'for 3D analysis(yes|no){yes}')
         call chdict%push('frac',          'fraction of ptcls(0-1){1}')
         call chdict%push('frac_outliers', 'fraction of outliers(0-1){0.0}')
         call chdict%push('fraca',         'fraction of amplitude contrast used for fitting CTF{0.07}')

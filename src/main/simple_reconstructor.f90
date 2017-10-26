@@ -29,7 +29,7 @@ type, extends(image) :: reconstructor
     real(kind=c_float), pointer :: rho(:,:,:)=>null()           !< sampling+CTF**2 density
     complex, allocatable        :: cmat_exp(:,:,:)              !< Fourier components of expanded reconstructor
     real,    allocatable        :: rho_exp(:,:,:)               !< sampling+CTF**2 density of expanded reconstructor
-    real                        :: winsz         = 1.           !< window half-width
+    real                        :: winsz         = RECWINSZ     !< window half-width
     real                        :: alpha         = KBALPHA      !< oversampling ratio
     real                        :: dfx=0., dfy=0., angast=0.    !< CTF params
     real                        :: phshift       = 0.           !< additional phase shift from the Volta  

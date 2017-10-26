@@ -32,6 +32,7 @@ public :: recvol_distr_commander
 public :: tseries_track_distr_commander
 public :: symsrch_distr_commander
 public :: scale_stk_parts_commander
+public :: prep4cgrid_stk_parts_commander
 private
 
 type, extends(commander_base) :: unblur_ctffind_distr_commander
@@ -98,6 +99,10 @@ type, extends(commander_base) :: scale_stk_parts_commander
   contains
     procedure :: execute      => exec_scale_stk_parts
 end type scale_stk_parts_commander
+type, extends(commander_base) :: prep4cgrid_stk_parts_commander
+  contains
+    procedure :: execute      => exec_prep4cgrid_stk_parts
+end type prep4cgrid_stk_parts_commander
 
 contains
 
@@ -1466,5 +1471,66 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_DISTR_SCALE_STK_PARTS NORMAL STOP ****')
     end subroutine exec_scale_stk_parts
+
+    subroutine exec_prep4cgrid_stk_parts( self, cline )
+        class(prep4cgrid_stk_parts_commander), intent(inout) :: self
+        class(cmdline),                        intent(inout) :: cline
+        type(qsys_env)                :: qenv
+        type(params)                  :: p_master
+        type(chash)                   :: job_descr
+        type(cmdline)                 :: cline_prep4cgrid
+        type(chash),      allocatable :: part_params(:)
+        character(len=:), allocatable :: stkname, outstkname
+        integer :: ipart
+        ! seed the random number generator
+        call seed_rnd
+        ! output command line executed
+        write(*,'(a)') '>>> COMMAND LINE EXECUTED'
+        write(*,*) trim(cmdline_glob)
+        ! make master parameters
+        p_master = params(cline, checkdistr=.false.)
+        ! copy command line
+        cline_prep4cgrid = cline
+        ! prepare part-dependent parameters
+        if( cline%defined('stktab') )then
+            p_master%nparts = p_master%nmics
+            call cline_prep4cgrid%set('nparts', real(p_master%nparts))
+            if( cline%defined('ncunits') )then
+                call cline_prep4cgrid%set('ncunits', cline%get_rarg('ncunits'))
+            endif
+            allocate(part_params(p_master%nparts))
+            do ipart=1,p_master%nparts
+                call part_params(ipart)%new(2)
+                stkname = p_master%stkhandle%get_stkname(ipart)
+                outstkname = add2fbody(stkname, p_master%ext, '_cgrid')
+                call part_params(ipart)%set('stk',    stkname)
+                call part_params(ipart)%set('outstk', outstkname)
+                deallocate(stkname, outstkname)
+            end do
+            call cline_prep4cgrid%delete('stktab')
+        else
+            ! prepare part-dependent parameters
+            allocate(part_params(p_master%nparts))
+            do ipart=1,p_master%nparts
+                call part_params(ipart)%new(2)
+                call part_params(ipart)%set('stk',&
+                    &trim(STKPARTFBODY)//int2str_pad(ipart,p_master%numlen)//p_master%ext)
+                call part_params(ipart)%set('outstk',&
+                    &trim(STKPARTFBODY_CGRID)//int2str_pad(ipart,p_master%numlen)//p_master%ext)
+            end do
+        endif
+        ! setup the environment for distributed execution
+        call qenv%new(p_master)
+        ! prepare job description
+        call cline_prep4cgrid%gen_job_descr(job_descr)
+        call job_descr%set('prg', 'prep4cgrid')
+        call job_descr%set('autoscale', 'no')
+        ! schedule & clean
+        call qenv%gen_scripts_and_schedule_jobs(p_master, job_descr, part_params=part_params)
+        ! clean
+        call qsys_cleanup(p_master)
+        ! end gracefully
+        call simple_end('**** SIMPLE_DISTR_PREP4CGRID_STK_PARTS NORMAL STOP ****')
+    end subroutine exec_prep4cgrid_stk_parts
 
 end module simple_commander_distr_wflows
