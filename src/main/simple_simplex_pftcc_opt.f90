@@ -65,7 +65,7 @@ contains
         self%pb     = spec%x
         ! set best cost
         spec%nevals = 0
-        self%yb     = funcontainer%costfun(self%pb)
+        call funcontainer%costfun(self%pb, self%yb)
         spec%nevals = spec%nevals + 1
         ! initialise dynamic bounds
         if(allocated(spec%limits_init))lims_dyn(:NDIM,:) = spec%limits_init
@@ -112,7 +112,7 @@ contains
                 end do
                 ! calculate costs
                 do i=1,NDIM + 1
-                    self%y(i) = funcontainer%costfun(self%p(i,:))
+                    call funcontainer%costfun(self%p(i,:), self%y(i))
                 end do
             end subroutine init
 
@@ -177,7 +177,7 @@ contains
                     p(:,:)=0.5*(p(:,:)+spread(p(ilo,:),1,size(p,1))) ! better contract around the lowest (best) point
                     do i=1,NDIM+1
                         if(i /= ilo)then
-                            y(i)=funcontainer%costfun(p(i,:))
+                            call funcontainer%costfun(p(i,:), y(i))
                             nevals = nevals+1
                         endif
                     end do
@@ -204,7 +204,7 @@ contains
             fac1=(1.0-fac)/real(NDIM)
             fac2=fac1-fac
             ptry(:)=psum(:)*fac1-p(ihi,:)*fac2
-            ytry=funcontainer%costfun(ptry) ! evaluate the function at the trial point
+            call funcontainer%costfun(ptry, ytry) ! evaluate the function at the trial point
             nevals = nevals+1
             if(ytry < y(ihi))then ! if it is better than the highest, then replace the highest
                 y(ihi)=ytry

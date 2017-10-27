@@ -15,15 +15,17 @@ private
 
 type, extends(image) :: polarizer
     private
-    type(kbinterpol)      :: kbwin                 !< window function object
+    complex, allocatable  :: pft(:,:)              !< Polar-FT matrix
+    complex, allocatable  :: comps(:,:)            !< pre-allocated for performance kernel Fourier components
     real,    allocatable  :: polweights_mat(:,:,:) !< polar weights matrix for the image to polar transformer
     integer, allocatable  :: polcyc1_mat(:,:,:)    !< image cyclic adresses for the image to polar transformer
     integer, allocatable  :: polcyc2_mat(:,:,:)    !< image cyclic adresses for the image to polar transformer
     integer               :: wdim = 0              !< dimension of K-B window
-    integer               :: pdim(3) = 0           ! Polar-FT matrix dimensions
-    complex, allocatable  :: pft(:,:), comps(:,:)
+    integer               :: wlen = 0              !< dimension squared of K-B window
+    integer               :: pdim(3) = 0           !< Polar-FT matrix dimensions
   contains
     procedure :: init_polarizer
+    procedure :: copy_polarizer
     procedure :: polarize
     procedure :: kill_polarizer
 end type polarizer
@@ -39,20 +41,21 @@ contains
         class(polarizer),        intent(inout) :: self   !< projector instance
         class(polarft_corrcalc), intent(inout) :: pftcc  !< polarft_corrcalc object to be filled
         real,                    intent(in)    :: alpha  !< oversampling factor
+        type(kbinterpol)  :: kbwin                 !< window function object
         real, allocatable :: w(:,:)
         real              :: loc(2)
         integer           :: win(2,2), lims(3,2)
-        integer           :: i, k, l, wlen, cnt
+        integer           :: i, k, l, cnt
         if( .not. pftcc%exists() ) stop 'polarft_corrcalc object needs to be created; init_imgpolarizer; simple_projector'
         call self%kill_polarizer
-        self%kbwin = kbinterpol(KBWINSZ, alpha)
-        self%wdim  = self%kbwin%get_wdim()
-        wlen       = self%wdim**2
         self%pdim  = pftcc%get_pdim()
+        kbwin      = kbinterpol(KBWINSZ, alpha)
+        self%wdim  = kbwin%get_wdim()
+        self%wlen  = self%wdim**2
         lims       = self%loop_lims(3)
         allocate( self%polcyc1_mat(1:self%pdim(1), self%pdim(2):self%pdim(3), 1:self%wdim),&
                   &self%polcyc2_mat(1:self%pdim(1), self%pdim(2):self%pdim(3), 1:self%wdim),&
-                  &self%polweights_mat(1:self%pdim(1), self%pdim(2):self%pdim(3), 1:wlen),&
+                  &self%polweights_mat(1:self%pdim(1), self%pdim(2):self%pdim(3), 1:self%wlen),&
                   &w(1:self%wdim,1:self%wdim), self%comps(1:self%wdim,1:self%wdim),&
                   &self%pft(self%pdim(1),self%pdim(2):self%pdim(3)), stat=alloc_stat)
         allocchk('in simple_projector :: init_imgpolarizer')
@@ -68,20 +71,34 @@ contains
                 do l=1,self%wdim
                     cnt = cnt + 1
                     ! interpolation weights
-                    w(l,:) = w(l,:) * self%kbwin%apod( real(win(1,1)+l-1)-loc(1) )
-                    w(:,l) = w(:,l) * self%kbwin%apod( real(win(2,1)+l-1)-loc(2) )
+                    w(l,:) = w(l,:) * kbwin%apod( real(win(1,1)+l-1)-loc(1) )
+                    w(:,l) = w(:,l) * kbwin%apod( real(win(2,1)+l-1)-loc(2) )
                     ! cyclic addresses
                     self%polcyc1_mat(i, k, cnt) = cyci_1d(lims(1,:), win(1,1)+l-1)
                     self%polcyc2_mat(i, k, cnt) = cyci_1d(lims(2,:), win(2,1)+l-1)
                 end do
-                self%polweights_mat(i,k,:) = reshape(w,(/wlen/))
+                self%polweights_mat(i,k,:) = reshape(w,(/self%wlen/))
             enddo
         enddo
         !$omp end parallel do
         deallocate(w)
     end subroutine init_polarizer
 
+    subroutine copy_polarizer(self, self_in)
+        class(polarizer), intent(inout) :: self    !< projector instance
+        class(polarizer), intent(inout) :: self_in
+        call self%kill_polarizer
+        self%pdim = self_in%pdim
+        self%wdim = self_in%wdim
+        self%wlen = self_in%wlen
+        allocate( self%polcyc1_mat(1:self%pdim(1), self%pdim(2):self%pdim(3), 1:self%wdim), source=self_in%polcyc1_mat )
+        allocate( self%polcyc2_mat(1:self%pdim(1), self%pdim(2):self%pdim(3), 1:self%wdim), source=self_in%polcyc2_mat )
+        allocate( self%polweights_mat(1:self%pdim(1), self%pdim(2):self%pdim(3), 1:self%wlen), source=self_in%polweights_mat )
+        allocate( self%comps(1:self%wdim,1:self%wdim), self%pft(self%pdim(1),self%pdim(2):self%pdim(3)), source=cmplx(0.,0.) )
+    end subroutine copy_polarizer
+
     !> \brief  creates the polar Fourier transform
+    !!         KEEP THIS ROUTINE SERIAL
     subroutine polarize( self, pftcc, img_ind, isptcl, iseven )
         use simple_math, only: sqwin_2d, cyci_1d
         use simple_polarft_corrcalc, only: polarft_corrcalc
@@ -90,10 +107,7 @@ contains
         integer,                 intent(in)    :: img_ind !< image index
         logical,                 intent(in)    :: isptcl  !< is ptcl (or reference)
         logical,                 intent(in)    :: iseven  !< is even (or odd)
-        integer :: logi(3), phys(3), i, k, l, m, vecdim, addr_l
-        vecdim   = self%wdim**2
-        !!$omp parallel do collapse(2) schedule(static) default(shared)&
-        !!$omp private(i,k,l,m,logi,phys,comps,addr_l) proc_bind(close)
+        integer :: logi(3), phys(3), i, k, l, m, addr_l
         do i=1,self%pdim(1)
             do k=self%pdim(2),self%pdim(3)
                 do l=1,self%wdim
@@ -104,10 +118,9 @@ contains
                         self%comps(l,m) = self%get_fcomp(logi,phys)
                     enddo
                 enddo
-                self%pft(i,k) = dot_product(self%polweights_mat(i,k,:), reshape(self%comps,(/vecdim/)))
+                self%pft(i,k) = dot_product(self%polweights_mat(i,k,:), reshape(self%comps,(/self%wlen/)))
             end do
         end do
-        !!$omp end parallel do
         if( isptcl )then
             call pftcc%set_ptcl_pft(img_ind, self%pft)
         else

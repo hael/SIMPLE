@@ -30,7 +30,7 @@ contains
         integer          :: n, i
         kbwin = kbinterpol(KBWINSZ, p%alpha)
         call vol_pad%new([p%boxpd,p%boxpd,p%boxpd], p%smpd)
-        call prep4cgrid(vol, vol_pad, p%msk, kbwin)
+        call prep4cgrid(vol, vol_pad, kbwin)
         call img_pad%new([p%boxpd,p%boxpd,1], p%smpd)
         if( present(top) )then
             n = top
@@ -77,7 +77,7 @@ contains
         call rovol_pad%new(ldim_pd, p%smpd)
         call rovol_pad%set_ft(.true.)
         call rovol%new(ldim, p%smpd)
-        call prep4cgrid(vol, vol_pad, p%msk, kbwin)
+        call prep4cgrid(vol, vol_pad, kbwin)
         call vol_pad%expand_cmat(p%alpha)
         lims = vol_pad%loop_lims(2)
         write(*,'(A)') '>>> ROTATING VOLUME'

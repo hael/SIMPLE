@@ -91,6 +91,7 @@ integer, parameter :: MAX_NSPACE           = 5000      !< maximum # of projectio
 integer, parameter :: NSPACE_BALANCE       = 600       !< # projection directions for the balancing constraint (PRIME3D)
 integer, parameter :: HETNREPEATS          = 1         !< # repeats het_ensemble
 integer, parameter :: GRIDCORR_MAXITS      = 5         !< # iterations for reconstruction gridding correction
+integer, parameter :: MAXIMGBATCHSZ        = 500       !< max # images in batch
 
 ! constants for SHC inplane grid search
 real,    parameter :: SHC_INPL_TRSHWDTH    = 2.0       !< shift search halfwidht (pixels)

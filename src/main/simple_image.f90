@@ -17,9 +17,6 @@ public :: image, test_image
 private
 #include "simple_local_flags.inc"
 
-! CLASS PARAMETERS/VARIABLES
-logical, parameter :: shift_to_phase_origin=.true.
-
 type :: image
     private
     logical                                :: ft=.false.           !< Fourier transformed or not
@@ -38,6 +35,7 @@ type :: image
   contains
     ! CONSTRUCTORS
     procedure          :: new
+    procedure          :: construct_thread_safe_tmp_imgs
     procedure          :: disc
     procedure          :: copy
     procedure          :: mic2spec
@@ -212,7 +210,6 @@ type :: image
     procedure          :: stats
     procedure          :: noisesdev
     procedure          :: mean
-    procedure          :: median_pixel
     procedure          :: contains_nans
     procedure          :: checkimg4nans
     procedure          :: cure
@@ -290,6 +287,10 @@ end type image
 interface image
     module procedure constructor
 end interface image
+
+! CLASS PARAMETERS/VARIABLES
+logical,     parameter   :: shift_to_phase_origin=.true.
+type(image), allocatable :: thread_safe_tmp_imgs(:)
 
 contains
 
@@ -399,6 +400,22 @@ contains
         end do
         self%existence = .true.
     end subroutine new
+
+    subroutine construct_thread_safe_tmp_imgs( self, nthr )
+        class(image), intent(in) :: self
+        integer,      intent(in) :: nthr
+        integer :: i
+        if( allocated(thread_safe_tmp_imgs) )then
+            do i=1,size(thread_safe_tmp_imgs)
+                call thread_safe_tmp_imgs(i)%kill
+            end do
+            deallocate(thread_safe_tmp_imgs)
+        endif
+        allocate( thread_safe_tmp_imgs(nthr) )
+        do i=1,nthr
+            call thread_safe_tmp_imgs(i)%new(self%ldim, self%smpd, wthreads=.false.)
+        end do
+    end subroutine construct_thread_safe_tmp_imgs
 
     !>  \brief disc constructs a binary disc of given radius and returns the number of 1:s
     !>
@@ -2574,38 +2591,55 @@ contains
 
     !>  \brief  is for binarizing an image using k-means to identify the background/
     !!          foreground distributions for the image
-    subroutine bin_kmeans( self, frac_outliers )
-        class(image),   intent(inout) :: self
-        real, optional, intent(in)    :: frac_outliers
-        real, allocatable :: forsort(:), foreground_pixels(:), dists(:)
-        real              :: cen1, cen2, sum1, sum2, val1, val2, sumvals
-        real              :: foreground_cen, background_cen, dist_thresh
-        integer           :: cnt1, cnt2, i, l, npix, halfnpix, noutliers
-        integer           :: nforeground, ninliers
-        type(image)       :: binimg
-        if( self%ft ) stop 'only for real images; bin_3; simple image'
-        ! sort the pixels to initialize k-means
-        forsort = pack(self%rmat, .true.)
-        npix = size(forsort)
-        call hpsort(npix, forsort)
-        halfnpix = nint(real(npix)/2.)
-        cen1     = sum(forsort(1:halfnpix)) / real(halfnpix)
-        cen2     = sum(forsort(halfnpix+1:npix)) / real(npix-halfnpix)
-        sumvals  = sum(forsort)
-        ! do 100 iterations of k-means to identify background/forground distributions
-        do l=1,100
-            sum1 = 0.
-            cnt1 = 0
-            do i=1,npix
-                if( (cen1-forsort(i))**2. < (cen2-forsort(i))**2. )then
-                    cnt1 = cnt1 + 1
-                    sum1 = sum1 + forsort(i)
-                endif
-            end do
+    subroutine bin_kmeans( self )
+        class(image), intent(inout) :: self
+        logical :: l_msk(self%ldim(1),self%ldim(2),self%ldim(3))
+        real    :: cen1, cen2, sum1, sum2, val1, val2, sumval
+        real    :: foreground_cen, background_cen
+        integer :: cnt1, cnt2, i, l, npix
+        integer, parameter :: MAXITS=100
+        if( self%ft ) stop 'only for real images; bin_kmeans; simple image'
+        ! estimate background value around the edges of the box
+        cen1 = 0.
+        if( self%ldim(3) == 1 )then
+            cen1  = cen1 + sum(self%rmat( 1           , :self%ldim(2),1))
+            cen1  = cen1 + sum(self%rmat( self%ldim(1), :self%ldim(2),1))
+            cen1  = cen1 + sum(self%rmat(:self%ldim(1),  1,           1))
+            cen1  = cen1 + sum(self%rmat(:self%ldim(1),  self%ldim(2),1))
+            cen1  = cen1 / real(4 * self%ldim(1))
+        else
+            cen1  = cen1 + sum(self%rmat( 1           ,  1            , :self%ldim(3)))
+            cen1  = cen1 + sum(self%rmat( 1           ,  self%ldim(2) , :self%ldim(3)))
+            cen1  = cen1 + sum(self%rmat( self%ldim(1),  1            , :self%ldim(3)))
+            cen1  = cen1 + sum(self%rmat( self%ldim(1),  self%ldim(2) , :self%ldim(3)))
+            cen1  = cen1 + sum(self%rmat( 1           , :self%ldim(2) ,  1           ))
+            cen1  = cen1 + sum(self%rmat( 1           , :self%ldim(2) ,  self%ldim(3)))
+            cen1  = cen1 + sum(self%rmat( self%ldim(1), :self%ldim(2) ,  1           ))
+            cen1  = cen1 + sum(self%rmat( self%ldim(1), :self%ldim(2) ,  self%ldim(3)))
+            cen1  = cen1 + sum(self%rmat(:self%ldim(1),  1            ,  1           ))
+            cen1  = cen1 + sum(self%rmat(:self%ldim(1),  1            ,  self%ldim(3)))
+            cen1  = cen1 + sum(self%rmat(:self%ldim(1),  self%ldim(2) ,  1           ))
+            cen1  = cen1 + sum(self%rmat(:self%ldim(1),  self%ldim(2) ,  self%ldim(3)))
+            cen1  = cen1 / real(12 * self%ldim(1))
+        endif
+        sumval = sum(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)))
+        npix   = product(self%ldim)
+        ! estimate foreground value as global average
+        cen2   = sumval / real(npix)
+        ! foreground/background identification with k-means
+        do l=1,MAXITS
+            where( (cen1 - self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)))**2.0 <&
+                  &(cen2 - self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)))**2.0 )
+                l_msk = .true.
+            else where
+                l_msk = .false.
+            end where
+            cnt1 = count(l_msk)
             cnt2 = npix - cnt1
-            sum2 = sumvals - sum1
+            sum1 = sum(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)), l_msk)
+            sum2 = sumval - sum1
             cen1 = sum1 / real(cnt1)
-            cen2 = sum2 / real(cnt2)
+            cen2 = sum2 / real(cnt2)            
         end do
         ! assign values to the centers
         if( cen1 > cen2 )then
@@ -2619,42 +2653,12 @@ contains
             foreground_cen = cen2
             background_cen = cen1
         endif
-        if( present(frac_outliers) )then
-            if( .not. frac_outliers > 0. ) stop 'frac_outliers must be > 0.; simple_image :: bin_kmeans'
-            ! create a binary volume (including outliers)
-            call binimg%new(self%ldim, self%smpd)
-            where( (cen1 - self%rmat)**2. < (cen2 - self%rmat)**2. )
-                binimg%rmat = val1
-            elsewhere
-                binimg%rmat = val2
-            end where
-            ! extract foreground pixels
-            foreground_pixels = pack(self%rmat, binimg%rmat > 0.5)
-            nforeground       = size(foreground_pixels)
-            noutliers         = max(1,nint(frac_outliers * real(nforeground)))
-            ninliers          = nforeground - noutliers
-            ! calculate "distances"
-            allocate(dists(nforeground))
-            dists = (foreground_cen - foreground_pixels)**2./&
-                    (background_cen - foreground_pixels)**2.
-            ! identify threshold
-            call hpsort(nforeground, dists)
-            dist_thresh = dists(ninliers)
-            ! binarize the image
-            where( binimg%rmat > 0.5 .and. (foreground_cen - self%rmat)**2. <  dist_thresh )
-                self%rmat = 1.0
-            elsewhere
-                self%rmat = 0.0
-            end where
-            call binimg%kill()
-        else
-            ! binarize the image
-            where( (cen1 - self%rmat)**2. < (cen2 - self%rmat)**2. )
-                self%rmat = val1
-            elsewhere
-                self%rmat = val2
-            end where
-        endif
+        ! binarize the image
+        where( (cen1 - self%rmat)**2. < (cen2 - self%rmat)**2. )
+            self%rmat = val1
+        elsewhere
+            self%rmat = val2
+        end where
     end subroutine bin_kmeans
 
     !>  \brief bin_filament is for creating a binary filament
@@ -2742,7 +2746,7 @@ contains
     !!
     function masscen( self ) result( xyz )
         class(image), intent(inout) :: self
-        real    :: xyz(3), spix, pix, ci, cj, ck
+        real    :: xyz(3), spix, ci, cj, ck
         integer :: i, j, k
         if( self%ft ) stop 'masscen not implemented for FTs; masscen; simple_image'
         spix = 0.
@@ -2753,9 +2757,8 @@ contains
             do j=1,self%ldim(2)
                 ck = -real(self%ldim(3))/2.
                 do k=1,self%ldim(3)
-                    pix  = self%get([i,j,k])
-                    xyz  = xyz + pix * [ci, cj, ck]
-                    spix = spix+pix
+                    xyz  = xyz  + self%rmat(i,j,k) * [ci, cj, ck]
+                    spix = spix + self%rmat(i,j,k)
                     ck   = ck+1.
                 end do
                 cj = cj + 1.
@@ -2763,9 +2766,7 @@ contains
             ci = ci + 1.
         end do
         xyz = xyz / spix
-        if(self%is_2d())then
-            xyz(3) = 0.
-        endif
+        if( self%ldim(3) == 1 ) xyz(3) = 0.
     end function masscen
 
     !>  \brief center is for centering an image based on center of mass
@@ -2817,20 +2818,22 @@ contains
     end function center
 
     function center_serial( self, lp, msk ) result( xyz )
-        class(image),     intent(inout) :: self
-        real,             intent(in)    :: lp
-        real,             intent(in)    :: msk
-        type(image) :: tmp
-        real        :: xyz(3)
-        integer     :: dims(3)
-        logical     :: l_doshif
-        call tmp%copy(self)
-        dims = tmp%get_ldim()
-        call tmp%bp(0., lp)
-        if( tmp%ft ) call tmp%bwd_ft
-        call tmp%mask(msk, 'soft')
-        call tmp%bin_kmeans
-        xyz = tmp%masscen() 
+        class(image), intent(inout) :: self
+        real,         intent(in)    :: lp
+        real,         intent(in)    :: msk
+        real    :: xyz(3)
+        integer :: ithr
+        ! get thread index
+        ithr = omp_get_thread_num() + 1
+        ! copy rmat
+        thread_safe_tmp_imgs(ithr)%rmat = self%rmat
+        thread_safe_tmp_imgs(ithr)%ft   = .false. 
+        call thread_safe_tmp_imgs(ithr)%fwd_ft
+        call thread_safe_tmp_imgs(ithr)%bp(0., lp)
+        call thread_safe_tmp_imgs(ithr)%bwd_ft
+        call thread_safe_tmp_imgs(ithr)%mask(msk, 'soft')
+        call thread_safe_tmp_imgs(ithr)%bin_kmeans
+        xyz = thread_safe_tmp_imgs(ithr)%masscen() 
     end function center_serial
 
     !>  \brief bin_inv inverts a binary image
@@ -3685,7 +3688,7 @@ contains
         class(image), intent(inout) :: self
         real, intent(in)            :: hplim, lplim
         real, intent(in), optional  :: width
-        integer                     :: h, k, l, lims(3,2)
+        integer                     :: h, k, l, lims(3,2), phys(3)
         logical                     :: didft
         real                        :: freq, hplim_freq, lplim_freq, wwidth, w
         wwidth =10.
@@ -3702,16 +3705,18 @@ contains
             do k=lims(2,1),lims(2,2)
                 do l=lims(3,1),lims(3,2)
                     freq = hyp(real(h),real(k),real(l))
+                    phys = self%comp_addr_phys([h,k,l])
 #ifdef USETINY
                     if(abs(hplim) > TINY)then
 #else
                     if(hplim/=0.)then
 #endif
                         if(freq .lt. hplim_freq) then
-                            call self%mul([h,k,l], 0.)
+                            self%cmat(phys(1),phys(2),phys(3)) = cmplx(0.,0.)
                         else if(freq .le. hplim_freq+wwidth) then
                             w = (1.-cos(((freq-hplim_freq)/wwidth)*pi))/2.
-                            call self%mul([h,k,l], w)
+                            self%cmat(phys(1),phys(2),phys(3)) = &
+                            &self%cmat(phys(1),phys(2),phys(3)) * w
                         endif
                     endif
 #ifdef USETINY
@@ -3720,10 +3725,11 @@ contains
                     if(lplim/=0.)then
 #endif
                         if(freq .gt. lplim_freq)then
-                            call self%mul([h,k,l], 0.)
+                            self%cmat(phys(1),phys(2),phys(3)) = cmplx(0.,0.)
                         else if(freq .ge. lplim_freq-wwidth)then
                             w = (cos(((freq-(lplim_freq-wwidth))/wwidth)*pi)+1.)/2.
-                            call self%mul([h,k,l], w)
+                            self%cmat(phys(1),phys(2),phys(3)) = &
+                            &self%cmat(phys(1),phys(2),phys(3)) * w
                         endif
                     endif
                 end do
@@ -4307,36 +4313,6 @@ contains
         avg = sum(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)))/real(product(self%ldim))
         if( didft ) call self%bwd_ft
     end function mean
-
-    !>  \brief median_pixel is for calculating the median of an image
-    !!
-    real function median_pixel( self, mskrad, which )
-        class(image),               intent(inout) :: self
-        real,             optional, intent(in)    :: mskrad
-        character(len=*), optional, intent(in)    :: which
-        type(image)       :: maskimg
-        real, allocatable :: pixels(:)
-        integer           :: npix
-        if( self%ft ) stop 'not for FTs; simple_image::median'
-        if( .not.present(which) )then
-            pixels = pack(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)), mask=.true.)
-            median_pixel = median_nocopy(pixels)
-        else
-            if(.not.present(mskrad) )stop 'mskrad required; simple_image%median_pixel'
-            call maskimg%disc(self%ldim, self%smpd, mskrad, npix)
-            if( trim(which).eq.'backgr' )then
-                pixels   = pack( self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)),&
-                &mask=maskimg%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) < 0.5 )
-            else if( trim(which).eq.'foregr')then
-                pixels   = pack( self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)),&
-                &mask=maskimg%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) >= 0.5 )
-            else
-                stop 'unknown option; simple_image%median_pixel'
-            endif
-            if( size(pixels) == 0 ) stop 'WEIRD ERROR! pixels not allocated; simple_imge :: median_pixel'
-            median_pixel = median_nocopy(pixels)
-        endif
-    end function median_pixel
 
     !>  \brief  is for checking the numerical soundness of an image
     logical function contains_nans( self )
@@ -5109,14 +5085,34 @@ contains
         self%ft   = .false.
     end subroutine zero_and_unflag_ft
 
-    !>  \brief  Taper edges of image so that there are no sharp discontinuities in real space
-    !!          This is a re-implementation of the MRC program taperedgek.for (Richard Henderson, 1987)
-    !!          I stole it from CTFFIND4 (thanks Alexis for the beautiful re-implementation)
-    subroutine zero_background(self, msk)
+    ! estimates median of background along edges of box and subtracts it to flatten the background
+    ! modifies pixels along the edges of the box, which ought to be safe as we are masking
+    subroutine zero_background( self )
         class(image), intent(inout) :: self
-        real,         intent(in)    :: msk
-        real :: med
-        med = self%median_pixel(msk, 'backgr')
+        integer :: k
+        real    :: med, val1,val2,val3,val4,val5,val6,val7,val8,val9,val10,val11,val12
+        k = self%ldim(1)/2
+        if( self%ldim(3) == 1 )then
+            val1  = selec(k,self%ldim(1),self%rmat( 1           , :self%ldim(2),1))
+            val2  = selec(k,self%ldim(1),self%rmat( self%ldim(1), :self%ldim(2),1))
+            val3  = selec(k,self%ldim(1),self%rmat(:self%ldim(1),  1,           1))
+            val4  = selec(k,self%ldim(1),self%rmat(:self%ldim(1),  self%ldim(2),1))
+            med   = (val1+val2+val3+val4) / 4.
+        else
+            val1  = selec(k,self%ldim(1),self%rmat( 1           ,  1            , :self%ldim(3)))
+            val2  = selec(k,self%ldim(1),self%rmat( 1           ,  self%ldim(2) , :self%ldim(3)))
+            val3  = selec(k,self%ldim(1),self%rmat( self%ldim(1),  1            , :self%ldim(3)))
+            val4  = selec(k,self%ldim(1),self%rmat( self%ldim(1),  self%ldim(2) , :self%ldim(3)))
+            val5  = selec(k,self%ldim(1),self%rmat( 1           , :self%ldim(2) ,  1           ))
+            val6  = selec(k,self%ldim(1),self%rmat( 1           , :self%ldim(2) ,  self%ldim(3)))
+            val7  = selec(k,self%ldim(1),self%rmat( self%ldim(1), :self%ldim(2) ,  1           ))
+            val8  = selec(k,self%ldim(1),self%rmat( self%ldim(1), :self%ldim(2) ,  self%ldim(3)))
+            val9  = selec(k,self%ldim(1),self%rmat(:self%ldim(1),  1            ,  1           ))
+            val10 = selec(k,self%ldim(1),self%rmat(:self%ldim(1),  1            ,  self%ldim(3)))
+            val11 = selec(k,self%ldim(1),self%rmat(:self%ldim(1),  self%ldim(2) ,  1           ))
+            val12 = selec(k,self%ldim(1),self%rmat(:self%ldim(1),  self%ldim(2) ,  self%ldim(3)))
+            med   = (val1+val2+val3+val4+val5+val6+val7+val8+val9+val10+val11+val12) / 12.
+        endif
         if(abs(med) > TINY) self%rmat = self%rmat - med
     end subroutine zero_background
 
@@ -5800,7 +5796,7 @@ contains
         select case(trim(which))
         case('soft')
             soft  = .true.
-            call self%zero_background(mskrad)
+            call self%zero_background
         case('hard')
             soft  = .false.
         case DEFAULT
@@ -6035,10 +6031,6 @@ contains
         real                        :: ratio
         integer                     :: starts(3), stops(3), lims(3,2)
         integer                     :: phys_out(3), phys_in(3), h, k, l
-        if( self_in.eqdims.self_out )then
-            call self_out%copy(self_in)
-            return
-        endif
         if( self_out%ldim(1) <= self_in%ldim(1) .and. self_out%ldim(2) <= self_in%ldim(2)&
         .and. self_out%ldim(3) <= self_in%ldim(3) )then
             if( self_in%ft )then

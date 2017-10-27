@@ -43,12 +43,11 @@ end type rank_cavgs_commander
 contains
 
     subroutine exec_makecavgs( self, cline )
-        use simple_classaverager, only: classaverager
+        use simple_classaverager
         class(makecavgs_commander), intent(inout) :: self
         class(cmdline),             intent(inout) :: cline
         type(params)        :: p
         type(build)         :: b
-        type(classaverager) :: cavger
         integer :: ncls_in_oritab, icls, fnr, file_stat, j
         p = params(cline)                                 ! parameters generated
         call b%build_general_tbox(p, cline, do3d=.false.) ! general objects built
@@ -108,9 +107,9 @@ contains
             call binwrite_oritab(p%oritab, b%a, [1,p%nptcls])
         endif
         ! create class averager
-        call cavger%new(b, p, 'class')
+        call cavger_new(b, p, 'class')
         ! transfer ori data to object
-        call cavger%transf_oridat(b%a)
+        call cavger_transf_oridat(b%a)
         if( cline%defined('filwidth') )then
             ! filament option
             if( p%l_distr_exec)then
@@ -118,31 +117,31 @@ contains
             endif
             call b%img%bin_filament(p%filwidth)
             do icls=1,p%ncls
-                call cavger%set_cavg(icls, 'merged', b%img)
+                call cavger_set_cavg(icls, 'merged', b%img)
             end do
         else
             ! standard cavg assembly
-            call cavger%assemble_sums()
+            call cavger_assemble_sums()
         endif
         ! write sums
         if( p%l_distr_exec)then
-            call cavger%write_partial_sums()
+            call cavger_write_partial_sums()
             call qsys_job_finished( p, 'simple_commander_prime2D :: exec_makecavgs' )
         else
-            call cavger%calc_and_write_frcs('frcs.bin')
+            call cavger_calc_and_write_frcs('frcs.bin')
             call gen2Dclassdoc( b, p, 'classdoc.txt')
-            call cavger%eoavg
+            call cavger_eoavg
             if( cline%defined('refs') )then
-                call cavger%write(p%refs,      'merged')
-                call cavger%write(p%refs_even, 'even'  )
-                call cavger%write(p%refs_odd,  'odd'   )
+                call cavger_write(p%refs,      'merged')
+                call cavger_write(p%refs_even, 'even'  )
+                call cavger_write(p%refs_odd,  'odd'   )
             else
-                call cavger%write('startcavgs'      //p%ext, 'merged')
-                call cavger%write('startcavgs_even' //p%ext, 'even'  )
-                call cavger%write('startcavgs_odd'  //p%ext, 'odd'   )
+                call cavger_write('startcavgs'      //p%ext, 'merged')
+                call cavger_write('startcavgs_even' //p%ext, 'even'  )
+                call cavger_write('startcavgs_odd'  //p%ext, 'odd'   )
             endif
         endif
-        call cavger%kill
+        call cavger_kill
         ! end gracefully
         call simple_end('**** SIMPLE_MAKECAVGS NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_makecavgs
@@ -192,18 +191,17 @@ contains
     end subroutine exec_prime2D
 
     subroutine exec_cavgassemble( self, cline )
-        use simple_classaverager,   only: classaverager
+        use simple_classaverager
         class(cavgassemble_commander), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
-        type(params)        :: p
-        type(build)         :: b
-        type(classaverager) :: cavger
-        integer             :: fnr, file_stat, j
+        type(params) :: p
+        type(build)  :: b
+        integer      :: fnr, file_stat, j
         p = params(cline)                                 ! parameters generated
         call b%build_general_tbox(p, cline, do3d=.false.) ! general objects built
         call b%build_hadamard_prime2D_tbox(p)
-        call cavger%new(b, p, 'class')
-        call cavger%assemble_sums_from_parts()
+        call cavger_new(b, p, 'class')
+        call cavger_assemble_sums_from_parts()
         p%frcs  = 'frcs.bin'
         if( cline%defined('which_iter') )then
             p%refs      = 'cavgs_iter'//int2str_pad(p%which_iter,3)//p%ext
@@ -215,13 +213,13 @@ contains
             p%refs_even = 'startcavgs_even'//p%ext
             p%refs_odd  = 'startcavgs_odd'//p%ext
         endif
-        call cavger%calc_and_write_frcs(p%frcs)
+        call cavger_calc_and_write_frcs(p%frcs)
         call gen2Dclassdoc( b, p, 'classdoc.txt')
-        call cavger%eoavg
-        call cavger%write(trim(p%refs),      'merged')
-        call cavger%write(trim(p%refs_even), 'even'  )
-        call cavger%write(trim(p%refs_odd),  'odd'   )
-        call cavger%kill()
+        call cavger_eoavg
+        call cavger_write(trim(p%refs),      'merged')
+        call cavger_write(trim(p%refs_even), 'even'  )
+        call cavger_write(trim(p%refs_odd),  'odd'   )
+        call cavger_kill()
         ! end gracefully
         call simple_end('**** SIMPLE_CAVGASSEMBLE NORMAL STOP ****', print_simple=.false.)
         ! indicate completion (when run in a qsys env)

@@ -36,12 +36,12 @@ abstract interface
     end subroutine generic_set_indices
 
     !>  \brief  is the cost function
-    function generic_costfun( self, vec ) result( cost )
+    subroutine generic_costfun( self, vec, cost )
         import :: pftcc_opt
         class(pftcc_opt), intent(inout) :: self
         real,             intent(in)    :: vec(2)
-        real :: cost
-    end function generic_costfun
+        real,             intent(out)   :: cost
+    end subroutine generic_costfun
 
     !> \brief  Virtual minimization of the costfunction
     function generic_minimize( self, irot ) result( cxy )

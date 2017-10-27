@@ -414,8 +414,8 @@ contains
     subroutine nn_srch( self, nnmat )
         class(prime2D_srch), intent(inout) :: self
         integer,             intent(in)    :: nnmat(self%nrefs,self%nnn)
-        integer           :: iref,loc(1),inpl_ind,inn
-        real              :: corrs(self%nrots),inpl_corr,corr
+        integer :: iref,loc(1),inpl_ind,inn
+        real    :: corrs(self%nrots),inpl_corr,corr
         if( nint(self%a_ptr%get(self%iptcl,'state')) > 0 )then
             ! find previous discrete alignment parameters
             self%prev_class = nint(self%a_ptr%get(self%iptcl,'class'))                        ! class index

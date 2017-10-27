@@ -12,7 +12,8 @@ implicit none
 
 public :: read_img_and_norm, read_imgbatch, set_bp_range, set_bp_range2D, grid_ptcl, prepimg4align,&
 &eonorm_struct_facts, norm_struct_facts, cenrefvol_and_mapshifts2ptcls, preprefvol, prep2Dref,&
-&gen2Dclassdoc, preprecvols, killrecvols, gen_projection_frcs
+&gen2Dclassdoc, preprecvols, killrecvols, gen_projection_frcs, prepimg4align_serial, prep2Dref_serial,&
+prepimgbatch
 private
 #include "simple_local_flags.inc"
 
@@ -331,41 +332,46 @@ contains
     end subroutine prepimg4align
 
     !>  \brief  prepares one particle image for alignment
-    subroutine prepimg4align_serial( b, p, o, is3D )
+    subroutine prepimg4align_serial( b, p, iptcl, img_in, img_out, is3D )
+        use simple_polarizer,     only: polarizer
         use simple_estimate_ssnr, only: fsc2optlp_sub
         use simple_ctf,           only: ctf
-        class(build),  intent(inout) :: b
-        class(params), intent(inout) :: p
-        type(ori),     intent(inout) :: o
-        logical,       intent(in)    :: is3D
+        class(build),     intent(inout) :: b
+        class(params),    intent(inout) :: p
+        integer,          intent(in)    :: iptcl
+        class(image),     intent(inout) :: img_in
+        class(polarizer), intent(inout) :: img_out
+        logical,          intent(in)    :: is3D
         real      :: frc(b%projfrcs%get_filtsz()), filter(b%projfrcs%get_filtsz())
         type(ctf) :: tfun
         real      :: x, y, dfx, dfy, angast, phshift
         integer   :: frcind
-        x      = o%get('x')
-        y      = o%get('y')
+        x      = b%a%get(iptcl, 'x')
+        y      = b%a%get(iptcl, 'y')
         frcind = 0 
         if( is3D .and. p%nstates==1 )then
             if( p%nspace /= NSPACE_BALANCE )then
-                frcind = b%e_bal%find_closest_proj(o)
+                frcind = b%e_bal%find_closest_proj(b%a%get_ori(iptcl))
             else
-                frcind = nint(o%get('proj'))
+                frcind = nint(b%a%get(iptcl, 'proj'))
             endif
         endif
+        ! normalise
+        call img_in%norm_serial
         ! move to Fourier space
-        call b%img%fwd_ft
+        call img_in%fwd_ft
         ! set CTF parameters
         if( p%ctf .ne. 'no' )then
             ! we here need to re-create the CTF object as kV/cs/fraca are now per-particle params
             ! that these parameters are part of the doc is checked in the params class
-            tfun = ctf(p%smpd, o%get('kv'), o%get('cs'), o%get('fraca'))
+            tfun = ctf(p%smpd, b%a%get(iptcl,'kv'), b%a%get(iptcl,'cs'), b%a%get(iptcl,'fraca'))
             select case(p%tfplan%mode)
                 case('astig') ! astigmatic CTF
-                    dfx    = o%get('dfx')
-                    dfy    = o%get('dfy')
-                    angast = o%get('angast')
+                    dfx    = b%a%get(iptcl,'dfx')
+                    dfy    = b%a%get(iptcl,'dfy')
+                    angast = b%a%get(iptcl,'angast')
                 case('noastig') ! non-astigmatic CTF
-                    dfx    = o%get('dfx')
+                    dfx    = b%a%get(iptcl,'dfx')
                     dfy    = dfx
                     angast = 0.
                 case DEFAULT
@@ -373,7 +379,7 @@ contains
                     stop 'simple_hadamard_common :: prepimg4align'
             end select
             phshift = 0.
-            if( p%tfplan%l_phaseplate ) phshift = o%get('phshift')
+            if( p%tfplan%l_phaseplate ) phshift = b%a%get(iptcl,'phshift')
         endif
         ! deal with CTF
         select case(p%ctf)
@@ -382,32 +388,32 @@ contains
             case('no')   ! do nothing
             case('yes')  ! do nothing
             case('flip') ! flip back
-                call tfun%apply_serial(b%img, dfx, 'flip', dfy, angast, phshift)
+                call tfun%apply_serial(img_in, dfx, 'flip', dfy, angast, phshift)
             case DEFAULT
                 stop 'Unsupported ctf mode; simple_hadamard_common :: prepimg4align'
         end select
         ! shift image to rotational origin
-        if(abs(x) > SHTHRESH .or. abs(y) > SHTHRESH) call b%img%shift2Dserial([-x,-y])
+        if(abs(x) > SHTHRESH .or. abs(y) > SHTHRESH) call img_in%shift2Dserial([-x,-y])
         if( is3D .and. frcind > 0 )then
             ! anisotropic matched filter
             call b%projfrcs%frc_getter(frcind, frc)
             if( any(frc > 0.143) )then
                 call fsc2optlp_sub(b%projfrcs%get_filtsz(), frc, filter)
-                call b%img%shellnorm_and_apply_filter_serial(filter)
+                call img_in%shellnorm_and_apply_filter_serial(filter)
             endif
         endif
         ! back to real-space
-        call b%img%bwd_ft
+        call img_in%bwd_ft
         ! clip image if needed
-        call b%img%clip(b%img_match)
+        call img_in%clip(img_out)
         ! soft-edged mask
         if( p%l_innermsk )then
-            call b%img_match%mask(p%msk, 'soft', inner=p%inner, width=p%width)
+            call img_out%mask(p%msk, 'soft', inner=p%inner, width=p%width)
         else
-            call b%img_match%mask(p%msk, 'soft')
+            call img_out%mask(p%msk, 'soft')
         endif
         ! return in Fourier space
-        call b%img_match%fwd_ft
+        call img_out%fwd_ft
         DebugPrint  '*** simple_hadamard_common ***: finished prepimg4align'
     end subroutine prepimg4align_serial
     
@@ -473,10 +479,13 @@ contains
     end subroutine prep2Dref
 
     !>  \brief  prepares one cluster centre image for alignment
-    subroutine prep2Dref_serial( b, p, icls, center, xyz_in, xyz_out )
+    subroutine prep2Dref_serial( b, p, img_in, img_out, icls, center, xyz_in, xyz_out )
         use simple_estimate_ssnr, only: fsc2optlp_sub
+        use simple_polarizer,     only: polarizer
         class(build),      intent(inout) :: b
         class(params),     intent(in)    :: p
+        class(image),      intent(inout) :: img_in
+        class(polarizer),  intent(inout) :: img_out
         integer,           intent(in)    :: icls
         logical, optional, intent(in)    :: center
         real,    optional, intent(in)    :: xyz_in(3)
@@ -485,7 +494,7 @@ contains
         real    :: xyz(3), sharg, frc05, frc0143
         logical :: do_center
         ! normalise
-        call b%img%norm_serial
+        call img_in%norm_serial
         do_center = (p%center .eq. 'yes')
         ! centering only performed if p%center.eq.'yes'
         if( present(center) ) do_center = do_center .and. center
@@ -494,16 +503,16 @@ contains
                 sharg = arg(xyz_in)
                 if( sharg > CENTHRESH )then
                     ! apply shift and do NOT update the corresponding class parameters
-                    call b%img%fwd_ft
-                    call b%img%shift2Dserial(xyz_in(1:2))
+                    call img_in%fwd_ft
+                    call img_in%shift2Dserial(xyz_in(1:2))
                 endif
             else
-                xyz = b%img%center_serial(p%cenlp, p%msk)
+                xyz = img_in%center_serial(p%cenlp, p%msk)
                 sharg = arg(xyz)
                 if( sharg > CENTHRESH )then
                     ! apply shift and update the corresponding class parameters
-                    call b%img%fwd_ft
-                    call b%img%shift2Dserial(xyz(1:2))
+                    call img_in%fwd_ft
+                    call img_in%shift2Dserial(xyz(1:2))
                     call b%a%add_shift2class(icls, -xyz(1:2))
                 endif
                 if( present(xyz_out) ) xyz_out = xyz 
@@ -513,23 +522,23 @@ contains
             ! anisotropic matched filter
             call b%projfrcs%frc_getter(icls, frc)
             if( any(frc > 0.143) )then
-                call b%img%fwd_ft ! needs to be here in case the shift was never applied (above)
+                call img_in%fwd_ft ! needs to be here in case the shift was never applied (above)
                 call fsc2optlp_sub(b%projfrcs%get_filtsz(), frc, filter)
-                call b%img%shellnorm_and_apply_filter_serial(filter)
+                call img_in%shellnorm_and_apply_filter_serial(filter)
             endif
         endif
         ! ensure we are in real-space before clipping
-        call b%img%bwd_ft
+        call img_in%bwd_ft
         ! clip image if needed
-        call b%img%clip(b%img_match)
+        call img_in%clip(img_out)
         ! apply mask
         if( p%l_innermsk )then
-            call b%img_match%mask(p%msk, 'soft', inner=p%inner, width=p%width)
+            call img_out%mask(p%msk, 'soft', inner=p%inner, width=p%width)
         else
-            call b%img_match%mask(p%msk, 'soft')
+            call img_out%mask(p%msk, 'soft')
         endif
         ! move to Fourier space
-        call b%img_match%fwd_ft
+        call img_out%fwd_ft
     end subroutine prep2Dref_serial
 
     !>  \brief prepares a 2D class document with class index, resolution, 
@@ -611,24 +620,24 @@ contains
         integer,        intent(in)    :: batchsz
         integer :: currsz, ibatch
         logical :: doprep
-        if( allocated(b%imgbatch) )then
-            currsz = size(b%imgbatch,1)
+        if( .not. allocated(b%imgbatch) )then
+            doprep = .true.
+        else
+            currsz = size(b%imgbatch)
             if( batchsz > currsz )then
                 do ibatch=1,currsz
                     call b%imgbatch(ibatch)%kill
-                    call b%imgbatch_pad(ibatch)%kill
                 end do
-                deallocate(b%imgbatch,b%imgbatch_pad)
+                deallocate(b%imgbatch)
                 doprep = .true.
+            else
+                doprep = .false.
             endif
-        else
-            doprep = .true. 
         endif
         if( doprep )then
-            allocate(b%imgbatch(batchsz), b%imgbatch_pad(batchsz))
+            allocate(b%imgbatch(batchsz))
             do ibatch=1,batchsz
                 call b%imgbatch(ibatch)%new([p%box,p%box,1], p%smpd)
-                call b%imgbatch_pad(ibatch)%new([p%boxpd,p%boxpd,1], p%smpd)
             end do
         endif
     end subroutine prepimgbatch
@@ -724,7 +733,7 @@ contains
             call b%mskvol%new([p%box, p%box, p%box], p%smpd)
             call b%mskvol%read(p%mskfile)
             if( p%boxmatch < p%box ) call b%mskvol%clip_inplace([p%boxmatch,p%boxmatch,p%boxmatch])
-            call b%vol%zero_background(p%msk)
+            call b%vol%zero_background
             call b%vol%mul(b%mskvol)
         else
             ! circular masking
@@ -919,7 +928,7 @@ contains
                     ! mask provided
                     call b%mskvol%new([p%box, p%box, p%box], p%smpd)
                     call b%mskvol%read(p%mskfile)
-                    call vol%zero_background(p%msk)
+                    call vol%zero_background
                     call vol%mul(b%mskvol)
                 else
                     ! circular masking

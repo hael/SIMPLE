@@ -28,7 +28,7 @@ type :: scaler
     procedure :: get_original_var
 end type scaler
 
-logical, parameter :: DEBUG=.false.
+logical, parameter :: DEBUG=.true.
 
 contains
 

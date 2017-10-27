@@ -122,11 +122,7 @@ contains
                 else if( cline%defined('npix') )then
                     call img_or_vol%bin(p%npix)
                 else
-                    if( cline%defined('frac_outliers') )then
-                        call img_or_vol%bin_kmeans(p%frac_outliers)
-                    else
-                        call img_or_vol%bin_kmeans
-                    endif
+                   call img_or_vol%bin_kmeans
                 endif
                 write(*,'(a,1x,i9)') '# FOREGROUND PIXELS:', img_or_vol%nforeground()
                 write(*,'(a,1x,i9)') '# BACKGROUND PIXELS:', img_or_vol%nbackground()

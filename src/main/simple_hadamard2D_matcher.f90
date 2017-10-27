@@ -5,7 +5,6 @@ module simple_hadamard2D_matcher
 #include "simple_lib.f08"
 use simple_polarft_corrcalc, only: polarft_corrcalc
 use simple_prime2D_srch,     only: prime2D_srch
-use simple_classaverager,    only: classaverager
 use simple_ori,              only: ori
 use simple_build,            only: build
 use simple_params,           only: params
@@ -13,6 +12,7 @@ use simple_cmdline,          only: cmdline
 use simple_hadamard_common   ! use all in there
 use simple_filterer          ! use all in there
 use simple_timer             ! use all in there
+use simple_classaverager,    ! use all in there
 implicit none
 
 public :: prime2D_exec, preppftcc4align, pftcc
@@ -23,7 +23,6 @@ logical, parameter              :: L_BENCH         = .true.
 logical, parameter              :: L_BENCH_PRIME2D = .false.
 type(polarft_corrcalc)          :: pftcc
 type(prime2D_srch), allocatable :: primesrch2D(:)
-type(classaverager)             :: cavger
 integer(timer_int_kind)         :: t_init, t_prep_pftcc, t_align, t_cavg, t_tot
 real(timer_int_kind)            :: rt_init, rt_prep_pftcc, rt_align, rt_cavg
 real(timer_int_kind)            :: rt_tot, rt_refloop, rt_inpl, rt_tot_sum, rt_refloop_sum
@@ -53,7 +52,7 @@ contains
             t_init = tic()
             t_tot  = t_init
         endif
-        call cavger%new(b, p, 'class')
+        call cavger_new(b, p, 'class')
         l_do_read = .true.
         if( p%l_distr_exec )then
             if( b%a%get_nevenodd() == 0 )then
@@ -68,8 +67,8 @@ contains
             if( which_iter == p%startit )then
                 if( .not. cline%defined('refs') .and. cline%defined('oritab') )then
                     ! we make references
-                    call cavger%transf_oridat(b%a)
-                    call cavger%assemble_sums()
+                    call cavger_transf_oridat(b%a)
+                    call cavger_assemble_sums()
                     l_do_read = .false.
                 else if( cline%defined('refs') )then
                     ! do nothing
@@ -92,9 +91,9 @@ contains
         endif
         if( l_do_read )then
             if( .not. file_exists(p%refs) ) stop 'input references (refs) does not exist in cwd'
-            call cavger%read(p%refs,      'merged')
-            call cavger%read(p%refs_even, 'even'  )
-            call cavger%read(p%refs_odd,  'odd'   )
+            call cavger_read(p%refs,      'merged')
+            call cavger_read(p%refs_even, 'even'  )
+            call cavger_read(p%refs_odd,  'odd'   )
         endif
 
         ! SET FRACTION OF SEARCH SPACE
@@ -249,22 +248,22 @@ contains
 
         ! WIENER RESTORATION OF CLASS AVERAGES
         if( L_BENCH ) t_cavg = tic()
-        call cavger%transf_oridat(b%a)
-        call cavger%assemble_sums()
+        call cavger_transf_oridat(b%a)
+        call cavger_assemble_sums()
         ! write results to disk
         if( p%l_distr_exec )then
-            call cavger%write_partial_sums()
+            call cavger_write_partial_sums()
         else
             p%frcs = 'frcs_iter'//int2str_pad(which_iter,3)//'.bin'
-            call cavger%calc_and_write_frcs(p%frcs)
+            call cavger_calc_and_write_frcs(p%frcs)
             call gen2Dclassdoc( b, p, 'classdoc.txt')
-            call cavger%eoavg
+            call cavger_eoavg
             p%refs      = 'cavgs_iter'//int2str_pad(which_iter,3)//p%ext
             p%refs_even = 'cavgs_iter'//int2str_pad(which_iter,3)//'_even'//p%ext
             p%refs_odd  = 'cavgs_iter'//int2str_pad(which_iter,3)//'_odd'//p%ext
-            call cavger%write(p%refs,      'merged')
-            call cavger%write(p%refs_even, 'even'  )
-            call cavger%write(p%refs_odd,  'odd'   )
+            call cavger_write(p%refs,      'merged')
+            call cavger_write(p%refs_even, 'even'  )
+            call cavger_write(p%refs_odd,  'odd'   )
         endif
         if( L_BENCH ) rt_cavg = toc(t_cavg)
 
@@ -275,7 +274,7 @@ contains
             end do
             deallocate( primesrch2D )
             call pftcc%kill
-            call cavger%kill
+            call cavger_kill
         endif
 
         ! REPORT CONVERGENCE
@@ -326,27 +325,39 @@ contains
         endif
     end subroutine prime2D_exec
 
-    !>  \brief  prepares the polarft corrcalc object for search
+     !>  \brief  prepares the polarft corrcalc object for search
     subroutine preppftcc4align( b, p, which_iter )
+        use simple_polarizer,     only: polarizer
         class(build),  intent(inout) :: b
         class(params), intent(inout) :: p
         integer,       intent(in)    :: which_iter
+        type(polarizer), allocatable :: match_imgs(:)
         type(ori) :: o
-        integer   :: cnt, iptcl, icls, pop, pop_even, pop_odd, istate, filtsz, filnum, io_stat
+        integer   :: iptcl, icls, pop, pop_even, pop_odd, istate, filtsz, filnum, io_stat
+        integer   :: batchlims(2), batchsz, imatch, batchsz_max, iptcl_batch
         logical   :: do_center
         real      :: xyz(3)
         if( .not. p%l_distr_exec ) write(*,'(A)') '>>> BUILDING PRIME2D SEARCH ENGINE'
 
         ! CREATE THE POLARFT_CORRCALC OBJECT
         call pftcc%new(p%ncls, p, nint(b%a%get_all('eo', [p%fromp,p%top])))
-        ! prepare the polarizer
+        ! prepare the polarizer images
         call b%img_match%init_polarizer(pftcc, p%alpha)
+        ! this is tro avoid excessive allocation, allocate what is the upper bound on the 
+        ! # matchimgs needed for both parallel loops
+        batchsz_max = max(MAXIMGBATCHSZ,p%ncls)
+        allocate(match_imgs(batchsz_max))
+        do imatch=1,batchsz_max
+            call match_imgs(imatch)%new([p%boxmatch, p%boxmatch, 1], p%smpd)
+            call match_imgs(imatch)%copy_polarizer(b%img_match)
+        end do
 
         ! PREPARATION OF REFERENCES IN PFTCC
         ! read references and transform into polar coordinates
         if( .not. p%l_distr_exec ) write(*,'(A)') '>>> BUILDING REFERENCES'
+        !$omp parallel do default(shared) private(icls,pop,pop_even,pop_odd,do_center,xyz)&
+        !$omp schedule(static) proc_bind(close)
         do icls=1,p%ncls
-            call progress(icls, p%ncls)
             pop      = 1
             pop_even = 0
             pop_odd  = 0
@@ -358,40 +369,108 @@ contains
             if( pop > 0 )then
                 ! prepare the references
                 do_center = (p%oritab /= '' .and. (pop > MINCLSPOPLIM) .and. (which_iter > 2))
-                call cavger%get_cavg(icls, 'merged', b%img)
                 ! here we are determining the shifts and map them back to classes
-                call prep2Dref(b, p, icls, center=do_center, xyz_out=xyz)
+                call prep2Dref_serial(b, p, cavgs_merged(1,icls), match_imgs(icls), icls, center=do_center, xyz_out=xyz)
                 if( pop_even >= MINCLSPOPLIM .and. pop_odd >= MINCLSPOPLIM )then
-                    call cavger%get_cavg(icls, 'even', b%img)
                     ! here we are passing in the shifts and do NOT map them back to classes
-                    call prep2Dref(b, p, icls, center=do_center, xyz_in=xyz) 
-                    call b%img_match%polarize(pftcc, icls, isptcl=.false., iseven=.true.) ! 2 polar coords
-                    call cavger%get_cavg(icls, 'odd', b%img)
+                    call prep2Dref_serial(b, p, cavgs_even(1,icls), match_imgs(icls), icls, center=do_center, xyz_in=xyz) 
+                    call match_imgs(icls)%polarize(pftcc, icls, isptcl=.false., iseven=.true.)  ! 2 polar coords
                     ! here we are passing in the shifts and do NOT map them back to classes
-                    call prep2Dref(b, p, icls, center=do_center, xyz_in=xyz)
-                    call b%img_match%polarize(pftcc, icls, isptcl=.false., iseven=.false.) ! 2 polar coords
+                    call prep2Dref_serial(b, p, cavgs_odd(1,icls), match_imgs(icls), icls, center=do_center, xyz_in=xyz)
+                    call match_imgs(icls)%polarize(pftcc, icls, isptcl=.false., iseven=.false.) ! 2 polar coords
                 else
                     ! put the merged class average in both even and odd positions
-                    call b%img_match%polarize(pftcc, icls, isptcl=.false., iseven=.true. ) ! 2 polar coords
+                    call match_imgs(icls)%polarize(pftcc, icls, isptcl=.false., iseven=.true. ) ! 2 polar coords
                     call pftcc%cp_even2odd_ref(icls)
                 endif   
             endif
         end do
+        !$omp end parallel do
 
         ! PREPARATION OF PARTICLES IN PFTCC
-        ! read particle images and create polar projections
         if( .not. p%l_distr_exec ) write(*,'(A)') '>>> BUILDING PARTICLES'
-        cnt = 0
-        do iptcl=p%fromp,p%top
-            cnt = cnt+1
-            call progress(cnt, p%top-p%fromp+1)
-            call read_img_and_norm( b, p, iptcl )
-            o = b%a%get_ori(iptcl)
-            call prepimg4align(b, p, o, is3D=.false.)
-            ! transfer to polar coordinates
-            call b%img_match%polarize(pftcc, iptcl, .true., .true.)
+        call prepimgbatch(b, p, batchsz_max)
+        do iptcl_batch=p%fromp,p%top,batchsz_max
+            batchlims = [iptcl_batch,min(p%top,iptcl_batch + batchsz_max - 1)]
+            batchsz   = batchlims(2) - batchlims(1) + 1
+            call read_imgbatch( b, p, batchlims)
+            !$omp parallel do default(shared) private(iptcl,imatch)&
+            !$omp schedule(static) proc_bind(close)
+            do iptcl=batchlims(1),batchlims(2)
+                imatch = iptcl - batchlims(1) + 1
+                call prepimg4align_serial(b, p, iptcl, b%imgbatch(imatch), match_imgs(imatch), is3D=.false.)
+                ! transfer to polar coordinates
+                call match_imgs(imatch)%polarize(pftcc, iptcl, .true., .true.)
+            end do
+            !$omp end parallel do 
         end do
         DebugPrint '*** hadamard2D_matcher ***: finished preppftcc4align'
     end subroutine preppftcc4align
+
+    !>  \brief  prepares the polarft corrcalc object for search
+    ! subroutine preppftcc4align( b, p, which_iter )
+    !     class(build),  intent(inout) :: b
+    !     class(params), intent(inout) :: p
+    !     integer,       intent(in)    :: which_iter
+    !     type(ori) :: o
+    !     integer   :: iptcl, icls, pop, pop_even, pop_odd, istate, filtsz, filnum, io_stat
+    !     logical   :: do_center
+    !     real      :: xyz(3)
+    !     if( .not. p%l_distr_exec ) write(*,'(A)') '>>> BUILDING PRIME2D SEARCH ENGINE'
+
+    !     ! CREATE THE POLARFT_CORRCALC OBJECT
+    !     call pftcc%new(p%ncls, p, nint(b%a%get_all('eo', [p%fromp,p%top])))
+    !     ! prepare the polarizer
+    !     call b%img_match%init_polarizer(pftcc, p%alpha)
+
+    !     ! PREPARATION OF REFERENCES IN PFTCC
+    !     ! read references and transform into polar coordinates
+    !     if( .not. p%l_distr_exec ) write(*,'(A)') '>>> BUILDING REFERENCES'
+    !     do icls=1,p%ncls
+    !         call progress(icls, p%ncls)
+    !         pop      = 1
+    !         pop_even = 0
+    !         pop_odd  = 0
+    !         if( p%oritab /= '' )then
+    !             pop      = b%a%get_pop(icls, 'class'      )
+    !             pop_even = b%a%get_pop(icls, 'class', eo=0)
+    !             pop_odd  = b%a%get_pop(icls, 'class', eo=1)
+    !         endif
+    !         if( pop > 0 )then
+    !             ! prepare the references
+    !             do_center = (p%oritab /= '' .and. (pop > MINCLSPOPLIM) .and. (which_iter > 2))
+    !             call cavger_get_cavg(icls, 'merged', b%img)
+    !             ! here we are determining the shifts and map them back to classes
+    !             call prep2Dref(b, p, icls, center=do_center, xyz_out=xyz)
+    !             if( pop_even >= MINCLSPOPLIM .and. pop_odd >= MINCLSPOPLIM )then
+    !                 call cavger_get_cavg(icls, 'even', b%img)
+    !                 ! here we are passing in the shifts and do NOT map them back to classes
+    !                 call prep2Dref(b, p, icls, center=do_center, xyz_in=xyz) 
+    !                 call b%img_match%polarize(pftcc, icls, isptcl=.false., iseven=.true.) ! 2 polar coords
+    !                 call cavger_get_cavg(icls, 'odd', b%img)
+    !                 ! here we are passing in the shifts and do NOT map them back to classes
+    !                 call prep2Dref(b, p, icls, center=do_center, xyz_in=xyz)
+    !                 call b%img_match%polarize(pftcc, icls, isptcl=.false., iseven=.false.) ! 2 polar coords
+    !             else
+    !                 ! put the merged class average in both even and odd positions
+    !                 call b%img_match%polarize(pftcc, icls, isptcl=.false., iseven=.true. ) ! 2 polar coords
+    !                 call pftcc%cp_even2odd_ref(icls)
+    !             endif   
+    !         endif
+    !     end do
+
+    !     ! PREPARATION OF PARTICLES IN PFTCC
+    !     ! read particle images and create polar projections
+    !     if( .not. p%l_distr_exec ) write(*,'(A)') '>>> BUILDING PARTICLES'
+    !     do iptcl=p%fromp,p%top
+    !         call progress(iptcl - p%fromp + 1, p%top - p%fromp + 1)
+    !         call read_img_and_norm( b, p, iptcl )
+    !         o = b%a%get_ori(iptcl)
+    !         call prepimg4align(b, p, o, is3D=.false.)
+    !         ! transfer to polar coordinates
+    !         call b%img_match%polarize(pftcc, iptcl, .true., .true.)
+    !     end do
+    !     DebugPrint '*** hadamard2D_matcher ***: finished preppftcc4align'
+    ! end subroutine preppftcc4align
 
 end module simple_hadamard2D_matcher

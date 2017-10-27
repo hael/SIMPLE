@@ -47,7 +47,6 @@ type :: build
     type(projection_frcs)               :: projfrcs           !< projection FRC's used in the anisotropic Wiener filter
     type(prep4cgrid)                    :: gridprep           !< gridding preparation (2D)
     type(image),            allocatable :: imgbatch(:)        !< batch of images
-    type(image),            allocatable :: imgbatch_pad(:)    !< batch of padded images
     ! COMMON LINES TOOLBOX
     type(image),            allocatable :: imgs(:)            !< images (all should be read in)
     type(image),            allocatable :: imgs_sym(:)        !< images (all should be read in)
@@ -170,6 +169,8 @@ contains
             call self%img_match%new([p%boxmatch,p%boxmatch,1],p%smpd, wthreads=.false.)
             call self%img_copy%new([p%boxmatch,p%boxmatch,1],p%smpd,  wthreads=.false.)
             DebugPrint   'did build box-sized image objects'
+            ! for thread safety in the image class
+            call self%img%construct_thread_safe_tmp_imgs(p%nthr)
             ! boxmatch-sized ones
             call self%img_tmp%new([p%boxmatch,p%boxmatch,1],p%smpd,   wthreads=.false.)
             call self%img_msk%new([p%boxmatch,p%boxmatch,1],p%smpd,   wthreads=.false.)

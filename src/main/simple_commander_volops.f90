@@ -176,7 +176,7 @@ contains
         if( cline%defined('mskfile') )then
             if( file_exists(p%mskfile) )then
                 ldim = b%vol%get_ldim()
-                call b%vol%zero_background(p%msk)
+                call b%vol%zero_background
                 call b%mskvol%new(ldim, p%smpd)
                 call b%mskvol%read(p%mskfile)
                 call b%vol%mul(b%mskvol)
@@ -196,7 +196,7 @@ contains
             call vol_copy%bwd_ft
             call b%mskvol%automask3D(p, vol_copy)
             call b%mskvol%write('automask'//p%ext)
-            call b%vol%zero_background(p%msk)
+            call b%vol%zero_background
             call b%vol%mul(b%mskvol)
         else
             call b%vol%mask(p%msk, 'soft')

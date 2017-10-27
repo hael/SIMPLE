@@ -122,7 +122,7 @@ contains
         call b%vol%mask(p%msk, 'soft')
         call vol_pad%new([p%boxpd, p%boxpd, p%boxpd], p%smpd)
         DebugPrint  '>>> DID READ VOL'
-        call prep4cgrid(b%vol, vol_pad, p%msk, kbwin)
+        call prep4cgrid(b%vol, vol_pad, kbwin)
         call vol_pad%expand_cmat(p%alpha)
         DebugPrint  '>>> DONE PREPARING FOR IMAGE GENERATION'
         write(*,'(A)') '>>> GENERATING IMAGES'

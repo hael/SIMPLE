@@ -313,8 +313,8 @@ contains
         call even%norm
         call odd%norm
         if( self%automsk )then
-            call even%zero_background(self%msk)
-            call odd%zero_background(self%msk)
+            call even%zero_background
+            call odd%zero_background
             call even%mul(self%envmask)
             call odd%mul(self%envmask)
         else
@@ -460,7 +460,7 @@ contains
                         endif
                     endif
                     ! gridding
-                    call prep4cgrid(img, img_pad, p%msk, kbwin)
+                    call prep4cgrid(img, img_pad, kbwin)
                     ! interpolation
                     if( p%pgrp == 'c1' )then
                         call self%grid_fplane(orientation, img_pad, eo, pw)

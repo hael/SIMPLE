@@ -11,10 +11,11 @@ public ::  split_nobjs_even,split_nobjs_in_chunks,split_pairs_in_parts,&
 contains
 
     !>  \brief  for generating balanced partitions of nobjs objects
-    function split_nobjs_even( nobjs, nparts ) result( parts )
-        integer, intent(in)  :: nobjs, nparts
+    function split_nobjs_even( nobjs, nparts, szmax ) result( parts )
+        integer,           intent(in)  :: nobjs, nparts
+        integer, optional, intent(out) :: szmax
         integer, allocatable :: parts(:,:)
-        integer :: nobjs_per_part, leftover, istop, istart, ipart
+        integer :: nobjs_per_part, leftover, istop, istart, ipart, sszmax
         allocate(parts(nparts,2), stat=alloc_stat)
         allocchk('In: simple_map_reduce :: split_nobjs_even')
         nobjs_per_part = nobjs/nparts
@@ -23,6 +24,7 @@ contains
         DebugPrint   'leftover: ', leftover
         istop  = 0
         istart = 0
+        sszmax = 0
         do ipart=1,nparts
             if( ipart == nparts )then
                 istart = istop+1
@@ -39,7 +41,9 @@ contains
             endif
             parts(ipart,1) = istart
             parts(ipart,2) = istop
+            sszmax         = max(sszmax,istop - istart + 1)
         end do
+        if( present(szmax) ) szmax = sszmax
     end function split_nobjs_even
 
     !>  \brief  for generating partitions of nobjs objects of pre-determined size

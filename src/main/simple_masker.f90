@@ -61,7 +61,7 @@ contains
         call self%cos_edge(self%edge)
         ! apply mask to volume
         call vol_inout%norm
-        call vol_inout%zero_background(self%msk)
+        call vol_inout%zero_background
         call vol_inout%mul(self)
         ! the end
         if( was_ft )call vol_inout%fwd_ft
