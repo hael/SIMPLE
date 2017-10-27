@@ -10,5 +10,5 @@ character(len=9),  parameter :: FRCS_ITER_FBODY = 'frcs_iter'
 character(len=8),  parameter :: ALGN_FBODY      = 'algndoc_'
 ! EXTRACT
 character(len=11), parameter :: EXTRACT_STK_FBODY    = 'ptcls_from_'
-character(len=20), parameter :: EXTRACT_PARAMS_FBODY = 'extract_params'
+character(len=20), parameter :: EXTRACT_PARAMS_FBODY = 'extract_params_'
 end module simple_defs_fname
