@@ -8,8 +8,8 @@ private
 
 !> struct for all opt specifications
 type :: opt_spec
-    procedure(costfun),  pointer, nopass   :: costfun  =>null()   !< defines cost function
-    procedure(gcostfun), pointer, nopass   :: gcostfun =>null()   !< defines the gradient of the cost function
+    procedure(costfun),  pointer, nopass   :: costfun    =>null() !< defines cost function
+    procedure(gcostfun), pointer, nopass   :: gcostfun   =>null() !< defines the gradient of the cost function
     procedure(fdfcostfun), pointer, nopass :: fdfcostfun =>null() !< defines the gradient of the cost function
     character(len=STDLEN) :: str_opt=''                           !< string descriptor (of optimization routine to be used)
     character(len=STDLEN) :: str_mode=''                          !< mode string descriptor
@@ -52,6 +52,8 @@ type :: opt_spec
     procedure :: set_gcostfun
     procedure :: set_fdfcostfun
     procedure :: set_inipop
+    procedure :: eval_f
+    procedure :: eval_df
     procedure :: eval_fdf
     procedure :: kill
 end type opt_spec
@@ -252,9 +254,35 @@ contains
         self%inipopulation = pop
     end subroutine set_inipop
 
+    !> \brief  evaluate the cost function 
+    function eval_f( self, x ) result(f)
+        class(opt_spec), intent(inout) :: self
+        real,            intent(inout) :: x(:)
+        real                           :: f
+        if (.not. associated(self%costfun)) then      
+            write (*,*) 'error : simple_opt_spec: costfun not associated'
+            return
+        end if
+        f = self%costfun(x, self%ndim)
+        self%nevals = self%nevals  + 1
+    end function eval_f
+
+    !> \brief  evaluate the gradient
+    subroutine eval_df( self, x, grad ) 
+        class(opt_spec), intent(inout) :: self
+        real,            intent(inout) :: x(:)
+        real,            intent(out)   :: grad(:)
+        if (.not. associated(self%gcostfun)) then
+            write (*,*) 'error : simple_opt_spec: gcostfun not associated'
+            return
+        end if
+        grad = self%gcostfun(x, self%ndim)
+        self%ngevals = self%ngevals  + 1
+    end subroutine eval_df
+    
     !> \brief  evaluate the cost function and gradient simultaneously, if associated, or subsequently otherwise
     subroutine eval_fdf( self, x, f, gradient )
-        class(opt_spec), intent(in)    :: self
+        class(opt_spec), intent(inout) :: self
         real,            intent(inout) :: x(:)
         real,            intent(out)   :: f, gradient(:)
         if ((.not. associated(self%costfun)).or.(.not. associated(self%gcostfun))) then
@@ -267,6 +295,8 @@ contains
             f        = self%costfun(x, self%ndim)
             gradient = self%gcostfun(x, self%ndim)
         end if
+        self%nevals  = self%nevals  + 1
+        self%ngevals = self%ngevals + 1
     end subroutine eval_fdf
 
     !>  \brief  sets the cost function in the spec object
@@ -343,8 +373,9 @@ contains
             if( allocated(self%population)    ) deallocate(self%population)
             if( allocated(self%inipopulation) ) deallocate(self%inipopulation)
             if( allocated(self%peaks)         ) deallocate(self%peaks)
-            self%costfun  => null()
-            self%gcostfun => null()
+            self%costfun    => null()
+            self%gcostfun   => null()
+            self%fdfcostfun => null()
             self%exists = .false.
         endif
     end subroutine kill

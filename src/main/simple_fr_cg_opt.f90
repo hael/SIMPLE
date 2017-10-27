@@ -134,15 +134,13 @@ contains
                     dir = -1.
                 end if
                 call take_step(spec%x, self%p, stepc, dir / self%pnorm, self%x1)
-                fc = spec%costfun(self%x1,spec%ndim)
-                spec%nevals = spec%nevals  + 1                
+                fc = spec%eval_f(self%x1)
                 if (fc < fa) then
                     ! Success, reduced the function value
                     self%step = stepc * 2.0
                     self%f = fc
                     spec%x = self%x1
-                    self%gradient = spec%gcostfun(self%x1,spec%ndim)
-                    spec%ngevals = spec%ngevals + 1
+                    call spec%eval_df(self%x1, self%gradient)
                     status = OPT_STATUS_CONTINUE
                     return
                 end if
