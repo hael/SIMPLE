@@ -12,8 +12,8 @@ private
 
 type, extends(optimizer) :: fr_cg_opt
     private
-    real, allocatable :: x1(:), x2(:), p(:), g0(:), gradient(:)
-    real :: step, pnorm, g0norm, f
+    real(kind=8), allocatable :: x1(:), x2(:), p(:), g0(:), gradient(:)
+    real(kind=8) :: step, pnorm, g0norm, f
     integer :: fr_cg_iter       !< internal iter for fr_cg algorithm
     logical :: exists=.false.
 contains
@@ -52,6 +52,7 @@ contains
             stop 'gradient of cost function not associated in opt_spec; fr_cg_minimize; simple_fr_cg_opt'
         endif
         ! run nrestarts restarts
+        spec%x_8 = spec%x
         avgniter = 0
         spec%nevals = 0
         do i=1,spec%nrestarts
@@ -70,10 +71,10 @@ contains
                 integer :: iter
                 iter        = 0
                 self%step   = spec%max_step
-                self%x1     = 0.
-                self%x2     = 0.
-                self%p      = 0.
-                self%g0     = 0.
+                self%x1     = 0.0_8
+                self%x2     = 0.0_8
+                self%p      = 0.0_8
+                self%g0     = 0.0_8
                 call fr_cg_set
                 do
                     iter = iter + 1
@@ -82,12 +83,12 @@ contains
                         write (*,*) 'simple_fr_cg_opt: error in minimizer routine'
                         return
                     end if
-                    status = test_gradient(self%gradient, spec%gtol)                    
+                    status = test_gradient(self%gradient, real(spec%gtol, kind=8))                    
                     if ((global_debug).and.(global_verbose)) then
                         if (status == OPT_STATUS_SUCCESS) then
                             write (*,*) 'Minimum found at:'
                         end if
-                        write (*,*) iter, 'x = ', spec%x, 'f = ', self%f
+                        write (*,*) iter, 'x = ', spec%x_8, 'f = ', self%f
                     end if
                     if ((status .ne. OPT_STATUS_CONTINUE) .or. (iter > spec%maxits)) then
                         exit
@@ -98,15 +99,15 @@ contains
                 else
                     spec%converged = .false.
                 end if
-                lowest_cost = self%f
+                lowest_cost = real(self%f, kind=4)
             end subroutine fr_cgmin
 
             subroutine fr_cg_set
-                real :: gnorm
+                real(kind=8) :: gnorm
                 self%fr_cg_iter = 0
                 self%step = spec%max_step
                 ! Use the gradient as the initial direction
-                call spec%eval_fdf(spec%x, self%f, self%gradient)
+                call spec%eval_fdf(spec%x_8, self%f, self%gradient)
                 spec%nevals  = spec%nevals  + 1
                 spec%ngevals = spec%ngevals + 1
                 self%p       = self%gradient
@@ -118,28 +119,29 @@ contains
 
             function fr_cg_iterate() result(status)
                 integer :: status
-                real :: fa, fb, fc, dir, stepa, stepb, stepc, g1norm, pg, beta
+                real(kind=8) :: fa, fb, fc, dir, stepa, stepb, stepc, g1norm, pg, beta
                 fa = self%f
-                stepa = 0.
+                stepa = 0.0_8
                 stepc = self%step
-                if ((self%pnorm == 0.).or.(self%g0norm == 0.)) then
+                if ((self%pnorm == 0.0_8).or.(self%g0norm == 0.0_8)) then
                     status = OPT_STATUS_ERROR
                     return
                 end if
                 ! Determine which direction is downhill, +p or -p
                 pg = dot_product(self%p, self%gradient)
-                if (pg >= 0.) then
-                    dir = 1.
+                if (pg >= 0.0_8) then
+                    dir = 1.0_8
                 else
-                    dir = -1.
+                    dir = -1.0_8
                 end if
-                call take_step(spec%x, self%p, stepc, dir / self%pnorm, self%x1)
+                call take_step(spec%x_8, self%p, stepc, dir / self%pnorm, self%x1)
                 fc = spec%eval_f(self%x1)
                 if (fc < fa) then
                     ! Success, reduced the function value
-                    self%step = stepc * 2.0
-                    self%f = fc
-                    spec%x = self%x1
+                    self%step = stepc * 2.0_8
+                    self%f    = fc
+                    spec%x_8  = self%x1
+                    spec%x    = real(spec%x_8, kind=4)
                     call spec%eval_df(self%x1, self%gradient)
                     status = OPT_STATUS_CONTINUE
                     return
@@ -150,16 +152,17 @@ contains
                 ! Do a line minimisation in the region (xa,fa) (xc,fc) to find an
                 ! intermediate (xb,fb) satisifying fa > fb < fc.  Choose an initial
                 ! xb based on parabolic interpolation
-                call intermediate_point (spec%x, self%p, dir / self%pnorm, pg, &
+                call intermediate_point (spec%x_8, self%p, dir / self%pnorm, pg, &
                     & stepa, stepc, fa, fc, self%x1, self%gradient, stepb, fb, spec)
-                if (stepb == 0.0) then
+                if (stepb == 0.0_8) then
                     status = OPT_STATUS_ERROR
                     return
                 end if
-                call minimize (spec%x, self%p, dir / self%pnorm, &
+                call minimize (spec%x_8, self%p, dir / self%pnorm, &
                     & stepa, stepb, stepc, fa, fb, fc, &
                     & self%x1, self%x2, self%gradient, self%step, self%f, g1norm, spec)
-                spec%x = self%x2
+                spec%x_8 = self%x2
+                spec%x   = real(spec%x_8, kind=4)
                 ! Choose a new conjugate direction for the next step
                 self%fr_cg_iter = modulo(self%fr_cg_iter + 1, spec%ndim)
                 if (self%fr_cg_iter == 0) then

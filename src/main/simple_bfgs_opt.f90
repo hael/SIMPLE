@@ -84,7 +84,7 @@ contains
                 real            :: stpmax,sum,sumdg,sumxi,temp,test,dgg,gnorm
                 fp=spec%costfun(self%p,spec%ndim) ! calc start costfun val & gradient
                 spec%nevals = spec%nevals+1       ! increment the nevals counter
-                self%g=spec%gcostfun(self%p,spec%ndim)
+                call spec%gcostfun(self%p,self%g,spec%ndim)
                 sum=0.
                 do i=1,spec%ndim     ! init Hessian 2 unit matrix
                     do j=1,spec%ndim
@@ -113,8 +113,8 @@ contains
                     do i=1,spec%ndim                       ! save the old gradient
                         self%dg(i)=self%g(i)
                     end do
-                    self%g=spec%gcostfun(self%p,spec%ndim) ! and calculate the new gradient
-                    test=0.                                ! test for convergence (zero grad)
+                    call spec%gcostfun(self%p,self%g,spec%ndim) ! and calculate the new gradient
+                    test=0.                                     ! test for convergence (zero grad)
                     den=max(lowest_cost,1.)
                     do i=1,spec%ndim
                         temp=abs(self%g(i))*max(abs(self%p(i)),1.)/den

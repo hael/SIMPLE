@@ -11,38 +11,41 @@ type :: opt_spec
     procedure(costfun),  pointer, nopass   :: costfun    =>null() !< defines cost function
     procedure(gcostfun), pointer, nopass   :: gcostfun   =>null() !< defines the gradient of the cost function
     procedure(fdfcostfun), pointer, nopass :: fdfcostfun =>null() !< defines the gradient of the cost function
-    character(len=STDLEN) :: str_opt=''                           !< string descriptor (of optimization routine to be used)
-    character(len=STDLEN) :: str_mode=''                          !< mode string descriptor
-    integer               :: ndim=0, ldim=0                       !< dimension parameters
-    real                  :: ftol=1e-5, gtol=1e-5                 !< fractional convergence tolerance to be achieved in costfun/gradient
-    real                  :: eps=0.5                              !< learning rate
-    real                  :: cfac=0.1                             !< convergence factor bfgs
-    real                  :: yb                                   !< best cost obtained so far
-    real                  :: max_step=0.01                        !< maximum step size
-    integer               :: maxits=100                           !< maximum number of iterations
-    integer               :: nbest=0                              !< number of best solutions used to re-estimate the model in CE
-    integer               :: niter=0                              !< actual number of iterations
-    integer               :: nrestarts=1                          !< number of restarts
-    integer               :: nevals=0                             !< total number of cost function evaluations
-    integer               :: ngevals=0                            !< total number of gradient function evaluations
-    integer               :: nstates=1                            !< number of states
-    integer               :: npeaks=0                             !< number of peaks (local optima to identify)
-    integer               :: npop=0                               !< population size (4 evolutionary optimizers)
-    integer               :: nnn=0                                !< number of nearest neighbors
-    integer               :: peakcnt=0                            !< peak counter
-    logical, allocatable  :: cyclic(:)                            !< to indicate which variables are cyclic (Euler angles)
-    real, allocatable     :: limits(:,:)                          !< variable bounds
-    real, allocatable     :: limits_init(:,:)                     !< variable bounds for initialisation (randomized bounds)
-    real, allocatable     :: stepsz(:)                            !< step sizes for brute force search
-    real, allocatable     :: x(:)                                 !< best/final solution
-    real, allocatable     :: xi(:)                                !< search direction used in linmin
-    real, allocatable     :: xt(:)                                !< test point, used in linmin
-    real, allocatable     :: inipopulation(:,:)                   !< input population for the evolutionary approaches
-    real, allocatable     :: population(:,:)                      !< output solution population from the evolutionary approaches
-    real, allocatable     :: peaks(:,:)                           !< output peaks (local optimal solutions)
+    character(len=STDLEN)     :: str_opt=''                           !< string descriptor (of optimization routine to be used)
+    character(len=STDLEN)     :: str_mode=''                          !< mode string descriptor
+    integer                   :: ndim=0, ldim=0                       !< dimension parameters
+    real                      :: ftol=1e-5, gtol=1e-5                 !< fractional convergence tolerance to be achieved in costfun/gradient
+    real                      :: eps=0.5                              !< learning rate
+    real                      :: cfac=0.1                             !< convergence factor bfgs
+    real                      :: yb                                   !< best cost obtained so far
+    real                      :: max_step=0.01                        !< maximum step size
+    integer                   :: maxits=100                           !< maximum number of iterations
+    integer                   :: nbest=0                              !< number of best solutions used to re-estimate the model in CE
+    integer                   :: niter=0                              !< actual number of iterations
+    integer                   :: nrestarts=1                          !< number of restarts
+    integer                   :: nevals=0                             !< total number of cost function evaluations
+    integer                   :: ngevals=0                            !< total number of gradient function evaluations
+    integer                   :: nstates=1                            !< number of states
+    integer                   :: npeaks=0                             !< number of peaks (local optima to identify)
+    integer                   :: npop=0                               !< population size (4 evolutionary optimizers)
+    integer                   :: nnn=0                                !< number of nearest neighbors
+    integer                   :: peakcnt=0                            !< peak counter
+    logical, allocatable      :: cyclic(:)                            !< to indicate which variables are cyclic (Euler angles)
+    real, allocatable         :: limits(:,:)                          !< variable bounds
+    real, allocatable         :: limits_init(:,:)                     !< variable bounds for initialisation (randomized bounds)
+    real, allocatable         :: stepsz(:)                            !< step sizes for brute force search
+    real, allocatable         :: x(:)                                 !< best/final solution
+    real(kind=8), allocatable :: x_8(:)                               !< double precision value for best/final solution
+    real, allocatable         :: xi(:)                                !< search direction used in linmin
+    real, allocatable         :: xt(:)                                !< test point, used in linmin
+    real, allocatable         :: inipopulation(:,:)                   !< input population for the evolutionary approaches
+    real, allocatable         :: population(:,:)                      !< output solution population from the evolutionary approaches
+    real, allocatable         :: peaks(:,:)                           !< output peaks (local optimal solutions)
+    real, allocatable         :: grad_4_tmp(:)                        !< temporary storage for single precision gradient
+    real, allocatable         :: x_4_tmp(:)                           !< temporary storage for single precision gradient
 #include "simple_local_flags.inc"
-    logical               :: converged = .false.                  !< converged status
-    logical               :: exists    = .false.                  !< to indicate existence
+    logical                   :: converged = .false.                  !< converged status
+    logical                   :: exists    = .false.                  !< to indicate existence
   contains
     procedure :: specify
     procedure :: change_opt
@@ -52,9 +55,15 @@ type :: opt_spec
     procedure :: set_gcostfun
     procedure :: set_fdfcostfun
     procedure :: set_inipop
-    procedure :: eval_f
-    procedure :: eval_df
-    procedure :: eval_fdf
+    procedure :: eval_f_4
+    procedure :: eval_df_4
+    procedure :: eval_fdf_4
+    procedure :: eval_f_8
+    procedure :: eval_df_8
+    procedure :: eval_fdf_8
+    generic   :: eval_f  => eval_f_4, eval_f_8
+    generic   :: eval_df => eval_df_4, eval_df_8
+    generic   :: eval_fdf => eval_fdf_4, eval_fdf_8    
     procedure :: kill
 end type opt_spec
 
@@ -69,11 +78,11 @@ end interface
 
 !>  \brief  defines the cost function gradient interface
 abstract interface
-    function gcostfun( vec, D ) result( grad )
+    subroutine gcostfun( vec, grad, D )
         integer, intent(in)    :: D
         real,    intent(inout) :: vec(D)
-        real                   :: grad(D)
-    end function
+        real,    intent(out)   :: grad(D)
+    end subroutine
 end interface
 
 !>  \brief  defines the cost function with simultaneous gradient interface
@@ -186,12 +195,14 @@ contains
         endif
         select case(str_opt)
             case('linmin')
-                allocate( self%x(self%ndim), self%xi(self%ndim), self%xt(self%ndim), stat=alloc_stat )
+                allocate( self%x(self%ndim), self%x_8(self%ndim), self%xi(self%ndim), &
+                    & self%xt(self%ndim), stat=alloc_stat )
                 allocchk('In: specify; simple_opt_spec, linmin')
                 self%xi = 0.
                 self%xt = 0.
             case DEFAULT
-                allocate( self%x(self%ndim), stat=alloc_stat )
+                allocate( self%x(self%ndim), self%grad_4_tmp(self%ndim), &
+                    & self%x_4_tmp(self%ndim), self%x_8(self%ndim),stat=alloc_stat )
                 allocchk('In: specify; simple_opt_spec, DEFAULT')
         end select
         self%x  = 0.
@@ -255,7 +266,7 @@ contains
     end subroutine set_inipop
 
     !> \brief  evaluate the cost function 
-    function eval_f( self, x ) result(f)
+    function eval_f_4( self, x ) result(f)
         class(opt_spec), intent(inout) :: self
         real,            intent(inout) :: x(:)
         real                           :: f
@@ -265,10 +276,10 @@ contains
         end if
         f = self%costfun(x, self%ndim)
         self%nevals = self%nevals  + 1
-    end function eval_f
+    end function eval_f_4
 
     !> \brief  evaluate the gradient
-    subroutine eval_df( self, x, grad ) 
+    subroutine eval_df_4( self, x, grad ) 
         class(opt_spec), intent(inout) :: self
         real,            intent(inout) :: x(:)
         real,            intent(out)   :: grad(:)
@@ -276,12 +287,12 @@ contains
             write (*,*) 'error : simple_opt_spec: gcostfun not associated'
             return
         end if
-        grad = self%gcostfun(x, self%ndim)
+        call self%gcostfun(x, grad, self%ndim)
         self%ngevals = self%ngevals  + 1
-    end subroutine eval_df
+    end subroutine eval_df_4
     
     !> \brief  evaluate the cost function and gradient simultaneously, if associated, or subsequently otherwise
-    subroutine eval_fdf( self, x, f, gradient )
+    subroutine eval_fdf_4( self, x, f, gradient )
         class(opt_spec), intent(inout) :: self
         real,            intent(inout) :: x(:)
         real,            intent(out)   :: f, gradient(:)
@@ -293,12 +304,63 @@ contains
             call self%fdfcostfun(x, f, gradient, self%ndim)
         else
             f        = self%costfun(x, self%ndim)
-            gradient = self%gcostfun(x, self%ndim)
+            call self%gcostfun(x, gradient, self%ndim)
         end if
         self%nevals  = self%nevals  + 1
         self%ngevals = self%ngevals + 1
-    end subroutine eval_fdf
+    end subroutine eval_fdf_4
 
+    !> \brief  evaluate the cost function 
+    function eval_f_8( self, x ) result(f)
+        class(opt_spec), intent(inout) :: self
+        real(kind=8),    intent(inout) :: x(:)
+        real(kind=8)                   :: f
+        if (.not. associated(self%costfun)) then      
+            write (*,*) 'error : simple_opt_spec: costfun not associated'
+            return
+        end if
+        f   = self%costfun(real(x, kind=4), self%ndim)
+        self%nevals = self%nevals  + 1
+    end function eval_f_8
+
+    !> \brief  evaluate the gradient
+    subroutine eval_df_8( self, x, grad ) 
+        class(opt_spec), intent(inout) :: self
+        real(kind=8),    intent(inout) :: x(:)
+        real(kind=8),    intent(out)   :: grad(:)
+        if (.not. associated(self%gcostfun)) then
+            write (*,*) 'error : simple_opt_spec: gcostfun not associated'
+            return
+        end if
+        self%x_4_tmp = real(x, kind=4)
+        call self%gcostfun(self%x_4_tmp, self%grad_4_tmp, self%ndim)
+        grad = self%grad_4_tmp
+        self%ngevals = self%ngevals  + 1
+    end subroutine eval_df_8
+    
+    !> \brief  evaluate the cost function and gradient simultaneously, if associated, or subsequently otherwise
+    subroutine eval_fdf_8( self, x, f, gradient )
+        class(opt_spec), intent(inout) :: self
+        real(kind=8),    intent(inout) :: x(:)
+        real(kind=8),    intent(out)   :: f, gradient(:)
+        real                           :: f_4
+        if ((.not. associated(self%costfun)).or.(.not. associated(self%gcostfun))) then
+            write (*,*) 'error : simple_opt_spec: costfun or gcostfun not associated'
+            return
+        end if
+        self%x_4_tmp = real(x, kind=4)
+        if (associated(self%fdfcostfun)) then
+            call self%fdfcostfun(self%x_4_tmp, f_4, self%grad_4_tmp, self%ndim)
+            f        = f_4
+            gradient = self%grad_4_tmp            
+        else
+            f        = self%costfun(self%x_4_tmp, self%ndim)
+            call self%gcostfun(self%x_4_tmp, self%grad_4_tmp, self%ndim)
+        end if
+        self%nevals  = self%nevals  + 1
+        self%ngevals = self%ngevals + 1
+    end subroutine eval_fdf_8
+    
     !>  \brief  sets the cost function in the spec object
     subroutine set_costfun( self, fun )
         class(opt_spec), intent(inout) :: self !< instance
@@ -324,16 +386,16 @@ contains
         class(opt_spec), intent(inout) :: self !< instance
 #if defined (PGI)
         ! GNU COMPILER DOES NOT COPE W EXTERNAL
-        real, external  :: fun !< defines cost function gradient interface
+        subroutine, external  :: fun !< defines cost function gradient interface
 #else
         ! PGI COMPILER DOES NOT COPE W INTERFACE
         interface
             !< defines cost function gradient interface
-            function fun( vec, D ) result( grad )
+            subroutine fun( vec, grad, D )
                 integer, intent(in)    :: D
                 real,    intent(inout) :: vec( D )
-                real :: grad( D )
-            end function
+                real,    intent(out)   :: grad( D )
+            end subroutine fun
         end interface
 #endif
         self%gcostfun => fun
@@ -368,11 +430,14 @@ contains
             if( allocated(self%limits_init)   ) deallocate(self%limits_init)
             if( allocated(self%stepsz)        ) deallocate(self%stepsz)
             if( allocated(self%x)             ) deallocate(self%x)
+            if( allocated(self%x_8)           ) deallocate(self%x_8)
             if( allocated(self%xi)            ) deallocate(self%xi)
             if( allocated(self%xt)            ) deallocate(self%xt)
             if( allocated(self%population)    ) deallocate(self%population)
             if( allocated(self%inipopulation) ) deallocate(self%inipopulation)
             if( allocated(self%peaks)         ) deallocate(self%peaks)
+            if( allocated(self%grad_4_tmp)    ) deallocate(self%grad_4_tmp)
+            if( allocated(self%x_4_tmp)       ) deallocate(self%x_4_tmp)
             self%costfun    => null()
             self%gcostfun   => null()
             self%fdfcostfun => null()

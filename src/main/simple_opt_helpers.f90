@@ -4,23 +4,23 @@ module simple_opt_helpers
 
     implicit none
     !< constants for return values
-    integer, parameter :: OPT_STATUS_SUCCESS = 1, OPT_STATUS_CONTINUE = 0, OPT_STATUS_ERROR = -1
-    real, parameter :: SINGLE_EPSILON = 1.192092895507812E-7
-    real, parameter :: SINGLE_NAN = TRANSFER(Z'7FF80000' ,1.0_4)
+    integer, parameter  :: OPT_STATUS_SUCCESS = 1, OPT_STATUS_CONTINUE = 0, OPT_STATUS_ERROR = -1
+    real, parameter     :: SINGLE_EPSILON = 1.192092895507812E-7
+    real(dp), parameter :: DOUBLE_EPSILON = 2.2204460492503131e-16_8
 contains
     subroutine take_step (x, p, step, lambda, x1)
-        real, intent(in) :: x(:), p(:), step, lambda
-        real, intent(out) :: x1(:)
+        real(dp), intent(in) :: x(:), p(:), step, lambda
+        real(dp), intent(out) :: x1(:)
         x1 = x - step*lambda*p
     end subroutine take_step
 
     subroutine intermediate_point(x, p, lambda,  pg, stepa, stepc, fa, fc, &
         & x1, gradient, step, f, spec)
         use simple_opt_spec, only: opt_spec
-        real, intent(in) :: x(:), p(:), lambda, pg, stepa,  fa
-        real, intent(out) :: x1(:), gradient(:), step, f, fc, stepc
-        class(opt_spec), intent(in)  :: spec
-        real :: stepb, fb, u
+        real(dp), intent(in)       :: x(:), p(:), lambda, pg, stepa,  fa
+        real(dp), intent(out)      :: x1(:), gradient(:), step, f, fc, stepc
+        class(opt_spec), intent(inout) :: spec
+        real(dp) :: stepb, fb, u
 10      u = abs(pg * lambda * stepc)  ! label: trial
         stepb = 0.5 * stepc * u / ((fc - fa) + u)
         call take_step(x, p , stepb, lambda, x1)
@@ -31,10 +31,10 @@ contains
             end if
             step = 0
             f = fa
-            gradient = spec%gcostfun(x1,spec%ndim)
+            call spec%eval_df(x1, gradient)
             return
         end if
-        fb = spec%costfun(x1,spec%ndim)
+        fb = spec%eval_f(x1)
         if (global_debug .and. global_verbose) then
             write (*,*) 'trying stepb = ', stepb, 'fb = ', fb
         end if
@@ -49,16 +49,16 @@ contains
         end if
         step = stepb
         f = fb
-        gradient = spec%costfun(x1,spec%ndim)
+        call spec%eval_df(x1, gradient)
     end subroutine intermediate_point
 
     subroutine minimize(x, p, lambda, stepa, stepb, stepc, fa, fb, fc, &
         & x1, x2, gradient, step, f, gnorm, spec)
         use simple_opt_spec, only: opt_spec        
-        real, intent(in) :: x(:), p(:), lambda
-        real, intent(out) :: x1(:), x2(:), gradient(:), step, stepa, stepb, stepc, fa, fb, fc, f, gnorm
-        class(opt_spec), intent(in)  :: spec
-        real :: u, v, w, dw, dv, du, fu, fv, fw, old1, old2, stepm, fm, pg, gnorm1, iter, e1, e2
+        real(dp), intent(in) :: x(:), p(:), lambda
+        real(dp), intent(out) :: x1(:), x2(:), gradient(:), step, stepa, stepb, stepc, fa, fb, fc, f, gnorm
+        class(opt_spec), intent(inout)  :: spec
+        real(dp) :: u, v, w, dw, dv, du, fu, fv, fw, old1, old2, stepm, fm, pg, gnorm1, iter, e1, e2
         u = stepb
         v = stepa
         w = stepc
@@ -81,7 +81,7 @@ contains
         du = 0.
         e1 = ((fv - fu) * dw * dw + (fu - fw) * dv * dv)
         e2 = 2.0 * ((fv - fu) * dw + (fu - fw) * dv)
-        if (e2 .ne. 0.0) then
+        if (e2 .ne. 0.0_8) then
             du = e1 / e2
         end if
         if ((du > 0.0) .and. (du < (stepc - stepb)) .and. (abs(du) < 0.5 * old2)) then
@@ -94,7 +94,7 @@ contains
             stepm = stepb - 0.38 * (stepb - stepa)
         end if
         call take_step (x, p, stepm, lambda, x1)
-        fm = spec%costfun(x1,spec%ndim)
+        fm = spec%eval_f(x1)
         if (global_debug .and. global_verbose) then
             write (*,*) 'trying stepm = ', stepm, ' fm = ', fm
         end if
@@ -126,7 +126,7 @@ contains
             fv = fu
             fu = fm
             x2 = x1
-            gradient = spec%gcostfun(x1,spec%ndim)
+            call spec%eval_df(x1, gradient)
             pg = dot_product(p, gradient)
             gnorm1 = norm2(gradient)
             if (global_debug .and. global_verbose) then
@@ -161,17 +161,29 @@ contains
     end subroutine minimize
 
     function test_gradient(g, epsabs) result(status)
-        real, intent(in) :: g(:), epsabs
-        integer :: status
+        real(dp), intent(in) :: g(:), epsabs
+        integer                  :: status
         if (norm2(g) < epsabs) then
             status = OPT_STATUS_SUCCESS
         else
             status = OPT_STATUS_CONTINUE
         end if
     end function test_gradient
+    
+    logical function vect_equal_4( array1, array2 )
+        real, intent(in) :: array1(:), array2(:)
+        integer :: i
+        vect_equal_4 = size(array1) == size(array2)
+        if ( vect_equal_4 ) then
+            do i = 1,size(array1)
+                vect_equal_4 = array1(i) == array2(i)
+                if ( .not. vect_equal_4 )exit
+            enddo
+        endif
+    end function vect_equal_4
 
     logical function vect_equal( array1, array2 )
-        real, intent(in) :: array1(:), array2(:)
+        real(dp), intent(in) :: array1(:), array2(:)
         integer :: i
         vect_equal = size(array1) == size(array2)
         if ( vect_equal ) then
@@ -181,18 +193,6 @@ contains
             enddo
         endif
     end function vect_equal
-
-    logical function vect_equal8( array1, array2 )
-        real(kind=8), intent(in) :: array1(:), array2(:)
-        integer :: i
-        vect_equal8 = size(array1) == size(array2)
-        if ( vect_equal8 ) then
-            do i = 1,size(array1)
-                vect_equal8 = array1(i) == array2(i)
-                if ( .not. vect_equal8 )exit
-            enddo
-        endif
-    end function vect_equal8
 
 end module simple_opt_helpers
         

@@ -12,8 +12,8 @@ private
 
 type, extends(optimizer) :: stde_opt
     private
-    real :: step, f
-    real, allocatable :: x1(:), g1(:), gradient(:)
+    real(dp) :: step, f
+    real(dp), allocatable :: x1(:), g1(:), gradient(:)
     logical :: exists=.false.
 contains
     procedure :: new          => new_stde_opt
@@ -27,7 +27,7 @@ contains
     subroutine new_stde_opt( self, spec )
         use simple_opt_spec, only: opt_spec
         use simple_syslib,   only: alloc_errchk
-        class(stde_opt), intent(inout) :: self !< instance
+        class(stde_opt), intent(inout)  :: self !< instance
         class(opt_spec), intent(inout)  :: spec !< specification
         call self%kill
         allocate(self%x1(spec%ndim),self%g1(spec%ndim), self%gradient(spec%ndim), &
@@ -40,7 +40,7 @@ contains
     subroutine stde_minimize( self, spec, lowest_cost )
         use simple_opt_spec, only: opt_spec
         use simple_opt_subs, only: lnsrch
-        class(stde_opt), intent(inout) :: self        !< instance
+        class(stde_opt), intent(inout)  :: self        !< instance
         class(opt_spec), intent(inout)  :: spec        !< specification
         real, intent(out)               :: lowest_cost !< minimum function value
         integer                         :: avgniter,i
@@ -51,6 +51,7 @@ contains
             stop 'gradient of cost function not associated in opt_spec; stde_minimize; simple_stde_opt'
         endif
         ! run nrestarts restarts
+        spec%x_8    = spec%x
         avgniter = 0
         spec%nevals = 0
         do i=1,spec%nrestarts
@@ -68,8 +69,8 @@ contains
             integer :: iter
             iter        = 0
             self%step   = spec%max_step
-            self%x1     = 0.
-            self%g1     = 0.
+            self%x1     = 0.0_8
+            self%g1     = 0.0_8
             call stde_set
             do
                 iter = iter + 1
@@ -78,12 +79,12 @@ contains
                     write (*,*) 'simple_stde_opt: error in minimizer routine'
                     return
                 end if
-                status = test_gradient(self%gradient, spec%gtol)
+                status = test_gradient(self%gradient, 0.0001_8)
                 if ((global_debug).and.(global_verbose)) then
                     if (status == OPT_STATUS_SUCCESS) then
                         write (*,*) 'Minimum found at:'
                     end if
-                    write (*,*) iter, 'x = ', spec%x, 'f = ', self%f
+                    write (*,*) iter, 'x = ', spec%x_8, 'f = ', self%f
                 end if
                 if ((status .ne. OPT_STATUS_CONTINUE) .or. (iter > spec%maxits)) then
                     exit
@@ -94,38 +95,34 @@ contains
             else
                 spec%converged = .false.
             end if
-            lowest_cost = self%f
+            lowest_cost = real(self%f, kind=4)
         end subroutine stdemin
 
         subroutine stde_set
             self%step    = spec%max_step
-            call spec%eval_fdf(spec%x, self%f, self%gradient)
-            spec%nevals  = spec%nevals  + 1
-            spec%ngevals = spec%ngevals + 1
+            call spec%eval_fdf_8(spec%x_8, self%f, self%gradient)
         end subroutine stde_set
 
         function stde_iterate() result(status)
-            integer :: status
-            real :: f0, f1, gnorm
-            logical :: failed
+            integer      :: status
+            real(dp) :: f0, f1, gnorm
+            logical      :: failed
             f0 = self%f
             failed = .false.
             ! compute new trial point at x1= x - step * dir, where dir is the
             ! normalized gradient
-            gnorm = norm2(self%gradient);
-            if (gnorm == 0.0) then
+            gnorm = norm2(self%gradient)
+            if (gnorm == 0.0_8) then
                 status = OPT_STATUS_ERROR
                 return
             end if
-10          self%x1 = spec%x - self%step / gnorm * self%gradient ! label: trial
-            if (vect_equal(spec%x, self%x1)) then
+10          self%x1 = spec%x_8 - self%step / gnorm * self%gradient ! label: trial
+            if (vect_equal(spec%x_8, self%x1)) then
                 status = OPT_STATUS_ERROR
                 return
             end if
             ! evaluate function and gradient at new point x1
             call spec%eval_fdf(self%x1, f1, self%g1)
-            spec%nevals  = spec%nevals  + 1
-            spec%ngevals = spec%ngevals + 1
             if (f1 > f0) then
                 ! downhill step failed, reduce step-size and try again
                 failed = .true.
@@ -135,9 +132,11 @@ contains
             if (failed) then
                 self%step = self%step * spec%ftol
             else
-                self%step = self%step * 2.
+                self%step = self%step * 2.0_8
             end if
-            spec%x = self%x1
+            !write (*,*) 'step = ', self%step
+            spec%x_8      = self%x1
+            spec%x        = real(spec%x_8, kind=4)
             self%gradient = self%g1
             self%f = f1
             status = OPT_STATUS_SUCCESS
