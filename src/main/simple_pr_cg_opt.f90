@@ -1,4 +1,4 @@
-\! function minimization by Polak-Ribiere conjugate gradient algorithm, translated from gsl 2.4
+! function minimization by Polak-Ribiere conjugate gradient algorithm, translated from gsl 2.4
 
 module simple_pr_cg_opt
 #include "simple_lib.f08"

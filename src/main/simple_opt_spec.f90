@@ -35,14 +35,14 @@ type :: opt_spec
     real, allocatable         :: limits_init(:,:)                     !< variable bounds for initialisation (randomized bounds)
     real, allocatable         :: stepsz(:)                            !< step sizes for brute force search
     real, allocatable         :: x(:)                                 !< best/final solution
-    real(kind=8), allocatable :: x_8(:)                               !< double precision value for best/final solution
+    real(dp), allocatable     :: x_8(:)                               !< double precision value for best/final solution
     real, allocatable         :: xi(:)                                !< search direction used in linmin
     real, allocatable         :: xt(:)                                !< test point, used in linmin
     real, allocatable         :: inipopulation(:,:)                   !< input population for the evolutionary approaches
     real, allocatable         :: population(:,:)                      !< output solution population from the evolutionary approaches
     real, allocatable         :: peaks(:,:)                           !< output peaks (local optimal solutions)
     real, allocatable         :: grad_4_tmp(:)                        !< temporary storage for single precision gradient
-    real, allocatable         :: x_4_tmp(:)                           !< temporary storage for single precision gradient
+    real, allocatable         :: x_4_tmp(:)                           !< temporary storage for single precision function value
 #include "simple_local_flags.inc"
     logical                   :: converged = .false.                  !< converged status
     logical                   :: exists    = .false.                  !< to indicate existence
@@ -310,11 +310,11 @@ contains
         self%ngevals = self%ngevals + 1
     end subroutine eval_fdf_4
 
-    !> \brief  evaluate the cost function 
+    !> \brief  evaluate the cost function, double precision
     function eval_f_8( self, x ) result(f)
         class(opt_spec), intent(inout) :: self
-        real(kind=8),    intent(inout) :: x(:)
-        real(kind=8)                   :: f
+        real(dp),        intent(inout) :: x(:)
+        real(dp)                       :: f
         if (.not. associated(self%costfun)) then      
             write (*,*) 'error : simple_opt_spec: costfun not associated'
             return
@@ -323,11 +323,11 @@ contains
         self%nevals = self%nevals  + 1
     end function eval_f_8
 
-    !> \brief  evaluate the gradient
+    !> \brief  evaluate the gradient, double precision
     subroutine eval_df_8( self, x, grad ) 
         class(opt_spec), intent(inout) :: self
-        real(kind=8),    intent(inout) :: x(:)
-        real(kind=8),    intent(out)   :: grad(:)
+        real(dp),        intent(inout) :: x(:)
+        real(dp),        intent(out)   :: grad(:)
         if (.not. associated(self%gcostfun)) then
             write (*,*) 'error : simple_opt_spec: gcostfun not associated'
             return
@@ -338,11 +338,11 @@ contains
         self%ngevals = self%ngevals  + 1
     end subroutine eval_df_8
     
-    !> \brief  evaluate the cost function and gradient simultaneously, if associated, or subsequently otherwise
+    !> \brief  evaluate the cost function and gradient simultaneously, if associated, or subsequently otherwise, double precision
     subroutine eval_fdf_8( self, x, f, gradient )
         class(opt_spec), intent(inout) :: self
-        real(kind=8),    intent(inout) :: x(:)
-        real(kind=8),    intent(out)   :: f, gradient(:)
+        real(dp),        intent(inout) :: x(:)
+        real(dp),        intent(out)   :: f, gradient(:)
         real                           :: f_4
         if ((.not. associated(self%costfun)).or.(.not. associated(self%gcostfun))) then
             write (*,*) 'error : simple_opt_spec: costfun or gcostfun not associated'
