@@ -8,8 +8,8 @@ private
 
 !> struct for all opt specifications
 type :: opt_spec
-    procedure(costfun),  pointer, nopass   :: costfun  =>null()   !< defines cost function
-    procedure(gcostfun), pointer, nopass   :: gcostfun =>null()   !< defines the gradient of the cost function
+    procedure(costfun),  pointer, nopass   :: costfun    =>null() !< defines cost function
+    procedure(gcostfun), pointer, nopass   :: gcostfun   =>null() !< defines the gradient of the cost function
     procedure(fdfcostfun), pointer, nopass :: fdfcostfun =>null() !< defines the gradient of the cost function
     character(len=STDLEN) :: str_opt=''                           !< string descriptor (of optimization routine to be used)
     character(len=STDLEN) :: str_mode=''                          !< mode string descriptor
@@ -373,8 +373,9 @@ contains
             if( allocated(self%population)    ) deallocate(self%population)
             if( allocated(self%inipopulation) ) deallocate(self%inipopulation)
             if( allocated(self%peaks)         ) deallocate(self%peaks)
-            self%costfun  => null()
-            self%gcostfun => null()
+            self%costfun    => null()
+            self%gcostfun   => null()
+            self%fdfcostfun => null()
             self%exists = .false.
         endif
     end subroutine kill
