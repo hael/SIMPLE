@@ -359,7 +359,7 @@ contains
                        &nint(orientation%get('state_balance')) == 0 ) cycle
                     call read_img_and_norm( b, p, iptcl )
                     if( p%npeaks > 1 )then
-                        call grid_ptcl(b, p, orientation, os= o_peaks(iptcl))
+                        call grid_ptcl(b, p, orientation, os=o_peaks(iptcl))
                     else
                         call grid_ptcl(b, p, orientation)
                     endif

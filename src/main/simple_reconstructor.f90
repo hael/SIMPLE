@@ -36,12 +36,12 @@ type, extends(image) :: reconstructor
     integer                     :: wdim          = 0            !< dim of interpolation matrix
     integer                     :: nyq           = 0            !< Nyqvist Fourier index
     integer                     :: ldim_img(3)   = 0            !< logical dimension of the original image
+    integer                     :: lims(3,2)     = 0            !< Friedel limits
+    integer                     :: cyc_lims(3,2) = 0            !< redundant limits
     type(CTFFLAGTYPE)           :: ctf                          !< ctf flag <yes|no|mul|flip>
     logical                     :: tfastig            = .false. !< astigmatic CTF or not
     logical                     :: phaseplate         = .false. !< Volta phaseplate images or not
     logical                     :: rho_allocated      = .false. !< existence of rho matrix
-    logical                     :: rho_exp_allocated  = .false. !< existence of rho expanded matrix
-    logical                     :: cmat_exp_allocated = .false. !< existence of Fourier components expanded matrix
   contains
     ! CONSTRUCTORS 
     procedure          :: alloc_rho
@@ -79,7 +79,7 @@ contains
         class(reconstructor), intent(inout) :: self   !< this instance
         class(params),        intent(in)    :: p      !< parameters object
         logical, optional,    intent(in)    :: expand !< expand flag
-        integer :: rho_shape(3), lims(3,2), rho_exp_lims(3,2), ldim_exp(3,2), dim
+        integer :: rho_shape(3), ldim_exp(3,2), dim
         logical :: l_expand
         if(.not. self%exists()) stop 'construct image before allocating rho; alloc_rho; simple_reconstructor'
         if(      self%is_2d() ) stop 'only for volumes; alloc_rho; simple_reconstructor'
@@ -105,6 +105,8 @@ contains
         self%phaseplate = p%tfplan%l_phaseplate
         self%kbwin      = kbinterpol(self%winsz,self%alpha)
         self%wdim       = self%kbwin%get_wdim()
+        self%lims       = self%loop_lims(2)
+        self%cyc_lims   = self%loop_lims(3)
         ! Work out dimensions of the rho array
         rho_shape(1)    = fdim(self%ldim_img(1))
         rho_shape(2:3)  = self%ldim_img(2:3)
@@ -115,22 +117,16 @@ contains
         self%rho_allocated = .true.
         if( l_expand )then
             ! setup expanded matrices
-            lims = self%loop_lims(2)
-            dim  = maxval(abs(lims)) + ceiling(KBWINSZ)
-            ldim_exp(1,:) = [-dim, dim]
+            dim  = maxval(abs(self%lims)) + ceiling(KBWINSZ)
+            ldim_exp(1,:) = [self%lims(1,1)-self%wdim, dim]
             ldim_exp(2,:) = [-dim, dim]
             ldim_exp(3,:) = [-dim, dim]
-            rho_exp_lims  = ldim_exp
-            allocate(self%cmat_exp( ldim_exp(1,1):ldim_exp(1,2),&
-                &ldim_exp(2,1):ldim_exp(2,2),&
+            allocate(self%cmat_exp( ldim_exp(1,1):ldim_exp(1,2),ldim_exp(2,1):ldim_exp(2,2),&
                 &ldim_exp(3,1):ldim_exp(3,2)), source=cmplx(0.,0.), stat=alloc_stat)
             allocchk("In: alloc_rho; simple_reconstructor cmat_exp")
-            allocate(self%rho_exp( rho_exp_lims(1,1):rho_exp_lims(1,2),&
-                &rho_exp_lims(2,1):rho_exp_lims(2,2),&
-                &rho_exp_lims(3,1):rho_exp_lims(3,2)), source=0., stat=alloc_stat)
+            allocate(self%rho_exp( ldim_exp(1,1):ldim_exp(1,2),ldim_exp(2,1):ldim_exp(2,2),&
+                &ldim_exp(3,1):ldim_exp(3,2)), source=0., stat=alloc_stat)
             allocchk("In: alloc_rho; simple_reconstructor rho_exp")
-            self%cmat_exp_allocated = .true.
-            self%rho_exp_allocated  = .true.
         end if       
         call self%reset
     end subroutine alloc_rho
@@ -204,10 +200,13 @@ contains
         ! calculate non-uniform sampling location
         vec = [real(h), real(k), 0.]
         loc = matmul(vec, e%get_mat())
-        ! evaluate the transfer function
-        call self%calc_tfun_vals(vec, tval, tvalsq)
         ! initiate kernel matrix
         call sqwin_3d(loc(1), loc(2), loc(3), self%winsz, win)
+        ! no need to update outside the non-redundant Friedel limits
+        ! consistently with compress_exp
+        if( win(1,2) < self%lims(1,1) )return
+        ! evaluate the transfer function
+        call self%calc_tfun_vals(vec, tval, tvalsq)
         ! (weighted) kernel values
         w = pwght
         do i=1,self%wdim
@@ -307,14 +306,13 @@ contains
         integer,    optional, intent(in)    :: maxits
         type(kbinterpol)     :: kbwin 
         type(image)          :: W_img, Wprev_img
-        real                 :: Wnorm, val_prev, val, Wnorm_prev, invrho
-        integer              :: h, k, m, lims(3,2),  phys(3), iter
+        real                 :: val_prev, val, invrho
+        integer              :: h, k, m, phys(3), iter
         integer              :: maxits_here
         complex, parameter   :: one = cmplx(1.,0.)
         real,    parameter   :: winsz  = 2.
         maxits_here = GRIDCORR_MAXITS
         if( present(maxits) )maxits_here = maxits
-        lims = self%loop_lims(2)
         call W_img%new(self%ldim_img, self%get_smpd())
         call Wprev_img%new(self%ldim_img, self%get_smpd())
         call W_img%set_ft(.true.)
@@ -323,16 +321,14 @@ contains
         kbwin = kbinterpol(winsz, self%alpha)
         ! weights init to 1.
         W_img = one
-        Wnorm = SMALL
         do iter = 1, maxits_here
-            Wnorm_prev = Wnorm
             Wprev_img  = W_img 
             ! W <- W * rho
             !$omp parallel do collapse(3) default(shared) schedule(static)&
             !$omp private(h,k,m,phys) proc_bind(close)
-            do h = lims(1,1),lims(1,2)
-                do k = lims(2,1),lims(2,2)
-                    do m = lims(3,1),lims(3,2)
+            do h = self%lims(1,1),self%lims(1,2)
+                do k = self%lims(2,1),self%lims(2,2)
+                    do m = self%lims(3,1),self%lims(3,2)
                         phys  = W_img%comp_addr_phys([h,k,m])
                         call W_img%mul_cmat_at(self%rho(phys(1),phys(2),phys(3)), phys)
                     end do
@@ -344,33 +340,28 @@ contains
             call mul_w_instr(W_img, kbwin)
             call W_img%fwd_ft
             ! W <- Wprev / ((W/ rho) x kernel)
-            Wnorm = 0.
             !$omp parallel do collapse(3) default(shared) schedule(static)&
-            !$omp private(h,k,m,phys,val,val_prev) proc_bind(close)&
-            !$omp reduction(+:Wnorm)
-            do h = lims(1,1),lims(1,2)
-                do k = lims(2,1),lims(2,2)
-                    do m = lims(3,1),lims(3,2)
+            !$omp private(h,k,m,phys,val,val_prev) proc_bind(close)
+            do h = self%lims(1,1),self%lims(1,2)
+                do k = self%lims(2,1),self%lims(2,2)
+                    do m = self%lims(3,1),self%lims(3,2)
                         phys     = W_img%comp_addr_phys([h, k, m])
                         val      = mycabs(W_img%get_cmat_at(phys))   !! ||C|| == ||C*||
                         val_prev = real(Wprev_img%get_cmat_at(phys)) !! Real(C) == Real(C*)
                         val      = min(val_prev/val, 1.e20)
                         call W_img%set_cmat_at( phys, cmplx(val, 0.)) 
-                        Wnorm    = Wnorm + val ! values are positive, no need to square (numerical stability)
                     end do
                 end do
             end do
             !$omp end parallel do
-            Wnorm = log10(1. + Wnorm / sqrt(real(product(lims(:,2) - lims(:,1)))))
-            if( Wnorm/Wnorm_prev < 1.05 ) exit
         enddo
         call Wprev_img%kill
         ! Fourier comps / rho
         !$omp parallel do collapse(3) default(shared) schedule(static)&
         !$omp private(h,k,m,phys,invrho) proc_bind(close)
-        do h = lims(1,1),lims(1,2)
-            do k = lims(2,1),lims(2,2)
-                do m = lims(3,1),lims(3,2)
+        do h = self%lims(1,1),self%lims(1,2)
+            do k = self%lims(2,1),self%lims(2,2)
+                do m = self%lims(3,1),self%lims(3,2)
                     phys   = W_img%comp_addr_phys([h, k, m])
                     invrho = real(W_img%get_cmat_at(phys)) !! Real(C) == Real(C*)
                     call self%mul_cmat_at(invrho,phys)
@@ -384,17 +375,16 @@ contains
 
     subroutine compress_exp( self )
         class(reconstructor), intent(inout) :: self
-        integer :: lims(3,2), phys(3), h, k, m, logi(3)
-        if(.not. self%cmat_exp_allocated .or. .not.self%rho_allocated)then
+        integer :: phys(3), h, k, m, logi(3)
+        if(.not. allocated(self%cmat_exp) .or. .not.allocated(self%rho_exp))then
             stop 'expanded complex or rho matrices do not exist; simple_reconstructor::compress_exp'
         endif
         call self%reset
-        lims = self%loop_lims(2)
         ! Fourier components & rho matrices compression
         !$omp parallel do collapse(3) private(h,k,m,phys,logi) schedule(static) default(shared) proc_bind(close)
-        do h = lims(1,1),lims(1,2)
-            do k = lims(2,1),lims(2,2)
-                do m = lims(3,1),lims(3,2)
+        do h = self%lims(1,1),self%lims(1,2)
+            do k = self%lims(2,1),self%lims(2,2)
+                do m = self%lims(3,1),self%lims(3,2)
                     if(abs(self%cmat_exp(h,k,m)) < TINY) cycle
                     logi = [h,k,m]
                     if (h > 0) then
@@ -535,8 +525,6 @@ contains
         class(reconstructor), intent(inout) :: self !< this instance
         if( allocated(self%rho_exp) ) deallocate(self%rho_exp)
         if( allocated(self%cmat_exp) ) deallocate(self%cmat_exp)
-        self%rho_exp_allocated  = .false.
-        self%cmat_exp_allocated = .false.
     end subroutine dealloc_exp
 
     !>  \brief  is a destructor
