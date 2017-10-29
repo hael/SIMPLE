@@ -369,7 +369,6 @@ contains
             endif
         end do
         !$omp end parallel do
-
         ! PREPARATION OF PARTICLES IN PFTCC
         if( .not. p%l_distr_exec ) write(*,'(A)') '>>> BUILDING PARTICLES'
         call prepimgbatch(b, p, batchsz_max)
@@ -387,7 +386,6 @@ contains
             end do
             !$omp end parallel do 
         end do
-
         ! DESTRUCT
         do imatch=1,batchsz_max
             call match_imgs(imatch)%kill_polarizer

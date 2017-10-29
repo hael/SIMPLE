@@ -168,7 +168,7 @@ contains
             corr = self%prev_corr
             do iref=1,self%nrefs
                 if( cls_pops(iref) == 0 )cycle
-                corrs     = self%pftcc_ptr%gencorrs(iref, self%iptcl) 
+                corrs     = self%pftcc_ptr%gencorrs(iref, self%iptcl)
                 loc       = maxloc(corrs)
                 inpl_ind  = loc(1)
                 inpl_corr = corrs(inpl_ind)         
@@ -438,7 +438,7 @@ contains
         endif 
         mi_joint = mi_joint / 2.
         ! update parameters
-        call self%a_ptr%e3set(self%iptcl, e3)
+        call self%a_ptr%e3set(self%iptcl,e3)
         call self%a_ptr%set_shift(self%iptcl, self%prev_shvec + self%best_shvec) 
         call self%a_ptr%set(self%iptcl, 'inpl',       real(self%best_rot))
         call self%a_ptr%set(self%iptcl, 'class',      real(self%best_class))

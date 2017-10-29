@@ -315,7 +315,6 @@ contains
         ! init object
         call self%init(dfx, dfy, angast)
         ! initialize
-        img      = cmplx(0.,0.)
         lims     = img%loop_lims(2)
         ldim     = img%get_ldim()
         inv_ldim = 1./real(ldim)
