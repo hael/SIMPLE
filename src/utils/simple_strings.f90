@@ -290,7 +290,6 @@ contains
         isnegative=.false.
         intg_this=intg
         if( intg < 0 )then
-            DebugPrint 'trying convert negative intg 2 str; simple_strings :: int2str'
             isnegative=.true.
             intg_this =  -intg
         end if

@@ -413,15 +413,13 @@ contains
         use simple_ori,  only: ori
         class(prime2D_srch), intent(in) :: self
         real :: dist, mat(2,2), u(2), x1(2), x2(2)
-        real :: euls(3), mi_class, mi_inpl, mi_joint
+        real :: e3, mi_class, mi_inpl, mi_joint
         ! get in-plane angle
-        euls     = 0.
-        euls(3)  = 360. - self%pftcc_ptr%get_rot(self%best_rot) ! change sgn to fit convention
-        if( euls(3) == 360. ) euls(3) = 0.
+        e3   = 360. - self%pftcc_ptr%get_rot(self%best_rot) ! change sgn to fit convention
         ! calculate in-plane rot dist (radians)
         u(1) = 0.
         u(2) = 1.
-        mat  = rotmat2d(euls(3))
+        mat  = rotmat2d(e3)
         x1   = matmul(u,mat)
         mat  = rotmat2d(self%a_ptr%e3get(self%iptcl))
         x2   = matmul(u,mat)
@@ -440,7 +438,7 @@ contains
         endif 
         mi_joint = mi_joint / 2.
         ! update parameters
-        call self%a_ptr%set_euler(self%iptcl, euls)
+        call self%a_ptr%e3set(self%iptcl, e3)
         call self%a_ptr%set_shift(self%iptcl, self%prev_shvec + self%best_shvec) 
         call self%a_ptr%set(self%iptcl, 'inpl',       real(self%best_rot))
         call self%a_ptr%set(self%iptcl, 'class',      real(self%best_class))

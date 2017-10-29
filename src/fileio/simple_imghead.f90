@@ -232,7 +232,6 @@ contains
                 stop 'Unsupported header type; initImgHead; simple_imghead'
         end select
         self%exists = .true.
-        DebugPrint  'created imghead ::new '
     end subroutine new
 
     ! I/O
