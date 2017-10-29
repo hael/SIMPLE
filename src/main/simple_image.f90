@@ -187,6 +187,10 @@ type :: image
     procedure          :: guinier
     procedure          :: spectrum
     procedure          :: shellnorm
+    procedure, private :: shellnorm_and_apply_filter_1
+    procedure, private :: shellnorm_and_apply_filter_2
+    generic            :: shellnorm_and_apply_filter =>&
+            &shellnorm_and_apply_filter_1, shellnorm_and_apply_filter_2
     procedure, private :: shellnorm_and_apply_filter_serial_1
     procedure, private :: shellnorm_and_apply_filter_serial_2
     generic            :: shellnorm_and_apply_filter_serial =>&
@@ -265,7 +269,6 @@ type :: image
     procedure          :: clip_inplace
     procedure          :: mirror
     procedure          :: norm
-    procedure          :: norm_serial
     procedure          :: norm_ext
     procedure          :: radius_norm
     procedure          :: noise_norm
@@ -2739,7 +2742,7 @@ contains
         endif
         self%rmat = sqrt(self%rmat)
     end subroutine cendist
-
+    
     !>  \brief masscen is for determining the center of mass of binarised image
     !!          only use this function for integer pixels shifting
     !! \return  xyz
@@ -2759,7 +2762,7 @@ contains
                 do k=1,self%ldim(3)
                     xyz  = xyz  + self%rmat(i,j,k) * [ci, cj, ck]
                     spix = spix + self%rmat(i,j,k)
-                    ck   = ck+1.
+                    ck   = ck + 1.
                 end do
                 cj = cj + 1.
             end do
@@ -2771,50 +2774,27 @@ contains
 
     !>  \brief center is for centering an image based on center of mass
     !! \param lp low-pass cut-off freq
-    !! \param neg negate image
     !! \param msk mask
-    !! \param thres hard or soft threshold
-    !! \param doshift logical flag for shifting
-    !! \return  ba
+    !! \return xyz shift
     !!
-    function center( self, lp, neg, msk, thres, doshift ) result( xyz )
-        class(image),     intent(inout) :: self
-        real,             intent(in)    :: lp
-        character(len=*), intent(in)    :: neg
-        real,    intent(in), optional   :: msk, thres
-        logical, intent(in), optional   :: doshift
+    function center( self, lp, msk ) result( xyz )
+        class(image),   intent(inout) :: self
+        real,           intent(in)    :: lp
+        real, optional, intent(in)    :: msk
         type(image) :: tmp
         real        :: xyz(3), rmsk
-        integer     :: dims(3)
-        logical     :: l_doshift
-        l_doshift = .true.
-        if( present(doshift) )l_doshift = doshift
-        tmp = self
-        dims = tmp%get_ldim()
+        call tmp%copy(self)
+        call tmp%bp(0., lp)
+        call tmp%bwd_ft
         if( present(msk) )then
             rmsk = msk
         else
-            rmsk = real( dims(1) )/2. - 5. ! 5 pixels outer width
+            rmsk = real( self%ldim(1) )/2. - 5. ! 5 pixels outer width
         endif
-        if(neg .eq. 'yes') call tmp%neg
-        call tmp%bp(0., lp)
-        if( tmp%ft ) call tmp%bwd_ft
-        if( present(thres) )then
-            call tmp%mask(rmsk, 'soft')
-            call tmp%norm_bin
-            call tmp%bin(thres)
-        else
-            call tmp%mask(rmsk, 'soft')
-            call tmp%bin_kmeans
-        endif
+        call tmp%mask(rmsk, 'soft')
+        call tmp%bin_kmeans
         xyz = tmp%masscen()
-        if( l_doshift )then
-            if( self%is_2d() )then
-                call self%shift([xyz(1),xyz(2),0.])
-            else
-                call self%shift([xyz(1),xyz(2),xyz(3)])
-            endif
-        endif
+        call tmp%kill
     end function center
 
     function center_serial( self, lp, msk ) result( xyz )
@@ -3420,7 +3400,7 @@ contains
                             sh = nint(hyp(real(h),real(k),real(l)))
                             if( sh == 0 .or. sh > lfny ) cycle
                             spec(sh) = spec(sh) + real(self%cmat(phys(1),phys(2),phys(3)))
-                            counts(sh) = counts(sh)+1.
+                            counts(sh) = counts(sh) + 1.
                         end do
                     end do
                 end do
@@ -3432,7 +3412,7 @@ contains
                             sh = nint(hyp(real(h),real(k),real(l)))
                             if( sh == 0 .or. sh > lfny ) cycle
                             spec(sh) = spec(sh) + csq(self%cmat(phys(1),phys(2),phys(3)))
-                            counts(sh) = counts(sh)+1.
+                            counts(sh) = counts(sh) + 1.
                         end do
                     end do
                 end do
@@ -3444,7 +3424,7 @@ contains
                             sh = nint(hyp(real(h),real(k),real(l)))
                             if( sh == 0 .or. sh > lfny ) cycle
                             spec(sh) = spec(sh) + abs(real(self%cmat(phys(1),phys(2),phys(3))))
-                            counts(sh) = counts(sh)+1.
+                            counts(sh) = counts(sh) + 1.
                         end do
                     end do
                 end do
@@ -3456,7 +3436,7 @@ contains
                             sh = nint(hyp(real(h),real(k),real(l)))
                             if( sh == 0 .or. sh > lfny ) cycle
                             spec(sh) = spec(sh) + abs(aimag(self%cmat(phys(1),phys(2),phys(3))))
-                            counts(sh) = counts(sh)+1.
+                            counts(sh) = counts(sh) + 1.
                         end do
                     end do
                 end do
@@ -3468,7 +3448,7 @@ contains
                             sh = nint(hyp(real(h),real(k),real(l)))
                             if( sh == 0 .or. sh > lfny ) cycle
                             spec(sh) = spec(sh) + cabs(self%cmat(phys(1),phys(2),phys(3)))
-                            counts(sh) = counts(sh)+1.
+                            counts(sh) = counts(sh) + 1.
                         end do
                     end do
                 end do
@@ -3480,7 +3460,7 @@ contains
                             sh = nint(hyp(real(h),real(k),real(l)))
                             if( sh == 0 .or. sh > lfny ) cycle
                             spec(sh) = spec(sh) + phase_angle(self%cmat(phys(1),phys(2),phys(3)))
-                            counts(sh) = counts(sh)+1.
+                            counts(sh) = counts(sh) + 1.
                         end do
                     end do
                 end do
@@ -3648,6 +3628,97 @@ contains
         self%cmat(phys(1),phys(2),phys(3)) = cmplx(real(comp),icomp)
     end subroutine shellnorm_and_apply_filter_serial_2
 
+    !> \brief  for normalising each shell to uniform (=1) power (assuming average has been 
+    !!         subtracted in real-space) and applying a filter function       
+    subroutine shellnorm_and_apply_filter_1( self, filter )
+        class(image), intent(inout) :: self
+        real,         intent(in)    :: filter(:)
+        real, allocatable  :: expec_pow(:)
+        integer            :: sh, h, k, l, phys(3), lfny, lims(3,2), filtsz
+        real               :: icomp, avg, wzero, fwght
+        filtsz    = size(filter)
+        wzero     = maxval(filter)
+        lfny      = self%get_lfny(1)
+        lims      = self%fit%loop_lims(2)
+        ! calculate the expectation value of the signal power in each shell
+        expec_pow = self%spectrum('power')
+        ! normalise
+        !$omp parallel do collapse(3) default(shared) private(h,k,l,sh,phys,fwght)&
+        !$omp schedule(static) proc_bind(close)
+        do h=lims(1,1),lims(1,2)
+            do k=lims(2,1),lims(2,2)
+                do l=lims(3,1),lims(3,2)
+                    sh   = nint(hyp(real(h),real(k),real(l)))
+                    phys = self%fit%comp_addr_phys([h,k,l])
+                     ! set filter weight
+                    if( sh > filtsz )then
+                        fwght = 0.
+                    else if( sh == 0 )then
+                        fwght = wzero
+                    else
+                        fwght = filter(sh)
+                    endif
+                    if( sh > lfny )then
+                        self%cmat(phys(1),phys(2),phys(3)) = cmplx(0.,0.)
+                    else
+                        if( sh == 0 ) cycle
+                        if( expec_pow(sh) > 0. )then
+                            self%cmat(phys(1),phys(2),phys(3)) =&
+                                &fwght * (self%cmat(phys(1),phys(2),phys(3)) / sqrt(expec_pow(sh)))
+                        endif
+                    endif
+                end do
+            end do
+        end do
+        !$omp end parallel do
+        ! take care of the central spot
+        phys  = self%fit%comp_addr_phys([0,0,0])
+        icomp = aimag(self%cmat(phys(1),phys(2),phys(3)))
+        self%cmat(phys(1),phys(2),phys(3)) = cmplx(wzero,icomp)
+    end subroutine shellnorm_and_apply_filter_1
+
+     !> \brief  for normalising each shell to uniform (=1) power (assuming average has been 
+    !!         subtracted in real-space) and applying a filter function       
+    subroutine shellnorm_and_apply_filter_2( self, filter )
+        class(image), intent(inout) :: self, filter
+        real, allocatable  :: expec_pow(:)
+        complex            :: comp
+        integer            :: sh, h, k, l, phys(3), lfny, lims(3,2), filtsz
+        real               :: icomp, avg, fwght
+        lfny      = self%get_lfny(1)
+        lims      = self%fit%loop_lims(2)
+        ! calculate the expectation value of the signal power in each shell
+        expec_pow = self%spectrum('power')
+        ! normalise
+        !$omp parallel do collapse(3) default(shared) private(h,k,l,sh,phys,comp,fwght)&
+        !$omp schedule(static) proc_bind(close)
+        do h=lims(1,1),lims(1,2)
+            do k=lims(2,1),lims(2,2)
+                do l=lims(3,1),lims(3,2)
+                    sh   = nint(hyp(real(h),real(k),real(l)))
+                    phys = self%fit%comp_addr_phys([h,k,l])
+                    comp  = filter%get_fcomp([h,k,l],phys)
+                    fwght = real(comp)
+                    if( sh > lfny )then
+                        self%cmat(phys(1),phys(2),phys(3)) = cmplx(0.,0.)
+                    else
+                        if( sh == 0 ) cycle
+                        if( expec_pow(sh) > 0. )then
+                            self%cmat(phys(1),phys(2),phys(3)) =&
+                                &fwght * (self%cmat(phys(1),phys(2),phys(3)) / sqrt(expec_pow(sh)))
+                        endif
+                    endif
+                end do
+            end do
+        end do
+        !$omp end parallel do
+        ! take care of the central spot
+        phys  = self%fit%comp_addr_phys([0,0,0])
+        comp  = filter%get_fcomp([0,0,0],phys)
+        icomp = aimag(self%cmat(phys(1),phys(2),phys(3)))
+        self%cmat(phys(1),phys(2),phys(3)) = cmplx(real(comp),icomp)
+    end subroutine shellnorm_and_apply_filter_2
+
     !> \brief apply_bfac  is for applying bfactor to an image
     !! \param b
     !!
@@ -3689,7 +3760,7 @@ contains
         real, intent(in)            :: hplim, lplim
         real, intent(in), optional  :: width
         integer                     :: h, k, l, lims(3,2), phys(3)
-        logical                     :: didft
+        logical                     :: didft, dohp, dolp
         real                        :: freq, hplim_freq, lplim_freq, wwidth, w
         wwidth =10.
         if( present(width) ) wwidth = width
@@ -3698,6 +3769,8 @@ contains
             call self%fwd_ft
             didft = .true.
         endif
+        dohp = abs(hplim) > TINY
+        dolp = abs(lplim) > TINY
         hplim_freq = self%fit%get_find(1,hplim)
         lplim_freq = self%fit%get_find(1,lplim)
         lims = self%fit%loop_lims(2)
@@ -3706,27 +3779,19 @@ contains
                 do l=lims(3,1),lims(3,2)
                     freq = hyp(real(h),real(k),real(l))
                     phys = self%comp_addr_phys([h,k,l])
-#ifdef USETINY
-                    if(abs(hplim) > TINY)then
-#else
-                    if(hplim/=0.)then
-#endif
+                    if( dohp )then
                         if(freq .lt. hplim_freq) then
                             self%cmat(phys(1),phys(2),phys(3)) = cmplx(0.,0.)
-                        else if(freq .le. hplim_freq+wwidth) then
+                        else if(freq .le. hplim_freq + wwidth) then
                             w = (1.-cos(((freq-hplim_freq)/wwidth)*pi))/2.
                             self%cmat(phys(1),phys(2),phys(3)) = &
                             &self%cmat(phys(1),phys(2),phys(3)) * w
                         endif
                     endif
-#ifdef USETINY
-                    if(abs(lplim) > TINY)then
-#else
-                    if(lplim/=0.)then
-#endif
+                    if( dolp )then
                         if(freq .gt. lplim_freq)then
                             self%cmat(phys(1),phys(2),phys(3)) = cmplx(0.,0.)
-                        else if(freq .ge. lplim_freq-wwidth)then
+                        else if(freq .ge. lplim_freq - wwidth)then
                             w = (cos(((freq-(lplim_freq-wwidth))/wwidth)*pi)+1.)/2.
                             self%cmat(phys(1),phys(2),phys(3)) = &
                             &self%cmat(phys(1),phys(2),phys(3)) * w
@@ -5803,9 +5868,9 @@ contains
             stop 'undefined which parameter; mask; simple_image'
         end select
         ! init center as origin
-        forall(i=1:self%ldim(1)) cis(i) = -real(self%ldim(1)-1)/2. + real(i-1)
-        forall(i=1:self%ldim(2)) cjs(i) = -real(self%ldim(2)-1)/2. + real(i-1)
-        if(self%is_3d())forall(i=1:self%ldim(3)) cks(i) = -real(self%ldim(3)-1)/2. + real(i-1)
+        forall(i=1:self%ldim(1)) cis(i) = -real(self%ldim(1))/2. + real(i-1)
+        forall(i=1:self%ldim(2)) cjs(i) = -real(self%ldim(2))/2. + real(i-1)
+        if(self%is_3d())forall(i=1:self%ldim(3)) cks(i) = -real(self%ldim(3))/2. + real(i-1)
         ! MASKING
         if( soft )then
             ! Soft masking
@@ -6111,43 +6176,20 @@ contains
         if( didft ) call self%fwd_ft
     end subroutine mirror
 
-    !> \brief norm  is for statistical normalization of an image
-    !! \param hfun
-    !! \param err error flag
-    !!
-    subroutine norm( self, err )
-        class(image),      intent(inout) :: self
-        logical, optional, intent(out)   :: err
-        integer :: n_nans
-        real    :: maxv, minv, ave, sdev
-        if( self%ft )then
-            write(*,*) 'WARNING: Cannot normalize FTs; norm; simple_image'
-            return
-        endif
-        call self%cure(maxv, minv, ave, sdev, n_nans)
-        if( sdev > 0. )then
-            if( present(err) ) err = .false.
-        else
-            write(*,'(a)') 'WARNING, undefined variance; norm; simple_image'
-            if( present(err) ) err = .true.
-        endif
-    end subroutine norm
-
-    subroutine norm_serial( self  )
+    subroutine norm( self  )
         class(image), intent(inout) :: self
         integer :: i, j, k, npix
-        real    :: ave, sdev, var, ep, dev
+        real    :: ave, var, ep, dev
         npix   = product(self%ldim)
         ave    = sum(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3))) / real(npix)
         if( abs(ave) > TINY ) self%rmat = self%rmat - ave
         ep     = sum(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)))
         var    = sum(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3))**2.0)
         var    = (var-ep**2./real(npix))/(real(npix)-1.) ! corrected two-pass formula
-        sdev   = sqrt(var)
-        if( is_a_number(sdev) )then
-            if( sdev > 0. ) self%rmat = self%rmat/sdev
+        if( is_a_number(var) )then
+            if( var > 0. ) self%rmat = self%rmat / sqrt(var)
         endif
-    end subroutine norm_serial
+    end subroutine norm
 
     !> \brief norm_ext  is for normalization of an image using inputted average and standard deviation
     !! \param avg Average

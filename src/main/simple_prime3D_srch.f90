@@ -52,7 +52,6 @@ type prime3D_srch
     character(len=STDLEN)            :: shbarr         = ''      !< shift barrier flag
     logical                          :: doshift        = .true.  !< 2 indicate whether 2 serch shifts
     logical                          :: greedy_inpl    = .true.  !< 2 indicate whether in-plane search is greedy or not
-    logical                          :: exists         = .false. !< 2 indicate existence
   contains
     procedure          :: new
     procedure          :: exec_prime3D_srch
@@ -274,7 +273,6 @@ contains
         lims_init(:,2) =  SHC_INPL_TRSHWDTH
         call self%shsrch_obj%new(self%pftcc_ptr, lims, lims_init=lims_init,&
             &shbarrier=self%shbarr, nrestarts=3, maxits=60)
-        self%exists = .true.
         DebugPrint '>>> PRIME3D_SRCH::CONSTRUCTED NEW SIMPLE_PRIME3D_SRCH OBJECT'
     end subroutine new
 

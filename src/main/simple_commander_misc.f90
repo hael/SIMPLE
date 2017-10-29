@@ -210,11 +210,7 @@ contains
         p = params(cline) ! parameters generated
         p%cenlp = p%lp
         ! center of mass centering
-        if( cline%defined('thres') )then
-            call masscen_imgfile(p%stk, p%outstk, p%smpd, p%lp, p%neg, p%msk, p%thres)
-        else
-            call masscen_imgfile(p%stk, p%outstk, p%smpd, p%lp, p%neg, p%msk)
-        endif
+        call masscen_imgfile(p%stk, p%outstk, p%smpd, p%lp, p%msk)
         ! end gracefully
         call simple_end('**** SIMPLE_MASSCEN NORMAL STOP ****')
     end subroutine exec_masscen

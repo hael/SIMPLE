@@ -1963,11 +1963,10 @@ select case(prg)
         ! set optional keys
         keys_optional(1) = 'msk'
         keys_optional(2) = 'neg'
-        keys_optional(3) = 'thres'
-        keys_optional(4) = 'outstk'
+        keys_optional(3) = 'outstk'
         ! parse command line
         if( describe ) call print_doc_masscen
-        call cline%parse(keys_required(:3), keys_optional(:4))
+        call cline%parse(keys_required(:3), keys_optional(:3))
         ! execute
         call xmasscen%execute(cline)
     case( 'print_cmd_dict' )

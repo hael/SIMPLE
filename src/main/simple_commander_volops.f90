@@ -104,7 +104,7 @@ contains
         allocate(shvec(p%nstates,3))
         do istate=1,p%nstates
             call b%vol%read(p%vols(istate))
-            shvec(istate,:) = b%vol%center(p%cenlp, 'no', p%msk)
+            shvec(istate,:) = b%vol%center(p%cenlp, p%msk)
             print *, shvec
             if( istate == 1 ) call b%vol%write(p%outvol)
             if( debug )then

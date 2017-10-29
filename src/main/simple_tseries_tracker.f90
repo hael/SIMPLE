@@ -138,7 +138,9 @@ contains
         endif
         if( mod(iframe,CENRATE) == 0 )then
             ! center the reference
-            xyz = reference%center(cenlp, neg)
+            if( l_neg ) call reference%neg
+            xyz = reference%center(cenlp)
+            if( l_neg ) call reference%neg
         endif
     end subroutine update_reference
 

@@ -568,11 +568,9 @@ contains
     !! \param fname  input filename
     !! \param smpd  sampling distance
     !! \param  msk threshold
-    subroutine masscen_imgfile( fname2masscen, fname, smpd, lp, neg, msk, tres )
+    subroutine masscen_imgfile( fname2masscen, fname, smpd, lp, msk )
         character(len=*), intent(in) :: fname2masscen, fname
-        real,             intent(in) :: smpd, lp  !< low-pass cutoff
-        character(len=*), intent(in) :: neg       !< use negative image
-        real, optional,   intent(in) :: msk, tres !< interpolation type
+        real,             intent(in) :: smpd, lp, msk
         type(image) :: img
         integer     :: i, n, ldim(3)
         real        :: xyz(3)
@@ -584,7 +582,7 @@ contains
         do i=1,n
             call progress(i,n)
             call img%read(fname2masscen, i)
-            xyz = img%center(lp, neg, msk, tres)
+            xyz = img%center(lp, msk)
             call img%write(fname, i)
         end do
         call img%kill

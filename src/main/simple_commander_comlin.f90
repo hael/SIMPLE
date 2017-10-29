@@ -154,7 +154,7 @@ contains
         if( (p%l_distr_exec .and. p%refine.eq.'no') .or. .not.p%l_distr_exec )then
             ! center volume
             call b%vol%read(p%vols(1))
-            shvec = b%vol%center(p%cenlp,'no',p%msk)
+            shvec = b%vol%center(p%cenlp,p%msk)
             if( p%l_distr_exec .and. p%part.eq.1 )then
                 ! writes shifts for distributed execution
                 call oshift%new(1)

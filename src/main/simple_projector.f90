@@ -151,48 +151,25 @@ contains
     end subroutine fproject
 
     !> \brief  extracts a polar FT from a volume's expanded FT (self)
-    subroutine fproject_polar( self, iref, e, pftcc, iseven, serial )
+    subroutine fproject_polar( self, iref, e, pftcc, iseven )
         use simple_polarft_corrcalc, only: polarft_corrcalc
         use simple_math,             only: deg2rad
         class(projector),        intent(inout) :: self   !< projector object
         integer,                 intent(in)    :: iref   !< which reference
-        class(ori),              intent(inout) :: e      !< orientation
+        class(ori),              intent(in)    :: e      !< orientation
         class(polarft_corrcalc), intent(inout) :: pftcc  !< object that holds the polar image
         logical,                 intent(in)    :: iseven !< eo flag
-        logical, optional,       intent(in)    :: serial !< thread or serial
-        integer :: irot, k, ldim(3), pdim(3), ldim_polft(3)
+        integer :: irot, k, pdim(3)
         real    :: vec(3), loc(3)
-        logical :: l_serial = .false.
-        if( present(serial) )l_serial = serial
-        ldim            = self%get_ldim()
-        if(ldim(3) == 1)stop 'only for interpolation from 3D images; fproject_polar_1; simple_projector'
-        ldim_polft(1:2) = ldim(1:2)
-        ldim_polft(3)   = 1
-        pdim            = pftcc%get_pdim()
-        if( l_serial )then
-            ! this is the serial version of the threaded version just below
-            do irot=1,pdim(1)
-                do k=pdim(2),pdim(3)
-                    vec(:2) = pftcc%get_coord(irot,k)
-                    vec(3)  = 0.
-                    loc     = matmul(vec,e%get_mat())
-                    call pftcc%set_ref_fcomp(iref, irot, k, self%interp_fcomp(loc), iseven)
-                end do
+        pdim = pftcc%get_pdim()
+        do irot=1,pdim(1)
+            do k=pdim(2),pdim(3)
+                vec(:2) = pftcc%get_coord(irot,k)
+                vec(3)  = 0.
+                loc     = matmul(vec,e%get_mat())
+                call pftcc%set_ref_fcomp(iref, irot, k, self%interp_fcomp(loc), iseven)
             end do
-        else
-            ! threaded version
-            !$omp parallel do collapse(2) schedule(static) default(shared)&
-            !$omp private(irot,k,vec,loc) proc_bind(close)
-            do irot=1,pdim(1)
-                do k=pdim(2),pdim(3)
-                    vec(:2) = pftcc%get_coord(irot,k)
-                    vec(3)  = 0.
-                    loc     = matmul(vec,e%get_mat())
-                    call pftcc%set_ref_fcomp(iref, irot, k, self%interp_fcomp(loc), iseven)
-                end do
-            end do
-            !$omp end parallel do
-        endif
+        end do
     end subroutine fproject_polar
 
     ! INTERPOLATORS

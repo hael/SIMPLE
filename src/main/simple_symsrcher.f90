@@ -53,7 +53,7 @@ contains
         do i = 1, noris
             call read_img%read(p%stk,i)
             ! center image
-            sh1 = read_img%center(p%cenlp, 'no', p%msk)
+            sh1 = read_img%center(p%cenlp, p%msk)
             call dsym_os%set(i, 'x', -sh1(1))
             call dsym_os%set(i, 'y', -sh1(2))
             ! rotational image

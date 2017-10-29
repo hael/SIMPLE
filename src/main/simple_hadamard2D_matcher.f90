@@ -4,7 +4,6 @@ module simple_hadamard2D_matcher
 !$ use omp_lib_kinds
 #include "simple_lib.f08"
 use simple_polarft_corrcalc, only: polarft_corrcalc
-use simple_prime2D_srch,     only: prime2D_srch
 use simple_ori,              only: ori
 use simple_build,            only: build
 use simple_params,           only: params
@@ -13,6 +12,7 @@ use simple_hadamard_common   ! use all in there
 use simple_filterer          ! use all in there
 use simple_timer             ! use all in there
 use simple_classaverager,    ! use all in there
+use simple_prime2D_srch,     ! use all in there
 implicit none
 
 public :: prime2D_exec, preppftcc4align, pftcc
@@ -41,7 +41,7 @@ contains
         class(cmdline), intent(inout) :: cline
         integer,        intent(in)    :: which_iter
         logical,        intent(inout) :: converged
-        integer, allocatable :: prev_pops(:), pinds(:), cls_pops(:)
+        integer, allocatable :: prev_pops(:), pinds(:)
         logical, allocatable :: ptcl_mask(:)
         integer :: iptcl, icls, j, fnr
         real    :: corr_thresh, frac_srch_space, skewness, extr_thresh
@@ -168,23 +168,12 @@ contains
         endif
 
         ! STOCHASTIC IMAGE ALIGNMENT
-        ! gather class populations
-        if( b%a%isthere('class') )then
-            if( p%weights2D .eq. 'yes' .and. which_iter > 3 )then
-                cls_pops = b%a%get_pops('class', consider_w=.true., maxn=p%ncls)
-            else
-                cls_pops = b%a%get_pops('class', consider_w=.false., maxn=p%ncls)
-            endif
-        else
-            ! first iteration, no class assignment: all classes are up for grab
-            allocate(cls_pops(p%ncls), source=MINCLSPOPLIM+1, stat=alloc_stat)
-            allocchk("simple_hadamard2D_matcher; prime2D_exec cls_pops")
-        endif
         ! create the search objects, need to re-create every round because parameters are changing
+        call prep4prime2D_srch( b, p, which_iter )
         allocate( primesrch2D(p%fromp:p%top), stat=alloc_stat)
         allocchk("In hadamard2D_matcher::prime2D_exec primesrch2D objects ")
         do iptcl=p%fromp,p%top
-            call primesrch2D(iptcl)%new(iptcl, pftcc, b%a, p, cls_pops)
+            call primesrch2D(iptcl)%new(iptcl, pftcc, b%a, p)
         end do
         ! generate CTF matrices
         if( p%ctf .ne. 'no' ) call pftcc%create_polar_ctfmats(b%a)
@@ -229,6 +218,9 @@ contains
                     !$omp end parallel do
                 endif
         end select
+        ! pftcc & primesrch2D not needed anymore
+        call pftcc%kill
+        deallocate( primesrch2D )
         if( L_BENCH ) rt_align = toc(t_align)
         DebugPrint ' hadamard2D_matcher; completed alignment'
 
@@ -265,17 +257,8 @@ contains
             call cavger_write(p%refs_even, 'even'  )
             call cavger_write(p%refs_odd,  'odd'   )
         endif
+        call cavger_kill
         if( L_BENCH ) rt_cavg = toc(t_cavg)
-
-        ! DESTRUCT
-        if( .not. p%l_distr_exec )then
-            do iptcl=p%fromp,p%top
-                call primesrch2D(iptcl)%kill
-            end do
-            deallocate( primesrch2D )
-            call pftcc%kill
-            call cavger_kill
-        endif
 
         ! REPORT CONVERGENCE
         if( p%l_distr_exec )then
@@ -327,19 +310,19 @@ contains
 
      !>  \brief  prepares the polarft corrcalc object for search
     subroutine preppftcc4align( b, p, which_iter )
-        use simple_polarizer,     only: polarizer
+        use simple_polarizer, only: polarizer
         class(build),  intent(inout) :: b
         class(params), intent(inout) :: p
         integer,       intent(in)    :: which_iter
         type(polarizer), allocatable :: match_imgs(:)
         type(ori) :: o
-        integer   :: iptcl, icls, pop, pop_even, pop_odd, istate, filtsz, filnum, io_stat
+        integer   :: iptcl, icls, pop, pop_even, pop_odd
         integer   :: batchlims(2), batchsz, imatch, batchsz_max, iptcl_batch
         logical   :: do_center
         real      :: xyz(3)
         if( .not. p%l_distr_exec ) write(*,'(A)') '>>> BUILDING PRIME2D SEARCH ENGINE'
 
-        ! CREATE THE POLARFT_CORRCALC OBJECT
+        ! create the polarft_corrcalc object
         call pftcc%new(p%ncls, p, nint(b%a%get_all('eo', [p%fromp,p%top])))
         ! prepare the polarizer images
         call b%img_match%init_polarizer(pftcc, p%alpha)
@@ -370,13 +353,13 @@ contains
                 ! prepare the references
                 do_center = (p%oritab /= '' .and. (pop > MINCLSPOPLIM) .and. (which_iter > 2))
                 ! here we are determining the shifts and map them back to classes
-                call prep2Dref_serial(b, p, cavgs_merged(1,icls), match_imgs(icls), icls, center=do_center, xyz_out=xyz)
+                call prep2Dref(b, p, cavgs_merged(1,icls), match_imgs(icls), icls, center=do_center, xyz_out=xyz)
                 if( pop_even >= MINCLSPOPLIM .and. pop_odd >= MINCLSPOPLIM )then
                     ! here we are passing in the shifts and do NOT map them back to classes
-                    call prep2Dref_serial(b, p, cavgs_even(1,icls), match_imgs(icls), icls, center=do_center, xyz_in=xyz) 
+                    call prep2Dref(b, p, cavgs_even(1,icls), match_imgs(icls), icls, center=do_center, xyz_in=xyz) 
                     call match_imgs(icls)%polarize(pftcc, icls, isptcl=.false., iseven=.true.)  ! 2 polar coords
                     ! here we are passing in the shifts and do NOT map them back to classes
-                    call prep2Dref_serial(b, p, cavgs_odd(1,icls), match_imgs(icls), icls, center=do_center, xyz_in=xyz)
+                    call prep2Dref(b, p, cavgs_odd(1,icls), match_imgs(icls), icls, center=do_center, xyz_in=xyz)
                     call match_imgs(icls)%polarize(pftcc, icls, isptcl=.false., iseven=.false.) ! 2 polar coords
                 else
                     ! put the merged class average in both even and odd positions
@@ -398,79 +381,22 @@ contains
             !$omp schedule(static) proc_bind(close)
             do iptcl=batchlims(1),batchlims(2)
                 imatch = iptcl - batchlims(1) + 1
-                call prepimg4align_serial(b, p, iptcl, b%imgbatch(imatch), match_imgs(imatch), is3D=.false.)
+                call prepimg4align(b, p, iptcl, b%imgbatch(imatch), match_imgs(imatch), is3D=.false.)
                 ! transfer to polar coordinates
                 call match_imgs(imatch)%polarize(pftcc, iptcl, .true., .true.)
             end do
             !$omp end parallel do 
         end do
+
+        ! DESTRUCT
+        do imatch=1,batchsz_max
+            call match_imgs(imatch)%kill_polarizer
+            call match_imgs(imatch)%kill
+            call b%imgbatch(imatch)%kill
+        end do
+        deallocate(match_imgs, b%imgbatch)
+
         DebugPrint '*** hadamard2D_matcher ***: finished preppftcc4align'
     end subroutine preppftcc4align
-
-    !>  \brief  prepares the polarft corrcalc object for search
-    ! subroutine preppftcc4align( b, p, which_iter )
-    !     class(build),  intent(inout) :: b
-    !     class(params), intent(inout) :: p
-    !     integer,       intent(in)    :: which_iter
-    !     type(ori) :: o
-    !     integer   :: iptcl, icls, pop, pop_even, pop_odd, istate, filtsz, filnum, io_stat
-    !     logical   :: do_center
-    !     real      :: xyz(3)
-    !     if( .not. p%l_distr_exec ) write(*,'(A)') '>>> BUILDING PRIME2D SEARCH ENGINE'
-
-    !     ! CREATE THE POLARFT_CORRCALC OBJECT
-    !     call pftcc%new(p%ncls, p, nint(b%a%get_all('eo', [p%fromp,p%top])))
-    !     ! prepare the polarizer
-    !     call b%img_match%init_polarizer(pftcc, p%alpha)
-
-    !     ! PREPARATION OF REFERENCES IN PFTCC
-    !     ! read references and transform into polar coordinates
-    !     if( .not. p%l_distr_exec ) write(*,'(A)') '>>> BUILDING REFERENCES'
-    !     do icls=1,p%ncls
-    !         call progress(icls, p%ncls)
-    !         pop      = 1
-    !         pop_even = 0
-    !         pop_odd  = 0
-    !         if( p%oritab /= '' )then
-    !             pop      = b%a%get_pop(icls, 'class'      )
-    !             pop_even = b%a%get_pop(icls, 'class', eo=0)
-    !             pop_odd  = b%a%get_pop(icls, 'class', eo=1)
-    !         endif
-    !         if( pop > 0 )then
-    !             ! prepare the references
-    !             do_center = (p%oritab /= '' .and. (pop > MINCLSPOPLIM) .and. (which_iter > 2))
-    !             call cavger_get_cavg(icls, 'merged', b%img)
-    !             ! here we are determining the shifts and map them back to classes
-    !             call prep2Dref(b, p, icls, center=do_center, xyz_out=xyz)
-    !             if( pop_even >= MINCLSPOPLIM .and. pop_odd >= MINCLSPOPLIM )then
-    !                 call cavger_get_cavg(icls, 'even', b%img)
-    !                 ! here we are passing in the shifts and do NOT map them back to classes
-    !                 call prep2Dref(b, p, icls, center=do_center, xyz_in=xyz) 
-    !                 call b%img_match%polarize(pftcc, icls, isptcl=.false., iseven=.true.) ! 2 polar coords
-    !                 call cavger_get_cavg(icls, 'odd', b%img)
-    !                 ! here we are passing in the shifts and do NOT map them back to classes
-    !                 call prep2Dref(b, p, icls, center=do_center, xyz_in=xyz)
-    !                 call b%img_match%polarize(pftcc, icls, isptcl=.false., iseven=.false.) ! 2 polar coords
-    !             else
-    !                 ! put the merged class average in both even and odd positions
-    !                 call b%img_match%polarize(pftcc, icls, isptcl=.false., iseven=.true. ) ! 2 polar coords
-    !                 call pftcc%cp_even2odd_ref(icls)
-    !             endif   
-    !         endif
-    !     end do
-
-    !     ! PREPARATION OF PARTICLES IN PFTCC
-    !     ! read particle images and create polar projections
-    !     if( .not. p%l_distr_exec ) write(*,'(A)') '>>> BUILDING PARTICLES'
-    !     do iptcl=p%fromp,p%top
-    !         call progress(iptcl - p%fromp + 1, p%top - p%fromp + 1)
-    !         call read_img_and_norm( b, p, iptcl )
-    !         o = b%a%get_ori(iptcl)
-    !         call prepimg4align(b, p, o, is3D=.false.)
-    !         ! transfer to polar coordinates
-    !         call b%img_match%polarize(pftcc, iptcl, .true., .true.)
-    !     end do
-    !     DebugPrint '*** hadamard2D_matcher ***: finished preppftcc4align'
-    ! end subroutine preppftcc4align
 
 end module simple_hadamard2D_matcher

@@ -662,10 +662,8 @@ contains
             do icls=1,ncls
                 even_img = cavgs_even(istate,icls)
                 odd_img  = cavgs_odd(istate,icls)
-                call even_img%norm(err=err)
-                if( err ) call even_img%ran
-                call odd_img%norm(err=err)
-                if( err ) call odd_img%ran
+                call even_img%norm
+                call odd_img%norm
                 if( pp%l_innermsk )then
                     call even_img%mask(pp%msk, 'soft', inner=pp%inner, width=pp%width)
                     call odd_img%mask(pp%msk, 'soft', inner=pp%inner, width=pp%width)

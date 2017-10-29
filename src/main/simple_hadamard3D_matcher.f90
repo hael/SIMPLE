@@ -17,7 +17,7 @@ use simple_prime3D_srch,     ! use all in there
 implicit none
 
 public :: prime3D_find_resrange, prime3D_exec, gen_random_model
-public :: preppftcc4align, prep_refs_pftcc4align, pftcc
+public :: preppftcc4align, pftcc
 
 private
 #include "simple_local_flags.inc"
@@ -480,14 +480,20 @@ contains
             call killrecvols(b, p)
         endif
     end subroutine gen_random_model
-    
+
     !> Prepare alignment search using polar projection Fourier cross correlation
     subroutine preppftcc4align( b, p, cline, ppfts_fname )
+        use simple_polarizer, only: polarizer
         class(build),               intent(inout) :: b       !< build object
         class(params),              intent(inout) :: p       !< param object
         class(cmdline),             intent(inout) :: cline   !< command line
         character(len=*), optional, intent(in)    :: ppfts_fname
-        integer :: nrefs
+        type(polarizer), allocatable :: match_imgs(:)
+        type(ori) :: o
+        integer   :: cnt, s, iptcl, iref, istate, ntot, nrefs, ldim(3)
+        integer   :: batchlims(2), batchsz, imatch, iptcl_batch
+        logical   :: do_center
+        real      :: xyz(3)
         if( .not. p%l_distr_exec ) write(*,'(A)') '>>> BUILDING PRIME3D SEARCH ENGINE'
         ! must be done here since p%kfromto is dynamically set based on FSC from previous round
         ! or based on dynamic resolution limit update
@@ -497,20 +503,7 @@ contains
         else
             call pftcc%new(nrefs, p)
         endif
-        call prep_refs_pftcc4align( b, p, cline )
-        call prep_ptcls_pftcc4align( b, p, ppfts_fname )
-        DebugPrint '*** hadamard3D_matcher ***: finished preppftcc4align'
-    end subroutine preppftcc4align
 
-    !> Prepare reference images and create polar projections
-    subroutine prep_refs_pftcc4align( b, p, cline )
-        class(build),   intent(inout) :: b          !< build object
-        class(params),  intent(inout) :: p          !< param object
-        class(cmdline), intent(inout) :: cline      !< command line
-        type(ori) :: o
-        integer   :: cnt, s, iref, nrefs, ldim(3)
-        logical   :: do_center
-        real      :: xyz(3)
         ! PREPARATION OF REFERENCES IN PFTCC
         ! read reference volumes and create polar projections
         nrefs = p%nspace * p%nstates
@@ -529,67 +522,156 @@ contains
             if( p%eo .ne. 'no' )then
                 if( .not. p%l_distr_exec ) write(*,'(A)') '>>> BUILDING EVEN REFERENCES'
                 call preprefvol(b, p, cline, s, p%vols_even(s), do_center, xyz)
-                cnt = 0
+                !$omp parallel do default(shared) private(iref) schedule(static) proc_bind(close)
                 do iref=1,p%nspace
-                    cnt = cnt + 1
-                    call progress(cnt, p%nspace)
-                    o = b%e%get_ori(iref)
-                    call b%vol%fproject_polar(cnt, o, pftcc, iseven=.true.) ! polar central sections
+                    call b%vol%fproject_polar((s - 1) * p%nspace + iref, b%e%get_ori(iref), pftcc, iseven=.true.)
                 end do
+                !$omp end parallel do
                 if( .not. p%l_distr_exec ) write(*,'(A)') '>>> BUILDING ODD REFERENCES'
                 call preprefvol(b, p, cline, s, p%vols_odd(s), do_center, xyz)
-                cnt = 0
+                !$omp parallel do default(shared) private(iref) schedule(static) proc_bind(close)
                 do iref=1,p%nspace
-                    cnt = cnt + 1
-                    call progress(cnt, p%nspace)
-                    o = b%e%get_ori(iref)
-                    call b%vol%fproject_polar(cnt, o, pftcc, iseven=.false.) ! polar central sections
+                    call b%vol%fproject_polar((s - 1) * p%nspace + iref, b%e%get_ori(iref), pftcc, iseven=.false.)
                 end do
+                !$omp end parallel do
             else
-                call preprefvol(b, p, cline, s, p%vols(s), do_center, xyz )
+                call preprefvol(b, p, cline, s, p%vols(s), do_center, xyz)
+                !$omp parallel do default(shared) private(iref) schedule(static) proc_bind(close)
                 do iref=1,p%nspace
-                    cnt = cnt + 1
-                    call progress(cnt, nrefs)
-                    o = b%e%get_ori(iref)
-                    call b%vol%fproject_polar(cnt, o, pftcc, iseven=.true.) ! polar central sections
+                    call b%vol%fproject_polar((s - 1) * p%nspace + iref, b%e%get_ori(iref), pftcc, iseven=.true.)
                 end do
+                !$omp end parallel do
             endif
         end do
         ! cleanup
         call b%vol%kill_expanded
-        ! bring back the original b%vol size for clean exit
+        ! bring back the original b%vol size
         call b%vol%new([p%box,p%box,p%box], p%smpd)
-    end subroutine prep_refs_pftcc4align
+
+        ! PREPARATION OF PARTICLES IN PFTCC
+        ! prepare the polarizer images
+        call b%img_match%init_polarizer(pftcc, p%alpha)
+        allocate(match_imgs(MAXIMGBATCHSZ))
+        do imatch=1,MAXIMGBATCHSZ
+            call match_imgs(imatch)%new([p%boxmatch, p%boxmatch, 1], p%smpd)
+            call match_imgs(imatch)%copy_polarizer(b%img_match)
+        end do
+        if( .not. p%l_distr_exec ) write(*,'(A)') '>>> BUILDING PARTICLES'
+        call prepimgbatch(b, p, MAXIMGBATCHSZ)
+        do iptcl_batch=p%fromp,p%top,MAXIMGBATCHSZ
+            batchlims = [iptcl_batch,min(p%top,iptcl_batch + MAXIMGBATCHSZ - 1)]
+            batchsz   = batchlims(2) - batchlims(1) + 1
+            call read_imgbatch( b, p, batchlims)
+            !$omp parallel do default(shared) private(iptcl,imatch)&
+            !$omp schedule(static) proc_bind(close)
+            do iptcl=batchlims(1),batchlims(2)
+                imatch = iptcl - batchlims(1) + 1
+                call prepimg4align(b, p, iptcl, b%imgbatch(imatch), match_imgs(imatch), is3D=.true.)
+                ! transfer to polar coordinates
+                call match_imgs(imatch)%polarize(pftcc, iptcl, .true., .true.)
+            end do
+            !$omp end parallel do 
+        end do
+
+        ! DESTRUCT
+        do imatch=1,MAXIMGBATCHSZ
+            call match_imgs(imatch)%kill_polarizer
+            call match_imgs(imatch)%kill
+            call b%imgbatch(imatch)%kill
+        end do
+        deallocate(match_imgs, b%imgbatch)
+
+        DebugPrint '*** hadamard3D_matcher ***: finished preppftcc4align'
+    end subroutine preppftcc4align
 
     !> Prepare particle images and create polar projections
-    subroutine prep_ptcls_pftcc4align( b, p, ppfts_fname )
-        use simple_fileio, only: file_exists
-        class(build),               intent(inout) :: b          !< build object
-        class(params),              intent(inout) :: p          !< param object
-        character(len=*), optional, intent(in)    :: ppfts_fname
-        type(ori) :: o
-        integer   :: cnt, s, iptcl, istate, ntot
-        if( .not. p%l_distr_exec ) write(*,'(A)') '>>> BUILDING PARTICLES'
-        ! initialize
-        call b%img_match%init_polarizer(pftcc, p%alpha)
-        ntot = (p%top-p%fromp+1) * p%nstates
-        cnt  = 0
-        do s=1,p%nstates
-            if( b%a%get_pop(s, 'state') == 0 )then
-                ! empty state
-                cycle
-            endif
-            do iptcl=p%fromp,p%top
-                o      = b%a%get_ori(iptcl)
-                istate = nint(o%get('state'))
-                cnt = cnt + 1
-                if( istate /= s ) cycle
-                call progress(cnt, ntot)
-                call read_img_and_norm( b, p, iptcl )
-                call prepimg4align(b, p, o, is3D=.true.)
-                call b%img_match%polarize(pftcc, iptcl, .true., .true.)
-            end do
-        end do
-    end subroutine prep_ptcls_pftcc4align
+    ! subroutine prep_ptcls_pftcc4align( b, p, ppfts_fname )
+    !     use simple_fileio, only: file_exists
+    !     class(build),               intent(inout) :: b          !< build object
+    !     class(params),              intent(inout) :: p          !< param object
+    !     character(len=*), optional, intent(in)    :: ppfts_fname
+    !     type(ori) :: o
+    !     integer   :: cnt, s, iptcl, istate, ntot
+    !     if( .not. p%l_distr_exec ) write(*,'(A)') '>>> BUILDING PARTICLES'
+    !     ! initialize
+    !     call b%img_match%init_polarizer(pftcc, p%alpha)
+    !     ntot = (p%top-p%fromp+1) * p%nstates
+    !     cnt  = 0
+    !     do s=1,p%nstates
+    !         if( b%a%get_pop(s, 'state') == 0 )then
+    !             ! empty state
+    !             cycle
+    !         endif
+    !         do iptcl=p%fromp,p%top
+    !             o      = b%a%get_ori(iptcl)
+    !             istate = nint(o%get('state'))
+    !             cnt = cnt + 1
+    !             if( istate /= s ) cycle
+    !             call progress(cnt, ntot)
+    !             call read_img_and_norm( b, p, iptcl )
+    !             call prepimg4align(b, p, o, is3D=.true.)
+    !             call b%img_match%polarize(pftcc, iptcl, .true., .true.)
+    !         end do
+    !     end do
+    ! end subroutine prep_ptcls_pftcc4align
+
+    !> Prepare reference images and create polar projections
+    ! subroutine prep_refs_pftcc4align( b, p, cline )
+    !     class(build),   intent(inout) :: b          !< build object
+    !     class(params),  intent(inout) :: p          !< param object
+    !     class(cmdline), intent(inout) :: cline      !< command line
+    !     type(ori) :: o
+    !     integer   :: cnt, s, iref, nrefs, ldim(3)
+    !     logical   :: do_center
+    !     real      :: xyz(3)
+    !     ! PREPARATION OF REFERENCES IN PFTCC
+    !     ! read reference volumes and create polar projections
+    !     nrefs = p%nspace * p%nstates
+    !     cnt   = 0
+    !     if( .not. p%l_distr_exec ) write(*,'(A)') '>>> BUILDING REFERENCES'
+    !     do s=1,p%nstates
+    !         if( p%oritab .ne. '' )then
+    !             if( b%a%get_pop(s, 'state') == 0 )then
+    !                 ! empty state
+    !                 cnt = cnt + p%nspace
+    !                 call progress(cnt, nrefs)
+    !                 cycle
+    !             endif
+    !         endif
+    !         call cenrefvol_and_mapshifts2ptcls(b, p, cline, s, p%vols(s), do_center, xyz)
+    !         if( p%eo .ne. 'no' )then
+    !             if( .not. p%l_distr_exec ) write(*,'(A)') '>>> BUILDING EVEN REFERENCES'
+    !             call preprefvol(b, p, cline, s, p%vols_even(s), do_center, xyz)
+    !             cnt = 0
+    !             do iref=1,p%nspace
+    !                 cnt = cnt + 1
+    !                 call progress(cnt, p%nspace)
+    !                 o = b%e%get_ori(iref)
+    !                 call b%vol%fproject_polar(cnt, o, pftcc, iseven=.true.) ! polar central sections
+    !             end do
+    !             if( .not. p%l_distr_exec ) write(*,'(A)') '>>> BUILDING ODD REFERENCES'
+    !             call preprefvol(b, p, cline, s, p%vols_odd(s), do_center, xyz)
+    !             cnt = 0
+    !             do iref=1,p%nspace
+    !                 cnt = cnt + 1
+    !                 call progress(cnt, p%nspace)
+    !                 o = b%e%get_ori(iref)
+    !                 call b%vol%fproject_polar(cnt, o, pftcc, iseven=.false.) ! polar central sections
+    !             end do
+    !         else
+    !             call preprefvol(b, p, cline, s, p%vols(s), do_center, xyz )
+    !             do iref=1,p%nspace
+    !                 cnt = cnt + 1
+    !                 call progress(cnt, nrefs)
+    !                 o = b%e%get_ori(iref)
+    !                 call b%vol%fproject_polar(cnt, o, pftcc, iseven=.true.) ! polar central sections
+    !             end do
+    !         endif
+    !     end do
+    !     ! cleanup
+    !     call b%vol%kill_expanded
+    !     ! bring back the original b%vol size for clean exit
+    !     call b%vol%new([p%box,p%box,p%box], p%smpd)
+    ! end subroutine prep_refs_pftcc4align
 
 end module simple_hadamard3D_matcher
