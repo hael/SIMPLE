@@ -69,7 +69,6 @@ contains
         call b%build_general_tbox(p, cline) ! general objects built
         call b%build_eo_rec_tbox(p)         ! reconstruction toolbox built
         call b%eorecvol%kill_exp            ! reduced meory usage
-        call b%mskvol%kill                  ! reduced memory usage
         allocate(res05s(p%nstates), res0143s(p%nstates), stat=alloc_stat)
         allocchk("In: simple_eo_volassemble res05s res0143s")
         res0143s = 0.

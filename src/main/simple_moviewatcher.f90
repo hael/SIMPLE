@@ -19,6 +19,7 @@ type moviewatcher
     character(len=STDLEN)              :: ext            = ''    !< target directory
     integer                            :: n_history      = 0     !< history of movies detected
     integer                            :: report_time    = 600   !< time ellapsed prior to processing
+    !integer                            :: report_time    = 60   !< time ellapsed prior to processing
     integer                            :: starttime      = 0     !< time of first watch
     integer                            :: ellapsedtime   = 0     !< time ellapsed between last and first watch
     integer                            :: lastreporttime = 0     !< time ellapsed between last and first watch
@@ -173,13 +174,20 @@ contains
         ! unblur
         unblur_name = trim(self%target_dir)//'/'//trim(adjustl(fbody))//'_thumb'//trim(self%ext)
         unblur_done = file_exists(trim(unblur_name))
+        if( unblur_done )then
+            unblur_name = trim(self%target_dir)//'/'//trim(adjustl(fbody))//'_intg'//trim(self%ext)
+            unblur_done = file_exists(trim(unblur_name))
+        endif
+        !print *,'to_process unblur ',trim(unblur_name),unblur_done
         ! ctffind
         unidoc_name  = trim(self%target_dir)//'/unidoc_output_'//trim(adjustl(fbody))//'.txt'
         ctffind_done = file_exists(trim(unidoc_name))
+        !print *,'to_process unidoc ',trim(unidoc_name),ctffind_done
         if( self%dopick )then
             ! picker
             picker_name = trim(self%target_dir)//'/'//trim(adjustl(fbody))//'_intg.box'
             picker_done = file_exists(picker_name)
+            !print *,'to_process pick ',trim(picker_name),picker_done, to_process
             to_process = .not. (unblur_done .and. ctffind_done .and. picker_done)
         else
             to_process = .not. (unblur_done .and. ctffind_done)

@@ -205,6 +205,10 @@ contains
         ! create the search objects, need to re-create every round because parameters are changing
         if( L_BENCH ) t_prep_primesrch3D = tic()
         call prep4prime3D_srch( b, p )
+        if( p%l_distr_exec )then
+            call b%vol%kill
+            call b%vol2%kill
+        endif
         if( L_BENCH ) rt_prep_primesrch3D = toc(t_prep_primesrch3D)
         allocate( primesrch3D(p%fromp:p%top) , stat=alloc_stat)
         allocchk("In hadamard3D_matcher::prime3D_exec primesrch3D objects ")
@@ -327,6 +331,7 @@ contains
                 stop
         end select
         ! pftcc & primesrch3D not needed anymore
+        call cleanprime3D_srch(p)
         call pftcc%kill
         deallocate(primesrch3D)
         if( L_BENCH ) rt_align = toc(t_align)

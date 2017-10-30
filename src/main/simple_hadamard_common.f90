@@ -543,6 +543,7 @@ contains
         character(len=*), intent(in)    :: volfname
         logical,          intent(in)    :: do_center
         real,             intent(in)    :: xyz(3)
+        type(image)                     :: mskvol
         real,             allocatable   :: filter(:)
         character(len=:), allocatable   :: fname_vol_filter
         real    :: shvec(3)
@@ -580,11 +581,12 @@ contains
         ! masking
         if( cline%defined('mskfile') )then
             ! mask provided
-            call b%mskvol%new([p%box, p%box, p%box], p%smpd)
-            call b%mskvol%read(p%mskfile)
-            if( p%boxmatch < p%box ) call b%mskvol%clip_inplace([p%boxmatch,p%boxmatch,p%boxmatch])
+            call mskvol%new([p%box, p%box, p%box], p%smpd)
+            call mskvol%read(p%mskfile)
+            if( p%boxmatch < p%box ) call mskvol%clip_inplace([p%boxmatch,p%boxmatch,p%boxmatch])
             call b%vol%zero_background
-            call b%vol%mul(b%mskvol)
+            call b%vol%mul(mskvol)
+            call mskvol%kill
         else
             ! circular masking
             if( p%l_innermsk )then
@@ -736,7 +738,7 @@ contains
         integer,                intent(in)    :: state
         class(projection_frcs), intent(inout) :: projfrcs
         type(oris)               :: e_space
-        type(image)              :: even, odd
+        type(image)              :: even, odd, mskvol
         type(image), allocatable :: even_imgs(:), odd_imgs(:)
         real,        allocatable :: frc(:), res(:)
         integer :: iproj, ldim(3)
@@ -766,6 +768,7 @@ contains
         !$omp end parallel do
         deallocate(even_imgs, odd_imgs)
         call e_space%kill
+        call mskvol%kill
 
         contains
 
@@ -776,10 +779,10 @@ contains
                 ! masking
                 if( cline%defined('mskfile') )then
                     ! mask provided
-                    call b%mskvol%new([p%box, p%box, p%box], p%smpd)
-                    call b%mskvol%read(p%mskfile)
+                    call mskvol%new([p%box, p%box, p%box], p%smpd)
+                    call mskvol%read(p%mskfile)
                     call vol%zero_background
-                    call vol%mul(b%mskvol)
+                    call vol%mul(mskvol)
                 else
                     ! circular masking
                     if( p%l_innermsk )then

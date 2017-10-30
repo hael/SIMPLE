@@ -123,11 +123,13 @@ contains
 
     subroutine exec_postproc_vol(self, cline)
         use simple_estimate_ssnr, only: fsc2optlp
+        use simple_masker,        only:masker
         class(postproc_vol_commander), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
         type(params)      :: p
         type(build)       :: b
         type(image)       :: vol_copy, vol_filt
+        type(masker)      :: mskvol
         real, allocatable :: fsc(:), optlp(:), res(:)
         real              :: fsc0143, fsc05
         integer           :: state, ldim(3)
@@ -177,9 +179,9 @@ contains
             if( file_exists(p%mskfile) )then
                 ldim = b%vol%get_ldim()
                 call b%vol%zero_background
-                call b%mskvol%new(ldim, p%smpd)
-                call b%mskvol%read(p%mskfile)
-                call b%vol%mul(b%mskvol)
+                call mskvol%new(ldim, p%smpd)
+                call mskvol%read(p%mskfile)
+                call b%vol%mul(mskvol)
             else
                 write(*,*) 'file: ', trim(p%mskfile)
                 stop 'maskfile does not exists in cwd'
@@ -194,10 +196,10 @@ contains
                 stop 'commander_volops :: postproc_vol'
             endif
             call vol_copy%bwd_ft
-            call b%mskvol%automask3D(p, vol_copy)
-            call b%mskvol%write('automask'//p%ext)
+            call mskvol%automask3D(p, vol_copy)
+            call mskvol%write('automask'//p%ext)
             call b%vol%zero_background
-            call b%vol%mul(b%mskvol)
+            call b%vol%mul(mskvol)
         else
             call b%vol%mask(p%msk, 'soft')
         endif
@@ -205,6 +207,7 @@ contains
         p%outvol = add2fbody(trim(p%vols(state)), p%ext, '_pproc')
         call b%vol%write(p%outvol)
         call vol_copy%kill
+        call mskvol%kill
         call simple_end('**** SIMPLE_POSTPROC_VOL NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_postproc_vol
 

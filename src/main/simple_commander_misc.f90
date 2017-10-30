@@ -333,7 +333,7 @@ contains
         type(build)          :: b
         type(oris)           :: e, sympeaks, sym_axes
         type(ori)            :: symaxis, o
-        type(image)          :: symvol, asym_vol
+        type(image)          :: symvol, asym_vol, mskvol
         type(sym)            :: se_c1
         real                 :: cc, rotmat(3,3)
         integer              :: i, fnr, file_stat, nl
@@ -351,11 +351,11 @@ contains
         call asym_vol%new([p%box,p%box,p%box], p%smpd)
         call asym_vol%read(p%vols(1))
         ! spherical mask
-        call b%mskvol%new([p%box,p%box,p%box], p%smpd)
-        b%mskvol = 1.
-        call b%mskvol%mask(p%msk, 'hard')
-        l_msk = b%mskvol%bin2logical()
-        call b%mskvol%kill
+        call mskvol%new([p%box,p%box,p%box], p%smpd)
+        mskvol = 1.
+        call mskvol%mask(p%msk, 'hard')
+        l_msk = mskvol%bin2logical()
+        call mskvol%kill
         ! identify top ranking symmetry peaks
         nl = binread_nlines(p%oritab2)
         sym_axes = oris(nl)

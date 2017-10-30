@@ -43,7 +43,6 @@ type :: build
     type(projector)                     :: vol                !< -"-
     type(image)                         :: vol2               !< -"-
     type(masker)                        :: mskimg             !< mask image
-    type(masker)                        :: mskvol             !< mask volume
     type(projection_frcs)               :: projfrcs           !< projection FRC's used in the anisotropic Wiener filter
     type(prep4cgrid)                    :: gridprep           !< gridding preparation (2D)
     type(image),            allocatable :: imgbatch(:)        !< batch of images
@@ -239,7 +238,6 @@ contains
             call self%vol%kill_expanded
             call self%vol%kill
             call self%vol2%kill
-            call self%mskvol%kill
             call self%mskimg%kill
             if( allocated(self%fsc) )deallocate(self%fsc)
             self%general_tbox_exists = .false.

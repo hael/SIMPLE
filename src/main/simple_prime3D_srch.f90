@@ -8,7 +8,7 @@ use simple_polarft_corrcalc, only: polarft_corrcalc
 use simple_pftcc_shsrch,     only: pftcc_shsrch
 implicit none
 
-public :: prep4prime3D_srch, prime3D_srch, o_peaks
+public :: cleanprime3D_srch, prep4prime3D_srch, prime3D_srch, o_peaks
 private
 #include "simple_local_flags.inc"
 
@@ -71,6 +71,21 @@ end type prime3D_srch
 
 contains
 
+    subroutine cleanprime3D_srch( p )
+        use simple_params,      only: params
+        class(params),  intent(in) :: p
+        integer :: i
+        if( allocated(proj_space_inds) ) deallocate(proj_space_inds)
+        if( allocated(srch_order)      ) deallocate(srch_order)
+        if( allocated(state_exists)    ) deallocate(state_exists)
+        if( allocated(o_refs) )then
+            do i=p%fromp,p%top
+                call o_refs(i)%kill
+            enddo
+            deallocate(o_refs)
+        endif
+    end subroutine cleanprime3D_srch
+
     subroutine prep4prime3D_srch( b, p )
         use simple_ran_tabu,  only: ran_tabu
         use simple_params,    only: params
@@ -81,21 +96,13 @@ contains
         real    :: euldists(p%nspace)
         integer :: i, istate, iproj, iptcl, prev_state, nnnrefs, cnt, prev_proj, prev_ref
         ! clean all class arrays
-        if( allocated(o_refs) )then
-            do i=p%fromp,p%top
-                call o_refs(i)%kill
-            enddo
-            deallocate(o_refs)
-        endif
+        call cleanprime3D_srch(p)
         if( allocated(o_peaks) )then
             do i=p%fromp,p%top
                 call o_peaks(i)%kill
             enddo
             deallocate(o_peaks)
         endif
-        if( allocated(proj_space_inds) ) deallocate(proj_space_inds)
-        if( allocated(srch_order)      ) deallocate(srch_order)
-        if( allocated(state_exists)    ) deallocate(state_exists)
         ! reference projections indices
         allocate(o_refs(p%fromp:p%top))
         do iptcl = p%fromp, p%top
