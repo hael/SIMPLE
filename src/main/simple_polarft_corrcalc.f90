@@ -776,40 +776,42 @@ contains
         kcorrs = cshift(kcorrs, -1)      ! step 2 is circular shift by 1
     end subroutine calc_k_corrs
 
-    function gencorrs_1( self, iref, iptcl ) result( cc )
+    subroutine gencorrs_1( self, iref, iptcl, cc )
         use simple_math, only: csq
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iref, iptcl
-        complex(sp) :: pft_ref(self%pftsz,self%kfromto(1):self%kfromto(2))
-        real(sp)    :: cc(self%nrots), sqsum_ref
-        real        :: corrs_over_k(self%nrots)
+        real(sp),                intent(out)   :: cc(self%nrots)        
+        complex(sp)                            :: pft_ref(self%pftsz,self%kfromto(1):self%kfromto(2))
+        real                                   :: corrs_over_k(self%nrots), sqsum_ref
         call self%prep_ref4corr(iref, iptcl, pft_ref, sqsum_ref, self%kfromto(2))
         call self%calc_corrs_over_k(pft_ref, iptcl, self%kfromto(2), corrs_over_k)
         cc = corrs_over_k / sqrt(sqsum_ref * self%sqsums_ptcls(iptcl))
-    end function gencorrs_1
+    end subroutine gencorrs_1
 
-    function gencorrs_2( self, iref, iptcl, kstop ) result( cc )
+    subroutine gencorrs_2( self, iref, iptcl, kstop, cc )
         use simple_math, only: csq
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iref, iptcl, kstop
-        complex(sp) :: pft_ref(self%pftsz,self%kfromto(1):self%kfromto(2))
-        real(sp)    :: cc(self%nrots), sqsum_ref, sqsum_ptcl
-        real        :: corrs_over_k(self%nrots)
+        real,                    intent(out)   :: cc(self%nrots)
+        complex(sp)                            :: pft_ref(self%pftsz,self%kfromto(1):self%kfromto(2))
+        real(sp)                               :: sqsum_ref, sqsum_ptcl
+        real                                   :: corrs_over_k(self%nrots)
         call self%prep_ref4corr(iref, iptcl, pft_ref, sqsum_ref, kstop)
         call self%calc_corrs_over_k(pft_ref, iptcl, kstop, corrs_over_k)
         sqsum_ptcl = sum(csq(self%pfts_ptcls(iptcl, :, self%kfromto(1):kstop)))
         cc = corrs_over_k / sqrt(sqsum_ref * sqsum_ptcl)
-    end function gencorrs_2
+    end subroutine gencorrs_2
 
-    function gencorrs_3( self, iref, iptcl, shvec ) result( cc )
+    subroutine gencorrs_3( self, iref, iptcl, shvec, cc )
         use simple_math, only: csq
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iref, iptcl
         real(sp),                intent(in)    :: shvec(2)
-        complex(sp) :: pft_ref(self%pftsz,self%kfromto(1):self%kfromto(2))
-        complex(sp) :: shmat(self%pftsz,self%kfromto(1):self%kfromto(2))
-        real(sp)    :: corrs_over_k(self%nrots), argmat(self%pftsz,self%kfromto(1):self%kfromto(2))
-        real(sp)    :: cc(self%nrots), sqsum_ref
+        real(sp),                intent(out)   :: cc(self%nrots)
+        complex(sp)                            :: pft_ref(self%pftsz,self%kfromto(1):self%kfromto(2))
+        complex(sp)                            :: shmat(self%pftsz,self%kfromto(1):self%kfromto(2))
+        real(sp)                               :: corrs_over_k(self%nrots), argmat(self%pftsz,self%kfromto(1):self%kfromto(2))
+        real(sp)                               :: sqsum_ref
         argmat = self%argtransf(:self%pftsz,:) * shvec(1) + self%argtransf(self%pftsz+1:,:) * shvec(2)
         shmat  = cmplx(cos(argmat),sin(argmat))
 
@@ -829,7 +831,7 @@ contains
         sqsum_ref = sum(csq(pft_ref))
         call self%calc_corrs_over_k(pft_ref, iptcl, self%kfromto(2), corrs_over_k)        
         cc = corrs_over_k  / sqrt(sqsum_ref * self%sqsums_ptcls(iptcl))
-    end function gencorrs_3
+    end subroutine gencorrs_3
 
     !>  \brief  is for generating resolution dependent correlations
     subroutine genfrc( self, iref, iptcl, irot, frc )

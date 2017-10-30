@@ -424,10 +424,10 @@ contains
         kbwin     = kbinterpol(KBWINSZ, pp%alpha)
         zero      = cmplx(0.,0.)
         wdim      = kbwin%get_wdim()
-        allocate(cmat_even(cyc_lims(1,1):cyc_lims(1,2),cyc_lims(2,1):cyc_lims(2,2)),&
-                &cmat_odd(cyc_lims(1,1):cyc_lims(1,2),cyc_lims(2,1):cyc_lims(2,2)),&
-                &rho_even(cyc_lims(1,1):cyc_lims(1,2),cyc_lims(2,1):cyc_lims(2,2)),&
-                &rho_odd(cyc_lims(1,1):cyc_lims(1,2),cyc_lims(2,1):cyc_lims(2,2)),&
+        allocate(cmat_even(lims(1,1):cyc_lims(1,2),cyc_lims(2,1):cyc_lims(2,2)),&
+                &cmat_odd(lims(1,1):cyc_lims(1,2),cyc_lims(2,1):cyc_lims(2,2)),&
+                &rho_even(lims(1,1):cyc_lims(1,2),cyc_lims(2,1):cyc_lims(2,2)),&
+                &rho_odd(lims(1,1):cyc_lims(1,2),cyc_lims(2,1):cyc_lims(2,2)),&
                 &w(wdim, wdim), stat=alloc_stat)
         call alloc_errchk('cavger_assemble_sums; simple_classaverager', alloc_stat)
         call batch_imgsum_even%new(ldim_pd, pp%smpd)
@@ -515,16 +515,18 @@ contains
                             do k=cyc_lims(2,1),cyc_lims(2,2)
                                 sh = nint(hyp(real(h),real(k)))
                                 if( sh > nyq + 1 )cycle
-                                ! fetch component & calc shift
-                                logi     = [h,k,0]
-                                phys     = padded_imgs(i)%comp_addr_phys(logi)
-                                comp     = padded_imgs(i)%get_fcomp(logi, phys)
-                                oshift   = padded_imgs(i)%oshift(logi, [-precs(iprec)%shifts(iori,1),-precs(iprec)%shifts(iori,2),0.])
                                 ! rotation
                                 vec      = real([h,k])
                                 loc      = matmul(vec,mat)
                                 ! kernel limits
                                 call sqwin_2d(loc(1),loc(2), KBWINSZ, cyc_lims(1:2,1:2), win)
+                                ! updates only asymmetric Friedel components
+                                if( win(1,2) < lims(1,1) )cycle
+                                ! fetch component & calc shift
+                                logi     = [h,k,0]
+                                phys     = padded_imgs(i)%comp_addr_phys(logi)
+                                comp     = padded_imgs(i)%get_fcomp(logi, phys)
+                                oshift   = padded_imgs(i)%oshift(logi, [-precs(iprec)%shifts(iori,1),-precs(iprec)%shifts(iori,2),0.])
                                 ! evaluate the transfer function
                                 call calc_tfun_vals(iprec, vec, tval, tvalsq)
                                 ! kernel

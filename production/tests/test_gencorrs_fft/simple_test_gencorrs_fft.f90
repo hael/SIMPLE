@@ -43,9 +43,9 @@ allocate(cc(pftcc%get_nrots()), cc_fft(pftcc%get_nrots()))
 
 tfft = tic()
 do iptcl=1,p%nptcls - 1
-	do jptcl=iptcl + 1, p%nptcls
-        cc_fft = pftcc%gencorrs(iptcl, jptcl)
-	end do
+    do jptcl=iptcl + 1, p%nptcls
+        call pftcc%gencorrs(iptcl, jptcl, cc_fft)
+    end do
 end do
 print *, 'time of fft_mod: ', toc(tfft)
 

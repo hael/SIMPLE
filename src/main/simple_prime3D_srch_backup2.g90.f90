@@ -1,5 +1,5 @@
 ! PRIME3D stochastic search routines
-module simple_prime3D_srch_dev
+module simple_prime3D_srch
 #include "simple_lib.f08"
 use simple_oris,             only: oris
 use simple_ori,              only: ori
@@ -8,21 +8,17 @@ use simple_polarft_corrcalc, only: polarft_corrcalc
 use simple_pftcc_shsrch,     only: pftcc_shsrch
 implicit none
 
-public :: prep4prime3D_srch, prime3D_srch, o_peaks
+public :: cleanprime3D_srch, prep4prime3D_srch, prime3D_srch, o_peaks
 private
 #include "simple_local_flags.inc"
 
 real, parameter :: FACTWEIGHTS_THRESH = 0.001 !< threshold for factorial weights
 
 ! allocatables for prime3D_srch are class variables to improve caching and reduce alloc overheads 
-real,       allocatable :: proj_space_euls(:,:,:)
-real,       allocatable :: proj_space_shift(:,:,:)
-real,       allocatable :: proj_space_corrs(:,:)
-integer,    allocatable :: proj_space_inds(:,:)
-integer,    allocatable :: proj_space_state(:,:)
-integer,    allocatable :: proj_space_proj(:,:)
+type(oris), allocatable :: o_refs(:)
 type(oris), allocatable :: o_peaks(:)
 integer,    allocatable :: srch_order(:,:)
+integer,    allocatable :: proj_space_inds(:,:)
 logical,    allocatable :: state_exists(:)
 
 type prime3D_srch
@@ -56,7 +52,6 @@ type prime3D_srch
     character(len=STDLEN)            :: shbarr         = ''      !< shift barrier flag
     logical                          :: doshift        = .true.  !< 2 indicate whether 2 serch shifts
     logical                          :: greedy_inpl    = .true.  !< 2 indicate whether in-plane search is greedy or not
-    logical                          :: exists         = .false. !< 2 indicate existence
   contains
     procedure          :: new
     procedure          :: exec_prime3D_srch
@@ -76,6 +71,21 @@ end type prime3D_srch
 
 contains
 
+    subroutine cleanprime3D_srch( p )
+        use simple_params,      only: params
+        class(params),  intent(in) :: p
+        integer :: i
+        if( allocated(proj_space_inds) ) deallocate(proj_space_inds)
+        if( allocated(srch_order)      ) deallocate(srch_order)
+        if( allocated(state_exists)    ) deallocate(state_exists)
+        if( allocated(o_refs) )then
+            do i=p%fromp,p%top
+                call o_refs(i)%kill
+            enddo
+            deallocate(o_refs)
+        endif
+    end subroutine cleanprime3D_srch
+
     subroutine prep4prime3D_srch( b, p )
         use simple_ran_tabu,  only: ran_tabu
         use simple_params,    only: params
@@ -84,38 +94,26 @@ contains
         class(params),  intent(inout) :: p
         type(ran_tabu) :: rt
         real    :: euldists(p%nspace)
-        integer :: i, istate, iproj, iptcl, prev_state, nnnrefs, cnt, prev_proj, prev_ref, nrefs
-        nrefs = p%nstates*p%nspace
+        integer :: i, istate, iproj, iptcl, prev_state, nnnrefs, cnt, prev_proj, prev_ref
         ! clean all class arrays
+        call cleanprime3D_srch(p)
         if( allocated(o_peaks) )then
             do i=p%fromp,p%top
                 call o_peaks(i)%kill
             enddo
             deallocate(o_peaks)
         endif
-        if( allocated(proj_space_euls)  ) deallocate(proj_space_euls)
-        if( allocated(proj_space_shift) ) deallocate(proj_space_shift)
-        if( allocated(proj_space_corrs) ) deallocate(proj_space_corrs)
-        if( allocated(proj_space_inds)  ) deallocate(proj_space_inds)
-        if( allocated(proj_space_state) ) deallocate(proj_space_state)
-        if( allocated(proj_space_proj)  ) deallocate(proj_space_proj)
-        if( allocated(srch_order)   ) deallocate(srch_order)
-        if( allocated(state_exists) ) deallocate(state_exists)
-        ! reference projection directions
-        allocate(proj_space_euls( p%fromp:p%top, nrefs,3), source=0.)
-        allocate(proj_space_shift(p%fromp:p%top, nrefs,2), source=0.)
-        allocate(proj_space_corrs(p%fromp:p%top, nrefs), source=-1.)
-        allocate(proj_space_inds( p%fromp:p%top, nrefs), source=0)
-        allocate(proj_space_state(p%fromp:p%top, nrefs), source=0)
-        allocate(proj_space_proj( p%fromp:p%top, nrefs), source=0)
+        ! reference projections indices
+        allocate(o_refs(p%fromp:p%top))
         do iptcl = p%fromp, p%top
+            call o_refs(iptcl)%new_clean(p%nstates*p%nspace)
             cnt = 0
             do istate=1,p%nstates
                 do iproj=1,p%nspace
                     cnt = cnt + 1
-                    proj_space_state(iptcl,cnt)   = istate
-                    proj_space_proj(iptcl, cnt)   = iproj
-                    proj_space_euls(iptcl, cnt,:) = b%e%get_euler(iproj)
+                    call o_refs(iptcl)%set( cnt, 'state', real(istate) )      ! Updates state
+                    call o_refs(iptcl)%set( cnt, 'proj', real(iproj) )        ! Updates proj
+                    call o_refs(iptcl)%set_euler( cnt, b%e%get_euler(iproj) ) ! Updates Euler
                 enddo
             enddo
         enddo
@@ -143,6 +141,8 @@ contains
             ! transfer eo flag
             call o_peaks(iptcl)%set_all2single('eo', b%a%get(iptcl,'eo'))
         enddo
+        ! reference projection directions indices
+        allocate(proj_space_inds(p%fromp:p%top, p%nspace*p%nstates), source=0)
         ! search order
         select case( trim(p%refine) )
             case( 'states' )
@@ -191,10 +191,10 @@ contains
                 enddo
                 !$omp end parallel do
             case('no','shc','snhc','greedy')
-                allocate(srch_order(p%fromp:p%top,nrefs), source=0)
+                allocate(srch_order(p%fromp:p%top,p%nspace*p%nstates), source=0)
                 !$omp parallel do default(shared) private(iptcl,rt,prev_state,prev_ref) schedule(static) proc_bind(close)
                 do iptcl = p%fromp, p%top
-                    rt = ran_tabu(nrefs)
+                    rt = ran_tabu(p%nspace*p%nstates)
                     call rt%ne_ran_iarr( srch_order(iptcl,:) )
                     prev_state = nint(b%a%get(iptcl, 'state'))
                     prev_ref   = (prev_state - 1) * p%nspace + b%e%find_closest_proj(b%a%get_ori(iptcl))
@@ -280,7 +280,6 @@ contains
         lims_init(:,2) =  SHC_INPL_TRSHWDTH
         call self%shsrch_obj%new(self%pftcc_ptr, lims, lims_init=lims_init,&
             &shbarrier=self%shbarr, nrestarts=3, maxits=60)
-        self%exists = .true.
         DebugPrint '>>> PRIME3D_SRCH::CONSTRUCTED NEW SIMPLE_PRIME3D_SRCH OBJECT'
     end subroutine new
 
@@ -335,23 +334,23 @@ contains
         class(prime3D_srch),     intent(inout) :: self
         real,                    intent(in)    :: lp
         integer, optional,       intent(in)    :: nnmat(self%nprojs,self%nnn_static)
-        integer :: iref, isample, loc(1), inpl_ind
-        real    :: corrs(self%nrots), inpl_corr
+        real    :: projspace_corrs(self%nrefs), wcorr
+        integer :: iref, isample
         ! execute search
         if( nint(self%a_ptr%get(self%iptcl,'state')) > 0 )then
             ! initialize
             call self%prep4srch(lp, nnmat=nnmat)
             self%nbetter    = 0
             self%nrefs_eval = 0
-            proj_space_corrs(self%iptcl,:) = -1.
+            projspace_corrs = -1.
             ! search
             do isample = 1, self%nnn
                 iref = srch_order(self%iptcl, isample) ! set the stochastic reference index
-                call per_ref_srch                      ! actual search
-                if( self%nbetter >= self%npeaks ) exit ! exit condition
+                call per_ref_srch(iref)                    ! actual search
+                if( self%nbetter >= self%npeaks ) exit     ! exit condition
             end do
             ! sort in correlation projection direction space
-            call hpsort(self%nrefs, proj_space_corrs(self%iptcl,:), proj_space_inds(self%iptcl,:))
+            call hpsort(self%nrefs, projspace_corrs, proj_space_inds(self%iptcl,:))
             call self%inpl_srch ! search shifts
             ! prepare weights and orientations
             call self%prep_npeaks_oris_and_weights
@@ -362,17 +361,22 @@ contains
 
         contains
 
-            subroutine per_ref_srch
-                if(proj_space_state(self%iptcl,iref) .ne. self%prev_state )then
+            subroutine per_ref_srch( iref )
+                integer, intent(in) :: iref
+                real    :: corrs(self%nrots), inpl_corr
+                integer :: loc(1), inpl_ind, state
+                state = nint(o_refs(self%iptcl)%get(iref, 'state'))
+                if(state .ne. self%prev_state )then
                     ! checker that will need to go
-                    print *,self%iptcl, self%prev_ref, self%prev_proj, self%prev_state, iref, proj_space_state(self%iptcl,iref)
+                    print *,self%iptcl, self%prev_ref, self%prev_proj, self%prev_state, iref, state
                     stop 'srch order error; simple_prime3d_srch; stochastic_srch_bystate'
                 endif
-                corrs     = self%pftcc_ptr%gencorrs(iref, self%iptcl) ! In-plane correlations
-                loc       = maxloc(corrs)               ! greedy in-plane
-                inpl_ind  = loc(1)                      ! in-plane angle index
-                inpl_corr = corrs(inpl_ind)             ! max in plane correlation
+                call self%pftcc_ptr%gencorrs(iref, self%iptcl, corrs) ! In-plane correlations
+                loc       = maxloc(corrs)                             ! greedy in-plane
+                inpl_ind  = loc(1)                                    ! in-plane angle index
+                inpl_corr = corrs(inpl_ind)                           ! max in plane correlation
                 call self%store_solution(iref, iref, inpl_ind, inpl_corr)
+                projspace_corrs( iref ) = inpl_corr                   ! stash in-plane correlation for sorting
                 ! update nbetter to keep track of how many improving solutions we have identified
                 if( self%npeaks == 1 )then
                     if( inpl_corr > self%prev_corr ) self%nbetter = self%nbetter + 1
@@ -393,8 +397,8 @@ contains
         class(prime3D_srch), intent(inout) :: self
         real,                intent(in)    :: lp
         integer, optional,   intent(in)    :: nnmat(self%nprojs,self%nnn_static), grid_projs(:)
-        integer :: iref,isample,nrefs,target_projs(self%npeaks_grid), inpl_ind(1), state
-        real    :: corrs(self%nrots), inpl_corr
+        real    :: projspace_corrs(self%nrefs),wcorr
+        integer :: iref,isample,nrefs,target_projs(self%npeaks_grid)
         if( nint(self%a_ptr%get(self%iptcl,'state')) > 0 )then
             if( str_has_substr(self%refine, 'neigh') )then
                 ! for neighbour modes we do a coarse grid search first
@@ -408,18 +412,18 @@ contains
                 call self%prep4srch(lp)
                 nrefs = self%nrefs
             endif
-            self%nbetter    = 0
-            self%nrefs_eval = 0
-            proj_space_corrs(self%iptcl,:) = -1.
+            self%nbetter         = 0
+            self%nrefs_eval      = 0
+            projspace_corrs      = -1.
             ! search
             do isample=1,nrefs
                 iref = srch_order(self%iptcl,isample) ! set the reference index
-                call per_ref_srch                     ! actual search
+                call per_ref_srch(iref)                   ! actual search
             end do
             ! in greedy mode, we evaluate all refs
             self%nrefs_eval = nrefs
             ! sort in correlation projection direction space
-            call hpsort(self%nrefs, proj_space_corrs(self%iptcl,:), proj_space_inds(self%iptcl,:))
+            call hpsort(self%nrefs, projspace_corrs, proj_space_inds(self%iptcl,:))
             ! take care of the in-planes
             call self%inpl_srch
             ! prepare weights & orientation
@@ -431,13 +435,19 @@ contains
 
         contains
 
-            subroutine per_ref_srch
-                state = proj_space_state(self%iptcl,iref)
+            subroutine per_ref_srch( iref )
+                integer, intent(in) :: iref
+                real    :: corrs(self%nrots), inpl_corr
+                integer :: loc(1), inpl_ind, state
+                state = 1
+                if( self%nstates > 1 ) state = nint( o_refs(self%iptcl)%get(iref, 'state') )
                 if( state_exists(state) )then
-                    corrs     = self%pftcc_ptr%gencorrs(iref, self%iptcl) ! In-plane correlations
-                    inpl_ind  = maxloc(corrs)                             ! greedy in-plane index
-                    inpl_corr = corrs(inpl_ind(1))                        ! max in plane correlation
-                    call self%store_solution(iref, iref, inpl_ind(1), inpl_corr)
+                    call self%pftcc_ptr%gencorrs(iref, self%iptcl, corrs) ! In-plane correlations
+                    loc       = maxloc(corrs)                             ! greedy in-plane
+                    inpl_ind  = loc(1)                                    ! in-plane angle index
+                    inpl_corr = corrs(inpl_ind)                           ! max in plane correlation
+                    call self%store_solution(iref, iref, inpl_ind, inpl_corr)
+                    projspace_corrs( iref ) = inpl_corr                   ! stash in-plane correlation for sorting
                 endif
             end subroutine per_ref_srch
 
@@ -451,25 +461,25 @@ contains
         class(prime3D_srch), intent(inout) :: self
         integer,             intent(in)    :: grid_projs(:)
         integer,             intent(inout) :: target_projs(:)
-        real      :: corrs(self%nrots), inpl_corr
+        real      :: projspace_corrs(self%nrefs)
         integer   :: iref, isample, nrefs, ntargets, cnt, prev_proj, istate
-        integer   :: state_cnt(self%nstates), iref_state, loc(1), inpl_ind
+        integer   :: state_cnt(self%nstates), iref_state
         if( nint(self%a_ptr%get(self%iptcl,'state')) > 0 )then
             prev_proj = self%e_ptr%find_closest_proj(self%a_ptr%get_ori(self%iptcl),1)
             ! initialize
-            target_projs = 0
-            proj_space_corrs(self%iptcl,:) = -1.
+            target_projs         = 0
+            projspace_corrs      = -1.
             nrefs = size(grid_projs)
             ! search
             do isample = 1, nrefs
                 do istate = 1, self%nstates
                     iref = grid_projs(isample)           ! set the projdir reference index
                     iref = (istate-1)*self%nprojs + iref ! set the state reference index
-                    call per_ref_srch                    ! actual search
+                    call per_ref_srch(iref)              ! actual search
                 end do
             end do
             ! sort in correlation projection direction space
-            call hpsort(self%nrefs, proj_space_corrs(self%iptcl,:), proj_space_inds(self%iptcl,:))
+            call hpsort(self%nrefs, projspace_corrs, proj_space_inds(self%iptcl,:))
             ! return target points
             ntargets = size(target_projs)
             cnt = 1
@@ -508,14 +518,17 @@ contains
 
         contains
 
-            subroutine per_ref_srch
+            subroutine per_ref_srch( iref )
+                integer, intent(in) :: iref
+                real    :: corrs(self%nrots), inpl_corr
+                integer :: loc(1), inpl_ind
                 if( state_exists(istate) )then
-                    corrs     = self%pftcc_ptr%gencorrs(iref, self%iptcl, self%kstop_grid) ! In-plane correlations
-                    loc       = maxloc(corrs)                      ! greedy in-plane
-                    inpl_ind  = loc(1)                             ! in-plane angle index
-                    inpl_corr = corrs(inpl_ind)                    ! max in plane correlation
-                    proj_space_corrs(self%iptcl,iref) = inpl_corr  ! stash in-plane correlation for sorting
-                    proj_space_inds(self%iptcl,iref)  = iref       ! stash the index for sorting
+                    call self%pftcc_ptr%gencorrs(iref, self%iptcl, self%kstop_grid, corrs) ! In-plane correlations
+                    loc       = maxloc(corrs)                                              ! greedy in-plane
+                    inpl_ind  = loc(1)                                                     ! in-plane angle index
+                    inpl_corr = corrs(inpl_ind)                                            ! max in plane correlation
+                    projspace_corrs( iref )      = inpl_corr                               ! stash in-plane correlation for sorting
+                    proj_space_inds(self%iptcl,iref)  = iref                               ! stash the index for sorting
                 endif
             end subroutine per_ref_srch
 
@@ -529,8 +542,8 @@ contains
         class(prime3D_srch), intent(inout) :: self
         real,                intent(in)    :: lp
         integer, optional,   intent(in)    :: nnmat(self%nprojs,self%nnn_static), grid_projs(:)
-        integer :: iref,isample,nrefs,target_projs(self%npeaks_grid), loc(1), inpl_ind
-        real    :: corrs(self%nrots), inpl_corr
+        real                 :: projspace_corrs(self%nrefs),wcorr,e3_prev
+        integer              :: iref,isample,nrefs,target_projs(self%npeaks_grid)
         ! execute search
         if( nint(self%a_ptr%get(self%iptcl,'state')) > 0 )then
             if( str_has_substr(self%refine, 'neigh') )then
@@ -548,14 +561,14 @@ contains
             ! initialize, ctd
             self%nbetter    = 0
             self%nrefs_eval = 0
-            proj_space_corrs(self%iptcl,:) = -1.
+            projspace_corrs = -1.
             do isample=1,nrefs
-                iref = srch_order(self%iptcl,isample)     ! set the stochastic reference index
-                call per_ref_srch                         ! actual search
+                iref = srch_order(self%iptcl,isample) ! set the stochastic reference index
+                call per_ref_srch(iref)                   ! actual search
                 if( self%nbetter >= self%npeaks ) exit    ! exit condition
             end do
             ! sort in correlation projection direction space
-            call hpsort(self%nrefs, proj_space_corrs(self%iptcl,:), proj_space_inds(self%iptcl,:))
+            call hpsort(self%nrefs, projspace_corrs, proj_space_inds(self%iptcl,:))
             call self%inpl_srch ! search shifts
             ! prepare weights and orientations
             call self%prep_npeaks_oris_and_weights
@@ -566,14 +579,20 @@ contains
 
         contains
 
-            subroutine per_ref_srch
-                if( state_exists( proj_space_state(self%iptcl,iref) ) )then
+            subroutine per_ref_srch( iref )
+                integer, intent(in) :: iref
+                real    :: corrs(self%nrots), inpl_corr
+                integer :: loc(1), inpl_ind, state
+                state = 1
+                if( self%nstates > 1 ) state = nint( o_refs(self%iptcl)%get(iref, 'state') )
+                if( state_exists(state) )then
                     ! In-plane correlations
-                    corrs     = self%pftcc_ptr%gencorrs(iref, self%iptcl)
+                    call self%pftcc_ptr%gencorrs(iref, self%iptcl, corrs)
                     loc       = maxloc(corrs)   ! greedy in-plane
                     inpl_ind  = loc(1)          ! in-plane angle index
                     inpl_corr = corrs(inpl_ind) ! max in plane correlation
                     call self%store_solution(iref, iref, inpl_ind, inpl_corr)
+                    projspace_corrs( iref ) = inpl_corr ! stash in-plane correlation for sorting
                     ! update nbetter to keep track of how many improving solutions we have identified
                     if( self%npeaks == 1 )then
                         if( inpl_corr > self%prev_corr ) self%nbetter = self%nbetter + 1
@@ -613,12 +632,12 @@ contains
                 nrefs = self%nrefs
             endif
             ! initialize
-            found_better    = .false.
-            self%nrefs_eval = 0
+            found_better         = .false.
+            self%nrefs_eval      = 0
             ! search
             do isample=1,nrefs
                 iref = srch_order(self%iptcl, isample ) ! stochastic reference index
-                call per_ref_srch                       ! actual search
+                call per_ref_srch( iref )                   ! actual search
                 if( inpl_ind > 0 )then
                     ! correlation-improving reference found, store it
                     call self%store_solution(self%nrefs, iref, inpl_ind, inpl_corr)
@@ -628,7 +647,7 @@ contains
             end do
             if( .not. found_better )then
                 iref = self%prev_ref
-                call per_ref_srch
+                call per_ref_srch( iref )
                 if( inpl_ind == 0 )then
                     ! be greedy
                     loc       = maxloc(corrs)
@@ -648,15 +667,19 @@ contains
 
         contains
 
-            subroutine per_ref_srch
+            subroutine per_ref_srch( iref )
                 use simple_rnd, only: shcloc
-                inpl_ind  = 0                                            ! init in-plane index
-                inpl_corr = 0.                                           ! init correlation
-                if( state_exists( proj_space_state(self%iptcl,iref) ) )then
-                    corrs    = self%pftcc_ptr%gencorrs( iref, self%iptcl )    ! in-plane correlations
-                    inpl_ind = shcloc(self%nrots, corrs, self%prev_corr) ! first improving in-plane index
-                    if( inpl_ind > 0 ) inpl_corr = corrs( inpl_ind )     ! improving correlation found
-                    self%nrefs_eval = self%nrefs_eval + 1                ! updates fractional search space
+                integer, intent(in) :: iref
+                integer :: state
+                inpl_ind  = 0                                               ! init in-plane index
+                inpl_corr = 0.                                              ! init correlation
+                state     = 1
+                if( self%nstates > 1 ) state = nint( o_refs(self%iptcl)%get(iref, 'state') )
+                if( state_exists( state ) )then
+                    call self%pftcc_ptr%gencorrs( iref, self%iptcl, corrs ) ! in-plane correlations
+                    inpl_ind = shcloc(self%nrots, corrs, self%prev_corr)    ! first improving in-plane index
+                    if( inpl_ind > 0 ) inpl_corr = corrs( inpl_ind )        ! improving correlation found
+                    self%nrefs_eval = self%nrefs_eval + 1                   ! updates fractional search space
                 endif
             end subroutine per_ref_srch
 
@@ -669,22 +692,22 @@ contains
         class(prime3D_srch), intent(inout) :: self
         real,                intent(in)    :: lp
         integer,             intent(in)    :: szsn
-        integer :: iref, isample, loc(1), inpl_ind
-        real    :: corrs(self%nrots), inpl_corr
+        real    :: projspace_corrs(self%nrefs), wcorr
+        integer :: iref, isample
         if( nint(self%a_ptr%get(self%iptcl,'state')) > 0 )then
             ! initialize
             call self%prep4srch(lp)
-            self%nbetter    = 0
-            self%nrefs_eval = 0
-            proj_space_corrs(self%iptcl,:) = -1.
+            self%nbetter         = 0
+            self%nrefs_eval      = 0
+            projspace_corrs      = -1.
             ! search
             do isample=1,szsn
                 iref = srch_order(self%iptcl,isample) ! set the stochastic reference index
-                call per_ref_srch                     ! actual search
+                call per_ref_srch(iref)                   ! actual search
             end do
             self%nrefs_eval = szsn
             ! sort in correlation projection direction space
-            call hpsort(self%nrefs, proj_space_corrs(self%iptcl,:), proj_space_inds(self%iptcl,:))
+            call hpsort(self%nrefs, projspace_corrs, proj_space_inds(self%iptcl,:))
             ! output
             call self%prep_npeaks_oris_and_weights
         else
@@ -694,13 +717,19 @@ contains
 
         contains
 
-            subroutine per_ref_srch
-                if( state_exists( proj_space_state(self%iptcl,iref) ) )then
-                    corrs     = self%pftcc_ptr%gencorrs(iref, self%iptcl) ! In-plane correlations
-                    loc       = maxloc(corrs)               ! greedy in-plane
-                    inpl_ind  = loc(1)                      ! in-plane angle index
-                    inpl_corr = corrs(inpl_ind)             ! max in plane correlation
+            subroutine per_ref_srch( iref )
+                integer, intent(in) :: iref
+                real    :: corrs(self%nrots), inpl_corr
+                integer :: loc(1), inpl_ind, state
+                state = 1
+                if( self%nstates > 1 ) state = nint( o_refs(self%iptcl)%get(iref, 'state') )
+                if( state_exists(state) )then
+                    call self%pftcc_ptr%gencorrs(iref, self%iptcl, corrs) ! In-plane correlations
+                    loc       = maxloc(corrs)                             ! greedy in-plane
+                    inpl_ind  = loc(1)                                    ! in-plane angle index
+                    inpl_corr = corrs(inpl_ind)                           ! max in plane correlation
                     call self%store_solution(iref, iref, inpl_ind, inpl_corr)
+                    projspace_corrs( iref ) = inpl_corr                   ! stash in-plane correlation for sorting
                 endif
             end subroutine per_ref_srch
 
@@ -716,7 +745,8 @@ contains
         integer,             intent(inout) :: statecnt(self%nstates)
         type(ori) :: o
         integer   :: iref, state
-        real      :: corr, mi_state, frac, corrs_state(self%nstates), corrs_inpl(self%nrots)
+        real      :: corrs_inpl(self%pftcc_ptr%get_nrots())
+        real      :: corr, mi_state, frac, corrs_state(self%nstates)
         self%prev_state = nint(self%a_ptr%get(self%iptcl, 'state'))
         if( self%prev_state > self%nstates )&
             &stop 'previous best state outside boundary; stochastic_srch_het; simple_prime3D_srch'
@@ -736,7 +766,7 @@ contains
                     state = irnd_uni(self%nstates)
                 enddo
                 iref  = (state - 1) * self%nprojs + self%prev_proj
-                corrs_inpl = self%pftcc_ptr%gencorrs(iref, self%iptcl)
+                call self%pftcc_ptr%gencorrs(iref, self%iptcl, corrs_inpl)
                 corr       = corrs_inpl(self%prev_roind)
             else
                 ! SHC
@@ -744,7 +774,7 @@ contains
                 do state = 1, self%nstates
                     if( .not.state_exists(state) )cycle
                     iref = (state-1) * self%nprojs + self%prev_proj
-                    corrs_inpl = self%pftcc_ptr%gencorrs(iref, self%iptcl)
+                    call self%pftcc_ptr%gencorrs(iref, self%iptcl, corrs_inpl)
                     corrs_state(state) = corrs_inpl(self%prev_roind)
                 enddo
                 self%prev_corr = corrs_state(self%prev_state)
@@ -782,17 +812,23 @@ contains
     !!          refine=no with 1000 referecnes
     subroutine inpl_srch( self )
         class(prime3D_srch), intent(inout) :: self
-        real, allocatable :: cxy(:), crxy(:)
-        integer :: i, ref, irot
+        real,    allocatable :: cxy(:), crxy(:)
+        type(ori) :: o
+        real      :: cc, e3
+        integer   :: i, ref, irot
         if( self%doshift )then
             do i=self%nrefs,self%nrefs-self%npeaks+1,-1
                 ref = proj_space_inds(self%iptcl, i )
+                o   = o_refs(self%iptcl)%get_ori( ref )
+                cc  = o_refs(self%iptcl)%get( ref, 'corr' )
                 call self%shsrch_obj%set_indices(ref, self%iptcl)
                 cxy = self%shsrch_obj%minimize(irot=irot)
                 if( irot > 0 )then
-                    proj_space_euls(self%iptcl, ref,3) = 360. - self%pftcc_ptr%get_rot(irot)
-                    proj_space_corrs(self%iptcl, ref)  = cxy(1)
-                    proj_space_shift(self%iptcl,ref,:) = cxy(2:3)
+                    e3 = 360. - self%pftcc_ptr%get_rot(irot) ! psi
+                    call o%e3set(e3)                    ! stash psi
+                    call o%set('corr', cxy(1))
+                    call o%set_shift( cxy(2:3) )
+                    call o_refs(self%iptcl)%set_ori( ref, o )
                 endif
             end do
         endif
@@ -809,7 +845,7 @@ contains
         real,                intent(in)    :: lp
         integer, optional,   intent(in)    :: nnmat(self%nprojs,self%nnn_static), target_projs(self%npeaks_grid)
         integer, allocatable :: nnvec(:)
-        real      :: corrs(self%nrots)
+        real      :: corrs(self%pftcc_ptr%get_nrots())
         type(ori) :: o_prev
         real      :: cc_t_min_1, corr
         if( str_has_substr(self%refine,'neigh') )then
@@ -819,25 +855,27 @@ contains
             &stop 'need optional target_projs to be present for refine=neigh modes :: prep4srch (prime3D_srch)'
         endif
         o_prev          = self%a_ptr%get_ori(self%iptcl)
-        self%prev_state = nint(o_prev%get('state'))                        ! state index
-        self%prev_roind = self%pftcc_ptr%get_roind(360.-o_prev%e3get())    ! in-plane angle index
-        self%prev_shvec = o_prev%get_2Dshift()                             ! shift vector
-        self%prev_proj  = self%e_ptr%find_closest_proj(o_prev,1)           ! projection direction
-        self%prev_ref   = (self%prev_state-1)*self%nprojs + self%prev_proj ! previous reference
+        self%prev_state = nint(o_prev%get('state'))                ! state index
+        self%prev_roind = self%pftcc_ptr%get_roind(360.-o_prev%e3get()) ! in-plane angle index
+        self%prev_shvec = o_prev%get_2Dshift()                     ! shift vector
+        self%prev_proj  = self%e_ptr%find_closest_proj(o_prev,1)        ! projection direction
+        if( self%prev_state > self%nstates ) stop 'previous best state outside boundary; prep4srch; simple_prime3D_srch'
         if( self%prev_state > 0 )then
-            if( self%prev_state > self%nstates ) stop 'previous best state outside boundary; prep4srch; simple_prime3D_srch'
             if( .not. state_exists(self%prev_state) ) stop 'empty previous state; prep4srch; simple_prime3D_srch'
         endif
         select case( self%refine )
-            case( 'no','shc','snhc','greedy')
-                ! 
-            case( 'neigh','shcneigh', 'greedyneigh' )
+            case( 'no','shc','snhc','greedy')         ! DISCRETE CASE
+                ! find closest ori with same state
+                self%prev_ref = o_refs(self%iptcl)%find_closest_proj(o_prev, self%prev_state)
+            case( 'neigh','shcneigh', 'greedyneigh' ) ! DISCRETE CASE WITH NEIGHBOURHOOD
                 ! disjoint nearest neighbour set
                 nnvec = merge_into_disjoint_set(self%nprojs, self%nnn_static, nnmat, target_projs)
+                ! find closest ori with same state
+                self%prev_ref = o_refs(self%iptcl)%find_closest_proj(o_prev, self%prev_state)
             case( 'het' )
-                !
+                self%prev_ref = (self%prev_state-1)*self%nprojs + self%prev_proj
             case( 'states' )
-                !
+                self%prev_ref = o_refs(self%iptcl)%find_closest_proj(o_prev, self%prev_state)
             case DEFAULT
                 stop 'Unknown refinement mode; simple_prime3D_srch; prep4srch'
         end select
@@ -845,7 +883,7 @@ contains
         self%specscore = self%pftcc_ptr%specscore(self%prev_ref, self%iptcl, self%prev_roind)
         ! prep corr
         if( self%refine .ne. 'het' )then
-            corrs = self%pftcc_ptr%gencorrs(self%prev_ref, self%iptcl)
+            call self%pftcc_ptr%gencorrs(self%prev_ref, self%iptcl, corrs)
             corr  = max(0.,maxval(corrs))
             if( corr - 1.0 > 1.0e-5 .or. .not. is_a_number(corr) )then
                 print *, 'FLOATING POINT EXCEPTION ALARM; simple_prime3D_srch :: prep4srch'
@@ -872,7 +910,8 @@ contains
         integer    :: roind, neff_states
         logical    :: included(self%npeaks)
         ! empty states
-        neff_states = count(state_exists)
+        neff_states = 1
+        if(self%nstates > 1)neff_states = count(state_exists)
         ! init npeaks
         do ipeak = 1, self%npeaks
             cnt = self%nrefs - self%npeaks + ipeak
@@ -881,21 +920,21 @@ contains
                 print *, 'ref: ', ref
                 stop 'ref index out of bound; simple_prime3D_srch::prep_npeaks_oris'
             endif
-            state = proj_space_state(self%iptcl,ref)
+            state = nint( o_refs(self%iptcl)%get(ref, 'state') )
             if( .not. state_exists(state) )then
                 print *, 'empty state: ', state
                 stop 'simple_prime3D_srch::prep_npeaks_oris'
             endif
             ! add shift
             shvec = self%prev_shvec
-            if( self%doshift )shvec = shvec + proj_space_shift(self%iptcl,ref,1:2)
+            if( self%doshift )shvec = shvec + o_refs(self%iptcl)%get_2Dshift(ref)
             where( abs(shvec) < 1e-6 ) shvec = 0.
             ! transfer to solution set
-            corrs(ipeak) = proj_space_corrs(self%iptcl,ref)
+            corrs(ipeak) = o_refs(self%iptcl)%get(ref, 'corr')
             call o_peaks(self%iptcl)%set(ipeak, 'state', real(state))
-            call o_peaks(self%iptcl)%set(ipeak, 'proj',  real(proj_space_proj(self%iptcl,ref)))
-            call o_peaks(self%iptcl)%set(ipeak, 'corr',  corrs(ipeak))
-            call o_peaks(self%iptcl)%set_euler(ipeak, proj_space_euls(self%iptcl,ref,1:3))
+            call o_peaks(self%iptcl)%set(ipeak, 'proj', o_refs(self%iptcl)%get(ref, 'proj'))
+            call o_peaks(self%iptcl)%set(ipeak, 'corr', corrs(ipeak))
+            call o_peaks(self%iptcl)%set_euler(ipeak,   o_refs(self%iptcl)%get_euler(ref))
             call o_peaks(self%iptcl)%set_shift(ipeak, shvec)
         enddo
         best_loc = maxloc(corrs)
@@ -1000,13 +1039,21 @@ contains
         DebugPrint '>>> PRIME3D_SRCH::EXECUTED PREP_NPEAKS_ORIS'
     end subroutine prep_npeaks_oris_and_weights
 
+    !>  \brief store_solution stash solution in o_refs
+    !! \param ind proj index
+    !! \param ref ref index
+    !! \param inpl_ind in-plane index
+    !! \param corr solution
     subroutine store_solution( self, ind, ref, inpl_ind, corr )
         class(prime3D_srch),     intent(inout) :: self
         integer,                 intent(in)    :: ind, ref, inpl_ind
         real,                    intent(in)    :: corr
-        proj_space_inds(self%iptcl,ind)   = ref
-        proj_space_euls(self%iptcl,ref,3) = 360. - self%pftcc_ptr%get_rot( inpl_ind )
-        proj_space_corrs(self%iptcl,ref)  = corr
+        real :: e3
+        proj_space_inds(self%iptcl,ind) = ref                             ! stash reference similarly to other search modes
+        e3 = 360. - self%pftcc_ptr%get_rot( inpl_ind )                             ! psi
+        call o_refs(self%iptcl)%set( ref, 'e3',   e3   )                  ! stash psi
+        call o_refs(self%iptcl)%set( ref, 'corr', corr )                  ! stash correlation
+        if( self%npeaks==1 ) call o_refs(self%iptcl)%set( ref, 'ow', 1. ) ! set reconstruction weight
     end subroutine store_solution
 
-end module simple_prime3D_srch_dev
+end module simple_prime3D_srch
