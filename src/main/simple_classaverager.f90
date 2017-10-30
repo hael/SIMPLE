@@ -655,11 +655,8 @@ contains
         do istate=1,nstates
             do icls=1,ncls
                 call cavgs_even(istate,icls)%clip_inplace(ldim)
-                call cavgs_even(istate,icls)%write('test_even.mrc', icls)
                 call cavgs_odd(istate,icls)%clip_inplace(ldim)
-                call cavgs_odd(istate,icls)%write('test_odd.mrc', icls)
                 call cavgs_merged(istate,icls)%clip_inplace(ldim)
-                call cavgs_odd(istate,icls)%write('test_merged.mrc', icls)
             end do
         end do
     end subroutine cavger_merge_eos_and_norm
