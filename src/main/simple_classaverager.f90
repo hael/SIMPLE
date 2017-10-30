@@ -424,10 +424,10 @@ contains
         kbwin     = kbinterpol(KBWINSZ, pp%alpha)
         zero      = cmplx(0.,0.)
         wdim      = kbwin%get_wdim()
-        allocate(cmat_even(lims(1,1):cyc_lims(1,2),cyc_lims(2,1):cyc_lims(2,2)),&
-                &cmat_odd(lims(1,1):cyc_lims(1,2),cyc_lims(2,1):cyc_lims(2,2)),&
-                &rho_even(lims(1,1):cyc_lims(1,2),cyc_lims(2,1):cyc_lims(2,2)),&
-                &rho_odd(lims(1,1):cyc_lims(1,2),cyc_lims(2,1):cyc_lims(2,2)),&
+        allocate(cmat_even(lims(1,1)-wdim:cyc_lims(1,2),cyc_lims(2,1):cyc_lims(2,2)),&
+                &cmat_odd(lims(1,1)-wdim:cyc_lims(1,2),cyc_lims(2,1):cyc_lims(2,2)),&
+                &rho_even(lims(1,1)-wdim:cyc_lims(1,2),cyc_lims(2,1):cyc_lims(2,2)),&
+                &rho_odd(lims(1,1)-wdim:cyc_lims(1,2),cyc_lims(2,1):cyc_lims(2,2)),&
                 &w(wdim, wdim), stat=alloc_stat)
         call alloc_errchk('cavger_assemble_sums; simple_classaverager', alloc_stat)
         call batch_imgsum_even%new(ldim_pd, pp%smpd)
