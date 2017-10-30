@@ -213,7 +213,7 @@ contains
         allocate( primesrch3D(p%fromp:p%top) , stat=alloc_stat)
         allocchk("In hadamard3D_matcher::prime3D_exec primesrch3D objects ")
         do iptcl=p%fromp,p%top
-            call primesrch3D(iptcl)%new(iptcl, p, pftcc, b%a, b%e, b%se)
+            call primesrch3D(iptcl)%new(iptcl, p, pftcc, b%a, b%se)
         end do
         ! generate CTF matrices
         if( p%ctf .ne. 'no' ) call pftcc%create_polar_ctfmats(b%a)

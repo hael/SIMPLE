@@ -30,7 +30,6 @@ type prime3D_srch
     private
     class(polarft_corrcalc), pointer :: pftcc_ptr      => null() !< corrcalc object
     class(oris),             pointer :: a_ptr          => null() !< b%a (primary particle orientation table)
-    class(oris),             pointer :: e_ptr          => null() !< b%e (reference orientations)
     class(sym),              pointer :: se_ptr         => null() !< b%se (symmetry elements)
     type(pftcc_shsrch)               :: shsrch_obj               !< origin shift search object
     integer                          :: iptcl          = 0       !< global particle index
@@ -225,21 +224,19 @@ contains
         endif
     end subroutine prep4prime3D_srch
 
-    subroutine new( self, iptcl, p, pftcc, a, e, se )
+    subroutine new( self, iptcl, p, pftcc, a, se )
         use simple_params, only: params
         class(prime3D_srch),             intent(inout) :: self   !< instance
         integer,                         intent(in)    :: iptcl  !< global particle index
         class(params),                   intent(in)    :: p      !< parameters
         class(polarft_corrcalc), target, intent(in)    :: pftcc  !< corrcalc object
         class(oris),             target, intent(in)    :: a      !< b%a (primary particle orientation table)
-        class(oris),             target, intent(in)    :: e      !< b%e (reference orientations)
         class(sym),              target, intent(in)    :: se     !< b%se (symmetry elements)
         integer :: alloc_stat, nstates_eff
         real    :: lims(2,2), lims_init(2,2)
         ! set constants
         self%pftcc_ptr   => pftcc
         self%a_ptr       => a
-        self%e_ptr       => e
         self%se_ptr      => se
         self%iptcl       =  iptcl
         self%nstates     =  p%nstates
@@ -464,10 +461,9 @@ contains
         integer,             intent(in)    :: grid_projs(:)
         integer,             intent(inout) :: target_projs(:)
         real      :: inpl_corrs(self%nrots), corrs(self%nrefs), inpl_corr
-        integer   :: iref, isample, nrefs, ntargets, cnt, prev_proj, istate
+        integer   :: iref, isample, nrefs, ntargets, cnt, istate
         integer   :: state_cnt(self%nstates), iref_state, loc(1), inpl_ind
         if( nint(self%a_ptr%get(self%iptcl,'state')) > 0 )then
-            prev_proj = self%e_ptr%find_closest_proj(self%a_ptr%get_ori(self%iptcl),1)
             ! initialize
             target_projs = 0
             proj_space_corrs(self%iptcl,:) = -1.
@@ -486,7 +482,7 @@ contains
             ! return target points
             ntargets = size(target_projs)
             cnt = 1
-            target_projs( cnt ) = prev_proj ! previous always part of the targets
+            target_projs( cnt ) = prev_proj(self%iptcl) ! previous always part of the targets
             if( self%nstates == 1 )then
                 ! Single state
                 do isample=self%nrefs,self%nrefs - ntargets + 1,-1
@@ -741,7 +737,6 @@ contains
             ! initialize
             o = self%a_ptr%get_ori(self%iptcl)
             self%prev_roind = self%pftcc_ptr%get_roind(360.-o%e3get())
-            prev_proj(self%iptcl)  = self%e_ptr%find_closest_proj(o,1)
             if( self%a_ptr%get(self%iptcl,'corr') < extr_bound)then
                 ! state randomization
                 statecnt(self%prev_state) = statecnt(self%prev_state) + 1
