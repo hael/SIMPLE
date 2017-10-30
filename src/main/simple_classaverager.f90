@@ -8,7 +8,7 @@ use simple_timer    ! use all in there
 implicit none
 
 public :: cavger_new, cavger_transf_oridat, cavger_get_cavg, cavger_set_cavg, cavger_assemble_sums,&
-cavger_merge_eos_and_norm, cavger_calc_and_write_frcs, cavger_eoavg, cavger_write, cavger_read,&
+cavger_merge_eos_and_norm, cavger_calc_and_write_frcs_and_eoavg, cavger_write, cavger_read,&
 cavger_write_partial_sums, cavger_assemble_sums_from_parts, cavger_kill, cavgs_even, cavgs_odd, cavgs_merged
 private
 
@@ -37,6 +37,7 @@ integer                        :: partsz     = 0           !< size of partition
 integer                        :: ncls       = 0           !< # classes
 integer                        :: nstates    = 0           !< # states
 integer                        :: nrots      = 0           !< # in-plane rotations
+integer                        :: filtsz     = 0           !< size of filter function or FSC
 integer                        :: ldim(3)    = [0,0,0]     !< logical dimension of image
 integer                        :: ldim_pd(3) = [0,0,0]     !< logical dimension of image, padded
 real                           :: smpd       = 0.          !< sampling distance
@@ -119,6 +120,7 @@ contains
         ldim       = [pp%box,pp%box,1]
         ldim_pd    = [pp%boxpd,pp%boxpd,1]
         ldim_pd(3) = 1
+        filtsz     = b%img%get_filtsz()
         ! build arrays
         allocate(precs(partsz), cavgs_even(p%nstates,ncls), cavgs_odd(p%nstates,ncls),&
         &cavgs_merged(p%nstates,ncls), ctfsqsums_even(p%nstates,ncls),&
@@ -126,12 +128,12 @@ contains
         call alloc_errchk('cavger_new; simple_classaverager_dev', alloc_stat)
         do istate=1,p%nstates
             do icls=1,ncls
-                call cavgs_even(istate,icls)%new(ldim_pd,p%smpd)
-                call cavgs_odd(istate,icls)%new(ldim_pd,p%smpd)
-                call cavgs_merged(istate,icls)%new(ldim_pd,p%smpd)
-                call ctfsqsums_even(istate,icls)%new(ldim_pd,p%smpd)
-                call ctfsqsums_odd(istate,icls)%new(ldim_pd,p%smpd)
-                call ctfsqsums_merged(istate,icls)%new(ldim_pd,p%smpd)
+                call cavgs_even(istate,icls)%new(ldim_pd,p%smpd,wthreads=.false.)
+                call cavgs_odd(istate,icls)%new(ldim_pd,p%smpd,wthreads=.false.)
+                call cavgs_merged(istate,icls)%new(ldim_pd,p%smpd,wthreads=.false.)
+                call ctfsqsums_even(istate,icls)%new(ldim_pd,p%smpd,wthreads=.false.)
+                call ctfsqsums_odd(istate,icls)%new(ldim_pd,p%smpd,wthreads=.false.)
+                call ctfsqsums_merged(istate,icls)%new(ldim_pd,p%smpd,wthreads=.false.)
             end do
         end do
         ! flag existence
@@ -273,15 +275,15 @@ contains
         integer :: istate, icls
         do istate=1,nstates
             do icls=1,ncls
-                call cavgs_even(istate,icls)%new(ldim_pd,smpd)
-                call cavgs_odd(istate,icls)%new(ldim_pd,smpd)
-                call cavgs_merged(istate,icls)%new(ldim_pd,smpd)
-                cavgs_even(istate,icls)       = cmplx(0.,0.)
-                cavgs_odd(istate,icls)        = cmplx(0.,0.)
-                cavgs_merged(istate,icls)     = cmplx(0.,0.)
-                ctfsqsums_even(istate,icls)   = cmplx(0.,0.)
-                ctfsqsums_odd(istate,icls)    = cmplx(0.,0.)
-                ctfsqsums_merged(istate,icls) = cmplx(0.,0.)
+                call cavgs_even(istate,icls)%new(ldim_pd,smpd,wthreads=.false.)
+                call cavgs_odd(istate,icls)%new(ldim_pd,smpd,wthreads=.false.)
+                call cavgs_merged(istate,icls)%new(ldim_pd,smpd,wthreads=.false.)
+                call cavgs_even(istate,icls)%zero_and_flag_ft
+                call cavgs_odd(istate,icls)%zero_and_flag_ft
+                call cavgs_merged(istate,icls)%zero_and_flag_ft
+                call ctfsqsums_even(istate,icls)%zero_and_flag_ft
+                call ctfsqsums_odd(istate,icls)%zero_and_flag_ft
+                call ctfsqsums_merged(istate,icls)%zero_and_flag_ft
             end do
         end do
     end subroutine init_cavgs_sums
@@ -587,8 +589,8 @@ contains
                     ! $omp end parallel do
 
                     ! batch summation
-                    call cavgs_even(istate,icls)%add( batch_imgsum_even)
-                    call cavgs_odd(istate,icls)%add( batch_imgsum_odd)
+                    call cavgs_even(istate,icls)%add(batch_imgsum_even)
+                    call cavgs_odd(istate,icls)%add(batch_imgsum_odd)
                     call ctfsqsums_even(istate,icls)%add( batch_rhosum_even)
                     call ctfsqsums_odd(istate,icls)%add( batch_rhosum_odd)
                     
@@ -628,59 +630,91 @@ contains
     !>  \brief  merges the even/odd pairs and normalises the sums
     subroutine cavger_merge_eos_and_norm
         integer :: istate, icls
-        do istate=1,nstates
-            do icls=1,ncls
-                ! merging
-                cavgs_merged(istate,icls) = cmplx(0.,0.)
+        !$omp parallel do default(shared) private(istate,icls) schedule(static) proc_bind(close)
+        do icls=1,ncls
+            do istate=1,nstates
+                call cavgs_merged(istate,icls)%zero_and_flag_ft
                 call cavgs_merged(istate,icls)%add(cavgs_even(istate,icls))
                 call cavgs_merged(istate,icls)%add(cavgs_odd(istate,icls))
-                ctfsqsums_merged(istate,icls) = cmplx(0.,0.)
+                call ctfsqsums_merged(istate,icls)%zero_and_flag_ft
                 call ctfsqsums_merged(istate,icls)%add(ctfsqsums_even(istate,icls))
                 call ctfsqsums_merged(istate,icls)%add(ctfsqsums_odd(istate,icls))
                 ! (w*CTF)**2 density correction
                 call cavgs_even(istate,icls)%ctf_dens_correct(ctfsqsums_even(istate,icls))
                 call cavgs_even(istate,icls)%bwd_ft
-                call cavgs_even(istate,icls)%clip_inplace(ldim)
                 call cavgs_odd(istate,icls)%ctf_dens_correct(ctfsqsums_odd(istate,icls))
                 call cavgs_odd(istate,icls)%bwd_ft
-                call cavgs_odd(istate,icls)%clip_inplace(ldim)
                 call cavgs_merged(istate,icls)%ctf_dens_correct(ctfsqsums_merged(istate,icls))
                 call cavgs_merged(istate,icls)%bwd_ft
-                call cavgs_merged(istate,icls)%clip_inplace(ldim)
             end do
-         end do
+        end do
+        !$omp end parallel do
+        ! serial code for the clip
+        do istate=1,nstates
+            do icls=1,ncls
+                call cavgs_even(istate,icls)%clip_inplace(ldim)
+                call cavgs_even(istate,icls)%write('test_even.mrc', icls)
+                call cavgs_odd(istate,icls)%clip_inplace(ldim)
+                call cavgs_odd(istate,icls)%write('test_odd.mrc', icls)
+                call cavgs_merged(istate,icls)%clip_inplace(ldim)
+                call cavgs_odd(istate,icls)%write('test_merged.mrc', icls)
+            end do
+        end do
     end subroutine cavger_merge_eos_and_norm
 
     !>  \brief  calculates Fourier ring correlations
-    subroutine cavger_calc_and_write_frcs( fname )
+    subroutine cavger_calc_and_write_frcs_and_eoavg( fname )
         character(len=*), intent(in) :: fname
-        type(image)       :: even_img, odd_img
-        real, allocatable :: res(:), frc(:)
-        integer           :: istate, icls
-        logical           :: err
+        type(image), allocatable     :: even_imgs(:,:), odd_imgs(:,:)
+        real,        allocatable     :: frc(:)
+        integer :: istate, icls, find
+        logical :: err
+        ! serial code for allocation/copy
+        allocate(even_imgs(nstates,ncls), odd_imgs(nstates,ncls), frc(filtsz))
         do istate=1,nstates
             do icls=1,ncls
-                even_img = cavgs_even(istate,icls)
-                odd_img  = cavgs_odd(istate,icls)
-                call even_img%norm
-                call odd_img%norm
-                if( pp%l_innermsk )then
-                    call even_img%mask(pp%msk, 'soft', inner=pp%inner, width=pp%width)
-                    call odd_img%mask(pp%msk, 'soft', inner=pp%inner, width=pp%width)
-                else
-                    call even_img%mask(pp%msk, 'soft')
-                    call odd_img%mask(pp%msk, 'soft')
-                endif
-                call even_img%fwd_ft
-                call odd_img%fwd_ft
-                call even_img%fsc(odd_img, res, frc)
-                call bp%projfrcs%set_frc(icls, frc, istate)
-                call even_img%kill
-                call odd_img%kill
+                call even_imgs(istate,icls)%copy(cavgs_even(istate,icls))
+                call odd_imgs(istate,icls)%copy(cavgs_odd(istate,icls))
             end do
         end do
+        ! parallel loop to do the job
+        !$omp parallel do default(shared) private(istate,icls,frc,find) schedule(static) proc_bind(close)
+        do icls=1,ncls
+            do istate=1,nstates
+                call even_imgs(istate,icls)%norm
+                call odd_imgs(istate,icls)%norm
+                if( pp%l_innermsk )then
+                    call even_imgs(istate,icls)%mask(pp%msk, 'soft', inner=pp%inner, width=pp%width)
+                    call odd_imgs(istate,icls)%mask(pp%msk, 'soft', inner=pp%inner, width=pp%width)
+                else
+                    call even_imgs(istate,icls)%mask(pp%msk, 'soft')
+                    call odd_imgs(istate,icls)%mask(pp%msk, 'soft')
+                endif
+                call even_imgs(istate,icls)%fwd_ft
+                call odd_imgs(istate,icls)%fwd_ft
+                call even_imgs(istate,icls)%fsc(odd_imgs(istate,icls), frc)
+                call bp%projfrcs%set_frc(icls, frc, istate)
+                ! average low-resolution info between eo pairs to keep things in register
+                find = bp%projfrcs%estimate_find_for_eoavg(icls, istate)
+                call cavgs_merged(istate,icls)%fwd_ft
+                call cavgs_even(istate,icls)%fwd_ft
+                call cavgs_odd(istate,icls)%fwd_ft
+                call cavgs_even(istate,icls)%insert_lowres(cavgs_merged(istate,icls), find)
+                call cavgs_odd(istate,icls)%insert_lowres(cavgs_merged(istate,icls), find)
+                call cavgs_merged(istate,icls)%bwd_ft
+                call cavgs_even(istate,icls)%bwd_ft
+                call cavgs_odd(istate,icls)%bwd_ft
+                ! destruct
+                call even_imgs(istate,icls)%kill
+                call odd_imgs(istate,icls)%kill
+            end do
+        end do
+        !$omp end parallel do
+        ! write FRCs
         call bp%projfrcs%write(fname)
-    end subroutine cavger_calc_and_write_frcs
+        ! destruct
+        deallocate(even_imgs, odd_imgs, frc)
+    end subroutine cavger_calc_and_write_frcs_and_eoavg
 
     subroutine calc_tfun_vals( iprec, vec, tval, tvalsq )
         integer, intent(in)    :: iprec        !< particle record
@@ -707,24 +741,6 @@ contains
             tvalsq = tval
         endif
     end subroutine calc_tfun_vals
-
-    !> \brief average low-resolution info between eo pairs
-    subroutine cavger_eoavg
-        integer :: find, istate, icls
-        do istate=1,nstates
-            do icls=1,ncls
-                find = bp%projfrcs%estimate_find_for_eoavg(icls, istate)
-                call cavgs_merged(istate,icls)%fwd_ft
-                call cavgs_even(istate,icls)%fwd_ft
-                call cavgs_odd(istate,icls)%fwd_ft
-                call cavgs_even(istate,icls)%insert_lowres(cavgs_merged(istate,icls), find)
-                call cavgs_odd(istate,icls)%insert_lowres(cavgs_merged(istate,icls), find)
-                call cavgs_merged(istate,icls)%bwd_ft
-                call cavgs_even(istate,icls)%bwd_ft
-                call cavgs_odd(istate,icls)%bwd_ft
-            end do
-        end do
-    end subroutine cavger_eoavg
 
     ! I/O
 
@@ -772,7 +788,7 @@ contains
                 end do
             case('odd')
                 do icls=1,ncls
-                call cavgs_odd(sstate,icls)%new(ldim,smpd)
+                    call cavgs_odd(sstate,icls)%new(ldim,smpd)
                     call cavgs_odd(sstate, icls)%read(fname, icls)
                 end do
             case('merged')
@@ -813,12 +829,19 @@ contains
 
     !>  \brief  re-generates the object after distributed execution
     subroutine cavger_assemble_sums_from_parts
-        type(image)                   :: img4read
+        type(image), allocatable :: imgs4read(:)
         character(len=:), allocatable :: cae, cao, cte, cto
         integer :: ipart, istate, icls
         call init_cavgs_sums
-        call img4read%new(ldim_pd, smpd)
-        call img4read%set_ft(.true.)
+        allocate(imgs4read(4))
+        call imgs4read(1)%new(ldim_pd, smpd)
+        call imgs4read(1)%set_ft(.true.)
+        call imgs4read(2)%new(ldim_pd, smpd)
+        call imgs4read(2)%set_ft(.true.)
+        call imgs4read(3)%new(ldim_pd, smpd)
+        call imgs4read(3)%set_ft(.true.)
+        call imgs4read(4)%new(ldim_pd, smpd)
+        call imgs4read(4)%set_ft(.true.)
         do istate=1,nstates
             do ipart=1,pp%nparts
                 if( nstates > 1 )then
@@ -832,46 +855,38 @@ contains
                     allocate(cte, source='ctfsqsums_even_part'//int2str_pad(ipart,pp%numlen)//pp%ext)
                     allocate(cto, source='ctfsqsums_odd_part'//int2str_pad(ipart,pp%numlen)//pp%ext)
                 endif
-                if( file_exists(cae) )then
-                    do icls=1,ncls
-                        call img4read%read(cae, icls)
-                        call cavgs_even(istate,icls)%add(img4read)
-                    end do
-                else
+                if( .not. file_exists(cae) )then
                     write(*,*) 'File does not exists: ', trim(cae)
                     stop 'In: simple_classaverager :: cavger_assemble_sums_from_parts'
                 endif
-                if( file_exists(cao) )then
-                    do icls=1,ncls
-                        call img4read%read(cao, icls)
-                        call cavgs_odd(istate,icls)%add(img4read)
-                    end do
-                else
+                if( .not. file_exists(cao) )then
                     write(*,*) 'File does not exists: ', trim(cao)
                     stop 'In: simple_classaverager :: cavger_assemble_sums_from_parts'
                 endif
-                if( file_exists(cte) )then
-                    do icls=1,ncls
-                        call img4read%read(cte, icls)
-                        call ctfsqsums_even(istate,icls)%add(img4read)
-                    end do
-                else
+                if( .not. file_exists(cte) )then
                     write(*,*) 'File does not exists: ', trim(cte)
                     stop 'In: simple_classaverager :: cavger_assemble_sums_from_parts'
                 endif
-                if( file_exists(cto) )then
-                    do icls=1,ncls
-                        call img4read%read(cto, icls)
-                        call ctfsqsums_odd(istate,icls)%add(img4read)
-                    end do
-                else
+                if( .not. file_exists(cto) )then
                     write(*,*) 'File does not exists: ', trim(cto)
                     stop 'In: simple_classaverager :: cavger_assemble_sums_from_parts'
                 endif
+                do icls=1,ncls
+                    call imgs4read(1)%read(cae, icls)
+                    call imgs4read(2)%read(cao, icls)
+                    call imgs4read(3)%read(cte, icls)
+                    call imgs4read(4)%read(cto, icls)
+                    call cavgs_even(istate,icls)%add_workshare(imgs4read(1), cavgs_odd(istate,icls),imgs4read(2),&
+                        &ctfsqsums_even(istate,icls), imgs4read(3), ctfsqsums_odd(istate,icls), imgs4read(4))
+                end do
                 deallocate(cae, cao, cte, cto)
             end do
         end do
-        call img4read%kill
+        call imgs4read(1)%kill
+        call imgs4read(2)%kill
+        call imgs4read(3)%kill
+        call imgs4read(4)%kill
+        deallocate(imgs4read)
         call cavger_merge_eos_and_norm()
     end subroutine cavger_assemble_sums_from_parts
 

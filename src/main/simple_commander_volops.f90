@@ -79,7 +79,9 @@ contains
         call even%fwd_ft
         call odd%fwd_ft
         ! calculate FSC
-        call even%fsc(odd, res, corrs)
+        res = even%get_res()
+        allocate(corrs(even%get_filtsz()))
+        call even%fsc(odd, corrs)
         do j=1,size(res)
            write(*,'(A,1X,F6.2,1X,A,1X,F7.3)') '>>> RESOLUTION:', res(j), '>>> CORRELATION:', corrs(j)
         end do

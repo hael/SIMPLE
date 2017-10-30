@@ -18,12 +18,11 @@ implicit none
 contains
 
     !>  \brief  generates an array of projection images of volume vol in orientations o
-    function projvol( vol, o, p, top, lp ) result( imgs )
+    function projvol( vol, o, p, top ) result( imgs )
         class(image),      intent(inout) :: vol     !< volume to project
         class(oris),       intent(inout) :: o       !< orientations
         class(params),     intent(inout) :: p       !< parameters
         integer, optional, intent(in)    :: top     !< stop index
-        real,    optional, intent(inout) :: lp      !< low-pass
         type(image),       allocatable :: imgs(:)   !< resulting images
         type(projector)  :: vol_pad, img_pad
         type(kbinterpol) :: kbwin
@@ -43,12 +42,8 @@ contains
         write(*,'(A)') '>>> GENERATES PROJECTIONS' 
         do i=1,n
             call progress(i, n)
-            call imgs(i)%new([p%box,p%box,1], p%smpd)
-            if( present(lp) )then
-                call vol_pad%fproject( o%get_ori(i), img_pad, lp=lp )
-            else
-                call vol_pad%fproject( o%get_ori(i), img_pad )
-            endif
+            call imgs(i)%new([p%box,p%box,1], p%smpd, wthreads=.false.)
+            call vol_pad%fproject( o%get_ori(i), img_pad )
             call img_pad%bwd_ft
             call img_pad%clip(imgs(i))
         end do

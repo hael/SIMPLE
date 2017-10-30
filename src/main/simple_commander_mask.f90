@@ -75,6 +75,7 @@ contains
                 call mskvol%new(ldim, p%smpd)
                 call mskvol%read(p%mskfile)
                 call b%vol%mul(mskvol)
+                call mskvol%kill
                 if( p%outvol .ne. '' )call b%vol%write(p%outvol, del_if_exists=.true.)
             else if( p%automsk.eq.'yes' )then
                 stop '3D automasking now deferred to program: postproc_vol'

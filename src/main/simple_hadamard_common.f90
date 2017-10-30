@@ -740,13 +740,14 @@ contains
         type(oris)               :: e_space
         type(image)              :: even, odd, mskvol
         type(image), allocatable :: even_imgs(:), odd_imgs(:)
-        real,        allocatable :: frc(:), res(:)
+        real,        allocatable :: frc(:)
         integer :: iproj, ldim(3)
         ! ensure correct b%vol dim
         call b%vol%new([p%box,p%box,p%box],p%smpd) 
         ! read & prep even/odd pair
         call b%vol%read(ename)
         call b%vol2%read(oname)
+        call mskvol%new([p%box, p%box, p%box], p%smpd)
         call prepeovol(b%vol)
         call prepeovol(b%vol2)
         ! create e_space
@@ -756,11 +757,12 @@ contains
         even_imgs = projvol(b%vol,  e_space, p)
         odd_imgs  = projvol(b%vol2, e_space, p)
         ! calculate FRCs and fill-in projfrcs object
-        !$omp parallel do default(shared) private(iproj,res,frc) schedule(static) proc_bind(close)
+        allocate(frc(even_imgs(1)%get_filtsz()))
+        !$omp parallel do default(shared) private(iproj,frc) schedule(static) proc_bind(close)
         do iproj=1,NSPACE_BALANCE
             call even_imgs(iproj)%fwd_ft
             call odd_imgs(iproj)%fwd_ft
-            call even_imgs(iproj)%fsc(odd_imgs(iproj), res, frc, serial=.true.)
+            call even_imgs(iproj)%fsc(odd_imgs(iproj), frc)
             call projfrcs%set_frc(iproj, frc, state)
             call even_imgs(iproj)%kill
             call odd_imgs(iproj)%kill
@@ -779,7 +781,7 @@ contains
                 ! masking
                 if( cline%defined('mskfile') )then
                     ! mask provided
-                    call mskvol%new([p%box, p%box, p%box], p%smpd)
+                    
                     call mskvol%read(p%mskfile)
                     call vol%zero_background
                     call vol%mul(mskvol)

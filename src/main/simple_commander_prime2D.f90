@@ -128,9 +128,8 @@ contains
             call cavger_write_partial_sums()
             call qsys_job_finished( p, 'simple_commander_prime2D :: exec_makecavgs' )
         else
-            call cavger_calc_and_write_frcs('frcs.bin')
+            call cavger_calc_and_write_frcs_and_eoavg('frcs.bin')
             call gen2Dclassdoc( b, p, 'classdoc.txt')
-            call cavger_eoavg
             if( cline%defined('refs') )then
                 call cavger_write(p%refs,      'merged')
                 call cavger_write(p%refs_even, 'even'  )
@@ -213,9 +212,8 @@ contains
             p%refs_even = 'startcavgs_even'//p%ext
             p%refs_odd  = 'startcavgs_odd'//p%ext
         endif
-        call cavger_calc_and_write_frcs(p%frcs)
+        call cavger_calc_and_write_frcs_and_eoavg(p%frcs)
         call gen2Dclassdoc( b, p, 'classdoc.txt')
-        call cavger_eoavg
         call cavger_write(trim(p%refs),      'merged')
         call cavger_write(trim(p%refs_even), 'even'  )
         call cavger_write(trim(p%refs_odd),  'odd'   )

@@ -173,6 +173,8 @@ contains
         logical           :: err
         p = params(cline)                                 ! parameters generated
         call b%build_general_tbox(p, cline, do3d=.false.) ! general objects built
+        res = b%img%get_res()
+        allocate(corrs(b%img%get_filtsz()))
         if( cline%defined('msk') )then
             if( p%stats .eq. 'yes' )then
                 allocate(corrs(p%nptcls), stat=alloc_stat)
@@ -218,7 +220,7 @@ contains
             do iptcl=1,p%nptcls
                 call b%img%read(p%stk, iptcl)
                 call b%img_copy%read(p%stk2, iptcl)
-                call b%img%fsc(b%img_copy, res, corrs)
+                call b%img%fsc(b%img_copy, corrs)
                 if( .not. allocated(corrs_sum) )then
                     allocate(corrs_sum(size(corrs)), stat=alloc_stat)
                     allocchk('In: simple_commander_imgproc:: corrcompare , 2')

@@ -31,7 +31,8 @@ type :: image
     type(c_ptr)                            :: plan_fwd             !< fftw plan for the image (fwd)
     type(c_ptr)                            :: plan_bwd             !< fftw plan for the image (bwd)
     integer                                :: array_shape(3)       !< shape of complex array
-    logical                                :: existence=.false.    !< indicates existence
+    logical                                :: wthreads  = .false.  !< with threads flag   
+    logical                                :: existence = .false.  !< indicates existence
   contains
     ! CONSTRUCTORS
     procedure          :: new
@@ -131,6 +132,7 @@ type :: image
     procedure, private :: add_4
     procedure, private :: add_5
     generic            :: add => add_1, add_2, add_3, add_4, add_5
+    procedure          :: add_workshare
     procedure, private :: subtr_1
     procedure, private :: subtr_2
     procedure, private :: subtr_3
@@ -248,6 +250,7 @@ type :: image
     procedure          :: dead_hot_positions
     procedure          :: taper_edges
     procedure          :: zero_and_unflag_ft
+    procedure          :: zero_and_flag_ft
     procedure          :: zero_background
     procedure          :: subtr_backgr_pad_divwinstr_fft
     procedure          :: salt_n_pepper
@@ -305,13 +308,12 @@ contains
     !! \param backgr  constant initial background
     !! \return  self new image object
     !!
-    function constructor( ldim, smpd, backgr, wthreads ) result( self ) !(FAILS W PRESENT GFORTRAN)
+    function constructor( ldim, smpd, wthreads ) result( self ) !(FAILS W PRESENT GFORTRAN)
         integer,           intent(in) :: ldim(:)
         real,              intent(in) :: smpd
-        real,    optional, intent(in) :: backgr
         logical, optional, intent(in) :: wthreads
         type(image) :: self
-        call self%new( ldim, smpd, backgr, wthreads )
+        call self%new( ldim, smpd, wthreads )
     end function constructor
 
     !>  \brief  Constructor for simple_image class
@@ -321,19 +323,18 @@ contains
     !!\param smpd sampling distance
     !!\param backgr constant initial background
     !!
-    !!\return new image object
-    subroutine new( self, ldim, smpd, backgr, wthreads )
+    !!\return new image object 
+    subroutine new( self, ldim, smpd, wthreads )
     !! have to have a type-bound constructor here because we get a sigbus error with the function construct
     !! "program received signal sigbus: access to an undefined portion of a memory object."
     !! this seems to be related to how the cstyle-allocated matrix is referenced by the gfortran compiler
         class(image),      intent(inout) :: self
         integer,           intent(in)    :: ldim(3)
         real,              intent(in)    :: smpd
-        real,    optional, intent(in)    :: backgr
         logical, optional, intent(in)    :: wthreads
         integer(kind=c_int) :: rc
         integer             :: i
-        logical             :: wwthreads, do_allocate
+        logical             :: do_allocate
         integer(kind=c_int) :: wsdm_ret
         ! we need to be clever about allocation (because it is costly)
         if( self%existence )then
@@ -348,9 +349,9 @@ contains
         else
             do_allocate = .true.
         endif
-        wwthreads = .true.
-        if( present(wthreads) ) wwthreads = wthreads
-        wwthreads = wwthreads .and. nthr_glob > 1
+        self%wthreads = .true.
+        if( present(wthreads) ) self%wthreads = wthreads
+        self%wthreads = self%wthreads .and. nthr_glob > 1
         self%ldim = ldim
         self%smpd = smpd
         ! Make Fourier iterator
@@ -371,14 +372,11 @@ contains
         endif
         ! put back the shape of the complex array
         self%array_shape(1) = fdim(self%ldim(1))
-        if( present(backgr) )then
-            self%rmat = backgr
-        else
-            self%rmat = 0.
-        endif
-        self%ft = .false.
+        ! init
+        self%rmat = 0.
+        self%ft   = .false.
         ! make fftw plans
-        if( wwthreads .and. (any(ldim > 500) .or. ldim(3) > 200) )then
+        if( self%wthreads .and. (any(ldim > 500) .or. ldim(3) > 200) )then
             rc = fftwf_init_threads()
             call fftwf_plan_with_nthreads(nthr_glob)
         endif
@@ -449,11 +447,7 @@ contains
     subroutine copy( self, self_in )
         class(image), intent(inout) :: self
         class(image), intent(in)    :: self_in
-        if( .not. self_in%existence )then
-            call self%kill
-            return
-        endif
-        call self%new(self_in%ldim, self_in%smpd)
+        call self%new(self_in%ldim, self_in%smpd, wthreads=self%wthreads)
         self%rmat(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)) =&
             &self_in%rmat(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3))
         self%ft = self_in%ft
@@ -1930,24 +1924,10 @@ contains
         real :: ww
         ww = 1.
         if( present(w) ) ww = w
-        if( self%exists() )then
-            if( self.eqdims.self_to_add )then
-                if( self%ft .eqv. self_to_add%ft )then
-                    if( self%ft )then
-                        self%cmat = self%cmat+ww*self_to_add%cmat
-                    else
-                        self%rmat = self%rmat+ww*self_to_add%rmat
-                    endif
-                else
-                    stop 'cannot sum images with different FT status; add_1; simple_image'
-                endif
-            else
-                print *, 'dim(self):        ', self%ldim
-                print *, 'dim(self_to_add): ', self_to_add%ldim
-                stop 'cannot sum images of different dims; add_1; simple_image'
-            endif
+        if( self%ft )then
+            self%cmat = self%cmat+ww*self_to_add%cmat
         else
-             call self%copy(self_to_add)
+            self%rmat = self%rmat+ww*self_to_add%rmat
         endif
     end subroutine add_1
 
@@ -2028,6 +2008,17 @@ contains
             self%rmat = self%rmat+c
         endif
     end subroutine add_5
+
+    subroutine add_workshare( self1, self1_to_add, self2, self2_to_add, self3, self3_to_add, self4, self4_to_add )
+        class(image),   intent(inout) :: self1, self2, self3, self4
+        class(image),   intent(in)    :: self1_to_add, self2_to_add, self3_to_add, self4_to_add
+        !$omp parallel workshare proc_bind(close)
+        self1%cmat = self1%cmat + self1_to_add%cmat
+        self2%cmat = self2%cmat + self2_to_add%cmat
+        self3%cmat = self3%cmat + self3_to_add%cmat
+        self4%cmat = self4%cmat + self4_to_add%cmat
+        !$omp end parallel workshare
+    end subroutine add_workshare
 
     !>  \brief subtraction is for image subtraction(-)
     !! \param self_from lhs
@@ -2448,45 +2439,29 @@ contains
     !> \brief ctf_dens_correct for sampling density compensation & Wiener normalization
     !! \param self_sum sum image
     !! \param self_rho density image
-    !! \param self_out processed copy image
-    !!
-    subroutine ctf_dens_correct( self_sum, self_rho, self_out )
-        class(image),           intent(inout) :: self_sum
-        class(image),           intent(inout) :: self_rho
-        class(image), optional, intent(inout) :: self_out
+    !! KEEP SERIAL
+    subroutine ctf_dens_correct( self_sum, self_rho )
+        class(image), intent(inout) :: self_sum
+        class(image), intent(inout) :: self_rho
         integer :: h, k, l, lims(3,2), phys(3), nyq, sh
-        logical :: self_out_present
+        real    :: denom
         ! set constants
         lims = self_sum%loop_lims(2)
         nyq  = self_sum%get_lfny(1)
-        self_out_present = present(self_out)
-        if( self_out_present )call self_out%copy(self_sum)
-        !$omp parallel do collapse(3) default(shared) private(sh,h,k,l,phys)&
-        !$omp schedule(static) proc_bind(close)
         do h=lims(1,1),lims(1,2)
             do k=lims(2,1),lims(2,2)
                 do l=lims(3,1),lims(3,2)
-                    sh = nint(hyp(real(h),real(k),real(l)))
-                    phys = self_sum%comp_addr_phys([h,k,l])
-                    if(sh <= nyq .and. abs(real(self_rho%cmat(phys(1),phys(2),phys(3)))) > 1.e-20 )then
-                        if( self_out_present )then
-                            call self_out%div([h,k,l],&
-                            real(self_rho%cmat(phys(1),phys(2),phys(3))),phys_in=phys)
-                        else
-                            call self_sum%div([h,k,l],&
-                            real(self_rho%cmat(phys(1),phys(2),phys(3))),phys_in=phys)
-                        endif
+                    sh    = nint(hyp(real(h),real(k),real(l)))
+                    phys  = self_sum%comp_addr_phys([h,k,l])
+                    denom = real(self_rho%cmat(phys(1),phys(2),phys(3)))
+                    if(sh <= nyq .and. abs(denom) > 1.e-10 )then
+                        self_sum%cmat(phys(1),phys(2),phys(3)) = self_sum%cmat(phys(1),phys(2),phys(3)) / denom
                     else
-                        if( self_out_present )then
-                            self_out%cmat(phys(1),phys(2),phys(3)) = cmplx(0.,0.)
-                        else
-                            self_sum%cmat(phys(1),phys(2),phys(3)) = cmplx(0.,0.)
-                        endif
+                        self_sum%cmat(phys(1),phys(2),phys(3)) = cmplx(0.,0.)
                     endif
                 end do
             end do
         end do
-        !$omp end parallel do
     end subroutine ctf_dens_correct
 
     !>  \brief conjugate is for complex conjugation of a FT
@@ -4760,79 +4735,33 @@ contains
     !! \param res
     !! \param corrs
     !!
-    subroutine fsc( self1, self2, res, corrs, serial )
+    subroutine fsc( self1, self2, corrs )
         use simple_math, only: csq
-        class(image),      intent(inout) :: self1, self2
-        real, allocatable, intent(inout) :: res(:), corrs(:)
-        logical, optional, intent(in)    :: serial
-        real, allocatable :: sumasq(:), sumbsq(:)
-        integer           :: n, lims(3,2), phys(3), sh, h, k, l
-        logical           :: didft1, didft2, sserial
-        if( self1.eqdims.self2 )then
-        else
-            stop 'images of same dimension only! fsc; simple_image'
-        endif
-        if( .not. square_dims(self1) .or. .not. square_dims(self2) ) stop 'square dimensions only! fsc; simple_image'
-        didft1 = .false.
-        if( .not. self1%ft )then
-            call self1%fwd_ft
-            didft1 = .true.
-        endif
-        didft2 = .false.
-        if( .not. self2%ft )then
-            call self2%fwd_ft
-            didft2 = .true.
-        endif
-        sserial = .false.
-        if( present(serial) ) sserial = .true.
-        n = self1%get_filtsz()
-        if( allocated(corrs) ) deallocate(corrs)
-        if( allocated(res) )   deallocate(res)
-        allocate( corrs(n), res(n), sumasq(n), sumbsq(n), stat=alloc_stat )
-        allocchk('In: fsc, module: simple_image')
+        class(image), intent(inout) :: self1, self2
+        real,         intent(out)   :: corrs(fdim(self1%ldim(1))-1)        
+        real    :: sumasq(fdim(self1%ldim(1))-1), sumbsq(fdim(self1%ldim(1))-1)
+        integer :: n, lims(3,2), phys(3), sh, h, k, l
         corrs  = 0.
-        res    = 0.
         sumasq = 0.
         sumbsq = 0.
         lims   = self1%fit%loop_lims(2)
-        if( sserial )then
-            do k=lims(2,1),lims(2,2)
-                do h=lims(1,1),lims(1,2)
-                    do l=lims(3,1),lims(3,2)
-                        ! compute physical address
-                        phys = self1%fit%comp_addr_phys([h,k,l])
-                        ! find shell
-                        sh = nint(hyp(real(h),real(k),real(l)))
-                        if( sh == 0 .or. sh > n ) cycle
-                        ! real part of the complex mult btw self1 and targ*
-                        corrs(sh) = corrs(sh)+&
-                        real(self1%cmat(phys(1),phys(2),phys(3))*conjg(self2%cmat(phys(1),phys(2),phys(3))))
-                        sumasq(sh) = sumasq(sh) + csq(self2%cmat(phys(1),phys(2),phys(3)))
-                        sumbsq(sh) = sumbsq(sh) + csq(self1%cmat(phys(1),phys(2),phys(3)))
-                    end do
+        n      = self1%get_filtsz()
+        do k=lims(2,1),lims(2,2)
+            do h=lims(1,1),lims(1,2)
+                do l=lims(3,1),lims(3,2)
+                    ! compute physical address
+                    phys = self1%fit%comp_addr_phys([h,k,l])
+                    ! find shell
+                    sh = nint(hyp(real(h),real(k),real(l)))
+                    if( sh == 0 .or. sh > n ) cycle
+                    ! real part of the complex mult btw self1 and targ*
+                    corrs(sh) = corrs(sh)+&
+                    real(self1%cmat(phys(1),phys(2),phys(3))*conjg(self2%cmat(phys(1),phys(2),phys(3))))
+                    sumasq(sh) = sumasq(sh) + csq(self2%cmat(phys(1),phys(2),phys(3)))
+                    sumbsq(sh) = sumbsq(sh) + csq(self1%cmat(phys(1),phys(2),phys(3)))
                 end do
             end do
-        else
-            !$omp parallel do collapse(3) default(shared) private(h,k,l,phys,sh)&
-            !$omp schedule(static) proc_bind(close) reduction(+:sumasq,sumbsq)
-            do k=lims(2,1),lims(2,2)
-                do h=lims(1,1),lims(1,2)
-                    do l=lims(3,1),lims(3,2)
-                        ! compute physical address
-                        phys = self1%fit%comp_addr_phys([h,k,l])
-                        ! find shell
-                        sh = nint(hyp(real(h),real(k),real(l)))
-                        if( sh == 0 .or. sh > n ) cycle
-                        ! real part of the complex mult btw self1 and targ*
-                        corrs(sh) = corrs(sh)+&
-                        real(self1%cmat(phys(1),phys(2),phys(3))*conjg(self2%cmat(phys(1),phys(2),phys(3))))
-                        sumasq(sh) = sumasq(sh) + csq(self2%cmat(phys(1),phys(2),phys(3)))
-                        sumbsq(sh) = sumbsq(sh) + csq(self1%cmat(phys(1),phys(2),phys(3)))
-                    end do
-                end do
-            end do
-            !$omp end parallel do
-        endif
+        end do
         ! normalize correlations and compute resolutions
         do k=1,n
             if( sumasq(k) > 0. .and. sumbsq(k) > 0. )then
@@ -4840,11 +4769,7 @@ contains
             else
                 corrs(k) = 0.
             endif
-            res(k) = self1%fit%get_lp(1,k)
         end do
-        deallocate(sumasq, sumbsq)
-        if( didft1 ) call self1%bwd_ft
-        if( didft2 ) call self2%bwd_ft
     end subroutine fsc
 
     !> \brief get_nvoxshell is for calculation of voxels per Fourier shell
@@ -5149,6 +5074,13 @@ contains
         self%rmat = 0.
         self%ft   = .false.
     end subroutine zero_and_unflag_ft
+
+    !>  \brief zero image
+    subroutine zero_and_flag_ft(self)
+        class(image), intent(inout) :: self
+        self%cmat = cmplx(0.,0.)
+        self%ft   = .true.
+    end subroutine zero_and_flag_ft
 
     ! estimates median of background along edges of box and subtracts it to flatten the background
     ! modifies pixels along the edges of the box, which ought to be safe as we are masking
@@ -6202,7 +6134,8 @@ contains
             write(*,*) 'WARNING: Cannot normalize FTs; norm_ext; simple_image'
             return
         endif
-        self%rmat = (self%rmat-avg)/sdev
+        if( abs(avg) > TINY ) self%rmat = self%rmat - avg
+        if( sdev     > 0.   ) self%rmat = self%rmat / sdev
     end subroutine norm_ext
 
     !> \brief noise_norm  normalizes the image according to the background noise
