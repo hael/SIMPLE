@@ -1930,24 +1930,10 @@ contains
         real :: ww
         ww = 1.
         if( present(w) ) ww = w
-        if( self%exists() )then
-            if( self.eqdims.self_to_add )then
-                if( self%ft .eqv. self_to_add%ft )then
-                    if( self%ft )then
-                        self%cmat = self%cmat+ww*self_to_add%cmat
-                    else
-                        self%rmat = self%rmat+ww*self_to_add%rmat
-                    endif
-                else
-                    stop 'cannot sum images with different FT status; add_1; simple_image'
-                endif
-            else
-                print *, 'dim(self):        ', self%ldim
-                print *, 'dim(self_to_add): ', self_to_add%ldim
-                stop 'cannot sum images of different dims; add_1; simple_image'
-            endif
+        if( self%ft )then
+            self%cmat = self%cmat+ww*self_to_add%cmat
         else
-             call self%copy(self_to_add)
+            self%rmat = self%rmat+ww*self_to_add%rmat
         endif
     end subroutine add_1
 
