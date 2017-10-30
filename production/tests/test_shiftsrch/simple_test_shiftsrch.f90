@@ -99,20 +99,20 @@ call img_copy%write('shifted.mrc', 8)
 call pftcc%memoize_ffts
 do i=1,8
     corrmax = -1.
-	do xsh=-2,2
-		do ysh=-2,2
-            corrs = pftcc%gencorrs(i, i, real([xsh,ysh]))
+    do xsh=-2,2
+        do ysh=-2,2
+            call pftcc%gencorrs(i, i, real([xsh,ysh]), corrs)
             corr  = maxval(corrs)
-
+            
             print *, 'corr: ', corr, xsh, ysh
-
-			if( corr > corrmax )then 
+            
+            if( corr > corrmax )then 
                 corrmax = corr
                 xbest   = xsh
                 ybest   = ysh
-			endif
-		end do
-	end do
+            endif
+        end do
+    end do
     print *, xbest, ybest
 end do
 end program simple_test_shiftsrch

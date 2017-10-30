@@ -168,7 +168,7 @@ contains
             corr = self%prev_corr
             do iref=1,self%nrefs
                 if( cls_pops(iref) == 0 )cycle
-                corrs     = self%pftcc_ptr%gencorrs(iref, self%iptcl)
+                call self%pftcc_ptr%gencorrs(iref, self%iptcl, corrs)
                 loc       = maxloc(corrs)
                 inpl_ind  = loc(1)
                 inpl_corr = corrs(inpl_ind)         
@@ -215,7 +215,7 @@ contains
                     ! passes empty classes
                     if( cls_pops(iref) == 0 )cycle
                     ! shc update
-                    corrs     = self%pftcc_ptr%gencorrs(iref, self%iptcl)
+                    call self%pftcc_ptr%gencorrs(iref, self%iptcl, corrs)
                     inpl_ind  = shcloc(self%nrots, corrs, self%prev_corr)
                     if( inpl_ind == 0 )then
                         ! update inpl_ind & inpl_corr to greedy best
@@ -268,7 +268,7 @@ contains
                     enddo
                 else
                     ! populated class
-                    corrs     = self%pftcc_ptr%gencorrs(iref, self%iptcl) 
+                    call self%pftcc_ptr%gencorrs(iref, self%iptcl, corrs) 
                     loc       = maxloc(corrs)
                     inpl_ind  = loc(1)
                     inpl_corr = corrs(inpl_ind)
@@ -332,7 +332,7 @@ contains
             do inn=1,self%nnn
                 iref      = nnmat(self%prev_class,inn)
                 if( cls_pops(iref) == 0 )cycle
-                corrs     = self%pftcc_ptr%gencorrs(iref, self%iptcl) 
+                call self%pftcc_ptr%gencorrs(iref, self%iptcl, corrs) 
                 loc       = maxloc(corrs)
                 inpl_ind  = loc(1)
                 inpl_corr = corrs(inpl_ind)         
@@ -394,7 +394,7 @@ contains
         self%best_rot   = self%prev_rot
         ! calculate previous best corr (treshold for better)
         if( self%prev_class > 0 )then
-            corrs           = self%pftcc_ptr%gencorrs(self%prev_class, self%iptcl)
+            call self%pftcc_ptr%gencorrs(self%prev_class, self%iptcl, corrs)
             self%prev_corr  = max(0., corrs(self%prev_rot))
             self%best_corr  = self%prev_corr
         else

@@ -371,12 +371,12 @@ contains
                     print *,self%iptcl, self%prev_ref, self%prev_proj, self%prev_state, iref, state
                     stop 'srch order error; simple_prime3d_srch; stochastic_srch_bystate'
                 endif
-                corrs     = self%pftcc_ptr%gencorrs(iref, self%iptcl) ! In-plane correlations
-                loc       = maxloc(corrs)               ! greedy in-plane
-                inpl_ind  = loc(1)                      ! in-plane angle index
-                inpl_corr = corrs(inpl_ind)             ! max in plane correlation
+                call self%pftcc_ptr%gencorrs(iref, self%iptcl, corrs) ! In-plane correlations
+                loc       = maxloc(corrs)                             ! greedy in-plane
+                inpl_ind  = loc(1)                                    ! in-plane angle index
+                inpl_corr = corrs(inpl_ind)                           ! max in plane correlation
                 call self%store_solution(iref, iref, inpl_ind, inpl_corr)
-                projspace_corrs( iref ) = inpl_corr ! stash in-plane correlation for sorting
+                projspace_corrs( iref ) = inpl_corr                   ! stash in-plane correlation for sorting
                 ! update nbetter to keep track of how many improving solutions we have identified
                 if( self%npeaks == 1 )then
                     if( inpl_corr > self%prev_corr ) self%nbetter = self%nbetter + 1
@@ -442,12 +442,12 @@ contains
                 state = 1
                 if( self%nstates > 1 ) state = nint( o_refs(self%iptcl)%get(iref, 'state') )
                 if( state_exists(state) )then
-                    corrs     = self%pftcc_ptr%gencorrs(iref, self%iptcl) ! In-plane correlations
-                    loc       = maxloc(corrs)                        ! greedy in-plane
-                    inpl_ind  = loc(1)                               ! in-plane angle index
-                    inpl_corr = corrs(inpl_ind)                      ! max in plane correlation
+                    call self%pftcc_ptr%gencorrs(iref, self%iptcl, corrs) ! In-plane correlations
+                    loc       = maxloc(corrs)                             ! greedy in-plane
+                    inpl_ind  = loc(1)                                    ! in-plane angle index
+                    inpl_corr = corrs(inpl_ind)                           ! max in plane correlation
                     call self%store_solution(iref, iref, inpl_ind, inpl_corr)
-                    projspace_corrs( iref ) = inpl_corr              ! stash in-plane correlation for sorting
+                    projspace_corrs( iref ) = inpl_corr                   ! stash in-plane correlation for sorting
                 endif
             end subroutine per_ref_srch
 
@@ -523,12 +523,12 @@ contains
                 real    :: corrs(self%nrots), inpl_corr
                 integer :: loc(1), inpl_ind
                 if( state_exists(istate) )then
-                    corrs     = self%pftcc_ptr%gencorrs(iref, self%iptcl, self%kstop_grid) ! In-plane correlations
-                    loc       = maxloc(corrs)                                         ! greedy in-plane
-                    inpl_ind  = loc(1)                                                ! in-plane angle index
-                    inpl_corr = corrs(inpl_ind)                                       ! max in plane correlation
-                    projspace_corrs( iref )      = inpl_corr                          ! stash in-plane correlation for sorting
-                    proj_space_inds(self%iptcl,iref)  = iref                      ! stash the index for sorting
+                    call self%pftcc_ptr%gencorrs(iref, self%iptcl, self%kstop_grid, corrs) ! In-plane correlations
+                    loc       = maxloc(corrs)                                              ! greedy in-plane
+                    inpl_ind  = loc(1)                                                     ! in-plane angle index
+                    inpl_corr = corrs(inpl_ind)                                            ! max in plane correlation
+                    projspace_corrs( iref )      = inpl_corr                               ! stash in-plane correlation for sorting
+                    proj_space_inds(self%iptcl,iref)  = iref                               ! stash the index for sorting
                 endif
             end subroutine per_ref_srch
 
@@ -587,7 +587,7 @@ contains
                 if( self%nstates > 1 ) state = nint( o_refs(self%iptcl)%get(iref, 'state') )
                 if( state_exists(state) )then
                     ! In-plane correlations
-                    corrs     = self%pftcc_ptr%gencorrs(iref, self%iptcl)
+                    call self%pftcc_ptr%gencorrs(iref, self%iptcl, corrs)
                     loc       = maxloc(corrs)   ! greedy in-plane
                     inpl_ind  = loc(1)          ! in-plane angle index
                     inpl_corr = corrs(inpl_ind) ! max in plane correlation
@@ -671,15 +671,15 @@ contains
                 use simple_rnd, only: shcloc
                 integer, intent(in) :: iref
                 integer :: state
-                inpl_ind  = 0                                            ! init in-plane index
-                inpl_corr = 0.                                           ! init correlation
+                inpl_ind  = 0                                               ! init in-plane index
+                inpl_corr = 0.                                              ! init correlation
                 state     = 1
                 if( self%nstates > 1 ) state = nint( o_refs(self%iptcl)%get(iref, 'state') )
                 if( state_exists( state ) )then
-                    corrs    = self%pftcc_ptr%gencorrs( iref, self%iptcl )    ! in-plane correlations
-                    inpl_ind = shcloc(self%nrots, corrs, self%prev_corr) ! first improving in-plane index
-                    if( inpl_ind > 0 ) inpl_corr = corrs( inpl_ind )     ! improving correlation found
-                    self%nrefs_eval = self%nrefs_eval + 1                ! updates fractional search space
+                    call self%pftcc_ptr%gencorrs( iref, self%iptcl, corrs ) ! in-plane correlations
+                    inpl_ind = shcloc(self%nrots, corrs, self%prev_corr)    ! first improving in-plane index
+                    if( inpl_ind > 0 ) inpl_corr = corrs( inpl_ind )        ! improving correlation found
+                    self%nrefs_eval = self%nrefs_eval + 1                   ! updates fractional search space
                 endif
             end subroutine per_ref_srch
 
@@ -724,12 +724,12 @@ contains
                 state = 1
                 if( self%nstates > 1 ) state = nint( o_refs(self%iptcl)%get(iref, 'state') )
                 if( state_exists(state) )then
-                    corrs     = self%pftcc_ptr%gencorrs(iref, self%iptcl) ! In-plane correlations
-                    loc       = maxloc(corrs)               ! greedy in-plane
-                    inpl_ind  = loc(1)                      ! in-plane angle index
-                    inpl_corr = corrs(inpl_ind)             ! max in plane correlation
+                    call self%pftcc_ptr%gencorrs(iref, self%iptcl, corrs) ! In-plane correlations
+                    loc       = maxloc(corrs)                             ! greedy in-plane
+                    inpl_ind  = loc(1)                                    ! in-plane angle index
+                    inpl_corr = corrs(inpl_ind)                           ! max in plane correlation
                     call self%store_solution(iref, iref, inpl_ind, inpl_corr)
-                    projspace_corrs( iref ) = inpl_corr     ! stash in-plane correlation for sorting
+                    projspace_corrs( iref ) = inpl_corr                   ! stash in-plane correlation for sorting
                 endif
             end subroutine per_ref_srch
 
@@ -766,7 +766,7 @@ contains
                     state = irnd_uni(self%nstates)
                 enddo
                 iref  = (state - 1) * self%nprojs + self%prev_proj
-                corrs_inpl = self%pftcc_ptr%gencorrs(iref, self%iptcl)
+                call self%pftcc_ptr%gencorrs(iref, self%iptcl, corrs_inpl)
                 corr       = corrs_inpl(self%prev_roind)
             else
                 ! SHC
@@ -774,7 +774,7 @@ contains
                 do state = 1, self%nstates
                     if( .not.state_exists(state) )cycle
                     iref = (state-1) * self%nprojs + self%prev_proj
-                    corrs_inpl = self%pftcc_ptr%gencorrs(iref, self%iptcl)
+                    call self%pftcc_ptr%gencorrs(iref, self%iptcl, corrs_inpl)
                     corrs_state(state) = corrs_inpl(self%prev_roind)
                 enddo
                 self%prev_corr = corrs_state(self%prev_state)
@@ -883,7 +883,7 @@ contains
         self%specscore = self%pftcc_ptr%specscore(self%prev_ref, self%iptcl, self%prev_roind)
         ! prep corr
         if( self%refine .ne. 'het' )then
-            corrs = self%pftcc_ptr%gencorrs(self%prev_ref, self%iptcl)
+            call self%pftcc_ptr%gencorrs(self%prev_ref, self%iptcl, corrs)
             corr  = max(0.,maxval(corrs))
             if( corr - 1.0 > 1.0e-5 .or. .not. is_a_number(corr) )then
                 print *, 'FLOATING POINT EXCEPTION ALARM; simple_prime3D_srch :: prep4srch'
