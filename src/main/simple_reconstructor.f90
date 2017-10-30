@@ -496,14 +496,16 @@ contains
                     orientation = o%get_ori(i)
                     if( p%l_stktab_input )then
                         call p%stkhandle%get_stkname_and_ind(i, stkname, ind)
-                        call img%read(stkname, ind)
                     else
                         if( p%l_distr_exec )then
-                            call img%read(p%stk_part, cnt)
+                            ind = cnt
+                            allocate(stkname, source=trim(p%stk_part))
                         else
-                            call img%read(fname, i)
+                            ind = i
+                            allocate(stkname, source=trim(p%stk))
                         endif
                     endif
+                    call img%read(stkname, ind)
                     call gridprep%prep(img, img_pd)
                     if( p%pgrp == 'c1' )then
                         call self%inout_fplane(orientation, .true., img_pd, pwght=pw)
@@ -513,6 +515,7 @@ contains
                             call self%inout_fplane(o_sym, .true., img_pd, pwght=pw)
                         end do
                     endif
+                    deallocate(stkname)
                 endif
             end subroutine rec_dens
 

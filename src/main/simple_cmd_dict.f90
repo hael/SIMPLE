@@ -17,6 +17,7 @@ contains
     subroutine init_cmd_dict
         call chdict%new(NMAX)
         call chdict%push('acf',           'calculate autocorrelation function(yes|no){no}')
+        call chdict%push('alpha',         'oversampling factor{sqrt(2)}')
         call chdict%push('amsklp',        'low-pass limit for envelope mask generation(in A)')
         call chdict%push('angastunit',    'angle of astigmatism unit (radians|degrees){degrees}')
         call chdict%push('angerr',        'angular error(in degrees){0}')

@@ -12,7 +12,7 @@ implicit none
 
 public :: read_img_and_norm, read_imgbatch, set_bp_range, set_bp_range2D, grid_ptcl, prepimg4align,&
 &eonorm_struct_facts, norm_struct_facts, cenrefvol_and_mapshifts2ptcls, preprefvol, prep2Dref,&
-&gen2Dclassdoc, preprecvols, killrecvols, gen_projection_frcs, prepimgbatch
+&gen2Dclassdoc, preprecvols, killrecvols, gen_projection_frcs, prepimgbatch, read_cgridimg
 private
 #include "simple_local_flags.inc"
 
@@ -68,6 +68,27 @@ contains
             endif
         endif
     end subroutine read_imgbatch
+
+    subroutine read_cgridimg( b, p, iptcl )
+        class(build),  intent(inout)  :: b
+        class(params), intent(inout)  :: p
+        integer,       intent(in)     :: iptcl
+        character(len=:), allocatable :: stkname, stkname_cgrid
+        integer :: ind
+        if( p%l_stktab_input )then
+            call p%stkhandle%get_stkname_and_ind(iptcl, stkname, ind)
+            stkname_cgrid = add2fbody(stkname, p%ext, '_cgrid') 
+        else
+            if( p%l_distr_exec )then
+                stkname_cgrid = add2fbody(trim(p%stk_part), p%ext, '_cgrid') 
+                ind = iptcl - p%fromp + 1
+            else
+                stkname_cgrid = add2fbody(trim(p%stk), p%ext, '_cgrid')
+                ind = iptcl
+            endif
+        endif
+        call b%img_pad%read(stkname_cgrid, ind)
+    end subroutine read_cgridimg
 
     subroutine set_bp_range( b, p, cline )
         use simple_math, only: calc_fourier_index
@@ -212,9 +233,6 @@ contains
         eo = 0
         if( p%eo .ne. 'no' ) eo = nint(orientation%get('eo'))
         if( pw > TINY )then
-            ! pre-gridding correction for the kernel convolution
-            call b%gridprep%prep(b%img, b%img_pad)
-            ! weighted interpolation
             orisoft = orientation
             do jpeak=1,npeaks
                 ! get ori info

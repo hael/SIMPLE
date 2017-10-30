@@ -736,14 +736,16 @@ contains
         class(prime3D_distr_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
         ! commanders
-        type(prime3D_init_distr_commander)  :: xprime3D_init_distr
-        type(recvol_distr_commander)        :: xrecvol_distr
-        type(resrange_commander)            :: xresrange
-        type(merge_algndocs_commander)      :: xmerge_algndocs
-        type(check3D_conv_commander)        :: xcheck3D_conv
-        type(split_commander)               :: xsplit
-        type(postproc_vol_commander)        :: xpostproc_vol
+        type(prep4cgrid_stk_parts_commander) :: xprep4cgrid_distr
+        type(prime3D_init_distr_commander)   :: xprime3D_init_distr
+        type(recvol_distr_commander)         :: xrecvol_distr
+        type(resrange_commander)             :: xresrange
+        type(merge_algndocs_commander)       :: xmerge_algndocs
+        type(check3D_conv_commander)         :: xcheck3D_conv
+        type(split_commander)                :: xsplit
+        type(postproc_vol_commander)         :: xpostproc_vol
         ! command lines
+        type(cmdline)         :: cline_prep4cgrid_distr
         type(cmdline)         :: cline_recvol_distr
         type(cmdline)         :: cline_prime3D_init
         type(cmdline)         :: cline_resrange
@@ -788,17 +790,20 @@ contains
         if( .not. cline%defined('nspace') ) call cline%set('nspace', 1000.)
         call cline%set( 'box', real(p_master%box) )
         ! prepare command lines from prototype master
-        cline_recvol_distr   = cline
-        cline_prime3D_init   = cline
-        cline_resrange       = cline
-        cline_check3D_conv   = cline
-        cline_merge_algndocs = cline
-        cline_volassemble    = cline
-        cline_postproc_vol   = cline
+        cline_prep4cgrid_distr = cline
+        cline_recvol_distr     = cline
+        cline_prime3D_init     = cline
+        cline_resrange         = cline
+        cline_check3D_conv     = cline
+        cline_merge_algndocs   = cline
+        cline_volassemble      = cline
+        cline_postproc_vol     = cline
 
         ! initialise static command line parameters and static job description parameter
-        call cline_recvol_distr%set( 'prg', 'recvol' )       ! required for distributed call
-        call cline_prime3D_init%set( 'prg', 'prime3D_init' ) ! required for distributed call
+        call cline_prep4cgrid_distr%set( 'prg', 'prep4cgrid_stk_parts') ! required for distributed call
+        call cline_prep4cgrid_distr%set( 'for3D', 'yes' )
+        call cline_recvol_distr%set( 'prg', 'recvol' )                  ! required for distributed call
+        call cline_prime3D_init%set( 'prg', 'prime3D_init' )            ! required for distributed call
         call cline_merge_algndocs%set('nthr', 1.)
         call cline_merge_algndocs%set('fbody', ALGN_FBODY)
         call cline_merge_algndocs%set('nptcls', real(p_master%nptcls))
@@ -824,6 +829,9 @@ contains
             ! split stack
             call xsplit%execute(cline)
         endif
+        ! prep4cgrid
+        call xprep4cgrid_distr%execute(cline_prep4cgrid_distr)
+
         ! GENERATE STARTING MODELS & ORIENTATIONS
         ! Orientations
         if( cline%defined('oritab') )then
@@ -1444,10 +1452,11 @@ contains
             allocate(part_params(p_master%nparts))
             do ipart=1,p_master%nparts
                 call part_params(ipart)%new(2)
-                call part_params(ipart)%set('stk',&
-                    &trim(STKPARTFBODY)//int2str_pad(ipart,p_master%numlen)//p_master%ext)
-                call part_params(ipart)%set('outstk',&
-                    &trim(STKPARTFBODY_SC)//int2str_pad(ipart,p_master%numlen)//p_master%ext)
+                allocate(stkname, source=trim(STKPARTFBODY)//int2str_pad(ipart,p_master%numlen)//p_master%ext)
+                outstkname = add2fbody(stkname, p_master%ext, '_sc')
+                call part_params(ipart)%set('stk',    stkname)
+                call part_params(ipart)%set('outstk', outstkname)
+                deallocate(stkname, outstkname)
             end do
         endif
         ! setup the environment for distributed execution
@@ -1493,7 +1502,7 @@ contains
             allocate(part_params(p_master%nparts))
             do ipart=1,p_master%nparts
                 call part_params(ipart)%new(2)
-                stkname = p_master%stkhandle%get_stkname(ipart)
+                stkname    = p_master%stkhandle%get_stkname(ipart)
                 outstkname = add2fbody(stkname, p_master%ext, '_cgrid')
                 call part_params(ipart)%set('stk',    stkname)
                 call part_params(ipart)%set('outstk', outstkname)
@@ -1505,10 +1514,11 @@ contains
             allocate(part_params(p_master%nparts))
             do ipart=1,p_master%nparts
                 call part_params(ipart)%new(2)
-                call part_params(ipart)%set('stk',&
-                    &trim(STKPARTFBODY)//int2str_pad(ipart,p_master%numlen)//p_master%ext)
-                call part_params(ipart)%set('outstk',&
-                    &trim(STKPARTFBODY_CGRID)//int2str_pad(ipart,p_master%numlen)//p_master%ext)
+                allocate(stkname, source=trim(STKPARTFBODY)//int2str_pad(ipart,p_master%numlen)//p_master%ext)
+                outstkname = add2fbody(stkname, p_master%ext, '_cgrid')
+                call part_params(ipart)%set('stk',    stkname)
+                call part_params(ipart)%set('outstk', outstkname)
+                deallocate(stkname, outstkname)
             end do
         endif
         ! setup the environment for distributed execution

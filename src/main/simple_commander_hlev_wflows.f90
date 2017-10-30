@@ -136,7 +136,7 @@ contains
                 call p_master%stkhandle%write_stktab(p_master%stktab)
             else
                 ! delete downscaled stack parts (we are done with them)
-                call del_files(trim(STKPARTFBODY_SC), p_master%nparts, ext=p_master%ext)
+                call del_files(trim(STKPARTFBODY), p_master%nparts, ext=p_master%ext, suffix='_sc')
             endif
             ! re-generate class averages at original sampling
             call scobj%uninit(cline) ! puts back the old command line
@@ -326,7 +326,7 @@ contains
         call cline%delete('autoscale')
         ! delete possibly pre-existing stack_parts
         call del_files(STKPARTFBODY, p_master%nparts, ext=p_master%ext)
-        call del_files(STKPARTFBODY_SC, p_master%nparts, ext=p_master%ext)
+        call del_files(STKPARTFBODY, p_master%nparts, ext=p_master%ext, suffix='_sc')
         ! make master parameters
         p_master = params(cline, checkdistr=.false.)
         ! set global state string
@@ -551,7 +551,7 @@ contains
         enddo
 
         ! delete possibly pre-existing scaled stack parts & pft parts
-        call del_files(STKPARTFBODY_SC, p_master%nparts, ext=p_master%ext)
+        call del_files(STKPARTFBODY, p_master%nparts, ext=p_master%ext, suffix='_sc')
         call del_files('ppfts_memoized_part', p_master%nparts, ext='.bin')
 
         ! prepare command lines from prototype

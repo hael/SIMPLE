@@ -405,10 +405,9 @@ contains
         class(cmdline),    intent(inout) :: cline
         logical, optional, intent(in)    :: checkdistr, allow_mix
         type(binoris)                    :: bos
-        character(len=STDLEN)            :: cwd_local, debug_local, verbose_local
-        character(len=STDLEN)            :: stk_part_fname_sc, stk_part_fname
+        character(len=STDLEN)            :: cwd_local, debug_local, verbose_local, stk_part_fname
         character(len=1)                 :: checkupfile(50)
-        character(len=:), allocatable    :: conv
+        character(len=:), allocatable    :: conv, stk_part_fname_sc
         integer                          :: i, ncls, ifoo, lfoo(3), cntfile, istate
         logical                          :: nparts_set, vol_defined(MAXS), ccheckdistr, aamix 
         nparts_set        = .false.
@@ -905,8 +904,9 @@ contains
             self%l_stktab_input = .true.
         else
             ! set name of partial files in parallel execution
-            stk_part_fname_sc = trim(STKPARTFBODY_SC)//int2str_pad(self%part,self%numlen)//self%ext
             stk_part_fname    = trim(STKPARTFBODY)//int2str_pad(self%part,self%numlen)//self%ext
+            stk_part_fname_sc = add2fbody(stk_part_fname, self%ext, '_sc')
+            
             self%stk_part     = stk_part_fname
             if( self%autoscale .eq. 'yes' )then
                 if( file_exists(stk_part_fname_sc) )then

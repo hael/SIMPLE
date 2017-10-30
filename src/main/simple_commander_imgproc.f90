@@ -641,6 +641,7 @@ contains
         endif
         call gridprep%new(b%img, kbwin, [p%boxpd,p%boxpd,1])
         do iptcl=1,p%nptcls
+            call progress(iptcl, p%nptcls)
             call b%img%read(p%stk, iptcl)
             call gridprep%prep(b%img, b%img_pad)
             call b%img_pad%write(p%outstk, iptcl)

@@ -2053,13 +2053,9 @@ contains
         if( self.eqdims.self_to_subtr )then
             if( self%ft .eqv. self_to_subtr%ft )then
                 if( self%ft )then
-                    !$omp parallel workshare proc_bind(close)
                     self%cmat = self%cmat-ww*self_to_subtr%cmat
-                    !$omp end parallel workshare
                 else
-                    !$omp parallel workshare proc_bind(close)
                     self%rmat = self%rmat-ww*self_to_subtr%rmat
-                    !$omp end parallel workshare
                 endif
             else
                 stop 'cannot subtract images with different FT status; subtr_1; simple_image'
@@ -2201,13 +2197,9 @@ contains
         class(image), intent(inout) :: self
         real,         intent(in)    :: rc
         if( self%is_ft() )then
-            !$omp parallel workshare proc_bind(close)
             self%cmat = self%cmat*rc
-            !$omp end parallel workshare
         else
-            !$omp parallel workshare proc_bind(close)
             self%rmat = self%rmat*rc
-            !$omp end parallel workshare
         endif
     end subroutine mul_2
 
@@ -2219,22 +2211,14 @@ contains
         class(image), intent(in)    :: self2mul
         if( self.eqdims.self2mul )then
             if( self%ft .and. self2mul%ft )then
-                !$omp parallel workshare proc_bind(close)
                 self%cmat = self%cmat*self2mul%cmat
-                !$omp end parallel workshare
             else if( self%ft .eqv. self2mul%ft )then
-                !$omp parallel workshare proc_bind(close)
                 self%rmat = self%rmat*self2mul%rmat
-                !$omp end parallel workshare
                 self%ft = .false.
             else if(self%ft)then
-                !$omp parallel workshare proc_bind(close)
                 self%cmat = self%cmat*self2mul%rmat
-                !$omp end parallel workshare
             else
-                !$omp parallel workshare proc_bind(close)
                 self%cmat = self%rmat*self2mul%cmat
-                !$omp end parallel workshare
                 self%ft = .true.
             endif
         else
@@ -2287,42 +2271,16 @@ contains
         if( self1.eqdims.self2 )then
             call self%new(self1%ldim, self1%smpd)
             if( self1%ft .and. self2%ft )then
-                lims = self1%loop_lims(2)
-                !$omp parallel default(shared) private(h,k,l,phys) proc_bind(close)
-                !$omp do collapse(3) schedule(static)
-                do h=lims(1,1),lims(1,2)
-                    do k=lims(2,1),lims(2,2)
-                        do l=lims(3,1),lims(3,2)
-                            phys = self%fit%comp_addr_phys([h,k,l])
-                            if( mycabs(self2%cmat(phys(1),phys(2),phys(3))) < 1e-6 )then
-                                self1%cmat(phys(1),phys(2),phys(3)) = cmplx(0.,0.)
-                            else
-                                self1%cmat(phys(1),phys(2),phys(3)) =&
-                                self1%cmat(phys(1),phys(2),phys(3))/self2%cmat(phys(1),phys(2),phys(3))
-                            endif
-                        end do
-                    end do
-                end do
-                !$omp end do nowait
-                !$omp workshare
                 self%cmat = self1%cmat/self2%cmat
-                !$omp end workshare
-                !$omp end parallel
                 self%ft = .true.
             else if( self1%ft .eqv. self2%ft )then
-                !$omp parallel workshare proc_bind(close)
                 self%rmat = self1%rmat/self2%rmat
-                !$omp end parallel workshare
                 self%ft = .false.
             else if(self1%ft)then
-                !$omp parallel workshare proc_bind(close)
                 self%cmat = self1%cmat/self2%rmat
-                !$omp end parallel workshare
                 self%ft = .true.
             else
-                !$omp parallel workshare proc_bind(close)
                 self%cmat = self1%rmat/self2%cmat
-                !$omp end parallel workshare
                 self%ft = .true.
             endif
         else
@@ -4108,17 +4066,13 @@ contains
     subroutine square_root( self )
         class(image), intent(inout) :: self
         if( self%ft )then
-            !$omp parallel workshare proc_bind(close)
             where(real(self%cmat) > 0. )
                 self%cmat = sqrt(real(self%cmat))
             end where
-            !$omp end parallel workshare
         else
-            !$omp parallel workshare proc_bind(close)
             where(self%rmat > 0. )
                 self%rmat = sqrt(self%rmat)
             end where
-            !$omp end parallel workshare
         endif
     end subroutine square_root
 
@@ -5953,10 +5907,8 @@ contains
                 else
                     self_out%rmat = 0.
                 endif
-                !$omp parallel workshare proc_bind(close)
                 self_out%rmat(starts(1):stops(1),starts(2):stops(2),starts(3):stops(3)) =&
                 self_in%rmat(:self_in%ldim(1),:self_in%ldim(2),:self_in%ldim(3))
-                !$omp end parallel workshare
                 self_out%ft = .false.
             endif
         endif
