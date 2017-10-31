@@ -158,6 +158,7 @@ contains
                 movie_fname = remove_abspath(trim(movienames(1)))
                 movie_ext   = fname2ext(trim(movie_fname))
                 movie_fbody = get_fbody(trim(movie_fname), trim(movie_ext))
+                if(cline%defined('fbody') )movie_fbody = trim(p%fbody)//trim(movie_fbody)
                 if( cline%defined('dir_target') )then
                     allocate(fname_ctffind_ctrl,  source=trim(p%dir_target)//'/'//&
                     &'ctffind_ctrl_file_'//trim(movie_fbody)//'.txt')

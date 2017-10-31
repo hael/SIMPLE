@@ -1414,13 +1414,15 @@ contains
     subroutine exec_scale_stk_parts( self, cline )
         class(scale_stk_parts_commander), intent(inout) :: self
         class(cmdline),                   intent(inout) :: cline
-        type(qsys_env)                :: qenv
-        type(params)                  :: p_master
-        type(chash)                   :: job_descr
-        type(cmdline)                 :: cline_scale
-        type(chash),      allocatable :: part_params(:)
-        character(len=:), allocatable :: stkname, outstkname
-        integer :: ipart
+        type(qsys_env)                     :: qenv
+        type(params)                       :: p_master
+        type(chash)                        :: job_descr
+        type(cmdline)                      :: cline_scale
+        type(chash),           allocatable :: part_params(:)
+        character(len=:),      allocatable :: stkname, outstkname
+        character(len=STDLEN), allocatable :: stks_names(:)
+        character(len=STDLEN) :: filetab
+        integer               :: ipart, istart, iend, n, istk, nstks, cnt
         ! seed the random number generator
         call seed_rnd
         ! output command line executed
@@ -1432,21 +1434,25 @@ contains
         cline_scale = cline
         ! prepare part-dependent parameters
         if( cline%defined('stktab') )then
-            p_master%nparts = p_master%nmics
-            call cline_scale%set('nparts', real(p_master%nparts))
-            if( cline%defined('ncunits') )then
-                call cline_scale%set('ncunits', cline%get_rarg('ncunits'))
-            endif
-            allocate(part_params(p_master%nparts))
-            do ipart=1,p_master%nparts
-                call part_params(ipart)%new(2)
-                stkname = p_master%stkhandle%get_stkname(ipart)
-                outstkname = add2fbody(stkname, p_master%ext, '_sc')
-                call part_params(ipart)%set('stk',    stkname)
-                call part_params(ipart)%set('outstk', outstkname)
-                deallocate(stkname, outstkname)
-            end do
             call cline_scale%delete('stktab')
+            n = ceiling(real(p_master%stkhandle%get_nmics())/real(p_master%nparts))
+            allocate(part_params(p_master%nparts))
+            cnt = 0
+            do ipart=1,p_master%nparts
+                istart = (ipart-1)*n+1
+                iend   = min(istart + n-1, p_master%stkhandle%get_nmics())
+                nstks  = iend-istart+1
+                allocate(stks_names(nstks))
+                call part_params(ipart)%new(2)
+                filetab = 'stktab_'//int2str(ipart)//METADATEXT
+                do istk = 1, nstks
+                    cnt = cnt + 1
+                    stks_names(istk) = p_master%stkhandle%get_stkname(cnt)
+                enddo
+                call write_filetable( filetab, stks_names )
+                call part_params(ipart)%set('filetab', filetab)
+                deallocate(stks_names)
+            end do
         else
             ! prepare part-dependent parameters
             allocate(part_params(p_master%nparts))
@@ -1469,6 +1475,13 @@ contains
         call qenv%gen_scripts_and_schedule_jobs(p_master, job_descr, part_params=part_params)
         ! clean
         call qsys_cleanup(p_master)
+        if( cline%defined('stktab') )then
+            ! removes temporary split stktab lists
+            do ipart=1,p_master%nparts
+                filetab = 'stktab_'//int2str(ipart)//METADATEXT
+                call del_file( filetab )
+            end do
+        endif
         ! end gracefully
         call simple_end('**** SIMPLE_DISTR_SCALE_STK_PARTS NORMAL STOP ****')
     end subroutine exec_scale_stk_parts

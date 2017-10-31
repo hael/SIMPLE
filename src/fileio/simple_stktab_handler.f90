@@ -6,12 +6,12 @@ public :: stktab_handler, test_stktab_handler
 private
 
 type :: mic_stk
-	character(len=:), allocatable :: stkname
-	integer :: fromp=0, top=0
+    character(len=:), allocatable :: stkname
+    integer :: fromp=0, top=0
 end type mic_stk
 
 type :: ptcl_entry
-	type(mic_stk), pointer :: msp => null()
+    type(mic_stk), pointer :: msp => null()
 end type ptcl_entry
 
 type :: stktab_handler
@@ -43,7 +43,7 @@ end type
 
 contains
 
-	subroutine new( self, filetabname )
+    subroutine new( self, filetabname )
 		use simple_fileio,  only: read_filetable
 		use simple_imghead, only: find_ldim_nptcls 
 		class(stktab_handler), target, intent(inout) :: self

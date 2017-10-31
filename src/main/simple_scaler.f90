@@ -50,10 +50,6 @@ contains
         self%nptcls        = p_master%nptcls
         ! prep scale command line
         self%cline_scale   = cline
-        if( cline%defined('nparts') .and. cline%defined('stktab') )then
-            ! # substacks typically >> nparts, so control via ncunits
-            call self%cline_scale%set('ncunits', real(p_master%nparts)) 
-        endif
         ! identify scaling params
         call autoscale(self%original_box, p_master%smpd,&
         &smpd_target, self%box_sc, self%smpd_sc, self%scale)

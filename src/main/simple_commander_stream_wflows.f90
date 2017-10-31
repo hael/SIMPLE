@@ -35,7 +35,6 @@ contains
         class(cmdline),                  intent(inout) :: cline
         integer,               parameter   :: SHORTTIME = 60   ! folder watched every minute
         integer,               parameter   :: LONGTIME  = 900  ! 15 mins before processing a new movie
-        !integer,               parameter   :: LONGTIME  = 9  ! 15 mins before processing a new movie
         character(len=STDLEN), allocatable :: movies(:)
         character(len=STDLEN)    :: movie
         type(qsys_env)           :: qenv
@@ -51,13 +50,8 @@ contains
         p_master%numlen     = 5
         call cline%set('numlen', real(p_master%numlen))
         call cline%set('stream', 'yes')
-        if( cline%defined('fbody') )then
-            call cline%set('fbody', trim(p_master%dir_target)//'/'//trim(p_master%fbody))
-        else
-            call cline%set('fbody', trim(p_master%dir_target)//'/')
-        endif
-        ! make target directory
-        call exec_cmdline('mkdir -p '//trim(adjustl(p_master%dir_target))//'|| true')
+        ! ! make target directory
+        call mkdir(p_master%dir_target)
         ! setup the environment for distributed execution
         call qenv%new(p_master, stream=.true.)
         ! movie watcher init
@@ -121,7 +115,6 @@ contains
         character(len=32),       parameter :: STK_FILETAB     = 'stkstreamtab.txt'
         character(len=32),       parameter :: SCALE_FILETAB   = 'stkscale.txt'
         character(len=32),       parameter :: DEFTAB          = 'deftab.txt'
-        character(len=32),       parameter :: STK_DIR         = './stacks/'
         character(len=32),       parameter :: FINALDOC        = 'prime2Ddoc_final'//METADATEXT
         integer,                 parameter :: SHIFTSRCH_PTCLSLIM = 2000 ! # of ptcls required to turm on shift search
         integer,                 parameter :: SHIFTSRCH_ITERLIM  = 5    ! # of iterations prior to turm on shift search
@@ -175,8 +168,7 @@ contains
         if( p_master%autoscale.eq.'yes' )then
             smpd_glob = LP2SMPDFAC * p_master%lp
             scale     = p_master%smpd / smpd_glob
-            ! make scaled stacks directory
-            call exec_cmdline('mkdir -p '//trim(adjustl(STK_DIR))//'|| true')
+            call mkdir(SCSTK_DIR)
         else
             msk_glob  = p_master%msk
             smpd_glob = p_master%smpd
@@ -326,27 +318,19 @@ contains
                     call qenv%new(p_master)
                     cnt = 0
                     do i = nstacks_glob+1, nstacks_glob+n_newstks
-                        cnt   = cnt + 1
-                        ext   = fname2ext(trim(remove_abspath(trim(new_stacks(cnt)))))
-                        fbody = get_fbody(trim(remove_abspath(trim(new_stacks(cnt)))), trim(ext))
-                        stk_scaled = trim(STK_DIR)//trim(fbody)// trim('_sc') // trim(p_master%ext) ! congruence with scale app
-                        stktab(i)  = trim(stk_scaled)
+                        cnt = cnt + 1
+                        ext       = fname2ext(trim(remove_abspath(trim(new_stacks(cnt)))))
+                        fbody     = get_fbody(trim(remove_abspath(trim(new_stacks(cnt)))), trim(ext))
+                        stktab(i) = trim(fbody)// trim('_sc') // trim(p_master%ext)
+                        call cline_scale%set('dir_target', SCSTK_DIR)
                     enddo
                     call qenv%exec_simple_prg_in_queue(cline_scale, 'OUT1','JOB_FINISHED_1')
-                    cnt = 0
-                    do i = nstacks_glob+1, nstacks_glob+n_newstks
-                        cnt   = cnt + 1
-                        ext   = fname2ext(trim(remove_abspath(trim(new_stacks(cnt)))))
-                        fbody = get_fbody(trim(remove_abspath(trim(new_stacks(cnt)))), trim(ext))
-                        stk_scaled = trim(fbody)// trim('_sc') // trim(p_master%ext) ! congruence with scale app
-                        call rename( stk_scaled, stktab(i))
-                    enddo
                     call qsys_cleanup(p_master)
                     call del_file(SCALE_FILETAB)
                 else
                     cnt = 0
                     do i = nstacks_glob+1, nstacks_glob+n_newstks
-                        cnt   = cnt + 1
+                        cnt = cnt + 1
                         stktab(i) = trim(new_stacks(cnt))
                     enddo                    
                 endif

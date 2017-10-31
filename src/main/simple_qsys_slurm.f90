@@ -1,5 +1,7 @@
 ! batch-processing manager - SLURM
 module simple_qsys_slurm
+use simple_defs
+use simple_defs_fname
 use simple_qsys_base, only: qsys_base
 use simple_chash,     only: chash
 implicit none
@@ -7,7 +9,8 @@ implicit none
 public :: qsys_slurm
 private
 
-integer, parameter :: MAXENVITEMS=100
+integer, parameter    :: MAXENVITEMS=100
+character(len=STDLEN) :: stderrout
 
 type, extends(qsys_base) :: qsys_slurm
     private
@@ -23,6 +26,7 @@ contains
     
     !> \brief  is a constructor
     subroutine new_slurm_env( self )
+        use simple_fileio, only: mkdir
         class(qsys_slurm), intent(inout) :: self
         ! make the container
         call self%env%new(MAXENVITEMS)
@@ -43,6 +47,9 @@ contains
         ! call self%env%push('job_gpus_per_task',     '#SBATCH --gpus-per-task') ! not a thing
         call self%env%push('job_memory_per_task',   '#SBATCH --mem')
         call self%env%push('job_time',              '#SBATCH --time')
+        ! standard error & output folder
+        stderrout = './'//trim(STDERROUT_DIR)
+        call mkdir(stderrout)
     end subroutine new_slurm_env
 
     !> \brief  is a getter
@@ -79,12 +86,12 @@ contains
         end do
         ! write default instructions
         if( write2file )then
-            write(fhandle,'(a)') '#SBATCH --output=outfile.%j'
-            write(fhandle,'(a)') '#SBATCH --error=errfile.%j'
+            write(fhandle,'(a)') '#SBATCH --output='//trim(stderrout)//'outfile.%j'
+            write(fhandle,'(a)') '#SBATCH --error='//trim(stderrout)//'errfile.%j'
             write(fhandle,'(a)') '#SBATCH --mail-type=FAIL'
         else
-            write(*,'(a)') '#SBATCH --output=outfile.%j'
-            write(*,'(a)') '#SBATCH --error=errfile.%j'
+            write(*,'(a)') '#SBATCH --output='//trim(stderrout)//'outfile.%j'
+            write(*,'(a)') '#SBATCH --error='//trim(stderrout)//'errfile.%j'
             write(*,'(a)') '#SBATCH --mail-type=FAIL'
         endif
     end subroutine write_slurm_header

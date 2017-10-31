@@ -485,19 +485,17 @@ contains
     end subroutine simple_rename
 
     !> Make directory
-    function mkdir (path)
-        integer :: mkdir
-        character(len=*),intent(inout) :: path
+    subroutine mkdir( path )
+        character(len=*), intent(in) :: path
+        integer :: iostat
         logical :: dir_e
-        ! a trick to be sure docs is a dir
-        inquire( file=trim(adjustl(path)), exist=dir_e , iostat=mkdir)
+        inquire( file=trim(adjustl(path)), exist=dir_e , iostat=iostat)
         if ( dir_e ) then
-            write(*,*) "simple_fileio::mkdir dir ", trim(path)
+            write(*,*) "simple_fileio::mkdir; directory already exists: ", trim(adjustl(path))
         else
-            ! workaround: it calls an extern program...
-            call exec_cmdline('mkdir docs')
+            call exec_cmdline('mkdir -p '//trim(adjustl(path))//'|| true')
         end if
-    end function mkdir
+    end subroutine mkdir
 
     !> \brief  is for deleting a file
     subroutine del_file( file )

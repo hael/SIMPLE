@@ -597,7 +597,11 @@ contains
             call img2%new(ldim_scaled,p%smpd/p%scale)
             do ifile=1,nfiles
                 call progress(ifile, nfiles)
-                fname = add2fbody(remove_abspath(filenames(ifile)), p%ext, '_sc')
+                if( cline%defined('dir_target') )then
+                    fname = trim(p%dir_target)//'/'//add2fbody(remove_abspath(filenames(ifile)), p%ext, '_sc')
+                else
+                    fname = add2fbody(trim(filenames(ifile)), p%ext, '_sc')
+                endif
                 call find_ldim_nptcls(filenames(ifile),ldim,nframes)
                 ldim(3) = 1 ! to correct for the stupide 3:d dim of mrc stacks
                 do iframe= 1, nframes

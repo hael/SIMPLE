@@ -17,9 +17,9 @@ type moviewatcher
     character(len=STDLEN)              :: watch_dir      = ''    !< movies directory to watch
     character(len=STDLEN)              :: target_dir     = ''    !< target directory
     character(len=STDLEN)              :: ext            = ''    !< target directory
+    character(len=STDLEN)              :: fbody          = ''    !< template name
     integer                            :: n_history      = 0     !< history of movies detected
     integer                            :: report_time    = 600   !< time ellapsed prior to processing
-    !integer                            :: report_time    = 60   !< time ellapsed prior to processing
     integer                            :: starttime      = 0     !< time of first watch
     integer                            :: ellapsedtime   = 0     !< time ellapsed between last and first watch
     integer                            :: lastreporttime = 0     !< time ellapsed between last and first watch
@@ -70,6 +70,7 @@ contains
         self%report_time = report_time
         self%dopick      = p%l_pick
         self%ext         = trim(adjustl(p%ext))
+        self%fbody       = trim(adjustl(p%fbody))
         if( present(print) )then
             self%doprint = print
         else
@@ -171,6 +172,7 @@ contains
         fname_here = remove_abspath(trim(adjustl(fname)))
         ext        = trim(fname2ext(fname_here))
         fbody      = trim(get_fbody(trim(fname_here), trim(ext)))
+        if( trim(self%fbody) .ne. '' )fbody = trim(self%fbody)//fbody
         ! unblur
         unblur_name = trim(self%target_dir)//'/'//trim(adjustl(fbody))//'_thumb'//trim(self%ext)
         unblur_done = file_exists(trim(unblur_name))
@@ -178,20 +180,10 @@ contains
             unblur_name = trim(self%target_dir)//'/'//trim(adjustl(fbody))//'_intg'//trim(self%ext)
             unblur_done = file_exists(trim(unblur_name))
         endif
-        !print *,'to_process unblur ',trim(unblur_name),unblur_done
         ! ctffind
         unidoc_name  = trim(self%target_dir)//'/unidoc_output_'//trim(adjustl(fbody))//'.txt'
         ctffind_done = file_exists(trim(unidoc_name))
-        !print *,'to_process unidoc ',trim(unidoc_name),ctffind_done
-        if( self%dopick )then
-            ! picker
-            picker_name = trim(self%target_dir)//'/'//trim(adjustl(fbody))//'_intg.box'
-            picker_done = file_exists(picker_name)
-            !print *,'to_process pick ',trim(picker_name),picker_done, to_process
-            to_process = .not. (unblur_done .and. ctffind_done .and. picker_done)
-        else
-            to_process = .not. (unblur_done .and. ctffind_done)
-        endif
+        to_process = .not. (unblur_done .and. ctffind_done)
     end function to_process
 
     !>  \brief  is for adding to the history of already reported files
