@@ -152,6 +152,12 @@ contains
         ! search order & previous projection direction
         allocate(prev_proj(p%fromp:p%top), source=0)
         select case( trim(p%refine) )
+            case( 'het' )
+                !$omp parallel do default(shared) private(iptcl,prev_state,rt,prev_ref) schedule(static) proc_bind(close)
+                do iptcl = p%fromp, p%top
+                    prev_proj(iptcl) = b%e%find_closest_proj(b%a%get_ori(iptcl))
+                enddo
+                !$omp end parallel do
             case( 'states' )
                 allocate(srch_order(p%fromp:p%top, p%nnn), source=0)
                 !$omp parallel do default(shared) private(iptcl,prev_state,rt,prev_ref) schedule(static) proc_bind(close)
@@ -165,6 +171,8 @@ contains
                     call put_last(prev_ref, srch_order(iptcl,:))
                 enddo
                 !$omp end parallel do
+                if( any(srch_order == 0) ) stop 'Invalid index in srch_order; simple_hadamard3D_matcher :: prep4primesrch3D'
+                call rt%kill
             case( 'neigh','shcneigh', 'greedyneigh' )
                 nnnrefs =  p%nnn * p%nstates
                 allocate(srch_order(p%fromp:p%top, nnnrefs), source=0)   
@@ -182,6 +190,8 @@ contains
                     call put_last(prev_ref, srch_order(iptcl,:))
                 enddo
                 !$omp end parallel do
+                if( any(srch_order == 0) ) stop 'Invalid index in srch_order; simple_hadamard3D_matcher :: prep4primesrch3D'
+                call rt%kill
             case( 'yes' )
                 allocate(srch_order(p%fromp:p%top,p%nspace*p%nstates), source=0)
                 !$omp parallel do default(shared) private(iptcl,prev_state,euldists,prev_ref,istate,i) schedule(static) proc_bind(close)
@@ -199,6 +209,8 @@ contains
                     call put_last(prev_ref, srch_order(iptcl,:))
                 enddo
                 !$omp end parallel do
+                if( any(srch_order == 0) ) stop 'Invalid index in srch_order; simple_hadamard3D_matcher :: prep4primesrch3D'
+                call rt%kill
             case('no','shc','snhc','greedy')
                 allocate(srch_order(p%fromp:p%top,nrefs), source=0)
                 !$omp parallel do default(shared) private(iptcl,rt,prev_state,prev_ref) schedule(static) proc_bind(close)
@@ -211,11 +223,11 @@ contains
                     call put_last(prev_ref, srch_order(iptcl,:))
                 enddo
                 !$omp end parallel do
+                if( any(srch_order == 0) ) stop 'Invalid index in srch_order; simple_hadamard3D_matcher :: prep4primesrch3D'
+                call rt%kill
             case DEFAULT
                 stop 'Unknown refinement mode; simple_hadamard3D_matcher; prep4primesrch3D'
         end select
-        if( any(srch_order == 0) ) stop 'Invalid index in srch_order; simple_hadamard3D_matcher :: prep4primesrch3D'
-        call rt%kill
         ! states existence
         if( p%oritab.ne.'' )then
             state_exists = b%a%states_exist(p%nstates)
