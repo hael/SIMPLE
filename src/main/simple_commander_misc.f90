@@ -255,7 +255,7 @@ contains
 
     !>  for printing the binary FSC files produced by PRIME3D
     subroutine exec_print_fsc( self, cline )
-        use simple_math,  only: get_resolution, get_lplim
+        use simple_math,  only: get_resolution
         use simple_image, only: image
         class(print_fsc_commander), intent(inout) :: self
         class(cmdline),             intent(inout) :: cline

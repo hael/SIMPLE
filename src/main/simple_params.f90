@@ -331,6 +331,7 @@ type :: params
     real    :: lp=20.              !< low-pass limit(in A)
     real    :: lp_ctffind=5.0      !< low-pass limit 4 ctffind(in A)
     real    :: lp_pick=20.         !< low-pass limit 4 picker(in A)
+    real    :: lplim_crit=0.143    !< corr criterion low-pass limit assignment(0.143-0.5){0.143}
     real    :: lplims2D(3)
     real    :: lpmed=20.
     real    :: lpstart=0.          !< start low-pass limit(in A){15}
@@ -712,6 +713,7 @@ contains
         call check_rarg('lp_ctffind',     self%lp_ctffind)
         call check_rarg('lp_grid',        self%lp_grid)
         call check_rarg('lp_pick',        self%lp_pick)
+        call check_rarg('lplim_crit',     self%lplim_crit)
         call check_rarg('lpstart',        self%lpstart)
         call check_rarg('lpstop',         self%lpstop)
         call check_rarg('lpvalid',        self%lpvalid)

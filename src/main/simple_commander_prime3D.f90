@@ -265,7 +265,7 @@ contains
     end subroutine exec_prime3D
     
     subroutine exec_check3D_conv( self, cline )
-        use simple_math,    only: rad2deg, get_lplim
+        use simple_math,    only: rad2deg, get_lplim_at_corr
         class(check3D_conv_commander), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
         type(params)      :: p
@@ -285,7 +285,7 @@ contains
                 p%fsc = 'fsc_state'//int2str_pad(istate,2)//'.bin'
                 if( file_exists(p%fsc) )then
                     b%fsc(istate,:) = file2rarr(p%fsc)
-                    maplp(istate)   = max(b%img%get_lp(get_lplim(b%fsc(istate,:))),2.*p%smpd)
+                    maplp(istate)   = max(b%img%get_lp(get_lplim_at_corr(b%fsc(istate,:),p%lplim_crit)),2.*p%smpd)
                 else
                     write(*,*) 'Tried to check the fsc file: ', trim(p%fsc)
                     stop 'but it does not exist!'

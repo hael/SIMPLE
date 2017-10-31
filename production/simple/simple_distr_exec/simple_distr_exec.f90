@@ -41,7 +41,6 @@ type(tseries_track_distr_commander)      :: xtseries_track_distr
 ! HIGH-LEVEL WORKFLOWS
 type(ini3D_from_cavgs_commander)         :: xini3D_from_cavgs
 type(het_ensemble_commander)             :: xhet_ensemble
-type(cga_hres_sel_commander)             :: xcga_hres_sel
 
 ! SUPORTING DISTRIBUTED WORKFLOWS
 type(scale_stk_parts_commander)          :: xscale_stk_parts
@@ -641,35 +640,36 @@ select case(prg)
         keys_optional(10) = 'dynlp'
         keys_optional(11) = 'lpstart'
         keys_optional(12) = 'lpstop'
-        keys_optional(13) = 'eo'
-        keys_optional(14) = 'refine'
-        keys_optional(15) = 'frac'
-        keys_optional(16) = 'mskfile'
-        keys_optional(17) = 'inner'
-        keys_optional(18) = 'width'
-        keys_optional(19) = 'nspace'
-        keys_optional(20) = 'nstates'
-        keys_optional(21) = 'npeaks'
-        keys_optional(22) = 'startit'
-        keys_optional(23) = 'maxits'
-        keys_optional(24) = 'shbarrier'
-        keys_optional(25) = 'noise'
-        keys_optional(26) = 'nnn'
-        keys_optional(27) = 'norec'
-        keys_optional(28) = 'nsub'
-        keys_optional(29) = 'lp_grid'
-        keys_optional(30) = 'balance'
-        keys_optional(31) = 'center'
-        keys_optional(32) = 'pproc'
-        keys_optional(33) = 'stk'
-        keys_optional(34) = 'stktab'
-        keys_optional(35) = 'weights3D'
-        keys_optional(36) = 'sdev_thres'
-        keys_optional(37) = 'phaseplate'
+        keys_optional(13) = 'lplim_crit'
+        keys_optional(14) = 'eo'
+        keys_optional(15) = 'refine'
+        keys_optional(16) = 'frac'
+        keys_optional(17) = 'mskfile'
+        keys_optional(18) = 'inner'
+        keys_optional(19) = 'width'
+        keys_optional(20) = 'nspace'
+        keys_optional(21) = 'nstates'
+        keys_optional(22) = 'npeaks'
+        keys_optional(23) = 'startit'
+        keys_optional(24) = 'maxits'
+        keys_optional(25) = 'shbarrier'
+        keys_optional(26) = 'noise'
+        keys_optional(27) = 'nnn'
+        keys_optional(28) = 'norec'
+        keys_optional(29) = 'nsub'
+        keys_optional(30) = 'lp_grid'
+        keys_optional(31) = 'balance'
+        keys_optional(32) = 'center'
+        keys_optional(33) = 'pproc'
+        keys_optional(34) = 'stk'
+        keys_optional(35) = 'stktab'
+        keys_optional(36) = 'weights3D'
+        keys_optional(37) = 'sdev_thres'
+        keys_optional(38) = 'phaseplate'
         ! documentation
         if( describe ) call print_doc_prime3D
         ! parse command line
-        call cline%parse( keys_required(:5), keys_optional(:37) )
+        call cline%parse( keys_required(:5), keys_optional(:38) )
         ! sanity check
         if( cline%defined('stk') .or. cline%defined('stktab') )then
             ! all ok
@@ -710,32 +710,33 @@ select case(prg)
         keys_optional(7)  = 'lp'
         keys_optional(8)  = 'cenlp'
         keys_optional(9)  = 'lpstop'
-        keys_optional(10) = 'eo'
-        keys_optional(11) = 'frac'
-        keys_optional(12) = 'mskfile'
-        keys_optional(13) = 'inner'
-        keys_optional(14) = 'width'
-        keys_optional(15) = 'nspace'
-        keys_optional(16) = 'npeaks'
-        keys_optional(17) = 'startit'
-        keys_optional(18) = 'maxits'
-        keys_optional(19) = 'shbarrier'
-        keys_optional(20) = 'nnn'
-        keys_optional(21) = 'norec'
-        keys_optional(22) = 'nsub'
-        keys_optional(23) = 'lp_grid'
-        keys_optional(24) = 'balance'
-        keys_optional(25) = 'center'
-        keys_optional(26) = 'pproc'
-        keys_optional(27) = 'stk'
-        keys_optional(28) = 'stktab'
-        keys_optional(29) = 'weights3D'
-        keys_optional(30) = 'sdev_thres'
-        keys_optional(31) = 'phaseplate'
+        keys_optional(10) = 'lplim_crit'
+        keys_optional(11) = 'eo'
+        keys_optional(12) = 'frac'
+        keys_optional(13) = 'mskfile'
+        keys_optional(14) = 'inner'
+        keys_optional(15) = 'width'
+        keys_optional(16) = 'nspace'
+        keys_optional(17) = 'npeaks'
+        keys_optional(18) = 'startit'
+        keys_optional(19) = 'maxits'
+        keys_optional(20) = 'shbarrier'
+        keys_optional(21) = 'nnn'
+        keys_optional(22) = 'norec'
+        keys_optional(23) = 'nsub'
+        keys_optional(24) = 'lp_grid'
+        keys_optional(25) = 'balance'
+        keys_optional(26) = 'center'
+        keys_optional(27) = 'pproc'
+        keys_optional(28) = 'stk'
+        keys_optional(29) = 'stktab'
+        keys_optional(30) = 'weights3D'
+        keys_optional(31) = 'sdev_thres'
+        keys_optional(32) = 'phaseplate'
         ! documentation
         if( describe ) call print_doc_prime3D
         ! parse command line
-        call cline%parse( keys_required(:5), keys_optional(:31) )
+        call cline%parse( keys_required(:5), keys_optional(:32) )
         ! sanity check
         if( cline%defined('stk') .or. cline%defined('stktab') )then
             ! all ok
@@ -961,44 +962,6 @@ select case(prg)
         if( .not. cline%defined('nrepeats') ) call cline%set('nrepeats', real(HETNREPEATS))
         ! execute
         call xhet_ensemble%execute( cline )
-    case( 'cga_hres_sel' )
-        !==Program cga_hres_sel
-        !
-        ! <cga_hres_sel/begin>is a distributed workflow for high-resolution particle selection
-        ! based on FSC optimisation with a compact genetic algorithm<cga_hres_sel/end> 
-        !
-        ! set required keys
-        keys_required(1)  = 'ctf'
-        keys_required(2)  = 'msk' 
-        keys_required(3)  = 'nparts'
-        keys_required(4)  = 'oritab' 
-        keys_required(5)  = 'pgrp' 
-        keys_required(6)  = 'smpd' 
-        ! set optional keys
-        keys_optional(1)  = 'balance'
-        keys_optional(2)  = 'eo'
-        keys_optional(3)  = 'mskfile' 
-        keys_optional(4)  = 'ncunits'
-        keys_optional(5)  = 'nthr'
-        keys_optional(6)  = 'maxits'
-        keys_optional(7)  = 'eps'
-        keys_optional(8)  = 'stk'
-        keys_optional(9)  = 'stktab'
-        keys_optional(10) = 'phaseplate'
-        ! parse command line
-        if( describe ) call print_doc_cga_hres_sel
-        call cline%parse(keys_required(:6), keys_optional(:10))
-        ! sanity check
-        if( cline%defined('stk') .or. cline%defined('stktab') )then
-            ! all ok
-        else
-            stop 'stk or stktab need to be part of command line!'
-        endif
-        ! set defaults
-        if( .not. cline%defined('trs') ) call cline%set('trs',  5.) ! to assure that shifts are being used
-        if( .not. cline%defined('eo')  ) call cline%set('eo', 'no')
-        ! execute
-        call xcga_hres_sel%execute( cline )
     
     ! SUPPORTING DISTRIBUTED WORKFLOWS
 

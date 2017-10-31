@@ -216,7 +216,7 @@ contains
     end subroutine estimate_res_2
 
     subroutine estimate_res_3( self, nbest, frc, res, frc05, frc0143, state )
-        use simple_math, only: get_resolution, hpsort, get_lplim
+        use simple_math, only: get_resolution, hpsort, get_lplim_at_corr
         class(projection_frcs), intent(in)  :: self
         integer,                intent(in)  :: nbest
         real, allocatable,      intent(out) :: frc(:), res(:)
@@ -234,7 +234,7 @@ contains
         if( present(state) ) sstate = state
         ! order FRCs according to low-pass limit (best first)
         do iproj=1,self%nprojs
-            lplims(iproj) = get_lplim(self%frcs(sstate,iproj,:))
+            lplims(iproj) = get_lplim_at_corr(self%frcs(sstate,iproj,:), 0.143)
         end do
         order = (/(iproj,iproj=1,self%nprojs)/)
         call hpsort(self%nprojs, lplims, order)

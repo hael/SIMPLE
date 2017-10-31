@@ -1009,25 +1009,6 @@ contains
         endif
     end subroutine get_resolution
 
-    !>   returns the Fourier index of the resolution limit
-    function get_lplim( fsc ) result( k )
-        real, intent(in) :: fsc(:) !< Fourier shell correlation array
-        integer :: n, k, h
-        n = size(fsc)
-        if( n < 3 )then
-            stop 'nonconforming size of fsc array; get_lplim; simple_math'
-        endif
-        k = n-1
-        do h=3,n-1
-            if( fsc(h) >= 0.143 )then
-                cycle
-            else
-                k = h
-                exit
-            endif
-        end do
-    end function get_lplim
-
     !>   returns the Fourier index of the resolution limit at corr
     function get_lplim_at_corr( fsc, corr ) result( k )
         real, intent(in) :: fsc(:), corr
@@ -1046,29 +1027,6 @@ contains
             endif
         end do
     end function get_lplim_at_corr
-
-    !>   compares two Fourier Shell Correlation (FSC) functions
-    logical function fsc1_ge_fsc2( fsc1, fsc2 )
-        real, intent(in) :: fsc1(:), fsc2(:) !< Fourier shell correlation arrays
-        integer          :: n, hplim, lplim, nfreq, n1, n2, h
-        real, parameter  :: FSC_MAX = 0.98
-        n = size(fsc1)
-        if( n /= size(fsc2) ) stop 'nonconforming fsc sizes; simple_math :: fsc1_ge_fsc2'
-        lplim = max(get_lplim(fsc1),get_lplim(fsc2))
-        hplim = 2
-        do h=3,n
-            if( fsc1(h) >= FSC_MAX .and. fsc2(h) >= FSC_MAX )then
-                cycle
-            else
-                hplim = h
-                exit
-            endif
-        end do
-        nfreq = lplim - hplim + 1
-        n1    = count(fsc1(hplim:lplim) >= fsc2(hplim:lplim))
-        n2    = nfreq - n1
-        fsc1_ge_fsc2 = (n1 >= n2)
-    end function fsc1_ge_fsc2
 
     !>   returns the Fourier index of resolution \f$ (\si{\per\angstrom}) \f$
     !< \param smpd pixel size

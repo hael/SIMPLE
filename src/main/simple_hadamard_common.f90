@@ -132,11 +132,11 @@ contains
                         endif
                     end do
                     loc    = maxloc(mapres) ! worst resolved
-                    lp_ind = get_lplim(b%fsc(loc(1),:))
+                    lp_ind = get_lplim_at_corr(b%fsc(loc(1),:), p%lplim_crit)
                     ! low pass limit
-                    p%kfromto(2) = calc_fourier_index( resarr(lp_ind), p%boxmatch, p%smpd )
+                    p%kfromto(2) = calc_fourier_index(resarr(lp_ind), p%boxmatch, p%smpd)
                     if( p%kfromto(2) == 1 )then
-                        stop 'simple_math::get_lplim gives nonsensical result (==1)'
+                        stop 'simple_hadamard_common, simple_math::get_lplim gives nonsensical result (==1)'
                     endif
                     DebugPrint ' extracted FSC info'
                 else if( cline%defined('lp') )then
