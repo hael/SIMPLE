@@ -92,7 +92,7 @@ type :: params
     character(len=3)      :: tseries='no'         !< images represent a time-series(yes|no){no}
     character(len=3)      :: vis='no'             !< visualise(yes|no)
     character(len=3)      :: weights2D='no'       !< to use 2d spectral weights(yes|no){no}
-    character(len=3)      :: weights3D='yes'      !< to use 3d spectral weights(yes|no){yes}
+    character(len=3)      :: weights3D='no'       !< to use 3d spectral weights(yes|no){yes}
     character(len=3)      :: zero='no'            !< zeroing(yes|no){no}
     ! other fixed length character variables in ascending alphabetical order
     character(len=STDLEN) :: angastunit='degrees' !< angle of astigmatism unit (radians|degrees){degrees}
@@ -331,7 +331,7 @@ type :: params
     real    :: lp=20.              !< low-pass limit(in A)
     real    :: lp_ctffind=5.0      !< low-pass limit 4 ctffind(in A)
     real    :: lp_pick=20.         !< low-pass limit 4 picker(in A)
-    real    :: lplim_crit=0.143    !< corr criterion low-pass limit assignment(0.143-0.5){0.143}
+    real    :: lplim_crit=0.5      !< corr criterion low-pass limit assignment(0.143-0.5){0.5}
     real    :: lplims2D(3)
     real    :: lpmed=20.
     real    :: lpstart=0.          !< start low-pass limit(in A){15}
@@ -773,14 +773,6 @@ contains
                 write(*,'(a)') 'ERROR, the number of states is limited to 20!'
                 write(*,'(a)') 'In: constructor, module: simple_params.f90'
                 stop
-            endif
-        endif
-        ! turns off 3D weights when nstates>1 and not provided
-        if( self%nstates > 1 )then
-            if( cline%defined('weights3D') .and. self%weights3D.eq.'yes' )then
-                ! all good
-            else
-                self%weights3D = 'no'
             endif
         endif
         ! determines whether at least one volume is on the cmdline
