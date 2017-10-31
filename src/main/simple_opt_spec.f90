@@ -69,28 +69,31 @@ end type opt_spec
 
 !>  \brief  defines the cost function interface
 abstract interface
-    function costfun( vec, D ) result( cost )
-        integer, intent(in) :: D
-        real,    intent(in) :: vec(D)
-        real                :: cost
+    function costfun( fun_self, vec, D ) result( cost )
+        class(*), intent(inout) :: fun_self
+        integer, intent(in)     :: D
+        real,    intent(in)     :: vec(D)
+        real                    :: cost
     end function
 end interface
 
 !>  \brief  defines the cost function gradient interface
 abstract interface
-    subroutine gcostfun( vec, grad, D )
-        integer, intent(in)    :: D
-        real,    intent(inout) :: vec(D)
-        real,    intent(out)   :: grad(D)
+    subroutine gcostfun( fun_self, vec, grad, D )
+        class(*), intent(inout) :: fun_self
+        integer, intent(in)     :: D
+        real,    intent(inout)  :: vec(D)
+        real,    intent(out)    :: grad(D)
     end subroutine
 end interface
 
 !>  \brief  defines the cost function with simultaneous gradient interface
 abstract interface
-    subroutine fdfcostfun( vec, f, grad, D )
-        integer, intent(in)    :: D
-        real,    intent(inout) :: vec(D)
-        real,    intent(out)   :: f, grad(D)
+    subroutine fdfcostfun( fun_self, vec, f, grad, D )
+        class(*), intent(inout) :: fun_self
+        integer, intent(in)     :: D
+        real,    intent(inout)  :: vec(D)
+        real,    intent(out)    :: f, grad(D)
     end subroutine
 end interface
 
@@ -266,34 +269,37 @@ contains
     end subroutine set_inipop
 
     !> \brief  evaluate the cost function 
-    function eval_f_4( self, x ) result(f)
+    function eval_f_4( self, fun_self, x ) result(f)
         class(opt_spec), intent(inout) :: self
+        class(*),        intent(inout) :: fun_self
         real,            intent(inout) :: x(:)
         real                           :: f
         if (.not. associated(self%costfun)) then      
             write (*,*) 'error : simple_opt_spec: costfun not associated'
             return
         end if
-        f = self%costfun(x, self%ndim)
+        f = self%costfun(fun_self, x, self%ndim)
         self%nevals = self%nevals  + 1
     end function eval_f_4
 
     !> \brief  evaluate the gradient
-    subroutine eval_df_4( self, x, grad ) 
+    subroutine eval_df_4( self, fun_self, x, grad ) 
         class(opt_spec), intent(inout) :: self
+        class(*),        intent(inout) :: fun_self
         real,            intent(inout) :: x(:)
         real,            intent(out)   :: grad(:)
         if (.not. associated(self%gcostfun)) then
             write (*,*) 'error : simple_opt_spec: gcostfun not associated'
             return
         end if
-        call self%gcostfun(x, grad, self%ndim)
+        call self%gcostfun(fun_self, x, grad, self%ndim)
         self%ngevals = self%ngevals  + 1
     end subroutine eval_df_4
     
     !> \brief  evaluate the cost function and gradient simultaneously, if associated, or subsequently otherwise
-    subroutine eval_fdf_4( self, x, f, gradient )
+    subroutine eval_fdf_4( self, fun_self, x, f, gradient )
         class(opt_spec), intent(inout) :: self
+        class(*),        intent(inout) :: fun_self
         real,            intent(inout) :: x(:)
         real,            intent(out)   :: f, gradient(:)
         if ((.not. associated(self%costfun)).or.(.not. associated(self%gcostfun))) then
@@ -301,31 +307,33 @@ contains
             return
         end if
         if (associated(self%fdfcostfun)) then
-            call self%fdfcostfun(x, f, gradient, self%ndim)
+            call self%fdfcostfun(fun_self, x, f, gradient, self%ndim)
         else
-            f        = self%costfun(x, self%ndim)
-            call self%gcostfun(x, gradient, self%ndim)
+            f        = self%costfun(fun_self, x, self%ndim)
+            call self%gcostfun(fun_self, x, gradient, self%ndim)
         end if
         self%nevals  = self%nevals  + 1
         self%ngevals = self%ngevals + 1
     end subroutine eval_fdf_4
 
     !> \brief  evaluate the cost function, double precision
-    function eval_f_8( self, x ) result(f)
+    function eval_f_8( self, fun_self, x ) result(f)
         class(opt_spec), intent(inout) :: self
+        class(*),        intent(inout) :: fun_self
         real(dp),        intent(inout) :: x(:)
         real(dp)                       :: f
         if (.not. associated(self%costfun)) then      
             write (*,*) 'error : simple_opt_spec: costfun not associated'
             return
         end if
-        f   = self%costfun(real(x, kind=4), self%ndim)
+        f   = self%costfun(fun_self, real(x, kind=4), self%ndim)
         self%nevals = self%nevals  + 1
     end function eval_f_8
 
     !> \brief  evaluate the gradient, double precision
-    subroutine eval_df_8( self, x, grad ) 
+    subroutine eval_df_8( self, fun_self, x, grad ) 
         class(opt_spec), intent(inout) :: self
+        class(*),        intent(inout) :: fun_self
         real(dp),        intent(inout) :: x(:)
         real(dp),        intent(out)   :: grad(:)
         if (.not. associated(self%gcostfun)) then
@@ -333,14 +341,15 @@ contains
             return
         end if
         self%x_4_tmp = real(x, kind=4)
-        call self%gcostfun(self%x_4_tmp, self%grad_4_tmp, self%ndim)
+        call self%gcostfun(fun_self, self%x_4_tmp, self%grad_4_tmp, self%ndim)
         grad = self%grad_4_tmp
         self%ngevals = self%ngevals  + 1
     end subroutine eval_df_8
     
     !> \brief  evaluate the cost function and gradient simultaneously, if associated, or subsequently otherwise, double precision
-    subroutine eval_fdf_8( self, x, f, gradient )
+    subroutine eval_fdf_8( self, fun_self, x, f, gradient )
         class(opt_spec), intent(inout) :: self
+        class(*),        intent(inout) :: fun_self
         real(dp),        intent(inout) :: x(:)
         real(dp),        intent(out)   :: f, gradient(:)
         real                           :: f_4
@@ -350,12 +359,12 @@ contains
         end if
         self%x_4_tmp = real(x, kind=4)
         if (associated(self%fdfcostfun)) then
-            call self%fdfcostfun(self%x_4_tmp, f_4, self%grad_4_tmp, self%ndim)
+            call self%fdfcostfun(fun_self, self%x_4_tmp, f_4, self%grad_4_tmp, self%ndim)
             f        = f_4
             gradient = self%grad_4_tmp            
         else
-            f        = self%costfun(self%x_4_tmp, self%ndim)
-            call self%gcostfun(self%x_4_tmp, self%grad_4_tmp, self%ndim)
+            f        = self%costfun(fun_self, self%x_4_tmp, self%ndim)
+            call self%gcostfun(fun_self, self%x_4_tmp, self%grad_4_tmp, self%ndim)
         end if
         self%nevals  = self%nevals  + 1
         self%ngevals = self%ngevals + 1
@@ -371,10 +380,11 @@ contains
         ! PGI COMPILER DOES NOT COPE W INTERFACE
         interface
             !< defines cost function interface
-            function fun( vec, D ) result(cost)
-                integer, intent(in) :: D
-                real,    intent(in) :: vec(D)
-                real :: cost
+            function fun( fun_self, vec, D ) result(cost)
+                class(*), intent(inout) :: fun_self
+                integer,  intent(in)    :: D
+                real,     intent(in)    :: vec(D)
+                real                    :: cost
             end function
         end interface
 #endif
@@ -391,10 +401,11 @@ contains
         ! PGI COMPILER DOES NOT COPE W INTERFACE
         interface
             !< defines cost function gradient interface
-            subroutine fun( vec, grad, D )
-                integer, intent(in)    :: D
-                real,    intent(inout) :: vec( D )
-                real,    intent(out)   :: grad( D )
+            subroutine fun( fun_self, vec, grad, D )
+                class(*), intent(inout) :: fun_self
+                integer,  intent(in)    :: D
+                real,     intent(inout) :: vec( D )
+                real,     intent(out)   :: grad( D )
             end subroutine fun
         end interface
 #endif
@@ -411,10 +422,11 @@ contains
         ! PGI COMPILER DOES NOT COPE W INTERFACE
         interface
             !< defines cost function gradient interface
-            subroutine fun( vec, f, grad, D )
-                integer, intent(in)    :: D
-                real,    intent(inout) :: vec(D)
-                real,    intent(out)   :: f, grad(D)
+            subroutine fun( fun_self, vec, f, grad, D )
+                class(*), intent(inout) :: fun_self
+                integer,  intent(in)    :: D
+                real,     intent(inout) :: vec(D)
+                real,     intent(out)   :: f, grad(D)
             end subroutine fun
         end interface
 #endif

@@ -105,14 +105,15 @@ contains
         real, allocatable :: frc(:)
         type(image)       :: pspec_half_n_half
         integer           :: find
+        class(*), pointer :: fun_self => null()
         dfstep = (df_max - df_min) / 100.
         if( l_phaseplate )then
             ! do a first grid search assuming no astigmatism
             ! and pi half phase shift
             df = df_min
-            cost_lowest = ctffit_cost_phaseplate([df,df,0.,PIO2], ndim)
+            cost_lowest = ctffit_cost_phaseplate(fun_self, [df,df,0.,PIO2], ndim)
             do while( df <= df_max )
-                cost = ctffit_cost_phaseplate([df,df,0.,PIO2], ndim)
+                cost = ctffit_cost_phaseplate(fun_self, [df,df,0.,PIO2], ndim)
                 if( cost < cost_lowest )then
                     cost_lowest = cost
                     ospec_de%x  = [df,df,0.,PIO2]
@@ -122,9 +123,9 @@ contains
         else
             ! do a first grid search assuming no astigmatism
             df = df_min
-            cost_lowest = ctffit_cost([df,df,0.], ndim)
+            cost_lowest = ctffit_cost(fun_self, [df,df,0.], ndim)
             do while( df <= df_max )
-                cost = ctffit_cost([df,df,0.], ndim)
+                cost = ctffit_cost(fun_self, [df,df,0.], ndim)
                 if( cost < cost_lowest )then
                     cost_lowest = cost
                     ospec_de%x  = [df,df,0.]
@@ -133,7 +134,7 @@ contains
             end do
         endif
         ! refinement by DE (Differential Evolution)
-        call diffevol%minimize(ospec_de, cost)
+        call diffevol%minimize(ospec_de, fun_self, cost)
         dfx     = ospec_de%x(1)
         dfy     = ospec_de%x(2)
         angast  = rad2deg(ospec_de%x(3))
@@ -169,19 +170,21 @@ contains
 
     ! cost function is real-space correlation within resolution mask between the CTF
     ! powerspectrum (the model) and the pre-processed micrograph powerspectrum (the data)
-  	function ctffit_cost( vec, D ) result( cost )
-        integer, intent(in) :: D
-        real,    intent(in) :: vec(D)
-        real :: cost
+    function ctffit_cost( fun_self, vec, D ) result( cost )
+        class(*), intent(inout) :: fun_self   
+        integer,  intent(in)    :: D
+        real,     intent(in)    :: vec(D)
+        real                    :: cost
         call tfun%ctf2pspecimg(pspec_ctf, vec(1), vec(2), rad2deg(vec(3)))
         cost = -pspec_ref%real_corr_prenorm(pspec_ctf, sxx, cc_msk)
   	end function ctffit_cost
 
     ! cost function is real-space correlation within resolution mask between the CTF
     ! powerspectrum (the model) and the pre-processed micrograph powerspectrum (the data)
-    function ctffit_cost_phaseplate( vec, D ) result( cost )
-        integer, intent(in) :: D
-        real,    intent(in) :: vec(D)
+    function ctffit_cost_phaseplate( fun_self, vec, D ) result( cost )
+        class(*), intent(inout) :: fun_self
+        integer,  intent(in)    :: D
+        real,     intent(in)    :: vec(D)
         real :: cost
         ! vec(4) is additional phase shift (in radians)
         call tfun%ctf2pspecimg(pspec_ctf, vec(1), vec(2), rad2deg(vec(3)), vec(4))

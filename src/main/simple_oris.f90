@@ -2995,11 +2995,12 @@ contains
         character(len=*),    intent(in) :: mode
         logical, optional,   intent(in) :: part_of_set(self%n)
         real,    optional,   intent(in) :: weights(self%n)
-        real, parameter   :: TOL=1e-6
-        type(ori)         :: oout
-        type(opt_spec)    :: ospec
-        type(simplex_opt) :: opt
-        real              :: dist, lims(3,2)
+        real, parameter                 :: TOL=1e-6
+        type(ori)                       :: oout
+        type(opt_spec)                  :: ospec
+        type(simplex_opt)               :: opt
+        real                            :: dist, lims(3,2)
+        class(*), pointer               :: fun_self => null()
         ! manage class vars
         if( allocated(class_part_of_set) ) deallocate(class_part_of_set)
         if( allocated(class_weights)     ) deallocate(class_weights)
@@ -3042,7 +3043,7 @@ contains
             case DEFAULT
                 stop 'unsupported mode inputted; simple_ori :: ori_generator'
         end select
-        call opt%minimize(ospec, dist)
+        call opt%minimize(ospec, fun_self, dist)
         call oout%set_euler(ospec%x)
         call ospec%kill
         call opt%kill
@@ -3211,19 +3212,21 @@ contains
 
     ! PRIVATE ROUTINES
 
-    function costfun_median( vec, D ) result( dist )
-        integer, intent(in) :: D
-        real,    intent(in) :: vec(D)
-        real :: dist
+    function costfun_median( fun_self, vec, D ) result( dist )
+        class(*), intent(inout) :: fun_self
+        integer,  intent(in)    :: D
+        real,     intent(in)    :: vec(D)
+        real                    :: dist
         call o_glob%set_euler(vec)
         ! we are minimizing the distance
         dist = ops%geodesic_dist(o_glob,class_part_of_set,class_weights)
     end function costfun_median
 
-    function costfun_diverse( vec, D ) result( dist )
-        integer, intent(in) :: D
-        real,    intent(in) :: vec(D)
-        real :: dist
+    function costfun_diverse( fun_self, vec, D ) result( dist )
+        class(*), intent(inout) :: fun_self
+        integer,  intent(in)    :: D
+        real,     intent(in)    :: vec(D)
+        real                    :: dist
         call o_glob%set_euler(vec)
         ! we are maximizing the distance
         dist = -ops%geodesic_dist(o_glob,class_part_of_set,class_weights)

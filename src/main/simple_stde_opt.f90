@@ -37,11 +37,12 @@ contains
     end subroutine new_stde_opt
 
     !>  \brief  nonlinear conjugate gradient minimizer
-    subroutine stde_minimize( self, spec, lowest_cost )
+    subroutine stde_minimize( self, spec, fun_self, lowest_cost )
         use simple_opt_spec, only: opt_spec
         use simple_opt_subs, only: lnsrch
         class(stde_opt), intent(inout)  :: self        !< instance
         class(opt_spec), intent(inout)  :: spec        !< specification
+        class(*),        intent(inout)  :: fun_self    !< self-pointer for cost function
         real, intent(out)               :: lowest_cost !< minimum function value
         integer                         :: avgniter,i
         if( .not. associated(spec%costfun) )then
@@ -100,7 +101,7 @@ contains
 
         subroutine stde_set
             self%step    = spec%max_step
-            call spec%eval_fdf_8(spec%x_8, self%f, self%gradient)
+            call spec%eval_fdf_8(fun_self, spec%x_8, self%f, self%gradient)
         end subroutine stde_set
 
         function stde_iterate() result(status)
@@ -122,7 +123,7 @@ contains
                 return
             end if
             ! evaluate function and gradient at new point x1
-            call spec%eval_fdf(self%x1, f1, self%g1)
+            call spec%eval_fdf(fun_self, self%x1, f1, self%g1)
             if (f1 > f0) then
                 ! downhill step failed, reduce step-size and try again
                 failed = .true.

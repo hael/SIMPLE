@@ -14,9 +14,10 @@ contains
     !!          Returns as lowest_cost the value of spec%cosfun at the returned
     !!          location spec%x. All accomplished by calling the routines mnbrak
     !!          and brent. No derivatives needed
-    subroutine linmin(spec,lowest_cost)
+    subroutine linmin(spec,fun_self,lowest_cost)
         use simple_opt_spec, only: opt_spec
         class(opt_spec), intent(inout) :: spec
+        class(*),        intent(inout) :: fun_self
         real,            intent(out)   :: lowest_cost
         integer :: j
         real    :: ax,bx,fa,fb,fx,xmin,xx
@@ -46,7 +47,7 @@ contains
                 do j=1,spec%ndim
                     spec%xt(j)=spec%x(j)+x*spec%xi(j)
                 end do
-                r = spec%costfun(spec%xt,spec%ndim)
+                r = spec%costfun(fun_self,spec%xt,spec%ndim)
                 spec%nevals = spec%nevals+1
             end function eval_move
 
@@ -216,17 +217,19 @@ contains
     end subroutine linmin
 
     !>  \brief  line search routine (relying on gradient evals, used in BFGS)
-    subroutine lnsrch(n,xold,fold,g,p,x,f,stpmax,check,func,nevals)
+    subroutine lnsrch(n,xold,fold,g,p,x,f,stpmax,check,func,fun_self,nevals)
         integer :: n, nevals
         logical :: check
         real    :: f, fold,stpmax,g(n),p(n)
         real    :: x(n),xold(n),ALF,TOLX
+        class(*), intent(inout) :: fun_self
         parameter (ALF=1.e-4,TOLX=1.e-7)
         interface
-            function func( vec, D ) result(cost)
-                integer, intent(in) :: D
-                real,    intent(in) :: vec(D)
-                real                :: cost
+            function func( fun_self, vec, D ) result(cost)
+                class(*), intent(inout) :: fun_self
+                integer,  intent(in)    :: D
+                real,     intent(in)    :: vec(D)
+                real                    :: cost
             end function
         end interface
         integer :: i
@@ -258,7 +261,7 @@ contains
             do i=1,n
                 x(i)=xold(i)+alam*p(i)
             end do
-            f=func(x,n)
+            f=func(fun_self,x,n)
             nevals = nevals+1
             if(alam.lt.alamin)then ! convergence on delta_x. For zero finding,
                 do i=1,n           ! the calling program should verify convergence
@@ -305,21 +308,23 @@ contains
     !!          value. On output, p and y will have been reset to ndim+1 new
     !!          points all within ftol of a minimum function value, and iter
     !!          gives the number of function evaluations taken.
-    subroutine amoeba(p,y,pb,yb,ftol,func,iter,itmax,nevals)
-        real,    intent(inout) :: p(:,:) !< the ndim+1 rows of p are ndim vec:s which are the vertices of the starting simplex
+    subroutine amoeba(p,y,pb,yb,ftol,func,fun_self,iter,itmax,nevals)
+        real,     intent(inout) :: p(:,:)   !< the ndim+1 rows of p are ndim vec:s which are the vertices of the starting simplex
                                          !! the best point is put in slot 1 upon convergence
-        real,    intent(inout) :: y(:)   !< must be pre-initialized to the values of func evaluated at the ndim+1 vertices (rows) of p
-        real,    intent(inout) :: pb(:)  !< for updating the best point
-        real,    intent(inout) :: yb     !< for updating the cost of best point
-        real,    intent(in)    :: ftol   !< fractional convergence tolerance to be achieved in the function value (0.0005)
-        integer, intent(out)   :: iter   !< number of exectuted iterations
-        integer, intent(in)    :: itmax  !< maximum number of iterations
-        integer, intent(inout) :: nevals !< number of costfun evals counter
+        real,     intent(inout) :: y(:)     !< must be pre-initialized to the values of func evaluated at the ndim+1 vertices (rows) of p
+        real,     intent(inout) :: pb(:)    !< for updating the best point
+        real,     intent(inout) :: yb       !< for updating the cost of best point
+        real,     intent(in)    :: ftol     !< fractional convergence tolerance to be achieved in the function value (0.0005)
+        class(*), intent(inout) :: fun_self !< self-pointer for cost function
+        integer,  intent(out)   :: iter     !< number of exectuted iterations
+        integer,  intent(in)    :: itmax    !< maximum number of iterations
+        integer,  intent(inout) :: nevals   !< number of costfun evals counter
         interface
-            function func( vec, D ) result( cost ) !< the external function used for callback
-                integer, intent(in) :: d
-                real, intent(in)    :: vec(D)
-                real :: cost
+            function func( fun_self, vec, D ) result( cost ) !< the external function used for callback
+                class(*), intent(inout) :: fun_self
+                integer,  intent(in)    :: d
+                real,     intent(in)    :: vec(D)
+                real                    :: cost
             end function
         end interface
         real, parameter :: tiny=1.0e-10
@@ -375,7 +380,7 @@ contains
                             p(:,:)=0.5*(p(:,:)+spread(p(ilo,:),1,size(p,1))) ! better contract around the lowest (best) point
                             do i=1,ndim+1
                                 if(i /= ilo)then
-                                    y(i)=func(p(i,:),ndim)
+                                    y(i)=func(fun_self,p(i,:),ndim)
                                     nevals = nevals+1
                                 endif
                             end do
@@ -401,7 +406,7 @@ contains
                 fac1=(1.0-fac)/ndim
                 fac2=fac1-fac
                 ptry(:)=psum(:)*fac1-p(ihi,:)*fac2
-                ytry=func(ptry,ndim)  ! evaluate the function at the trial point
+                ytry=func(fun_self,ptry,ndim)  ! evaluate the function at the trial point
                 nevals = nevals+1
                 if(ytry < y(ihi))then ! if it is better than the highest, then replace the highest
                     y(ihi)=ytry

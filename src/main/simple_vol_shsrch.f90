@@ -50,10 +50,11 @@ contains
         call nlopt%new(ospec)
     end subroutine vol_shsrch_init
 
-    function vol_shsrch_costfun( vec, D ) result( cost )
-        integer, intent(in) :: D
-        real,    intent(in) :: vec(D)
-        real :: vec_here(3), cost
+    function vol_shsrch_costfun( fun_self, vec, D ) result( cost )
+        class(*), intent(inout) :: fun_self
+        integer,  intent(in)    :: D
+        real,     intent(in)    :: vec(D)
+        real                    :: vec_here(3), cost
         vec_here = vec
         where( abs(vec) < 1.e-6 ) vec_here = 0.
         if( shbarr )then
@@ -67,10 +68,11 @@ contains
     end function vol_shsrch_costfun
 
     function vol_shsrch_minimize( ) result( cxyz )
-        real :: cost_init, cost, cxyz(4)
+        real              :: cost_init, cost, cxyz(4)
+        class(*), pointer :: fun_self => null()
         ospec%x = 0.0
-        cost_init = vol_shsrch_costfun(ospec%x, ospec%ndim)
-        call nlopt%minimize(ospec, cost)
+        cost_init = vol_shsrch_costfun(fun_self, ospec%x, ospec%ndim)
+        call nlopt%minimize(ospec, fun_self, cost)
         if( cost < cost_init )then
             cxyz(1)  = -cost   ! correlation
             cxyz(2:) = ospec%x ! shift

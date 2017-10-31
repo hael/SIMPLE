@@ -44,10 +44,11 @@ contains
     end subroutine
 
     !>  \brief  the high-level minimization routine
-    subroutine powell_minimize(self,spec,lowest_cost)
+    subroutine powell_minimize(self,spec,fun_self,lowest_cost)
         use simple_rnd, only: ran3
         class(powell_opt), intent(inout) :: self        !< instance
-        class(opt_spec), intent(inout)   :: spec        !< specification
+        class(opt_spec),   intent(inout) :: spec        !< specification
+        class(*),          intent(inout) :: fun_self    !< self-pointer for cost function
         real, intent(out)                :: lowest_cost !< lowest cost
         logical :: found_better
         real    :: cost
@@ -77,7 +78,7 @@ contains
         self%spec_linmin%x = spec%x
         ! set best cost
         spec%nevals  = 0
-        self%yb      = spec%costfun(spec%x, spec%ndim)
+        self%yb      = spec%costfun(fun_self, spec%x, spec%ndim)
         spec%nevals  = spec%nevals+1
         ! run nrestarts
         found_better = .false.
@@ -125,7 +126,7 @@ contains
                 real    :: del,fp,fptt,t
                 allocate(pt(spec%ndim),ptt(spec%ndim), stat=alloc_stat)
                 allocchk("In: powell; simple_powell_opt")
-                cost=spec%costfun(self%spec_linmin%x,spec%ndim) ! set initial costfun val
+                cost=spec%costfun(fun_self,self%spec_linmin%x,spec%ndim) ! set initial costfun val
                 spec%nevals = spec%nevals+1
                 do j=1,spec%ndim
                     pt(j)=self%spec_linmin%x(j) ! save initial pont
@@ -142,7 +143,7 @@ contains
                         end do
                         fptt=cost
                         self%spec_linmin%nevals = 0
-                        call linmin(self%spec_linmin,cost) ! minimize along it
+                        call linmin(self%spec_linmin,fun_self,cost) ! minimize along it
                         spec%nevals = spec%nevals+self%spec_linmin%nevals
                         if (abs(fptt-cost) > del) then
                             del=abs(fptt-cost)
@@ -161,13 +162,13 @@ contains
                         self%spec_linmin%xi(j)=self%spec_linmin%x(j)-pt(j)
                         pt(j)=self%spec_linmin%x(j)
                     end do
-                    fptt=spec%costfun(ptt,spec%ndim)   ! function value at extrapolated point
+                    fptt=spec%costfun(fun_self,ptt,spec%ndim)   ! function value at extrapolated point
                     spec%nevals = spec%nevals+1        ! increment nr ov cost fun evals counter
                     if (fptt > fp) cycle              ! one reason not to use new direction
                     t=2.*(fp-2.*cost+fptt)*(fp-cost-del)**2-del*(fp-fptt)**2
                     if (t > 0.0) cycle                 ! another reason not to use new direction
                     self%spec_linmin%nevals = 0
-                    call linmin(self%spec_linmin,cost) ! move to the minimum of the new direction
+                    call linmin(self%spec_linmin,fun_self,cost) ! move to the minimum of the new direction
                     spec%nevals = spec%nevals+self%spec_linmin%nevals
                     do j=1,spec%ndim                   ! and save the new direction
                         self%direction_set(j,ibig)=self%direction_set(j,spec%ndim)

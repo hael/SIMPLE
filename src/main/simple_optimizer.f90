@@ -28,11 +28,12 @@ abstract interface
     !! minimization requires specifications and a return param
     !! \param spec specifications of opt
     !! \param lowest_cost return param for best result at end of optimisation
-    subroutine generic_minimize( self, spec, lowest_cost )
+    subroutine generic_minimize( self, spec, fun_self, lowest_cost )
         use simple_opt_spec, only: opt_spec
         import :: optimizer
         class(optimizer), intent(inout) :: self
-        class(opt_spec), intent(inout)  :: spec
+        class(opt_spec),  intent(inout) :: spec
+        class(*),         intent(inout) :: fun_self        
         real, intent(out)               :: lowest_cost
     end subroutine generic_minimize
 

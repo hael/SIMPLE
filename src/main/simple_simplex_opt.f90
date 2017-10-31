@@ -40,7 +40,7 @@ contains
     end subroutine new_simplex_opt
 
     !> \brief  restarted simplex minimization
-    subroutine simplex_minimize( self, spec, lowest_cost )
+    subroutine simplex_minimize( self, spec, fun_self, lowest_cost )
         !$ use omp_lib
         !$ use omp_lib_kinds
         use simple_opt_spec, only: opt_spec
@@ -48,6 +48,7 @@ contains
         use simple_rnd,      only: ran3
         class(simplex_opt), intent(inout) :: self        !< instance
         class(opt_spec),    intent(inout) :: spec        !< specification
+        class(*),           intent(inout) :: fun_self    !< self-pointer for cost function
         real,               intent(out)   :: lowest_cost !< lowest cost
         integer                           :: i, avgniter
         integer                           :: niters(spec%nrestarts)
@@ -71,13 +72,13 @@ contains
         self%pb = spec%x
         ! set best cost
         spec%nevals = 0
-        self%yb = spec%costfun(self%pb, spec%ndim)
+        self%yb     = spec%costfun(fun_self, self%pb, spec%ndim)
         spec%nevals = spec%nevals+1
         ! run nrestarts
         do i=1,spec%nrestarts
             call init
             ! run the amoeba routine
-            call amoeba(self%p,self%y,self%pb,self%yb,spec%ftol,spec%costfun,niters(i),spec%maxits,spec%nevals)
+            call amoeba(self%p,self%y,self%pb,self%yb,spec%ftol,spec%costfun,fun_self,niters(i),spec%maxits,spec%nevals)
         end do
         avgniter    = sum(niters)/spec%nrestarts
         spec%niter  = avgniter
@@ -101,7 +102,7 @@ contains
                 end do
                 ! calculate costs
                 do i=1,spec%ndim+1
-                    self%y(i) = spec%costfun(self%p(i,:), spec%ndim)
+                    self%y(i) = spec%costfun(fun_self, self%p(i,:), spec%ndim)
                 end do
             end subroutine init
 

@@ -41,9 +41,10 @@ contains
     end subroutine new_particle_swarm
 
     !> \brief  is the particle swarm minimize minimization routine
-    subroutine particle_swarm_minimize( self, spec, lowest_cost )
+    subroutine particle_swarm_minimize( self, spec, fun_self, lowest_cost )
         class(particle_swarm_opt), intent(inout) :: self        !< instance
-        class(opt_spec), intent(inout)           :: spec        !< specification
+        class(opt_spec),           intent(inout) :: spec        !< specification
+        class(*),                  intent(inout) :: fun_self    !< self-pointer for cost function
         real, intent(out)                        :: lowest_cost !< lowest cost
         integer :: t                !< iteration counter
         integer :: npeaks           !< number of local minima
@@ -97,7 +98,7 @@ contains
             end do
             ! calculate initial costs
             do i=1,spec%npop
-                costs(i) = spec%costfun(self%swarm(i,:), spec%ndim)
+                costs(i) = spec%costfun(fun_self, self%swarm(i,:), spec%ndim)
                 spec%nevals = spec%nevals+1
             end do
             loc = minloc(costs)
@@ -124,7 +125,7 @@ contains
                 self%swarm(i,j) = max(spec%limits(j,1),self%swarm(i,j))
             end do
             ! calculate cost
-            y = spec%costfun(self%swarm(i,:), spec%ndim)
+            y = spec%costfun(fun_self, self%swarm(i,:), spec%ndim)
             costs(i) = y
             spec%nevals = spec%nevals+1
             if( y < self%yb )then

@@ -56,11 +56,12 @@ contains
     end subroutine new_bfgs2_opt
 
     !>  \brief  nonlinear conjugate gradient minimizer
-    subroutine bfgs2_minimize( self, spec, lowest_cost )
+    subroutine bfgs2_minimize( self, spec, fun_self, lowest_cost )
         use simple_opt_spec, only: opt_spec
         use simple_opt_subs, only: lnsrch
         class(bfgs2_opt), intent(inout) :: self        !< instance
-        class(opt_spec), intent(inout)  :: spec        !< specification
+        class(opt_spec),  intent(inout) :: spec        !< specification
+        class(*),         intent(inout) :: fun_self    !< self-pointer for cost function
         real, intent(out)               :: lowest_cost !< minimum function value
         integer                         :: avgniter,i
         if( .not. associated(spec%costfun) )then
@@ -124,7 +125,7 @@ contains
             self%step       = spec%max_step
             self%delta_f    = 0.
             ! Use the gradient as the initial direction
-            call spec%eval_fdf(spec%x_8, self%f, self%gradient)
+            call spec%eval_fdf(fun_self, spec%x_8, self%f, self%gradient)
             self%x0         = spec%x_8
             self%g0         = self%gradient
             self%g0norm     = norm2(self%g0)
@@ -343,7 +344,7 @@ contains
                 return
             end if
             call moveto(alpha)
-            self%wrapper%f_alpha     = spec%eval_f(self%wrapper%x_alpha)
+            self%wrapper%f_alpha     = spec%eval_f(fun_self, self%wrapper%x_alpha)
             self%wrapper%f_cache_key = alpha
             res = self%wrapper%f_alpha
         end function wrap_f
@@ -357,7 +358,7 @@ contains
             end if
             call moveto(alpha)
             if (alpha .ne. self%wrapper%g_cache_key) then
-                call spec%eval_df(self%wrapper%x_alpha, self%wrapper%g_alpha)
+                call spec%eval_df(fun_self, self%wrapper%x_alpha, self%wrapper%g_alpha)
                 self%wrapper%g_cache_key = alpha
             end if
             self%wrapper%df_alpha = slope()
@@ -380,7 +381,7 @@ contains
                 return
             end if
             call moveto(alpha)
-            call spec%eval_fdf(self%wrapper%x_alpha, self%wrapper%f_alpha, self%wrapper%g_alpha)
+            call spec%eval_fdf(fun_self, self%wrapper%x_alpha, self%wrapper%f_alpha, self%wrapper%g_alpha)
             self%wrapper%f_cache_key  = alpha
             self%wrapper%g_cache_key  = alpha
             self%wrapper%df_alpha     = slope()

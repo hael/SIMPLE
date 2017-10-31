@@ -78,53 +78,54 @@ contains
     
     subroutine test_testfuns
         procedure(testfun), pointer :: ptr
-        integer :: i
-        real    :: gmin, range(2)
-        logical :: success
+        integer                     :: i
+        real                        :: gmin, range(2)
+        logical                     :: success
+        class(*), pointer           :: fun_self => null()
         success = .false.
         do i=1,20
             call get_testfun(i, 2, gmin, range, ptr)
             select case(i)
                 case(1)
-                    if( abs(ptr([0.,0.],2)-gmin) < 1e-5 ) success = .true.
+                    if( abs(ptr(fun_self,[0.,0.],2)-gmin) < 1e-5 ) success = .true.
                 case(2)
-                    if( abs(ptr([1.,1.],2)-gmin) < 1e-5 ) success = .true.
+                    if( abs(ptr(fun_self,[1.,1.],2)-gmin) < 1e-5 ) success = .true.
                 case(3)
-                    if( abs(ptr([-2.903534,-2.903534],2)-gmin) < 1e-5 ) success = .true.
+                    if( abs(ptr(fun_self,[-2.903534,-2.903534],2)-gmin) < 1e-5 ) success = .true.
                 case(4)
-                    if( abs(ptr([0.,0.],2)-gmin) < 1e-5 ) success = .true.
+                    if( abs(ptr(fun_self,[0.,0.],2)-gmin) < 1e-5 ) success = .true.
                 case(5)
-                    if( abs(ptr([0.,0.],2)-gmin) < 1e-5 ) success = .true.
+                    if( abs(ptr(fun_self,[0.,0.],2)-gmin) < 1e-5 ) success = .true.
                 case(6)
-                    if( abs(ptr([0.,0.],2)-gmin) < 1e-5 ) success = .true.
+                    if( abs(ptr(fun_self,[0.,0.],2)-gmin) < 1e-5 ) success = .true.
                 case(7)
-                    if( abs(ptr([420.9687,420.9687],2)-gmin) < 1e-5 ) success = .true.
+                    if( abs(ptr(fun_self,[420.9687,420.9687],2)-gmin) < 1e-5 ) success = .true.
                 case(8)
-                    if( abs(ptr([0.,0.],2)-gmin) < 1e-5 ) success = .true.
+                    if( abs(ptr(fun_self,[0.,0.],2)-gmin) < 1e-5 ) success = .true.
                 case(9)
-                    if( abs(ptr([1.,1.],2)-gmin) < 1e-5 ) success = .true.
+                    if( abs(ptr(fun_self,[1.,1.],2)-gmin) < 1e-5 ) success = .true.
                 case(10)
-                    if( abs(ptr([3.,0.5],2)-gmin) < 1e-5 ) success = .true.
+                    if( abs(ptr(fun_self,[3.,0.5],2)-gmin) < 1e-5 ) success = .true.
                 case(11)
-                    if( abs(ptr([0.,-1.],2)-gmin) < 1e-5 ) success = .true.
+                    if( abs(ptr(fun_self,[0.,-1.],2)-gmin) < 1e-5 ) success = .true.
                 case(12)
-                    if( abs(ptr([1.,3.],2)-gmin) < 1e-5 ) success = .true.
+                    if( abs(ptr(fun_self,[1.,3.],2)-gmin) < 1e-5 ) success = .true.
                 case(13)
-                    if( abs(ptr([0.,0.],2)-gmin) < 1e-5 ) success = .true.
+                    if( abs(ptr(fun_self,[0.,0.],2)-gmin) < 1e-5 ) success = .true.
                 case(14)
-                    if( abs(ptr([0.,0.],2)-gmin) < 1e-5 ) success = .true.
+                    if( abs(ptr(fun_self,[0.,0.],2)-gmin) < 1e-5 ) success = .true.
                 case(15)
-                    if( abs(ptr([1.,1.],2)-gmin) < 1e-5 ) success = .true.
+                    if( abs(ptr(fun_self,[1.,1.],2)-gmin) < 1e-5 ) success = .true.
                 case(16)
-                    if( abs(ptr([0.,0.],2)-gmin) < 1e-5 ) success = .true.
+                    if( abs(ptr(fun_self,[0.,0.],2)-gmin) < 1e-5 ) success = .true.
                 case(17)
-                    if( abs(ptr([pi,pi],2)-gmin) < 1e-5 ) success = .true.
+                    if( abs(ptr(fun_self,[pi,pi],2)-gmin) < 1e-5 ) success = .true.
                 case(18)
-                    if( abs(ptr([512.,404.2319],2)-gmin) < 1e-5 ) success = .true.
+                    if( abs(ptr(fun_self,[512.,404.2319],2)-gmin) < 1e-5 ) success = .true.
                 case(19)
-                    if( abs(ptr([0.,0.],2)-gmin) < 1e-5 ) success = .true.
+                    if( abs(ptr(fun_self,[0.,0.],2)-gmin) < 1e-5 ) success = .true.
                 case(20)
-                    if( abs(ptr([0.,1.25313],2)-gmin) < 1e-5 ) success = .true.
+                    if( abs(ptr(fun_self,[0.,1.25313],2)-gmin) < 1e-5 ) success = .true.
                 case DEFAULT
                     stop 'Unknown function index; test_testfuns; simple_unit_test'
             end select

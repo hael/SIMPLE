@@ -15,11 +15,12 @@ contains
     end subroutine take_step
 
     subroutine intermediate_point(x, p, lambda,  pg, stepa, stepc, fa, fc, &
-        & x1, gradient, step, f, spec)
+        & x1, gradient, step, f, spec, fun_self)
         use simple_opt_spec, only: opt_spec
         real(dp), intent(in)       :: x(:), p(:), lambda, pg, stepa,  fa
         real(dp), intent(out)      :: x1(:), gradient(:), step, f, fc, stepc
         class(opt_spec), intent(inout) :: spec
+        class(*),        intent(inout) :: fun_self
         real(dp) :: stepb, fb, u
 10      u = abs(pg * lambda * stepc)  ! label: trial
         stepb = 0.5 * stepc * u / ((fc - fa) + u)
@@ -31,10 +32,10 @@ contains
             end if
             step = 0
             f = fa
-            call spec%eval_df(x1, gradient)
+            call spec%eval_df(fun_self, x1, gradient)
             return
         end if
-        fb = spec%eval_f(x1)
+        fb = spec%eval_f(fun_self,x1)
         if (global_debug .and. global_verbose) then
             write (*,*) 'trying stepb = ', stepb, 'fb = ', fb
         end if
@@ -49,15 +50,16 @@ contains
         end if
         step = stepb
         f = fb
-        call spec%eval_df(x1, gradient)
+        call spec%eval_df(fun_self, x1, gradient)
     end subroutine intermediate_point
 
     subroutine minimize(x, p, lambda, stepa, stepb, stepc, fa, fb, fc, &
-        & x1, x2, gradient, step, f, gnorm, spec)
+        & x1, x2, gradient, step, f, gnorm, spec, fun_self)
         use simple_opt_spec, only: opt_spec        
         real(dp), intent(in) :: x(:), p(:), lambda
         real(dp), intent(out) :: x1(:), x2(:), gradient(:), step, stepa, stepb, stepc, fa, fb, fc, f, gnorm
-        class(opt_spec), intent(inout)  :: spec
+        class(opt_spec), intent(inout) :: spec
+        class(*),        intent(inout) :: fun_self
         real(dp) :: u, v, w, dw, dv, du, fu, fv, fw, old1, old2, stepm, fm, pg, gnorm1, iter, e1, e2
         u = stepb
         v = stepa
@@ -93,8 +95,8 @@ contains
         else
             stepm = stepb - 0.38 * (stepb - stepa)
         end if
-        call take_step (x, p, stepm, lambda, x1)
-        fm = spec%eval_f(x1)
+        call take_step(x, p, stepm, lambda, x1)
+        fm = spec%eval_f(fun_self,x1)
         if (global_debug .and. global_verbose) then
             write (*,*) 'trying stepm = ', stepm, ' fm = ', fm
         end if
@@ -126,7 +128,7 @@ contains
             fv = fu
             fu = fm
             x2 = x1
-            call spec%eval_df(x1, gradient)
+            call spec%eval_df(fun_self, x1, gradient)
             pg = dot_product(p, gradient)
             gnorm1 = norm2(gradient)
             if (global_debug .and. global_verbose) then

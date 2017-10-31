@@ -12,10 +12,11 @@ implicit none
 
 !>  \brief  defines the test function interface
 abstract interface
-    function testfun( vec, D ) result( cost )
-        integer, intent(in) :: D
-        real, intent(in)    :: vec(D)
-        real                :: cost
+    function testfun( fun_self, vec, D ) result( cost )
+        class(*), intent(inout) :: fun_self
+        integer,  intent(in)    :: D
+        real,     intent(in)    :: vec(D)
+        real                    :: cost
     end function
 end interface
 
@@ -315,11 +316,12 @@ contains
     !>  \brief  Ackley's function
     !!          global minimum: f(0,...,0) = 0
     !!          search domain: [-32,32]
-    function testfun1( x, d ) result( r )
-        integer, intent(in) :: d
-        real, intent(in)    :: x(d)
-        integer :: i
-        real :: r, s
+    function testfun1( fun_self, x, d ) result( r )
+        class(*), intent(inout) :: fun_self
+        integer,  intent(in)    :: d
+        real,     intent(in)    :: x(d)
+        integer                 :: i
+        real                    :: r, s
         r = 0.
         s = 0.
         do i=1,d
@@ -332,11 +334,12 @@ contains
     !>  \brief  Griewank's function
     !!          global minimum: f(0,...,0) = 0
     !!          search domain: [-600,600]
-    function testfun2( x, d ) result( r )
-        integer, intent(in) :: d
-        real, intent(in)    :: x(d)
-        integer :: i
-        real :: r, s
+    function testfun2( fun_self, x, d ) result( r )
+        class(*), intent(inout) :: fun_self
+        integer,  intent(in)    :: d
+        real,     intent(in)    :: x(d)
+        integer                 :: i
+        real                    :: r, s
         r = 0.
         s = 1.
         do i=1,d
@@ -349,8 +352,9 @@ contains
     !>  \brief  Levy function
     !!          global minimum: f(1,...,1) = 0
     !!          search domain: [-10,10]
-    function testfun3( x, d ) result( r )
-        integer, intent(in) :: d
+    function testfun3( fun_self, x, d ) result( r )
+        class(*), intent(inout) :: fun_self        
+        integer, intent(in) :: d        
         real, intent(in)    :: x(d)
         real                :: w(d)
         integer :: i
@@ -371,7 +375,8 @@ contains
     !>  \brief  Rastrigin's function
     !!          global minimum: f(0,...,0) = 0
     !!          search domain: [-5.12,5.12]
-    function testfun4( x, d ) result( r )
+    function testfun4( fun_self, x, d ) result( r )
+        class(*), intent(inout) :: fun_self        
         integer, intent(in) :: d
         real, intent(in)    :: x(d)
         integer :: i
@@ -386,7 +391,8 @@ contains
     !!          global minimum: f(420.9687,...,420.9687) = 0
     !!          search domain: [-500,500]
     !!          characteristics: highly complex, with many local minima
-    function testfun5( x, d ) result( r )
+    function testfun5( fun_self, x, d ) result( r )
+        class(*), intent(inout) :: fun_self                
         integer, intent(in) :: d
         real, intent(in)    :: x(d)
         integer :: i
@@ -402,7 +408,8 @@ contains
     !!          global minimum: f(0,...,0) = 0
     !!          search domain: [-100,100]
     !!          characteristics: highly multimodal
-    function testfun6( x, d ) result( r )
+    function testfun6( fun_self, x, d ) result( r )
+        class(*), intent(inout) :: fun_self                
         integer, intent(in) :: d
         real, intent(in)    :: x(d)
         integer :: i
@@ -419,7 +426,8 @@ contains
     !>  \brief  Sphere function
     !!          global minimum: f(0,...,0) = 0
     !!          search domain: [-5.12,5.12]
-    function testfun7( x, d ) result( r )
+    function testfun7( fun_self, x, d ) result( r )
+        class(*), intent(inout) :: fun_self        
         integer, intent(in) :: d
         real, intent(in)    :: x(d)
         integer :: i
@@ -433,7 +441,8 @@ contains
     !>  \brief  SumSquares function
     !!          global minimum: f(0,...,0) = 0
     !!          search domain: [-10,10]
-    function testfun8( x, d ) result( r )
+    function testfun8( fun_self, x, d ) result( r )
+        class(*), intent(inout) :: fun_self        
         integer, intent(in) :: d
         real, intent(in)    :: x(d)
         integer :: i
@@ -447,7 +456,8 @@ contains
     !>  \brief  SumPowers function
     !!          global minimum: f(0,...,0) = 0
     !!          search domain: [-1,1]
-    function testfun9( x, d ) result( r )
+    function testfun9( fun_self, x, d ) result( r )
+        class(*), intent(inout) :: fun_self                
         integer, intent(in) :: d
         real, intent(in)    :: x(d)
         integer :: i
@@ -461,7 +471,8 @@ contains
     !>  \brief  1st Perm function
     !!          global minimum: f(1,1/2,1/3,...,1/d) = 0
     !!          search domain: [-d,d]
-    function testfun10( x, d ) result( r )
+    function testfun10( fun_self, x, d ) result( r )
+        class(*), intent(inout) :: fun_self        
         integer, intent(in) :: d
         real, intent(in)    :: x(d)
         integer :: i, j
@@ -484,7 +495,8 @@ contains
     !!          global minimum: f(1,2,3,...,d) = 0
     !!          search domain: [-d,d]
     !!          characteristics: wavy bowl
-    function testfun11( x, d ) result( r )
+    function testfun11( fun_self, x, d ) result( r )
+        class(*), intent(inout) :: fun_self        
         integer, intent(in) :: d
         real, intent(in)    :: x(d)
         integer :: i, j
@@ -505,7 +517,8 @@ contains
     !!          global minimum: f(-2.903534,...,-2.903534) = -39.16599*d
     !!          search domain: [-5,5]
     !!          characteristics: wavy bowl
-    function testfun12( x, d ) result( r )
+    function testfun12( fun_self, x, d ) result( r )
+        class(*), intent(inout) :: fun_self        
         integer, intent(in) :: d
         real, intent(in)    :: x(d)
         integer :: i
@@ -521,7 +534,8 @@ contains
     !!          global minimum: f(1,...,1) = 0
     !!          search domain: [-10.24,10.24]
     !!          characteristics: wavy bowl
-    function testfun13( x, d ) result( r )
+    function testfun13( fun_self, x, d ) result( r )
+        class(*), intent(inout) :: fun_self        
         integer, intent(in) :: d
         real, intent(in)    :: x(d)
         integer :: i,j
@@ -540,7 +554,8 @@ contains
     !>  \brief  Zakharov function
     !!          global minimum: f(0,...,0) = 0
     !!          search domain: [-5,10]
-    function testfun14( x, d ) result( r )
+    function testfun14( fun_self, x, d ) result( r )
+        class(*), intent(inout) :: fun_self        
         integer, intent(in) :: d
         real, intent(in)    :: x(d)
         integer :: i
@@ -560,7 +575,8 @@ contains
     !>  \brief  Dixon-Price function
     !!          global minimum: f(x(1),...,x(d)) = 0 at x(i) = 2**(-(2**i-2)/(2**i))
     !!          search domain: [-10,10]
-    function testfun15( x, d ) result( r )
+    function testfun15( fun_self, x, d ) result( r )
+        class(*), intent(inout) :: fun_self        
         integer, intent(in) :: d
         real, intent(in)    :: x(d)
         integer :: i
@@ -575,7 +591,8 @@ contains
     !!          global minimum: f(1,...,1) = 0
     !!          search domain: [-5,10]
     !!          can be restricted to: [-2.048,2.048]
-    function testfun16( x, d ) result( r )
+    function testfun16( fun_self, x, d ) result( r )
+        class(*), intent(inout) :: fun_self        
         integer, intent(in) :: d
         real, intent(in)    :: x(d)
         integer :: i
@@ -591,7 +608,8 @@ contains
     !>  \brief  Pinter's function
     !!          global minimum: f(0,...,0) = 0
     !!          search domain: [-100,100]
-    function testfun17( x, d ) result( r )
+    function testfun17( fun_self, x, d ) result( r )
+        class(*), intent(inout) :: fun_self        
         integer, intent(in) :: d
         real, intent(in)    :: x(d)
         integer :: i
@@ -623,7 +641,8 @@ contains
     !>  \brief  MultiMod function
     !!          global minimum: f(0,...,0) = 0
     !!          search domain: [-10,10]
-    function testfun18( x, d ) result( r )
+    function testfun18( fun_self, x, d ) result( r )
+        class(*), intent(inout) :: fun_self        
         integer, intent(in) :: d
         real, intent(in)    :: x(d)
         integer :: i
@@ -645,7 +664,8 @@ contains
     !!          search domain: [-100,100]
     !!          The presence of many flat plateus and steep ridges presents
     !!          difficulties for algorithms based on gradient information
-    function testfun19( x, d ) result( r )
+    function testfun19( fun_self, x, d ) result( r )
+        class(*), intent(inout) :: fun_self        
         integer, intent(in) :: d
         real, intent(in)    :: x(d)
         integer :: i
@@ -664,7 +684,8 @@ contains
     !>  \brief  Drop-wave function
     !!          global minimum: f(0,0) = -1
     !!          search domain: [-5.12,5.12]
-    function testfun20( x, d ) result( r )
+    function testfun20( fun_self, x, d ) result( r )
+        class(*), intent(inout) :: fun_self        
         integer, intent(in) :: d ! d=2
         real, intent(in)    :: x(d)
         real :: r, frac1, frac2
@@ -676,7 +697,8 @@ contains
     !>  \brief Eggholder function
     !!         global minimum: f(512,404.2319) = -959.6407
     !!         search domain: [-512,512]
-    function testfun21( x, d )result( r )
+    function testfun21( fun_self, x, d )result( r )
+        class(*), intent(inout) :: fun_self        
         integer, intent(in) :: d ! d=2
         real, intent(in)    :: x(d)
         real :: r
@@ -689,7 +711,8 @@ contains
     !!          global minimum: f(-8.05502,9.66459)  = -19.2085
     !!          global minimum: f(-8.05502,-9.66459) = -19.2085
     !!          search domain: [-10,10]
-    function testfun22( x, d ) result( r )
+    function testfun22( fun_self, x, d ) result( r )
+        class(*), intent(inout) :: fun_self        
         integer, intent(in) :: d ! d=2
         real, intent(in)    :: x(d)
         real :: r, fact1, fact2
@@ -701,7 +724,8 @@ contains
     !>  \brief  Levy function N.13
     !!          global minimum: f(1,1) = 0
     !!          search domain: [-10,10]
-    function testfun23( x, d ) result( r )
+    function testfun23( fun_self, x, d ) result( r )
+        class(*), intent(inout) :: fun_self        
         integer, intent(in) :: d ! d=2
         real, intent(in)    :: x(d)
         real :: r, term1, term2, term3
@@ -714,7 +738,8 @@ contains
     !>  \brief Schaffer function N.2
     !!         global minimum: f(0,0) = 0
     !!         search domain: [-100,100]
-    function testfun24( x, d )result( r )
+    function testfun24( fun_self, x, d )result( r )
+        class(*), intent(inout) :: fun_self        
         integer, intent(in) :: d ! d=2
         real, intent(in)    :: x(d)
         real :: r
@@ -724,7 +749,8 @@ contains
     !>  \brief Schaffer function N.4
     !!         global minimum: f(0,1.25313) = 0.292579
     !!         search domain: [-100,100]
-    function testfun25( x, d )result( r )
+    function testfun25( fun_self, x, d )result( r )
+        class(*), intent(inout) :: fun_self        
         integer, intent(in) :: d ! d=2
         real, intent(in)    :: x(d)
         real :: r
@@ -734,7 +760,8 @@ contains
     !>  \brief Shubert function
     !!         global minimum: f(unknonw) = -186.7309
     !!         search domain: [-5.12,5.12]
-    function testfun26( x, d )result( r )
+    function testfun26( fun_self, x, d )result( r )
+        class(*), intent(inout) :: fun_self        
         integer, intent(in) :: d ! d=2
         real, intent(in)    :: x(d)
         real    :: r, sum1, sum2, ii
@@ -754,7 +781,8 @@ contains
     !>  \brief  Booth's function
     !!          global minimum: f(1,3) = 0
     !!          search domain: [-10,10]
-    function testfun27( x, d ) result( r )
+    function testfun27( fun_self, x, d ) result( r )
+        class(*), intent(inout) :: fun_self        
         integer, intent(in) :: d ! d=2
         real, intent(in)    :: x(d)
         real :: r
@@ -764,7 +792,8 @@ contains
     !>  \brief  Matya's function
     !!          global minimum: f(0,0) = 0
     !!          search domain: [-10,-10]
-    function testfun28( x, d ) result( r )
+    function testfun28( fun_self, x, d ) result( r )
+        class(*), intent(inout) :: fun_self        
         integer, intent(in) :: d ! d=2
         real, intent(in)    :: x(d)
         real :: r
@@ -776,7 +805,8 @@ contains
     !>  \brief  three-hump camel function
     !!          global minimum: f(0,0) = 0
     !!          search domain: [-5,-5]
-    function testfun29( x, d ) result( r )
+    function testfun29( fun_self, x, d ) result( r )
+        class(*), intent(inout) :: fun_self        
         integer, intent(in) :: d ! d=2
         real, intent(in)    :: x(d)
         real :: r
@@ -787,7 +817,8 @@ contains
     !!          global minimum: f(0.0898,-0.7126) = -1.0316
     !!          global minimum: f(-0.0898,0.7126) = -1.0316
     !!          search domain: [-3,-3]
-    function testfun30( x, d ) result( r )
+    function testfun30( fun_self, x, d ) result( r )
+        class(*), intent(inout) :: fun_self        
         integer, intent(in) :: d ! d=2
         real, intent(in)    :: x(d)
         real :: r, term1, term2, term3
@@ -803,7 +834,8 @@ contains
     !!          global minimum: f(3,0.5) = 0
     !!          search domain: [-4.5,4.5]
     !!          characteristics: plateued bowl
-    function testfun31( x, d ) result( r )
+    function testfun31( fun_self, x, d ) result( r )
+        class(*), intent(inout) :: fun_self        
         integer, intent(in) :: d ! d=2
         real, intent(in)    :: x(d)
         real :: r
@@ -814,7 +846,8 @@ contains
     !!         global minimum: f(0,-1) = 3
     !!         search domain: [-2,2]
     !!         characteristics: plateued humps
-    function testfun32( x, d )result( r )
+    function testfun32( fun_self, x, d )result( r )
+        class(*), intent(inout) :: fun_self        
         integer, intent(in) :: d ! d=2
         real, intent(in)    :: x(d)
         real :: r, term1, term2, term3, term4

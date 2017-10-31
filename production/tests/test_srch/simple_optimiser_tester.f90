@@ -204,6 +204,7 @@ contains
         integer, intent(in)         :: wopt, wfun, ndim !< which optimizer, which test function, dimension of problem
         procedure(testfun), pointer :: costfun_ptr      !< pointer 2 test function
         real :: h(ndim), gmin, range(2), lowest_cost, lims(ndim,2), rtol
+        class(*), pointer :: fun_self => null()
         h = 1.
         call get_testfun(wfun, ndim, gmin, range, costfun_ptr) ! get testfun, gmin is the global min, range is limits
         lims(:,1) = range(1)
@@ -214,7 +215,7 @@ contains
         ! generate starting point
         spec%x(1) = spec%limits(1,1)+ran3()*(spec%limits(1,2)-spec%limits(1,1))
         spec%x(2) = spec%limits(2,1)+ran3()*(spec%limits(2,2)-spec%limits(2,1))
-        call opt_ptr%minimize(spec, lowest_cost)                         ! minimize the test function
+        call opt_ptr%minimize(spec, fun_self, lowest_cost)               ! minimize the test function
         rtol=2.0*abs(gmin-lowest_cost)/(abs(gmin)+abs(lowest_cost)+TINY) ! relative tolerance
         if( sqrt((lowest_cost-gmin)**2.) <= TOL )then
             success(wopt,wfun) = success(wopt,wfun)+1
@@ -231,6 +232,7 @@ contains
         type(bforce_opt)            :: bforce
         real                        :: lowest_cost, limits(2,2), range(2), gmin, dist
         procedure(testfun), pointer :: pfun
+        class(*), pointer           :: fun_self => null()
         call get_testfun(7, 2, gmin, range, pfun)
         limits(1,1) = range(1)
         limits(1,2) = range(2)
@@ -239,7 +241,7 @@ contains
         call spec%specify('bforce', 2, limits=limits, stepsz=[0.01,0.01])
         call spec%set_costfun(pfun)
         call bforce%new(spec)
-        call bforce%minimize(spec, lowest_cost)
+        call bforce%minimize(spec, fun_self, lowest_cost)
         dist = sqrt(sum(spec%x**2.0))
         if( dist < 1e-4 .and. abs(lowest_cost) < 1e-9 )then
             ! test passed

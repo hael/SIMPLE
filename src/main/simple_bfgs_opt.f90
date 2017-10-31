@@ -42,11 +42,12 @@ contains
     end subroutine
 
     !>  \brief  nonlinear conjugate gradient minimizer
-    subroutine bfgs_minimize( self, spec, lowest_cost )
+    subroutine bfgs_minimize( self, spec, fun_self, lowest_cost )
         use simple_opt_spec, only: opt_spec
         use simple_opt_subs, only: lnsrch
         class(bfgs_opt), intent(inout) :: self        !< instance
         class(opt_spec), intent(inout) :: spec        !< specification
+        class(*),        intent(inout) :: fun_self    !< self-pointer for cost function        
         real, intent(out)              :: lowest_cost !< minimum function value
         integer                        :: avgniter,i
         if( .not. associated(spec%costfun) )then
@@ -82,9 +83,9 @@ contains
                 logical         :: check
                 real            :: den,fac,fad,fae,fp
                 real            :: stpmax,sum,sumdg,sumxi,temp,test,dgg,gnorm
-                fp=spec%costfun(self%p,spec%ndim) ! calc start costfun val & gradient
+                fp=spec%costfun(fun_self,self%p,spec%ndim) ! calc start costfun val & gradient
                 spec%nevals = spec%nevals+1       ! increment the nevals counter
-                call spec%gcostfun(self%p,self%g,spec%ndim)
+                call spec%gcostfun(fun_self,self%p,self%g,spec%ndim)
                 sum=0.
                 do i=1,spec%ndim     ! init Hessian 2 unit matrix
                     do j=1,spec%ndim
@@ -98,7 +99,7 @@ contains
                 do its=1,spec%maxits                       ! main loop
                     spec%niter=its
                     call lnsrch(spec%ndim,self%p,fp,self%g,self%xi,&
-                    self%pnew,lowest_cost,stpmax,check,spec%costfun,spec%nevals)
+                    self%pnew,lowest_cost,stpmax,check,spec%costfun,fun_self,spec%nevals)
                     fp=lowest_cost
                     do i=1,spec%ndim
                         self%xi(i)=self%pnew(i)-self%p(i)  ! update line direction
@@ -113,7 +114,7 @@ contains
                     do i=1,spec%ndim                       ! save the old gradient
                         self%dg(i)=self%g(i)
                     end do
-                    call spec%gcostfun(self%p,self%g,spec%ndim) ! and calculate the new gradient
+                    call spec%gcostfun(fun_self,self%p,self%g,spec%ndim) ! and calculate the new gradient
                     test=0.                                     ! test for convergence (zero grad)
                     den=max(lowest_cost,1.)
                     do i=1,spec%ndim

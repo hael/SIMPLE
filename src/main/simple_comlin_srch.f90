@@ -207,36 +207,39 @@ contains
 
     !> common-line mode search minimisation function
     function comlin_srch_minimize( otarget ) result( cxy )
-        class(ori) :: otarget  !< orientation target
-        real       :: cxy(4)   !< output correlation and spec coordinates
+        class(ori)        :: otarget  !< orientation target
+        real              :: cxy(4)   !< output correlation and spec coordinates
+        class(*), pointer :: fun_self => null()
         oref    = otarget
         call oref%swape1e3
         ospec%x = otarget%get_euler()
         ospec%nevals = 0
-        call nlopt%minimize(ospec, cxy(1))
+        call nlopt%minimize(ospec, fun_self, cxy(1))
         cxy(1)  = -cxy(1) ! correlation
         cxy(2:) = ospec%x ! euler set
     end function comlin_srch_minimize
 
     !> Pair search minimisation
     function comlin_pairsrch_minimize( otarget ) result( cxy )
-        class(ori) :: otarget
-        real       :: cxy(6)
+        class(ori)        :: otarget
+        real              :: cxy(6)
+        class(*), pointer :: fun_self => null()
         ospec%x(1:3) = otarget%get_euler()
         ospec%x(4)   = 0.
         ospec%x(5)   = 0.
         ospec%nevals = 0
-        call nlopt%minimize(ospec, cxy(1))
+        call nlopt%minimize(ospec, fun_self, cxy(1))
         cxy(1)  = -cxy(1) ! correlation
         cxy(2:) = ospec%x ! ori set
     end function comlin_pairsrch_minimize
 
     !> Common-line mode search cost function
-    function comlin_srch_cost( vec, D ) result( cost )
-        integer, intent(in)  :: D     !< size of parameter vector
-        real,    intent(in)  :: vec(D)!<  parameter vector
-        type(ori) :: o, oswap
-        real      :: cost, euldist
+    function comlin_srch_cost( fun_self, vec, D ) result( cost )
+        class(*), intent(inout) :: fun_self      !< self-pointer for cost function
+        integer,  intent(in)    :: D             !< size of parameter vector
+        real,     intent(in)    :: vec(D)        !<  parameter vector
+        type(ori)               :: o, oswap
+        real                    :: cost, euldist
         cost = 0.
         if(any(vec(1:3)-eullims(:,1) < 0.))then     ! lower limits
             cost = 1.
@@ -261,10 +264,11 @@ contains
     end function comlin_srch_cost
 
      !> Pair search cost function
-    function comlin_pairsrch_cost( vec, D ) result( cost )
-        integer, intent(in)  :: D   !< size of parameter vector
-        real,    intent(in)  :: vec(D) !< parameter vector
-        real :: cost
+    function comlin_pairsrch_cost( fun_self, vec, D ) result( cost )
+        class(*), intent(inout) :: fun_self !< self-pointer for cost function
+        integer,  intent(in)    :: D        !< size of parameter vector
+        real,     intent(in)    :: vec(D)   !< parameter vector
+        real                    :: cost
         cost = 0.
         if(any(vec(1:3)-eullims(:,1) < 0.))then     ! lower limits
             cost = 1.

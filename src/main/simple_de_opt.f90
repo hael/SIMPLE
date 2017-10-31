@@ -67,9 +67,10 @@ contains
     end subroutine new_de
 
     !> \brief  is the differential evolution minimization routine
-    subroutine de_minimize( self, spec, lowest_cost )
+    subroutine de_minimize( self, spec, fun_self, lowest_cost )
         class(de_opt),   intent(inout) :: self        !< instance     
         class(opt_spec), intent(inout) :: spec        !< specification
+        class(*),        intent(inout) :: fun_self    !< self-pointer for cost function
         real,            intent(out)   :: lowest_cost !< lowest cost
         real    :: trial_costs(spec%npop)!, ran3s(spec%npop,spec%ndim)
         real    :: trials(spec%npop,spec%ndim)
@@ -93,7 +94,7 @@ contains
         end do
         ! calculate initial costs
         do i=1,spec%npop
-            self%costs(i) = spec%costfun(self%pop(i,:), spec%ndim)
+            self%costs(i) = spec%costfun(fun_self, self%pop(i,:), spec%ndim)
         end do
         loc = minloc(self%costs)
         self%best = loc(1)
@@ -123,7 +124,7 @@ contains
                 endif
             end do
             ! calculate cost
-            cost_trial = spec%costfun(trial, spec%ndim)
+            cost_trial = spec%costfun(fun_self, trial, spec%ndim)
             ! update pop if better solution is found
             if( cost_trial < self%costs(X) )then
                 nworse = 0

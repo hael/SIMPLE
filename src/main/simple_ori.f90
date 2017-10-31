@@ -810,10 +810,11 @@ contains
         use simple_simplex_opt, only: simplex_opt
         use simple_opt_spec,    only: opt_spec
         class(ori), target, intent(inout) :: self1, self2
-        real, parameter   :: TOL=1e-6
-        type(opt_spec)    :: ospec
-        type(simplex_opt) :: opt
-        real :: dist, lims(3,2)
+        real, parameter                   :: TOL=1e-6
+        type(opt_spec)                    :: ospec
+        type(simplex_opt)                 :: opt
+        real                              :: dist, lims(3,2)
+        class(*), pointer                 :: fun_self
         if( .not. self1%exists() ) call self1%new_ori
         if( .not. self2%exists() ) call self2%new_ori
         call self1%rnd_euler ! fixed
@@ -833,7 +834,7 @@ contains
         ospec%x(3) = self2%e3get()
         call ospec%set_costfun(costfun_diverse_1)
         call opt%new(ospec)
-        call opt%minimize(ospec, dist)
+        call opt%minimize(ospec, fun_self, dist)
         call self2%set_euler(ospec%x)
         call ospec%kill
         call opt%kill
@@ -844,10 +845,11 @@ contains
         use simple_opt_spec,    only: opt_spec
         class(ori), target, intent(inout) :: self1, self2
         real,               intent(in)    :: rangthres
-        real, parameter   :: TOL=1e-6
-        type(opt_spec)    :: ospec
-        type(simplex_opt) :: opt
-        real :: e3,dist,lims(2,2)
+        real, parameter                   :: TOL=1e-6
+        type(opt_spec)                    :: ospec
+        type(simplex_opt)                 :: opt
+        real                              :: e3,dist,lims(2,2)
+        class(*), pointer                 :: fun_self => null()
         if( .not. self1%exists() )stop 'need a fixed ori! simple_oris::oripair_diverse_projdir'
         if( .not. self2%exists() )call self2%new_ori
         angthres = rangthres
@@ -865,7 +867,7 @@ contains
         ospec%x(2) = self2%e2get()
         call ospec%set_costfun(costfun_diverse_projdir)
         call opt%new(ospec)
-        call opt%minimize(ospec, dist)
+        call opt%minimize(ospec, fun_self, dist)
         call self2%set_euler([ospec%x(1),ospec%x(2),e3])
         call ospec%kill
         call opt%kill
@@ -890,6 +892,7 @@ contains
         type(opt_spec)                 :: ospec
         type(simplex_opt)              :: opt
         real                           :: dist, lims(3,2)
+        class(*), pointer              :: fun_self => null()
         call oout%new_ori
         call otst%new_ori
         call otst%rnd_euler
@@ -917,7 +920,7 @@ contains
             case DEFAULT
                 stop 'unsupported mode inputted; simple_ori :: ori_generator'
         end select
-        call opt%minimize(ospec, dist)
+        call opt%minimize(ospec, fun_self, dist)
         call oout%set_euler(ospec%x)
         call ospec%kill
         call opt%kill
@@ -1129,19 +1132,21 @@ contains
         endif
     end function rotmat
 
-    function costfun_diverse_1( vec, D ) result( dist )
-        integer, intent(in) :: D
-        real,    intent(in) :: vec(D)
-        real :: dist
+    function costfun_diverse_1( fun_self, vec, D ) result( dist )
+        class(*), intent(inout) :: fun_self
+        integer,  intent(in)    :: D
+        real,     intent(in)    :: vec(D)
+        real                    :: dist
         call class_self2%set_euler(vec)
         ! negation because we try to maximize the distance
         dist = -class_self1%geodesic_dist(class_self2)
     end function costfun_diverse_1
 
-    function costfun_diverse_2( vec, D ) result( dist )
-        integer, intent(in) :: D
-        real,    intent(in) :: vec(D)
-        real :: d1, d2, dist
+    function costfun_diverse_2( fun_self, vec, D ) result( dist )
+        class(*), intent(inout) :: fun_self
+        integer,  intent(in)    :: D
+        real,     intent(in)    :: vec(D)
+        real                    :: d1, d2, dist
         call class_self3%set_euler(vec)
         d1   = class_self3%geodesic_dist(class_self1)
         d2   = class_self3%geodesic_dist(class_self2)
@@ -1149,11 +1154,12 @@ contains
     end function costfun_diverse_2
 
     !>  \brief  uses an angular threshold
-    function costfun_diverse_projdir( vec, D ) result( dist )
+    function costfun_diverse_projdir( fun_self, vec, D ) result( dist )
         use simple_math, only: rad2deg
-        integer, intent(in) :: D
-        real,    intent(in) :: vec(D)
-        real :: dist
+        class(*), intent(inout) :: fun_self
+        integer,  intent(in)    :: D
+        real,     intent(in)    :: vec(D)
+        real                    :: dist
         call class_self2%e1set(vec(1))
         call class_self2%e2set(vec(2))
         dist = class_self1.euldist.class_self2
@@ -1162,10 +1168,11 @@ contains
         dist = -dist
     end function costfun_diverse_projdir
 
-    function costfun_median( vec, D ) result( dist )
-        integer, intent(in) :: D
-        real,    intent(in) :: vec(D)
-        real :: d1, d2, dist
+    function costfun_median( fun_self, vec, D ) result( dist )
+        class(*), intent(inout) :: fun_self
+        integer,  intent(in)    :: D
+        real,     intent(in)    :: vec(D)
+        real                    :: d1, d2, dist
         call class_self3%set_euler(vec)
         d1   = class_self3%geodesic_dist(class_self1)
         d2   = class_self3%geodesic_dist(class_self2)

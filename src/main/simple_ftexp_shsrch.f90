@@ -57,10 +57,11 @@ contains
     end subroutine ftexp_shsrch_reset_ptrs
 
     !> Cost function
-    function ftexp_shsrch_cost( vec, D ) result( cost )
-        integer, intent(in) :: D
-        real,    intent(in) :: vec(D)
-        real :: cost
+    function ftexp_shsrch_cost( fun_self, vec, D ) result( cost )
+        class(*), intent(inout) :: fun_self
+        integer,  intent(in)    :: D
+        real,     intent(in)    :: vec(D)
+        real                    :: cost
         cost = -reference%corr_shifted(particle, -vec)
     end function ftexp_shsrch_cost
     
@@ -68,6 +69,7 @@ contains
     function ftexp_shsrch_minimize( prev_corr, prev_shift ) result( cxy )
         real, optional, intent(in) :: prev_corr, prev_shift(2)
         real :: cxy(3), maxshift, maxlim, lims(2,2)
+        class(*), pointer :: fun_self => null()
         if( present(prev_shift) )then
             maxshift = maxval(abs(prev_shift))
             maxlim   = maxval(abs(ospec%limits))
@@ -85,7 +87,7 @@ contains
         else
             ospec%x = 0.
         endif
-        call nlopt%minimize(ospec, cxy(1))
+        call nlopt%minimize(ospec, fun_self, cxy(1))
         cxy(1)  = -cxy(1) ! correlation
         cxy(2:) = ospec%x ! shift
         if( present(prev_corr) )then

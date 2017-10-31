@@ -43,10 +43,11 @@ contains
     end subroutine new_bforce_opt
     
     !> \brief  brute force minimization
-    subroutine bforce_minimize( self, spec, lowest_cost )
+    subroutine bforce_minimize( self, spec, fun_self, lowest_cost )
         use simple_opt_spec, only: opt_spec
         class(bforce_opt), intent(inout) :: self        !< instance
-        class(opt_spec), intent(inout)   :: spec        !< specification
+        class(opt_spec),   intent(inout) :: spec        !< specification
+        class(*),          intent(inout) :: fun_self    !< self-pointer for cost function
         real, intent(out)                :: lowest_cost !< lowest cost
         real :: y
         if( .not. associated(spec%costfun) )then
@@ -61,7 +62,7 @@ contains
         DebugPrint  'did set best and current point'
         ! set best cost
         spec%nevals = 0
-        self%yb     = spec%costfun(self%pb, spec%ndim)
+        self%yb     = spec%costfun(fun_self, self%pb, spec%ndim)
         if( debug ) write(*,'(a,1x,f7.3)') 'Initial cost:', self%yb 
         spec%nevals = spec%nevals+1
         ! search: we will start at the lowest value for each dimension, then 
@@ -69,7 +70,7 @@ contains
         spec%niter = 0
         DebugPrint  'starting brute force search'
         do while( srch_not_done() )
-            y = spec%costfun(self%pc, spec%ndim)
+            y = spec%costfun(fun_self, self%pc, spec%ndim)
             spec%nevals = spec%nevals+1
             spec%niter  = spec%niter+1
             if( y <= self%yb )then

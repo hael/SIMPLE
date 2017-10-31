@@ -85,6 +85,7 @@ contains
         type(ori)                     :: orientation, orientation_best
         integer, allocatable          :: order(:)
         real,    allocatable          :: corrs(:,:)
+        class(*), pointer             :: fun_self => null()
         ! flag distributed/shmem exec & set range
         distr_exec = present(fromto)
         if( distr_exec )then
@@ -137,7 +138,7 @@ contains
             ! refine all local optima
             do iloc=ffromto(1),ffromto(2)
                 ospec_eul%x = resoris%get_euler(iloc)
-                call nlopt_eul%minimize(ospec_eul, cost)
+                call nlopt_eul%minimize(ospec_eul, fun_self, cost)
                 call resoris%set_euler(iloc, ospec_eul%x)
                 call resoris%set(iloc, 'corr', -cost)
             end do
@@ -148,7 +149,7 @@ contains
             ! refine the NBEST solutions
             do iloc=1,NBEST
                 ospec_eul%x = resoris%get_euler(order(iloc))
-                call nlopt_eul%minimize(ospec_eul, cost)
+                call nlopt_eul%minimize(ospec_eul, fun_self, cost)
                 call resoris%set_euler(order(iloc), ospec_eul%x)
                 call resoris%set(order(iloc), 'corr', -cost)
             end do
@@ -162,13 +163,14 @@ contains
     end function volpft_srch_minimize_eul
 
     function volpft_srch_minimize_shift( ) result( orientation_best )
-        type(ori) :: orientation_best
-        real      :: cost_init, cost
+        type(ori)         :: orientation_best
+        real              :: cost_init, cost
+        class(*), pointer :: fun_self => null()
         orientation_best = e_glob
         ospec_shift%x    = 0.
         serial           = .false. ! since we want to parallellize the cost calc
-        cost_init        = volpft_srch_costfun_shift(ospec_shift%x, ospec_shift%ndim)
-        call nlopt_shift%minimize(ospec_shift, cost)
+        cost_init        = volpft_srch_costfun_shift(fun_self, ospec_shift%x, ospec_shift%ndim)
+        call nlopt_shift%minimize(ospec_shift, fun_self, cost)
         if( cost < cost_init )then
             ! set corr
             call orientation_best%set('corr', -cost)
@@ -189,8 +191,9 @@ contains
     end function volpft_srch_minimize_shift
 
     function volpft_srch_minimize_all( ) result( orientation_best )
-        type(ori) :: orientation_best
-        real      :: cost_init, cost
+        type(ori)         :: orientation_best
+        real              :: cost_init, cost
+        class(*), pointer :: fun_self => null()
         orientation_best = e_glob
         ospec_all%x(1:3) = e_glob%get_euler()
         ospec_all%x(4)   = e_glob%get('x')
@@ -203,9 +206,9 @@ contains
         ospec_all%x(4:)        = ospec_all%x(4:)        * shift_scale
         ! initialize
         serial    = .false. ! since we want to parallellize the cost calc
-        cost_init = volpft_srch_costfun_all(ospec_all%x, ospec_all%ndim)
+        cost_init = volpft_srch_costfun_all(fun_self, ospec_all%x, ospec_all%ndim)
         ! minimisation
-        call nlopt_all%minimize(ospec_all, cost)
+        call nlopt_all%minimize(ospec_all, fun_self, cost)
         ! solution and un-scaling
         if( cost < cost_init )then
             ! set corr
@@ -222,19 +225,21 @@ contains
         endif
     end function volpft_srch_minimize_all
 
-    function volpft_srch_costfun_eul( vec, D ) result( cost )
+    function volpft_srch_costfun_eul( fun_self, vec, D ) result( cost )        
         use simple_ori, only: ori
-        integer, intent(in) :: D
-        real,    intent(in) :: vec(D)
-        real :: cost
+        class(*), intent(inout) :: fun_self
+        integer,  intent(in)    :: D
+        real,     intent(in)    :: vec(D)
+        real                    :: cost
         cost = -vpftcc%corr(vec(:3), serial)
     end function volpft_srch_costfun_eul
 
-    function volpft_srch_costfun_shift( vec, D ) result( cost )
+    function volpft_srch_costfun_shift( fun_self, vec, D ) result( cost )
         use simple_ori, only: ori
-        integer, intent(in) :: D
-        real,    intent(in) :: vec(D)
-        real :: vec_here(3), cost
+        class(*), intent(inout) :: fun_self
+        integer,  intent(in)    :: D
+        real,     intent(in)    :: vec(D)
+        real                    :: vec_here(3), cost
         vec_here = vec
         where( abs(vec) < 1.e-6 ) vec_here = 0.0
         if( shbarr )then
@@ -247,10 +252,11 @@ contains
         cost = -vpftcc%corr(e_glob, vec_here(:3), serial)
     end function volpft_srch_costfun_shift
 
-    function volpft_srch_costfun_all( vec, D ) result( cost )
-        integer, intent(in) :: D
-        real,    intent(in) :: vec(D)
-        real :: vec_here(6), cost
+    function volpft_srch_costfun_all( fun_self, vec, D ) result( cost )
+        class(*), intent(inout) :: fun_self
+        integer,  intent(in)    :: D
+        real,     intent(in)    :: vec(D)
+        real                    :: vec_here(6), cost
         vec_here = vec
         if( shbarr )then
             if( any(vec_here(4:6) < ospec_all%limits(4:6,1)) .or.&
