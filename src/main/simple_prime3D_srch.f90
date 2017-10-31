@@ -926,8 +926,9 @@ contains
             ! thresholding of the weights
             included = (ws >= FACTWEIGHTS_THRESH)
             where( .not.included ) ws = 0.
+            ws = ws / sum(ws,mask=included)
             ! weighted corr
-            wcorr = sum(ws*corrs,mask=included) / sum(ws,mask=included)
+            wcorr = sum(ws*corrs,mask=included)
             ! update npeaks individual weights
             call o_peaks(self%iptcl)%set_all('ow', ws)
         endif
