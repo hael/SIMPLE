@@ -53,7 +53,7 @@ foreach my $i ($last_header_line + 1 .. $#reliondoc){
         foreach my $i (0 .. $#which_columns){
             if( $simple_tags[$which_tags[$i]] =~ /df/ ){
                 $val = $line_split[$which_columns[$i]-1]/10000.;
-            }elsif( $simple_tags[$which_tags[$i]] =~ /df/ ){
+            }elsif( $simple_tags[$which_tags[$i]] =~ /phshift/ ){
                 $val = deg2rad($line_split[$which_columns[$i]-1])
             }else{
                 $val = $line_split[$which_columns[$i]-1];
@@ -83,5 +83,5 @@ sub look4relion_column{
 
 sub deg2rad{
     my $deg_val = shift; 
-    return  (deg / 180.) * 3.14159265359;
+    return  ($deg_val / 180.) * 3.14159265359;
 }

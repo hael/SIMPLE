@@ -329,12 +329,14 @@ contains
         end select
         ! shift image to rotational origin
         if(abs(x) > SHTHRESH .or. abs(y) > SHTHRESH) call img_in%shift2Dserial([-x,-y])
-        if( is3D .and. frcind > 0 )then
-            ! anisotropic matched filter
-            call b%projfrcs%frc_getter(frcind, frc)
-            if( any(frc > 0.143) )then
-                call fsc2optlp_sub(b%projfrcs%get_filtsz(), frc, filter)
-                call img_in%shellnorm_and_apply_filter_serial(filter)
+        if( p%l_match_filt )then
+            if( is3D .and. frcind > 0 )then
+                ! anisotropic matched filter
+                call b%projfrcs%frc_getter(frcind, frc)
+                if( any(frc > 0.143) )then
+                    call fsc2optlp_sub(b%projfrcs%get_filtsz(), frc, filter)
+                    call img_in%shellnorm_and_apply_filter_serial(filter)
+                endif
             endif
         endif
         ! back to real-space
