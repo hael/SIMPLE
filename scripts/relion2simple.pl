@@ -22,6 +22,7 @@ push @relion_tags, '_rlnAngleTilt';           push @simple_tags, 'e2';
 push @relion_tags, '_rlnAnglePsi';            push @simple_tags, 'e3';
 push @relion_tags, '_rlnOriginX';             push @simple_tags, 'x';
 push @relion_tags, '_rlnOriginY';             push @simple_tags, 'y';
+push @relion_tags, '_rlnPhaseShift';          push @simple_tags, 'phshift';
 my @which_columns;
 my @which_tags;
 my $linecnt = 0;
@@ -52,6 +53,8 @@ foreach my $i ($last_header_line + 1 .. $#reliondoc){
         foreach my $i (0 .. $#which_columns){
             if( $simple_tags[$which_tags[$i]] =~ /df/ ){
                 $val = $line_split[$which_columns[$i]-1]/10000.;
+            }elsif( $simple_tags[$which_tags[$i]] =~ /df/ ){
+                $val = deg2rad($line_split[$which_columns[$i]-1])
             }else{
                 $val = $line_split[$which_columns[$i]-1];
             }
@@ -76,4 +79,9 @@ sub look4relion_column{
         }
     }
     return ($tag,$col);
+}
+
+sub deg2rad{
+    my $deg_val = shift; 
+    return  (deg / 180.) * 3.14159265359;
 }
