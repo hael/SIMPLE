@@ -850,7 +850,7 @@ contains
             if( .not. state_exists(self%prev_state) ) stop 'empty previous state; prep4srch; simple_prime3D_srch'
         endif
         select case( self%refine )
-            case( 'no','shc','snhc','greedy')
+            case( 'no','shc','snhc','greedy','yes')
                 ! 
             case( 'neigh','shcneigh', 'greedyneigh' )
                 ! disjoint nearest neighbour set

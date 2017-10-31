@@ -1089,11 +1089,12 @@ contains
         ! fix translation param
         self%trs = abs(self%trs)
         if( .not. cline%defined('trs') )then
-            if( self%refine.eq.'no' .or. self%refine.eq.'snhc' )then
-                self%trs = 0.
-            else
-                self%trs = 1.
-            endif
+            select case(trim(self%refine))
+                case('no','snhc')
+                    self%trs = 0.
+                case DEFAULT
+                    self%trs = 1.
+            end select
         endif
         self%doshift = .true.
         if( self%trs < 0.5 )then
