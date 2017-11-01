@@ -123,7 +123,7 @@ contains
         write(*,'(a)') '>>> COMMAND LINE EXECUTED'
         write(*,*) trim(cmdline_glob)
         ! make master parameters
-        p_master = params(cline, checkdistr=.false.)
+        p_master = params(cline)
         p_master%nptcls = nlines(p_master%filetab)
         if( p_master%nparts > p_master%nptcls ) stop 'nr of partitions (nparts) mjust be < number of entries in filetable'
         ! prepare merge_algndocs command line
@@ -163,7 +163,7 @@ contains
         write(*,'(a)') '>>> COMMAND LINE EXECUTED'
         write(*,*) trim(cmdline_glob)
         ! make master parameters
-        p_master = params(cline, checkdistr=.false.)
+        p_master = params(cline)
         p_master%nptcls = nlines(p_master%filetab)
         if( p_master%nparts > p_master%nptcls ) stop 'nr of partitions (nparts) mjust be < number of entries in filetable'
         ! prepare merge_algndocs command line
@@ -207,7 +207,7 @@ contains
         write(*,'(a)') '>>> COMMAND LINE EXECUTED'
         write(*,*) trim(cmdline_glob)
         ! make master parameters
-        p_master = params(cline, checkdistr=.false.)
+        p_master = params(cline)
         if( cline%defined('tomoseries') )then
             call read_filetable(p_master%tomoseries, tomonames)
         else
@@ -261,7 +261,7 @@ contains
         write(*,'(a)') '>>> COMMAND LINE EXECUTED'
         write(*,*) trim(cmdline_glob)
         ! make master parameters
-        p_master = params(cline, checkdistr=.false.)
+        p_master = params(cline)
         p_master%nptcls = nlines(p_master%filetab)
         if( p_master%nparts > p_master%nptcls ) stop 'nr of partitions (nparts) mjust be < number of entries in filetable'
         ! setup the environment for distributed execution
@@ -290,7 +290,7 @@ contains
         write(*,'(a)') '>>> COMMAND LINE EXECUTED'
         write(*,*) trim(cmdline_glob)
         ! make master parameters
-        p_master = params(cline, checkdistr=.false.)
+        p_master = params(cline)
         p_master%nptcls = nlines(p_master%filetab)
         if( p_master%nparts > p_master%nptcls ) stop 'nr of partitions (nparts) mjust be < number of entries in filetable'
         ! prepare merge_algndocs command line
@@ -328,7 +328,7 @@ contains
         write(*,'(a)') '>>> COMMAND LINE EXECUTED'
         write(*,*) trim(cmdline_glob)
         ! make master parameters
-        p_master = params(cline, checkdistr=.false.)
+        p_master = params(cline)
         p_master%nptcls = nlines(p_master%filetab)
         if( p_master%nparts > p_master%nptcls ) stop 'nr of partitions (nparts) mjust be < number of entries in filetable'
         ! prepare merge_algndocs command line
@@ -363,7 +363,7 @@ contains
         write(*,'(a)') '>>> COMMAND LINE EXECUTED'
         write(*,*) trim(cmdline_glob)
         ! make master parameters
-        p_master = params(cline, checkdistr=.false.)
+        p_master = params(cline)
         p_master%nptcls = nlines(p_master%filetab)
         if( p_master%nparts > p_master%nptcls ) stop 'nr of partitions (nparts) mjust be < number of entries in filetable'
         ! setup the environment for distributed execution
@@ -390,7 +390,7 @@ contains
         write(*,'(a)') '>>> COMMAND LINE EXECUTED'
         write(*,*) trim(cmdline_glob)
         ! make master parameters
-        p_master = params(cline, checkdistr=.false.)
+        p_master = params(cline)
         ! setup the environment for distributed execution
         call qenv%new(p_master)
         ! prepare job description
@@ -444,7 +444,7 @@ contains
         write(*,'(a)') '>>> COMMAND LINE EXECUTED'
         write(*,*) trim(cmdline_glob)
         ! make master parameters
-        p_master = params(cline, checkdistr=.false.)
+        p_master = params(cline)
         ! make builder
         call b%build_general_tbox(p_master, cline, do3d=.false.)
         ! setup the environment for distributed execution
@@ -659,7 +659,7 @@ contains
         write(*,'(a)') '>>> COMMAND LINE EXECUTED'
         write(*,*) trim(cmdline_glob)
         ! make master parameters
-        p_master = params(cline, checkdistr=.false.)
+        p_master = params(cline)
         nptcls          = p_master%nptcls
         p_master%nptcls = (p_master%nptcls*(p_master%nptcls - 1))/2
         call split_pairs_in_parts(nptcls, p_master%nparts)
@@ -698,7 +698,7 @@ contains
         write(*,'(a)') '>>> COMMAND LINE EXECUTED'
         write(*,*) trim(cmdline_glob)
         ! make master parameters
-        p_master = params(cline, checkdistr=.false.)
+        p_master = params(cline)
         ! setup the environment for distributed execution
         call qenv%new(p_master)
         ! prepare job description
@@ -772,7 +772,7 @@ contains
         write(*,'(a)') '>>> COMMAND LINE EXECUTED'
         write(*,*) trim(cmdline_glob)
         ! make master parameters
-        p_master = params(cline, checkdistr=.false.)
+        p_master = params(cline)
         ! make oritab
         call os%new(p_master%nptcls)
         ! options check
@@ -1121,7 +1121,7 @@ contains
         write(*,*) trim(cmdline_glob)
         ! make master parameters
         call cline%delete('refine')
-        p_master = params(cline, checkdistr=.false.)
+        p_master = params(cline)
         ! make oritab
         call os%new(p_master%nptcls)
         ! setup the environment for distributed execution
@@ -1194,7 +1194,7 @@ contains
         write(*,'(a)') '>>> COMMAND LINE EXECUTED'
         write(*,*) trim(cmdline_glob)
         ! make master parameters
-        p_master = params(cline, checkdistr=.false.)
+        p_master = params(cline)
         if( .not. file_exists(p_master%boxfile)  ) stop 'inputted boxfile does not exist in cwd'
         if( nlines(p_master%boxfile) > 0 )then
             call boxfile%new(p_master%boxfile, 1)
@@ -1280,7 +1280,7 @@ contains
         write(*,'(a)') '>>> COMMAND LINE EXECUTED'
         write(*,*) trim(cmdline_glob)
         ! make master parameters
-        p_master          = params(cline, checkdistr=.false.)
+        p_master          = params(cline)
         comlin_srch_nproj = comlin_srch_get_nproj( pgrp=trim(p_master%pgrp) )
         p_master%nptcls   = comlin_srch_nproj
         if( p_master%nparts > p_master%nptcls )then
@@ -1429,7 +1429,7 @@ contains
         write(*,'(a)') '>>> COMMAND LINE EXECUTED'
         write(*,*) trim(cmdline_glob)
         ! make master parameters
-        p_master = params(cline, checkdistr=.false.)
+        p_master = params(cline)
         ! copy command line
         cline_scale = cline
         ! prepare part-dependent parameters
@@ -1502,7 +1502,7 @@ contains
         write(*,'(a)') '>>> COMMAND LINE EXECUTED'
         write(*,*) trim(cmdline_glob)
         ! make master parameters
-        p_master = params(cline, checkdistr=.false.)
+        p_master = params(cline)
         ! copy command line
         cline_prep4cgrid = cline
         ! prepare part-dependent parameters

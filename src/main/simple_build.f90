@@ -540,7 +540,7 @@ contains
         call mycline_varying%set('refine', 'no')
         call mycline_varying%set('pgrp',   'c1')
         call mycline_varying%set('eo',    'yes')
-        myp = params(mycline_varying, checkdistr=.false.)
+        myp = params(mycline_varying)
         call tester
         write(*,'(a)') '**info(simple_build_unit_test): case 1 passed'
         ! case 2:  refine=no, pgrp=c1, eo=no
@@ -549,7 +549,7 @@ contains
         call mycline_varying%set('refine', 'no')
         call mycline_varying%set('pgrp',   'c1')
         call mycline_varying%set('eo',    'yes')
-        myp = params(mycline_varying, checkdistr=.false.)
+        myp = params(mycline_varying)
         call tester
         write(*,'(a)') '**info(simple_build_unit_test): case 2 passed'
         ! case 3:  refine=no, pgrp=c2, eo=yes
@@ -558,7 +558,7 @@ contains
         call mycline_varying%set('refine', 'no')
         call mycline_varying%set('pgrp',   'c1')
         call mycline_varying%set('eo',    'yes')
-        myp = params(mycline_varying, checkdistr=.false.)
+        myp = params(mycline_varying)
         call tester
         write(*,'(a)') '**info(simple_build_unit_test): case 3 passed'
         ! case 4:  refine=no, pgrp=c2, eo=no
@@ -567,7 +567,7 @@ contains
         call mycline_varying%set('refine', 'no')
         call mycline_varying%set('pgrp',   'c1')
         call mycline_varying%set('eo',    'yes')
-        myp = params(mycline_varying, checkdistr=.false.)
+        myp = params(mycline_varying)
         call tester
         write(*,'(a)') '**info(simple_build_unit_test): case 4 passed'
         ! case 5:  refine=neigh, pgrp=c1, eo=yes
@@ -576,7 +576,7 @@ contains
         call mycline_varying%set('refine', 'no')
         call mycline_varying%set('pgrp',   'c1')
         call mycline_varying%set('eo',    'yes')
-        myp = params(mycline_varying, checkdistr=.false.)
+        myp = params(mycline_varying)
         call tester
         write(*,'(a)') '**info(simple_build_unit_test): case 5 passed'
         ! case 6:  refine=neigh, pgrp=c1, eo=no
@@ -585,7 +585,7 @@ contains
         call mycline_varying%set('refine', 'no')
         call mycline_varying%set('pgrp',   'c1')
         call mycline_varying%set('eo',    'yes')
-        myp = params(mycline_varying, checkdistr=.false.)
+        myp = params(mycline_varying)
         call tester
         write(*,'(a)') '**info(simple_build_unit_test): case 6 passed'
         ! case 7:  refine=neigh, pgrp=c2, eo=yes
@@ -594,7 +594,7 @@ contains
         call mycline_varying%set('refine', 'no')
         call mycline_varying%set('pgrp',   'c1')
         call mycline_varying%set('eo',    'yes')
-        myp = params(mycline_varying, checkdistr=.false.)
+        myp = params(mycline_varying)
         call tester
         write(*,'(a)') '**info(simple_build_unit_test): case 7 passed'
         ! case 8:  refine=neigh, pgrp=c2, eo=no
@@ -603,7 +603,7 @@ contains
         call mycline_varying%set('refine', 'no')
         call mycline_varying%set('pgrp',   'c1')
         call mycline_varying%set('eo',    'yes')
-        myp = params(mycline_varying, checkdistr=.false.)
+        myp = params(mycline_varying)
         call tester
         write(*,'(a)') '**info(simple_build_unit_test): case 8 passed'
         ! case 9:  refine=neigh, pgrp=c1, eo=yes
@@ -612,7 +612,7 @@ contains
         call mycline_varying%set('refine', 'no')
         call mycline_varying%set('pgrp',   'c1')
         call mycline_varying%set('eo',    'yes')
-        myp = params(mycline_varying, checkdistr=.false.)
+        myp = params(mycline_varying)
         call tester
         write(*,'(a)') '**info(simple_build_unit_test): case 9 passed'
         ! case 10: refine=neigh, pgrp=c1, eo=no
@@ -621,7 +621,7 @@ contains
         call mycline_varying%set('refine', 'no')
         call mycline_varying%set('pgrp',   'c1')
         call mycline_varying%set('eo',    'yes')
-        myp = params(mycline_varying, checkdistr=.false.)
+        myp = params(mycline_varying)
         write(*,'(a)') '**info(simple_build_unit_test): case 10 passed'
         ! case 11: refine=neigh, pgrp=c2, eo=yes
         write(*,'(a)') '**info(simple_build_unit_test): testing case: refine=neigh, pgrp=c2, eo=yes'
@@ -629,7 +629,7 @@ contains
         call mycline_varying%set('refine', 'no')
         call mycline_varying%set('pgrp',   'c1')
         call mycline_varying%set('eo',    'yes')
-        myp = params(mycline_varying, checkdistr=.false.)
+        myp = params(mycline_varying)
         call tester
         write(*,'(a)') '**info(simple_build_unit_test): case 11 passed'
         ! case 12: refine=neigh, pgrp=c2, eo=no
@@ -638,7 +638,7 @@ contains
         call mycline_varying%set('refine', 'no')
         call mycline_varying%set('pgrp',   'c1')
         call mycline_varying%set('eo',    'yes')
-        myp = params(mycline_varying, checkdistr=.false.)
+        myp = params(mycline_varying)
         call tester
         write(*,'(a)') '**info(simple_build_unit_test): case 12 passed'
         write(*,'(a)') 'SIMPLE_BUILD_UNIT_TEST COMPLETED SUCCESSFULLY ;-)'

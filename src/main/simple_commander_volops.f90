@@ -137,7 +137,7 @@ contains
         integer           :: state, ldim(3)
         state = 1
         ! pre-proc
-        p = params(cline, checkdistr=.false.) ! constants & derived constants produced, mode=2
+        p = params(cline) ! constants & derived constants produced, mode=2
         call b%build_general_tbox(p, cline)   ! general objects built
         call b%vol%read(p%vols(state))
         call b%vol%fwd_ft
@@ -358,7 +358,7 @@ contains
         type(ori)         :: o
         type(image)       :: vol_rot
         real              :: shvec(3)
-        p = params(cline,checkdistr=.false.) ! constants & derived constants produced, mode=2
+        p = params(cline) ! constants & derived constants produced, mode=2
         call b%build_general_tbox(p, cline)  ! general objects built
         ! reallocate vol (boxmatch issue)
         call b%vol%new([p%box,p%box,p%box], p%smpd) 

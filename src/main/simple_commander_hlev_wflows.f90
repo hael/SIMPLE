@@ -65,7 +65,7 @@ contains
         type(params)          :: p_master
         real                  :: scale_stage1, scale_stage2
         integer               :: nparts, last_iter_stage1, last_iter_stage2
-        p_master = params(cline, checkdistr=.false.)
+        p_master = params(cline)
         nparts   = p_master%nparts
         if( .not. cline%defined('stktab') )then
             ! split stack
@@ -198,7 +198,7 @@ contains
         call cline%set('eo', 'yes')
         call cline%set('dynlp', 'no') ! better be explicit about the dynlp
         ! make master parameters
-        p_master = params(cline, checkdistr=.false.)
+        p_master = params(cline)
         ! delete possibly pre-existing stack_parts
         call del_files(STKPARTFBODY, p_master%nparts, ext=p_master%ext)
         ! set global state string
@@ -323,7 +323,7 @@ contains
         call del_files(STKPARTFBODY, p_master%nparts, ext=p_master%ext)
         call del_files(STKPARTFBODY, p_master%nparts, ext=p_master%ext, suffix='_sc')
         ! make master parameters
-        p_master = params(cline, checkdistr=.false.)
+        p_master = params(cline)
         ! set global state string
         str_state = int2str_pad(STATE,2)
         ! decide wether to search for the symmetry axis or put the point-group in from the start
@@ -530,7 +530,7 @@ contains
             &stop 'Non-sensical NSTATES argument for heterogeneity analysis!'
 
         ! make master parameters
-        p_master = params(cline, checkdistr=.false.)
+        p_master = params(cline)
 
         if( p_master%eo .eq. 'no' .and. .not. cline%defined('lp') )&
             &stop 'need lp input when eo .eq. no; het_ensemble'

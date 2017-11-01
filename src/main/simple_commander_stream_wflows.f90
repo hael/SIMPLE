@@ -44,7 +44,7 @@ contains
         integer, parameter       :: TRAILING=5
         debug=.true.  ! from local flags, for debugging
         ! make master parameters
-        p_master = params(cline, checkdistr=.false.)
+        p_master = params(cline)
         ! set defaults
         p_master%split_mode = 'stream'
         p_master%numlen     = 5
@@ -138,7 +138,7 @@ contains
         write(*,'(a)') '>>> COMMAND LINE EXECUTED'
         write(*,*) trim(cmdline_glob)
         ! make master parameters
-        p_master = params(cline, checkdistr=.false.)
+        p_master = params(cline)
         ! init command-lines
         cline_scale     = cline
         cline_prime2D   = cline

@@ -372,7 +372,7 @@ contains
         type(image)  :: vol_rot
         type(ori)    :: o
         integer      :: iptcl, numlen
-        p = params(cline, checkdistr=.false.) ! constants & derived constants produced, mode=2
+        p = params(cline) ! constants & derived constants produced, mode=2
         call b%build_general_tbox(p, cline)   ! general objects built
         call vol_rot%new([p%box,p%box,p%box], p%smpd)
         call b%vol%new([p%box,p%box,p%box],   p%smpd)

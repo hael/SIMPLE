@@ -104,7 +104,7 @@ contains
         type(nrtxtfile)   :: boxfile
         integer           :: ndatlines, j, orig_box, numlen
         real, allocatable :: boxdata(:,:)
-        p = params(cline, checkdistr=.false.) ! parameters generated
+        p = params(cline) ! parameters generated
         numlen = 5 ! default value
         orig_box = p%box
         ! check file inout existence and read filetables
@@ -165,7 +165,7 @@ contains
         logical      :: params_present(4), ctfastig
         real         :: dfx, dfy, angast
         integer      :: iptcl
-        p = params(cline, checkdistr=.false.)             ! parameters generated
+        p = params(cline)             ! parameters generated
         call b%build_general_tbox(p, cline, do3d=.false.) ! general objects built
         ! get background image
         call img_backgr%new([p%box,p%box,1], p%smpd)

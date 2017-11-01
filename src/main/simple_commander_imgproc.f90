@@ -672,7 +672,7 @@ contains
         if( cline%defined('lp') )then
             if( .not. cline%defined('smpd') ) stop 'smpd (sampling distance) needs to be defined if lp is'
         endif
-        p = params(cline,checkdistr=.false.)            ! constants & derived constants produced
+        p = params(cline) ! constants & derived constants produced
         call b%build_general_tbox(p,cline,do3d=.false.) ! general stuff built
         call read_filetable(p%filetab, filenames)
         nfiles = size(filenames)

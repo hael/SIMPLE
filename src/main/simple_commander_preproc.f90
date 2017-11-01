@@ -104,7 +104,7 @@ contains
         real         :: smpd_original, smpd_scaled
         integer      :: nmovies, fromto(2), imovie, ntot, movie_counter
         integer      :: frame_counter, movie_ind, nptcls_out
-        p = params(cline, checkdistr=.false.) ! constants & derived constants produced
+        p = params(cline) ! constants & derived constants produced
         if( p%scale > 1.05 )then
             stop 'scale cannot be > 1; simple_commander_preproc :: exec_preproc'
         endif
@@ -253,7 +253,7 @@ contains
         character(len=STDLEN), allocatable :: movienames(:)
         character(len=:), allocatable      :: new_name
         type(image)                        :: img_frame
-        p = params(cline, checkdistr=.false.)           ! constants & derived constants produced
+        p = params(cline) ! constants & derived constants produced
         call b%build_general_tbox(p,cline,do3d=.false.) ! general objects built
         call read_filetable(p%filetab, movienames)
         nmovies = size(movienames)
@@ -321,7 +321,7 @@ contains
         if( .not. cline%defined('stk') .and. .not. cline%defined('filetab') )then
             stop 'either stk or filetab need to be defined!'
         endif
-        p = params(cline, checkdistr=.false.)               ! parameters generated
+        p = params(cline) ! parameters generated
         call b%build_general_tbox( p, cline, do3d=.false. ) ! general objects built
         ! do the work
         if( cline%defined('stk') )then
@@ -379,7 +379,7 @@ contains
         if( .not. cline%defined('stk') .and. .not. cline%defined('filetab') )then
             stop 'either stk or filetab need to be defined!'
         endif
-        p = params(cline, checkdistr=.false.)           ! constants & derived constants produced
+        p = params(cline) ! constants & derived constants produced
         call b%build_general_tbox(p,cline,do3d=.false.) ! general toolbox built
         ! create mask
         call tmp%new([p%clip,p%clip,1], p%smpd)
@@ -463,7 +463,7 @@ contains
         real    :: smpd_scaled
         integer :: nmovies, fromto(2), imovie, ntot, movie_counter
         integer :: frame_counter, lfoo(3), nframes
-        p = params(cline, checkdistr=.false.) ! constants & derived constants produced
+        p = params(cline) ! constants & derived constants produced
         if( p%scale > 1.05 )then
             stop 'scale cannot be > 1; simple_commander_preproc :: exec_unblur'
         endif
@@ -534,7 +534,7 @@ contains
         character(len=STDLEN) :: movie_fbody, movie_ext, movie_name
         type(oris)            :: os
         integer               :: nmovies, fromto(2), imovie, ntot, movie_counter
-        p = params(cline, checkdistr=.false.) ! constants & derived constants produced
+        p = params(cline) ! constants & derived constants produced
         call read_filetable(p%filetab, movienames_forctf)
         nmovies = size(movienames_forctf)
         if( p%l_distr_exec )then
@@ -593,7 +593,7 @@ contains
         character(len=STDLEN) :: movie_fbody, movie_ext, movie_name
         type(oris)            :: os
         integer               :: nmovies, fromto(2), imovie, ntot, movie_counter
-        p = params(cline, checkdistr=.false.) ! constants & derived constants produced
+        p = params(cline) ! constants & derived constants produced
         call read_filetable(p%filetab, movienames_forctf)
         nmovies = size(movienames_forctf)
         if( p%l_distr_exec )then
@@ -764,7 +764,7 @@ contains
         p = params(cline)                   ! parameters generated
         call b%build_general_tbox(p, cline) ! general objects built
         if( cline%defined('stk') .or. cline%defined('vol1') )then
-            p = params(cline, checkdistr=.false.) ! constants & derived constants produced
+            p = params(cline) ! constants & derived constants produced
             if( cline%defined('vol1') )then
                 p%nptcls = NPROJS
                 call b%a%new(NPROJS)
@@ -817,7 +817,7 @@ contains
         character(len=STDLEN), allocatable :: movienames_intg(:)
         character(len=STDLEN) :: boxfile
         integer :: nmovies, fromto(2), imovie, ntot, movie_counter, nptcls_out
-        p = params(cline, checkdistr=.false.) ! constants & derived constants produced
+        p = params(cline) ! constants & derived constants produced
         ! check filetab existence
         call read_filetable(p%filetab, movienames_intg)
         nmovies = size(movienames_intg)
@@ -868,7 +868,7 @@ contains
         logical                            :: params_present(3), ctffitcc_is_there, phshift_is_there
         logical                            :: ctfres_is_there, included
         noutside = 0
-        p = params(cline, checkdistr=.false.) ! constants & derived constants produced
+        p = params(cline) ! constants & derived constants produced
         if( p%stream .eq. 'yes' )then
             if( cline%defined('outstk') .and. cline%defined('outfile') )then
                 ! all ok

@@ -391,33 +391,30 @@ end interface
 contains
 
     !> \brief  is a constructor
-    function constructor( cline, checkdistr, allow_mix ) result( self )
+    function constructor( cline, allow_mix ) result( self )
         class(cmdline),    intent(inout) :: cline
-        logical, optional, intent(in)    :: checkdistr, allow_mix
+        logical, optional, intent(in)    :: allow_mix
         type(params) :: self
-        call self%new( cline, checkdistr, allow_mix )
+        call self%new( cline, allow_mix )
     end function constructor
 
     !> \brief  is a constructor
-    subroutine new( self, cline, checkdistr, allow_mix )
+    subroutine new( self, cline, allow_mix )
         use simple_math, only: round2even
         use simple_map_reduce  ! use all in there
         class(params),     intent(inout) :: self
         class(cmdline),    intent(inout) :: cline
-        logical, optional, intent(in)    :: checkdistr, allow_mix
+        logical, optional, intent(in)    :: allow_mix
         type(binoris)                    :: bos
         character(len=STDLEN)            :: cwd_local, debug_local, verbose_local, stk_part_fname
         character(len=1)                 :: checkupfile(50)
         character(len=:), allocatable    :: conv, stk_part_fname_sc
         integer                          :: i, ncls, ifoo, lfoo(3), cntfile, istate
-        logical                          :: nparts_set, vol_defined(MAXS), ccheckdistr, aamix 
+        logical                          :: nparts_set, vol_defined(MAXS), aamix 
         nparts_set        = .false.
         vol_defined(MAXS) = .false.
         debug_local       = 'no'
         verbose_local     = 'no'
-        ! take care of optionals
-        ccheckdistr = .true.
-        if( present(checkdistr) ) ccheckdistr = checkdistr
         aamix = .false.
         if( present(allow_mix) ) aamix = allow_mix
         ! file counter
@@ -917,21 +914,6 @@ contains
                         write(*,*) 'box read from partial stack: ', self%box
                         stop 'dim mismatch; simple_params :: new'
                     endif
-                endif
-            endif
-            ! Check for the existance of this file if part is defined on the command line
-            if( cline%defined('part') )then
-                if( ccheckdistr )then
-                    select case(trim(self%prg))
-                    case('simple_symsrch','simple_scale')
-                        ! no need for split stack with prg=symsrch
-                    case DEFAULT
-                        if( .not. file_exists(self%stk_part) )then
-                            write(*,*) 'Need partial stacks to be generated for parallel execution; simple_params'
-                            write(*,*) 'Use simple_exec prg=split'
-                            stop
-                        endif
-                    end select
                 endif
             endif
         endif
