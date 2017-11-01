@@ -248,9 +248,11 @@ contains
             if( istate==0 )cycle
             statepops(istate) = statepops(istate) + 1.0
         end do
+        self%corr = self%bap%get_avg('corr')
+        write(*,'(A,1X,F7.4)') '>>> CORRELATION        :', self%corr
         ! print the overlaps and pops for the different states
         do istate=1,self%pp%nstates
-            write(*,'(A,1X,I5)') '>>> STATE POPULATION:', nint(statepops(istate))
+            write(*,'(A,I2,1X,A,1X,I6)') '>>> STATE ',istate,'POPULATION:', nint(statepops(istate))
         end do
         if( self%mi_state > HET_MI_STATE_LIM .and.&
             self%frac     > HET_FRAC_LIM     )then

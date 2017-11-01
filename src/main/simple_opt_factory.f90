@@ -55,7 +55,7 @@ contains
             case('bfgs2')
                 allocate(bfgs2_opt          :: self%optimizer_type)
             case('stde')
-                allocate(stde_opt          :: self%optimizer_type)                
+                allocate(stde_opt           :: self%optimizer_type)                
             case DEFAULT
                 write(*,*) 'class:', spec%str_opt
                 stop 'unsupported in opt_factory constructor'
