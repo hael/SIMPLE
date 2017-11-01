@@ -66,7 +66,6 @@ contains
         class(cmdline), intent(inout) :: cline
         integer,        intent(in)    :: which_iter
         logical,        intent(inout) :: update_res, converged
-        logical,          allocatable :: to_update(:)
         type(oris) :: prime3D_oris
         type(ori)  :: orientation
         real       :: norm, corr_thresh, skewness, frac_srch_space
@@ -74,7 +73,7 @@ contains
         integer    :: iptcl, inptcls, istate, iextr_lim, i
         integer    :: update_ind, nupdates_target, nupdates, fnr
         integer    :: statecnt(p%nstates)
-        logical    :: doprint 
+        logical    :: doprint
 
         if( L_BENCH )then
             t_init = tic()
@@ -165,26 +164,7 @@ contains
             endif
         endif
 
-        ! FRACTIONAL UPDATE
-        allocate( to_update(p%fromp:p%top), source=.true. )
-        if( p%l_frac_update )then
-        ! Soon to come
-        !     nupdates = inptcls
-        !     nupdates_target = nint(p%update_frac * real(inptcls))
-        !     do while( nupdates > nupdates_target )
-        !         update_ind = irnd_uni(inptcls)
-        !         if( to_update(update_ind) )then
-        !             to_update(update_ind) = .false.
-        !             nupdates = nupdates - 1
-        !         else
-        !             ! better luck next time
-        !         endif
-        !     enddo
-        else
-            ! all done
-        endif
         if( L_BENCH ) rt_init = toc(t_init)
-
         ! PREPARE THE POLARFT_CORRCALC DATA STRUCTURE
         if( L_BENCH ) t_prep_pftcc = tic()
         call preppftcc4align( b, p, cline )
@@ -227,9 +207,7 @@ contains
             case( 'snhc' )
                 !$omp parallel do default(shared) private(iptcl) schedule(guided) proc_bind(close)
                 do iptcl=p%fromp,p%top
-                    if( to_update(iptcl) )then
-                        call primesrch3D(iptcl)%exec_prime3D_srch(p%lp, szsn=p%szsn)
-                    endif
+                    call primesrch3D(iptcl)%exec_prime3D_srch(p%lp, szsn=p%szsn)
                 end do
                 !$omp end parallel do
             case( 'no','shc','yes' )
@@ -242,9 +220,7 @@ contains
                 else
                     !$omp parallel do default(shared) private(iptcl) schedule(guided) proc_bind(close)
                     do iptcl=p%fromp,p%top
-                        if( to_update(iptcl) )then
-                            call primesrch3D(iptcl)%exec_prime3D_srch(p%lp)
-                        endif
+                        call primesrch3D(iptcl)%exec_prime3D_srch(p%lp)
                     end do
                     !$omp end parallel do
                 endif
@@ -252,9 +228,7 @@ contains
                 if( p%oritab .eq. '' ) stop 'cannot run the refine=neigh mode without input oridoc (oritab)'
                 !$omp parallel do default(shared) private(iptcl) schedule(guided) proc_bind(close)
                 do iptcl=p%fromp,p%top
-                    if( to_update(iptcl) )then
-                        call primesrch3D(iptcl)%exec_prime3D_srch(p%lp, nnmat=b%nnmat, grid_projs=b%grid_projs)
-                    endif
+                    call primesrch3D(iptcl)%exec_prime3D_srch(p%lp, nnmat=b%nnmat, grid_projs=b%grid_projs)
                 end do
                 !$omp end parallel do
             case('greedy')
@@ -267,9 +241,7 @@ contains
                 else
                     !$omp parallel do default(shared) private(iptcl) schedule(guided) proc_bind(close)
                     do iptcl=p%fromp,p%top
-                        if( to_update(iptcl) )then
-                            call primesrch3D(iptcl)%exec_prime3D_srch(p%lp, greedy=.true.)
-                        endif
+                        call primesrch3D(iptcl)%exec_prime3D_srch(p%lp, greedy=.true.)
                     end do
                     !$omp end parallel do
                 endif
@@ -284,10 +256,8 @@ contains
                 else
                     !$omp parallel do default(shared) private(iptcl) schedule(guided) proc_bind(close)
                     do iptcl=p%fromp,p%top
-                        if( to_update(iptcl) )then
-                            call primesrch3D(iptcl)%exec_prime3D_srch(p%lp,&
-                                &greedy=.true., nnmat=b%nnmat, grid_projs=b%grid_projs)
-                        endif
+                        call primesrch3D(iptcl)%exec_prime3D_srch(p%lp,&
+                            &greedy=.true., nnmat=b%nnmat, grid_projs=b%grid_projs)
                     end do
                     !$omp end parallel do
                 endif
@@ -313,18 +283,14 @@ contains
                 if(p%oritab .eq. '') stop 'cannot run the refine=states mode without input oridoc (oritab)'
                 !$omp parallel do default(shared) private(iptcl) schedule(guided) proc_bind(close)
                 do iptcl=p%fromp,p%top
-                    if( to_update(iptcl) )then
-                        call primesrch3D(iptcl)%exec_prime3D_srch(p%lp, greedy=.true., nnmat=b%nnmat)
-                    endif
+                    call primesrch3D(iptcl)%exec_prime3D_srch(p%lp, greedy=.true., nnmat=b%nnmat)
                 end do
                 !$omp end parallel do
             case ('tseries')
                 if(p%oritab .eq. '') stop 'cannot run the refine=tseries mode without input oridoc (oritab)'
                 !$omp parallel do default(shared) private(iptcl) schedule(guided) proc_bind(close)
                 do iptcl=p%fromp,p%top
-                    if( to_update(iptcl) )then
-                        call primesrch3D(iptcl)%exec_prime3D_srch(p%lp, greedy=.false.)
-                    endif
+                    call primesrch3D(iptcl)%exec_prime3D_srch(p%lp, greedy=.false.)
                 end do
                 !$omp end parallel do
             case DEFAULT
@@ -359,18 +325,14 @@ contains
             endif
             ! reconstruction
             do iptcl=p%fromp,p%top
-                if( to_update(iptcl) )then
-                    orientation = b%a%get_ori(iptcl)
-                    if( nint(orientation%get('state')) == 0 .or.&
-                       &nint(orientation%get('state_balance')) == 0 ) cycle
-                    call read_cgridimg( b, p, iptcl )
-                    if( p%npeaks > 1 )then
-                        call grid_ptcl(b, p, orientation, os=o_peaks(iptcl))
-                    else
-                        call grid_ptcl(b, p, orientation)
-                    endif
+                orientation = b%a%get_ori(iptcl)
+                if( nint(orientation%get('state')) == 0 .or.&
+                   &nint(orientation%get('state_balance')) == 0 ) cycle
+                call read_cgridimg( b, p, iptcl )
+                if( p%npeaks > 1 )then
+                    call grid_ptcl(b, p, orientation, os=o_peaks(iptcl))
                 else
-                    ! reconstruction contribution already part of recvols
+                    call grid_ptcl(b, p, orientation)
                 endif
             end do
             ! normalise structure factors

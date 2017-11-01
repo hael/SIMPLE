@@ -83,6 +83,7 @@ type :: params
     character(len=3)      :: soften='no'          !< soften envelope with cosine edge(yes|no){no}
     character(len=3)      :: stats='no'           !< provide statistics(yes|no){yes}
     character(len=3)      :: stream='no'          !< sream (real time) execution mode(yes|no){no}
+    character(len=3)      :: symrnd='no'          !< randomize over symmetry operations(yes|no){no}
     character(len=3)      :: swap='no'
     character(len=3)      :: taper_edges='no'     !< self-explanatory
     character(len=3)      :: test='no'
@@ -530,6 +531,7 @@ contains
         call check_carg('speckind',       self%speckind)
         call check_carg('stats',          self%stats)
         call check_carg('stream',         self%stream)
+        call check_carg('symrnd',         self%symrnd)
         call check_carg('swap',           self%swap)
         call check_carg('taper_edges',    self%taper_edges)
         call check_carg('test',           self%test)

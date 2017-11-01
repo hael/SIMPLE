@@ -37,7 +37,9 @@ type sym
     procedure          :: get_all_subgrps
     procedure          :: within_asymunit
     procedure          :: apply_sym_with_shift
-    procedure          :: nearest_neighbors
+    procedure          :: nearest_proj_neighbors
+    procedure          :: nearest_sym_neighbors
+    procedure          :: symrandomize
     procedure, private :: build_srchrange
     procedure, private :: make_c_and_d
     procedure, private :: make_t
@@ -409,10 +411,10 @@ contains
     end subroutine apply_sym_with_shift
 
     !>  \brief  is for retrieving nearest neighbors in symmetric cases 
-    subroutine nearest_neighbors( self, asym_os, k, nnmat )
+    subroutine nearest_proj_neighbors( self, os_asym_unit, k, nnmat )
         use simple_math, only: hpsort
         class(sym),           intent(inout) :: self
-        type(oris),           intent(inout) :: asym_os !< sampled orientations from asymetric unit, eg from spiral with symmetry
+        type(oris),           intent(inout) :: os_asym_unit !< sampled orientations from assymetric unit, eg from spiral with symmetry
         integer,              intent(inout) :: k
         integer, allocatable, intent(inout) :: nnmat(:,:) !< nearest-neighbour matrix
         real,    allocatable :: dists(:)
@@ -420,16 +422,14 @@ contains
         type(ori)  :: oasym, osym, oj
         integer    :: i, j, n_os, isym
         if( trim(self%pgrp).eq.'c1' )then
-            call asym_os%nearest_neighbors(k, nnmat)
+            call os_asym_unit%nearest_proj_neighbors(k, nnmat)
         else
-            n_os = asym_os%get_noris()
-            allocate( nnmat(n_os,k), stat=alloc_stat )
-            allocchk("In: nearest_neighbors 1; simple_sym")
-            allocate(dists(n_os), inds(n_os), stat=alloc_stat)
-            allocchk("In: nearest_neighbors 2; simple_sym")
+            n_os = os_asym_unit%get_noris()
+            allocate( nnmat(n_os,k), dists(n_os), inds(n_os), stat=alloc_stat )
+            allocchk("In: nearest_proj_neighbors; simple_sym")
             do i = 1, n_os
-                dists = 360.
-                oasym = asym_os%get_ori(i)
+                dists = pi
+                oasym = os_asym_unit%get_ori(i)
                 do isym = 1, self%n
                     if(isym == 1)then
                         osym = oasym
@@ -440,8 +440,8 @@ contains
                         if( j == i )then
                             dists(j) = 0.
                         else
-                            oj = asym_os%get_ori(j)
-                            dists(j) = min(dists(j), osym.geod.oj)
+                            oj = os_asym_unit%get_ori(j)
+                            dists(j) = min(dists(j), osym.euldist.oj)
                         endif
                     enddo
                 enddo
@@ -451,7 +451,64 @@ contains
             enddo
             deallocate(inds, dists)
         endif
-    end subroutine nearest_neighbors
+    end subroutine nearest_proj_neighbors
+
+    !>  \brief  is for retrieving nearest symmetry neighbours in an assymetric set of projection directions
+    subroutine nearest_sym_neighbors( self, asym_os, nnmat )
+        use simple_math, only: hpsort
+        class(sym),           intent(inout) :: self
+        type(oris),           intent(inout) :: asym_os    !< C1 projection directions
+        integer, allocatable, intent(inout) :: nnmat(:,:) !< nearest-neighbour matrix
+        real,    allocatable :: dists(:)
+        type(ori)  :: oasym, osym, oj
+        integer    :: i, j, n_os, isym, loc(1), nsym
+        if( trim(self%pgrp).eq.'c1' )then
+            call asym_os%nearest_proj_neighbors(1, nnmat)
+        else
+            n_os = asym_os%get_noris()
+            nsym = self%n
+            allocate( nnmat(n_os,nsym), dists(n_os), stat=alloc_stat )
+            allocchk("In: nearest_proj_neighbors; simple_sym")
+            do i = 1, n_os
+                oasym = asym_os%get_ori(i)
+                do isym = 1, nsym
+                    if( isym == 1 )then
+                        osym = oasym
+                    else
+                        osym = self%apply(oasym, isym)
+                    endif
+                    do j = 1, n_os
+                        oj = asym_os%get_ori(j)
+                        dists(j) = osym.euldist.oj
+                    enddo
+                    loc = minloc(dists)
+                    nnmat(i,isym) = loc(1)
+                enddo
+            enddo
+            deallocate(dists)
+        endif
+    end subroutine nearest_sym_neighbors
+
+    !>  \brief  is for randomizing over the symmetry operations of the point-group
+    subroutine symrandomize( self, os_asym_unit )
+        class(sym), intent(inout) :: self
+        type(oris), intent(inout) :: os_asym_unit !< sampled orientations from assymetric unit, eg from spiral with symmetry
+        integer   :: n_os, nsym, symop, i
+        type(ori) :: oasym, osym
+        if( trim(self%pgrp).eq.'c1' )then
+            stop 'nothing to do, pgrp=c1; simple_sym :: symrandomize'
+        endif
+        n_os = os_asym_unit%get_noris()
+        nsym = self%n
+        do i = 1, n_os
+            oasym = os_asym_unit%get_ori(i)
+            symop = irnd_uni(nsym)
+            if( symop > 1 )then
+                osym = self%apply(oasym, symop)
+                call os_asym_unit%set_ori(i,osym)
+            endif
+        end do
+    end subroutine symrandomize
 
     !>  \brief  SPIDER code for making c and d symmetries
     subroutine make_c_and_d( self )

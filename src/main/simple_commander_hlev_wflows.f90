@@ -494,6 +494,7 @@ contains
 
     !> for ensemble heterogeinity analysis
     subroutine exec_het_ensemble( self, cline )
+        use simple_defs_conv
         use simple_commander_rec,    only: recvol_commander
         use simple_commander_volops, only: postproc_vol_commander
         use simple_combinatorics,    only: diverse_labeling, shc_aggregation
@@ -519,11 +520,12 @@ contains
         integer,               allocatable :: labels(:,:), labels_incl(:,:), consensus(:)
         character(len=STDLEN), allocatable :: init_docs(:), final_docs(:)
         logical,               allocatable :: included(:)
-        type(params)                  :: p_master
-        type(oris)                    :: os
-        character(len=STDLEN)         :: oritab, vol, str_state
-        integer                       :: irepeat, state, iter, n_incl, it
-        integer                       :: best_loc(1)
+        type(params)          :: p_master
+        type(oris)            :: os
+        character(len=STDLEN) :: oritab, vol, str_state
+        real                  :: trs
+        integer               :: irepeat, state, iter, n_incl, it
+        integer               :: best_loc(1)
 
         ! sanity check
         if(nint(cline%get_rarg('nstates')) <= 1)&
@@ -567,6 +569,14 @@ contains
         call cline_prime3D_master%set('refine', 'het')
         call cline_prime3D_master%set('dynlp', 'no')
         call cline_prime3D_master%set('pproc', 'no')
+        ! works out shift lmits for in-plane search
+        if( cline%defined('trs') )then
+            ! all good
+        else
+            trs = MSK_FRAC*real(p_master%msk)
+            trs = min(MAXSHIFT, max(MINSHIFT, trs))
+            call cline_prime3D_master%set('trs',trs)
+        endif
 
         ! generate diverse initial labels
         write(*,'(A)') '>>>'

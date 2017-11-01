@@ -739,17 +739,17 @@ contains
         integer,             intent(inout) :: statecnt(self%nstates)
         type(ori) :: o
         integer   :: iref, state
-        real      :: corr, mi_state, frac, corrs_state(self%nstates), corrs_inpl(self%nrots)
-        self%prev_state = nint(self%a_ptr%get(self%iptcl, 'state'))
-        if( self%prev_state > self%nstates )&
-            &stop 'previous best state outside boundary; stochastic_srch_het; simple_prime3D_srch'
+        real      :: corr, mi_state, frac, shvec(2), corrs_state(self%nstates), corrs_inpl(self%nrots)
+        o = self%a_ptr%get_ori(self%iptcl)
+        self%prev_state = nint(o%get('state'))
         if( self%prev_state > 0 )then
+            if( self%prev_state > self%nstates )&
+                &stop 'previous best state outside boundary; stochastic_srch_het; simple_prime3D_srch'
             if( .not. state_exists(self%prev_state) )&
                 &stop 'empty previous state; stochastic_srch_het; simple_prime3D_srch'
             ! initialize
-            o = self%a_ptr%get_ori(self%iptcl)
             self%prev_roind = self%pftcc_ptr%get_roind(360.-o%e3get())
-            if( self%a_ptr%get(self%iptcl,'corr') < extr_bound)then
+            if( o%get('corr') < extr_bound )then
                 ! state randomization
                 statecnt(self%prev_state) = statecnt(self%prev_state) + 1
                 self%nrefs_eval = 1
@@ -757,9 +757,9 @@ contains
                 do while(state == self%prev_state .or. .not.state_exists(state))
                     state = irnd_uni(self%nstates)
                 enddo
-                iref  = (state - 1) * self%nprojs + prev_proj(self%iptcl)
+                iref = (state - 1) * self%nprojs + prev_proj(self%iptcl)
                 call self%pftcc_ptr%gencorrs(iref, self%iptcl, corrs_inpl)
-                corr  = corrs_inpl(self%prev_roind)
+                corr = corrs_inpl(self%prev_roind)
             else
                 ! SHC
                 corrs_state = -1.
@@ -769,11 +769,23 @@ contains
                     call self%pftcc_ptr%gencorrs(iref, self%iptcl, corrs_inpl)
                     corrs_state(state) = corrs_inpl(self%prev_roind)
                 enddo
-                self%prev_corr = corrs_state(self%prev_state)
-                state          = shcloc(self%nstates, corrs_state, self%prev_corr)
-                if(state == 0)state = self%prev_state ! numerical stability
+                self%prev_corr  = corrs_state(self%prev_state)
+                state           = shcloc(self%nstates, corrs_state, self%prev_corr)
                 corr            = corrs_state(state)
                 self%nrefs_eval = count(corrs_state <= self%prev_corr)
+                if( extr_bound < TINY )then
+                    ! in-plane search after extremal optimization stage
+                    iref = (state-1)*self%nprojs + prev_proj(self%iptcl)
+                    proj_space_corrs(self%iptcl,iref)      = corr
+                    proj_space_inds(self%iptcl,self%nrefs) = iref
+                    call self%inpl_srch
+                    if( proj_space_corrs(self%iptcl,iref) > corr )then
+                        corr  = proj_space_corrs(self%iptcl,iref)
+                        shvec = o%get_2Dshift() + proj_space_shift(self%iptcl,iref,:)
+                        call o%e3set(proj_space_euls(self%iptcl, iref, 3))
+                        call o%set_shift(shvec)
+                    endif
+                endif
             endif
             ! updates orientation
             frac = 100.*real(self%nrefs_eval) / real(self%nstates)
@@ -791,7 +803,7 @@ contains
             call o%set('mi_joint', mi_state)
             call o%set('w', 1.)
             ! updates orientations objects
-            call o_peaks(self%iptcl)%set_ori(1, o)
+            call o_peaks(self%iptcl)%set_ori(1,o)
             call self%a_ptr%set_ori(self%iptcl, o)
         else
             call self%a_ptr%reject(self%iptcl)
@@ -801,7 +813,7 @@ contains
 
     !>  \brief  executes the in-plane search. This improved routine took HCN
     !!          from stall @ 5.4 to close to convergence @ 4.5 after 10 iters
-    !!          refine=no with 1000 referecnes
+    !!          refine=no with 1000 references
     subroutine inpl_srch( self )
         class(prime3D_srch), intent(inout) :: self
         real, allocatable :: cxy(:), crxy(:)
