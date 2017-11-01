@@ -160,7 +160,7 @@ type :: oris
     procedure, private :: create_proj_subspace_2
     generic            :: create_proj_subspace => create_proj_subspace_1, create_proj_subspace_2
     procedure          :: discretize
-    procedure          :: nearest_neighbors
+    procedure          :: nearest_proj_neighbors
     procedure          :: find_angres
     procedure          :: find_angres_geod
     procedure          :: extremal_bound
@@ -2708,8 +2708,8 @@ contains
         endif
     end subroutine discretize
 
-    !>  \brief  to identify the indices of the k nearest neighbors (inclusive)
-    subroutine nearest_neighbors( self, k, nnmat )
+    !>  \brief  to identify the indices of the k nearest projection neighbors (inclusive)
+    subroutine nearest_proj_neighbors( self, k, nnmat )
         class(oris),          intent(inout) :: self
         integer,              intent(in)    :: k
         integer, allocatable, intent(inout) :: nnmat(:,:)
@@ -2727,7 +2727,7 @@ contains
                 if( i == j )then
                     dists(j) = 0.
                 else
-                    dists(j) = self%o(j).geod.o
+                    dists(j) = self%o(j).euldist.o
                 endif
             end do
             call hpsort(self%n, dists, inds)
@@ -2735,7 +2735,7 @@ contains
                 nnmat(i,j) = inds(j)
             end do
         end do
-    end subroutine nearest_neighbors
+    end subroutine nearest_proj_neighbors
 
     !>  \brief  to find angular resolution of an even orientation distribution (in degrees)
     function find_angres( self ) result( res )

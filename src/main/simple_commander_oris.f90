@@ -491,6 +491,9 @@ contains
                 stop 'need ndiscrete to be defined!'
             endif
         endif
+        if( p%symrnd .eq. 'yes' )then
+            call b%se%symrandomize(b%a)
+        endif
         if( cline%defined('nstates') ) call b%a%rnd_states(p%nstates)
         call binwrite_oritab(p%outfile, b%a, [1,b%a%get_noris()])
         call simple_end('**** SIMPLE_ORISOPS NORMAL STOP ****')

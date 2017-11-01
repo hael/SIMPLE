@@ -2154,19 +2154,26 @@ select case(prg)
        ! the individual particle images<map2ptcls/end>
        !
        ! set required keys
-       keys_required(1) = 'stk'
-       keys_required(2) = 'stk2'
-       keys_required(3) = 'stk3'
-       keys_required(4) = 'oritab'
+       keys_required(1) = 'stk2'
+       keys_required(2) = 'stk3'
+       keys_required(3) = 'oritab'
        ! set optional keys
        keys_optional(1) = 'nthr'
        keys_optional(2) = 'oritab3D'
        keys_optional(3) = 'deftab'
        keys_optional(4) = 'outfile'
        keys_optional(5) = 'mul'
+       keys_optional(6) = 'stk'
+       keys_optional(7) = 'stktab'
        ! parse command line
        if( describe ) call print_doc_map2ptcls
-       call cline%parse(keys_required(:4), keys_optional(:5))
+       call cline%parse(keys_required(:3), keys_optional(:7))
+       ! sanity check
+        if( cline%defined('stk') .or. cline%defined('stktab') )then
+            ! all ok
+        else
+            stop 'stk or stktab need to be part of command line!'
+        endif
        ! set defaults
        if( .not. cline%defined('outfile') ) call cline%set('outfile', 'mapped_ptcls_params.txt')
        ! execute

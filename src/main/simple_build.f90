@@ -376,7 +376,7 @@ contains
             if( file_exists(p%oritab3D) )then
                 call os%new(p%ncls)
                 call binread_oritab(p%oritab3D, os, [1,p%ncls])
-                call os%nearest_neighbors(p%nnn, self%nnmat)
+                call os%nearest_proj_neighbors(p%nnn, self%nnmat)
                 call os%kill
             else
                 stop 'need oritab3D input for prime2D refine=neigh mode; simple_build :: build_hadamard_prime2D_tbox'
@@ -419,7 +419,7 @@ contains
         endif
         if( str_has_substr(p%refine,'neigh') .or. trim(p%refine).eq.'states' )then
             nnn = p%nnn
-            call self%se%nearest_neighbors(self%e, nnn, self%nnmat)
+            call self%se%nearest_proj_neighbors(self%e, nnn, self%nnmat)
         endif
         if( .not. self%a%isthere('proj') ) call self%a%set_projs(self%e)
         call self%projfrcs%new(NSPACE_BALANCE, p%box, p%smpd, p%nstates)

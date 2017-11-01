@@ -182,16 +182,19 @@ contains
     end subroutine exec_multiptcl_init
 
     subroutine exec_prime3D( self, cline )
-        use simple_math, only: calc_lowpass_lim, calc_fourier_index
+        use simple_math,               only: calc_lowpass_lim, calc_fourier_index
         use simple_hadamard3D_matcher, only: prime3D_exec, prime3D_find_resrange
         use simple_strings,            only: str_has_substr
+        use simple_commander_imgproc,  only: prep4cgrid_commander
         class(prime3D_commander), intent(inout) :: self
         class(cmdline),           intent(inout) :: cline
-        type(params)      :: p
-        type(build)       :: b
-        integer           :: i, startit
-        logical           :: update_res, converged
-        real              :: lpstart, lpstop, corr, corr_prev
+        type(prep4cgrid_commander) :: xprep4cgrid
+        type(cmdline)              :: cline_prep4cgrid
+        type(params)               :: p
+        type(build)                :: b
+        integer                    :: i, startit
+        logical                    :: update_res, converged
+        real                       :: lpstart, lpstop, corr, corr_prev
         update_res = .false.
         converged  = .false.
         p = params(cline) ! parameters generated
@@ -212,13 +215,17 @@ contains
         call b%build_hadamard_prime3D_tbox(p) ! prime3D objects built
         startit = 1
         if( cline%defined('startit') )startit = p%startit
-        if( cline%defined('part') )then
+        if( p%l_distr_exec )then
             if( .not. cline%defined('outfile') ) stop 'need unique output file for parallel jobs'
             if( cline%defined('find') )then
                 p%lp = calc_lowpass_lim( p%find, p%boxmatch, p%smpd )
             endif
             call prime3D_exec(b, p, cline, startit, update_res, converged) ! partition or not, depending on 'part'
         else
+            cline_prep4cgrid = cline
+            call cline_prep4cgrid%set( 'for3D', 'yes' )
+            call cline_prep4cgrid%set( 'outstk', add2fbody(p%stk, p%ext, '_cgrid') )
+            call xprep4cgrid%execute(cline_prep4cgrid)
             if( p%dynlp .eq. 'yes' )then
                 call prime3D_find_resrange( b, p, lpstart, lpstop ) ! determine resolution range
                 if( cline%defined('lpstart') )then

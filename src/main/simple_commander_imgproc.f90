@@ -58,7 +58,6 @@ type, extends(commander_base) :: norm_commander
   contains
     procedure :: execute      => exec_norm
 end type norm_commander
-
 type, extends(commander_base) :: scale_commander
   contains
     procedure :: execute      => exec_scale
@@ -799,7 +798,7 @@ contains
         if( cline%defined('order') )then
             if( p%order .eq. 'yes' )then
                 ! order the particles
-                pinds = b%a%order()
+                pinds = b%a%order_corr()
                 cnt = 0
                 do i=1,p%nptcls
                     cnt = cnt + 1

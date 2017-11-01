@@ -232,6 +232,7 @@ contains
         call chdict%push('stk3',          '3d stack (in map2ptcls/select: (cavgs)2selectfrom.ext)')
         call chdict%push('stk_backgr',    'stack with image for background subtraction')
         call chdict%push('stream',        'sream (real time) execution mode(yes|no){no}')
+        call chdict%push('symrnd',        'randomize over symmetry operations(yes|no){no}')
         call chdict%push('szsn',          'size of stochastic neighborhood{5}')
         call chdict%push('taper_edges',   'to taper edges(yes|no){no}')
         call chdict%push('time_inactive', 'end time limit(in seconds){7200}')
