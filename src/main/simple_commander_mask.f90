@@ -33,16 +33,14 @@ contains
         type(automask2D_commander) :: automask2D
         type(image)                :: mskvol
         integer                    :: ldim(3)
-        p = params(cline)                   ! parameters generated
-        p%boxmatch = p%box                  ! turns off boxmatch logics
-        call b%build_general_tbox(p, cline) ! general objects built
+        p = params(cline)  ! parameters generated
+        p%boxmatch = p%box ! turns off boxmatch logics
         if( cline%defined('stk') .and. cline%defined('vol1')   ) stop 'Cannot operate on images AND volume at once'
         if( p%automsk.eq.'yes'   .and..not.cline%defined('mw') ) stop 'Missing mw argument for automasking'
         if( p%msktype.ne.'soft'  .and. p%msktype.ne.'hard' .and. p%msktype.ne.'cavg' ) stop 'Invalid mask type'
-        ! reallocate vol (boxmatch issue)
-        call b%vol%new([p%box, p%box, p%box], p%smpd) 
         if( cline%defined('stk') )then
             ! 2D
+            call b%build_general_tbox(p, cline, do3d=.false.) ! general objects built
             if( p%automsk.eq.'yes' )then
                 ! auto
                 if( .not. cline%defined('amsklp') )call cline%set('amsklp', 25.)
@@ -66,6 +64,9 @@ contains
             endif
         else if( cline%defined('vol1') )then
             ! 3D
+            call b%build_general_tbox(p, cline) ! general objects built
+            ! reallocate vol (boxmatch issue)
+            call b%vol%new([p%box, p%box, p%box], p%smpd) 
             if( .not. file_exists(p%vols(1)) ) stop 'Cannot find input volume'
             call b%vol%read(p%vols(1))
             if( cline%defined('mskfile') )then
@@ -109,9 +110,9 @@ contains
         type(params) :: p
         type(build)  :: b
         integer      :: iptcl
-        p = params(cline)                   ! parameters generated
-        p%boxmatch = p%box                  ! turns off boxmatch logics
-        call b%build_general_tbox(p, cline) ! general objects built
+        p = params(cline)                                 ! parameters generated
+        p%boxmatch = p%box                                ! turns off boxmatch logics
+        call b%build_general_tbox(p, cline, do3d=.false.) ! general objects built
         write(*,'(A,F8.2,A)') '>>> AUTOMASK LOW-PASS:',        p%amsklp, ' ANGSTROMS'
         write(*,'(A,I3,A)')   '>>> AUTOMASK SOFT EDGE WIDTH:', p%edge,   ' PIXELS'
         p%outstk = add2fbody(p%stk, p%ext, 'msk')

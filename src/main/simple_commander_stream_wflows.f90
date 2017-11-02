@@ -231,9 +231,6 @@ contains
             oritab_glob = trim(PRIME2D_ITER_FBODY)//trim(str_iter)//trim(METADATEXT)
             refs_glob   = trim(CAVGS_ITER_FBODY)//trim(str_iter)//trim(p_master%ext)
             frcs_glob   = trim(FRCS_ITER_FBODY)//trim(str_iter)//'.bin'
-            call rename('prime2Ddoc_final.txt', oritab_glob)
-            call rename(trim('cavgs_final')//trim(p_master%ext), refs_glob)
-            call rename('classdoc.txt', trim('classdoc_')//trim(str_iter)//trim('.txt'))
             call cline_prime2D%set('oritab', trim(oritab_glob))
             call cline_prime2D%set('refs',   trim(refs_glob))
             call remap_empty_classes
@@ -321,7 +318,7 @@ contains
                         cnt = cnt + 1
                         ext       = fname2ext(trim(remove_abspath(trim(new_stacks(cnt)))))
                         fbody     = get_fbody(trim(remove_abspath(trim(new_stacks(cnt)))), trim(ext))
-                        stktab(i) = trim(fbody)// trim('_sc') // trim(p_master%ext)
+                        stktab(i) = trim(fbody)// '_sc' // p_master%ext
                         call cline_scale%set('dir_target', SCSTK_DIR)
                     enddo
                     call qenv%exec_simple_prg_in_queue(cline_scale, 'OUT1','JOB_FINISHED_1')

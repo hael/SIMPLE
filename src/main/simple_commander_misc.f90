@@ -86,8 +86,8 @@ contains
         real, allocatable   :: validinds(:)
         integer, parameter  :: NRESTARTS=10
         logical             :: done=.false.
-        p = params(cline,.false.)                        ! parameters generated
-        call b%build_general_tbox(p, cline, do3d=.false.)! general objects built
+        p = params(cline,.false.)                         ! parameters generated
+        call b%build_general_tbox(p, cline, do3d=.false.) ! general objects built
         ! obtain similarity matrix
         allocate(smat(p%nptcls,p%nptcls), stat=alloc_stat)
         allocchk('In: simple_cluster_smat, 1')
@@ -187,7 +187,7 @@ contains
                 endif
             enddo
             ! output
-            fbody = trim(get_fbody(trim(p%pdbfile), trim('pdb')))
+            fbody = trim(get_fbody(trim(p%pdbfile), 'pdb'))
             csv_name = './'//trim(adjustl(fbody))//'_intg.csv'
             call fopen(fnr, FILE=csv_name, STATUS='REPLACE', action='WRITE', iostat=file_stat)
             call fileio_errmsg('commander_misc; exec_intgpeaks ', file_stat)

@@ -460,7 +460,7 @@ contains
         if( cline%defined('refs') )then
             refs = trim(p_master%refs)
         else
-            refs = trim('start2Drefs' // p_master%ext)
+            refs = 'start2Drefs' // p_master%ext
         endif
 
         ! prepare command lines from prototype master
@@ -553,9 +553,9 @@ contains
             call cline_merge_algndocs%set('outfile', trim(oritab))
             call xmerge_algndocs%execute(cline_merge_algndocs)
             ! assemble class averages
-            refs      = trim(trim(CAVGS_ITER_FBODY) // trim(str_iter)            // p_master%ext)
-            refs_even = trim(trim(CAVGS_ITER_FBODY) // trim(str_iter) // '_even' // p_master%ext)
-            refs_odd  = trim(trim(CAVGS_ITER_FBODY) // trim(str_iter) // '_odd'  // p_master%ext)
+            refs      = trim(CAVGS_ITER_FBODY) // trim(str_iter)            // p_master%ext
+            refs_even = trim(CAVGS_ITER_FBODY) // trim(str_iter) // '_even' // p_master%ext
+            refs_odd  = trim(CAVGS_ITER_FBODY) // trim(str_iter) // '_odd'  // p_master%ext
             call cline_cavgassemble%set('oritab', trim(oritab))
             call cline_cavgassemble%set('which_iter', real(iter))
             call qenv%exec_simple_prg_in_queue(cline_cavgassemble, 'CAVGASSEMBLE', 'CAVGASSEMBLE_FINISHED')
@@ -707,7 +707,7 @@ contains
         if( cline%defined('vol1') )then
             vol = trim(p_master%vols(1))
         else
-            vol = trim('startvol_state01'//p_master%ext)
+            vol = 'startvol_state01'//p_master%ext
         endif
         if( .not. cline%defined('stktab') )then
             ! split stack
@@ -848,7 +848,7 @@ contains
         if( .not.cline%defined('oritab') .and. .not.vol_defined )then
             ! ab-initio
             call xprime3D_init_distr%execute( cline_prime3D_init )
-            call cline%set( 'vol1', trim('startvol_state01'//p_master%ext) )
+            call cline%set( 'vol1', 'startvol_state01'//p_master%ext )
             call cline%set( 'oritab', oritab )
         else if( cline%defined('oritab') .and. .not.vol_defined )then
             ! reconstructions needed

@@ -248,7 +248,7 @@ contains
         else
             p%frcs = 'frcs_iter'//int2str_pad(which_iter,3)//'.bin'
             call cavger_calc_and_write_frcs_and_eoavg(p%frcs)
-            call gen2Dclassdoc( b, p, 'classdoc.txt')
+            call gen2Dclassdoc( b, p, 'classdoc_'//int2str_pad(which_iter,3)//'.txt')
             p%refs      = 'cavgs_iter'//int2str_pad(which_iter,3)//p%ext
             p%refs_even = 'cavgs_iter'//int2str_pad(which_iter,3)//'_even'//p%ext
             p%refs_odd  = 'cavgs_iter'//int2str_pad(which_iter,3)//'_odd'//p%ext

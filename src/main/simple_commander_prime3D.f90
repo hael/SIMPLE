@@ -81,7 +81,7 @@ contains
         type(build)  :: b
         type(params) :: p
         p = params(cline) ! parameters generated
-        call b%build_general_tbox(p, cline)
+        call b%build_general_tbox(p, cline, do3d=.false.)
         p%npeaks = min(10,b%e%find_npeaks(p%lp, p%moldiam))
         write(*,'(A,1X,I4)') '>>> NPEAKS:', p%npeaks
         ! end gracefully
@@ -280,8 +280,8 @@ contains
         real, allocatable :: maplp(:)
         integer           :: istate, loc(1)
         logical           :: limset, converged, update_res
-        p = params(cline)                   ! parameters generated
-        call b%build_general_tbox(p, cline) ! general objects built
+        p = params(cline) ! parameters generated
+        call b%build_general_tbox(p, cline, do3d=.false.) ! general objects built
         limset = .false. ;  update_res = .false.
         if( p%eo .ne. 'no' )then
             allocate( maplp(p%nstates), stat=alloc_stat)

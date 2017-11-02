@@ -144,14 +144,15 @@ contains
         type(build),  target :: b
         integer              :: iptcl
         p = params(cline, allow_mix=.true.) ! parameters generated
-        call b%build_general_tbox(p, cline) ! general objects built
         if( cline%defined('stk') )then
+            call b%build_general_tbox(p, cline, do3d=.false.) ! general objects built
             do iptcl=1,p%nptcls
                 call progress(iptcl, p%nptcls)
                 call b%img%read(p%stk, iptcl)
                 call b%img%write(p%outstk, iptcl)
             end do
         else if( cline%defined('vol1') )then
+            call b%build_general_tbox(p, cline)               ! general objects built
             call b%vol%read(p%vols(1))
             call b%img%write(p%outvol)
         else
@@ -300,12 +301,12 @@ contains
         type(params) :: p
         type(build)  :: b
         real :: width
-        p = params(cline)                   ! parameters generated
-        call b%build_general_tbox(p, cline) ! general objects built
+        p     = params(cline) ! parameters generated
         width = 10.
         if( cline%defined('width') ) width = p%width
         if( cline%defined('stk') )then
             ! 2D
+            call b%build_general_tbox(p, cline, do3d=.false.) ! general objects built
             if( .not.file_exists(p%stk) )stop 'Cannot find input stack (stk)'
             if( p%phrand .eq. 'no')then
                 ! Band pass
@@ -329,6 +330,7 @@ contains
             endif
         else
             ! 3D
+            call b%build_general_tbox(p, cline) ! general objects built
             if( .not.file_exists(p%vols(1)) )stop 'Cannot find input volume (vol1)'
             call b%vol%read(p%vols(1))
             if( p%phrand.eq.'no')then
@@ -371,8 +373,8 @@ contains
         type(build)          :: b
         integer              :: iptcl, funit, io_stat
         real, allocatable    :: corrmat(:,:)
-        p = params(cline, .false.)                           ! constants & derived constants produced
-        call b%build_general_tbox(p, cline, .false., .true.) ! general objects built (no oritab reading)
+        p = params(cline, .false.) ! constants & derived constants produced
+        call b%build_general_tbox(p, cline, do3d=.false., nooritab=.true.) ! general objects built (no oritab reading)
         allocate(b%imgs_sym(p%nptcls), stat=alloc_stat)
         allocchk('In: simple_image_smat, 1')
         do iptcl=1,p%nptcls
@@ -409,8 +411,8 @@ contains
         class(cmdline),              intent(inout) :: cline
         type(params)         :: p
         type(build)          :: b
-        p = params(cline, .false.)                           ! constants & derived constants produced
-        call b%build_general_tbox(p, cline, .false., .true.) ! general objects built (no oritab reading)
+        p = params(cline, .false.) ! constants & derived constants produced
+        call b%build_general_tbox(p, cline, do3d=.false., nooritab=.true.) ! general objects built (no oritab reading)
         if( cline%defined('stk') .and. cline%defined('vol1') )stop 'Cannot operate on images AND volume at once'
         call diff_imgfiles(p%stk, p%stk2, p%outstk, p%smpd)
         ! end gracefully
@@ -430,16 +432,14 @@ contains
         type(params)      :: p
         real, allocatable :: spec(:)
         integer           :: k
-        p = params(cline)                           ! parameters generated
-        call b%build_general_tbox(p, cline)         ! general objects built
+        p = params(cline) ! parameters generated
         if( cline%defined('stk')  .and. cline%defined('vol1') )stop 'Cannot operate on images AND volume at once'
         if( p%norm.eq.'yes'       .and. p%noise_norm.eq.'yes' )stop 'Invalid normalization type'
         if( p%norm.eq.'yes'       .and. p%shellnorm .eq.'yes' )stop 'Invalid normalization type'
         if( p%noise_norm.eq.'yes' .and. p%shellnorm .eq.'yes' )stop 'Invalid normalization type'
-        ! reallocate vol (boxmatch issue)
-        call b%vol%new([p%box,p%box,p%box], p%smpd) 
         if( cline%defined('stk') )then
             ! 2D
+            call b%build_general_tbox(p, cline, do3d=.false.) ! general objects built
             if( p%norm.eq.'yes' )then
                 ! Normalization
                 call norm_imgfile(p%stk, p%outstk, p%smpd)
@@ -457,6 +457,8 @@ contains
             endif
         else if( cline%defined('vol1') )then
             ! 3D
+            call b%build_general_tbox(p, cline)         ! general objects built
+            call b%vol%new([p%box,p%box,p%box], p%smpd) ! reallocate vol (boxmatch issue)
             if( .not.file_exists(p%vols(1)) )stop 'Cannot find input volume'
             call b%vol%read(p%vols(1))
             if( p%norm.eq.'yes' )then
@@ -493,15 +495,13 @@ contains
         integer      :: ldims_scaled(2,3)
         character(len=:), allocatable      :: fname
         character(len=STDLEN), allocatable :: filenames(:)
-        p = params(cline)                   ! parameters generated
-        call b%build_general_tbox(p, cline) ! general objects built
-        ! reallocate vol (boxmatch issue)
-        call b%vol%new([p%box,p%box,p%box], p%smpd)     
+        p = params(cline)                     ! parameters generated
         call img%new([p%box,p%box,1],p%smpd)  ! image created
         call img2%new([p%box,p%box,1],p%smpd) ! image created
         if( cline%defined('stk') .and. cline%defined('vol1') ) stop 'Cannot operate on images AND volume at once'
         if( cline%defined('stk') )then
             ! 2D
+            call b%build_general_tbox(p, cline, do3d=.false.) ! general objects built
             if( cline%defined('scale2') )then
                 call del_file(p%outstk)
                 call del_file(p%outstk2)
@@ -538,6 +538,9 @@ contains
             endif
         else if( cline%defined('vol1') )then
             ! 3D
+            call b%build_general_tbox(p, cline) ! general objects built
+            ! reallocate vol (boxmatch issue)
+            call b%vol%new([p%box,p%box,p%box], p%smpd)     
             if( .not.file_exists(p%vols(1)) ) stop 'Cannot find input volume'
             call b%vol%read(p%vols(1))
             if( cline%defined('scale') .or. cline%defined('newbox') )then

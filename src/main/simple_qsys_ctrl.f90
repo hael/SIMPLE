@@ -215,9 +215,9 @@ contains
                 call job_descr%set('nparts',  int2str(self%nparts_tot))
                 if( allocated(outfile_body_local) )then
                     if( present(outfile_ext) )then
-                        call job_descr%set('outfile', trim(trim(outfile_body_local)//int2str_pad(ipart,self%numlen)//outfile_ext))
+                        call job_descr%set('outfile', trim(outfile_body_local)//int2str_pad(ipart,self%numlen)//outfile_ext)
                     else
-                        call job_descr%set('outfile', trim(trim(outfile_body_local)//int2str_pad(ipart,self%numlen)//METADATEXT))
+                        call job_descr%set('outfile', trim(outfile_body_local)//int2str_pad(ipart,self%numlen)//METADATEXT)
                     endif
                 endif
             endif

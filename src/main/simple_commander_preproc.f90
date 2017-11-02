@@ -642,7 +642,6 @@ contains
         class(select_commander), intent(inout) :: self
         class(cmdline),          intent(inout) :: cline !< command line input
         type(params)                       :: p
-        type(build)                        :: b
         type(image)                        :: stk3_img
         type(image),           allocatable :: imgs_sel(:), imgs_all(:)
         character(len=STDLEN), allocatable :: imgnames(:)
@@ -659,7 +658,6 @@ contains
             stop 'Need either stk3 or filetab are part of the command line!'
         endif
         p = params(cline)                   ! parameters generated
-        call b%build_general_tbox(p, cline) ! general objects built
         ! find number of selected cavgs
         call find_ldim_nptcls(p%stk2, lfoo, nsel)
         ! find number of original cavgs

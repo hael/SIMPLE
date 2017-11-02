@@ -83,7 +83,7 @@ contains
         real                 :: avgd, sdevd, maxd, mind
         integer, allocatable :: clsarr(:)
         p = params(cline)
-        call b%build_general_tbox(p, cline)
+        call b%build_general_tbox(p, cline, do3d=.false.)
         call shc_cluster_oris(b%a, p%ncls)
         ! calculate distance statistics
         call b%a%cluster_diststat(avgd, sdevd, maxd, mind)
@@ -120,7 +120,7 @@ contains
         type(nrtxtfile)   :: ctfparamfile
         real, allocatable :: line(:)
         p = params(cline)
-        call b%build_general_tbox(p, cline)
+        call b%build_general_tbox(p, cline, do3d=.false.)
         if( cline%defined('oritab') .or. cline%defined('deftab')  )then
             if( cline%defined('oritab') )then
                 nptcls = binread_nlines(p%oritab)
@@ -228,7 +228,7 @@ contains
         integer      :: i, j, cnt, ispace, irot, class, loc(1)
         integer      :: ioritab, noritabs, nl, nl1
         p = params(cline)
-        call b%build_general_tbox(p, cline)
+        call b%build_general_tbox(p, cline, do3d=.false.)
         if( cline%defined('ncls') )then
             if( cline%defined('angerr') )then
                 o_even = oris(p%ncls)
@@ -364,8 +364,8 @@ contains
         type(ori)    :: ori2d, ori_comp, o
         if( cline%defined('doclist')   ) stop 'doclist execution route no longer supported'
         if( cline%defined('comlindoc') ) stop 'comlindoc execution route no longer supported'
-        p = params(cline)                   ! parameters generated
-        call b%build_general_tbox(p, cline) ! general objects built
+        p = params(cline) ! parameters generated
+        call b%build_general_tbox(p, cline, do3d=.false.) ! general objects built
         ! find number of selected cavgs
         call find_ldim_nptcls(p%stk2, lfoo, nsel)
         ! find number of original cavgs
@@ -460,7 +460,7 @@ contains
         type(params) :: p
         integer      :: s, i
         p = params(cline)
-        call b%build_general_tbox(p, cline)
+        call b%build_general_tbox(p, cline, do3d=.false.)
         if( p%errify .eq. 'yes' )then   ! introduce error in input orientations
             if( cline%defined('angerr').or.&
                 cline%defined('sherr') ) call b%a%introd_alig_err(p%angerr, p%sherr)

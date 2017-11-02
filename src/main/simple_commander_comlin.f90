@@ -42,7 +42,7 @@ contains
         integer, allocatable          :: pairs(:,:)
         character(len=:), allocatable :: fname
         p = params(cline, .false.)                           ! constants & derived constants produced
-        call b%build_general_tbox(p, cline, .false., .true.) ! general objects built (no oritab reading)
+        call b%build_general_tbox(p, cline, do3d=.false., nooritab=.true.) ! general objects built (no oritab reading)
         allocate(b%imgs_sym(p%nptcls), stat=alloc_stat)
         allocchk('In: simple_comlin_smat, 1')
         DebugPrint  'analysing this number of objects: ', p%nptcls
@@ -147,8 +147,8 @@ contains
         character(len=32), parameter :: SYMPROJSTK = 'sym_projs.mrc'
         character(len=32), parameter :: SYMPROJTAB = 'sym_projs'//METADATEXT
         integer,           parameter :: NBEST = 30
-        p = params(cline)                                   ! parameters generated
-        call b%build_general_tbox(p, cline, .true., nooritab=.true.) ! general objects built (no oritab reading)
+        p = params(cline) ! parameters generated
+        call b%build_general_tbox(p, cline, do3d=.true., nooritab=.true.) ! general objects built (no oritab reading)
         call b%build_comlin_tbox(p)  ! objects for common lines based alignment built
         ! SETUP
         if( (p%l_distr_exec .and. p%refine.eq.'no') .or. .not.p%l_distr_exec )then

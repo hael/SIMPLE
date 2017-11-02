@@ -89,7 +89,7 @@ contains
             call xprime2D_distr%execute(cline_prime2D_stage1)
             last_iter_stage1 = nint(cline_prime2D_stage1%get_rarg('endit'))
             finaldoc         = trim(ITERFBODY)//int2str_pad(last_iter_stage1,3)//METADATEXT
-            finalcavgs       = trim(trim(CAVGS_ITERFBODY)//int2str_pad(last_iter_stage1,3)//p_master%ext)
+            finalcavgs       = trim(CAVGS_ITERFBODY)//int2str_pad(last_iter_stage1,3)//p_master%ext
             ! prepare stage 2 input -- re-scale
             if( cline%defined('stktab') )then
                  ! update stktab
@@ -122,7 +122,7 @@ contains
             call xprime2D_distr%execute(cline_prime2D_stage2)
             last_iter_stage2 = nint(cline_prime2D_stage2%get_rarg('endit'))
             finaldoc         = trim(ITERFBODY)//int2str_pad(last_iter_stage2,3)//METADATEXT
-            finalcavgs       = trim(trim(CAVGS_ITERFBODY)//int2str_pad(last_iter_stage2,3)//p_master%ext)
+            finalcavgs       = trim(CAVGS_ITERFBODY)//int2str_pad(last_iter_stage2,3)//p_master%ext
             if( cline%defined('stktab') )then
                 ! delete downscaled stack parts (we are done with them)
                 call p_master%stkhandle%del_stktab_files
@@ -145,22 +145,22 @@ contains
             if( p_master%l_chunk_distr )then
                 call cline_makecavgs%delete('ncls')
             endif
-            call cline_makecavgs%set('prg',     'makecavgs')
-            call cline_makecavgs%set('oritab',  trim(finaldoc))
-            call cline_makecavgs%set('nparts',  real(nparts))
-            call cline_makecavgs%set('refs',    trim(finalcavgs))
+            call cline_makecavgs%set('prg',    'makecavgs')
+            call cline_makecavgs%set('oritab', trim(finaldoc))
+            call cline_makecavgs%set('nparts', real(nparts))
+            call cline_makecavgs%set('refs',   trim(finalcavgs))
             call xmakecavgs%execute(cline_makecavgs)
         else ! no auto-scaling
             call xprime2D_distr%execute(cline)
             last_iter_stage2 = nint(cline%get_rarg('endit'))
             finaldoc         = trim(ITERFBODY)//int2str_pad(last_iter_stage2,3)//METADATEXT
-            finalcavgs       = trim(trim(CAVGS_ITERFBODY)//int2str_pad(last_iter_stage2,3)//p_master%ext)
+            finalcavgs       = trim(CAVGS_ITERFBODY)//int2str_pad(last_iter_stage2,3)//p_master%ext
         endif
         ! ranking
-        finalcavgs_ranked = trim(trim(CAVGS_ITERFBODY)//int2str_pad(last_iter_stage2,3)//'_ranked'//p_master%ext)
+        finalcavgs_ranked = trim(CAVGS_ITERFBODY)//int2str_pad(last_iter_stage2,3)//'_ranked'//p_master%ext
         call cline_rank_cavgs%set('oritab',   trim(finaldoc))
         call cline_rank_cavgs%set('stk',      trim(finalcavgs))
-        call cline_rank_cavgs%set('classdoc', 'classdoc.txt')
+        call cline_rank_cavgs%set('classdoc', 'classdoc_'//int2str_pad(last_iter_stage2,3)//'.txt')
         call cline_rank_cavgs%set('outstk',   trim(finalcavgs_ranked))
         call xrank_cavgs%execute( cline_rank_cavgs )
         ! cleanup

@@ -42,8 +42,8 @@ contains
         type(params) :: p
         type(build)  :: b
         integer :: i, cnt, ntot
-        p = params(cline, .false.)          ! parameters generated
-        call b%build_general_tbox(p, cline) ! general objects built
+        p = params(cline, .false.) ! parameters generated
+        call b%build_general_tbox(p, cline, do3d=.false.) ! general objects built
         cnt  = 0
         ntot = p%top-p%fromp+1
         do i=p%fromp,p%top
@@ -183,10 +183,10 @@ contains
         integer, allocatable :: ptcl_positions(:,:)
         real, allocatable    :: shifts(:,:)
         logical              :: here
-        debug=.false. ! declared in local flags
-        p = params(cline)                     ! parameters generated
+        debug=.false.     ! declared in local flags
+        p = params(cline) ! parameters generated
         if( p%box == 0 ) stop 'box=0, something is fishy!'
-        call b%build_general_tbox(p, cline)   ! general objects built
+        call b%build_general_tbox(p, cline, do3d=.false.) ! general objects built
         tfun = ctf(p%smpd, p%kv, p%cs, p%fraca)
         ! set fixed frame
         fixed_frame = nint(real(p%nframes)/2.)

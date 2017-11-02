@@ -100,8 +100,8 @@ contains
         type(build)          :: b
         real, allocatable    :: shvec(:,:)
         integer              :: istate
-        p = params(cline)                           ! parameters generated
-        call b%build_general_tbox(p, cline, .true.) ! general objects built
+        p = params(cline)                   ! parameters generated
+        call b%build_general_tbox(p, cline) ! general objects built
         ! center volume(s)
         allocate(shvec(p%nstates,3))
         do istate=1,p%nstates
@@ -138,7 +138,7 @@ contains
         state = 1
         ! pre-proc
         p = params(cline) ! constants & derived constants produced, mode=2
-        call b%build_general_tbox(p, cline)   ! general objects built
+        call b%build_general_tbox(p, cline) ! general objects built
         call b%vol%read(p%vols(state))
         call b%vol%fwd_ft
         if( cline%defined('fsc') )then

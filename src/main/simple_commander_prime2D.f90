@@ -213,7 +213,12 @@ contains
             p%refs_odd  = 'startcavgs_odd'//p%ext
         endif
         call cavger_calc_and_write_frcs_and_eoavg(p%frcs)
-        call gen2Dclassdoc( b, p, 'classdoc.txt')
+        ! classdoc gen needs to be after calc of FRCs
+        if( cline%defined('which_iter') )then
+            call gen2Dclassdoc( b, p, 'classdoc_'//int2str_pad(p%which_iter,3)//'.txt')
+        else
+            call gen2Dclassdoc( b, p, 'classdoc.txt')
+        endif
         call cavger_write(trim(p%refs),      'merged')
         call cavger_write(trim(p%refs_even), 'even'  )
         call cavger_write(trim(p%refs_odd),  'odd'   )
@@ -309,7 +314,7 @@ contains
                 call b%img%write(p%outstk, iclass)
             end do
         endif
-        call clsdoc_ranked%write('classdoc_ranked.txt')
+        call clsdoc_ranked%write(add2fbody(p%classdoc, '.txt', '_ranked'))
         ! end gracefully
         call simple_end('**** SIMPLE_RANK_CAVGS NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_rank_cavgs
