@@ -70,10 +70,9 @@ contains
         type(ori)  :: orientation
         real       :: norm, corr_thresh, skewness, frac_srch_space
         real       :: extr_thresh, update_frac, reslim
-        integer    :: iptcl, inptcls, istate, iextr_lim, i
+        integer    :: iptcl, inptcls, istate, iextr_lim, i, zero_pop
         integer    :: update_ind, nupdates_target, nupdates, fnr
-        integer    :: statecnt(p%nstates)
-        logical    :: doprint
+        logical    :: doprint, do_extr
 
         if( L_BENCH )then
             t_init = tic()
@@ -134,6 +133,7 @@ contains
             else
                 call b%a%calc_spectral_weights(p%frac)
             endif
+
         else
             call b%a%calc_hard_weights(p%frac)
         endif
@@ -151,16 +151,14 @@ contains
             call b%a%set_all2single('state_balance', 1.0)
         endif
 
-        ! EXTREMAL LOGICS
+        ! EXTREMAL LOGICS PART 1
         if( p%refine.eq.'het' )then
-            iextr_lim = ceiling(2.*log(real(p%nptcls)))
-            if( frac_srch_space < 98. .or. p%extr_iter <= iextr_lim )then
-                extr_thresh = EXTRINITHRESH * cos(PI/2. * real(p%extr_iter-1)/real(iextr_lim)) ! cosine decay
-                extr_thresh = min(EXTRINITHRESH, max(0., extr_thresh))
-                corr_thresh = b%a%extremal_bound(extr_thresh)
-                statecnt(:) = 0
+            zero_pop  = b%a%get_pop(0, 'state', consider_w=.false.)
+            iextr_lim = ceiling(2.*log(real(p%nptcls-zero_pop)))
+            if( which_iter==1 .or.(frac_srch_space <= 98. .and. p%extr_iter <= iextr_lim) )then
+                do_extr = .true.  ! stochastic/SHC in state space
             else
-                corr_thresh = -huge(corr_thresh)
+                do_extr = .false. ! SHC in state space + in-plane search
             endif
         endif
 
@@ -263,22 +261,11 @@ contains
                 endif
             case('het')
                 if(p%oritab .eq. '') stop 'cannot run the refine=het mode without input oridoc (oritab)'
-                if( corr_thresh > TINY )then
-                    write(*,'(A,F8.2)') '>>> PARTICLE RANDOMIZATION(%):', 100.*extr_thresh
-                    write(*,'(A,F8.2)') '>>> CORRELATION THRESHOLD:    ', corr_thresh
-                endif
-                !$omp parallel do default(shared) private(iptcl) schedule(guided) reduction(+:statecnt) proc_bind(close)
+                !$omp parallel do default(shared) private(iptcl) schedule(guided) proc_bind(close)
                 do iptcl=p%fromp,p%top
-                    call primesrch3D(iptcl)%exec_prime3D_srch_het(corr_thresh, statecnt)
+                    call primesrch3D(iptcl)%exec_prime3D_srch_het( do_extr )
                 end do
                 !$omp end parallel do
-                if( corr_thresh > TINY )then
-                    norm = real(sum(statecnt))
-                    do istate=1,p%nstates
-                        print *,'% randomized ptcls for state ',istate,' is ',100.*(real(statecnt(istate))/norm),&
-                            &'; pop=',statecnt(istate)
-                    end do
-                endif
             case ('states')
                 if(p%oritab .eq. '') stop 'cannot run the refine=states mode without input oridoc (oritab)'
                 !$omp parallel do default(shared) private(iptcl) schedule(guided) proc_bind(close)
@@ -286,18 +273,17 @@ contains
                     call primesrch3D(iptcl)%exec_prime3D_srch(p%lp, greedy=.true., nnmat=b%nnmat)
                 end do
                 !$omp end parallel do
-            case ('tseries')
-                if(p%oritab .eq. '') stop 'cannot run the refine=tseries mode without input oridoc (oritab)'
-                !$omp parallel do default(shared) private(iptcl) schedule(guided) proc_bind(close)
-                do iptcl=p%fromp,p%top
-                    call primesrch3D(iptcl)%exec_prime3D_srch(p%lp, greedy=.false.)
-                end do
-                !$omp end parallel do
             case DEFAULT
                 write(*,*) 'The refinement mode: ', trim(p%refine), ' is unsupported'
                 stop
         end select
-        ! primesrch3D & pftcc not needed anymore
+
+        ! EXTREMAL LOGICS PART 2
+        if( p%refine.eq.'het' )then
+            call prime3D_srch_extr(b%a, p, do_extr)
+        endif
+
+        ! CLEANUP primesrch3D & pftcc
         call cleanprime3D_srch(p)
         call pftcc%kill
         deallocate(primesrch3D)

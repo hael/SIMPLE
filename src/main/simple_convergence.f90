@@ -252,7 +252,7 @@ contains
         write(*,'(A,1X,F7.4)') '>>> CORRELATION        :', self%corr
         ! print the overlaps and pops for the different states
         do istate=1,self%pp%nstates
-            write(*,'(A,I2,1X,A,1X,I6)') '>>> STATE ',istate,'POPULATION:', nint(statepops(istate))
+            write(*,'(A,I2,1X,A,1X,I7)') '>>> STATE ',istate,'POPULATION:', nint(statepops(istate))
         end do
         if( self%mi_state > HET_MI_STATE_LIM .and.&
             self%frac     > HET_FRAC_LIM     )then
