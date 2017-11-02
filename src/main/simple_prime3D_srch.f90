@@ -214,7 +214,9 @@ contains
                 stop 'Unknown refinement mode; simple_hadamard3D_matcher; prep4primesrch3D'
         end select
         call rt%kill
-        if( any(srch_order == 0) ) stop 'Invalid index in srch_order; simple_hadamard3D_matcher :: prep4primesrch3D'
+        if( allocated(srch_order) )then
+            if( any(srch_order == 0) ) stop 'Invalid index in srch_order; simple_hadamard3D_matcher :: prep4primesrch3D'
+        endif
         ! states existence
         if( p%oritab.ne.'' )then
             state_exists = b%a%states_exist(p%nstates)
