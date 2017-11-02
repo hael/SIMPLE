@@ -413,7 +413,7 @@ contains
         end subroutine moveto
 
         function interpolate(a, fa, fpa, b, fb, fpb, fpb_nan, xmin, xmax, order) result(alpha)
-            use, intrinsic :: IEEE_ARITHMETIC, only: IEEE_IS_FINITE
+            !use, intrinsic :: IEEE_ARITHMETIC, only: IEEE_IS_FINITE
             real(dp), intent(in) :: a, fa, fpa, b, fb, fpb, xmin, xmax
             integer, intent(in) :: order
             logical, intent(in) :: fpb_nan
