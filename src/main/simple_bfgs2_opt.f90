@@ -136,7 +136,7 @@ contains
             call prepare_wrapper
             ! Prepare 1d minimisation parameters
             self%rho        = 0.01_8
-            self%sigma      = spec%gtol
+            self%sigma      = spec%ftol
             self%tau1       = 9.0_8
             self%tau2       = 0.05_8
             self%tau3       = 0.5_8
