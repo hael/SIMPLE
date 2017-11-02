@@ -5,8 +5,6 @@ module simple_opt_helpers
     implicit none
     !< constants for return values
     integer, parameter  :: OPT_STATUS_SUCCESS = 1, OPT_STATUS_CONTINUE = 0, OPT_STATUS_ERROR = -1
-    real, parameter     :: SINGLE_EPSILON = 1.192092895507812E-7
-    real(dp), parameter :: DOUBLE_EPSILON = 2.2204460492503131e-16_8
 contains
     subroutine take_step (x, p, step, lambda, x1)
         real(dp), intent(in) :: x(:), p(:), step, lambda
@@ -23,7 +21,7 @@ contains
         class(*),        intent(inout) :: fun_self
         real(dp) :: stepb, fb, u
 10      u = abs(pg * lambda * stepc)  ! label: trial
-        stepb = 0.5 * stepc * u / ((fc - fa) + u)
+        stepb = 0.5_8 * stepc * u / ((fc - fa) + u)
         call take_step(x, p , stepb, lambda, x1)
         if (vect_equal(x, x1)) then
             ! Take fast exit if trial point does not move from initial point
@@ -39,7 +37,7 @@ contains
         if (global_debug .and. global_verbose) then
             write (*,*) 'trying stepb = ', stepb, 'fb = ', fb
         end if
-        if ((fb >= fa) .and. (stepb > 0.0)) then
+        if ((fb >= fa) .and. (stepb > 0.0_8)) then
             ! downhill step failed, reduce step-size and try again
             fc = fb
             stepc = stepb
@@ -80,20 +78,20 @@ contains
         end if
         dw = w - u
         dv = v - u
-        du = 0.
+        du = 0.0_8
         e1 = ((fv - fu) * dw * dw + (fu - fw) * dv * dv)
-        e2 = 2.0 * ((fv - fu) * dw + (fu - fw) * dv)
+        e2 = 2.0_8 * ((fv - fu) * dw + (fu - fw) * dv)
         if (e2 .ne. 0.0_8) then
             du = e1 / e2
         end if
-        if ((du > 0.0) .and. (du < (stepc - stepb)) .and. (abs(du) < 0.5 * old2)) then
+        if ((du > 0.0_8) .and. (du < (stepc - stepb)) .and. (abs(du) < 0.5_8 * old2)) then
             stepm = u + du
-        else if ((du < 0.0) .and. (du > (stepa - stepb)) .and. (abs(du) < 0.5 * old2)) then
+        else if ((du < 0.0_8) .and. (du > (stepa - stepb)) .and. (abs(du) < 0.5_8 * old2)) then
             stepm = u + du
         else if ((stepc - stepb) > (stepb - stepa)) then
-            stepm = 0.38 * (stepc - stepb) + stepb
+            stepm = 0.38_8 * (stepc - stepb) + stepb
         else
-            stepm = stepb - 0.38 * (stepb - stepa)
+            stepm = stepb - 0.38_8 * (stepb - stepa)
         end if
         call take_step(x, p, stepm, lambda, x1)
         fm = spec%eval_f(fun_self,x1)

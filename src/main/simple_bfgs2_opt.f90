@@ -123,7 +123,7 @@ contains
         subroutine bfgs2_set
             self%bfgs2_iter = 0
             self%step       = spec%max_step
-            self%delta_f    = 0.
+            self%delta_f    = 0.0_8
             ! Use the gradient as the initial direction
             call spec%eval_fdf(fun_self, spec%x_8, self%f, self%gradient)
             self%x0         = spec%x_8
@@ -163,14 +163,14 @@ contains
             real(dp) :: alpha, alpha1, pg, dir, f0, del
             real(dp) :: dxg, dgg, dxdg, dgnorm, A, B;
             integer :: status
-            alpha = 0.
+            alpha = 0.0_8
             f0 = self%f
             if ((self%pnorm == 0.0_8) .or. (self%g0norm == 0.0_8) .or. (self%fp0 == 0.0_8)) then
                 status = OPT_STATUS_ERROR
                 return
             end if
             if (self%delta_f < 0.0_8) then
-                del = max(-self%delta_f, DOUBLE_EPSILON * abs(f0))
+                del = max(-self%delta_f, EPSILON(alpha) * abs(f0))
                 alpha1 = min(1.0_8, 2.0_8 * del / (-self%fp0))
             else
                 alpha1 = abs(self%step)
@@ -214,9 +214,9 @@ contains
             ! update direction and fp0
             pg = dot_product(self%p, self%gradient)
             if (pg >= 0.) then
-                dir = -1.
+                dir = -1.0_8
             else
-                dir = 1.
+                dir = 1.0_8
             end if
             self%p     = self%p * dir / self%pnorm
             self%pnorm = norm2(self%p)
@@ -300,7 +300,7 @@ contains
                 upper = b - tau3 * delta
                 alpha = interpolate(a, fa, fpa, b, fb, fpb, fpb_nan, lower, upper, order)
                 falpha = wrap_f(alpha)
-                if ((a-alpha)*fpa <= DOUBLE_EPSILON) then
+                if ((a-alpha)*fpa <= EPSILON(rho)) then
                     ! roundoff prevents progress
                     write (*,*) 'simple_bfgs2_opt: roundoff prevents progress'
                     status = OPT_STATUS_ERROR
@@ -540,9 +540,9 @@ contains
                     x1 =  r
                 else
                     if (b > 0.0_8) then
-                        sgnb = 1.
+                        sgnb = 1.0_8
                     else
-                        sgnb = -1.
+                        sgnb = -1.0_8
                     end if
                     temp = -0.5_8 * (b + sgnb * sqrt(disc))
                     r1 = temp / a

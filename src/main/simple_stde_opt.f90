@@ -80,7 +80,7 @@ contains
                     write (*,*) 'simple_stde_opt: error in minimizer routine'
                     return
                 end if
-                status = test_gradient(self%gradient, 0.0001_8)
+                status = test_gradient(self%gradient, real(spec%gtol, kind=8))
                 if ((global_debug).and.(global_verbose)) then
                     if (status == OPT_STATUS_SUCCESS) then
                         write (*,*) 'Minimum found at:'

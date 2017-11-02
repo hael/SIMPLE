@@ -102,7 +102,7 @@ contains
     !>  \brief  specifies the optimization parameters
     subroutine specify( self, str_opt, ndim, mode, ldim, ftol, gtol, maxits,&
     nrestarts, limits, limits_init, cyclic, verbose_arg, debug_arg, npop,&
-    cfac, warn_arg, nbest, nstates, stepsz, npeaks, nnn )
+    cfac, warn_arg, nbest, nstates, stepsz, npeaks, nnn, max_step )
         class(opt_spec),            intent(inout) :: self                !< instance
         character(len=*),           intent(in)    :: str_opt             !< string descriptor (of optimization routine to be used)
         integer,                    intent(in)    :: ndim                !< problem dimensionality
@@ -125,6 +125,7 @@ contains
         integer,          optional, intent(in)    :: nnn                 !< number of nearest neighbors
         real,             optional, intent(in)    :: cfac                !< convergence factor (bfgs)
         real,             optional, intent(in)    :: stepsz(ndim)        !< step sizes for brute force search
+        real,             optional, intent(in)    :: max_step            !< initial step size
         integer :: alloc_stat
         call self%kill
         ! take care of optimizer specifics
@@ -173,6 +174,7 @@ contains
         if(present(nrestarts))   self%nrestarts = nrestarts
         if(present(nstates))     self%nstates   = nstates
         if(present(nnn))         self%nnn       = nnn
+        if(present(max_step))    self%max_step  = max_step
         if(present(limits))      call self%set_limits(limits)
         if(present(limits_init)) call self%set_limits_init(limits_init)
         allocate( self%cyclic(self%ndim), stat=alloc_stat )
@@ -326,7 +328,8 @@ contains
             write (*,*) 'error : simple_opt_spec: costfun not associated'
             return
         end if
-        f   = self%costfun(fun_self, real(x, kind=4), self%ndim)
+        self%x_4_tmp = real(x, kind=4)
+        f   = self%costfun(fun_self, self%x_4_tmp, self%ndim)
         self%nevals = self%nevals  + 1
     end function eval_f_8
 
