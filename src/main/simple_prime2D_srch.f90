@@ -86,14 +86,13 @@ contains
         endif
         ! make random reference direction order
         allocate(srch_order(p%fromp:p%top,p%ncls), source=0)
-        !$omp parallel do default(shared) private(iptcl,rt,prev_class) schedule(static) proc_bind(close)
+        rt = ran_tabu(p%ncls)
         do iptcl = p%fromp, p%top
-            rt = ran_tabu(p%ncls)
+            call rt%reset
             call rt%ne_ran_iarr( srch_order(iptcl,:) )
             prev_class = nint(b%a%get(iptcl,'class'))
             call put_last(prev_class, srch_order(iptcl,:))
         end do
-        !$omp end parallel do
         if( any(srch_order == 0) ) stop 'Invalid index in srch_order; simple_prime2D_srch :: prep4prime2D_srch'
         call rt%kill
     end subroutine prep4prime2D_srch
