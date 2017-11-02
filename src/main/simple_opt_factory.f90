@@ -20,10 +20,9 @@ private
 !> abstract optimisation factory type
 type :: opt_factory
     private
-    class(optimizer), allocatable :: optimizer_type
+    class(optimizer), pointer :: optimizer_type
   contains
     procedure :: new
-    procedure :: kill
 end type opt_factory
 
 contains
@@ -33,8 +32,6 @@ contains
         class(opt_factory), target, intent(inout) :: self !< instance
         class(opt_spec),            intent(inout) :: spec !< specification
         class(optimizer), pointer                 :: ptr  !< pointer to constructed object
-        ptr => null()
-        call self%kill
         select case(spec%str_opt)
             case('bfgs')
                 allocate(bfgs_opt           :: self%optimizer_type)
@@ -62,15 +59,6 @@ contains
         end select
         call self%optimizer_type%new(spec)
         ptr => self%optimizer_type
-    end subroutine
-
-    !> \brief  is a destructor
-    subroutine kill( self )
-        class(opt_factory), intent(inout) :: self
-        if( allocated(self%optimizer_type) )then
-            call self%optimizer_type%kill
-            deallocate(self%optimizer_type)
-        endif
     end subroutine
 
 end module simple_opt_factory
