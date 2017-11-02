@@ -203,22 +203,27 @@ end function test_loop
        integer(4)    :: count4, irate4, mymax4
        integer(8)    :: count8, irate8, mymax8
        real(4)       :: rrate4
-       
-       call system_clock(count=count1, count_rate=irate4, count_max=mymax4)
-       if (count1.ne.-127.or.irate4.ne.0.or.mymax4.ne.0) call abort
-       call system_clock(count=count1, count_rate=rrate4, count_max=mymax1)
-       if (count1.ne.-127.or.rrate4.ne.0.0.or.mymax4.ne.0) call abort
+#if defined(GNU) && __GNUC__ < 5
+#define NOREAL4CLOCK
+#endif
+#ifdef NOREAL4CLOCK
+       if (FC_COMPILER_VERSION(1) >= 5)then
+       call system_clock(count=count4, count_rate=irate4, count_max=mymax4)
+       if (count4.ne.-127.or.irate4.ne.0.or.mymax4.ne.0) call abort
+       !call system_clock(count=count4, count_rate=rrate4, count_max=mymax1)
+       !if (count4.ne.-127.or.rrate4.ne.0.0.or.mymax4.ne.0) call abort
        call system_clock(count=count2, count_rate=irate2, count_max=mymax2)
        if (count2.ne.-32767.or.irate2.ne.0.or.mymax2.ne.0) call abort
-       call system_clock(count=count2, count_rate=rrate4, count_max=mymax2)
-       if (count2.ne.-32767.or.rrate4.ne.0.0.or.mymax2.ne.0) call abort
+       !call system_clock(count=count4, count_rate=rrate4, count_max=mymax2)
+       !if (count4.ne.-32767.or.rrate4.ne.0.0.or.mymax2.ne.0) call abort
        call system_clock(count=count4, count_rate=irate4, count_max=mymax4)
        if (irate4.ne.1000.or.mymax4.ne.huge(0_4)) call abort
-       call system_clock(count=count4, count_rate=rrate4, count_max=mymax4)
-       if (rrate4.ne.1000.0.or.mymax4.ne.huge(0_4)) call abort
+       !call system_clock(count=count4, count_rate=rrate4, count_max=mymax4)
+       !if (rrate4.ne.1000.0.or.mymax4.ne.huge(0_4)) call abort
        call system_clock(count=count8, count_rate=irate8, count_max=mymax8)
        if (irate8.ne.1000000000.or.mymax4.ne.huge(0_8)) call abort
-
+    end if
+#endif
   end subroutine test_precision_timer
 
 end module simple_timer_basic_test

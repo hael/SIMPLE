@@ -221,6 +221,8 @@ contains
             success(wopt,wfun) = success(wopt,wfun)+1
             nevals(wopt,wfun)  = nevals(wopt,wfun)+spec%nevals
         end if
+        call opt_ptr%kill
+        deallocate(opt_ptr)
     end subroutine test_optimizer
 
     subroutine simple_test_bforce_opt

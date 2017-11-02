@@ -46,6 +46,10 @@ contains
         ! set optimizer cost function
         call ospec%set_costfun(ftexp_shsrch_cost)
         ! generate optimizer object with the factory
+        if (associated(nlopt)) then
+            call nlopt%kill
+            deallocate(nlopt)
+        end if
         call ofac%new(ospec, nlopt)
     end subroutine ftexp_shsrch_init
 
@@ -81,6 +85,10 @@ contains
                 ! set optimizer cost function
                 call ospec%set_costfun(ftexp_shsrch_cost)
                 ! generate optimizer object with the factory
+                if (associated(nlopt)) then
+                    call nlopt%kill
+                    deallocate(nlopt)
+                end if
                 call ofac%new(ospec, nlopt)
             endif
             ospec%x = prev_shift

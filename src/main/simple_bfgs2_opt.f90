@@ -136,7 +136,7 @@ contains
             call prepare_wrapper
             ! Prepare 1d minimisation parameters
             self%rho        = 0.01_8
-            self%sigma      = spec%gtol
+            self%sigma      = spec%ftol
             self%tau1       = 9.0_8
             self%tau2       = 0.05_8
             self%tau3       = 0.5_8
@@ -413,7 +413,7 @@ contains
         end subroutine moveto
 
         function interpolate(a, fa, fpa, b, fb, fpb, fpb_nan, xmin, xmax, order) result(alpha)
-            use, intrinsic :: IEEE_ARITHMETIC, only: IEEE_IS_FINITE
+            !use, intrinsic :: IEEE_ARITHMETIC, only: IEEE_IS_FINITE
             real(dp), intent(in) :: a, fa, fpa, b, fb, fpb, xmin, xmax
             integer, intent(in) :: order
             logical, intent(in) :: fpb_nan
