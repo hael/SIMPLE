@@ -90,6 +90,10 @@ contains
         else
             call simple_stop ('Unsupported mode; simple_comlin_srch::comlin_srch_init')
         endif
+        if (associated(nlopt)) then
+            call nlopt%kill
+            deallocate(nlopt)
+        end if
         call ofac%new(ospec, nlopt)
     end subroutine comlin_srch_init
 
