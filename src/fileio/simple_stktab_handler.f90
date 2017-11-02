@@ -44,18 +44,20 @@ end type
 contains
 
     subroutine new( self, filetabname )
-		use simple_fileio,  only: read_filetable
+		use simple_fileio,  only: read_filetable, fopen, fclose
 		use simple_imghead, only: find_ldim_nptcls 
 		class(stktab_handler), target, intent(inout) :: self
 		character(len=*),              intent(in)    :: filetabname
 		character(len=STDLEN), allocatable :: micnames(:) 
-		integer :: imic, ldim(3), pind_cnt, istart, istop, nptcls, iptcl
+		integer :: imic, ldim(3), pind_cnt, istart, istop, nptcls, iptcl, fnr
 		! take care of micrograph stacks
 		call read_filetable(filetabname, micnames)
 		self%nmics = size(micnames)
 		allocate(self%mics(self%nmics))
 		istart = 1
 		istop  = 0
+		call fopen(fnr, FILE='stktab_info.txt', STATUS='REPLACE', action='WRITE')
+		write(fnr,'(a)') '#MIC STKNAME #NPTCLS IN STK #FROMP #TOP'
 		do imic=1,self%nmics
 			allocate(self%mics(imic)%stkname, source=trim(micnames(imic)))
 			call find_ldim_nptcls(trim(micnames(imic)), ldim, nptcls)
@@ -74,7 +76,9 @@ contains
 			self%mics(imic)%fromp = istart
 			self%mics(imic)%top   = istop
 			istart = istart + nptcls
+			write(fnr,'(a,1x,i6,1x,i10,1x,i10)') self%mics(imic)%stkname, nptcls, self%mics(imic)%fromp, self%mics(imic)%top
 		end do
+		call fclose(fnr)
 		self%nptcls = self%mics(self%nmics)%top
 		! take care of particle entries
 		allocate(self%pens(self%nptcls))

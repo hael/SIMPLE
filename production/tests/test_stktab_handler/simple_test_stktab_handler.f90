@@ -10,8 +10,8 @@ type(stktab_handler)          :: stkhandle
 character(len=:), allocatable :: stkname
 integer                       :: nmics, nptcls, ldim(3), iptcl, ind
 
-call test_stktab_handler
-stop
+! call test_stktab_handler
+! stop
 
 call stkhandle%new(ftab)
 nmics  = stkhandle%get_nmics()
