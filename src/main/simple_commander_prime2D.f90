@@ -101,8 +101,10 @@ contains
         ! even/odd partitioning
         if( b%a%get_nevenodd() == 0 ) call b%a%partition_eo
         ! write
-        if( p%l_distr_exec .and. nint(cline%get_rarg('part')) .eq. 1 )then
-            call binwrite_oritab(p%oritab, b%a, [1,p%nptcls])
+        if( p%l_distr_exec )then
+            if( nint(cline%get_rarg('part')) .eq. 1 )then
+                call binwrite_oritab(p%oritab, b%a, [1,p%nptcls])
+            endif
         else
             call binwrite_oritab(p%oritab, b%a, [1,p%nptcls])
         endif
