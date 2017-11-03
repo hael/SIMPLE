@@ -698,8 +698,8 @@ contains
                 call cavgs_merged(istate,icls)%fwd_ft
                 call cavgs_even(istate,icls)%fwd_ft
                 call cavgs_odd(istate,icls)%fwd_ft
-                call cavgs_even(istate,icls)%insert_lowres(cavgs_merged(istate,icls), find)
-                call cavgs_odd(istate,icls)%insert_lowres(cavgs_merged(istate,icls), find)
+                call cavgs_even(istate,icls)%insert_lowres_serial(cavgs_merged(istate,icls), find)
+                call cavgs_odd(istate,icls)%insert_lowres_serial(cavgs_merged(istate,icls), find)
                 call cavgs_merged(istate,icls)%bwd_ft
                 call cavgs_even(istate,icls)%bwd_ft
                 call cavgs_odd(istate,icls)%bwd_ft

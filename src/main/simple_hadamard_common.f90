@@ -675,6 +675,7 @@ contains
         integer               :: s, find4eoavg
         real                  :: res05s(p%nstates), res0143s(p%nstates)
         character(len=STDLEN) :: pprocvol
+        character(len=32)     :: resmskname
         ! init
         res0143s = 0.
         res05s   = 0.
@@ -696,9 +697,10 @@ contains
                 endif
                 p%vols_even(s) = add2fbody(p%vols(s), p%ext, '_even')
                 p%vols_odd(s)  = add2fbody(p%vols(s), p%ext, '_odd')
+                resmskname     = 'resmask'//p%ext
                 call b%eorecvols(s)%sum_eos
-                call b%eorecvols(s)%sampl_dens_correct_eos(s, p%vols_even(s), p%vols_odd(s), find4eoavg)
-                call gen_projection_frcs( b, p, cline, p%vols_even(s), p%vols_odd(s), s, b%projfrcs)
+                call b%eorecvols(s)%sampl_dens_correct_eos(s, p%vols_even(s), p%vols_odd(s), resmskname, find4eoavg)
+                call gen_projection_frcs( b, p, cline, p%vols_even(s), p%vols_odd(s), resmskname, s, b%projfrcs)
                 call b%projfrcs%write('frcs_state'//int2str_pad(s,2)//'.bin')
                 call gen_anisotropic_optlp(b%vol2, b%projfrcs, b%e_bal, s, p%pgrp)
                 call b%vol2%write('aniso_optlp_state'//int2str_pad(s,2)//p%ext)
@@ -742,14 +744,14 @@ contains
     end subroutine eonorm_struct_facts
 
     !>  \brief generate projection FRCs from even/odd pairs
-    subroutine gen_projection_frcs( b, p, cline, ename, oname, state, projfrcs )
+    subroutine gen_projection_frcs( b, p, cline, ename, oname, resmskname, state, projfrcs )
         use simple_oris,            only: oris
         use simple_projector_hlev,  only: projvol
         use simple_projection_frcs, only: projection_frcs
         class(build),           intent(inout) :: b
         class(params),          intent(inout) :: p
         class(cmdline),         intent(inout) :: cline
-        character(len=*),       intent(in)    :: ename, oname
+        character(len=*),       intent(in)    :: ename, oname, resmskname
         integer,                intent(in)    :: state
         class(projection_frcs), intent(inout) :: projfrcs
         type(oris)               :: e_space
@@ -796,8 +798,7 @@ contains
                 ! masking
                 if( cline%defined('mskfile') )then
                     ! mask provided
-                    
-                    call mskvol%read(p%mskfile)
+                    call mskvol%read(resmskname)
                     call vol%zero_background
                     call vol%mul(mskvol)
                 else

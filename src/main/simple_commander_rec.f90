@@ -126,13 +126,14 @@ contains
                 use simple_filterer, only: gen_anisotropic_optlp
                 character(len=*), intent(in) :: recname
                 character(len=STDLEN)        :: volname
-                character(len=32)            :: eonames(2)
+                character(len=32)            :: eonames(2), resmskname
                 volname    = trim(recname)//trim(p%ext)
                 eonames(1) = trim(recname)//'_even'//trim(p%ext)
                 eonames(2) = trim(recname)//'_odd'//trim(p%ext)
+                resmskname = 'resmask'//p%ext
                 call b%eorecvol%sum_eos
-                call b%eorecvol%sampl_dens_correct_eos(state, eonames(1), eonames(2), find4eoavg)
-                call gen_projection_frcs( b, p, cline, eonames(1), eonames(2), s, b%projfrcs)
+                call b%eorecvol%sampl_dens_correct_eos(state, eonames(1), eonames(2), resmskname, find4eoavg)
+                call gen_projection_frcs( b, p, cline, eonames(1), eonames(2), resmskname, s, b%projfrcs)
                 call b%projfrcs%write('frcs_state'//int2str_pad(state,2)//'.bin')
                 call gen_anisotropic_optlp(b%vol2, b%projfrcs, b%e_bal, s, p%pgrp)
                 call b%vol2%write('aniso_optlp_state'//int2str_pad(state,2)//p%ext)

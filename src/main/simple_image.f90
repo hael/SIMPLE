@@ -132,7 +132,9 @@ type :: image
     procedure, private :: add_4
     procedure, private :: add_5
     generic            :: add => add_1, add_2, add_3, add_4, add_5
-    procedure          :: add_workshare
+    procedure, private :: add_workshare_1
+    procedure, private :: add_workshare_2
+    generic            :: add_workshare => add_workshare_1, add_workshare_2
     procedure, private :: subtr_1
     procedure, private :: subtr_2
     procedure, private :: subtr_3
@@ -213,7 +215,9 @@ type :: image
     procedure          :: ccpeak_offset
     procedure          :: minmax
     procedure          :: rmsd
-    procedure          :: stats
+    procedure, private :: stats_1
+    procedure, private :: stats_2
+    generic            :: stats => stats_1, stats_2
     procedure          :: noisesdev
     procedure          :: mean
     procedure          :: contains_nans
@@ -243,6 +247,7 @@ type :: image
     ! MODIFIERS
     procedure          :: insert
     procedure          :: insert_lowres
+    procedure          :: insert_lowres_serial
     procedure          :: inv
     procedure          :: ran
     procedure          :: gauran
@@ -2009,7 +2014,7 @@ contains
         endif
     end subroutine add_5
 
-    subroutine add_workshare( self1, self1_to_add, self2, self2_to_add, self3, self3_to_add, self4, self4_to_add )
+    subroutine add_workshare_1( self1, self1_to_add, self2, self2_to_add, self3, self3_to_add, self4, self4_to_add )
         class(image),   intent(inout) :: self1, self2, self3, self4
         class(image),   intent(in)    :: self1_to_add, self2_to_add, self3_to_add, self4_to_add
         !$omp parallel workshare proc_bind(close)
@@ -2018,7 +2023,25 @@ contains
         self3%cmat = self3%cmat + self3_to_add%cmat
         self4%cmat = self4%cmat + self4_to_add%cmat
         !$omp end parallel workshare
-    end subroutine add_workshare
+    end subroutine add_workshare_1
+
+    subroutine add_workshare_2( self, self_to_add, rho, rho_to_add )
+        class(image),       intent(inout) :: self
+        class(image),       intent(in)    :: self_to_add
+        real(kind=c_float), intent(inout) :: rho(:,:,:)
+        real(kind=c_float), intent(in)    :: rho_to_add(:,:,:)
+        if( self%ft )then
+            !$omp parallel workshare proc_bind(close)
+            self%cmat = self%cmat+self_to_add%cmat
+            rho       = rho + rho_to_add
+            !$omp end parallel workshare
+        else
+            !$omp parallel workshare proc_bind(close)
+            self%rmat = self%rmat+self_to_add%rmat
+            rho       = rho + rho_to_add
+            !$omp end parallel workshare
+        endif
+    end subroutine add_workshare_2
 
     !>  \brief subtraction is for image subtraction(-)
     !! \param self_from lhs
@@ -4112,7 +4135,7 @@ contains
     !! \param med median
     !! \param errout error flag
     !!
-    subroutine stats( self, which, ave, sdev, maxv, minv, msk, med, errout )
+    subroutine stats_1( self, which, ave, sdev, maxv, minv, msk, med, errout )
         class(image),      intent(inout) :: self
         character(len=*),  intent(in)    :: which
         real,              intent(out)   :: ave, sdev, maxv, minv
@@ -4147,7 +4170,7 @@ contains
         else if( which.eq.'foreground' )then
             background = .false.
         else
-            stop 'unrecognized parameter: which; stats; simple_image'
+            stop 'unrecognized parameter: which; stats_1; simple_image'
         endif
         allocate( pixels(product(self%ldim)), stat=alloc_stat )
         allocchk('backgr; simple_image')
@@ -4210,10 +4233,45 @@ contains
         if( present(errout) )then
             errout = err
         else
-            if( err ) write(*,'(a)') 'WARNING: variance zero; stats; simple_image'
+            if( err ) write(*,'(a)') 'WARNING: variance zero; stats_1; simple_image'
         endif
         if( didft ) call self%fwd_ft
-    end subroutine stats
+    end subroutine stats_1
+
+    !> \brief stats  is for providing within mask statistics
+    !! \param mskimg binary mask image
+    !! \param ave Geometric mean of pixels within mask
+    !! \param sdev Standard Deviation of pixels within mask
+    !! \param maxv maximum value within mask
+    !! \param minv minimum value within mask
+    !! \param m optional input mask
+    !! \param med median
+    !! \param errout error flag
+    !!
+    subroutine stats_2( self, mskimg, ave, sdev, maxv, minv, med, errout )
+        class(image),      intent(inout) :: self
+        class(image),      intent(in)    :: mskimg
+        real,              intent(out)   :: ave, sdev, maxv, minv
+        real,    optional, intent(out)   :: med
+        logical, optional, intent(out)   :: errout
+        real              :: var
+        logical           :: err
+        real, allocatable :: pixels(:)
+        ! FT
+        if( self%ft ) stop 'not for FTed imgs; simple_image :: stats_2'
+        pixels = pack(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)),&
+            &mskimg%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) > 0.95 )
+        maxv = maxval(pixels)
+        minv = minval(pixels)
+        call moment( pixels, ave, sdev, var, err )
+        if( present(med) ) med  = median_nocopy(pixels)
+        deallocate( pixels )
+        if( present(errout) )then
+            errout = err
+        else
+            if( err ) write(*,'(a)') 'WARNING: variance zero; stats_2; simple_image'
+        endif
+    end subroutine stats_2
 
     !>  \brief minmax to get the minimum and maximum values in an image
     !! \return  mm 2D element (minimum , maximum)
@@ -4920,6 +4978,8 @@ contains
         if( .not. self%ft        ) stop 'image to be modified assumed to be FTed; image :: insert_lowres'
         if( .not. self2insert%ft ) stop 'image to insert assumed to be FTed; image :: insert_lowres'
         lims = self%fit%loop_lims(2)
+        !$omp parallel do collapse(3) default(shared) private(h,k,l,sh,phys,comp)&
+        !$omp schedule(static) proc_bind(close)
         do h=lims(1,1),lims(1,2)
             do k=lims(2,1),lims(2,2)
                 do l=lims(3,1),lims(3,2)
@@ -4934,7 +4994,34 @@ contains
                 end do
             end do
         end do
+        !$omp end parallel do
     end subroutine insert_lowres
+
+    ! inserts the low-resolution information from one image into another
+    subroutine insert_lowres_serial( self, self2insert, find )
+        class(image), intent(inout) :: self
+        class(image), intent(in)    :: self2insert
+        integer,      intent(in)    :: find
+        integer :: lims(3,2), phys(3), h, k, l, sh
+        complex :: comp
+        if( .not. self%ft        ) stop 'image to be modified assumed to be FTed; image :: insert_lowres'
+        if( .not. self2insert%ft ) stop 'image to insert assumed to be FTed; image :: insert_lowres'
+        lims = self%fit%loop_lims(2)
+        do h=lims(1,1),lims(1,2)
+            do k=lims(2,1),lims(2,2)
+                do l=lims(3,1),lims(3,2)
+                    ! find shell
+                    sh = nint(hyp(real(h),real(k),real(l)))
+                    if( sh <= find )then
+                        ! insert component
+                        phys = self%comp_addr_phys([h,k,l])
+                        comp = self2insert%get_fcomp([h,k,l],phys)
+                        call self%set_fcomp([h,k,l],phys,comp)
+                    endif
+                end do
+            end do
+        end do
+    end subroutine insert_lowres_serial
 
     !>  \brief  is for inverting an image
     subroutine inv( self )
