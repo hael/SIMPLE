@@ -163,7 +163,6 @@ contains
                 p%lp = calc_lowpass_lim( p%kfromto(2), p%boxmatch, p%smpd )
                 p%lp_dyn = p%lp
                 call b%a%set_all2single('lp',p%lp)
-                print *,'lp lim:',p%lp
             case('no')
                 ! set Fourier index range
                 p%kfromto(1) = max(2, calc_fourier_index( p%hp, p%boxmatch, p%smpd ))
@@ -561,7 +560,7 @@ contains
         integer :: ldim(3)
         logical :: shellnorm_and_filter
         shellnorm_and_filter = .true.
-        if( p%refine.eq.'het' )shellnorm_and_filter = .false.
+        if( p%refine.eq.'het' .or. p%nstates>1 )shellnorm_and_filter = .false.
         ! ensure correct b%vol dim
         call b%vol%new([p%box,p%box,p%box],p%smpd)
         call b%vol%read(volfname)

@@ -158,15 +158,15 @@ contains
         endif
         ! search order & previous projection direction
         allocate(prev_proj(p%fromp:p%top), source=0)
+            !$omp parallel do default(shared) private(iptcl) schedule(static) proc_bind(close)
+            do iptcl = p%fromp, p%top
+                prev_proj(iptcl) = b%e%find_closest_proj(b%a%get_ori(iptcl))
+            enddo
+            !$omp end parallel do
         select case( trim(p%refine) )
             case( 'het' )
                 allocate(het_corrs(p%fromp:p%top,p%nstates),source=-1.)
                 allocate(prev_states(p%fromp:p%top),source=0)
-                !$omp parallel do default(shared) private(iptcl) schedule(static) proc_bind(close)
-                do iptcl = p%fromp, p%top
-                    prev_proj(iptcl) = b%e%find_closest_proj(b%a%get_ori(iptcl))
-                enddo
-                !$omp end parallel do
             case( 'states' )
                 allocate(srch_order(p%fromp:p%top, p%nnn), source=0)
                 rt = ran_tabu(p%nnn)
@@ -174,9 +174,7 @@ contains
                     prev_state          = nint(b%a%get(iptcl, 'state'))
                     srch_order(iptcl,:) = b%nnmat(iptcl,:) + (prev_state - 1) * p%nspace
                     call rt%reset
-                    call rt%shuffle( srch_order(iptcl,:) )
-                    prev_proj(iptcl)    = b%e%find_closest_proj(b%a%get_ori(iptcl))
-                    prev_ref            = (prev_state - 1) * p%nspace + prev_proj(iptcl)
+                    prev_ref = (prev_state - 1) * p%nspace + prev_proj(iptcl)
                     call put_last(prev_ref, srch_order(iptcl,:))
                 enddo
             case( 'neigh','shcneigh', 'greedyneigh' )
@@ -184,9 +182,8 @@ contains
                 allocate(srch_order(p%fromp:p%top, nnnrefs), source=0)
                 rt = ran_tabu(nnnrefs)
                 do iptcl = p%fromp, p%top   
-                    prev_state       = nint(b%a%get(iptcl, 'state'))
-                    prev_proj(iptcl) = b%e%find_closest_proj(b%a%get_ori(iptcl))
-                    prev_ref         = (prev_state - 1)*p%nspace + prev_proj(iptcl)
+                    prev_state = nint(b%a%get(iptcl, 'state'))
+                    prev_ref   = (prev_state - 1)*p%nspace + prev_proj(iptcl)
                     do istate = 0, p%nstates - 1
                         i = istate * p%nnn + 1
                         srch_order(iptcl,i:i + p%nnn - 1) = b%nnmat(prev_proj(iptcl),:) + istate * p%nspace
@@ -198,8 +195,7 @@ contains
             case( 'yes' )
                 allocate(srch_order(p%fromp:p%top,p%nspace*p%nstates), source=0)
                 do iptcl = p%fromp, p%top
-                    prev_state       = nint(b%a%get(iptcl, 'state'))
-                    prev_proj(iptcl) = b%e%find_closest_proj(b%a%get_ori(iptcl))
+                    prev_state = nint(b%a%get(iptcl, 'state'))
                     call b%e%calc_euldists(b%a%get_ori(iptcl), euldists)
                     srch_order(iptcl,:p%nspace) = (/(i,i=1,p%nspace)/)
                     call hpsort( p%nspace, euldists, srch_order(iptcl,:p%nspace) )
@@ -216,9 +212,8 @@ contains
                 do iptcl = p%fromp, p%top
                     call rt%reset
                     call rt%ne_ran_iarr( srch_order(iptcl,:) )
-                    prev_state       = nint(b%a%get(iptcl, 'state'))
-                    prev_proj(iptcl) = b%e%find_closest_proj(b%a%get_ori(iptcl))
-                    prev_ref         = (prev_state - 1) * p%nspace + prev_proj(iptcl)
+                    prev_state = nint(b%a%get(iptcl, 'state'))
+                    prev_ref   = (prev_state - 1) * p%nspace + prev_proj(iptcl)
                     call put_last(prev_ref, srch_order(iptcl,:))
                 enddo
             case DEFAULT
@@ -685,9 +680,9 @@ contains
                 if( state_exists( proj_space_state(self%iptcl,iref) ) )then
                     ! In-plane correlations
                     call self%pftcc_ptr%gencorrs(iref, self%iptcl, inpl_corrs)
-                    loc        = maxloc(inpl_corrs)   ! greedy in-plane
-                    inpl_ind   = loc(1)               ! in-plane angle index
-                    inpl_corr  = inpl_corrs(inpl_ind) ! max in plane correlation
+                    loc       = maxloc(inpl_corrs)   ! greedy in-plane
+                    inpl_ind  = loc(1)               ! in-plane angle index
+                    inpl_corr = inpl_corrs(inpl_ind) ! max in plane correlation
                     call self%store_solution(iref, iref, inpl_ind, inpl_corr)
                     ! update nbetter to keep track of how many improving solutions we have identified
                     if( self%npeaks == 1 )then
@@ -1009,7 +1004,7 @@ contains
             if( self%doshift )shvec = shvec + proj_space_shift(self%iptcl,ref,1:2)
             where( abs(shvec) < 1e-6 ) shvec = 0.
             ! transfer to solution set
-            corrs(ipeak) = proj_space_corrs(self%iptcl,ipeak)
+            corrs(ipeak) = proj_space_corrs(self%iptcl,ref)
             call o_peaks(self%iptcl)%set(ipeak, 'state', real(state))
             call o_peaks(self%iptcl)%set(ipeak, 'proj',  real(proj_space_proj(self%iptcl,ref)))
             call o_peaks(self%iptcl)%set(ipeak, 'corr',  corrs(ipeak))

@@ -282,6 +282,7 @@ contains
         if( p%refine.eq.'het' )then
             call prime3D_srch_extr(b%a, p, do_extr)
         endif
+        call state_stats(b%a, p)
 
         ! CLEANUP primesrch3D & pftcc
         call cleanprime3D_srch(p)
@@ -536,5 +537,24 @@ contains
 
         DebugPrint '*** hadamard3D_matcher ***: finished preppftcc4align'
     end subroutine preppftcc4align
+
+    subroutine state_stats(a, p)
+        type(oris),    intent(inout) :: a      
+        class(params), intent(inout) :: p       !< param object
+        integer, allocatable :: ptcl_states(:)
+        integer :: iptcl, states_cnt(p%nstates), state, s
+        if( p%refine.eq.'no' .and. p%nstates>1 .and. p%npeaks>1 )then
+            do iptcl=p%fromp,p%top
+                state = nint(a%get(iptcl,'state'))
+                if( state==0 .or. nint(a%get(iptcl, 'state_balance'))==0 )cycle
+                ptcl_states = o_peaks(iptcl)%get_all('state')
+                do s = 1, p%nstates
+                    states_cnt(s) = count(ptcl_states==s)
+                enddo
+                print *, iptcl, state, states_cnt
+                deallocate(ptcl_states)
+            end do
+        endif
+    end subroutine state_stats
 
 end module simple_hadamard3D_matcher
