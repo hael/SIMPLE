@@ -26,6 +26,7 @@ type, extends(image) :: masker
     integer           :: idim(3)       = 0    !< image dimension
   contains
     procedure          :: automask3D
+    procedure          :: resmask
     procedure          :: apply_2Denvmask22Dref
     procedure, private :: bin_cavg
     procedure, private :: bin_vol_thres
@@ -66,6 +67,26 @@ contains
         ! the end
         if( was_ft )call vol_inout%fwd_ft
     end subroutine automask3D
+
+    !>  \brief  envelope mask for resolution estimation
+    !!          it is assumed that the envelope mask (auotmask) is set from the start
+    subroutine resmask( self, p )
+        class(masker), intent(inout) :: self
+        class(params), intent(in)    :: p
+        type(image) :: mskimg, distimg
+        integer     :: winsz
+        real        :: ave, sdev, maxv, minv, med
+        ! create edge-less envelope
+        call self%remove_edge
+        ! calculate distance stats
+        call distimg%new(self%get_ldim(), p%smpd)
+        call distimg%cendist
+        call distimg%stats(self, ave, sdev, maxv, minv, med)
+        winsz = nint((p%msk - maxv) / 2.)
+        call self%real_space_filter(winsz, 'average')
+        ! mask with spherical sof mask
+        call self%mask(p%msk, 'soft')
+    end subroutine resmask
 
     !>  \brief  is for envelope masking of the reference in prime2D
     subroutine apply_2Denvmask22Dref( self, ref )

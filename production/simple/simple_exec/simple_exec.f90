@@ -65,6 +65,7 @@ type(dsymsrch_commander)             :: xdsymsrch
 ! MASK PROGRAMS
 type(mask_commander)                 :: xmask
 type(automask2D_commander)           :: xautomask2D
+type(resmask_commander)              :: xresmask
 
 ! RECONSTRUCTION PROGRAMS
 type(eo_volassemble_commander)       :: xeo_volassemble
@@ -1279,6 +1280,20 @@ select case(prg)
         if( .not. cline%defined('edge')   ) call cline%set('edge',   10.)
         ! execute
         call xautomask2D%execute(cline)
+    case( 'resmask' )
+        !==Program resmask
+        !
+        ! <resmask/begin>is a program for 3D envelope masking for resolution estimation<resmask/end>
+        !
+        ! set required keys
+        keys_required(1) = 'smpd'
+        keys_required(2) = 'msk'
+        keys_required(3) = 'mskfile'
+        ! parse command line
+        ! if( describe ) call print_doc_resmask
+        call cline%parse(keys_required(:3))
+        ! execute
+        call xresmask%execute(cline)
 
     ! RECONSTRUCTION PROGRAMS
 
@@ -1448,12 +1463,16 @@ select case(prg)
         ! are done to the volumes, which allow you to test different masking options and see how they
         ! affect the FSCs<fsc/end>
         !
+        ! set required keys
         keys_required(1) = 'smpd'
         keys_required(2) = 'vol1'
         keys_required(3) = 'vol2'
+        keys_required(4) = 'msk'
+        ! set optional keys
+        keys_optional(1) = 'mskfile'
         ! parse command line
         if( describe ) call print_doc_fsc
-        call cline%parse(keys_required(:3))
+        call cline%parse(keys_required(:4), keys_optional(:1))
         ! execute
         call xfsc%execute(cline)
     case( 'cenvol' )

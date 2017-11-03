@@ -9,6 +9,7 @@ use simple_commander_base, only: commander_base
 use simple_image,          only: image
 use simple_projector_hlev, only: projvol, rotvol
 use simple_ori,            only: ori
+use simple_masker,         only:masker
 !! import functions
 use simple_binoris_io,     only: binread_oritab, binwrite_oritab, binread_nlines
 use simple_imghead,        only: find_ldim_nptcls
@@ -66,6 +67,7 @@ contains
         class(cmdline),       intent(inout) :: cline
         type(params)      :: p
         type(image)       :: even, odd
+        type(masker)      :: mskvol
         integer           :: j
         real              :: res_fsc05, res_fsc0143
         real, allocatable :: res(:), corrs(:)
@@ -75,6 +77,33 @@ contains
         call odd%new([p%box,p%box,p%box], p%smpd)
         call odd%read(p%vols(1))
         call even%read(p%vols(2))
+        ! always normalise before masking
+        call even%norm
+        call odd%norm
+        if( cline%defined('mskfile') )then
+            if( file_exists(p%mskfile) )then
+                call mskvol%new([p%box,p%box,p%box], p%smpd)
+                call mskvol%read(p%mskfile)
+                call mskvol%resmask(p)
+                call mskvol%write('resmask'//p%ext)
+                call even%zero_background
+                call odd%zero_background
+                call even%mul(mskvol)
+                call odd%mul(mskvol)
+            else
+                write(*,*) 'the inputted mskfile: ', trim(p%mskfile)
+                stop 'does not exists in cwd; commander_volops :: exec_fsc'
+            endif
+        else
+            ! spherical masking
+            if( p%l_innermsk )then
+                call even%mask(p%msk, 'soft', inner=p%inner, width=p%width) 
+                call odd%mask(p%msk, 'soft', inner=p%inner, width=p%width)
+            else
+                call even%mask(p%msk, 'soft') 
+                call odd%mask(p%msk, 'soft')
+            endif
+        endif
         ! forward FT
         call even%fwd_ft
         call odd%fwd_ft
@@ -86,8 +115,8 @@ contains
            write(*,'(A,1X,F6.2,1X,A,1X,F7.3)') '>>> RESOLUTION:', res(j), '>>> CORRELATION:', corrs(j)
         end do
         call get_resolution(corrs, res, res_fsc05, res_fsc0143)
-        write(*,'(A,1X,F6.2)') '>>> RESOLUTION AT FSC=0.143 DETERMINED TO:', res_fsc0143
         write(*,'(A,1X,F6.2)') '>>> RESOLUTION AT FSC=0.500 DETERMINED TO:', res_fsc05
+        write(*,'(A,1X,F6.2)') '>>> RESOLUTION AT FSC=0.143 DETERMINED TO:', res_fsc0143
         call even%kill
         call odd%kill
     end subroutine exec_fsc
@@ -125,7 +154,6 @@ contains
 
     subroutine exec_postproc_vol(self, cline)
         use simple_estimate_ssnr, only: fsc2optlp
-        use simple_masker,        only:masker
         class(postproc_vol_commander), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
         type(params)      :: p

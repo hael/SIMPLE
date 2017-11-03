@@ -9,6 +9,7 @@ implicit none
 
 public :: mask_commander
 public :: automask2D_commander
+public :: resmask_commander
 private
 
 type, extends(commander_base) :: mask_commander
@@ -19,6 +20,10 @@ type, extends(commander_base) :: automask2D_commander
   contains
     procedure :: execute      => exec_automask2D
 end type automask2D_commander
+type, extends(commander_base) :: resmask_commander
+  contains
+    procedure :: execute      => exec_resmask
+end type resmask_commander
 
 contains
 
@@ -104,7 +109,6 @@ contains
     
     !> for solvent flattening of class averages
     subroutine exec_automask2D( self, cline )
-        !use simple_masker, only: automask2D
         class(automask2D_commander), intent(inout) :: self
         class(cmdline),              intent(inout) :: cline
         type(params) :: p
@@ -124,5 +128,30 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_AUTOMASK2D NORMAL STOP ****')
     end subroutine exec_automask2D
+
+    !> for generating an envelope mask for resolution estimation
+    subroutine exec_resmask( self, cline )
+        use simple_masker, only: masker
+        class(resmask_commander), intent(inout) :: self
+        class(cmdline),           intent(inout) :: cline
+        type(params)  :: p
+        type(build)   :: b
+        type(masker)  :: mskvol
+        p = params(cline)
+        p%boxmatch = p%box                  ! turns off boxmatch logics
+        call b%build_general_tbox(p, cline) ! general objects built
+        call mskvol%new([p%box,p%box,p%box], p%smpd)
+        if( file_exists(p%mskfile) )then
+            call mskvol%read(p%mskfile)
+            call mskvol%resmask(p)
+            call mskvol%write('resmask'//p%ext)
+            call mskvol%kill
+        else
+            write(*,*) 'the inputted mskfile: ', trim(p%mskfile)
+            stop 'does not exists in cwd; commander_mask :: exec_resmask'
+        endif
+         ! end gracefully
+        call simple_end('**** SIMPLE_RESMASK NORMAL STOP ****')
+    end subroutine exec_resmask
 
 end module simple_commander_mask

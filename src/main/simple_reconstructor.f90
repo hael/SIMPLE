@@ -285,8 +285,8 @@ contains
         y    = o%get('y')
         !$omp parallel do collapse(2) default(shared) schedule(static)&
         !$omp private(h,k,sh,oshift,logi,phys) proc_bind(close)
-        do k=lims(2,1),lims(2,2)
-            do h=lims(1,1),lims(1,2)
+        do h=lims(1,1),lims(1,2)
+            do k=lims(2,1),lims(2,2)
                 sh = nint(hyp(real(h),real(k)))
                 if( sh > self%nyq + 1 )cycle
                 logi   = [h,k,0]
@@ -411,10 +411,7 @@ contains
     subroutine sum( self, self_in )
          class(reconstructor), intent(inout) :: self    !< this instance
          class(reconstructor), intent(in)    :: self_in !< other instance
-         call self%add(self_in)
-         !$omp parallel workshare proc_bind(close)
-         self%rho = self%rho+self_in%rho
-         !$omp end parallel workshare
+         call self%add_workshare(self_in, self%rho, self_in%rho)
     end subroutine sum
 
     ! RECONSTRUCTION

@@ -1,7 +1,6 @@
 ! 3D reconstruction of even-odd pairs for FSC estimation
 module simple_eo_reconstructor
 #include "simple_lib.f08"
-
 use simple_reconstructor, only: reconstructor
 use simple_image,         only: image
 use simple_params,        only: params
@@ -9,7 +8,7 @@ use simple_cmdline,       only: cmdline
 use simple_imghead,       only: find_ldim_nptcls
 use simple_imgfile,       only: imgfile
 use simple_kbinterpol,    only: kbinterpol
-
+use simple_masker,        only: masker
 implicit none
 
 public :: eo_reconstructor
@@ -20,7 +19,7 @@ type :: eo_reconstructor
     type(reconstructor)  :: even
     type(reconstructor)  :: odd
     type(reconstructor)  :: eosum
-    type(image)          :: envmask
+    type(masker)         :: envmask
     character(len=4)     :: ext
     real                 :: fsc05          !< target resolution at FSC=0.5
     real                 :: fsc0143        !< target resolution at FSC=0.143
@@ -93,6 +92,7 @@ contains
         if( self%automsk )then
             call self%envmask%new([p%box,p%box,p%box], p%smpd)
             call self%envmask%read(p%mskfile)
+            call self%envmask%resmask(p)
         endif
         call self%even%new([p%boxpd,p%boxpd,p%boxpd], p%smpd)
         call self%even%alloc_rho(p)
@@ -285,11 +285,12 @@ contains
     end subroutine compress_exp
 
     !> \brief  for sampling density correction of the eo pairs
-    subroutine sampl_dens_correct_eos( self, state, fname_even, fname_odd, find4eoavg )
+    subroutine sampl_dens_correct_eos( self, state, fname_even, fname_odd, resmskname, find4eoavg )
         use simple_masker,  only: masker
         class(eo_reconstructor), intent(inout) :: self                  !< instance
         integer,                 intent(in)    :: state                 !< state
         character(len=*),        intent(in)    :: fname_even, fname_odd !< even/odd filenames
+        character(len=*),        intent(in)    :: resmskname            !< resolution mask name
         integer,                 intent(out)   :: find4eoavg            !< Fourier index for eo averaging
         real, allocatable :: res(:), corrs(:)
         type(image)       :: even, odd
@@ -317,6 +318,7 @@ contains
             call odd%zero_background
             call even%mul(self%envmask)
             call odd%mul(self%envmask)
+            call self%envmask%write(resmskname)
         else
             ! spherical masking
             if( self%inner > 1. )then
