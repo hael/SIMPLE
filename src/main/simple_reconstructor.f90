@@ -285,7 +285,7 @@ contains
         y    = o%get('y')
         !$omp parallel do collapse(2) default(shared) schedule(static)&
         !$omp private(h,k,sh,oshift,logi,phys) proc_bind(close)
-        do k=lims(1,1),lims(1,2)
+        do k=lims(2,1),lims(2,2)
             do h=lims(1,1),lims(1,2)
                 sh = nint(hyp(real(h),real(k)))
                 if( sh > self%nyq + 1 )cycle

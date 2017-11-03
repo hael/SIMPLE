@@ -545,17 +545,22 @@ contains
         type(oris),    intent(inout) :: a      
         class(params), intent(inout) :: p       !< param object
         integer, allocatable :: ptcl_states(:)
-        integer :: iptcl, states_cnt(p%nstates), state, s
+        real,    allocatable :: weights(:)
+        integer :: i, iptcl, state, s
+        real    :: states_w(p%nstates)
         if( p%refine.eq.'no' .and. p%nstates>1 .and. p%npeaks>1 )then
             do iptcl=p%fromp,p%top
                 state = nint(a%get(iptcl,'state'))
                 if( state==0 .or. nint(a%get(iptcl, 'state_balance'))==0 )cycle
-                ptcl_states = o_peaks(iptcl)%get_all('state')
+                ptcl_states = nint(o_peaks(iptcl)%get_all('state'))
+                weights     = o_peaks(iptcl)%get_all('ow')               
+                states_w    = 0.
                 do s = 1, p%nstates
-                    states_cnt(s) = count(ptcl_states==s)
+                    states_w(s) = sum(weights, mask=ptcl_states==s)
                 enddo
-                print *, iptcl, state, states_cnt
-                deallocate(ptcl_states)
+                states_w = states_w / sum(states_w)
+                print *, iptcl, state, states_w
+                deallocate(ptcl_states, weights)
             end do
         endif
     end subroutine state_stats

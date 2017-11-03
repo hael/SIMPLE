@@ -992,7 +992,7 @@ contains
         real       :: shvec(2), corrs(self%npeaks), ws(self%npeaks), logws(self%npeaks)
         real       :: frac, ang_sdev, dist, inpl_dist, euldist, mi_joint
         real       :: mi_proj, mi_inpl, mi_state, dist_inpl, wcorr
-        integer    :: ipeak, cnt, ref, state, best_loc(1), order(self%npeaks), loc(1)
+        integer    :: ipeak, cnt, ref, state, best_loc(1), order(self%npeaks), loc(1), states(self%nstates)
         integer    :: roind, neff_states
         logical    :: included(self%npeaks)
         ! empty states
@@ -1069,28 +1069,41 @@ contains
         call self%se_ptr%sym_dists( self%a_ptr%get_ori(self%iptcl),&
             &o_peaks(self%iptcl)%get_ori(best_loc(1)), euldist, dist_inpl )
         ! convergence parameters
+        roind = self%pftcc_ptr%get_roind( 360.-o_peaks(self%iptcl)%e3get(best_loc(1)) )
+        mi_proj  = 0.
+        mi_inpl  = 0.
+        mi_joint = 0.
+        if( euldist < 0.5 )then
+            mi_proj = 1.
+            mi_joint = mi_joint + 1.
+        endif
+        if( self%prev_roind == roind )then
+            mi_inpl  = 1.
+            mi_joint = mi_joint + 1.
+        endif
+        ! states convergence
+        mi_state = 0.
         state = nint( o_peaks(self%iptcl)%get(best_loc(1), 'state') )
         if( .not. state_exists(state) )then
             print *, 'empty state: ', state
             stop 'simple_prime3d_srch; update_best'
         endif
-        roind = self%pftcc_ptr%get_roind( 360.-o_peaks(self%iptcl)%e3get(best_loc(1)) )
-        mi_proj  = 0.
-        mi_inpl  = 0.
-        mi_state = 0.
-        mi_joint = 0.
-        if( euldist < 0.5 )then
-            mi_proj = mi_proj + 1.
-            mi_joint = mi_joint + 1.
-        endif
-        if( self%prev_roind == roind )then
-            mi_inpl  = mi_inpl  + 1.
-            mi_joint = mi_joint + 1.
-        endif
-        if( self%nstates > 1 )then
-            if( self%prev_state == state )then
-                mi_state = mi_state + 1.
-                mi_joint = mi_joint + 1.
+        if(self%nstates > 1)then
+            if(self%npeaks == 1)then
+                if( self%prev_state == state )then
+                    mi_state = 1.
+                    mi_joint = mi_joint + 1.
+                endif
+            else
+                do ipeak = 1, self%npeaks
+                    if( ws(ipeak) > TINY)then
+                        if( nint(o_peaks(self%iptcl)%get(ipeak,'state')) == state )then
+                            mi_state = mi_state + ws(ipeak)
+                        endif
+                    endif
+                enddo
+                mi_state = mi_state / sum(ws, mask=(ws>TINY))
+                mi_joint = mi_joint + mi_state
             endif
             mi_joint = mi_joint/3.
         else
