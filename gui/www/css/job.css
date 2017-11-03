@@ -1,0 +1,238 @@
+body {
+ font-family: Verdana, Geneva, sans-serif;
+ margin: 0px;
+ overflow: hidden;
+}
+	
+.header {
+ height: 20px;
+padding: 5px;
+padding-left: 10px
+}
+
+#selectfileheader{
+	padding-left: 30px;
+}
+
+.title {
+
+ height: 20px;
+padding: 5px;
+padding-left: 30px
+}
+
+.simpleicon{
+	position: absolute;
+top: 6px;
+width: 17px;
+left: 7px;
+}
+
+.mainpane {
+	overflow: hidden;
+	padding: 5px;
+
+}
+
+
+.gauze {
+	 position: fixed;
+	 top: 0px;
+	 left: 0px;
+	 height: calc(100vh);
+	 width: calc(100vw);
+	 background-color: black;
+	 opacity: 0.6;
+	 display: none;
+}
+
+.jobpane {
+	overflow: hidden;
+	padding: 20px;
+
+}
+
+.jobpane td {
+ font-size: 13px;
+}
+
+.jobpane textarea {
+	width: 300px;
+    height: 150px;
+    padding: 5px 5px;
+    box-sizing: border-box;
+    border: 2px solid #ccc;
+    border-radius: 4px;
+    background-color: #f8f8f8;
+    resize: none;
+}
+
+.jobpane input {
+	width: 300px;
+    padding: 5px 5px;
+    box-sizing: border-box;
+    border: 2px solid #ccc;
+    border-radius: 4px;
+    background-color: #f8f8f8;
+    resize: none;
+}
+
+.jobpane select {
+	width: 300px;
+    padding: 5px 5px;
+    box-sizing: border-box;
+    border: 2px solid #ccc;
+    border-radius: 4px;
+    background-color: #f8f8f8;
+    resize: none;
+}
+
+.jobpane button{
+	width: 100px;
+    padding: 5px 5px;
+    box-sizing: border-box;
+    border: 2px solid #ccc;
+    border-radius: 4px;
+    background-color: #7891b0;
+    color: white;
+    resize: none;
+    margin: 10px;
+}
+
+
+.closeimage {
+height: 15px;
+float:right;
+
+}
+
+.modeselector {
+position: absolute;
+right: 60px;
+top: 7px;
+ }
+ 
+.modeimages {
+ display: none;
+position: absolute;
+top: -5px;
+z-index: 1;
+border: solid 4px #d7dfea;
+padding: 5px;
+background-color: white;
+right: 0px;
+ }
+ 
+.modeimage:hover{
+background-color: grey;
+}
+
+#modeimage {
+ width: 100px;
+
+}
+
+.jobheader {
+    background-color: white;
+    margin-top: 5px;
+    height: calc(100vh - 94px);
+    font-size: 13px;
+    width: 185px;
+    display:inline-block;
+}
+
+
+.modeimage{
+	width:150px;
+	border-style: solid;
+	border-color: white;
+	border-width: 2px;
+	padding: 2px;
+}
+
+.job {
+	padding:5px;
+}
+.job:hover {
+	background-color: orange;
+}
+
+.jobiframe{
+position: absolute;
+padding: 5px; 
+   display:inline-block;
+}
+
+.jobinfo {
+	font-size: 10px;
+	padding-left: 40px;
+}
+
+#jobiframe{
+	 width: 100%;
+	 height: calc(100vh - 94px);
+	 background-color: white;
+	 border: none;
+	 width: calc(100vw - 200px);
+	 }
+
+.selectfilepopup {
+	position: absolute;
+	left: calc(50vw - 270px);
+	top: calc(50vh - 175px);
+	width: 540px;
+	height: 350px;
+	background-color: white;
+	display: none;
+}
+
+
+.selectfiledirectory{
+	width: 500px;
+    padding: 5px 5px;
+    box-sizing: border-box;
+    border: 2px solid #ccc;
+    border-radius: 4px;
+    background-color: #f8f8f8;
+    resize: none;
+    margin: auto;
+    display: block;
+    margin-bottom: 5px;
+}
+
+.selectfiletable {
+	width: 500px;
+    padding: 5px 5px;
+    box-sizing: border-box;
+    border: 2px solid #ccc;
+    border-radius: 4px;
+	font-size: 10px;
+	height: 235px;
+	resize: none;
+	overflow-y: scroll;
+	overflow-x: auto;
+	display: block;
+	background-color: #f8f8f8;
+	margin: auto;
+	display: block;
+	font-size: 10px;
+}
+
+.selectfiletable tr:nth-child(odd) {
+background: #d7dfea;
+}
+
+.selectfilebutton{
+width: 100px;
+    padding: 5px 5px;
+    box-sizing: border-box;
+    border: 2px solid #ccc;
+    border-radius: 4px;
+    background-color: #7891b0;
+    color: white;
+    resize: none;
+    margin: auto;
+    display: block;
+}
+
+

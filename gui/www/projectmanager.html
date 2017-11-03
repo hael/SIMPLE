@@ -1,0 +1,63 @@
+<DOCTYPE html>
+<html>
+ <head>
+  <link rel="stylesheet" href="css/projectmanager.css">
+ </head>
+ <body>
+	 
+  <div class=header>
+   <img class=simpleicon id=simpleicon src=img/simple_favicon.ico onclick="showHideHeaderMenu()">
+   <div class=headermenu id=headermenu>
+	  <div onclick='newProjectPopup()'>New Project</div>
+   </div>
+   Project Manager
+   <img src=img/close.png class=closeimage onclick='parent.document.getElementById("mainpaneiframe").src = "projecthistory.html"'>
+  </div>
+  
+  <div class=mainpane>
+	<table id=projecttable class=projecttable></table>
+  </div>
+  
+  <div class=gauze id=gauze></div>
+  
+  <div class=newprojectpopup id=newprojectpopup>
+	  <div class=header>
+		<img class=simpleicon id=simpleicon src=img/simple_favicon.ico>
+		New Project
+		<img src=img/close.png class=closeimage onclick='hideNewProjectPopup()'>
+	</div>
+	<div class=projectpane>
+		<form action='JSONhandler' onsubmit="hideNewProjectPopup()">
+			<table>
+				<input type=hidden name=function value=newproject>
+				<tr>
+					<td>Project Name</td>
+					<td><input data-required=no type=text name=projectname></td>
+				</tr>
+				<tr data-required=no>
+					<td>Project Description</td>
+					<td><textarea data-required=no name=projectdescription></textarea></td>
+				</tr>
+				<tr>
+					<td>Project Folder</td>
+					<td><input data-required=yes type=text name=projectfolder id=projectfolder></td>
+					<td><img src="img/folder.png" onclick="folderSelect()"></td>
+				</tr>
+				<tr>
+					<td colspan=3 style="text-align: center">
+						<button type="submit" onclick="console.log('check required')">Create</button>
+					</td>
+				</tr>
+			</table>
+		</form>
+	</div>
+	<form action='JSONhandler' )">
+
+
+
+	</div>
+  </div>
+  
+  <script src="js/projectmanager.js"></script>
+ </body>
+</html>

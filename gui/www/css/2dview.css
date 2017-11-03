@@ -1,0 +1,339 @@
+body {
+ font-family: Verdana, Geneva, sans-serif;
+ margin: 0px;
+ overflow: hidden;
+}
+	
+.gauze {
+	 position: fixed;
+	 top: 0px;
+	 left: 0px;
+	 height: calc(100vh);
+	 width: calc(100vw);
+	 background-color: black;
+	 opacity: 0.6;
+	 display: none;
+}
+		
+.header {
+
+ height: 40px;
+padding: 5px;
+padding-left: 30px;
+}
+
+
+
+
+.headermenubutton {
+	float: left;
+}
+
+.headermenu {
+	width: 185px;
+	text-align: left;
+	padding: 5px;
+	display: none;
+	position: absolute;
+	background-color: #d7d7d7;
+	font-size: 12px;
+	left: 40px;
+	top: 20px;
+	z-index: 101;
+}
+
+.headermenu div:hover{
+	background-color: #acb2ba;
+}
+
+.headerproject {
+ font-size: 12px;
+}
+
+.headermenuicon {
+ height: 20px;
+}
+
+.mainpane {
+	overflow: hidden;
+	padding: 5px;
+	background-color: white;
+}
+
+.displaypopup {
+	position: absolute;
+	left: calc(50vw - 200px);
+	top: calc(50vh - 150px);
+	width: 400px;
+	background-color: white;
+	display: none;
+}
+
+.controlspopup {
+	position: absolute;
+	left: calc(50vw - 200px);
+	top: calc(50vh - 150px);
+	width: 400px;
+	background-color: white;
+	display: none;
+}
+
+.sortpopup {
+	position: absolute;
+	left: calc(50vw - 270px);
+	top: calc(50vh - 175px);
+	width: 540px;
+	height: 350px;
+	background-color: white;
+	display: none;
+}
+
+.selectfilepopup {
+	height: 300px;
+	width: 400px;
+	position: absolute;
+	left: calc(50vw - 200px);
+	top: calc(50vh - 150px);
+	display: block;
+	background-color: white;
+}
+
+.saveselectionpopup {
+	height: 300px;
+	width: 400px;
+	position: absolute;
+	left: calc(50vw - 200px);
+	top: calc(50vh - 150px);
+	display: none;
+	background-color: white;
+}
+
+.saveselectionparticlespopup{
+	height: 300px;
+	width: 400px;
+	position: absolute;
+	left: calc(50vw - 200px);
+	top: calc(50vh - 150px);
+	display: none;
+	background-color: white;
+}
+
+.selectionpopup {
+	height: 300px;
+	width: 400px;
+	position: absolute;
+	left: calc(50vw - 200px);
+	top: calc(50vh - 150px);
+	display: none;
+	background-color: white;
+}
+
+.selectfiledirectory{
+	font-size: 10px;
+	margin-bottom: 5px;
+	width: 100%;
+	border: medium none;
+}
+
+.selectfiletable, .selectfiletable table {
+	font-size: 10px;
+	height: 220px;
+	overflow-y: scroll;
+	overflow-x: auto;
+	display: block;
+	background-color: white;
+}
+
+.displaytable, .displaytable table {
+	font-size: 10px;
+	height: 220px;
+	overflow-y: scroll;
+	overflow-x: auto;
+	display: block;
+	background-color: white;
+}
+
+.controlstable, .controlstable table {
+	font-size: 10px;
+	height: 220px;
+	overflow-y: scroll;
+	overflow-x: auto;
+	display: block;
+	background-color: white;
+}
+
+.sorttable, .sorttable table {
+	font-size: 10px;
+	height: 220px;
+	overflow-y: scroll;
+	overflow-x: auto;
+	display: block;
+	background-color: white;
+}
+
+.folderimage {
+height: 15px;
+}
+
+.closeimage {
+height: 15px;
+float:right;
+margin-right: 10px;
+}
+
+.snapshot {
+background-color: white;
+display: inline-block;
+margin-bottom: 5px;
+margin-right: 5px;
+position: relative;
+min-height: 200px;
+min-width: 200px;
+transition-delay: 1s;
+}
+
+.snapshot img{
+padding: 5px;
+}
+
+.particle {
+background-color: white;
+display: inline-block;
+margin-bottom: 5px;
+margin-right: 5px;
+position: relative;
+
+transition-delay: 1s;
+}
+
+.particle img{
+padding: 5px;
+}
+
+.snapshotselected {
+background-color: white;
+display: inline-block;
+margin-bottom: 5px;
+margin-right: 5px;
+}
+
+.snapshotgauze {
+background-color: black;
+width: 100%;
+position: absolute;
+height: 100%;
+opacity: 0.6;
+display: none;
+
+}
+
+.snapshots {
+	overflow-y: scroll;
+	height: calc(100vh - 40px);
+}
+
+.attributes {
+	visibility: hidden;
+	position: absolute;
+	background: white;
+	width: 100%;
+	height: calc(100% - 30px);
+	font-size: 8px;
+
+	overflow: scroll;
+	padding-top: 30px;
+	}
+	
+
+.snapshotattributesbutton {
+position:absolute;
+top: 5px;
+left: 5px;
+
+}
+
+.snapshotviewparticlesbutton {
+position:absolute;
+bottom: 5px;
+left: 5px;
+
+}
+
+.simpleicon{
+	position: absolute;
+top: 12px;
+width: 17px;
+left: 7px;
+}
+
+.closeimage {
+height: 15px;
+float:right;
+}
+
+.iterationselector {
+display: inline-block;
+margin-left: 33vw;
+font-size: 12px;
+}
+
+.iterationselector select{
+	width: 70;
+    padding: 5px 5px;
+    box-sizing: border-box;
+    border: 2px solid #ccc;
+    border-radius: 4px;
+    background-color: #f8f8f8;
+    resize: none;
+    margin: auto;
+    margin-bottom: 5px;
+    font-size: 12px;
+}
+
+.particleviewpopup {
+	position: absolute;
+left: 10vw;
+top: 10vh;
+width: 80vw;
+height: 80vh;
+	background-color: white;
+	display: none;
+}
+
+.simpleiconpopup{
+	position: absolute;
+width: 17px;
+left: 7px;
+}
+
+.sortorder,.sorton,.selectionattribute,.selectioncriteria,.selectionvalue,.selectionappend,.saveselectionfolder,.saveselectionfilename,.controlscontrast,.controlsbrightness{
+font-size: 12px;
+width: 300px;
+margin: auto;
+}
+
+.sortorder select,.sorton select,.selectionattribute select,.selectioncriteria select,.selectionvalue input,.saveselectionfolder input,.saveselectionfilename input{
+	width: 300px;
+    padding: 5px 5px;
+    box-sizing: border-box;
+    border: 2px solid #ccc;
+    border-radius: 4px;
+    background-color: #f8f8f8;
+    resize: none;
+    margin: auto;
+    margin-bottom: 5px;
+    font-size: 12px;
+}
+
+.popupbutton{
+width: 100px;
+    padding: 5px 5px;
+    box-sizing: border-box;
+    border: 2px solid #ccc;
+    border-radius: 4px;
+    background-color: #7891b0;
+    color: white;
+    resize: none;
+    margin: auto;
+    display: block;
+}

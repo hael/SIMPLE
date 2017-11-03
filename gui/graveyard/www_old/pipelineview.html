@@ -1,0 +1,86 @@
+<div class=pipelineviewheader>
+	<input type=hidden id=pipelineviewdirectory>
+	<div class=pipelineviewmenu id=pipelineviewmenu>
+		<img src=grid.png class=pipelineviewmenuicon>
+		<div class=pipelineviewmenuoptions>
+			<div class=pipelineviewmenuoption>Selection
+				<div class=pipelineviewmenuelements>
+					<div class=pipelineviewmenuelement onClick="document.getElementById('pipelineviewsavegauze').style.display = 'block'; document.getElementById('pipelineviewsave').style.display = 'block'">Save Selection</div>
+					<div class=pipelineviewmenuelement onClick="pipelineViewSelectAll();">Select All</div>
+					<div class=pipelineviewmenuelement onClick="pipelineViewClearAll();">Clear Selection</div>
+				</div>
+			</div>
+			<div class=pipelineviewmenuoption>View
+				<div class=pipelineviewmenuelements>
+					<div class=pipelineviewmenuelement>
+						Power Spectrum Contrast
+						<input class=pipelineviewpspeccontrast id=pipelineviewpspeccontrast type=range max=10 min=0 step=1 value=3 onchange="pipelineViewPage();">
+					</div>
+					<div class=pipelineviewmenuelement>
+						Power Spectrum Brightness
+						<input class=pipelineviewpspecbrightness id=pipelineviewpspecbrightness type=range max=255 min=0 step=1 value=128 onchange="pipelineViewPage();">
+					</div>
+					<div class=pipelineviewmenuelement>
+						Power Spectrum Zoom
+						<input class=pipelineviewpspeczoom id=pipelineviewpspeczoom type=range max=10 min=0.5 step=0.5 value=1 onchange="pipelineViewPage();">
+					</div>
+					<div class=pipelineviewmenuelement>
+						Thumbnail Contrast
+						<input class=pipelineviewthumbcontrast id=pipelineviewthumbcontrast type=range max=10 min=0 step=1 value=3 onchange="pipelineViewPage();">
+					</div>
+					<div class=pipelineviewmenuelement>
+						Thumbnail Brightness
+						<input class=pipelineviewthumbbrightness id=pipelineviewthumbbrightness type=range max=255 min=0 value=128 step=1 onchange="pipelineViewPage();">
+					</div>
+					<div class=pipelineviewmenuelement>
+						Thumbnail Zoom
+						<input class=pipelineviewthumbzoom id=pipelineviewthumbzoom type=range max=10 min=0.5 step=0.5 value=1 onchange="pipelineViewPage();">
+					</div>
+					<div class=pipelineviewmenuelement>
+						Per Page
+						<select id=pipelineviewperpage onChange="pipelineViewPage();">
+							<option value=5>5</option>
+							<option value=10 selected>10</option>
+							<option value=25>25</option>
+							<option value=50>50</option>
+							<option value=100>100</option>
+						</select>
+					</div>
+				</div>
+			</div>	
+			<div class=pipelineviewmenuoption>Sort
+				<div class=pipelineviewmenuelements>
+					<div class=pipelineviewmenuelement onClick="pipelineViewSortColumn(3); pipelineViewPage();">DFX</div>
+					<div class=pipelineviewmenuelement onClick="pipelineViewSortColumn(4); pipelineViewPage();">DFY</div>
+					<div class=pipelineviewmenuelement onClick="pipelineViewSortColumn(5); pipelineViewPage();">ANGAST</div>
+					<div class=pipelineviewmenuelement onClick="pipelineViewSortColumn(7); pipelineViewPage();">CTFRES</div>
+				</div>
+			</div>
+		</div>
+	</div>
+	Pipeline View
+	<img src=close.png class=pipelineviewcloseicon onclick="pipelineViewAutoSave(); document.getElementById('pipelineview').style.display='none'; document.getElementById('gauze').style.display='none'">
+	<img src=rightchevron.png class=pipelineviewcloseicon onclick="pipelineViewAutoSave(); document.getElementById('pipelineviewpage').value = parseInt(document.getElementById('pipelineviewpage').value) + 1; pipelineViewPage();">
+	<input id=pipelineviewpagetotal class=pipelineviewpagetotal readonly="readonly" >
+	<input id=pipelineviewpage class=pipelineviewpage onchange="pipelineViewPage();">
+	
+	<img src=leftchevron.png class=pipelineviewcloseicon onclick="pipelineViewAutoSave(); document.getElementById('pipelineviewpage').value = parseInt(document.getElementById('pipelineviewpage').value) - 1; pipelineViewPage();">
+	
+	<div class=pipelineviewsavegauze id=pipelineviewsavegauze></div>
+	<div class=pipelineviewsave id=pipelineviewsave>
+		<div class=pipelineviewsaveheader>Save Selection</div>
+		<div class=pipelineviewsaverow>
+			<div>Filename</div>
+			<input id=pipelineviewsavefilename type=text>
+		</div>
+		<div class=pipelineviewsaverow>
+			<div>Folder</div>
+			<input id=pipelineviewsavefolder type=text>
+			<img src=folder.png onclick=selectFolder('pipelineviewsavefolder')>
+		</div>
+		<div class=pipelineviewsavebutton onclick='document.getElementById("pipelineviewsave").style.display = "none"; document.getElementById("pipelineviewsavegauze").style.display = "none";'>Cancel</div>
+		<div class=pipelineviewsavebutton onclick='pipelineViewSave(); document.getElementById("pipelineviewsave").style.display = "none"; document.getElementById("pipelineviewsavegauze").style.display = "none";'>OK</div>
+	</div>	
+</div>
+<div id=pipelineviewarea class=pipelineviewarea></div>
+

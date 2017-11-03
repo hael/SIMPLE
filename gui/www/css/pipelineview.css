@@ -1,0 +1,259 @@
+body {
+ font-family: Verdana, Geneva, sans-serif;
+ margin: 0px;
+ overflow: hidden;
+}
+	
+.gauze {
+	 position: fixed;
+	 top: 0px;
+	 left: 0px;
+	 height: calc(100vh);
+	 width: calc(100vw);
+	 background-color: black;
+	 opacity: 0.6;
+	 display: none;
+}
+		
+.header {
+
+ height: 30px;
+padding: 5px;
+padding-left: 30px;
+}
+
+.headermenubutton {
+	float: left;
+}
+
+.headermenu {
+	width: 150px;
+	text-align: left;
+	padding: 5px;
+	display: none;
+	position: absolute;
+	background-color: #d7d7d7;
+	font-size: 12px;
+	left: 40px;
+	top: 20px;
+	z-index: 101;
+}
+
+.headermenu div:hover{
+	background-color: #acb2ba;
+}
+
+.headermenuicon {
+ height: 20px;
+}
+
+.mainpane {
+	overflow: hidden;
+	padding: 5px;
+}
+
+.boxviewpopup {
+	position: absolute;
+	top: 50px;
+	background-color: white;
+	display: none;
+	left: 30vw;
+}
+
+#boxviewerimage{
+width: 80vh;
+height: 80vh;
+}
+
+.controlspopup {
+	position: absolute;
+	left: calc(50vw - 270px);
+	top: calc(50vh - 175px);
+	width: 540px;
+	height: 350px;
+	background-color: white;
+	display: none;
+}
+
+.sortpopup {
+	position: absolute;
+	left: calc(50vw - 270px);
+	top: calc(50vh - 175px);
+	width: 540px;
+	height: 350px;
+	background-color: white;
+	display: none;
+}
+
+.saveselectionpopup {
+	position: absolute;
+	left: calc(50vw - 270px);
+	top: calc(50vh - 175px);
+	width: 540px;
+	height: 350px;
+	background-color: white;
+	display: none;
+}
+
+.selectionpopup {
+	position: absolute;
+	left: calc(50vw - 270px);
+	top: calc(50vh - 175px);
+	width: 540px;
+	height: 350px;
+	background-color: white;
+	display: none;
+}
+
+.selectfiledirectory{
+	font-size: 10px;
+	margin-bottom: 5px;
+	width: 100%;
+	border: medium none;
+}
+
+.selectfiletable, .selectfiletable table {
+	font-size: 10px;
+	height: 220px;
+	overflow-y: scroll;
+	overflow-x: auto;
+	display: block;
+	background-color: white;
+}
+
+.displaytable, .displaytable table {
+	font-size: 10px;
+	height: 220px;
+	overflow-y: scroll;
+	overflow-x: auto;
+	display: block;
+	background-color: white;
+}
+
+.controlstable, .controlstable table {
+	font-size: 10px;
+	height: 220px;
+	overflow-y: scroll;
+	overflow-x: auto;
+	display: block;
+	background-color: white;
+}
+
+.sortorder,.sorton,.selectionattribute,.selectioncriteria,.selectionvalue,.selectionappend,.saveselectionfolder,.saveselectionfilename,.controlscontrast,.controlsbrightness{
+font-size: 12px;
+width: 300px;
+margin: auto;
+}
+
+.sortorder select,.sorton select,.selectionattribute select,.selectioncriteria select,.selectionvalue input,.saveselectionfolder input,.saveselectionfilename input{
+	width: 300px;
+    padding: 5px 5px;
+    box-sizing: border-box;
+    border: 2px solid #ccc;
+    border-radius: 4px;
+    background-color: #f8f8f8;
+    resize: none;
+    margin: auto;
+    margin-bottom: 5px;
+    font-size: 12px;
+}
+
+.popupbutton{
+width: 100px;
+    padding: 5px 5px;
+    box-sizing: border-box;
+    border: 2px solid #ccc;
+    border-radius: 4px;
+    background-color: #7891b0;
+    color: white;
+    resize: none;
+    margin: auto;
+    display: block;
+}
+
+.folderimage {
+height: 15px;
+}
+
+.closeimage {
+height: 15px;
+float:right;
+}
+
+.headerproject {
+ font-size: 12px;
+}
+
+.simpleicon{
+	position: absolute;
+top: 12px;
+width: 17px;
+left: 7px;
+}
+
+.simpleiconpopup{
+	position: absolute;
+width: 17px;
+left: 7px;
+}
+
+.snapshot {
+background-color: white;
+display: inline-block;
+margin-bottom: 5px;
+margin-right: 5px;
+position: relative;
+min-height: 200px;
+min-width: 200px;
+transition-delay: 1s;
+background-color: #d7dfea;
+}
+
+.snapshot img{
+padding: 5px;
+}
+
+.snapshotselected {
+background-color: white;
+display: inline-block;
+margin-bottom: 5px;
+margin-right: 5px;
+}
+
+.snapshotgauze {
+background-color: black;
+width: 100%;
+position: absolute;
+height: 100%;
+opacity: 0.6;
+display: none;
+}
+
+.snapshots {
+	overflow-y: scroll;
+	height: calc(100vh - 40px);
+}
+
+.attributes {
+	visibility: hidden;
+	position: absolute;
+	background: white;
+	width: 100%;
+	height: calc(100% - 30px);
+	font-size: 8px;
+	overflow: scroll;
+	padding-top: 30px;
+	}
+	
+
+.snapshotattributesbutton {
+position:absolute;
+top: 5px;
+left: 5px;
+}
+
+.snapshoteyebutton {
+position:absolute;
+bottom: 5px;
+left: 5px;
+}

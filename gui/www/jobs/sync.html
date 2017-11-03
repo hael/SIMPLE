@@ -1,0 +1,63 @@
+<DOCTYPE html>
+<html>
+ <head>
+  <link rel="stylesheet" href="../css/job.css">
+ </head>
+ <body>
+	 
+  <div class=header>
+   Microscope Sync
+  </div>
+  
+  <div class=jobinfo>
+	<p>Sync data from the microscope to storage for downstream processing</p>
+  </div>
+  
+	<div class=jobpane>
+		<form action='../JSONhandler'>
+			<table>
+				<input type=hidden name=function value=externaljob>
+				<tr>
+					<td>Job Name</td>
+					<td><input data-required=no type=text name=jobname></td>
+				</tr>
+				<tr data-required=no>
+					<td>Job Description</td>
+					<td><textarea data-required=no name=jobdescription></textarea></td>
+				</tr>
+				<tr>
+					<td>Data Location</td>
+					<td><input data-required=no type=text name=jobname></td>
+					<td><img src=../img/folder.png></td>
+				</tr>
+				<tr>
+					<td>Data Type</td>
+					<td><select>
+							<option>K2 Frames</option>
+							<option>K2 Movies</option>
+							<option>F3 Movies</option>
+						</select>
+					</td>
+				</tr>
+				<tr>
+					<td>Data Format</td>
+					<td>
+						<select>
+							<option>MRC</option>
+							<option>DM4</option>
+						</select>
+					</td>
+				</tr>
+				<tr>
+					<td colspan=2 style="text-align: center">
+						<button type="button" onclick="document.getElementById('page1').style.display = 'none'; document.getElementById('page2').style.display = 'block'">Run</button>
+					</td>
+				</tr>
+			</table>
+
+
+		</form>
+	</div>
+  <script src="../js/job.js"></script>
+ </body>
+</html>
