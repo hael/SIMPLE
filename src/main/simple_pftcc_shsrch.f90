@@ -25,6 +25,7 @@ type, extends(pftcc_opt) :: pftcc_shsrch
     real                             :: maxshift       = 0.      !< maximal shift
   contains
     procedure :: new         => shsrch_new
+    procedure :: kill        => shsrch_kill
     procedure :: set_indices => shsrch_set_indices
     procedure :: costfun     => shsrch_costfun
     procedure :: minimize    => shsrch_minimize
@@ -71,6 +72,11 @@ contains
         self%maxshift = real(maxval(self%ldim))/2.
     end subroutine shsrch_new
 
+    !> destructor (empty)
+    subroutine shsrch_kill( self )
+        class(pftcc_shsrch), intent(inout) :: self
+    end subroutine shsrch_kill
+    
     !> shsrch_set_indices Set indicies for shift search
     !! \param ref reference
     !! \param ptcl particle index
@@ -103,7 +109,7 @@ contains
         call self%pftcc_ptr%gencorrs(self%reference, self%particle, vec_here, corrs)
         cost = -maxval(corrs)
     end subroutine shsrch_costfun
-
+    
     !> minimisation routine
     function shsrch_minimize( self, irot ) result( cxy )
         class(pftcc_shsrch), intent(inout) :: self

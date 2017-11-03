@@ -1,11 +1,12 @@
 ! PRIME3D stochastic search routines
 module simple_prime3D_srch
 #include "simple_lib.f08"
-use simple_oris,             only: oris
-use simple_ori,              only: ori
-use simple_sym,              only: sym
-use simple_polarft_corrcalc, only: polarft_corrcalc
-use simple_pftcc_shsrch,     only: pftcc_shsrch
+use simple_oris,                  only: oris
+use simple_ori,                   only: ori
+use simple_sym,                   only: sym
+use simple_polarft_corrcalc,      only: polarft_corrcalc
+use simple_pftcc_shsrch,          only: pftcc_shsrch       ! simplex-based angle and shift search
+use simple_pftcc_grad_shsrch,     only: pftcc_grad_shsrch  ! gradient-based angle and shift search
 implicit none
 
 public :: cleanprime3D_srch, prep4prime3D_srch, prime3D_srch_extr
@@ -35,6 +36,7 @@ type prime3D_srch
     class(oris),             pointer :: a_ptr          => null() !< b%a (primary particle orientation table)
     class(sym),              pointer :: se_ptr         => null() !< b%se (symmetry elements)
     type(pftcc_shsrch)               :: shsrch_obj               !< origin shift search object
+!    type(pftcc_grad_shsrch)          :: shsrch_obj               !< activate for gradient-based search object
     integer                          :: iptcl          = 0       !< global particle index
     integer                          :: nrefs          = 0       !< total # references (nstates*nprojs)
     integer                          :: nnnrefs        = 0       !< total # neighboring references (nstates*nnn)
@@ -61,6 +63,7 @@ type prime3D_srch
     logical                          :: exists         = .false. !< 2 indicate existence
   contains
     procedure          :: new
+    procedure          :: kill
     procedure          :: exec_prime3D_srch
     procedure          :: exec_prime3D_srch_het
     procedure, private :: greedy_srch
@@ -389,9 +392,17 @@ contains
         lims_init(:,2) =  SHC_INPL_TRSHWDTH
         call self%shsrch_obj%new(self%pftcc_ptr, lims, lims_init=lims_init,&
             &shbarrier=self%shbarr, nrestarts=3, maxits=60)
+!!$  activate below for gradient-based shift search
+!!$        call self%shsrch_obj%new(self%pftcc_ptr, lims, lims_init=lims_init,&
+!!$            &shbarrier=self%shbarr, nrestarts=1, maxits=60)
         self%exists = .true.
         DebugPrint '>>> PRIME3D_SRCH::CONSTRUCTED NEW SIMPLE_PRIME3D_SRCH OBJECT'
     end subroutine new
+
+    subroutine kill( self )
+        class(prime3D_srch),  intent(inout) :: self   !< instance
+        call self%shsrch_obj%kill
+    end subroutine kill
 
     ! SEARCH ROUTINES
 
