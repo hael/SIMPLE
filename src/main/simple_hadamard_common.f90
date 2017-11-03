@@ -430,8 +430,8 @@ contains
                 call classdoc%set(icls, 'corr', -1.0)
                 call classdoc%set(icls, 'w',     0.0)
             endif
-            call classdoc%write(fname)
         end do
+        call classdoc%write(fname)
         call classdoc%kill
     end subroutine gen2Dclassdoc
             
