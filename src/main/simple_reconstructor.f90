@@ -6,7 +6,6 @@ use, intrinsic :: iso_c_binding
 #include "simple_lib.f08"
 !! import functions
 use simple_fftw3,      only: fftwf_alloc_real, fftwf_free
-use simple_imghead,    only: find_ldim_nptcls
 use simple_timer,      only: tic, toc, timer_int_kind
 !! import classes
 use simple_ctf,        only: ctf
@@ -416,27 +415,24 @@ contains
 
     ! RECONSTRUCTION
     !> reconstruction routine
-    subroutine rec( self, fname, p, o, se, state, mul, part )
+    subroutine rec( self, p, o, se, state, mul, part )
         use simple_prep4cgrid, only: prep4cgrid
         class(reconstructor), intent(inout) :: self      !< this object
-        character(len=*),     intent(inout) :: fname     !< spider/MRC stack filename
         class(params),        intent(in)    :: p         !< parameters
         class(oris),          intent(inout) :: o         !< orientations
         class(sym),           intent(inout) :: se        !< symmetry element
         integer,              intent(in)    :: state     !< state to reconstruct
         real,    optional,    intent(in)    :: mul       !< shift multiplication factor
         integer, optional,    intent(in)    :: part      !< partition (4 parallel rec)
-        type(image)      :: img, img_pd
+        type(image)      :: img, img_pad
         type(prep4cgrid) :: gridprep
         real             :: skewness
-        integer          :: statecnt(p%nstates), i, cnt, n, ldim(3), state_here, state_glob
-        call find_ldim_nptcls(fname, ldim, n)
-        if( n /= o%get_noris() ) stop 'inconsistent nr entries; rec; simple_reconstructor'
+        integer          :: statecnt(p%nstates), i, cnt, state_here, state_glob
         ! stash global state index
         state_glob = state
         ! make the images
-        call img_pd%new([p%boxpd,p%boxpd,1],self%get_smpd())
-        call img%new([p%box,p%box,1],self%get_smpd())
+        call img%new([p%box,p%box,1], p%smpd)
+        call img_pad%new([p%boxpd,p%boxpd,1], p%smpd)
         ! make the gridding prepper
         call gridprep%new(img, self%kbwin, [p%boxpd,p%boxpd,1])
         ! population balancing logics
@@ -455,7 +451,7 @@ contains
         do i=1,p%nptcls
             call progress(i, p%nptcls)
             if( i <= p%top .and. i >= p%fromp )then
-                cnt = cnt+1
+                cnt = cnt + 1
                 state_here = nint(o%get(i,'state'))
                 if( state_here > 0 .and. (state_here == state) )then
                     statecnt(state) = statecnt(state) + 1
@@ -472,7 +468,7 @@ contains
         endif
         call self%bwd_ft
         call img%kill
-        call img_pd%kill
+        call img_pad%kill
         ! report how many particles were used to reconstruct each state
         if( p%nstates > 1 )then
             write(*,'(a,1x,i3,1x,a,1x,i6)') '>>> NR OF PARTICLES INCLUDED IN STATE:', state, 'WAS:', statecnt(state)
@@ -483,10 +479,11 @@ contains
             subroutine rec_dens
                 character(len=:), allocatable :: stkname
                 type(ori) :: orientation, o_sym
-                integer   :: j, state_balance, ind
+                integer   :: j, state, state_balance, ind
                 real      :: pw
+                state         = nint(o%get(i, 'state'))
                 state_balance = nint(o%get(i, 'state_balance'))
-                if( state_balance == 0 ) return
+                if( state == 0 .or. state_balance == 0 ) return
                 pw = 1.
                 if( p%frac < 0.99 ) pw = o%get(i, 'w')
                 if( pw > 0. )then
@@ -503,13 +500,13 @@ contains
                         endif
                     endif
                     call img%read(stkname, ind)
-                    call gridprep%prep(img, img_pd)
+                    call gridprep%prep(img, img_pad)
                     if( p%pgrp == 'c1' )then
-                        call self%inout_fplane(orientation, .true., img_pd, pwght=pw)
+                        call self%inout_fplane(orientation, .true., img_pad, pwght=pw)
                     else
                         do j=1,se%get_nsym()
                             o_sym = se%apply(orientation, j)
-                            call self%inout_fplane(o_sym, .true., img_pd, pwght=pw)
+                            call self%inout_fplane(o_sym, .true., img_pad, pwght=pw)
                         end do
                     endif
                     deallocate(stkname)

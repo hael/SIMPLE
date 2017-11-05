@@ -53,7 +53,7 @@ contains
                 endif
                 p%vols(s) = fbody//p%ext
                 rho_name  = 'rho_'//fbody//p%ext
-                call b%recvol%rec(p%stk, p, b%a, b%se, s, part=p%part)
+                call b%recvol%rec(p, b%a, b%se, s, part=p%part)
                 call b%recvol%compress_exp
                 call b%recvol%write(p%vols(s), del_if_exists=.true.)
                 call b%recvol%write_rho(trim(rho_name))
@@ -64,7 +64,7 @@ contains
                     allocate(fbody, source='recvol_state')
                 endif
                 p%vols(s) = fbody//int2str_pad(s,2)//p%ext
-                call b%recvol%rec(p%stk, p, b%a, b%se, s)
+                call b%recvol%rec(p, b%a, b%se, s)
                 call b%recvol%clip(b%vol)
                 call b%vol%write(p%vols(s), del_if_exists=.true.)
             endif
@@ -93,7 +93,7 @@ contains
             else
                 allocate(fbody, source='recvol_state')
             endif
-            call b%eorecvol%eorec_distr(p%stk, p, b%a, b%se, s, b%vol, fbody=fbody)
+            call b%eorecvol%eorec_distr(p, b%a, b%se, s, b%vol, fbody=fbody)
             deallocate(fbody)
         end do
         call qsys_job_finished( p, 'simple_rec_master :: exec_eorec')

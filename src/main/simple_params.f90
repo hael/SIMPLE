@@ -894,7 +894,11 @@ contains
             if( cline%defined('stk') )&
                 &stop 'stk and stktab cannot simultaneously be defined; params :: new'
             ! prepare stktab handler and set everything accordingly in this instance
-            call self%stkhandle%new(trim(self%stktab))
+            if( self%l_distr_exec )then
+                call self%stkhandle%new(trim(self%stktab), self%part)
+            else
+                call self%stkhandle%new(trim(self%stktab))
+            endif
             self%nmics   = self%stkhandle%get_nmics()
             self%nptcls  = self%stkhandle%get_nptcls()
             self%ldim    = self%stkhandle%get_ldim()
@@ -905,7 +909,6 @@ contains
             ! set name of partial files in parallel execution
             stk_part_fname    = trim(STKPARTFBODY)//int2str_pad(self%part,self%numlen)//self%ext
             stk_part_fname_sc = add2fbody(stk_part_fname, self%ext, '_sc')
-            
             self%stk_part     = stk_part_fname
             if( self%autoscale .eq. 'yes' )then
                 if( file_exists(stk_part_fname_sc) )then
@@ -1037,6 +1040,8 @@ contains
         if( .not. cline%defined('ydim') ) self%ydim = self%xdim
         ! set ldim
         if( cline%defined('xdim') ) self%ldim = [self%xdim,self%ydim,1]
+        ! box on the command line overrides all other ldim setters
+        if( cline%defined('box')  ) self%ldim = [self%box,self%box,1]
         ! if CTF refinement
         if( self%ctf .eq. 'refine' ) stop 'CTF refinement not yet implemented'
         ! set eullims

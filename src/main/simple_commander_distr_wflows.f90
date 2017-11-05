@@ -824,9 +824,8 @@ contains
             call cline_volassemble%delete( trim(vol) )
             state_assemble_finished(state) = 'VOLASSEMBLE_FINISHED_STATE'//int2str_pad(state,2)
         enddo
-
+        ! split stack
         if( .not. cline%defined('stktab') )then
-            ! split stack
             call xsplit%execute(cline)
         endif
         ! prep4cgrid

@@ -367,33 +367,32 @@ contains
     ! RECONSTRUCTION
     
     !> \brief  for distributed reconstruction of even/odd maps  
-    subroutine eorec_distr( self, fname, p, o, se, state, vol, fbody )
-        use simple_oris,            only: oris
-        use simple_sym,             only: sym
-        use simple_params,          only: params
-        use simple_gridding,        only: prep4cgrid
+    subroutine eorec_distr( self, p, o, se, state, vol, fbody )
+        use simple_oris,       only: oris
+        use simple_sym,        only: sym
+        use simple_params,     only: params
+        use simple_prep4cgrid, only: prep4cgrid
         class(eo_reconstructor),    intent(inout) :: self   !< object
-        character(len=*),           intent(in)    :: fname  !< spider/MRC stack filename
         class(params),              intent(in)    :: p      !< parameters
         class(oris),                intent(inout) :: o      !< orientations
         class(sym),                 intent(inout) :: se     !< symmetry element
         integer,                    intent(in)    :: state  !< state to reconstruct
         class(image),               intent(inout) :: vol    !< reconstructed volume
         character(len=*), optional, intent(in)    :: fbody  !< body of output file
+        type(kbinterpol)  :: wf
         type(image)       :: img, img_pad
-        type(kbinterpol)  :: kbwin
+        type(prep4cgrid)  :: gridprep
         real              :: skewness
-        integer           :: i, cnt, n, ldim(3), state_glob
-        integer           :: statecnt(p%nstates), state_here
+        integer           :: statecnt(p%nstates), i, cnt, state_here, state_glob
         character(len=32) :: eonames(2)
-        call find_ldim_nptcls(fname, ldim, n)
-        if( n /= o%get_noris() ) stop 'inconsistent nr entries; eorec; simple_eo_reconstructor'
-        kbwin = self%get_kbwin() 
         ! stash global state index
         state_glob = state
         ! make the images
         call img%new([p%box,p%box,1],p%smpd)
         call img_pad%new([p%boxpd,p%boxpd,1],p%smpd)
+        ! make the gridding prepper
+        wf = self%even%get_kbwin()
+        call gridprep%new(img, wf, [p%boxpd,p%boxpd,1])
         ! population balancing logics
         if( p%balance > 0 )then
             call o%balance( p%balance, NSPACE_BALANCE, p%nsym, p%eullims, skewness )
@@ -410,17 +409,17 @@ contains
         do i=1,p%nptcls
             call progress(i, p%nptcls)
             if( i <= p%top .and. i >= p%fromp )then
-                cnt = cnt+1
+                cnt = cnt + 1
                 state_here = nint(o%get(i,'state'))
                 if( state_here > 0 .and. (state_here == state ) )then
-                    statecnt(state) = statecnt(state)+1
+                    statecnt(state) = statecnt(state) + 1
                     call rec_dens
                 endif
             endif
         end do
         ! undo fourier components expansion
         call self%compress_exp
-        ! proceeds with density correction & output
+        ! density correction & output
         if( p%l_distr_exec )then
             if( present(fbody) )then
                 call self%write_eos(fbody//int2str_pad(state,2)//'_part'//int2str_pad(p%part,self%numlen))
@@ -452,20 +451,19 @@ contains
                 if( pw > 0. )then
                     orientation = o%get_ori(i)
                     eo          = nint(orientation%get('eo'))
-                    ! read image
                     if( p%l_stktab_input )then
                         call p%stkhandle%get_stkname_and_ind(i, stkname, ind)
-                        call img%read(stkname, ind)
                     else
                         if( p%l_distr_exec )then
-                            call img%read(p%stk_part, cnt)
+                            ind = cnt
+                            allocate(stkname, source=trim(p%stk_part))
                         else
-                            call img%read(fname, i)
+                            ind = i
+                            allocate(stkname, source=trim(p%stk))
                         endif
                     endif
-                    ! gridding
-                    call prep4cgrid(img, img_pad, kbwin)
-                    ! interpolation
+                    call img%read(stkname, ind)
+                    call gridprep%prep(img, img_pad)
                     if( p%pgrp == 'c1' )then
                         call self%grid_fplane(orientation, img_pad, eo, pw)
                     else

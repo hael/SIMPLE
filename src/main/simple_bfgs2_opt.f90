@@ -33,9 +33,9 @@ type, extends(optimizer) :: bfgs2_opt
     integer :: order
     logical :: exists=.false.
 contains
-    procedure :: new          => new_bfgs2_opt
-    procedure :: minimize     => bfgs2_minimize
-    procedure :: kill         => kill_bfgs2_opt
+    procedure :: new      => new_bfgs2_opt
+    procedure :: minimize => bfgs2_minimize
+    procedure :: kill     => kill_bfgs2_opt
 end type
 
 contains
@@ -568,26 +568,25 @@ contains
             end if
         end function solve_quadratic
 
-    subroutine change_direction
-        ! Convert the cache values from the end of the current minimisation
-        ! to those needed for the start of the next minimisation, alpha=0
-        ! The new x_alpha for alpha=0 is the current position
-        self%wrapper%x_alpha = spec%x_8
-        self%wrapper%x_cache_key = 0.0_8
-        ! The function value does not change
-        self%wrapper%f_cache_key = 0.0_8
-        ! The new g_alpha for alpha=0 is the current gradient at the endpoint
-        self%wrapper%g_alpha = self%gradient
-        self%wrapper%g_cache_key = 0.0_8
-        ! Calculate the slope along the new direction vector, p
-        self%wrapper%df_alpha = slope()
-        self%wrapper%df_cache_key = 0.0_8
-    end subroutine change_direction
-
+        subroutine change_direction
+            ! Convert the cache values from the end of the current minimisation
+            ! to those needed for the start of the next minimisation, alpha=0
+            ! The new x_alpha for alpha=0 is the current position
+            self%wrapper%x_alpha = spec%x_8
+            self%wrapper%x_cache_key = 0.0_8
+            ! The function value does not change
+            self%wrapper%f_cache_key = 0.0_8
+            ! The new g_alpha for alpha=0 is the current gradient at the endpoint
+            self%wrapper%g_alpha = self%gradient
+            self%wrapper%g_cache_key = 0.0_8
+            ! Calculate the slope along the new direction vector, p
+            self%wrapper%df_alpha = slope()
+            self%wrapper%df_cache_key = 0.0_8
+        end subroutine change_direction
 
     end subroutine bfgs2_minimize
 
-        !> \brief  is a destructor
+    !> \brief  is a destructor
     subroutine kill_bfgs2_opt( self )
         class(bfgs2_opt), intent(inout) :: self !< instance
         if( self%exists )then
@@ -596,4 +595,5 @@ contains
             self%exists = .false.
         endif
     end subroutine kill_bfgs2_opt
+
 end module simple_bfgs2_opt
