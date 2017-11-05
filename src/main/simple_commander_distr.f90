@@ -190,7 +190,7 @@ contains
         integer              :: iptcl, ipart, ldim(3), cnt, nimgs
         integer, allocatable :: parts(:,:)
         p = params(cline) ! parameters generated
-        call find_ldim_nptcls(p%stk, ldim, nimgs)
+        ldim = p%ldim
         ldim(3) = 1
         call img%new(ldim,1.)
         parts = split_nobjs_even(nimgs, p%nparts)           !! intel realloc warning
@@ -201,8 +201,8 @@ contains
                 call progress(ipart,p%nparts)
                 cnt = 0
                 do iptcl=parts(ipart,1),parts(ipart,2)
-                    cnt = cnt+1
-                    call img%read(p%stk, iptcl)
+                    cnt = cnt + 1
+                    call read_image( iptcl )
                     if( p%neg .eq. 'yes' ) call img%neg
                     call img%write(trim(STKPARTFBODY)//int2str_pad(ipart,p%numlen)//p%ext, cnt)
                 end do
@@ -240,7 +240,7 @@ contains
                             exit
                         endif
                         if( ldim(1) == p%box_original .and. ldim(2) == p%box_original )then
-                            ! dimension ok
+                            ! dimension ok 
                         else
                             is_correct = .false.
                             exit
@@ -251,6 +251,18 @@ contains
                 stack_is_split = is_split .and. is_correct
                 if( .not. stack_is_split ) call del_files(trim(STKPARTFBODY), p%nparts, ext=p%ext)
             end function stack_is_split
+
+            subroutine read_image( iptcl )
+                integer, intent(in) :: iptcl
+                character(len=:), allocatable :: stkname
+                integer :: ind
+                if( p%l_stktab_input )then
+                    call p%stkhandle%get_stkname_and_ind(iptcl, stkname, ind)
+                    call img%read(stkname, ind)
+                else
+                    call img%read(p%stk, iptcl)
+                endif
+            end subroutine read_image
 
     end subroutine exec_split
 

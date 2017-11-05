@@ -1915,20 +1915,19 @@ select case(prg)
         keys_optional(13) = 'snr'
         keys_optional(14) = 'fromp'
         keys_optional(15) = 'top'
-        keys_optional(16) = 'stk2'
-        keys_optional(17) = 'nptcls'
-        keys_optional(18) = 'order'
-        keys_optional(19) = 'bfac'
-        keys_optional(20) = 'outfile'
-        keys_optional(21) = 'ctfreslim'
-        keys_optional(22) = 'dfclose'
-        keys_optional(23) = 'dffar'
-        keys_optional(24) = 'stats'
-        keys_optional(25) = 'stk'
-        keys_optional(26) = 'stktab'
+        keys_optional(16) = 'nptcls'
+        keys_optional(17) = 'order'
+        keys_optional(18) = 'bfac'
+        keys_optional(19) = 'outfile'
+        keys_optional(20) = 'ctfreslim'
+        keys_optional(21) = 'dfclose'
+        keys_optional(22) = 'dffar'
+        keys_optional(23) = 'stats'
+        keys_optional(24) = 'stk'
+        keys_optional(25) = 'stktab'
         ! parse command line
         if( describe ) call print_doc_stackops
-        call cline%parse( keys_required(:1),keys_optional(:26) )
+        call cline%parse( keys_required(:1),keys_optional(:25) )
         ! sanity check
         if( cline%defined('stk') .or. cline%defined('stktab') )then
             ! all ok
@@ -2512,16 +2511,14 @@ select case(prg)
         ! <split/begin>is a program for splitting of image stacks into partitions for parallel execution.
         ! This is done to reduce I/O latency<split/end>
         !
-        ! set required keys
-        keys_required(1) = 'stk'
         ! set optional keys
-        keys_optional(1) = 'nparts'
-        keys_optional(2) = 'neg'
-        keys_optional(3) = 'ncls'
-        keys_optional(4) = 'nspace'
+        keys_optional(1) = 'stk'
+        keys_optional(2) = 'stktab'
+        keys_optional(3) = 'nparts'
+        keys_optional(4) = 'neg'
         ! parse command line
         if( describe ) call print_doc_split
-        call cline%parse(keys_required(:1), keys_optional(:4))
+        call cline%parse(keys_optional=keys_optional(:4))
         ! execute
         call xsplit%execute(cline)
     case DEFAULT
