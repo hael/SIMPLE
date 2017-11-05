@@ -763,15 +763,14 @@ contains
         type(params)                             :: p
         type(build)                              :: b
         type(ran_tabu)                           :: rt
-        type(image)                              :: img
         type(oris)                               :: o_here, os_ran
         integer,          allocatable            :: pinds(:)
         character(len=:), allocatable            :: fname
         integer :: i, s, ipst, cnt, cnt2, cnt3, nincl, lfoo(3), np1,np2,ntot
         real    :: p_ctf, p_dfx
         p = params(cline)                                ! parameters generated
+        p%boxmatch = p%box
         call b%build_general_tbox(p, cline,do3d=.false.) ! general objects built
-        call img%new([p%box,p%box,1],p%smpd)             ! image created
         ! random selection
         if( cline%defined('nran') )then
             write(*,'(a)') '>>> RANDOMLY SELECTING IMAGES'
@@ -785,8 +784,8 @@ contains
             call os_ran%new(p%nran)
             do i=1,p%nran
                 call progress(i, p%nran)
-                call img%read(p%stk, pinds(i))
-                call img%write(p%outstk, i)
+                call read_image(pinds(i))
+                call b%img%write(p%outstk, i)
                 if( cline%defined('oritab') .or. cline%defined('deftab') )then
                     call os_ran%set_ori(i, b%a%get_ori(pinds(i)))
                 endif
@@ -806,8 +805,8 @@ contains
                 do i=1,p%nptcls
                     cnt = cnt + 1
                     call progress(i, p%nptcls)
-                    call img%read(p%stk, pinds(i))
-                    call img%write(p%outstk, cnt)
+                    call read_image(pinds(i))
+                    call b%img%write(p%outstk, cnt)
                 end do
             endif
             goto 999
@@ -831,8 +830,8 @@ contains
                     s = nint(b%a%get(pinds(i), 'state'))
                     if( s == p%state )then
                         cnt = cnt+1
-                        call img%read(p%stk, pinds(i))
-                        call img%write(p%outstk, cnt)
+                        call read_image(pinds(i))
+                        call b%img%write(p%outstk, cnt)
                     endif
                 end do
                 ! make orientation structure for the best ones
@@ -854,8 +853,8 @@ contains
                     s = nint(b%a%get(pinds(i), 'class'))
                     if( s == p%class )then
                         cnt = cnt+1
-                        call img%read(p%stk, pinds(i))
-                        call img%write(p%outstk, cnt)
+                        call read_image(pinds(i))
+                        call b%img%write(p%outstk, cnt)
                     endif
                 end do
                 ! make orientation structure for the best ones
@@ -874,8 +873,8 @@ contains
                 o_here = oris(nincl)
                 do i=1,nincl
                     call progress(i, nincl)
-                    call img%read(p%stk, pinds(i))
-                    call img%write(p%outstk, i)
+                    call read_image(pinds(i))
+                    call b%img%write(p%outstk, i)
                     call o_here%set_ori(i, b%a%get_ori(pinds(i)))
                 end do
                 allocate(fname, source='extracted_oris'//METADATEXT)
@@ -897,8 +896,8 @@ contains
                     s = nint(b%a%get(i, 'state'))
                     if( s == p%state )then
                         cnt = cnt+1
-                        call img%read(p%stk, i)
-                        call img%write(p%outstk, cnt)
+                        call read_image(i)
+                        call b%img%write(p%outstk, cnt)
                     endif
                 end do
                 ! make orientation structure for the extracted ones
@@ -920,8 +919,8 @@ contains
                     s = nint(b%a%get(i, 'class'))
                     if( s == p%class )then
                         cnt = cnt+1
-                        call img%read(p%stk, i)
-                        call img%write(p%outstk, cnt)
+                        call read_image(i)
+                        call b%img%write(p%outstk, cnt)
                     endif
                 end do
                 ! make orientation structure for the best ones
@@ -968,8 +967,8 @@ contains
         ! visualize
         if( p%vis .eq. 'yes' )then
             do i=1,p%nptcls
-                call img%read(p%stk, i)
-                call img%vis
+                call read_image(i)
+                call b%img%vis
             end do
             goto 999
         endif
@@ -981,25 +980,6 @@ contains
         ! add noise
         if( cline%defined('snr') )then
             call add_noise_imgfile(p%stk, p%outstk, p%snr, p%smpd)
-            goto 999
-        endif
-        ! append stk2 to stk while preserving the name of stk
-        if( p%append .eq. 'yes' )then
-            if( cline%defined('stk') .and. cline%defined('stk2') )then
-                ! find out image dimension and number of particles
-                call find_ldim_nptcls(p%stk,lfoo,np1)
-                call find_ldim_nptcls(p%stk2,lfoo,np2)
-                ntot = np1+np2
-                cnt = 0
-                do i=np1+1,ntot
-                    cnt = cnt+1
-                    call progress(cnt,np2)
-                    call img%read(p%stk2,cnt)
-                    call img%write(p%stk,i)
-                end do
-            else
-                stop 'need two stacks (stk & stk2) to append; simple_stackops'
-            endif
             goto 999
         endif
         ! copy
@@ -1058,6 +1038,21 @@ contains
         write(*,*)'Nothing to do!'
         ! end gracefully
     999 call simple_end('**** SIMPLE_STACKOPS NORMAL STOP ****')
+
+    contains
+
+        subroutine read_image( iptcl )
+            integer, intent(in) :: iptcl
+            character(len=:), allocatable :: stkname
+            integer :: ind
+            if( p%l_stktab_input )then
+                call p%stkhandle%get_stkname_and_ind(iptcl, stkname, ind)
+                call b%img%read(stkname, ind)
+            else
+                call b%img%read(p%stk, iptcl)
+            endif
+        end subroutine read_image
+
     end subroutine exec_stackops
 
 end module simple_commander_imgproc

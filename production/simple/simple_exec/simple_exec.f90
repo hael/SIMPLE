@@ -1898,8 +1898,7 @@ select case(prg)
         ! which may be useful for analysis of dose-fractionated image series. neg inverts the contrast of the images<stackops/end>
         !
         ! Required keys
-        keys_required(1)  = 'stk'
-        keys_required(2)  = 'smpd'
+        keys_required(1)  = 'smpd'
         ! set optional keys
         keys_optional(1)  = 'oritab'
         keys_optional(2)  = 'outstk'
@@ -1918,17 +1917,24 @@ select case(prg)
         keys_optional(15) = 'top'
         keys_optional(16) = 'stk2'
         keys_optional(17) = 'nptcls'
-        keys_optional(18) = 'append'
-        keys_optional(19) = 'order'
-        keys_optional(20) = 'bfac'
-        keys_optional(21) = 'outfile'
-        keys_optional(22) = 'ctfreslim'
-        keys_optional(23) = 'dfclose'
-        keys_optional(24) = 'dffar'
-        keys_optional(25) = 'stats'
+        keys_optional(18) = 'order'
+        keys_optional(19) = 'bfac'
+        keys_optional(20) = 'outfile'
+        keys_optional(21) = 'ctfreslim'
+        keys_optional(22) = 'dfclose'
+        keys_optional(23) = 'dffar'
+        keys_optional(24) = 'stats'
+        keys_optional(25) = 'stk'
+        keys_optional(26) = 'stktab'
         ! parse command line
         if( describe ) call print_doc_stackops
-        call cline%parse( keys_required(:2),keys_optional(:25) )
+        call cline%parse( keys_required(:1),keys_optional(:26) )
+        ! sanity check
+        if( cline%defined('stk') .or. cline%defined('stktab') )then
+            ! all ok
+        else
+            stop 'stk or stktab need to be part of command line!'
+        endif
         ! execute
         call xstackops%execute(cline)
 
