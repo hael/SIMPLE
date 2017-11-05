@@ -187,13 +187,13 @@ contains
         class(cmdline),         intent(inout) :: cline
         type(params)         :: p
         type(image)          :: img
-        integer              :: iptcl, ipart, ldim(3), cnt, nimgs
+        integer              :: iptcl, ipart, ldim(3), cnt
         integer, allocatable :: parts(:,:)
         p = params(cline) ! parameters generated
         ldim = p%ldim
         ldim(3) = 1
-        call img%new(ldim,1.)
-        parts = split_nobjs_even(nimgs, p%nparts)           !! intel realloc warning
+        call img%new(ldim,p%smpd)
+        parts = split_nobjs_even(p%nptcls, p%nparts)
         if( size(parts,1) /= p%nparts ) stop 'ERROR! generated number of parts not same as inputted nparts'
         if( .not. stack_is_split() )then
             call exec_cmdline('mkdir -p '//trim(STKPARTSDIR))

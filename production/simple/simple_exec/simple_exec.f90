@@ -2511,6 +2511,8 @@ select case(prg)
         ! <split/begin>is a program for splitting of image stacks into partitions for parallel execution.
         ! This is done to reduce I/O latency<split/end>
         !
+        ! set required keys
+        keys_required(1) = 'smpd'
         ! set optional keys
         keys_optional(1) = 'stk'
         keys_optional(2) = 'stktab'
@@ -2518,7 +2520,7 @@ select case(prg)
         keys_optional(4) = 'neg'
         ! parse command line
         if( describe ) call print_doc_split
-        call cline%parse(keys_optional=keys_optional(:4))
+        call cline%parse(keys_required(:1), keys_optional(:4))
         ! execute
         call xsplit%execute(cline)
     case DEFAULT
