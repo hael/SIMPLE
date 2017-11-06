@@ -17,11 +17,10 @@ type :: pftcc_grad_shsrch
     class(polarft_corrcalc), pointer :: pftcc_ptr    =>null()  !< pointer to pftcc object
     integer                          :: reference    = 0       !< reference pft
     integer                          :: particle     = 0       !< particle pft
-    integer                          :: ldim(3)      = [0,0,0] !< logical dimension of Cartesian image
     integer                          :: nrots        = 0       !< # rotations
     integer                          :: maxits       = 100     !< max # iterations
     logical                          :: shbarr       = .true.  !< shift barrier constraint or not
-    integer                          :: nrestarts    =  5      !< simplex restarts (randomized bounds)
+    integer                          :: nrestarts    = 5       !< # randomized restarts (randomized bounds)
     integer                          :: cur_inpl_idx = 0       !< index of inplane angle for shift search              
     real                             :: maxshift     = 0.      !< maximal shift
     integer                          :: max_evals    = 5       !< max # inplrot/shsrch cycles
@@ -65,12 +64,8 @@ contains
         call opt_fact%new(self%ospec, self%nlopt)        
         ! set pointer to corrcalc object
         self%pftcc_ptr => pftcc
-        ! get logical dimension
-        self%ldim = self%pftcc_ptr%get_ldim()
         ! get # rotations
-        self%nrots = pftcc%get_nrots() 
-        ! set maxshift
-        self%maxshift = real(maxval(self%ldim))/2.
+        self%nrots = pftcc%get_nrots()
         call self%grad_shsrch_set_costfun
     end subroutine grad_shsrch_new
     

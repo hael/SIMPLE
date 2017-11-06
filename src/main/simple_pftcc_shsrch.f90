@@ -17,12 +17,10 @@ type :: pftcc_shsrch
     class(polarft_corrcalc), pointer :: pftcc_ptr  =>null()  !< pointer to pftcc object
     integer                          :: reference  = 0       !< reference pft
     integer                          :: particle   = 0       !< particle pft
-    integer                          :: ldim(3)    = [0,0,0] !< logical dimension of Cartesian image
     integer                          :: nrots      = 0       !< # rotations
     integer                          :: maxits     = 100     !< max # iterations
     logical                          :: shbarr     = .true.  !< shift barrier constraint or not
     integer                          :: nrestarts  =  5      !< simplex restarts (randomized bounds)
-    real                             :: maxshift   = 0.      !< maximal shift
   contains
     procedure :: new
     procedure :: set_indices
@@ -35,13 +33,13 @@ contains
     !> Shift search constructor
     subroutine new( self, pftcc, lims, lims_init, shbarrier, nrestarts, maxits )
         use simple_projector, only: projector
-        class(pftcc_shsrch),                intent(inout) :: self           !< instance
-        class(polarft_corrcalc),    target, intent(in)    :: pftcc          !< correlator
-        real,                               intent(in)    :: lims(:,:)      !< limits for barrier constraint
-        real,             optional,         intent(in)    :: lims_init(:,:) !< limits for simplex initialisation by randomised bounds
-        character(len=*), optional,         intent(in)    :: shbarrier      !< shift barrier constraint or not
-        integer,          optional,         intent(in)    :: nrestarts      !< simplex restarts (randomized bounds)
-        integer,          optional,         intent(in)    :: maxits         !< maximum iterations
+        class(pftcc_shsrch),             intent(inout) :: self           !< instance
+        class(polarft_corrcalc), target, intent(in)    :: pftcc          !< correlator
+        real,                            intent(in)    :: lims(:,:)      !< limits for barrier constraint
+        real,             optional,      intent(in)    :: lims_init(:,:) !< limits for simplex initialisation by randomised bounds
+        character(len=*), optional,      intent(in)    :: shbarrier      !< shift barrier constraint or not
+        integer,          optional,      intent(in)    :: nrestarts      !< simplex restarts (randomized bounds)
+        integer,          optional,      intent(in)    :: maxits         !< maximum iterations
         type(opt_factory) :: opt_fact
         ! flag the barrier constraint
         self%shbarr = .true.
@@ -64,12 +62,8 @@ contains
         call opt_fact%new(self%ospec, self%nlopt)
         ! set pointer to corrcalc object
         self%pftcc_ptr => pftcc
-        ! get logical dimension
-        self%ldim = self%pftcc_ptr%get_ldim()
         ! get # rotations
-        self%nrots = pftcc%get_nrots() 
-        ! set maxshift
-        self%maxshift = real(maxval(self%ldim))/2.
+        self%nrots = pftcc%get_nrots()
         ! associate costfun
         self%ospec%costfun => costfun
     end subroutine new
@@ -128,10 +122,6 @@ contains
             cxy(2:) = self%ospec%x ! shift
             ! rotate the shift vector to the frame of reference
             cxy(2:) = matmul(cxy(2:), rotmat2d(self%pftcc_ptr%get_rot(irot)))
-            if( any(cxy(2:) > self%maxshift) .or. any(cxy(2:) < -self%maxshift) )then
-                cxy(1)  = -1.
-                cxy(2:) = 0.
-            endif
         else
             irot    = 0
             cxy(1)  = -cost_init ! correlation
