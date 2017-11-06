@@ -501,7 +501,7 @@ contains
             if( cconsider_w )  w = self%o(i)%get('w')
             if( mystate > 0 .and. w > TINY )then
                 myval = nint(self%o(i)%get(label))
-                pops(myval) = pops(myval) + 1
+                if( myval > 0 ) pops(myval) = pops(myval) + 1
             endif
         end do
     end function get_pops

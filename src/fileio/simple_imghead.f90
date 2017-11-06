@@ -322,21 +322,16 @@ contains
                     endif
                 end do
                 self%nz       = spihed(1)
-                DebugPrint ' nz: ', self%nz
                 self%ny       = spihed(2)
-                DebugPrint ' ny: ', self%ny
                 self%irec     = spihed(3)
                 self%iform    = spihed(5)
-                DebugPrint  ' iform: ', self%iform
                 self%imami    = spihed(6)
                 self%fmax     = spihed(7)
                 self%fmin     = spihed(8)
                 self%av       = spihed(9)
                 self%sig      = spihed(10)
                 self%nx       = spihed(12)
-                DebugPrint ' nx: ', self%nx
                 self%labrec   = spihed(13)
-                DebugPrint ' labrec: ', self%labrec
                 self%iangle   = spihed(14)
                 self%phi      = spihed(15)
                 self%theta    = spihed(16)
@@ -346,9 +341,7 @@ contains
                 self%zoff     = spihed(20)
                 self%scale    = spihed(21)
                 self%labbyt   = spihed(22)
-                DebugPrint ' labbyt: ', self%labbyt
                 self%lenbyt   = spihed(23)
-                DebugPrint ' lenbyt: ', self%lenbyt
                 self%istack   = spihed(24)
                 self%maxim    = spihed(26)
                 self%imgnum   = spihed(27)
@@ -375,7 +368,6 @@ contains
             class DEFAULT
                 stop 'Format not supported; print; simle_imghead'
         end select
-        DebugPrint '(imghead::read) done'
     end subroutine read
 
     !>  \brief write header data to disk
@@ -398,9 +390,7 @@ contains
         type is( SpiImgHead )
             spihed = 0.
             spihed(1)  = self%nz
-            DebugPrint '::write nz: ', spihed(1)
             spihed(2)  = self%ny
-            DebugPrint '::write ny: ', spihed(2)
             spihed(3)  = self%irec
             spihed(5)  = self%iform
             spihed(6)  = self%imami
@@ -409,9 +399,7 @@ contains
             spihed(9)  = self%av
             spihed(10) = self%sig
             spihed(12) = self%nx
-            DebugPrint '::write nx: ', spihed(12)
             spihed(13) = self%labrec
-            DebugPrint '::write labrec: ', spihed(13)
             spihed(14) = self%iangle
             spihed(15) = self%phi
             spihed(16) = self%theta
@@ -421,9 +409,7 @@ contains
             spihed(20) = self%zoff
             spihed(21) = self%scale
             spihed(22) = self%labbyt
-            DebugPrint '::write labbyt: ', spihed(22)
             spihed(23) = self%lenbyt
-            DebugPrint '::write lenbyt: ', spihed(23)
             spihed(24) = self%istack
             spihed(26) = self%maxim
             spihed(27) = self%imgnum
@@ -956,7 +942,6 @@ contains
             write(*,*) 'Trying to set image dimension that is nonconforming; setDim; simple_imghead'
             stop
         endif
-        DebugPrint 'imghead::setDim check type of ImgHead'
         select type( self )
         class is( MrcImgHead )
             select case( which_dim )
@@ -984,7 +969,6 @@ contains
                 stop 'not a valid dimension; setDim; simple_imghead'
             end select
         end select
-        DebugPrint 'imghead::setDim check type of ImgHead done'
     end subroutine setDim
 
     !>  \brief  Return the number of records in file header
