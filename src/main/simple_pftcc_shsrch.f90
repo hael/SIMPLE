@@ -2,39 +2,38 @@
 module simple_pftcc_shsrch
 #include "simple_lib.f08"
 use simple_opt_spec,          only: opt_spec
-use simple_pftcc_opt,         only: pftcc_opt
 use simple_polarft_corrcalc,  only: polarft_corrcalc
-use simple_simplex_pftcc_opt, only: simplex_pftcc_opt
+use simple_opt_factory,       only: opt_factory
+use simple_optimizer,         only: optimizer
 implicit none
 
 public :: pftcc_shsrch
 private
 
-type, extends(pftcc_opt) :: pftcc_shsrch
+type :: pftcc_shsrch
     private
-    type(opt_spec)                   :: ospec                    !< optimizer specification object
-    type(simplex_pftcc_opt)          :: nlopt                    !< optimizer object
-    class(polarft_corrcalc), pointer :: pftcc_ptr      =>null()  !< pointer to pftcc object
-    integer                          :: reference      = 0       !< reference pft
-    integer                          :: particle       = 0       !< particle pft
-    integer                          :: ldim(3)        = [0,0,0] !< logical dimension of Cartesian image
-    integer                          :: nrots          = 0       !< # rotations
-    integer                          :: maxits         = 100     !< max # iterations
-    logical                          :: shbarr         = .true.  !< shift barrier constraint or not
-    integer                          :: nrestarts      =  5      !< simplex restarts (randomized bounds)
-    real                             :: maxshift       = 0.      !< maximal shift
+    type(opt_spec)                   :: ospec                !< optimizer specification object
+    class(optimizer), pointer        :: nlopt                !< optimizer object
+    class(polarft_corrcalc), pointer :: pftcc_ptr  =>null()  !< pointer to pftcc object
+    integer                          :: reference  = 0       !< reference pft
+    integer                          :: particle   = 0       !< particle pft
+    integer                          :: ldim(3)    = [0,0,0] !< logical dimension of Cartesian image
+    integer                          :: nrots      = 0       !< # rotations
+    integer                          :: maxits     = 100     !< max # iterations
+    logical                          :: shbarr     = .true.  !< shift barrier constraint or not
+    integer                          :: nrestarts  =  5      !< simplex restarts (randomized bounds)
+    real                             :: maxshift   = 0.      !< maximal shift
   contains
-    procedure :: new         => shsrch_new
-    procedure :: kill        => shsrch_kill
-    procedure :: set_indices => shsrch_set_indices
-    procedure :: costfun     => shsrch_costfun
-    procedure :: minimize    => shsrch_minimize
+    procedure :: new
+    procedure :: set_indices
+    procedure :: minimize
+    procedure :: costfun
 end type pftcc_shsrch
 
 contains
 
     !> Shift search constructor
-    subroutine shsrch_new( self, pftcc, lims, lims_init, shbarrier, nrestarts, maxits )
+    subroutine new( self, pftcc, lims, lims_init, shbarrier, nrestarts, maxits )
         use simple_projector, only: projector
         class(pftcc_shsrch),                intent(inout) :: self           !< instance
         class(polarft_corrcalc),    target, intent(in)    :: pftcc          !< correlator
@@ -43,6 +42,7 @@ contains
         character(len=*), optional,         intent(in)    :: shbarrier      !< shift barrier constraint or not
         integer,          optional,         intent(in)    :: nrestarts      !< simplex restarts (randomized bounds)
         integer,          optional,         intent(in)    :: maxits         !< maximum iterations
+        type(opt_factory) :: opt_fact
         ! flag the barrier constraint
         self%shbarr = .true.
         if( present(shbarrier) )then
@@ -60,8 +60,8 @@ contains
             call self%ospec%specify('simplex', 2, ftol=1e-4, gtol=1e-4,&
                 &limits=lims, nrestarts=self%nrestarts, maxits=self%maxits)
         endif
-        ! generate the simplex optimizer object
-        call self%nlopt%new(self%ospec)
+        ! generate the optimizer object
+        call opt_fact%new(self%ospec, self%nlopt)
         ! set pointer to corrcalc object
         self%pftcc_ptr => pftcc
         ! get logical dimension
@@ -70,12 +70,9 @@ contains
         self%nrots = pftcc%get_nrots() 
         ! set maxshift
         self%maxshift = real(maxval(self%ldim))/2.
-    end subroutine shsrch_new
-
-    !> destructor (empty)
-    subroutine shsrch_kill( self )
-        class(pftcc_shsrch), intent(inout) :: self
-    end subroutine shsrch_kill
+        ! associate costfun
+        self%ospec%costfun => costfun
+    end subroutine new
     
     !> shsrch_set_indices Set indicies for shift search
     !! \param ref reference
@@ -83,35 +80,33 @@ contains
     !! \param rot rotational index
     !! \param state current state
     !!
-    subroutine shsrch_set_indices( self, ref, ptcl )
+    subroutine set_indices( self, ref, ptcl )
         class(pftcc_shsrch), intent(inout) :: self
         integer,             intent(in)    :: ref, ptcl
         self%reference = ref
         self%particle  = ptcl
-    end subroutine shsrch_set_indices
+    end subroutine set_indices     
 
     !> Cost function
-    subroutine shsrch_costfun( self, vec, cost )
+    function costfun( self, vec, D ) result( cost )
         class(pftcc_shsrch), intent(inout) :: self
-        real,                intent(in)    :: vec(2)
-        real,                intent(out)   :: cost
-        real :: vec_here(2) !< current set of values
+        integer,             intent(in)    :: D
+        real,                intent(in)    :: vec(D)
+        real :: cost
         real :: corrs(self%nrots)
-        vec_here = vec
-        where( abs(vec) < 1.e-6 ) vec_here = 0.
         if( self%shbarr )then
-            if( any(vec_here(:) < self%ospec%limits(:,1)) .or.&
-               &any(vec_here(:) > self%ospec%limits(:,2)) )then
+            if( any(vec(:) < self%ospec%limits(:,1)) .or.&
+               &any(vec(:) > self%ospec%limits(:,2)) )then
                 cost = 1.
                 return
             endif
         endif
-        call self%pftcc_ptr%gencorrs(self%reference, self%particle, vec_here, corrs)
+        call self%pftcc_ptr%gencorrs(self%reference, self%particle, vec, corrs)
         cost = -maxval(corrs)
-    end subroutine shsrch_costfun
+    end function costfun
     
     !> minimisation routine
-    function shsrch_minimize( self, irot ) result( cxy )
+    function minimize( self, irot ) result( cxy )
         class(pftcc_shsrch), intent(inout) :: self
         integer,             intent(out)   :: irot
         real, allocatable :: cxy(:)
@@ -121,7 +116,7 @@ contains
         ! minimisation
         self%ospec%x      = 0.
         self%ospec%nevals = 0
-        call self%costfun(self%ospec%x, cost_init)
+        cost_init = self%costfun(self%ospec%x, self%ospec%ndim)
         call self%nlopt%minimize(self%ospec, self, cost)
         if( cost <= cost_init )then
             ! get rotation index
@@ -142,19 +137,19 @@ contains
             cxy(1)  = -cost_init ! correlation
             cxy(2:) = 0.
         endif
-    end function shsrch_minimize
+    end function minimize
 
-    function shsrch_get_nevals( self ) result( nevals )
+    function get_nevals( self ) result( nevals )
         class(pftcc_shsrch), intent(inout) :: self
         integer :: nevals
         nevals = self%ospec%nevals
-    end function shsrch_get_nevals
+    end function get_nevals
 
-    subroutine shsrch_get_peaks( self, peaks )
+    subroutine get_peaks( self, peaks )
         class(pftcc_shsrch), intent(inout) :: self
         real, allocatable,   intent(out)   :: peaks(:,:) !< output peak matrix
         allocate(peaks(1,2))
         peaks(1,:) = self%ospec%x
-    end subroutine shsrch_get_peaks
+    end subroutine get_peaks
 
 end module simple_pftcc_shsrch

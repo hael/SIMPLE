@@ -733,9 +733,10 @@ select case(prg)
         keys_optional(25) = 'stktab'
         keys_optional(26) = 'dyncls'
         keys_optional(27) = 'phaseplate'
+        keys_optional(28) = 'opt'
         ! parse command line
         if( describe ) call print_doc_prime2D
-        call cline%parse(keys_required(:4), keys_optional(:27))
+        call cline%parse(keys_required(:4), keys_optional(:28))
         ! sanity check
         if( cline%defined('stk') .or. cline%defined('stktab') )then
             ! all ok
@@ -1035,9 +1036,10 @@ select case(prg)
         keys_optional(35) = 'stktab'
         keys_optional(36) = 'sdev_thres'
         keys_optional(37) = 'phaseplate'
+        keys_optional(38) = 'opt'
         ! parse command line
         if( describe ) call print_doc_prime3D
-        call cline%parse(keys_required(:5), keys_optional(:37))
+        call cline%parse(keys_required(:5), keys_optional(:38))
         ! sanity check
         if( cline%defined('stk') .or. cline%defined('stktab') )then
             ! all ok

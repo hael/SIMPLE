@@ -36,7 +36,7 @@ type prime3D_srch
     class(oris),             pointer :: a_ptr          => null() !< b%a (primary particle orientation table)
     class(sym),              pointer :: se_ptr         => null() !< b%se (symmetry elements)
     type(pftcc_shsrch)               :: shsrch_obj               !< origin shift search object
-!    type(pftcc_grad_shsrch)          :: shsrch_obj               !< activate for gradient-based search object
+    type(pftcc_grad_shsrch)          :: grad_shsrch_obj          !< origin shift search object, L-BFGS with gradient
     integer                          :: iptcl          = 0       !< global particle index
     integer                          :: nrefs          = 0       !< total # references (nstates*nprojs)
     integer                          :: nnnrefs        = 0       !< total # neighboring references (nstates*nnn)
@@ -57,13 +57,12 @@ type prime3D_srch
     real                             :: specscore      = 0.      !< spectral score
     real                             :: prev_shvec(2)  = 0.      !< previous origin shift vector
     character(len=STDLEN)            :: refine         = ''      !< refinement flag
-    character(len=STDLEN)            :: shbarr         = ''      !< shift barrier flag
+    character(len=STDLEN)            :: opt            = ''      !< optimizer flag
     logical                          :: doshift        = .true.  !< 2 indicate whether 2 serch shifts
     logical                          :: greedy_inpl    = .true.  !< 2 indicate whether in-plane search is greedy or not
     logical                          :: exists         = .false. !< 2 indicate existence
   contains
     procedure          :: new
-    procedure          :: kill
     procedure          :: exec_prime3D_srch
     procedure          :: exec_prime3D_srch_het
     procedure, private :: greedy_srch
@@ -77,6 +76,7 @@ type prime3D_srch
     procedure, private :: prep4srch
     procedure, private :: prep_npeaks_oris_and_weights
     procedure, private :: store_solution
+    procedure          :: kill
 end type prime3D_srch
 
 contains
@@ -355,8 +355,8 @@ contains
         self%nnn_static  =  p%nnn
         self%nnn         =  p%nnn
         self%nnnrefs     =  self%nnn*self%nstates
-        self%shbarr      =  p%shbarrier
         self%kstop_grid  =  p%kstop_grid
+        self%opt         =  p%opt
         self%greedy_inpl = .true.
         if( str_has_substr(self%refine,'shc') )then
             if( self%npeaks > 1 ) stop 'npeaks must be equal to 1 with refine=shc|shcneigh'
@@ -391,19 +391,14 @@ contains
         lims_init(:,1) = -SHC_INPL_TRSHWDTH
         lims_init(:,2) =  SHC_INPL_TRSHWDTH
         call self%shsrch_obj%new(self%pftcc_ptr, lims, lims_init=lims_init,&
-            &shbarrier=self%shbarr, nrestarts=3, maxits=60)
-!!$  activate below for gradient-based shift search
-!!$        call self%shsrch_obj%new(self%pftcc_ptr, lims, lims_init=lims_init,&
-!!$            &shbarrier=self%shbarr, nrestarts=1, maxits=60)
+            &shbarrier=p%shbarrier, nrestarts=3, maxits=60)
+        call self%grad_shsrch_obj%new(self%pftcc_ptr, lims, lims_init=lims_init,&
+            &shbarrier=p%shbarrier, nrestarts=1, maxits=60)
         self%exists = .true.
         DebugPrint '>>> PRIME3D_SRCH::CONSTRUCTED NEW SIMPLE_PRIME3D_SRCH OBJECT'
     end subroutine new
 
-    subroutine kill( self )
-        class(prime3D_srch),  intent(inout) :: self   !< instance
-        call self%shsrch_obj%kill
-    end subroutine kill
-
+    
     ! SEARCH ROUTINES
 
     !>  \brief  exec_prime3D_srch is a master prime search routine
@@ -909,17 +904,32 @@ contains
         real, allocatable :: cxy(:), crxy(:)
         integer :: i, ref, irot
         if( self%doshift )then
-            do i=self%nrefs,self%nrefs-self%npeaks+1,-1
-                ref = proj_space_inds(self%iptcl, i)
-                call self%shsrch_obj%set_indices(ref, self%iptcl)
-                cxy = self%shsrch_obj%minimize(irot=irot)
-                if( irot > 0 )then
-                    ! irot > 0 guarantees improvement found
-                    proj_space_euls(self%iptcl, ref,3) = 360. - self%pftcc_ptr%get_rot(irot)
-                    proj_space_corrs(self%iptcl,ref)   = cxy(1)
-                    proj_space_shift(self%iptcl,ref,:) = cxy(2:3)
-                endif
-            end do
+            select case(trim(self%opt))
+                case('bfgs')
+                    do i=self%nrefs,self%nrefs-self%npeaks+1,-1
+                        ref = proj_space_inds(self%iptcl, i)
+                        call self%grad_shsrch_obj%set_indices(ref, self%iptcl)
+                        cxy = self%grad_shsrch_obj%minimize(irot=irot)
+                        if( irot > 0 )then
+                            ! irot > 0 guarantees improvement found
+                            proj_space_euls(self%iptcl, ref,3) = 360. - self%pftcc_ptr%get_rot(irot)
+                            proj_space_corrs(self%iptcl,ref)   = cxy(1)
+                            proj_space_shift(self%iptcl,ref,:) = cxy(2:3)
+                        endif
+                    end do
+                case DEFAULT
+                    do i=self%nrefs,self%nrefs-self%npeaks+1,-1
+                        ref = proj_space_inds(self%iptcl, i)
+                        call self%shsrch_obj%set_indices(ref, self%iptcl)
+                        cxy = self%shsrch_obj%minimize(irot=irot)
+                        if( irot > 0 )then
+                            ! irot > 0 guarantees improvement found
+                            proj_space_euls(self%iptcl, ref,3) = 360. - self%pftcc_ptr%get_rot(irot)
+                            proj_space_corrs(self%iptcl,ref)   = cxy(1)
+                            proj_space_shift(self%iptcl,ref,:) = cxy(2:3)
+                        endif
+                    end do
+            end select
         endif
         DebugPrint '>>> PRIME3D_SRCH::FINISHED INPL SEARCH'
     end subroutine inpl_srch
@@ -1146,5 +1156,10 @@ contains
         proj_space_euls(self%iptcl,ref,3) = 360. - self%pftcc_ptr%get_rot(inpl_ind)
         proj_space_corrs(self%iptcl,ref)  = corr
     end subroutine store_solution
+
+    subroutine kill( self )
+        class(prime3D_srch),  intent(inout) :: self !< instance
+        call self%grad_shsrch_obj%kill
+    end subroutine kill
 
 end module simple_prime3D_srch

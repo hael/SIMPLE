@@ -1,16 +1,17 @@
 ! PRIME2D stochastic search routines
 module simple_prime2D_srch
 #include "simple_lib.f08"
-use simple_polarft_corrcalc, only: polarft_corrcalc
-use simple_pftcc_shsrch,     only: pftcc_shsrch
-use simple_oris,             only: oris
-use simple_timer             ! use all in there
+use simple_polarft_corrcalc,  only: polarft_corrcalc
+use simple_pftcc_shsrch,      only: pftcc_shsrch      ! simplex-based angle and shift search
+use simple_pftcc_grad_shsrch, only: pftcc_grad_shsrch ! gradient-based angle and shift search
+use simple_oris,              only: oris
+use simple_timer              ! use all in there
 implicit none
 
 public :: prep4prime2D_srch, prime2D_srch
 private
 
-logical, parameter :: L_BENCH = .false.
+logical, parameter :: L_BENCH = .true.
 logical, parameter :: DEBUG   = .false.
 
 ! allocatables for prime3D_srch are class variables to improve caching and reduce alloc overheads 
@@ -19,9 +20,10 @@ integer, allocatable :: srch_order(:,:)
 
 type prime2D_srch
     private
-    class(polarft_corrcalc), pointer :: pftcc_ptr       => null() !< pointer to pftcc (corrcalc) object
-    class(oris),             pointer :: a_ptr           => null() !< pointer to b%a (primary particle orientation table)
-    type(pftcc_shsrch)               :: shsrch_obj           !< shift search object (in-plane rot for free)
+    class(polarft_corrcalc), pointer :: pftcc_ptr => null()  !< pointer to pftcc (corrcalc) object
+    class(oris),             pointer :: a_ptr     => null()  !< pointer to b%a (primary particle orientation table)
+    type(pftcc_shsrch)               :: shsrch_obj           !< origin shift search object
+    type(pftcc_grad_shsrch)          :: grad_shsrch_obj      !< origin shift search object, L-BFGS with gradient
     integer                          :: nrefs         =  0   !< number of references
     integer                          :: nrots         =  0   !< number of in-plane rotations in polar representation
     integer                          :: nrefs_eval    =  0   !< nr of references evaluated
@@ -41,6 +43,7 @@ type prime2D_srch
     real                             :: best_corr     = -1.  !< best corr found by search
     real                             :: specscore     =  0.  !< spectral score
     character(len=STDLEN)            :: refine        = ''   !< refinement flag
+    character(len=STDLEN)            :: opt           = ''   !< optimizer flag
     ! timer vars
     real(timer_int_kind)             :: rt_refloop, rt_inpl, rt_tot
     integer(timer_int_kind)          :: t_refloop, t_inpl, t_tot
@@ -57,6 +60,7 @@ type prime2D_srch
     procedure          :: prep4srch
     procedure          :: update_best
     procedure          :: get_times
+    procedure          :: kill
 end type prime2D_srch
 
 contains
@@ -122,12 +126,14 @@ contains
         self%top        =  p%top
         self%nnn        =  p%nnn
         self%dyncls     =  (p%dyncls.eq.'yes')
+        self%opt        =  p%opt
         ! construct composites
         lims(:,1)       = -p%trs
         lims(:,2)       =  p%trs
         lims_init(:,1)  = -SHC_INPL_TRSHWDTH
         lims_init(:,2)  =  SHC_INPL_TRSHWDTH
         call self%shsrch_obj%new(self%pftcc_ptr, lims, lims_init=lims_init, nrestarts=3, maxits=60)
+        call self%grad_shsrch_obj%new(self%pftcc_ptr, lims, lims_init=lims_init, nrestarts=1, maxits=60)
         if( L_BENCH )then
             ! init timers
             self%rt_refloop = 0.
@@ -357,14 +363,25 @@ contains
         real, allocatable :: cxy(:)
         integer           :: irot
         self%best_shvec = [0.,0.]
-        if( self%doshift )then          
-            call self%shsrch_obj%set_indices(self%best_class, self%iptcl)
-            cxy = self%shsrch_obj%minimize(irot=irot)
-            if( irot > 0 )then
-                self%best_corr  = cxy(1)
-                self%best_rot   = irot
-                self%best_shvec = cxy(2:3)
-            endif
+        if( self%doshift )then
+            select case(trim(self%opt))
+                case('bfgs')
+                    call self%grad_shsrch_obj%set_indices(self%best_class, self%iptcl)
+                    cxy = self%grad_shsrch_obj%minimize(irot=irot)
+                    if( irot > 0 )then
+                        self%best_corr  = cxy(1)
+                        self%best_rot   = irot
+                        self%best_shvec = cxy(2:3)
+                    endif
+                case DEFAULT
+                    call self%shsrch_obj%set_indices(self%best_class, self%iptcl)
+                    cxy = self%shsrch_obj%minimize(irot=irot)
+                    if( irot > 0 )then
+                        self%best_corr  = cxy(1)
+                        self%best_rot   = irot
+                        self%best_shvec = cxy(2:3)
+                    endif
+            end select
         endif
         if( DEBUG ) write(*,'(A)') '>>> PRIME2D_SRCH::FINISHED SHIFT SEARCH'
     end subroutine inpl_srch
@@ -458,5 +475,10 @@ contains
         rt_inpl    = self%rt_inpl
         rt_tot     = self%rt_tot
     end subroutine get_times
+
+    subroutine kill( self )
+        class(prime2D_srch),  intent(inout) :: self !< instance
+        call self%grad_shsrch_obj%kill
+    end subroutine kill
 
 end module simple_prime2D_srch

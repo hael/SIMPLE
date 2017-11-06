@@ -1,10 +1,7 @@
 ! The Nelder-Mead simplex method for continuous function minimisation
-
 module simple_simplex_opt
 #include "simple_lib.f08"
-
 use simple_optimizer, only: optimizer
-
 implicit none
 
 public :: simplex_opt
@@ -18,9 +15,9 @@ type, extends(optimizer) :: simplex_opt
     real              :: yb=0.          !< best cost function value
     logical           :: exists=.false. !< to indicate existence
   contains
-    procedure :: new          => new_simplex_opt
-    procedure :: minimize     => simplex_minimize
-    procedure :: kill         => kill_simplex_opt
+    procedure :: new      => new_simplex_opt
+    procedure :: minimize => simplex_minimize
+    procedure :: kill     => kill_simplex_opt
 end type simplex_opt
 
 contains
@@ -30,7 +27,7 @@ contains
         use simple_opt_spec, only: opt_spec
         class(simplex_opt), intent(inout) :: self !< instance
         class(opt_spec),    intent(inout) :: spec !< specification
-        real                              :: x
+        real :: x
         call self%kill
         allocate(self%p(spec%ndim+1,spec%ndim), self%y(spec%ndim+1), self%pb(spec%ndim), stat=alloc_stat)
         allocchk("In: new_simplex_opt")
@@ -41,8 +38,6 @@ contains
 
     !> \brief  restarted simplex minimization
     subroutine simplex_minimize( self, spec, fun_self, lowest_cost )
-        !$ use omp_lib
-        !$ use omp_lib_kinds
         use simple_opt_spec, only: opt_spec
         use simple_opt_subs, only: amoeba
         use simple_rnd,      only: ran3
@@ -50,6 +45,7 @@ contains
         class(opt_spec),    intent(inout) :: spec        !< specification
         class(*),           intent(inout) :: fun_self    !< self-pointer for cost function
         real,               intent(out)   :: lowest_cost !< lowest cost
+        real, allocatable                 :: lims_dyn(:,:)
         integer                           :: i, avgniter
         integer                           :: niters(spec%nrestarts)
         logical                           :: arezero(spec%ndim)
@@ -73,12 +69,30 @@ contains
         ! set best cost
         spec%nevals = 0
         self%yb     = spec%costfun(fun_self, self%pb, spec%ndim)
-        spec%nevals = spec%nevals+1
+        spec%nevals = spec%nevals + 1
+        ! initialise dynamic bounds
+        if( allocated(spec%limits_init) )then
+            allocate(lims_dyn(spec%ndim,2), source=spec%limits_init)
+        endif
         ! run nrestarts
         do i=1,spec%nrestarts
-            call init
+            if( allocated(spec%limits_init) )then
+                call init( lims_dyn )
+            else
+                call init( spec%limits )
+            endif
             ! run the amoeba routine
             call amoeba(self%p,self%y,self%pb,self%yb,spec%ftol,spec%costfun,fun_self,niters(i),spec%maxits,spec%nevals)
+            if( allocated(spec%limits_init) )then
+                ! movie the shift limits to around the best point
+                ! left limit
+                lims_dyn(:,1) = self%pb - (lims_dyn(:,2) - lims_dyn(:,1)) / 2.0
+                ! right limit
+                lims_dyn(:,2) = self%pb + (lims_dyn(:,2) - lims_dyn(:,1)) / 2.0
+                ! bound according to spec%limits
+                where( lims_dyn(:,1) < spec%limits(:,1) ) lims_dyn(:,1) = spec%limits(:,1)
+                where( lims_dyn(:,2) > spec%limits(:,2) ) lims_dyn(:,2) = spec%limits(:,2)
+            endif
         end do
         avgniter    = sum(niters)/spec%nrestarts
         spec%niter  = avgniter
@@ -88,20 +102,21 @@ contains
 
         contains
 
-            !> \brief  initializes the simplex using randomized bounds
-            subroutine init
+             !> \brief  initializes the simplex using randomized bounds
+            subroutine init( limits )
                 use simple_rnd, only: ran3
+                real, intent(in) :: limits(spec%ndim,2)
                 integer :: i, j
                 ! first vertex is the best-so-far solution solution
                 self%p(1,:) = self%pb
                 ! the others are obtained by randomized bounds
-                do i=2,spec%ndim+1
+                do i=2,spec%ndim + 1
                     do j=1,spec%ndim
-                        self%p(i,j) = spec%limits(j,1)+ran3()*(spec%limits(j,2)-spec%limits(j,1))
+                        self%p(i,j) = limits(j,1) + ran3() * (limits(j,2) - limits(j,1))
                     end do
                 end do
                 ! calculate costs
-                do i=1,spec%ndim+1
+                do i=1,spec%ndim + 1
                     self%y(i) = spec%costfun(fun_self, self%p(i,:), spec%ndim)
                 end do
             end subroutine init

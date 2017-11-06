@@ -20,7 +20,7 @@ private
 #include "simple_local_flags.inc"
 
 logical, parameter              :: L_BENCH         = .true.
-logical, parameter              :: L_BENCH_PRIME2D = .false.
+logical, parameter              :: L_BENCH_PRIME2D = .true.
 type(polarft_corrcalc)          :: pftcc
 type(prime2D_srch), allocatable :: primesrch2D(:)
 integer(timer_int_kind)         :: t_init, t_prep_pftcc, t_align, t_cavg, t_tot

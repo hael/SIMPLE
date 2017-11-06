@@ -176,7 +176,7 @@ contains
         call chdict%push('numlen_tomo',   'length of number string tomo series index{3}')
         call chdict%push('nvox',          '# voxels{0}')
         call chdict%push('offset',        'pixels offset{10}')
-        call chdict%push('opt',           'optimiser (powell|simplex|oasis|bforce|pso|de){simplex}')
+        call chdict%push('opt',           'optimiser (simplex|de|bfgs){simplex}')
         call chdict%push('order',         'order ptcls according to correlation(yes|no){no}')
         call chdict%push('oritab',        'table of orientations(.txt|.bin)')
         call chdict%push('oritab2',       '2nd table of orientations(.txt|.bin)')

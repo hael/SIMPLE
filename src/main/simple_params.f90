@@ -135,7 +135,7 @@ type :: params
     character(len=STDLEN) :: label='class'        !< discrete label(class|state){class}
     character(len=STDLEN) :: mskfile=''           !< maskfile.ext
     character(len=STDLEN) :: msktype='soft'       !< type of mask(hard|soft){soft}
-    character(len=STDLEN) :: opt='simplex'        !< optimiser (powell|simplex|oasis|bforce|pso|de){simplex}
+    character(len=STDLEN) :: opt='simplex'        !< optimiser (simplex|de|bfgs){simplex}
     character(len=STDLEN) :: oritab=''            !< table  of orientations(.txt|.bin)
     character(len=STDLEN) :: oritab2=''           !< 2nd table of orientations(.txt|.bin)
     character(len=STDLEN) :: oritab3D=''          !< table of 3D orientations(.txt|.bin)

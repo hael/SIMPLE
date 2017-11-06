@@ -1,7 +1,6 @@
 ! volume alignment based on band-pass limited cross-correlation
 module simple_volpft_srch
 use simple_opt_spec,        only: opt_spec
-use simple_pftcc_opt,       only: pftcc_opt
 use simple_volpft_corrcalc, only: volpft_corrcalc
 use simple_simplex_opt,     only: simplex_opt
 use simple_ori,             only: ori
