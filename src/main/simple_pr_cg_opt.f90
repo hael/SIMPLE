@@ -45,7 +45,6 @@ contains
         class(opt_spec),  intent(inout) :: spec        !< specification
         class(*),         intent(inout) :: fun_self    !< self-pointer for cost function        
         real, intent(out)               :: lowest_cost !< minimum function value
-        integer                         :: avgniter,i
         if( .not. associated(spec%costfun) )then
             stop 'cost function not associated in opt_spec; pr_cg_minimize; simple_pr_cg_opt'
         endif
@@ -54,15 +53,7 @@ contains
         endif
         ! run nrestarts restarts
         spec%x_8 = spec%x
-        avgniter = 0
-        spec%nevals = 0
-        do i=1,spec%nrestarts
-            call pr_cgmin
-            avgniter = avgniter+spec%niter
-        end do
-        spec%niter  = avgniter/spec%nrestarts
-        spec%nevals = spec%nevals/spec%nrestarts
-        !spec%x      = self%p
+        call pr_cgmin        
 
         contains
 

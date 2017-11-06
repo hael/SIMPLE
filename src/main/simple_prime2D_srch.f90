@@ -1,4 +1,5 @@
 ! PRIME2D stochastic search routines
+
 module simple_prime2D_srch
 #include "simple_lib.f08"
 use simple_polarft_corrcalc,  only: polarft_corrcalc
@@ -133,7 +134,7 @@ contains
         lims_init(:,1)  = -SHC_INPL_TRSHWDTH
         lims_init(:,2)  =  SHC_INPL_TRSHWDTH
         call self%shsrch_obj%new(self%pftcc_ptr, lims, lims_init=lims_init, nrestarts=3, maxits=60)
-        call self%grad_shsrch_obj%new(self%pftcc_ptr, lims, lims_init=lims_init, nrestarts=1, maxits=60)
+        call self%grad_shsrch_obj%new(self%pftcc_ptr, lims, lims_init=lims_init, nrestarts=5, maxits=60)
         if( L_BENCH )then
             ! init timers
             self%rt_refloop = 0.

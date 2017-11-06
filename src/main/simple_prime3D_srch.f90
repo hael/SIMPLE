@@ -393,7 +393,7 @@ contains
         call self%shsrch_obj%new(self%pftcc_ptr, lims, lims_init=lims_init,&
             &shbarrier=p%shbarrier, nrestarts=3, maxits=60)
         call self%grad_shsrch_obj%new(self%pftcc_ptr, lims, lims_init=lims_init,&
-            &shbarrier=p%shbarrier, nrestarts=1, maxits=60)
+            &shbarrier=p%shbarrier, nrestarts=5, maxits=60)
         self%exists = .true.
         DebugPrint '>>> PRIME3D_SRCH::CONSTRUCTED NEW SIMPLE_PRIME3D_SRCH OBJECT'
     end subroutine new

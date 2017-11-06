@@ -63,25 +63,15 @@ contains
         class(opt_spec),  intent(inout) :: spec        !< specification
         class(*),         intent(inout) :: fun_self    !< self-pointer for cost function
         real, intent(out)               :: lowest_cost !< minimum function value
-        integer                         :: avgniter,i
         if( .not. associated(spec%costfun) )then
             stop 'cost function not associated in opt_spec; bfgs2_minimize; simple_bfgs2_opt'
         endif
         if( .not. associated(spec%gcostfun) )then
             stop 'gradient of cost function not associated in opt_spec; bfgs2_minimize; simple_bfgs2_opt'
         endif
-        ! run nrestarts restarts
         spec%x_8 = spec%x
-        avgniter = 0
-        spec%nevals = 0
-        do i=1,spec%nrestarts
-            call bfgs2min
-            avgniter = avgniter+spec%niter
-        end do
-        spec%niter  = avgniter/spec%nrestarts
-        spec%nevals = spec%nevals/spec%nrestarts
-        !spec%x      = self%p
-
+        call bfgs2min
+        
     contains
 
         !>  \brief  nonlinear conjugate gradient minimizer
