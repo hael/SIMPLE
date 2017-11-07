@@ -54,7 +54,6 @@ type, extends(image) :: reconstructor
     procedure          :: read_rho
     ! INTERPOLATION
     procedure, private :: inout_fcomp
-    procedure, private :: calc_tfun_vals
     procedure          :: inout_fplane
     procedure          :: sampl_dens_correct
     procedure          :: compress_exp
@@ -195,6 +194,7 @@ contains
         real,                 intent(in)    :: pwght     !< external particle weight (affects both fplane and rho)
         real    :: w(self%wdim,self%wdim,self%wdim)
         real    :: vec(3), loc(3), tval, tvalsq
+        real    :: sqSpatFreq, ang, inv1, inv2
         integer :: i, win(3,2)
         ! calculate non-uniform sampling location
         vec = [real(h), real(k), 0.]
@@ -205,37 +205,6 @@ contains
         ! consistently with compress_exp
         if( win(1,2) < self%lims(1,1) )return
         ! evaluate the transfer function
-        call self%calc_tfun_vals(vec, tval, tvalsq)
-        ! (weighted) kernel values
-        w = pwght
-        do i=1,self%wdim
-            w(i,:,:) = w(i,:,:) * self%kbwin%apod(real(win(1,1)+i-1)-loc(1))
-            w(:,i,:) = w(:,i,:) * self%kbwin%apod(real(win(2,1)+i-1)-loc(2))
-            w(:,:,i) = w(:,:,i) * self%kbwin%apod(real(win(3,1)+i-1)-loc(3))
-        enddo
-        ! expanded matrices update
-        if( inoutmode )then
-            ! addition
-            ! CTF and w modulates the component before origin shift
-            self%cmat_exp(win(1,1):win(1,2), win(2,1):win(2,2), win(3,1):win(3,2)) =&
-            &self%cmat_exp(win(1,1):win(1,2), win(2,1):win(2,2), win(3,1):win(3,2)) + (comp*tval*w)*oshift
-            self%rho_exp(win(1,1):win(1,2), win(2,1):win(2,2), win(3,1):win(3,2)) =&
-            &self%rho_exp(win(1,1):win(1,2), win(2,1):win(2,2), win(3,1):win(3,2)) + tvalsq*w
-        else
-            ! substraction
-            ! CTF and w modulates the component before origin shift
-            self%cmat_exp(win(1,1):win(1,2), win(2,1):win(2,2), win(3,1):win(3,2)) =&
-            &self%cmat_exp(win(1,1):win(1,2), win(2,1):win(2,2), win(3,1):win(3,2)) - (comp*tval*w)*oshift
-            self%rho_exp(win(1,1):win(1,2), win(2,1):win(2,2), win(3,1):win(3,2)) =&
-            &self%rho_exp(win(1,1):win(1,2), win(2,1):win(2,2), win(3,1):win(3,2)) - tvalsq*w
-        endif
-    end subroutine inout_fcomp
-
-    subroutine calc_tfun_vals( self, vec, tval, tvalsq )
-        class(reconstructor), intent(inout) :: self         !< instance
-        real,                 intent(in)    :: vec(3)       !< nonuniform sampling location
-        real,                 intent(out)   :: tval, tvalsq !< CTF and CTF**2.
-        real :: sqSpatFreq, ang, inv1, inv2
         if( self%ctf%flag /= CTFFLAG_NO )then
             inv1       = vec(1)*(1./real(self%ldim_img(1)))
             inv2       = vec(2)*(1./real(self%ldim_img(2)))
@@ -253,7 +222,30 @@ contains
             tval   = 1.
             tvalsq = tval
         endif
-    end subroutine calc_tfun_vals
+        ! (weighted) kernel values
+        w = pwght
+        do i=1,self%wdim
+            w(i,:,:) = w(i,:,:) * self%kbwin%apod(real(win(1,1) + i - 1) - loc(1))
+            w(:,i,:) = w(:,i,:) * self%kbwin%apod(real(win(2,1) + i - 1) - loc(2))
+            w(:,:,i) = w(:,:,i) * self%kbwin%apod(real(win(3,1) + i - 1) - loc(3))
+        enddo
+        ! expanded matrices update
+        if( inoutmode )then
+            ! addition
+            ! CTF and w modulates the component before origin shift
+            self%cmat_exp(win(1,1):win(1,2), win(2,1):win(2,2), win(3,1):win(3,2)) =&
+            &self%cmat_exp(win(1,1):win(1,2), win(2,1):win(2,2), win(3,1):win(3,2)) + (comp*tval*w)*oshift
+            self%rho_exp(win(1,1):win(1,2), win(2,1):win(2,2), win(3,1):win(3,2)) =&
+            &self%rho_exp(win(1,1):win(1,2), win(2,1):win(2,2), win(3,1):win(3,2)) + tvalsq*w
+        else
+            ! subtraction
+            ! CTF and w modulates the component before origin shift
+            self%cmat_exp(win(1,1):win(1,2), win(2,1):win(2,2), win(3,1):win(3,2)) =&
+            &self%cmat_exp(win(1,1):win(1,2), win(2,1):win(2,2), win(3,1):win(3,2)) - (comp*tval*w)*oshift
+            self%rho_exp(win(1,1):win(1,2), win(2,1):win(2,2), win(3,1):win(3,2)) =&
+            &self%rho_exp(win(1,1):win(1,2), win(2,1):win(2,2), win(3,1):win(3,2)) - tvalsq*w
+        endif
+    end subroutine inout_fcomp
 
     !> insert or uninsert Fourier plane
     subroutine inout_fplane( self, o, inoutmode, fpl, pwght )
@@ -268,10 +260,10 @@ contains
         if( self%ctf%flag /= CTFFLAG_NO )then ! make CTF object & get CTF info
             self%tfun = ctf(self%get_smpd(), o%get('kv'), o%get('cs'), o%get('fraca'))
             self%dfx  = o%get('dfx')
-            if( self%tfastig )then ! astigmatic CTF model
+            if( self%tfastig )then            ! astigmatic CTF model
                 self%dfy = o%get('dfy')
                 self%angast = o%get('angast')
-            else                   ! non-astigmatic CTF model
+            else                              ! non-astigmatic CTF model
                 self%dfy = self%dfx
                 self%angast = 0.
             endif
