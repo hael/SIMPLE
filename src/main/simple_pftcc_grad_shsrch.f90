@@ -23,7 +23,7 @@ type :: pftcc_grad_shsrch
     integer                          :: nrestarts    = 5       !< # randomized restarts (randomized bounds)
     integer                          :: cur_inpl_idx = 0       !< index of inplane angle for shift search              
     real                             :: maxshift     = 0.      !< maximal shift
-    integer                          :: max_evals    = 5       !< max # inplrot/shsrch cycles
+    integer                          :: max_evals    = 3       !< max # inplrot/shsrch cycles
   contains
     procedure          :: new         => grad_shsrch_new
     procedure          :: set_indices => grad_shsrch_set_indices
@@ -33,7 +33,6 @@ type :: pftcc_grad_shsrch
     procedure          ::                grad_shsrch_gcostfun
     procedure          ::                grad_shsrch_fdfcostfun
     procedure          ::                grad_shsrch_set_costfun
-    procedure, private ::                grad_shsrch_rnd_init
 end type pftcc_grad_shsrch
 
 contains
@@ -120,54 +119,54 @@ contains
         self%reference = ref
         self%particle  = ptcl
     end subroutine grad_shsrch_set_indices
-
-    subroutine grad_shsrch_rnd_init( self )
-        class(pftcc_grad_shsrch), intent(inout) :: self
-        self%ospec%x = self%ospec%limits_init(:,1) + &
-            & ( randn_1(2) + 1. ) / 2. * (self%ospec%limits_init(:,2) - self%ospec%limits_init(:,1))
-    end subroutine grad_shsrch_rnd_init
     
     !> minimisation routine
     function grad_shsrch_minimize( self, irot ) result( cxy )
         class(pftcc_grad_shsrch), intent(inout) :: self
-        integer,             intent(out)   :: irot
-        real              :: cxy(3)
-        real              :: cost, corrs(self%nrots)
-        integer           :: loc(1)
-        integer           :: i
-        real              :: lowest_cost        
-        real              :: grad(2), f
-        ! for randomized initial conditions
-        integer           :: nrestart
-        real              :: lowest_cost_overall
-        integer           :: lowest_rot
-        real              :: lowest_shift(2)
-        lowest_cost_overall    = 999999.
-        do nrestart = 1,self%ospec%nrestarts
-            call grad_shsrch_rnd_init(self)
-            call self%pftcc_ptr%gencorrs(self%reference, self%particle, self%ospec%x, corrs)
-            loc               = maxloc(corrs)
-            self%cur_inpl_idx = loc(1)        
+        integer,                  intent(out)   :: irot
+        real              :: cost, corrs(self%nrots), x_ini(self%ospec%ndim), cxy(3)
+        real              :: lowest_cost, grad(2), f, lowest_cost_overall, lowest_shift(2)
+        integer           :: loc(1), i, irestart, lowest_rot, inpl_idx_zero_sh
+        logical           :: found_better
+        call self%pftcc_ptr%gencorrs(self%reference, self%particle, [0.,0.], corrs)
+        loc                 = maxloc(corrs)
+        inpl_idx_zero_sh    = loc(1)
+        self%cur_inpl_idx   = inpl_idx_zero_sh  
+        lowest_cost_overall = -corrs(self%cur_inpl_idx)
+        found_better        = .false.
+        do irestart = 1,self%ospec%nrestarts
+            ! random initialisation
+            x_ini = self%ospec%limits_init(:,1) + &
+            & ( randn_1(2) + 1. ) / 2. * (self%ospec%limits_init(:,2) - self%ospec%limits_init(:,1))
+            ! shift search / in-plane rot update
             do i = 1,self%max_evals
-                if( i > 1 )then
-                    call self%pftcc_ptr%gencorrs(self%reference, self%particle, self%ospec%x, corrs)            
-                    loc = maxloc(corrs)            
-                    if( loc(1) == self%cur_inpl_idx ) exit
-                end if
-                self%cur_inpl_idx = loc(1)
+                self%ospec%x = x_ini
                 call self%nlopt%minimize(self%ospec, self, lowest_cost)
+                call self%pftcc_ptr%gencorrs(self%reference, self%particle, self%ospec%x, corrs)
+                loc = maxloc(corrs)
+                if( loc(1) == self%cur_inpl_idx ) exit
+                self%cur_inpl_idx = loc(1)
             end do
-            if (lowest_cost < lowest_cost_overall) then
+            ! update best
+            lowest_cost = -corrs(self%cur_inpl_idx)            
+            if( lowest_cost < lowest_cost_overall )then
+                found_better        = .true.
                 lowest_cost_overall = lowest_cost
                 lowest_rot          = self%cur_inpl_idx
                 lowest_shift        = self%ospec%x
-            end if
+            endif
+            ! put back the in-plane index for zero shift
+            self%cur_inpl_idx = inpl_idx_zero_sh
         end do
-        irot    =   lowest_rot
-        cxy(1)  = - lowest_cost_overall  ! correlation
-        cxy(2:) =   lowest_shift ! shift
-        ! rotate the shift vector to the frame of reference
-        cxy(2:) = matmul(cxy(2:), rotmat2d(self%pftcc_ptr%get_rot(irot)))
+        if( found_better )then
+            irot    =   lowest_rot           ! in-plane index
+            cxy(1)  = - lowest_cost_overall  ! correlation
+            cxy(2:) =   lowest_shift         ! shift
+            ! rotate the shift vector to the frame of reference
+            cxy(2:) = matmul(cxy(2:), rotmat2d(self%pftcc_ptr%get_rot(irot)))
+        else
+            irot = 0 ! to communicate that a better solution was not found
+        endif
     end function grad_shsrch_minimize
 
     subroutine grad_shsrch_kill( self )
