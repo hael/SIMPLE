@@ -67,7 +67,7 @@ file(GLOB TESTDIRS
   "tests/test_*"
   )
 ## Uncomment the following block to remove ITEMS from the tests
-if(USING_CUDA)
+if (NOT (CMAKE_Fortran_COMPILER_ID STREQUAL "PGI"))
 list(REMOVE_ITEM TESTDIRS
  "tests/test_pgi"
   )

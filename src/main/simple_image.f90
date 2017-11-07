@@ -559,9 +559,9 @@ contains
         type(image) :: img_out, tmp, tmp2
         integer     :: xind, yind, cnt
         logical     :: didft
-        if( self%ldim(3) /= 1 ) stop 'only for 2D images; mic2spec; simple_image'
+        if( self%ldim(3) /= 1 ) call simple_stop('only for 2D images; mic2spec; simple_image')
         if( self%ldim(1) <= box .or. self%ldim(2) <= box )then
-            stop 'cannot use a box larger than the image; mic2spec; simple_image'
+            call simple_stop('cannot use a box larger than the image; mic2spec; simple_image')
         endif
         didft = .false.
         if( self%ft )then
@@ -655,9 +655,9 @@ contains
         type(image) :: img_out, tmp
         integer     :: xind, yind, cnt
         logical     :: didft
-        if( self%ldim(3) /= 1 ) stop 'only for 2D images; boxconvolute; simple_image'
+        if( self%ldim(3) /= 1 ) call simple_stop('only for 2D images; boxconvolute; simple_image')
         if( self%ldim(1) <= box .or. self%ldim(2) <= box )then
-            stop 'cannot boxconvolute using a box larger than the image; boxconvolute; simple_image'
+            call simple_stop('cannot boxconvolute using a box larger than the image; boxconvolute; simple_image')
         endif
         didft = .false.
         if( self%ft )then
@@ -691,10 +691,10 @@ contains
         class(image),      intent(inout) :: self_out
         integer, optional, intent(inout) :: noutside
         integer :: fromc(2), toc(2), xoshoot, yoshoot, xushoot, yushoot, xboxrange(2), yboxrange(2)
-        if( self_in%ldim(3) > 1 ) stop 'only 4 2D images; window; simple_image'
-        if( self_in%is_ft() )     stop 'only 4 real images; window; simple_image'
+        if( self_in%ldim(3) > 1 ) call simple_stop('only 4 2D images; window; simple_image')
+        if( self_in%is_ft() )     call simple_stop('only 4 real images; window; simple_image')
         if( self_out%exists() )then
-            if( self_out%is_ft() ) stop 'only 4 real images; window; simple_image'
+            if( self_out%is_ft() ) call simple_stop('only 4 real images; window; simple_image')
             if( self_out%ldim(1) == box .and. self_out%ldim(2) == box .and. self_out%ldim(3) == 1 )then
                 ! go ahead
             else
@@ -766,14 +766,14 @@ contains
         integer,      intent(in)    :: i, j, k, winsz
         real, allocatable :: pixels(:)
         integer :: s, ss, t, tt, u, uu, cnt, npix
-        if( self%is_ft() ) stop 'only 4 real images; win2arr; simple_image'
+        if( self%is_ft() ) call simple_stop('only 4 real images; win2arr; simple_image')
         if( self%is_3d() )then
             npix = (2*winsz+1)**3
         else
             npix = (2*winsz+1)**2
         endif
         allocate(pixels(npix), stat=alloc_stat)
-        if(alloc_stat/=0)call allocchk('In: win2arr; simple_image')
+        if(alloc_stat.ne.0)call allocchk('In: win2arr; simple_image',alloc_stat)
         cnt = 1
         do s=i-winsz,i+winsz
             ss = cyci_1d([1,self%ldim(1)], s)
@@ -801,13 +801,14 @@ contains
         class(image), intent(in) :: self
         class(image), intent(in) :: mskimg
         real, allocatable :: pixels(:)   !< 1D pixel array: self(mskimg==1)
-        if( self%is_ft() ) stop 'only 4 real images; extr_pixels; simple_image'
+        if( self%is_ft() ) call simple_stop('only 4 real images; extr_pixels; simple_image')
         if( self.eqdims.mskimg )then
             ! pixels = self%packer(mskimg) ! Intel hickup
+            !pgi$ allocate(pixels(self%ldim(1)*self%ldim(2)*self%ldim(3)))
             pixels = pack( self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)),&
                 &mskimg%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3))>0.5 )
         else
-            stop 'mask and image of different dims; extr_pixels; simple_image'
+            call simple_stop('mask and image of different dims; extr_pixels; simple_image')
         endif
     end function extr_pixels
 
@@ -820,8 +821,8 @@ contains
         class(image), intent(in)    :: self_in
         integer,      intent(in)    :: box
         type(image),  intent(inout) :: self_out
-        if( self_in%ldim(3) <= 1 ) stop 'only 4 3D images; corner; simple_image'
-        if( self_in%is_ft() )      stop 'only 4 real images; corner; simple_image'
+        if( self_in%ldim(3) <= 1 ) call simple_stop('only 4 3D images; corner; simple_image')
+        if( self_in%is_ft() )      call simple_stop('only 4 real images; corner; simple_image')
         call self_out%new([box,box,box], self_in%smpd)
         self_out%rmat(:box,:box,:box) = self_in%rmat(:box,:box,:box)
     end subroutine corner
@@ -847,7 +848,7 @@ contains
         if( self%existence )then
             if( .not. file_exists(fname) )then
                 print *, 'file: ', trim(fname)
-                stop 'The file you are trying to open does not exists; open; simple_image'
+                call simple_stop('The file you are trying to open does not exists; open; simple_image')
             endif
             if( present(formatchar) )then
                 form = formatchar
@@ -869,7 +870,7 @@ contains
                     call ioimg%open(fname, self%ldim, self%smpd, formatchar=formatchar, readhead=readhead, rwaction=rwaction)
             end select
         else
-            stop 'ERROR, image need to be constructed before read/write; open; simple_image'
+            call simple_stop('ERROR, image need to be constructed before read/write; open; simple_image')
         endif
     end subroutine open
 
@@ -918,7 +919,7 @@ contains
         call exception_handler(ioimg)
         call read_local(ioimg)
 
-        contains
+    contains
 
             !> read_local
             !! \param ioimg Image file object
@@ -938,69 +939,69 @@ contains
                 call ioimg%close
             end subroutine read_local
 
-            !> exception_handler
-            !! \param ioimg Image file object
-            !!
-            subroutine exception_handler( ioimg )
-                class(imgfile) :: ioimg
-                if( form .eq. 'S' ) call spider_exception_handler(ioimg)
-                if( form .ne. 'F' )then
-                    ! make sure that the logical image dimensions of self are consistent with the overall header
-                    ldim = ioimg%getDims()
-                    if( .not. all(ldim(1:2) == self%ldim(1:2)) )then
-                        write(*,*) 'ldim of image object: ', self%ldim
-                        write(*,*) 'ldim in ioimg (fhandle) object: ', ldim
-                        stop 'ERROR, logical dimensions of overall header & image object do not match; read; simple_image'
-                    endif
+        !> exception_handler
+        !! \param ioimg Image file object
+        !!
+        subroutine exception_handler( ioimg )
+            class(imgfile) :: ioimg
+            if( form .eq. 'S' ) call spider_exception_handler(ioimg)
+            if( form .ne. 'F' )then
+                ! make sure that the logical image dimensions of self are consistent with the overall header
+                ldim = ioimg%getDims()
+                if( .not. all(ldim(1:2) == self%ldim(1:2)) )then
+                    write(*,*) 'ldim of image object: ', self%ldim
+                    write(*,*) 'ldim in ioimg (fhandle) object: ', ldim
+                    call simple_stop('ERROR, logical dims of overall header & image object do not match; read; simple_image')
                 endif
-            end subroutine exception_handler
+            endif
+        end subroutine exception_handler
 
-            !> spider_exception_handler
-            !! \param ioimg Image IO object to get Iform
-            !! iform file type specifier:
-            !!   1 = 2D image
-            !!   3 = 3D volume
-            !! -11 = 2D Fourier odd
-            !! -12 = 2D Fourier even
-            !! -21 = 3D Fourier odd
-            !! -22 = 3D Fourier even
-            subroutine spider_exception_handler(ioimg)
-                class(imgfile) :: ioimg
-                iform = ioimg%getIform()
-                select case(iform)
-                    case(1,-11,-12)
-                        ! we are processing a stack of 2D images (single 2D images not allowed in SIMPLE)
-                        if( present(i) )then
-                            ! all good
-                        else
-                            stop 'ERROR, optional argument i required for reading from stack; read; simple_image'
-                        endif
-                        if( self%ldim(3) == 1 )then
-                            ! all good
-                        else if( self%ldim(3) > 1 )then
-                            stop 'ERROR, trying to read from a stack into a volume; read; simple_image'
-                        else
-                            stop 'ERROR, nonconforming logical dimension of image; read; simple_image'
-                        endif
-                        if( iform == -11 .or. iform == -12 ) self%ft = .true.
-                    case(3,-21,-22)
-                        ! we are processing a 3D image (stacks of 3D volumes not allowed in SIMPLE)
-                        if( present(i) )then
-                            stop 'ERROR, optional argument i should not be present when reading volumes; read; simple_image'
-                        endif
-                        if( self%ldim (3) > 1 )then
-                            ! all good
-                        else if( self%ldim(3) == 1)then
-                            stop 'ERROR, trying to read from a volume into a 2D image; read; simple_image'
-                        else
-                            stop 'ERROR, nonconforming logical dimension of image; read; simple_image'
-                        endif
-                        if( iform == -21 .or. iform == -22 ) self%ft = .true.
-                    case DEFAULT
-                        write(*,*) 'iform = ', iform
-                        stop 'Unsupported iform flag; simple_image :: read'
-                end select
-            end subroutine spider_exception_handler
+        !> spider_exception_handler
+        !! \param ioimg Image IO object to get Iform
+        !! iform file type specifier:
+        !!   1 = 2D image
+        !!   3 = 3D volume
+        !! -11 = 2D Fourier odd
+        !! -12 = 2D Fourier even
+        !! -21 = 3D Fourier odd
+        !! -22 = 3D Fourier even
+        subroutine spider_exception_handler(ioimg)
+            class(imgfile) :: ioimg
+            iform = ioimg%getIform()
+            select case(iform)
+            case(1,-11,-12)
+                ! we are processing a stack of 2D images (single 2D images not allowed in SIMPLE)
+                if( present(i) )then
+                    ! all good
+                else
+                    call simple_stop('ERROR, optional argument i required for reading from stack; read; simple_image')
+                endif
+                if( self%ldim(3) == 1 )then
+                    ! all good
+                else if( self%ldim(3) > 1 )then
+                    call simple_stop('ERROR, trying to read from a stack into a volume; read; simple_image')
+                else
+                    call simple_stop('ERROR, nonconforming logical dimension of image; read; simple_image')
+                endif
+                if( iform == -11 .or. iform == -12 ) self%ft = .true.
+            case(3,-21,-22)
+                ! we are processing a 3D image (stacks of 3D volumes not allowed in SIMPLE)
+                if( present(i) )then
+                    call simple_stop('ERROR, stacks of 3D volumes not allowed in SIMPLE; read; simple_image')
+                endif
+                if( self%ldim (3) > 1 )then
+                    ! all good
+                else if( self%ldim(3) == 1)then
+                    call simple_stop('ERROR, trying to read from a volume into a 2D image; read; simple_image')
+                else
+                    call simple_stop('ERROR, nonconforming logical dimension of image; read; simple_image')
+                endif
+                if( iform == -21 .or. iform == -22 ) self%ft = .true.
+            case DEFAULT
+                write(*,*) 'iform = ', iform
+                call simple_stop('Unsupported iform flag; simple_image :: read')
+            end select
+        end subroutine spider_exception_handler
 
     end subroutine read
 
@@ -1035,7 +1036,7 @@ contains
                 ! we are writing to a stack & in SIMPLE volumes are not allowed
                 ! to be stacked so the image object must be 2D
                 if( isvol )then
-                    stop 'ERROR, trying to write 3D image to stack, which is not allowed in SIMPLE ; write; simple_image'
+                    call simple_stop('ERROR, trying to write 3D image to stack ; write; simple_image')
                 endif
                 ii = i ! replace default location
             endif
@@ -1046,61 +1047,61 @@ contains
                 form = fname2format(fname)
             endif
             select case(form)
-                case('M','F')
-                    ! pixel size of object overrides pixel size in header
-                    call ioimg%open(fname, self%ldim, self%smpd, del_if_exists=die,&
+            case('M','F')
+                ! pixel size of object overrides pixel size in header
+                call ioimg%open(fname, self%ldim, self%smpd, del_if_exists=die,&
                     formatchar=formatchar, readhead=.false.)
-                    ! data type: 0 image: signed 8-bit bytes rante -128 to 127
-                    !            1 image: 16-bit halfwords
-                    !            2 image: 32-bit reals (DEFAULT MODE)
-                    !            3 transform: complex 16-bit integers
-                    !            4 transform: complex 32-bit reals (THIS WOULD BE THE DEFAULT FT MODE)
+                ! data type: 0 image: signed 8-bit bytes rante -128 to 127
+                !            1 image: 16-bit halfwords
+                !            2 image: 32-bit reals (DEFAULT MODE)
+                !            3 transform: complex 16-bit integers
+                !            4 transform: complex 32-bit reals (THIS WOULD BE THE DEFAULT FT MODE)
+                if( self%ft )then
+                    call ioimg%setMode(4)
+                else
+                    call ioimg%setMode(2)
+                endif
+                call ioimg%setRMSD(dev)
+            case('S')
+                ! pixel size of object overrides pixel size in header
+                call ioimg%open(fname, self%ldim, self%smpd, del_if_exists=die,&
+                    formatchar=formatchar, readhead=.false.)
+                ! iform file type specifier:
+                !   1 = 2D image
+                !   3 = 3D volume
+                ! -11 = 2D Fourier odd
+                ! -12 = 2D Fourier even
+                ! -21 = 3D Fourier odd
+                ! -22 = 3D Fourier even
+                if( self%is_2d() )then
                     if( self%ft )then
-                        call ioimg%setMode(4)
-                    else
-                        call ioimg%setMode(2)
-                    endif
-                    call ioimg%setRMSD(dev)
-                case('S')
-                    ! pixel size of object overrides pixel size in header
-                    call ioimg%open(fname, self%ldim, self%smpd, del_if_exists=die,&
-                    formatchar=formatchar, readhead=.false.)
-                    ! iform file type specifier:
-                    !   1 = 2D image
-                    !   3 = 3D volume
-                    ! -11 = 2D Fourier odd
-                    ! -12 = 2D Fourier even
-                    ! -21 = 3D Fourier odd
-                    ! -22 = 3D Fourier even
-                    if( self%is_2d() )then
-                        if( self%ft )then
-                            if( self%even_dims() )then
-                                iform = -12
-                            else
-                                iform = -11
-                            endif
+                        if( self%even_dims() )then
+                            iform = -12
                         else
-                            iform = 1
+                            iform = -11
                         endif
                     else
-                        if( self%ft )then
-                            if( self%even_dims() )then
-                                iform = -22
-                            else
-                                iform = -21
-                            endif
-                        else
-                            iform = 3
-                        endif
+                        iform = 1
                     endif
-                    call ioimg%setIform(iform)
-                case DEFAULT
-                    write(*,*) 'format descriptor: ', form
-                    stop 'ERROR, unsupported file format; write; simple_image'
+                else
+                    if( self%ft )then
+                        if( self%even_dims() )then
+                            iform = -22
+                        else
+                            iform = -21
+                        endif
+                    else
+                        iform = 3
+                    endif
+                endif
+                call ioimg%setIform(iform)
+            case DEFAULT
+                write(*,*) 'format descriptor: ', form
+                call simple_stop('ERROR, unsupported file format; write; simple_image')
             end select
             ! work out the slice range
             if( isvol )then
-                if( ii .gt. 1 ) stop 'ERROR, stacks of volumes not supported; write; simple_image'
+                if( ii .gt. 1 ) call simple_stop('ERROR, stacks of volumes not supported; write; simple_image')
                 first_slice = 1
                 last_slice = self%ldim(3)
             else
@@ -1111,7 +1112,7 @@ contains
             call ioimg%wSlices(first_slice,last_slice,self%rmat,self%ldim,self%ft,self%smpd)
             call ioimg%close
         else
-            stop 'ERROR, nonexisting image cannot be written to disk; write; simple_image'
+            call simple_stop('ERROR, nonexisting image cannot be written to disk; write; simple_image')
         endif
     end subroutine write
 
@@ -1244,10 +1245,11 @@ contains
     !!
     pure function get_cmat( self ) result( cmat )
         class(image), intent(in) :: self
+        integer :: array_shape(3)
         complex, allocatable :: cmat(:,:,:)
         allocate(cmat(self%array_shape(1),self%array_shape(2),self%array_shape(3)), source=self%cmat)
-        !pure function cannot call allocchk
-        !if (alloc_stat /= 0)call allocchk("simple_image::get_cmat ")
+        !! pure function cannot call allocchk
+        !! if (alloc_stat /= 0)call allocchk("simple_image::get_cmat ")
     end function get_cmat
 
     !>  \brief   get_cmatfull get the image object's complex matrix, including index limits
@@ -1472,24 +1474,31 @@ contains
         print *, self%cmat
     end subroutine print_cmat
 
+    !> print_rmat
+    !!
+    subroutine print_rmat( self )
+        class(image), intent(in) :: self
+        print *, self%rmat
+    end subroutine print_rmat
+
     !>  \brief  expand_ft is for getting a Fourier plane using the old SIMPLE logics
     !! \return fplane a copy of this image object's fplane
     !!
     function expand_ft( self ) result( fplane )
-         class(image), intent(in) :: self
-         complex, allocatable :: fplane(:,:)
-         integer :: xdim, ydim, h, k, phys(3)
-         if(is_even(self%ldim(1)))then
-             xdim = self%ldim(1)/2
-             ydim = self%ldim(2)/2
-         else
-             xdim = (self%ldim(1)-1)/2
-             ydim = (self%ldim(2)-1)/2
-         endif
-         allocate(fplane(-xdim:xdim,-ydim:ydim))
-         fplane = cmplx(0.,0.)
-         do h=-xdim,xdim
-             do k=-ydim,ydim
+        class(image), intent(in) :: self
+        complex, allocatable :: fplane(:,:)
+        integer :: xdim, ydim, h, k, phys(3)
+        if(is_even(self%ldim(1)))then
+            xdim = self%ldim(1)/2
+            ydim = self%ldim(2)/2
+        else
+            xdim = (self%ldim(1)-1)/2
+            ydim = (self%ldim(2)-1)/2
+        endif
+        allocate(fplane(-xdim:xdim,-ydim:ydim))
+        fplane = cmplx(0.,0.)
+        do h=-xdim,xdim
+            do k=-ydim,ydim
                 phys = self%comp_addr_phys([h,k,0])
                 fplane(h,k) = self%get_fcomp([h,k,0],phys)
             end do
@@ -1505,7 +1514,7 @@ contains
         integer,      intent(in)    :: logi(3)
         real,         intent(in)    :: val
         if( logi(1) <= self%ldim(1) .and. logi(1) >= 1 .and. logi(2) <= self%ldim(2)&
-        .and. logi(2) >= 1 .and. logi(3) <= self%ldim(3) .and. logi(3) >= 1 )then
+            .and. logi(2) >= 1 .and. logi(3) <= self%ldim(3) .and. logi(3) >= 1 )then
             self%rmat(logi(1),logi(2),logi(3)) = val
         endif
     end subroutine set
@@ -1527,16 +1536,9 @@ contains
         else
             write(*,*) 'ldim(rmat): ', ldim
             write(*,*) 'ldim(img): ', self%ldim
-            stop 'nonconforming dims; simple_image :: set_rmat'
+            call simple_stop('nonconforming dims; simple_image :: set_rmat')
         endif
     end subroutine set_rmat
-    !> add comp to cmat at index phys
-    subroutine set_rmat_at_ind( self, h, k, l, rin)
-        class(image), intent(in) :: self
-        integer, intent(in) :: h,k,l
-        real, intent(in) :: rin
-        self%rmat(h,k,l) =  rin
-    end subroutine set_rmat_at_ind
 
     !>  \brief  set (replace) image data with new 3D data
     !! \param cmat new 3D complex data
@@ -1730,14 +1732,14 @@ contains
         real                             :: ci, cj, ck, e
         logical                          :: pack, usemsk = .false.
         if( present(mskrad) )usemsk=.true.
-        if( self%ft ) stop 'ERROR, serialization not yet implemented for Fourier transforms; serialize; simple_image'
+        if( self%ft ) call simple_stop('ERROR, serialization not yet implemented for FTs; serialize; simple_image')
         if( usemsk )then
             npix = self%get_npix(mskrad)
         else
             npix = self%ldim(1)*self%ldim(2)*self%ldim(3)
         endif
         if( allocated(pcavec) )then
-            if( size(pcavec) /= npix ) stop 'size mismatch mask/npix; serialize; simple_image'
+            if( size(pcavec) /= npix ) call simple_stop('size mismatch mask/npix; serialize; simple_image')
             pack = .false.
         else
             pack = .true.
@@ -1786,7 +1788,7 @@ contains
         integer,           intent(in)    :: coord(:), winsz
         integer :: i, j, k, cnt, npix
         logical :: pack
-        if( self%ft ) stop 'ERROR, winserialization not yet implemented for Fourier transforms; winserialize; simple_image'
+        if( self%ft ) call simple_stop('ERROR, winserialization not yet implemented for Fourier; winserialize; simple_image')
         if( self%is_2d() )then
             npix = winsz**2
             call set_action
@@ -1809,7 +1811,7 @@ contains
                 end do
             end do
         else
-            if( size(coord) < 3 ) stop 'need a 3D coordinate for a 3D image; winserialize; simple_imgae'
+            if( size(coord) < 3 ) call simple_stop('need a 3D coordinate for a 3D image; winserialize; simple_imgae')
             npix = winsz**3
             call set_action
             cnt = 0
@@ -1834,7 +1836,7 @@ contains
             end do
         endif
 
-        contains
+    contains
 
             subroutine set_action
                 if( allocated(pcavec) )then
@@ -1857,11 +1859,7 @@ contains
         do i=1,self%ldim(1)
             do j=1,self%ldim(2)
                 do k=1,self%ldim(3)
-#ifdef USETINY
-                   if( abs(self%rmat(i,j,k))< TINY ) self%rmat(i,j,k) = 1.
-#else
-                   if( self%rmat(i,j,k) == 0. ) self%rmat(i,j,k) = 1.
-#endif
+                    if( abs(self%rmat(i,j,k)) < TINY ) self%rmat(i,j,k) = 1.
                 end do
             end do
         end do
@@ -1991,8 +1989,8 @@ contains
         complex, allocatable :: comps(:,:)
         complex :: comp
         integer :: win(2,2), i, j, phys(3)
-        if( self%ldim(3) > 1 )         stop 'only 4 2D images; extr_fcomp; simple_image'
-        if( .not. self%ft )            stop 'image need to be FTed; extr_fcomp; simple_image'
+        if( self%ldim(3) > 1 )         call simple_stop('only 4 2D images; extr_fcomp; simple_image')
+        if( .not. self%ft )            call simple_stop('image need to be FTed; extr_fcomp; simple_image')
         ! evenness and squareness are checked in the comlin class
         call sqwin_2d(h, k, 1., win)
         allocate( comps(win(1,1):win(1,2),win(2,1):win(2,2)) )
@@ -2009,31 +2007,26 @@ contains
         comp = sum(comps)
         deallocate(comps)
         ! origin shift
-#ifdef USETINY
-        if( abs(x) + abs(y) > TINY )then
-#else
-        if( x == 0. .and. y == 0. )then
-        else
-#endif
-           comp = comp*oshift_here(self%ldim(1)/2, h, k, x, y)
+        if( (abs(x) > TINY) .and. (abs(y) > TINY) )then
+            comp = comp*oshift_here(self%ldim(1)/2, h, k, x, y)
         endif
 
-        contains
+    contains
 
-            !> oshift_here
-            !! \param xdim
-            !! \param x,y Image coords
-            !! \param dx,dy pixel width
-            !! \return  comp
-            !!
-            pure function oshift_here( xdim, x, y, dx, dy ) result( comp )
-                integer, intent(in)  :: xdim
-                real, intent(in)     :: x, y, dx, dy
-                complex              :: comp
-                real                 :: arg
-                arg = (pi/real(xdim)) * dot_product([x,y], [dx,dy])
-                comp = cmplx(cos(arg),sin(arg))
-            end function oshift_here
+        !> oshift_here
+        !! \param xdim
+        !! \param x,y Image coords
+        !! \param dx,dy pixel width
+        !! \return  comp
+        !!
+        pure function oshift_here( xdim, x, y, dx, dy ) result( comp )
+            integer, intent(in)  :: xdim
+            real, intent(in)     :: x, y, dx, dy
+            complex              :: comp
+            real                 :: arg
+            arg = (pi/real(xdim)) * dot_product([x,y], [dx,dy])
+            comp = cmplx(cos(arg),sin(arg))
+        end function oshift_here
 
     end function extr_fcomp
 
@@ -2216,11 +2209,11 @@ contains
         if( self1.eqdims.self2 )then
             call self%new(self1%ldim, self1%smpd)
             if( self1%ft .neqv. self2%ft )then
-                stop 'cannot add images of different FT state; addition(+); simple_image'
+                call simple_stop('cannot add images of different FT state; addition(+); simple_image')
             endif
             self%rmat = self1%rmat+self2%rmat
         else
-            stop 'cannot add images of different dims; addition(+); simple_image'
+            call simple_stop('cannot add images of different dims; addition(+); simple_image')
         endif
         self%ft = self1%ft
     end function addition
@@ -2236,7 +2229,7 @@ contains
         if( self1.eqdims.self2 )then
             call self%new(self1%ldim, self1%smpd)
             if( self1%ft .neqv. self2%ft )then
-                stop 'cannot process images of different FT state; l1norm_1; simple_image'
+                call simple_stop('cannot process images of different FT state; l1norm_1; simple_image')
             endif
             if( self1%ft )then
                 self%cmat = cabs(self1%cmat-self2%cmat)
@@ -2244,7 +2237,7 @@ contains
                 self%rmat = abs(self1%rmat-self2%rmat)
             endif
         else
-            stop 'cannot process images of different dims; l1norm_1; simple_image'
+            call simple_stop('cannot process images of different dims; l1norm_1; simple_image')
         endif
     end function l1norm_1
 
@@ -2256,11 +2249,12 @@ contains
     function l1norm_2( self1, self2 ) result( l1 )
         class(image), intent(in) :: self1, self2
         real :: l1
-        if( self1%ft .or. self2%ft ) stop 'not impemented for FTs; l1norm_2; simple_image'
-        if( self1.eqdims.self2 )then
-            l1 = sum(abs(self1%rmat-self2%rmat))
+        if( self1%ft .neqv. self2%ft ) call simple_stop('images in different FT states; l1norm_2; simple_image')
+        if(.not.(self1.eqdims.self2 ))call simple_stop('cannot process images of different dims; l1norm_2; simple_image')
+        if( self1%ft .and. self2%ft )then
+            l1 = sum(cabs(self1%cmat-self2%cmat))
         else
-            stop 'cannot process images of different dims; l1norm; simple_image'
+            l1 = sum(abs(self1%rmat-self2%rmat))
         endif
     end function l1norm_2
 
@@ -2276,7 +2270,7 @@ contains
         type(image) :: self
         integer :: i, j, k
         real :: sumw, nnvar
-        if( self1%ft .or. self2%ft ) stop 'not impemented for FTs; l1weights; simple_image'
+        if( self1%ft .or. self2%ft ) call simple_stop('not impemented for FTs; l1weights; simple_image')
         nnvar = 1.
         if( present(nvar) ) nnvar = nvar
         self = self1.lone.self2
@@ -2324,7 +2318,7 @@ contains
         integer, optional, intent(out)   :: phys_out(3)
         integer :: phys(3)
         complex :: comp_here
-        if( .not. self%ft ) stop 'cannot add complex number to real image; add_2; simple_image'
+        if( .not. self%ft ) call simple_stop('cannot add complex number to real image; add_2; simple_image')
         if( present(phys_in) )then
             phys = phys_in
         else
@@ -2342,12 +2336,12 @@ contains
     !> \brief add_3  is for componentwise summation, not overloaded
     !! \param rcomp
     !! \param i,j,k index
-     !!
+    !!
     subroutine add_3( self, rcomp, i, j, k )
         class(image), intent(inout) :: self
         real,         intent(in)    :: rcomp
         integer,      intent(in)    :: i, j, k
-        if(  self%ft ) stop 'cannot add real number to transform; add_3; simple_image'
+        if(  self%ft ) call simple_stop('cannot add real number to transform; add_3; simple_image')
         self%rmat(i,j,k) = self%rmat(i,j,k)+rcomp
     end subroutine add_3
 
@@ -2364,7 +2358,7 @@ contains
         real,         intent(in)    :: w, k(:,:,:)
         integer :: phys(3)
         complex :: comp_here
-        if( .not. self%ft ) stop 'cannot add complex number to real image; add_2; simple_image'
+        if( .not. self%ft ) call simple_stop('cannot add complex number to real image; add_2; simple_image')
         phys = self%fit%comp_addr_phys(logi)
         if( logi(1) < 0 )then
             comp_here = conjg(comp)
@@ -2428,11 +2422,11 @@ contains
         if( self_from.eqdims.self_to )then
             call self%new(self_from%ldim, self_from%smpd)
             if( self_from%ft .neqv. self_to%ft )then
-                stop 'cannot subtract images of different FT state; subtraction(+); simple_image'
+                call simple_stop('cannot subtract images of different FT state; subtraction(+); simple_image')
             endif
             self%rmat = self_from%rmat-self_to%rmat
         else
-            stop 'cannot subtract images of different dims; subtraction(-); simple_image'
+            call simple_stop('cannot subtract images of different dims; subtraction(-); simple_image')
         endif
     end function subtraction
 
@@ -2455,10 +2449,10 @@ contains
                     self%rmat = self%rmat-ww*self_to_subtr%rmat
                 endif
             else
-                stop 'cannot subtract images with different FT status; subtr_1; simple_image'
+                call simple_stop('cannot subtract images with different FT status; subtr_1; simple_image')
             endif
         else
-            stop 'cannot subtract images of different dims; subtr_1; simple_image'
+            call simple_stop('cannot subtract images of different dims; subtr_1; simple_image')
         endif
     end subroutine subtr_1
 
@@ -2476,7 +2470,7 @@ contains
         integer, optional, intent(out)   :: phys_out(3)
         integer :: phys(3)
         complex :: comp_here
-        if( .not. self%ft ) stop 'cannot subtract complex number from real image; subtr_2; simple_image'
+        if( .not. self%ft ) call simple_stop('cannot subtract complex number from real image; subtr_2; simple_image')
         if( present(phys_in) )then
             phys = phys_in
         else
@@ -2504,7 +2498,7 @@ contains
         real,         intent(in)    :: w, k(:,:,:)
         integer :: phys(3)
         complex :: comp_here
-        if( .not. self%ft ) stop 'cannot subtract complex number from real image; subtr_3; simple_image'
+        if( .not. self%ft ) call simple_stop('cannot subtract complex number from real image; subtr_3; simple_image')
         phys = self%fit%comp_addr_phys(logi)
         if( logi(1) < 0 )then
             comp_here = conjg(comp)
@@ -2512,7 +2506,8 @@ contains
             comp_here = comp
         endif
         if( abs(k(phys(1),phys(2),phys(3))) > TINY )then
-            self%cmat(phys(1),phys(2),phys(3)) = self%cmat(phys(1),phys(2),phys(3))-(comp_here/k(phys(1),phys(2),phys(3)))*w
+            self%cmat(phys(1),phys(2),phys(3)) = self%cmat(phys(1),phys(2),phys(3)) -&
+                &(comp_here/k(phys(1),phys(2),phys(3)))*w
         endif
     end subroutine subtr_3
 
@@ -2549,7 +2544,7 @@ contains
                 self%ft = .true.
             endif
         else
-            stop 'cannot multiply images of different dims; multiplication(*); simple_image'
+            call simple_stop('cannot multiply images of different dims; multiplication(*); simple_image')
         endif
     end function multiplication
 
@@ -2576,13 +2571,13 @@ contains
     !! \param phys_out
     !!
     subroutine mul_1( self, logi, rc, phys_in, phys_out )
-         class(image),      intent(inout) :: self
-         integer,           intent(in)    :: logi(3)
-         real,              intent(in)    :: rc
-         integer, optional, intent(in)    :: phys_in(3)
-         integer, optional, intent(out)   :: phys_out(3)
-         integer :: phys(3)
-         if( self%is_ft() )then
+        class(image),      intent(inout) :: self
+        integer,           intent(in)    :: logi(3)
+        real,              intent(in)    :: rc
+        integer, optional, intent(in)    :: phys_in(3)
+        integer, optional, intent(out)   :: phys_out(3)
+        integer :: phys(3)
+        if( self%is_ft() )then
             if( present(phys_in) )then
                 phys = phys_in
             else
@@ -2590,9 +2585,9 @@ contains
             endif
             if( present(phys_out) ) phys_out = phys
             self%cmat(phys(1),phys(2),phys(3)) = self%cmat(phys(1),phys(2),phys(3))*rc
-         else
+        else
             self%rmat(logi(1),logi(2),logi(3)) = self%rmat(logi(1),logi(2),logi(3))*rc
-         endif
+        endif
     end subroutine mul_1
 
     !>  \brief mul_2 is for  multiplication of an image with a real constant
@@ -2627,7 +2622,7 @@ contains
                 self%ft = .true.
             endif
         else
-           stop 'cannot multiply images of different dims; mul_3; simple_image'
+            call simple_stop('cannot multiply images of different dims; mul_3; simple_image')
         endif
     end subroutine mul_3
 
@@ -2640,8 +2635,8 @@ contains
         class(image), intent(in)    :: self2mul
         real,         intent(in)    :: lp
         integer                     :: lims(3,2),sqlim,h,k,l,phys(3)
-        if( .not. self%is_ft() )     stop 'low-pass limited multiplication requires self to be FT'
-        if( .not. self2mul%is_ft() ) stop 'low-pass limited multiplication requires self2mul to be FT'
+        if( .not. self%is_ft() )     call simple_stop('low-pass limited multiplication requires self to be FT')
+        if( .not. self2mul%is_ft() ) call simple_stop('low-pass limited multiplication requires self2mul to be FT')
         if( self.eqdims.self2mul )then
             lims = self%fit%loop_lims(1,lp)
             sqlim = (maxval(lims(:,2)))**2
@@ -2653,14 +2648,14 @@ contains
                         if( h * h + k * k + l * l <= sqlim )then
                             phys = self%fit%comp_addr_phys([h,k,l])
                             self%cmat(phys(1),phys(2),phys(3)) = self%cmat(phys(1),phys(2),phys(3))*&
-                            self2mul%cmat(phys(1),phys(2),phys(3))
+                                self2mul%cmat(phys(1),phys(2),phys(3))
                         endif
                     end do
                 end do
             end do
             !$omp end parallel do
         else
-           stop 'cannot multiply images of different dims; mul_3; simple_image'
+            call simple_stop('cannot multiply images of different dims; mul_3; simple_image')
         endif
     end subroutine mul_4
 
@@ -2688,7 +2683,7 @@ contains
                 self%ft = .true.
             endif
         else
-            stop 'cannot divide images of different dims; division(/); simple_image'
+            call simple_stop('cannot divide images of different dims; division(/); simple_image')
         endif
     end function division
 
@@ -2719,7 +2714,7 @@ contains
         class(image), intent(inout) :: self
         real,         intent(in)    :: c
         if( abs(c) < 1e-6 )then
-            stop 'division with zero; div; simple_image'
+            call simple_stop('division with zero; div; simple_image')
         else
             if( self%ft )then
                 self%cmat = self%cmat/c
@@ -2752,7 +2747,7 @@ contains
                 self%cmat(phys(1),phys(2),phys(3)) = cmplx(0.,0.) ! this is desirable for kernel division
             endif
         else
-            stop 'Image need to be Fourier transformed; simple_image::div_2'
+            call simple_stop('Image need to be Fourier transformed; simple_image::div_2')
         endif
     end subroutine div_2
 
@@ -2804,7 +2799,7 @@ contains
                 self%ft = .true.
             endif
         else
-           stop 'cannot divide images of different dims; div_4; simple_image'
+            call simple_stop('cannot divide images of different dims; div_4; simple_image')
         endif
     end subroutine div_4
 
@@ -2912,7 +2907,7 @@ contains
     subroutine bin_1( self, thres )
         class(image), intent(inout) :: self
         real,         intent(in)    :: thres
-        if( self%ft ) stop 'only for real images; bin_1; simple image'
+        if( self%ft ) call simple_stop('only for real images; bin_1; simple image')
         where( self%rmat >= thres )
             self%rmat = 1.
         elsewhere
@@ -2929,9 +2924,10 @@ contains
         real, allocatable           :: forsort(:)
         real                        :: thres
         integer                     :: npixtot
-        if( self%ft ) stop 'only for real images; bin_2; simple image'
+        if( self%ft ) call simple_stop('only for real images; bin_2; simple image')
         npixtot = product(self%ldim)
         ! forsort = self%packer() ! Intel hickup
+        !pgi$ allocate(forsort(self%ldim(1)*self%ldim(2)*self%ldim(3)))
         forsort = pack( self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)), .true.)
         call hpsort(forsort)
         thres = forsort(npixtot-npix-1) ! everyting above this value 1 else 0
@@ -2946,7 +2942,7 @@ contains
         logical :: l_msk(self%ldim(1),self%ldim(2),self%ldim(3))
         real    :: cen1, cen2, sum1, sum2, val1, val2, sumval
         real    :: foreground_cen, background_cen
-        integer :: cnt1, cnt2, i, l, npix
+        integer :: cnt1, cnt2,  l, npix
         integer, parameter :: MAXITS=100
         if( self%ft ) stop 'only for real images; bin_kmeans; simple image'
         ! estimate background value around the edges of the box
@@ -3019,7 +3015,7 @@ contains
         real, intent(in)            :: width_A
         real    :: halfwidth_pix, cen_xdim
         integer :: xstart, xstop
-        if( self%ldim(3) > 1 ) stop 'only for 2D images; simple_imge :: bin_filament '
+        if( self%ldim(3) > 1 ) call simple_stop('only for 2D images; simple_imge :: bin_filament ')
         halfwidth_pix = (width_A/self%smpd)/2.
         cen_xdim      = real(self%ldim(1))/2.
         xstart        = floor(cen_xdim-halfwidth_pix)
@@ -3040,12 +3036,13 @@ contains
         real, allocatable :: plane(:,:,:)
         real        :: centre(3)
         integer     :: k
-        if( self%ldim(3) == 1 ) stop 'only for 3D images; simple_imge :: bin_cylinder '
+        if( self%ldim(3) == 1 ) call simple_stop('only for 3D images; simple_imge :: bin_cylinder ')
         centre = 1. + real(self%ldim-1)/2.
         if( self%ft ) self%ft = .false.
         call mask2d%new([self%ldim(1), self%ldim(2), 1], self%smpd)
         mask2d = 1.
         call mask2d%mask(rad, 'hard')
+        !pgi$ allocate(plane(self%ldim(1),self%ldim(2),self%ldim(3)))
         plane = mask2d%get_rmat()
         self%rmat = 0.
         do k = 1,self%ldim(3)
@@ -3063,7 +3060,7 @@ contains
         class(image), intent(inout) :: self
         real    :: centre(3)
         integer :: i
-        if( self%ft ) stop 'real space only; simple_image%cendist'
+        if( self%ft ) call simple_stop('real space only; simple_image%cendist')
         ! Builds square distance image
         self   = 0.
         centre = real(self%ldim-1)/2.
@@ -3098,7 +3095,7 @@ contains
         class(image), intent(inout) :: self
         real    :: xyz(3), spix, ci, cj, ck
         integer :: i, j, k
-        if( self%ft ) stop 'masscen not implemented for FTs; masscen; simple_image'
+        if( self%ft ) call simple_stop('masscen not implemented for FTs; masscen; simple_image')
         spix = 0.
         xyz  = 0.
         ci   = -real(self%ldim(1))/2.
@@ -3207,7 +3204,7 @@ contains
         integer                     :: i,j,k
         integer                     :: il,ir,jl,jr,kl,kr
         logical, allocatable        :: add_pixels(:,:,:)
-        if( self%ft ) stop 'only for real images; grow_bin; simple image'
+        if( self%ft ) call simple_stop('only for real images; grow_bin; simple image')
         allocate( add_pixels(self%ldim(1),self%ldim(2),self%ldim(3)), stat=alloc_stat )
         if(alloc_stat/=0)call allocchk('grow_bin; simple_image')
         ! Figure out which pixels to add
@@ -3256,7 +3253,7 @@ contains
         integer                     :: i,j,k
         integer                     :: il,ir,jl,jr,kl,kr
         logical, allocatable        :: sub_pixels(:,:,:)
-        if( self%ft ) stop 'only for real images; shrink_bin; simple image'
+        if( self%ft ) call simple_stop('only for real images; shrink_bin; simple image')
         allocate( sub_pixels(self%ldim(1),self%ldim(2),self%ldim(3)), stat=alloc_stat )
         if(alloc_stat/=0)call allocchk('shrink_bin; simple_image')
         ! Figure out which pixels to remove
@@ -3266,19 +3263,11 @@ contains
                 il = max(1,i-1)
                 ir = min(self%ldim(1),i+1)
                 do j=1,self%ldim(2)
-#ifdef USETINY
                     if (abs(self%rmat(i,j,1)) < TINY) then
-                          jl = max(1,j-1)
-                          jr = min(self%ldim(2),j+1)
-                          if( any(abs(self%rmat(il:ir,jl:jr,1)-1) < TINY )) sub_pixels(i,j,1) = .true.
-                    end if
-#else
-                    if (self%rmat(i,j,1)==0.) then
                         jl = max(1,j-1)
                         jr = min(self%ldim(2),j+1)
-                        if( any(self%rmat(il:ir,jl:jr,1)==1.) ) sub_pixels(i,j,1) = .true.
+                        if( any(abs(self%rmat(il:ir,jl:jr,1)-1) < TINY )) sub_pixels(i,j,1) = .true.
                     end if
-#endif
                 end do
             end do
             ! remove
@@ -3291,19 +3280,11 @@ contains
                     jl = max(1,j-1)
                     jr = min(self%ldim(2),j+1)
                     do k=1,self%ldim(3)
-#ifdef USETINY
                         if (abs(self%rmat(i,j,k)) < TINY) then
                             kl = max(1,k-1)
                             kr = min(self%ldim(3),k+1)
                             if( any(abs(self%rmat(il:ir,jl:jr,kl:kr)-1.)<TINY))sub_pixels(i,j,k) = .true.
                         end if
-#else
-                        if (self%rmat(i,j,k)==0.) then
-                            kl = max(1,k-1)
-                            kr = min(self%ldim(3),k+1)
-                            if( any(self%rmat(il:ir,jl:jr,kl:kr)==1.) )sub_pixels(i,j,k) = .true.
-                        end if
-#endif
                     end do
                 end do
             end do
@@ -3322,7 +3303,7 @@ contains
         integer,      intent(in)    :: nlayers
         integer                     :: i,j,k, tsz(3,2), win(3,2), pdsz(3,2)
         logical, allocatable        :: add_pixels(:,:,:), template(:,:,:)
-        if( self%ft ) stop 'only for real images; grow_bin; simple image'
+        if( self%ft ) call simple_stop('only for real images; grow_bin; simple image')
         tsz(:,1) = -nlayers
         tsz(:,2) = nlayers
         if(self%is_2d())tsz(3,:) = 1
@@ -3349,13 +3330,8 @@ contains
         enddo
         ! init paddedd logical array
         add_pixels = .false.
-#ifdef USETINY
         forall( i=1:self%ldim(1), j=1:self%ldim(2), k=1:self%ldim(3), abs(self%rmat(i,j,k)-1.)<TINY )&
             & add_pixels(i,j,k) = .true.
-#else
-          forall( i=1:self%ldim(1), j=1:self%ldim(2), k=1:self%ldim(3), self%rmat(i,j,k)==1. )&
-              & add_pixels(i,j,k) = .true.
-#endif
         ! cycle
         if( self%is_3d() )then
             do i = 1, self%ldim(1)
@@ -3369,8 +3345,8 @@ contains
                         win(3,1) = k - nlayers
                         win(3,2) = k + nlayers
                         add_pixels(win(1,1):win(1,2), win(2,1):win(2,2), win(3,1):win(3,2)) =&
-                        &add_pixels(win(1,1):win(1,2), win(2,1):win(2,2), win(3,1):win(3,2))&
-                        &.or.template
+                            &add_pixels(win(1,1):win(1,2), win(2,1):win(2,2), win(3,1):win(3,2))&
+                            &.or.template
                     enddo
                 enddo
             enddo
@@ -3382,7 +3358,7 @@ contains
                     win(1:2,2) = [i, j] + nlayers
                     if (self%rmat(i,j,1) <= 0.5)cycle
                     add_pixels(win(1,1):win(1,2), win(2,1):win(2,2), 1) =&
-                    &add_pixels(win(1,1):win(1,2), win(2,1):win(2,2), 1).or.template(:,:,1)
+                        &add_pixels(win(1,1):win(1,2), win(2,1):win(2,2), 1).or.template(:,:,1)
                 enddo
             enddo
         endif
@@ -3401,7 +3377,7 @@ contains
         integer,      intent(in)    :: nlayers
         integer                     :: i,j,k, tsz(3,2), win(3,2), pdsz(3,2)
         logical, allocatable        :: sub_pixels(:,:,:), template(:,:,:)
-        if( self%ft ) stop 'only for real images; shrink_bin; simple image'
+        if( self%ft ) call simple_stop('only for real images; shrink_bin; simple image')
         tsz(:,1) = -nlayers
         tsz(:,2) = nlayers
         if(self%is_2d())tsz(3,:) = 1
@@ -3429,13 +3405,8 @@ contains
         ! init paddedd logical array
         sub_pixels = .false.
 
-#ifdef USETINY
         forall( i=1:self%ldim(1), j=1:self%ldim(2), k=1:self%ldim(3), abs(self%rmat(i,j,k)-1.) < TINY )&
             & sub_pixels(i,j,k) = .true.
-#else
-        forall( i=1:self%ldim(1), j=1:self%ldim(2), k=1:self%ldim(3), self%rmat(i,j,k)==1. )&
-            & sub_pixels(i,j,k) = .true.
-#endif
         ! cycle
         if( self%is_3d() )then
             do i = 1, self%ldim(1)
@@ -3449,8 +3420,8 @@ contains
                         win(3,1) = k - nlayers
                         win(3,2) = k + nlayers
                         sub_pixels(win(1,1):win(1,2), win(2,1):win(2,2), win(3,1):win(3,2)) =&
-                        &sub_pixels(win(1,1):win(1,2), win(2,1):win(2,2), win(3,1):win(3,2))&
-                        &.or.template
+                            &sub_pixels(win(1,1):win(1,2), win(2,1):win(2,2), win(3,1):win(3,2))&
+                            &.or.template
                     enddo
                 enddo
             enddo
@@ -3462,7 +3433,7 @@ contains
                     win(1:2,2) = [i, j] + nlayers
                     if (self%rmat(i,j,1) <= 0.5)cycle
                     sub_pixels(win(1,1):win(1,2), win(2,1):win(2,2), 1) =&
-                    &sub_pixels(win(1,1):win(1,2), win(2,1):win(2,2), 1).or.template(:,:,1)
+                        &sub_pixels(win(1,1):win(1,2), win(2,1):win(2,2), 1).or.template(:,:,1)
                 enddo
             enddo
         endif
@@ -3531,24 +3502,21 @@ contains
         real                        :: rfalloff, scalefactor
         integer                     :: i, j, k, is, js, ks, ie, je, ke
         integer                     :: il, ir, jl, jr, kl, kr, falloff_sq
-        if( falloff<=0 ) stop 'stictly positive values for edge fall-off allowed; simple_image::cos_edge'
-        if( self%ft )    stop 'not intended for FTs; simple_image :: cos_edge'
+        if( falloff<=0 ) call simple_stop('stictly positive values for edge fall-off allowed; simple_image::cos_edge')
+        if( self%ft )    call simple_stop('not intended for FTs; simple_image :: cos_edge')
         self%rmat   = self%rmat/maxval(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)))
         rfalloff    = real( falloff )
         falloff_sq  = falloff**2
         scalefactor = PI / rfalloff
-        allocate( rmat(self%ldim(1),self%ldim(2),self%ldim(3)) )
+        allocate( rmat(self%ldim(1),self%ldim(2),self%ldim(3)),stat=alloc_stat )
+        if(alloc_stat /= 0)call allocchk("In simple_image::cos_edge")
         rmat = self%rmat(1:self%ldim(1),:,:)
         do i=1,self%ldim(1)
             is = max(1,i-1)                  ! left neighbour
             ie = min(i+1,self%ldim(1))       ! right neighbour
             il = max(1,i-falloff)            ! left bounding box limit
             ir = min(i+falloff,self%ldim(1)) ! right bounding box limit
-#ifdef USETINY
             if( any(abs(rmat(i,:,:)-1.) > TINY) )cycle ! no values equal to one
-#else
-            if(.not. any(rmat(i,:,:)==1.))cycle
-#endif
             do j=1,self%ldim(2)
                 js = max(1,j-1)
                 je = min(j+1,self%ldim(2))
@@ -3556,27 +3524,16 @@ contains
                 jr = min(j+falloff,self%ldim(2))
                 if( self%ldim(3)==1 )then
                     ! 2d
-#ifdef USETINY
-                   if( (abs(rmat(i,j,1)-1.) > TINY) )cycle
-#else
-                   if( rmat(i,j,1)/=1. )cycle
-#endif
+                    if( (abs(rmat(i,j,1) - 1.) > TINY) ) cycle ! cycle if not equal to one
                     ! within mask region
                     ! update if has a masked neighbour
                     if( any( rmat(is:ie,js:je,1) < 1.) )call update_mask_2d
                 else
                     ! 3d
-#ifdef USETINY
-                    if(.not. any(abs(rmat(i,j,:)-1.) < TINY))cycle
-#else
-                    if(.not. any(rmat(i,j,:)==1.))cycle
-#endif
+                    if(.not. any(abs(rmat(i,j,:) - 1.) < TINY))cycle ! cycle if equal to one
                     do k=1,self%ldim(3)
-#ifdef USETINY
+
                         if( abs(rmat(i,j,k)-1.)>TINY )cycle
-#else
-                        if( rmat(i,j,k)/=1. )cycle
-#endif
                         ! within mask region
                         ks = max(1,k-1)
                         ke = min(k+1,self%ldim(3))
@@ -3592,55 +3549,55 @@ contains
         end do
         self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) = rmat
         deallocate(rmat)
-        contains
+    contains
 
-            !> updates neighbours with cosine weight
-            subroutine update_mask_2d
-                integer :: ii, jj, di_sq, dist_sq
-                do ii=il,ir
-                    di_sq = (ii-i)**2                 ! 1D squared distance in x dim
-                    do jj=jl,jr
-                        dist_sq = di_sq + (jj-j)**2   ! 2D squared distance in x & y dim
-                        if(dist_sq > falloff_sq)cycle
-                        ! masked neighbour
-                        if( rmat(ii,jj,1)<1. )&
+        !> updates neighbours with cosine weight
+        subroutine update_mask_2d
+            integer :: ii, jj, di_sq, dist_sq
+            do ii=il,ir
+                di_sq = (ii-i)**2                 ! 1D squared distance in x dim
+                do jj=jl,jr
+                    dist_sq = di_sq + (jj-j)**2   ! 2D squared distance in x & y dim
+                    if(dist_sq > falloff_sq)cycle
+                    ! masked neighbour
+                    if( rmat(ii,jj,1)<1. )&
                         &rmat(ii,jj,1) = max(local_versine(real(dist_sq)), rmat(ii,jj,1))
-                    enddo
                 enddo
-            end subroutine update_mask_2d
+            enddo
+        end subroutine update_mask_2d
 
-            !> updates neighbours with cosine weight
-            subroutine update_mask_3d
-                integer :: ii, jj, kk, di_sq, dij_sq, dist_sq
-                do ii=il,ir
-                    di_sq = (ii-i)**2
-                    do jj=jl,jr
-                        dij_sq = di_sq+(jj-j)**2
-                        do kk=kl,kr
-                            dist_sq = dij_sq + (kk-k)**2
-                            if(dist_sq > falloff_sq)cycle
-                            if( rmat(ii,jj,kk)<1. )&
+        !> updates neighbours with cosine weight
+        subroutine update_mask_3d
+            integer :: ii, jj, kk, di_sq, dij_sq, dist_sq
+            do ii=il,ir
+                di_sq = (ii-i)**2
+                do jj=jl,jr
+                    dij_sq = di_sq+(jj-j)**2
+                    do kk=kl,kr
+                        dist_sq = dij_sq + (kk-k)**2
+                        if(dist_sq > falloff_sq)cycle
+                        if( rmat(ii,jj,kk)<1. )&
                             &rmat(ii,jj,kk) = max(local_versine(real(dist_sq)), rmat(ii,jj,kk))
-                        enddo
                     enddo
                 enddo
-            end subroutine update_mask_3d
+            enddo
+        end subroutine update_mask_3d
 
-            !> Local elemental cosine edge function
-            !> this is not a replacement of math%cosedge, which is not applicable here
-            elemental real function local_versine( r_sq )result( c )
-                real, intent(in) :: r_sq
-                c = 0.5 * (1. - cos(scalefactor*(sqrt(r_sq)-rfalloff)) )
-            end function local_versine
+        !> Local elemental cosine edge function
+        !> this is not a replacement of math%cosedge, which is not applicable here
+        elemental real function local_versine( r_sq )result( c )
+            real, intent(in) :: r_sq
+            c = 0.5 * (1. - cos(scalefactor*(sqrt(r_sq)-rfalloff)) )
+        end function local_versine
 
     end subroutine cos_edge
 
     !>  \brief  remove edge from binary image
     subroutine remove_edge( self )
         class(image), intent(inout) :: self
-        if( self%ft ) stop 'only for real binary images (not FTed ones); simple_image :: remove_edge'
+        if( self%ft ) call simple_stop('only for real binary images (not FTed ones); simple_image :: remove_edge')
         if( any(self%rmat > 1.0001) .or. any(self%rmat < 0. ))&
-        stop 'input to remove edge not binary; simple_image :: remove_edge'
+            call simple_stop('input to remove edge not binary; simple_image :: remove_edge')
         where( self%rmat < 0.999 ) self%rmat = 0.
     end subroutine remove_edge
 
@@ -3727,7 +3684,7 @@ contains
         class(image), intent(inout) :: self
         real, allocatable :: spec(:), plot(:,:)
         integer           :: lfny, k
-        if( .not. self%is_3d() ) stop 'Only for 3D images; guinier; simple_image'
+        if( .not. self%is_3d() ) call simple_stop('Only for 3D images; guinier; simple_image')
         spec = self%spectrum('absreal')
         lfny = self%get_lfny(1)
         allocate( plot(lfny,2), stat=alloc_stat )
@@ -3952,7 +3909,7 @@ contains
         real,         intent(in)    :: filter(:)
         real, allocatable  :: expec_pow(:)
         integer            :: sh, h, k, l, phys(3), lfny, lims(3,2), filtsz
-        real               :: icomp, avg, wzero, fwght
+        real               :: icomp, wzero, fwght
         filtsz    = size(filter)
         wzero     = maxval(filter)
         lfny      = self%get_lfny(1)
@@ -3997,8 +3954,8 @@ contains
         class(image), intent(inout) :: self, filter
         real, allocatable  :: expec_pow(:)
         complex            :: comp
-        integer            :: sh, h, k, l, phys(3), lfny, lims(3,2), filtsz
-        real               :: icomp, avg, fwght
+        integer            :: sh, h, k, l, phys(3), lfny, lims(3,2)
+        real               :: icomp, fwght
         lfny      = self%get_lfny(1)
         lims      = self%fit%loop_lims(2)
         ! calculate the expectation value of the signal power in each shell
@@ -4037,7 +3994,7 @@ contains
         real,         intent(in)    :: filter(:)
         real, allocatable  :: expec_pow(:)
         integer            :: sh, h, k, l, phys(3), lfny, lims(3,2), filtsz
-        real               :: icomp, avg, wzero, fwght
+        real               :: icomp, wzero, fwght
         filtsz    = size(filter)
         wzero     = maxval(filter)
         lfny      = self%get_lfny(1)
@@ -4085,8 +4042,8 @@ contains
         class(image), intent(inout) :: self, filter
         real, allocatable  :: expec_pow(:)
         complex            :: comp
-        integer            :: sh, h, k, l, phys(3), lfny, lims(3,2), filtsz
-        real               :: icomp, avg, fwght
+        integer            :: sh, h, k, l, phys(3), lfny, lims(3,2)
+        real               :: icomp, fwght
         lfny      = self%get_lfny(1)
         lims      = self%fit%loop_lims(2)
         ! calculate the expectation value of the signal power in each shell
@@ -4284,7 +4241,7 @@ contains
         if( self.eqdims.filter )then
             if( filter%ft )then
                 if( .not. self%ft )then
-                    stop 'assumed that the image to be filtered is in the Fourier domain; apply_filter_2; simple_image'
+                    call simple_stop('ERROR, image to be filtered is not in the Fourier domain; apply_filter_2; simple_image')
                 endif
                 lims = self%fit%loop_lims(2)
                 !$omp parallel do collapse(3) default(shared) private(h,k,l,comp,fwght,phys)&
@@ -4301,10 +4258,10 @@ contains
                 end do
                 !$omp end parallel do
             else
-                stop 'assumed that the inputted filter is in the Fourier domain; apply_filter_2; simple_image'
+                call simple_stop('assumed that the inputted filter is in the Fourier domain; apply_filter_2; simple_image')
             endif
         else
-            stop 'equal dims assumed; apply_filter_2; simple_image'
+            call simple_stop('equal dims assumed; apply_filter_2; simple_image')
         endif
     end subroutine apply_filter_2
 
@@ -4368,8 +4325,8 @@ contains
                         if( ran3() > 0.5 ) sgn2 = -1.
                         if( ran3() > 0.5 ) sgn3 = -1.
                         self%cmat(phys(1),phys(2),phys(3)) = self%cmat(phys(1),phys(2),phys(3))*&
-                        self%oshift([h,k,l],[sgn1*ran3()*errfrac*self%ldim(1),&
-                        sgn2*ran3()*errfrac*self%ldim(2),sgn3*ran3()*errfrac*self%ldim(3)])
+                            self%oshift([h,k,l],[sgn1*ran3()*errfrac*self%ldim(1),&
+                            sgn2*ran3()*errfrac*self%ldim(2),sgn3*ran3()*errfrac*self%ldim(3)])
                     endif
                 end do
             end do
@@ -4453,35 +4410,35 @@ contains
         ! filter
         if( self%ldim(3) == 1 )then
             select case(which)
-                case('median')
-                    !$omp parallel do collapse(2) default(shared) private(i,j,pixels) schedule(static) proc_bind(close)
-                    do i=1,self%ldim(1)
-                        do j=1,self%ldim(2)
-                            pixels = self%win2arr(i, j, 1, winsz)
-                            img_filt%rmat(i,j,1) = median_nocopy(pixels)
-                        end do
+            case('median')
+                !$omp parallel do collapse(2) default(shared) private(i,j,pixels) schedule(static) proc_bind(close)
+                do i=1,self%ldim(1)
+                    do j=1,self%ldim(2)
+                        pixels = self%win2arr(i, j, 1, winsz)
+                        img_filt%rmat(i,j,1) = median_nocopy(pixels)
                     end do
-                    !$omp end parallel do
-                case('average')
-                    !$omp parallel do collapse(2) default(shared) private(i,j,pixels) schedule(static) proc_bind(close)
-                    do i=1,self%ldim(1)
-                        do j=1,self%ldim(2)
-                            pixels = self%win2arr(i, j, 1, winsz)
-                            img_filt%rmat(i,j,1) = sum(pixels)/rn
-                        end do
+                end do
+                !$omp end parallel do
+            case('average')
+                !$omp parallel do collapse(2) default(shared) private(i,j,pixels) schedule(static) proc_bind(close)
+                do i=1,self%ldim(1)
+                    do j=1,self%ldim(2)
+                        pixels = self%win2arr(i, j, 1, winsz)
+                        img_filt%rmat(i,j,1) = sum(pixels)/rn
                     end do
-                    !$omp end parallel do
-                case('bman')
-                    !$omp parallel do collapse(2) default(shared) private(i,j,pixels) schedule(static) proc_bind(close)
-                    do i=1,self%ldim(1)
-                        do j=1,self%ldim(2)
-                            pixels = self%win2arr(i, j, 1, winsz)
-                            img_filt%rmat(i,j,1) = sum(pixels * wfvals) / norm
-                        end do
+                end do
+                !$omp end parallel do
+            case('bman')
+                !$omp parallel do collapse(2) default(shared) private(i,j,pixels) schedule(static) proc_bind(close)
+                do i=1,self%ldim(1)
+                    do j=1,self%ldim(2)
+                        pixels = self%win2arr(i, j, 1, winsz)
+                        img_filt%rmat(i,j,1) = sum(pixels * wfvals) / norm
                     end do
-                    !$omp end parallel do
-                case DEFAULT
-                    stop 'unknown filter type; simple_image :: real_space_filter'
+                end do
+                !$omp end parallel do
+            case DEFAULT
+                call simple_stop('unknown filter type; simple_image :: real_space_filter')
             end select
         else
             select case(which)
@@ -4518,8 +4475,8 @@ contains
                         end do
                     end do
                     !$omp end parallel do
-                case DEFAULT
-                    stop 'unknown filter type; simple_image :: real_space_filter'
+            case DEFAULT
+                call simple_stop('unknown filter type; simple_image :: real_space_filter')
             end select
         endif
         call self%copy(img_filt)
@@ -4532,8 +4489,8 @@ contains
         integer                     :: i,j,k
         real, allocatable           :: rmat(:,:,:)
         real                        ::  dx, dy, dz, kernel(3,3)
-        if( self%ft )stop 'real space only; simple_image%sobel'
-        if( self%ldim(3) == 1 )stop 'Volumes only; simple_image%sobel'
+        if( self%ft )call simple_stop('real space only; simple_image%sobel')
+        if( self%ldim(3) == 1 )call simple_stop('Volumes only; simple_image%sobel')
         allocate(rmat(self%ldim(1), self%ldim(2), self%ldim(3)), source=0., stat=alloc_stat)
         if(alloc_stat/=0)call allocchk("In: sobel; simple_image")
         kernel      = 0.
@@ -4577,7 +4534,7 @@ contains
         class(image), intent(inout) :: self
         integer :: loc(3)
         if( self%ft )then
-            stop 'maxloc not implemented 4 FTs! simple_image'
+            call simple_stop('maxloc not implemented 4 FTs! simple_image')
         else
             loc = maxloc(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)))
         endif
@@ -4588,7 +4545,7 @@ contains
         class(image), intent(inout) :: self
         integer :: loc(3)
         real    :: xyz(3)
-        if( self%ft ) stop 'not implemented 4 FTs! simple_image :: ccpeak_offset'
+        if( self%ft ) call simple_stop('not implemented 4 FTs! simple_image :: ccpeak_offset')
         loc    = maxloc(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)))
         xyz(1) = real(loc(1) - self%ldim(1)/2)
         xyz(2) = real(loc(2) - self%ldim(2)/2)
@@ -4958,7 +4915,7 @@ contains
         class(image), intent(in)  :: self
         integer,      intent(in)  :: lims(2,2)
         integer,      intent(out) :: ind_map(lims(1,1):lims(1,2),lims(2,1):lims(2,2),3)
-        integer :: h, k, l
+        integer :: h, k
         do h=lims(1,1),lims(1,2)
             do k=lims(2,1),lims(2,2)
                 ind_map(h,k,:) = self%fit%comp_addr_phys([h,k,0])
@@ -5016,7 +4973,7 @@ contains
                             r = r + real(self1%cmat(phys(1),phys(2),phys(3))*conjg(self2%cmat(phys(1),phys(2),phys(3))))
                             sumasq = sumasq + csq(self2%cmat(phys(1),phys(2),phys(3)))
                             sumbsq = sumbsq + csq(self1%cmat(phys(1),phys(2),phys(3)))
-                         endif
+                        endif
                     end do
                 end do
             end do
@@ -5031,7 +4988,7 @@ contains
         else
             write(*,*) 'self1%ldim:', self1%ldim
             write(*,*) 'self2%ldim:', self2%ldim
-            stop 'images to be correlated need to have same dimensions; corr; simple_image'
+            call simple_stop('images to be correlated need to have same dimensions; corr; simple_image')
         endif
     end function corr
 
@@ -5053,8 +5010,8 @@ contains
         complex                       :: shcomp
         integer                       :: h, k, l, phys(3), lims(3,2), sqarg, sqlp, sqhp
         ! this is for highly optimised code, so we assume that images are always Fourier transformed beforehand
-        if( .not. self_ref%ft  ) stop 'self_ref not FTed;  corr_shifted; simple_image'
-        if( .not. self_ptcl%ft ) stop 'self_ptcl not FTed; corr_shifted; simple_image'
+        if( .not. self_ref%ft  ) call simple_stop('self_ref not FTed;  corr_shifted; simple_image')
+        if( .not. self_ptcl%ft ) call simple_stop('self_ptcl not FTed; corr_shifted; simple_image')
         r = 0.
         sumasq = 0.
         sumbsq = 0.
@@ -5079,12 +5036,12 @@ contains
                         phys = self_ref%fit%comp_addr_phys([h,k,l])
                         ! shift particle
                         shcomp = self_ptcl%cmat(phys(1),phys(2),phys(3))*&
-                                &self_ptcl%oshift([h,k,l], shvec)
+                            &self_ptcl%oshift([h,k,l], shvec)
                         ! real part of the complex mult btw 1 and 2*
                         r = r + real(self_ref%cmat(phys(1),phys(2),phys(3))*conjg(shcomp))
                         sumasq = sumasq + csq(shcomp)
                         sumbsq = sumbsq + csq(self_ref%cmat(phys(1),phys(2),phys(3)))
-                     endif
+                    endif
                 end do
             end do
         end do
@@ -5276,7 +5233,7 @@ contains
         real, allocatable, intent(inout) :: voxs(:)
         integer                          :: n, lims(3,2), sh, h, k, l
         logical                          :: didft
-        if( .not. square_dims(self) ) stop 'square dimensions only! fsc; simple_image'
+        if( .not. square_dims(self) ) call simple_stop('square dimensions only! fsc; simple_image')
         didft = .false.
         if( .not. self%is_ft() )then
             call self%fft()
@@ -5426,22 +5383,22 @@ contains
         integer, intent(in)        :: coord(2)
         type(image), intent(inout) :: self_out
         integer :: xllim, xulim, yllim, yulim
-        if( self_in%ldim(3) > 1 )       stop 'only 4 2D images; insert; simple_image'
-        if( self_in%is_ft() )           stop 'only 4 real images; insert; simple_image'
-        if( .not. self_in%even_dims() ) stop 'only 4 even particle dims; insert; simple_image'
+        if( self_in%ldim(3) > 1 )       call simple_stop('only 4 2D images; insert; simple_image')
+        if( self_in%is_ft() )           call simple_stop('only 4 real images; insert; simple_image')
+        if( .not. self_in%even_dims() ) call simple_stop('only 4 even particle dims; insert; simple_image')
         if( self_out%exists() )then
-            if( self_out%ldim(3) > 1 )  stop 'only 4 2D images; insert; simple_image'
-            if( self_out%is_ft() )      stop 'only 4 real images; insert; simple_image'
+            if( self_out%ldim(3) > 1 )  call simple_stop('only 4 2D images; insert; simple_image')
+            if( self_out%is_ft() )      call simple_stop('only 4 real images; insert; simple_image')
             if( self_out%ldim(1) > self_in%ldim(1) .and. self_out%ldim(2) > self_in%ldim(2) .and. self_out%ldim(3) == 1 )then
                 if( (coord(1) < self_in%ldim(1)/2+1 .or. coord(1) > self_out%ldim(1)-self_in%ldim(1)/2-1) .or.&
-                 (coord(2) < self_in%ldim(2)/2+1 .or. coord(2) > self_out%ldim(2)-self_in%ldim(2)/2-1) )then
-                    stop 'particle outside micrograph area; insert; simple_image'
+                    (coord(2) < self_in%ldim(2)/2+1 .or. coord(2) > self_out%ldim(2)-self_in%ldim(2)/2-1) )then
+                    call simple_stop('particle outside micrograph area; insert; simple_image')
                 endif
             else
-                stop 'micrograph (self_out) need to have dimensions larger than the particle (self_in); insert; simple_image'
+                call simple_stop('micrograph needs to have dimensions larger than the particle; insert; simple_image')
             endif
         else
-            stop 'micrograph (self_out) does not exist; insert; simple_image'
+            call simple_stop('micrograph (self_out) does not exist; insert; simple_image')
         endif
         ! set range
         xllim = coord(1)-self_in%ldim(1)/2
@@ -5771,15 +5728,15 @@ contains
         do curr_dim=1,ndims
             ! take care of dimensions
             select case (curr_dim)
-                case (1)
-                    dim2 = 2
-                    dim3 = 3
-                case (2)
-                    dim2 = 1
-                    dim3 = 3
-                case (3)
-                    dim2 = 1
-                    dim3 = 2
+            case (1)
+                dim2 = 2
+                dim3 = 3
+            case (2)
+                dim2 = 1
+                dim3 = 3
+            case (3)
+                dim2 = 1
+                dim3 = 2
             end select
             ! take care of allocation & initialisation
             if(allocated(avg_curr_edge_start))        deallocate(avg_curr_edge_start)
@@ -5804,33 +5761,33 @@ contains
             do k=1,self%ldim(dim3)
                 do j=1,self%ldim(dim2)
                     select case (curr_dim)
-                        case (1)
-                            avg_curr_edge_start(j,k) =&
+                    case (1)
+                        avg_curr_edge_start(j,k) =&
                             sum(self%rmat(1:avg_strip_width(curr_dim),j,k))&
                             /avg_strip_width(curr_dim)
-                            avg_curr_edge_stop(j,k)  =&
+                        avg_curr_edge_stop(j,k)  =&
                             sum(self%rmat(self%ldim(curr_dim)-avg_strip_width(1)+1:self%ldim(curr_dim),j,k))&
                             /avg_strip_width(curr_dim)
-                        case (2)
-                            avg_curr_edge_start(j,k) =&
+                    case (2)
+                        avg_curr_edge_start(j,k) =&
                             sum(self%rmat(j,1:avg_strip_width(curr_dim),k))&
                             /avg_strip_width(curr_dim)
-                            avg_curr_edge_stop(j,k) =&
+                        avg_curr_edge_stop(j,k) =&
                             sum(self%rmat(j,self%ldim(curr_dim)-avg_strip_width(1)+1:self%ldim(curr_dim),k))&
                             /avg_strip_width(curr_dim)
-                        case (3)
-                            avg_curr_edge_start(j,k) =&
+                    case (3)
+                        avg_curr_edge_start(j,k) =&
                             sum(self%rmat(j,k,1:avg_strip_width(curr_dim)))&
                             /avg_strip_width(curr_dim)
-                            avg_curr_edge_stop(j,k) =&
+                        avg_curr_edge_stop(j,k) =&
                             sum(self%rmat(j,k,self%ldim(curr_dim)-avg_strip_width(1)+1:self%ldim(curr_dim)))&
                             /avg_strip_width(curr_dim)
                     end select
                 enddo
             enddo
-            avg_curr_edge_avg   = 0.5e0*(avg_curr_edge_stop+avg_curr_edge_start)
-            avg_curr_edge_start = avg_curr_edge_start-avg_curr_edge_avg
-            avg_curr_edge_stop  = avg_curr_edge_stop-avg_curr_edge_avg
+            avg_curr_edge_avg   = 0.5e0*(avg_curr_edge_stop + avg_curr_edge_start)
+            avg_curr_edge_start = avg_curr_edge_start - avg_curr_edge_avg
+            avg_curr_edge_stop  = avg_curr_edge_stop - avg_curr_edge_avg
             ! Apply smoothing parallel to edge in the form of a running average
             do k=1,self%ldim(dim3)
                 do j=1,self%ldim(dim2)
@@ -5844,9 +5801,9 @@ contains
                             if (jj .lt. 1 .or. jj .gt. self%ldim(dim2)) cycle
                             nvals_runnavg = nvals_runnavg + 1
                             smooth_avg_curr_edge_start (j,k) =&
-                            smooth_avg_curr_edge_start(j,k)+avg_curr_edge_start(jj,kk)
+                                smooth_avg_curr_edge_start(j,k)+avg_curr_edge_start(jj,kk)
                             smooth_avg_curr_edge_stop(j,k)   =&
-                            smooth_avg_curr_edge_stop(j,k)+avg_curr_edge_stop(jj,kk)
+                                smooth_avg_curr_edge_stop(j,k)+avg_curr_edge_stop(jj,kk)
                         enddo
                     enddo
                     ! Now we can compute the average
@@ -5858,38 +5815,38 @@ contains
             do i=1,self%ldim(curr_dim)
                 if (i .le. taper_strip_width(curr_dim)) then
                     select case (curr_dim)
-                        case (1)
-                            self%rmat(i,:,:) = self%rmat(i,:,:)&
+                    case (1)
+                        self%rmat(i,:,:) = self%rmat(i,:,:)&
                             - smooth_avg_curr_edge_start (:,:)&
                             * (taper_strip_width(curr_dim)-i+1)&
                             / taper_strip_width(curr_dim)
-                        case (2)
-                            self%rmat(1:self%ldim(1),i,:) = self%rmat(1:self%ldim(1),i,:)&
+                    case (2)
+                        self%rmat(1:self%ldim(1),i,:) = self%rmat(1:self%ldim(1),i,:)&
                             - smooth_avg_curr_edge_start(:,:)&
                             * (taper_strip_width(curr_dim)-i+1)&
                             / taper_strip_width(curr_dim)
-                        case (3)
-                            self%rmat(1:self%ldim(1),:,i) = self%rmat(1:self%ldim(1),:,i)&
+                    case (3)
+                        self%rmat(1:self%ldim(1),:,i) = self%rmat(1:self%ldim(1),:,i)&
                             - smooth_avg_curr_edge_start (:,:)&
                             * (taper_strip_width(curr_dim)-i+1)&
                             / taper_strip_width(curr_dim)
                     end select
                 else if (i .ge. self%ldim(curr_dim)-taper_strip_width(curr_dim)+1) then
                     select case (curr_dim)
-                        case (1)
-                            self%rmat(i,:,:) = self%rmat(i,:,:)&
+                    case (1)
+                        self%rmat(i,:,:) = self%rmat(i,:,:)&
                             - smooth_avg_curr_edge_stop(:,:)&
                             * (taper_strip_width(curr_dim)+i&
                             - self%ldim(curr_dim))&
                             / taper_strip_width(curr_dim)
-                        case (2)
-                            self%rmat(1:self%ldim(1),i,:) = self%rmat(1:self%ldim(1),i,:)&
+                    case (2)
+                        self%rmat(1:self%ldim(1),i,:) = self%rmat(1:self%ldim(1),i,:)&
                             - smooth_avg_curr_edge_stop(:,:)&
                             * (taper_strip_width(curr_dim)+i&
                             - self%ldim(curr_dim))&
                             / taper_strip_width(curr_dim)
-                        case (3)
-                            self%rmat(1:self%ldim(1),:,i) = self%rmat(1:self%ldim(1),:,i)&
+                    case (3)
+                        self%rmat(1:self%ldim(1),:,i) = self%rmat(1:self%ldim(1),:,i)&
                             - smooth_avg_curr_edge_stop(:,:)&
                             * (taper_strip_width(curr_dim)+i&
                             - self%ldim(curr_dim))&
@@ -5950,7 +5907,7 @@ contains
                 end do
             end do
         else
-            stop 'image is to small to fit the square; square; simple_image'
+            call simple_stop('image is to small to fit the square; square; simple_image')
         endif
         self%ft = .false.
     end subroutine square
@@ -5997,8 +5954,8 @@ contains
         type(image) :: ba
         if( left.eqdims.right )then
             if( left.eqsmpd.right )then
-                if( left%ft .or. right%ft ) stop 'not for FTs; before_after; simple_image'
-                if( left%is_3d() .or. right%is_3d() ) stop 'not for 3D imgs; before_after; simple_image'
+                if( left%ft .or. right%ft ) call simple_stop('not for FTs; before_after; simple_image')
+                if( left%is_3d() .or. right%is_3d() ) call simple_stop('not for 3D imgs; before_after; simple_image')
                 ldim = left%ldim
                 ba = left
                 ba%rmat(:ldim(1)/2,:ldim(2),1)   = left%rmat(:ldim(1)/2,:ldim(2),1)
@@ -6014,10 +5971,10 @@ contains
                     ba%rmat(ldim(1)/2+1:,:ldim(2),1) = right%rmat(ldim(1)/2+1:,:ldim(2),1)
                 endif
             else
-                 stop 'before (left) and after (right) not of same smpd; before_after; simple_image'
+                call simple_stop('before (left) and after (right) not of same smpd; before_after; simple_image')
             endif
         else
-            stop 'before (left) and after (right) not of same dim; before_after; simple_image'
+            call simple_stop('before (left) and after (right) not of same dim; before_after; simple_image')
         endif
     end function before_after
 
@@ -6089,7 +6046,7 @@ contains
     subroutine gauimg2D( self, xsigma, ysigma )
         class(image), intent(inout) :: self
         real,         intent(in)    :: xsigma, ysigma
-        real    :: x, y, zw
+        real    :: x, y
         integer :: i, j
         x = -real(self%ldim(1))/2.
         do i=1,self%ldim(1)
@@ -6105,10 +6062,104 @@ contains
 
     !> \brief fwd_ft  forward Fourier transform FFTW3
     !!
-    subroutine fwd_ft( self )
+    subroutine fft_pgi_cuda( self )
+#ifndef PGI
+        class(image), intent(inout)      :: self
+        print *,"simple_image::fft_pgi_cuda cannot be called from this compiler"
+#else
+        !! IN-PLACE 3D FFT using CUDA's cufft
+        use simple_cufft
+        use openacc
+        use cudafor
+        class(image), intent(inout)      :: self
+        real(sp),    allocatable         :: rinput(:,:,:)
+        complex(sp), allocatable, device :: coutput_d(:,:,:)
+        complex(sp), allocatable         :: coutput(:,:,:)
+        integer      :: plan, planType
+        integer      :: i,j,k,h,l,n,istat
+        integer      :: nerrors, cdim(3),ldim(3),lims(3,2),phys(3)
+        real         :: nscale
+        integer(timer_int_kind) :: t1
+        if( self%ft ) return
+        ldim = self%ldim
+        verbose=.true.
+        if(verbose)t1=tic()
+        ! synchronise
+        istat=cudaDeviceSynchronize()
+        istat=istat+cudaThreadSynchronize()
+        if(istat.ne.0)then
+            call simple_cuda_stop("In simple_image::fft sync ",__FILENAME__,__LINE__)
+        endif
+
+        ! allocate arrays on the host
+        allocate(coutput(ldim(1),ldim(2),ldim(3)),stat=alloc_stat)
+        if(alloc_stat.ne.0)call allocchk("In simple_image::fft coutput",alloc_stat)
+        ! allocate( rinput(ldim(1), ldim(2), ldim(3)),source=0.,stat=alloc_stat)
+        !if(alloc_stat.ne.0)call allocchk("In simple_image::pgi_fft rinput",alloc_stat)
+        rinput = self%get_rmat()
+
+        ! allocate arrays on the device
+        allocate(coutput_d(ldim(1),ldim(2),ldim(3)))
+        ! set planType to either single or double precision
+        planType = CUFFT_C2C    !! (fp_kind == singlePrecision)
+
+        ! copy arrays to device
+        coutput=cmplx(rinput,0.)
+        coutput_d = coutput
+
+        ! Initialize the plan for real to complex transform
+        call cufftPlan3d(plan,ldim(1),ldim(2),ldim(3),planType)
+        VerbosePrint "In Image::fft  PGI ", toc()
+
+        ! Execute  Forward transform in place
+        call cufftExec(plan,planType,coutput_d,coutput_d,CUFFT_FORWARD )
+
+        ! now scale the values so that a ifft of the output yields the
+        ! original image back, rather than a scaled version
+        !$acc kernels
+        coutput_d = coutput_d / nscale
+        !$acc end kernels
+
+        ! Copy results back to host
+        coutput = coutput_d
+
+        ! release memory on the host and on the device
+        deallocate(coutput_d)
+
+        ! Destroy the plans
+        call cufftDestroy(plan)
+        VerbosePrint "In simple_cufft::fft_pgi  PGI destroyed ", toc()
+
+
+        call self%set_ft(.true.)
+        call self%set_cmat(coutput)
+
+
+        VerbosePrint "In simple_cufft::fft_pgi  deallocating host arrays", toc()
+        ! Remove host storage
+        if(allocated(coutput))then
+            deallocate(coutput,stat=alloc_stat)
+            if(alloc_stat /= 0)call allocchk("In simple_image::fft dealloc host coutput",alloc_stat)
+        end if
+        if(allocated(rinput))then
+            deallocate(rinput,stat=alloc_stat)
+            if(alloc_stat /= 0)call allocchk("In simple_image::fft dealloc host rinput",alloc_stat)
+        end if
+        VerbosePrint "In simple_cufft::fft_pgi deallocating done "
+        ! istat=cudaThreadSynchronize()
+        !   VerbosePrint "In simple_cufft::fft_pgi  PGI scaling ", size(coutput), LBOUND(coutput), UBOUND(coutput)
+        istat=cudaThreadSynchronize()
+        istat=istat+cudaDeviceSynchronize()
+       ! if(istat.ne.0)then
+         call simple_cuda_stop("In simple_image::fft post fft sync ",__FILENAME__,__LINE__)
+       ! endif
+        VerbosePrint "In simple_cufft::fft_pgi finished ", toc(), toc(t1)
+#endif
+    end subroutine fft_pgi_cuda
+
+    subroutine fwd_ft(self)
         class(image), intent(inout) :: self
         if( self%ft ) return
-        if( shift_to_phase_origin ) call self%shift_phorig
         call fftwf_execute_dft_r2c(self%plan_fwd,self%rmat,self%cmat)
         ! now scale the values so that a ifft() of the output yields the
         ! original image back, rather than a scaled version
@@ -6212,101 +6263,6 @@ contains
             end do
         end do
     end subroutine img2ft
-
-    subroutine fft_pgi_cuda( self )
-#ifndef PGI
-        class(image), intent(inout)      :: self
-        print *,"simple_image::fft_pgi_cuda cannot be called from this compiler"
-#else
-        !! IN-PLACE 3D FFT using CUDA's cufft library
-        use simple_cufft
-#ifdef _OPENACC
-        use openacc
-#endif
-        use cudafor
-        class(image), intent(inout)      :: self
-        complex, allocatable, device     :: coutput_d(:,:,:)
-        complex, allocatable             :: coutput(:,:,:)
-        real,    allocatable             :: rinput(:,:,:)
-        integer      :: plan, planType
-        integer      :: i,j,k,h,l,n,istat
-        integer      :: nerrors, cdim(3),ldim(3),lims(3,2),phys(3)
-        real         :: nscale
-        integer(timer_int_kind) :: t1
-        if( self%ft ) return
-        ldim = self%ldim
-        verbose=.true.
-        if(debug)t1=tic()
-        ! synchronise
-!        istat=cudaDeviceSynchronize()
-!        if(istat.ne.0)then
-!            call simple_cuda_stop("In simple_image::fft sync ",__FILENAME__,__LINE__)
-!        endif
-
-        ! Allocate arrays on the host
-        allocate(coutput(ldim(1),ldim(2),ldim(3)),stat=istat)
-        if(alloc_stat.ne.0)call allocchk("In simple_image::fft coutput",istat)
-        !$ allocate( rinput(ldim(1), ldim(2), ldim(3)),source=0.,stat=alloc_stat)
-        !$ if(alloc_stat.ne.0)call allocchk("In simple_image::pgi_fft rinput",alloc_stat)
-        rinput = self%get_rmat()
-
-        ! Allocate arrays on the device
-        allocate(coutput_d(ldim(1),ldim(2),ldim(3)))
-        ! Set planType to either single or double precision
-        planType = CUFFT_C2C    !! (fp_kind == singlePrecision)
-
-        ! Copy arrays to device
-        coutput=cmplx(rinput,0.)
-        coutput_d = coutput
-
-        ! Initialize the plan for real to complex transform
-        call cufftPlan3d(plan,ldim(1),ldim(2),ldim(3),planType)
-        DebugPrint "In Image::fft  PGI ", toc()
-
-        ! Execute  Forward transform in place
-        call cufftExec(plan,planType,coutput_d,coutput_d,CUFFT_FORWARD )
-
-        ! Scale
-        !$acc kernels
-        coutput_d = coutput_d / nscale
-        !$acc end kernels
-
-        ! Copy results back to host
-        coutput = coutput_d
-
-
-        self%ft =.true.
-        self%cmat(:cdim(1),:cdim(2),:cdim(3))=coutput(:cdim(1),:cdim(2),:cdim(3))
-
-
-        ! Release memory on the host and on the device
-        deallocate(coutput_d,coutput,rinput,stat=istat)
-        if(alloc_stat /= 0)call allocchk("In simple_image::fft dealloc host coutput",istat)
-        ! Destroy the plans
-        call cufftDestroy(plan)
-        DebugPrint "In simple_cufft::fft_pgi  PGI destroyed ", toc()
-
-        ! DebugPrint "In simple_cufft::fft_pgi  deallocating host arrays", toc()
-        ! ! Remove host storage
-        ! if(allocated(coutput))then
-        !     deallocate(coutput,stat=alloc_stat)
-        !     if(alloc_stat /= 0)call allocchk("In simple_image::fft dealloc host coutput",alloc_stat)
-        ! end if
-        ! if(allocated(rinput))then
-        !     deallocate(rinput,stat=alloc_stat)
-        !     if(alloc_stat /= 0)call allocchk("In simple_image::fft dealloc host rinput",alloc_stat)
-        ! end if
-        ! DebugPrint "In simple_cufft::fft_pgi deallocating done "
-        ! istat=cudaThreadSynchronize()
-        !   VerbosePrint "In simple_cufft::fft_pgi  PGI scaling ", size(coutput), LBOUND(coutput), UBOUND(coutput)
-
-        !istat=istat+cudaDeviceSynchronize()
-        !if(istat.ne.0)then
-        !    call simple_cuda_stop("In simple_image::fft post fft sync ",__FILENAME__,__LINE__)
-        !endif
-        DebugPrint "In simple_cufft::fft_pgi finished ", toc(t1)
-#endif
-    end subroutine fft_pgi_cuda
 
 
     subroutine ifft_pgi_cuda( self )
@@ -6548,19 +6504,32 @@ contains
         integer :: i, j, k
         real    :: rswap
         integer :: kfrom,kto
-        if( self%ft ) stop 'ERROR, this method is intended for real images; shift_phorig; simple_image'
+        if( self%ft ) call simple_stop('ERROR, this method is intended for real images; shift_phorig; simple_image')
         if( self%even_dims() )then
             if( self%ldim(3) == 1 )then
-                kfrom = 1
-                kto   = 1
+                !$omp parallel do collapse(2) default(shared) private(rswap,i,j)&
+                !$omp schedule(static) proc_bind(close)
+                do i=1,self%ldim(1)/2
+                    do j=1,self%ldim(2)/2
+                        !(1)
+                        rswap = self%rmat(i,j,1)
+                        self%rmat(i,j,1) = self%rmat(self%ldim(1)/2+i,self%ldim(2)/2+j,1)
+                        self%rmat(self%ldim(1)/2+i,self%ldim(2)/2+j,1) = rswap
+                        !(2)
+                        rswap = self%rmat(i,self%ldim(2)/2+j,1)
+                        self%rmat(i,self%ldim(2)/2+j,1) = self%rmat(self%ldim(1)/2+i,j,1)
+                        self%rmat(self%ldim(1)/2+i,j,1) = rswap
+                    end do
+                end do
+                !$omp end parallel do
             else
                 kfrom = 1
                 kto   = self%ldim(3)/2
-            endif
-            do i=1,self%ldim(1)/2
-                do j=1,self%ldim(2)/2
-                    do k=kfrom,kto
-                        if( self%ldim(3) > 1 )then
+                !$omp parallel do collapse(3) default(shared) private(rswap,i,j,k)&
+                !$omp schedule(static) proc_bind(close)
+                do i=1,self%ldim(1)/2
+                    do j=1,self%ldim(2)/2
+                        do k=1,self%ldim(3)/2
                             !(1)
                             rswap = self%rmat(i,j,k)
                             self%rmat(i,j,k) = self%rmat(self%ldim(1)/2+i,self%ldim(2)/2+j,self%ldim(3)/2+k)
@@ -6577,22 +6546,14 @@ contains
                             rswap = self%rmat(i,j,self%ldim(3)/2+k)
                             self%rmat(i,j,self%ldim(3)/2+k) = self%rmat(self%ldim(1)/2+i,self%ldim(2)/2+j,k)
                             self%rmat(self%ldim(1)/2+i,self%ldim(2)/2+j,k) = rswap
-                        else
-                            !(1)
-                            rswap = self%rmat(i,j,1)
-                            self%rmat(i,j,1) = self%rmat(self%ldim(1)/2+i,self%ldim(2)/2+j,1)
-                            self%rmat(self%ldim(1)/2+i,self%ldim(2)/2+j,1) = rswap
-                            !(2)
-                            rswap = self%rmat(i,self%ldim(2)/2+j,1)
-                            self%rmat(i,self%ldim(2)/2+j,1) = self%rmat(self%ldim(1)/2+i,j,1)
-                            self%rmat(self%ldim(1)/2+i,j,1) = rswap
-                        endif
+                        end do
                     end do
                 end do
-            end do
+                !$omp end parallel do
+            endif
         else
             write(*,*) 'ldim: ', self%ldim
-            stop 'even dimensions assumed; shift_phorig; simple_image'
+            call simple_stop('even dimensions assumed; shift_phorig; simple_image')
         endif
     end subroutine shift_phorig
 
@@ -6758,7 +6719,7 @@ contains
         case('hard')
             soft  = .false.
         case DEFAULT
-            stop 'undefined which parameter; mask; simple_image'
+            call simple_stop('undefined which parameter; mask; simple_image')
         end select
         ! init center as origin
         forall(i=1:self%ldim(1)) cis(i) = -real(self%ldim(1))/2. + real(i-1)
@@ -6928,14 +6889,14 @@ contains
     subroutine pad_mirr( self_in, self_out )
         !use simple_winfuns, only: winfuns
         class(image),   intent(inout) :: self_in, self_out
-        integer :: starts(3), stops(3), lims(3,2)
+        integer :: starts(3), stops(3)
         integer :: i,j, i_in, j_in
         if( self_in.eqdims.self_out )then
             call self_out%copy(self_in)
             return
         endif
-        if(self_in%is_3d())stop '2D images only; simple_image::pad_mirr'
-        if(self_in%ft)stop 'real space 2D images only; simple_image::pad_mirr'
+        if(self_in%is_3d())call simple_stop('2D images only; simple_image::pad_mirr')
+        if(self_in%ft)call simple_stop('real space 2D images only; simple_image::pad_mirr')
         if( self_out%ldim(1) >= self_in%ldim(1) .and. self_out%ldim(2) >= self_in%ldim(2))then
             self_out%rmat = 0.
             starts  = (self_out%ldim-self_in%ldim)/2+1
@@ -6973,7 +6934,7 @@ contains
             enddo
             self_out%ft = .false.
         else
-            stop 'Inconsistent dimensions; simple_image::pad_mirr'
+            call simple_stop('Inconsistent dimensions; simple_image::pad_mirr')
         endif
     end subroutine pad_mirr
 
@@ -7069,8 +7030,8 @@ contains
 
     subroutine norm( self  )
         class(image), intent(inout) :: self
-        integer :: i, j, k, npix
-        real    :: ave, var, ep, dev
+        integer :: npix
+        real    :: ave, var, ep
         npix   = product(self%ldim)
         ave    = sum(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3))) / real(npix)
         if( abs(ave) > TINY ) self%rmat = self%rmat - ave
@@ -7135,7 +7096,7 @@ contains
             endif
             if( sdev > 1e-6 )then
                 self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) =&
-                self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3))/sdev
+                    self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3))/sdev
             endif
         endif
     end subroutine noise_norm
@@ -7176,7 +7137,7 @@ contains
         else
             irad = radius
         endif
-        if( irad<=0. )stop 'Invalid radius value in rad_norm'
+        if( irad<=0. )call simple_stop('Invalid radius value in rad_norm')
         call maskimg%disc(self%ldim, self%smpd, irad, npix)
         ! pixels = self%packer(maskimg) ! Intel hickup
         pixels = pack( self%rmat, maskimg%rmat > 0.5 )
@@ -7586,11 +7547,10 @@ contains
                 logical, intent(in)  :: doplot
                 type(image)          :: img, img_2, img_3, img_4, img3d
                 type(image)          :: imgs(20)
-                complex, allocatable :: fplane_simple(:,:), fplane_frealix(:,:)
-                integer              :: i, j, k, cnt, lfny, ldim(3)
-                real                 :: input, msk, ave, sdev, var, med, xyz(3), pow
-                real                 :: imcorr, recorr, corr, corr_lp, maxv, minv
-                real, allocatable    :: pcavec1(:), pcavec2(:), spec(:), res(:)
+                integer              :: i, j, k, cnt, ldim(3)
+                real                 :: input, msk, ave, sdev, med, xyz(3)
+                real                 :: corr, corr_lp, maxv, minv
+                real, allocatable    :: pcavec1(:), pcavec2(:)
                 real                 :: smpd=2.
                 logical              :: passed, test(6)
 
@@ -7981,26 +7941,6 @@ contains
                 if( .not. passed )  stop 'destructor test failed'
             end subroutine test_image_local
 
-            subroutine test_image_ops ( ld1, ld2, ld3, doplot)
-                 integer, intent(in)  :: ld1, ld2, ld3
-                logical, intent(in)  :: doplot
-                type(image)          :: img, img_2, img_3, img_4, img3d
-                type(image)          :: imgs(20)
-                complex, allocatable :: fplane_simple(:,:), fplane_frealix(:,:)
-                integer              :: i, j, k, lfny, ldim(3)
-                real                 :: input, msk, sdev, var, med, xyz(3), pow
-                real                 :: imcorr, recorr
-                real, allocatable    :: pcavec1(:), pcavec2(:), spec(:), res(:)
-                real                 :: smpd=2.
-                logical              :: passed, test(6)
-                write(*,'(a)') '**info(simple_image ops ): testing fft'
-                call img%new([ld1,ld2,1], 1.)
-                call img_3%new([ld1,ld2,1], 1.)
-                call img3d%new([ld1,ld2,ld3], 1.)
-                if( .not. img%exists() ) stop 'ERROR, in constructor or in exists function, 1'
-                if( .not. img3d%exists() ) stop 'ERROR, in constructor or in exists function, 2'
-             end subroutine test_image_ops
-
     end subroutine test_image
 
     subroutine test_image_pgi_cuda( doplot )
@@ -8018,22 +7958,17 @@ contains
 
 
         subroutine test_image_pgi( ld1, ld2, ld3, doplot )
-            !              use simple_fftshifter
 #ifdef PGI
             use cudafor
 #endif
             integer, intent(in)  :: ld1, ld2, ld3
             logical, intent(in)  :: doplot
             type(image)          :: img, img_2, img_3, img_4, img3d
-            type(image)          :: imgs(20)
-            complex, allocatable :: fplane_simple(:,:), fplane_frealix(:,:)
-            complex              :: c1,c2
-            integer              :: i, j, k, h, cnt, lfny, ldim(3), istat, phys(3),lims(3,2)
-            real                 :: input, msk, ave, sdev, var, med, xyz(3), pow, r1, r2
-            real                 :: imcorr, recorr, corr, corr_lp, maxv, minv
-            real, allocatable    :: pcavec1(:), pcavec2(:), spec(:), res(:),rsh(:,:,:)
+            integer              :: i, j, k, h, ldim(3), phys(3),lims(3,2)
+            real                 :: msk, ave
+            real, allocatable    :: pcavec1(:), pcavec2(:)
             real                 :: smpd=2.
-            logical              :: passed, test(6)
+            logical              :: passed
 
 
             verbose=.true.
