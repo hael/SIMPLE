@@ -29,9 +29,6 @@ type :: pftcc_grad_shsrch
     procedure          :: set_indices => grad_shsrch_set_indices
     procedure          :: minimize    => grad_shsrch_minimize
     procedure          :: kill        => grad_shsrch_kill
-    procedure          ::                grad_shsrch_costfun
-    procedure          ::                grad_shsrch_gcostfun
-    procedure          ::                grad_shsrch_fdfcostfun
     procedure          ::                grad_shsrch_set_costfun
 end type pftcc_grad_shsrch
 
@@ -77,34 +74,54 @@ contains
     end subroutine grad_shsrch_set_costfun          
        
     function grad_shsrch_costfun( self, vec, D ) result( cost )
-        class(pftcc_grad_shsrch), intent(inout) :: self
+        class(*), intent(inout) :: self
         integer,  intent(in)    :: D
         real,     intent(in)    :: vec(D)
         real                    :: cost
-        real                    :: corrs(self%nrots)      
-        cost = - self%pftcc_ptr%gencorr_for_rot(self%reference, self%particle, vec, self%cur_inpl_idx)        
-    end function grad_shsrch_costfun
+        select type(self)
+        class is (pftcc_grad_shsrch)
+            cost = - self%pftcc_ptr%gencorr_for_rot(self%reference, self%particle, vec, self%cur_inpl_idx)
+        class default
+            write (*,*) 'error in grad_shsrch_costfun: unknown type'
+            stop
+        end select
+        end function grad_shsrch_costfun
     
     subroutine grad_shsrch_gcostfun( self, vec, grad, D )
-        class(pftcc_grad_shsrch), intent(inout) :: self
-        integer, intent(in)    :: D
-        real,    intent(inout) :: vec(D)
-        real,    intent(out)   :: grad(D)
-        real                   :: corrs_grad(2)       
-        call self%pftcc_ptr%gencorr_grad_only_for_rot(self%reference, self%particle, vec, self%cur_inpl_idx, corrs_grad)
-        grad = - corrs_grad        
+        class(*), intent(inout) :: self
+        integer, intent(in)     :: D
+        real,    intent(inout)  :: vec(D)
+        real,    intent(out)    :: grad(D)
+        real                    :: corrs_grad(2)
+        select type(self)
+        class is (pftcc_grad_shsrch)
+            call self%pftcc_ptr%gencorr_grad_only_for_rot(self%reference, self%particle, vec, self%cur_inpl_idx, corrs_grad)       
+            grad = - corrs_grad
+        class default            
+            write (*,*) 'error in grad_shsrch_gcostfun: unknown type'
+            grad = 0.
+            stop
+        end select
     end subroutine grad_shsrch_gcostfun
 
     subroutine grad_shsrch_fdfcostfun( self, vec, f, grad, D )
-        class(pftcc_grad_shsrch), intent(inout) :: self
-        integer, intent(in)    :: D
-        real,    intent(inout) :: vec(D)
-        real,    intent(out)   :: f, grad(D)
-        real                   :: corrs          
-        real                   :: corrs_grad(2)
-        call self%pftcc_ptr%gencorr_grad_for_rot(self%reference, self%particle, vec, self%cur_inpl_idx, corrs, corrs_grad)
-        f    = - corrs
-        grad = - corrs_grad
+        class(*), intent(inout) :: self
+        integer, intent(in)     :: D
+        real,    intent(inout)  :: vec(D)
+        real,    intent(out)    :: f, grad(D)
+        real                    :: corrs          
+        real                    :: corrs_grad(2)
+        select type(self)
+        class is (pftcc_grad_shsrch)
+            call self%pftcc_ptr%gencorr_grad_for_rot(self%reference, self%particle, vec, self%cur_inpl_idx, corrs, corrs_grad)
+            f    = - corrs
+            grad = - corrs_grad
+        class default
+            write (*,*) 'error in grad_shsrch_fdfcostfun: unknown type'
+            f = 0.
+            grad = 0.
+            stop
+        end select
     end subroutine grad_shsrch_fdfcostfun
     
     !> shsrch_set_indices Set indicies for shift search

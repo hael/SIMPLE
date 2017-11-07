@@ -25,7 +25,7 @@ type :: pftcc_shsrch
     procedure :: new
     procedure :: set_indices
     procedure :: minimize
-    procedure :: costfun
+    procedure :: costfun    
 end type pftcc_shsrch
 
 contains
@@ -65,7 +65,7 @@ contains
         ! get # rotations
         self%nrots = pftcc%get_nrots()
         ! associate costfun
-        self%ospec%costfun => costfun
+        self%ospec%costfun => costfun_wrapper
     end subroutine new
     
     !> shsrch_set_indices Set indicies for shift search
@@ -79,8 +79,23 @@ contains
         integer,             intent(in)    :: ref, ptcl
         self%reference = ref
         self%particle  = ptcl
-    end subroutine set_indices     
-
+    end subroutine set_indices
+    
+    !> Wrapper for cost function (gcc7+)
+    function costfun_wrapper(self, vec, D) result( cost )
+        class(*), intent(inout) :: self
+        integer,  intent(in)    :: D
+        real,     intent(in)    :: vec(D)
+        real :: cost
+        select type (self)
+        class is (pftcc_shsrch)
+            cost = self%costfun(vec, D)
+        class default
+            write (*,*) 'error in simple_pftcc_shsrch, costfun_wrapper: unknown type'
+            stop
+        end select
+    end function costfun_wrapper
+    
     !> Cost function
     function costfun( self, vec, D ) result( cost )
         class(pftcc_shsrch), intent(inout) :: self
@@ -90,13 +105,13 @@ contains
         real :: corrs(self%nrots)
         if( self%shbarr )then
             if( any(vec(:) < self%ospec%limits(:,1)) .or.&
-               &any(vec(:) > self%ospec%limits(:,2)) )then
+                &any(vec(:) > self%ospec%limits(:,2)) )then
                 cost = 1.
                 return
             endif
         endif
         call self%pftcc_ptr%gencorrs(self%reference, self%particle, vec, corrs)
-        cost = -maxval(corrs)
+        cost = -maxval(corrs)        
     end function costfun
     
     !> minimisation routine
