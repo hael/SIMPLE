@@ -37,6 +37,7 @@ type prime3D_srch
     class(sym),              pointer :: se_ptr         => null() !< b%se (symmetry elements)
     type(pftcc_shsrch)               :: shsrch_obj               !< origin shift search object
     type(pftcc_grad_shsrch)          :: grad_shsrch_obj          !< origin shift search object, L-BFGS with gradient
+    integer, allocatable             :: nnvec(:)                 !< nearest neighbours indices
     integer                          :: iptcl          = 0       !< global particle index
     integer                          :: nrefs          = 0       !< total # references (nstates*nprojs)
     integer                          :: nnnrefs        = 0       !< total # neighboring references (nstates*nnn)
@@ -431,6 +432,7 @@ contains
         else
             call self%stochastic_srch(lp, nnmat, grid_projs)
         endif
+        if(allocated(self%nnvec))deallocate(self%nnvec)
         DebugPrint '>>> PRIME3D_SRCH::EXECUTED PRIME3D_SRCH'
     end subroutine exec_prime3D_srch
 
@@ -568,7 +570,7 @@ contains
         integer,             intent(inout) :: target_projs(:)
         real      :: inpl_corrs(self%nrots), corrs(self%nrefs), inpl_corr
         integer   :: iref, isample, nrefs, ntargets, cnt, istate
-        integer   :: state_cnt(self%nstates), iref_state, loc(1), inpl_ind
+        integer   :: state_cnt(self%nstates), iref_state, inpl_ind(1)
         if( nint(self%a_ptr%get(self%iptcl,'state')) > 0 )then
             ! initialize
             target_projs = 0
@@ -587,7 +589,7 @@ contains
             call hpsort(self%nrefs, corrs, proj_space_inds(self%iptcl,:))
             ! return target points
             ntargets = size(target_projs)
-            cnt = 1
+            cnt      = 1
             target_projs( cnt ) = prev_proj(self%iptcl) ! previous always part of the targets
             if( self%nstates == 1 )then
                 ! Single state
@@ -626,9 +628,8 @@ contains
             subroutine per_ref_srch
                 if( state_exists(istate) )then
                     call self%pftcc_ptr%gencorrs(iref, self%iptcl, self%kstop_grid, inpl_corrs) ! In-plane correlations
-                    loc        = maxloc(inpl_corrs)               ! greedy in-plane
-                    inpl_ind   = loc(1)                           ! in-plane angle index
-                    inpl_corr  = inpl_corrs(inpl_ind)             ! max in plane correlation
+                    inpl_ind   = maxloc(inpl_corrs)               ! greedy in-plane
+                    inpl_corr  = inpl_corrs(inpl_ind(1))          ! max in plane correlation
                     proj_space_corrs(self%iptcl,iref) = inpl_corr ! stash in-plane correlation for sorting
                     proj_space_inds(self%iptcl,iref)  = iref      ! stash the index for sorting
                 endif
@@ -830,7 +831,7 @@ contains
         use simple_rnd, only: shcloc, irnd_uni
         class(prime3D_srch), intent(inout) :: self
         logical,             intent(in)    :: do_extr
-        integer :: iref, state
+        integer :: iref, state, loc(1)
         real    :: corr, mi_state, mi_inpl, frac
         real    :: corrs_state(self%nstates), corrs_inpl(self%nrots), shvec(2)
         prev_states(self%iptcl) = nint(self%a_ptr%get(self%iptcl, 'state'))
@@ -854,11 +855,13 @@ contains
             else
                 ! SHC out of plane
                 self%prev_corr  = corrs_state(prev_states(self%iptcl))
-                state           = shcloc(self%nstates, corrs_state, self%prev_corr)
+                ! state           = shcloc(self%nstates, corrs_state, self%prev_corr)
+                ! corr            = corrs_state(state)
+                ! self%nrefs_eval = count(corrs_state <= self%prev_corr)
+                loc             = maxloc(corrs_state) ! greedy in state
+                state           = loc(1)
                 corr            = corrs_state(state)
-                self%nrefs_eval = count(corrs_state <= self%prev_corr)
-                ! state           = maxloc(corrs_state) ! greedy in state
-                ! self%nrefs_eval = self%nstates
+                self%nrefs_eval = self%nstates
                 ! greedy inpl move
                 iref = (state-1)*self%nprojs + prev_proj(self%iptcl)
                 proj_space_corrs(self%iptcl,iref)      = corr
@@ -963,15 +966,11 @@ contains
             if( .not. state_exists(self%prev_state) ) stop 'empty previous state; prep4srch; simple_prime3D_srch'
         endif
         select case( self%refine )
-            case( 'no','shc','snhc','greedy','yes')
-                ! 
             case( 'neigh','shcneigh', 'greedyneigh' )
                 ! disjoint nearest neighbour set
-                nnvec = merge_into_disjoint_set(self%nprojs, self%nnn_static, nnmat, target_projs)
-            case( 'het' )
-                !
-            case( 'states' )
-                !
+                self%nnvec = merge_into_disjoint_set(self%nprojs, self%nnn_static, nnmat, target_projs)
+            case( 'no','shc','snhc','greedy','yes','het','states' )
+                ! all good
             case DEFAULT
                 stop 'Unknown refinement mode; simple_prime3D_srch; prep4srch'
         end select
@@ -1000,9 +999,9 @@ contains
         type(ori)  :: o
         type(oris) :: sym_os
         real       :: shvec(2), corrs(self%npeaks), ws(self%npeaks), logws(self%npeaks)
-        real       :: frac, ang_sdev, dist, inpl_dist, euldist, mi_joint
+        real       :: frac, ang_sdev, dist, inpl_dist, euldist, mi_joint, states_w(self%nstates)
         real       :: mi_proj, mi_inpl, mi_state, dist_inpl, wcorr
-        integer    :: ipeak, cnt, ref, state, best_loc(1), order(self%npeaks), loc(1), states(self%nstates)
+        integer    :: s, ipeak, cnt, ref, state, best_loc(1), order(self%npeaks), loc(1)
         integer    :: roind, neff_states
         logical    :: included(self%npeaks)
         ! empty states
@@ -1056,6 +1055,31 @@ contains
             wcorr = sum(ws*corrs,mask=included)
             ! update npeaks individual weights
             call o_peaks(self%iptcl)%set_all('ow', ws)
+        endif
+        ! state stochastic weights
+        if( self%nstates > 1 .and. self%npeaks > 1 )then
+            ! states_w = 0.
+            ! do ipeak = 1, self%npeaks
+            !     s = nint(o_peaks(self%iptcl)%get(ipeak,'state'))
+            !     if( included(ipeak) )states_w(s) = states_w(s) + ws(ipeak)
+            ! enddo
+            ! states_w = states_w / sum(states_w)
+            ! loc = maxloc(states_w)
+            ! if( states_w(loc(1)) > 0.6 )then
+            !     ! other states weights zeroed
+            !     do ipeak = 1, self%npeaks
+            !         s = nint(o_peaks(self%iptcl)%get(ipeak,'state'))
+            !         if( s.ne.loc(1) )then
+            !             corrs(ipeak)    = 0.
+            !             ws(ipeak)       = 0.
+            !             included(ipeak) = .false.
+            !         endif
+            !     enddo
+            !     wcorr = sum(ws*corrs,mask=included)
+            !     call o_peaks(self%iptcl)%set_all('ow', ws)
+            !else
+            !    ! other states weights preserved
+            !endif
         endif
         ! angular standard deviation
         ang_sdev = 0.
@@ -1159,6 +1183,7 @@ contains
 
     subroutine kill( self )
         class(prime3D_srch),  intent(inout) :: self !< instance
+        if(allocated(self%nnvec))deallocate(self%nnvec)
         call self%grad_shsrch_obj%kill
     end subroutine kill
 

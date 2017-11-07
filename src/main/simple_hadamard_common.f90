@@ -558,9 +558,6 @@ contains
         character(len=:), allocatable   :: fname_vol_filter
         real    :: shvec(3)
         integer :: ldim(3)
-        logical :: shellnorm_and_filter
-        shellnorm_and_filter = .true.
-        if( p%refine.eq.'het' .or. p%nstates>1 )shellnorm_and_filter = .false.
         ! ensure correct b%vol dim
         call b%vol%new([p%box,p%box,p%box],p%smpd)
         call b%vol%read(volfname)
@@ -578,7 +575,7 @@ contains
                 call b%vol%fwd_ft ! needs to be here in case the shift was never applied (above)
                 call b%vol%shellnorm_and_apply_filter(b%vol2)
             else
-                if( shellnorm_and_filter )then
+                if( p%nstates==1 )then
                     ! matched filter based on Rosenthal & Henderson, 2003
                     if( any(b%fsc(s,:) > 0.143) )then
                         call b%vol%fwd_ft ! needs to be here in case the shift was never applied (above)

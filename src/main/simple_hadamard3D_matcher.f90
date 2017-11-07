@@ -282,7 +282,12 @@ contains
         if( p%refine.eq.'het' )then
             call prime3D_srch_extr(b%a, p, do_extr)
         endif
-        call state_stats(b%a, p)
+        ! if( p%refine.eq.'no' .and. p%nstates > 1 .and. p%npeaks > 1 )then
+        !     do iptcl = p%fromp, p%top
+        !         call o_peaks(iptcl)%write('peak_'//int2str_pad(iptcl,6)//'_iter'//int2str_pad(which_iter,3)//'.txt')
+        !     enddo
+        ! endif
+
 
         ! CLEANUP primesrch3D & pftcc
         call cleanprime3D_srch(p)
@@ -540,29 +545,5 @@ contains
 
         DebugPrint '*** hadamard3D_matcher ***: finished preppftcc4align'
     end subroutine preppftcc4align
-
-    subroutine state_stats(a, p)
-        type(oris),    intent(inout) :: a      
-        class(params), intent(inout) :: p       !< param object
-        integer, allocatable :: ptcl_states(:)
-        real,    allocatable :: weights(:)
-        integer :: i, iptcl, state, s
-        real    :: states_w(p%nstates)
-        if( p%refine.eq.'no' .and. p%nstates>1 .and. p%npeaks>1 )then
-            do iptcl=p%fromp,p%top
-                state = nint(a%get(iptcl,'state'))
-                if( state==0 .or. nint(a%get(iptcl, 'state_balance'))==0 )cycle
-                ptcl_states = nint(o_peaks(iptcl)%get_all('state'))
-                weights     = o_peaks(iptcl)%get_all('ow')               
-                states_w    = 0.
-                do s = 1, p%nstates
-                    states_w(s) = sum(weights, mask=ptcl_states==s)
-                enddo
-                states_w = states_w / sum(states_w)
-                print *, iptcl, state, states_w
-                deallocate(ptcl_states, weights)
-            end do
-        endif
-    end subroutine state_stats
 
 end module simple_hadamard3D_matcher
