@@ -6072,9 +6072,9 @@ contains
         use openacc
         use cudafor
         class(image), intent(inout)      :: self
-        real(sp),    allocatable         :: rinput(:,:,:)
         complex(sp), allocatable, device :: coutput_d(:,:,:)
         complex(sp), allocatable         :: coutput(:,:,:)
+        real, allocatable                :: rinput(:,:,:)
         integer      :: plan, planType
         integer      :: i,j,k,h,l,n,istat
         integer      :: nerrors, cdim(3),ldim(3),lims(3,2),phys(3)
@@ -6403,16 +6403,6 @@ contains
 #endif
     end subroutine ifft_pgi_cuda
 
-
-
-
-
-
-
-
-
-
-
     !> \brief dampens the central cross of a powerspectrum by median filtering
     subroutine dampen_central_cross( self )
         class(image), intent(inout) :: self
@@ -6529,7 +6519,7 @@ contains
                 !$omp schedule(static) proc_bind(close)
                 do i=1,self%ldim(1)/2
                     do j=1,self%ldim(2)/2
-                        do k=1,self%ldim(3)/2
+                        do k=1,kto
                             !(1)
                             rswap = self%rmat(i,j,k)
                             self%rmat(i,j,k) = self%rmat(self%ldim(1)/2+i,self%ldim(2)/2+j,self%ldim(3)/2+k)
