@@ -174,6 +174,7 @@ if (CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
   # -O0 -g3 -Warray-bounds -Wcharacter-truncation -Wline-truncation -Wimplicit-interface
   # -Wimplicit-procedure -Wunderflow -Wuninitialized -fcheck=all -fmodule-private -fbacktrace -dump-core -finit-real=nan -ffpe-trap=invalid,zero,overflow
   #
+  option(GFORTRAN_EXTRA_CHECKING "Use extra checks in commandline " OFF)
 elseif (CMAKE_Fortran_COMPILER_ID STREQUAL "PGI")
   # pgfortran
   message(STATUS " PGI Compiler settings: default USE_CUDA=ON")
@@ -183,7 +184,7 @@ elseif (CMAKE_Fortran_COMPILER_ID STREQUAL "PGI")
   set(checks   "-Mdclchk -Mchkptr -Mchkstk -Mdepchk -Munixlogical -Mflushz -Mdaz -Mfpmisalign")
   set(warn     "-Minform=warn -Minfo=all,ftn ") # ${checks}")
   # bounds checking cannot be done in CUDA fortran or OpenACC GPU
-  set(fordebug "-g ${warn}  -traceback -gopt -Mneginfo=all,ftn -Mpgicoff -traceback -Mprof  ")
+  set(fordebug "-g ${warn}  -traceback -gopt -Mcuda=debug -Mneginfo=all,ftn -Mpgicoff -traceback -Mprof  ")
   set(forspeed "-O3 -fast " ) # -Munroll -O4  -Mipa=fast -fast -Mcuda=fastmath,unroll -Mvect=nosizelimit,short,simd,sse  ")
   set(forpar   " -mp  -Mcuda=cc60,cuda8.0") # -Mconcur=bind,allcores -Mcuda=cuda8.0,cc60,flushz,fma
   set(target   " -m64 -fPIC ")  #
@@ -192,10 +193,11 @@ elseif (CMAKE_Fortran_COMPILER_ID STREQUAL "PGI")
   option(PGI_EXTRACT_ALL  "PGI --Extract subprograms for inlining (-Mextract)" OFF)
   option(PGI_LARGE_FILE_SUPPORT  "PGI -- Link with library directory for large file support (-Mlfs)" OFF)
   option(PGI_CUDA_MANAGED_MEMORY "Use CUDA Managed Memory" OFF)
-  option(PGI_CUDA_IOMUTEX "Use mutex for IO calls" ON)
-  option(PGI_CHECKING "Use extra checks in commandline " ON)
-  option(PGI_EXTRA_FAST "Use extra compile options to speed up code e.g. -Munroll -Mvect" ON)
+  option(PGI_CUDA_IOMUTEX "Use mutex for IO calls (-Miomutex)" ON)
+  option(PGI_CHECKING "Use extra checks in commandline " OFF)
+  option(PGI_EXTRA_FAST "Use extra compile options to speed up code e.g. -Munroll -Mvect" OFF)
   #
+  option(USE_OPENACC_ONLY "Enable OpenACC without OpenMP (OpenMP on by default)" OFF)
   message(STATUS "In PGI: FFTW should be set with one of the following environment variables: FFTWDIR,FFTW_DIR, or FFTW_ROOT ")
   if(NOT "$ENV{FFTW_DIR}" STREQUAL "")
     set(FFTWDIR "$ENV{FFTW_DIR}")
