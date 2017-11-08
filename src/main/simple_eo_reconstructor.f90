@@ -25,9 +25,10 @@ type :: eo_reconstructor
     real                 :: fsc0143        !< target resolution at FSC=0.143
     real                 :: smpd, msk, fny, inner=0., width=10.
     integer              :: box=0, nstates=1, numlen=2, lfny=0
-    logical              :: automsk = .false.
-    logical              :: wiener  = .false.
-    logical              :: exists  = .false.
+    logical              :: phaseplate = .false.
+    logical              :: automsk    = .false.
+    logical              :: wiener     = .false.
+    logical              :: exists     = .false.
   contains
     ! CONSTRUCTOR
     procedure          :: new
@@ -78,16 +79,17 @@ contains
         ! set constants
         neg = .false.
         if( p%neg .eq. 'yes' ) neg = .true.
-        self%box     = p%box
-        self%smpd    = p%smpd
-        self%nstates = p%nstates
-        self%inner   = p%inner
-        self%width   = p%width
-        self%fny     = p%fny
-        self%ext     = p%ext
-        self%numlen  = p%numlen
-        self%msk     = p%msk
-        self%automsk = file_exists(p%mskfile)
+        self%box        = p%box
+        self%smpd       = p%smpd
+        self%nstates    = p%nstates
+        self%inner      = p%inner
+        self%width      = p%width
+        self%fny        = p%fny
+        self%ext        = p%ext
+        self%numlen     = p%numlen
+        self%msk        = p%msk
+        self%automsk    = file_exists(p%mskfile)
+        self%phaseplate = p%tfplan%l_phaseplate
         ! create composites
         if( self%automsk )then
             call self%envmask%new([p%box,p%box,p%box], p%smpd)
@@ -294,7 +296,7 @@ contains
         integer,                 intent(out)   :: find4eoavg            !< Fourier index for eo averaging
         real, allocatable :: res(:), corrs(:)
         type(image)       :: even, odd
-        integer           :: j
+        integer           :: j, find_plate
         ! make clipped volumes
         call even%new([self%box,self%box,self%box],self%smpd)
         call odd%new([self%box,self%box,self%box],self%smpd)
@@ -336,6 +338,8 @@ contains
         res = even%get_res()
         allocate(corrs(even%get_filtsz()))
         call even%fsc(odd, corrs)
+        find_plate = 0
+        if( self%phaseplate ) call phaseplate_correct_fsc(corrs, find_plate)
         do j=1,size(res)
            write(*,'(A,1X,F6.2,1X,A,1X,F7.3)') '>>> RESOLUTION:', res(j), '>>> CORRELATION:', corrs(j)
         end do
@@ -348,6 +352,7 @@ contains
         write(*,'(A,1X,F6.2)') '>>> RESOLUTION AT FSC=0.143 DETERMINED TO:', self%fsc0143
         ! Fourier index for eo averaging
         find4eoavg = max(K4EOAVGLB,get_lplim_at_corr(corrs, FSC4EOAVG))
+        find4eoavg = max(find4eoavg, find_plate)
         deallocate(corrs, res)
         call even%kill
         call odd%kill

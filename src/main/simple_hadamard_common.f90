@@ -755,7 +755,7 @@ contains
         type(image)              :: even, odd, mskvol
         type(image), allocatable :: even_imgs(:), odd_imgs(:)
         real,        allocatable :: frc(:)
-        integer :: iproj, ldim(3)
+        integer :: iproj, ldim(3), find_plate
         ! ensure correct b%vol dim
         call b%vol%new([p%box,p%box,p%box],p%smpd) 
         ! read & prep even/odd pair
@@ -777,6 +777,7 @@ contains
             call even_imgs(iproj)%fwd_ft
             call odd_imgs(iproj)%fwd_ft
             call even_imgs(iproj)%fsc(odd_imgs(iproj), frc)
+            if( p%tfplan%l_phaseplate ) call phaseplate_correct_fsc(frc, find_plate)
             call projfrcs%set_frc(iproj, frc, state)
             call even_imgs(iproj)%kill
             call odd_imgs(iproj)%kill

@@ -1009,6 +1009,23 @@ contains
         endif
     end subroutine get_resolution
 
+    subroutine phaseplate_correct_fsc( fsc, find_plate )
+        real,    intent(inout) :: fsc(:)
+        integer, intent(out)   :: find_plate
+        integer :: loc(1), k
+        real    :: maxv
+        loc = maxloc(fsc)
+        if( loc(1) == 1 )then
+            find_plate = 0
+            return
+        endif
+        find_plate = loc(1)
+        maxv       = fsc(loc(1))
+        do k=loc(1)-1,1,-1
+            fsc(k) = maxv
+        end do
+    end subroutine phaseplate_correct_fsc
+
     !>   returns the Fourier index of the resolution limit at corr
     function get_lplim_at_corr( fsc, corr ) result( k )
         real, intent(in) :: fsc(:), corr

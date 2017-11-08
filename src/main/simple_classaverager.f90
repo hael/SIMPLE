@@ -666,7 +666,7 @@ contains
         character(len=*), intent(in) :: fname
         type(image), allocatable     :: even_imgs(:,:), odd_imgs(:,:)
         real,        allocatable     :: frc(:)
-        integer :: istate, icls, find
+        integer :: istate, icls, find, find_plate
         logical :: err
         ! serial code for allocation/copy
         allocate(even_imgs(nstates,ncls), odd_imgs(nstates,ncls), frc(filtsz))
@@ -677,7 +677,7 @@ contains
             end do
         end do
         ! parallel loop to do the job
-        !$omp parallel do default(shared) private(istate,icls,frc,find) schedule(static) proc_bind(close)
+        !$omp parallel do default(shared) private(istate,icls,frc,find,find_plate) schedule(static) proc_bind(close)
         do icls=1,ncls
             do istate=1,nstates
                 call even_imgs(istate,icls)%norm
@@ -692,9 +692,12 @@ contains
                 call even_imgs(istate,icls)%fwd_ft
                 call odd_imgs(istate,icls)%fwd_ft
                 call even_imgs(istate,icls)%fsc(odd_imgs(istate,icls), frc)
+                find_plate = 0
+                if( phaseplate ) call phaseplate_correct_fsc(frc, find_plate)
                 call bp%projfrcs%set_frc(icls, frc, istate)
                 ! average low-resolution info between eo pairs to keep things in register
                 find = bp%projfrcs%estimate_find_for_eoavg(icls, istate)
+                find = max(find, find_plate)
                 call cavgs_merged(istate,icls)%fwd_ft
                 call cavgs_even(istate,icls)%fwd_ft
                 call cavgs_odd(istate,icls)%fwd_ft

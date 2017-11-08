@@ -68,7 +68,7 @@ contains
         type(params)      :: p
         type(image)       :: even, odd
         type(masker)      :: mskvol
-        integer           :: j
+        integer           :: j, find_plate
         real              :: res_fsc05, res_fsc0143
         real, allocatable :: res(:), corrs(:)
         p = params(cline)
@@ -111,6 +111,7 @@ contains
         res = even%get_res()
         allocate(corrs(even%get_filtsz()))
         call even%fsc(odd, corrs)
+        if( p%tfplan%l_phaseplate ) call phaseplate_correct_fsc(corrs, find_plate)
         do j=1,size(res)
            write(*,'(A,1X,F6.2,1X,A,1X,F7.3)') '>>> RESOLUTION:', res(j), '>>> CORRELATION:', corrs(j)
         end do
