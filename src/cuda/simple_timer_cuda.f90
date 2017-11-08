@@ -5,9 +5,12 @@
 !! Michael Eager 2017-03-15
 module simple_timer_cuda
 include 'simple_lib.f08'
+#ifdef PGI
 use cudafor
+#endif
+
 implicit none
-    !> 
+    !>
     type timer_cuda
 #ifdef PGI
         type(cudaEvent) :: start_point
@@ -16,13 +19,13 @@ implicit none
         real(dp)  :: start_point=REAL(0.,dp)
         real(dp)  :: end_point=REAL(0.,dp)
 #endif
-        
+
     contains
-        final :: CUtimer_kill
         procedure :: ticU
         procedure :: tocU
         procedure :: nowCU
         procedure :: CUtimer_setup
+        final :: destroy
     end type timer_cuda
 
     interface timer_cuda
@@ -83,6 +86,7 @@ contains
         istat=cudaEventCreate(this%end_point)
         if (istat .ne. 0) call simple_stop(' cudaEventCreate for device 0: Failed')
 #else
+        class(timer_cuda) :: this
         this%start_point=0.0d0
         this%end_point=this%start_point
 #endif
@@ -100,10 +104,10 @@ contains
         real(dp) :: res
         call cpu_time(this%start_point)
 #endif
-        ticU=this%start_point
+        res=this%start_point
     end function ticU
 
-    real function tocU(this,start_optional)
+    function tocU(this,start_optional) result(elapsed)
         class(timer_cuda) :: this
 #ifdef PGI
         integer :: istat
@@ -121,11 +125,12 @@ contains
         if (istat .ne. 0) call simple_stop(' cudaEventtSynchronize for device 0: Failed')
         istat=cudaEventElapsedTime(elapsed,this%start_point,this%end_point)
         if (istat .ne. 0) call simple_stop(' cudaEventElapsedTime for device 0: Failed')
+        elapsed=elapsed/100.
 #else
         call cpu_time(this%end_point)
-        elapsed=this%end_point-this%start_point
+        elapsed=(this%end_point-this%start_point)
 #endif
-        tocU=elapsed
+
     end function tocU
 
     !< Print Info and clock time
@@ -152,7 +157,7 @@ contains
     end subroutine nowCU
 
     !> \brief timer destructor
-    subroutine CUtimer_kill(this)
+    subroutine destroy(this)
 #ifdef PGI
         type(timer_cuda) :: this
         integer :: istat
@@ -160,8 +165,10 @@ contains
         if (istat .ne. 0) call simple_stop(' cudaEventDestroyfor device 0: Failed')
         istat=cudaEventDestroy(this%end_point)
         if (istat .ne. 0) call simple_stop(' cudaEventDestroyfor device 0: Failed')
+#else
+        type(timer_cuda) :: this
+        !nothing to do here
 #endif
-    end subroutine CUtimer_kill
+    end subroutine destroy
 
 end module simple_timer_cuda
-
