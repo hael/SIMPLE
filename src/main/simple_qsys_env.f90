@@ -49,7 +49,7 @@ contains
         nparts = p_master%nparts
         select case(p_master%split_mode)
             case('even')
-                !$ allocate( self%parts(p_master%nptcls,2) )
+                !pgi$ allocate( self%parts(p_master%nptcls,2) )
                 self%parts = split_nobjs_even(p_master%nptcls, nparts)
                 partsz     = self%parts(1,2) - self%parts(1,1) + 1
             case('singles')

@@ -69,7 +69,7 @@ contains
         end select
         ! batches
         nbatches = ceiling(real(nptcls)/real(p%nthr*BATCHSZ_MUL))
-        !$ allocate(batches(nptcls,2))
+        !pgi$ allocate(batches(nptcls,2))
         batches  = split_nobjs_even(nptcls, nbatches)
 
         ! SET BAND-PASS LIMIT RANGE

@@ -49,7 +49,7 @@ contains
         character(len=STDLEN)      :: fname
         character(len=1024)        :: line
         p      = params(cline) ! parameters generated
-        !$ allocate(parts(p%nptcls,2))
+        !pgi$ allocate(parts(p%nptcls,2))
         parts  = split_nobjs_even(p%nptcls, p%ndocs)
         if( cline%defined('numlen') )then
             numlen = p%numlen
