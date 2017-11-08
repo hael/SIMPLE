@@ -116,7 +116,7 @@ contains
         class(prep4cgrid), intent(inout) :: self
         if( self%exists )then
             call self%mskimg%kill
-            call self%prep4cgrid%kill
+            call self%img4grid%kill
             deallocate(self%instr_fun)
             self%exists = .false.
         endif

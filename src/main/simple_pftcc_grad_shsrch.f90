@@ -55,7 +55,11 @@ contains
         self%maxits = 100
         if( present(maxits) ) self%maxits = maxits
         ! make optimizer spec
-        call self%ospec%specify('bfgs2', 2, ftol=1e-1, gtol=1e-3, max_step=0.01,&
+        ! call self%ospec%specify('bfgs2', 2, ftol=1e-1, gtol=1e-3, max_step=0.01,&
+        !     &limits_init=lims_init, nrestarts=self%nrestarts, maxits=self%maxits)
+        ! call self%ospec%specify('cg_fr', 2, ftol=1e-1, gtol=1e-3, max_step=0.01,&
+        !     &limits_init=lims_init, nrestarts=self%nrestarts, maxits=self%maxits)
+        call self%ospec%specify('cg_pr', 2, ftol=1e-1, gtol=1e-3, max_step=0.01,&
             &limits_init=lims_init, nrestarts=self%nrestarts, maxits=self%maxits)
         ! generate the optimizer object
         call opt_fact%new(self%ospec, self%nlopt)        
