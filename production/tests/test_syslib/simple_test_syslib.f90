@@ -10,13 +10,13 @@ character(len=STDLEN) :: simple_path_str
 integer(8) :: version(3)
 
 #if defined (PGI)
-    print *, '  PGI  COMPILER found. '
+    print *, '  PGI  COMPILER identified. '
 #elif defined (INTEL)
-    print *, '  Intel  COMPILER found. '
+    print *, '  Intel  COMPILER identified. '
 #elif defined (GNU)
-    print *, '  GNU COMPILER found. '
+    print *, '  GNU COMPILER identified. '
 #else
-    print *, ' NO COMPILER found. '
+    print *, ' NO COMPILER identified. '
 #endif
 
 print *, '>>> cmake variables defined in SimpleGitVersion.h:'

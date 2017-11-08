@@ -61,7 +61,7 @@ contains
 
     subroutine terminate_if_prg_in_cwd( prg )
         character(len=*), intent(in) :: prg
-        integer                      :: file_stat, funit, ios, file_rec, i, pos
+        integer                      :: file_stat, funit, status, file_rec, i, pos
         character(len=STDLEN)        :: pid, pid_dir, pwd, cmd
         cmd = 'pgrep '//trim(prg)//' > pid_from_fortran.txt'
         call exec_cmdline(cmd)
@@ -81,7 +81,7 @@ contains
         ! get pwd
         ios = simple_getenv('PWD',pwd)
         pwd = trim(adjustl( pwd ))
-
+        if (status /= 0 ) call simple_stop("In simple_qsys_funs::terminate_if_prg_in_cwd PWD not found")
         ! assert
         pos = index(pid_dir, '/') ! start of directory
         if( trim(pid_dir(pos:)) .eq. trim(pwd) )then
@@ -98,14 +98,14 @@ contains
         type(chash), intent(inout)    :: env
         character(len=STDLEN)         :: env_file, qsys_name
         character(len=:), allocatable :: simple_path, simple_path_env
-        integer :: i,funit, nl, file_stat,ios
+        integer :: i,funit, nl, file_stat,status
         env_file = './simple_distr_config.env'
         if( .not. file_exists(trim(env_file)) ) call autogen_env_file(env_file)
         call env%read( trim(env_file) )
         ! User keys
         if( .not. env%isthere('simple_path') )stop 'Path to SIMPLE directory is required in simple_distr_config.env (simple_path)'
-        ios = simple_getenv('SIMPLE_PATH',simple_path)
-        if( allocated(simple_path) )then
+        status = simple_getenv('SIMPLE_PATH', simple_path)
+        if( status == 0 .and. allocated(simple_path) )then
             simple_path_env = env%get('simple_path')
             if( str_has_substr(simple_path, simple_path_env) .or. str_has_substr(simple_path_env, simple_path) )then
                 ! all ok
@@ -137,16 +137,16 @@ contains
 
     subroutine autogen_env_file( env_file )
         character(len=*), intent(in)  :: env_file
-        integer                       :: funit, file_stat, io_stat
+        integer                       :: funit, file_stat, status
         character(len=:), allocatable :: simple_path, simple_email, simple_qsys
-        io_stat = simple_getenv('SIMPLE_PATH',simple_path )
-        if( .not. allocated(simple_path) )&
+        status = simple_getenv('SIMPLE_PATH', simple_path)
+        if( status /= 0 ) &
         stop 'need SIMPLE_PATH env var to auto-generate simple_distr_config.env; simple_qsys_funs :: autogen_env_file'
-        io_stat = simple_getenv('SIMPLE_QSYS',simple_qsys)
-        if( .not. allocated(simple_qsys) )&
+        status= simple_getenv('SIMPLE_QSYS', simple_qsys )
+        if( status /= 0 ) &
         stop 'need SIMPLE_QSYS env var to auto-generate simple_distr_config.env; simple_qsys_funs :: autogen_env_file'
-        io_stat =  simple_getenv('SIMPLE_EMAIL',simple_email)
-        if( .not. allocated(simple_email) ) allocate(simple_email, source='me.myself\uni.edu')
+        status = simple_getenv('SIMPLE_EMAIL',  simple_email)
+        if( status /= 0 .or. (.not. allocated(simple_email)) ) allocate(simple_email, source='me.myself\uni.edu')
 
         call fopen(funit, status='replace', action='write', file=trim(env_file), iostat=file_stat)
         call fileiochk("autogen_env_file qsys_funs ", file_stat)

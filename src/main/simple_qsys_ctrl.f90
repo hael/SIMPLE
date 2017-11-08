@@ -99,6 +99,7 @@ contains
         integer,                  intent(in)    :: ncomputing_units !< number of computing units (<= the number of parts controlled)
         logical,                  intent(in)    :: stream           !< stream flag
         integer, optional,        intent(in)    :: numlen           !< length of number string
+        character(len=STDLEN) :: pwd
         integer :: ipart,iostat
         call self%kill
         self%stream                 =  stream
@@ -140,8 +141,8 @@ contains
             self%jobs_done_fnames(ipart) = 'JOB_FINISHED_'//int2str_pad(ipart,self%numlen)
         end do
         ! get pwd
-        iostat = simple_getenv('PWD',self%pwd)
-        self%pwd = trim(adjustl( self%pwd ))
+        iostat =  simple_getenv('PWD',pwd)
+        self%pwd = trim(adjustl( pwd ) )
         self%existence = .true.
     end subroutine new
 

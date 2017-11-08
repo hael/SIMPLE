@@ -153,7 +153,8 @@ subroutine test_args()
     write(*,'(a)') '**info(simple_args_unit_test, part 1): testing for args that should be present'
     as = args()
     write(*,'(a)') '**info(simple_args_unit_test): getting SIMPLE_PATH env variable'
-    io_stat = simple_getenv(\"SIMPLE_PATH\", spath)
+    status = simple_getenv(\"SIMPLE_PATH\",spath)
+    if (status /= 0) call simple_stop(\"In simple_args::test_args SIMPLE_PATH env variable not found\")
     spath = trim(adjustl(spath))
     print *, 'get_environment_variable found SIMPLE_PATH ', trim(spath)
     print *, 'appending varlist '
