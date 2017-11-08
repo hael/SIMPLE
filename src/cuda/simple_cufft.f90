@@ -1,7 +1,6 @@
 !>  \brief  CUFFT NVIDIA interfaces
 ! based on cufft_m.cuf CUDA_Fortran examples
 module simple_cufft
-  use, intrinsic :: iso_c_binding
 
   integer, parameter, public :: CUFFT_FORWARD = -1
   integer, parameter, public :: CUFFT_INVERSE = 1
@@ -177,40 +176,40 @@ module simple_cufft
      end subroutine cufftPlan3d
   end interface cufftPlan3d
 
-  interface cufftPlanMany
-     subroutine cufftPlanMany(plan, rank, n, inembed, istride, idist, &
-          onembed, ostride, odist,  &
-          type, batch) bind(C,name='cufftPlanMany')
-       use iso_c_binding
-       implicit none
-       !pgi$ ignore_tkr n, inembed, onembed
-       type(c_ptr) :: plan
-       integer(c_int) :: n, inembed, onembed
-       integer(c_int), value:: rank, istride, ostride, idist, odist, type, batch
-     end subroutine cufftPlanMany
-  end interface cufftPlanMany
+  ! interface cufftPlanMany
+  !    subroutine cufftPlanMany(plan, rank, n, inembed, istride, idist, &
+  !         onembed, ostride, odist,  &
+  !         type, batch) bind(C,name='cufftPlanMany')
+  !      use iso_c_binding
+  !      implicit none
+  !      !pgi$ ignore_tkr n, inembed, onembed
+  !      type(c_ptr) :: plan
+  !      integer(c_int) :: n, inembed, onembed
+  !      integer(c_int), value:: rank, istride, ostride, idist, odist, type, batch
+  !    end subroutine cufftPlanMany
+  ! end interface cufftPlanMany
 
-  interface cufftPlan2d
-     module procedure cufftPlan2Dswap
-  end interface cufftPlan2d
+  ! interface cufftPlan2d
+  !    module procedure cufftPlan2Dswap
+  ! end interface cufftPlan2d
 
-  interface cufftPlan2dC
-     subroutine cufftPlan2d(plann, nxn, nyn, typen) &
-          bind(C,name='cufftPlan2d')
-       use iso_c_binding
-       type(c_ptr):: plann
-       integer(c_int),value:: nxn, nyn, typen
-     end subroutine cufftPlan2d
-  end interface cufftPlan2dC
+  ! interface cufftPlan2dC
+  !    subroutine cufftPlan2d(plann, nxn, nyn, typen) &
+  !         bind(C,name='cufftPlan2d')
+  !      use iso_c_binding
+  !      type(c_ptr):: plann
+  !      integer(c_int),value:: nxn, nyn, typen
+  !    end subroutine cufftPlan2d
+  ! end interface cufftPlan2dC
 
-contains
+! contains
 
-  subroutine cufftPlan2Dswap(plan,nx,ny, type)
-    use iso_c_binding
-    type(c_ptr):: plan
-    integer(c_int),value:: nx, ny, type
-    call cufftPlan2dC(plan,ny,nx,type)
-  end subroutine cufftPlan2Dswap
+!   subroutine cufftPlan2Dswap(plan,nx,ny, type)
+!     use iso_c_binding
+!     type(c_ptr):: plan
+!     integer(c_int),value:: nx, ny, type
+!     call cufftPlan2dC(plan,ny,nx,type)
+!   end subroutine cufftPlan2Dswap
 
 end module simple_cufft
 
@@ -254,103 +253,6 @@ subroutine cufftExec(plan, transform, idata, odata, direction)
      write(*,*) 'Invalid transform type passed to cufftExec'
   end select
 end subroutine cufftExec
-
-subroutine test_cufft
-  use cudafor
-  use simple_defs
-  implicit none
-
-  call test_precision
-  call sum_accuracy
-
-contains
-  subroutine test_precision
-    real :: x, y, dist
-    double precision:: x_dp, y_dp, dist_dp
-    x=Z'3F1DC57A'
-    y=Z'3F499AA3'
-    dist= x**2 +y**2
-
-    x_dp=real(x,8)
-    y_dp=real(y,8)
-    dist_dp= x_dp**2 +y_dp**2
-
-    print *, 'Result with operands in single precision:'
-    print '((2x,z8)) ', dist
-
-    print *, 'Result in double precision with operands'
-    print *, 'promoted to double precision:'
-    print '((2x,z16))', dist_dp
-
-    print *, 'Result in single precision with operands'
-    print *, 'promoted to double precision:'
-    print '((2x,z8))', real(dist_dp,4)
-  end subroutine test_precision
-  subroutine sum_accuracy
-    real, allocatable :: x(:)
-    real :: sum_intrinsic,sum_cpu, sum_kahan, sum_pairwise, &
-         comp, y, tmp
-    double precision :: sum_cpu_dp
-    integer :: i,inext,icurrent,  N=10000000
-
-    allocate (x(N))
-    x=7.
-
-    ! Summation using intrinsic
-    sum_intrinsic=sum(x)
-
-    ! Recursive summation
-    sum_cpu=0.
-    sum_cpu_dp=0.d0
-    do i=1,N
-       ! accumulator in single precision
-       sum_cpu=sum_cpu+x(i)
-       ! accumulator in double precision
-       sum_cpu_dp=sum_cpu_dp+x(i)
-    end do
-
-    ! Kahan summation
-    sum_kahan=0.
-    comp=0. ! running compensation to recover lost low-order bits
-
-    do i=1,N
-       y    = comp +x(i)
-       tmp  = sum_kahan + y     ! low-order bits may be lost
-       comp = (sum_kahan-tmp)+y ! (sum-tmp) recover low-order bits
-       sum_kahan = tmp
-    end do
-    sum_kahan=sum_kahan +comp
-
-    ! Pairwise summation
-    icurrent=N
-    inext=ceiling(real(N)/2)
-    do while (inext >1)
-       do i=1,inext
-          if ( 2*i <= icurrent) x(i)=x(i)+x(i+inext)
-       end do
-       icurrent=inext
-       inext=ceiling(real(inext)/2)
-    end do
-    sum_pairwise=x(1)+x(2)
-
-    write(*, "('Summming ',i10, &
-         ' elements of magnitude ',f3.1)") N,7.
-    write(*, "('Sum with intrinsic function       =',f12.1, &
-         '   Error=', f12.1)")  &
-         sum_intrinsic, 7.*N-sum_intrinsic
-    write(*, "('Recursive sum with SP accumulator =',f12.1, &
-         '   Error=', f12.1)")  sum_cpu, 7.*N-sum_cpu
-    write(*, "('Recursive sum with DP accumulator =',f12.1, &
-         '   Error=', f12.1)")  sum_cpu_dp, 7.*N-sum_cpu_dp
-    write(*, "('Pairwise sum in SP                =',f12.1, &
-         '   Error=', f12.1)")  sum_pairwise, 7.*N-sum_pairwise
-    write(*, "('Compensated sum in SP             =',f12.1, &
-         '   Error=', f12.1)")  sum_kahan, 7.*N-sum_kahan
-
-    deallocate(x)
-  end subroutine sum_accuracy
-
-end subroutine test_cufft
 
 
 ! FFTW function  |                                  CUFFT function
