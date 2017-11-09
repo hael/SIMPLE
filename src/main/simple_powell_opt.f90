@@ -57,6 +57,8 @@ contains
         if( .not. associated(spec%costfun) )then
             stop 'cost function not associated in opt_spec; powell_minimize; simple_powell_opt'
         endif
+        ! initialise nevals counters
+        spec%nevals  = 0
         ! initialize the direction set
         self%direction_set = 0.
         do i=1,spec%ndim
@@ -77,7 +79,6 @@ contains
         ! set best point in line minimizer to point in spec
         self%spec_linmin%x = spec%x
         ! set best cost
-        spec%nevals  = 0
         self%yb      = spec%costfun(fun_self, spec%x, spec%ndim)
         spec%nevals  = spec%nevals+1
         ! run nrestarts
@@ -99,7 +100,6 @@ contains
                 exit
             endif
         end do
-        spec%nevals = spec%nevals/spec%nrestarts
         lowest_cost = self%yb
 
         contains

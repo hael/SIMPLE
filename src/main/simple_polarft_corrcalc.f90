@@ -909,16 +909,14 @@ contains
         integer,                 intent(in)    :: iref, iptcl
         real(sp),                intent(in)    :: shvec(2)
         real(sp),                intent(out)   :: cc(self%nrots)
-        !real(sp),                intent(out)   :: grad(2, self%nrots)
         real(sp),                intent(out)   :: grad(2, self%nrots)
-        complex(sp)                            :: pft_ref(self%pftsz,self%kfromto(1):self%kfromto(2))
-        complex(sp)                            :: pft_ref_tmp(self%pftsz,self%kfromto(1):self%kfromto(2))
-        complex(sp)                            :: shmat(self%pftsz,self%kfromto(1):self%kfromto(2))
-        real(sp)                               :: corrs_over_k(self%nrots), argmat(self%pftsz,self%kfromto(1):self%kfromto(2))
-        real(sp)                               :: sqsum_ref
+        complex(sp) :: pft_ref(self%pftsz,self%kfromto(1):self%kfromto(2))
+        complex(sp) :: pft_ref_tmp(self%pftsz,self%kfromto(1):self%kfromto(2))
+        complex(sp) :: shmat(self%pftsz,self%kfromto(1):self%kfromto(2))
+        real(sp)    :: corrs_over_k(self%nrots), argmat(self%pftsz,self%kfromto(1):self%kfromto(2))
+        real(sp)    :: sqsum_ref
         argmat = self%argtransf(:self%pftsz,:) * shvec(1) + self%argtransf(self%pftsz+1:,:) * shvec(2)
         shmat  = cmplx(cos(argmat),sin(argmat))
-
         if( self%with_ctf )then
             if( self%iseven(iptcl) )then
                 pft_ref = (self%pfts_refs_even(iref,:,:) * self%ctfmats(iptcl,:,:)) * shmat
@@ -932,17 +930,15 @@ contains
                 pft_ref = self%pfts_refs_odd(iref,:,:)  * shmat
             endif
         endif
-        sqsum_ref = sum(csq(pft_ref))
-        !write (*,*) 'x = ', shvec(1), ', y = ', shvec(2), 'sqsum_ref = ', sqsum_ref
+        sqsum_ref   = sum(csq(pft_ref))
         call self%calc_corrs_over_k(pft_ref, iptcl, self%kfromto(2), corrs_over_k)
         cc = corrs_over_k  / sqrt(sqsum_ref * self%sqsums_ptcls(iptcl))
-        
         pft_ref_tmp = pft_ref * (0., 1.) * self%argtransf(:self%pftsz,:)
         call self%calc_corrs_over_k(pft_ref_tmp, iptcl, self%kfromto(2), corrs_over_k)
-        grad(1,:) = corrs_over_k / sqrt(sqsum_ref * self%sqsums_ptcls(iptcl))
+        grad(1,:)   = corrs_over_k / sqrt(sqsum_ref * self%sqsums_ptcls(iptcl))
         pft_ref_tmp = pft_ref * (0., 1.) * self%argtransf(self%pftsz+1:,:)
         call self%calc_corrs_over_k(pft_ref_tmp, iptcl, self%kfromto(2), corrs_over_k)
-        grad(2,:) = corrs_over_k / sqrt(sqsum_ref * self%sqsums_ptcls(iptcl))
+        grad(2,:)   = corrs_over_k / sqrt(sqsum_ref * self%sqsums_ptcls(iptcl))
     end subroutine gencorrs_grad
 
     !< brief  calculates only gradient for correlations
@@ -951,16 +947,14 @@ contains
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iref, iptcl
         real(sp),                intent(in)    :: shvec(2)
-        !real(sp),                intent(out)   :: grad(2, self%nrots)
         real(sp),                intent(out)   :: grad(2, self%nrots)
-        complex(sp)                            :: pft_ref(self%pftsz,self%kfromto(1):self%kfromto(2))
-        complex(sp)                            :: pft_ref_tmp(self%pftsz,self%kfromto(1):self%kfromto(2))
-        complex(sp)                            :: shmat(self%pftsz,self%kfromto(1):self%kfromto(2))
-        real(sp)                               :: corrs_over_k(self%nrots), argmat(self%pftsz,self%kfromto(1):self%kfromto(2))
-        real(sp)                               :: sqsum_ref
+        complex(sp) :: pft_ref(self%pftsz,self%kfromto(1):self%kfromto(2))
+        complex(sp) :: pft_ref_tmp(self%pftsz,self%kfromto(1):self%kfromto(2))
+        complex(sp) :: shmat(self%pftsz,self%kfromto(1):self%kfromto(2))
+        real(sp)    :: corrs_over_k(self%nrots), argmat(self%pftsz,self%kfromto(1):self%kfromto(2))
+        real(sp)    :: sqsum_ref
         argmat = self%argtransf(:self%pftsz,:) * shvec(1) + self%argtransf(self%pftsz+1:,:) * shvec(2)
         shmat  = cmplx(cos(argmat),sin(argmat))
-
         if( self%with_ctf )then
             if( self%iseven(iptcl) )then
                 pft_ref = (self%pfts_refs_even(iref,:,:) * self%ctfmats(iptcl,:,:)) * shmat
@@ -992,12 +986,12 @@ contains
         integer,                 intent(in)    :: irot
         real(sp),                intent(out)   :: f
         real(sp),                intent(out)   :: grad(2)
-        complex(sp)                            :: pft_ref(self%pftsz,self%kfromto(1):self%kfromto(2))
-        complex(sp)                            :: pft_ref_tmp(self%pftsz,self%kfromto(1):self%kfromto(2))
-        complex(sp)                            :: shmat(self%pftsz,self%kfromto(1):self%kfromto(2))
-        real(sp)                               :: argmat(self%pftsz,self%kfromto(1):self%kfromto(2))
-        real(sp)                               :: sqsum_ref
-        real(sp)                               :: corr
+        complex(sp) :: pft_ref(self%pftsz,self%kfromto(1):self%kfromto(2))
+        complex(sp) :: pft_ref_tmp(self%pftsz,self%kfromto(1):self%kfromto(2))
+        complex(sp) :: shmat(self%pftsz,self%kfromto(1):self%kfromto(2))
+        real(sp)    :: argmat(self%pftsz,self%kfromto(1):self%kfromto(2))
+        real(sp)    :: sqsum_ref
+        real(sp)    :: corr
         argmat = self%argtransf(:self%pftsz,:) * shvec(1) + self%argtransf(self%pftsz+1:,:) * shvec(2)
         shmat  = cmplx(cos(argmat),sin(argmat))
         if( self%with_ctf )then

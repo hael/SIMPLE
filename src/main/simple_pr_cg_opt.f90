@@ -53,6 +53,9 @@ contains
         endif
         ! run nrestarts restarts
         spec%x_8 = spec%x
+        ! initialise nevals counters
+        spec%nevals  = 0
+        spec%ngevals = 0
         call pr_cgmin        
 
         contains

@@ -53,6 +53,8 @@ contains
         if( .not. associated(spec%costfun) )then
             stop 'cost function not associated in opt_spec; bforce_minimize; simple_bforce_opt'
         endif
+        ! init nevals counter
+        spec%nevals = 0
         ! generate initial vector (lower bounds)
         spec%x = spec%limits(:,1)
         DebugPrint  'generated initial vector'
@@ -61,7 +63,6 @@ contains
         self%pc = spec%x
         DebugPrint  'did set best and current point'
         ! set best cost
-        spec%nevals = 0
         self%yb     = spec%costfun(fun_self, self%pb, spec%ndim)
         if( debug ) write(*,'(a,1x,f7.3)') 'Initial cost:', self%yb 
         spec%nevals = spec%nevals+1

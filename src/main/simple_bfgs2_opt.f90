@@ -70,6 +70,9 @@ contains
             stop 'gradient of cost function not associated in opt_spec; bfgs2_minimize; simple_bfgs2_opt'
         endif
         spec%x_8 = spec%x
+        ! initialise nevals counters
+        spec%nevals  = 0
+        spec%ngevals = 0
         call bfgs2min
         
     contains

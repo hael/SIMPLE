@@ -80,6 +80,8 @@ contains
         if( .not. associated(spec%costfun) )then
             stop 'cost function not associated in opt_spec; de_minimize; simple_de_opt'
         endif
+        ! initialise nevals counters
+        spec%nevals = 0
         ! obtain initial solutions by randomized bounds
         do i=1,spec%npop
             do j=1,spec%ndim
@@ -95,6 +97,7 @@ contains
         ! calculate initial costs
         do i=1,spec%npop
             self%costs(i) = spec%costfun(fun_self, self%pop(i,:), spec%ndim)
+            spec%nevals = spec%nevals + 1
         end do
         loc = minloc(self%costs)
         self%best = loc(1)
@@ -124,7 +127,8 @@ contains
                 endif
             end do
             ! calculate cost
-            cost_trial = spec%costfun(fun_self, trial, spec%ndim)
+            cost_trial  = spec%costfun(fun_self, trial, spec%ndim)
+            spec%nevals = spec%nevals + 1
             ! update pop if better solution is found
             if( cost_trial < self%costs(X) )then
                 nworse = 0

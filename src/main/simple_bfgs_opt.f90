@@ -56,6 +56,10 @@ contains
         if( .not. associated(spec%gcostfun) )then
             stop 'gradient of cost function not associated in opt_spec; bfgs_minimize; simple_bfgs_opt'
         endif
+        ! initialise nevals counters
+        spec%nevals  = 0
+        spec%ngevals = 0
+        avgniter     = 0
         ! init allocated variables
         self%dg     = 0.
         self%hdg    = 0.
@@ -64,15 +68,12 @@ contains
         self%xi     = 0.
         self%p      = spec%x
         ! run nrestarts restarts
-        avgniter = 0
-        spec%nevals = 0
         do i=1,spec%nrestarts
             call bfgsmin
             avgniter = avgniter+spec%niter
         end do
-        spec%niter  = avgniter/spec%nrestarts
-        spec%nevals = spec%nevals/spec%nrestarts
-        spec%x      = self%p
+        spec%niter = avgniter/spec%nrestarts
+        spec%x     = self%p
 
         contains
 

@@ -142,6 +142,9 @@ contains
             cxy(1)  = -cost_init ! correlation
             cxy(2:) = 0.
         endif
+
+        print *, 'nevals : ', self%ospec%nevals
+
     end function minimize
 
     function get_nevals( self ) result( nevals )

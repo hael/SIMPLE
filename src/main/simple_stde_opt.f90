@@ -50,8 +50,10 @@ contains
         if( .not. associated(spec%gcostfun) )then
             stop 'gradient of cost function not associated in opt_spec; stde_minimize; simple_stde_opt'
         endif
-        ! run nrestarts restarts
-        spec%x_8    = spec%x
+        spec%x_8     = spec%x
+        ! initialise nevals counters
+        spec%nevals  = 0
+        spec%ngevals = 0
         call stdemin
 
     contains

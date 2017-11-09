@@ -51,8 +51,10 @@ contains
         if( .not. associated(spec%gcostfun) )then
             stop 'gradient of cost function not associated in opt_spec; fr_cg_minimize; simple_fr_cg_opt'
         endif
-        ! run nrestarts restarts
         spec%x_8 = spec%x
+        ! initialise nevals counters
+        spec%nevals  = 0
+        spec%ngevals = 0
         call fr_cgmin        
 
         contains
@@ -100,8 +102,6 @@ contains
                 self%step = spec%max_step
                 ! Use the gradient as the initial direction
                 call spec%eval_fdf(fun_self, spec%x_8, self%f, self%gradient)
-                spec%nevals  = spec%nevals  + 1
-                spec%ngevals = spec%ngevals + 1
                 self%p       = self%gradient
                 self%g0      = self%gradient
                 gnorm        = norm2(self%gradient)

@@ -23,7 +23,7 @@ type :: pftcc_grad_shsrch
     integer                          :: nrestarts    = 5       !< # randomized restarts (randomized bounds)
     integer                          :: cur_inpl_idx = 0       !< index of inplane angle for shift search              
     real                             :: maxshift     = 0.      !< maximal shift
-    integer                          :: max_evals    = 3       !< max # inplrot/shsrch cycles
+    integer                          :: max_evals    = 5       !< max # inplrot/shsrch cycles
   contains
     procedure          :: new         => grad_shsrch_new
     procedure          :: set_indices => grad_shsrch_set_indices
@@ -85,7 +85,7 @@ contains
             write (*,*) 'error in grad_shsrch_costfun: unknown type'
             stop
         end select
-        end function grad_shsrch_costfun
+    end function grad_shsrch_costfun
     
     subroutine grad_shsrch_gcostfun( self, vec, grad, D )
         class(*), intent(inout) :: self
@@ -141,23 +141,27 @@ contains
     function grad_shsrch_minimize( self, irot ) result( cxy )
         class(pftcc_grad_shsrch), intent(inout) :: self
         integer,                  intent(out)   :: irot
-        real              :: cost, corrs(self%nrots), x_ini(self%ospec%ndim), cxy(3)
-        real              :: lowest_cost, grad(2), f, lowest_cost_overall, lowest_shift(2)
-        integer           :: loc(1), i, irestart, lowest_rot, inpl_idx_zero_sh
-        logical           :: found_better
+        real    :: cost, corrs(self%nrots), cxy(3)
+        real    :: lowest_cost, grad(2), f, lowest_cost_overall, lowest_shift(2)
+        integer :: loc(1), i, irestart, lowest_rot, inpl_idx_zero_sh, nevals, ngevals
+        logical :: found_better
         call self%pftcc_ptr%gencorrs(self%reference, self%particle, [0.,0.], corrs)
         loc                 = maxloc(corrs)
         inpl_idx_zero_sh    = loc(1)
         self%cur_inpl_idx   = inpl_idx_zero_sh  
         lowest_cost_overall = -corrs(self%cur_inpl_idx)
         found_better        = .false.
+        nevals  = 0 
+        ngevals = 0 
         do irestart = 1,self%ospec%nrestarts
             ! random initialisation
-            x_ini = self%ospec%limits_init(:,1) + &
+            self%ospec%x = self%ospec%limits_init(:,1) + &
             & ( randn_1(2) + 1. ) / 2. * (self%ospec%limits_init(:,2) - self%ospec%limits_init(:,1))
+            call self%pftcc_ptr%gencorrs(self%reference, self%particle, self%ospec%x, corrs)
+            loc               = maxloc(corrs)
+            self%cur_inpl_idx = loc(1)
             ! shift search / in-plane rot update
             do i = 1,self%max_evals
-                self%ospec%x = x_ini
                 call self%nlopt%minimize(self%ospec, self, lowest_cost)
                 call self%pftcc_ptr%gencorrs(self%reference, self%particle, self%ospec%x, corrs)
                 loc = maxloc(corrs)
@@ -172,8 +176,6 @@ contains
                 lowest_rot          = self%cur_inpl_idx
                 lowest_shift        = self%ospec%x
             endif
-            ! put back the in-plane index for zero shift
-            self%cur_inpl_idx = inpl_idx_zero_sh
         end do
         if( found_better )then
             irot    =   lowest_rot           ! in-plane index
@@ -184,6 +186,10 @@ contains
         else
             irot = 0 ! to communicate that a better solution was not found
         endif
+
+        print *, 'nevals : ', self%ospec%nevals
+        print *, 'ngevals: ', self%ospec%ngevals
+
     end function grad_shsrch_minimize
 
     subroutine grad_shsrch_kill( self )

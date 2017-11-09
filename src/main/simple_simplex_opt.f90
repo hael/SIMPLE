@@ -45,13 +45,15 @@ contains
         class(opt_spec),    intent(inout) :: spec        !< specification
         class(*),           intent(inout) :: fun_self    !< self-pointer for cost function
         real,               intent(out)   :: lowest_cost !< lowest cost
-        real, allocatable                 :: lims_dyn(:,:)
-        integer                           :: i, avgniter
-        integer                           :: niters(spec%nrestarts)
-        logical                           :: arezero(spec%ndim)
+        real, allocatable :: lims_dyn(:,:)
+        integer           :: i, avgniter
+        integer           :: niters(spec%nrestarts)
+        logical           :: arezero(spec%ndim)
         if( .not. associated(spec%costfun) )then
            call simple_stop ('cost function not associated in opt_spec; simplex_minimize; simple_simplex_opt')
         end if
+        ! initialise nevals counter
+        spec%nevals = 0
         ! test if best point in spec is set
         arezero = .false.
         do i=1,spec%ndim
@@ -67,7 +69,6 @@ contains
         ! set best point to best point in spec
         self%pb = spec%x
         ! set best cost
-        spec%nevals = 0
         self%yb     = spec%costfun(fun_self, self%pb, spec%ndim)
         spec%nevals = spec%nevals + 1
         ! initialise dynamic bounds
@@ -96,7 +97,6 @@ contains
         end do
         avgniter    = sum(niters)/spec%nrestarts
         spec%niter  = avgniter
-        spec%nevals = spec%nevals/spec%nrestarts
         spec%x      = self%pb
         lowest_cost = self%yb
 
@@ -118,6 +118,7 @@ contains
                 ! calculate costs
                 do i=1,spec%ndim + 1
                     self%y(i) = spec%costfun(fun_self, self%p(i,:), spec%ndim)
+                    spec%nevals = spec%nevals + 1
                 end do
             end subroutine init
 
