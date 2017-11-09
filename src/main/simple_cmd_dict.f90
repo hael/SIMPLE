@@ -110,7 +110,6 @@ contains
         call chdict%push('fracdeadhot',   'fraction of dead or hot pixels{0.01}')
         call chdict%push('fromf',         'start frame index')
         call chdict%push('fromp',         'start ptcl index')
-        call chdict%push('fromm',         'start movie index')
         call chdict%push('frcs',          'binary file with per-class/proj Fourier Ring Correlations(.bin)')
         call chdict%push('fsc',           'binary file with FSC info{fsc_state01.bin}')
         call chdict%push('ft2img',        'convert Fourier transform to real image of power(yes|no){no}')

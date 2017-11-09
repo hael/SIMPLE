@@ -110,12 +110,12 @@ select case(prg)
         keys_optional(26) = 'rm_outliers'
         keys_optional(27) = 'nsig'
         keys_optional(28) = 'dopick'
-        keys_optional(29) = 'fromm'
         keys_optional(30) = 'ndev'
         keys_optional(31) = 'pcontrast'
+        keys_optional(32) = 'ctfreslim'
         ! parse command line
         if( describe ) call print_doc_preproc
-        call cline%parse(keys_required(:7), keys_optional(:31))
+        call cline%parse(keys_required(:7), keys_optional(:32))
         ! set defaults
         if( .not. cline%defined('trs')             ) call cline%set('trs',               5.)
         if( .not. cline%defined('lpstart')         ) call cline%set('lpstart',          15.)
@@ -985,10 +985,9 @@ select case(prg)
         keys_optional(1) = 'nthr'
         keys_optional(2) = 'stktab'
         keys_optional(3) = 'nparts'
-        keys_optional(4) = 'ncunits'
         ! parse command line
         if( describe ) call print_doc_scale_stk_parts
-        call cline%parse(keys_required(:2), keys_optional(:4))
+        call cline%parse(keys_required(:2), keys_optional(:3))
         ! sanity check
         if( cline%defined('nparts') .or. cline%defined('stktab') )then
             ! all ok

@@ -1436,8 +1436,6 @@ contains
             call cline_scale%delete('stktab')
             if(cline%defined('nparts'))then
                 nparts = p_master%nparts
-            else if(cline%defined('ncunits'))then
-                nparts = nint(cline%get_rarg('ncunits'))
             else
                 nparts = 1
             endif
@@ -1524,7 +1522,7 @@ contains
             do ipart=1,p_master%nparts
                 call part_params(ipart)%new(2)
                 stkname    = p_master%stkhandle%get_stkname(ipart)
-                outstkname = add2fbody(stkname, p_master%ext, '_cgrid')
+                outstkname = add2fbody(stkname, p_master%ext, PREP4CGRID_SUFFIX)
                 call part_params(ipart)%set('stk',    stkname)
                 call part_params(ipart)%set('outstk', outstkname)
                 deallocate(stkname, outstkname)
@@ -1535,7 +1533,7 @@ contains
             do ipart=1,p_master%nparts
                 call part_params(ipart)%new(2)
                 allocate(stkname, source=trim(STKPARTFBODY)//int2str_pad(ipart,p_master%numlen)//p_master%ext)
-                outstkname = add2fbody(stkname, p_master%ext, '_cgrid')
+                outstkname = add2fbody(stkname, p_master%ext, PREP4CGRID_SUFFIX)
                 call part_params(ipart)%set('stk',    stkname)
                 call part_params(ipart)%set('outstk', outstkname)
                 deallocate(stkname, outstkname)

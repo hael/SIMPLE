@@ -328,9 +328,10 @@ select case(prg)
         keys_optional(28)  = 'dopick'
         keys_optional(29)  = 'ndev'
         keys_optional(30)  = 'pcontrast'
+        keys_optional(31)  = 'ctfreslim'
         ! parse command line
         if( describe ) call print_doc_preproc
-        call cline%parse(keys_required(:5), keys_optional(:30))
+        call cline%parse(keys_required(:5), keys_optional(:31))
         ! set defaults
         if( .not. cline%defined('trs')             ) call cline%set('trs',               5.)
         if( .not. cline%defined('lpstart')         ) call cline%set('lpstart',          15.)

@@ -1,6 +1,7 @@
 ! common PRIME2D/PRIME3D routines used primarily by the Hadamard matchers
 module simple_hadamard_common
 #include "simple_lib.f08"
+use simple_defs_fname
 use simple_image,    only: image
 use simple_cmdline,  only: cmdline
 use simple_build,    only: build
@@ -77,13 +78,13 @@ contains
         integer :: ind
         if( p%l_stktab_input )then
             call p%stkhandle%get_stkname_and_ind(iptcl, stkname, ind)
-            stkname_cgrid = add2fbody(stkname, p%ext, '_cgrid') 
+            stkname_cgrid = add2fbody(stkname, p%ext, PREP4CGRID_SUFFIX) 
         else
             if( p%l_distr_exec )then
-                stkname_cgrid = add2fbody(trim(p%stk_part), p%ext, '_cgrid') 
+                stkname_cgrid = add2fbody(trim(p%stk_part), p%ext, PREP4CGRID_SUFFIX) 
                 ind = iptcl - p%fromp + 1
             else
-                stkname_cgrid = add2fbody(trim(p%stk), p%ext, '_cgrid')
+                stkname_cgrid = add2fbody(trim(p%stk), p%ext, PREP4CGRID_SUFFIX)
                 ind = iptcl
             endif
         endif

@@ -1,6 +1,7 @@
 ! concrete commander: general image processing routines
 module simple_commander_imgproc
 #include "simple_lib.f08"
+use simple_defs_fname
 use simple_binoris_io      ! use all in there
 use simple_procimgfile     ! use all in there
 use simple_cmdline,        only: cmdline
@@ -660,7 +661,7 @@ contains
             call gridprep%new(img, kbwin, ldim_pd)
             do ifile=1,nfiles
                 call progress(ifile, nfiles)
-                fname = add2fbody(trim(filenames(ifile)), p%ext, '_cgrid')
+                fname = add2fbody(trim(filenames(ifile)), p%ext, PREP4CGRID_SUFFIX)
                 call find_ldim_nptcls(filenames(ifile),ldim,nframes)
                 if( ldim(1) .ne. p%box )then
                     print *,'Non congruent dimensions; simple_commander_imgproc :: exec_prep4cgrid'
@@ -668,7 +669,6 @@ contains
                 endif
                 nptcls = ldim(3)
                 do iptcl=1,nptcls
-                    call progress(iptcl, p%nptcls)
                     call img%read(filenames(ifile), iptcl)
                     call gridprep%prep(img, img_pad)
                     call img_pad%write(fname, iptcl)

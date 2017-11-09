@@ -101,7 +101,7 @@ contains
         ! DETERMINE THE NUMBER OF PEAKS
         if( .not. cline%defined('npeaks') )then
             select case(p%refine)
-                case('no', 'yes', 'neigh', 'greedy', 'greedyneigh', 'states', 'tseries')
+                case('no', 'yes', 'neigh', 'greedy', 'greedyneigh', 'states')
                     if( p%eo .ne. 'no' )then
                         p%npeaks = min(b%e%find_npeaks_from_athres(NPEAKSATHRES), MAXNPEAKS)
                     else
@@ -281,12 +281,6 @@ contains
         if( p%refine.eq.'het' )then
             call prime3D_srch_extr(b%a, p, do_extr)
         endif
-        ! if( p%refine.eq.'no' .and. p%nstates > 1 .and. p%npeaks > 1 )then
-        !     do iptcl = p%fromp, p%top
-        !         call o_peaks(iptcl)%write('peak_'//int2str_pad(iptcl,6)//'_iter'//int2str_pad(which_iter,3)//'.txt')
-        !     enddo
-        ! endif
-
 
         ! CLEANUP primesrch3D & pftcc
         call cleanprime3D_srch(p)

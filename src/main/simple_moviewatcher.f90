@@ -1,8 +1,6 @@
 ! movie watcher for stream processing
-
 module simple_moviewatcher
 #include "simple_lib.f08"
-
 use simple_params,        only: params
 use simple_timer
 implicit none

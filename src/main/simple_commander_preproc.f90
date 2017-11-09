@@ -104,6 +104,7 @@ contains
         real         :: smpd_original, smpd_scaled
         integer      :: nmovies, fromto(2), imovie, ntot, movie_counter
         integer      :: frame_counter, movie_ind, nptcls_out
+        logical      :: l_picknextract
         p = params(cline) ! constants & derived constants produced
         if( p%scale > 1.05 )then
             stop 'scale cannot be > 1; simple_commander_preproc :: exec_preproc'
@@ -197,11 +198,13 @@ contains
             else
                 movie_ind = imovie ! standard mode
             endif
+            ! unblur
             call ubiter%iterate(cline, p, orientation, movie_ind, movie_counter,&
             &frame_counter, movienames(imovie), smpd_scaled)
             call os_uni%set_ori(movie_counter, orientation)
             p%smpd           = smpd_scaled
             movie_counter    = movie_counter - 1
+            ! ctffind
             moviename_forctf = ubiter%get_moviename('forctf')    !! realloc warning
             moviename_intg   = ubiter%get_moviename('intg')
             p%pspecsz        = p%pspecsz_ctffind
@@ -209,17 +212,27 @@ contains
             p%lp             = p%lp_ctffind
             call cfiter%iterate(p, movie_ind, movie_counter, moviename_forctf,&
             &fname_ctffind_ctrl, fname_unidoc_output, os_uni)
-            if( p%l_pick )then
-                movie_counter = movie_counter - 1
-                p%lp          = p%lp_pick
-                call piter%iterate(cline, p, movie_counter, moviename_intg, boxfile, nptcls_out)
-                call os_uni%set(movie_counter, 'boxfile', trim(boxfile)   )
-                call os_uni%set(movie_counter, 'nptcls',  real(nptcls_out))
+            movie_counter = movie_counter - 1
+            orientation   = os_uni%get_ori(movie_counter)
+            ! picker
+            l_picknextract = p%l_pick
+            if( l_picknextract )then
+                if( orientation%isthere('ctfres') .and. cline%defined('ctfreslim') )then
+                    if( orientation%get('ctfres') > p%ctfreslim ) l_picknextract = .false.
+                endif
+                if( l_picknextract )then
+                    movie_counter = movie_counter - 1
+                    p%lp          = p%lp_pick
+                    call piter%iterate(cline, p, movie_counter, moviename_intg, boxfile, nptcls_out)
+                    call os_uni%set(movie_counter, 'boxfile', trim(boxfile)   )
+                    call os_uni%set(movie_counter, 'nptcls',  real(nptcls_out))
+                endif
             endif
             if( p%stream .eq. 'yes' )then
                 ! write unidoc
                 call os_uni%write(fname_unidoc_output)
-                if( p%l_pick )then
+                ! extract particles & params
+                if( l_picknextract )then
                     cline_extract = cline
                     call cline_extract%set('dir_ptcls', trim(dir_ptcls))
                     call cline_extract%set('smpd',      p%smpd)
