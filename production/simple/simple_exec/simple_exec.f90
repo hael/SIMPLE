@@ -1851,15 +1851,22 @@ select case(prg)
         ! <prep4cgrid/end>
         !
         ! set required keys
-        keys_required(1) = 'stk'
+        keys_required(1) = 'smpd'
         keys_required(2) = 'for3D'
-        keys_required(3) = 'outstk'
-        keys_required(4) = 'smpd'
         ! set optional keys
-        keys_optional(1)  = 'alpha'
+        keys_optional(1) = 'stk'
+        keys_optional(2) = 'outstk'
+        keys_optional(3) = 'filetab'
+        keys_optional(4) = 'alpha'
         ! parse command line
         ! if( describe ) call print_doc_prep4cgrid
-        call cline%parse(keys_required(:4),keys_optional(:1))
+        call cline%parse(keys_required(:2),keys_optional(:4))
+        ! sanity check
+        if( cline%defined('stk') .or. cline%defined('filetab') )then
+            ! all ok
+        else
+            stop 'stk or filetab need to be part of command line!'
+        endif
         ! execute
         call xprep4cgrid%execute(cline)
     case( 'stack' )

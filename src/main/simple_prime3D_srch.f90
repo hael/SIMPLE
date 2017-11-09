@@ -60,7 +60,6 @@ type prime3D_srch
     character(len=STDLEN)            :: refine         = ''      !< refinement flag
     character(len=STDLEN)            :: opt            = ''      !< optimizer flag
     logical                          :: doshift        = .true.  !< 2 indicate whether 2 serch shifts
-    logical                          :: greedy_inpl    = .true.  !< 2 indicate whether in-plane search is greedy or not
     logical                          :: exists         = .false. !< 2 indicate existence
   contains
     procedure          :: new
@@ -358,10 +357,8 @@ contains
         self%nnnrefs     =  self%nnn*self%nstates
         self%kstop_grid  =  p%kstop_grid
         self%opt         =  p%opt
-        self%greedy_inpl = .true.
         if( str_has_substr(self%refine,'shc') )then
             if( self%npeaks > 1 ) stop 'npeaks must be equal to 1 with refine=shc|shcneigh'
-            self%greedy_inpl = .false.
         endif
         ! multiple states
         if( self%nstates == 1 )then
@@ -997,13 +994,11 @@ contains
         class(prime3D_srch),   intent(inout) :: self
         type(ori)  :: o
         type(oris) :: sym_os
-        real       :: shvec(2), corrs(self%npeaks), ws(self%npeaks), logws(self%npeaks)
-        real       :: state_corrs(self%nstates), state_ws(self%nstates), state_logws(self%nstates)
+        real       :: shvec(2), corrs(self%npeaks), ws(self%npeaks), logws(self%npeaks), state_ws(self%nstates)
         real       :: frac, ang_sdev, dist, inpl_dist, euldist, mi_joint
         real       :: mi_proj, mi_inpl, mi_state, dist_inpl, wcorr
-        integer    :: best_loc(1), loc(1), order(self%npeaks), state_order(self%nstates), states(self%npeaks)
-        integer    :: states_cnt(self%nstates)
-        integer    :: s, ipeak, cnt, ref, state, roind, neff_states, nstate_peaks, state_thresh
+        integer    :: best_loc(1), loc(1), order(self%npeaks), states(self%npeaks)
+        integer    :: s, ipeak, cnt, ref, state, roind, neff_states
         logical    :: included(self%npeaks), found
         ! empty states
         neff_states = count(state_exists)
@@ -1057,76 +1052,25 @@ contains
             ! update npeaks individual weights
             call o_peaks(self%iptcl)%set_all('ow', ws)
         endif
-        if( self%npeaks > 1 .and. self%nstates > 1 )then
-            ! states stochastic weights
+        if( self%refine.ne.'states' .and. self%npeaks > 1 .and. self%nstates > 1 )then
+            ! states weights
             do ipeak = 1, self%npeaks
                 corrs(ipeak)  = o_peaks(self%iptcl)%get(ipeak,'corr')
                 states(ipeak) = nint(o_peaks(self%iptcl)%get(ipeak,'state'))
             enddo
+            ! greedy state assignment
             do s = 1, self%nstates
-                state_ws(s) = sum(ws,mask=states == s)
+                state_ws(s) = sum(ws,mask=(states==s))
             enddo
             loc   = maxloc(state_ws)
             state = loc(1)
-            ! do s = 1,self%nstates
-            !     print *,'weights',self%iptcl,s,state_ws(s),sum(corrs,mask=states==s)
-            ! enddo
-            print *,'winner ',self%iptcl,state,self%prev_state
-            where( states /= state)ws = 0.
-            ws = ws / sum(ws)
+            ! in-state re-weighing
+            included = included .and. (states==state)
+            where( .not.included )ws = 0.
+            ws       = ws / sum(ws, mask=included)
             best_loc = maxloc(ws)
-            wcorr    = sum(ws*corrs)
-            ! states ranking according to correlations
-            ! do ipeak = 1, self%npeaks
-            !     corrs(ipeak)  = o_peaks(self%iptcl)%get(ipeak,'corr')
-            !     states(ipeak) = nint(o_peaks(self%iptcl)%get(ipeak,'state'))
-            ! enddo
-            ! call hpsort(self%npeaks, corrs, states)
-            ! call reverse(states)
-            ! ! majority voting
-            ! found = .false.
-            ! do ipeak = 2,self%npeaks
-            !     state_thresh = floor(real(ipeak)/2.) + 1
-            !     !state_thresh = min(ipeak, ceiling(real(ipeak)/2.) + 1)
-            !     do s=1,self%nstates
-            !         if( count(states==s) >= state_thresh )then
-            !             state = s
-            !             found = .true.
-            !             exit
-            !         endif
-            !     enddo
-            ! enddo
-            ! ! fetch corrs & states again
-            ! do ipeak = 1, self%npeaks
-            !     corrs(ipeak)  = o_peaks(self%iptcl)%get(ipeak,'corr')
-            !     states(ipeak) = nint(o_peaks(self%iptcl)%get(ipeak,'state'))
-            ! enddo
-            ! if( .not.found )then
-            !     state = self%prev_state
-            ! endif
-            ! ! and reweight
-            ! included = (states == state)
-            ! where(included)
-            !     ws    = exp(-(1.-corrs))
-            !     logws = log(ws)
-            ! else where
-            !     corrs = 0.
-            !     ws    = 0.
-            !     logws = -huge(wcorr)
-            ! end where
-            ! order = (/(ipeak,ipeak=1,self%npeaks)/)
-            ! call hpsort(self%npeaks, logws, order)
-            ! call reverse(order)
-            ! call reverse(logws)
-            ! do ipeak = 1,self%npeaks
-            !     if(included(order(ipeak))) ws(order(ipeak)) = exp(sum(logws(:ipeak)))
-            ! enddo
-            ! ! thresholding of the weights
-            ! included = included .and. (ws >= FACTWEIGHTS_THRESH)
-            ! where( .not.included ) ws = 0.
-            ! ws       = ws / sum(ws, mask=included)
-            ! best_loc = maxloc(ws)
-            ! wcorr    = sum(ws*corrs,mask=included)
+            ! weighted corr
+            wcorr    = sum(ws*corrs, mask=included)
             ! update npeaks individual weights
             call o_peaks(self%iptcl)%set_all('ow', ws)
         endif
