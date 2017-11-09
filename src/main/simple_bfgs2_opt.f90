@@ -246,7 +246,7 @@ contains
             fpb = 0.0_8
             fpb_nan = .false.
             ! Begin bracketing
-            do while (i < bracket_iters-1)
+            do while (i < bracket_iters)
                 i = i + 1
                 falpha = wrap_f(alpha)
                 ! Fletcher's rho test
@@ -279,14 +279,14 @@ contains
                 lower = alpha + delta
                 upper = alpha + tau1 * delta
                 alpha_next = interpolate(alpha_prev, falpha_prev, fpalpha_prev, &
-                    & alpha, falpha, fpalpha, .true., lower, upper, order)
+                    & alpha, falpha, fpalpha, fpb_nan, lower, upper, order)
                 alpha_prev = alpha
                 falpha_prev = falpha
                 fpalpha_prev = fpalpha
                 alpha = alpha_next
             end do
             ! Sectioning of bracket [a,b]
-            do while (i < section_iters-1)
+            do while (i < section_iters)
                 i = i + 1
                 delta = b - a
                 lower = a + tau2 * delta
