@@ -38,6 +38,8 @@
   module procedure image_2
   module procedure image_3
   module procedure image_4
+  module procedure image_5
+  module procedure image_6
  end interface
 !***********************************************************************************
 !***********************************************************************************
@@ -79,6 +81,284 @@
 !***********************************************************************************
  end function output_terminal
 !***********************************************************************************
+!***********************************************************************************
+!***********************************************************************************
+ subroutine image_6(gray1,gray2,pause,palette,terminal,filename,persist,input)
+!***********************************************************************************
+! this is the most general subroutine for generating 3D plots.
+! The data is contained in a 3D array z(:,:,:)
+!***********************************************************************************
+ implicit none
+ real(kind=4), intent(in) :: gray1(:,:), gray2(:,:)
+ real(kind=4), optional  :: pause
+ character(len=*),optional :: palette, terminal, filename, persist, input
+ integer    :: nx, ny
+ integer    :: i, j, ierror, ios, file_unit
+ character(len=100)  :: data_file_name, command_file_name, my_pause, my_persist
+ integer       :: mx(3)
+!***********************************************************************************
+ nx=size(gray1(:,1))
+ ny=size(gray1(1,:))
+ if(nx /= size(gray2,1) .or. ny /= size(gray2,2)) return
+ mx(1)=floor(minval(gray1));mx(3)=ceiling(maxval(gray1))
+ if( mx(3)-mx(1) < 1.e-6 )then
+     mx(2)=mx(1)
+ else if (mx(1) < 0)then
+     mx(2)=0
+ else
+     mx(2)=nint(real(mx(3)-mx(1))/2. + real(mx(1)))
+ end if
+ !write(*,*) nx,ny
+!***********************************************************************************
+ if (present(input)) then
+  data_file_name='data_file_'//input//'.txt'
+  command_file_name='command_file_'//input//'.txt'
+ else
+  data_file_name='data_file.txt'
+  command_file_name='command_file.txt'
+ end if
+!***********************************************************************************
+ ierror=0
+ ! call get_unit(file_unit)
+ ! if (file_unit==0) then
+ !  ierror=1
+ !  print *,'write_vector_date - fatal error! Could not get a free FORTRAN unit.'
+ !  stop
+ ! end if
+ open (newunit=file_unit, file=data_file_name, status='replace', iostat=ios)
+ if (ios/=0) then
+  ierror=2
+  print *,'write_vector_data - fatal error! Could not open the terminal data file.'
+  stop
+ end if
+!***********************************************************************************
+! here we write the date to the data_file - the gnuplot will read this data later
+!***********************************************************************************
+ do j=1,ny
+  do i=1,nx
+   write (file_unit,'(I5,I5,3E15.7)') i,j,gray1(i,j), gray2(i,j),gray1(i,j)- gray2(i,j)
+  end do
+  write (file_unit,'(a)')
+ end do
+!***********************************************************************************
+ close (unit=file_unit)
+!***********************************************************************************
+ ierror = 0
+ ! call get_unit(file_unit)
+ ! if (file_unit==0) then
+ !  ierror=1
+ !  print *,'write_vector_date - fatal error! Could not get a free FORTRAN unit.'
+ !  stop
+ ! end if
+ open (newunit=file_unit, file=command_file_name, status='replace', iostat=ios)
+ if (ios/=0) then
+  ierror=2
+  print *,'write_vector_data - fatal error! Could not open the terminal command file.'
+  stop
+ end if
+!***********************************************************************************
+! here we write the commands to the commands file which gnuplot will execute
+!***********************************************************************************
+ my_persist='persist '
+ if (present(persist).and.(persist=='no')) my_persist=' '
+ if (present(terminal)) then
+  write ( file_unit, '(a)' ) 'set terminal '// trim(output_terminal(terminal))
+ if (present(filename)) then
+  write ( file_unit, '(a)' ) 'set output "'// trim(filename) //'"'
+ else
+  write ( file_unit, '(a)' ) 'set output "'//my_date_and_time()//'"'
+ end if
+ else
+  write ( file_unit, '(a)' ) 'set terminal ' // trim(default_terminal) // ' ' &
+   & //trim(my_persist) // ' title  "Gnuplot"'
+ end if
+ !***********************************************************************************
+ write ( file_unit, '(a,F5.1,"]")' ) 'set xrange [0:', real(nx)+1
+ write ( file_unit, '(a,I3,",",I3)' ) 'set xtics 1,',nx/4,nx
+ write ( file_unit, '(a,F5.1,"]")' ) 'set yrange [0:', real(ny)+1
+ write ( file_unit, '(a,I3,",",I3)' ) 'set ytics 1,',ny/4,ny
+
+! write ( file_unit, '(a)' ) 'unset xtics; unset ytics'
+ write ( file_unit, '(a)' ) 'unset ztics'
+ write ( file_unit, '(a)' ) 'unset colorbox;set pm3d map'
+ write ( file_unit, '(a,I0,a,I0,a,I0,a)' ) 'set palette defined (',mx(1),' "blue", ',mx(2),' "white", ',mx(3),' "red")'
+ write ( file_unit, '(a)' ) 'set nokey'
+ write ( file_unit, '(a)' ) "set style line 11 lc rgb '#808080' lt 1"
+ write ( file_unit, '(a)' ) 'set border 3 front ls 11;set tics nomirror in scale 0.75;'
+ write ( file_unit, '(a)' ) 'set ticslevel 0;set format cb "%4.3g";'
+ write ( file_unit, '(a)' ) 'set colorbox ; set cbtics '
+ write ( file_unit, '(a)' ) 'set cbrange [*:*]'
+ write ( file_unit, '(a)' ) ' set lmargin at screen 0.1'
+ write ( file_unit, '(a)' ) 'set rmargin at screen 0.9'
+
+ if (present(palette)) then
+ if (trim(palette).eq.'ocean')then
+     write ( file_unit, '(a)' ) 'set palette rgb 23,28,3'
+ else if (trim(palette).eq.'hot')then
+     write ( file_unit, '(a)' ) 'set palette rgb 21,22,23'
+ end if
+end if
+write ( file_unit, '(a)' ) 'set multiplot layout 3,1 margins 0.1,0.8,0.1,0.98 spacing 0.08,0.08'
+!***********************************************************************************
+ write ( file_unit, '(a)' ) 'plot "' // trim ( data_file_name ) // &
+     & '" using 1:2:3 with  image t "FIRST"'
+ write ( file_unit, '(a)' ) 'plot "' // trim ( data_file_name ) //&
+     & '" using 1:2:4 with image t "SECOND"'
+  write ( file_unit, '(a)' ) 'plot "' // trim ( data_file_name ) //&
+      & '" using 1:2:5 with image t "DIFF"'
+ write ( file_unit, '(a)' ) 'unset multiplot'
+!***********************************************************************************
+ if (present(pause)) then
+  if (pause<0.0) then
+   write ( file_unit, '(a)' ) 'pause -1 "press RETURN to continue"'
+  else
+   write ( my_pause,'(e9.3)') pause
+   write ( file_unit, '(a)' ) 'pause ' // trim(my_pause)
+  end if
+ else
+  write ( file_unit, '(a)' ) 'pause 0'
+ end if
+!***********************************************************************************
+ write ( file_unit, '(a)' ) 'q'
+ close ( unit = file_unit )
+!***********************************************************************************
+ call run_gnuplot (command_file_name)
+!***********************************************************************************
+ end subroutine image_6
+!***********************************************************************************
+!***********************************************************************************
+ subroutine image_5(gray,text,pause,palette,terminal,filename,persist,input)
+!***********************************************************************************
+! this is the most general subroutine for generating 3D plots.
+! The data is contained in a 3D array z(:,:,:)
+!***********************************************************************************
+ implicit none
+ real(kind=4), intent(in) :: gray(:,:)
+ character(len=*), intent(in):: text
+ real(kind=4), optional  :: pause
+ character(len=*),optional :: palette, terminal, filename, persist, input
+ integer    :: nx, ny
+ integer    :: i, j, ierror, ios, file_unit
+ character(len=100)  :: data_file_name, command_file_name, my_pause, my_persist
+ integer       :: mx(3)
+!***********************************************************************************
+ nx=size(gray(:,1))
+ ny=size(gray(1,:))
+ mx(1)=floor(minval(gray));mx(3)=ceiling(maxval(gray))
+ if( mx(3)-mx(1) < 1.e-6 )then
+     mx(2)=mx(1)
+ else if (mx(1) < 0)then
+     mx(2)=0
+ else
+     mx(2)=nint(real(mx(3)-mx(1))/2. + real(mx(1)))
+ end if
+ !write(*,*) nx,ny
+!***********************************************************************************
+ if (present(input)) then
+  data_file_name='data_file_'//input//'.txt'
+  command_file_name='command_file_'//input//'.txt'
+ else
+  data_file_name='data_file.txt'
+  command_file_name='command_file.txt'
+ end if
+!***********************************************************************************
+ ierror=0
+ ! call get_unit(file_unit)
+ ! if (file_unit==0) then
+ !  ierror=1
+ !  print *,'write_vector_date - fatal error! Could not get a free FORTRAN unit.'
+ !  stop
+ ! end if
+ open (newunit=file_unit, file=data_file_name, status='replace', iostat=ios)
+ if (ios/=0) then
+  ierror=2
+  print *,'write_vector_data - fatal error! Could not open the terminal data file.'
+  stop
+ end if
+!***********************************************************************************
+! here we write the date to the data_file - the gnuplot will read this data later
+!***********************************************************************************
+ do j=1,ny
+  do i=1,nx
+   write (file_unit,'(I5,I5,E15.7)') i,j,gray(i,j)
+  end do
+  write (file_unit,'(a)')
+ end do
+!***********************************************************************************
+ close (unit=file_unit)
+!***********************************************************************************
+ ierror = 0
+ ! call get_unit(file_unit)
+ ! if (file_unit==0) then
+ !  ierror=1
+ !  print *,'write_vector_date - fatal error! Could not get a free FORTRAN unit.'
+ !  stop
+ ! end if
+ open (newunit=file_unit, file=command_file_name, status='replace', iostat=ios)
+ if (ios/=0) then
+  ierror=2
+  print *,'write_vector_data - fatal error! Could not open the terminal command file.'
+  stop
+ end if
+!***********************************************************************************
+! here we write the commands to the commands file which gnuplot will execute
+!***********************************************************************************
+ my_persist='persist '
+ if (present(persist).and.(persist=='no')) my_persist=' '
+ if (present(terminal)) then
+  write ( file_unit, '(a)' ) 'set terminal '// trim(output_terminal(terminal))
+ if (present(filename)) then
+  write ( file_unit, '(a)' ) 'set output "'// trim(filename) //'"'
+ else
+  write ( file_unit, '(a)' ) 'set output "'//my_date_and_time()//'"'
+ end if
+ else
+  write ( file_unit, '(a)' ) 'set terminal ' // trim(default_terminal) // ' ' &
+   & //trim(my_persist) // ' title  "Gnuplot"'
+ end if
+ !***********************************************************************************
+ write ( file_unit, '(a,F5.1,"]")' ) 'set xrange [-0.5:', real(nx)+0.5
+ write ( file_unit, '(a,I3,",",I3)' ) 'set xtics 1,',nx/2,nx
+ write ( file_unit, '(a,F5.1,"]")' ) 'set yrange [-0.5:', real(ny)+0.5
+ write ( file_unit, '(a,I3,",",I3)' ) 'set ytics 1,',ny/2,ny
+
+ write ( file_unit, '(a)' ) 'set nokey'
+ write ( file_unit, '(a)' ) 'unset border'
+ write ( file_unit, '(a)' ) 'unset xtics'
+ write ( file_unit, '(a)' ) 'unset ztics'
+ write ( file_unit, '(a)' ) 'unset colorbox;set pm3d map'
+ write ( file_unit, '(a,I0,a,I0,a,I0,a)' ) 'set palette defined (',mx(1),' "blue", ',mx(2),' "white", ',mx(3),' "red")'
+ if (present(palette)) then
+ if (trim(palette).eq.'ocean')then
+     write ( file_unit, '(a)' ) 'set palette rgb 23,28,3'
+ else if (trim(palette).eq.'hot')then
+     write ( file_unit, '(a)' ) 'set palette rgb 21,22,23'
+ end if
+end if
+
+!***********************************************************************************
+ write ( file_unit, '(a)' ) 'splot "' // trim ( data_file_name ) // &
+     & '" using 1:2:3 with pm3d, \\'
+ write ( file_unit, '(a)' ) '"' // trim ( data_file_name ) //&
+     & '" using 1:2:( sprintf("%.3g",$3) ) with labels'
+!***********************************************************************************
+ if (present(pause)) then
+  if (pause<0.0) then
+   write ( file_unit, '(a)' ) 'pause -1 "press RETURN to continue"'
+  else
+   write ( my_pause,'(e9.3)') pause
+   write ( file_unit, '(a)' ) 'pause ' // trim(my_pause)
+  end if
+ else
+  write ( file_unit, '(a)' ) 'pause 0'
+ end if
+!***********************************************************************************
+ write ( file_unit, '(a)' ) 'q'
+ close ( unit = file_unit )
+!***********************************************************************************
+ call run_gnuplot (command_file_name)
+!***********************************************************************************
+ end subroutine image_5
 !***********************************************************************************
 !***********************************************************************************
  subroutine image_4(x,y,rgb,pause,terminal,filename,persist,input)
