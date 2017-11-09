@@ -8,23 +8,6 @@ implicit none
 
 contains
 
-    function diverse_labeling( nptcls, nlabels, ndiverse ) result( configs_diverse )
-        integer, intent(in)  :: nptcls, nlabels, ndiverse
-        integer, allocatable :: configs_diverse(:,:), tmp(:)
-        type(ran_tabu)       :: rt
-        integer :: idiv
-        call seed_rnd
-        allocate(configs_diverse(ndiverse,nptcls), tmp(nptcls), stat=alloc_stat )
-        if(alloc_stat /= 0) call alloc_errchk('In: combinatorics::diverse_labeling ', alloc_stat)
-        rt = ran_tabu(nptcls)
-        do idiv=1,ndiverse
-            call rt%balanced(nlabels, tmp)
-            configs_diverse(idiv,:) = tmp
-        enddo
-        deallocate(tmp)
-        call rt%kill
-    end function diverse_labeling
-
     function merge_into_disjoint_set( nprojs, nnn, nnmat, which_nns ) result( disjoint )
         integer, intent(in)  :: nprojs, nnn, nnmat(nprojs,nnn), which_nns(:)
         integer, allocatable :: disjoint(:)

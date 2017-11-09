@@ -633,25 +633,57 @@ contains
         use simple_kbinterpol, only: kbinterpol
         class(prep4cgrid_commander), intent(inout) :: self
         class(cmdline),              intent(inout) :: cline
-        type(params)     :: p
-        type(build)      :: b
-        type(prep4cgrid) :: gridprep
-        type(kbinterpol) :: kbwin
-        integer          :: iptcl
-        p = params(cline)                                 ! parameters generated
-        call b%build_general_tbox(p, cline, do3d=.false.) ! general objects built
+        type(params)                       :: p
+        type(build)                        :: b
+        type(image)                        :: img, img_pad
+        type(prep4cgrid)                   :: gridprep
+        type(kbinterpol)                   :: kbwin
+        character(len=:),      allocatable :: fname
+        character(len=STDLEN), allocatable :: filenames(:)
+        integer                            :: iptcl, nfiles, nframes, ifile, ldim(3), ldim_pd(3), nptcls
+        p = params(cline)                  ! parameters generated
         if( p%for3D.eq.'yes' )then
             kbwin = kbinterpol(RECWINSZ, p%alpha)
         else
             kbwin = kbinterpol(KBWINSZ, p%alpha)
         endif
-        call gridprep%new(b%img, kbwin, [p%boxpd,p%boxpd,1])
-        do iptcl=1,p%nptcls
-            call progress(iptcl, p%nptcls)
-            call b%img%read(p%stk, iptcl)
-            call gridprep%prep(b%img, b%img_pad)
-            call b%img_pad%write(p%outstk, iptcl)
-        end do
+        if( cline%defined('filetab') )then
+            call read_filetable(p%filetab, filenames)
+            nfiles = size(filenames)
+            call find_ldim_nptcls(filenames(1),ldim,nframes)
+            ldim(3)     = 1
+            p%box       = ldim(1) 
+            ldim_pd(:2) = nint(real(ldim(1:2))*p%alpha)
+            ldim_pd(3)  = 1
+            call img%new(ldim, p%smpd)
+            call img_pad%new(ldim_pd, p%smpd)
+            call gridprep%new(img, kbwin, ldim_pd)
+            do ifile=1,nfiles
+                call progress(ifile, nfiles)
+                fname = add2fbody(trim(filenames(ifile)), p%ext, '_cgrid')
+                call find_ldim_nptcls(filenames(ifile),ldim,nframes)
+                if( ldim(1) .ne. p%box )then
+                    print *,'Non congruent dimensions; simple_commander_imgproc :: exec_prep4cgrid'
+                    stop
+                endif
+                nptcls = ldim(3)
+                do iptcl=1,nptcls
+                    call progress(iptcl, p%nptcls)
+                    call img%read(filenames(ifile), iptcl)
+                    call gridprep%prep(img, img_pad)
+                    call img_pad%write(fname, iptcl)
+                end do
+            enddo
+        else
+            call b%build_general_tbox(p, cline, do3d=.false.) ! general objects built
+            call gridprep%new(b%img, kbwin, [p%boxpd,p%boxpd,1])
+            do iptcl=1,p%nptcls
+                call progress(iptcl, p%nptcls)
+                call b%img%read(p%stk, iptcl)
+                call gridprep%prep(b%img, b%img_pad)
+                call b%img_pad%write(p%outstk, iptcl)
+            end do
+        endif
         ! end gracefully
         call simple_end('**** SIMPLE_PREP4CGRID NORMAL STOP ****', print_simple=.false.)
         call qsys_job_finished( p, 'simple_commander_imgproc :: exec_prep4cgrid' )

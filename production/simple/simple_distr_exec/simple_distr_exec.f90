@@ -952,9 +952,10 @@ select case(prg)
         keys_optional(16) = 'stktab'
         keys_optional(17) = 'phaseplate'
         keys_optional(18) = 'opt'
+        keys_optional(19) = 'oritab2'
         ! parse command line
         if( describe ) call print_doc_het_ensemble
-        call cline%parse(keys_required(:7), keys_optional(:18))
+        call cline%parse(keys_required(:7), keys_optional(:19))
         ! sanity check
         if( cline%defined('stk') .or. cline%defined('stktab') )then
             ! all ok

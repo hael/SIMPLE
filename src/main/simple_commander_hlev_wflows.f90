@@ -497,7 +497,7 @@ contains
         use simple_defs_conv
         use simple_commander_rec,    only: recvol_commander
         use simple_commander_volops, only: postproc_vol_commander
-        use simple_combinatorics,    only: diverse_labeling, shc_aggregation
+        use simple_combinatorics,    only: shc_aggregation
         class(het_ensemble_commander), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
         ! constants
@@ -521,7 +521,7 @@ contains
         character(len=STDLEN), allocatable :: init_docs(:), final_docs(:)
         logical,               allocatable :: included(:)
         type(params)          :: p_master
-        type(oris)            :: os
+        type(oris)            :: os, os_states
         character(len=STDLEN) :: oritab, vol, str_state
         real                  :: trs
         integer               :: irepeat, state, iter, n_incl, it
@@ -549,7 +549,6 @@ contains
 
         ! delete possibly pre-existing scaled stack parts & pft parts
         call del_files(STKPARTFBODY, p_master%nparts, ext=p_master%ext, suffix='_sc')
-        call del_files('ppfts_memoized_part', p_master%nparts, ext='.bin')
 
         ! prepare command lines from prototype
         cline_recvol_distr = cline
@@ -569,6 +568,7 @@ contains
         call cline_prime3D_master%set('refine', 'het')
         call cline_prime3D_master%set('dynlp', 'no')
         call cline_prime3D_master%set('pproc', 'no')
+        call cline_prime3D_master%delete('oritab2')
         ! works out shift lmits for in-plane search
         if( cline%defined('trs') )then
             ! all good
@@ -583,7 +583,16 @@ contains
         write(*,'(A)') '>>> GENERATING DIVERSE LABELING'
         call os%new(p_master%nptcls)
         call binread_oritab(p_master%oritab, os, [1,p_master%nptcls])
-        labels   = diverse_labeling(p_master%nptcls, p_master%nstates, p_master%nrepeats)
+        if( cline%defined('oritab2') )then
+            call os_states%new(p_master%nptcls)
+            call binread_oritab(p_master%oritab2, os_states, [1,p_master%nptcls])
+            call os%set_all('state', os_states%get_all('state'))
+        endif
+        call diverse_labeling(os, p_master%nstates, p_master%nrepeats, labels, corr_ranked=.true.)
+        if( cline%defined('oritab2') )then
+            labels(1,:) = os_states%get_all('state')
+            call os_states%kill
+        endif
         included = os%included()
         n_incl   = count(included)
         do irepeat=1,p_master%nrepeats
@@ -711,6 +720,69 @@ contains
                     call cl%set('lp', p_master%lp)
                 endif
             end subroutine update_pproc_cline
+
+            subroutine diverse_labeling( os, nlabels, ndiverse, configs_diverse, corr_ranked )
+                use simple_oris, only: oris
+                type(oris),           intent(inout) :: os
+                integer,              intent(in)    :: nlabels, ndiverse
+                integer, allocatable, intent(out)   :: configs_diverse(:,:)
+                logical, optional,    intent(in)    :: corr_ranked
+                integer, allocatable :: tmp(:), states(:), order(:)
+                real,    allocatable :: corrs(:)
+                type(ran_tabu)       :: rt
+                integer              :: idiv, iptcl, nptcls,nonzero_nptcls, alloc_stat, cnt, s, ind
+                logical              :: corr_ranked_here
+                corr_ranked_here = .false.
+                if(present(corr_ranked)) corr_ranked_here = corr_ranked
+                if(.not.os%isthere('corr')) corr_ranked_here = .false.
+                call seed_rnd
+                nptcls = os%get_noris()
+                states = nint(os%get_all('state'))
+                nonzero_nptcls = count(states>0 .and. states<=nlabels)
+                if( .not.corr_ranked_here )then
+                    allocate(configs_diverse(ndiverse,nptcls), tmp(nonzero_nptcls), stat=alloc_stat )
+                    if(alloc_stat /= 0) call alloc_errchk('In: commander_hlev_wflows::diverse_labeling ', alloc_stat)
+                    rt = ran_tabu(nonzero_nptcls)
+                    do idiv = 1, ndiverse
+                        call rt%balanced(nlabels, tmp)
+                        cnt = 0
+                        do iptcl=1,nptcls
+                            if(states(iptcl)>0 .and. states(iptcl)<=nlabels)then
+                                cnt = cnt + 1
+                                configs_diverse(idiv,iptcl) = tmp(cnt)
+                            else
+                                configs_diverse(idiv,iptcl) = states(iptcl)
+                            endif
+                        enddo
+                    enddo
+                    deallocate(tmp,states)
+                else
+                    allocate(configs_diverse(ndiverse,nptcls), order(nptcls), tmp(nlabels),stat=alloc_stat )
+                    corrs = os%get_all('corr')
+                    tmp   = (/(s,s=1,nlabels)/)
+                    where( states<=0 .and. states>nlabels ) corrs = -1.
+                    order = (/(iptcl,iptcl=1,nptcls)/)
+                    call hpsort( nptcls, corrs, order )
+                    call reverse(order)
+                    call reverse(corrs)
+                    rt = ran_tabu(nlabels)
+                    configs_diverse = 0
+                    do idiv = 1, ndiverse
+                        do iptcl = 1, nonzero_nptcls+nlabels, nlabels
+                            call rt%reset
+                            call rt%shuffle(tmp)
+                            do s = 1, nlabels
+                                ind = iptcl+s-1
+                                if(ind > nptcls)exit
+                                configs_diverse(idiv, order(ind)) = tmp(s)
+                            enddo
+                        enddo
+                        where( states<=0 .and. states>nlabels )configs_diverse(idiv,:) = 0
+                    enddo
+                    deallocate(states,corrs,order,tmp)
+                endif
+                call rt%kill
+            end subroutine diverse_labeling
 
     end subroutine exec_het_ensemble
 

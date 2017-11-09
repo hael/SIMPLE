@@ -133,7 +133,6 @@ contains
             else
                 call b%a%calc_spectral_weights(p%frac)
             endif
-
         else
             call b%a%calc_hard_weights(p%frac)
         endif
