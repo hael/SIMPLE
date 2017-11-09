@@ -1251,6 +1251,45 @@ contains
         !! pure function cannot call allocchk
         !! if (alloc_stat /= 0)call allocchk("simple_image::get_cmat ")
     end function get_cmat
+<<<<<<< variant A
+>>>>>>> variant B
+    !>  \brief   get_cmat get the image object's complex matrix
+    !! \return cmat a copy of this image object's cmat
+    !!
+    function get_cmatfull( self , llims) result( cmat )
+        class(image), intent(in) :: self
+        integer, intent(inout), optional :: llims(3,2)
+        complex, allocatable :: cmat(:,:,:)
+        integer :: ll(3,2)
+        if (present(llims))then
+            ll=llims
+        else
+            ll=1
+            ll(:,2) = self%array_shape
+        end if
+        allocate(cmat(ll(1,1):ll(1,2),ll(2,1):ll(2,2),ll(3,1):ll(3,2)), source=self%cmat, stat=alloc_stat)
+        if (alloc_stat /= 0)call allocchk("simple_image::get_cmat ",alloc_stat)
+    end function get_cmatfull
+####### Ancestor
+    !>  \brief   get_cmat get the image object's complex matrix
+    !! \return cmat a copy of this image object's cmat
+    !!
+    function get_cmatfull( self , llims) result( cmat )
+        class(image), intent(in) :: self
+        integer, intent(inout), optional :: llims(3,2)
+        complex, allocatable :: cmat(:,:,:)
+        integer :: ll(3,2)
+        if (present(llims))then
+            ll=llims
+        else
+            ll=1
+            ll(:,2) = self%array_shape
+        end if
+        print *,"  get_cmatfull ", ll
+        allocate(cmat(ll(1,1):ll(1,2),ll(2,1):ll(2,2),ll(3,1):ll(3,2)), source=self%cmat, stat=alloc_stat)
+        if (alloc_stat /= 0)call allocchk("simple_image::get_cmat ",alloc_stat)
+    end function get_cmatfull
+======= end
 
     !>  \brief   get_cmatfull get the image object's complex matrix, including index limits
     !! \return cmat a copy of this image object's cmat
@@ -6072,9 +6111,9 @@ contains
         use openacc
         use cudafor
         class(image), intent(inout)      :: self
-        complex(sp), allocatable, device :: coutput_d(:,:,:)
-        complex(sp), allocatable         :: coutput(:,:,:)
-        real, allocatable                :: rinput(:,:,:)
+        complex, allocatable, device     :: coutput_d(:,:,:)
+        complex, allocatable             :: coutput(:,:,:)
+        real,    allocatable             :: rinput(:,:,:)
         integer      :: plan, planType
         integer      :: i,j,k,h,l,n,istat
         integer      :: nerrors, cdim(3),ldim(3),lims(3,2),phys(3)
@@ -6132,7 +6171,7 @@ contains
 
 
         call self%set_ft(.true.)
-        call self%set_cmat(coutput)
+        call self%set_cmat(coutput(:cdim(1),:cdim(2),:cdim(3)))
 
 
         VerbosePrint "In simple_cufft::fft_pgi  deallocating host arrays", toc()
