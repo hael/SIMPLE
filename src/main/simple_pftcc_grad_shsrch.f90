@@ -143,23 +143,26 @@ contains
         integer,                  intent(out)   :: irot
         real    :: cost, corrs(self%nrots), cxy(3)
         real    :: lowest_cost, grad(2), f, lowest_cost_overall, lowest_shift(2)
-        integer :: loc(1), i, irestart, lowest_rot, inpl_idx_zero_sh, nevals, ngevals
+        integer :: loc(1), i, irestart, lowest_rot, inpl_idx_zero_sh!, nevals, ngevals
         logical :: found_better
-        call self%pftcc_ptr%gencorrs(self%reference, self%particle, [0.,0.], corrs)
-        loc                 = maxloc(corrs)
-        inpl_idx_zero_sh    = loc(1)
-        self%cur_inpl_idx   = inpl_idx_zero_sh  
-        lowest_cost_overall = -corrs(self%cur_inpl_idx)
+        ! call self%pftcc_ptr%gencorrs(self%reference, self%particle, [0.,0.], corrs)
+        ! loc                 = maxloc(corrs)
+        ! inpl_idx_zero_sh    = loc(1)
+        ! self%cur_inpl_idx   = inpl_idx_zero_sh  
+        ! lowest_cost_overall = -corrs(self%cur_inpl_idx)
         found_better        = .false.
-        nevals  = 0 
-        ngevals = 0 
-        do irestart = 1,self%ospec%nrestarts
+        ! nevals  = 0 
+        ! ngevals = 0 
+        ! do irestart = 1,self%ospec%nrestarts
             ! random initialisation
-            self%ospec%x = self%ospec%limits_init(:,1) + &
-            & ( randn_1(2) + 1. ) / 2. * (self%ospec%limits_init(:,2) - self%ospec%limits_init(:,1))
+            ! self%ospec%x = self%ospec%limits_init(:,1) + &
+            ! & ( randn_1(2) + 1. ) / 2. * (self%ospec%limits_init(:,2) - self%ospec%limits_init(:,1))
             call self%pftcc_ptr%gencorrs(self%reference, self%particle, self%ospec%x, corrs)
             loc               = maxloc(corrs)
             self%cur_inpl_idx = loc(1)
+            !!!!!!!!!!!!!!!!!!!!!!!!!!
+            lowest_cost_overall = -corrs(self%cur_inpl_idx)
+            !!!!!!!!!!!!!!!!!!!!!!!!!!
             ! shift search / in-plane rot update
             do i = 1,self%max_evals
                 call self%nlopt%minimize(self%ospec, self, lowest_cost)
@@ -176,7 +179,7 @@ contains
                 lowest_rot          = self%cur_inpl_idx
                 lowest_shift        = self%ospec%x
             endif
-        end do
+        ! end do
         if( found_better )then
             irot    =   lowest_rot           ! in-plane index
             cxy(1)  = - lowest_cost_overall  ! correlation
@@ -187,8 +190,8 @@ contains
             irot = 0 ! to communicate that a better solution was not found
         endif
 
-        print *, 'nevals : ', self%ospec%nevals
-        print *, 'ngevals: ', self%ospec%ngevals
+        ! print *, 'nevals : ', self%ospec%nevals
+        ! print *, 'ngevals: ', self%ospec%ngevals
 
     end function grad_shsrch_minimize
 
