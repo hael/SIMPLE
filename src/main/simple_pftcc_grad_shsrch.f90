@@ -68,9 +68,10 @@ contains
     
     subroutine grad_shsrch_set_costfun( self )
         class(pftcc_grad_shsrch), intent(inout) :: self
-        self%ospec%costfun    => grad_shsrch_costfun
-        self%ospec%gcostfun   => grad_shsrch_gcostfun
-        self%ospec%fdfcostfun => grad_shsrch_fdfcostfun
+        self%ospec%costfun      => grad_shsrch_costfun
+        self%ospec%gcostfun     => grad_shsrch_gcostfun
+        self%ospec%fdfcostfun   => grad_shsrch_fdfcostfun
+        self%ospec%opt_callback => grad_shsrch_optimize_angle_wrapper
     end subroutine grad_shsrch_set_costfun          
        
     function grad_shsrch_costfun( self, vec, D ) result( cost )
@@ -123,6 +124,26 @@ contains
             stop
         end select
     end subroutine grad_shsrch_fdfcostfun
+
+    subroutine grad_shsrch_optimize_angle( self )
+        class(pftcc_grad_shsrch), intent(inout) :: self
+        real                                    :: corrs(self%nrots)
+        integer                                 :: loc(1)
+        call self%pftcc_ptr%gencorrs(self%reference, self%particle, self%ospec%x, corrs)
+        loc = maxloc(corrs)
+        self%cur_inpl_idx = loc(1)
+    end subroutine grad_shsrch_optimize_angle
+    
+    subroutine grad_shsrch_optimize_angle_wrapper( self )
+        class(*), intent(inout) :: self
+        select type(self)
+        class is (pftcc_grad_shsrch)
+            call grad_shsrch_optimize_angle(self)
+        class default
+            write (*,*) 'error in grad_shsrch_optimize_angle_wrapper: unknown type'
+            stop
+        end select
+    end subroutine grad_shsrch_optimize_angle_wrapper
     
     !> shsrch_set_indices Set indicies for shift search
     !! \param ref reference

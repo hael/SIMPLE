@@ -8,9 +8,10 @@ private
 
 !> struct for all opt specifications
 type :: opt_spec
-    procedure(costfun),  pointer, nopass   :: costfun    =>null() !< defines cost function
-    procedure(gcostfun), pointer, nopass   :: gcostfun   =>null() !< defines the gradient of the cost function
-    procedure(fdfcostfun), pointer, nopass :: fdfcostfun =>null() !< defines the gradient of the cost function
+    procedure(costfun),  pointer, nopass       :: costfun      =>null() !< defines cost function
+    procedure(gcostfun), pointer, nopass       :: gcostfun     =>null() !< defines the gradient of the cost function
+    procedure(fdfcostfun), pointer, nopass     :: fdfcostfun   =>null() !< defines the gradient of the cost function
+    procedure(opt_callback), pointer, nopass   :: opt_callback =>null() !< callback function for in-between iteration steps
     character(len=STDLEN)     :: str_opt=''                           !< string descriptor (of optimization routine to be used)
     character(len=STDLEN)     :: str_mode=''                          !< mode string descriptor
     integer                   :: ndim=0, ldim=0                       !< dimension parameters
@@ -95,6 +96,13 @@ abstract interface
         real,    intent(inout)  :: vec(D)
         real,    intent(out)    :: f, grad(D)
     end subroutine
+end interface
+
+!>  \brief  defines a callback routine that can be invoked in-between iteration steps
+abstract interface
+    subroutine opt_callback( fun_self )
+        class(*), intent(inout) :: fun_self
+    end subroutine opt_callback
 end interface
 
 contains
@@ -453,9 +461,10 @@ contains
             if( allocated(self%peaks)         ) deallocate(self%peaks)
             if( allocated(self%grad_4_tmp)    ) deallocate(self%grad_4_tmp)
             if( allocated(self%x_4_tmp)       ) deallocate(self%x_4_tmp)
-            self%costfun    => null()
-            self%gcostfun   => null()
-            self%fdfcostfun => null()
+            self%costfun      => null()
+            self%gcostfun     => null()
+            self%fdfcostfun   => null()
+            self%opt_callback => null()
             self%exists = .false.
         endif
     end subroutine kill

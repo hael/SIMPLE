@@ -87,6 +87,9 @@ contains
                     if ((status .ne. OPT_STATUS_CONTINUE) .or. (iter > spec%maxits)) then
                         exit
                     end if
+                    if (associated(spec%opt_callback)) then
+                        call spec%opt_callback(fun_self)
+                    end if                    
                 end do
                 if (status == OPT_STATUS_SUCCESS) then
                     spec%converged = .true.
