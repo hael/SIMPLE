@@ -1014,11 +1014,7 @@ contains
         integer, intent(out)   :: find_plate
         integer :: loc(1), k
         real    :: maxv
-        loc = maxloc(fsc)
-        if( loc(1) == 1 )then
-            find_plate = 0
-            return
-        endif
+        loc        = maxloc(fsc(2:))
         find_plate = loc(1)
         maxv       = fsc(loc(1))
         do k=loc(1)-1,1,-1
