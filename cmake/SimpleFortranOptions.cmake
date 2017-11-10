@@ -439,7 +439,7 @@ elseif(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR Fortran_COMPILER_NAME MATC
     set(EXTRA_FLAGS "${EXTRA_FLAGS} -mp")
   endif()
  if(PGI_EXTRA_FAST)
-     set (EXTRA_FLAGS "${EXTRA_FLAGS} -Munroll -O4  -Mipa=fast -fast -Mcuda=fastmath,unroll -Mvect=nosizelimit,short,simd,sse  ")
+     set (EXTRA_FLAGS "${EXTRA_FLAGS} -Munroll -O4  -fast -Mcuda=fastmath,unroll -Mvect=nosizelimit,short,simd,sse  ")
   endif()
 
   if(PGI_CUDA_IOMUTEX)
