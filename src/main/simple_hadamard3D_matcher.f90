@@ -316,7 +316,7 @@ contains
                 orientation = b%a%get_ori(iptcl)
                 if( nint(orientation%get('state')) == 0 .or.&
                    &nint(orientation%get('state_balance')) == 0 ) cycle
-                call read_cgridimg( b, p, iptcl )
+                call read_cgridcmat( b, p, iptcl )
                 if( p%npeaks > 1 )then
                     call grid_ptcl(b, p, orientation, os=o_peaks(iptcl))
                 else
@@ -420,7 +420,7 @@ contains
             do i=1,nsamp
                 call progress(i, nsamp)
                 orientation = b%a%get_ori(sample(i) + p%fromp - 1)
-                call read_cgridimg( b, p, sample(i) + p%fromp - 1 )
+                call read_cgridcmat( b, p, sample(i) + p%fromp - 1 )
                 if( p%pgrp == 'c1' )then
                     call b%recvols(1)%inout_fplane(orientation, .true., b%img_pad, pwght=1.0)
                 else

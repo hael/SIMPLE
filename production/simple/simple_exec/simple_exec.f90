@@ -1859,9 +1859,12 @@ select case(prg)
         keys_optional(2) = 'outstk'
         keys_optional(3) = 'filetab'
         keys_optional(4) = 'alpha'
+        keys_optional(5) = 'autoscale'
         ! parse command line
         ! if( describe ) call print_doc_prep4cgrid
         call cline%parse(keys_required(:2),keys_optional(:4))
+        ! set defaults
+        if( .not. cline%defined('outstk') ) call cline%set('outstk', 'outstk.bin')
         ! sanity check
         if( cline%defined('stk') .or. cline%defined('filetab') )then
             ! all ok

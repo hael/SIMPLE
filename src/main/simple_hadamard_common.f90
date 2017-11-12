@@ -8,12 +8,11 @@ use simple_build,    only: build
 use simple_params,   only: params
 use simple_ori,      only: ori
 use simple_oris,     only: oris
-use simple_gridding, only: prep4cgrid
 implicit none
 
 public :: read_img_and_norm, read_imgbatch, set_bp_range, set_bp_range2D, grid_ptcl, prepimg4align,&
 &eonorm_struct_facts, norm_struct_facts, cenrefvol_and_mapshifts2ptcls, preprefvol, prep2Dref,&
-&gen2Dclassdoc, preprecvols, killrecvols, gen_projection_frcs, prepimgbatch, read_cgridimg
+&gen2Dclassdoc, preprecvols, killrecvols, gen_projection_frcs, prepimgbatch, read_cgridcmat
 private
 #include "simple_local_flags.inc"
 
@@ -70,26 +69,29 @@ contains
         endif
     end subroutine read_imgbatch
 
-    subroutine read_cgridimg( b, p, iptcl )
+    subroutine read_cgridcmat( b, p, iptcl )
         class(build),  intent(inout)  :: b
         class(params), intent(inout)  :: p
         integer,       intent(in)     :: iptcl
         character(len=:), allocatable :: stkname, stkname_cgrid
-        integer :: ind
+        integer :: ind, funit
         if( p%l_stktab_input )then
             call p%stkhandle%get_stkname_and_ind(iptcl, stkname, ind)
-            stkname_cgrid = add2fbody(stkname, p%ext, PREP4CGRID_SUFFIX) 
+            stkname_cgrid = add2fbody_and_new_ext(stkname, p%ext, PREP4CGRID_SUFFIX, '.bin')
         else
             if( p%l_distr_exec )then
-                stkname_cgrid = add2fbody(trim(p%stk_part), p%ext, PREP4CGRID_SUFFIX) 
+                stkname_cgrid = add2fbody_and_new_ext(trim(p%stk_part), p%ext, PREP4CGRID_SUFFIX, '.bin')
                 ind = iptcl - p%fromp + 1
             else
-                stkname_cgrid = add2fbody(trim(p%stk), p%ext, PREP4CGRID_SUFFIX)
+                stkname_cgrid = add2fbody_and_new_ext(trim(p%stk), p%ext, PREP4CGRID_SUFFIX, '.bin')
                 ind = iptcl
             endif
         endif
-        call b%img_pad%read(stkname_cgrid, ind)
-    end subroutine read_cgridimg
+        call fopen(funit, stkname_cgrid, status='OLD', action='READ',&
+            &access='DIRECT', form='UNFORMATTED', recl=p%recl_cgrid)
+        read(funit, rec=ind) b%cmat
+        call fclose(funit)
+    end subroutine read_cgridcmat
 
     subroutine set_bp_range( b, p, cline )
         use simple_math, only: calc_fourier_index
@@ -248,17 +250,17 @@ contains
                 if( w > TINY )then
                     if( p%pgrp == 'c1' )then
                         if( p%eo .ne. 'no' )then
-                            call b%eorecvols(s)%grid_fplane(orisoft, b%img_pad, eo, pwght=w)
+                            call b%eorecvols(s)%grid_fplane(orisoft, b%cmat, eo, pwght=w)
                         else
-                            call b%recvols(s)%inout_fplane(orisoft, .true., b%img_pad, pwght=w)
+                            call b%recvols(s)%inout_fplane(orisoft, .true., b%cmat, pwght=w)
                         endif
                     else
                         do k=1,b%se%get_nsym()
                             o_sym = b%se%apply(orisoft, k)
                             if( p%eo .ne. 'no' )then
-                                call b%eorecvols(s)%grid_fplane(o_sym, b%img_pad, eo, pwght=w)
+                                call b%eorecvols(s)%grid_fplane(o_sym, b%cmat, eo, pwght=w)
                             else
-                                call b%recvols(s)%inout_fplane(o_sym, .true., b%img_pad, pwght=w)
+                                call b%recvols(s)%inout_fplane(o_sym, .true., b%cmat, pwght=w)
                             endif
                         end do
                     endif
@@ -449,7 +451,6 @@ contains
                         call b%eorecvols(istate)%reset_all
                     endif
                 end do
-                call b%gridprep%new(b%img, b%eorecvols(1)%get_kbwin(), [p%boxpd,p%boxpd,1])
             case DEFAULT
                 do istate = 1, p%nstates
                     if( b%a%get_pop(istate, 'state') > 0)then
@@ -458,7 +459,6 @@ contains
                         call b%recvols(istate)%reset
                     endif
                 end do
-                call b%gridprep%new(b%img, b%recvols(1)%get_kbwin(), [p%boxpd,p%boxpd,1])
         end select
     end subroutine preprecvols
 
@@ -477,7 +477,6 @@ contains
                 call b%recvols(istate)%kill
             end do
         endif
-        call b%gridprep%kill
     end subroutine killrecvols
 
     !>  \brief  prepares a batch of images

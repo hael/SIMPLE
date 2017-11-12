@@ -103,6 +103,8 @@ contains
         complex(sp),       intent(out)   :: cmat(self%lims(1,1):self%lims(1,2),self%lims(2,1):self%lims(2,2))
         integer :: h, k, logi(3), phys(3)
         call img%subtr_backgr_pad_divwinstr_fft(self%mskimg, self%instr_fun, self%img4grid)
+        !$omp parallel do collapse(2) default(shared) schedule(static)&
+        !$omp private(h,k,logi,phys) proc_bind(close)
         do h=self%lims(1,1),self%lims(1,2)
             do k=self%lims(2,1),self%lims(2,2)
                 logi      = [h,k,0]
@@ -110,6 +112,7 @@ contains
                 cmat(h,k) = self%img4grid%get_fcomp(logi,phys)
             end do
         end do
+        !$omp end parallel do
     end subroutine prep_2
 
     subroutine kill( self )

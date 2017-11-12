@@ -257,6 +257,7 @@ type :: params
     integer :: pspecsz_unblur=512  !< size of power spectrum 4 unblur(in pixels)
     integer :: pspecsz_ctffind=512
     integer :: ptcl=1
+    integer :: recl_cgrid=-1
     integer :: ring1=2
     integer :: ring2=0
     integer :: spec=0

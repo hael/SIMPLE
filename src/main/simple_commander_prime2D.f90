@@ -1,7 +1,6 @@
 ! concrete commander: prime2D for simultanous 2D alignment and clustering of single-particle images
 module simple_commander_prime2D
 #include "simple_lib.f08"
-use simple_binoris_io      ! use all in there
 use simple_cmdline,         only: cmdline
 use simple_params,          only: params
 use simple_build,           only: build
@@ -9,7 +8,9 @@ use simple_commander_base,  only: commander_base
 use simple_imghead,         only: find_ldim_nptcls
 use simple_hadamard_common, only: gen2Dclassdoc
 use simple_qsys_funs,       only: qsys_job_finished
-use simple_projection_frcs
+use simple_projection_frcs, only: projection_frcs
+use simple_defs_fname       ! use all in there
+use simple_binoris_io       ! use all in there
 implicit none
 
 public :: makecavgs_commander
@@ -149,8 +150,11 @@ contains
 
     subroutine exec_prime2D( self, cline )
         use simple_hadamard2D_matcher, only: prime2D_exec
+        use simple_commander_imgproc,  only: prep4cgrid_commander
         class(prime2D_commander), intent(inout) :: self
         class(cmdline),           intent(inout) :: cline
+        type(prep4cgrid_commander) :: xprep4cgrid
+        type(cmdline)              :: cline_prep4cgrid
         type(params) :: p
         type(build)  :: b
         integer      :: i, startit, ncls_from_refs, lfoo(3)
@@ -165,13 +169,17 @@ contains
             ! consistency check
             if( p%ncls /=  ncls_from_refs ) stop 'nrefs /= inputted ncls'
         endif
+        startit = 1
+        if( cline%defined('startit') )startit = p%startit
         ! execute
-        if( cline%defined('part') )then
+        if( p%l_distr_exec )then
             if( .not. cline%defined('outfile') ) stop 'need unique output file for parallel jobs'
-            call prime2D_exec(b, p, cline, p%startit, converged) ! partition or not, depending on 'part'
+            call prime2D_exec(b, p, cline, startit, converged) ! partition or not, depending on 'part'
         else
-            startit = 1
-            if( cline%defined('startit') ) startit = p%startit
+            cline_prep4cgrid = cline
+            call cline_prep4cgrid%set( 'for3D', 'no' )
+            call cline_prep4cgrid%set( 'outstk', add2fbody_and_new_ext(p%stk, p%ext, PREP4CGRID_SUFFIX, '.bin') )
+            call xprep4cgrid%execute(cline_prep4cgrid)
             ! extremal dynamics
             if( cline%defined('extr_iter') )then
                 ! all is well

@@ -56,6 +56,7 @@ type :: image
     procedure          :: get_smpd
     procedure          :: get_nyq
     procedure          :: get_filtsz
+    procedure          :: get_shconst
     procedure          :: cyci
     procedure          :: get
     procedure          :: get_rmat
@@ -1010,6 +1011,12 @@ contains
         integer :: n
         n = fdim(self%ldim(1)) - 1
     end function get_filtsz
+
+    pure function get_shconst( self ) result( shconst )
+        class(image), intent(in) :: self
+        real :: shconst(3)
+        shconst = self%shconst
+    end function get_shconst
 
     !> \brief cyci  cyclic index generation
     !! \param logi
@@ -5165,16 +5172,18 @@ contains
         pixels   = pack( self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)),&
                 &mask=mskimg%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) < 0.5 )
         med = median_nocopy(pixels)
-        if(abs(med) > TINY) self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) =&
-        self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) - med
         starts        = (self_out%ldim - self%ldim) / 2 + 1
         stops         = self_out%ldim - starts + 1
-        self_out%rmat = 0.
         self_out%ft   = .false.
+        !$omp parallel workshare proc_bind(close)
+        self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) =&
+        self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) - med
+        self_out%rmat = 0.
         self_out%rmat(starts(1):stops(1),starts(2):stops(2),1)=&
             &self%rmat(:self%ldim(1),:self%ldim(2),1)
         self_out%rmat(:self_out%ldim(1),:self_out%ldim(2),1) = &
             &self_out%rmat(:self_out%ldim(1),:self_out%ldim(2),1) / instr_fun(:self_out%ldim(1),:self_out%ldim(2),1)
+        !$omp end parallel workshare 
         call self_out%fwd_ft
     end subroutine subtr_backgr_pad_divwinstr_fft
 

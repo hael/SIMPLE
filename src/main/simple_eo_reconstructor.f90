@@ -24,7 +24,8 @@ type :: eo_reconstructor
     real                 :: fsc05          !< target resolution at FSC=0.5
     real                 :: fsc0143        !< target resolution at FSC=0.143
     real                 :: smpd, msk, fny, inner=0., width=10.
-    integer              :: box=0, nstates=1, numlen=2, lfny=0
+    integer              :: box=0, nstates=1, numlen=2
+    integer              :: cyc_lims(3,2)  = 0 !< redundant limits
     logical              :: phaseplate = .false.
     logical              :: automsk    = .false.
     logical              :: wiener     = .false.
@@ -52,7 +53,9 @@ type :: eo_reconstructor
     procedure, private :: read_even
     procedure, private :: read_odd
     ! INTERPOLATION
-    procedure          :: grid_fplane
+    procedure, private :: grid_fplane_1
+    procedure, private :: grid_fplane_2
+    generic            :: grid_fplane => grid_fplane_1, grid_fplane_2
     procedure          :: compress_exp
     procedure          :: sum_eos !< for merging even and odd into sum
     procedure          :: sum     !< for summing eo_recs obtained by parallel exec
@@ -104,10 +107,8 @@ contains
         call self%odd%set_ft(.true.)
         call self%eosum%new([p%boxpd,p%boxpd,p%boxpd], p%smpd)
         call self%eosum%alloc_rho(p, expand=.false.)
-        ! set lfny
-        call imgtmp%new([self%box,self%box,self%box], self%smpd)
-        self%lfny = imgtmp%get_lfny(1)
-        call imgtmp%kill
+        ! set redundant limits
+        self%cyc_lims = self%even%loop_lims(3)
         ! set existence
         self%exists = .true.
     end subroutine new
@@ -246,7 +247,7 @@ contains
     ! INTERPOLATION
 
     !> \brief  for gridding a Fourier plane
-    subroutine grid_fplane(self, o, fpl, eo, pwght )
+    subroutine grid_fplane_1( self, o, fpl, eo, pwght )
         use simple_ori, only: ori
         class(eo_reconstructor), intent(inout) :: self  !< instance
         class(ori),              intent(inout) :: o     !< orientation
@@ -261,7 +262,25 @@ contains
             case DEFAULT
                 stop 'unsupported eo flag; eo_reconstructor :: grid_fplane'
         end select
-    end subroutine grid_fplane
+    end subroutine grid_fplane_1
+
+    !> \brief  for gridding a Fourier plane
+    subroutine grid_fplane_2( self, o, cmat, eo, pwght )
+        use simple_ori, only: ori
+        class(eo_reconstructor), intent(inout) :: self  !< instance
+        class(ori),              intent(inout) :: o     !< orientation
+        complex(sp),             intent(in)    :: cmat(self%cyc_lims(1,1):self%cyc_lims(1,2),self%cyc_lims(2,1):self%cyc_lims(2,2))
+        integer,                 intent(in)    :: eo    !< eo flag
+        real,                    intent(in)    :: pwght !< external particle weight (affects both fplane and rho)
+        select case(eo)
+            case(-1,0)
+                call self%even%inout_fplane(o, .true., cmat, pwght)
+            case(1)
+                call self%odd%inout_fplane(o, .true., cmat, pwght)
+            case DEFAULT
+                stop 'unsupported eo flag; eo_reconstructor :: grid_fplane'
+        end select
+    end subroutine grid_fplane_2
 
     !> \brief  for summing the even odd pairs, resulting sum in self%even
     subroutine sum_eos( self )

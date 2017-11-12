@@ -1011,9 +1011,10 @@ select case(prg)
         keys_optional(3) = 'stktab'
         keys_optional(4) = 'nparts'
         keys_optional(5) = 'ncunits'
+        keys_optional(6) = 'autoscale'
         ! parse command line
         ! if( describe ) call print_doc_prep4cgrid_stk_parts
-        call cline%parse(keys_required(:2), keys_optional(:5))
+        call cline%parse(keys_required(:2), keys_optional(:6))
         ! sanity check
         if( cline%defined('nparts') .or. cline%defined('stktab') )then
             ! all ok

@@ -597,6 +597,14 @@ contains
         allocate(newname, source=fname(:pos-1)//trim(str)//trim(suffix))
     end function add2fbody
 
+    function add2fbody_and_new_ext( fname, suffix, str, new_ext ) result( newname )
+        character(len=*), intent(in)  :: fname, suffix, str, new_ext
+        character(len=:), allocatable :: newname
+        integer :: pos
+        pos = index(fname, suffix) ! position of suffix
+        allocate(newname, source=fname(:pos-1)//trim(str)//trim(new_ext))
+    end function add2fbody_and_new_ext
+
     !> \brief  is for deleting from fbody
     function del_from_fbody( fname, suffix, str ) result( newname )
         character(len=*), intent(in)  :: fname, suffix, str

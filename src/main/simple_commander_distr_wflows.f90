@@ -423,11 +423,13 @@ contains
         class(prime2D_distr_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
         ! commanders
-        type(check2D_conv_commander)    :: xcheck2D_conv
-        type(merge_algndocs_commander)  :: xmerge_algndocs
-        type(split_commander)           :: xsplit
-        type(makecavgs_distr_commander) :: xmakecavgs
+        type(prep4cgrid_stk_parts_commander) :: xprep4cgrid_distr
+        type(check2D_conv_commander)         :: xcheck2D_conv
+        type(merge_algndocs_commander)       :: xmerge_algndocs
+        type(split_commander)                :: xsplit
+        type(makecavgs_distr_commander)      :: xmakecavgs
         ! command lines
+        type(cmdline)         :: cline_prep4cgrid_distr
         type(cmdline)         :: cline_check2D_conv
         type(cmdline)         :: cline_cavgassemble
         type(cmdline)         :: cline_merge_algndocs
@@ -464,12 +466,15 @@ contains
         endif
 
         ! prepare command lines from prototype master
-        cline_check2D_conv   = cline
-        cline_cavgassemble   = cline
-        cline_merge_algndocs = cline
-        cline_makecavgs      = cline
+        cline_prep4cgrid_distr = cline
+        cline_check2D_conv     = cline
+        cline_cavgassemble     = cline
+        cline_merge_algndocs   = cline
+        cline_makecavgs        = cline
 
         ! initialise static command line parameters and static job description parameters
+        call cline_prep4cgrid_distr%set( 'prg', 'prep4cgrid_stk_parts') ! required for distributed call
+        call cline_prep4cgrid_distr%set( 'for3D', 'no' )
         call cline_merge_algndocs%set('fbody',    ALGN_FBODY           )
         call cline_merge_algndocs%set('nptcls',   real(p_master%nptcls))
         call cline_merge_algndocs%set('ndocs',    real(p_master%nparts))
@@ -484,6 +489,8 @@ contains
             ! split stack
             call xsplit%execute(cline)
         endif
+        ! prep4cgrid
+        call xprep4cgrid_distr%execute(cline_prep4cgrid_distr)
         ! execute initialiser
         if( .not. cline%defined('refs') )then
             p_master%refs      = 'start2Drefs'//p_master%ext
@@ -730,9 +737,9 @@ contains
         use simple_commander_mask
         use simple_commander_rec
         use simple_commander_volops
-        use simple_oris, only: oris
-        use simple_math, only: calc_fourier_index, calc_lowpass_lim
-        use simple_strings,        only: real2str
+        use simple_oris,    only: oris
+        use simple_math,    only: calc_fourier_index, calc_lowpass_lim
+        use simple_strings, only: real2str
         class(prime3D_distr_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
         ! commanders
@@ -1522,7 +1529,8 @@ contains
             do ipart=1,p_master%nparts
                 call part_params(ipart)%new(2)
                 stkname    = p_master%stkhandle%get_stkname(ipart)
-                outstkname = add2fbody(stkname, p_master%ext, PREP4CGRID_SUFFIX)
+                outstkname = add2fbody_and_new_ext(stkname, p_master%ext, PREP4CGRID_SUFFIX, '.bin')
+                ! scale tag is dealt with by the stktab handler
                 call part_params(ipart)%set('stk',    stkname)
                 call part_params(ipart)%set('outstk', outstkname)
                 deallocate(stkname, outstkname)
@@ -1532,8 +1540,14 @@ contains
             allocate(part_params(p_master%nparts))
             do ipart=1,p_master%nparts
                 call part_params(ipart)%new(2)
-                allocate(stkname, source=trim(STKPARTFBODY)//int2str_pad(ipart,p_master%numlen)//p_master%ext)
-                outstkname = add2fbody(stkname, p_master%ext, PREP4CGRID_SUFFIX)
+                if( p_master%autoscale .eq. 'yes' )then
+                    allocate(stkname, source=trim(STKPARTFBODY)//&
+                        &int2str_pad(ipart,p_master%numlen)//SCALE_SUFFIX//p_master%ext)
+                else
+                    allocate(stkname, source=trim(STKPARTFBODY)//&
+                        &int2str_pad(ipart,p_master%numlen)//p_master%ext)
+                endif
+                outstkname = add2fbody_and_new_ext(stkname, p_master%ext, PREP4CGRID_SUFFIX, '.bin')
                 call part_params(ipart)%set('stk',    stkname)
                 call part_params(ipart)%set('outstk', outstkname)
                 deallocate(stkname, outstkname)
@@ -1544,7 +1558,6 @@ contains
         ! prepare job description
         call cline_prep4cgrid%gen_job_descr(job_descr)
         call job_descr%set('prg', 'prep4cgrid')
-        call job_descr%set('autoscale', 'no')
         ! schedule
         call qenv%gen_scripts_and_schedule_jobs(p_master, job_descr, part_params=part_params)
         ! clean

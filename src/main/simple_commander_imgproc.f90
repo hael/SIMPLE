@@ -641,8 +641,10 @@ contains
         type(kbinterpol)                   :: kbwin
         character(len=:),      allocatable :: fname
         character(len=STDLEN), allocatable :: filenames(:)
-        integer                            :: iptcl, nfiles, nframes, ifile, ldim(3), ldim_pd(3), nptcls
-        p = params(cline)                  ! parameters generated
+        complex(sp),           allocatable :: cmat(:,:)
+        integer                            :: iptcl, nfiles, nframes, ifile, ldim(3)
+        integer                            :: recl, ldim_pd(3), nptcls, lims(3,2), funit
+        p = params(cline) ! parameters generated
         if( p%for3D.eq.'yes' )then
             kbwin = kbinterpol(RECWINSZ, p%alpha)
         else
@@ -659,30 +661,42 @@ contains
             call img%new(ldim, p%smpd)
             call img_pad%new(ldim_pd, p%smpd)
             call gridprep%new(img, kbwin, ldim_pd)
+            lims = gridprep%get_lims()
+            allocate(cmat(lims(1,1):lims(1,2),lims(2,1):lims(2,2)))
+            inquire(iolength=recl) cmat
             do ifile=1,nfiles
                 call progress(ifile, nfiles)
-                fname = add2fbody(trim(filenames(ifile)), p%ext, PREP4CGRID_SUFFIX)
+                fname = add2fbody_and_new_ext(trim(filenames(ifile)), p%ext, PREP4CGRID_SUFFIX, '.bin')
                 call find_ldim_nptcls(filenames(ifile),ldim,nframes)
                 if( ldim(1) .ne. p%box )then
                     print *,'Non congruent dimensions; simple_commander_imgproc :: exec_prep4cgrid'
                     stop
                 endif
                 nptcls = ldim(3)
+                call fopen(funit, fname, status='REPLACE', action='WRITE',&
+                    &access='DIRECT', form='UNFORMATTED', recl=recl)
                 do iptcl=1,nptcls
                     call img%read(filenames(ifile), iptcl)
-                    call gridprep%prep(img, img_pad)
-                    call img_pad%write(fname, iptcl)
+                    call gridprep%prep(img, cmat)
+                    write(funit, rec=iptcl) cmat
                 end do
+                call fclose(funit)
             enddo
         else
             call b%build_general_tbox(p, cline, do3d=.false.) ! general objects built
             call gridprep%new(b%img, kbwin, [p%boxpd,p%boxpd,1])
+            lims = gridprep%get_lims()
+            allocate(cmat(lims(1,1):lims(1,2),lims(2,1):lims(2,2)))
+            inquire(iolength=recl) cmat
+            call fopen(funit, p%outstk, status='REPLACE', action='WRITE',&
+                &access='DIRECT', form='UNFORMATTED', recl=recl)
             do iptcl=1,p%nptcls
                 call progress(iptcl, p%nptcls)
                 call b%img%read(p%stk, iptcl)
-                call gridprep%prep(b%img, b%img_pad)
-                call b%img_pad%write(p%outstk, iptcl)
+                call gridprep%prep(b%img, cmat)
+                write(funit, rec=iptcl) cmat
             end do
+            call fclose(funit)
         endif
         ! end gracefully
         call simple_end('**** SIMPLE_PREP4CGRID NORMAL STOP ****', print_simple=.false.)

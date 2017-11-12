@@ -28,19 +28,20 @@ type, extends(image) :: reconstructor
     real(kind=c_float), pointer :: rho(:,:,:)=>null()           !< sampling+CTF**2 density
     complex, allocatable        :: cmat_exp(:,:,:)              !< Fourier components of expanded reconstructor
     real,    allocatable        :: rho_exp(:,:,:)               !< sampling+CTF**2 density of expanded reconstructor
-    real                        :: winsz         = RECWINSZ     !< window half-width
-    real                        :: alpha         = KBALPHA      !< oversampling ratio
+    real                        :: winsz          = RECWINSZ    !< window half-width
+    real                        :: alpha          = KBALPHA     !< oversampling ratio
     real                        :: dfx=0., dfy=0., angast=0.    !< CTF params
-    real                        :: phshift       = 0.           !< additional phase shift from the Volta  
-    integer                     :: wdim          = 0            !< dim of interpolation matrix
-    integer                     :: nyq           = 0            !< Nyqvist Fourier index
-    integer                     :: ldim_img(3)   = 0            !< logical dimension of the original image
-    integer                     :: lims(3,2)     = 0            !< Friedel limits
-    integer                     :: cyc_lims(3,2) = 0            !< redundant limits
+    real                        :: phshift        = 0.          !< additional phase shift from the Volta 
+    real                        :: shconst_rec(3) = [0.,0.,0.]  !< memoized constants for origin shifting 
+    integer                     :: wdim           = 0           !< dim of interpolation matrix
+    integer                     :: nyq            = 0           !< Nyqvist Fourier index
+    integer                     :: ldim_img(3)    = 0           !< logical dimension of the original image
+    integer                     :: lims(3,2)      = 0           !< Friedel limits
+    integer                     :: cyc_lims(3,2)  = 0           !< redundant limits
     type(CTFFLAGTYPE)           :: ctf                          !< ctf flag <yes|no|mul|flip>
-    logical                     :: tfastig            = .false. !< astigmatic CTF or not
-    logical                     :: phaseplate         = .false. !< Volta phaseplate images or not
-    logical                     :: rho_allocated      = .false. !< existence of rho matrix
+    logical                     :: tfastig        = .false.     !< astigmatic CTF or not
+    logical                     :: phaseplate     = .false.     !< Volta phaseplate images or not
+    logical                     :: rho_allocated  = .false.     !< existence of rho matrix
   contains
     ! CONSTRUCTORS 
     procedure          :: alloc_rho
@@ -54,7 +55,9 @@ type, extends(image) :: reconstructor
     procedure          :: read_rho
     ! INTERPOLATION
     procedure, private :: inout_fcomp
-    procedure          :: inout_fplane
+    procedure, private :: inout_fplane_1
+    procedure, private :: inout_fplane_2
+    generic            :: inout_fplane => inout_fplane_1, inout_fplane_2
     procedure          :: sampl_dens_correct
     procedure          :: compress_exp
     ! SUMMATION
@@ -100,11 +103,12 @@ contains
         end select
         self%tfastig = .false.
         if( p%tfplan%mode .eq. 'astig' ) self%tfastig = .true.
-        self%phaseplate = p%tfplan%l_phaseplate
-        self%kbwin      = kbinterpol(self%winsz,self%alpha)
-        self%wdim       = self%kbwin%get_wdim()
-        self%lims       = self%loop_lims(2)
-        self%cyc_lims   = self%loop_lims(3)
+        self%phaseplate  = p%tfplan%l_phaseplate
+        self%kbwin       = kbinterpol(self%winsz,self%alpha)
+        self%wdim        = self%kbwin%get_wdim()
+        self%lims        = self%loop_lims(2)
+        self%cyc_lims    = self%loop_lims(3)
+        self%shconst_rec = self%get_shconst() 
         ! Work out dimensions of the rho array
         rho_shape(1)    = fdim(self%ldim_img(1))
         rho_shape(2:3)  = self%ldim_img(2:3)
@@ -248,7 +252,7 @@ contains
     end subroutine inout_fcomp
 
     !> insert or uninsert Fourier plane
-    subroutine inout_fplane( self, o, inoutmode, fpl, pwght )
+    subroutine inout_fplane_1( self, o, inoutmode, fpl, pwght )
         class(reconstructor), intent(inout) :: self      !< instance
         class(ori),           intent(inout) :: o         !< orientation
         logical,              intent(in)    :: inoutmode !< add = .true., subtract = .false.
@@ -287,7 +291,47 @@ contains
             end do
         end do
         !$omp end parallel do
-    end subroutine inout_fplane
+    end subroutine inout_fplane_1
+
+    !> insert or uninsert Fourier plane
+    subroutine inout_fplane_2( self, o, inoutmode, cmat, pwght )
+        class(reconstructor), intent(inout) :: self      !< instance
+        class(ori),           intent(inout) :: o         !< orientation
+        logical,              intent(in)    :: inoutmode !< add = .true., subtract = .false.
+        complex(sp),          intent(in)    :: cmat(self%cyc_lims(1,1):self%cyc_lims(1,2),self%cyc_lims(2,1):self%cyc_lims(2,2))
+        real,                 intent(in)    :: pwght     !< external particle weight (affects both fplane and rho)
+        integer :: h, k, sh
+        complex :: oshift
+        real    :: x, y, arg
+        if( self%ctf%flag /= CTFFLAG_NO )then ! make CTF object & get CTF info
+            self%tfun = ctf(self%get_smpd(), o%get('kv'), o%get('cs'), o%get('fraca'))
+            self%dfx  = o%get('dfx')
+            if( self%tfastig )then            ! astigmatic CTF model
+                self%dfy = o%get('dfy')
+                self%angast = o%get('angast')
+            else                              ! non-astigmatic CTF model
+                self%dfy = self%dfx
+                self%angast = 0.
+            endif
+            ! additional phase shift from the Volta
+            self%phshift = 0.
+            if( self%phaseplate ) self%phshift = o%get('phshift')
+        endif
+        x = o%get('x')
+        y = o%get('y')
+        !$omp parallel do collapse(2) default(shared) schedule(static)&
+        !$omp private(h,k,sh,arg,oshift) proc_bind(close)
+        do h=self%cyc_lims(1,1),self%cyc_lims(1,2)
+            do k=self%cyc_lims(2,1),self%cyc_lims(2,2)
+                sh = nint(hyp(real(h),real(k)))
+                if( sh > self%nyq + 1 )cycle
+                arg    = real(h) * (-x) * self%shconst_rec(1) + real(k) * (-y) * self%shconst_rec(2)
+                oshift = cmplx(cos(arg),sin(arg))
+                call self%inout_fcomp(h,k,o,inoutmode,cmat(h,k),oshift,pwght)
+            end do
+        end do
+        !$omp end parallel do
+    end subroutine inout_fplane_2
 
     !>  is for uneven distribution of orientations correction 
     !>  from Pipe & Menon 1999

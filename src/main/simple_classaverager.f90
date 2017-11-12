@@ -29,31 +29,31 @@ type ptcl_record
     real,    allocatable :: shifts(:,:)   !< rotational origin shifts
 end type ptcl_record
 
-class(build),      pointer     :: bp => null()             !< pointer to build
-class(params),     pointer     :: pp => null()             !< pointer to params
-type(CTFFLAGTYPE)              :: ctfflag                  !< ctf flag <yes|no|mul|flip>
-integer                        :: istart     = 0, iend = 0 !< particle index range
-integer                        :: partsz     = 0           !< size of partition
-integer                        :: ncls       = 0           !< # classes
-integer                        :: nstates    = 0           !< # states
-integer                        :: nrots      = 0           !< # in-plane rotations
-integer                        :: filtsz     = 0           !< size of filter function or FSC
-integer                        :: ldim(3)    = [0,0,0]     !< logical dimension of image
-integer                        :: ldim_pd(3) = [0,0,0]     !< logical dimension of image, padded
-real                           :: smpd       = 0.          !< sampling distance
-type(ptcl_record), allocatable :: precs(:)                 !< particle records     
-type(image),       allocatable :: cavgs_even(:,:)          !< class averages
-type(image),       allocatable :: cavgs_odd(:,:)           !< -"-
-type(image),       allocatable :: cavgs_merged(:,:)        !< -"-
-type(image),       allocatable :: ctfsqsums_even(:,:)      !< CTF**2 sums for Wiener normalisation
-type(image),       allocatable :: ctfsqsums_odd(:,:)       !< -"-
-type(image),       allocatable :: ctfsqsums_merged(:,:)    !< -"-
-real,              allocatable :: inpl_rots(:)             !< in-plane rotations (sign shifted)
-logical                        :: phaseplate    = .false.  !< Volta phaseplate images or not
-logical                        :: l_is_class    = .true.   !< for prime2D or not
-logical                        :: l_hard_assign = .true.   !< npeaks == 1 or not
-logical                        :: exists        = .false.  !< to flag instance existence 
-
+class(build),      pointer     :: bp => null()                  !< pointer to build
+class(params),     pointer     :: pp => null()                  !< pointer to params
+type(CTFFLAGTYPE)              :: ctfflag                       !< ctf flag <yes|no|mul|flip>
+integer                        :: istart          = 0, iend = 0 !< particle index range
+integer                        :: partsz          = 0           !< size of partition
+integer                        :: ncls            = 0           !< # classes
+integer                        :: nstates         = 0           !< # states
+integer                        :: nrots           = 0           !< # in-plane rotations
+integer                        :: filtsz          = 0           !< size of filter function or FSC
+integer                        :: ldim(3)         = [0,0,0]     !< logical dimension of image
+integer                        :: ldim_pd(3)      = [0,0,0]     !< logical dimension of image, padded
+real                           :: smpd            = 0.          !< sampling distance
+real                           :: shconst_cavg(3) = [0.,0.,0.]  !< memoized constants for origin shifting 
+type(ptcl_record), allocatable :: precs(:)                      !< particle records     
+type(image),       allocatable :: cavgs_even(:,:)               !< class averages
+type(image),       allocatable :: cavgs_odd(:,:)                !< -"-
+type(image),       allocatable :: cavgs_merged(:,:)             !< -"-
+type(image),       allocatable :: ctfsqsums_even(:,:)           !< CTF**2 sums for Wiener normalisation
+type(image),       allocatable :: ctfsqsums_odd(:,:)            !< -"-
+type(image),       allocatable :: ctfsqsums_merged(:,:)         !< -"-
+real,              allocatable :: inpl_rots(:)                  !< in-plane rotations (sign shifted)
+logical                        :: phaseplate    = .false.       !< Volta phaseplate images or not
+logical                        :: l_is_class    = .true.        !< for prime2D or not
+logical                        :: l_hard_assign = .true.        !< npeaks == 1 or not
+logical                        :: exists        = .false.       !< to flag instance existence 
 
 integer, parameter      :: BATCHTHRSZ = 50
 logical, parameter      :: L_BENCH    = .false.
@@ -136,6 +136,8 @@ contains
                 call ctfsqsums_merged(istate,icls)%new(ldim_pd,p%smpd,wthreads=.false.)
             end do
         end do
+        ! set constants for origin shifting 
+        shconst_cavg = cavgs_even(1,1)%get_shconst() 
         ! flag existence
         exists = .true.
     end subroutine cavger_new
@@ -397,20 +399,17 @@ contains
     !!          interpolation in real-space      
     subroutine cavger_assemble_sums
         use simple_kbinterpol,      only: kbinterpol
-        use simple_prep4cgrid,      only: prep4cgrid
         use simple_map_reduce,      only: split_nobjs_even
-        use simple_hadamard_common, only: read_img_and_norm
+        use simple_hadamard_common, only: read_cgridcmat
         type(kbinterpol)         :: kbwin
-        type(prep4cgrid)         :: gridprep
         type(image)              :: batch_imgsum_even, batch_imgsum_odd
         type(image)              :: batch_rhosum_even, batch_rhosum_odd
-        type(image), allocatable :: padded_imgs(:), batch_imgs(:)
-        complex,     allocatable :: cmat_even(:,:), cmat_odd(:,:)
+        complex,     allocatable :: cmat_even(:,:), cmat_odd(:,:), cmats(:,:,:)
         real,        allocatable :: w(:,:), rho_even(:,:), rho_odd(:,:)
         integer,     allocatable :: ptcls_inds(:), batches(:,:), iprecs(:)
         integer,     allocatable :: ioris(:)
-        complex   :: comp, zero, oshift
-        real      :: loc(2), mat(2,2), pw, tval, tvalsq, vec(2)
+        complex   :: zero, oshift
+        real      :: loc(2), mat(2,2), pw, tval, tvalsq, vec(2), arg
         integer   :: cnt_progress, nbatches, batch, icls_pop, iprec, iori, i, batchsz, fnr, icls_popmax
         integer   :: lims(3,2), istate, sh, nyq, logi(3), phys(3), win(2,2), win4w(2,2)
         integer   :: cyc_lims(3,2), alloc_stat, wdim, h, k, hh, kk, icls, iptcl, batchsz_max
@@ -434,7 +433,6 @@ contains
         call batch_imgsum_odd%new(ldim_pd, pp%smpd)
         call batch_rhosum_even%new(ldim_pd, pp%smpd)
         call batch_rhosum_odd%new(ldim_pd, pp%smpd)
-        call gridprep%new(bp%img, kbwin, ldim_pd)
         if( L_BENCH )then
             rt_batch_loop = 0.
             rt_gridding   = 0.
@@ -459,12 +457,8 @@ contains
                 end do
             end do
         end do
-        ! pre-create images based on maximum batchsz
-        allocate(padded_imgs(batchsz_max), batch_imgs(batchsz_max))
-        do i=1,batchsz_max
-            call batch_imgs(i)%new(ldim, pp%smpd)
-            call padded_imgs(i)%new(ldim_pd, pp%smpd, wthreads=.false.)
-        end do
+        ! pre-create cmats based on maximum batchsz
+        allocate(cmats(batchsz_max,cyc_lims(1,1):cyc_lims(1,2),cyc_lims(2,1):cyc_lims(2,2)), source=cmplx(0.,0.))
         ! state loop 
         cnt_progress = 0
         do istate=1,nstates
@@ -486,9 +480,8 @@ contains
                     if( L_BENCH ) t_batch_loop = tic()
                     do i=1,batchsz
                         iptcl = ptcls_inds(batches(batch,1) + i - 1)
-                        call read_img_and_norm( bp, pp, iptcl )
-                        call batch_imgs(i)%copy(bp%img)
-                        call padded_imgs(i)%zero_and_unflag_ft
+                        call read_cgridcmat( bp, pp, iptcl )
+                        cmats(i,:,:) = bp%cmat
                     enddo
                     if( L_BENCH ) rt_batch_loop = rt_batch_loop + toc(t_batch_loop)
                     if( L_BENCH ) t_gridding = tic()
@@ -497,10 +490,9 @@ contains
                     rho_odd   = 0.
                     rho_even  = 0.
                     !$omp parallel do default(shared) schedule(static) reduction(+:cmat_even,cmat_odd,rho_even,rho_odd) proc_bind(close)&
-                    !$omp private(sh,i,iprec,iori,h,k,loc,mat,logi,phys,w,win4w,win,pw,tval,tvalsq,vec,hh,kk,oshift,comp)
+                    !$omp private(sh,i,iprec,iori,h,k,loc,mat,arg,w,win4w,win,pw,tval,tvalsq,vec,hh,kk,oshift)
                     ! batch loop, convolution interpolation
                     do i=1,batchsz
-                        call gridprep%prep(batch_imgs(i), padded_imgs(i))
                         iprec = iprecs(batches(batch,1) + i - 1)
                         iori  = ioris(batches(batch,1)  + i - 1)
                         ! prep weight
@@ -516,17 +508,16 @@ contains
                                 sh = nint(hyp(real(h),real(k)))
                                 if( sh > nyq + 1 )cycle
                                 ! rotation
-                                vec      = real([h,k])
-                                loc      = matmul(vec,mat)
+                                vec = real([h,k])
+                                loc = matmul(vec,mat)
                                 ! kernel limits
                                 call sqwin_2d(loc(1),loc(2), KBWINSZ, cyc_lims(1:2,1:2), win)
-                                ! updates only asymmetric Friedel components
+                                ! update only asymmetric Friedel components
                                 if( win(1,2) < lims(1,1) )cycle
-                                ! fetch component & calc shift
-                                logi     = [h,k,0]
-                                phys     = padded_imgs(i)%comp_addr_phys(logi)
-                                comp     = padded_imgs(i)%get_fcomp(logi, phys)
-                                oshift   = padded_imgs(i)%oshift(logi, [-precs(iprec)%shifts(iori,1),-precs(iprec)%shifts(iori,2),0.])
+                                ! calc shift
+                                arg = real(h) * (-precs(iprec)%shifts(iori,1)) * shconst_cavg(1) +&
+                                     &real(k) * (-precs(iprec)%shifts(iori,2)) * shconst_cavg(2)
+                                oshift = cmplx(cos(arg),sin(arg))
                                 ! evaluate the transfer function
                                 call calc_tfun_vals(iprec, vec, tval, tvalsq)
                                 ! kernel
@@ -543,12 +534,12 @@ contains
                                 select case(precs(iprec)%eo)
                                 case(0,-1)
                                     cmat_even(win(1,1):win(1,2),win(2,1):win(2,2)) = cmat_even(win(1,1):win(1,2),win(2,1):win(2,2)) + &
-                                        &(w(win4w(1,1):win4w(1,2),win4w(2,1):win4w(2,2))*tval*comp)*oshift
+                                        &(w(win4w(1,1):win4w(1,2),win4w(2,1):win4w(2,2))*tval*cmats(i,h,k))*oshift
                                     rho_even(win(1,1):win(1,2),win(2,1):win(2,2)) = rho_even(win(1,1):win(1,2),win(2,1):win(2,2)) + &
                                         &w(win4w(1,1):win4w(1,2),win4w(2,1):win4w(2,2))*tvalsq
                                 case(1)
                                     cmat_odd(win(1,1):win(1,2),win(2,1):win(2,2)) = cmat_odd(win(1,1):win(1,2),win(2,1):win(2,2)) + &
-                                        &(w(win4w(1,1):win4w(1,2),win4w(2,1):win4w(2,2))*tval*comp)*oshift
+                                        &(w(win4w(1,1):win4w(1,2),win4w(2,1):win4w(2,2))*tval*cmats(i,h,k))*oshift
                                     rho_odd(win(1,1):win(1,2),win(2,1):win(2,2)) = rho_odd(win(1,1):win(1,2),win(2,1):win(2,2)) + &
                                         &w(win4w(1,1):win4w(1,2),win4w(2,1):win4w(2,2))*tvalsq
                                 end select
@@ -602,16 +593,11 @@ contains
             enddo
         enddo
         ! batch cleanup
-        do i=1,batchsz_max
-            call padded_imgs(i)%kill
-            call batch_imgs(i)%kill
-        enddo
-        deallocate(padded_imgs, batch_imgs)
         call batch_imgsum_even%kill
         call batch_imgsum_odd%kill
         call batch_rhosum_even%kill
         call batch_rhosum_odd%kill
-        deallocate(cmat_even, cmat_odd, rho_even, rho_odd, w)
+        deallocate(cmats, cmat_even, cmat_odd, rho_even, rho_odd, w)
         if( .not. pp%l_distr_exec ) call cavger_merge_eos_and_norm
         if( L_BENCH )then
             rt_tot = rt_tot + toc(t_tot)

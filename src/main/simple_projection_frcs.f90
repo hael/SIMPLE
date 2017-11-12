@@ -2,8 +2,10 @@ module simple_projection_frcs
 #include "simple_lib.f08"
 use simple_estimate_ssnr, only: resample_filter
 use simple_oris,          only: oris
-
 implicit none
+
+public :: projection_frcs
+private
 
 type projection_frcs
     private

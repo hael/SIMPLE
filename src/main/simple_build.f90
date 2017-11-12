@@ -18,7 +18,6 @@ use simple_polarizer,        only: polarizer
 use simple_masker,           only: masker
 use simple_projection_frcs,  only: projection_frcs
 use simple_ran_tabu,         only: ran_tabu
- use simple_prep4cgrid,      only: prep4cgrid
 !! import functions
 use simple_timer,            only: tic, toc, timer_int_kind
 use simple_binoris_io,       only: binread_ctfparams_state_eo, binread_oritab
@@ -44,7 +43,6 @@ type :: build
     type(image)                         :: vol2               !< -"-
     type(masker)                        :: mskimg             !< mask image
     type(projection_frcs)               :: projfrcs           !< projection FRC's used in the anisotropic Wiener filter
-    type(prep4cgrid)                    :: gridprep           !< gridding preparation (2D)
     type(image),            allocatable :: imgbatch(:)        !< batch of images
     ! COMMON LINES TOOLBOX
     type(image),            allocatable :: imgs(:)            !< images (all should be read in)
@@ -57,6 +55,7 @@ type :: build
     ! PRIME TOOLBOX
     type(reconstructor),    allocatable :: recvols(:)         !< array of volumes for reconstruction
     type(eo_reconstructor), allocatable :: eorecvols(:)       !< array of volumes for eo-reconstruction
+    complex(sp),            allocatable :: cmat(:,:)          !< 2D matrix for reading FTs prepped 4 cgrid
     real,                   allocatable :: fsc(:,:)           !< Fourier Shell Correlation
     integer,                allocatable :: nnmat(:,:)         !< matrix with nearest neighbor indices
     integer,                allocatable :: pbatch(:)          !< particle index batch
@@ -98,7 +97,7 @@ contains
         class(cmdline),    intent(inout) :: cline
         logical, optional, intent(in)    :: do3d, nooritab, force_ctf
         type(ran_tabu) :: rt
-        integer        :: lfny, partsz, lfny_match
+        integer        :: lfny, partsz, lfny_match, cyc_lims(3,2)
         logical        :: ddo3d, fforce_ctf
         verbose=.false.
         if(verbose.or.global_verbose) tbuild=tic()
@@ -183,10 +182,16 @@ contains
             endif
             DebugPrint  'did build boxpd-sized image objects'
             ! build arrays
-            lfny = self%img%get_lfny(1)
-            lfny_match = self%img_match%get_lfny(1)         
-            allocate( self%fsc(p%nstates,lfny), source=0., stat=alloc_stat )
+            lfny       = self%img%get_lfny(1)
+            lfny_match = self%img_match%get_lfny(1)
+            cyc_lims   = self%img_pad%loop_lims(3)
+            allocate( self%fsc(p%nstates,lfny),&
+                &self%cmat(cyc_lims(1,1):cyc_lims(1,2),cyc_lims(2,1):cyc_lims(2,2)), stat=alloc_stat )
             allocchk("In: build_general_tbox; simple_build, 1")
+            self%fsc  = 0.
+            self%cmat = cmplx(0.,0.)
+            ! set record-lenght for direct access I/O
+            inquire(iolength=p%recl_cgrid) self%cmat
             ! set default amsklp
             if( .not. cline%defined('amsklp') .and. cline%defined('lp') )then
                 p%amsklp = self%img%get_lp(self%img%get_find(p%lp)-2)
@@ -239,7 +244,8 @@ contains
             call self%vol%kill
             call self%vol2%kill
             call self%mskimg%kill
-            if( allocated(self%fsc) )deallocate(self%fsc)
+            if( allocated(self%fsc)  ) deallocate(self%fsc)
+            if( allocated(self%cmat) ) deallocate(self%cmat)
             self%general_tbox_exists = .false.
         endif
     end subroutine kill_general_tbox
@@ -312,7 +318,6 @@ contains
         call self%raise_hard_ctf_exception(p)
         call self%recvol%new([p%boxpd,p%boxpd,p%boxpd],p%smpd)
         call self%recvol%alloc_rho(p)
-        call self%gridprep%new(self%img, self%recvol%get_kbwin(), [p%boxpd,p%boxpd,1])
         if( .not. self%a%isthere('proj') ) call self%a%set_projs(self%e)
         if (verbose.or.global_verbose)then
             write(*,'(A,1x,1ES20.5)') '>>> DONE BUILDING RECONSTRUCTION TOOLBOX      time (s)', toc(tbuild)
@@ -328,7 +333,6 @@ contains
         if( self%rec_tbox_exists )then
             call self%recvol%dealloc_rho
             call self%recvol%kill
-            call self%gridprep%kill
             self%rec_tbox_exists = .false.
         endif
     end subroutine kill_rec_tbox
@@ -348,7 +352,6 @@ contains
         else
             write(*,'(A)') '>>> DONE BUILDING EO RECONSTRUCTION TOOLBOX'
         endif
-        call self%gridprep%new(self%img, self%eorecvol%get_kbwin(), [p%boxpd,p%boxpd,1])
         self%eo_rec_tbox_exists = .true.
     end subroutine build_eo_rec_tbox
 
@@ -358,7 +361,6 @@ contains
         if( self%eo_rec_tbox_exists )then
             call self%eorecvol%kill
             call self%projfrcs%kill
-            call self%gridprep%kill
             self%eo_rec_tbox_exists = .false.
         endif
     end subroutine kill_eo_rec_tbox
@@ -466,7 +468,6 @@ contains
         allocchk('build_hadamard_prime3D_tbox; simple_build, 2')
         call self%recvols(1)%new([p%boxpd,p%boxpd,p%boxpd],p%smpd)
         call self%recvols(1)%alloc_rho(p)
-        call self%gridprep%new(self%img, self%recvols(1)%get_kbwin(), [p%boxpd,p%boxpd,1])
         if( .not. self%a%isthere('proj') ) call self%a%set_projs(self%e)
         if (verbose.or.global_verbose)then
             write(*,'(A,1x,1ES20.5)') '>>> DONE BUILDING EXTREMAL3D TOOLBOX          time (s)', toc(tbuild)
@@ -482,7 +483,6 @@ contains
         if( self%extremal3D_tbox_exists )then
             call self%recvols(1)%dealloc_rho
             call self%recvols(1)%kill
-            call self%gridprep%kill
             deallocate(self%recvols)
             self%extremal3D_tbox_exists = .false.
         endif

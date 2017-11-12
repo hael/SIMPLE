@@ -1,14 +1,14 @@
 ! concrete commander: prime3D for ab initio 3D reconstruction and 3D refinement
 module simple_commander_prime3D
 #include "simple_lib.f08"
-use simple_defs_fname      ! use all in there
-use simple_binoris_io      ! use all in there
 use simple_cmdline,        only: cmdline
 use simple_params,         only: params
 use simple_build,          only: build
 use simple_oris,           only: oris
 use simple_commander_base, only: commander_base
 use simple_qsys_funs       ! use all in there
+use simple_defs_fname      ! use all in there
+use simple_binoris_io      ! use all in there
 implicit none
 
 public :: resrange_commander
@@ -225,7 +225,7 @@ contains
         else
             cline_prep4cgrid = cline
             call cline_prep4cgrid%set( 'for3D', 'yes' )
-            call cline_prep4cgrid%set( 'outstk', add2fbody(p%stk, p%ext, PREP4CGRID_SUFFIX) )
+            call cline_prep4cgrid%set( 'outstk', add2fbody_and_new_ext(p%stk, p%ext, PREP4CGRID_SUFFIX, '.bin') )
             call xprep4cgrid%execute(cline_prep4cgrid)
             if( p%dynlp .eq. 'yes' )then
                 call prime3D_find_resrange( b, p, lpstart, lpstop ) ! determine resolution range

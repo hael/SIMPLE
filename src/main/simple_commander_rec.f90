@@ -1,13 +1,12 @@
 ! concrete commander: 3D reconstruction routines
 module simple_commander_rec
 #include "simple_lib.f08"
-    
 use simple_cmdline,         only: cmdline
 use simple_params,          only: params
 use simple_build,           only: build
 use simple_commander_base,  only: commander_base
+use simple_projection_frcs, only: projection_frcs
 use simple_hadamard_common  ! use all in there
-use simple_projection_frcs
 implicit none
 
 public :: recvol_commander
