@@ -379,7 +379,9 @@ contains
     subroutine exec_makecavgs_distr( self, cline )
         class(makecavgs_distr_commander), intent(inout) :: self
         class(cmdline),                   intent(inout) :: cline
+        type(prep4cgrid_stk_parts_commander) :: xprep4cgrid_distr
         type(split_commander) :: xsplit
+        type(cmdline)         :: cline_prep4cgrid_distr
         type(cmdline)         :: cline_cavgassemble
         type(qsys_env)        :: qenv
         type(params)          :: p_master
@@ -396,7 +398,10 @@ contains
         ! prepare job description
         call cline%gen_job_descr(job_descr)
         ! prepare command lines from prototype master
-        cline_cavgassemble = cline
+        cline_prep4cgrid_distr = cline
+        cline_cavgassemble     = cline
+        call cline_prep4cgrid_distr%set( 'prg', 'prep4cgrid_stk_parts') ! required for distributed call
+        call cline_prep4cgrid_distr%set( 'for3D', 'no' )
         call cline_cavgassemble%set('nthr',1.)
         call cline_cavgassemble%set('prg', 'cavgassemble')
         if( cline%defined('outfile') )then
@@ -410,6 +415,8 @@ contains
             ! split stack
             call xsplit%execute(cline)
         endif
+        ! prep4cgrid
+        call xprep4cgrid_distr%execute(cline_prep4cgrid_distr)
         ! schedule
         call qenv%gen_scripts_and_schedule_jobs(p_master, job_descr)
         ! assemble class averages
