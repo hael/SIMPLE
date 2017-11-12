@@ -62,7 +62,7 @@ contains
         ierr=0
         ! allocate arrays on the host
         !  if(allocated(coutput))deallocate(coutput)
-        allocate(coutput(cdim(1),cdim(2),cdim(3)),source=cmplx(0.0),stat=istat)
+        allocate(coutput(ldim(1),ldim(2),ldim(3)),source=cmplx(0.,0.),stat=istat)
         if(istat /= 0)call allocchk("In fft_cuda_test coutput",istat)
         !    if(allocated(rinput))deallocate(rinput)
         !  allocate( rinput(ldim(1), ldim(2), ldim(3)),source=0.,stat=istat)
@@ -139,7 +139,7 @@ contains
         !      call self%set_cmat( coutput )
 
         call self%set_ft(.true.)
-        call self%set_cmat(coutput(:cdim(1),:cdim(2),cdim(3)))
+        call self%set_cmat(coutput(:cdim(1),:cdim(2),:cdim(3)))
         ! release memory on the host and on the device
         !  if(allocated(rinput_d))then
         !      deallocate(rinput_d)!,stat=istat)
@@ -1008,6 +1008,7 @@ contains
 
         if(doplot)write(*,'(a)') '**info(unit_test PGI CUFFT: images created '
         call fft_pgi_cuda_test(img_2)
+        call img_2%vis(geomorsphr=.false.)
         if(doplot)write(*,'(a)') '**info(simple_image PGI test): forward FFT completed '
         call ifft_pgi_cuda_test4(img_2)
         if(doplot)write(*,'(a)') '**info(simple_image PGI test): inverse FFT completed '
@@ -1915,7 +1916,6 @@ contains
     subroutine test_pgi_ifft(  doplot )
         use simple_fftshifter
         use simple_image, only: image
-
         use gnufor2
 
         logical, intent(in)  :: doplot
@@ -1930,7 +1930,6 @@ contains
         !    type(cudaEvent):: t4
 
         integer(8) :: t1
-
 
         do p=5,8
             t1=tic()

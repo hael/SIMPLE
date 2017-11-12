@@ -106,9 +106,9 @@ program simple_test_cuda
     !        call test_pgi(20*i,20*i,10*i,.true.)
     !        print *,'pgi fft ',i,toc()
     !    end do
-    print *," ready"
+    print *," Press enter to test_pgi_ifft"
     read(*,*)
-   ! call test_pgi_ifft(.true.)
+    call test_pgi_ifft(.true.)
     !   ! write (*,'(A,F9.4)') 'SIMPLE_CUDA timer (exec_cufft2D_test):  Average Simple_CUFFT test (300x300) sec', ctimer%tocU(res)/10.
     !   ! print *,'Standard timer', toc(t1)
     !
