@@ -78,15 +78,12 @@ contains
         real        :: ave, sdev, maxv, minv, med
         ! create edge-less envelope
         call self%remove_edge
-        call self%write('rmedge.mrc')
         ! calculate distance stats
         call distimg%new(self%get_ldim(), p%smpd)
         call distimg%cendist
-        call distimg%write('cendist.mrc')
         call distimg%stats(self, ave, sdev, maxv, minv, med)
         winsz = max(1, nint((p%msk - maxv) / 2.))
         call self%real_space_filter(winsz, 'average')
-        call self%write('rpfilter.mrc')
         ! mask with spherical sof mask
         call self%mask(p%msk, 'soft')
     end subroutine resmask
