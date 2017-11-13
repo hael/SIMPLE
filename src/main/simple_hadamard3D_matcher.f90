@@ -422,11 +422,11 @@ contains
                 orientation = b%a%get_ori(sample(i) + p%fromp - 1)
                 call read_cgridcmat( b, p, sample(i) + p%fromp - 1 )
                 if( p%pgrp == 'c1' )then
-                    call b%recvols(1)%inout_fplane(orientation, .true., b%img_pad, pwght=1.0)
+                    call b%recvols(1)%inout_fplane(orientation, .true., b%cmat, pwght=1.0)
                 else
                     do k=1,b%se%get_nsym()
                         o_sym = b%se%apply(orientation, k)
-                        call b%recvols(1)%inout_fplane(o_sym, .true., b%img_pad, pwght=1.0)
+                        call b%recvols(1)%inout_fplane(o_sym, .true., b%cmat, pwght=1.0)
                     end do
                 endif
             end do

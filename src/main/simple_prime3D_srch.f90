@@ -118,13 +118,13 @@ contains
         endif
         ! reference projection directions
         nrefs = p%nstates * p%nspace
-        allocate(proj_space_dir(p%nspace,2),        source=0.)
-        allocate(proj_space_e3(   p%fromp:p%top, nrefs),   source=0.)
-        allocate(proj_space_shift(p%fromp:p%top, nrefs,2), source=0.)
+        allocate(proj_space_dir(p%nspace,2),               source=0. )
+        allocate(proj_space_e3(   p%fromp:p%top, nrefs),   source=0. )
+        allocate(proj_space_shift(p%fromp:p%top, nrefs,2), source=0. )
         allocate(proj_space_corrs(p%fromp:p%top, nrefs),   source=-1.)
-        allocate(proj_space_inds( p%fromp:p%top, nrefs),   source=0)
-        allocate(proj_space_state(p%fromp:p%top, nrefs),   source=0)
-        allocate(proj_space_proj( p%fromp:p%top, nrefs),   source=0)
+        allocate(proj_space_inds( p%fromp:p%top, nrefs),   source=0  )
+        allocate(proj_space_state(p%fromp:p%top, nrefs),   source=0  )
+        allocate(proj_space_proj( p%fromp:p%top, nrefs),   source=0  )
         do iproj=1,p%nspace
             euls = b%e%get_euler(iproj)
             proj_space_dir(iproj,:) = euls(1:2)
@@ -168,11 +168,11 @@ contains
         endif
         ! search order & previous projection direction
         allocate(prev_proj(p%fromp:p%top), source=0)
-            !$omp parallel do default(shared) private(iptcl) schedule(static) proc_bind(close)
-            do iptcl = p%fromp, p%top
-                prev_proj(iptcl) = b%e%find_closest_proj(b%a%get_ori(iptcl))
-            enddo
-            !$omp end parallel do
+        !$omp parallel do default(shared) private(iptcl) schedule(static) proc_bind(close)
+        do iptcl = p%fromp, p%top
+            prev_proj(iptcl) = b%e%find_closest_proj(b%a%get_ori(iptcl))
+        enddo
+        !$omp end parallel do
         select case( trim(p%refine) )
             case( 'het' )
                 allocate(het_corrs(p%fromp:p%top,p%nstates),source=-1.)
