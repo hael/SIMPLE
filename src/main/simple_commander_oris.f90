@@ -356,7 +356,7 @@ contains
         logical,               allocatable :: selected(:)
         integer      :: isel, nsel, loc(1), iptcl, pind, icls
         integer      :: nlines_oritab, nlines_oritab3D, nlines_deftab
-        integer      :: lfoo(3)
+        integer      :: lfoo(3), ldim2(3), ldim3(3)
         real         :: corr, rproj, rstate
         type(params) :: p
         type(build)  :: b
@@ -367,13 +367,18 @@ contains
         p = params(cline) ! parameters generated
         call b%build_general_tbox(p, cline, do3d=.false.) ! general objects built
         ! find number of selected cavgs
-        call find_ldim_nptcls(p%stk2, lfoo, nsel)
+        call find_ldim_nptcls(p%stk2, ldim2, nsel)
         ! find number of original cavgs
-        call find_ldim_nptcls(p%stk3, lfoo, p%ncls)
+        call find_ldim_nptcls(p%stk3, ldim3, p%ncls)
         if( p%ncls < nsel ) stop 'nr of original clusters cannot be less than the number of selected ones'
+        if( any(ldim2(:2) /= ldim3(:2)) )then
+            print *, 'ldim2: ', ldim2(:2)
+            print *, 'ldim3: ', ldim3(:2)
+            stop 'ERROR, dimensions of stk2/stk3 non-congruent; commander_oris :: map2ptcls'
+        endif
+        p%box = ldim2(1)
         ! find number of lines in input document
         nlines_oritab = binread_nlines(p%oritab)
-        if( nlines_oritab /= p%nptcls ) stop 'nr lines in oritab .ne. nr images in particle stack; must be congruent!'
         if( cline%defined('deftab') )then
             nlines_deftab = binread_nlines(p%deftab)
             if( nlines_oritab /= nlines_deftab ) stop 'nr lines in oritab .ne. nr lines in deftab; must be congruent!'

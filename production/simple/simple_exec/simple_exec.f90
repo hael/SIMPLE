@@ -2205,12 +2205,6 @@ select case(prg)
        ! parse command line
        if( describe ) call print_doc_map2ptcls
        call cline%parse(keys_required(:3), keys_optional(:7))
-       ! sanity check
-        if( cline%defined('stk') .or. cline%defined('stktab') )then
-            ! all ok
-        else
-            stop 'stk or stktab need to be part of command line!'
-        endif
        ! set defaults
        if( .not. cline%defined('outfile') ) call cline%set('outfile', 'mapped_ptcls_params.txt')
        ! execute

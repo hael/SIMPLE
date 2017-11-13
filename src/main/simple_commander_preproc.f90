@@ -310,7 +310,7 @@ contains
             cnt = 0
             do frame=p%fromp,p%top
                 cnt = cnt+1
-                call img_frame%read(movienames(movie),frame,rwaction='READ')
+                call img_frame%read(movienames(movie),frame)
                 call img_frame%write(new_name,cnt)
             end do
             deallocate(new_name)
@@ -341,7 +341,7 @@ contains
             call b%img%new(p%ldim, p%smpd) ! img re-generated (to account for possible non-square)
             tmp = 0.0
             do iimg=1,p%nptcls
-                call b%img%read(p%stk, iimg, rwaction='READ')
+                call b%img%read(p%stk, iimg)
                 tmp = b%img%boxconv(p%boxconvsz)
                 call tmp%write(trim(adjustl(p%fbody))//p%ext, iimg)
                 call progress(iimg, p%nptcls)
@@ -366,7 +366,7 @@ contains
                 if( .not. file_exists(imgnames(iimg)) )then
                     write(*,*) 'inputted img file does not exist: ', trim(adjustl(imgnames(iimg)))
                 endif
-                call b%img%read(imgnames(iimg), 1, rwaction='READ')
+                call b%img%read(imgnames(iimg), 1)
                 tmp = b%img%boxconv(p%boxconvsz)
                 call tmp%write(trim(adjustl(p%fbody))//p%ext, iimg)
                 call progress(iimg, nimgs)
@@ -412,7 +412,7 @@ contains
             call b%img%new(p%ldim, p%smpd) ! img re-generated (to account for possible non-square)
             tmp = 0.0
             do iimg=1,p%nptcls
-                call b%img%read(p%stk, iimg, rwaction='READ')
+                call b%img%read(p%stk, iimg)
                 powspec = b%img%mic2spec(p%pspecsz, trim(adjustl(p%speckind)))
                 call powspec%clip(tmp)
                 call tmp%write(trim(adjustl(p%fbody))//p%ext, iimg)
@@ -448,7 +448,7 @@ contains
                 if( .not. file_exists(imgnames(iimg)) )then
                     write(*,*) 'inputted img file does not exist: ', trim(adjustl(imgnames(iimg)))
                 endif
-                call b%img%read(imgnames(iimg), 1, rwaction='READ')
+                call b%img%read(imgnames(iimg), 1)
                 powspec = b%img%mic2spec(p%pspecsz, trim(adjustl(p%speckind)))
                 call powspec%clip(tmp)
                 if( p%l_distr_exec )then
@@ -1078,7 +1078,7 @@ contains
                 endif
                 if( cline%defined('dir_ptcls') ) stack = trim(p%dir_ptcls) //'/'// trim(stack)
                 ! extract windows from integrated movie
-                call micrograph%read(moviename, 1, rwaction='READ')
+                call micrograph%read(moviename, 1)
                 cnt = 0
                 do j=1,nptcls ! loop over boxes
                     if( oris_mask(j) )then
@@ -1095,7 +1095,7 @@ contains
                 if( allocated(movienames_frames) )then
                     fbody        = get_fbody(trim(stack), p%ext, separator=.false.)
                     stack_frames = add2fbody(fbody, p%ext, '_frames_subset')
-                    call micrograph%read(movienames_frames(movie),1,rwaction='READ')
+                    call micrograph%read(movienames_frames(movie),1)
                     cnt = 0
                     do j=1,nptcls ! loop over boxes
                         if( oris_mask(j) )then

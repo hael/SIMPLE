@@ -731,13 +731,12 @@ contains
     !! \param readhead         get header info flag
     !! \param rwaction         read mode flag
     !!
-    subroutine read( self, fname, i, formatchar, readhead, rwaction )
+    subroutine read( self, fname, i, formatchar, readhead )
         class(image),               intent(inout) :: self
         character(len=*),           intent(in)    :: fname
         integer,          optional, intent(in)    :: i
         character(len=1), optional, intent(in)    :: formatchar
         logical,          optional, intent(in)    :: readhead
-        character(len=*), optional, intent(in)    :: rwaction
         type(imgfile)         :: ioimg
         character(len=1)      :: form
         integer               :: ldim(3), iform, first_slice
@@ -761,7 +760,7 @@ contains
         endif
         select case(form)
             case('M', 'F', 'S')
-                call self%open(fname, ioimg, formatchar, readhead, rwaction)
+                call self%open(fname, ioimg, formatchar, readhead, rwaction='READ')
             case DEFAULT
                 write(*,*) 'Trying to read from file: ', trim(fname)
                 stop 'ERROR, unsupported file format; read; simple_image'

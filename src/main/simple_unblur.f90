@@ -318,7 +318,7 @@ contains
         if( doprint ) write(*,'(a)') '>>> READING & REMOVING DEAD/HOT PIXELS & FOURIER TRANSFORMING FRAMES'
         call tmpmovsum%new(ldim, smpd)
         do iframe=1,nframes
-            call frame_tmp%read(movie_stack_fname, iframe, rwaction='READ')
+            call frame_tmp%read(movie_stack_fname, iframe)
             call tmpmovsum%add(frame_tmp)
         end do
         call tmpmovsum%cure_outliers(ncured, nsig_here, deadhot, outliers)
@@ -327,7 +327,7 @@ contains
         if( any(outliers) )then ! remove the outliers & do the rest
             do iframe=1,nframes
                 call progress(iframe, nframes)
-                call frame_tmp%read(movie_stack_fname, iframe, rwaction='READ')
+                call frame_tmp%read(movie_stack_fname, iframe)
                 rmat = frame_tmp%get_rmat()
                 rmat_pad = median( reshape(rmat(:,:,1),(/(ldim(1)*ldim(2))/)) )
                 rmat_pad(1:ldim(1),1:ldim(2)) = rmat(1:ldim(1),1:ldim(2),1)
@@ -352,7 +352,7 @@ contains
             do iframe=1,nframes
                 call progress(iframe, nframes)
                 call movie_frames_scaled(iframe)%new(ldim_scaled, smpd_scaled)
-                call frame_tmp%read(movie_stack_fname, iframe, rwaction='READ')
+                call frame_tmp%read(movie_stack_fname, iframe)
                 call frame_tmp%fwd_ft
                 call frame_tmp%clip(movie_frames_scaled(iframe))
                 call movie_frames_ftexp(iframe)%new(movie_frames_scaled(iframe), hp, lp)
