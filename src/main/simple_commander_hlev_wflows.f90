@@ -1,6 +1,7 @@
 ! concrete commander: high-level workflows
 module simple_commander_hlev_wflows
 #include "simple_lib.f08"
+use simple_defs_fname
 use simple_cmdline,               only: cmdline
 use simple_params,                only: params
 use simple_commander_base,        only: commander_base
@@ -17,6 +18,7 @@ public :: prime2D_autoscale_commander
 public :: ini3D_from_cavgs_commander
 public :: auto_refine3D_commander
 public :: het_ensemble_commander
+public :: het_refine_commander
 private
 
 type, extends(commander_base) :: prime2D_autoscale_commander
@@ -35,6 +37,10 @@ type, extends(commander_base) :: het_ensemble_commander
   contains
     procedure :: execute      => exec_het_ensemble
 end type het_ensemble_commander
+type, extends(commander_base) :: het_refine_commander
+  contains
+    procedure :: execute      => exec_het_refine
+end type het_refine_commander
 
 contains
 
@@ -46,8 +52,6 @@ contains
         ! constants
         integer,           parameter :: MAXITS_STAGE1   = 10
         character(len=32), parameter :: ALGNFBODY       = 'algndoc_'
-        character(len=32), parameter :: ITERFBODY       = 'prime2Ddoc_'
-        character(len=32), parameter :: CAVGS_ITERFBODY = 'cavgs_iter'
         ! commanders
         type(split_commander)           :: xsplit
         type(makecavgs_distr_commander) :: xmakecavgs
@@ -88,8 +92,8 @@ contains
             call cline_prime2D_stage1%set('maxits', real(MAXITS_STAGE1))
             call xprime2D_distr%execute(cline_prime2D_stage1)
             last_iter_stage1 = nint(cline_prime2D_stage1%get_rarg('endit'))
-            finaldoc         = trim(ITERFBODY)//int2str_pad(last_iter_stage1,3)//METADATEXT
-            finalcavgs       = trim(CAVGS_ITERFBODY)//int2str_pad(last_iter_stage1,3)//p_master%ext
+            finaldoc         = trim(PRIME2D_ITER_FBODY)//int2str_pad(last_iter_stage1,3)//METADATEXT
+            finalcavgs       = trim(CAVGS_ITER_FBODY)//int2str_pad(last_iter_stage1,3)//p_master%ext
             ! prepare stage 2 input -- re-scale
             if( cline%defined('stktab') )then
                  ! update stktab
@@ -121,8 +125,8 @@ contains
             call cline_prime2D_stage2%set('startit', real(MAXITS_STAGE1 + 1))
             call xprime2D_distr%execute(cline_prime2D_stage2)
             last_iter_stage2 = nint(cline_prime2D_stage2%get_rarg('endit'))
-            finaldoc         = trim(ITERFBODY)//int2str_pad(last_iter_stage2,3)//METADATEXT
-            finalcavgs       = trim(CAVGS_ITERFBODY)//int2str_pad(last_iter_stage2,3)//p_master%ext
+            finaldoc         = trim(PRIME2D_ITER_FBODY)//int2str_pad(last_iter_stage2,3)//METADATEXT
+            finalcavgs       = trim(CAVGS_ITER_FBODY)//int2str_pad(last_iter_stage2,3)//p_master%ext
             if( cline%defined('stktab') )then
                 ! delete downscaled stack parts (we are done with them)
                 call p_master%stkhandle%del_stktab_files
@@ -153,11 +157,11 @@ contains
         else ! no auto-scaling
             call xprime2D_distr%execute(cline)
             last_iter_stage2 = nint(cline%get_rarg('endit'))
-            finaldoc         = trim(ITERFBODY)//int2str_pad(last_iter_stage2,3)//METADATEXT
-            finalcavgs       = trim(CAVGS_ITERFBODY)//int2str_pad(last_iter_stage2,3)//p_master%ext
+            finaldoc         = trim(PRIME2D_ITER_FBODY)//int2str_pad(last_iter_stage2,3)//METADATEXT
+            finalcavgs       = trim(CAVGS_ITER_FBODY)//int2str_pad(last_iter_stage2,3)//p_master%ext
         endif
         ! ranking
-        finalcavgs_ranked = trim(CAVGS_ITERFBODY)//int2str_pad(last_iter_stage2,3)//'_ranked'//p_master%ext
+        finalcavgs_ranked = trim(CAVGS_ITER_FBODY)//int2str_pad(last_iter_stage2,3)//'_ranked'//p_master%ext
         call cline_rank_cavgs%set('oritab',   trim(finaldoc))
         call cline_rank_cavgs%set('stk',      trim(finalcavgs))
         call cline_rank_cavgs%set('classdoc', 'classdoc_'//int2str_pad(last_iter_stage2,3)//'.txt')
@@ -180,7 +184,6 @@ contains
         integer,               parameter :: MAXITS_REFINE1=20, MAXITS_REFINE2=20
         integer,               parameter :: STATE=1
         character(len=32),     parameter :: ITERFBODY     = 'prime3Ddoc_'
-        character(len=32),     parameter :: VOLFBODY      = 'recvol_state'
         ! distributed commanders
         type(prime3D_distr_commander) :: xprime3D_distr
         ! shared-mem commanders
@@ -259,7 +262,7 @@ contains
         call xprime3D_distr%execute(cline_prime3D_3)
         iter = cline_prime3D_3%get_rarg('endit')
         call set_iter_dependencies
-        vol_pproc = trim(VOLFBODY)//trim(str_state)//'_iter'//trim(str_iter)//'_pproc'//p_master%ext
+        vol_pproc = trim(VOL_FBODY)//trim(str_state)//'_iter'//trim(str_iter)//'_pproc'//p_master%ext
         call simple_rename(trim(vol_iter), 'rec_final'//p_master%ext)
         call simple_rename(trim(vol_pproc), 'rec_final_pproc'//p_master%ext)
         call simple_rename(trim(oritab), 'prime3Ddoc_final'//METADATEXT)
@@ -273,7 +276,7 @@ contains
             subroutine set_iter_dependencies
                 str_iter = int2str_pad(nint(iter),3)
                 oritab   = trim(ITERFBODY)//trim(str_iter)//METADATEXT
-                vol_iter = trim(VOLFBODY)//trim(str_state)//'_iter'//trim(str_iter)//p_master%ext
+                vol_iter = trim(VOL_FBODY)//trim(str_state)//'_iter'//trim(str_iter)//p_master%ext
             end subroutine set_iter_dependencies
 
     end subroutine exec_auto_refine3D
@@ -289,7 +292,6 @@ contains
         integer,               parameter :: MAXITS_SNHC=30, MAXITS_INIT=15, MAXITS_REFINE=40
         integer,               parameter :: STATE=1, NPROJS_SYMSRCH=50, NPEAKS_REFINE=6
         character(len=32),     parameter :: ITERFBODY     = 'prime3Ddoc_'
-        character(len=32),     parameter :: VOLFBODY      = 'recvol_state'
         character(len=STDLEN), parameter :: STKSCALEDBODY = 'stk_sc_ini3D_from_cavgs'
         ! distributed commanders
         type(prime3D_distr_commander) :: xprime3D_distr
@@ -438,7 +440,7 @@ contains
             write(*,'(A)') '>>> 3D RECONSTRUCTION OF SYMMETRISED VOLUME'
             write(*,'(A)') '>>>'
             call xrecvol%execute(cline_recvol)
-            call simple_rename(trim(volfbody)//trim(str_state)//p_master%ext, 'rec_sym'//p_master%ext)
+            call simple_rename(trim(VOL_FBODY)//trim(str_state)//p_master%ext, 'rec_sym'//p_master%ext)
         else
             ! refinement step needs to use iter dependent vol/oritab
             call cline_prime3D_refine%set('oritab', trim(oritab))
@@ -467,7 +469,7 @@ contains
             call cline_recvol%set('oritab', trim(oritab))
             ! re-reconstruct volume
             call xrecvol%execute(cline_recvol)
-            call simple_rename(trim(volfbody)//trim(str_state)//p_master%ext, 'rec_final'//p_master%ext)
+            call simple_rename(trim(VOL_FBODY)//trim(str_state)//p_master%ext, 'rec_final'//p_master%ext)
         else
             call simple_rename(trim(vol_iter), 'rec_final'//p_master%ext)
         endif
@@ -487,7 +489,7 @@ contains
                 character(len=3) :: str_iter
                 str_iter = int2str_pad(nint(iter),3)
                 oritab   = trim(ITERFBODY)//trim(str_iter)//METADATEXT
-                vol_iter = trim(VOLFBODY)//trim(str_state)//'_iter'//trim(str_iter)//p_master%ext
+                vol_iter = trim(VOL_FBODY)//trim(str_state)//'_iter'//trim(str_iter)//p_master%ext
             end subroutine set_iter_dependencies
 
     end subroutine exec_ini3D_from_cavgs
@@ -504,7 +506,6 @@ contains
         integer,            parameter :: MAXITS_INIT = 50
         character(len=32),  parameter :: HETFBODY    = 'hetrep_'
         character(len=32),  parameter :: REPEATFBODY = 'hetdoc_'
-        character(len=32),  parameter :: VOLFBODY    = 'recvol_state'
         ! distributed commanders
         type(prime3D_distr_commander) :: xprime3D_distr
         type(recvol_distr_commander)  :: xrecvol_distr
@@ -679,7 +680,7 @@ contains
                 ! delete iterations volumes & documents
                 do it = 1, iter-1
                     do state = 1, p_master%nstates
-                        vol = trim(VOLFBODY)//int2str_pad(state,2)//'_iter'//int2str_pad(it,3)//p_master%ext
+                        vol = trim(VOL_FBODY)//int2str_pad(state,2)//'_iter'//int2str_pad(it,3)//p_master%ext
                         if(file_exists(vol))call del_file(vol)
                     enddo
                     oritab = 'prime3Ddoc_'//int2str_pad(it,3)//METADATEXT
@@ -692,8 +693,8 @@ contains
                 character(len=STDLEN) :: srcvol, destvol
                 do state=1,p_master%nstates
                     str_state = int2str_pad(state, 2)
-                    srcvol  = trim(VOLFBODY)//int2str_pad(state,2)//'_iter'//int2str_pad(iter,3)//p_master%ext
-                    destvol = trim(HETFBODY)//int2str_pad(irepeat,2)//'_'//trim(VOLFBODY)//int2str_pad(state,2)//p_master%ext
+                    srcvol  = trim(VOL_FBODY)//int2str_pad(state,2)//'_iter'//int2str_pad(iter,3)//p_master%ext
+                    destvol = trim(HETFBODY)//int2str_pad(irepeat,2)//'_'//trim(VOL_FBODY)//int2str_pad(state,2)//p_master%ext
                     if(file_exists(destvol))call del_file(destvol)
                     call simple_rename(trim(srcvol), trim(destvol))
                     call cline_postproc_repvol%set('vol1', trim(destvol))
@@ -785,5 +786,293 @@ contains
             end subroutine diverse_labeling
 
     end subroutine exec_het_ensemble
+
+    !> for ensemble heterogeinity analysis
+    subroutine exec_het_refine( self, cline )
+        use simple_defs_conv
+        use simple_commander_rec,    only: recvol_commander
+        use simple_commander_volops, only: postproc_vol_commander
+        class(het_refine_commander), intent(inout) :: self
+        class(cmdline),              intent(inout) :: cline
+        ! constants
+        character(len=20),  parameter :: INIT_FBODY  = 'hetinit_refine_state'
+        character(len=19),  parameter :: FINAL_FBODY = 'hetdoc_refine_state'
+        character(len=17),  parameter :: FINAL_DOC   = 'hetdoc_refine'//METADATEXT
+        ! distributed commanders
+        type(prime3D_distr_commander) :: xprime3D_distr
+        type(recvol_distr_commander)  :: xrecvol_distr
+        ! shared-mem commanders
+        type(postproc_vol_commander)  :: xpostproc_vol
+        ! command lines
+        type(cmdline)                 :: cline_prime3D_master
+        type(cmdline)                 :: cline_prime3D
+        type(cmdline)                 :: cline_recvol_distr
+        type(cmdline)                 :: cline_postproc_vol
+        ! other variables
+        integer,               allocatable :: state_pops(:), states(:)
+        character(len=STDLEN), allocatable :: init_docs(:), final_docs(:)
+        logical,               allocatable :: l_hasmskvols(:), l_hasvols(:)
+        type(params)          :: p_master
+        type(oris)            :: os_master, os_state
+        character(len=STDLEN) :: oritab, vol, fname
+        character(len=9)      :: dir
+        character(len=2)      :: str_state
+        integer               :: state, iptcl, iter
+        logical               :: l_singlestate, error
+
+        ! make master parameters
+        p_master      = params(cline)
+        l_singlestate = cline%defined('state')
+        error         = .false.
+
+        ! sanity checks
+        if( p_master%eo .eq. 'no' .and. .not. cline%defined('lp') )&
+            &stop 'need lp input when eo .eq. no; het_refine'
+        if(.not.file_exists(p_master%oritab))then
+            print *,'Document ',trim(p_master%oritab),' does not exist!'
+            stop
+        endif
+
+        ! general prep
+        p_master%nptcls = nlines(p_master%oritab)
+        call os_master%new(p_master%nptcls)
+        call binread_oritab(p_master%oritab, os_master, [1,p_master%nptcls])
+        p_master%nstates = os_master%get_n('state')
+        if(p_master%nstates < 2 .and. .not.l_singlestate)then
+            print *, 'Non-sensical number of states argument for heterogeneity refinemnt: ',p_master%nstates
+            stop
+        endif
+        allocate(l_hasmskvols(p_master%nstates), l_hasvols(p_master%nstates), source=.false.)
+        allocate(init_docs(p_master%nstates), final_docs(p_master%nstates))
+        state_pops = os_master%get_pops('state', consider_w=.false.)
+        do state = 1, p_master%nstates
+            if( state_pops(state) == 0 )cycle
+            if( l_singlestate .and. state.ne.p_master%state )cycle
+            str_state = int2str_pad(state,2)
+            dir = 'state_'//str_state//'/'
+            call mkdir(dir)
+            ! preps individual documents
+            os_state = os_master
+            states   = nint(os_state%get_all('state'))
+            where( states .ne. state )
+                states = 0
+            else where
+                states = 1
+            end where
+            call os_state%set_all('state', real(states))
+            deallocate(states)
+            init_docs(state) = INIT_FBODY//str_state//METADATEXT
+            call binwrite_oritab(init_docs(state), os_state, [1,p_master%nptcls])
+            final_docs(state) = FINAL_FBODY//str_state//METADATEXT            
+            ! check & move volumes
+            l_hasvols(state) = trim(p_master%vols(state)) .ne. ''
+            if( l_hasvols(state) )then
+                if( p_master%eo .ne. 'no' )then
+                    ! fsc
+                    fname = FSC_FBODY//str_state//BIN_EXT
+                    if( .not.file_exists(fname) )then
+                        print *, 'File missing: ', trim(fname)
+                        error = .true.
+                    else
+                        call rename(fname, dir//trim(fname))
+                    endif
+                    ! FRC
+                    fname = FRCS_FBODY//str_state//BIN_EXT
+                    if( .not.file_exists(fname) )then
+                        print *, 'File missing: ', trim(fname)
+                    else
+                        call rename(fname, dir//trim(fname))
+                    endif
+                    ! aniso
+                    fname = ANISOLP_FBODY//str_state//p_master%ext
+                    if( .not.file_exists(fname) )then
+                        print *, 'File missing: ', trim(fname)
+                    else
+                        call rename(fname, dir//trim(fname))
+                    endif
+                    ! e/o
+                    fname = add2fbody(trim(p_master%vols(state)), p_master%ext, '_even')
+                    if( .not.file_exists(fname) )then
+                        print *, 'File missing: ', trim(fname)
+                    else
+                        call rename(fname, dir//trim(fname))
+                    endif
+                    fname = add2fbody(trim(p_master%vols(state)), p_master%ext, '_odd')
+                    if( .not.file_exists(fname) )then
+                        print *, 'File missing: ', trim(fname)
+                    else
+                        call rename(fname, dir//trim(fname))
+                    endif
+                endif
+                ! volume
+                if( .not.file_exists(p_master%vols(state)) )then
+                    print *, 'File missing: ', p_master%vols(state)
+                    error = .true.
+                else
+                    fname = trim(p_master%vols(state))
+                    p_master%vols(state) = dir//trim(fname) ! name change
+                    call rename(fname, p_master%vols(state))
+                endif
+            endif
+            ! mask volume
+            l_hasmskvols(state) = trim(p_master%mskvols(state)) .ne. ''
+            if( l_hasmskvols(state) )then
+                ! mask volume
+                if( .not.file_exists(p_master%mskvols(state)) )then
+                    print *, 'File missing: ', trim(fname)
+                    error = .true.
+                else
+                    fname = trim(p_master%mskvols(state))
+                    p_master%mskvols(state) = dir//trim(fname)  ! name change
+                    call exec_cmdline('cp '//trim(fname)//' '//trim(p_master%mskvols(state)))
+                endif
+            endif
+        enddo
+        if( error ) stop
+        if( cline%defined('vollist') .and. count(l_hasvols).eq.0 )stop 'Missing volume(s)'
+        if( cline%defined('msklist') .and. count(l_hasmskvols).eq.0 )stop 'Missing mask volume(s)'
+
+        ! preps command-lines
+        call cline%delete('vollist')
+        call cline%delete('nstates')
+        call cline%delete('msklist')
+        call cline%delete('mskfile')
+        do state = 1, p_master%nstates
+            call cline%delete('vol'//int2str_pad(state,1))
+        enddo
+        cline_prime3D_master = cline
+        cline_recvol_distr   = cline
+        cline_postproc_vol   = cline
+        call cline_prime3D_master%set('prg', 'prime3D')
+        call cline_prime3D_master%set('dynlp', 'no')
+        call cline_recvol_distr%set('prg', 'recvol')
+        call cline_recvol_distr%set('oritab', trim(FINAL_DOC))
+        call cline_recvol_distr%set('nstates', trim(int2str(p_master%nstates)))
+
+        ! Main loop
+        do state = 1, p_master%nstates
+            if( state_pops(state) == 0 )cycle
+            if( l_singlestate .and. state.ne.p_master%state )cycle
+            str_state = int2str_pad(state,2)
+            dir       = 'state_'//str_state//'/'
+            write(*,'(A)')   '>>>'
+            write(*,'(A,I2)')'>>> REFINING STATE: ', state
+            write(*,'(A)')   '>>>'
+            ! prime3D prep
+            cline_prime3D = cline_prime3D_master
+            call cline_prime3D%set('oritab', trim(init_docs(state)))
+            if( l_hasvols(state) )then
+                call cline_prime3D%set('vol1', trim(p_master%vols(state)))
+                if( p_master%eo.ne.'no' )then
+                    fname = dir//FSC_FBODY//str_state//BIN_EXT
+                    call exec_cmdline('cp '//trim(fname)//' fsc_state01.bin')
+                    fname = dir//FRCS_FBODY//str_state//BIN_EXT
+                    if(file_exists(fname))call exec_cmdline('cp '//trim(fname)//' frcs_state01.bin')
+                    fname = dir//ANISOLP_FBODY//str_state//p_master%ext               
+                    if(file_exists(fname))call exec_cmdline('cp '//trim(fname)//' aniso_optlp_state01.mrc')
+                endif
+            endif
+            if( l_hasmskvols(state) )call cline_prime3D%set('mskfile', trim(p_master%mskvols(state)))
+            ! run prime3D
+            call xprime3D_distr%execute(cline_prime3D)
+            ! harvest outcome
+            iter   = nint(cline_prime3D%get_rarg('endit'))
+            oritab = PRIME3D_ITER_FBODY//int2str_pad(iter,3)//METADATEXT
+            ! stash
+            call os_state%new(p_master%nptcls)
+            call binread_oritab(oritab, os_state, [1,p_master%nptcls])
+            do iptcl = 1,p_master%nptcls
+                if( nint(os_master%get(iptcl, 'state')) .ne. 1 )cycle
+                call os_master%set_ori(iptcl, os_state%get_ori(iptcl))
+                call os_master%set(iptcl, 'state', real(state))
+            enddo
+            call os_state%kill  
+            call prime3d_cleanup
+        enddo
+
+        ! final document
+        call binwrite_oritab(FINAL_DOC, os_master, [1,p_master%nptcls])
+
+        ! final reconstruction
+        call xrecvol_distr%execute(cline_recvol_distr)
+        ! post-process
+        do state = 1, p_master%nstates
+            if( state_pops(state) == 0 )cycle
+            if( l_singlestate .and. state.ne.p_master%state )cycle
+            str_state = int2str_pad(state, 2)
+            if( l_hasmskvols(state) )call cline_postproc_vol%set('mskfile', trim(p_master%mskvols(state)))
+            vol = 'recvol_state'//trim(str_state)//p_master%ext
+            call cline_postproc_vol%set('vol1', trim(vol))
+            call update_pproc_cline(cline_postproc_vol, str_state)
+            call xpostproc_vol%execute(cline_postproc_vol)
+        enddo
+
+        ! end gracefully
+        call simple_end('**** SIMPLE_HET_REFINE NORMAL STOP ****')
+        contains
+
+            ! stash docs, volumes , etc.
+            subroutine prime3d_cleanup
+                character(len=STDLEN) :: src, dist
+                character(len=2), parameter :: one = '01'
+                character(len=3) :: str_iter
+                integer          :: it
+                dir = 'state_'//str_state//'/'
+                call mkdir(dir)
+                do it = 1, iter
+                    str_iter = int2str_pad(it,3)
+                    ! volumes
+                    src  = VOL_FBODY//one//'_iter'//str_iter//p_master%ext
+                    dist = dir//VOL_FBODY//one//'_iter'//str_iter//p_master%ext
+                    call rename(src, dist)
+                    src  = VOL_FBODY//one//'_iter'//str_iter//'_pproc'//p_master%ext
+                    dist = dir//VOL_FBODY//one//'_iter'//str_iter//'_pproc'//p_master%ext
+                    call rename(src, dist)
+                    ! e/o
+                    if( p_master%eo.ne.'no')then
+                        src  = VOL_FBODY//one//'_iter'//str_iter//'_even'//p_master%ext
+                        dist = dir//VOL_FBODY//one//'_iter'//str_iter//'_even'//p_master%ext
+                        call rename(src, dist)
+                        src  = VOL_FBODY//one//'_iter'//str_iter//'_odd'//p_master%ext
+                        dist = dir//VOL_FBODY//one//'_iter'//str_iter//'_odd'//p_master%ext
+                        call rename(src, dist)
+                        src = 'RESOLUTION_STATE'//str_state//'_ITER'//str_iter
+                        call rename(src, dir//src)
+                    endif
+                    ! orientation document
+                    src = PRIME3D_ITER_FBODY//str_iter//METADATEXT
+                    if( file_exists(src) )call rename(src, dir//src)
+                enddo
+                ! resolution measures
+                if( p_master%eo.ne.'no')then
+                    src  = FSC_FBODY//one//BIN_EXT
+                    if( file_exists(src) )call rename(src, dir//src)
+                    src  = FRCS_ITER_FBODY//one//BIN_EXT
+                    if( file_exists(src) )call rename(src, dir//src)
+                    src  = ANISOLP_FBODY//one//p_master%ext
+                    if( file_exists(src) )call rename(src, dir//src)
+                endif
+            end subroutine prime3d_cleanup
+
+            subroutine update_pproc_cline( cl, str_state )
+                class(cmdline),   intent(inout) :: cl
+                character(len=2), intent(in)    :: str_state
+                character(len=STDLEN) :: fsc_file, optlp_file
+                fsc_file   = 'fsc_state'//trim(str_state)//'.bin'
+                optlp_file = 'aniso_optlp_state'//trim(str_state)//p_master%ext
+                if( file_exists(optlp_file) .and. p_master%eo .ne. 'no' )then
+                    call cl%delete('lp')
+                    call cl%set('fsc', trim(fsc_file))
+                    call cl%set('vol_filt', trim(optlp_file))
+                else if( file_exists(fsc_file) .and. p_master%eo .ne. 'no' )then
+                    call cl%delete('lp')
+                    call cl%set('fsc', trim(fsc_file))
+                else
+                    call cl%delete('fsc')
+                    call cl%set('lp', p_master%lp)
+                endif
+            end subroutine update_pproc_cline
+
+    end subroutine exec_het_refine
 
 end module simple_commander_hlev_wflows

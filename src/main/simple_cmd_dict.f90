@@ -143,6 +143,7 @@ contains
         call chdict%push('msktype',       'type of mask(hard|soft){soft}')
         call chdict%push('mul',           'origin shift multiplication factor{1}')
         call chdict%push('mw',            'molecular weight(in kD)')
+        call chdict%push('msklist',       'table (text file) of mask volume files(.txt)')
         call chdict%push('ncls',          '# clusters')
         call chdict%push('ncls_start',    '# clusters required to start prime2D streaming')
         call chdict%push('ncunits',       '# computing units, can be < nparts{nparts}')

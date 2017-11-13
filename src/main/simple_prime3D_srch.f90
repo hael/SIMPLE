@@ -18,7 +18,8 @@ real, parameter :: FACTWEIGHTS_THRESH = 0.001 !< threshold for factorial weights
 
 ! allocatables for prime3D_srch are class variables to improve caching and reduce alloc overheads 
 type(oris), allocatable :: o_peaks(:)                            !< solution objects
-real,       allocatable :: proj_space_euls(:,:,:)                !< euler angles
+real,       allocatable :: proj_space_e3(:,:)                    !< in-plane angles
+real,       allocatable :: proj_space_dir(:,:)                   !< reference projection directions (out-of-plane angles)
 real,       allocatable :: proj_space_shift(:,:,:)               !< shift vector
 real,       allocatable :: proj_space_corrs(:,:)                 !< correlations vs. reference orientations
 integer,    allocatable :: proj_space_inds(:,:)                  !< stochastic index of reference orientations
@@ -84,7 +85,8 @@ contains
     subroutine cleanprime3D_srch( p )
         use simple_params, only: params
         class(params),  intent(in) :: p
-        if( allocated(proj_space_euls)  ) deallocate(proj_space_euls)
+        if( allocated(proj_space_e3)         ) deallocate(proj_space_e3)
+        if( allocated(proj_space_dir) ) deallocate(proj_space_dir)
         if( allocated(proj_space_shift) ) deallocate(proj_space_shift)
         if( allocated(proj_space_corrs) ) deallocate(proj_space_corrs)
         if( allocated(proj_space_inds)  ) deallocate(proj_space_inds)
@@ -104,7 +106,7 @@ contains
         class(build),   intent(inout) :: b
         class(params),  intent(inout) :: p
         type(ran_tabu) :: rt
-        real           :: euldists(p%nspace)
+        real           :: euldists(p%nspace), euls(3)
         integer        :: i, istate, iproj, iptcl, prev_state, nnnrefs, cnt, prev_ref, nrefs
         ! clean all class arrays
         call cleanprime3D_srch(p)
@@ -116,20 +118,25 @@ contains
         endif
         ! reference projection directions
         nrefs = p%nstates * p%nspace
-        allocate(proj_space_euls( p%fromp:p%top, nrefs,3), source=0.)
+        allocate(proj_space_dir(p%nspace,2),        source=0.)
+        allocate(proj_space_e3(   p%fromp:p%top, nrefs),   source=0.)
         allocate(proj_space_shift(p%fromp:p%top, nrefs,2), source=0.)
-        allocate(proj_space_corrs(p%fromp:p%top, nrefs), source=-1.)
-        allocate(proj_space_inds( p%fromp:p%top, nrefs), source=0)
-        allocate(proj_space_state(p%fromp:p%top, nrefs), source=0)
-        allocate(proj_space_proj( p%fromp:p%top, nrefs), source=0)
+        allocate(proj_space_corrs(p%fromp:p%top, nrefs),   source=-1.)
+        allocate(proj_space_inds( p%fromp:p%top, nrefs),   source=0)
+        allocate(proj_space_state(p%fromp:p%top, nrefs),   source=0)
+        allocate(proj_space_proj( p%fromp:p%top, nrefs),   source=0)
+        do iproj=1,p%nspace
+            euls = b%e%get_euler(iproj)
+            proj_space_dir(iproj,:) = euls(1:2)
+        enddo
         do iptcl = p%fromp, p%top
             cnt = 0
             do istate=1,p%nstates
                 do iproj=1,p%nspace
                     cnt = cnt + 1
-                    proj_space_state(iptcl,cnt)   = istate
-                    proj_space_proj(iptcl, cnt)   = iproj
-                    proj_space_euls(iptcl, cnt,:) = b%e%get_euler(iproj)
+                    proj_space_state(iptcl,cnt) = istate
+                    proj_space_proj(iptcl, cnt) = iproj
+                    proj_space_e3(iptcl,   cnt) = b%e%e3get(iproj)
                 enddo
             enddo
         enddo
@@ -867,13 +874,13 @@ contains
                 if( proj_space_corrs(self%iptcl,iref) > corr )then
                     corr  = proj_space_corrs(self%iptcl,iref)
                     shvec = self%a_ptr%get_2Dshift(self%iptcl) + proj_space_shift(self%iptcl,iref,:)
-                    call self%a_ptr%e3set(self%iptcl, proj_space_euls(self%iptcl, iref, 3))
+                    call self%a_ptr%e3set(self%iptcl, proj_space_e3(self%iptcl, iref))
                     call self%a_ptr%set_shift(self%iptcl, shvec)
                 endif
                 ! updates peaks and orientation orientation
                 frac    = 100.*real(self%nrefs_eval) / real(self%nstates)
                 mi_inpl = 1.
-                if( self%prev_roind .ne. self%pftcc_ptr%get_roind(360.-proj_space_euls(self%iptcl, iref, 3)) )then
+                if( self%prev_roind .ne. self%pftcc_ptr%get_roind(360.-proj_space_e3(self%iptcl, iref)) )then
                     mi_inpl = 0.
                 endif
                 call self%a_ptr%set(self%iptcl,'frac', frac)
@@ -910,26 +917,20 @@ contains
                         ref = proj_space_inds(self%iptcl, i)
                         call self%grad_shsrch_obj%set_indices(ref, self%iptcl)
                         cxy = self%grad_shsrch_obj%minimize(irot=irot)
-                        if( irot > 0 )then
-                            ! irot > 0 guarantees improvement found
-                            proj_space_euls(self%iptcl, ref,3) = 360. - self%pftcc_ptr%get_rot(irot)
-                            proj_space_corrs(self%iptcl,ref)   = cxy(1)
-                            proj_space_shift(self%iptcl,ref,:) = cxy(2:3)
-                        endif
                     end do
                 case DEFAULT
                     do i=self%nrefs,self%nrefs-self%npeaks+1,-1
                         ref = proj_space_inds(self%iptcl, i)
                         call self%shsrch_obj%set_indices(ref, self%iptcl)
                         cxy = self%shsrch_obj%minimize(irot=irot)
-                        if( irot > 0 )then
-                            ! irot > 0 guarantees improvement found
-                            proj_space_euls(self%iptcl, ref,3) = 360. - self%pftcc_ptr%get_rot(irot)
-                            proj_space_corrs(self%iptcl,ref)   = cxy(1)
-                            proj_space_shift(self%iptcl,ref,:) = cxy(2:3)
-                        endif
                     end do
             end select
+            if( irot > 0 )then
+                ! irot > 0 guarantees improvement found
+                proj_space_e3(self%iptcl, ref)     = 360. - self%pftcc_ptr%get_rot(irot)
+                proj_space_corrs(self%iptcl,ref)   = cxy(1)
+                proj_space_shift(self%iptcl,ref,:) = cxy(2:3)
+            endif
         endif
         DebugPrint '>>> PRIME3D_SRCH::FINISHED INPL SEARCH'
     end subroutine inpl_srch
@@ -994,12 +995,12 @@ contains
         class(prime3D_srch),   intent(inout) :: self
         type(ori)  :: o
         type(oris) :: sym_os
-        real       :: shvec(2), corrs(self%npeaks), ws(self%npeaks), logws(self%npeaks), state_ws(self%nstates)
-        real       :: frac, ang_sdev, dist, inpl_dist, euldist, mi_joint
+        real       :: corrs(self%npeaks), ws(self%npeaks), logws(self%npeaks), state_ws(self%nstates)
+        real       :: euls(3), shvec(2), frac, ang_sdev, dist, inpl_dist, euldist, mi_joint
         real       :: mi_proj, mi_inpl, mi_state, dist_inpl, wcorr
         integer    :: best_loc(1), loc(1), order(self%npeaks), states(self%npeaks)
-        integer    :: s, ipeak, cnt, ref, state, roind, neff_states
-        logical    :: included(self%npeaks), found
+        integer    :: s, ipeak, cnt, ref, state, roind, neff_states, proj
+        logical    :: included(self%npeaks)
         ! empty states
         neff_states = count(state_exists)
         ! init npeaks
@@ -1020,11 +1021,14 @@ contains
             if( self%doshift )shvec = shvec + proj_space_shift(self%iptcl,ref,1:2)
             where( abs(shvec) < 1e-6 ) shvec = 0.
             ! transfer to solution set
+            proj         = proj_space_proj(self%iptcl, ref)
+            euls(1:2)    = proj_space_dir(proj,:)
+            euls(3)      = proj_space_e3(self%iptcl, ref)
             corrs(ipeak) = proj_space_corrs(self%iptcl,ref)
             call o_peaks(self%iptcl)%set(ipeak, 'state', real(state))
-            call o_peaks(self%iptcl)%set(ipeak, 'proj',  real(proj_space_proj(self%iptcl,ref)))
+            call o_peaks(self%iptcl)%set(ipeak, 'proj',  real(proj))
             call o_peaks(self%iptcl)%set(ipeak, 'corr',  corrs(ipeak))
-            call o_peaks(self%iptcl)%set_euler(ipeak, proj_space_euls(self%iptcl,ref,1:3))
+            call o_peaks(self%iptcl)%set_euler(ipeak, euls)
             call o_peaks(self%iptcl)%set_shift(ipeak, shvec)
         enddo
         best_loc = maxloc(corrs)
@@ -1157,9 +1161,9 @@ contains
         class(prime3D_srch),     intent(inout) :: self
         integer,                 intent(in)    :: ind, ref, inpl_ind
         real,                    intent(in)    :: corr
-        proj_space_inds(self%iptcl,ind)   = ref
-        proj_space_euls(self%iptcl,ref,3) = 360. - self%pftcc_ptr%get_rot(inpl_ind)
-        proj_space_corrs(self%iptcl,ref)  = corr
+        proj_space_inds(self%iptcl,ind)  = ref
+        proj_space_e3(self%iptcl,ref)    = 360. - self%pftcc_ptr%get_rot(inpl_ind)
+        proj_space_corrs(self%iptcl,ref) = corr
     end subroutine store_solution
 
     subroutine kill( self )

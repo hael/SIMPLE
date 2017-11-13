@@ -41,6 +41,7 @@ type(tseries_track_distr_commander)      :: xtseries_track_distr
 ! HIGH-LEVEL WORKFLOWS
 type(ini3D_from_cavgs_commander)         :: xini3D_from_cavgs
 type(het_ensemble_commander)             :: xhet_ensemble
+type(het_refine_commander)               :: xhet_refine
 
 ! SUPORTING DISTRIBUTED WORKFLOWS
 type(scale_stk_parts_commander)          :: xscale_stk_parts
@@ -969,7 +970,51 @@ select case(prg)
         if( .not. cline%defined('nrepeats') ) call cline%set('nrepeats', real(HETNREPEATS))
         ! execute
         call xhet_ensemble%execute( cline )
-    
+    case( 'het_refine' )
+        !==Program het_ensemble
+        !
+        ! <het_refine/begin>is a distributed workflow for heterogeneity analysis refinement
+        ! <het_refine/end> 
+        !
+        ! set required keys
+        keys_required(1)  = 'smpd'
+        keys_required(2)  = 'oritab'
+        keys_required(3)  = 'msk'
+        keys_required(4)  = 'pgrp'
+        keys_required(5)  = 'ctf'
+        keys_required(6)  = 'nparts'
+        ! set optional keys
+        keys_optional(1)  = 'nthr'
+        keys_optional(2)  = 'lp'
+        keys_optional(3)  = 'lpstop'
+        keys_optional(4)  = 'eo'
+        keys_optional(5)  = 'frac'
+        keys_optional(6)  = 'inner'
+        keys_optional(7)  = 'width'
+        keys_optional(8)  = 'nspace'
+        keys_optional(9)  = 'balance'
+        keys_optional(10) = 'stk'
+        keys_optional(11) = 'stktab'
+        keys_optional(12) = 'phaseplate'
+        keys_optional(13) = 'opt'
+        keys_optional(14) = 'msklist'
+        keys_optional(15) = 'vollist'
+        keys_optional(16) = 'state'
+        keys_optional(17) = 'trs'
+        ! parse command line
+        ! if( describe ) call print_doc_het_refine
+        call cline%parse(keys_required(:6), keys_optional(:17))
+        ! sanity check
+        if( cline%defined('stk') .or. cline%defined('stktab') )then
+            ! all ok
+        else
+            stop 'stk or stktab need to be part of command line!'
+        endif
+        ! set defaults
+        if( .not. cline%defined('eo')       ) call cline%set('eo',       'no')
+        ! execute
+        call xhet_refine%execute( cline )
+
     ! SUPPORTING DISTRIBUTED WORKFLOWS
 
     case( 'scale_stk_parts' )

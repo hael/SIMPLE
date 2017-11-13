@@ -134,6 +134,8 @@ type :: params
     character(len=STDLEN) :: infile=''            !< file with inputs(.txt|.bin)
     character(len=STDLEN) :: label='class'        !< discrete label(class|state){class}
     character(len=STDLEN) :: mskfile=''           !< maskfile.ext
+    character(len=STDLEN) :: msklist=''           !< table (text file) of mask volume files(.txt)
+    character(len=STDLEN) :: mskvols(MAXS)=''
     character(len=STDLEN) :: msktype='soft'       !< type of mask(hard|soft){soft}
     character(len=STDLEN) :: opt='simplex'        !< optimiser (simplex|de|bfgs){simplex}
     character(len=STDLEN) :: oritab=''            !< table  of orientations(.txt|.bin)
@@ -792,6 +794,10 @@ contains
                 end do
             endif
         endif
+        ! check inputted mask vols
+        if( cline%defined('msklist') )then
+            if( nlines(self%msklist)< MAXS )call read_masks
+        endif
         ! no stack given, get ldim from volume if present
         if( self%stk .eq. '' .and. self%vols(1) .ne. '' )then
             call find_ldim_nptcls(self%vols(1), self%ldim, ifoo)
@@ -1134,7 +1140,7 @@ contains
         contains
 
             subroutine check_vol( i )
-                integer, intent(in) :: i
+                integer, intent(in)   :: i
                 character(len=STDLEN) :: nam
                 nam = 'vol'//int2str(i)
                 if( cline%defined(nam) )then
@@ -1163,6 +1169,23 @@ contains
                 end do
                 call fclose(fnr,errmsg="params ; read_vols error closing "//trim(filenam))
             end subroutine read_vols
+
+            subroutine read_masks
+                character(len=STDLEN) :: filenam, nam
+                integer :: nl, fnr, i, io_stat
+                filenam = cline%get_carg('msklist')
+                nl      = nlines(filenam)
+                call fopen(fnr, file=filenam, iostat=io_stat)
+                if(io_stat /= 0) call fileio_errmsg("params ; read_masks error opening "//trim(filenam), io_stat)
+                do i=1,nl
+                    read(fnr,*, iostat=io_stat) nam
+                    if(io_stat /= 0) call fileio_errmsg("params ; read_masks error reading "//trim(filenam), io_stat)
+                    if( nam .ne. '' )then
+                        self%mskvols(i) = nam
+                    endif
+                end do
+                call fclose(fnr,errmsg="params ; read_masks error closing "//trim(filenam))
+            end subroutine read_masks
 
             subroutine check_file( file, var, allowed1, allowed2, notAllowed )
                 character(len=*),           intent(in)  :: file
