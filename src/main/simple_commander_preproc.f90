@@ -104,7 +104,6 @@ contains
         real         :: smpd_original, smpd_scaled
         integer      :: nmovies, fromto(2), imovie, ntot, movie_counter
         integer      :: frame_counter, movie_ind, nptcls_out
-        logical      :: l_picknextract
         p = params(cline) ! constants & derived constants produced
         if( p%scale > 1.05 )then
             stop 'scale cannot be > 1; simple_commander_preproc :: exec_preproc'
@@ -212,27 +211,19 @@ contains
             p%lp             = p%lp_ctffind
             call cfiter%iterate(p, movie_ind, movie_counter, moviename_forctf,&
             &fname_ctffind_ctrl, fname_unidoc_output, os_uni)
-            movie_counter = movie_counter - 1
-            orientation   = os_uni%get_ori(movie_counter)
             ! picker
-            l_picknextract = p%l_pick
-            if( l_picknextract )then
-                if( orientation%isthere('ctfres') .and. cline%defined('ctfreslim') )then
-                    if( orientation%get('ctfres') > p%ctfreslim ) l_picknextract = .false.
-                endif
-                if( l_picknextract )then
-                    movie_counter = movie_counter - 1
-                    p%lp          = p%lp_pick
-                    call piter%iterate(cline, p, movie_counter, moviename_intg, boxfile, nptcls_out)
-                    call os_uni%set(movie_counter, 'boxfile', trim(boxfile)   )
-                    call os_uni%set(movie_counter, 'nptcls',  real(nptcls_out))
-                endif
+            if( p%l_pick )then
+                movie_counter = movie_counter - 1
+                p%lp          = p%lp_pick
+                call piter%iterate(cline, p, movie_counter, moviename_intg, boxfile, nptcls_out)
+                call os_uni%set(movie_counter, 'boxfile', trim(boxfile)   )
+                call os_uni%set(movie_counter, 'nptcls',  real(nptcls_out))
             endif
             if( p%stream .eq. 'yes' )then
                 ! write unidoc
                 call os_uni%write(fname_unidoc_output)
                 ! extract particles & params
-                if( l_picknextract )then
+                if( p%l_pick )then
                     cline_extract = cline
                     call cline_extract%set('dir_ptcls', trim(dir_ptcls))
                     call cline_extract%set('smpd',      p%smpd)
@@ -877,7 +868,7 @@ contains
         type(image)                        :: micrograph
         type(oris)                         :: outoris, os_uni
         logical                            :: params_present(3), ctffitcc_is_there, phshift_is_there
-        logical                            :: ctfres_is_there, included
+        logical                            :: ctfres_is_there
         noutside = 0
         p = params(cline) ! constants & derived constants produced
         if( p%stream .eq. 'yes' )then
@@ -929,8 +920,6 @@ contains
         noutside = 0
         ! loop over exposures (movies)
         do movie=fromto(1),fromto(2)
-            included  = .true.
-            ctfres    = -1.
             moviename = trim(adjustl(movienames(movie)))
             ! get movie index (parsing the number string from the filename)
             call fname2ind(moviename, movie_ind)
@@ -1014,20 +1003,9 @@ contains
                 dfx   = b%a%get(movie,'dfx')
                 ctffitcc_is_there = b%a%isthere('ctffitcc')
                 phshift_is_there  = b%a%isthere('phshift')
-                ctfres_is_there   = b%a%isthere('ctfres')
                 if( ctffitcc_is_there ) ctffitcc = b%a%get(movie,'ctffitcc')
                 if( phshift_is_there  ) phshift  = b%a%get(movie,'phshift')
-                if( ctfres_is_there   )then
-                    ctfres = b%a%get(movie,'ctfres')
-                    ! ctfres limit exclusion
-                    if( cline%defined('ctfreslim') )then
-                        if( ctfres > p%ctfreslim )then
-                            write(*,'(A,A,A,F6.2)')'>>> REJECTING MICROGRAPH ',&
-                                &trim(adjustl(movienames(movie))), 'WITH CTFRES: ', ctfres
-                            included = .false.
-                        endif
-                    endif
-                endif
+                if( ctfres_is_there   ) ctfres   = b%a%get(movie,'ctfres')
                 angast = 0.
                 if( b%a%isthere('dfy') )then ! astigmatic CTF
                     if( .not. b%a%isthere('angast') ) stop 'need angle of astigmatism for CTF correction'
@@ -1041,7 +1019,6 @@ contains
                         call outoris%set(j, 'fraca',   fraca)
                         call outoris%set(j, 'smpd',   p%smpd)
                         call outoris%set(j, 'dfx',       dfx)
-                        call outoris%set(j, 'ctfres', ctfres)
                         if( b%a%isthere('dfy') )then
                             call outoris%set(j, 'angast', angast)
                             call outoris%set(j, 'dfy',       dfy)
@@ -1052,63 +1029,58 @@ contains
                     endif
                 end do
                 DebugPrint  'did set CTF parameters dfx/dfy/angast/ctfres: ', dfx, dfy, angast, ctfres
-                if( included )then
-                    ! compress & write params (remove entries for boxes outside micrograph)
-                    call outoris%compress(oris_mask)
-                    call outoris%kill_chash() ! remove chash part
-                    ! output stk & params file names
-                    if( p%stream.eq.'yes' )then
-                        outfile = p%outfile
-                    else
-                        fbody   = get_fbody(trim(remove_abspath(moviename)), p%ext, separator=.false.)
-                        outfile = trim(EXTRACT_PARAMS_FBODY) // trim(fbody) // trim(METADATEXT)
-                    endif
-                    if( cline%defined('dir_ptcls') ) outfile = trim(p%dir_ptcls) //'/'// trim(outfile)
-                    call del_file(outfile)
-                    call binwrite_oritab(outfile, outoris, [1,count(oris_mask)])
-                endif
-            endif
-            ! Actual extraction
-            if( included )then
-                ! output stack
+                ! compress & write params (remove entries for boxes outside micrograph)
+                call outoris%compress(oris_mask)
+                call outoris%kill_chash() ! remove chash part
+                ! output stk & params file names
                 if( p%stream.eq.'yes' )then
-                    stack   = p%outstk
+                    outfile = p%outfile
                 else
-                    stack   = trim(EXTRACT_STK_FBODY) // trim(remove_abspath(moviename))
+                    fbody   = get_fbody(trim(remove_abspath(moviename)), p%ext, separator=.false.)
+                    outfile = trim(EXTRACT_PARAMS_FBODY) // trim(fbody) // trim(METADATEXT)
                 endif
-                if( cline%defined('dir_ptcls') ) stack = trim(p%dir_ptcls) //'/'// trim(stack)
-                ! extract windows from integrated movie
-                call micrograph%read(moviename, 1)
+                if( cline%defined('dir_ptcls') ) outfile = trim(p%dir_ptcls) //'/'// trim(outfile)
+                call del_file(outfile)
+                call binwrite_oritab(outfile, outoris, [1,count(oris_mask)])
+            endif
+            ! output stack
+            if( p%stream.eq.'yes' )then
+                stack   = p%outstk
+            else
+                stack   = trim(EXTRACT_STK_FBODY) // trim(remove_abspath(moviename))
+            endif
+            if( cline%defined('dir_ptcls') ) stack = trim(p%dir_ptcls) //'/'// trim(stack)
+            ! extract windows from integrated movie
+            call micrograph%read(moviename, 1)
+            cnt = 0
+            do j=1,nptcls ! loop over boxes
+                if( oris_mask(j) )then
+                    cnt = cnt + 1
+                    ! extract the window
+                    particle_position = boxdata(j,1:2)
+                    call micrograph%window(nint(particle_position), p%box, b%img, noutside)
+                    if( p%pcontrast .eq. 'black' ) call b%img%neg
+                    call b%img%norm
+                    call b%img%write(trim(adjustl(stack)), cnt)
+                endif
+            end do
+            ! extract windows from integrated movie (subset of frames)
+            if( allocated(movienames_frames) )then
+                fbody        = get_fbody(trim(stack), p%ext, separator=.false.)
+                stack_frames = add2fbody(fbody, p%ext, '_frames_subset')
+                call micrograph%read(movienames_frames(movie),1)
                 cnt = 0
                 do j=1,nptcls ! loop over boxes
                     if( oris_mask(j) )then
                         cnt = cnt + 1
                         ! extract the window
                         particle_position = boxdata(j,1:2)
-                        call micrograph%window(nint(particle_position), p%box, b%img, noutside)
+                        call micrograph%window(nint(particle_position), p%box, b%img)
                         if( p%pcontrast .eq. 'black' ) call b%img%neg
                         call b%img%norm
-                        call b%img%write(trim(adjustl(stack)), cnt)
+                        call b%img%write(trim(adjustl(stack_frames)), cnt)
                     endif
                 end do
-                ! extract windows from integrated movie (subset of frames)
-                if( allocated(movienames_frames) )then
-                    fbody        = get_fbody(trim(stack), p%ext, separator=.false.)
-                    stack_frames = add2fbody(fbody, p%ext, '_frames_subset')
-                    call micrograph%read(movienames_frames(movie),1)
-                    cnt = 0
-                    do j=1,nptcls ! loop over boxes
-                        if( oris_mask(j) )then
-                            cnt = cnt + 1
-                            ! extract the window
-                            particle_position = boxdata(j,1:2)
-                            call micrograph%window(nint(particle_position), p%box, b%img)
-                            if( p%pcontrast .eq. 'black' ) call b%img%neg
-                            call b%img%norm
-                            call b%img%write(trim(adjustl(stack_frames)), cnt)
-                        endif
-                    end do
-                endif
             endif
             ! destruct
             call boxfile%kill

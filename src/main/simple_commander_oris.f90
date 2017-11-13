@@ -466,6 +466,15 @@ contains
         integer      :: s, i
         p = params(cline)
         call b%build_general_tbox(p, cline, do3d=.false.)
+        if( cline%defined('ctfres_lim') .and. b%a%isthere('ctfres') )then
+            ! filter out oris with ctfres > ctfres_lim
+            do i=1,b%a%get_noris()
+                s = nint(b%a%get(i, 'state'))
+                if( s > 0 .and. b%a%get(i, 'ctfres') > p%ctfreslim)then
+                    call b%a%set(i,'state',0.)
+                endif
+            end do
+        endif
         if( p%errify .eq. 'yes' )then   ! introduce error in input orientations
             if( cline%defined('angerr').or.&
                 cline%defined('sherr') ) call b%a%introd_alig_err(p%angerr, p%sherr)

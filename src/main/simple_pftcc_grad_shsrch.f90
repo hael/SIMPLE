@@ -72,7 +72,7 @@ contains
         self%ospec%gcostfun     => grad_shsrch_gcostfun
         self%ospec%fdfcostfun   => grad_shsrch_fdfcostfun
         self%ospec%opt_callback => grad_shsrch_optimize_angle_wrapper
-    end subroutine grad_shsrch_set_costfun          
+    end subroutine grad_shsrch_set_costfun
        
     function grad_shsrch_costfun( self, vec, D ) result( cost )
         class(*), intent(inout) :: self

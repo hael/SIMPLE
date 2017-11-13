@@ -646,10 +646,9 @@ select case(prg)
         keys_optional(5) = 'pcontrast'
         keys_optional(6) = 'box'
         keys_optional(7) = 'outside'
-        keys_optional(8) = 'ctfreslim'
         ! parse command line
         if( describe ) call print_doc_extract
-        call cline%parse(keys_required(:1),keys_optional(:8))
+        call cline%parse(keys_required(:1),keys_optional(:7))
         ! parse command line
         if( .not. cline%defined('pcontrast') )call cline%set('pcontrast', 'black')
         ! execute
@@ -2252,9 +2251,10 @@ select case(prg)
         keys_optional(22) = 'xsh'
         keys_optional(23) = 'ysh'
         keys_optional(24) = 'zsh'
+        keys_optional(25) = 'ctfreslim'
         ! parse command line
         if( describe ) call print_doc_orisops
-        call cline%parse(keys_optional=keys_optional(:24))
+        call cline%parse(keys_optional=keys_optional(:25))
         ! execute
         call xorisops%execute(cline)
     case( 'oristats' )

@@ -137,12 +137,8 @@ contains
         do istate=1,p%nstates
             call b%vol%read(p%vols(istate))
             shvec(istate,:) = b%vol%center(p%cenlp, p%msk)
-            print *, shvec
-            if( istate == 1 ) call b%vol%write(p%outvol)
-            if( debug )then
-                call b%vol%shift([-shvec(istate,1),-shvec(istate,2),-shvec(istate,3)])
-                call b%vol%write('shifted_vol_state'//int2str(istate)//p%ext)
-            endif
+            call b%vol%shift([shvec(istate,1),shvec(istate,2),shvec(istate,3)])
+            call b%vol%write('shifted_vol_state'//int2str(istate)//p%ext)
             ! transfer the 3D shifts to 2D
             if( cline%defined('oritab') ) call b%a%map3dshift22d(-shvec(istate,:), state=istate)
         end do
