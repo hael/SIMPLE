@@ -129,6 +129,10 @@ type :: polarft_corrcalc
     procedure          :: gencorr_for_rot
     procedure          :: gencorr_grad_for_rot
     procedure          :: gencorr_grad_only_for_rot
+    procedure, private :: calc_corr_for_rot_8    
+    procedure          :: gencorr_for_rot_8
+    procedure          :: gencorr_grad_for_rot_8
+    procedure          :: gencorr_grad_only_for_rot_8
     procedure          :: genfrc
     procedure          :: specscore
     ! DESTRUCTOR
@@ -810,7 +814,36 @@ contains
         end if                    
         corr = real(tmp)
     end function calc_corr_for_rot
-        
+
+    function calc_corr_for_rot_8(self, pft_ref, iptcl, kstop, irot) result(corr)
+        class(polarft_corrcalc), intent(inout) :: self
+        integer,                 intent(in)    :: iptcl, kstop
+        complex(dp),             intent(in)    :: pft_ref(1:self%pftsz,self%kfromto(1):kstop)
+        integer,                 intent(in)    :: irot
+        integer                                :: rot        
+        real(dp)                               :: corr
+        complex(dp)                            :: tmp
+        corr = 0.        
+        tmp = 0.
+        if (irot >= self%pftsz + 1) then
+            rot = irot - self%pftsz
+        else
+            rot = irot
+        end if
+        if (irot == 1) then
+            tmp = sum( pft_ref(:,:) * conjg(self%pfts_ptcls(iptcl,:,:))) 
+        else if (irot <= self%pftsz) then                                   
+            tmp =       sum( pft_ref(               1:self%pftsz-rot+1,:) * conjg(self%pfts_ptcls(iptcl,rot:self%pftsz,:)) ) 
+            tmp = tmp + sum( pft_ref(self%pftsz-rot+2:self%pftsz,      :) *       self%pfts_ptcls(iptcl,  1:rot-1,     :)) 
+        else if (irot == self%pftsz + 1) then
+            tmp = sum( pft_ref(:,:) * self%pfts_ptcls(iptcl,:,:) )
+        else
+            tmp =       sum( pft_ref(1:self%pftsz-rot+1,:)          *        self%pfts_ptcls(iptcl,rot:self%pftsz,:)) 
+            tmp = tmp + sum( pft_ref(self%pftsz-rot+2:self%pftsz,:) * conjg( self%pfts_ptcls(iptcl,1:rot-1,:) ))            
+        end if                    
+        corr = real(tmp)
+    end function calc_corr_for_rot_8
+    
     subroutine gencorrs_1( self, iref, iptcl, cc )
         use simple_math, only: csq
         class(polarft_corrcalc), intent(inout) :: self
@@ -1055,6 +1088,121 @@ contains
         corr = self%calc_corr_for_rot(pft_ref_tmp, iptcl, self%kfromto(2), irot)        
         grad(2) = corr / sqrt(sqsum_ref * self%sqsums_ptcls(iptcl))        
     end subroutine gencorr_grad_only_for_rot
+
+    !< brief  generates correlation for one specific rotation angle, double precision
+    function gencorr_for_rot_8( self, iref, iptcl, shvec, irot ) result(cc)
+        use simple_math, only: csq
+        class(polarft_corrcalc), intent(inout) :: self
+        integer,                 intent(in)    :: iref, iptcl
+        real(dp),                intent(in)    :: shvec(2)
+        integer,                 intent(in)    :: irot
+        real(dp)                               :: cc
+        complex(dp)                            :: pft_ref(self%pftsz,self%kfromto(1):self%kfromto(2))
+        complex(dp)                            :: shmat(self%pftsz,self%kfromto(1):self%kfromto(2))
+        real(dp)                               :: corr
+        real(dp)                               :: argmat(self%pftsz,self%kfromto(1):self%kfromto(2))
+        real(dp)                               :: sqsum_ref        
+        argmat = self%argtransf(:self%pftsz,:) * shvec(1) + self%argtransf(self%pftsz+1:,:) * shvec(2)
+        shmat  = cmplx(cos(argmat),sin(argmat))
+
+        if( self%with_ctf )then
+            if( self%iseven(iptcl) )then
+                pft_ref = (self%pfts_refs_even(iref,:,:) * self%ctfmats(iptcl,:,:)) * shmat
+            else
+                pft_ref = (self%pfts_refs_odd(iref,:,:)  * self%ctfmats(iptcl,:,:)) * shmat
+            endif
+        else
+            if( self%iseven(iptcl) )then
+                pft_ref = self%pfts_refs_even(iref,:,:) * shmat
+            else
+                pft_ref = self%pfts_refs_odd(iref,:,:)  * shmat
+            endif
+        endif
+        sqsum_ref = sum(csq(pft_ref))
+        corr = self%calc_corr_for_rot_8(pft_ref, iptcl, self%kfromto(2), irot)       
+        cc = corr  / sqrt(sqsum_ref * self%sqsums_ptcls(iptcl))
+    end function gencorr_for_rot_8
+
+    !< brief  calculates correlation and gradient for origin shift, for one specific rotation angle, double precision
+    subroutine gencorr_grad_for_rot_8( self, iref, iptcl, shvec, irot, f, grad )
+        use simple_math, only: csq
+        class(polarft_corrcalc), intent(inout) :: self
+        integer,                 intent(in)    :: iref, iptcl
+        real(dp),                intent(in)    :: shvec(2)
+        integer,                 intent(in)    :: irot
+        real(dp),                intent(out)   :: f
+        real(dp),                intent(out)   :: grad(2)
+        complex(dp) :: pft_ref(self%pftsz,self%kfromto(1):self%kfromto(2))
+        complex(dp) :: pft_ref_tmp(self%pftsz,self%kfromto(1):self%kfromto(2))
+        complex(dp) :: shmat(self%pftsz,self%kfromto(1):self%kfromto(2))
+        real(dp)    :: argmat(self%pftsz,self%kfromto(1):self%kfromto(2))
+        real(dp)    :: sqsum_ref
+        real(dp)    :: corr
+        argmat = self%argtransf(:self%pftsz,:) * shvec(1) + self%argtransf(self%pftsz+1:,:) * shvec(2)
+        shmat  = cmplx(cos(argmat),sin(argmat))
+        if( self%with_ctf )then
+            if( self%iseven(iptcl) )then
+                pft_ref = (self%pfts_refs_even(iref,:,:) * self%ctfmats(iptcl,:,:)) * shmat
+            else
+                pft_ref = (self%pfts_refs_odd(iref,:,:)  * self%ctfmats(iptcl,:,:)) * shmat
+            endif
+        else
+            if( self%iseven(iptcl) )then
+                pft_ref = self%pfts_refs_even(iref,:,:) * shmat
+            else
+                pft_ref = self%pfts_refs_odd(iref,:,:)  * shmat
+            endif
+        endif
+        sqsum_ref = sum(csq(pft_ref))
+        corr = self%calc_corr_for_rot_8(pft_ref, iptcl, self%kfromto(2), irot)        
+        f    = corr  / sqrt(sqsum_ref * self%sqsums_ptcls(iptcl))        
+        pft_ref_tmp = pft_ref * (0., 1.) * self%argtransf(:self%pftsz,:)
+        corr = self%calc_corr_for_rot_8(pft_ref_tmp, iptcl, self%kfromto(2), irot)        
+        grad(1) = corr / sqrt(sqsum_ref * self%sqsums_ptcls(iptcl))
+        pft_ref_tmp = pft_ref * (0., 1.) * self%argtransf(self%pftsz+1:,:)
+        corr = self%calc_corr_for_rot_8(pft_ref_tmp, iptcl, self%kfromto(2), irot)        
+        grad(2) = corr / sqrt(sqsum_ref * self%sqsums_ptcls(iptcl))
+    end subroutine gencorr_grad_for_rot_8
+
+    !< brief  calculates only gradient for correlation, for one specific rotation angle, double precision
+    subroutine gencorr_grad_only_for_rot_8( self, iref, iptcl, shvec, irot, grad )
+        use simple_math, only: csq
+        class(polarft_corrcalc), intent(inout) :: self
+        integer,                 intent(in)    :: iref, iptcl
+        real(dp),                intent(in)    :: shvec(2)
+        integer,                 intent(in)    :: irot
+        real(dp),                intent(out)   :: grad(2)
+        complex(dp)                            :: pft_ref(self%pftsz,self%kfromto(1):self%kfromto(2))
+        complex(dp)                            :: pft_ref_tmp(self%pftsz,self%kfromto(1):self%kfromto(2))
+        complex(dp)                            :: shmat(self%pftsz,self%kfromto(1):self%kfromto(2))
+        real(dp)                               :: argmat(self%pftsz,self%kfromto(1):self%kfromto(2))
+        real(dp)                               :: sqsum_ref
+        real(dp)                               :: corr
+        argmat = self%argtransf(:self%pftsz,:) * shvec(1) + self%argtransf(self%pftsz+1:,:) * shvec(2)
+        shmat  = cmplx(cos(argmat),sin(argmat))
+        if( self%with_ctf )then
+            if( self%iseven(iptcl) )then
+                pft_ref = (self%pfts_refs_even(iref,:,:) * self%ctfmats(iptcl,:,:)) * shmat
+            else
+                pft_ref = (self%pfts_refs_odd(iref,:,:)  * self%ctfmats(iptcl,:,:)) * shmat
+            endif
+        else
+            if( self%iseven(iptcl) )then
+                pft_ref = self%pfts_refs_even(iref,:,:) * shmat
+            else
+                pft_ref = self%pfts_refs_odd(iref,:,:)  * shmat
+            endif
+        endif
+        sqsum_ref = sum(csq(pft_ref))
+        pft_ref_tmp = pft_ref * (0., 1.) * self%argtransf(:self%pftsz,:)
+        corr = self%calc_corr_for_rot_8(pft_ref_tmp, iptcl, self%kfromto(2), irot)        
+        grad(1) = corr / sqrt(sqsum_ref * self%sqsums_ptcls(iptcl))
+        pft_ref_tmp = pft_ref * (0., 1.) * self%argtransf(self%pftsz+1:,:)
+        corr = self%calc_corr_for_rot_8(pft_ref_tmp, iptcl, self%kfromto(2), irot)        
+        grad(2) = corr / sqrt(sqsum_ref * self%sqsums_ptcls(iptcl))        
+    end subroutine gencorr_grad_only_for_rot_8
+
+    
     
     !>  \brief  is for generating resolution dependent correlations
     subroutine genfrc( self, iref, iptcl, irot, frc )
