@@ -45,10 +45,10 @@ contains
         class(opt_spec),  intent(inout) :: spec        !< specification
         class(*),         intent(inout) :: fun_self    !< self-pointer for cost function        
         real, intent(out)               :: lowest_cost !< minimum function value
-        if( .not. associated(spec%costfun) )then
+        if ( (.not. associated(spec%costfun) ).and.( .not. associated(spec%costfun_8)) ) then
             stop 'cost function not associated in opt_spec; pr_cg_minimize; simple_pr_cg_opt'
         endif
-        if( .not. associated(spec%gcostfun) )then
+        if ( (.not. associated(spec%gcostfun) ).and.(.not. associated(spec%gcostfun_8)) ) then
             stop 'gradient of cost function not associated in opt_spec; pr_cg_minimize; simple_pr_cg_opt'
         endif
         ! run nrestarts restarts
@@ -171,7 +171,7 @@ contains
                     beta = g0g1 / (self%g0norm**2)             ! beta = -((g1 - g0).g1)/(g0.g0)                    
                     self%p = -beta * self%p
                     self%p = self%p + self%gradient
-                    self%pnorm = norm2(self%p);
+                    self%pnorm = norm2(self%p)
                 end if
                 self%g0norm = g1norm
                 self%g0 = self%gradient

@@ -8,10 +8,13 @@ private
 
 !> struct for all opt specifications
 type :: opt_spec
-    procedure(costfun),  pointer, nopass       :: costfun      =>null() !< defines cost function
-    procedure(gcostfun), pointer, nopass       :: gcostfun     =>null() !< defines the gradient of the cost function
-    procedure(fdfcostfun), pointer, nopass     :: fdfcostfun   =>null() !< defines the gradient of the cost function
-    procedure(opt_callback), pointer, nopass   :: opt_callback =>null() !< callback function for in-between iteration steps
+    procedure(costfun),      pointer, nopass :: costfun      =>null() !< defines cost function
+    procedure(gcostfun),     pointer, nopass :: gcostfun     =>null() !< defines the gradient of the cost function
+    procedure(fdfcostfun),   pointer, nopass :: fdfcostfun   =>null() !< defines the gradient of the cost function
+    procedure(costfun_8),    pointer, nopass :: costfun_8    =>null() !< defines cost function, double precision
+    procedure(gcostfun_8),   pointer, nopass :: gcostfun_8   =>null() !< defines the gradient of the cost function, double precision
+    procedure(fdfcostfun_8), pointer, nopass :: fdfcostfun_8 =>null() !< defines the gradient of the cost function, double precision
+    procedure(opt_callback), pointer, nopass :: opt_callback =>null() !< callback function for in-between iteration steps
     character(len=STDLEN)     :: str_opt=''                           !< string descriptor (of optimization routine to be used)
     character(len=STDLEN)     :: str_mode=''                          !< mode string descriptor
     integer                   :: ndim=0, ldim=0                       !< dimension parameters
@@ -55,6 +58,9 @@ type :: opt_spec
     procedure :: set_costfun
     procedure :: set_gcostfun
     procedure :: set_fdfcostfun
+    procedure :: set_costfun_8
+    procedure :: set_gcostfun_8
+    procedure :: set_fdfcostfun_8    
     procedure :: set_inipop
     procedure :: eval_f_4
     procedure :: eval_df_4
@@ -95,6 +101,36 @@ abstract interface
         integer, intent(in)     :: D
         real,    intent(inout)  :: vec(D)
         real,    intent(out)    :: f, grad(D)
+    end subroutine
+end interface
+
+!>  \brief  defines the cost function interface, double precision
+abstract interface
+    function costfun_8( fun_self, vec, D ) result( cost )
+        class(*),     intent(inout) :: fun_self
+        integer,      intent(in)    :: D
+        real(kind=8), intent(in)    :: vec(D)
+        real(kind=8)                :: cost
+    end function
+end interface
+
+!>  \brief  defines the cost function gradient interface, double precision
+abstract interface
+    subroutine gcostfun_8( fun_self, vec, grad, D )
+        class(*),     intent(inout) :: fun_self
+        integer,      intent(in)    :: D
+        real(kind=8), intent(inout) :: vec(D)
+        real(kind=8), intent(out)   :: grad(D)
+    end subroutine
+end interface
+
+!>  \brief  defines the cost function with simultaneous gradient interface, double precision
+abstract interface
+    subroutine fdfcostfun_8( fun_self, vec, f, grad, D )
+        class(*),     intent(inout) :: fun_self
+        integer,      intent(in)    :: D
+        real(kind=8), intent(inout) :: vec(D)
+        real(kind=8), intent(out)   :: f, grad(D)
     end subroutine
 end interface
 
@@ -332,13 +368,17 @@ contains
         class(*),        intent(inout) :: fun_self
         real(dp),        intent(inout) :: x(:)
         real(dp)                       :: f
-        if (.not. associated(self%costfun)) then      
-            write (*,*) 'error : simple_opt_spec: costfun not associated'
+        if ((.not. associated(self%costfun)).and.(.not. associated(self%costfun_8))) then      
+            write (*,*) 'error : simple_opt_spec: no costfun associated'
             return
         end if
-        self%x_4_tmp = real(x, kind=4)
-        f   = self%costfun(fun_self, self%x_4_tmp, self%ndim)
-        self%nevals = self%nevals  + 1
+        if (associated(self%costfun_8)) then
+            f = self%costfun_8(fun_self, x, self%ndim)
+        else
+            self%x_4_tmp = real(x, kind=4)
+            f   = self%costfun(fun_self, self%x_4_tmp, self%ndim)
+        end if
+        self%nevals = self%nevals  + 1            
     end function eval_f_8
 
     !> \brief  evaluate the gradient, double precision
@@ -347,13 +387,17 @@ contains
         class(*),        intent(inout) :: fun_self
         real(dp),        intent(inout) :: x(:)
         real(dp),        intent(out)   :: grad(:)
-        if (.not. associated(self%gcostfun)) then
-            write (*,*) 'error : simple_opt_spec: gcostfun not associated'
+        if ((.not. associated(self%gcostfun)).and.(.not. associated(self%gcostfun_8))) then
+            write (*,*) 'error : simple_opt_spec: no gcostfun associated'
             return
         end if
-        self%x_4_tmp = real(x, kind=4)
-        call self%gcostfun(fun_self, self%x_4_tmp, self%grad_4_tmp, self%ndim)
-        grad = self%grad_4_tmp
+        if (associated(self%gcostfun_8)) then
+            call self%gcostfun_8(fun_self, x, grad, self%ndim)
+        else
+            self%x_4_tmp = real(x, kind=4)
+            call self%gcostfun(fun_self, self%x_4_tmp, self%grad_4_tmp, self%ndim)
+            grad = self%grad_4_tmp
+        end if
         self%ngevals = self%ngevals  + 1
     end subroutine eval_df_8
     
@@ -364,19 +408,29 @@ contains
         real(dp),        intent(inout) :: x(:)
         real(dp),        intent(out)   :: f, gradient(:)
         real                           :: f_4
-        if ((.not. associated(self%costfun)).or.(.not. associated(self%gcostfun))) then
-            write (*,*) 'error : simple_opt_spec: costfun or gcostfun not associated'
+        if   ( ((.not. associated(self%costfun  )) .or. (.not. associated(self%gcostfun))) .and.  &
+            &  ((.not. associated(self%costfun_8)) .or. (.not. associated(self%gcostfun_8)))         ) then
+            write (*,*) 'error : simple_opt_spec: no costfun or gcostfun associate'
             return
         end if
-        self%x_4_tmp = real(x, kind=4)
-        if (associated(self%fdfcostfun)) then
-            call self%fdfcostfun(fun_self, self%x_4_tmp, f_4, self%grad_4_tmp, self%ndim)
-            f        = f_4
-            gradient = self%grad_4_tmp            
+
+        if (associated(self%fdfcostfun_8)) then
+            call self%fdfcostfun_8(fun_self, x, f, gradient, self%ndim)
+        else if ( (associated(self%costfun_8)) .and. ( associated(self%gcostfun_8)) ) then
+            f = self%costfun_8(fun_self, x, self%ndim)
+            call self%gcostfun_8(fun_self, x, gradient, self%ndim)
         else
-            f        = self%costfun(fun_self, self%x_4_tmp, self%ndim)
-            call self%gcostfun(fun_self, self%x_4_tmp, self%grad_4_tmp, self%ndim)
-        end if
+            self%x_4_tmp = real(x, kind=4)
+            if (associated(self%fdfcostfun)) then
+                call self%fdfcostfun(fun_self, self%x_4_tmp, f_4, self%grad_4_tmp, self%ndim)
+                f        = f_4
+                gradient = self%grad_4_tmp                            
+            else
+                f        = self%costfun(fun_self, self%x_4_tmp, self%ndim)
+                call self%gcostfun(fun_self, self%x_4_tmp, self%grad_4_tmp, self%ndim)
+                gradient = self%grad_4_tmp
+            endif
+        end if        
         self%nevals  = self%nevals  + 1
         self%ngevals = self%ngevals + 1
     end subroutine eval_fdf_8
@@ -444,6 +498,70 @@ contains
         self%fdfcostfun => fun
     end subroutine set_fdfcostfun
 
+ 
+    !>  \brief  sets the cost function in the spec object
+    subroutine set_costfun_8( self, fun )
+        class(opt_spec), intent(inout) :: self !< instance
+#if defined (PGI)
+        ! GNU COMPILER DOES NOT COPE W EXTERNAL
+        real, external :: fun !< defines cost function interface
+#else
+        ! PGI COMPILER DOES NOT COPE W INTERFACE
+        interface
+            !< defines cost function interface
+            function fun( fun_self, vec, D ) result(cost)
+                class(*),     intent(inout) :: fun_self
+                integer,      intent(in)    :: D
+                real(kind=8), intent(in)    :: vec(D)
+                real(kind=8)                :: cost
+            end function
+        end interface
+#endif
+        self%costfun_8 => fun
+    end subroutine set_costfun_8
+
+    !>  \brief  sets the gradient function in the spec object
+    subroutine set_gcostfun_8( self, fun )
+        class(opt_spec), intent(inout) :: self !< instance
+#if defined (PGI)
+        ! GNU COMPILER DOES NOT COPE W EXTERNAL
+        subroutine, external  :: fun !< defines cost function gradient interface
+#else
+        ! PGI COMPILER DOES NOT COPE W INTERFACE
+        interface
+            !< defines cost function gradient interface
+            subroutine fun( fun_self, vec, grad, D )
+                class(*),     intent(inout) :: fun_self
+                integer,      intent(in)    :: D
+                real(kind=8), intent(inout) :: vec( D )
+                real(kind=8), intent(out)   :: grad( D )
+            end subroutine fun
+        end interface
+#endif
+        self%gcostfun_8 => fun
+    end subroutine set_gcostfun_8
+
+    !>  \brief  sets the cost and simultaneous gradient function in the spec object
+    subroutine set_fdfcostfun_8( self, fun )
+        class(opt_spec), intent(inout) :: self !< instance
+#if defined (PGI)
+        ! GNU COMPILER DOES NOT COPE W EXTERNAL
+        subroutine, external  :: fun !< defines cost function with simultaneous gradient interface
+#else
+        ! PGI COMPILER DOES NOT COPE W INTERFACE
+        interface
+            !< defines cost function gradient interface
+            subroutine fun( fun_self, vec, f, grad, D )
+                class(*),     intent(inout) :: fun_self
+                integer,      intent(in)    :: D
+                real(kind=8), intent(inout) :: vec(D)
+                real(kind=8), intent(out)   :: f, grad(D)
+            end subroutine fun
+        end interface
+#endif
+        self%fdfcostfun_8 => fun
+    end subroutine set_fdfcostfun_8
+    
     !>  \brief  is a destructor
     subroutine kill( self )
         class(opt_spec), intent(inout) :: self !< instance
@@ -464,6 +582,9 @@ contains
             self%costfun      => null()
             self%gcostfun     => null()
             self%fdfcostfun   => null()
+            self%costfun_8    => null()
+            self%gcostfun_8   => null()
+            self%fdfcostfun_8 => null()            
             self%opt_callback => null()
             self%exists = .false.
         endif

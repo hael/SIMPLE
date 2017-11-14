@@ -63,10 +63,10 @@ contains
         class(opt_spec),  intent(inout) :: spec        !< specification
         class(*),         intent(inout) :: fun_self    !< self-pointer for cost function
         real, intent(out)               :: lowest_cost !< minimum function value
-        if( .not. associated(spec%costfun) )then
+        if ( (.not. associated(spec%costfun) ).and.( .not. associated(spec%costfun_8)) ) then
             stop 'cost function not associated in opt_spec; bfgs2_minimize; simple_bfgs2_opt'
         endif
-        if( .not. associated(spec%gcostfun) )then
+        if ( (.not. associated(spec%gcostfun) ).and.(.not. associated(spec%gcostfun_8)) ) then
             stop 'gradient of cost function not associated in opt_spec; bfgs2_minimize; simple_bfgs2_opt'
         endif
         spec%x_8 = spec%x
@@ -114,6 +114,7 @@ contains
                 spec%converged = .false.
             end if
             lowest_cost = real(self%f, kind=4)
+            spec%x = real(spec%x_8, kind=4)
         end subroutine bfgs2min
 
         subroutine bfgs2_set
@@ -157,7 +158,7 @@ contains
 
         function bfgs2_iterate() result(status)
             real(dp) :: alpha, alpha1, pg, dir, f0, del
-            real(dp) :: dxg, dgg, dxdg, dgnorm, A, B;
+            real(dp) :: dxg, dgg, dxdg, dgnorm, A, B
             integer :: status
             alpha = 0.0_8
             f0 = self%f
@@ -166,7 +167,7 @@ contains
                 return
             end if
             if (self%delta_f < 0.0_8) then
-                del = max(-self%delta_f, EPSILON(alpha) * abs(f0))
+                del = max(-self%delta_f, 10.0_8 * EPSILON(alpha) * abs(f0))
                 alpha1 = min(1.0_8, 2.0_8 * del / (-self%fp0))
             else
                 alpha1 = abs(self%step)
@@ -224,16 +225,16 @@ contains
         function linear_minimize(rho, sigma, tau1, tau2, tau3, order, alpha1, alpha_new) result(status)
             ! recommended values from Fletcher are
             ! rho = 0.01, sigma = 0.1, tau1 = 9, tau2 = 0.05, tau3 = 0.5
-            real(dp), intent(in) :: rho, sigma, tau1, tau2, tau3, alpha1
-            integer, intent(in) :: order
+            real(dp), intent(in)  :: rho, sigma, tau1, tau2, tau3, alpha1
+            integer,  intent(in)  :: order
             real(dp), intent(out) :: alpha_new
-            integer :: status
-            real(dp), volatile :: f0, fp0, falpha, falpha_prev, fpalpha, fpalpha_prev, delta, alpha_next, alpha, alpha_prev
-            real(dp), volatile :: a, b, fa, fb, fpa, fpb
-            real(dp), volatile :: lower, upper
-            logical            :: fpb_nan
-            integer, parameter :: bracket_iters = 100, section_iters = 100
-            integer :: i
+            integer               :: status
+            real(dp)              :: f0, fp0, falpha, falpha_prev, fpalpha, fpalpha_prev, delta, alpha_next, alpha, alpha_prev
+            real(dp)              :: a, b, fa, fb, fpa, fpb
+            real(dp)              :: lower, upper
+            logical               :: fpb_nan
+            integer, parameter    :: bracket_iters = 100, section_iters = 100
+            integer               :: i
             alpha = alpha1
             alpha_prev = 0.0_8
             i = 0
@@ -440,16 +441,16 @@ contains
             !
             ! where eta=3*(f1-f0)-2*fp0-fp1, xi=fp0+fp1-2*(f1-f0).
             real(dp), intent(in) :: c0, c1, c2, c3, z
-            real(dp) :: res
+            real(dp)             :: res
             res = c0 + z * (c1 + z * (c2 + z * c3))
         end function cubic
 
         subroutine check_extremum(c0, c1, c2, c3, z, zmin, fmin)
             ! could make an early return by testing curvature >0 for minimum
-            real(dp), intent(in) :: c0, c1, c2, c3, z
+            real(dp), intent(in)    :: c0, c1, c2, c3, z
             real(dp), intent(inout) :: fmin
-            real(dp), intent(out) :: zmin
-            real(dp) :: y
+            real(dp), intent(out)   :: zmin
+            real(dp)                :: y
             y = cubic(c0, c1, c2, c3, z)
             if (y < fmin) then
                 zmin = z  ! accepted new point
@@ -459,11 +460,11 @@ contains
 
         function interp_cubic(f0, fp0, f1, fp1, zl, zh) result(zmin)
             real(dp), intent(in) :: f0, fp0, f1, fp1, zl, zh
-            real(dp), volatile :: zmin
-            real(dp), volatile :: eta, xi, c0, c1, c2, c3, fmin, z0, z1
-            integer :: n
-            eta = 3.0_8 * (f1 - f0) - 2.0_8 * fp0 - fp1;
-            xi = fp0 + fp1 - 2.0_8 * (f1 - f0);
+            real(dp)             :: zmin
+            real(dp)             :: eta, xi, c0, c1, c2, c3, fmin, z0, z1
+            integer              :: n
+            eta = 3.0_8 * (f1 - f0) - 2.0_8 * fp0 - fp1
+            xi = fp0 + fp1 - 2.0_8 * (f1 - f0)
             c0 = f0
             c1 = fp0
             c2 = eta
@@ -481,7 +482,7 @@ contains
                 end if
             else if (n == 1) then  ! found 1 root
                 if ((z0 > zl) .and. (z0 < zh)) then
-                    call check_extremum(c0, c1, c2, c3, z0, zmin, fmin);
+                    call check_extremum(c0, c1, c2, c3, z0, zmin, fmin)
                 end if
             end if
         end function interp_cubic
@@ -528,7 +529,7 @@ contains
                     return
                 end if
             end if
-            disc = b * b - 4.0_8 * a * c;
+            disc = b * b - 4.0_8 * a * c
             if (disc > 0.0_8) then
                 if (b == 0.0_8) then
                     r = sqrt(-c / a)
