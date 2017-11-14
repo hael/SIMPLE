@@ -40,7 +40,7 @@ type(tseries_track_distr_commander)      :: xtseries_track_distr
 
 ! HIGH-LEVEL WORKFLOWS
 type(ini3D_from_cavgs_commander)         :: xini3D_from_cavgs
-type(het_ensemble_commander)             :: xhet_ensemble
+type(het_commander)                      :: xhet
 type(het_refine_commander)               :: xhet_refine
 
 ! SUPORTING DISTRIBUTED WORKFLOWS
@@ -919,11 +919,11 @@ select case(prg)
         if( .not. cline%defined('autoscale') ) call cline%set('autoscale', 'yes')
         ! execute
         call xini3D_from_cavgs%execute( cline )
-    case( 'het_ensemble' )
-        !==Program het_ensemble
+    case( 'het' )
+        !==Program het
         !
-        ! <het_ensemble/begin>is a distributed workflow for heterogeneity analysis 
-        ! <het_ensemble/end> 
+        ! <het/begin>is a distributed workflow for heterogeneity analysis 
+        ! <het/end> 
         !
         ! set required keys
         keys_required(1)  = 'smpd'
@@ -939,23 +939,20 @@ select case(prg)
         keys_optional(3)  = 'lpstop'
         keys_optional(4)  = 'eo'
         keys_optional(5)  = 'frac'
-        keys_optional(6)  = 'automsk'
-        keys_optional(7)  = 'amsklp'
-        keys_optional(8)  = 'edge'
-        keys_optional(9)  = 'binwidth'
-        keys_optional(10) = 'inner'
-        keys_optional(11) = 'width'
-        keys_optional(12) = 'nspace'
-        keys_optional(13) = 'balance'
-        keys_optional(14) = 'nrepeats'
-        keys_optional(15) = 'stk'
-        keys_optional(16) = 'stktab'
-        keys_optional(17) = 'phaseplate'
-        keys_optional(18) = 'opt'
-        keys_optional(19) = 'oritab2'
+        keys_optional(6)  = 'inner'
+        keys_optional(7)  = 'width'
+        keys_optional(8)  = 'nspace'
+        keys_optional(9)  = 'balance'
+        keys_optional(10) = 'stk'
+        keys_optional(11) = 'stktab'
+        keys_optional(12) = 'phaseplate'
+        keys_optional(13) = 'opt'
+        keys_optional(14) = 'oritab2'
+        keys_optional(15) = 'mskfile'
+        keys_optional(16) = 'startit'
         ! parse command line
-        if( describe ) call print_doc_het_ensemble
-        call cline%parse(keys_required(:7), keys_optional(:19))
+        ! if( describe ) call print_doc_het
+        call cline%parse(keys_required(:7), keys_optional(:16))
         ! sanity check
         if( cline%defined('stk') .or. cline%defined('stktab') )then
             ! all ok
@@ -963,12 +960,9 @@ select case(prg)
             stop 'stk or stktab need to be part of command line!'
         endif
         ! set defaults
-        if( .not. cline%defined('eo')       ) call cline%set('eo',       'no')
-        if( .not. cline%defined('amsklp')   ) call cline%set('amsklp',   20.)
-        if( .not. cline%defined('edge')     ) call cline%set('edge',     6. )
-        if( .not. cline%defined('nrepeats') ) call cline%set('nrepeats', real(HETNREPEATS))
+        if( .not. cline%defined('eo') ) call cline%set('eo','yes')
         ! execute
-        call xhet_ensemble%execute( cline )
+        call xhet%execute( cline )
     case( 'het_refine' )
         !==Program het_ensemble
         !

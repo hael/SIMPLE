@@ -20,7 +20,6 @@ type :: pftcc_grad_shsrch
     integer                          :: nrots        = 0       !< # rotations
     integer                          :: maxits       = 100     !< max # iterations
     logical                          :: shbarr       = .true.  !< shift barrier constraint or not
-    integer                          :: nrestarts    = 5       !< # randomized restarts (randomized bounds)
     integer                          :: cur_inpl_idx = 0       !< index of inplane angle for shift search              
     real                             :: maxshift     = 0.      !< maximal shift
     integer                          :: max_evals    = 5       !< max # inplrot/shsrch cycles
@@ -35,14 +34,13 @@ end type pftcc_grad_shsrch
 contains
 
     !> Shift search constructor
-    subroutine grad_shsrch_new( self, pftcc, lims, lims_init, shbarrier, nrestarts, maxits )
+    subroutine grad_shsrch_new( self, pftcc, lims, lims_init, shbarrier, maxits )
         use simple_projector, only: projector
         class(pftcc_grad_shsrch),           intent(inout) :: self           !< instance
         class(polarft_corrcalc),    target, intent(in)    :: pftcc          !< correlator
         real,                               intent(in)    :: lims(:,:)      !< limits for barrier constraint
         real,             optional,         intent(in)    :: lims_init(:,:) !< limits for simplex initialisation by randomised bounds
         character(len=*), optional,         intent(in)    :: shbarrier      !< shift barrier constraint or not
-        integer,          optional,         intent(in)    :: nrestarts      !< simplex restarts (randomized bounds)
         integer,          optional,         intent(in)    :: maxits         !< maximum iterations
         type(opt_factory) :: opt_fact
         ! flag the barrier constraint
@@ -50,13 +48,11 @@ contains
         if( present(shbarrier) )then
             if( shbarrier .eq. 'no' ) self%shbarr = .false.
         endif
-        self%nrestarts = 5
-        if( present(nrestarts) ) self%nrestarts = nrestarts
         self%maxits = 100
         if( present(maxits) ) self%maxits = maxits
         ! make optimizer spec
         call self%ospec%specify('bfgs2', 2, ftol=1e-1, gtol=1e-3, max_step=0.01,&
-            &limits_init=lims_init, nrestarts=self%nrestarts, maxits=self%maxits)
+            &limits_init=lims_init, maxits=self%maxits)
         ! generate the optimizer object
         call opt_fact%new(self%ospec, self%nlopt)        
         ! set pointer to corrcalc object
@@ -166,41 +162,28 @@ contains
         real    :: lowest_cost, grad(2), f, lowest_cost_overall, lowest_shift(2)
         integer :: loc(1), i, irestart, lowest_rot, inpl_idx_zero_sh!, nevals, ngevals
         logical :: found_better
-        ! call self%pftcc_ptr%gencorrs(self%reference, self%particle, [0.,0.], corrs)
-        ! loc                 = maxloc(corrs)
-        ! inpl_idx_zero_sh    = loc(1)
-        ! self%cur_inpl_idx   = inpl_idx_zero_sh  
-        ! lowest_cost_overall = -corrs(self%cur_inpl_idx)
-        found_better        = .false.
-        ! nevals  = 0 
-        ! ngevals = 0 
-        ! do irestart = 1,self%ospec%nrestarts
-            ! random initialisation
-            ! self%ospec%x = self%ospec%limits_init(:,1) + &
-            ! & ( randn_1(2) + 1. ) / 2. * (self%ospec%limits_init(:,2) - self%ospec%limits_init(:,1))
+        found_better      = .false.
+        call self%pftcc_ptr%gencorrs(self%reference, self%particle, self%ospec%x, corrs)
+        loc               = maxloc(corrs)
+        self%cur_inpl_idx = loc(1)
+        lowest_cost_overall = -corrs(self%cur_inpl_idx)
+        ! shift search / in-plane rot update
+        do i = 1,self%max_evals
+            call self%nlopt%minimize(self%ospec, self, lowest_cost)
             call self%pftcc_ptr%gencorrs(self%reference, self%particle, self%ospec%x, corrs)
-            loc               = maxloc(corrs)
+            loc = maxloc(corrs)
+            if( loc(1) == self%cur_inpl_idx ) exit
             self%cur_inpl_idx = loc(1)
-            !!!!!!!!!!!!!!!!!!!!!!!!!!
-            lowest_cost_overall = -corrs(self%cur_inpl_idx)
-            !!!!!!!!!!!!!!!!!!!!!!!!!!
-            ! shift search / in-plane rot update
-            do i = 1,self%max_evals
-                call self%nlopt%minimize(self%ospec, self, lowest_cost)
-                call self%pftcc_ptr%gencorrs(self%reference, self%particle, self%ospec%x, corrs)
-                loc = maxloc(corrs)
-                if( loc(1) == self%cur_inpl_idx ) exit
-                self%cur_inpl_idx = loc(1)
-            end do
-            ! update best
-            lowest_cost = -corrs(self%cur_inpl_idx)            
-            if( lowest_cost < lowest_cost_overall )then
-                found_better        = .true.
-                lowest_cost_overall = lowest_cost
-                lowest_rot          = self%cur_inpl_idx
-                lowest_shift        = self%ospec%x
-            endif
-        ! end do
+        end do
+        ! update best
+        lowest_cost = -corrs(self%cur_inpl_idx)            
+        if( lowest_cost < lowest_cost_overall )then
+            found_better        = .true.
+            lowest_cost_overall = lowest_cost
+            lowest_rot          = self%cur_inpl_idx
+            lowest_shift        = self%ospec%x
+        endif
+
         if( found_better )then
             irot    =   lowest_rot           ! in-plane index
             cxy(1)  = - lowest_cost_overall  ! correlation
@@ -210,10 +193,6 @@ contains
         else
             irot = 0 ! to communicate that a better solution was not found
         endif
-
-        ! print *, 'nevals : ', self%ospec%nevals
-        ! print *, 'ngevals: ', self%ospec%ngevals
-
     end function grad_shsrch_minimize
 
     subroutine grad_shsrch_kill( self )
