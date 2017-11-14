@@ -111,7 +111,8 @@ select case(prg)
         keys_optional(26) = 'rm_outliers'
         keys_optional(27) = 'nsig'
         keys_optional(28) = 'dopick'
-        keys_optional(30) = 'ndev'
+        keys_optional(29) = 'ndev'
+        keys_optional(30) = 'box_extract'
         keys_optional(31) = 'pcontrast'
         ! parse command line
         if( describe ) call print_doc_preproc

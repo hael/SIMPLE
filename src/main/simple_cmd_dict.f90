@@ -35,6 +35,7 @@ contains
         call chdict%push('bin',           'binarise image(yes|no){no}')
         call chdict%push('binwidth',      'binary layers grown for molecular envelope(in pixels){1}')
         call chdict%push('box',           'square image size(in pixels)')
+        call chdict%push('box_extract',   'square image box size for extraction(in pixels)')
         call chdict%push('boxconvsz',     'size of box used for box-convolution(in pixels)')
         call chdict%push('boxfile',       'file with EMAN particle coordinates(.txt)')
         call chdict%push('boxtab',        'table (text file) of files with EMAN particle coordinates(.txt)')

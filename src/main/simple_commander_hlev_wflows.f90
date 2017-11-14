@@ -51,7 +51,6 @@ contains
         class(cmdline),                     intent(inout) :: cline
         ! constants
         integer,           parameter :: MAXITS_STAGE1   = 10
-        character(len=32), parameter :: ALGNFBODY       = 'algndoc_'
         ! commanders
         type(split_commander)           :: xsplit
         type(makecavgs_distr_commander) :: xmakecavgs
@@ -63,10 +62,12 @@ contains
         type(cmdline) :: cline_makecavgs
         type(cmdline) :: cline_rank_cavgs
         ! other variables
+        character(len=STDLEN) :: scaled_stktab
         character(len=STDLEN) :: finaldoc, finalcavgs, finalcavgs_ranked
         type(oris)            :: os
         type(scaler)          :: scobj
         type(params)          :: p_master
+
         real                  :: scale_stage1, scale_stage2
         integer               :: nparts, last_iter_stage1, last_iter_stage2
         p_master = params(cline)
@@ -82,12 +83,17 @@ contains
             ! scale images in parallel
             call scobj%scale_distr_exec
             if( cline%defined('stktab') )then
+                ! updates command lines
+                scaled_stktab = add2fbody(p_master%stktab, METADATEXT, SCALE_SUFFIX)
                 ! update stktab
                 call p_master%stkhandle%add_scale_tag
-                call p_master%stkhandle%write_stktab(p_master%stktab)
+                call p_master%stkhandle%write_stktab(trim(scaled_stktab))
             endif
             ! execute stage 1
             cline_prime2D_stage1 = cline
+            if( cline%defined('stktab') )then
+                call cline_prime2D_stage1%set('stktab', trim(scaled_stktab))
+            endif
             call cline_prime2D_stage1%delete('automsk') ! delete possible automsk flag from stage 1
             call cline_prime2D_stage1%set('maxits', real(MAXITS_STAGE1))
             call xprime2D_distr%execute(cline_prime2D_stage1)
@@ -95,20 +101,10 @@ contains
             finaldoc         = trim(PRIME2D_ITER_FBODY)//int2str_pad(last_iter_stage1,3)//METADATEXT
             finalcavgs       = trim(CAVGS_ITER_FBODY)//int2str_pad(last_iter_stage1,3)//p_master%ext
             ! prepare stage 2 input -- re-scale
-            if( cline%defined('stktab') )then
-                 ! update stktab
-                call p_master%stkhandle%del_scale_tag
-                call p_master%stkhandle%write_stktab(p_master%stktab)
-            endif
             call scobj%uninit(cline) ! puts back the old command line
             call scobj%init(p_master, cline, p_master%box, p_master%smpd_targets2D(2))
             scale_stage2 = scobj%get_scaled_var('scale')
             call scobj%scale_distr_exec
-            if( cline%defined('stktab') )then
-                ! update stktab
-                call p_master%stkhandle%add_scale_tag
-                call p_master%stkhandle%write_stktab(p_master%stktab)
-            endif
             ! prepare stage 2 input -- shift modulation
             call os%new(p_master%nptcls)
             call binread_oritab(finaldoc, os, [1,p_master%nptcls])
@@ -120,6 +116,9 @@ contains
             if( p_master%automsk .eq. 'yes' )then
                 call cline_prime2D_stage2%set('automsk', 'cavg')
             endif
+            if( cline%defined('stktab') )then
+                call cline_prime2D_stage2%set('stktab', trim(scaled_stktab))
+            endif
             call cline_prime2D_stage2%delete('deftab')
             call cline_prime2D_stage2%set('oritab',  trim(finaldoc))
             call cline_prime2D_stage2%set('startit', real(MAXITS_STAGE1 + 1))
@@ -128,11 +127,11 @@ contains
             finaldoc         = trim(PRIME2D_ITER_FBODY)//int2str_pad(last_iter_stage2,3)//METADATEXT
             finalcavgs       = trim(CAVGS_ITER_FBODY)//int2str_pad(last_iter_stage2,3)//p_master%ext
             if( cline%defined('stktab') )then
-                ! delete downscaled stack parts (we are done with them)
+                ! delete downscaled stack parts & stktab (we are done with them)
+                call del_file(trim(scaled_stktab))
                 call p_master%stkhandle%del_stktab_files
                 ! put back original stktab
                 call p_master%stkhandle%del_scale_tag
-                call p_master%stkhandle%write_stktab(p_master%stktab)
             else
                 ! delete downscaled stack parts (we are done with them)
                 call del_files(trim(STKPARTFBODY), p_master%nparts, ext=p_master%ext, suffix='_sc')
@@ -555,8 +554,6 @@ contains
             call cline_prime3D%set('trs',trs)
         endif
         ! generate diverse initial labels
-        write(*,'(A)') '>>>'
-        write(*,'(A)') '>>> GENERATING DIVERSE LABELING'
         oritab = 'hetdoc_init'//METADATEXT
         call os%new(p_master%nptcls)
         call binread_oritab(p_master%oritab, os, [1,p_master%nptcls])
@@ -567,6 +564,8 @@ contains
             call os%set_all('state', os_states%get_all('state'))
             call os_states%kill
         else if( .not. cline%defined('startit') )then
+            write(*,'(A)') '>>>'
+            write(*,'(A)') '>>> GENERATING DIVERSE LABELING'
             call diverse_labeling(os, p_master%nstates, labels, corr_ranked=.true.)
             call os%set_all('state', real(labels))
         else
@@ -582,21 +581,21 @@ contains
         deallocate(labels, included)
         ! run prime3d
         write(*,'(A)')    '>>>'
-        write(*,'(A,I3)') '>>> PRIME3'
+        write(*,'(A,I3)') '>>> PRIME3D'
         write(*,'(A)')    '>>>'
         call cline_prime3D%set('oritab', trim(oritab))
         call xprime3D_distr%execute(cline_prime3D)
         ! final distributed reconstruction to obtain resolution estimate when eo .eq. 'no'
         if( p_master%eo .eq. 'no' )then
             iter   = nint(cline_prime3D%get_rarg('endit'))
-            oritab = 'prime3Ddoc_'//int2str_pad(iter,3)//METADATEXT
+            oritab = PRIME3D_ITER_FBODY//int2str_pad(iter,3)//METADATEXT
             call cline_recvol_distr%set('oritab', trim(oritab))
             call xrecvol_distr%execute(cline_recvol_distr)
             do state = 1, p_master%nstates
                 str_state  = int2str_pad(state, 2)
-                call cline_postproc_vol%set('vol1', 'recvol_state'//trim(str_state)//p_master%ext)
-                call cline_postproc_vol%set('fsc', 'fsc_state'//trim(str_state)//'.bin')
-                call cline_postproc_vol%set('vol_filt', 'aniso_optlp_state'//trim(str_state)//p_master%ext)
+                call cline_postproc_vol%set('vol1', VOL_FBODY//trim(str_state)//p_master%ext)
+                call cline_postproc_vol%set('fsc', FSC_FBODY//trim(str_state)//BIN_EXT)
+                call cline_postproc_vol%set('vol_filt', ANISOLP_FBODY//trim(str_state)//p_master%ext)
                 call xpostproc_vol%execute(cline_postproc_vol)
             enddo
         endif
@@ -797,7 +796,6 @@ contains
             ! mask volume
             l_hasmskvols(state) = trim(p_master%mskvols(state)) .ne. ''
             if( l_hasmskvols(state) )then
-                ! mask volume
                 if( .not.file_exists(p_master%mskvols(state)) )then
                     print *, 'File missing: ', trim(fname)
                     error = .true.
@@ -828,6 +826,8 @@ contains
         call cline_recvol_distr%set('prg', 'recvol')
         call cline_recvol_distr%set('oritab', trim(FINAL_DOC))
         call cline_recvol_distr%set('nstates', trim(int2str(p_master%nstates)))
+        call cline_recvol_distr%set('eo', 'yes')
+        call cline_postproc_vol%delete('lp')
 
         ! Main loop
         do state = 1, p_master%nstates
@@ -874,18 +874,20 @@ contains
         call binwrite_oritab(FINAL_DOC, os_master, [1,p_master%nptcls])
 
         ! final reconstruction
-        call xrecvol_distr%execute(cline_recvol_distr)
-        ! post-process
-        do state = 1, p_master%nstates
-            if( state_pops(state) == 0 )cycle
-            if( l_singlestate .and. state.ne.p_master%state )cycle
-            str_state = int2str_pad(state, 2)
-            if( l_hasmskvols(state) )call cline_postproc_vol%set('mskfile', trim(p_master%mskvols(state)))
-            vol = 'recvol_state'//trim(str_state)//p_master%ext
-            call cline_postproc_vol%set('vol1', trim(vol))
-            call update_pproc_cline(cline_postproc_vol, str_state)
-            call xpostproc_vol%execute(cline_postproc_vol)
-        enddo
+        if( p_master%eo .eq.'no' )then
+            call xrecvol_distr%execute(cline_recvol_distr)
+            do state = 1, p_master%nstates
+                if( state_pops(state) == 0 )cycle
+                if( l_singlestate .and. state.ne.p_master%state )cycle
+                str_state = int2str_pad(state, 2)
+                if( l_hasmskvols(state) )call cline_postproc_vol%set('mskfile', trim(p_master%mskvols(state)))
+                vol = 'recvol_state'//trim(str_state)//p_master%ext
+                call cline_postproc_vol%set('vol1', trim(vol))
+                call cline_postproc_vol%set('fsc', FSC_FBODY//trim(str_state)//BIN_EXT)
+                call cline_postproc_vol%set('vol_filt', ANISOLP_FBODY//trim(str_state)//p_master%ext)
+                call xpostproc_vol%execute(cline_postproc_vol)
+            enddo
+        endif
 
         ! end gracefully
         call simple_end('**** SIMPLE_HET_REFINE NORMAL STOP ****')
@@ -933,25 +935,6 @@ contains
                     if( file_exists(src) )call rename(src, dir//src)
                 endif
             end subroutine prime3d_cleanup
-
-            subroutine update_pproc_cline( cl, str_state )
-                class(cmdline),   intent(inout) :: cl
-                character(len=2), intent(in)    :: str_state
-                character(len=STDLEN) :: fsc_file, optlp_file
-                fsc_file   = 'fsc_state'//trim(str_state)//'.bin'
-                optlp_file = 'aniso_optlp_state'//trim(str_state)//p_master%ext
-                if( file_exists(optlp_file) .and. p_master%eo .ne. 'no' )then
-                    call cl%delete('lp')
-                    call cl%set('fsc', trim(fsc_file))
-                    call cl%set('vol_filt', trim(optlp_file))
-                else if( file_exists(fsc_file) .and. p_master%eo .ne. 'no' )then
-                    call cl%delete('lp')
-                    call cl%set('fsc', trim(fsc_file))
-                else
-                    call cl%delete('fsc')
-                    call cl%set('lp', p_master%lp)
-                endif
-            end subroutine update_pproc_cline
 
     end subroutine exec_het_refine
 

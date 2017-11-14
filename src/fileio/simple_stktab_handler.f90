@@ -150,20 +150,20 @@ contains
 		allocate(stkname, source=self%pens(iptcl)%msp%stkname)
 	end subroutine get_stkname_and_ind
 
-	subroutine add_scale_tag( self )
-		use simple_fileio, only: fname2ext, add2fbody
-		class(stktab_handler), intent(inout) :: self
-		character(len=:), allocatable :: ext, newname
-		integer :: imic
+    subroutine add_scale_tag( self )
+    	use simple_fileio, only: fname2ext, add2fbody
+        class(stktab_handler), intent(inout) :: self
+        character(len=:), allocatable :: ext, newname
+        integer :: imic
 		do imic=1,self%nmics
-        	ext     = fname2ext(trim(self%mics(imic)%stkname))
-        	newname = add2fbody(self%mics(imic)%stkname, '.'//ext, '_sc')
-        	deallocate(self%mics(imic)%stkname)
-        	allocate(self%mics(imic)%stkname, source=newname)
+            ext     = fname2ext(trim(self%mics(imic)%stkname))
+            newname = add2fbody(self%mics(imic)%stkname, '.'//ext, '_sc')
+            deallocate(self%mics(imic)%stkname)
+            allocate(self%mics(imic)%stkname, source=newname)
 		end do
 	end subroutine add_scale_tag
 
-	subroutine del_scale_tag( self )
+    subroutine del_scale_tag( self )
 		use simple_fileio, only: fname2ext, del_from_fbody
 		class(stktab_handler), intent(inout) :: self
 		character(len=:), allocatable :: ext, newname

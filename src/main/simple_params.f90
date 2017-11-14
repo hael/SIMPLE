@@ -188,6 +188,7 @@ type :: params
     integer :: boxconvsz=256       !< size of box used for box-convolution(in pixels)
     integer :: boxmatch=0
     integer :: box_original
+    integer :: box_extract
     integer :: boxpd=0
     integer :: chunk=0
     integer :: chunksz=0           !< # images/orientations in chunk
@@ -589,6 +590,7 @@ contains
         call check_iarg('balance',        self%balance)
         call check_iarg('binwidth',       self%binwidth)
         call check_iarg('box',            self%box)
+        call check_iarg('box_extract',    self%box_extract)
         call check_iarg('boxconvsz',      self%boxconvsz)
         call check_iarg('chunk',          self%chunk)
         call check_iarg('chunksz',        self%chunksz)

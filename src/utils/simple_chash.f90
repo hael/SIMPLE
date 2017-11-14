@@ -368,7 +368,7 @@ contains
             endif
         else
             write(*,*) 'key: ', trim(key), ' does not exist in the chash'
-            stop 'simple_chash :: print_key_val'
+            stop 'simple_chash :: print_key_val_pair_1'
         endif
     end subroutine print_key_val_pair_1
 

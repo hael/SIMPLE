@@ -231,6 +231,9 @@ contains
                     call cline_extract%set('outfile',   fname_ctf_extract)
                     call cline_extract%set('outstk',    fname_stk_extract)
                     call cline_extract%set('pcontrast', p%pcontrast)
+                    if( cline%defined('box_extract') )then
+                        call cline_extract%set('box', real(p%box_extract))
+                    endif
                     call xextract%execute(cline_extract)
                 endif
             endif
