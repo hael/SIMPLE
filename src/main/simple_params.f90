@@ -395,11 +395,11 @@ end interface
 contains
 
     !> \brief  is a constructor
-    function constructor( cline, allow_mix ) result( self )
+    function constructor( cline, allow_mix, del_scaled ) result( self )
         class(cmdline),    intent(inout) :: cline
-        logical, optional, intent(in)    :: allow_mix
+        logical, optional, intent(in)    :: allow_mix, del_scaled
         type(params) :: self
-        call self%new( cline, allow_mix )
+        call self%new( cline, allow_mix, del_scaled )
     end function constructor
 
     !> \brief  is a constructor
