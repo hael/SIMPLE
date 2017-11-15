@@ -527,8 +527,6 @@ contains
         p_master = params(cline)
         if( p_master%eo .eq. 'no' .and. .not. cline%defined('lp') )&
             &stop 'need lp input when eo .eq. no; het'
-        ! delete possibly pre-existing scaled stack parts & pft parts
-        call del_files(STKPARTFBODY, p_master%nparts, ext=p_master%ext, suffix='_sc')
         ! prepare command lines from prototype
         cline_recvol_distr = cline
         call cline_recvol_distr%set('prg', 'recvol')
