@@ -1497,7 +1497,7 @@ contains
             ! removes temporary split stktab lists
             do ipart=1,nparts
                 filetab = 'scale_stktab_part'//int2str(ipart)//METADATEXT
-                !call del_file( filetab )
+                call del_file( filetab )
             end do
             deallocate(part_stks)
         endif

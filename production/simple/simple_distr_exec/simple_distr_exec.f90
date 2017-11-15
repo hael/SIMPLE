@@ -961,7 +961,7 @@ select case(prg)
             stop 'stk or stktab need to be part of command line!'
         endif
         ! set defaults
-        if( .not. cline%defined('eo') ) call cline%set('eo','yes')
+        if( .not. cline%defined('eo') .and. .not. cline%defined('lp') ) call cline%set('eo','yes')
         ! execute
         call xhet%execute( cline )
     case( 'het_refine' )
