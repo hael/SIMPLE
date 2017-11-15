@@ -403,24 +403,26 @@ contains
     end function constructor
 
     !> \brief  is a constructor
-    subroutine new( self, cline, allow_mix )
+    subroutine new( self, cline, allow_mix, del_scaled )
         use simple_math, only: round2even
         use simple_map_reduce  ! use all in there
         class(params),     intent(inout) :: self
         class(cmdline),    intent(inout) :: cline
-        logical, optional, intent(in)    :: allow_mix
+        logical, optional, intent(in)    :: allow_mix, del_scaled
         type(binoris)                    :: bos
         character(len=STDLEN)            :: cwd_local, debug_local, verbose_local, stk_part_fname
         character(len=1)                 :: checkupfile(50)
         character(len=:), allocatable    :: conv, stk_part_fname_sc
         integer                          :: i, ncls, ifoo, lfoo(3), cntfile, istate
-        logical                          :: nparts_set, vol_defined(MAXS), aamix 
+        logical                          :: nparts_set, vol_defined(MAXS), aamix, ddel_scaled 
         nparts_set        = .false.
         vol_defined(MAXS) = .false.
         debug_local       = 'no'
         verbose_local     = 'no'
         aamix = .false.
         if( present(allow_mix) ) aamix = allow_mix
+        ddel_scaled = .false.
+        if( present(del_scaled) ) ddel_scaled = del_scaled
         ! file counter
         cntfile = 0
         ! make global ori
@@ -913,6 +915,10 @@ contains
             self%box     = self%ldim(1)
             self%l_stktab_input = .true.
         else
+            if( ddel_scaled )then
+                ! delete possibly pre-existing scaled stack parts
+                call del_files(STKPARTFBODY, self%nparts, ext=self%ext, suffix='_sc')
+            endif
             ! set name of partial files in parallel execution
             stk_part_fname    = trim(STKPARTFBODY)//int2str_pad(self%part,self%numlen)//self%ext
             stk_part_fname_sc = add2fbody(stk_part_fname, self%ext, '_sc')

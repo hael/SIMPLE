@@ -70,7 +70,7 @@ contains
 
         real                  :: scale_stage1, scale_stage2
         integer               :: nparts, last_iter_stage1, last_iter_stage2
-        p_master = params(cline)
+        p_master = params(cline, del_scaled=.true.)
         nparts   = p_master%nparts
         if( .not. cline%defined('stktab') )then
             ! split stack
