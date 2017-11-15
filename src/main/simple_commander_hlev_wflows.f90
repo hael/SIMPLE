@@ -621,7 +621,7 @@ contains
                 call seed_rnd
                 nptcls = os%get_noris()
                 states = nint(os%get_all('state'))
-                nonzero_nptcls = count(states>0 .and. states<=nlabels)
+                nonzero_nptcls = count(states>0)
                 if( .not.corr_ranked_here )then
                     allocate(config_diverse(nptcls), tmp(nonzero_nptcls), stat=alloc_stat )
                     if(alloc_stat /= 0) call alloc_errchk('In: commander_hlev_wflows::diverse_labeling ', alloc_stat)
@@ -638,10 +638,10 @@ contains
                     enddo
                     deallocate(tmp,states)
                 else
-                    allocate(config_diverse(nptcls), order(nptcls), tmp(nlabels),stat=alloc_stat )
+                    allocate(config_diverse(nptcls), order(nptcls), tmp(nlabels), source=0, stat=alloc_stat )
                     corrs = os%get_all('corr')
                     tmp   = (/(s,s=1,nlabels)/)
-                    where( states<=0 .and. states>nlabels ) corrs = -1.
+                    where( states<=0 ) corrs = -1.
                     order = (/(iptcl,iptcl=1,nptcls)/)
                     call hpsort( nptcls, corrs, order )
                     call reverse(order)
@@ -656,7 +656,7 @@ contains
                             config_diverse(order(ind)) = tmp(s)
                         enddo
                     enddo
-                    where( states<=0 .and. states>nlabels ) config_diverse = 0
+                    where( states<=0 ) config_diverse = 0
                     deallocate(states,corrs,order,tmp)
                 endif
                 call rt%kill
