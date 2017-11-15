@@ -12,9 +12,9 @@ implicit none
 public :: cleanprime3D_srch, prep4prime3D_srch, prime3D_srch_extr
 public :: prime3D_srch, o_peaks
 private
-#include "simple_local_flags.inc"
 
-real, parameter :: FACTWEIGHTS_THRESH = 0.001 !< threshold for factorial weights
+real,    parameter :: FACTWEIGHTS_THRESH = 0.001 !< threshold for factorial weights
+logical, parameter :: DEBUG = .false.
 
 ! allocatables for prime3D_srch are class variables to improve caching and reduce alloc overheads 
 type(oris), allocatable :: o_peaks(:)                            !< solution objects
@@ -400,7 +400,7 @@ contains
         call self%grad_shsrch_obj%new(self%pftcc_ptr, lims, lims_init=lims_init,&
             &shbarrier=p%shbarrier, maxits=60)
         self%exists = .true.
-        DebugPrint '>>> PRIME3D_SRCH::CONSTRUCTED NEW SIMPLE_PRIME3D_SRCH OBJECT'
+        if( DEBUG ) print *, '>>> PRIME3D_SRCH::CONSTRUCTED NEW SIMPLE_PRIME3D_SRCH OBJECT'
     end subroutine new
     
     ! SEARCH ROUTINES
@@ -436,7 +436,7 @@ contains
             call self%stochastic_srch(lp, nnmat, grid_projs)
         endif
         if(allocated(self%nnvec))deallocate(self%nnvec)
-        DebugPrint '>>> PRIME3D_SRCH::EXECUTED PRIME3D_SRCH'
+        if( DEBUG ) print *,  '>>> PRIME3D_SRCH::EXECUTED PRIME3D_SRCH'
     end subroutine exec_prime3D_srch
 
     !>  \brief state labeler
@@ -444,7 +444,7 @@ contains
         class(prime3D_srch), intent(inout) :: self
         logical,             intent(in)    :: do_extr
         call self%stochastic_srch_het( do_extr )
-        DebugPrint '>>> PRIME3D_SRCH::EXECUTED PRIME3D_SRCH_HET'
+        if( DEBUG ) print *, '>>> PRIME3D_SRCH::EXECUTED PRIME3D_SRCH_HET'
     end subroutine exec_prime3D_srch_het
 
     !>  \brief  Individual stochastic search by state
@@ -478,7 +478,7 @@ contains
         else
             call self%a_ptr%reject(self%iptcl)
         endif
-        DebugPrint '>>> PRIME3D_SRCH::FINISHED STOCHASTIC BYSTATE SEARCH'
+        if( DEBUG ) print *, '>>> PRIME3D_SRCH::FINISHED STOCHASTIC BYSTATE SEARCH'
 
         contains
 
@@ -547,7 +547,7 @@ contains
         else
             call self%a_ptr%reject(self%iptcl)
         endif
-        DebugPrint '>>> PRIME3D_SRCH::FINISHED GREEDY SEARCH'
+        if( DEBUG ) print *, '>>> PRIME3D_SRCH::FINISHED GREEDY SEARCH'
 
         contains
 
@@ -624,7 +624,7 @@ contains
         else
             call self%a_ptr%reject(self%iptcl)
         endif
-        DebugPrint '>>> PRIME3D_SRCH::FINISHED GREEDY SUBSPACE SEARCH'
+        if( DEBUG ) print *, '>>> PRIME3D_SRCH::FINISHED GREEDY SUBSPACE SEARCH'
 
         contains
 
@@ -682,7 +682,7 @@ contains
         else
             call self%a_ptr%reject(self%iptcl)
         endif
-        DebugPrint '>>> PRIME3D_SRCH::FINISHED STOCHASTIC SEARCH'
+        if( DEBUG ) print *, '>>> PRIME3D_SRCH::FINISHED STOCHASTIC SEARCH'
 
         contains
 
@@ -764,7 +764,7 @@ contains
         else
             call self%a_ptr%reject(self%iptcl)
         endif
-        DebugPrint '>>> PRIME3D_SRCH::FINISHED STOCHASTIC SEARCH (REFINE=SHC|SHCNEIGH)'
+        if( DEBUG ) print *, '>>> PRIME3D_SRCH::FINISHED STOCHASTIC SEARCH (REFINE=SHC|SHCNEIGH)'
 
         contains
 
@@ -811,7 +811,7 @@ contains
         else
             call self%a_ptr%reject(self%iptcl)
         endif
-        DebugPrint '>>> PRIME3D_SRCH::FINISHED EXTREMAL SEARCH'
+        if( DEBUG ) print *, '>>> PRIME3D_SRCH::FINISHED EXTREMAL SEARCH'
 
         contains
 
@@ -839,8 +839,10 @@ contains
         real    :: corrs_state(self%nstates), corrs_inpl(self%nrots), shvec(2)
         prev_states(self%iptcl) = nint(self%a_ptr%get(self%iptcl, 'state'))
         if( prev_states(self%iptcl) > 0 )then
-            if( prev_states(self%iptcl) > self%nstates )&
-                &stop 'previous best state outside boundary; stochastic_srch_het; simple_prime3D_srch'
+            if( prev_states(self%iptcl) > self%nstates )then
+                if( DEBUG ) print *, 'previous state: ', prev_states(self%iptcl)
+                stop 'previous best state outside boundary; stochastic_srch_het; simple_prime3D_srch'
+            endif
             if( .not. state_exists(prev_states(self%iptcl)) )&
                 &stop 'empty previous state; stochastic_srch_het; simple_prime3D_srch'
             ! all states correlations
@@ -899,7 +901,7 @@ contains
         else
             call self%a_ptr%reject(self%iptcl)
         endif
-        DebugPrint '>>> PRIME3D_SRCH::FINISHED HET SEARCH'
+        if( DEBUG ) print *, '>>> PRIME3D_SRCH::FINISHED HET SEARCH'
     end subroutine stochastic_srch_het
 
     !>  \brief  executes the in-plane search. This improved routine took HCN
@@ -931,7 +933,7 @@ contains
                 proj_space_shift(self%iptcl,ref,:) = cxy(2:3)
             endif
         endif
-        DebugPrint '>>> PRIME3D_SRCH::FINISHED INPL SEARCH'
+        if( DEBUG ) print *, '>>> PRIME3D_SRCH::FINISHED INPL SEARCH'
     end subroutine inpl_srch
 
     !>  \brief  prepares reference indices for the search & fetches ctf
@@ -986,7 +988,7 @@ contains
             endif
             self%prev_corr = corr
         endif
-        DebugPrint '>>> PRIME3D_SRCH::PREPARED FOR SIMPLE_PRIME3D_SRCH'
+        if( DEBUG ) print *, '>>> PRIME3D_SRCH::PREPARED FOR SIMPLE_PRIME3D_SRCH'
     end subroutine prep4srch
 
     !>  \brief retrieves and preps npeaks orientations for reconstruction
@@ -1153,7 +1155,7 @@ contains
         call self%a_ptr%set(self%iptcl, 'ow',    o_peaks(self%iptcl)%get(best_loc(1),'ow')   )
         call self%a_ptr%set(self%iptcl, 'proj',  o_peaks(self%iptcl)%get(best_loc(1),'proj') )
         call self%a_ptr%set(self%iptcl, 'sdev',  ang_sdev )
-        DebugPrint '>>> PRIME3D_SRCH::EXECUTED PREP_NPEAKS_ORIS'
+        if( DEBUG ) print *, '>>> PRIME3D_SRCH::EXECUTED PREP_NPEAKS_ORIS'
     end subroutine prep_npeaks_oris_and_weights
 
     subroutine store_solution( self, ind, ref, inpl_ind, corr )
