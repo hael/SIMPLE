@@ -80,8 +80,7 @@ select case(prg)
         keys_required(3)  = 'cs'
         keys_required(4)  = 'fraca'
         keys_required(5)  = 'dir_movies'
-        keys_required(6)  = 'dir_target'
-        keys_required(7)  = 'ncunits'
+        keys_required(6)  = 'ncunits'
         ! set optional keys
         keys_optional(1)  = 'nthr'
         keys_optional(2)  = 'refs'
@@ -116,7 +115,7 @@ select case(prg)
         keys_optional(31) = 'pcontrast'
         ! parse command line
         if( describe ) call print_doc_preproc
-        call cline%parse(keys_required(:7), keys_optional(:31))
+        call cline%parse(keys_required(:6), keys_optional(:31))
         ! set defaults
         if( .not. cline%defined('trs')             ) call cline%set('trs',               5.)
         if( .not. cline%defined('lpstart')         ) call cline%set('lpstart',          15.)
@@ -962,6 +961,7 @@ select case(prg)
         endif
         ! set defaults
         if( .not. cline%defined('eo') .and. .not. cline%defined('lp') ) call cline%set('eo','yes')
+        if( cline%defined('lp') ) call cline%set('eo','no')
         ! execute
         call xhet%execute( cline )
     case( 'het_refine' )

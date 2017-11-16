@@ -1,9 +1,8 @@
 module simple_defs_fname
 ! PRIME2D
-character(len=11), parameter :: PRIME2D_ITER_FBODY   = 'prime2Ddoc_'
-character(len=10), parameter :: CAVGS_ITER_FBODY     = 'cavgs_iter'
+character(len=11), parameter :: PRIME2D_ITER_FBODY = 'prime2Ddoc_'
+character(len=10), parameter :: CAVGS_ITER_FBODY   = 'cavgs_iter'
 ! PRIME2D STREAM
-
 character(len=10), parameter :: SCSTK_DIR          = 'stacks_sc/'
 ! PRIME3D
 character(len=11), parameter :: PRIME3D_ITER_FBODY = 'prime3Ddoc_'
@@ -23,6 +22,12 @@ character(len=3),  parameter :: SCALE_SUFFIX       = '_sc'
 character(len=6),  parameter :: PREP4CGRID_SUFFIX  = '_cgrid'
 ! DIRECTORIES
 character(len=10), parameter :: STDERROUT_DIR      = 'stderrout/'
+character(len=9),  parameter :: PREPROC_STREAM_DIR = 'pipeline/'
+character(len=21), parameter :: UNBLUR_STREAM_DIR  = PREPROC_STREAM_DIR//'micrographs/'
+character(len=13), parameter :: CTF_STREAM_DIR     = PREPROC_STREAM_DIR//'ctf/'
+character(len=15), parameter :: PICK_STREAM_DIR    = PREPROC_STREAM_DIR//'boxes/'
+character(len=19), parameter :: EXTRACT_STREAM_DIR = PREPROC_STREAM_DIR//'particles/'
+character(len=17), parameter :: UNIDOC_STREAM_DIR  = PREPROC_STREAM_DIR//'unidocs/'
 ! EXTENSIONS
 character(len=4),  parameter :: BIN_EXT            = '.bin'
 character(len=4),  parameter :: METADATA_EXT       = '.txt'

@@ -1,6 +1,7 @@
 ! ctffind iterator
 module simple_ctffind_iter
 #include "simple_lib.f08"
+use simple_defs_fname
 use simple_nrtxtfile, only: nrtxtfile
 implicit none
 
@@ -14,25 +15,35 @@ end type ctffind_iter
 
 contains
 
-    subroutine iterate( self, p, imovie, movie_counter, moviename_forctf, fname_ctrl, fname_output, os )
+    subroutine iterate( self, p, imovie, movie_counter, moviename_forctf, fname_output, os, dir_out )
         use simple_params, only: params
         use simple_oris,   only: oris
         class(ctffind_iter),        intent(inout) :: self
         class(params),              intent(inout) :: p
         integer,                    intent(in)    :: imovie
         integer,                    intent(inout) :: movie_counter
-        character(len=*),           intent(in)    :: moviename_forctf, fname_ctrl, fname_output
+        character(len=*),           intent(in)    :: moviename_forctf, fname_output
         class(oris),                intent(inout) :: os
+        character(len=*), optional, intent(in)    :: dir_out
         character(len=:), allocatable :: fname_diag
         real,             allocatable :: ctfparams(:,:)
-        character(len=STDLEN)         :: cmd_str, fname_param
+        character(len=STDLEN)         :: cmd_str, fname_param, fname_ctrl
         type(nrtxtfile)               :: ctfparamfile
         integer                       :: funit, ndatlines, nrecs, j, file_stat
         if( .not. file_exists(moviename_forctf) )&
         & write(*,*) 'inputted micrograph does not exist: ', trim(adjustl(moviename_forctf))
         movie_counter = movie_counter + 1
-        fname_diag    = add2fbody(moviename_forctf, p%ext, '_ctffind_diag')
-        fname_param   = fname_new_ext(fname_diag, 'txt')
+        ! diagnostic
+        fname_diag = add2fbody(trim(moviename_forctf), p%ext, '_ctffind_diag')
+        ! control script
+        fname_ctrl = add2fbody(remove_abspath(trim(moviename_forctf)), p%ext, '_ctffind_ctrl_file')
+        fname_ctrl = fname_new_ext(trim(fname_ctrl), 'txt')
+        if(present(dir_out))then
+            fname_diag = remove_abspath(trim(fname_diag))
+            fname_diag = trim(dir_out)//'/'//trim(fname_diag)
+            fname_ctrl = trim(dir_out)//'/'//trim(fname_ctrl)
+        endif
+        fname_param = fname_new_ext(trim(fname_diag), 'txt')
         call fopen(funit, status='REPLACE', action='WRITE', file=trim(fname_ctrl),iostat=file_stat)
         if(file_stat/=0) call fileio_errmsg("ctffind_iter:: iterate fopen failed "//trim(fname_ctrl),file_stat)
         write(funit,'(a)') trim(moviename_forctf)      ! integrated movie used for fitting
@@ -54,7 +65,11 @@ contains
         write(funit,'(a)') trim(p%phaseplate)          ! phase-plate or not (yes|no) {no}
         write(funit,'(a)') 'no';                       ! set expert options
         call fclose(funit,errmsg="ctffind_iter:: iterate fopen failed "//trim(fname_ctrl))
-        cmd_str = 'cat ' // fname_ctrl//' | ctffind'
+        cmd_str = 'cat ' // trim(fname_ctrl) //' | ctffind'
+        print *, trim(fname_param)
+        print *, trim(fname_diag)
+        print *, trim(fname_ctrl)
+        print *, trim(cmd_str)
         call exec_cmdline(trim(cmd_str))
         call ctfparamfile%new(fname_param, 1)
         ndatlines = ctfparamfile%get_ndatalines()

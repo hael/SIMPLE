@@ -86,6 +86,8 @@ contains
             else
                 if( b%a%get_nevenodd() == 0 ) call b%a%partition_eo
             endif
+        else
+            call b%a%set_all2single('eo', -1.)
         endif
 
         inptcls = p%top - p%fromp + 1

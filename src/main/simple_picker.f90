@@ -37,10 +37,11 @@ logical                       :: rm_outliers = .true.
 
 contains
 
-    subroutine init_picker( micfname, refsfname, smpd_in, lp_in, distthr_in, ndev_in )
+    subroutine init_picker( micfname, refsfname, smpd_in, lp_in, distthr_in, ndev_in, dir_out )
         character(len=*),           intent(in) :: micfname, refsfname
         real,                       intent(in) :: smpd_in
         real,             optional, intent(in) :: lp_in, distthr_in, ndev_in
+        character(len=*), optional, intent(in) :: dir_out
         type(image) :: refimg
         integer     :: ifoo, iref
         allocate(micname,  source=trim(micfname), stat=alloc_stat)
@@ -48,6 +49,7 @@ contains
         allocate(refsname, source=trim(refsfname), stat=alloc_stat)
         allocchk('picker;init, 2')
         boxname = remove_abspath( fname_new_ext(micname,'box') )   
+        if( present(dir_out) )boxname = trim(dir_out)//trim(boxname)
         smpd    = smpd_in
         lp      = 20.0
         if( present(lp_in) ) lp = lp_in

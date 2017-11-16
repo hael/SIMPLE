@@ -1,7 +1,7 @@
 ! concrete commander: stream processing routines
 module simple_commander_stream_wflows
 #include "simple_lib.f08"
-
+use simple_defs_fname
 use simple_cmdline,           only: cmdline
 use simple_chash,             only: chash
 use simple_params,            only: params
@@ -50,8 +50,15 @@ contains
         p_master%numlen     = 5
         call cline%set('numlen', real(p_master%numlen))
         call cline%set('stream', 'yes')
-        ! ! make target directory
-        call mkdir(p_master%dir_target)
+        ! ! make target directories
+        call mkdir(PREPROC_STREAM_DIR)
+        call mkdir(UNBLUR_STREAM_DIR)
+        call mkdir(CTF_STREAM_DIR)
+        call mkdir(UNIDOC_STREAM_DIR)
+        if( p_master%l_pick )then
+            call mkdir(PICK_STREAM_DIR)
+            if( cline%defined('refs') )call mkdir(EXTRACT_STREAM_DIR)
+        endif
         ! setup the environment for distributed execution
         call qenv%new(p_master, stream=.true.)
         ! movie watcher init

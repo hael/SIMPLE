@@ -1,7 +1,7 @@
 ! iterator for unblur (a program for motion correction, dose-weighting and frame-weighting of DDD movies)
 module simple_unblur_iter
 #include "simple_lib.f08"
-
+use simple_defs_fname
 use simple_image,        only: image
 use simple_cmdline,      only: cmdline
 use simple_params,       only: params
@@ -30,47 +30,49 @@ end type unblur_iter
 
 contains
 
-    subroutine iterate( self, cline, p, orientation, imovie, movie_counter, frame_counter, moviename, smpd_out )
-        class(unblur_iter), intent(inout) :: self
-        class(cmdline),     intent(inout) :: cline
-        class(params),      intent(inout) :: p
-        class(ori),         intent(inout) :: orientation
-        integer,            intent(in)    :: imovie
-        integer,            intent(inout) :: movie_counter, frame_counter
-        character(len=*),   intent(in)    :: moviename
-        real,               intent(out)   :: smpd_out
-        real, allocatable :: shifts(:,:)
-        integer           :: ldim(3), ldim_thumb(3), iframe, nframes
-        real              :: corr, scale
+    subroutine iterate( self, cline, p, orientation, imovie, movie_counter, frame_counter, moviename, smpd_out, dir_out )
+        class(unblur_iter),         intent(inout) :: self
+        class(cmdline),             intent(inout) :: cline
+        class(params),              intent(inout) :: p
+        class(ori),                 intent(inout) :: orientation
+        integer,                    intent(in)    :: imovie
+        integer,                    intent(inout) :: movie_counter, frame_counter
+        character(len=*),           intent(in)    :: moviename
+        real,                       intent(out)   :: smpd_out
+        character(len=*), optional, intent(in)    :: dir_out
+        real, allocatable     :: shifts(:,:)
+        character(len=STDLEN) :: dir
+        integer               :: ldim(3), ldim_thumb(3), iframe, nframes
+        real                  :: corr, scale
+        if( present(dir_out) )then
+            dir = trim(adjustl(dir_out))
+        else
+            dir = ''
+        endif
         ! make names
         if( cline%defined('fbody') )then
             if( p%stream.eq.'yes' )then
-                self%moviename_intg   = trim(adjustl(p%fbody))//'_intg'//p%ext
-                self%moviename_forctf = trim(adjustl(p%fbody))//'_forctf'//p%ext
-                self%moviename_pspec  = trim(adjustl(p%fbody))//'_pspec'//p%ext
-                self%moviename_thumb  = trim(adjustl(p%fbody))//'_thumb'//p%ext
+                self%moviename_intg   = trim(dir)//trim(adjustl(p%fbody))//'_intg'//p%ext
+                self%moviename_forctf = trim(dir)//trim(adjustl(p%fbody))//'_forctf'//p%ext
+                self%moviename_pspec  = trim(dir)//trim(adjustl(p%fbody))//'_pspec'//p%ext
+                self%moviename_thumb  = trim(dir)//trim(adjustl(p%fbody))//'_thumb'//p%ext
             else
-                self%moviename_intg   = trim(adjustl(p%fbody))//'_intg'//int2str_pad(imovie,p%numlen)//p%ext
-                self%moviename_forctf = trim(adjustl(p%fbody))//'_forctf'//int2str_pad(imovie,p%numlen)//p%ext
-                self%moviename_pspec  = trim(adjustl(p%fbody))//'_pspec'//int2str_pad(imovie,p%numlen)//p%ext
-                self%moviename_thumb  = trim(adjustl(p%fbody))//'_thumb'//int2str_pad(imovie,p%numlen)//p%ext
+                self%moviename_intg   = trim(dir)//trim(adjustl(p%fbody))//'_intg'//int2str_pad(imovie,p%numlen)//p%ext
+                self%moviename_forctf = trim(dir)//trim(adjustl(p%fbody))//'_forctf'//int2str_pad(imovie,p%numlen)//p%ext
+                self%moviename_pspec  = trim(dir)//trim(adjustl(p%fbody))//'_pspec'//int2str_pad(imovie,p%numlen)//p%ext
+                self%moviename_thumb  = trim(dir)//trim(adjustl(p%fbody))//'_thumb'//int2str_pad(imovie,p%numlen)//p%ext
             endif
             if( cline%defined('tof') )then
-                if( p%stream.eq.'yes' )then
-                    self%moviename_intg_frames = trim(adjustl(p%fbody))//'_frames'//int2str(p%fromf)//'-'&
-                    &//int2str(p%tof)//'_intg'//p%ext
-                else
-                    self%moviename_intg_frames = trim(adjustl(p%fbody))//'_frames'//int2str(p%fromf)//'-'&
-                    &//int2str(p%tof)//'_intg'//int2str_pad(imovie,p%numlen)//p%ext
-                endif
+                self%moviename_intg_frames = trim(dir)//trim(adjustl(p%fbody))//'_frames'//int2str(p%fromf)//'-'&
+                &//int2str(p%tof)//'_intg'//int2str_pad(imovie,p%numlen)//p%ext
             endif
         else
-            self%moviename_intg   = int2str_pad(imovie,p%numlen)//'_intg'//p%ext
-            self%moviename_forctf = int2str_pad(imovie,p%numlen)//'_forctf'//p%ext
-            self%moviename_pspec  = int2str_pad(imovie,p%numlen)//'_pspec'//p%ext
-            self%moviename_thumb  = int2str_pad(imovie,p%numlen)//'_thumb'//p%ext
+            self%moviename_intg   = trim(dir)//int2str_pad(imovie,p%numlen)//'_intg'//p%ext
+            self%moviename_forctf = trim(dir)//int2str_pad(imovie,p%numlen)//'_forctf'//p%ext
+            self%moviename_pspec  = trim(dir)//int2str_pad(imovie,p%numlen)//'_pspec'//p%ext
+            self%moviename_thumb  = trim(dir)//int2str_pad(imovie,p%numlen)//'_thumb'//p%ext
             if( cline%defined('tof') )then
-                self%moviename_intg_frames = int2str_pad(imovie,p%numlen)//'_frames'//int2str(p%fromf)//'-'&
+                self%moviename_intg_frames = trim(dir)//int2str_pad(imovie,p%numlen)//'_frames'//int2str(p%fromf)//'-'&
                 &//int2str(p%tof)//'_intg'//p%ext
             endif
         endif

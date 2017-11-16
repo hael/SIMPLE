@@ -169,8 +169,8 @@ contains
         logical :: unblur_done, ctffind_done, picker_done
         fname_here = remove_abspath(trim(adjustl(fname)))
         ext        = trim(fname2ext(fname_here))
-        fbody      = trim(get_fbody(trim(fname_here), trim(ext)))
-        if( trim(self%fbody) .ne. '' )fbody = trim(self%fbody)//fbody
+        fbody      = get_fbody(trim(fname_here), trim(ext))
+        if( trim(self%fbody) .ne. '' )fbody = trim(self%fbody)//trim(adjustl(fbody))
         ! unblur
         unblur_name = trim(self%target_dir)//'/'//trim(adjustl(fbody))//'_thumb'//trim(self%ext)
         unblur_done = file_exists(trim(unblur_name))

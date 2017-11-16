@@ -67,7 +67,6 @@ contains
         type(oris)            :: os
         type(scaler)          :: scobj
         type(params)          :: p_master
-
         real                  :: scale_stage1, scale_stage2
         integer               :: nparts, last_iter_stage1, last_iter_stage2
         p_master = params(cline, del_scaled=.true.)
@@ -528,21 +527,21 @@ contains
         if( p_master%eo .eq. 'no' .and. .not. cline%defined('lp') )&
             &stop 'need lp input when eo .eq. no; het'
         ! prepare command lines from prototype
-        cline_recvol_distr = cline
-        call cline_recvol_distr%set('prg', 'recvol')
-        if( p_master%eo .eq. 'no' ) call cline_recvol_distr%set('eo', 'yes')
-        call cline_recvol_distr%delete('lp')
-        cline_postproc_vol = cline
-        call cline_postproc_vol%set('prg', 'postproc_vol')
-        if( p_master%eo .eq. 'no' )  call cline_postproc_vol%set('eo', 'yes')
-        call cline_postproc_vol%delete('lp')
-        cline_prime3D = cline
+        cline_prime3D      = cline
         call cline_prime3D%set('prg', 'prime3D')
         call cline_prime3D%set('maxits', real(MAXITS))
         call cline_prime3D%set('refine', 'het')
         call cline_prime3D%set('dynlp', 'no')
         call cline_prime3D%set('pproc', 'no')
         call cline_prime3D%delete('oritab2')
+        cline_postproc_vol = cline ! eo always eq yes
+        cline_recvol_distr = cline ! eo always eq yes
+        call cline_recvol_distr%set('prg', 'recvol')
+        call cline_postproc_vol%set('prg', 'postproc_vol')
+        call cline_recvol_distr%delete('lp')
+        call cline_postproc_vol%delete('lp')
+        call cline_recvol_distr%set('eo','yes')
+        call cline_postproc_vol%set('eo','yes')
         ! works out shift lmits for in-plane search
         if( cline%defined('trs') )then
             ! all good
@@ -555,6 +554,12 @@ contains
         oritab = 'hetdoc_init'//METADATEXT
         call os%new(p_master%nptcls)
         call binread_oritab(p_master%oritab, os, [1,p_master%nptcls])
+        if( p_master%eo.eq.'no' )then
+            ! updates e/o flags
+            call os%set_all2single('eo', -1.)
+        else
+            if( os%get_nevenodd() == 0 ) call os%partition_eo
+        endif
         if( cline%defined('oritab2') )then
             ! this is  to force initialisation (4 testing)
             call os_states%new(p_master%nptcls)
