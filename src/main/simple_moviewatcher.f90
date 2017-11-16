@@ -3,6 +3,7 @@ module simple_moviewatcher
 #include "simple_lib.f08"
 use simple_params,        only: params
 use simple_timer
+use simple_defs_fname
 implicit none
 
 public :: moviewatcher
@@ -13,7 +14,6 @@ type moviewatcher
     character(len=STDLEN), allocatable :: history(:)             !< history of movies detected
     character(len=STDLEN)              :: cwd            = ''    !< CWD
     character(len=STDLEN)              :: watch_dir      = ''    !< movies directory to watch
-    character(len=STDLEN)              :: target_dir     = ''    !< target directory
     character(len=STDLEN)              :: ext            = ''    !< target directory
     character(len=STDLEN)              :: fbody          = ''    !< template name
     integer                            :: n_history      = 0     !< history of movies detected
@@ -57,14 +57,9 @@ contains
             print *, 'Directory does not exist: ', trim(adjustl(p%dir_movies))
             stop
         endif
-        if( .not. file_exists(trim(adjustl(p%dir_target))) )then
-            print *, 'Directory does not exist: ', trim(adjustl(p%dir_target))
-            stop
-        endif
         call simple_getcwd(cwd)
         self%cwd         = trim(cwd)
         self%watch_dir   = trim(adjustl(p%dir_movies))
-        self%target_dir  = trim(adjustl(p%dir_target))
         self%report_time = report_time
         self%dopick      = p%l_pick
         self%ext         = trim(adjustl(p%ext))
@@ -172,14 +167,14 @@ contains
         fbody      = get_fbody(trim(fname_here), trim(ext))
         if( trim(self%fbody) .ne. '' )fbody = trim(self%fbody)//trim(adjustl(fbody))
         ! unblur
-        unblur_name = trim(self%target_dir)//'/'//trim(adjustl(fbody))//'_thumb'//trim(self%ext)
+        unblur_name = UNBLUR_STREAM_DIR//trim(adjustl(fbody))//THUMBNAIL_SUFFIX//trim(self%ext)
         unblur_done = file_exists(trim(unblur_name))
         if( unblur_done )then
-            unblur_name = trim(self%target_dir)//'/'//trim(adjustl(fbody))//'_intg'//trim(self%ext)
+            unblur_name = UNBLUR_STREAM_DIR//trim(adjustl(fbody))//INTGMOV_SUFFIX//trim(self%ext)
             unblur_done = file_exists(trim(unblur_name))
         endif
         ! ctffind
-        unidoc_name  = trim(self%target_dir)//'/unidoc_output_'//trim(adjustl(fbody))//'.txt'
+        unidoc_name  = UNIDOC_STREAM_DIR//UNIDOC_OUTPUT//trim(adjustl(fbody))//'.txt'
         ctffind_done = file_exists(trim(unidoc_name))
         to_process = .not. (unblur_done .and. ctffind_done)
     end function to_process
@@ -230,7 +225,6 @@ contains
         class(moviewatcher), intent(inout) :: self
         self%cwd        = ''
         self%watch_dir  = ''
-        self%target_dir = ''
         self%ext        = ''
         if(allocated(self%history))deallocate(self%history)
         self%report_time    = 0

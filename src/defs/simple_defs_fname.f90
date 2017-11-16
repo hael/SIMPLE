@@ -20,6 +20,9 @@ character(len=20), parameter :: EXTRACT_PARAMS_FBODY = 'extract_params_'
 ! SUFFIXES
 character(len=3),  parameter :: SCALE_SUFFIX       = '_sc'
 character(len=6),  parameter :: PREP4CGRID_SUFFIX  = '_cgrid'
+character(len=6),  parameter :: THUMBNAIL_SUFFIX   = '_thumb'
+character(len=5),  parameter :: INTGMOV_SUFFIX     = '_intg'
+character(len=6),  parameter :: POWSPEC_SUFFIX     = '_pspec'
 ! DIRECTORIES
 character(len=10), parameter :: STDERROUT_DIR      = 'stderrout/'
 character(len=9),  parameter :: PREPROC_STREAM_DIR = 'pipeline/'
@@ -28,6 +31,8 @@ character(len=13), parameter :: CTF_STREAM_DIR     = PREPROC_STREAM_DIR//'ctf/'
 character(len=15), parameter :: PICK_STREAM_DIR    = PREPROC_STREAM_DIR//'boxes/'
 character(len=19), parameter :: EXTRACT_STREAM_DIR = PREPROC_STREAM_DIR//'particles/'
 character(len=17), parameter :: UNIDOC_STREAM_DIR  = PREPROC_STREAM_DIR//'unidocs/'
+! UNIDOC
+character(len=14), parameter :: UNIDOC_OUTPUT      = 'unidoc_output_'
 ! EXTENSIONS
 character(len=4),  parameter :: BIN_EXT            = '.bin'
 character(len=4),  parameter :: METADATA_EXT       = '.txt'

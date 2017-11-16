@@ -158,7 +158,7 @@ contains
                 p%fbody = trim(movie_fbody)
                 ! unblur: on call
                 ! ctf: on call and output set below
-                allocate(fname_unidoc_output, source=UNIDOC_STREAM_DIR//'unidoc_output_'//trim(movie_fbody)//'.txt')
+                allocate(fname_unidoc_output, source=UNIDOC_STREAM_DIR//UNIDOC_OUTPUT//trim(movie_fbody)//'.txt')
                 ! picker: on call
                 ! extract
                 allocate(fname_stk_extract, source=trim(EXTRACT_STK_FBODY)//trim(movie_fbody)//'.'//trim(movie_ext))
