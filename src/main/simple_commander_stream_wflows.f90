@@ -325,7 +325,7 @@ contains
                         cnt = cnt + 1
                         ext       = fname2ext(trim(remove_abspath(trim(new_stacks(cnt)))))
                         fbody     = get_fbody(trim(remove_abspath(trim(new_stacks(cnt)))), trim(ext))
-                        stktab(i) = SCSTK_DIR // trim(fbody)// '_sc' // p_master%ext
+                        stktab(i) = SCSTK_DIR // trim(fbody)// SCALE_SUFFIX // p_master%ext
                         call cline_scale%set('dir_target', SCSTK_DIR)
                     enddo
                     call qenv%exec_simple_prg_in_queue(cline_scale, 'OUT1','JOB_FINISHED_1')

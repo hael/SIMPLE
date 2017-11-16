@@ -66,10 +66,6 @@ contains
         write(funit,'(a)') 'no';                       ! set expert options
         call fclose(funit,errmsg="ctffind_iter:: iterate fopen failed "//trim(fname_ctrl))
         cmd_str = 'cat ' // trim(fname_ctrl) //' | ctffind'
-        print *, trim(fname_param)
-        print *, trim(fname_diag)
-        print *, trim(fname_ctrl)
-        print *, trim(cmd_str)
         call exec_cmdline(trim(cmd_str))
         call ctfparamfile%new(fname_param, 1)
         ndatlines = ctfparamfile%get_ndatalines()
