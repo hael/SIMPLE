@@ -5160,6 +5160,40 @@ contains
             med   = (val1+val2+val3+val4+val5+val6+val7+val8+val9+val10+val11+val12) / 12.
         endif
         if(abs(med) > TINY) self%rmat = self%rmat - med
+        ! for the time where we care about modifying the image
+        ! class(image), intent(inout) :: self
+        ! integer :: k, npixels, start
+        ! real, allocatable :: pixels(:)
+        ! real    :: med
+        ! if( self%ldim(3) == 1 )then
+        !     npixels = 2*sum(self%ldim(1:2))
+        !     allocate(pixels(npixels))
+        !     pixels(1:self%ldim(2))                               = self%rmat(1           , :self%ldim(2),1)
+        !     pixels(self%ldim(2)+1:2*self%ldim(2))                = self%rmat(self%ldim(1), :self%ldim(2),1)
+        !     pixels(2*self%ldim(2)+1:2*self%ldim(2)+self%ldim(1)) = self%rmat(:self%ldim(1), 1, 1)
+        !     pixels(2*self%ldim(2)+self%ldim(1)+1:)               = self%rmat(:self%ldim(1), self%ldim(2),1)
+        ! else
+        !     npixels = 4*sum(self%ldim(1:3))
+        !     allocate(pixels(npixels))
+        !     pixels(1:self%ldim(2))                                              = self%rmat(1           , :self%ldim(2),1)
+        !     pixels(self%ldim(2)+1:2*self%ldim(2))                               = self%rmat(self%ldim(1), :self%ldim(2),1)
+        !     pixels(2*self%ldim(2)+1:2*self%ldim(2)+self%ldim(1))                = self%rmat(:self%ldim(1), 1, 1)
+        !     pixels(2*self%ldim(2)+self%ldim(1)+1:2*(self%ldim(2)+self%ldim(1))) = self%rmat(:self%ldim(1), self%ldim(2),1)
+        !     start = 2*(self%ldim(2)+self%ldim(1))
+        !     pixels(start:start+self%ldim(2))                                 = self%rmat(1           , :self%ldim(2),self%ldim(3))
+        !     pixels(start+self%ldim(2)+1:start+2*self%ldim(2))                = self%rmat(self%ldim(1), :self%ldim(2),self%ldim(3))
+        !     pixels(start+2*self%ldim(2)+1:start+2*self%ldim(2)+self%ldim(1)) = self%rmat(:self%ldim(1), 1,self%ldim(3))
+        !     pixels(start+2*self%ldim(2)+self%ldim(1)+1:2*start)              = self%rmat(:self%ldim(1), self%ldim(2),self%ldim(3))
+        !     start = 4*(self%ldim(2)+self%ldim(1))
+        !     pixels(start:start+self%ldim(3))                    = self%rmat(1           ,1,           :self%ldim(3))
+        !     pixels(start+self%ldim(3)+1:start+2*self%ldim(3))   = self%rmat(1           ,self%ldim(2),:self%ldim(3))
+        !     pixels(start+2*self%ldim(3)+1:start+3*self%ldim(3)) = self%rmat(self%ldim(1),1,           :self%ldim(3))
+        !     pixels(start+3*self%ldim(3)+1:)                     = self%rmat(self%ldim(1),self%ldim(2),:self%ldim(3))
+        ! endif
+        ! k = nint(real(npixels)/2.)
+        ! med = selec(k,npixels,pixels)
+        ! if(abs(med) > TINY) self%rmat = self%rmat - med
+        ! deallocate(pixels)
     end subroutine zero_background
 
     subroutine subtr_backgr_pad_divwinstr_fft( self, mskimg, instr_fun, self_out )

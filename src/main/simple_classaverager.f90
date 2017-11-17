@@ -36,7 +36,6 @@ integer                        :: istart          = 0, iend = 0 !< particle inde
 integer                        :: partsz          = 0           !< size of partition
 integer                        :: ncls            = 0           !< # classes
 integer                        :: nstates         = 0           !< # states
-integer                        :: nrots           = 0           !< # in-plane rotations
 integer                        :: filtsz          = 0           !< size of filter function or FSC
 integer                        :: ldim(3)         = [0,0,0]     !< logical dimension of image
 integer                        :: ldim_pd(3)      = [0,0,0]     !< logical dimension of image, padded
@@ -55,7 +54,7 @@ logical                        :: l_hard_assign = .true.        !< npeaks == 1 o
 logical                        :: exists        = .false.       !< to flag instance existence 
 
 integer, parameter      :: BATCHTHRSZ = 50
-logical, parameter      :: L_BENCH    = .false.
+logical, parameter      :: L_BENCH    = .true.
 integer(timer_int_kind) :: t_batch_loop, t_gridding, t_tot
 real(timer_int_kind)    :: rt_batch_loop, rt_gridding, rt_tot
 character(len=STDLEN)   :: benchfname
@@ -401,8 +400,7 @@ contains
         use simple_hadamard_common, only: read_img
         type(kbinterpol)         :: kbwin
         type(prep4cgrid)         :: gridprep
-        type(image)              :: batch_imgsum_even, batch_imgsum_odd
-        type(image)              :: batch_rhosum_even, batch_rhosum_odd
+        type(image)              :: cls_imgsum_even, cls_imgsum_odd
         type(image), allocatable :: batch_imgs(:), cgrid_imgs(:) 
         complex,     allocatable :: cmat_even(:,:,:), cmat_odd(:,:,:)
         real,        allocatable :: rho(:,:), rho_even(:,:), rho_odd(:,:), w(:,:)
@@ -454,10 +452,6 @@ contains
         allocate( rho(lims_small(1,1):lims_small(1,2),lims_small(2,1):lims_small(2,2)),&
                   rho_even(lims_small(1,1):lims_small(1,2),lims_small(2,1):lims_small(2,2)),&
                  &rho_odd( lims_small(1,1):lims_small(1,2),lims_small(2,1):lims_small(2,2)), stat=alloc_stat)
-        call batch_rhosum_even%new(ldim, pp%smpd)
-        call batch_rhosum_odd%new(ldim, pp%smpd)
-        call batch_rhosum_even%set_ft(.true.)
-        call batch_rhosum_odd%set_ft(.true.)
         call gridprep%new(bp%img, kbwin, ldim_pd)
         if( L_BENCH )then
             rt_batch_loop = 0.
@@ -475,6 +469,12 @@ contains
                 icls_pop = class_pop(istate, icls)
                 if( icls_pop == 0 ) cycle
                 call get_indices(istate, icls, ptcls_inds, iprecs, ioris)
+                ! class temporary matrices
+                cmat_even = zero
+                cmat_odd  = zero
+                rho       = 0.
+                rho_even  = 0.
+                rho_odd   = 0.
                 ! batch planning
                 nbatches = ceiling(real(icls_pop)/real(pp%nthr*BATCHTHRSZ))
                 batches  = split_nobjs_even(icls_pop, nbatches)
@@ -493,11 +493,6 @@ contains
                     ! batch particles loop
                     if( L_BENCH ) rt_batch_loop = rt_batch_loop + toc(t_batch_loop)
                     if( L_BENCH ) t_gridding = tic()
-                    cmat_even = zero
-                    cmat_odd  = zero
-                    rho       = 0.
-                    rho_even  = 0.
-                    rho_odd   = 0.
                     !$omp parallel do default(shared) schedule(static) reduction(+:cmat_even,cmat_odd,rho_even,rho_odd) proc_bind(close)&
                     !$omp private(i,iprec,iori,add_phshift,rho,pw,mat,h,k,l,m,loc,win,logi,phys,phys_cmat,cyc1,cyc2,w,incr)
                     ! batch loop, direct Fourier interpolation
@@ -528,22 +523,23 @@ contains
                                 &-precs(iprec)%shifts(iori,2), precs(iprec)%dfx, precs(iprec)%dfy,&
                                 &precs(iprec)%angast, add_phshift)
                         endif
-                        ! sampling density update
-                        select case(precs(iprec)%eo)
-                            case(0,-1)
-                                rho_even = rho_even + rho
-                            case(1)
-                                rho_odd  = rho_odd + rho
-                        end select
-                        ! reverse FFT and prepare for gridding
-                        call batch_imgs(i)%bwd_ft
-                        call gridprep%prep_serial(batch_imgs(i), cgrid_imgs(i))
                         ! prep weight
                         if( l_hard_assign )then
                             pw = precs(iprec)%pw
                         else
                             pw = precs(iprec)%pw * precs(iprec)%ows(iori)
                         endif
+                        ! sampling density update
+                        select case(precs(iprec)%eo)
+                            case(0,-1)
+                                rho_even = rho_even + pw * rho
+                            case(1)
+                                rho_odd  = rho_odd + pw * rho
+                        end select
+                        ! reverse FFT and prepare for gridding
+                        call batch_imgs(i)%bwd_ft
+                        call gridprep%prep_serial(batch_imgs(i), cgrid_imgs(i))
+                        ! rotation
                         mat = rotmat2d( -precs(iprec)%e3s(iori) )
                         ! Fourier components loop
                         do h=lims(1,1),lims(1,2)
@@ -567,7 +563,7 @@ contains
                                         ! interpolation
                                         do l=1,wdim
                                             do m=1,wdim
-                                                if( abs(w(l,m)) <= TINY ) cycle
+                                                if( w(l,m) == 0. ) cycle
                                                 logi       = [cyc1(l), cyc2(m), 0]
                                                 phys       = cgrid_imgs(i)%comp_addr_phys(logi)
                                                 cmat_even(phys_cmat(1),phys_cmat(2),phys_cmat(3)) = cmat_even(phys_cmat(1),phys_cmat(2),phys_cmat(3)) +&
@@ -578,7 +574,7 @@ contains
                                         ! interpolation
                                         do l=1,wdim
                                             do m=1,wdim
-                                                if( abs(w(l,m)) <= TINY ) cycle
+                                                if( w(l,m) == 0. ) cycle
                                                 logi       = [cyc1(l), cyc2(m), 0]
                                                 phys       = cgrid_imgs(i)%comp_addr_phys(logi)
                                                 cmat_odd(phys_cmat(1),phys_cmat(2),phys_cmat(3)) = cmat_odd(phys_cmat(1),phys_cmat(2),phys_cmat(3)) +&
@@ -591,44 +587,40 @@ contains
                     enddo
                     !$omp end parallel do
                     if( L_BENCH ) rt_gridding = rt_gridding + toc(t_gridding)
-                    ! put back cmats
-                    call batch_imgsum_even%new(ldim_pd, pp%smpd)
-                    call batch_imgsum_odd%new(ldim_pd, pp%smpd)
-                    call batch_imgsum_even%set_cmat(cmat_even)
-                    call batch_imgsum_odd%set_cmat(cmat_odd)
-                    ! real space & clipping
-                    call batch_imgsum_even%bwd_ft
-                    call batch_imgsum_odd%bwd_ft
-                    call batch_imgsum_even%clip_inplace(ldim)
-                    call batch_imgsum_odd%clip_inplace(ldim)
-                    ! back to Fourier space
-                    call batch_imgsum_even%fwd_ft
-                    call batch_imgsum_odd%fwd_ft
-                    ! put back rhos
-                    !$omp parallel do collapse(2) default(shared) private(h,k,logi,phys)&
-                    !$omp schedule(static) proc_bind(close)                    
-                    do h=lims_small(1,1),lims_small(1,2)
-                        do k=lims_small(2,1),lims_small(2,2)
-                            logi = [h,k,0]
-                            phys = batch_rhosum_even%comp_addr_phys([h,k,0])
-                            call batch_rhosum_even%set_fcomp(logi, phys, cmplx(rho_even(h,k),0.))
-                            call batch_rhosum_odd%set_fcomp( logi, phys, cmplx(rho_odd(h,k), 0.))
-                        enddo
+                enddo ! batch loop
+                ! put back cmats
+                call cls_imgsum_even%new(ldim_pd, pp%smpd)
+                call cls_imgsum_odd%new(ldim_pd, pp%smpd)
+                call cls_imgsum_even%set_cmat(cmat_even)
+                call cls_imgsum_odd%set_cmat(cmat_odd)
+                ! real space & clipping
+                call cls_imgsum_even%bwd_ft
+                call cls_imgsum_odd%bwd_ft
+                call cls_imgsum_even%clip_inplace(ldim)
+                call cls_imgsum_odd%clip_inplace(ldim)
+                ! back to Fourier space
+                call cls_imgsum_even%fwd_ft
+                call cls_imgsum_odd%fwd_ft
+                ! updates cavgs & rhos
+                !$omp parallel do collapse(2) default(shared) private(h,k,logi,phys)&
+                !$omp schedule(static) proc_bind(close)                    
+                do h=lims_small(1,1),lims_small(1,2)
+                    do k=lims_small(2,1),lims_small(2,2)
+                        logi = [h,k,0]
+                        phys = cls_imgsum_even%comp_addr_phys([h,k,0])
+                        call cavgs_even(istate,icls)%set_fcomp(logi, phys, cls_imgsum_even%get_fcomp(logi, phys))
+                        call cavgs_odd(istate,icls)%set_fcomp( logi, phys, cls_imgsum_odd%get_fcomp(logi, phys))
+                        call ctfsqsums_even(istate,icls)%set_fcomp(logi, phys, cmplx(rho_even(h,k),0.))
+                        call ctfsqsums_odd(istate,icls)%set_fcomp( logi, phys, cmplx(rho_odd(h,k), 0.))
                     enddo
-                    !$omp end parallel do
-                    ! batch summation
-                    call cavgs_even(istate,icls)%add_workshare(batch_imgsum_even, cavgs_odd(istate,icls), batch_imgsum_odd,&
-                        &ctfsqsums_even(istate,icls), batch_rhosum_even, ctfsqsums_odd(istate,icls), batch_rhosum_odd)
                 enddo
-                ! class cleanup
+                !$omp end parallel do
                 deallocate(ptcls_inds, batches, iprecs, ioris)
-            enddo
+            enddo ! class loop
         enddo
         ! batch cleanup
-        call batch_imgsum_even%kill
-        call batch_imgsum_odd%kill
-        call batch_rhosum_even%kill
-        call batch_rhosum_odd%kill
+        call cls_imgsum_even%kill
+        call cls_imgsum_odd%kill
         call gridprep%kill
         do i=1,batchsz_max
             call batch_imgs(i)%kill
@@ -667,10 +659,13 @@ contains
                 ! (w*CTF)**2 density correction
                 call cavgs_even(istate,icls)%ctf_dens_correct(ctfsqsums_even(istate,icls))
                 call cavgs_even(istate,icls)%bwd_ft
+                call cavgs_even(istate,icls)%norm
                 call cavgs_odd(istate,icls)%ctf_dens_correct(ctfsqsums_odd(istate,icls))
                 call cavgs_odd(istate,icls)%bwd_ft
+                call cavgs_odd(istate,icls)%norm
                 call cavgs_merged(istate,icls)%ctf_dens_correct(ctfsqsums_merged(istate,icls))
                 call cavgs_merged(istate,icls)%bwd_ft
+                call cavgs_merged(istate,icls)%norm
             end do
         end do
         !$omp end parallel do
@@ -682,7 +677,6 @@ contains
         type(image), allocatable     :: even_imgs(:,:), odd_imgs(:,:)
         real,        allocatable     :: frc(:)
         integer :: istate, icls, find, find_plate
-        logical :: err
         ! serial code for allocation/copy
         allocate(even_imgs(nstates,ncls), odd_imgs(nstates,ncls), frc(filtsz))
         do istate=1,nstates
@@ -745,17 +739,14 @@ contains
         select case(which)
             case('even')
                 do icls=1,ncls
-                    call cavgs_even(sstate, icls)%norm
                     call cavgs_even(sstate, icls)%write(fname, icls)
                 end do
             case('odd')
                 do icls=1,ncls
-                    call cavgs_odd(sstate, icls)%norm
                     call cavgs_odd(sstate, icls)%write(fname, icls)
                 end do
             case('merged')
                  do icls=1,ncls
-                    call cavgs_merged(sstate, icls)%norm
                     call cavgs_merged(sstate, icls)%write(fname, icls)
                 end do
             case DEFAULT
