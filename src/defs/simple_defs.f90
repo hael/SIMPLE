@@ -97,8 +97,10 @@ integer, parameter :: MAXIMGBATCHSZ        = 500       !< max # images in batch
 real,    parameter :: SHC_INPL_TRSHWDTH    = 2.0       !< shift search halfwidht (pixels)
 
 ! criterion for even/odd averaging in gold-FSC
-real,    parameter :: FSC4EOAVG = 0.98
-integer, parameter :: K4EOAVGLB = 3                    !< Fourier index lower-bound
+real,    parameter :: FSC4EOAVG   = 0.98
+real,    parameter :: FSC4EOAVG2D = 0.8
+integer, parameter :: K4EOAVGLB   = 3                  !< Fourier index lower-bound
+integer, parameter :: K4EOAVGLB2D = 4
 
 ! global  variables
 integer(kind=c_int)       :: nthr_glob                 !< number of threads global variable

@@ -487,7 +487,6 @@ contains
                     do i=1,batchsz
                         iptcl = ptcls_inds(batches(batch,1) + i - 1)
                         call read_img( bp, pp, iptcl )
-                        call batch_imgs(i)%zero_and_unflag_ft
                         batch_imgs(i) = bp%img
                     enddo
                     ! batch particles loop
@@ -707,7 +706,7 @@ contains
                 if( phaseplate ) call phaseplate_correct_fsc(frc, find_plate)
                 call bp%projfrcs%set_frc(icls, frc, istate)
                 ! average low-resolution info between eo pairs to keep things in register
-                find = bp%projfrcs%estimate_find_for_eoavg(icls, istate)
+                find = bp%projfrcs%estimate_find_for_eoavg2D(icls, istate)
                 find = max(find, find_plate)
                 call cavgs_merged(istate,icls)%fwd_ft
                 call cavgs_even(istate,icls)%fwd_ft
