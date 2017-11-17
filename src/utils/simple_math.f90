@@ -51,6 +51,11 @@ interface hardedge_inner
     module procedure hardedge_inner_2
 end interface
 
+interface peakfinder
+    module procedure peakfinder_1
+    module procedure peakfinder_2
+end interface
+
 interface find
     module procedure find_1
     module procedure find_2
@@ -2301,22 +2306,34 @@ contains
 
     ! SORTING
 
-    function peakfinder( vals, npeaks ) result( peakpos )
+    function peakfinder_1( vals, npeaks ) result( peakpos )
         real,    intent(in)  :: vals(:)
         integer, intent(in)  :: npeaks
         integer, allocatable :: peakpos(:)
         logical, allocatable :: mask(:)
         integer :: n, ipeak, loc(1)
         n = size(vals)
-        allocate(peakpos(npeaks), mask(n),stat=alloc_stat)
-        if(alloc_stat /= 0) call alloc_errchk("In: peakfinder; simple_math", alloc_stat)
+        allocate(peakpos(npeaks), mask(n))
         mask = .true.
         do ipeak=1,npeaks
             loc = maxloc(vals, mask=mask)
             peakpos(ipeak) = loc(1)
             mask(loc(1)) = .false.
         end do
-    end function peakfinder
+    end function peakfinder_1
+
+    function peakfinder_2( vals ) result( peakpos )
+        real,    intent(in)  :: vals(:)
+        logical, allocatable :: peakpos(:)
+        integer :: n, i, alloc_stat
+        n = size(vals)
+        allocate(peakpos(n))
+        if( vals(1) > vals(2) )  peakpos(1) = .true.
+        do i=2,n-1
+            if( vals(i) >= vals(i-1) .and. vals(i) >= vals(i+1) ) peakpos(i) = .true.
+        end do
+        if( vals(n) > vals(n-1) ) peakpos(n) = .true.
+    end function peakfinder_2
 
     !>   rheapsort from numerical recepies (largest last)
     subroutine hpsort_1( n, rarr, iarr )

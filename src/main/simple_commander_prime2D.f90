@@ -9,7 +9,6 @@ use simple_imghead,           only: find_ldim_nptcls
 use simple_hadamard_common,   only: gen2Dclassdoc
 use simple_qsys_funs,         only: qsys_job_finished
 use simple_projection_frcs,   only: projection_frcs
-use simple_commander_imgproc, only: prep4cgrid_commander
 use simple_defs_fname         ! use all in there
 use simple_binoris_io         ! use all in there
 implicit none
@@ -48,8 +47,6 @@ contains
         use simple_classaverager
         class(makecavgs_commander), intent(inout) :: self
         class(cmdline),             intent(inout) :: cline
-        type(prep4cgrid_commander) :: xprep4cgrid
-        type(cmdline)              :: cline_prep4cgrid
         type(params)  :: p
         type(build)   :: b
         integer :: ncls_in_oritab, icls, fnr, file_stat, j
@@ -111,10 +108,6 @@ contains
             endif
         else
             call binwrite_oritab(p%oritab, b%a, [1,p%nptcls])
-            cline_prep4cgrid = cline
-            call cline_prep4cgrid%set( 'for3D', 'no' )
-            call cline_prep4cgrid%set( 'outstk', add2fbody_and_new_ext(p%stk, p%ext, PREP4CGRID_SUFFIX, '.bin') )
-            call xprep4cgrid%execute(cline_prep4cgrid)
         endif
         ! create class averager
         call cavger_new(b, p, 'class')
@@ -159,8 +152,6 @@ contains
         use simple_hadamard2D_matcher, only: prime2D_exec
         class(prime2D_commander), intent(inout) :: self
         class(cmdline),           intent(inout) :: cline
-        type(prep4cgrid_commander) :: xprep4cgrid
-        type(cmdline)              :: cline_prep4cgrid
         type(params) :: p
         type(build)  :: b
         integer      :: i, startit, ncls_from_refs, lfoo(3)
@@ -182,10 +173,6 @@ contains
             if( .not. cline%defined('outfile') ) stop 'need unique output file for parallel jobs'
             call prime2D_exec(b, p, cline, startit, converged) ! partition or not, depending on 'part'
         else
-            cline_prep4cgrid = cline
-            call cline_prep4cgrid%set( 'for3D', 'no' )
-            call cline_prep4cgrid%set( 'outstk', add2fbody_and_new_ext(p%stk, p%ext, PREP4CGRID_SUFFIX, '.bin') )
-            call xprep4cgrid%execute(cline_prep4cgrid)
             ! extremal dynamics
             if( cline%defined('extr_iter') )then
                 ! all is well

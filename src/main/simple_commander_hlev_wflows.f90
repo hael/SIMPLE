@@ -527,7 +527,7 @@ contains
         if( p_master%eo .eq. 'no' .and. .not. cline%defined('lp') )&
             &stop 'need lp input when eo .eq. no; het'
         ! prepare command lines from prototype
-        cline_prime3D      = cline
+        cline_prime3D = cline
         call cline_prime3D%set('prg', 'prime3D')
         call cline_prime3D%set('maxits', real(MAXITS))
         call cline_prime3D%set('refine', 'het')
@@ -578,15 +578,15 @@ contains
         ! to accomodate state=0s in oritab input
         included = os%included()
         n_incl   = count(included)
-        where( .not.included ) labels = 0
+        where( .not. included ) labels = 0
         call os%set_all('state', real(labels))
         call binwrite_oritab(trim(oritab), os, [1,p_master%nptcls])
         deallocate(labels, included)
+        call cline_prime3D%set('oritab', trim(oritab))
         ! run prime3d
         write(*,'(A)')    '>>>'
         write(*,'(A,I3)') '>>> PRIME3D'
         write(*,'(A)')    '>>>'
-        call cline_prime3D%set('oritab', trim(oritab))
         call xprime3D_distr%execute(cline_prime3D)
         ! final distributed reconstruction to obtain resolution estimate when eo .eq. 'no'
         if( p_master%eo .eq. 'no' )then

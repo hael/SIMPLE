@@ -10,9 +10,9 @@ use simple_ori,      only: ori
 use simple_oris,     only: oris
 implicit none
 
-public :: read_img_and_norm, read_imgbatch, set_bp_range, set_bp_range2D, grid_ptcl, prepimg4align,&
-&eonorm_struct_facts, norm_struct_facts, cenrefvol_and_mapshifts2ptcls, preprefvol, prep2Dref,&
-&gen2Dclassdoc, preprecvols, killrecvols, gen_projection_frcs, prepimgbatch, read_cgridcmat
+public :: read_img, read_img_and_norm, read_imgbatch, set_bp_range, set_bp_range2D, grid_ptcl,&
+&prepimg4align, eonorm_struct_facts, norm_struct_facts, cenrefvol_and_mapshifts2ptcls, preprefvol,&
+&prep2Dref, gen2Dclassdoc, preprecvols, killrecvols, gen_projection_frcs, prepimgbatch, read_cgridcmat
 private
 #include "simple_local_flags.inc"
 
@@ -21,7 +21,8 @@ real, parameter :: CENTHRESH = 0.5    ! threshold for performing volume/cavg cen
 
 contains
 
-    subroutine read_img_and_norm( b, p, iptcl )
+
+    subroutine read_img( b, p, iptcl )
         class(build),  intent(inout)  :: b
         class(params), intent(inout)  :: p
         integer,       intent(in)     :: iptcl
@@ -37,31 +38,65 @@ contains
                 call b%img%read(p%stk, iptcl)
             endif
         endif
+    end subroutine read_img
+
+    subroutine read_img_and_norm( b, p, iptcl )
+        class(build),  intent(inout)  :: b
+        class(params), intent(inout)  :: p
+        integer,       intent(in)     :: iptcl
+        call read_img( b, p, iptcl )
         call b%img%norm
     end subroutine read_img_and_norm
 
-    subroutine read_imgbatch( b, p, fromptop )
-        class(build),  intent(inout)  :: b
-        class(params), intent(inout)  :: p
-        integer,       intent(in)     :: fromptop(2)
+    subroutine read_imgbatch( b, p, fromptop, pinds )
+        class(build),      intent(inout)  :: b
+        class(params),     intent(inout)  :: p
+        integer,           intent(in)     :: fromptop(2)
+        integer, optional, intent(in)     :: pinds(fromptop(1):fromptop(2)) 
         character(len=:), allocatable :: stkname
-        integer :: iptcl, ind_in_batch, ind_in_stk
+        integer :: iptcl, ind_in_batch, ind_in_stk, iiptcl
+        logical :: pinds_present
+        pinds_present = present(pinds)
         if( p%l_stktab_input )then
             do iptcl=fromptop(1),fromptop(2)
-                ind_in_batch = iptcl - fromptop(1) + 1
-                call p%stkhandle%get_stkname_and_ind(iptcl, stkname, ind_in_stk)
+                if( pinds_present )then
+                    iiptcl       = pinds(iptcl)
+                    ind_in_batch = iptcl
+                else
+                    iiptcl       = iptcl
+                    ind_in_batch = iptcl - fromptop(1) + 1
+                endif
+
+
+
+                
+                call p%stkhandle%get_stkname_and_ind(iiptcl, stkname, ind_in_stk)
                 call b%imgbatch(ind_in_batch)%read(stkname, ind_in_stk)
             end do
         else
             if( p%l_distr_exec )then
                 do iptcl=fromptop(1),fromptop(2)
-                    ind_in_batch = iptcl - fromptop(1) + 1
-                    ind_in_stk   = iptcl - p%fromp + 1
+                    if( pinds_present )then
+                        iiptcl       = pinds(iptcl)
+                        ind_in_batch = iptcl
+                    else
+                        iiptcl       = iptcl
+                        ind_in_batch = iptcl - fromptop(1) + 1
+                    endif
+                    
+                    ind_in_stk   = iiptcl - p%fromp + 1
                     call b%imgbatch(ind_in_batch)%read(p%stk_part, ind_in_stk)
                 end do
             else
                 do iptcl=fromptop(1),fromptop(2)
-                    ind_in_batch = iptcl - fromptop(1) + 1
+                    if( pinds_present )then
+                        ind_in_batch = iptcl
+                        iiptcl       = pinds(iptcl)
+                    else
+                        iiptcl       = iptcl
+                        ind_in_batch = iptcl - fromptop(1) + 1
+                    endif
+                    
                     ind_in_stk   = iptcl
                     call b%imgbatch(ind_in_batch)%read(p%stk, ind_in_stk)
                 end do

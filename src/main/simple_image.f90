@@ -259,6 +259,7 @@ type :: image
     procedure          :: zero_and_flag_ft
     procedure          :: zero_background
     procedure          :: subtr_backgr_pad_divwinstr_fft
+    procedure          :: subtr_backgr_pad_divwinstr_fft_serial
     procedure          :: salt_n_pepper
     procedure          :: square
     procedure          :: corners
@@ -1084,6 +1085,7 @@ contains
     subroutine set_cmat( self, cmat )
         class(image), intent(inout) :: self
         complex,      intent(in)    :: cmat(self%array_shape(1),self%array_shape(2),self%array_shape(3))
+        self%ft = .true.
         self%cmat = cmat
     end subroutine set_cmat
 
@@ -5185,6 +5187,30 @@ contains
         !$omp end parallel workshare 
         call self_out%fwd_ft
     end subroutine subtr_backgr_pad_divwinstr_fft
+
+    subroutine subtr_backgr_pad_divwinstr_fft_serial( self, mskimg, instr_fun, self_out )
+        class(image), intent(inout) :: self
+        class(image), intent(in)    :: mskimg
+        real,         intent(in)    :: instr_fun(:,:,:)
+        class(image), intent(inout) :: self_out
+        real, allocatable :: pixels(:)
+        integer :: starts(3), stops(3)
+        real    :: med
+        pixels   = pack( self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)),&
+                &mask=mskimg%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) < 0.5 )
+        med = median_nocopy(pixels)
+        starts        = (self_out%ldim - self%ldim) / 2 + 1
+        stops         = self_out%ldim - starts + 1
+        self_out%ft   = .false.
+        self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) =&
+        self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) - med
+        self_out%rmat = 0.
+        self_out%rmat(starts(1):stops(1),starts(2):stops(2),1)=&
+            &self%rmat(:self%ldim(1),:self%ldim(2),1)
+        self_out%rmat(:self_out%ldim(1),:self_out%ldim(2),1) = &
+            &self_out%rmat(:self_out%ldim(1),:self_out%ldim(2),1) / instr_fun(:self_out%ldim(1),:self_out%ldim(2),1)
+        call self_out%fwd_ft
+    end subroutine subtr_backgr_pad_divwinstr_fft_serial
 
     !>  \brief  Taper edges of image so that there are no sharp discontinuities in real space
     !!          This is a re-implementation of the MRC program taperedgek.for (Richard Henderson, 1987)

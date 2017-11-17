@@ -379,9 +379,7 @@ contains
     subroutine exec_makecavgs_distr( self, cline )
         class(makecavgs_distr_commander), intent(inout) :: self
         class(cmdline),                   intent(inout) :: cline
-        type(prep4cgrid_stk_parts_commander) :: xprep4cgrid_distr
         type(split_commander) :: xsplit
-        type(cmdline)         :: cline_prep4cgrid_distr
         type(cmdline)         :: cline_cavgassemble
         type(qsys_env)        :: qenv
         type(params)          :: p_master
@@ -398,10 +396,7 @@ contains
         ! prepare job description
         call cline%gen_job_descr(job_descr)
         ! prepare command lines from prototype master
-        cline_prep4cgrid_distr = cline
-        cline_cavgassemble     = cline
-        call cline_prep4cgrid_distr%set( 'prg', 'prep4cgrid_stk_parts') ! required for distributed call
-        call cline_prep4cgrid_distr%set( 'for3D', 'no' )
+        cline_cavgassemble = cline
         call cline_cavgassemble%set('nthr',1.)
         call cline_cavgassemble%set('prg', 'cavgassemble')
         if( cline%defined('outfile') )then
@@ -415,8 +410,6 @@ contains
             ! split stack
             call xsplit%execute(cline)
         endif
-        ! prep4cgrid
-        call xprep4cgrid_distr%execute(cline_prep4cgrid_distr)
         ! schedule
         call qenv%gen_scripts_and_schedule_jobs(p_master, job_descr)
         ! assemble class averages
@@ -430,13 +423,11 @@ contains
         class(prime2D_distr_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
         ! commanders
-        type(prep4cgrid_stk_parts_commander) :: xprep4cgrid_distr
         type(check2D_conv_commander)         :: xcheck2D_conv
         type(merge_algndocs_commander)       :: xmerge_algndocs
         type(split_commander)                :: xsplit
         type(makecavgs_distr_commander)      :: xmakecavgs
         ! command lines
-        type(cmdline)         :: cline_prep4cgrid_distr
         type(cmdline)         :: cline_check2D_conv
         type(cmdline)         :: cline_cavgassemble
         type(cmdline)         :: cline_merge_algndocs
@@ -473,15 +464,12 @@ contains
         endif
 
         ! prepare command lines from prototype master
-        cline_prep4cgrid_distr = cline
         cline_check2D_conv     = cline
         cline_cavgassemble     = cline
         cline_merge_algndocs   = cline
         cline_makecavgs        = cline
 
         ! initialise static command line parameters and static job description parameters
-        call cline_prep4cgrid_distr%set( 'prg', 'prep4cgrid_stk_parts') ! required for distributed call
-        call cline_prep4cgrid_distr%set( 'for3D', 'no' )
         call cline_merge_algndocs%set('fbody',    ALGN_FBODY           )
         call cline_merge_algndocs%set('nptcls',   real(p_master%nptcls))
         call cline_merge_algndocs%set('ndocs',    real(p_master%nparts))
@@ -496,8 +484,7 @@ contains
             ! split stack
             call xsplit%execute(cline)
         endif
-        ! prep4cgrid
-        call xprep4cgrid_distr%execute(cline_prep4cgrid_distr)
+
         ! execute initialiser
         if( .not. cline%defined('refs') )then
             p_master%refs      = 'start2Drefs'//p_master%ext
@@ -518,12 +505,14 @@ contains
                 call copy_imgfile(trim(p_master%refs), trim(p_master%refs_odd),  p_master%smpd, [1,p_master%ncls])
             endif
         endif
+
         ! extremal dynamics
         if( cline%defined('extr_iter') )then
             p_master%extr_iter = p_master%extr_iter - 1
         else
             p_master%extr_iter = p_master%startit - 1
         endif
+
         ! deal with eo partitioning
         if( b%a%get_nevenodd() == 0 )then
             if( p_master%tseries .eq. 'yes' )then
@@ -542,6 +531,7 @@ contains
                 call cline%set('deftab', trim(p_master%deftab))
             endif
         endif
+
         ! main loop
         iter = p_master%startit - 1
         do

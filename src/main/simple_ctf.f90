@@ -397,53 +397,27 @@ contains
         end select
     end subroutine apply_serial
 
-    !>  \brief  is for applying CTF to an image and shifting it
-    subroutine apply_and_shift( self, img, imgctfsq, x, y, dfx, mode, dfy, angast, add_phshift )
+    !>  \brief  is for applying CTF to an image and shifting it (used in classaverager)
+    !!          KEEP THIS ROUTINE SERIAL
+    subroutine apply_and_shift( self, img, imode, lims, rho, x, y, dfx, dfy, angast, add_phshift )
         use simple_image, only: image
-        class(ctf),       intent(inout) :: self        !< instance
-        class(image),     intent(inout) :: img         !< modified image (output)
-        class(image),     intent(inout) :: imgctfsq    !< CTF**2 image (output)
-        real,             intent(in)    :: x, y        !< rotational origin shift
-        real,             intent(in)    :: dfx         !< defocus x-axis
-        character(len=*), intent(in)    :: mode        !< abs, ctf, flip, flipneg, neg, square
-        real, optional,   intent(in)    :: dfy         !< defocus y-axis
-        real, optional,   intent(in)    :: angast      !< angle of astigmatism
-        real, optional,   intent(in)    :: add_phshift !< aditional phase shift (radians), for phase plate
-        integer :: ldim(3),logi(3),imode,lims(3,2),h,k,phys(3)
-        real    :: ang,tval,ddfy,aangast,spaFreqSq,hinv,kinv,inv_ldim(3),tvalsq,aadd_phshift
+        class(ctf),   intent(inout) :: self        !< instance
+        class(image), intent(inout) :: img         !< modified image (output)
+        integer,      intent(in)    :: imode       !< 1=abs 2=ctf 3=no
+        integer,      intent(in)    :: lims(3,2)   !< loop limits
+        real,         intent(out)   :: rho(lims(1,1):lims(1,2),lims(2,1):lims(2,2))
+        real,         intent(in)    :: x, y        !< rotational origin shift
+        real,         intent(in)    :: dfx         !< defocus x-axis
+        real,         intent(in)    :: dfy         !< defocus y-axis
+        real,         intent(in)    :: angast      !< angle of astigmatism
+        real,         intent(in)    :: add_phshift !< aditional phase shift (radians), for phase plate
+        integer :: ldim(3),logi(3),h,k,phys(3)
+        real    :: ang,tval,spaFreqSq,hinv,kinv,inv_ldim(3)
         complex :: comp
-        ldim = img%get_ldim()
-        ! check that image is 2D
-        if( img%is_3d() )then
-            print *, 'ldim: ', ldim
-            stop 'Only 4 2D images; apply; simple_ctf'
-        endif
-        ! check that image is FTed
-        if( .not. img%is_ft() )then
-            stop 'expecting FT input; simple_ctf :: apply_and_shift'
-        endif
-        ! set CTF params
-        ddfy = dfx
-        if( present(dfy) ) ddfy = dfy
-        aangast = 0.
-        if( present(angast) ) aangast = angast
-        aadd_phshift = 0.
-        if( present(add_phshift) ) aadd_phshift = add_phshift
-        select case(mode)
-            case('abs')
-                imode = 1
-            case('ctf')
-                imode = 2
-            case DEFAULT
-                imode = 3
-        end select
         ! initialize
-        call self%init(dfx, ddfy, aangast)
-        lims     = img%loop_lims(2)
+        call self%init(dfx, dfy, angast)
         ldim     = img%get_ldim()
         inv_ldim = 1./real(ldim)
-        !$omp parallel do collapse(2) default(shared) proc_bind(close) &
-        !$omp private(h,hinv,k,kinv,spaFreqSq,ang,tval,tvalsq,logi,phys,comp) schedule(static)
         do h=lims(1,1),lims(1,2)
             do k=lims(2,1),lims(2,2)
                 ! calculate CTF and CTF**2.0 values
@@ -452,22 +426,17 @@ contains
                 spaFreqSq = hinv * hinv + kinv * kinv
                 ang       = atan2(real(k),real(h))
                 tval      = 1.0
-                if( imode <  3 ) tval = self%eval(spaFreqSq, dfx, ddfy, aangast, ang, aadd_phshift)
-                tvalsq = tval * tval
+                if( imode <  3 ) tval = self%eval(spaFreqSq, dfx, dfy, angast, ang, add_phshift)
+                rho(h,k)  = tval * tval
                 if( imode == 1 ) tval = abs(tval)
-                ! multiply image
+                ! multiply image with tval
                 logi = [h,k,0]
                 phys = img%comp_addr_phys(logi)
-                comp = img%get_fcomp(logi, phys)
-                comp = comp * tval
+                call img%mul_cmat_at(tval, phys)
                 ! shift image
-                comp = comp * img%oshift(logi, [x,y,0.])
-                ! set outputs
-                call img%set_fcomp(logi, phys, comp)
-                call imgctfsq%set_fcomp(logi, phys, cmplx(tvalsq,0.))
+                call img%mul_cmat_at(img%oshift(logi,[x,y,0.]), phys)
             end do
         end do
-        !$omp end parallel do
     end subroutine apply_and_shift
 
     pure elemental real function kV2wl( self ) result (wavelength)

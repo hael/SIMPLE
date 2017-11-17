@@ -24,6 +24,7 @@ contains
     procedure, private :: prep_1
     procedure, private :: prep_2
     generic            :: prep => prep_1, prep_2
+    procedure          :: prep_serial
     procedure          :: kill
 end type prep4cgrid
 
@@ -114,6 +115,13 @@ contains
         end do
         !$omp end parallel do
     end subroutine prep_2
+
+    !>  \brief  prepare image for gridding interpolation in Fourier space
+    subroutine prep_serial( self, img, img4grid )
+        class(prep4cgrid), intent(in)    :: self
+        class(image),      intent(inout) :: img, img4grid
+        call img%subtr_backgr_pad_divwinstr_fft_serial(self%mskimg, self%instr_fun, img4grid)
+    end subroutine prep_serial
 
     subroutine kill( self )
         class(prep4cgrid), intent(inout) :: self
