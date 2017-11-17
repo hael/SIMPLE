@@ -408,7 +408,7 @@ contains
         integer,     allocatable :: ioris(:), cyc1(:), cyc2(:)
         complex   :: zero
         real      :: loc(2), mat(2,2), pw, add_phshift
-        integer   :: cnt_progress, nbatches, batch, icls_pop, iprec, iori, i, batchsz, fnr
+        integer   :: cnt_progress, nbatches, batch, icls_pop, iprec, iori, i, batchsz, fnr, sh
         integer   :: lims(3,2), istate, nyq, logi(3), phys(3), win(2,2), lims_small(3,2), phys_cmat(3)
         integer   :: cyc_lims(3,2), alloc_stat, wdim, h, k, l, m, incr, icls, iptcl, batchsz_max
         if( .not. pp%l_distr_exec ) write(*,'(a)') '>>> ASSEMBLING CLASS SUMS'
@@ -494,7 +494,7 @@ contains
                     if( L_BENCH ) rt_batch_loop = rt_batch_loop + toc(t_batch_loop)
                     if( L_BENCH ) t_gridding = tic()
                     !$omp parallel do default(shared) schedule(static) reduction(+:cmat_even,cmat_odd,rho_even,rho_odd) proc_bind(close)&
-                    !$omp private(i,iprec,iori,add_phshift,rho,pw,mat,h,k,l,m,loc,win,logi,phys,phys_cmat,cyc1,cyc2,w,incr)
+                    !$omp private(i,iprec,iori,add_phshift,rho,pw,mat,h,k,l,m,loc,sh,win,logi,phys,phys_cmat,cyc1,cyc2,w,incr)
                     ! batch loop, direct Fourier interpolation
                     do i=1,batchsz
                         iprec = iprecs(batches(batch,1) + i - 1)
@@ -544,6 +544,8 @@ contains
                         ! Fourier components loop
                         do h=lims(1,1),lims(1,2)
                             do k=lims(2,1),lims(2,2)
+                                sh = nint(hyp(real(h),real(k)))
+                                if( sh > nyq + 1 )cycle
                                 loc = matmul(real([h,k]),mat)
                                 call sqwin_2d(loc(1),loc(2), KBWINSZ, win)
                                 w = pw
