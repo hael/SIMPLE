@@ -83,7 +83,9 @@ contains
         smpd_shrunken         = PICKER_SHRINK*smpd
         smpd_shrunken_refine  = PICKER_SHRINK_REFINE*smpd
         msk                   = real(ldim_refs(1)/2-5)
+        msk                   = max(msk, real(ldim_refs(1)/2-2)) ! for tiny particles
         msk_refine            = real(ldim_refs_refine(1)/2-5)
+        msk_refine            = max(PICKER_SHRINK/PICKER_SHRINK_REFINE*real(ldim_refs(1)/2-2), msk_refine)
         distthr               = BOXFRAC*real(ldim_refs(1))
         if( present(distthr_in) ) distthr = distthr_in/PICKER_SHRINK
         ! read and shrink references
