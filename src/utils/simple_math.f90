@@ -1017,13 +1017,26 @@ contains
     subroutine phaseplate_correct_fsc( fsc, find_plate )
         real,    intent(inout) :: fsc(:)
         integer, intent(out)   :: find_plate
-        integer :: loc(1), k
-        real    :: maxv
-        loc        = maxloc(fsc(2:))
-        find_plate = loc(1)
-        maxv       = fsc(loc(1))
-        do k=loc(1)-1,1,-1
-            fsc(k) = maxv
+        logical, allocatable :: peakpos(:)
+        integer :: k, n
+        real    :: peakavg
+        n = size(fsc)
+        ! find FSC peaks
+        peakpos = peakfinder_2(fsc)
+        ! filter out all peaks FSC < 0.5
+        where(fsc < 0.5) peakpos = .false.
+        ! calculate peak average
+        peakavg = sum(fsc, mask=peakpos)/real(count(peakpos))
+        ! identify peak with highest frequency
+        do k=n,1,-1
+            if( peakpos(k) )then
+                find_plate = k
+                exit
+            endif
+        end do
+        ! replace with average FSC peak value up to last peak (find_plate)
+        do k=1,find_plate
+            fsc(k) = peakavg
         end do
     end subroutine phaseplate_correct_fsc
 
@@ -2327,7 +2340,7 @@ contains
         logical, allocatable :: peakpos(:)
         integer :: n, i, alloc_stat
         n = size(vals)
-        allocate(peakpos(n))
+        allocate(peakpos(n), source=.false.)
         if( vals(1) > vals(2) )  peakpos(1) = .true.
         do i=2,n-1
             if( vals(i) >= vals(i-1) .and. vals(i) >= vals(i+1) ) peakpos(i) = .true.

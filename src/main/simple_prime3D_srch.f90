@@ -241,100 +241,6 @@ contains
         endif
     end subroutine prep4prime3D_srch
 
-    subroutine prime3D_srch_extr( a, p, do_extr )
-        use simple_params, only: params
-        class(oris),   intent(inout) :: a
-        class(params),  intent(in)   :: p
-        logical,        intent(in)   :: do_extr
-        real,    allocatable :: curr_corrs(:)
-        integer, allocatable :: curr_inds(:)
-        real    :: extr_frac, prev_corr, frac, mi_state, corr_thresh, avg_rndcorr, avg_shccorr, avg_currcorr
-        real    :: avg_prevrndcorr, avg_prevshccorr
-        integer :: iextr_lim, iptcl, n_incl, n_rnd, cnt, ind, istate, nrefs_eval, prev_state, zero_pop
-        if( .not.do_extr )return
-        zero_pop  = a%get_pop( 0, 'state', consider_w=.false.)
-        iextr_lim = ceiling(2.*log( real(p%nptcls-zero_pop) ))
-        n_incl    = count(prev_states(p%fromp:p%top)>0)      ! # non-zero state particles in part
-        extr_frac = EXTRINITHRESH * cos(PI/2. * real(p%extr_iter-1)/real(iextr_lim)) ! cosine decay
-        extr_frac = min(EXTRINITHRESH, max(0.0, extr_frac)) ! fraction of particles to randomize
-        n_rnd     = nint(real(n_incl)*extr_frac)            ! # of particles to randomize
-        ! collate and sort correlations
-        allocate(curr_corrs(n_incl), curr_inds(n_incl))
-        cnt = 0
-        do iptcl = p%fromp, p%top
-            if(prev_states(iptcl) > 0)then
-                cnt = cnt + 1 
-                curr_corrs(cnt) = het_corrs(iptcl,prev_states(iptcl))
-                curr_inds(cnt)  = iptcl
-            endif
-        enddo
-        avg_currcorr = sum(curr_corrs) / real(n_incl)
-        if( n_rnd == 0 )then
-            corr_thresh = 0.
-        else
-            call hpsort(n_incl, curr_corrs, curr_inds)
-        endif
-        ! assign moves
-        avg_rndcorr     = 0.
-        avg_shccorr     = 0.
-        avg_prevrndcorr = 0.
-        avg_prevshccorr = 0.
-        do ind = 1, n_incl
-            iptcl      = curr_inds(ind)
-            prev_corr  = het_corrs(iptcl,prev_states(iptcl))
-            prev_state = prev_states(iptcl)
-            if( ind <= n_rnd )then
-                ! stochastic diversifying move
-                istate = irnd_uni(p%nstates)
-                do while(istate == prev_state .or. .not.state_exists(istate))
-                    istate = irnd_uni(p%nstates)
-                enddo
-                nrefs_eval      = 1
-                avg_prevrndcorr = avg_prevrndcorr + prev_corr
-                avg_rndcorr     = avg_rndcorr + het_corrs(iptcl, istate)
-                if( ind == n_rnd )corr_thresh = het_corrs(iptcl, prev_state)
-            else
-                ! SHC move
-                istate          = shcloc(p%nstates, het_corrs(iptcl,:), prev_corr)
-                nrefs_eval      = count(het_corrs(iptcl,:) <= prev_corr)
-                avg_prevshccorr = avg_prevshccorr + prev_corr
-                avg_shccorr     = avg_shccorr + het_corrs(iptcl, istate)
-            endif
-            ! orientation update
-            frac = 100.*real(nrefs_eval) / real(p%nstates)
-            if( prev_state .ne. istate )then
-                mi_state = 0.
-            else
-                mi_state = 1.
-            endif      
-            call a%set(iptcl, 'state',    real(istate))
-            call a%set(iptcl, 'corr',     het_corrs(iptcl, istate))
-            call a%set(iptcl, 'frac',     frac)
-            call a%set(iptcl, 'mi_state', mi_state)
-            call a%set(iptcl, 'mi_joint', mi_state)
-            call a%set(iptcl, 'mi_proj',  1.)
-            call a%set(iptcl, 'mi_inpl',  1.)
-            call a%set(iptcl, 'w',        1.)
-            call a%set(iptcl, 'ow',       1.)
-        enddo
-        write(*,'(A,F8.3)') '>>> PARTICLE RANDOMIZATION(%): ', 100.*extr_frac
-        write(*,'(A,F8.3)') '>>> CORRELATION THRESHOLD    : ', corr_thresh
-        write(*,'(A,I8)')   '>>> # RANDOMIZED PARTICLES   : ', n_rnd
-        write(*,'(A,I8)')   '>>> # SHC        PARTICLES   : ', n_incl-n_rnd
-        write(*,'(A,F8.3)') '>>> AVG PREV     CORRELATION : ', avg_currcorr
-        if(n_rnd > 0)then
-            avg_rndcorr     = avg_rndcorr / real(n_rnd)
-            avg_prevrndcorr = avg_prevrndcorr / real(n_rnd)
-            write(*,'(A,F8.3)') '>>> AVG PREV RND CORRELATION : ', avg_prevrndcorr
-            write(*,'(A,F8.3)') '>>> AVG      RND CORRELATION : ', avg_rndcorr
-        endif
-        avg_shccorr     = avg_shccorr / real(n_incl-n_rnd)
-        avg_prevshccorr = avg_prevshccorr / real(n_incl-n_rnd)
-        write(*,'(A,F8.3)') '>>> AVG PREV SHC CORRELATION : ', avg_prevshccorr
-        write(*,'(A,F8.3)') '>>> AVG      SHC CORRELATION : ', avg_shccorr
-        deallocate(curr_corrs, curr_inds)
-    end subroutine prime3D_srch_extr
-
     subroutine new( self, iptcl, p, pftcc, a, se )
         use simple_params, only: params
         class(prime3D_srch),             intent(inout) :: self   !< instance
@@ -446,63 +352,6 @@ contains
         call self%stochastic_srch_het( do_extr )
         if( DEBUG ) print *, '>>> PRIME3D_SRCH::EXECUTED PRIME3D_SRCH_HET'
     end subroutine exec_prime3D_srch_het
-
-    !>  \brief  Individual stochastic search by state
-    !! \param lp low-pass cutoff freq
-    !! \param nnmat nearest neighbour matrix
-    subroutine stochastic_srch_bystate( self, lp, nnmat )
-        class(prime3D_srch),     intent(inout) :: self
-        real,                    intent(in)    :: lp
-        integer, optional,       intent(in)    :: nnmat(self%nprojs,self%nnn_static)
-        integer :: iref, isample, inpl_ind(1)
-        real    :: inpl_corrs(self%nrots), corrs(self%nrefs), inpl_corr
-        ! execute search
-        if( nint(self%a_ptr%get(self%iptcl,'state')) > 0 )then
-            ! initialize
-            call self%prep4srch(lp, nnmat=nnmat)
-            self%nbetter    = 0
-            self%nrefs_eval = 0
-            proj_space_corrs(self%iptcl,:) = -1.
-            ! search
-            do isample = 1, self%nnn
-                iref = srch_order(self%iptcl, isample) ! set the stochastic reference index
-                call per_ref_srch                      ! actual search
-                if( self%nbetter >= self%npeaks ) exit ! exit condition
-            end do
-            ! sort in correlation projection direction space
-            corrs = proj_space_corrs(self%iptcl,:)
-            call hpsort(self%nrefs, corrs, proj_space_inds(self%iptcl,:))
-            call self%inpl_srch ! search shifts
-            ! prepare weights and orientations
-            call self%prep_npeaks_oris_and_weights
-        else
-            call self%a_ptr%reject(self%iptcl)
-        endif
-        if( DEBUG ) print *, '>>> PRIME3D_SRCH::FINISHED STOCHASTIC BYSTATE SEARCH'
-
-        contains
-
-            subroutine per_ref_srch
-                if( proj_space_state(self%iptcl,iref) .ne. self%prev_state )then
-                    ! checker that will need to go
-                    print *,self%iptcl, self%prev_ref, prev_proj(self%iptcl), self%prev_state, iref, proj_space_state(self%iptcl,iref)
-                    stop 'srch order error; simple_prime3d_srch; stochastic_srch_bystate'
-                endif
-                call self%pftcc_ptr%gencorrs(iref, self%iptcl, inpl_corrs) ! In-plane correlations
-                inpl_ind   = maxloc(inpl_corrs)                            ! greedy in-plane index
-                inpl_corr  = inpl_corrs(inpl_ind(1))                       ! max in plane correlation
-                call self%store_solution(iref, iref, inpl_ind(1), inpl_corr)
-                ! update nbetter to keep track of how many improving solutions we have identified
-                if( self%npeaks == 1 )then
-                    if( inpl_corr > self%prev_corr ) self%nbetter = self%nbetter + 1
-                else
-                    if( inpl_corr >= self%prev_corr ) self%nbetter = self%nbetter + 1
-                endif
-                ! keep track of how many references we are evaluating
-                self%nrefs_eval = self%nrefs_eval + 1
-            end subroutine per_ref_srch
-
-    end subroutine stochastic_srch_bystate
 
     !>  \brief  greedy hill-climbing
     !! \param lp low-pass cutoff freq
@@ -903,6 +752,157 @@ contains
         endif
         if( DEBUG ) print *, '>>> PRIME3D_SRCH::FINISHED HET SEARCH'
     end subroutine stochastic_srch_het
+
+    subroutine prime3D_srch_extr( a, p, do_extr )
+        use simple_params, only: params
+        class(oris),   intent(inout) :: a
+        class(params),  intent(in)   :: p
+        logical,        intent(in)   :: do_extr
+        real,    allocatable :: curr_corrs(:)
+        integer, allocatable :: curr_inds(:)
+        real    :: extr_frac, prev_corr, frac, mi_state, corr_thresh, avg_rndcorr, avg_shccorr, avg_currcorr
+        real    :: avg_prevrndcorr, avg_prevshccorr
+        integer :: iextr_lim, iptcl, n_incl, n_rnd, cnt, ind, istate, nrefs_eval, prev_state, zero_pop
+        if( .not.do_extr )return
+        zero_pop  = a%get_pop( 0, 'state', consider_w=.false.)
+        iextr_lim = ceiling(2.*log( real(p%nptcls-zero_pop) ))
+        n_incl    = count(prev_states(p%fromp:p%top)>0)      ! # non-zero state particles in part
+        extr_frac = EXTRINITHRESH * cos(PI/2. * real(p%extr_iter-1)/real(iextr_lim)) ! cosine decay
+        extr_frac = min(EXTRINITHRESH, max(0.0, extr_frac)) ! fraction of particles to randomize
+        n_rnd     = nint(real(n_incl)*extr_frac)            ! # of particles to randomize
+        ! collate and sort correlations
+        allocate(curr_corrs(n_incl), curr_inds(n_incl))
+        cnt = 0
+        do iptcl = p%fromp, p%top
+            if(prev_states(iptcl) > 0)then
+                cnt = cnt + 1 
+                curr_corrs(cnt) = het_corrs(iptcl,prev_states(iptcl))
+                curr_inds(cnt)  = iptcl
+            endif
+        enddo
+        avg_currcorr = sum(curr_corrs) / real(n_incl)
+        if( n_rnd == 0 )then
+            corr_thresh = 0.
+        else
+            call hpsort(n_incl, curr_corrs, curr_inds)
+        endif
+        ! assign moves
+        avg_rndcorr     = 0.
+        avg_shccorr     = 0.
+        avg_prevrndcorr = 0.
+        avg_prevshccorr = 0.
+        do ind = 1, n_incl
+            iptcl      = curr_inds(ind)
+            prev_corr  = het_corrs(iptcl,prev_states(iptcl))
+            prev_state = prev_states(iptcl)
+            if( ind <= n_rnd )then
+                ! stochastic diversifying move
+                istate = irnd_uni(p%nstates)
+                do while(istate == prev_state .or. .not.state_exists(istate))
+                    istate = irnd_uni(p%nstates)
+                enddo
+                nrefs_eval      = 1
+                avg_prevrndcorr = avg_prevrndcorr + prev_corr
+                avg_rndcorr     = avg_rndcorr + het_corrs(iptcl, istate)
+                if( ind == n_rnd )corr_thresh = het_corrs(iptcl, prev_state)
+            else
+                ! SHC move
+                istate          = shcloc(p%nstates, het_corrs(iptcl,:), prev_corr)
+                nrefs_eval      = count(het_corrs(iptcl,:) <= prev_corr)
+                avg_prevshccorr = avg_prevshccorr + prev_corr
+                avg_shccorr     = avg_shccorr + het_corrs(iptcl, istate)
+            endif
+            ! orientation update
+            frac = 100.*real(nrefs_eval) / real(p%nstates)
+            if( prev_state .ne. istate )then
+                mi_state = 0.
+            else
+                mi_state = 1.
+            endif      
+            call a%set(iptcl, 'state',    real(istate))
+            call a%set(iptcl, 'corr',     het_corrs(iptcl, istate))
+            call a%set(iptcl, 'frac',     frac)
+            call a%set(iptcl, 'mi_state', mi_state)
+            call a%set(iptcl, 'mi_joint', mi_state)
+            call a%set(iptcl, 'mi_proj',  1.)
+            call a%set(iptcl, 'mi_inpl',  1.)
+            call a%set(iptcl, 'w',        1.)
+            call a%set(iptcl, 'ow',       1.)
+        enddo
+        write(*,'(A,F8.3)') '>>> PARTICLE RANDOMIZATION(%): ', 100.*extr_frac
+        write(*,'(A,F8.3)') '>>> CORRELATION THRESHOLD    : ', corr_thresh
+        write(*,'(A,I8)')   '>>> # RANDOMIZED PARTICLES   : ', n_rnd
+        write(*,'(A,I8)')   '>>> # SHC        PARTICLES   : ', n_incl-n_rnd
+        write(*,'(A,F8.3)') '>>> AVG PREV     CORRELATION : ', avg_currcorr
+        if(n_rnd > 0)then
+            avg_rndcorr     = avg_rndcorr / real(n_rnd)
+            avg_prevrndcorr = avg_prevrndcorr / real(n_rnd)
+            write(*,'(A,F8.3)') '>>> AVG PREV RND CORRELATION : ', avg_prevrndcorr
+            write(*,'(A,F8.3)') '>>> AVG      RND CORRELATION : ', avg_rndcorr
+        endif
+        avg_shccorr     = avg_shccorr / real(n_incl-n_rnd)
+        avg_prevshccorr = avg_prevshccorr / real(n_incl-n_rnd)
+        write(*,'(A,F8.3)') '>>> AVG PREV SHC CORRELATION : ', avg_prevshccorr
+        write(*,'(A,F8.3)') '>>> AVG      SHC CORRELATION : ', avg_shccorr
+        deallocate(curr_corrs, curr_inds)
+    end subroutine prime3D_srch_extr
+
+    !>  \brief  Individual stochastic search by state
+    !! \param lp low-pass cutoff freq
+    !! \param nnmat nearest neighbour matrix
+    subroutine stochastic_srch_bystate( self, lp, nnmat )
+        class(prime3D_srch),     intent(inout) :: self
+        real,                    intent(in)    :: lp
+        integer, optional,       intent(in)    :: nnmat(self%nprojs,self%nnn_static)
+        integer :: iref, isample, inpl_ind(1)
+        real    :: inpl_corrs(self%nrots), corrs(self%nrefs), inpl_corr
+        ! execute search
+        if( nint(self%a_ptr%get(self%iptcl,'state')) > 0 )then
+            ! initialize
+            call self%prep4srch(lp, nnmat=nnmat)
+            self%nbetter    = 0
+            self%nrefs_eval = 0
+            proj_space_corrs(self%iptcl,:) = -1.
+            ! search
+            do isample = 1, self%nnn
+                iref = srch_order(self%iptcl, isample) ! set the stochastic reference index
+                call per_ref_srch                      ! actual search
+                if( self%nbetter >= self%npeaks ) exit ! exit condition
+            end do
+            ! sort in correlation projection direction space
+            corrs = proj_space_corrs(self%iptcl,:)
+            call hpsort(self%nrefs, corrs, proj_space_inds(self%iptcl,:))
+            call self%inpl_srch ! search shifts
+            ! prepare weights and orientations
+            call self%prep_npeaks_oris_and_weights
+        else
+            call self%a_ptr%reject(self%iptcl)
+        endif
+        if( DEBUG ) print *, '>>> PRIME3D_SRCH::FINISHED STOCHASTIC BYSTATE SEARCH'
+
+        contains
+
+            subroutine per_ref_srch
+                if( proj_space_state(self%iptcl,iref) .ne. self%prev_state )then
+                    ! checker that will need to go
+                    print *,self%iptcl, self%prev_ref, prev_proj(self%iptcl), self%prev_state, iref, proj_space_state(self%iptcl,iref)
+                    stop 'srch order error; simple_prime3d_srch; stochastic_srch_bystate'
+                endif
+                call self%pftcc_ptr%gencorrs(iref, self%iptcl, inpl_corrs) ! In-plane correlations
+                inpl_ind   = maxloc(inpl_corrs)                            ! greedy in-plane index
+                inpl_corr  = inpl_corrs(inpl_ind(1))                       ! max in plane correlation
+                call self%store_solution(iref, iref, inpl_ind(1), inpl_corr)
+                ! update nbetter to keep track of how many improving solutions we have identified
+                if( self%npeaks == 1 )then
+                    if( inpl_corr > self%prev_corr ) self%nbetter = self%nbetter + 1
+                else
+                    if( inpl_corr >= self%prev_corr ) self%nbetter = self%nbetter + 1
+                endif
+                ! keep track of how many references we are evaluating
+                self%nrefs_eval = self%nrefs_eval + 1
+            end subroutine per_ref_srch
+
+    end subroutine stochastic_srch_bystate
 
     !>  \brief  executes the in-plane search. This improved routine took HCN
     !!          from stall @ 5.4 to close to convergence @ 4.5 after 10 iters
