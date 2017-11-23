@@ -146,6 +146,46 @@ contains
         which = inds(which)
     end function multinomal
 
+    !>  \brief  generates a multinomal 1-of-K random number according to the
+    !!          distribution in pvec
+    subroutine multinomal_many( fromto, nsamples, pvec, mask, samples )
+        use simple_math, only: hpsort
+        integer, intent(in)  :: fromto(2), nsamples
+        real,    intent(in)  :: pvec(fromto(1):fromto(2)) !< probabilities
+        logical, intent(in)  :: mask(fromto(1):fromto(2))
+        integer, intent(out) :: samples(nsamples)
+        real    :: pvec_sorted(fromto(1):fromto(2))
+        integer :: inds(fromto(1):fromto(2))
+        integer :: i, j, ismp
+        inds = (/(i,i=fromto(1),fromto(2))/)
+        pvec_sorted = pvec
+        call hpsort(size(pvec_sorted), pvec_sorted, inds)
+        if( sum(pvec_sorted) >= 1.001 )then
+            stop 'probability distribution does not sum up to 1.; multinomal_many; simple_rnd;'
+        endif
+        do j=1,nsamples
+            do 
+                ismp = sample()
+                if( mask(ismp) ) exit
+            end do
+            samples(j) = ismp
+        end do
+        contains
+
+            integer function sample( )
+                real :: rnd, bound
+                rnd = ran3()
+                do i=fromto(1),fromto(2)
+                    bound = sum(pvec_sorted(1:i))
+                    if( rnd <= bound ) exit
+                enddo
+                ! to deal with numerical instability
+                if( i < fromto(1) ) i = fromto(1) 
+                if( i > fromto(2) ) i = fromto(2) 
+            end function sample
+
+    end subroutine multinomal_many
+
     !>  \brief  random number generator yielding normal distribution
     !!          with zero mean and unit variance (from NR)
     function gasdev_1( ) result( harvest )

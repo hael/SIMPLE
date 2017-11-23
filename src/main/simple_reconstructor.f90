@@ -53,6 +53,10 @@ type, extends(image) :: reconstructor
     ! I/O
     procedure          :: write_rho
     procedure          :: read_rho
+    procedure          :: write_rho_exp
+    procedure          :: read_rho_exp
+    procedure          :: write_cmat_exp
+    procedure          :: read_cmat_exp
     ! INTERPOLATION
     procedure, private :: inout_fcomp
     procedure, private :: inout_fplane_1
@@ -153,7 +157,7 @@ contains
     !> get the kbintpol window
     function get_kbwin( self ) result( wf )
         class(reconstructor), intent(inout) :: self !< this instance
-        type(kbinterpol) :: wf   !< return kbintpol window
+        type(kbinterpol) :: wf                      !< return kbintpol window
         wf = kbinterpol(self%winsz,self%alpha)
     end function get_kbwin
 
@@ -162,29 +166,61 @@ contains
     subroutine write_rho( self, kernam )
         class(reconstructor), intent(in) :: self   !< this instance
         character(len=*),     intent(in) :: kernam !< kernel name
-        integer :: filnum, ierr
-        call del_file(trim(kernam))
-        call fopen(filnum, trim(kernam), status='NEW', action='WRITE', access='STREAM', iostat=ierr)
-        call fileio_errmsg( 'simple_reconstructor ; write rho '//trim(kernam), ierr)
-        write(filnum, pos=1, iostat=ierr) self%rho
-        if( ierr .ne. 0 ) &
-            call fileio_errmsg('read_rho; simple_reconstructor writing '//trim(kernam), ierr)
-        call fclose(filnum,errmsg='simple_reconstructor ; write rho  fclose ')
+        integer :: filnum
+        call fopen(filnum, trim(kernam), status='REPLACE', action='WRITE', access='STREAM')
+        write(filnum, pos=1) self%rho
+        call fclose(filnum)
     end subroutine write_rho
 
     !> Read sampling density matrix
     subroutine read_rho( self, kernam )
-        class(reconstructor), intent(inout) :: self !< this instance
+        class(reconstructor), intent(inout) :: self   !< this instance
         character(len=*),     intent(in)    :: kernam !< kernel name
-        integer :: filnum, ierr
-        call fopen(filnum, file=trim(kernam), status='OLD', action='READ', access='STREAM', iostat=ierr)
-        call fileio_errmsg('read_rho; simple_reconstructor opening '//trim(kernam), ierr)
-        read(filnum, pos=1, iostat=ierr) self%rho
-        if( ierr .ne. 0 ) &
-            call fileio_errmsg('simple_reconstructor::read_rho; simple_reconstructor reading '&
-            &// trim(kernam), ierr)
-        call fclose(filnum,errmsg='read_rho; simple_reconstructor closing '//trim(kernam))
+        integer :: filnum
+        call fopen(filnum, file=trim(kernam), status='OLD', action='READ', access='STREAM')
+        read(filnum, pos=1) self%rho
+        call fclose(filnum)
     end subroutine read_rho
+
+    !>Write reconstructed image
+    subroutine write_rho_exp( self, kernam )
+        class(reconstructor), intent(in) :: self   !< this instance
+        character(len=*),     intent(in) :: kernam !< kernel name
+        integer :: filnum
+        call fopen(filnum, trim(kernam), status='REPLACE', action='WRITE', access='STREAM')
+        write(filnum, pos=1) self%rho_exp
+        call fclose(filnum)
+    end subroutine write_rho_exp
+
+    !> Read sampling density matrix
+    subroutine read_rho_exp( self, kernam )
+        class(reconstructor), intent(inout) :: self   !< this instance
+        character(len=*),     intent(in)    :: kernam !< kernel name
+        integer :: filnum
+        call fopen(filnum, file=trim(kernam), status='OLD', action='READ', access='STREAM')
+        read(filnum, pos=1) self%rho_exp
+        call fclose(filnum)
+    end subroutine read_rho_exp
+
+    !>Write reconstructed image
+    subroutine write_cmat_exp( self, kernam )
+        class(reconstructor), intent(in) :: self   !< this instance
+        character(len=*),     intent(in) :: kernam !< kernel name
+        integer :: filnum
+        call fopen(filnum, trim(kernam), status='REPLACE', action='WRITE', access='STREAM')
+        write(filnum, pos=1) self%cmat_exp
+        call fclose(filnum)
+    end subroutine write_cmat_exp
+
+    !> Read sampling density matrix
+    subroutine read_cmat_exp( self, kernam )
+        class(reconstructor), intent(inout) :: self   !< this instance
+        character(len=*),     intent(in)    :: kernam !< kernel name
+        integer :: filnum
+        call fopen(filnum, file=trim(kernam), status='OLD', action='READ', access='STREAM')
+        read(filnum, pos=1) self%cmat_exp
+        call fclose(filnum)
+    end subroutine read_cmat_exp
 
     ! INTERPOLATION
 
@@ -453,13 +489,13 @@ contains
     !> reconstruction routine
     subroutine rec( self, p, o, se, state, mul, part )
         use simple_prep4cgrid, only: prep4cgrid
-        class(reconstructor), intent(inout) :: self      !< this object
-        class(params),        intent(in)    :: p         !< parameters
-        class(oris),          intent(inout) :: o         !< orientations
-        class(sym),           intent(inout) :: se        !< symmetry element
-        integer,              intent(in)    :: state     !< state to reconstruct
-        real,    optional,    intent(in)    :: mul       !< shift multiplication factor
-        integer, optional,    intent(in)    :: part      !< partition (4 parallel rec)
+        class(reconstructor), intent(inout) :: self  !< this object
+        class(params),        intent(in)    :: p     !< parameters
+        class(oris),          intent(inout) :: o     !< orientations
+        class(sym),           intent(inout) :: se    !< symmetry element
+        integer,              intent(in)    :: state !< state to reconstruct
+        real,    optional,    intent(in)    :: mul   !< shift multiplication factor
+        integer, optional,    intent(in)    :: part  !< partition (4 parallel rec)
         type(image)      :: img, img_pad
         type(prep4cgrid) :: gridprep
         real             :: skewness

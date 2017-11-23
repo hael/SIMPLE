@@ -64,6 +64,7 @@ type :: oris
     procedure, private :: get_nodd
     procedure          :: print_
     procedure          :: print_matrices
+    ! procedure          :: sample4update
     ! SETTERS
     procedure, private :: assign
     generic            :: assignment(=) => assign
@@ -1236,6 +1237,37 @@ contains
             call self%o(i)%print_mat()
         end do
     end subroutine print_matrices
+
+    ! function sample4update( self, fromto )
+    !     class(oris),       intent(inout) :: self
+    !     integer, optional, intent(in)    :: fromto(2)
+
+    !     real,    allocatable :: probs(:), states(:)
+    !     logical, allocatable :: incl(:)
+    !     integer :: ffromto(2)
+    !     real    :: norm
+    !     ffromto(1) = 1
+    !     ffromto(2) = self%n
+    !     if( present(fromto) ) ffromto = fromto
+    !     states = self%get_all('state', ffromto)
+    !     allocate(incl(ffromto(1):ffromto(2)), source=states > 0.5)
+    !     if( self%isthere('updatecnt') )then
+    !         probs = self%get_all('updatecnt', ffromto)
+    !     else
+    !         allocate(probs(ffromto(1):ffromto(2)), source=1.0)
+    !     endif
+    !     norm  = sum(probs, mask=incl)
+    !     where( incl )
+    !         probs = probs / norm
+    !     else where
+    !         probs = 0.
+    !     end where
+
+
+
+
+
+    ! end function sample4update
 
     ! SETTERS
 
