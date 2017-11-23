@@ -46,6 +46,19 @@ type fftw_arrs
     real(kind=c_float),            pointer :: backtransf(:)  => null()  !< -"-
 end type fftw_arrs
 
+type heap_vars
+    complex(sp), pointer        :: pft_ref(:,:)       => null()
+    complex(sp), pointer        :: pft_ref_tmp(:,:)   => null()
+    real,        pointer        :: corrs_over_k(:)    => null()
+    real(sp),    pointer        :: argmat(:,:)        => null()
+    complex(sp), pointer        :: shmat(:,:)         => null()
+    real,        pointer        :: kcorrs(:)          => null()
+    complex(dp), pointer        :: pft_ref_8(:,:)     => null()
+    complex(dp), pointer        :: pft_ref_tmp_8(:,:) => null()
+    complex(dp), pointer        :: shmat_8(:,:)       => null()
+    real(dp),    pointer        :: argmat_8(:,:)      => null()
+end type heap_vars
+
 type :: polarft_corrcalc
   private
     integer                          :: pfromto(2) = 1        !< from/to particle indices (in parallel execution)
@@ -78,6 +91,7 @@ type :: polarft_corrcalc
     type(c_ptr)                      :: plan_bwd              !< -"-
     logical                          :: with_ctf  = .false.   !< CTF flag
     logical                          :: existence = .false.   !< to indicate existence
+    type(heap_vars),     allocatable :: heap_vars(:)          !< allocated fields to save stack allocation in subroutines and functions
   contains
     ! CONSTRUCTOR
     procedure          :: new
@@ -233,11 +247,25 @@ contains
             self%polar(self%nrots+1:self%nrots+self%pftsz,:) * &
             (PI/real(self%ldim(2)/2))    ! y-part
         ! allocate others
-        allocate( self%pfts_refs_even(self%nrefs,self%pftsz,self%kfromto(1):self%kfromto(2)),&
+        allocate(self%pfts_refs_even(self%nrefs,self%pftsz,self%kfromto(1):self%kfromto(2)),&
                  &self%pfts_refs_odd(self%nrefs,self%pftsz,self%kfromto(1):self%kfromto(2)),&
                  &self%pfts_ptcls(self%pfromto(1):self%pfromto(2),self%pftsz,self%kfromto(1):self%kfromto(2)),&
-                 &self%sqsums_ptcls(self%pfromto(1):self%pfromto(2)), self%fftdat(self%nthr),&
-                 &self%fftdat_ptcls(self%pfromto(1):self%pfromto(2),self%kfromto(1):self%kfromto(2)), stat=alloc_stat)
+                 &self%sqsums_ptcls(self%pfromto(1):self%pfromto(2)),self%fftdat(self%nthr),&
+                 &self%fftdat_ptcls(self%pfromto(1):self%pfromto(2),self%kfromto(1):self%kfromto(2)),&
+                 &self%heap_vars(self%nthr),stat=alloc_stat)
+        do ithr=1,self%nthr
+            allocate(self%heap_vars(ithr)%pft_ref(self%pftsz,self%kfromto(1):self%kfromto(2)),&
+                &self%heap_vars(ithr)%pft_ref_tmp(self%pftsz,self%kfromto(1):self%kfromto(2)),&
+                &self%heap_vars(ithr)%corrs_over_k(self%nrots),&
+                &self%heap_vars(ithr)%argmat(self%pftsz,self%kfromto(1):self%kfromto(2)),&
+                &self%heap_vars(ithr)%shmat(self%pftsz,self%kfromto(1):self%kfromto(2)),&
+                &self%heap_vars(ithr)%kcorrs(self%nrots),&
+                &self%heap_vars(ithr)%pft_ref_8(self%pftsz,self%kfromto(1):self%kfromto(2)),&
+                &self%heap_vars(ithr)%pft_ref_tmp_8(self%pftsz,self%kfromto(1):self%kfromto(2)),&
+                &self%heap_vars(ithr)%shmat_8(self%pftsz,self%kfromto(1):self%kfromto(2)),&
+                &self%heap_vars(ithr)%argmat_8(self%pftsz,self%kfromto(1):self%kfromto(2)),&
+                &stat=alloc_stat)
+        end do
         allocchk('polarfts and sqsums; new; simple_polarft_corrcalc')
         self%pfts_refs_even = zero
         self%pfts_refs_odd  = zero
@@ -849,8 +877,13 @@ contains
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iref, iptcl
         real(sp),                intent(out)   :: cc(self%nrots)        
-        complex(sp)                            :: pft_ref(self%pftsz,self%kfromto(1):self%kfromto(2))
-        real                                   :: corrs_over_k(self%nrots), sqsum_ref
+        complex(sp),             pointer       :: pft_ref(:,:)
+        real,                    pointer       :: corrs_over_k(:)
+        real                                   :: sqsum_ref
+        integer                                :: ithr
+        ithr = omp_get_thread_num() + 1
+        pft_ref      => self%heap_vars(ithr)%pft_ref
+        corrs_over_k => self%heap_vars(ithr)%corrs_over_k
         call self%prep_ref4corr(iref, iptcl, pft_ref, sqsum_ref, self%kfromto(2))
         call self%calc_corrs_over_k(pft_ref, iptcl, self%kfromto(2), corrs_over_k)
         cc = corrs_over_k / sqrt(sqsum_ref * self%sqsums_ptcls(iptcl))
@@ -861,9 +894,13 @@ contains
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iref, iptcl, kstop
         real,                    intent(out)   :: cc(self%nrots)
-        complex(sp)                            :: pft_ref(self%pftsz,self%kfromto(1):self%kfromto(2))
+        complex(sp),             pointer       :: pft_ref(:,:)
+        real,                    pointer       :: corrs_over_k(:)
         real(sp)                               :: sqsum_ref, sqsum_ptcl
-        real                                   :: corrs_over_k(self%nrots)
+        integer                                :: ithr
+        ithr = omp_get_thread_num() + 1        
+        pft_ref      => self%heap_vars(ithr)%pft_ref
+        corrs_over_k => self%heap_vars(ithr)%corrs_over_k
         call self%prep_ref4corr(iref, iptcl, pft_ref, sqsum_ref, kstop)
         call self%calc_corrs_over_k(pft_ref, iptcl, kstop, corrs_over_k)
         sqsum_ptcl = sum(csq(self%pfts_ptcls(iptcl, :, self%kfromto(1):kstop)))
@@ -876,10 +913,16 @@ contains
         integer,                 intent(in)    :: iref, iptcl
         real(sp),                intent(in)    :: shvec(2)
         real(sp),                intent(out)   :: cc(self%nrots)
-        complex(sp)                            :: pft_ref(self%pftsz,self%kfromto(1):self%kfromto(2))
-        complex(sp)                            :: shmat(self%pftsz,self%kfromto(1):self%kfromto(2))
-        real(sp)                               :: corrs_over_k(self%nrots), argmat(self%pftsz,self%kfromto(1):self%kfromto(2))
+        complex(sp),             pointer       :: pft_ref(:,:)
+        complex(sp),             pointer       :: shmat(:,:)
+        real(sp),                pointer       :: corrs_over_k(:), argmat(:,:)
         real(sp)                               :: sqsum_ref
+        integer                                :: ithr
+        ithr = omp_get_thread_num() + 1        
+        pft_ref      => self%heap_vars(ithr)%pft_ref
+        shmat        => self%heap_vars(ithr)%shmat
+        corrs_over_k => self%heap_vars(ithr)%corrs_over_k
+        argmat       => self%heap_vars(ithr)%argmat
         argmat = self%argtransf(:self%pftsz,:) * shvec(1) + self%argtransf(self%pftsz+1:,:) * shvec(2)
         shmat  = cmplx(cos(argmat),sin(argmat))
 
@@ -908,12 +951,17 @@ contains
         integer,                 intent(in)    :: iref, iptcl
         real(sp),                intent(in)    :: shvec(2)
         integer,                 intent(in)    :: irot
-        real                                   :: cc
-        complex(sp)                            :: pft_ref(self%pftsz,self%kfromto(1):self%kfromto(2))
-        complex(sp)                            :: shmat(self%pftsz,self%kfromto(1):self%kfromto(2))
+        complex(sp),             pointer       :: pft_ref(:,:)
+        complex(sp),             pointer       :: shmat(:,:)
+        real(sp),                pointer       :: argmat(:,:)
+        real                                   :: cc        
         real(sp)                               :: corr
-        real(sp)                               :: argmat(self%pftsz,self%kfromto(1):self%kfromto(2))
-        real(sp)                               :: sqsum_ref        
+        real(sp)                               :: sqsum_ref
+        integer                                :: ithr
+        ithr = omp_get_thread_num() + 1        
+        pft_ref  => self%heap_vars(ithr)%pft_ref
+        shmat    => self%heap_vars(ithr)%shmat
+        argmat   => self%heap_vars(ithr)%argmat
         argmat = self%argtransf(:self%pftsz,:) * shvec(1) + self%argtransf(self%pftsz+1:,:) * shvec(2)
         shmat  = cmplx(cos(argmat),sin(argmat))
 
@@ -943,11 +991,18 @@ contains
         real(sp),                intent(in)    :: shvec(2)
         real(sp),                intent(out)   :: cc(self%nrots)
         real(sp),                intent(out)   :: grad(2, self%nrots)
-        complex(sp) :: pft_ref(self%pftsz,self%kfromto(1):self%kfromto(2))
-        complex(sp) :: pft_ref_tmp(self%pftsz,self%kfromto(1):self%kfromto(2))
-        complex(sp) :: shmat(self%pftsz,self%kfromto(1):self%kfromto(2))
-        real(sp)    :: corrs_over_k(self%nrots), argmat(self%pftsz,self%kfromto(1):self%kfromto(2))
-        real(sp)    :: sqsum_ref
+        complex(sp),             pointer       :: pft_ref(:,:)
+        complex(sp),             pointer       :: pft_ref_tmp(:,:)
+        complex(sp),             pointer       :: shmat(:,:)
+        real(sp),                pointer       :: corrs_over_k(:), argmat(:,:)
+        real(sp)                               :: sqsum_ref
+        integer                                :: ithr
+        ithr = omp_get_thread_num() + 1        
+        pft_ref      => self%heap_vars(ithr)%pft_ref
+        pft_ref_tmp  => self%heap_vars(ithr)%pft_ref_tmp
+        shmat        => self%heap_vars(ithr)%shmat
+        corrs_over_k => self%heap_vars(ithr)%corrs_over_k
+        argmat       => self%heap_vars(ithr)%argmat
         argmat = self%argtransf(:self%pftsz,:) * shvec(1) + self%argtransf(self%pftsz+1:,:) * shvec(2)
         shmat  = cmplx(cos(argmat),sin(argmat))
         if( self%with_ctf )then
@@ -981,11 +1036,18 @@ contains
         integer,                 intent(in)    :: iref, iptcl
         real(sp),                intent(in)    :: shvec(2)
         real(sp),                intent(out)   :: grad(2, self%nrots)
-        complex(sp) :: pft_ref(self%pftsz,self%kfromto(1):self%kfromto(2))
-        complex(sp) :: pft_ref_tmp(self%pftsz,self%kfromto(1):self%kfromto(2))
-        complex(sp) :: shmat(self%pftsz,self%kfromto(1):self%kfromto(2))
-        real(sp)    :: corrs_over_k(self%nrots), argmat(self%pftsz,self%kfromto(1):self%kfromto(2))
-        real(sp)    :: sqsum_ref
+        complex(sp),             pointer       :: pft_ref(:,:)
+        complex(sp),             pointer       :: pft_ref_tmp(:,:)
+        complex(sp),             pointer       :: shmat(:,:)
+        real(sp),                pointer       :: corrs_over_k(:), argmat(:,:)
+        real(sp)                               :: sqsum_ref
+        integer                                :: ithr
+        ithr = omp_get_thread_num() + 1        
+        pft_ref      => self%heap_vars(ithr)%pft_ref
+        pft_ref_tmp  => self%heap_vars(ithr)%pft_ref_tmp
+        shmat        => self%heap_vars(ithr)%shmat
+        corrs_over_k => self%heap_vars(ithr)%corrs_over_k
+        argmat       => self%heap_vars(ithr)%argmat
         argmat = self%argtransf(:self%pftsz,:) * shvec(1) + self%argtransf(self%pftsz+1:,:) * shvec(2)
         shmat  = cmplx(cos(argmat),sin(argmat))
         if( self%with_ctf )then
@@ -1019,12 +1081,18 @@ contains
         integer,                 intent(in)    :: irot
         real(sp),                intent(out)   :: f
         real(sp),                intent(out)   :: grad(2)
-        complex(sp) :: pft_ref(self%pftsz,self%kfromto(1):self%kfromto(2))
-        complex(sp) :: pft_ref_tmp(self%pftsz,self%kfromto(1):self%kfromto(2))
-        complex(sp) :: shmat(self%pftsz,self%kfromto(1):self%kfromto(2))
-        real(sp)    :: argmat(self%pftsz,self%kfromto(1):self%kfromto(2))
-        real(sp)    :: sqsum_ref
-        real(sp)    :: corr
+        complex(sp),             pointer       :: pft_ref(:,:)
+        complex(sp),             pointer       :: pft_ref_tmp(:,:)
+        complex(sp),             pointer       :: shmat(:,:)
+        real(sp),                pointer       :: argmat(:,:)
+        real(sp)                               :: sqsum_ref
+        real(sp)                               :: corr
+        integer                                :: ithr
+        ithr = omp_get_thread_num() + 1        
+        pft_ref     => self%heap_vars(ithr)%pft_ref
+        pft_ref_tmp => self%heap_vars(ithr)%pft_ref_tmp
+        shmat       => self%heap_vars(ithr)%shmat
+        argmat      => self%heap_vars(ithr)%argmat
         argmat = self%argtransf(:self%pftsz,:) * shvec(1) + self%argtransf(self%pftsz+1:,:) * shvec(2)
         shmat  = cmplx(cos(argmat),sin(argmat))
         if( self%with_ctf )then
@@ -1059,12 +1127,18 @@ contains
         real(sp),                intent(in)    :: shvec(2)
         integer,                 intent(in)    :: irot
         real(sp),                intent(out)   :: grad(2)
-        complex(sp)                            :: pft_ref(self%pftsz,self%kfromto(1):self%kfromto(2))
-        complex(sp)                            :: pft_ref_tmp(self%pftsz,self%kfromto(1):self%kfromto(2))
-        complex(sp)                            :: shmat(self%pftsz,self%kfromto(1):self%kfromto(2))
-        real(sp)                               :: argmat(self%pftsz,self%kfromto(1):self%kfromto(2))
+        complex(sp),             pointer       :: pft_ref(:,:)
+        complex(sp),             pointer       :: pft_ref_tmp(:,:)
+        complex(sp),             pointer       :: shmat(:,:)
+        real(sp),                pointer       :: argmat(:,:)
         real(sp)                               :: sqsum_ref
         real(sp)                               :: corr
+        integer                                :: ithr
+        ithr = omp_get_thread_num() + 1        
+        pft_ref     => self%heap_vars(ithr)%pft_ref
+        pft_ref_tmp => self%heap_vars(ithr)%pft_ref_tmp
+        shmat       => self%heap_vars(ithr)%shmat
+        argmat      => self%heap_vars(ithr)%argmat
         argmat = self%argtransf(:self%pftsz,:) * shvec(1) + self%argtransf(self%pftsz+1:,:) * shvec(2)
         shmat  = cmplx(cos(argmat),sin(argmat))
         if( self%with_ctf )then
@@ -1096,12 +1170,17 @@ contains
         integer,                 intent(in)    :: iref, iptcl
         real(dp),                intent(in)    :: shvec(2)
         integer,                 intent(in)    :: irot
+        complex(dp),             pointer       :: pft_ref(:,:)
+        complex(dp),             pointer       :: shmat(:,:)
+        real(dp),                pointer       :: argmat(:,:)
         real(dp)                               :: cc
-        complex(dp)                            :: pft_ref(self%pftsz,self%kfromto(1):self%kfromto(2))
-        complex(dp)                            :: shmat(self%pftsz,self%kfromto(1):self%kfromto(2))
         real(dp)                               :: corr
-        real(dp)                               :: argmat(self%pftsz,self%kfromto(1):self%kfromto(2))
-        real(dp)                               :: sqsum_ref        
+        real(dp)                               :: sqsum_ref
+        integer                                :: ithr
+        ithr = omp_get_thread_num() + 1        
+        pft_ref     => self%heap_vars(ithr)%pft_ref_8
+        shmat       => self%heap_vars(ithr)%shmat_8
+        argmat      => self%heap_vars(ithr)%argmat_8
         argmat = self%argtransf(:self%pftsz,:) * shvec(1) + self%argtransf(self%pftsz+1:,:) * shvec(2)
         shmat  = cmplx(cos(argmat),sin(argmat))
 
@@ -1132,12 +1211,18 @@ contains
         integer,                 intent(in)    :: irot
         real(dp),                intent(out)   :: f
         real(dp),                intent(out)   :: grad(2)
-        complex(dp) :: pft_ref(self%pftsz,self%kfromto(1):self%kfromto(2))
-        complex(dp) :: pft_ref_tmp(self%pftsz,self%kfromto(1):self%kfromto(2))
-        complex(dp) :: shmat(self%pftsz,self%kfromto(1):self%kfromto(2))
-        real(dp)    :: argmat(self%pftsz,self%kfromto(1):self%kfromto(2))
-        real(dp)    :: sqsum_ref
-        real(dp)    :: corr
+        complex(dp),             pointer       :: pft_ref(:,:)
+        complex(dp),             pointer       :: pft_ref_tmp(:,:)
+        complex(dp),             pointer       :: shmat(:,:)
+        real(dp),                pointer       :: argmat(:,:)
+        real(dp)                               :: sqsum_ref
+        real(dp)                               :: corr
+        integer                                :: ithr
+        ithr = omp_get_thread_num() + 1        
+        pft_ref     => self%heap_vars(ithr)%pft_ref_8
+        pft_ref_tmp => self%heap_vars(ithr)%pft_ref_tmp_8
+        shmat       => self%heap_vars(ithr)%shmat_8
+        argmat      => self%heap_vars(ithr)%argmat_8
         argmat = self%argtransf(:self%pftsz,:) * shvec(1) + self%argtransf(self%pftsz+1:,:) * shvec(2)
         shmat  = cmplx(cos(argmat),sin(argmat))
         if( self%with_ctf )then
@@ -1172,12 +1257,18 @@ contains
         real(dp),                intent(in)    :: shvec(2)
         integer,                 intent(in)    :: irot
         real(dp),                intent(out)   :: grad(2)
-        complex(dp)                            :: pft_ref(self%pftsz,self%kfromto(1):self%kfromto(2))
-        complex(dp)                            :: pft_ref_tmp(self%pftsz,self%kfromto(1):self%kfromto(2))
-        complex(dp)                            :: shmat(self%pftsz,self%kfromto(1):self%kfromto(2))
-        real(dp)                               :: argmat(self%pftsz,self%kfromto(1):self%kfromto(2))
+        complex(dp),             pointer       :: pft_ref(:,:)
+        complex(dp),             pointer       :: pft_ref_tmp(:,:)
+        complex(dp),             pointer       :: shmat(:,:)
+        real(dp),                pointer       :: argmat(:,:)
         real(dp)                               :: sqsum_ref
         real(dp)                               :: corr
+        integer                                :: ithr
+        ithr = omp_get_thread_num() + 1        
+        pft_ref     => self%heap_vars(ithr)%pft_ref_8
+        pft_ref_tmp => self%heap_vars(ithr)%pft_ref_tmp_8
+        shmat       => self%heap_vars(ithr)%shmat_8
+        argmat      => self%heap_vars(ithr)%argmat_8
         argmat = self%argtransf(:self%pftsz,:) * shvec(1) + self%argtransf(self%pftsz+1:,:) * shvec(2)
         shmat  = cmplx(cos(argmat),sin(argmat))
         if( self%with_ctf )then
@@ -1210,9 +1301,14 @@ contains
         class(polarft_corrcalc),  intent(inout) :: self
         integer,                  intent(in)    :: iref, iptcl, irot
         real(sp),                 intent(out)   :: frc(self%kfromto(1):self%kfromto(2))
-        complex(sp) :: pft_ref(self%pftsz,self%kfromto(1):self%kfromto(2))
-        real(sp)    :: kcorrs(self%nrots), sumsqref, sumsqptcl, sqsum_ref
-        integer     :: k
+        complex(sp),              pointer       :: pft_ref(:,:)
+        real(sp),                 pointer       :: kcorrs(:)
+        real(sp)                                :: sumsqref, sumsqptcl, sqsum_ref
+        integer                                 :: k
+        integer                                 :: ithr
+        ithr = omp_get_thread_num() + 1        
+        pft_ref  => self%heap_vars(ithr)%pft_ref
+        kcorrs   => self%heap_vars(ithr)%kcorrs
         call self%prep_ref4corr(iref, iptcl, pft_ref, sqsum_ref, self%kfromto(2))
         do k=self%kfromto(1),self%kfromto(2)
             call self%calc_k_corrs(pft_ref, iptcl, k, kcorrs)
@@ -1250,6 +1346,11 @@ contains
                 call fftwf_free(self%fftdat(ithr)%p_ref_fft_im)
                 call fftwf_free(self%fftdat(ithr)%p_product_fft)
                 call fftwf_free(self%fftdat(ithr)%p_backtransf)
+                deallocate(self%heap_vars(ithr)%pft_ref,self%heap_vars(ithr)%pft_ref_tmp,&
+                    &self%heap_vars(ithr)%corrs_over_k,self%heap_vars(ithr)%argmat,&
+                    &self%heap_vars(ithr)%shmat,self%heap_vars(ithr)%kcorrs,&
+                    &self%heap_vars(ithr)%pft_ref_8,self%heap_vars(ithr)%pft_ref_tmp_8,&
+                    &self%heap_vars(ithr)%shmat_8,self%heap_vars(ithr)%argmat_8)
             end do
             do iptcl = self%pfromto(1),self%pfromto(2)
                 do ik = self%kfromto(1),self%kfromto(2)
