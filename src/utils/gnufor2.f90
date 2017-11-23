@@ -7,7 +7,8 @@
 !! it is a modification of the GNUFOR interface written by John Burkardt:
 !! http://orion.math.iastate.edu/burkardt/g_src/gnufor/gnufor.html
 !***********************************************************************************
- module gnufor2
+module gnufor2
+use simple_syslib, only: simple_isenv
  implicit none
 !***********************************************************************************
 ! these are default parameters which control linewidth, colors and terminal
@@ -72,6 +73,11 @@
  integer, parameter  :: Nc=35
  character(len=Nc)  :: f_result
 !***********************************************************************************
+ if(simple_isenv('DISPLAY') /= 0) then
+     f_result = 'dumb'
+     return
+ endif
+
  select case(terminal)
   case('ps')
    f_result='postscript landscape color'

@@ -1,12 +1,11 @@
 ! for calculation of band-pass limited cross-correlation of polar Fourier transforms
 module simple_polarft_corrcalc
+!$ use omp_lib
+!$ use omp_lib_kinds
 include 'simple_lib.f08'
 
 use simple_params,   only: params
-use simple_ran_tabu, only: ran_tabu
 use simple_fftw3
-!$ use omp_lib
-!$ use omp_lib_kinds
 implicit none
 
 public :: polarft_corrcalc
