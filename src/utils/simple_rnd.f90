@@ -133,7 +133,7 @@ contains
         n = size(pvec)
         allocate(pvec_sorted(n), source=pvec)
         inds = (/(i,i=1,n)/)
-        call hpsort(n, pvec_sorted, inds)
+        call hpsort(pvec_sorted, inds)
         if( sum(pvec_sorted) >= 1.001 )then
             stop 'probability distribution does not sum up to 1.; multinomal; simple_rnd;'
         endif
@@ -150,17 +150,17 @@ contains
     !!          distribution in pvec
     subroutine multinomal_many( fromto, nsamples, pvec, mask, samples )
         use simple_math, only: hpsort
-        integer, intent(in)  :: fromto(2), nsamples
-        real,    intent(in)  :: pvec(fromto(1):fromto(2)) !< probabilities
-        logical, intent(in)  :: mask(fromto(1):fromto(2))
-        integer, intent(out) :: samples(nsamples)
-        real    :: pvec_sorted(fromto(1):fromto(2))
-        integer :: inds(fromto(1):fromto(2))
-        integer :: i, j, ismp
-        inds = (/(i,i=fromto(1),fromto(2))/)
+        integer, intent(in)    :: fromto(2), nsamples
+        real,    intent(in)    :: pvec(fromto(1):fromto(2)) !< probabilities
+        logical, intent(inout) :: mask(fromto(1):fromto(2))
+        integer, intent(out)   :: samples(nsamples)
+        real    :: pvec_sorted(fromto(2)-fromto(1)+1), psum
+        integer :: i, j, ismp, n
+        n = fromto(2) - fromto(1) + 1
         pvec_sorted = pvec
-        call hpsort(size(pvec_sorted), pvec_sorted, inds)
-        if( sum(pvec_sorted) >= 1.001 )then
+        call hpsort(pvec_sorted)
+        psum = sum(pvec_sorted)
+        if( psum >= 1.002 .or. psum <= 0.998  )then
             stop 'probability distribution does not sum up to 1.; multinomal_many; simple_rnd;'
         endif
         do j=1,nsamples
@@ -169,19 +169,23 @@ contains
                 if( mask(ismp) ) exit
             end do
             samples(j) = ismp
+            mask(ismp) = .false.
         end do
+
         contains
 
             integer function sample( )
                 real :: rnd, bound
                 rnd = ran3()
-                do i=fromto(1),fromto(2)
+                do i=1,n
                     bound = sum(pvec_sorted(1:i))
                     if( rnd <= bound ) exit
                 enddo
+                i = i + fromto(1) - 1
                 ! to deal with numerical instability
                 if( i < fromto(1) ) i = fromto(1) 
-                if( i > fromto(2) ) i = fromto(2) 
+                if( i > fromto(2) ) i = fromto(2)
+                sample = i
             end function sample
 
     end subroutine multinomal_many

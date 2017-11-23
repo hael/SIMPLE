@@ -1,6 +1,7 @@
 ! 3D reconstruction of even-odd pairs for FSC estimation
 module simple_eo_reconstructor
 #include "simple_lib.f08"
+use simple_defs_fname     ! use all in there
 use simple_reconstructor, only: reconstructor
 use simple_image,         only: image
 use simple_params,        only: params
@@ -40,6 +41,7 @@ type :: eo_reconstructor
     procedure, private :: reset_even
     procedure, private :: reset_odd
     procedure          :: reset_sum
+    procedure          :: apply_weight
     ! GETTERS
     procedure          :: get_kbwin
     procedure          :: get_res
@@ -150,6 +152,13 @@ contains
         call self%eosum%reset
     end subroutine reset_sum
 
+    subroutine apply_weight( self, w )
+        class(eo_reconstructor), intent(inout) :: self
+        real,                    intent(in)    :: w
+        call self%even%apply_weight(w)
+        call self%odd%apply_weight(w)
+    end subroutine apply_weight
+
     ! GETTERS
 
     !>  \brief  return the window functions used by eo_reconstructor
@@ -226,8 +235,8 @@ contains
         character(len=*),        intent(in)    :: fbody
         character(len=STDLEN) :: even_vol, even_rho, odd_vol, odd_rho
         logical               :: here(2)
-        even_vol = trim(adjustl(fbody))//'_even.bin'
-        even_rho = 'rho_'//trim(adjustl(fbody))//'_even.bin'
+        even_vol = trim(adjustl(fbody))//'_even'//BIN_EXT
+        even_rho = 'rho_'//trim(adjustl(fbody))//'_even'//BIN_EXT
         here(1)  = file_exists(even_vol)
         here(2)  = file_exists(even_rho)
         if( all(here) )then
@@ -236,8 +245,8 @@ contains
         else
             call self%reset_even
         endif
-        odd_vol = trim(adjustl(fbody))//'_odd.bin'
-        odd_rho = 'rho_'//trim(adjustl(fbody))//'_odd.bin'
+        odd_vol = trim(adjustl(fbody))//'_odd'//BIN_EXT
+        odd_rho = 'rho_'//trim(adjustl(fbody))//'_odd'//BIN_EXT
         here(1) = file_exists(odd_vol)
         here(2) = file_exists(odd_rho)
         if( all(here) )then

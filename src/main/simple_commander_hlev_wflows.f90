@@ -648,7 +648,7 @@ contains
                     tmp   = (/(s,s=1,nlabels)/)
                     where( states<=0 ) corrs = -1.
                     order = (/(iptcl,iptcl=1,nptcls)/)
-                    call hpsort( nptcls, corrs, order )
+                    call hpsort( corrs, order )
                     call reverse(order)
                     call reverse(corrs)
                     rt = ran_tabu(nlabels)

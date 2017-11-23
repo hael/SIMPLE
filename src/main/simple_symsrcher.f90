@@ -73,7 +73,7 @@ contains
         call dsym_os%set_all('corr', corrs)
         ! indentify views along z and x-/y- axes
         forsort = corrs
-        call hpsort(noris, forsort)
+        call hpsort(forsort)
         halfnoris = nint(real(noris)/2.)
         cen1      = sum(forsort(1:halfnoris)) / real(halfnoris)
         cen2      = sum(forsort(halfnoris+1:noris)) / real(noris-halfnoris)

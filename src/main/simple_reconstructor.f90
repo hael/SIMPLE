@@ -48,6 +48,7 @@ type, extends(image) :: reconstructor
     ! SETTERS
     procedure          :: reset
     procedure          :: reset_exp
+    procedure          :: apply_weight
     ! GETTER
     procedure          :: get_kbwin
     ! I/O
@@ -152,6 +153,13 @@ contains
         if(allocated(self%cmat_exp))self%cmat_exp = cmplx(0.,0.)
         if(allocated(self%rho_exp)) self%rho_exp  = 0.
     end subroutine reset_exp
+
+    subroutine apply_weight( self, w )
+        class(reconstructor), intent(inout) :: self !< this instance
+        real,                 intent(in)    :: w
+        if(allocated(self%cmat_exp)) self%cmat_exp = self%cmat_exp * w
+        if(allocated(self%rho_exp))  self%rho_exp  = self%rho_exp  * w
+    end subroutine apply_weight
 
     ! GETTERS
     !> get the kbintpol window

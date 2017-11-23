@@ -632,7 +632,7 @@ contains
             order(j) = j
             vals(j)  = arr(j)
         end do
-        call hpsort(n, vals, order)
+        call hpsort(vals, order)
         do j=1,n
             arr(order(j)) = real(j)
         end do
@@ -659,7 +659,7 @@ contains
                 vals(cnt)      = mat(i,j)
             end do
         end do
-        call hpsort(n, vals, order)
+        call hpsort(vals, order)
         ! convert to rank
         do j=1,n
             mat(indices(order(j),1),indices(order(j),2)) = real(j)
@@ -699,8 +699,8 @@ contains
         real, intent(inout) :: data1(n1), data2(n2), d, prob  !< significance
         integer             :: j1, j2
         real                :: d1, d2, dt, en1, en2, en, fn1, fn2
-        call hpsort( n1, data1 )
-        call hpsort( n2, data2 )
+        call hpsort(data1)
+        call hpsort(data2)
         en1 = n1
         en2 = n2
         j1  = 1

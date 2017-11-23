@@ -495,7 +495,7 @@ contains
         if(alloc_stat /= 0) call alloc_errchk("sortmeans; simple_math", alloc_stat)
         ! initialization by sorting
         dat_sorted = dat ! reallocation  dat_sorted(ndat),
-        call hpsort(ndat, dat_sorted)
+        call hpsort(dat_sorted)
         clssz = int(real(ndat)/real(ncls))
         cnt_means = 0
         do i=1,ndat,clssz
@@ -2349,13 +2349,14 @@ contains
     end function peakfinder_2
 
     !>   rheapsort from numerical recepies (largest last)
-    subroutine hpsort_1( n, rarr, iarr )
-        integer, intent(in)    :: n
-        real, intent(inout)    :: rarr(n)
-        integer, intent(inout) :: iarr(n)
-        integer                :: i, ir, j, l, ia
-        real                   :: ra
-        if( n < 2) return
+    subroutine hpsort_1( rarr, iarr )
+        real,    intent(inout) :: rarr(:)
+        integer, intent(inout) :: iarr(:)
+        integer :: i, ir, j, l, ia, n
+        real    :: ra
+        n = size(rarr)
+        if( n /= size(iarr) ) stop 'nonconforming array sizes; math :: hpsort_1'
+        if( n < 2 ) return
         l  = n/2+1
         ir = n
         do
@@ -2396,10 +2397,10 @@ contains
     end subroutine hpsort_1
 
     !>   rheapsort from numerical recepies (largest last)
-    subroutine hpsort_2( n, iarr )
-        integer, intent(in)    :: n
-        integer, intent(inout) :: iarr(n)
-        integer                :: i, ir, j, l, ra
+    subroutine hpsort_2( iarr )
+        integer, intent(inout) :: iarr(:)
+        integer :: i, ir, j, l, ra, n
+        n = size(iarr)
         if( n < 2) return
         l  = n/2+1
         ir = n
@@ -2435,16 +2436,16 @@ contains
     end subroutine hpsort_2
 
     !>   rheapsort from numerical recepies (largest last)
-    subroutine hpsort_3( n, iarr, p1_lt_p2 )
-        integer, intent(in)    :: n
-        integer, intent(inout) :: iarr(n)
+    subroutine hpsort_3( iarr, p1_lt_p2 )
+        integer, intent(inout) :: iarr(:)
         interface
             function p1_lt_p2( p1, p2 ) result( val )
                 integer, intent(in) :: p1, p2
                 logical :: val
             end function p1_lt_p2
         end interface
-        integer                :: i, ir, j, l, ra
+        integer :: i, ir, j, l, ra, n
+        n = size(iarr)
         if( n < 2) return
         l  = n/2+1
         ir = n
@@ -2480,11 +2481,11 @@ contains
     end subroutine hpsort_3
 
     !>   rheapsort from numerical recepies (largest last)
-    subroutine hpsort_4( n, rarr )
-        integer, intent(in) :: n
-        real, intent(inout) :: rarr(n)
-        integer             :: i, ir, j, l
-        real                :: ra
+    subroutine hpsort_4( rarr )
+        real, intent(inout) :: rarr(:)
+        integer :: i, ir, j, l, n
+        real    :: ra
+        n = size(rarr)
         if( n < 2) return
         l  = n/2+1
         ir = n
@@ -2520,11 +2521,12 @@ contains
     end subroutine hpsort_4
 
     !>   rheapsort from numerical recepies (largest last)
-    subroutine hpsort_5( n, rarr, rarr2 )
-        integer, intent(in)    :: n
-        real, intent(inout)    :: rarr(n), rarr2(n)
-        integer                :: i, ir, j, l
-        real                   :: ra, ra2
+    subroutine hpsort_5( rarr, rarr2 )
+        real, intent(inout) :: rarr(:), rarr2(:)
+        integer :: i, ir, j, l, n
+        real    :: ra, ra2
+        n = size(rarr)
+        if( n /= size(rarr2) ) stop 'nonconforming array sizes; math :: hpsort_5'
         if( n < 2) return
         l  = n/2+1
         ir = n
@@ -2576,7 +2578,7 @@ contains
         do i=1,m
             rheap(i) = rarr(i)
         end do
-        call hpsort_4(m,rheap)
+        call hpsort_4(rheap)
         do i=m+1,n
             if(rarr(i).gt.rheap(1))then
                 rheap(1) = rarr(i)
@@ -2612,7 +2614,7 @@ contains
             rheap(i) = rarr(i)
             iheap(i) = i
         end do
-        call hpsort_1(m,rheap,iheap)
+        call hpsort_1(rheap,iheap)
         do i=m+1,n
             if(rarr(i).gt.rheap(1))then
                 rheap(1) = rarr(i)

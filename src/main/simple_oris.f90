@@ -64,7 +64,7 @@ type :: oris
     procedure, private :: get_nodd
     procedure          :: print_
     procedure          :: print_matrices
-    ! procedure          :: sample4update
+    procedure          :: sample4update_and_incrcnt
     ! SETTERS
     procedure, private :: assign
     generic            :: assignment(=) => assign
@@ -761,7 +761,7 @@ contains
             ! shrink set
             ows  = self%get_all('ow')
             inds = (/(i,i=1,self%n)/)
-            call hpsort(self%n, ows, inds)
+            call hpsort(ows, inds)
             cnt = 0
             do i=self%n,self%n - npeaks + 1,-1
                 cnt = cnt + 1
@@ -1238,36 +1238,42 @@ contains
         end do
     end subroutine print_matrices
 
-    ! function sample4update( self, fromto )
-    !     class(oris),       intent(inout) :: self
-    !     integer, optional, intent(in)    :: fromto(2)
-
-    !     real,    allocatable :: probs(:), states(:)
-    !     logical, allocatable :: incl(:)
-    !     integer :: ffromto(2)
-    !     real    :: norm
-    !     ffromto(1) = 1
-    !     ffromto(2) = self%n
-    !     if( present(fromto) ) ffromto = fromto
-    !     states = self%get_all('state', ffromto)
-    !     allocate(incl(ffromto(1):ffromto(2)), source=states > 0.5)
-    !     if( self%isthere('updatecnt') )then
-    !         probs = self%get_all('updatecnt', ffromto)
-    !     else
-    !         allocate(probs(ffromto(1):ffromto(2)), source=1.0)
-    !     endif
-    !     norm  = sum(probs, mask=incl)
-    !     where( incl )
-    !         probs = probs / norm
-    !     else where
-    !         probs = 0.
-    !     end where
-
-
-
-
-
-    ! end function sample4update
+    subroutine sample4update_and_incrcnt( self, fromto, nsamples, inds, mask )
+        use simple_rnd, only: multinomal_many
+        class(oris),       intent(inout) :: self
+        integer,           intent(in)    :: fromto(2), nsamples
+        integer,           intent(out)   :: inds(nsamples)
+        logical,           intent(out)   :: mask(fromto(1):fromto(2))
+        real,    allocatable :: probs(:), states(:)
+        logical, allocatable :: incl(:)
+        integer :: i
+        real    :: norm, val
+        ! states mask
+        states = self%get_all('state', fromto)
+        ! make multinomal distribution
+        allocate(incl(fromto(1):fromto(2)), source=states > 0.5)
+        if( self%isthere('updatecnt') )then
+            probs = self%get_all('updatecnt', fromto)
+        else
+            allocate(probs(fromto(1):fromto(2)), source=1.0)
+        endif
+        norm  = sum(probs, mask=incl)
+        where( incl )
+            probs = probs / norm
+        else where
+            probs = 0.
+        end where
+        ! sample the probability distribution
+        call multinomal_many( fromto, nsamples, probs, incl, inds)
+        ! increment update counter and set mask
+        mask = .false.
+        do i=1,nsamples
+            val = self%o(inds(i))%get('updatecnt')
+            val = val + 1.0
+            call self%o(inds(i))%set('updatecnt', val)
+            mask(inds(i)) = .true.
+        end do
+    end subroutine sample4update_and_incrcnt
 
     ! SETTERS
 
@@ -2301,7 +2307,7 @@ contains
         allocchk('order; simple_oris')
         specscores = self%get_all('specscore')
         inds = (/(i,i=1,self%n)/)
-        call hpsort( self%n, specscores, inds )
+        call hpsort(specscores, inds)
         call reverse(inds)
     end function order
 
@@ -2315,7 +2321,7 @@ contains
         allocchk('order; simple_oris')
         corrs = self%get_all('corr')
         inds = (/(i,i=1,self%n)/)
-        call hpsort( self%n, corrs, inds )
+        call hpsort(corrs, inds)
     end function order_corr
 
     !>  \brief  orders clusters according to population
@@ -2334,7 +2340,7 @@ contains
             classpops(i) = real(self%get_pop(i, 'class'))
         end do
         inds = (/(i,i=1,ncls)/)
-        call hpsort( ncls, classpops, inds )
+        call hpsort(classpops, inds)
         call reverse(inds)
     end function order_cls
 
@@ -2403,7 +2409,7 @@ contains
                     endif
                     inds_tmp(j) = inds(j)
                 end do
-                call hpsort(pop, scores, inds_tmp)
+                call hpsort(scores, inds_tmp)
                 do j=pop,pop - popmax + 1,-1
                     included(inds_tmp(j)) = .true. 
                 end do
@@ -2492,7 +2498,7 @@ contains
                     endif
                     inds_tmp(j) = inds(j)
                 end do
-                call hpsort(pop, scores, inds_tmp)
+                call hpsort(scores, inds_tmp)
                 do j=pop,pop - popmax + 1,-1
                     included(inds_tmp(j)) = .true. 
                 end do
@@ -2628,7 +2634,7 @@ contains
             dists(i) = self%o(i).euldist.o_in
             inds(i)  = i
         end do
-        call hpsort(self%n, dists, inds)
+        call hpsort(dists, inds)
         do i=1,size(pdirinds)
             pdirinds(i) = inds(i)
         end do
@@ -2665,7 +2671,7 @@ contains
             dists(i) = self%o(i).geod.o_in
             inds(i)  = i
         end do
-        call hpsort(self%n, dists, inds)
+        call hpsort(dists, inds)
         do i=1,size(oriinds)
             oriinds(i) = inds(i)
         end do
@@ -2762,7 +2768,7 @@ contains
                     dists(j) = self%o(j).euldist.o
                 endif
             end do
-            call hpsort(self%n, dists, inds)
+            call hpsort(dists, inds)
             do j=1,k
                 nnmat(i,j) = inds(j)
             end do
@@ -2783,7 +2789,7 @@ contains
                     dists(i) = self%o(i).euldist.self%o(j)
                 endif
             end do
-            call hpsort(self%n, dists)
+            call hpsort(dists)
             res = res+sum(dists(:3))/3. ! average of three nearest neighbors
         end do
         res = rad2deg(res/real(self%n))
@@ -2803,7 +2809,7 @@ contains
                     dists(i) = self%o(i).geodsc.self%o(j)
                 endif
             end do
-            call hpsort(self%n, dists)
+            call hpsort(dists)
             res = res+sum(dists(:3))/3. ! average of three nearest neighbors
         end do
         res = rad2deg(res/real(self%n))
@@ -2823,7 +2829,7 @@ contains
         corrs_incl = pack(corrs, mask=incl)
         ! sort correlations & determine threshold
         n_incl     = size(corrs_incl)
-        call hpsort(n_incl, corrs_incl)
+        call hpsort(corrs_incl)
         thresh_ind  = nint(real(n_incl) * thresh)
         corr_bound  = corrs_incl(thresh_ind)
         deallocate(corrs, incl, corrs_incl)
@@ -2843,7 +2849,7 @@ contains
             do i=1,self%n
                 dists(i) = self%o(i).euldist.self%o(j)
             end do
-            call hpsort(self%n, dists)
+            call hpsort(dists)
             do i=1,self%n
                 if( dists(i) <= tres )then
                     npeaksum = npeaksum + 1.

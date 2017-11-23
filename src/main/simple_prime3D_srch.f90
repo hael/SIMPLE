@@ -208,7 +208,7 @@ contains
                     prev_state = nint(b%a%get(iptcl, 'state'))
                     call b%e%calc_euldists(b%a%get_ori(iptcl), euldists)
                     srch_order(iptcl,:p%nspace) = (/(i,i=1,p%nspace)/)
-                    call hpsort( p%nspace, euldists, srch_order(iptcl,:p%nspace) )
+                    call hpsort(euldists, srch_order(iptcl,:p%nspace))
                     prev_ref = (prev_state - 1) * p%nspace + srch_order(iptcl,1)
                     do istate = 0, p%nstates - 1
                         i = istate * p%nspace + 1
@@ -388,7 +388,7 @@ contains
             self%nrefs_eval = nrefs
             ! sort in correlation projection direction space
             corrs = proj_space_corrs(self%iptcl,:)
-            call hpsort(self%nrefs, corrs, proj_space_inds(self%iptcl,:))
+            call hpsort(corrs, proj_space_inds(self%iptcl,:))
             ! take care of the in-planes
             call self%inpl_srch
             ! prepare weights & orientation
@@ -438,7 +438,7 @@ contains
             end do
             ! sort in correlation projection direction space
             corrs = proj_space_corrs(self%iptcl,:)
-            call hpsort(self%nrefs, corrs, proj_space_inds(self%iptcl,:))
+            call hpsort(corrs, proj_space_inds(self%iptcl,:))
             ! return target points
             ntargets = size(target_projs)
             cnt      = 1
@@ -524,7 +524,7 @@ contains
             end do
             ! sort in correlation projection direction space
             corrs = proj_space_corrs(self%iptcl,:)
-            call hpsort(self%nrefs, corrs, proj_space_inds(self%iptcl,:))
+            call hpsort(corrs, proj_space_inds(self%iptcl,:))
             call self%inpl_srch ! search shifts
             ! prepare weights and orientations
             call self%prep_npeaks_oris_and_weights
@@ -654,7 +654,7 @@ contains
             self%nrefs_eval = szsn
             ! sort in correlation projection direction space
             corrs = proj_space_corrs(self%iptcl,:)
-            call hpsort(self%nrefs, corrs, proj_space_inds(self%iptcl,:))
+            call hpsort(corrs, proj_space_inds(self%iptcl,:))
             ! output
             call self%prep_npeaks_oris_and_weights
         else
@@ -784,7 +784,7 @@ contains
         if( n_rnd == 0 )then
             corr_thresh = 0.
         else
-            call hpsort(n_incl, curr_corrs, curr_inds)
+            call hpsort(curr_corrs, curr_inds)
         endif
         ! assign moves
         avg_rndcorr     = 0.
@@ -871,7 +871,7 @@ contains
             end do
             ! sort in correlation projection direction space
             corrs = proj_space_corrs(self%iptcl,:)
-            call hpsort(self%nrefs, corrs, proj_space_inds(self%iptcl,:))
+            call hpsort(corrs, proj_space_inds(self%iptcl,:))
             call self%inpl_srch ! search shifts
             ! prepare weights and orientations
             call self%prep_npeaks_oris_and_weights
@@ -1044,7 +1044,7 @@ contains
             ws    = exp(-(1.-corrs))
             logws = log(ws)
             order = (/(ipeak,ipeak=1,self%npeaks)/)
-            call hpsort(self%npeaks, logws, order)
+            call hpsort(logws, order)
             call reverse(order)
             call reverse(logws)
             forall(ipeak=1:self%npeaks) ws(order(ipeak)) = exp(sum(logws(:ipeak)))

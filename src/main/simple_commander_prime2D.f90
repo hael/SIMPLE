@@ -279,7 +279,7 @@ contains
             res = b%a%get_all('res')
             allocate(order(p%ncls))
             order = (/(iclass,iclass=1,p%ncls)/)
-            call hpsort(p%ncls, res, order)
+            call hpsort(res, order)
             do iclass=1,p%ncls
                 call clsdoc_ranked%set(iclass, 'class', real(order(iclass)))
                 call clsdoc_ranked%set(iclass, 'rank',  real(iclass))

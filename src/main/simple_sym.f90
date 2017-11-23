@@ -446,7 +446,7 @@ contains
                     enddo
                 enddo
                 inds = (/(j,j=1,n_os)/)
-                call hpsort(n_os, dists, inds)
+                call hpsort(dists, inds)
                 nnmat(i,:) = inds(:k)
             enddo
             deallocate(inds, dists)
@@ -455,7 +455,6 @@ contains
 
     !>  \brief  is for retrieving nearest symmetry neighbours in an assymetric set of projection directions
     subroutine nearest_sym_neighbors( self, asym_os, nnmat )
-        use simple_math, only: hpsort
         class(sym),           intent(inout) :: self
         type(oris),           intent(inout) :: asym_os    !< C1 projection directions
         integer, allocatable, intent(inout) :: nnmat(:,:) !< nearest-neighbour matrix

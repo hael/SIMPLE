@@ -240,7 +240,7 @@ contains
             lplims(iproj) = get_lplim_at_corr(self%frcs(sstate,iproj,:), 0.143)
         end do
         order = (/(iproj,iproj=1,self%nprojs)/)
-        call hpsort(self%nprojs, lplims, order)
+        call hpsort(lplims, order)
         ! average the nbest ones
         frc = 0.0
         do iproj=1,nbest

@@ -2550,7 +2550,7 @@ contains
         npixtot = product(self%ldim)
         ! forsort = self%packer() ! Intel hickup
         forsort = pack( self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)), .true.)
-        call hpsort( npixtot, forsort)
+        call hpsort(forsort)
         thres = forsort(npixtot-npix-1) ! everyting above this value 1 else 0
         call self%bin( thres )
         deallocate( forsort )

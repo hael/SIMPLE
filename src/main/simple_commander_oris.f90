@@ -457,7 +457,6 @@ contains
     subroutine exec_orisops(self,cline)
         use simple_ori,  only: ori
         use simple_math, only: normvec
-        use simple_math, only: hpsort
         class(orisops_commander), intent(inout) :: self
         class(cmdline),           intent(inout) :: cline
         type(build)  :: b

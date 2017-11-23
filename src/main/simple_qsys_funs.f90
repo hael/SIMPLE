@@ -15,7 +15,7 @@ contains
     subroutine qsys_cleanup( p )
         use simple_params, only: params
         class(params), intent(in) :: p
-        character(len=:), allocatable :: rec_base_str, rho_base_str, rec_base_str_part, rho_base_str_part
+        ! character(len=:), allocatable :: rec_base_str, rho_base_str, rec_base_str_part, rho_base_str_part
         integer, parameter :: NUMLEN_STATE = 2, NUMLEN_ITER = 3
         integer :: istate, iter
         ! single files
@@ -42,19 +42,19 @@ contains
         call del_files('ctffind_ctrl_file_part',     p%nparts, ext='.txt')
         ! state and part numbered files
         do istate=1,MAXS
-            allocate(rec_base_str, source='recvol_state'//int2str_pad(istate,NUMLEN_STATE))
-            allocate(rho_base_str, source='rho_'//rec_base_str)
-            allocate(rec_base_str_part, source=rec_base_str//'_part')
-            allocate(rho_base_str_part, source='rho_'//rec_base_str_part)
-            call del_files(rec_base_str_part, p%nparts, ext=p%ext)
-            call del_files(rho_base_str_part, p%nparts, ext=p%ext)
-            call del_files(rec_base_str_part, p%nparts, ext=p%ext, suffix='_even')
-            call del_files(rec_base_str_part, p%nparts, ext=p%ext, suffix='_odd')
-            call del_files(rho_base_str_part, p%nparts, ext=p%ext, suffix='_even')
-            call del_files(rho_base_str_part, p%nparts, ext=p%ext, suffix='_odd')
-            call del_file(rho_base_str//'_even'//p%ext)
-            call del_file(rho_base_str//'_odd'//p%ext)
-            deallocate(rec_base_str,rho_base_str,rec_base_str_part,rho_base_str_part)
+            ! allocate(rec_base_str, source='recvol_state'//int2str_pad(istate,NUMLEN_STATE))
+            ! allocate(rho_base_str, source='rho_'//rec_base_str)
+            ! allocate(rec_base_str_part, source=rec_base_str//'_part')
+            ! allocate(rho_base_str_part, source='rho_'//rec_base_str_part)
+            ! call del_files(rec_base_str_part, p%nparts, ext=p%ext)
+            ! call del_files(rho_base_str_part, p%nparts, ext=p%ext)
+            ! call del_files(rec_base_str_part, p%nparts, ext=p%ext, suffix='_even')
+            ! call del_files(rec_base_str_part, p%nparts, ext=p%ext, suffix='_odd')
+            ! call del_files(rho_base_str_part, p%nparts, ext=p%ext, suffix='_even')
+            ! call del_files(rho_base_str_part, p%nparts, ext=p%ext, suffix='_odd')
+            ! call del_file(rho_base_str//'_even'//p%ext)
+            ! call del_file(rho_base_str//'_odd'//p%ext)
+            ! deallocate(rec_base_str,rho_base_str,rec_base_str_part,rho_base_str_part)
         end do
         ! syscalls to del files
         call sys_del_files('VOLASSEMBLE_STATE', '')
