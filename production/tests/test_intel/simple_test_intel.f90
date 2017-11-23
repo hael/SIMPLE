@@ -26,7 +26,7 @@ program simple_test_intel
     write (*,'(A)') 'SIMPLE INTEL TEST'
 
     errflag=.false.
-    call test_omp(errflag)
+!    call test_omp(errflag)
 #ifdef INTEL
     call test_intel_blas(errflag)
     call test_mkl_fftw(errflag)

@@ -26,6 +26,10 @@ else()
 endif()
 endif()
 message("==========================================================================")
+if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "Intel")
+	message("Intel® Math Kernel Library Link Line Advisor: ")
+message("  o Set the INCLUDE, MKLROOT, LD_LIBRARY_PATH, LIBRARY_PATH, CPATH and NLSPATH environment variables in the command shell using one of mklvars script files in the 'bin' subdirectory of the Intel(R) MKL installation directory. Please see also the Intel(R) MKL User Guide.")
+message("  o Set the environment variable: MKL_MIC_ENABLE=1, when using Intel® Xeon Phi™ Coprocessor Automatic offload")
+message("  o Please be sure that you have used the recommended compiler options for the selected interface layer. Caution: linking Intel(R) MKL libraries with your objects compiled for different interface layer may lead to run-time errors.")
+  endif()
 message("\n\n")
-
-

@@ -25,6 +25,8 @@ contains
       integer(kind=4) i,j
       integer brng,method,seed,n
 
+      write(*,'(a)') '**info(simple_intel unit tests, MKL VecStat part 1): testing VSL GAUSSIAN'
+
       n = 1000
       s = 0.0
       a = 5.0

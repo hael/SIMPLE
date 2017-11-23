@@ -213,7 +213,7 @@ elseif (CMAKE_Fortran_COMPILER_ID STREQUAL "Intel")
   # set(FC "ifort" CACHE PATH "Intel Fortran compiler")
   set(preproc  "-fpp")
   set(dialect  "-free -implicitnone -std08  -list-line-len=264 -diag-disable 6477  -diag-disable 406 -gen-interfaces  ")
-  set(checks   "-check bounds -check uninit -assume buffered_io ") # -mcmodel=medium -shared-intel
+  set(checks   "-check bounds -check uninit -assume buffered_io -assume realloc_lhs ") # -mcmodel=medium -shared-intel
   set(warn     "-warn all ")
   set(fordebug "-g -debug -O0 -ftrapuv -debug all -check all ${warn} -assume byterecl -align sequence ")
   set(forspeed "-O3 -fp-model fast=2 -inline all -unroll-aggressive -no-fp-port  ")

@@ -248,13 +248,19 @@ contains
     subroutine test_mkl_fftw (errflag)
         use MKL_DFTI
         logical, intent(inout) :: errflag
-
+        write(*,'(a)') '**info(simple_intel unit tests, MKL FFTW part 1): testing 1D fft'
         call test_1d(errflag)
+        write(*,'(a)') '**info(simple_intel unit tests, MKL FFTW part 2): testing 2D fft'
         call test_2d(errflag)
+        write(*,'(a)') '**info(simple_intel unit tests, MKL FFTW part 3): testing 2D inplace fft'
         call test_2d_real_inplace(errflag)
+        write(*,'(a)') '**info(simple_intel unit tests, MKL FFTW part 4): testing 1D fft openmp'
         call test_mkl_fft_openmp(errflag)
+        write(*,'(a)') '**info(simple_intel unit tests, MKL FFTW part 5): testing 2D fft array descr'
         call test_mkl_fft2d_array_descr_main(errflag)
+        write(*,'(a)') '**info(simple_intel unit tests, MKL FFTW part 6): testing 2D fft shared descr'
         call test_mkl_fft2d_shared_descr_main(errflag)
+        write(*,'(a)') '**info(simple_intel unit tests, MKL FFTW done'
 
     contains
 
@@ -270,6 +276,8 @@ contains
             type(DFTI_DESCRIPTOR), POINTER :: My_Desc1_Handle, My_Desc2_Handle
             integer :: Status
             !...put input data into X(1),...,X(32); Y(1),...,Y(32)
+
+            X=cmplx(1.,1.)
 
             ! Perform a complex to complex transform
             status = DftiCreateDescriptor( My_Desc1_Handle, DFTI_SINGLE,&
@@ -303,6 +311,7 @@ contains
             logical, intent(inout) :: errflag
             complex ::  X_2D(32,100)
             real :: Y_2D(34, 102)
+            integer :: j,k
             complex ::  X(3200)
             real :: Y(3468)
             equivalence (X_2D, X)
@@ -310,8 +319,13 @@ contains
             type(DFTI_DESCRIPTOR), POINTER :: My_Desc1_Handle, My_Desc2_Handle
             integer :: status, L(2)
             !...put input data into X_2D(j,k), Y_2D(j,k), 1<=j=32,1<=k<=100
-            !...set L(1) = 32, L(2) = 100
+             L(1) = 32; L(2) = 100
             !...the transform is a 32-by-100
+            do j=8,24
+                do k=25,75
+                    X_2D(j,k) = cmplx(real(16-j)*real(50-k), real(mod(j,8)*mod(k,25)))
+                end do
+            end do
 
             ! Perform a complex to complex transform
             status = DftiCreateDescriptor( My_Desc1_Handle, DFTI_SINGLE,&
@@ -359,13 +373,19 @@ contains
             real :: X(3400)
             equivalence (X_2D, X)
             type(DFTI_DESCRIPTOR), POINTER :: My_Desc_Handle
-            integer :: status, L(2)
+            integer :: status, L(2), j,k
             integer :: strides_in(3)
             integer :: strides_out(3)
             ! ...put input data into X_2D(j,k), 1<=j=32,1<=k<=100
             L(1) = 32; L(2) = 100
             strides_in(1) = 0; strides_in(2) = 1; strides_in(3) = 34
             strides_out(1) = 0; strides_out(2) = 1; strides_out(3) = 17
+            do j=8,24
+                do k=25,75
+                    X_2D(j,k) = cmplx(real(16-j)*real(50-k), real(mod(j,8)*mod(k,25)))
+                end do
+            end do
+
             ! ...the transform is a 32-by-100
             ! Perform a real to complex conjugate-even transform
             status = DftiCreateDescriptor( My_Desc_Handle, DFTI_SINGLE,&
@@ -405,13 +425,18 @@ contains
         subroutine test_mkl_fft_openmp (errflag)
 
             logical, intent(inout) :: errflag
-            integer nth, len(2)
+            integer nth, len(2), j, k
             ! 4 OMP threads, each does 2D FFT 50x100 points
             parameter (nth = 4, len = (/50, 100/))
             complex x(len(2)*len(1), nth)
 
             type(dfti_descriptor), pointer :: myFFT
             integer th, status, mystatus
+            do j=8,24
+                do k=25,75
+                    x(50*k+j,:nth) = cmplx(real(16-j)*real(50-k), real(mod(j,8)*mod(k,25)))
+                end do
+            end do
 
             ! assume x is initialized and do 2D FFTs
             !$OMP PARALLEL DO DEFAULT(SHARED) PRIVATE(myFFT, mystatus) reduction(+:status)
@@ -435,9 +460,7 @@ contains
 
         subroutine test_mkl_fft2d_array_descr_main (errflag)
             logical, intent(inout) :: errflag
-
-
-            integer nth, len(2)
+            integer nth, len(2),j,k,n
             ! 4 OMP threads, each does 2D FFT 50x100 points
             parameter (nth = 4, len = (/50, 100/))
             complex x(len(2)*len(1), nth)
@@ -448,6 +471,11 @@ contains
             type(thread_data) :: workload(nth)
 
             integer th, status, mystatus
+            do j=8,42
+                do k=25,75
+                    x(50*k+j,:nth) = cmplx(real(16-j)*real(50-k), real(mod(j,8)*mod(k,25)))
+                end do
+            end do
 
             do th = 1, nth
                 status = DftiCreateDescriptor (workload(th)%FFT, DFTI_SINGLE, DFTI_COMPLEX, 2, len)
@@ -478,14 +506,19 @@ contains
         subroutine  test_mkl_fft2d_shared_descr_main(errflag)
             logical, intent(inout) :: errflag
 
-
-            integer nth, len(2)
+            integer :: j,k
+            integer,parameter :: nth=4, len(2)=(/50, 100/)
             ! 4 OMP threads, each does 2D FFT 50x100 points
-            parameter (nth = 4, len = (/50, 100/))
             complex x(len(2)*len(1), nth)
             type(dfti_descriptor), pointer :: FFT
 
             integer th, status, mystatus
+
+            do j=8,42
+                do k=25,75
+                    x(50*k+j,:nth) = cmplx(real(25-j)*real(50-k), real(mod(j,8)*mod(k,25)))
+                end do
+            end do
 
             status = DftiCreateDescriptor (FFT, DFTI_SINGLE, DFTI_COMPLEX, 2, len)
             status = DftiCommitDescriptor (FFT)
@@ -565,6 +598,7 @@ contains
         type(DFTI_DESCRIPTOR), POINTER :: hand
 
         hand => null()
+        write(*,'(a)') '**info(simple_intel unit tests, MKL DFTI part 1): testing 2D fft basic'
 
         print *,"Example basic_sp_real_dft_2d"
         print *,"Forward-Backward single-precision real out-of-place 2D transform"
@@ -659,8 +693,8 @@ contains
         if (allocated(x_cmplx))    deallocate(x_cmplx)
 
         if (status == 0) then
-            print *, "TEST PASSED"
-           return !  call exit(0)
+            write(*,'(a)') '**info(simple_intel unit tests, MKL DFTI : TEST PASSED'
+            return !  call exit(0)
         else
             print *, "TEST FAILED"
             errflag=.true.
@@ -842,8 +876,7 @@ contains
 
         integer :: failed = 0
         integer :: thr_failed, me, team
-
-        print *,"Example config_thread_limit"
+        write(*,'(a)') '**info(simple_intel unit tests, Intel OpenMP config_thread_limit'
 
         ! Enable nested parallel OpenMP sections (maybe oversubscribed)
         ! Use kind(4) literals because some compilers fail on this in i8 mode

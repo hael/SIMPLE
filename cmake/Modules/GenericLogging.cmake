@@ -128,10 +128,10 @@ MESSAGE( STATUS "CMAKE_RANLIB: " ${CMAKE_RANLIB} )
 
 # the compiler flags for compiling C sources
 MESSAGE( STATUS "CMAKE_C_FLAGS: " ${CMAKE_C_FLAGS} )
-
 # the compiler flags for compiling C++ sources
 MESSAGE( STATUS "CMAKE_CXX_FLAGS: " ${CMAKE_CXX_FLAGS} )
-
+# the compiler used for Fortran files
+MESSAGE( STATUS "CMAKE_Fortran_COMPILER: " ${CMAKE_Fortran_COMPILER} )
 # fortran flags
 MESSAGE( STATUS "CMAKE_Fortran_FLAGS_INIT: " ${CMAKE_Fortran_FLAGS_INIT})
 MESSAGE( STATUS "CMAKE_Fortran_FLAGS: " ${CMAKE_Fortran_FLAGS})
@@ -154,9 +154,8 @@ MESSAGE( STATUS "CMAKE_Fortran_CREATE_SHARED_MODULE: " ${CMAKE_Fortran_CREATE_SH
 MESSAGE( STATUS "CMAKE_Fortran_CREATE_SHARED_LIBRARY: " ${CMAKE_Fortran_CREATE_SHARED_LIBRARY})
 #      "<CMAKE_Fortran_COMPILER>  <LANGUAGE_COMPILE_FLAGS> <CMAKE_SHARED_MODULE_CREATE_Fortran_FLAGS> <LINK_FLAGS> -o <TARGET> <OBJECTS> <LINK_LIBRARIES>"))
 MESSAGE( STATUS "CMAKE_Fortran_CREATE_PREPROCESSED_SOURCE: " ${CMAKE_Fortran_CREATE_PREPROCESSED_SOURCE})
+MESSAGE( STATUS "EXTRA_LIBS: " ${EXTRA_LIBS})
 
-# the compiler used for Fortran files
-MESSAGE( STATUS "CMAKE_Fortran_COMPILER: " ${CMAKE_Fortran_COMPILER} )
 # if you are building in-source, this is the same as CMAKE_SOURCE_DIR, otherwise
 # this is the top level directory of your build tree
 MESSAGE( STATUS "CMAKE_INSTALL_PREFIX:         " ${CMAKE_INSTALL_PREFIX} )

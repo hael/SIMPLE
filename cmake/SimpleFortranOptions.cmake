@@ -399,7 +399,7 @@ elseif (${CMAKE_Fortran_COMPILER_ID} STREQUAL "Intel" OR Fortran_COMPILER_NAME M
   ## INTEL fortran
   #
   #############################################
-  set(EXTRA_FLAGS "${EXTRA_FLAGS} -fpp -I${MKLROOT}/include -list-line-len=264 -assume realloc_lhs -assume source_include -diag-enable=openmp,vec,par,error  -diag-disable=warn -sox -qoverride-limits")
+  set(EXTRA_FLAGS "${EXTRA_FLAGS} -I${MKLROOT}/include/intel64/lp64 -I${MKLROOT}/include  -assume source_include -diag-enable=openmp,vec,par,error  -diag-disable=warn -sox -qoverride-limits")
   # -diag-file-append=diagnostics.txt
   set(CMAKE_AR                           "xiar")
   set(CMAKE_CPP_COMPILER                 "fpp")
