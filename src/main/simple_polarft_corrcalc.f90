@@ -47,20 +47,20 @@ type fftw_arrs
 end type fftw_arrs
 
 type heap_vars
-    complex(sp), pointer        :: pft_ref(:,:)       => null()
-    complex(sp), pointer        :: pft_ref_tmp(:,:)   => null()
-    real,        pointer        :: corrs_over_k(:)    => null()
-    real(sp),    pointer        :: argmat(:,:)        => null()
-    complex(sp), pointer        :: shmat(:,:)         => null()
-    real,        pointer        :: kcorrs(:)          => null()
-    complex(dp), pointer        :: pft_ref_8(:,:)     => null()
-    complex(dp), pointer        :: pft_ref_tmp_8(:,:) => null()
-    complex(dp), pointer        :: shmat_8(:,:)       => null()
-    real(dp),    pointer        :: argmat_8(:,:)      => null()
+    complex(sp), pointer :: pft_ref(:,:)       => null()
+    complex(sp), pointer :: pft_ref_tmp(:,:)   => null()
+    real,        pointer :: corrs_over_k(:)    => null()
+    real(sp),    pointer :: argmat(:,:)        => null()
+    complex(sp), pointer :: shmat(:,:)         => null()
+    real,        pointer :: kcorrs(:)          => null()
+    complex(dp), pointer :: pft_ref_8(:,:)     => null()
+    complex(dp), pointer :: pft_ref_tmp_8(:,:) => null()
+    complex(dp), pointer :: shmat_8(:,:)       => null()
+    real(dp),    pointer :: argmat_8(:,:)      => null()
 end type heap_vars
 
 type :: polarft_corrcalc
-  private
+    private
     integer                          :: pfromto(2) = 1        !< from/to particle indices (in parallel execution)
     integer                          :: nptcls     = 1        !< the total number of particles in partition (logically indexded [fromp,top])
     integer                          :: nrefs      = 1        !< the number of references (logically indexded [1,nrefs])
@@ -823,18 +823,18 @@ contains
         real                                   :: corr
         complex                                :: tmp
         corr = 0.        
-        tmp = 0.
-        if (irot >= self%pftsz + 1) then
+        tmp  = 0.
+        if( irot >= self%pftsz + 1 )then
             rot = irot - self%pftsz
         else
             rot = irot
         end if
-        if (irot == 1) then
+        if( irot == 1 )then
             tmp = sum( pft_ref(:,:) * conjg(self%pfts_ptcls(iptcl,:,:))) 
-        else if (irot <= self%pftsz) then                                   
+        else if( irot <= self%pftsz )then                                   
             tmp =       sum( pft_ref(               1:self%pftsz-rot+1,:) * conjg(self%pfts_ptcls(iptcl,rot:self%pftsz,:)) ) 
             tmp = tmp + sum( pft_ref(self%pftsz-rot+2:self%pftsz,      :) *       self%pfts_ptcls(iptcl,  1:rot-1,     :)) 
-        else if (irot == self%pftsz + 1) then
+        else if( irot == self%pftsz + 1 )then
             tmp = sum( pft_ref(:,:) * self%pfts_ptcls(iptcl,:,:) )
         else
             tmp =       sum( pft_ref(1:self%pftsz-rot+1,:)          *        self%pfts_ptcls(iptcl,rot:self%pftsz,:)) 
@@ -881,7 +881,7 @@ contains
         real,                    pointer       :: corrs_over_k(:)
         real                                   :: sqsum_ref
         integer                                :: ithr
-        ithr = omp_get_thread_num() + 1
+        ithr         =  omp_get_thread_num() + 1
         pft_ref      => self%heap_vars(ithr)%pft_ref
         corrs_over_k => self%heap_vars(ithr)%corrs_over_k
         call self%prep_ref4corr(iref, iptcl, pft_ref, sqsum_ref, self%kfromto(2))
@@ -898,7 +898,7 @@ contains
         real,                    pointer       :: corrs_over_k(:)
         real(sp)                               :: sqsum_ref, sqsum_ptcl
         integer                                :: ithr
-        ithr = omp_get_thread_num() + 1        
+        ithr         =  omp_get_thread_num() + 1        
         pft_ref      => self%heap_vars(ithr)%pft_ref
         corrs_over_k => self%heap_vars(ithr)%corrs_over_k
         call self%prep_ref4corr(iref, iptcl, pft_ref, sqsum_ref, kstop)
@@ -918,14 +918,13 @@ contains
         real(sp),                pointer       :: corrs_over_k(:), argmat(:,:)
         real(sp)                               :: sqsum_ref
         integer                                :: ithr
-        ithr = omp_get_thread_num() + 1        
+        ithr         = omp_get_thread_num() + 1        
         pft_ref      => self%heap_vars(ithr)%pft_ref
         shmat        => self%heap_vars(ithr)%shmat
         corrs_over_k => self%heap_vars(ithr)%corrs_over_k
         argmat       => self%heap_vars(ithr)%argmat
         argmat = self%argtransf(:self%pftsz,:) * shvec(1) + self%argtransf(self%pftsz+1:,:) * shvec(2)
         shmat  = cmplx(cos(argmat),sin(argmat))
-
         if( self%with_ctf )then
             if( self%iseven(iptcl) )then
                 pft_ref = (self%pfts_refs_even(iref,:,:) * self%ctfmats(iptcl,:,:)) * shmat
@@ -958,13 +957,12 @@ contains
         real(sp)                               :: corr
         real(sp)                               :: sqsum_ref
         integer                                :: ithr
-        ithr = omp_get_thread_num() + 1        
-        pft_ref  => self%heap_vars(ithr)%pft_ref
-        shmat    => self%heap_vars(ithr)%shmat
-        argmat   => self%heap_vars(ithr)%argmat
-        argmat = self%argtransf(:self%pftsz,:) * shvec(1) + self%argtransf(self%pftsz+1:,:) * shvec(2)
-        shmat  = cmplx(cos(argmat),sin(argmat))
-
+        ithr    =  omp_get_thread_num() + 1        
+        pft_ref => self%heap_vars(ithr)%pft_ref
+        shmat   => self%heap_vars(ithr)%shmat
+        argmat  => self%heap_vars(ithr)%argmat
+        argmat  =  self%argtransf(:self%pftsz,:) * shvec(1) + self%argtransf(self%pftsz+1:,:) * shvec(2)
+        shmat   =  cmplx(cos(argmat),sin(argmat))
         if( self%with_ctf )then
             if( self%iseven(iptcl) )then
                 pft_ref = (self%pfts_refs_even(iref,:,:) * self%ctfmats(iptcl,:,:)) * shmat
@@ -979,8 +977,8 @@ contains
             endif
         endif
         sqsum_ref = sum(csq(pft_ref))
-        corr = self%calc_corr_for_rot(pft_ref, iptcl, self%kfromto(2), irot)       
-        cc = corr  / sqrt(sqsum_ref * self%sqsums_ptcls(iptcl))
+        corr      = self%calc_corr_for_rot(pft_ref, iptcl, self%kfromto(2), irot)       
+        cc        = corr  / sqrt(sqsum_ref * self%sqsums_ptcls(iptcl))
     end function gencorr_for_rot
     
     !< brief  calculates correlations and gradient for origin shift
@@ -997,14 +995,14 @@ contains
         real(sp),                pointer       :: corrs_over_k(:), argmat(:,:)
         real(sp)                               :: sqsum_ref
         integer                                :: ithr
-        ithr = omp_get_thread_num() + 1        
+        ithr         =  omp_get_thread_num() + 1        
         pft_ref      => self%heap_vars(ithr)%pft_ref
         pft_ref_tmp  => self%heap_vars(ithr)%pft_ref_tmp
         shmat        => self%heap_vars(ithr)%shmat
         corrs_over_k => self%heap_vars(ithr)%corrs_over_k
         argmat       => self%heap_vars(ithr)%argmat
-        argmat = self%argtransf(:self%pftsz,:) * shvec(1) + self%argtransf(self%pftsz+1:,:) * shvec(2)
-        shmat  = cmplx(cos(argmat),sin(argmat))
+        argmat       =  self%argtransf(:self%pftsz,:) * shvec(1) + self%argtransf(self%pftsz+1:,:) * shvec(2)
+        shmat        =  cmplx(cos(argmat),sin(argmat))
         if( self%with_ctf )then
             if( self%iseven(iptcl) )then
                 pft_ref = (self%pfts_refs_even(iref,:,:) * self%ctfmats(iptcl,:,:)) * shmat
@@ -1042,14 +1040,14 @@ contains
         real(sp),                pointer       :: corrs_over_k(:), argmat(:,:)
         real(sp)                               :: sqsum_ref
         integer                                :: ithr
-        ithr = omp_get_thread_num() + 1        
+        ithr         =  omp_get_thread_num() + 1        
         pft_ref      => self%heap_vars(ithr)%pft_ref
         pft_ref_tmp  => self%heap_vars(ithr)%pft_ref_tmp
         shmat        => self%heap_vars(ithr)%shmat
         corrs_over_k => self%heap_vars(ithr)%corrs_over_k
         argmat       => self%heap_vars(ithr)%argmat
-        argmat = self%argtransf(:self%pftsz,:) * shvec(1) + self%argtransf(self%pftsz+1:,:) * shvec(2)
-        shmat  = cmplx(cos(argmat),sin(argmat))
+        argmat       =  self%argtransf(:self%pftsz,:) * shvec(1) + self%argtransf(self%pftsz+1:,:) * shvec(2)
+        shmat        =  cmplx(cos(argmat),sin(argmat))
         if( self%with_ctf )then
             if( self%iseven(iptcl) )then
                 pft_ref = (self%pfts_refs_even(iref,:,:) * self%ctfmats(iptcl,:,:)) * shmat
@@ -1063,13 +1061,13 @@ contains
                 pft_ref = self%pfts_refs_odd(iref,:,:)  * shmat
             endif
         endif
-        sqsum_ref = sum(csq(pft_ref))
+        sqsum_ref   = sum(csq(pft_ref))
         pft_ref_tmp = pft_ref * (0., 1.) * self%argtransf(:self%pftsz,:)
         call self%calc_corrs_over_k(pft_ref_tmp, iptcl, self%kfromto(2), corrs_over_k)
-        grad(1,:) = corrs_over_k / sqrt(sqsum_ref * self%sqsums_ptcls(iptcl))
+        grad(1,:)   = corrs_over_k / sqrt(sqsum_ref * self%sqsums_ptcls(iptcl))
         pft_ref_tmp = pft_ref * (0., 1.) * self%argtransf(self%pftsz+1:,:)
         call self%calc_corrs_over_k(pft_ref_tmp, iptcl, self%kfromto(2), corrs_over_k)
-        grad(2,:) = corrs_over_k / sqrt(sqsum_ref * self%sqsums_ptcls(iptcl))
+        grad(2,:)   = corrs_over_k / sqrt(sqsum_ref * self%sqsums_ptcls(iptcl))
     end subroutine gencorrs_grad_only
 
     !< brief  calculates correlation and gradient for origin shift, for one specific rotation angle
@@ -1088,13 +1086,13 @@ contains
         real(sp)                               :: sqsum_ref
         real(sp)                               :: corr
         integer                                :: ithr
-        ithr = omp_get_thread_num() + 1        
+        ithr        =  omp_get_thread_num() + 1        
         pft_ref     => self%heap_vars(ithr)%pft_ref
         pft_ref_tmp => self%heap_vars(ithr)%pft_ref_tmp
         shmat       => self%heap_vars(ithr)%shmat
         argmat      => self%heap_vars(ithr)%argmat
-        argmat = self%argtransf(:self%pftsz,:) * shvec(1) + self%argtransf(self%pftsz+1:,:) * shvec(2)
-        shmat  = cmplx(cos(argmat),sin(argmat))
+        argmat      =  self%argtransf(:self%pftsz,:) * shvec(1) + self%argtransf(self%pftsz+1:,:) * shvec(2)
+        shmat       =  cmplx(cos(argmat),sin(argmat))
         if( self%with_ctf )then
             if( self%iseven(iptcl) )then
                 pft_ref = (self%pfts_refs_even(iref,:,:) * self%ctfmats(iptcl,:,:)) * shmat
@@ -1108,15 +1106,15 @@ contains
                 pft_ref = self%pfts_refs_odd(iref,:,:)  * shmat
             endif
         endif
-        sqsum_ref = sum(csq(pft_ref))
-        corr = self%calc_corr_for_rot(pft_ref, iptcl, self%kfromto(2), irot)        
-        f    = corr  / sqrt(sqsum_ref * self%sqsums_ptcls(iptcl))        
+        sqsum_ref   = sum(csq(pft_ref))
+        corr        = self%calc_corr_for_rot(pft_ref, iptcl, self%kfromto(2), irot)        
+        f           = corr  / sqrt(sqsum_ref * self%sqsums_ptcls(iptcl))        
         pft_ref_tmp = pft_ref * (0., 1.) * self%argtransf(:self%pftsz,:)
-        corr = self%calc_corr_for_rot(pft_ref_tmp, iptcl, self%kfromto(2), irot)        
-        grad(1) = corr / sqrt(sqsum_ref * self%sqsums_ptcls(iptcl))
+        corr        = self%calc_corr_for_rot(pft_ref_tmp, iptcl, self%kfromto(2), irot)        
+        grad(1)     = corr / sqrt(sqsum_ref * self%sqsums_ptcls(iptcl))
         pft_ref_tmp = pft_ref * (0., 1.) * self%argtransf(self%pftsz+1:,:)
-        corr = self%calc_corr_for_rot(pft_ref_tmp, iptcl, self%kfromto(2), irot)        
-        grad(2) = corr / sqrt(sqsum_ref * self%sqsums_ptcls(iptcl))
+        corr        = self%calc_corr_for_rot(pft_ref_tmp, iptcl, self%kfromto(2), irot)        
+        grad(2)     = corr / sqrt(sqsum_ref * self%sqsums_ptcls(iptcl))
     end subroutine gencorr_grad_for_rot
 
     !< brief  calculates only gradient for correlation, for one specific rotation angle
@@ -1134,13 +1132,13 @@ contains
         real(sp)                               :: sqsum_ref
         real(sp)                               :: corr
         integer                                :: ithr
-        ithr = omp_get_thread_num() + 1        
+        ithr        =  omp_get_thread_num() + 1        
         pft_ref     => self%heap_vars(ithr)%pft_ref
         pft_ref_tmp => self%heap_vars(ithr)%pft_ref_tmp
         shmat       => self%heap_vars(ithr)%shmat
         argmat      => self%heap_vars(ithr)%argmat
-        argmat = self%argtransf(:self%pftsz,:) * shvec(1) + self%argtransf(self%pftsz+1:,:) * shvec(2)
-        shmat  = cmplx(cos(argmat),sin(argmat))
+        argmat      =  self%argtransf(:self%pftsz,:) * shvec(1) + self%argtransf(self%pftsz+1:,:) * shvec(2)
+        shmat       =  cmplx(cos(argmat),sin(argmat))
         if( self%with_ctf )then
             if( self%iseven(iptcl) )then
                 pft_ref = (self%pfts_refs_even(iref,:,:) * self%ctfmats(iptcl,:,:)) * shmat
@@ -1154,13 +1152,13 @@ contains
                 pft_ref = self%pfts_refs_odd(iref,:,:)  * shmat
             endif
         endif
-        sqsum_ref = sum(csq(pft_ref))
+        sqsum_ref   = sum(csq(pft_ref))
         pft_ref_tmp = pft_ref * (0., 1.) * self%argtransf(:self%pftsz,:)
-        corr = self%calc_corr_for_rot(pft_ref_tmp, iptcl, self%kfromto(2), irot)        
-        grad(1) = corr / sqrt(sqsum_ref * self%sqsums_ptcls(iptcl))
+        corr        = self%calc_corr_for_rot(pft_ref_tmp, iptcl, self%kfromto(2), irot)        
+        grad(1)     = corr / sqrt(sqsum_ref * self%sqsums_ptcls(iptcl))
         pft_ref_tmp = pft_ref * (0., 1.) * self%argtransf(self%pftsz+1:,:)
-        corr = self%calc_corr_for_rot(pft_ref_tmp, iptcl, self%kfromto(2), irot)        
-        grad(2) = corr / sqrt(sqsum_ref * self%sqsums_ptcls(iptcl))        
+        corr        = self%calc_corr_for_rot(pft_ref_tmp, iptcl, self%kfromto(2), irot)        
+        grad(2)     = corr / sqrt(sqsum_ref * self%sqsums_ptcls(iptcl))        
     end subroutine gencorr_grad_only_for_rot
 
     !< brief  generates correlation for one specific rotation angle, double precision
@@ -1177,13 +1175,12 @@ contains
         real(dp)                               :: corr
         real(dp)                               :: sqsum_ref
         integer                                :: ithr
-        ithr = omp_get_thread_num() + 1        
-        pft_ref     => self%heap_vars(ithr)%pft_ref_8
-        shmat       => self%heap_vars(ithr)%shmat_8
-        argmat      => self%heap_vars(ithr)%argmat_8
-        argmat = self%argtransf(:self%pftsz,:) * shvec(1) + self%argtransf(self%pftsz+1:,:) * shvec(2)
-        shmat  = cmplx(cos(argmat),sin(argmat))
-
+        ithr    =  omp_get_thread_num() + 1        
+        pft_ref => self%heap_vars(ithr)%pft_ref_8
+        shmat   => self%heap_vars(ithr)%shmat_8
+        argmat  => self%heap_vars(ithr)%argmat_8
+        argmat  =  self%argtransf(:self%pftsz,:) * shvec(1) + self%argtransf(self%pftsz+1:,:) * shvec(2)
+        shmat   =  cmplx(cos(argmat),sin(argmat))
         if( self%with_ctf )then
             if( self%iseven(iptcl) )then
                 pft_ref = (self%pfts_refs_even(iref,:,:) * self%ctfmats(iptcl,:,:)) * shmat
@@ -1198,8 +1195,8 @@ contains
             endif
         endif
         sqsum_ref = sum(csq(pft_ref))
-        corr = self%calc_corr_for_rot_8(pft_ref, iptcl, self%kfromto(2), irot)       
-        cc = corr  / sqrt(sqsum_ref * self%sqsums_ptcls(iptcl))
+        corr      = self%calc_corr_for_rot_8(pft_ref, iptcl, self%kfromto(2), irot)       
+        cc        = corr  / sqrt(sqsum_ref * self%sqsums_ptcls(iptcl))
     end function gencorr_for_rot_8
 
     !< brief  calculates correlation and gradient for origin shift, for one specific rotation angle, double precision
@@ -1218,13 +1215,13 @@ contains
         real(dp)                               :: sqsum_ref
         real(dp)                               :: corr
         integer                                :: ithr
-        ithr = omp_get_thread_num() + 1        
+        ithr        =  omp_get_thread_num() + 1        
         pft_ref     => self%heap_vars(ithr)%pft_ref_8
         pft_ref_tmp => self%heap_vars(ithr)%pft_ref_tmp_8
         shmat       => self%heap_vars(ithr)%shmat_8
         argmat      => self%heap_vars(ithr)%argmat_8
-        argmat = self%argtransf(:self%pftsz,:) * shvec(1) + self%argtransf(self%pftsz+1:,:) * shvec(2)
-        shmat  = cmplx(cos(argmat),sin(argmat))
+        argmat      =  self%argtransf(:self%pftsz,:) * shvec(1) + self%argtransf(self%pftsz+1:,:) * shvec(2)
+        shmat       =  cmplx(cos(argmat),sin(argmat))
         if( self%with_ctf )then
             if( self%iseven(iptcl) )then
                 pft_ref = (self%pfts_refs_even(iref,:,:) * self%ctfmats(iptcl,:,:)) * shmat
@@ -1238,15 +1235,15 @@ contains
                 pft_ref = self%pfts_refs_odd(iref,:,:)  * shmat
             endif
         endif
-        sqsum_ref = sum(csq(pft_ref))
-        corr = self%calc_corr_for_rot_8(pft_ref, iptcl, self%kfromto(2), irot)        
-        f    = corr  / sqrt(sqsum_ref * self%sqsums_ptcls(iptcl))        
+        sqsum_ref   = sum(csq(pft_ref))
+        corr        = self%calc_corr_for_rot_8(pft_ref, iptcl, self%kfromto(2), irot)        
+        f           = corr  / sqrt(sqsum_ref * self%sqsums_ptcls(iptcl))        
         pft_ref_tmp = pft_ref * (0., 1.) * self%argtransf(:self%pftsz,:)
-        corr = self%calc_corr_for_rot_8(pft_ref_tmp, iptcl, self%kfromto(2), irot)        
-        grad(1) = corr / sqrt(sqsum_ref * self%sqsums_ptcls(iptcl))
+        corr        = self%calc_corr_for_rot_8(pft_ref_tmp, iptcl, self%kfromto(2), irot)        
+        grad(1)     = corr / sqrt(sqsum_ref * self%sqsums_ptcls(iptcl))
         pft_ref_tmp = pft_ref * (0., 1.) * self%argtransf(self%pftsz+1:,:)
-        corr = self%calc_corr_for_rot_8(pft_ref_tmp, iptcl, self%kfromto(2), irot)        
-        grad(2) = corr / sqrt(sqsum_ref * self%sqsums_ptcls(iptcl))
+        corr        = self%calc_corr_for_rot_8(pft_ref_tmp, iptcl, self%kfromto(2), irot)        
+        grad(2)     = corr / sqrt(sqsum_ref * self%sqsums_ptcls(iptcl))
     end subroutine gencorr_grad_for_rot_8
 
     !< brief  calculates only gradient for correlation, for one specific rotation angle, double precision
@@ -1264,13 +1261,13 @@ contains
         real(dp)                               :: sqsum_ref
         real(dp)                               :: corr
         integer                                :: ithr
-        ithr = omp_get_thread_num() + 1        
+        ithr        =  omp_get_thread_num() + 1        
         pft_ref     => self%heap_vars(ithr)%pft_ref_8
         pft_ref_tmp => self%heap_vars(ithr)%pft_ref_tmp_8
         shmat       => self%heap_vars(ithr)%shmat_8
         argmat      => self%heap_vars(ithr)%argmat_8
-        argmat = self%argtransf(:self%pftsz,:) * shvec(1) + self%argtransf(self%pftsz+1:,:) * shvec(2)
-        shmat  = cmplx(cos(argmat),sin(argmat))
+        argmat      =  self%argtransf(:self%pftsz,:) * shvec(1) + self%argtransf(self%pftsz+1:,:) * shvec(2)
+        shmat       =  cmplx(cos(argmat),sin(argmat))
         if( self%with_ctf )then
             if( self%iseven(iptcl) )then
                 pft_ref = (self%pfts_refs_even(iref,:,:) * self%ctfmats(iptcl,:,:)) * shmat
@@ -1284,16 +1281,14 @@ contains
                 pft_ref = self%pfts_refs_odd(iref,:,:)  * shmat
             endif
         endif
-        sqsum_ref = sum(csq(pft_ref))
+        sqsum_ref   = sum(csq(pft_ref))
         pft_ref_tmp = pft_ref * (0., 1.) * self%argtransf(:self%pftsz,:)
-        corr = self%calc_corr_for_rot_8(pft_ref_tmp, iptcl, self%kfromto(2), irot)        
-        grad(1) = corr / sqrt(sqsum_ref * self%sqsums_ptcls(iptcl))
+        corr        = self%calc_corr_for_rot_8(pft_ref_tmp, iptcl, self%kfromto(2), irot)        
+        grad(1)     = corr / sqrt(sqsum_ref * self%sqsums_ptcls(iptcl))
         pft_ref_tmp = pft_ref * (0., 1.) * self%argtransf(self%pftsz+1:,:)
-        corr = self%calc_corr_for_rot_8(pft_ref_tmp, iptcl, self%kfromto(2), irot)        
-        grad(2) = corr / sqrt(sqsum_ref * self%sqsums_ptcls(iptcl))        
+        corr        = self%calc_corr_for_rot_8(pft_ref_tmp, iptcl, self%kfromto(2), irot)        
+        grad(2)     = corr / sqrt(sqsum_ref * self%sqsums_ptcls(iptcl))        
     end subroutine gencorr_grad_only_for_rot_8
-
-    
     
     !>  \brief  is for generating resolution dependent correlations
     subroutine genfrc( self, iref, iptcl, irot, frc )
@@ -1306,7 +1301,7 @@ contains
         real(sp)                                :: sumsqref, sumsqptcl, sqsum_ref
         integer                                 :: k
         integer                                 :: ithr
-        ithr = omp_get_thread_num() + 1        
+        ithr     =  omp_get_thread_num() + 1        
         pft_ref  => self%heap_vars(ithr)%pft_ref
         kcorrs   => self%heap_vars(ithr)%kcorrs
         call self%prep_ref4corr(iref, iptcl, pft_ref, sqsum_ref, self%kfromto(2))

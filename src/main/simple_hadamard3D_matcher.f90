@@ -177,13 +177,13 @@ contains
             do iptcl=p%fromp,p%top
                 if( .not. ptcl_mask(iptcl) )then
                     ! these are not updated
-                    call b%a%set(iptcl, 'mi_proj',   1.0)
-                    call b%a%set(iptcl, 'mi_inpl',   1.0)
-                    call b%a%set(iptcl, 'mi_state',  1.0)
-                    call b%a%set(iptcl, 'mi_joint',  1.0)
-                    call b%a%set(iptcl, 'dist',      0.0)
-                    call b%a%set(iptcl, 'dist_inpl', 0.0)
-                    call b%a%set(iptcl, 'frac',      100.)
+                    call b%a%set(iptcl, 'mi_proj',     1.0)
+                    call b%a%set(iptcl, 'mi_inpl',     1.0)
+                    call b%a%set(iptcl, 'mi_state',    1.0)
+                    call b%a%set(iptcl, 'mi_joint',    1.0)
+                    call b%a%set(iptcl, 'dist',        0.0)
+                    call b%a%set(iptcl, 'dist_inpl',   0.0)
+                    call b%a%set(iptcl, 'frac',      100.0)
                 endif
             end do
         else

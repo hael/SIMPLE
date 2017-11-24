@@ -1254,10 +1254,13 @@ contains
         allocate(incl(fromto(1):fromto(2)), source=states > 0.5)
         if( self%isthere('updatecnt') )then
             probs = self%get_all('updatecnt', fromto)
+            where( probs < 0.5 ) probs  = 0.5 ! no zeroes allowed
+            ! probabilities should be inverseley proportional to counts
+            probs = 1.0 / probs
         else
             allocate(probs(fromto(1):fromto(2)), source=1.0)
         endif
-        norm  = sum(probs, mask=incl)
+        norm = sum(probs, mask=incl)
         where( incl )
             probs = probs / norm
         else where

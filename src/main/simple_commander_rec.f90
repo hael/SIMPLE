@@ -1,6 +1,7 @@
 ! concrete commander: 3D reconstruction routines
 module simple_commander_rec
 #include "simple_lib.f08"
+use simple_defs_fname
 use simple_cmdline,         only: cmdline
 use simple_params,          only: params
 use simple_build,           only: build
@@ -60,14 +61,13 @@ contains
         type(params)                  :: p
         type(build)                   :: b
         type(eo_reconstructor)        :: eorecvol_read
-        character(len=:), allocatable :: fname, finished_fname
+        character(len=:), allocatable :: fbody, finished_fname
         real, allocatable             :: res05s(:), res0143s(:)
         real                          :: res
         integer                       :: part, s, n, ss, state, ldim(3), find4eoavg
         p = params(cline)                   ! parameters generated
         call b%build_general_tbox(p, cline) ! general objects built
         call b%build_eo_rec_tbox(p)         ! reconstruction toolbox built
-        call b%eorecvol%kill_exp            ! reduced meory usage
         allocate(res05s(p%nstates), res0143s(p%nstates), stat=alloc_stat)
         allocchk("In: simple_eo_volassemble res05s res0143s")
         res0143s = 0.
@@ -75,7 +75,6 @@ contains
         ! rebuild b%vol according to box size (beacuse it is otherwise boxmatch)
         call b%vol%new([p%box,p%box,p%box], p%smpd)
         call eorecvol_read%new(p)
-        call eorecvol_read%kill_exp ! reduced memory usage
         n = p%nstates*p%nparts
         do ss=1,p%nstates
             if( cline%defined('state') )then
@@ -85,14 +84,13 @@ contains
                 s     = ss
                 state = ss
             endif
-            DebugPrint  'processing state: ', s
             if( b%a%get_pop(state, 'state' ) == 0 )cycle ! Empty state
             call b%eorecvol%reset_all
             do part=1,p%nparts
-                allocate(fname, source='recvol_state'//int2str_pad(state,2)//'_part'//int2str_pad(part,p%numlen))
-                DebugPrint  'processing file: ', fname
-                call assemble(fname)
-                deallocate(fname)
+                allocate(fbody, source='recvol_state'//int2str_pad(state,2)//'_part'//int2str_pad(part,p%numlen))
+                DebugPrint  'processing file: ', fbody
+                call assemble(fbody)
+                deallocate(fbody)
             end do
             call correct_for_sampling_density_and_estimate_res('recvol_state'//int2str_pad(state,2))
             if( cline%defined('state') )exit
@@ -116,9 +114,9 @@ contains
 
             subroutine assemble( fbody )
                 character(len=*), intent(in) :: fbody
-                call eorecvol_read%read_eos(trim(fbody))
+                call eorecvol_read%read_eos_exp(trim(fbody))
                 ! sum the Fourier coefficients
-                call b%eorecvol%sum(eorecvol_read)
+                call b%eorecvol%sum_exp(eorecvol_read)
             end subroutine assemble
 
             subroutine correct_for_sampling_density_and_estimate_res( recname )
@@ -130,6 +128,7 @@ contains
                 eonames(1) = trim(recname)//'_even'//trim(p%ext)
                 eonames(2) = trim(recname)//'_odd'//trim(p%ext)
                 resmskname = 'resmask'//p%ext
+                call b%eorecvol%compress_exp
                 call b%eorecvol%sum_eos
                 call b%eorecvol%sampl_dens_correct_eos(state, eonames(1), eonames(2), resmskname, find4eoavg)
                 call gen_projection_frcs( b, p, cline, eonames(1), eonames(2), resmskname, s, b%projfrcs)
@@ -174,9 +173,6 @@ contains
         call b%build_rec_tbox(p)            ! reconstruction toolbox built
         ! rebuild b%vol according to box size (because it is otherwise boxmatch)
         call b%vol%new([p%box,p%box,p%box], p%smpd)
-        if( cline%defined('find') )then
-            p%lp = b%img%get_lp(p%find)
-        endif
         call recvol_read%new([p%boxpd,p%boxpd,p%boxpd], p%smpd)
         call recvol_read%alloc_rho(p)
         do ss=1,p%nstates
@@ -187,15 +183,12 @@ contains
                 s     = ss
                 state = ss
             endif
-            DebugPrint  'processing state: ', state
             if( b%a%get_pop(state, 'state' ) == 0 ) cycle ! Empty state
             call b%recvol%reset
+            call b%recvol%reset_exp
             do part=1,p%nparts
                 allocate(fbody, source='recvol_state'//int2str_pad(state,2)//'_part'//int2str_pad(part,p%numlen))
-                DebugPrint  'processing fbody: ', fbody
-                p%vols(s) = fbody//p%ext
-                rho_name  = 'rho_'//fbody//p%ext
-                call assemble(p%vols(s), trim(rho_name))
+                call assemble(fbody)
                 deallocate(fbody)
             end do
             if( p%nstates == 1 .and. cline%defined('outvol') )then
@@ -220,25 +213,28 @@ contains
 
         contains
 
-            subroutine assemble( recnam, kernam )
-                character(len=*), intent(in) :: recnam
-                character(len=*), intent(in) :: kernam
-                logical                      :: here(2)
-                here(1)=file_exists(recnam)
-                here(2)=file_exists(kernam)
+            subroutine assemble( fbody )
+                character(len=*), intent(in)  :: fbody
+                character(len=:), allocatable :: recname, rhoname
+                logical :: here(2)
+                allocate(recname, source=trim(adjustl(fbody))//BIN_EXT)
+                allocate(rhoname, source='rho_'//trim(adjustl(fbody))//BIN_EXT)
+                here(1)=file_exists(recname)
+                here(2)=file_exists(rhoname)
                 if( all(here) )then
-                    call recvol_read%read(recnam)
-                    call recvol_read%read_rho(kernam)
-                    call b%recvol%sum(recvol_read)
+                    call recvol_read%read_cmat_exp(recname)
+                    call recvol_read%read_rho_exp(rhoname)
+                    call b%recvol%sum_exp(recvol_read)
                 else
-                    if( .not. here(1) ) write(*,'(A,A,A)') 'WARNING! ', adjustl(trim(recnam)), ' missing'
-                    if( .not. here(2) ) write(*,'(A,A,A)') 'WARNING! ', adjustl(trim(kernam)), ' missing'
+                    if( .not. here(1) ) write(*,'(A,A,A)') 'WARNING! ', recname, ' missing'
+                    if( .not. here(2) ) write(*,'(A,A,A)') 'WARNING! ', rhoname, ' missing'
                     return
                 endif
             end subroutine assemble
 
             subroutine correct_for_sampling_density( recname )
                 character(len=*), intent(in) :: recname
+                call b%recvol%compress_exp
                 call b%recvol%sampl_dens_correct
                 call b%recvol%bwd_ft
                 call b%recvol%clip(b%vol)
