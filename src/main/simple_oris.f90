@@ -1244,30 +1244,28 @@ contains
         integer,           intent(in)    :: fromto(2), nsamples
         integer,           intent(out)   :: inds(nsamples)
         logical,           intent(out)   :: mask(fromto(1):fromto(2))
-        real,    allocatable :: probs(:), states(:)
-        logical, allocatable :: incl(:)
-        integer :: i
-        real    :: norm, val
-        ! states mask
+        real,    allocatable :: counts(:), states(:)
+        integer, allocatable :: inds_here(:)
+        integer :: i, cnt
+        real    :: val
+        ! states
         states = self%get_all('state', fromto)
-        ! make multinomal distribution
-        allocate(incl(fromto(1):fromto(2)), source=states > 0.5)
-        if( self%isthere('updatecnt') )then
-            probs = self%get_all('updatecnt', fromto)
-            where( probs < 0.5 ) probs  = 0.5 ! no zeroes allowed
-            ! probabilities should be inverseley proportional to counts
-            probs = 1.0 / probs
-        else
-            allocate(probs(fromto(1):fromto(2)), source=1.0)
-        endif
-        norm = sum(probs, mask=incl)
-        where( incl )
-            probs = probs / norm
-        else where
-            probs = 0.
-        end where
-        ! sample the probability distribution
-        call multinomal_many( fromto, nsamples, probs, incl, inds)
+        ! update counts
+        counts = self%get_all('updatecnt', fromto)
+        ! indices
+        allocate(inds_here(fromto(1):fromto(2))) 
+        inds_here = (/(i,i=fromto(1),fromto(2))/)
+        ! order
+        call hpsort(counts, inds_here)
+        ! sample
+        cnt = 0
+        do i=fromto(1),fromto(2)
+            if( states(i) > 0 )then
+                cnt = cnt + 1
+                inds(cnt) = inds_here(i)
+            endif
+            if( cnt == nsamples ) exit
+        end do
         ! increment update counter and set mask
         mask = .false.
         do i=1,nsamples
@@ -1275,7 +1273,7 @@ contains
             val = val + 1.0
             call self%o(inds(i))%set('updatecnt', val)
             mask(inds(i)) = .true.
-        end do
+        end do 
     end subroutine sample4update_and_incrcnt
 
     ! SETTERS
