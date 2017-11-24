@@ -1248,19 +1248,22 @@ contains
         integer, allocatable :: inds_here(:)
         integer :: i, cnt
         real    :: val
-        ! states
-        states = self%get_all('state', fromto)
-        ! update counts
-        counts = self%get_all('updatecnt', fromto)
-        ! indices
-        allocate(inds_here(fromto(1):fromto(2))) 
-        inds_here = (/(i,i=fromto(1),fromto(2))/)
+        allocate( states(fromto(1):fromto(2)), counts(fromto(1):fromto(2)), inds_here(fromto(1):fromto(2)))
+        do i=fromto(1),fromto(2)
+            if( self%o(i)%isthere('updatecnt') )then
+                counts(i) = self%o(i)%get('updatecnt')
+            else
+                counts(i) = 0
+            endif
+            states(i)    = self%o(i)%get('state')
+            inds_here(i) = i
+        end do
         ! order
         call hpsort(counts, inds_here)
         ! sample
         cnt = 0
         do i=fromto(1),fromto(2)
-            if( states(i) > 0 )then
+            if( states(i) > 0.5 )then
                 cnt = cnt + 1
                 inds(cnt) = inds_here(i)
             endif
