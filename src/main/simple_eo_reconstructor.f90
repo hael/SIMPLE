@@ -1,7 +1,6 @@
 ! 3D reconstruction of even-odd pairs for FSC estimation
 module simple_eo_reconstructor
 #include "simple_lib.f08"
-use simple_defs_fname     ! use all in there
 use simple_reconstructor, only: reconstructor
 use simple_image,         only: image
 use simple_params,        only: params
@@ -22,8 +21,8 @@ type :: eo_reconstructor
     type(reconstructor)  :: eosum
     type(masker)         :: envmask
     character(len=4)     :: ext
-    real                 :: fsc05   !< target resolution at FSC=0.5
-    real                 :: fsc0143 !< target resolution at FSC=0.143
+    real                 :: fsc05          !< target resolution at FSC=0.5
+    real                 :: fsc0143        !< target resolution at FSC=0.143
     real                 :: smpd, msk, fny, inner=0., width=10.
     integer              :: box=0, nstates=1, numlen=2
     integer              :: cyc_lims(3,2)  = 0 !< redundant limits
@@ -41,15 +40,18 @@ type :: eo_reconstructor
     procedure, private :: reset_even
     procedure, private :: reset_odd
     procedure          :: reset_sum
-    procedure          :: apply_weight
     ! GETTERS
     procedure          :: get_kbwin
     procedure          :: get_res
     ! I/O
-    ! procedure          :: write_eos
-    ! procedure          :: read_eos
-    procedure          :: write_eos_exp
-    procedure          :: read_eos_exp
+    ! writers
+    procedure          :: write_eos
+    procedure, private :: write_even
+    procedure, private :: write_odd
+    ! readers
+    procedure          :: read_eos
+    procedure, private :: read_even
+    procedure, private :: read_odd
     ! INTERPOLATION
     procedure, private :: grid_fplane_1
     procedure, private :: grid_fplane_2
@@ -57,7 +59,6 @@ type :: eo_reconstructor
     procedure          :: compress_exp
     procedure          :: sum_eos !< for merging even and odd into sum
     procedure          :: sum     !< for summing eo_recs obtained by parallel exec
-    procedure          :: sum_exp !< for summing eo_recs obtained by parallel exec
     procedure          :: sampl_dens_correct_eos
     procedure          :: sampl_dens_correct_sum
     ! RECONSTRUCTION
@@ -118,7 +119,6 @@ contains
     subroutine reset_all( self )
         class(eo_reconstructor), intent(inout) :: self
         call self%reset_eos
-        call self%reset_eoexp
         call self%reset_sum
     end subroutine reset_all
 
@@ -154,13 +154,6 @@ contains
         call self%eosum%reset
     end subroutine reset_sum
 
-    subroutine apply_weight( self, w )
-        class(eo_reconstructor), intent(inout) :: self
-        real,                    intent(in)    :: w
-        call self%even%apply_weight(w)
-        call self%odd%apply_weight(w)
-    end subroutine apply_weight
-
     ! GETTERS
 
     !>  \brief  return the window functions used by eo_reconstructor
@@ -184,80 +177,72 @@ contains
     ! I/O
 
     !>  \brief  write the even and odd reconstructions
-    ! subroutine write_eos( self, fbody )
-    !     class(eo_reconstructor), intent(inout) :: self
-    !     character(len=*),        intent(in)    :: fbody !< filename
-    !     call self%even%write(trim(adjustl(fbody))//'_even'//self%ext, del_if_exists=.true.)
-    !     call self%even%write_rho('rho_'//trim(adjustl(fbody))//'_even'//BIN_EXT)
-    !     call self%odd%write(trim(adjustl(fbody))//'_odd'//self%ext, del_if_exists=.true.)
-    !     call self%odd%write_rho('rho_'//trim(adjustl(fbody))//'_odd'//BIN_EXT)
-    ! end subroutine write_eos
-
-    !>  \brief read the even and odd reconstructions
-    ! subroutine read_eos( self, fbody )
-    !     class(eo_reconstructor), intent(inout) :: self
-    !     character(len=*),        intent(in)    :: fbody
-    !     character(len=STDLEN) :: even_vol, even_rho, odd_vol, odd_rho
-    !     logical               :: here(2)
-    !     even_vol = trim(adjustl(fbody))//'_even'//self%ext
-    !     even_rho = 'rho_'//trim(adjustl(fbody))//'_even'//BIN_EXT
-    !     here(1)= file_exists(even_vol)
-    !     here(2)= file_exists(even_rho)
-    !     if( all(here) )then
-    !         call self%even%read(even_vol)
-    !         call self%even%read_rho(even_rho)
-    !     else
-    !         call self%reset_even
-    !     endif
-    !     odd_vol = trim(adjustl(fbody))//'_odd'//self%ext
-    !     odd_rho = 'rho_'//trim(adjustl(fbody))//'_odd'//BIN_EXT
-    !     here(1)= file_exists(odd_vol)
-    !     here(2)= file_exists(odd_rho)
-    !     if( all(here) )then
-    !         call self%odd%read(odd_vol)
-    !         call self%odd%read_rho(odd_rho)
-    !     else
-    !         call self%reset_odd
-    !     endif
-    ! end subroutine read_eos
-
-    !>  \brief  write the even and odd reconstructions
-    subroutine write_eos_exp( self, fbody )
+    subroutine write_eos( self, fbody )
         class(eo_reconstructor), intent(inout) :: self
         character(len=*),        intent(in)    :: fbody !< filename
-        call self%even%write_cmat_exp(trim(adjustl(fbody))//'_even'//BIN_EXT)
-        call self%even%write_rho_exp('rho_'//trim(adjustl(fbody))//'_even'//BIN_EXT)
-        call self%odd%write_cmat_exp(trim(adjustl(fbody))//'_odd'//BIN_EXT)
-        call self%odd%write_rho_exp('rho_'//trim(adjustl(fbody))//'_odd'//BIN_EXT)
-    end subroutine write_eos_exp
+        call self%write_even(fbody)
+        call self%write_odd(fbody)
+    end subroutine write_eos
 
-    !>  \brief read the even and odd reconstructions
-    subroutine read_eos_exp( self, fbody )
+    !>  \brief  write the even reconstruction
+    subroutine write_even( self, fbody )
         class(eo_reconstructor), intent(inout) :: self
         character(len=*),        intent(in)    :: fbody
-        character(len=STDLEN) :: even_vol, even_rho, odd_vol, odd_rho
-        logical               :: here(2)
-        even_vol = trim(adjustl(fbody))//'_even'//BIN_EXT
-        even_rho = 'rho_'//trim(adjustl(fbody))//'_even'//BIN_EXT
-        here(1)  = file_exists(even_vol)
-        here(2)  = file_exists(even_rho)
+        call self%even%write(trim(adjustl(fbody))//'_even'//self%ext, del_if_exists=.true.)
+        call self%even%write_rho(trim('rho_'//trim(adjustl(fbody))//'_even'//self%ext))
+    end subroutine write_even
+
+    !>  \brief  write the odd reconstruction
+    subroutine write_odd( self, fbody )
+        class(eo_reconstructor), intent(inout) :: self
+        character(len=*),        intent(in)    :: fbody
+        call self%odd%write(trim(adjustl(fbody))//'_odd'//self%ext, del_if_exists=.true.)
+        call self%odd%write_rho('rho_'//trim(adjustl(fbody))//'_odd'//self%ext)
+    end subroutine write_odd
+
+    !>  \brief read the even and odd reconstructions
+    subroutine read_eos( self, fbody )
+        class(eo_reconstructor), intent(inout) :: self
+        character(len=*),        intent(in)    :: fbody
+        call self%read_even(fbody)
+        call self%read_odd(fbody)
+    end subroutine read_eos
+
+    !>  \brief  read the even reconstruction
+    subroutine read_even( self, fbody )
+        class(eo_reconstructor), intent(inout) :: self
+        character(len=*),        intent(in)    :: fbody
+        character(len=STDLEN)                  :: even_vol, even_rho
+        logical                                :: here(2)
+        even_vol = trim(adjustl(fbody))//'_even'//self%ext
+        even_rho = 'rho_'//trim(adjustl(fbody))//'_even'//self%ext
+        here(1)= file_exists(even_vol)
+        here(2)= file_exists(even_rho)
         if( all(here) )then
-            call self%even%read_cmat_exp(even_vol)
-            call self%even%read_rho_exp(even_rho)
+            call self%even%read(even_vol)
+            call self%even%read_rho(even_rho)
         else
             call self%reset_even
         endif
-        odd_vol = trim(adjustl(fbody))//'_odd'//BIN_EXT
-        odd_rho = 'rho_'//trim(adjustl(fbody))//'_odd'//BIN_EXT
-        here(1) = file_exists(odd_vol)
-        here(2) = file_exists(odd_rho)
+    end subroutine read_even
+
+    !>  \brief  read the odd reconstruction
+    subroutine read_odd( self, fbody )
+        class(eo_reconstructor), intent(inout) :: self
+        character(len=*),        intent(in)    :: fbody
+        character(len=STDLEN)                  :: odd_vol, odd_rho
+        logical                                :: here(2)
+        odd_vol = trim(adjustl(fbody))//'_odd'//self%ext
+        odd_rho = 'rho_'//trim(adjustl(fbody))//'_odd'//self%ext
+        here(1)= file_exists(odd_vol)
+        here(2)= file_exists(odd_rho)
         if( all(here) )then
-            call self%odd%read_cmat_exp(odd_vol)
-            call self%odd%read_rho_exp(odd_rho)
+            call self%odd%read(odd_vol)
+            call self%odd%read_rho(odd_rho)
         else
             call self%reset_odd
         endif
-    end subroutine read_eos_exp
+    end subroutine read_odd
 
     ! INTERPOLATION
 
@@ -306,20 +291,12 @@ contains
     end subroutine sum_eos
 
     !> \brief  for summing reconstructors generated by parallel execution
-    subroutine sum( self, self_to_add )
+    subroutine sum( self, self_in )
          class(eo_reconstructor), intent(inout) :: self
-         class(eo_reconstructor), intent(in)    :: self_to_add
-         call self%even%sum(self_to_add%even)
-         call self%odd%sum(self_to_add%odd)
+         class(eo_reconstructor), intent(in)    :: self_in
+         call self%even%sum(self_in%even)
+         call self%odd%sum(self_in%odd)
     end subroutine sum
-
-    !> \brief  for summing reconstructors generated by parallel execution
-    subroutine sum_exp( self, self_to_add )
-         class(eo_reconstructor), intent(inout) :: self
-         class(eo_reconstructor), intent(in)    :: self_to_add
-         call self%even%sum_exp(self_to_add%even)
-         call self%odd%sum_exp(self_to_add%odd)
-    end subroutine sum_exp
 
     !>  \brief compress e/o
     subroutine compress_exp( self )
@@ -464,10 +441,15 @@ contains
                 endif
             endif
         end do
-        if( present(fbody) )then
-            call self%write_eos_exp(fbody//int2str_pad(state,2)//'_part'//int2str_pad(p%part,self%numlen))
-        else
-            call self%write_eos_exp('recvol_state'//int2str_pad(state,2)//'_part'//int2str_pad(p%part,self%numlen))
+        ! undo fourier components expansion
+        call self%compress_exp
+        ! density correction & output
+        if( p%l_distr_exec )then
+            if( present(fbody) )then
+                call self%write_eos(fbody//int2str_pad(state,2)//'_part'//int2str_pad(p%part,self%numlen))
+            else
+                call self%write_eos('recvol_state'//int2str_pad(state,2)//'_part'//int2str_pad(p%part,self%numlen))
+            endif
         endif
         call img%kill
         call img_pad%kill

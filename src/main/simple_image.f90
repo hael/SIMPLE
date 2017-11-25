@@ -265,10 +265,12 @@ type :: image
     procedure          :: corners
     procedure          :: before_after
     procedure          :: gauimg
+    procedure          :: gauimg2D
     procedure          :: fwd_ft
     procedure          :: ft2img
     procedure          :: dampen_central_cross
     procedure          :: subtr_backgr
+    procedure          :: subtr_avg_and_square
     procedure          :: resmsk
     procedure          :: frc_pspec
     procedure          :: mask
@@ -5514,9 +5516,9 @@ contains
     !> \brief gauimg  just a Gaussian fun for testing purposes
     !! \param wsz window size
     !!
-    subroutine gauimg( self, wsz)
+    subroutine gauimg( self, wsz )
         class(image), intent(inout) :: self
-        integer, intent(in) :: wsz
+        integer,      intent(in)    :: wsz
         real    :: x, y, z, xw, yw, zw
         integer :: i, j, k
         x = -real(self%ldim(1))/2.
@@ -5541,6 +5543,23 @@ contains
         end do
         self%ft = .false.
     end subroutine gauimg
+
+    subroutine gauimg2D( self, xsigma, ysigma )
+        class(image), intent(inout) :: self
+        real,         intent(in)    :: xsigma, ysigma
+        real    :: x, y, z, xw, yw, zw
+        integer :: i, j, k
+        x = -real(self%ldim(1))/2.
+        do i=1,self%ldim(1)
+            y = -real(self%ldim(2))/2.
+            do j=1,self%ldim(2)
+                self%rmat(i,j,1) = gaussian2D( [0.,0.], x, y, xsigma, ysigma )
+                y = y+1.
+            end do
+            x = x+1.
+        end do
+        self%ft = .false.
+    end subroutine gauimg2D
 
     !> \brief fwd_ft  forward Fourier transform
     !!
@@ -5661,6 +5680,14 @@ contains
         self%rmat = self%rmat - tmp%rmat
         call tmp%kill
     end subroutine subtr_backgr
+    
+    subroutine subtr_avg_and_square( self )
+        class(image), intent(inout) :: self
+        real :: avg
+        avg = sum(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3))) / real(product(self%ldim))
+        self%rmat = self%rmat - avg
+        self%rmat = self%rmat * self%rmat
+    end subroutine subtr_avg_and_square
 
     !> \brief generates a real-space resolution mask for matching power-spectra
     subroutine resmsk( self, hplim, lplim )

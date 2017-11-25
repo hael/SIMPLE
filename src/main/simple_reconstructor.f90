@@ -48,16 +48,11 @@ type, extends(image) :: reconstructor
     ! SETTERS
     procedure          :: reset
     procedure          :: reset_exp
-    procedure          :: apply_weight
     ! GETTER
     procedure          :: get_kbwin
     ! I/O
-    ! procedure          :: write_rho
-    ! procedure          :: read_rho
-    procedure          :: write_rho_exp
-    procedure          :: read_rho_exp
-    procedure          :: write_cmat_exp
-    procedure          :: read_cmat_exp
+    procedure          :: write_rho
+    procedure          :: read_rho
     ! INTERPOLATION
     procedure, private :: inout_fcomp
     procedure, private :: inout_fplane_1
@@ -67,7 +62,6 @@ type, extends(image) :: reconstructor
     procedure          :: compress_exp
     ! SUMMATION
     procedure          :: sum
-    procedure          :: sum_exp
     ! RECONSTRUCTION
     procedure          :: rec
     ! DESTRUCTORS
@@ -155,81 +149,42 @@ contains
         if(allocated(self%rho_exp)) self%rho_exp  = 0.
     end subroutine reset_exp
 
-    subroutine apply_weight( self, w )
-        class(reconstructor), intent(inout) :: self !< this instance
-        real,                 intent(in)    :: w
-        if(allocated(self%cmat_exp)) self%cmat_exp = self%cmat_exp * w
-        if(allocated(self%rho_exp))  self%rho_exp  = self%rho_exp  * w
-    end subroutine apply_weight
-
     ! GETTERS
     !> get the kbintpol window
     function get_kbwin( self ) result( wf )
         class(reconstructor), intent(inout) :: self !< this instance
-        type(kbinterpol) :: wf                      !< return kbintpol window
+        type(kbinterpol) :: wf   !< return kbintpol window
         wf = kbinterpol(self%winsz,self%alpha)
     end function get_kbwin
 
     ! I/O
     !>Write reconstructed image
-    ! subroutine write_rho( self, kernam )
-    !     class(reconstructor), intent(in) :: self   !< this instance
-    !     character(len=*),     intent(in) :: kernam !< kernel name
-    !     integer :: filnum
-    !     call fopen(filnum, trim(kernam), status='REPLACE', action='WRITE', access='STREAM')
-    !     write(filnum, pos=1) self%rho
-    !     call fclose(filnum)
-    ! end subroutine write_rho
-
-    !> Read sampling density matrix
-    ! subroutine read_rho( self, kernam )
-    !     class(reconstructor), intent(inout) :: self   !< this instance
-    !     character(len=*),     intent(in)    :: kernam !< kernel name
-    !     integer :: filnum
-    !     call fopen(filnum, file=trim(kernam), status='OLD', action='READ', access='STREAM')
-    !     read(filnum, pos=1) self%rho
-    !     call fclose(filnum)
-    ! end subroutine read_rho
-
-    !>Write reconstructed image
-    subroutine write_rho_exp( self, kernam )
+    subroutine write_rho( self, kernam )
         class(reconstructor), intent(in) :: self   !< this instance
         character(len=*),     intent(in) :: kernam !< kernel name
-        integer :: filnum
-        call fopen(filnum, trim(kernam), status='REPLACE', action='WRITE', access='STREAM')
-        write(filnum, pos=1) self%rho_exp
-        call fclose(filnum)
-    end subroutine write_rho_exp
+        integer :: filnum, ierr
+        call del_file(trim(kernam))
+        call fopen(filnum, trim(kernam), status='NEW', action='WRITE', access='STREAM', iostat=ierr)
+        call fileio_errmsg( 'simple_reconstructor ; write rho '//trim(kernam), ierr)
+        write(filnum, pos=1, iostat=ierr) self%rho
+        if( ierr .ne. 0 ) &
+            call fileio_errmsg('read_rho; simple_reconstructor writing '//trim(kernam), ierr)
+        call fclose(filnum,errmsg='simple_reconstructor ; write rho  fclose ')
+    end subroutine write_rho
 
     !> Read sampling density matrix
-    subroutine read_rho_exp( self, kernam )
-        class(reconstructor), intent(inout) :: self   !< this instance
+    subroutine read_rho( self, kernam )
+        class(reconstructor), intent(inout) :: self !< this instance
         character(len=*),     intent(in)    :: kernam !< kernel name
-        integer :: filnum
-        call fopen(filnum, file=trim(kernam), status='OLD', action='READ', access='STREAM')
-        read(filnum, pos=1) self%rho_exp
-        call fclose(filnum)
-    end subroutine read_rho_exp
-
-    !>Write reconstructed image
-    subroutine write_cmat_exp( self, kernam )
-        class(reconstructor), intent(in) :: self   !< this instance
-        character(len=*),     intent(in) :: kernam !< kernel name
-        integer :: filnum
-        call fopen(filnum, trim(kernam), status='REPLACE', action='WRITE', access='STREAM')
-        write(filnum, pos=1) self%cmat_exp
-        call fclose(filnum)
-    end subroutine write_cmat_exp
-
-    !> Read sampling density matrix
-    subroutine read_cmat_exp( self, kernam )
-        class(reconstructor), intent(inout) :: self   !< this instance
-        character(len=*),     intent(in)    :: kernam !< kernel name
-        integer :: filnum
-        call fopen(filnum, file=trim(kernam), status='OLD', action='READ', access='STREAM')
-        read(filnum, pos=1) self%cmat_exp
-        call fclose(filnum)
-    end subroutine read_cmat_exp
+        integer :: filnum, ierr
+        call fopen(filnum, file=trim(kernam), status='OLD', action='READ', access='STREAM', iostat=ierr)
+        call fileio_errmsg('read_rho; simple_reconstructor opening '//trim(kernam), ierr)
+        read(filnum, pos=1, iostat=ierr) self%rho
+        if( ierr .ne. 0 ) &
+            call fileio_errmsg('simple_reconstructor::read_rho; simple_reconstructor reading '&
+            &// trim(kernam), ierr)
+        call fclose(filnum,errmsg='read_rho; simple_reconstructor closing '//trim(kernam))
+    end subroutine read_rho
 
     ! INTERPOLATION
 
@@ -488,33 +443,23 @@ contains
     ! SUMMATION
 
     !> for summing reconstructors generated by parallel execution
-    subroutine sum( self, self_to_add )
-        class(reconstructor), intent(inout) :: self        !< this instance
-        class(reconstructor), intent(in)    :: self_to_add !< other instance
-        call self%add_workshare(self_to_add, self%rho, self_to_add%rho)
+    subroutine sum( self, self_in )
+         class(reconstructor), intent(inout) :: self    !< this instance
+         class(reconstructor), intent(in)    :: self_in !< other instance
+         call self%add_workshare(self_in, self%rho, self_in%rho)
     end subroutine sum
-
-    !> for summing reconstructors generated by parallel execution
-    subroutine sum_exp( self, self_to_add )
-        class(reconstructor), intent(inout) :: self        !< this instance
-        class(reconstructor), intent(in)    :: self_to_add !< other instance
-        !$omp parallel workshare proc_bind(close)
-        self%cmat_exp = self%cmat_exp + self_to_add%cmat_exp
-        self%rho_exp  = self%rho_exp  + self_to_add%rho_exp
-        !$omp end parallel workshare
-    end subroutine sum_exp
 
     ! RECONSTRUCTION
     !> reconstruction routine
     subroutine rec( self, p, o, se, state, mul, part )
         use simple_prep4cgrid, only: prep4cgrid
-        class(reconstructor), intent(inout) :: self  !< this object
-        class(params),        intent(in)    :: p     !< parameters
-        class(oris),          intent(inout) :: o     !< orientations
-        class(sym),           intent(inout) :: se    !< symmetry element
-        integer,              intent(in)    :: state !< state to reconstruct
-        real,    optional,    intent(in)    :: mul   !< shift multiplication factor
-        integer, optional,    intent(in)    :: part  !< partition (4 parallel rec)
+        class(reconstructor), intent(inout) :: self      !< this object
+        class(params),        intent(in)    :: p         !< parameters
+        class(oris),          intent(inout) :: o         !< orientations
+        class(sym),           intent(inout) :: se        !< symmetry element
+        integer,              intent(in)    :: state     !< state to reconstruct
+        real,    optional,    intent(in)    :: mul       !< shift multiplication factor
+        integer, optional,    intent(in)    :: part      !< partition (4 parallel rec)
         type(image)      :: img, img_pad
         type(prep4cgrid) :: gridprep
         real             :: skewness

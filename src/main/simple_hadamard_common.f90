@@ -66,6 +66,10 @@ contains
                     iiptcl       = iptcl
                     ind_in_batch = iptcl - fromptop(1) + 1
                 endif
+
+
+
+                
                 call p%stkhandle%get_stkname_and_ind(iiptcl, stkname, ind_in_stk)
                 call b%imgbatch(ind_in_batch)%read(stkname, ind_in_stk)
             end do
@@ -264,7 +268,6 @@ contains
         endif
         pw = 1.0
         if( orientation%isthere('w') ) pw = orientation%get('w')
-        if( p%l_frac_update          ) pw = pw * p%update_frac
         eo = 0
         if( p%eo .ne. 'no' ) eo = nint(orientation%get('eo'))
         if( pw > TINY )then
@@ -474,19 +477,13 @@ contains
     subroutine preprecvols( b, p )
         class(build),   intent(inout) :: b
         class(params),  intent(inout) :: p
-        character(len=:), allocatable :: recname, rhoname, part_str
         integer :: istate
-        allocate(part_str, source=int2str_pad(p%part,p%numlen))
         select case(p%eo)
             case('yes','aniso')
                 do istate = 1, p%nstates
                     if( b%a%get_pop(istate, 'state') > 0)then
                         call b%eorecvols(istate)%new(p)
                         call b%eorecvols(istate)%reset_all
-                        if( p%l_frac_update )then
-                            call b%eorecvols(istate)%read_eos_exp(VOL_FBODY//int2str_pad(istate,2)//'_part'//part_str)
-                            call b%eorecvols(istate)%apply_weight(1.0 - p%update_frac)
-                        endif
                     endif
                 end do
             case DEFAULT
@@ -495,16 +492,6 @@ contains
                         call b%recvols(istate)%new([p%boxpd, p%boxpd, p%boxpd], p%smpd)
                         call b%recvols(istate)%alloc_rho(p)
                         call b%recvols(istate)%reset
-                        if( p%l_frac_update )then
-                            allocate(recname, source=VOL_FBODY//int2str_pad(istate,2)//'_part'//part_str//BIN_EXT)
-                            allocate(rhoname, source='rho_'//VOL_FBODY//int2str_pad(istate,2)//'_part'//part_str//BIN_EXT)
-                            if( file_exists(recname) .and. file_exists(rhoname) )then
-                                call b%recvols(istate)%read_cmat_exp(recname)
-                                call b%recvols(istate)%read_rho_exp(rhoname)
-                                call b%recvols(istate)%apply_weight(1.0 - p%update_frac)
-                            endif
-                            deallocate(recname, rhoname)
-                        endif
                     endif
                 end do
         end select
@@ -571,7 +558,7 @@ contains
         ! centering            
         do_center = .true.
         if( p%center .eq. 'no' .or. p%nstates > 1 .or. .not. p%doshift .or.&
-        &p%pgrp(:1) .ne. 'c' .or. cline%defined('mskfile') .or. p%l_frac_update )then
+        &p%pgrp(:1) .ne. 'c' .or. cline%defined('mskfile') )then
             do_center = .false.
             xyz       = 0.
             return
@@ -675,14 +662,10 @@ contains
             endif
             if( p%l_distr_exec )then
                 allocate(fbody, source='recvol_state'//int2str_pad(s,2)//'_part'//int2str_pad(p%part,p%numlen))
-                call b%recvols(s)%write_cmat_exp(fbody//BIN_EXT)
-                call b%recvols(s)%write_rho_exp('rho_'//fbody//BIN_EXT)
-                !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-                ! p%vols(s)  = trim(adjustl(fbody))//p%ext
-                ! call b%recvols(s)%compress_exp
-                ! call b%recvols(s)%write(p%vols(s), del_if_exists=.true.)
-                ! call b%recvols(s)%write_rho('rho_'//trim(adjustl(fbody))//BIN_EXT)
-                !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+                p%vols(s)  = trim(adjustl(fbody))//p%ext
+                call b%recvols(s)%compress_exp
+                call b%recvols(s)%write(p%vols(s), del_if_exists=.true.)
+                call b%recvols(s)%write_rho('rho_'//trim(adjustl(fbody))//p%ext)
                 deallocate(fbody)
             else
                 if( p%refine .eq. 'snhc' )then
@@ -735,12 +718,10 @@ contains
                 if( present(which_iter) ) b%fsc(s,:) = 0.
                 cycle
             endif
+            call b%eorecvols(s)%compress_exp
             if( p%l_distr_exec )then
-                call b%eorecvols(s)%write_eos_exp('recvol_state'//int2str_pad(s,2)//'_part'//int2str_pad(p%part,p%numlen))
-                !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-                ! call b%eorecvols(s)%write_eos('recvol_state'//int2str_pad(s,2)//'_part'//int2str_pad(p%part,p%numlen))
-                !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-            else  
+                call b%eorecvols(s)%write_eos('recvol_state'//int2str_pad(s,2)//'_part'//int2str_pad(p%part,p%numlen))
+            else
                 if( present(which_iter) )then
                     p%vols(s)      = 'recvol_state'//int2str_pad(s,2)//'_iter'//int2str_pad(which_iter,3)//p%ext 
                 else
@@ -749,7 +730,6 @@ contains
                 p%vols_even(s) = add2fbody(p%vols(s), p%ext, '_even')
                 p%vols_odd(s)  = add2fbody(p%vols(s), p%ext, '_odd')
                 resmskname     = 'resmask'//p%ext
-                call b%eorecvols(s)%compress_exp
                 call b%eorecvols(s)%sum_eos
                 call b%eorecvols(s)%sampl_dens_correct_eos(s, p%vols_even(s), p%vols_odd(s), resmskname, find4eoavg)
                 call gen_projection_frcs( b, p, cline, p%vols_even(s), p%vols_odd(s), resmskname, s, b%projfrcs)

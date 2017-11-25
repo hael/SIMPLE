@@ -7,7 +7,7 @@ use simple_image,        only: image
 implicit none
 
 public :: init_picker, exec_picker, kill_picker
-private
+private 
 
 ! PEAK STATS INDICES
 integer,          parameter   :: CC2REF   = 1
@@ -18,11 +18,12 @@ integer,          parameter   :: SSCORE   = 4
 integer,          parameter   :: NSTAT   = 4
 integer,          parameter   :: MAXKMIT = 20
 real,             parameter   :: BOXFRAC = 0.5
-logical,          parameter   :: WRITESHRUNKEN = .false., DOPRINT = .true.
+logical,          parameter   :: WRITESHRUNKEN = .true., DOPRINT = .true., GAUPICK = .false.
 ! VARS
-type(image)                   :: micrograph, mic_shrunken, mic_shrunken_refine, ptcl_target
+type(image)                   :: micrograph, mic_shrunken, mic_shrunken_copy, mic_shrunken_refine, ptcl_target
+type(image)                   :: gaussimg
 type(image),      allocatable :: refs(:), refs_refine(:)
-logical,          allocatable :: selected_peak_positions(:)
+logical,          allocatable :: selected_peak_positions(:), lgaupeaks(:,:)
 real,             allocatable :: sxx(:), sxx_refine(:), corrmat(:,:)
 integer,          allocatable :: peak_positions(:,:), peak_positions_refined(:,:), refmat(:,:)
 character(len=:), allocatable :: micname, refsname
@@ -30,7 +31,7 @@ real, allocatable             :: peak_stats(:,:)
 character(len=STDLEN)         :: boxname
 integer                       :: ldim(3), ldim_refs(3), ldim_refs_refine(3), ldim_shrink(3)
 integer                       :: ldim_shrink_refine(3), ntargets, nx, ny, nx_refine, ny_refine
-integer                       :: nrefs, npeaks, npeaks_sel, orig_box, lfny, nbackgr
+integer                       :: nrefs, npeaks, npeaks_sel, orig_box, lfny, nbackgr, cnt_glob=0
 real                          :: smpd, smpd_shrunken, smpd_shrunken_refine, corrmax, corrmin
 real                          :: msk, msk_refine, lp, distthr, ndev
 logical                       :: rm_outliers = .true.
@@ -42,18 +43,21 @@ contains
         real,                       intent(in) :: smpd_in
         real,             optional, intent(in) :: lp_in, distthr_in, ndev_in
         character(len=*), optional, intent(in) :: dir_out
-        type(image) :: refimg
-        integer     :: ifoo, iref
+        type(image)       :: refimg
+        integer           :: ifoo, iref
+        real              :: sigma, hp
+        real, allocatable :: rmat(:,:,:)
         allocate(micname,  source=trim(micfname), stat=alloc_stat)
         allocchk('picker;init, 1')
         allocate(refsname, source=trim(refsfname), stat=alloc_stat)
         allocchk('picker;init, 2')
         boxname = remove_abspath( fname_new_ext(micname,'box') )   
         if( present(dir_out) )boxname = trim(dir_out)//trim(boxname)
-        smpd    = smpd_in
-        lp      = 20.0
+        smpd = smpd_in
+        lp   = 20.0
+        
         if( present(lp_in) ) lp = lp_in
-        ndev    = 2.0
+        ndev = 2.0
         if( present(ndev_in)) ndev = ndev_in
         ! read micrograph
         call find_ldim_nptcls(micname, ldim, ifoo)
@@ -108,14 +112,41 @@ contains
         end do
         ! pre-process micrograph
         call micrograph%fwd_ft
-        call micrograph%bp(0., lp)
+        ! call micrograph%bp(hp, lp)
         call mic_shrunken%new(ldim_shrink, smpd_shrunken)
         call mic_shrunken_refine%new(ldim_shrink_refine, smpd_shrunken_refine)
+        call mic_shrunken%set_ft(.true.)
+        call mic_shrunken_refine%set_ft(.true.)
         call micrograph%clip(mic_shrunken)
         call micrograph%clip(mic_shrunken_refine)
+        hp = real(ldim_shrink(1) / 2) * smpd_shrunken
+        call mic_shrunken%bp(hp, lp)
+        hp = real(ldim_shrink_refine(1) / 2) * smpd_shrunken_refine
+        call mic_shrunken_refine%bp(hp, lp)
         call mic_shrunken%bwd_ft
         call mic_shrunken_refine%bwd_ft
-        if( WRITESHRUNKEN ) call mic_shrunken%write('shrunken.mrc')
+        if( GAUPICK )then
+            mic_shrunken_copy = mic_shrunken
+            ! create variance image
+            call mic_shrunken%subtr_avg_and_square
+            ! call mic_shrunken%write('varimg.mrc', 1)
+            call mic_shrunken%fwd_ft
+            ! create Gaussian image
+            call gaussimg%new(ldim_shrink, smpd_shrunken)
+            sigma = real(orig_box)/PICKER_SHRINK/13.0
+            call gaussimg%gauimg2D(sigma, sigma)
+            ! call gaussimg%write('gaussimg.mrc', 1)
+            call gaussimg%fwd_ft
+            call gaussimg%neg
+            ! convolve
+            call gaussimg%mul(mic_shrunken)
+            call gaussimg%bwd_ft
+            cnt_glob = cnt_glob + 1
+            call gaussimg%write('peakimgs.mrc', cnt_glob)
+            ! put back the original shrunken micrograph
+            mic_shrunken = gaussimg
+            if( WRITESHRUNKEN ) call mic_shrunken%write('shrunken_ones.mrc', cnt_glob)
+        endif
     end subroutine init_picker
 
     subroutine exec_picker( boxname_out, nptcls_out )

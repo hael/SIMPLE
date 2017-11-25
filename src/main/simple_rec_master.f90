@@ -1,7 +1,6 @@
 ! 3D reconstruction - master module
 module simple_rec_master
 #include "simple_lib.f08"
-use simple_defs_fname
 use simple_build,     only: build
 use simple_params,    only: params
 use simple_cmdline,   only: cmdline
@@ -52,11 +51,12 @@ contains
                     allocate(fbody, source='recvol_state'//int2str_pad(s,2)//&
                     &'_part'//int2str_pad(p%part,p%numlen))
                 endif
-                p%vols(s) = fbody//BIN_EXT
-                rho_name  = 'rho_'//fbody//BIN_EXT
+                p%vols(s) = fbody//p%ext
+                rho_name  = 'rho_'//fbody//p%ext
                 call b%recvol%rec(p, b%a, b%se, s, part=p%part)
-                call b%recvol%write_cmat_exp(fbody//BIN_EXT)
-                call b%recvol%write_rho_exp('rho_'//fbody//BIN_EXT)
+                call b%recvol%compress_exp
+                call b%recvol%write(p%vols(s), del_if_exists=.true.)
+                call b%recvol%write_rho(trim(rho_name))
             else ! shared-mem parallel rec
                 if( present(fbody_in) )then
                     allocate(fbody, source=trim(adjustl(fbody_in))//'_state')

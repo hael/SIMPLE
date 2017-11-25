@@ -54,6 +54,7 @@ end interface
 interface peakfinder
     module procedure peakfinder_1
     module procedure peakfinder_2
+    module procedure peakfinder_3
 end interface
 
 interface find
@@ -700,6 +701,12 @@ contains
         real :: r
         r = (1./(sigma*sqrt(twopi)))*exp(-dist/(2.*(sigma*sigma)))
     end function gaussian_2
+
+    real function gaussian2D( center_coords, x, y, xsigma, ysigma )
+        real, intent(in) :: center_coords(2), x, y, xsigma, ysigma
+        gaussian2D = exp( -((x - center_coords(1))**2.0 / (2.0 * xsigma * xsigma) +&
+                            (y - center_coords(2))**2.0 / (2.0 * ysigma * ysigma)) )
+    end function gaussian2D
 
     ! COMPLEX STUFF
 
@@ -2347,6 +2354,23 @@ contains
         end do
         if( vals(n) > vals(n-1) ) peakpos(n) = .true.
     end function peakfinder_2
+
+    function peakfinder_3( mat ) result( peakpos )
+        real,    intent(in)  :: mat(:,:)
+        logical, allocatable :: peakpos(:,:)
+        integer :: nx, ny, i, j, alloc_stat
+        nx = size(mat,1)
+        ny = size(mat,2)
+        allocate(peakpos(nx,ny), source=.false.)
+        do i=2,nx-1
+            do j=2,ny-1
+                if( mat(i,j) >= mat(i-1,j) .and. mat(i,j) >= mat(i+1,j) .and.&
+                    mat(i,j) >= mat(i,j-1) .and. mat(i,j) >= mat(i,j+1) )then
+                    peakpos(i,j) = .true.
+                endif
+            end do
+        end do
+    end function peakfinder_3
 
     !>   rheapsort from numerical recepies (largest last)
     subroutine hpsort_1( rarr, iarr )

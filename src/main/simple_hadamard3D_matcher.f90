@@ -24,9 +24,6 @@ private
 logical, parameter              :: L_BENCH = .true.
 type(polarft_corrcalc)          :: pftcc
 type(prime3D_srch), allocatable :: primesrch3D(:)
-integer,            allocatable :: pinds(:)
-logical,            allocatable :: ptcl_mask(:)
-integer                         :: nptcls2update
 integer(timer_int_kind)         :: t_init, t_prep_pftcc, t_align, t_rec, t_tot, t_prep_primesrch3D
 real(timer_int_kind)            :: rt_init, rt_prep_pftcc, rt_align, rt_rec, rt_prep_primesrch3D
 real(timer_int_kind)            :: rt_tot
@@ -73,7 +70,7 @@ contains
         type(ori)  :: orientation
         real       :: norm, corr_thresh, skewness, frac_srch_space
         real       :: extr_thresh, update_frac, reslim
-        integer    :: iptcl, inptcls, istate, iextr_lim, i, j, zero_pop
+        integer    :: iptcl, inptcls, istate, iextr_lim, i, zero_pop
         integer    :: update_ind, nupdates_target, nupdates, fnr
         logical    :: doprint, do_extr
 
@@ -166,33 +163,6 @@ contains
             endif
         endif
 
-        ! PARTICLE INDEXC SAMPLING FOR FRACTIONAL UPDATE (OR NOT)
-        if( allocated(pinds) )     deallocate(pinds)
-        if( allocated(ptcl_mask) ) deallocate(ptcl_mask)
-        if( p%l_frac_update )then
-            nptcls2update = nint(p%update_frac * real(p%top - p%fromp + 1))
-            allocate(pinds(nptcls2update), ptcl_mask(p%fromp:p%top))
-            call b%a%sample4update_and_incrcnt([p%fromp,p%top], nptcls2update, pinds, ptcl_mask)
-            ! correct convergence stats
-            do iptcl=p%fromp,p%top
-                if( .not. ptcl_mask(iptcl) )then
-                    ! these are not updated
-                    call b%a%set(iptcl, 'mi_proj',     1.0)
-                    call b%a%set(iptcl, 'mi_inpl',     1.0)
-                    call b%a%set(iptcl, 'mi_state',    1.0)
-                    call b%a%set(iptcl, 'mi_joint',    1.0)
-                    call b%a%set(iptcl, 'dist',        0.0)
-                    call b%a%set(iptcl, 'dist_inpl',   0.0)
-                    call b%a%set(iptcl, 'frac',      100.0)
-                endif
-            end do
-        else
-            nptcls2update = p%top - p%fromp + 1
-            allocate(pinds(nptcls2update), ptcl_mask(p%fromp:p%top))
-            pinds = (/(i,i=p%fromp,p%top)/)
-            ptcl_mask = .true.
-        endif
-
         if( L_BENCH ) rt_init = toc(t_init)
         ! PREPARE THE POLARFT_CORRCALC DATA STRUCTURE
         if( L_BENCH ) t_prep_pftcc = tic()
@@ -234,65 +204,57 @@ contains
         if( L_BENCH ) t_align = tic()
         select case(p%refine)
             case( 'snhc' )
-                !$omp parallel do default(shared) private(iptcl,i) schedule(guided) proc_bind(close)
-                do i=1,nptcls2update
-                    iptcl = pinds(i)
+                !$omp parallel do default(shared) private(iptcl) schedule(guided) proc_bind(close)
+                do iptcl=p%fromp,p%top
                     call primesrch3D(iptcl)%exec_prime3D_srch(p%lp, szsn=p%szsn)
                 end do
                 !$omp end parallel do
             case( 'no','shc','yes' )
                 if( p%oritab .eq. '' )then
-                    !$omp parallel do default(shared) private(iptcl,i) schedule(guided) proc_bind(close)
-                    do i=1,nptcls2update
-                        iptcl = pinds(i)
+                    !$omp parallel do default(shared) private(iptcl) schedule(guided) proc_bind(close)
+                    do iptcl=p%fromp,p%top
                         call primesrch3D(iptcl)%exec_prime3D_srch(p%lp, greedy=.true.)
                     end do
                     !$omp end parallel do
                 else
-                    !$omp parallel do default(shared) private(iptcl,i) schedule(guided) proc_bind(close)
-                    do i=1,nptcls2update
-                        iptcl = pinds(i)
+                    !$omp parallel do default(shared) private(iptcl) schedule(guided) proc_bind(close)
+                    do iptcl=p%fromp,p%top
                         call primesrch3D(iptcl)%exec_prime3D_srch(p%lp)
                     end do
                     !$omp end parallel do
                 endif
             case('neigh','shcneigh')
                 if( p%oritab .eq. '' ) stop 'cannot run the refine=neigh mode without input oridoc (oritab)'
-                !$omp parallel do default(shared) private(iptcl,i) schedule(guided) proc_bind(close)
-                do i=1,nptcls2update
-                    iptcl = pinds(i)
+                !$omp parallel do default(shared) private(iptcl) schedule(guided) proc_bind(close)
+                do iptcl=p%fromp,p%top
                     call primesrch3D(iptcl)%exec_prime3D_srch(p%lp, nnmat=b%nnmat, grid_projs=b%grid_projs)
                 end do
                 !$omp end parallel do
             case('greedy')
                 if( p%oritab .eq. '' )then
-                    !$omp parallel do default(shared) private(iptcl,i) schedule(guided) proc_bind(close)
-                    do i=1,nptcls2update
-                        iptcl = pinds(i)
+                    !$omp parallel do default(shared) private(iptcl) schedule(guided) proc_bind(close)
+                    do iptcl=p%fromp,p%top
                         call primesrch3D(iptcl)%exec_prime3D_srch(p%lp, greedy=.true.)
                     end do
                     !$omp end parallel do
                 else
-                    !$omp parallel do default(shared) private(iptcl,i) schedule(guided) proc_bind(close)
-                    do i=1,nptcls2update
-                        iptcl = pinds(i)
+                    !$omp parallel do default(shared) private(iptcl) schedule(guided) proc_bind(close)
+                    do iptcl=p%fromp,p%top
                         call primesrch3D(iptcl)%exec_prime3D_srch(p%lp, greedy=.true.)
                     end do
                     !$omp end parallel do
                 endif
             case('greedyneigh')
                 if( p%oritab .eq. '' )then                
-                    !$omp parallel do default(shared) private(iptcl,i) schedule(guided) proc_bind(close)
-                    do i=1,nptcls2update
-                        iptcl = pinds(i)
+                    !$omp parallel do default(shared) private(iptcl) schedule(guided) proc_bind(close)
+                    do iptcl=p%fromp,p%top
                         call primesrch3D(iptcl)%exec_prime3D_srch(p%lp,&
                             &greedy=.true., nnmat=b%nnmat, grid_projs=b%grid_projs)
                     end do
                     !$omp end parallel do
                 else
-                    !$omp parallel do default(shared) private(iptcl,i) schedule(guided) proc_bind(close)
-                    do i=1,nptcls2update
-                        iptcl = pinds(i)
+                    !$omp parallel do default(shared) private(iptcl) schedule(guided) proc_bind(close)
+                    do iptcl=p%fromp,p%top
                         call primesrch3D(iptcl)%exec_prime3D_srch(p%lp,&
                             &greedy=.true., nnmat=b%nnmat, grid_projs=b%grid_projs)
                     end do
@@ -300,17 +262,15 @@ contains
                 endif
             case('het')
                 if(p%oritab .eq. '') stop 'cannot run the refine=het mode without input oridoc (oritab)'
-                !$omp parallel do default(shared) private(iptcl,i) schedule(guided) proc_bind(close)
-                do i=1,nptcls2update
-                    iptcl = pinds(i)
+                !$omp parallel do default(shared) private(iptcl) schedule(guided) proc_bind(close)
+                do iptcl=p%fromp,p%top
                     call primesrch3D(iptcl)%exec_prime3D_srch_het( do_extr )
                 end do
                 !$omp end parallel do
             case ('states')
                 if(p%oritab .eq. '') stop 'cannot run the refine=states mode without input oridoc (oritab)'
-                !$omp parallel do default(shared) private(iptcl,i) schedule(guided) proc_bind(close)
-                do i=1,nptcls2update
-                    iptcl = pinds(i)
+                !$omp parallel do default(shared) private(iptcl) schedule(guided) proc_bind(close)
+                do iptcl=p%fromp,p%top
                     call primesrch3D(iptcl)%exec_prime3D_srch(p%lp, greedy=.true., nnmat=b%nnmat)
                 end do
                 !$omp end parallel do
@@ -347,9 +307,14 @@ contains
         if( p%norec .ne. 'yes' )then
             ! init volumes
             call preprecvols(b, p)
+            if( p%l_frac_update )then
+                ! need to read in part volumes & rho
+                ! todo in simple_hadamard_common
+                ! call readrecvols_for_update(p)
+                ! discarding contribution to volume should be done within grid_ptcl
+            endif
             ! reconstruction
-            do i=1,nptcls2update
-                iptcl = pinds(i)
+            do iptcl=p%fromp,p%top
                 orientation = b%a%get_ori(iptcl)
                 if( nint(orientation%get('state')) == 0 .or.&
                    &nint(orientation%get('state_balance')) == 0 ) cycle
@@ -557,7 +522,6 @@ contains
             !$omp parallel do default(shared) private(iptcl,imatch)&
             !$omp schedule(static) proc_bind(close)
             do iptcl=batchlims(1),batchlims(2)
-                if( .not.ptcl_mask(iptcl) )cycle
                 imatch = iptcl - batchlims(1) + 1
                 call prepimg4align(b, p, iptcl, b%imgbatch(imatch), match_imgs(imatch), is3D=.true.)
                 ! transfer to polar coordinates
