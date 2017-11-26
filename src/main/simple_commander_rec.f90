@@ -1,6 +1,7 @@
 ! concrete commander: 3D reconstruction routines
 module simple_commander_rec
 #include "simple_lib.f08"
+use simple_defs_fname
 use simple_cmdline,         only: cmdline
 use simple_params,          only: params
 use simple_build,           only: build
@@ -85,16 +86,14 @@ contains
                 s     = ss
                 state = ss
             endif
-            DebugPrint  'processing state: ', s
             if( b%a%get_pop(state, 'state' ) == 0 )cycle ! Empty state
             call b%eorecvol%reset_all
             do part=1,p%nparts
-                allocate(fname, source='recvol_state'//int2str_pad(state,2)//'_part'//int2str_pad(part,p%numlen))
-                DebugPrint  'processing file: ', fname
+                allocate(fname, source=VOL_FBODY//int2str_pad(state,2)//'_part'//int2str_pad(part,p%numlen))
                 call assemble(fname)
                 deallocate(fname)
             end do
-            call correct_for_sampling_density_and_estimate_res('recvol_state'//int2str_pad(state,2))
+            call correct_for_sampling_density_and_estimate_res(VOL_FBODY//int2str_pad(state,2))
             if( cline%defined('state') )exit
         end do
         ! set the resolution limit according to the worst resolved model
@@ -174,9 +173,6 @@ contains
         call b%build_rec_tbox(p)            ! reconstruction toolbox built
         ! rebuild b%vol according to box size (because it is otherwise boxmatch)
         call b%vol%new([p%box,p%box,p%box], p%smpd)
-        if( cline%defined('find') )then
-            p%lp = b%img%get_lp(p%find)
-        endif
         call recvol_read%new([p%boxpd,p%boxpd,p%boxpd], p%smpd)
         call recvol_read%alloc_rho(p)
         do ss=1,p%nstates
@@ -187,12 +183,10 @@ contains
                 s     = ss
                 state = ss
             endif
-            DebugPrint  'processing state: ', state
             if( b%a%get_pop(state, 'state' ) == 0 ) cycle ! Empty state
             call b%recvol%reset
             do part=1,p%nparts
-                allocate(fbody, source='recvol_state'//int2str_pad(state,2)//'_part'//int2str_pad(part,p%numlen))
-                DebugPrint  'processing fbody: ', fbody
+                allocate(fbody, source=VOL_FBODY//int2str_pad(state,2)//'_part'//int2str_pad(part,p%numlen))
                 p%vols(s) = fbody//p%ext
                 rho_name  = 'rho_'//fbody//p%ext
                 call assemble(p%vols(s), trim(rho_name))
@@ -203,7 +197,7 @@ contains
             else
                 recvolname = 'recvol_state'//int2str_pad(state,2)//p%ext
             endif
-            call correct_for_sampling_density( trim(recvolname) )
+            call correct_for_sampling_density(trim(recvolname))
             if( cline%defined('state') )exit
         end do
         call recvol_read%dealloc_rho

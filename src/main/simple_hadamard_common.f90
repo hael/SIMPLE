@@ -66,10 +66,6 @@ contains
                     iiptcl       = iptcl
                     ind_in_batch = iptcl - fromptop(1) + 1
                 endif
-
-
-
-                
                 call p%stkhandle%get_stkname_and_ind(iiptcl, stkname, ind_in_stk)
                 call b%imgbatch(ind_in_batch)%read(stkname, ind_in_stk)
             end do
@@ -281,7 +277,8 @@ contains
                     w       = 1.
                 endif
                 s = nint(orisoft%get('state'))
-                if( p%frac < 0.99 ) w = w * pw
+                if( p%frac < 0.99   ) w = w * pw
+                if( p%l_frac_update ) w = w * p%update_frac
                 if( w > TINY )then
                     if( p%pgrp == 'c1' )then
                         if( p%eo .ne. 'no' )then
@@ -477,13 +474,20 @@ contains
     subroutine preprecvols( b, p )
         class(build),   intent(inout) :: b
         class(params),  intent(inout) :: p
+        character(len=:), allocatable :: recname, rhoname, part_str
         integer :: istate
+        allocate(part_str, source=int2str_pad(p%part,p%numlen))
         select case(p%eo)
             case('yes','aniso')
                 do istate = 1, p%nstates
                     if( b%a%get_pop(istate, 'state') > 0)then
                         call b%eorecvols(istate)%new(p)
                         call b%eorecvols(istate)%reset_all
+                        if( p%l_frac_update )then
+                            call b%eorecvols(istate)%read_eos(VOL_FBODY//int2str_pad(istate,2)//'_part'//part_str)
+                            call b%eorecvols(istate)%expand_exp
+                            call b%eorecvols(istate)%apply_weight(1.0 - p%update_frac)
+                        endif
                     endif
                 end do
             case DEFAULT
@@ -492,6 +496,17 @@ contains
                         call b%recvols(istate)%new([p%boxpd, p%boxpd, p%boxpd], p%smpd)
                         call b%recvols(istate)%alloc_rho(p)
                         call b%recvols(istate)%reset
+                        if( p%l_frac_update )then
+                            allocate(recname, source=VOL_FBODY//int2str_pad(istate,2)//'_part'//part_str//p%ext)
+                            allocate(rhoname, source='rho_'//VOL_FBODY//int2str_pad(istate,2)//'_part'//part_str//p%ext)
+                            if( file_exists(recname) .and. file_exists(rhoname) )then
+                                call b%recvols(istate)%read(recname)
+                                call b%recvols(istate)%read_rho(rhoname)
+                                call b%recvols(istate)%expand_exp
+                                call b%recvols(istate)%apply_weight(1.0 - p%update_frac)
+                            endif
+                            deallocate(recname, rhoname)
+                        endif
                     endif
                 end do
         end select
@@ -558,7 +573,7 @@ contains
         ! centering            
         do_center = .true.
         if( p%center .eq. 'no' .or. p%nstates > 1 .or. .not. p%doshift .or.&
-        &p%pgrp(:1) .ne. 'c' .or. cline%defined('mskfile') )then
+        &p%pgrp(:1) .ne. 'c' .or. cline%defined('mskfile') .or. p%l_frac_update )then
             do_center = .false.
             xyz       = 0.
             return

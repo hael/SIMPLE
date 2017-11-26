@@ -48,6 +48,7 @@ type, extends(image) :: reconstructor
     ! SETTERS
     procedure          :: reset
     procedure          :: reset_exp
+    procedure          :: apply_weight
     ! GETTER
     procedure          :: get_kbwin
     ! I/O
@@ -60,6 +61,7 @@ type, extends(image) :: reconstructor
     generic            :: inout_fplane => inout_fplane_1, inout_fplane_2
     procedure          :: sampl_dens_correct
     procedure          :: compress_exp
+    procedure          :: expand_exp
     ! SUMMATION
     procedure          :: sum
     ! RECONSTRUCTION
@@ -149,7 +151,15 @@ contains
         if(allocated(self%rho_exp)) self%rho_exp  = 0.
     end subroutine reset_exp
 
+    subroutine apply_weight( self, w )
+        class(reconstructor), intent(inout) :: self
+        real,                 intent(in)    :: w
+        if(allocated(self%cmat_exp)) self%cmat_exp = self%cmat_exp * w
+        if(allocated(self%rho_exp))  self%rho_exp  = self%rho_exp  * w
+    end subroutine apply_weight
+
     ! GETTERS
+
     !> get the kbintpol window
     function get_kbwin( self ) result( wf )
         class(reconstructor), intent(inout) :: self !< this instance
@@ -439,6 +449,29 @@ contains
         end do
         !$omp end parallel do
     end subroutine compress_exp
+
+    subroutine expand_exp( self )
+        class(reconstructor), intent(inout) :: self
+        integer :: phys(3), h, k, m, logi(3)
+        if(.not. allocated(self%cmat_exp) .or. .not.allocated(self%rho_exp))then
+            stop 'expanded complex or rho matrices do not exist; simple_reconstructor::expand_exp'
+        endif
+        call self%reset_exp
+        ! Fourier components & rho matrices expansion
+        !$omp parallel do collapse(3) private(h,k,m,phys,logi) schedule(static) default(shared) proc_bind(close)
+        do h = self%cyc_lims(1,1),self%cyc_lims(1,2)
+            do k = self%cyc_lims(2,1),self%cyc_lims(2,2)
+                do m = self%cyc_lims(3,1),self%cyc_lims(3,2)
+                    logi                 = [h,k,m]
+                    phys                 = self%comp_addr_phys([h,k,m])
+                    ! this should be safe even if there isn't a 1-to-1 correspondence
+                    ! btw logi and phys since we are accessing shared data.
+                    self%cmat_exp(h,k,m) = self%get_fcomp(logi, phys)
+                    self%rho_exp(h,k,m)  = self%rho(phys(1),phys(2),phys(3))
+                end do
+            end do
+        end do
+    end subroutine expand_exp
 
     ! SUMMATION
 

@@ -16,20 +16,20 @@ private
 
 type :: eo_reconstructor
     private
-    type(reconstructor)  :: even
-    type(reconstructor)  :: odd
-    type(reconstructor)  :: eosum
-    type(masker)         :: envmask
-    character(len=4)     :: ext
-    real                 :: fsc05          !< target resolution at FSC=0.5
-    real                 :: fsc0143        !< target resolution at FSC=0.143
-    real                 :: smpd, msk, fny, inner=0., width=10.
-    integer              :: box=0, nstates=1, numlen=2
-    integer              :: cyc_lims(3,2)  = 0 !< redundant limits
-    logical              :: phaseplate = .false.
-    logical              :: automsk    = .false.
-    logical              :: wiener     = .false.
-    logical              :: exists     = .false.
+    type(reconstructor):: even
+    type(reconstructor):: odd
+    type(reconstructor):: eosum
+    type(masker)       :: envmask
+    character(len=4)   :: ext
+    real               :: fsc05          !< target resolution at FSC=0.5
+    real               :: fsc0143        !< target resolution at FSC=0.143
+    real               :: smpd, msk, fny, inner=0., width=10.
+    integer            :: box=0, nstates=1, numlen=2
+    integer            :: cyc_lims(3,2)  = 0 !< redundant limits
+    logical            :: phaseplate = .false.
+    logical            :: automsk    = .false.
+    logical            :: wiener     = .false.
+    logical            :: exists     = .false.
   contains
     ! CONSTRUCTOR
     procedure          :: new
@@ -40,6 +40,7 @@ type :: eo_reconstructor
     procedure, private :: reset_even
     procedure, private :: reset_odd
     procedure          :: reset_sum
+    procedure          :: apply_weight
     ! GETTERS
     procedure          :: get_kbwin
     procedure          :: get_res
@@ -57,6 +58,7 @@ type :: eo_reconstructor
     procedure, private :: grid_fplane_2
     generic            :: grid_fplane => grid_fplane_1, grid_fplane_2
     procedure          :: compress_exp
+    procedure          :: expand_exp
     procedure          :: sum_eos !< for merging even and odd into sum
     procedure          :: sum     !< for summing eo_recs obtained by parallel exec
     procedure          :: sampl_dens_correct_eos
@@ -153,6 +155,13 @@ contains
         class(eo_reconstructor), intent(inout) :: self
         call self%eosum%reset
     end subroutine reset_sum
+
+    subroutine apply_weight( self, w )
+        class(eo_reconstructor), intent(inout) :: self
+        real,                    intent(in)    :: w
+        call self%even%apply_weight(w)
+        call self%odd%apply_weight(w)
+    end subroutine apply_weight
 
     ! GETTERS
 
@@ -304,6 +313,13 @@ contains
         call self%even%compress_exp
         call self%odd%compress_exp
     end subroutine compress_exp
+
+    !>  \brief expand e/o
+    subroutine expand_exp( self )
+        class(eo_reconstructor), intent(inout) :: self
+        call self%even%expand_exp
+        call self%odd%expand_exp
+    end subroutine expand_exp
 
     !> \brief  for sampling density correction of the eo pairs
     subroutine sampl_dens_correct_eos( self, state, fname_even, fname_odd, resmskname, find4eoavg )
