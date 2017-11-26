@@ -329,7 +329,7 @@ contains
         call cleanprime3D_srch(p)
         call pftcc%kill
         do i = p%fromp,p%top
-            call primesrch3D(i)%kill
+            if( ptcl_mask(iptcl) ) call primesrch3D(i)%kill
         end do
         deallocate(primesrch3D)
         if( L_BENCH ) rt_align = toc(t_align)
@@ -355,7 +355,8 @@ contains
                 ! discarding contribution to volume should be done within grid_ptcl
             endif
             ! reconstruction
-            do iptcl=p%fromp,p%top
+            do i=1,nptcls2update
+                iptcl = pinds(i)
                 orientation = b%a%get_ori(iptcl)
                 if( nint(orientation%get('state')) == 0 .or.&
                    &nint(orientation%get('state_balance')) == 0 ) cycle

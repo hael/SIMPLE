@@ -130,7 +130,7 @@ contains
         call chdict%push('lp_ctffind',    'low-pass limit 4 ctffind(in A)')
         call chdict%push('lp_grid',       'low-pass limit in coarse grid search(in A){20 A}')
         call chdict%push('lp_pick',       'low-pass limit 4 picker(in A)')
-        call chdict%push('lplim_crit',    'corr criterion low-pass limit assignment(0.143-0.5){0.5}')
+        call chdict%push('lplim_crit',    'corr criterion low-pass limit assignment(0.143-0.5){0.3}')
         call chdict%push('lpstart',       'start low-pass limit(in A){15}')
         call chdict%push('lpstop',        'stop low-pass limit(in A){8}')
         call chdict%push('masscen',       'center using binarisation and mass centering(yes|no){no}')

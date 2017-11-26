@@ -272,7 +272,7 @@ contains
         sstate = 1
         if( present(state) ) sstate = state
         call self%raise_exception( proj, sstate, 'ERROR, out of bounds in estimate_find_for_eoavg2D')
-        find = max(K4EOAVGLB2D,get_lplim_at_corr(self%frcs(sstate,proj,:), FSC4EOAVG2D))
+        find = max(K4EOAVGLB,get_lplim_at_corr(self%frcs(sstate,proj,:), FSC4EOAVG2D))
     end function estimate_find_for_eoavg2D
 
     ! I/O
