@@ -218,65 +218,65 @@ contains
         !return
     end subroutine fft_pgi_cuda_test
 
-    ! subroutine fft_pgi_stream_test (self)
+     subroutine fft_pgi_stream_test (self)
 
-    !     use simple_cufft
-    !     use cudafor
-    !     implicit none
-    !     type(image), intent(inout)  :: self
-    !     complex(fp_kind), allocatable, dimension(:,:,:),pinned :: A,B,C
-    !     complex(fp_kind), allocatable, dimension(:,:,:),device :: A_d,B_d
-    !     integer, parameter :: num_streams=4
-    !     integer:: nx, ny, nomega, ifr, i,j, istat,stream_index
-    !     integer(8):: clock_start,clock_end,clock_rate
-    !     integer(kind=cuda_stream_kind) :: stream(num_streams)
-    !     integer :: plan
-    !     real:: elapsed_time
-    !     real(fp_kind):: scale
+        use simple_cufft
+        use cudafor
+        implicit none
+        type(image), intent(inout)  :: self
+        complex(fp_kind), allocatable, dimension(:,:,:),pinned :: A,B,C
+        complex(fp_kind), allocatable, dimension(:,:,:),device :: A_d,B_d
+        integer, parameter :: num_streams=4
+        integer:: nx, ny, nomega, ifr, i,j, istat,stream_index
+        integer(8):: clock_start,clock_end,clock_rate
+        integer(kind=cuda_stream_kind) :: stream(num_streams)
+        integer :: plan
+        real:: elapsed_time
+        real(fp_kind):: scale
 
-    !     nx=512; ny=512;  nomega=196
-    !     scale=1./real(nx*ny,fp_kind)
+        nx=512; ny=512;  nomega=196
+        scale=1./real(nx*ny,fp_kind)
 
-    !     ! Initialize FFT plan
-    !     call cufftPlan2D(plan,nx,ny,CUFFT_C2C)
+        ! Initialize FFT plan
+        call cufftPlan2D(plan,nx,ny,CUFFT_C2C)
 
-    !     ! Create streams
-    !     do i = 1,num_streams
-    !         istat= cudaStreamCreate(stream(i))
-    !     end do
+        ! Create streams
+        do i = 1,num_streams
+            istat= cudaStreamCreate(stream(i))
+        end do
 
-    !     call SYSTEM_CLOCK(COUNT_RATE=clock_rate) ! Find the rate
+        call SYSTEM_CLOCK(COUNT_RATE=clock_rate) ! Find the rate
 
-    !     ! Allocate arrays on CPU and GPU
-    !     allocate(A(nx,ny,nomega),B(nx,ny,nomega),C(nx,ny,nomega))
-    !     allocate(A_d(nx,ny,num_streams),B_d(nx,ny,num_streams))
+        ! Allocate arrays on CPU and GPU
+        allocate(A(nx,ny,nomega),B(nx,ny,nomega),C(nx,ny,nomega))
+        allocate(A_d(nx,ny,num_streams),B_d(nx,ny,num_streams))
 
-    !     ! Initialize arrays on CPU
-    !     A=cmplx(1.,1.,fp_kind); B=cmplx(1.,1.,fp_kind); C=cmplx(0.,0.,fp_kind)
+        ! Initialize arrays on CPU
+        A=cmplx(1.,1.,fp_kind); B=cmplx(1.,1.,fp_kind); C=cmplx(0.,0.,fp_kind)
 
-    !     ! Measure only the transfer time
-    !     istat=cudaThreadSynchronize()
+        ! Measure only the transfer time
+        istat=cudaThreadSynchronize()
 
-    !     print *,"I/O only"
-    !     call SYSTEM_CLOCK(COUNT=clock_start) ! Start timing
+        print *,"I/O only"
+        call SYSTEM_CLOCK(COUNT=clock_start) ! Start timing
 
-    !     do ifr=1,nomega
-    !         istat= cudaMemcpy(A_d(1,1,1),A(1,1,ifr),nx*ny)
-    !         istat= cudaMemcpy(B_d(1,1,1),B(1,1,ifr),nx*ny)
-    !         istat= cudaMemcpy(C(1,1,ifr),A_d(1,1,1),nx*ny)
-    !     end do
+        do ifr=1,nomega
+            istat= cudaMemcpy(A_d(1,1,1),A(1,1,ifr),nx*ny)
+            istat= cudaMemcpy(B_d(1,1,1),B(1,1,ifr),nx*ny)
+            istat= cudaMemcpy(C(1,1,ifr),A_d(1,1,1),nx*ny)
+        end do
 
-    !     istat=cudaThreadSynchronize()
-    !     call SYSTEM_CLOCK(COUNT=clock_end) ! End timing
-    !     elapsed_time=REAL(clock_end-clock_start)/REAL(clock_rate)
-    !     print *,"Elapsed time :",elapsed_time
+        istat=cudaThreadSynchronize()
+        call SYSTEM_CLOCK(COUNT=clock_end) ! End timing
+        elapsed_time=REAL(clock_end-clock_start)/REAL(clock_rate)
+        print *,"Elapsed time :",elapsed_time
 
-    !     ! Measure the transfer time H2D, FFT , IFFT and transfer time D2H
+        ! Measure the transfer time H2D, FFT , IFFT and transfer time D2H
 
-    !     print '(/a)',"Single stream  loop"
-    !     istat=cudaThreadSynchronize()
-    !     call SYSTEM_CLOCK(COUNT=clock_start) ! Start timing
-    !     stream_index = 1
+        print '(/a)',"Single stream  loop"
+        istat=cudaThreadSynchronize()
+        call SYSTEM_CLOCK(COUNT=clock_start) ! Start timing
+        stream_index = 1
     !     call cufftSetStream(plan,stream(stream_index))
     !     do ifr=1,nomega
     !         istat= cudaMemcpy(A_d(1,1,stream_index),A(1,1,ifr),nx*ny)
@@ -300,19 +300,19 @@ contains
     !         istat=cudaMemcpy( C(1,1,ifr),B_d(1,1,stream_index),nx*ny)
     !     end do
 
-    !     istat=cudaThreadSynchronize()
-    !     call SYSTEM_CLOCK(COUNT=clock_end) ! End timing
-    !     elapsed_time=REAL(clock_end-clock_start)/REAL(clock_rate)
-    !     print *,"Elapsed time :",elapsed_time
+        istat=cudaThreadSynchronize()
+        call SYSTEM_CLOCK(COUNT=clock_end) ! End timing
+        elapsed_time=REAL(clock_end-clock_start)/REAL(clock_rate)
+        print *,"Elapsed time :",elapsed_time
 
-    !     ! Overlap I/O and compute using multiple streams and async copies
-    !     print '(/a)',"Do loop with multiple streams"
-    !     call SYSTEM_CLOCK(COUNT=clock_start) ! Start timing
+        ! Overlap I/O and compute using multiple streams and async copies
+        print '(/a)',"Do loop with multiple streams"
+        call SYSTEM_CLOCK(COUNT=clock_start) ! Start timing
 
-    !     do ifr=1,nomega
+        do ifr=1,nomega
 
-    !         ! assign a stream for the current plan
-    !         stream_index = mod(ifr,num_streams)+1
+            ! assign a stream for the current plan
+            stream_index = mod(ifr,num_streams)+1
 
     !         ! Set the stream used by CUFFT
     !         call cufftSetStream(plan,stream(stream_index))
@@ -350,23 +350,23 @@ contains
     !         istat=cudaMemcpyAsync( C(1,1,ifr),B_d(1,1,stream_index), &
     !             nx*ny, stream=stream(stream_index))
 
-    !     end do
+        end do
 
-    !     istat=cudaThreadSynchronize()
-    !     call SYSTEM_CLOCK(COUNT=clock_end) ! Start timing
-    !     elapsed_time=REAL(clock_end-clock_start)/REAL(clock_rate)
-    !     print *,"Elapsed time :",elapsed_time
+        istat=cudaThreadSynchronize()
+        call SYSTEM_CLOCK(COUNT=clock_end) ! Start timing
+        elapsed_time=REAL(clock_end-clock_start)/REAL(clock_rate)
+        print *,"Elapsed time :",elapsed_time
 
-    !     if (istat .eq. 0) then
-    !         print *,"Test Passed"
-    !     else
-    !         print *,"Test Failed"
-    !     endif
+        if (istat .eq. 0) then
+            print *,"Test Passed"
+        else
+            print *,"Test Failed"
+        endif
 
-    !     deallocate(A,B,C); deallocate(A_d,B_d)
-    !     call cufftDestroy(plan)
+         deallocate(A,B,C); deallocate(A_d,B_d)
+         call cufftDestroy(plan)
 
-    ! end subroutine fft_pgi_stream_test
+     end subroutine fft_pgi_stream_test
 
     subroutine ifft_pgi_cuda_test( self )
         !#ifndef PGI
@@ -979,18 +979,20 @@ contains
         VerbosePrint "In simple_cufft::ifft_pgi finished "
     end subroutine ifft_pgi_cuda_test3
 
-    subroutine test_pgi( ld1, ld2, ld3, doplot )
-        use simple_fftshifter
+    subroutine test_pgi( ld1, ld2, ld3, doplot,iter )
+ !       use simple_fftshifter
         integer, intent(in)  :: ld1, ld2, ld3
         logical, intent(in)  :: doplot
+        integer, intent(in),optional:: iter
         type(image)          :: img, img_2
-        integer              :: i, j, k, cnt, lfny, ldim(3)
+        integer              :: i, j, k, iter_here,cnt, lfny, ldim(3)
         real                 :: input, msk, ave, sdev, var, med, xyz(3), pow
         real                 :: imcorr, recorr, corr, corr_lp, maxv, minv
         real                 :: smpd=2.
         logical              :: passed, test(6)
 
-
+        iter_here=1
+        if(present(iter))iter_here=iter
         verbose=.false.
 
         write(*,'(a)') '**info(unit_test, PGI CUFFT: test_pgi  '
@@ -998,20 +1000,19 @@ contains
         ldim = [ld1,ld2,ld3]
         call img%new(ldim, smpd)
         call img_2%new(ldim, smpd)
-        !  call img_3%new(ldim, smpd)
-        ! call img_4%new(ldim, smpd)
 
         call img%gauimg(10)
-        call img%add_gauran(100.)
+        call img%gauimg2(5, floor(real(ld1)/5.),floor(real(ld2)/3.))
+        call img%gauimg2(8, -floor(real(ld1)/5.),floor(real(ld2)/6.))
+        call img%add_gauran(0.5)
 
         img_2 = img
 
-        if(doplot)write(*,'(a)') '**info(unit_test PGI CUFFT: images created '
-        call fft_pgi_cuda_test(img_2)
-        call img_2%vis(geomorsphr=.false.)
-        if(doplot)write(*,'(a)') '**info(simple_image PGI test): forward FFT completed '
-        call ifft_pgi_cuda_test4(img_2)
-        if(doplot)write(*,'(a)') '**info(simple_image PGI test): inverse FFT completed '
+        do i=1,iter_here
+            call fft_pgi_cuda_test(img_2)
+            call ifft_pgi_cuda_test4(img_2)
+        end do
+
         write(*,'(a,ES20.10)') "**info(simple_image PGI test): L2 norm sum ", img.lonesum.img_2
 
 
@@ -1030,7 +1031,7 @@ contains
         !     call img_3%fwd_fftshift()
         !    img_4 = img_2
         if(doplot)call img_2%vis(geomorsphr=.false.)
-        if(doplot)call img%vis(geomorsphr=.false.)
+        !if(doplot)call img%vis(geomorsphr=.false.)
         !     write(*,'(a)') 'Press enter to test fftw3 '
         !    read(*,*)
 
@@ -1087,7 +1088,6 @@ contains
 
         !     end do
         ! end do
-        VerbosePrint " test_pgi done"
         call img_2%kill
         call img%kill
 
@@ -1095,17 +1095,20 @@ contains
     end subroutine test_pgi
 
     !> test_pgi1 is a simple fwd/bwd FFT
-    subroutine test_pgi1( ld1, ld2, ld3, doplot )
-        use simple_fftshifter
+    subroutine test_pgi1( ld1, ld2, ld3, doplot ,iter)
+!        use simple_fftshifter
         integer, intent(in)  :: ld1, ld2, ld3
         logical, intent(in)  :: doplot
+        integer, intent(in),optional:: iter
         type(image)          :: img, img_2
-        integer              :: i, j, k, cnt, lfny, ldim(3)
+        integer              :: i, j, k, iter_here,cnt, lfny, ldim(3)
         real                 :: input, msk, ave, sdev, var, med, xyz(3), pow
         real                 :: imcorr, recorr, corr, corr_lp, maxv, minv
         real                 :: smpd=2.
         logical              :: passed, test(6)
-
+        integer(timer_int_kind) :: t1
+        iter_here=1
+        if(present(iter))iter_here=iter
 
         verbose=.false.
         write(*,'(a)') '**info(unit_test, PGI CUFFT: test_pgi  '
@@ -1113,20 +1116,18 @@ contains
         ldim = [ld1,ld2,ld3]
         call img%new(ldim, smpd)
         call img_2%new(ldim, smpd)
-        !  call img_3%new(ldim, smpd)
-        ! call img_4%new(ldim, smpd)
 
         call img%gauimg(10)
-        call img%add_gauran(100.)
+        call img%gauimg2(5, floor(real(ld1)/5.),floor(real(ld2)/3.))
+        call img%gauimg2(8, -floor(real(ld1)/5.),floor(real(ld2)/6.))
+        call img%add_gauran(0.5)
         if(doplot)call img%vis(geomorsphr=.false.)
         img_2 = img
 
-        if(doplot)write(*,'(a)') '**info(unit_test PGI CUFFT: images created '
-        call img_2%fft()
-        if(doplot)call img_2%vis(geomorsphr=.false.)
-        if(doplot)write(*,'(a)') '**info(simple_image PGI test): forward FFT completed '
-        call img_2%ifft()
-        if(doplot)write(*,'(a)') '**info(simple_image PGI test): inverse FFT completed '
+        do i=1,iter_here
+            call img_2%fft_pgi_cuda()
+            call img_2%ifft_pgi_cuda()
+        end do
         write(*,'(a,ES20.10)') "**info(simple_image PGI test): L1 norm sum ", img.lonesum.img_2
         if(doplot)call img_2%vis()
 
@@ -1152,21 +1153,20 @@ contains
         !   call img%ifft
         !  write(*,'(a)') '**info(simple_image PGI test): testing cufft inverse fft '
         ! call ifft_pgi_cuda_test(img_2)
-         print *," L2 norm sum", img.lonesum.img_2
+        !  print *," L2 norm sum", img.lonesum.img_2
 
-        do i=1,ldim(1)
-            do j=1,ldim(2),2
-                do k=1,ldim(3)
-                    if (abs( img%get_rmat_at_ind(i,j,k) - img_2%get_rmat_at_ind(i,j,k)) >= 1.e-05_sp )then
-                        print *,'test_pgi1: mismatch FFT i/j/k fftw /cufft', i, j, k,&
-                            img%get_rmat_at_ind(i,j,k) , img_2%get_rmat_at_ind(i,j,k)
-                      !  call simple_stop("image FFT PGI test stopped")
-                    end if
-                end do
+        ! do i=1,ldim(1)
+        !     do j=1,ldim(2),2
+        !         do k=1,ldim(3)
+        !             if (abs( img%get_rmat_at_ind(i,j,k) - img_2%get_rmat_at_ind(i,j,k)) >= 1.e-05_sp )then
+        !                 print *,'test_pgi1: mismatch FFT i/j/k fftw /cufft', i, j, k,&
+        !                     img%get_rmat_at_ind(i,j,k) , img_2%get_rmat_at_ind(i,j,k)
+        !               !  call simple_stop("image FFT PGI test stopped")
+        !             end if
+        !         end do
 
-            end do
-        end do
-        VerbosePrint " test_pgi done"
+        !     end do
+        ! end do
         call img_2%kill
         call img%kill
 
@@ -1266,7 +1266,7 @@ contains
         !   write(*,'(a)') '**info(simple_image PGI test): cufft returned '
         !   write(*,'(a)') '**info(simple_image PGI test): testing cufft inverse fft '
         !     call ifft_pgi_cuda_test(img_2)
-        read(*,*)
+        ! read(*,*)
         ! if(doplot)call img_2%vis
         ! print *," L1 norm sum", img.lonesum.img_2
 
@@ -1337,7 +1337,7 @@ contains
         call gnufor_image(aimag(ctmp(:ldim(1),:ldim(2),1)), palette='gray')
         call gnufor_image(cabs(ctmp(:ldim(1),:ldim(2),1)), palette='gray')
         call gnufor_image(atan2(real(ctmp(:ldim(1),:ldim(2),1)),aimag(ctmp(:ldim(1),:ldim(2),1))), palette='gray')
-        read(*,*)
+        ! read(*,*)
         img_4 = img_2 - img_3
         call img_4%set_ft(.true.)
         if(doplot)call img_4%vis(geomorsphr=.false.)
@@ -1361,7 +1361,7 @@ contains
         !      end do
         !  end do
         !     VerbosePrint "In simple_cufft::ifft_pgi testing done"
-        read(*,*)
+        !read(*,*)
         call img_4%kill
         !      call img_5%kill
         call img_2%kill
@@ -1493,7 +1493,7 @@ contains
         VerbosePrint "In simple_cufft::ifft_pgi testing set_cmat"
         write(*,'(a)') 'Press enter to test fftw '
         VerbosePrint "In simple_cufft::ifft_pgi testing set_cmat"
-        read(*,*)
+        !read(*,*)
 
 
         !  call img%subtr(img_2)
@@ -1519,7 +1519,7 @@ contains
         end do
 
         write(*,'(a)') 'Press enter to test difference '
-        read(*,*)
+        !read(*,*)
         img_4= img_2 - img_3
         call img_4%print_rmat()
         if(doplot) call img_4%vis()
@@ -1570,8 +1570,8 @@ contains
         call simple_cuda_stop("In TEST_PGI4 ",__FILENAME__,__LINE__)
         img=2.; img_2=0.; img_3=0.
         call img%gauimg(10)
-        call img%gauimg2(5, floor(real(ld1)/5.),floor(real(ld1)/3.))
-        call img%gauimg2(8, -floor(real(ld1)/5.),floor(real(ld1)/6.))
+        call img%gauimg2(5, floor(real(ld1)/5.),floor(real(ld2)/3.))
+        call img%gauimg2(8, -floor(real(ld1)/5.),floor(real(ld2)/6.))
 
         call simple_cuda_stop("In TEST_PGI4 ",__FILENAME__,__LINE__)
         allocate(rtmp(ldim(1),ldim(2),ldim(3)))
@@ -1619,7 +1619,7 @@ contains
         if(img_2%is_ft())print *, " cufft ifft test failed",toc(t4)
         if(doplot)call img_2%vis()
         if(verbose)print *, "test completed backward cufft ifft",toc(t4)
-        read(*,*)
+        !read(*,*)
         if(doplot)call img_2%vis()
         if(verbose)print *,"CUFFT "
         !if(verbose)call img_2%print_rmat()
@@ -1635,7 +1635,7 @@ contains
         call img%set_ft(.false.)
         img = img_3-img_2
         if(doplot)call img%vis()
-        if(verbose)read(*,*)
+        ! if(verbose)read(*,*)
 
         if(allocated(rtmp)) deallocate(rtmp)
         if( allocated(rtmp2) ) deallocate(rtmp2)
@@ -1926,8 +1926,8 @@ contains
         real, allocatable    :: rtmp(:,:,:),rtmp2(:,:,:),rtmp3(:,:,:)
         real                 :: smpd=2.
         logical              :: passed, test(6)
-        !    type(timer_cuda)::ctimer
-        !    type(cudaEvent):: t4
+        !   type(timer_cuda) :: ctimer
+        !    type(cudaEvent) :: t4
 
         integer(8) :: t1
 
@@ -2040,7 +2040,7 @@ contains
              if(doplot)call gnufor_image(rtmp(:ldim(1),:ldim(2),1),rtmp2(:ldim(1),:ldim(2),1), palette='hot')
              if(doplot)call gnufor_image(rtmp(:ldim(1),:ldim(2),1),rtmp3(:ldim(1),:ldim(2),1), palette='ocean')
 
-            read(*,*)
+            !read(*,*)
             !  print *," Ldim/shapes ", ldim, shape(rtmp), shape(rtmp2)
             cnt=0
             do i=1,ldim(1)

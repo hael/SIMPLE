@@ -9,7 +9,7 @@ module simple_cufft_test
     public :: exec_cufft2D_test, exec_cufft3D_test ,exec_oacc_cufft2d,cufftTest,cufftTest3D!, fft_pgi_stream_test
 
 #ifdef CUDA_MANAGED_MEM
-    public :: managed_cufft2dTest
+    public :: test_managed_cufft2dTest
 #endif
 
 #ifdef CUDA_MULTIGPU
@@ -429,9 +429,7 @@ contains
     end subroutine cufftTest3D
 
 
-
-
-    subroutine managed_cufft2dTest
+    subroutine test_managed_cufft2dTest
         use cudafor
         use cufft
         implicit none
@@ -471,7 +469,7 @@ contains
             print *,"Test FAILED"
         endif
 #endif
-    end subroutine managed_cufft2dTest
+    end subroutine test_managed_cufft2dTest
 
 
 #ifdef CUDA_MULTIGPU
@@ -583,17 +581,17 @@ contains
 
 #endif
 
-
-
-    subroutine test_fftw( ld1, ld2, ld3, doplot )
-        use simple_fftshifter
+    subroutine test_fftw( ld1, ld2, ld3, doplot ,iter)
+!        use simple_fftshifter
         integer, intent(in)  :: ld1, ld2, ld3
         logical, intent(in)  :: doplot
+        integer, intent(in),optional:: iter
         type(image)          :: img, img_2
-        integer              :: ldim(3)
+        integer              :: ldim(3),iter_here,it
         real                 :: smpd=2.
         logical              :: passed
-
+        iter_here=1
+        if(present(iter))iter_here=iter
         verbose=.false.
         !debug=.true.
         write(*,*) '**info(unit_test, FFTW  test_fftw'
@@ -603,13 +601,17 @@ contains
         call img_2%new(ldim, smpd)
 
         call img%gauimg(10)
-        call img%add_gauran(1.)
-
+        call img%gauimg2(5, floor(real(ld1)/5.),floor(real(ld2)/3.))
+        call img%gauimg2(8, -floor(real(ld1)/5.),floor(real(ld2)/6.))
+        call img%add_gauran(0.1)
+        if(doplot)call img%vis(geomorsphr=.false.)
         img_2=img
-
-        call img_2%fwd_ft()
-        call img_2%bwd_ft()
+        do it=1,iter_here
+            call img_2%fwd_ft()
+            call img_2%bwd_ft()
+        end do
         write(*,'(a,1ES20.10)') '**info(unit_test, FFTW   L2 norm sum', img.lonesum.img_2
+        if(doplot)call img_2%vis()
         call img_2%kill
         call img%kill
 
