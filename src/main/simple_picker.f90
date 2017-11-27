@@ -54,8 +54,7 @@ contains
         boxname = remove_abspath( fname_new_ext(micname,'box') )   
         if( present(dir_out) )boxname = trim(dir_out)//trim(boxname)
         smpd = smpd_in
-        lp   = 20.0
-        
+        lp   = 20.0 
         if( present(lp_in) ) lp = lp_in
         ndev = 2.0
         if( present(ndev_in)) ndev = ndev_in
@@ -133,7 +132,7 @@ contains
             call mic_shrunken%fwd_ft
             ! create Gaussian image
             call gaussimg%new(ldim_shrink, smpd_shrunken)
-            sigma = real(orig_box)/PICKER_SHRINK/13.0
+            sigma = real(orig_box)/PICKER_SHRINK/GAUPICK_SIGMA_SHRINK
             call gaussimg%gauimg2D(sigma, sigma)
             ! call gaussimg%write('gaussimg.mrc', 1)
             call gaussimg%fwd_ft

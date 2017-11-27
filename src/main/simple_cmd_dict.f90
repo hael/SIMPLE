@@ -149,7 +149,7 @@ contains
         call chdict%push('ncls_start',    '# clusters required to start prime2D streaming')
         call chdict%push('ncunits',       '# computing units, can be < nparts{nparts}')
         call chdict%push('ndiscrete',     '# discrete orientations')
-        call chdict%push('ndev',          '# deviations in one-cluster clustering')
+        call chdict%push('ndev',          '# deviations in one-cluster clustering{2.0}')
         call chdict%push('ndocs',         '# documents')
         call chdict%push('neg',           'invert contrast of images(yes|no)')
         call chdict%push('newbox',        'new box for scaling (by Fourier padding/clipping')

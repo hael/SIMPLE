@@ -64,6 +64,7 @@ integer, parameter :: MAXNKEYS=100, KEYLEN=32
 ! constants for picker
 real,    parameter :: PICKER_SHRINK        = 4.        !< picker shrink factor
 real,    parameter :: PICKER_SHRINK_REFINE = 2.        !< picker shrink factor, peak refine step
+real,    parameter :: GAUPICK_SIGMA_SHRINK = 13.0      !< picker shrink factor, Gaussian convolution
 integer, parameter :: PICKER_OFFSET        = 3         !< picker offset for grid search
 
 ! constants for masking/interpolation

@@ -782,6 +782,7 @@ contains
                 call cline_projvol%set('oritab', trim(ORIFILE))
                 call cline_projvol%set('smpd',   PICKER_SHRINK)
                 call cline_projvol%set('neg',    'no'         )
+                call cline_projvol%set('msk',    real(p%box/2-5))
                 call xprojvol%execute(cline_projvol)
             endif
             ! expand in in-plane rotation
@@ -1056,6 +1057,8 @@ contains
             if( cline%defined('dir_ptcls') ) stack = trim(p%dir_ptcls) //'/'// trim(stack)
             ! extract windows from integrated movie
             call micrograph%read(moviename, 1)
+            ! filter out frequencies lower than the box can express to avoid aliasing
+            call micrograph%bp(real(p%box) * p%smpd, 0.)
             cnt = 0
             do j=1,nptcls ! loop over boxes
                 if( oris_mask(j) )then
