@@ -1415,6 +1415,7 @@ contains
     end subroutine exec_symsrch_distr
 
     subroutine exec_scale_stk_parts( self, cline )
+        use simple_map_reduce, only: split_nobjs_even
         class(scale_stk_parts_commander), intent(inout) :: self
         class(cmdline),                   intent(inout) :: cline
         type(qsys_env)                     :: qenv
@@ -1425,7 +1426,8 @@ contains
         character(len=:),      allocatable :: stkname, outstkname
         character(len=STDLEN), allocatable :: part_stks(:)
         character(len=STDLEN) :: filetab
-        integer               :: ipart, maxpart_nstks, nparts, nstks, cnt, istk
+        integer, allocatable  :: parts(:,:)
+        integer               :: ipart, nparts, nstks, cnt, istk, partsz
         ! seed the random number generator
         call seed_rnd
         ! output command line executed
@@ -1443,24 +1445,26 @@ contains
             else
                 nparts = 1
             endif
-            nstks         = p_master%stkhandle%get_nmics()
-            maxpart_nstks = ceiling(real(nstks)/real(nparts))
-            maxpart_nstks = min(nstks, maxpart_nstks) ! max # of stacks per part
-            allocate(part_params(nparts), part_stks(maxpart_nstks))
+            nstks = p_master%stkhandle%get_nmics()
+            parts = split_nobjs_even(nstks, nparts)
+            allocate(part_params(nparts))
             cnt = 0
             do ipart=1,nparts
                 call part_params(ipart)%new(1)
+                partsz = parts(ipart,2) - parts(ipart,1) + 1
+                allocate(part_stks(partsz))
                 ! creates part filetab
                 filetab = 'scale_stktab_part'//int2str(ipart)//METADATEXT
-                do istk=1,maxpart_nstks
+                do istk=1,partsz
                     cnt = cnt + 1
-                    if(cnt > nstks)exit
                     part_stks(istk) = p_master%stkhandle%get_stkname(cnt)
                 enddo
                 ! write part filetab & update part parameters
-                call write_filetable( filetab, part_stks(:istk-1) )
+                call write_filetable( filetab, part_stks )
                 call part_params(ipart)%set('filetab', filetab)
+                deallocate(part_stks)
             end do
+            deallocate(parts)
         else
             ! prepare part-dependent parameters
             allocate(part_params(p_master%nparts))
