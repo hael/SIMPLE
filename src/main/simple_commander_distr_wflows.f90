@@ -1493,7 +1493,6 @@ contains
                 filetab = 'scale_stktab_part'//int2str(ipart)//METADATEXT
                 call del_file( filetab )
             end do
-            deallocate(part_stks)
         endif
         ! end gracefully
         call simple_end('**** SIMPLE_DISTR_SCALE_STK_PARTS NORMAL STOP ****')
