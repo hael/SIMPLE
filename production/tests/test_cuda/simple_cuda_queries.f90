@@ -1,3 +1,5 @@
+!> Simple unit-tests modified from NVIDIA CUDA Fortran examples
+
 !
 !     Copyright (c) 2017, NVIDIA CORPORATION.  All rights reserved.
 !
@@ -22,6 +24,7 @@
 module transpose_m
     integer, parameter :: cudaTileDim = 32
     integer, parameter :: blockRows = 8
+#if defined (PGI)
 contains
 
     attributes(global) subroutine cudaTranspose( &
@@ -49,17 +52,30 @@ contains
             odata(x,y+j) = tile(threadIdx%y+j, threadIdx%x)
         end do
     end subroutine cudaTranspose
-
+#endif
 end module transpose_m
+
+
+#if defined (PGI)
+attributes(global) subroutine assignp2p(a, v)
+    implicit none
+    real :: a(*)
+    real, value :: v
+    a(threadIdx%x) = v
+  end subroutine assignp2p
+#endif
+
 
 module simple_cuda_tests
     include 'simple_lib.f08'
     implicit none
 
 #ifdef PGI
-    public :: cuda_query_version, cuda_query_devices, cuda_query_peak_bandwidth, cuda_query_p2pAccess, test_cuda_precision, test_acc
+    public :: cuda_query_version, cuda_query_devices, cuda_query_peak_bandwidth, cuda_query_p2pAccess
+    public :: test_cuda_precision, test_acc, test_minimal_P2P, test_transposeP2P
 #endif
 
+#if defined (PGI)
 contains
 
     subroutine cuda_query_version
@@ -316,12 +332,13 @@ contains
         !$omp end parallel do
 
         !$acc data copy(A), create(Anew)
+
         do while ( error .gt. tol .and. iter .lt. iter_max )
             error=0.0_fp_kind
+            !$acc kernels ! loop gang(32), vector(16)
             !$omp parallel do shared(m, n, Anew, A) reduction( max:error )
-            !$acc kernels loop gang(32), vector(16)
             do j=1,m-2
-                !$acc loop gang(16), vector(32)
+            !$acc loop gang(16), vector(32)
                 do i=1,n-2
                     Anew(i,j) = 0.25_fp_kind * ( A(i+1,j  ) + A(i-1,j  ) + &
                         A(i  ,j-1) + A(i  ,j+1) )
@@ -329,15 +346,14 @@ contains
                 end do
                 !$acc end loop
             end do
-            !$acc end kernels
             !$omp end parallel do
-
+            !$acc end kernels
             if(mod(iter,100).eq.0 ) write(*,'(i5,f10.6)'), iter, error
             iter = iter +1
 
 
+            !$acc kernels ! loop
             !$omp parallel do shared(m, n, Anew, A)
-            !$acc kernels loop
             do j=1,m-2
                 !$acc loop gang(16), vector(32)
                 do i=1,n-2
@@ -345,15 +361,14 @@ contains
                 end do
                 !$acc end loop
             end do
-            !$acc end kernels
             !$omp end parallel do
-
+            !$acc end kernels
         end do
         !$acc end data
 
         call cpu_time(stop_time)
         write(*,'(a,f10.3,a)')  ' completed in ', stop_time-start_time, ' seconds'
-
+        write(*,"(a)") '  Testing OpenACC - jacobi relaxation example completed'
         deallocate (A,Anew,y0)
 #else
         logical, intent(inout):: flag
@@ -364,9 +379,10 @@ contains
     end subroutine test_acc
 
 
-    subroutine cuda_query_p2pAccess
+    subroutine cuda_query_p2pAccess(flag)
         use cudafor
         implicit none
+         logical, intent(inout):: flag
         integer, allocatable :: p2pOK(:,:)
         integer :: nDevices, i, j, istat
         type (cudaDeviceProp) :: prop
@@ -376,7 +392,7 @@ contains
             nDevices
 
         do i = 0, nDevices-1
-            istat = cudaGetDeviceProperties(prop, i)
+            istat = istat+cudaGetDeviceProperties(prop, i)
             write(*,"('Device ', i0, ': ', a)") i, trim(prop%name)
         enddo
         write(*,*)
@@ -386,7 +402,7 @@ contains
 
         do j = 0, nDevices-1
             do i = j+1, nDevices-1
-                istat = cudaDeviceCanAccessPeer(p2pOK(i,j), i, j)
+                istat = istat+ cudaDeviceCanAccessPeer(p2pOK(i,j), i, j)
                 p2pOK(j,i) = p2pOK(i,j)
             end do
         end do
@@ -414,69 +430,58 @@ contains
             write(*,*) "Test Passed"
         else
             write(*,*) "Test Failed"
+            flag=.false.
         endif
 
     end subroutine cuda_query_p2pAccess
 
 
-    subroutine test_minimal_P2P
+
+    subroutine test_minimal_P2P(flag)
         use cudafor
+        logical, intent(inout):: flag
+        integer, parameter :: n=32
+        real :: a(n)
+        real, device, allocatable :: a0_d(:), a1_d(:)
+        integer :: nDevices, istat
 
-        implicit none
-        call minimal
+        istat = cudaGetDeviceCount(nDevices)
+        if (nDevices < 2) then
+            write(*,*) 'This program requires at least two GPUs'
+            stop
+        end if
 
-    contains
-        subroutine minimal
-            integer, parameter :: n=32
-            real :: a(n)
-            real, device, allocatable :: a0_d(:), a1_d(:)
-            integer :: nDevices, istat
+        istat = cudaSetDevice(0)
+        allocate(a0_d(n))
+        call assignp2p<<<1,n>>>(a0_d, 3.0)
+        a = a0_d
+        deallocate(a0_d)
+        write(*,*) 'Device 0: ', a(1)
 
-            istat = cudaGetDeviceCount(nDevices)
-            if (nDevices < 2) then
-                write(*,*) 'This program requires at least two GPUs'
-                stop
-            end if
+        if (istat .eq. 0) then
+            write(*,*) "Test Passed"
+        else
+            write(*,*) "Test Failed"
+        endif
 
-            istat = cudaSetDevice(0)
-            allocate(a0_d(n))
-            call assignp2p<<<1,n>>>(a0_d, 3.0)
-            a = a0_d
-            deallocate(a0_d)
-            write(*,*) 'Device 0: ', a(1)
+        istat = cudaSetDevice(1)
+        allocate(a1_d(n))
+        call assignp2p<<<1,n>>>(a1_d, 4.0)
+        a = a1_d
+        deallocate(a1_d)
+        write(*,*) 'Device 1: ', a(1)
 
-            if (istat .eq. 0) then
-                write(*,*) "Test Passed"
-            else
-                write(*,*) "Test Failed"
-            endif
-
-            istat = cudaSetDevice(1)
-            allocate(a1_d(n))
-            call assignp2p<<<1,n>>>(a1_d, 4.0)
-            a = a1_d
-            deallocate(a1_d)
-            write(*,*) 'Device 1: ', a(1)
-
-            if (istat .eq. 0) then
-                write(*,*) "Test Passed"
-            else
-                write(*,*) "Test Failed"
-            endif
-        end subroutine minimal
-
-
-
+        if (istat .eq. 0) then
+            write(*,*) "Test minimal P2P Passed"
+        else
+            write(*,*) "Test minimal P2P Failed"
+            flag=.false.
+        endif
     end subroutine test_minimal_P2P
-
-    !
-    ! Main code
-    !
 
     subroutine test_transposeP2P
         use cudafor
         use transpose_m
-        implicit none
 
         ! global array size
         integer, parameter :: nx = 1024, ny = 768
@@ -537,8 +542,8 @@ contains
                     write(*,*) &
                         'the environment variable ', &
                         'CUDA_VISIBLE_DEVICES accordingly'
-                    write(*,*) "Test Passed"
-                    stop
+                    write(*,*) "Test Failed: transpose P2P  "
+                 return
                 end if
                 istat = cudaSetDevice(j)
                 istat = cudaDeviceEnablePeerAccess(i, 0)
@@ -713,11 +718,11 @@ contains
         end do
 
         if (all(h_tdata == gold)) then
-            write(*,"(' *** Test Passed ***',/)")
+            write(*,"(' *** Test transpose P2P: Passed ***',/)")
             write(*,"('Bandwidth (GB/s): ', f7.2,/)") &
                 2.*(nx*ny*4)/(1.0e+9*(timeStop-timeStart))
         else
-            write(*,"(' *** Failed ***',/)")
+            write(*,"(' *** Test transpose P2P: Failed ***',/)")
         endif
 
         ! cleanup
@@ -735,10 +740,3 @@ contains
 
 
 end module simple_cuda_tests
-
-attributes(global) subroutine assignp2p(a, v)
-    implicit none
-    real :: a(*)
-    real, value :: v
-    a(threadIdx%x) = v
-  end subroutine assignp2p
