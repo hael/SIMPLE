@@ -143,10 +143,10 @@ call timer_loop_end(cblock);end block
 #define GPU_STOPWATCH( EVALBLOCK )              \
 use simple_timer_cuda;                          \
 type(cudaEvent) :: __t1;                        \
-real(timer_int_kind) :: elapsed;  \
-starttime = tic();                              \
+type(timer_cuda) :: citimer;  \
+__t1 = citimer%ticU();                          \
 EVALBLOCK  ;                                    \
-  print *, "__FILENAME__:__LINE__: CUDA Event timer (sec): ", toc(__t1)
+  print *, "__FILENAME__:__LINE__: CUDA Event timer (sec): ", citimer%tocU(__t1)
 
 #endif
 

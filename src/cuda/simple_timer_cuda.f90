@@ -10,6 +10,7 @@ use cudafor
 #endif
 
 implicit none
+private
     !>
     type timer_cuda
 #ifdef PGI
@@ -24,7 +25,7 @@ implicit none
         procedure :: ticU
         procedure :: tocU
         procedure :: nowCU
-        procedure :: CUtimer_setup
+        procedure :: setup
         final :: destroy
     end type timer_cuda
 
@@ -32,13 +33,14 @@ implicit none
         module procedure constructor
     end interface timer_cuda
 
+    public :: timer_cuda
 contains
     function constructor() result(this)
         class(timer_cuda),pointer :: this
-        call this%CUtimer_setup()
+        call this%setup()
     end function constructor
 
-    subroutine CUtimer_setup(this)
+    subroutine setup(this)
 #ifdef PGI
         use cudafor
         class(timer_cuda) :: this
@@ -90,7 +92,7 @@ contains
         this%start_point=0.0d0
         this%end_point=this%start_point
 #endif
-    end subroutine CUtimer_setup
+    end subroutine setup
 
 
     function ticU(this) result(res)
