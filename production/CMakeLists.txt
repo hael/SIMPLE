@@ -66,12 +66,15 @@ file(GLOB TESTDIRS
   RELATIVE ${CMAKE_CURRENT_SOURCE_DIR}
   "tests/test_*"
   )
-## Uncomment the following block to remove ITEMS from the tests
-if (NOT (CMAKE_Fortran_COMPILER_ID STREQUAL "PGI"))
-list(REMOVE_ITEM TESTDIRS
- "tests/test_pgi"
-  )
+if (CMAKE_Fortran_COMPILER_ID STREQUAL "PGI")
+else()
+  list(REMOVE_ITEM TESTDIRS "tests/test_pgi")
 endif()
+if (CMAKE_Fortran_COMPILER_ID STREQUAL "Intel")
+else()
+  list(REMOVE_ITEM TESTDIRS "tests/test_intel")
+endif()
+
 message( STATUS "Test directories ${TESTDIRS}")
 
 foreach(TESTNAME ${TESTDIRS})
