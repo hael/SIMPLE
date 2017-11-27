@@ -201,4 +201,4 @@ program simple_test_cufft
     deallocate(x,y,y1)
 
 
-end program simple_test_cuda
+end program simple_test_cufft
