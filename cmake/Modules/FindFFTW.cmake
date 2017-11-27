@@ -83,6 +83,7 @@ find_path(FFTW_INCLUDE_DIRS
         ENV FFTW_ROOT
         ${FFTWDIR}/include
         $ENV{FFTWDIR}/include
+        $ENV{PGIHOME}/src/fftw/include
     PATHS
         ${FFTWDIR}/include
         /usr/include
@@ -90,7 +91,6 @@ find_path(FFTW_INCLUDE_DIRS
         /opt/local/include          #MacPorts
         /sw/include                 #Fink
         /usr/opt/local/include
-        /usr/local/pgi/src/fftw/include
 )
 mark_as_advanced( FFTW_INCLUDE_DIRS )
 
@@ -107,6 +107,7 @@ find_library( FFTW_SINGLE_PRECISION_LIBRARIES
         $ENV{FFTWDIR}/lib
         ENV FFTW_ROOT
         ENV FFTWLIB
+        $ENV{PGIHOME}/src/fftw/lib  # PGI local build
     PATHS
         ${FFTWDIR}/lib
         /usr/lib
@@ -115,7 +116,6 @@ find_library( FFTW_SINGLE_PRECISION_LIBRARIES
         /opt/local/lib               # Macports
         /usr/opt/local/lib
         /sw/lib                      # Fink
-        /usr/local/pgi/src/fftw/lib  # PGI local build
     DOC "FFTW dynamic library -- single precision, serial"
 )
 mark_as_advanced( FFTW_SINGLE_PRECISION_LIBRARIES )
@@ -133,6 +133,7 @@ find_library( FFTW_DOUBLE_PRECISION_LIBRARIES
         $ENV{FFTWDIR}/lib
         ENV FFTW_ROOT
         ENV FFTWLIB
+        $ENV{PGIHOME}/src/fftw/lib  # PGI local build
     PATHS
          ${FFTWDIR}/lib
         /usr/lib
@@ -140,7 +141,6 @@ find_library( FFTW_DOUBLE_PRECISION_LIBRARIES
         /usr/local/lib
         /opt/local/lib
         /sw/lib
-        /usr/local/pgi/src/fftw/lib
         ${FFTWDIR}/lib
     DOC "FFTW dynamic library - double precision serial"
 )
@@ -161,6 +161,7 @@ find_library( FFTW_SINGLE_PRECISION_THREADED_LIBRARIES
         $ENV{FFTWDIR}/lib
         ENV FFTW_ROOT
         ENV FFTWLIB
+        $ENV{PGIHOME}/src/fftw/lib  # PGI local build
     PATHS
         ${FFTWDIR}/lib
         /usr/lib
@@ -169,7 +170,6 @@ find_library( FFTW_SINGLE_PRECISION_THREADED_LIBRARIES
         /opt/local/lib               # Macports
         /usr/opt/local/lib
         /sw/lib                      # Fink
-        /usr/local/pgi/src/fftw/lib  # PGI local build
         ${FFTWDIR}/lib
     DOC "FFTW dynamic library -- single threaded"
 )
@@ -217,7 +217,9 @@ include( FindPackageHandleStandardArgs )
 FIND_PACKAGE_HANDLE_STANDARD_ARGS( FFTW DEFAULT_MSG FFTW_LIBRARIES FFTW_INCLUDE_DIRS )
 
 if( NOT FFTW_FOUND )
-    message( STATUS "FindFFTW looked for single precision libraries named: fftw3f or libfftw3f-3" )
-    message( STATUS "FindFFTW looked for double precision libraries named: fftw3 or libfftw3-3" )
-    message( STATUS "FindFFTW looked for single precision libraries named: fftw3f_threaded or libfftw3-3_threaded." )
+   message( STATUS "Error FFTW not found")
+    message( STATUS "FindFFTW looked for single precision libraries -- :  ${FFTW_SINGLE_PRECISION_LIBRARIES}" )
+    message( STATUS "FindFFTW looked for double precision libraries -- :  ${FFTW_DOUBLE_PRECISION_LIBRARIES}" )
+    message( STATUS "FindFFTW looked for single precision threaded libraries -- :  ${FFTW_SINGLE_PRECISION_THREADED_LIBRARIES}" )
+#    message( STATUS "FindFFTW looked for double precision threaded libraries -- :  ${FFTW_DOUBLE_PRECISION_THREADED_LIBRARIES}" )
 endif()
