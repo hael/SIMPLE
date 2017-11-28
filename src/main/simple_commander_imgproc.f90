@@ -636,7 +636,7 @@ contains
         class(cmdline),              intent(inout) :: cline
         type(params)                       :: p
         type(build)                        :: b
-        type(image)                        :: img, img_pad
+        type(image)                        :: img
         type(prep4cgrid)                   :: gridprep
         type(kbinterpol)                   :: kbwin
         character(len=:),      allocatable :: fname
@@ -659,7 +659,6 @@ contains
             ldim_pd(:2) = nint(real(ldim(1:2))*p%alpha)
             ldim_pd(3)  = 1
             call img%new(ldim, p%smpd)
-            call img_pad%new(ldim_pd, p%smpd)
             call gridprep%new(img, kbwin, ldim_pd)
             lims = gridprep%get_lims()
             allocate(cmat(lims(1,1):lims(1,2),lims(2,1):lims(2,2)))

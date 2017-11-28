@@ -28,6 +28,8 @@ type, extends(image) :: reconstructor
     real(kind=c_float), pointer :: rho(:,:,:)=>null()           !< sampling+CTF**2 density
     complex, allocatable        :: cmat_exp(:,:,:)              !< Fourier components of expanded reconstructor
     real,    allocatable        :: rho_exp(:,:,:)               !< sampling+CTF**2 density of expanded reconstructor
+    real,    allocatable        :: ctf_sqSpatFreq(:,:)          !< CTF squared reciprocal pixels
+    real,    allocatable        :: ctf_ang(:,:)                 !< CTF effective defocus
     real                        :: winsz          = RECWINSZ    !< window half-width
     real                        :: alpha          = KBALPHA     !< oversampling ratio
     real                        :: dfx=0., dfy=0., angast=0.    !< CTF params
@@ -55,7 +57,6 @@ type, extends(image) :: reconstructor
     procedure          :: write_rho
     procedure          :: read_rho
     ! INTERPOLATION
-    procedure, private :: inout_fcomp
     procedure, private :: inout_fplane_1
     procedure, private :: inout_fplane_2
     generic            :: inout_fplane => inout_fplane_1, inout_fplane_2
@@ -82,7 +83,8 @@ contains
         class(reconstructor), intent(inout) :: self   !< this instance
         class(params),        intent(in)    :: p      !< parameters object
         logical, optional,    intent(in)    :: expand !< expand flag
-        integer :: rho_shape(3), ldim_exp(3,2), dim
+        real    :: inv1, inv2
+        integer :: rho_shape(3), ldim_exp(3,2), dim, h, k, sh
         logical :: l_expand
         if(.not. self%exists()) stop 'construct image before allocating rho; alloc_rho; simple_reconstructor'
         if(      self%is_2d() ) stop 'only for volumes; alloc_rho; simple_reconstructor'
@@ -131,7 +133,28 @@ contains
             allocate(self%rho_exp( ldim_exp(1,1):ldim_exp(1,2),ldim_exp(2,1):ldim_exp(2,2),&
                 &ldim_exp(3,1):ldim_exp(3,2)), source=0., stat=alloc_stat)
             allocchk("In: alloc_rho; simple_reconstructor rho_exp")
-        end if       
+        end if
+        ! build CTF related matrices
+        if( self%ctf%flag .ne. CTFFLAG_NO)then
+            allocate(self%ctf_ang(self%cyc_lims(1,1):self%cyc_lims(1,2), self%cyc_lims(2,1):self%cyc_lims(2,2)),&
+            &self%ctf_sqSpatFreq(self%cyc_lims(1,1):self%cyc_lims(1,2), self%cyc_lims(2,1):self%cyc_lims(2,2)), source=0.)
+            !$omp parallel do collapse(2) default(shared) schedule(static)&
+            !$omp private(h,k,sh,inv1,inv2)&
+            !$omp proc_bind(close)
+            do h=self%cyc_lims(1,1),self%cyc_lims(1,2)
+                do k=self%cyc_lims(2,1),self%cyc_lims(2,2)
+                    sh = nint(hyp(real(h),real(k)))
+                    if( sh > self%nyq + 1 )cycle
+                    ! evaluate the transfer function
+                    inv1 = real(h)*(1./real(self%ldim_img(1)))
+                    inv2 = real(k)*(1./real(self%ldim_img(2)))
+                    self%ctf_sqSpatFreq(h,k) = inv1 * inv1 + inv2 * inv2
+                    self%ctf_ang(h,k) = atan2(real(k), real(h))
+                enddo
+            enddo
+            !$omp end parallel do
+        endif
+        ! 
         call self%reset
     end subroutine alloc_rho
 
@@ -198,79 +221,17 @@ contains
 
     ! INTERPOLATION
 
-    subroutine inout_fcomp( self, h, k, e, inoutmode, comp, oshift, pwght)
-        class(reconstructor), intent(inout) :: self      !< this object
-        integer,              intent(in)    :: h, k      !< Fourier indices
-        class(ori),           intent(inout) :: e         !< orientation
-        logical,              intent(in)    :: inoutmode !< add = .true., subtract = .false.
-        complex,              intent(in)    :: comp      !< input component, if not given only sampling density calculation
-        complex,              intent(in)    :: oshift    !< origin shift
-        real,                 intent(in)    :: pwght     !< external particle weight (affects both fplane and rho)
-        real    :: w(self%wdim,self%wdim,self%wdim)
-        real    :: vec(3), loc(3), tval, tvalsq
-        real    :: sqSpatFreq, ang, inv1, inv2
-        integer :: i, win(3,2)
-        ! calculate non-uniform sampling location
-        vec = [real(h), real(k), 0.]
-        loc = matmul(vec, e%get_mat())
-        ! initiate kernel matrix
-        call sqwin_3d(loc(1), loc(2), loc(3), self%winsz, win)
-        ! no need to update outside the non-redundant Friedel limits
-        ! consistently with compress_exp
-        if( win(1,2) < self%lims(1,1) )return
-        ! evaluate the transfer function
-        if( self%ctf%flag /= CTFFLAG_NO )then
-            inv1       = vec(1)*(1./real(self%ldim_img(1)))
-            inv2       = vec(2)*(1./real(self%ldim_img(2)))
-            sqSpatFreq = inv1 * inv1 + inv2 * inv2
-            ang        = atan2(vec(2), vec(1))
-            ! calculate CTF and CTF**2 values
-            if( self%phaseplate )then
-                tval = self%tfun%eval(sqSpatFreq, self%dfx, self%dfy, self%angast, ang, self%phshift)
-            else
-                tval = self%tfun%eval(sqSpatFreq, self%dfx, self%dfy, self%angast, ang)
-            endif
-            tvalsq = tval * tval
-            if( self%ctf%flag == CTFFLAG_FLIP ) tval = abs(tval)
-        else
-            tval   = 1.
-            tvalsq = tval
-        endif
-        ! (weighted) kernel values
-        w = pwght
-        do i=1,self%wdim
-            w(i,:,:) = w(i,:,:) * self%kbwin%apod(real(win(1,1) + i - 1) - loc(1))
-            w(:,i,:) = w(:,i,:) * self%kbwin%apod(real(win(2,1) + i - 1) - loc(2))
-            w(:,:,i) = w(:,:,i) * self%kbwin%apod(real(win(3,1) + i - 1) - loc(3))
-        enddo
-        ! expanded matrices update
-        if( inoutmode )then
-            ! addition
-            ! CTF and w modulates the component before origin shift
-            self%cmat_exp(win(1,1):win(1,2), win(2,1):win(2,2), win(3,1):win(3,2)) =&
-            &self%cmat_exp(win(1,1):win(1,2), win(2,1):win(2,2), win(3,1):win(3,2)) + (comp*tval*w)*oshift
-            self%rho_exp(win(1,1):win(1,2), win(2,1):win(2,2), win(3,1):win(3,2)) =&
-            &self%rho_exp(win(1,1):win(1,2), win(2,1):win(2,2), win(3,1):win(3,2)) + tvalsq*w
-        else
-            ! subtraction
-            ! CTF and w modulates the component before origin shift
-            self%cmat_exp(win(1,1):win(1,2), win(2,1):win(2,2), win(3,1):win(3,2)) =&
-            &self%cmat_exp(win(1,1):win(1,2), win(2,1):win(2,2), win(3,1):win(3,2)) - (comp*tval*w)*oshift
-            self%rho_exp(win(1,1):win(1,2), win(2,1):win(2,2), win(3,1):win(3,2)) =&
-            &self%rho_exp(win(1,1):win(1,2), win(2,1):win(2,2), win(3,1):win(3,2)) - tvalsq*w
-        endif
-    end subroutine inout_fcomp
-
-    !> insert or uninsert Fourier plane
+    ! !> insert or uninsert Fourier plane
     subroutine inout_fplane_1( self, o, inoutmode, fpl, pwght )
         class(reconstructor), intent(inout) :: self      !< instance
         class(ori),           intent(inout) :: o         !< orientation
         logical,              intent(in)    :: inoutmode !< add = .true., subtract = .false.
         class(image),         intent(inout) :: fpl       !< Fourier plane
         real,                 intent(in)    :: pwght     !< external particle weight (affects both fplane and rho)
-        integer :: h, k, lims(3,2), logi(3), phys(3), sh
-        complex :: oshift
-        real    :: x, y
+        integer :: logi(3), win(3,2), sh, i, h, k
+        complex :: comp, oshift
+        real    :: rotmat(3,3), vec(3), loc(3), shconst_here(2), tval, tvalsq
+        real    :: w(self%wdim,self%wdim,self%wdim), arg
         if( self%ctf%flag /= CTFFLAG_NO )then ! make CTF object & get CTF info
             self%tfun = ctf(self%get_smpd(), o%get('kv'), o%get('cs'), o%get('fraca'))
             self%dfx  = o%get('dfx')
@@ -285,19 +246,67 @@ contains
             self%phshift = 0.
             if( self%phaseplate ) self%phshift = o%get('phshift')
         endif
-        lims = fpl%loop_lims(3)
-        x    = o%get('x')
-        y    = o%get('y')
+        rotmat       = o%get_mat()
+        shconst_here = (-o%get_2Dshift()) * self%shconst_rec(1:2)
         !$omp parallel do collapse(2) default(shared) schedule(static)&
-        !$omp private(h,k,sh,oshift,logi,phys) proc_bind(close)
-        do h=lims(1,1),lims(1,2)
-            do k=lims(2,1),lims(2,2)
+        !$omp private(i,h,k,sh,comp,arg,oshift,logi,tval,tvalsq,w,win,vec,loc)&
+        !$omp proc_bind(close)
+        do h=self%cyc_lims(1,1),self%cyc_lims(1,2)
+            do k=self%cyc_lims(2,1),self%cyc_lims(2,2)
                 sh = nint(hyp(real(h),real(k)))
                 if( sh > self%nyq + 1 )cycle
-                logi   = [h,k,0]
-                oshift = fpl%oshift(logi, [-x,-y,0.])
-                phys   = fpl%comp_addr_phys(logi)
-                call self%inout_fcomp(h,k,o,inoutmode,fpl%get_fcomp(logi,phys),oshift,pwght)
+                ! calculate non-uniform sampling location
+                logi = [h,k,0]
+                vec  = real(logi)
+                loc  = matmul(vec, rotmat)
+                ! initiate kernel matrix
+                call sqwin_3d(loc(1), loc(2), loc(3), self%winsz, win)
+                ! no need to update outside the non-redundant Friedel limits
+                ! consistently with compress_exp
+                if( win(1,2) < self%lims(1,1) )cycle
+                ! Fourier component
+                comp   = fpl%get_fcomp(logi, fpl%comp_addr_phys(logi))
+                ! evaluate shift
+                arg    = shconst_here(1)*vec(1) + shconst_here(2)*vec(2)
+                oshift = cmplx(cos(arg), sin(arg))
+                ! evaluate the transfer function
+                if( self%ctf%flag /= CTFFLAG_NO )then
+                    ! CTF and CTF**2 values
+                    if( self%phaseplate )then
+                        tval = self%tfun%eval(self%ctf_sqSpatFreq(h,k), self%dfx, self%dfy, self%angast, self%ctf_ang(h,k),&
+                        &self%phshift)
+                    else
+                        tval = self%tfun%eval(self%ctf_sqSpatFreq(h,k), self%dfx, self%dfy, self%angast, self%ctf_ang(h,k))
+                    endif
+                    tvalsq = tval * tval
+                    if( self%ctf%flag == CTFFLAG_FLIP ) tval = abs(tval)
+                else
+                    tval   = 1.
+                    tvalsq = tval
+                endif
+                ! (weighted) kernel values
+                w = pwght
+                do i=1,self%wdim
+                    w(i,:,:) = w(i,:,:) * self%kbwin%apod(real(win(1,1) + i - 1) - loc(1))
+                    w(:,i,:) = w(:,i,:) * self%kbwin%apod(real(win(2,1) + i - 1) - loc(2))
+                    w(:,:,i) = w(:,:,i) * self%kbwin%apod(real(win(3,1) + i - 1) - loc(3))
+                enddo
+                ! expanded matrices update
+                if( inoutmode )then
+                    ! addition
+                    ! CTF and w modulates the component before origin shift
+                    self%cmat_exp(win(1,1):win(1,2), win(2,1):win(2,2), win(3,1):win(3,2)) =&
+                    &self%cmat_exp(win(1,1):win(1,2), win(2,1):win(2,2), win(3,1):win(3,2)) + (comp*tval*w)*oshift
+                    self%rho_exp(win(1,1):win(1,2), win(2,1):win(2,2), win(3,1):win(3,2)) =&
+                    &self%rho_exp(win(1,1):win(1,2), win(2,1):win(2,2), win(3,1):win(3,2)) + tvalsq*w
+                else
+                    ! subtraction
+                    ! CTF and w modulates the component before origin shift
+                    self%cmat_exp(win(1,1):win(1,2), win(2,1):win(2,2), win(3,1):win(3,2)) =&
+                    &self%cmat_exp(win(1,1):win(1,2), win(2,1):win(2,2), win(3,1):win(3,2)) - (comp*tval*w)*oshift
+                    self%rho_exp(win(1,1):win(1,2), win(2,1):win(2,2), win(3,1):win(3,2)) =&
+                    &self%rho_exp(win(1,1):win(1,2), win(2,1):win(2,2), win(3,1):win(3,2)) - tvalsq*w
+                endif
             end do
         end do
         !$omp end parallel do
@@ -310,9 +319,10 @@ contains
         logical,              intent(in)    :: inoutmode !< add = .true., subtract = .false.
         complex(sp),          intent(in)    :: cmat(self%cyc_lims(1,1):self%cyc_lims(1,2),self%cyc_lims(2,1):self%cyc_lims(2,2))
         real,                 intent(in)    :: pwght     !< external particle weight (affects both fplane and rho)
-        integer :: h, k, sh
+        integer :: win(3,2), i, h, k, sh
         complex :: oshift
-        real    :: x, y, arg
+        real    :: rotmat(3,3), vec(3), loc(3), shconst_here(2), tval, tvalsq
+        real    :: w(self%wdim,self%wdim,self%wdim), arg
         if( self%ctf%flag /= CTFFLAG_NO )then ! make CTF object & get CTF info
             self%tfun = ctf(self%get_smpd(), o%get('kv'), o%get('cs'), o%get('fraca'))
             self%dfx  = o%get('dfx')
@@ -327,17 +337,63 @@ contains
             self%phshift = 0.
             if( self%phaseplate ) self%phshift = o%get('phshift')
         endif
-        x = o%get('x')
-        y = o%get('y')
+        rotmat       = o%get_mat()
+        shconst_here = (-o%get_2Dshift()) * self%shconst_rec(1:2)
         !$omp parallel do collapse(2) default(shared) schedule(static)&
-        !$omp private(h,k,sh,arg,oshift) proc_bind(close)
+        !$omp private(h,k,sh,arg,oshift,i,vec,loc,w,win,tval,tvalsq) proc_bind(close)
         do h=self%cyc_lims(1,1),self%cyc_lims(1,2)
             do k=self%cyc_lims(2,1),self%cyc_lims(2,2)
                 sh = nint(hyp(real(h),real(k)))
                 if( sh > self%nyq + 1 )cycle
-                arg    = real(h) * (-x) * self%shconst_rec(1) + real(k) * (-y) * self%shconst_rec(2)
-                oshift = cmplx(cos(arg),sin(arg))
-                call self%inout_fcomp(h,k,o,inoutmode,cmat(h,k),oshift,pwght)
+                ! calculate non-uniform sampling location
+                vec  = real([h,k,0])
+                loc  = matmul(vec, rotmat)
+                ! initiate kernel matrix
+                call sqwin_3d(loc(1), loc(2), loc(3), self%winsz, win)
+                ! no need to update outside the non-redundant Friedel limits
+                ! consistently with compress_exp
+                if( win(1,2) < self%lims(1,1) )cycle
+                ! evaluate shift
+                arg    = shconst_here(1)*vec(1) + shconst_here(2)*vec(2)
+                oshift = cmplx(cos(arg), sin(arg))
+                ! evaluate the transfer function
+                if( self%ctf%flag /= CTFFLAG_NO )then
+                    ! calculate CTF and CTF**2 values
+                    if( self%phaseplate )then
+                        tval = self%tfun%eval(self%ctf_sqSpatFreq(h,k), self%dfx, self%dfy, self%angast, self%ctf_ang(h,k),&
+                        &self%phshift)
+                    else
+                        tval = self%tfun%eval(self%ctf_sqSpatFreq(h,k), self%dfx, self%dfy, self%angast, self%ctf_ang(h,k))
+                    endif
+                    tvalsq = tval * tval
+                    if( self%ctf%flag == CTFFLAG_FLIP ) tval = abs(tval)
+                else
+                    tval   = 1.
+                    tvalsq = tval
+                endif
+                ! (weighted) kernel values
+                w = pwght
+                do i=1,self%wdim
+                    w(i,:,:) = w(i,:,:) * self%kbwin%apod(real(win(1,1) + i - 1) - loc(1))
+                    w(:,i,:) = w(:,i,:) * self%kbwin%apod(real(win(2,1) + i - 1) - loc(2))
+                    w(:,:,i) = w(:,:,i) * self%kbwin%apod(real(win(3,1) + i - 1) - loc(3))
+                enddo
+                ! expanded matrices update
+                if( inoutmode )then
+                    ! addition
+                    ! CTF and w modulates the component before origin shift
+                    self%cmat_exp(win(1,1):win(1,2), win(2,1):win(2,2), win(3,1):win(3,2)) =&
+                    &self%cmat_exp(win(1,1):win(1,2), win(2,1):win(2,2), win(3,1):win(3,2)) + (cmat(h,k)*tval*w)*oshift
+                    self%rho_exp(win(1,1):win(1,2), win(2,1):win(2,2), win(3,1):win(3,2)) =&
+                    &self%rho_exp(win(1,1):win(1,2), win(2,1):win(2,2), win(3,1):win(3,2)) + tvalsq*w
+                else
+                    ! subtraction
+                    ! CTF and w modulates the component before origin shift
+                    self%cmat_exp(win(1,1):win(1,2), win(2,1):win(2,2), win(3,1):win(3,2)) =&
+                    &self%cmat_exp(win(1,1):win(1,2), win(2,1):win(2,2), win(3,1):win(3,2)) - (cmat(h,k)*tval*w)*oshift
+                    self%rho_exp(win(1,1):win(1,2), win(2,1):win(2,2), win(3,1):win(3,2)) =&
+                    &self%rho_exp(win(1,1):win(1,2), win(2,1):win(2,2), win(3,1):win(3,2)) - tvalsq*w
+                endif
             end do
         end do
         !$omp end parallel do
@@ -426,12 +482,11 @@ contains
         endif
         call self%reset
         ! Fourier components & rho matrices compression
-        !$omp parallel do collapse(3) private(h,k,m,phys,logi) schedule(static) default(shared) proc_bind(close)
+        !$omp parallel do collapse(3) private(h,k,m,phys) schedule(static) default(shared) proc_bind(close)
         do h = self%lims(1,1),self%lims(1,2)
             do k = self%lims(2,1),self%lims(2,2)
                 do m = self%lims(3,1),self%lims(3,2)
                     if(abs(self%cmat_exp(h,k,m)) < TINY) cycle
-                    logi = [h,k,m]
                     if (h > 0) then
                         phys(1) = h + 1
                         phys(2) = k + 1 + MERGE(self%ldim_img(2),0,k < 0)
@@ -483,6 +538,7 @@ contains
     end subroutine sum
 
     ! RECONSTRUCTION
+
     !> reconstruction routine
     subroutine rec( self, p, o, se, state, mul, part )
         use simple_prep4cgrid, only: prep4cgrid
@@ -589,7 +645,7 @@ contains
     !>  \brief  is the expanded destructor
     subroutine dealloc_exp( self )
         class(reconstructor), intent(inout) :: self !< this instance
-        if( allocated(self%rho_exp) ) deallocate(self%rho_exp)
+        if( allocated(self%rho_exp) )  deallocate(self%rho_exp)
         if( allocated(self%cmat_exp) ) deallocate(self%cmat_exp)
     end subroutine dealloc_exp
 
@@ -602,6 +658,8 @@ contains
             self%rho => null()
             self%rho_allocated = .false.
         endif
+        if(allocated(self%ctf_ang))        deallocate(self%ctf_ang)
+        if(allocated(self%ctf_sqSpatFreq)) deallocate(self%ctf_sqSpatFreq)
     end subroutine dealloc_rho
 
 end module simple_reconstructor

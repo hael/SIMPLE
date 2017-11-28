@@ -348,12 +348,6 @@ contains
         if( p%norec .ne. 'yes' )then
             ! init volumes
             call preprecvols(b, p)
-            if( p%l_frac_update )then
-                ! need to read in part volumes & rho
-                ! todo in simple_hadamard_common
-                ! call readrecvols_for_update(p)
-                ! discarding contribution to volume should be done within grid_ptcl
-            endif
             ! reconstruction
             do i=1,nptcls2update
                 iptcl = pinds(i)

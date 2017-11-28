@@ -59,9 +59,9 @@ contains
         class(params),  intent(in)    :: p        !< parameters
         real, optional, intent(in)    :: shvec(3) !< 3D shift vector
         type(projector)  :: vol_pad
-        type(image)      :: rovol_pad, rovol 
+        type(image)      :: rovol_pad, rovol
         type(kbinterpol) :: kbwin
-        integer          :: h,k,l,lims(3,2),logi(3),phys(3),ldim(3),ldim_pd(3)
+        integer          :: sh,h,k,l,nyq,lims(3,2),logi(3),phys(3),ldim(3),ldim_pd(3)
         real             :: loc(3)
         logical          :: l_shvec_present
         kbwin           = kbinterpol(KBWINSZ, p%alpha)
@@ -75,13 +75,16 @@ contains
         call prep4cgrid(vol, vol_pad, kbwin)
         call vol_pad%expand_cmat(p%alpha)
         lims = vol_pad%loop_lims(2)
+        nyq  = vol_pad%get_lfny(1)
         write(*,'(A)') '>>> ROTATING VOLUME'
-        !$omp parallel do collapse(3) default(shared) private(h,k,l,loc,logi,phys)&
+        !$omp parallel do collapse(3) default(shared) private(sh,h,k,l,loc,logi,phys)&
         !$omp schedule(static) proc_bind(close)
         do h=lims(1,1),lims(1,2)
             do k=lims(2,1),lims(2,2)
                 do l=lims(3,1),lims(3,2)
                     logi = [h,k,l]
+                    sh = nint(hyp(real(h),real(k),real(l)))
+                    if( sh > nyq + 1 )cycle
                     phys = rovol_pad%comp_addr_phys(logi)
                     loc  = matmul(real(logi), o%get_mat())
                     if( l_shvec_present )then
@@ -89,11 +92,11 @@ contains
                     else
                         call rovol_pad%set_fcomp(logi, phys, vol_pad%interp_fcomp(loc))
                     endif
-                end do 
+                end do
             end do
         end do
         !$omp end parallel do
-        call rovol_pad%bwd_ft
+        call rovol_pad%bwd_ft()
         call rovol_pad%clip(rovol)
         call rovol%norm()
         call vol_pad%kill_expanded
