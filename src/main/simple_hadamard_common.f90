@@ -278,7 +278,6 @@ contains
                 endif
                 s = nint(orisoft%get('state'))
                 if( p%frac < 0.99   ) w = w * pw
-                if( p%l_frac_update ) w = w * p%update_frac
                 if( w > TINY )then
                     if( p%pgrp == 'c1' )then
                         if( p%eo .ne. 'no' )then
