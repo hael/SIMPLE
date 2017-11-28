@@ -1499,15 +1499,19 @@ contains
     end subroutine exec_scale_stk_parts
 
     subroutine exec_prep4cgrid_stk_parts( self, cline )
+        use simple_map_reduce, only: split_nobjs_even
         class(prep4cgrid_stk_parts_commander), intent(inout) :: self
         class(cmdline),                        intent(inout) :: cline
-        type(qsys_env)                :: qenv
-        type(params)                  :: p_master
-        type(chash)                   :: job_descr
-        type(cmdline)                 :: cline_prep4cgrid
-        type(chash),      allocatable :: part_params(:)
-        character(len=:), allocatable :: stkname, outstkname
-        integer :: ipart
+        type(qsys_env)                     :: qenv
+        type(params)                       :: p_master
+        type(chash)                        :: job_descr
+        type(cmdline)                      :: cline_prep4cgrid
+        type(chash),           allocatable :: part_params(:)
+        character(len=STDLEN), allocatable :: part_stks(:)
+        integer,               allocatable :: parts(:,:)
+        character(len=:),      allocatable :: stkname, outstkname
+        character(len=STDLEN)              :: filetab
+        integer :: ipart, cnt, partsz, nparts, nstks, istk
         ! seed the random number generator
         call seed_rnd
         ! output command line executed
@@ -1519,23 +1523,32 @@ contains
         cline_prep4cgrid = cline
         ! prepare part-dependent parameters
         if( cline%defined('stktab') )then
-            p_master%nparts = p_master%nmics
-            call cline_prep4cgrid%set('nparts', real(p_master%nparts))
-            if( cline%defined('ncunits') )then
-                call cline_prep4cgrid%set('ncunits', cline%get_rarg('ncunits'))
+            call cline_prep4cgrid%delete('stktab')
+            if(cline%defined('nparts'))then
+                nparts = p_master%nparts
+            else
+                nparts = 1
             endif
-            call cline_prep4cgrid%delete('stktab')
-            allocate(part_params(p_master%nparts))
-            do ipart=1,p_master%nparts
-                call part_params(ipart)%new(2)
-                stkname    = p_master%stkhandle%get_stkname(ipart)
-                outstkname = add2fbody_and_new_ext(stkname, p_master%ext, PREP4CGRID_SUFFIX, '.bin')
-                ! scale tag is dealt with by the stktab handler
-                call part_params(ipart)%set('stk',    stkname)
-                call part_params(ipart)%set('outstk', outstkname)
-                deallocate(stkname, outstkname)
+            nstks = p_master%stkhandle%get_nmics()
+            parts = split_nobjs_even(nstks, nparts)
+            allocate(part_params(nparts))
+            cnt = 0
+            do ipart=1,nparts
+                call part_params(ipart)%new(1)
+                partsz = parts(ipart,2) - parts(ipart,1) + 1
+                allocate(part_stks(partsz))
+                ! creates part filetab
+                filetab = 'prep4cgrid_stktab_part'//int2str(ipart)//METADATEXT
+                do istk=1,partsz
+                    cnt = cnt + 1
+                    part_stks(istk) = p_master%stkhandle%get_stkname(cnt)
+                enddo
+                ! write part filetab & update part parameters
+                call write_filetable( filetab, part_stks )
+                call part_params(ipart)%set('filetab', filetab)
+                deallocate(part_stks)
             end do
-            call cline_prep4cgrid%delete('stktab')
+            deallocate(parts)
         else
             allocate(part_params(p_master%nparts))
             do ipart=1,p_master%nparts
@@ -1562,6 +1575,13 @@ contains
         call qenv%gen_scripts_and_schedule_jobs(p_master, job_descr, part_params=part_params)
         ! clean
         call qsys_cleanup(p_master)
+        if( cline%defined('stktab') )then
+            ! removes temporary split stktab lists
+            do ipart=1,nparts
+                filetab = 'prep4cgrid_stktab_part'//int2str(ipart)//METADATEXT
+                call del_file( filetab )
+            end do
+        endif
         ! end gracefully
         call simple_end('**** SIMPLE_DISTR_PREP4CGRID_STK_PARTS NORMAL STOP ****')
     end subroutine exec_prep4cgrid_stk_parts

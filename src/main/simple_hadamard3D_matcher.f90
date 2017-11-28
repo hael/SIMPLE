@@ -328,8 +328,8 @@ contains
         ! CLEANUP primesrch3D & pftcc
         call cleanprime3D_srch(p)
         call pftcc%kill
-        do i = p%fromp,p%top
-            if( ptcl_mask(iptcl) ) call primesrch3D(i)%kill
+        do iptcl = p%fromp,p%top
+            if( ptcl_mask(iptcl) ) call primesrch3D(iptcl)%kill
         end do
         deallocate(primesrch3D)
         if( L_BENCH ) rt_align = toc(t_align)

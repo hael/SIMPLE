@@ -38,6 +38,7 @@ type, extends(image) :: reconstructor
     integer                     :: wdim           = 0           !< dim of interpolation matrix
     integer                     :: nyq            = 0           !< Nyqvist Fourier index
     integer                     :: ldim_img(3)    = 0           !< logical dimension of the original image
+    integer                     :: ldim_exp(3,2)  = 0           !< logical dimension of the expanded complex matrix
     integer                     :: lims(3,2)      = 0           !< Friedel limits
     integer                     :: cyc_lims(3,2)  = 0           !< redundant limits
     type(CTFFLAGTYPE)           :: ctf                          !< ctf flag <yes|no|mul|flip>
@@ -84,7 +85,7 @@ contains
         class(params),        intent(in)    :: p      !< parameters object
         logical, optional,    intent(in)    :: expand !< expand flag
         real    :: inv1, inv2
-        integer :: rho_shape(3), ldim_exp(3,2), dim, h, k, sh
+        integer :: rho_shape(3), dim, h, k, sh
         logical :: l_expand
         if(.not. self%exists()) stop 'construct image before allocating rho; alloc_rho; simple_reconstructor'
         if(      self%is_2d() ) stop 'only for volumes; alloc_rho; simple_reconstructor'
@@ -124,14 +125,14 @@ contains
         if( l_expand )then
             ! setup expanded matrices
             dim  = maxval(abs(self%lims)) + ceiling(KBWINSZ)
-            ldim_exp(1,:) = [self%lims(1,1)-self%wdim, dim]
-            ldim_exp(2,:) = [-dim, dim]
-            ldim_exp(3,:) = [-dim, dim]
-            allocate(self%cmat_exp( ldim_exp(1,1):ldim_exp(1,2),ldim_exp(2,1):ldim_exp(2,2),&
-                &ldim_exp(3,1):ldim_exp(3,2)), source=cmplx(0.,0.), stat=alloc_stat)
+            self%ldim_exp(1,:) = [self%lims(1,1)-self%wdim, dim]
+            self%ldim_exp(2,:) = [-dim, dim]
+            self%ldim_exp(3,:) = [-dim, dim]
+            allocate(self%cmat_exp( self%ldim_exp(1,1):self%ldim_exp(1,2),self%ldim_exp(2,1):self%ldim_exp(2,2),&
+                &self%ldim_exp(3,1):self%ldim_exp(3,2)), source=cmplx(0.,0.), stat=alloc_stat)
             allocchk("In: alloc_rho; simple_reconstructor cmat_exp")
-            allocate(self%rho_exp( ldim_exp(1,1):ldim_exp(1,2),ldim_exp(2,1):ldim_exp(2,2),&
-                &ldim_exp(3,1):ldim_exp(3,2)), source=0., stat=alloc_stat)
+            allocate(self%rho_exp( self%ldim_exp(1,1):self%ldim_exp(1,2),self%ldim_exp(2,1):self%ldim_exp(2,2),&
+                &self%ldim_exp(3,1):self%ldim_exp(3,2)), source=0., stat=alloc_stat)
             allocchk("In: alloc_rho; simple_reconstructor rho_exp")
         end if
         ! build CTF related matrices
@@ -514,11 +515,11 @@ contains
         call self%reset_exp
         ! Fourier components & rho matrices expansion
         !$omp parallel do collapse(3) private(h,k,m,phys,logi) schedule(static) default(shared) proc_bind(close)
-        do h = self%cyc_lims(1,1),self%cyc_lims(1,2)
-            do k = self%cyc_lims(2,1),self%cyc_lims(2,2)
-                do m = self%cyc_lims(3,1),self%cyc_lims(3,2)
-                    logi                 = [h,k,m]
-                    phys                 = self%comp_addr_phys([h,k,m])
+        do h = self%lims(1,1),self%lims(1,2)
+            do k = self%lims(2,1),self%lims(2,2)
+                do m = self%lims(3,1),self%lims(3,2)
+                    logi = [h,k,m]
+                    phys = self%comp_addr_phys([h,k,m])
                     ! this should be safe even if there isn't a 1-to-1 correspondence
                     ! btw logi and phys since we are accessing shared data.
                     self%cmat_exp(h,k,m) = self%get_fcomp(logi, phys)

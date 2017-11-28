@@ -607,8 +607,8 @@ contains
         real,    intent(in)  :: x,y      !< input point
         real,    intent(in)  :: winsz    !< window size
         integer, intent(out) :: win(2,2) !< window
-        call sqwin_1d(x, winsz, win(1,:))
-        call sqwin_1d(y, winsz, win(2,:))
+        call sqwin_1d_1(x, winsz, win(1,:))
+        call sqwin_1d_1(y, winsz, win(2,:))
     end subroutine sqwin_2d_1
 
     !> two-dimensional symmetric hard window with limits
@@ -617,8 +617,8 @@ contains
         real,    intent(in)  :: winsz     !< window size
         integer, intent(in)  :: lims(2,2) !< bounds 
         integer, intent(out) :: win(2,2)  !< window
-        call sqwin_1d(x,winsz,lims(1,:), win(1,:))
-        call sqwin_1d(y,winsz,lims(2,:), win(2,:))
+        call sqwin_1d_2(x,winsz,lims(1,:), win(1,:))
+        call sqwin_1d_2(y,winsz,lims(2,:), win(2,:))
     end subroutine sqwin_2d_2
 
     !> three-dimensional symmetric hard window
@@ -626,9 +626,9 @@ contains
         real,    intent(in)  :: x,y,z    !< input point
         real,    intent(in)  :: winsz    !< window size
         integer, intent(out) :: win(3,2) !< window
-        call sqwin_1d(x, winsz, win(1,:))
-        call sqwin_1d(y, winsz, win(2,:))
-        call sqwin_1d(z, winsz, win(3,:))
+        call sqwin_1d_1(x, winsz, win(1,:))
+        call sqwin_1d_1(y, winsz, win(2,:))
+        call sqwin_1d_1(z, winsz, win(3,:))
     end subroutine sqwin_3d_1
 
     !> three-dimensional symmetric hard window with limits
@@ -637,9 +637,9 @@ contains
         real,    intent(in)  :: winsz     !< window size
         integer, intent(in)  :: lims(3,2) !< bounds 
         integer, intent(out) :: win(3,2)  !< window
-        call sqwin_1d(x,winsz,lims(1,:), win(1,:))
-        call sqwin_1d(y,winsz,lims(2,:), win(2,:))
-        call sqwin_1d(z,winsz,lims(3,:), win(3,:))
+        call sqwin_1d_2(x,winsz,lims(1,:), win(1,:))
+        call sqwin_1d_2(y,winsz,lims(2,:), win(2,:))
+        call sqwin_1d_2(z,winsz,lims(3,:), win(3,:))
     end subroutine sqwin_3d_2
 
     ! USEFUL MATHEMATICAL FUNCTIONS
