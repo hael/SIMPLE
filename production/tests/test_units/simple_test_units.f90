@@ -1,21 +1,22 @@
 program simple_test_units
-use simple_syslib            ! use all in there
-use simple_defs              ! use all in there
-use simple_testfuns          ! use all in there
-use simple_rnd               ! use all in there
-use simple_cmd_dict,         only: test_cmd_dict
-use simple_build,            only: test_build
-use simple_ftiter,           only: test_ftiter
-use simple_ori,              only: test_ori, test_ori_dists
-use simple_oris,             only: test_oris
-use simple_image,            only: test_image
-use simple_shc_cluster,      only: test_shc_cluster
-use simple_args,             only: test_args
-use simple_online_var,       only: test_online_var
-use simple_hash,             only: test_hash
-use simple_imghead,          only: test_imghead
-use simple_jiffys,           only: simple_end
-use simple_ftexp_shsrch,     only: test_ftexp_shsrch
+use simple_syslib        ! use all in there
+use simple_defs          ! use all in there
+use simple_testfuns      ! use all in there
+use simple_rnd           ! use all in there
+use simple_cmd_dict,     only: test_cmd_dict
+use simple_build,        only: test_build
+use simple_ftiter,       only: test_ftiter
+use simple_ori,          only: test_ori, test_ori_dists
+use simple_oris,         only: test_oris
+use simple_image,        only: test_image
+use simple_shc_cluster,  only: test_shc_cluster
+use simple_args,         only: test_args
+use simple_online_var,   only: test_online_var
+use simple_hash,         only: test_hash
+use simple_imghead,      only: test_imghead
+use simple_jiffys,       only: simple_end
+use simple_ftexp_shsrch, only: test_ftexp_shsrch
+use simple_aff_prop,     only: test_aff_prop
 implicit none
 character(8)          :: datestr
 character(len=STDLEN) :: folder
@@ -44,7 +45,8 @@ call test_multinomal         ! pass with PGI
 call test_testfuns           ! pass with PGI
 call test_euler_shift        ! pass with PGI
 call simple_test_fit_line    ! pass with PGI
-call simple_chdir( "../" )
+call test_aff_prop
+! call simple_chdir( "../" )
 call simple_end('**** SIMPLE_UNIT_TEST NORMAL STOP ****')
 
 contains

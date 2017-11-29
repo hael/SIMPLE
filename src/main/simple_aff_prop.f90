@@ -11,27 +11,21 @@ private
 type aff_prop
     private
     integer              :: N                    !< nr of data entries
-    real, allocatable    :: A(:,:), R(:,:)       !< \param A affinities & \param R responsibilities
-    real, allocatable    :: Aold(:,:), Rold(:,:) !< \param Aold Old affinities & \param Rold Old responsibilities
-    real, allocatable    :: Rp(:,:), tmp(:)      !< other stuff needed
-    real, allocatable    :: AS(:,:), dA(:)       !< \param AS A+S & \param dA diag(A)
-    real, pointer        :: S(:,:)               !< pointer to similarity matrix
-    real, allocatable    :: Y(:), Y2(:)          !< maxvals
+    real,    allocatable :: A(:,:), R(:,:)       !< A is affinities & R responsibilities
+    real,    allocatable :: Aold(:,:), Rold(:,:) 
+    real,    allocatable :: Rp(:,:), tmp(:)     
+    real,    allocatable :: AS(:,:), dA(:)
+    real,    pointer     :: S(:,:)               !< pointer to similarity matrix
+    real,    allocatable :: Y(:), Y2(:)          !< maxvals
     integer, allocatable :: I(:), I2(:)          !< index arrays
     integer              :: maxits=200           !< maximum number of iterations
-    integer              :: convits=15           !< convergence factor
     real                 :: ftol=1e-9            !< fractional convergence tolerance score
     real                 :: lam=0.5              !< dampening factor
-    real                 :: Smin, Smax           !< similarity characteristics
+    real                 :: Smin, Smax           !< similarity min/max
     logical              :: exists=.false.       !< to indicate existence
   contains
-    ! CONSTRUCTOR
     procedure :: new
-    ! PROPAGATOR
     procedure :: propagate
-    ! GETTERS
-    procedure :: get_resp
-    ! DESTRUCTOR
     procedure :: kill
 end type aff_prop
 
@@ -40,25 +34,21 @@ contains
     ! CONSTRUCTOR
 
     !>  \brief  is a constructor
-    !! \param N  num of data entries
-    !! \param S pointer to similarity matrix
-    !! \param  ftol,lam,pref,maxits,convits Initialise aff_prop type variables
-    subroutine new( self, N, S, ftol, lam, pref, maxits, convits )
+    subroutine new( self, N, S, ftol, lam, pref, maxits )
         class(aff_prop),   intent(inout) :: self
-        integer,           intent(in)    :: N               
-        real,    target,   intent(inout) :: S(N,N)          
-        real,    optional, intent(in)    :: ftol, lam, pref
-        integer, optional, intent(in)    :: maxits, convits
+        integer,           intent(in)    :: N               ! # data entries       
+        real,    target,   intent(inout) :: S(N,N)          ! similarity matrix
+        real,    optional, intent(in)    :: ftol, lam, pref ! tolerance, dampening factor, preference thres
+        integer, optional, intent(in)    :: maxits
         integer :: alloc_stat, i, j
         real    :: ppref, diff
         call self%kill
         ! set constants
         self%S => S
         self%N = N
-        if( present(ftol) )    self%ftol    = ftol
-        if( present(lam) )     self%lam     = lam
-        if( present(maxits) )  self%maxits  = maxits
-        if( present(convits) ) self%convits = convits
+        if( present(ftol)    ) self%ftol    = ftol
+        if( present(lam)     ) self%lam     = lam
+        if( present(maxits)  ) self%maxits  = maxits
         ! calculate similarity characteristics
         call analyze_smat(s, .false., self%Smin, self%Smax)
         ! low pref [0.1,1] leads to small numbers of clusters and
@@ -67,18 +57,16 @@ contains
         if( present(pref) ) ppref = pref
         ! remove degeneracies
         forall(i=1:N) self%S(i,i) = ppref
-        diff = (self%Smax-self%Smin)*self%ftol
+        diff = (self%Smax - self%Smin) * self%ftol
         do i=1,self%N
             do j=1,self%N
-                self%S(i,j) = self%S(i,j)+ran3()*diff
+                self%S(i,j) = self%S(i,j) + ran3() * diff
             end do
         end do
         ! allocate
         allocate( self%A(N,N), self%R(N,N), self%Aold(N,N), self%Rp(N,N),&
         self%Rold(N,N), self%AS(N,N), self%Y(N), self%Y2(N), self%tmp(N),&
-        self%I(N), self%I2(N), self%dA(N), stat=alloc_stat )
-        call alloc_err('new; simple_aff_prop, 2', alloc_stat)
-        ! initialize
+        self%I(N), self%I2(N), self%dA(N) )
         self%A      = 0.
         self%R      = 0.
         self%Aold   = 0.
@@ -104,7 +92,7 @@ contains
         real,                 intent(out)   :: simsum     !< similarity sum
         real, allocatable :: similarities(:)
         real              :: x, realmax
-        integer           :: i, j, k, alloc_stat, ncls, loc(1), convits, ncls_prev
+        integer           :: i, j, k, alloc_stat, ncls, loc(1)
         ! initialize
         realmax   = huge(x)
         self%A    = 0.
@@ -119,13 +107,11 @@ contains
         self%I    = 0
         self%I2   = 0
         self%dA   = 0.
-        convits   = 0
-        ncls      = 0
         ! iterate
         do i=1,self%maxits
             ! FIRST, COMPUTE THE RESPONSIBILITIES
             self%Rold = self%R
-            self%AS   = self%A+self%S
+            self%AS   = self%A + self%S
             self%I    = maxloc(self%AS, dim=2)
             forall(j=1:self%N) self%Y(j) = self%AS(j,self%I(j))
             do j=1,self%N
@@ -134,12 +120,12 @@ contains
             self%I2 = maxloc(self%AS, dim=2)
             forall(j=1:self%N) self%Y2(j) = self%AS(j,self%I2(j))
             self%R = self%S
-            forall(j=1:self%N) self%R(j,:) = self%R(j,:)-self%Y
+            forall(j=1:self%N) self%R(j,:) = self%R(j,:) - self%Y
             do j=1,self%N
-               self%R(j,self%I(j)) = self%S(j,self%I(j))-self%Y2(j)
+               self%R(j,self%I(j)) = self%S(j,self%I(j)) - self%Y2(j)
             end do
             ! update responsibilities (in a dampened fashion)
-            self%R = (1.-self%lam)*self%R+self%lam*self%Rold
+            self%R = (1. - self%lam) * self%R + self%lam * self%Rold
             ! THEN, COMPUTE THE AVAILABILITIES
             self%Aold = self%A
             where(self%R > 0.)
@@ -150,37 +136,27 @@ contains
             forall(k=1:self%N) self%Rp(k,k) = self%R(k,k)
             forall(k=1:self%N) self%tmp(k)  = sum(self%Rp(:,k))
             self%A = -self%Rp
-            forall(j=1:self%N) self%A(j,:)  = self%A(j,:)+self%tmp
+            forall(j=1:self%N) self%A(j,:)  = self%A(j,:) + self%tmp
             forall(k=1:self%N) self%dA(k)   = self%A(k,k)
             where(self%A > 0.) self%A       = 0.
             forall(k=1:self%N) self%A(k,k)  = self%dA(k)
             ! update availabilities (in a dampened fashion)
-            self%A = (1.-self%lam)*self%A+self%lam*self%Aold
-            ! count the number of clusters
-            ncls_prev = ncls
-            ncls = 0
-            do j=1,self%N
-                if( self%R(j,j)+self%A(j,j) > 0. )then
-                    ncls = ncls+1
-                endif
-            end do
-            if( ncls_prev == ncls )then
-                convits = convits+1
-            else
-                convits = 0
-            endif
-            if( convits == self%convits ) exit
+            self%A = (1. - self%lam) * self%A + self%lam * self%Aold
         end do
-        self%R = self%R+self%A ! pseudomarginals
-        if( ncls==0 )ncls=1
+        self%R = self%R + self%A ! pseudomarginals
+        ! count the number of clusters
+        ncls = 0
+        do j=1,self%N
+            if( self%R(j,j) > 0. ) ncls = ncls + 1
+        end do
         if( allocated(centers) ) deallocate(centers)
         if( allocated(labels) )  deallocate(labels)
-        allocate( centers(ncls), similarities(ncls), labels(self%N), stat=alloc_stat )
-        call alloc_err("In: propagate; simple_aff_prop", alloc_stat)
+        allocate( centers(ncls), similarities(ncls), labels(self%N) )
+        ! set the cluster centers
         ncls = 0
         do j=1,self%N
             if( self%R(j,j) > 0. )then
-                ncls = ncls+1
+                ncls = ncls + 1
                 centers(ncls) = j
             endif
         end do
@@ -188,7 +164,7 @@ contains
         simsum = 0.
         do j=1,self%N
             do k=1,ncls
-                if( j.ne.centers(k) )then
+                if( j .ne. centers(k) )then
                     similarities(k) = self%S(centers(k),j)
                 else
                     similarities(k) = realmax
@@ -196,19 +172,11 @@ contains
             end do
             loc = maxloc(similarities)
             labels(j) = loc(1)
-            if( j.ne.centers(labels(j)) ) simsum = simsum+similarities(labels(j))
+            if( j .ne. centers(labels(j)) ) simsum = simsum + similarities(labels(j))
         end do
-        simsum = simsum/real(self%N)
+        simsum = simsum / real(self%N)
         deallocate(similarities)
     end subroutine propagate
-
-    ! GETTERS
-
-    function get_resp( self )result( resp )
-        class(aff_prop), intent(inout) :: self
-        real :: resp( self%N,self%N )
-        resp = self%R
-    end function get_resp
 
     ! UNIT TEST
 
@@ -273,6 +241,7 @@ contains
     subroutine kill( self )
         class(aff_prop), intent(inout) :: self
         if( self%exists )then
+            self%S => null()
             deallocate( self%A, self%R, self%Aold, self%Rp,&
             self%Rold, self%AS, self%Y, self%Y2, self%tmp, self%I,&
             self%I2, self%dA )

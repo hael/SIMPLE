@@ -92,7 +92,6 @@ contains
                         iiptcl       = iptcl
                         ind_in_batch = iptcl - fromptop(1) + 1
                     endif
-                    
                     ind_in_stk   = iptcl
                     call b%imgbatch(ind_in_batch)%read(p%stk, ind_in_stk)
                 end do

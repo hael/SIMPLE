@@ -143,7 +143,7 @@ contains
         real, allocatable,       intent(out)   :: corrmat(:,:)
         real, allocatable       :: cxy(:)
         type(pftcc_grad_shsrch) :: grad_shsrch_obj
-        real :: corrs(pftcc%get_nrots())
+        real    :: corrs(pftcc%get_nrots())
         integer :: iref, iptcl, irot, nptcls, nrefs, loc(1)
         real    :: lims(2,2), lims_init(2,2)
         nptcls = pftcc%get_nptcls()
@@ -158,11 +158,14 @@ contains
         allocate(corrmat(nptcls,nptcls), stat=alloc_stat)
         allocchk('In: calc_roinv_corrmat; simple_corrmat')
         corrmat = 1.
+        !$omp parallel do default(shared) schedule(guided) private(iref,iptcl,corrs,loc,irot,cxy) proc_bind(close)
         do iref=1,nptcls - 1
             do iptcl=iref + 1,nptcls
+                ! rotational corr
                 call pftcc%gencorrs(iref, iptcl, corrs)
                 loc  = maxloc(corrs)
                 irot = loc(1)
+                ! origin shift refinement
                 call grad_shsrch_obj%set_indices(iref,iptcl)
                 cxy = grad_shsrch_obj%minimize(irot=irot)
                 if( irot > 0 )then
@@ -170,8 +173,11 @@ contains
                 else
                     corrmat(iref,iptcl) = corrs(irot)
                 endif
+                ! symmetrize
+                corrmat(iptcl,iref) = corrmat(iref,iptcl) 
             end do
         end do
+        !$omp end parallel do
         call grad_shsrch_obj%kill
     end subroutine calc_roinv_corrmat
 

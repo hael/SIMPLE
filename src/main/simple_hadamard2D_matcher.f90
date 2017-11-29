@@ -311,7 +311,7 @@ contains
         endif
     end subroutine prime2D_exec
 
-     !>  \brief  prepares the polarft corrcalc object for search
+    !>  \brief  prepares the polarft corrcalc object for search
     subroutine preppftcc4align( b, p, which_iter )
         use simple_polarizer, only: polarizer
         class(build),  intent(inout) :: b
