@@ -44,6 +44,7 @@ type(prime2D_commander)              :: xprime2D
 type(cavgassemble_commander)         :: xcavgassemble
 type(check2D_conv_commander)         :: xcheck2D_conv
 type(rank_cavgs_commander)           :: xrank_cavgs
+type(cluster_cavgs_commander)        :: xcluster_cavgs
 
 ! PRIME3D PROGRAMS
 type(resrange_commander)             :: xresrange
@@ -828,6 +829,25 @@ select case(prg)
         call cline%parse(keys_required(:2), keys_optional(:2))
         ! execute
         call xrank_cavgs%execute(cline)
+    case('cluster_cavgs')
+        !==Program cluster_cavgs
+        !
+        ! <cluster_cavgs/begin>is a program for analyzing class averages with affinity propagation,
+        ! in order to get a better understanding of the view distribution<cluster_cavgs/end>
+        !
+        ! set required keys
+        keys_required(1) = 'stk'
+        keys_required(2) = 'smpd'
+        keys_required(3) = 'msk'
+        keys_required(4) = 'lp'
+        ! set optional keys
+        keys_optional(1) = 'hp'
+        keys_optional(2) = 'nthr'
+        ! parse command line
+        ! if( describe ) call print_doc_cluster_cavgs
+        call cline%parse(keys_required(:4), keys_optional(:2))
+        ! execute
+        call xcluster_cavgs%execute(cline)
 
     ! PRIME3D PROGRAMS
 

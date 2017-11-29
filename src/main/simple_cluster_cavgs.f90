@@ -6,8 +6,8 @@ use simple_corrmat,          only: calc_roinv_corrmat
 use simple_aff_prop,         only: aff_prop
 use simple_hadamard_common   ! use all in there 
 use simple_defs              ! use all in there
+use simple_binoris_io        ! use all in there
 implicit none
-
 
 public :: cluster_cavgs_exec
 private
@@ -17,23 +17,30 @@ real, allocatable      :: corrmat(:,:)
 type(aff_prop)         :: aprop
 integer, allocatable   :: centers(:), labels(:)
 
-
 contains
 
 	subroutine cluster_cavgs_exec( b, p )
 		use simple_oris, only: oris
+		use simple_math, only: calc_fourier_index
 		class(build),  intent(inout) :: b
         class(params), intent(inout) :: p
         real       :: simsum
         integer    :: iptcl, icen
         type(oris) :: ceninfo
+        ! set bp range
+        p%kfromto(1) = max(2, calc_fourier_index(p%hp, p%boxmatch, p%smpd))
+    	p%kfromto(2) = calc_fourier_index(p%lp, p%boxmatch, p%smpd)
+    	p%lp_dyn     = p%lp
+    	call b%a%set_all2single('lp',p%lp)
         ! prep pftcc
         call preppftcc4cluster( b, p )
+        ! memoize FFTs for improved performance
+        call pftcc%memoize_ffts
 		! calculate similarity matrix in parallel
 		call calc_roinv_corrmat( pftcc, p%trs, corrmat )
 		! perform clustering with affinity propagation
 		call aprop%new(p%nptcls, corrmat)
-		call propagate(centers, labels, simsum)
+		call aprop%propagate(centers, labels, simsum)
 		! report clustering solution
 		p%ncls = size(centers)
 		write(*,'(a,1x,i9)') '# CLUSTERS FOUND:', p%ncls
@@ -46,6 +53,7 @@ contains
 			call ceninfo%set(icen, 'class',  real(icen))
 			call ceninfo%set(icen, 'center', real(centers(icen)))
 		end do
+		call binwrite_oritab('aff_prop_ceninfo'//METADATEXT, ceninfo, [1,p%ncls])
 		call ceninfo%kill
 		call aprop%kill
 	end subroutine cluster_cavgs_exec
@@ -71,7 +79,7 @@ contains
         call prepimgbatch(b, p, p%nptcls)
         call read_imgbatch( b, p, [1,p%nptcls])
 
-        ! PREPARATION OF REFERENCES IN PFTCC
+        ! PREPARATION OF PFTS IN PFTCC
         ! read references and transform into polar coordinates
         !$omp parallel do default(shared) private(iptcl)&
         !$omp schedule(static) proc_bind(close)
@@ -94,7 +102,7 @@ contains
 	        call pftcc%cp_even_ref2ptcl(iptcl, iptcl)
         end do
         !$omp end parallel do
-
+        
 		! DESTRUCT
         do iptcl=1,p%nptcls
             call match_imgs(iptcl)%kill_polarizer
@@ -102,6 +110,7 @@ contains
             call b%imgbatch(iptcl)%kill
         end do
         deallocate(match_imgs, b%imgbatch)
+
 	end subroutine preppftcc4cluster
 
 end module simple_cluster_cavgs

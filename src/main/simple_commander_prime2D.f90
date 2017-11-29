@@ -18,6 +18,7 @@ public :: prime2D_commander
 public :: cavgassemble_commander
 public :: check2D_conv_commander
 public :: rank_cavgs_commander
+public :: cluster_cavgs_commander
 private
 
 type, extends(commander_base) :: makecavgs_commander
@@ -40,6 +41,10 @@ type, extends(commander_base) :: rank_cavgs_commander
   contains
     procedure :: execute      => exec_rank_cavgs
 end type rank_cavgs_commander
+type, extends(commander_base) :: cluster_cavgs_commander
+  contains
+    procedure :: execute      => exec_cluster_cavgs
+end type cluster_cavgs_commander
 
 contains
 
@@ -321,5 +326,18 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_RANK_CAVGS NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_rank_cavgs
+
+    subroutine exec_cluster_cavgs( self, cline )
+        use simple_cluster_cavgs
+        class(cluster_cavgs_commander), intent(inout) :: self
+        class(cmdline),                 intent(inout) :: cline
+        type(params) :: p
+        type(build)  :: b
+        p = params(cline)                                 ! parameters generated
+        call b%build_general_tbox(p, cline, do3d=.false.) ! general objects built
+        call cluster_cavgs_exec( b, p )
+         ! end gracefully
+        call simple_end('**** SIMPLE_CLUSTER_CAVGS NORMAL STOP ****', print_simple=.false.)
+    end subroutine exec_cluster_cavgs
 
 end module simple_commander_prime2D
