@@ -637,9 +637,9 @@ contains
         real,    intent(in)  :: winsz     !< window size
         integer, intent(in)  :: lims(3,2) !< bounds 
         integer, intent(out) :: win(3,2)  !< window
-        call sqwin_1d_2(x,winsz,lims(1,:), win(1,:))
-        call sqwin_1d_2(y,winsz,lims(2,:), win(2,:))
-        call sqwin_1d_2(z,winsz,lims(3,:), win(3,:))
+        call sqwin_1d_2(x,winsz,[lims(1,1), lims(1,2)], win(1,:))
+        call sqwin_1d_2(y,winsz,[lims(2,1), lims(2,2)], win(2,:))
+        call sqwin_1d_2(z,winsz,[lims(3,1), lims(3,2)], win(3,:))
     end subroutine sqwin_3d_2
 
     ! USEFUL MATHEMATICAL FUNCTIONS

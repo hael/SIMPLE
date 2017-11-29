@@ -28,10 +28,12 @@ type ctf
     real    :: phaseq      = 0.    !< phase constrast weight (derived constant)
     real    :: ampliq      = 0.    !< amplitude contrast weight (derived constant)
   contains
-    procedure, private :: init
+    procedure          :: init
     procedure, private :: eval_1
     procedure, private :: eval_2
-    generic            :: eval => eval_1, eval_2
+    procedure, private :: eval_3
+    procedure, private :: eval_4
+    generic            :: eval => eval_1, eval_2, eval_3, eval_4
     procedure, private :: evalPhSh
     procedure, private :: eval_df
     procedure          :: ctf2img
@@ -129,6 +131,35 @@ contains
         val = (self%phaseq * sin(phshift) + self%ampliq * cos(phshift))
     end function eval_2
 
+    !>  \brief Returns the CTF with pre-initialize parameters
+    pure elemental real function eval_3( self, spaFreqSq, ang )
+        class(ctf), intent(in) :: self        !< instance
+        real,       intent(in) :: spaFreqSq   !< squared reciprocal pixels
+        real,       intent(in) :: ang         !< Angle at which to compute the CTF (radians)
+        real :: df, phshift
+        ! compute DOUBLE the effective defocus
+        df = (self%dfx + self%dfy + cos(2.0 * (ang - self%angast)) * (self%dfx - self%dfy))
+        !! compute the ctf argument
+        phshift = 0.5 * pi * self%wl * spaFreqSq * (df - self%wl * self%wl * spaFreqSq * self%Cs)
+        ! compute value of CTF, assuming white particles
+        eval_3 = (self%phaseq * sin(phshift) + self%ampliq * cos(phshift))
+    end function eval_3
+
+    !>  \brief Returns the CTF with pre-initialize parameters
+    pure elemental real function eval_4( self, spaFreqSq, ang, add_phshift )
+        class(ctf), intent(in) :: self        !< instance
+        real,       intent(in) :: spaFreqSq   !< squared reciprocal pixels
+        real,       intent(in) :: ang         !< Angle at which to compute the CTF (radians)
+        real,       intent(in) :: add_phshift !< aditional phase shift (radians), for phase plate
+        real :: df, phshift
+        ! compute DOUBLE the effective defocus
+        df      = (self%dfx + self%dfy + cos(2.0 * (ang - self%angast)) * (self%dfx - self%dfy))
+        ! compute the ctf argument
+        phshift = 0.5 * pi * self%wl * spaFreqSq * (df - self%wl * self%wl * spaFreqSq * self%Cs) + add_phshift
+        ! compute value of CTF, assuming white particles
+        eval_4  = (self%phaseq * sin(phshift) + self%ampliq * cos(phshift))
+    end function eval_4
+
     !>  \brief returns the argument (radians) to the sine and cosine terms of the ctf
     !!
     !!  We follow the convention, like the rest of the cryo-EM/3DEM field, that underfocusing the objective lens
@@ -193,7 +224,7 @@ contains
                 kinv      = real(k) * inv_ldim(2)
                 spaFreqSq = hinv * hinv + kinv * kinv
                 ang       = atan2(real(k),real(h))
-                tval      = self%eval(spaFreqSq, dfx, ddfy, aangast, ang, aadd_phshift)
+                tval      = self%eval(spaFreqSq, ang, aadd_phshift)
                 select case(mode)
                     case('abs')
                         tval = abs(tval)
@@ -252,7 +283,7 @@ contains
                 kinv      = real(k) * inv_ldim(2)
                 spaFreqSq = hinv * hinv + kinv * kinv
                 ang       = atan2(real(k),real(h))
-                tval      = self%eval(spaFreqSq, dfx, dfy, angast, ang, aadd_phshift)
+                tval      = self%eval(spaFreqSq, ang, aadd_phshift)
                 tval      = sqrt(min(1.,max(tval**2.,0.001)))
                 call img%set(inds, tval)
             end do
@@ -326,7 +357,7 @@ contains
                         kinv      = real(k) * inv_ldim(2)
                         spaFreqSq = hinv * hinv + kinv * kinv
                         ang       = atan2(real(k),real(h))
-                        tval      = self%eval(spaFreqSq, dfx, dfy, angast, ang, add_phshift)
+                        tval      = self%eval(spaFreqSq, ang, add_phshift)
                         phys = img%comp_addr_phys([h,k,0])
                         call img%mul_cmat_at(abs(tval), phys)
                     end do
@@ -338,7 +369,7 @@ contains
                         kinv      = real(k) * inv_ldim(2)
                         spaFreqSq = hinv * hinv + kinv * kinv
                         ang       = atan2(real(k),real(h))
-                        tval      = self%eval(spaFreqSq, dfx, dfy, angast, ang, add_phshift)
+                        tval      = self%eval(spaFreqSq, ang, add_phshift)
                         phys = img%comp_addr_phys([h,k,0])
                         call img%mul_cmat_at(tval, phys)
                     end do
@@ -350,7 +381,7 @@ contains
                         kinv      = real(k) * inv_ldim(2)
                         spaFreqSq = hinv * hinv + kinv * kinv
                         ang       = atan2(real(k),real(h))
-                        tval      = self%eval(spaFreqSq, dfx, dfy, angast, ang, add_phshift)
+                        tval      = self%eval(spaFreqSq, ang, add_phshift)
                         phys = img%comp_addr_phys([h,k,0])
                         call img%mul_cmat_at(sign(1.,tval), phys)
                     end do
@@ -362,7 +393,7 @@ contains
                         kinv      = real(k) * inv_ldim(2)
                         spaFreqSq = hinv * hinv + kinv * kinv
                         ang       = atan2(real(k),real(h))
-                        tval      = self%eval(spaFreqSq, dfx, dfy, angast, ang, add_phshift)
+                        tval      = self%eval(spaFreqSq, ang, add_phshift)
                         phys = img%comp_addr_phys([h,k,0])
                         call img%mul_cmat_at(-sign(1.,tval), phys)
                     end do
@@ -374,7 +405,7 @@ contains
                         kinv      = real(k) * inv_ldim(2)
                         spaFreqSq = hinv * hinv + kinv * kinv
                         ang       = atan2(real(k),real(h))
-                        tval      = self%eval(spaFreqSq, dfx, dfy, angast, ang, add_phshift)
+                        tval      = self%eval(spaFreqSq, ang, add_phshift)
                         phys = img%comp_addr_phys([h,k,0])
                         call img%mul_cmat_at(-tval, phys)
                     end do
@@ -386,7 +417,7 @@ contains
                         kinv      = real(k) * inv_ldim(2)
                         spaFreqSq = hinv * hinv + kinv * kinv
                         ang       = atan2(real(k),real(h))
-                        tval      = self%eval(spaFreqSq, dfx, dfy, angast, ang, add_phshift)
+                        tval      = self%eval(spaFreqSq, ang, add_phshift)
                         phys = img%comp_addr_phys([h,k,0])
                         call img%mul_cmat_at(min(1.,max(tval**2.,0.001)), phys)
                     end do
@@ -426,7 +457,7 @@ contains
                 spaFreqSq = hinv * hinv + kinv * kinv
                 ang       = atan2(real(k),real(h))
                 tval      = 1.0
-                if( imode <  3 ) tval = self%eval(spaFreqSq, dfx, dfy, angast, ang, add_phshift)
+                if( imode <  3 ) tval = self%eval(spaFreqSq, ang, add_phshift)
                 rho(h,k)  = tval * tval
                 if( imode == 1 ) tval = abs(tval)
                 ! multiply image with tval

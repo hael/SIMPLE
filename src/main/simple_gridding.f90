@@ -42,13 +42,13 @@ contains
         w3(lims(3,1):lims(3,2)), source=1., stat=alloc_stat )
         allocchk("In: divide_w_instr; simple_gridding")
         ! calculate the values
-        call calc_w(lims(1,:), ldim(1), w1)
+        call calc_w(lims(1,1), lims(1,2), w1)
         if( img%square_dims() )then
             w2 = w1
             if(img%is_3d()) w3 = w1
         else
-            call calc_w(lims(2,:), ldim(2), w2)
-            if( img%is_3d() )call calc_w(lims(3,:), ldim(3), w3)
+            call calc_w(lims(2,1), lims(2,2), w2)
+            if( img%is_3d() )call calc_w(lims(3,1), lims(3,2), w3)
         endif
         ! divide the image
         !$omp parallel do collapse(3) schedule(static) default(shared) private(i,j,k) proc_bind(close)
@@ -64,17 +64,18 @@ contains
 
         contains
 
-            subroutine calc_w( lims_here, ldim_here, w )
-                integer, intent(in)    :: lims_here(2), ldim_here
-                real,    intent(inout) :: w(lims_here(1):lims_here(2))
+            subroutine calc_w( from, to, w )
+                integer, intent(in)    :: from, to
+                real,    intent(inout) :: w(from:to)
                 real    :: ci
-                integer :: i
-                ci = -real(ldim_here)/2.
-                do i=lims_here(1),lims_here(2)
+                integer :: i, length
+                length = to - from + 1
+                ci     = -real(length)/2.
+                do i = from,to
                     if( img%is_ft() )then
-                        arg = real(i)/real(ldim_here)
+                        arg = real(i)/real(length)
                     else
-                        arg = ci/real(ldim_here)
+                        arg = ci/real(length)
                     endif
                     w(i) = kbwin%instr(arg)
                     ci = ci+1.
@@ -102,13 +103,13 @@ contains
         w3(lims(3,1):lims(3,2)), source=1., stat=alloc_stat )
         allocchk("In: divide_w_instr; simple_gridding")
         ! calculate the values
-        call calc_w(lims(1,:), ldim(1), w1)
+        call calc_w(lims(1,1), lims(1,2), w1)
         if( vol%square_dims() )then
             w2 = w1
             if( vol%is_3d() ) w3 = w1
         else
-            call calc_w(lims(2,:), ldim(2), w2)
-            if( vol%is_3d() )call calc_w(lims(3,:), ldim(3), w3)
+            call calc_w(lims(2,1), lims(2,2), w2)
+            if( vol%is_3d() )call calc_w(lims(3,1), lims(3,2), w3)
         endif
         ! divide the image
         !$omp parallel do collapse(3) schedule(static) default(shared) private(i,j,k) proc_bind(close)
@@ -124,15 +125,16 @@ contains
 
         contains
 
-            subroutine calc_w( lims_here, ldim_here, w )
-                integer, intent(in)    :: lims_here(2), ldim_here
-                real,    intent(inout) :: w(lims_here(1):lims_here(2))
+            subroutine calc_w( from, to, w )
+                integer, intent(in)    :: from, to
+                real,    intent(inout) :: w(from:to)
                 real    :: ci, w_zero
-                integer :: i
+                integer :: i, length
+                length = to - from + 1
                 w_zero = kbwin%instr(0.)
-                ci = -real(ldim_here)/2.
-                do i=lims_here(1),lims_here(2)
-                    arg  = ci/real(ldim_here)
+                ci     = -real(length)/2.
+                do i = from,to
+                    arg  = ci/real(length)
                     w(i) = kbwin%instr(arg) / w_zero
                     ci   = ci+1.
                 end do

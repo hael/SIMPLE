@@ -78,7 +78,6 @@ contains
     subroutine new(self, p )
         class(eo_reconstructor), intent(inout) :: self !< instance
         class(params), target,   intent(in)    :: p    !< parameters object (provides constants)
-        type(image) :: imgtmp
         logical     :: neg  
         call self%kill
         ! set constants
