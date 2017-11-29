@@ -1,0 +1,323 @@
+<DOCTYPE html>
+<html>
+ <head>
+  <link rel="stylesheet" href="../css/job.css">
+ </head>
+ <body>
+	 
+  <div class=header>
+   Preprocessing Pipeline
+  </div>
+  
+  <div class=jobinfo>
+	<p>Perform Movie squashing, CTF parameter estimation, automatic particle picking and extraction</p>
+  </div>
+  
+	<div class=jobpane>
+		<form action='../JSONhandler' onsubmit="parent.parent.parent.document.getElementById('mainpaneiframe').src = 'projecthistory.html'">
+			<input type=hidden name=function value=simplejob>
+			<input type=hidden name=program value=preproc>
+			<input type=hidden name=jobstatus value=starting>
+			<input type=hidden name=jobtype value=preproc>
+			<input type=hidden name=jobpid value=0>
+			<input type=hidden id=projecttable name=table value=0>
+			<input type=hidden id=projectfolder name=jobfolder value=0>
+			
+			<table id=page1>
+				<tr>
+					<td colspan=2><b>Job Parameters</b></td>
+				</tr>
+				<tr>
+					<td>Job Name</td>
+					<td><input data-required=no type=text name=jobname></td>
+				</tr>
+				<tr data-required=no>
+					<td>Job Description</td>
+					<td><textarea data-required=no name=jobdescription></textarea></td>
+				</tr>
+				<tr>
+					<td colspan=2 style="text-align: center">
+						<button type="button" onclick="document.getElementById('page1').style.display = 'none'; document.getElementById('page2').style.display = 'block'">Next</button>
+					</td>
+				</tr>
+			</table>
+			
+			<table id=page2 style="display:none">
+				<tr>
+					<input data-required=no type=hidden name=dir_target value=output></td>
+					<td colspan=2><b>Required Parameters</b></td>
+				</tr>
+				<tr>
+					<td>Movies Directory</td>
+					<td><input data-required=no type=text name=dir_movies></td>
+					<td><img src=../img/folder.png></td>
+				</tr>
+				<tr>
+					<td>Sampling Distance</td>
+					<td><input data-required=no type=number step=0.01 name=smpd></td>
+					<td></td>
+					<td>Spherical Aberration</td>
+					<td><input data-required=no type=number name=cs></td>
+				</tr>
+					<td>Amplitude Contrast</td>
+					<td><input data-required=no type=number name=fraca></td>
+					<td></td>
+					<td>Acceleration Voltage</td>
+					<td><input data-required=no type=number name=kv></td>
+				<tr>
+					<td colspan=5 style="text-align: center">
+						<button type="button" onclick="document.getElementById('page2').style.display = 'none'; document.getElementById('page1').style.display = 'block'">Back</button>
+						<button type="button" onclick="document.getElementById('page2').style.display = 'none'; document.getElementById('page3').style.display = 'block'">Next</button>
+					</td>
+				</tr>
+			</table>
+			
+			<table id=page3 style="display:none">
+				<tr>
+					<td colspan=2><b>Optional Parameters For Motion Correction</b></td>
+				</tr>
+				<tr>
+					<td>Dose Rate</td>
+					<td><input data-required=no type=number name=dose_rate></td>
+					<td></td>
+					<td>Exposure Time</td>
+					<td><input data-required=no type=number name=exp_time</td>
+				</tr>
+				<tr>
+					<td>From Frame</td>
+					<td><input data-required=no type=number name=fromf></td>
+					<td></td>
+					<td>To Frame</td>
+					<td><input data-required=no type=number name=tof></td>
+				</tr>
+				<tr>
+					<td>Start Low Pass Limit</td>
+					<td><input data-required=no type=number name=lpstart></td>
+					<td></td>
+					<td>Stop Low Pass Limit</td>
+					<td><input data-required=no type=number name=lpstop></td>
+				</tr>
+				<tr>
+					<td>Unblur Power Spectrum Size</td>
+					<td><input data-required=no type=number name=pspecz_unblur></td>
+					<td></td>
+					<td>Phaseplate</td>
+					<td>
+						<select data-required=no name=phaseplate>
+							<option value=yes>Yes</option>
+							<option value=no selected>No</option>
+						</select>
+					</td>
+				</tr>
+				<tr>
+					<td>Image Scale Factor</td>
+					<td><input data-required=no type=number name=scale></td>
+					<td></td>
+					<td>Frames to Group Before Unblur</td>
+					<td><input data-required=no type=number name=nframesgrp></td>
+				</tr>
+				
+				<tr>
+					<td colspan=5 style="text-align: center">
+						<button type="button" onclick="document.getElementById('page3').style.display = 'none'; document.getElementById('page2').style.display = 'block'">Back</button>
+						<button type="button" onclick="document.getElementById('page3').style.display = 'none'; document.getElementById('page4').style.display = 'block'">Next</button>
+					</td>
+				</tr>
+			</table>
+			
+			<table id=page4 style="display:none">
+				<tr>
+					<td colspan=2><b>Optional Parameters For CTF Estimation</b></td>
+				</tr>
+				<tr>
+					<td>Expected Astigmatism </td>
+					<td><input data-required=no type=number name=astigtol></td>
+					<td></td>
+					<td>Maximum Expected Defocus </td>
+					<td><input data-required=no type=number name=dfmax></td>
+				</tr>
+				<tr>
+					<td>Minimum Expected Defocus</td>
+					<td><input data-required=no type=number name=dfmin></td>
+					<td></td>
+					<td>Defocus Search Step</td>
+					<td><input data-required=no type=number name=dfstep></td>
+				</tr>
+				<tr>
+					<td>CTFFIND High Pass Limit</td>
+					<td><input data-required=no type=number name=hp_ctffind></td>
+					<td></td>
+					<td>CTFFIND Low Pass Limit</td>
+					<td><input data-required=no type=number name=lp_ctffind></td>
+				</tr>
+				<tr>
+					<td>CTFFIND Power Spectrum Size</td>
+					<td><input data-required=no type=number name=pspecz_ctffind></td>
+					<td></td>
+					<td>Maximum Halfwidth Shift</td>
+					<td><input data-required=no type=number name=trs></td>
+				</tr>
+				
+				<tr>
+					<td colspan=5 style="text-align: center">
+						<button type="button" onclick="document.getElementById('page4').style.display = 'none'; document.getElementById('page3').style.display = 'block'">Back</button>
+						<button type="button" onclick="document.getElementById('page4').style.display = 'none'; document.getElementById('page5').style.display = 'block'">Next</button>
+					</td>
+				</tr>
+			</table>
+			
+			<table id=page5 style="display:none">
+				<tr>
+					<td colspan=2><b>Optional Parameters For Autopicking</b></td>
+				</tr>
+				<tr>
+					<td>AutoPick</td>
+					<td>
+						<select data-required=no name=dopick>
+							<option value=yes>Yes</option>
+							<option value=no selected>No</option>
+						</select>
+					</td>
+					<td></td>
+					<td>Number Sigmas</td>
+					<td><input data-required=no type=number name=nsig></td>
+				</tr>
+				<tr>
+					<td>Picker Low Pass Limit</td>
+					<td><input data-required=no type=number name=lp_pick></td>
+					<td></td>
+					<td>Clustering Deviations</td>
+					<td><input data-required=no type=number name=ndev></td>
+				</tr>
+				<tr>
+					<td>Remove Outliers</td>
+					<td>
+						<select data-required=no name=rm_outliers>//
+							<option value=yes selected>Yes</option>
+							<option value=no>No</option>
+						</select>
+					</td>
+					<td></td>
+					<td>Particle Contrast</td>
+					<td>
+						<select data-required=no name=pcontrast>//
+							<option value=black selected>Black</option>
+							<option value=white selected>White</option>
+						</select>
+					</td>
+				</tr>
+
+				<tr>
+					<td>Picking References</td>
+					<td><input data-required=no type=number name=refs></td>
+					<td></td>
+					<td>Threshold</td>
+					<td><input data-required=no type=number name=thres></td>
+				</tr>
+				
+				<tr>
+					<td colspan=5 style="text-align: center">
+						<button type="button" onclick="document.getElementById('page5').style.display = 'none'; document.getElementById('page4').style.display = 'block'">Back</button>
+						<button type="button" onclick="document.getElementById('page5').style.display = 'none'; document.getElementById('page6').style.display = 'block'">Next</button>
+					</td>
+				</tr>
+			</table>
+			
+			<table id=page6 style="display:none">
+				<tr>
+					<td colspan=2><b>Run Parameters</b></td>
+					<input type=hidden name=executable value=simple_distr_exec>
+				</tr>
+				<tr>
+					<td>Number Parts</td>
+					<td><input data-required=no type=number name=nparts></td>
+					<td>Number Threads per Part</td>
+					<td><input data-required=no type=number name=nthr></td>
+				</tr>
+					
+				<tr>
+					<td>Number of Compute Units</td>
+					<td>
+						<input type=number type=number name=ncunits >
+					</td>
+					<td>Submit to Queue</td>
+					<td>
+						<select data-required=no name=queue_submit onchange="showHideQueueOptions()">
+							<option value=yes>Yes</option>
+							<option value=no selected>No</option>
+						</select>
+					</td>
+				</tr>
+					
+				<tr data-queue=yes>	
+					<td>Scheduler Type</td>
+					<td>
+						<select data-required=no name=qsys_name>
+							<option value=slurm selected>Slurm</option>
+						</select>
+					</td>
+					<td></td>
+					<td></td>
+				</tr>
+				
+				<tr data-queue=yes>
+					<td>Maximum Job Time</td>
+					<td>
+						<input data-required=no type=number name=time_per_image>
+					</td>
+					<td>Job Identifier</td>
+					<td>
+						<input data-required=no type=text name=qsys_name>
+					</td>
+				</tr>
+				
+				<tr data-queue=yes>
+					<td>Memory Per Job</td>
+					<td>
+						<input data-required=no type=number name=job_memory_per_task>
+					</td>
+					<td>Queue Partition</td>
+					<td>
+						<input data-required=no type=text name=qsys_partition>
+					</td>
+				</tr>
+				
+				<tr data-queue=yes>
+					<td>Number Tasks Per Socket</td>
+					<td>
+						<input data-required=no type=number name=job_ntasks_per_socket>
+					</td>
+					<td>Job Identifier</td>
+					<td>
+						<input data-required=no type=text name=job_name>
+					</td>
+				</tr>
+				
+				<tr data-queue=yes>
+					<td>Queue QOS</td>
+					<td>
+						<input data-required=no type=text name=qsys_qos>
+					</td>
+					<td>Submit Master to Queue</td>
+					<td>
+						<select data-required=no name=submitmaster>
+							<option value=yes>Yes</option>
+							<option value=no selected>No</option>
+						</select>
+					</td>
+				</tr>
+				<tr>
+					<td colspan=4 style="text-align: center">
+						<button type="button" onclick="document.getElementById('page6').style.display = 'none'; document.getElementById('page5').style.display = 'block'">Back</button>
+						<button type="submit" onclick="document.getElementById('page6').style.display = 'none'">Run</button>
+					</td>
+				</tr>
+			</table>
+			
+		</form>
+	</div>
+  <script src="../js/job.js"></script>
+  <script>setProjectTable()</script>
+  <script>setProjectFolder()</script>
+ </body>
+</html>

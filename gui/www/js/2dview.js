@@ -26,40 +26,45 @@ function view2DInit (data) {
 	
 	for(var i = 0; i < iterations.length; i++){
 		var select = document.createElement("option");
-		select.value = iterations[i];
-		select.innerHTML = iterations[i].replace(".star", "").replace("classdoc_","");
+		select.setAttribute("data-classdoc", iterations[i].classdoc);
+		select.setAttribute("data-cavgs", iterations[i].cavgs);
+		select.setAttribute("data-prime2ddoc", iterations[i].prime2ddoc);
+		select.innerHTML = iterations[i].classdoc.replace(".txt", "").replace("classdoc_","");
 		iterationselector.appendChild(select);
 	}
 }
 
 function view2DSelectIteration (caller) {
-	var classstar = caller.options[caller.selectedIndex].value;
+	var iteration = caller.options[caller.selectedIndex];
 	var rootdirectory = document.getElementById('rootdirectory').value;
-	getAjax('JSONhandler?function=viewfile&filename=' + rootdirectory + "/" + caller.value, function(data){showFileViewerData(data)});
+	getAjax('JSONhandler?function=2dviewiteration&classdoc=' + rootdirectory + "/" + iteration.getAttribute("data-classdoc") + "&cavgs="  + rootdirectory + "/" + iteration.getAttribute("data-cavgs")  + "&prime2ddoc="  + rootdirectory + "/" + iteration.getAttribute("data-prime2ddoc"), function(data){showFileViewerData(data)});
 }
 
 
 function showFileViewerData (data){
 	var JSONdata = JSON.parse(data);
 	
-	var rootdirectory = document.getElementById('rootdirectory');
-	rootdirectory.value = JSONdata.rootdirectory;
+	//var rootdirectory = document.getElementById('rootdirectory');
+	//rootdirectory.value = JSONdata.rootdirectory;
 	
 	var sorton = document.getElementById('sorton');
 	sorton.innerHTML = "";
-	for (var i = 0; i < JSONdata.sortoptions.length; i++) {
+	
+	var sortoptions = ["class", "pop", "res","corr", "w"]; 
+	
+	for (var i = 0; i < sortoptions.length; i++) {
 		var option = document.createElement("option");
-		option.value = JSONdata.sortoptions[i];
-		option.innerHTML = JSONdata.sortoptions[i];
+		option.value = sortoptions[i];
+		option.innerHTML = sortoptions[i];
 		sorton.appendChild(option);
 	}
 	
 	var selectionattribute = document.getElementById('selectionattribute');
 	selectionattribute.innerHTML = "";
-	for (var i = 0; i < JSONdata.sortoptions.length; i++) {
+	for (var i = 0; i < sortoptions.length; i++) {
 		var option = document.createElement("option");
-		option.value = JSONdata.sortoptions[i];
-		option.innerHTML = JSONdata.sortoptions[i];
+		option.value = sortoptions[i];
+		option.innerHTML = sortoptions[i];
 		selectionattribute.appendChild(option);
 	}
 	
@@ -74,15 +79,18 @@ function showFileViewerData (data){
 			selectUnselectSnapshot(this);
 		}
 		var attributesdiv = document.createElement("div");
-		attributesdiv.className = 'attributes';
-		for(var j = 0; j < JSONdata.sortoptions.length; j++) {
-			div.setAttribute('data-'+JSONdata.sortoptions[j], JSONdata.snapshots[i][JSONdata.sortoptions[j]]);
+		attributesdiv.className = 'attributes';	
+			
+		var keys = Object.keys(JSONdata.snapshots[0]);
+		for(var j = 0; j < keys.length; j++) {
+			div.setAttribute('data-'+keys[j], JSONdata.snapshots[i][keys[j]]);
 			var attributediv = document.createElement("div");
-			attributediv.innerHTML = JSONdata.sortoptions[j];
+			attributediv.innerHTML = keys[j];
 			attributediv.innerHTML += " : ";
-			attributediv.innerHTML += JSONdata.snapshots[i][JSONdata.sortoptions[j]];
+			attributediv.innerHTML += JSONdata.snapshots[i][keys[j]];
 			attributesdiv.appendChild(attributediv);
 		}
+		div.setAttribute('data-prime2ddoc', JSONdata.prime2ddoc);
 		div.setAttribute('data-id', JSONdata.snapshots[i].id);
 		if(typeof(JSONdata.snapshots[i].frameid) != undefined){
 			div.setAttribute('data-frameid', JSONdata.snapshots[i].frameid);
@@ -90,7 +98,7 @@ function showFileViewerData (data){
 			div.setAttribute('data-frameid', 0);
 		}
 		
-		
+			
 		div.appendChild(attributesdiv);
 		var gauze = document.createElement("div");
 		gauze.className = "snapshotgauze";
@@ -132,17 +140,17 @@ function updateFileViewer () {
 			e.cancelBubble = true;
 			if (e.stopPropagation) e.stopPropagation();
 			showHideParticleViewPopup();
-			getAjax('JSONhandler?function=particleviewer&particlestar=' + this.parentNode.getAttribute('data-rootdirectory') + "/" + this.parentNode.getAttribute('data-splparticlestar') + "&class="  + this.parentNode.getAttribute('data-splclassnumber') , function(data){showParticleData(data)});
+			getAjax('JSONhandler?function=2dviewparticles&prime2ddoc=' + this.parentNode.getAttribute('data-prime2ddoc') + "&class="  + this.parentNode.getAttribute('data-class') , function(data){showParticleData(data)});
 		};
 		snapshots[i].appendChild(eyeimg);
 		var img = document.createElement("img");
-		img.setAttribute('data-src',"JPEGhandler?filename=" + snapshots[i].getAttribute('data-rootdirectory') + "/" + snapshots[i].getAttribute('data-splreferenceimage') + "&contrast=2&brightness=128&size=200&frameid=" + snapshots[i].getAttribute('data-frameid'));
+		img.setAttribute('data-src',"JPEGhandler?filename=" + snapshots[i].getAttribute('data-cavgs') + "&contrast=2&brightness=128&size=200&frameid=" + snapshots[i].getAttribute('data-frameid'));
 		img.style.width = "200px";
 		img.style.height = "200px";
 		img.className = 'data-splreferenceimage';
 		img.alt = "Loading ...";
 		img.setAttribute('data-frameid', snapshots[i].getAttribute('data-frameid'));
-		img.id = snapshots[i].getAttribute('data-rootdirectory') + "/" + snapshots[i].getAttribute('data-splreferenceimage');
+		img.id = snapshots[i].getAttribute('data-cavgs');
 		img.oncontextmenu = function(){
 			var controlstarget = document.getElementById('controlstarget');
 			controlstarget.value = this.className;
@@ -408,8 +416,8 @@ function saveSelection() {
 	var saveselectionfilename = document.getElementById('saveselectionfolder').value + "/" + document.getElementById('saveselectionfilename').value;
 	var selected = document.querySelectorAll('[data-selected="yes"]');
 	var rootdirectory = document.getElementById('rootdirectory').value;
-	var inputfilename = document.getElementById('rootdirectory').value + "/" + document.getElementsByClassName('snapshot')[0].getAttribute('data-splreferenceimage');
-	var url = 'JSONhandler?function=save2dselection';
+	var inputfilename = document.getElementsByClassName('snapshot')[0].getAttribute('data-cavgs');
+	var url = 'JSONhandler?function=2dsaveselection';
 	if(inputfilename){
 		url += "&inputfilename=" + inputfilename;
 	}
@@ -426,9 +434,8 @@ function saveSelection() {
 function saveSelectionParticles() {
 	var saveselectionfilename = document.getElementById('saveselectionparticlesfolder').value + "/" + document.getElementById('saveselectionparticlesfilename').value;
 	var inverseselected = document.querySelectorAll('[data-selected="no"]');
-	var rootdirectory = document.getElementById('rootdirectory').value;
-	var inputfilename = document.getElementById('rootdirectory').value + "/" + document.getElementsByClassName('snapshot')[0].getAttribute('data-splparticlestar');
-	var url = 'JSONhandler?function=save2dselectionparticles';
+	var inputfilename = document.getElementsByClassName('snapshot')[0].getAttribute('data-prime2ddoc');
+	var url = 'JSONhandler?function=2dsaveselectionparticles';
 	if(inputfilename){
 		url += "&inputfilename=" + inputfilename;
 	}
@@ -437,7 +444,7 @@ function saveSelectionParticles() {
 	}
 	url += "&inverseselection=";
 	for (var i = 0; i < inverseselected.length; i++) {
-		url += inverseselected[i].getAttribute("data-splclassnumber") + ",";
+		url += inverseselected[i].getAttribute("data-class") + ",";
 	} 
 	getAjax(url, function(data){showHideSaveSelectionPopup()});
 }
@@ -478,11 +485,12 @@ function applySelection() {
 function showParticleData (data){
 	var JSONdata = JSON.parse(data);
 	var particles = document.getElementById('particles');
+	var rootdirectory = document.getElementById('rootdirectory').value;
 	particles.innerHTML = "";
 	for (var i = 0; i < JSONdata.snapshots.length; i++) {
 		var div = document.createElement("div");
-		div.setAttribute('data-frameid', JSONdata.snapshots[i].split("@")[0]);
-		div.setAttribute('data-src', JSONdata.snapshots[i].split("@")[1]);
+		div.setAttribute('data-frameid', JSONdata.snapshots[i].frameid);
+		div.setAttribute('data-src', rootdirectory + "/" + JSONdata.snapshots[i].stackfile);
 		div.className = 'particle';
 		particles.appendChild(div);
 	} 
@@ -498,7 +506,7 @@ function updateParticleViewer () {
 	
 	for (var i = 0; i < particles.length; i++){
 		var img = document.createElement("img");
-		img.setAttribute('data-src',"JPEGhandler?filename=" + rootdirectory + "/" + particles[i].getAttribute('data-src') + "&contrast=" +particlecontrast+"&brightness="+particlebrightness+"&size="+particlesize+"&frameid=" + particles[i].getAttribute('data-frameid'));
+		img.setAttribute('data-src',"JPEGhandler?filename=" + particles[i].getAttribute('data-src') + "&contrast=" +particlecontrast+"&brightness="+particlebrightness+"&size="+particlesize+"&frameid=" + particles[i].getAttribute('data-frameid'));
 		img.style.width = particlesize+"px";
 		img.style.height = particlesize+"px";
 		img.alt = "Loading ...";
@@ -548,7 +556,7 @@ function updateParticlesControls () {
 	for (var i = 0; i < particles.length; i++){
 		var img = particles[i].getElementsByTagName('img')[0];
 		img.setAttribute('data-loaded',"no");
-		img.setAttribute('data-src',"JPEGhandler?filename=" + rootdirectory + "/" + particles[i].getAttribute('data-src') + "&contrast=" +particlecontrast+"&brightness="+particlebrightness+"&size="+particlesize+"&frameid=" + particles[i].getAttribute('data-frameid'));
+		img.setAttribute('data-src',"JPEGhandler?filename=" + particles[i].getAttribute('data-src') + "&contrast=" +particlecontrast+"&brightness="+particlebrightness+"&size="+particlesize+"&frameid=" + particles[i].getAttribute('data-frameid'));
 		img.style.width = particlesize+"px";
 		img.style.height = particlesize+"px"
 	}

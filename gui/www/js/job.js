@@ -42,25 +42,36 @@ function setProjectTable(){
 	projecttable.value = projectselector.options[projectselector.selectedIndex].getAttribute('data-projecttable');
 }
 
+function setProjectFolder(){
+	var projectselector = parent.parent.document.getElementById('projectselector');
+	var projectfolder = document.getElementById('projectfolder');
+	projectfolder.value = projectselector.options[projectselector.selectedIndex].getAttribute('data-projectfolder');
+}
+
 function showHistory(){
-	var largepopupiframe = parent.parent.document.getElementById('largepopupiframe');
-	largepopupiframe.src = "projecthistory.html";
+	var mainpaneiframe = parent.parent.parent.document.getElementById('mainpaneiframe');
+	mainpaneiframe.src = "projecthistory.html";
 }
 
 function fileSelect(element) {
 	var selectfilepopup = document.getElementById('selectfilepopup');
+	var filetarget = document.getElementById('filetarget');
+	filetarget.value = element.getAttribute('data-target');
+	
 	selectfilepopup.style.display = "block";
 	var gauze = document.getElementById('gauze');
 	gauze.style.display = "block";
-	getFileBrowserData(element);
+	getFileBrowserData();
 }
 
 function folderSelect(element) {
 	var selectfilepopup = document.getElementById('selectfilepopup');
+	var filetarget = document.getElementById('filetarget');
+	filetarget.value = element.getAttribute('data-target');
 	selectfilepopup.style.display = "block";
 	var gauze = document.getElementById('gauze');
 	gauze.style.display = "block";
-	getFolderBrowserData(element);
+	getFolderBrowserData();
 }
 
 function showFileBrowserData(data){
@@ -70,28 +81,47 @@ function showFileBrowserData(data){
 	var selectfiledirectory = document.getElementById('selectfiledirectory');
 	var selectfiletable = document.getElementById('selectfiletable');
 	selectfiletable.innerHTML = "";
-	directories.sort();
+	
 	var row = selectfiletable.insertRow(-1);
-	row.id = JSONdata.directory;
+	var rootdir = JSONdata.rootdirectory.split('/');
+	rootdir.pop()
+	row.id = rootdir.join('/');
 	var cell1 = row.insertCell(0);
 	cell1.innerHTML = "<img src=../img/folder.png class=folderimage>";
 	var cell2 = row.insertCell(1);
 	cell2.innerHTML = "..";
 	cell2.style.width = "100%";
 	row.ondblclick = function(){getFileBrowserData(this.id)};
-	row.onclick = function(){this.style.background = "orange"; document.getElementById('jobfolder').value=this.id};
-	for (var i = 0; i < directories.length; i++) {
-		var row = selectfiletable.insertRow(-1);
-		row.id = JSONdata.directory + "/" + directories[i];
-		var cell1 = row.insertCell(0);
-		cell1.innerHTML = "<img src=../img/folder.png class=folderimage>";
-		var cell2 = row.insertCell(1);
-		cell2.innerHTML = directories[i];
-		cell2.style.width = "100%";
-		row.ondblclick = function(){getFileBrowserData(this.id)};
-		row.onclick = function(){this.style.background = "orange"; document.getElementById('jobfolder').value=this.id};
+	if(!!directories){
+		directories.sort();
+		for (var i = 0; i < directories.length; i++) {
+			if(directories[i][0] != "."){
+				var row = selectfiletable.insertRow(-1);
+				row.id = JSONdata.rootdirectory + "/" + directories[i];
+				var cell1 = row.insertCell(0);
+				cell1.innerHTML = "<img src=../img/folder.png class=folderimage>";
+				var cell2 = row.insertCell(1);
+				cell2.innerHTML = directories[i];
+				cell2.style.width = "100%";
+				row.ondblclick = function(){getFileBrowserData(this.id)};
+			}
+		}
 	}
-	selectfiledirectory.value = JSONdata.directory;
+	if(!!files){
+		files.sort();
+		for (var i = 0; i < files.length; i++) {
+			if(files[i][0] != "."){
+				var row = selectfiletable.insertRow(-1);
+				row.setAttribute("data-target",JSONdata.rootdirectory + "/" + files[i]);
+				var cell1 = row.insertCell(0);
+				var cell2 = row.insertCell(1);
+				cell2.innerHTML = files[i];
+				cell2.style.width = "100%";
+				row.onclick = function(){this.style.background = "orange"; document.getElementById(document.getElementById('filetarget').value).value=this.getAttribute('data-target')};
+			}
+		}
+	}
+	selectfiledirectory.value = JSONdata.rootdirectory;
 }
 
 function showFolderBrowserData(data){
@@ -103,7 +133,7 @@ function showFolderBrowserData(data){
 	selectfiletable.innerHTML = "";
 	directories.sort();
 	var row = selectfiletable.insertRow(-1);
-	var rootdir = JSONdata.directory.split('/');
+	var rootdir = JSONdata.rootdirectory.split('/');
 	rootdir.pop()
 	row.id = rootdir.join('/');
 	var cell1 = row.insertCell(0);
@@ -114,17 +144,20 @@ function showFolderBrowserData(data){
 	row.ondblclick = function(){getFolderBrowserData(this.id)};
 	row.onclick = function(){this.style.background = "orange"; document.getElementById('jobfolder').value=this.id};
 	for (var i = 0; i < directories.length; i++) {
-		var row = selectfiletable.insertRow(-1);
-		row.id = JSONdata.directory + "/" + directories[i];
-		var cell1 = row.insertCell(0);
-		cell1.innerHTML = "<img src=../img/folder.png class=folderimage>";
-		var cell2 = row.insertCell(1);
-		cell2.innerHTML = directories[i];
-		cell2.style.width = "100%";
-		row.ondblclick = function(){getFolderBrowserData(this.id)};
-		row.onclick = function(){this.style.background = "orange"; document.getElementById('jobfolder').value=this.id};
+		if(directories[i][0] != "."){
+			var row = selectfiletable.insertRow(-1);
+			row.id = JSONdata.rootdirectory + "/" + directories[i];
+			row.setAttribute("data-target",JSONdata.rootdirectory + "/" + directories[i]);
+			var cell1 = row.insertCell(0);
+			cell1.innerHTML = "<img src=../img/folder.png class=folderimage>";
+			var cell2 = row.insertCell(1);
+			cell2.innerHTML = directories[i];
+			cell2.style.width = "100%";
+			row.ondblclick = function(){getFolderBrowserData(this.id)};
+			row.onclick = function(){this.style.background = "orange"; document.getElementById(document.getElementById('filetarget').value).value=this.getAttribute('data-target')};
+		}
 	}
-	selectfiledirectory.value = JSONdata.directory;
+	selectfiledirectory.value = JSONdata.rootdirectory;
 }
 
 function getFileBrowserData(directory, filter){
@@ -162,5 +195,16 @@ function showHideModeSelect () {
 		modeimages.style.display = "none";	
 	} else {
 		modeimages.style.display = "block";
+	}
+}
+
+function showHideQueueOptions() {
+	var queueoptions = document.querySelectorAll("[data-queue='yes']");
+	for(var i = 0; i < queueoptions.length; i++){
+		if(queueoptions[i].style.display == "table-row"){
+			queueoptions[i].style.display = "none";
+		}else{
+			queueoptions[i].style.display = "table-row";
+		}
 	}
 }
