@@ -8,7 +8,7 @@ use simple_image,  only: image
 
 implicit none
 
-public :: calc_cartesian_corrmat
+public :: calc_cartesian_corrmat, calc_roinv_corrmat
 private
 
 interface calc_cartesian_corrmat
@@ -133,5 +133,46 @@ contains
             call mskimg%kill
         endif
     end subroutine calc_cartesian_corrmat_2
+
+    subroutine calc_roinv_corrmat( pftcc, trs, corrmat )
+        ! assumes particles/references in pftcc identical sets
+        use simple_pftcc_grad_shsrch, only: pftcc_grad_shsrch
+        use simple_polarft_corrcalc,  only: polarft_corrcalc
+        class(polarft_corrcalc), intent(inout) :: pftcc
+        real,                    intent(in)    :: trs
+        real, allocatable,       intent(out)   :: corrmat(:,:)
+        real, allocatable       :: cxy(:)
+        type(pftcc_grad_shsrch) :: grad_shsrch_obj
+        real :: corrs(pftcc%get_nrots())
+        integer :: iref, iptcl, irot, nptcls, nrefs, loc(1)
+        real    :: lims(2,2), lims_init(2,2)
+        nptcls = pftcc%get_nptcls()
+        nrefs  = pftcc%get_nrefs()
+        if( nptcls /= nrefs ) stop 'nptcls == nrefs in pftcc required; simple_corrmat :: calc_roinv_corrmat'
+        lims(:,1)      = -trs
+        lims(:,2)      =  trs
+        lims_init(:,1) = -SHC_INPL_TRSHWDTH
+        lims_init(:,2) =  SHC_INPL_TRSHWDTH
+        call grad_shsrch_obj%new(pftcc, lims, lims_init=lims_init, maxits=60)
+        if( allocated(corrmat) ) deallocate(corrmat)
+        allocate(corrmat(nptcls,nptcls), stat=alloc_stat)
+        allocchk('In: calc_roinv_corrmat; simple_corrmat')
+        corrmat = 1.
+        do iref=1,nptcls - 1
+            do iptcl=iref + 1,nptcls
+                call pftcc%gencorrs(iref, iptcl, corrs)
+                loc  = maxloc(corrs)
+                irot = loc(1)
+                call grad_shsrch_obj%set_indices(iref,iptcl)
+                cxy = grad_shsrch_obj%minimize(irot=irot)
+                if( irot > 0 )then
+                    corrmat(iref,iptcl) = cxy(1)
+                else
+                    corrmat(iref,iptcl) = corrs(irot)
+                endif
+            end do
+        end do
+        call grad_shsrch_obj%kill
+    end subroutine calc_roinv_corrmat
 
 end module simple_corrmat

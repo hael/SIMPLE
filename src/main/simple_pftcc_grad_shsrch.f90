@@ -28,7 +28,7 @@ type :: pftcc_grad_shsrch
     procedure          :: set_indices => grad_shsrch_set_indices
     procedure          :: minimize    => grad_shsrch_minimize
     procedure          :: kill        => grad_shsrch_kill
-    procedure          ::                grad_shsrch_set_costfun
+    procedure, private ::                grad_shsrch_set_costfun
 end type pftcc_grad_shsrch
 
 contains
