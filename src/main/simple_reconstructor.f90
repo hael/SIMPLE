@@ -231,9 +231,10 @@ contains
         real,                 intent(in)    :: pwght     !< external particle weight (affects both fplane and rho)
         integer :: logi(3), win(3,2), sh, i, h, k
         complex :: comp, oshift
-        real    :: rotmat(3,3), vec(3), loc(3), shconst_here(2), tval, tvalsq
-        real    :: w(self%wdim,self%wdim,self%wdim), arg
-        if( self%ctf%flag /= CTFFLAG_NO )then ! make CTF object & get CTF info
+        real    :: rotmat(3,3), vec(3), loc(3), shconst_here(2)
+        real    :: w(self%wdim,self%wdim,self%wdim), arg, tval, tvalsq
+        if( self%ctf%flag /= CTFFLAG_NO )then
+            ! make CTF object & get CTF info
             self%tfun = ctf(self%get_smpd(), o%get('kv'), o%get('cs'), o%get('fraca'))
             self%dfx  = o%get('dfx')
             if( self%tfastig )then            ! astigmatic CTF model
@@ -243,6 +244,7 @@ contains
                 self%dfy = self%dfx
                 self%angast = 0.
             endif
+            call self%tfun%init(self%dfx, self%dfy, self%angast)
             ! additional phase shift from the Volta
             self%phshift = 0.
             if( self%phaseplate ) self%phshift = o%get('phshift')
@@ -274,10 +276,9 @@ contains
                 if( self%ctf%flag /= CTFFLAG_NO )then
                     ! CTF and CTF**2 values
                     if( self%phaseplate )then
-                        tval = self%tfun%eval(self%ctf_sqSpatFreq(h,k), self%dfx, self%dfy, self%angast, self%ctf_ang(h,k),&
-                        &self%phshift)
+                        tval = self%tfun%eval(self%ctf_sqSpatFreq(h,k), self%ctf_ang(h,k), self%phshift)
                     else
-                        tval = self%tfun%eval(self%ctf_sqSpatFreq(h,k), self%dfx, self%dfy, self%angast, self%ctf_ang(h,k))
+                        tval = self%tfun%eval(self%ctf_sqSpatFreq(h,k), self%ctf_ang(h,k))
                     endif
                     tvalsq = tval * tval
                     if( self%ctf%flag == CTFFLAG_FLIP ) tval = abs(tval)
@@ -334,6 +335,7 @@ contains
                 self%dfy = self%dfx
                 self%angast = 0.
             endif
+            call self%tfun%init(self%dfx, self%dfy, self%angast)
             ! additional phase shift from the Volta
             self%phshift = 0.
             if( self%phaseplate ) self%phshift = o%get('phshift')
@@ -347,8 +349,8 @@ contains
                 sh = nint(hyp(real(h),real(k)))
                 if( sh > self%nyq + 1 )cycle
                 ! calculate non-uniform sampling location
-                vec  = real([h,k,0])
-                loc  = matmul(vec, rotmat)
+                vec = real([h,k,0])
+                loc = matmul(vec, rotmat)
                 ! initiate kernel matrix
                 call sqwin_3d(loc(1), loc(2), loc(3), self%winsz, win)
                 ! no need to update outside the non-redundant Friedel limits
@@ -361,10 +363,9 @@ contains
                 if( self%ctf%flag /= CTFFLAG_NO )then
                     ! calculate CTF and CTF**2 values
                     if( self%phaseplate )then
-                        tval = self%tfun%eval(self%ctf_sqSpatFreq(h,k), self%dfx, self%dfy, self%angast, self%ctf_ang(h,k),&
-                        &self%phshift)
+                        tval = self%tfun%eval(self%ctf_sqSpatFreq(h,k), self%ctf_ang(h,k), self%phshift)
                     else
-                        tval = self%tfun%eval(self%ctf_sqSpatFreq(h,k), self%dfx, self%dfy, self%angast, self%ctf_ang(h,k))
+                        tval = self%tfun%eval(self%ctf_sqSpatFreq(h,k), self%ctf_ang(h,k))
                     endif
                     tvalsq = tval * tval
                     if( self%ctf%flag == CTFFLAG_FLIP ) tval = abs(tval)
@@ -541,14 +542,13 @@ contains
     ! RECONSTRUCTION
 
     !> reconstruction routine
-    subroutine rec( self, p, o, se, state, mul, part )
+    subroutine rec( self, p, o, se, state, part )
         use simple_prep4cgrid, only: prep4cgrid
         class(reconstructor), intent(inout) :: self      !< this object
         class(params),        intent(in)    :: p         !< parameters
         class(oris),          intent(inout) :: o         !< orientations
         class(sym),           intent(inout) :: se        !< symmetry element
         integer,              intent(in)    :: state     !< state to reconstruct
-        real,    optional,    intent(in)    :: mul       !< shift multiplication factor
         integer, optional,    intent(in)    :: part      !< partition (4 parallel rec)
         type(image)      :: img, img_pad
         type(prep4cgrid) :: gridprep
