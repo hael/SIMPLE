@@ -16,7 +16,9 @@
 	<div class=jobpane>
 		<form action='../JSONhandler'>
 			<table id=page1>
-				<input type=hidden name=function value=externaljob>
+				<input type=hidden name=function value=simplejob>
+				<input type=hidden name=executable value=simple_distr_exec>
+				<input type=hidden name=program value=prime2D_stream>
 				<tr>
 					<td colspan=2><b>Job Parameters</b></td>
 				</tr>
@@ -45,7 +47,7 @@
 				</tr>
 				<tr>
 					<td>Sampling Distance</td>
-					<td><input data-required=no type=text name=jobname></td>
+					<td><input data-required=no type=text name=smpd></td>
 					<td></td>
 					<td>Spherical Abberation</td>
 					<td><input data-required=no type=text name=jobname></td>
@@ -107,6 +109,9 @@
 				</tr>
 			</table>
 			<table id=page4 style="display:none">
+				<tr>
+					<td colspan=2><b>Run Parameters</b></td>
+				</tr>
 				<tr>
 					<td colspan=3 style="text-align: center">
 						<button type="button" onclick="document.getElementById('page4').style.display = 'none'; document.getElementById('page3').style.display = 'block'">Back</button>

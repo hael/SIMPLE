@@ -125,4 +125,70 @@ margin-right: 10px;
 .projectpane table {
 	margin: auto;
 }
-    
+
+#selectfileheader{
+	padding-left: 30px;
+}
+
+.selectfilepopup {
+	position: absolute;
+	left: calc(50vw - 270px);
+	top: calc(50vh - 175px);
+	width: 540px;
+	height: 350px;
+	background-color: white;
+	display: none;
+}
+
+
+.selectfiledirectory{
+	width: 500px;
+    padding: 5px 5px;
+    box-sizing: border-box;
+    border: 2px solid #ccc;
+    border-radius: 4px;
+    background-color: #f8f8f8;
+    resize: none;
+    margin: auto;
+    display: block;
+    margin-bottom: 5px;
+}
+
+.selectfiletable {
+	width: 500px;
+    padding: 5px 5px;
+    box-sizing: border-box;
+    border: 2px solid #ccc;
+    border-radius: 4px;
+	font-size: 10px;
+	height: 235px;
+	resize: none;
+	overflow-y: scroll;
+	overflow-x: auto;
+	display: block;
+	background-color: #f8f8f8;
+	margin: auto;
+	display: block;
+	font-size: 10px;
+}
+
+#selectfiletable {
+font-size: 10px;
+}
+
+.selectfiletable tr:nth-child(odd) {
+background: #d7dfea;
+}
+
+.selectfilebutton{
+width: 100px;
+    padding: 5px 5px;
+    box-sizing: border-box;
+    border: 2px solid #ccc;
+    border-radius: 4px;
+    background-color: #7891b0;
+    color: white;
+    resize: none;
+    margin: auto;
+    display: block;
+}

@@ -58,4 +58,14 @@ function selectProject (){
 	}
 }
 
+function showHideMainMenu (){
+	var menu = document.getElementById('hoverdiv');
+	if(menu.style.display == "block"){
+		menu.style.display = "none";
+	} else {
+		menu.style.display = "block";
+	}
+}
+
+
 getProjects();

@@ -52,8 +52,14 @@ left: 7px;
 
 }
 
+.jobpane table{
+	display: block;
+	height: calc(80vh - 20px);
+	overflow: auto;
+}
+
 .jobpane td {
- font-size: 13px;
+ font-size: 11px;
 }
 
 .jobpane textarea {
@@ -75,6 +81,7 @@ left: 7px;
     border-radius: 4px;
     background-color: #f8f8f8;
     resize: none;
+    font-size: 11px;
 }
 
 .jobpane select {
@@ -85,6 +92,7 @@ left: 7px;
     border-radius: 4px;
     background-color: #f8f8f8;
     resize: none;
+    font-size: 11px;
 }
 
 .jobpane button{
@@ -163,6 +171,21 @@ padding: 5px;
    display:inline-block;
 }
 
+.jobiframe::after {
+  content: "";
+  background: url("../img/simple_banner.png");
+	background-size: calc(100vw - 400px) ;
+    background-repeat: no-repeat; 
+    background-position: center;
+  opacity: 0.2;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  right: 0;
+  position: absolute;
+  z-index: -1;  
+  } 
+
 .jobinfo {
 	font-size: 10px;
 	padding-left: 40px;
@@ -171,7 +194,6 @@ padding: 5px;
 #jobiframe{
 	 width: 100%;
 	 height: calc(100vh - 94px);
-	 background-color: white;
 	 border: none;
 	 width: calc(100vw - 200px);
 	 }
@@ -218,6 +240,10 @@ padding: 5px;
 	font-size: 10px;
 }
 
+#selectfiletable {
+font-size: 10px;
+}
+
 .selectfiletable tr:nth-child(odd) {
 background: #d7dfea;
 }
@@ -234,5 +260,11 @@ width: 100px;
     margin: auto;
     display: block;
 }
+
+[data-queue='yes'] {
+	display: none;
+}
+
+
 
 

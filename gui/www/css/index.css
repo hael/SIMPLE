@@ -28,7 +28,7 @@ body {
 	width: 30px;
 }
 
-.headermenu .hoverdiv {
+.hoverdiv {
 	width: 150px;
 	text-align: left;
 	padding: 5px;
@@ -40,15 +40,10 @@ body {
 	top: 20px;
 }
 
-.headermenu .hoverdiv div:hover{
+.hoverdiv div:hover{
 	background-color: #acb2ba;
 }
 
-
-.headermenu:hover .hoverdiv {
-	display: block;
-}
-	
 .projectselector {
 	position: absolute;
 	right: 50px;

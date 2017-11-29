@@ -1,0 +1,78 @@
+#pickpane {
+	display: none;
+}
+
+.headermenu {
+	width: 150px;
+	text-align: left;
+	padding: 5px;
+	display: none;
+	position: absolute;
+	background-color: #d7d7d7;
+	font-size: 12px;
+	left: 40px;
+	top: 20px;
+	z-index: 101;
+}
+
+.headermenu div:hover{
+	background-color: #acb2ba;
+}
+
+.pickmicrographs {
+	width: 200px;
+	display: inline-block;
+}
+
+#pickmicrographs {
+	overflow: auto;
+	font-size: 12px;
+}
+
+.pickcanvas{
+	width: 80vw;
+	height: 80vh;
+	overflow: scroll;
+	display: inline-block;
+	}
+
+.controlspopup {
+	position: absolute;
+	left: calc(50vw - 270px);
+	top: calc(50vh - 175px);
+	width: 540px;
+	height: 350px;
+	background-color: white;
+	display: none;
+}
+
+.popupbutton{
+width: 100px;
+    padding: 5px 5px;
+    box-sizing: border-box;
+    border: 2px solid #ccc;
+    border-radius: 4px;
+    background-color: #7891b0;
+    color: white;
+    resize: none;
+    margin: auto;
+    display: block;
+}
+
+.controlsbrightness,.controlscontrast{
+font-size: 12px;
+width: 300px;
+margin: auto;
+}
+
+.closeimage {
+height: 15px;
+float:right;
+}
+
+
+.simpleiconpopup{
+	position: absolute;
+width: 17px;
+left: 7px;
+}

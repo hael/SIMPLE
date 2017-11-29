@@ -60,6 +60,38 @@ padding-left: 30px;
 	left: 30vw;
 }
 
+.pickingpopup {
+	position: absolute;
+	top: 50px;
+	background-color: white;
+	display: none;
+	left: 10vw;
+	width: 80vw;
+}
+
+.pickingpopup .mainpane{
+	font-size: 10px
+}
+
+.pickingmicrographs{
+width: 200px;
+display: block;
+overflow: scroll;
+height: 80vh;
+display: inline-block;
+}
+
+#pickingviewerimage{
+width: 80vh;
+height: 80vh;
+display: inline-block;
+}	
+
+.referencecreator{
+display: inline-block;
+height: 80vh;
+}
+
 #boxviewerimage{
 width: 80vh;
 height: 80vh;

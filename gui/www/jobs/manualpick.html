@@ -1,0 +1,139 @@
+<DOCTYPE html>
+<html>
+ <head>
+  <link rel="stylesheet" href="../css/job.css">
+  <link rel="stylesheet" href="../css/manualpick.css">
+ </head>
+ <body>
+	 
+  <div class=header>
+   Manual Particle Picking
+  </div>
+  
+  <div class=jobinfo>
+	<p>Manually pick particles from micrographs</p>
+  </div>
+  
+	<div class=jobpane id=jobpane>
+		<form>
+			<input type=hidden id=projecttable name=table value=0>
+			<input type=hidden id=projectfolder name=jobfolder value=0>
+			<input type=hidden id=rootdirectory>
+			
+			<table id=page1>
+				<tr>
+					<td colspan=2><b>Job Parameters</b></td>
+				</tr>
+				<tr>
+					<td>Job Name</td>
+					<td><input data-required=no type=text id=jobname></td>
+				</tr>
+				<tr data-required=no>
+					<td>Job Description</td>
+					<td><textarea data-required=no id=jobdescription></textarea></td>
+				</tr>
+				<tr>
+					<td colspan=2 style="text-align: center">
+						<button type="button" onclick="document.getElementById('page1').style.display = 'none'; document.getElementById('page2').style.display = 'block'">Next</button>
+					</td>
+				</tr>
+			</table>
+			
+			<table id=page2 style="display:none">
+				<tr>
+					<td colspan=2><b>Required Parameters</b></td>
+				</tr>
+				<tr>
+					<td>Micrographs Parameters Table</td>
+					<td><input data-required=no type=text id=unbluroutput></td>
+					<td><img src=../img/folder.png onclick="fileSelect(this)" data-target=unbluroutput></td>
+				</tr>
+				<tr>
+					<td><i>or</i></td>
+				</tr>
+				<tr>
+					<td>Micrographs Directory</td>
+					<td><input data-required=no type=text id=micrographsdirectory></td>
+					<td><img src=../img/folder.png onclick="folderSelect(this)" data-target=micrographsdirectory></td>
+				</tr>
+				<tr>
+					<td>Sampling Distance</td>
+					<td><input data-required=no type=number step=0.01 id=smpd></td>
+					<td></td>
+					<td></td>
+					<td></td>
+				</tr>
+				<tr>
+					<td colspan=5 style="text-align: center">
+						<button type="button" onclick="document.getElementById('page2').style.display = 'none'; document.getElementById('page1').style.display = 'block'">Back</button>
+						<button type="button" onclick="document.getElementById('page2').style.display = 'none'; showManualPicker()">Run</button>
+					</td>
+				</tr>
+			</table>
+			
+		</form>
+	</div>
+	
+	<div id=pickpane>
+		<div class=headermenu id=headermenu>
+		</div>
+		<div class=pickmicrographs>
+			<div>
+				Picking Parameters
+				<label for=boxsize>Boxsize</label>
+				<input type=number id=boxsize name=boxsize value=128>
+				<label for=particlediameter>Particle Diameter</label>
+				<input type=number id=particlediameter name=particlediameter value=32>
+			</div>
+			Micrographs
+			<div id=pickmicrographs></div>
+		</div>
+		<div class=pickcanvas oncontextmenu="showHideControlsPopup();return false;">
+			<canvas id=pickcanvas></canvas>
+		</div>
+	</div>
+	
+	<div id=gauze class=gauze></div>
+	
+	<div class=controlspopup id=controlspopup>
+	  <div class=header>
+		  <img class=simpleiconpopup src=../img/simple_favicon.ico>
+		View Controls
+		<img src=../img/close.png class=closeimage onclick='showHideControlsPopup()'>
+	</div>
+	<input type=hidden id=controlstarget>
+	<div class=mainpane>
+		<div class=controlscontrast>
+			Contrast
+			<input type=range min=0.5 max=10 value=2 id=pickcontrast>
+		</div>		
+		<div class=controlsbrightness>
+			Brightness
+			<input type=range min=0 max=254 value=128 id=pickbrightness>
+		</div>
+	</div>
+	<button class=popupbutton onclick='reloadMicrograph()'>Update</button>
+  </div>
+	
+	<div class=selectfilepopup id=selectfilepopup>
+	 <div class=header id=selectfileheader>
+		<img class=simpleicon id=simpleicon src=../img/simple_favicon.ico>
+		File Browser
+		<img src=../img/close.png class=closeimage onclick='hideFileSelect()'>
+	</div>
+	 <div class=mainpane>
+		 <input type=hidden id=filetarget>
+		<input class=selectfiledirectory id=selectfiledirectory>
+		<div class=selectfiletable>
+			<table id=selectfiletable></table>
+		</div>
+	</div>
+	<button class=selectfilebutton onclick='hideFileSelect()'>Select</button>
+   </div> 
+	
+  <script src="../js/job.js"></script>
+   <script src="../js/manualpick.js"></script>
+  <script>setProjectTable()</script>
+  <script>setProjectFolder()</script>
+ </body>
+</html>

@@ -27,7 +27,7 @@ function getJobs () {
 
 function addJobs(data){
 	var JSONdata = JSON.parse(data);
-	
+	var projectselector = parent.document.getElementById('projectselector');
 	var historytable = document.getElementById('historytable');
 	for (var i = 0; i < JSONdata.jobs.length; i++) {
 		var row = historytable.insertRow();
@@ -56,12 +56,28 @@ function addJobs(data){
 		cell5.appendChild(gearimage);
 		var jobmenu = document.createElement("div");
 		jobmenu.className = "jobmenu";
+		
 		var viewoutput = document.createElement("div");
 		viewoutput.innerHTML = "View Output";
 		viewoutput.setAttribute('data-jobfolder', JSONdata.jobs[i].jobfolder);
 		viewoutput.setAttribute('data-jobtype', JSONdata.jobs[i].jobtype);
 		viewoutput.onclick = function(){viewOutput(this)};
 		jobmenu.appendChild(viewoutput);
+		
+		var viewlogfile = document.createElement("div");
+		viewlogfile.innerHTML = "View Log File";
+		viewlogfile.setAttribute('data-jobfolder', JSONdata.jobs[i].jobfolder);
+		viewlogfile.onclick = function(){viewLogfile(this)};
+		jobmenu.appendChild(viewlogfile)
+		
+		var deleteJob = document.createElement("div");
+		
+		deleteJob.innerHTML = "Delete Job";
+		deleteJob.setAttribute('data-jobid', JSONdata.jobs[i].id);
+		deleteJob.setAttribute('data-projecttable', projectselector.options[projectselector.selectedIndex].getAttribute('data-projecttable'));
+		deleteJob.onclick = function(){deleteJob(this)};
+		jobmenu.appendChild(deleteJob)
+		
 		cell5.appendChild(jobmenu);
 	}
 }
@@ -72,11 +88,32 @@ function viewOutput(element){
 		mainpaneiframe.src = "pipelineview.html?folder=" + element.getAttribute('data-jobfolder');
 	} else if (element.getAttribute('data-jobtype') == "stream2d"){
 		mainpaneiframe.src = "2dview.html?folder=" + element.getAttribute('data-jobfolder');
-	}else if (element.getAttribute('data-jobtype') == "prime2d"){
+	} else if (element.getAttribute('data-jobtype') == "prime2D_stream"){
+		mainpaneiframe.src = "2dview.html?folder=" + element.getAttribute('data-jobfolder')
+	} else if (element.getAttribute('data-jobtype') == "prime2D"){
 		mainpaneiframe.src = "2dview.html?folder=" + element.getAttribute('data-jobfolder');
+	} else if (element.getAttribute('data-jobtype') == "unblur"){
+		mainpaneiframe.src = "unblurview.html?folder=" + element.getAttribute('data-jobfolder');
+	} else if (element.getAttribute('data-jobtype') == "ctffind"){
+		mainpaneiframe.src = "ctffindview.html?folder=" + element.getAttribute('data-jobfolder');
 	}
 
 }
 
+function viewLogfile(element){		
+	var mainpaneiframe = parent.document.getElementById('mainpaneiframe');
+	mainpaneiframe.src = "logfileview.html?folder=" + element.getAttribute('data-jobfolder');
+
+}
+
+function deleteJob(element){
+	var url = 'JSONhandler?function=deletejob&table=' + element.getAttribute('data-projecttable') + '&jobid=' + element.getAttribute('data-jobid');
+	getAjax(url, function(data){window.location.reload(1)});
+}
+
 setTitle();
 getJobs();
+
+setTimeout(function(){
+   window.location.reload(1);
+}, 20000);

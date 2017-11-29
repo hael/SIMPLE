@@ -8,9 +8,9 @@
  <body>
   <div class=header>
    <div class=headermenu>
-	   <img src=img/headermenu.png>
-	   <div class=hoverdiv>
-     <div onclick='showJobSelector()'>New Job</div>
+	   <img src=img/headermenu.png onclick="showHideMainMenu()">
+	   <div class=hoverdiv id=hoverdiv>
+     <div onclick='showJobSelector(); showHideMainMenu()'>New Job</div>
    <!--  <div onclick='showFileViewer()'>View Files</div> -->
 	   </div>
    </div>

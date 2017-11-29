@@ -24,10 +24,10 @@
 	  <div class=header>
 		<img class=simpleicon id=simpleicon src=img/simple_favicon.ico>
 		New Project
-		<img src=img/close.png class=closeimage onclick='hideNewProjectPopup()'>
+		<img src=img/close.png class=closeimage onclick="parent.parent.parent.location.reload(1)">
 	</div>
 	<div class=projectpane>
-		<form action='JSONhandler' onsubmit="hideNewProjectPopup()">
+		<form action='JSONhandler' onsubmit="hideNewProjectPopup(); window.location.reload(1)">
 			<table>
 				<input type=hidden name=function value=newproject>
 				<tr>
@@ -41,7 +41,7 @@
 				<tr>
 					<td>Project Folder</td>
 					<td><input data-required=yes type=text name=projectfolder id=projectfolder></td>
-					<td><img src="img/folder.png" onclick="folderSelect()"></td>
+					<td><img src=img/folder.png onclick="folderSelect(this)" data-target=projectfolder></td
 				</tr>
 				<tr>
 					<td colspan=3 style="text-align: center">
@@ -51,12 +51,24 @@
 			</table>
 		</form>
 	</div>
-	<form action='JSONhandler' )">
-
-
-
-	</div>
   </div>
+
+	
+	<div class=selectfilepopup id=selectfilepopup>
+	 <div class=header id=selectfileheader>
+		<img class=simpleicon id=simpleicon src=../img/simple_favicon.ico>
+		File Browser
+		<img src=../img/close.png class=closeimage onclick='hideFileSelect()'>
+	</div>
+	 <div class=mainpane>
+		 <input type=hidden id=filetarget>
+		<input class=selectfiledirectory id=selectfiledirectory>
+		<div class=selectfiletable>
+			<table id=selectfiletable></table>
+		</div>
+	</div>
+	<button class=selectfilebutton onclick='hideFileSelect()'>Select</button>
+   </div> 
   
   <script src="js/projectmanager.js"></script>
  </body>

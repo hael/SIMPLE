@@ -1,0 +1,250 @@
+<DOCTYPE html>
+<html>
+ <head>
+  <link rel="stylesheet" href="../css/job.css">
+ </head>
+ <body>
+	 
+  <div class=header>
+   CTF Estimation
+  </div>
+  
+  <div class=jobinfo>
+	<p>Calculate CTF parameters</p>
+  </div>
+  
+	<div class=jobpane>
+		<form action='../JSONhandler' onsubmit="parent.parent.parent.document.getElementById('mainpaneiframe').src = 'projecthistory.html'">
+			<input type=hidden name=function value=simplejob>
+			<input type=hidden name=program value=ctffind>
+			<input type=hidden name=jobstatus value=starting>
+			<input type=hidden name=jobtype value=ctffind>
+			<input type=hidden name=jobpid value=0>
+			<input type=hidden id=projecttable name=table value=0>
+			<input type=hidden id=projectfolder name=jobfolder value=0>
+			
+			<table id=page1>
+				<tr>
+					<td colspan=2><b>Job Parameters</b></td>
+				</tr>
+				<tr>
+					<td>Job Name</td>
+					<td><input data-required=no type=text name=jobname></td>
+				</tr>
+				<tr data-required=no>
+					<td>Job Description</td>
+					<td><textarea data-required=no name=jobdescription></textarea></td>
+				</tr>
+				<tr>
+					<td colspan=2 style="text-align: center">
+						<button type="button" onclick="document.getElementById('page1').style.display = 'none'; document.getElementById('page2').style.display = 'block'">Next</button>
+					</td>
+				</tr>
+			</table>
+			
+			<table id=page2 style="display:none">
+				<tr>
+					<input data-required=no type=hidden name=dir_target value=output></td>
+					<td colspan=2><b>Required Parameters</b></td>
+				</tr>
+				<tr>
+					<td>Output From Motion Correction</td>
+					<td><input data-required=no type=text name=unbluroutput id=unbluroutput></td>
+					<td><img src=../img/folder.png onclick="fileSelect(this)" data-target=unbluroutput></td>
+				</tr>
+				<tr>
+					<td>
+						<i>or</i>
+					</td>
+				</tr>
+				<tr>
+					<td>Micrographs Directory</td>
+					<td><input data-required=no type=text name=micrographsdirectory id=micrographsdirectory></td>
+					<td><img src=../img/folder.png onclick="folderSelect(this)" data-target=micrographsdirectory></td>
+				</tr>
+				<tr>
+					<td><br></td>
+				</tr>
+				<tr>
+					<td>Sampling Distance</td>
+					<td><input data-required=no type=number step=0.01 name=smpd></td>
+					<td></td>
+					<td>Spherical Aberration</td>
+					<td><input data-required=no type=number step=0.1  name=cs></td>
+				</tr>
+					<td>Amplitude Contrast</td>
+					<td><input data-required=no type=number step=0.01 name=fraca></td>
+					<td></td>
+					<td>Acceleration Voltage</td>
+					<td><input data-required=no type=number name=kv></td>
+				<tr>
+					<td colspan=5 style="text-align: center">
+						<button type="button" onclick="document.getElementById('page2').style.display = 'none'; document.getElementById('page1').style.display = 'block'">Back</button>
+						<button type="button" onclick="document.getElementById('page2').style.display = 'none'; document.getElementById('page3').style.display = 'block'">Next</button>
+					</td>
+				</tr>
+			</table>
+			
+			<table id=page3 style="display:none">
+				<tr>
+					<td colspan=2><b>Optional Parameters For CTF Estimation</b></td>
+				</tr>
+				<tr>
+					<td>Expected Astigmatism </td>
+					<td><input data-required=no type=number step=0.01 name=astigtol></td>
+					<td></td>
+					<td>Maximum Expected Defocus </td>
+					<td><input data-required=no type=number step=0.01 name=dfmax></td>
+				</tr>
+				<tr>
+					<td>Minimum Expected Defocus</td>
+					<td><input data-required=no type=number step=0.01 name=dfmin></td>
+					<td></td>
+					<td>Defocus Search Step</td>
+					<td><input data-required=no type=number step=0.01 name=dfstep></td>
+				</tr>
+				<tr>
+					<td>High Pass Limit</td>
+					<td><input data-required=no type=number name=hp></td>
+					<td></td>
+					<td>Low Pass Limit</td>
+					<td><input data-required=no type=number name=lp></td>
+				</tr>
+				<tr>
+					<td>Power Spectrum Size</td>
+					<td><input data-required=no type=number name=pspecz></td>
+					<td></td>
+					<td>Phase Plate</td>
+					<td>
+						<select data-required=no name=phaseplate>
+							<option value=yes>Yes</option>
+							<option value=no selected>No</option>
+						</select>
+					</td>
+				</tr>
+				
+				<tr>
+					<td colspan=5 style="text-align: center">
+						<button type="button" onclick="document.getElementById('page3').style.display = 'none'; document.getElementById('page2').style.display = 'block'">Back</button>
+						<button type="button" onclick="document.getElementById('page3').style.display = 'none'; document.getElementById('page4').style.display = 'block'">Next</button>
+					</td>
+				</tr>
+			</table>
+			
+			<table id=page4 style="display:none">
+				<tr>
+					<td colspan=2><b>Run Parameters</b></td>
+					<input type=hidden name=executable value=simple_distr_exec>
+				</tr>
+				<tr>
+					<td>Number Parts</td>
+					<td><input data-required=no type=number name=nparts></td>
+					<td>Number Threads per Part</td>
+					<td><input data-required=no type=number name=nthr></td>
+				</tr>
+					
+				<tr>
+					<td>Number of Compute Units</td>
+					<td>
+						<input type=number type=number name=ncunits >
+					</td>
+					<td>Submit to Queue</td>
+					<td>
+						<select data-required=no name=queue_submit onchange="showHideQueueOptions()">
+							<option value=yes>Yes</option>
+							<option value=no selected>No</option>
+						</select>
+					</td>
+				</tr>
+					
+				<tr data-queue=yes>	
+					<td>Scheduler Type</td>
+					<td>
+						<select data-required=no name=qsys_name>
+							<option value=slurm selected>Slurm</option>
+						</select>
+					</td>
+					<td></td>
+					<td></td>
+				</tr>
+				
+				<tr data-queue=yes>
+					<td>Maximum Job Time</td>
+					<td>
+						<input data-required=no type=number name=time_per_image>
+					</td>
+					<td>Job Identifier</td>
+					<td>
+						<input data-required=no type=text name=qsys_name>
+					</td>
+				</tr>
+				
+				<tr data-queue=yes>
+					<td>Memory Per Job</td>
+					<td>
+						<input data-required=no type=number name=job_memory_per_task>
+					</td>
+					<td>Queue Partition</td>
+					<td>
+						<input data-required=no type=text name=qsys_partition>
+					</td>
+				</tr>
+				
+				<tr data-queue=yes>
+					<td>Number Tasks Per Socket</td>
+					<td>
+						<input data-required=no type=number name=job_ntasks_per_socket>
+					</td>
+					<td>Job Identifier</td>
+					<td>
+						<input data-required=no type=text name=job_name>
+					</td>
+				</tr>
+				
+				<tr data-queue=yes>
+					<td>Queue QOS</td>
+					<td>
+						<input data-required=no type=text name=qsys_qos>
+					</td>
+					<td>Submit Master to Queue</td>
+					<td>
+						<select data-required=no name=submitmaster>
+							<option value=yes>Yes</option>
+							<option value=no selected>No</option>
+						</select>
+					</td>
+				</tr>
+				<tr>
+					<td colspan=4 style="text-align: center">
+						<button type="button" onclick="document.getElementById('page4').style.display = 'none'; document.getElementById('page3').style.display = 'block'">Back</button>
+						<button type="submit" onclick="document.getElementById('page4').style.display = 'none'">Run</button>
+					</td>
+				</tr>
+			</table>
+			
+		</form>
+	</div>
+	
+	<div id=gauze class=gauze></div>
+	
+	<div class=selectfilepopup id=selectfilepopup>
+	 <div class=header id=selectfileheader>
+		<img class=simpleicon id=simpleicon src=../img/simple_favicon.ico>
+		File Browser
+		<img src=../img/close.png class=closeimage onclick='hideFileSelect()'>
+	</div>
+	 <div class=mainpane>
+		 <input type=hidden id=filetarget>
+		<input class=selectfiledirectory id=selectfiledirectory>
+		<div class=selectfiletable>
+			<table id=selectfiletable></table>
+		</div>
+	</div>
+	<button class=selectfilebutton onclick='hideFileSelect()'>Select</button>
+   </div> 
+   
+  <script src="../js/job.js"></script>
+  <script>setProjectTable()</script>
+  <script>setProjectFolder()</script>
+ </body>
+</html>

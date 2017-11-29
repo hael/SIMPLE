@@ -12,6 +12,7 @@ function getAjax (url, success) {
 function postAjax (url, success) {
     var xhr = new XMLHttpRequest();
     xhr.open('POST', url, true);
+    xhr.setRequestHeader("Content-type", "application/x-www-form-urlencoded");
     xhr.onreadystatechange = function() {
         if (xhr.readyState>3 && xhr.status==200){
 			success(xhr.responseText);
@@ -27,7 +28,6 @@ function setTitle() {
 function getFileviewerData () {
 	var fileviewerfilename = document.getElementById('fileviewerfilename').value;
 	getAjax('JSONhandler?function=pipelineview&' + window.location.toString().split('?')[1], function(data){showFileViewerData(data)});
-   
 }
  
 function showProjectHistory(){
@@ -41,64 +41,133 @@ function showFileViewerData (data){
 	var rootdirectory = document.getElementById('rootdirectory');
 	rootdirectory.value = JSONdata.rootdirectory;
 	
+	var saveselectionfolder = document.getElementById('saveselectionfolder');
+	saveselectionfolder.value = JSONdata.rootdirectory;
+	
+	var inputfilename = document.getElementById('inputfilename');
+	inputfilename.value = JSONdata.inputfilename;
+	
+	var pickingmicrographs = document.getElementById('pickingmicrographs');
+	
 	var sorton = document.getElementById('sorton');
 	sorton.innerHTML = "";
-	for (var i = 0; i < JSONdata.sortoptions.length; i++) {
+	
+	var sortoptions = ["dfx", "dfy", "angast","ctfres", "nptcls"]; 
+					
+	for (var i = 0; i < sortoptions.length; i++) {
 		var option = document.createElement("option");
-		option.value = JSONdata.sortoptions[i];
-		option.innerHTML = JSONdata.sortoptions[i];
+		option.value = sortoptions[i];
+		option.innerHTML = sortoptions[i];
 		sorton.appendChild(option);
 	}
 	
 	var selectionattribute = document.getElementById('selectionattribute');
 	selectionattribute.innerHTML = "";
-	for (var i = 0; i < JSONdata.sortoptions.length; i++) {
+	
+	for (var i = 0; i < sortoptions.length; i++) {
 		var option = document.createElement("option");
-		option.value = JSONdata.sortoptions[i];
-		option.innerHTML = JSONdata.sortoptions[i];
+		option.value = sortoptions[i];
+		option.innerHTML = sortoptions[i];
 		selectionattribute.appendChild(option);
 	}
-	
+
 	var snapshots = document.getElementById('snapshots');
 	for (var i = 0; i < JSONdata.snapshots.length; i++) {
 		var div = document.createElement("div");
 		div.className = 'snapshot';
-		div.setAttribute('data-selected', "yes");
+		if(JSONdata.snapshots[i]['state'] == "0"){
+			div.setAttribute('data-selected', "no");
+		} else{
+			div.setAttribute('data-selected', "yes");
+		}
 		div.setAttribute('data-rootdirectory', JSONdata.rootdirectory);
 		div.onclick = function() {
 			selectUnselectSnapshot(this);
 		}
 		var attributesdiv = document.createElement("div");
 		attributesdiv.className = 'attributes';
-		for(var j = 0; j < JSONdata.sortoptions.length; j++) {
-			div.setAttribute('data-'+JSONdata.sortoptions[j], JSONdata.snapshots[i][JSONdata.sortoptions[j]]);
+		
+		var keys = Object.keys(JSONdata.snapshots[0]);
+		for(var j = 0; j < keys.length; j++) {
+			div.setAttribute('data-'+keys[j], JSONdata.snapshots[i][keys[j]]);
 			var attributediv = document.createElement("div");
-			attributediv.innerHTML = JSONdata.sortoptions[j];
+			attributediv.innerHTML = keys[j];
 			attributediv.innerHTML += " : ";
-			attributediv.innerHTML += JSONdata.snapshots[i][JSONdata.sortoptions[j]];
+			attributediv.innerHTML += JSONdata.snapshots[i][keys[j]];
 			attributesdiv.appendChild(attributediv);
 		}
+		
 		div.setAttribute('data-id', JSONdata.snapshots[i].id);
-		if(typeof(JSONdata.snapshots[i].frameid) != undefined){
-			div.setAttribute('data-frameid', JSONdata.snapshots[i].frameid);
-		}else{
-			div.setAttribute('data-frameid', 0);
-		}
-		
-		
+		div.setAttribute('data-frameid', 0);
+
 		div.appendChild(attributesdiv);
 		var gauze = document.createElement("div");
 		gauze.className = "snapshotgauze";
+		if(JSONdata.snapshots[i]['state'] == "0"){
+			gauze.style.display = "block";
+		} 
 		div.appendChild(gauze);
 		snapshots.appendChild(div);
+		
+		var pickingdiv = document.createElement("div");
+		pickingdiv.innerHTML = JSONdata.snapshots[i].intg;
+		pickingdiv.setAttribute('data-src', JSONdata.rootdirectory + "/" + JSONdata.snapshots[i].thumb);
+	//pickingdiv.setAttribute('data-src', JSONdata.rootdirectory + "/" + JSONdata.snapshots[i].intg);
+		pickingdiv.setAttribute('data-boxfile', JSONdata.rootdirectory + "/" + JSONdata.snapshots[i].boxfile);
+		pickingdiv.onclick = function(e){
+			var canvas = document.getElementById('pickingviewerimage');
+			canvas.setAttribute('data-micrograph', this.getAttribute('data-src'));
+			var context = canvas.getContext('2d');
+			context.clearRect(0, 0, canvas.width, canvas.height);
+			backgroundimage = new Image();
+			backgroundimage.src = "JPEGhandler?filename=" + this.getAttribute('data-src') + "&contrast=" + document.getElementById('pickcontrast').value  + "&brightness=" + document.getElementById('pickbrightness').value +"&frameid=0";
+			backgroundimage.onload = function(){
+				canvas.width = backgroundimage.width;
+				canvas.height = backgroundimage.height;
+				canvas.addEventListener('click', function(event) { refineBox(this, event)}, false);
+				//var context = canvas.getContext('2d');
+				context.drawImage(backgroundimage, 0, 0,backgroundimage.width, backgroundimage.height, 0, 0, canvas.width, canvas.height);
+				
+			}
+		}
+		pickingmicrographs.appendChild(pickingdiv);
+		
 	} 
 	updateFileViewer();
 }
 
+function refineBox(currentElement, event){
+    var totalOffsetX = 0;
+    var totalOffsetY = 0;
+    var canvasX = 0;
+    var canvasY = 0;
+
+    do{
+        totalOffsetX += currentElement.offsetLeft - currentElement.scrollLeft;
+        totalOffsetY += currentElement.offsetTop - currentElement.scrollTop;
+    }
+    while(currentElement = currentElement.offsetParent)
+
+    canvasX = event.pageX - totalOffsetX;
+    canvasY = event.pageY - totalOffsetY;
+   
+    var canvas = document.getElementById('pickingviewerimage');
+    
+	var url = "JSONhandler?function=autopick&micrograph=" + canvas.getAttribute('data-micrograph')+"&boxsize=" + document.getElementById('referenceboxsize').value + "&xcoord=" + canvasX +"&ycoord=" + canvasY + "&particlediameter=" + document.getElementById('referencediameter').value + "&thres=" + document.getElementById('thresh').value + "&ndev=" + document.getElementById('ndev').value + "&directory=/home/lea2/joe/Code/SIMPLE_GIT/SIMPLE3.0/gui/src_test";
+	autopickSubmit(url);
+	//getAjax(url, function(data){
+		
+	//	var canvas = document.getElementById('pickingviewerimage');
+	//	var context = canvas.getContext('2d');
+	//	var backgroundimage = new Image();	
+		
+	//});
+}
+
 function showBoxes(){	
 	var canvas = document.getElementById('boxviewerimage');
-	var micrographname = canvas.getAttribute('data-splmicrographname');
-	var boxfilename = canvas.getAttribute('data-splboxfilename');
+	var micrographname = canvas.getAttribute('data-intg');
+	var boxfilename = canvas.getAttribute('data-boxfile');
 	var rootdirectory = canvas.getAttribute('data-rootdirectory');
 	var context = canvas.getContext('2d');
 	context.clearRect(0, 0, canvas.width, canvas.height);
@@ -159,12 +228,12 @@ function updateFileViewer () {
 			if (!e) var e = window.event;
 			e.cancelBubble = true;
 			if (e.stopPropagation) e.stopPropagation();
-			var micrographname = this.parentNode.getAttribute('data-splmicrographname');
-			var boxfilename = this.parentNode.getAttribute('data-splboxfilename');
+			var micrographname = this.parentNode.getAttribute('data-intg');
+			var boxfilename = this.parentNode.getAttribute('data-boxfile');
 			var rootdirectory = this.parentNode.getAttribute('data-rootdirectory');
 			var canvas = document.getElementById('boxviewerimage');
-			canvas.setAttribute('data-splmicrographname', micrographname);
-			canvas.setAttribute('data-splboxfilename', boxfilename);
+			canvas.setAttribute('data-intg', micrographname);
+			canvas.setAttribute('data-boxfile', boxfilename);
 			canvas.setAttribute('data-rootdirectory', rootdirectory);
 			showHideBoxViewPopup();	
 			showBoxes();
@@ -172,16 +241,16 @@ function updateFileViewer () {
 		snapshots[i].appendChild(eyeimg);
 		
 		var rootdirectory = snapshots[i].getAttribute('data-rootdirectory');
-		var thumbnail = snapshots[i].getAttribute('data-splthumbname');
-		var ctffindfit= snapshots[i].getAttribute('data-splctffindfit');
-		var pspec = snapshots[i].getAttribute('data-splpspecname');
+		var thumbnail = snapshots[i].getAttribute('data-thumb');
+		var ctffindfit= snapshots[i].getAttribute('data-ctffindfit');
+		var pspec = snapshots[i].getAttribute('data-pspec');
 		
 		if(!!thumbnail){
 			var img = document.createElement("img");
-			img.setAttribute('data-src',"JPEGhandler?filename=" + rootdirectory + "/" +  thumbnail + "&contrast=2&brightness=128&size=200&frameid=0");
+			img.setAttribute('data-src',"JPEGhandler?filename=" + rootdirectory + "/" +  thumbnail + "&contrast=2&brightness=128&size=200&frameid=0&size=200");
 			img.style.width = "200px";
 			img.style.height = "200px";
-			img.className = 'data-splthumbname';
+			img.className = 'data-thumb';
 			img.alt = "Loading ...";
 			img.setAttribute('data-frameid', 0);
 			img.id =  rootdirectory + "/" + thumbnail;
@@ -196,10 +265,10 @@ function updateFileViewer () {
 		
 		if(!!pspec){
 			var img = document.createElement("img");
-			img.setAttribute('data-src',"JPEGhandler?filename=" + rootdirectory + "/" + pspec  + "&contrast=2&brightness=128&size=200&frameid=0");
+			img.setAttribute('data-src',"JPEGhandler?filename=" + rootdirectory + "/" + pspec  + "&contrast=2&brightness=128&size=200&frameid=0&size=200");
 			img.style.width = "200px";
 			img.style.height = "200px";
-			img.className = 'data-splpspecname';
+			img.className = 'data-pspec';
 			img.alt = "Loading ...";
 			img.setAttribute('data-frameid', 0);
 			img.id =  rootdirectory + "/" + pspec;
@@ -214,10 +283,10 @@ function updateFileViewer () {
 		
 		if(!!ctffindfit){
 			var img = document.createElement("img");
-			img.setAttribute('data-src',"JPEGhandler?filename=" + rootdirectory + "/" +  ctffindfit + "&contrast=2&brightness=128&size=200&frameid=0");
+			img.setAttribute('data-src',"JPEGhandler?filename=" + rootdirectory + "/" +  ctffindfit + "&contrast=2&brightness=128&size=200&frameid=0&size=200");
 			img.style.width = "200px";
 			img.style.height = "200px";
-			img.className = 'data-splctffindfit';
+			img.className = 'data-ctffindfit';
 			img.alt = "Loading ...";
 			img.setAttribute('data-frameid', 0);
 			img.id =  rootdirectory + "/" + ctffindfit;
@@ -338,6 +407,18 @@ function showHideSaveSelectionPopup () {
 		saveselectionpopup.style.display = "block";
 		gauze.style.display = "block";
 	}
+}showHideSaveSelectionParticlesPopup
+
+function showHideSaveSelectionParticlesPopup () {
+	var saveselectionpopup = document.getElementById('saveselectionparticlespopup');
+	var gauze = document.getElementById('gauze');
+	if (saveselectionpopup.style.display == "block") {
+		saveselectionpopup.style.display = "none";
+		gauze.style.display = "none";
+	} else {
+		saveselectionpopup.style.display = "block";
+		gauze.style.display = "block";
+	}
 }
 
 function showHideSelectionPopup () {
@@ -364,6 +445,18 @@ function showHideBoxViewPopup () {
 	}
 }
 
+function showHidePickingPopup () {
+	var pickingpopup = document.getElementById('pickingpopup');
+	var gauze = document.getElementById('gauze');
+	if (pickingpopup.style.display == "block") {
+		pickingpopup.style.display = "none";
+		gauze.style.display = "none";
+	} else {
+		pickingpopup.style.display = "block";
+		gauze.style.display = "block";
+	}
+}
+
 function selectUnselectSnapshot(element) {
 	var snapshotgauze = element.getElementsByClassName('snapshotgauze')[0];
 	if (snapshotgauze.style.display == "block"){
@@ -372,6 +465,44 @@ function selectUnselectSnapshot(element) {
 	} else {
 		snapshotgauze.style.display = "block";
 		element.setAttribute('data-selected', "no");
+	}
+}
+
+function showHideViewedSnapshots (element) {
+	var value = element.options[element.selectedIndex].value;
+	var snapshots =  document.getElementsByClassName('snapshot');
+	
+	if(value == "yes"){
+		for(var i = 0; i < snapshots.length; i++){
+			if(snapshots[i].getAttribute('data-viewed') == "1"){
+				snapshots[i].style.display = "none";
+			}
+		}
+	}else{
+		for(var i = 0; i < snapshots.length; i++){
+			if(snapshots[i].getAttribute('data-viewed') == "1"){
+				snapshots[i].style.display = "";
+			}
+		}
+	}
+}
+
+function showHideUnselectedSnapshots (element) {
+	var value = element.options[element.selectedIndex].value;
+	var snapshots =  document.getElementsByClassName('snapshot');
+	
+	if(value == "yes"){
+		for(var i = 0; i < snapshots.length; i++){
+			if(snapshots[i].getAttribute('data-state') == "0"){
+				snapshots[i].style.display = "none";
+			}
+		}
+	}else{
+		for(var i = 0; i < snapshots.length; i++){
+			if(snapshots[i].getAttribute('data-state') == "0"){
+				snapshots[i].style.display = "";
+			}
+		}
 	}
 }
 
@@ -405,15 +536,36 @@ function sortFileViewer(){
 
 function saveSelection() {
 	var saveselectionfilename = document.getElementById('saveselectionfilename').value;
+	
 	var inverseselected = document.querySelectorAll('[data-selected="no"]');
 	var rootdirectory = document.getElementById('rootdirectory').value;
+	var inputfilename = document.getElementById('inputfilename').value;
 	var url = 'JSONhandler?function=savesel';
-	url += "&inputfilename=" + rootdirectory + "/micrographs_preproc.star";
+	url += "&inputfilename=" + rootdirectory + "/" + inputfilename;
 
 	if(saveselectionfilename){
 		url += "&outputfilename=" + rootdirectory + "/" + saveselectionfilename;
 	}
 	url += "&inverseselection=";
+	for (var i = inverseselected.length - 1; i >= 0; i--) {
+		url += inverseselected[i].getAttribute("data-id") + ",";
+	} 
+	postAjax(url, function(data){showHideSaveSelectionPopup()});
+}
+
+function saveParticlesSelection() {
+	var saveselectionfilename = document.getElementById('saveselectionparticlesfilename').value;
+	var saveselectionfolder = document.getElementById('saveselectionparticlesfolder').value;
+	var inverseselected = document.querySelectorAll('[data-selected="no"]');
+	var rootdirectory = document.getElementById('rootdirectory').value;
+	var inputfilename = document.getElementById('inputfilename').value;
+	var url = 'JSONhandler?function=preprocsaveselectionparticles';
+	url += "&inputfilename=" + rootdirectory + "/" + inputfilename;
+
+	if(saveselectionfilename){
+		url += "&outputfilename=" + rootdirectory + "/" + saveselectionfilename;
+	}
+	url += "&inverseselection=" ;
 	for (var i = inverseselected.length - 1; i >= 0; i--) {
 		url += inverseselected[i].getAttribute("data-id") + ",";
 	} 
@@ -451,6 +603,43 @@ function applySelection() {
 		}
 	}
 	showHideSelectionPopup();
+}
+
+function generatePickref() {
+	var referenceboxsize = document.getElementById('referenceboxsize').value;
+	var referencediameter = document.getElementById('referencediameter').value;
+	var referenceimage = document.getElementById('referenceimage');
+	
+	referenceimage.src="JPEGhandler?function=createpickref&boxsize=" +referenceboxsize+"&sigma="+referencediameter+"&directory=/tmp&contrast=1&brightness=128&frameid=0"
+}
+
+function autopickSubmit(url){
+	var canvas = document.getElementById('pickingviewerimage');
+	var context = canvas.getContext('2d');
+	var backgroundimage = new Image();
+	backgroundimage.src = "JPEGhandler?filename=" + canvas.getAttribute('data-micrograph') + "&contrast=" + document.getElementById('pickcontrast').value + "&brightness=" + document.getElementById('pickbrightness').value + "&frameid=0";
+	backgroundimage.onload = function(){
+		context.clearRect(0, 0, canvas.width, canvas.height);
+		canvas.width = backgroundimage.width;
+		canvas.height = backgroundimage.height;
+		context.drawImage(backgroundimage, 0, 0,backgroundimage.width, backgroundimage.height, 0, 0, canvas.width, canvas.height);
+		//var url = "JSONhandler?function=autopick&folder=/tmp&micrograph=" + canvas.getAttribute('data-micrograph')+"&thres=" + document.getElementById('thresh').value + "&ndev=" + document.getElementById('ndev').value;
+		getAjax(url, function(data){
+			var JSONdata = JSON.parse(data);
+			var canvas = document.getElementById('pickingviewerimage');
+			var boxsize = document.getElementById('referenceboxsize').value;
+			var particlesize = document.getElementById('referencediameter').value;
+			for(var i = 0; i < JSONdata.boxes.length; i++) {
+				context.beginPath();
+				console.log("jjklj");
+				console.log((parseInt(JSONdata.boxes[i][0])+ parseInt(JSONdata.boxes[i][2]) / 2) + " " +  (parseInt(JSONdata.boxes[i][1]) + parseInt(JSONdata.boxes[i][2]) / 2) + " " +parseInt(particlesize));
+				context.arc(parseInt(JSONdata.boxes[i][0]) + parseInt(JSONdata.boxes[i][2]) / 2, parseInt(JSONdata.boxes[i][1]) + parseInt(JSONdata.boxes[i][2]) / 2, parseInt(particlesize) / 2 ,0,2*Math.PI);
+				context.lineWidth=1;
+				context.strokeStyle= "green";
+				context.stroke();
+			}
+		});
+	}
 }
 
 setTitle();

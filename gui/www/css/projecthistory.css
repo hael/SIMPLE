@@ -33,11 +33,12 @@ padding: 5px;
 
 .historytable {
 	font-size: 10px;
-	height: calc(100vh - 50px);
+#	height: calc(100vh - 50px);
 	overflow-y: scroll;
 	overflow-x: auto;
 	display: block;
 }
+
 
 .historytable tr:nth-child(odd) {
 background: #d7dfea;
