@@ -102,6 +102,7 @@ type :: polarft_corrcalc
     procedure          :: set_ptcl_fcomp
     procedure          :: zero_ref
     procedure          :: cp_even2odd_ref
+    procedure          :: cp_even_ref2ptcl
     ! GETTERS
     procedure          :: get_pfromto
     procedure          :: get_nptcls
@@ -394,6 +395,13 @@ contains
         integer,                 intent(in)    :: iref
         self%pfts_refs_odd(iref,:,:) = self%pfts_refs_even(iref,:,:)
     end subroutine cp_even2odd_ref
+
+    subroutine cp_even_ref2ptcl( self, iref, iptcl )
+        class(polarft_corrcalc), intent(inout) :: self
+        integer,                 intent(in)    :: iref, iptcl
+        self%pfts_ptcls(iptcl,:,:) = self%pfts_refs_even(iref,:,:)
+        call self%memoize_sqsum_ptcl(iptcl)
+    end subroutine cp_even_ref2ptcl
 
     ! GETTERS
 
