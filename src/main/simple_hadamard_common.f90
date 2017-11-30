@@ -21,7 +21,6 @@ real, parameter :: CENTHRESH = 0.5    ! threshold for performing volume/cavg cen
 
 contains
 
-
     subroutine read_img( b, p, iptcl )
         class(build),  intent(inout)  :: b
         class(params), intent(inout)  :: p

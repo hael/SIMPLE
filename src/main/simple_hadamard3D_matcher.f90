@@ -397,7 +397,7 @@ contains
                 write(fnr,'(a,1x,f9.2)') 'reconstruction          : ', rt_rec
                 write(fnr,'(a,1x,f9.2)') 'total time              : ', rt_tot
                 write(fnr,'(a)') ''
-                write(fnr,'(a)') '*** REATIVE TIMINGS (%) ***'
+                write(fnr,'(a)') '*** RELATIVE TIMINGS (%) ***'
                 write(fnr,'(a,1x,f9.2)') 'initialisation          : ', (rt_init/rt_tot)             * 100.
                 write(fnr,'(a,1x,f9.2)') 'pftcc preparation       : ', (rt_prep_pftcc/rt_tot)       * 100.
                 write(fnr,'(a,1x,f9.2)') 'primesrch3D preparation : ', (rt_prep_primesrch3D/rt_tot) * 100.

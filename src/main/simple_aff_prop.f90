@@ -18,7 +18,7 @@ type aff_prop
     real,    pointer     :: S(:,:)               !< pointer to similarity matrix
     real,    allocatable :: Y(:), Y2(:)          !< maxvals
     integer, allocatable :: I(:), I2(:)          !< index arrays
-    integer              :: maxits=200           !< maximum number of iterations
+    integer              :: maxits=500           !< maximum number of iterations
     real                 :: ftol=1e-9            !< fractional convergence tolerance score
     real                 :: lam=0.5              !< dampening factor
     real                 :: Smin, Smax           !< similarity min/max

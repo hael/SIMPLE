@@ -608,7 +608,7 @@ contains
             write(fnr,'(a,1x,f9.2)') 'gridding   : ', rt_gridding
             write(fnr,'(a,1x,f9.2)') 'total time : ', rt_tot
             write(fnr,'(a)') ''
-            write(fnr,'(a)') '*** REATIVE TIMINGS (%) ***'
+            write(fnr,'(a)') '*** RELATIVE TIMINGS (%) ***'
             write(fnr,'(a,1x,f9.2)') 'batch loop : ', (rt_batch_loop/rt_tot) * 100.
             write(fnr,'(a,1x,f9.2)') 'gridding   : ', (rt_gridding/rt_tot)   * 100.
             call fclose(fnr)

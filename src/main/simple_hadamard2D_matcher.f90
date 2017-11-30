@@ -283,7 +283,7 @@ contains
                 write(fnr,'(a,1x,f9.2)') 'class averaging      : ', rt_cavg
                 write(fnr,'(a,1x,f9.2)') 'total time           : ', rt_tot
                 write(fnr,'(a)') ''
-                write(fnr,'(a)') '*** REATIVE TIMINGS (%) ***'
+                write(fnr,'(a)') '*** RELATIVE TIMINGS (%) ***'
                 write(fnr,'(a,1x,f9.2)') 'initialisation       : ', (rt_init/rt_tot)        * 100.
                 write(fnr,'(a,1x,f9.2)') 'pftcc preparation    : ', (rt_prep_pftcc/rt_tot)  * 100.
                 write(fnr,'(a,1x,f9.2)') 'stochastic alignment : ', (rt_align/rt_tot)       * 100.
@@ -304,7 +304,7 @@ contains
                 write(fnr,'(a,1x,f9.2)') 'in-plane: ', rt_inpl_sum
                 write(fnr,'(a,1x,f9.2)') 'tot     : ', rt_tot_sum
                 write(fnr,'(a)') ''
-                write(fnr,'(a)') '*** REATIVE TIMINGS (%) ***'
+                write(fnr,'(a)') '*** RELATIVE TIMINGS (%) ***'
                 write(fnr,'(a,1x,f9.2)') 'refloop : ', (rt_refloop_sum/rt_tot_sum)      * 100.
                 write(fnr,'(a,1x,f9.2)') 'in-plane: ', (rt_inpl_sum/rt_tot_sum)         * 100.
             endif
