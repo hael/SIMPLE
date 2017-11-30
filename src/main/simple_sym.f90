@@ -27,7 +27,9 @@ type sym
     procedure          :: get_nsym
     procedure          :: get_pgrp
     procedure          :: apply
-    procedure          :: apply2all
+    procedure, private :: apply2all_1
+    procedure, private :: apply2all_2
+    generic            :: apply2all => apply2all_1, apply2all_2
     procedure          :: rot_to_asym
     procedure          :: rotall_to_asym
     procedure          :: sym_dists
@@ -352,8 +354,8 @@ contains
         e_sym = self%e_sym%get_ori(symop)
     end function get_symori
 
-    !>  \brief  is a symmetry adaptor
-    subroutine apply2all( self, e_in )
+    !>  \brief  is a symmetry adaptor 
+    subroutine apply2all_1( self, e_in )
         class(sym),  intent(inout) :: self
         class(oris), intent(inout) :: e_in !< symmetry orientations
         type(ori)                  :: orientation
@@ -365,7 +367,19 @@ contains
             call e_in%set_ori(j, self%apply(orientation, cnt))
             if( cnt == self%n ) cnt = 0
         end do
-    end subroutine apply2all
+    end subroutine apply2all_1
+
+    !>  \brief  is a symmetry adaptor for applying a specific symmetry
+    !>\         operator to all orientations
+    subroutine apply2all_2( self, e_in, symop )
+        class(sym),  intent(inout) :: self
+        class(oris), intent(inout) :: e_in !< symmetry orientations
+        integer,     intent(in)    :: symop !< symmetry operator
+        integer                    :: j
+        do j=1,e_in%get_noris()
+            call e_in%set_ori(j, self%apply(e_in%get_ori(j), symop))
+        end do
+    end subroutine apply2all_2
 
     !>  \brief  whether or not an orientation falls within the asymetric unit
     function within_asymunit( self, o )result( is_within )

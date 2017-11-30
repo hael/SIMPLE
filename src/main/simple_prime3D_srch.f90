@@ -712,10 +712,6 @@ contains
                 state           = shcloc(self%nstates, corrs_state, self%prev_corr)
                 corr            = corrs_state(state)
                 self%nrefs_eval = count(corrs_state <= self%prev_corr)
-                ! loc             = maxloc(corrs_state) ! greedy in state
-                ! state           = loc(1)
-                ! corr            = corrs_state(state)
-                ! self%nrefs_eval = self%nstates
                 ! greedy inpl move
                 iref = (state-1)*self%nprojs + prev_proj(self%iptcl)
                 proj_space_corrs(self%iptcl,iref)      = corr

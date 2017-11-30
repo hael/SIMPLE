@@ -60,7 +60,8 @@ type, extends(image) :: reconstructor
     ! INTERPOLATION
     procedure, private :: inout_fplane_1
     procedure, private :: inout_fplane_2
-    generic            :: inout_fplane => inout_fplane_1, inout_fplane_2
+    procedure, private :: inout_fplane_3
+    generic            :: inout_fplane => inout_fplane_1, inout_fplane_2, inout_fplane_3
     procedure          :: sampl_dens_correct
     procedure          :: compress_exp
     procedure          :: expand_exp
@@ -400,6 +401,103 @@ contains
         end do
         !$omp end parallel do
     end subroutine inout_fplane_2
+
+    !> insert or un-insert Fourier plane peaks
+    subroutine inout_fplane_3( self, os, inoutmode, cmat, noris, pwght )
+        class(reconstructor), intent(inout) :: self      !< instance
+        class(oris),          intent(inout) :: os        !< orientation peaks
+        logical,              intent(in)    :: inoutmode !< add = .true., subtract = .false.
+        complex(sp),          intent(in)    :: cmat(self%cyc_lims(1,1):self%cyc_lims(1,2),self%cyc_lims(2,1):self%cyc_lims(2,2))
+        integer,              intent(in)    :: noris     !< # of orienations peaks
+        real,                 intent(in)    :: pwght     !< image weight
+        integer :: win(3,2), i, h, k, sh, iori
+        complex :: oshift
+        real    :: rotmats(noris,3,3), vec(3), loc(3), shifts(noris,2), ows(noris)
+        real    :: w(self%wdim,self%wdim,self%wdim), arg, tval, tvalsq
+        if( self%ctf%flag /= CTFFLAG_NO )then ! make CTF object & get CTF info
+            self%tfun = ctf(self%get_smpd(), os%get(1,'kv'), os%get(1,'cs'), os%get(1,'fraca'))
+            self%dfx  = os%get(1,'dfx')
+            if( self%tfastig )then            ! astigmatic CTF model
+                self%dfy    = os%get(1,'dfy')
+                self%angast = os%get(1,'angast')
+            else                              ! non-astigmatic CTF model
+                self%dfy    = self%dfx
+                self%angast = 0.
+            endif
+            call self%tfun%init(self%dfx, self%dfy, self%angast)
+            ! additional phase shift from the Volta
+            self%phshift = 0.
+            if( self%phaseplate ) self%phshift = os%get(1,'phshift')
+        endif
+        do iori = 1, noris
+            ows(iori) = pwght * os%get(iori,'ow')
+            if( ows(iori) < TINY ) cycle
+            rotmats(iori,:,:) = os%get_mat(iori)
+            shifts(iori,:)    = (-os%get_2Dshift(iori)) * self%shconst_rec(1:2)
+        enddo
+        !$omp parallel do collapse(2) default(shared) schedule(static)&
+        !$omp private(h,k,iori,sh,arg,oshift,i,vec,loc,w,win,tval,tvalsq) proc_bind(close)
+        do h=self%cyc_lims(1,1),self%cyc_lims(1,2)
+            do k=self%cyc_lims(2,1),self%cyc_lims(2,2)
+                sh = nint(hyp(real(h),real(k)))
+                if( sh > self%nyq + 1 )cycle
+                vec = real([h,k,0])
+                ! evaluate the transfer function
+                if( self%ctf%flag /= CTFFLAG_NO )then
+                    ! calculate CTF and CTF**2 values
+                    if( self%phaseplate )then
+                        tval = self%tfun%eval(self%ctf_sqSpatFreq(h,k), self%ctf_ang(h,k), self%phshift)
+                    else
+                        tval = self%tfun%eval(self%ctf_sqSpatFreq(h,k), self%ctf_ang(h,k))
+                    endif
+                    tvalsq = tval * tval
+                    if( self%ctf%flag == CTFFLAG_FLIP ) tval = abs(tval)
+                else
+                    tval   = 1.
+                    tvalsq = tval
+                endif
+                ! orientation peaks loop
+                do iori = 1,noris
+                    if( ows(iori) < TINY ) cycle
+                    ! calculate non-uniform sampling location
+                    loc = matmul(vec, rotmats(iori,:,:))
+                    ! initiate kernel matrix
+                    call sqwin_3d(loc(1), loc(2), loc(3), self%winsz, win)
+                    ! no need to update outside the non-redundant Friedel limits
+                    ! consistently with compress_exp
+                    if( win(1,2) < self%lims(1,1) )cycle
+                    ! evaluate shift
+                    arg    = dot_product(shifts(iori,:), vec(1:2))
+                    oshift = cmplx(cos(arg), sin(arg))
+                    ! (weighted) kernel values
+                    w = ows(iori)
+                    do i=1,self%wdim
+                        w(i,:,:) = w(i,:,:) * self%kbwin%apod(real(win(1,1) + i - 1) - loc(1))
+                        w(:,i,:) = w(:,i,:) * self%kbwin%apod(real(win(2,1) + i - 1) - loc(2))
+                        w(:,:,i) = w(:,:,i) * self%kbwin%apod(real(win(3,1) + i - 1) - loc(3))
+                    enddo
+                    ! expanded matrices update
+                    if( inoutmode )then
+                        ! addition
+                        ! CTF and w modulates the component before origin shift
+                        self%cmat_exp(win(1,1):win(1,2), win(2,1):win(2,2), win(3,1):win(3,2)) =&
+                        &self%cmat_exp(win(1,1):win(1,2), win(2,1):win(2,2), win(3,1):win(3,2)) + (cmat(h,k)*tval*w)*oshift
+                        self%rho_exp(win(1,1):win(1,2), win(2,1):win(2,2), win(3,1):win(3,2)) =&
+                        &self%rho_exp(win(1,1):win(1,2), win(2,1):win(2,2), win(3,1):win(3,2)) + tvalsq*w
+                    else
+                        ! subtraction
+                        ! CTF and w modulates the component before origin shift
+                        self%cmat_exp(win(1,1):win(1,2), win(2,1):win(2,2), win(3,1):win(3,2)) =&
+                        &self%cmat_exp(win(1,1):win(1,2), win(2,1):win(2,2), win(3,1):win(3,2)) - (cmat(h,k)*tval*w)*oshift
+                        self%rho_exp(win(1,1):win(1,2), win(2,1):win(2,2), win(3,1):win(3,2)) =&
+                        &self%rho_exp(win(1,1):win(1,2), win(2,1):win(2,2), win(3,1):win(3,2)) - tvalsq*w
+                    endif
+                end do
+            end do
+        end do
+        !$omp end parallel do
+    end subroutine inout_fplane_3
+
 
     !>  is for uneven distribution of orientations correction 
     !>  from Pipe & Menon 1999

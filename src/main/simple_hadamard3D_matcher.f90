@@ -166,7 +166,7 @@ contains
             endif
         endif
 
-        ! PARTICLE INDEXC SAMPLING FOR FRACTIONAL UPDATE (OR NOT)
+        ! PARTICLE INDEX SAMPLING FOR FRACTIONAL UPDATE (OR NOT)
         if( allocated(pinds) )     deallocate(pinds)
         if( allocated(ptcl_mask) ) deallocate(ptcl_mask)
         if( p%l_frac_update )then
