@@ -161,23 +161,11 @@ contains
 					memres  = pack(clsres, mask=mask)
 					! populations of members
 					mempops = pack(clspops, mask=mask)
-
-					! print *, 'pops(icen)/p%balance: ', pops(icen), p%balance
-					! print *, 'nmems: ', nmems
-					! print *, 'meminds_native: ', meminds_native
-					! print *, 'memres: ', memres
-					! print *, 'mempops: ', mempops
-					! print *, 'sum(mempops): ', sum(mempops)
-
 					! rank according to resolution
 					call hpsort(memres, meminds)
 					curr_pop = 0
 					do i=1,nmems
 						curr_pop = curr_pop + nint(mempops(meminds(i)))
-
-						! print *, 'meminds(i)/memres(i)/mempops(i): ', meminds(i), memres(i), mempops(meminds(i))
-						! print *, 'icen/curr_pop: ', icen, curr_pop
-
 						if( curr_pop <= p%balance )then
 							! update pops
 							pops(icen) = curr_pop
