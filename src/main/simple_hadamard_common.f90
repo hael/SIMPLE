@@ -257,8 +257,8 @@ contains
         npeaks  = 1
         nstates = 1
         if( present(os) )then
-            npeaks    = os%get_noris()
-            nstates   = os%get_n('state')
+            npeaks  = os%get_noris()
+            nstates = os%get_n('state')
         endif
         ! particle weight
         pw = 1.0

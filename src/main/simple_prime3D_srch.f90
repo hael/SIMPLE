@@ -85,12 +85,6 @@ contains
         use simple_params, only: params
         class(params),  intent(in) :: p
         integer :: i
-        if( allocated(o_peaks) )then
-            do i=p%fromp,p%top
-                call o_peaks(i)%kill
-            enddo
-            deallocate(o_peaks)
-        endif
         if( allocated(proj_space_euls)  ) deallocate(proj_space_euls)
         if( allocated(proj_space_shift) ) deallocate(proj_space_shift)
         if( allocated(proj_space_corrs) ) deallocate(proj_space_corrs)
@@ -115,6 +109,12 @@ contains
         integer        :: i, istate, iproj, iptcl, prev_state, nnnrefs, cnt, prev_ref, nrefs
         ! clean all class arrays
         call cleanprime3D_srch(p)
+        if( allocated(o_peaks) )then
+            do i=p%fromp,p%top
+                call o_peaks(i)%kill
+            enddo
+            deallocate(o_peaks)
+        endif
         ! reference projection directions
         nrefs = p%nstates * p%nspace
         allocate(proj_space_euls( p%fromp:p%top, nrefs,3), source=0. )
