@@ -706,7 +706,7 @@ contains
                 if( phaseplate ) call phaseplate_correct_fsc(frc, find_plate)
                 call bp%projfrcs%set_frc(icls, frc, istate)
                 ! average low-resolution info between eo pairs to keep things in register
-                find = bp%projfrcs%estimate_find_for_eoavg2D(icls, istate)
+                find = bp%projfrcs%estimate_find_for_eoavg(icls, istate)
                 find = max(find, find_plate)
                 call cavgs_merged(istate,icls)%fwd_ft
                 call cavgs_even(istate,icls)%fwd_ft

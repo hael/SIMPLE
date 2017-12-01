@@ -405,7 +405,7 @@ contains
         write(*,'(A,1X,F6.2)') '>>> RESOLUTION AT FSC=0.500 DETERMINED TO:', self%fsc05
         write(*,'(A,1X,F6.2)') '>>> RESOLUTION AT FSC=0.143 DETERMINED TO:', self%fsc0143
         ! Fourier index for eo averaging
-        find4eoavg = max(K4EOAVGLB,get_lplim_at_corr(corrs, FSC4EOAVG))
+        find4eoavg = max(K4EOAVGLB,get_lplim_at_corr(corrs, FSC4EOAVG3D))
         find4eoavg = max(find4eoavg, find_plate)
         deallocate(corrs, res)
         call even%kill
