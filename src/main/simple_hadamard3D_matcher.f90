@@ -106,7 +106,7 @@ contains
         ! DETERMINE THE NUMBER OF PEAKS
         if( .not. cline%defined('npeaks') )then
             select case(p%refine)
-                case('no', 'yes', 'neigh', 'greedy', 'greedyneigh', 'states')
+                case('no', 'neigh', 'greedy', 'greedyneigh', 'states')
                     if( p%eo .ne. 'no' )then
                         p%npeaks = min(b%e%find_npeaks_from_athres(NPEAKSATHRES), MAXNPEAKS)
                     else
@@ -241,7 +241,7 @@ contains
                     call primesrch3D(iptcl)%exec_prime3D_srch(p%lp, szsn=p%szsn)
                 end do
                 !$omp end parallel do
-            case( 'no','shc','yes' )
+            case( 'no','shc' )
                 if( p%oritab .eq. '' )then
                     !$omp parallel do default(shared) private(i,iptcl) schedule(guided) proc_bind(close)
                     do i=1,nptcls2update

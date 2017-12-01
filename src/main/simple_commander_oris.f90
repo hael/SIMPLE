@@ -362,8 +362,6 @@ contains
         type(build)  :: b
         type(oris)   :: o_oritab3D
         type(ori)    :: ori2d, ori_comp, o
-        if( cline%defined('doclist')   ) stop 'doclist execution route no longer supported'
-        if( cline%defined('comlindoc') ) stop 'comlindoc execution route no longer supported'
         p = params(cline) ! parameters generated
         call b%build_general_tbox(p, cline, do3d=.false.) ! general objects built
         ! find number of selected cavgs
