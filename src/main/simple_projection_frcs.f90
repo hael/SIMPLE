@@ -37,7 +37,6 @@ contains
     procedure, private :: estimate_res_3
     generic            :: estimate_res => estimate_res_1, estimate_res_2, estimate_res_3
     procedure          :: estimate_find_for_eoavg
-    procedure          :: estimate_find_for_eoavg2D
     ! I/O
     procedure          :: read
     procedure          :: write
@@ -261,19 +260,8 @@ contains
         sstate = 1
         if( present(state) ) sstate = state
         call self%raise_exception( proj, sstate, 'ERROR, out of bounds in estimate_find_for_eoavg')
-        find = max(K4EOAVGLB,get_lplim_at_corr(self%frcs(sstate,proj,:), FSC4EOAVG))
+        find = max(K4EOAVGLB,get_lplim_at_corr(self%frcs(sstate,proj,:), FSC4EOAVG2D))
     end function estimate_find_for_eoavg
-
-    function estimate_find_for_eoavg2D( self, proj, state ) result( find )
-        class(projection_frcs), intent(in)  :: self
-        integer,                intent(in)  :: proj
-        integer, optional,      intent(in)  :: state
-        integer :: sstate, find
-        sstate = 1
-        if( present(state) ) sstate = state
-        call self%raise_exception( proj, sstate, 'ERROR, out of bounds in estimate_find_for_eoavg2D')
-        find = max(K4EOAVGLB,get_lplim_at_corr(self%frcs(sstate,proj,:), FSC4EOAVG))
-    end function estimate_find_for_eoavg2D
 
     ! I/O
 
