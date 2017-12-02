@@ -899,24 +899,18 @@ select case(prg)
         keys_optional(4)  = 'lpstart'
         keys_optional(5)  = 'lpstop' 
         keys_optional(6)  = 'frac'
-        keys_optional(7)  = 'automsk'
-        keys_optional(8)  = 'amsklp'
-        keys_optional(9)  = 'edge'
-        keys_optional(10) = 'binwidth'
-        keys_optional(11) = 'inner'
-        keys_optional(12) = 'width'
-        keys_optional(13) = 'nspace'
-        keys_optional(14) = 'shbarrier'
-        keys_optional(15) = 'autoscale'
-        keys_optional(16) = 'pgrp_known'
-        keys_optional(17) = 'center'
-        keys_optional(18) = 'opt'
+        keys_optional(7)  = 'inner'
+        keys_optional(8)  = 'width'
+        keys_optional(9)  = 'nspace'
+        keys_optional(10) = 'autoscale'
+        keys_optional(11) = 'pgrp_known'
+        keys_optional(12) = 'center'
+        keys_optional(13) = 'opt'
+        keys_optional(14) = 'update_frac'
         ! parse command line
         if( describe ) call print_doc_ini3D_from_cavgs
-        call cline%parse(keys_required(:5), keys_optional(:18))
+        call cline%parse(keys_required(:5), keys_optional(:14))
         ! set defaults
-        if( .not. cline%defined('amsklp')    ) call cline%set('amsklp', 20.)
-        if( .not. cline%defined('edge')      ) call cline%set('edge',   10.)
         if( .not. cline%defined('autoscale') ) call cline%set('autoscale', 'yes')
         ! execute
         call xini3D_from_cavgs%execute( cline )

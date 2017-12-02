@@ -362,10 +362,10 @@ contains
         call cline_projvol%delete('nparts')
         ! initialise command line parameters
         ! (1) INITIALIZATION BY STOCHASTIC NEIGHBORHOOD HILL-CLIMBING
+        call cline_prime3D_snhc%delete('update_frac') ! no fractional update in first phase
         call cline_prime3D_snhc%set('prg',    'prime3D')
         call cline_prime3D_snhc%set('ctf',    'no')
         call cline_prime3D_snhc%set('maxits', real(MAXITS_SNHC))
-        
         call cline_prime3D_snhc%set('refine', 'snhc')
         call cline_prime3D_snhc%set('dynlp',  'no') ! better be explicit about the dynlp
         call cline_prime3D_snhc%set('lp',     lplims(1))

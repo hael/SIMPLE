@@ -1238,17 +1238,19 @@ contains
         end do
     end subroutine print_matrices
 
-    subroutine sample4update_and_incrcnt( self, fromto, nsamples, inds, mask )
+    subroutine sample4update_and_incrcnt( self, fromto, update_frac, nsamples, inds, mask )
         use simple_rnd, only: multinomal_many
         class(oris),          intent(inout) :: self
         integer,              intent(in)    :: fromto(2)
-        integer,              intent(inout) :: nsamples
+        real,                 intent(in)    :: update_frac
+        integer,              intent(out)   :: nsamples
         integer, allocatable, intent(out)   :: inds(:)
         logical,              intent(out)   :: mask(fromto(1):fromto(2))
         real,    allocatable :: counts(:), states(:)
         integer, allocatable :: inds_here(:)
         integer :: i, cnt, n_incl
         real    :: val
+        ! gather info
         allocate( states(fromto(1):fromto(2)), counts(fromto(1):fromto(2)), inds_here(fromto(1):fromto(2)))
         do i=fromto(1),fromto(2)
             if( self%o(i)%isthere('updatecnt') )then
@@ -1259,11 +1261,10 @@ contains
             states(i)    = self%o(i)%get('state')
             inds_here(i) = i
         end do
-        ! order
+        ! order counts
         call hpsort(counts, inds_here)
-        ! update nsamples if neded
-        n_incl = count(states > 0.5)
-        if( nsamples > n_incl ) nsamples = n_incl
+        ! figure out how many samples
+        nsamples = nint(update_frac * real(count(states > 0.5)))
         ! allocate output index array
         if( allocated(inds) ) deallocate(inds)
         allocate( inds(nsamples) )
