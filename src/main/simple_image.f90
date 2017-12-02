@@ -385,7 +385,7 @@ contains
         self%rmat = 0.
         self%ft   = .false.
         ! make fftw plans
-        if( self%wthreads .and. (any(ldim > 500) .or. ldim(3) > 200) )then
+        if( self%wthreads .and. (any(ldim >= 500) .or. ldim(3) >= 100) )then
             rc = fftwf_init_threads()
             call fftwf_plan_with_nthreads(nthr_glob)
         endif

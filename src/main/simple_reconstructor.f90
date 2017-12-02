@@ -498,7 +498,6 @@ contains
         !$omp end parallel do
     end subroutine inout_fplane_3
 
-
     !>  is for uneven distribution of orientations correction 
     !>  from Pipe & Menon 1999
     subroutine sampl_dens_correct( self, maxits )

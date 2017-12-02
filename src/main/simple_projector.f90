@@ -31,6 +31,7 @@ type, extends(image) :: projector
     procedure :: reset_expanded
     ! FOURIER PROJECTORS
     procedure :: fproject
+    procedure :: fproject_serial
     procedure :: fproject_polar
     procedure :: interp_fcomp
     ! DESTRUCTOR
@@ -109,29 +110,23 @@ contains
     ! FOURIER PROJECTORS
 
     !> \brief  extracts a Fourier plane from the expanded FT matrix of a volume (self)
-    subroutine fproject( self, e, fplane, lp )
+    subroutine fproject( self, e, fplane )
         class(projector), intent(inout) :: self
         class(ori),       intent(in)    :: e
         class(image),     intent(inout) :: fplane
-        real, optional,   intent(in)    :: lp
         real        :: loc(3)
         integer     :: h, k, sqarg, sqlp, lims(3,2), phys(3), ldim(3)
         complex(sp) :: comp
-        if( present(lp) )then
-            lims = self%loop_lims(1,lp)
-            sqlp = fplane%get_find(lp)**2
-        else
-            lims = self%loop_lims(2) 
-            sqlp = (maxval(lims(:,2)))**2
-        endif
+        lims   = self%loop_lims(2) 
+        sqlp   = (maxval(lims(:,2)))**2
         ldim   = fplane%get_ldim()
-        fplane = cmplx(0.,0.)
+        call fplane%zero_and_flag_ft()
         !$omp parallel do collapse(2) schedule(static) default(shared)&
         !$omp private(h,k,sqarg,loc,phys,comp) proc_bind(close)
         do h=lims(1,1),lims(1,2)
             do k=lims(2,1),lims(2,2)
                 sqarg = dot_product([h,k],[h,k])
-                if(sqarg > sqlp)cycle
+                if( sqarg > sqlp ) cycle
                 loc  = matmul(real([h,k,0]), e%get_mat())
                 comp = self%interp_fcomp(loc)
                 if (h > 0) then
@@ -149,6 +144,39 @@ contains
         end do
         !$omp end parallel do
     end subroutine fproject
+
+    !> \brief  extracts a Fourier plane from the expanded FT matrix of a volume (self)
+    subroutine fproject_serial( self, e, fplane )
+        class(projector), intent(inout) :: self
+        class(ori),       intent(in)    :: e
+        class(image),     intent(inout) :: fplane
+        real        :: loc(3)
+        integer     :: h, k, sqarg, sqlp, lims(3,2), phys(3), ldim(3)
+        complex(sp) :: comp
+        lims   = self%loop_lims(2) 
+        sqlp   = (maxval(lims(:,2)))**2
+        ldim   = fplane%get_ldim()
+        call fplane%zero_and_flag_ft()
+        do h=lims(1,1),lims(1,2)
+            do k=lims(2,1),lims(2,2)
+                sqarg = dot_product([h,k],[h,k])
+                if( sqarg > sqlp ) cycle
+                loc  = matmul(real([h,k,0]), e%get_mat())
+                comp = self%interp_fcomp(loc)
+                if (h > 0) then
+                    phys(1) = h + 1
+                    phys(2) = k + 1 + MERGE(ldim(2),0,k < 0)
+                    phys(3) = 1
+                    call fplane%set_cmat_at(phys, comp)
+                else
+                    phys(1) = -h + 1
+                    phys(2) = -k + 1 + MERGE(ldim(2),0,-k < 0)
+                    phys(3) = 1
+                    call fplane%set_cmat_at(phys, conjg(comp))
+                endif
+            end do
+        end do
+    end subroutine fproject_serial
 
     !> \brief  extracts a polar FT from a volume's expanded FT (self)
     subroutine fproject_polar( self, iref, e, pftcc, iseven )

@@ -90,9 +90,11 @@ contains
         fwght_find0 = maxval(filters2D)
         fwght_find1 = sum(filters2D(:,1)) / real(noris)
         fwght_find2 = sum(filters2D(:,2)) / real(noris)
-        vol_filter  = cmplx(0.0,0.0)
+        call vol_filter%zero_and_flag_ft
+        ! dynamic scheduling works better here because of the imbalanced amount of compute
+        ! it cuts execution time by half as compared to static scheduling
         !$omp parallel do collapse(3) default(shared) private(h,k,l,sh,logi,phys,imatch,fwght)&
-        !$omp schedule(static) proc_bind(close)
+        !$omp schedule(dynamic) proc_bind(close)
         do h=lims(1,1),lims(1,2)
             do k=lims(2,1),lims(2,2)
                 do l=lims(3,1),lims(3,2)

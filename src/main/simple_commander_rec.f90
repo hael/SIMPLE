@@ -56,15 +56,29 @@ contains
     !> for assembling even/odd volumes generated with distributed execution
     subroutine exec_eo_volassemble( self, cline )
         use simple_eo_reconstructor, only: eo_reconstructor
+        use simple_filterer,         only: gen_anisotropic_optlp
+        use simple_timer             ! use all in there
         class(eo_volassemble_commander), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline
         type(params)                  :: p
         type(build)                   :: b
         type(eo_reconstructor)        :: eorecvol_read
-        character(len=:), allocatable :: fname, finished_fname
+        character(len=:), allocatable :: finished_fname, recname, volname
+        character(len=32)             :: eonames(2), resmskname, benchfname
         real, allocatable             :: res05s(:), res0143s(:)
         real                          :: res
-        integer                       :: part, s, n, ss, state, ldim(3), find4eoavg
+        integer                       :: part, s, n, ss, state, ldim(3), find4eoavg, fnr
+        logical, parameter            :: L_BENCH = .true.
+        integer(timer_int_kind)       :: t_init, t_assemble, t_sum_eos, t_sampl_dens_correct_eos
+        integer(timer_int_kind)       :: t_gen_projection_frcs, t_gen_anisotropic_optlp
+        integer(timer_int_kind)       :: t_sampl_dens_correct_sum, t_eoavg, t_tot
+        real(timer_int_kind)          :: rt_init, rt_assemble, rt_sum_eos, rt_sampl_dens_correct_eos
+        real(timer_int_kind)          :: rt_gen_projection_frcs, rt_gen_anisotropic_optlp
+        real(timer_int_kind)          :: rt_sampl_dens_correct_sum, rt_eoavg, rt_tot
+        if( L_BENCH )then
+            t_init = tic()
+            t_tot  = t_init
+        endif
         p = params(cline)                   ! parameters generated
         call b%build_general_tbox(p, cline) ! general objects built
         call b%build_eo_rec_tbox(p)         ! reconstruction toolbox built
@@ -78,6 +92,18 @@ contains
         call eorecvol_read%new(p)
         call eorecvol_read%kill_exp ! reduced memory usage
         n = p%nstates*p%nparts
+        if( L_BENCH )then
+            ! end of init
+            rt_init = toc(t_init)
+            ! initialise incremental timers before loop
+            rt_assemble                = 0.
+            rt_sum_eos                 = 0.
+            rt_sampl_dens_correct_eos  = 0.
+            rt_gen_projection_frcs     = 0.
+            rt_gen_anisotropic_optlp   = 0.
+            rt_sampl_dens_correct_sum  = 0.
+            rt_eoavg                   = 0.
+        endif
         do ss=1,p%nstates
             if( cline%defined('state') )then
                 s     = 1        ! index in recvol
@@ -87,13 +113,62 @@ contains
                 state = ss
             endif
             if( b%a%get_pop(state, 'state' ) == 0 )cycle ! Empty state
+            if( L_BENCH ) t_assemble = tic()
             call b%eorecvol%reset_all
+            ! assemble volumes
             do part=1,p%nparts
-                allocate(fname, source=VOL_FBODY//int2str_pad(state,2)//'_part'//int2str_pad(part,p%numlen))
-                call assemble(fname)
-                deallocate(fname)
+                call eorecvol_read%read_eos(VOL_FBODY//int2str_pad(state,2)//'_part'//int2str_pad(part,p%numlen))
+                ! sum the Fourier coefficients
+                call b%eorecvol%sum(eorecvol_read)
             end do
-            call correct_for_sampling_density_and_estimate_res(VOL_FBODY//int2str_pad(state,2))
+            if( L_BENCH ) rt_assemble = rt_assemble + toc(t_assemble)
+            ! correct for sampling density and estimate resolution
+            allocate(recname, source=VOL_FBODY//int2str_pad(state,2))
+            allocate(volname, source=recname//p%ext)
+            eonames(1) = trim(recname)//'_even'//p%ext
+            eonames(2) = trim(recname)//'_odd'//p%ext
+            resmskname = 'resmask'//p%ext
+            if( L_BENCH ) t_sum_eos = tic()
+            call b%eorecvol%sum_eos
+            if( L_BENCH )then
+                rt_sum_eos               = rt_sum_eos + toc(t_sum_eos)
+                t_sampl_dens_correct_eos = tic()
+            endif
+            call b%eorecvol%sampl_dens_correct_eos(state, eonames(1), eonames(2), resmskname, find4eoavg)
+            if( L_BENCH )then
+                rt_sampl_dens_correct_eos = rt_sampl_dens_correct_eos + toc(t_sampl_dens_correct_eos)
+                t_gen_projection_frcs     = tic()
+            endif
+            call gen_projection_frcs( b, p, cline, eonames(1), eonames(2), resmskname, s, b%projfrcs)
+            if( L_BENCH ) rt_gen_projection_frcs = rt_gen_projection_frcs + toc(t_gen_projection_frcs)
+            call b%projfrcs%write('frcs_state'//int2str_pad(state,2)//'.bin')
+            if( L_BENCH ) t_gen_anisotropic_optlp = tic()
+            call gen_anisotropic_optlp(b%vol2, b%projfrcs, b%e_bal, s, p%pgrp)
+            if( L_BENCH ) rt_gen_anisotropic_optlp = rt_gen_anisotropic_optlp + toc(t_gen_anisotropic_optlp)
+            call b%vol2%write('aniso_optlp_state'//int2str_pad(state,2)//p%ext)
+            call b%eorecvol%get_res(res05s(s), res0143s(s))
+            if( L_BENCH ) t_sampl_dens_correct_sum = tic()
+            call b%eorecvol%sampl_dens_correct_sum( b%vol )
+            if( L_BENCH ) rt_sampl_dens_correct_sum = rt_sampl_dens_correct_sum + toc(t_sampl_dens_correct_sum)
+            call b%vol%write( volname, del_if_exists=.true. )
+            call wait_for_closure( volname )
+            ! need to put the sum back at lowres for the eo pairs
+            if( L_BENCH ) t_eoavg = tic()
+            call b%vol%fwd_ft
+            call b%vol2%zero_and_unflag_ft
+            call b%vol2%read(eonames(1))
+            call b%vol2%fwd_ft
+            call b%vol2%insert_lowres(b%vol, find4eoavg)
+            call b%vol2%bwd_ft
+            call b%vol2%write(eonames(1), del_if_exists=.true.)
+            call b%vol2%zero_and_unflag_ft
+            call b%vol2%read(eonames(2))
+            call b%vol2%fwd_ft
+            call b%vol2%insert_lowres(b%vol, find4eoavg)
+            call b%vol2%bwd_ft
+            call b%vol2%write(eonames(2), del_if_exists=.true.)
+            if( L_BENCH ) rt_eoavg = rt_eoavg + toc(t_eoavg)
+            deallocate(recname, volname)
             if( cline%defined('state') )exit
         end do
         ! set the resolution limit according to the worst resolved model
@@ -110,51 +185,35 @@ contains
             allocate( finished_fname, source='VOLASSEMBLE_FINISHED' )
         endif
         call simple_touch( finished_fname , errmsg='In: commander_rec::eo_volassemble')
-
-        contains
-
-            subroutine assemble( fbody )
-                character(len=*), intent(in) :: fbody
-                call eorecvol_read%read_eos(trim(fbody))
-                ! sum the Fourier coefficients
-                call b%eorecvol%sum(eorecvol_read)
-            end subroutine assemble
-
-            subroutine correct_for_sampling_density_and_estimate_res( recname )
-                use simple_filterer, only: gen_anisotropic_optlp
-                character(len=*), intent(in) :: recname
-                character(len=STDLEN)        :: volname
-                character(len=32)            :: eonames(2), resmskname
-                volname    = trim(recname)//trim(p%ext)
-                eonames(1) = trim(recname)//'_even'//trim(p%ext)
-                eonames(2) = trim(recname)//'_odd'//trim(p%ext)
-                resmskname = 'resmask'//p%ext
-                call b%eorecvol%sum_eos
-                call b%eorecvol%sampl_dens_correct_eos(state, eonames(1), eonames(2), resmskname, find4eoavg)
-                call gen_projection_frcs( b, p, cline, eonames(1), eonames(2), resmskname, s, b%projfrcs)
-                call b%projfrcs%write('frcs_state'//int2str_pad(state,2)//'.bin')
-                call gen_anisotropic_optlp(b%vol2, b%projfrcs, b%e_bal, s, p%pgrp)
-                call b%vol2%write('aniso_optlp_state'//int2str_pad(state,2)//p%ext)
-                call b%eorecvol%get_res(res05s(s), res0143s(s))
-                call b%eorecvol%sampl_dens_correct_sum( b%vol )
-                call b%vol%write( volname, del_if_exists=.true. )
-                call wait_for_closure( volname )
-                ! need to put the sum back at lowres for the eo pairs 
-                call b%vol%fwd_ft
-                call b%vol2%zero_and_unflag_ft
-                call b%vol2%read(eonames(1))
-                call b%vol2%fwd_ft
-                call b%vol2%insert_lowres(b%vol, find4eoavg)
-                call b%vol2%bwd_ft
-                call b%vol2%write(eonames(1), del_if_exists=.true.)
-                call b%vol2%zero_and_unflag_ft
-                call b%vol2%read(eonames(2))
-                call b%vol2%fwd_ft
-                call b%vol2%insert_lowres(b%vol, find4eoavg)
-                call b%vol2%bwd_ft
-                call b%vol2%write(eonames(2), del_if_exists=.true.)
-            end subroutine correct_for_sampling_density_and_estimate_res
-
+        if( L_BENCH )then
+            rt_tot     = toc(t_tot)
+            benchfname = 'EO_VOLASSEMBLE_BENCH.txt'
+            call fopen(fnr, FILE=trim(benchfname), STATUS='REPLACE', action='WRITE')
+            write(fnr,'(a)') '*** TIMINGS (s) ***'
+            write(fnr,'(a,1x,f9.2)') 'initialisation           : ', rt_init
+            write(fnr,'(a,1x,f9.2)') 'assemble of volumes (I/O): ', rt_assemble
+            write(fnr,'(a,1x,f9.2)') 'sum of eo-paris          : ', rt_sum_eos
+            write(fnr,'(a,1x,f9.2)') 'gridding correction (eos): ', rt_sampl_dens_correct_eos
+            write(fnr,'(a,1x,f9.2)') 'projection FRCs          : ', rt_gen_projection_frcs
+            write(fnr,'(a,1x,f9.2)') 'anisotropic filter       : ', rt_gen_anisotropic_optlp
+            write(fnr,'(a,1x,f9.2)') 'gridding correction (sum): ', rt_sampl_dens_correct_sum
+            write(fnr,'(a,1x,f9.2)') 'averaging eo-pairs       : ', rt_eoavg
+            write(fnr,'(a,1x,f9.2)') 'total time               : ', rt_tot
+            write(fnr,'(a)') ''
+            write(fnr,'(a)') '*** RELATIVE TIMINGS (%) ***'
+            write(fnr,'(a,1x,f9.2)') 'initialisation           : ', (rt_init/rt_tot)                   * 100.
+            write(fnr,'(a,1x,f9.2)') 'assemble of volumes (I/O): ', (rt_assemble/rt_tot)               * 100.
+            write(fnr,'(a,1x,f9.2)') 'sum of eo-paris          : ', (rt_sum_eos/rt_tot)                * 100.
+            write(fnr,'(a,1x,f9.2)') 'gridding correction (eos): ', (rt_sampl_dens_correct_eos/rt_tot) * 100.
+            write(fnr,'(a,1x,f9.2)') 'projection FRCs          : ', (rt_gen_projection_frcs/rt_tot)    * 100.
+            write(fnr,'(a,1x,f9.2)') 'anisotropic filter       : ', (rt_gen_anisotropic_optlp/rt_tot)  * 100.
+            write(fnr,'(a,1x,f9.2)') 'gridding correction (sum): ', (rt_sampl_dens_correct_sum/rt_tot) * 100.
+            write(fnr,'(a,1x,f9.2)') 'averaging eo-pairs       : ', (rt_eoavg/rt_tot)                  * 100.
+            write(fnr,'(a,1x,f9.2)') '% accounted for          : ',&
+            &((rt_init+rt_assemble+rt_sum_eos+rt_sampl_dens_correct_eos+rt_gen_projection_frcs+&
+            &rt_gen_anisotropic_optlp+rt_sampl_dens_correct_sum+rt_eoavg)/rt_tot) * 100.
+            call fclose(fnr)
+        endif
     end subroutine exec_eo_volassemble
 
     !> for assembling a volume generated with distributed execution
@@ -168,6 +227,7 @@ contains
         character(len=STDLEN)         :: recvolname, rho_name
         integer                       :: part, s, ss, state, ldim(3)
         type(reconstructor)           :: recvol_read
+        logical                       :: here(2)
         p = params(cline)                   ! parameters generated
         call b%build_general_tbox(p, cline) ! general objects built
         call b%build_rec_tbox(p)            ! reconstruction toolbox built
@@ -185,11 +245,22 @@ contains
             endif
             if( b%a%get_pop(state, 'state' ) == 0 ) cycle ! Empty state
             call b%recvol%reset
+            ! assemble volumes
             do part=1,p%nparts
                 allocate(fbody, source=VOL_FBODY//int2str_pad(state,2)//'_part'//int2str_pad(part,p%numlen))
                 p%vols(s) = fbody//p%ext
                 rho_name  = 'rho_'//fbody//p%ext
-                call assemble(p%vols(s), trim(rho_name))
+                ! 
+                here(1)=file_exists(trim(p%vols(s)))
+                here(2)=file_exists(trim(rho_name))
+                if( all(here) )then
+                    call recvol_read%read(trim(p%vols(s)))
+                    call recvol_read%read_rho(trim(rho_name))
+                    call b%recvol%sum(recvol_read)
+                else
+                    if( .not. here(1) ) write(*,'(A,A,A)') 'WARNING! ', adjustl(trim(p%vols(s))), ' missing'
+                    if( .not. here(2) ) write(*,'(A,A,A)') 'WARNING! ', adjustl(trim(trim(rho_name))), ' missing'
+                endif
                 deallocate(fbody)
             end do
             if( p%nstates == 1 .and. cline%defined('outvol') )then
@@ -197,7 +268,12 @@ contains
             else
                 recvolname = 'recvol_state'//int2str_pad(state,2)//p%ext
             endif
-            call correct_for_sampling_density(trim(recvolname))
+            ! correct for sampling density
+            call b%recvol%sampl_dens_correct
+            call b%recvol%bwd_ft
+            call b%recvol%clip(b%vol)
+            call b%vol%write(trim(p%vols(s)), del_if_exists=.true.)
+            call wait_for_closure(trim(p%vols(s)))
             if( cline%defined('state') )exit
         end do
         call recvol_read%dealloc_rho
@@ -211,35 +287,6 @@ contains
             allocate( finished_fname, source='VOLASSEMBLE_FINISHED' )
         endif
         call simple_touch( finished_fname, errmsg='In: commander_rec :: volassemble')
-
-        contains
-
-            subroutine assemble( recnam, kernam )
-                character(len=*), intent(in) :: recnam
-                character(len=*), intent(in) :: kernam
-                logical                      :: here(2)
-                here(1)=file_exists(recnam)
-                here(2)=file_exists(kernam)
-                if( all(here) )then
-                    call recvol_read%read(recnam)
-                    call recvol_read%read_rho(kernam)
-                    call b%recvol%sum(recvol_read)
-                else
-                    if( .not. here(1) ) write(*,'(A,A,A)') 'WARNING! ', adjustl(trim(recnam)), ' missing'
-                    if( .not. here(2) ) write(*,'(A,A,A)') 'WARNING! ', adjustl(trim(kernam)), ' missing'
-                    return
-                endif
-            end subroutine assemble
-
-            subroutine correct_for_sampling_density( recname )
-                character(len=*), intent(in) :: recname
-                call b%recvol%sampl_dens_correct
-                call b%recvol%bwd_ft
-                call b%recvol%clip(b%vol)
-                call b%vol%write(recname, del_if_exists=.true.)
-                call wait_for_closure(recname)
-            end subroutine correct_for_sampling_density
-
     end subroutine exec_volassemble
 
 end module simple_commander_rec

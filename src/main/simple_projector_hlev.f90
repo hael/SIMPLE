@@ -24,32 +24,52 @@ contains
         class(params),     intent(inout) :: p       !< parameters
         integer, optional, intent(in)    :: top     !< stop index
         type(image),       allocatable :: imgs(:)   !< resulting images
-        type(projector)  :: vol_pad, img_pad
+        type(image),       allocatable :: imgs_pad(:)
+        type(projector)  :: vol_pad
         type(kbinterpol) :: kbwin
-        integer          :: n, i
+        integer          :: n, i, ithr
         kbwin = kbinterpol(KBWINSZ, p%alpha)
         call vol_pad%new([p%boxpd,p%boxpd,p%boxpd], p%smpd)
         call prep4cgrid(vol, vol_pad, kbwin)
-        call img_pad%new([p%boxpd,p%boxpd,1], p%smpd)
         if( present(top) )then
             n = top
         else
             n = o%get_noris()
         endif
-        allocate( imgs(n), stat=alloc_stat )
+        allocate( imgs(n), imgs_pad(p%nthr), stat=alloc_stat )
         allocchk('projvol; simple_projector')
-        call vol_pad%expand_cmat(p%alpha)
-        write(*,'(A)') '>>> GENERATES PROJECTIONS' 
+        ! construct thread safe images
         do i=1,n
-            call progress(i, n)
             call imgs(i)%new([p%box,p%box,1], p%smpd, wthreads=.false.)
-            call vol_pad%fproject( o%get_ori(i), img_pad )
-            call img_pad%bwd_ft
-            call img_pad%clip(imgs(i))
         end do
+        do ithr=1,p%nthr
+            call imgs_pad(ithr)%new([p%boxpd,p%boxpd,1], p%smpd, wthreads=.false.)
+        end do
+        ! prepare for projection
+        call vol_pad%expand_cmat(p%alpha)
+        write(*,'(A)') '>>> GENERATES PROJECTIONS'
+        !$omp parallel do schedule(static) default(shared)&
+        !$omp private(i,ithr) proc_bind(close)
+        do i=1,n
+            ! get thread index
+            ithr = omp_get_thread_num() + 1
+            ! extract central secion
+            call vol_pad%fproject_serial(o%get_ori(i), imgs_pad(ithr))
+            ! back FT
+            call imgs_pad(ithr)%bwd_ft
+            ! clip
+            call imgs_pad(ithr)%clip(imgs(i))
+            ! normalise
+            call imgs(i)%norm
+        end do
+        !$omp end parallel do
+        ! destruct
+        do ithr=1,p%nthr
+            call imgs_pad(ithr)%kill
+        end do
+        deallocate(imgs_pad)
         call vol_pad%kill_expanded
         call vol_pad%kill
-        call img_pad%kill
     end function projvol
 
     !>  \brief  rotates a volume by Euler angle o using Fourier gridding
