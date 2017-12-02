@@ -1,0 +1,71 @@
+30 partitions, 8 cores, M2
+
+*** TIMINGS (s) ***
+initialisation           :      14.38
+assemble of volumes (I/O):      34.63
+sum of eo-paris          :       0.08
+gridding correction (eos):       7.09
+projection FRCs          :      15.17
+anisotropic filter       :      33.35
+gridding correction (sum):      13.13
+averaging eo-pairs       :       1.28
+total time               :     119.45
+
+*** RELATIVE TIMINGS (%) ***
+initialisation           :      12.04
+assemble of volumes (I/O):      28.99
+sum of eo-paris          :       0.07
+gridding correction (eos):       5.93
+projection FRCs          :      12.70
+anisotropic filter       :      27.92
+gridding correction (sum):      10.99
+averaging eo-pairs       :       1.07
+% accounted for          :      99.71
+
+2 partitions, 8cores, workstation
+
+*** TIMINGS (s) ***
+initialisation           :       1.76
+assemble of volumes (I/O):       0.47
+sum of eo-paris          :       0.06
+gridding correction (eos):       6.58
+projection FRCs          :      19.65
+anisotropic filter       :      15.03
+gridding correction (sum):      10.62
+averaging eo-pairs       :       1.37
+total time               :      55.75
+
+*** RELATIVE TIMINGS (%) ***
+initialisation           :       3.15
+assemble of volumes (I/O):       0.84
+sum of eo-paris          :       0.11
+gridding correction (eos):      11.80
+projection FRCs          :      35.25
+anisotropic filter       :      26.97
+gridding correction (sum):      19.05
+averaging eo-pairs       :       2.45
+% accounted for          :      99.62
+
+10 partitions, 12 ores, M3
+
+*** TIMINGS (s) ***
+initialisation           :       2.15
+assemble of volumes (I/O):       7.48
+sum of eo-paris          :       0.07
+gridding correction (eos):       5.17
+projection FRCs          :      13.03
+anisotropic filter       :      15.00
+gridding correction (sum):       9.84
+averaging eo-pairs       :       1.15
+total time               :      54.37
+
+*** RELATIVE TIMINGS (%) ***
+initialisation           :       3.95
+assemble of volumes (I/O):      13.76
+sum of eo-paris          :       0.12
+gridding correction (eos):       9.50
+projection FRCs          :      23.96
+anisotropic filter       :      27.59
+gridding correction (sum):      18.10
+averaging eo-pairs       :       2.12
+% accounted for          :      99.12

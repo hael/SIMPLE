@@ -227,7 +227,6 @@ contains
         character(len=STDLEN)         :: recvolname, rho_name
         integer                       :: part, s, ss, state, ldim(3)
         type(reconstructor)           :: recvol_read
-        logical                       :: here(2)
         p = params(cline)                   ! parameters generated
         call b%build_general_tbox(p, cline) ! general objects built
         call b%build_rec_tbox(p)            ! reconstruction toolbox built
@@ -245,22 +244,11 @@ contains
             endif
             if( b%a%get_pop(state, 'state' ) == 0 ) cycle ! Empty state
             call b%recvol%reset
-            ! assemble volumes
             do part=1,p%nparts
                 allocate(fbody, source=VOL_FBODY//int2str_pad(state,2)//'_part'//int2str_pad(part,p%numlen))
                 p%vols(s) = fbody//p%ext
                 rho_name  = 'rho_'//fbody//p%ext
-                ! 
-                here(1)=file_exists(trim(p%vols(s)))
-                here(2)=file_exists(trim(rho_name))
-                if( all(here) )then
-                    call recvol_read%read(trim(p%vols(s)))
-                    call recvol_read%read_rho(trim(rho_name))
-                    call b%recvol%sum(recvol_read)
-                else
-                    if( .not. here(1) ) write(*,'(A,A,A)') 'WARNING! ', adjustl(trim(p%vols(s))), ' missing'
-                    if( .not. here(2) ) write(*,'(A,A,A)') 'WARNING! ', adjustl(trim(trim(rho_name))), ' missing'
-                endif
+                call assemble(p%vols(s), trim(rho_name))
                 deallocate(fbody)
             end do
             if( p%nstates == 1 .and. cline%defined('outvol') )then
@@ -268,12 +256,7 @@ contains
             else
                 recvolname = 'recvol_state'//int2str_pad(state,2)//p%ext
             endif
-            ! correct for sampling density
-            call b%recvol%sampl_dens_correct
-            call b%recvol%bwd_ft
-            call b%recvol%clip(b%vol)
-            call b%vol%write(trim(p%vols(s)), del_if_exists=.true.)
-            call wait_for_closure(trim(p%vols(s)))
+            call correct_for_sampling_density(trim(recvolname))
             if( cline%defined('state') )exit
         end do
         call recvol_read%dealloc_rho
@@ -287,6 +270,35 @@ contains
             allocate( finished_fname, source='VOLASSEMBLE_FINISHED' )
         endif
         call simple_touch( finished_fname, errmsg='In: commander_rec :: volassemble')
+
+        contains
+
+            subroutine assemble( recnam, kernam )
+                character(len=*), intent(in) :: recnam
+                character(len=*), intent(in) :: kernam
+                logical                      :: here(2)
+                here(1)=file_exists(recnam)
+                here(2)=file_exists(kernam)
+                if( all(here) )then
+                    call recvol_read%read(recnam)
+                    call recvol_read%read_rho(kernam)
+                    call b%recvol%sum(recvol_read)
+                else
+                    if( .not. here(1) ) write(*,'(A,A,A)') 'WARNING! ', adjustl(trim(recnam)), ' missing'
+                    if( .not. here(2) ) write(*,'(A,A,A)') 'WARNING! ', adjustl(trim(kernam)), ' missing'
+                    return
+                endif
+            end subroutine assemble
+
+            subroutine correct_for_sampling_density( recname )
+                character(len=*), intent(in) :: recname
+                call b%recvol%sampl_dens_correct
+                call b%recvol%bwd_ft
+                call b%recvol%clip(b%vol)
+                call b%vol%write(recname, del_if_exists=.true.)
+                call wait_for_closure(recname)
+            end subroutine correct_for_sampling_density
+
     end subroutine exec_volassemble
 
 end module simple_commander_rec
