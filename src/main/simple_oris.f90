@@ -1240,13 +1240,14 @@ contains
 
     subroutine sample4update_and_incrcnt( self, fromto, nsamples, inds, mask )
         use simple_rnd, only: multinomal_many
-        class(oris),       intent(inout) :: self
-        integer,           intent(in)    :: fromto(2), nsamples
-        integer,           intent(out)   :: inds(nsamples)
-        logical,           intent(out)   :: mask(fromto(1):fromto(2))
+        class(oris),          intent(inout) :: self
+        integer,              intent(in)    :: fromto(2)
+        integer,              intent(inout) :: nsamples
+        integer, allocatable, intent(out)   :: inds(:)
+        logical,              intent(out)   :: mask(fromto(1):fromto(2))
         real,    allocatable :: counts(:), states(:)
         integer, allocatable :: inds_here(:)
-        integer :: i, cnt
+        integer :: i, cnt, n_incl
         real    :: val
         allocate( states(fromto(1):fromto(2)), counts(fromto(1):fromto(2)), inds_here(fromto(1):fromto(2)))
         do i=fromto(1),fromto(2)
@@ -1260,6 +1261,12 @@ contains
         end do
         ! order
         call hpsort(counts, inds_here)
+        ! update nsamples if neded
+        n_incl = count(states > 0.5)
+        if( nsamples > n_incl ) nsamples = n_incl
+        ! allocate output index array
+        if( allocated(inds) ) deallocate(inds)
+        allocate( inds(nsamples) )
         ! sample
         cnt = 0
         do i=fromto(1),fromto(2)

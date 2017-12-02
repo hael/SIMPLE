@@ -171,7 +171,7 @@ contains
         if( allocated(ptcl_mask) ) deallocate(ptcl_mask)
         if( p%l_frac_update )then
             nptcls2update = nint(p%update_frac * real(p%top - p%fromp + 1))
-            allocate(pinds(nptcls2update), ptcl_mask(p%fromp:p%top))
+            allocate(ptcl_mask(p%fromp:p%top))
             call b%a%sample4update_and_incrcnt([p%fromp,p%top], nptcls2update, pinds, ptcl_mask)
             ! correct convergence stats
             do iptcl=p%fromp,p%top
