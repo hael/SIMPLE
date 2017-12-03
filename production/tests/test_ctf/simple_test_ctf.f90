@@ -6,9 +6,9 @@ use simple_rnd,   only: ran3
 use simple_ctffit
 use simple_timer
 implicit none
-! erravg(microns):    2.11304426E-03
-! errmax(microns):    9.35137272E-04
-! time(s)        :    32.833357161999999
+! erravg(microns):    3.46422195E-04
+! errmax(microns):    1.91450119E-04
+! time(s)        :    22.322969166000000
 type(ctf)               :: tfun
 type(image)             :: img, img_msk
 real                    :: dfx_found, dfy_found, angast_found, cc, err
@@ -25,15 +25,15 @@ tctf   = tic()
 errmax = 0.
 erravg = 0.
 do itst=1,NTST
-	print *, 'test: ', itst
-	dfx_ran = 0.5 + ran3() * 4.5
-	call tfun%ctf2pspecimg(img, dfx_ran, dfx_ran, 0.)
-	call ctffit_init(img, SMPD, KV, CS, AC, [0.5,5.0], [HPLIM,LPLIM], 'no' )
-	call ctffit_srch( dfx_found, dfy_found, angast_found, phshift_found, cc, ctfres, 'diag'//int2str(itst)//'.mrc' )
-	print *, 'ctfres: ', ctfres
-	err = abs(dfx_found - dfx_ran)
-	if( err > errmax ) errmax = err
-	erravg = erravg + err
+    print *, 'test: ', itst
+    dfx_ran = 0.5 + ran3() * 4.5
+    call tfun%ctf2pspecimg(img, dfx_ran, dfx_ran, 0.)
+    call ctffit_init(img, SMPD, KV, CS, AC, [0.5,5.0], [HPLIM,LPLIM], 'no' )
+    call ctffit_srch( dfx_found, dfy_found, angast_found, phshift_found, cc, ctfres, 'diag'//int2str(itst)//'.mrc' )
+    print *, 'ctfres: ', ctfres
+    err = abs(dfx_found - dfx_ran)
+    if( err > errmax ) errmax = err
+    erravg = erravg + err
 end do
 print *, 'erravg(microns): ', erravg
 print *, 'errmax(microns): ', errmax

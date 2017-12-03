@@ -475,6 +475,7 @@ contains
         wavelength = 12.26 / sqrt((1000.0 * self%kV) + (0.9784*(1000.0 * self%kV)**2)/(10.0**6.0))
     end function kV2wl
 
+    !>  \brief This test compare ctf2img implementations
     subroutine ctf_test
         use simple_image, only: image
         use simple_rnd,   only: ran3

@@ -76,6 +76,7 @@ contains
         ! memoize reference corr components
         call pspec_ref%prenorm4real_corr(sxx, cc_msk)
         ! contruct optimiser
+        call seed_rnd
         limits        = 0.
         limits(1:2,1) = df_min
         limits(1:2,2) = df_max
@@ -86,7 +87,7 @@ contains
             limits(4,2)   = 3.15 ! little over pi as max lim
         endif
         call ospec_de%specify('de', ndim, limits=limits(1:ndim,:), maxits=400)
-        call ospec_simplex%specify('simplex', ndim, limits=limits(1:ndim,:), maxits=60, nrestarts=3)
+        call ospec_simplex%specify('simplex', ndim, limits=limits(1:ndim,:), maxits=80, nrestarts=5)
         if( l_phaseplate )then
             call ospec_de%set_costfun(ctffit_cost_phaseplate)
             call ospec_simplex%set_costfun(ctffit_cost_phaseplate)
@@ -142,16 +143,16 @@ contains
         phshift = 0.
         if( l_phaseplate ) phshift = ospec_de%x(4)
         
-        ! additional refinement with unconstrained Nelder-Mead
-        ! ospec_simplex%x = ospec_de%x
-        ! call simplexsrch%minimize(ospec_simplex, cost)
-        ! ! report solution
-        ! dfx    = ospec_simplex%x(1)
-        ! dfy    = ospec_simplex%x(2)
-        ! angast = rad2deg(ospec_simplex%x(3))
-        ! cc     = -cost
-        ! phshift = 0.
-        ! if( l_phaseplate ) phshift = ospec_simplex%x(4)
+        ! additional refinement with unconstrained Nelder-Mead: critical to accuracy
+        ospec_simplex%x = ospec_de%x
+        call simplexsrch%minimize(ospec_simplex, fun_self, cost)
+        ! report solution
+        dfx    = ospec_simplex%x(1)
+        dfy    = ospec_simplex%x(2)
+        angast = rad2deg(ospec_simplex%x(3))
+        cc     = -cost
+        phshift = 0.
+        if( l_phaseplate ) phshift = ospec_simplex%x(4)
 
         ! calculate CTFres diagnostic
         call tfun%ctf2pspecimg(pspec_ctf, dfx, dfy, angast, phshift)
