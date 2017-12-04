@@ -1440,12 +1440,12 @@ contains
         ! prepare part-dependent parameters
         if( cline%defined('stktab') )then
             call cline_scale%delete('stktab')
+            nstks = p_master%stkhandle%get_nmics()
             if(cline%defined('nparts'))then
-                nparts = p_master%nparts
+                nparts = min(p_master%nparts, nstks)
             else
                 nparts = 1
             endif
-            nstks = p_master%stkhandle%get_nmics()
             parts = split_nobjs_even(nstks, nparts)
             allocate(part_params(nparts))
             cnt = 0
@@ -1524,12 +1524,12 @@ contains
         ! prepare part-dependent parameters
         if( cline%defined('stktab') )then
             call cline_prep4cgrid%delete('stktab')
+            nstks = p_master%stkhandle%get_nmics()
             if(cline%defined('nparts'))then
-                nparts = p_master%nparts
+                nparts = min(p_master%nparts, nstks)
             else
                 nparts = 1
             endif
-            nstks = p_master%stkhandle%get_nmics()
             parts = split_nobjs_even(nstks, nparts)
             allocate(part_params(nparts))
             cnt = 0
