@@ -847,7 +847,7 @@ select case(prg)
         keys_optional(3) = 'balance'
         ! parse command line
         ! if( describe ) call print_doc_cluster_cavgs
-        call cline%parse(keys_required(:5), keys_optional(:2))
+        call cline%parse(keys_required(:5), keys_optional(:3))
         ! execute
         call xcluster_cavgs%execute(cline)
 
