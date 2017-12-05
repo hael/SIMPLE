@@ -82,8 +82,10 @@ contains
         call distimg%new(self%get_ldim(), p%smpd)
         call distimg%cendist
         call distimg%stats(self, ave, sdev, maxv, minv, med)
-        winsz = max(1, nint((p%msk - maxv) / 2.))
-        call self%real_space_filter(winsz, 'average')
+        winsz = max(8, nint((p%msk - maxv) / 2.))
+        ! soft edge mask
+        call self%grow_bins(2) ! in addition to binwidth (4 safety)
+        call self%cos_edge(winsz)
         ! mask with spherical sof mask
         call self%mask(p%msk, 'soft')
     end subroutine resmask
