@@ -107,9 +107,9 @@ contains
                 call b%a%set_all2single('w', 1.0)
             else
                 if( p%weights2D .eq. 'yes' .and. which_iter > 3 )then
-                    prev_pops = b%a%get_pops('class', consider_w=.true., maxn=p%ncls)
+                    call b%a%get_pops(prev_pops, 'class', consider_w=.true., maxn=p%ncls)
                 else
-                    prev_pops = b%a%get_pops('class', consider_w=.false., maxn=p%ncls)
+                    call b%a%get_pops(prev_pops, 'class', consider_w=.false., maxn=p%ncls)
                 endif
                 ! frac is one by default in prime2D (no option to set frac)
                 ! so spectral weighting is done over all images

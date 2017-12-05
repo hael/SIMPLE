@@ -523,8 +523,8 @@ contains
         real                 :: popmin, popmax, popmed, popave, popsdev, popvar, frac_populated, szmax
         integer              :: nprojs, iptcl, icls, j 
         integer              :: noris, ncls
-        real,    allocatable :: pops(:), tmp(:), clustszs(:), sdevs(:)
-        integer, allocatable :: clustering(:)
+        real,    allocatable :: clustszs(:), sdevs(:)
+        integer, allocatable :: clustering(:), pops(:), tmp(:)
         logical, allocatable :: ptcl_mask(:)
         integer, parameter   :: hlen=50
         logical              :: err
@@ -579,11 +579,11 @@ contains
                     call b%a%set_all2single('w', 1.0)
                 endif
                 ! generate class stats
-                pops           = b%a%get_pops('class', consider_w=.true.)  !! realloc warning
+                call b%a%get_pops(pops, 'class', consider_w=.true.)
                 popmin         = minval(pops)
                 popmax         = maxval(pops)
-                popmed         = median_nocopy(pops)
-                call moment(pops, popave, popsdev, popvar, err)
+                popmed         = median(real(pops))
+                call moment(real(pops), popave, popsdev, popvar, err)
                 write(*,'(a,1x,f8.2)') 'MINIMUM POPULATION :', popmin
                 write(*,'(a,1x,f8.2)') 'MAXIMUM POPULATION :', popmax
                 write(*,'(a,1x,f8.2)') 'MEDIAN  POPULATION :', popmed
@@ -598,7 +598,7 @@ contains
                 end do
                 write(*,'(a)') '>>> HISTOGRAM OF CLASS POPULATIONS'
                 do icls=1,ncls
-                    write(*,*) nint(pops(icls)),"|",('*', j=1,nint(pops(icls)*scale))  
+                    write(*,*) pops(icls),"|",('*', j=1,nint(real(pops(icls)*scale)))  
                 end do
             endif
             if( p%projstats .eq. 'yes' )then
@@ -615,14 +615,14 @@ contains
                     call b%a%calc_hard_weights(p%frac)
                 endif
                 ! generate population stats
-                tmp            = b%a%get_pops('proj', consider_w=.true.)!! realloc warning
+                call b%a%get_pops(tmp, 'proj', consider_w=.true.)
                 nprojs         = size(tmp)
                 pops           = pack(tmp, tmp > 0.5)                   !! realloc warning
                 frac_populated = real(size(pops))/real(p%nspace)
                 popmin         = minval(pops)
                 popmax         = maxval(pops)
-                popmed         = median_nocopy(pops)
-                call moment(pops, popave, popsdev, popvar, err)
+                popmed         = median(real(pops))
+                call moment(real(pops), popave, popsdev, popvar, err)
                 write(*,'(a)') '>>> STATISTICS BEFORE CLUSTERING'
                 write(*,'(a,1x,f8.2)') 'FRAC POPULATED DIRECTIONS :', frac_populated
                 write(*,'(a,1x,f8.2)') 'MINIMUM POPULATION        :', popmin

@@ -467,14 +467,54 @@ contains
         end do
     end function get_pop
 
+    ! !>  \brief  is for checking discrete label populations
+    ! function get_pops( self, label, consider_w, maxn, eo ) result( pops )
+    !     class(oris),       intent(inout) :: self
+    !     character(len=*),  intent(in)    :: label
+    !     logical, optional, intent(in)    :: consider_w
+    !     integer, optional, intent(in)    :: maxn ! max label, for the case where the last class/state is missing
+    !     integer, optional, intent(in)    :: eo
+    !     integer, allocatable :: pops(:)
+    !     integer :: i, mystate, myval, n, myeo
+    !     real    :: w
+    !     logical :: cconsider_w, consider_eo
+    !     cconsider_w = .false.
+    !     if( present(consider_w) ) cconsider_w = consider_w
+    !     if( cconsider_w )then
+    !         if( .not. self%isthere('w') ) stop 'ERROR, oris :: get_pops with optional consider_w assumes w set'
+    !     endif
+    !     consider_eo = .false.
+    !     if( present(eo) ) consider_eo = .true.
+    !     n = self%get_n(label)
+    !     if( present(maxn) )then
+    !         n = max(n, maxn)
+    !     endif
+    !     if(allocated(pops))deallocate(pops)
+    !     allocate(pops(n),source=0,stat=alloc_stat)
+    !     allocchk('In: get_pops, module: simple_oris')
+    !     do i=1,self%n
+    !         mystate = nint(self%o(i)%get('state'))
+    !         myeo    = nint(self%o(i)%get('eo'))
+    !         if( consider_eo )then
+    !             if( myeo /= eo ) cycle
+    !         endif
+    !         w = 1.0
+    !         if( cconsider_w )  w = self%o(i)%get('w')
+    !         if( mystate > 0 .and. w > TINY )then
+    !             myval = nint(self%o(i)%get(label))
+    !             if( myval > 0 ) pops(myval) = pops(myval) + 1
+    !         endif
+    !     end do
+    ! end function get_pops
+
     !>  \brief  is for checking discrete label populations
-    function get_pops( self, label, consider_w, maxn, eo ) result( pops )
-        class(oris),       intent(inout) :: self
-        character(len=*),  intent(in)    :: label
-        logical, optional, intent(in)    :: consider_w
-        integer, optional, intent(in)    :: maxn ! max label, for the case where the last class/state is missing
-        integer, optional, intent(in)    :: eo
-        integer, allocatable :: pops(:)
+    subroutine get_pops( self, pops, label, consider_w, maxn, eo )
+        class(oris),          intent(inout) :: self
+        integer, allocatable, intent(out)   :: pops(:)
+        character(len=*),     intent(in)    :: label
+        logical, optional,    intent(in)    :: consider_w
+        integer, optional,    intent(in)    :: maxn ! max label, for the case where the last class/state is missing
+        integer, optional,    intent(in)    :: eo
         integer :: i, mystate, myval, n, myeo
         real    :: w
         logical :: cconsider_w, consider_eo
@@ -505,7 +545,7 @@ contains
                 if( myval > 0 ) pops(myval) = pops(myval) + 1
             endif
         end do
-    end function get_pops
+    end subroutine get_pops
 
     !>  \brief  returns a logical array of state existence
     function states_exist(self, nstates) result(exists)
@@ -638,7 +678,7 @@ contains
         integer              :: cnt, nempty, n_incl, maxpop, i, icls, ncls_here
         logical              :: consider_w_here
         ncls_here = max(self%get_n('class'), ncls)
-        pops      = self%get_pops('class', consider_w=.true., maxn=ncls_here)            
+        call self%get_pops(pops, 'class', consider_w=.true., maxn=ncls_here)            
         nempty    = count(pops == 0)
         if(nempty == 0)return
         if( present(fromtocls) )then
@@ -648,7 +688,7 @@ contains
         endif
         do icls = 1, ncls
             deallocate(pops, stat=alloc_stat)
-            pops = self%get_pops('class', consider_w=.true., maxn=ncls_here)
+            call self%get_pops(pops, 'class', consider_w=.true., maxn=ncls_here)            
             if( pops(icls) /= 0 )cycle
             ! identify class to split
             cls2split  = maxloc(pops)

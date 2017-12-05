@@ -726,7 +726,7 @@ contains
         endif
         allocate(l_hasmskvols(p_master%nstates), l_hasvols(p_master%nstates), source=.false.)
         allocate(init_docs(p_master%nstates), final_docs(p_master%nstates))
-        state_pops = os_master%get_pops('state', consider_w=.false.)
+        call os_master%get_pops(state_pops, 'state', consider_w=.false.)
         do state = 1, p_master%nstates
             if( state_pops(state) == 0 )cycle
             if( l_singlestate .and. state.ne.p_master%state )cycle

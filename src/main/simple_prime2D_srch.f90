@@ -80,9 +80,9 @@ contains
         ! gather class populations
         if( b%a%isthere('class') )then
             if( p%weights2D .eq. 'yes' .and. which_iter > 3 )then
-                cls_pops = b%a%get_pops('class', consider_w=.true., maxn=p%ncls)
+                call b%a%get_pops(cls_pops, 'class', consider_w=.true., maxn=p%ncls)
             else
-                cls_pops = b%a%get_pops('class', consider_w=.false., maxn=p%ncls)
+                call b%a%get_pops(cls_pops, 'class', consider_w=.false., maxn=p%ncls)
             endif
         else
             ! first iteration, no class assignment: all classes are up for grab

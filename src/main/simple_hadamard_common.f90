@@ -525,14 +525,16 @@ contains
         class(build),     intent(inout) :: b
         class(params),    intent(inout) :: p
         character(len=*), intent(in)    :: fname
+        integer, allocatable :: pops(:)
         integer    :: icls, pop
         real       :: frc05, frc0143
         type(oris) :: classdoc
-        call classdoc%new_clean(p%ncls)            
+        call classdoc%new_clean(p%ncls)        
+        call b%a%get_pops(pops, 'class', maxn=p%ncls)
         do icls=1,p%ncls
             call b%projfrcs%estimate_res(icls, frc05, frc0143)
+            pop = pops(icls)
             call classdoc%set(icls, 'class', real(icls))
-            pop = b%a%get_pop(icls, 'class')
             call classdoc%set(icls, 'pop',   real(pop))
             call classdoc%set(icls, 'res',   frc0143)
             if( pop > 1 )then
@@ -545,6 +547,7 @@ contains
         end do
         call classdoc%write(fname)
         call classdoc%kill
+        deallocate(pops)
     end subroutine gen2Dclassdoc
             
     !>  \brief  initializes all volumes for reconstruction
