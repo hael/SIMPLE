@@ -337,3 +337,8 @@ width: 100px;
     margin: auto;
     display: block;
 }
+
+#particles {
+	height: 100%;
+	overflow: scroll;
+}

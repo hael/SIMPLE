@@ -110,13 +110,13 @@
 	 <div class=mainpane>
 		 <div class=saveselectionfolder>
 			 Folder
-			<input class=saveselectionfolder id=saveselectionfolder>
+			<input class=saveselectionfolder id=saveselectionfolder value="" disabled>
 		</div>
 		 <div class=saveselectionfilename>
 			 Filename
-			<input class=saveselectionfilename id=saveselectionfilename>
+			<input class=saveselectionfilename id=saveselectionfilename value=prime2D_selected_clusters.mrc disabled>
 		</div>
-		<button class=popupbutton onclick='saveSelection()'>Save</button>
+		<button class=popupbutton id=saveselectionbutton onclick='saveSelection()'>Save</button>
 	</div>
 	</div>
 	
@@ -129,13 +129,13 @@
 	 <div class=mainpane>
 		 <div class=saveselectionfolder>
 			 Folder
-			<input class=saveselectionfolder id=saveselectionparticlesfolder>
+			<input class=saveselectionfolder id=saveselectionparticlesfolder value="" disabled>
 		</div>
 		 <div class=saveselectionfilename>
 			 Filename
-			<input class=saveselectionfilename id=saveselectionparticlesfilename>
+			<input class=saveselectionfilename id=saveselectionparticlesfilename value=prime2D_selected_particles.simple disabled>
 		</div>
-		<button class=popupbutton onclick='saveSelectionParticles()'>Save</button>
+		<button class=popupbutton id=saveselectionparticlesbutton onclick='saveSelectionParticles()'>Save</button>
 	</div>	
 	
   </div>

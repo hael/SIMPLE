@@ -44,6 +44,9 @@ function showFileViewerData (data){
 	var saveselectionfolder = document.getElementById('saveselectionfolder');
 	saveselectionfolder.value = JSONdata.rootdirectory;
 	
+	var saveselectionparticlesfolder = document.getElementById('saveselectionparticlesfolder');
+	saveselectionparticlesfolder.value = JSONdata.rootdirectory;
+	
 	var inputfilename = document.getElementById('inputfilename');
 	inputfilename.value = JSONdata.inputfilename;
 	
@@ -569,7 +572,7 @@ function saveParticlesSelection() {
 	for (var i = inverseselected.length - 1; i >= 0; i--) {
 		url += inverseselected[i].getAttribute("data-id") + ",";
 	} 
-	postAjax(url, function(data){showHideSaveSelectionPopup()});
+	postAjax(url, function(data){showHideSaveSelectionParticlesPopup()});
 }
 
 function applySelection() {

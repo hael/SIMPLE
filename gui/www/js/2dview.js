@@ -17,20 +17,25 @@ function view2DInit (data) {
 	var JSONdata = JSON.parse(data);
 	
 	var iterations = JSONdata.iterations;
-	iterations.sort();
-	
+	iterations.sort(function(a,b) {return (a.cavgs > b.cavgs) ? 1 : ((b.cavgs > a.cavgs) ? -1 : 0);} );
 	var rootdirectory = document.getElementById('rootdirectory');
 	rootdirectory.value = JSONdata.rootdirectory;
+	var saveselectionfolder = document.getElementById('saveselectionfolder');
+	saveselectionfolder.value = JSONdata.rootdirectory;
+	var saveselectionparticlesfolder = document.getElementById('saveselectionparticlesfolder');
+	saveselectionparticlesfolder.value = JSONdata.rootdirectory;
 	
 	var iterationselector = document.getElementById('iterationselector');
 	
 	for(var i = 0; i < iterations.length; i++){
-		var select = document.createElement("option");
-		select.setAttribute("data-classdoc", iterations[i].classdoc);
-		select.setAttribute("data-cavgs", iterations[i].cavgs);
-		select.setAttribute("data-prime2ddoc", iterations[i].prime2ddoc);
-		select.innerHTML = iterations[i].classdoc.replace(".txt", "").replace("classdoc_","");
-		iterationselector.appendChild(select);
+		if(! iterations[i].cavgs.includes("ranked")){
+			var select = document.createElement("option");
+			select.setAttribute("data-classdoc", iterations[i].classdoc);
+			select.setAttribute("data-cavgs", iterations[i].cavgs);
+			select.setAttribute("data-prime2ddoc", iterations[i].prime2ddoc);
+			select.innerHTML = iterations[i].classdoc.replace(".txt", "").replace("classdoc_","");
+			iterationselector.appendChild(select);
+		}
 	}
 }
 
@@ -261,6 +266,7 @@ function showHideSelectFilePopup () {
 function showHideSaveSelectionPopup () {
 	var saveselectionpopup = document.getElementById('saveselectionpopup');
 	var gauze = document.getElementById('gauze');
+	document.getElementById('saveselectionbutton').innerHTML = "Save";
 	if (saveselectionpopup.style.display == "block") {
 		saveselectionpopup.style.display = "none";
 		gauze.style.display = "none";
@@ -285,6 +291,7 @@ function showHideSelectionPopup () {
 function showHideSaveSelectionParticlesPopup () {
 	var saveselectionpopup = document.getElementById('saveselectionparticlespopup');
 	var gauze = document.getElementById('gauze');
+	document.getElementById('saveselectionparticlesbutton').innerHTML = "Save";
 	if (saveselectionpopup.style.display == "block") {
 		saveselectionpopup.style.display = "none";
 		gauze.style.display = "none";
@@ -428,6 +435,7 @@ function saveSelection() {
 	for (var i = 0; i < selected.length; i++) {
 		url += selected[i].getAttribute("data-frameid") + ",";
 	} 
+	document.getElementById('saveselectionbutton').innerHTML = "Saving ...";
 	getAjax(url, function(data){showHideSaveSelectionPopup()});
 }
 
@@ -446,7 +454,8 @@ function saveSelectionParticles() {
 	for (var i = 0; i < inverseselected.length; i++) {
 		url += inverseselected[i].getAttribute("data-class") + ",";
 	} 
-	getAjax(url, function(data){showHideSaveSelectionPopup()});
+	document.getElementById('saveselectionparticlesbutton').innerHTML = "Saving ...";
+	getAjax(url, function(data){showHideSaveSelectionParticlesPopup()});
 }
 
 function applySelection() {

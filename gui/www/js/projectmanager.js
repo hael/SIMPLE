@@ -21,7 +21,6 @@ function newProjectPopup () {
 	gauze.style.display = "block";
 }
 
-
 function hideNewProjectPopup () {
 	var newprojectpopup = document.getElementById('newprojectpopup');
 	var gauze = document.getElementById('gauze');
@@ -116,9 +115,7 @@ function getFolderBrowserData(directory, filter){
 
 function hideFileSelect () {
 	var selectfilepopup = document.getElementById('selectfilepopup');
-	var gauze = document.getElementById('gauze');
 	selectfilepopup.style.display = "none";
-	gauze.style.display = "none";
 }
 
 getProjects();

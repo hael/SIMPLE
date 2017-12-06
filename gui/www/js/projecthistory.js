@@ -96,8 +96,9 @@ function viewOutput(element){
 		mainpaneiframe.src = "unblurview.html?folder=" + element.getAttribute('data-jobfolder');
 	} else if (element.getAttribute('data-jobtype') == "ctffind"){
 		mainpaneiframe.src = "ctffindview.html?folder=" + element.getAttribute('data-jobfolder');
+	}else if (element.getAttribute('data-jobtype') == "extract"){
+		mainpaneiframe.src = "particleview.html?folder=" + element.getAttribute('data-jobfolder');
 	}
-
 }
 
 function viewLogfile(element){		

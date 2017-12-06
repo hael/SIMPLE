@@ -42,6 +42,7 @@ struct JSONResponse {
 	std::string													prime2ddoc;
 	std::string													inputfilename;
 	std::string													logfile;
+	std::string													error;
 	std::string													JSONstring;
 };
 
@@ -496,7 +497,6 @@ void addUnidocParticleIdentifiers(UniDoc* unidoc, std::string& unidocfilename){
 	int							stackframeit;
 	int							frameit;
 	
-	
 	dirc = strdup(unidocfilename.c_str());
 	rootdirectory = std::string(dirname(dirc));
 	stacktabfilename = rootdirectory + "/stktab_info.txt";
@@ -518,6 +518,67 @@ void addUnidocParticleIdentifiers(UniDoc* unidoc, std::string& unidocfilename){
 		}
 		delete stacktab;
 	}
+}
+
+void writeRelionStar(UniDoc* unidoc, std::string filename){
+
+	UniDoc * 		relionstar;
+	int				selectionit;
+	std::string		starline;
+	std::string		value;
+	std::string		stackfile;
+	std::string		state;
+	float			statef;
+	float			defocus;
+	
+	relionstar = new UniDoc();
+	relionstar->data.push_back("");
+	relionstar->data.push_back("data_");
+	relionstar->data.push_back("");
+	relionstar->data.push_back("loop_");
+	relionstar->data.push_back("_rlnImageName");
+	relionstar->data.push_back("_rlnVoltage");
+	relionstar->data.push_back("_rlnDefocusU");
+	relionstar->data.push_back("_rlnDefocusV");
+	relionstar->data.push_back("_rlnDefocusAngle");
+	relionstar->data.push_back("_rlnSphericalAberration");
+	relionstar->data.push_back("_rlnAmplitudeContrast");
+	relionstar->data.push_back("_rlnMagnification");
+	relionstar->data.push_back("_rlnDetectorPixelSize");
+	
+	for(selectionit = 0; selectionit < unidoc->data.size(); selectionit++){
+		getUniDocValue(unidoc, selectionit, "state", state);
+		statef = std::stof(state);
+		if (statef != 0){
+			getUniDocValue(unidoc, selectionit, "frameid", value);
+			starline = value + "@";
+			getUniDocValue(unidoc, selectionit, "stackfile", value);
+			stackfile = value + "s";
+			symlink(value.c_str(), stackfile.c_str());
+			starline += value + "s";
+			getUniDocValue(unidoc, selectionit, "kv", value);
+			starline += " " + value;
+			getUniDocValue(unidoc, selectionit, "dfx", value);
+			defocus = std::stof(value) * 10000;
+			starline += " " + std::to_string(defocus);
+			getUniDocValue(unidoc, selectionit, "dfy", value);
+			defocus = std::stof(value) * 10000;
+			starline += " " + std::to_string(defocus);
+			getUniDocValue(unidoc, selectionit, "angast", value);
+			starline += " " + value;
+			getUniDocValue(unidoc, selectionit, "cs", value);
+			starline += " " + value;
+			getUniDocValue(unidoc, selectionit, "fraca", value);
+			starline += " " + value;
+			starline += " 10000";
+			getUniDocValue(unidoc, selectionit, "smpd", value);
+			starline += " " + value;
+			relionstar->data.push_back(starline);
+		}
+	}
+	filename += ".star";
+	writeUniDoc(relionstar, filename);
+	delete relionstar;
 }
 
 void addJob (std::string& jobname, std::string& jobdescription, std::string& jobfolder, std::string& jobtype, std::string& table, int &jobid) {
@@ -741,6 +802,7 @@ void extractPre (std::string boxdirectory, std::string micrographsdirectory, std
 void extractPost (std::string directory){
 	
 	UniDoc*							unidoc;
+	UniDoc*							parts;
 	UniDoc*							unidocpart;
 	std::vector<std::string>		files;
 	int								filesit;
@@ -749,6 +811,7 @@ void extractPost (std::string directory){
 	
 	listFilesInDirectory(files, directory);
 	unidoc = new UniDoc();
+	parts = new UniDoc();
 	
 	for(filesit = 0; filesit < files.size(); filesit++){
 		if(files[filesit].find("extract_params") != std::string::npos){
@@ -756,6 +819,7 @@ void extractPost (std::string directory){
 			stack.replace(stack.begin(), stack.begin() + 14, "ptcls_from");
 			stack.replace(stack.end() - 3, stack.end(), "mrc");
 			if(fileExists(stack)){
+				
 				unidocpart = new UniDoc();
 				readUniDoc(unidocpart, files[filesit]);
 				for(stackit = 0; stackit < unidocpart->data.size(); stackit++){
@@ -763,13 +827,16 @@ void extractPost (std::string directory){
 					addUniDocKeyVal(unidocpart, stackit, "frameid", std::to_string(stackit + 1));
 					unidoc->data.push_back(unidocpart->data[stackit]);
 				}
+				parts->data.push_back("stackfile=" + stack + " particlecount=" + std::to_string(unidocpart->data.size()));
 				delete unidocpart;
 			}
 		}
 	}
 	
 	writeUniDoc(unidoc, "extract_out.simple");
+	writeUniDoc(parts, "extract_parts.txt");
 	delete unidoc;
+	delete parts;
 }
 
 void preprocPost (std::string directory){
@@ -1024,6 +1091,9 @@ void externalJob (JSONResponse* response, struct http_message* message) {
 				prime2DPost (jobfolder);
 			} else if (jobtype == "unblur"){
 				unblurPost (jobfolder);
+			} else if (jobtype == "extract"){
+				chdir(jobfolder.c_str());
+				extractPost (jobfolder);
 			}
 			
 			/*if (std::strstr(jobtype, "preproc") ) {
@@ -1208,6 +1278,64 @@ void simpleLocalSubmit(std::string& command, std::string& directory, int& jobid,
 
 }
 
+void syncJob (JSONResponse* response, struct http_message* message) {
+	
+	std::string								program;
+	std::string								executable;
+	std::string								jobname;
+	std::string								jobdescription;
+	std::string								jobtype;
+	std::string								jobfolder;
+	std::string								table;	
+	std::string								sourcefolder;
+	std::string								destinationfolder;
+	std::string								fileidentifier;
+	std::string								deletesource;
+	std::string								command;
+	FILE*									stream;		
+	int										jobid;	
+	pid_t 									pid;
+	pid_t 									sid;
+
+	
+	if(getRequestVariable(message, "jobtype", jobtype) && getRequestVariable(message, "jobfolder", jobfolder) && getRequestVariable(message, "table", table)){
+		
+		getRequestVariable(message, "jobname", jobname);
+		getRequestVariable(message, "jobdescription", jobdescription);
+		
+		addJob(jobname, jobdescription, jobfolder, jobtype, table, jobid);
+		getRequestVariable(message, "sourcefolder", sourcefolder);
+		getRequestVariable(message, "destinationfolder", destinationfolder);
+		getRequestVariable(message, "fileidentifier", fileidentifier);
+		getRequestVariable(message, "deletesource", deletesource);
+
+		pid = fork();
+	
+		if (pid == 0){
+			umask(0);
+			sid = setsid();
+
+			updateJobStatus("Running", table, jobid);
+			command = "microscope_sync.sh -s " + sourcefolder + " -d " + destinationfolder + " -i " + fileidentifier;
+			if(deletesource == "yes") {
+				command += " -r";
+			}
+			command += " > /tmp/sync.log";
+			stream = popen(command.c_str(), "r");
+			pclose(stream);
+			
+			
+			exit(0);
+			
+		} else if (pid > 0) {
+			waitpid(pid, 0, WNOHANG);
+			
+		} else {
+			std::cout << "Fork Failed" << std::endl;
+		}
+	}
+}
+
 void simpleJob (JSONResponse* response, struct http_message* message) {
 	
 	std::string								program;
@@ -1354,12 +1482,16 @@ void newProject (JSONResponse* response, struct http_message* message) {
 	std::string  			projecttable; 
 	
 	if (getRequestVariable(message, "projectname", projectname) && getRequestVariable(message, "projectfolder", projectfolder)) {
-		getRequestVariable(message, "projectdescription", projectdescription);
-		getDatabaseLocation(databasepath);
-		srand((int)time(0));
-		projecttable = "p" + std::to_string(rand());
-		SQLQuery(databasepath, response->projects, "CREATE TABLE IF NOT EXISTS projects (projectid integer PRIMARY KEY, projectname text NOT NULL, projectdescription text NOT NULL, projectfolder text NOT NULL, projecttable text NOT NULL, projectusage bool NOT NULL);");	
-		SQLQuery(databasepath, response->projects, "INSERT INTO projects(projectname, projectdescription, projectfolder, projecttable, projectusage) VALUES('"	+ projectname + "','" + projectdescription + "','" + projectfolder + "','" + projecttable + "','" + "true" + "');");
+		if(fileExists(projectfolder)){
+			getRequestVariable(message, "projectdescription", projectdescription);
+			getDatabaseLocation(databasepath);
+			srand((int)time(0));
+			projecttable = "p" + std::to_string(rand());
+			SQLQuery(databasepath, response->projects, "CREATE TABLE IF NOT EXISTS projects (projectid integer PRIMARY KEY, projectname text NOT NULL, projectdescription text NOT NULL, projectfolder text NOT NULL, projecttable text NOT NULL, projectusage bool NOT NULL);");	
+			SQLQuery(databasepath, response->projects, "INSERT INTO projects(projectname, projectdescription, projectfolder, projecttable, projectusage) VALUES('"	+ projectname + "','" + projectdescription + "','" + projectfolder + "','" + projecttable + "','" + "true" + "');");
+		} else {
+			response->error = "Project folder does not exist!";
+		}
 	}
 	
 }
@@ -1428,6 +1560,33 @@ void viewCtffind (JSONResponse* response, struct http_message* message) {
 		}
 	}
 	
+}
+
+void viewExtract (JSONResponse* response, struct http_message* message) {
+	
+	std::string 							directory;
+	UniDoc*									iterationsunidoc;
+	int										datait;
+	std::map<std::string, std::string>		iterationmap;
+	std::string								value;
+	
+	if (getRequestVariable(message, "folder", directory)){
+		response->rootdirectory = directory;
+		if(fileExists(directory + "/extract_parts.txt")){
+			iterationsunidoc = new UniDoc();
+			readUniDoc(iterationsunidoc, directory + "/extract_parts.txt");
+			for(datait = 0; datait < iterationsunidoc->data.size(); datait++){
+				iterationmap.clear();
+				getUniDocValue(iterationsunidoc, datait, "stackfile", value);
+				iterationmap["stackfile"] = value;
+				getUniDocValue(iterationsunidoc, datait, "particlecount", value);
+				iterationmap["particlecount"] = value;
+				response->iterations.push_back(iterationmap);
+			}
+			delete iterationsunidoc;
+		}
+	}
+
 }
 
 void viewPrime2D (JSONResponse* response, struct http_message* message) {
@@ -1578,7 +1737,8 @@ void savePrime2DSelectionParticles(JSONResponse* response, struct http_message* 
 	std::string					classnumber;
 	int							datait;
 	
-	if(getRequestVariable(message, "inputfilename", inputfilename) && getRequestVariable(message, "outputfilename", outputfilename) && getRequestVariable(message, "inverseselection", inverseselection)) {
+	if(getRequestVariable(message, "inputfilename", inputfilename) && getRequestVariable(message, "outputfilename", outputfilename)) {
+		getRequestVariable(message, "inverseselection", inverseselection);
 		unidoc = new UniDoc();
 		readUniDoc(unidoc, inputfilename);
 		selectionit = inverseselection.find(",");
@@ -1596,6 +1756,7 @@ void savePrime2DSelectionParticles(JSONResponse* response, struct http_message* 
 		}
 		addUnidocParticleIdentifiers(unidoc, inputfilename);
 		writeUniDoc(unidoc, outputfilename);
+		writeRelionStar(unidoc, outputfilename);
 		delete unidoc;
 	}
 }
@@ -1686,7 +1847,8 @@ void savePreprocSelection(JSONResponse* response, struct http_message* message) 
 	std::string					removeline;
 	int							datacount;
 	
-	if(getRequestVariable(message, "inputfilename", inputfilename) && getRequestVariable(message, "outputfilename", outputfilename) && getRequestVariable(message, "inverseselection", inverseselection)) {
+	if(getRequestVariable(message, "inputfilename", inputfilename) && getRequestVariable(message, "outputfilename", outputfilename)) {
+		getRequestVariable(message, "inverseselection", inverseselection);
 		unidoc = new UniDoc();
 		if(fileExists(inputfilename)){
 			readUniDoc(unidoc, inputfilename);
@@ -1718,6 +1880,7 @@ void savePreprocSelectionParticles(JSONResponse* response, struct http_message* 
 	UniDoc*						unidoc;
 	UniDoc*						partunidoc;
 	UniDoc*						outputunidoc;
+	UniDoc*						relionstar;
 	int							selectionit;
 	std::string					removeline;
 	int							particleit;
@@ -1725,11 +1888,14 @@ void savePreprocSelectionParticles(JSONResponse* response, struct http_message* 
 	std::string					intg;
 	std::string					stackfile;
 	std::string					extractparams;
+	std::string					value;
 	char*						dirc;
 	std::string					directory;
+	float						defocusU;
+	float						defocusV;
 
-	if(getRequestVariable(message, "inputfilename", inputfilename) && getRequestVariable(message, "outputfilename", outputfilename) && getRequestVariable(message, "inverseselection", inverseselection)) {
-		std::cout << inverseselection << std::endl;
+	if(getRequestVariable(message, "inputfilename", inputfilename) && getRequestVariable(message, "outputfilename", outputfilename)) {
+		getRequestVariable(message, "inverseselection", inverseselection);
 		unidoc = new UniDoc();
 		if(fileExists(inputfilename)){
 			readUniDoc(unidoc, inputfilename);
@@ -1756,11 +1922,12 @@ void savePreprocSelectionParticles(JSONResponse* response, struct http_message* 
 					extractparams = intg;
 					extractparams.replace(0, 21, directory + "/pipeline/particles/extract_params_");
 					extractparams.replace(extractparams.end() - 9, extractparams.end(), ".txt");
+
 					std::cout << stackfile << " " << extractparams << std::endl;
 					if(fileExists(stackfile) && fileExists(extractparams)){
 						partunidoc = new UniDoc();
 						readUniDoc(partunidoc, extractparams);
-						std::cout << stackfile << std::endl;
+
 						for(particleit = 0; particleit <  partunidoc->data.size(); particleit++){
 							addUniDocKeyVal(partunidoc, particleit, "stackfile", stackfile);
 							addUniDocKeyVal(partunidoc, particleit, "frameid", std::to_string(particleit + 1));
@@ -1770,7 +1937,9 @@ void savePreprocSelectionParticles(JSONResponse* response, struct http_message* 
 					}
 				}
 			}
+			std::cout << outputfilename << std::endl;
 			writeUniDoc(outputunidoc, outputfilename);
+			writeRelionStar(outputunidoc, outputfilename);
 			delete outputunidoc;
 		}
 		delete unidoc;
@@ -2619,6 +2788,10 @@ void encodeJSON(JSONResponse* response){
 		response->JSONstring += "\"logfile\" : \"" + response->logfile + "\",";
 	}
 	
+	if (response->error.size() > 0) {
+		response->JSONstring += "\"error\" : \"" + response->error + "\",";
+	}
+	
 	response->JSONstring.pop_back();
 	response->JSONstring += "}";
 }
@@ -2676,6 +2849,8 @@ void JSONHandler (struct mg_connection* http_connection, struct http_message* me
 			deleteJob(response, message);
 		} else if (function == "ctffindview") {
 			viewCtffind(response, message);
+		} else if (function == "extractview") {
+			viewExtract(response, message);
 		}
 	}
 	

@@ -31,12 +31,13 @@
 				<tr>
 					<td>Folder</td>
 					<td><input data-required=yes type=text name=jobfolder id=jobfolder></td>
-					<td><img src="../img/folder.png" onclick="folderSelect()"></td>
+					<td><img src="../img/folder.png" onclick="folderSelect(this)" data-target=jobfolder></td>
 				</tr>
 				<tr>
 					<td>Job Type</td>
 					<td>
 						<select name=jobtype>
+							<option value=extract>Extract</option>
 							<option value=preproc>Preproc</option>
 							<option value=prime2D>Prime 2D</option>
 							<option value=stream2d>Stream 2D</option>
@@ -72,13 +73,14 @@
 		<img src=../img/close.png class=closeimage onclick='hideFileSelect()'>
 	</div>
 	 <div class=mainpane>
+		 <input type=hidden id=filetarget>
 		<input class=selectfiledirectory id=selectfiledirectory>
 		<div class=selectfiletable>
 			<table id=selectfiletable></table>
 		</div>
 	</div>
 	<button class=selectfilebutton onclick='hideFileSelect()'>Select</button>
-   </div> 
+   </div>
    
   <script src="../js/job.js"></script>
   <script>setProjectTable()</script>
