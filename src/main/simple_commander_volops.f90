@@ -166,7 +166,6 @@ contains
         call b%build_general_tbox(p, cline) ! general objects built
         call b%vol%read(p%vols(state))
         call b%vol%fwd_ft
-        if( .not. cline%defined('hp') ) p%hp = real(p%box/2) * p%smpd
         if( cline%defined('fsc') )then
             ! optimal low-pass filter from FSC
             if( file_exists(p%fsc) )then
@@ -185,15 +184,13 @@ contains
             call vol_filt%new(b%vol%get_ldim(), p%smpd)
             call vol_filt%read(p%vol_filt)
             call b%vol%apply_filter(vol_filt)
-            call b%vol%bp(p%hp, 0.)
             call vol_filt%kill
         else if( cline%defined('fsc') )then
             ! optimal low-pass filter from FSC
             call b%vol%apply_filter(optlp)
-            call b%vol%bp(p%hp, 0.)
         else if( cline%defined('lp') )then
             ! ad hoc low-pass filter
-            call b%vol%bp(p%hp, p%lp)
+            call b%vol%bp(0., p%lp)
         else
             write(*,*) 'no method for low-pass filtering defined; give fsc|lp|vol_filt on command line'
             stop 'comple_commander_volops :: exec_postproc_vol'
