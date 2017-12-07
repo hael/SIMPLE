@@ -56,7 +56,9 @@ function showHistory(){
 function fileSelect(element) {
 	var selectfilepopup = document.getElementById('selectfilepopup');
 	var filetarget = document.getElementById('filetarget');
+	var filefilter = document.getElementById('filefilter');
 	filetarget.value = element.getAttribute('data-target');
+	filefilter.value = element.getAttribute('data-filter');
 	
 	selectfilepopup.style.display = "block";
 	var gauze = document.getElementById('gauze');
@@ -160,24 +162,22 @@ function showFolderBrowserData(data){
 	selectfiledirectory.value = JSONdata.rootdirectory;
 }
 
-function getFileBrowserData(directory, filter){
+function getFileBrowserData(directory){
 	var url = '../JSONhandler?function=listdir';
 	if (directory){	
 		url += "&directoryname=" + directory;
 	}
-	if (filter){	
+	var filter = document.getElementById('filefilter').value;
+	if (!!filter){	
 		url += "&filefilter=" + filter;
 	}
 	getAjax(url, function(data){showFileBrowserData(data)});	
 }
 
-function getFolderBrowserData(directory, filter){
+function getFolderBrowserData(directory){
 	var url = '../JSONhandler?function=listdir';
 	if (directory){	
 		url += "&directoryname=" + directory;
-	}
-	if (filter){	
-		url += "&filefilter=" + filter;
 	}
 	getAjax(url, function(data){showFolderBrowserData(data)});	
 }

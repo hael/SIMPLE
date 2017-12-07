@@ -51,7 +51,7 @@
 				<tr>
 					<td>Input Particles File</td>
 					<td><input data-required=no type=text name=simpleinput id=simpleinput></td>
-					<td><img src=../img/folder.png onclick="fileSelect(this)" data-target=simpleinput></td>
+					<td><img src=../img/folder.png onclick="fileSelect(this)" data-target=simpleinput data-filter=".simple"></td>
 				</tr>
 				<tr>
 					<td>Sampling Distance</td>
@@ -301,6 +301,7 @@
 	</div>
 	 <div class=mainpane>
 		 <input type=hidden id=filetarget>
+		 <input type=hidden id=filefilter>
 		<input class=selectfiledirectory id=selectfiledirectory>
 		<div class=selectfiletable>
 			<table id=selectfiletable></table>

@@ -402,6 +402,7 @@ function showHideSelectFilePopup () {
 
 function showHideSaveSelectionPopup () {
 	var saveselectionpopup = document.getElementById('saveselectionpopup');
+	document.getElementById('saveselectionbutton').innerHTML = "Save";
 	var gauze = document.getElementById('gauze');
 	if (saveselectionpopup.style.display == "block") {
 		saveselectionpopup.style.display = "none";
@@ -414,6 +415,7 @@ function showHideSaveSelectionPopup () {
 
 function showHideSaveSelectionParticlesPopup () {
 	var saveselectionpopup = document.getElementById('saveselectionparticlespopup');
+	document.getElementById('saveselectionparticlesbutton').innerHTML = "Save"
 	var gauze = document.getElementById('gauze');
 	if (saveselectionpopup.style.display == "block") {
 		saveselectionpopup.style.display = "none";
@@ -553,6 +555,7 @@ function saveSelection() {
 	for (var i = inverseselected.length - 1; i >= 0; i--) {
 		url += inverseselected[i].getAttribute("data-id") + ",";
 	} 
+	document.getElementById('saveselectionbutton').innerHTML = "Saving ...";
 	postAjax(url, function(data){showHideSaveSelectionPopup()});
 }
 
@@ -572,6 +575,7 @@ function saveParticlesSelection() {
 	for (var i = inverseselected.length - 1; i >= 0; i--) {
 		url += inverseselected[i].getAttribute("data-id") + ",";
 	} 
+	document.getElementById('saveselectionparticlesbutton').innerHTML = "Saving ...";
 	postAjax(url, function(data){showHideSaveSelectionParticlesPopup()});
 }
 

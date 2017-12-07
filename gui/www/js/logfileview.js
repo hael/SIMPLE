@@ -11,12 +11,17 @@ function getAjax (url, success) {
 
 function getLogFileviewerData () {
  
- getAjax('JSONhandler?function=viewlogfile&='+ window.location.toString().split('?')[1], function(data){showLogFileViewerData(data)});
+ getAjax('JSONhandler?function=viewlogfile&'+ window.location.toString().split('?')[1], function(data){showLogFileViewerData(data)});
 }
  
 
 function showLogFileViewerData (data){
-
+	var JSONdata = JSON.parse(data);
+	var snapshots = document.getElementById('snapshots');
+	var logfile = JSONdata.logfile;
+	var logfileformatted;
+	logfileformatted = logfile.replace(/\^/g, "\\");
+	snapshots.innerHTML = logfileformatted;
 }
 
 function showProjectHistory(){

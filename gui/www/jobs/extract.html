@@ -50,7 +50,7 @@
 				<tr>
 					<td>Output From CTF Parameter Estimation</td>
 					<td><input data-required=no type=text name=ctffindoutput id=ctffindoutput></td>
-					<td><img src=../img/folder.png onclick="fileSelect(this)" data-target=ctffindoutput></td>
+					<td><img src=../img/folder.png onclick="fileSelect(this)" data-target=ctffindoutput data-filter=".simple"></td>
 				</tr>
 				<tr>
 					<td>
@@ -215,6 +215,7 @@
 	</div>
 	 <div class=mainpane>
 		 <input type=hidden id=filetarget>
+		 <input type=hidden id=filefilter>
 		<input class=selectfiledirectory id=selectfiledirectory>
 		<div class=selectfiletable>
 			<table id=selectfiletable></table>

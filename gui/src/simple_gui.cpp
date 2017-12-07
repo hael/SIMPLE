@@ -11,7 +11,7 @@
 #include <sys/wait.h>
 #include <jpeglib.h>
 #include <libgen.h>
-
+#include <algorithm>
 
 extern "C" {
     #include "../ext/mongoose/mongoose.h"
@@ -577,6 +577,7 @@ void writeRelionStar(UniDoc* unidoc, std::string filename){
 		}
 	}
 	filename += ".star";
+	std::cout << "WRITING STAR FILE " + filename << std::endl;
 	writeUniDoc(relionstar, filename);
 	delete relionstar;
 }
@@ -2204,10 +2205,13 @@ void getLogFile (JSONResponse* response, struct http_message* message) {
 			input.open(logfilename.c_str());
 			if(input.is_open()){
 				while(getline(input, line)){
-					response->logfile += line;
+					response->logfile += line + "<br>";
 				}
+				input.close();
+				std::replace( response->logfile.begin(), response->logfile.end(), '\\', '^');
 			}
 		}
+		
 	}
 	
 }
@@ -2667,14 +2671,26 @@ void generateGaussianRef (JPEGResponse* response, struct http_message* message) 
 void getDirectoryContents (JSONResponse* response, struct http_message* message) {
 	
 	std::string						directory;
+	std::string						filter;
+	int								fileit;
 	
 	if(!getRequestVariable(message, "directoryname", directory)) {
 		directory = "/";
 	}
 	
+	
 	if(fileExists(directory)){
 		listDirectory(response->files, response->directories, directory);
 		response->rootdirectory = directory;
+	}
+	
+	if(getRequestVariable(message, "filefilter", filter)) {
+		for(fileit = response->files.size() - 1; fileit >= 0; fileit--){
+			if(response->files[fileit].find(filter) == std::string::npos){
+				response->files.erase(response->files.begin() + fileit);
+			}
+		}
+
 	}
 
 }

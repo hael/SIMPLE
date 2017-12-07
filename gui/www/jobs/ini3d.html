@@ -49,7 +49,7 @@
 				<tr>
 					<td>Selected Cluster Averages</td>
 					<td><input data-required=no type=text name=stk id=stk></td>
-					<td><img src=../img/folder.png onclick="fileSelect(this)" data-target=stk></td>
+					<td><img src=../img/folder.png onclick="fileSelect(this)" data-target=stk data-filter=".mrc"></td>
 				</tr>
 				<tr>
 					<td>Sampling Distance</td>
@@ -77,7 +77,7 @@
 				<tr>
 					<td>Particles Table</td>
 					<td><input data-required=no type=text name=ptcls id=ptcls></td>
-					<td><img src=../img/folder.png onclick="fileSelect(this)" data-target=ptcls></td>
+					<td><img src=../img/folder.png onclick="fileSelect(this)" data-target=ptcls data-filter=".simple"></td>
 				</tr>
 				
 				<tr>
@@ -261,6 +261,7 @@
 	</div>
 	 <div class=mainpane>
 		 <input type=hidden id=filetarget>
+		 <input type=hidden id=filefilter>
 		<input class=selectfiledirectory id=selectfiledirectory>
 		<div class=selectfiletable>
 			<table id=selectfiletable></table>

@@ -46,7 +46,7 @@
 				<tr>
 					<td>Micrographs Parameters Table</td>
 					<td><input data-required=no type=text id=unbluroutput></td>
-					<td><img src=../img/folder.png onclick="fileSelect(this)" data-target=unbluroutput></td>
+					<td><img src=../img/folder.png onclick="fileSelect(this)" data-target=unbluroutput data-filter=".simple"></td>
 				</tr>
 				<tr>
 					<td><i>or</i></td>
@@ -123,6 +123,7 @@
 	</div>
 	 <div class=mainpane>
 		 <input type=hidden id=filetarget>
+		  <input type=hidden id=filefilter>
 		<input class=selectfiledirectory id=selectfiledirectory>
 		<div class=selectfiletable>
 			<table id=selectfiletable></table>
