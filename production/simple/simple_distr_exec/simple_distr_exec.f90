@@ -833,9 +833,10 @@ select case(prg)
         keys_optional(2) = 'cenlp'
         keys_optional(3) = 'hp'
         keys_optional(4) = 'nspace'
+        keys_optional(5) = 'center'
         ! parse command line
         if( describe ) call print_doc_symsrch
-        call cline%parse(keys_required(:8), keys_optional(:4))
+        call cline%parse(keys_required(:8), keys_optional(:5))
         ! sanity check
         if(cline%defined('compare'))stop 'Distributed execution of SYMSRCH does not support the COMPARE argument'
         ! set defaults
@@ -845,7 +846,8 @@ select case(prg)
         else
             call cline%set('nptcls', cline%get_rarg('nspace'))
         endif
-        if(.not.cline%defined('cenlp')) call cline%set('cenlp', 30.)
+        if( .not.cline%defined('cenlp')   ) call cline%set('cenlp', 30.)
+        if( .not. cline%defined('center') ) call cline%set('center', 'yes')
         ! execute
         call xsymsrch_distr%execute( cline )
 

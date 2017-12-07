@@ -1174,9 +1174,10 @@ select case(prg)
         keys_optional(2) = 'cenlp'
         keys_optional(3) = 'hp'
         keys_optional(4) = 'nspace'
+        keys_optional(5) = 'center'
         ! parse command line
         if( describe ) call print_doc_symsrch
-        call cline%parse(keys_required(:7), keys_optional(:4))
+        call cline%parse(keys_required(:7), keys_optional(:5))
         ! set defaults
         if( .not. cline%defined('nspace') )then
             call cline%set('nptcls', 50.) ! 50 projections 4 symsrch
@@ -1184,7 +1185,8 @@ select case(prg)
         else
             call cline%set('nptcls', cline%get_rarg('nspace'))
         endif
-        if( .not. cline%defined('cenlp') ) call cline%set('cenlp', 30.)
+        if( .not. cline%defined('center') ) call cline%set('center', 'yes')
+        if( .not. cline%defined('cenlp')  ) call cline%set('cenlp', 30.)
         call cline%set('compare', 'no')
         ! execute
         call xsymsrch%execute(cline)
