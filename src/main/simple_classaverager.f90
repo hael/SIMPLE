@@ -435,7 +435,7 @@ contains
                 end do
             end do
         end do
-        deallocate(batches)
+        if( allocated(batches) ) deallocate(batches)
         ! pre-allocations
         allocate(batch_imgs(batchsz_max), cgrid_imgs(batchsz_max),&
                 &cyc1(wdim), cyc2(wdim), w(wdim, wdim))
