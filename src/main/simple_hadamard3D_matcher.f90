@@ -462,6 +462,7 @@ contains
                 call progress(i, nsamp)
                 orientation = b%a%get_ori(sample(i) + p%fromp - 1)
                 call read_img_and_norm( b, p, sample(i) + p%fromp - 1 )
+                call gridprep%prep(b%img, b%img_pad)
                 if( p%pgrp == 'c1' )then
                     call b%recvols(1)%inout_fplane(orientation, .true., b%img_pad, pwght=1.0)
                 else
