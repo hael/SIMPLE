@@ -627,7 +627,9 @@ contains
             call batch_imgs(i)%kill
             call cgrid_imgs(i)%kill
         enddo
-        deallocate(cmat_even, cmat_odd, rho, rho_even, rho_odd, batch_imgs, cgrid_imgs, cyc1, cyc2, w)
+        if( allocated(cmat_even) ) deallocate(cmat_even)
+        if( allocated(cmat_odd)  ) deallocate(cmat_odd)
+        deallocate(rho, rho_even, rho_odd, batch_imgs, cgrid_imgs, cyc1, cyc2, w)
         if( .not. pp%l_distr_exec ) call cavger_merge_eos_and_norm
         if( L_BENCH )then
             rt_tot = rt_tot + toc(t_tot)
