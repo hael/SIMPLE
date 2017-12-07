@@ -412,6 +412,7 @@ contains
     subroutine gen_random_model( b, p, nsamp_in )
         use simple_ran_tabu,   only: ran_tabu
         use simple_kbinterpol, only: kbinterpol
+        use simple_prep4cgrid, only: prep4cgrid
         class(build),      intent(inout) :: b         !< build object
         class(params),     intent(inout) :: p         !< param object
         integer, optional, intent(in)    :: nsamp_in  !< num input samples
@@ -420,6 +421,7 @@ contains
         integer, allocatable :: sample(:)
         integer              :: i, k, nsamp, alloc_stat
         type(kbinterpol)     :: kbwin
+        type(prep4cgrid)     :: gridprep
         if( p%vols(1) == '' )then
             ! init volumes
             call preprecvols(b, p)
@@ -453,17 +455,19 @@ contains
                 forall(i=1:nsamp) sample(i) = i
             endif
             write(*,'(A)') '>>> RECONSTRUCTING RANDOM MODEL'
+            ! make the gridding prepper
             kbwin = b%recvols(1)%get_kbwin()
+            call gridprep%new(b%img, kbwin, [p%boxpd,p%boxpd,1])
             do i=1,nsamp
                 call progress(i, nsamp)
                 orientation = b%a%get_ori(sample(i) + p%fromp - 1)
-                call read_cgridcmat( b, p, sample(i) + p%fromp - 1 )
+                call read_img_and_norm( b, p, sample(i) + p%fromp - 1 )
                 if( p%pgrp == 'c1' )then
-                    call b%recvols(1)%inout_fplane(orientation, .true., b%cmat, pwght=1.0)
+                    call b%recvols(1)%inout_fplane(orientation, .true., b%img_pad, pwght=1.0)
                 else
                     do k=1,b%se%get_nsym()
                         o_sym = b%se%apply(orientation, k)
-                        call b%recvols(1)%inout_fplane(o_sym, .true., b%cmat, pwght=1.0)
+                        call b%recvols(1)%inout_fplane(o_sym, .true., b%img_pad, pwght=1.0)
                     end do
                 endif
             end do
