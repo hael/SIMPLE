@@ -47,50 +47,40 @@ contains
         call b%img%norm
     end subroutine read_img_and_norm
 
-    subroutine read_imgbatch( b, p, fromptop, pinds )
+    subroutine read_imgbatch( b, p, fromptop, ptcl_mask )
         class(build),      intent(inout)  :: b
         class(params),     intent(inout)  :: p
         integer,           intent(in)     :: fromptop(2)
-        integer, optional, intent(in)     :: pinds(fromptop(1):fromptop(2)) 
+        logical, optional, intent(in)     :: ptcl_mask(p%fromp:p%top) 
         character(len=:), allocatable :: stkname
-        integer :: iptcl, ind_in_batch, ind_in_stk, iiptcl
-        logical :: pinds_present
-        pinds_present = present(pinds)
+        integer :: iptcl, ind_in_batch, ind_in_stk
+        logical :: ptcl_mask_present
+        ptcl_mask_present = present(ptcl_mask)
         if( p%l_stktab_input )then
             do iptcl=fromptop(1),fromptop(2)
-                if( pinds_present )then
-                    iiptcl       = pinds(iptcl)
-                    ind_in_batch = iptcl
-                else
-                    iiptcl       = iptcl
-                    ind_in_batch = iptcl - fromptop(1) + 1
+                if( ptcl_mask_present )then
+                    if( .not. ptcl_mask(iptcl) ) cycle
                 endif
-                call p%stkhandle%get_stkname_and_ind(iiptcl, stkname, ind_in_stk)
+                ind_in_batch = iptcl - fromptop(1) + 1
+                call p%stkhandle%get_stkname_and_ind(iptcl, stkname, ind_in_stk)
                 call b%imgbatch(ind_in_batch)%read(stkname, ind_in_stk)
             end do
         else
             if( p%l_distr_exec )then
                 do iptcl=fromptop(1),fromptop(2)
-                    if( pinds_present )then
-                        iiptcl       = pinds(iptcl)
-                        ind_in_batch = iptcl
-                    else
-                        iiptcl       = iptcl
-                        ind_in_batch = iptcl - fromptop(1) + 1
+                    if( ptcl_mask_present )then
+                        if( .not. ptcl_mask(iptcl) ) cycle
                     endif
-                    
-                    ind_in_stk   = iiptcl - p%fromp + 1
+                    ind_in_batch = iptcl - fromptop(1) + 1                    
+                    ind_in_stk   = iptcl - p%fromp + 1
                     call b%imgbatch(ind_in_batch)%read(p%stk_part, ind_in_stk)
                 end do
             else
                 do iptcl=fromptop(1),fromptop(2)
-                    if( pinds_present )then
-                        ind_in_batch = iptcl
-                        iiptcl       = pinds(iptcl)
-                    else
-                        iiptcl       = iptcl
-                        ind_in_batch = iptcl - fromptop(1) + 1
+                    if( ptcl_mask_present )then
+                        if( .not. ptcl_mask(iptcl) ) cycle
                     endif
+                    ind_in_batch = iptcl - fromptop(1) + 1
                     ind_in_stk   = iptcl
                     call b%imgbatch(ind_in_batch)%read(p%stk, ind_in_stk)
                 end do

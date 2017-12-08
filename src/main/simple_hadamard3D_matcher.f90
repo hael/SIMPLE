@@ -172,6 +172,11 @@ contains
         if( p%l_frac_update )then
             allocate(ptcl_mask(p%fromp:p%top))
             call b%a%sample4update_and_incrcnt([p%fromp,p%top], p%update_frac, nptcls2update, pinds, ptcl_mask)
+
+            do i=p%fromp,p%top
+                if( ptcl_mask(i) ) print *, 'ptlc index in hadamard3D: ', i
+            end do
+
             ! correct convergence stats
             do iptcl=p%fromp,p%top
                 if( .not. ptcl_mask(iptcl) )then
@@ -496,9 +501,9 @@ contains
         ! or based on dynamic resolution limit update
         nrefs = p%nspace * p%nstates
         if( p%eo .ne. 'no' )then
-            call pftcc%new(nrefs, p, nint(b%a%get_all('eo', [p%fromp,p%top])))
+            call pftcc%new(nrefs, p, ptcl_mask, nint(b%a%get_all('eo', [p%fromp,p%top])))
         else
-            call pftcc%new(nrefs, p)
+            call pftcc%new(nrefs, p, ptcl_mask)
         endif
 
         ! PREPARATION OF REFERENCES IN PFTCC
@@ -558,7 +563,7 @@ contains
         do iptcl_batch=p%fromp,p%top,MAXIMGBATCHSZ
             batchlims = [iptcl_batch,min(p%top,iptcl_batch + MAXIMGBATCHSZ - 1)]
             batchsz   = batchlims(2) - batchlims(1) + 1
-            call read_imgbatch( b, p, batchlims)
+            call read_imgbatch( b, p, batchlims, ptcl_mask)
             !$omp parallel do default(shared) private(iptcl,imatch)&
             !$omp schedule(static) proc_bind(close)
             do iptcl=batchlims(1),batchlims(2)
