@@ -16,10 +16,12 @@
 	<div class=jobpane>
 		<form action='../JSONhandler' onsubmit="showHistory()">
 			<table>
-				<input type=hidden name=function value=sync>
+				<input type=hidden name=function value=syncjob>
 				<input type=hidden name=jobstatus value=sync>
+				<input type=hidden name=jobtype value=sync>
 				<input type=hidden name=jobpid value=0>
 				<input type=hidden id=projecttable name=table value=0>
+				<input type=hidden id=projectfolder name=jobfolder value=0>
 				<tr>
 					<td>Job Name</td>
 					<td><input data-required=no type=text name=jobname></td>
@@ -70,15 +72,18 @@
 		<img src=../img/close.png class=closeimage onclick='hideFileSelect()'>
 	</div>
 	 <div class=mainpane>
+		 <input type=hidden id=filetarget>
+		 <input type=hidden id=filefilter>
 		<input class=selectfiledirectory id=selectfiledirectory>
 		<div class=selectfiletable>
 			<table id=selectfiletable></table>
 		</div>
 	</div>
 	<button class=selectfilebutton onclick='hideFileSelect()'>Select</button>
-   </div> 
+   </div>
    
   <script src="../js/job.js"></script>
   <script>setProjectTable()</script>
+  <script>setProjectFolder()</script>
  </body>
 </html><td colspan=3 style="text-align: center">

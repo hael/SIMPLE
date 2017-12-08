@@ -1293,8 +1293,10 @@ void syncJob (JSONResponse* response, struct http_message* message) {
 	std::string								fileidentifier;
 	std::string								deletesource;
 	std::string								command;
+	std::string								outputfolder;
 	FILE*									stream;		
 	int										jobid;	
+	int										status;
 	pid_t 									pid;
 	pid_t 									sid;
 
@@ -1309,7 +1311,7 @@ void syncJob (JSONResponse* response, struct http_message* message) {
 		getRequestVariable(message, "destinationfolder", destinationfolder);
 		getRequestVariable(message, "fileidentifier", fileidentifier);
 		getRequestVariable(message, "deletesource", deletesource);
-
+		
 		pid = fork();
 	
 		if (pid == 0){
@@ -1317,16 +1319,28 @@ void syncJob (JSONResponse* response, struct http_message* message) {
 			sid = setsid();
 
 			updateJobStatus("Running", table, jobid);
+			
+			outputfolder = jobfolder + "/" + std::to_string(jobid) + "_" + jobtype;
+			
+			updateJobFolder(outputfolder, table, jobid);
+			
+			status = mkdir(outputfolder.c_str(), S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
+			
+			status = chdir(outputfolder.c_str());
+			
 			command = "microscope_sync.sh -s " + sourcefolder + " -d " + destinationfolder + " -i " + fileidentifier;
+			
 			if(deletesource == "yes") {
 				command += " -r";
 			}
-			command += " > /tmp/sync.log";
+			command += " > simple_job.log";
+			std::cout << command << std::endl;
 			stream = popen(command.c_str(), "r");
 			pclose(stream);
 			
-			
+			updateJobStatus ("Failed", table, jobid);
 			exit(0);
+			
 			
 		} else if (pid > 0) {
 			waitpid(pid, 0, WNOHANG);
@@ -2867,6 +2881,8 @@ void JSONHandler (struct mg_connection* http_connection, struct http_message* me
 			viewCtffind(response, message);
 		} else if (function == "extractview") {
 			viewExtract(response, message);
+		} else if (function == "syncjob") {
+			syncJob(response, message);
 		}
 	}
 	
