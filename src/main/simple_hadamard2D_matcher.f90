@@ -326,7 +326,7 @@ contains
         if( .not. p%l_distr_exec ) write(*,'(A)') '>>> BUILDING PRIME2D SEARCH ENGINE'
 
         ! create the polarft_corrcalc object
-        call pftcc%new(p%ncls, p, nint(b%a%get_all('eo', [p%fromp,p%top])))
+        call pftcc%new(p%ncls, p, eoarr=nint(b%a%get_all('eo', [p%fromp,p%top])))
         ! prepare the polarizer images
         call b%img_match%init_polarizer(pftcc, p%alpha)
         ! this is tro avoid excessive allocation, allocate what is the upper bound on the 

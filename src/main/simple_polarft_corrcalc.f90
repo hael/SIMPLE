@@ -307,12 +307,12 @@ contains
         endif
         ! FFTW plans
         wsdm_ret = fftw_import_wisdom_from_filename(fft_wisdoms_fname)
-        self%plan_fwd_1 = fftwf_plan_dft_r2c_1d(self%pftsz, self%fftdat(1)%ref_re, &
-             self%fftdat(1)%ref_fft_re, FFTW_PATIENT)
+         self%plan_fwd_1 = fftwf_plan_dft_r2c_1d(self%pftsz, self%fftdat(1)%ref_re, &
+             self%fftdat(1)%ref_fft_re, ior(FFTW_PATIENT,FFTW_NO_NONTHREADED))
         self%plan_fwd_2 = fftwf_plan_dft_1d    (self%pftsz, self%fftdat(1)%ref_im, &
-             self%fftdat(1)%ref_fft_im, FFTW_FORWARD, FFTW_PATIENT)
+             self%fftdat(1)%ref_fft_im, FFTW_FORWARD, ior(FFTW_PATIENT,FFTW_NO_NONTHREADED))
         self%plan_bwd   = fftwf_plan_dft_c2r_1d(self%nrots, self%fftdat(1)%product_fft, &
-             self%fftdat(1)%backtransf, FFTW_PATIENT)
+             self%fftdat(1)%backtransf, ior(FFTW_PATIENT,FFTW_NO_NONTHREADED))
         wsdm_ret = fftw_export_wisdom_to_filename(fft_wisdoms_fname)
         deallocate(fft_wisdoms_fname)
         if (wsdm_ret == 0) then
