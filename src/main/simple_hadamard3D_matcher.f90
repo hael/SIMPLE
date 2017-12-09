@@ -74,7 +74,7 @@ contains
         real       :: norm, corr_thresh, skewness, frac_srch_space
         real       :: extr_thresh, update_frac, reslim
         integer    :: iptcl, inptcls, istate, iextr_lim, i, zero_pop
-        integer    :: update_ind, nupdates_target, nupdates, fnr
+        integer    :: update_ind, nupdates_target, nupdates, fnr, cnt
         logical    :: doprint, do_extr
 
         if( L_BENCH )then
@@ -172,11 +172,6 @@ contains
         if( p%l_frac_update )then
             allocate(ptcl_mask(p%fromp:p%top))
             call b%a%sample4update_and_incrcnt([p%fromp,p%top], p%update_frac, nptcls2update, pinds, ptcl_mask)
-
-            do i=p%fromp,p%top
-                if( ptcl_mask(i) ) print *, 'ptlc index in hadamard3D: ', i
-            end do
-
             ! correct convergence stats
             do iptcl=p%fromp,p%top
                 if( .not. ptcl_mask(iptcl) )then
@@ -223,12 +218,16 @@ contains
             call b%vol2%kill
         endif
         ! class array allocation in prime3D_srch
-        call prep4prime3D_srch( b, p )
+        call prep4prime3D_srch( b, p, ptcl_mask )
         if( L_BENCH ) rt_prep_primesrch3D = toc(t_prep_primesrch3D)
         allocate( primesrch3D(p%fromp:p%top) , stat=alloc_stat)
         allocchk("In hadamard3D_matcher::prime3D_exec primesrch3D objects ")
+        cnt = 0
         do iptcl=p%fromp,p%top
-            if( ptcl_mask(iptcl) ) call primesrch3D(iptcl)%new(iptcl, p, pftcc, b%a, b%se)
+            if( ptcl_mask(iptcl) )then
+                cnt = cnt + 1
+                call primesrch3D(iptcl)%new(iptcl, cnt, p, pftcc, b%a, b%se)
+            endif
         end do
         ! generate CTF matrices
         if( p%ctf .ne. 'no' ) call pftcc%create_polar_ctfmats(b%a)
@@ -563,7 +562,8 @@ contains
         do iptcl_batch=p%fromp,p%top,MAXIMGBATCHSZ
             batchlims = [iptcl_batch,min(p%top,iptcl_batch + MAXIMGBATCHSZ - 1)]
             batchsz   = batchlims(2) - batchlims(1) + 1
-            call read_imgbatch( b, p, batchlims, ptcl_mask)
+            ! call read_imgbatch( b, p, batchlims, ptcl_mask)
+            call read_imgbatch( b, p, batchlims)
             !$omp parallel do default(shared) private(iptcl,imatch)&
             !$omp schedule(static) proc_bind(close)
             do iptcl=batchlims(1),batchlims(2)

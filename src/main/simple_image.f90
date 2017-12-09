@@ -396,6 +396,10 @@ contains
             self%plan_fwd = fftwf_plan_dft_r2c_2d(self%ldim(2), self%ldim(1), self%rmat, self%cmat, FFTW_ESTIMATE)
             self%plan_bwd = fftwf_plan_dft_c2r_2d(self%ldim(2), self%ldim(1), self%cmat, self%rmat, FFTW_ESTIMATE)
         endif
+        if( self%wthreads .and. (any(ldim >= 500) .or. ldim(3) >= 100) )then
+            ! need to disable threads for subsequent plans
+            call fftwf_plan_with_nthreads(1)
+        endif
         ! set shift constant (shconst)
         do i=1,3
             if( self%ldim(i) == 1 )then

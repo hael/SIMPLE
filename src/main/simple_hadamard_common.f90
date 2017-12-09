@@ -51,39 +51,58 @@ contains
         class(build),      intent(inout)  :: b
         class(params),     intent(inout)  :: p
         integer,           intent(in)     :: fromptop(2)
-        logical, optional, intent(in)     :: ptcl_mask(p%fromp:p%top) 
+        logical, optional, intent(in)     :: ptcl_mask(p%fromp:p%top)
         character(len=:), allocatable :: stkname
         integer :: iptcl, ind_in_batch, ind_in_stk
-        logical :: ptcl_mask_present
-        ptcl_mask_present = present(ptcl_mask)
-        if( p%l_stktab_input )then
-            do iptcl=fromptop(1),fromptop(2)
-                if( ptcl_mask_present )then
-                    if( .not. ptcl_mask(iptcl) ) cycle
-                endif
-                ind_in_batch = iptcl - fromptop(1) + 1
-                call p%stkhandle%get_stkname_and_ind(iptcl, stkname, ind_in_stk)
-                call b%imgbatch(ind_in_batch)%read(stkname, ind_in_stk)
-            end do
-        else
-            if( p%l_distr_exec )then
+        if( present(ptcl_mask) )then
+            if( p%l_stktab_input )then
                 do iptcl=fromptop(1),fromptop(2)
-                    if( ptcl_mask_present )then
-                        if( .not. ptcl_mask(iptcl) ) cycle
+                    if( ptcl_mask(iptcl) )then
+                        ind_in_batch = iptcl - fromptop(1) + 1
+                        call p%stkhandle%get_stkname_and_ind(iptcl, stkname, ind_in_stk)
+                        call b%imgbatch(ind_in_batch)%read(stkname, ind_in_stk)
                     endif
-                    ind_in_batch = iptcl - fromptop(1) + 1                    
-                    ind_in_stk   = iptcl - p%fromp + 1
-                    call b%imgbatch(ind_in_batch)%read(p%stk_part, ind_in_stk)
                 end do
             else
+                if( p%l_distr_exec )then
+                    do iptcl=fromptop(1),fromptop(2)
+                        if( ptcl_mask(iptcl) )then
+                            ind_in_batch = iptcl - fromptop(1) + 1
+                            ind_in_stk   = iptcl - p%fromp + 1
+                            call b%imgbatch(ind_in_batch)%read(p%stk_part, ind_in_stk)
+                        endif
+                    end do
+                else
+                    do iptcl=fromptop(1),fromptop(2)
+                        if( ptcl_mask(iptcl) )then
+                            ind_in_batch = iptcl - fromptop(1) + 1
+                            ind_in_stk   = iptcl
+                            call b%imgbatch(ind_in_batch)%read(p%stk, ind_in_stk)
+                        endif
+                    end do
+                endif
+            endif
+        else
+            if( p%l_stktab_input )then
                 do iptcl=fromptop(1),fromptop(2)
-                    if( ptcl_mask_present )then
-                        if( .not. ptcl_mask(iptcl) ) cycle
-                    endif
                     ind_in_batch = iptcl - fromptop(1) + 1
-                    ind_in_stk   = iptcl
-                    call b%imgbatch(ind_in_batch)%read(p%stk, ind_in_stk)
+                    call p%stkhandle%get_stkname_and_ind(iptcl, stkname, ind_in_stk)
+                    call b%imgbatch(ind_in_batch)%read(stkname, ind_in_stk)
                 end do
+            else
+                if( p%l_distr_exec )then
+                    do iptcl=fromptop(1),fromptop(2)
+                        ind_in_batch = iptcl - fromptop(1) + 1
+                        ind_in_stk   = iptcl - p%fromp + 1
+                        call b%imgbatch(ind_in_batch)%read(p%stk_part, ind_in_stk)
+                    end do
+                else
+                    do iptcl=fromptop(1),fromptop(2)
+                        ind_in_batch = iptcl - fromptop(1) + 1
+                        ind_in_stk   = iptcl
+                        call b%imgbatch(ind_in_batch)%read(p%stk, ind_in_stk)
+                    end do
+                endif
             endif
         endif
     end subroutine read_imgbatch
