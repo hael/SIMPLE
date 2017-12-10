@@ -13,17 +13,13 @@ type prep4cgrid
     integer           :: ldim(3)
     integer           :: ldim_pd(3)
     integer           :: lims(3,2)
-    integer           :: recl
-    type(image)       :: mskimg, img4grid
+    type(image)       :: mskimg
     logical           :: exists = .false.
 contains
     procedure          :: new
     procedure          :: get_lims
-    procedure          :: get_recl
     procedure, private :: memoize_instr_fun
-    procedure, private :: prep_1
-    procedure, private :: prep_2
-    generic            :: prep => prep_1, prep_2
+    procedure          :: prep
     procedure          :: prep_serial
     procedure          :: kill
 end type prep4cgrid
@@ -36,7 +32,6 @@ contains
         class(image),      intent(in)    :: img
         class(kbinterpol), intent(in)    :: kbwin
         integer,           intent(in)    :: ldim_pd(3)
-        complex(sp), allocatable :: cmat(:,:)
         type(ftiter) :: fit 
         integer      :: npix
         call self%kill
@@ -53,12 +48,6 @@ contains
         ! work out size of complex matrix output
         call fit%new(ldim_pd, img%get_smpd())
         self%lims = fit%loop_lims(3)
-        ! allocate complex matrix and check record lenght for writing to binary direct access file
-        allocate(cmat(self%lims(1,1):self%lims(1,2),self%lims(2,1):self%lims(2,2)))
-        inquire(iolength=self%recl) cmat
-        deallocate(cmat)
-        ! make an img4grid for the case where the return value is a complex matrix
-        call self%img4grid%new(self%ldim_pd, img%get_smpd())
         ! flag existence
         self%exists = .true.
     end subroutine new
@@ -68,12 +57,6 @@ contains
         integer :: lims(3,2)
         lims = self%lims
     end function get_lims
-
-    function get_recl( self ) result( recl )
-        class(prep4cgrid), intent(in) :: self
-        integer :: recl
-        recl = self%recl
-    end function get_recl
 
     subroutine memoize_instr_fun( self, kbwin )
         class(prep4cgrid), intent(inout) :: self
@@ -91,30 +74,11 @@ contains
     end subroutine memoize_instr_fun
 
     !>  \brief  prepare image for gridding interpolation in Fourier space
-    subroutine prep_1( self, img, img4grid )
+    subroutine prep( self, img, img4grid )
         class(prep4cgrid), intent(in)    :: self
         class(image),      intent(inout) :: img, img4grid
         call img%subtr_backgr_pad_divwinstr_fft(self%mskimg, self%instr_fun, img4grid)
-    end subroutine prep_1
-
-    !>  \brief  prepare cmat for gridding interpolation in Fourier space
-    subroutine prep_2( self, img, cmat )
-        class(prep4cgrid), intent(inout) :: self
-        class(image),      intent(inout) :: img
-        complex(sp),       intent(out)   :: cmat(self%lims(1,1):self%lims(1,2),self%lims(2,1):self%lims(2,2))
-        integer :: h, k, logi(3), phys(3)
-        call img%subtr_backgr_pad_divwinstr_fft(self%mskimg, self%instr_fun, self%img4grid)
-        !$omp parallel do collapse(2) default(shared) schedule(static)&
-        !$omp private(h,k,logi,phys) proc_bind(close)
-        do h=self%lims(1,1),self%lims(1,2)
-            do k=self%lims(2,1),self%lims(2,2)
-                logi      = [h,k,0]
-                phys      = self%img4grid%comp_addr_phys(logi)
-                cmat(h,k) = self%img4grid%get_fcomp(logi,phys)
-            end do
-        end do
-        !$omp end parallel do
-    end subroutine prep_2
+    end subroutine prep
 
     !>  \brief  prepare image for gridding interpolation in Fourier space
     subroutine prep_serial( self, img, img4grid )
@@ -127,7 +91,6 @@ contains
         class(prep4cgrid), intent(inout) :: self
         if( self%exists )then
             call self%mskimg%kill
-            call self%img4grid%kill
             deallocate(self%instr_fun)
             self%exists = .false.
         endif

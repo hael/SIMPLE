@@ -19,7 +19,6 @@ character(len=11), parameter :: EXTRACT_STK_FBODY    = 'ptcls_from_'
 character(len=20), parameter :: EXTRACT_PARAMS_FBODY = 'extract_params_'
 ! SUFFIXES
 character(len=3),  parameter :: SCALE_SUFFIX       = '_sc'
-character(len=6),  parameter :: PREP4CGRID_SUFFIX  = '_cgrid'
 character(len=6),  parameter :: THUMBNAIL_SUFFIX   = '_thumb'
 character(len=5),  parameter :: INTGMOV_SUFFIX     = '_intg'
 character(len=6),  parameter :: POWSPEC_SUFFIX     = '_pspec'

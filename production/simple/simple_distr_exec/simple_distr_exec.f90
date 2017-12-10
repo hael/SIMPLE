@@ -45,7 +45,6 @@ type(het_refine_commander)               :: xhet_refine
 
 ! SUPORTING DISTRIBUTED WORKFLOWS
 type(scale_stk_parts_commander)          :: xscale_stk_parts
-type(prep4cgrid_stk_parts_commander)     :: xprep4cgrid_stk_parts
 
 ! OTHER DECLARATIONS
 character(len=KEYLEN) :: keys_required(MAXNKEYS)='', keys_optional(MAXNKEYS)=''
@@ -1032,33 +1031,6 @@ select case(prg)
         endif
         ! execute
         call xscale_stk_parts%execute( cline )
-    case( 'prep4cgrid_stk_parts' ) 
-        !==Program prep4cgrid_stk_parts
-        !
-        ! <prep4cgrid_stk_parts/begin>is a distributed workflow for preparing
-        ! partial stacks for gridding<prep4cgrid_stk_parts/end> 
-        !
-        ! set required keys
-        keys_required(1) = 'for3D'
-        keys_required(2) = 'smpd'
-        ! set optional keys
-        keys_optional(1) = 'alpha'
-        keys_optional(2) = 'nthr'
-        keys_optional(3) = 'stktab'
-        keys_optional(4) = 'nparts'
-        keys_optional(5) = 'ncunits'
-        keys_optional(6) = 'autoscale'
-        ! parse command line
-        ! if( describe ) call print_doc_prep4cgrid_stk_parts
-        call cline%parse(keys_required(:2), keys_optional(:6))
-        ! sanity check
-        if( cline%defined('nparts') .or. cline%defined('stktab') )then
-            ! all ok
-        else
-            stop 'nparts or stktab need to be part of command line!'
-        endif
-        ! execute
-        call xprep4cgrid_stk_parts%execute( cline )
     case DEFAULT
         write(*,'(a,a)') 'program key (prg) is: ', trim(prg)
         stop 'unsupported program'

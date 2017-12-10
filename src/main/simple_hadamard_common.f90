@@ -12,7 +12,7 @@ implicit none
 
 public :: read_img, read_img_and_norm, read_imgbatch, set_bp_range, set_bp_range2D, grid_ptcl,&
 &prepimg4align, eonorm_struct_facts, norm_struct_facts, cenrefvol_and_mapshifts2ptcls, preprefvol,&
-&prep2Dref, gen2Dclassdoc, preprecvols, killrecvols, gen_projection_frcs, prepimgbatch, read_cgridcmat
+&prep2Dref, gen2Dclassdoc, preprecvols, killrecvols, gen_projection_frcs, prepimgbatch
 private
 #include "simple_local_flags.inc"
 
@@ -106,30 +106,6 @@ contains
             endif
         endif
     end subroutine read_imgbatch
-
-    subroutine read_cgridcmat( b, p, iptcl )
-        class(build),  intent(inout)  :: b
-        class(params), intent(inout)  :: p
-        integer,       intent(in)     :: iptcl
-        character(len=:), allocatable :: stkname, stkname_cgrid
-        integer :: ind, funit
-        if( p%l_stktab_input )then
-            call p%stkhandle%get_stkname_and_ind(iptcl, stkname, ind)
-            stkname_cgrid = add2fbody_and_new_ext(stkname, p%ext, PREP4CGRID_SUFFIX, '.bin')
-        else
-            if( p%l_distr_exec )then
-                stkname_cgrid = add2fbody_and_new_ext(trim(p%stk_part), p%ext, PREP4CGRID_SUFFIX, '.bin')
-                ind = iptcl - p%fromp + 1
-            else
-                stkname_cgrid = add2fbody_and_new_ext(trim(p%stk), p%ext, PREP4CGRID_SUFFIX, '.bin')
-                ind = iptcl
-            endif
-        endif
-        call fopen(funit, stkname_cgrid, status='OLD', action='READ',&
-            &access='DIRECT', form='UNFORMATTED', recl=p%recl_cgrid)
-        read(funit, rec=ind) b%cmat
-        call fclose(funit)
-    end subroutine read_cgridcmat
 
     subroutine set_bp_range( b, p, cline )
         use simple_math, only: calc_fourier_index
@@ -282,17 +258,17 @@ contains
                 ! one peak & one state
                 if( p%pgrp == 'c1' )then
                     if( p%eo .ne. 'no' )then
-                        call b%eorecvols(s)%grid_fplane(orientation, b%cmat, eo, pw)
+                        call b%eorecvols(s)%grid_fplane(orientation, b%img_pad, eo, pw)
                     else
-                        call b%recvols(s)%inout_fplane(orientation, .true., b%cmat, pw)
+                        call b%recvols(s)%inout_fplane(orientation, .true., b%img_pad, pw)
                     endif
                 else
                     do k=1,b%se%get_nsym()
                         o_sym = b%se%apply(orientation, k)
                         if( p%eo .ne. 'no' )then
-                            call b%eorecvols(s)%grid_fplane(o_sym, b%cmat, eo, pw)
+                            call b%eorecvols(s)%grid_fplane(o_sym, b%img_pad, eo, pw)
                         else
-                            call b%recvols(s)%inout_fplane(o_sym, .true., b%cmat, pw)
+                            call b%recvols(s)%inout_fplane(o_sym, .true., b%img_pad, pw)
                         endif
                     end do
                 endif
@@ -300,18 +276,18 @@ contains
                 ! multiple peaks & one state
                 if( p%pgrp == 'c1' )then
                     if( p%eo .ne. 'no' )then
-                        call b%eorecvols(s)%grid_fplane(os, b%cmat, eo, npeaks, pw)
+                        call b%eorecvols(s)%grid_fplane(os, b%img_pad, eo, npeaks, pw)
                     else
-                        call b%recvols(s)%inout_fplane(os, .true., b%cmat, npeaks, pw)
+                        call b%recvols(s)%inout_fplane(os, .true., b%img_pad, npeaks, pw)
                     endif
                 else
                     do k=1,b%se%get_nsym()
                         os_sym = os
                         call b%se%apply2all(os_sym, k)
                         if( p%eo .ne. 'no' )then
-                            call b%eorecvols(s)%grid_fplane(os_sym, b%cmat, eo, npeaks, pw)
+                            call b%eorecvols(s)%grid_fplane(os_sym, b%img_pad, eo, npeaks, pw)
                         else
-                            call b%recvols(s)%inout_fplane(os_sym, .true., b%cmat, npeaks, pw)
+                            call b%recvols(s)%inout_fplane(os_sym, .true., b%img_pad, npeaks, pw)
                         endif
                     enddo
                 endif
@@ -325,66 +301,22 @@ contains
                 s      = nint(o_soft%get('state'))
                 if( p%pgrp == 'c1' )then
                     if( p%eo .ne. 'no' )then
-                        call b%eorecvols(s)%grid_fplane(o_soft, b%cmat, eo, w)
+                        call b%eorecvols(s)%grid_fplane(o_soft, b%img_pad, eo, w)
                     else
-                        call b%recvols(s)%inout_fplane(o_soft, .true., b%cmat, w)
+                        call b%recvols(s)%inout_fplane(o_soft, .true., b%img_pad, w)
                     endif
                 else
                     do k=1,b%se%get_nsym()
                         o_sym = b%se%apply(o_soft, k)
                         if( p%eo .ne. 'no' )then
-                            call b%eorecvols(s)%grid_fplane(o_sym, b%cmat, eo, w)
+                            call b%eorecvols(s)%grid_fplane(o_sym, b%img_pad, eo, w)
                         else
-                            call b%recvols(s)%inout_fplane(o_sym, .true., b%cmat, w)
+                            call b%recvols(s)%inout_fplane(o_sym, .true., b%img_pad, w)
                         endif
                     end do
                 endif
             enddo
         endif
-        ! l_softrec = .false.
-        ! npeaks    = 1
-        ! nstates   = 1
-        ! if( present(os) )then
-        !     l_softrec = .true.
-        !     npeaks    = os%get_noris()
-        !     nstates   = os%get_n('state')
-        ! endif
-        ! pw = 1.0
-        ! if( orientation%isthere('w') ) pw = orientation%get('w')
-        ! eo = 0
-        ! if( p%eo .ne. 'no' ) eo = nint(orientation%get('eo'))
-        ! if( pw > TINY )then
-        !     orisoft = orientation
-        !     do jpeak=1,npeaks
-        !         ! get ori info
-        !         if( l_softrec )then
-        !             orisoft = os%get_ori(jpeak)
-        !             w       = orisoft%get('ow')
-        !         else
-        !             w       = 1.
-        !         endif
-        !         s = nint(orisoft%get('state'))
-        !         if( p%frac < 0.99   ) w = w * pw
-        !         if( w > TINY )then
-        !             if( p%pgrp == 'c1' )then
-        !                 if( p%eo .ne. 'no' )then
-        !                     call b%eorecvols(s)%grid_fplane(orisoft, b%cmat, eo, pwght=w)
-        !                 else
-        !                     call b%recvols(s)%inout_fplane(orisoft, .true., b%cmat, pwght=w)
-        !                 endif
-        !             else
-        !                 do k=1,b%se%get_nsym()
-        !                     o_sym = b%se%apply(orisoft, k)
-        !                     if( p%eo .ne. 'no' )then
-        !                         call b%eorecvols(s)%grid_fplane(o_sym, b%cmat, eo, pwght=w)
-        !                     else
-        !                         call b%recvols(s)%inout_fplane(o_sym, .true., b%cmat, pwght=w)
-        !                     endif
-        !                 end do
-        !             endif
-        !         endif
-        !     end do
-        ! endif
     end subroutine grid_ptcl
 
     !>  \brief  prepares one particle image for alignment

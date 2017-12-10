@@ -21,7 +21,6 @@ public :: image_diff_commander
 public :: image_smat_commander
 public :: norm_commander
 public :: scale_commander
-public :: prep4cgrid_commander
 public :: stack_commander
 public :: stackops_commander
 private
@@ -63,10 +62,6 @@ type, extends(commander_base) :: scale_commander
   contains
     procedure :: execute      => exec_scale
 end type scale_commander
-type, extends(commander_base) :: prep4cgrid_commander
-  contains
-    procedure :: execute      => exec_prep4cgrid
-end type prep4cgrid_commander
 type, extends(commander_base) :: stack_commander
   contains
     procedure :: execute      => exec_stack
@@ -627,83 +622,6 @@ contains
         call simple_end('**** SIMPLE_SCALE NORMAL STOP ****', print_simple=.false.)
         call qsys_job_finished( p, 'simple_commander_imgproc :: exec_scale' )
     end subroutine exec_scale
-
-    !>  for preparing images for gridding in the Fourier domain
-    subroutine exec_prep4cgrid( self, cline )
-        use simple_prep4cgrid, only: prep4cgrid
-        use simple_kbinterpol, only: kbinterpol
-        class(prep4cgrid_commander), intent(inout) :: self
-        class(cmdline),              intent(inout) :: cline
-        type(params)                       :: p
-        type(build)                        :: b
-        type(image)                        :: img
-        type(prep4cgrid)                   :: gridprep
-        type(kbinterpol)                   :: kbwin
-        character(len=:),      allocatable :: fname
-        character(len=STDLEN), allocatable :: filenames(:)
-        complex(sp),           allocatable :: cmat(:,:)
-        integer                            :: iptcl, nfiles, nframes, ifile, ldim(3)
-        integer                            :: recl, ldim_pd(3), lims(3,2), funit
-        if( cline%defined('filetab') )then
-            call read_filetable(cline%get_carg('filetab'), filenames)
-            nfiles = size(filenames)
-            call find_ldim_nptcls(filenames(1), ldim, nframes)
-            call cline%set('stk', trim(filenames(1)))
-            call cline%set('box', real(ldim(1)))
-            p = params(cline) ! parameters generated
-            if( p%for3D.eq.'yes' )then
-                kbwin = kbinterpol(RECWINSZ, p%alpha)
-            else
-                kbwin = kbinterpol(KBWINSZ, p%alpha)
-            endif
-            call b%build_general_tbox(p, cline, do3d=.false.) ! general objects built
-            call gridprep%new(b%img, kbwin, [p%boxpd,p%boxpd,1])
-            lims = gridprep%get_lims()
-            allocate(cmat(lims(1,1):lims(1,2),lims(2,1):lims(2,2)))
-            inquire(iolength=recl) cmat
-            do ifile=1,nfiles
-                call progress(ifile, nfiles)
-                fname = add2fbody_and_new_ext(trim(filenames(ifile)), p%ext, PREP4CGRID_SUFFIX, '.bin')
-                call find_ldim_nptcls(filenames(ifile),ldim,nframes)
-                if( ldim(1) .ne. p%box )then
-                    print *,'Non congruent dimensions; simple_commander_imgproc :: exec_prep4cgrid'
-                    stop
-                endif
-                call fopen(funit, fname, status='REPLACE', action='WRITE',&
-                    &access='DIRECT', form='UNFORMATTED', recl=recl)
-                do iptcl=1,nframes
-                    call b%img%read(trim(filenames(ifile)), iptcl)
-                    call gridprep%prep(b%img, cmat)
-                    write(funit, rec=iptcl) cmat
-                end do
-                call fclose(funit)
-            enddo
-        else
-            p = params(cline) ! parameters generated
-            if( p%for3D.eq.'yes' )then
-                kbwin = kbinterpol(RECWINSZ, p%alpha)
-            else
-                kbwin = kbinterpol(KBWINSZ, p%alpha)
-            endif
-            call b%build_general_tbox(p, cline, do3d=.false.) ! general objects built
-            call gridprep%new(b%img, kbwin, [p%boxpd,p%boxpd,1])
-            lims = gridprep%get_lims()
-            allocate(cmat(lims(1,1):lims(1,2),lims(2,1):lims(2,2)))
-            inquire(iolength=recl) cmat
-            call fopen(funit, p%outstk, status='REPLACE', action='WRITE',&
-                &access='DIRECT', form='UNFORMATTED', recl=recl)
-            do iptcl=1,p%nptcls
-                call progress(iptcl, p%nptcls)
-                call b%img%read(p%stk, iptcl)
-                call gridprep%prep(b%img, cmat)
-                write(funit, rec=iptcl) cmat
-            end do
-            call fclose(funit)
-        endif
-        ! end gracefully
-        call simple_end('**** SIMPLE_PREP4CGRID NORMAL STOP ****', print_simple=.false.)
-        call qsys_job_finished( p, 'simple_commander_imgproc :: exec_prep4cgrid' )
-    end subroutine exec_prep4cgrid
 
     !>  for stacking individual images or multiple stacks into one
     subroutine exec_stack( self, cline )

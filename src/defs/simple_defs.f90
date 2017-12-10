@@ -29,13 +29,8 @@ real(sp), parameter :: DTWOPI       = 2.d0*acos(-1.d0)
 real(sp), parameter :: FOURPI       = 4.*acos(-1.)
 real(sp), parameter :: SQRT2        = sqrt(2.)
 real(sp), parameter :: EUL          = 0.5772156649015328606065120900824024310422_sp
-! #ifdef USETINY
-! real(sp), parameter :: TINY         = EPSILON(PI)*2.
-! real(dp), parameter :: DTINY        = EPSILON(DPI)*2.
-! #else
 real(sp), parameter :: TINY         = 1e-10
 real(dp), parameter :: DTINY        = 1e-10
-! #endif
 real(sp), parameter :: SMALL        = 1e-6
 real(sp), parameter :: FTOL         = 1e-4
 real(dp), parameter :: DSMALL       = 1e-6

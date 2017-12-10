@@ -10,6 +10,8 @@ use simple_build,            only: build
 use simple_params,           only: params
 use simple_cmdline,          only: cmdline
 use simple_binoris_io,       only: binwrite_oritab
+use simple_kbinterpol,       only: kbinterpol
+use simple_prep4cgrid,       only: prep4cgrid
 use simple_hadamard_common   ! use all in there
 use simple_timer             ! use all in there
 use simple_prime3D_srch,     ! use all in there
@@ -69,8 +71,10 @@ contains
         class(cmdline), intent(inout) :: cline
         integer,        intent(in)    :: which_iter
         logical,        intent(inout) :: update_res, converged
-        type(oris) :: prime3D_oris
-        type(ori)  :: orientation
+        type(oris)       :: prime3D_oris
+        type(ori)        :: orientation
+        type(kbinterpol) :: kbwin
+        type(prep4cgrid) :: gridprep
         real       :: norm, corr_thresh, skewness, frac_srch_space
         real       :: extr_thresh, update_frac, reslim
         integer    :: iptcl, inptcls, istate, iextr_lim, i, zero_pop
@@ -192,7 +196,6 @@ contains
             ptcl_mask = .true.
         endif
 
-
         if( L_BENCH ) rt_init = toc(t_init)
         ! PREPARE THE POLARFT_CORRCALC DATA STRUCTURE
         if( L_BENCH ) t_prep_pftcc = tic()
@@ -238,7 +241,7 @@ contains
         if( L_BENCH ) t_align = tic()
         select case(p%refine)
             case( 'snhc' )
-                !$omp parallel do default(shared) private(i,iptcl) schedule(guided) proc_bind(close)
+                !$omp parallel do default(shared) private(i,iptcl) schedule(static) proc_bind(close)
                 do i=1,nptcls2update
                     iptcl = pinds(i)
                     call primesrch3D(iptcl)%exec_prime3D_srch(p%lp, szsn=p%szsn)
@@ -246,14 +249,14 @@ contains
                 !$omp end parallel do
             case( 'no','shc' )
                 if( p%oritab .eq. '' )then
-                    !$omp parallel do default(shared) private(i,iptcl) schedule(guided) proc_bind(close)
+                    !$omp parallel do default(shared) private(i,iptcl) schedule(static) proc_bind(close)
                     do i=1,nptcls2update
                         iptcl = pinds(i)
                         call primesrch3D(iptcl)%exec_prime3D_srch(p%lp, greedy=.true.)
                     end do
                     !$omp end parallel do
                 else
-                    !$omp parallel do default(shared) private(i,iptcl) schedule(guided) proc_bind(close)
+                    !$omp parallel do default(shared) private(i,iptcl) schedule(static) proc_bind(close)
                     do i=1,nptcls2update
                         iptcl = pinds(i)
                         call primesrch3D(iptcl)%exec_prime3D_srch(p%lp)
@@ -262,7 +265,7 @@ contains
                 endif
             case('neigh','shcneigh')
                 if( p%oritab .eq. '' ) stop 'cannot run the refine=neigh mode without input oridoc (oritab)'
-                !$omp parallel do default(shared) private(i,iptcl) schedule(guided) proc_bind(close)
+                !$omp parallel do default(shared) private(i,iptcl) schedule(static) proc_bind(close)
                 do i=1,nptcls2update
                     iptcl = pinds(i)
                     call primesrch3D(iptcl)%exec_prime3D_srch(p%lp, nnmat=b%nnmat, grid_projs=b%grid_projs)
@@ -270,14 +273,14 @@ contains
                 !$omp end parallel do
             case('greedy')
                 if( p%oritab .eq. '' )then
-                    !$omp parallel do default(shared) private(i,iptcl) schedule(guided) proc_bind(close)
+                    !$omp parallel do default(shared) private(i,iptcl) schedule(static) proc_bind(close)
                     do i=1,nptcls2update
                         iptcl = pinds(i)
                         call primesrch3D(iptcl)%exec_prime3D_srch(p%lp, greedy=.true.)
                     end do
                     !$omp end parallel do
                 else
-                    !$omp parallel do default(shared) private(i,iptcl) schedule(guided) proc_bind(close)
+                    !$omp parallel do default(shared) private(i,iptcl) schedule(static) proc_bind(close)
                     do i=1,nptcls2update
                         iptcl = pinds(i)
                         call primesrch3D(iptcl)%exec_prime3D_srch(p%lp, greedy=.true.)
@@ -286,7 +289,7 @@ contains
                 endif
             case('greedyneigh')
                 if( p%oritab .eq. '' )then                
-                    !$omp parallel do default(shared) private(i,iptcl) schedule(guided) proc_bind(close)
+                    !$omp parallel do default(shared) private(i,iptcl) schedule(static) proc_bind(close)
                     do i=1,nptcls2update
                         iptcl = pinds(i)
                         call primesrch3D(iptcl)%exec_prime3D_srch(p%lp,&
@@ -294,7 +297,7 @@ contains
                     end do
                     !$omp end parallel do
                 else
-                    !$omp parallel do default(shared) private(i,iptcl) schedule(guided) proc_bind(close)
+                    !$omp parallel do default(shared) private(i,iptcl) schedule(static) proc_bind(close)
                     do i=1,nptcls2update
                         iptcl = pinds(i)
                         call primesrch3D(iptcl)%exec_prime3D_srch(p%lp,&
@@ -304,7 +307,7 @@ contains
                 endif
             case('het')
                 if(p%oritab .eq. '') stop 'cannot run the refine=het mode without input oridoc (oritab)'
-                !$omp parallel do default(shared) private(i,iptcl) schedule(guided) proc_bind(close)
+                !$omp parallel do default(shared) private(i,iptcl) schedule(static) proc_bind(close)
                 do i=1,nptcls2update
                     iptcl = pinds(i)
                     call primesrch3D(iptcl)%exec_prime3D_srch_het( do_extr )
@@ -312,7 +315,7 @@ contains
                 !$omp end parallel do
             case ('states')
                 if(p%oritab .eq. '') stop 'cannot run the refine=states mode without input oridoc (oritab)'
-                !$omp parallel do default(shared) private(i,iptcl) schedule(guided) proc_bind(close)
+                !$omp parallel do default(shared) private(i,iptcl) schedule(static) proc_bind(close)
                 do i=1,nptcls2update
                     iptcl = pinds(i)
                     call primesrch3D(iptcl)%exec_prime3D_srch(p%lp, greedy=.true., nnmat=b%nnmat)
@@ -349,6 +352,13 @@ contains
         ! VOLUMETRIC 3D RECONSTRUCTION
         if( L_BENCH ) t_rec = tic()
         if( p%norec .ne. 'yes' )then
+            ! make the gridding prepper
+            if( p%eo .ne. 'no' )then
+                kbwin = b%eorecvols(1)%get_kbwin()
+            else
+                kbwin = b%recvols(1)%get_kbwin()
+            endif
+            call gridprep%new(b%img, kbwin, [p%boxpd,p%boxpd,1])
             ! init volumes
             call preprecvols(b, p)
             ! reconstruction
@@ -357,7 +367,8 @@ contains
                 orientation = b%a%get_ori(iptcl)
                 if( nint(orientation%get('state')) == 0 .or.&
                    &nint(orientation%get('state_balance')) == 0 ) cycle
-                call read_cgridcmat( b, p, iptcl )
+                call read_img_and_norm(b, p, iptcl)
+                call gridprep%prep(b%img, b%img_pad)
                 if( p%npeaks > 1 )then
                     call grid_ptcl(b, p, orientation, os=o_peaks(iptcl))
                 else
@@ -370,8 +381,9 @@ contains
             else
                 call norm_struct_facts(b, p, which_iter)
             endif
-            ! recvols not needed anymore
+            ! recvols % gridprep not needed anymore
             call killrecvols(b, p)
+            call gridprep%kill
         endif
         if( L_BENCH ) rt_rec = toc(t_rec)
 
@@ -415,8 +427,6 @@ contains
 
     subroutine gen_random_model( b, p, nsamp_in )
         use simple_ran_tabu,   only: ran_tabu
-        use simple_kbinterpol, only: kbinterpol
-        use simple_prep4cgrid, only: prep4cgrid
         class(build),      intent(inout) :: b         !< build object
         class(params),     intent(inout) :: p         !< param object
         integer, optional, intent(in)    :: nsamp_in  !< num input samples
@@ -564,6 +574,7 @@ contains
             batchsz   = batchlims(2) - batchlims(1) + 1
             ! call read_imgbatch( b, p, batchlims, ptcl_mask)
             call read_imgbatch( b, p, batchlims)
+
             !$omp parallel do default(shared) private(iptcl,imatch)&
             !$omp schedule(static) proc_bind(close)
             do iptcl=batchlims(1),batchlims(2)

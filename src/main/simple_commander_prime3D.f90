@@ -186,11 +186,8 @@ contains
         use simple_math,               only: calc_lowpass_lim, calc_fourier_index
         use simple_hadamard3D_matcher, only: prime3D_exec, prime3D_find_resrange
         use simple_strings,            only: str_has_substr
-        use simple_commander_imgproc,  only: prep4cgrid_commander
         class(prime3D_commander), intent(inout) :: self
         class(cmdline),           intent(inout) :: cline
-        type(prep4cgrid_commander) :: xprep4cgrid
-        type(cmdline)              :: cline_prep4cgrid
         type(params)               :: p
         type(build)                :: b
         integer                    :: i, startit
@@ -223,10 +220,6 @@ contains
             endif
             call prime3D_exec(b, p, cline, startit, update_res, converged) ! partition or not, depending on 'part'
         else
-            cline_prep4cgrid = cline
-            call cline_prep4cgrid%set( 'for3D', 'yes' )
-            call cline_prep4cgrid%set( 'outstk', add2fbody_and_new_ext(p%stk, p%ext, PREP4CGRID_SUFFIX, '.bin') )
-            call xprep4cgrid%execute(cline_prep4cgrid)
             if( p%dynlp .eq. 'yes' )then
                 call prime3D_find_resrange( b, p, lpstart, lpstop ) ! determine resolution range
                 if( cline%defined('lpstart') )then

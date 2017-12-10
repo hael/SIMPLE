@@ -33,7 +33,6 @@ public :: recvol_distr_commander
 public :: tseries_track_distr_commander
 public :: symsrch_distr_commander
 public :: scale_stk_parts_commander
-public :: prep4cgrid_stk_parts_commander
 private
 
 type, extends(commander_base) :: unblur_ctffind_distr_commander
@@ -100,10 +99,6 @@ type, extends(commander_base) :: scale_stk_parts_commander
   contains
     procedure :: execute      => exec_scale_stk_parts
 end type scale_stk_parts_commander
-type, extends(commander_base) :: prep4cgrid_stk_parts_commander
-  contains
-    procedure :: execute      => exec_prep4cgrid_stk_parts
-end type prep4cgrid_stk_parts_commander
 
 contains
 
@@ -740,7 +735,6 @@ contains
         class(prime3D_distr_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
         ! commanders
-        type(prep4cgrid_stk_parts_commander) :: xprep4cgrid_distr
         type(prime3D_init_distr_commander)   :: xprime3D_init_distr
         type(recvol_distr_commander)         :: xrecvol_distr
         type(resrange_commander)             :: xresrange
@@ -749,7 +743,6 @@ contains
         type(split_commander)                :: xsplit
         type(postproc_vol_commander)         :: xpostproc_vol
         ! command lines
-        type(cmdline)         :: cline_prep4cgrid_distr
         type(cmdline)         :: cline_recvol_distr
         type(cmdline)         :: cline_prime3D_init
         type(cmdline)         :: cline_resrange
@@ -794,20 +787,17 @@ contains
         if( .not. cline%defined('nspace') ) call cline%set('nspace', 1000.)
         call cline%set( 'box', real(p_master%box) )
         ! prepare command lines from prototype master
-        cline_prep4cgrid_distr = cline
-        cline_recvol_distr     = cline
-        cline_prime3D_init     = cline
-        cline_resrange         = cline
-        cline_check3D_conv     = cline
-        cline_merge_algndocs   = cline
-        cline_volassemble      = cline
-        cline_postproc_vol     = cline
+        cline_recvol_distr   = cline
+        cline_prime3D_init   = cline
+        cline_resrange       = cline
+        cline_check3D_conv   = cline
+        cline_merge_algndocs = cline
+        cline_volassemble    = cline
+        cline_postproc_vol   = cline
 
         ! initialise static command line parameters and static job description parameter
-        call cline_prep4cgrid_distr%set( 'prg', 'prep4cgrid_stk_parts') ! required for distributed call
-        call cline_prep4cgrid_distr%set( 'for3D', 'yes' )
-        call cline_recvol_distr%set( 'prg', 'recvol' )                  ! required for distributed call
-        call cline_prime3D_init%set( 'prg', 'prime3D_init' )            ! required for distributed call
+        call cline_recvol_distr%set( 'prg', 'recvol' )       ! required for distributed call
+        call cline_prime3D_init%set( 'prg', 'prime3D_init' ) ! required for distributed call
         call cline_merge_algndocs%set('nthr', 1.)
         call cline_merge_algndocs%set('fbody', ALGN_FBODY)
         call cline_merge_algndocs%set('nptcls', real(p_master%nptcls))
@@ -832,8 +822,6 @@ contains
         if( .not. cline%defined('stktab') )then
             call xsplit%execute(cline)
         endif
-        ! prep4cgrid
-        call xprep4cgrid_distr%execute(cline_prep4cgrid_distr)
 
         ! GENERATE STARTING MODELS & ORIENTATIONS
         ! Orientations
@@ -1499,95 +1487,5 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_DISTR_SCALE_STK_PARTS NORMAL STOP ****')
     end subroutine exec_scale_stk_parts
-
-    subroutine exec_prep4cgrid_stk_parts( self, cline )
-        use simple_map_reduce, only: split_nobjs_even
-        class(prep4cgrid_stk_parts_commander), intent(inout) :: self
-        class(cmdline),                        intent(inout) :: cline
-        type(qsys_env)                     :: qenv
-        type(params)                       :: p_master
-        type(chash)                        :: job_descr
-        type(cmdline)                      :: cline_prep4cgrid
-        type(chash),           allocatable :: part_params(:)
-        character(len=STDLEN), allocatable :: part_stks(:)
-        integer,               allocatable :: parts(:,:)
-        character(len=:),      allocatable :: stkname, outstkname
-        character(len=STDLEN)              :: filetab
-        integer :: ipart, cnt, partsz, nparts, nstks, istk
-        ! seed the random number generator
-        call seed_rnd
-        ! output command line executed
-        write(*,'(a)') '>>> COMMAND LINE EXECUTED'
-        write(*,*) trim(cmdline_glob)
-        ! make master parameters
-        p_master = params(cline)
-        ! copy command line
-        cline_prep4cgrid = cline
-        ! prepare part-dependent parameters
-        if( cline%defined('stktab') )then
-            call cline_prep4cgrid%delete('stktab')
-            nstks = p_master%stkhandle%get_nmics()
-            if(cline%defined('nparts'))then
-                nparts = min(p_master%nparts, nstks)
-                call cline_prep4cgrid%set('nparts',real(nparts))
-                p_master%nparts = nparts
-            else
-                nparts = 1
-            endif
-            parts = split_nobjs_even(nstks, nparts)
-            allocate(part_params(nparts))
-            cnt = 0
-            do ipart=1,nparts
-                call part_params(ipart)%new(1)
-                partsz = parts(ipart,2) - parts(ipart,1) + 1
-                allocate(part_stks(partsz))
-                ! creates part filetab
-                filetab = 'prep4cgrid_stktab_part'//int2str(ipart)//METADATEXT
-                do istk=1,partsz
-                    cnt = cnt + 1
-                    part_stks(istk) = p_master%stkhandle%get_stkname(cnt)
-                enddo
-                ! write part filetab & update part parameters
-                call write_filetable( filetab, part_stks )
-                call part_params(ipart)%set('filetab', filetab)
-                deallocate(part_stks)
-            end do
-            deallocate(parts)
-        else
-            allocate(part_params(p_master%nparts))
-            do ipart=1,p_master%nparts
-                call part_params(ipart)%new(2)
-                if( p_master%autoscale .eq. 'yes' )then
-                    allocate(stkname, source=trim(STKPARTFBODY)//&
-                        &int2str_pad(ipart,p_master%numlen)//SCALE_SUFFIX//p_master%ext)
-                else
-                    allocate(stkname, source=trim(STKPARTFBODY)//&
-                        &int2str_pad(ipart,p_master%numlen)//p_master%ext)
-                endif
-                outstkname = add2fbody_and_new_ext(stkname, p_master%ext, PREP4CGRID_SUFFIX, '.bin')
-                call part_params(ipart)%set('stk',    stkname)
-                call part_params(ipart)%set('outstk', outstkname)
-                deallocate(stkname, outstkname)
-            end do
-        endif
-        ! setup the environment for distributed execution
-        call qenv%new(p_master)
-        ! prepare job description
-        call cline_prep4cgrid%gen_job_descr(job_descr)
-        call job_descr%set('prg', 'prep4cgrid')
-        ! schedule
-        call qenv%gen_scripts_and_schedule_jobs(p_master, job_descr, part_params=part_params)
-        ! clean
-        call qsys_cleanup(p_master)
-        if( cline%defined('stktab') )then
-            ! removes temporary split stktab lists
-            do ipart=1,nparts
-                filetab = 'prep4cgrid_stktab_part'//int2str(ipart)//METADATEXT
-                call del_file( filetab )
-            end do
-        endif
-        ! end gracefully
-        call simple_end('**** SIMPLE_DISTR_PREP4CGRID_STK_PARTS NORMAL STOP ****')
-    end subroutine exec_prep4cgrid_stk_parts
 
 end module simple_commander_distr_wflows

@@ -98,7 +98,6 @@ type(image_diff_commander)           :: ximage_diff
 type(image_smat_commander)           :: ximage_smat
 type(norm_commander)                 :: xnorm
 type(scale_commander)                :: xscale
-type(prep4cgrid_commander)           :: xprep4cgrid
 type(stack_commander)                :: xstack
 type(stackops_commander)             :: xstackops
 
@@ -1868,34 +1867,6 @@ select case(prg)
         call cline%parse(keys_required(:1),keys_optional(:11))
         ! execute
         call xscale%execute(cline)
-    case( 'prep4cgrid' )
-        !==Program prep4cgrid
-        !
-        ! <prep4cgrid/begin>is a program that prepares images (on disk) for gridding in the Fourier domain
-        ! <prep4cgrid/end>
-        !
-        ! set required keys
-        keys_required(1) = 'smpd'
-        keys_required(2) = 'for3D'
-        ! set optional keys
-        keys_optional(1) = 'stk'
-        keys_optional(2) = 'outstk'
-        keys_optional(3) = 'filetab'
-        keys_optional(4) = 'alpha'
-        keys_optional(5) = 'autoscale'
-        ! parse command line
-        ! if( describe ) call print_doc_prep4cgrid
-        call cline%parse(keys_required(:2),keys_optional(:4))
-        ! set defaults
-        if( .not. cline%defined('outstk') ) call cline%set('outstk', 'outstk.bin')
-        ! sanity check
-        if( cline%defined('stk') .or. cline%defined('filetab') )then
-            ! all ok
-        else
-            stop 'stk or filetab need to be part of command line!'
-        endif
-        ! execute
-        call xprep4cgrid%execute(cline)
     case( 'stack' )
         !==Program stack
         !

@@ -175,7 +175,7 @@ contains
             call self%mskimg%new([p%boxmatch, p%boxmatch, 1],p%smpd,  wthreads=.false.)
             DebugPrint  'did build boxmatch-sized image objects'
             ! boxpd-sized ones
-            call self%img_pad%new([p%boxpd,p%boxpd,1],p%smpd,         wthreads=.false.)
+            call self%img_pad%new([p%boxpd,p%boxpd,1],p%smpd)
             if( ddo3d )then
                 call self%vol%new([p%box,p%box,p%box], p%smpd)
                 call self%vol2%new([p%box,p%box,p%box], p%smpd)
