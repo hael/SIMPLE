@@ -20,20 +20,17 @@ implicit none
 public :: reconstructor
 private
 
-type :: cproxcmp
-    complex :: cmat_exp_val = cmplx(0.,0.)
-    real    :: rho_val      = 0.0
-    integer :: win(3,2)
-end type cproxcmp
+type :: cmprxy
+    complex, allocatable :: cmat_exp(:,:,:,:,:,:)
+    real,    allocatable :: rho(:,:,:,:,:,:)
+    integer, allocatable :: win(:,:,:,:,:)
+end type cmprxy
 
 type, extends(image) :: reconstructor
     private
-    ! cmat_proxy is a proxy for cmat_exp, to increase the parallelism (operate over many planes in parallel)
-    ! at the cost of increased memory use
-    type(cproxcmp), allocatable :: cmat_proxy(:,:,:)            !< indexed: iplane, h, k       
+    type(cmprxy)                :: cmat_proxy                   !< proxy for cmat_exp, to increase the parallelism
     type(kbinterpol)            :: kbwin                        !< window function object
     type(c_ptr)                 :: kp                           !< c pointer for fftw allocation
-    type(ctf)                   :: tfun                         !< CTF object
     real(kind=c_float), pointer :: rho(:,:,:)=>null()           !< sampling+CTF**2 density
     complex, allocatable        :: cmat_exp(:,:,:)              !< Fourier components of expanded reconstructor
     real,    allocatable        :: rho_exp(:,:,:)               !< sampling+CTF**2 density of expanded reconstructor
@@ -43,8 +40,6 @@ type, extends(image) :: reconstructor
     integer, allocatable        :: ind_map_proxy(:,:)           !< index mapping for cmat_proxy
     real                        :: winsz          = RECWINSZ    !< window half-width
     real                        :: alpha          = KBALPHA     !< oversampling ratio
-    real                        :: dfx=0., dfy=0., angast=0.    !< CTF params
-    real                        :: phshift        = 0.          !< additional phase shift from the Volta 
     real                        :: shconst_rec(3) = [0.,0.,0.]  !< memoized constants for origin shifting 
     integer                     :: wdim           = 0           !< dim of interpolation matrix
     integer                     :: nyq            = 0           !< Nyqvist Fourier index
@@ -71,9 +66,11 @@ type, extends(image) :: reconstructor
     procedure          :: write_rho
     procedure          :: read_rho
     ! INTERPOLATION
-    procedure, private :: inout_fplane_1
-    procedure, private :: inout_fplane_2
-    generic            :: inout_fplane => inout_fplane_1, inout_fplane_2
+    procedure, private :: insert_fplane_1
+    procedure, private :: insert_fplane_2
+    generic            :: insert_fplane => insert_fplane_1, insert_fplane_2
+    procedure, private :: insert_fplanes_1
+    generic            :: insert_fplanes => insert_fplanes_1
     procedure          :: sampl_dens_correct
     procedure          :: compress_exp
     procedure          :: expand_exp
@@ -83,6 +80,7 @@ type, extends(image) :: reconstructor
     procedure          :: rec
     ! DESTRUCTORS
     procedure          :: dealloc_exp
+    procedure          :: dealloc_cmat_proxy
     procedure          :: dealloc_rho
 end type reconstructor
 
@@ -176,16 +174,23 @@ contains
     end subroutine alloc_rho
 
     subroutine alloc_cmat_proxy( self, nplanes, npeaks )
-        class(reconstructor), intent(inout) :: self   !< this instance
+        class(reconstructor), intent(inout) :: self !< this instance
         integer,              intent(in)    :: nplanes, npeaks
-        integer :: cnt, ipeak, iplane
+        integer :: cnt, ipeak, iplane, h, k
         if( self%rho_allocated )then
-            if( allocated(self%cmat_proxy)    ) deallocate(self%cmat_proxy)
-            if( allocated(self%ind_map_proxy) ) deallocate(self%ind_map_proxy)
+            if( allocated(self%cmat_proxy%cmat_exp) ) deallocate(self%cmat_proxy%cmat_exp)
+            if( allocated(self%cmat_proxy%rho)      ) deallocate(self%cmat_proxy%rho)
+            if( allocated(self%cmat_proxy%win)      ) deallocate(self%cmat_proxy%win)
+            if( allocated(self%ind_map_proxy)       ) deallocate(self%ind_map_proxy)
             self%nplanes_proxy = nplanes * npeaks
-            allocate( self%cmat_proxy(self%nplanes_proxy,self%cyc_lims(1,1):self%cyc_lims(1,2),&
-                &self%cyc_lims(2,1):self%cyc_lims(2,2)), self%ind_map_proxy(nplanes,npeaks), stat=alloc_stat )
-            allocchk("In: alloc_cmat_proxy; simple_reconstructor")
+            allocate( self%cmat_proxy%cmat_exp(self%nplanes_proxy,self%cyc_lims(1,1):self%cyc_lims(1,2),&
+                &self%cyc_lims(2,1):self%cyc_lims(2,2),self%wdim,self%wdim,self%wdim), source=cmplx(0.,0.))
+            allocate( self%cmat_proxy%rho(self%nplanes_proxy,self%cyc_lims(1,1):self%cyc_lims(1,2),&
+                &self%cyc_lims(2,1):self%cyc_lims(2,2),self%wdim,self%wdim,self%wdim), source=0.)
+            allocate( self%cmat_proxy%win(self%nplanes_proxy,self%cyc_lims(1,1):self%cyc_lims(1,2),&
+                &self%cyc_lims(2,1):self%cyc_lims(2,2),3,2), source=0)
+            allocate(self%ind_map_proxy(nplanes,npeaks))
+            ! create index mapping
             cnt = 0
             do iplane=1,nplanes
                 do ipeak=1,npeaks
@@ -262,30 +267,31 @@ contains
     ! INTERPOLATION
 
     !> insert Fourier plane
-    subroutine inout_fplane_1( self, o, fpl, pwght )
-        class(reconstructor), intent(inout) :: self      !< instance
-        class(ori),           intent(inout) :: o         !< orientation
-        class(image),         intent(inout) :: fpl       !< Fourier plane
-        real,                 intent(in)    :: pwght     !< external particle weight (affects both fplane and rho)
-        integer :: logi(3), win(3,2), sh, i, h, k
-        complex :: comp, oshift
-        real    :: rotmat(3,3), vec(3), loc(3), shconst_here(2)
-        real    :: w(self%wdim,self%wdim,self%wdim), arg, tval, tvalsq
+    subroutine insert_fplane_1( self, o, fpl, pwght )
+        class(reconstructor), intent(inout) :: self   !< instance
+        class(ori),           intent(inout) :: o      !< orientation
+        class(image),         intent(inout) :: fpl    !< Fourier plane
+        real,                 intent(in)    :: pwght  !< external particle weight (affects both fplane and rho)
+        type(ctf) :: tfun
+        integer   :: logi(3), win(3,2), sh, i, h, k
+        complex   :: comp, oshift
+        real      :: rotmat(3,3), vec(3), loc(3), shconst_here(2), dfx, dfy, angast, phshift
+        real      :: w(self%wdim,self%wdim,self%wdim), arg, tval, tvalsq
         if( self%ctf%flag /= CTFFLAG_NO )then
             ! make CTF object & get CTF info
-            self%tfun = ctf(self%get_smpd(), o%get('kv'), o%get('cs'), o%get('fraca'))
-            self%dfx  = o%get('dfx')
+            tfun = ctf(self%get_smpd(), o%get('kv'), o%get('cs'), o%get('fraca'))
+            dfx  = o%get('dfx')
             if( self%tfastig )then            ! astigmatic CTF model
-                self%dfy = o%get('dfy')
-                self%angast = o%get('angast')
+                dfy    = o%get('dfy')
+                angast = o%get('angast')
             else                              ! non-astigmatic CTF model
-                self%dfy = self%dfx
-                self%angast = 0.
+                dfy    = dfx
+                angast = 0.
             endif
-            call self%tfun%init(self%dfx, self%dfy, self%angast)
+            call tfun%init(dfx, dfy, angast)
             ! additional phase shift from the Volta
-            self%phshift = 0.
-            if( self%phaseplate ) self%phshift = o%get('phshift')
+            phshift = 0.
+            if( self%phaseplate ) phshift = o%get('phshift')
         endif
         rotmat       = o%get_mat()
         shconst_here = (-o%get_2Dshift()) * self%shconst_rec(1:2)
@@ -303,7 +309,7 @@ contains
                 ! initiate kernel matrix
                 call sqwin_3d(loc(1), loc(2), loc(3), self%winsz, win)
                 ! no need to update outside the non-redundant Friedel limits
-                ! consistently with compress_exp
+                ! consistent with compress_exp
                 if( win(1,2) < self%lims(1,1) )cycle
                 ! Fourier component
                 comp   = fpl%get_fcomp(logi, self%ind_map(h,k,:))
@@ -314,9 +320,9 @@ contains
                 if( self%ctf%flag /= CTFFLAG_NO )then
                     ! CTF and CTF**2 values
                     if( self%phaseplate )then
-                        tval = self%tfun%eval(self%ctf_sqSpatFreq(h,k), self%ctf_ang(h,k), self%phshift)
+                        tval = tfun%eval(self%ctf_sqSpatFreq(h,k), self%ctf_ang(h,k), phshift)
                     else
-                        tval = self%tfun%eval(self%ctf_sqSpatFreq(h,k), self%ctf_ang(h,k))
+                        tval = tfun%eval(self%ctf_sqSpatFreq(h,k), self%ctf_ang(h,k))
                     endif
                     tvalsq = tval * tval
                     if( self%ctf%flag == CTFFLAG_FLIP ) tval = abs(tval)
@@ -340,33 +346,134 @@ contains
             end do
         end do
         !$omp end parallel do
-    end subroutine inout_fplane_1
+    end subroutine insert_fplane_1
+
+    !> insert Fourier planes
+    subroutine insert_fplanes_1( self, n, os, fpls, pwghts )
+        class(reconstructor), intent(inout) :: self      !< instance
+        integer,              intent(in)    :: n         !< # planes to insert
+        class(oris),          intent(inout) :: os        !< orientations
+        class(image),         intent(inout) :: fpls(n)   !< Fourier planes
+        real,                 intent(in)    :: pwghts(n) !< external particle weights (affects both fplanes and rho)
+        type(ctf) :: tfun
+        integer   :: logi(3), win(3,2), sh, i, h, k, iplane
+        complex   :: comp, oshift
+        real      :: rotmat(3,3), vec(3), loc(3), shconst_here(2), dfx, dfy, angast, phshift
+        real      :: w(self%wdim,self%wdim,self%wdim), arg, tval, tvalsq
+        if( .not. allocated(self%cmat_proxy%cmat_exp) ) stop 'cmat_proxy needs to be allocated; reconstructor :: insert_fplanes_1'
+        if( n /= self%nplanes_proxy ) stop 'cmat_proxy not congruent with # planes; reconstructor :: insert_fplanes_1'
+        !$omp parallel do default(shared) schedule(static)&
+        !$omp private(iplane,tfun,dfx,dfy,angast,phshift,rotmat,shconst_here,i,h,k,sh,comp,arg,oshift,logi,tval,tvalsq,w,win,vec,loc)&
+        !$omp proc_bind(close)
+        do iplane=1,n
+            if( self%ctf%flag /= CTFFLAG_NO )then
+                ! make CTF object & get CTF info
+                tfun = ctf(self%get_smpd(), os%get(iplane, 'kv'), os%get(iplane, 'cs'), os%get(iplane, 'fraca'))
+                dfx  = os%get(iplane, 'dfx')
+                if( self%tfastig )then ! astigmatic CTF model
+                    dfy    = os%get(iplane, 'dfy')
+                    angast = os%get(iplane, 'angast')
+                else                   ! non-astigmatic CTF model
+                    dfy    = dfx
+                    angast = 0.
+                endif
+                call tfun%init(dfx, dfy, angast)
+                ! additional phase shift from the Volta
+                phshift = 0.
+                if( self%phaseplate ) phshift = os%get(iplane, 'phshift')
+            endif
+            rotmat       = os%get_mat(iplane)
+            shconst_here = (-os%get_2Dshift(iplane)) * self%shconst_rec(1:2)
+            do h=self%cyc_lims(1,1),self%cyc_lims(1,2)
+                do k=self%cyc_lims(2,1),self%cyc_lims(2,2)
+                    sh = nint(hyp(real(h),real(k)))
+                    if( sh > self%nyq + 1 )cycle
+                    ! calculate non-uniform sampling location
+                    logi = [h,k,0]
+                    vec  = real(logi)
+                    loc  = matmul(vec, rotmat)
+                    ! initiate kernel matrix
+                    call sqwin_3d(loc(1), loc(2), loc(3), self%winsz, win)
+                    ! no need to update outside the non-redundant Friedel limits
+                    ! consistent with compress_exp
+                    if( win(1,2) < self%lims(1,1) )cycle
+                    ! Fourier component
+                    comp   = fpls(iplane)%get_fcomp(logi, self%ind_map(h,k,:))
+                    ! evaluate shift
+                    arg    = shconst_here(1)*vec(1) + shconst_here(2)*vec(2)
+                    oshift = cmplx(cos(arg), sin(arg))
+                    ! evaluate the transfer function
+                    if( self%ctf%flag /= CTFFLAG_NO )then
+                        ! CTF and CTF**2 values
+                        if( self%phaseplate )then
+                            tval = tfun%eval(self%ctf_sqSpatFreq(h,k), self%ctf_ang(h,k), phshift)
+                        else
+                            tval = tfun%eval(self%ctf_sqSpatFreq(h,k), self%ctf_ang(h,k))
+                        endif
+                        tvalsq = tval * tval
+                        if( self%ctf%flag == CTFFLAG_FLIP ) tval = abs(tval)
+                    else
+                        tval   = 1.
+                        tvalsq = tval
+                    endif
+                    ! (weighted) kernel values
+                    w = pwghts(iplane)
+                    do i=1,self%wdim
+                        w(i,:,:) = w(i,:,:) * self%kbwin%apod(real(win(1,1) + i - 1) - loc(1))
+                        w(:,i,:) = w(:,i,:) * self%kbwin%apod(real(win(2,1) + i - 1) - loc(2))
+                        w(:,:,i) = w(:,:,i) * self%kbwin%apod(real(win(3,1) + i - 1) - loc(3))
+                    enddo
+                    ! update cmat_proxy
+                    ! CTF and w modulates the component before origin shift
+                    self%cmat_proxy%cmat_exp(self%ind_map_proxy(iplane,1),h,k,:,:,:) = (comp*tval*w)*oshift
+                    self%cmat_proxy%rho(self%ind_map_proxy(iplane,1),h,k,:,:,:)      = tvalsq*w
+                    self%cmat_proxy%win(self%ind_map_proxy(iplane,1),h,k,:,:)        = win
+                end do
+            end do
+        end do
+        !$omp end parallel do
+        ! update expanded matrix (serial 4 now)
+        do iplane=1,n
+            do h=self%cyc_lims(1,1),self%cyc_lims(1,2)
+                do k=self%cyc_lims(2,1),self%cyc_lims(2,2)
+                    win = self%cmat_proxy%win(self%ind_map_proxy(iplane,1),h,k,:,:)
+                    self%cmat_exp(win(1,1):win(1,2), win(2,1):win(2,2), win(3,1):win(3,2)) =&
+                    &self%cmat_exp(win(1,1):win(1,2), win(2,1):win(2,2), win(3,1):win(3,2)) +&
+                    &self%cmat_proxy%cmat_exp(self%ind_map_proxy(iplane,1),h,k,:,:,:)
+                    self%rho_exp(win(1,1):win(1,2), win(2,1):win(2,2), win(3,1):win(3,2)) =&
+                    &self%rho_exp(win(1,1):win(1,2), win(2,1):win(2,2), win(3,1):win(3,2)) +&
+                    &self%cmat_proxy%rho(self%ind_map_proxy(iplane,1),h,k,:,:,:)
+                end do
+            end do
+        end do
+    end subroutine insert_fplanes_1
 
     !> insert or un-insert Fourier plane peaks
-    subroutine inout_fplane_2( self, os, fpl, noris, pwght )
-        class(reconstructor), intent(inout) :: self      !< instance
-        class(oris),          intent(inout) :: os        !< orientation peaks
-        class(image),         intent(inout) :: fpl       !< Fourier plane
-        integer,              intent(in)    :: noris     !< # of orienations peaks
-        real,                 intent(in)    :: pwght     !< image weight
-        integer :: win(3,2), i, h, k, sh, iori, logi(3)
-        complex :: comp, oshift
-        real    :: rotmats(noris,3,3), vec(3), loc(3), shifts(noris,2), ows(noris)
-        real    :: w(self%wdim,self%wdim,self%wdim), arg, tval, tvalsq
+    subroutine insert_fplane_2( self, os, fpl, noris, pwght )
+        class(reconstructor), intent(inout) :: self   !< instance
+        class(oris),          intent(inout) :: os     !< orientation peaks
+        class(image),         intent(inout) :: fpl    !< Fourier plane
+        integer,              intent(in)    :: noris  !< # of orienations peaks
+        real,                 intent(in)    :: pwght  !< image weight
+        type(ctf) :: tfun
+        integer   :: win(3,2), i, h, k, sh, iori, logi(3)
+        complex   :: comp, oshift
+        real      :: rotmats(noris,3,3), vec(3), loc(3), shifts(noris,2), ows(noris)
+        real      :: w(self%wdim,self%wdim,self%wdim), arg, tval, tvalsq, dfx, dfy, angast, phshift
         if( self%ctf%flag /= CTFFLAG_NO )then ! make CTF object & get CTF info
-            self%tfun = ctf(self%get_smpd(), os%get(1,'kv'), os%get(1,'cs'), os%get(1,'fraca'))
-            self%dfx  = os%get(1,'dfx')
+            tfun = ctf(self%get_smpd(), os%get(1,'kv'), os%get(1,'cs'), os%get(1,'fraca'))
+            dfx  = os%get(1,'dfx')
             if( self%tfastig )then            ! astigmatic CTF model
-                self%dfy    = os%get(1,'dfy')
-                self%angast = os%get(1,'angast')
+                dfy    = os%get(1,'dfy')
+                angast = os%get(1,'angast')
             else                              ! non-astigmatic CTF model
-                self%dfy    = self%dfx
-                self%angast = 0.
+                dfy    = dfx
+                angast = 0.
             endif
-            call self%tfun%init(self%dfx, self%dfy, self%angast)
+            call tfun%init(dfx, dfy, angast)
             ! additional phase shift from the Volta
-            self%phshift = 0.
-            if( self%phaseplate ) self%phshift = os%get(1,'phshift')
+            phshift = 0.
+            if( self%phaseplate ) phshift = os%get(1,'phshift')
         endif
         do iori = 1, noris
             ows(iori) = pwght * os%get(iori,'ow')
@@ -388,9 +495,9 @@ contains
                 if( self%ctf%flag /= CTFFLAG_NO )then
                     ! calculate CTF and CTF**2 values
                     if( self%phaseplate )then
-                        tval = self%tfun%eval(self%ctf_sqSpatFreq(h,k), self%ctf_ang(h,k), self%phshift)
+                        tval = tfun%eval(self%ctf_sqSpatFreq(h,k), self%ctf_ang(h,k), phshift)
                     else
-                        tval = self%tfun%eval(self%ctf_sqSpatFreq(h,k), self%ctf_ang(h,k))
+                        tval = tfun%eval(self%ctf_sqSpatFreq(h,k), self%ctf_ang(h,k))
                     endif
                     tvalsq = tval * tval
                     if( self%ctf%flag == CTFFLAG_FLIP ) tval = abs(tval)
@@ -406,7 +513,7 @@ contains
                     ! initiate kernel matrix
                     call sqwin_3d(loc(1), loc(2), loc(3), self%winsz, win)
                     ! no need to update outside the non-redundant Friedel limits
-                    ! consistently with compress_exp
+                    ! consistent with compress_exp
                     if( win(1,2) < self%lims(1,1) )cycle
                     ! evaluate shift
                     arg    = dot_product(shifts(iori,:), vec(1:2))
@@ -428,7 +535,7 @@ contains
             end do
         end do
         !$omp end parallel do
-    end subroutine inout_fplane_2
+    end subroutine insert_fplane_2
 
     !>  is for uneven distribution of orientations correction 
     !>  from Pipe & Menon 1999
@@ -657,11 +764,11 @@ contains
                     call img%read(stkname, ind)
                     call gridprep%prep(img, img_pad)
                     if( p%pgrp == 'c1' )then
-                        call self%inout_fplane(orientation, img_pad, pwght=pw)
+                        call self%insert_fplane(orientation, img_pad, pwght=pw)
                     else
                         do j=1,se%get_nsym()
                             o_sym = se%apply(orientation, j)
-                            call self%inout_fplane(o_sym, img_pad, pwght=pw)
+                            call self%insert_fplane(o_sym, img_pad, pwght=pw)
                         end do
                     endif
                     deallocate(stkname)
@@ -675,24 +782,32 @@ contains
     !>  \brief  is the expanded destructor
     subroutine dealloc_exp( self )
         class(reconstructor), intent(inout) :: self !< this instance
-        if( allocated(self%rho_exp) )  deallocate(self%rho_exp)
+        if( allocated(self%rho_exp)  ) deallocate(self%rho_exp)
         if( allocated(self%cmat_exp) ) deallocate(self%cmat_exp)
     end subroutine dealloc_exp
+
+    !>  \brief  is the cmat_proxy destructor
+    subroutine dealloc_cmat_proxy( self )
+        class(reconstructor), intent(inout) :: self !< this instance
+        if( allocated(self%cmat_proxy%cmat_exp) ) deallocate(self%cmat_proxy%cmat_exp)
+        if( allocated(self%cmat_proxy%rho)      ) deallocate(self%cmat_proxy%rho)
+        if( allocated(self%cmat_proxy%win)      ) deallocate(self%cmat_proxy%win)
+        if( allocated(self%ind_map_proxy)       ) deallocate(self%ind_map_proxy)
+    end subroutine dealloc_cmat_proxy
 
     !>  \brief  is a destructor
     subroutine dealloc_rho( self )
         class(reconstructor), intent(inout) :: self !< this instance
         call self%dealloc_exp
+        call self%dealloc_cmat_proxy
         if( self%rho_allocated )then
             call fftwf_free(self%kp)
             self%rho => null()
             self%rho_allocated = .false.
         endif
-        if(allocated(self%ctf_ang))        deallocate(self%ctf_ang)
-        if(allocated(self%ctf_sqSpatFreq)) deallocate(self%ctf_sqSpatFreq)
-        if(allocated(self%ind_map))        deallocate(self%ind_map)
-        if(allocated(self%ind_map_proxy))  deallocate(self%ind_map_proxy)
-        if(allocated(self%cmat_proxy))     deallocate(self%cmat_proxy)
+        if(allocated(self%ctf_ang)        ) deallocate(self%ctf_ang)
+        if(allocated(self%ctf_sqSpatFreq) ) deallocate(self%ctf_sqSpatFreq)
+        if(allocated(self%ind_map)        ) deallocate(self%ind_map)
     end subroutine dealloc_rho
 
 end module simple_reconstructor

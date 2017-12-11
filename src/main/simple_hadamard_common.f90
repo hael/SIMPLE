@@ -13,7 +13,7 @@ implicit none
 public :: read_img, read_img_and_norm, read_imgbatch, set_bp_range, set_bp_range2D, grid_ptcl,&
 &prepimg4align, eonorm_struct_facts, norm_struct_facts, cenrefvol_and_mapshifts2ptcls, preprefvol,&
 &prep2Dref, gen2Dclassdoc, preprecvols, killrecvols, gen_projection_frcs, prepimgbatch,&
-&grid_ptcl_tst
+&grid_ptcl_tst, grid_ptcls_tst
 private
 #include "simple_local_flags.inc"
 
@@ -295,7 +295,7 @@ contains
                     if( p%eo .ne. 'no' )then
                         call b%eorecvols(s)%grid_fplane(orientation, b%img_pad, eo, pw)
                     else
-                        call b%recvols(s)%inout_fplane(orientation, b%img_pad, pw)
+                        call b%recvols(s)%insert_fplane(orientation, b%img_pad, pw)
                     endif
                 else
                     do k=1,se%get_nsym()
@@ -303,7 +303,7 @@ contains
                         if( p%eo .ne. 'no' )then
                             call b%eorecvols(s)%grid_fplane(o_sym, b%img_pad, eo, pw)
                         else
-                            call b%recvols(s)%inout_fplane(o_sym, b%img_pad, pw)
+                            call b%recvols(s)%insert_fplane(o_sym, b%img_pad, pw)
                         endif
                     end do
                 endif
@@ -313,7 +313,7 @@ contains
                     if( p%eo .ne. 'no' )then
                         call b%eorecvols(s)%grid_fplane(os, b%img_pad, eo, npeaks, pw)
                     else
-                        call b%recvols(s)%inout_fplane(os, b%img_pad, npeaks, pw)
+                        call b%recvols(s)%insert_fplane(os, b%img_pad, npeaks, pw)
                     endif
                 else
                     do k=1,se%get_nsym()
@@ -322,7 +322,7 @@ contains
                         if( p%eo .ne. 'no' )then
                             call b%eorecvols(s)%grid_fplane(os_sym, b%img_pad, eo, npeaks, pw)
                         else
-                            call b%recvols(s)%inout_fplane(os_sym, b%img_pad, npeaks, pw)
+                            call b%recvols(s)%insert_fplane(os_sym, b%img_pad, npeaks, pw)
                         endif
                     enddo
                 endif
@@ -338,7 +338,7 @@ contains
                     if( p%eo .ne. 'no' )then
                         call b%eorecvols(s)%grid_fplane(o_soft, b%img_pad, eo, w)
                     else
-                        call b%recvols(s)%inout_fplane(o_soft, b%img_pad, w)
+                        call b%recvols(s)%insert_fplane(o_soft, b%img_pad, w)
                     endif
                 else
                     do k=1,se%get_nsym()
@@ -346,7 +346,7 @@ contains
                         if( p%eo .ne. 'no' )then
                             call b%eorecvols(s)%grid_fplane(o_sym, b%img_pad, eo, w)
                         else
-                            call b%recvols(s)%inout_fplane(o_sym, b%img_pad, w)
+                            call b%recvols(s)%insert_fplane(o_sym, b%img_pad, w)
                         endif
                     end do
                 endif
@@ -387,6 +387,40 @@ contains
             end do
         endif
     end subroutine grid_ptcl_tst
+
+    !>  \brief  grids one particle image to the volume
+    subroutine grid_ptcls_tst( b, p, img, orientation )
+        use simple_kbinterpol, only: kbinterpol
+        class(build),          intent(inout) :: b
+        class(params),         intent(inout) :: p
+        class(image),          intent(inout) :: img
+        class(ori),            intent(inout) :: orientation
+        type(oris) :: os_sym
+        type(ori)  :: o_sym, o_soft
+        real       :: pw, w
+        integer    :: jpeak, s, k, npeaks, eo, nstates
+        npeaks  = 1
+        nstates = 1
+        ! particle weight
+        pw = 1.0
+        if( orientation%isthere('w') ) pw = orientation%get('w')
+        if( pw <= TINY ) return
+        ! e/o flag
+        eo = 0
+        if( p%eo .ne. 'no' ) eo = nint(orientation%get('eo'))
+        s  = 1
+        ! fwd ft
+        call img%fwd_ft
+        ! one peak & one state
+        if( p%pgrp == 'c1' )then
+            call b%eorecvols(s)%grid_fplane(orientation, img, eo, pw)
+        else
+            do k=1,b%se%get_nsym()
+                o_sym = b%se%apply(orientation, k)
+                call b%eorecvols(s)%grid_fplane(o_sym, img, eo, pw)
+            end do
+        endif
+    end subroutine grid_ptcls_tst
 
     !>  \brief  prepares one particle image for alignment
     subroutine prepimg4align( b, p, iptcl, img_in, img_out, is3D )

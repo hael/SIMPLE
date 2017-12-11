@@ -500,11 +500,11 @@ contains
                 call read_img_and_norm( b, p, sample(i) + p%fromp - 1 )
                 call gridprep%prep(b%img, b%img_pad)
                 if( p%pgrp == 'c1' )then
-                    call b%recvols(1)%inout_fplane(orientation, b%img_pad, pwght=1.0)
+                    call b%recvols(1)%insert_fplane(orientation, b%img_pad, pwght=1.0)
                 else
                     do k=1,b%se%get_nsym()
                         o_sym = b%se%apply(orientation, k)
-                        call b%recvols(1)%inout_fplane(o_sym, b%img_pad, pwght=1.0)
+                        call b%recvols(1)%insert_fplane(o_sym, b%img_pad, pwght=1.0)
                     end do
                 endif
             end do

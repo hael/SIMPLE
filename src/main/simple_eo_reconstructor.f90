@@ -33,6 +33,8 @@ type :: eo_reconstructor
   contains
     ! CONSTRUCTOR
     procedure          :: new
+    procedure          :: alloc_cmat_proxy_even
+    procedure          :: alloc_cmat_proxy_odd
     ! SETTERS
     procedure          :: reset_all
     procedure          :: reset_eos
@@ -57,6 +59,8 @@ type :: eo_reconstructor
     procedure, private :: grid_fplane_1
     procedure, private :: grid_fplane_2
     generic            :: grid_fplane => grid_fplane_1, grid_fplane_2
+    procedure          :: grid_fplanes_even
+    procedure          :: grid_fplanes_odd
     procedure          :: compress_exp
     procedure          :: expand_exp
     procedure          :: sum_eos !< for merging even and odd into sum
@@ -65,7 +69,9 @@ type :: eo_reconstructor
     procedure          :: sampl_dens_correct_sum
     ! RECONSTRUCTION
     procedure          :: eorec_distr
-    ! DESTRUCTOR
+    ! DESTRUCTORS
+    procedure          :: dealloc_cmat_proxy_even
+    procedure          :: dealloc_cmat_proxy_odd
     procedure          :: kill_exp
     procedure          :: kill
 end type eo_reconstructor
@@ -113,6 +119,18 @@ contains
         ! set existence
         self%exists = .true.
     end subroutine new
+
+    subroutine alloc_cmat_proxy_even( self, nplanes, npeaks )
+        class(eo_reconstructor), intent(inout) :: self !< this instance
+        integer,                 intent(in)    :: nplanes, npeaks
+        call self%even%alloc_cmat_proxy(nplanes, npeaks)
+    end subroutine alloc_cmat_proxy_even
+
+    subroutine alloc_cmat_proxy_odd( self, nplanes, npeaks )
+        class(eo_reconstructor), intent(inout) :: self !< this instance
+        integer,                 intent(in)    :: nplanes, npeaks
+        call self%odd%alloc_cmat_proxy(nplanes, npeaks)
+    end subroutine alloc_cmat_proxy_odd
 
     ! SETTERS
 
@@ -264,9 +282,9 @@ contains
         real,                    intent(in)    :: pwght !< external particle weight (affects both fplane and rho)
         select case(eo)
             case(-1,0)
-                call self%even%inout_fplane(o, fpl, pwght)
+                call self%even%insert_fplane(o, fpl, pwght)
             case(1)
-                call self%odd%inout_fplane(o, fpl, pwght)
+                call self%odd%insert_fplane(o, fpl, pwght)
             case DEFAULT
                 stop 'unsupported eo flag; eo_reconstructor :: grid_fplane'
         end select
@@ -283,13 +301,35 @@ contains
         real,                    intent(in)    :: pwght !< external particle weight (affects both fplane and rho)
         select case(eo)
             case(-1,0)
-                call self%even%inout_fplane(os, fpl, noris, pwght)
+                call self%even%insert_fplane(os, fpl, noris, pwght)
             case(1)
-                call self%odd%inout_fplane(os, fpl, noris, pwght)
+                call self%odd%insert_fplane(os, fpl, noris, pwght)
             case DEFAULT
                 stop 'unsupported eo flag; eo_reconstructor :: grid_fplane'
         end select
     end subroutine grid_fplane_2
+
+    !> \brief  for gridding Fourier planes to even
+    subroutine grid_fplanes_even( self, n, os, fpls, pwghts )
+        use simple_oris, only: oris
+        class(eo_reconstructor), intent(inout) :: self      !< instance
+        integer,                 intent(in)    :: n         !< # planes
+        class(oris),             intent(inout) :: os        !< orientations
+        class(image),            intent(inout) :: fpls(n)   !< Fourier planes
+        real,                    intent(in)    :: pwghts(n) !< external particle weight (affects both fplane and rho)
+        call self%even%insert_fplanes(n, os, fpls, pwghts)
+    end subroutine grid_fplanes_even
+
+    !> \brief  for gridding Fourier planes to odd
+    subroutine grid_fplanes_odd( self, n, os, fpls, pwghts )
+        use simple_oris, only: oris
+        class(eo_reconstructor), intent(inout) :: self      !< instance
+        integer,                 intent(in)    :: n         !< # planes
+        class(oris),             intent(inout) :: os        !< orientations
+        class(image),            intent(inout) :: fpls(n)   !< Fourier planes
+        real,                    intent(in)    :: pwghts(n) !< external particle weight (affects both fplane and rho)
+        call self%odd%insert_fplanes(n, os, fpls, pwghts)
+    end subroutine grid_fplanes_odd
 
     !> \brief  for summing the even odd pairs, resulting sum in self%even
     subroutine sum_eos( self )
@@ -517,11 +557,21 @@ contains
             
     end subroutine eorec_distr
 
-    ! DESTRUCTOR
+    ! DESTRUCTORS
+
+    subroutine dealloc_cmat_proxy_even( self )
+        class(eo_reconstructor), intent(inout) :: self !< this instance
+        call self%even%dealloc_cmat_proxy
+    end subroutine dealloc_cmat_proxy_even
+
+    subroutine dealloc_cmat_proxy_odd( self )
+        class(eo_reconstructor), intent(inout) :: self !< this instance
+        call self%odd%dealloc_cmat_proxy
+    end subroutine dealloc_cmat_proxy_odd
 
     !>  \brief  is the expanded destructor
     subroutine kill_exp( self )
-        class(eo_reconstructor), intent(inout)   :: self !< instance
+        class(eo_reconstructor), intent(inout) :: self !< instance
         if( self%exists )then
             call self%even%dealloc_exp
             call self%odd%dealloc_exp
@@ -531,7 +581,7 @@ contains
 
     !>  \brief  is a destructor
     subroutine kill( self )
-        class(eo_reconstructor), intent(inout)   :: self !< instance
+        class(eo_reconstructor), intent(inout) :: self !< instance
         if( self%exists )then
             ! kill composites
             call self%envmask%kill
@@ -546,4 +596,4 @@ contains
         endif
     end subroutine kill
 
-end module simple_eo_reconstructor
+end module simple_eo_reconstructor  
