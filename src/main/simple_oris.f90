@@ -39,6 +39,7 @@ type :: oris
     procedure          :: get_mat
     procedure          :: get_normal
     procedure          :: get_2Dshift
+    procedure          :: get_state
     procedure, private :: isthere_1
     procedure, private :: isthere_2
     generic            :: isthere => isthere_1, isthere_2
@@ -381,13 +382,20 @@ contains
         normal = self%o(i)%get_normal()
     end function get_normal
 
-    !>  \brief  is a setter
+    !>  \brief  is a getter
     function get_2Dshift( self, i )  result(shvec)
         class(oris), intent(inout) :: self
         integer,     intent(in)    :: i
         real :: shvec(2)
         shvec = self%o(i)%get_2Dshift()
     end function get_2Dshift
+
+    !>  \brief  is a etter
+    integer function get_state( self, i )
+        class(oris), intent(inout) :: self
+        integer,     intent(in)    :: i
+        get_state = self%o(i)%get_state()
+    end function get_state
 
     !>  \brief  is for checking if parameter is present
     function isthere_1( self, key ) result( is )
@@ -466,46 +474,6 @@ contains
             endif
         end do
     end function get_pop
-
-    ! !>  \brief  is for checking discrete label populations
-    ! function get_pops( self, label, consider_w, maxn, eo ) result( pops )
-    !     class(oris),       intent(inout) :: self
-    !     character(len=*),  intent(in)    :: label
-    !     logical, optional, intent(in)    :: consider_w
-    !     integer, optional, intent(in)    :: maxn ! max label, for the case where the last class/state is missing
-    !     integer, optional, intent(in)    :: eo
-    !     integer, allocatable :: pops(:)
-    !     integer :: i, mystate, myval, n, myeo
-    !     real    :: w
-    !     logical :: cconsider_w, consider_eo
-    !     cconsider_w = .false.
-    !     if( present(consider_w) ) cconsider_w = consider_w
-    !     if( cconsider_w )then
-    !         if( .not. self%isthere('w') ) stop 'ERROR, oris :: get_pops with optional consider_w assumes w set'
-    !     endif
-    !     consider_eo = .false.
-    !     if( present(eo) ) consider_eo = .true.
-    !     n = self%get_n(label)
-    !     if( present(maxn) )then
-    !         n = max(n, maxn)
-    !     endif
-    !     if(allocated(pops))deallocate(pops)
-    !     allocate(pops(n),source=0,stat=alloc_stat)
-    !     allocchk('In: get_pops, module: simple_oris')
-    !     do i=1,self%n
-    !         mystate = nint(self%o(i)%get('state'))
-    !         myeo    = nint(self%o(i)%get('eo'))
-    !         if( consider_eo )then
-    !             if( myeo /= eo ) cycle
-    !         endif
-    !         w = 1.0
-    !         if( cconsider_w )  w = self%o(i)%get('w')
-    !         if( mystate > 0 .and. w > TINY )then
-    !             myval = nint(self%o(i)%get(label))
-    !             if( myval > 0 ) pops(myval) = pops(myval) + 1
-    !         endif
-    !     end do
-    ! end function get_pops
 
     !>  \brief  is for checking discrete label populations
     subroutine get_pops( self, pops, label, consider_w, maxn, eo )

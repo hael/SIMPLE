@@ -22,7 +22,7 @@ integer                 :: fnr
 
 contains
 
-	subroutine exec_old_school_rec( b, p, cline )
+    subroutine exec_old_school_rec( b, p, cline )
 		class(build),   intent(inout) :: b
         class(params),  intent(inout) :: p
         class(cmdline), intent(inout) :: cline
@@ -45,7 +45,7 @@ contains
             orientation = b%a%get_ori(iptcl)
             call read_img_and_norm(b, p, iptcl)
             call gridprep%prep(b%img, b%img_pad)
-            call grid_ptcl(b, p, orientation)
+            call grid_ptcl(b, p, b%se, orientation)
         end do
         rt_rec = toc(t_rec)
         ! normalise structure factors

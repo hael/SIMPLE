@@ -497,7 +497,7 @@ contains
         use simple_defs_conv
         use simple_commander_rec,    only: recvol_commander
         use simple_commander_volops, only: postproc_vol_commander
-        use simple_combinatorics,    only: shc_aggregation
+        use simple_sym,              only: sym
         class(het_commander), intent(inout) :: self
         class(cmdline),       intent(inout) :: cline
         ! constants
@@ -511,7 +511,10 @@ contains
         type(cmdline)                 :: cline_prime3D
         type(cmdline)                 :: cline_recvol_distr
         type(cmdline)                 :: cline_postproc_vol
+        ! parameters
+        integer, parameter            :: MAXSYMPROJS = 5000
         ! other variables
+        type(sym)                     :: symop
         integer,     allocatable      :: labels(:)
         logical,     allocatable      :: included(:)
         type(params)                  :: p_master
@@ -519,23 +522,36 @@ contains
         character(len=STDLEN)         :: oritab, vol, str_state
         real                          :: trs
         integer                       :: state, iter, n_incl
+        call seed_rnd
         ! sanity check
         if(nint(cline%get_rarg('nstates')) <= 1)&
             &stop 'Non-sensical NSTATES argument for heterogeneity analysis!'
         ! make master parameters
         p_master = params(cline)
+        if( trim(p_master%refine).eq.'sym' )then
+            call symop%new(p_master%pgrp)
+            if( .not.cline%defined('nspace') )then
+                p_master%nspace = min(symop%get_nsym()*p_master%nspace, MAXSYMPROJS) 
+                call cline%set('nspace', real(p_master%nspace))
+            endif
+        endif
         if( p_master%eo .eq. 'no' .and. .not. cline%defined('lp') )&
             &stop 'need lp input when eo .eq. no; het'
         ! prepare command lines from prototype
-        cline_prime3D = cline
+        call cline%delete('refine')
+        cline_prime3D      = cline
+        cline_postproc_vol = cline ! eo always eq yes
+        cline_recvol_distr = cline ! eo always eq yes
         call cline_prime3D%set('prg', 'prime3D')
         call cline_prime3D%set('maxits', real(MAXITS))
-        call cline_prime3D%set('refine', 'het')
+        if( trim(p_master%refine) .eq. 'sym' )then
+            call cline_prime3D%set('refine', 'hetsym')
+        else
+            call cline_prime3D%set('refine', 'het')
+        endif
         call cline_prime3D%set('dynlp', 'no')
         call cline_prime3D%set('pproc', 'no')
         call cline_prime3D%delete('oritab2')
-        cline_postproc_vol = cline ! eo always eq yes
-        cline_recvol_distr = cline ! eo always eq yes
         call cline_recvol_distr%set('prg', 'recvol')
         call cline_postproc_vol%set('prg', 'postproc_vol')
         call cline_recvol_distr%delete('lp')
@@ -559,6 +575,11 @@ contains
             call os%set_all2single('eo', -1.)
         else
             if( os%get_nevenodd() == 0 ) call os%partition_eo
+        endif
+        if( trim(p_master%refine) .eq. 'sym' )then
+            ! randomize projection directions with respect to symmetry
+            call symop%symrandomize(os)
+            call symop%kill
         endif
         if( cline%defined('oritab2') )then
             ! this is  to force initialisation (4 testing)
@@ -623,7 +644,6 @@ contains
                 corr_ranked_here = .false.
                 if(present(corr_ranked)) corr_ranked_here = corr_ranked
                 if(.not.os%isthere('corr')) corr_ranked_here = .false.
-                call seed_rnd
                 nptcls = os%get_noris()
                 states = nint(os%get_all('state'))
                 nonzero_nptcls = count(states>0)

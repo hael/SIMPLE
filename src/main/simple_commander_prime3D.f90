@@ -345,14 +345,14 @@ contains
         if( cline%defined('update_res') )then
             update_res = .false.
             if( cline%get_carg('update_res').eq.'yes' )update_res = .true.
-            if( cline%get_carg('update_res').eq.'no' .and. p%refine.eq.'het')then
+            if( cline%get_carg('update_res').eq.'no' .and. str_has_substr(p%refine,'het') )then
                 converged = b%conv%check_conv_het()
             else
                 converged = b%conv%check_conv3D()
             endif
         else
             select case(p%refine)
-                case('het')
+                case('het', 'hetsym')
                     converged = b%conv%check_conv_het()
                 case DEFAULT
                     converged = b%conv%check_conv3D()

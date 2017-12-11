@@ -2,7 +2,7 @@
 
 module simple_sym
 #include "simple_lib.f08"
-use simple_oris,   only: oris
+use simple_oris,  only: oris
 use simple_ori,   only: ori
 implicit none
 
@@ -36,7 +36,6 @@ type sym
     procedure          :: get_symori
     procedure          :: get_nsubgrp
     procedure          :: get_subgrp
-    procedure          :: get_all_subgrps
     procedure          :: within_asymunit
     procedure          :: apply_sym_with_shift
     procedure          :: nearest_proj_neighbors
@@ -48,7 +47,6 @@ type sym
     procedure, private :: make_o
     procedure, private :: make_i
     procedure, private :: set_subgrps
-    procedure, private :: get_all_cd_subgrps
     procedure :: kill
 end type sym
 
@@ -198,79 +196,6 @@ contains
         endif
         symobj = sym(self%subgrps(i))
     end function get_subgrp
-
-    !>  get_all_cd_subgrps
-    subroutine get_all_cd_subgrps( self, subgrps)
-        use simple_math,                   only: is_even
-        class(sym), intent(inout)             :: self
-        integer                               :: i, cnt
-        character(len=1)                      :: pgrp
-        character(len=3),allocatable          :: pgrps(:), subgrps(:)
-        allocate( pgrps(self%n), stat=alloc_stat )
-        allocchk( 'get_all_cd_subgrps; simple_sym; 1')
-        pgrp = self%pgrp(1:1)
-        cnt  = 0
-        if( pgrp=='c' )then
-            do i=2,self%n
-                cnt = cnt+1
-                pgrps(cnt) = fmtsymstr(pgrp, i)
-            enddo
-        else if( pgrp=='d' )then
-            do i=2,self%n/2
-                cnt = cnt+1
-                pgrps(cnt) = fmtsymstr('c', i)
-                cnt = cnt+1
-                pgrps(cnt) = fmtsymstr(pgrp, i)
-            enddo
-        else
-            write(*,*)'Unsupported point-group; simple_sym; get_all_cd_subgrps'
-            stop
-        endif
-        allocate( subgrps(cnt), stat=alloc_stat )
-        allocchk( 'get_all_cd_subgrps; simple_sym; 2')
-        do i=1,cnt
-            subgrps(i) = pgrps(i)
-        enddo
-        deallocate(pgrps)
-
-        contains
-
-            function fmtsymstr( symtype, iord )result( ostr )
-                integer, intent(in)           :: iord     !< order index
-                character(len=1), intent(in)  :: symtype  !< symmetry
-                character(len=2)              :: ord
-                character(len=3)              :: ostr     !< formatted output string
-                write(ord,'(I2)') iord
-                write(ostr,'(A1,A2)') symtype, adjustl(ord)
-            end function fmtsymstr
-
-    end subroutine get_all_cd_subgrps
-
-    !>  \brief  Returns array of all symmetry subgroups in c and d
-    function get_all_subgrps( self )result( subgrps )
-        class(sym), intent(inout)             :: self
-        character(len=3),allocatable          :: subgrps(:)
-        character(len=1)                      :: pgrp
-        pgrp = self%pgrp(1:1)
-        if( (pgrp=='c').or.(pgrp=='d') )then
-            call self%get_all_cd_subgrps( subgrps )
-        else if( pgrp=='t' )then
-            allocate( subgrps(1), stat=alloc_stat )
-            allocchk( 'get_all_subgrps; simple_sym; 1')
-            subgrps(1)  = 't'
-        else if( pgrp=='o' )then
-            allocate( subgrps(2), stat=alloc_stat )
-            allocchk( 'get_all_subgrps; simple_sym; 2')
-            subgrps(1)  = 't'
-            subgrps(2)  = 'o'
-        else if( pgrp=='i' )then
-            allocate( subgrps(3), stat=alloc_stat )
-            allocchk( 'get_all_subgrps; simple_sym; 3')
-            subgrps(1)  = 't'
-            subgrps(2)  = 'o'
-            subgrps(3)  = 'i'
-        endif
-    end function get_all_subgrps
 
     !>  \brief  is a symmetry adaptor
     function apply( self, e_in, symop ) result( e_sym )
@@ -631,66 +556,91 @@ contains
 
     !>  \brief Sets the array of subgroups (character identifier) including itself
     subroutine set_subgrps( self )
-        use simple_math, only: is_even
-        class(sym), intent(inout)     :: self
-        integer                       :: i, cnt
-        character(len=1)              :: pgrp
-        character(len=3), allocatable :: pgrps(:)
-        allocate( pgrps(self%n), stat=alloc_stat )
+        use simple_math, only: is_even, hpsort
+        class(sym), intent(inout) :: self
+        real                      :: symorders(self%n)
+        integer                   :: i, cnt, inds(self%n)
+        character(len=1)          :: pgrp
+        character(len=3)          :: pgrps(self%n)
         pgrp = self%pgrp(1:1)
         cnt  = 0
-        if( pgrp.eq.'c' )then
-            if( is_even(self%n) )then
-                call getevensym('c', self%n)
-            else
-                cnt        = cnt+1
-                pgrps(cnt) = self%pgrp
+        if( pgrp.eq.'c' .or. pgrp.eq.'d' )then
+            symorders = 0
+            inds = (/(i,i=1,self%n)/)
+            if( pgrp.eq.'c' )then
+                if( is_even(self%n) )then
+                    call getevensym('c', self%n)
+                else
+                    cnt            = cnt+1
+                    pgrps(cnt)     = self%pgrp
+                    symorders(cnt) = real(self%n)
+                endif
+                if(self%n > 1)then
+                    cnt            = cnt+1
+                    pgrps(cnt)     = 'c1'
+                    symorders(cnt) = 1.
+                endif
+            else if( pgrp.eq.'d' )then
+                if( is_even(self%n/2) )then
+                    call getevensym('c', self%n/2)
+                    call getevensym('d', self%n/2)
+                else
+                    cnt            = cnt+1
+                    pgrps(cnt)     = self%pgrp
+                    symorders(cnt) = real(self%n)
+                    cnt            = cnt+1
+                    pgrps(cnt)     = fmtsymstr('c', self%n/2)
+                    symorders(cnt) = real(self%n/2)
+                    cnt            = cnt+1
+                    pgrps(cnt)     = 'c2'
+                    symorders(cnt) = 2.
+                endif
+                if(self%n > 1)then
+                    cnt            = cnt+1
+                    pgrps(cnt)     = 'c1'
+                    symorders(cnt) = 1.
+                endif  
             endif
-        else if( pgrp.eq.'d' )then
-            if( is_even(self%n/2) )then
-                call getevensym('c', self%n/2)
-                call getevensym('d', self%n/2)
-            else
-                cnt        = cnt+1
-                pgrps(cnt) = self%pgrp
-                cnt        = cnt+1
-                pgrps(cnt) = fmtsymstr('c', self%n/2)
-                cnt        = cnt+1
-                pgrps(cnt) = 'c2'
+            call hpsort(symorders, inds)
+            allocate( self%subgrps(cnt), stat=alloc_stat )
+            do i=1,cnt
+                self%subgrps(i) = pgrps(inds(self%n-i+1))
+            enddo
+        else
+            if( pgrp.eq.'t' )then
+                cnt      = 5
+                allocate(self%subgrps(cnt))
+                self%subgrps(5) = 'c1'
+                self%subgrps(4) = 'c2'
+                self%subgrps(3) = 'c3'
+                self%subgrps(2) = 'd2'
+                self%subgrps(1) = 't'
+            else if( pgrp.eq.'o' )then
+                cnt      = 9
+                allocate(self%subgrps(cnt))
+                self%subgrps(9) = 'c1'
+                self%subgrps(8) = 'c2'
+                self%subgrps(7) = 'c3'
+                self%subgrps(6) = 'c4'
+                self%subgrps(5) = 'd2'
+                self%subgrps(4) = 'd3'
+                self%subgrps(3) = 'd4'
+                self%subgrps(2) = 't'
+                self%subgrps(1) = 'o'
+            else if( pgrp.eq.'i' )then
+                cnt      = 9
+                allocate(self%subgrps(cnt))
+                self%subgrps(9) = 'c1'
+                self%subgrps(8) = 'c2'
+                self%subgrps(7) = 'c3'
+                self%subgrps(6) = 'c5'
+                self%subgrps(5) = 'd2'
+                self%subgrps(4) = 'd3'
+                self%subgrps(3) = 'd5'
+                self%subgrps(2) = 't'
+                self%subgrps(1) = 'i'
             endif
-        else if( pgrp.eq.'t' )then
-            cnt      = 4
-            pgrps(1) = 'c2'
-            pgrps(2) = 'c3'
-            pgrps(3) = 'd2'
-            pgrps(4) = 't'
-        else if( pgrp.eq.'o' )then
-            cnt      = 8
-            pgrps(1) = 'c2'
-            pgrps(2) = 'c3'
-            pgrps(3) = 'c4'
-            pgrps(4) = 'd2'
-            pgrps(5) = 'd3'
-            pgrps(6) = 'd4'
-            pgrps(7) = 't'
-            pgrps(8) = 'o'
-        else if( pgrp.eq.'i' )then
-            cnt      = 8
-            pgrps(1) = 'c2'
-            pgrps(2) = 'c3'
-            pgrps(3) = 'c5'
-            pgrps(4) = 'd2'
-            pgrps(5) = 'd3'
-            pgrps(6) = 'd5'
-            pgrps(7) = 't'
-            pgrps(8) = 'i'
         endif
-        if( allocated(self%subgrps) )deallocate( self%subgrps )
-        allocate( self%subgrps(cnt), stat=alloc_stat )
-        do i=1,cnt
-            self%subgrps(i) = pgrps(i)
-        enddo
-        deallocate(pgrps)
 
         contains
             !> get even symmetry
@@ -702,9 +652,15 @@ contains
                     if( (mod( o, i).eq.0) )then
                         cnt = cnt+1
                         pgrps(cnt) = fmtsymstr(cstr, i)
+                        if(cstr.eq.'c')then
+                            symorders(cnt) = real(i)
+                        else
+                            symorders(cnt) = real(2*i)                            
+                        endif
                     endif
                 enddo
             end subroutine getevensym
+
             !> format symmetry string
             !! \param symtype   symmetry type, one char options  c, d, t or i
             function fmtsymstr( symtype, iord ) result( ostr )
