@@ -20,8 +20,17 @@ implicit none
 public :: reconstructor
 private
 
+type :: cproxcmp
+    complex :: cmat_exp_val = cmplx(0.,0.)
+    real    :: rho_val      = 0.0
+    integer :: win(3,2)
+end type cproxcmp
+
 type, extends(image) :: reconstructor
     private
+    ! cmat_proxy is a proxy for cmat_exp, to increase the parallelism (operate over many planes in parallel)
+    ! at the cost of increased memory use
+    type(cproxcmp), allocatable :: cmat_proxy(:,:,:)            !< indexed: iplane, h, k       
     type(kbinterpol)            :: kbwin                        !< window function object
     type(c_ptr)                 :: kp                           !< c pointer for fftw allocation
     type(ctf)                   :: tfun                         !< CTF object
@@ -31,6 +40,7 @@ type, extends(image) :: reconstructor
     real,    allocatable        :: ctf_sqSpatFreq(:,:)          !< CTF squared reciprocal pixels
     real,    allocatable        :: ctf_ang(:,:)                 !< CTF effective defocus
     integer, allocatable        :: ind_map(:,:,:)               !< logical to physical index mapping (2D)
+    integer, allocatable        :: ind_map_proxy(:,:)           !< index mapping for cmat_proxy
     real                        :: winsz          = RECWINSZ    !< window half-width
     real                        :: alpha          = KBALPHA     !< oversampling ratio
     real                        :: dfx=0., dfy=0., angast=0.    !< CTF params
@@ -42,6 +52,7 @@ type, extends(image) :: reconstructor
     integer                     :: ldim_exp(3,2)  = 0           !< logical dimension of the expanded complex matrix
     integer                     :: lims(3,2)      = 0           !< Friedel limits
     integer                     :: cyc_lims(3,2)  = 0           !< redundant limits
+    integer                     :: nplanes_proxy  = 0           !< number of planes stashed in cmat_proxy
     type(CTFFLAGTYPE)           :: ctf                          !< ctf flag <yes|no|mul|flip>
     logical                     :: tfastig        = .false.     !< astigmatic CTF or not
     logical                     :: phaseplate     = .false.     !< Volta phaseplate images or not
@@ -49,6 +60,7 @@ type, extends(image) :: reconstructor
   contains
     ! CONSTRUCTORS 
     procedure          :: alloc_rho
+    procedure          :: alloc_cmat_proxy
     ! SETTERS
     procedure          :: reset
     procedure          :: reset_exp
@@ -79,7 +91,7 @@ real, parameter :: SHTHRESH=0.0001
 
 contains
 
-    ! CONSTRUCTOR
+    ! CONSTRUCTORS
 
     subroutine alloc_rho( self, p, expand )
         class(reconstructor), intent(inout) :: self   !< this instance
@@ -162,6 +174,29 @@ contains
         !
         call self%reset
     end subroutine alloc_rho
+
+    subroutine alloc_cmat_proxy( self, nplanes, npeaks )
+        class(reconstructor), intent(inout) :: self   !< this instance
+        integer,              intent(in)    :: nplanes, npeaks
+        integer :: cnt, ipeak, iplane
+        if( self%rho_allocated )then
+            if( allocated(self%cmat_proxy)    ) deallocate(self%cmat_proxy)
+            if( allocated(self%ind_map_proxy) ) deallocate(self%ind_map_proxy)
+            self%nplanes_proxy = nplanes * npeaks
+            allocate( self%cmat_proxy(self%nplanes_proxy,self%cyc_lims(1,1):self%cyc_lims(1,2),&
+                &self%cyc_lims(2,1):self%cyc_lims(2,2)), self%ind_map_proxy(nplanes,npeaks), stat=alloc_stat )
+            allocchk("In: alloc_cmat_proxy; simple_reconstructor")
+            cnt = 0
+            do iplane=1,nplanes
+                do ipeak=1,npeaks
+                    cnt = cnt + 1
+                    self%ind_map_proxy = cnt
+                end do
+            end do
+        else
+            stop 'need to alloc_rho before allocating cmat_proxy; simple_reconstructor :: alloc_cmat_proxy'
+        endif
+    end subroutine alloc_cmat_proxy
 
     ! SETTERS
 
@@ -656,6 +691,8 @@ contains
         if(allocated(self%ctf_ang))        deallocate(self%ctf_ang)
         if(allocated(self%ctf_sqSpatFreq)) deallocate(self%ctf_sqSpatFreq)
         if(allocated(self%ind_map))        deallocate(self%ind_map)
+        if(allocated(self%ind_map_proxy))  deallocate(self%ind_map_proxy)
+        if(allocated(self%cmat_proxy))     deallocate(self%cmat_proxy)
     end subroutine dealloc_rho
 
 end module simple_reconstructor
