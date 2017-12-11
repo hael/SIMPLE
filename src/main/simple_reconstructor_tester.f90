@@ -23,16 +23,16 @@ integer                 :: fnr
 contains
 
     subroutine exec_old_school_rec( b, p, cline )
-		class(build),   intent(inout) :: b
+        class(build),   intent(inout) :: b
         class(params),  intent(inout) :: p
         class(cmdline), intent(inout) :: cline
         type(ori)        :: orientation
-		type(kbinterpol) :: kbwin
-		type(prep4cgrid) :: gridprep
-		integer          :: iptcl
-		real             :: reslim
-    	t_init = tic()
-    	t_tot  = t_init
+        type(kbinterpol) :: kbwin
+        type(prep4cgrid) :: gridprep
+        integer          :: iptcl
+        real             :: reslim
+        t_init = tic()
+        t_tot  = t_init
         ! make the gridding prepper
         kbwin = b%eorecvols(1)%get_kbwin()
         call gridprep%new(b%img, kbwin, [p%boxpd,p%boxpd,1])
@@ -58,33 +58,33 @@ contains
         rt_tot = toc(t_tot)
         call gridprep%kill
         benchfname = 'REC_TEST_OLD_SCHOOL_BENCH.txt'
-	    call fopen(fnr, FILE=trim(benchfname), STATUS='REPLACE', action='WRITE')
-	    write(fnr,'(a)') '*** TIMINGS (s) ***'
-	    write(fnr,'(a,1x,f9.2)') 'initialisation  : ', rt_init
-	    write(fnr,'(a,1x,f9.2)') 'gridding        : ', rt_rec
-	    write(fnr,'(a,1x,f9.2)') 'eonorm          : ', rt_norm
-	    write(fnr,'(a,1x,f9.2)') 'total time      : ', rt_tot
-	    write(fnr,'(a)') ''
-	    write(fnr,'(a)') '*** RELATIVE TIMINGS (%) ***'
-	    write(fnr,'(a,1x,f9.2)') 'initialisation  : ', (rt_init/rt_tot) * 100.
-	    write(fnr,'(a,1x,f9.2)') 'gridding        : ', (rt_rec/rt_tot)  * 100.
-	    write(fnr,'(a,1x,f9.2)') 'eonorm          : ', (rt_norm/rt_tot) * 100.
-	    write(fnr,'(a,1x,f9.2)') '% accounted for : ', ((rt_init+rt_rec+rt_norm)/rt_tot) * 100.
-	    call fclose(fnr)
+        call fopen(fnr, FILE=trim(benchfname), STATUS='REPLACE', action='WRITE')
+        write(fnr,'(a)') '*** TIMINGS (s) ***'
+        write(fnr,'(a,1x,f9.2)') 'initialisation  : ', rt_init
+        write(fnr,'(a,1x,f9.2)') 'gridding        : ', rt_rec
+        write(fnr,'(a,1x,f9.2)') 'eonorm          : ', rt_norm
+        write(fnr,'(a,1x,f9.2)') 'total time      : ', rt_tot
+        write(fnr,'(a)') ''
+        write(fnr,'(a)') '*** RELATIVE TIMINGS (%) ***'
+        write(fnr,'(a,1x,f9.2)') 'initialisation  : ', (rt_init/rt_tot) * 100.
+        write(fnr,'(a,1x,f9.2)') 'gridding        : ', (rt_rec/rt_tot)  * 100.
+        write(fnr,'(a,1x,f9.2)') 'eonorm          : ', (rt_norm/rt_tot) * 100.
+        write(fnr,'(a,1x,f9.2)') '% accounted for : ', ((rt_init+rt_rec+rt_norm)/rt_tot) * 100.
+        call fclose(fnr)
     end subroutine exec_old_school_rec
 
     subroutine exec_rec_batch_gridprep( b, p, cline )
-		class(build),   intent(inout) :: b
+        class(build),   intent(inout) :: b
         class(params),  intent(inout) :: p
         class(cmdline), intent(inout) :: cline
         type(ori)                :: orientation
-		type(kbinterpol)         :: kbwin
-		type(prep4cgrid)         :: gridprep
-		integer                  :: iptcl, i, iptcl_batch, batchlims(2), ibatch
-		real                     :: reslim
-		type(image), allocatable :: rec_imgs(:)
-    	t_init = tic()
-    	t_tot  = t_init
+        type(kbinterpol)         :: kbwin
+        type(prep4cgrid)         :: gridprep
+        integer                  :: iptcl, i, iptcl_batch, batchlims(2), ibatch
+        real                     :: reslim
+        type(image), allocatable :: rec_imgs(:)
+        t_init = tic()
+        t_tot  = t_init
         ! make the gridding prepper
         kbwin = b%eorecvols(1)%get_kbwin()
         call gridprep%new(b%img, kbwin, [p%boxpd,p%boxpd,1])
@@ -101,19 +101,19 @@ contains
         ! reconstruction
         t_rec = tic()
         do iptcl_batch=1,p%nptcls,MAXIMGBATCHSZ
-        	batchlims = [iptcl_batch,min(p%nptcls,iptcl_batch + MAXIMGBATCHSZ - 1)]
-        	call read_imgbatch(b, p, batchlims)
-        	!$omp parallel do default(shared) private(iptcl)&
+            batchlims = [iptcl_batch,min(p%nptcls,iptcl_batch + MAXIMGBATCHSZ - 1)]
+            call read_imgbatch(b, p, batchlims)
+            !$omp parallel do default(shared) private(iptcl)&
             !$omp schedule(static) proc_bind(close)
             do iptcl=batchlims(1),batchlims(2)
-            	ibatch = iptcl - batchlims(1) + 1
-            	call gridprep%prep_serial_no_fft(b%imgbatch(ibatch), rec_imgs(ibatch))
+                ibatch = iptcl - batchlims(1) + 1
+                call gridprep%prep_serial_no_fft(b%imgbatch(ibatch), rec_imgs(ibatch))
             end do
             !$omp end parallel do
             do iptcl=batchlims(1),batchlims(2)
-            	ibatch = iptcl - batchlims(1) + 1
-            	orientation = b%a%get_ori(iptcl)
-            	call grid_ptcl_tst(b, p, rec_imgs(ibatch), orientation )
+                ibatch = iptcl - batchlims(1) + 1
+                orientation = b%a%get_ori(iptcl)
+                call grid_ptcl_tst(b, p, rec_imgs(ibatch), orientation )
             end do
         end do
         rt_rec = toc(t_rec)
@@ -132,19 +132,19 @@ contains
         rt_tot = toc(t_tot)
         call gridprep%kill
         benchfname = 'REC_TEST_BATCH_GRIDPREP.txt'
-	    call fopen(fnr, FILE=trim(benchfname), STATUS='REPLACE', action='WRITE')
-	    write(fnr,'(a)') '*** TIMINGS (s) ***'
-	    write(fnr,'(a,1x,f9.2)') 'initialisation  : ', rt_init
-	    write(fnr,'(a,1x,f9.2)') 'gridding        : ', rt_rec
-	    write(fnr,'(a,1x,f9.2)') 'eonorm          : ', rt_norm
-	    write(fnr,'(a,1x,f9.2)') 'total time      : ', rt_tot
-	    write(fnr,'(a)') ''
-	    write(fnr,'(a)') '*** RELATIVE TIMINGS (%) ***'
-	    write(fnr,'(a,1x,f9.2)') 'initialisation  : ', (rt_init/rt_tot) * 100.
-	    write(fnr,'(a,1x,f9.2)') 'gridding        : ', (rt_rec/rt_tot)  * 100.
-	    write(fnr,'(a,1x,f9.2)') 'eonorm          : ', (rt_norm/rt_tot) * 100.
-	    write(fnr,'(a,1x,f9.2)') '% accounted for : ', ((rt_init+rt_rec+rt_norm)/rt_tot) * 100.
-	    call fclose(fnr)
+        call fopen(fnr, FILE=trim(benchfname), STATUS='REPLACE', action='WRITE')
+        write(fnr,'(a)') '*** TIMINGS (s) ***'
+        write(fnr,'(a,1x,f9.2)') 'initialisation  : ', rt_init
+        write(fnr,'(a,1x,f9.2)') 'gridding        : ', rt_rec
+        write(fnr,'(a,1x,f9.2)') 'eonorm          : ', rt_norm
+        write(fnr,'(a,1x,f9.2)') 'total time      : ', rt_tot
+        write(fnr,'(a)') ''
+        write(fnr,'(a)') '*** RELATIVE TIMINGS (%) ***'
+        write(fnr,'(a,1x,f9.2)') 'initialisation  : ', (rt_init/rt_tot) * 100.
+        write(fnr,'(a,1x,f9.2)') 'gridding        : ', (rt_rec/rt_tot)  * 100.
+        write(fnr,'(a,1x,f9.2)') 'eonorm          : ', (rt_norm/rt_tot) * 100.
+        write(fnr,'(a,1x,f9.2)') '% accounted for : ', ((rt_init+rt_rec+rt_norm)/rt_tot) * 100.
+        call fclose(fnr)
     end subroutine exec_rec_batch_gridprep
 
 end module simple_reconstructor_tester

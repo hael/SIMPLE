@@ -218,7 +218,7 @@ contains
     subroutine qsys_watcher_2( fnames, wtime )
         character(len=STDLEN), intent(in)    :: fnames(:)
         integer, optional,     intent(in)    :: wtime
-        integer, parameter   :: MAXITS=1000
+        integer, parameter   :: MAXITS=10000
         integer              :: wwtime, nfiles, ifile, nlogic, i
         logical              :: doreturn, fexists
         wwtime = SHORTTIME

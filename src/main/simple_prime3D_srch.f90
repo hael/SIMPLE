@@ -844,9 +844,10 @@ contains
         logical,        intent(in)   :: do_extr
         real,    allocatable :: curr_corrs(:)
         integer, allocatable :: curr_inds(:), curr_inds_ptcl(:), order(:), tmp(:)
-        real    :: extr_frac, prev_corr, frac, mi_state, corr_thresh, avg_rndcorr, avg_shccorr, avg_currcorr
-        real    :: avg_prevrndcorr, avg_prevshccorr
-        integer :: iextr_lim, iptcl, n_incl, n_rnd, cnt, cnt2, ind, istate, nrefs_eval, prev_state, zero_pop, i
+        real    :: extr_frac, prev_corr, frac, mi_state, corr_thresh, avg_rndcorr
+        real    :: avg_prevrndcorr, avg_prevshccorr, avg_shccorr, avg_currcorr
+        integer :: iextr_lim, iptcl, n_incl, n_rnd, cnt, cnt2, ind, istate
+        integer :: nrefs_eval, prev_state, zero_pop, i, iproj
         if( .not.do_extr )return
         zero_pop  = a%get_pop( 0, 'state', consider_w=.false.)
         iextr_lim = ceiling(2.*log( real(p%nptcls-zero_pop) ))
@@ -914,18 +915,18 @@ contains
                 nrefs_eval      = count(het_corrs(i,:) <= prev_corr)
                 avg_prevshccorr = avg_prevshccorr + prev_corr
                 avg_shccorr     = avg_shccorr + het_corrs(i, istate)
-                ! if( trim(p%refine).eq.'hetsym' )then
-                !     iproj = symprojs(i, istate)
-                !     if( iproj == prev_proj(i) )then
-                !         call a%set(iptcl, 'mi_proj',  1.)
-                !     else
-                !         call a%set_euler(iptcl, e%get_euler(iproj))
-                !         call a%set(iptcl, 'mi_proj',  0.)
-                !     endif
-                ! else
-                !     call a%set(iptcl, 'mi_proj',  1.)
-                ! endif
-                call a%set(iptcl, 'mi_proj',  1.)
+                if( trim(p%refine).eq.'hetsym' )then
+                    iproj = symprojs(i, istate)
+                    if( iproj == prev_proj(i) )then
+                        call a%set(iptcl, 'mi_proj',  1.)
+                    else
+                        call a%set_euler(iptcl, e%get_euler(iproj))
+                        call a%set(iptcl, 'mi_proj',  0.)
+                    endif
+                else
+                    call a%set(iptcl, 'mi_proj',  1.)
+                endif
+                !call a%set(iptcl, 'mi_proj',  1.)
             endif
             ! orientation update
             frac = 100.*real(nrefs_eval) / real(p%nstates)
