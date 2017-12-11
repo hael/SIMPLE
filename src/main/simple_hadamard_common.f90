@@ -261,18 +261,21 @@ contains
     end subroutine set_bp_range2D
 
     !>  \brief  grids one particle image to the volume
-    subroutine grid_ptcl( b, p, orientation, os )
-        use simple_kbinterpol, only: kbinterpol
+    subroutine grid_ptcl( b, p, se, orientation, os )
+        use simple_sym, only: sym
         class(build),          intent(inout) :: b
         class(params),         intent(inout) :: p
+        class(sym),            intent(inout) :: se
         class(ori),            intent(inout) :: orientation
         class(oris), optional, intent(inout) :: os
-        type(oris) :: os_sym
-        type(ori)  :: o_sym, o_soft
-        real       :: pw, w
-        integer    :: jpeak, s, k, npeaks, eo, nstates
+        type(oris)       :: os_sym
+        type(ori)        :: o_sym, o_soft
+        character(len=3) :: pgrp
+        real             :: pw, w
+        integer          :: jpeak, s, k, npeaks, eo, nstates
         npeaks  = 1
         nstates = 1
+        pgrp = se%get_pgrp()
         if( present(os) )then
             npeaks  = os%get_noris()
             nstates = os%get_n('state')
@@ -288,15 +291,15 @@ contains
             s = nint(orientation%get('state'))
             if( npeaks == 1 )then
                 ! one peak & one state
-                if( p%pgrp == 'c1' )then
+                if( pgrp == 'c1' )then
                     if( p%eo .ne. 'no' )then
                         call b%eorecvols(s)%grid_fplane(orientation, b%img_pad, eo, pw)
                     else
                         call b%recvols(s)%inout_fplane(orientation, b%img_pad, pw)
                     endif
                 else
-                    do k=1,b%se%get_nsym()
-                        o_sym = b%se%apply(orientation, k)
+                    do k=1,se%get_nsym()
+                        o_sym = se%apply(orientation, k)
                         if( p%eo .ne. 'no' )then
                             call b%eorecvols(s)%grid_fplane(o_sym, b%img_pad, eo, pw)
                         else
@@ -306,16 +309,16 @@ contains
                 endif
             else
                 ! multiple peaks & one state
-                if( p%pgrp == 'c1' )then
+                if( pgrp == 'c1' )then
                     if( p%eo .ne. 'no' )then
                         call b%eorecvols(s)%grid_fplane(os, b%img_pad, eo, npeaks, pw)
                     else
                         call b%recvols(s)%inout_fplane(os, b%img_pad, npeaks, pw)
                     endif
                 else
-                    do k=1,b%se%get_nsym()
+                    do k=1,se%get_nsym()
                         os_sym = os
-                        call b%se%apply2all(os_sym, k)
+                        call se%apply2all(os_sym, k)
                         if( p%eo .ne. 'no' )then
                             call b%eorecvols(s)%grid_fplane(os_sym, b%img_pad, eo, npeaks, pw)
                         else
@@ -331,15 +334,15 @@ contains
                 w      = pw * o_soft%get('ow')
                 if( w <= TINY )cycle
                 s      = nint(o_soft%get('state'))
-                if( p%pgrp == 'c1' )then
+                if( pgrp == 'c1' )then
                     if( p%eo .ne. 'no' )then
                         call b%eorecvols(s)%grid_fplane(o_soft, b%img_pad, eo, w)
                     else
                         call b%recvols(s)%inout_fplane(o_soft, b%img_pad, w)
                     endif
                 else
-                    do k=1,b%se%get_nsym()
-                        o_sym = b%se%apply(o_soft, k)
+                    do k=1,se%get_nsym()
+                        o_sym = se%apply(o_soft, k)
                         if( p%eo .ne. 'no' )then
                             call b%eorecvols(s)%grid_fplane(o_sym, b%img_pad, eo, w)
                         else

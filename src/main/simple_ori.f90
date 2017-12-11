@@ -60,12 +60,14 @@ type :: ori
     generic            :: getter => getter_1, getter_2
     procedure          :: get_2Dshift
     procedure          :: get_3Dshift
+    procedure          :: get_state
     procedure          :: hash_size
     procedure          :: hash_keys
     procedure          :: hash_vals
     procedure          :: chash_size
     procedure          :: chash_nmax
     procedure          :: isthere
+    procedure          :: isstatezero
     procedure          :: isevenodd
     procedure          :: iseven
     procedure          :: isodd
@@ -509,6 +511,12 @@ contains
         vec(2) = self%htab%get('z')
     end function get_3Dshift
 
+    !>  \brief  is a getter
+    integer function get_state( self )
+        class(ori), intent(inout) :: self
+        get_state = nint(self%htab%get('state'))
+    end function get_state
+
     !>  \brief  returns size of hash
     function hash_size( self ) result( sz )
         class(ori), intent(in) :: self
@@ -554,6 +562,12 @@ contains
         found = .false.
         if( hash_found .or. chash_found ) found = .true.
     end function isthere
+
+    !>  \brief  whether state is zero
+    logical function isstatezero( self )
+        class(ori),       intent(inout) :: self
+        isstatezero = (self%get_state() == 0)
+    end function isstatezero
 
     !>  \brief  whether orientation has been atributed an even/odd partition
     logical function isevenodd( self )

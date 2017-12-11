@@ -2372,7 +2372,7 @@ contains
         end do
     end function peakfinder_3
 
-    !>   rheapsort from numerical recepies (largest last)
+    !>   rheapsort from numerical recipes (largest last)
     subroutine hpsort_1( rarr, iarr )
         real,    intent(inout) :: rarr(:)
         integer, intent(inout) :: iarr(:)

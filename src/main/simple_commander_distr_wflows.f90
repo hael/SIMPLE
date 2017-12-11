@@ -798,6 +798,7 @@ contains
         ! initialise static command line parameters and static job description parameter
         call cline_recvol_distr%set( 'prg', 'recvol' )       ! required for distributed call
         call cline_prime3D_init%set( 'prg', 'prime3D_init' ) ! required for distributed call
+        if( trim(p_master%refine).eq.'hetsym' )call cline_recvol_distr%set( 'pgrp', 'c1' )
         call cline_merge_algndocs%set('nthr', 1.)
         call cline_merge_algndocs%set('fbody', ALGN_FBODY)
         call cline_merge_algndocs%set('nptcls', real(p_master%nptcls))

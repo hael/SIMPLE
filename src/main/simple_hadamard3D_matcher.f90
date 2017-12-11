@@ -65,19 +65,19 @@ contains
         use simple_oris,      only: oris
         use simple_fileio,    only: del_file
         use simple_rnd,       only: irnd_uni
+        use simple_sym,       only: sym
         class(build),   intent(inout) :: b
         class(params),  intent(inout) :: p
         class(cmdline), intent(inout) :: cline
         integer,        intent(in)    :: which_iter
         logical,        intent(inout) :: update_res, converged
-        type(oris)       :: prime3D_oris
-        type(ori)        :: orientation
-        type(kbinterpol) :: kbwin
-        type(prep4cgrid) :: gridprep
-        real       :: norm, corr_thresh, skewness, frac_srch_space
-        real       :: extr_thresh, update_frac, reslim
-        integer    :: iptcl, inptcls, istate, iextr_lim, i, zero_pop
-        integer    :: update_ind, nupdates_target, nupdates, fnr, cnt
+        type(ori)            :: orientation
+        type(kbinterpol)     :: kbwin
+        type(sym)            :: c1_symop
+        type(prep4cgrid)     :: gridprep
+        integer, allocatable :: symmat(:,:)
+        real       :: skewness, frac_srch_space, reslim
+        integer    :: iptcl, iextr_lim, i, zero_pop, fnr, cnt
         logical    :: doprint, do_extr
 
         if( L_BENCH )then
@@ -95,8 +95,6 @@ contains
         else
             call b%a%set_all2single('eo', -1.)
         endif
-
-        inptcls = p%top - p%fromp + 1
 
         ! SET FOURIER INDEX RANGE
         call set_bp_range( b, p, cline )
@@ -159,15 +157,23 @@ contains
         endif
 
         ! EXTREMAL LOGICS PART 1
-        if( p%refine.eq.'het' )then
-            zero_pop  = b%a%get_pop(0, 'state', consider_w=.false.)
-            iextr_lim = ceiling(2.*log(real(p%nptcls-zero_pop)))
-            if( which_iter==1 .or.(frac_srch_space <= 98. .and. p%extr_iter <= iextr_lim) )then
-                do_extr = .true.  ! stochastic/SHC in state space
-            else
-                do_extr = .false. ! SHC in state space + in-plane search
-            endif
-        endif
+        select case(trim(p%refine))
+            case('het','hetsym')
+                zero_pop  = b%a%get_pop(0, 'state', consider_w=.false.)
+                iextr_lim = ceiling(2.*log(real(p%nptcls-zero_pop)))
+                if( which_iter==1 .or.(frac_srch_space <= 98. .and. p%extr_iter <= iextr_lim) )then
+                    do_extr = .true.  ! stochastic/SHC in state space
+                else
+                    do_extr = .false. ! SHC in state space + in-plane search
+                endif
+                if(trim(p%refine).eq.'hetsym')then
+                   ! symmetry pairing matrix
+                    c1_symop = sym('c1')
+                    call b%se%nearest_sym_neighbors( b%e, symmat )
+                endif
+            case DEFAULT
+                ! nothing to do
+        end select
 
         ! PARTICLE INDEX SAMPLING FOR FRACTIONAL UPDATE (OR NOT)
         if( allocated(pinds) )     deallocate(pinds)
@@ -243,7 +249,7 @@ contains
                 !$omp parallel do default(shared) private(i,iptcl) schedule(static) proc_bind(close)
                 do i=1,nptcls2update
                     iptcl = pinds(i)
-                    call primesrch3D(iptcl)%exec_prime3D_srch(p%lp, szsn=p%szsn)
+                    call primesrch3D(iptcl)%exec_prime3D_srch(szsn=p%szsn)
                 end do
                 !$omp end parallel do
             case( 'no','shc' )
@@ -251,14 +257,14 @@ contains
                     !$omp parallel do default(shared) private(i,iptcl) schedule(static) proc_bind(close)
                     do i=1,nptcls2update
                         iptcl = pinds(i)
-                        call primesrch3D(iptcl)%exec_prime3D_srch(p%lp, greedy=.true.)
+                        call primesrch3D(iptcl)%exec_prime3D_srch(greedy=.true.)
                     end do
                     !$omp end parallel do
                 else
                     !$omp parallel do default(shared) private(i,iptcl) schedule(static) proc_bind(close)
                     do i=1,nptcls2update
                         iptcl = pinds(i)
-                        call primesrch3D(iptcl)%exec_prime3D_srch(p%lp)
+                        call primesrch3D(iptcl)%exec_prime3D_srch()
                     end do
                     !$omp end parallel do
                 endif
@@ -267,7 +273,7 @@ contains
                 !$omp parallel do default(shared) private(i,iptcl) schedule(static) proc_bind(close)
                 do i=1,nptcls2update
                     iptcl = pinds(i)
-                    call primesrch3D(iptcl)%exec_prime3D_srch(p%lp, nnmat=b%nnmat, grid_projs=b%grid_projs)
+                    call primesrch3D(iptcl)%exec_prime3D_srch(nnmat=b%nnmat, grid_projs=b%grid_projs)
                 end do
                 !$omp end parallel do
             case('greedy')
@@ -275,14 +281,14 @@ contains
                     !$omp parallel do default(shared) private(i,iptcl) schedule(static) proc_bind(close)
                     do i=1,nptcls2update
                         iptcl = pinds(i)
-                        call primesrch3D(iptcl)%exec_prime3D_srch(p%lp, greedy=.true.)
+                        call primesrch3D(iptcl)%exec_prime3D_srch(greedy=.true.)
                     end do
                     !$omp end parallel do
                 else
                     !$omp parallel do default(shared) private(i,iptcl) schedule(static) proc_bind(close)
                     do i=1,nptcls2update
                         iptcl = pinds(i)
-                        call primesrch3D(iptcl)%exec_prime3D_srch(p%lp, greedy=.true.)
+                        call primesrch3D(iptcl)%exec_prime3D_srch(greedy=.true.)
                     end do
                     !$omp end parallel do
                 endif
@@ -291,16 +297,16 @@ contains
                     !$omp parallel do default(shared) private(i,iptcl) schedule(static) proc_bind(close)
                     do i=1,nptcls2update
                         iptcl = pinds(i)
-                        call primesrch3D(iptcl)%exec_prime3D_srch(p%lp,&
-                            &greedy=.true., nnmat=b%nnmat, grid_projs=b%grid_projs)
+                        call primesrch3D(iptcl)%exec_prime3D_srch(greedy=.true.,&
+                            &nnmat=b%nnmat, grid_projs=b%grid_projs)
                     end do
                     !$omp end parallel do
                 else
                     !$omp parallel do default(shared) private(i,iptcl) schedule(static) proc_bind(close)
                     do i=1,nptcls2update
                         iptcl = pinds(i)
-                        call primesrch3D(iptcl)%exec_prime3D_srch(p%lp,&
-                            &greedy=.true., nnmat=b%nnmat, grid_projs=b%grid_projs)
+                        call primesrch3D(iptcl)%exec_prime3D_srch(greedy=.true.,&
+                            &nnmat=b%nnmat, grid_projs=b%grid_projs)
                     end do
                     !$omp end parallel do
                 endif
@@ -312,12 +318,20 @@ contains
                     call primesrch3D(iptcl)%exec_prime3D_srch_het( do_extr )
                 end do
                 !$omp end parallel do
+            case('hetsym')
+                if(p%oritab .eq. '') stop 'cannot run the refine=hetsym mode without input oridoc (oritab)'
+                !$omp parallel do default(shared) private(i,iptcl) schedule(guided) proc_bind(close)
+                do i=1,nptcls2update
+                    iptcl = pinds(i)
+                    call primesrch3D(iptcl)%exec_prime3D_srch_het( do_extr, symmat )
+                end do
+                !$omp end parallel do
             case ('states')
                 if(p%oritab .eq. '') stop 'cannot run the refine=states mode without input oridoc (oritab)'
                 !$omp parallel do default(shared) private(i,iptcl) schedule(static) proc_bind(close)
                 do i=1,nptcls2update
                     iptcl = pinds(i)
-                    call primesrch3D(iptcl)%exec_prime3D_srch(p%lp, greedy=.true., nnmat=b%nnmat)
+                    call primesrch3D(iptcl)%exec_prime3D_srch(greedy=.true., nnmat=b%nnmat)
                 end do
                 !$omp end parallel do
             case DEFAULT
@@ -326,19 +340,23 @@ contains
         end select
 
         ! EXTREMAL LOGICS PART 2
-        if( p%refine.eq.'het' )then
-            call prime3D_srch_extr(b%a, p, do_extr)
-        endif
+        select case(trim(p%refine))
+            case('het','hetsym')
+                call prime3D_srch_extr(b%a, p, b%e, do_extr)
+            case DEFAULT
+                ! nothing to do
+        end select
 
         ! CLEANUP primesrch3D & pftcc
-        call cleanprime3D_srch(p)
+        call cleanprime3D_srch()
         call pftcc%kill
         do iptcl = p%fromp,p%top
             if( ptcl_mask(iptcl) ) call primesrch3D(iptcl)%kill
         end do
         deallocate(primesrch3D)
         if( L_BENCH ) rt_align = toc(t_align)
-        
+        if( allocated(symmat) )deallocate(symmat)
+
         ! PARTICLE REJECTION BASED ON ALIGNABILITY (SDEV OF ANGULAR ORIS)
         if( cline%defined('sdev_thres') )then
             call b%a%reject_above('sdev', p%sdev_thres)
@@ -364,14 +382,19 @@ contains
             do i=1,nptcls2update
                 iptcl = pinds(i)
                 orientation = b%a%get_ori(iptcl)
-                if( nint(orientation%get('state')) == 0 .or.&
+                if( orientation%isstatezero() .or.&
                    &nint(orientation%get('state_balance')) == 0 ) cycle
                 call read_img_and_norm(b, p, iptcl)
                 call gridprep%prep(b%img, b%img_pad)
                 if( p%npeaks > 1 )then
-                    call grid_ptcl(b, p, orientation, os=o_peaks(iptcl))
+                    call grid_ptcl(b, p, b%se, orientation, os=o_peaks(iptcl))
                 else
-                    call grid_ptcl(b, p, orientation)
+                    if( trim(p%refine).eq.'hetsym' )then
+                        ! always C1 reconstruction
+                        call grid_ptcl(b, p, c1_symop, orientation)
+                    else
+                        call grid_ptcl(b, p, b%se, orientation)
+                    endif
                 endif
             end do
             ! normalise structure factors
@@ -492,12 +515,11 @@ contains
     end subroutine gen_random_model
 
     !> Prepare alignment search using polar projection Fourier cross correlation
-    subroutine preppftcc4align( b, p, cline, ppfts_fname )
+    subroutine preppftcc4align( b, p, cline )
         use simple_polarizer, only: polarizer
         class(build),               intent(inout) :: b       !< build object
         class(params),              intent(inout) :: p       !< param object
         class(cmdline),             intent(inout) :: cline   !< command line
-        character(len=*), optional, intent(in)    :: ppfts_fname
         type(polarizer), allocatable :: match_imgs(:)
         type(ori) :: o
         integer   :: cnt, s, iptcl, iref, istate, ntot, nrefs, ldim(3)
@@ -505,9 +527,9 @@ contains
         logical   :: do_center
         real      :: xyz(3)
         if( .not. p%l_distr_exec ) write(*,'(A)') '>>> BUILDING PRIME3D SEARCH ENGINE'
+        nrefs  = p%nspace * p%nstates
         ! must be done here since p%kfromto is dynamically set based on FSC from previous round
         ! or based on dynamic resolution limit update
-        nrefs = p%nspace * p%nstates
         if( p%eo .ne. 'no' )then
             call pftcc%new(nrefs, p, ptcl_mask, nint(b%a%get_all('eo', [p%fromp,p%top])))
         else
@@ -516,7 +538,6 @@ contains
 
         ! PREPARATION OF REFERENCES IN PFTCC
         ! read reference volumes and create polar projections
-        nrefs = p%nspace * p%nstates
         cnt   = 0
         if( .not. p%l_distr_exec ) write(*,'(A)') '>>> BUILDING REFERENCES'
         do s=1,p%nstates
