@@ -30,6 +30,7 @@ type, extends(image) :: reconstructor
     real,    allocatable        :: rho_exp(:,:,:)               !< sampling+CTF**2 density of expanded reconstructor
     real,    allocatable        :: ctf_sqSpatFreq(:,:)          !< CTF squared reciprocal pixels
     real,    allocatable        :: ctf_ang(:,:)                 !< CTF effective defocus
+    integer, allocatable        :: ind_map(:,:,:)               !< logical to physical index mapping (2D)
     real                        :: winsz          = RECWINSZ    !< window half-width
     real                        :: alpha          = KBALPHA     !< oversampling ratio
     real                        :: dfx=0., dfy=0., angast=0.    !< CTF params
@@ -155,7 +156,10 @@ contains
             enddo
             !$omp end parallel do
         endif
-        ! 
+        ! generate index map
+        allocate( self%ind_map(self%cyc_lims(1,1):self%cyc_lims(1,2),self%cyc_lims(2,1):self%cyc_lims(2,2),3), source=0)
+        call self%get_2Dphys_ind_mapping(self%cyc_lims(1:2,:), self%ind_map)
+        !
         call self%reset
     end subroutine alloc_rho
 
@@ -222,11 +226,10 @@ contains
 
     ! INTERPOLATION
 
-    ! !> insert or uninsert Fourier plane
-    subroutine inout_fplane_1( self, o, inoutmode, fpl, pwght )
+    !> insert Fourier plane
+    subroutine inout_fplane_1( self, o, fpl, pwght )
         class(reconstructor), intent(inout) :: self      !< instance
         class(ori),           intent(inout) :: o         !< orientation
-        logical,              intent(in)    :: inoutmode !< add = .true., subtract = .false.
         class(image),         intent(inout) :: fpl       !< Fourier plane
         real,                 intent(in)    :: pwght     !< external particle weight (affects both fplane and rho)
         integer :: logi(3), win(3,2), sh, i, h, k
@@ -268,7 +271,7 @@ contains
                 ! consistently with compress_exp
                 if( win(1,2) < self%lims(1,1) )cycle
                 ! Fourier component
-                comp   = fpl%get_fcomp(logi, fpl%comp_addr_phys(logi))
+                comp   = fpl%get_fcomp(logi, self%ind_map(h,k,:))
                 ! evaluate shift
                 arg    = shconst_here(1)*vec(1) + shconst_here(2)*vec(2)
                 oshift = cmplx(cos(arg), sin(arg))
@@ -294,31 +297,20 @@ contains
                     w(:,:,i) = w(:,:,i) * self%kbwin%apod(real(win(3,1) + i - 1) - loc(3))
                 enddo
                 ! expanded matrices update
-                if( inoutmode )then
-                    ! addition
-                    ! CTF and w modulates the component before origin shift
-                    self%cmat_exp(win(1,1):win(1,2), win(2,1):win(2,2), win(3,1):win(3,2)) =&
-                    &self%cmat_exp(win(1,1):win(1,2), win(2,1):win(2,2), win(3,1):win(3,2)) + (comp*tval*w)*oshift
-                    self%rho_exp(win(1,1):win(1,2), win(2,1):win(2,2), win(3,1):win(3,2)) =&
-                    &self%rho_exp(win(1,1):win(1,2), win(2,1):win(2,2), win(3,1):win(3,2)) + tvalsq*w
-                else
-                    ! subtraction
-                    ! CTF and w modulates the component before origin shift
-                    self%cmat_exp(win(1,1):win(1,2), win(2,1):win(2,2), win(3,1):win(3,2)) =&
-                    &self%cmat_exp(win(1,1):win(1,2), win(2,1):win(2,2), win(3,1):win(3,2)) - (comp*tval*w)*oshift
-                    self%rho_exp(win(1,1):win(1,2), win(2,1):win(2,2), win(3,1):win(3,2)) =&
-                    &self%rho_exp(win(1,1):win(1,2), win(2,1):win(2,2), win(3,1):win(3,2)) - tvalsq*w
-                endif
+                ! CTF and w modulates the component before origin shift
+                self%cmat_exp(win(1,1):win(1,2), win(2,1):win(2,2), win(3,1):win(3,2)) =&
+                &self%cmat_exp(win(1,1):win(1,2), win(2,1):win(2,2), win(3,1):win(3,2)) + (comp*tval*w)*oshift
+                self%rho_exp(win(1,1):win(1,2), win(2,1):win(2,2), win(3,1):win(3,2)) =&
+                &self%rho_exp(win(1,1):win(1,2), win(2,1):win(2,2), win(3,1):win(3,2)) + tvalsq*w
             end do
         end do
         !$omp end parallel do
     end subroutine inout_fplane_1
 
     !> insert or un-insert Fourier plane peaks
-    subroutine inout_fplane_2( self, os, inoutmode, fpl, noris, pwght )
+    subroutine inout_fplane_2( self, os, fpl, noris, pwght )
         class(reconstructor), intent(inout) :: self      !< instance
         class(oris),          intent(inout) :: os        !< orientation peaks
-        logical,              intent(in)    :: inoutmode !< add = .true., subtract = .false.
         class(image),         intent(inout) :: fpl       !< Fourier plane
         integer,              intent(in)    :: noris     !< # of orienations peaks
         real,                 intent(in)    :: pwght     !< image weight
@@ -356,7 +348,7 @@ contains
                 logi = [h,k,0]
                 vec  = real(logi)
                 ! Fourier component
-                comp = fpl%get_fcomp(logi, fpl%comp_addr_phys(logi))
+                comp = fpl%get_fcomp(logi, self%ind_map(h,k,:))
                 ! evaluate the transfer function
                 if( self%ctf%flag /= CTFFLAG_NO )then
                     ! calculate CTF and CTF**2 values
@@ -392,21 +384,11 @@ contains
                         w(:,:,i) = w(:,:,i) * self%kbwin%apod(real(win(3,1) + i - 1) - loc(3))
                     enddo
                     ! expanded matrices update
-                    if( inoutmode )then
-                        ! addition
-                        ! CTF and w modulates the component before origin shift
-                        self%cmat_exp(win(1,1):win(1,2), win(2,1):win(2,2), win(3,1):win(3,2)) =&
-                        &self%cmat_exp(win(1,1):win(1,2), win(2,1):win(2,2), win(3,1):win(3,2)) + (comp*tval*w)*oshift
-                        self%rho_exp(win(1,1):win(1,2), win(2,1):win(2,2), win(3,1):win(3,2)) =&
-                        &self%rho_exp(win(1,1):win(1,2), win(2,1):win(2,2), win(3,1):win(3,2)) + tvalsq*w
-                    else
-                        ! subtraction
-                        ! CTF and w modulates the component before origin shift
-                        self%cmat_exp(win(1,1):win(1,2), win(2,1):win(2,2), win(3,1):win(3,2)) =&
-                        &self%cmat_exp(win(1,1):win(1,2), win(2,1):win(2,2), win(3,1):win(3,2)) - (comp*tval*w)*oshift
-                        self%rho_exp(win(1,1):win(1,2), win(2,1):win(2,2), win(3,1):win(3,2)) =&
-                        &self%rho_exp(win(1,1):win(1,2), win(2,1):win(2,2), win(3,1):win(3,2)) - tvalsq*w
-                    endif
+                    ! CTF and w modulates the component before origin shift
+                    self%cmat_exp(win(1,1):win(1,2), win(2,1):win(2,2), win(3,1):win(3,2)) =&
+                    &self%cmat_exp(win(1,1):win(1,2), win(2,1):win(2,2), win(3,1):win(3,2)) + (comp*tval*w)*oshift
+                    self%rho_exp(win(1,1):win(1,2), win(2,1):win(2,2), win(3,1):win(3,2)) =&
+                    &self%rho_exp(win(1,1):win(1,2), win(2,1):win(2,2), win(3,1):win(3,2)) + tvalsq*w
                 end do
             end do
         end do
@@ -640,11 +622,11 @@ contains
                     call img%read(stkname, ind)
                     call gridprep%prep(img, img_pad)
                     if( p%pgrp == 'c1' )then
-                        call self%inout_fplane(orientation, .true., img_pad, pwght=pw)
+                        call self%inout_fplane(orientation, img_pad, pwght=pw)
                     else
                         do j=1,se%get_nsym()
                             o_sym = se%apply(orientation, j)
-                            call self%inout_fplane(o_sym, .true., img_pad, pwght=pw)
+                            call self%inout_fplane(o_sym, img_pad, pwght=pw)
                         end do
                     endif
                     deallocate(stkname)
@@ -673,6 +655,7 @@ contains
         endif
         if(allocated(self%ctf_ang))        deallocate(self%ctf_ang)
         if(allocated(self%ctf_sqSpatFreq)) deallocate(self%ctf_sqSpatFreq)
+        if(allocated(self%ind_map))        deallocate(self%ind_map)
     end subroutine dealloc_rho
 
 end module simple_reconstructor

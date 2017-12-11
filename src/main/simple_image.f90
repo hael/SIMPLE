@@ -226,6 +226,7 @@ type :: image
     procedure          :: cure
     procedure          :: loop_lims
     procedure          :: comp_addr_phys
+    procedure          :: get_2Dphys_ind_mapping
     procedure          :: corr
     procedure          :: corr_shifted
     procedure, private :: real_corr_1
@@ -260,6 +261,7 @@ type :: image
     procedure          :: zero_background
     procedure          :: subtr_backgr_pad_divwinstr_fft
     procedure          :: subtr_backgr_pad_divwinstr_fft_serial
+    procedure          :: subtr_backgr_pad_divwinstr_serial
     procedure          :: salt_n_pepper
     procedure          :: square
     procedure          :: corners
@@ -4487,13 +4489,25 @@ contains
     end function loop_lims
 
     !>  \brief  Convert logical address to physical address. Complex image.
-     !!
     function comp_addr_phys(self,logi) result(phys)
         class(image), intent(in)  :: self
         integer,       intent(in) :: logi(3) !<  Logical address
         integer                   :: phys(3) !<  Physical address
         phys = self%fit%comp_addr_phys(logi)
     end function comp_addr_phys
+
+    !>  \brief  generate physical index mapping array
+    subroutine get_2Dphys_ind_mapping( self, lims, ind_map )
+        class(image), intent(in)  :: self
+        integer,      intent(in)  :: lims(2,2)
+        integer,      intent(out) :: ind_map(lims(1,1):lims(1,2),lims(2,1):lims(2,2),3)
+        integer :: h, k, l
+        do h=lims(1,1),lims(1,2)
+            do k=lims(2,1),lims(2,2)
+                ind_map(h,k,:) = self%fit%comp_addr_phys([h,k,0])
+            end do
+        end do
+    end subroutine get_2Dphys_ind_mapping
 
     !>  \brief corr is for correlating two images
     !! \param self1 input image 1
@@ -5251,6 +5265,29 @@ contains
             &self_out%rmat(:self_out%ldim(1),:self_out%ldim(2),1) / instr_fun(:self_out%ldim(1),:self_out%ldim(2),1)
         call self_out%fwd_ft
     end subroutine subtr_backgr_pad_divwinstr_fft_serial
+
+    subroutine subtr_backgr_pad_divwinstr_serial( self, mskimg, instr_fun, self_out )
+        class(image), intent(inout) :: self
+        class(image), intent(in)    :: mskimg
+        real,         intent(in)    :: instr_fun(:,:,:)
+        class(image), intent(inout) :: self_out
+        real, allocatable :: pixels(:)
+        integer :: starts(3), stops(3)
+        real    :: med
+        pixels   = pack( self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)),&
+                &mask=mskimg%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) < 0.5 )
+        med = median_nocopy(pixels)
+        starts        = (self_out%ldim - self%ldim) / 2 + 1
+        stops         = self_out%ldim - starts + 1
+        self_out%ft   = .false.
+        self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) =&
+        self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) - med
+        self_out%rmat = 0.
+        self_out%rmat(starts(1):stops(1),starts(2):stops(2),1)=&
+            &self%rmat(:self%ldim(1),:self%ldim(2),1)
+        self_out%rmat(:self_out%ldim(1),:self_out%ldim(2),1) = &
+            &self_out%rmat(:self_out%ldim(1),:self_out%ldim(2),1) / instr_fun(:self_out%ldim(1),:self_out%ldim(2),1)
+    end subroutine subtr_backgr_pad_divwinstr_serial
 
     !>  \brief  Taper edges of image so that there are no sharp discontinuities in real space
     !!          This is a re-implementation of the MRC program taperedgek.for (Richard Henderson, 1987)

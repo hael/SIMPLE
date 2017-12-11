@@ -51,6 +51,7 @@ type(resrange_commander)             :: xresrange
 type(npeaks_commander)               :: xnpeaks
 type(nspace_commander)               :: xnspace
 type(prime3D_init_commander)         :: xprime3D_init
+type(rec_test_commander)             :: xrec_test
 type(multiptcl_init_commander)       :: xmultiptcl_init
 type(prime3D_commander)              :: xprime3D
 type(check3D_conv_commander)         :: xcheck3D_conv
@@ -1084,6 +1085,20 @@ select case(prg)
         endif
         ! execute
         call xprime3D%execute(cline)
+    case( 'rec_test' )
+        ! set required keys
+        keys_required(1) = 'smpd'
+        keys_required(2) = 'msk'
+        keys_required(3) = 'ctf'
+        keys_required(4) = 'pgrp'
+        keys_required(5) = 'oritab'
+        keys_required(6) = 'stk'
+        ! set optional keys
+        keys_optional(1) = 'nthr'
+        ! parse command line
+        call cline%parse(keys_required(:6), keys_optional(:1))
+        ! execute
+        call xrec_test%execute(cline)
     case( 'check3D_conv' )
         !==Program check3D_conv
         !

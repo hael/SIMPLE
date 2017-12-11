@@ -264,9 +264,9 @@ contains
         real,                    intent(in)    :: pwght !< external particle weight (affects both fplane and rho)
         select case(eo)
             case(-1,0)
-                call self%even%inout_fplane(o, .true., fpl, pwght)
+                call self%even%inout_fplane(o, fpl, pwght)
             case(1)
-                call self%odd%inout_fplane(o, .true., fpl, pwght)
+                call self%odd%inout_fplane(o, fpl, pwght)
             case DEFAULT
                 stop 'unsupported eo flag; eo_reconstructor :: grid_fplane'
         end select
@@ -283,9 +283,9 @@ contains
         real,                    intent(in)    :: pwght !< external particle weight (affects both fplane and rho)
         select case(eo)
             case(-1,0)
-                call self%even%inout_fplane(os, .true., fpl, noris, pwght)
+                call self%even%inout_fplane(os, fpl, noris, pwght)
             case(1)
-                call self%odd%inout_fplane(os, .true., fpl, noris, pwght)
+                call self%odd%inout_fplane(os, fpl, noris, pwght)
             case DEFAULT
                 stop 'unsupported eo flag; eo_reconstructor :: grid_fplane'
         end select

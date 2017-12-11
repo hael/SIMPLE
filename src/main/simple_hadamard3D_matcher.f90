@@ -19,7 +19,6 @@ implicit none
 
 public :: prime3D_find_resrange, prime3D_exec, gen_random_model
 public :: preppftcc4align, pftcc
-
 private
 #include "simple_local_flags.inc"
 
@@ -478,11 +477,11 @@ contains
                 call read_img_and_norm( b, p, sample(i) + p%fromp - 1 )
                 call gridprep%prep(b%img, b%img_pad)
                 if( p%pgrp == 'c1' )then
-                    call b%recvols(1)%inout_fplane(orientation, .true., b%img_pad, pwght=1.0)
+                    call b%recvols(1)%inout_fplane(orientation, b%img_pad, pwght=1.0)
                 else
                     do k=1,b%se%get_nsym()
                         o_sym = b%se%apply(orientation, k)
-                        call b%recvols(1)%inout_fplane(o_sym, .true., b%img_pad, pwght=1.0)
+                        call b%recvols(1)%inout_fplane(o_sym, b%img_pad, pwght=1.0)
                     end do
                 endif
             end do
@@ -502,7 +501,7 @@ contains
         type(polarizer), allocatable :: match_imgs(:)
         type(ori) :: o
         integer   :: cnt, s, iptcl, iref, istate, ntot, nrefs, ldim(3)
-        integer   :: batchlims(2), batchsz, imatch, iptcl_batch
+        integer   :: batchlims(2), imatch, iptcl_batch
         logical   :: do_center
         real      :: xyz(3)
         if( .not. p%l_distr_exec ) write(*,'(A)') '>>> BUILDING PRIME3D SEARCH ENGINE'
@@ -571,10 +570,7 @@ contains
         call prepimgbatch(b, p, MAXIMGBATCHSZ)
         do iptcl_batch=p%fromp,p%top,MAXIMGBATCHSZ
             batchlims = [iptcl_batch,min(p%top,iptcl_batch + MAXIMGBATCHSZ - 1)]
-            batchsz   = batchlims(2) - batchlims(1) + 1
-            ! call read_imgbatch( b, p, batchlims, ptcl_mask)
-            call read_imgbatch( b, p, batchlims)
-
+            call read_imgbatch( b, p, batchlims, ptcl_mask )
             !$omp parallel do default(shared) private(iptcl,imatch)&
             !$omp schedule(static) proc_bind(close)
             do iptcl=batchlims(1),batchlims(2)

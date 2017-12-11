@@ -17,6 +17,7 @@ public :: nspace_commander
 public :: prime3D_init_commander
 public :: multiptcl_init_commander
 public :: prime3D_commander
+public :: rec_test_commander
 public :: check3D_conv_commander
 private
 #include "simple_local_flags.inc"
@@ -45,6 +46,10 @@ type, extends(commander_base) :: prime3D_commander
   contains
     procedure :: execute      => exec_prime3D
 end type prime3D_commander
+type, extends(commander_base) :: rec_test_commander
+  contains
+    procedure :: execute      => exec_rec_test
+end type rec_test_commander
 type, extends(commander_base) :: check3D_conv_commander
   contains
     procedure :: execute      => exec_check3D_conv
@@ -264,6 +269,22 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_PRIME3D NORMAL STOP ****')
     end subroutine exec_prime3D
+
+    subroutine exec_rec_test( self, cline )
+        use simple_reconstructor_tester ! use all in there
+        class(rec_test_commander), intent(inout) :: self
+        class(cmdline),            intent(inout) :: cline
+        type(params)               :: p
+        type(build)                :: b
+        p = params(cline)                     ! parameters generated
+        call b%build_general_tbox(p, cline)   ! general objects built
+        p%eo = 'yes'                          ! default
+        call b%build_hadamard_prime3D_tbox(p) ! prime3D objects built
+        ! call exec_old_school_rec( b, p, cline )
+        call exec_rec_batch_gridprep( b, p, cline )
+        ! end gracefully
+        call simple_end('**** SIMPLE_REC_TEST NORMAL STOP ****')
+    end subroutine exec_rec_test
     
     subroutine exec_check3D_conv( self, cline )
         use simple_math,    only: rad2deg, get_lplim_at_corr

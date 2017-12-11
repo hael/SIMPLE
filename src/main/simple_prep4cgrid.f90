@@ -21,6 +21,7 @@ contains
     procedure, private :: memoize_instr_fun
     procedure          :: prep
     procedure          :: prep_serial
+    procedure          :: prep_serial_no_fft
     procedure          :: kill
 end type prep4cgrid
 
@@ -86,6 +87,13 @@ contains
         class(image),      intent(inout) :: img, img4grid
         call img%subtr_backgr_pad_divwinstr_fft_serial(self%mskimg, self%instr_fun, img4grid)
     end subroutine prep_serial
+
+    !>  \brief  prepare image for gridding interpolation in Fourier space
+    subroutine prep_serial_no_fft( self, img, img4grid )
+        class(prep4cgrid), intent(in)    :: self
+        class(image),      intent(inout) :: img, img4grid
+        call img%subtr_backgr_pad_divwinstr_serial(self%mskimg, self%instr_fun, img4grid)
+    end subroutine prep_serial_no_fft
 
     subroutine kill( self )
         class(prep4cgrid), intent(inout) :: self
