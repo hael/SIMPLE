@@ -169,6 +169,9 @@ contains
                 if(trim(p%refine).eq.'hetsym')then
                    ! symmetry pairing matrix
                     c1_symop = sym('c1')
+                    p%nspace = min( p%nspace*b%se%get_nsym(), 3000 )
+                    call b%e%new( p%nspace )
+                    call b%e%spiral
                     call b%se%nearest_sym_neighbors( b%e, symmat )
                 endif
             case DEFAULT
@@ -323,7 +326,7 @@ contains
                 !$omp parallel do default(shared) private(i,iptcl) schedule(guided) proc_bind(close)
                 do i=1,nptcls2update
                     iptcl = pinds(i)
-                    call primesrch3D(iptcl)%exec_prime3D_srch_het( do_extr, symmat )
+                    call primesrch3D(iptcl)%exec_prime3D_srch_het( do_extr, symmat, b%e )
                 end do
                 !$omp end parallel do
             case ('states')
@@ -341,8 +344,10 @@ contains
 
         ! EXTREMAL LOGICS PART 2
         select case(trim(p%refine))
-            case('het','hetsym')
-                call prime3D_srch_extr(b%a, p, b%e, do_extr)
+            case('het')
+                call prime3D_srch_extr(b%a, p, do_extr)
+            case('hetsym')
+                call prime3D_srch_extr(b%a, p, do_extr, b%e)
             case DEFAULT
                 ! nothing to do
         end select

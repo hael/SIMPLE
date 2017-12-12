@@ -511,8 +511,6 @@ contains
         type(cmdline)                 :: cline_prime3D
         type(cmdline)                 :: cline_recvol_distr
         type(cmdline)                 :: cline_postproc_vol
-        ! parameters
-        integer, parameter            :: MAXSYMPROJS = 5000
         ! other variables
         type(sym)                     :: symop
         integer,     allocatable      :: labels(:)
@@ -528,13 +526,6 @@ contains
             &stop 'Non-sensical NSTATES argument for heterogeneity analysis!'
         ! make master parameters
         p_master = params(cline)
-        if( trim(p_master%refine).eq.'sym' )then
-            call symop%new(p_master%pgrp)
-            if( .not.cline%defined('nspace') )then
-                p_master%nspace = min(symop%get_nsym()*p_master%nspace, MAXSYMPROJS) 
-                call cline%set('nspace', real(p_master%nspace))
-            endif
-        endif
         if( p_master%eo .eq. 'no' .and. .not. cline%defined('lp') )&
             &stop 'need lp input when eo .eq. no; het'
         ! prepare command lines from prototype
@@ -578,6 +569,7 @@ contains
         endif
         if( trim(p_master%refine) .eq. 'sym' )then
             ! randomize projection directions with respect to symmetry
+            symop = sym(p_master%pgrp)
             call symop%symrandomize(os)
             call symop%kill
         endif

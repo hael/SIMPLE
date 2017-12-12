@@ -359,11 +359,12 @@ contains
     end subroutine exec_prime3D_srch
 
     !>  \brief state labeler
-    subroutine exec_prime3D_srch_het( self, do_extr, symmat )
+    subroutine exec_prime3D_srch_het( self, do_extr, symmat, c1_e )
         class(prime3D_srch),        intent(inout) :: self
         logical,                    intent(in)    :: do_extr
         integer,          optional, intent(in)    :: symmat(self%nprojs, self%nsym)
-        call self%stochastic_srch_het( do_extr, symmat )
+        class(oris),      optional, intent(inout) :: c1_e
+        call self%stochastic_srch_het( do_extr, symmat, c1_e )
         if( DEBUG ) print *,  '>>> PRIME3D_SRCH::EXECUTED PRIME3D_SRCH_HET'
     end subroutine exec_prime3D_srch_het
 
@@ -735,13 +736,14 @@ contains
     !> stochastic search heterogeneity
     !! \param extr_bound corr threshold
     !! \param statecnt state counter array
-    subroutine stochastic_srch_het( self, do_extr, symmat )
+    subroutine stochastic_srch_het( self, do_extr, symmat, c1_e )
         use simple_rnd,      only: shcloc, irnd_uni
         class(prime3D_srch),       intent(inout) :: self
         logical,                   intent(in)    :: do_extr
         integer,         optional, intent(in)    :: symmat(self%nprojs, self%nsym)
+        class(oris),     optional, intent(inout) :: c1_e
         integer :: iref, state, isym, iref_offset, nsym, iproj
-        real    :: corr, mi_state, mi_inpl, frac, maxcorr
+        real    :: corr, mi_state, mi_inpl, mi_proj, frac, maxcorr
         real    :: corrs_state(self%nstates), corrs_inpl(self%nrots), shvec(2)
         prev_states(self%iptcl_map) = self%a_ptr%get_state(self%iptcl)
         if( prev_states(self%iptcl_map) > 0 )then
@@ -756,14 +758,6 @@ contains
                 do state = 1, self%nstates
                     if( .not.state_exists(state) )cycle
                     iref_offset = (state-1) * self%nprojs
-                    ! pick random symmetric unit
-                    ! isym = irnd_uni(self%nsym)
-                    ! iproj = symmat(prev_proj(self%iptcl_map), isym)
-                    ! iref  = iref_offset + iproj
-                    ! call self%pftcc_ptr%gencorrs(iref, self%iptcl, corrs_inpl)
-                    ! corrs_state(state) = corrs_inpl(self%prev_roind)
-                    ! symprojs(self%iptcl_map,state) = iproj
-                    ! pick best scoring symmetric unit
                     maxcorr     = -1.
                     do isym = 1, self%nsym
                         iproj = symmat(prev_proj(self%iptcl_map), isym)
@@ -795,11 +789,22 @@ contains
                 corr            = corrs_state(state)
                 self%nrefs_eval = count(corrs_state <= self%prev_corr)
                 if(present(symmat) )then
-                    ! no in-plane move
+                    ! greedy in symmetry
+                    iproj = symprojs(self%iptcl_map, state)
+                    if( iproj == prev_proj(self%iptcl_map) )then
+                        mi_proj = 1.
+                    else
+                        mi_proj     = 0.
+                        iref_offset = (state-1) * self%nprojs
+                        iref        = iref_offset + iproj
+                        call self%a_ptr%e1set(self%iptcl, proj_space_euls(self%iptcl_map, iref, 1))
+                        call self%a_ptr%e2set(self%iptcl, proj_space_euls(self%iptcl_map, iref, 2))
+                    endif
                     mi_inpl = 1.
                 else
                     ! greedy inpl move
-                    iref = (state-1)*self%nprojs + prev_proj(self%iptcl_map)
+                    mi_proj = 1.
+                    iref    = (state-1)*self%nprojs + prev_proj(self%iptcl_map)
                     proj_space_corrs(self%iptcl_map,iref)      = corr
                     proj_space_inds(self%iptcl_map,self%nrefs) = iref
                     call self%inpl_srch
@@ -819,7 +824,7 @@ contains
                 call self%a_ptr%set(self%iptcl,'frac', frac)
                 call self%a_ptr%set(self%iptcl,'state', real(state))
                 call self%a_ptr%set(self%iptcl,'corr', corr)
-                call self%a_ptr%set(self%iptcl,'mi_proj', 1.)
+                call self%a_ptr%set(self%iptcl,'mi_proj', mi_proj)
                 call self%a_ptr%set(self%iptcl,'mi_inpl', mi_inpl)
                 if( prev_states(self%iptcl_map) .ne. state )then
                     mi_state = 0.
@@ -837,17 +842,18 @@ contains
     end subroutine stochastic_srch_het
 
     !>  \brief  executes moves for stochastic search heterogeneity
-    subroutine prime3D_srch_extr( a, p, e, do_extr )
+    subroutine prime3D_srch_extr( a, p, do_extr, c1_e )
         use simple_params, only: params
-        class(oris),   intent(inout) :: a, e
-        class(params),  intent(in)   :: p
-        logical,        intent(in)   :: do_extr
+        class(oris),            intent(inout) :: a
+        class(params),          intent(in)    :: p
+        logical,                intent(in)    :: do_extr
+        class(oris), optional,  intent(inout) :: c1_e
         real,    allocatable :: curr_corrs(:)
         integer, allocatable :: curr_inds(:), curr_inds_ptcl(:), order(:), tmp(:)
         real    :: extr_frac, prev_corr, frac, mi_state, corr_thresh, avg_rndcorr
         real    :: avg_prevrndcorr, avg_prevshccorr, avg_shccorr, avg_currcorr
         integer :: iextr_lim, iptcl, n_incl, n_rnd, cnt, cnt2, ind, istate
-        integer :: nrefs_eval, prev_state, zero_pop, i, iproj
+        integer :: nrefs_eval, prev_state, zero_pop, i, iproj, iref
         if( .not.do_extr )return
         zero_pop  = a%get_pop( 0, 'state', consider_w=.false.)
         iextr_lim = ceiling(2.*log( real(p%nptcls-zero_pop) ))
@@ -887,7 +893,6 @@ contains
             enddo
             deallocate(tmp, order)
         endif
-
         ! assign moves
         avg_rndcorr     = 0.
         avg_shccorr     = 0.
@@ -910,23 +915,25 @@ contains
                 if( ind == n_rnd )corr_thresh = het_corrs(i, prev_state)
                 call a%set(iptcl, 'mi_proj',  1.)
             else
-                ! SHC move
+                ! SHC move in state
                 istate          = shcloc(p%nstates, het_corrs(i,:), prev_corr)
                 nrefs_eval      = count(het_corrs(i,:) <= prev_corr)
                 avg_prevshccorr = avg_prevshccorr + prev_corr
                 avg_shccorr     = avg_shccorr + het_corrs(i, istate)
                 if( trim(p%refine).eq.'hetsym' )then
+                    ! greedy in symmetry
                     iproj = symprojs(i, istate)
                     if( iproj == prev_proj(i) )then
                         call a%set(iptcl, 'mi_proj',  1.)
                     else
-                        call a%set_euler(iptcl, e%get_euler(iproj))
+                        iref = (istate-1)*p%nspace + iproj
+                        call a%e1set(iptcl, proj_space_euls(i, iref, 1))
+                        call a%e2set(iptcl, proj_space_euls(i, iref, 2))
                         call a%set(iptcl, 'mi_proj',  0.)
                     endif
                 else
                     call a%set(iptcl, 'mi_proj',  1.)
                 endif
-                !call a%set(iptcl, 'mi_proj',  1.)
             endif
             ! orientation update
             frac = 100.*real(nrefs_eval) / real(p%nstates)
