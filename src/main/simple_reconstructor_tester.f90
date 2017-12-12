@@ -6,6 +6,7 @@ use simple_cmdline,        only: cmdline
 use simple_kbinterpol,     only: kbinterpol
 use simple_prep4cgrid,     only: prep4cgrid
 use simple_ori,            only: ori
+use simple_oris,           only: oris
 use simple_image,          only: image
 use simple_hadamard_common ! use all in there
 use simple_timer           ! use all in there
@@ -15,8 +16,8 @@ implicit none
 public :: exec_old_school_rec, exec_rec_batch_gridprep
 private
 
-integer(timer_int_kind) :: t_init, t_rec, t_norm, t_tot
-real(timer_int_kind)    :: rt_init, rt_rec, rt_norm, rt_tot
+integer(timer_int_kind) :: t_init, t_rec, t_norm, t_tot, t_read, t_gridprep, t_gridding
+real(timer_int_kind)    :: rt_init, rt_rec, rt_norm, rt_tot, rt_read, rt_gridprep, rt_gridding
 character(len=STDLEN)   :: benchfname
 integer                 :: fnr
 
@@ -99,10 +100,16 @@ contains
         call prepimgbatch(b, p, MAXIMGBATCHSZ)
         rt_init = toc(t_init)
         ! reconstruction
-        t_rec = tic()
+        t_rec       = tic()
+        rt_read     = 0.
+        rt_gridprep = 0.
+        rt_gridding = 0.
         do iptcl_batch=1,p%nptcls,MAXIMGBATCHSZ
             batchlims = [iptcl_batch,min(p%nptcls,iptcl_batch + MAXIMGBATCHSZ - 1)]
+            t_read = tic()
             call read_imgbatch(b, p, batchlims)
+            rt_read    = rt_read + toc(t_read)
+            t_gridprep = tic()
             !$omp parallel do default(shared) private(iptcl)&
             !$omp schedule(static) proc_bind(close)
             do iptcl=batchlims(1),batchlims(2)
@@ -110,11 +117,14 @@ contains
                 call gridprep%prep_serial_no_fft(b%imgbatch(ibatch), rec_imgs(ibatch))
             end do
             !$omp end parallel do
+            rt_gridprep = rt_gridprep + toc(t_gridprep)
+            t_gridding  = tic()
             do iptcl=batchlims(1),batchlims(2)
                 ibatch = iptcl - batchlims(1) + 1
                 orientation = b%a%get_ori(iptcl)
                 call grid_ptcl_tst(b, p, rec_imgs(ibatch), orientation )
             end do
+            rt_gridding = rt_gridding + toc(t_gridding)
         end do
         rt_rec = toc(t_rec)
         ! normalise structure factors
@@ -135,13 +145,19 @@ contains
         call fopen(fnr, FILE=trim(benchfname), STATUS='REPLACE', action='WRITE')
         write(fnr,'(a)') '*** TIMINGS (s) ***'
         write(fnr,'(a,1x,f9.2)') 'initialisation  : ', rt_init
-        write(fnr,'(a,1x,f9.2)') 'gridding        : ', rt_rec
+        write(fnr,'(a,1x,f9.2)') 'reconstruction  : ', rt_rec
+        write(fnr,'(a,1x,f9.2)') '* read          : ', rt_read
+        write(fnr,'(a,1x,f9.2)') '* gridprep      : ', rt_gridprep
+        write(fnr,'(a,1x,f9.2)') '* gridding      : ', rt_gridding
         write(fnr,'(a,1x,f9.2)') 'eonorm          : ', rt_norm
         write(fnr,'(a,1x,f9.2)') 'total time      : ', rt_tot
         write(fnr,'(a)') ''
         write(fnr,'(a)') '*** RELATIVE TIMINGS (%) ***'
         write(fnr,'(a,1x,f9.2)') 'initialisation  : ', (rt_init/rt_tot) * 100.
-        write(fnr,'(a,1x,f9.2)') 'gridding        : ', (rt_rec/rt_tot)  * 100.
+        write(fnr,'(a,1x,f9.2)') 'reconstruction  : ', (rt_rec/rt_tot)  * 100.
+        write(fnr,'(a,1x,f9.2)') '* read          : ', (rt_read/rt_tot)     * 100.
+        write(fnr,'(a,1x,f9.2)') '* gridprep      : ', (rt_gridprep/rt_tot) * 100.
+        write(fnr,'(a,1x,f9.2)') '* gridding      : ', (rt_gridding/rt_tot) * 100.
         write(fnr,'(a,1x,f9.2)') 'eonorm          : ', (rt_norm/rt_tot) * 100.
         write(fnr,'(a,1x,f9.2)') '% accounted for : ', ((rt_init+rt_rec+rt_norm)/rt_tot) * 100.
         call fclose(fnr)
