@@ -32,12 +32,13 @@ type, extends(image) :: reconstructor
     integer, allocatable        :: ind_map(:,:,:)               !< logical to physical index mapping (2D)
     real                        :: winsz          = RECWINSZ    !< window half-width
     real                        :: alpha          = KBALPHA     !< oversampling ratio
-    real                        :: shconst_rec(3) = [0.,0.,0.]  !< memoized constants for origin shifting 
+    real                        :: shconst_rec(3) = 0.          !< memoized constants for origin shifting 
     integer                     :: wdim           = 0           !< dim of interpolation matrix
     integer                     :: nyq            = 0           !< Nyqvist Fourier index
     integer                     :: ldim_img(3)    = 0           !< logical dimension of the original image
     integer                     :: ldim_exp(3,2)  = 0           !< logical dimension of the expanded complex matrix
     integer                     :: lims(3,2)      = 0           !< Friedel limits
+    integer                     :: rho_shape(3)   = 0           !< shape of sampling density matrix
     integer                     :: cyc_lims(3,2)  = 0           !< redundant limits
     type(CTFFLAGTYPE)           :: ctf                          !< ctf flag <yes|no|mul|flip>
     logical                     :: tfastig        = .false.     !< astigmatic CTF or not
@@ -55,7 +56,7 @@ type, extends(image) :: reconstructor
     ! I/O
     procedure          :: write_rho
     procedure          :: read_rho
-    ! INTERPOLATION
+    ! CONVOLUTION INTERPOLATION
     procedure, private :: insert_fplane_1
     procedure, private :: insert_fplane_2
     generic            :: insert_fplane => insert_fplane_1, insert_fplane_2
@@ -83,7 +84,7 @@ contains
         class(params),        intent(in)    :: p      !< parameters object
         logical, optional,    intent(in)    :: expand !< expand flag
         real    :: inv1, inv2
-        integer :: rho_shape(3), dim, h, k, sh
+        integer :: dim, h, k, sh
         logical :: l_expand
         if(.not. self%exists()) stop 'construct image before allocating rho; alloc_rho; simple_reconstructor'
         if(      self%is_2d() ) stop 'only for volumes; alloc_rho; simple_reconstructor'
@@ -113,12 +114,12 @@ contains
         self%cyc_lims    = self%loop_lims(3)
         self%shconst_rec = self%get_shconst() 
         ! Work out dimensions of the rho array
-        rho_shape(1)    = fdim(self%ldim_img(1))
-        rho_shape(2:3)  = self%ldim_img(2:3)
+        self%rho_shape(1)    = fdim(self%ldim_img(1))
+        self%rho_shape(2:3)  = self%ldim_img(2:3)
         ! Letting FFTW do the allocation in C ensures that we will be using aligned memory
-        self%kp = fftwf_alloc_real(int(product(rho_shape),c_size_t))
+        self%kp = fftwf_alloc_real(int(product(self%rho_shape),c_size_t))
         ! Set up the rho array which will point at the allocated memory
-        call c_f_pointer(self%kp,self%rho,rho_shape)
+        call c_f_pointer(self%kp,self%rho,self%rho_shape)
         self%rho_allocated = .true.
         if( l_expand )then
             ! setup expanded matrices
@@ -137,9 +138,7 @@ contains
         if( self%ctf%flag .ne. CTFFLAG_NO)then
             allocate(self%ctf_ang(self%cyc_lims(1,1):self%cyc_lims(1,2), self%cyc_lims(2,1):self%cyc_lims(2,2)),&
             &self%ctf_sqSpatFreq(self%cyc_lims(1,1):self%cyc_lims(1,2), self%cyc_lims(2,1):self%cyc_lims(2,2)), source=0.)
-            !$omp parallel do collapse(2) default(shared) schedule(static)&
-            !$omp private(h,k,sh,inv1,inv2)&
-            !$omp proc_bind(close)
+            !$omp parallel do collapse(2) default(shared) schedule(static) private(h,k,sh,inv1,inv2) proc_bind(close)
             do h=self%cyc_lims(1,1),self%cyc_lims(1,2)
                 do k=self%cyc_lims(2,1),self%cyc_lims(2,2)
                     sh = nint(hyp(real(h),real(k)))
@@ -162,25 +161,66 @@ contains
 
     ! SETTERS
 
-    ! resets the reconstructor object before reconstruction
+    ! Resets the reconstructor object before reconstruction.
+    ! The shared memory used in a parallel section should be initialised 
+    ! with a (redundant) parallel section, because of how pages are organised.
+    ! Memory otherwise becomes associated with the single thread used for
+    ! allocation, causing load imbalance. This will reduce cache misses.
     subroutine reset( self )
         class(reconstructor), intent(inout) :: self !< this instance
-        self     = cmplx(0.,0.)
-        self%rho = 0.
+        integer :: i, j, k
+        call self%set_ft(.true.)
+        !$omp parallel do collapse(3) default(shared) schedule(static) private(i,j,k) proc_bind(close)
+        do i=1,self%rho_shape(1)
+            do j=1,self%rho_shape(2)
+                do k=1,self%rho_shape(3)
+                    call self%set_cmat_at([i,j,k], cmplx(0.,0.))
+                    self%rho(i,j,k) = 0.
+                end do
+            end do
+        end do
+        !$omp end parallel do
     end subroutine reset
 
     ! resets the reconstructor expanded matrices before reconstruction
+    ! The shared memory used in a parallel section should be initialised 
+    ! with a (redundant) parallel section, because of how pages are organised.
+    ! Memory otherwise becomes associated with the single thread used for
+    ! allocation, causing load imbalance. This will reduce cache misses.
     subroutine reset_exp( self )
         class(reconstructor), intent(inout) :: self !< this instance
-        if(allocated(self%cmat_exp))self%cmat_exp = cmplx(0.,0.)
-        if(allocated(self%rho_exp)) self%rho_exp  = 0.
+        integer :: h, k, l
+        if(allocated(self%cmat_exp) .and. allocated(self%rho_exp) )then
+            !$omp parallel do collapse(3) default(shared) schedule(static) private(h,k,l) proc_bind(close)
+            do h=self%ldim_exp(1,1),self%ldim_exp(1,2)
+                do k=self%ldim_exp(2,1),self%ldim_exp(2,2)
+                    do l=self%ldim_exp(3,1),self%ldim_exp(3,2)
+                        self%cmat_exp(h,k,l) = cmplx(0.,0.)
+                        self%rho_exp(h,k,l)  = 0.
+                    end do
+                end do
+            end do
+            !$omp end parallel do
+        endif
     end subroutine reset_exp
 
+    ! the same trick is applied here (see above) since this is after (single-threaded) read
     subroutine apply_weight( self, w )
         class(reconstructor), intent(inout) :: self
         real,                 intent(in)    :: w
-        if(allocated(self%cmat_exp)) self%cmat_exp = self%cmat_exp * w
-        if(allocated(self%rho_exp))  self%rho_exp  = self%rho_exp  * w
+        integer :: h, k, l
+        if(allocated(self%cmat_exp) .and. allocated(self%rho_exp) )then
+            !$omp parallel do collapse(3) default(shared) schedule(static) private(h,k,l) proc_bind(close)
+            do h=self%cyc_lims(1,1),self%cyc_lims(1,2)
+                do k=self%cyc_lims(2,1),self%cyc_lims(2,2)
+                    do l=self%cyc_lims(3,1),self%cyc_lims(3,2)
+                        self%cmat_exp(h,k,l) = self%cmat_exp(h,k,l) * w
+                        self%rho_exp(h,k,l)  = self%rho_exp(h,k,l)  * w
+                    end do
+                end do
+            end do
+            !$omp end parallel do
+        endif
     end subroutine apply_weight
 
     ! GETTERS
@@ -221,7 +261,7 @@ contains
         call fclose(filnum,errmsg='read_rho; simple_reconstructor closing '//trim(kernam))
     end subroutine read_rho
 
-    ! INTERPOLATION
+    ! CONVOLUTION INTERPOLATION
 
     !> insert Fourier plane
     subroutine insert_fplane_1( self, o, fpl, pwght )
@@ -304,8 +344,6 @@ contains
         end do
         !$omp end parallel do
     end subroutine insert_fplane_1
-
-
 
     !> insert or un-insert Fourier plane peaks
     subroutine insert_fplane_2( self, os, fpl, noris, pwght )
@@ -415,12 +453,27 @@ contains
         call Wprev_img%new(self%ldim_img, self%get_smpd())
         call W_img%set_ft(.true.)
         call Wprev_img%set_ft(.true.)
+        ! redundant parallel initialisation because the First Touch policy of OpenMP 
+        ! distributes the pages over the memory of the system to allow better cache
+        ! utilisation
+        !$omp parallel do collapse(3) default(shared) schedule(static)&
+        !$omp private(h,k,m,phys) proc_bind(close)
+        do h = self%lims(1,1),self%lims(1,2)
+            do k = self%lims(2,1),self%lims(2,2)
+                do m = self%lims(3,1),self%lims(3,2)
+                    phys  = W_img%comp_addr_phys([h,k,m])
+                    call W_img%set_cmat_at(phys,cmplx(0., 0.))
+                    call Wprev_img%set_cmat_at(phys,cmplx(0., 0.))
+                end do
+            end do
+        end do
+        !$omp end parallel do
         ! kernel
         kbwin = kbinterpol(winsz, self%alpha)
         ! weights init to 1.
         W_img = one
         do iter = 1, maxits_here
-            Wprev_img  = W_img 
+            Wprev_img = W_img 
             ! W <- W * rho
             !$omp parallel do collapse(3) default(shared) schedule(static)&
             !$omp private(h,k,m,phys) proc_bind(close)

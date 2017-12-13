@@ -120,6 +120,7 @@ contains
     subroutine reset_all( self )
         class(eo_reconstructor), intent(inout) :: self
         call self%reset_eos
+        call self%reset_eoexp
         call self%reset_sum
     end subroutine reset_all
 

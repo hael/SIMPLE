@@ -65,7 +65,6 @@ type prime3D_srch
     character(len=STDLEN)            :: opt            = ''        !< optimizer flag
     logical                          :: doshift        = .true.    !< 2 indicate whether 2 serch shifts
     logical                          :: exists         = .false.   !< 2 indicate existence
-
   contains
     procedure          :: new
     procedure          :: exec_prime3D_srch
@@ -108,6 +107,8 @@ contains
         class(build),    intent(inout) :: b
         class(params),   intent(inout) :: p
         logical, target, intent(in)    :: ptcl_mask(p%fromp:p%top)
+        integer,        allocatable :: pinds(:)
+        type(ran_tabu), allocatable :: rts(:)
         type(ran_tabu) :: rt
         integer        :: i, istate, iproj, iptcl, prev_state
         integer        :: nnnrefs, cnt, prev_ref, nrefs, nptcls
@@ -121,15 +122,37 @@ contains
         endif
         ! parameters
         nrefs  = p%nspace * p%nstates
-        nptcls = count(ptcl_mask) 
-        ! reference projection directions
-        allocate(proj_space_euls( 1:nptcls, nrefs,3), source=0. )
-        allocate(proj_space_shift(1:nptcls, nrefs,2), source=0. )
-        allocate(proj_space_corrs(1:nptcls, nrefs),   source=-1.)
-        allocate(proj_space_inds( 1:nptcls, nrefs),   source=0  )
-        allocate(proj_space_state(1:nptcls, nrefs),   source=0  )
-        allocate(proj_space_proj( 1:nptcls, nrefs),   source=0  )
-        do i = 1, nptcls
+        nptcls = count(ptcl_mask)
+        ! particle index mapping
+        allocate(pinds(p%fromp:p%top))
+        pinds = 0
+        cnt   = 0
+        do i=p%fromp,p%top
+            if( ptcl_mask(i) )then
+                cnt = cnt + 1
+                pinds(i) = cnt
+            endif
+        end do
+        ! set patcl_mask pointer
+        ptcl_mask_ptr => ptcl_mask
+        ! shared-memory arrays
+        allocate(proj_space_euls(nptcls,nrefs,3), proj_space_shift(nptcls,nrefs,2),&
+            &proj_space_corrs(nptcls,nrefs), proj_space_inds(nptcls,nrefs),&
+            &proj_space_state(nptcls,nrefs), proj_space_proj(nptcls,nrefs),&
+            &prev_proj(nptcls) )
+        ! The shared memory used in a parallel section should be initialised 
+        ! with a (redundant) parallel section, because of how pages are organised.
+        ! Memory otherwise becomes associated with the single thread used for
+        ! allocation, causing load imbalance. This will reduce cache misses.
+        !$omp parallel default(shared) private(i,iptcl,cnt,istate,iproj) proc_bind(close)
+        !$omp do schedule(static) 
+        do i=1,nptcls
+            proj_space_shift(i,:,:) = 0.
+            proj_space_corrs(i,:)   = -1.
+            proj_space_inds( i,:)   = 0.
+            proj_space_state(i,:)   = 0.
+            proj_space_proj( i,:)   = 0.
+            ! reference projection directions
             cnt = 0
             do istate=1,p%nstates
                 do iproj=1,p%nspace
@@ -139,9 +162,14 @@ contains
                     proj_space_euls(i, cnt,:) = b%e%get_euler(iproj)
                 enddo
             enddo
+        end do
+        !$omp end do nowait
+        !$omp do schedule(static)
+        do iptcl = p%fromp, p%top
+            if( pinds(iptcl) > 0 ) prev_proj(pinds(iptcl)) = b%e%find_closest_proj(b%a%get_ori(iptcl))
         enddo
-        ! set patcl_mask pointer
-        ptcl_mask_ptr => ptcl_mask
+        !$omp end do nowait
+        !$omp end parallel
         ! projection direction peaks, eo & CTF transfer
         select case(trim(p%refine))
             case('het','hetsym')
@@ -173,70 +201,81 @@ contains
                     endif
                 enddo
         end select
-        ! search order & previous projection direction
-        allocate(prev_proj(nptcls), source=0)
-        cnt = 0
-        do iptcl = p%fromp, p%top
-            if( ptcl_mask(iptcl) )then
-                cnt = cnt + 1
-                prev_proj(cnt) = b%e%find_closest_proj(b%a%get_ori(iptcl))
-            endif
-        enddo
+        ! refine mode specific allocations and initialisations
         select case( trim(p%refine) )
             case( 'het' )
-                allocate(het_corrs(1:nptcls,p%nstates),source=-1.)
-                allocate(prev_states(1:nptcls),source=0)
+                allocate(het_corrs(nptcls,p%nstates))
+                allocate(prev_states(nptcls))
+                !$omp parallel do default(shared) private(i) schedule(static) proc_bind(close)
+                do i=1,nptcls
+                    het_corrs(i,:) = -1.
+                    prev_states(i) = 0
+                end do
+                !$omp end parallel do
             case( 'hetsym' )
-                allocate(het_corrs(1:nptcls,p%nstates),source=-1.)
-                allocate(prev_states(1:nptcls),source=0)
-                allocate(symprojs(1:nptcls, p%nstates), source=0)
+                allocate(het_corrs(nptcls,p%nstates),source=-1.)
+                allocate(prev_states(nptcls),source=0)
+                allocate(symprojs(nptcls, p%nstates), source=0)
+                !$omp parallel do default(shared) private(i) schedule(static) proc_bind(close)
+                do i=1,nptcls
+                    het_corrs(i,:) = -1.
+                    prev_states(i) = 0
+                    symprojs(i,:)  = 0
+                end do
+                !$omp end parallel do
             case( 'states' )
-                allocate(srch_order(1:nptcls, p%nnn), source=0)
-                rt = ran_tabu(p%nnn)
-                cnt = 0
+                allocate(srch_order(nptcls, p%nnn))
+                !$omp parallel do default(shared) private(iptcl,prev_state,prev_ref) schedule(static) proc_bind(close)
                 do iptcl = p%fromp, p%top
-                    if( ptcl_mask(iptcl) )then
-                        cnt = cnt + 1
-                        prev_state        = b%a%get_state(iptcl)
-                        srch_order(cnt,:) = b%nnmat(prev_proj(cnt),:) + (prev_state - 1) * p%nspace
-                        call rt%reset
-                        prev_ref = (prev_state - 1) * p%nspace + prev_proj(cnt)
-                        call put_last(prev_ref, srch_order(cnt,:))
+                    if( pinds(iptcl) > 0 )then
+                        prev_state = b%a%get_state(iptcl)
+                        srch_order(pinds(iptcl),:) = b%nnmat(prev_proj(pinds(iptcl)),:) + (prev_state - 1) * p%nspace
+                        prev_ref = (prev_state - 1) * p%nspace + prev_proj(pinds(iptcl))
+                        call put_last(prev_ref, srch_order(pinds(iptcl),:))
                     endif
                 enddo
+                !$omp end parallel do
             case( 'neigh','shcneigh', 'greedyneigh' )
                 nnnrefs =  p%nnn * p%nstates
-                allocate(srch_order(1:nptcls, nnnrefs), source=0)
-                rt  = ran_tabu(nnnrefs)
-                cnt = 0
+                allocate(srch_order(nptcls, nnnrefs), rts(nptcls))
+                do i=1,nptcls
+                    rts(i) = ran_tabu(nnnrefs)
+                end do
+                !$omp parallel do default(shared) private(iptcl,prev_state,prev_ref,istate,i) schedule(static) proc_bind(close)
                 do iptcl = p%fromp, p%top
-                    if( ptcl_mask(iptcl) )then
-                        cnt        = cnt + 1
+                    if( pinds(iptcl) > 0 )then
                         prev_state = b%a%get_state(iptcl)
-                        prev_ref   = (prev_state - 1) * p%nspace + prev_proj(cnt)
+                        prev_ref   = (prev_state - 1) * p%nspace + prev_proj(pinds(iptcl))
                         do istate = 0, p%nstates - 1
                             i = istate * p%nnn + 1
-                            srch_order(cnt,i:i + p%nnn - 1) = b%nnmat(prev_proj(cnt),:) + istate * p%nspace
+                            srch_order(pinds(iptcl),i:i + p%nnn - 1) = b%nnmat(prev_proj(pinds(iptcl)),:) + istate * p%nspace
                         enddo
-                        call rt%reset
-                        call rt%shuffle(srch_order(cnt,:))
-                        call put_last(prev_ref, srch_order(cnt,:))
+                        call rts(pinds(iptcl))%shuffle(srch_order(pinds(iptcl),:))
+                        call put_last(prev_ref, srch_order(pinds(iptcl),:))
                     endif
                 enddo
+                !$omp end parallel do
+                do i=1,nptcls
+                    call rts(i)%kill
+                end do
             case('no','shc','snhc','greedy')
-                allocate(srch_order(1:nptcls,nrefs), source=0)
-                rt = ran_tabu(nrefs)
-                cnt = 0
+                allocate(srch_order(nptcls,nrefs), rts(nptcls))
+                do i=1,nptcls
+                    rts(i) = ran_tabu(nrefs)
+                end do
+                !$omp parallel do default(shared) private(iptcl,prev_state,prev_ref,istate,i) schedule(static) proc_bind(close)
                 do iptcl = p%fromp, p%top
-                    if( ptcl_mask(iptcl) )then
-                        cnt = cnt + 1
-                        call rt%reset
-                        call rt%ne_ran_iarr( srch_order(cnt,:) )
+                    if( pinds(iptcl) > 0 )then
+                        call rts(pinds(iptcl))%ne_ran_iarr(srch_order(pinds(iptcl),:))
                         prev_state = b%a%get_state(iptcl)
-                        prev_ref   = (prev_state - 1) * p%nspace + prev_proj(cnt)
-                        call put_last(prev_ref, srch_order(cnt,:))
+                        prev_ref   = (prev_state - 1) * p%nspace + prev_proj(pinds(iptcl))
+                        call put_last(prev_ref, srch_order(pinds(iptcl),:))
                     endif
                 enddo
+                !$omp end parallel do
+                do i=1,nptcls
+                    call rts(i)%kill
+                end do
             case DEFAULT
                 stop 'Unknown refinement mode; simple_hadamard3D_matcher; prep4primesrch3D'
         end select

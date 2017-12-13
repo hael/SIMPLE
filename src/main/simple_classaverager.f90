@@ -183,62 +183,6 @@ contains
             if( phaseplate ) precs(cnt)%phshift = a_here%get(iptcl,'phshift')
         end do
         l_hard_assign = .true.
-        ! if( present(prime3Dsrchobj) )then
-        !     l_reduce_projs = .false.
-        !     if( pp%nspace > NSPACE_BALANCE )then
-        !         ! reduce # projection directions 
-        !         ! used for the class average representation
-        !         call a_here%reduce_projs(NSPACE_BALANCE, pp%nsym, pp%eullims)
-        !         l_reduce_projs = .true.
-        !     endif
-        !     cnt = 0
-        !     do iptcl=istart,iend
-        !         cnt = cnt + 1
-        !         ! inclusion condition
-        !         if( precs(cnt)%pind > 0 )then
-        !             ! ori template
-        !             orientation = a_here%get_ori(iptcl)
-        !             if( pp%npeaks > 1 )then
-        !                 l_hard_assign = .false.
-        !                 ! get orientation distribution
-        !                 call prime3Dsrchobj(iptcl)%get_oris(prime3D_oris, orientation)
-        !                 if( l_reduce_projs ) call prime3D_oris%reduce_projs(NSPACE_BALANCE, pp%nsym, pp%eullims)
-        !                 ori_weights = prime3D_oris%get_all('ow')
-        !                 n_incl = count(ori_weights > TINY)
-        !                 if( n_incl >= 1 )then
-        !                     ! allocate & set info in record
-        !                     if( allocated(precs(cnt)%classes)  ) deallocate(precs(cnt)%classes)
-        !                     if( allocated(precs(cnt)%inpl_inds)) deallocate(precs(cnt)%inpl_inds)
-        !                     if( allocated(precs(cnt)%states)   ) deallocate(precs(cnt)%states)
-        !                     if( allocated(precs(cnt)%ows)      ) deallocate(precs(cnt)%ows)
-        !                     if( allocated(precs(cnt)%e3s)      ) deallocate(precs(cnt)%e3s)
-        !                     if( allocated(precs(cnt)%shifts)   ) deallocate(precs(cnt)%shifts)
-        !                     allocate( precs(cnt)%classes(n_incl),  precs(cnt)%states(n_incl),&
-        !                               precs(cnt)%ows(n_incl),      precs(cnt)%e3s(n_incl),&
-        !                               precs(cnt)%shifts(n_incl,2), precs(cnt)%inpl_inds(n_incl), stat=alloc_stat )
-        !                     call alloc_errchk('cavger_new; simple_classaverager, record arrays', alloc_stat)
-        !                     cnt_ori = 0
-        !                     do iori=1,prime3D_oris%get_noris()
-        !                         if( ori_weights(iori) > TINY )then
-        !                             cnt_ori = cnt_ori + 1
-        !                             precs(cnt)%classes(cnt_ori)   = nint(prime3D_oris%get(iori, 'proj'))
-        !                             precs(cnt)%inpl_inds(cnt_ori) = nint(prime3D_oris%get(iori, 'proj'))
-        !                             precs(cnt)%states(cnt_ori)    = nint(prime3D_oris%get(iori, 'inpl'))
-        !                             precs(cnt)%ows(cnt_ori)       = prime3D_oris%get(iori, 'w')
-        !                             precs(cnt)%e3s(cnt_ori)       = prime3D_oris%e3get(iori)
-        !                             precs(cnt)%shifts(cnt_ori,1)  = prime3D_oris%get(iori, 'x')
-        !                             precs(cnt)%shifts(cnt_ori,2)  = prime3D_oris%get(iori, 'y')
-        !                         endif
-        !                     end do
-        !                 else
-        !                     precs(cnt)%pind = 0
-        !                 endif
-        !                 deallocate(ori_weights)
-        !                 call prime3D_oris%kill
-        !             endif
-        !         endif
-        !     end do
-        ! else
         cnt = 0
         do iptcl=istart,iend
             cnt = cnt + 1

@@ -25,7 +25,7 @@ type :: image
     real                                   :: smpd                 !< sampling distance
     type(ftiter)                           :: fit                  !< Fourier iterator object
     type(c_ptr)                            :: p                    !< c pointer for fftw allocation
-    real(kind=c_float), pointer            :: rmat(:,:,:)=>null()  !< image pixels/voxels (in data)
+    real(kind=c_float),            pointer :: rmat(:,:,:)=>null()  !< image pixels/voxels (in data)
     complex(kind=c_float_complex), pointer :: cmat(:,:,:)=>null()  !< Fourier components
     real                                   :: shconst(3)           !< shift constant
     type(c_ptr)                            :: plan_fwd             !< fftw plan for the image (fwd)
@@ -1114,7 +1114,7 @@ contains
     end subroutine add2_cmat_at
 
     !! set comp to cmat at index phys
-    subroutine set_cmat_at( self , phys , comp)
+    subroutine set_cmat_at( self, phys, comp)
         class(image), intent(in) :: self
         integer, intent(in) :: phys(3)
         complex, intent(in) :: comp

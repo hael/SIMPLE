@@ -2538,6 +2538,12 @@ select case(prg)
         ! parse command line
         if( describe ) call print_doc_split
         call cline%parse(keys_required(:1), keys_optional(:4))
+        ! sanity check
+        if( cline%defined('stk') .or. cline%defined('stktab') )then
+            ! all ok
+        else
+            stop 'stk or stktab need to be part of command line!'
+        endif
         ! execute
         call xsplit%execute(cline)
     case DEFAULT

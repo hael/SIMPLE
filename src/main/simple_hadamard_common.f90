@@ -620,6 +620,7 @@ contains
                         call b%recvols(istate)%new([p%boxpd, p%boxpd, p%boxpd], p%smpd)
                         call b%recvols(istate)%alloc_rho(p)
                         call b%recvols(istate)%reset
+                        call b%recvols(istate)%reset_exp
                         if( p%l_frac_update )then
                             allocate(recname, source=VOL_FBODY//int2str_pad(istate,2)//'_part'//part_str//p%ext)
                             allocate(rhoname, source='rho_'//VOL_FBODY//int2str_pad(istate,2)//'_part'//part_str//p%ext)
