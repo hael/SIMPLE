@@ -228,7 +228,11 @@ contains
             call b%vol%zero_background
             call b%vol%mul(mskvol)
         else
-            call b%vol%mask(p%msk, 'soft')
+            if( p%l_innermsk )then
+                call b%vol%mask(p%msk, 'soft', inner=p%inner, width=p%width)
+            else
+                call b%vol%mask(p%msk, 'soft')
+            endif
         endif
         ! output
         p%outvol = add2fbody(trim(p%vols(state)), p%ext, '_pproc')
