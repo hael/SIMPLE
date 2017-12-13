@@ -57,7 +57,7 @@ contains
             ! deallocate(rec_base_str,rho_base_str,rec_base_str_part,rho_base_str_part)
         end do
         ! syscalls to del files
-        call sys_del_files('VOLASSEMBLE_STATE', '')
+        ! call sys_del_files('VOLASSEMBLE_STATE', '')
     end subroutine qsys_cleanup
 
     subroutine terminate_if_prg_in_cwd( prg )
