@@ -45,6 +45,7 @@ struct JSONResponse {
 	std::string													error;
 	std::vector< std::map<std::string, std::string> >			rerunjob;
 	std::string													JSONstring;
+	std::string													particlecount;
 };
 
 struct UniDoc {
@@ -1777,7 +1778,7 @@ void viewCtffit (JSONResponse* response, struct http_message* message) {
 		if(fileExists(directory + "/ctffit_out.simple")){
 			unidoc = new UniDoc();
 			readUniDoc(unidoc, directory + "/ctffit_out.simple");
-			response->inputfilename = "ctffit_out.simple.";
+			response->inputfilename = "ctffit_out.simple";
 			for(datait = 0; datait < unidoc->data.size(); datait++){
 				micrographmap.clear();
 				micrographmap["id"] = std::to_string(datait);
@@ -1838,6 +1839,12 @@ void viewExtract (JSONResponse* response, struct http_message* message) {
 				iterationmap["particlecount"] = value;
 				response->iterations.push_back(iterationmap);
 			}
+			delete iterationsunidoc;
+		}
+		if(fileExists(directory + "/extract_out.simple")){
+			iterationsunidoc = new UniDoc();
+			readUniDoc(iterationsunidoc, directory + "/extract_out.simple");
+			response->particlecount = std::to_string(iterationsunidoc.size());
 			delete iterationsunidoc;
 		}
 	}
@@ -3064,6 +3071,10 @@ void encodeJSON(JSONResponse* response){
 	
 	if (response->error.size() > 0) {
 		response->JSONstring += "\"error\" : \"" + response->error + "\",";
+	}
+	
+	if (response->particlecount.size() > 0) {
+		response->JSONstring += "\"particlecount\" : \"" + response->particlecount + "\",";
 	}
 	
 	response->JSONstring.pop_back();

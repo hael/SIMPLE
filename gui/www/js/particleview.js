@@ -19,7 +19,8 @@ function viewParticleViewInit (data) {
 	var micrographs = JSONdata.iterations;
 	var rootdirectory = document.getElementById('rootdirectory');
 	rootdirectory.value = JSONdata.rootdirectory;
-	
+	var particlecount = document.getElementById('particlecount');
+	particlecount.innerHTML = JSONdata.particlecount;
 	var micrographselector = document.getElementById('micrographselector');
 	
 	for(var i = 0; i < micrographs.length; i++){
