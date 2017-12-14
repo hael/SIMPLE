@@ -1439,6 +1439,8 @@ void simpleLocalSubmit(std::string& command, std::string& directory, int& jobid,
 			preprocPost(directory);
 		}else if (jobtype == "ctffind"){
 			ctffindPost(directory);
+		}else if (jobtype == "ctffit"){
+			ctffitPost(directory);	
 		}else if (jobtype == "extract"){
 			extractPost(directory);
 		}
@@ -1603,10 +1605,10 @@ void simpleJob (JSONResponse* response, struct http_message* message) {
 					ctffindPre("", argval);
 					command += " filetab=micrographs.txt";
 			}else if (program == "ctffit" && getRequestVariable(message, "micrographsdirectory", argval)){
-					ctffindPre(argval, "");
+					ctffitPre(argval, "");
 					command += " filetab=micrographs.txt";
 			}else if (program == "ctffit" && getRequestVariable(message, "unbluroutput", argval)){
-					ctffindPre("", argval);
+					ctffitPre("", argval);
 					command += " filetab=micrographs.txt";
 			}else if (program == "extract" && getRequestVariable(message, "boxfilesdirectory", argval) && getRequestVariable(message, "ctffindoutput", argval2)){
 					extractPre(argval, "", argval2);
