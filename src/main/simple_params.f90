@@ -863,13 +863,7 @@ contains
         call mkfnames
         ! check box
         if( self%box > 0 .and. self%box < 26 ) stop 'box size need to be larger than 26; simple_params'
-        ! fractional search and volume update
-        if( self%update_frac <= .99)then
-            if( self%update_frac < 0.01 )stop 'UPDATE_FRAC is too small 1; simple_params :: constructor'
-            if( nint(self%update_frac*real(self%nptcls)) < 1 )&
-                &stop 'UPDATE_FRAC is too small 2; simple_params :: constructor'
-            self%l_frac_update = .true.
-        endif
+        
         ! set refs_even and refs_odd
         if( cline%defined('refs') )then
             self%refs_even = add2fbody(self%refs, self%ext, '_even')
@@ -943,6 +937,13 @@ contains
                     endif
                 endif
             endif
+        endif
+        ! fractional search and volume update (nneds to be here for stktab exec route)
+        if( self%update_frac <= .99)then
+            if( self%update_frac < 0.01 )stop 'UPDATE_FRAC is too small 1; simple_params :: constructor'
+            if( nint(self%update_frac*real(self%nptcls)) < 1 )&
+                &stop 'UPDATE_FRAC is too small 2; simple_params :: constructor'
+            self%l_frac_update = .true.
         endif
         ! if we are doing chunk-based parallelisation...
         self%l_chunk_distr = .false.
