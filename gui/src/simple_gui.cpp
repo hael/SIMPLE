@@ -664,7 +664,7 @@ void ctffindPre (std::string micrographsdirectory, std::string unbluroutput){
 	if(filetab.is_open()){
 	//	status = mkdir("micrographs", S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
 		
-		if(micrographsdirectory.size() > 0 && fileExists(micrographsdirectory) && status == 0){
+		if(micrographsdirectory.size() > 0 && fileExists(micrographsdirectory)){
 			status = symlink(micrographsdirectory.c_str(), "micrographs");
 			listFilesInDirectory(files, "micrographs" );
 			outit = 0;
@@ -755,6 +755,115 @@ void ctffindPost (std::string directory){
 	delete ctfparams;
 	
 	writeUniDoc(ctffindunidocin, directory + "/ctffind_out.simple");
+	
+	delete ctffindunidocin;
+}
+
+void ctffitPre (std::string micrographsdirectory, std::string unbluroutput){
+	
+	UniDoc* 									outputunidoc;
+	UniDoc* 									unidoc;
+	std::ofstream								filetab;								
+	std::vector<std::string> 					files;
+	std::vector<std::string>::iterator			filesit;
+	int											it;
+	int											outit;
+	std::string									value;
+	std::string									micrographpath;
+	std::string									micrographlink;
+	char*										dname;
+	char*										dirc;
+	int											status;
+	
+	outputunidoc = new UniDoc();
+	
+	filetab.open("micrographs.txt");
+	
+	if(filetab.is_open()){
+		if(micrographsdirectory.size() > 0 && fileExists(micrographsdirectory)){
+			status = symlink(micrographsdirectory.c_str(), "micrographs");
+			listFilesInDirectory(files, "micrographs" );
+			outit = 0;
+			for(it = 0; it < files.size(); it++) {
+				if(files[it].find(".mrc") != std::string::npos) {
+					outputunidoc->data.push_back("");
+					addUniDocKeyVal(outputunidoc, outit, "intg", "micrographs/" + files[it]);
+					filetab << micrographsdirectory + "/" + files[it] + "\n";
+					outit++;
+				}
+			}
+		} else if(unbluroutput.size() > 0 && fileExists(unbluroutput)){
+			unidoc = new UniDoc();
+			readUniDoc(unidoc, unbluroutput);
+			dirc = strdup(unbluroutput.c_str());
+			dname = dirname(dirc);
+			for(it = 0; it < unidoc->data.size(); it++){
+				outputunidoc->data.push_back("");
+				getUniDocValue(unidoc, it, "intg", value);
+				addUniDocKeyVal(outputunidoc, it, "intg", std::string(dname) + "/" + value);
+				getUniDocValue(unidoc, it, "forctf", value);
+				addUniDocKeyVal(outputunidoc, it, "forctf", std::string(dname) + "/" + value);
+				filetab << std::string(dname) + "/" + value + "\n";
+				getUniDocValue(unidoc, it, "pspec", value);
+				addUniDocKeyVal(outputunidoc, it, "pspec", std::string(dname) + "/" + value);
+				getUniDocValue(unidoc, it, "thumb", value);
+				addUniDocKeyVal(outputunidoc, it, "thumb", std::string(dname) + "/" + value);
+			}
+			delete unidoc;
+		}
+	}
+
+	writeUniDoc(outputunidoc, "ctffit_in.simple");
+	filetab.close();
+	delete outputunidoc;
+}
+
+void ctffitPost (std::string directory){
+	
+	int											it;
+	bool										newmicrograph;
+	UniDoc* 									ctffindunidocin;
+	UniDoc*										ctfparams;
+	std::string									intgfilename;
+	std::string									ctffindfit;
+	std::string									value;
+	
+	ctffindunidocin = new UniDoc();
+	ctfparams = new UniDoc();
+	
+	if(fileExists(directory + "/ctffit_in.simple") && fileExists(directory + "/ctffit_output_merged.txt")){
+		readUniDoc(ctffindunidocin, directory + "/ctffit_in.simple");
+		readUniDoc(ctfparams, directory + "/ctffit_output_merged.txt");
+		
+		for(it = 0; it < ctffindunidocin->data.size(); it++){
+			getUniDocValue(ctfparams, it, "kv", value);
+			addUniDocKeyVal(ctffindunidocin, it, "kv", value);
+			getUniDocValue(ctfparams, it, "cs", value);
+			addUniDocKeyVal(ctffindunidocin, it, "cs", value);
+			getUniDocValue(ctfparams, it, "fraca", value);
+			addUniDocKeyVal(ctffindunidocin, it, "fraca", value);
+			getUniDocValue(ctfparams, it, "dfx", value);
+			addUniDocKeyVal(ctffindunidocin, it, "dfx", value);
+			getUniDocValue(ctfparams, it, "dfy", value);
+			addUniDocKeyVal(ctffindunidocin, it, "dfy", value);
+			getUniDocValue(ctfparams, it, "angast", value);
+			addUniDocKeyVal(ctffindunidocin, it, "angast", value);
+			getUniDocValue(ctfparams, it, "ctfres", value);
+			addUniDocKeyVal(ctffindunidocin, it, "ctfres", value);
+			if(getUniDocValue(ctffindunidocin, it, "forctf", ctffindfit)){
+				ctffindfit.replace(ctffindfit.end() - 4, ctffindfit.end(), "_ctffit_diag.mrc");
+			} else if (getUniDocValue(ctffindunidocin, it, "intg", ctffindfit)){
+				ctffindfit.replace(ctffindfit.end() - 4, ctffindfit.end(), "_ctffit_diag.mrc");
+			}
+			if(fileExists(ctffindfit)){
+				addUniDocKeyVal(ctffindunidocin, it, "ctffindfit", ctffindfit);
+			} 
+		} 
+	} 
+	
+	delete ctfparams;
+	
+	writeUniDoc(ctffindunidocin, directory + "/ctffit_out.simple");
 	
 	delete ctffindunidocin;
 }
@@ -1491,6 +1600,12 @@ void simpleJob (JSONResponse* response, struct http_message* message) {
 					ctffindPre(argval, "");
 					command += " filetab=micrographs.txt";
 			}else if (program == "ctffind" && getRequestVariable(message, "unbluroutput", argval)){
+					ctffindPre("", argval);
+					command += " filetab=micrographs.txt";
+			}else if (program == "ctffit" && getRequestVariable(message, "micrographsdirectory", argval)){
+					ctffindPre(argval, "");
+					command += " filetab=micrographs.txt";
+			}else if (program == "ctffit" && getRequestVariable(message, "unbluroutput", argval)){
 					ctffindPre("", argval);
 					command += " filetab=micrographs.txt";
 			}else if (program == "extract" && getRequestVariable(message, "boxfilesdirectory", argval) && getRequestVariable(message, "ctffindoutput", argval2)){
