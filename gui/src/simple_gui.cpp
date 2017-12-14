@@ -43,6 +43,7 @@ struct JSONResponse {
 	std::string													inputfilename;
 	std::string													logfile;
 	std::string													error;
+	std::vector< std::map<std::string, std::string> >			rerunjob;
 	std::string													JSONstring;
 };
 
@@ -582,13 +583,13 @@ void writeRelionStar(UniDoc* unidoc, std::string filename){
 	delete relionstar;
 }
 
-void addJob (std::string& jobname, std::string& jobdescription, std::string& jobfolder, std::string& jobtype, std::string& table, int &jobid) {
+void addJob (std::string& jobname, std::string& jobdescription, std::string& jobfolder, std::string& jobtype, std::string& table, std::string& runstring, int &jobid) {
 	
 	std::string				databasepath;
 	
 	getDatabaseLocation(databasepath);
 	
-	SQLQuery(databasepath, "INSERT INTO " + std::string(table) + "(jobname, jobdescription, jobfolder, jobtype, jobstatus, jobpid) VALUES('" + jobname + "','" + jobdescription + "','"	+ jobfolder + "','"	+ jobtype + "','" + "External" + "','"	+ std::to_string(0) + "');", jobid);
+	SQLQuery(databasepath, "INSERT INTO " + std::string(table) + "(jobname, jobdescription, jobfolder, jobtype, jobstatus, jobpid, jobrerun) VALUES('" + jobname + "','" + jobdescription + "','"	+ jobfolder + "','"	+ jobtype + "','" + "External" + "','"	+ std::to_string(0) + "','" + runstring + "');", jobid);
 }
 
 void deleteJob(JSONResponse* response, struct http_message* message) {
@@ -629,6 +630,15 @@ void updateJobPID (pid_t pid, std::string& table, int &jobid) {
 	getDatabaseLocation(databasepath);
 	
 	SQLQuery(databasepath, "UPDATE " + table + " SET  jobpid = \'" + std::to_string(pid) + "\' WHERE jobid=" + std::to_string(jobid) +";");
+}
+
+void updateJobRerun (std::string runstring, std::string& table, int &jobid) {
+	
+	std::string 	databasepath;
+	
+	getDatabaseLocation(databasepath);
+	
+	SQLQuery(databasepath, "UPDATE " + table + " SET  jobrerun = \'" + runstring + "\' WHERE jobid=" + std::to_string(jobid) +";");
 }
 
 void ctffindPre (std::string micrographsdirectory, std::string unbluroutput){
@@ -747,6 +757,54 @@ void ctffindPost (std::string directory){
 	writeUniDoc(ctffindunidocin, directory + "/ctffind_out.simple");
 	
 	delete ctffindunidocin;
+}
+
+void ini3DPre (std::string simpleinput){ // NEEDS WORK
+	
+	UniDoc*										inputunidoc;
+	std::ofstream								stktab;
+	int											inputit;
+	std::string									stackfile;
+	std::string									stackfilepre;
+	std::string									inputroot;
+	char*										dname;
+	char*										dirc;
+	std::string									stackfilepath;
+	std::string									stackfilelink;
+	std::string									stackfilerealpath;
+	
+	mkdir("particles", S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
+	stktab.open("stkparts.txt");
+	dirc = strdup(simpleinput.c_str());
+	inputroot = std::string(dirname(dirc));
+	
+	if(fileExists(simpleinput) && stktab.is_open()){
+		inputunidoc = new UniDoc();
+		readUniDoc(inputunidoc, simpleinput);
+		//if(simpleinput.find("preproc") == std::string::npos) {
+		//	std::cout << "adding params" << std::endl;
+		//	addUnidocParticleIdentifiers(inputunidoc, simpleinput);
+		//}
+		stackfilepre = "";
+		for(inputit = 0; inputit < inputunidoc->data.size(); inputit++) {
+			getUniDocValue(inputunidoc, inputit, "stackfile", stackfile);
+			if(stackfile != stackfilepre){
+				stackfilepath = inputroot + "/" + stackfile;
+				stackfilerealpath = std::string(realpath(stackfilepath.c_str(), NULL));
+				dirc = strdup(stackfilepath.c_str());
+				stktab << "particles/" + std::string(basename(dirc)) << "\n";
+				std::cout << stackfilepath << " " << stackfilerealpath << std::endl;
+				stackfilelink = "particles/" + std::string(basename(dirc));
+				symlink(stackfilerealpath.c_str(), stackfilelink.c_str());
+				stackfilepre = stackfile;
+			}
+			deleteUniDocValue(inputunidoc, inputit, "stackfile");
+			deleteUniDocValue(inputunidoc, inputit, "frameid");
+		}
+		stktab.close();
+		writeUniDoc(inputunidoc, "prime2D_in.txt");
+		delete inputunidoc;
+	}
 }
 
 void extractPre (std::string boxdirectory, std::string micrographsdirectory, std::string unidocname){
@@ -1065,13 +1123,17 @@ void externalJob (JSONResponse* response, struct http_message* message) {
 	std::string 			jobtype;
 	std::string 			table;
 	std::string 			loop;
+	std::string 			runstring;
+	
+	runstring = std::string(message->query_string.p);
+	runstring = runstring.substr (0,message->query_string.len);
 	
 	if(getRequestVariable(message, "jobfolder", jobfolder) && getRequestVariable(message, "jobtype", jobtype) && getRequestVariable(message, "table", table)){
 		getRequestVariable(message, "jobname", jobname);
 		getRequestVariable(message, "jobdescription", jobdescription);
 		getRequestVariable(message, "loop", loop);
 		
-		addJob(jobname, jobdescription, jobfolder, jobtype, table, jobid);
+		addJob(jobname, jobdescription, jobfolder, jobtype, table, runstring, jobid);
 	
 		pid = fork();
 	
@@ -1147,9 +1209,9 @@ void generateSimpleEnv (struct http_message* message){
 		envfile << "qsys_partition = " << element << "\n";
 	}
 	
-	if(getRequestVariable(message, "nparts", element)){
-		envfile << "job_ntasks = " << element << "\n";
-	}
+	//if(getRequestVariable(message, "nparts", element)){
+	envfile << "job_ntasks = 1" << "\n";
+	//}
 	
 	if(getRequestVariable(message, "job_memory_per_task", element)){
 		envfile << "job_memory_per_task = " << element << "\n";
@@ -1294,19 +1356,22 @@ void syncJob (JSONResponse* response, struct http_message* message) {
 	std::string								deletesource;
 	std::string								command;
 	std::string								outputfolder;
+	std::string								runstring;
 	FILE*									stream;		
 	int										jobid;	
 	int										status;
 	pid_t 									pid;
 	pid_t 									sid;
-
+	
+	runstring = std::string(message->query_string.p);
+	runstring = runstring.substr (0,message->query_string.len);
 	
 	if(getRequestVariable(message, "jobtype", jobtype) && getRequestVariable(message, "jobfolder", jobfolder) && getRequestVariable(message, "table", table)){
 		
 		getRequestVariable(message, "jobname", jobname);
 		getRequestVariable(message, "jobdescription", jobdescription);
 		
-		addJob(jobname, jobdescription, jobfolder, jobtype, table, jobid);
+		addJob(jobname, jobdescription, jobfolder, jobtype, table, runstring, jobid);
 		getRequestVariable(message, "sourcefolder", sourcefolder);
 		getRequestVariable(message, "destinationfolder", destinationfolder);
 		getRequestVariable(message, "fileidentifier", fileidentifier);
@@ -1371,13 +1436,17 @@ void simpleJob (JSONResponse* response, struct http_message* message) {
 	pid_t 									sid;
 	std::vector<std::string> 				arguments;
 	std::vector<std::string>::iterator		argit;
+	std::string								runstring;
+	
+	runstring = std::string(message->query_string.p);
+	runstring = runstring.substr (0,message->query_string.len);
 	
 	if(getRequestVariable(message, "jobtype", jobtype) && getRequestVariable(message, "jobfolder", jobfolder) && getRequestVariable(message, "table", table)){
 		
 		getRequestVariable(message, "jobname", jobname);
 		getRequestVariable(message, "jobdescription", jobdescription);
 		
-		addJob(jobname, jobdescription, jobfolder, jobtype, table, jobid);
+		addJob(jobname, jobdescription, jobfolder, jobtype, table, runstring, jobid);
 		
 		pid = fork();
 	
@@ -1432,8 +1501,7 @@ void simpleJob (JSONResponse* response, struct http_message* message) {
 					command += " unidoc=unidoc_in.txt boxtab=boxtab.txt";
 			}
 			
-			
-	std::cout << command << std::endl;
+			std::cout << command << std::endl;
 			command += " > simple_job.log";
 			
 			generateSimpleEnv(message);
@@ -1462,7 +1530,7 @@ void getJobs (JSONResponse* response, struct http_message* message) {
 	
 	if(getRequestVariable(message, "table", table)){
 		getDatabaseLocation(databasepath);
-		SQLQuery(databasepath, response->jobs, "CREATE TABLE IF NOT EXISTS " + table + " (jobid integer PRIMARY KEY, jobname text NOT NULL, jobdescription text NOT NULL, jobfolder text NOT NULL, jobtype text NOT NULL, jobstatus text NOT NULL, jobpid integer NOT NULL);");									
+		SQLQuery(databasepath, response->jobs, "CREATE TABLE IF NOT EXISTS " + table + " (jobid integer PRIMARY KEY, jobname text NOT NULL, jobdescription text NOT NULL, jobfolder text NOT NULL, jobtype text NOT NULL, jobstatus text NOT NULL, jobpid integer NOT NULL, jobrerun text NOT NULL);");									
 		SQLQuery(databasepath, response->jobs, "SELECT * FROM " + table);	
 	}								
 }
@@ -1976,16 +2044,20 @@ void viewManualPick (JSONResponse* response, struct http_message* message) {
 	std::string 							jobname;
 	std::string 							jobdescription;
 	std::string 							boxfile;
+	std::string								runstring;
 	int										jobid;
 	int										status;
 	std::string 							outputfolder;	
-									
+			
+	runstring = std::string(message->query_string.p);
+	runstring = runstring.substr (0,message->query_string.len);
+							
 	if(getRequestVariable(message, "jobtype", jobtype) && getRequestVariable(message, "jobfolder", jobfolder) && getRequestVariable(message, "table", table)){
 		
 		getRequestVariable(message, "jobname", jobname);
 		getRequestVariable(message, "jobdescription", jobdescription);
 		
-		addJob(jobname, jobdescription, jobfolder, jobtype, table, jobid);
+		addJob(jobname, jobdescription, jobfolder, jobtype, table, runstring, jobid);
 		
 		outputfolder = jobfolder + "/" + std::to_string(jobid) + "_" + jobtype;
 			

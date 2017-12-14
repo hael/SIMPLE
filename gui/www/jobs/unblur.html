@@ -49,8 +49,8 @@
 				</tr>
 				<tr>
 					<td>Movies Directory</td>
-					<td><input data-required=no type=text name=moviesdirectory></td>
-					<td><img src=../img/folder.png onclick="folderSelect(this)" data-target=moviesdirectory></td>
+					<td><input data-required=no type=text name=moviesdirectory id=moviesdirectory title="Folder containing movies in .mrc format"></td>
+					<td><img src=../img/folder.png onclick="folderSelect(this)" data-target=moviesdirectory title="Sampling distance in electrons per pixel (e/px)"></td>
 				</tr>
 				<tr>
 					<td>Sampling Distance</td>
@@ -212,7 +212,28 @@
 			
 		</form>
 	</div>
+	
+	<div id=gauze class=gauze></div>
+	
+	<div class=selectfilepopup id=selectfilepopup>
+	 <div class=header id=selectfileheader>
+		<img class=simpleicon id=simpleicon src=../img/simple_favicon.ico>
+		File Browser
+		<img src=../img/close.png class=closeimage onclick='hideFileSelect()'>
+	</div>
+	 <div class=mainpane>
+		 <input type=hidden id=filetarget>
+		 <input type=hidden id=filefilter>
+		<input class=selectfiledirectory id=selectfiledirectory>
+		<div class=selectfiletable>
+			<table id=selectfiletable></table>
+		</div>
+	</div>
+	<button class=selectfilebutton onclick='hideFileSelect()'>Select</button>
+   </div>
+   
   <script src="../js/job.js"></script>
+  <script>setReRun()</script>
   <script>setProjectTable()</script>
   <script>setProjectFolder()</script>
  </body>

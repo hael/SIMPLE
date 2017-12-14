@@ -72,6 +72,7 @@ function showFileViewerData (data){
 	}
 
 	var snapshots = document.getElementById('snapshots');
+	snapshots.innerHTML = "";
 	for (var i = 0; i < JSONdata.snapshots.length; i++) {
 		var div = document.createElement("div");
 		div.className = 'snapshot';

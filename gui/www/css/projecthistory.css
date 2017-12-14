@@ -54,6 +54,10 @@ border: solid 4px #d7dfea;
 padding: 2px;
 }
 
+.jobmenu div:hover{
+ background-color: #acb2ba;
+}
+
 .headerproject {
  font-size: 12px;
 }
