@@ -1760,6 +1760,61 @@ void viewCtffind (JSONResponse* response, struct http_message* message) {
 	
 }
 
+void viewCtffit (JSONResponse* response, struct http_message* message) {
+	
+	std::string 							directory;
+	UniDoc*									unidoc;
+	int										datait;
+	std::map<std::string, std::string>		micrographmap;
+	std::string								value;
+	int										randomint;
+	
+	
+	if (getRequestVariable(message, "folder", directory)){
+		response->rootdirectory = directory;
+		if(fileExists(directory + "/ctffit_out.simple")){
+			unidoc = new UniDoc();
+			readUniDoc(unidoc, directory + "/ctffit_out.simple");
+			response->inputfilename = "ctffit_out.simple.";
+			for(datait = 0; datait < unidoc->data.size(); datait++){
+				micrographmap.clear();
+				micrographmap["id"] = std::to_string(datait);
+				getUniDocValue(unidoc, datait, "intg", value);
+				micrographmap["intg"] = value;
+				getUniDocValue(unidoc, datait, "movie", value);
+				micrographmap["movie"] = value;
+				getUniDocValue(unidoc, datait, "pspec", value);
+				micrographmap["pspec"] = value;
+				getUniDocValue(unidoc, datait, "thumb", value);
+				micrographmap["thumb"] = value;
+				getUniDocValue(unidoc, datait, "boxfile", value);
+				micrographmap["state"] = value;
+				getUniDocValue(unidoc, datait, "smpd", value);
+				micrographmap["smpd"] = value;
+				getUniDocValue(unidoc, datait, "kv", value);
+				micrographmap["kv"] = value;
+				getUniDocValue(unidoc, datait, "cs", value);
+				micrographmap["cs"] = value;
+				getUniDocValue(unidoc, datait, "fraca", value);
+				micrographmap["fraca"] = value;
+				getUniDocValue(unidoc, datait, "dfx", value);
+				micrographmap["dfx"] = value;
+				getUniDocValue(unidoc, datait, "dfy", value);
+				micrographmap["dfy"] = value;
+				getUniDocValue(unidoc, datait, "angast", value);
+				micrographmap["angast"] = value;
+				getUniDocValue(unidoc, datait, "ctfres", value);
+				micrographmap["ctfres"] = value;
+				getUniDocValue(unidoc, datait, "ctffindfit", value);
+				micrographmap["ctffindfit"] = value;
+				response->snapshots.push_back(micrographmap);
+			}
+			delete unidoc;
+		}
+	}
+	
+}
+
 void viewExtract (JSONResponse* response, struct http_message* message) {
 	
 	std::string 							directory;
@@ -3064,8 +3119,10 @@ void JSONHandler (struct mg_connection* http_connection, struct http_message* me
 			viewManualPick(response, message);
 		} else if (function == "deletejob") {
 			deleteJob(response, message);
+		//} else if (function == "ctffindview") {
+		//	viewCtffind(response, message);
 		} else if (function == "ctffindview") {
-			viewCtffind(response, message);
+			viewCtffit(response, message);
 		} else if (function == "extractview") {
 			viewExtract(response, message);
 		} else if (function == "syncjob") {
