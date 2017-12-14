@@ -261,6 +261,7 @@ contains
         call chdict%push('width',         'falloff of inner mask or filter(in pixels){10}')
         call chdict%push('wiener',        'Wiener restoration mode(full|highres){highres}')
         call chdict%push('winsz',         'half-width of window for real-space filter(in pixels)')
+        call chdict%push('wtype',         'type of orientation weights (factorial|flat){factorial}')
         call chdict%push('xcoord',        'x coordinate{0}')
         call chdict%push('xdim',          'x dimension(in pixles)')
         call chdict%push('xsh',           'x shift(in pixels){0}')

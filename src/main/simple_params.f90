@@ -177,6 +177,7 @@ type :: params
     character(len=STDLEN) :: vols_odd(MAXS)=''
     character(len=STDLEN) :: voltab=''            !< table (text file) of volume files(.txt)
     character(len=STDLEN) :: voltab2=''           !< 2nd table (text file) of volume files(.txt)
+    character(len=STDLEN) :: wtype='factorial'    !< type of orientation weights (factorial|flat){factorial}
     character(len=STDLEN) :: wfun='kb'
     ! integer variables in ascending alphabetical order
     integer :: astep=1
@@ -371,19 +372,20 @@ type :: params
     real    :: ysh=0.              !< y shift(in pixels){0}
     real    :: zsh=0.              !< z shift(in pixels){0}
     ! logical variables in ascending alphabetical order
-    logical :: cyclic(7)       = .false.
-    logical :: l_distr_exec    = .false.
-    logical :: l_chunk_distr   = .false.
-    logical :: l_match_filt    = .true.
-    logical :: doshift         = .false.
-    logical :: l_envmsk        = .false.
-    logical :: l_autoscale     = .false.
-    logical :: l_dose_weight   = .false. 
-    logical :: l_frac_update   = .false.
-    logical :: l_innermsk      = .false. 
-    logical :: l_pick          = .false.
-    logical :: l_remap_classes = .false.
-    logical :: l_stktab_input  = .false.
+    logical :: cyclic(7)          = .false.
+    logical :: l_distr_exec       = .false.
+    logical :: l_chunk_distr      = .false.
+    logical :: l_match_filt       = .true.
+    logical :: doshift            = .false.
+    logical :: l_envmsk           = .false.
+    logical :: l_autoscale        = .false.
+    logical :: l_dose_weight      = .false. 
+    logical :: l_frac_update      = .false.
+    logical :: l_innermsk         = .false. 
+    logical :: l_pick             = .false.
+    logical :: l_remap_classes    = .false.
+    logical :: l_stktab_input     = .false.
+    logical :: l_factorial_wdistr = .true.
   contains
     procedure :: new
 end type params
@@ -550,6 +552,7 @@ contains
         call check_carg('wfun',           self%wfun)
         call check_carg('weights2D',      self%weights2D)
         call check_carg('weights3D',      self%weights3D)
+        call check_carg('wtype',          self%wtype)
         call check_carg('zero',           self%zero)
         ! File args
         call check_file('boxfile',        self%boxfile,      'T')
@@ -1141,6 +1144,16 @@ contains
         ! set logical pick flag
         self%l_pick = .false.
         if( self%dopick .eq. 'yes' ) self%l_pick = .true.
+        ! set weight type
+        select case(self%wtype)
+            case('factorial')
+                self%l_factorial_wdistr = .true.
+            case('flat')
+                self%l_factorial_wdistr = .false.
+            case DEFAULT
+                stop 'unsupported wtype flag; simple_params :: new'
+        end select
+
 !>>> END, IMAGE-PROCESSING-RELATED
 
         write(*,'(A)') '>>> DONE PROCESSING PARAMETERS'

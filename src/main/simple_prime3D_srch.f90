@@ -17,54 +17,55 @@ real,    parameter :: FACTWEIGHTS_THRESH = 0.001 !< threshold for factorial weig
 logical, parameter :: DEBUG = .false.
 
 ! allocatables for prime3D_srch are class variables to improve caching and reduce alloc overheads 
-type(oris), allocatable :: o_peaks(:)                              !< solution objects
-real,       allocatable :: proj_space_euls(:,:,:)                  !< euler angles
-real,       allocatable :: proj_space_shift(:,:,:)                 !< shift vector
-real,       allocatable :: proj_space_corrs(:,:)                   !< correlations vs. reference orientations
-real,       allocatable :: het_corrs(:,:)                          !< per particle state correlations
-integer,    allocatable :: proj_space_inds(:,:)                    !< stochastic index of reference orientations
-integer,    allocatable :: proj_space_state(:,:)                   !< reference orientations state
-integer,    allocatable :: proj_space_proj(:,:)                    !< reference orientations projection direction (1 state assumed)
-integer,    allocatable :: prev_proj(:)                            !< particle previous reference projection direction
-integer,    allocatable :: prev_states(:)                          !< particle previous state
-integer,    allocatable :: srch_order(:,:)                         !< stochastic search index
-integer,    allocatable :: symprojs(:,:)                           !< symmetry projection directions
-logical,    allocatable :: state_exists(:)                         !< indicates state existence
-logical,    pointer     :: ptcl_mask_ptr(:) => null()              !< pointer to particle mask
+type(oris), allocatable :: o_peaks(:)                                !< solution objects
+real,       allocatable :: proj_space_euls(:,:,:)                    !< euler angles
+real,       allocatable :: proj_space_shift(:,:,:)                   !< shift vector
+real,       allocatable :: proj_space_corrs(:,:)                     !< correlations vs. reference orientations
+real,       allocatable :: het_corrs(:,:)                            !< per particle state correlations
+integer,    allocatable :: proj_space_inds(:,:)                      !< stochastic index of reference orientations
+integer,    allocatable :: proj_space_state(:,:)                     !< reference orientations state
+integer,    allocatable :: proj_space_proj(:,:)                      !< reference orientations projection direction (1 state assumed)
+integer,    allocatable :: prev_proj(:)                              !< particle previous reference projection direction
+integer,    allocatable :: prev_states(:)                            !< particle previous state
+integer,    allocatable :: srch_order(:,:)                           !< stochastic search index
+integer,    allocatable :: symprojs(:,:)                             !< symmetry projection directions
+logical,    allocatable :: state_exists(:)                           !< indicates state existence
+logical,    pointer     :: ptcl_mask_ptr(:) => null()                !< pointer to particle mask
 
 type prime3D_srch
     private
-    class(polarft_corrcalc), pointer :: pftcc_ptr        => null() !< corrcalc object
-    class(oris),             pointer :: a_ptr            => null() !< b%a (primary particle orientation table)
-    class(sym),              pointer :: se_ptr           => null() !< b%se (symmetry elements)
-    type(pftcc_shsrch)               :: shsrch_obj                 !< origin shift search object
-    type(pftcc_grad_shsrch)          :: grad_shsrch_obj            !< origin shift search object, L-BFGS with gradient
-    integer, allocatable             :: nnvec(:)                   !< nearest neighbours indices
-    integer                          :: iptcl          = 0         !< global particle index
-    integer                          :: iptcl_map      = 0         !< index in pre-allocated 2D arrays
-    integer                          :: nrefs          = 0         !< total # references (nstates*nprojs)
-    integer                          :: nnnrefs        = 0         !< total # neighboring references (nstates*nnn)
-    integer                          :: nstates        = 0         !< # states
-    integer                          :: nprojs         = 0         !< # projections
-    integer                          :: nrots          = 0         !< # in-plane rotations in polar representation
-    integer                          :: npeaks         = 0         !< # peaks (nonzero orientation weights)
-    integer                          :: npeaks_grid    = 0         !< # peaks after coarse search
-    integer                          :: nbetter        = 0         !< # better orientations identified
-    integer                          :: nrefs_eval     = 0         !< # references evaluated
-    integer                          :: nnn_static     = 0         !< # nearest neighbors (static)
-    integer                          :: nnn            = 0         !< # nearest neighbors (dynamic)
-    integer                          :: prev_roind     = 0         !< previous in-plane rotation index
-    integer                          :: prev_state     = 0         !< previous state index
-    integer                          :: prev_ref       = 0         !< previous reference index
-    integer                          :: kstop_grid     = 0         !< Frequency limit of first coarse grid search
-    integer                          :: nsym           = 0         !< symmetry order
-    real                             :: prev_corr      = 1.        !< previous best correlation
-    real                             :: specscore      = 0.        !< spectral score
-    real                             :: prev_shvec(2)  = 0.        !< previous origin shift vector
-    character(len=STDLEN)            :: refine         = ''        !< refinement flag
-    character(len=STDLEN)            :: opt            = ''        !< optimizer flag
-    logical                          :: doshift        = .true.    !< 2 indicate whether 2 serch shifts
-    logical                          :: exists         = .false.   !< 2 indicate existence
+    class(polarft_corrcalc), pointer :: pftcc_ptr => null()          !< corrcalc object
+    class(oris),             pointer :: a_ptr     => null()          !< b%a (primary particle orientation table)
+    class(sym),              pointer :: se_ptr    => null()          !< b%se (symmetry elements)
+    type(pftcc_shsrch)               :: shsrch_obj                   !< origin shift search object
+    type(pftcc_grad_shsrch)          :: grad_shsrch_obj              !< origin shift search object, L-BFGS with gradient
+    integer, allocatable             :: nnvec(:)                     !< nearest neighbours indices
+    integer                          :: iptcl            = 0         !< global particle index
+    integer                          :: iptcl_map        = 0         !< index in pre-allocated 2D arrays
+    integer                          :: nrefs            = 0         !< total # references (nstates*nprojs)
+    integer                          :: nnnrefs          = 0         !< total # neighboring references (nstates*nnn)
+    integer                          :: nstates          = 0         !< # states
+    integer                          :: nprojs           = 0         !< # projections
+    integer                          :: nrots            = 0         !< # in-plane rotations in polar representation
+    integer                          :: npeaks           = 0         !< # peaks (nonzero orientation weights)
+    integer                          :: npeaks_grid      = 0         !< # peaks after coarse search
+    integer                          :: nbetter          = 0         !< # better orientations identified
+    integer                          :: nrefs_eval       = 0         !< # references evaluated
+    integer                          :: nnn_static       = 0         !< # nearest neighbors (static)
+    integer                          :: nnn              = 0         !< # nearest neighbors (dynamic)
+    integer                          :: prev_roind       = 0         !< previous in-plane rotation index
+    integer                          :: prev_state       = 0         !< previous state index
+    integer                          :: prev_ref         = 0         !< previous reference index
+    integer                          :: kstop_grid       = 0         !< Frequency limit of first coarse grid search
+    integer                          :: nsym             = 0         !< symmetry order
+    real                             :: prev_corr        = 1.        !< previous best correlation
+    real                             :: specscore        = 0.        !< spectral score
+    real                             :: prev_shvec(2)    = 0.        !< previous origin shift vector
+    character(len=STDLEN)            :: refine           = ''        !< refinement flag
+    character(len=STDLEN)            :: opt              = ''        !< optimizer flag
+    logical                          :: factorial_wdistr = .true.    !< factorial (sharp) weight distribution
+    logical                          :: doshift          = .true.    !< 2 indicate whether 2 serch shifts
+    logical                          :: exists           = .false.   !< 2 indicate existence
   contains
     procedure          :: new
     procedure          :: exec_prime3D_srch
@@ -303,26 +304,27 @@ contains
         integer :: nstates_eff
         real    :: lims(2,2), lims_init(2,2)
         ! set constants
-        self%pftcc_ptr   => pftcc
-        self%a_ptr       => a
-        self%se_ptr      => se
-        self%iptcl       =  iptcl
-        self%iptcl_map   =  iptcl_map
-        self%nstates     =  p%nstates
-        self%nprojs      =  p%nspace
-        self%nrefs       =  self%nprojs*self%nstates
-        self%nrots       =  round2even(twopi*real(p%ring2))
-        self%npeaks      =  p%npeaks
-        self%nbetter     =  0
-        self%nrefs_eval  =  0
-        self%nsym        =  se%get_nsym()
-        self%doshift     =  p%doshift
-        self%refine      =  p%refine
-        self%nnn_static  =  p%nnn
-        self%nnn         =  p%nnn
-        self%nnnrefs     =  self%nnn*self%nstates
-        self%kstop_grid  =  p%kstop_grid
-        self%opt         =  p%opt
+        self%pftcc_ptr        => pftcc
+        self%a_ptr            => a
+        self%se_ptr           => se
+        self%iptcl            =  iptcl
+        self%iptcl_map        =  iptcl_map
+        self%nstates          =  p%nstates
+        self%nprojs           =  p%nspace
+        self%nrefs            =  self%nprojs*self%nstates
+        self%nrots            =  round2even(twopi*real(p%ring2))
+        self%npeaks           =  p%npeaks
+        self%nbetter          =  0
+        self%nrefs_eval       =  0
+        self%nsym             =  se%get_nsym()
+        self%doshift          =  p%doshift
+        self%refine           =  p%refine
+        self%nnn_static       =  p%nnn
+        self%nnn              =  p%nnn
+        self%nnnrefs          =  self%nnn*self%nstates
+        self%kstop_grid       =  p%kstop_grid
+        self%opt              =  p%opt
+        self%factorial_wdistr =  p%l_factorial_wdistr
         if( str_has_substr(self%refine,'shc') )then
             if( self%npeaks > 1 ) stop 'npeaks must be equal to 1 with refine=shc|shcneigh'
         endif
@@ -777,10 +779,10 @@ contains
     !! \param statecnt state counter array
     subroutine stochastic_srch_het( self, do_extr, symmat, c1_e )
         use simple_rnd,      only: shcloc, irnd_uni
-        class(prime3D_srch),       intent(inout) :: self
-        logical,                   intent(in)    :: do_extr
-        integer,         optional, intent(in)    :: symmat(self%nprojs, self%nsym)
-        class(oris),     optional, intent(inout) :: c1_e
+        class(prime3D_srch),   intent(inout) :: self
+        logical,               intent(in)    :: do_extr
+        integer,     optional, intent(in)    :: symmat(self%nprojs, self%nsym)
+        class(oris), optional, intent(inout) :: c1_e
         integer :: iref, state, isym, iref_offset, nsym, iproj
         real    :: corr, mi_state, mi_inpl, mi_proj, frac, maxcorr
         real    :: corrs_state(self%nstates), corrs_inpl(self%nrots), shvec(2)
@@ -1132,6 +1134,7 @@ contains
             where( abs(shvec) < 1e-6 ) shvec = 0.
             ! transfer to solution set
             corrs(ipeak) = proj_space_corrs(self%iptcl_map,ref)
+            if( corrs(ipeak) < 0. ) corrs(ipeak) = 0. 
             call o_peaks(self%iptcl)%set(ipeak, 'state', real(state))
             call o_peaks(self%iptcl)%set(ipeak, 'proj',  real(proj_space_proj(self%iptcl_map,ref)))
             call o_peaks(self%iptcl)%set(ipeak, 'corr',  corrs(ipeak))
@@ -1147,13 +1150,15 @@ contains
             ! calculate the exponential of the negative distances
             ! so that when diff==0 the weights are maximum and when
             ! diff==corrmax the weights are minimum
-            ws    = exp(-(1.-corrs))
-            logws = log(ws)
-            order = (/(ipeak,ipeak=1,self%npeaks)/)
-            call hpsort(logws, order)
-            call reverse(order)
-            call reverse(logws)
-            forall(ipeak=1:self%npeaks) ws(order(ipeak)) = exp(sum(logws(:ipeak)))
+            ws = exp(-(1.-corrs))
+            if( self%factorial_wdistr )then
+                logws = log(ws)
+                order = (/(ipeak,ipeak=1,self%npeaks)/)
+                call hpsort(logws, order)
+                call reverse(order)
+                call reverse(logws)
+                forall(ipeak=1:self%npeaks) ws(order(ipeak)) = exp(sum(logws(:ipeak)))
+            endif
             ! thresholding of the weights
             included = (ws >= FACTWEIGHTS_THRESH)
             where( .not.included ) ws = 0.
