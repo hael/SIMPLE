@@ -142,28 +142,29 @@ contains
         cc      = -cost
         phshift = 0.
         if( l_phaseplate ) phshift = ospec_de%x(4)
-        
         ! additional refinement with unconstrained Nelder-Mead: critical to accuracy
         ospec_simplex%x = ospec_de%x
         call simplexsrch%minimize(ospec_simplex, fun_self, cost)
         ! report solution
-        dfx    = ospec_simplex%x(1)
-        dfy    = ospec_simplex%x(2)
-        angast = rad2deg(ospec_simplex%x(3))
-        cc     = -cost
+        dfx     = ospec_simplex%x(1)
+        dfy     = ospec_simplex%x(2)
+        angast  = rad2deg(ospec_simplex%x(3))
+        cc      = -cost
         phshift = 0.
         if( l_phaseplate ) phshift = ospec_simplex%x(4)
-
         ! calculate CTFres diagnostic
         call tfun%ctf2pspecimg(pspec_ctf, dfx, dfy, angast, phshift)
-        frc    = pspec_ctf%frc_pspec(pspec_ctf)
+        ! always normalise before FRC calc
+        call pspec_ctf%norm
+        call pspec_ref%norm
+        ! ctfres statistic
+        allocate(frc(pspec_ctf%get_filtsz()))
+        call pspec_ctf%frc_pspec(pspec_ref, frc)
+        call phaseplate_correct_fsc(frc, find)
         find   = get_lplim_at_corr(frc, 0.5)
         ctfres = pspec_ctf%get_lp(find)
         ! make a half-n-half diagnostic
-        call pspec_ctf%norm
-        call pspec_ref%norm
         call pspec_ctf%mul(imgmsk)
-        call pspec_ref%mul(imgmsk)
         pspec_half_n_half = pspec_ref%before_after(pspec_ctf)
         call pspec_half_n_half%write(trim(diagfname), 1)
         call pspec_half_n_half%kill

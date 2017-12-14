@@ -48,6 +48,7 @@ type prime3D_srch
     integer                          :: nprojs           = 0         !< # projections
     integer                          :: nrots            = 0         !< # in-plane rotations in polar representation
     integer                          :: npeaks           = 0         !< # peaks (nonzero orientation weights)
+    integer                          :: npeaks_eff       = 0         !< effective # peaks
     integer                          :: npeaks_grid      = 0         !< # peaks after coarse search
     integer                          :: nbetter          = 0         !< # better orientations identified
     integer                          :: nrefs_eval       = 0         !< # references evaluated
@@ -1161,6 +1162,7 @@ contains
             endif
             ! thresholding of the weights
             included = (ws >= FACTWEIGHTS_THRESH)
+            self%npeaks_eff = count(included)
             where( .not.included ) ws = 0.
             ws = ws / sum(ws,mask=included)
             ! weighted corr
@@ -1266,6 +1268,7 @@ contains
         call self%a_ptr%set(self%iptcl, 'ow',    o_peaks(self%iptcl)%get(best_loc(1),'ow')   )
         call self%a_ptr%set(self%iptcl, 'proj',  o_peaks(self%iptcl)%get(best_loc(1),'proj') )
         call self%a_ptr%set(self%iptcl, 'sdev',  ang_sdev )
+        call self%a_ptr%set(self%iptcl, 'npeaks', real(self%npeaks_eff) )
         if( DEBUG ) print *,  '>>> PRIME3D_SRCH::EXECUTED PREP_NPEAKS_ORIS'
     end subroutine prep_npeaks_oris_and_weights
 

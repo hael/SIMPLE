@@ -38,6 +38,7 @@ type :: image
     procedure          :: new
     procedure          :: construct_thread_safe_tmp_imgs
     procedure          :: disc
+    procedure          :: ring
     procedure          :: copy
     procedure          :: mic2spec
     procedure          :: boxconv
@@ -270,6 +271,7 @@ type :: image
     procedure          :: gauimg2D
     procedure          :: fwd_ft
     procedure          :: ft2img
+    procedure          :: img2ft
     procedure          :: dampen_central_cross
     procedure          :: subtr_backgr
     procedure          :: subtr_avg_and_square
@@ -454,6 +456,22 @@ contains
         end where
         if( present(npix) )npix = count(self%rmat>0.5)
     end subroutine disc
+
+    !>  \brief disc constructs a binary ring and returns the number of 1:s
+    subroutine ring( self, ldim, smpd, outer_radius, inner_radius, npix )
+        class(image),      intent(inout) :: self
+        integer,           intent(in)    :: ldim(3)
+        real,              intent(in)    :: smpd, outer_radius, inner_radius
+        integer, optional, intent(inout) :: npix
+        call self%new(ldim, smpd)
+        call self%cendist
+        where(self%rmat <= outer_radius .and. self%rmat >= inner_radius )
+            self%rmat = 1.
+        else where
+            self%rmat = 0.
+        end where
+        if( present(npix) )npix = count(self%rmat>0.5)
+    end subroutine ring
 
     !>  \brief copy is a constructor that copies the input object
     !! \param self image object
@@ -5684,6 +5702,45 @@ contains
         if( didft ) call self%bwd_ft
     end subroutine ft2img
 
+    subroutine img2ft( self, img )
+        class(image), intent(inout) :: self
+        class(image), intent(out)   :: img
+        integer :: h,k,l,lims(3,2),logi(3),phys(3)
+        integer :: xcnt,ycnt,zcnt
+        if( img%exists() )then
+            if( .not.(self.eqdims.img) )then
+                call img%new(self%ldim, self%smpd)
+                call img%set_ft(.true.)
+            else
+                img = cmplx(0.,0.)
+            endif
+        else
+            call img%new(self%ldim, self%smpd)
+            call img%set_ft(.true.)
+        end if
+        xcnt = 0
+        ycnt = 0
+        zcnt = 0
+        lims = self%loop_lims(3)
+        do h=lims(1,1),lims(1,2)
+            xcnt = xcnt + 1
+            if( xcnt > self%ldim(1) ) cycle
+            ycnt = 0
+            do k=lims(2,1),lims(2,2)
+                ycnt = ycnt + 1
+                if( ycnt > self%ldim(2) ) cycle
+                zcnt = 0
+                do l=lims(3,1),lims(3,2)
+                    zcnt = zcnt + 1
+                    if( zcnt > self%ldim(3) ) cycle
+                    logi = [h,k,l]
+                    phys = self%comp_addr_phys(logi)
+                    call img%set_fcomp(logi, phys, cmplx(self%rmat(xcnt,ycnt,zcnt),0.))
+                end do
+            end do
+        end do
+    end subroutine img2ft
+
     !> \brief dampens the central cross of a powerspectrum by median filtering
     subroutine dampen_central_cross( self )
         class(image), intent(inout) :: self
@@ -5755,41 +5812,19 @@ contains
         end do
     end subroutine resmsk
 
-    function frc_pspec( self1, self2 ) result( frc )
-        class(image), intent(in) :: self1, self2
-        real              :: cis(self1%ldim(1)),cjs(self2%ldim(2)),xt,yt
-        integer           :: i,j,sh,nyq
-        real, allocatable :: ax(:),ay(:),norm(:),sxx(:),syy(:),sxy(:),frc(:)
-        if( .not. (self1.eqdims.self2) ) stop 'ERROR, non-equal dimensions; image :: frc_pspec'
-        forall(i=1:self1%ldim(1)) cis(i) = -real(self1%ldim(1)-1)/2. + real(i-1)
-        forall(i=1:self1%ldim(2)) cjs(i) = -real(self1%ldim(2)-1)/2. + real(i-1)
-        nyq = nint(maxval(cis)-1.0)
-        allocate(ax(nyq),ay(nyq),norm(nyq),sxx(nyq),syy(nyq),sxy(nyq),frc(nyq),source=0.)
-        do i=1,self1%ldim(1)/2
-            do j=1,self1%ldim(2)/2          
-                sh       = nint(hyp(cis(i),cjs(j)))
-                if( sh > nyq .or. sh < 1 ) cycle
-                ax(sh)   = ax(sh)   + self1%rmat(i,j,1)
-                ay(sh)   = ay(sh)   + self2%rmat(i,j,1)
-                norm(sh) = norm(sh) + 1.0
-            end do
+    subroutine frc_pspec( self1, self2, corrs )
+        class(image), intent(inout) :: self1, self2
+        real,         intent(out)   :: corrs(fdim(self1%ldim(1))-1)
+        integer     :: k, npix
+        type(image) :: maskimg
+        logical, allocatable :: l_mask(:,:,:)
+        corrs = 0.
+        do k=1,fdim(self1%ldim(1))-3
+            call maskimg%ring(self1%ldim, self1%smpd, real(k+2), real(k-2), npix )
+            l_mask = bin2logical(maskimg)
+            corrs(k) = self1%real_corr(self2, l_mask)
         end do
-        where( norm > 0. ) ax = ax / norm
-        where( norm > 0. ) ay = ay / norm
-        do i=1,self1%ldim(1)/2
-            do j=1,self1%ldim(2)/2       
-                sh      = nint(hyp(cis(i),cjs(j)))
-                if( sh > nyq .or. sh < 1 ) cycle
-                xt      = self1%rmat(i,j,1) - ax(sh)
-                yt      = self2%rmat(i,j,1) - ay(sh)
-                sxx(sh) = sxx(sh) + xt * xt
-                syy(sh) = syy(sh) + yt * yt
-                sxy(sh) = sxy(sh) + xt * yt
-            end do
-        end do
-        where(sxx > 0. .and. syy > 0.) frc = sxy / sqrt(sxx * syy)
-        deallocate(ax, ay, norm, sxx, syy, sxy)
-    end function frc_pspec
+    end subroutine frc_pspec
 
     !>  \brief  an image shifter to prepare for Fourier transformation
     subroutine shift_phorig( self )
