@@ -94,7 +94,7 @@ real,    parameter :: SHC_INPL_TRSHWDTH    = 2.0       !< shift search halfwidht
 
 ! criterion for even/odd averaging in gold-FSC
 real,    parameter :: FSC4EOAVG3D = 0.9                !< corr criterium for eo-averaging in 3D
-real,    parameter :: FSC4EOAVG2D = 0.7			       !< corr criterium for eo-averaging in 2D
+real,    parameter :: FSC4EOAVG2D = 0.7                !< corr criterium for eo-averaging in 2D
 integer, parameter :: K4EOAVGLB   = 4                  !< Fourier index lower-bound
 
 ! global  variables

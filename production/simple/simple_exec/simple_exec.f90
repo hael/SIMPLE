@@ -2220,6 +2220,27 @@ select case(prg)
        if( .not. cline%defined('outfile') ) call cline%set('outfile', 'mapped_ptcls_params.txt')
        ! execute
        call xmap2ptcls%execute(cline)
+    case( 'map2ptcls_doc' )
+        !==Program map2ptcls
+       !
+       ! <map2ptcls/begin>is a program for mapping parameters that have been obtained using class averages to
+       ! the individual particle images<map2ptcls/end>
+       !
+       ! set required keys
+       keys_required(1) = 'oritab'
+       ! set optional keys
+       keys_optional(1) = 'nthr'
+       keys_optional(2) = 'oritab3D'
+       keys_optional(3) = 'deftab'
+       keys_optional(4) = 'outfile'
+       keys_optional(5) = 'mul'
+       ! parse command line
+       if( describe ) call print_doc_map2ptcls
+       call cline%parse(keys_required(:1), keys_optional(:5))
+       ! set defaults
+       if( .not. cline%defined('outfile') ) call cline%set('outfile', 'mapped_ptcls_params.txt')
+       ! execute
+       call xmap2ptcls%execute(cline)
     case( 'orisops' )
         !==Program orisops
         !

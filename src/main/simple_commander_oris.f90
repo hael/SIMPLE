@@ -362,58 +362,71 @@ contains
         type(build)  :: b
         type(oris)   :: o_oritab3D
         type(ori)    :: ori2d, ori_comp, o
-        p = params(cline) ! parameters generated
+        p = params(cline)                                 ! parameters generated
         call b%build_general_tbox(p, cline, do3d=.false.) ! general objects built
-        ! find number of selected cavgs
-        call find_ldim_nptcls(p%stk2, ldim2, nsel)
-        ! find number of original cavgs
-        call find_ldim_nptcls(p%stk3, ldim3, p%ncls)
-        if( p%ncls < nsel ) stop 'nr of original clusters cannot be less than the number of selected ones'
-        if( any(ldim2(:2) /= ldim3(:2)) )then
-            print *, 'ldim2: ', ldim2(:2)
-            print *, 'ldim3: ', ldim3(:2)
-            stop 'ERROR, dimensions of stk2/stk3 non-congruent; commander_oris :: map2ptcls'
+        if( cline%defined('stk2') )then
+            ! find number of selected cavgs
+            call find_ldim_nptcls(p%stk2, ldim2, nsel)
+            ! find number of original cavgs
+            call find_ldim_nptcls(p%stk3, ldim3, p%ncls)
+            if( p%ncls < nsel ) stop 'nr of original clusters cannot be less than the number of selected ones'
+            if( any(ldim2(:2) /= ldim3(:2)) )then
+                print *, 'ldim2: ', ldim2(:2)
+                print *, 'ldim3: ', ldim3(:2)
+                stop 'ERROR, dimensions of stk2/stk3 non-congruent; commander_oris :: map2ptcls'
+            endif
+            p%box = ldim2(1)
+        else
+            call b%a%remap_classes
+            p%ncls = b%a%get_n('class')
+            nsel   = p%ncls
         endif
-        p%box = ldim2(1)
         ! find number of lines in input document
         nlines_oritab = binread_nlines(p%oritab)
         if( cline%defined('deftab') )then
             nlines_deftab = binread_nlines(p%deftab)
             if( nlines_oritab /= nlines_deftab ) stop 'nr lines in oritab .ne. nr lines in deftab; must be congruent!'
         endif
-        allocate(imgs_sel(nsel), imgs_cls(p%ncls))
-        ! read images
-        do isel=1,nsel
-            call imgs_sel(isel)%new([p%box,p%box,1], p%smpd)
-            call imgs_sel(isel)%read(p%stk2, isel)
-        end do
-        do icls=1,p%ncls
-            call imgs_cls(icls)%new([p%box,p%box,1], p%smpd)
-            call imgs_cls(icls)%read(p%stk3, icls)
-        end do
-        write(*,'(a)') '>>> CALCULATING CORRELATIONS'
-        call calc_cartesian_corrmat(imgs_sel, imgs_cls, correlations)
-        ! find selected clusters & map selected to original clusters & extract the particle indices
-        allocate(labeler(nsel), selected(p%ncls))
-        ! initialise selection array
-        selected = .false.
-        write(*,'(a)') '>>> MAPPING SELECTED TO ORIGINAL CLUSTERS'
-        do isel=1,nsel
-            loc                     = maxloc(correlations(isel,:))
-            selected(loc(1))        = .true.
-            labeler(isel)%particles = b%a%get_pinds(loc(1), 'class')
-        end do
-        ! erase deselected (by setting their state to zero)
-        do icls=1,p%ncls
-            if( selected(icls) ) cycle
-            if( b%a%get_pop(icls, 'class') > 0 )then
-                rejected_particles = b%a%get_pinds(icls, 'class')
-                do iptcl=1,size(rejected_particles)
-                    call b%a%set(rejected_particles(iptcl), 'state', 0.)
-                end do
-                deallocate(rejected_particles)
-            endif
-        end do
+        if( cline%defined('stk2') )then
+            allocate(imgs_sel(nsel), imgs_cls(p%ncls))
+            ! read images
+            do isel=1,nsel
+                call imgs_sel(isel)%new([p%box,p%box,1], p%smpd)
+                call imgs_sel(isel)%read(p%stk2, isel)
+            end do
+            do icls=1,p%ncls
+                call imgs_cls(icls)%new([p%box,p%box,1], p%smpd)
+                call imgs_cls(icls)%read(p%stk3, icls)
+            end do
+            write(*,'(a)') '>>> CALCULATING CORRELATIONS'
+            call calc_cartesian_corrmat(imgs_sel, imgs_cls, correlations)
+            ! find selected clusters & map selected to original clusters & extract the particle indices
+            allocate(labeler(nsel), selected(p%ncls))
+            ! initialise selection array
+            selected = .false.
+            write(*,'(a)') '>>> MAPPING SELECTED TO ORIGINAL CLUSTERS'
+            do isel=1,nsel
+                loc                     = maxloc(correlations(isel,:))
+                selected(loc(1))        = .true.
+                labeler(isel)%particles = b%a%get_pinds(loc(1), 'class')
+            end do
+            ! erase deselected (by setting their state to zero)
+            do icls=1,p%ncls
+                if( selected(icls) ) cycle
+                if( b%a%get_pop(icls, 'class') > 0 )then
+                    rejected_particles = b%a%get_pinds(icls, 'class')
+                    do iptcl=1,size(rejected_particles)
+                        call b%a%set(rejected_particles(iptcl), 'state', 0.)
+                    end do
+                    deallocate(rejected_particles)
+                endif
+            end do
+        else
+            allocate(labeler(nsel))
+            do isel=1,nsel
+                labeler(isel)%particles = b%a%get_pinds(loc(1), 'class')
+            end do
+        endif
         if( cline%defined('oritab3D') )then
             if( .not. file_exists(p%oritab3D) ) stop 'Inputted oritab3D does not exist in the cwd'
             nlines_oritab3D = binread_nlines(p%oritab3D)
