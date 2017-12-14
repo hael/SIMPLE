@@ -136,6 +136,8 @@ function showFileViewerData (data){
 		pickingmicrographs.appendChild(pickingdiv);
 		
 	} 
+	document.getElementsByClassName('loadergauze')[0].style.display = "none";
+	
 	updateFileViewer();
 }
 

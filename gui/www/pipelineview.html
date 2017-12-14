@@ -24,8 +24,12 @@
   <input type=hidden id=rootdirectory>
   
   <div class=mainpane>
-	<div class=snapshots id=snapshots></div>
+	<div class=loadergauze>
+		<div class=loader></div>
 	</div>
+	<div class=snapshots id=snapshots>
+	</div>
+  </div>
   
  <div class=gauze id=gauze></div>
  
@@ -194,10 +198,10 @@
 		</div>
 		 <div class=saveselectionfilename>
 			Filename
-			<input class=saveselectionfilename id=saveselectionparticlesbutton id=saveselectionparticlesfilename value=particles_selected.simple disabled>
+			<input class=saveselectionfilename id=saveselectionparticlesfilename value=particles_selected.simple disabled>
 		</div>
 	</div>
-	<button class=popupbutton onclick='saveParticlesSelection()'>Save</button>
+	<button id=saveselectionparticlesbutton class=popupbutton onclick='saveParticlesSelection()'>Save</button>
   </div>
   
    <div class=selectionpopup id=selectionpopup>

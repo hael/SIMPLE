@@ -36,6 +36,18 @@ function showJobs(element, selector){
 	}
 }
 
+function showReRun(){
+	console.log(window.location.toString().split('jobtype=')[1]);
+	var jobtype = window.location.toString().split('jobtype=')[1].split('&')[0];
+	console.log(jobtype);
+	var jobiframe = document.getElementById('jobiframe');
+	if (jobtype == "preproc"){
+		jobiframe.src = "jobs/preproc.html?" + window.location.toString().split('?')[1];
+	} else if (jobtype == "unblur"){
+		jobiframe.src = "jobs/unblur.html?" + window.location.toString().split('?')[1];
+	}
+}
+
 function setProjectTable(){
 	var projectselector = parent.parent.document.getElementById('projectselector');
 	var projecttable = document.getElementById('projecttable');
@@ -46,6 +58,16 @@ function setProjectFolder(){
 	var projectselector = parent.parent.document.getElementById('projectselector');
 	var projectfolder = document.getElementById('projectfolder');
 	projectfolder.value = projectselector.options[projectselector.selectedIndex].getAttribute('data-projectfolder');
+}
+
+function setReRun(){
+	var querystring = window.location.toString().split('?')[1];
+	var queryelements = querystring.split('&');
+	for(var i = 0; i < queryelements.length; i++){
+		var key = queryelements[i].split("=")[0];
+		var value = queryelements[i].split("=")[1];
+		document.getElementsByName(key)[0].value = decodeURIComponent(value);
+	}
 }
 
 function showHistory(){

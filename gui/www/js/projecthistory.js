@@ -68,18 +68,31 @@ function addJobs(data){
 		viewlogfile.innerHTML = "View Log File";
 		viewlogfile.setAttribute('data-jobfolder', JSONdata.jobs[i].jobfolder);
 		viewlogfile.onclick = function(){viewLogfile(this)};
-		jobmenu.appendChild(viewlogfile)
+		jobmenu.appendChild(viewlogfile);
 		
-		var deleteJob = document.createElement("div");
+		var rerunjob = document.createElement("div");
 		
-		deleteJob.innerHTML = "Delete Job";
-		deleteJob.setAttribute('data-jobid', JSONdata.jobs[i].id);
-		deleteJob.setAttribute('data-projecttable', projectselector.options[projectselector.selectedIndex].getAttribute('data-projecttable'));
-		deleteJob.onclick = function(){deleteJob(this)};
-		jobmenu.appendChild(deleteJob)
+		rerunjob.innerHTML = "Rerun Job";
+		rerunjob.setAttribute('data-jobrerun', JSONdata.jobs[i].jobrerun);
+		rerunjob.setAttribute('data-jobtype', JSONdata.jobs[i].jobtype);
+		rerunjob.onclick = function(){rerunJob(this)};
+		jobmenu.appendChild(rerunjob);
+		
+		var deletejob = document.createElement("div");
+		
+		deletejob.innerHTML = "Delete Job";
+		deletejob.setAttribute('data-jobid', JSONdata.jobs[i].id);
+		deletejob.setAttribute('data-projecttable', projectselector.options[projectselector.selectedIndex].getAttribute('data-projecttable'));
+		deletejob.onclick = function(){deleteJob(this)};
+		jobmenu.appendChild(deletejob);
 		
 		cell5.appendChild(jobmenu);
 	}
+}
+
+function rerunJob(element){		
+	var mainpaneiframe = parent.document.getElementById('mainpaneiframe');
+	mainpaneiframe.src = "jobselector.html?" + element.getAttribute('data-jobrerun'); 
 }
 
 function viewOutput(element){		
