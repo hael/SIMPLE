@@ -21,7 +21,7 @@ function showJobs(element, selector){
 		modeimages[i].style.borderColor = "white";
 	}
 	
-	element.style.borderColor = "orange";
+	element.style.borderColor = "green";
 	
 	var jobs = document.getElementsByClassName('job');
 	
