@@ -216,7 +216,7 @@ function showFileBrowserData(data){
 				var cell2 = row.insertCell(1);
 				cell2.innerHTML = files[i];
 				cell2.style.width = "100%";
-				row.onclick = function(){this.style.background = "orange"; document.getElementById(document.getElementById('filetarget').value).value=this.getAttribute('data-target')};
+				row.onclick = function(){this.style.background = "#6698ab"; document.getElementById(document.getElementById('filetarget').value).value=this.getAttribute('data-target')};
 			}
 		}
 	}
@@ -241,7 +241,7 @@ function showFolderBrowserData(data){
 	cell2.innerHTML = "..";
 	cell2.style.width = "100%";
 	row.ondblclick = function(){getFolderBrowserData(this.id)};
-	row.onclick = function(){this.style.background = "orange"; document.getElementById('jobfolder').value=this.id};
+	row.onclick = function(){this.style.background = "#6698ab"; document.getElementById('jobfolder').value=this.id};
 	for (var i = 0; i < directories.length; i++) {
 		if(directories[i][0] != "."){
 			var row = selectfiletable.insertRow(-1);
@@ -253,7 +253,7 @@ function showFolderBrowserData(data){
 			cell2.innerHTML = directories[i];
 			cell2.style.width = "100%";
 			row.ondblclick = function(){getFolderBrowserData(this.id)};
-			row.onclick = function(){this.style.background = "orange"; document.getElementById(document.getElementById('filetarget').value).value=this.getAttribute('data-target')};
+			row.onclick = function(){this.style.background = "#6698ab"; document.getElementById(document.getElementById('filetarget').value).value=this.getAttribute('data-target')};
 		}
 	}
 	selectfiledirectory.value = JSONdata.rootdirectory;

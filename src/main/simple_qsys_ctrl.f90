@@ -269,6 +269,7 @@ contains
             call self%myqsys%write_instr(q_descr, fhandle=funit)
         else
             call self%myqsys%write_instr(job_descr, fhandle=funit)
+	    write(funit,'(a)',advance='yes') 'echo $$ >> .pid'
         endif
         write(funit,'(a)',advance='yes') 'cd '//trim(self%pwd)
         write(funit,'(a)',advance='yes') ''

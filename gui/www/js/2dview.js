@@ -369,7 +369,7 @@ function showFileBrowserData(data){
 					document.getElementsByClassName('fileviewerfileselected')[0].className = "";
 				}
 				this.className = "fileviewerfileselected";
-				this.style.background = "orange";
+				this.style.background = "#6698ab";
 			};
 		}
 	}
