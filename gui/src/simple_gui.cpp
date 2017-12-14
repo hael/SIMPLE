@@ -2482,6 +2482,10 @@ void getLogFile (JSONResponse* response, struct http_message* message) {
 			input.open(logfilename.c_str());
 			if(input.is_open()){
 				while(getline(input, line)){
+					if(line.back() = 'M') {
+						line.pop_back();
+						line.pop_back();
+					}
 					response->logfile += line + "<br>";
 				}
 				input.close();
@@ -3146,6 +3150,8 @@ void JSONHandler (struct mg_connection* http_connection, struct http_message* me
 			deleteJob(response, message);
 		//} else if (function == "ctffindview") {
 		//	viewCtffind(response, message);
+		} else if (function == "deleteproject") {
+			deleteProject(response, message)
 		} else if (function == "ctffindview") {
 			viewCtffit(response, message);
 		} else if (function == "extractview") {

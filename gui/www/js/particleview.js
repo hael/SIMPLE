@@ -30,6 +30,7 @@ function viewParticleViewInit (data) {
 			select.innerHTML = micrographs[i].stackfile;
 			micrographselector.appendChild(select);
 	}
+	document.getElementById('snapshots').addEventListener('scroll', function(){loadImages2()});
 }
 
 function viewparticlesSelectMicrograph(caller) {
@@ -56,7 +57,7 @@ function viewparticlesSelectMicrograph(caller) {
 		div.appendChild(img);
 		snapshots.appendChild(div);
 	} 
-	 loadImages2();
+	loadImages2();
 }
 
 
