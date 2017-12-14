@@ -1708,6 +1708,19 @@ void getProjects (JSONResponse* response) {
 
 }
 
+void deleteProject(JSONResponse* response, struct http_message* message) {
+	
+	std::string				databasepath;
+	std::string				table;
+	std::string				projectid;
+	
+	getDatabaseLocation(databasepath);
+	
+	if (getRequestVariable(message, "projectid", projectid)) {
+		SQLQuery(databasepath, "DELETE FROM projects WHERE projectid=" + projectid + ";");
+	}
+}
+
 void viewCtffind (JSONResponse* response, struct http_message* message) {
 	
 	std::string 							directory;
@@ -1844,7 +1857,7 @@ void viewExtract (JSONResponse* response, struct http_message* message) {
 		if(fileExists(directory + "/extract_out.simple")){
 			iterationsunidoc = new UniDoc();
 			readUniDoc(iterationsunidoc, directory + "/extract_out.simple");
-			response->particlecount = std::to_string(iterationsunidoc.size());
+			response->particlecount = std::to_string(iterationsunidoc->data.size());
 			delete iterationsunidoc;
 		}
 	}
@@ -2375,7 +2388,6 @@ void getPixelsFromMRC(JPEGResponse* response, std::string filename, struct http_
 		}	
 
 		datamean = datamean / datalength;
-		std::cout << datamean << std::endl;
 		datadiff2 = 0;
 
 		for(datacount = 0; datacount < datalength; datacount++){
@@ -2388,7 +2400,7 @@ void getPixelsFromMRC(JPEGResponse* response, std::string filename, struct http_
 
 		for(datacount = 0; datacount < datalength; datacount++){
 			datanorm = (mrcfile->data[datacount] - datamean) / datasd;
-			datanorm *= 128 / std::stoi(contrast);
+			datanorm *= 128 / (10.5 - std::stof(contrast));
 			datanorm += std::stoi(brightness);
 			if(datanorm > 254){
 				response->pixels[datacount] = (int) 254;

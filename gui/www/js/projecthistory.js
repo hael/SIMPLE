@@ -123,8 +123,12 @@ function viewLogfile(element){
 }
 
 function deleteJob(element){
+	
 	var url = 'JSONhandler?function=deletejob&table=' + element.getAttribute('data-projecttable') + '&jobid=' + element.getAttribute('data-jobid');
-	getAjax(url, function(data){window.location.reload(1)});
+	
+	if (confirm("Do you wish to delete this job? Please note, you will have to remove the job directory yourself") == true) {
+		getAjax(url, function(data){window.location.reload(1)});
+	}
 }
 
 setTitle();
