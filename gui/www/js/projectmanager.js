@@ -42,9 +42,21 @@ function showProjects(data){
 		var cell3 = row.insertCell(1);
 		cell1.innerHTML = JSONdata.projects[i].projectname;
 		cell1.style.width = "100%";
-		cell2.innerHTML = "Edit";
+		//cell2.innerHTML = "Edit";
+		cell2.innerHTML = "";
 		cell3.innerHTML = "Delete";
+		cell3.setAttribute('data-projectid', JSONdata.projects[i].projectid);
+		cell3.onclick = function(){deleteProject(this)};
 	}	
+}
+
+function deleteProject(element){
+	
+	var url = 'JSONhandler?function=deleteproject&projectid=' + element.getAttribute('data-projectid');
+	
+	if (confirm("Do you wish to delete this project? Please note, you will have to remove the project directory yourself") == true) {
+		getAjax(url, function(data){window.location.reload(1)});
+	}
 }
 
 function showHideHeaderMenu() {

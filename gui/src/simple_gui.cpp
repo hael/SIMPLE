@@ -45,6 +45,7 @@ struct JSONResponse {
 	std::string													error;
 	std::vector< std::map<std::string, std::string> >			rerunjob;
 	std::string													JSONstring;
+	std::string													particlecount;
 };
 
 struct UniDoc {
@@ -664,7 +665,7 @@ void ctffindPre (std::string micrographsdirectory, std::string unbluroutput){
 	if(filetab.is_open()){
 	//	status = mkdir("micrographs", S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
 		
-		if(micrographsdirectory.size() > 0 && fileExists(micrographsdirectory) && status == 0){
+		if(micrographsdirectory.size() > 0 && fileExists(micrographsdirectory)){
 			status = symlink(micrographsdirectory.c_str(), "micrographs");
 			listFilesInDirectory(files, "micrographs" );
 			outit = 0;
@@ -755,6 +756,115 @@ void ctffindPost (std::string directory){
 	delete ctfparams;
 	
 	writeUniDoc(ctffindunidocin, directory + "/ctffind_out.simple");
+	
+	delete ctffindunidocin;
+}
+
+void ctffitPre (std::string micrographsdirectory, std::string unbluroutput){
+	
+	UniDoc* 									outputunidoc;
+	UniDoc* 									unidoc;
+	std::ofstream								filetab;								
+	std::vector<std::string> 					files;
+	std::vector<std::string>::iterator			filesit;
+	int											it;
+	int											outit;
+	std::string									value;
+	std::string									micrographpath;
+	std::string									micrographlink;
+	char*										dname;
+	char*										dirc;
+	int											status;
+	
+	outputunidoc = new UniDoc();
+	
+	filetab.open("micrographs.txt");
+	
+	if(filetab.is_open()){
+		if(micrographsdirectory.size() > 0 && fileExists(micrographsdirectory)){
+			status = symlink(micrographsdirectory.c_str(), "micrographs");
+			listFilesInDirectory(files, "micrographs" );
+			outit = 0;
+			for(it = 0; it < files.size(); it++) {
+				if(files[it].find(".mrc") != std::string::npos) {
+					outputunidoc->data.push_back("");
+					addUniDocKeyVal(outputunidoc, outit, "intg", "micrographs/" + files[it]);
+					filetab << micrographsdirectory + "/" + files[it] + "\n";
+					outit++;
+				}
+			}
+		} else if(unbluroutput.size() > 0 && fileExists(unbluroutput)){
+			unidoc = new UniDoc();
+			readUniDoc(unidoc, unbluroutput);
+			dirc = strdup(unbluroutput.c_str());
+			dname = dirname(dirc);
+			for(it = 0; it < unidoc->data.size(); it++){
+				outputunidoc->data.push_back("");
+				getUniDocValue(unidoc, it, "intg", value);
+				addUniDocKeyVal(outputunidoc, it, "intg", std::string(dname) + "/" + value);
+				getUniDocValue(unidoc, it, "forctf", value);
+				addUniDocKeyVal(outputunidoc, it, "forctf", std::string(dname) + "/" + value);
+				filetab << std::string(dname) + "/" + value + "\n";
+				getUniDocValue(unidoc, it, "pspec", value);
+				addUniDocKeyVal(outputunidoc, it, "pspec", std::string(dname) + "/" + value);
+				getUniDocValue(unidoc, it, "thumb", value);
+				addUniDocKeyVal(outputunidoc, it, "thumb", std::string(dname) + "/" + value);
+			}
+			delete unidoc;
+		}
+	}
+
+	writeUniDoc(outputunidoc, "ctffit_in.simple");
+	filetab.close();
+	delete outputunidoc;
+}
+
+void ctffitPost (std::string directory){
+	
+	int											it;
+	bool										newmicrograph;
+	UniDoc* 									ctffindunidocin;
+	UniDoc*										ctfparams;
+	std::string									intgfilename;
+	std::string									ctffindfit;
+	std::string									value;
+	
+	ctffindunidocin = new UniDoc();
+	ctfparams = new UniDoc();
+	
+	if(fileExists(directory + "/ctffit_in.simple") && fileExists(directory + "/ctffit_output_merged.txt")){
+		readUniDoc(ctffindunidocin, directory + "/ctffit_in.simple");
+		readUniDoc(ctfparams, directory + "/ctffit_output_merged.txt");
+		
+		for(it = 0; it < ctffindunidocin->data.size(); it++){
+			getUniDocValue(ctfparams, it, "kv", value);
+			addUniDocKeyVal(ctffindunidocin, it, "kv", value);
+			getUniDocValue(ctfparams, it, "cs", value);
+			addUniDocKeyVal(ctffindunidocin, it, "cs", value);
+			getUniDocValue(ctfparams, it, "fraca", value);
+			addUniDocKeyVal(ctffindunidocin, it, "fraca", value);
+			getUniDocValue(ctfparams, it, "dfx", value);
+			addUniDocKeyVal(ctffindunidocin, it, "dfx", value);
+			getUniDocValue(ctfparams, it, "dfy", value);
+			addUniDocKeyVal(ctffindunidocin, it, "dfy", value);
+			getUniDocValue(ctfparams, it, "angast", value);
+			addUniDocKeyVal(ctffindunidocin, it, "angast", value);
+			getUniDocValue(ctfparams, it, "ctfres", value);
+			addUniDocKeyVal(ctffindunidocin, it, "ctfres", value);
+			if(getUniDocValue(ctffindunidocin, it, "forctf", ctffindfit)){
+				ctffindfit.replace(ctffindfit.end() - 4, ctffindfit.end(), "_ctffit_diag.mrc");
+			} else if (getUniDocValue(ctffindunidocin, it, "intg", ctffindfit)){
+				ctffindfit.replace(ctffindfit.end() - 4, ctffindfit.end(), "_ctffit_diag.mrc");
+			}
+			if(fileExists(ctffindfit)){
+				addUniDocKeyVal(ctffindunidocin, it, "ctffindfit", ctffindfit);
+			} 
+		} 
+	} 
+	
+	delete ctfparams;
+	
+	writeUniDoc(ctffindunidocin, directory + "/ctffit_out.simple");
 	
 	delete ctffindunidocin;
 }
@@ -1330,6 +1440,8 @@ void simpleLocalSubmit(std::string& command, std::string& directory, int& jobid,
 			preprocPost(directory);
 		}else if (jobtype == "ctffind"){
 			ctffindPost(directory);
+		}else if (jobtype == "ctffit"){
+			ctffitPost(directory);	
 		}else if (jobtype == "extract"){
 			extractPost(directory);
 		}
@@ -1493,6 +1605,12 @@ void simpleJob (JSONResponse* response, struct http_message* message) {
 			}else if (program == "ctffind" && getRequestVariable(message, "unbluroutput", argval)){
 					ctffindPre("", argval);
 					command += " filetab=micrographs.txt";
+			}else if (program == "ctffit" && getRequestVariable(message, "micrographsdirectory", argval)){
+					ctffitPre(argval, "");
+					command += " filetab=micrographs.txt";
+			}else if (program == "ctffit" && getRequestVariable(message, "unbluroutput", argval)){
+					ctffitPre("", argval);
+					command += " filetab=micrographs.txt";
 			}else if (program == "extract" && getRequestVariable(message, "boxfilesdirectory", argval) && getRequestVariable(message, "ctffindoutput", argval2)){
 					extractPre(argval, "", argval2);
 					command += " unidoc=unidoc_in.txt boxtab=boxtab.txt";
@@ -1590,6 +1708,19 @@ void getProjects (JSONResponse* response) {
 
 }
 
+void deleteProject(JSONResponse* response, struct http_message* message) {
+	
+	std::string				databasepath;
+	std::string				table;
+	std::string				projectid;
+	
+	getDatabaseLocation(databasepath);
+	
+	if (getRequestVariable(message, "projectid", projectid)) {
+		SQLQuery(databasepath, "DELETE FROM projects WHERE projectid=" + projectid + ";");
+	}
+}
+
 void viewCtffind (JSONResponse* response, struct http_message* message) {
 	
 	std::string 							directory;
@@ -1606,6 +1737,61 @@ void viewCtffind (JSONResponse* response, struct http_message* message) {
 			unidoc = new UniDoc();
 			readUniDoc(unidoc, directory + "/ctffind_out.simple");
 			response->inputfilename = "ctffind_out.simple.";
+			for(datait = 0; datait < unidoc->data.size(); datait++){
+				micrographmap.clear();
+				micrographmap["id"] = std::to_string(datait);
+				getUniDocValue(unidoc, datait, "intg", value);
+				micrographmap["intg"] = value;
+				getUniDocValue(unidoc, datait, "movie", value);
+				micrographmap["movie"] = value;
+				getUniDocValue(unidoc, datait, "pspec", value);
+				micrographmap["pspec"] = value;
+				getUniDocValue(unidoc, datait, "thumb", value);
+				micrographmap["thumb"] = value;
+				getUniDocValue(unidoc, datait, "boxfile", value);
+				micrographmap["state"] = value;
+				getUniDocValue(unidoc, datait, "smpd", value);
+				micrographmap["smpd"] = value;
+				getUniDocValue(unidoc, datait, "kv", value);
+				micrographmap["kv"] = value;
+				getUniDocValue(unidoc, datait, "cs", value);
+				micrographmap["cs"] = value;
+				getUniDocValue(unidoc, datait, "fraca", value);
+				micrographmap["fraca"] = value;
+				getUniDocValue(unidoc, datait, "dfx", value);
+				micrographmap["dfx"] = value;
+				getUniDocValue(unidoc, datait, "dfy", value);
+				micrographmap["dfy"] = value;
+				getUniDocValue(unidoc, datait, "angast", value);
+				micrographmap["angast"] = value;
+				getUniDocValue(unidoc, datait, "ctfres", value);
+				micrographmap["ctfres"] = value;
+				getUniDocValue(unidoc, datait, "ctffindfit", value);
+				micrographmap["ctffindfit"] = value;
+				response->snapshots.push_back(micrographmap);
+			}
+			delete unidoc;
+		}
+	}
+	
+}
+
+void viewCtffit (JSONResponse* response, struct http_message* message) {
+	
+	std::string 							directory;
+	UniDoc*									unidoc;
+	int										datait;
+	std::map<std::string, std::string>		micrographmap;
+	std::string								value;
+	int										randomint;
+	
+	
+	if (getRequestVariable(message, "folder", directory)){
+		response->rootdirectory = directory;
+		if(fileExists(directory + "/ctffit_out.simple")){
+			unidoc = new UniDoc();
+			readUniDoc(unidoc, directory + "/ctffit_out.simple");
+			response->inputfilename = "ctffit_out.simple";
 			for(datait = 0; datait < unidoc->data.size(); datait++){
 				micrographmap.clear();
 				micrographmap["id"] = std::to_string(datait);
@@ -1666,6 +1852,12 @@ void viewExtract (JSONResponse* response, struct http_message* message) {
 				iterationmap["particlecount"] = value;
 				response->iterations.push_back(iterationmap);
 			}
+			delete iterationsunidoc;
+		}
+		if(fileExists(directory + "/extract_out.simple")){
+			iterationsunidoc = new UniDoc();
+			readUniDoc(iterationsunidoc, directory + "/extract_out.simple");
+			response->particlecount = std::to_string(iterationsunidoc->data.size());
 			delete iterationsunidoc;
 		}
 	}
@@ -2196,7 +2388,6 @@ void getPixelsFromMRC(JPEGResponse* response, std::string filename, struct http_
 		}	
 
 		datamean = datamean / datalength;
-		std::cout << datamean << std::endl;
 		datadiff2 = 0;
 
 		for(datacount = 0; datacount < datalength; datacount++){
@@ -2209,7 +2400,7 @@ void getPixelsFromMRC(JPEGResponse* response, std::string filename, struct http_
 
 		for(datacount = 0; datacount < datalength; datacount++){
 			datanorm = (mrcfile->data[datacount] - datamean) / datasd;
-			datanorm *= 128 / std::stoi(contrast);
+			datanorm *= 128 / (10.5 - std::stof(contrast));
 			datanorm += std::stoi(brightness);
 			if(datanorm > 254){
 				response->pixels[datacount] = (int) 254;
@@ -2894,6 +3085,10 @@ void encodeJSON(JSONResponse* response){
 		response->JSONstring += "\"error\" : \"" + response->error + "\",";
 	}
 	
+	if (response->particlecount.size() > 0) {
+		response->JSONstring += "\"particlecount\" : \"" + response->particlecount + "\",";
+	}
+	
 	response->JSONstring.pop_back();
 	response->JSONstring += "}";
 }
@@ -2949,8 +3144,10 @@ void JSONHandler (struct mg_connection* http_connection, struct http_message* me
 			viewManualPick(response, message);
 		} else if (function == "deletejob") {
 			deleteJob(response, message);
+		//} else if (function == "ctffindview") {
+		//	viewCtffind(response, message);
 		} else if (function == "ctffindview") {
-			viewCtffind(response, message);
+			viewCtffit(response, message);
 		} else if (function == "extractview") {
 			viewExtract(response, message);
 		} else if (function == "syncjob") {

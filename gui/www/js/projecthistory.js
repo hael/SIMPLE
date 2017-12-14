@@ -109,6 +109,8 @@ function viewOutput(element){
 		mainpaneiframe.src = "unblurview.html?folder=" + element.getAttribute('data-jobfolder');
 	} else if (element.getAttribute('data-jobtype') == "ctffind"){
 		mainpaneiframe.src = "ctffindview.html?folder=" + element.getAttribute('data-jobfolder');
+	} else if (element.getAttribute('data-jobtype') == "ctffit"){
+		mainpaneiframe.src = "ctffindview.html?folder=" + element.getAttribute('data-jobfolder');	
 	}else if (element.getAttribute('data-jobtype') == "extract"){
 		mainpaneiframe.src = "particleview.html?folder=" + element.getAttribute('data-jobfolder');
 	}
@@ -121,8 +123,12 @@ function viewLogfile(element){
 }
 
 function deleteJob(element){
+	
 	var url = 'JSONhandler?function=deletejob&table=' + element.getAttribute('data-projecttable') + '&jobid=' + element.getAttribute('data-jobid');
-	getAjax(url, function(data){window.location.reload(1)});
+	
+	if (confirm("Do you wish to delete this job? Please note, you will have to remove the job directory yourself") == true) {
+		getAjax(url, function(data){window.location.reload(1)});
+	}
 }
 
 setTitle();

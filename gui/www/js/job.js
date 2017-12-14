@@ -21,7 +21,7 @@ function showJobs(element, selector){
 		modeimages[i].style.borderColor = "white";
 	}
 	
-	element.style.borderColor = "orange";
+	element.style.borderColor = "green";
 	
 	var jobs = document.getElementsByClassName('job');
 	
@@ -81,11 +81,12 @@ function fileSelect(element) {
 	var filefilter = document.getElementById('filefilter');
 	filetarget.value = element.getAttribute('data-target');
 	filefilter.value = element.getAttribute('data-filter');
-	
+	var projectselector = parent.parent.document.getElementById('projectselector');
+	var projectfolder = projectselector.options[projectselector.selectedIndex].getAttribute('data-projectfolder');
 	selectfilepopup.style.display = "block";
 	var gauze = document.getElementById('gauze');
 	gauze.style.display = "block";
-	getFileBrowserData();
+	getFileBrowserData(projectfolder);
 }
 
 function folderSelect(element) {
@@ -93,9 +94,11 @@ function folderSelect(element) {
 	var filetarget = document.getElementById('filetarget');
 	filetarget.value = element.getAttribute('data-target');
 	selectfilepopup.style.display = "block";
+	var projectselector = parent.parent.document.getElementById('projectselector');
+	var projectfolder = projectselector.options[projectselector.selectedIndex].getAttribute('data-projectfolder');
 	var gauze = document.getElementById('gauze');
 	gauze.style.display = "block";
-	getFolderBrowserData();
+	getFolderBrowserData(projectfolder);
 }
 
 function showFileBrowserData(data){
