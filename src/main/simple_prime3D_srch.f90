@@ -34,39 +34,38 @@ logical,    pointer     :: ptcl_mask_ptr(:) => null()                !< pointer 
 
 type prime3D_srch
     private
-    class(polarft_corrcalc), pointer :: pftcc_ptr => null()          !< corrcalc object
-    class(oris),             pointer :: a_ptr     => null()          !< b%a (primary particle orientation table)
-    class(sym),              pointer :: se_ptr    => null()          !< b%se (symmetry elements)
-    type(pftcc_shsrch)               :: shsrch_obj                   !< origin shift search object
-    type(pftcc_grad_shsrch)          :: grad_shsrch_obj              !< origin shift search object, L-BFGS with gradient
-    integer, allocatable             :: nnvec(:)                     !< nearest neighbours indices
-    integer                          :: iptcl            = 0         !< global particle index
-    integer                          :: iptcl_map        = 0         !< index in pre-allocated 2D arrays
-    integer                          :: nrefs            = 0         !< total # references (nstates*nprojs)
-    integer                          :: nnnrefs          = 0         !< total # neighboring references (nstates*nnn)
-    integer                          :: nstates          = 0         !< # states
-    integer                          :: nprojs           = 0         !< # projections
-    integer                          :: nrots            = 0         !< # in-plane rotations in polar representation
-    integer                          :: npeaks           = 0         !< # peaks (nonzero orientation weights)
-    integer                          :: npeaks_eff       = 0         !< effective # peaks
-    integer                          :: npeaks_grid      = 0         !< # peaks after coarse search
-    integer                          :: nbetter          = 0         !< # better orientations identified
-    integer                          :: nrefs_eval       = 0         !< # references evaluated
-    integer                          :: nnn_static       = 0         !< # nearest neighbors (static)
-    integer                          :: nnn              = 0         !< # nearest neighbors (dynamic)
-    integer                          :: prev_roind       = 0         !< previous in-plane rotation index
-    integer                          :: prev_state       = 0         !< previous state index
-    integer                          :: prev_ref         = 0         !< previous reference index
-    integer                          :: kstop_grid       = 0         !< Frequency limit of first coarse grid search
-    integer                          :: nsym             = 0         !< symmetry order
-    real                             :: prev_corr        = 1.        !< previous best correlation
-    real                             :: specscore        = 0.        !< spectral score
-    real                             :: prev_shvec(2)    = 0.        !< previous origin shift vector
-    character(len=STDLEN)            :: refine           = ''        !< refinement flag
-    character(len=STDLEN)            :: opt              = ''        !< optimizer flag
-    logical                          :: factorial_wdistr = .true.    !< factorial (sharp) weight distribution
-    logical                          :: doshift          = .true.    !< 2 indicate whether 2 serch shifts
-    logical                          :: exists           = .false.   !< 2 indicate existence
+    class(polarft_corrcalc), pointer :: pftcc_ptr => null()       !< corrcalc object
+    class(oris),             pointer :: a_ptr     => null()       !< b%a (primary particle orientation table)
+    class(sym),              pointer :: se_ptr    => null()       !< b%se (symmetry elements)
+    type(pftcc_shsrch)               :: shsrch_obj                !< origin shift search object
+    type(pftcc_grad_shsrch)          :: grad_shsrch_obj           !< origin shift search object, L-BFGS with gradient
+    integer, allocatable             :: nnvec(:)                  !< nearest neighbours indices
+    integer                          :: iptcl         = 0         !< global particle index
+    integer                          :: iptcl_map     = 0         !< index in pre-allocated 2D arrays
+    integer                          :: nrefs         = 0         !< total # references (nstates*nprojs)
+    integer                          :: nnnrefs       = 0         !< total # neighboring references (nstates*nnn)
+    integer                          :: nstates       = 0         !< # states
+    integer                          :: nprojs        = 0         !< # projections
+    integer                          :: nrots         = 0         !< # in-plane rotations in polar representation
+    integer                          :: npeaks        = 0         !< # peaks (nonzero orientation weights)
+    integer                          :: npeaks_eff    = 0         !< effective # peaks
+    integer                          :: npeaks_grid   = 0         !< # peaks after coarse search
+    integer                          :: nbetter       = 0         !< # better orientations identified
+    integer                          :: nrefs_eval    = 0         !< # references evaluated
+    integer                          :: nnn_static    = 0         !< # nearest neighbors (static)
+    integer                          :: nnn           = 0         !< # nearest neighbors (dynamic)
+    integer                          :: prev_roind    = 0         !< previous in-plane rotation index
+    integer                          :: prev_state    = 0         !< previous state index
+    integer                          :: prev_ref      = 0         !< previous reference index
+    integer                          :: kstop_grid    = 0         !< Frequency limit of first coarse grid search
+    integer                          :: nsym          = 0         !< symmetry order
+    real                             :: prev_corr     = 1.        !< previous best correlation
+    real                             :: specscore     = 0.        !< spectral score
+    real                             :: prev_shvec(2) = 0.        !< previous origin shift vector
+    character(len=STDLEN)            :: refine        = ''        !< refinement flag
+    character(len=STDLEN)            :: opt           = ''        !< optimizer flag
+    logical                          :: doshift       = .true.    !< 2 indicate whether 2 serch shifts
+    logical                          :: exists        = .false.   !< 2 indicate existence
   contains
     procedure          :: new
     procedure          :: exec_prime3D_srch
@@ -305,27 +304,26 @@ contains
         integer :: nstates_eff
         real    :: lims(2,2), lims_init(2,2)
         ! set constants
-        self%pftcc_ptr        => pftcc
-        self%a_ptr            => a
-        self%se_ptr           => se
-        self%iptcl            =  iptcl
-        self%iptcl_map        =  iptcl_map
-        self%nstates          =  p%nstates
-        self%nprojs           =  p%nspace
-        self%nrefs            =  self%nprojs*self%nstates
-        self%nrots            =  round2even(twopi*real(p%ring2))
-        self%npeaks           =  p%npeaks
-        self%nbetter          =  0
-        self%nrefs_eval       =  0
-        self%nsym             =  se%get_nsym()
-        self%doshift          =  p%doshift
-        self%refine           =  p%refine
-        self%nnn_static       =  p%nnn
-        self%nnn              =  p%nnn
-        self%nnnrefs          =  self%nnn*self%nstates
-        self%kstop_grid       =  p%kstop_grid
-        self%opt              =  p%opt
-        self%factorial_wdistr =  p%l_factorial_wdistr
+        self%pftcc_ptr  => pftcc
+        self%a_ptr      => a
+        self%se_ptr     => se
+        self%iptcl      =  iptcl
+        self%iptcl_map  =  iptcl_map
+        self%nstates    =  p%nstates
+        self%nprojs     =  p%nspace
+        self%nrefs      =  self%nprojs*self%nstates
+        self%nrots      =  round2even(twopi*real(p%ring2))
+        self%npeaks     =  p%npeaks
+        self%nbetter    =  0
+        self%nrefs_eval =  0
+        self%nsym       =  se%get_nsym()
+        self%doshift    =  p%doshift
+        self%refine     =  p%refine
+        self%nnn_static =  p%nnn
+        self%nnn        =  p%nnn
+        self%nnnrefs    =  self%nnn*self%nstates
+        self%kstop_grid =  p%kstop_grid
+        self%opt        =  p%opt
         if( str_has_substr(self%refine,'shc') )then
             if( self%npeaks > 1 ) stop 'npeaks must be equal to 1 with refine=shc|shcneigh'
         endif
@@ -1108,9 +1106,9 @@ contains
         class(prime3D_srch),   intent(inout) :: self
         type(ori)  :: o
         type(oris) :: sym_os
-        real       :: shvec(2), corrs(self%npeaks), ws(self%npeaks), logws(self%npeaks), state_ws(self%nstates)
-        real       :: frac, ang_sdev, dist, inpl_dist, euldist, mi_joint
-        real       :: mi_proj, mi_inpl, mi_state, dist_inpl, wcorr
+        real       :: shvec(2), corrs(self%npeaks), wprecursor(self%npeaks), ws(self%npeaks), logws(self%npeaks)
+        real       :: state_ws(self%nstates), frac, ang_sdev, dist, inpl_dist, euldist, mi_joint
+        real       :: mi_proj, mi_inpl, mi_state, dist_inpl, wcorr, corrmax
         integer    :: best_loc(1), loc(1), order(self%npeaks), states(self%npeaks)
         integer    :: s, ipeak, cnt, ref, state, roind, neff_states
         logical    :: included(self%npeaks)
@@ -1148,22 +1146,22 @@ contains
             call o_peaks(self%iptcl)%set(1,'ow',1.0)
             wcorr = o_peaks(self%iptcl)%get(1,'corr')
         else
+            ! pre-normalise the correlations to avoid too rapid weight decay
+            corrmax    = maxval(corrs)
+            wprecursor = corrs / corrmax
             ! calculate the exponential of the negative distances
-            ! so that when diff==0 the weights are maximum and when
-            ! diff==corrmax the weights are minimum
-            ws = exp(-(1.-corrs))
-            if( self%factorial_wdistr )then
-                logws = log(ws)
-                order = (/(ipeak,ipeak=1,self%npeaks)/)
-                call hpsort(logws, order)
-                call reverse(order)
-                call reverse(logws)
-                forall(ipeak=1:self%npeaks) ws(order(ipeak)) = exp(sum(logws(:ipeak)))
-            endif
+            ! so that when diff==0 the weights are maximum
+            ws    = exp(-(1.-wprecursor))
+            logws = log(ws)
+            order = (/(ipeak,ipeak=1,self%npeaks)/)
+            call hpsort(logws, order)
+            call reverse(order)
+            call reverse(logws)
+            forall(ipeak=1:self%npeaks) ws(order(ipeak)) = exp(sum(logws(:ipeak)))
             ! thresholding of the weights
             included = (ws >= FACTWEIGHTS_THRESH)
             self%npeaks_eff = count(included)
-            where( .not.included ) ws = 0.
+            where( .not. included ) ws = 0.
             ws = ws / sum(ws,mask=included)
             ! weighted corr
             wcorr = sum(ws*corrs,mask=included)
@@ -1180,8 +1178,8 @@ contains
             do s = 1, self%nstates
                 state_ws(s) = sum(ws,mask=(states==s))
             enddo
-            loc   = maxloc(state_ws)
-            state = loc(1)
+            loc      = maxloc(state_ws)
+            state    = loc(1)
             ! in-state re-weighing
             included = included .and. (states==state)
             where( .not.included )ws = 0.

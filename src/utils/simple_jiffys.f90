@@ -66,7 +66,7 @@ contains
         character(len=:), allocatable :: pid_file
         logical :: pprint_simple
         integer :: pid
-        ! deleta file indicating active process
+        ! delete file indicating active process
         pid = get_process_id()
         allocate(pid_file, source='.'//int2str(pid)//'.simple.pid')
         call del_file(pid_file)

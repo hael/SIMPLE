@@ -1059,10 +1059,9 @@ select case(prg)
         keys_optional(36) = 'sdev_thres'
         keys_optional(37) = 'phaseplate'
         keys_optional(38) = 'opt'
-        keys_optional(39) = 'wtype'
         ! parse command line
         if( describe ) call print_doc_prime3D
-        call cline%parse(keys_required(:5), keys_optional(:39))
+        call cline%parse(keys_required(:5), keys_optional(:38))
         ! sanity check
         if( cline%defined('stk') .or. cline%defined('stktab') )then
             ! all ok
