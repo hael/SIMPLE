@@ -25,7 +25,7 @@ function showManualPicker() {
 	var jobpane = document.getElementById('jobpane');
 	var pickpane = document.getElementById('pickpane');
 	jobpane.style.display = "none";
-	pickpane.style.display = "block";
+	pickpane.style.display = "inline-flex";
 	
 	var projecttable = document.getElementById('projecttable').value;
 	var projectfolder = document.getElementById('projectfolder').value;

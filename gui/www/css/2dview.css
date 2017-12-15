@@ -342,3 +342,8 @@ width: 100px;
 	height: 100%;
 	overflow: scroll;
 }
+
+.micrographselector{
+	display: inline-block;
+	padding-left: 20vw;
+}

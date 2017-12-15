@@ -885,12 +885,13 @@ void ini3DPre (std::string simpleinput){ // NEEDS WORK
 	std::string									stackfilelink;
 	std::string									stackfilerealpath;
 	
+	std::cout << "inipre" << std::endl;
 	if(fileExists(simpleinput)){
 		mkdir("particles", S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
 		stktab.open("stkparts.txt");
 		dirc = strdup(simpleinput.c_str());
 		inputroot = std::string(dirname(dirc));
-		
+		std::cout << inputroot << std::endl;
 		if(stktab.is_open()){
 			inputunidoc = new UniDoc();
 			readUniDoc(inputunidoc, simpleinput);
@@ -914,6 +915,27 @@ void ini3DPre (std::string simpleinput){ // NEEDS WORK
 			delete inputunidoc;
 		}
 	}
+}
+
+void ini3DPost (std::string directory){
+	
+	int											it;
+	bool										newmicrograph;
+	UniDoc* 									ctffindunidocin;
+	UniDoc*										ctfparams;
+	std::string									intgfilename;
+	std::string									ctffindfit;
+	std::string									value;
+	
+	ctffindunidocin = new UniDoc();
+	ctfparams = new UniDoc();
+	
+	if(fileExists(directory + "/ini3d_in.txt")){
+		readUniDoc(ctffindunidocin, directory + "/ini3d_in.txt");
+		//runmap2pscls_doc
+	} 
+	
+	delete ctffindunidocin;
 }
 
 void extractPre (std::string boxdirectory, std::string micrographsdirectory, std::string unidocname){
@@ -1443,6 +1465,8 @@ void simpleLocalSubmit(std::string& command, std::string& directory, int& jobid,
 			ctffitPost(directory);	
 		}else if (jobtype == "extract"){
 			extractPost(directory);
+		}else if (jobtype == "ini3D_from_cavgs"){
+			ini3DPost(directory);
 		}
 		updateJobPID (0, table, jobid);
 		updateJobStatus ("Finished", table, jobid);
@@ -1616,6 +1640,8 @@ void simpleJob (JSONResponse* response, struct http_message* message) {
 			}else if (program == "extract" && getRequestVariable(message, "boxfilesdirectory", argval) && getRequestVariable(message, "micrographsdirectory", argval2)){
 					extractPre(argval, argval2, "");
 					command += " unidoc=unidoc_in.txt boxtab=boxtab.txt";
+			}else if (program == "ini3D_from_cavgs" && getRequestVariable(message, "ptcls", argval)){
+					ini3DPre(argval);
 			}
 			
 			std::cout << command << std::endl;

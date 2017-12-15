@@ -21,7 +21,7 @@
 
 .pickmicrographs {
 	width: 200px;
-	display: inline-block;
+
 }
 
 #pickmicrographs {
@@ -29,6 +29,15 @@
 	font-size: 12px;
 }
 
+.pickparameters {
+	width: 200px;
+
+}
+
+.pickparameters label{
+	font-size: 12px;
+
+}
 .pickcanvas{
 	width: 80vw;
 	height: 80vh;
