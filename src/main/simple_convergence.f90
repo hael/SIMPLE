@@ -19,6 +19,7 @@ type convergence
     real :: corr      = 0.                      !< average correlation
     real :: dist      = 0.                      !< average angular distance
     real :: dist_inpl = 0.                      !< average in-plane angular distance
+    real :: npeaks    = 0.                      !< average # peaks
     real :: frac      = 0.                      !< average fraction of search space scanned
     real :: mi_joint  = 0.                      !< joint parameter distribution overlap
     real :: mi_class  = 0.                      !< class parameter distribution overlap
@@ -47,7 +48,7 @@ contains
         type(convergence) :: self
         self%bap    => ba
         self%pp     => p
-        self%pcline => cline 
+        self%pcline => cline
     end function constructor
     
     function check_conv2D( self, ncls ) result( converged )
@@ -106,19 +107,37 @@ contains
     function check_conv3D( self, update_res ) result( converged )
         class(convergence), intent(inout) :: self
         logical, optional,  intent(inout) :: update_res
-        real, allocatable :: state_mi_joint(:), statepops(:)
-        real              :: min_state_mi_joint
-        logical           :: converged
-        integer           :: iptcl, istate
-        self%corr      = self%bap%get_avg('corr')
-        self%dist      = self%bap%get_avg('dist')
-        self%dist_inpl = self%bap%get_avg('dist_inpl')
-        self%frac      = self%bap%get_avg('frac')
-        self%mi_joint  = self%bap%get_avg('mi_joint')
-        self%mi_proj   = self%bap%get_avg('mi_proj')
-        self%mi_inpl   = self%bap%get_avg('mi_inpl')
-        self%mi_state  = self%bap%get_avg('mi_state')
-        self%sdev      = self%bap%get_avg('sdev')
+        real,    allocatable :: state_mi_joint(:), statepops(:), updatecnts(:)
+        logical, allocatable :: mask(:)
+        real    :: min_state_mi_joint
+        logical :: converged
+        integer :: iptcl, istate
+        if( self%bap%isthere('updatecnt') )then
+            ! fractional particle update
+            updatecnts     = self%bap%get_all('updatecnt')
+            allocate(mask(size(updatecnts)), source=updatecnts > 0.5)
+            self%corr      = self%bap%get_avg('corr',      mask=mask)
+            self%dist      = self%bap%get_avg('dist',      mask=mask)
+            self%dist_inpl = self%bap%get_avg('dist_inpl', mask=mask)
+            self%npeaks    = self%bap%get_avg('npeaks',    mask=mask)
+            self%frac      = self%bap%get_avg('frac',      mask=mask)
+            self%mi_joint  = self%bap%get_avg('mi_joint',  mask=mask)
+            self%mi_proj   = self%bap%get_avg('mi_proj',   mask=mask)
+            self%mi_inpl   = self%bap%get_avg('mi_inpl',   mask=mask)
+            self%mi_state  = self%bap%get_avg('mi_state',  mask=mask)
+            self%sdev      = self%bap%get_avg('sdev',      mask=mask)
+        else
+            self%corr      = self%bap%get_avg('corr')
+            self%dist      = self%bap%get_avg('dist')
+            self%dist_inpl = self%bap%get_avg('dist_inpl')
+            self%npeaks    = self%bap%get_avg('npeaks')
+            self%frac      = self%bap%get_avg('frac')
+            self%mi_joint  = self%bap%get_avg('mi_joint')
+            self%mi_proj   = self%bap%get_avg('mi_proj')
+            self%mi_inpl   = self%bap%get_avg('mi_inpl')
+            self%mi_state  = self%bap%get_avg('mi_state')
+            self%sdev      = self%bap%get_avg('sdev')
+        endif
         if( self%pp%athres==0. )then
             ! required for distributed mode
             self%pp%athres = rad2deg( atan(max(self%pp%fny, self%pp%lp)/(self%pp%moldiam/2.)) )
@@ -131,6 +150,7 @@ contains
         write(*,'(A,1X,F7.4)') '>>> STATE DISTRIBUTION OVERLAP:        ', self%mi_state
         write(*,'(A,1X,F7.1)') '>>> AVERAGE ANGULAR DISTANCE BTW ORIS: ', self%dist
         write(*,'(A,1X,F7.1)') '>>> AVERAGE IN-PLANE ANGULAR DISTANCE: ', self%dist_inpl
+        write(*,'(A,1X,F7.1)') '>>> AVERAGE # PEAKS:                   ', self%npeaks
         write(*,'(A,1X,F7.1)') '>>> PERCENTAGE OF SEARCH SPACE SCANNED:', self%frac
         write(*,'(A,1X,F7.4)') '>>> CORRELATION:                       ', self%corr
         write(*,'(A,1X,F7.2)') '>>> ANGULAR SDEV OF MODEL:             ', self%sdev
@@ -198,12 +218,6 @@ contains
                 ! 2.0 because we include two mi-values
                 statepops(istate)      = statepops(istate) + 2.0
             end do
-            ! ! normalise the overlap
-            ! state_mi_joint     = state_mi_joint/statepops
-            ! ! bring back the correct statepops
-            ! statepops          = statepops/2.0
-            ! ! the minumum overlap is in charge of convergence
-            ! min_state_mi_joint = minval(state_mi_joint)
             ! normalise the overlap
             forall( istate=1:self%pp%nstates, statepops(istate)>0. )&
                 &state_mi_joint(istate) = state_mi_joint(istate)/statepops(istate)

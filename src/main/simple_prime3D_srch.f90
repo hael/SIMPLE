@@ -13,24 +13,24 @@ public :: cleanprime3D_srch, prep4prime3D_srch, prime3D_srch_extr
 public :: prime3D_srch, o_peaks
 private
 
-real,    parameter :: FACTWEIGHTS_THRESH = 0.001 !< threshold for factorial weights
+real,    parameter :: FACTWEIGHTS_THRESH = 0.01 !< threshold for factorial weights
 logical, parameter :: DEBUG = .false.
 
 ! allocatables for prime3D_srch are class variables to improve caching and reduce alloc overheads 
-type(oris), allocatable :: o_peaks(:)                                !< solution objects
-real,       allocatable :: proj_space_euls(:,:,:)                    !< euler angles
-real,       allocatable :: proj_space_shift(:,:,:)                   !< shift vector
-real,       allocatable :: proj_space_corrs(:,:)                     !< correlations vs. reference orientations
-real,       allocatable :: het_corrs(:,:)                            !< per particle state correlations
-integer,    allocatable :: proj_space_inds(:,:)                      !< stochastic index of reference orientations
-integer,    allocatable :: proj_space_state(:,:)                     !< reference orientations state
-integer,    allocatable :: proj_space_proj(:,:)                      !< reference orientations projection direction (1 state assumed)
-integer,    allocatable :: prev_proj(:)                              !< particle previous reference projection direction
-integer,    allocatable :: prev_states(:)                            !< particle previous state
-integer,    allocatable :: srch_order(:,:)                           !< stochastic search index
-integer,    allocatable :: symprojs(:,:)                             !< symmetry projection directions
-logical,    allocatable :: state_exists(:)                           !< indicates state existence
-logical,    pointer     :: ptcl_mask_ptr(:) => null()                !< pointer to particle mask
+type(oris), allocatable :: o_peaks(:)                             !< solution objects
+real,       allocatable :: proj_space_euls(:,:,:)                 !< euler angles
+real,       allocatable :: proj_space_shift(:,:,:)                !< shift vector
+real,       allocatable :: proj_space_corrs(:,:)                  !< correlations vs. reference orientations
+real,       allocatable :: het_corrs(:,:)                         !< per particle state correlations
+integer,    allocatable :: proj_space_inds(:,:)                   !< stochastic index of reference orientations
+integer,    allocatable :: proj_space_state(:,:)                  !< reference orientations state
+integer,    allocatable :: proj_space_proj(:,:)                   !< reference orientations projection direction (1 state assumed)
+integer,    allocatable :: prev_proj(:)                           !< particle previous reference projection direction
+integer,    allocatable :: prev_states(:)                         !< particle previous state
+integer,    allocatable :: srch_order(:,:)                        !< stochastic search index
+integer,    allocatable :: symprojs(:,:)                          !< symmetry projection directions
+logical,    allocatable :: state_exists(:)                        !< indicates state existence
+logical,    pointer     :: ptcl_mask_ptr(:) => null()             !< pointer to particle mask
 
 type prime3D_srch
     private
@@ -1158,10 +1158,13 @@ contains
             call reverse(order)
             call reverse(logws)
             forall(ipeak=1:self%npeaks) ws(order(ipeak)) = exp(sum(logws(:ipeak)))
-            ! thresholding of the weights
+            ! normalise before thresholding
+            ws = ws / sum(ws)
+            ! threshold weights
             included = (ws >= FACTWEIGHTS_THRESH)
             self%npeaks_eff = count(included)
             where( .not. included ) ws = 0.
+            ! re-normalise
             ws = ws / sum(ws,mask=included)
             ! weighted corr
             wcorr = sum(ws*corrs,mask=included)
