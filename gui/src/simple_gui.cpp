@@ -12,6 +12,7 @@
 #include <jpeglib.h>
 #include <libgen.h>
 #include <algorithm>
+#include <signal.h>
 
 extern "C" {
     #include "../ext/mongoose/mongoose.h"
@@ -884,37 +885,34 @@ void ini3DPre (std::string simpleinput){ // NEEDS WORK
 	std::string									stackfilelink;
 	std::string									stackfilerealpath;
 	
-	mkdir("particles", S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
-	stktab.open("stkparts.txt");
-	dirc = strdup(simpleinput.c_str());
-	inputroot = std::string(dirname(dirc));
-	
-	if(fileExists(simpleinput) && stktab.is_open()){
-		inputunidoc = new UniDoc();
-		readUniDoc(inputunidoc, simpleinput);
-		//if(simpleinput.find("preproc") == std::string::npos) {
-		//	std::cout << "adding params" << std::endl;
-		//	addUnidocParticleIdentifiers(inputunidoc, simpleinput);
-		//}
-		stackfilepre = "";
-		for(inputit = 0; inputit < inputunidoc->data.size(); inputit++) {
-			getUniDocValue(inputunidoc, inputit, "stackfile", stackfile);
-			if(stackfile != stackfilepre){
-				stackfilepath = inputroot + "/" + stackfile;
-				stackfilerealpath = std::string(realpath(stackfilepath.c_str(), NULL));
-				dirc = strdup(stackfilepath.c_str());
-				stktab << "particles/" + std::string(basename(dirc)) << "\n";
-				std::cout << stackfilepath << " " << stackfilerealpath << std::endl;
-				stackfilelink = "particles/" + std::string(basename(dirc));
-				symlink(stackfilerealpath.c_str(), stackfilelink.c_str());
-				stackfilepre = stackfile;
+	if(fileExists(simpleinput)){
+		mkdir("particles", S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
+		stktab.open("stkparts.txt");
+		dirc = strdup(simpleinput.c_str());
+		inputroot = std::string(dirname(dirc));
+		
+		if(stktab.is_open()){
+			inputunidoc = new UniDoc();
+			readUniDoc(inputunidoc, simpleinput);
+			stackfilepre = "";
+			for(inputit = 0; inputit < inputunidoc->data.size(); inputit++) {
+				getUniDocValue(inputunidoc, inputit, "stackfile", stackfile);
+				if(stackfile != stackfilepre){
+					stackfilepath = inputroot + "/" + stackfile;
+					stackfilerealpath = std::string(realpath(stackfilepath.c_str(), NULL));
+					dirc = strdup(stackfilepath.c_str());
+					stktab << "particles/" + std::string(basename(dirc)) << "\n";
+					stackfilelink = "particles/" + std::string(basename(dirc));
+					symlink(stackfilerealpath.c_str(), stackfilelink.c_str());
+					stackfilepre = stackfile;
+				}
+				deleteUniDocValue(inputunidoc, inputit, "stackfile");
+				deleteUniDocValue(inputunidoc, inputit, "frameid");
 			}
-			deleteUniDocValue(inputunidoc, inputit, "stackfile");
-			deleteUniDocValue(inputunidoc, inputit, "frameid");
+			stktab.close();
+			writeUniDoc(inputunidoc, "ini3d_in.txt");
+			delete inputunidoc;
 		}
-		stktab.close();
-		writeUniDoc(inputunidoc, "prime2D_in.txt");
-		delete inputunidoc;
 	}
 }
 
@@ -1653,27 +1651,24 @@ void getJobs (JSONResponse* response, struct http_message* message) {
 		SQLQuery(databasepath, response->jobs, "SELECT * FROM " + table);	
 	}								
 }
-/*
-void killJob (struct mg_connection* http_connection, struct http_message* message) {
-	char        jobpid[8];
-	int 		pidint;
-	const char*	 JSONchar;
-	std::string  JSONstring;
+
+void killJob (JSONResponse* response, struct http_message* message) {
 	
-	if (mg_get_http_var(&message->query_string, "jobpid", jobpid, sizeof(jobpid)) <= 0){
-		//error
+	std::string 				pid;
+	std::string 				table;
+	std::string 				jobid;
+	std::string 				jobfolder;
+	std::vector<std::string>	files;
+	int							fileit;
+	
+	if(getRequestVariable(message, "table", table) && getRequestVariable(message, "pid", pid) && getRequestVariable(message, "jobid", jobid) && getRequestVariable(message, "jobfolder", jobfolder)){
+		listFilesInDirectory(files, jobfolder);
+		for(fileit = 0; fileit < files.size(); fileit++){
+		//	if(files[fileit].find(".pid") != std::string::npos
+		}
+		
 	}
-	
-	pidint = std::atoi(jobpid);
-	
-	if(kill(pidint, 0) == 0){
-		kill(pidint, 9);
-	} 
-	
-	mg_send_head(http_connection, 200, JSONstring.length(), "Content-Type: application/json");
-	mg_send(http_connection, JSONchar, JSONstring.length());	
 }
-*/
 
 void newProject (JSONResponse* response, struct http_message* message) {
 	

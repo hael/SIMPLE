@@ -14,7 +14,7 @@
   </div>
   
 	<div class=jobpane>
-		<form action='../JSONhandler'>
+		<form id=jobform action='../JSONhandler'>
 			<table id=page1>
 				<input type=hidden name=function value=simplejob>
 				<input type=hidden name=executable value=simple_distr_exec>
@@ -115,7 +115,7 @@
 				<tr>
 					<td colspan=3 style="text-align: center">
 						<button type="button" onclick="document.getElementById('page4').style.display = 'none'; document.getElementById('page3').style.display = 'block'">Back</button>
-						<button type="submit" onclick="document.getElementById('page4').style.display = 'none'">Run</button>
+						<button type="button" onclick="document.getElementById('page4').style.display = 'none'; runJob(this)">Run</button>
 					</td>
 				</tr>
 			</table>

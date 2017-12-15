@@ -14,7 +14,7 @@
   </div>
   
 	<div class=jobpane>
-		<form action='../JSONhandler' onsubmit="parent.parent.parent.document.getElementById('mainpaneiframe').src = 'projecthistory.html'">
+		<form id=jobform action='../JSONhandler' onsubmit="parent.parent.parent.document.getElementById('mainpaneiframe').src = 'projecthistory.html'">
 			<input type=hidden name=function value=simplejob>
 			<input type=hidden name=program value=extract>
 			<input type=hidden name=jobstatus value=starting>
@@ -197,7 +197,7 @@
 				<tr>
 					<td colspan=4 style="text-align: center">
 						<button type="button" onclick="document.getElementById('page4').style.display = 'none'; document.getElementById('page3').style.display = 'block'">Back</button>
-						<button type="submit" onclick="document.getElementById('page4').style.display = 'none'">Run</button>
+						<button type="button" onclick="document.getElementById('page4').style.display = 'none'; runJob(this)">Run</button>
 					</td>
 				</tr>
 			</table>

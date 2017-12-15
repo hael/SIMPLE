@@ -14,7 +14,7 @@
   </div>
   
 	<div class=jobpane>
-		<form action='../JSONhandler' onsubmit="showHistory()">
+		<form id=jobform action='../JSONhandler' onsubmit="showHistory()">
 			<table>
 				<input type=hidden name=function value=externaljob>
 				<input type=hidden name=jobstatus value=external>
@@ -56,7 +56,7 @@
 				</tr>
 				<tr>
 					<td colspan=3 style="text-align: center">
-						<button type="submit" onclick="console.log('check required')">Import</button>
+						<button type="button" onclick="runJob(this)">Import</button>
 					</td>
 				</tr>
 			</table>
