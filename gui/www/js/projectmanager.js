@@ -130,4 +130,13 @@ function hideFileSelect () {
 	selectfilepopup.style.display = "none";
 }
 
+function createProject(element){
+	var projectform = document.getElementById('projectform');
+	var projectdescription = document.getElementsByName('projectdescription')[0].value;
+	document.getElementsByName('projectdescription')[0].value = encodeURIComponent(projectdescription);
+	projectform.submit();
+	var mainpaneiframe = parent.parent.parent.document.getElementById('mainpaneiframe');
+	mainpaneiframe.src = "projectmanager.html";
+}
+
 getProjects();

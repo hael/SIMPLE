@@ -584,12 +584,13 @@ void writeRelionStar(UniDoc* unidoc, std::string filename){
 	delete relionstar;
 }
 
-void addJob (std::string& jobname, std::string& jobdescription, std::string& jobfolder, std::string& jobtype, std::string& table, std::string& runstring, int &jobid) {
+void addJob (std::string& jobname, std::string jobdescription, std::string& jobfolder, std::string& jobtype, std::string& table, std::string& runstring, int &jobid) {
 	
 	std::string				databasepath;
+	std::string::size_type  i;
 	
 	getDatabaseLocation(databasepath);
-	
+
 	SQLQuery(databasepath, "INSERT INTO " + std::string(table) + "(jobname, jobdescription, jobfolder, jobtype, jobstatus, jobpid, jobrerun) VALUES('" + jobname + "','" + jobdescription + "','"	+ jobfolder + "','"	+ jobtype + "','" + "External" + "','"	+ std::to_string(0) + "','" + runstring + "');", jobid);
 }
 
@@ -2475,24 +2476,24 @@ void getLogFile (JSONResponse* response, struct http_message* message) {
 	std::string								logfilename;
 	std::ifstream 							input;
 	std::string 							line;
+//	char									finalchar;
+//	int										finalascii;
 	
 	if (getRequestVariable(message, "folder", folder)){
 		logfilename = folder + "/simple_job.log";
 		if(fileExists(logfilename)){
-			input.open(logfilename.c_str());
+			input.open(logfilename.c_str(), std::ios::binary);
 			if(input.is_open()){
 				while(getline(input, line)){
-					if(line.back() = 'M') {
-						line.pop_back();
-						line.pop_back();
-					}
-					response->logfile += line + "<br>";
+					//line.erase(std::remove(line.begin(), line.end(), '\r'), line.end());
+					std::replace(line.begin(), line.end(), '\r', '@');
+					response->logfile += line + "@";
 				}
 				input.close();
 				std::replace( response->logfile.begin(), response->logfile.end(), '\\', '^');
 			}
-		}
 		
+		}
 	}
 	
 }
@@ -3151,7 +3152,7 @@ void JSONHandler (struct mg_connection* http_connection, struct http_message* me
 		//} else if (function == "ctffindview") {
 		//	viewCtffind(response, message);
 		} else if (function == "deleteproject") {
-			deleteProject(response, message)
+			deleteProject(response, message);
 		} else if (function == "ctffindview") {
 			viewCtffit(response, message);
 		} else if (function == "extractview") {

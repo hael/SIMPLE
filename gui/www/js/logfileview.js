@@ -21,6 +21,7 @@ function showLogFileViewerData (data){
 	var logfile = JSONdata.logfile;
 	var logfileformatted;
 	logfileformatted = logfile.replace(/\^/g, "\\");
+	logfileformatted = logfile.replace(/@/g, "<br>");
 	snapshots.innerHTML = logfileformatted;
 }
 
