@@ -18,6 +18,11 @@ function setTitle() {
 	} else {
 		document.getElementById('header').innerHTML = "";
 	}
+	var projectdescription = projectselector.options[projectselector.selectedIndex].getAttribute('data-projectdescription');
+	if (projectdescription){
+		headerproject.title = decodeURIComponent(projectselector.options[projectselector.selectedIndex].getAttribute('data-projectdescription'));
+	}
+	
 }
 
 function getJobs () {
@@ -41,7 +46,7 @@ function addJobs(data){
 		cell3.innerHTML = JSONdata.jobs[i].jobstatus;
 		cell3.innerHTML = JSONdata.jobs[i].jobstatus;
 		cell4.innerHTML = JSONdata.jobs[i].jobname;
-		cell4.title = JSONdata.jobs[i].jobdescription;
+		cell4.title = decodeURIComponent(JSONdata.jobs[i].jobdescription);
 		cell4.style.width = "100%";
 		var gearimage = document.createElement("img");
 		gearimage.src = "img/gear.png";

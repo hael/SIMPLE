@@ -43,7 +43,7 @@ function showReRun(){
 	var jobiframe = document.getElementById('jobiframe');
 	if (jobtype == "preproc"){
 		jobiframe.src = "jobs/preproc.html?" + window.location.toString().split('?')[1];
-	} else if (jobtype == "unblur"){
+	}else if (jobtype == "unblur"){
 		jobiframe.src = "jobs/unblur.html?" + window.location.toString().split('?')[1];
 	}else if (jobtype == "ctffit"){
 		jobiframe.src = "jobs/ctffind.html?" + window.location.toString().split('?')[1];
@@ -73,8 +73,11 @@ function setReRun(){
 	var queryelements = querystring.split('&');
 	for(var i = 0; i < queryelements.length; i++){
 		var key = queryelements[i].split("=")[0];
+		console.log(key);
 		var value = queryelements[i].split("=")[1];
-		document.getElementsByName(key)[0].value = decodeURIComponent(value);
+		if (typeof document.getElementsByName(key)[0] !== "undefined"){
+			document.getElementsByName(key)[0].value = decodeURIComponent(value);
+		}
 	}
 }
 
@@ -240,4 +243,12 @@ function showHideQueueOptions() {
 			queueoptions[i].style.display = "table-row";
 		}
 	}
+}
+
+function runJob(element){
+	var jobdescription = document.getElementsByName('jobdescription')[0].value;
+	document.getElementsByName('jobdescription')[0].value = encodeURIComponent(jobdescription);
+	var jobform = document.getElementById('jobform');
+	jobform.submit();
+	showHistory();
 }
