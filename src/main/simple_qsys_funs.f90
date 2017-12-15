@@ -186,16 +186,13 @@ contains
         class(params),    intent(in) :: p
         character(len=*), intent(in) :: source
         if( p%l_chunk_distr )then
-            call simple_touch('JOB_FINISHED_'//int2str_pad(p%chunk,p%numlen),&
-                 &errmsg="qsys_job_finished ")
+            call simple_touch('JOB_FINISHED_'//int2str_pad(p%chunk,p%numlen), errmsg="qsys_job_finished")
         endif
         if( p%l_distr_exec )then
-            call simple_touch('JOB_FINISHED_'//int2str_pad(p%part,p%numlen),&
-            &errmsg="qsys_job_finished  ")
+            call simple_touch('JOB_FINISHED_'//int2str_pad(p%part,p%numlen), errmsg="qsys_job_finished")
         endif
         if( p%stream.eq.'yes' )then
-            call simple_touch('JOB_FINISHED_'//int2str_pad(p%part,p%numlen),&
-            & errmsg="qsys_job_finished  ")
+            call simple_touch('JOB_FINISHED_'//int2str_pad(p%part,p%numlen), errmsg="qsys_job_finished ")
         endif
     end subroutine qsys_job_finished
 

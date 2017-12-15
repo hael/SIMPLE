@@ -58,9 +58,19 @@ contains
 
     !> \brief  is for pretty ending
     subroutine simple_end( str, print_simple )
+        use simple_syslib,  only: get_process_id
+        use simple_strings, only: int2str
+        use simple_fileio,  only: del_file
         character(len=*),  intent(in) :: str
         logical, optional, intent(in) :: print_simple
+        character(len=:), allocatable :: pid_file
         logical :: pprint_simple
+        integer :: pid
+        ! deleta file indicating active process
+        pid = get_process_id()
+        allocate(pid_file, source='.'//int2str(pid)//'.simple.pid')
+        call del_file(pid_file)
+        ! pretty ending
         pprint_simple = .true.
         if( present(print_simple) ) pprint_simple = print_simple
         if( pprint_simple )then

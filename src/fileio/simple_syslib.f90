@@ -769,7 +769,6 @@ contains
     !     endif
     ! end function get_lunit
 
-
     function cpu_usage ()
         real :: cpu_usage
 
@@ -814,6 +813,10 @@ contains
     end function cpu_usage
 
     !! SYSTEM INFO ROUTINES
+
+    integer function get_process_id( )
+        get_process_id = getpid()
+    end function get_process_id
 
     subroutine print_compiler_info(file_unit)
         use simple_strings, only: int2str

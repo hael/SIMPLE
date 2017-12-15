@@ -414,8 +414,8 @@ contains
         type(binoris)                    :: bos
         character(len=STDLEN)            :: cwd_local, debug_local, verbose_local, stk_part_fname
         character(len=1)                 :: checkupfile(50)
-        character(len=:), allocatable    :: conv, stk_part_fname_sc
-        integer                          :: i, ncls, ifoo, lfoo(3), cntfile, istate
+        character(len=:), allocatable    :: conv, stk_part_fname_sc, pid_file
+        integer                          :: i, ncls, ifoo, lfoo(3), cntfile, istate, pid
         logical                          :: nparts_set, vol_defined(MAXS), aamix, ddel_scaled 
         nparts_set        = .false.
         vol_defined(MAXS) = .false.
@@ -432,6 +432,10 @@ contains
         ! get cwd
         call simple_getcwd(self%cwd)
         cwd_local = self%cwd
+        ! report process ID to disk
+        pid = get_process_id()
+        allocate(pid_file, source='.'//int2str(pid)//'.simple.pid')
+        call simple_touch(pid_file, errmsg="pid_file; simple_params :: new")
         ! get absolute path of executable
         call getarg(0,self%exec_abspath)
         ! take care of debug/verbose flags
