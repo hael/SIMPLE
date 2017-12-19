@@ -10,7 +10,7 @@
   </div>
   
   <div class=jobinfo>
-	<p>Correct movies for motion by aligning frames</p>
+	<p>Correct movies for motion by aligning and weighting frames</p>
   </div>
   
 	<div class=jobpane>
@@ -45,16 +45,16 @@
 			<table id=page2 style="display:none">
 				<tr>
 					<input data-required=no type=hidden name=dir_target value=output></td>
-					<td colspan=2><b>Required Parameters</b></td>
+					<td colspan=2 class=parametersheader><b>Required Parameters</b></td>
 				</tr>
 				<tr>
 					<td>Movies Directory</td>
 					<td><input data-required=no type=text name=moviesdirectory id=moviesdirectory title="Folder containing movies in .mrc format"></td>
-					<td><img src=../img/folder.png onclick="folderSelect(this)" data-target=moviesdirectory title="Sampling distance in electrons per pixel (e/px)"></td>
+					<td><img src=../img/folder.png onclick="folderSelect(this)" data-target=moviesdirectory ></td>
 				</tr>
 				<tr>
 					<td>Sampling Distance</td>
-					<td><input data-required=no type=number step=0.01 name=smpd></td>
+					<td><input data-required=no type=number step=0.01 name=smpd title="Size of detector pixels in Angstroms at magnification of data collection"></td>
 					<td></td>
 					<td></td>
 					<td></td>
@@ -69,46 +69,58 @@
 			
 			<table id=page3 style="display:none">
 				<tr>
-					<td colspan=2><b>Optional Parameters For Motion Correction</b></td>
+					<td colspan=2 class=parametersheader><b>Optional Parameters</b></td>
+				</tr>
+				<tr>
+					<td></td>
+				</tr>
+				<tr>
+					<td colspan=2 title="Parameters for applying dose correction (Grant & Grigorieff, Elife, 2015 4:e06980)"><b>Dose Correction</b></td>
 				</tr>
 				<tr>
 					<td>Acceleration Voltage</td>
-					<td><input data-required=no type=number name=kv></td>
+					<td><input data-required=no type=number name=kv title="Microscope acceleration voltage in kV"></td>
 				</tr>
 				<tr>
 					<td>Dose Rate</td>
-					<td><input data-required=no type=number name=dose_rate></td>
+					<td><input data-required=no type=number name=dose_rate title="Dose rate in e-/A^2/s" ></td>
 					<td></td>
 					<td>Exposure Time</td>
-					<td><input data-required=no type=number name=exp_time></td>
+					<td><input data-required=no type=number name=exp_time title="Exposure length in seconds"></td>
 				</tr>
 				<tr>
-					<td>From Frame</td>
-					<td><input data-required=no type=number name=fromf></td>
+					<td colspan=2 title="In addition to the full-frame, automatically weighted, motion and dose corrected micrograph you can also write a sub-set of the frames (still automatically weighted / motion & dose corrected) to a second micrograph"><b>Write Additional Partial Dose Micrograph</b></td>
+				</tr>
+				<tr>
+				    <td>Start Frame</td>
+					<td><input data-required=no type=number name=fromf title="First movie frame to include in additional partial dose micrograph"></td>
 					<td></td>
-					<td>To Frame</td>
-					<td><input data-required=no type=number name=tof></td>
+					<td>End Frame</td>
+					<td><input data-required=no type=number name=tof title="Last movie frame to include in additional partial dose micrograph"></td>
+				</tr>
+				<tr>
+					<td colspan=2><b>Other Optional Parameters</b></td>
 				</tr>
 				<tr>
 					<td>Start Low Pass Limit</td>
-					<td><input data-required=no type=number name=lpstart></td>
+					<td><input data-required=no type=number name=lpstart title="Starting resolution for motion correction in A {15}"></td>
 					<td></td>
 					<td>Stop Low Pass Limit</td>
-					<td><input data-required=no type=number name=lpstop></td>
+					<td><input data-required=no type=number name=lpstop title="Final resolution for motion correction in A {8}"></td>
 				</tr>
 				<tr>
 					<td>Power Spectrum Size</td>
-					<td><input data-required=no type=number name=pspecz></td>
+					<td><input data-required=no type=number name=pspecz title="Size of power spectrum written in pixels {512}"></td>
 					<td></td>
 					<td>Number Sigmas</td>
 					<td><input data-required=no type=number name=nsig></td>
 				</tr>
 				<tr>
 					<td>Image Scale Factor</td>
-					<td><input data-required=no type=number name=scale></td>
+					<td><input data-required=no type=number name=scale title="Scaling Factor for output micrographs e.g. for downsampling super-resolution movies {1}"></td>
 					<td></td>
 					<td>Frames to Group Before Unblur</td>
-					<td><input data-required=no type=number name=nframesgrp></td>
+					<td><input data-required=no type=number name=nframesgrp title="Number of frames in original movie to group before motion correction for very low dose frames {0}"></td>
 				</tr>
 				
 				<tr>
@@ -126,15 +138,15 @@
 				</tr>
 				<tr>
 					<td>Number Parts</td>
-					<td><input data-required=no type=number name=nparts></td>
+					<td><input data-required=no type=number name=nparts title="Number of parts to divide distributed job into for processing {1}"></td>
 					<td>Number Threads per Part</td>
-					<td><input data-required=no type=number name=nthr></td>
+					<td><input data-required=no type=number name=nthr title="Number of shared-memory CPU threads available {1}"></td>
 				</tr>
 					
 				<tr>
 					<td>Number of Compute Units</td>
 					<td>
-						<input type=number type=number name=ncunits >
+						<input type=number type=number name=ncunits title="Number of separate computing units available, should be >= number of parts {1}">
 					</td>
 					<td>Submit to Queue</td>
 					<td>
@@ -148,7 +160,7 @@
 				<tr data-queue=yes>	
 					<td>Scheduler Type</td>
 					<td>
-						<select data-required=no name=qsys_name>
+						<select data-required=no name=qsys_name title="Select queueing system type">
 							<option value=slurm selected>Slurm</option>
 						</select>
 					</td>
@@ -159,33 +171,29 @@
 				<tr data-queue=yes>
 					<td>Maximum Job Time</td>
 					<td>
-						<input data-required=no type=number name=time_per_image>
-					</td>
-					<td>Job Identifier</td>
-					<td>
-						<input data-required=no type=text name=qsys_name>
+						<input data-required=no type=number name=time_per_image title="Maximum time allowed in queue per job in seconds">
 					</td>
 				</tr>
 				
 				<tr data-queue=yes>
 					<td>Memory Per Job</td>
 					<td>
-						<input data-required=no type=number name=job_memory_per_task>
+						<input data-required=no type=number name=job_memory_per_task title="Memory allocated per job in bytes" >
 					</td>
-					<td>Queue Partition</td>
+					<td >Queue Partition</td>
 					<td>
-						<input data-required=no type=text name=qsys_partition>
+						<input data-required=no type=text name=qsys_partition title="Name of queue to submit distributed jobs to">
 					</td>
 				</tr>
 				
 				<tr data-queue=yes>
 					<td>Number Tasks Per Socket</td>
 					<td>
-						<input data-required=no type=number name=job_ntasks_per_socket>
+						<input data-required=no type=number name=job_ntasks_per_socket title="Number of simultaneous jobs to run on each CPU socket">
 					</td>
-					<td>Job Identifier</td>
+					<td >Job Identifier</td>
 					<td>
-						<input data-required=no type=text name=job_name>
+						<input data-required=no type=text name=job_name title="Assign a job name to the submitted jobs">
 					</td>
 				</tr>
 				
@@ -194,9 +202,9 @@
 					<td>
 						<input data-required=no type=text name=qsys_qos>
 					</td>
-					<td>Submit Master to Queue</td>
+					<td >Submit Master to Queue</td>
 					<td>
-						<select data-required=no name=submitmaster>
+						<select data-required=no name=submitmaster title="Choose whether master process runs on queue or locally">
 							<option value=yes>Yes</option>
 							<option value=no selected>No</option>
 						</select>

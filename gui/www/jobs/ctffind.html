@@ -48,7 +48,7 @@
 					<td colspan=2><b>Required Parameters</b></td>
 				</tr>
 				<tr>
-					<td>Output From Motion Correction</td>
+					<td>List of motion corrected micrographs from "Motion Correction" task (e.g. unblur_out.simple)</td>
 					<td><input data-required=no type=text name=unbluroutput id=unbluroutput></td>
 					<td><img src=../img/folder.png onclick="fileSelect(this)" data-target=unbluroutput data-filter=".simple"></td>
 				</tr>
@@ -67,16 +67,16 @@
 				</tr>
 				<tr>
 					<td>Sampling Distance</td>
-					<td><input data-required=no type=number step=0.01 name=smpd></td>
+					<td><input data-required=no type=number step=0.01 name=smpd title="Size of detector pixels in Angstroms at magnification of data collection"></td>
 					<td></td>
 					<td>Spherical Aberration</td>
-					<td><input data-required=no type=number step=0.1  name=cs></td>
+					<td><input data-required=no type=number step=0.1  name=cs title="Spherical aberration constant of microsope in mm {2.7}"></td>
 				</tr>
 					<td>Amplitude Contrast</td>
-					<td><input data-required=no type=number step=0.01 name=fraca></td>
+					<td><input data-required=no type=number step=0.01 name=fraca title="Fraction of amplitude contrast to be used for fitting CTF, typically ~0.1 for cryo and ~0.3 for negative stain {0.07}"></td>
 					<td></td>
 					<td>Acceleration Voltage</td>
-					<td><input data-required=no type=number name=kv></td>
+					<td><input data-required=no type=number name=kv title="Acceleration voltage of microscope (kV) {300}"></td>
 				<tr>
 					<td colspan=5 style="text-align: center">
 						<button type="button" onclick="document.getElementById('page2').style.display = 'none'; document.getElementById('page1').style.display = 'block'">Back</button>
@@ -91,32 +91,32 @@
 				</tr>
 				<tr>
 					<td>Expected Astigmatism </td>
-					<td><input data-required=no type=number step=0.01 name=astigtol></td>
+					<td><input data-required=no type=number step=0.01 name=astigtol title="Level of astimagtism tolerated in fitting in microns {0.05}"></td>
 					<td></td>
 					<td>Maximum Expected Defocus </td>
-					<td><input data-required=no type=number step=0.01 name=dfmax></td>
+					<td><input data-required=no type=number step=0.01 name=dfmax title="Maximum (further from focus) expected defocus in microns {5.0}"></td>
 				</tr>
 				<tr>
 					<td>Minimum Expected Defocus</td>
-					<td><input data-required=no type=number step=0.01 name=dfmin></td>
+					<td><input data-required=no type=number step=0.01 name=dfmin title="Minimum (closest to focus) expected defocus in microns {0.5}"></td>
 					<td></td>
 					<td>Defocus Search Step</td>
-					<td><input data-required=no type=number step=0.01 name=dfstep></td>
+					<td><input data-required=no type=number step=0.01 name=dfstep title="Defocus search step size in microns {0.05}"></td>
 				</tr>
 				<tr>
 					<td>High Pass Limit</td>
-					<td><input data-required=no type=number name=hp></td>
+					<td><input data-required=no type=number name=hp title="Lowest resolution frequencies used in fitting in A {?}"></td>
 					<td></td>
 					<td>Low Pass Limit</td>
-					<td><input data-required=no type=number name=lp></td>
+					<td><input data-required=no type=number name=lp title="Highest resolution frequencies used in fitting in A {?}"></td>
 				</tr>
 				<tr>
 					<td>Power Spectrum Size</td>
-					<td><input data-required=no type=number name=pspecz></td>
+					<td><input data-required=no type=number name=pspecz title="Size of powerspectrum written in pixels {512}"></td>
 					<td></td>
 					<td>Phase Plate</td>
 					<td>
-						<select data-required=no name=phaseplate>
+						<select data-required=no name=phaseplate title="Select 'yes' if Volta Phaseplate used in data collection {no}">
 							<option value=yes>Yes</option>
 							<option value=no selected>No</option>
 						</select>
@@ -138,15 +138,15 @@
 				</tr>
 				<tr>
 					<td>Number Parts</td>
-					<td><input data-required=no type=number name=nparts></td>
+					<td><input data-required=no type=number name=nparts title="Number of parts to divide distributed job into for processing {1}"></td>
 					<td>Number Threads per Part</td>
-					<td><input data-required=no type=number name=nthr></td>
+					<td><input data-required=no type=number name=nthr title="Number of shared-memory CPU threads available {1}"></td>
 				</tr>
 					
 				<tr>
 					<td>Number of Compute Units</td>
 					<td>
-						<input type=number type=number name=ncunits >
+						<input type=number type=number name=ncunits title="Number of separate computing units available, should be >= number of parts {1}">
 					</td>
 					<td>Submit to Queue</td>
 					<td>
@@ -157,47 +157,32 @@
 					</td>
 				</tr>
 					
-				<tr data-queue=yes>	
-					<td>Scheduler Type</td>
-					<td>
-						<select data-required=no name=qsys_name>
-							<option value=slurm selected>Slurm</option>
-						</select>
-					</td>
-					<td></td>
-					<td></td>
-				</tr>
-				
 				<tr data-queue=yes>
 					<td>Maximum Job Time</td>
 					<td>
-						<input data-required=no type=number name=time_per_image>
-					</td>
-					<td>Job Identifier</td>
-					<td>
-						<input data-required=no type=text name=qsys_name>
+						<input data-required=no type=number name=time_per_image title="Maximum time allowed in queue per job in seconds">
 					</td>
 				</tr>
 				
 				<tr data-queue=yes>
 					<td>Memory Per Job</td>
 					<td>
-						<input data-required=no type=number name=job_memory_per_task>
+						<input data-required=no type=number name=job_memory_per_task title="Memory allocated per job in bytes" >
 					</td>
-					<td>Queue Partition</td>
+					<td >Queue Partition</td>
 					<td>
-						<input data-required=no type=text name=qsys_partition>
+						<input data-required=no type=text name=qsys_partition title="Name of queue to submit distributed jobs to">
 					</td>
 				</tr>
 				
 				<tr data-queue=yes>
 					<td>Number Tasks Per Socket</td>
 					<td>
-						<input data-required=no type=number name=job_ntasks_per_socket>
+						<input data-required=no type=number name=job_ntasks_per_socket title="Number of simultaneous jobs to run on each CPU socket">
 					</td>
-					<td>Job Identifier</td>
+					<td >Job Identifier</td>
 					<td>
-						<input data-required=no type=text name=job_name>
+						<input data-required=no type=text name=job_name title="Assign a job name to the submitted jobs">
 					</td>
 				</tr>
 				
@@ -206,14 +191,14 @@
 					<td>
 						<input data-required=no type=text name=qsys_qos>
 					</td>
-					<td>Submit Master to Queue</td>
+					<td >Submit Master to Queue</td>
 					<td>
-						<select data-required=no name=submitmaster>
+						<select data-required=no name=submitmaster title="Choose whether master process runs on queue or locally">
 							<option value=yes>Yes</option>
 							<option value=no selected>No</option>
 						</select>
 					</td>
-				</tr>
+	
 				<tr>
 					<td colspan=4 style="text-align: center">
 						<button type="button" onclick="document.getElementById('page4').style.display = 'none'; document.getElementById('page3').style.display = 'block'">Back</button>

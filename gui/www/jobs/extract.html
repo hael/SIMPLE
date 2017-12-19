@@ -48,7 +48,7 @@
 					<td colspan=2><b>Required Parameters</b></td>
 				</tr>
 				<tr>
-					<td>Output From CTF Parameter Estimation</td>
+					<td>List of motion corrected micrographs and CTF parameters from "CTF fit" task (e.g. ctffit_output.simple)</td>
 					<td><input data-required=no type=text name=ctffindoutput id=ctffindoutput></td>
 					<td><img src=../img/folder.png onclick="fileSelect(this)" data-target=ctffindoutput data-filter=".simple"></td>
 				</tr>
@@ -72,7 +72,7 @@
 				</tr>
 				<tr>
 					<td>Sampling Distance</td>
-					<td><input data-required=no type=number step=0.01 name=smpd></td>
+					<td><input data-required=no type=number step=0.01 name=smpd title="Size of detector pixels in Angstroms at magnification of data collection"></td>
 					<td></td>
 				</tr>
 				<tr>
@@ -88,24 +88,24 @@
 					<td colspan=2><b>Optional Parameters For Particle Extraction</b></td>
 				</tr>
 				<tr>
-					<td>Box Size</td>
-					<td><input data-required=no type=number name=box></td>
+					<td>New Box Size</td>
+					<td><input data-required=no type=number name=box title="Box size, in pixels, to extract particles in if different from size of box used in picking"></td>
 					<td></td>
 					<td>CTF Resolution Limit</td>
-					<td><input data-required=no type=number name=ctfreslim></td>
+					<td><input data-required=no type=number name=ctfreslim title="Only extract particles from micrographs where ctfres fit statistic is better than this value in Angstroms"></td>
 				</tr>
 				<tr>
 					<td>Particle Contrast</td>
 					<td>
 						<select data-required=no name=pcontrast>
-							<option value=black selected>Black</option>
-							<option value=white>White</option>
+							<option value=black selected>Cryo</option>
+							<option value=white>Negative Stain</option>
 						</select>	
 					</td>
 					<td></td>
-					<td>Extract Outside</td>
+					<td>Extract Particles Outside Micrograph Area</td>
 					<td>
-						<select data-required=no name=pcontrast>
+						<select data-required=no name=pcontrast title="Option to extract particles where box lies partially outside the area of the micrograph {no}">
 							<option value=yes>Yes</option>
 							<option value=no selected>No</option>
 						</select>
@@ -127,7 +127,7 @@
 				</tr>
 				<tr>
 					<td>Number Threads</td>
-					<td><input data-required=no type=number name=nthr></td>
+					<td><input data-required=no type=number name=nthr title="Number of shared-memory CPU threads available {1}"></td>
 					<td>Submit to Queue</td>
 					<td>
 						<select data-required=no name=queue_submit onchange="showHideQueueOptions()">
@@ -140,7 +140,7 @@
 				<tr data-queue=yes>	
 					<td>Scheduler Type</td>
 					<td>
-						<select data-required=no name=qsys_name>
+						<select data-required=no name=qsys_name title="Select queueing system type">
 							<option value=slurm selected>Slurm</option>
 						</select>
 					</td>
@@ -151,33 +151,33 @@
 				<tr data-queue=yes>
 					<td>Maximum Job Time</td>
 					<td>
-						<input data-required=no type=number name=time_per_image>
+						<input data-required=no type=number name=time_per_image title="Maximum time allowed in queue per job, in seconds">
 					</td>
 					<td>Job Identifier</td>
 					<td>
-						<input data-required=no type=text name=qsys_name>
+						<input data-required=no type=text name=qsys_name title="Assign a job name to the submitted jobs">
 					</td>
 				</tr>
 				
 				<tr data-queue=yes>
 					<td>Memory Per Job</td>
 					<td>
-						<input data-required=no type=number name=job_memory_per_task>
+						<input data-required=no type=number name=job_memory_per_task title="Memory allocated per job in bytes">
 					</td>
 					<td>Queue Partition</td>
 					<td>
-						<input data-required=no type=text name=qsys_partition>
+						<input data-required=no type=text name=qsys_partition title="Name of queue to submit distributed jobs to">
 					</td>
 				</tr>
 				
 				<tr data-queue=yes>
 					<td>Number Tasks Per Socket</td>
 					<td>
-						<input data-required=no type=number name=job_ntasks_per_socket>
+						<input data-required=no type=number name=job_ntasks_per_socket title="Number of simultaneous jobs to run on each CPU socket">
 					</td>
 					<td>Job Identifier</td>
 					<td>
-						<input data-required=no type=text name=job_name>
+						<input data-required=no type=text name=job_name title="Assign a job name to the submitted jobs">
 					</td>
 				</tr>
 				
@@ -189,8 +189,8 @@
 					<td>Submit Master to Queue</td>
 					<td>
 						<select data-required=no name=submitmaster>
-							<option value=yes>Yes</option>
-							<option value=no selected>No</option>
+							<option value=yes selected>Yes</option>
+							<option value=no >No</option>
 						</select>
 					</td>
 				</tr>

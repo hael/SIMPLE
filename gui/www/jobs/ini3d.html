@@ -48,18 +48,18 @@
 				</tr>
 				<tr>
 					<td>Selected Cluster Averages</td>
-					<td><input data-required=no type=text name=stk id=stk></td>
+					<td><input data-required=no type=text name=stk id=stk title=".mrc file containing the 2D clusters selected to generate initial 3D volume"></td>
 					<td><img src=../img/folder.png onclick="fileSelect(this)" data-target=stk data-filter=".mrc"></td>
 				</tr>
 				<tr>
 					<td>Sampling Distance</td>
-					<td><input data-required=no type=number step=0.01 name=smpd></td>
+					<td><input data-required=no type=number step=0.01 name=smpd title="Size of detector pixels in Angstroms at magnification of data collection"></td>
 					<td></td>
 					<td>Point Group Symmetry</td>
-					<td><input data-required=no name=pgrp></td>
+					<td><input data-required=no name=pgrp title="Point group symmetry of object (cn | dn | t | o | i)"></td>
 				</tr>
 					<td>Mask Radius </td>
-					<td><input data-required=no type=number name=msk></td>
+					<td><input data-required=no type=number name=msk title="Mask radius in pixels"></td>
 					<td></td>
 				<tr>
 					<td colspan=5 style="text-align: center">
@@ -75,19 +75,14 @@
 				</tr>
 				
 				<tr>
-					<td>Particles Table</td>
-					<td><input data-required=no type=text name=ptcls id=ptcls></td>
+					<td>Orientation parameters output from 2D clustering</td>
+					<td><input data-required=no type=text name=ptcls id=ptcls title="prime2D_output_selected.simple document from previous 2D clustering / selection for remapping of information to particles at end of generation of 3D volume"></td>
 					<td><img src=../img/folder.png onclick="fileSelect(this)" data-target=ptcls data-filter=".simple"></td>
-				</tr>
-				
-				<tr>
-					<td>Envenlope Layer Width</td>
-					<td><input data-required=no type=number name=binwidth></td>
 				</tr>
 				<tr>
 					<td>Center Images/Class Averages</td>
 					<td>
-						<select data-required=no name=center>
+						<select data-required=no name=center title="Use automatic centering {no}">
 							<option value='' selected></option>
 							<option value=yes>Yes</option>
 							<option value=no>No</option>
@@ -96,7 +91,7 @@
 					<td></td>
 					<td>Automatic Down-Scaling</td>
 					<td>
-						<select data-required=no name=autoscale>
+						<select data-required=no name=autoscale title="Use automatic re-sampling to speed calculation {yes}">
 							<option value='' selected></option>
 							<option value=yes>Yes</option>
 							<option value=no>No</option>
@@ -107,51 +102,36 @@
 				<tr>
 					<td>Point Group Known</td>
 					<td>
-						<select data-required=no name=pgrp_known>
+						<select data-required=no name=pgrp_known title="If point group symmetry of object firmly established set to 'yes' and symmetry will be used from start. If symmetry less well established set to 'no' and initial volume will be generated in c1 then full search for symmetry axes performed at mid-point of workflow (slower)">
 							<option value='' selected></option>
 							<option value=yes>Yes</option>
 							<option value=no>No</option>
 						</select>
 					</td>
-					<td></td>
-					<td>Edge Size For Softening Envelope</td>
-					<td><input data-required=no type=number name=edge></td>
-				</tr>
-				
-				<tr>
+				    <td></td>
 					<td>Fraction Of Particles</td>
-					<td><input data-required=no type=number name=frac></td>
-					<td></td>
-					<td>Low Pass Limit For Envelope</td>
-					<td><input data-required=no type=number name=amsklp></td>
-				</tr>
+					<td><input data-required=no type=number name=frac title="Reconstruct from fraction of input 2D clusters only {1}">
+					</td>
+				</tr>				
 		
 				<tr>
 					<td>Number Of Projection Directions</td>
-					<td><input data-required=no type=number name=nspace></td>
+					<td><input data-required=no type=number name=nspace title="Number of projection directions {1000}"></td>
 					<td></td>
 					<td>Mask Width</td>
-					<td><input data-required=no type=number name=width></td>
+					<td><input data-required=no type=number name=width title="Distance for falloff of inner mask or filter in pixels {10}"></td>
 				</tr>
 				<tr>
-					<td>Shift Search Barrier Constraint</td>
-					<td>
-						<select data-required=no name=shbarrier>
-							<option value='' selected></option>
-							<option value=yes>Yes</option>
-							<option value=no>No</option>
-						</select>
-					</td>
-					<td></td>
+					<td>Low Pass Limit</td>
+					<td><input data-required=no type=number name=lp title="High resolution limit in Angstroms"></td>
+				<td></td>
 					<td>High Pass Limit</td>
-					<td><input data-required=no type=number name=hp></td>
+					<td><input data-required=no type=number name=hp title="Low resolution limit in Angstroms"></td>
 				</tr>
 				<tr>
 					<td>Inner Mask Radius</td>
 					<td><input data-required=no type=number name=inner></td>
 					<td></td>
-					<td>Low Pass Limit</td>
-					<td><input data-required=no type=number name=lp></td>
 				</tr>
 
 				<tr>

@@ -49,23 +49,23 @@
 					<td colspan=2><b>Required Parameters</b></td>
 				</tr>
 				<tr>
-					<td>Input Particles File</td>
-					<td><input data-required=no type=text name=simpleinput id=simpleinput></td>
+					<td>Input Particles</td>
+					<td><input data-required=no type=text name=simpleinput id=simpleinput title="File containing particles and other parameters from earlier jobs (e.g. extract_output.simple or preproc_output.simple)"></td>
 					<td><img src=../img/folder.png onclick="fileSelect(this)" data-target=simpleinput data-filter=".simple"></td>
 				</tr>
 				<tr>
 					<td>Sampling Distance</td>
-					<td><input data-required=no type=number step=0.001 name=smpd></td>
+					<td><input data-required=no type=number step=0.001 name=smpd title="Size of detector pixels in Angstroms at magnification of data collection"></td>
 					<td></td>
-					<td>Number Clusters</td>
-					<td><input data-required=no type=number name=ncls></td>
+					<td>Number of 2D Clusters</td>
+					<td><input data-required=no type=number name=ncls title="number of 2D clusters to group particles in, typically 100-300 particles per cluster"></td>
 				</tr>
 					<td>Mask Radius </td>
-					<td><input data-required=no type=number name=msk></td>
+					<td><input data-required=no type=number name=msk title="Radius of mask used for clustering in pixels"></td>
 					<td></td>
 					<td>CTF Correction</td>
 					<td>
-						<select data-required=no name=ctf>
+						<select data-required=no name=ctf title="Choose whether to perform full CTF correction, phase-flipping or no correction {yes = full correction}">
 							<option value=yes selected>Yes</option>
 							<option value=no>No</option>
 							<option value=flip>Flip</option>
@@ -84,31 +84,106 @@
 					<td colspan=2><b>Optional Parameters</b></td>
 				</tr>
 				<tr>
-					<td>Centering Low-Pass Limit</td>
-					<td><input data-required=no type=number name=cenlp></td>
-				</tr>
-				<tr>
 					<td>Center Images/Class Averages</td>
 					<td>
-						<select data-required=no name=center>
+						<select data-required=no name=center title="Option to centre particles / classes {no}">
 							<option value='' selected></option>
 							<option value=yes>Yes</option>
 							<option value=no>No</option>
 						</select>
 					</td>
 					<td></td>
-					<td>Automatic Down-Scaling</td>
+						<td>Centering Low-Pass Limit</td>
+					<td><input data-required=no type=number name=cenlp title="Resolution in Angstroms for centering particles {30 A}"></td>
+				</tr>
+				<tr>
+				<td>Automatic Down-Scaling</td>
 					<td>
-						<select data-required=no name=autoscale>
+						<select data-required=no name=autoscale title="Allow automatic re-sampling of particles during workflow to speed calculations {yes}">
+							<option value='' selected></option>
+							<option value=yes>Yes</option>
+							<option value=no>No</option>
+						</select>
+					</td> 
+				</tr>
+				
+				<tr>
+					<td>Initial References</td>
+					<td><input data-required=no type=number name=refs title=".mrc file containing 2D clusters from previous round of clustering as starting references"></td>
+					<td></td>
+					<td>Number Particles Per Chunk</td>
+					<td><input data-required=no type=number name=chunksz title="Number of particles per chunk for chunk-based clustering (deprecated)"></td>
+				</tr>
+				<tr>
+					<td>First Iteration</td>
+					<td><input data-required=no type=number name=startit title="Start numbering iterations from here - for restarting clustering"></td>
+					<td></td>
+					<td>Maximum Number Iterations</td>
+					<td><input data-required=no type=number name=maxits title="Limit the maximum number of clustering iterations"></td>
+				</tr>
+				<tr>
+					<td>Maximum Translational Shift</td>
+					<td><input data-required=no type=number name=trs title="Maximum translational shift per iteration in pixels"></td>
+					<td></td>
+					<td>Spectral Weighting</td>
+					<td>
+						<select data-required=no name=weights2D title="Select use of spectral weights - often useful for small particles {no}">
 							<option value='' selected></option>
 							<option value=yes>Yes</option>
 							<option value=no>No</option>
 						</select>
 					</td>
 				</tr>
+				<tr>
+					<td>Inner Mask Radius</td>
+					<td><input data-required=no type=number name=inner title="Inner mask radius in pixels for clustering hollow objects e.g. spherical viruses"></td>
+				</tr>
+				<tr>
+					<td>High Pass Limit</td>
+					<td><input data-required=no type=number name=hp title="Low resolution limit used in clustering in Angstroms"></td>
+					<td></td>
+					<td>Low Pass Limit</td>
+					<td><input data-required=no type=number name=lp title="High resolution limit used in clusetering in Angstroms"></td>
+				</tr>
 				
 				<tr>
-					<td>Envelope Masking</td>
+					<td>Starting Low Pass Limit</td>
+					<td><input data-required=no type=number name=lpstart title="Initial high resolution limit in Angstroms used for clustering with dyanmic resolution update {15}"></td>
+					<td></td>
+					<td>Stopping Low Pass Limit</td>
+					<td><input data-required=no type=number name=lpstop title="Final high resolution limit in Angstroms used for clustering with dyanmic resolution update {8}"></td>
+				</tr>
+				<tr>
+					<td>Phase Plate Data</td>
+					<td>
+						<select data-required=no name=phaseplate title="Select 'yes' if Volta Phaseplate used in data collection {no}">
+							<option value='' selected></option>
+							<option value=yes>Yes</option>
+							<option value=no>No</option>
+						</select>
+					</td>
+				</tr>	
+				<tr>
+					<td>Matched Filter</td>
+					<td>
+						<select data-required=no name=match_filt title="Matched filter applied {yes}">
+							<option value='' selected></option>
+							<option value=yes>Yes</option>
+							<option value=no>No</option>
+						</select>
+					</td>
+					<td></td>
+				</tr>
+					<tr>
+					<td colspan=2><b>Under Development Parameters</b></td>
+				</tr>
+				<tr>
+				<tr>
+					<td>Width of Inner Mask/Filter</td>
+					<td><input data-required=no type=number name=width title="Distance for falloff of inner mask or filter in pixels {10}"></td>
+					<td></td>
+				</tr>
+						<td>Envelope Masking</td>
 					<td>
 						<select data-required=no name=automsk>
 							<option value='' selected></option>
@@ -118,85 +193,10 @@
 						</select>
 					</td>
 					<td></td>
-					<td>Number Particles Per Chunk</td>
-					<td><input data-required=no type=number name=chunksz></td>
-				</tr>
-				
-				<tr>
-					<td>Initial References</td>
-					<td><input data-required=no type=number name=refs></td>
-					<td></td>
-					<td>Low Pass Limit For Envelope</td>
-					<td><input data-required=no type=number name=amsklp></td>
-				</tr>
-		
-				<tr>
-					<td>First Iteration</td>
-					<td><input data-required=no type=number name=startit></td>
-					<td></td>
-					<td>Maximum Number Iterations</td>
-					<td><input data-required=no type=number name=maxits></td>
-				</tr>
-				<tr>
-					<td>Width of Filament</td>
-					<td><input data-required=no type=number name=filwidth></td>
-					<td></td>
-					<td>High Pass Limit</td>
-					<td><input data-required=no type=number name=hp></td>
-				</tr>
-				<tr>
-					<td>Inner Mask Radius</td>
-					<td><input data-required=no type=number name=inner></td>
-					<td></td>
-					<td>Low Pass Limit</td>
-					<td><input data-required=no type=number name=lp></td>
-				</tr>
-				
-				<tr>
-					<td>Starting Low Pass Limit</td>
-					<td><input data-required=no type=number name=lpstart></td>
-					<td></td>
-					<td>Stopping Low Pass Limit</td>
-					<td><input data-required=no type=number name=lpstop></td>
-				</tr>
-				
-				<tr>
-					<td>Matched Filter</td>
-					<td>
-						<select data-required=no name=match_filt>
-							<option value='' selected></option>
-							<option value=yes>Yes</option>
-							<option value=no>No</option>
-						</select>
-					</td>
-					<td></td>
-					<td>Phase Plate Data</td>
-					<td>
-						<select data-required=no name=phaseplate>
-							<option value='' selected></option>
-							<option value=yes>Yes</option>
-							<option value=no>No</option>
-						</select>
-					</td>
-				</tr>
-				<tr>
-					<td>Maximum Halfwidth Shift</td>
-					<td><input data-required=no type=number name=trs></td>
-					<td></td>
-					<td>Spectral Weighting</td>
-					<td>
-						<select data-required=no name=weights2D>
-							<option value='' selected></option>
-							<option value=yes>Yes</option>
-							<option value=no>No</option>
-						</select>
-					</td>
-				</tr>
-				<tr>
-					<td>Width of Inner Mask/Filter</td>
-					<td><input data-required=no type=number name=width></td>
-				</tr>
-				<tr>
+						<td>Low Pass Limit For Envelope</td>
+					<td><input data-required=no type=number name=amsklp title="High resolution limit for envelope mask generation in Angstroms"></td>
+				</tr>				
+			<tr>
 					<td colspan=5 style="text-align: center">
 						<button type="button" onclick="document.getElementById('page3').style.display = 'none'; document.getElementById('page2').style.display = 'block'">Back</button>
 						<button type="button" onclick="document.getElementById('page3').style.display = 'none'; document.getElementById('page4').style.display = 'block'">Next</button>
@@ -211,15 +211,15 @@
 				</tr>
 				<tr>
 					<td>Number Parts</td>
-					<td><input data-required=no type=number name=nparts></td>
+					<td><input data-required=no type=number name=nparts title="Number of parts to divide distributed job into for processing {1}"></td>
 					<td>Number Threads per Part</td>
-					<td><input data-required=no type=number name=nthr></td>
+					<td><input data-required=no type=number name=nthr title="Number of shared-memory CPU threads available {1}"></td>
 				</tr>
 					
 				<tr>
 					<td>Number of Compute Units</td>
 					<td>
-						<input type=number name=executable value=ncunits>
+						<input type=number type=number name=ncunits title="Number of separate computing units available, should be >= number of parts {1}">
 					</td>
 					<td>Submit to Queue</td>
 					<td>
@@ -230,47 +230,32 @@
 					</td>
 				</tr>
 					
-				<tr data-queue=yes>	
-					<td>Scheduler Type</td>
-					<td>
-						<select data-required=no name=qsys_name>
-							<option value=slurm selected>Slurm</option>
-						</select>
-					</td>
-					<td></td>
-					<td></td>
-				</tr>
-				
 				<tr data-queue=yes>
 					<td>Maximum Job Time</td>
 					<td>
-						<input data-required=no type=number name=time_per_image>
-					</td>
-					<td>Job Identifier</td>
-					<td>
-						<input data-required=no type=text name=qsys_name>
+						<input data-required=no type=number name=time_per_image title="Maximum time allowed in queue per job in seconds">
 					</td>
 				</tr>
 				
 				<tr data-queue=yes>
 					<td>Memory Per Job</td>
 					<td>
-						<input data-required=no type=number name=job_memory_per_task>
+						<input data-required=no type=number name=job_memory_per_task title="Memory allocated per job in bytes" >
 					</td>
-					<td>Queue Partition</td>
+					<td >Queue Partition</td>
 					<td>
-						<input data-required=no type=text name=qsys_partition>
+						<input data-required=no type=text name=qsys_partition title="Name of queue to submit distributed jobs to">
 					</td>
 				</tr>
 				
 				<tr data-queue=yes>
 					<td>Number Tasks Per Socket</td>
 					<td>
-						<input data-required=no type=number name=job_ntasks_per_socket>
+						<input data-required=no type=number name=job_ntasks_per_socket title="Number of simultaneous jobs to run on each CPU socket">
 					</td>
-					<td>Job Identifier</td>
+					<td >Job Identifier</td>
 					<td>
-						<input data-required=no type=text name=job_name>
+						<input data-required=no type=text name=job_name title="Assign a job name to the submitted jobs">
 					</td>
 				</tr>
 				
@@ -279,14 +264,13 @@
 					<td>
 						<input data-required=no type=text name=qsys_qos>
 					</td>
-					<td>Submit Master to Queue</td>
+					<td >Submit Master to Queue</td>
 					<td>
-						<select data-required=no name=submitmaster>
+						<select data-required=no name=submitmaster title="Choose whether master process runs on queue or locally">
 							<option value=yes>Yes</option>
 							<option value=no selected>No</option>
 						</select>
 					</td>
-				</tr>
 				<tr>
 					<td colspan=4 style="text-align: center">
 						<button type="button" onclick="document.getElementById('page4').style.display = 'none'; document.getElementById('page3').style.display = 'block'">Back</button>
