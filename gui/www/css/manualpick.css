@@ -20,8 +20,14 @@
 }
 
 .pickmicrographs {
-	width: 200px;
+	width: 400px;
 
+}
+
+.pickmicrographs table{
+	height: calc(90vh - 220px);
+	overflow: scroll;
+	display: block;
 }
 
 #pickmicrographs {
@@ -30,8 +36,8 @@
 }
 
 .pickparameters {
-	width: 200px;
-
+	width: 400px;
+	
 }
 
 .pickparameters label{
@@ -39,8 +45,8 @@
 
 }
 .pickcanvas{
-	width: 80vw;
-	height: 80vh;
+	width: calc(100vw - 800px);
+	height: 90vh;
 	overflow: scroll;
 	display: inline-block;
 	}
@@ -84,4 +90,28 @@ float:right;
 	position: absolute;
 width: 17px;
 left: 7px;
+}
+
+.pickcanvasgauze{
+	position:absolute;
+	display: none;
+	background-color: black;
+	opacity: 0.7;
+	width: calc(100vw - 800px);
+	height: 90vh;
+}
+
+.loader {
+  border: 8px solid #f3f3f3;
+  border-radius: 50%;
+  border-top: 8px solid #3498db;
+  width: 60px;
+  height: 60px;
+  animation: spin 2s linear infinite;
+  margin: auto;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
 }

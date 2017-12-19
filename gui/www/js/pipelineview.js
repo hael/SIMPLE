@@ -90,15 +90,20 @@ function showFileViewerData (data){
 		var attributesdiv = document.createElement("div");
 		attributesdiv.className = 'attributes';
 		
+		var attributestable = document.createElement("table");
+		
 		var keys = Object.keys(JSONdata.snapshots[0]);
 		for(var j = 0; j < keys.length; j++) {
 			div.setAttribute('data-'+keys[j], JSONdata.snapshots[i][keys[j]]);
-			var attributediv = document.createElement("div");
-			attributediv.innerHTML = keys[j];
-			attributediv.innerHTML += " : ";
-			attributediv.innerHTML += JSONdata.snapshots[i][keys[j]];
-			attributesdiv.appendChild(attributediv);
+			var row = attributestable.insertRow();
+			var cell1 = row.insertCell();
+			var cell2 = row.insertCell();
+			var cell3 = row.insertCell();
+			cell1.innerHTML = keys[j];
+			cell2.innerHTML = ":";
+			cell3.innerHTML = JSONdata.snapshots[i][keys[j]];
 		}
+		attributesdiv.appendChild(attributestable);
 		
 		div.setAttribute('data-id', JSONdata.snapshots[i].id);
 		div.setAttribute('data-frameid', 0);
@@ -218,11 +223,15 @@ function updateFileViewer () {
 			e.cancelBubble = true;
 			if (e.stopPropagation) e.stopPropagation();
 			var attributes = this.parentNode.getElementsByClassName('attributes')[0];
-			if(attributes.style.visibility =="visible"){
-				attributes.style.visibility = "hidden"
-			}else{
-				attributes.style.visibility = "visible";
-			}
+			var ctfattributes =  document.getElementById('ctfattributes');
+			ctfattributes.innerHTML = attributes.innerHTML;
+			showHideCTFViewPopup();
+		//	if(attributes.style.visibility =="visible"){
+		//		attributes.style.visibility = "hidden"
+		//	}else{
+		//		attributes.style.visibility = "visible";
+		//	}
+		
 		};
 		snapshots[i].appendChild(fileimg);
 		
@@ -442,6 +451,18 @@ function showHideSelectionPopup () {
 
 function showHideBoxViewPopup () {
 	var boxviewpopup = document.getElementById('boxviewpopup');
+	var gauze = document.getElementById('gauze');
+	if (boxviewpopup.style.display == "block") {
+		boxviewpopup.style.display = "none";
+		gauze.style.display = "none";
+	} else {
+		boxviewpopup.style.display = "block";
+		gauze.style.display = "block";
+	}
+}
+
+function showHideCTFViewPopup () {
+	var boxviewpopup = document.getElementById('ctfviewpopup');
 	var gauze = document.getElementById('gauze');
 	if (boxviewpopup.style.display == "block") {
 		boxviewpopup.style.display = "none";

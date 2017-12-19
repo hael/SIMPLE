@@ -19,6 +19,7 @@
 			<input type=hidden id=projecttable name=table value=0>
 			<input type=hidden id=projectfolder name=jobfolder value=0>
 			<input type=hidden id=rootdirectory>
+			<input type=hidden id=jobfolder>
 			
 			<table id=page1>
 				<tr>
@@ -78,56 +79,145 @@
 		<div class=headermenu id=headermenu>
 		</div>
 		<div class=pickmicrographs>
-			Micrographs
-			<div id=pickmicrographs></div>
+			<div>
+				Micrographs
+				<table id=pickmicrographs></table>
+			</div>
+			<div>
+				View Parameters
+				<table>
+					<tr>
+						<td>Contrast</td>
+						<td>
+							<input type=range min=0.5 max=10 value=2 id=pickcontrast>
+						</td>
+					</tr>
+					<tr>
+						<td>Brightness</td>
+						<td>
+							<input type=range min=0 max=254 value=128 id=pickbrightness>
+						</td>
+					</tr>
+					<tr>
+						<td>Scale</td>
+						<td>
+							<input type=range min=0.05 max=1 value=0.5 step=0.01 id=scale>
+						</td>
+					</tr>
+					<tr>
+						<td>Show Box Outline</td>
+						<td>
+							<input type=checkbox id=pickbox>
+						</td>
+					</tr>
+					<tr>
+						<td>Show Particle Diameter</td>
+						<td>
+							<input type=checkbox id=pickparticle checked>
+						</td>
+					</tr>
+					<tr>
+						<td colspan=2>
+							<input type=button onclick='reloadMicrograph()' value="Refresh">
+						</td>
+					</tr>
+	
+				</table>
+			</div>
 		</div>
 		<div class=pickcanvas oncontextmenu="showHideControlsPopup();return false;">
+			<div id=particlecount></div>
 			<canvas id=pickcanvas></canvas>
+			<div id=pickcanvasgauze class=pickcanvasgauze>
+				<div id=loader class=loader></div>
+			</div>
 		</div>
 		<div class=pickparameters>
 			<div>
 				Picking Parameters
-				<label for=boxsize>Boxsize</label>
-				<input type=number id=boxsize name=boxsize value=128>
-				<label for=particlediameter>Particle Diameter</label>
-				<input type=number id=particlediameter name=particlediameter value=32>
-				<input type=button value="Clear Boxes">
+				<table>
+					<tr>
+						<td>Boxsize</td>
+						<td>
+							<input type=number id=boxsize onchange="clearBoxes()" name=boxsize value=128>
+						</td>
+					</tr>
+					<tr>
+						<td>Particle Diameter</td>
+						<td>
+							<input type=number id=particlediameter name=particlediameter value=32>
+						</td>
+					</tr>
+					<tr>
+						<td colspan=2>
+							<input type=button onclick='clearBoxes()' value="Clear Boxes">
+						</td>
+					</tr>	
+				</table>
 			</div>
 			<div>
 				Reference Based Picking
-				<label for=refs>References</label>
-				<input type=text id=refs name=refs>
-				<img src=../img/folder.png onclick="fileSelect(this)" data-target=refs data-filter=".mrc"></td>
-				<label for=ndev>Deviation</label>
-				<input type=number id=ndev name=ndev value=1>
-				<label for=thres>Threshold</label>
-				<input type=number id=thres name=thres value=100>
-				<input type=button value="Autopick">
+				<table>
+					<tr>
+						<td>References</td>
+						<td>
+							<input type=text id=pickrefs name=pickrefs>
+						</td>
+						<td>
+							<img src=../img/folder.png onclick="fileSelect(this)" data-target=pickrefs data-filter=".mrc">
+						</td>
+					</tr>
+					<tr>
+						<td>
+							<it>or</it>
+						</td>
+					</tr>
+					<tr>
+						<td>Volume</td>
+						<td>
+							<input type=text id=pickvol name=pickvol>
+						</td>
+						<td>
+							<img src=../img/folder.png onclick="fileSelect(this)" data-target=pickvol data-filter=".mrc">
+						</td>
+					</tr>
+					<tr>
+						<td>Point Group Symmetry</td>
+						<td>
+							<input type=text id=pgrp name=pgrp value=C1>
+						</td>
+					</tr>
+					<tr>
+						<td>Deviation</td>
+						<td>
+							<input type=number id=ndev name=ndev value=1>
+						</td>
+					</tr>
+					<tr>
+						<td>Threshold</td>
+						<td>
+							<input type=number id=thres name=thres value=100>
+						</td>
+						<td></td>
+					</tr>
+					<tr>
+						<td>Negative Stain</td>
+						<td>
+							<input type=checkbox id=pcontrast>
+						</td>
+						<td></td>
+					</tr>
+					<tr>
+						<td colspan=3>
+							<input type=button onclick="autoPick()" value="Autopick">
+						</td>
+					</tr>
+				</table>
 			</div>
 		</div>
 	</div>
 	
 	<div id=gauze class=gauze></div>
-	
-	<div class=controlspopup id=controlspopup>
-	  <div class=header>
-		  <img class=simpleiconpopup src=../img/simple_favicon.ico>
-		View Controls
-		<img src=../img/close.png class=closeimage onclick='showHideControlsPopup()'>
-	</div>
-	<input type=hidden id=controlstarget>
-	<div class=mainpane>
-		<div class=controlscontrast>
-			Contrast
-			<input type=range min=0.5 max=10 value=2 id=pickcontrast>
-		</div>		
-		<div class=controlsbrightness>
-			Brightness
-			<input type=range min=0 max=254 value=128 id=pickbrightness>
-		</div>
-	</div>
-	<button class=popupbutton onclick='reloadMicrograph()'>Update</button>
-  </div>
 	
 	<div class=selectfilepopup id=selectfilepopup>
 	 <div class=header id=selectfileheader>

@@ -52,18 +52,20 @@ function populateMicrographs(data){
 	var JSONdata = JSON.parse(data);
 	var rootdirectory = document.getElementById('rootdirectory');
 	rootdirectory.value = JSONdata.rootdirectory;
+	var jobfolder = document.getElementById('jobfolder');
+	jobfolder.value = JSONdata.jobfolder;
 	
 	var pickmicrographs = document.getElementById('pickmicrographs');
 	
 	for (var i = 0; i < JSONdata.snapshots.length; i++) {
-		var micrograph = document.createElement("div");
-		micrograph.innerHTML = JSONdata.snapshots[i].micrograph;
-		micrograph.onclick = function(ev){ev.stopPropagation(); pickMicrograph(this)};
+		var row = pickmicrographs.insertRow();
+		var cell1 = row.insertCell(0);
+		cell1.innerHTML = JSONdata.snapshots[i].micrograph;
+		cell1.onclick = function(ev){ev.stopPropagation(); pickMicrograph(this)};
 		var keys = Object.keys(JSONdata.snapshots[i]);
 		for(var j = 0; j < keys.length; j++) {
-			micrograph.setAttribute('data-'+keys[j], JSONdata.snapshots[i][keys[j]]);
+			cell1.setAttribute('data-'+keys[j], JSONdata.snapshots[i][keys[j]]);
 		}
-		pickmicrographs.appendChild(micrograph);
 	}
 }
 
@@ -80,6 +82,8 @@ function pickMicrograph(element){
 		context.clearRect(0, 0, canvas.width, canvas.height);
 		canvas.width = backgroundimage.width;
 		canvas.height = backgroundimage.height;
+		var scale = document.getElementById('scale').value;
+		canvas.style.width = canvas.width * scale;
 		context.drawImage(backgroundimage, 0, 0,backgroundimage.width, backgroundimage.height, 0, 0, canvas.width, canvas.height);
 		var url = "../JSONhandler?function=boxfiledata"
 		url += "&filename=" + canvas.getAttribute('data-boxfile');
@@ -98,7 +102,10 @@ function reloadMicrograph(){
 		context.clearRect(0, 0, canvas.width, canvas.height);
 		canvas.width = backgroundimage.width;
 		canvas.height = backgroundimage.height;
+		var scale = document.getElementById('scale').value;
+		canvas.style.width = canvas.width * scale;
 		context.drawImage(backgroundimage, 0, 0,backgroundimage.width, backgroundimage.height, 0, 0, canvas.width, canvas.height);
+		document.getElementById('pickcanvasgauze').style.display = "none";
 		var url = "../JSONhandler?function=boxfiledata"
 		url += "&filename=" + canvas.getAttribute('data-boxfile');
 		getAjax(url, drawBoxes);
@@ -106,25 +113,14 @@ function reloadMicrograph(){
 }
 
 function refineBox(element, event){
+	var scale = document.getElementById('scale').value;
     var totalOffsetX = 0;
     var totalOffsetY = 0;
     var canvasX = 0;
     var canvasY = 0;
-	
-  //  do{
-  //      totalOffsetX += element.offsetLeft - element.scrollLeft;
-   //     totalOffsetY += element.offsetTop - element.scrollTop;
-  //  }
-   // while(element = element.offsetParent)
 
-	console.log("offsetleft " + totalOffsetX);
-	console.log("scrollleft " + totalOffsetY);
-	console.log("eventx " + event.pageX);
-	
-   // canvasX = event.pageX - totalOffsetX;
-  //  canvasY = event.pageY - totalOffsetY;
-	canvasX = event.pageX - element.offsetLeft + element.parentNode.scrollLeft;
-	canvasY = event.pageY - element.offsetTop + element.parentNode.scrollTop;
+	canvasX = (event.pageX - element.offsetLeft + element.parentNode.scrollLeft) / scale;
+	canvasY = (event.pageY - element.offsetTop + element.parentNode.scrollTop) / scale;
 	
 	var canvas = document.getElementById('pickcanvas');
 
@@ -144,15 +140,60 @@ function drawBoxes(data){
 	var context = canvas.getContext('2d');
 	var boxsize = document.getElementById('boxsize').value;
 	var particlediameter = document.getElementById('particlediameter').value;
-	
+	var particlecount =  document.getElementById('particlecount');
+	particlecount.innerHTML = "Particle Count: " + JSONdata.boxes.length; 
 	for(var i = 0; i < JSONdata.boxes.length; i++) {
-		context.beginPath();
-		context.arc(parseInt(JSONdata.boxes[i][0]) + parseInt(JSONdata.boxes[i][2]) / 2, parseInt(JSONdata.boxes[i][1]) + parseInt(JSONdata.boxes[i][2]) / 2, parseInt(particlediameter) / 2 ,0,2*Math.PI);
-		context.lineWidth=8;
-		context.strokeStyle=  "green";
-		context.stroke();
+
+		if(document.getElementById("pickbox").checked){
+			context.beginPath();
+			context.rect(parseInt(JSONdata.boxes[i][0]), parseInt(JSONdata.boxes[i][1]), parseInt(boxsize), parseInt(boxsize));
+			context.lineWidth=8;
+			context.strokeStyle=  "green";
+			context.stroke();
+		}
+		if(document.getElementById("pickparticle").checked){
+			context.beginPath();
+			context.arc(parseInt(JSONdata.boxes[i][0]) + parseInt(JSONdata.boxes[i][2]) / 2, parseInt(JSONdata.boxes[i][1]) + parseInt(JSONdata.boxes[i][2]) / 2, parseInt(particlediameter) / 2 ,0,2*Math.PI);
+			context.lineWidth=8;
+			context.strokeStyle=  "green";
+			context.stroke();
+		}
 	}
 }
+
+function clearBoxes(){
+	var canvas = document.getElementById('pickcanvas');
+	var url = "../JSONhandler?function=clearboxes"
+	url += "&filename=" + canvas.getAttribute('data-boxfile');
+	getAjax(url, reloadMicrograph);
+}
+
+function autoPick(){
+	var canvas = document.getElementById('pickcanvas');
+	var gauze = document.getElementById('pickcanvasgauze');
+	gauze.style.top = canvas.offsetTop;
+	gauze.style.left = canvas.offsetLeft;
+	gauze.style.display = "block";
+	var url = "../JSONhandler?function=autopick"
+	url += "&micrograph=" + canvas.getAttribute('data-micrograph');
+	url += "&pgrp=" + document.getElementById('pgrp').value;
+	url += "&folder=" + document.getElementById('jobfolder').value;
+	url += "&smpd=" + document.getElementById('smpd').value;
+	if(document.getElementById('pickrefs').value != ""){
+		url += "&pickrefs=" + document.getElementById('pickrefs').value;
+	}else if(document.getElementById('pickvol').value != ""){
+		url += "&pickvol=" + document.getElementById('pickvol').value;
+	}
+	if(document.getElementById('pcontrast').checked){
+		url += "&pcontrast=white";
+	}else{
+		url += "&pcontrast=black";
+	}
+	url += "&thres=" + document.getElementById('thres').value;
+	url += "&ndev=" + document.getElementById('ndev').value;
+	getAjax(url, reloadMicrograph);
+}
+
 function fileSelect(element) {
 	var selectfilepopup = document.getElementById('selectfilepopup');
 	var filetarget = document.getElementById('filetarget');

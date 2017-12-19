@@ -60,6 +60,18 @@ padding-left: 30px;
 	left: 30vw;
 }
 
+.ctfviewpopup {
+	position: absolute;
+	top: 160px;
+	background-color: white;
+	display: none;
+	left: 30vw;
+}
+
+.ctfviewpopup table{
+	font-size: 14px;
+}
+	
 .pickingpopup {
 	position: absolute;
 	top: 50px;

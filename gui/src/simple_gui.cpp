@@ -13,6 +13,7 @@
 #include <libgen.h>
 #include <algorithm>
 #include <signal.h>
+#include <cstdio>
 
 extern "C" {
     #include "../ext/mongoose/mongoose.h"
@@ -47,6 +48,7 @@ struct JSONResponse {
 	std::vector< std::map<std::string, std::string> >			rerunjob;
 	std::string													JSONstring;
 	std::string													particlecount;
+	std::string													jobfolder;
 };
 
 struct UniDoc {
@@ -2279,6 +2281,8 @@ void viewManualPick (JSONResponse* response, struct http_message* message) {
 			
 		status = mkdir(outputfolder.c_str(), S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
 		
+		response->jobfolder = outputfolder;
+		
 		if (getRequestVariable(message, "unbluroutput", unidocfilename)){
 			dirc = strdup(unidocfilename.c_str());
 			dname = dirname(dirc);
@@ -2294,12 +2298,12 @@ void viewManualPick (JSONResponse* response, struct http_message* message) {
 					value.replace(value.end() - 3, value.end(), "box");
 					dirc = strdup(value.c_str());
 					boxfile = outputfolder + "/" + std::string(basename(dirc));
-					getUniDocValue(unidoc, datait, "boxfile", value);
-					if(value.size() > 0){
-						micrographmap["boxfile"] = value;
-					} else {
+					//getUniDocValue(unidoc, datait, "boxfile", value);
+					//if(value.size() > 0){
+					//	micrographmap["boxfile"] = value;
+					//} else {
 						micrographmap["boxfile"] = boxfile;
-					}
+					//}
 					response->snapshots.push_back(micrographmap);
 				}
 				delete unidoc;
@@ -2442,6 +2446,17 @@ void getPixelsFromMRC(JPEGResponse* response, std::string filename, struct http_
 	
 }
 
+void clearBoxes (JSONResponse* response, struct http_message* message) {
+
+	std::string								filename;
+
+	if (getRequestVariable(message, "filename", filename)){
+		if(fileExists(filename)){
+			std::remove(filename.c_str());
+		}
+	}
+}
+
 void getBoxes (JSONResponse* response, struct http_message* message) {
 
 	std::ifstream 							input;
@@ -2519,25 +2534,43 @@ void getLogFile (JSONResponse* response, struct http_message* message) {
 	
 }
 
-void pick (JSONResponse* response, struct http_message* message){
+void autoPick (JSONResponse* response, struct http_message* message){
 	
 	std::string		pickrefs;
+	std::string		pickvol;
+	std::string		pgrp;
 	std::string		boxfile;
 	std::string		folder;
 	std::string		micrograph;
 	std::string		command;
 	std::string		thres;
 	std::string		ndev;
+	std::string		picktab;
+	std::string		smpd;
+	std::string		pcontrast;
+	
 	FILE*								stream;
 	int				status;
 	std::ofstream					filetab;
 	char*			basec;
 	
-	if (getRequestVariable(message, "folder", folder) && getRequestVariable(message, "micrograph", micrograph)){
-		pickrefs = "/tmp/gausspick.mrc";
-		if(fileExists(pickrefs) && fileExists(folder)){
-			status = chdir(folder.c_str()); // is this a good idea? no!
-			filetab.open("picktab.txt");
+	if (getRequestVariable(message, "folder", folder) && getRequestVariable(message, "micrograph", micrograph) && getRequestVariable(message, "pgrp", pgrp)){
+		if(getRequestVariable(message, "pickrefs", pickrefs) && getRequestVariable(message, "pcontrast", pcontrast) && fileExists(folder)){
+			command = "cd " + folder + " && simple_exec prg=makepickrefs pgrp=" + pgrp + " stk=" + pickrefs + " nthr=1 pcontrast=" + pcontrast + " >> simple_job.log";
+			std::cout << command << std::endl;
+			stream = popen(command.c_str(), "r");
+			pclose(stream);
+		} else if (getRequestVariable(message, "pickvol", pickvol) && fileExists(folder)){
+			command = "cd " + folder + " && simple_exec prg=makepickrefs pgrp=" + pgrp + " vol1=" + pickrefs + " nthr=1 pcontrast=" + pcontrast + " >> simple_job.log";
+			stream = popen(command.c_str(), "r");
+			pclose(stream);
+		}
+		
+		pickrefs = folder + "/pickrefs.mrc";
+		picktab = folder + "/picktab.txt";
+
+		if(fileExists(pickrefs)){
+			filetab.open(picktab.c_str());
 			if(filetab.is_open()){
 				basec = strdup(micrograph.c_str());
 				boxfile = folder + "/";
@@ -2548,14 +2581,17 @@ void pick (JSONResponse* response, struct http_message* message){
 				}
 				filetab << micrograph << "\n";
 				filetab.close();
-				command = "simple_exec prg=pick smpd=6.8 refs=" + pickrefs + " filetab=picktab.txt nthr=1";
+				command = "cd " + folder + " && simple_exec prg=pick refs=pickrefs.mrc filetab=picktab.txt nthr=4";
 				if(getRequestVariable(message, "thres", thres)){
 					command += " thres="+thres;
 				}
 				if(getRequestVariable(message, "ndev", ndev)){
 					command += " ndev="+ndev;
 				}
-				command += " > simple_pick.log";
+				if(getRequestVariable(message, "smpd", smpd)){
+					command += " smpd="+smpd;
+				}
+				command += " >> simple_job.log";
 				std::cout << command << std::endl;
 				std::cout << boxfile << std::endl;
 				stream = popen(command.c_str(), "r");
@@ -3115,6 +3151,10 @@ void encodeJSON(JSONResponse* response){
 		response->JSONstring += "\"particlecount\" : \"" + response->particlecount + "\",";
 	}
 	
+	if (response->jobfolder.size() > 0) {
+		response->JSONstring += "\"jobfolder\" : \"" + response->jobfolder + "\",";
+	}
+	
 	response->JSONstring.pop_back();
 	response->JSONstring += "}";
 }
@@ -3180,6 +3220,10 @@ void JSONHandler (struct mg_connection* http_connection, struct http_message* me
 			viewExtract(response, message);
 		} else if (function == "syncjob") {
 			syncJob(response, message);
+		} else if (function == "clearboxes") {
+			clearBoxes(response, message);
+		} else if (function == "autopick") {
+			autoPick(response, message);
 		}
 	}
 	
