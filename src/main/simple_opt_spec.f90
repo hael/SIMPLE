@@ -34,6 +34,7 @@ type :: opt_spec
     integer                   :: npop=0                               !< population size (4 evolutionary optimizers)
     integer                   :: nnn=0                                !< number of nearest neighbors
     integer                   :: peakcnt=0                            !< peak counter
+    integer                   :: lbfgsb_m                             !< m-parameter for lbfgsb algorithm (default: 15)
     logical, allocatable      :: cyclic(:)                            !< to indicate which variables are cyclic (Euler angles)
     real, allocatable         :: limits(:,:)                          !< variable bounds
     real, allocatable         :: limits_init(:,:)                     !< variable bounds for initialisation (randomized bounds)
@@ -182,6 +183,8 @@ contains
                 ! do nothing
             case('bfgs2')
                 ! do nothing
+            case('lfbgsb')
+                ! do nothing
             case('stde')
                 ! do nothing
             case('powell')
@@ -254,8 +257,9 @@ contains
                     & self%x_4_tmp(self%ndim), self%x_8(self%ndim),stat=alloc_stat )
                 allocchk('In: specify; simple_opt_spec, DEFAULT')
         end select
-        self%x  = 0.
-        self%exists = .true.
+        self%x        = 0.
+        self%lbfgsb_m = 15
+        self%exists   = .true.
     end subroutine specify
 
     !>  \brief  to change optimizer

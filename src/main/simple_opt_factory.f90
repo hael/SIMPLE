@@ -4,6 +4,7 @@ use simple_optimizer,          only: optimizer
 use simple_opt_spec,           only: opt_spec
 use simple_bfgs_opt,           only: bfgs_opt
 use simple_bfgs2_opt,          only: bfgs2_opt
+use simple_lbfgsb_opt,         only: lbfgsb_opt
 use simple_fr_cg_opt,          only: fr_cg_opt
 use simple_pr_cg_opt,          only: pr_cg_opt
 use simple_stde_opt,           only: stde_opt
@@ -51,6 +52,8 @@ contains
                 allocate(pr_cg_opt          :: self%optimizer_type)
             case('bfgs2')
                 allocate(bfgs2_opt          :: self%optimizer_type)
+            case('lbfgsb')
+                allocate(lbfgsb_opt         :: self%optimizer_type)
             case('stde')
                 allocate(stde_opt           :: self%optimizer_type)                
             case DEFAULT
