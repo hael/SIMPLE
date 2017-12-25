@@ -269,7 +269,7 @@ contains
             call self%myqsys%write_instr(q_descr, fhandle=funit)
         else
             call self%myqsys%write_instr(job_descr, fhandle=funit)
-	    write(funit,'(a)',advance='yes') 'echo $$ >> .pid'
+        write(funit,'(a)',advance='yes') 'echo $$ >> .pid'
         endif
         write(funit,'(a)',advance='yes') 'cd '//trim(self%pwd)
         write(funit,'(a)',advance='yes') ''
@@ -320,7 +320,11 @@ contains
         ! compose the command line
         write(funit,'(a)',advance='no') trim(exec_bin)//' '//job_descr%chash2str()
         ! direct output
-        write(funit,'(a)',advance='yes') ' > '//outfile
+        if( outfile .ne. '' )then
+            write(funit,'(a)',advance='yes') ' > '//outfile
+        else
+            write(funit,'(a)',advance='yes') ''
+        endif
         ! exit shell when done
         write(funit,'(a)',advance='yes') ''
         write(funit,'(a)',advance='yes') 'exit'

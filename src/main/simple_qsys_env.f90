@@ -126,7 +126,7 @@ contains
         type(chash)                        :: job_descr
         character(len=:),      allocatable :: halt_ind, script_name_here
         if( present(finish_indicator) )then
-            allocate(halt_ind, source=trim(finish_indicator) )
+            allocate(halt_ind, source=trim(finish_indicator))
         endif
         if( present(script_name) )then
             allocate(script_name_here, source=trim(script_name))

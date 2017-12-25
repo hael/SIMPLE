@@ -436,67 +436,51 @@ select case(prg)
         keys_required(2)  = 'msk'
         keys_required(3)  = 'ncls'
         keys_required(4)  = 'ctf'
+        keys_required(5)  = 'nparts'
         ! set optional keys
-        keys_optional(1)  = 'nparts'
-        keys_optional(2)  = 'chunksz'
-        keys_optional(3)  = 'nthr'
-        keys_optional(4)  = 'ncunits'
-        keys_optional(5)  = 'deftab'
-        keys_optional(6)  = 'refs'
-        keys_optional(7)  = 'oritab'
-        keys_optional(8)  = 'hp'
-        keys_optional(9)  = 'lp'
-        keys_optional(10) = 'lpstart'
-        keys_optional(11) = 'lpstop'
-        keys_optional(12) = 'cenlp'
-        keys_optional(13) = 'trs'
-        keys_optional(14) = 'automsk'
-        keys_optional(15) = 'amsklp'
-        keys_optional(16) = 'edge'
-        keys_optional(17) = 'inner'
-        keys_optional(18) = 'width'
-        keys_optional(19) = 'startit'
-        keys_optional(20) = 'maxits'
-        keys_optional(21) = 'filwidth'
-        keys_optional(22) = 'center'
-        keys_optional(23) = 'autoscale'
-        keys_optional(24) = 'oritab3D'
-        keys_optional(25) = 'weights2D'
-        keys_optional(26) = 'refine'
-        keys_optional(27) = 'balance'
-        keys_optional(28) = 'match_filt'
-        keys_optional(29) = 'stk'
-        keys_optional(30) = 'stktab'
-        keys_optional(31) = 'dyncls'
-        keys_optional(32) = 'phaseplate'
-        keys_optional(33) = 'opt'
+        keys_optional(1)  = 'nthr'
+        keys_optional(2)  = 'ncunits'
+        keys_optional(3)  = 'deftab'
+        keys_optional(4)  = 'refs'
+        keys_optional(5)  = 'oritab'
+        keys_optional(6)  = 'hp'
+        keys_optional(7)  = 'lp'
+        keys_optional(8)  = 'lpstart'
+        keys_optional(9)  = 'lpstop'
+        keys_optional(10) = 'cenlp'
+        keys_optional(11) = 'trs'
+        keys_optional(12) = 'inner'
+        keys_optional(13) = 'width'
+        keys_optional(14) = 'startit'
+        keys_optional(15) = 'maxits'
+        keys_optional(16) = 'filwidth'
+        keys_optional(17) = 'center'
+        keys_optional(18) = 'autoscale'
+        keys_optional(19) = 'weights2D'
+        keys_optional(20) = 'refine'
+        keys_optional(21) = 'balance'
+        keys_optional(22) = 'match_filt'
+        keys_optional(23) = 'stk'
+        keys_optional(24) = 'stktab'
+        keys_optional(25) = 'dyncls'
+        keys_optional(26) = 'phaseplate'
+        keys_optional(27) = 'opt'
         ! documentation
         if( describe ) call print_doc_prime2D
-        call cline%parse( keys_required(:4), keys_optional(:33) )
+        call cline%parse( keys_required(:5), keys_optional(:27) )
         ! sanity checks 
         if( cline%defined('stk') .or. cline%defined('stktab') )then
             ! all ok
         else
             stop 'stk or stktab need to be part of command line!'
         endif
-        if( cline%defined('nparts') .and. cline%defined('chunksz') )then
-            stop 'nparts and chunksz cannot simultaneously be part of command line'
-        else if(cline%defined('nparts') )then
-            ! ok
-        else if( cline%defined('chunksz') )then
-            ! ok
-        else
-            stop 'eiter nparts or chunksz need to be part of command line'
-        endif
         ! set defaults
-        if( .not. cline%defined('lpstart')   ) call cline%set('lpstart',    15.)
-        if( .not. cline%defined('lpstop')    ) call cline%set('lpstop',     8.)
-        if( .not. cline%defined('eo')        ) call cline%set('eo',         'no')
-        if( .not. cline%defined('amsklp')    ) call cline%set('amsklp',     20.)
-        if( .not. cline%defined('cenlp')     ) call cline%set('cenlp',      30.)
-        if( .not. cline%defined('edge')      ) call cline%set('edge',       10.)
-        if( .not. cline%defined('maxits')    ) call cline%set('maxits',     30.)
-        if( .not. cline%defined('weights2D') ) call cline%set('weights2D', 'no')
+        if( .not. cline%defined('lpstart')   ) call cline%set('lpstart',    15. )
+        if( .not. cline%defined('lpstop')    ) call cline%set('lpstop',      8. )
+        if( .not. cline%defined('eo')        ) call cline%set('eo',        'no' )
+        if( .not. cline%defined('cenlp')     ) call cline%set('cenlp',      30. )
+        if( .not. cline%defined('maxits')    ) call cline%set('maxits',     30. )
+        if( .not. cline%defined('weights2D') ) call cline%set('weights2D', 'no' )
         if( .not. cline%defined('autoscale') ) call cline%set('autoscale', 'yes')
         ! execute
         call xprime2D_distr%execute(cline)

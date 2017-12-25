@@ -990,7 +990,7 @@ contains
                     if( p_master%eo .ne. 'no' )then
                         volassemble_output = 'RESOLUTION_STATE'//trim(str_state)//'_ITER'//trim(str_iter)
                     else
-                        volassemble_output = 'VOLASSEMBLE_STATE'//trim(str_state)//'_ITER'//trim(str_iter)
+                        volassemble_output = ''
                     endif
                     call cline_volassemble%set( 'state', real(state) )
                     call qenv%exec_simple_prg_in_queue(cline_volassemble, trim(volassemble_output),&
@@ -1155,10 +1155,9 @@ contains
             if( p_master%eo .ne. 'no' )then
                 volassemble_output = 'RESOLUTION_STATE'//trim(str_state)
             else
-                volassemble_output = 'VOLASSEMBLE_STATE'//trim(str_state)
+                volassemble_output = ''
             endif
             call cline_volassemble%set( 'state', real(state) )
-
             call qenv%exec_simple_prg_in_queue(cline_volassemble, trim(volassemble_output),&
                 &script_name='simple_script_state'//trim(str_state))
         end do

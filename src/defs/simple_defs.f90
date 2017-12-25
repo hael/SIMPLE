@@ -75,6 +75,7 @@ real, parameter :: EXTRINITHRESH           = 0.5       !< initial randomization 
 real, parameter :: EXTRTHRESH_CONST        = 0.2       !< threshold for factorial decay in extremal search
 real, parameter :: LP2SMPDFAC              = 0.4125    !< low-pass limit scaling constant
 real, parameter :: NPEAKSATHRES            = 12.0      !< angular threshold for determining npeaks (PRIME3D)
+real, parameter :: TAU                     = 0.02      !< controls the sharpeness of the orientation weight distribution
 
 ! integer #/threshold constants
 integer, parameter :: LPLIM1ITERBOUND      = 5         !< # iteration bound lplim stage 1 (PRIME2D)

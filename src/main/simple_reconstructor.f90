@@ -263,25 +263,30 @@ contains
 
     ! CONVOLUTION INTERPOLATION
 
-    !> insert Fourier plane
-    subroutine insert_fplane_1( self, o, fpl, pwght )
-        class(reconstructor), intent(inout) :: self   !< instance
-        class(ori),           intent(inout) :: o      !< orientation
-        class(image),         intent(inout) :: fpl    !< Fourier plane
-        real,                 intent(in)    :: pwght  !< external particle weight (affects both fplane and rho)
+    !> insert Fourier plane, single orientation
+    subroutine insert_fplane_1( self, se, o, fpl, pwght )
+        use simple_sym, only: sym
+        class(reconstructor), intent(inout) :: self  !< instance
+        class(sym),           intent(inout) :: se    !< symmetry elements
+        class(ori),           intent(inout) :: o     !< orientation
+        class(image),         intent(inout) :: fpl   !< Fourier plane
+        real,                 intent(in)    :: pwght !< external particle weight (affects both fplane and rho)
+        real, allocatable :: rotmats(:,:,:)
+        type(ori) :: o_sym
         type(ctf) :: tfun
-        integer   :: logi(3), win(3,2), sh, i, h, k
+        integer   :: logi(3), win(3,2), sh, i, h, k, nsym, isym
         complex   :: comp, oshift
-        real      :: rotmat(3,3), vec(3), loc(3), shconst_here(2), dfx, dfy, angast, phshift
+        real      :: vec(3), loc(3), shconst_here(2), dfx, dfy, angast, phshift
         real      :: w(self%wdim,self%wdim,self%wdim), arg, tval, tvalsq
+        ! setup CTF
         if( self%ctf%flag /= CTFFLAG_NO )then
             ! make CTF object & get CTF info
             tfun = ctf(self%get_smpd(), o%get('kv'), o%get('cs'), o%get('fraca'))
             dfx  = o%get('dfx')
-            if( self%tfastig )then            ! astigmatic CTF model
+            if( self%tfastig )then ! astigmatic CTF model
                 dfy    = o%get('dfy')
                 angast = o%get('angast')
-            else                              ! non-astigmatic CTF model
+            else                   ! non-astigmatic CTF model
                 dfy    = dfx
                 angast = 0.
             endif
@@ -290,133 +295,59 @@ contains
             phshift = 0.
             if( self%phaseplate ) phshift = o%get('phshift')
         endif
-        rotmat       = o%get_mat()
-        shconst_here = (-o%get_2Dshift()) * self%shconst_rec(1:2)
-        !$omp parallel do collapse(2) default(shared) schedule(static)&
-        !$omp private(i,h,k,sh,comp,arg,oshift,logi,tval,tvalsq,w,win,vec,loc)&
-        !$omp proc_bind(close)
-        do h=self%cyc_lims(1,1),self%cyc_lims(1,2)
-            do k=self%cyc_lims(2,1),self%cyc_lims(2,2)
-                sh = nint(hyp(real(h),real(k)))
-                if( sh > self%nyq + 1 )cycle
-                ! calculate non-uniform sampling location
-                logi = [h,k,0]
-                vec  = real(logi)
-                loc  = matmul(vec, rotmat)
-                ! initiate kernel matrix
-                call sqwin_3d(loc(1), loc(2), loc(3), self%winsz, win)
-                ! no need to update outside the non-redundant Friedel limits
-                ! consistent with compress_exp
-                if( win(1,2) < self%lims(1,1) )cycle
-                ! Fourier component
-                comp   = fpl%get_fcomp(logi, self%ind_map(h,k,:))
-                ! evaluate shift
-                arg    = dot_product(shconst_here, vec(1:2))
-                oshift = cmplx(cos(arg), sin(arg))
-                ! evaluate the transfer function
-                if( self%ctf%flag /= CTFFLAG_NO )then
-                    ! CTF and CTF**2 values
-                    if( self%phaseplate )then
-                        tval = tfun%eval(self%ctf_sqSpatFreq(h,k), self%ctf_ang(h,k), phshift)
-                    else
-                        tval = tfun%eval(self%ctf_sqSpatFreq(h,k), self%ctf_ang(h,k))
-                    endif
-                    tvalsq = tval * tval
-                    if( self%ctf%flag == CTFFLAG_FLIP ) tval = abs(tval)
-                else
-                    tval   = 1.
-                    tvalsq = tval
-                endif
-                ! (weighted) kernel values
-                w = pwght
-                do i=1,self%wdim
-                    w(i,:,:) = w(i,:,:) * self%kbwin%apod(real(win(1,1) + i - 1) - loc(1))
-                    w(:,i,:) = w(:,i,:) * self%kbwin%apod(real(win(2,1) + i - 1) - loc(2))
-                    w(:,:,i) = w(:,:,i) * self%kbwin%apod(real(win(3,1) + i - 1) - loc(3))
-                enddo
-                ! expanded matrices update
-                ! CTF and w modulates the component before origin shift
-                self%cmat_exp(win(1,1):win(1,2), win(2,1):win(2,2), win(3,1):win(3,2)) =&
-                &self%cmat_exp(win(1,1):win(1,2), win(2,1):win(2,2), win(3,1):win(3,2)) + (comp*tval*w)*oshift
-                self%rho_exp(win(1,1):win(1,2), win(2,1):win(2,2), win(3,1):win(3,2)) =&
-                &self%rho_exp(win(1,1):win(1,2), win(2,1):win(2,2), win(3,1):win(3,2)) + tvalsq*w
+        ! setup rotation matrices
+        nsym = se%get_nsym()
+        allocate(rotmats(nsym,3,3), source=0.0)
+        rotmats(1,:,:) = o%get_mat()
+        if( nsym > 1 )then
+            do isym=2,nsym
+                o_sym = se%apply(o, isym)
+                rotmats(isym,:,:) = o_sym%get_mat()
             end do
-        end do
-        !$omp end parallel do
-    end subroutine insert_fplane_1
-
-    !> insert or un-insert Fourier plane peaks
-    subroutine insert_fplane_2( self, os, fpl, noris, pwght )
-        class(reconstructor), intent(inout) :: self   !< instance
-        class(oris),          intent(inout) :: os     !< orientation peaks
-        class(image),         intent(inout) :: fpl    !< Fourier plane
-        integer,              intent(in)    :: noris  !< # of orienations peaks
-        real,                 intent(in)    :: pwght  !< image weight
-        type(ctf) :: tfun
-        integer   :: win(3,2), i, h, k, sh, iori, logi(3)
-        complex   :: comp, oshift
-        real      :: rotmats(noris,3,3), vec(3), loc(3), shifts(noris,2), ows(noris)
-        real      :: w(self%wdim,self%wdim,self%wdim), arg, tval, tvalsq, dfx, dfy, angast, phshift
-        if( self%ctf%flag /= CTFFLAG_NO )then ! make CTF object & get CTF info
-            tfun = ctf(self%get_smpd(), os%get(1,'kv'), os%get(1,'cs'), os%get(1,'fraca'))
-            dfx  = os%get(1,'dfx')
-            if( self%tfastig )then            ! astigmatic CTF model
-                dfy    = os%get(1,'dfy')
-                angast = os%get(1,'angast')
-            else                              ! non-astigmatic CTF model
-                dfy    = dfx
-                angast = 0.
-            endif
-            call tfun%init(dfx, dfy, angast)
-            ! additional phase shift from the Volta
-            phshift = 0.
-            if( self%phaseplate ) phshift = os%get(1,'phshift')
         endif
-        do iori = 1, noris
-            ows(iori) = pwght * os%get(iori,'ow')
-            if( ows(iori) < TINY ) cycle
-            rotmats(iori,:,:) = os%get_mat(iori)
-            shifts(iori,:)    = (-os%get_2Dshift(iori)) * self%shconst_rec(1:2)
-        enddo
-        !$omp parallel do collapse(2) default(shared) schedule(static)&
-        !$omp private(h,k,iori,sh,arg,oshift,i,logi,vec,comp,loc,w,win,tval,tvalsq) proc_bind(close)
-        do h=self%cyc_lims(1,1),self%cyc_lims(1,2)
-            do k=self%cyc_lims(2,1),self%cyc_lims(2,2)
-                sh = nint(hyp(real(h),real(k)))
-                if( sh > self%nyq + 1 )cycle
-                logi = [h,k,0]
-                vec  = real(logi)
-                ! Fourier component
-                comp = fpl%get_fcomp(logi, self%ind_map(h,k,:))
-                ! evaluate the transfer function
-                if( self%ctf%flag /= CTFFLAG_NO )then
-                    ! calculate CTF and CTF**2 values
-                    if( self%phaseplate )then
-                        tval = tfun%eval(self%ctf_sqSpatFreq(h,k), self%ctf_ang(h,k), phshift)
-                    else
-                        tval = tfun%eval(self%ctf_sqSpatFreq(h,k), self%ctf_ang(h,k))
-                    endif
-                    tvalsq = tval * tval
-                    if( self%ctf%flag == CTFFLAG_FLIP ) tval = abs(tval)
-                else
-                    tval   = 1.
-                    tvalsq = tval
-                endif
-                ! orientation peaks loop
-                do iori = 1,noris
-                    if( ows(iori) < TINY ) cycle
-                    ! calculate non-uniform sampling location
-                    loc = matmul(vec, rotmats(iori,:,:))
-                    ! initiate kernel matrix
+        ! memoize for origin shifting
+        shconst_here = (-o%get_2Dshift()) * self%shconst_rec(1:2)
+        ! the parallellisation must run over one plane @ the time to avoid race conditions
+        ! but by starting the parallel section here we reduce thread creation O/H
+        ! and lower the serial slack, while preserving a low memory footprint. The speeduop 
+        ! (on 5000 images of betagal) is modest (10%) but significant
+        !$omp parallel default(shared) private(i,h,k,sh,comp,arg,oshift,logi,tval,tvalsq,w,win,vec,loc) proc_bind(close)
+        do isym=1,nsym
+            !$omp do collapse(2) schedule(static)
+            do h=self%cyc_lims(1,1),self%cyc_lims(1,2)
+                do k=self%cyc_lims(2,1),self%cyc_lims(2,2)
+                    sh = nint(hyp(real(h),real(k)))
+                    if( sh > self%nyq + 1 ) cycle
+                    logi = [h,k,0]
+                    vec  = real(logi)
+                    ! non-uniform sampling location
+                    loc  = matmul(vec, rotmats(isym,:,:))
+                    ! window
                     call sqwin_3d(loc(1), loc(2), loc(3), self%winsz, win)
                     ! no need to update outside the non-redundant Friedel limits
                     ! consistent with compress_exp
                     if( win(1,2) < self%lims(1,1) )cycle
-                    ! evaluate shift
-                    arg    = dot_product(shifts(iori,:), vec(1:2))
+                    ! Fourier component
+                    comp   = fpl%get_fcomp(logi, self%ind_map(h,k,:))
+                    ! shift
+                    arg    = dot_product(shconst_here, vec(1:2))
                     oshift = cmplx(cos(arg), sin(arg))
+                    ! transfer function
+                    if( self%ctf%flag /= CTFFLAG_NO )then
+                        ! CTF and CTF**2 values
+                        if( self%phaseplate )then
+                            tval = tfun%eval(self%ctf_sqSpatFreq(h,k), self%ctf_ang(h,k), phshift)
+                        else
+                            tval = tfun%eval(self%ctf_sqSpatFreq(h,k), self%ctf_ang(h,k))
+                        endif
+                        tvalsq = tval * tval
+                        if( self%ctf%flag == CTFFLAG_FLIP ) tval = abs(tval)
+                    else
+                        tval   = 1.
+                        tvalsq = tval
+                    endif
                     ! (weighted) kernel values
-                    w = ows(iori)
+                    w = pwght
                     do i=1,self%wdim
                         w(i,:,:) = w(i,:,:) * self%kbwin%apod(real(win(1,1) + i - 1) - loc(1))
                         w(:,i,:) = w(:,i,:) * self%kbwin%apod(real(win(2,1) + i - 1) - loc(2))
@@ -430,8 +361,123 @@ contains
                     &self%rho_exp(win(1,1):win(1,2), win(2,1):win(2,2), win(3,1):win(3,2)) + tvalsq*w
                 end do
             end do
+            !$omp end do nowait
         end do
-        !$omp end parallel do
+        !$omp end parallel 
+    end subroutine insert_fplane_1
+
+    !> insert Fourier plane, distribution of orientations (with weights)
+    subroutine insert_fplane_2( self, se, os, fpl, pwght, state )
+        use simple_sym, only: sym
+        class(reconstructor), intent(inout) :: self  !< instance
+        class(sym),           intent(inout) :: se    !< symmetry elements
+        class(oris),          intent(inout) :: os    !< orientations
+        class(image),         intent(inout) :: fpl   !< Fourier plane
+        real,                 intent(in)    :: pwght !< external particle weight (affects both fplane and rho)
+        integer, optional,    intent(in)    :: state !< state to reconstruct
+        type(ori) :: o_sym, o
+        type(ctf) :: tfun
+        integer   :: logi(3), win(3,2), sh, i, h, k, nsym, isym, iori, noris, sstate, states(os%get_noris())
+        complex   :: comp, oshift
+        real      :: vec(3), loc(3), shifts(os%get_noris(),2), ows(os%get_noris()), dfx, dfy, angast, phshift
+        real      :: w(self%wdim,self%wdim,self%wdim), arg, tval, tvalsq, rotmats(os%get_noris(),se%get_nsym(),3,3)
+        ! take care of optional state flag
+        sstate = 1
+        if( present(state) ) sstate = state
+        ! setup CTF
+        if( self%ctf%flag /= CTFFLAG_NO )then
+            ! make CTF object & get CTF info
+            o    = os%get_ori(1)
+            tfun = ctf(self%get_smpd(), o%get('kv'), o%get('cs'), o%get('fraca'))
+            dfx  = o%get('dfx')
+            if( self%tfastig )then ! astigmatic CTF model
+                dfy    = o%get('dfy')
+                angast = o%get('angast')
+            else                   ! non-astigmatic CTF model
+                dfy    = dfx
+                angast = 0.
+            endif
+            call tfun%init(dfx, dfy, angast)
+            ! additional phase shift from the Volta
+            phshift = 0.
+            if( self%phaseplate ) phshift = o%get('phshift')
+        endif
+        ! setup orientation weights/states/rotation matrices/shifts
+        nsym  = se%get_nsym()
+        noris = os%get_noris()
+        do iori=1,noris
+            o            = os%get_ori(iori)
+            ows(iori)    = pwght * o%get('ow')
+            states(iori) = nint(o%get('state'))
+            if( ows(iori) < TINY ) cycle
+            rotmats(iori,1,:,:) = o%get_mat()
+            if( nsym > 1 )then
+                do isym=2,nsym
+                    o_sym = se%apply(o, isym)
+                    rotmats(iori,isym,:,:) = o_sym%get_mat()
+                end do
+            endif
+            shifts(iori,:) = (-o%get_2Dshift()) * self%shconst_rec(1:2)
+        enddo
+        ! the parallellisation must run over one plane @ the time to avoid race conditions
+        ! but by starting the parallel section here we reduce thread creation O/H
+        ! and lower the serial slack, while preserving a low memory footprint
+        !$omp parallel default(shared) private(i,h,k,sh,comp,arg,oshift,logi,tval,tvalsq,w,win,vec,loc) proc_bind(close)
+        do isym=1,nsym
+            do iori=1,noris
+                if( ows(iori) < TINY .or. states(iori) /= sstate ) cycle
+                !$omp do collapse(2) schedule(static)
+                do h=self%cyc_lims(1,1),self%cyc_lims(1,2)
+                    do k=self%cyc_lims(2,1),self%cyc_lims(2,2)
+                        sh = nint(hyp(real(h),real(k)))
+                        if( sh > self%nyq + 1 ) cycle
+                        logi = [h,k,0]
+                        vec  = real(logi)
+                        ! non-uniform sampling location
+                        loc  = matmul(vec, rotmats(iori,isym,:,:))
+                        ! window
+                        call sqwin_3d(loc(1), loc(2), loc(3), self%winsz, win)
+                        ! no need to update outside the non-redundant Friedel limits
+                        ! consistent with compress_exp
+                        if( win(1,2) < self%lims(1,1) )cycle
+                        ! Fourier component
+                        comp   = fpl%get_fcomp(logi, self%ind_map(h,k,:))
+                        ! shift
+                        arg    = dot_product(shifts(iori,:), vec(1:2))
+                        oshift = cmplx(cos(arg), sin(arg))
+                        ! transfer function
+                        if( self%ctf%flag /= CTFFLAG_NO )then
+                            ! CTF and CTF**2 values
+                            if( self%phaseplate )then
+                                tval = tfun%eval(self%ctf_sqSpatFreq(h,k), self%ctf_ang(h,k), phshift)
+                            else
+                                tval = tfun%eval(self%ctf_sqSpatFreq(h,k), self%ctf_ang(h,k))
+                            endif
+                            tvalsq = tval * tval
+                            if( self%ctf%flag == CTFFLAG_FLIP ) tval = abs(tval)
+                        else
+                            tval   = 1.
+                            tvalsq = tval
+                        endif
+                        ! (weighted) kernel values
+                        w = ows(iori)
+                        do i=1,self%wdim
+                            w(i,:,:) = w(i,:,:) * self%kbwin%apod(real(win(1,1) + i - 1) - loc(1))
+                            w(:,i,:) = w(:,i,:) * self%kbwin%apod(real(win(2,1) + i - 1) - loc(2))
+                            w(:,:,i) = w(:,:,i) * self%kbwin%apod(real(win(3,1) + i - 1) - loc(3))
+                        enddo
+                        ! expanded matrices update
+                        ! CTF and w modulates the component before origin shift
+                        self%cmat_exp(win(1,1):win(1,2), win(2,1):win(2,2), win(3,1):win(3,2)) =&
+                        &self%cmat_exp(win(1,1):win(1,2), win(2,1):win(2,2), win(3,1):win(3,2)) + (comp*tval*w)*oshift
+                        self%rho_exp(win(1,1):win(1,2), win(2,1):win(2,2), win(3,1):win(3,2)) =&
+                        &self%rho_exp(win(1,1):win(1,2), win(2,1):win(2,2), win(3,1):win(3,2)) + tvalsq*w
+                    end do
+                end do
+                !$omp end do nowait
+            end do
+        end do
+        !$omp end parallel 
     end subroutine insert_fplane_2
 
     !>  is for uneven distribution of orientations correction 
@@ -675,14 +721,7 @@ contains
                     endif
                     call img%read(stkname, ind)
                     call gridprep%prep(img, img_pad)
-                    if( p%pgrp == 'c1' )then
-                        call self%insert_fplane(orientation, img_pad, pwght=pw)
-                    else
-                        do j=1,se%get_nsym()
-                            o_sym = se%apply(orientation, j)
-                            call self%insert_fplane(o_sym, img_pad, pwght=pw)
-                        end do
-                    endif
+                    call self%insert_fplane(se, orientation, img_pad, pwght=pw)
                     deallocate(stkname)
                 endif
             end subroutine rec_dens

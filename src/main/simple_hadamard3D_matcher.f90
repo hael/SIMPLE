@@ -66,19 +66,21 @@ contains
         use simple_fileio,    only: del_file
         use simple_rnd,       only: irnd_uni
         use simple_sym,       only: sym
+        use simple_image,     only: image
         class(build),   intent(inout) :: b
         class(params),  intent(inout) :: p
         class(cmdline), intent(inout) :: cline
         integer,        intent(in)    :: which_iter
         logical,        intent(inout) :: update_res, converged
-        type(ori)            :: orientation
-        type(kbinterpol)     :: kbwin
-        type(sym)            :: c1_symop
-        type(prep4cgrid)     :: gridprep
-        integer, allocatable :: symmat(:,:)
-        real       :: skewness, frac_srch_space, reslim
-        integer    :: iptcl, iextr_lim, i, zero_pop, fnr, cnt
-        logical    :: doprint, do_extr
+        type(ori)                :: orientation
+        type(kbinterpol)         :: kbwin
+        type(sym)                :: c1_symop
+        type(prep4cgrid)         :: gridprep
+        type(image), allocatable :: rec_imgs(:)
+        integer,     allocatable :: symmat(:,:)
+        real    :: skewness, frac_srch_space, reslim
+        integer :: iptcl, iextr_lim, i, zero_pop, fnr, cnt, i_batch, batchlims(2), ibatch
+        logical :: doprint, do_extr
 
         if( L_BENCH )then
             t_init = tic()
@@ -383,24 +385,41 @@ contains
             call gridprep%new(b%img, kbwin, [p%boxpd,p%boxpd,1])
             ! init volumes
             call preprecvols(b, p)
-            ! reconstruction
-            do i=1,nptcls2update
-                iptcl = pinds(i)
-                orientation = b%a%get_ori(iptcl)
-                if( orientation%isstatezero() .or.&
-                   &nint(orientation%get('state_balance')) == 0 ) cycle
-                call read_img_and_norm(b, p, iptcl)
-                call gridprep%prep(b%img, b%img_pad)
-                if( p%npeaks > 1 )then
-                    call grid_ptcl(b, p, b%se, orientation, os=o_peaks(iptcl))
-                else
-                    if( trim(p%refine).eq.'hetsym' )then
-                        ! always C1 reconstruction
-                        call grid_ptcl(b, p, c1_symop, orientation)
+            ! prep rec imgs
+            allocate(rec_imgs(MAXIMGBATCHSZ))
+            do i=1,MAXIMGBATCHSZ
+                call rec_imgs(i)%new([p%boxpd, p%boxpd, 1], p%smpd)
+            end do
+            ! prep batch imgs
+            call prepimgbatch(b, p, MAXIMGBATCHSZ)
+            ! gridding batch loop
+            do i_batch=1,nptcls2update,MAXIMGBATCHSZ
+                batchlims = [i_batch,min(nptcls2update,i_batch + MAXIMGBATCHSZ - 1)]
+                call read_imgbatch(b, p, nptcls2update, pinds, batchlims)
+                ! parallel gridprep
+                !$omp parallel do default(shared) private(i,ibatch) schedule(static) proc_bind(close)
+                do i=batchlims(1),batchlims(2)
+                    ibatch = i - batchlims(1) + 1
+                    call gridprep%prep_serial_no_fft(b%imgbatch(ibatch), rec_imgs(ibatch))
+                end do
+                !$omp end parallel do
+                ! gridding
+                do i=batchlims(1),batchlims(2)
+                    iptcl       = pinds(i)
+                    ibatch      = i - batchlims(1) + 1
+                    orientation = b%a%get_ori(iptcl)
+                    if( orientation%isstatezero() .or. nint(orientation%get('state_balance')) == 0 ) cycle
+                    if( p%npeaks > 1 )then
+                        call grid_ptcl(b, p, rec_imgs(ibatch), b%se, orientation, o_peaks(iptcl))
                     else
-                        call grid_ptcl(b, p, b%se, orientation)
+                        if( trim(p%refine).eq.'hetsym' )then
+                            ! always C1 reconstruction
+                            call grid_ptcl(b, p, rec_imgs(ibatch), c1_symop, orientation)
+                        else
+                            call grid_ptcl(b, p, rec_imgs(ibatch), b%se, orientation)
+                        endif
                     endif
-                endif
+                end do
             end do
             ! normalise structure factors
             if( p%eo .ne. 'no' )then
@@ -408,8 +427,14 @@ contains
             else
                 call norm_struct_facts(b, p, which_iter)
             endif
-            ! recvols % gridprep not needed anymore
+            ! destruct
             call killrecvols(b, p)
+            call gridprep%kill
+            do ibatch=1,MAXIMGBATCHSZ
+                call rec_imgs(ibatch)%kill
+                call b%imgbatch(ibatch)%kill
+            end do
+            deallocate(rec_imgs, b%imgbatch)
             call gridprep%kill
         endif
         if( L_BENCH ) rt_rec = toc(t_rec)
@@ -504,14 +529,7 @@ contains
                 orientation = b%a%get_ori(sample(i) + p%fromp - 1)
                 call read_img_and_norm( b, p, sample(i) + p%fromp - 1 )
                 call gridprep%prep(b%img, b%img_pad)
-                if( p%pgrp == 'c1' )then
-                    call b%recvols(1)%insert_fplane(orientation, b%img_pad, pwght=1.0)
-                else
-                    do k=1,b%se%get_nsym()
-                        o_sym = b%se%apply(orientation, k)
-                        call b%recvols(1)%insert_fplane(o_sym, b%img_pad, pwght=1.0)
-                    end do
-                endif
+                call b%recvols(1)%insert_fplane(b%se, orientation, b%img_pad, pwght=1.0)
             end do
             deallocate(sample)
             call norm_struct_facts(b, p)
@@ -522,9 +540,9 @@ contains
     !> Prepare alignment search using polar projection Fourier cross correlation
     subroutine preppftcc4align( b, p, cline )
         use simple_polarizer, only: polarizer
-        class(build),               intent(inout) :: b       !< build object
-        class(params),              intent(inout) :: p       !< param object
-        class(cmdline),             intent(inout) :: cline   !< command line
+        class(build),               intent(inout) :: b     !< build object
+        class(params),              intent(inout) :: p     !< param object
+        class(cmdline),             intent(inout) :: cline !< command line
         type(polarizer), allocatable :: match_imgs(:)
         type(ori) :: o
         integer   :: cnt, s, iptcl, iref, istate, ntot, nrefs, ldim(3)

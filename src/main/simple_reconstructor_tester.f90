@@ -46,7 +46,7 @@ contains
             orientation = b%a%get_ori(iptcl)
             call read_img_and_norm(b, p, iptcl)
             call gridprep%prep(b%img, b%img_pad)
-            call grid_ptcl(b, p, b%se, orientation)
+            call grid_ptcl(b, p, b%img_pad, b%se, orientation)
         end do
         rt_rec = toc(t_rec)
         ! normalise structure factors
@@ -110,7 +110,7 @@ contains
             call read_imgbatch(b, p, batchlims)
             rt_read    = rt_read + toc(t_read)
             t_gridprep = tic()
-            !$omp parallel do default(shared) private(iptcl)&
+            !$omp parallel do default(shared) private(iptcl,ibatch)&
             !$omp schedule(static) proc_bind(close)
             do iptcl=batchlims(1),batchlims(2)
                 ibatch = iptcl - batchlims(1) + 1

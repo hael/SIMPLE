@@ -1104,7 +1104,7 @@ contains
     !>  \brief retrieves and preps npeaks orientations for reconstruction
     subroutine prep_npeaks_oris_and_weights( self )
         class(prime3D_srch),   intent(inout) :: self
-        type(ori)  :: o
+        type(ori)  :: o, osym
         type(oris) :: sym_os
         real       :: shvec(2), corrs(self%npeaks), wprecursor(self%npeaks), ws(self%npeaks), logws(self%npeaks)
         real       :: state_ws(self%nstates), frac, ang_sdev, dist, inpl_dist, euldist, mi_joint
@@ -1146,26 +1146,12 @@ contains
             call o_peaks(self%iptcl)%set(1,'ow',1.0)
             wcorr = o_peaks(self%iptcl)%get(1,'corr')
         else
-            ! pre-normalise the correlations to avoid too rapid weight decay
-            corrmax    = maxval(corrs)
-            wprecursor = corrs / corrmax
-            ! calculate the exponential of the negative distances
-            ! so that when diff==0 the weights are maximum
-            ws    = exp(-(1.-wprecursor))
-            logws = log(ws)
-            order = (/(ipeak,ipeak=1,self%npeaks)/)
-            call hpsort(logws, order)
-            call reverse(order)
-            call reverse(logws)
-            forall(ipeak=1:self%npeaks) ws(order(ipeak)) = exp(sum(logws(:ipeak)))
-            ! normalise before thresholding
+            ws = exp(-(1.-corrs/TAU))
             ws = ws / sum(ws)
             ! threshold weights
             included = (ws >= FACTWEIGHTS_THRESH)
             self%npeaks_eff = count(included)
             where( .not. included ) ws = 0.
-            ! re-normalise
-            ws = ws / sum(ws,mask=included)
             ! weighted corr
             wcorr = sum(ws*corrs,mask=included)
             ! update npeaks individual weights
@@ -1203,9 +1189,9 @@ contains
                 sym_os = o_peaks(self%iptcl)
                 do ipeak = 1, self%npeaks
                     if(ipeak == loc(1))cycle
-                    o = o_peaks(self%iptcl)%get_ori(ipeak)
-                    call self%se_ptr%sym_dists( o_peaks(self%iptcl)%get_ori(best_loc(1)), o, dist, inpl_dist)
-                    call sym_os%set_ori(ipeak, o)
+                    call self%se_ptr%sym_dists( o_peaks(self%iptcl)%get_ori(best_loc(1)),&
+                        &o_peaks(self%iptcl)%get_ori(ipeak), osym, dist, inpl_dist)
+                    call sym_os%set_ori(ipeak, osym)
                 enddo
                 ang_sdev = sym_os%ang_sdev(self%refine, self%nstates, self%npeaks)
             endif
@@ -1213,7 +1199,7 @@ contains
         ! Update the best orientation
         ! angular distances
         call self%se_ptr%sym_dists( self%a_ptr%get_ori(self%iptcl),&
-            &o_peaks(self%iptcl)%get_ori(best_loc(1)), euldist, dist_inpl )
+            &o_peaks(self%iptcl)%get_ori(best_loc(1)), osym, euldist, dist_inpl )
         ! convergence parameters
         roind = self%pftcc_ptr%get_roind( 360.-o_peaks(self%iptcl)%e3get(best_loc(1)) )
         mi_proj  = 0.

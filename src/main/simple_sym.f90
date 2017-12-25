@@ -27,9 +27,7 @@ type sym
     procedure          :: get_nsym
     procedure          :: get_pgrp
     procedure          :: apply
-    procedure, private :: apply2all_1
-    procedure, private :: apply2all_2
-    generic            :: apply2all => apply2all_1, apply2all_2
+    procedure          :: apply2all
     procedure          :: rot_to_asym
     procedure          :: rotall_to_asym
     procedure          :: sym_dists
@@ -241,14 +239,15 @@ contains
 
     !>  \brief  determines euler distance and corresponding symmetrized
     !>          orientation between two orientations
-    subroutine sym_dists( self, oref, oasym, euldist, inplrotdist )
+    subroutine sym_dists( self, oref, oasym, osym, euldist, inplrotdist )
         use simple_math, only: rad2deg
         class(sym), intent(inout) :: self
-        class(ori), intent(in)    :: oref   !< is the untouched reference
-        class(ori), intent(in)    :: oasym  !< is outputted as symmetrized
-        real,       intent(out)   :: euldist !< Euler distance
+        class(ori), intent(in)    :: oref        !< is the untouched reference
+        class(ori), intent(in)    :: oasym       !< is the orientation determined within assymetric unit
+        class(ori), intent(out)   :: osym        !< is the orientatiom that minimises the distance to oref
+        real,       intent(out)   :: euldist     !< Euler distance
         real,       intent(out)   :: inplrotdist !< in-plane rotational distance
-        type(ori) :: o, osym
+        type(ori) :: o
         real      :: dist
         integer   :: isym
         euldist     = oasym.euldist.oref
@@ -257,12 +256,12 @@ contains
             ! C1: nothing to do
         else
             osym = oasym
-            do isym = 2, self%n
+            do isym=2,self%n
                 o    = self%apply(oasym, isym)
                 dist = o.euldist.oref
                 if( dist < euldist )then
                     euldist = dist
-                    osym = o
+                    osym    = o
                 endif
             enddo
             inplrotdist = osym.inplrotdist.oref
@@ -280,11 +279,11 @@ contains
     end function get_symori
 
     !>  \brief  is a symmetry adaptor 
-    subroutine apply2all_1( self, e_in )
+    subroutine apply2all( self, e_in )
         class(sym),  intent(inout) :: self
-        class(oris), intent(inout) :: e_in !< symmetry orientations
-        type(ori)                  :: orientation
-        integer                    :: j, cnt
+        class(oris), intent(inout) :: e_in
+        type(ori) :: orientation
+        integer   :: j, cnt
         cnt = 0
         do j=1,e_in%get_noris()
             cnt = cnt+1
@@ -292,19 +291,7 @@ contains
             call e_in%set_ori(j, self%apply(orientation, cnt))
             if( cnt == self%n ) cnt = 0
         end do
-    end subroutine apply2all_1
-
-    !>  \brief  is a symmetry adaptor for applying a specific symmetry
-    !>\         operator to all orientations
-    subroutine apply2all_2( self, e_in, symop )
-        class(sym),  intent(inout) :: self
-        class(oris), intent(inout) :: e_in !< symmetry orientations
-        integer,     intent(in)    :: symop !< symmetry operator
-        integer                    :: j
-        do j=1,e_in%get_noris()
-            call e_in%set_ori(j, self%apply(e_in%get_ori(j), symop))
-        end do
-    end subroutine apply2all_2
+    end subroutine apply2all
 
     !>  \brief  whether or not an orientation falls within the asymetric unit
     function within_asymunit( self, o )result( is_within )

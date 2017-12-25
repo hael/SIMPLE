@@ -256,37 +256,40 @@ contains
     ! INTERPOLATION
 
     !> \brief  for gridding a Fourier plane
-    subroutine grid_fplane_1( self, o, fpl, eo, pwght )
+    subroutine grid_fplane_1( self, se, o, fpl, eo, pwght )
         use simple_ori, only: ori
+        use simple_sym, only: sym
         class(eo_reconstructor), intent(inout) :: self  !< instance
+        class(sym),              intent(inout) :: se    !< symmetry elements
         class(ori),              intent(inout) :: o     !< orientation
         class(image),            intent(inout) :: fpl   !< Fourier plane
         integer,                 intent(in)    :: eo    !< eo flag
         real,                    intent(in)    :: pwght !< external particle weight (affects both fplane and rho)
         select case(eo)
             case(-1,0)
-                call self%even%insert_fplane(o, fpl, pwght)
+                call self%even%insert_fplane(se, o, fpl, pwght)
             case(1)
-                call self%odd%insert_fplane(o, fpl, pwght)
+                call self%odd%insert_fplane(se, o, fpl, pwght)
             case DEFAULT
                 stop 'unsupported eo flag; eo_reconstructor :: grid_fplane'
         end select
     end subroutine grid_fplane_1
 
-    !> \brief  for gridding a Fourier plane
-    subroutine grid_fplane_2( self, os, fpl, eo, noris, pwght )
+    subroutine grid_fplane_2( self, se, os, fpl, eo, pwght, state )
         use simple_oris, only: oris
+        use simple_sym,  only: sym
         class(eo_reconstructor), intent(inout) :: self  !< instance
-        class(oris),             intent(inout) :: os    !< orientations
+        class(sym),              intent(inout) :: se    !< symmetry elements
+        class(oris),             intent(inout) :: os    !< orientation
         class(image),            intent(inout) :: fpl   !< Fourier plane
         integer,                 intent(in)    :: eo    !< eo flag
-        integer,                 intent(in)    :: noris !< # of peaks
         real,                    intent(in)    :: pwght !< external particle weight (affects both fplane and rho)
+        integer, optional,       intent(in)    :: state !< state flag
         select case(eo)
             case(-1,0)
-                call self%even%insert_fplane(os, fpl, noris, pwght)
+                call self%even%insert_fplane(se, os, fpl, pwght, state)
             case(1)
-                call self%odd%insert_fplane(os, fpl, noris, pwght)
+                call self%odd%insert_fplane(se, os, fpl, pwght, state)
             case DEFAULT
                 stop 'unsupported eo flag; eo_reconstructor :: grid_fplane'
         end select
@@ -505,14 +508,7 @@ contains
                     endif
                     call img%read(stkname, ind)
                     call gridprep%prep(img, img_pad)
-                    if( p%pgrp == 'c1' )then
-                        call self%grid_fplane(orientation, img_pad, eo, pw)
-                    else
-                        do j=1,se%get_nsym()
-                            o_sym = se%apply(orientation, j)
-                            call self%grid_fplane(o_sym, img_pad, eo, pw)
-                        end do
-                    endif
+                    call self%grid_fplane(se, orientation, img_pad, eo, pw)
                  endif
             end subroutine rec_dens
             

@@ -717,27 +717,23 @@ select case(prg)
         keys_optional(8)  = 'lpstop'
         keys_optional(9)  = 'cenlp'
         keys_optional(10) = 'trs'
-        keys_optional(11) = 'automsk'
-        keys_optional(12) = 'amsklp'
-        keys_optional(13) = 'edge'
-        keys_optional(14) = 'inner'
-        keys_optional(15) = 'width'
-        keys_optional(16) = 'startit'
-        keys_optional(17) = 'maxits'
-        keys_optional(18) = 'center'
-        keys_optional(19) = 'oritab3D'
-        keys_optional(20) = 'weights2D'
-        keys_optional(21) = 'refine'
-        keys_optional(22) = 'balance'
-        keys_optional(23) = 'match_filt'
-        keys_optional(24) = 'stk'
-        keys_optional(25) = 'stktab'
-        keys_optional(26) = 'dyncls'
-        keys_optional(27) = 'phaseplate'
-        keys_optional(28) = 'opt'
+        keys_optional(11) = 'inner'
+        keys_optional(12) = 'width'
+        keys_optional(13) = 'startit'
+        keys_optional(14) = 'maxits'
+        keys_optional(15) = 'center'
+        keys_optional(16) = 'weights2D'
+        keys_optional(17) = 'refine'
+        keys_optional(18) = 'balance'
+        keys_optional(19) = 'match_filt'
+        keys_optional(20) = 'stk'
+        keys_optional(21) = 'stktab'
+        keys_optional(22) = 'dyncls'
+        keys_optional(23) = 'phaseplate'
+        keys_optional(24) = 'opt'
         ! parse command line
         if( describe ) call print_doc_prime2D
-        call cline%parse(keys_required(:4), keys_optional(:28))
+        call cline%parse(keys_required(:4), keys_optional(:24))
         ! sanity check
         if( cline%defined('stk') .or. cline%defined('stktab') )then
             ! all ok
@@ -747,9 +743,7 @@ select case(prg)
         ! set defaults
         if( .not. cline%defined('lpstart')   ) call cline%set('lpstart',   15.)
         if( .not. cline%defined('lpstop')    ) call cline%set('lpstop',     8.)
-        if( .not. cline%defined('amsklp')    ) call cline%set('amsklp',    20.)
         if( .not. cline%defined('cenlp')     ) call cline%set('cenlp',     30.)
-        if( .not. cline%defined('edge')      ) call cline%set('edge',      10.)
         if( .not. cline%defined('eo')        ) call cline%set('eo',       'no')
         if( .not. cline%defined('maxits')    ) call cline%set('maxits',    30.)
         if( .not. cline%defined('weights2D') ) call cline%set('weights2D','no')
