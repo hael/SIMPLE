@@ -28,7 +28,7 @@ type :: pftcc_grad_shsrch
     procedure          :: set_indices => grad_shsrch_set_indices
     procedure          :: minimize    => grad_shsrch_minimize
     procedure          :: kill        => grad_shsrch_kill
-    procedure, private ::                grad_shsrch_set_costfun
+    procedure, private :: grad_shsrch_set_costfun
 end type pftcc_grad_shsrch
 
 contains
@@ -51,8 +51,8 @@ contains
         self%maxits = 100
         if( present(maxits) ) self%maxits = maxits
         ! make optimizer spec
-        call self%ospec%specify('bfgs2', 2, ftol=1e-1, gtol=1e-3, max_step=0.01,&
-            &limits_init=lims_init, maxits=self%maxits)
+        call self%ospec%specify('lbfgsb', 2, ftol=1e-1, gtol=1e-3, limits=lims,&
+            max_step=0.01, limits_init=lims_init, maxits=self%maxits)
         ! generate the optimizer object
         call opt_fact%new(self%ospec, self%nlopt)        
         ! set pointer to corrcalc object

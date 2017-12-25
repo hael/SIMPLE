@@ -1,4 +1,4 @@
-! 
+! memory limited bound-constained BFGS optimiser
 module simple_lbfgsb_opt
 #include "simple_lib.f08"
 
@@ -76,6 +76,7 @@ contains
         self%l = spec%limits(:,1)
         self%u = spec%limits(:,2)
         call lbfgsbmin
+
     contains
 
         !>  \brief  nonlinear conjugate gradient minimizer
@@ -89,12 +90,11 @@ contains
                     &         self%csave, self%lsave, self%isave, self%dsave      )
                 
                 if (self%task(1:2) .eq. 'FG') then
-                    !write (*,*) 'evaluate function at x=', spec%x_8
                     call spec%eval_fdf_8( fun_self, spec%x_8, self%f, self%g )
                 else if (self%task(1:5) .eq. 'NEW_X') then
-                    !       the minimization routine has returned with a new iterate.
-                    !       At this point have the opportunity of stopping the iteration 
-                    !       or observing the values of certain parameters
+                    ! the minimization routine has returned with a new iterate.
+                    ! At this point have the opportunity of stopping the iteration 
+                    ! or observing the values of certain parameters
                     if (associated(spec%opt_callback)) then
                         spec%x = real(spec%x_8)
                         call spec%opt_callback(fun_self)
@@ -105,8 +105,7 @@ contains
                 end if
             end do
             lowest_cost = real(self%f)
-            spec%x      = real(spec%x_8)            
-            !write (*,*) 'iteration finished. x=', spec%x_8            
+            spec%x      = real(spec%x_8)          
         end subroutine lbfgsbmin
 
         !===========   L-BFGS-B (version 3.0.  April 25, 2011  ===================
@@ -157,7 +156,6 @@ contains
             integer   :: n, m
             integer   :: nbd(n), iwa(3*n), isave(44)
             real(dp)  :: f, factr, pgtol, x(n), l(n), u(n), g(n)
-            !-jlm-jn
             real(dp)  :: wa(2*m*n + 5*n + 11*m*m + 8*m), dsave(24)
             !     ************
             !
@@ -322,7 +320,6 @@ contains
             !
             !
             !     ************
-            !-jlm-jn 
             integer :: lws,lr,lz,lt,ld,lxp,lwa
             integer :: lwy,lsy,lss,lwt,lwn,lsnd
             if (task .eq. 'START') then
@@ -375,7 +372,6 @@ contains
             integer   :: iwhere(n), indx2(n), isave(23)
             real(dp)  :: f, factr, pgtol
             real(dp)  :: x(n), l(n), u(n), g(n), z(n), r(n), d(n), t(n)
-            !-jlm-jn
             real(dp)  :: xp(n)
             real(dp)  :: wa(8*m)
             real(dp)  :: ws(n, m), wy(n, m), sy(m, m), ss(m, m)
@@ -557,8 +553,8 @@ contains
             real(dp)  :: gd,gdold,stp,stpmx
             if (task .eq. 'START') then
                 epsmch = epsilon(one)
-                !        Initialize counters and scalars when task='START'.
-                !           for the limited memory BFGS matrices:
+                ! Initialize counters and scalars when task='START'.
+                ! for the limited memory BFGS matrices:
                 col    = 0
                 head   = 1
                 theta  = one
@@ -578,7 +574,7 @@ contains
                 stp    = zero
                 gdold  = zero
                 dtd    = zero
-                !           for operation counts:
+                ! for operation counts:
                 iter   = 0
                 nfgv   = 0
                 nseg   = 0
@@ -586,23 +582,21 @@ contains
                 nskip  = 0
                 nfree  = n
                 ifun   = 0
-                !           for stopping tolerance:
-                tol = factr*epsmch
-                !           'word' records the status of subspace solutions.
-                word = '---'
-                !           'info' records the termination information.
-                info = 0
+                ! for stopping tolerance:
+                tol    = factr*epsmch
+                ! 'word' records the status of subspace solutions.
+                word   = '---'
+                ! 'info' records the termination information.
+                info   = 0
                 itfile = 8
-                !        Check the input arguments for errors.
+                !  Check the input arguments for errors.
                 call errclb(n,m,factr,l,u,nbd,task,info,k)
-                if (task(1:5) .eq. 'ERROR') then
-                    return
-                end if
-                !        Initialize iwhere & project x onto the feasible set.
+                if (task(1:5) .eq. 'ERROR') return
+                ! Initialize iwhere & project x onto the feasible set.
                 call active(n,l,u,nbd,x,iwhere,prjctd,cnstnd,boxed) 
-                !        The end of the initialization.
+                ! The end of the initialization.
             else
-                !          restore local variables.
+                ! restore local variables.
                 prjctd = lsave(1)
                 cnstnd = lsave(2)
                 boxed  = lsave(3)
@@ -636,14 +630,13 @@ contains
                 stp    = dsave(9)
                 gdold  = dsave(10)
                 dtd    = dsave(11)
-                !        After returning from the driver go to the point where execution
-                !        is to resume.
+                ! After returning from the driver go to the point where execution is to resume.
                 if (task(1:5) .eq. 'FG_LN') goto 666
                 if (task(1:5) .eq. 'NEW_X') goto 777
                 if (task(1:5) .eq. 'FG_ST') goto 111
                 if (task(1:4) .eq. 'STOP') then
                     if (task(7:9) .eq. 'CPU') then
-                        !                                          restore the previous iterate.
+                        ! restore the previous iterate.
                         call dcopy(n,t,1,x,1)
                         call dcopy(n,r,1,g,1)
                         f = fold
@@ -651,25 +644,24 @@ contains
                     goto 999
                 end if
             end if
-            !     Compute f0 and g0.
+            !  Compute f0 and g0.
             task = 'FG_START' 
-            !          return to the driver to calculate f and g; reenter at 111.
+            ! return to the driver to calculate f and g; reenter at 111.
             goto 1000
 111         continue
             nfgv = 1
-            !     Compute the infinity norm of the (-) projected gradient.
+            ! Compute the infinity norm of the (-) projected gradient.
             call projgr(n,l,u,nbd,x,g,sbgnrm)
             if (sbgnrm .le. pgtol) then
-                !                                terminate the algorithm.
+                !  terminate the algorithm.
                 task = 'CONVERGENCE: NORM_OF_PROJECTED_GRADIENT_<=_PGTOL'
                 goto 999
             end if
             ! ----------------- the beginning of the loop --------------------------
 222         continue
             iword = -1
-            !
             if (.not. cnstnd .and. col .gt. 0) then 
-                !                                            skip the search for GCP.
+                ! skip the search for GCP.
                 call dcopy(n,x,1,z,1)
                 wrk = updatd
                 nseg = 0
@@ -685,7 +677,7 @@ contains
                 &            wa(1),wa(2*m+1),wa(4*m+1),wa(6*m+1),nseg, &
                 &            sbgnrm, info, epsmch)
             if (info .ne. 0) then 
-                !         singular triangular system detected; refresh the lbfgs memory.
+                ! singular triangular system detected; refresh the lbfgs memory.
                 info   = 0
                 col    = 0
                 head   = 1
@@ -695,14 +687,14 @@ contains
                 goto 222
             end if
             nintol = nintol + nseg
-            !     Count the entering and leaving variables for iter > 0; 
-            !     find the index set of free and active variables at the GCP.
+            ! Count the entering and leaving variables for iter > 0; 
+            ! find the index set of free and active variables at the GCP.
             call freev(n,nfree,index,nenter,ileave,indx2, &
                 &           iwhere,wrk,updatd,cnstnd,iter)
             nact = n - nfree
 333         continue
-            !     If there are no free variables or B=theta*I, then
-            !                                        skip the subspace minimization.
+            ! If there are no free variables or B=theta*I, then
+            ! skip the subspace minimization.
             if (nfree .eq. 0 .or. col .eq. 0) goto 555
             !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
             !
@@ -717,8 +709,8 @@ contains
             if (wrk) call formk(n,nfree,index,nenter,ileave,indx2,iupdat, &
                 &                 updatd,wn,snd,m,ws,wy,sy,theta,col,head,info)
             if (info .ne. 0) then
-                !          nonpositive definiteness in Cholesky factorization;
-                !          refresh the lbfgs memory and restart the iteration.
+                ! nonpositive definiteness in Cholesky factorization;
+                ! refresh the lbfgs memory and restart the iteration.
                 info   = 0
                 col    = 0
                 head   = 1
@@ -727,18 +719,17 @@ contains
                 updatd = .false.
                 goto 222
             end if
-            !        compute r=-Z'B(xcp-xk)-Z'g (using wa(2m+1)=W'(xcp-x)
-            !                                                   from 'cauchy').
+            ! compute r=-Z'B(xcp-xk)-Z'g (using wa(2m+1)=W'(xcp-x) from 'cauchy').
             call cmprlb(n,m,x,g,ws,wy,sy,wt,z,r,wa,index, &
                 &           theta,col,head,nfree,cnstnd,info)
             if (info .ne. 0) goto 444
-            !-jlm-jn   call the direct method. 
+            !-jlm-jn call the direct method. 
             call subsm( n, m, nfree, index, l, u, nbd, z, r, xp, ws, wy, &
                 &           theta, x, g, col, head, iword, wa, wn, info)
 444         continue
             if (info .ne. 0) then 
-                !          singular triangular system detected;
-                !          refresh the lbfgs memory and restart the iteration.
+                ! singular triangular system detected;
+                ! refresh the lbfgs memory and restart the iteration.
                 info   = 0
                 col    = 0
                 head   = 1
@@ -762,15 +753,15 @@ contains
                 &            dtd,xstep,stpmx,iter,ifun,iback,nfgv,info,task, &
                 &            boxed,cnstnd,csave,isave(22),dsave(12))
             if (info .ne. 0 .or. iback .ge. 20) then
-                !          restore the previous iterate.
+                ! restore the previous iterate.
                 call dcopy(n,t,1,x,1)
                 call dcopy(n,r,1,g,1)
                 f = fold
                 if (col .eq. 0) then
-                    !             abnormal termination.
+                    ! abnormal termination.
                     if (info .eq. 0) then
                         info = -9
-                        !                restore the actual number of f and g evaluations etc.
+                        ! restore the actual number of f and g evaluations etc.
                         nfgv = nfgv - 1
                         ifun = ifun - 1
                         iback = iback - 1
@@ -779,7 +770,7 @@ contains
                     iter = iter + 1
                     goto 999
                 else
-                    !             refresh the lbfgs memory and restart the iteration.
+                    ! refresh the lbfgs memory and restart the iteration.
                     if (info .eq. 0) nfgv = nfgv - 1
                     info   = 0
                     col    = 0
@@ -791,32 +782,32 @@ contains
                     goto 222
                 end if
             else if (task(1:5) .eq. 'FG_LN') then
-                !          return to the driver for calculating f and g; reenter at 666.
+                ! return to the driver for calculating f and g; reenter at 666.
                 goto 1000
             else 
-                !          calculate and print out the quantities related to the new X.
+                ! calculate and print out the quantities related to the new X.
                 iter = iter + 1
-                !        Compute the infinity norm of the projected (-)gradient.
+                ! Compute the infinity norm of the projected (-)gradient.
                 call projgr(n,l,u,nbd,x,g,sbgnrm)
-                !        Print iteration information.
+                ! Print iteration information.
                 goto 1000
             end if
 777         continue
-            !     Test for termination.
+            ! Test for termination.
             if (sbgnrm .le. pgtol) then
-                !                                terminate the algorithm.
+                !  terminate the algorithm.
                 task = 'CONVERGENCE: NORM_OF_PROJECTED_GRADIENT_<=_PGTOL'
                 goto 999
             end if
             ddum = max(abs(fold), abs(f), one)
             if ((fold - f) .le. tol*ddum) then
-                !                                        terminate the algorithm.
+                ! terminate the algorithm.
                 task = 'CONVERGENCE: REL_REDUCTION_OF_F_<=_FACTR*EPSMCH'
                 if (iback .ge. 10) info = -5
-                !           i.e., to issue a warning if iback>10 in the line search.
+                ! i.e., to issue a warning if iback>10 in the line search.
                 goto 999
             end if
-            !     Compute d=newx-oldx, r=newg-oldg, rr=y'y and dr=y's.
+            ! Compute d=newx-oldx, r=newg-oldg, rr=y'y and dr=y's.
             do i = 1, n
                 r(i) = g(i) - r(i)
             end do
@@ -830,7 +821,7 @@ contains
                 ddum = -gdold*stp
             end if
             if (dr .le. epsmch*ddum) then
-                !                            skip the L-BFGS update.
+                ! skip the L-BFGS update.
                 nskip = nskip + 1
                 updatd = .false.
                 goto 888
@@ -842,17 +833,17 @@ contains
             !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
             updatd = .true.
             iupdat = iupdat + 1
-            !     Update matrices WS and WY and form the middle matrix in B.
+            ! Update matrices WS and WY and form the middle matrix in B.
             call matupd(n,m,ws,wy,sy,ss,d,r,itail, &
                 &            iupdat,col,head,theta,rr,dr,stp,dtd)
-            !     Form the upper half of the pds T = theta*SS + L*D^(-1)*L';
-            !        Store T in the upper triangular of the array wt;
-            !        Cholesky factorize T to J*J' with
-            !           J' stored in the upper triangular of wt.
+            ! Form the upper half of the pds T = theta*SS + L*D^(-1)*L';
+            ! Store T in the upper triangular of the array wt;
+            ! Cholesky factorize T to J*J' with
+            ! J' stored in the upper triangular of wt.
             call formt(m,wt,sy,ss,col,theta,info)
             if (info .ne. 0) then 
-                !          nonpositive definiteness in Cholesky factorization;
-                !          refresh the lbfgs memory and restart the iteration.
+                ! nonpositive definiteness in Cholesky factorization;
+                ! refresh the lbfgs memory and restart the iteration.
                 info = 0
                 col = 0
                 head = 1
@@ -869,7 +860,7 @@ contains
             goto 222
 999         continue
 1000        continue
-            !     Save local variables.
+            ! Save local variables.
             lsave(1)  = prjctd
             lsave(2)  = cnstnd
             lsave(3)  = boxed
@@ -904,7 +895,7 @@ contains
             dsave(10) = gdold
             dsave(11) = dtd  
         end subroutine mainlb
-        !======================= The end of mainlb =============================
+
         subroutine active(n, l, u, nbd, x, iwhere, prjctd, cnstnd, boxed)
             logical  :: prjctd, cnstnd, boxed
             integer  :: n, nbd(n), iwhere(n)
@@ -936,12 +927,12 @@ contains
             !
             !     ************
             integer :: nbdd,i
-            !     Initialize nbdd, prjctd, cnstnd and boxed.
+            ! Initialize nbdd, prjctd, cnstnd and boxed.
             nbdd = 0
             prjctd = .false.
             cnstnd = .false.
             boxed = .true.
-            !     Project the initial x to the easible set if necessary.
+            ! Project the initial x to the easible set if necessary.
             do i = 1, n
                 if (nbd(i) .gt. 0) then
                     if (nbd(i) .le. 2 .and. x(i) .le. l(i)) then
@@ -959,17 +950,17 @@ contains
                     end if
                 end if
             end do
-            !     Initialize iwhere and assign values to cnstnd and boxed.
+            ! Initialize iwhere and assign values to cnstnd and boxed.
             do i = 1, n
                 if (nbd(i) .ne. 2) boxed = .false.
                 if (nbd(i) .eq. 0) then
-                    !                                this variable is always free
+                    ! this variable is always free
                     iwhere(i) = -1
-                    !           otherwise set x(i)=mid(x(i), u(i), l(i)).
+                    ! otherwise set x(i)=mid(x(i), u(i), l(i)).
                 else
                     cnstnd = .true.
                     if (nbd(i) .eq. 2 .and. u(i) - l(i) .le. zero) then
-                        !                   this variable is always fixed
+                        ! this variable is always fixed
                         iwhere(i) = 3
                     else 
                         iwhere(i) = 0
@@ -977,7 +968,7 @@ contains
                 end if
             end do
         end subroutine active
-        !======================= The end of active =============================
+
         subroutine bmv(m, sy, wt, col, v, p, info)
             integer  :: m, col, info
             real(dp) :: sy(m, m), wt(m, m), v(2*col), p(2*col)
@@ -1078,7 +1069,7 @@ contains
                 p(i) = p(i) + sum
             end do
         end subroutine bmv
-        !======================== The end of bmv ===============================
+
         subroutine cauchy(n, x, l, u, nbd, g, iorder, iwhere, t, d, xcp, & 
             &                  m, wy, ws, sy, wt, theta, col, head, p, c, wbp, &
             &                  v, nseg, sbgnrm, info, epsmch)
@@ -1314,9 +1305,8 @@ contains
                         p(col + j) = p(col + j) + ws(i,pointr)*neggi
                         pointr = mod(pointr,m) + 1
                     end do
-                    if (nbd(i) .le. 2 .and. nbd(i) .ne. 0 &
-                        &                        .and. neggi .lt. zero) then
-                        !                                 x(i) + d(i) is bounded; compute t(i).
+                    if (nbd(i) .le. 2 .and. nbd(i) .ne. 0 .and. neggi .lt. zero) then
+                        ! x(i) + d(i) is bounded; compute t(i).
                         nbreak = nbreak + 1
                         iorder(nbreak) = i
                         t(nbreak) = tl/(-neggi)
@@ -1325,7 +1315,7 @@ contains
                             ibkmin = nbreak
                         end if
                     else if (nbd(i) .ge. 2 .and. neggi .gt. zero) then
-                        !                                 x(i) + d(i) is bounded; compute t(i).
+                        ! x(i) + d(i) is bounded; compute t(i).
                         nbreak = nbreak + 1
                         iorder(nbreak) = i
                         t(nbreak) = tu/neggi
@@ -1334,7 +1324,7 @@ contains
                             ibkmin = nbreak
                         end if
                     else
-                        !                x(i) + d(i) is not bounded.
+                        ! x(i) + d(i) is not bounded.
                         nfree = nfree - 1
                         iorder(nfree) = i
                         if (abs(neggi) .gt. zero) bnded = .false.
@@ -1351,7 +1341,7 @@ contains
             !     Initialize GCP xcp = x.
             call dcopy(n,x,1,xcp,1)
             if (nbreak .eq. 0 .and. nfree .eq. n + 1) then
-                !                  is a zero vector, return with the initial xcp as GCP.
+                ! is a zero vector, return with the initial xcp as GCP.
                 return
             end if
             !     Initialize c = W'(xcp - x) = 0.
@@ -1420,8 +1410,8 @@ contains
                 iwhere(ibp) = 1
             end if
             if (nleft .eq. 0 .and. nbreak .eq. n) then
-                !                                             all n variables are fixed,
-                !                                                return with xcp as GCP.
+                ! all n variables are fixed,
+                !  return with xcp as GCP.
                 dtm = dt
                 goto 999
             end if
@@ -1443,15 +1433,15 @@ contains
                     wbp(col + j) = theta*ws(ibp,pointr)
                     pointr = mod(pointr,m) + 1
                 end do
-                !           compute (wbp)Mc, (wbp)Mp, and (wbp)M(wbp)'.
+                ! compute (wbp)Mc, (wbp)Mp, and (wbp)M(wbp)'.
                 call bmv(m,sy,wt,col,wbp,v,info)
                 if (info .ne. 0) return
                 wmc = ddot_lbfgsb(col2,c,1,v,1)
                 wmp = ddot_lbfgsb(col2,p,1,v,1) 
                 wmw = ddot_lbfgsb(col2,wbp,1,v,1)
-                !           update p = p - dibp*wbp. 
+                ! update p = p - dibp*wbp. 
                 call daxpy(col2,-dibp,wbp,1,p,1)
-                !           complete updating f1 and f2 while col > 0.
+                ! complete updating f1 and f2 while col > 0.
                 f1 = f1 + dibp*wmc
                 f2 = f2 + 2.0d0*dibp*wmp - dibp2*wmw
             end if
@@ -1459,7 +1449,7 @@ contains
             if (nleft .gt. 0) then
                 dtm = -f1/f2
                 goto 777
-                !                 to repeat the loop for unsearched intervals. 
+                ! to repeat the loop for unsearched intervals. 
             else if(bnded) then
                 f1 = zero
                 f2 = zero
@@ -1479,7 +1469,7 @@ contains
             !       which will be used in computing r = Z'(B(x^c - x) + g).
             if (col .gt. 0) call daxpy(col2,dtm,p,1,c,1)
         end subroutine cauchy
-        !====================== The end of cauchy ==============================
+
         subroutine cmprlb(n, m, x, g, ws, wy, sy, wt, z, r, wa, index, & 
             &                 theta, col, head, nfree, cnstnd, info)
             logical  :: cnstnd
@@ -1538,7 +1528,7 @@ contains
                 end do
             end if
         end subroutine cmprlb
-        !======================= The end of cmprlb =============================
+
         subroutine errclb(n, m, factr, l, u, nbd, task, info, k)
             character :: task*60
             integer   :: n, m, info, k, nbd(n)
@@ -1569,14 +1559,14 @@ contains
             !     Check the validity of the arrays nbd(i), u(i), and l(i).
             do i = 1, n
                 if (nbd(i) .lt. 0 .or. nbd(i) .gt. 3) then
-                    !                                                   return
+                    ! return
                     task = 'ERROR: INVALID NBD'
                     info = -6
                     k = i
                 end if
                 if (nbd(i) .eq. 2) then
                     if (l(i) .gt. u(i)) then
-                        !                                    return
+                        ! return
                         task = 'ERROR: NO FEASIBLE SOLUTION'
                         info = -7
                         k = i
@@ -1584,7 +1574,7 @@ contains
                 end if
             end do
         end subroutine errclb
-        !======================= The end of errclb =============================
+
         subroutine formk(n, nsub, ind, nenter, ileave, indx2, iupdat, & 
             &            updatd, wn, wn1, m, ws, wy, sy, theta, col, &
             &            head, info)
@@ -1725,7 +1715,7 @@ contains
             !              R_z is the upper triangular part of S'ZZ'Y.
             if (updatd) then
                 if (iupdat .gt. m) then 
-                    !                                 shift old part of WN1.
+                    ! shift old part of WN1.
                     do jy = 1, m - 1
                         js = m + jy
                         call dcopy(m-jy,wn1(jy+1,jy+1),1,wn1(jy,jy),1)
@@ -1733,7 +1723,7 @@ contains
                         call dcopy(m-1,wn1(m+2,jy+1),1,wn1(m+1,jy),1)
                     end do
                 end if
-                !          put new rows in blocks (1,1), (2,1) and (2,2).
+                ! put new rows in blocks (1,1), (2,1) and (2,2).
                 pbegin = 1
                 pend = nsub
                 dbegin = nsub + 1
@@ -1748,12 +1738,12 @@ contains
                     temp1 = zero
                     temp2 = zero
                     temp3 = zero
-                    !             compute element jy of row 'col' of Y'ZZ'Y
+                    ! compute element jy of row 'col' of Y'ZZ'Y
                     do k = pbegin, pend
                         k1 = ind(k)
                         temp1 = temp1 + wy(k1,ipntr)*wy(k1,jpntr)
                     end do
-                    !             compute elements jy of row 'col' of L_a and S'AA'S
+                    ! compute elements jy of row 'col' of L_a and S'AA'S
                     do k = dbegin, dend
                         k1 = ind(k)
                         temp2 = temp2 + ws(k1,ipntr)*ws(k1,jpntr)
@@ -1764,7 +1754,7 @@ contains
                     wn1(is,jy) = temp3
                     jpntr = mod(jpntr,m) + 1
                 end do
-                !          put new column in block (2,1).
+                ! put new column in block (2,1).
                 jy = col       
                 jpntr = head + col - 1
                 if (jpntr .gt. m) jpntr = jpntr - m
@@ -1772,7 +1762,7 @@ contains
                 do i = 1, col
                     is = m + i
                     temp3 = zero
-                    !             compute element i of column 'col' of R_z
+                    ! compute element i of column 'col' of R_z
                     do k = pbegin, pend
                         k1 = ind(k)
                         temp3 = temp3 + ws(k1,ipntr)*wy(k1,jpntr)
@@ -1784,8 +1774,8 @@ contains
             else
                 upcl = col
             end if
-            !       modify the old parts in blocks (1,1) and (2,2) due to changes
-            !       in the set of free variables.
+            ! modify the old parts in blocks (1,1) and (2,2) due to changes
+            ! in the set of free variables.
             ipntr = head      
             do iy = 1, upcl
                 is = m + iy
@@ -1812,7 +1802,7 @@ contains
                 end do
                 ipntr = mod(ipntr,m) + 1
             end do
-            !       modify the old parts in block (2,1).
+            ! modify the old parts in block (2,1).
             ipntr = head      
             do is = m + 1, m + upcl
                 jpntr = head 
@@ -1836,8 +1826,8 @@ contains
                 end do
                 ipntr = mod(ipntr,m) + 1
             end do
-            !     Form the upper triangle of WN = [D+Y' ZZ'Y/theta   -L_a'+R_z' ] 
-            !                                     [-L_a +R_z        S'AA'S*theta]
+            ! Form the upper triangle of WN = [D+Y' ZZ'Y/theta   -L_a'+R_z' ] 
+            !                                 [-L_a +R_z        S'AA'S*theta]
             m2 = 2*m
             do iy = 1, col
                 is = col + iy
@@ -1856,35 +1846,35 @@ contains
                 end do
                 wn(iy,iy) = wn(iy,iy) + sy(iy,iy)
             end do
-            !     Form the upper triangle of WN= [  LL'            L^-1(-L_a'+R_z')] 
-            !                                    [(-L_a +R_z)L'^-1   S'AA'S*theta  ]
-            !        first Cholesky factor (1,1) block of wn to get LL'
+            ! Form the upper triangle of WN= [  LL'            L^-1(-L_a'+R_z')] 
+            !                                [(-L_a +R_z)L'^-1   S'AA'S*theta  ]
+            ! first Cholesky factor (1,1) block of wn to get LL'
             !                          with L' stored in the upper triangle of wn.
             call dpofa(wn,m2,col,info)
             if (info .ne. 0) then
                 info = -1
                 return
             end if
-            !        then form L^-1(-L_a'+R_z') in the (1,2) block.
+            ! then form L^-1(-L_a'+R_z') in the (1,2) block.
             col2 = 2*col
             do js = col+1 ,col2
                 call dtrsl(wn,m2,col,wn(1,js),11,info)
             end do
-            !     Form S'AA'S*theta + (L^-1(-L_a'+R_z'))'L^-1(-L_a'+R_z') in the
-            !        upper triangle of (2,2) block of wn.
+            ! Form S'AA'S*theta + (L^-1(-L_a'+R_z'))'L^-1(-L_a'+R_z') in the
+            ! upper triangle of (2,2) block of wn.
             do is = col+1, col2
                 do js = is, col2
                     wn(is,js) = wn(is,js) + ddot_lbfgsb(col,wn(1,is),1,wn(1,js),1)
                 end do
             end do
-            !     Cholesky factorization of (2,2) block of wn.
+            ! Cholesky factorization of (2,2) block of wn.
             call dpofa(wn(col+1,col+1),m2,col,info)
             if (info .ne. 0) then
                 info = -2
                 return
             end if
         end subroutine formk
-        !======================= The end of formk ==============================
+
         subroutine formt(m, wt, sy, ss, col, theta, info)
             integer  :: m, col, info
             real(dp) :: theta, wt(m, m), sy(m, m), ss(m, m)
@@ -1915,8 +1905,8 @@ contains
             !     ************
             integer  :: i,j,k,k1
             real(dp) :: ddum
-            !     Form the upper half of  T = theta*SS + L*D^(-1)*L',
-            !        store T in the upper triangle of the array wt.
+            ! Form the upper half of  T = theta*SS + L*D^(-1)*L',
+            ! store T in the upper triangle of the array wt.
             do j = 1, col
                 wt(1,j) = theta*ss(1,j)
             end do
@@ -1930,14 +1920,14 @@ contains
                     wt(i,j) = ddum + theta*ss(i,j)
                 end do
             end do
-            !     Cholesky factorize T to J*J' with 
-            !        J' stored in the upper triangle of wt.
+            ! Cholesky factorize T to J*J' with 
+            ! J' stored in the upper triangle of wt.
             call dpofa(wt,m,col,info)
             if (info .ne. 0) then
                 info = -3
             end if
         end subroutine formt
-        !======================= The end of formt ==============================
+
         subroutine freev(n, nfree, index, nenter, ileave, indx2, & 
             &                 iwhere, wrk, updatd, cnstnd, iter)
             integer :: n, nfree, nenter, ileave, iter
@@ -1984,11 +1974,11 @@ contains
             nenter = 0
             ileave = n + 1
             if (iter .gt. 0 .and. cnstnd) then
-                !                           count the entering and leaving variables.
+                ! count the entering and leaving variables.
                 do i = 1, nfree
                     k = index(i)
-                    !            write(6,*) ' k  = index(i) ', k
-                    !            write(6,*) ' index = ', i
+                    ! write(6,*) ' k  = index(i) ', k
+                    ! write(6,*) ' index = ', i
                     if (iwhere(k) .gt. 0) then
                         ileave = ileave - 1
                         indx2(ileave) = k
@@ -2016,7 +2006,7 @@ contains
                 end if
             end do
         end subroutine freev
-        !======================= The end of freev ==============================
+
         subroutine hpsolb(n, t, iorder, iheap)
             integer  :: iheap, n, iorder(n)
             real(dp) :: t(n)
@@ -2064,11 +2054,11 @@ contains
             integer  :: i,j,k,indxin,indxou
             real(dp) :: ddum,out
             if (iheap .eq. 0) then
-                !        Rearrange the elements t(1) to t(n) to form a heap.
+                ! Rearrange the elements t(1) to t(n) to form a heap.
                 do k = 2, n
                     ddum  = t(k)
                     indxin = iorder(k)
-                    !           Add ddum to the heap.
+                    ! Add ddum to the heap.
                     i = k
 10                  continue
                     if (i.gt.1) then
@@ -2084,9 +2074,9 @@ contains
                     iorder(i) = indxin
                 end do
             end if
-            !     Assign to 'out' the value of t(1), the least member of the heap,
-            !        and rearrange the remaining members to form a heap as
-            !        elements 1 to n-1 of t.
+            ! Assign to 'out' the value of t(1), the least member of the heap,
+            ! and rearrange the remaining members to form a heap as
+            ! elements 1 to n-1 of t.
             if (n .gt. 1) then
                 i = 1
                 out = t(1)
@@ -2107,7 +2097,7 @@ contains
                 end if
                 t(i) = ddum
                 iorder(i) = indxin
-                !     Put the least member in t(n). 
+                ! Put the least member in t(n). 
                 t(n) = out
                 iorder(n) = indxou
             end if
@@ -2155,7 +2145,7 @@ contains
             if (task(1:5) .eq. 'FG_LN') goto 556
             dtd = ddot_lbfgsb(n,d,1,d,1)
             dnorm = sqrt(dtd)
-            !     Determine the maximum step length.
+            ! Determine the maximum step length.
             stpmx = big
             if (cnstnd) then
                 if (iter .eq. 0) then
@@ -2199,8 +2189,8 @@ contains
             if (ifun .eq. 0) then
                 gdold=gd
                 if (gd .ge. zero) then
-                    !                               the directional derivative >=0.
-                    !                               Line search is impossible.            
+                    ! the directional derivative >=0.
+                    ! Line search is impossible.            
                     info = -4
                     return
                 end if
@@ -2223,7 +2213,7 @@ contains
                 task = 'NEW_X'
             end if
         end subroutine lnsrlb
-        !======================= The end of lnsrlb =============================
+
         subroutine matupd(n, m, ws, wy, sy, ss, d, r, itail, & 
             &                  iupdat, col, head, theta, rr, dr, stp, dtd)
             integer  :: n, m, itail, iupdat, col, head
@@ -2253,7 +2243,7 @@ contains
             !
             !     ************
             integer  :: j,pointr
-            !     Set pointers for matrices WS and WY.
+            ! Set pointers for matrices WS and WY.
             if (iupdat .le. m) then
                 col = iupdat
                 itail = mod(head+iupdat-2,m) + 1
@@ -2261,23 +2251,23 @@ contains
                 itail = mod(itail,m) + 1
                 head = mod(head,m) + 1
             end if
-            !     Update matrices WS and WY.
+            ! Update matrices WS and WY.
             call dcopy(n,d,1,ws(1,itail),1)
             call dcopy(n,r,1,wy(1,itail),1)
             !     Set theta=yy/ys.
             theta = rr/dr
-            !     Form the middle matrix in B.
-            !        update the upper triangle of SS,
-            !                                         and the lower triangle of SY:
+            ! Form the middle matrix in B.
+            ! update the upper triangle of SS,
+            ! and the lower triangle of SY:
             if (iupdat .gt. m) then
-                !                              move old information
+                ! move old information
                 do j = 1, col - 1
                     call dcopy(j,ss(2,j+1),1,ss(1,j),1)
                     call dcopy(col-j,sy(j+1,j+1),1,sy(j,j),1)
                 end do
             end if
-            !        add new information: the last row of SY
-            !                                             and the last column of SS:
+            ! add new information: the last row of SY
+            ! and the last column of SS:
             pointr = head
             do j = 1, col - 1
                 sy(col,j) = ddot_lbfgsb(n,d,1,wy(1,pointr),1)
@@ -2291,7 +2281,7 @@ contains
             end if
             sy(col,col) = dr
         end subroutine matupd
-        !======================= The end of matupd =============================
+
         subroutine projgr(n, l, u, nbd, x, g, sbgnrm)
             integer  :: n, nbd(n)
             real(dp) :: sbgnrm, x(n), l(n), u(n), g(n)
@@ -2329,7 +2319,7 @@ contains
                 sbgnrm = max(sbgnrm,abs(gi))
             end do
         end subroutine projgr
-        !======================= The end of projgr =============================
+
         subroutine subsm ( n, m, nsub, ind, l, u, nbd, x, d, xp, ws, wy, &
             &              theta, xx, gg, &
             &              col, head, iword, wv, wn, info )
@@ -2510,7 +2500,7 @@ contains
             real(dp) :: alpha, xk, dk, temp1, temp2 
             real(dp) :: dd_p
             if (nsub .le. 0) return
-            !     Compute wv = W'Zd.
+            ! Compute wv = W'Zd.
             pointr = head 
             do i = 1, col
                 temp1 = zero
@@ -2524,7 +2514,7 @@ contains
                 wv(col + i) = theta*temp2
                 pointr = mod(pointr,m) + 1
             end do
-            !     Compute wv:=K^(-1)wv.
+            ! Compute wv:=K^(-1)wv.
             m2 = 2*m
             col2 = 2*col
             call dtrsl(wn,m2,col2,wv,11,info)
@@ -2534,7 +2524,7 @@ contains
             end do
             call dtrsl(wn,m2,col2,wv,01,info)
             if (info .ne. 0) return
-            !     Compute d = (1/theta)d + (1/theta**2)Z'W wv.
+            ! Compute d = (1/theta)d + (1/theta**2)Z'W wv.
             pointr = head
             do jy = 1, col
                 js = col + jy
@@ -2547,7 +2537,7 @@ contains
             call dscal( nsub, one/theta, d, 1 )
             ! 
             !-----------------------------------------------------------------
-            !     Let us try the projection, d is the Newton direction
+            !  Let us try the projection, d is the Newton direction
             iword = 0
             call dcopy ( n, x, 1, xp, 1 )
             !
@@ -2557,18 +2547,18 @@ contains
                 xk = x(k)
                 if ( nbd(k) .ne. 0 ) then
                     !
-                    if ( nbd(k).eq.1 ) then          ! lower bounds only
+                    if ( nbd(k).eq.1 ) then         ! lower bounds only
                         x(k) = max( l(k), xk + dk )
                         if ( x(k).eq.l(k) ) iword = 1
                     else 
                         !     
-                        if ( nbd(k).eq.2 ) then       ! upper and lower bounds
+                        if ( nbd(k).eq.2 ) then     ! upper and lower bounds
                             xk   = max( l(k), xk + dk ) 
                             x(k) = min( u(k), xk )
                             if ( x(k).eq.l(k) .or. x(k).eq.u(k) ) iword = 1
                         else
                             !
-                            if ( nbd(k).eq.3 ) then    ! upper bounds only
+                            if ( nbd(k).eq.3 ) then ! upper bounds only
                                 x(k) = min( u(k), xk + dk )
                                 if ( x(k).eq.u(k) ) iword = 1
                             end if
@@ -2643,7 +2633,7 @@ contains
             end do
 911         continue
         end subroutine subsm
-        !====================== The end of subsm ===============================
+
         subroutine dcsrch(f,g,stp,ftol,gtol,xtol,stpmin,stpmax, &
             &             task,isave,dsave)
             character*(*) :: task
@@ -2807,12 +2797,12 @@ contains
                 gtest = ftol*ginit
                 width = stpmax - stpmin
                 width1 = width/p5
-                !        The variables stx, fx, gx contain the values of the step, 
-                !        function, and derivative at the best step. 
-                !        The variables sty, fy, gy contain the value of the step, 
-                !        function, and derivative at sty.
-                !        The variables stp, f, g contain the values of the step, 
-                !        function, and derivative at stp.
+                ! The variables stx, fx, gx contain the values of the step, 
+                ! function, and derivative at the best step. 
+                ! The variables sty, fy, gy contain the value of the step, 
+                ! function, and derivative at sty.
+                ! The variables stp, f, g contain the values of the step, 
+                ! function, and derivative at stp.
                 stx = zero
                 fx = finit
                 gx = ginit
@@ -2845,48 +2835,48 @@ contains
                 width = dsave(12) 
                 width1 = dsave(13) 
             end if
-            !     If psi(stp) <= 0 and f'(stp) >= 0 for some step, then the
-            !     algorithm enters the second stage.
+            ! If psi(stp) <= 0 and f'(stp) >= 0 for some step, then the
+            ! algorithm enters the second stage.
             ftest = finit + stp*gtest
             if (stage .eq. 1 .and. f .le. ftest .and. g .ge. zero) stage = 2
-            !     Test for warnings.
+            ! Test for warnings.
             if (brackt .and. (stp .le. stmin .or. stp .ge. stmax)) task = 'WARNING: ROUNDING ERRORS PREVENT PROGRESS'
             if (brackt .and. stmax - stmin .le. xtol*stmax) task = 'WARNING: XTOL TEST SATISFIED'
             if (stp .eq. stpmax .and. f .le. ftest .and. g .le. gtest) task = 'WARNING: STP = STPMAX'
             if (stp .eq. stpmin .and. (f .gt. ftest .or. g .ge. gtest)) task = 'WARNING: STP = STPMIN'
-            !     Test for convergence.
+            ! Test for convergence.
             if (f .le. ftest .and. abs(g) .le. gtol*(-ginit)) task = 'CONVERGENCE'
-            !     Test for termination.
+            ! Test for termination.
             if (task(1:4) .eq. 'WARN' .or. task(1:4) .eq. 'CONV') goto 1000
-            !     A modified function is used to predict the step during the
-            !     first stage if a lower function value has been obtained but 
-            !     the decrease is not sufficient.
+            ! A modified function is used to predict the step during the
+            ! first stage if a lower function value has been obtained but 
+            ! the decrease is not sufficient.
             if (stage .eq. 1 .and. f .le. fx .and. f .gt. ftest) then
-                !        Define the modified function and derivative values.
+                ! Define the modified function and derivative values.
                 fm = f - stp*gtest
                 fxm = fx - stx*gtest
                 fym = fy - sty*gtest
                 gm = g - gtest
                 gxm = gx - gtest
                 gym = gy - gtest
-                !        Call dcstep to update stx, sty, and to compute the new step.
+                ! Call dcstep to update stx, sty, and to compute the new step.
                 call dcstep(stx,fxm,gxm,sty,fym,gym,stp,fm,gm,brackt,stmin,stmax)
-                !        Reset the function and derivative values for f.
+                ! Reset the function and derivative values for f.
                 fx = fxm + stx*gtest
                 fy = fym + sty*gtest
                 gx = gxm + gtest
                 gy = gym + gtest
             else
-                !       Call dcstep to update stx, sty, and to compute the new step.
+                ! Call dcstep to update stx, sty, and to compute the new step.
                 call dcstep(stx,fx,gx,sty,fy,gy,stp,f,g,brackt,stmin,stmax)
             end if
-            !     Decide if a bisection step is needed.
+            ! Decide if a bisection step is needed.
             if (brackt) then
                 if (abs(sty-stx) .ge. p66*width1) stp = stx + p5*(sty - stx)
                 width1 = width
                 width = abs(sty-stx)
             end if
-            !     Set the minimum and maximum steps allowed for stp.
+            ! Set the minimum and maximum steps allowed for stp.
             if (brackt) then
                 stmin = min(stx,sty)
                 stmax = max(stx,sty)
@@ -2894,17 +2884,17 @@ contains
                 stmin = stp + xtrapl*(stp - stx)
                 stmax = stp + xtrapu*(stp - stx)
             end if
-            !     Force the step to be within the bounds stpmax and stpmin.
+            ! Force the step to be within the bounds stpmax and stpmin.
             stp = max(stp,stpmin)
             stp = min(stp,stpmax)
-            !     If further progress is not possible, let stp be the best
-            !     point obtained during the search.
+            ! If further progress is not possible, let stp be the best
+            ! point obtained during the search.
             if (brackt .and. (stp .le. stmin .or. stp .ge. stmax) &
                 &   .or. (brackt .and. stmax-stmin .le. xtol*stmax)) stp = stx
-            !     Obtain another function and derivative.
+            ! Obtain another function and derivative.
             task = 'FG'
 1000        continue
-            !     Save local variables.
+            ! Save local variables.
             if (brackt) then
                 isave(1) = 1
             else
@@ -2925,7 +2915,7 @@ contains
             dsave(12) = width
             dsave(13) = width1
         end subroutine dcsrch
-        !====================== The end of dcsrch ==============================
+
         subroutine dcstep(stx,fx,dx,sty,fy,dy,stp,fp,dp_var,brackt,stpmin,stpmax)
             logical  :: brackt
             real(dp) :: stx,fx,dx,sty,fy,dy,stp,fp,dp_var,stpmin,stpmax
@@ -3023,10 +3013,10 @@ contains
             !     **********
             real(dp) :: gamma,p,q,r,s,sgnd,stpc,stpf,stpq,theta
             sgnd = dp_var*(dx/abs(dx))
-            !     First case: A higher function value. The minimum is bracketed. 
-            !     If the cubic step is closer to stx than the quadratic step, the 
-            !     cubic step is taken, otherwise the average of the cubic and 
-            !     quadratic steps is taken.
+            ! First case: A higher function value. The minimum is bracketed. 
+            ! If the cubic step is closer to stx than the quadratic step, the 
+            ! cubic step is taken, otherwise the average of the cubic and 
+            ! quadratic steps is taken.
             if (fp .gt. fx) then
                 theta = three*(fx - fp)/(stp - stx) + dx + dp_var
                 s = max(abs(theta),abs(dx),abs(dp_var))
@@ -3043,10 +3033,10 @@ contains
                     stpf = stpc + (stpq - stpc)/two
                 end if
                 brackt = .true.
-                !     Second case: A lower function value and derivatives of opposite 
-                !     sign. The minimum is bracketed. If the cubic step is farther from 
-                !     stp than the secant step, the cubic step is taken, otherwise the 
-                !     secant step is taken.
+                ! Second case: A lower function value and derivatives of opposite 
+                ! sign. The minimum is bracketed. If the cubic step is farther from 
+                ! stp than the secant step, the cubic step is taken, otherwise the 
+                ! secant step is taken.
             else if (sgnd .lt. zero) then
                 theta = three*(fx - fp)/(stp - stx) + dx + dp_var
                 s = max(abs(theta),abs(dx),abs(dp_var))
@@ -3063,17 +3053,17 @@ contains
                     stpf = stpq
                 end if
                 brackt = .true.
-                !     Third case: A lower function value, derivatives of the same sign,
-                !     and the magnitude of the derivative decreases.
+                ! Third case: A lower function value, derivatives of the same sign,
+                ! and the magnitude of the derivative decreases.
             else if (abs(dp_var) .lt. abs(dx)) then
-                !        The cubic step is computed only if the cubic tends to infinity 
-                !        in the direction of the step or if the minimum of the cubic
-                !        is beyond stp. Otherwise the cubic step is defined to be the 
-                !        secant step.
+                ! The cubic step is computed only if the cubic tends to infinity 
+                ! in the direction of the step or if the minimum of the cubic
+                ! is beyond stp. Otherwise the cubic step is defined to be the 
+                ! secant step.
                 theta = three*(fx - fp)/(stp - stx) + dx + dp_var
                 s = max(abs(theta),abs(dx),abs(dp_var))
-                !        The case gamma = 0 only arises if the cubic does not tend
-                !        to infinity in the direction of the step.
+                ! The case gamma = 0 only arises if the cubic does not tend
+                ! to infinity in the direction of the step.
                 gamma = s*sqrt(max(zero,(theta/s)**2-(dx/s)*(dp_var/s)))
                 if (stp .gt. stx) gamma = -gamma
                 p = (gamma - dp_var) + theta
@@ -3088,9 +3078,9 @@ contains
                 end if
                 stpq = stp + (dp_var/(dp_var - dx))*(stx - stp)
                 if (brackt) then
-                    !           A minimizer has been bracketed. If the cubic step is 
-                    !           closer to stp than the secant step, the cubic step is 
-                    !           taken, otherwise the secant step is taken.
+                    ! A minimizer has been bracketed. If the cubic step is 
+                    ! closer to stp than the secant step, the cubic step is 
+                    ! taken, otherwise the secant step is taken.
                     if (abs(stpc-stp) .lt. abs(stpq-stp)) then
                         stpf = stpc
                     else
@@ -3102,9 +3092,9 @@ contains
                         stpf = max(stp+p66*(sty-stp),stpf)
                     end if
                 else
-                    !           A minimizer has not been bracketed. If the cubic step is 
-                    !           farther from stp than the secant step, the cubic step is 
-                    !           taken, otherwise the secant step is taken.
+                    ! A minimizer has not been bracketed. If the cubic step is 
+                    ! farther from stp than the secant step, the cubic step is 
+                    ! taken, otherwise the secant step is taken.
                     if (abs(stpc-stp) .gt. abs(stpq-stp)) then
                         stpf = stpc
                     else
@@ -3113,10 +3103,10 @@ contains
                     stpf = min(stpmax,stpf)
                     stpf = max(stpmin,stpf)
                 end if
-                !     Fourth case: A lower function value, derivatives of the same sign, 
-                !     and the magnitude of the derivative does not decrease. If the 
-                !     minimum is not bracketed, the step is either stpmin or stpmax, 
-                !     otherwise the cubic step is taken.
+                ! Fourth case: A lower function value, derivatives of the same sign, 
+                ! and the magnitude of the derivative does not decrease. If the 
+                ! minimum is not bracketed, the step is either stpmin or stpmax, 
+                ! otherwise the cubic step is taken.
             else
                 if (brackt) then
                     theta = three*(fp - fy)/(sty - stp) + dy + dp_var
@@ -3134,7 +3124,7 @@ contains
                     stpf = stpmin
                 end if
             end if
-            !     Update the interval which contains a minimizer.
+            ! Update the interval which contains a minimizer
             if (fp .gt. fx) then
                 sty = stp
                 fy = fp
@@ -3149,7 +3139,7 @@ contains
                 fx = fp
                 dx = dp_var
             end if
-            !     Compute the new step.
+            ! Compute the new step
             stp = stpf
         end subroutine dcstep
 
@@ -3230,8 +3220,6 @@ contains
             return
             !
             !        code for both increments equal to 1
-            !
-            !
             !        clean-up loop
             !
 20          m = mod(n,4)
@@ -3278,7 +3266,6 @@ contains
             return
             !
             !        code for both increments equal to 1
-            !
             !
             !        clean-up loop
             !
@@ -3334,7 +3321,6 @@ contains
             !
             !        code for both increments equal to 1
             !
-            !
             !        clean-up loop
             !
 20          m = mod(n,5)
@@ -3375,7 +3361,6 @@ contains
             return
             !
             !        code for increment equal to 1
-            !
             !
             !        clean-up loop
             !
@@ -3445,7 +3430,6 @@ contains
             integer  :: j,jm1,k
             !     begin block with ...exits to 40
             !
-            !
             do j = 1, n
                 info = j
                 s = 0.0d0
@@ -3470,7 +3454,6 @@ contains
         subroutine dtrsl(t,ldt,n,b,job,info)
             integer  :: ldt,n,job,info
             real(dp) :: t(ldt,*),b(*)
-            !
             !
             !     dtrsl solves systems of the form
             !
@@ -3601,10 +3584,8 @@ contains
 150         continue
         end subroutine dtrsl
 
-
     end subroutine lbfgsb_minimize
            
-
     !> \brief  is a destructor
     subroutine kill_lbfgsb_opt( self )
         class(lbfgsb_opt), intent(inout) :: self !< instance
