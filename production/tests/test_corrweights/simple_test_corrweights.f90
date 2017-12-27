@@ -39,7 +39,7 @@ contains
     end subroutine corrs2w_factorial
 
     subroutine corrs2w_softmax
-        real, parameter :: TAU=0.02
+        real, parameter :: TAU=0.01
         real :: corrmin, corrmax, corrdiff 
 
         corrmax  = maxval(corrs)

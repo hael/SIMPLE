@@ -187,6 +187,8 @@ contains
                 ! do nothing
             case('stde')
                 ! do nothing
+            case('lbfgsb')
+                ! do nothing
             case('powell')
                 self%maxits   = ndim*1000
             case('simplex')

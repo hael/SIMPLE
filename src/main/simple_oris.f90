@@ -1101,44 +1101,45 @@ contains
 
         contains
 
-            function ang_sdev_state( istate )result( isdev )
+            function ang_sdev_state( istate )result( wsdev )
                 integer, intent(in)  :: istate
                 type(ori)            :: o_best, o
                 type(oris)           :: os
                 real,    allocatable :: dists(:), ws(:)
                 integer, allocatable :: inds(:)
-                real                 :: ave, isdev, var
-                integer              :: loc(1), i, ind, n, cnt
-                logical              :: err
-                isdev = 0.
-                inds = self%get_pinds( istate, 'state' )
+                real                 :: wdmean, nw_nonzero, wsdev
+                integer              :: loc(1), i, n, cnt
+                inds = self%get_pinds(istate, 'state')
                 n = size(inds)
-                if( n < 3 )return ! because one is excluded in the next step & moment needs at least 2 objs
-                call os%new( n )
-                allocate( ws(n), dists(n-1), stat=alloc_stat )
+                if( n < 3 ) return
+                call os%new(n)
+                allocate( ws(n), dists(n), stat=alloc_stat )
                 allocchk( 'ang_sdev_state; simple_oris')
                 ws    = 0.
                 dists = 0.
                 ! get best ori
                 do i=1,n
-                    ind   = inds(i)
-                    ws(i) = self%get(ind,'ow')
-                    call os%set_ori( i, self%o(ind) )
+                    ws(i) = self%get(inds(i),'ow')
+                    call os%set_ori( i, self%o(inds(i)) )
                 enddo
-                loc    = maxloc( ws )
+                loc    = maxloc(ws)
                 o_best = os%get_ori( loc(1) )
                 ! build distance vector
-                cnt = 0
                 do i=1,n
-                    if( i==loc(1) )cycle
-                    cnt = cnt+1
-                    o = os%get_ori( i )
-                    dists( cnt ) = rad2deg( o.euldist.o_best )
+                    o = os%get_ori(i)
+                    dists(i) = rad2deg( o.euldist.o_best )
                 enddo
-                call moment(dists, ave, isdev, var, err)
+                ! weighted distance mean
+                wdmean = sum(ws * dists) / sum(ws)
+                ! # nonzero weights
+                nw_nonzero = real(count(ws > 0.))
+                ! weighted standard deviation of distances
+                wsdev = sqrt(sum(ws * (dists - wdmean)**2.0) / (((nw_nonzero - 1.0) / nw_nonzero) * sum(ws)))
+                ! destruct
                 deallocate( ws, dists, inds )
                 call os%kill
             end function ang_sdev_state
+
     end function ang_sdev
 
     !>  \brief  for getting a logical mask of the included particles
