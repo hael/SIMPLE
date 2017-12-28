@@ -39,16 +39,17 @@ contains
     end subroutine corrs2w_factorial
 
     subroutine corrs2w_softmax
-        real, parameter :: TAU=0.01
-        real :: corrmin, corrmax, corrdiff 
-
-        corrmax  = maxval(corrs)
-        corrmin  = minval(corrs)
-        corrdiff = corrmax - corrmin
-
-        print *, corrdiff
-
-        ws = exp(-(1.-corrs/TAU))
+        real, parameter :: TAU=0.005
+        real :: arg4exp(NCORRS), dists(NCORRS)
+        dists = 1.-corrs
+        ! scale distances with TAU
+        dists = dists / TAU
+        ! argument for exponential function is negative distances
+        arg4exp = -dists
+        ! subtract maxval of negative distances for numerical stability
+        arg4exp = arg4exp -maxval(arg4exp)
+        ! calculate softmax weights
+        ws = exp(arg4exp)
         ws = ws / sum(ws)
     end subroutine corrs2w_softmax
 

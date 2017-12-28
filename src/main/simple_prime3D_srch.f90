@@ -13,7 +13,7 @@ public :: cleanprime3D_srch, prep4prime3D_srch, prime3D_srch_extr
 public :: prime3D_srch, o_peaks
 private
 
-real,    parameter :: FACTWEIGHTS_THRESH = 0.01 !< threshold for factorial weights
+real,    parameter :: SOFTMAXW_THRESH = 0.01 !< threshold for softmax weights
 logical, parameter :: DEBUG = .false.
 
 ! allocatables for prime3D_srch are class variables to improve caching and reduce alloc overheads 
@@ -1108,7 +1108,7 @@ contains
         type(oris) :: sym_os
         real       :: shvec(2), corrs(self%npeaks), wprecursor(self%npeaks), ws(self%npeaks), logws(self%npeaks)
         real       :: state_ws(self%nstates), frac, ang_sdev, dist, inpl_dist, euldist, mi_joint
-        real       :: mi_proj, mi_inpl, mi_state, dist_inpl, wcorr, corrmax
+        real       :: mi_proj, mi_inpl, mi_state, dist_inpl, wcorr, corrmax, dists(self%npeaks), arg4softmax(self%npeaks)
         integer    :: best_loc(1), loc(1), order(self%npeaks), states(self%npeaks)
         integer    :: s, ipeak, cnt, ref, state, roind, neff_states
         logical    :: included(self%npeaks)
@@ -1146,10 +1146,19 @@ contains
             call o_peaks(self%iptcl)%set(1,'ow',1.0)
             wcorr = o_peaks(self%iptcl)%get(1,'corr')
         else
-            ws = exp(-(1.-corrs/TAU))
+            ! convert correlations to distances
+            dists = 1.0 - corrs
+            ! scale distances with TAU
+            dists = dists / TAU
+            ! argument for softmax function is negative distances
+            arg4softmax = -dists
+            ! subtract maxval of negative distances for numerical stability
+            arg4softmax = arg4softmax - maxval(dists)
+            ! calculate softmax weights
+            ws = exp(arg4softmax)
             ws = ws / sum(ws)
             ! threshold weights
-            included = (ws >= FACTWEIGHTS_THRESH)
+            included = (ws >= SOFTMAXW_THRESH)
             self%npeaks_eff = count(included)
             where( .not. included ) ws = 0.
             ! weighted corr
