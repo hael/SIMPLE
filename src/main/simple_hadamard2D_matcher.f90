@@ -318,13 +318,11 @@ contains
         class(params), intent(inout) :: p
         integer,       intent(in)    :: which_iter
         type(polarizer), allocatable :: match_imgs(:)
-        type(ori) :: o
         integer   :: iptcl, icls, pop, pop_even, pop_odd
         integer   :: batchlims(2), batchsz, imatch, batchsz_max, iptcl_batch
         logical   :: do_center
         real      :: xyz(3)
         if( .not. p%l_distr_exec ) write(*,'(A)') '>>> BUILDING PRIME2D SEARCH ENGINE'
-
         ! create the polarft_corrcalc object
         call pftcc%new(p%ncls, p, eoarr=nint(b%a%get_all('eo', [p%fromp,p%top])))
         ! prepare the polarizer images

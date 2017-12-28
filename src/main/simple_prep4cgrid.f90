@@ -34,7 +34,6 @@ contains
         class(kbinterpol), intent(in)    :: kbwin
         integer,           intent(in)    :: ldim_pd(3)
         type(ftiter) :: fit 
-        integer      :: npix
         call self%kill
         ! set logical dimensions of images
         self%ldim    = img%get_ldim()

@@ -208,15 +208,13 @@ contains
     subroutine apply_weight( self, w )
         class(reconstructor), intent(inout) :: self
         real,                 intent(in)    :: w
-        integer :: h, k, l
+        integer :: h, k
         if(allocated(self%cmat_exp) .and. allocated(self%rho_exp) )then
-            !$omp parallel do collapse(3) default(shared) schedule(static) private(h,k,l) proc_bind(close)
-            do h=self%cyc_lims(1,1),self%cyc_lims(1,2)
-                do k=self%cyc_lims(2,1),self%cyc_lims(2,2)
-                    do l=self%cyc_lims(3,1),self%cyc_lims(3,2)
-                        self%cmat_exp(h,k,l) = self%cmat_exp(h,k,l) * w
-                        self%rho_exp(h,k,l)  = self%rho_exp(h,k,l)  * w
-                    end do
+            !$omp parallel do collapse(2) default(shared) schedule(static) private(h,k) proc_bind(close)
+            do h=self%ldim_exp(1,1),self%ldim_exp(1,2)
+                do k=self%ldim_exp(2,1),self%ldim_exp(2,2)
+                    self%cmat_exp(h,k,self%ldim_exp(3,1):self%ldim_exp(3,2)) = w * self%cmat_exp(h,k,self%ldim_exp(3,1):self%ldim_exp(3,2))
+                    self%rho_exp(h,k,self%ldim_exp(3,1):self%ldim_exp(3,2))  = w * self%rho_exp(h,k,self%ldim_exp(3,1):self%ldim_exp(3,2))
                 end do
             end do
             !$omp end parallel do
@@ -264,6 +262,223 @@ contains
     ! CONVOLUTION INTERPOLATION
 
     !> insert Fourier plane, single orientation
+    ! subroutine insert_fplane_1( self, se, o, fpl, pwght )
+    !     use simple_sym, only: sym
+    !     class(reconstructor), intent(inout) :: self  !< instance
+    !     class(sym),           intent(inout) :: se    !< symmetry elements
+    !     class(ori),           intent(inout) :: o     !< orientation
+    !     class(image),         intent(inout) :: fpl   !< Fourier plane
+    !     real,                 intent(in)    :: pwght !< external particle weight (affects both fplane and rho)
+    !     real, allocatable :: rotmats(:,:,:)
+    !     type(ori) :: o_sym
+    !     type(ctf) :: tfun
+    !     integer   :: logi(3), win(3,2), sh, i, h, k, nsym, isym
+    !     complex   :: comp, oshift
+    !     real      :: vec(3), loc(3), shconst_here(2), dfx, dfy, angast, phshift
+    !     real      :: w(self%wdim,self%wdim,self%wdim), arg, tval, tvalsq
+    !     ! setup CTF
+    !     if( self%ctf%flag /= CTFFLAG_NO )then
+    !         ! make CTF object & get CTF info
+    !         tfun = ctf(self%get_smpd(), o%get('kv'), o%get('cs'), o%get('fraca'))
+    !         dfx  = o%get('dfx')
+    !         if( self%tfastig )then ! astigmatic CTF model
+    !             dfy    = o%get('dfy')
+    !             angast = o%get('angast')
+    !         else                   ! non-astigmatic CTF model
+    !             dfy    = dfx
+    !             angast = 0.
+    !         endif
+    !         call tfun%init(dfx, dfy, angast)
+    !         ! additional phase shift from the Volta
+    !         phshift = 0.
+    !         if( self%phaseplate ) phshift = o%get('phshift')
+    !     endif
+    !     ! setup rotation matrices
+    !     nsym = se%get_nsym()
+    !     allocate(rotmats(nsym,3,3), source=0.0)
+    !     rotmats(1,:,:) = o%get_mat()
+    !     if( nsym > 1 )then
+    !         do isym=2,nsym
+    !             o_sym = se%apply(o, isym)
+    !             rotmats(isym,:,:) = o_sym%get_mat()
+    !         end do
+    !     endif
+    !     ! memoize for origin shifting
+    !     shconst_here = (-o%get_2Dshift()) * self%shconst_rec(1:2)
+    !     ! the parallellisation must run over one plane @ the time to avoid race conditions
+    !     ! but by starting the parallel section here we reduce thread creation O/H
+    !     ! and lower the serial slack, while preserving a low memory footprint. The speeduop 
+    !     ! (on 5000 images of betagal) is modest (10%) but significant
+    !     !$omp parallel default(shared) private(i,h,k,sh,comp,arg,oshift,logi,tval,tvalsq,w,win,vec,loc) proc_bind(close)
+    !     do isym=1,nsym
+    !         !$omp do collapse(2) schedule(static)
+    !         do h=self%cyc_lims(1,1),self%cyc_lims(1,2)
+    !             do k=self%cyc_lims(2,1),self%cyc_lims(2,2)
+    !                 sh = nint(hyp(real(h),real(k)))
+    !                 if( sh > self%nyq + 1 ) cycle
+    !                 logi = [h,k,0]
+    !                 vec  = real(logi)
+    !                 ! non-uniform sampling location
+    !                 loc  = matmul(vec, rotmats(isym,:,:))
+    !                 ! window
+    !                 call sqwin_3d(loc(1), loc(2), loc(3), self%winsz, win)
+    !                 ! no need to update outside the non-redundant Friedel limits
+    !                 ! consistent with compress_exp
+    !                 if( win(1,2) < self%lims(1,1) )cycle
+    !                 ! Fourier component
+    !                 comp   = fpl%get_fcomp(logi, self%ind_map(h,k,:))
+    !                 ! shift
+    !                 arg    = dot_product(shconst_here, vec(1:2))
+    !                 oshift = cmplx(cos(arg), sin(arg))
+    !                 ! transfer function
+    !                 if( self%ctf%flag /= CTFFLAG_NO )then
+    !                     ! CTF and CTF**2 values
+    !                     if( self%phaseplate )then
+    !                         tval = tfun%eval(self%ctf_sqSpatFreq(h,k), self%ctf_ang(h,k), phshift)
+    !                     else
+    !                         tval = tfun%eval(self%ctf_sqSpatFreq(h,k), self%ctf_ang(h,k))
+    !                     endif
+    !                     tvalsq = tval * tval
+    !                     if( self%ctf%flag == CTFFLAG_FLIP ) tval = abs(tval)
+    !                 else
+    !                     tval   = 1.
+    !                     tvalsq = tval
+    !                 endif
+    !                 ! (weighted) kernel values
+    !                 w = pwght
+    !                 do i=1,self%wdim
+    !                     w(i,:,:) = w(i,:,:) * self%kbwin%apod(real(win(1,1) + i - 1) - loc(1))
+    !                     w(:,i,:) = w(:,i,:) * self%kbwin%apod(real(win(2,1) + i - 1) - loc(2))
+    !                     w(:,:,i) = w(:,:,i) * self%kbwin%apod(real(win(3,1) + i - 1) - loc(3))
+    !                 enddo
+    !                 ! expanded matrices update
+    !                 ! CTF and w modulates the component before origin shift
+    !                 self%cmat_exp(win(1,1):win(1,2), win(2,1):win(2,2), win(3,1):win(3,2)) =&
+    !                 &self%cmat_exp(win(1,1):win(1,2), win(2,1):win(2,2), win(3,1):win(3,2)) + (comp*tval*w)*oshift
+    !                 self%rho_exp(win(1,1):win(1,2), win(2,1):win(2,2), win(3,1):win(3,2)) =&
+    !                 &self%rho_exp(win(1,1):win(1,2), win(2,1):win(2,2), win(3,1):win(3,2)) + tvalsq*w
+    !             end do
+    !         end do
+    !         !$omp end do nowait
+    !     end do
+    !     !$omp end parallel 
+    ! end subroutine insert_fplane_1
+
+    ! !> insert Fourier plane, distribution of orientations (with weights)
+    ! subroutine insert_fplane_2( self, se, os, fpl, pwght, state )
+    !     use simple_sym, only: sym
+    !     class(reconstructor), intent(inout) :: self  !< instance
+    !     class(sym),           intent(inout) :: se    !< symmetry elements
+    !     class(oris),          intent(inout) :: os    !< orientations
+    !     class(image),         intent(inout) :: fpl   !< Fourier plane
+    !     real,                 intent(in)    :: pwght !< external particle weight (affects both fplane and rho)
+    !     integer, optional,    intent(in)    :: state !< state to reconstruct
+    !     type(ori) :: o_sym, o
+    !     type(ctf) :: tfun
+    !     integer   :: logi(3), win(3,2), sh, i, h, k, nsym, isym, iori, noris, sstate, states(os%get_noris())
+    !     complex   :: comp, oshift
+    !     real      :: vec(3), loc(3), shifts(os%get_noris(),2), ows(os%get_noris()), dfx, dfy, angast, phshift
+    !     real      :: w(self%wdim,self%wdim,self%wdim), arg, tval, tvalsq, rotmats(os%get_noris(),se%get_nsym(),3,3)
+    !     ! take care of optional state flag
+    !     sstate = 1
+    !     if( present(state) ) sstate = state
+    !     ! setup CTF
+    !     if( self%ctf%flag /= CTFFLAG_NO )then
+    !         ! make CTF object & get CTF info
+    !         o    = os%get_ori(1)
+    !         tfun = ctf(self%get_smpd(), o%get('kv'), o%get('cs'), o%get('fraca'))
+    !         dfx  = o%get('dfx')
+    !         if( self%tfastig )then ! astigmatic CTF model
+    !             dfy    = o%get('dfy')
+    !             angast = o%get('angast')
+    !         else                   ! non-astigmatic CTF model
+    !             dfy    = dfx
+    !             angast = 0.
+    !         endif
+    !         call tfun%init(dfx, dfy, angast)
+    !         ! additional phase shift from the Volta
+    !         phshift = 0.
+    !         if( self%phaseplate ) phshift = o%get('phshift')
+    !     endif
+    !     ! setup orientation weights/states/rotation matrices/shifts
+    !     nsym  = se%get_nsym()
+    !     noris = os%get_noris()
+    !     do iori=1,noris
+    !         o            = os%get_ori(iori)
+    !         ows(iori)    = pwght * o%get('ow')
+    !         states(iori) = nint(o%get('state'))
+    !         if( ows(iori) < TINY ) cycle
+    !         rotmats(iori,1,:,:) = o%get_mat()
+    !         if( nsym > 1 )then
+    !             do isym=2,nsym
+    !                 o_sym = se%apply(o, isym)
+    !                 rotmats(iori,isym,:,:) = o_sym%get_mat()
+    !             end do
+    !         endif
+    !         shifts(iori,:) = (-o%get_2Dshift()) * self%shconst_rec(1:2)
+    !     enddo
+    !     ! the parallellisation must run over one plane @ the time to avoid race conditions
+    !     ! but by starting the parallel section here we reduce thread creation O/H
+    !     ! and lower the serial slack, while preserving a low memory footprint
+    !     !$omp parallel default(shared) private(i,h,k,sh,comp,arg,oshift,logi,tval,tvalsq,w,win,vec,loc) proc_bind(close)
+    !     do isym=1,nsym
+    !         do iori=1,noris
+    !             if( ows(iori) < TINY .or. states(iori) /= sstate ) cycle
+    !             !$omp do collapse(2) schedule(static)
+    !             do h=self%cyc_lims(1,1),self%cyc_lims(1,2)
+    !                 do k=self%cyc_lims(2,1),self%cyc_lims(2,2)
+    !                     sh = nint(hyp(real(h),real(k)))
+    !                     if( sh > self%nyq + 1 ) cycle
+    !                     logi = [h,k,0]
+    !                     vec  = real(logi)
+    !                     ! non-uniform sampling location
+    !                     loc  = matmul(vec, rotmats(iori,isym,:,:))
+    !                     ! window
+    !                     call sqwin_3d(loc(1), loc(2), loc(3), self%winsz, win)
+    !                     ! no need to update outside the non-redundant Friedel limits
+    !                     ! consistent with compress_exp
+    !                     if( win(1,2) < self%lims(1,1) )cycle
+    !                     ! Fourier component
+    !                     comp   = fpl%get_fcomp(logi, self%ind_map(h,k,:))
+    !                     ! shift
+    !                     arg    = dot_product(shifts(iori,:), vec(1:2))
+    !                     oshift = cmplx(cos(arg), sin(arg))
+    !                     ! transfer function
+    !                     if( self%ctf%flag /= CTFFLAG_NO )then
+    !                         ! CTF and CTF**2 values
+    !                         if( self%phaseplate )then
+    !                             tval = tfun%eval(self%ctf_sqSpatFreq(h,k), self%ctf_ang(h,k), phshift)
+    !                         else
+    !                             tval = tfun%eval(self%ctf_sqSpatFreq(h,k), self%ctf_ang(h,k))
+    !                         endif
+    !                         tvalsq = tval * tval
+    !                         if( self%ctf%flag == CTFFLAG_FLIP ) tval = abs(tval)
+    !                     else
+    !                         tval   = 1.
+    !                         tvalsq = tval
+    !                     endif
+    !                     ! (weighted) kernel values
+    !                     w = ows(iori)
+    !                     do i=1,self%wdim
+    !                         w(i,:,:) = w(i,:,:) * self%kbwin%apod(real(win(1,1) + i - 1) - loc(1))
+    !                         w(:,i,:) = w(:,i,:) * self%kbwin%apod(real(win(2,1) + i - 1) - loc(2))
+    !                         w(:,:,i) = w(:,:,i) * self%kbwin%apod(real(win(3,1) + i - 1) - loc(3))
+    !                     enddo
+    !                     ! expanded matrices update
+    !                     ! CTF and w modulates the component before origin shift
+    !                     self%cmat_exp(win(1,1):win(1,2), win(2,1):win(2,2), win(3,1):win(3,2)) =&
+    !                     &self%cmat_exp(win(1,1):win(1,2), win(2,1):win(2,2), win(3,1):win(3,2)) + (comp*tval*w)*oshift
+    !                     self%rho_exp(win(1,1):win(1,2), win(2,1):win(2,2), win(3,1):win(3,2)) =&
+    !                     &self%rho_exp(win(1,1):win(1,2), win(2,1):win(2,2), win(3,1):win(3,2)) + tvalsq*w
+    !                 end do
+    !             end do
+    !             !$omp end do nowait
+    !         end do
+    !     end do
+    !     !$omp end parallel 
+    ! end subroutine insert_fplane_2
+
+    !> insert Fourier plane, single orientation
     subroutine insert_fplane_1( self, se, o, fpl, pwght )
         use simple_sym, only: sym
         class(reconstructor), intent(inout) :: self  !< instance
@@ -274,10 +489,13 @@ contains
         real, allocatable :: rotmats(:,:,:)
         type(ori) :: o_sym
         type(ctf) :: tfun
-        integer   :: logi(3), win(3,2), sh, i, h, k, nsym, isym
+        integer   :: logi(3), phys(3), sh, i, h, k, nsym, isym, iwinsz
+        integer   :: win(2,3) ! window boundary array in fortran contiguous format
         complex   :: comp, oshift
-        real      :: vec(3), loc(3), shconst_here(2), dfx, dfy, angast, phshift
-        real      :: w(self%wdim,self%wdim,self%wdim), arg, tval, tvalsq
+        real      :: w(self%wdim,self%wdim,self%wdim), vec(3), loc(3), dists(3), shconst_here(2)
+        real      :: arg, dfx, dfy, angast, phshift, tval, tvalsq
+        ! window size
+        iwinsz = ceiling(self%winsz - 0.5)
         ! setup CTF
         if( self%ctf%flag /= CTFFLAG_NO )then
             ! make CTF object & get CTF info
@@ -311,7 +529,7 @@ contains
         ! but by starting the parallel section here we reduce thread creation O/H
         ! and lower the serial slack, while preserving a low memory footprint. The speeduop 
         ! (on 5000 images of betagal) is modest (10%) but significant
-        !$omp parallel default(shared) private(i,h,k,sh,comp,arg,oshift,logi,tval,tvalsq,w,win,vec,loc) proc_bind(close)
+        !$omp parallel default(shared) private(i,h,k,sh,comp,arg,oshift,logi,tval,tvalsq,w,win,vec,loc,dists,phys) proc_bind(close)
         do isym=1,nsym
             !$omp do collapse(2) schedule(static)
             do h=self%cyc_lims(1,1),self%cyc_lims(1,2)
@@ -323,12 +541,15 @@ contains
                     ! non-uniform sampling location
                     loc  = matmul(vec, rotmats(isym,:,:))
                     ! window
-                    call sqwin_3d(loc(1), loc(2), loc(3), self%winsz, win)
+                    win(1,:) = nint(loc)
+                    win(2,:) = win(1,:) + iwinsz
+                    win(1,:) = win(1,:) - iwinsz
                     ! no need to update outside the non-redundant Friedel limits
                     ! consistent with compress_exp
-                    if( win(1,2) < self%lims(1,1) )cycle
+                    if( win(2,1) < self%lims(1,1) )cycle
                     ! Fourier component
-                    comp   = fpl%get_fcomp(logi, self%ind_map(h,k,:))
+                    phys = self%ind_map(h,k,:)
+                    comp = fpl%get_fcomp(logi, phys)
                     ! shift
                     arg    = dot_product(shconst_here, vec(1:2))
                     oshift = cmplx(cos(arg), sin(arg))
@@ -349,21 +570,22 @@ contains
                     ! (weighted) kernel values
                     w = pwght
                     do i=1,self%wdim
-                        w(i,:,:) = w(i,:,:) * self%kbwin%apod(real(win(1,1) + i - 1) - loc(1))
-                        w(:,i,:) = w(:,i,:) * self%kbwin%apod(real(win(2,1) + i - 1) - loc(2))
-                        w(:,:,i) = w(:,:,i) * self%kbwin%apod(real(win(3,1) + i - 1) - loc(3))
+                        dists    = real(win(1,:) + i - 1) - loc
+                        w(i,:,:) = w(i,:,:) * self%kbwin%apod(dists(1))
+                        w(:,i,:) = w(:,i,:) * self%kbwin%apod(dists(2))
+                        w(:,:,i) = w(:,:,i) * self%kbwin%apod(dists(3))
                     enddo
                     ! expanded matrices update
                     ! CTF and w modulates the component before origin shift
-                    self%cmat_exp(win(1,1):win(1,2), win(2,1):win(2,2), win(3,1):win(3,2)) =&
-                    &self%cmat_exp(win(1,1):win(1,2), win(2,1):win(2,2), win(3,1):win(3,2)) + (comp*tval*w)*oshift
-                    self%rho_exp(win(1,1):win(1,2), win(2,1):win(2,2), win(3,1):win(3,2)) =&
-                    &self%rho_exp(win(1,1):win(1,2), win(2,1):win(2,2), win(3,1):win(3,2)) + tvalsq*w
+                    self%cmat_exp(win(1,1):win(2,1), win(1,2):win(2,2), win(1,3):win(2,3)) =&
+                    &self%cmat_exp(win(1,1):win(2,1), win(1,2):win(2,2), win(1,3):win(2,3)) + (comp*tval*w)*oshift
+                    self%rho_exp(win(1,1):win(2,1), win(1,2):win(2,2), win(1,3):win(2,3)) =&
+                    &self%rho_exp(win(1,1):win(2,1), win(1,2):win(2,2), win(1,3):win(2,3)) + tvalsq*w
                 end do
             end do
             !$omp end do nowait
         end do
-        !$omp end parallel 
+        !$omp end parallel
     end subroutine insert_fplane_1
 
     !> insert Fourier plane, distribution of orientations (with weights)
@@ -377,13 +599,16 @@ contains
         integer, optional,    intent(in)    :: state !< state to reconstruct
         type(ori) :: o_sym, o
         type(ctf) :: tfun
-        integer   :: logi(3), win(3,2), sh, i, h, k, nsym, isym, iori, noris, sstate, states(os%get_noris())
         complex   :: comp, oshift
+        integer   :: logi(3), sh, i, h, k, nsym, isym, iori, noris, sstate, states(os%get_noris()), iwinsz
+        integer   :: win(2,3) ! window boundary array in fortran contiguous format
         real      :: vec(3), loc(3), shifts(os%get_noris(),2), ows(os%get_noris()), dfx, dfy, angast, phshift
         real      :: w(self%wdim,self%wdim,self%wdim), arg, tval, tvalsq, rotmats(os%get_noris(),se%get_nsym(),3,3)
         ! take care of optional state flag
         sstate = 1
         if( present(state) ) sstate = state
+        ! window size
+        iwinsz = ceiling(self%winsz - 0.5)
         ! setup CTF
         if( self%ctf%flag /= CTFFLAG_NO )then
             ! make CTF object & get CTF info
@@ -436,10 +661,12 @@ contains
                         ! non-uniform sampling location
                         loc  = matmul(vec, rotmats(iori,isym,:,:))
                         ! window
-                        call sqwin_3d(loc(1), loc(2), loc(3), self%winsz, win)
+                        win(1,:) = nint(loc)
+                        win(2,:) = win(1,:) + iwinsz
+                        win(1,:) = win(1,:) - iwinsz
                         ! no need to update outside the non-redundant Friedel limits
                         ! consistent with compress_exp
-                        if( win(1,2) < self%lims(1,1) )cycle
+                        if( win(2,1) < self%lims(1,1) )cycle
                         ! Fourier component
                         comp   = fpl%get_fcomp(logi, self%ind_map(h,k,:))
                         ! shift
@@ -463,15 +690,15 @@ contains
                         w = ows(iori)
                         do i=1,self%wdim
                             w(i,:,:) = w(i,:,:) * self%kbwin%apod(real(win(1,1) + i - 1) - loc(1))
-                            w(:,i,:) = w(:,i,:) * self%kbwin%apod(real(win(2,1) + i - 1) - loc(2))
-                            w(:,:,i) = w(:,:,i) * self%kbwin%apod(real(win(3,1) + i - 1) - loc(3))
+                            w(:,i,:) = w(:,i,:) * self%kbwin%apod(real(win(1,2) + i - 1) - loc(2))
+                            w(:,:,i) = w(:,:,i) * self%kbwin%apod(real(win(1,3) + i - 1) - loc(3))
                         enddo
                         ! expanded matrices update
                         ! CTF and w modulates the component before origin shift
-                        self%cmat_exp(win(1,1):win(1,2), win(2,1):win(2,2), win(3,1):win(3,2)) =&
-                        &self%cmat_exp(win(1,1):win(1,2), win(2,1):win(2,2), win(3,1):win(3,2)) + (comp*tval*w)*oshift
-                        self%rho_exp(win(1,1):win(1,2), win(2,1):win(2,2), win(3,1):win(3,2)) =&
-                        &self%rho_exp(win(1,1):win(1,2), win(2,1):win(2,2), win(3,1):win(3,2)) + tvalsq*w
+                        self%cmat_exp(win(1,1):win(2,1), win(1,2):win(2,2), win(1,3):win(2,3)) =&
+                        &self%cmat_exp(win(1,1):win(2,1), win(1,2):win(2,2), win(1,3):win(2,3)) + (comp*tval*w)*oshift
+                        self%rho_exp(win(1,1):win(2,1), win(1,2):win(2,2), win(1,3):win(2,3)) =&
+                        &self%rho_exp(win(1,1):win(2,1), win(1,2):win(2,2), win(1,3):win(2,3)) + tvalsq*w
                     end do
                 end do
                 !$omp end do nowait
@@ -572,7 +799,7 @@ contains
 
     subroutine compress_exp( self )
         class(reconstructor), intent(inout) :: self
-        integer :: phys(3), h, k, m, logi(3)
+        integer :: phys(3), h, k, m
         if(.not. allocated(self%cmat_exp) .or. .not.allocated(self%rho_exp))then
             stop 'expanded complex or rho matrices do not exist; simple_reconstructor::compress_exp'
         endif
@@ -698,8 +925,8 @@ contains
             !> \brief  the density reconstruction functionality
             subroutine rec_dens
                 character(len=:), allocatable :: stkname
-                type(ori) :: orientation, o_sym
-                integer   :: j, state, state_balance, ind
+                type(ori) :: orientation
+                integer   :: state, state_balance, ind
                 real      :: pw
                 state         = nint(o%get(i, 'state'))
                 state_balance = nint(o%get(i, 'state_balance'))

@@ -389,10 +389,7 @@ contains
 
     !>  \brief  prepares for the search
     subroutine prep4srch( self )
-        use simple_ran_tabu, only: ran_tabu
         class(prime2D_srch), intent(inout) :: self
-        type(ran_tabu)   :: rt
-        integer          :: icls
         real             :: corrs(self%pftcc_ptr%get_nrots())
         ! find previous discrete alignment parameters
         self%prev_class = nint(self%a_ptr%get(self%iptcl,'class')) ! class index

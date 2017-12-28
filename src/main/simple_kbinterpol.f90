@@ -67,7 +67,7 @@ contains
     end function get_wdim
 
     !>  \brief  is the Kaiser-Bessel apodization function, abs(x) <= Whalf
-    function apod( self, x ) result( r )
+    elemental function apod( self, x ) result( r )
         class(kbinterpol), intent(in) :: self
         real,              intent(in) :: x
         real :: r, arg
@@ -81,7 +81,7 @@ contains
     end function apod
 
     !>  \brief  is the Kaiser-Bessel instrument function
-    function instr( self, x ) result( r )
+    elemental function instr( self, x ) result( r )
         class(kbinterpol), intent(in) :: self
         real,              intent(in) :: x
         real :: r, arg1, arg2

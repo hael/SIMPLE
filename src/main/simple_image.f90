@@ -1102,13 +1102,13 @@ contains
     !>  \brief   get_cmat get the image object's complex matrix
     !! \return cmat a copy of this image object's cmat
     !!
-    function get_cmat( self ) result( cmat )
+    pure function get_cmat( self ) result( cmat )
         class(image), intent(in) :: self
         complex, allocatable :: cmat(:,:,:)
         allocate(cmat(self%array_shape(1),self%array_shape(2),self%array_shape(3)), source=self%cmat)
     end function get_cmat
 
-    subroutine set_cmat( self, cmat )
+    pure subroutine set_cmat( self, cmat )
         class(image), intent(inout) :: self
         complex,      intent(in)    :: cmat(self%array_shape(1),self%array_shape(2),self%array_shape(3))
         self%ft = .true.
@@ -1116,7 +1116,7 @@ contains
     end subroutine set_cmat
 
     !! get cmat value at index phys
-    function get_cmat_at( self, phys ) result( comp )
+    pure function get_cmat_at( self, phys ) result( comp )
         class(image), intent(in)  :: self
         integer,      intent(in)  ::  phys(3)
         complex :: comp
@@ -1132,15 +1132,15 @@ contains
     end subroutine add2_cmat_at
 
     !! set comp to cmat at index phys
-    subroutine set_cmat_at( self, phys, comp)
-        class(image), intent(in) :: self
-        integer, intent(in) :: phys(3)
-        complex, intent(in) :: comp
+    pure subroutine set_cmat_at( self, phys, comp)
+        class(image), intent(inout) :: self
+        integer,      intent(in)    :: phys(3)
+        complex,      intent(in)    :: comp
         self%cmat(phys(1),phys(2),phys(3)) = comp
     end subroutine set_cmat_at
 
     !! divide comp by cmat at index phys
-    subroutine div_cmat_at( self, k, phys )
+    pure subroutine div_cmat_at( self, k, phys )
         class(image),      intent(inout) :: self
         integer,           intent(in)    :: phys(3)
         real,              intent(in)    :: k
@@ -1152,7 +1152,7 @@ contains
     end subroutine div_cmat_at
 
     !! multiply cmat with real k at index phys
-    subroutine mul_cmat_at_1( self, k, phys )
+    pure subroutine mul_cmat_at_1( self, k, phys )
         class(image),      intent(inout) :: self
         integer,           intent(in)    :: phys(3)
         real,              intent(in)    :: k
@@ -1160,7 +1160,7 @@ contains
     end subroutine mul_cmat_at_1
 
     !! multiply cmat with complex k at index phys
-    subroutine mul_cmat_at_2( self, k, phys )
+    pure subroutine mul_cmat_at_2( self, k, phys )
         class(image),      intent(inout) :: self
         integer,           intent(in)    :: phys(3)
         complex,           intent(in)    :: k
@@ -1546,7 +1546,7 @@ contains
     !! \param phys
     !! \return  comp
     !!
-    function get_fcomp( self, logi, phys ) result( comp )
+    pure function get_fcomp( self, logi, phys ) result( comp )
         class(image), intent(in)  :: self
         integer,      intent(in)  :: logi(3), phys(3)
         complex :: comp
@@ -3901,8 +3901,6 @@ contains
     !! \param lp
     !!
     subroutine phase_rand( self, lp )
-        use simple_sll,      only: sll
-        use simple_ran_tabu, only: ran_tabu
         class(image), intent(inout) :: self
         real, intent(in)            :: lp
         integer                     :: h,k,l,phys(3),lims(3,2)
@@ -4507,10 +4505,10 @@ contains
     end function loop_lims
 
     !>  \brief  Convert logical address to physical address. Complex image.
-    function comp_addr_phys(self,logi) result(phys)
-        class(image), intent(in)  :: self
-        integer,       intent(in) :: logi(3) !<  Logical address
-        integer                   :: phys(3) !<  Physical address
+    pure function comp_addr_phys(self,logi) result(phys)
+        class(image), intent(in) :: self
+        integer,      intent(in) :: logi(3) !<  Logical address
+        integer                  :: phys(3) !<  Physical address
         phys = self%fit%comp_addr_phys(logi)
     end function comp_addr_phys
 

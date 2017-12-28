@@ -1104,12 +1104,12 @@ contains
     !>  \brief retrieves and preps npeaks orientations for reconstruction
     subroutine prep_npeaks_oris_and_weights( self )
         class(prime3D_srch),   intent(inout) :: self
-        type(ori)  :: o, osym
+        type(ori)  :: osym
         type(oris) :: sym_os
-        real       :: shvec(2), corrs(self%npeaks), wprecursor(self%npeaks), ws(self%npeaks), logws(self%npeaks)
+        real       :: shvec(2), corrs(self%npeaks), ws(self%npeaks), dists(self%npeaks), arg4softmax(self%npeaks)
         real       :: state_ws(self%nstates), frac, ang_sdev, dist, inpl_dist, euldist, mi_joint
-        real       :: mi_proj, mi_inpl, mi_state, dist_inpl, wcorr, corrmax, dists(self%npeaks), arg4softmax(self%npeaks)
-        integer    :: best_loc(1), loc(1), order(self%npeaks), states(self%npeaks)
+        real       :: mi_proj, mi_inpl, mi_state, dist_inpl, wcorr
+        integer    :: best_loc(1), loc(1), states(self%npeaks)
         integer    :: s, ipeak, cnt, ref, state, roind, neff_states
         logical    :: included(self%npeaks)
         ! empty states
@@ -1153,7 +1153,7 @@ contains
             ! argument for softmax function is negative distances
             arg4softmax = -dists
             ! subtract maxval of negative distances for numerical stability
-            arg4softmax = arg4softmax - maxval(dists)
+            arg4softmax = arg4softmax - maxval(arg4softmax)
             ! calculate softmax weights
             ws = exp(arg4softmax)
             ws = ws / sum(ws)
