@@ -12,7 +12,7 @@ implicit none
 public :: prep4prime2D_srch, prime2D_srch
 private
 
-logical, parameter :: L_BENCH = .true.
+logical, parameter :: L_BENCH = .false.
 logical, parameter :: DEBUG   = .false.
 
 ! allocatables for prime3D_srch are class variables to improve caching and reduce alloc overheads 

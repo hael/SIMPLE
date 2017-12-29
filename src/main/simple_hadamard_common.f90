@@ -155,7 +155,8 @@ contains
         real                  :: fsc0143, fsc05, mapres(p%nstates)
         integer               :: s, loc(1), lp_ind
         character(len=STDLEN) :: fsc_fname
-        logical               :: fsc_bin_exists(p%nstates), all_fsc_bin_exist
+        logical               :: fsc_bin_exists(p%nstates), all_fsc_bin_exist, kstop_grid_set
+        kstop_grid_set = .false.
         select case(p%eo)
             case('yes','aniso')
                 ! check all fsc_state*.bin exist
@@ -194,13 +195,16 @@ contains
                     if( p%kfromto(2) == 1 )then
                         stop 'simple_hadamard_common, simple_math::get_lplim gives nonsensical result (==1)'
                     endif
+                    ! set highest Fourier index for coarse grid search
+                    p%kstop_grid   = get_lplim_at_corr(b%fsc(loc(1),:), 0.5)
+                    kstop_grid_set = .true.
                     DebugPrint ' extracted FSC info'
                 else if( cline%defined('lp') )then
-                    p%kfromto(2) = calc_fourier_index( p%lp, p%boxmatch, p%smpd )
+                    p%kfromto(2) = calc_fourier_index(p%lp, p%boxmatch, p%smpd)
                 else if( cline%defined('find') )then
                     p%kfromto(2) = min(p%find,p%tofny)
                 else if( b%a%isthere(p%fromp,'lp') )then
-                    p%kfromto(2) = calc_fourier_index( b%a%get(p%fromp,'lp'), p%boxmatch, p%smpd )
+                    p%kfromto(2) = calc_fourier_index(b%a%get(p%fromp,'lp'), p%boxmatch, p%smpd)
                 else
                     write(*,*) 'no method available for setting the low-pass limit'
                     stop 'need fsc file, lp, or find; set_bp_range; simple_hadamard_common'
@@ -211,17 +215,17 @@ contains
                 endif
                 ! lpstop overrides any other method for setting the low-pass limit
                 if( cline%defined('lpstop') )then
-                    p%kfromto(2) = min(p%kfromto(2), calc_fourier_index( p%lpstop, p%boxmatch, p%smpd ))
+                    p%kfromto(2) = min(p%kfromto(2), calc_fourier_index(p%lpstop, p%boxmatch, p%smpd))
                 endif
                 ! set high-pass Fourier index limit
-                p%kfromto(1) = max(2,calc_fourier_index( p%hp, p%boxmatch, p%smpd ))
+                p%kfromto(1) = max(2,calc_fourier_index( p%hp, p%boxmatch, p%smpd))
                 ! re-set the low-pass limit
-                p%lp = calc_lowpass_lim( p%kfromto(2), p%boxmatch, p%smpd )
+                p%lp = calc_lowpass_lim(p%kfromto(2), p%boxmatch, p%smpd)
                 p%lp_dyn = p%lp
                 call b%a%set_all2single('lp',p%lp)
             case('no')
                 ! set Fourier index range
-                p%kfromto(1) = max(2, calc_fourier_index( p%hp, p%boxmatch, p%smpd ))
+                p%kfromto(1) = max(2, calc_fourier_index( p%hp, p%boxmatch, p%smpd))
                 if( cline%defined('lpstop') )then
                     p%kfromto(2) = min(calc_fourier_index(p%lp, p%boxmatch, p%smpd),&
                     &calc_fourier_index(p%lpstop, p%boxmatch, p%smpd))
@@ -233,8 +237,11 @@ contains
             case DEFAULT
                 stop 'Unsupported eo flag; simple_hadamard_common'
         end select
-        ! set highest Fourier index for coarse grid search
-        p%kstop_grid = calc_fourier_index(p%lp_grid, p%boxmatch, p%smpd)
+        if( .not. kstop_grid_set )then
+            ! set highest Fourier index for coarse grid search
+            p%kstop_grid = calc_fourier_index(p%lp_grid, p%boxmatch, p%smpd)
+        endif
+        ! lp_grid check
         if( p%kstop_grid > p%kfromto(2) ) p%kstop_grid = p%kfromto(2)
         DebugPrint '*** simple_hadamard_common ***: did set Fourier index range'
     end subroutine set_bp_range

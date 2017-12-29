@@ -17,8 +17,8 @@ do i=1,NDISTR
 
     read(funit,*) corrs
     call corrs2w_softmax
-    ! print *, corrs
     call plot(x, ws)
+    print *, 'npeaks: ', count(ws >= 0.01)
 
 end do
 call fclose(funit)

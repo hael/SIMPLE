@@ -229,7 +229,7 @@ type :: params
     integer :: newbox2=0
     integer :: nframes=0           !< # frames{30}
     integer :: nmembers=0
-    integer :: nnn=50              !< # nearest neighbors{500}
+    integer :: nnn=200             !< # nearest neighbors{200}
     integer :: nmics=0             !< # micographs
     integer :: noris=0
     integer :: nparts=1            !< # partitions in distributed exection
@@ -355,7 +355,6 @@ type :: params
     real    :: power=2.
     real    :: scale=1.            !< image scale factor{1}
     real    :: scale2=1.           !< image scale factor 2nd{1}
-    real    :: sdev_thres=180.     !< angular standard deviation threshold(degrees)
     real    :: sherr=0.            !< shift error(in pixels){2}
     real    :: smpd=2.             !< sampling distance, same as EMANs apix(in A)
     real    :: smpd_targets2D(2)
@@ -738,7 +737,6 @@ contains
         call check_rarg('power',          self%power)
         call check_rarg('scale',          self%scale)
         call check_rarg('scale2',         self%scale2)
-        call check_rarg('sdev_thres',     self%sdev_thres)
         call check_rarg('sherr',          self%sherr)
         call check_rarg('smpd',           self%smpd)
         call check_rarg('snr',            self%snr)
@@ -1147,6 +1145,10 @@ contains
         ! set logical pick flag
         self%l_pick = .false.
         if( self%dopick .eq. 'yes' ) self%l_pick = .true.
+        ! set default nnn value to 10% of the search space
+        if( .not. cline%defined('nnn') )then
+            self%nnn = nint(0.1 * real(self%nspace))
+        endif
 
 !>>> END, IMAGE-PROCESSING-RELATED
 

@@ -695,10 +695,6 @@ contains
                 write(*,'(a,1x,f8.2)') 'MAXIMUM TRS               :', (maxd+maxd2)/2.
                 goto 999
             endif
-            if( cline%defined('sdev_thres') )then
-                sdevs = b%a%get_all('sdev')
-                write(*,'(a,1x,i9)') '# particles included:', count(sdevs <= p%sdev_thres)
-            endif
         endif
         999 call simple_end('**** SIMPLE_ORISTATS NORMAL STOP ****')
     end subroutine exec_oristats

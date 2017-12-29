@@ -54,7 +54,7 @@ logical                        :: l_hard_assign = .true.        !< npeaks == 1 o
 logical                        :: exists        = .false.       !< to flag instance existence 
 
 integer, parameter      :: BATCHTHRSZ = 50
-logical, parameter      :: L_BENCH    = .true.
+logical, parameter      :: L_BENCH    = .false.
 integer(timer_int_kind) :: t_batch_loop, t_gridding, t_tot
 real(timer_int_kind)    :: rt_batch_loop, rt_gridding, rt_tot
 character(len=STDLEN)   :: benchfname

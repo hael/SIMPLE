@@ -22,7 +22,7 @@ public :: preppftcc4align, pftcc
 private
 #include "simple_local_flags.inc"
 
-logical, parameter              :: L_BENCH = .true.
+logical, parameter              :: L_BENCH = .false.
 type(polarft_corrcalc)          :: pftcc
 type(prime3D_srch), allocatable :: primesrch3D(:)
 integer,            allocatable :: pinds(:)
@@ -363,11 +363,6 @@ contains
         deallocate(primesrch3D)
         if( L_BENCH ) rt_align = toc(t_align)
         if( allocated(symmat) )deallocate(symmat)
-
-        ! PARTICLE REJECTION BASED ON ALIGNABILITY (SDEV OF ANGULAR ORIS)
-        if( cline%defined('sdev_thres') )then
-            call b%a%reject_above('sdev', p%sdev_thres)
-        endif
 
         ! OUTPUT ORIENTATIONS
         call binwrite_oritab(p%outfile, b%a, [p%fromp,p%top])
