@@ -1050,12 +1050,11 @@ select case(prg)
         keys_optional(33) = 'update_frac'
         keys_optional(34) = 'stk'
         keys_optional(35) = 'stktab'
-        keys_optional(36) = 'sdev_thres'
-        keys_optional(37) = 'phaseplate'
-        keys_optional(38) = 'opt'
+        keys_optional(36) = 'phaseplate'
+        keys_optional(37) = 'opt'
         ! parse command line
         if( describe ) call print_doc_prime3D
-        call cline%parse(keys_required(:5), keys_optional(:38))
+        call cline%parse(keys_required(:5), keys_optional(:37))
         ! sanity check
         if( cline%defined('stk') .or. cline%defined('stktab') )then
             ! all ok
@@ -2313,10 +2312,9 @@ select case(prg)
         keys_optional(15) = 'weights2D'
         keys_optional(16) = 'weights3D'
         keys_optional(17) = 'classtats'
-        keys_optional(18) = 'sdev_thres'
         ! parse command line
         if( describe ) call print_doc_oristats
-        call cline%parse( keys_required(:1), keys_optional(:18) )
+        call cline%parse( keys_required(:1), keys_optional(:17) )
         ! set defaults
         if( .not. cline%defined('ndiscrete') ) call cline%set('ndiscrete', 100.)
         ! execute

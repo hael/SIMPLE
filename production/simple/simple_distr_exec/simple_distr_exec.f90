@@ -649,14 +649,13 @@ select case(prg)
         keys_optional(34) = 'stk'
         keys_optional(35) = 'stktab'
         keys_optional(36) = 'weights3D'
-        keys_optional(37) = 'sdev_thres'
-        keys_optional(38) = 'phaseplate'
-        keys_optional(39) = 'opt'
-        keys_optional(40) = 'update_frac'
+        keys_optional(37) = 'phaseplate'
+        keys_optional(38) = 'opt'
+        keys_optional(39) = 'update_frac'
         ! documentation
         if( describe ) call print_doc_prime3D
         ! parse command line
-        call cline%parse( keys_required(:5), keys_optional(:40) )
+        call cline%parse( keys_required(:5), keys_optional(:39) )
         ! sanity check
         if( cline%defined('stk') .or. cline%defined('stktab') )then
             ! all ok
@@ -718,13 +717,12 @@ select case(prg)
         keys_optional(28) = 'stk'
         keys_optional(29) = 'stktab'
         keys_optional(30) = 'weights3D'
-        keys_optional(31) = 'sdev_thres'
-        keys_optional(32) = 'phaseplate'
-        keys_optional(33) = 'opt'
+        keys_optional(31) = 'phaseplate'
+        keys_optional(32) = 'opt'
         ! documentation
         if( describe ) call print_doc_prime3D
         ! parse command line
-        call cline%parse( keys_required(:5), keys_optional(:33) )
+        call cline%parse( keys_required(:5), keys_optional(:32) )
         ! sanity check
         if( cline%defined('stk') .or. cline%defined('stktab') )then
             ! all ok
