@@ -289,6 +289,7 @@ contains
         real,                  parameter :: CENLP=30.           !< consistency with prime3D
         integer,               parameter :: MAXITS_SNHC=30, MAXITS_INIT=15, MAXITS_REFINE=40
         integer,               parameter :: STATE=1, NPROJS_SYMSRCH=50, NPEAKS_REFINE=6
+        integer,               parameter :: NSPACE_SNHC = 1000, NSPACE_DEFAULT= 2500
         character(len=32),     parameter :: ITERFBODY     = 'prime3Ddoc_'
         character(len=STDLEN), parameter :: STKSCALEDBODY = 'stk_sc_ini3D_from_cavgs'
         ! distributed commanders
@@ -369,6 +370,7 @@ contains
         call cline_prime3D_snhc%set('refine', 'snhc')
         call cline_prime3D_snhc%set('dynlp',  'no') ! better be explicit about the dynlp
         call cline_prime3D_snhc%set('lp',     lplims(1))
+        call cline_prime3D_snhc%set('nspace', real(NSPACE_SNHC))
         ! (2) PRIME3D_INIT
         call cline_prime3D_init%set('prg',    'prime3D')
         call cline_prime3D_init%set('ctf',    'no')
@@ -377,6 +379,9 @@ contains
         call cline_prime3D_init%set('oritab', SNHCDOC)
         call cline_prime3D_init%set('dynlp',  'no') ! better be explicit about the dynlp
         call cline_prime3D_init%set('lp',     lplims(1))
+        if( .not. cline_prime3D_init%defined('nspace') )then
+            call cline_prime3D_init%set('nspace', real(NSPACE_DEFAULT))
+        endif
         ! (3) SYMMETRY AXIS SEARCH
         if( srch4symaxis )then
             ! need to replace original point-group flag with c1
@@ -407,6 +412,9 @@ contains
         call cline_prime3D_refine%set('npeaks', real(NPEAKS_REFINE))
         call cline_prime3D_refine%set('dynlp', 'no') ! better be explicit about the dynlp
         call cline_prime3D_refine%set('lp', lplims(2))
+        if( .not. cline_prime3D_refine%defined('nspace') )then
+            call cline_prime3D_refine%set('nspace', real(NSPACE_DEFAULT))
+        endif
         ! (5) RE-PROJECT VOLUME
         call cline_projvol%set('prg', 'projvol')
         call cline_projvol%set('outstk', 'reprojs'//p_master%ext)

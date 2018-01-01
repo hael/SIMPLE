@@ -137,7 +137,7 @@ type :: params
     character(len=STDLEN) :: msklist=''           !< table (text file) of mask volume files(.txt)
     character(len=STDLEN) :: mskvols(MAXS)=''
     character(len=STDLEN) :: msktype='soft'       !< type of mask(hard|soft){soft}
-    character(len=STDLEN) :: opt='simplex'        !< optimiser (simplex|de|bfgs){simplex}
+    character(len=STDLEN) :: opt='bfgs'           !< optimiser (bfgs|simplex){bfgs}
     character(len=STDLEN) :: oritab=''            !< table  of orientations(.txt|.bin)
     character(len=STDLEN) :: oritab2=''           !< 2nd table of orientations(.txt|.bin)
     character(len=STDLEN) :: oritab3D=''          !< table of 3D orientations(.txt|.bin)
@@ -242,7 +242,7 @@ type :: params
     integer :: nrestarts=1
     integer :: nrepeats=HETNREPEATS !< # repeats in het_ensemble worklow
     integer :: nrots=0
-    integer :: nspace=1000         !< # projection directions
+    integer :: nspace=2500         !< # projection directions
     integer :: nstates=1           !< # states to reconstruct
     integer :: nsub=300
     integer :: nsym=1

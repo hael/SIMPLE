@@ -517,12 +517,12 @@ select case(prg)
         if( describe ) call print_doc_prime2D
         call cline%parse( keys_required(:7), keys_optional(:14) )
         ! set defaults
-        if( .not. cline%defined('lp')        ) call cline%set('lp',     15.)
-        if( .not. cline%defined('lpstop')    ) call cline%set('lpstop', 8.)
-        if( .not. cline%defined('eo')        ) call cline%set('eo',     'no')
-        if( .not. cline%defined('cenlp')     ) call cline%set('cenlp',  30.)
+        if( .not. cline%defined('lp')        ) call cline%set('lp',          15.)
+        if( .not. cline%defined('lpstop')    ) call cline%set('lpstop',       8.)
+        if( .not. cline%defined('eo')        ) call cline%set('eo',         'no')
+        if( .not. cline%defined('cenlp')     ) call cline%set('cenlp',       30.)
         if( .not. cline%defined('autoscale') ) call cline%set('autoscale', 'yes')
-        if( .not. cline%defined('weights2D') ) call cline%set('weights2D', 'no')
+        if( .not. cline%defined('weights2D') ) call cline%set('weights2D',  'no')
         call xprime2D_stream_distr%execute(cline)
 
     ! 3D SIMILARITY MATRIX GENERATION WITH COMMON LINES
@@ -663,7 +663,6 @@ select case(prg)
             stop 'stk or stktab need to be part of command line!'
         endif
         ! set defaults
-        if( .not. cline%defined('nspace')                  ) call cline%set('nspace', 1000.)
         if( cline%defined('lp') .or. cline%defined('find') ) call cline%set('dynlp',   'no')
         if( .not. cline%defined('cenlp')                   ) call cline%set('cenlp',    30.)
         if( .not. cline%defined('refine')                  ) call cline%set('refine',  'no')
@@ -730,10 +729,9 @@ select case(prg)
             stop 'stk or stktab need to be part of command line!'
         endif
         ! set defaults
-        if( .not. cline%defined('nspace') ) call cline%set('nspace', 1000.)
-        if( .not. cline%defined('cenlp')  ) call cline%set('cenlp',    30.)
-        if( .not. cline%defined('pproc')  ) call cline%set('pproc',  'yes')
-        if( .not. cline%defined('eo')     ) call cline%set('eo', 'yes')
+        if( .not. cline%defined('cenlp')  ) call cline%set('cenlp',   30.)
+        if( .not. cline%defined('pproc')  ) call cline%set('pproc', 'yes')
+        if( .not. cline%defined('eo')     ) call cline%set('eo',    'yes')
         ! execute
         call xauto_refine3D%execute(cline)
     case( 'recvol' )

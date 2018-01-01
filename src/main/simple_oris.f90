@@ -158,6 +158,9 @@ type :: oris
     procedure          :: find_closest_ori
     procedure          :: find_closest_oris
     procedure          :: calc_euldists
+    procedure, private :: find_centroid_proj_1
+    procedure, private :: find_centroid_proj_2
+    generic            :: find_centroid_proj => find_centroid_proj_1, find_centroid_proj_2
     procedure, private :: create_proj_subspace_1
     procedure, private :: create_proj_subspace_2
     generic            :: create_proj_subspace => create_proj_subspace_1, create_proj_subspace_2
@@ -1111,6 +1114,7 @@ contains
                 integer              :: loc(1), i, n, cnt
                 inds = self%get_pinds(istate, 'state')
                 n = size(inds)
+                wsdev = 0.
                 if( n < 3 ) return
                 call os%new(n)
                 allocate( ws(n), dists(n), stat=alloc_stat )
@@ -2700,14 +2704,68 @@ contains
 
     !>  \brief  to calculate all euler distances to one orientation
     subroutine calc_euldists( self, o_in, dists )
-        class(oris),       intent(in)  :: self
-        class(ori),        intent(in)  :: o_in
-        real,              intent(out) :: dists(self%n)
+        class(oris), intent(in)  :: self
+        class(ori),  intent(in)  :: o_in
+        real,        intent(out) :: dists(self%n)
         integer :: i
         do i=1,self%n
             dists(i) = self%o(i).euldist.o_in
         end do
     end subroutine calc_euldists
+
+    !>  \brief  to identify the projection direction that minimises the distance to all others
+    function find_centroid_proj_1( self ) result( icen )
+        class(oris), intent(in) :: self
+        real    :: dmat(self%n,self%n), dists(self%n)
+        integer :: i, j, loc(1), icen
+        ! odd cases
+        if( self%n == 1)then
+            icen = 1
+            return
+        endif
+        if( self%n == 2 )then
+            if( ran3() <= 0.5 )then
+                icen = 1
+            else
+                icen = 2
+            endif
+            return
+        endif
+        ! calculate distance matrix
+        dmat = 0.
+        do i=1,self%n - 1
+            do j=i + 1, self%n
+                dmat(i,j) = self%o(i).euldist.self%o(j)
+                dmat(j,i) = dmat(i,j)
+            end do
+        end do
+        ! find centroid
+        do i=1,self%n
+            dists(i) = 0.
+            do j=1,self%n
+                if( i /= j )then
+                    dists(i) = dists(i) + dmat(i,j)
+                endif
+            end do
+        end do
+        loc  = minloc(dists)
+        icen = loc(1)
+    end function find_centroid_proj_1
+
+    !>  \brief  to identify the projection direction that minimises the distance to all others
+    function find_centroid_proj_2( self, state ) result( icen )
+        class(oris), intent(inout) :: self
+        integer,     intent(in)    :: state
+        real, allocatable :: states(:)
+        type(oris) :: self_copy
+        integer    :: icen
+        states = self%get_all('state')
+        icen   = 0 ! indicates no centroid found
+        if( .not. any(nint(states) .eq. state) ) return
+        self_copy = self
+        call self_copy%compress(mask=nint(states) .eq. state)
+        icen = self_copy%find_centroid_proj_1()
+    end function find_centroid_proj_2
 
     !>  \brief  to identify a subspace of projection directions
     function create_proj_subspace_1( self, nsub ) result( subspace_projs )
