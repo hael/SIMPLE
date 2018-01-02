@@ -62,11 +62,11 @@ contains
 		if( ppart == 1 ) call fopen(fnr, FILE='stktab_info.txt', STATUS='REPLACE', action='WRITE')
 		if( ppart == 1 ) write(fnr,'(a)') '#MIC STKNAME #NPTCLS IN STK #FROMP #TOP'
 		do imic=1,self%nmics
-			allocate(self%mics(imic)%stkname, source=trim(micnames(imic)))
-			call find_ldim_nptcls(trim(micnames(imic)), ldim, nptcls)
-			ldim(3) = 1
+            allocate(self%mics(imic)%stkname, source=trim(micnames(imic)))
+            call find_ldim_nptcls(trim(micnames(imic)), ldim, nptcls)
+            ldim(3) = 1
 			if( imic == 1 )then
-				self%ldim = ldim
+                self%ldim = ldim
 			else
 				if( .not. all(self%ldim == ldim) )then
 					print *, 'micrograph stack #:   ', imic
@@ -111,17 +111,17 @@ contains
 		ldim = self%ldim
 	end function get_ldim
 
-	function get_stkname( self, imic ) result( stkname )
-		class(stktab_handler), intent(in) :: self
-		integer,               intent(in) :: imic
-		character(len=:), allocatable :: stkname
-		! sanity check
+    function get_stkname( self, imic ) result( stkname )
+        class(stktab_handler), intent(in) :: self
+        integer,               intent(in) :: imic
+        character(len=:), allocatable :: stkname
+        ! sanity check
 		if( imic < 1 .or. imic > self%nmics )then
-			print *, 'imic:       ', imic
-			print *, 'self%nmics: ', self%nmics
-			stop 'imic index out of range; simple_stktab_handler :: get_stkname'
+            print *, 'imic:       ', imic
+            print *, 'self%nmics: ', self%nmics
+            stop 'imic index out of range; simple_stktab_handler :: get_stkname'
 		endif
-		allocate(stkname, source=self%mics(imic)%stkname)
+        allocate(stkname, source=trim(self%mics(imic)%stkname))
 	end function get_stkname
 
 	subroutine get_stkname_and_ind( self, iptcl, stkname, ind )
@@ -147,7 +147,7 @@ contains
 		ind = iptcl - self%pens(iptcl)%msp%fromp + 1
 		! read image
 		if( allocated(stkname) ) deallocate(stkname)
-		allocate(stkname, source=self%pens(iptcl)%msp%stkname)
+		allocate(stkname, source=trim(self%pens(iptcl)%msp%stkname))
 	end subroutine get_stkname_and_ind
 
     subroutine add_scale_tag( self )
