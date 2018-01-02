@@ -85,7 +85,7 @@
 			</div>
 			<div>
 				View Parameters
-				<table>
+				<table id=viewparameters>
 					<tr>
 						<td>Contrast</td>
 						<td>
@@ -118,18 +118,20 @@
 					</tr>
 					<tr>
 						<td colspan=2>
-							<input type=button onclick='reloadMicrograph()' value="Refresh">
+							<input type=button onclick='reloadMicrograph()' value="Refresh" class=popupbutton>
 						</td>
 					</tr>
 	
 				</table>
 			</div>
 		</div>
-		<div class=pickcanvas oncontextmenu="showHideControlsPopup();return false;">
+		<div class=pickcenter>
 			<div id=particlecount></div>
-			<canvas id=pickcanvas></canvas>
-			<div id=pickcanvasgauze class=pickcanvasgauze>
-				<div id=loader class=loader></div>
+			<div class=pickcanvas>
+				<canvas id=pickcanvas></canvas>
+				<div id=pickcanvasgauze class=pickcanvasgauze>
+					<div id=loader class=loader></div>
+				</div>
 			</div>
 		</div>
 		<div class=pickparameters>
@@ -139,18 +141,116 @@
 					<tr>
 						<td>Boxsize</td>
 						<td>
-							<input type=number id=boxsize onchange="clearBoxes()" name=boxsize value=128>
+							<select id=boxsize onchange="clearBoxes()" name=boxsize>
+								<option value=32>32</option>
+								<option value=36>36</option>
+								<option value=40>40</option>
+								<option value=48>48</option>
+								<option value=52>52</option>
+								<option value=56>56</option>
+								<option value=64>64</option>
+								<option value=66>66</option>
+								<option value=70>70</option>
+								<option value=72>72</option>
+								<option value=80>80</option>
+								<option value=84>84</option>
+								<option value=88>88</option>
+								<option value=100>100</option>
+								<option value=104>104</option>
+								<option value=108>108</option>
+								<option value=112>112</option>
+								<option value=120>120</option>
+								<option value=128 selected>128</option>
+								<option value=130>130</option>
+								<option value=132>132</option>
+								<option value=140>140</option>
+								<option value=144>144</option>
+								<option value=150>150</option>
+								<option value=160>160</option>
+								<option value=162>162</option>
+								<option value=168>168</option>
+								<option value=176>176</option>
+								<option value=180>180</option>
+								<option value=182>182</option>
+								<option value=192>192</option>
+								<option value=200>200</option>
+								<option value=208>208</option>
+								<option value=216>216</option>
+								<option value=220>220</option>
+								<option value=224>224</option>
+								<option value=240>240</option>
+								<option value=256>256</option>
+								<option value=264>264</option>
+								<option value=288>288</option>
+								<option value=300>300</option>
+								<option value=308>308</option>
+								<option value=320>320</option>
+								<option value=324>324</option>
+								<option value=336>336</option>
+								<option value=338>338</option>
+								<option value=352>352</option>
+								<option value=364>364</option>
+								<option value=384>384</option>
+								<option value=400>400</option>
+								<option value=420>420</option>
+								<option value=432>432</option>
+								<option value=448>448</option>
+								<option value=450>450</option>
+								<option value=462>462</option>
+								<option value=480>480</option>
+								<option value=486>486</option>
+								<option value=500>500</option>
+								<option value=504>504</option>
+								<option value=512>512</option>
+								<option value=520>520</option>
+								<option value=528>528</option>
+								<option value=546>546</option>
+								<option value=560>560</option>
+								<option value=576>576</option>
+								<option value=588>588</option>
+								<option value=600>600</option>
+								<option value=640>640</option>
+								<option value=648>648</option>
+								<option value=650>650</option>
+								<option value=660>660</option>
+								<option value=672>672</option>
+								<option value=686>686</option>
+								<option value=700>700</option>
+								<option value=702>702</option>
+								<option value=704>704</option>
+								<option value=720>720</option>
+								<option value=726>726</option>
+								<option value=728>728</option>
+								<option value=750>750</option>
+								<option value=768>768</option>
+								<option value=770>770</option>
+								<option value=784>784</option>
+								<option value=800>800</option>
+								<option value=810>810</option>
+								<option value=840>840</option>
+								<option value=882>882</option>
+								<option value=896>896</option>
+								<option value=910>910</option>
+								<option value=924>924</option>
+								<option value=936>936</option>
+								<option value=972>972</option>
+								<option value=980>980</option>
+								<option value=1008>1008</option>
+								<option value=1014>1014</option>
+								<option value=1020>1020</option>
+								<option value=1024>1024</option>
+							</select>
 						</td>
 					</tr>
 					<tr>
 						<td>Particle Diameter</td>
 						<td>
-							<input type=number id=particlediameter name=particlediameter value=32>
+							<input type=number id=particlediameter name=particlediameter value=80>
 						</td>
 					</tr>
 					<tr>
 						<td colspan=2>
-							<input type=button onclick='clearBoxes()' value="Clear Boxes">
+							<input type=button onclick='clearBoxes()' value="Clear Boxes" class=popupbutton>
 						</td>
 					</tr>	
 				</table>
@@ -169,7 +269,7 @@
 					</tr>
 					<tr>
 						<td>
-							<it>or</it>
+							<i>or</i>
 						</td>
 					</tr>
 					<tr>
@@ -209,7 +309,7 @@
 					</tr>
 					<tr>
 						<td colspan=3>
-							<input type=button onclick="autoPick()" value="Autopick">
+							<input type=button onclick="autoPick()" value="Autopick" class=popupbutton>
 						</td>
 					</tr>
 				</table>
@@ -235,7 +335,6 @@
 	</div>
 	<button class=selectfilebutton onclick='hideFileSelect()'>Select</button>
    </div> 
-	
   <script src="../js/job.js"></script>
    <script src="../js/manualpick.js"></script>
      <script>setReRun()</script>

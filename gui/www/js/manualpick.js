@@ -1,3 +1,5 @@
+backgroundimage = new Image();
+
 function getAjax (url, success) {
     var xhr = new XMLHttpRequest();
     xhr.open('GET', url, true);
@@ -60,21 +62,31 @@ function populateMicrographs(data){
 	for (var i = 0; i < JSONdata.snapshots.length; i++) {
 		var row = pickmicrographs.insertRow();
 		var cell1 = row.insertCell(0);
-		cell1.innerHTML = JSONdata.snapshots[i].micrograph;
+		cell1.className = "micrograph";
+		var micrograph = JSONdata.snapshots[i].micrograph.split("/").pop();
+		cell1.innerHTML = micrograph;
 		cell1.onclick = function(ev){ev.stopPropagation(); pickMicrograph(this)};
 		var keys = Object.keys(JSONdata.snapshots[i]);
 		for(var j = 0; j < keys.length; j++) {
 			cell1.setAttribute('data-'+keys[j], JSONdata.snapshots[i][keys[j]]);
 		}
 	}
+	var canvas = document.getElementById('pickcanvas');
+	canvas.addEventListener('click', function(event) { refineBox(this, event)}, false);
+	canvas.oncontextmenu = function(event) { deleteBox(this, event); return false};
 }
 
 function pickMicrograph(element){
+	var micrographs = document.getElementsByClassName('micrograph');
+	for(var i = 0; i < micrographs.length; i++){
+		micrographs[i].style.removeProperty("background-color");
+	}
+	element.style.backgroundColor = "#6698ab";
 	var canvas = document.getElementById('pickcanvas');
 	var context = canvas.getContext('2d');
-	var backgroundimage = new Image();
+//	var backgroundimage = new Image();
 	var rootdirectory = document.getElementById('rootdirectory').value;
-	canvas.addEventListener('click', function(event) { refineBox(this, event)}, false);
+	//canvas.addEventListener('click', function(event) { refineBox(this, event)}, false);
 	canvas.setAttribute('data-micrograph', rootdirectory + "/" + element.getAttribute('data-micrograph'));
 	canvas.setAttribute('data-boxfile', element.getAttribute('data-boxfile'));
 	backgroundimage.src = "../JPEGhandler?filename=" + rootdirectory + "/" + element.getAttribute('data-micrograph') + "&contrast=" + document.getElementById('pickcontrast').value + "&brightness=" + document.getElementById('pickbrightness').value + "&frameid=0";
@@ -94,12 +106,12 @@ function pickMicrograph(element){
 function reloadMicrograph(){
 	var canvas = document.getElementById('pickcanvas');
 	var context = canvas.getContext('2d');
-	var backgroundimage = new Image();
+	//var backgroundimage = new Image();
 	var rootdirectory = document.getElementById('rootdirectory').value;
-	canvas.addEventListener('click', function(event) { refineBox(this, event)}, false);
-	backgroundimage.src = "../JPEGhandler?filename=" + canvas.getAttribute('data-micrograph') + "&contrast=" + document.getElementById('pickcontrast').value + "&brightness=" + document.getElementById('pickbrightness').value + "&frameid=0";
-	backgroundimage.onload = function(){
-		context.clearRect(0, 0, canvas.width, canvas.height);
+	//canvas.addEventListener('click', function(event) { refineBox(this, event)}, false);
+	//backgroundimage.src = "../JPEGhandler?filename=" + canvas.getAttribute('data-micrograph') + "&contrast=" + document.getElementById('pickcontrast').value + "&brightness=" + document.getElementById('pickbrightness').value + "&frameid=0";
+	//backgroundimage.onload = function(){
+		//context.clearRect(0, 0, canvas.width, canvas.height);
 		canvas.width = backgroundimage.width;
 		canvas.height = backgroundimage.height;
 		var scale = document.getElementById('scale').value;
@@ -109,7 +121,7 @@ function reloadMicrograph(){
 		var url = "../JSONhandler?function=boxfiledata"
 		url += "&filename=" + canvas.getAttribute('data-boxfile');
 		getAjax(url, drawBoxes);
-	};
+	//};
 }
 
 function refineBox(element, event){
@@ -134,6 +146,26 @@ function refineBox(element, event){
 	getAjax(url, drawBoxes);
 }
 
+function deleteBox(element, event){
+	var scale = document.getElementById('scale').value;
+    var totalOffsetX = 0;
+    var totalOffsetY = 0;
+    var canvasX = 0;
+    var canvasY = 0;
+
+	canvasX = (event.pageX - element.offsetLeft + element.parentNode.scrollLeft) / scale;
+	canvasY = (event.pageY - element.offsetTop + element.parentNode.scrollTop) / scale;
+	
+	var canvas = document.getElementById('pickcanvas');
+
+	var url = "../JSONhandler?function=deletebox"
+	url += "&boxsize=" + document.getElementById('boxsize').value;
+	url += "&xcoord=" + canvasX;
+	url += "&ycoord=" + canvasY;
+	url += "&boxfile=" + canvas.getAttribute('data-boxfile');
+	getAjax(url, drawBoxes);
+}
+
 function drawBoxes(data){
 	var JSONdata = JSON.parse(data);
 	var canvas = document.getElementById('pickcanvas');
@@ -141,7 +173,12 @@ function drawBoxes(data){
 	var boxsize = document.getElementById('boxsize').value;
 	var particlediameter = document.getElementById('particlediameter').value;
 	var particlecount =  document.getElementById('particlecount');
-	particlecount.innerHTML = "Particle Count: " + JSONdata.boxes.length; 
+	particlecount.innerHTML = "Particle Count: " + JSONdata.boxes.length;
+	canvas.width = backgroundimage.width;
+	canvas.height = backgroundimage.height;
+	var scale = document.getElementById('scale').value;
+	canvas.style.width = canvas.width * scale;
+	context.drawImage(backgroundimage, 0, 0,backgroundimage.width, backgroundimage.height, 0, 0, canvas.width, canvas.height);
 	for(var i = 0; i < JSONdata.boxes.length; i++) {
 
 		if(document.getElementById("pickbox").checked){
@@ -305,7 +342,7 @@ function getFileBrowserData(directory, filter){
 	if (directory){	
 		url += "&directoryname=" + directory;
 	}
-	if (filter){	
+	if (!!filter){	
 		url += "&filefilter=" + filter;
 	}
 	getAjax(url, function(data){showFileBrowserData(data)});	
@@ -315,9 +352,6 @@ function getFolderBrowserData(directory, filter){
 	var url = '../JSONhandler?function=listdir';
 	if (directory){	
 		url += "&directoryname=" + directory;
-	}
-	if (filter){	
-		url += "&filefilter=" + filter;
 	}
 	getAjax(url, function(data){showFolderBrowserData(data)});	
 }

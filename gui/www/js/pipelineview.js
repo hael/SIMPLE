@@ -21,6 +21,18 @@ function postAjax (url, success) {
     xhr.send();
 }
 
+function postAjaxForm (url, formdata, success) {
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', url, true);
+   xhr.setRequestHeader("Content-type", "application/x-www-form-urlencoded");
+    xhr.onreadystatechange = function() {
+        if (xhr.readyState>3 && xhr.status==200){
+			success(xhr.responseText);
+		}
+    };
+    xhr.send(formdata);
+}
+
 function setTitle() {
 	document.getElementById('headerproject').value = window.location.toString().split('?')[2];
 }
@@ -581,6 +593,34 @@ function saveSelection() {
 	document.getElementById('saveselectionbutton').innerHTML = "Saving ...";
 	postAjax(url, function(data){showHideSaveSelectionPopup()});
 }
+
+/*function saveSelection() {
+	var saveselectionfilename = document.getElementById('saveselectionfilename').value;
+	var inverseselected = document.querySelectorAll('[data-selected="no"]');
+	var rootdirectory = document.getElementById('rootdirectory').value;
+	var inputfilename = document.getElementById('inputfilename').value;
+	
+	var formdata = new FormData();
+	
+	var url = 'JSONhandler';
+	
+	formdata.append("function", "savesel");
+	formdata.append("inputfilename", rootdirectory + "/" + inputfilename);
+
+	if(saveselectionfilename){
+		formdata.append("outputfilename", rootdirectory + "/" + saveselectionfilename);
+	}
+	
+	var inverseselection = "";
+	for (var i = inverseselected.length - 1; i >= 0; i--) {
+		console.log(inverseselected[i].getAttribute("data-id"));
+		 inverseselection += inverseselected[i].getAttribute("data-id") + ",";
+	} 
+	formdata.append("inverseselection", inverseselection);
+	
+	document.getElementById('saveselectionbutton').innerHTML = "Saving ...";
+	postAjaxForm(url, formdata, function(data){showHideSaveSelectionPopup()});
+}*/
 
 function saveParticlesSelection() {
 	var saveselectionfilename = document.getElementById('saveselectionparticlesfilename').value;

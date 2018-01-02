@@ -1,4 +1,3 @@
-#define MG_MAX_HTTP_HEADERS 0
 #include <string>
 #include <fstream>
 #include <iostream>
@@ -70,7 +69,7 @@ struct MRCFile {
 
 bool getRequestVariable (struct http_message* message, std::string variable, std::string& value){
 	
-	char		buffer[32768];
+	char		buffer[524288];
 	int			returncode;
 	
 	returncode = mg_get_http_var(&message->query_string, variable.c_str(), buffer, sizeof(buffer));
@@ -2148,6 +2147,7 @@ void savePreprocSelection(JSONResponse* response, struct http_message* message) 
 	
 	if(getRequestVariable(message, "inputfilename", inputfilename) && getRequestVariable(message, "outputfilename", outputfilename)) {
 		getRequestVariable(message, "inverseselection", inverseselection);
+		std::cout << inverseselection << std::endl;
 		unidoc = new UniDoc();
 		if(fileExists(inputfilename)){
 			readUniDoc(unidoc, inputfilename);
@@ -2877,78 +2877,88 @@ void massCentre(JSONResponse* response, struct http_message* message){
 	getRequestVariable(message, "boxfile", boxfile);
 	
 	micrograph = new MRCFile();
-	box = new MRCFile();
-	
 	readMRCFrame(micrograph, micrographname, 0);
 	
-	extractMRCBox(micrograph, box, std::atoi(xcoord.c_str()) - (std::atoi(boxsize.c_str())/2), std::atoi(ycoord.c_str()) - (std::atoi(boxsize.c_str())/2), std::atoi(boxsize.c_str()));
+	if ((std::atoi(xcoord.c_str()) - std::atoi(boxsize.c_str())) > 0 &&
+		(std::atoi(xcoord.c_str()) + std::atoi(boxsize.c_str())) < micrograph->nx &&
+		(std::atoi(ycoord.c_str()) - std::atoi(boxsize.c_str())) > 0 &&
+		(std::atoi(ycoord.c_str()) + std::atoi(boxsize.c_str())) < micrograph->ny){
+	
+		box = new MRCFile();
+		
+		extractMRCBox(micrograph, box, std::atoi(xcoord.c_str()) - (std::atoi(boxsize.c_str())/2), std::atoi(ycoord.c_str()) - (std::atoi(boxsize.c_str())/2), std::atoi(boxsize.c_str()));
+		
+		datamean = 0;
+			
+		datalength = box->nx * box->ny;
+			
+		for(datacount = 0; datacount < datalength; datacount++){
+			datamean += box->data[datacount];
+		}	
+
+		datamean = datamean / datalength;
+			
+		datadiff2 = 0;
+
+		for(datacount = 0; datacount < datalength; datacount++){
+			datadiff2 += pow((box->data[datacount] - datamean), 2);
+		}
+			
+		datasd = sqrt(datadiff2 /datalength);
+
+		for(datacount = 0; datacount < datalength; datacount++){
+			datanorm = (box->data[datacount] - datamean) / datasd;
+			box->data[datacount] = datanorm;
+		}
+		
+		backgroundcount = 0;
+		
+		for(yit = 0; yit < std::atoi(boxsize.c_str()); yit++){
+			for(xit = 0; xit < std::atoi(boxsize.c_str()); xit++){
+				r = sqrt(pow((xit - (std::atoi(boxsize.c_str())/2)), 2) + pow((yit - std::atoi(boxsize.c_str())/2), 2));
+				if(r > (std::atoi(particlediameter.c_str()) / 2)){
+					backaverage += box->data[(yit * box->nx) + xit];
+					backgroundcount++;
+				}
+			}
+		}
+		
+		backaverage = backaverage / backgroundcount;
+		
+		for(datacount = 0; datacount < datalength; datacount++){
+			datasub = (box->data[datacount] - backaverage);
+			box->data[datacount] = datasub;
+		}
+		
+		backgroundcount = 0;
+		xcen = 0;
+		ycen = 0;
+		
+		for(yit = 0; yit < std::atoi(boxsize.c_str()); yit++){
+			for(xit = 0; xit < std::atoi(boxsize.c_str()); xit++){
+				r = sqrt(pow((xit - (std::atoi(boxsize.c_str())/2)), 2) + pow((yit - std::atoi(boxsize.c_str())/2), 2));
+				if(r < (std::atoi(particlediameter.c_str()) / 2)){
+					xcen += (box->data[(yit * box->nx) + xit] * (xit - (std::atoi(boxsize.c_str())/2)));
+					ycen += (box->data[(yit * box->nx) + xit] * (yit - (std::atoi(boxsize.c_str())/2)));
+					backgroundcount++;
+				}
+			}
+		}
+		xcen = xcen / backgroundcount;
+		ycen = ycen / backgroundcount;
+		
+		delete [] box->data;
+		delete box;
+		std::cout << "centred" << std::endl;
+		
+	} else {
+		xcen = 0;
+		ycen = 0;
+		std::cout << "non-centred" << std::endl;
+	}
 	
 	delete [] micrograph->data;
 	delete micrograph;
-	
-	datamean = 0;
-		
-	datalength = box->nx * box->ny;
-		
-	for(datacount = 0; datacount < datalength; datacount++){
-		datamean += box->data[datacount];
-	}	
-
-	datamean = datamean / datalength;
-		
-	datadiff2 = 0;
-
-	for(datacount = 0; datacount < datalength; datacount++){
-		datadiff2 += pow((box->data[datacount] - datamean), 2);
-	}
-		
-	datasd = sqrt(datadiff2 /datalength);
-
-	for(datacount = 0; datacount < datalength; datacount++){
-		datanorm = (box->data[datacount] - datamean) / datasd;
-		box->data[datacount] = datanorm;
-	}
-	
-	backgroundcount = 0;
-	
-	for(yit = 0; yit < std::atoi(boxsize.c_str()); yit++){
-		for(xit = 0; xit < std::atoi(boxsize.c_str()); xit++){
-			r = sqrt(pow((xit - (std::atoi(boxsize.c_str())/2)), 2) + pow((yit - std::atoi(boxsize.c_str())/2), 2));
-			if(r > (std::atoi(particlediameter.c_str()) / 2)){
-				backaverage += box->data[(yit * box->nx) + xit];
-				backgroundcount++;
-			}
-		}
-	}
-	
-	backaverage = backaverage / backgroundcount;
-	
-	for(datacount = 0; datacount < datalength; datacount++){
-		datasub = (box->data[datacount] - backaverage);
-		box->data[datacount] = datasub;
-	}
-	
-	backgroundcount = 0;
-	xcen = 0;
-	ycen = 0;
-	
-	for(yit = 0; yit < std::atoi(boxsize.c_str()); yit++){
-		for(xit = 0; xit < std::atoi(boxsize.c_str()); xit++){
-			r = sqrt(pow((xit - (std::atoi(boxsize.c_str())/2)), 2) + pow((yit - std::atoi(boxsize.c_str())/2), 2));
-			if(r < (std::atoi(particlediameter.c_str()) / 2)){
-				xcen += (box->data[(yit * box->nx) + xit] * (xit - (std::atoi(boxsize.c_str())/2)));
-				ycen += (box->data[(yit * box->nx) + xit] * (yit - (std::atoi(boxsize.c_str())/2)));
-				backgroundcount++;
-			}
-		}
-	}
-	xcen = xcen / backgroundcount;
-	ycen = ycen / backgroundcount;
-	
-	delete [] box->data;
-	delete box;
-	
-	std::cout << boxfile << std::endl;
 	
 	output.open(boxfile.c_str(), std::ios_base::app);
 	if(output.is_open()){
@@ -2957,6 +2967,63 @@ void massCentre(JSONResponse* response, struct http_message* message){
 	}
 	
 	getBoxes(response, boxfile);
+}
+
+void deleteBox(JSONResponse* response, struct http_message* message){
+	
+	std::string		xcoord;
+	std::string		ycoord;
+	std::string		boxsize;
+	std::string		boxfilename;
+	UniDoc*			boxfile;
+	UniDoc*			newboxfile;
+	int				i;
+	int 			xmin;
+	int				xmax;
+	int				ymin;
+	int				ymax;
+	int				x;
+	int				y;
+	
+	getRequestVariable(message, "xcoord", xcoord);
+	getRequestVariable(message, "ycoord", ycoord);
+	getRequestVariable(message, "boxsize", boxsize);
+	getRequestVariable(message, "boxfile", boxfilename);
+	
+	boxfile = new UniDoc();
+	newboxfile = new UniDoc();
+	
+	readUniDoc(boxfile, boxfilename);
+	
+	x = std::atoi(xcoord.c_str());
+	y = std::atoi(ycoord.c_str());
+	
+	std::cout << x << " " << y << std::endl;
+	
+	for(i = 0; i < boxfile->data.size(); i++){
+		getElementFromString(boxfile->data[i], xcoord, 0);
+		getElementFromString(boxfile->data[i], ycoord, 1);
+		xmin = std::atoi(xcoord.c_str());
+		ymin = std::atoi(ycoord.c_str());
+		xmax = xmin + std::atoi(boxsize.c_str());
+		ymax = ymin + std::atoi(boxsize.c_str());
+		std::cout << xmin << " " << ymin << std::endl;
+		if(x > xmin &&
+		   x < xmax &&
+		   y > ymin &&
+		   y < ymax){
+			   std::cout << "ptcl" << std::endl;
+		   } else {
+			   newboxfile->data.push_back(boxfile->data[i]);
+		   }
+	}
+	
+	writeUniDoc(newboxfile, boxfilename);
+	
+	delete boxfile;
+	delete newboxfile;
+	
+	getBoxes(response, boxfilename);
 }
 
 void generateGaussianRef (JPEGResponse* response, struct http_message* message) {
@@ -3202,6 +3269,8 @@ void JSONHandler (struct mg_connection* http_connection, struct http_message* me
 			getLogFile(response, message);
 		} else if (function == "refinebox") {
 			massCentre(response, message);
+		} else if (function == "deletebox") {
+			deleteBox(response, message);
 		} else if (function == "unblurview") {
 			viewUnblur(response, message);
 		} else if (function == "saveunblurselection") {
@@ -3224,6 +3293,10 @@ void JSONHandler (struct mg_connection* http_connection, struct http_message* me
 			clearBoxes(response, message);
 		} else if (function == "autopick") {
 			autoPick(response, message);
+		} else if (function == "teststring") {
+			std::string inverseselection;
+			getRequestVariable(message, "inverseselection", inverseselection);
+			std::cout << inverseselection << std::endl;
 		}
 	}
 	
@@ -3233,6 +3306,7 @@ void JSONHandler (struct mg_connection* http_connection, struct http_message* me
 	mg_send(http_connection, response->JSONstring.c_str(), response->JSONstring.length());
 	
 	delete response;
+	
 }
 
 void encodeJPEG(JPEGResponse* response, int size) {
@@ -3353,7 +3427,6 @@ void webEventHandler (struct mg_connection* http_connection, int event, void *ev
 			break;
 		}
 	}
-	
 }
 
 void webServer(){

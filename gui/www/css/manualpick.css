@@ -1,3 +1,6 @@
+body {
+background-color: white;
+}
 #pickpane {
 	display: none;
 }
@@ -25,9 +28,18 @@
 }
 
 .pickmicrographs table{
-	height: calc(90vh - 220px);
-	overflow: scroll;
+	max-height: 300px;
 	display: block;
+width: 360px;
+margin: 20px;
+}
+
+.pickmicrographs div{
+
+}
+
+#pickmicrographs tr:nth-child(odd) {
+background: #d7dfea;
 }
 
 #pickmicrographs {
@@ -35,15 +47,25 @@
 	font-size: 12px;
 }
 
+#viewparameters {
+font-size: 12px;
+}
+
+#particlecount {
+font-size: 12px;
+height: 16px;
+}
+
 .pickparameters {
 	width: 400px;
-	
 }
 
-.pickparameters label{
+.pickparameters table {
 	font-size: 12px;
-
+width: 360px;
+margin: 20px;
 }
+
 .pickcanvas{
 	width: calc(100vw - 800px);
 	height: 90vh;
