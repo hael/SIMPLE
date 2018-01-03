@@ -109,9 +109,9 @@ function reloadMicrograph(){
 	//var backgroundimage = new Image();
 	var rootdirectory = document.getElementById('rootdirectory').value;
 	//canvas.addEventListener('click', function(event) { refineBox(this, event)}, false);
-	//backgroundimage.src = "../JPEGhandler?filename=" + canvas.getAttribute('data-micrograph') + "&contrast=" + document.getElementById('pickcontrast').value + "&brightness=" + document.getElementById('pickbrightness').value + "&frameid=0";
-	//backgroundimage.onload = function(){
-		//context.clearRect(0, 0, canvas.width, canvas.height);
+	backgroundimage.src = "../JPEGhandler?filename=" + canvas.getAttribute('data-micrograph') + "&contrast=" + document.getElementById('pickcontrast').value + "&brightness=" + document.getElementById('pickbrightness').value + "&frameid=0";
+	backgroundimage.onload = function(){
+		context.clearRect(0, 0, canvas.width, canvas.height);
 		canvas.width = backgroundimage.width;
 		canvas.height = backgroundimage.height;
 		var scale = document.getElementById('scale').value;
@@ -121,7 +121,7 @@ function reloadMicrograph(){
 		var url = "../JSONhandler?function=boxfiledata"
 		url += "&filename=" + canvas.getAttribute('data-boxfile');
 		getAjax(url, drawBoxes);
-	//};
+	};
 }
 
 function refineBox(element, event){
@@ -167,6 +167,8 @@ function deleteBox(element, event){
 }
 
 function drawBoxes(data){
+	var gauze = document.getElementById('pickcanvasgauze');
+	gauze.style.display = "none";
 	var JSONdata = JSON.parse(data);
 	var canvas = document.getElementById('pickcanvas');
 	var context = canvas.getContext('2d');
@@ -178,6 +180,7 @@ function drawBoxes(data){
 	canvas.height = backgroundimage.height;
 	var scale = document.getElementById('scale').value;
 	canvas.style.width = canvas.width * scale;
+	context.clearRect(0, 0, canvas.width, canvas.height);
 	context.drawImage(backgroundimage, 0, 0,backgroundimage.width, backgroundimage.height, 0, 0, canvas.width, canvas.height);
 	for(var i = 0; i < JSONdata.boxes.length; i++) {
 
@@ -200,9 +203,13 @@ function drawBoxes(data){
 
 function clearBoxes(){
 	var canvas = document.getElementById('pickcanvas');
+	var context = canvas.getContext('2d');
+	context.clearRect(0, 0, canvas.width, canvas.height);
+	context.drawImage(backgroundimage, 0, 0,backgroundimage.width, backgroundimage.height, 0, 0, canvas.width, canvas.height);
 	var url = "../JSONhandler?function=clearboxes"
 	url += "&filename=" + canvas.getAttribute('data-boxfile');
-	getAjax(url, reloadMicrograph);
+	
+	getAjax(url, drawBoxes);
 }
 
 function autoPick(){
@@ -228,7 +235,7 @@ function autoPick(){
 	}
 	url += "&thres=" + document.getElementById('thres').value;
 	url += "&ndev=" + document.getElementById('ndev').value;
-	getAjax(url, reloadMicrograph);
+	getAjax(url, drawBoxes);
 }
 
 function fileSelect(element) {

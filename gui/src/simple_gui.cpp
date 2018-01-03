@@ -940,8 +940,10 @@ void ini3DPost (std::string directory){
 	int							it;
 	int							iterationcount;
 	
-	if(fileExists("ini3d_in.txt")){
-		
+	std::cout << "3DpOST" << std::endl;
+	std::cout << directory + "/ini3d_in.txt" << std::endl;
+	if(fileExists(directory + "/ini3d_in.txt")){
+		std::cout << "3DpOSTin" << std::endl;
 		listFilesInDirectory(files, directory);
 		iterationcount = 0;
 		for(it = 0; it < files.size(); it++) {
@@ -3386,12 +3388,18 @@ void JSONHandler (struct mg_connection* http_connection, struct http_message* me
 			syncJob(response, message);
 		} else if (function == "clearboxes") {
 			clearBoxes(response, message);
+			getBoxes(response, message);
 		} else if (function == "autopick") {
 			autoPick(response, message);
 		} else if (function == "teststring") {
 			std::string inverseselection;
 			getRequestVariable(message, "inverseselection", inverseselection);
 			std::cout << inverseselection << std::endl;
+		}else if (function == "ini3dpost") {
+			std::string dir;
+			getRequestVariable(message, "directory", dir);
+			std::cout << dir << std::endl;
+			ini3DPost(dir);
 		}
 	}
 	
