@@ -16,14 +16,14 @@
 	<div class=jobpane>
 		<form id=jobform action='../JSONhandler'>
 			<input type=hidden name=function value=simplejob>
-			<input type=hidden name=program value=prime2D>
+			<input type=hidden name=program value=prime3D>
 			<input type=hidden name=jobstatus value=starting>
-			<input type=hidden name=jobtype value=prime2D>
+			<input type=hidden name=jobtype value=prime3D>
 			<input type=hidden name=jobpid value=0>
 			<input type=hidden id=projecttable name=table value=0>
 			<input type=hidden id=projectfolder name=jobfolder value=0>
 			<input type=hidden name=stktab value=stkparts.txt>
-			<input type=hidden name=deftab value=prime2D_in.txt>
+			<input type=hidden name=deftab value=prime3D_in.txt>
 			
 			<table id=page1>
 				<tr>
@@ -50,7 +50,7 @@
 				</tr>
 				<tr>
 					<td>Input File</td>
-					<td><input data-required=no type=text name=simpleinput id=simpleinput placeholder="xxx.simple ptcls file" title="File containing particles and other parameters from earlier jobs (e.g. ini3D_particles.simple)"></td>
+					<td><input data-required=no type=text name=simpleinput id=simpleinput placeholder="xxx.simple ptcls and params file" title="File containing particles and other parameters from earlier jobs (e.g. ini3D_particles.simple)"></td>
 					<td><img src=../img/folder.png onclick="fileSelect(this)" data-target=simpleinput data-filter=".simple"></td>
 				</tr>
 				<tr>
@@ -85,42 +85,77 @@
 				</tr>
 				<tr>
 					<td>Fractional Update Per Iteration</td>
-					<td><input data-required=no type=number name=update_frac placeholder="% ptcls to update / iter" title="Option to update only a pecentage of particles in each iteration {1.0}" step="0.05"></td>
+					<td><input data-required=no type=number name=update_frac placeholder="fraction ptcls to update / iter" title="Option to update only a pecentage of particles in each iteration to speed calculation (0-1) {1.0}" step="0.05"></td>
 	  			<td></td>
 					<td>Fraction of Particles to use</td>
-					<td><input data-required=no type=number name=cenlp placeholder="% ptlcs used in reconstruction" title="Use only the best fitting fraction of particles for reconstruction {1.0}"></td>
+					<td><input data-required=no type=number name=cenlp placeholder="fraction ptlcs used in reconstruction" title="Use only the best fitting fraction of particles for reconstruction (0-1) {1.0}"></td>
 				</tr>
 				<tr>
-				<td>Gold Standard FSC Reconstruction</td>
+				<td>Use Gold Standard FSC for Filtering and Resolution Setting?</td>
 					<td>
-						<select data-required=no name=eo title="Use gold standard FSC to determine resolution { no | yes | aniso }">
-							<option value='' selected></option>
-							<option value=yes>Yes</option>
+						<select data-required=no name=eo title="Use gold standard FSC to determine resolution (yes|no) {yes}">
+							<option value=yes selected>Yes</option>
 							<option value=no>No</option>
-							<option value=aniso>Aniso</option>
+
+						</select>
+					</td> 
+				<td></td>	
+				<td>Volta Phaseplate Used?</td>
+					<td>
+						<select data-required=no name=phaseplate title="Was a Volta phaseplate used (yes | no) {no}">
+							<option value=yes>Yes</option>
+							<option value=no selected>No</option>
 						</select>
 					</td> 
 				</tr>
 				<tr>
+				<td>Center particles / volume(s)</td>
+					<td>
+						<select data-required=no name=center title="Center particles / volume(s) ? (yes|no) {yes}">
+							<option value=yes selected>Yes</option>
+							<option value=no>No</option>
+
+						</select>
+					</td> 
+					<td></td>
+						<td>High resolution limit for centering</td>
+					<td><input data-required=no type=number name=cenlp placeholder="high resolution limit for centering, Angstroms" title="High resolution limit for binarisation used for centering in Angstroms {30 A}"></td>
+				</tr>
+				<tr>
 					<td>Input Mask File</td>
-					<td><input data-required=no type=text id=mskfile name=mskfile placeholder="maskfile.mrc from postprocessing" title=".mrc file for mask generated using postprocessing"></td>
+					<td><input data-required=no type=text id=mskfile name=mskfile placeholder="e.g. automask.mrc from postprocessing" title=".mrc file for mask generated using postprocessing"></td>
 					<td><img src=../img/folder.png onclick="fileSelect(this)" data-target=mskfile data-filter=".mrc"></td>
 				</tr>
 				<tr>
 					<td>Refinement Mode</td>
-					<td><input data-required=no type=text name=refine placeholder="refinement mode - commonly 'no' or 'neigh'" title="Orientation refinement mode {no} (no | yes | neigh | greedy | greedyneigh | shc | shcneigh)"></td>
+					<td><input data-required=no type=text name=refine placeholder="refinement mode - commonly 'no' or 'neigh'" title="Orientation refinement mode {no} (no | yes | neigh | greedy | greedyneigh)"></td>
 				<td></td>
-					<td>Refinement Neighbourhood Size</td>
-					<td><input data-required=no type=number name=nnn placeholder="projection neighbourhood size" title="Number of projections searched per iteration in neighbourhood mode {10% of projection space}"></td>
+					<td>Input Volume for Particle Alignment</td>
+					<td><input data-required=no type=text name=vol1 placeholder="input volume e.g. volume.mrc" title="Input volume for alignment (e.g. xxx.mrc, xxx.spi)"></td>
 				</tr>
 				<tr>
 					<td>Maximum Translational Shift</td>
-					<td><input data-required=no type=number name=trs placeholder="Translational shift per iteration, pixels"title="Maximum translational shift per iteration in pixels"></td>
+					<td><input data-required=no type=number name=trs placeholder="Translational shift per iteration, pixels" title="Maximum translational shift per iteration in pixels"></td>
 				<td></td>
 					<td>Number of Projections</td>
 					<td><input data-required=no type=number name=nspace placeholder="# of projections used" title="Number of projections used"></					</td>
 				</tr>
-				<tr> <td></td>
+				<tr>
+					<td>Low Resolution Limit</td>
+					<td><input data-required=no type=number name=hp placeholder="low resolution limit, Angstroms" title="Low resolution limit in Angstroms"></td>
+				<td></td>
+					<td>High Resolution limit</td>
+					<td><input data-required=no type=number name=lp placeholder="high resolution limit, Angstroms" title="High resolution limint in Angstroms"></					</td>
+				</tr>
+				<tr>
+					<td>Inner Mask Radius</td>
+					<td><input data-required=no type=number name=inner placeholder="inner mask radius, pixels" title="Define an innner spherical mask - radius in pixels"></td>
+				<td></td>
+					<td>Inner Mask Falloff Rate</td>
+					<td><input data-required=no type=number name=width placeholder="falloff of inner mask, pixels" title="Falloff of inner mask / filter in pixels {10}"></					</td>
+				</tr>
+
+				<tr> <td><br></td>
 				</tr>
 				<tr> 
 					<td><b>Additional Parameters</b></td>
