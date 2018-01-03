@@ -1,5 +1,6 @@
 #include <string>
 #include <fstream>
+#include <sstream>
 #include <iostream>
 #include <vector>
 #include <cstring>
@@ -164,6 +165,18 @@ bool fileExists(std::string filename) {
 		return(false);
 	}
 	
+}
+
+std::string zeroPadNumber(int num) {
+	std::stringstream ss;
+	std::string ret;
+	
+	ss << num; 
+	ss >> ret;
+	int str_length = ret.length();
+	for (int i = 0; i < 3 - str_length; i++)
+		ret = "0" + ret;
+	return ret;
 }
 
 void getDatabaseLocation (std::string& databasepath) {
@@ -920,23 +933,26 @@ void ini3DPre (std::string simpleinput){ // NEEDS WORK
 
 void ini3DPost (std::string directory){
 	
-	int											it;
-	bool										newmicrograph;
-	UniDoc* 									ctffindunidocin;
-	UniDoc*										ctfparams;
-	std::string									intgfilename;
-	std::string									ctffindfit;
-	std::string									value;
+	FILE*						stream;
+	std::string					command;
+	std::string					prime3ddoc;
+	std::vector<std::string>	files;
+	int							it;
+	int							iterationcount;
 	
-	ctffindunidocin = new UniDoc();
-	ctfparams = new UniDoc();
-	
-	if(fileExists(directory + "/ini3d_in.txt")){
-		readUniDoc(ctffindunidocin, directory + "/ini3d_in.txt");
-		//runmap2pscls_doc
-	} 
-	
-	delete ctffindunidocin;
+	if(fileExists("ini3d_in.txt")){
+		
+		listFilesInDirectory(files, directory);
+		iterationcount = 0;
+		for(it = 0; it < files.size(); it++) {
+			if(files[it].find("prime3Ddoc") != std::string::npos) {
+				iterationcount++;
+			}
+		}	
+		prime3ddoc = "prime3Ddoc_" + zeroPadNumber(iterationcount) + ".txt";
+		command = "simple_exec prg=map2ptcls_doc oritab=ini3d_in.txt oritab3D="+ prime3ddoc +" >> simple_job.log";
+		std::cout << command << std::endl;
+	}
 }
 
 void extractPre (std::string boxdirectory, std::string micrographsdirectory, std::string unidocname){

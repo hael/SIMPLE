@@ -134,9 +134,21 @@ function createProject(element){
 	var projectform = document.getElementById('projectform');
 	var projectdescription = document.getElementsByName('projectdescription')[0].value;
 	document.getElementsByName('projectdescription')[0].value = encodeURIComponent(projectdescription);
-	projectform.submit();
+	var formelements = projectform.elements;
+	var url = '../JSONhandler?';
+	for (var i = 0; i < formelements.length; i++) {
+		if(formelements[i].name != "" && formelements[i].value != ""){
+			url += formelements[i].name + "=" + formelements[i].value + "&";
+		}
+	}
+	getAjax(encodeURI(url.slice(0, -1)), reloadWindow); 
+	
 	//var mainpaneiframe = parent.parent.parent.document.getElementById('mainpaneiframe');
 	//mainpaneiframe.src = "projectmanager.html";
+}
+
+function reloadWindow(){
+	window.location.reload(1);
 }
 
 getProjects();
