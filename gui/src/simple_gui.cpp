@@ -1030,6 +1030,63 @@ void extractPost (std::string directory){
 	delete parts;
 }
 
+void pickPre (std::string simpleinput, std::string micrographsdirectory, std::string pickrefs, std::string pickvol, std::string pgrp, std::string pcontrast) {
+	
+	std::string		command;
+	std::string		micrograph;
+	std::string		rootdir;
+	FILE*			stream;
+	UniDoc*			simplein;
+	UniDoc*			filetab;
+	int 			i;
+	char*			basec;
+
+	if(pickrefs != "" && pcontrast != ""){
+		command = "simple_exec prg=makepickrefs pgrp=" + pgrp + " stk=" + pickrefs + " nthr=1 pcontrast=white >> simple_job.log";
+		std::cout << command << std::endl;
+		stream = popen(command.c_str(), "r");
+		pclose(stream);
+	} else if (pickrefs != "" && pcontrast == ""){
+		command = "simple_exec prg=makepickrefs pgrp=" + pgrp + " stk=" + pickrefs + " nthr=1 >> simple_job.log";
+		std::cout << command << std::endl;
+		stream = popen(command.c_str(), "r");
+		pclose(stream);
+	} else if (pickvol != "" && pcontrast != ""){		
+		command = "simple_exec prg=makepickrefs pgrp=" + pgrp + " vol1=" + pickrefs + " nthr=1 pcontrast=white >> simple_job.log";
+		std::cout << command << std::endl;
+		stream = popen(command.c_str(), "r");
+		pclose(stream);
+	} else if (pickvol != "" && pcontrast == ""){
+		command = "simple_exec prg=makepickrefs pgrp=" + pgrp + " vol1=" + pickrefs + " nthr=1 >> simple_job.log";
+		std::cout << command << std::endl;
+		stream = popen(command.c_str(), "r");
+		pclose(stream);
+	}
+	
+	if (simpleinput != "" && fileExists	(simpleinput)){
+		
+		simplein = new UniDoc();
+		filetab = new UniDoc();
+		
+		readUniDoc(simplein, simpleinput);
+		
+		basec = strdup(simpleinput.c_str());
+		rootdir = std::string(dirname(basec));
+		
+		for(i = 0; i < simplein->data.size(); i++){
+			getUniDocValue(simplein, i, "intg", micrograph);
+			filetab->data.push_back(rootdir + "/" + micrograph);
+		}
+		
+		writeUniDoc(filetab, "picktab.txt");
+		writeUniDoc(simplein, "autopick_in.simple");
+		
+		delete simplein;
+		delete filetab;
+		
+	}
+}
+
 void preprocPost (std::string directory){
 	
 	std::vector<std::string> 					files;
@@ -1566,6 +1623,8 @@ void simpleJob (JSONResponse* response, struct http_message* message) {
 	std::string								programarg;
 	std::string								argval;
 	std::string								argval2;
+	std::string								argval3;
+	std::string								argval4;
 	int										jobid;	
 	int										status;	
 	pid_t 									pid;
@@ -1643,10 +1702,29 @@ void simpleJob (JSONResponse* response, struct http_message* message) {
 					command += " unidoc=unidoc_in.txt boxtab=boxtab.txt";
 			}else if (program == "ini3D_from_cavgs" && getRequestVariable(message, "ptcls", argval)){
 					ini3DPre(argval);
+			}else if (program == "pick" && getRequestVariable(message, "simpleinput", argval) && getRequestVariable(message, "pickrefs", argval2)){
+				getRequestVariable(message, "pcontrast", argval3);
+				getRequestVariable(message, "pgrp", argval4);
+				pickPre(argval, "", argval2, "", argval4, argval3);
+				command += " filetab=picktab.txt refs=pickrefs.mrc";
+			}else if (program == "pick" && getRequestVariable(message, "micrographsdirectory", argval) && getRequestVariable(message, "pickrefs", argval2)){
+				getRequestVariable(message, "pcontrast", argval3);
+				getRequestVariable(message, "pgrp", argval4);
+				pickPre("", argval, argval2, "", argval4, argval3);
+				command += " filetab=picktab.txt refs=pickrefs.mrc";
+			}else if (program == "pick" && getRequestVariable(message, "simpleinput", argval) && getRequestVariable(message, "pickvol", argval2)){
+				getRequestVariable(message, "pcontrast", argval3);
+				getRequestVariable(message, "pgrp", argval4);
+				pickPre(argval, "", "", argval2, argval4, argval3);
+				command += " filetab=picktab.txt refs=pickrefs.mrc";
+			}else if (program == "pick" && getRequestVariable(message, "micrographsdirectory", argval) && getRequestVariable(message, "pickvol", argval2)){
+				getRequestVariable(message, "pcontrast", argval3);
+				getRequestVariable(message, "pgrp", argval4);
+				pickPre("", argval, "", argval2, argval4, argval3);
+				command += " filetab=picktab.txt refs=pickrefs.mrc";
 			}
-			
 			std::cout << command << std::endl;
-			command += " > simple_job.log";
+			command += " >> simple_job.log";
 			
 			generateSimpleEnv(message);
 			
@@ -2216,7 +2294,8 @@ void savePreprocSelectionParticles(JSONResponse* response, struct http_message* 
 				if(state != "0"){
 					getUniDocValue(unidoc, selectionit, "intg", intg);
 					stackfile = intg;
-					stackfile.replace(0, 21,  directory + "/pipeline/particles/ptcls_from_");
+					//stackfile.replace(0, 21,  directory + "/pipeline/particles/ptcls_from_");
+					stackfile.replace(0, 21, "pipeline/particles/ptcls_from_");
 					stackfile.replace(stackfile.end() - 9, stackfile.end(), ".mrc");
 					extractparams = intg;
 					extractparams.replace(0, 21, directory + "/pipeline/particles/extract_params_");

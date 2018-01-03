@@ -1,0 +1,172 @@
+<DOCTYPE html>
+<html>
+ <head>
+  <link rel="stylesheet" href="../css/job.css">
+ </head>
+ <body>
+	 
+  <div class=header>
+   Automated Picking
+  </div>
+  
+  <div class=jobinfo>
+	<p>Reference based picking</p>
+  </div>
+  
+	<div class=jobpane>
+		<form id=jobform action='../JSONhandler' onsubmit="parent.parent.parent.document.getElementById('mainpaneiframe').src = 'projecthistory.html'">
+			<input type=hidden name=function value=simplejob>
+			<input type=hidden name=program value=postproc_vol>
+			<input type=hidden name=jobstatus value=starting>
+			<input type=hidden name=jobtype value=postprocess>
+			<input type=hidden name=jobpid value=0>
+			<input type=hidden id=projecttable name=table value=0>
+			<input type=hidden id=projectfolder name=jobfolder value=0>
+			
+			<table id=page1>
+				<tr>
+					<td colspan=2><b>Job Parameters</b></td>
+				</tr>
+				<tr>
+					<td>Job Name</td>
+					<td><input data-required=no type=text name=jobname></td>
+				</tr>
+				<tr data-required=no>
+					<td>Job Description</td>
+					<td><textarea data-required=no name=jobdescription></textarea></td>
+				</tr>
+				<tr>
+					<td colspan=2 style="text-align: center">
+						<button type="button" onclick="document.getElementById('page1').style.display = 'none'; document.getElementById('page2').style.display = 'block'">Next</button>
+					</td>
+				</tr>
+			</table>
+			
+			<table id=page2 style="display:none">
+				<tr>
+					<td colspan=2><b>Required Parameters</b></td>
+				</tr>
+				</tr>
+					<td>Volume</td>
+					<td><input data-required=no type=text name=vol1 id=vol1 title=""></td>
+					<td><img src=../img/folder.png onclick="fileSelect(this)" data-target=vol1 data-filter=".mrc"></td>
+				</tr>
+				<tr>
+					<td>Sampling Distance</td>
+					<td><input data-required=no type=number step=0.01 name=smpd title="Size of detector pixels in Angstroms at magnification of data collection"></td>
+					<td></td>
+					<td>Mask Radius</td>
+					<td><input data-required=no type=number step=1 name=msk title=""></td>
+				</tr>
+				<tr>
+					<td colspan=5 style="text-align: center">
+						<button type="button" onclick="document.getElementById('page2').style.display = 'none'; document.getElementById('page1').style.display = 'block'">Back</button>
+						<button type="button" onclick="document.getElementById('page2').style.display = 'none'; document.getElementById('page3').style.display = 'block'">Next</button>
+					</td>
+				</tr>
+			</table>
+			
+			<table id=page3 style="display:none">
+				<tr>
+					<td colspan=2><b>Optional Parameters</b></td>
+				</tr>
+				<tr>
+					<td>Low Pass Limit</td>
+					<td><input data-required=no type=number step=0.01 name=lp title=""></td>
+					<td></td>
+					<td>Molecular Weight</td>
+					<td><input data-required=no type=number step=1 name=mw title=""></td>
+				</tr>
+				<tr>
+					<td>Threshold</td>
+					<td><input data-required=no type=number step=0.01 name=thres title=""></td>
+					<td></td>
+					<td>B Factor</td>
+					<td><input data-required=no type=number step=1 name=bfac title=""></td>
+				</tr>
+				<tr>
+					<td>Envelope Masking</td>
+					<td>
+						<select name=automsk>
+							<option selected></option>
+							<option value=yes>Yes</option>
+							<option value=no>No</option>
+							<option value=cavg>Cavg</option>
+						</select>
+					</td>
+					<td></td>
+					<td>Envelope Mask Low Pass Limit</td>
+					<td><input data-required=no type=number step=1 name=amsklp title=""></td>
+				</tr>
+				<tr>
+					<td>Envelope Mask Layer Width</td>
+					<td><input data-required=no type=number step=1 name=binwidth title=""></td>
+					<td></td>
+					<td>Envelope Edge Size</td>
+					<td><input data-required=no type=number step=1 name=edge title=""></td>
+				</tr>
+				<tr>
+					<td>FSC File</td>
+					<td><input data-required=no type=number step=1 name=binwidth id=binwidth title=""></td>
+					<td><img src=../img/folder.png onclick="fileSelect(this)" data-target=binwidth data-filter=".bin"></td>
+					<td>Filter Volume</td>
+					<td><input data-required=no type=number step=1 name=vol_filt title=""></td>
+					<td><img src=../img/folder.png onclick="fileSelect(this)" data-target=vol_filt data-filter=".mrc"></td
+				</tr>
+				<tr>
+					<td>Inner Mask Radius</td>
+					<td><input data-required=no type=number step=1 name=inner title=""></td>
+				</tr>
+				<tr>
+					<td colspan=5 style="text-align: center">
+						<button type="button" onclick="document.getElementById('page3').style.display = 'none'; document.getElementById('page2').style.display = 'block'">Back</button>
+						<button type="button" onclick="document.getElementById('page3').style.display = 'none'; document.getElementById('page4').style.display = 'block'">Next</button>
+					</td>
+				</tr>
+			</table>
+			
+			<table id=page4 style="display:none">
+				<tr>
+					<td colspan=2><b>Run Parameters</b></td>
+					<input type=hidden name=executable value=simple_exec>
+				</tr>
+				<tr>
+					<td>Number Threads</td>
+					<td><input data-required=no type=number name=nthr title="Number of shared-memory CPU threads available {1}"></td>
+				</tr>
+				<tr>
+					<td colspan=4 style="text-align: center">
+						<button type="button" onclick="document.getElementById('page4').style.display = 'none'; document.getElementById('page3').style.display = 'block'">Back</button>
+						<button type="button" onclick="document.getElementById('page4').style.display = 'none'; runJob(this)">Run</button>
+					</td>
+				</tr>
+			</table>
+			
+		</form>
+	</div>
+	
+	<div id=gauze class=gauze></div>
+	
+	<div class=selectfilepopup id=selectfilepopup>
+	 <div class=header id=selectfileheader>
+		<img class=simpleicon id=simpleicon src=../img/simple_favicon.ico>
+		File Browser
+		<img src=../img/close.png class=closeimage onclick='hideFileSelect()'>
+	</div>
+	 <div class=mainpane>
+		 <input type=hidden id=filetarget>
+		 <input type=hidden id=filefilter>
+		<input class=selectfiledirectory id=selectfiledirectory>
+		<div class=selectfiletable>
+			<table id=selectfiletable></table>
+		</div>
+	</div>
+	<button class=selectfilebutton onclick='hideFileSelect()'>Select</button>
+   </div> 
+   
+  <script src="../js/job.js"></script>
+    <script>setReRun()</script>
+  <script>setProjectTable()</script>
+  <script>setProjectFolder()</script>
+ </body>
+</html>
