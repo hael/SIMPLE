@@ -249,6 +249,13 @@ function runJob(element){
 	var jobdescription = document.getElementsByName('jobdescription')[0].value;
 	document.getElementsByName('jobdescription')[0].value = encodeURIComponent(jobdescription);
 	var jobform = document.getElementById('jobform');
-	jobform.submit();
-	showHistory();
+	var formelements = jobform.elements;
+	var url = '../JSONhandler?';
+	for (var i = 0; i < formelements.length; i++) {
+		if(formelements[i].name != "" && formelements[i].value != ""){
+			url += formelements[i].name + "=" + formelements[i].value + "&";
+		}
+	}
+	getAjax(encodeURI(url.slice(0, -1)), showHistory); 
+
 }

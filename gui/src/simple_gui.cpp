@@ -1,5 +1,6 @@
 #include <string>
 #include <fstream>
+#include <sstream>
 #include <iostream>
 #include <vector>
 #include <cstring>
@@ -164,6 +165,18 @@ bool fileExists(std::string filename) {
 		return(false);
 	}
 	
+}
+
+std::string zeroPadNumber(int num) {
+	std::stringstream ss;
+	std::string ret;
+	
+	ss << num; 
+	ss >> ret;
+	int str_length = ret.length();
+	for (int i = 0; i < 3 - str_length; i++)
+		ret = "0" + ret;
+	return ret;
 }
 
 void getDatabaseLocation (std::string& databasepath) {
@@ -920,23 +933,28 @@ void ini3DPre (std::string simpleinput){ // NEEDS WORK
 
 void ini3DPost (std::string directory){
 	
-	int											it;
-	bool										newmicrograph;
-	UniDoc* 									ctffindunidocin;
-	UniDoc*										ctfparams;
-	std::string									intgfilename;
-	std::string									ctffindfit;
-	std::string									value;
+	FILE*						stream;
+	std::string					command;
+	std::string					prime3ddoc;
+	std::vector<std::string>	files;
+	int							it;
+	int							iterationcount;
 	
-	ctffindunidocin = new UniDoc();
-	ctfparams = new UniDoc();
-	
+	std::cout << "3DpOST" << std::endl;
+	std::cout << directory + "/ini3d_in.txt" << std::endl;
 	if(fileExists(directory + "/ini3d_in.txt")){
-		readUniDoc(ctffindunidocin, directory + "/ini3d_in.txt");
-		//runmap2pscls_doc
-	} 
-	
-	delete ctffindunidocin;
+		std::cout << "3DpOSTin" << std::endl;
+		listFilesInDirectory(files, directory);
+		iterationcount = 0;
+		for(it = 0; it < files.size(); it++) {
+			if(files[it].find("prime3Ddoc") != std::string::npos) {
+				iterationcount++;
+			}
+		}	
+		prime3ddoc = "prime3Ddoc_" + zeroPadNumber(iterationcount) + ".txt";
+		command = "simple_exec prg=map2ptcls_doc oritab=ini3d_in.txt oritab3D="+ prime3ddoc +" >> simple_job.log";
+		std::cout << command << std::endl;
+	}
 }
 
 void extractPre (std::string boxdirectory, std::string micrographsdirectory, std::string unidocname){
@@ -1028,6 +1046,63 @@ void extractPost (std::string directory){
 	writeUniDoc(parts, "extract_parts.txt");
 	delete unidoc;
 	delete parts;
+}
+
+void pickPre (std::string simpleinput, std::string micrographsdirectory, std::string pickrefs, std::string pickvol, std::string pgrp, std::string pcontrast) {
+	
+	std::string		command;
+	std::string		micrograph;
+	std::string		rootdir;
+	FILE*			stream;
+	UniDoc*			simplein;
+	UniDoc*			filetab;
+	int 			i;
+	char*			basec;
+
+	if(pickrefs != "" && pcontrast != ""){
+		command = "simple_exec prg=makepickrefs pgrp=" + pgrp + " stk=" + pickrefs + " nthr=1 pcontrast=white >> simple_job.log";
+		std::cout << command << std::endl;
+		stream = popen(command.c_str(), "r");
+		pclose(stream);
+	} else if (pickrefs != "" && pcontrast == ""){
+		command = "simple_exec prg=makepickrefs pgrp=" + pgrp + " stk=" + pickrefs + " nthr=1 >> simple_job.log";
+		std::cout << command << std::endl;
+		stream = popen(command.c_str(), "r");
+		pclose(stream);
+	} else if (pickvol != "" && pcontrast != ""){		
+		command = "simple_exec prg=makepickrefs pgrp=" + pgrp + " vol1=" + pickrefs + " nthr=1 pcontrast=white >> simple_job.log";
+		std::cout << command << std::endl;
+		stream = popen(command.c_str(), "r");
+		pclose(stream);
+	} else if (pickvol != "" && pcontrast == ""){
+		command = "simple_exec prg=makepickrefs pgrp=" + pgrp + " vol1=" + pickrefs + " nthr=1 >> simple_job.log";
+		std::cout << command << std::endl;
+		stream = popen(command.c_str(), "r");
+		pclose(stream);
+	}
+	
+	if (simpleinput != "" && fileExists	(simpleinput)){
+		
+		simplein = new UniDoc();
+		filetab = new UniDoc();
+		
+		readUniDoc(simplein, simpleinput);
+		
+		basec = strdup(simpleinput.c_str());
+		rootdir = std::string(dirname(basec));
+		
+		for(i = 0; i < simplein->data.size(); i++){
+			getUniDocValue(simplein, i, "intg", micrograph);
+			filetab->data.push_back(rootdir + "/" + micrograph);
+		}
+		
+		writeUniDoc(filetab, "picktab.txt");
+		writeUniDoc(simplein, "autopick_in.simple");
+		
+		delete simplein;
+		delete filetab;
+		
+	}
 }
 
 void preprocPost (std::string directory){
@@ -1566,6 +1641,8 @@ void simpleJob (JSONResponse* response, struct http_message* message) {
 	std::string								programarg;
 	std::string								argval;
 	std::string								argval2;
+	std::string								argval3;
+	std::string								argval4;
 	int										jobid;	
 	int										status;	
 	pid_t 									pid;
@@ -1643,10 +1720,29 @@ void simpleJob (JSONResponse* response, struct http_message* message) {
 					command += " unidoc=unidoc_in.txt boxtab=boxtab.txt";
 			}else if (program == "ini3D_from_cavgs" && getRequestVariable(message, "ptcls", argval)){
 					ini3DPre(argval);
+			}else if (program == "pick" && getRequestVariable(message, "simpleinput", argval) && getRequestVariable(message, "pickrefs", argval2)){
+				getRequestVariable(message, "pcontrast", argval3);
+				getRequestVariable(message, "pgrp", argval4);
+				pickPre(argval, "", argval2, "", argval4, argval3);
+				command += " filetab=picktab.txt refs=pickrefs.mrc";
+			}else if (program == "pick" && getRequestVariable(message, "micrographsdirectory", argval) && getRequestVariable(message, "pickrefs", argval2)){
+				getRequestVariable(message, "pcontrast", argval3);
+				getRequestVariable(message, "pgrp", argval4);
+				pickPre("", argval, argval2, "", argval4, argval3);
+				command += " filetab=picktab.txt refs=pickrefs.mrc";
+			}else if (program == "pick" && getRequestVariable(message, "simpleinput", argval) && getRequestVariable(message, "pickvol", argval2)){
+				getRequestVariable(message, "pcontrast", argval3);
+				getRequestVariable(message, "pgrp", argval4);
+				pickPre(argval, "", "", argval2, argval4, argval3);
+				command += " filetab=picktab.txt refs=pickrefs.mrc";
+			}else if (program == "pick" && getRequestVariable(message, "micrographsdirectory", argval) && getRequestVariable(message, "pickvol", argval2)){
+				getRequestVariable(message, "pcontrast", argval3);
+				getRequestVariable(message, "pgrp", argval4);
+				pickPre("", argval, "", argval2, argval4, argval3);
+				command += " filetab=picktab.txt refs=pickrefs.mrc";
 			}
-			
 			std::cout << command << std::endl;
-			command += " > simple_job.log";
+			command += " >> simple_job.log";
 			
 			generateSimpleEnv(message);
 			
@@ -2216,7 +2312,8 @@ void savePreprocSelectionParticles(JSONResponse* response, struct http_message* 
 				if(state != "0"){
 					getUniDocValue(unidoc, selectionit, "intg", intg);
 					stackfile = intg;
-					stackfile.replace(0, 21,  directory + "/pipeline/particles/ptcls_from_");
+					//stackfile.replace(0, 21,  directory + "/pipeline/particles/ptcls_from_");
+					stackfile.replace(0, 21, "pipeline/particles/ptcls_from_");
 					stackfile.replace(stackfile.end() - 9, stackfile.end(), ".mrc");
 					extractparams = intg;
 					extractparams.replace(0, 21, directory + "/pipeline/particles/extract_params_");
@@ -3291,12 +3388,18 @@ void JSONHandler (struct mg_connection* http_connection, struct http_message* me
 			syncJob(response, message);
 		} else if (function == "clearboxes") {
 			clearBoxes(response, message);
+			getBoxes(response, message);
 		} else if (function == "autopick") {
 			autoPick(response, message);
 		} else if (function == "teststring") {
 			std::string inverseselection;
 			getRequestVariable(message, "inverseselection", inverseselection);
 			std::cout << inverseselection << std::endl;
+		}else if (function == "ini3dpost") {
+			std::string dir;
+			getRequestVariable(message, "directory", dir);
+			std::cout << dir << std::endl;
+			ini3DPost(dir);
 		}
 	}
 	

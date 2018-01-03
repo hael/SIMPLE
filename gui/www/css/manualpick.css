@@ -137,3 +137,41 @@ left: 7px;
   0% { transform: rotate(0deg); }
   100% { transform: rotate(360deg); }
 }
+
+#pickpane input[type="text"]{
+	width: 175px;
+    padding: 5px 5px;
+    box-sizing: border-box;
+    border: 2px solid #ccc;
+    border-radius: 4px;
+    background-color: #f8f8f8;
+    resize: none;
+    font-size: 11px;
+}
+
+#pickpane input[type="number"]{
+	width: 175px;
+    padding: 5px 5px;
+    box-sizing: border-box;
+    border: 2px solid #ccc;
+    border-radius: 4px;
+    background-color: #f8f8f8;
+    resize: none;
+    font-size: 11px;
+}
+
+#jobpane input {
+	width: 300px;
+    padding: 5px 5px;
+    box-sizing: border-box;
+    border: 2px solid #ccc;
+    border-radius: 4px;
+    background-color: #f8f8f8;
+    resize: none;
+    font-size: 11px;
+}
+
+#pickpane b{
+	font-size: 12px;
+	padding-left:10px;
+}
