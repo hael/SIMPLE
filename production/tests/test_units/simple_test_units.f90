@@ -46,7 +46,7 @@ call test_testfuns           ! pass with PGI
 call test_euler_shift        ! pass with PGI
 call simple_test_fit_line    ! pass with PGI
 call test_aff_prop
-! call simple_chdir( "../" )
+call simple_chdir( "../" )
 call simple_end('**** SIMPLE_UNIT_TEST NORMAL STOP ****')
 
 contains

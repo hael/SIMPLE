@@ -1,13 +1,5 @@
 ### Joe points
 
-* appended unidoc in addition to the singles
-* correaltion score from ctffind
-* full paths for all output files in unidoc
-* defaults 256 for pspec and thumbnail size
-* state in unidoc, for filtering based on ctfres/gui selection/ect
-* rank on output from rank_cavgs
-
-
 micrograph unidoc
 
 mimimise transfer of info between micrograph -> particle
@@ -15,7 +7,6 @@ mimimise transfer of info between micrograph -> particle
 particle parameter file
 
 class average parameter file
-
 
 ### Streaming strategy
 
@@ -29,14 +20,6 @@ are set in pre-proc & state flag in unidoc controls
 
 modify extract to take the "filter" into account
 
-stream 2D:
-
-montor substacks
-when chunksz, merge stacks + params, launch chunk-based 2D
-move processed data to new folder
-loop
-
-offline chunk combiner
 
 
 

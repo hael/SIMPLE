@@ -399,27 +399,6 @@ contains
         call img_in%norm
         ! move to Fourier space
         call img_in%fwd_ft
-        ! set CTF parameters
-        if( p%ctf .ne. 'no' )then
-            ! we here need to re-create the CTF object as kV/cs/fraca are now per-particle params
-            ! that these parameters are part of the doc is checked in the params class
-            tfun = ctf(p%smpd, b%a%get(iptcl,'kv'), b%a%get(iptcl,'cs'), b%a%get(iptcl,'fraca'))
-            select case(p%tfplan%mode)
-                case('astig') ! astigmatic CTF
-                    dfx    = b%a%get(iptcl,'dfx')
-                    dfy    = b%a%get(iptcl,'dfy')
-                    angast = b%a%get(iptcl,'angast')
-                case('noastig') ! non-astigmatic CTF
-                    dfx    = b%a%get(iptcl,'dfx')
-                    dfy    = dfx
-                    angast = 0.
-                case DEFAULT
-                    write(*,*) 'Unsupported p%tfplan%mode: ', trim(p%tfplan%mode)
-                    stop 'simple_hadamard_common :: prepimg4align'
-            end select
-            phshift = 0.
-            if( p%tfplan%l_phaseplate ) phshift = b%a%get(iptcl,'phshift')
-        endif
         ! deal with CTF
         select case(p%ctf)
             case('mul')  ! images have been multiplied with the CTF, no CTF-dependent weighting of the correlations
@@ -427,6 +406,24 @@ contains
             case('no')   ! do nothing
             case('yes')  ! do nothing
             case('flip') ! flip back
+                ! we here need to re-create the CTF object as kV/cs/fraca are now per-particle params
+                ! that these parameters are part of the doc is checked in the params class
+                tfun = ctf(p%smpd, b%a%get(iptcl,'kv'), b%a%get(iptcl,'cs'), b%a%get(iptcl,'fraca'))
+                select case(p%tfplan%mode)
+                    case('astig') ! astigmatic CTF
+                        dfx    = b%a%get(iptcl,'dfx')
+                        dfy    = b%a%get(iptcl,'dfy')
+                        angast = b%a%get(iptcl,'angast')
+                    case('noastig') ! non-astigmatic CTF
+                        dfx    = b%a%get(iptcl,'dfx')
+                        dfy    = dfx
+                        angast = 0.
+                    case DEFAULT
+                        write(*,*) 'Unsupported p%tfplan%mode: ', trim(p%tfplan%mode)
+                        stop 'simple_hadamard_common :: prepimg4align'
+                end select
+                phshift = 0.
+                if( p%tfplan%l_phaseplate ) phshift = b%a%get(iptcl,'phshift')
                 call tfun%apply_serial(img_in, dfx, 'flip', dfy, angast, phshift)
             case DEFAULT
                 stop 'Unsupported ctf mode; simple_hadamard_common :: prepimg4align'

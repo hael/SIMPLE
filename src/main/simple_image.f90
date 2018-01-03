@@ -6718,8 +6718,6 @@ contains
         logical, intent(in)  :: doplot
         write(*,'(a)') '**info(simple_image_unit_test): testing square dimensions'
         call test_image_local( 100, 100, 100, doplot )
-        write(*,'(a)') '**info(simple_image_unit_test): testing non-square dimensions'
-        call test_image_local( 120, 90, 80, doplot )
         write(*,'(a)') 'SIMPLE_IMAGE_UNIT_TEST COMPLETED SUCCESSFULLY ;-)'
 
         contains

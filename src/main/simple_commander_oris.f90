@@ -424,7 +424,7 @@ contains
         else
             allocate(labeler(nsel))
             do isel=1,nsel
-                labeler(isel)%particles = b%a%get_pinds(loc(1), 'class')
+                labeler(isel)%particles = b%a%get_pinds(isel, 'class')
             end do
         endif
         if( cline%defined('oritab3D') )then
