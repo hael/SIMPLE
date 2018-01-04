@@ -65,11 +65,16 @@ padding-left: 30px;
 	top: 160px;
 	background-color: white;
 	display: none;
-	left: 30vw;
+	left: calc(50vw - 250px);
+	width: 500px;
 }
 
 .ctfviewpopup table{
 	font-size: 14px;
+}
+
+.ctfattributes {
+	font-size: 12px;
 }
 	
 .pickingpopup {

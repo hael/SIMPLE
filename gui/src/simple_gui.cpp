@@ -202,7 +202,7 @@ void SQLQuery(std::string& databasepath, std::vector< std::map<std::string, std:
 	if(sqlite3_open(databasepath.c_str(), &db)){
 		std::cout << "Failed to open database " << sqlite3_errmsg(db) << std::endl;
 	}
-	
+	sqlite3_busy_timeout(db, 5000);
 	if(sqlite3_prepare_v2(db, sql.c_str(), -1, &stmt, NULL) != SQLITE_OK ){
 		std::cout << "Failed to query database " << sqlite3_errmsg(db) << std::endl;
 	}
@@ -239,7 +239,7 @@ void SQLQuery(std::string& databasepath, std::vector< std::map<std::string, std:
 	if(sqlite3_open(databasepath.c_str(), &db)){
 		std::cout << "Failed to open database " << sqlite3_errmsg(db) << std::endl;
 	}
-	
+	sqlite3_busy_timeout(db, 5000);
 	if(sqlite3_prepare_v2(db, sql.c_str(), -1, &stmt, NULL) != SQLITE_OK ){
 		std::cout << "Failed to query database " << sqlite3_errmsg(db) << std::endl;
 	}
@@ -288,7 +288,7 @@ void SQLQuery(std::string& databasepath, std::string sql, int& rowid){
 	if(sqlite3_open(databasepath.c_str(), &db)){
 		std::cout << "Failed to open database " << sqlite3_errmsg(db) << std::endl;
 	}
-	
+	sqlite3_busy_timeout(db, 5000);
 	if(sqlite3_prepare_v2(db, sql.c_str(), -1, &stmt, NULL) != SQLITE_OK ){
 		std::cout << "Failed to query database " << sqlite3_errmsg(db) << std::endl;
 	}
@@ -328,11 +328,11 @@ void SQLQuery(std::string& databasepath, std::string sql) {
 	if(sqlite3_open(databasepath.c_str(), &db)){
 		std::cout << "Failed to open database " << sqlite3_errmsg(db) << std::endl;
 	}
-	
+	sqlite3_busy_timeout(db, 5000);
 	if(sqlite3_prepare_v2(db, sql.c_str(), -1, &stmt, NULL) != SQLITE_OK ){
 		std::cout << "Failed to query database " << sqlite3_errmsg(db) << std::endl;
 	}
-
+	
 	while ((rc = sqlite3_step(stmt)) == SQLITE_ROW) {
 	}
 
@@ -593,6 +593,7 @@ void writeRelionStar(UniDoc* unidoc, std::string filename){
 			relionstar->data.push_back(starline);
 		}
 	}
+	filename = filename.substr(0, filename.length() -7);
 	filename += ".star";
 	std::cout << "WRITING STAR FILE " + filename << std::endl;
 	writeUniDoc(relionstar, filename);
@@ -794,18 +795,24 @@ void ctffitPre (std::string micrographsdirectory, std::string unbluroutput){
 	
 	outputunidoc = new UniDoc();
 	
+	
 	filetab.open("micrographs.txt");
 	
 	if(filetab.is_open()){
 		if(micrographsdirectory.size() > 0 && fileExists(micrographsdirectory)){
-			status = symlink(micrographsdirectory.c_str(), "micrographs");
-			listFilesInDirectory(files, "micrographs" );
+			//status = symlink(micrographsdirectory.c_str(), "micrographs");
+			status = mkdir("micrographs", S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
+			listFilesInDirectory(files, micrographsdirectory);
 			outit = 0;
 			for(it = 0; it < files.size(); it++) {
 				if(files[it].find(".mrc") != std::string::npos) {
+					micrographpath = micrographsdirectory + "/" + files[it];
+					micrographlink = "micrographs/" + files[it];
+					status = symlink(micrographpath.c_str(), micrographlink.c_str());
 					outputunidoc->data.push_back("");
 					addUniDocKeyVal(outputunidoc, outit, "intg", "micrographs/" + files[it]);
-					filetab << micrographsdirectory + "/" + files[it] + "\n";
+					//filetab << micrographsdirectory + "/" + files[it] + "\n";
+					filetab << "micrographs/" + files[it] + "\n";
 					outit++;
 				}
 			}
@@ -814,17 +821,34 @@ void ctffitPre (std::string micrographsdirectory, std::string unbluroutput){
 			readUniDoc(unidoc, unbluroutput);
 			dirc = strdup(unbluroutput.c_str());
 			dname = dirname(dirc);
+			status = mkdir("micrographs", S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
 			for(it = 0; it < unidoc->data.size(); it++){
 				outputunidoc->data.push_back("");
+				
 				getUniDocValue(unidoc, it, "intg", value);
-				addUniDocKeyVal(outputunidoc, it, "intg", std::string(dname) + "/" + value);
+				addUniDocKeyVal(outputunidoc, it, "intg", "micrographs/" + value);
+				micrographpath = std::string(dname) + "/" + value;
+				micrographlink = "micrographs/" + value;
+				status = symlink(micrographpath.c_str(), micrographlink.c_str());
+				
 				getUniDocValue(unidoc, it, "forctf", value);
-				addUniDocKeyVal(outputunidoc, it, "forctf", std::string(dname) + "/" + value);
-				filetab << std::string(dname) + "/" + value + "\n";
+				addUniDocKeyVal(outputunidoc, it, "forctf", "micrographs/" + value);
+				micrographpath = std::string(dname) + "/" + value;
+				micrographlink = "micrographs/" + value;
+				status = symlink(micrographpath.c_str(), micrographlink.c_str());
+				filetab << "micrographs/" + value + "\n";
+				
 				getUniDocValue(unidoc, it, "pspec", value);
-				addUniDocKeyVal(outputunidoc, it, "pspec", std::string(dname) + "/" + value);
+				addUniDocKeyVal(outputunidoc, it, "pspec", "micrographs/" + value);
+				micrographpath = std::string(dname) + "/" + value;
+				micrographlink = "micrographs/" + value;
+				status = symlink(micrographpath.c_str(), micrographlink.c_str());
+				
 				getUniDocValue(unidoc, it, "thumb", value);
-				addUniDocKeyVal(outputunidoc, it, "thumb", std::string(dname) + "/" + value);
+				addUniDocKeyVal(outputunidoc, it, "thumb", "micrographs/" + value);
+				micrographpath = std::string(dname) + "/" + value;
+				micrographlink = "micrographs/" + value;
+				status = symlink(micrographpath.c_str(), micrographlink.c_str());
 			}
 			delete unidoc;
 		}
@@ -885,7 +909,7 @@ void ctffitPost (std::string directory){
 	delete ctffindunidocin;
 }
 
-void ini3DPre (std::string simpleinput){ // NEEDS WORK
+void ini3DPre (std::string simpleinput, std::string& command){ // NEEDS WORK
 	
 	UniDoc*										inputunidoc;
 	std::ofstream								stktab;
@@ -905,6 +929,9 @@ void ini3DPre (std::string simpleinput){ // NEEDS WORK
 		stktab.open("stkparts.txt");
 		dirc = strdup(simpleinput.c_str());
 		inputroot = std::string(dirname(dirc));
+		if(fileExists(inputroot + "/prime2D_selected_clusters.mrc")){
+			command += " stk=" + inputroot + "/prime2D_selected_clusters.mrc";
+		}
 		std::cout << inputroot << std::endl;
 		if(stktab.is_open()){
 			inputunidoc = new UniDoc();
@@ -949,7 +976,7 @@ void ini3DPost (std::string directory){
 	
 	status = chdir(directory.c_str());
 	
-	if(fileExists("ini3d_in.simple")){
+	if(fileExists("ini3d_in.simple") && fileExists("ini3d_in.txt")){
 		listFilesInDirectory(files, directory);
 		iterationcount = 0;
 		for(it = 0; it < files.size(); it++) {
@@ -1316,7 +1343,6 @@ void prime3DPre (std::string simpleinput){
 	}
 }
 
-
 void unblurPre (std::string moviesdirectory){
 	
 	std::ofstream								movietab;
@@ -1348,6 +1374,7 @@ void unblurPost (std::string directory){
 	std::string									micrographname;
 	std::string									unidocline;
 	std::string									attribute;
+	char*										dirc;
 	
 	listFilesInDirectory(files, directory);
 	
@@ -1369,6 +1396,8 @@ void unblurPost (std::string directory){
 			}
 			if(newmicrograph){
 				attribute = std::string(*filesit);
+				dirc = strdup(attribute.c_str());
+				attribute = std::string(basename(dirc));
 				unidocline = "intg=" + attribute;
 				attribute.replace(attribute.end() - 8, attribute.end(), "thumb.mrc");
 				unidocline += " thumb=" + attribute;
@@ -1610,6 +1639,8 @@ void simpleLocalSubmit(std::string& command, std::string& directory, int& jobid,
 			extractPost(directory);
 		}else if (jobtype == "ini3D"){
 			ini3DPost(directory);
+		}else if (jobtype == "unblur"){
+			unblurPost(directory);
 		}
 		updateJobPID (0, table, jobid);
 		updateJobStatus ("Finished", table, jobid);
@@ -1785,8 +1816,8 @@ void simpleJob (JSONResponse* response, struct http_message* message) {
 			}else if (program == "extract" && getRequestVariable(message, "boxfilesdirectory", argval) && getRequestVariable(message, "micrographsdirectory", argval2)){
 					extractPre(argval, argval2, "");
 					command += " unidoc=unidoc_in.txt boxtab=boxtab.txt";
-			}else if (program == "ini3D_from_cavgs" && getRequestVariable(message, "ptcls", argval)){
-					ini3DPre(argval);
+			}else if (program == "ini3D_from_cavgs" && getRequestVariable(message, "simpleinput", argval)){
+					ini3DPre(argval, command);
 			}else if (program == "pick" && getRequestVariable(message, "simpleinput", argval) && getRequestVariable(message, "pickrefs", argval2)){
 				getRequestVariable(message, "pcontrast", argval3);
 				getRequestVariable(message, "pgrp", argval4);

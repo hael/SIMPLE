@@ -23,7 +23,18 @@ padding-left: 30px;
 }
 
 
+.ctfattributes {
+	font-size: 12px;
+}
 
+.ctfviewpopup {
+	position: absolute;
+	top: 160px;
+	background-color: white;
+	display: none;
+	left: calc(50vw - 250px);
+	width: 500px;
+}
 
 .headermenubutton {
 	float: left;

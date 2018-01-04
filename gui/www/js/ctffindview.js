@@ -131,11 +131,14 @@ function updateFileViewer () {
 			e.cancelBubble = true;
 			if (e.stopPropagation) e.stopPropagation();
 			var attributes = this.parentNode.getElementsByClassName('attributes')[0];
-			if(attributes.style.visibility =="visible"){
-				attributes.style.visibility = "hidden"
-			}else{
-				attributes.style.visibility = "visible";
-			}
+			var ctfattributes =  document.getElementById('ctfattributes');
+			ctfattributes.innerHTML = attributes.innerHTML;
+			showHideCTFViewPopup();
+			//if(attributes.style.visibility =="visible"){
+			//	attributes.style.visibility = "hidden"
+			//}else{
+			//	attributes.style.visibility = "visible";
+			//}
 		};
 		snapshots[i].appendChild(fileimg);
 		
@@ -426,6 +429,18 @@ function applySelection() {
 		}
 	}
 	showHideSelectionPopup();
+}
+
+function showHideCTFViewPopup () {
+	var boxviewpopup = document.getElementById('ctfviewpopup');
+	var gauze = document.getElementById('gauze');
+	if (boxviewpopup.style.display == "block") {
+		boxviewpopup.style.display = "none";
+		gauze.style.display = "none";
+	} else {
+		boxviewpopup.style.display = "block";
+		gauze.style.display = "block";
+	}
 }
 
 setTitle();

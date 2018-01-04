@@ -38,7 +38,7 @@ function viewparticlesSelectMicrograph(caller) {
 	var rootdirectory = document.getElementById('rootdirectory').value;
 	var snapshots = document.getElementById('snapshots');
 	snapshots.innerHTML = "";
-	for (var i = 0; i < micrograph.getAttribute("data-particlecount"); i++) {
+	for (var i = 0; i < micrograph.getAttribute("data-particlecount") - 1; i++) {
 		var div = document.createElement("div");
 		div.className = 'snapshot';
 		var img = document.createElement("img");

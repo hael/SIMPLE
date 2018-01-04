@@ -47,9 +47,9 @@
 					<td colspan=2><b>Required Parameters</b></td>
 				</tr>
 				<tr>
-					<td>Selected Cluster Averages</td>
-					<td><input data-required=no type=text name=stk id=stk title=".mrc file containing the 2D clusters selected to generate initial 3D volume"></td>
-					<td><img src=../img/folder.png onclick="fileSelect(this)" data-target=stk data-filter=".mrc"></td>
+					<td>Selected Cluster Averages .simple File</td>
+					<td><input data-required=no type=text name=simpleinput id=simpleinput title="prime2D_output_selected.simple document from previous 2D clustering / selection for remapping of information to particles at end of generation of 3D volume"></td>
+					<td><img src=../img/folder.png onclick="fileSelect(this)" data-target=simpleinput data-filter=".simple"></td>
 				</tr>
 				<tr>
 					<td>Sampling Distance</td>
@@ -72,12 +72,6 @@
 			<table id=page3 style="display:none">
 				<tr>
 					<td colspan=2><b>Optional Parameters</b></td>
-				</tr>
-				
-				<tr>
-					<td>Orientation parameters output from 2D clustering</td>
-					<td><input data-required=no type=text name=ptcls id=ptcls title="prime2D_output_selected.simple document from previous 2D clustering / selection for remapping of information to particles at end of generation of 3D volume"></td>
-					<td><img src=../img/folder.png onclick="fileSelect(this)" data-target=ptcls data-filter=".simple"></td>
 				</tr>
 				<tr>
 					<td>Fractional Update Per Iteration</td>

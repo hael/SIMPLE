@@ -12,7 +12,7 @@
      <div onclick='showHideHeaderMenu(this);showHideSortPopup()'>Sort</div>
      <div onclick='showHideHeaderMenu(this);showHideSelectionPopup()'>Select</div>
      <div onclick='showHideHeaderMenu(this);showHideSaveSelectionPopup()'>Save Selection</div>
-     <div onclick='showHideHeaderMenu(this);showHideSaveSelectionParticlesPopup()'>Save Particles From Selection</div>
+ <!--    <div onclick='showHideHeaderMenu(this);showHideSaveSelectionParticlesPopup()'>Save Particles From Selection</div>-->
 	</div>
 	2D View
 	<div class=iterationselector>
@@ -32,7 +32,18 @@
 	</div>
 	
 	<div class=gauze id=gauze></div>
-	 
+	
+	 <div class=ctfviewpopup id=ctfviewpopup>
+	  <div class=header>
+		<img class=simpleiconpopup src=img/simple_favicon.ico >
+		Cluster Parameters
+		<img src=img/close.png class=closeimage onclick='showHideCTFViewPopup()'>
+	</div>
+	<div class=mainpane>
+		<div id=ctfattributes class=ctfattributes></div>
+	</div>
+  </div>
+  
     <div class=particleviewpopup id=particleviewpopup>
 	  <div class=header>
 		<img class=simpleiconpopup src=img/simple_favicon.ico onclick="showHideHeaderMenu(this)">

@@ -129,12 +129,15 @@ function updateFileViewer () {
 			if (!e) var e = window.event;
 			e.cancelBubble = true;
 			if (e.stopPropagation) e.stopPropagation();
-			var attributes = this.parentNode.getElementsByClassName('attributes')[0];
-			if(attributes.style.visibility =="visible"){
-				attributes.style.visibility = "hidden"
-			}else{
-				attributes.style.visibility = "visible";
-			}
+			var attributes = this.parentNode.getElementsByClassName('attributes')[0];			
+			var ctfattributes =  document.getElementById('ctfattributes');
+			ctfattributes.innerHTML = attributes.innerHTML;
+			showHideCTFViewPopup();
+			//if(attributes.style.visibility =="visible"){
+			//	attributes.style.visibility = "hidden"
+			//}else{
+			//	attributes.style.visibility = "visible";
+			//}
 		};
 		snapshots[i].appendChild(fileimg);
 		var eyeimg = document.createElement("img");
@@ -435,8 +438,9 @@ function saveSelection() {
 	for (var i = 0; i < selected.length; i++) {
 		url += selected[i].getAttribute("data-frameid") + ",";
 	} 
-	document.getElementById('saveselectionbutton').innerHTML = "Saving ...";
-	getAjax(url, function(data){showHideSaveSelectionPopup()});
+	document.getElementById('saveselectionbutton').innerHTML = "Saving Classes ...";
+	//getAjax(url, function(data){showHideSaveSelectionPopup()});
+	getAjax(url, function(data){saveSelectionParticles()});
 }
 
 function saveSelectionParticles() {
@@ -454,8 +458,8 @@ function saveSelectionParticles() {
 	for (var i = 0; i < inverseselected.length; i++) {
 		url += inverseselected[i].getAttribute("data-class") + ",";
 	} 
-	document.getElementById('saveselectionparticlesbutton').innerHTML = "Saving ...";
-	getAjax(url, function(data){showHideSaveSelectionParticlesPopup()});
+	document.getElementById('saveselectionparticlesbutton').innerHTML = "Saving Particles ...";
+	getAjax(url, function(data){showHideSaveSelectionPopup()});
 }
 
 function applySelection() {
@@ -572,5 +576,16 @@ function updateParticlesControls () {
 	loadParticles2();
 }
 
+function showHideCTFViewPopup () {
+	var boxviewpopup = document.getElementById('ctfviewpopup');
+	var gauze = document.getElementById('gauze');
+	if (boxviewpopup.style.display == "block") {
+		boxviewpopup.style.display = "none";
+		gauze.style.display = "none";
+	} else {
+		boxviewpopup.style.display = "block";
+		gauze.style.display = "block";
+	}
+}
 
 get2DViewData();
