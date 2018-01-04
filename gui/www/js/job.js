@@ -256,6 +256,15 @@ function runJob(element){
 			url += formelements[i].name + "=" + formelements[i].value + "&";
 		}
 	}
-	getAjax(encodeURI(url.slice(0, -1)), showHistory); 
+	url.slice(0, -1);
+	var additionalparams = document.getElementById('additionalparams');
+	if(!!additionalparams){
+		if (additionalparams.value != ""){
+			var additionalparamsstring = additionalparams.value.replace(" ", "&");
+			url += "&" + additionalparamsstring;
+		}
+	}
+	
+	getAjax(encodeURI(url), showHistory); 
 
 }

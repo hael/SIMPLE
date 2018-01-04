@@ -909,6 +909,7 @@ void ini3DPre (std::string simpleinput){ // NEEDS WORK
 		if(stktab.is_open()){
 			inputunidoc = new UniDoc();
 			readUniDoc(inputunidoc, simpleinput);
+			writeUniDoc(inputunidoc, "ini3d_in.simple");
 			stackfilepre = "";
 			for(inputit = 0; inputit < inputunidoc->data.size(); inputit++) {
 				getUniDocValue(inputunidoc, inputit, "stackfile", stackfile);
@@ -936,14 +937,19 @@ void ini3DPost (std::string directory){
 	FILE*						stream;
 	std::string					command;
 	std::string					prime3ddoc;
+	std::string					stackfile;
+	std::string					frameid;
 	std::vector<std::string>	files;
 	int							it;
 	int							iterationcount;
+	int							status;
+	UniDoc*						inputunidoc;
+	UniDoc*						outputunidoc;
+	int							inputit;
 	
-	std::cout << "3DpOST" << std::endl;
-	std::cout << directory + "/ini3d_in.txt" << std::endl;
-	if(fileExists(directory + "/ini3d_in.txt")){
-		std::cout << "3DpOSTin" << std::endl;
+	status = chdir(directory.c_str());
+	
+	if(fileExists("ini3d_in.simple")){
 		listFilesInDirectory(files, directory);
 		iterationcount = 0;
 		for(it = 0; it < files.size(); it++) {
@@ -952,8 +958,24 @@ void ini3DPost (std::string directory){
 			}
 		}	
 		prime3ddoc = "prime3Ddoc_" + zeroPadNumber(iterationcount) + ".txt";
-		command = "simple_exec prg=map2ptcls_doc oritab=ini3d_in.txt oritab3D="+ prime3ddoc +" >> simple_job.log";
+		command = "simple_exec prg=map2ptcls_doc oritab=ini3d_in.txt oritab3D="+ prime3ddoc +" outfile=ini3d_particles_out.txt >> simple_job.log";
 		std::cout << command << std::endl;
+		stream = popen(command.c_str(), "r");
+		pclose(stream);
+		inputunidoc = new UniDoc();
+		outputunidoc = new UniDoc();
+		readUniDoc(inputunidoc, "ini3d_in.simple");
+		readUniDoc(outputunidoc, "ini3d_particles_out.txt");
+		for(inputit = 0; inputit < inputunidoc->data.size(); inputit++) {
+			getUniDocValue(inputunidoc, inputit, "stackfile", stackfile);
+			getUniDocValue(inputunidoc, inputit, "frameid", frameid);
+			addUniDocKeyVal(outputunidoc, inputit, "stackfile", stackfile);
+			addUniDocKeyVal(outputunidoc, inputit, "frameid", frameid);
+		}
+		
+		delete inputunidoc;
+		writeUniDoc(outputunidoc, "ini3d_particles_out.simple");
+		delete outputunidoc;
 	}
 }
 
@@ -1250,6 +1272,51 @@ void prime2DPost (std::string directory){
 	delete prime2dunidoc;
 }
 
+void prime3DPre (std::string simpleinput){
+	
+	UniDoc*										inputunidoc;
+	std::ofstream								stktab;
+	int											inputit;
+	std::string									stackfile;
+	std::string									stackfilepre;
+	std::string									inputroot;
+	char*										dname;
+	char*										dirc;
+	std::string									stackfilepath;
+	std::string									stackfilelink;
+	std::string									stackfilerealpath;
+	
+	mkdir("particles", S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
+	stktab.open("stkparts.txt");
+	dirc = strdup(simpleinput.c_str());
+	inputroot = std::string(dirname(dirc));
+	
+	if(fileExists(simpleinput) && stktab.is_open()){
+		inputunidoc = new UniDoc();
+		readUniDoc(inputunidoc, simpleinput);
+		stackfilepre = "";
+		for(inputit = 0; inputit < inputunidoc->data.size(); inputit++) {
+			getUniDocValue(inputunidoc, inputit, "stackfile", stackfile);
+			if(stackfile != stackfilepre){
+				stackfilepath = inputroot + "/" + stackfile;
+				stackfilerealpath = std::string(realpath(stackfilepath.c_str(), NULL));
+				dirc = strdup(stackfilepath.c_str());
+				stktab << "particles/" + std::string(basename(dirc)) << "\n";
+				std::cout << stackfilepath << " " << stackfilerealpath << std::endl;
+				stackfilelink = "particles/" + std::string(basename(dirc));
+				symlink(stackfilerealpath.c_str(), stackfilelink.c_str());
+				stackfilepre = stackfile;
+			}
+			deleteUniDocValue(inputunidoc, inputit, "stackfile");
+			deleteUniDocValue(inputunidoc, inputit, "frameid");
+		}
+		stktab.close();
+		writeUniDoc(inputunidoc, "prime3D_in.txt");
+		delete inputunidoc;
+	}
+}
+
+
 void unblurPre (std::string moviesdirectory){
 	
 	std::ofstream								movietab;
@@ -1541,7 +1608,7 @@ void simpleLocalSubmit(std::string& command, std::string& directory, int& jobid,
 			ctffitPost(directory);	
 		}else if (jobtype == "extract"){
 			extractPost(directory);
-		}else if (jobtype == "ini3D_from_cavgs"){
+		}else if (jobtype == "ini3D"){
 			ini3DPost(directory);
 		}
 		updateJobPID (0, table, jobid);
@@ -1740,7 +1807,9 @@ void simpleJob (JSONResponse* response, struct http_message* message) {
 				getRequestVariable(message, "pgrp", argval4);
 				pickPre("", argval, "", argval2, argval4, argval3);
 				command += " filetab=picktab.txt refs=pickrefs.mrc";
-			}
+			}else if(program == "prime3D" && getRequestVariable(message, "simpleinput", argval)){
+					prime3DPre(argval);
+				}
 			std::cout << command << std::endl;
 			command += " >> simple_job.log";
 			

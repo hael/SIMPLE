@@ -45,15 +45,21 @@ function showProjecthistory(){
 }
 
 function showJobSelector (){
- var mainpaneiframe = document.getElementById('mainpaneiframe');
- mainpaneiframe.src = "jobselector.html";
+ var project = document.getElementById('projectselector').value;
+ console.log(project);
+ if(project == "projectmanager" || project == "selectproject" ) {
+	 alert("Please select a project before starting a new job");
+ }else{
+	var mainpaneiframe = document.getElementById('mainpaneiframe');
+	mainpaneiframe.src = "jobselector.html";
+ }
 }
 
 function selectProject (){
 	var project = document.getElementById('projectselector').value;
 	if (project == "projectmanager") {
 		showProjectManager();
-	} else if (project != ""){
+	} else if (project != "selectproject"){
 		showProjecthistory();
 	}
 }

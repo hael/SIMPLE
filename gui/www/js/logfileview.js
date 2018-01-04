@@ -23,6 +23,7 @@ function showLogFileViewerData (data){
 	logfileformatted = logfile.replace(/\^/g, "\\");
 	logfileformatted = logfile.replace(/@/g, "<br>");
 	snapshots.innerHTML = logfileformatted;
+	snapshots.scrollTop = snapshots.scrollHeight;
 }
 
 function showProjectHistory(){

@@ -55,7 +55,7 @@ function deleteProject(element){
 	var url = 'JSONhandler?function=deleteproject&projectid=' + element.getAttribute('data-projectid');
 	
 	if (confirm("Do you wish to delete this project? Please note, you will have to remove the project directory yourself") == true) {
-		getAjax(url, function(data){window.location.reload(1)});
+		getAjax(url, function(data){window.location.reload(1); window.top.location.reload()});
 	}
 }
 
@@ -149,6 +149,7 @@ function createProject(element){
 
 function reloadWindow(){
 	window.location.reload(1);
+	window.top.location.reload();
 }
 
 getProjects();
