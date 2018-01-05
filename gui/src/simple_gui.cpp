@@ -3640,6 +3640,7 @@ void webServer(){
 	
 	mg_mgr_init(&http_manager, NULL);
 	
+	std::cout << "" << std::endl;
 	std::cout << "Starting webserver on port 8088" << " ... ";
 	
 	http_connection = mg_bind(&http_manager, "8088", webEventHandler);
@@ -3649,6 +3650,8 @@ void webServer(){
 		exit(1);
 	}else{
 		std::cout << "Success" << std::endl;
+		std::cout << "" << std::endl;
+		std::cout << "Please direct your web browser to localhost:8088 to view the interface" << std::endl;
 	}
 	
 	mg_set_protocol_http_websocket(http_connection);	

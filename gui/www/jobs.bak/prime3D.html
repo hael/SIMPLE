@@ -6,22 +6,24 @@
  <body>
 	 
   <div class=header>
-   Initial 3D Model 
+   Prime 3D Reconstruction
   </div>
   
   <div class=jobinfo>
-	<p>Generate initial 3D model from 2D cluster averages</p>
+	<p>3D Volume reconstruction</p>
   </div>
   
 	<div class=jobpane>
-		<form id=jobform action='../JSONhandler' onsubmit="showHistory()">
+		<form id=jobform action='../JSONhandler'>
 			<input type=hidden name=function value=simplejob>
-			<input type=hidden name=program value=ini3D_from_cavgs>
+			<input type=hidden name=program value=prime3D>
 			<input type=hidden name=jobstatus value=starting>
-			<input type=hidden name=jobtype value=ini3D>
+			<input type=hidden name=jobtype value=prime3D>
 			<input type=hidden name=jobpid value=0>
 			<input type=hidden id=projecttable name=table value=0>
 			<input type=hidden id=projectfolder name=jobfolder value=0>
+			<input type=hidden name=stktab value=stkparts.txt>
+			<input type=hidden name=oritab value=prime3D_in.txt>
 			
 			<table id=page1>
 				<tr>
@@ -47,20 +49,28 @@
 					<td colspan=2><b>Required Parameters</b></td>
 				</tr>
 				<tr>
-					<td>Selected Cluster Averages .simple File</td>
-					<td><input data-required=no type=text name=simpleinput id=simpleinput placeholder="xxx.simple file containing selected 2D clusters" title="prime2D_output_selected.simple document from previous 2D clustering / selection for remapping of information to particles at end of generation of 3D volume"></td>
+					<td>Input File</td>
+					<td><input data-required=no type=text name=simpleinput id=simpleinput placeholder="xxx.simple ptcls and params file" title="File containing particles and other parameters from earlier jobs (e.g. ini3D_particles.simple)"></td>
 					<td><img src=../img/folder.png onclick="fileSelect(this)" data-target=simpleinput data-filter=".simple"></td>
 				</tr>
 				<tr>
 					<td>Sampling Distance</td>
 					<td><input data-required=no type=number step=0.001 name=smpd placeholder="pixel size in Angstroms" title="Size of detector pixels in Angstroms at magnification of data collection"></td>
 					<td></td>
-					<td>Point Group Symmetry</td>
-					<td><input data-required=no name=pgrp placeholder="Point group symmetry of object" title="Point group symmetry of object (cn | dn | t | o | i)"></td>
+					<td>Point Group Symmetry of Object</td>
+					<td><input data-required=no type=text name=pgrp placeholder="Point group symmetry of object" title="Point group symmetry of object { cn | dn | t | o | i } "></td>
 				</tr>
 					<td>Mask Radius </td>
-					<td><input data-required=no type=number name=msk placeholder="mask radius in pixels" title="Mask radius in pixels"></td>
+					<td><input data-required=no type=number name=msk placeholder="mask radius in pixels" title="Radius of soft mask used during alignment and reconstruction in pixels"></td>
 					<td></td>
+					<td>CTF Correction</td>
+					<td>
+						<select data-required=no name=ctf title="Choose whether to perform full CTF correction, phase-flipping or no correction {yes = full correction}">
+							<option value=yes selected>Yes</option>
+							<option value=no>No</option>
+							<option value=flip>Flip</option>
+						</select>
+					</td>
 				<tr>
 					<td colspan=5 style="text-align: center">
 						<button type="button" onclick="document.getElementById('page2').style.display = 'none'; document.getElementById('page1').style.display = 'block'">Back</button>
@@ -75,46 +85,76 @@
 				</tr>
 				<tr>
 					<td>Fractional Update Per Iteration</td>
-					<td><input data-required=no type=number name=update_frac placeholder="% ptcls to update / iter" title="Option to update only a pecentage of particles in each iteration {1.0}" step="0.05"></td>
-					<td></td>
-					<td>Point Group Known</td>
-					<td>
-						<select data-required=no name=pgrp_known title="If point group symmetry of object firmly established set to 'yes' and symmetry will be used from start. If symmetry less well established set to 'no' and initial volume will be generated in c1 then full search for symmetry axes performed at mid-point of workflow (slower)">
-							<option value=yes>Yes</option>
-							<option value=no selected>No</option>
-						</select>
-				</tr><tr>
-					<td>Center Volume/Clusters</td>
-					<td>
-						<select data-required=no name=center title="Use automatic centering {no}">
-							<option value=yes>Yes</option>
-							<option value=no selected>No</option>
-						</select>
-					</td>
-					<td></td>
-					<td>Automatic Down-Scaling</td>
-					<td>
-						<select data-required=no name=autoscale title="Use automatic re-sampling to speed calculation {yes}">
-							<option value=yes selected>Yes</option>
-							<option value=no>No</option>
-						</select>
-					</td>
+					<td><input data-required=no type=number name=update_frac placeholder="fraction ptcls to update / iter" title="Option to update only a pecentage of particles in each iteration to speed calculation (0-1) {1.0}" step="0.05"></td>
+	  			<td></td>
+					<td>Fraction of Particles to use</td>
+					<td><input data-required=no type=number name=cenlp placeholder="fraction ptlcs used in reconstruction" title="Use only the best fitting fraction of particles for reconstruction (0-1) {1.0}"></td>
 				</tr>
 				<tr>
-					<td>Inner Mask Radius</td>
-					<td><input data-required=no type=number name=inner placeholder="inner mask radius, pixels" title="Define an innner spherical mask - radius in pixels"></td>
+				<td>Use Gold Standard FSC for Filtering and Resolution Setting?</td>
+					<td>
+						<select data-required=no name=eo title="Use gold standard FSC to determine resolution (yes|no) {yes}">
+							<option value=yes selected>Yes</option>
+							<option value=no>No</option>
+
+						</select>
+					</td> 
+				<td></td>	
+				<td>Volta Phaseplate Used?</td>
+					<td>
+						<select data-required=no name=phaseplate title="Was a Volta phaseplate used (yes | no) {no}">
+							<option value=yes>Yes</option>
+							<option value=no selected>No</option>
+						</select>
+					</td> 
+				</tr>
+				<tr>
+				<td>Center particles / volume(s)</td>
+					<td>
+						<select data-required=no name=center title="Center particles / volume(s) ? (yes|no) {yes}">
+							<option value=yes selected>Yes</option>
+							<option value=no>No</option>
+
+						</select>
+					</td> 
+					<td></td>
+						<td>High resolution limit for centering</td>
+					<td><input data-required=no type=number name=cenlp placeholder="high resolution limit for centering, Angstroms" title="High resolution limit for binarisation used for centering in Angstroms {30 A}"></td>
+				</tr>
+				<tr>
+					<td>Input Mask File</td>
+					<td><input data-required=no type=text id=mskfile name=mskfile placeholder="e.g. automask.mrc from postprocessing" title=".mrc file for mask generated using postprocessing"></td>
+					<td><img src=../img/folder.png onclick="fileSelect(this)" data-target=mskfile data-filter=".mrc"></td>
+				</tr>
+				<tr>
+					<td>Refinement Mode</td>
+					<td><input data-required=no type=text name=refine placeholder="refinement mode - commonly 'no' or 'neigh'" title="Orientation refinement mode {no} (no | yes | neigh | greedy | greedyneigh)"></td>
 				<td></td>
-					<td>Inner Mask Falloff Rate</td>
-					<td><input data-required=no type=number name=width placeholder="falloff of inner mask, pixels" title="Falloff of inner mask / filter in pixels {10}"></td>
+					<td>Input Volume for Particle Alignment</td>
+					<td><input data-required=no type=text name=vol1 placeholder="input volume e.g. volume.mrc" title="Input volume for alignment (e.g. xxx.mrc, xxx.spi)"></td>
+				</tr>
+				<tr>
+					<td>Maximum Translational Shift</td>
+					<td><input data-required=no type=number name=trs placeholder="Translational shift per iteration, pixels" title="Maximum translational shift per iteration in pixels"></td>
+				<td></td>
+					<td>Number of Projections</td>
+					<td><input data-required=no type=number name=nspace placeholder="# of projections used" title="Number of projections used"></					</td>
 				</tr>
 				<tr>
 					<td>Low Resolution Limit</td>
 					<td><input data-required=no type=number name=hp placeholder="low resolution limit, Angstroms" title="Low resolution limit in Angstroms"></td>
 				<td></td>
 					<td>High Resolution limit</td>
-					<td><input data-required=no type=number name=lp placeholder="high resolution limit, Angstroms" title="High resolution limint in Angstroms"></td>
+					<td><input data-required=no type=number name=lp placeholder="high resolution limit, Angstroms" title="High resolution limint in Angstroms"></					</td>
 				</tr>
 				<tr>
+					<td>Inner Mask Radius</td>
+					<td><input data-required=no type=number name=inner placeholder="inner mask radius, pixels" title="Define an innner spherical mask - radius in pixels"></td>
+				<td></td>
+					<td>Inner Mask Falloff Rate</td>
+					<td><input data-required=no type=number name=width placeholder="falloff of inner mask, pixels" title="Falloff of inner mask / filter in pixels {10}"></					</td>
+				</tr>
+
 				<tr> <td><br></td>
 				</tr>
 				<tr> 
@@ -125,9 +165,7 @@
 					<td><input data-required=no type=text id=additionalparams placeholder="additional parameters param=value param2=value2..." title="Additional Parameters entered in format param=value"></td>
 					<td></td>
 				</tr>
-				</tr>
-
-				<tr>
+			<tr>
 					<td colspan=5 style="text-align: center">
 						<button type="button" onclick="document.getElementById('page3').style.display = 'none'; document.getElementById('page2').style.display = 'block'">Back</button>
 						<button type="button" onclick="document.getElementById('page3').style.display = 'none'; document.getElementById('page4').style.display = 'block'">Next</button>
@@ -150,11 +188,7 @@
 				<tr>
 					<td>Number of Compute Units</td>
 					<td>
-<<<<<<< Updated upstream
 						<input type=number type=number name=ncunits placeholder="# independent computing units" title="Number of separate computing units available, should be >= number of parts {1}">
-=======
-						<input data-required=no type=number name=ncunits>
->>>>>>> Stashed changes
 					</td>
 					<td>Submit to Queue</td>
 					<td>
@@ -206,7 +240,6 @@
 							<option value=no selected>No</option>
 						</select>
 					</td>
-				</tr>
 				<tr>
 					<td colspan=4 style="text-align: center">
 						<button type="button" onclick="document.getElementById('page4').style.display = 'none'; document.getElementById('page3').style.display = 'block'">Back</button>

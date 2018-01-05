@@ -1,0 +1,127 @@
+<DOCTYPE html>
+<html>
+ <head>
+  <link rel="stylesheet" href="../css/job.css">
+ </head>
+ <body>
+	 
+  <div class=header>
+   Streaming Pipeline
+  </div>
+  
+  <div class=jobinfo>
+	<p>Process data as it is collected on the microscope. Performs motion correction, CTF estimation, automated picking, particle extraction and 2D clustering</p>
+  </div>
+  
+	<div class=jobpane>
+		<form id=jobform action='../JSONhandler'>
+			<table id=page1>
+				<input type=hidden name=function value=simplejob>
+				<input type=hidden name=executable value=simple_distr_exec>
+				<input type=hidden name=program value=prime2D_stream>
+				<tr>
+					<td colspan=2><b>Job Parameters</b></td>
+				</tr>
+				<tr>
+					<td>Job Name</td>
+					<td><input data-required=no type=text name=jobname></td>
+				</tr>
+				<tr data-required=no>
+					<td>Job Description</td>
+					<td><textarea data-required=no name=jobdescription></textarea></td>
+				</tr>
+				<tr>
+					<td colspan=2 style="text-align: center">
+						<button type="button" onclick="document.getElementById('page1').style.display = 'none'; document.getElementById('page2').style.display = 'block'">Next</button>
+					</td>
+				</tr>
+			</table>
+			<table id=page2 style="display:none">
+				<tr>
+					<td colspan=2><b>Movie Parameters</b></td>
+				</tr>
+				<tr>
+					<td>Movies Location</td>
+					<td><input data-required=no type=text name=jobname></td>
+					<td><img src=../img/folder.png></td>
+				</tr>
+				<tr>
+					<td>Sampling Distance</td>
+					<td><input data-required=no type=text name=smpd></td>
+					<td></td>
+					<td>Spherical Abberation</td>
+					<td><input data-required=no type=text name=jobname></td>
+				</tr>
+					<td>Fraction Amplitude Contrast</td>
+					<td><input data-required=no type=text name=jobname></td>
+					<td></td>
+					<td>Acceleration Voltage</td>
+					<td>
+						<select>
+							<option>200 kV</option>
+							<option>300 kV</option>
+						</select>
+					</td>
+				<tr>
+					<td>Dose Rate</td>
+					<td><input data-required=no type=text name=jobname></td>
+					<td></td>
+					<td>Exposure Time</td>
+					<td><input data-required=no type=text name=jobname></td>
+				</tr>
+				<tr>
+					<td colspan=5 style="text-align: center">
+						<button type="button" onclick="document.getElementById('page2').style.display = 'none'; document.getElementById('page1').style.display = 'block'">Back</button>
+						<button type="button" onclick="document.getElementById('page2').style.display = 'none'; document.getElementById('page3').style.display = 'block'">Next</button>
+					</td>
+				</tr>
+			</table>
+			<table id=page3 style="display:none">
+				<tr>
+					<td colspan=2><b>Picking Parameters</b></td>
+				</tr>
+				<tr>
+					<td>Picking References</td>
+					<td><input data-required=no type=text name=jobname></td>
+					<td><img src=../img/folder.png></td>
+				</tr>
+				<tr>
+					<td>Remove Outliers</td>
+					<td>
+						<select>
+							<option>On</option>
+							<option>Off</option>
+						</select>
+					</td>
+					<td></td>
+					<td>Number Sigmas</td>
+					<td><input data-required=no type=text name=jobname></td>
+				</tr>
+				<tr>
+					<td>Threshold</td>
+					<td><input data-required=no type=text name=jobname></td>
+				</tr>
+				<tr>
+					<td colspan=5 style="text-align: center">
+						<button type="button" onclick="document.getElementById('page3').style.display = 'none'; document.getElementById('page2').style.display = 'block'">Back</button>
+						<button type="button" onclick="document.getElementById('page3').style.display = 'none'; document.getElementById('page4').style.display = 'block'">Next</button>
+					</td>
+				</tr>
+			</table>
+			<table id=page4 style="display:none">
+				<tr>
+					<td colspan=2><b>Run Parameters</b></td>
+				</tr>
+				<tr>
+					<td colspan=3 style="text-align: center">
+						<button type="button" onclick="document.getElementById('page4').style.display = 'none'; document.getElementById('page3').style.display = 'block'">Back</button>
+						<button type="button" onclick="document.getElementById('page4').style.display = 'none'; runJob(this)">Run</button>
+					</td>
+				</tr>
+			</table>
+		</form>
+	</div>
+  <script src="../js/job.js"></script>
+    <script>setReRun()</script>
+ </body>
+</html>

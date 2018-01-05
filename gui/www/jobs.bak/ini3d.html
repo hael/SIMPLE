@@ -29,11 +29,11 @@
 				</tr>
 				<tr>
 					<td>Job Name</td>
-					<td><input data-required=no type=text name=jobname placeholder="job identifier"></td>
+					<td><input data-required=no type=text name=jobname></td>
 				</tr>
 				<tr data-required=no>
 					<td>Job Description</td>
-					<td><textarea data-required=no name=jobdescription placeholder="free text description of job"></textarea></td>
+					<td><textarea data-required=no name=jobdescription></textarea></td>
 				</tr>
 				<tr>
 					<td colspan=2 style="text-align: center">
@@ -48,18 +48,18 @@
 				</tr>
 				<tr>
 					<td>Selected Cluster Averages .simple File</td>
-					<td><input data-required=no type=text name=simpleinput id=simpleinput placeholder="xxx.simple file containing selected 2D clusters" title="prime2D_output_selected.simple document from previous 2D clustering / selection for remapping of information to particles at end of generation of 3D volume"></td>
+					<td><input data-required=no type=text name=simpleinput id=simpleinput title="prime2D_output_selected.simple document from previous 2D clustering / selection for remapping of information to particles at end of generation of 3D volume"></td>
 					<td><img src=../img/folder.png onclick="fileSelect(this)" data-target=simpleinput data-filter=".simple"></td>
 				</tr>
 				<tr>
 					<td>Sampling Distance</td>
-					<td><input data-required=no type=number step=0.001 name=smpd placeholder="pixel size in Angstroms" title="Size of detector pixels in Angstroms at magnification of data collection"></td>
+					<td><input data-required=no type=number step=0.001 name=smpd title="Size of detector pixels in Angstroms at magnification of data collection"></td>
 					<td></td>
 					<td>Point Group Symmetry</td>
-					<td><input data-required=no name=pgrp placeholder="Point group symmetry of object" title="Point group symmetry of object (cn | dn | t | o | i)"></td>
+					<td><input data-required=no name=pgrp title="Point group symmetry of object (cn | dn | t | o | i)"></td>
 				</tr>
 					<td>Mask Radius </td>
-					<td><input data-required=no type=number name=msk placeholder="mask radius in pixels" title="Mask radius in pixels"></td>
+					<td><input data-required=no type=number name=msk title="Mask radius in pixels"></td>
 					<td></td>
 				<tr>
 					<td colspan=5 style="text-align: center">
@@ -76,55 +76,59 @@
 				<tr>
 					<td>Fractional Update Per Iteration</td>
 					<td><input data-required=no type=number name=update_frac placeholder="% ptcls to update / iter" title="Option to update only a pecentage of particles in each iteration {1.0}" step="0.05"></td>
-					<td></td>
-					<td>Point Group Known</td>
-					<td>
-						<select data-required=no name=pgrp_known title="If point group symmetry of object firmly established set to 'yes' and symmetry will be used from start. If symmetry less well established set to 'no' and initial volume will be generated in c1 then full search for symmetry axes performed at mid-point of workflow (slower)">
-							<option value=yes>Yes</option>
-							<option value=no selected>No</option>
-						</select>
 				</tr><tr>
-					<td>Center Volume/Clusters</td>
+					<td>Center Images/Class Averages</td>
 					<td>
 						<select data-required=no name=center title="Use automatic centering {no}">
+							<option value='' selected></option>
 							<option value=yes>Yes</option>
-							<option value=no selected>No</option>
+							<option value=no>No</option>
 						</select>
 					</td>
 					<td></td>
 					<td>Automatic Down-Scaling</td>
 					<td>
 						<select data-required=no name=autoscale title="Use automatic re-sampling to speed calculation {yes}">
-							<option value=yes selected>Yes</option>
+							<option value='' selected></option>
+							<option value=yes>Yes</option>
 							<option value=no>No</option>
 						</select>
 					</td>
 				</tr>
+				
+				<tr>
+					<td>Point Group Known</td>
+					<td>
+						<select data-required=no name=pgrp_known title="If point group symmetry of object firmly established set to 'yes' and symmetry will be used from start. If symmetry less well established set to 'no' and initial volume will be generated in c1 then full search for symmetry axes performed at mid-point of workflow (slower)">
+							<option value='' selected></option>
+							<option value=yes>Yes</option>
+							<option value=no>No</option>
+						</select>
+					</td>
+				    <td></td>
+					<td>Fraction Of Particles</td>
+					<td><input data-required=no type=number name=frac title="Reconstruct from fraction of input 2D clusters only {1}">
+					</td>
+				</tr>				
+		
+				<tr>
+					<td>Number Of Projection Directions</td>
+					<td><input data-required=no type=number name=nspace title="Number of projection directions {1000}"></td>
+					<td></td>
+					<td>Mask Width</td>
+					<td><input data-required=no type=number name=width title="Distance for falloff of inner mask or filter in pixels {10}"></td>
+				</tr>
+				<tr>
+					<td>Low Pass Limit</td>
+					<td><input data-required=no type=number name=lp title="High resolution limit in Angstroms"></td>
+				<td></td>
+					<td>High Pass Limit</td>
+					<td><input data-required=no type=number name=hp title="Low resolution limit in Angstroms"></td>
+				</tr>
 				<tr>
 					<td>Inner Mask Radius</td>
-					<td><input data-required=no type=number name=inner placeholder="inner mask radius, pixels" title="Define an innner spherical mask - radius in pixels"></td>
-				<td></td>
-					<td>Inner Mask Falloff Rate</td>
-					<td><input data-required=no type=number name=width placeholder="falloff of inner mask, pixels" title="Falloff of inner mask / filter in pixels {10}"></td>
-				</tr>
-				<tr>
-					<td>Low Resolution Limit</td>
-					<td><input data-required=no type=number name=hp placeholder="low resolution limit, Angstroms" title="Low resolution limit in Angstroms"></td>
-				<td></td>
-					<td>High Resolution limit</td>
-					<td><input data-required=no type=number name=lp placeholder="high resolution limit, Angstroms" title="High resolution limint in Angstroms"></td>
-				</tr>
-				<tr>
-				<tr> <td><br></td>
-				</tr>
-				<tr> 
-					<td><b>Additional Parameters</b></td>
-				</tr>
-				<tr> 
+					<td><input data-required=no type=number name=inner></td>
 					<td></td>
-					<td><input data-required=no type=text id=additionalparams placeholder="additional parameters param=value param2=value2..." title="Additional Parameters entered in format param=value"></td>
-					<td></td>
-				</tr>
 				</tr>
 
 				<tr>
@@ -142,19 +146,15 @@
 				</tr>
 				<tr>
 					<td>Number Parts</td>
-					<td><input data-required=no type=number name=nparts placeholder="divide job into # parts" title="Number of parts to divide distributed job into for processing {1}"></td>
+					<td><input data-required=no type=number name=nparts></td>
 					<td>Number Threads per Part</td>
-					<td><input data-required=no type=number name=nthr placeholder="# shared-memory CPU threads" title="Number of shared-memory CPU threads available {1}"></td>
+					<td><input data-required=no type=number name=nthr></td>
 				</tr>
 					
 				<tr>
 					<td>Number of Compute Units</td>
 					<td>
-<<<<<<< Updated upstream
-						<input type=number type=number name=ncunits placeholder="# independent computing units" title="Number of separate computing units available, should be >= number of parts {1}">
-=======
 						<input data-required=no type=number name=ncunits>
->>>>>>> Stashed changes
 					</td>
 					<td>Submit to Queue</td>
 					<td>
@@ -165,32 +165,47 @@
 					</td>
 				</tr>
 					
+				<tr data-queue=yes>	
+					<td>Scheduler Type</td>
+					<td>
+						<select data-required=no name=qsys_name>
+							<option value=slurm selected>Slurm</option>
+						</select>
+					</td>
+					<td></td>
+					<td></td>
+				</tr>
+				
 				<tr data-queue=yes>
 					<td>Maximum Job Time</td>
 					<td>
-						<input data-required=no type=number name=time_per_image placeholder="time allowed in queue per job (s)" title="Maximum time allowed in queue per job in seconds">
+						<input data-required=no type=number name=time_per_image>
+					</td>
+					<td>Job Identifier</td>
+					<td>
+						<input data-required=no type=text name=qsys_name>
 					</td>
 				</tr>
 				
 				<tr data-queue=yes>
 					<td>Memory Per Job</td>
 					<td>
-						<input data-required=no type=number name=job_memory_per_task placeholder="memory allocated per job (bytes)" title="Memory allocated per job in bytes" >
+						<input data-required=no type=number name=job_memory_per_task>
 					</td>
-					<td >Queue Partition</td>
+					<td>Queue Partition</td>
 					<td>
-						<input data-required=no type=text name=qsys_partition placeholder="queue name" title="Name of queue to submit distributed jobs to">
+						<input data-required=no type=text name=qsys_partition>
 					</td>
 				</tr>
 				
 				<tr data-queue=yes>
 					<td>Number Tasks Per Socket</td>
 					<td>
-						<input data-required=no type=number name=job_ntasks_per_socket placeholder="# jobs per CPU socket" title="Number of simultaneous jobs to run on each CPU socket">
+						<input data-required=no type=number name=job_ntasks_per_socket>
 					</td>
-					<td >Job Identifier</td>
+					<td>Job Identifier</td>
 					<td>
-						<input data-required=no type=text name=job_name placeholder="queue job name" title="Assign a job name to the submitted jobs">
+						<input data-required=no type=text name=job_name>
 					</td>
 				</tr>
 				
@@ -199,9 +214,9 @@
 					<td>
 						<input data-required=no type=text name=qsys_qos>
 					</td>
-					<td >Submit Master to Queue</td>
+					<td>Submit Master to Queue</td>
 					<td>
-						<select data-required=no name=submitmaster title="Choose whether master process runs on queue or locally">
+						<select data-required=no name=submitmaster>
 							<option value=yes>Yes</option>
 							<option value=no selected>No</option>
 						</select>

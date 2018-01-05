@@ -100,6 +100,7 @@ function showFolderBrowserData(data){
 	for (var i = 0; i < directories.length; i++) {
 		if(directories[i][0] != "."){
 			var row = selectfiletable.insertRow(-1);
+			row.className = "filefolder";
 			row.id = JSONdata.rootdirectory + "/" + directories[i];
 			row.setAttribute("data-target",JSONdata.rootdirectory + "/" + directories[i]);
 			var cell1 = row.insertCell(0);
@@ -108,7 +109,14 @@ function showFolderBrowserData(data){
 			cell2.innerHTML = directories[i];
 			cell2.style.width = "100%";
 			row.ondblclick = function(){getFolderBrowserData(this.id)};
-			row.onclick = function(){this.style.background = "#6698ab"; document.getElementById(document.getElementById('filetarget').value).value=this.getAttribute('data-target')};
+			row.onclick = function(){
+				var filefolders = document.getElementsByClassName('filefolder');
+				for(var i = 0; i < filefolders.length; i++){
+					filefolders[i].style.background = "";
+				}
+				this.style.background = "#6698ab"; 
+				document.getElementById(document.getElementById('filetarget').value).value=this.getAttribute('data-target');
+				};
 		}
 	}
 	selectfiledirectory.value = JSONdata.rootdirectory;

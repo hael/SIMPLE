@@ -1,0 +1,261 @@
+<DOCTYPE html>
+<html>
+ <head>
+  <link rel="stylesheet" href="../css/job.css">
+ </head>
+ <body>
+	 
+  <div class=header>
+   Streaming 2D Pipeline
+  </div>
+  
+  <div class=jobinfo>
+	<p>Process data as it is collected on the microscope. Performs 2D clustering in near-real time as data collection progresses</p>
+  </div>
+  
+	<div class=jobpane>
+		<form id=jobform  action='../JSONhandler'>
+			<input type=hidden name=function value=simplejob>
+			<input type=hidden name=program value=prime2D_stream>
+			<input type=hidden name=jobstatus value=starting>
+			<input type=hidden name=jobtype value=prime2D_stream>
+			<input type=hidden name=jobpid value=0>
+			<input type=hidden id=projecttable name=table value=0>
+			<input type=hidden id=projectfolder name=jobfolder value=0>
+			
+			<table id=page1>
+				<tr>
+					<td colspan=2><b>Job Parameters</b></td>
+				</tr>
+				<tr>
+					<td>Job Name</td>
+					<td><input data-required=no type=text name=jobname></td>
+				</tr>
+				<tr data-required=no>
+					<td>Job Description</td>
+					<td><textarea data-required=no name=jobdescription></textarea></td>
+				</tr>
+				<tr>
+					<td colspan=2 style="text-align: center">
+						<button type="button" onclick="document.getElementById('page1').style.display = 'none'; document.getElementById('page2').style.display = 'block'">Next</button>
+					</td>
+				</tr>
+			</table>
+			
+			<table id=page2 style="display:none">
+				<tr>
+					<td colspan=2><b>Required Parameters</b></td>
+				</tr>
+				<tr>
+					<td>Preprocessing Directory</td>
+					<td><input data-required=no type=text name=dir_ptcls></td>
+					<td><img src=../img/folder.png></td>
+				</tr>
+				<tr>
+					<td>Sampling Distance</td>
+					<td><input data-required=no type=number step=0.01 name=smpd></td>
+					<td></td>
+					<td>Number Particles per Class</td>
+					<td><input data-required=no type=number name=nptcls_per_cls></td>
+				</tr>
+					<td>Mask Radius </td>
+					<td><input data-required=no type=number name=msk></td>
+					<td></td>
+					<td>CTF Correction</td>
+					<td>
+						<select data-required=no name=ctf>
+							<option value=yes selected>Yes</option>
+							<option value=no>No</option>
+							<option value=flip>Flip</option>
+						</select>
+					</td>
+				<tr>
+					<td>Number Classes To Start</td>
+					<td><input data-required=no type=text name=ncls_start></td>
+					<td></td>
+				</tr>
+				<tr>
+					<td colspan=5 style="text-align: center">
+						<button type="button" onclick="document.getElementById('page2').style.display = 'none'; document.getElementById('page1').style.display = 'block'">Back</button>
+						<button type="button" onclick="document.getElementById('page2').style.display = 'none'; document.getElementById('page3').style.display = 'block'">Next</button>
+					</td>
+				</tr>
+			</table>
+			
+			<table id=page3 style="display:none">
+				<tr>
+					<td colspan=2><b>Optional Parameters</b></td>
+				</tr>
+				<tr>
+					<td>Centering Low-Pass Limit</td>
+					<td><input data-required=no type=number name=cenlp></td>
+				</tr>
+				<tr>
+					<td>Center Images/Class Averages</td>
+					<td>
+						<select data-required=no name=center>
+							<option value=yes>Yes</option>
+							<option value=no selected>No</option>
+						</select>
+					</td>
+					<td></td>
+					<td>Automatic Down-Scaling</td>
+					<td>
+						<select data-required=no name=autoscale>
+							<option value=yes>Yes</option>
+							<option value=no selected>No</option>
+						</select>
+					</td>
+				</tr>
+				<tr>
+					<td>Width of Filament</td>
+					<td><input data-required=no type=number name=filwidth></td>
+					<td></td>
+					<td>High Pass Limit</td>
+					<td><input data-required=no type=number name=hp></td>
+				</tr>
+				<tr>
+					<td>Inner Mask Radius</td>
+					<td><input data-required=no type=number name=inner></td>
+					<td></td>
+					<td>Low Pass Limit</td>
+					<td><input data-required=no type=number name=lp></td>
+				</tr>
+				<tr>
+					<td>Matched Filter</td>
+					<td>
+						<select data-required=no name=match_filt>
+							<option value=yes selected>Yes</option>
+							<option value=no>No</option>
+						</select>
+					</td>
+					<td></td>
+					<td>Phase Plate Data</td>
+					<td>
+						<select data-required=no name=phaseplate>
+							<option value=yes>Yes</option>
+							<option value=no selected>No</option>
+						</select>
+					</td>
+				</tr>
+				<tr>
+					<td>Maximum Halfwidth Shift</td>
+					<td><input data-required=no type=number name=trs></td>
+					<td></td>
+					<td>Spectral Weighting</td>
+					<td>
+						<select data-required=no name=weights2D>
+							<option value=yes>Yes</option>
+							<option value=no selected>No</option>
+						</select>
+					</td>
+				</tr>
+				<tr>
+					<td>Width of Inner Mask/Filter</td>
+					<td><input data-required=no type=number name=width></td>
+				</tr>
+				<tr>
+					<td colspan=5 style="text-align: center">
+						<button type="button" onclick="document.getElementById('page3').style.display = 'none'; document.getElementById('page2').style.display = 'block'">Back</button>
+						<button type="button" onclick="document.getElementById('page3').style.display = 'none'; document.getElementById('page4').style.display = 'block'">Next</button>
+					</td>
+				</tr>
+			</table>
+			
+			<table id=page4 style="display:none">
+				<tr>
+					<td colspan=2><b>Run Parameters</b></td>
+					<input type=hidden name=executable value=simple_distr_exec>
+				</tr>
+				<tr>
+					<td>Number Parts</td>
+					<td><input data-required=no type=number name=nparts></td>
+					<td>Number Threads per Part</td>
+					<td><input data-required=no type=number name=nthr></td>
+				</tr>
+					
+				<tr>
+					<td>Submit to Queue</td>
+					<td>
+						<select data-required=no name=queue_submit onchange="showHideQueueOptions()">
+							<option value=yes>Yes</option>
+							<option value=no selected>No</option>
+						</select>
+					</td>
+					<td></td>
+					<td></td>
+				</tr>
+					
+				<tr data-queue=yes>	
+					<td>Scheduler Type</td>
+					<td>
+						<select data-required=no name=qsys_name>
+							<option value=slurm selected>Slurm</option>
+						</select>
+					</td>
+					<td></td>
+					<td></td>
+				</tr>
+				
+				<tr data-queue=yes>
+					<td>Maximum Job Time</td>
+					<td>
+						<input data-required=no type=number name=time_per_image>
+					</td>
+					<td>Job Identifier</td>
+					<td>
+						<input data-required=no type=text name=qsys_name>
+					</td>
+				</tr>
+				
+				<tr data-queue=yes>
+					<td>Memory Per Job</td>
+					<td>
+						<input data-required=no type=number name=job_memory_per_task>
+					</td>
+					<td>Queue Partition</td>
+					<td>
+						<input data-required=no type=text name=qsys_partition>
+					</td>
+				</tr>
+				
+				<tr data-queue=yes>
+					<td>Number Tasks Per Socket</td>
+					<td>
+						<input data-required=no type=number name=job_ntasks_per_socket>
+					</td>
+					<td>Job Identifier</td>
+					<td>
+						<input data-required=no type=text name=job_name>
+					</td>
+				</tr>
+				
+				<tr data-queue=yes>
+					<td>Queue QOS</td>
+					<td>
+						<input data-required=no type=text name=qsys_qos>
+					</td>
+					<td>Submit Master to Queue</td>
+					<td>
+						<select data-required=no name=submitmaster>
+							<option value=yes>Yes</option>
+							<option value=no selected>No</option>
+						</select>
+					</td>
+				</tr>
+				<tr>
+					<td colspan=3 style="text-align: center">
+						<button type="button" onclick="document.getElementById('page4').style.display = 'none'; document.getElementById('page3').style.display = 'block'">Back</button>
+						<button type="button" onclick="document.getElementById('page4').style.display = 'none'; runJob(this)">Run</button>
+					</td>
+				</tr>
+			</table>
+			
+		</form>
+	</div>
+  <script src="../js/job.js"></script>
+    <script>setReRun()</script>
+  <script>setProjectTable()</script>
+  <script>setProjectFolder()</script>
+ </body>
+</html>
