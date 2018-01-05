@@ -1107,6 +1107,8 @@ void pickPre (std::string simpleinput, std::string micrographsdirectory, std::st
 	UniDoc*			filetab;
 	int 			i;
 	char*			basec;
+	int				filecount;
+	std::vector<std::string>	files;
 
 	if(pickrefs != "" && pcontrast != ""){
 		command = "simple_exec prg=makepickrefs pgrp=" + pgrp + " stk=" + pickrefs + " nthr=1 pcontrast=white >> simple_job.log";
@@ -1151,7 +1153,26 @@ void pickPre (std::string simpleinput, std::string micrographsdirectory, std::st
 		delete simplein;
 		delete filetab;
 		
-	}
+	} else if(micrographsdirectory != ""){
+			listFilesInDirectory(files, micrographsdirectory);
+			
+			simplein = new UniDoc();
+			filetab = new UniDoc();
+			
+			for(filecount = 0; filecount < files.size(); filecount++){
+				if(files[filecount].find(".mrc") !=std::string::npos){
+					simplein->data.push_back("intg=" + files[filecount]);
+					filetab->data.push_back(micrographsdirectory + "/" + files[filecount]);
+				}
+			}
+			
+			writeUniDoc(filetab, "picktab.txt");
+			writeUniDoc(simplein, "autopick_in.simple");
+			
+			delete filetab;
+			delete simplein;
+			
+		}
 }
 
 void postprocessPre (std::string volume, std::string& command) {
@@ -2473,8 +2494,11 @@ void viewManualPick (JSONResponse* response, struct http_message* message) {
 	std::string 							jobdescription;
 	std::string 							boxfile;
 	std::string								runstring;
+	std::string								micrographsdirectory;
+	std::vector<std::string>				files;
 	int										jobid;
 	int										status;
+	int										filecount;
 	std::string 							outputfolder;	
 			
 	runstring = std::string(message->query_string.p);
@@ -2518,8 +2542,37 @@ void viewManualPick (JSONResponse* response, struct http_message* message) {
 					//}
 					response->snapshots.push_back(micrographmap);
 				}
+				writeUniDoc(unidoc, outputfolder + "/manualpick_out.simple");
 				delete unidoc;
 			}
+			
+		} else if(getRequestVariable(message, "micrographsdirectory", micrographsdirectory)){
+			listFilesInDirectory(files, micrographsdirectory);
+			
+			response->rootdirectory = micrographsdirectory;
+			
+			unidoc = new UniDoc();
+			
+			for(filecount = 0; filecount < files.size(); filecount++){
+				if(files[filecount].find(".mrc") !=std::string::npos){
+					unidoc->data.push_back("intg=" + files[filecount]);
+				}
+			}
+			
+			for(filecount = 0; filecount < unidoc->data.size(); filecount++){
+				micrographmap.clear();
+				micrographmap["id"] = std::to_string(filecount);
+				getUniDocValue(unidoc, filecount, "intg", value);
+				micrographmap["micrograph"] = value;
+				value.replace(value.end() - 3, value.end(), "box");
+				boxfile = outputfolder + "/" + value;
+				micrographmap["boxfile"] = boxfile;
+				response->snapshots.push_back(micrographmap);
+			}
+			
+			writeUniDoc(unidoc, outputfolder + "/manualpick_out.simple");
+			
+			delete unidoc;
 			
 		}
 	}

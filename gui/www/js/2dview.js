@@ -435,9 +435,15 @@ function saveSelection() {
 		url += "&outputfilename=" + saveselectionfilename;
 	}
 	url += "&selection=";
+	var selectionarray = [];
 	for (var i = 0; i < selected.length; i++) {
-		url += selected[i].getAttribute("data-frameid") + ",";
+		//url += selected[i].getAttribute("data-frameid") + ",";
+		selectionarray.push(selected[i].getAttribute("data-frameid"));
 	} 
+	selectionarray.sort(function(a, b){return a-b});
+	for (var i = 0; i < selectionarray.length; i++) {
+		url += selectionarray[i] + ",";
+	}
 	document.getElementById('saveselectionbutton').innerHTML = "Saving Classes ...";
 	//getAjax(url, function(data){showHideSaveSelectionPopup()});
 	getAjax(url, function(data){saveSelectionParticles()});
