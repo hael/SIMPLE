@@ -23,6 +23,32 @@ function postAjax (url, success) {
     xhr.send();
 }
 
+
+function setProjectTable(){
+	var projectselector = parent.parent.document.getElementById('projectselector');
+	var projecttable = document.getElementById('projecttable');
+	projecttable.value = projectselector.options[projectselector.selectedIndex].getAttribute('data-projecttable');
+}
+
+function setProjectFolder(){
+	var projectselector = parent.parent.document.getElementById('projectselector');
+	var projectfolder = document.getElementById('projectfolder');
+	projectfolder.value = projectselector.options[projectselector.selectedIndex].getAttribute('data-projectfolder');
+}
+
+function setReRun(){
+	var querystring = window.location.toString().split('?')[1];
+	var queryelements = querystring.split('&');
+	for(var i = 0; i < queryelements.length; i++){
+		var key = queryelements[i].split("=")[0];
+		console.log(key);
+		var value = queryelements[i].split("=")[1];
+		if (typeof document.getElementsByName(key)[0] !== "undefined"){
+			document.getElementsByName(key)[0].value = decodeURIComponent(value);
+		}
+	}
+}
+
 function showManualPicker() {
 	var jobpane = document.getElementById('jobpane');
 	var pickpane = document.getElementById('pickpane');
@@ -250,4 +276,15 @@ function showHideControlsPopup () {
 	}
 }
 
-
+function setReRun(){
+	var querystring = window.location.toString().split('?')[1];
+	var queryelements = querystring.split('&');
+	for(var i = 0; i < queryelements.length; i++){
+		var key = queryelements[i].split("=")[0];
+		console.log(key);
+		var value = queryelements[i].split("=")[1];
+		if (typeof document.getElementsByName(key)[0] !== "undefined"){
+			document.getElementsByName(key)[0].value = decodeURIComponent(value);
+		}
+	}
+}

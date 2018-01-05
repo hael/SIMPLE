@@ -6,11 +6,11 @@
  <body>
 	 
   <div class=header>
-   Automated Picking
+   Post Processing
   </div>
   
   <div class=jobinfo>
-	<p>Reference based picking</p>
+	<p>Post process volume</p>
   </div>
   
 	<div class=jobpane>
@@ -48,12 +48,12 @@
 				</tr>
 				</tr>
 					<td>Volume</td>
-					<td><input data-required=no type=text name=vol1 id=vol1 title=""></td>
-					<td><img src=../img/folder.png onclick="fileSelect(this)" data-target=vol1 data-filter=".mrc"></td>
+					<td><input data-required=no type=text name=invol id=invol title=""></td>
+					<td><img src=../img/folder.png onclick="fileSelect(this)" data-target=invol data-filter=".mrc"></td>
 				</tr>
 				<tr>
 					<td>Sampling Distance</td>
-					<td><input data-required=no type=number step=0.01 name=smpd title="Size of detector pixels in Angstroms at magnification of data collection"></td>
+					<td><input data-required=no type=number step=0.011 name=smpd title="Size of detector pixels in Angstroms at magnification of data collection"></td>
 					<td></td>
 					<td>Mask Radius</td>
 					<td><input data-required=no type=number step=1 name=msk title=""></td>

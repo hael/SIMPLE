@@ -1154,6 +1154,19 @@ void pickPre (std::string simpleinput, std::string micrographsdirectory, std::st
 	}
 }
 
+void postprocessPre (std::string volume, std::string& command) {
+	
+	char*			basec;
+	std::string		volumelink;
+	
+	if(fileExists(volume)){
+		basec = strdup(volume.c_str());
+		volumelink =  std::string(basename(basec));
+		symlink(volume.c_str(), volumelink.c_str());
+		command += " vol1=" + volumelink;
+	}
+}
+
 void preprocPost (std::string directory){
 	
 	std::vector<std::string> 					files;
@@ -1840,6 +1853,8 @@ void simpleJob (JSONResponse* response, struct http_message* message) {
 				command += " filetab=picktab.txt refs=pickrefs.mrc";
 			}else if(program == "prime3D" && getRequestVariable(message, "simpleinput", argval)){
 					prime3DPre(argval);
+			}else if(program == "postproc_vol" && getRequestVariable(message, "invol", argval)){
+					postprocessPre(argval, command);
 				}
 			std::cout << command << std::endl;
 			command += " >> simple_job.log";
