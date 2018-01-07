@@ -2827,6 +2827,7 @@ void autoPick (JSONResponse* response, struct http_message* message){
 			pclose(stream);
 		} else if (getRequestVariable(message, "pickvol", pickvol) && fileExists(folder)){
 			command = "cd " + folder + " && simple_exec prg=makepickrefs pgrp=" + pgrp + " vol1=" + pickrefs + " nthr=1 pcontrast=" + pcontrast + " >> simple_job.log";
+			std::cout << command << std::endl;
 			stream = popen(command.c_str(), "r");
 			pclose(stream);
 		}
