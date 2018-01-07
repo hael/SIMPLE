@@ -27,11 +27,11 @@
 				</tr>
 				<tr>
 					<td>Job Name</td>
-					<td><input data-required=no type=text id=jobname></td>
+					<td><input data-required=no type=text id=jobname placeholder="job identifier"></td>
 				</tr>
 				<tr data-required=no>
 					<td>Job Description</td>
-					<td><textarea data-required=no id=jobdescription></textarea></td>
+					<td><textarea data-required=no id=jobdescription placeholder="free text description of job"></textarea></td>
 				</tr>
 				<tr>
 					<td colspan=2 style="text-align: center">
@@ -46,7 +46,7 @@
 				</tr>
 				<tr>
 					<td>Micrographs Parameters Table</td>
-					<td><input data-required=no type=text id=unbluroutput></td>
+					<td><input data-required=no type=text id=unbluroutput placeholder=".simple file with list of micrographs e.g. ctf_out.simple"></td>
 					<td><img src=../img/folder.png onclick="fileSelect(this)" data-target=unbluroutput data-filter=".simple"></td>
 				</tr>
 				<tr>
@@ -54,12 +54,12 @@
 				</tr>
 				<tr>
 					<td>Micrographs Directory</td>
-					<td><input data-required=no type=text id=micrographsdirectory></td>
+					<td><input data-required=no type=text id=micrographsdirectory placeholder="directory containing micrographs"></td>
 					<td><img src=../img/folder.png onclick="folderSelect(this)" data-target=micrographsdirectory></td>
 				</tr>
 				<tr>
 					<td>Sampling Distance</td>
-					<td><input data-required=no type=number step=0.01 id=smpd></td>
+					<td><input data-required=no type=number step=0.01 id=smpd placeholder="pixel size in Angstroms" title="Size of detector pixels in Angstroms at magnification of data collection"></td>
 					<td></td>
 					<td></td>
 					<td></td>
@@ -261,10 +261,10 @@
 					<tr>
 						<td>2D Clusters</td>
 						<td>
-							<input type=text id=pickrefs name=pickrefs>
+							<input type=text id=pickrefs name=pickrefs placeholder="file containing clusters from 2D e.g. .mrc">
 						</td>
 						<td>
-							<img src=../img/folder.png onclick="fileSelect(this)" data-target=pickrefs data-filter=".mrc">
+							<img src=../img/folder.png onclick="fileSelect(this)" data-target=pickrefs data-filter="2D.mrc">
 						</td>
 					</tr>
 					<tr>
@@ -275,7 +275,7 @@
 					<tr>
 						<td>Volume</td>
 						<td>
-							<input type=text id=pickvol name=pickvol>
+							<input type=text id=pickvol name=pickvol placeholder="file containing 3D volume e.g. vol.mrc">
 						</td>
 						<td>
 							<img src=../img/folder.png onclick="fileSelect(this)" data-target=pickvol data-filter=".mrc">
@@ -284,7 +284,7 @@
 					<tr>
 						<td>Point Group Symmetry</td>
 						<td>
-							<input type=text id=pgrp name=pgrp value=C1>
+							<input type=text id=pgrp name=pgrp value=c1>
 						</td>
 					</tr>
 					<tr>

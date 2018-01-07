@@ -29,11 +29,11 @@
 				</tr>
 				<tr>
 					<td>Job Name</td>
-					<td><input data-required=no type=text name=jobname></td>
+					<td><input data-required=no type=text name=jobname placeholder="job identifier"></td>
 				</tr>
 				<tr data-required=no>
 					<td>Job Description</td>
-					<td><textarea data-required=no name=jobdescription></textarea></td>
+					<td><textarea data-required=no name=jobdescription placeholder="free text description of job"></textarea></td>
 				</tr>
 				<tr>
 					<td colspan=2 style="text-align: center">
@@ -48,8 +48,8 @@
 					<td colspan=2><b>Required Parameters</b></td>
 				</tr>
 				<tr>
-					<td>List of motion corrected micrographs and CTF parameters from "CTF fit" task (e.g. ctffit_output.simple)</td>
-					<td><input data-required=no type=text name=ctffindoutput id=ctffindoutput></td>
+					<td>List of [motion corrected] micrographs and CTF parameters </td>
+					<td><input data-required=no type=text name=ctffindoutput id=ctffindoutput placeholder="micrographs and parameters file e.g. ctffit_output.simple"></td>
 					<td><img src=../img/folder.png onclick="fileSelect(this)" data-target=ctffindoutput data-filter=".simple"></td>
 				</tr>
 			<!--	<tr>
@@ -59,7 +59,7 @@
 				</tr>
 				<tr>
 					<td>Micrographs Directory</td>
-					<td><input data-required=no type=text name=micrographsdirectory id=micrographsdirectory></td>
+					<td><input data-required=no type=text name=micrographsdirectory id=micrographsdirectory placeholder="micrographs directory"></td>
 					<td><img src=../img/folder.png onclick="folderSelect(this)" data-target=micrographsdirectory></td>
 				</tr>
 				<tr>
@@ -67,12 +67,12 @@
 				</tr>-->
 				<tr>
 					<td>Boxfiles Directory</td>
-					<td><input data-required=no type=text name=boxfilesdirectory id=boxfilesdirectory></td>
+					<td><input data-required=no type=text name=boxfilesdirectory id=boxfilesdirectory placeholder="directory containing box files"></td>
 					<td><img src=../img/folder.png onclick="folderSelect(this)" data-target=boxfilesdirectory></td>
 				</tr>
 				<tr>
 					<td>Sampling Distance</td>
-					<td><input data-required=no type=number step=0.01 name=smpd title="Size of detector pixels in Angstroms at magnification of data collection"></td>
+					<td><input data-required=no type=number step=0.001 name=smpd placeholder="pixel size in Angstroms" title="Size of detector pixels in Angstroms at magnification of data collection"></td>
 					<td></td>
 				</tr>
 				<tr>
@@ -89,10 +89,10 @@
 				</tr>
 				<tr>
 					<td>New Box Size</td>
-					<td><input data-required=no type=number name=box title="Box size, in pixels, to extract particles in if different from size of box used in picking"></td>
+					<td><input data-required=no type=number name=box placeholer="box size for extraction, in pixels" title="Box size, in pixels, to extract particles in if different from size of box used in picking"></td>
 					<td></td>
 					<td>CTF Resolution Limit</td>
-					<td><input data-required=no type=number name=ctfreslim title="Only extract particles from micrographs where ctfres fit statistic is better than this value in Angstroms"></td>
+					<td><input data-required=no type=number name=ctfreslim placeholder="use limit on ctfres fit statistic to select" title="Only extract particles from micrographs where ctfres fit statistic is better than this value in Angstroms"></td>
 				</tr>
 				<tr>
 					<td>Particle Contrast</td>
@@ -127,7 +127,7 @@
 				</tr>
 				<tr>
 					<td>Number Threads</td>
-					<td><input data-required=no type=number name=nthr title="Number of shared-memory CPU threads available {1}"></td>
+					<td><input data-required=no type=number name=nthr placeholder="# shared-memory CPU threads"  title="Number of shared-memory CPU threads available {1}"></td>
 					<td>Submit to Queue</td>
 					<td>
 						<select data-required=no name=queue_submit onchange="showHideQueueOptions()">
@@ -151,33 +151,29 @@
 				<tr data-queue=yes>
 					<td>Maximum Job Time</td>
 					<td>
-						<input data-required=no type=number name=time_per_image title="Maximum time allowed in queue per job, in seconds">
-					</td>
-					<td>Job Identifier</td>
-					<td>
-						<input data-required=no type=text name=qsys_name title="Assign a job name to the submitted jobs">
+						<input data-required=no type=number name=time_per_image placeholder="time allowed in queue per job (s)" title="Maximum time allowed in queue per job, in seconds">
 					</td>
 				</tr>
 				
 				<tr data-queue=yes>
 					<td>Memory Per Job</td>
 					<td>
-						<input data-required=no type=number name=job_memory_per_task title="Memory allocated per job in bytes">
+						<input data-required=no type=number name=job_memory_per_task placeholder="memory allocated per job (bytes)" title="Memory allocated per job in bytes">
 					</td>
 					<td>Queue Partition</td>
 					<td>
-						<input data-required=no type=text name=qsys_partition title="Name of queue to submit distributed jobs to">
+						<input data-required=no type=text name=qsys_partition placeholder="queue name" title="Name of queue to submit distributed jobs to">
 					</td>
 				</tr>
 				
 				<tr data-queue=yes>
 					<td>Number Tasks Per Socket</td>
 					<td>
-						<input data-required=no type=number name=job_ntasks_per_socket title="Number of simultaneous jobs to run on each CPU socket">
+						<input data-required=no type=number name=job_ntasks_per_socket placeholder="# jobs per CPU socket" title="Number of simultaneous jobs to run on each CPU socket">
 					</td>
 					<td>Job Identifier</td>
 					<td>
-						<input data-required=no type=text name=job_name title="Assign a job name to the submitted jobs">
+						<input data-required=no type=text name=job_name placeholder="queue job name" title="Assign a job name to the submitted jobs">
 					</td>
 				</tr>
 				
