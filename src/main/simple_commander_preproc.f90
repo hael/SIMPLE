@@ -205,14 +205,13 @@ contains
             p%pspecsz        = p%pspecsz_ctffind
             p%hp             = p%hp_ctffind
             p%lp             = p%lp_ctffind
-            call cfiter%iterate(p, movie_ind, movie_counter, moviename_forctf, os_uni)
-            ! if( p%stream.eq.'yes' )then
-            !     call cfiter%iterate(p, movie_ind, movie_counter, moviename_forctf,&
-            !     &fname_unidoc_output, os_uni, dir_out=CTF_STREAM_DIR)
-            ! else
-            !     call cfiter%iterate(p, movie_ind, movie_counter, moviename_forctf,&
-            !     &fname_unidoc_output, os_uni)
-            ! endif
+            !call cfiter%iterate(p, movie_ind, movie_counter, moviename_forctf, os_uni)
+            if( p%stream.eq.'yes' )then
+                call cfiter%iterate(p, movie_ind, movie_counter, moviename_forctf, os_uni,&
+                &dir_out=CTF_STREAM_DIR)
+            else
+                call cfiter%iterate(p, movie_ind, movie_counter, moviename_forctf, os_uni)
+            endif
             ! picker
             if( p%l_pick )then
                 movie_counter = movie_counter - 1
