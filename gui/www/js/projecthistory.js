@@ -118,6 +118,8 @@ function viewOutput(element){
 		mainpaneiframe.src = "ctffindview.html?folder=" + element.getAttribute('data-jobfolder');	
 	}else if (element.getAttribute('data-jobtype') == "extract"){
 		mainpaneiframe.src = "particleview.html?folder=" + element.getAttribute('data-jobfolder');
+	}else if (element.getAttribute('data-jobtype') == "prime3D"){
+		mainpaneiframe.src = "3dview.html?folder=" + element.getAttribute('data-jobfolder');
 	}
 }
 

@@ -1374,6 +1374,7 @@ void prime3DPre (std::string simpleinput){
 	if(fileExists(simpleinput) && stktab.is_open()){
 		inputunidoc = new UniDoc();
 		readUniDoc(inputunidoc, simpleinput);
+		writeUniDoc(inputunidoc, "prime3D_in.simple");
 		stackfilepre = "";
 		for(inputit = 0; inputit < inputunidoc->data.size(); inputit++) {
 			getUniDocValue(inputunidoc, inputit, "stackfile", stackfile);
@@ -1393,6 +1394,46 @@ void prime3DPre (std::string simpleinput){
 		stktab.close();
 		writeUniDoc(inputunidoc, "prime3D_in.txt");
 		delete inputunidoc;
+	}
+}
+
+void prime3DPost (std::string directory){
+	
+	std::vector<std::string> 					files;
+	int											filesit;
+	std::string									simplefile;
+	std::string									stackfile;
+	std::string									frameid;
+	UniDoc*										prime3Din;
+	UniDoc*										prime3Diteration;
+	int											particlesit;
+	
+	listFilesInDirectory(files, directory);
+	
+	for(filesit = 0; filesit < files.size(); filesit++){
+		if(fileExists(directory + "/" + "prime3D_in.simple")){
+			prime3Din = new UniDoc();
+			readUniDoc(prime3Din, directory + "/" + "prime3D_in.simple");
+			
+			if(files[filesit].find("prime3Ddoc_") != std::string::npos){
+				simplefile = directory + "/" + files[filesit];
+				simplefile.replace(simplefile.end() - 3, simplefile.end(), "simple");
+				std::cout << simplefile << std::endl;
+				if(!fileExists(simplefile)){
+					prime3Diteration = new UniDoc();
+					readUniDoc(prime3Diteration, directory + "/" + files[filesit]);
+					for(particlesit = 0; particlesit < prime3Diteration->data.size(); particlesit++){
+						getUniDocValue(prime3Din, particlesit, "stackfile", stackfile);
+						getUniDocValue(prime3Din, particlesit, "frameid", frameid);
+						addUniDocKeyVal(prime3Diteration, particlesit, "stackfile", stackfile);
+						addUniDocKeyVal(prime3Diteration, particlesit, "frameid", frameid);
+					}
+					writeUniDoc(prime3Diteration, simplefile);
+					delete prime3Diteration;
+				}
+			}
+			delete prime3Din;
+		}
 	}
 }
 
@@ -1513,6 +1554,8 @@ void externalJob (JSONResponse* response, struct http_message* message) {
 			} else if (jobtype == "extract"){
 				chdir(jobfolder.c_str());
 				extractPost (jobfolder);
+			}else if (jobtype == "prime3D"){
+				prime3DPost(jobfolder);
 			}
 			
 			/*if (std::strstr(jobtype, "preproc") ) {
@@ -1676,6 +1719,8 @@ void simpleLocalSubmit(std::string& command, std::string& directory, int& jobid,
 				prime2DPost(directory);
 			}else if (jobtype == "preproc"){
 				preprocPost(directory);
+			}else if (jobtype == "prime3D"){
+				prime3DPost(directory);
 			}
 		}
 		if(jobtype == "prime2D_stream"){
@@ -1694,6 +1739,8 @@ void simpleLocalSubmit(std::string& command, std::string& directory, int& jobid,
 			ini3DPost(directory);
 		}else if (jobtype == "unblur"){
 			unblurPost(directory);
+		}else if (jobtype == "prime3D"){
+			prime3DPost(directory);
 		}
 		updateJobPID (0, table, jobid);
 		updateJobStatus ("Finished", table, jobid);
@@ -2307,6 +2354,55 @@ void savePrime2DSelectionParticles(JSONResponse* response, struct http_message* 
 		writeUniDoc(unidoc, outputfilename);
 		writeRelionStar(unidoc, outputfilename);
 		delete unidoc;
+	}
+}
+
+void viewPrime3D(JSONResponse* response, struct http_message* message) {
+	
+	std::string 							directory;
+	std::string 							line;
+	std::string 							filename;
+	std::string 							state;
+	std::string 							iteration;
+	std::string 							fsc50;
+	std::string 							fsc143;
+	std::vector<std::string>				files;
+	int										filesit;
+	std::ifstream 							input;
+	std::map<std::string, std::string>		iterationmap;
+	
+	if (getRequestVariable(message, "folder", directory)){
+		listFilesInDirectory(files, directory);
+		for(filesit = 0; filesit < files.size(); filesit++){
+			if(files[filesit].find("RESOLUTION_STATE") != std::string::npos){
+				filename = directory + "/" + files[filesit];
+				std::cout << filename << std::endl;
+				input.open(filename.c_str());
+				while(getline(input, line)){
+					if(line.find("FSC=0.500") != std::string::npos){
+						getElementFromString(line, fsc50, 6);
+					}else if (line.find("FSC=0.143") != std::string::npos){
+						getElementFromString(line, fsc143, 6);
+					}
+				}
+				input.close();
+				state = files[filesit];
+				state.erase(state.begin(), state.begin() + 16);
+				if(files[filesit].find("ITER") != std::string::npos){
+					state.erase(state.end() - 8, state.end());
+					iteration = files[filesit];
+					iteration.erase(iteration.begin(), iteration.begin() + 23);
+				}else{
+					iteration = "0";
+				}
+				iterationmap.clear();
+				iterationmap["iteration"] = std::to_string(std::stoi(iteration.c_str()));
+				iterationmap["state"] = std::to_string(std::stoi(state.c_str()));;
+				iterationmap["fsc50"] = fsc50;
+				iterationmap["fsc143"] = fsc143;
+				response->iterations.push_back(iterationmap);
+			}
+		}
 	}
 }
 
@@ -3614,13 +3710,15 @@ void JSONHandler (struct mg_connection* http_connection, struct http_message* me
 			std::string inverseselection;
 			getRequestVariable(message, "inverseselection", inverseselection);
 			std::cout << inverseselection << std::endl;
-		}else if (function == "ini3dpost") {
+		} else if (function == "ini3dpost") {
 			std::string dir;
 			getRequestVariable(message, "directory", dir);
 			std::cout << dir << std::endl;
 			ini3DPost(dir);
 		} else if (function == "guinierbfactor") {
 			getGuinierBFactor(response, message);
+		} else if (function == "3dview") {
+			viewPrime3D(response, message);
 		}
 	}
 	

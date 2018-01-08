@@ -1,0 +1,33 @@
+<DOCTYPE html>
+<html>
+ <head>
+  <link rel="stylesheet" href="css/2dview.css">
+ </head>
+ <body>
+	 
+  <div class=header>
+	<div class=headerproject id=headerproject>Project Name</div>
+	<img class=simpleicon id=simpleicon src=img/simple_favicon.ico onclick="showHideHeaderMenu(this)">
+	<div class=headermenu id=headermenu>
+     <div onclick='showHideHeaderMenu(this);showHideSortPopup()'>Sort</div>
+     <div onclick='showHideHeaderMenu(this);showHideSelectionPopup()'>Select</div>
+     <div onclick='showHideHeaderMenu(this);showHideSaveSelectionPopup()'>Save Selection</div>
+ <!--    <div onclick='showHideHeaderMenu(this);showHideSaveSelectionParticlesPopup()'>Save Particles From Selection</div>-->
+	</div>
+	3D View
+	<div class=iterationselector>
+	  <img src=img/refresh.png onclick="window.location.reload(1)">
+	</div>
+	<img src=img/close.png class=closeimage onclick='showProjectHistory()'>
+  </div>
+
+  <input type=hidden id=rootdirectory>
+  
+	<div class=mainpane>
+		<div class=snapshots id=snapshots></div>
+	</div>
+	
+   
+  <script src="js/3dview.js"></script>
+ </body>
+</html> 
