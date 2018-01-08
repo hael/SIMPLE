@@ -112,7 +112,13 @@ contains
             if( self%is_past(fname) )then
                 is_new_movie(i) = .false.
             else
-                abs_fname = trim(self%cwd)//'/'//trim(adjustl(fname))
+                if( fname(1:1).eq."/" )then
+                    ! already has absolute path
+                    abs_fname = trim(adjustl(fname))
+                else
+                    ! generate absolute path
+                    abs_fname = trim(self%cwd)//'/'//trim(adjustl(fname))
+                endif
                 call simple_file_stat(abs_fname, io_stat, fileinfo, doprint=.false.)
                 is_closed = .not. is_file_open(abs_fname)
                 if( io_stat.eq.0 )then
