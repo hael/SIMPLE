@@ -1897,6 +1897,8 @@ void simpleJob (JSONResponse* response, struct http_message* message) {
 			
 			if(program == "prime2D" && getRequestVariable(message, "simpleinput", argval)){
 					prime2DPre(argval);
+			} else if (program == "prime2D_stream" && getRequestVariable(message, "ptclsdir", argval)){
+                                        command += " dir_ptcls=" + argval + "/pipeline/particles";
 			} else if (program == "unblur" && getRequestVariable(message, "moviesdirectory", argval)){
 					unblurPre(argval);
 					command += " filetab=movies.txt";

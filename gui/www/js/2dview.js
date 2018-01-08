@@ -420,6 +420,7 @@ function sortFileViewer(){
 	for (var i = 0; i < snapshot.length; i++){
 		snapshots.appendChild(snapshot[i]);
 	}
+	loadImages2();
 }
 
 function saveSelection() {

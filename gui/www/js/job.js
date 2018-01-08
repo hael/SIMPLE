@@ -53,7 +53,12 @@ function showReRun(){
 		jobiframe.src = "jobs/prime2d.html?" + window.location.toString().split('?')[1];
 	}else if (jobtype == "ini3D"){
 		jobiframe.src = "jobs/ini3d.html?" + window.location.toString().split('?')[1];
-	}
+	}else if (jobtype == "prime3D"){
+                jobiframe.src = "jobs/prime3d.html?" + window.location.toString().split('?')[1];
+	else if (jobtype == "prime2D_stream"){
+                jobiframe.src = "jobs/prime2d_stream.html?" + window.location.toString().split('?')[1];
+        }
+
 }
 
 function setProjectTable(){
