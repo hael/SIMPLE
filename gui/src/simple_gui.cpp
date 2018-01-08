@@ -1240,7 +1240,7 @@ void preprocPost (std::string directory){
 				micrographunidoc = new UniDoc();
 				readUniDoc(micrographunidoc, directory + "/pipeline/unidocs/" + std::string(*filesit));
 				ctffindfit = std::string(*filesit);
-				ctffindfit.replace(ctffindfit.end() - 4, ctffindfit.end(), "_forctf_ctffind_diag.mrc");
+				ctffindfit.replace(ctffindfit.end() - 4, ctffindfit.end(), "_forctf_ctffit_diag.mrc");
 				ctffindfit.replace(ctffindfit.begin(), ctffindfit.begin() + 14, "pipeline/ctf/");
 				addUniDocKeyVal(micrographunidoc, 0, "ctffindfit", ctffindfit);
 				addUniDocKeyVal(micrographunidoc, 0, "unidoc", std::string(*filesit));
