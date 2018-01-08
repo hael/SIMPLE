@@ -119,7 +119,11 @@ contains
             if( self%is_past(fname) )then
                 is_new_stk(i) = .false.
             else
-                abs_fname = trim(self%cwd)//'/'//trim(adjustl(fname))
+                if( fname(1:1).eq."/" )then
+                    abs_fname = trim(adjustl(fname))
+                else
+                    abs_fname = trim(self%cwd)//'/'//trim(adjustl(fname))
+                endif
                 call simple_file_stat(abs_fname, io_stat, fileinfo, doprint=.false.)
                 is_closed = .not. is_file_open(abs_fname)
                 if( io_stat.eq.0 )then

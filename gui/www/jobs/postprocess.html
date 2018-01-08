@@ -48,12 +48,12 @@
 				</tr>
 				</tr>
 					<td>Volume</td>
-					<td><input data-required=no type=text name=invol id=invol title=""></td>
+					<td><input data-required=no type=text name=invol id=invol placeholder="3D volume from prime3D for postprocessing" title="3D Volume to be post-processed from prime3D"></td>
 					<td><img src=../img/folder.png onclick="fileSelect(this)" data-target=invol data-filter=".mrc"></td>
 				</tr>
 				<tr>
 					<td>Sampling Distance</td>
-					<td><input data-required=no type=number step=0.011 name=smpd title="Size of detector pixels in Angstroms at magnification of data collection"></td>
+					<td><input data-required=no type=number step=0.011 name=smpd placeholder="pixel size in Angstroms" title="Size of detector pixels in Angstroms at magnification of data collection"></td>
 					<td></td>
 					<td>Mask Radius</td>
 					<td><input data-required=no type=number step=1 name=msk title=""></td>
@@ -71,11 +71,11 @@
 					<td colspan=2><b>Estimate B Factor Using Guinier Plot</b></td>
 				</tr>
 				<tr>
-					<td>Low Pass Limit For Guinier Plot</td>
-					<td><input data-required=no type=number step=0.01 name=lpguinier title=""></td>
+					<td>Low Resolution Limit For Guinier Plot</td>
+					<td><input data-required=no type=number step=1 name=hpguinier placeholder="low resolution limit (Angstoms)" title="Low resolution limit for Guinier Plot calculation (Angstroms)"></td>
 					<td></td>
-					<td>High Pass Limit For Guinier Plot</td>
-					<td><input data-required=no type=number step=1 name=hpguinier title=""></td>
+					<td>High Resolution Limit For Guinier Plot</td>
+					<td><input data-required=no type=number step=0.01 name=lpguinier placeholder="high resolution limit (Angstoms)" title="High resolution limit for Guinier Plot calculation (Angstroms)"></td>
 				</tr>
 				<tr>
 					<td colspan=5 style="text-align: center">
@@ -99,18 +99,18 @@
 					<td colspan=2><b>Optional Parameters</b></td>
 				</tr>
 				<tr>
-					<td>Low Pass Limit</td>
-					<td><input data-required=no type=number step=0.01 name=lp title=""></td>
+					<td>High Resolution Limit</td>
+					<td><input data-required=no type=number step=0.01 name=lp placeholder="high resolution limit (A)" title="high resolution limit (Angstroms)"></td>
 					<td></td>
 					<td>Molecular Weight</td>
-					<td><input data-required=no type=number step=1 name=mw title=""></td>
+					<td><input data-required=no type=number step=1 name=mw placeholder="molecular weight of particle (kDa)" title="molecular weight of particle (kDa)"></td>
 				</tr>
 				<tr>
 					<td>Threshold</td>
-					<td><input data-required=no type=number step=0.01 name=thres title=""></td>
+					<td><input data-required=no type=number step=0.0001 name=thres placeholder="masking threshold from chimera" title="masking threshold determined in chimera"></td>
 					<td></td>
 					<td>B Factor</td>
-					<td><input data-required=no type=number step=1 name=bfac title=""></td>
+					<td><input data-required=no type=number step=1 name=bfac placeholder="B factor to apply" title="B factor to apply from Guinier Plot"></td>
 				</tr>
 				<tr>
 					<td>Envelope Masking</td>
@@ -123,7 +123,7 @@
 						</select>
 					</td>
 					<td></td>
-					<td>Envelope Mask Low Pass Limit</td>
+					<td>Envelope Mask High Resolution Limit</td>
 					<td><input data-required=no type=number step=1 name=amsklp title=""></td>
 				</tr>
 				<tr>
@@ -135,7 +135,7 @@
 				</tr>
 				<tr>
 					<td>Mask File</td>
-					<td><input data-required=no type=number step=1 name=mskfile id=mskfile title=""></td>
+					<td><input data-required=no type=number step=1 name=mskfile id=mskfile placeholder="apply previously calculated mask to volume" title="apply previously calculated mask to volume"></td>
 					<td><img src=../img/folder.png onclick="fileSelect(this)" data-target=mskfile data-filter=".mrc"></td>
 					<td>Inner Mask Radius</td>
 					<td><input data-required=no type=number step=1 name=inner title=""></td>
