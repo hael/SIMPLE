@@ -48,6 +48,7 @@ struct JSONResponse {
 	std::vector< std::map<std::string, std::string> >			rerunjob;
 	std::string													JSONstring;
 	std::string													particlecount;
+	std::string													bfactor;
 	std::string													jobfolder;
 };
 
@@ -1178,13 +1179,31 @@ void pickPre (std::string simpleinput, std::string micrographsdirectory, std::st
 void postprocessPre (std::string volume, std::string& command) {
 	
 	char*			basec;
-	std::string		volumelink;
+	std::string		volumename;
+	std::string		volumebase;
+	std::string		fscfile;
+	std::string		filtvol;
 	
 	if(fileExists(volume)){
 		basec = strdup(volume.c_str());
-		volumelink =  std::string(basename(basec));
-		symlink(volume.c_str(), volumelink.c_str());
-		command += " vol1=" + volumelink;
+		volumename = std::string(basename(basec));
+		volumebase = std::string(dirname(basec));
+		symlink(volume.c_str(), volumename.c_str());
+		command += " vol1=" + volumename;
+		fscfile = volumename;
+		fscfile.replace(fscfile.end() - 12, fscfile.end(), ".bin");
+		fscfile.replace(fscfile.begin(), fscfile.begin() + 7, "fsc_");
+		filtvol = volumename;
+		filtvol.replace(filtvol.end() - 12, filtvol.end(), ".mrc");
+		filtvol.replace(filtvol.begin(), filtvol.begin() + 7, "aniso_optlp_");
+		std::cout << fscfile << std::endl;
+		std::cout << filtvol << std::endl;
+		if(fileExists(volumebase + "/" + fscfile)) {
+			command += " fsc=" + volumebase + "/" + fscfile;
+		}
+		if(fileExists(volumebase + "/" + filtvol)) {
+			command += " vol_filt=" + volumebase + "/" + filtvol;
+		}
 	}
 }
 
@@ -2648,6 +2667,34 @@ void saveUnblurSelection(JSONResponse* response, struct http_message* message) {
 	}
 }
 
+void getGuinierBFactor(JSONResponse* response, struct http_message* message) {
+	
+	FILE*								stream;
+	std::string							command;
+	std::string							hp;
+	std::string							lp;
+	std::string							vol1;
+	std::string							smpd;
+	std::string							line;
+	std::string							bfactor;
+	char 								buffer[1024];
+	
+	if(getRequestVariable(message, "hp", hp) && getRequestVariable(message, "lp", lp) && getRequestVariable(message, "vol1", vol1) && getRequestVariable(message, "smpd", smpd)){
+		command = "simple_exec prg=volops guinier=yes hp=" + hp + " lp=" + lp + " vol1=" + vol1 + " smpd=" + smpd;
+		stream = popen(command.c_str(), "r");
+		while (fgets(buffer, 512, stream) != NULL){
+			line = buffer;
+			if(line.find("B-FACTOR DETERMINED TO:") != std::string::npos){
+				getElementFromString(line, bfactor, 4);
+				bfactor.erase (bfactor.end()-1, bfactor.end());
+				std::cout << bfactor << std::endl;
+				response->bfactor = bfactor;
+			}
+		}
+		pclose(stream);
+	}
+}
+
 void getPixelsFromMRC(JPEGResponse* response, std::string filename, struct http_message* message){
 	
 	std::string			contrast;
@@ -3488,6 +3535,9 @@ void encodeJSON(JSONResponse* response){
 		response->JSONstring += "\"jobfolder\" : \"" + response->jobfolder + "\",";
 	}
 	
+	if (response->bfactor.size() > 0) {
+		response->JSONstring += "\"bfactor\" : \"" + response->bfactor + "\",";
+	}
 	response->JSONstring.pop_back();
 	response->JSONstring += "}";
 }
@@ -3569,6 +3619,8 @@ void JSONHandler (struct mg_connection* http_connection, struct http_message* me
 			getRequestVariable(message, "directory", dir);
 			std::cout << dir << std::endl;
 			ini3DPost(dir);
+		} else if (function == "guinierbfactor") {
+			getGuinierBFactor(response, message);
 		}
 	}
 	

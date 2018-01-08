@@ -68,6 +68,34 @@
 			
 			<table id=page3 style="display:none">
 				<tr>
+					<td colspan=2><b>Estimate B Factor Using Guinier Plot</b></td>
+				</tr>
+				<tr>
+					<td>Low Pass Limit For Guinier Plot</td>
+					<td><input data-required=no type=number step=0.01 name=lpguinier title=""></td>
+					<td></td>
+					<td>High Pass Limit For Guinier Plot</td>
+					<td><input data-required=no type=number step=1 name=hpguinier title=""></td>
+				</tr>
+				<tr>
+					<td colspan=5 style="text-align: center">
+						<button type="button" onclick="fitGuinier()" id=estimateguinier>Estimate</button>
+					</td>
+				</tr>
+				<tr>
+					<td>Estimated B Factor : </td>
+					<td id=bfactorguinier></td>
+				</tr>
+				<tr>
+					<td colspan=5 style="text-align: center">
+						<button type="button" onclick="document.getElementById('page3').style.display = 'none'; document.getElementById('page2').style.display = 'block'">Back</button>
+						<button type="button" onclick="document.getElementById('page3').style.display = 'none'; document.getElementById('page4').style.display = 'block'">Next</button>
+					</td>
+				</tr>
+			</table>
+			
+			<table id=page4 style="display:none">
+				<tr>
 					<td colspan=2><b>Optional Parameters</b></td>
 				</tr>
 				<tr>
@@ -106,26 +134,21 @@
 					<td><input data-required=no type=number step=1 name=edge title=""></td>
 				</tr>
 				<tr>
-					<td>FSC File</td>
-					<td><input data-required=no type=number step=1 name=binwidth id=binwidth title=""></td>
-					<td><img src=../img/folder.png onclick="fileSelect(this)" data-target=binwidth data-filter=".bin"></td>
-					<td>Filter Volume</td>
-					<td><input data-required=no type=number step=1 name=vol_filt title=""></td>
-					<td><img src=../img/folder.png onclick="fileSelect(this)" data-target=vol_filt data-filter=".mrc"></td
-				</tr>
-				<tr>
+					<td>Mask File</td>
+					<td><input data-required=no type=number step=1 name=mskfile id=mskfile title=""></td>
+					<td><img src=../img/folder.png onclick="fileSelect(this)" data-target=mskfile data-filter=".mrc"></td>
 					<td>Inner Mask Radius</td>
 					<td><input data-required=no type=number step=1 name=inner title=""></td>
 				</tr>
 				<tr>
 					<td colspan=5 style="text-align: center">
-						<button type="button" onclick="document.getElementById('page3').style.display = 'none'; document.getElementById('page2').style.display = 'block'">Back</button>
-						<button type="button" onclick="document.getElementById('page3').style.display = 'none'; document.getElementById('page4').style.display = 'block'">Next</button>
+						<button type="button" onclick="document.getElementById('page4').style.display = 'none'; document.getElementById('page3').style.display = 'block'">Back</button>
+						<button type="button" onclick="document.getElementById('page4').style.display = 'none'; document.getElementById('page5').style.display = 'block'">Next</button>
 					</td>
 				</tr>
 			</table>
 			
-			<table id=page4 style="display:none">
+			<table id=page5 style="display:none">
 				<tr>
 					<td colspan=2><b>Run Parameters</b></td>
 					<input type=hidden name=executable value=simple_exec>
@@ -136,8 +159,8 @@
 				</tr>
 				<tr>
 					<td colspan=4 style="text-align: center">
-						<button type="button" onclick="document.getElementById('page4').style.display = 'none'; document.getElementById('page3').style.display = 'block'">Back</button>
-						<button type="button" onclick="document.getElementById('page4').style.display = 'none'; runJob(this)">Run</button>
+						<button type="button" onclick="document.getElementById('page5').style.display = 'none'; document.getElementById('page4').style.display = 'block'">Back</button>
+						<button type="button" onclick="document.getElementById('page5').style.display = 'none'; runJob(this)">Run</button>
 					</td>
 				</tr>
 			</table>

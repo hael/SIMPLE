@@ -285,3 +285,26 @@ function runJob(element){
 	getAjax(encodeURI(url), showHistory); 
 
 }
+
+function fitGuinier() {
+	var vol1 = document.getElementsByName('invol')[0].value;
+	var hp = document.getElementsByName('hpguinier')[0].value;
+	var lp = document.getElementsByName('lpguinier')[0].value;
+	var smpd = document.getElementsByName('smpd')[0].value;
+	var url = '../JSONhandler?function=guinierbfactor&vol1=' + vol1 + "&hp=" + hp + "&lp=" + lp + "&smpd=" + smpd;
+	var estimateguinier =  document.getElementById('estimateguinier');
+	estimateguinier.disabled = true;
+	getAjax(encodeURI(url), showGuinier);
+}
+
+function showGuinier(data) {
+	var JSONdata = JSON.parse(data);
+	var bfactor = JSONdata.bfactor;
+	var bfactorguinier =  document.getElementById('bfactorguinier');
+	var estimateguinier =  document.getElementById('estimateguinier');
+	estimateguinier.disabled = false;
+	bfactorguinier.innerHTML = bfactor;
+	document.getElementsByName('bfac')[0].value = bfactor;
+}
+
+
