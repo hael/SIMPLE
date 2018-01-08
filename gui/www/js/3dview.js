@@ -43,4 +43,9 @@ function view3DInit (data) {
 	}
 }
 
+function showProjectHistory(){
+	var mainpaneiframe = parent.document.getElementById('mainpaneiframe');
+	mainpaneiframe.src = "projecthistory.html"
+}
+
 get3DViewData();

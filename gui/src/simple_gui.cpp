@@ -1715,6 +1715,7 @@ void simpleLocalSubmit(std::string& command, std::string& directory, int& jobid,
 			usleep(20000000);
 			if(jobtype == "prime2D_stream"){
 		//		streamPost(directory);
+				prime2DPost(directory);
 			} else if (jobtype == "prime2D"){
 				prime2DPost(directory);
 			}else if (jobtype == "preproc"){
@@ -1725,6 +1726,7 @@ void simpleLocalSubmit(std::string& command, std::string& directory, int& jobid,
 		}
 		if(jobtype == "prime2D_stream"){
 		//	streamPost(directory);
+			prime2DPost(directory);
 		}else if (jobtype == "prime2D"){
 			prime2DPost(directory);
 		}else if (jobtype == "preproc"){
