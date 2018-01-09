@@ -176,7 +176,8 @@ contains
         ! schedule & clean
         call qenv%gen_scripts_and_schedule_jobs(p_master, job_descr, algnfbody=UNIDOCFBODY, ext_meta='.txt')
         ! merge docs
-        call xmerge_algndocs%execute( cline_merge_algndocs )
+        !!!!!  BUGS OUT OXFORD WORKSHOP
+        ! call xmerge_algndocs%execute( cline_merge_algndocs )
         ! clean
         call qsys_cleanup(p_master)
         ! end gracefully

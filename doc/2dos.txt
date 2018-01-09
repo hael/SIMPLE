@@ -1,0 +1,19 @@
+* support for doc input to re-extract with shifts from doc
+* pipelined pick/extract
+* frac parameter for 2D (& consider outlier detection similar to picker)
+* dyncls should state=0 the ones that fall below threshold
+* extract should set the header right (smpd)
+* scaling should set the header right (smpd)
+
+Binary file format
+
+StkInfo
+ClsInfo
+PtclInfo
+FSCInfo
+VolInfo
+LastJob (append to structure to get history of workflow???)
+
+Json as a User Interface Markup Language
+
+Joe made a mockup
