@@ -181,7 +181,7 @@ contains
         real                 :: snr_pink, snr_detector, ave, sdev, var, med, fracarea, x, y, sherr, dfx, dfy, deferr, angast
         integer              :: i, ptclarea, mgrapharea, fixed_frame
         integer, allocatable :: ptcl_positions(:,:)
-        real, allocatable    :: shifts(:,:)
+        real,    allocatable :: shifts(:,:)
         logical              :: here
         debug=.false.     ! declared in local flags
         p = params(cline) ! parameters generated
@@ -211,6 +211,10 @@ contains
             call b%img%insert(ptcl_positions(i,:), base_image)
         end do
         if( p%vis .eq. 'yes' ) call base_image%vis
+
+        ! call base_image%vis
+        ! stop
+
         DebugPrint  'inserted projections'
         ! calculate snr:s
         snr_pink     = p%snr/0.2
@@ -263,15 +267,12 @@ contains
         ! make and open a stack for the movie frames
         DebugPrint  'made stack for output movie frames'
         write(*,'(a)') '>>> GENERATING MOVIE FRAMES'
+        call base_image%fwd_ft
         do i=1,p%nframes
             call progress(i,p%nframes)
             ! shift base image
-            call base_image%fwd_ft
-            if( i > 1 ) then
-                call base_image%shift(shifts(i,1),shifts(i,2),imgout=shifted_base_image)
-            else
-                shifted_base_image = base_image
-            endif
+            shifted_base_image = base_image
+            call shifted_base_image%shift([shifts(i,1),shifts(i,2),0.])
             call shifted_base_image%bwd_ft
             ! add pink noise
             call shifted_base_image%add_gauran(snr_pink)

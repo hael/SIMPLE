@@ -54,7 +54,11 @@ contains
         character(len=1024)   :: line
         p      = params(cline) ! parameters generated
         parts  = split_nobjs_even(p%nptcls, p%ndocs)
-        numlen = len(int2str(p%ndocs))
+        if( cline%defined('numlen') )then
+            numlen = p%numlen
+        else
+            numlen = len(int2str(p%ndocs))
+        endif
         if( .not. cline%defined('ext_meta') )&
         &stop 'need ext_meta (meta data file extension) to be part of command line; commander_distr :: exec_merge_algndocs'
         select case(p%ext_meta)

@@ -86,7 +86,7 @@ contains
     end function constructor
 
     !>  \brief  is a constructor
-    subroutine new( self, exec_binary, qsys_obj, parts, fromto_part, ncomputing_units, stream )
+    subroutine new( self, exec_binary, qsys_obj, parts, fromto_part, ncomputing_units, stream, numlen )
         class(qsys_ctrl),         intent(inout) :: self             !< the instance
         character(len=*),         intent(in)    :: exec_binary      !< the binary that we want to execute in parallel
         class(qsys_base), target, intent(in)    :: qsys_obj         !< the object that defines the qeueuing system
@@ -94,6 +94,7 @@ contains
         integer,                  intent(in)    :: fromto_part(2)   !< defines the range of partitions controlled by this object
         integer,                  intent(in)    :: ncomputing_units !< number of computing units (<= the number of parts controlled)
         logical,                  intent(in)    :: stream           !< stream flag
+        integer, optional,        intent(in)    :: numlen           !< length of number string
         integer :: ipart
         call self%kill
         self%stream                 =  stream
@@ -106,8 +107,12 @@ contains
         self%ncomputing_units_avail =  ncomputing_units
         if( self%stream )then
             self%numlen = 5
-        else
-            self%numlen = len(int2str(self%nparts_tot))
+        else    
+            if( present(numlen) )then
+                self%numlen = numlen
+            else
+                self%numlen = len(int2str(self%nparts_tot))
+            endif
         endif
         ! allocate
         allocate(   self%jobs_done(fromto_part(1):fromto_part(2)),&
@@ -417,6 +422,9 @@ contains
         class(qsys_ctrl),  intent(inout) :: self
         integer :: ipart, njobs_in_queue
         do ipart=self%fromto_part(1),self%fromto_part(2)
+
+            print *, 'looking for: ', self%jobs_done_fnames(ipart)
+
             if( .not. self%jobs_done(ipart) )then
                 self%jobs_done(ipart) = file_exists(self%jobs_done_fnames(ipart))
             endif
@@ -426,6 +434,7 @@ contains
                 if( self%jobs_done(ipart) )self%jobs_submitted(ipart) = .true.
             endif
         end do
+        print *, '************'
         if( self%stream )then
             self%ncomputing_units_avail = min(count(self%jobs_done), self%ncomputing_units)
         else

@@ -2487,9 +2487,11 @@ select case(prg)
         keys_required(3) = 'ndocs'
         keys_required(4) = 'outfile'
         keys_required(5) = 'ext_meta'
+         ! set optional keys
+        keys_optional(1) = 'numlen'
         ! parse command line
         if( describe ) call print_doc_merge_algndocs
-        call cline%parse(keys_required(:5))
+        call cline%parse(keys_required(:5), keys_optional(:1))
         ! execute
         call xmerge_algndocs%execute(cline)
     case( 'merge_nnmat' )

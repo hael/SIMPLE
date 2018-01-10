@@ -31,10 +31,11 @@ end type qsys_env
 
 contains
 
-    subroutine new( self, p_master, stream )
+    subroutine new( self, p_master, stream, numlen )
         class(qsys_env)               :: self
         class(params)                 :: p_master
         logical, optional             :: stream
+        integer, optional             :: numlen
         character(len=:), allocatable :: qsnam, tpi, hrs_str, mins_str, secs_str
         integer                       :: partsz, hrs, mins, secs, nparts
         real                          :: rtpi, tot_time_sec
@@ -88,8 +89,13 @@ contains
         call self%qsys_fac%new(qsnam, self%myqsys)
         ! create the user specific qsys and qsys controller (script generator)
         self%simple_exec_bin = trim(self%qdescr%get('simple_path'))//'/bin/simple_exec'
-        call self%qscripts%new(self%simple_exec_bin, self%myqsys, self%parts,&
-        &[1, nparts], p_master%ncunits, sstream )
+        if( present(numlen) )then
+            call self%qscripts%new(self%simple_exec_bin, self%myqsys, self%parts,&
+            &[1, nparts], p_master%ncunits, sstream, numlen)
+        else
+            call self%qscripts%new(self%simple_exec_bin, self%myqsys, self%parts,&
+            &[1, nparts], p_master%ncunits, sstream)
+        endif
         call self%qdescr%set('job_cpus_per_task', int2str(p_master%nthr))   ! overrides env file
         call self%qdescr%set('job_nparts',        int2str(p_master%nparts)) ! overrides env file
         deallocate(qsnam)

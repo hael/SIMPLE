@@ -121,6 +121,9 @@ contains
         p_master = params(cline)
         p_master%nptcls = nlines(p_master%filetab)
         if( p_master%nparts > p_master%nptcls ) stop 'nr of partitions (nparts) mjust be < number of entries in filetable'
+        ! deal with numlen so that length matches JOB_FINISHED indicator files
+        p_master%numlen = len(int2str(p_master%nptcls))
+        call cline%set('numlen', real(p_master%numlen))
         ! prepare merge_algndocs command line
         cline_merge_algndocs = cline
         call cline_merge_algndocs%set( 'nthr',     1.                    )
@@ -129,8 +132,9 @@ contains
         call cline_merge_algndocs%set( 'ndocs',    real(p_master%nparts) )
         call cline_merge_algndocs%set( 'outfile',  'simple_unidoc.txt'   )
         call cline_merge_algndocs%set( 'ext_meta', '.txt'                )
+        call cline_merge_algndocs%set( 'numlen',   real(p_master%numlen) )
         ! setup the environment for distributed execution
-        call qenv%new(p_master)
+        call qenv%new(p_master, numlen=p_master%numlen)
         ! prepare job description
         call cline%gen_job_descr(job_descr)
         ! schedule & clean
@@ -158,9 +162,12 @@ contains
         write(*,'(a)') '>>> COMMAND LINE EXECUTED'
         write(*,*) trim(cmdline_glob)
         ! make master parameters
-        p_master = params(cline)
+        p_master        = params(cline)
         p_master%nptcls = nlines(p_master%filetab)
         if( p_master%nparts > p_master%nptcls ) stop 'nr of partitions (nparts) mjust be < number of entries in filetable'
+        ! deal with numlen so that length matches JOB_FINISHED indicator files
+        p_master%numlen = len(int2str(p_master%nptcls))
+        call cline%set('numlen', real(p_master%numlen))
         ! prepare merge_algndocs command line
         cline_merge_algndocs = cline
         call cline_merge_algndocs%set( 'nthr',    1.                    )
@@ -169,15 +176,15 @@ contains
         call cline_merge_algndocs%set( 'ndocs',   real(p_master%nparts) )
         call cline_merge_algndocs%set( 'outfile', 'simple_unidoc.txt'   )
         call cline_merge_algndocs%set( 'ext_meta', '.txt'               )
+        call cline_merge_algndocs%set( 'numlen',   real(p_master%numlen) )
         ! setup the environment for distributed execution
-        call qenv%new(p_master)
+        call qenv%new(p_master, numlen=p_master%numlen)
         ! prepare job description
         call cline%gen_job_descr(job_descr)
         ! schedule & clean
         call qenv%gen_scripts_and_schedule_jobs(p_master, job_descr, algnfbody=UNIDOCFBODY, ext_meta='.txt')
         ! merge docs
-        !!!!!  BUGS OUT OXFORD WORKSHOP
-        ! call xmerge_algndocs%execute( cline_merge_algndocs )
+        call xmerge_algndocs%execute( cline_merge_algndocs )
         ! clean
         call qsys_cleanup(p_master)
         ! end gracefully

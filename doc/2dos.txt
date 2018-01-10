@@ -11,7 +11,7 @@ StkInfo
 ClsInfo
 PtclInfo
 FSCInfo
-VolInfo
+VolInfo (flip indicator)
 LastJob (append to structure to get history of workflow???)
 
 Json as a User Interface Markup Language

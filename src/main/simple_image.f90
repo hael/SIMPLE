@@ -5885,20 +5885,77 @@ contains
     !! \param lp_dyn low-pass cut-off freq
     !! \param imgout processed image
     !!
-    subroutine shift( self, shvec, lp_dyn, imgout )
-        class(image),           intent(inout) :: self
-        real,                   intent(in)    :: shvec(3)
-        real,         optional, intent(in)    :: lp_dyn
-        class(image), optional, intent(inout) :: imgout
+    ! subroutine shift( self, shvec, lp_dyn, imgout )
+    !     class(image),           intent(inout) :: self
+    !     real,                   intent(in)    :: shvec(3)
+    !     real,         optional, intent(in)    :: lp_dyn
+    !     class(image), optional, intent(inout) :: imgout
+    !     integer :: h, k, l, lims(3,2), phys(3)
+    !     real    :: shvec_here(3)
+    !     logical :: didft, imgout_present, lp_dyn_present
+    !     imgout_present = present(imgout)
+    !     lp_dyn_present = present(lp_dyn)
+    !     if( all(abs(shvec) < TINY) )then
+    !         if( imgout_present ) call imgout%copy(self)
+    !         return
+    !     endif
+    !     shvec_here = shvec
+    !     if( self%ldim(3) == 1 ) shvec_here(3) = 0.0
+    !     didft = .false.
+    !     if( .not. self%ft )then
+    !         call self%fwd_ft
+    !         didft = .true.
+    !     endif
+    !     if( lp_dyn_present )then
+    !         lims = self%fit%loop_lims(1,lp_dyn)
+    !     else
+    !         lims = self%fit%loop_lims(2)
+    !     endif
+    !     if( imgout_present )then
+    !         imgout%ft = .true.
+    !         !$omp parallel do collapse(3) default(shared) private(phys,h,k,l)&
+    !         !$omp schedule(static) proc_bind(close)
+    !         do h=lims(1,1),lims(1,2)
+    !             do k=lims(2,1),lims(2,2)
+    !                 do l=lims(3,1),lims(3,2)
+    !                     phys = self%fit%comp_addr_phys([h,k,l])
+    !                     imgout%cmat(phys(1),phys(2),phys(3)) = self%cmat(phys(1),phys(2),phys(3))*&
+    !                     self%oshift([h,k,l], shvec_here)
+    !                 end do
+    !             end do
+    !         end do
+    !         !$omp end parallel do
+    !     else
+    !         !$omp parallel do collapse(3) default(shared) private(phys,h,k,l)&
+    !         !$omp schedule(static) proc_bind(close)
+    !         do h=lims(1,1),lims(1,2)
+    !             do k=lims(2,1),lims(2,2)
+    !                 do l=lims(3,1),lims(3,2)
+    !                     phys = self%fit%comp_addr_phys([h,k,l])
+    !                     self%cmat(phys(1),phys(2),phys(3)) = self%cmat(phys(1),phys(2),phys(3))*&
+    !                     self%oshift([h,k,l], shvec_here)
+    !                 end do
+    !             end do
+    !         end do
+    !         !$omp end parallel do
+    !     endif
+    !     if( didft )then
+    !         call self%bwd_ft
+    !         if( imgout_present ) call imgout%bwd_ft
+    !     endif
+    ! end subroutine shift
+
+    !> \brief shift  is for origin shifting an image
+    !! \param x position in axis 0
+    !! \param y position in axis 1
+    !! \param z position in axis 2
+    !!
+    subroutine shift( self, shvec )
+        class(image), intent(inout) :: self
+        real,         intent(in)    :: shvec(3)
         integer :: h, k, l, lims(3,2), phys(3)
         real    :: shvec_here(3)
-        logical :: didft, imgout_present, lp_dyn_present
-        imgout_present = present(imgout)
-        lp_dyn_present = present(lp_dyn)
-        if( all(abs(shvec) < TINY) )then
-            if( imgout_present ) call imgout%copy(self)
-            return
-        endif
+        logical :: didft
         shvec_here = shvec
         if( self%ldim(3) == 1 ) shvec_here(3) = 0.0
         didft = .false.
@@ -5906,43 +5963,20 @@ contains
             call self%fwd_ft
             didft = .true.
         endif
-        if( lp_dyn_present )then
-            lims = self%fit%loop_lims(1,lp_dyn)
-        else
-            lims = self%fit%loop_lims(2)
-        endif
-        if( imgout_present )then
-            imgout%ft = .true.
-            !$omp parallel do collapse(3) default(shared) private(phys,h,k,l)&
-            !$omp schedule(static) proc_bind(close)
-            do h=lims(1,1),lims(1,2)
-                do k=lims(2,1),lims(2,2)
-                    do l=lims(3,1),lims(3,2)
-                        phys = self%fit%comp_addr_phys([h,k,l])
-                        imgout%cmat(phys(1),phys(2),phys(3)) = self%cmat(phys(1),phys(2),phys(3))*&
-                        self%oshift([h,k,l], shvec_here)
-                    end do
+        lims = self%fit%loop_lims(2)
+        !$omp parallel do collapse(3) default(shared) private(phys,h,k,l)&
+        !$omp schedule(static) proc_bind(close)
+        do h=lims(1,1),lims(1,2)
+            do k=lims(2,1),lims(2,2)
+                do l=lims(3,1),lims(3,2)
+                    phys = self%fit%comp_addr_phys([h,k,l])
+                    self%cmat(phys(1),phys(2),phys(3)) = self%cmat(phys(1),phys(2),phys(3))*&
+                    self%oshift([h,k,l], shvec_here)
                 end do
             end do
-            !$omp end parallel do
-        else
-            !$omp parallel do collapse(3) default(shared) private(phys,h,k,l)&
-            !$omp schedule(static) proc_bind(close)
-            do h=lims(1,1),lims(1,2)
-                do k=lims(2,1),lims(2,2)
-                    do l=lims(3,1),lims(3,2)
-                        phys = self%fit%comp_addr_phys([h,k,l])
-                        self%cmat(phys(1),phys(2),phys(3)) = self%cmat(phys(1),phys(2),phys(3))*&
-                        self%oshift([h,k,l], shvec_here)
-                    end do
-                end do
-            end do
-            !$omp end parallel do
-        endif
-        if( didft )then
-            call self%bwd_ft
-            if( imgout_present ) call imgout%bwd_ft
-        endif
+        end do
+        !$omp end parallel do
+        if( didft ) call self%bwd_ft
     end subroutine shift
 
     subroutine shift2Dserial( self, shvec  )
