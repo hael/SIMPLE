@@ -1832,7 +1832,7 @@ select case(prg)
         !==Program norm
         !
         ! <norm/begin>is a program for normalization of MRC or SPIDER stacks and volumes. If you want to
-        ! normalise your images inputted with stk, set norm=yes. If you want to perform noise normalisation 
+        ! normalise your images inputted with stk, set norm=yes. If you want to perform noise normalisation
         ! of the images set noise_norm=yes given a mask radius msk (pixels). If you want to normalise your
         ! images or volume (vol1) with respect to their power spectrum set shell_norm=yes
         ! <norm/end>

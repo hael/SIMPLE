@@ -105,6 +105,7 @@ contains
         if( p%weights2D .eq. 'yes' .and. frac_srch_space >= FRAC_INTERPOL )then
             if( p%nptcls <= SPECWMINPOP )then
                 call b%a%set_all2single('w', 1.0)
+                ! call b%a%calc_hard_weights(p%frac)
             else
                 if( p%weights2D .eq. 'yes' .and. which_iter > 3 )then
                     call b%a%get_pops(prev_pops, 'class', consider_w=.true., maxn=p%ncls)
@@ -114,8 +115,9 @@ contains
                 ! frac is one by default in prime2D (no option to set frac)
                 ! so spectral weighting is done over all images
                 call b%a%calc_spectral_weights(1.0)
+                ! call b%a%calc_spectral_weights(p%frac)
                 if( any(prev_pops == 0) )then
-                    ! now ensuring the spectral re-ranking does not re-populates 
+                    ! now ensuring the spectral re-ranking does not re-populates
                     ! zero-populated classes, for congruence with empty cavgs
                     do icls = 1, p%ncls
                         if( prev_pops(icls) > 0 )cycle
@@ -132,6 +134,7 @@ contains
         else
             ! defaults to unitary weights
             call b%a%set_all2single('w', 1.0)
+            ! call b%a%set_all2single('w', p%frac)
         endif
 
         ! READ FOURIER RING CORRELATIONS
@@ -327,7 +330,7 @@ contains
         call pftcc%new(p%ncls, p, eoarr=nint(b%a%get_all('eo', [p%fromp,p%top])))
         ! prepare the polarizer images
         call b%img_match%init_polarizer(pftcc, p%alpha)
-        ! this is tro avoid excessive allocation, allocate what is the upper bound on the 
+        ! this is tro avoid excessive allocation, allocate what is the upper bound on the
         ! # matchimgs needed for both parallel loops
         batchsz_max = max(MAXIMGBATCHSZ,p%ncls)
         allocate(match_imgs(batchsz_max))
@@ -357,7 +360,7 @@ contains
                 call prep2Dref(b, p, cavgs_merged(1,icls), match_imgs(icls), icls, center=do_center, xyz_out=xyz)
                 if( pop_even >= MINCLSPOPLIM .and. pop_odd >= MINCLSPOPLIM )then
                     ! here we are passing in the shifts and do NOT map them back to classes
-                    call prep2Dref(b, p, cavgs_even(1,icls), match_imgs(icls), icls, center=do_center, xyz_in=xyz) 
+                    call prep2Dref(b, p, cavgs_even(1,icls), match_imgs(icls), icls, center=do_center, xyz_in=xyz)
                     call match_imgs(icls)%polarize(pftcc, icls, isptcl=.false., iseven=.true.)  ! 2 polar coords
                     ! here we are passing in the shifts and do NOT map them back to classes
                     call prep2Dref(b, p, cavgs_odd(1,icls), match_imgs(icls), icls, center=do_center, xyz_in=xyz)
@@ -366,11 +369,11 @@ contains
                     ! put the merged class average in both even and odd positions
                     call match_imgs(icls)%polarize(pftcc, icls, isptcl=.false., iseven=.true. ) ! 2 polar coords
                     call pftcc%cp_even2odd_ref(icls)
-                endif   
+                endif
             endif
         end do
         !$omp end parallel do
-        
+
         ! PREPARATION OF PARTICLES IN PFTCC
         if( .not. p%l_distr_exec ) write(*,'(A)') '>>> BUILDING PARTICLES'
         call prepimgbatch(b, p, batchsz_max)
@@ -386,7 +389,7 @@ contains
                 ! transfer to polar coordinates
                 call match_imgs(imatch)%polarize(pftcc, iptcl, .true., .true.)
             end do
-            !$omp end parallel do 
+            !$omp end parallel do
         end do
         ! DESTRUCT
         do imatch=1,batchsz_max

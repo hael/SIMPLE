@@ -107,7 +107,7 @@ contains
         self%ncomputing_units_avail =  ncomputing_units
         if( self%stream )then
             self%numlen = 5
-        else    
+        else
             if( present(numlen) )then
                 self%numlen = numlen
             else
@@ -422,9 +422,6 @@ contains
         class(qsys_ctrl),  intent(inout) :: self
         integer :: ipart, njobs_in_queue
         do ipart=self%fromto_part(1),self%fromto_part(2)
-
-            print *, 'looking for: ', self%jobs_done_fnames(ipart)
-
             if( .not. self%jobs_done(ipart) )then
                 self%jobs_done(ipart) = file_exists(self%jobs_done_fnames(ipart))
             endif
@@ -434,7 +431,6 @@ contains
                 if( self%jobs_done(ipart) )self%jobs_submitted(ipart) = .true.
             endif
         end do
-        print *, '************'
         if( self%stream )then
             self%ncomputing_units_avail = min(count(self%jobs_done), self%ncomputing_units)
         else
