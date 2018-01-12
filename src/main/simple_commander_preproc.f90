@@ -1,6 +1,6 @@
 ! concrete commander: pre-processing routines
 module simple_commander_preproc
-#include "simple_lib.f08"   
+#include "simple_lib.f08"
 !! import classes
 use simple_cmdline,        only: cmdline
 use simple_params,         only: params
@@ -852,7 +852,7 @@ contains
         call simple_end('**** SIMPLE_PICK NORMAL STOP ****')
     end subroutine exec_pick
 
-    !> for extracting particle images from integrated DDD movies 
+    !> for extracting particle images from integrated DDD movies
     subroutine exec_extract( self, cline )
         use simple_defs_fname
         class(extract_commander), intent(inout) :: self
@@ -1085,7 +1085,7 @@ contains
                         particle_position = boxdata(j,1:2)
                         call micrograph%window(nint(particle_position), p%box, b%img)
                         if( p%pcontrast .eq. 'black' ) call b%img%neg
-                        call b%img%norm
+                        call b%img%edges_norm()
                         call b%img%write(trim(adjustl(stack_frames)), cnt)
                     endif
                 end do

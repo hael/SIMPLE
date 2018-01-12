@@ -1281,9 +1281,12 @@ select case(prg)
        keys_optional(15) = 'mskfile'
        keys_optional(16) = 'taper_edges'
        keys_optional(17) = 'msk'
+       keys_optional(18) = 'pdbfile'
+       keys_optional(19) = 'oritab'
+       keys_optional(20) = 'outfile'
        ! parse command line
        if( describe ) call print_doc_mask
-       call cline%parse( keys_required(:1), keys_optional(:17))
+       call cline%parse( keys_required(:1), keys_optional(:20))
        ! execute
        call xmask%execute(cline)
     case( 'automask2D' )

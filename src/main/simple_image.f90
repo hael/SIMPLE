@@ -288,6 +288,7 @@ type :: image
     procedure          :: norm_ext
     procedure          :: radius_norm
     procedure          :: noise_norm
+    procedure          :: edges_norm
     procedure          :: norm_bin
     procedure          :: roavg
     procedure          :: rtsq
@@ -3256,7 +3257,6 @@ contains
         stop 'input to remove edge not binary; simple_image :: remove_edge'
         where( self%rmat < 0.999 ) self%rmat = 0.
     end subroutine remove_edge
-
 
     !>  \brief  increments the logi pixel value with incr
     !! \param logi coordinates
@@ -6424,6 +6424,20 @@ contains
         endif
     end subroutine noise_norm
 
+    !>  \brief  is for substracting a 2D image edges average
+    subroutine edges_norm( self )
+        class(image), intent(inout) :: self
+        real :: edges_sum, edges_ave
+        if( self%ft ) stop 'not for Fted images; simple_image :: edge_norm'
+        if( .not.self%is_2d() ) stop 'only for 2d images; simple_image :: edge_norm'
+        edges_sum = sum(self%rmat(1:self%ldim(1),1,1))
+        edges_sum = edges_sum + sum(self%rmat(1:self%ldim(1),self%ldim(2),1))
+        edges_sum = edges_sum + sum(self%rmat(1,1:self%ldim(2),1))
+        edges_sum = edges_sum + sum(self%rmat(self%ldim(1),1:self%ldim(2),1))
+        edges_ave = edges_sum / real( 2*(self%ldim(1)+self%ldim(2)) )
+        if( abs(edges_ave) > TINY )self%rmat = self%rmat - edges_ave
+    end subroutine edges_norm
+
     !> \brief radius_norm  normalizes the image based on a central sphere of input radius
     !! \param radius Radius of sphere
     !! \param errout error flag
@@ -6623,7 +6637,9 @@ contains
                 do k = win(3,1),win(3,2)
                     vec     = real([i,j,k] - 1) * self%smpd - xyz
                     dist_sq = dot_product(vec,vec)
-                    if(dist_sq <= radius_sq)self%rmat(i,j,k) = val
+                    if(dist_sq <= radius_sq)then
+                        self%rmat(i,j,k) = val
+                    endif
                 end do
             end do
       end do

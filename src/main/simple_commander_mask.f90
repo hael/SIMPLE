@@ -31,12 +31,16 @@ contains
     subroutine exec_mask( self, cline )
         use simple_image,       only: image
         use simple_procimgfile, only: mask_imgfile, taper_edges_imgfile
+        use simple_atoms,       only: atoms
+        use simple_masker,      only: masker
         class(mask_commander), intent(inout) :: self
         class(cmdline),        intent(inout) :: cline
         type(build)                :: b
         type(params)               :: p
         type(automask2D_commander) :: automask2D
         type(image)                :: mskvol
+        type(atoms)                :: pdb
+        type(masker)               :: msker
         integer                    :: ldim(3)
         p = params(cline)  ! parameters generated
         p%boxmatch = p%box ! turns off boxmatch logics
@@ -71,7 +75,7 @@ contains
             ! 3D
             call b%build_general_tbox(p, cline) ! general objects built
             ! reallocate vol (boxmatch issue)
-            call b%vol%new([p%box, p%box, p%box], p%smpd) 
+            call b%vol%new([p%box, p%box, p%box], p%smpd)
             if( .not. file_exists(p%vols(1)) ) stop 'Cannot find input volume'
             call b%vol%read(p%vols(1))
             if( cline%defined('mskfile') )then
@@ -97,6 +101,12 @@ contains
                     call b%vol%mask(p%msk, p%msktype)
                 endif
                 if( p%outvol .ne. '' )call b%vol%write(p%outvol, del_if_exists=.true.)
+            else if( cline%defined('pdbfile') )then
+                call pdb%new(p%pdbfile)
+                call msker%mask_from_pdb(p, pdb, b%vol, b%a)
+                call b%a%write(p%outfile)
+                call b%vol%write(p%outvol)
+                call msker%write('maskfile'//p%ext)
             else
                 stop 'Nothing to do!'
             endif
@@ -106,7 +116,7 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_MASK NORMAL STOP ****')
     end subroutine exec_mask
-    
+
     !> for solvent flattening of class averages
     subroutine exec_automask2D( self, cline )
         class(automask2D_commander), intent(inout) :: self

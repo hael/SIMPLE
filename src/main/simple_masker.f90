@@ -1,7 +1,7 @@
 ! 2D/3D envelope and adaptive masking
 module simple_masker
 #include "simple_lib.f08"
-    
+
 use simple_image,  only: image
 use simple_ori,    only: ori
 use simple_params, only: params
@@ -28,9 +28,11 @@ type, extends(image) :: masker
     procedure          :: automask3D
     procedure          :: resmask
     procedure          :: apply_2Denvmask22Dref
+    ! procedure          :: sphere_mask
+    procedure          :: mask_from_pdb
     procedure, private :: bin_cavg
     procedure, private :: bin_vol_thres
-    procedure, private :: env_rproject 
+    procedure, private :: env_rproject
 end type masker
 
 contains
@@ -105,6 +107,75 @@ contains
         if( DEBUG )write(*,*)'simple_masker::update_cls done'
     end subroutine apply_2Denvmask22Dref
 
+    !>  \brief  is for
+    subroutine sphere_mask( self, p, xyz, vol_inout, os)
+        use simple_oris, only: oris
+        class(masker), intent(inout) :: self
+        class(params), intent(in)    :: p
+        real,          intent(in)    :: xyz(3)
+        class(image),  intent(inout) :: vol_inout
+        class(oris),   intent(inout) :: os
+        real    :: centre(3), shift(3)
+        logical :: was_ft
+        if( vol_inout%is_2d() )stop 'sphere_mask is intended for volumes only, simple_masker::sphere_mask'
+        was_ft = vol_inout%is_ft()
+        call self%new(vol_inout%get_ldim(), vol_inout%get_smpd())
+        centre = real(self%get_ldim()-1)/2. * self%get_smpd()
+        shift  = ( xyz - centre ) / self%get_smpd()
+        ! shift volume & oris
+        call vol_inout%shift(shift)
+        call os%map3dshift22d(-shift)
+        ! build mask
+        call self%set_within( centre, real(p%binwidth)*self%get_smpd(), 5.)
+        call self%grow_bin()
+        call self%cos_edge(p%edge)
+        ! multiply with mask
+        call vol_inout%bwd_ft()
+        call vol_inout%mul(self)
+        if(was_ft) call vol_inout%fwd_ft
+    end subroutine sphere_mask
+
+    !>  \brief  is for
+    subroutine mask_from_pdb( self, p, pdb, vol_inout, os)
+        use simple_oris,  only: oris
+        use simple_atoms, only: atoms
+        class(masker),         intent(inout) :: self
+        class(params),         intent(in)    :: p
+        type(atoms),           intent(in)    :: pdb
+        class(image),          intent(inout) :: vol_inout
+        class(oris), optional, intent(inout) :: os
+        real    :: centre(3), shift(3), pdb_center(3), xyz(3), radius, smpd
+        integer :: i
+        logical :: was_ft
+        if( vol_inout%is_2d() )stop 'sphere_mask is intended for volumes only, simple_masker::sphere_mask'
+        was_ft = vol_inout%is_ft()
+        smpd   = vol_inout%get_smpd()
+        call self%new(vol_inout%get_ldim(), smpd)
+        pdb_center = pdb%get_geom_center()
+        centre     = real(self%get_ldim()-1)/2. * smpd
+        shift      = ( pdb_center - centre ) / smpd
+        if( p%binwidth == 0 ) then
+            radius = smpd
+        else
+            radius = real(p%binwidth) * smpd
+        endif
+        ! shift volume & oris
+        call vol_inout%shift(shift)
+        if(present(os))call os%map3dshift22d(-shift)
+        ! build mask
+        shift = shift * smpd
+        do i = 1, pdb%get_n()
+            xyz = pdb%get_coord(i) - shift
+            call self%set_within( xyz, radius, 1.)
+        enddo
+        call self%grow_bin()
+        call self%cos_edge(p%edge)
+        ! multiply with mask
+        call vol_inout%bwd_ft()
+        call vol_inout%mul(self)
+        if(was_ft) call vol_inout%fwd_ft
+    end subroutine mask_from_pdb
+
     ! BINARISATION ROUTINES
 
     !>  \brief  is for binarizing the 2D image
@@ -120,7 +191,7 @@ contains
         ! binarize within mask
         call img%mask(self%msk, 'hard')
         call img%bin_kmeans
-        ! add one layer 
+        ! add one layer
         call img%grow_bins(self%binwidth)
         if( DEBUG ) write(*,*)'simple_masker::bin_cavg done'
     end subroutine bin_cavg
@@ -134,7 +205,7 @@ contains
         call self%real_space_filter( WINSZ, 'average')
         call self%bp(0., self%amsklp)
         ! find nr of voxels corresponding to mw
-        nnvox = nvoxfind(self%get_smpd(), self%mw)     
+        nnvox = nvoxfind(self%get_smpd(), self%mw)
         ! binarize again
         call self%bin(nnvox)
         ! binary layers
