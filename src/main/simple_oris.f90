@@ -44,6 +44,7 @@ type :: oris
     procedure, private :: isthere_2
     generic            :: isthere => isthere_1, isthere_2
     procedure          :: max_hash_size
+    procedure          :: max_ori_strlen_trim
     procedure          :: get_n
     procedure          :: get_pop
     procedure          :: get_pops
@@ -66,6 +67,7 @@ type :: oris
     procedure          :: print_
     procedure          :: print_matrices
     procedure          :: sample4update_and_incrcnt
+    procedure          :: ori2str
     ! SETTERS
     procedure, private :: assign
     generic            :: assignment(=) => assign
@@ -113,6 +115,7 @@ type :: oris
     procedure          :: merge
     procedure          :: partition_eo
     procedure          :: transf_proj2class
+    procedure          :: str2ori
     ! I/O
     procedure          :: read
     procedure          :: read_ctfparams_state_eo
@@ -433,6 +436,20 @@ contains
         end do
     end function max_hash_size
 
+    !>  \brief  is for getting the maximum string length of a trimed string ori representation
+    integer function max_ori_strlen_trim( self )
+        class(oris), intent(inout) :: self
+        integer :: strlen, i
+        max_ori_strlen_trim = 0
+        !$omp parallel do schedule(static) default(shared) proc_bind(close)&
+        !$omp private(i,strlen) reduction(max:max_ori_strlen_trim)
+        do i=1,self%n
+            strlen = self%o(i)%ori2strlen_trim()
+            if( strlen > max_ori_strlen_trim ) max_ori_strlen_trim = strlen
+        end do
+        !$omp end parallel do
+    end function max_ori_strlen_trim
+
     !>  \brief  is for getting the max val of integer label
     function get_n( self, label ) result( n )
         class(oris),      intent(inout) :: self
@@ -546,7 +563,7 @@ contains
             if( mask(i) )then
                 cnt = cnt + 1
                 os_tmp%o(cnt) = self%o(i)
-            endif 
+            endif
         end do
         self = os_tmp
         call os_tmp%kill
@@ -649,7 +666,7 @@ contains
         integer              :: cnt, nempty, n_incl, maxpop, i, icls, ncls_here
         logical              :: consider_w_here
         ncls_here = max(self%get_n('class'), ncls)
-        call self%get_pops(pops, 'class', consider_w=.true., maxn=ncls_here)            
+        call self%get_pops(pops, 'class', consider_w=.true., maxn=ncls_here)
         nempty    = count(pops == 0)
         if(nempty == 0)return
         if( present(fromtocls) )then
@@ -659,7 +676,7 @@ contains
         endif
         do icls = 1, ncls
             deallocate(pops, stat=alloc_stat)
-            call self%get_pops(pops, 'class', consider_w=.true., maxn=ncls_here)            
+            call self%get_pops(pops, 'class', consider_w=.true., maxn=ncls_here)
             if( pops(icls) /= 0 )cycle
             ! identify class to split
             cls2split  = maxloc(pops)
@@ -754,7 +771,7 @@ contains
         end do
     end subroutine shift_classes
 
-    !>  \brief  is for contracting/expanding the ori set in self to make 
+    !>  \brief  is for contracting/expanding the ori set in self to make
     !!          a set of conforming size
     function create_conforming_npeaks_set( self, npeaks ) result( os_conf )
         class(oris), intent(inout) :: self
@@ -811,7 +828,7 @@ contains
         if( cconsider_w )then
             if( .not. self%isthere('w') ) stop 'ERROR, oris :: get_pinds with optional consider_w assumes w set'
         endif
-        pop = self%get_pop(ind, label, cconsider_w ) 
+        pop = self%get_pop(ind, label, cconsider_w )
         if( pop > 0 )then
             allocate( indices(pop), stat=alloc_stat )
             allocchk('get_pinds; simple_oris')
@@ -1297,8 +1314,16 @@ contains
             val = val + 1.0
             call self%o(inds(i))%set('updatecnt', val)
             mask(inds(i)) = .true.
-        end do 
+        end do
     end subroutine sample4update_and_incrcnt
+
+    !>  \brief  joins the hashes into a string that represent the ith ori
+    function ori2str( self, i ) result( str )
+        class(oris), intent(inout) :: self
+        integer,     intent(in)    :: i
+        character(len=:), allocatable :: str
+        str = self%o(i)%ori2str()
+    end function ori2str
 
     ! SETTERS
 
@@ -1907,7 +1932,7 @@ contains
         if( ttseries )then
             do i=1,self%n,2
                 eopart(i) = 1
-                i_incr = i + 1 
+                i_incr = i + 1
                 if(i_incr > self%n) exit
                 eopart(i_incr) = 2
             end do
@@ -1929,6 +1954,14 @@ contains
             call self%o(i)%set('class', self%o(i)%get('proj'))
         enddo
     end subroutine transf_proj2class
+
+    !>  \brief  reads all orientation info (by line) into the hash-tables
+    subroutine str2ori( self, i, line )
+        class(oris),      intent(inout) :: self
+        integer,          intent(in)    :: i
+        character(len=*), intent(inout) :: line
+        call self%o(i)%str2ori(line)
+    end subroutine str2ori
 
     ! I/O
 
@@ -1957,7 +1990,7 @@ contains
             if(iend > self%n) stop 'Invalid index; simple_oris%read'
         else
             istart = 1
-            iend   = self%n 
+            iend   = self%n
         endif
         do i = istart, iend
             call self%o(i)%read(fnr)
@@ -2369,7 +2402,7 @@ contains
         call reverse(inds)
     end function order_cls
 
-    !>  \brief  reduces the number of projection directions, useful for balancing 
+    !>  \brief  reduces the number of projection directions, useful for balancing
     !!          operations
     subroutine reduce_projs( self, nprojs_reduced, nsym, eullims )
         class(oris), intent(inout) :: self
@@ -2436,7 +2469,7 @@ contains
                 end do
                 call hpsort(scores, inds_tmp)
                 do j=pop,pop - popmax + 1,-1
-                    included(inds_tmp(j)) = .true. 
+                    included(inds_tmp(j)) = .true.
                 end do
                 deallocate(scores, inds_tmp)
             endif
@@ -2502,7 +2535,7 @@ contains
             if( pop < 1 ) cycle
             ! get indices of particles in cluster
             allocate(inds(pop))
-            cnt = 0 
+            cnt = 0
             do iptcl=1,self%n
                 if( clustering(iptcl) == icls )then
                     cnt = cnt + 1
@@ -2525,7 +2558,7 @@ contains
                 end do
                 call hpsort(scores, inds_tmp)
                 do j=pop,pop - popmax + 1,-1
-                    included(inds_tmp(j)) = .true. 
+                    included(inds_tmp(j)) = .true.
                 end do
                 deallocate(scores, inds_tmp)
             endif
@@ -2963,7 +2996,7 @@ contains
         end do
         athres = rad2deg(athres / real(self%n))
     end function find_athres_from_npeaks
-    
+
     !>  \brief  find number of peaks from angular threshold
     function find_npeaks_from_athres( self, athres ) result( npeaks )
         class(oris), intent(in) :: self

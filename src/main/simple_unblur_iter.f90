@@ -99,12 +99,6 @@ contains
         call unblur_movie(self%moviename, p, corr, smpd_out, shifts)
         ! report new smpd & shifts to ori object
         call orientation%set('smpd', smpd_out)
-        ! LEAVE THIS COMMENTED OUT!!! CAUSES THE STRING TO BECOME TOO LONG. NEEDS SEPARATE DOC.
-        ! nframes = size(shifts,1)
-        ! do iframe=1,nframes
-        !     call orientation%set('x'//int2str(iframe), shifts(iframe,1))
-        !     call orientation%set('y'//int2str(iframe), shifts(iframe,2))
-        ! end do
         ! generate sums
         if( p%tomo .eq. 'yes' )then
             call unblur_calc_sums_tomo(frame_counter, p%time_per_frame,&

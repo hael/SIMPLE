@@ -1,170 +1,62 @@
 ! for manging orientation data using binary files
-
 module simple_binoris
-use, intrinsic :: iso_c_binding
-use simple_defs    ! use all in there
-use simple_ori,    only: ori
-use simple_oris,   only: oris
-use simple_fileio, only: file_exists, del_file,funit_size, fopen,fileio_errmsg,fclose
-use simple_syslib, only: alloc_errchk
+use simple_defs   ! use all in there
+use simple_fileio ! use all in there
+use simple_oris,  only: oris
+#include "simple_lib.f08"
 implicit none
 
 public :: binoris
 private
 
+integer(kind=8), parameter :: MAX_N_SEGEMENTS = 20
+integer(kind=8), parameter :: N_BYTES_HEADER  = MAX_N_SEGEMENTS * 5 * 8
+! max(# segments) * # kind=8 variables in header segment * bytes per variable + string lenght of descriptor
+
+type file_header_segment
+    integer(kind=8)   :: fromto(2)          = 0
+    integer(kind=8)   :: n_bytes_per_record = 0
+    integer(kind=8)   :: n_records          = 0
+    integer(kind=8)   :: first_data_byte    = 0
+end type file_header_segment
+
 type binoris
     private
-    ! in header
-    integer                        :: n_bytes_header  = 0
-    integer                        :: n_hash_vals     = 0
-    integer                        :: first_data_byte = 0
-    integer                        :: n_records       = 0
-    integer                        :: n_peaks         = 0
-    integer                        :: fromto(2)
-    character(len=32), allocatable :: hash_keys(:)
-    ! derived
-    integer                        :: n_bytes_hash_keys  = 0
-    integer                        :: n_reals_per_record = 0
-    ! header byte array
-    integer(kind=1),   allocatable :: byte_array_header(:)
-    ! record
-    real(kind=4),      allocatable :: record(:)
-    ! for on-line use
-    integer                        :: funit  = 0
-    logical                        :: l_open = .false.
-    logical                        :: exists = .false.
+    type(file_header_segment) :: header(MAX_N_SEGEMENTS)
+    integer                   :: n_segments = 0
+    integer                   :: funit      = 0
+    logical                   :: l_open     = .false.
   contains
-    ! constructors
-    procedure          :: new
-    ! checkers/setters/getters
-    procedure, private :: same_dims
-    generic            :: operator(.eqdims.) => same_dims
-    procedure          :: set_fromto
-    procedure          :: get_n_records
-    procedure          :: get_fromto
-    procedure          :: get_n_peaks
     ! I/O
     procedure          :: open
-    procedure, private :: open_local
     procedure          :: close
-    procedure          :: print_header
-    procedure          :: print_hash_keys
     procedure          :: write_header
-    procedure, private :: write_record_1
-    procedure, private :: write_record_2
-    generic            :: write_record => write_record_1, write_record_2
-    procedure, private :: read_record_1
-    procedure, private :: read_record_2
-    generic            :: read_record => read_record_1, read_record_2
-    procedure          :: read_ctfparams_state_eo
-    ! byte indexing
-    procedure          :: first_byte
-    procedure          :: last_byte
-    ! header byte array conversions for mixed format read/write
-    procedure, private :: header2byte_array
-    procedure, private :: byte_array2header
-    ! destructor
-    procedure          :: kill
+    procedure          :: print_header
+    procedure          :: write_segment
+    procedure          :: read_segment
+    procedure          :: read_segment_ctfparams_state_eo
+    ! getters
+    procedure          :: get_n_segments
+    procedure          :: get_fromto
+    procedure          :: get_n_records
+    ! helper routines
+    procedure, private :: clear_segments
+    procedure, private :: add_segment
+    procedure, private :: update_byte_ranges
 end type binoris
-
-integer, parameter :: NOPEAKFLAGS = 9
-character(len=32)  :: o_peak_flags(NOPEAKFLAGS)
 
 contains
 
-    ! constructors
-
-    subroutine new( self, a, fromto, os_peak )
-        class(binoris),        intent(inout) :: self
-        class(oris),           intent(inout) :: a
-        integer,     optional, intent(in)    :: fromto(2)
-        class(oris), optional, intent(in)    :: os_peak
-        type(ori) :: o
-        ! destruct possibly pre-existing
-        call self%kill
-        ! set range
-        if( present(fromto) )then
-            self%fromto = fromto
-        else
-            self%fromto(1) = 1
-            self%fromto(2) = a%get_noris()
-        endif
-        ! set n_hash_vals
-        self%n_hash_vals = a%max_hash_size()
-        ! set hash keys
-        self%hash_keys = o%hash_keys()
-        if( size(self%hash_keys) /= self%n_hash_vals )&
-        &stop 'ERROR, n_hash_vals /= n_keys; binoris :: new_1'
-        ! set n_records
-        self%n_records = self%fromto(2) - self%fromto(1) + 1
-        if( self%n_records < 1 ) stop 'ERROR, input oritab (a) empty; binoris :: new_1'
-        ! set n_peaks
-        self%n_peaks = 0
-        if( present(os_peak) )then
-            self%n_peaks = os_peak%get_noris()
-        endif
-        ! set derived
-        self%n_bytes_hash_keys  = 32 * self%n_hash_vals
-        self%n_bytes_header     = 7  * 4 + self%n_bytes_hash_keys
-        self%first_data_byte    = self%n_bytes_header + 1
-        self%n_reals_per_record = self%n_hash_vals + self%n_peaks * NOPEAKFLAGS
-        ! allocate
-        allocate( self%byte_array_header(self%n_bytes_header),&
-                 &self%record(self%n_reals_per_record), stat=alloc_stat )
-        if(alloc_stat /= 0) call alloc_errchk( 'In: binoris :: new_1', alloc_stat)
-        ! set
-        call self%header2byte_array
-        self%record = 0.0
-        call set_o_peak_flags ! class variable
-        ! flag existence
-        self%exists = .true.
-    end subroutine new
-
-    ! checkers/setters/getters
-
-    logical function same_dims( self1, self2 )
-        class(binoris), intent(in) :: self1, self2 !< instances
-        same_dims = all([self1%n_bytes_header == self2%n_bytes_header,&
-                        &self1%n_hash_vals    == self2%n_hash_vals,&
-                        &self1%n_peaks        == self2%n_peaks])
-    end function same_dims
-
-    subroutine set_fromto( self, fromto )
-        class(binoris), intent(inout) :: self      !< instance
-        integer,        intent(in)    :: fromto(2) !< range
-        if( fromto(1) > 1 .or. fromto(2) < fromto(1) )&
-        &stop 'unallowed fromto range; binoris :: set_fromto'
-        self%fromto = fromto
-        ! set n_records
-        self%n_records = self%fromto(2) - self%fromto(1) + 1
-    end subroutine set_fromto
-
-    integer function get_n_records( self )
-        class(binoris), intent(in) :: self !< instance
-        get_n_records = self%n_records
-    end function get_n_records
-
-    function get_fromto( self ) result( fromto )
-        class(binoris), intent(in) :: self !< instance
-        integer :: fromto(2)
-        fromto = self%fromto
-    end function get_fromto
-
-    integer function get_n_peaks( self )
-        class(binoris), intent(in) :: self !< instance
-        get_n_peaks = self%n_peaks
-    end function get_n_peaks
-
-    ! I/O supporting ori + oris (peaks)
+    ! I/O
 
     subroutine open( self, fname, del_if_exists )
         class(binoris),    intent(inout) :: self          !< instance
         character(len=*),  intent(in)    :: fname         !< filename
         logical, optional, intent(in)    :: del_if_exists !< If the file already exists on disk, replace
-        integer(dp)            :: filesz
-        integer            :: io_status
+        integer(kind=1)    :: byte_array(N_BYTES_HEADER)
+        integer(kind=8)    :: filesz
+        integer            :: io_status, isegment, first_byte, sz
         character(len=512) :: io_message
-        integer(kind=1)    :: bytes(8)
         ! deletion logics
         if( present(del_if_exists) )then
             if( del_if_exists )then
@@ -173,319 +65,272 @@ contains
         endif
         ! existence logics
         if( .not. file_exists(trim(fname)) )then
-            if( self%exists )then
-                call self%open_local(trim(fname))
-                return
-            else
-                stop 'cannot open non-existing file using non-existing object; binoris :: open'
-            endif
+            call open_local
+            return
         endif
-        call self%kill
-        ! open file
-        call self%open_local(trim(fname))
+        call open_local
         ! check size
         filesz = funit_size(self%funit)
         if( filesz == -1 )then
-            stop 'file_size cannot be inquired; binoris :: new_2'
-        else if( filesz >= 28 )then
+            stop 'file_size cannot be inquired; binoris :: open'
+        else if( filesz >= N_BYTES_HEADER )then
             ! ok
         else
-            stop 'file_size too small to contain a header; binoris :: new_2'
+            stop 'file_size too small to contain a header; binoris :: open'
         endif
-        ! read first two header records (n_bytes_header & n_hash_vals)
-        read(unit=self%funit,pos=1,iostat=io_status,iomsg=io_message) bytes
-        if( io_status .ne. 0 )&
-            call fileio_errmsg('simple_binoris::open  error when reading first two header records from disk. '&
-            //trim(io_message), io_status)
-        ! allocate header byte array and hash_keys
-        self%n_bytes_header = transfer(bytes(1:4), self%n_bytes_header)
-        self%n_hash_vals    = transfer(bytes(5:8), self%n_hash_vals)
-        allocate( self%byte_array_header(self%n_bytes_header),&
-            &self%hash_keys(self%n_hash_vals), stat=alloc_stat )
-        if(alloc_stat /= 0) call alloc_errchk( 'In: binoris :: new_2, 1', alloc_stat)
-        read(unit=self%funit,pos=1,iostat=io_status,iomsg=io_message) self%byte_array_header
-        if( io_status .ne. 0 )&
-            call fileio_errmsg('simple_binoris::open  error when reading header bytes to disk. '&
-            //trim(io_message), io_status)
+        ! clear segments before reading header
+        call self%clear_segments
+        ! read header
+        read(unit=self%funit,pos=1,iostat=io_status,iomsg=io_message) byte_array
+        if( io_status .ne. 0 ) call fileio_errmsg('binoris :: open, ERROR reading header records '//trim(io_message), io_status)
+        self%n_segments = 0 ! for counting # segments
+        first_byte = 1
+        do isegment=1,MAX_N_SEGEMENTS
+            sz = sizeof(self%header(isegment)%fromto(1))
+            self%header(isegment)%fromto(1)          = transfer(byte_array(first_byte:first_byte + sz - 1),  self%header(isegment)%fromto(1))
+            first_byte = first_byte + sz
+            self%header(isegment)%fromto(2)          = transfer(byte_array(first_byte:first_byte + sz - 1),  self%header(isegment)%fromto(2))
+            first_byte = first_byte + sz
+            self%header(isegment)%n_bytes_per_record = transfer(byte_array(first_byte:first_byte + sz - 1),  self%header(isegment)%n_bytes_per_record)
+            first_byte = first_byte + sz
+            self%header(isegment)%n_records          = transfer(byte_array(first_byte:first_byte + sz - 1),  self%header(isegment)%n_records)
+            first_byte = first_byte + sz
+            self%header(isegment)%first_data_byte    = transfer(byte_array(first_byte:first_byte + sz - 1),  self%header(isegment)%first_data_byte)
+            first_byte = first_byte + sz
+            ! update # segments counter
+            if( self%header(isegment)%n_bytes_per_record > 0 .and. self%header(isegment)%n_records > 0&
+                &.and. self%header(isegment)%first_data_byte > 0 ) self%n_segments = isegment ! to allow empty in-between segments
+        end do
 
-        call self%byte_array2header
-        ! set derived
-        self%n_bytes_hash_keys  = 32 * self%n_hash_vals
-        self%n_reals_per_record = self%n_hash_vals + self%n_peaks * NOPEAKFLAGS
-        ! allocate
-        allocate( self%record(self%n_reals_per_record), stat=alloc_stat )
-        if(alloc_stat /= 0) call alloc_errchk( 'In: binoris :: new_2, 2', alloc_stat)
-        ! set
-        self%record = 0.0
-        call set_o_peak_flags ! class variable
-        ! flag existence
-        self%exists = .true.
+        contains
+
+            subroutine open_local
+                integer :: io_stat, tmpunit
+                if( .not. self%l_open )then
+                    call fopen(tmpunit,fname,access='STREAM', action='READWRITE', status='UNKNOWN', iostat=io_stat)
+                    call fileio_errmsg('binoris ; open_local '//trim(fname), io_stat)
+                    self%funit  = tmpunit
+                    self%l_open = .true.
+                endif
+            end subroutine open_local
+
     end subroutine open
-
-    subroutine open_local( self, fname, rwaction )
-        class(binoris),             intent(inout) :: self     !< instance
-        character(len=*),           intent(in)    :: fname    !< filename
-        character(len=*), optional, intent(in)    :: rwaction !< read/write flag
-        character(len=9) :: rw_str
-        character(len=7) :: stat_str
-        integer          :: io_stat, tmpunit
-        if( .not. self%l_open )then
-            if( present(rwaction) )then
-                rw_str = trim(rwaction)
-            else
-                rw_str = 'READWRITE'
-            endif
-            stat_str = 'UNKNOWN'
-            call fopen(tmpunit,fname,access='STREAM',action=rw_str,status=stat_str, iostat=io_stat)
-            call fileio_errmsg('binoris ; open_local '// trim(fname), io_stat)
-            self%funit  = tmpunit
-            self%l_open = .true.
-        endif
-    end subroutine open_local
 
     subroutine close( self )
         class(binoris), intent(inout) :: self !< instance
-        integer          :: io_stat
+        integer :: io_stat
         if( self%l_open )then
             call fclose(self%funit,io_stat,errmsg='binoris ; close ')
-            self%l_open =.false.
+            self%l_open = .false.
         end if
     end subroutine close
 
-    subroutine print_header( self )
-        class(binoris), intent(in) :: self
-        write(*,*) '*****  HEADER VALUES  *****'
-        write(*,*) 'n_bytes_header    : ', self%n_bytes_header
-        write(*,*) 'n_hash_vals       : ', self%n_hash_vals
-        write(*,*) 'first_data_byte   : ', self%first_data_byte
-        write(*,*) 'n_records         : ', self%n_records
-        write(*,*) 'n_peaks           : ', self%n_peaks
-        write(*,*) 'fromto(1)         : ', self%fromto(1)
-        write(*,*) 'fromto(2)         : ', self%fromto(2)
-        write(*,*) 'n_bytes_hash_keys : ', self%n_bytes_hash_keys
-        write(*,*) 'n_reals_per_record: ', self%n_reals_per_record
-    end subroutine print_header
-
-    subroutine print_hash_keys( self )
-        class(binoris), intent(in) :: self
-        integer :: i
-        write(*,*) '*****  HASH KEYS  *****'
-        do i=1,size(self%hash_keys)
-            write(*,*) 'key ', i, ' is ', trim(self%hash_keys(i))
-        end do
-    end subroutine print_hash_keys
-
     subroutine write_header( self )
         class(binoris), intent(inout) :: self  !< instance
-        integer :: io_status
+        integer(kind=1) :: byte_array(N_BYTES_HEADER)
+        integer :: first_byte, sz
+        integer :: io_status, isegment
         if( .not. self%l_open ) stop 'file needs to be open; binoris :: write_header'
-        call self%header2byte_array
-        write(unit=self%funit,pos=1,iostat=io_status) self%byte_array_header
-        if( io_status .ne. 0 )&
-            call fileio_errmsg('simple_binoris::write_header: error when writing header bytes to disk', io_status)
+        ! transfer header to byte array
+        first_byte = 1
+        do isegment=1,MAX_N_SEGEMENTS
+            sz = sizeof(self%header(isegment)%fromto(1))
+            byte_array(first_byte:first_byte + sz - 1) = transfer(self%header(isegment)%fromto(1),          byte_array(first_byte:first_byte + sz - 1))
+            first_byte = first_byte + sz
+            byte_array(first_byte:first_byte + sz - 1) = transfer(self%header(isegment)%fromto(2),          byte_array(first_byte:first_byte + sz - 1))
+            first_byte = first_byte + sz
+            byte_array(first_byte:first_byte + sz - 1) = transfer(self%header(isegment)%n_bytes_per_record, byte_array(first_byte:first_byte + sz - 1))
+            first_byte = first_byte + sz
+            byte_array(first_byte:first_byte + sz - 1) = transfer(self%header(isegment)%n_records,          byte_array(first_byte:first_byte + sz - 1))
+            first_byte = first_byte + sz
+            byte_array(first_byte:first_byte + sz - 1) = transfer(self%header(isegment)%first_data_byte,    byte_array(first_byte:first_byte + sz - 1))
+            first_byte = first_byte + sz
+        end do
+        ! write header
+        write(unit=self%funit,pos=1,iostat=io_status) byte_array
+        if( io_status .ne. 0 ) call fileio_errmsg('binoris :: write_header, ERROR writing header bytes ', io_status)
     end subroutine write_header
 
-    subroutine write_record_1( self, i, self2 )
-        class(binoris), intent(inout) :: self
-        integer,        intent(in)    :: i
-        class(binoris), intent(in)    :: self2
-        integer :: io_status
-        if( .not. self%l_open         ) stop 'file needs to be open; binoris :: write_record_1'
-        if( .not. (self.eqdims.self2) ) stop 'filehandlers have different dims; binoris :: write_record_1'
-        if( i < self%fromto(1) .or. i > self%fromto(2) ) stop 'index i out of bound; binoris :: write_record_1'
-        write(unit=self%funit,pos=self%first_byte(i),iostat=io_status) self2%record
-        if( io_status .ne. 0 )&
-             call fileio_errmsg('simple_binoris::write_record_1: error when writing record bytes to disk', io_status)
-    end subroutine write_record_1
-
-    subroutine write_record_2( self, i, a, os_peak )
-        class(binoris),        intent(inout) :: self
-        integer,               intent(in)    :: i
-        class(oris),           intent(inout) :: a
-        class(oris), optional, intent(inout) :: os_peak
-        integer                   :: io_status, iflag, ipeak, cnt, sz_vals
-        type(ori)                 :: o
-        real(kind=4), allocatable :: vals(:)
-        if( .not. self%l_open ) stop 'file needs to be open; binoris :: write_record_2'
-        if( i < self%fromto(1) .or. i > self%fromto(2) ) stop 'index i out of bound; binoris :: write_record_2'
-        ! transfer hash data to self%record
-        o       = a%get_ori(i)
-        vals    = o%hash_vals()
-        sz_vals = size(vals)
-        if( self%n_hash_vals /= sz_vals )then
-            print *, 'trying to write record: ', i
-            print *, 'self%n_hash_vals:       ', self%n_hash_vals
-            print *, 'sz_vals         :       ', sz_vals
-            stop 'nonconforming hash size; binoris :: write_record_2'
-        endif
-        self%record = 0.0
-        self%record(:self%n_hash_vals) = vals
-        if( present(os_peak) )then
-            ! transfer os_peak data to self%record
-            if( self%n_peaks /= os_peak%get_noris() ) stop 'nonconforming os_peak size; binoris :: write_record_2'
-            cnt = self%n_hash_vals
-            do ipeak=1,self%n_peaks
-                do iflag=1,NOPEAKFLAGS
-                    cnt = cnt + 1
-                    if( .not. os_peak%isthere(trim(o_peak_flags(iflag))) )then
-                        write(*,'(a)') 'WARNING! The '//trim(o_peak_flags(iflag))//' is missing from os_peak'
-                        write(*,'(a)') 'In: simple_binors; write_record_2'
-                    endif
-                    self%record(cnt) = os_peak%get(ipeak, trim(o_peak_flags(iflag)))
-                end do
-            end do
-        endif
-        write(unit=self%funit,pos=self%first_byte(i),iostat=io_status) self%record
-        if( io_status .ne. 0 )&
-            call fileio_errmsg('binoris::write_record_2: error when writing record bytes to disk', io_status)
-    end subroutine write_record_2
-
-    subroutine read_record_1( self, i )
-        class(binoris), intent(inout) :: self
-        integer,        intent(in)    :: i
-        integer :: io_status
-        if( .not. self%l_open ) stop 'file needs to be open; binoris :: read_record_1'
-        if( i < self%fromto(1) .or. i > self%fromto(2) ) stop 'index i out of bound; binoris :: read_record_1'
-        read(unit=self%funit,pos=self%first_byte(i),iostat=io_status) self%record
-        if( io_status .ne. 0 )&
-            call fileio_errmsg("binoris::read_record_1  error when reading record bytes from disk", io_status)
-    end subroutine read_record_1
-
-    subroutine read_record_2( self, i, a, os_peak, nst )
-        class(binoris),        intent(inout) :: self
-        integer,               intent(in)    :: i
-        class(oris),           intent(inout) :: a
-        class(oris), optional, intent(inout) :: os_peak
-        integer,     optional, intent(out)   :: nst
-        integer   :: iflag, ipeak, cnt, j, state
-        real      :: euls(3)
-        call self%read_record_1(i)
-        ! transfer hash data
-        euls = 0.
-        do j=1,self%n_hash_vals
-            select case(trim(self%hash_keys(j)))
-                case('e1')
-                    euls(1) = self%record(j)
-                case('e2')
-                    euls(2) = self%record(j)
-                case('e3')
-                    euls(3) = self%record(j)
-                case DEFAULT
-                    call a%set(i, trim(self%hash_keys(j)), self%record(j))
-            end select
-        end do
-        call a%set_euler(i, euls)
-        if( present(nst) )then
-            state = int(a%get(i, 'state'))
-            nst = max(1,max(state,nst))
-        endif
-        if( present(os_peak) )then
-            ! transfer os_peak data
-            cnt = self%n_hash_vals
-            call os_peak%new(self%n_peaks)
-            do ipeak=1,self%n_peaks
-                euls = 0.
-                do iflag=1,NOPEAKFLAGS
-                    cnt = cnt + 1
-                    select case(trim(o_peak_flags(iflag)))
-                        case('e1')
-                            euls(1) = self%record(cnt)
-                        case('e2')
-                            euls(2) = self%record(cnt)
-                        case('e3')
-                            euls(3) = self%record(cnt)
-                        case DEFAULT
-                            call os_peak%set(ipeak, trim(o_peak_flags(iflag)), self%record(cnt))
-                    end select
-                end do
-                call os_peak%set_euler(ipeak, euls)
-            end do
-        endif
-    end subroutine read_record_2
-
-    subroutine read_ctfparams_state_eo( self, i, a )
-        class(binoris), intent(inout) :: self
-        integer,        intent(in)    :: i
-        class(oris),    intent(inout) :: a
-        integer :: j
-        call self%read_record_1(i)
-        ! transfer hash data
-        do j=1,self%n_hash_vals
-            select case(trim(self%hash_keys(j)))
-                case('smpd','kv','cs','fraca','dfx','dfy','angast','bfac','state','eo','phshift')
-                    call a%set(i, trim(self%hash_keys(j)), self%record(j))
-            end select
-        end do
-    end subroutine read_ctfparams_state_eo
-
-    ! byte indexing
-
-    integer function first_byte( self, irec )
+    subroutine print_header( self )
         class(binoris), intent(in) :: self
-        integer,        intent(in) :: irec
-        integer :: ind
-        ind = irec - self%fromto(1) + 1
-        first_byte = self%first_data_byte + (ind - 1) * self%n_reals_per_record * 4
-    end function first_byte
+        integer :: isegment
+        do isegment=1,MAX_N_SEGEMENTS
+            write(*,*) '*****  HEADER, segment: ', isegment
+            write(*,*) 'fromto(1)         : ', self%header(isegment)%fromto(1)
+            write(*,*) 'fromto(2)         : ', self%header(isegment)%fromto(2)
+            write(*,*) 'n_bytes_per_record: ', self%header(isegment)%n_bytes_per_record
+            write(*,*) 'n_records         : ', self%header(isegment)%n_records
+            write(*,*) 'first_data_byte   : ', self%header(isegment)%first_data_byte
+        end do
+    end subroutine print_header
 
-    integer function last_byte( self )
-        class(binoris), intent(in) :: self
-        integer :: ind
-        ind = self%fromto(2) - self%fromto(1) + 1
-        last_byte = self%n_bytes_header + ind * self%n_reals_per_record * 4
-    end function last_byte
+    subroutine write_segment( self, isegment, os, fromto )
+        class(binoris),    intent(inout) :: self
+        integer,           intent(in)    :: isegment
+        class(oris),       intent(inout) :: os
+        integer, optional, intent(in)    :: fromto(2)
+        integer(kind=1),  allocatable :: byte_array(:,:)
+        character(len=:), allocatable :: str_os_line, str_dyn
+        integer :: i, irec, io_status
+        if( .not. self%l_open ) stop 'file needs to be open; binoris :: write_segment'
+        ! add segment to stack, this sets all the information needed for allocation
+        call self%add_segment(isegment, os, fromto)
+        ! update byte ranges in header
+        call self%update_byte_ranges
+        ! allocate byte array
+        allocate(byte_array(self%header(isegment)%n_records,self%header(isegment)%n_bytes_per_record))
+        ! allocate string with static lenght (set to max(strlen))
+        allocate(character(len=self%header(isegment)%n_bytes_per_record) :: str_os_line)
+        ! transfer orientation data to raw byte array via string representation
+        irec = 0
+        do i=self%header(isegment)%fromto(1),self%header(isegment)%fromto(2)
+            irec               = irec + 1
+            str_dyn            = os%ori2str(i)
+            str_os_line        = str_dyn ! string of lenght that matches record, since different oris will have different strlen
+            byte_array(irec,:) = transfer(str_os_line, byte_array(irec,:))
+        end do
+        ! write raw bytes
+        write(unit=self%funit,pos=self%header(isegment)%first_data_byte,iostat=io_status) byte_array
+        if( io_status .ne. 0 ) call fileio_errmsg('binoris :: write_segment, ERROR when writing 2D byte array to disk', io_status)
+    end subroutine write_segment
 
-    ! header byte array conversions for mixed format read/write
-
-    subroutine header2byte_array( self )
+    subroutine read_segment( self, isegment, os )
         class(binoris), intent(inout) :: self
-        self%byte_array_header(1:4)   = transfer(self%n_bytes_header,  self%byte_array_header(1:4))
-        self%byte_array_header(5:8)   = transfer(self%n_hash_vals,     self%byte_array_header(5:8))
-        self%byte_array_header(9:12)  = transfer(self%n_records,       self%byte_array_header(9:12))
-        self%byte_array_header(13:16) = transfer(self%first_data_byte, self%byte_array_header(13:16))
-        self%byte_array_header(17:20) = transfer(self%n_peaks,         self%byte_array_header(17:20))
-        self%byte_array_header(21:24) = transfer(self%fromto(1),       self%byte_array_header(21:24))
-        self%byte_array_header(25:28) = transfer(self%fromto(2),       self%byte_array_header(25:28))
-        self%byte_array_header(29:self%n_bytes_header)&
-        &= transfer(self%hash_keys, self%byte_array_header(29:self%n_bytes_header))
-    end subroutine header2byte_array
-
-    subroutine byte_array2header( self )
-        class(binoris), intent(inout) :: self
-        self%n_bytes_header  = transfer(self%byte_array_header(1:4),   self%n_bytes_header)
-        self%n_hash_vals     = transfer(self%byte_array_header(5:8),   self%n_hash_vals)
-        self%n_records       = transfer(self%byte_array_header(9:12),  self%n_records)
-        self%first_data_byte = transfer(self%byte_array_header(13:16), self%first_data_byte)
-        self%n_peaks         = transfer(self%byte_array_header(17:20), self%n_peaks)
-        self%fromto(1)       = transfer(self%byte_array_header(21:24), self%fromto(1))
-        self%fromto(2)       = transfer(self%byte_array_header(25:28), self%fromto(2))
-        ! Intel warn: code for reallocating lhs
-        self%hash_keys       = transfer(self%byte_array_header(29:self%n_bytes_header), self%hash_keys)
-    end subroutine byte_array2header
-
-    ! destructor
-
-    subroutine kill( self )
-        class(binoris), intent(inout) :: self
-        call self%close
-        if( self%exists )then
-            deallocate(self%hash_keys, self%byte_array_header, self%record)
-            self%exists = .false.
+        integer,        intent(in)    :: isegment
+        class(oris),    intent(inout) :: os
+        integer(kind=1) :: byte_array(self%header(isegment)%n_records,self%header(isegment)%n_bytes_per_record)
+        character(len=self%header(isegment)%n_bytes_per_record) :: str_os_line ! string with static lenght (set to max(strlen))
+        character(len=512) :: io_message
+        integer :: i, irec, io_status
+        if( .not. self%l_open ) stop 'file needs to be open; binoris :: read_segment'
+        if( isegment < 1 .or. isegment > self%n_segments ) stop 'isegment out of bound; binoris :: write_segment'
+        if( self%header(isegment)%n_records > 0 .and. self%header(isegment)%n_bytes_per_record > 0 )then
+            ! read raw byte array
+            read(unit=self%funit,pos=self%header(isegment)%first_data_byte,iostat=io_status,iomsg=io_message) byte_array
+            if( io_status .ne. 0 ) call fileio_errmsg('binoris :: open, ERROR when reading 2D byte array from disk '//trim(io_message), io_status)
+            ! transfer raw bytes to oris via string representation
+            irec = 0
+            do i=self%header(isegment)%fromto(1),self%header(isegment)%fromto(2)
+                irec        = irec + 1
+                str_os_line = transfer(byte_array(irec,:), str_os_line)
+                call os%str2ori(irec, str_os_line) ! irec because of sp_project implementation
+            end do
+        else
+            ! empty segment, nothing to do
         endif
-    end subroutine kill
+    end subroutine read_segment
 
-    ! local subs
+    subroutine read_segment_ctfparams_state_eo( self, isegment, os )
+        use simple_ori, only: ori
+        class(binoris), intent(inout) :: self
+        integer,        intent(in)    :: isegment
+        class(oris),    intent(inout) :: os
+        integer, parameter :: NFLAGS = 11
+        character(len=32)  :: flags(NFLAGS)
+        type(ori)          :: o
+        integer(kind=1)    :: byte_array(self%header(isegment)%n_records,self%header(isegment)%n_bytes_per_record)
+        character(len=self%header(isegment)%n_bytes_per_record) :: str_os_line ! string with static lenght (set to max(strlen))
+        character(len=512) :: io_message
+        integer :: i, j, irec, io_status
+        if( .not. self%l_open ) stop 'file needs to be open; binoris :: read_segment'
+        ! set flags for ctfparams, state & eo
+        flags(1)  = 'smpd'
+        flags(2)  = 'kv'
+        flags(3)  = 'cs'
+        flags(4)  = 'fraca'
+        flags(5)  = 'dfx'
+        flags(6)  = 'dfy'
+        flags(7)  = 'angast'
+        flags(8)  = 'bfac'
+        flags(9)  = 'state'
+        flags(10) = 'eo'
+        flags(11) = 'phshift'
+        ! read raw byte array
+        read(unit=self%funit,pos=self%header(isegment)%first_data_byte,iostat=io_status,iomsg=io_message) byte_array
+        if( io_status .ne. 0 ) call fileio_errmsg('binoris :: open, ERROR when reading 2D byte array from disk '//trim(io_message), io_status)
+        ! transfer raw bytes to oris via string representation
+        irec = 0
+        do i=self%header(isegment)%fromto(1),self%header(isegment)%fromto(2)
+            irec        = irec + 1
+            str_os_line = transfer(byte_array(irec,:), str_os_line)
+            call o%str2ori(str_os_line)
+            do j=1,NFLAGS
+                if( o%isthere(trim(flags(j))) ) call os%set(i, trim(flags(j)), o%get(trim(flags(j))))
+            end do
+        end do
+    end subroutine read_segment_ctfparams_state_eo
 
-    subroutine set_o_peak_flags
-        o_peak_flags(1) = 'e1'
-        o_peak_flags(2) = 'e2'
-        o_peak_flags(3) = 'e3'
-        o_peak_flags(4) = 'x'
-        o_peak_flags(5) = 'y'
-        o_peak_flags(6) = 'state'
-        o_peak_flags(7) = 'proj'
-        o_peak_flags(8) = 'corr'
-        o_peak_flags(9) = 'ow'
-    end subroutine set_o_peak_flags
+    ! getters
+
+    pure integer function get_n_segments( self )
+        class(binoris), intent(in) :: self
+        get_n_segments = self%n_segments
+    end function get_n_segments
+
+    pure function get_fromto( self, isegment ) result( fromto )
+        class(binoris), intent(in) :: self
+        integer,        intent(in) :: isegment
+        integer :: fromto(2)
+        fromto = self%header(isegment)%fromto
+    end function get_fromto
+
+    pure integer function get_n_records( self, isegment )
+        class(binoris), intent(in) :: self
+        integer,        intent(in) :: isegment
+        get_n_records = self%header(isegment)%n_records
+    end function get_n_records
+
+    ! private routines
+
+    subroutine clear_segments( self )
+        class(binoris), intent(inout) :: self
+        if( self%n_segments <= 0 ) return
+        ! clear header
+        self%header(:)%fromto(1)          = 0
+        self%header(:)%fromto(2)          = 0
+        self%header(:)%n_bytes_per_record = 0
+        self%header(:)%n_records          = 0
+        self%header(:)%first_data_byte    = 0
+        ! clear the rest
+        self%n_segments = 0
+    end subroutine clear_segments
+
+    subroutine add_segment( self, isegment, os, fromto )
+        class(binoris),    intent(inout) :: self
+        integer,           intent(in)    :: isegment
+        class(oris),       intent(inout) :: os
+        integer, optional, intent(in)    :: fromto(2)
+        integer :: strlen_max, n_oris
+        ! sanity check isegment
+        if( isegment < 1 .or. isegment > MAX_N_SEGEMENTS ) stop 'ERROR, isegment out of range; binoris :: add_segment'
+        if( isegment > self%n_segments ) self%n_segments = isegment
+        ! set range in segment
+        n_oris = os%get_noris()
+        if( present(fromto) )then
+            if( fromto(1) < 1 .or. fromto(2) > n_oris ) stop 'fromto out of range; binoris :: add_segment'
+            self%header(isegment)%fromto = fromto
+        else
+            self%header(isegment)%fromto(1) = 1
+            self%header(isegment)%fromto(2) = n_oris
+        endif
+        ! set maximum trimmed string lenght to n_bytes_per_record
+        strlen_max = os%max_ori_strlen_trim()
+        self%header(isegment)%n_bytes_per_record = strlen_max
+        ! set n_records
+        self%header(isegment)%n_records = self%header(isegment)%fromto(2) - self%header(isegment)%fromto(1) + 1
+        if( self%header(isegment)%n_records < 1 ) stop 'ERROR, input oritab (os) empty; binoris :: add_segment'
+    end subroutine add_segment
+
+    subroutine update_byte_ranges( self )
+        class(binoris), intent(inout) :: self
+        integer(kind=8) :: n_bytes_tot
+        integer :: isegment
+        n_bytes_tot = N_BYTES_HEADER
+        if( self%n_segments <= 0 ) return
+        do isegment=1,self%n_segments
+            self%header(isegment)%first_data_byte = n_bytes_tot + 1
+            n_bytes_tot = n_bytes_tot + self%header(isegment)%n_bytes_per_record * self%header(isegment)%n_records
+        end do
+    end subroutine update_byte_ranges
 
 end module simple_binoris

@@ -774,7 +774,9 @@ contains
             case('txt', 'asc', 'box','dat')
                 fname2format = 'T'
             case('pdb')
-                fname2format = 'P'                
+                fname2format = 'P'
+            case('simple')
+                fname2format = 'O'                
             case DEFAULT
                 fname2format = 'N'
         end select

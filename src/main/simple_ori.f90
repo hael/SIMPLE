@@ -8,7 +8,7 @@ implicit none
 public :: ori, test_ori, test_ori_dists
 private
 
-!>  orientation parameter stuct and operations 
+!>  orientation parameter stuct and operations
 type :: ori
     private
     real        :: euls(3)=0.        !< Euler angle
@@ -46,6 +46,7 @@ type :: ori
     procedure          :: rnd_inpl
     procedure          :: rnd_shift
     procedure          :: revshsgn
+    procedure          :: str2ori
     ! GETTERS
     procedure          :: exists
     procedure          :: get_euler
@@ -73,6 +74,7 @@ type :: ori
     procedure          :: isodd
     procedure          :: key_is_real
     procedure          :: ori2str
+    procedure          :: ori2strlen_trim
     ! PRINTING & I/O
     procedure          :: print_mat
     procedure          :: print_ori
@@ -149,12 +151,12 @@ contains
         self%chtab = chash(NNAMES)
         self%existence = .true.
     end subroutine new_ori_clean
-    
+
     !>  \brief  is a parameterized constructor
     subroutine ori_from_rotmat( self, rotmat )
         class(ori), intent(inout) :: self
         real, intent(in)          :: rotmat(3,3) !< rotation matrix
-        call self%new_ori
+        call self%new_ori_clean
         self%rmat = rotmat
         self%euls = m2euler(self%rmat)
         call self%htab%set('e1',self%euls(1))
@@ -330,7 +332,7 @@ contains
         self%normal = matmul(zvec, self%rmat)
     end subroutine rnd_euler_1
 
-    !>  \brief  for generating a random Euler angle neighbour to o_prev 
+    !>  \brief  for generating a random Euler angle neighbour to o_prev
     subroutine rnd_euler_2( self, o_prev, athres, proj )
         use simple_math, only: deg2rad
         class(ori),        intent(inout) :: self   !< instance
@@ -407,7 +409,7 @@ contains
         call self%set('x', x)
         call self%set('y', y)
     end subroutine rnd_shift
-    
+
     !>  \brief  for reversing the shift signs (to fit convention)
     subroutine revshsgn( self )
         class(ori), intent(inout) :: self
@@ -417,6 +419,15 @@ contains
         call self%set('x', -x)
         call self%set('y', -y)
     end subroutine revshsgn
+
+    !>  \brief  reads all orientation info (by line) into the hash-tables
+    subroutine str2ori( self, line )
+        use simple_sauron, only: sauron_line_parser
+        class(ori),       intent(inout) :: self
+        character(len=*), intent(inout) :: line
+        call sauron_line_parser(line, self%htab, self%chtab)
+        call self%set_euler([self%htab%get('e1'),self%htab%get('e2'),self%htab%get('e3')])
+    end subroutine str2ori
 
     ! GETTERS
 
@@ -625,6 +636,14 @@ contains
         endif
     end function ori2str
 
+    function ori2strlen_trim( self ) result( len )
+        class(ori), intent(inout) :: self
+        character(len=:), allocatable :: str
+        integer :: len
+        str = self%ori2str()
+        len = len_trim(str)
+    end function ori2strlen_trim
+
     !<  \brief  to print the rotation matrix
     subroutine print_mat( self )
         class(ori), intent(inout) :: self
@@ -662,9 +681,7 @@ contains
         integer :: istate
         read(fhandle,fmt='(A)') line
         call sauron_line_parser( line, self%htab, self%chtab )
-        istate = nint( self%get('state') )           ! to make sure that state=0 is preserved
         call self%set_euler([self%htab%get('e1'),self%htab%get('e2'),self%htab%get('e3')])
-        if( istate == 0 ) call self%set('state', 0.) ! to make sure that state=0 is preserved
     end subroutine read
 
     ! CALCULATORS
@@ -754,7 +771,7 @@ contains
     subroutine map3dshift22d( self, sh3d )
         use simple_math, only: deg2rad
         class(ori), intent(inout) :: self
-        real, intent(in)          :: sh3d(3) !< 3D shift 
+        real, intent(in)          :: sh3d(3) !< 3D shift
         real                      :: old_x,old_y,x,y,cx,cy
         real                      :: u(3),v(3),shift(3)
         real                      :: phi,cosphi,sinphi

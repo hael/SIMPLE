@@ -62,44 +62,44 @@ contains
         if( .not. cline%defined('ext_meta') )&
         &stop 'need ext_meta (meta data file extension) to be part of command line; commander_distr :: exec_merge_algndocs'
         select case(p%ext_meta)
-            case('.bin')
-                ! generate a merged filehandling object based on the first file
-                fname = trim(adjustl(p%fbody))//int2str_pad(1,numlen)//p%ext_meta
-                call fhandle_merged%open(fname)
-                call fhandle_merged%set_fromto([1,p%nptcls])
-                call fhandle_merged%close()
-                ! make a new header based on the modified template
-                call fhandle_merged%open(p%outfile, del_if_exists=.true.)
-                call fhandle_merged%write_header()
-                ! loop over documents
-                cnt = 0
-                do i=1,p%ndocs
-                    fname = trim(adjustl(p%fbody))//int2str_pad(i,numlen)//p%ext_meta
-                    call fhandle_doc%open(fname)
-                    nj = fhandle_doc%get_n_records()
-                    nentries_all = parts(i,2) - parts(i,1) + 1
-                    if( nentries_all /= nj ) then
-                        write(*,*) 'in: commander_distr :: exec_merge_binalgndocs'
-                        write(*,*) 'nr of entries in partition: ', nentries_all
-                        write(*,*) 'nr of records in file     : ', nj
-                        write(*,*) 'filename                  : ', trim(fname)
-                        stop 'number of records in file not consistent with the size of the partition'
-                    endif
-                    fromto = fhandle_doc%get_fromto()
-                    if( any(fromto /= parts(i,:)) )then
-                        write(*,*) 'in: commander_distr :: exec_merge_binalgndocs'
-                        write(*,*) 'range in partition: ', parts(i,:)
-                        write(*,*) 'range in file     : ', fromto
-                        stop 'range in file not consistent with the range in the partition'
-                    endif
-                    do j=fromto(1),fromto(2)
-                        cnt = cnt + 1
-                        call fhandle_doc%read_record(j)
-                        call fhandle_merged%write_record(cnt, fhandle_doc)
-                    end do
-                end do
-                call fhandle_merged%close()
-                call fhandle_doc%close()
+            ! case('.bin')
+            !     ! generate a merged filehandling object based on the first file
+            !     fname = trim(adjustl(p%fbody))//int2str_pad(1,numlen)//p%ext_meta
+            !     call fhandle_merged%open(fname)
+            !     call fhandle_merged%set_fromto([1,p%nptcls])
+            !     call fhandle_merged%close()
+            !     ! make a new header based on the modified template
+            !     call fhandle_merged%open(p%outfile, del_if_exists=.true.)
+            !     call fhandle_merged%write_header()
+            !     ! loop over documents
+            !     cnt = 0
+            !     do i=1,p%ndocs
+            !         fname = trim(adjustl(p%fbody))//int2str_pad(i,numlen)//p%ext_meta
+            !         call fhandle_doc%open(fname)
+            !         nj = fhandle_doc%get_n_records()
+            !         nentries_all = parts(i,2) - parts(i,1) + 1
+            !         if( nentries_all /= nj ) then
+            !             write(*,*) 'in: commander_distr :: exec_merge_binalgndocs'
+            !             write(*,*) 'nr of entries in partition: ', nentries_all
+            !             write(*,*) 'nr of records in file     : ', nj
+            !             write(*,*) 'filename                  : ', trim(fname)
+            !             stop 'number of records in file not consistent with the size of the partition'
+            !         endif
+            !         fromto = fhandle_doc%get_fromto()
+            !         if( any(fromto /= parts(i,:)) )then
+            !             write(*,*) 'in: commander_distr :: exec_merge_binalgndocs'
+            !             write(*,*) 'range in partition: ', parts(i,:)
+            !             write(*,*) 'range in file     : ', fromto
+            !             stop 'range in file not consistent with the range in the partition'
+            !         endif
+            !         do j=fromto(1),fromto(2)
+            !             cnt = cnt + 1
+            !             call fhandle_doc%read_record(j)
+            !             call fhandle_merged%write_record(cnt, fhandle_doc)
+            !         end do
+            !     end do
+            !     call fhandle_merged%close()
+            !     call fhandle_doc%close()
             case('.txt')
                 call fopen(funit_merge, file=p%outfile, iostat=io_stat, status='replace',&
                 &action='write', position='append', access='sequential')

@@ -1,3 +1,11 @@
+
+Edge normalisation on extraction (same as EMAN's edgenorm routine). The average of the boarder pixels must be zero for Fourier transformation.
+
+Consider using the natural logarithm of the power spectrum for CTF fitting rater than the square root. Should improve robustness. (Leave option speckind=sqrt|log)
+
+Consider
+
+
 * support for doc input to re-extract with shifts from doc
 * pipelined pick/extract
 * frac parameter for 2D (& consider outlier detection similar to picker)
@@ -5,11 +13,15 @@
 * extract should set the header right (smpd)
 * scaling should set the header right (smpd)
 
+Flip in postproc
+
 Binary file format
 
 StkInfo
 ClsInfo
-PtclInfo
+Ptcl2DInfo
+Cls3Dinfo
+Ptcl3DInfo
 FSCInfo
 VolInfo (flip indicator)
 LastJob (append to structure to get history of workflow???)

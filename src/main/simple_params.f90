@@ -5,7 +5,7 @@ use simple_ori,            only: ori
 use simple_cmdline,        only: cmdline
 use simple_magic_boxes,    only: find_magic_box
 use simple_imghead,        only: find_ldim_nptcls
-use simple_binoris,        only: binoris
+! use simple_binoris,        only: binoris
 use simple_stktab_handler, only: stktab_handler
 !$ use omp_lib
 !$ use omp_lib_kinds
@@ -409,7 +409,7 @@ contains
         class(params),     intent(inout) :: self
         class(cmdline),    intent(inout) :: cline
         logical, optional, intent(in)    :: allow_mix, del_scaled
-        type(binoris)                    :: bos
+        ! type(binoris)                    :: bos
         character(len=STDLEN)            :: cwd_local, debug_local, verbose_local, stk_part_fname
         character(len=1)                 :: checkupfile(50)
         character(len=:), allocatable    :: conv, stk_part_fname_sc, pid_file
@@ -838,9 +838,9 @@ contains
                 else
                     ! needed because use of binoris_io causes circular dependency
                     ! since params is used by prime3D_srch
-                    call bos%open(self%oritab)
-                    self%nptcls = bos%get_n_records()
-                    call bos%close
+                    ! call bos%open(self%oritab)
+                    ! self%nptcls = bos%get_n_records()
+                    ! call bos%close
                 endif            
             endif
         else if( self%refs .ne. '' )then
