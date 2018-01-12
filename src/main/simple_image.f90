@@ -31,7 +31,7 @@ type :: image
     type(c_ptr)                            :: plan_fwd             !< fftw plan for the image (fwd)
     type(c_ptr)                            :: plan_bwd             !< fftw plan for the image (bwd)
     integer                                :: array_shape(3)       !< shape of complex array
-    logical                                :: wthreads  = .false.  !< with threads flag   
+    logical                                :: wthreads  = .false.  !< with threads flag
     logical                                :: existence = .false.  !< indicates existence
   contains
     ! CONSTRUCTORS
@@ -288,6 +288,7 @@ type :: image
     procedure          :: norm_ext
     procedure          :: radius_norm
     procedure          :: noise_norm
+    procedure          :: edges_norm
     procedure          :: norm_bin
     procedure          :: roavg
     procedure          :: rtsq
@@ -295,6 +296,7 @@ type :: image
     procedure          :: bwd_ft
     procedure          :: shift
     procedure          :: shift2Dserial
+    procedure          :: set_within
     ! DENOISING FUNCTIONS
     procedure          :: cure_outliers
     procedure          :: denoise_NLM
@@ -336,7 +338,7 @@ contains
     !!\param smpd sampling distance
     !!\param backgr constant initial background
     !!
-    !!\return new image object 
+    !!\return new image object
     subroutine new( self, ldim, smpd, wthreads )
     !! have to have a type-bound constructor here because we get a sigbus error with the function construct
     !! "program received signal sigbus: access to an undefined portion of a memory object."
@@ -2632,7 +2634,7 @@ contains
             sum1 = sum(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)), l_msk)
             sum2 = sumval - sum1
             cen1 = sum1 / real(cnt1)
-            cen2 = sum2 / real(cnt2)            
+            cen2 = sum2 / real(cnt2)
         end do
         ! assign values to the centers
         if( cen1 > cen2 )then
@@ -2732,7 +2734,7 @@ contains
         endif
         self%rmat = sqrt(self%rmat)
     end subroutine cendist
-    
+
     !>  \brief masscen is for determining the center of mass of binarised image
     !!          only use this function for integer pixels shifting
     !! \return  xyz
@@ -2797,13 +2799,13 @@ contains
         ithr = omp_get_thread_num() + 1
         ! copy rmat
         thread_safe_tmp_imgs(ithr)%rmat = self%rmat
-        thread_safe_tmp_imgs(ithr)%ft   = .false. 
+        thread_safe_tmp_imgs(ithr)%ft   = .false.
         call thread_safe_tmp_imgs(ithr)%fwd_ft
         call thread_safe_tmp_imgs(ithr)%bp(0., lp)
         call thread_safe_tmp_imgs(ithr)%bwd_ft
         call thread_safe_tmp_imgs(ithr)%mask(msk, 'soft')
         call thread_safe_tmp_imgs(ithr)%bin_kmeans
-        xyz = thread_safe_tmp_imgs(ithr)%masscen() 
+        xyz = thread_safe_tmp_imgs(ithr)%masscen()
     end function center_serial
 
     !>  \brief bin_inv inverts a binary image
@@ -3256,7 +3258,6 @@ contains
         where( self%rmat < 0.999 ) self%rmat = 0.
     end subroutine remove_edge
 
-
     !>  \brief  increments the logi pixel value with incr
     !! \param logi coordinates
     !! \param incr increment
@@ -3533,8 +3534,8 @@ contains
         endif
     end subroutine shellnorm
 
-    !> \brief  for normalising each shell to uniform (=1) power (assuming average has been 
-    !!         subtracted in real-space) and applying a filter function       
+    !> \brief  for normalising each shell to uniform (=1) power (assuming average has been
+    !!         subtracted in real-space) and applying a filter function
     subroutine shellnorm_and_apply_filter_serial_1( self, filter )
         class(image), intent(inout) :: self
         real,         intent(in)    :: filter(:)
@@ -3579,8 +3580,8 @@ contains
         self%cmat(phys(1),phys(2),phys(3)) = cmplx(wzero,icomp)
     end subroutine shellnorm_and_apply_filter_serial_1
 
-     !> \brief  for normalising each shell to uniform (=1) power (assuming average has been 
-    !!         subtracted in real-space) and applying a filter function       
+     !> \brief  for normalising each shell to uniform (=1) power (assuming average has been
+    !!         subtracted in real-space) and applying a filter function
     subroutine shellnorm_and_apply_filter_serial_2( self, filter )
         class(image), intent(inout) :: self, filter
         real, allocatable  :: expec_pow(:)
@@ -3618,8 +3619,8 @@ contains
         self%cmat(phys(1),phys(2),phys(3)) = cmplx(real(comp),icomp)
     end subroutine shellnorm_and_apply_filter_serial_2
 
-    !> \brief  for normalising each shell to uniform (=1) power (assuming average has been 
-    !!         subtracted in real-space) and applying a filter function       
+    !> \brief  for normalising each shell to uniform (=1) power (assuming average has been
+    !!         subtracted in real-space) and applying a filter function
     subroutine shellnorm_and_apply_filter_1( self, filter )
         class(image), intent(inout) :: self
         real,         intent(in)    :: filter(:)
@@ -3667,8 +3668,8 @@ contains
         self%cmat(phys(1),phys(2),phys(3)) = cmplx(wzero,icomp)
     end subroutine shellnorm_and_apply_filter_1
 
-     !> \brief  for normalising each shell to uniform (=1) power (assuming average has been 
-    !!         subtracted in real-space) and applying a filter function       
+     !> \brief  for normalising each shell to uniform (=1) power (assuming average has been
+    !!         subtracted in real-space) and applying a filter function
     subroutine shellnorm_and_apply_filter_2( self, filter )
         class(image), intent(inout) :: self, filter
         real, allocatable  :: expec_pow(:)
@@ -4794,7 +4795,7 @@ contains
     subroutine fsc( self1, self2, corrs )
         use simple_math, only: csq
         class(image), intent(inout) :: self1, self2
-        real,         intent(out)   :: corrs(fdim(self1%ldim(1))-1)        
+        real,         intent(out)   :: corrs(fdim(self1%ldim(1))-1)
         real    :: sumasq(fdim(self1%ldim(1))-1), sumbsq(fdim(self1%ldim(1))-1)
         integer :: n, lims(3,2), phys(3), sh, h, k, l
         corrs  = 0.
@@ -5254,7 +5255,7 @@ contains
             &self%rmat(:self%ldim(1),:self%ldim(2),1)
         self_out%rmat(:self_out%ldim(1),:self_out%ldim(2),1) = &
             &self_out%rmat(:self_out%ldim(1),:self_out%ldim(2),1) / instr_fun(:self_out%ldim(1),:self_out%ldim(2),1)
-        !$omp end parallel workshare 
+        !$omp end parallel workshare
         call self_out%fwd_ft
     end subroutine subtr_backgr_pad_divwinstr_fft
 
@@ -5776,7 +5777,7 @@ contains
         self%rmat = self%rmat - tmp%rmat
         call tmp%kill
     end subroutine subtr_backgr
-    
+
     subroutine subtr_avg_and_square( self )
         class(image), intent(inout) :: self
         real :: avg
@@ -6423,6 +6424,20 @@ contains
         endif
     end subroutine noise_norm
 
+    !>  \brief  is for substracting a 2D image edges average
+    subroutine edges_norm( self )
+        class(image), intent(inout) :: self
+        real :: edges_sum, edges_ave
+        if( self%ft ) stop 'not for Fted images; simple_image :: edge_norm'
+        if( .not.self%is_2d() ) stop 'only for 2d images; simple_image :: edge_norm'
+        edges_sum = sum(self%rmat(1:self%ldim(1),1,1))
+        edges_sum = edges_sum + sum(self%rmat(1:self%ldim(1),self%ldim(2),1))
+        edges_sum = edges_sum + sum(self%rmat(1,1:self%ldim(2),1))
+        edges_sum = edges_sum + sum(self%rmat(self%ldim(1),1:self%ldim(2),1))
+        edges_ave = edges_sum / real( 2*(self%ldim(1)+self%ldim(2)) )
+        if( abs(edges_ave) > TINY )self%rmat = self%rmat - edges_ave
+    end subroutine edges_norm
+
     !> \brief radius_norm  normalizes the image based on a central sphere of input radius
     !! \param radius Radius of sphere
     !! \param errout error flag
@@ -6602,6 +6617,33 @@ contains
             call self_in%bwd_ft
         endif
     end subroutine rtsq
+
+    !>  \brief  set pixels to value within a sphere
+    subroutine set_within( self, xyz, radius, val )
+        class(image), intent(inout) :: self
+        real,         intent(in)    :: xyz(3), radius, val
+        real    :: rpos(3), vec(3), dist_sq, radius_sq
+        integer :: i,j,k, win(3,2)
+        radius_sq = radius**2.
+        rpos      = xyz / self%smpd
+        win(:,1)  = 1 + floor(rpos - radius)
+        where( win(:,1) < 1 )win(:,1) = 1
+        win(:,2)  = 1 + ceiling(rpos + radius)
+        if(win(1,2) > self%ldim(1)) win(1,2) = self%ldim(1)
+        if(win(2,2) > self%ldim(2)) win(2,2) = self%ldim(2)
+        if(win(3,2) > self%ldim(3)) win(3,2) = self%ldim(3)
+        do i = win(1,1),win(1,2)
+            do j = win(2,1),win(2,2)
+                do k = win(3,1),win(3,2)
+                    vec     = real([i,j,k] - 1) * self%smpd - xyz
+                    dist_sq = dot_product(vec,vec)
+                    if(dist_sq <= radius_sq)then
+                        self%rmat(i,j,k) = val
+                    endif
+                end do
+            end do
+      end do
+    end subroutine set_within
 
     !>  \brief  cure_outliers for replacing extreme outliers with median of a 13x13 neighbourhood window
     !!          only done on negative values, assuming white ptcls on black bkgr

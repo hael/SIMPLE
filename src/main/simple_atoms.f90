@@ -54,6 +54,7 @@ type :: atoms
     procedure          :: writepdb
     ! CALCULATORS
     procedure, private :: Z_from_name
+    procedure          :: get_geom_center
     ! MODIFIERS
     ! DESTRUCTOR
     procedure          :: kill
@@ -174,28 +175,28 @@ contains
     end function does_exist
 
     integer function get_n( self )
-        class(atoms), intent(inout) :: self
+        class(atoms), intent(in) :: self
         get_n = self%n
     end function get_n
 
     function get_coord( self, i )result( xyz )
-        class(atoms), intent(inout) :: self
-        integer,      intent(in)    :: i
+        class(atoms), intent(in) :: self
+        integer,      intent(in) :: i
         real :: xyz(3)
         if(i.lt.1 .or. i.gt.self%n)stop 'index out of range; simple_atoms%get_coord'
         xyz = self%xyz(i,:)
     end function get_coord
 
     integer function get_num( self, i )
-        class(atoms), intent(inout) :: self
-        integer,      intent(in)    :: i
+        class(atoms), intent(in) :: self
+        integer,      intent(in) :: i
         if(i.lt.1 .or. i.gt.self%n)stop 'index out of range; simple_atoms%get_coord'
         get_num = self%num(i)
     end function get_num
 
     character(len=4) function get_name( self, i )
-        class(atoms), intent(inout) :: self
-        integer,      intent(in)    :: i
+        class(atoms), intent(in) :: self
+        integer,      intent(in) :: i
         get_name = self%name(i)
     end function get_name
 
@@ -312,6 +313,14 @@ contains
             Z_from_name = 78
         end select
     end function Z_from_name
+
+    function get_geom_center(self) result(center)
+        class(atoms), intent(in) :: self
+        real :: center(3)
+        center(1) = sum(self%xyz(:,1)) / real(self%n)
+        center(2) = sum(self%xyz(:,2)) / real(self%n)
+        center(3) = sum(self%xyz(:,3)) / real(self%n)
+    end function get_geom_center
 
     ! DESTRUCTOR
     subroutine kill( self )

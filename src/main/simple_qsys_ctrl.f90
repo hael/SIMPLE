@@ -107,7 +107,7 @@ contains
         self%ncomputing_units_avail =  ncomputing_units
         if( self%stream )then
             self%numlen = 5
-        else    
+        else
             if( present(numlen) )then
                 self%numlen = numlen
             else

@@ -333,9 +333,9 @@ contains
                 do s=1,p%nstates
                     if( count(nint(states) == s) > 0 )then
                         if( p%eo .ne. 'no' )then
-                            call b%eorecvols(1)%grid_fplane(se, os, img, eo, pwght=pw, state=s)
+                            call b%eorecvols(s)%grid_fplane(se, os, img, eo, pwght=pw, state=s)
                         else
-                            call b%recvols(1)%insert_fplane(se, os, img, pwght=pw, state=s)
+                            call b%recvols(s)%insert_fplane(se, os, img, pwght=pw, state=s)
                         endif
                     endif
                 end do
@@ -387,7 +387,7 @@ contains
         integer   :: frcind
         x      = b%a%get(iptcl, 'x')
         y      = b%a%get(iptcl, 'y')
-        frcind = 0 
+        frcind = 0
         if( is3D .and. p%nstates==1 )then
             if( p%nspace /= NSPACE_BALANCE )then
                 frcind = b%e_bal%find_closest_proj(b%a%get_ori(iptcl))
@@ -466,7 +466,7 @@ contains
         ! centering only performed if p%center.eq.'yes'
         if( present(center) ) do_center = do_center .and. center
         if( do_center )then
-            if( present(xyz_in) )then 
+            if( present(xyz_in) )then
                 sharg = arg(xyz_in)
                 if( sharg > CENTHRESH )then
                     ! apply shift and do NOT update the corresponding class parameters
@@ -482,8 +482,8 @@ contains
                     call img_in%shift2Dserial(xyz(1:2))
                     call b%a%add_shift2class(icls, -xyz(1:2))
                 endif
-                if( present(xyz_out) ) xyz_out = xyz 
-            endif            
+                if( present(xyz_out) ) xyz_out = xyz
+            endif
         endif
         if( p%l_match_filt )then
             ! anisotropic matched filter
@@ -508,7 +508,7 @@ contains
         call img_out%fwd_ft
     end subroutine prep2Dref
 
-    !>  \brief prepares a 2D class document with class index, resolution, 
+    !>  \brief prepares a 2D class document with class index, resolution,
     !!         poulation, average correlation and weight
     subroutine gen2Dclassdoc( b, p, fname )
         class(build),     intent(inout) :: b
@@ -518,7 +518,7 @@ contains
         integer    :: icls, pop
         real       :: frc05, frc0143
         type(oris) :: classdoc
-        call classdoc%new_clean(p%ncls)        
+        call classdoc%new_clean(p%ncls)
         call b%a%get_pops(pops, 'class', maxn=p%ncls)
         do icls=1,p%ncls
             call b%projfrcs%estimate_res(icls, frc05, frc0143)
@@ -538,7 +538,7 @@ contains
         call classdoc%kill
         deallocate(pops)
     end subroutine gen2Dclassdoc
-            
+
     !>  \brief  initializes all volumes for reconstruction
     subroutine preprecvols( b, p )
         class(build),   intent(inout) :: b
@@ -628,7 +628,7 @@ contains
         endif
     end subroutine prepimgbatch
 
-    !>  \brief  center the reference volume and map shifts back to particles 
+    !>  \brief  center the reference volume and map shifts back to particles
     subroutine cenrefvol_and_mapshifts2ptcls( b, p, cline, s, volfname, do_center, xyz )
         class(build),     intent(inout) :: b
         class(params),    intent(inout) :: p
@@ -640,7 +640,7 @@ contains
         integer :: ldim(3)
         ! ensure correct b%vol dim
         call b%vol%new([p%box,p%box,p%box],p%smpd)
-        ! centering            
+        ! centering
         do_center = .true.
         if( p%center .eq. 'no' .or. p%nstates > 1 .or. .not. p%doshift .or.&
         &p%pgrp(:1) .ne. 'c' .or. cline%defined('mskfile') .or. p%l_frac_update )then
@@ -730,7 +730,7 @@ contains
         ! FT volume
         call b%vol%fwd_ft
         ! expand for fast interpolation
-        call b%vol%expand_cmat(p%alpha)   
+        call b%vol%expand_cmat(p%alpha)
     end subroutine preprefvol
 
     subroutine norm_struct_facts( b, p, which_iter )
@@ -781,7 +781,7 @@ contains
             endif
         end do
     end subroutine norm_struct_facts
-    
+
     subroutine eonorm_struct_facts( b, p, cline, res, which_iter )
         use simple_filterer, only: gen_anisotropic_optlp
         class(build),      intent(inout) :: b
@@ -808,7 +808,7 @@ contains
                 call b%eorecvols(s)%write_eos('recvol_state'//int2str_pad(s,2)//'_part'//int2str_pad(p%part,p%numlen))
             else
                 if( present(which_iter) )then
-                    p%vols(s) = 'recvol_state'//int2str_pad(s,2)//'_iter'//int2str_pad(which_iter,3)//p%ext 
+                    p%vols(s) = 'recvol_state'//int2str_pad(s,2)//'_iter'//int2str_pad(which_iter,3)//p%ext
                 else
                     p%vols(s) = 'startvol_state'//int2str_pad(s,2)//p%ext
                 endif
@@ -824,7 +824,7 @@ contains
                 call b%eorecvols(s)%get_res(res05s(s), res0143s(s))
                 call b%eorecvols(s)%sampl_dens_correct_sum(b%vol)
                 call b%vol%write(p%vols(s), del_if_exists=.true.)
-                 ! need to put the sum back at lowres for the eo pairs 
+                 ! need to put the sum back at lowres for the eo pairs
                 call b%vol%fwd_ft
                 call b%vol2%zero_and_unflag_ft
                 call b%vol2%read(p%vols_even(s))
@@ -877,7 +877,7 @@ contains
         real,        allocatable :: frc(:)
         integer :: iproj, ldim(3), find_plate
         ! ensure correct b%vol dim
-        call b%vol%new([p%box,p%box,p%box],p%smpd) 
+        call b%vol%new([p%box,p%box,p%box],p%smpd)
         ! read & prep even/odd pair
         call b%vol%read(ename)
         call b%vol2%read(oname)
@@ -926,7 +926,7 @@ contains
                     else
                         call vol%mask(p%msk, 'soft')
                     endif
-                endif 
+                endif
         end subroutine prepeovol
 
     end subroutine gen_projection_frcs

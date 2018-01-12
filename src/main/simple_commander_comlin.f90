@@ -31,7 +31,7 @@ contains
         use simple_ori,          only: ori
         use simple_imgfile,      only: imgfile
         use simple_comlin,       only: comlin
-        use simple_qsys_funs,      only: qsys_job_finished
+        use simple_qsys_funs,    only: qsys_job_finished
         class(comlin_smat_commander), intent(inout) :: self
         class(cmdline),               intent(inout) :: cline
         type(params), target          :: p
@@ -176,7 +176,7 @@ contains
                 ! writes projections images and orientations for subsequent reconstruction
                 ! only in local and distributed (part=1) modes
                 noris = b%e%get_noris()
-                do i=1,noris 
+                do i=1,noris
                     call b%ref_imgs(1,i)%write(SYMPROJSTK, i)
                 enddo
                 call binwrite_oritab(SYMPROJTAB, b%e, [1,noris])

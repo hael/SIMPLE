@@ -1281,9 +1281,12 @@ select case(prg)
        keys_optional(15) = 'mskfile'
        keys_optional(16) = 'taper_edges'
        keys_optional(17) = 'msk'
+       keys_optional(18) = 'pdbfile'
+       keys_optional(19) = 'oritab'
+       keys_optional(20) = 'outfile'
        ! parse command line
        if( describe ) call print_doc_mask
-       call cline%parse( keys_required(:1), keys_optional(:17))
+       call cline%parse( keys_required(:1), keys_optional(:20))
        ! execute
        call xmask%execute(cline)
     case( 'automask2D' )
@@ -1832,7 +1835,7 @@ select case(prg)
         !==Program norm
         !
         ! <norm/begin>is a program for normalization of MRC or SPIDER stacks and volumes. If you want to
-        ! normalise your images inputted with stk, set norm=yes. If you want to perform noise normalisation 
+        ! normalise your images inputted with stk, set norm=yes. If you want to perform noise normalisation
         ! of the images set noise_norm=yes given a mask radius msk (pixels). If you want to normalise your
         ! images or volume (vol1) with respect to their power spectrum set shell_norm=yes
         ! <norm/end>
