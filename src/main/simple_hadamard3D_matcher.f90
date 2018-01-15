@@ -298,7 +298,7 @@ contains
                     !$omp end parallel do
                 endif
             case('greedyneigh')
-                if( p%oritab .eq. '' )then                
+                if( p%oritab .eq. '' )then
                     !$omp parallel do default(shared) private(i,iptcl) schedule(static) proc_bind(close)
                     do i=1,nptcls2update
                         iptcl = pinds(i)
@@ -619,7 +619,7 @@ contains
                 ! transfer to polar coordinates
                 call match_imgs(imatch)%polarize(pftcc, iptcl, .true., .true.)
             end do
-            !$omp end parallel do 
+            !$omp end parallel do
         end do
 
         ! DESTRUCT

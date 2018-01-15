@@ -133,7 +133,7 @@ select case(prg)
     case( 'unblur_ctffind' )
         !==Program unblur_ctffind
         !
-        ! <unblur_ctffind/begin>is a pipelined distributed workflow: unblur + ctffind program<unblur_ctffind/end> 
+        ! <unblur_ctffind/begin>is a pipelined distributed workflow: unblur + ctffind program<unblur_ctffind/end>
         !
         ! set required keys
         keys_required(1)  = 'filetab'
@@ -188,16 +188,16 @@ select case(prg)
     case( 'unblur' )
         !==Program unblur
         !
-        ! <unblur/begin>is a distributed workflow for movie alignment or unblurring based the same 
-        ! principal strategy as Grigorieffs program (hence the name). There are two important 
-        ! differences: automatic weighting of the frames using a correlation-based M-estimator and 
-        ! continuous optimisation of the shift parameters. Input is a textfile with absolute paths 
-        ! to movie files in addition to a few input parameters, some of which deserve a comment. If 
+        ! <unblur/begin>is a distributed workflow for movie alignment or unblurring based the same
+        ! principal strategy as Grigorieffs program (hence the name). There are two important
+        ! differences: automatic weighting of the frames using a correlation-based M-estimator and
+        ! continuous optimisation of the shift parameters. Input is a textfile with absolute paths
+        ! to movie files in addition to a few input parameters, some of which deserve a comment. If
         ! dose_rate and exp_time are given the individual frames will be low-pass filtered accordingly
-        ! (dose-weighting strategy). If scale is given, the movie will be Fourier cropped according to 
-        ! the down-scaling factor (for super-resolution movies). If nframesgrp is given the frames will 
-        ! be pre-averaged in the given chunk size (Falcon 3 movies). If fromf/tof are given, a 
-        ! contiguous subset of frames will be averaged without any dose-weighting applied. 
+        ! (dose-weighting strategy). If scale is given, the movie will be Fourier cropped according to
+        ! the down-scaling factor (for super-resolution movies). If nframesgrp is given the frames will
+        ! be pre-averaged in the given chunk size (Falcon 3 movies). If fromf/tof are given, a
+        ! contiguous subset of frames will be averaged without any dose-weighting applied.
         ! <unblur/end>
         !
         ! set required keys
@@ -238,8 +238,8 @@ select case(prg)
         ! Input is a textfile with absolute paths to movie files in addition to a few input parameters, some
         ! of which deserve a comment. The exp_doc document should contain per line exp_time=X and dose_rate=Y.
         ! It is asssumed that the input list of movies (one per tilt) are ordered temporally. This is necessary
-        ! for correct dose-weighting of tomographic tilt series. If scale is given, the movie will be Fourier 
-        ! cropped according to the down-scaling factor (for super-resolution movies). If nframesgrp is given 
+        ! for correct dose-weighting of tomographic tilt series. If scale is given, the movie will be Fourier
+        ! cropped according to the down-scaling factor (for super-resolution movies). If nframesgrp is given
         ! the frames will be pre-averaged in the given chunk size (Falcon 3 movies). <unblur_tomo/end>
         !
         ! set required keys
@@ -302,7 +302,7 @@ select case(prg)
     case( 'ctffind' )
         !==Program ctffind
         !
-        ! <ctffind/begin>is a distributed workflow that wraps CTFFIND4 (Grigorieff lab)<ctffind/end> 
+        ! <ctffind/begin>is a distributed workflow that wraps CTFFIND4 (Grigorieff lab)<ctffind/end>
         !
         ! set required keys
         keys_required(1) = 'filetab'
@@ -366,7 +366,7 @@ select case(prg)
     case( 'pick' )
         !==Program pick
         !
-        ! <pick/begin>is a distributed workflow for template-based particle picking<pick/end> 
+        ! <pick/begin>is a distributed workflow for template-based particle picking<pick/end>
         !
         ! set required keys
         keys_required(1) = 'filetab'
@@ -389,8 +389,8 @@ select case(prg)
     case( 'makecavgs' )
         !==Program makecavgs
         !
-        ! <makecavgs/begin>is a distributed workflow used for producing class averages or 
-        ! initial random references for prime2D execution. <makecavgs/end> 
+        ! <makecavgs/begin>is a distributed workflow used for producing class averages or
+        ! initial random references for prime2D execution. <makecavgs/end>
         !
         ! set required keys
         keys_required(1)  = 'smpd'
@@ -428,7 +428,7 @@ select case(prg)
     case( 'prime2D' )
         !==Program prime2D
         !
-        ! <prime2D/begin>is a distributed workflow implementing a reference-free 2D alignment/clustering 
+        ! <prime2D/begin>is a distributed workflow implementing a reference-free 2D alignment/clustering
         ! algorithm adopted from the prime3D probabilistic ab initio 3D reconstruction algorithm<prime2D/end>
         !
         ! set required keys
@@ -468,7 +468,7 @@ select case(prg)
         ! documentation
         if( describe ) call print_doc_prime2D
         call cline%parse( keys_required(:5), keys_optional(:27) )
-        ! sanity checks 
+        ! sanity checks
         if( cline%defined('stk') .or. cline%defined('stktab') )then
             ! all ok
         else
@@ -487,7 +487,7 @@ select case(prg)
     case( 'prime2D_stream' )
         !==Program prime2D
         !
-        ! <prime2D/begin>is a distributed workflow implementing reference-free 2D alignment/clustering 
+        ! <prime2D/begin>is a distributed workflow implementing reference-free 2D alignment/clustering
         ! algorithm adopted from the prime3D probabilistic ab initio 3D reconstruction algorithm<prime2D/end>
         !
         ! set required keys
@@ -530,7 +530,7 @@ select case(prg)
     case( 'comlin_smat' )
         !==Program comlin_smat
         !
-        ! <comlin_smat/begin>is a distributed workflow for creating a similarity matrix based on 
+        ! <comlin_smat/begin>is a distributed workflow for creating a similarity matrix based on
         ! common line correlation. The idea being that it should be possible to cluster images based
         ! on their 3D similarity witout having a 3D model by only operating on class averages
         ! and find averages that fit well together in 3D<comlin_smat/end>
@@ -551,23 +551,23 @@ select case(prg)
         call cline%set('nthr', 1.0)
         if( .not. cline%defined('trs') ) call cline%set('trs', 3.0)
         ! execute
-        call xcomlin_smat_distr%execute(cline) 
-        
+        call xcomlin_smat_distr%execute(cline)
+
     ! PRIME3D
 
     case('prime3D_init')
         !==Program prime3D_init
         !
-        ! <prime3D_init/begin>is a distributed workflow for generating a random initial model for 
-        ! initialisation of PRIME3D. If the data set is large (>5000 images), generating a random 
-        ! model can be slow. To speedup, set nran to some smaller number, resulting in nran images 
-        ! selected randomly for reconstruction<prime3D_init/end> 
+        ! <prime3D_init/begin>is a distributed workflow for generating a random initial model for
+        ! initialisation of PRIME3D. If the data set is large (>5000 images), generating a random
+        ! model can be slow. To speedup, set nran to some smaller number, resulting in nran images
+        ! selected randomly for reconstruction<prime3D_init/end>
         !
         ! set required keys
         keys_required(1)  = 'smpd'
         keys_required(2)  = 'msk'
         keys_required(3)  = 'ctf'
-        keys_required(4)  = 'pgrp' 
+        keys_required(4)  = 'pgrp'
         keys_required(5)  = 'nparts'
         ! set optional keys
         keys_optional(1)  = 'nthr'
@@ -652,10 +652,11 @@ select case(prg)
         keys_optional(37) = 'phaseplate'
         keys_optional(38) = 'opt'
         keys_optional(39) = 'update_frac'
+        keys_optional(40) = 'focusmsk'
         ! documentation
         if( describe ) call print_doc_prime3D
         ! parse command line
-        call cline%parse( keys_required(:5), keys_optional(:39) )
+        call cline%parse( keys_required(:5), keys_optional(:40) )
         ! sanity check
         if( cline%defined('stk') .or. cline%defined('stktab') )then
             ! all ok
@@ -835,8 +836,8 @@ select case(prg)
     case( 'tseries_track' )
         !==Program tseries_track
         !
-        ! <tseries_track/begin>is a distributed workflow for particle tracking 
-        ! in time-series data <tseries_track/end> 
+        ! <tseries_track/begin>is a distributed workflow for particle tracking
+        ! in time-series data <tseries_track/end>
         !
         ! set required keys
         keys_required(1) = 'filetab'
@@ -864,8 +865,8 @@ select case(prg)
     case( 'ini3D_from_cavgs' )
         !==Program ini3D_from_cavgs
         !
-        ! <ini3D_from_cavgs/begin>is a distributed workflow for generating an initial 
-        ! 3D model from class averages obtained with prime2D<ini3D_from_cavgs/end> 
+        ! <ini3D_from_cavgs/begin>is a distributed workflow for generating an initial
+        ! 3D model from class averages obtained with prime2D<ini3D_from_cavgs/end>
         !
         ! set required keys
         keys_required(1)  = 'stk'
@@ -878,7 +879,7 @@ select case(prg)
         keys_optional(2)  = 'ncunits'
         keys_optional(3)  = 'hp'
         keys_optional(4)  = 'lpstart'
-        keys_optional(5)  = 'lpstop' 
+        keys_optional(5)  = 'lpstop'
         keys_optional(6)  = 'frac'
         keys_optional(7)  = 'inner'
         keys_optional(8)  = 'width'
@@ -898,8 +899,8 @@ select case(prg)
     case( 'het' )
         !==Program het
         !
-        ! <het/begin>is a distributed workflow for heterogeneity analysis 
-        ! <het/end> 
+        ! <het/begin>is a distributed workflow for heterogeneity analysis
+        ! <het/end>
         !
         ! set required keys
         keys_required(1)  = 'smpd'
@@ -944,7 +945,7 @@ select case(prg)
         !==Program het_ensemble
         !
         ! <het_refine/begin>is a distributed workflow for heterogeneity analysis refinement
-        ! <het_refine/end> 
+        ! <het_refine/end>
         !
         ! set required keys
         keys_required(1)  = 'smpd'
@@ -991,7 +992,7 @@ select case(prg)
         !==Program scale_stk_parts
         !
         ! <scale_stk_parts/begin>is a distributed workflow for scaling
-        ! partial stacks<scale_stk_parts/end> 
+        ! partial stacks<scale_stk_parts/end>
         !
         ! set required keys
         keys_required(1) = 'smpd'

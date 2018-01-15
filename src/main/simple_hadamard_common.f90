@@ -438,7 +438,11 @@ contains
         if( p%l_innermsk )then
             call img_out%mask(p%msk, 'soft', inner=p%inner, width=p%width)
         else
-            call img_out%mask(p%msk, 'soft')
+            if( p%l_focusmsk )then
+                call img_out%mask(p%focusmsk, 'soft')
+            else
+                call img_out%mask(p%msk, 'soft')
+            endif
         endif
         ! return in Fourier space
         call img_out%fwd_ft
