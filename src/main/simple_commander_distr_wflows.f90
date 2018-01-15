@@ -337,10 +337,10 @@ contains
         ! prepare merge_algndocs command line
         cline_merge_algndocs = cline
         call cline_merge_algndocs%set( 'fbody',    'ctffit_output_part'       )
-        call cline_merge_algndocs%set( 'nptcls',   real(p_master%nptcls)       )
-        call cline_merge_algndocs%set( 'ndocs',    real(p_master%nparts)       )
+        call cline_merge_algndocs%set( 'nptcls',   real(p_master%nptcls)      )
+        call cline_merge_algndocs%set( 'ndocs',    real(p_master%nparts)      )
         call cline_merge_algndocs%set( 'outfile',  'ctffit_output_merged.txt' )
-        call cline_merge_algndocs%set( 'ext_meta', '.txt'                      )
+        call cline_merge_algndocs%set( 'ext_meta', '.txt'                     )
         ! setup the environment for distributed execution
         call qenv%new(p_master)
         ! prepare job description

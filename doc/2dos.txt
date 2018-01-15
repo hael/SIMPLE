@@ -15,7 +15,19 @@ Consider
 
 Flip in postproc
 
+Picker should produce output identically to unblur/ctffind, output is boxfile per movie
+Make sure that output names are standardised
+
+
+
+
 Binary file format
+
+Should we keep track of jobid, out_dir, pid for every executed job?
+In this way we could kill processes, allowing cancellation
+Shall we keep track of which jobid wrote which entry in the segmented binary file?
+
+
 
 StkInfo
 ClsInfo
@@ -29,3 +41,22 @@ LastJob (append to structure to get history of workflow???)
 Json as a User Interface Markup Language
 
 Joe made a mockup
+
+JULIA
+Should be possible to use ccall to call Fortran subroutines, which means we need to re-code all commanders so they become subroutines of modules and so that their arguments are native types (i.e. the cmdline needs to be turned into a job_description string). Then we should have all the commander functionality at our hands with all the power of Julia.
+
+Julia coding priorities:
+Support from reading MRC into matrix
+Support for  writing MRC from matrix
+Support for read/write *simple binary files
+
+Ideas from flow-based programming
+
+These kind of applications always keep a register of process ID:s and statuses. We should probably have a LIFO data structure that keeps track of jobid:s PID:s, execution times etc. as part of the sp_project structure
+
+Other ideas
+
+Need methods for projecting the time of an execution, so that we can display accordingly
+
+
+

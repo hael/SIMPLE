@@ -5,6 +5,8 @@ stderr=>ERROR_UNIT,&
 stdout=>OUTPUT_UNIT,&
 stdin=>INPUT_UNIT
 implicit none
+integer, parameter  :: ascii = selected_char_kind ("ascii")
+integer, parameter  :: ucs4  = selected_char_kind ('ISO_10646')
 integer,  parameter :: MAXS         = 99   !< maximum number of states
 integer,  parameter :: STDLEN       = 256  !< standard string length
 integer,  parameter :: LONGSTRLEN   = 2048 !< longer string length

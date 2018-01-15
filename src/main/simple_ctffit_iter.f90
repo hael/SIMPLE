@@ -42,7 +42,7 @@ contains
         pspec         = micrograph%mic2spec(p%pspecsz, 'sqrt')
         movie_counter = movie_counter + 1
         fname_diag    = add2fbody(moviename_forctf, p%ext, '_ctffit_diag')
-        if(present(dir_out))then
+        if( present(dir_out) )then
             fname_diag = remove_abspath(trim(fname_diag))
             fname_diag = trim(dir_out)//'/'//trim(fname_diag)
         endif
@@ -52,7 +52,7 @@ contains
         call os%set(movie_counter, 'kv',       p%kv   )
         call os%set(movie_counter, 'cs',       p%cs   )
         call os%set(movie_counter, 'fraca',    p%fraca)
-        call os%set(movie_counter, 'dfx',      dfx    ) 
+        call os%set(movie_counter, 'dfx',      dfx    )
         call os%set(movie_counter, 'dfy',      dfy    )
         call os%set(movie_counter, 'angast',   angast )
         call os%set(movie_counter, 'phshift',  phshift)

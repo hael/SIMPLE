@@ -239,6 +239,10 @@ contains
             if (stringsAreEqual(round, 'UNDEFINED',.false.)) write( round_this ,'(A)') upperCase(round)
         end if
         if(present(iomsg)) iomsg_this=iomsg
+
+
+        print *, 'form in fopen: ', form_this
+
         ! execute open under specific conditions
         if (stringsAreEqual(form_this, 'FORMATTED',.false.)) then
             open( NEWUNIT=funit,FILE=filename,IOSTAT=iostat_this,&
@@ -414,31 +418,31 @@ contains
     end function nlines
 
     !> \brief  return the size of a binary file
-    function filelength( fname ) result( filesz )
-        character(len=*), intent(in) :: fname !< input filename
-        integer                      :: filesz, funit, ios, cnt,recl
-        character(len=1)             :: junk
-        if(  file_exists(fname) )then
-            recl=1
-            call fopen_1(funit, fname, ACTION='read', IOSTAT=ios,&
-                ACCESS='direct', form='unformatted', recl=recl)
-            call fileio_errmsg('simple_fileio :: nlines opening '//trim(fname), ios)
-            cnt = 0
-            filesz = 0
-            do
-                cnt = cnt+1
-                read(funit,rec=cnt,IOSTAT=ios) junk
-                if(ios /= 0)then
-                    exit
-                else
-                    filesz = filesz+1
-                endif
-            end do
-            call fclose_1( funit, ios ,errmsg=" Error closing file in ::filelength "//trim(fname))
-        else
-            filesz = 0
-        endif
-    end function filelength
+    ! function filelength( fname ) result( filesz )
+    !     character(len=*), intent(in) :: fname !< input filename
+    !     integer                      :: filesz, funit, ios, cnt,recl
+    !     character(len=1)             :: junk
+    !     if(  file_exists(fname) )then
+    !         recl=1
+    !         call fopen_1(funit, fname, ACTION='read', IOSTAT=ios,&
+    !             ACCESS='direct', form='unformatted', recl=recl)
+    !         call fileio_errmsg('simple_fileio :: nlines opening '//trim(fname), ios)
+    !         cnt = 0
+    !         filesz = 0
+    !         do
+    !             cnt = cnt+1
+    !             read(funit,rec=cnt,IOSTAT=ios) junk
+    !             if(ios /= 0)then
+    !                 exit
+    !             else
+    !                 filesz = filesz+1
+    !             endif
+    !         end do
+    !         call fclose_1( funit, ios ,errmsg=" Error closing file in ::filelength "//trim(fname))
+    !     else
+    !         filesz = 0
+    !     endif
+    ! end function filelength
 
     !> \brief  return file size in bytes
     function funit_size(unit) result(sz)

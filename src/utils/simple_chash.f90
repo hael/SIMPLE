@@ -11,11 +11,11 @@ private
 !> Simple chash type
 type :: chash
     private
-    character(len=32),     allocatable :: keys(:)   !< chash keys
-    character(len=STDLEN), allocatable :: values(:) !< chash values
-    integer :: nmax        = 0                      !< maximum number of entries in chash
-    integer :: chash_index = 0                      !< current highest index in hash
-    logical :: exists      = .false.                !< to indicate existence
+    character(kind=ascii, len=32),     allocatable :: keys(:)   !< chash keys
+    character(kind=ascii, len=STDLEN), allocatable :: values(:) !< chash values
+    integer :: nmax        = 0                                  !< maximum number of entries in chash
+    integer :: chash_index = 0                                  !< current highest index in hash
+    logical :: exists      = .false.                            !< to indicate existence
   contains
     !< CONSTRUCTORS
     procedure          :: new
