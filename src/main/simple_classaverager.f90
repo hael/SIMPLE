@@ -40,7 +40,7 @@ integer                        :: filtsz          = 0           !< size of filte
 integer                        :: ldim(3)         = [0,0,0]     !< logical dimension of image
 integer                        :: ldim_pd(3)      = [0,0,0]     !< logical dimension of image, padded
 real                           :: smpd            = 0.          !< sampling distance
-type(ptcl_record), allocatable :: precs(:)                      !< particle records     
+type(ptcl_record), allocatable :: precs(:)                      !< particle records
 type(image),       allocatable :: cavgs_even(:,:)               !< class averages
 type(image),       allocatable :: cavgs_odd(:,:)                !< -"-
 type(image),       allocatable :: cavgs_merged(:,:)             !< -"-
@@ -51,7 +51,7 @@ real,              allocatable :: inpl_rots(:)                  !< in-plane rota
 logical                        :: phaseplate    = .false.       !< Volta phaseplate images or not
 logical                        :: l_is_class    = .true.        !< for prime2D or not
 logical                        :: l_hard_assign = .true.        !< npeaks == 1 or not
-logical                        :: exists        = .false.       !< to flag instance existence 
+logical                        :: exists        = .false.       !< to flag instance existence
 
 integer, parameter      :: BATCHTHRSZ = 50
 logical, parameter      :: L_BENCH    = .false.
@@ -84,7 +84,7 @@ contains
                 ncls       = p%ncls
             case('proj')
                 l_is_class = .false.
-                ! possible reduction of # projection directions used 
+                ! possible reduction of # projection directions used
                 ! for the class average representation
                 ncls = min(NSPACE_BALANCE,p%nspace)
             case DEFAULT
@@ -335,8 +335,8 @@ contains
     ! calculators
 
     !>  \brief  is for assembling the sums in distributed/non-distributed mode
-    !!          using gridding interpolation in Fourier space or quadratic 
-    !!          interpolation in real-space      
+    !!          using gridding interpolation in Fourier space or quadratic
+    !!          interpolation in real-space
     subroutine cavger_assemble_sums
         use simple_kbinterpol,      only: kbinterpol
         use simple_prep4cgrid,      only: prep4cgrid
@@ -345,7 +345,7 @@ contains
         type(kbinterpol)         :: kbwin
         type(prep4cgrid)         :: gridprep
         type(image)              :: cls_imgsum_even, cls_imgsum_odd
-        type(image), allocatable :: batch_imgs(:), cgrid_imgs(:) 
+        type(image), allocatable :: batch_imgs(:), cgrid_imgs(:)
         complex,     allocatable :: cmat_even(:,:,:), cmat_odd(:,:,:)
         real,        allocatable :: rho(:,:), rho_even(:,:), rho_odd(:,:), w(:,:)
         integer,     allocatable :: ptcls_inds(:), batches(:,:), iprecs(:)
@@ -403,7 +403,7 @@ contains
             rt_tot        = 0.
             t_tot         = tic()
         endif
-        ! state loop 
+        ! state loop
         cnt_progress = 0
         do istate=1,nstates
             ! class loop
@@ -548,7 +548,7 @@ contains
                 call cls_imgsum_odd%fwd_ft
                 ! updates cavgs & rhos
                 !$omp parallel do collapse(2) default(shared) private(h,k,logi,phys)&
-                !$omp schedule(static) proc_bind(close)                    
+                !$omp schedule(static) proc_bind(close)
                 do h=lims_small(1,1),lims_small(1,2)
                     do k=lims_small(2,1),lims_small(2,2)
                         logi = [h,k,0]

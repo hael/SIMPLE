@@ -127,7 +127,7 @@ type :: params
     character(len=STDLEN) :: featstk='expecstk.bin'
     character(len=STDLEN) :: filetab=''           !< list of files(.txt)
     character(len=STDLEN) :: fname=''             !< file name
-    character(len=STDLEN) :: frcs=''              !< binary file with per-class/proj Fourier Ring Correlations(.bin) 
+    character(len=STDLEN) :: frcs=''              !< binary file with per-class/proj Fourier Ring Correlations(.bin)
     character(len=STDLEN) :: fsc='fsc_state01.bin'!< binary file with FSC info{fsc_state01.bin}
     character(len=STDLEN) :: hfun='sigm'          !< function used for normalization(sigm|tanh|lin){sigm}
     character(len=STDLEN) :: hist='corr'          !< give variable for histogram plot
@@ -318,6 +318,7 @@ type :: params
     real    :: exp_time=2.0        !< exposure time(in s)
     real    :: filwidth=0.         !< width of filament (in A)
     real    :: fny=0.
+    real    :: focusmsk=0.         !< spherical msk for use with focused refinement
     real    :: frac=1.             !< fraction of ptcls(0-1){1}
     real    :: fraca=0.07          !< fraction of amplitude contrast used for fitting CTF{0.07}
     real    :: fracdeadhot=0.05    !< fraction of dead or hot pixels{0.01}
@@ -375,11 +376,11 @@ type :: params
     logical :: l_chunk_distr      = .false.
     logical :: l_match_filt       = .true.
     logical :: doshift            = .false.
-    logical :: l_envmsk           = .false.
+    logical :: l_focusmsk           = .false.
     logical :: l_autoscale        = .false.
-    logical :: l_dose_weight      = .false. 
+    logical :: l_dose_weight      = .false.
     logical :: l_frac_update      = .false.
-    logical :: l_innermsk         = .false. 
+    logical :: l_innermsk         = .false.
     logical :: l_pick             = .false.
     logical :: l_remap_classes    = .false.
     logical :: l_stktab_input     = .false.
@@ -414,7 +415,7 @@ contains
         character(len=1)                 :: checkupfile(50)
         character(len=:), allocatable    :: conv, stk_part_fname_sc, pid_file
         integer                          :: i, ncls, ifoo, lfoo(3), cntfile, istate, pid
-        logical                          :: nparts_set, vol_defined(MAXS), aamix, ddel_scaled 
+        logical                          :: nparts_set, vol_defined(MAXS), aamix, ddel_scaled
         nparts_set        = .false.
         vol_defined(MAXS) = .false.
         debug_local       = 'no'
@@ -705,6 +706,7 @@ contains
         call check_rarg('eps',            self%eps)
         call check_rarg('exp_time',       self%exp_time)
         call check_rarg('filwidth',       self%filwidth)
+        call check_rarg('focusmsk',       self%focusmsk)
         call check_rarg('frac',           self%frac)
         call check_rarg('fraca',          self%fraca)
         call check_rarg('fracdeadhot',    self%fracdeadhot)
@@ -841,7 +843,7 @@ contains
                     ! call bos%open(self%oritab)
                     ! self%nptcls = bos%get_n_records()
                     ! call bos%close
-                endif            
+                endif
             endif
         else if( self%refs .ne. '' )then
             if( file_exists(self%refs) )then
@@ -863,7 +865,7 @@ contains
         call mkfnames
         ! check box
         if( self%box > 0 .and. self%box < 26 ) stop 'box size need to be larger than 26; simple_params'
-        
+
         ! set refs_even and refs_odd
         if( cline%defined('refs') )then
             self%refs_even = add2fbody(self%refs, self%ext, '_even')
@@ -1027,14 +1029,22 @@ contains
                 self%l_match_filt = .true.
         end select
         ! checks automask related values
-        self%l_envmsk = .false.
-        if( self%automsk .ne. 'no' ) self%l_envmsk = .true.
         if( cline%defined('mskfile') )then
             if( .not. file_exists(self%mskfile) )then
                 write(*,*) 'file: ', trim(self%mskfile)
                 stop 'input mask file not in cwd'
             endif
-            self%l_envmsk = .true.
+        endif
+        ! focused masking
+        self%l_focusmsk = .false.
+        if( cline%defined('focusmsk') )then
+            if( .not.cline%defined('mskfile') )stop 'mskfile must be provided together with focusmsk'
+            if( .not.cline%defined('msk') )then
+                stop 'msk must be provided together with focusmsk'
+            else
+                if(self%focusmsk >= self%msk)stop 'focusmsk should be smaller than msk'
+            endif
+            self%l_focusmsk = .true.
         endif
         ! scaling stuff
         self%l_autoscale = .false.

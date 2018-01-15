@@ -3258,6 +3258,7 @@ contains
         where( self%rmat < 0.999 ) self%rmat = 0.
     end subroutine remove_edge
 
+
     !>  \brief  increments the logi pixel value with incr
     !! \param logi coordinates
     !! \param incr increment
@@ -6637,9 +6638,7 @@ contains
                 do k = win(3,1),win(3,2)
                     vec     = real([i,j,k] - 1) * self%smpd - xyz
                     dist_sq = dot_product(vec,vec)
-                    if(dist_sq <= radius_sq)then
-                        self%rmat(i,j,k) = val
-                    endif
+                    if(dist_sq <= radius_sq)self%rmat(i,j,k) = val
                 end do
             end do
       end do

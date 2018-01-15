@@ -28,7 +28,6 @@ type, extends(image) :: masker
     procedure          :: automask3D
     procedure          :: resmask
     procedure          :: apply_2Denvmask22Dref
-    ! procedure          :: sphere_mask
     procedure          :: mask_from_pdb
     procedure, private :: bin_cavg
     procedure, private :: bin_vol_thres
@@ -108,34 +107,6 @@ contains
     end subroutine apply_2Denvmask22Dref
 
     !>  \brief  is for
-    subroutine sphere_mask( self, p, xyz, vol_inout, os)
-        use simple_oris, only: oris
-        class(masker), intent(inout) :: self
-        class(params), intent(in)    :: p
-        real,          intent(in)    :: xyz(3)
-        class(image),  intent(inout) :: vol_inout
-        class(oris),   intent(inout) :: os
-        real    :: centre(3), shift(3)
-        logical :: was_ft
-        if( vol_inout%is_2d() )stop 'sphere_mask is intended for volumes only, simple_masker::sphere_mask'
-        was_ft = vol_inout%is_ft()
-        call self%new(vol_inout%get_ldim(), vol_inout%get_smpd())
-        centre = real(self%get_ldim()-1)/2. * self%get_smpd()
-        shift  = ( xyz - centre ) / self%get_smpd()
-        ! shift volume & oris
-        call vol_inout%shift(shift)
-        call os%map3dshift22d(-shift)
-        ! build mask
-        call self%set_within( centre, real(p%binwidth)*self%get_smpd(), 5.)
-        call self%grow_bin()
-        call self%cos_edge(p%edge)
-        ! multiply with mask
-        call vol_inout%bwd_ft()
-        call vol_inout%mul(self)
-        if(was_ft) call vol_inout%fwd_ft
-    end subroutine sphere_mask
-
-    !>  \brief  is for
     subroutine mask_from_pdb( self, p, pdb, vol_inout, os)
         use simple_oris,  only: oris
         use simple_atoms, only: atoms
@@ -144,13 +115,16 @@ contains
         type(atoms),           intent(in)    :: pdb
         class(image),          intent(inout) :: vol_inout
         class(oris), optional, intent(inout) :: os
-        real    :: centre(3), shift(3), pdb_center(3), xyz(3), radius, smpd
-        integer :: i
-        logical :: was_ft
+        type(image) :: distimg
+        real        :: centre(3), shift(3), pdb_center(3), xyz(3), minmax(2), radius, smpd
+        integer     :: i
+        logical     :: was_ft
         if( vol_inout%is_2d() )stop 'sphere_mask is intended for volumes only, simple_masker::sphere_mask'
         was_ft = vol_inout%is_ft()
         smpd   = vol_inout%get_smpd()
         call self%new(vol_inout%get_ldim(), smpd)
+        call distimg%new(vol_inout%get_ldim(), smpd)
+        call distimg%cendist()
         pdb_center = pdb%get_geom_center()
         centre     = real(self%get_ldim()-1)/2. * smpd
         shift      = ( pdb_center - centre ) / smpd
@@ -169,11 +143,16 @@ contains
             call self%set_within( xyz, radius, 1.)
         enddo
         call self%grow_bin()
+        call distimg%mul(self) ! for suggested focusmsk
         call self%cos_edge(p%edge)
         ! multiply with mask
         call vol_inout%bwd_ft()
         call vol_inout%mul(self)
         if(was_ft) call vol_inout%fwd_ft
+        ! suggested focusmsk
+        minmax = distimg%minmax()
+        write(*,'(A,I4)') '>>> SUGGESTED FOCUSMSK: ', ceiling(minmax(2))+p%edge
+        call distimg%kill
     end subroutine mask_from_pdb
 
     ! BINARISATION ROUTINES
