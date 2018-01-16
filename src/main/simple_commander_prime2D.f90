@@ -88,7 +88,7 @@ contains
         if( cline%defined('outfile') )then
             p%oritab = p%outfile
         else
-            p%oritab = 'prime2D_startdoc'//METADATEXT
+            p%oritab = 'prime2D_startdoc'//trim(METADATEXT)
         endif
         ! shift multiplication
         if( p%mul > 1. ) call b%a%mul_shifts(p%mul)

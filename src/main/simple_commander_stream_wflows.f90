@@ -122,7 +122,7 @@ contains
         character(len=32),       parameter :: STK_FILETAB     = 'stkstreamtab.txt'
         character(len=32),       parameter :: SCALE_FILETAB   = 'stkscale.txt'
         character(len=32),       parameter :: DEFTAB          = 'deftab.txt'
-        character(len=32),       parameter :: FINALDOC        = 'prime2Ddoc_final'//METADATEXT
+        character(len=32),       parameter :: FINALDOC        = 'prime2Ddoc_final'//trim(METADATEXT)
         integer,                 parameter :: SHIFTSRCH_PTCLSLIM = 2000 ! # of ptcls required to turm on shift search
         integer,                 parameter :: SHIFTSRCH_ITERLIM  = 5    ! # of iterations prior to turm on shift search
         integer,                 parameter :: WAIT_WATCHER       = 60   ! seconds prior to new stack detection
@@ -184,7 +184,7 @@ contains
         ! Instantiate watcher
         mic_watcher = extractwatcher(p_master, 30, print=.true.)
         ! Wait for sufficient number of classes
-        do 
+        do
             call mic_watcher%watch(n_newstks)
             if(n_newstks > 0)then
                 if( nptcls_glob .eq. 0 )then
@@ -336,7 +336,7 @@ contains
                     do i = nstacks_glob+1, nstacks_glob+n_newstks
                         cnt = cnt + 1
                         stktab(i) = trim(new_stacks(cnt))
-                    enddo                    
+                    enddo
                 endif
                 nstacks_glob = nstacks_glob + n_newstks
                 call write_filetable(STK_FILETAB, stktab)
@@ -408,7 +408,7 @@ contains
                 if( ncls_glob.eq.ncls_glob_prev )then
                     ! nothing to do
                 else
-                    write(*,'(A,I6)')'>>> NEW CLASSES COUNT: ', ncls_glob 
+                    write(*,'(A,I6)')'>>> NEW CLASSES COUNT: ', ncls_glob
                     call os%fill_empty_classes(ncls_glob, fromtocls)
                     if( allocated(fromtocls) )then
                         ! references

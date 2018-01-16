@@ -83,7 +83,7 @@ contains
             call scobj%scale_distr_exec
             if( cline%defined('stktab') )then
                 ! updates command lines
-                scaled_stktab = add2fbody(p_master%stktab, METADATEXT, SCALE_SUFFIX)
+                scaled_stktab = add2fbody(p_master%stktab, trim(METADATEXT), SCALE_SUFFIX)
                 ! update stktab
                 call p_master%stkhandle%add_scale_tag
                 call p_master%stkhandle%write_stktab(trim(scaled_stktab))
@@ -97,7 +97,7 @@ contains
             call cline_prime2D_stage1%set('maxits', real(MAXITS_STAGE1))
             call xprime2D_distr%execute(cline_prime2D_stage1)
             last_iter_stage1 = nint(cline_prime2D_stage1%get_rarg('endit'))
-            finaldoc         = trim(PRIME2D_ITER_FBODY)//int2str_pad(last_iter_stage1,3)//METADATEXT
+            finaldoc         = trim(PRIME2D_ITER_FBODY)//int2str_pad(last_iter_stage1,3)//trim(METADATEXT)
             finalcavgs       = trim(CAVGS_ITER_FBODY)//int2str_pad(last_iter_stage1,3)//p_master%ext
             ! prepare stage 2 input -- re-scale
             call scobj%uninit(cline) ! puts back the old command line
@@ -123,7 +123,7 @@ contains
             call cline_prime2D_stage2%set('startit', real(MAXITS_STAGE1 + 1))
             call xprime2D_distr%execute(cline_prime2D_stage2)
             last_iter_stage2 = nint(cline_prime2D_stage2%get_rarg('endit'))
-            finaldoc         = trim(PRIME2D_ITER_FBODY)//int2str_pad(last_iter_stage2,3)//METADATEXT
+            finaldoc         = trim(PRIME2D_ITER_FBODY)//int2str_pad(last_iter_stage2,3)//trim(METADATEXT)
             finalcavgs       = trim(CAVGS_ITER_FBODY)//int2str_pad(last_iter_stage2,3)//p_master%ext
             if( cline%defined('stktab') )then
                 ! delete downscaled stack parts & stktab (we are done with them)
@@ -151,7 +151,7 @@ contains
         else ! no auto-scaling
             call xprime2D_distr%execute(cline)
             last_iter_stage2 = nint(cline%get_rarg('endit'))
-            finaldoc         = trim(PRIME2D_ITER_FBODY)//int2str_pad(last_iter_stage2,3)//METADATEXT
+            finaldoc         = trim(PRIME2D_ITER_FBODY)//int2str_pad(last_iter_stage2,3)//trim(METADATEXT)
             finalcavgs       = trim(CAVGS_ITER_FBODY)//int2str_pad(last_iter_stage2,3)//p_master%ext
         endif
         ! ranking
@@ -162,7 +162,7 @@ contains
         call cline_rank_cavgs%set('outstk',   trim(finalcavgs_ranked))
         call xrank_cavgs%execute( cline_rank_cavgs )
         ! cleanup
-        call del_file('prime2D_startdoc'//METADATEXT)
+        call del_file('prime2D_startdoc'//trim(METADATEXT))
         call del_file('start2Drefs'//p_master%ext)
         ! end gracefully
         call simple_end('**** SIMPLE_PRIME2D NORMAL STOP ****')
@@ -259,7 +259,7 @@ contains
         vol_pproc = trim(VOL_FBODY)//trim(str_state)//'_iter'//trim(str_iter)//'_pproc'//p_master%ext
         call simple_rename(trim(vol_iter), 'rec_final'//p_master%ext)
         call simple_rename(trim(vol_pproc), 'rec_final_pproc'//p_master%ext)
-        call simple_rename(trim(oritab), 'prime3Ddoc_final'//METADATEXT)
+        call simple_rename(trim(oritab), 'prime3Ddoc_final'//trim(METADATEXT))
         ! delete stack parts (we are done with them)
         call del_files(trim(STKPARTFBODY), p_master%nparts, ext=p_master%ext)
         ! end gracefully
@@ -269,7 +269,7 @@ contains
 
             subroutine set_iter_dependencies
                 str_iter = int2str_pad(nint(iter),3)
-                oritab   = trim(ITERFBODY)//trim(str_iter)//METADATEXT
+                oritab   = trim(ITERFBODY)//trim(str_iter)//trim(METADATEXT)
                 vol_iter = trim(VOL_FBODY)//trim(str_state)//'_iter'//trim(str_iter)//p_master%ext
             end subroutine set_iter_dependencies
 
@@ -389,15 +389,15 @@ contains
             call cline_symsrch%set('nptcls',  real(NPROJS_SYMSRCH))
             call cline_symsrch%set('nspace',  real(NPROJS_SYMSRCH))
             call cline_symsrch%set('cenlp',   CENLP)
-            call cline_symsrch%set('outfile', 'symdoc'//METADATEXT)
+            call cline_symsrch%set('outfile', 'symdoc'//trim(METADATEXT))
             call cline_symsrch%set('lp',      lplims(2))
             ! (4.5) RECONSTRUCT SYMMETRISED VOLUME
             call cline_recvol%set('prg', 'recvol')
             call cline_recvol%set('trs',  5.) ! to assure that shifts are being used
             call cline_recvol%set('ctf',  'no')
-            call cline_recvol%set('oritab', 'symdoc'//METADATEXT)
+            call cline_recvol%set('oritab', 'symdoc'//trim(METADATEXT))
             ! refinement step now uses the symmetrised vol and doc
-            call cline_prime3D_refine%set('oritab', 'symdoc'//METADATEXT)
+            call cline_prime3D_refine%set('oritab', 'symdoc'//trim(METADATEXT))
             call cline_prime3D_refine%set('vol1', 'rec_sym'//p_master%ext)
         endif
         ! (4) PRIME3D REFINE STEP
@@ -490,7 +490,7 @@ contains
             subroutine set_iter_dependencies
                 character(len=3) :: str_iter
                 str_iter = int2str_pad(nint(iter),3)
-                oritab   = trim(ITERFBODY)//trim(str_iter)//METADATEXT
+                oritab   = trim(ITERFBODY)//trim(str_iter)//trim(METADATEXT)
                 vol_iter = trim(VOL_FBODY)//trim(str_state)//'_iter'//trim(str_iter)//p_master%ext
             end subroutine set_iter_dependencies
 
@@ -562,7 +562,7 @@ contains
             call cline_prime3D%set('trs',trs)
         endif
         ! generate diverse initial labels
-        oritab = 'hetdoc_init'//METADATEXT
+        oritab = 'hetdoc_init'//trim(METADATEXT)
         call os%new(p_master%nptcls)
         call binread_oritab(p_master%oritab, os, [1,p_master%nptcls])
         if( p_master%eo.eq.'no' )then
@@ -608,7 +608,7 @@ contains
         ! final distributed reconstruction to obtain resolution estimate when eo .eq. 'no'
         if( p_master%eo .eq. 'no' )then
             iter   = nint(cline_prime3D%get_rarg('endit'))
-            oritab = PRIME3D_ITER_FBODY//int2str_pad(iter,3)//METADATEXT
+            oritab = PRIME3D_ITER_FBODY//int2str_pad(iter,3)//trim(METADATEXT)
             call cline_recvol_distr%set('oritab', trim(oritab))
             call xrecvol_distr%execute(cline_recvol_distr)
             do state = 1, p_master%nstates
@@ -695,7 +695,7 @@ contains
         ! constants
         character(len=20),  parameter :: INIT_FBODY  = 'hetinit_refine_state'
         character(len=19),  parameter :: FINAL_FBODY = 'hetdoc_refine_state'
-        character(len=17),  parameter :: FINAL_DOC   = 'hetdoc_refine'//METADATEXT
+        character(len=17),  parameter :: FINAL_DOC   = 'hetdoc_refine'//trim(METADATEXT)
         ! distributed commanders
         type(prime3D_distr_commander) :: xprime3D_distr
         type(recvol_distr_commander)  :: xrecvol_distr
@@ -759,9 +759,9 @@ contains
             end where
             call os_state%set_all('state', real(states))
             deallocate(states)
-            init_docs(state) = INIT_FBODY//str_state//METADATEXT
+            init_docs(state) = INIT_FBODY//str_state//trim(METADATEXT)
             call binwrite_oritab(init_docs(state), os_state, [1,p_master%nptcls])
-            final_docs(state) = FINAL_FBODY//str_state//METADATEXT
+            final_docs(state) = FINAL_FBODY//str_state//trim(METADATEXT)
             ! check & move volumes
             l_hasvols(state) = trim(p_master%vols(state)) .ne. ''
             if( l_hasvols(state) )then
@@ -876,7 +876,7 @@ contains
             call xprime3D_distr%execute(cline_prime3D)
             ! harvest outcome
             iter   = nint(cline_prime3D%get_rarg('endit'))
-            oritab = PRIME3D_ITER_FBODY//int2str_pad(iter,3)//METADATEXT
+            oritab = PRIME3D_ITER_FBODY//int2str_pad(iter,3)//trim(METADATEXT)
             ! stash
             call os_state%new(p_master%nptcls)
             call binread_oritab(oritab, os_state, [1,p_master%nptcls])
@@ -941,7 +941,7 @@ contains
                         call rename(src, dir//src)
                     endif
                     ! orientation document
-                    src = PRIME3D_ITER_FBODY//str_iter//METADATEXT
+                    src = PRIME3D_ITER_FBODY//str_iter//trim(METADATEXT)
                     if( file_exists(src) )call rename(src, dir//src)
                 enddo
                 ! resolution measures

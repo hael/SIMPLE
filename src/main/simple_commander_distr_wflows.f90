@@ -403,7 +403,7 @@ contains
             call cline_cavgassemble%set('oritab', p_master%outfile)
         else
             ! because prime2D_startdoc.txt is default output in the absence of outfile
-            call cline_cavgassemble%set('oritab', 'prime2D_startdoc'//METADATEXT)
+            call cline_cavgassemble%set('oritab', 'prime2D_startdoc'//trim(METADATEXT))
         endif
         if( .not. cline%defined('stktab') )then
             ! split stack
@@ -523,7 +523,7 @@ contains
             else if( cline%defined('deftab') )then
                 call binwrite_oritab(p_master%deftab, b%a, [1,p_master%nptcls])
             else
-                p_master%deftab = 'deftab_from_distr_wflow'//METADATEXT
+                p_master%deftab = 'deftab_from_distr_wflow'//trim(METADATEXT)
                 call binwrite_oritab(p_master%deftab, b%a, [1,p_master%nptcls])
                 call job_descr%set('deftab', trim(p_master%deftab))
                 call cline%set('deftab', trim(p_master%deftab))
@@ -551,7 +551,7 @@ contains
             ! schedule
             call qenv%gen_scripts_and_schedule_jobs(p_master, job_descr, algnfbody=ALGN_FBODY)
             ! merge orientation documents
-            oritab = trim(PRIME2D_ITER_FBODY)//trim(str_iter)//METADATEXT
+            oritab = trim(PRIME2D_ITER_FBODY)//trim(str_iter)//trim(METADATEXT)
             call cline_merge_algndocs%set('outfile', trim(oritab))
             call xmerge_algndocs%execute(cline_merge_algndocs)
             ! assemble class averages
@@ -720,7 +720,7 @@ contains
         call cline_volassemble%set( 'outvol',  vol)
         call cline_volassemble%set( 'eo',     'no')
         call cline_volassemble%set( 'prg',    'volassemble')
-        call cline_volassemble%set( 'oritab', 'prime3D_startdoc'//METADATEXT)
+        call cline_volassemble%set( 'oritab', 'prime3D_startdoc'//trim(METADATEXT))
         call qenv%gen_scripts_and_schedule_jobs(p_master, job_descr)
         call qenv%exec_simple_prg_in_queue(cline_volassemble, 'VOLASSEMBLE', 'VOLASSEMBLE_FINISHED')
         call qsys_cleanup(p_master)
@@ -831,7 +831,7 @@ contains
         if( cline%defined('oritab') )then
             oritab=trim(p_master%oritab)
         else
-            oritab='prime3D_startdoc'//METADATEXT
+            oritab='prime3D_startdoc'//trim(METADATEXT)
         endif
         ! Models
         vol_defined = .false.
@@ -920,7 +920,7 @@ contains
                 else if( cline%defined('deftab') )then
                     call binwrite_oritab(p_master%deftab, os, [1,p_master%nptcls])
                 else
-                    p_master%deftab = 'deftab_from_distr_wflow'//METADATEXT
+                    p_master%deftab = 'deftab_from_distr_wflow'//trim(METADATEXT)
                     call binwrite_oritab(p_master%deftab, os, [1,p_master%nptcls])
                     call job_descr%set('deftab', trim(p_master%deftab))
                     call cline%set('deftab', trim(p_master%deftab))
@@ -965,7 +965,7 @@ contains
             if( p_master%refine .eq. 'snhc' )then
                 oritab = trim(SNHCDOC)
             else
-                oritab = trim(PRIME3D_ITER_FBODY)//trim(str_iter)//METADATEXT
+                oritab = trim(PRIME3D_ITER_FBODY)//trim(str_iter)//trim(METADATEXT)
             endif
             call cline%set( 'oritab', oritab )
             call cline_merge_algndocs%set( 'outfile', trim(oritab) )
@@ -1258,14 +1258,14 @@ contains
         integer                        :: i, comlin_srch_nproj, nl,  nbest_here
         integer                        :: bestloc(1), cnt, numlen
         character(len=STDLEN)          :: part_tab
-        character(len=32),   parameter :: GRIDSYMFBODY = 'grid_symaxes_part'        !<
-        character(len=32),   parameter :: GRIDSYMTAB   = 'grid_symaxes'//METADATEXT !<
-        character(len=32),   parameter :: SYMFBODY     = 'symaxes_part'             !< symmetry axes doc (distributed mode)
-        character(len=32),   parameter :: SYMTAB       = 'symaxes'//METADATEXT      !< gri
-        character(len=32),   parameter :: SYMPEAKSTAB  = 'sympeaks.txt'             !< symmetry peaks to refine
-        character(len=32),   parameter :: SYMSHTAB     = 'sym_3dshift'//METADATEXT  !< volume 3D shift
-        character(len=32),   parameter :: SYMPROJSTK   = 'sym_projs.mrc'            !< volume reference projections
-        character(len=32),   parameter :: SYMPROJTAB   = 'sym_projs'//METADATEXT    !< volume reference projections doc
+        character(len=32),   parameter :: GRIDSYMFBODY = 'grid_symaxes_part'              !<
+        character(len=32),   parameter :: GRIDSYMTAB   = 'grid_symaxes'//trim(METADATEXT) !<
+        character(len=32),   parameter :: SYMFBODY     = 'symaxes_part'                   !< symmetry axes doc (distributed mode)
+        character(len=32),   parameter :: SYMTAB       = 'symaxes'//trim(METADATEXT)      !< gri
+        character(len=32),   parameter :: SYMPEAKSTAB  = 'sympeaks.txt'                   !< symmetry peaks to refine
+        character(len=32),   parameter :: SYMSHTAB     = 'sym_3dshift'//trim(METADATEXT)  !< volume 3D shift
+        character(len=32),   parameter :: SYMPROJSTK   = 'sym_projs.mrc'                  !< volume reference projections
+        character(len=32),   parameter :: SYMPROJTAB   = 'sym_projs'//trim(METADATEXT)    !< volume reference projections doc
         integer,             parameter :: NBEST = 30
         ! seed the random number generator
         call seed_rnd
@@ -1388,13 +1388,13 @@ contains
         call del_file(trim(SYMSHTAB))
         numlen =  len(int2str(nbest_here))
         do i = 1, nbest_here
-            part_tab = trim(SYMFBODY)//int2str_pad(i, numlen)//METADATEXT
+            part_tab = trim(SYMFBODY)//int2str_pad(i, numlen)//trim(METADATEXT)
             call del_file(trim(part_tab))
         enddo
         p_master%nparts = nint(cline%get_rarg('nparts'))
         numlen =  len(int2str(p_master%nparts))
         do i = 1, p_master%nparts
-            part_tab = trim(GRIDSYMFBODY)//int2str_pad(i, numlen)//METADATEXT
+            part_tab = trim(GRIDSYMFBODY)//int2str_pad(i, numlen)//trim(METADATEXT)
             call del_file(trim(part_tab))
         enddo
         call del_file('SYM_AGGREGATE')
@@ -1444,7 +1444,7 @@ contains
                 partsz = parts(ipart,2) - parts(ipart,1) + 1
                 allocate(part_stks(partsz))
                 ! creates part filetab
-                filetab = 'scale_stktab_part'//int2str(ipart)//METADATEXT
+                filetab = 'scale_stktab_part'//int2str(ipart)//trim(METADATEXT)
                 do istk=1,partsz
                     cnt = cnt + 1
                     part_stks(istk) = p_master%stkhandle%get_stkname(cnt)
@@ -1480,7 +1480,7 @@ contains
         if( cline%defined('stktab') )then
             ! removes temporary split stktab lists
             do ipart=1,nparts
-                filetab = 'scale_stktab_part'//int2str(ipart)//METADATEXT
+                filetab = 'scale_stktab_part'//int2str(ipart)//trim(METADATEXT)
                 call del_file( filetab )
             end do
         endif

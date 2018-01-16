@@ -3441,23 +3441,23 @@ contains
         os = oris(100)
         os2 = oris(100)
         call os%rnd_oris(5.)
-        call os%write('test_oris_rndoris'//METADATEXT)
-        call os2%read('test_oris_rndoris'//METADATEXT)
-        call os2%write('test_oris_rndoris_copy'//METADATEXT)
+        call os%write('test_oris_rndoris.txt')
+        call os2%read('test_oris_rndoris.txt')
+        call os2%write('test_oris_rndoris_copy.txt')
         corr = corr_oris(os,os2)
         if( corr > 0.99 ) passed = .true.
         if( .not. passed ) stop 'read/write failed'
         passed = .false.
         call os%rnd_states(5)
-        call os%write('test_oris_rndoris_rndstates'//METADATEXT)
+        call os%write('test_oris_rndoris_rndstates.txt')
         if( corr_oris(os,os2) > 0.99 ) passed = .true.
         if( .not. passed ) stop 'statedoc read/write failed!'
         write(*,'(a)') '**info(simple_oris_unit_test, part3): testing calculators'
         passed = .false.
         call os%rnd_lps()
-        call os%write('test_oris_rndoris_rndstates_rndlps'//METADATEXT)
+        call os%write('test_oris_rndoris_rndstates_rndlps.txt')
         call os%spiral
-        call os%write('test_oris_rndoris_rndstates_rndlps_spiral'//METADATEXT)
+        call os%write('test_oris_rndoris_rndstates_rndlps_spiral.txt')
         call os%rnd_corrs()
         order = os%order()
         if( doprint )then

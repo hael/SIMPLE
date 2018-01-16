@@ -536,7 +536,7 @@ contains
             ! 3D
             call b%build_general_tbox(p, cline) ! general objects built
             ! reallocate vol (boxmatch issue)
-            call b%vol%new([p%box,p%box,p%box], p%smpd)     
+            call b%vol%new([p%box,p%box,p%box], p%smpd)
             if( .not.file_exists(p%vols(1)) ) stop 'Cannot find input volume'
             call b%vol%read(p%vols(1))
             if( cline%defined('scale') .or. cline%defined('newbox') )then
@@ -717,7 +717,7 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_STACK NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_stack
-    
+
     !> provides standard single-particle image
     !> processing routines that are applied to MRC or SPIDER stacks.
     subroutine exec_stackops( self, cline )
@@ -811,7 +811,7 @@ contains
                         call o_here%set_ori(cnt, b%a%get_ori(pinds(i)))
                     endif
                 end do
-                allocate(fname, source='extracted_oris_state'//int2str_pad(p%state,2)//METADATEXT)
+                allocate(fname, source='extracted_oris_state'//int2str_pad(p%state,2)//trim(METADATEXT))
             else if( cline%defined('class') )then
                 cnt = 0
                 do i=1,nincl
@@ -834,7 +834,7 @@ contains
                         call o_here%set_ori(cnt, b%a%get_ori(pinds(i)))
                     endif
                 end do
-                allocate(fname, source='extracted_oris_class'//int2str_pad(p%class,5)//METADATEXT)
+                allocate(fname, source='extracted_oris_class'//int2str_pad(p%class,5)//trim(METADATEXT))
             else
                 o_here = oris(nincl)
                 do i=1,nincl
@@ -843,7 +843,7 @@ contains
                     call b%img%write(p%outstk, i)
                     call o_here%set_ori(i, b%a%get_ori(pinds(i)))
                 end do
-                allocate(fname, source='extracted_oris'//METADATEXT)
+                allocate(fname, source='extracted_oris'//trim(METADATEXT))
             endif
             if( cline%defined('outfile') )then
                 call binwrite_oritab(p%outfile, o_here, [1,o_here%get_noris()])
@@ -877,7 +877,7 @@ contains
                         call o_here%set_ori(cnt, b%a%get_ori(i))
                     endif
                 end do
-                allocate(fname, source='extracted_oris_state'//int2str_pad(p%state,2)//METADATEXT)
+                allocate(fname, source='extracted_oris_state'//int2str_pad(p%state,2)//trim(METADATEXT))
             else if( cline%defined('class') )then
                 cnt = 0
                 do i=1,p%nptcls
@@ -900,7 +900,7 @@ contains
                         call o_here%set_ori(cnt, b%a%get_ori(i))
                     endif
                 end do
-                allocate(fname, source='extracted_oris_class'//int2str_pad(p%class,5)//METADATEXT)
+                allocate(fname, source='extracted_oris_class'//int2str_pad(p%class,5)//trim(METADATEXT))
             endif
             if( cline%defined('outfile') )then
                 call binwrite_oritab(p%outfile, o_here, [1,o_here%get_noris()])

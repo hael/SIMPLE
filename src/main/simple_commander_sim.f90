@@ -58,7 +58,7 @@ contains
         end do
         call simple_end('**** SIMPLE_NOISEIMGS NORMAL STOP ****')
     end subroutine exec_noiseimgs
-    
+
     subroutine exec_simimgs( self, cline )
         use simple_ori,        only: ori
         use simple_rnd,        only: ran3
@@ -87,7 +87,7 @@ contains
         if( cline%defined('part') )then
             if( .not. cline%defined('outfile') ) stop 'need unique output file for parallel jobs'
         else
-            if( .not. cline%defined('outfile') ) p%outfile = 'simoris'//METADATEXT
+            if( .not. cline%defined('outfile') ) p%outfile = 'simoris'//trim(METADATEXT)
         endif
         if( p%box == 0 ) stop 'box=0, something is fishy! Perhaps forgotten to input volume or stack?'
         ! generate orientation/CTF parameters
@@ -311,7 +311,7 @@ contains
         call base_image%write('optimal_movie_average'//p%ext, 1)
         if( p%vis .eq. 'yes' ) call base_image%vis
         ! output orientations
-        call binwrite_oritab('simmovie_params'//METADATEXT, b%a, [1,b%a%get_noris()])
+        call binwrite_oritab('simmovie_params'//trim(METADATEXT), b%a, [1,b%a%get_noris()])
         ! end gracefully
         call simple_end('**** SIMPLE_SIMMOVIE NORMAL STOP ****')
 
@@ -354,14 +354,14 @@ contains
                     pos(cnt,2) = iy
                     if( cnt == 500*npos )then
                         write(*,'(a)') "WARNING! Exiting loop because maximum nr of iterations; gen_ptcl_pos; simple_math"
-                        exit 
+                        exit
                     endif
                     if( cnt == npos ) exit
                 end do
             end function gen_ptcl_pos
 
     end subroutine exec_simmovie
-    
+
     subroutine exec_simsubtomo( self, cline )
         use simple_image,          only: image
         use simple_ori,            only: ori

@@ -1,7 +1,7 @@
 ! concrete commander: time-series analysis
 module simple_commander_tseries
 #include "simple_lib.f08"
-    
+
 use simple_cmdline,        only: cmdline
 use simple_params,         only: params
 use simple_build,          only: build
@@ -61,7 +61,7 @@ contains
         else
             write(*,*) 'ldim(3): ', ldim(3)
             write(*,*) 'nframes: ', nframes
-            stop 'simple_commander_imgproc :: exec_tseries_extract assumes one frame per file' 
+            stop 'simple_commander_imgproc :: exec_tseries_extract assumes one frame per file'
         endif
         if( cline%defined('nframesgrp') )then
             if( p%nframesgrp < 3 )then
@@ -256,7 +256,7 @@ contains
             call os%new(p%chunksz)
             call exec_cmdline('mkdir -p '//'tseries_chunk'//int2str_pad(cnt,numlen)//'|| true')
             allocate( stkname, source='./tseries_chunk'//int2str_pad(cnt,numlen)//'/imgs'//p%ext)
-            allocate( oriname, source='tseries_chunk'//int2str_pad(cnt,numlen)//'/oris'//METADATEXT)
+            allocate( oriname, source='tseries_chunk'//int2str_pad(cnt,numlen)//'/oris'//trim(METADATEXT))
             call del_file( stkname )
             call del_file( oriname )
             cnt2 = 0

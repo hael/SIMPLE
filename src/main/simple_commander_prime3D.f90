@@ -126,7 +126,7 @@ contains
         endif
         call b%build_general_tbox(p, cline)   ! general objects built
         call b%build_hadamard_prime3D_tbox(p) ! prime3D objects built
-        ! determine resolution range 
+        ! determine resolution range
         if( cline%defined('lp') ) call prime3D_find_resrange( b, p, p%lp, p%lpstop )
         ! determine the number of peaks
         if( .not. cline%defined('npeaks') ) p%npeaks = min(10,b%e%find_npeaks(p%lp, p%moldiam))
@@ -182,7 +182,7 @@ contains
             call exec_rec_master(b, p, cline, 'startvol')
         endif
         if( p%zero .eq. 'yes' ) call b%a%set_all2single('corr', 0.)
-        call binwrite_oritab('multiptcl_startdoc'//METADATEXT, b%a, [1,b%a%get_noris()])
+        call binwrite_oritab('multiptcl_startdoc'//trim(METADATEXT), b%a, [1,b%a%get_noris()])
         ! end gracefully
         call simple_end('**** SIMPLE_MULTIPTCL_INIT NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_multiptcl_init
@@ -285,7 +285,7 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_REC_TEST NORMAL STOP ****')
     end subroutine exec_rec_test
-    
+
     subroutine exec_check3D_conv( self, cline )
         use simple_math,    only: rad2deg, get_lplim_at_corr
         class(check3D_conv_commander), intent(inout) :: self
@@ -356,7 +356,7 @@ contains
                     converged = b%conv%check_conv_het()
                 case DEFAULT
                     converged = b%conv%check_conv3D()
-            end select                 
+            end select
         endif
         ! reports convergence, shift activation, resolution update and
         ! fraction of search space scanned to the distr commander

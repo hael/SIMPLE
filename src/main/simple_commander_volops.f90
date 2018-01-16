@@ -97,10 +97,10 @@ contains
         else
             ! spherical masking
             if( p%l_innermsk )then
-                call even%mask(p%msk, 'soft', inner=p%inner, width=p%width) 
+                call even%mask(p%msk, 'soft', inner=p%inner, width=p%width)
                 call odd%mask(p%msk, 'soft', inner=p%inner, width=p%width)
             else
-                call even%mask(p%msk, 'soft') 
+                call even%mask(p%msk, 'soft')
                 call odd%mask(p%msk, 'soft')
             endif
         endif
@@ -178,7 +178,7 @@ contains
             res = b%vol%get_res()
             call get_resolution( fsc, res, fsc05, fsc0143 )
             where(res < TINY) optlp = 0.
-        endif    
+        endif
         if( cline%defined('vol_filt') )then
             ! optimal low-pass filter from input vol_filt
             call vol_filt%new(b%vol%get_ldim(), p%smpd)
@@ -298,7 +298,7 @@ contains
             if( p%neg .eq. 'yes' ) call imgs(i)%neg
             call imgs(i)%write(p%outstk,i)
         end do
-        call binwrite_oritab('projvol_oris'//METADATEXT, b%a, [1,p%nptcls])
+        call binwrite_oritab('projvol_oris'//trim(METADATEXT), b%a, [1,p%nptcls])
         call simple_end('**** SIMPLE_PROJVOL NORMAL STOP ****')
     end subroutine exec_projvol
 
@@ -390,7 +390,7 @@ contains
         p = params(cline) ! constants & derived constants produced, mode=2
         call b%build_general_tbox(p, cline)  ! general objects built
         ! reallocate vol (boxmatch issue)
-        call b%vol%new([p%box,p%box,p%box], p%smpd) 
+        call b%vol%new([p%box,p%box,p%box], p%smpd)
         if( .not.cline%defined('vollist') )then
             inquire(FILE=p%vols(1), EXIST=here)
             if( here )then
@@ -563,7 +563,7 @@ contains
             write(unit=funit,pos=1,iostat=io_stat) corrmat
             if(io_stat/=0) &
                 call fileio_errmsg('**ERROR(simple_volume_smat): I/O error writing to vol_smat.bin', io_stat)
-            
+
             call fclose(funit, errmsg='volops; volume smat 3 closing ')
             if(allocated(corrmat))deallocate(corrmat)
         endif

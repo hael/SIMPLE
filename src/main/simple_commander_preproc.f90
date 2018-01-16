@@ -163,10 +163,10 @@ contains
                 ! picker: on call
                 ! extract
                 allocate(fname_stk_extract, source=trim(EXTRACT_STK_FBODY)//trim(movie_fbody)//'.'//trim(movie_ext))
-                allocate(fname_ctf_extract, source=trim(EXTRACT_PARAMS_FBODY)//trim(movie_fbody)//METADATEXT)
+                allocate(fname_ctf_extract, source=trim(EXTRACT_PARAMS_FBODY)//trim(movie_fbody)//trim(METADATEXT))
                 call cline%set('fbody', trim(p%fbody))
             else
-                allocate(fname_unidoc_output, source='unidoc_output'//METADATEXT)
+                allocate(fname_unidoc_output, source='unidoc_output'//trim(METADATEXT))
             endif
             ! determine loop range
             fromto(1) = 1
@@ -760,7 +760,7 @@ contains
         class(makepickrefs_commander), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline !< command line input
         integer, parameter           :: NREFS=100, NPROJS=20
-        character(STDLEN), parameter :: ORIFILE='pickrefs_oris'//METADATEXT
+        character(STDLEN), parameter :: ORIFILE='pickrefs_oris'//trim(METADATEXT)
         type(params)                 :: p
         type(build)                  :: b
         type(cmdline)                :: cline_projvol
