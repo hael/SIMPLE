@@ -12,6 +12,7 @@ private
 integer(kind=8), parameter :: MAX_N_SEGEMENTS = 20
 integer(kind=8), parameter :: N_VARS_HEAD_SEG = 5
 integer(kind=8), parameter :: N_BYTES_HEADER  = MAX_N_SEGEMENTS * N_VARS_HEAD_SEG * 8 ! because dp integer
+logical,         parameter :: DEBUG = .true.
 
 type file_header_segment
     integer(kind=8)   :: fromto(2)          = 0
@@ -31,6 +32,7 @@ type binoris
     procedure          :: open
     procedure, private :: clear_segments
     procedure          :: close
+    procedure          :: read_header
     procedure          :: write_header
     procedure          :: print_header
     procedure, private :: write_segment_1
@@ -80,13 +82,12 @@ contains
         else if( filesz >= N_BYTES_HEADER )then
             ! ok
         else
+            write(*,*) 'file: ', trim(fname)
             stop 'file_size too small to contain a header; binoris :: open'
         endif
         ! clear segments before reading header
         call self%clear_segments
-        ! read header
-        read(unit=self%funit,pos=1,iostat=io_status,iomsg=io_message) self%header
-        if( io_status .ne. 0 ) call fileio_errmsg('binoris :: open, ERROR reading header records '//trim(io_message), io_status)
+        call self%read_header
         self%n_segments = 0 ! for counting # segments
         do isegment=1,MAX_N_SEGEMENTS
             ! update # segments counter
@@ -131,12 +132,21 @@ contains
         end if
     end subroutine close
 
+    subroutine read_header( self )
+        class(binoris), intent(inout) :: self  !< instance
+        integer :: io_status
+        if( .not. self%l_open ) stop 'file needs to be open; binoris :: read_header'
+        read(unit=self%funit,pos=1,iostat=io_status) self%header
+        if( io_status .ne. 0 ) call fileio_errmsg('binoris ::read_header, ERROR reading header bytes ', io_status)
+    end subroutine read_header
+
     subroutine write_header( self )
         class(binoris), intent(inout) :: self  !< instance
-        integer :: io_status, isegment
+        integer :: io_status
         if( .not. self%l_open ) stop 'file needs to be open; binoris :: write_header'
         write(unit=self%funit,pos=1,iostat=io_status) self%header
         if( io_status .ne. 0 ) call fileio_errmsg('binoris :: write_header, ERROR writing header bytes ', io_status)
+        if( DEBUG ) print *, 'wrote: ', sizeof(self%header), ' header bytes'
     end subroutine write_header
 
     subroutine print_header( self )
@@ -157,21 +167,34 @@ contains
         integer,           intent(in)    :: isegment
         class(oris),       intent(inout) :: os
         integer, optional, intent(in)    :: fromto(2)
-        character(len=:), allocatable :: str_os_line, str_dyn
-        integer :: i, ibytes, io_status
+        character(len=:), allocatable :: str_dyn
+        integer :: i, ibytes, io_status, nspaces
+        if( os%get_noris() == 0 ) return
         if( .not. self%l_open ) stop 'file needs to be open; binoris :: write_segment_1'
         ! add segment to stack, this sets all the information needed for allocation
         call self%add_segment_1(isegment, os, fromto)
         ! update byte ranges in header
         call self%update_byte_ranges
-        ! allocate string with static lenght (set to max(strlen))
-        allocate(character(len=self%header(isegment)%n_bytes_per_record) :: str_os_line)
         ! write orientation data
         ibytes = self%header(isegment)%first_data_byte
         do i=self%header(isegment)%fromto(1),self%header(isegment)%fromto(2)
-            str_dyn            = os%ori2str(i)
-            str_os_line        = str_dyn ! string of lenght that matches record, since different oris will have different strlen
-            write(unit=self%funit,pos=ibytes) str_os_line
+            str_dyn = os%ori2str(i)
+
+            print *, 'str_dyn: ', str_dyn
+
+            nspaces = self%header(isegment)%n_bytes_per_record - len(str_dyn)
+
+            print *, 'nspaces: ', nspaces
+
+            if( nspaces > 0 )then
+                write(unit=self%funit,pos=ibytes) str_dyn//spaces(nspaces)
+                if( DEBUG ) print *, 'wrote: ', sizeof(str_dyn//spaces(nspaces)),&
+                    &'bytes, segment: ', isegment, ' bytes, starting @: ', ibytes
+            else
+                write(unit=self%funit,pos=ibytes) str_dyn
+                if( DEBUG ) print *, 'wrote: ', sizeof(str_dyn),&
+                    &'bytes, segment: ', isegment, ' bytes, starting @: ', ibytes
+            endif
             ibytes = ibytes + self%header(isegment)%n_bytes_per_record
         end do
     end subroutine write_segment_1
@@ -181,8 +204,7 @@ contains
         integer,        intent(in)    :: isegment
         integer,        intent(in)    :: fromto(2), strlen_max
         type(str4arr),  intent(inout) :: sarr(:)
-        character(len=strlen_max) :: str_os_line
-        integer :: i, ibytes, io_status
+        integer :: i, ibytes, io_status, nspaces
         if( .not. self%l_open ) stop 'file needs to be open; binoris :: write_segment_2'
         ! add segment to stack
         call self%add_segment_2(isegment, fromto, strlen_max)
@@ -191,8 +213,18 @@ contains
         ! write orientation data
         ibytes = self%header(isegment)%first_data_byte
         do i=self%header(isegment)%fromto(1),self%header(isegment)%fromto(2)
-            str_os_line = sarr(i)%str ! string of lenght that matches record, since different oris will have different strlen
-            write(unit=self%funit,pos=ibytes) str_os_line
+            nspaces = self%header(isegment)%n_bytes_per_record - len(sarr(i)%str)
+            if( nspaces > 0 )then
+                write(unit=self%funit,pos=ibytes) sarr(i)%str//spaces(nspaces)
+                if( DEBUG ) print *, 'wrote: ', sizeof(sarr(i)%str//spaces(nspaces)),&
+                    &' segment: ', isegment, ' bytes, starting @: ', ibytes
+            else
+                write(unit=self%funit,pos=ibytes) sarr(i)%str
+                if( DEBUG ) print *, 'wrote: ', sizeof(sarr(i)%str),&
+                    &' segment: ', isegment, ' bytes, starting @: ', ibytes
+            endif
+
+
             ibytes = ibytes + self%header(isegment)%n_bytes_per_record
         end do
     end subroutine write_segment_2
@@ -202,18 +234,16 @@ contains
         integer,           intent(in)    :: isegment
         class(oris),       intent(inout) :: os
         integer, optional, intent(in)    :: fromto(2)
-        integer :: strlen_max, n_oris
+        integer :: strlen_max
         ! sanity check isegment
         if( isegment < 1 .or. isegment > MAX_N_SEGEMENTS ) stop 'ERROR, isegment out of range; binoris :: add_segment_1'
         if( isegment > self%n_segments ) self%n_segments = isegment
         ! set range in segment
-        n_oris = os%get_noris()
         if( present(fromto) )then
-            if( fromto(1) < 1 .or. fromto(2) > n_oris ) stop 'fromto out of range; binoris :: add_segment_1'
             self%header(isegment)%fromto = fromto
         else
             self%header(isegment)%fromto(1) = 1
-            self%header(isegment)%fromto(2) = n_oris
+            self%header(isegment)%fromto(2) = os%get_noris()
         endif
         ! set maximum trimmed string lenght to n_bytes_per_record
         strlen_max = os%max_ori_strlen_trim()
@@ -246,8 +276,10 @@ contains
         n_bytes_tot = N_BYTES_HEADER
         if( self%n_segments <= 0 ) return
         do isegment=1,self%n_segments
-            self%header(isegment)%first_data_byte = n_bytes_tot + 1
-            n_bytes_tot = n_bytes_tot + self%header(isegment)%n_bytes_per_record * self%header(isegment)%n_records
+            if( self%header(isegment)%n_records > 0 .and. self%header(isegment)%n_bytes_per_record > 0 )then
+                self%header(isegment)%first_data_byte = n_bytes_tot + 1
+                n_bytes_tot = n_bytes_tot + self%header(isegment)%n_bytes_per_record * self%header(isegment)%n_records
+            endif
         end do
     end subroutine update_byte_ranges
 

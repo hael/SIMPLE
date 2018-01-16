@@ -117,7 +117,7 @@ contains
                     deallocate(os_strings(i)%str)
                 end do
                 deallocate(os_strings)
-            case(trim(METADATEXT))
+            case('.txt')
                 call fopen(funit_merge, file=p%outfile, iostat=io_stat, status='replace',&
                 &action='write', position='append', access='sequential')
                 call fileio_errmsg("Error opening file"//trim(adjustl(p%outfile)), io_stat)

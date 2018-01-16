@@ -118,7 +118,7 @@ character(len=LONGSTRLEN) :: cmdline_glob              !< global command line st
 ! stack part related and file format constants
 character(len=32),     parameter :: STKPARTSDIR         = 'stack_parts'
 character(len=STDLEN), parameter :: STKPARTFBODY        = trim(STKPARTSDIR)//'/stack_part'
-character(len=4),      parameter :: METADATEXT          = '.txt'
+character(len=7),      parameter :: METADATEXT          = '.txt'
 character(len=1),      parameter :: DEFAULT_FILE_FORMAT = 'M'
 
 ! SNHC-related global constants, PRIME3D, refine=snhc

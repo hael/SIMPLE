@@ -22,6 +22,21 @@ public
 
 contains
 
+    function spaces( n ) result( str )
+        integer, intent(in) :: n
+        character(len=:), allocatable :: str,  str_copy
+        character(len=1) :: space = ' '
+        if( n <  0 ) stop 'negative string lenght; simple_strings :: spaces'
+        if( n == 0 ) return
+        allocate(str, source=space)
+        do while( len(str) < n )
+            allocate( str_copy, source=str )
+            deallocate( str )
+            allocate( str, source=str_copy//space )
+            deallocate(str_copy)
+        end do
+    end function spaces
+
     !> \brief  assesses whether a string represents a filename
     function str2format( str) result( format )
         character(len=*), intent(in)  :: str
@@ -43,6 +58,7 @@ contains
         else if( index(str, '.hed') /= 0 )then
         else if( index(str, '.img') /= 0 )then
         else if( index(str, '.ccp') /= 0 )then
+        else if( index(str, '.simple') /= 0 )then
         else
             str_is_file = .false.
         endif

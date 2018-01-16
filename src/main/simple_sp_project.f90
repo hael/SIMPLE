@@ -28,6 +28,7 @@ contains
     procedure :: write
     procedure :: write_sp_oris
     procedure :: read_sp_oris
+    procedure :: read_header
     procedure :: print_header
     ! destructor
     procedure :: kill
@@ -118,10 +119,14 @@ contains
         call self%bos%close
     end subroutine read
 
-    subroutine write( self, fname )
+    subroutine write( self, fname, fromto )
         class(sp_project), intent(inout) :: self
         character(len=*),  intent(in)    :: fname
-        integer :: isegment
+        integer, optional, intent(in)    :: fromto(2)
+        integer :: isegment, n, noris
+        logical :: present_fromto
+        present_fromto = present(fromto)
+        if( present_fromto ) n = fromto(2) - fromto(1) + 1
         if( fname2format(fname) .ne. 'O' )then
             write(*,*) 'fname: ', trim(fname)
             stop 'file format not supported; sp_project :: write'
@@ -130,17 +135,56 @@ contains
         do isegment=1,MAXN_OS_SEG
             select case(isegment)
                 case(STK_SEG)
-                    if( self%os_stk%get_noris()    > 0 ) call self%bos%write_segment(isegment, self%os_stk)
+                    ! noris = self%os_stk%get_noris()
+                    ! if( noris > 0 ) call self%bos%write_segment(isegment, self%os_stk)
+                    call self%bos%write_segment(isegment, self%os_stk)
                 case(PTCL2D_SEG)
-                    if( self%os_ptcl2D%get_noris() > 0 ) call self%bos%write_segment(isegment, self%os_ptcl2D)
+                    ! noris = self%os_ptcl2D%get_noris()
+                    ! if( noris > 0 )then
+                    !     if( present_fromto )then
+                    !         if( n /= noris )then
+                    !             write(*,*) 'fromto(2) - fromto(1) + 1 = ', n
+                    !             write(*,*) 'self%os_ptcl2D%get_noris() -> ', noris
+                    !             stop 'ERROR, fromto range not consistent with self%os_ptcl2D size; binoris :: write'
+                    !         endif
+                    !     endif
+                    !     call self%bos%write_segment(isegment, self%os_ptcl2D, fromto)
+                    ! endif
+                    call self%bos%write_segment(isegment, self%os_ptcl2D, fromto)
                 case(CLS2D_SEG)
-                    if( self%os_cls2D%get_noris()  > 0 ) call self%bos%write_segment(isegment, self%os_cls2D)
+                    ! noris = self%os_cls2D%get_noris()
+                    ! if( noris > 0 ) call self%bos%write_segment(isegment, self%os_cls2D)
+                    call self%bos%write_segment(isegment, self%os_cls2D)
                 case(CLS3D_SEG)
-                    if( self%os_cls3D%get_noris()  > 0 ) call self%bos%write_segment(isegment, self%os_cls3D)
+                    ! noris = self%os_cls3D%get_noris()
+                    ! if( noris > 0 )then
+                    !     if( present_fromto )then
+                    !         if( n /= self%os_cls3D%get_noris() )then
+                    !             write(*,*) 'fromto(2) - fromto(1) + 1 = ', n
+                    !             write(*,*) 'self%os_cls3D%get_noris() -> ', noris
+                    !             stop 'ERROR, fromto range not consistent with self%os_cls3D size; binoris :: write'
+                    !         endif
+                    !     endif
+                    !     call self%bos%write_segment(isegment, self%os_cls3D, fromto)
+                    ! endif
+                    call self%bos%write_segment(isegment, self%os_cls3D, fromto)
                 case(PTCL3D_SEG)
-                    if( self%os_ptcl3D%get_noris() > 0 ) call self%bos%write_segment(isegment, self%os_ptcl3D)
+                    ! noris = self%os_ptcl3D%get_noris()
+                    ! if( noris > 0 )then
+                    !     if( present_fromto )then
+                    !         if( n /= noris )then
+                    !             write(*,*) 'fromto(2) - fromto(1) + 1 = ', n
+                    !             write(*,*) 'self%os_ptcl3D%get_noris() -> ', noris
+                    !             stop 'ERROR, fromto range not consistent with self%os_ptcl3D size; binoris :: write'
+                    !         endif
+                    !     endif
+                    !     call self%bos%write_segment(isegment, self%os_ptcl3D, fromto)
+                    ! endif
+                    call self%bos%write_segment(isegment, self%os_ptcl3D, fromto)
                 case(JOBPROC_SEG)
-                    if( self%jobproc%get_noris()   > 0 ) call self%bos%write_segment(isegment, self%jobproc)
+                    ! noris = self%jobproc%get_noris()
+                    ! if( noris > 0 ) call self%bos%write_segment(isegment, self%jobproc)
+                    call self%bos%write_segment(isegment, self%jobproc)
             end select
         end do
         call self%bos%write_header
@@ -212,6 +256,22 @@ contains
                 stop 'file format not supported; sp_project :: read_sp_oris'
         end select
     end subroutine read_sp_oris
+
+    subroutine read_header( self, fname )
+        class(sp_project), intent(inout) :: self
+        character(len=*),  intent(in)    :: fname
+        if( .not. file_exists(trim(fname)) )then
+            write(*,*) 'fname: ', trim(fname)
+            stop 'inputted file does not exist; sp_project :: read_header'
+        endif
+        if( fname2format(fname) .ne. 'O' )then
+            write(*,*) 'fname: ', trim(fname)
+            stop 'file format not supported; sp_project :: read_header'
+        endif
+        call self%bos%open(fname)
+        call self%bos%read_header
+        call self%bos%close
+    end subroutine read_header
 
     subroutine print_header( self )
         class(sp_project), intent(in) :: self

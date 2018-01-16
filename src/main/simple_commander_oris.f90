@@ -20,8 +20,8 @@ public :: oristats_commander
 public :: rotmats2oris_commander
 public :: project2txt_commander
 public :: txt2project_commander
+public :: print_project_header_commander
 public :: vizoris_commander
-
 private
 #include "simple_local_flags.inc"
 
@@ -61,6 +61,10 @@ type, extends(commander_base) :: txt2project_commander
  contains
    procedure :: execute      => exec_txt2project
 end type txt2project_commander
+type, extends(commander_base) :: print_project_header_commander
+ contains
+   procedure :: execute      => exec_print_project_header
+end type print_project_header_commander
 type, extends(commander_base) :: vizoris_commander
  contains
    procedure :: execute      => exec_vizoris
@@ -781,6 +785,22 @@ contains
         call sp_proj%kill
         call simple_end('**** PROJECT2TXT NORMAL STOP ****')
     end subroutine exec_project2txt
+
+    !> convert binary (.bin) oris doc to text (.txt)
+    subroutine exec_print_project_header( self, cline )
+        use simple_oris,       only: oris
+        use simple_sp_project, only: sp_project
+        class(print_project_header_commander), intent(inout) :: self
+        class(cmdline),                        intent(inout) :: cline
+        type(params)     :: p
+        type(sp_project) :: sp_proj
+        p = params(cline)
+        ! call sp_proj%read(p%projfile)
+        call sp_proj%read_header(p%projfile)
+        call sp_proj%print_header
+        call sp_proj%kill
+        call simple_end('**** PRINT_PROJECT_HEADER NORMAL STOP ****')
+    end subroutine exec_print_project_header
 
     subroutine exec_vizoris( self, cline )
         use simple_oris,      only: oris

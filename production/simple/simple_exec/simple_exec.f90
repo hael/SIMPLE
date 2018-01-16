@@ -123,6 +123,7 @@ type(oristats_commander)             :: xoristats
 type(rotmats2oris_commander)         :: xrotmats2oris
 type(txt2project_commander)          :: xtxt2project
 type(project2txt_commander)          :: xproject2txt
+type(print_project_header_commander) :: xprint_project_header
 type(vizoris_commander)              :: xvizoris
 
 ! TIME-SERIES ANALYSIS PROGRAMS
@@ -2365,6 +2366,17 @@ select case(prg)
         call cline%parse(keys_required(:2), keys_optional(:1))
         ! execute
         call xproject2txt%execute(cline)
+    case( 'print_project_header' )
+        !==Program print_project_header
+        !
+        ! <print_project_header/begin>prints the header of a *.simple project file<print_project_header/end>
+        !
+        ! Required keys
+        keys_required(1) = 'projfile'
+        ! if( describe ) call print_doc_print_project_header
+        call cline%parse(keys_required(:1))
+        ! execute
+        call xprint_project_header%execute(cline)
     case( 'vizoris' )
         !==Program vizoris
         !
@@ -2487,12 +2499,12 @@ select case(prg)
         keys_required(2) = 'nptcls'
         keys_required(3) = 'ndocs'
         keys_required(4) = 'outfile'
-        keys_required(5) = 'ext_meta'
-         ! set optional keys
+        ! set optional keys
         keys_optional(1) = 'numlen'
+        keys_optional(2) = 'oritype' ! needs to be required when we move to *.simple format
         ! parse command line
         if( describe ) call print_doc_merge_algndocs
-        call cline%parse(keys_required(:5), keys_optional(:1))
+        call cline%parse(keys_required(:4), keys_optional(:2))
         ! execute
         call xmerge_algndocs%execute(cline)
     case( 'merge_nnmat' )
