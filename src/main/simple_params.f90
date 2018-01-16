@@ -5,7 +5,6 @@ use simple_ori,            only: ori
 use simple_cmdline,        only: cmdline
 use simple_magic_boxes,    only: find_magic_box
 use simple_imghead,        only: find_ldim_nptcls
-! use simple_binoris,        only: binoris
 use simple_stktab_handler, only: stktab_handler
 !$ use omp_lib
 !$ use omp_lib_kinds
@@ -101,7 +100,6 @@ type :: params
     character(len=STDLEN) :: boxfile=''           !< file with EMAN particle coordinates(.txt)
     character(len=STDLEN) :: boxtab=''            !< table (text file) of files with EMAN particle coordinates(.txt)
     character(len=STDLEN) :: boxtype='eman'
-    character(len=STDLEN) :: chunktag=''
     character(len=STDLEN) :: classdoc=''          !< doc with per-class stats(.txt)
     character(len=STDLEN) :: comlindoc=''         !< shc_clustering_nclsX.txt
     character(len=STDLEN) :: ctf='no'             !< ctf flag(yes|no|flip)
@@ -121,7 +119,6 @@ type :: params
     character(len=STDLEN) :: exec_abspath=''
     character(len=STDLEN) :: exp_doc=''           !< specifying exp_time and dose_rate per tomogram
     character(len=4)      :: ext='.mrc'           !< file extension{.mrc}
-    character(len=7)      :: ext_meta=''          !< meta data file extension(.txt|.bin)
     character(len=STDLEN) :: extrmode='all'
     character(len=STDLEN) :: fbody=''             !< file body
     character(len=STDLEN) :: featstk='expecstk.bin'
@@ -192,7 +189,6 @@ type :: params
     integer :: box_original
     integer :: box_extract
     integer :: boxpd=0
-    integer :: chunk=0
     integer :: chunksz=0           !< # images/orientations in chunk
     integer :: class=1             !< cluster identity
     integer :: clip=0              !< clipped image box size(in pixels)
@@ -375,10 +371,9 @@ type :: params
     ! logical variables in ascending alphabetical order
     logical :: cyclic(7)          = .false.
     logical :: l_distr_exec       = .false.
-    logical :: l_chunk_distr      = .false.
     logical :: l_match_filt       = .true.
     logical :: doshift            = .false.
-    logical :: l_focusmsk           = .false.
+    logical :: l_focusmsk         = .false.
     logical :: l_autoscale        = .false.
     logical :: l_dose_weight      = .false.
     logical :: l_frac_update      = .false.
@@ -463,7 +458,6 @@ contains
         call check_carg('bin',            self%bin)
         call check_carg('boxtype',        self%boxtype)
         call check_carg('center',         self%center)
-        call check_carg('chunktag',       self%chunktag)
         call check_carg('classtats',      self%classtats)
         call check_carg('clustvalid',     self%clustvalid)
         call check_carg('compare',        self%compare)
@@ -515,6 +509,7 @@ contains
         call check_carg('norm',           self%norm)
         call check_carg('opt',            self%opt)
         call check_carg('order',          self%order)
+        call check_carg('oritype',        self%oritype)
         call check_carg('outside',        self%outside)
         call check_carg('pad',            self%pad)
         call check_carg('pcontrast',      self%pcontrast)
@@ -524,6 +519,7 @@ contains
         call check_carg('phrand',         self%phrand)
         call check_carg('phshiftunit',    self%phshiftunit)
         call check_carg('prg',            self%prg)
+        call check_carg('projfile',       self%projfile)
         call check_carg('projstats',      self%projstats)
         call check_carg('readwrite',      self%readwrite)
         call check_carg('real_filter',    self%real_filter)
@@ -567,7 +563,6 @@ contains
         call check_file('deftab',         self%deftab,       'T', 'O')
         call check_file('doclist',        self%doclist,      'T')
         call check_file('ext',            self%ext,          notAllowed='T')
-        call check_file('ext_meta',       self%ext_meta,     'T', 'O')
         call check_file('filetab',        self%filetab,      'T')
         call check_file('fname',          self%fname)
         call check_file('frcs',           self%frcs,         'B')
@@ -601,7 +596,6 @@ contains
         call check_iarg('box',            self%box)
         call check_iarg('box_extract',    self%box_extract)
         call check_iarg('boxconvsz',      self%boxconvsz)
-        call check_iarg('chunk',          self%chunk)
         call check_iarg('chunksz',        self%chunksz)
         call check_iarg('clip',           self%clip)
         call check_iarg('corner',         self%corner)
@@ -948,11 +942,6 @@ contains
             if( nint(self%update_frac*real(self%nptcls)) < 1 )&
                 &stop 'UPDATE_FRAC is too small 2; simple_params :: constructor'
             self%l_frac_update = .true.
-        endif
-        ! if we are doing chunk-based parallelisation...
-        self%l_chunk_distr = .false.
-        if( cline%defined('chunksz') )then
-            self%l_chunk_distr = .true.
         endif
         if( .not. cline%defined('ncunits') )then
             ! we assume that the number of computing units is equal to the number of partitions

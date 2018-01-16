@@ -23,24 +23,24 @@ type cmdline
     character(len=LONGSTRLEN) :: entire_line=''
     integer                   :: argcnt=0, totlen=0, ncheck=0
 contains
-    procedure             :: parse
-    procedure, private    :: copy
-    procedure, private    :: assign
-    generic               :: assignment(=) => assign
-    procedure             :: set_1
-    procedure             :: set_2
-    procedure, private    :: lookup
-    generic               :: set => set_1, set_2
-    procedure             :: delete
-    procedure             :: checkvar
-    procedure             :: check
-    procedure             :: printline
-    procedure             :: write
-    procedure             :: read
-    procedure             :: defined
-    procedure             :: get_rarg
-    procedure             :: get_carg
-    procedure             :: gen_job_descr
+    procedure          :: parse
+    procedure, private :: copy
+    procedure, private :: assign
+    generic            :: assignment(=) => assign
+    procedure          :: set_1
+    procedure          :: set_2
+    procedure, private :: lookup
+    generic            :: set => set_1, set_2
+    procedure          :: delete
+    procedure          :: checkvar
+    procedure          :: check
+    procedure          :: printline
+    procedure          :: write
+    procedure          :: read
+    procedure          :: defined
+    procedure          :: get_rarg
+    procedure          :: get_carg
+    procedure          :: gen_job_descr
 end type cmdline
 
 contains
@@ -61,15 +61,15 @@ contains
         cmdargcnt = command_argument_count()
         call get_command(self%entire_line)
         cmdline_glob = trim(self%entire_line)
-        DebugPrint ' command_argument_count: ', cmdargcnt 
+        DebugPrint ' command_argument_count: ', cmdargcnt
         if( present(keys_required) )then
             if( str_has_substr(self%entire_line,'prg=') )then
                 nreq = size(keys_required)+1 ! +1 because prg part of command line
             else
                 nreq = size(keys_required)
             endif
-            DebugPrint ' # keys required:        ', nreq 
-            DebugPrint ' command_argument_count: ', cmdargcnt 
+            DebugPrint ' # keys required:        ', nreq
+            DebugPrint ' command_argument_count: ', cmdargcnt
             if( cmdargcnt < nreq )then
                 call print_cmdline(keys_required, keys_optional, distr=distr_exec)
                 stop
@@ -103,7 +103,7 @@ contains
             call parse_local(arg)
         end do
         if( present(keys_required) )then
-            DebugPrint ' reached checker' 
+            DebugPrint ' reached checker'
             call self%check
         endif
 
@@ -139,6 +139,9 @@ contains
                 else if( index(arg(pos1+1:), '.bin') /= 0 )then
                     ! generic binary file
                     self%cmds(i)%carg = adjustl(arg(pos1+1:))
+                else if( index(arg(pos1+1:), '.simple') /= 0 )then
+                    ! simple binary project file
+                    self%cmds(i)%carg = adjustl(arg(pos1+1:))
                 else if( index(arg(pos1+1:), '.txt') /= 0 )then
                     ! text file
                     cnttxt = cnttxt+1
@@ -150,7 +153,7 @@ contains
                 else if( index(arg(pos1+1:), '.log') /= 0 )then
                     stop '.log files are obsolete!'
                 else if( index(arg(pos1+1:), '.dat') /= 0 )then
-                    ! text file 
+                    ! text file
                     cnttxt = cnttxt+1
                     self%cmds(i)%carg = adjustl(arg(pos1+1:))
                 else if( index(arg(pos1+1:), '.box') /= 0 )then
@@ -171,9 +174,9 @@ contains
                     endif
                 endif
                 self%cmds(i)%defined = .true.
-                DebugPrint  'parse_local: key|cval|rval|defined: ' 
+                DebugPrint  'parse_local: key|cval|rval|defined: '
                 DebugPrint  trim(self%cmds(i)%key), ' ', trim(self%cmds(i)%carg),&
-                &self%cmds(i)%rarg, self%cmds(i)%defined 
+                &self%cmds(i)%rarg, self%cmds(i)%defined
             endif
         end subroutine parse_local
 

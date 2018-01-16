@@ -143,10 +143,6 @@ contains
             cline_makecavgs = cline
             call cline_makecavgs%delete('autoscale')
             call cline_makecavgs%delete('balance')
-            call cline_makecavgs%delete('chunksz')
-            if( p_master%l_chunk_distr )then
-                call cline_makecavgs%delete('ncls')
-            endif
             call cline_makecavgs%set('prg',    'makecavgs')
             call cline_makecavgs%set('oritab', trim(finaldoc))
             call cline_makecavgs%set('nparts', real(nparts))
@@ -317,7 +313,7 @@ contains
         call cline%set('eo', 'no')
         ! auto-scaling prep
         doautoscale = (cline%get_carg('autoscale').eq.'yes')
-        ! now, remove autoscale flag from command line, since no scaled partial stacks 
+        ! now, remove autoscale flag from command line, since no scaled partial stacks
         ! will be produced (this program used shared-mem paralllelisation of scale)
         call cline%delete('autoscale')
         ! delete possibly pre-existing stack_parts
@@ -765,7 +761,7 @@ contains
             deallocate(states)
             init_docs(state) = INIT_FBODY//str_state//METADATEXT
             call binwrite_oritab(init_docs(state), os_state, [1,p_master%nptcls])
-            final_docs(state) = FINAL_FBODY//str_state//METADATEXT            
+            final_docs(state) = FINAL_FBODY//str_state//METADATEXT
             ! check & move volumes
             l_hasvols(state) = trim(p_master%vols(state)) .ne. ''
             if( l_hasvols(state) )then
@@ -871,7 +867,7 @@ contains
                     call exec_cmdline('cp '//trim(fname)//' fsc_state01.bin')
                     fname = dir//FRCS_FBODY//str_state//BIN_EXT
                     if(file_exists(fname))call exec_cmdline('cp '//trim(fname)//' frcs_state01.bin')
-                    fname = dir//ANISOLP_FBODY//str_state//p_master%ext               
+                    fname = dir//ANISOLP_FBODY//str_state//p_master%ext
                     if(file_exists(fname))call exec_cmdline('cp '//trim(fname)//' aniso_optlp_state01.mrc')
                 endif
             endif
@@ -889,7 +885,7 @@ contains
                 call os_master%set_ori(iptcl, os_state%get_ori(iptcl))
                 call os_master%set(iptcl, 'state', real(state))
             enddo
-            call os_state%kill  
+            call os_state%kill
             call prime3d_cleanup
         enddo
 

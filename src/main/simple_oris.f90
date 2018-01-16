@@ -129,7 +129,6 @@ type :: oris
     procedure          :: expand_classes
     procedure          :: fill_empty_classes
     procedure          :: remap_classes
-    procedure          :: shift_classes
     procedure          :: create_conforming_npeaks_set
     procedure          :: merge_classes
     procedure          :: round_shifts
@@ -755,21 +754,6 @@ contains
         endif
         deallocate(clspops)
     end subroutine remap_classes
-
-    !>  \brief  for shifting class indices after chunk-based prime2D exec
-    !!             1 .. 10
-    !!    + 10 => 11 .. 20
-    !!    + 10 => 21 .. 31 etc.
-    subroutine shift_classes( self, ishift )
-        class(oris), intent(inout) :: self
-        integer,     intent(in)    :: ishift
-        integer :: iptcl, new_cls, old_cls
-        do iptcl=1,self%n
-            old_cls = nint(self%o(iptcl)%get('class'))
-            new_cls = old_cls + ishift
-            call self%o(iptcl)%set('class', real(new_cls))
-        end do
-    end subroutine shift_classes
 
     !>  \brief  is for contracting/expanding the ori set in self to make
     !!          a set of conforming size

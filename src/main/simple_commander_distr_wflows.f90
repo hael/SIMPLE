@@ -131,14 +131,13 @@ contains
         call cline_merge_algndocs%set( 'nptcls',   real(p_master%nptcls) )
         call cline_merge_algndocs%set( 'ndocs',    real(p_master%nparts) )
         call cline_merge_algndocs%set( 'outfile',  'simple_unidoc.txt'   )
-        call cline_merge_algndocs%set( 'ext_meta', '.txt'                )
         call cline_merge_algndocs%set( 'numlen',   real(p_master%numlen) )
         ! setup the environment for distributed execution
         call qenv%new(p_master, numlen=p_master%numlen)
         ! prepare job description
         call cline%gen_job_descr(job_descr)
         ! schedule & clean
-        call qenv%gen_scripts_and_schedule_jobs(p_master, job_descr, algnfbody=UNIDOCFBODY, ext_meta='.txt')
+        call qenv%gen_scripts_and_schedule_jobs(p_master, job_descr, algnfbody=UNIDOCFBODY)
         ! merge docs
         call xmerge_algndocs%execute( cline_merge_algndocs )
         ! clean
@@ -170,19 +169,18 @@ contains
         call cline%set('numlen', real(p_master%numlen))
         ! prepare merge_algndocs command line
         cline_merge_algndocs = cline
-        call cline_merge_algndocs%set( 'nthr',    1.                    )
-        call cline_merge_algndocs%set( 'fbody',   'unidoc_'             )
-        call cline_merge_algndocs%set( 'nptcls',  real(p_master%nptcls) )
-        call cline_merge_algndocs%set( 'ndocs',   real(p_master%nparts) )
-        call cline_merge_algndocs%set( 'outfile', 'simple_unidoc.txt'   )
-        call cline_merge_algndocs%set( 'ext_meta', '.txt'               )
+        call cline_merge_algndocs%set( 'nthr',     1.                    )
+        call cline_merge_algndocs%set( 'fbody',    'unidoc_'             )
+        call cline_merge_algndocs%set( 'nptcls',   real(p_master%nptcls) )
+        call cline_merge_algndocs%set( 'ndocs',    real(p_master%nparts) )
+        call cline_merge_algndocs%set( 'outfile',  'simple_unidoc.txt'   )
         call cline_merge_algndocs%set( 'numlen',   real(p_master%numlen) )
         ! setup the environment for distributed execution
         call qenv%new(p_master, numlen=p_master%numlen)
         ! prepare job description
         call cline%gen_job_descr(job_descr)
         ! schedule & clean
-        call qenv%gen_scripts_and_schedule_jobs(p_master, job_descr, algnfbody=UNIDOCFBODY, ext_meta='.txt')
+        call qenv%gen_scripts_and_schedule_jobs(p_master, job_descr, algnfbody=UNIDOCFBODY)
         ! merge docs
         call xmerge_algndocs%execute( cline_merge_algndocs )
         ! clean
@@ -247,7 +245,7 @@ contains
         ! prepare job description
         call cline%gen_job_descr(job_descr)
         ! schedule & clean
-        call qenv%gen_scripts_and_schedule_jobs(p_master, job_descr, part_params=part_params, ext_meta='.txt')
+        call qenv%gen_scripts_and_schedule_jobs(p_master, job_descr, part_params=part_params)
         call qsys_cleanup(p_master)
         call simple_end('**** SIMPLE_DISTR_UNBLUR_TOMO_MOVIES NORMAL STOP ****')
     end subroutine exec_unblur_tomo_movies_distr
@@ -298,18 +296,17 @@ contains
         if( p_master%nparts > p_master%nptcls ) stop 'nr of partitions (nparts) mjust be < number of entries in filetable'
         ! prepare merge_algndocs command line
         cline_merge_algndocs = cline
-        call cline_merge_algndocs%set( 'nthr', 1. )
+        call cline_merge_algndocs%set( 'nthr',     1.                          )
         call cline_merge_algndocs%set( 'fbody',    'ctffind_output_part'       )
         call cline_merge_algndocs%set( 'nptcls',   real(p_master%nptcls)       )
         call cline_merge_algndocs%set( 'ndocs',    real(p_master%nparts)       )
         call cline_merge_algndocs%set( 'outfile',  'ctffind_output_merged.txt' )
-        call cline_merge_algndocs%set( 'ext_meta', '.txt'                      )
         ! setup the environment for distributed execution
         call qenv%new(p_master)
         ! prepare job description
         call cline%gen_job_descr(job_descr)
         ! schedule
-        call qenv%gen_scripts_and_schedule_jobs(p_master, job_descr, ext_meta='.txt')
+        call qenv%gen_scripts_and_schedule_jobs(p_master, job_descr)
         ! merge docs
         call xmerge_algndocs%execute( cline_merge_algndocs )
         ! clean
@@ -340,13 +337,12 @@ contains
         call cline_merge_algndocs%set( 'nptcls',   real(p_master%nptcls)      )
         call cline_merge_algndocs%set( 'ndocs',    real(p_master%nparts)      )
         call cline_merge_algndocs%set( 'outfile',  'ctffit_output_merged.txt' )
-        call cline_merge_algndocs%set( 'ext_meta', '.txt'                     )
         ! setup the environment for distributed execution
         call qenv%new(p_master)
         ! prepare job description
         call cline%gen_job_descr(job_descr)
         ! schedule
-        call qenv%gen_scripts_and_schedule_jobs(p_master, job_descr, ext_meta='.txt')
+        call qenv%gen_scripts_and_schedule_jobs(p_master, job_descr)
         ! merge docs
         call xmerge_algndocs%execute( cline_merge_algndocs )
         ! clean
@@ -375,7 +371,7 @@ contains
         call cline%gen_job_descr(job_descr)
         ! schedule & clean
         call qenv%gen_scripts_and_schedule_jobs(p_master, job_descr)
-        call qsys_cleanup(p_master)        
+        call qsys_cleanup(p_master)
         call simple_end('**** SIMPLE_DISTR_PICK NORMAL STOP ****')
     end subroutine exec_pick_distr
 
@@ -476,11 +472,10 @@ contains
         call cline_merge_algndocs%set('fbody',    ALGN_FBODY           )
         call cline_merge_algndocs%set('nptcls',   real(p_master%nptcls))
         call cline_merge_algndocs%set('ndocs',    real(p_master%nparts))
-        call cline_merge_algndocs%set('ext_meta', METADATEXT           )
-        call cline_check2D_conv%set('box',    real(p_master%box)   )
-        call cline_check2D_conv%set('nptcls', real(p_master%nptcls))
-        call cline_cavgassemble%set('prg', 'cavgassemble')
-        call cline_makecavgs%set('prg', 'makecavgs')
+        call cline_check2D_conv%set('box',        real(p_master%box)   )
+        call cline_check2D_conv%set('nptcls',     real(p_master%nptcls))
+        call cline_cavgassemble%set('prg',        'cavgassemble'       )
+        call cline_makecavgs%set('prg',           'makecavgs'          )
         if( job_descr%isthere('automsk') ) call job_descr%delete('automsk')
 
         if( .not. cline%defined('stktab') )then
@@ -806,15 +801,14 @@ contains
         ! initialise static command line parameters and static job description parameter
         call cline_recvol_distr%set( 'prg', 'recvol' )       ! required for distributed call
         call cline_prime3D_init%set( 'prg', 'prime3D_init' ) ! required for distributed call
-        if( trim(p_master%refine).eq.'hetsym' )call cline_recvol_distr%set( 'pgrp', 'c1' )
-        call cline_merge_algndocs%set('nthr', 1.)
-        call cline_merge_algndocs%set('fbody', ALGN_FBODY)
-        call cline_merge_algndocs%set('nptcls', real(p_master%nptcls))
-        call cline_merge_algndocs%set('ndocs', real(p_master%nparts))
-        call cline_merge_algndocs%set('ext_meta', METADATEXT)
-        call cline_check3D_conv%set( 'box', real(p_master%box)   )
-        call cline_check3D_conv%set( 'nptcls', real(p_master%nptcls))
-        call cline_postproc_vol%set( 'nstates', 1.)
+        if( trim(p_master%refine).eq.'hetsym' ) call cline_recvol_distr%set( 'pgrp', 'c1' )
+        call cline_merge_algndocs%set('nthr',     1.)
+        call cline_merge_algndocs%set('fbody',    ALGN_FBODY)
+        call cline_merge_algndocs%set('nptcls',   real(p_master%nptcls))
+        call cline_merge_algndocs%set('ndocs',    real(p_master%nparts))
+        call cline_check3D_conv%set('box',        real(p_master%box)   )
+        call cline_check3D_conv%set('nptcls',     real(p_master%nptcls))
+        call cline_postproc_vol%set('nstates',    1.)
 
         ! for parallel volassemble over states
         allocate(state_assemble_finished(p_master%nstates) )
@@ -1004,7 +998,7 @@ contains
                     call qenv%exec_simple_prg_in_queue(cline_volassemble, trim(volassemble_output),&
                         &script_name='simple_script_state'//trim(str_state))
                 end do
-                call qsys_watcher(state_assemble_finished)                
+                call qsys_watcher(state_assemble_finished)
             endif
             ! rename volumes, postprocess & update job_descr
             call binread_oritab(trim(oritab), os, [1,p_master%nptcls])
@@ -1212,7 +1206,7 @@ contains
             stop 'inputted boxfile is empty; simple_commander_tseries :: exec_tseries_track'
         endif
         call boxfile%kill
-        call cline%delete('boxfile')  
+        call cline%delete('boxfile')
         p_master%nptcls = ndatlines
         p_master%nparts = p_master%nptcls
         if( p_master%ncunits > p_master%nparts )&
@@ -1264,8 +1258,8 @@ contains
         integer                        :: i, comlin_srch_nproj, nl,  nbest_here
         integer                        :: bestloc(1), cnt, numlen
         character(len=STDLEN)          :: part_tab
-        character(len=32),   parameter :: GRIDSYMFBODY = 'grid_symaxes_part'        !< 
-        character(len=32),   parameter :: GRIDSYMTAB   = 'grid_symaxes'//METADATEXT !< 
+        character(len=32),   parameter :: GRIDSYMFBODY = 'grid_symaxes_part'        !<
+        character(len=32),   parameter :: GRIDSYMTAB   = 'grid_symaxes'//METADATEXT !<
         character(len=32),   parameter :: SYMFBODY     = 'symaxes_part'             !< symmetry axes doc (distributed mode)
         character(len=32),   parameter :: SYMTAB       = 'symaxes'//METADATEXT      !< gri
         character(len=32),   parameter :: SYMPEAKSTAB  = 'sympeaks.txt'             !< symmetry peaks to refine
@@ -1297,12 +1291,11 @@ contains
         call qenv%gen_scripts_and_schedule_jobs(p_master, job_descr)
         ! consolidate grid search
         cline_merge_algndocs = cline
-        call cline_merge_algndocs%set( 'nthr',     1. )
-        call cline_merge_algndocs%set( 'fbody',    trim(GRIDSYMFBODY) )
+        call cline_merge_algndocs%set( 'nthr',     1.                      )
+        call cline_merge_algndocs%set( 'fbody',    trim(GRIDSYMFBODY)      )
         call cline_merge_algndocs%set( 'nptcls',   real(comlin_srch_nproj) )
-        call cline_merge_algndocs%set( 'ndocs',    real(p_master%nparts) )
-        call cline_merge_algndocs%set( 'outfile',  trim(GRIDSYMTAB) )
-        call cline_merge_algndocs%set( 'ext_meta', METADATEXT )
+        call cline_merge_algndocs%set( 'ndocs',    real(p_master%nparts)   )
+        call cline_merge_algndocs%set( 'outfile',  trim(GRIDSYMTAB)        )
         call xmerge_algndocs%execute( cline_merge_algndocs )
 
         ! 2. SELECTION OF SYMMETRY PEAKS TO REFINE
@@ -1329,8 +1322,8 @@ contains
         call cline_srch%set('prg', 'symsrch')
         call cline_srch%set('refine', 'yes') !!
         call cline_srch%set('nptcls', real(comlin_srch_nproj))
-        call cline_srch%set('oritab', trim(GRIDSYMTAB)) 
-        call cline_srch%set('fbody',  trim(SYMFBODY)) 
+        call cline_srch%set('oritab', trim(GRIDSYMTAB))
+        call cline_srch%set('fbody',  trim(SYMFBODY))
         ! switch to collection of single threaded jobs
         p_master%ncunits = p_master%nparts * p_master%nthr
         p_master%nparts  = nbest_here
@@ -1340,12 +1333,11 @@ contains
         call qenv%gen_scripts_and_schedule_jobs(p_master, job_descr)
         ! merge_algndocs command line
         cline_merge_algndocs = cline
-        call cline_merge_algndocs%set( 'nthr',    1. )
-        call cline_merge_algndocs%set( 'fbody',   trim(SYMFBODY) )
-        call cline_merge_algndocs%set( 'nptcls',  real(nbest_here) )
-        call cline_merge_algndocs%set( 'ndocs',   real(p_master%nparts) )
-        call cline_merge_algndocs%set( 'outfile', trim(SYMTAB) )
-        call cline_merge_algndocs%set( 'ext_meta', METADATEXT )
+        call cline_merge_algndocs%set( 'nthr',     1.                    )
+        call cline_merge_algndocs%set( 'fbody',    trim(SYMFBODY)        )
+        call cline_merge_algndocs%set( 'nptcls',   real(nbest_here)      )
+        call cline_merge_algndocs%set( 'ndocs',    real(p_master%nparts) )
+        call cline_merge_algndocs%set( 'outfile',  trim(SYMTAB)          )
         call xmerge_algndocs%execute( cline_merge_algndocs )
 
         ! 4. REAL-SPACE EVALUATION

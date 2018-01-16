@@ -85,11 +85,11 @@ contains
         integer :: isegment, n
         if( .not. file_exists(trim(fname)) )then
             write(*,*) 'fname: ', trim(fname)
-            stop 'inputted file does not exist; sp_project :: new_from_file'
+            stop 'inputted file does not exist; sp_project :: read'
         endif
         if( fname2format(fname) .ne. 'O' )then
             write(*,*) 'fname: ', trim(fname)
-            stop 'file format not supported; sp_project :: new_from_file'
+            stop 'file format not supported; sp_project :: read'
         endif
         call self%bos%open(fname)
         do isegment=1,self%bos%get_n_segments()

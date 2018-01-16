@@ -192,39 +192,27 @@ contains
     ! SCRIPT GENERATORS
 
     !>  \brief  public script generator
-    subroutine generate_scripts( self, job_descr, ext, q_descr, outfile_body, outfile_ext, part_params, chunkdistr )
+    subroutine generate_scripts( self, job_descr, ext, q_descr, outfile_body, part_params )
         class(qsys_ctrl),           intent(inout) :: self
         class(chash),               intent(inout) :: job_descr
         character(len=4),           intent(in)    :: ext
         class(chash),               intent(in)    :: q_descr
         character(len=*), optional, intent(in)    :: outfile_body
-        character(len=4), optional, intent(in)    :: outfile_ext
         class(chash),     optional, intent(in)    :: part_params(:)
-        logical,          optional, intent(in)    :: chunkdistr
         character(len=:), allocatable :: outfile_body_local, key, val
         integer :: ipart, iadd
-        logical :: part_params_present, cchunkdistr
-        cchunkdistr = .false.
-        if( present(chunkdistr) ) cchunkdistr = .true.
+        logical :: part_params_present
         if( present(outfile_body) )then
             allocate(outfile_body_local, source=trim(outfile_body))
         endif
         part_params_present = present(part_params)
         do ipart=self%fromto_part(1),self%fromto_part(2)
-            if( cchunkdistr )then
-                ! don't input part-dependent parameters
-            else
-                call job_descr%set('fromp',   int2str(self%parts(ipart,1)))
-                call job_descr%set('top',     int2str(self%parts(ipart,2)))
-                call job_descr%set('part',    int2str(ipart))
-                call job_descr%set('nparts',  int2str(self%nparts_tot))
-                if( allocated(outfile_body_local) )then
-                    if( present(outfile_ext) )then
-                        call job_descr%set('outfile', trim(outfile_body_local)//int2str_pad(ipart,self%numlen)//outfile_ext)
-                    else
-                        call job_descr%set('outfile', trim(outfile_body_local)//int2str_pad(ipart,self%numlen)//METADATEXT)
-                    endif
-                endif
+            call job_descr%set('fromp',   int2str(self%parts(ipart,1)))
+            call job_descr%set('top',     int2str(self%parts(ipart,2)))
+            call job_descr%set('part',    int2str(ipart))
+            call job_descr%set('nparts',  int2str(self%nparts_tot))
+            if( allocated(outfile_body_local) )then
+                call job_descr%set('outfile', trim(outfile_body_local)//int2str_pad(ipart,self%numlen)//METADATEXT)
             endif
             if( part_params_present  )then
                 do iadd=1,part_params(ipart)%size_of_chash()
@@ -235,15 +223,13 @@ contains
             endif
             call self%generate_script_1(job_descr, ipart, q_descr)
         end do
-        if( .not. cchunkdistr )then
-            call job_descr%delete('fromp')
-            call job_descr%delete('top')
-            call job_descr%delete('part')
-            call job_descr%delete('nparts')
-            if( allocated(outfile_body_local) )then
-                call job_descr%delete('outfile')
-                deallocate(outfile_body_local)
-            endif
+        call job_descr%delete('fromp')
+        call job_descr%delete('top')
+        call job_descr%delete('part')
+        call job_descr%delete('nparts')
+        if( allocated(outfile_body_local) )then
+            call job_descr%delete('outfile')
+            deallocate(outfile_body_local)
         endif
         if( part_params_present  )then
             do iadd=1,part_params(1)%size_of_chash()

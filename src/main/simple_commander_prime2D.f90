@@ -193,7 +193,6 @@ contains
         endif
         ! end gracefully
         call simple_end('**** SIMPLE_PRIME2D NORMAL STOP ****')
-        ! this is needed for chunk-based prime2D parallellisation
         call qsys_job_finished(p, 'simple_commander_prime2D :: exec_prime2D')
     end subroutine exec_prime2D
 

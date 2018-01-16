@@ -98,7 +98,6 @@ contains
         call chdict%push('exp_doc',       'specifying exp_time and dose_rate per tomogram')
         call chdict%push('exp_time',      'exposure time(in s)')
         call chdict%push('ext',           'file extension{.mrc}')
-        call chdict%push('ext_meta',      'meta data file extension(.txt|.bin)')
         call chdict%push('fbody',         'file body')
         call chdict%push('filetab',       'list of files(.txt)')
         call chdict%push('filwidth',      'width of filament (in Angstroms)')

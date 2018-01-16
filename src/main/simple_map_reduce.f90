@@ -6,8 +6,8 @@ module simple_map_reduce
 implicit none
 private
 #include "simple_local_flags.inc"
-public ::  split_nobjs_even,split_nobjs_in_chunks,split_pairs_in_parts,&
-&merge_similarities_from_parts,merge_rmat_from_parts, merge_nnmat_from_parts
+public ::  split_nobjs_even,split_pairs_in_parts,merge_similarities_from_parts,&
+&merge_rmat_from_parts,merge_nnmat_from_parts
 contains
 
     !>  \brief  for generating balanced partitions of nobjs objects
@@ -45,56 +45,6 @@ contains
         end do
         if( present(szmax) ) szmax = sszmax
     end function split_nobjs_even
-
-    !>  \brief  for generating partitions of nobjs objects of pre-determined size
-    function split_nobjs_in_chunks( nobjs, chunksz ) result( parts )
-        integer, intent(in)  :: nobjs, chunksz
-        integer, allocatable :: parts(:,:)
-        integer :: ipart, nparts, cnt
-        logical :: leftover
-        ! count the number of parts
-        cnt   = 0
-        nparts = 0
-        do
-            cnt = cnt+chunksz
-            if( cnt <= nobjs )then
-                nparts = nparts+1
-                cycle
-            else
-                exit
-            endif
-        end do
-        leftover = .false.
-        if( chunksz*nparts == nobjs )then
-            ! the objects were evenly partitioned, i.e. mod(nobjs,chunksz) .eq. 0
-        else
-            ! there's a leftover
-            leftover = .true.
-            ! and we need to increment the number of partitions with 1
-            nparts = nparts+1
-        endif
-        ! generate output
-        allocate(parts(nparts,2), stat=alloc_stat)
-        allocchk("In: simple_map_reduce :: split_nobjs_in_chunks")
-        ! count the number of parts
-        cnt   = 0
-        ipart = 0
-        do
-            cnt = cnt+chunksz
-            if( cnt <= nobjs )then
-                ipart = ipart+1
-                parts(ipart,1) = cnt-chunksz+1
-                parts(ipart,2) = cnt
-                cycle
-            else
-                exit
-            endif
-        end do
-        if( leftover )then
-            parts(ipart+1,1) = parts(ipart,2)+1
-            parts(ipart+1,2) = nobjs
-        endif
-    end function split_nobjs_in_chunks
 
     !>  \brief  for generating balanced partitions for pairwise calculations on nobjs ojects
     subroutine split_pairs_in_parts( nobjs, nparts )
@@ -139,7 +89,7 @@ contains
         end do
         deallocate(pairs, parts)
     end subroutine split_pairs_in_parts
- 
+
     !>  \brief  for merging partial calculations of similarities
     function merge_similarities_from_parts( nobjs, nparts ) result( smat )
         integer, intent(in) :: nobjs  !< number objects to analyse in pairs
@@ -217,7 +167,7 @@ contains
         parts  = split_nobjs_even(nobjs, nparts)                                        !! realloc lhs
         numlen = len(int2str(nparts))
         ! compress the partial nearest neighbour matrices into a single matrix
-        
+
         do ipart=1,nparts
             allocate(fname, source='nnmat_part'//int2str_pad(ipart,numlen)//'.bin')
             allocchk('In: simple_map_reduce::merge_nnmat_from_parts, 1')

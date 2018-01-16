@@ -51,7 +51,7 @@ call myproject%os_stk%set(2, 'ctfres',   3.8 )
 ! write/read
 call myproject%write('myproject.simple')
 call myproject%read('myproject.simple')
-call myproject%print_header
+! call myproject%print_header
 call myproject%write_sp_oris('stk', 'myproject_os_stk_2.txt')
 
 

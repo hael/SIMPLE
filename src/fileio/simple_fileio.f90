@@ -239,10 +239,6 @@ contains
             if (stringsAreEqual(round, 'UNDEFINED',.false.)) write( round_this ,'(A)') upperCase(round)
         end if
         if(present(iomsg)) iomsg_this=iomsg
-
-
-        print *, 'form in fopen: ', form_this
-
         ! execute open under specific conditions
         if (stringsAreEqual(form_this, 'FORMATTED',.false.)) then
             open( NEWUNIT=funit,FILE=filename,IOSTAT=iostat_this,&
@@ -269,7 +265,7 @@ contains
                 end if
             end if
         end if
-        call fileio_errmsg(trim(adjustl(errmsg_this))//" fopen opening "//trim(filename), iostat_this, .false.) 
+        call fileio_errmsg(trim(adjustl(errmsg_this))//" fopen opening "//trim(filename), iostat_this, .false.)
         if(is_io(funit)) call simple_stop( "::fopen newunit returned "//int2str(funit) )
         if(present(iostat))iostat=iostat_this
         if(present(recl))recl=recl_this
@@ -284,7 +280,7 @@ contains
     !     character(len=STDLEN) :: filename, errmsg_this
     !     character(len=30)     :: status_this
     !     if (present(status)) write(status_this,'(A)')  upperCase(status)
-        
+
     !     errmsg_this=errmsg
     !     filename=file
     !     call fopen_1(funit,FILE=filename,STATUS=status,IOSTAT=iostat)
@@ -780,7 +776,7 @@ contains
             case('pdb')
                 fname2format = 'P'
             case('simple')
-                fname2format = 'O'                
+                fname2format = 'O'
             case DEFAULT
                 fname2format = 'N'
         end select

@@ -756,7 +756,7 @@ contains
         integer          :: noris
         p     = params(cline)
         noris = nlines(p%oritab)
-        call os%new(noris)
+        call os%new_clean(noris)
         call os%read(p%oritab)
         if( file_exists(p%projfile) )then
             call sp_proj%read(p%projfile)
@@ -764,6 +764,7 @@ contains
         call sp_proj%set_sp_oris(p%oritype, os)
         call sp_proj%write(p%projfile)
         call sp_proj%kill
+        call simple_end('**** TXT2PROJECT NORMAL STOP ****')
     end subroutine exec_txt2project
 
     !> convert binary (.bin) oris doc to text (.txt)
@@ -778,6 +779,7 @@ contains
         call sp_proj%read(p%projfile)
         call sp_proj%write_sp_oris(p%oritype, p%outfile)
         call sp_proj%kill
+        call simple_end('**** PROJECT2TXT NORMAL STOP ****')
     end subroutine exec_project2txt
 
     subroutine exec_vizoris( self, cline )

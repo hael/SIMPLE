@@ -1,5 +1,4 @@
 ! batch-processing manager - environment module
-
 module simple_qsys_env
 #include "simple_lib.f08"
 use simple_qsys_funs,    only: qsys_watcher,qsys_cleanup,parse_env_file
@@ -49,9 +48,6 @@ contains
             case('even')
                 self%parts = split_nobjs_even(p_master%nptcls, nparts)
                 partsz     = self%parts(1,2) - self%parts(1,1) + 1
-            case('chunk')
-                self%parts = split_nobjs_in_chunks(p_master%nptcls, p_master%chunksz)
-                partsz     = p_master%chunksz
             case('singles')
                 allocate(self%parts(p_master%nptcls,2))
                 self%parts(:,:) = 1
@@ -108,17 +104,15 @@ contains
         is = self%existence
     end function exists
 
-    subroutine gen_scripts_and_schedule_jobs( self, p_master, job_descr, part_params, algnfbody, ext_meta, chunkdistr )
+    subroutine gen_scripts_and_schedule_jobs( self, p_master, job_descr, part_params, algnfbody )
         class(qsys_env)            :: self
         class(params)              :: p_master
         class(chash)               :: job_descr
         class(chash),     optional :: part_params(p_master%nparts)
         character(len=*), optional :: algnfbody
-        character(len=4), optional :: ext_meta
-        logical,          optional :: chunkdistr
         call qsys_cleanup(p_master)
         call self%qscripts%generate_scripts(job_descr, p_master%ext, self%qdescr,&
-        outfile_body=algnfbody, outfile_ext=ext_meta, part_params=part_params, chunkdistr=chunkdistr)
+        outfile_body=algnfbody, part_params=part_params)
         call self%qscripts%schedule_jobs
     end subroutine gen_scripts_and_schedule_jobs
 
