@@ -19,7 +19,10 @@ Picker should produce output identically to unblur/ctffind, output is boxfile pe
 Make sure that output names are standardised
 
 
-
+Major Refactorings
+* simple_auto exec
+* modularise commanders for Julia integration
+* simple_sp_projec controller
 
 Binary file format
 

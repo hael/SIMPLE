@@ -1,7 +1,6 @@
 ! concrete commander: operations on orientations
 module simple_commander_oris
 #include "simple_lib.f08"
-
 use simple_ori,            only: ori
 use simple_oris,           only: oris
 use simple_binoris_io,     only: binwrite_oritab, binread_oritab,binread_nlines
@@ -19,8 +18,8 @@ public :: map2ptcls_commander
 public :: orisops_commander
 public :: oristats_commander
 public :: rotmats2oris_commander
-public :: bin2txt_commander
-public :: txt2bin_commander
+public :: project2txt_commander
+public :: txt2project_commander
 public :: vizoris_commander
 
 private
@@ -54,14 +53,14 @@ type, extends(commander_base) :: rotmats2oris_commander
  contains
    procedure :: execute      => exec_rotmats2oris
 end type rotmats2oris_commander
-type, extends(commander_base) :: bin2txt_commander
+type, extends(commander_base) :: project2txt_commander
  contains
-   procedure :: execute      => exec_bin2txt
-end type bin2txt_commander
-type, extends(commander_base) :: txt2bin_commander
+   procedure :: execute      => exec_project2txt
+end type project2txt_commander
+type, extends(commander_base) :: txt2project_commander
  contains
-   procedure :: execute      => exec_txt2bin
-end type txt2bin_commander
+   procedure :: execute      => exec_txt2project
+end type txt2project_commander
 type, extends(commander_base) :: vizoris_commander
  contains
    procedure :: execute      => exec_vizoris
@@ -99,7 +98,7 @@ contains
                 call os_class%new(size(clsarr))
                 do iptcl=1,size(clsarr)
                     call os_class%set_ori(iptcl, b%a%get_ori(clsarr(iptcl)))
-                end do 
+                end do
                 call binwrite_oritab('oris_class'//int2str_pad(icls,numlen)//METADATEXT,&
                     &os_class, [1,size(clsarr)])
                 deallocate(clsarr)
@@ -534,7 +533,7 @@ contains
         real                 :: mind, maxd, avgd, sdevd, sumd, vard, scale
         real                 :: mind2, maxd2, avgd2, sdevd2, vard2
         real                 :: popmin, popmax, popmed, popave, popsdev, popvar, frac_populated, szmax
-        integer              :: nprojs, iptcl, icls, j 
+        integer              :: nprojs, iptcl, icls, j
         integer              :: noris, ncls
         real,    allocatable :: clustszs(:), sdevs(:)
         integer, allocatable :: clustering(:), pops(:), tmp(:)
@@ -611,7 +610,7 @@ contains
                 end do
                 write(*,'(a)') '>>> HISTOGRAM OF CLASS POPULATIONS'
                 do icls=1,ncls
-                    write(*,*) pops(icls),"|",('*', j=1,nint(real(pops(icls)*scale)))  
+                    write(*,*) pops(icls),"|",('*', j=1,nint(real(pops(icls)*scale)))
                 end do
             endif
             if( p%projstats .eq. 'yes' )then
@@ -681,7 +680,7 @@ contains
                 end do
                 write(*,'(a)') '>>> HISTOGRAM OF SUBSPACE POPULATIONS (FROM NORTH TO SOUTH)'
                 do icls=1,NSPACE_BALANCE
-                    write(*,*) nint(clustszs(icls)),"|",('*', j=1,nint(clustszs(icls)*scale))  
+                    write(*,*) nint(clustszs(icls)),"|",('*', j=1,nint(clustszs(icls)*scale))
                 end do
             endif
             if( p%trsstats .eq. 'yes' )then
@@ -746,34 +745,40 @@ contains
     end subroutine exec_rotmats2oris
 
     !> convert text (.txt) oris doc to binary (.bin)
-    subroutine exec_txt2bin( self, cline )
-        use simple_oris, only: oris
-        class(txt2bin_commander), intent(inout) :: self
-        class(cmdline),           intent(inout) :: cline
-        type(params)  :: p
-        type(oris)    :: os
-        integer       :: noris
-        p = params(cline)
+    subroutine exec_txt2project( self, cline )
+        use simple_oris,       only: oris
+        use simple_sp_project, only: sp_project
+        class(txt2project_commander), intent(inout) :: self
+        class(cmdline),               intent(inout) :: cline
+        type(params)     :: p
+        type(oris)       :: os
+        type(sp_project) :: sp_proj
+        integer          :: noris
+        p     = params(cline)
         noris = nlines(p%oritab)
         call os%new(noris)
         call os%read(p%oritab)
-        call binwrite_oritab(p%outfile, os, [1,noris])
-    end subroutine exec_txt2bin
+        if( file_exists(p%projfile) )then
+            call sp_proj%read(p%projfile)
+        endif
+        call sp_proj%set_sp_oris(p%oritype, os)
+        call sp_proj%write(p%projfile)
+        call sp_proj%kill
+    end subroutine exec_txt2project
 
     !> convert binary (.bin) oris doc to text (.txt)
-    subroutine exec_bin2txt( self, cline )
-        use simple_oris, only: oris
-        class(bin2txt_commander), intent(inout) :: self
-        class(cmdline),           intent(inout) :: cline
-        type(params)  :: p
-        type(oris)    :: os
-        integer       :: noris
+    subroutine exec_project2txt( self, cline )
+        use simple_oris,       only: oris
+        use simple_sp_project, only: sp_project
+        class(project2txt_commander), intent(inout) :: self
+        class(cmdline),               intent(inout) :: cline
+        type(params)     :: p
+        type(sp_project) :: sp_proj
         p = params(cline)
-        noris = binread_nlines(p%oritab)
-        call os%new(noris)
-        call binread_oritab(p%oritab, os, [1,noris])
-        call os%write(p%outfile)
-    end subroutine exec_bin2txt
+        call sp_proj%read(p%projfile)
+        call sp_proj%write_sp_oris(p%oritype, p%outfile)
+        call sp_proj%kill
+    end subroutine exec_project2txt
 
     subroutine exec_vizoris( self, cline )
         use simple_oris,      only: oris
@@ -821,8 +826,8 @@ contains
                 if(nint(o%get('state')) == 0 )cycle
                 call progress(i, n)
                 closest = b%e%find_closest_proj(o)
-                pops(closest) = pops(closest) + 1          
-            enddo        
+                pops(closest) = pops(closest) + 1
+            enddo
             maxpop = maxval(pops)
             write(*,'(A,I6)')'>>> NUMBER OF POPULATED PROJECTION DIRECTIONS:', count(pops>0)
             write(*,'(A,I6)')'>>> NUMBER OF EMPTY     PROJECTION DIRECTIONS:', count(pops==0)
@@ -913,7 +918,7 @@ contains
                     avg_geodist = avg_geodist + geodist
                 endif
                 euldists(i) = ang
-                write(funit,'(I7,A1,F8.3,A1,F8.3)')i, ',', ang, ',', geodist   
+                write(funit,'(I7,A1,F8.3,A1,F8.3)')i, ',', ang, ',', geodist
                 o_prev = o
             enddo
             call fclose(funit, errmsg="simple_commander_oris::exec_vizoris closing "//trim(fname))

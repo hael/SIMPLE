@@ -425,8 +425,13 @@ contains
         use simple_sauron, only: sauron_line_parser
         class(ori),       intent(inout) :: self
         character(len=*), intent(inout) :: line
+        logical :: isthere(3)
         call sauron_line_parser(line, self%htab, self%chtab)
-        call self%set_euler([self%htab%get('e1'),self%htab%get('e2'),self%htab%get('e3')])
+        isthere(1) = self%htab%isthere('e1')
+        isthere(2) = self%htab%isthere('e2')
+        isthere(3) = self%htab%isthere('e3')
+        if( any(isthere) )&
+          &call self%set_euler([self%htab%get('e1'),self%htab%get('e2'),self%htab%get('e3')])
     end subroutine str2ori
 
     ! GETTERS
@@ -678,10 +683,14 @@ contains
         class(ori), intent(inout) :: self
         integer,    intent(in)    :: fhandle
         character(len=2048) :: line
-        integer :: istate
+        logical :: isthere(3)
         read(fhandle,fmt='(A)') line
         call sauron_line_parser( line, self%htab, self%chtab )
-        call self%set_euler([self%htab%get('e1'),self%htab%get('e2'),self%htab%get('e3')])
+        isthere(1) = self%htab%isthere('e1')
+        isthere(2) = self%htab%isthere('e2')
+        isthere(3) = self%htab%isthere('e3')
+        if( any(isthere) )&
+          &call self%set_euler([self%htab%get('e1'),self%htab%get('e2'),self%htab%get('e3')])
     end subroutine read
 
     ! CALCULATORS

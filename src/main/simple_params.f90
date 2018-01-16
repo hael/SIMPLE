@@ -121,7 +121,7 @@ type :: params
     character(len=STDLEN) :: exec_abspath=''
     character(len=STDLEN) :: exp_doc=''           !< specifying exp_time and dose_rate per tomogram
     character(len=4)      :: ext='.mrc'           !< file extension{.mrc}
-    character(len=4)      :: ext_meta=''          !< meta data file extension(.txt|.bin)
+    character(len=7)      :: ext_meta=''          !< meta data file extension(.txt|.bin)
     character(len=STDLEN) :: extrmode='all'
     character(len=STDLEN) :: fbody=''             !< file body
     character(len=STDLEN) :: featstk='expecstk.bin'
@@ -141,6 +141,7 @@ type :: params
     character(len=STDLEN) :: oritab=''            !< table  of orientations(.txt|.bin)
     character(len=STDLEN) :: oritab2=''           !< 2nd table of orientations(.txt|.bin)
     character(len=STDLEN) :: oritab3D=''          !< table of 3D orientations(.txt|.bin)
+    character(len=STDLEN) :: oritype=''           !< SIMPLE project orientation type(stk|ptcl2D|cls2D|cls3D|ptcl3D|jobproc)
     character(len=STDLEN) :: outfile=''           !< output document
     character(len=STDLEN) :: outstk=''            !< output image stack
     character(len=STDLEN) :: outstk2=''           !< output image stack 2nd
@@ -154,6 +155,7 @@ type :: params
     character(len=STDLEN) :: phshiftunit='radians' !< additional phase-shift unit (radians|degrees){radians}
     character(len=STDLEN) :: plaintexttab=''      !< plain text file of input parameters
     character(len=STDLEN) :: prg=''               !< SIMPLE program to execute
+    character(len=STDLEN) :: projfile=''          !< SIMPLE *.simple project file
     character(len=STDLEN) :: real_filter=''
     character(len=STDLEN) :: refine='no'
     character(len=STDLEN) :: refs=''              !< initial2Dreferences.ext
@@ -560,22 +562,22 @@ contains
         call check_file('boxfile',        self%boxfile,      'T')
         call check_file('boxtab',         self%boxtab,       'T')
         call check_file('classdoc',       self%classdoc,     'T')
-        call check_file('ctffind_doc',    self%ctffind_doc,  'T', 'B')
+        call check_file('ctffind_doc',    self%ctffind_doc,  'T', 'O')
         call check_file('comlindoc',      self%comlindoc,    'T')
-        call check_file('deftab',         self%deftab,       'T', 'B')
+        call check_file('deftab',         self%deftab,       'T', 'O')
         call check_file('doclist',        self%doclist,      'T')
         call check_file('ext',            self%ext,          notAllowed='T')
-        call check_file('ext_meta',       self%ext_meta,     'T', 'B')
+        call check_file('ext_meta',       self%ext_meta,     'T', 'O')
         call check_file('filetab',        self%filetab,      'T')
         call check_file('fname',          self%fname)
         call check_file('frcs',           self%frcs,         'B')
         call check_file('fsc',            self%fsc,          'B')
         call check_file('infile',         self%infile)
         call check_file('mskfile',        self%mskfile,      notAllowed='T')
-        call check_file('oritab',         self%oritab,       'T', 'B')
-        call check_file('oritab2',        self%oritab2,      'T', 'B')
-        call check_file('oritab3D',       self%oritab3D,     'T', 'B')
-        call check_file('outfile',        self%outfile,      'T', 'B')
+        call check_file('oritab',         self%oritab,       'T')
+        call check_file('oritab2',        self%oritab2,      'T')
+        call check_file('oritab3D',       self%oritab3D,     'T')
+        call check_file('outfile',        self%outfile,      'T', 'O')
         call check_file('outstk',         self%outstk,       notAllowed='T')
         call check_file('outstk2',        self%outstk2,      notAllowed='T')
         call check_file('outvol',         self%outvol,       notAllowed='T')
@@ -1246,7 +1248,7 @@ contains
                     endif
                     select case(file_descr)
                         case ('I')
-                            stop 'Support for IMAGIC files is not yet implemented!'
+                            stop 'Support for IMAGIC files is not implemented!'
                         case ('M')
                             ! MRC files are supported
                             cntfile = cntfile+1
@@ -1258,12 +1260,11 @@ contains
                         case ('N')
                             write(*,*) 'file: ', trim(file)
                             stop 'This file format is not supported by SIMPLE; simple_params::check_file'
-                        case ('T')
+                        case ('T','B','P','O')
                             ! text files are supported
-                        case ('B')
                             ! binary files are supported
-                        case ('P')
-                            ! PDB files
+                            ! PDB files are supported
+                            ! *.simple project files are supported
                         case DEFAULT
                             write(*,*) 'file: ', trim(file)
                             stop 'This file format is not supported by SIMPLE; simple_params::check_file'
@@ -1271,7 +1272,6 @@ contains
                     DebugPrint file, '=', var
                 endif
             end subroutine check_file
-
 
             subroutine check_file_formats( allow_mix )
                 logical, intent(in) :: allow_mix
@@ -1290,14 +1290,10 @@ contains
                         end do
                     end do
                     select case(checkupfile(1))
-                        case('M')
+                        case('M','D','B')
                             self%ext = '.mrc'
                         case('S')
                             self%ext = '.spi'
-                        case('D')
-                            self%ext = '.mrc'
-                        case('B')
-                            self%ext = '.mrc'
                         case DEFAULT
                             stop 'This file format is not supported by SIMPLE; check_file_formats; simple_params'
                     end select
@@ -1317,14 +1313,10 @@ contains
                         call fclose(funit, &
                             errmsg="In params:: double_check_file_formats fclose failed "//trim(self%filetab) )
                         select case(form)
-                            case('M')
+                        case('M','D','B')
                                 self%ext = '.mrc'
                             case('S')
                                 self%ext = '.spi'
-                            case('D')
-                                self%ext = '.mrc'
-                            case('B')
-                                self%ext = '.mrc'
                             case DEFAULT
                                 write(*,*) 'format string is ', form
                                 stop 'This file format is not supported by SIMPLE; double_check_file_formats; simple_params'

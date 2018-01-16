@@ -121,8 +121,8 @@ type(map2ptcls_commander)            :: xmap2ptcls
 type(orisops_commander)              :: xorisops
 type(oristats_commander)             :: xoristats
 type(rotmats2oris_commander)         :: xrotmats2oris
-type(txt2bin_commander)              :: xtxt2bin
-type(bin2txt_commander)              :: xbin2txt
+type(txt2project_commander)          :: xtxt2project
+type(project2txt_commander)          :: xproject2txt
 type(vizoris_commander)              :: xvizoris
 
 ! TIME-SERIES ANALYSIS PROGRAMS
@@ -2338,36 +2338,33 @@ select case(prg)
         call cline%parse( keys_required(:1), keys_optional(:1) )
         ! execute
         call xrotmats2oris%execute(cline)
-    case( 'txt2bin' )
-        !==Program txt2bin
+    case( 'txt2project' )
+        !==Program txt2project
         !
-        ! <txt2bin/begin>converts a text oritab to a binary oritab<txt2bin/end>
-        !
-        ! Required keys
-        keys_required(1)  = 'oritab'
-        ! set optional keys
-        keys_optional(1)  = 'outfile'
-        if( describe ) call print_doc_txt2bin
-        call cline%parse(keys_required(:1), keys_optional(:1))
-        ! set defaults
-        if( .not. cline%defined('outfile') ) call cline%set('outfile', 'outfile.bin')
-        ! execute
-        call xtxt2bin%execute(cline)
-    case( 'bin2txt' )
-        !==Program bin2txt
-        !
-        ! <bin2txt/begin>converts a binary oritab to a text oritab<bin2txt/end>
+        ! <txt2project/begin>adds or replaces a text oritab in a binary *.simple project file<txt2project/end>
         !
         ! Required keys
-        keys_required(1)  = 'oritab'
+        keys_required(1) = 'oritab'
+        keys_required(2) = 'projfile'
+        keys_required(3) = 'oritype'
+        ! if( describe ) call print_doc_txt2project
+        call cline%parse(keys_required(:3))
+        ! execute
+        call xtxt2project%execute(cline)
+    case( 'project2txt' )
+        !==Program project2txt
+        !
+        ! <project2txt/begin>converts a binary *.simple project file to a text oritab<project2txt/end>
+        !
+        ! Required keys
+        keys_required(1) = 'projfile'
+        keys_required(2) = 'oritype'
         ! set optional keys
         keys_optional(1)  = 'outfile'
-        if( describe ) call print_doc_bin2txt
-        call cline%parse(keys_required(:1), keys_optional(:1))
-        ! set defaults
-        if( .not. cline%defined('outfile') ) call cline%set('outfile', 'outfile.txt')
+        ! if( describe ) call print_doc_project2txt
+        call cline%parse(keys_required(:2), keys_optional(:1))
         ! execute
-        call xbin2txt%execute(cline)
+        call xproject2txt%execute(cline)
     case( 'vizoris' )
         !==Program vizoris
         !

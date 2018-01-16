@@ -46,14 +46,24 @@ type :: ctfplan
     logical               :: l_phaseplate = .false. !< image obtained with Volta phaseplate
 end type ctfplan
 
-!! CTF flag type
-enum, bind(c) 
+! type for arrays of allocatable strings
+type str4arr
+    character(len=:), allocatable :: str
+end type str4arr
+
+! CTF flag type
+enum, bind(c)
     enumerator :: CTFFLAG_NO = 0, CTFFLAG_YES = 1, CTFFLAG_MUL = 2,  CTFFLAG_FLIP = 3
 end enum
-
 type :: CTFFLAGTYPE
     integer(kind(CTFFLAG_NO)) :: flag=CTFFLAG_NO
 end type CTFFLAGTYPE
+
+! oritype enumeration
+enum, bind(c)
+    enumerator :: STK_SEG = 1, PTCL2D_SEG = 2, CLS2D_SEG = 3,&
+    &CLS3D_SEG = 4, PTCL3D_SEG = 5, JOBPROC_SEG = 11
+end enum
 
 ! command line
 integer, parameter :: MAXNKEYS=100, KEYLEN=32
@@ -79,7 +89,6 @@ real, parameter :: LP2SMPDFAC              = 0.4125    !< low-pass limit scaling
 real, parameter :: NPEAKSATHRES            = 12.0      !< angular threshold for determining npeaks (PRIME3D)
 real, parameter :: TAU                     = 0.005     !< controls the sharpeness of the orientation weight distribution
                                                        !! smaller number means sharper distribution
-
 ! integer #/threshold constants
 integer, parameter :: LPLIM1ITERBOUND      = 5         !< # iteration bound lplim stage 1 (PRIME2D)
 integer, parameter :: LPLIM3ITERBOUND      = 7         !< # iteration bound lplim stage 2 (PRIME2D)

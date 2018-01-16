@@ -45,13 +45,14 @@ contains
         use simple_map_reduce, only:  split_nobjs_even
         class(merge_algndocs_commander), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline
-        type(params)          :: p
-        integer               :: i, j, nj, numlen, funit, funit_merge
-        integer               :: io_stat, nentries_all, cnt, fromto(2)
-        type(binoris)         :: fhandle_doc, fhandle_merged
-        character(len=STDLEN) :: fname
-        integer, allocatable  :: parts(:,:)
-        character(len=1024)   :: line
+        type(params)               :: p
+        type(str4arr), allocatable :: os_strings(:)
+        integer,       allocatable :: parts(:,:)
+        integer                    :: i, j, nj, numlen, funit, funit_merge, n_records
+        integer                    :: io_stat, partsz, cnt, fromto(2), isegment, strlen, strlen_max
+        type(binoris)              :: bos_doc, bos_merged
+        character(len=STDLEN)      :: fname
+        character(len=1024)        :: line
         p      = params(cline) ! parameters generated
         parts  = split_nobjs_even(p%nptcls, p%ndocs)
         if( cline%defined('numlen') )then
@@ -62,44 +63,62 @@ contains
         if( .not. cline%defined('ext_meta') )&
         &stop 'need ext_meta (meta data file extension) to be part of command line; commander_distr :: exec_merge_algndocs'
         select case(p%ext_meta)
-            ! case('.bin')
-            !     ! generate a merged filehandling object based on the first file
-            !     fname = trim(adjustl(p%fbody))//int2str_pad(1,numlen)//p%ext_meta
-            !     call fhandle_merged%open(fname)
-            !     call fhandle_merged%set_fromto([1,p%nptcls])
-            !     call fhandle_merged%close()
-            !     ! make a new header based on the modified template
-            !     call fhandle_merged%open(p%outfile, del_if_exists=.true.)
-            !     call fhandle_merged%write_header()
-            !     ! loop over documents
-            !     cnt = 0
-            !     do i=1,p%ndocs
-            !         fname = trim(adjustl(p%fbody))//int2str_pad(i,numlen)//p%ext_meta
-            !         call fhandle_doc%open(fname)
-            !         nj = fhandle_doc%get_n_records()
-            !         nentries_all = parts(i,2) - parts(i,1) + 1
-            !         if( nentries_all /= nj ) then
-            !             write(*,*) 'in: commander_distr :: exec_merge_binalgndocs'
-            !             write(*,*) 'nr of entries in partition: ', nentries_all
-            !             write(*,*) 'nr of records in file     : ', nj
-            !             write(*,*) 'filename                  : ', trim(fname)
-            !             stop 'number of records in file not consistent with the size of the partition'
-            !         endif
-            !         fromto = fhandle_doc%get_fromto()
-            !         if( any(fromto /= parts(i,:)) )then
-            !             write(*,*) 'in: commander_distr :: exec_merge_binalgndocs'
-            !             write(*,*) 'range in partition: ', parts(i,:)
-            !             write(*,*) 'range in file     : ', fromto
-            !             stop 'range in file not consistent with the range in the partition'
-            !         endif
-            !         do j=fromto(1),fromto(2)
-            !             cnt = cnt + 1
-            !             call fhandle_doc%read_record(j)
-            !             call fhandle_merged%write_record(cnt, fhandle_doc)
-            !         end do
-            !     end do
-            !     call fhandle_merged%close()
-            !     call fhandle_doc%close()
+            case('.simple')
+                ! allocate merged string representation
+                allocate( os_strings(p%nptcls) )
+                ! convert from flag to enumerator to integer
+                select case(trim(p%oritype))
+                    case('ptcl2D')
+                        isegment = PTCL2D_SEG
+                    case('cls2D')
+                        isegment = CLS2D_SEG
+                    case('cls3D')
+                        isegment = CLS3D_SEG
+                    case('ptcl3D')
+                        isegment = PTCL3D_SEG
+                    case DEFAULT
+                        write(*,*) 'oritype: ', trim(p%oritype)
+                        stop 'is not supported; merge_algndocs :: commander_oris'
+                end select
+                ! read into string representation
+                do i=1,p%ndocs
+                    fname     = trim(adjustl(p%fbody))//int2str_pad(i,numlen)//p%ext_meta
+                    call bos_doc%open(trim(fname))
+                    n_records = bos_doc%get_n_records(isegment)
+                    fromto    = bos_doc%get_fromto(isegment)
+                    partsz    = parts(i,2) - parts(i,1) + 1
+                    if( n_records /= partsz .or. .not. all(fromto == parts(i,:)) )then
+                        write(*,*) 'ERROR, # records does not match expectation'
+                        write(*,*) 'EXTRACTED FROM file: ', trim(fname)
+                        write(*,*) 'fromto   : ', fromto(1), fromto(2)
+                        write(*,*) 'n_records: ', n_records
+                        write(*,*) 'CALCULATED FROM input p%nptcls/p%ndocs'
+                        write(*,*) 'fromto: ', parts(i,1), parts(i,2)
+                        write(*,*) 'partsz: ', partsz
+                        stop
+                    endif
+                    call bos_doc%read_segment(isegment, os_strings)
+                    call bos_doc%close
+                end do
+                ! find maxium string lenght
+                strlen_max = 0
+                !$omp parallel do schedule(static) default(shared) proc_bind(close)&
+                !$omp private(i,strlen) reduction(max:strlen_max)
+                do i=1,p%nptcls
+                    strlen = len_trim(os_strings(i)%str)
+                    if( strlen > strlen_max ) strlen_max = strlen
+                end do
+                !$omp end parallel do
+                ! write as one (merged) segment
+                call bos_merged%open(p%outfile, del_if_exists=.true.)
+                call bos_merged%write_header
+                call bos_merged%write_segment(isegment, [1,p%nptcls], strlen_max, os_strings)
+                call bos_merged%close
+                ! better be explicit about deallocating the derived type
+                do i=1,p%nptcls
+                    deallocate(os_strings(i)%str)
+                end do
+                deallocate(os_strings)
             case('.txt')
                 call fopen(funit_merge, file=p%outfile, iostat=io_stat, status='replace',&
                 &action='write', position='append', access='sequential')
@@ -107,9 +126,9 @@ contains
                 do i=1,p%ndocs
                     fname = trim(adjustl(p%fbody))//int2str_pad(i,numlen)//p%ext_meta
                     nj = nlines(fname)
-                    nentries_all = parts(i,2) - parts(i,1) + 1
-                    if( nentries_all /= nj ) then
-                        write(*,*) 'nr of entries in partition: ', nentries_all
+                    partsz = parts(i,2) - parts(i,1) + 1
+                    if( partsz /= nj ) then
+                        write(*,*) 'nr of entries in partition: ', partsz
                         write(*,*) 'nr of lines in file: ', nj
                         write(*,*) 'filename: ', trim(fname)
                         stop 'number of lines in file not consistent with the size of the partition'
@@ -181,7 +200,7 @@ contains
         call split_pairs_in_parts(p%nptcls, p%nparts)
         call simple_end('**** SIMPLE_SPLIT_PAIRS NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_split_pairs
-    
+
     !> for splitting of image stacks into balanced partitions for parallel execution.
     !! This is done to reduce I/O latency
     subroutine exec_split( self, cline )
@@ -222,7 +241,7 @@ contains
 
             logical function stack_is_split()
                 character(len=:), allocatable :: stack_part_fname
-                logical,          allocatable :: stack_parts_exist(:) 
+                logical,          allocatable :: stack_parts_exist(:)
                 integer :: ipart, numlen, sz, sz_correct, ldim(3)
                 logical :: is_split, is_correct
                 allocate( stack_parts_exist(p%nparts) )
@@ -244,7 +263,7 @@ contains
                             exit
                         endif
                         if( ldim(1) == p%box_original .and. ldim(2) == p%box_original )then
-                            ! dimension ok 
+                            ! dimension ok
                         else
                             is_correct = .false.
                             exit

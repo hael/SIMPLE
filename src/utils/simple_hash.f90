@@ -150,25 +150,20 @@ contains
         integer :: i
         if( self%hash_index > 0 )then
             if( self%hash_index == 1 )then
-                allocate(str, source=trim(self%keys(1))//'='//trim(real2str(self%vals(1))),stat=alloc_stat)
-                if(alloc_stat /= 0) call alloc_errchk("In simple_hash::hash2str 1", alloc_stat)
+                allocate(str, source=trim(self%keys(1))//'='//trim(real2str(self%vals(1))))
                 return
             endif
-            allocate(str_moving, source=trim(self%keys(1))//'='//trim(real2str(self%vals(1)))//' ',stat=alloc_stat)
-            if(alloc_stat /= 0) call alloc_errchk("In simple_hash::hash2str 2", alloc_stat)
+            allocate(str_moving, source=trim(self%keys(1))//'='//trim(real2str(self%vals(1)))//' ')
             if( self%hash_index > 2 )then
-                do i=2,self%hash_index-1
-                    allocate(str, source=str_moving//trim(self%keys(i))//'='//trim(real2str(self%vals(i)))//' ',stat=alloc_stat)
-                    if(alloc_stat /= 0) call alloc_errchk("In simple_hash::hash2str 2", alloc_stat)
+                do i=2,self%hash_index - 1
+                    allocate(str, source=str_moving//trim(self%keys(i))//'='//trim(real2str(self%vals(i)))//' ')
                     deallocate(str_moving)
                     allocate(str_moving,source=str,stat=alloc_stat)
-                    if(alloc_stat /= 0) call alloc_errchk("In simple_hash::hash2str 4", alloc_stat)
                     deallocate(str)
                 end do
             endif
             allocate(str,source=trim(str_moving//trim(self%keys(self%hash_index))&
-                &//'='//trim(real2str(self%vals(self%hash_index)))),stat=alloc_stat)
-            if(alloc_stat /= 0) call alloc_errchk("In simple_hash::hash2str 5", alloc_stat)
+                &//'='//trim(real2str(self%vals(self%hash_index)))))
         endif
     end function hash2str
 

@@ -29,7 +29,8 @@ sam2emanbox.pl
 simmovies.pl
 simple_args_varlist.pl
 split_filetab.pl
-tab2space.pl)
+tab2space.pl
+read_simple_binfile.jl)
 
 # foreach(PERL_SCRIPT ${SIMPLE_PERL_SCRIPTS})
 #   install(PROGRAMS ${CMAKE_CURRENT_SOURCE_DIR}/${PERL_SCRIPT}
@@ -50,8 +51,6 @@ add_custom_target(gen_doc_primer_tex
   WORKING_DIRECTORY ${CMAKE_INSTALL_PREFIX}
   USES_TERMINAL
   )
-
-
 
 install(DIRECTORY  ${CMAKE_CURRENT_SOURCE_DIR}
   DESTINATION  ${CMAKE_INSTALL_PREFIX}

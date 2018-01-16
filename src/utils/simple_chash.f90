@@ -264,26 +264,20 @@ contains
         integer :: i
         if( self%chash_index > 0 )then
             if( self%chash_index == 1 )then
-                allocate(str, source=trim(self%keys(1))//'='//trim(self%values(1)),stat=alloc_stat)
-                if(alloc_stat /= 0) call alloc_errchk("In simple_chash::chash2str 1 ", alloc_stat)
+                allocate(str, source=trim(self%keys(1))//'='//trim(self%values(1)))
                 return
             endif
-            allocate(str_moving, source=trim(self%keys(1))//'='//trim(self%values(1))//' ',stat=alloc_stat)
-            if(alloc_stat /= 0) call alloc_errchk("In simple_chash::chash2str 2", alloc_stat)
+            allocate(str_moving, source=trim(self%keys(1))//'='//trim(self%values(1))//' ')
             if( self%chash_index > 2 )then
                 do i=2,self%chash_index-1
-                    allocate(str, source=str_moving//trim(self%keys(i))//'='//trim(self%values(i))//' ',&
-                        &stat=alloc_stat)
-                    if(alloc_stat /= 0) call alloc_errchk("In simple_chash::get_1", alloc_stat)
+                    allocate(str, source=str_moving//trim(self%keys(i))//'='//trim(self%values(i))//' ')
                     deallocate(str_moving)
                     allocate(str_moving,source=str,stat=alloc_stat)
-                    if(alloc_stat /= 0) call alloc_errchk("In simple_chash::chash2str 4", alloc_stat)
                     deallocate(str)
                 end do
             endif
             allocate(str,source=trim(str_moving//trim(self%keys(self%chash_index))//'='//&
-                &trim(self%values(self%chash_index))),stat=alloc_stat)
-            if(alloc_stat /= 0) call alloc_errchk("In simple_chash::chash2str 5", alloc_stat)
+                &trim(self%values(self%chash_index))))
         endif
     end function chash2str
 
