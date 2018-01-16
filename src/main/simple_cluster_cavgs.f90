@@ -4,7 +4,7 @@ use simple_build,            only: build
 use simple_params,           only: params
 use simple_corrmat,          only: calc_roinv_corrmat
 use simple_aff_prop,         only: aff_prop
-use simple_hadamard_common   ! use all in there 
+use simple_hadamard_common   ! use all in there
 use simple_defs              ! use all in there
 use simple_binoris_io        ! use all in there
 implicit none
@@ -73,16 +73,16 @@ contains
 		do iptcl=1,p%nptcls
 			call clsdoc%set(iptcl, 'class', real(labels(iptcl)))
 		end do
-		call binwrite_oritab('aff_prop_clustering'//METADATEXT, clsdoc, [1,p%nptcls])
+		call binwrite_oritab('aff_prop_clustering'//trim(METADATEXT), clsdoc, [1,p%nptcls])
 		! calculate within cluster correlations
 		corr_within_cls_avg =  0.
 		corr_within_cls_min =  1.0
 		corr_within_cls_max = -1.0
-		cnt                 = 0 
+		cnt                 = 0
 		do iptcl=1,p%nptcls - 1
 			do jptcl=iptcl + 1,p%nptcls
 				if( labels(iptcl) == labels(jptcl) )then
-					corr_within_cls_avg = corr_within_cls_avg + corrmat(iptcl,jptcl)				
+					corr_within_cls_avg = corr_within_cls_avg + corrmat(iptcl,jptcl)
 					if( corrmat(iptcl,jptcl) < corr_within_cls_min ) corr_within_cls_min = corrmat(iptcl,jptcl)
 					if( corrmat(iptcl,jptcl) > corr_within_cls_max ) corr_within_cls_max = corrmat(iptcl,jptcl)
 					cnt = cnt + 1
@@ -200,9 +200,9 @@ contains
         write(*,'(a)') '>>> HISTOGRAM OF CLUSTER POPULATIONS'
         call hpsort(pops)
         do icen=1,p%ncls
-            write(*,*) nint(pops(icen)),"|",('*', j=1,nint(pops(icen)*scale))  
+            write(*,*) nint(pops(icen)),"|",('*', j=1,nint(pops(icen)*scale))
         end do
-		call binwrite_oritab('aff_prop_ceninfo'//METADATEXT, ceninfo, [1,p%ncls])
+		call binwrite_oritab('aff_prop_ceninfo'//trim(METADATEXT), ceninfo, [1,p%ncls])
 		! write selected class averages
 		if( p%balance > 0 )then
 			cnt = 0
@@ -263,7 +263,7 @@ contains
 	        call pftcc%cp_even_ref2ptcl(iptcl, iptcl)
         end do
         !$omp end parallel do
-        
+
 		! DESTRUCT
         do iptcl=1,p%nptcls
             call match_imgs(iptcl)%kill_polarizer
