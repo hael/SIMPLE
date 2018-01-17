@@ -260,12 +260,16 @@ contains
             p%lp_dyn     = p%lp
             call b%a%set_all2single('lp',p%lp)
         else
-            if( which_iter <= LPLIM1ITERBOUND )then
-                lplim = p%lplims2D(1)
-            else if( frac_srch_space >= FRAC_SH_LIM .and. which_iter > LPLIM3ITERBOUND )then
-                lplim = p%lplims2D(3)
+            if( file_exists(p%frcs) )then
+                lplim = b%projfrcs%estimate_lp_for_align()
             else
-                lplim = p%lplims2D(2)
+                if( which_iter <= LPLIM1ITERBOUND )then
+                    lplim = p%lplims2D(1)
+                else if( frac_srch_space >= FRAC_SH_LIM .and. which_iter > LPLIM3ITERBOUND )then
+                    lplim = p%lplims2D(3)
+                else
+                    lplim = p%lplims2D(2)
+                endif
             endif
             p%kfromto(2) = calc_fourier_index(lplim, p%boxmatch, p%smpd)
             p%lp_dyn = lplim

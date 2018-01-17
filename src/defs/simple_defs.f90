@@ -62,7 +62,7 @@ end type CTFFLAGTYPE
 ! oritype enumeration
 enum, bind(c)
     enumerator :: STK_SEG = 1, PTCL2D_SEG = 2, CLS2D_SEG = 3,&
-    &CLS3D_SEG = 4, PTCL3D_SEG = 5, JOBPROC_SEG = 11
+    &CLS3D_SEG = 4, PTCL3D_SEG = 5, PROJINFO_SEG=11, JOBPROC_SEG = 12
 end enum
 
 ! command line

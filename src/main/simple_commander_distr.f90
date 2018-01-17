@@ -68,8 +68,6 @@ contains
                 select case(trim(p%oritype))
                     case('ptcl2D')
                         isegment = PTCL2D_SEG
-                    case('cls2D')
-                        isegment = CLS2D_SEG
                     case('cls3D')
                         isegment = CLS3D_SEG
                     case('ptcl3D')
@@ -109,8 +107,8 @@ contains
                 !$omp end parallel do
                 ! write as one (merged) segment
                 call bos_merged%open(p%outfile, del_if_exists=.true.)
-                call bos_merged%write_header
                 call bos_merged%write_segment(isegment, [1,p%nptcls], strlen_max, os_strings)
+                call bos_merged%write_header
                 call bos_merged%close
                 ! better be explicit about deallocating the derived type
                 do i=1,p%nptcls

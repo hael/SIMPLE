@@ -32,11 +32,9 @@ contains
     procedure          :: set_frc
     procedure          :: get_frc
     procedure          :: frc_getter
-    procedure, private :: estimate_res_1
-    procedure, private :: estimate_res_2
-    procedure, private :: estimate_res_3
-    generic            :: estimate_res => estimate_res_1, estimate_res_2, estimate_res_3
+    procedure          :: estimate_res
     procedure          :: estimate_find_for_eoavg
+    procedure          :: estimate_lp_for_align
     ! I/O
     procedure          :: read
     procedure          :: write
@@ -102,26 +100,26 @@ contains
 
     ! bound res
 
-    subroutine bound_res( self, frc, frc05, frc0143 )
+    subroutine bound_res( self, frc, res_frc05, res_frc0143 )
         class(projection_frcs), intent(in)    :: self
         real,                   intent(in)    :: frc(:)
-        real,                   intent(inout) :: frc05, frc0143  
+        real,                   intent(inout) :: res_frc05, res_frc0143
         if( all(frc >  0.5) )then
-            frc05   = 2. * self%smpd
-            frc0143 = frc05
+            res_frc05   = 2. * self%smpd
+            res_frc0143 = res_frc05
             return
         endif
         if( all(frc >  0.143) )then
-            frc0143 = 2. * self%smpd
+            res_frc0143 = 2. * self%smpd
             return
         endif
         if( all(frc <=  0.143) )then
-            frc05   = self%dstep
-            frc0143 = frc05
+            res_frc05   = self%dstep
+            res_frc0143 = res_frc05
             return
         endif
         if( all(frc <=  0.5) )then
-            frc0143 = self%dstep
+            res_frc0143 = self%dstep
             return
         endif
     end subroutine bound_res
@@ -184,73 +182,18 @@ contains
         frc = self%frcs(sstate,proj,:)
     end subroutine frc_getter
 
-    subroutine estimate_res_1( self, proj, frc05, frc0143, state )
+    subroutine estimate_res( self, proj, res_frc05, res_frc0143, state )
         class(projection_frcs), intent(in)  :: self
         integer,                intent(in)  :: proj
-        real,                   intent(out) :: frc05, frc0143
+        real,                   intent(out) :: res_frc05, res_frc0143
         integer, optional,      intent(in)  :: state
         integer :: sstate
         sstate = 1
         if( present(state) ) sstate = state
         call self%raise_exception( proj, sstate, 'ERROR, out of bounds in estimate_res')
-        call get_resolution(self%frcs(sstate,proj,:), self%res4frc_calc, frc05, frc0143)
-        call self%bound_res(self%frcs(sstate,proj,:), frc05, frc0143)
-    end subroutine estimate_res_1
-
-    subroutine estimate_res_2( self, state )
-        class(projection_frcs), intent(in)  :: self
-        integer, optional,      intent(in)  :: state
-        integer :: alloc_stat, sstate, j
-        real    :: frc05, frc0143
-        real, allocatable :: frc(:)
-        allocate( frc(self%filtsz), stat=alloc_stat )
-        call alloc_errchk( 'estimate_res_2; simple_projection_frcs', alloc_stat )
-        sstate = 1
-        if( present(state) ) sstate = state
-        frc = sum(self%frcs(sstate,:,:),dim=1) / real(self%nprojs)
-        call get_resolution(frc, self%res4frc_calc, frc05, frc0143)
-        do j=1,size(self%res4frc_calc)
-            write(*,'(A,1X,F6.2,1X,A,1X,F7.3)') '>>> RESOLUTION:', self%res4frc_calc(j), '>>> CORRELATION:', frc(j)
-        end do
-        call self%bound_res(frc, frc05, frc0143)
-        write(*,'(A,1X,F6.2)') '>>> RESOLUTION AT FRC=0.500 DETERMINED TO:', frc05
-        write(*,'(A,1X,F6.2)') '>>> RESOLUTION AT FRC=0.143 DETERMINED TO:', frc0143 
-    end subroutine estimate_res_2
-
-    subroutine estimate_res_3( self, nbest, frc, res, frc05, frc0143, state )
-        use simple_math, only: get_resolution, hpsort, get_lplim_at_corr
-        class(projection_frcs), intent(in)  :: self
-        integer,                intent(in)  :: nbest
-        real, allocatable,      intent(out) :: frc(:), res(:)
-        real,                   intent(out) :: frc05, frc0143
-        integer, optional,      intent(in)  :: state
-        integer :: alloc_stat, sstate, iproj
-        real,    allocatable :: lplims(:)
-        integer, allocatable :: order(:)
-        if( allocated(frc) ) deallocate(frc)
-        if( allocated(res) ) deallocate(res)
-        allocate( frc(self%filtsz), res(self%filtsz),&
-            &lplims(self%nprojs), order(self%nprojs), stat=alloc_stat )
-        allocchk( 'estimate_res_2; simple_projection_frcs allocating frc, res, order and lplims' )
-        sstate = 1
-        if( present(state) ) sstate = state
-        ! order FRCs according to low-pass limit (best first)
-        do iproj=1,self%nprojs
-            lplims(iproj) = get_lplim_at_corr(self%frcs(sstate,iproj,:), 0.143)
-        end do
-        order = (/(iproj,iproj=1,self%nprojs)/)
-        call hpsort(lplims, order)
-        ! average the nbest ones
-        frc = 0.0
-        do iproj=1,nbest
-            frc = frc + self%frcs(sstate,order(iproj),:)
-        end do
-        ! prep output
-        frc = frc / real(nbest)
-        call get_resolution(frc, self%res4frc_calc, frc05, frc0143)
-        call self%bound_res(frc, frc05, frc0143)
-        res = self%res4frc_calc
-    end subroutine estimate_res_3
+        call get_resolution(self%frcs(sstate,proj,:), self%res4frc_calc, res_frc05, res_frc0143)
+        call self%bound_res(self%frcs(sstate,proj,:), res_frc05, res_frc0143)
+    end subroutine estimate_res
 
     function estimate_find_for_eoavg( self, proj, state ) result( find )
         class(projection_frcs), intent(in)  :: self
@@ -262,6 +205,25 @@ contains
         call self%raise_exception( proj, sstate, 'ERROR, out of bounds in estimate_find_for_eoavg')
         find = max(K4EOAVGLB,get_lplim_at_corr(self%frcs(sstate,proj,:), FSC4EOAVG2D))
     end function estimate_find_for_eoavg
+
+    function estimate_lp_for_align( self, state ) result( lp )
+        class(projection_frcs), intent(in)  :: self
+        integer, optional,      intent(in)  :: state
+        real    :: lplims(self%nprojs)
+        integer :: alloc_stat, sstate, iproj
+        real    :: lp, res_frc05, res_frc0143
+        sstate = 1
+        if( present(state) ) sstate = state
+        ! order FRCs according to low-pass limit (best first)
+        do iproj=1,self%nprojs
+            call get_resolution(self%frcs(sstate,iproj,:), self%res4frc_calc, res_frc05, res_frc0143)
+            call self%bound_res(self%frcs(sstate,iproj,:), res_frc05, res_frc0143)
+            lplims(iproj) = res_frc0143
+        end do
+        call hpsort(lplims)
+        ! return median of top three clusters
+        lp = median(lplims(1:3))
+    end function estimate_lp_for_align
 
     ! I/O
 
@@ -297,7 +259,7 @@ contains
         class(projection_frcs), intent(inout) :: self
         if( self%exists )then
             deallocate(self%res4frc_calc, self%frcs)
-            self%nprojs       = 0 
+            self%nprojs       = 0
             self%filtsz       = 0
             self%box4frc_calc = 0
             self%exists       = .false.

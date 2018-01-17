@@ -12,7 +12,7 @@ private
 integer(kind=8), parameter :: MAX_N_SEGEMENTS = 20
 integer(kind=8), parameter :: N_VARS_HEAD_SEG = 5
 integer(kind=8), parameter :: N_BYTES_HEADER  = MAX_N_SEGEMENTS * N_VARS_HEAD_SEG * 8 ! because dp integer
-logical,         parameter :: DEBUG = .true.
+logical,         parameter :: DEBUG = .false.
 
 type file_header_segment
     integer(kind=8)   :: fromto(2)          = 0
@@ -165,11 +165,19 @@ contains
     subroutine write_segment_1( self, isegment, os, fromto )
         class(binoris),    intent(inout) :: self
         integer,           intent(in)    :: isegment
-        class(oris),       intent(inout) :: os
+        class(oris),       intent(inout) :: os ! indexed from 1 to nptcls
         integer, optional, intent(in)    :: fromto(2)
         character(len=:), allocatable :: str_dyn
-        integer :: i, ibytes, io_status, nspaces
-        if( os%get_noris() == 0 ) return
+        integer :: i, ibytes, io_status, nspaces, noris
+        noris = os%get_noris()
+        if( noris == 0 ) return
+        if( present(fromto) )then
+            if( fromto(1) < 1 .or. fromto(2) > noris )then
+                write(*,*) 'noris : ', noris
+                write(*,*) 'fromto: ', fromto
+                stop 'fromto out of range; binoris :: write_segment_1'
+            endif
+        endif
         if( .not. self%l_open ) stop 'file needs to be open; binoris :: write_segment_1'
         ! add segment to stack, this sets all the information needed for allocation
         call self%add_segment_1(isegment, os, fromto)
@@ -179,13 +187,7 @@ contains
         ibytes = self%header(isegment)%first_data_byte
         do i=self%header(isegment)%fromto(1),self%header(isegment)%fromto(2)
             str_dyn = os%ori2str(i)
-
-            print *, 'str_dyn: ', str_dyn
-
             nspaces = self%header(isegment)%n_bytes_per_record - len(str_dyn)
-
-            print *, 'nspaces: ', nspaces
-
             if( nspaces > 0 )then
                 write(unit=self%funit,pos=ibytes) str_dyn//spaces(nspaces)
                 if( DEBUG ) print *, 'wrote: ', sizeof(str_dyn//spaces(nspaces)),&
@@ -203,7 +205,7 @@ contains
         class(binoris), intent(inout) :: self
         integer,        intent(in)    :: isegment
         integer,        intent(in)    :: fromto(2), strlen_max
-        type(str4arr),  intent(inout) :: sarr(:)
+        type(str4arr),  intent(inout) :: sarr(:) ! indexed from 1 to nptcls
         integer :: i, ibytes, io_status, nspaces
         if( .not. self%l_open ) stop 'file needs to be open; binoris :: write_segment_2'
         ! add segment to stack
@@ -223,8 +225,6 @@ contains
                 if( DEBUG ) print *, 'wrote: ', sizeof(sarr(i)%str),&
                     &' segment: ', isegment, ' bytes, starting @: ', ibytes
             endif
-
-
             ibytes = ibytes + self%header(isegment)%n_bytes_per_record
         end do
     end subroutine write_segment_2
@@ -283,14 +283,21 @@ contains
         end do
     end subroutine update_byte_ranges
 
-    subroutine read_segment_1( self, isegment, os )
+    subroutine read_segment_1( self, isegment, os, fromto )
         class(binoris), intent(inout) :: self
         integer,        intent(in)    :: isegment
         class(oris),    intent(inout) :: os
+        integer, optional, intent(in) :: fromto(2)
         character(len=self%header(isegment)%n_bytes_per_record) :: str_os_line ! string with static lenght (set to max(strlen))
-        integer :: i, irec, ibytes
+        integer :: i, ibytes, irec
+        logical :: present_fromto
         if( .not. self%l_open ) stop 'file needs to be open; binoris :: read_segment_1'
         if( isegment < 1 .or. isegment > self%n_segments ) stop 'isegment out of bound; binoris :: read_segment_1'
+        present_fromto = present(fromto)
+        if( present_fromto )then
+            if( .not. all(fromto .eq. self%header(isegment)%fromto) )&
+                &stop 'passed dummy fromto not consistent with self%header; binoris :: read_segment_1'
+        endif
         if( self%header(isegment)%n_records > 0 .and. self%header(isegment)%n_bytes_per_record > 0 )then
             ! read orientation data
             ibytes = self%header(isegment)%first_data_byte
@@ -298,7 +305,11 @@ contains
             do i=self%header(isegment)%fromto(1),self%header(isegment)%fromto(2)
                 irec = irec + 1
                 read(unit=self%funit,pos=ibytes) str_os_line
-                call os%str2ori(irec, str_os_line) ! irec because of sp_project implementation
+                if( present(fromto) )then
+                    call os%str2ori(i, str_os_line)
+                else
+                    call os%str2ori(irec, str_os_line)
+                endif
                 ibytes = ibytes + self%header(isegment)%n_bytes_per_record
             end do
         else
@@ -309,7 +320,7 @@ contains
     subroutine read_segment_2( self, isegment, sarr )
         class(binoris), intent(inout) :: self
         integer,        intent(in)    :: isegment
-        type(str4arr),  intent(out)   :: sarr(:)
+        type(str4arr),  intent(inout) :: sarr(:)
         integer :: i, ibytes
         if( .not. self%l_open ) stop 'file needs to be open; binoris :: read_segment_2'
         if( isegment < 1 .or. isegment > self%n_segments ) stop 'isegment out of bound; binoris :: read_segment_2'
@@ -335,7 +346,7 @@ contains
         character(len=32)  :: flags(NFLAGS)
         type(ori)          :: o
         character(len=self%header(isegment)%n_bytes_per_record) :: str_os_line ! string with static lenght (set to max(strlen))
-        integer :: i, j, irec, ibytes
+        integer :: i, j, ibytes
         if( .not. self%l_open ) stop 'file needs to be open; binoris :: read_segment_ctfparams_state_eo'
         if( isegment < 1 .or. isegment > self%n_segments ) stop 'isegment out of bound; binoris :: read_segment_ctfparams_state_eo'
         if( self%header(isegment)%n_records > 0 .and. self%header(isegment)%n_bytes_per_record > 0 )then
@@ -353,11 +364,9 @@ contains
             flags(11) = 'phshift'
             ! read orientation data
             ibytes = self%header(isegment)%first_data_byte
-            irec   = 0
             do i=self%header(isegment)%fromto(1),self%header(isegment)%fromto(2)
-                irec = irec + 1
                 read(unit=self%funit,pos=ibytes) str_os_line
-                call o%str2ori(str_os_line) ! irec because of sp_project implementation
+                call o%str2ori(str_os_line)
                 do j=1,NFLAGS
                     if( o%isthere(trim(flags(j))) ) call os%set(i, trim(flags(j)), o%get(trim(flags(j))))
                 end do

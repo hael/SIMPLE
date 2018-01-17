@@ -795,7 +795,6 @@ contains
         type(params)     :: p
         type(sp_project) :: sp_proj
         p = params(cline)
-        ! call sp_proj%read(p%projfile)
         call sp_proj%read_header(p%projfile)
         call sp_proj%print_header
         call sp_proj%kill

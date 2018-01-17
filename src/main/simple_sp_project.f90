@@ -15,8 +15,9 @@ type sp_project
     type(oris)    :: os_cls2D  ! per-cluster 2D os,       segment 3
     type(oris)    :: os_cls3D  ! per-cluster 3D os,       segment 4
     type(oris)    :: os_ptcl3D ! per-particle 3D os,      segment 5
-    ! segments 11-20 reserved for job management etc.
-    type(oris)    :: jobproc   ! jobid + PID + etc.       segment 11
+    ! segments 11-20 reserved for project info, job management etc.
+    type(oris)    :: projinfo  ! project information      segment 11
+    type(oris)    :: jobproc   ! jobid + PID + etc.       segment 12
     ! binary file-handler
     type(binoris) :: bos
 contains
@@ -51,6 +52,8 @@ contains
                 call self%os_cls3D%new_clean(n)
             case('ptcl3D')
                 call self%os_ptcl3D%new_clean(n)
+            case('projinfo')
+                call self%projinfo%new_clean(n)
             case('jobproc')
                 call self%jobproc%new_clean(n)
             case DEFAULT
@@ -73,6 +76,8 @@ contains
                 self%os_cls3D  = os
             case('ptcl3D')
                 self%os_ptcl3D = os
+            case('projinfo')
+                self%projinfo  = os
             case('jobproc')
                 self%jobproc   = os
             case DEFAULT
@@ -111,6 +116,9 @@ contains
                 case(PTCL3D_SEG)
                     call self%os_ptcl3D%new_clean(n)
                     call self%bos%read_segment(isegment, self%os_ptcl3D)
+                case(PROJINFO_SEG)
+                    call self%projinfo%new_clean(n)
+                    call self%bos%read_segment(isegment, self%projinfo)
                 case(JOBPROC_SEG)
                     call self%jobproc%new_clean(n)
                     call self%bos%read_segment(isegment, self%jobproc)
@@ -123,10 +131,7 @@ contains
         class(sp_project), intent(inout) :: self
         character(len=*),  intent(in)    :: fname
         integer, optional, intent(in)    :: fromto(2)
-        integer :: isegment, n, noris
-        logical :: present_fromto
-        present_fromto = present(fromto)
-        if( present_fromto ) n = fromto(2) - fromto(1) + 1
+        integer :: isegment
         if( fname2format(fname) .ne. 'O' )then
             write(*,*) 'fname: ', trim(fname)
             stop 'file format not supported; sp_project :: write'
@@ -135,55 +140,18 @@ contains
         do isegment=1,MAXN_OS_SEG
             select case(isegment)
                 case(STK_SEG)
-                    ! noris = self%os_stk%get_noris()
-                    ! if( noris > 0 ) call self%bos%write_segment(isegment, self%os_stk)
                     call self%bos%write_segment(isegment, self%os_stk)
                 case(PTCL2D_SEG)
-                    ! noris = self%os_ptcl2D%get_noris()
-                    ! if( noris > 0 )then
-                    !     if( present_fromto )then
-                    !         if( n /= noris )then
-                    !             write(*,*) 'fromto(2) - fromto(1) + 1 = ', n
-                    !             write(*,*) 'self%os_ptcl2D%get_noris() -> ', noris
-                    !             stop 'ERROR, fromto range not consistent with self%os_ptcl2D size; binoris :: write'
-                    !         endif
-                    !     endif
-                    !     call self%bos%write_segment(isegment, self%os_ptcl2D, fromto)
-                    ! endif
                     call self%bos%write_segment(isegment, self%os_ptcl2D, fromto)
                 case(CLS2D_SEG)
-                    ! noris = self%os_cls2D%get_noris()
-                    ! if( noris > 0 ) call self%bos%write_segment(isegment, self%os_cls2D)
                     call self%bos%write_segment(isegment, self%os_cls2D)
                 case(CLS3D_SEG)
-                    ! noris = self%os_cls3D%get_noris()
-                    ! if( noris > 0 )then
-                    !     if( present_fromto )then
-                    !         if( n /= self%os_cls3D%get_noris() )then
-                    !             write(*,*) 'fromto(2) - fromto(1) + 1 = ', n
-                    !             write(*,*) 'self%os_cls3D%get_noris() -> ', noris
-                    !             stop 'ERROR, fromto range not consistent with self%os_cls3D size; binoris :: write'
-                    !         endif
-                    !     endif
-                    !     call self%bos%write_segment(isegment, self%os_cls3D, fromto)
-                    ! endif
                     call self%bos%write_segment(isegment, self%os_cls3D, fromto)
                 case(PTCL3D_SEG)
-                    ! noris = self%os_ptcl3D%get_noris()
-                    ! if( noris > 0 )then
-                    !     if( present_fromto )then
-                    !         if( n /= noris )then
-                    !             write(*,*) 'fromto(2) - fromto(1) + 1 = ', n
-                    !             write(*,*) 'self%os_ptcl3D%get_noris() -> ', noris
-                    !             stop 'ERROR, fromto range not consistent with self%os_ptcl3D size; binoris :: write'
-                    !         endif
-                    !     endif
-                    !     call self%bos%write_segment(isegment, self%os_ptcl3D, fromto)
-                    ! endif
                     call self%bos%write_segment(isegment, self%os_ptcl3D, fromto)
+                case(PROJINFO_SEG)
+                    call self%bos%write_segment(isegment, self%projinfo)
                 case(JOBPROC_SEG)
-                    ! noris = self%jobproc%get_noris()
-                    ! if( noris > 0 ) call self%bos%write_segment(isegment, self%jobproc)
                     call self%bos%write_segment(isegment, self%jobproc)
             end select
         end do
@@ -204,17 +172,47 @@ contains
                 ! *.txt plain text ori file
                 select case(trim(which))
                     case('stk')
-                        call self%os_stk%write(fname,    fromto)
+                        if( self%os_stk%get_noris() > 0 )then
+                            call self%os_stk%write(fname)
+                        else
+                            write(*,*) 'WARNING, no stk-type oris available to write; sp_project :: write_sp_oris'
+                        endif
                     case('ptcl2D')
-                        call self%os_ptcl2D%write(fname, fromto)
+                        if( self%os_ptcl2D%get_noris() > 0 )then
+                            call self%os_ptcl2D%write(fname, fromto)
+                        else
+                            write(*,*) 'WARNING, no ptcl2D-type oris available to write; sp_project :: write_sp_oris'
+                        endif
                     case('cls2D')
-                        call self%os_cls2D%write(fname,  fromto)
+                        if( self%os_cls2D%get_noris() > 0 )then
+                            call self%os_cls2D%write(fname)
+                        else
+                            write(*,*) 'WARNING, no cls2D-type oris available to write; sp_project :: write_sp_oris'
+                        endif
                     case('cls3D')
-                        call self%os_cls3D%write(fname,  fromto)
+                        if( self%os_cls3D%get_noris() > 0 )then
+                            call self%os_cls3D%write(fname,  fromto)
+                        else
+                            write(*,*) 'WARNING, no cls3D-type oris available to write; sp_project :: write_sp_oris'
+                        endif
                     case('ptcl3D')
-                        call self%os_ptcl3D%write(fname, fromto)
+                        if( self%os_ptcl3D%get_noris() > 0 )then
+                            call self%os_ptcl3D%write(fname, fromto)
+                        else
+                            write(*,*) 'WARNING, no ptcl3D-type oris available to write; sp_project :: write_sp_oris'
+                        endif
+                    case('projinfo')
+                        if( self%projinfo%get_noris() > 0 )then
+                            call self%projinfo%write(fname, fromto)
+                        else
+                            write(*,*) 'WARNING, no projinfo-type oris available to write; sp_project :: write_sp_oris'
+                        endif
                     case('jobproc')
-                        call self%jobproc%write(fname,   fromto)
+                        if( self%jobproc%get_noris() > 0 )then
+                            call self%jobproc%write(fname)
+                        else
+                            write(*,*) 'WARNING, no jobproc-type oris available to write; sp_project :: write_sp_oris'
+                        endif
                     case DEFAULT
                         stop 'unsupported which flag; sp_project :: write_sp_oris'
                 end select
@@ -237,17 +235,19 @@ contains
                 ! *.txt plain text ori file
                 select case(trim(which))
                     case('stk')
-                        call self%os_stk%read(fname,    fromto)
+                        call self%os_stk%read(fname)
                     case('ptcl2D')
                         call self%os_ptcl2D%read(fname, fromto)
                     case('cls2D')
-                        call self%os_cls2D%read(fname,  fromto)
+                        call self%os_cls2D%read(fname)
                     case('cls3D')
                         call self%os_cls3D%read(fname,  fromto)
                     case('ptcl3D')
                         call self%os_ptcl3D%read(fname, fromto)
+                    case('projinfo')
+                        call self%projinfo%read(fname)
                     case('jobproc')
-                        call self%jobproc%read(fname,   fromto)
+                        call self%jobproc%read(fname)
                     case DEFAULT
                         stop 'unsupported which flag; sp_project :: read_sp_oris'
                 end select

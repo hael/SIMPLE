@@ -56,20 +56,23 @@ call myproject%print_header
 call myproject%write_sp_oris('stk', 'myproject_os_stk_2.txt')
 
 ! generate 3 algndocs for testing merging
-call myproject%os_ptcl3D%new_clean(3)
+call myproject%os_ptcl3D%new_clean(9)
 call myproject%os_ptcl3D%set_euler(1, [1.,1.,1.])
 call myproject%os_ptcl3D%set_euler(2, [1.,1.,1.])
 call myproject%os_ptcl3D%set_euler(3, [1.,1.,1.])
+print *, 'writing doc1'
 call myproject%write('doc1.simple', [1,3])
-call myproject%os_ptcl3D%new_clean(3)
-call myproject%os_ptcl3D%set_euler(1, [2.,2.,2.])
-call myproject%os_ptcl3D%set_euler(2, [2.,2.,2.])
-call myproject%os_ptcl3D%set_euler(3, [2.,2.,2.])
+call myproject%os_ptcl3D%new_clean(9)
+call myproject%os_ptcl3D%set_euler(4, [2.,2.,2.])
+call myproject%os_ptcl3D%set_euler(5, [2.,2.,2.])
+call myproject%os_ptcl3D%set_euler(6, [2.,2.,2.])
+print *, 'writing doc2'
 call myproject%write('doc2.simple', [4,6])
-call myproject%os_ptcl3D%new_clean(3)
-call myproject%os_ptcl3D%set_euler(1, [3.,3.,3.])
-call myproject%os_ptcl3D%set_euler(2, [3.,3.,3.])
-call myproject%os_ptcl3D%set_euler(3, [3.,3.,3.])
+call myproject%os_ptcl3D%new_clean(9)
+call myproject%os_ptcl3D%set_euler(7, [3.,3.,3.])
+call myproject%os_ptcl3D%set_euler(8, [3.,3.,3.])
+call myproject%os_ptcl3D%set_euler(9, [3.,3.,3.])
+print *, 'writing doc3'
 call myproject%write('doc3.simple', [7,9])
 
 end program simple_test_sp_project
