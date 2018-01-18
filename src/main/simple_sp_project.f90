@@ -1,4 +1,5 @@
 module simple_sp_project
+#include "simple_lib.f08"
 use simple_oris,    only: oris
 use simple_binoris, only: binoris
 use simple_fileio
@@ -21,6 +22,8 @@ type sp_project
     ! binary file-handler
     type(binoris) :: bos
 contains
+    ! constructor
+    procedure :: new
     ! modifiers
     procedure :: new_sp_oris
     procedure :: set_sp_oris
@@ -36,6 +39,37 @@ contains
 end type sp_project
 
 contains
+
+    subroutine new( self, cline )
+        use simple_cmdline, only: cmdline
+        class(sp_project), intent(inout) :: self
+        class(cmdline),    intent(in)    :: cline
+        character(len=STDLEN) :: str
+        if( .not. cline%defined('projfile') ) stop 'projfile (*.simple project filename) input required to create new project; sp_project :: new'
+        if( .not. cline%defined('smpd')     ) stop 'smpd (sampling distance in A) input required to create new project; sp_project :: new'
+        if( .not. cline%defined('kv')       ) stop 'kv (acceleration voltage in kV{300}) input required to create new project; sp_project :: new'
+        if( .not. cline%defined('cs')       ) stop 'cs (spherical aberration constant in mm{2.7}) input required to create new project; sp_project :: new'
+        if( .not. cline%defined('fraca')    ) stop 'fraca (fraction of amplitude contrast{0.1}) input required to create new project; sp_project :: new'
+        call self%projinfo%new(1)
+        ! set required
+        str = cline%get_carg('projfile')
+        call self%projinfo%set(1, 'projfile', trim(str)            )
+        call self%projinfo%set(1, 'smpd',  cline%get_rarg('smpd')  )
+        call self%projinfo%set(1, 'kv',    cline%get_rarg('kv')    )
+        call self%projinfo%set(1, 'cs',    cline%get_rarg('cs')    )
+        call self%projinfo%set(1, 'fraca', cline%get_rarg('fraca') )
+        ! set defaults for optionals
+        if( .not. cline%defined('phaseplate') ) call self%projinfo%set(1, 'phaseplate', 'no')
+        if( .not. cline%defined('astigtol')   ) call self%projinfo%set(1, 'astigtol',   0.05)
+        if( .not. cline%defined('dfmax')      ) call self%projinfo%set(1, 'dfmax',       5.0)
+        if( .not. cline%defined('dfmin')      ) call self%projinfo%set(1, 'dfmin',       0.5)
+        ! it is assumed that the project is created in the "project directory", i.e. stash cwd
+        call simple_getcwd(str)
+        call self%projinfo%set(1, 'cwd', trim(str))
+        ! write the project file to disk
+        str = cline%get_carg('projfile')
+        call self%write(trim(str))
+    end subroutine new
 
     subroutine new_sp_oris( self, which, n )
         class(sp_project), intent(inout) :: self
@@ -285,6 +319,7 @@ contains
         call self%os_cls2D%kill
         call self%os_cls3D%kill
         call self%os_ptcl3D%kill
+        call self%projinfo%kill
         call self%jobproc%kill
     end subroutine kill
 

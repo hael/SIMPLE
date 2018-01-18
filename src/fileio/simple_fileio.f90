@@ -1,11 +1,10 @@
 ! generic fileio module
 module simple_fileio
-    use simple_defs
-    ! use ISO_C_BINDING
-    use, intrinsic :: iso_fortran_env, only: stderr=>ERROR_UNIT, stdout=>OUTPUT_UNIT, stdin=>INPUT_UNIT
-    use simple_strings, only: upperCase,stringsAreEqual, strIsBlank, int2str,int2str_pad,cpStr
-    use simple_syslib, only: file_exists, is_open, is_file_open, is_io, alloc_errchk, &
-        &exec_cmdline, simple_stop, simple_error_check
+use simple_defs
+use, intrinsic :: iso_fortran_env, only: stderr=>ERROR_UNIT, stdout=>OUTPUT_UNIT, stdin=>INPUT_UNIT
+use simple_strings, only: upperCase,stringsAreEqual, strIsBlank, int2str,int2str_pad,cpStr
+use simple_syslib, only: file_exists, is_open, is_file_open, is_io, alloc_errchk, &
+    &exec_cmdline, simple_stop, simple_error_check
 implicit none
 
 interface arr2file
@@ -13,38 +12,20 @@ interface arr2file
     module procedure arr2file_2
 end interface arr2file
 
-interface fopen
-    module procedure fopen_1
-!    module procedure fopen_2
-end interface fopen
-
 interface fclose
-
     module procedure fclose_1
     module procedure fclose_2
 end interface fclose
 
-! interface
-!     !> Declare the interface for POSIX fsync function
-!     function fsync (fd) bind(c,name="fsync")
-!     use iso_c_binding, only: c_int
-!         integer(c_int), value :: fd
-!         integer(c_int) :: fsync
-!     end function fsync
-! end interface
-! private
-! #include "simple_local_flags.inc"
-
-!public :: alloc_errchk, err_msg, errcheck
-!public :: fopen, fclose, nlines,
+integer, parameter :: MAX_UNIT_NUMBER = 1000
 
 contains
 
     !> \brief  is for checking file IO status
     subroutine fileio_errmsg( message, iostat , die)
         character(len=*), intent(in)              :: message  !< error message
-        integer,          intent(inout), optional :: iostat !< error status
-        logical,          intent(in),    optional :: die    !< do you want to terminate or not
+        integer,          intent(inout), optional :: iostat   !< error status
+        logical,          intent(in),    optional :: die      !< do you want to terminate or not
         logical :: die_this
         integer :: iostat_this
         die_this=.true.
@@ -68,7 +49,7 @@ contains
     !! Usage: if(.not.fopen(fnr, fname, STATUS='REPLACE', action='WRITE', iostat=file_stat))&
     !!        call fileio_errmsg('In: commander_rec :: eo_volassemble', file_stat )
     !!
-    subroutine fopen_1(funit, file, status, action, iostat, access, form, recl, async, pad,&
+    subroutine fopen(funit, file, status, action, iostat, access, form, recl, async, pad,&
         &decimal, round, delim, blank, convert, iomsg, position, errmsg)
         integer,                    intent(inout) :: funit
         character(len=*),           intent(in)    :: file
@@ -202,8 +183,6 @@ contains
             if(funit/=0 .and. is_io(funit)) call simple_stop( "::fopen newunit returned "//int2str(funit) )
             return
         end if
-        ! err_this=2000
-        ! if(present(err))err_this=err
         recl_this=-1
         if(present(recl)) recl_this=recl
         write(pad_this,'(A)') 'YES'
@@ -269,23 +248,7 @@ contains
         if(is_io(funit)) call simple_stop( "::fopen newunit returned "//int2str(funit) )
         if(present(iostat))iostat=iostat_this
         if(present(recl))recl=recl_this
-    end subroutine fopen_1
-
-    ! subroutine fopen_2(funit, file, status, iostat,  errmsg)
-    !     integer,                    intent(inout) :: funit
-    !     character(len=*),           intent(in)    :: file
-    !     integer,                    intent(inout) :: iostat
-    !     character(len=*),           intent(in)    :: errmsg
-    !     character(len=*), optional, intent(in)    :: status
-    !     character(len=STDLEN) :: filename, errmsg_this
-    !     character(len=30)     :: status_this
-    !     if (present(status)) write(status_this,'(A)')  upperCase(status)
-
-    !     errmsg_this=errmsg
-    !     filename=file
-    !     call fopen_1(funit,FILE=filename,STATUS=status,IOSTAT=iostat)
-    !     call fileio_errmsg(errmsg_this, iostat)
-    ! end subroutine fopen_2
+    end subroutine fopen
 
     !> FCLOSE replacement for intrinsic close
     !!
@@ -329,50 +292,6 @@ contains
             call simple_error_check(iostat, "SIMPLE_FILEIO::fclose_1 failed closing unit "//int2str(funit)//" ; "//trim(msg_this))
         end if
     end subroutine fclose_2
-    !     function fclose_2 (fname,iostat,status,dispose,errmsg)
-    !         character(len=*), intent(in) :: fname
-    !         integer, intent(inout) :: iostat
-    !         character(len=*), intent(in), optional :: status,dispose, errmsg
-    !         character(len=30) :: status_this, errmsg_this
-    !         integer :: unit_number
-    !         logical :: fclose_2
-    !         ! initialise
-    !         fclose_2=.true.
-    !         unit_number=-1
-    !         write(status_this,'(A)')'KEEP'
-
-    !         if(present(errmsg)) write(errmsg_this,'(a)')errmsg
-    !         if (is_file_open(fname)) then
-    !             if( .not. file_exists(fname) )then
-    !                 unit_number = get_lunit(fname)
-    !             else
-    !                 call simple_stop( "SIMPLE_FILEIO::fclose_2 not possible, file open but does not exist")
-    !             end if
-    !             if (unit_number>0 .and. .not. is_io(unit_number)) then
-
-    !                 !! status or dispose: 'KEEP' or 'DELETE', unless file was opened with status=SCRATCH
-    !                 write(status_this,'(A)')'KEEP'
-    !                 if (present(dispose))then
-    !                     if (stringsAreEqual(dispose, 'DELETE',.false.))  write(status_this ,'(A)') upperCase(dispose)
-    !                 end if
-    !                 if (present(status))then
-    !                     if (stringsAreEqual(status, 'DELETE',.false.))  write(status_this ,'(A)') upperCase(status)
-    !                 end if
-
-    !                 CLOSE (unit_number,IOSTAT=iostat,STATUS=status_this)
-    !                 call simple_error_check(iostat, "SIMPLE_FILEIO::fclose_2 failed closing "//trim(fname)//&
-    !                 " Message: "//errmsg)
-    !             end if
-    !             if ( iostat /= 0 ) fclose_2=.false.
-    !             return
-    !         else
-    !             if(present(errmsg)) write(stderr,'(A)') errmsg
-    !             call simple_stop( "SIMPLE_FILEIO::fclose_2 failed closing "//trim(fname)//" unit invalid "//int2str(unit_number))
-    !         end if
-    ! ! 92      print ERROR_UNIT, "fclose failed ", int2str(iostat_this)
-    ! !         return
-    !         end function fclose_2
-
 
     !> \brief Touch file, create file if necessary
     subroutine simple_touch( fname , errmsg )
@@ -381,11 +300,6 @@ contains
         character(len=STDLEN) :: msg_this
         integer               :: funit, io_status
         call exec_cmdline(trim('touch '//trim(adjustl(fname))))
-        ! msg_this = "simple_fileio::simple_touch "
-        ! if(present(errmsg)) write(msg_this,'(A)') errmsg
-        ! call fopen_1(funit, trim(adjustl(fname)), status='REPLACE', action='WRITE', iostat=io_status)
-        ! call fileio_errmsg("simple_fileio::simple_touch opening ; "//trim(adjustl(msg_this))//trim(fname), io_status)
-        ! call fclose( funit , errmsg="simple_fileio::simple_touch opening ; "//trim(adjustl(msg_this))//trim(fname))
     end subroutine simple_touch
 
     !> \brief return the number of lines in a textfile
@@ -396,7 +310,7 @@ contains
         character(len=1) :: junk
         if( file_exists(fname) )then
             tfile=fname
-            call fopen_1(funit, tfile, status='unknown', action='read', iostat=io_status)
+            call fopen(funit, tfile, status='unknown', action='read', iostat=io_status)
             call fileio_errmsg(":nlines error opening file "//trim(tfile), io_status)
             n = 0
             do
@@ -413,39 +327,43 @@ contains
         endif
     end function nlines
 
-    !> \brief  return the size of a binary file
-    ! function filelength( fname ) result( filesz )
-    !     character(len=*), intent(in) :: fname !< input filename
-    !     integer                      :: filesz, funit, ios, cnt,recl
-    !     character(len=1)             :: junk
-    !     if(  file_exists(fname) )then
-    !         recl=1
-    !         call fopen_1(funit, fname, ACTION='read', IOSTAT=ios,&
-    !             ACCESS='direct', form='unformatted', recl=recl)
-    !         call fileio_errmsg('simple_fileio :: nlines opening '//trim(fname), ios)
-    !         cnt = 0
-    !         filesz = 0
-    !         do
-    !             cnt = cnt+1
-    !             read(funit,rec=cnt,IOSTAT=ios) junk
-    !             if(ios /= 0)then
-    !                 exit
-    !             else
-    !                 filesz = filesz+1
-    !             endif
-    !         end do
-    !         call fclose_1( funit, ios ,errmsg=" Error closing file in ::filelength "//trim(fname))
-    !     else
-    !         filesz = 0
-    !     endif
-    ! end function filelength
-
     !> \brief  return file size in bytes
     function funit_size(unit) result(sz)
         integer, intent(in)          :: unit !< input file unit
         integer(kind=8)              :: sz
         inquire(unit=unit,size=sz)
     end function funit_size
+
+    ! computes an array of integers made of all currently opened units.
+    ! Output : nbunits : number of opened units, units ( iunit ) : unit number for the opened unit #iunit with 1<= iunit <= nbunits
+    subroutine get_open_funits( nbunits , units )
+        integer, intent ( out ) :: nbunits
+        integer, allocatable    :: units(:)
+        integer :: iunit
+        logical :: lopen
+        integer :: step
+        ! Loop over the steps.
+        ! Step #1 : count the number of opened units
+        ! Step #2 : store the number of opened units
+        do step=1,2
+           nbunits=0
+           do iunit=1, MAX_UNIT_NUMBER
+              if( iunit /= 5 .and. iunit /= 6 .and. iunit /= 9 ) then
+                 inquire( UNIT = iunit, opened = lopen )
+                 if( lopen )then
+                    if( step == 1 )then ! count the number of opened units
+                       nbunits = nbunits + 1
+                   else                 ! store the number of opened units
+                       nbunits = nbunits + 1
+                       units ( nbunits ) = iunit
+                    endif
+                 end if
+              end if
+           end do
+           ! At the end of step #1, allocate the array
+           if( step == 1) allocate( units(nbunits) )
+        enddo
+    end subroutine get_open_funits
 
     !> \brief  return file size in bytes
     function file_size(fname) result(sz)
@@ -503,7 +421,7 @@ contains
         integer :: fnr, file_status
         if( file_exists(file) )then
             !call cpStr(file,tfile)
-            call fopen_1(fnr,file,STATUS='OLD',IOSTAT=file_status)
+            call fopen(fnr,file,STATUS='OLD',IOSTAT=file_status)
             call fileio_errmsg( "del_file failed to open file designated for deletion "//trim(file), file_status)
             if( file_status == 0 )then
                 call fclose_2(fnr, status='delete',errmsg="::fclose_1 failed in del_file "//trim(file))
@@ -541,7 +459,7 @@ contains
         character(len=STDLEN), allocatable :: names(:)
         integer :: ifile, fnr, ios
         names = make_filenames( body, n, ext, numlen=numlen, suffix=suffix )
-        call fopen_1(fnr, file=tabname, status='replace', action='write', iostat=ios)
+        call fopen(fnr, file=tabname, status='replace', action='write', iostat=ios)
         call fileio_errmsg('simple_fileio :: make_filetable '//trim(tabname), ios)
         do ifile=1,n
             write(fnr,'(a)') trim(names(ifile))
@@ -549,30 +467,6 @@ contains
         call fclose_1( fnr, ios )
         call fileio_errmsg(" Error closing file in ::make_filetable ",ios)
     end subroutine make_filetable
-
-    !> \brief  is for making a file-table (to be able to commander execute programs that depend on them)
-    !! \param tab1,tab2,tab3,tab4 input filenames
-    subroutine make_multitab_filetable( tabname, tab1, tab2, tab3, tab4 )
-        character(len=*),                intent(in) :: tabname
-        character(len=STDLEN),           intent(in) :: tab1(:), tab2(:)
-        character(len=STDLEN), optional, intent(in) :: tab3(:), tab4(:)
-        integer :: ntabs, n, fnr, ifile, ios
-        ntabs = 2
-        if( present(tab3) ) ntabs = 3
-        if( present(tab4) ) ntabs = 4
-        n = size(tab1)
-        call fopen_1(fnr,tabname, status='replace', action='write', iostat=ios)
-        call fileio_errmsg('simple_fileio :: make_multitab_filetable '//trim(tabname), ios)
-        do ifile=1,n
-            if( ntabs == 2 ) write(fnr,'(a)') trim(tab1(ifile))//' '//trim(tab2(ifile))
-            if( ntabs == 3 ) write(fnr,'(a)') trim(tab1(ifile))//' '//trim(tab2(ifile))&
-                &//' '//trim(tab3(ifile))
-            if( ntabs == 4 ) write(fnr,'(a)') trim(tab1(ifile))//' '//trim(tab2(ifile))&
-                &//' '//trim(tab3(ifile))//' '//trim(tab4(ifile))
-        end do
-        call fclose_1( fnr, ios )
-        call fileio_errmsg(" Error closing file in ::make_multitab_filetable ",ios)
-    end subroutine make_multitab_filetable
 
     !> \brief  is for checking file kind
     !> \param fname,suffix string args to check suffix
@@ -797,9 +691,8 @@ contains
         character(len=*),                   intent(in)  :: filetable    !< input table filename
         character(len=STDLEN), allocatable, intent(out) :: filenames(:) !< array of filenames
         integer :: nl, funit, iline,io_stat
-
-        nl    = nlines(filetable)
-        call fopen_1(funit,filetable,'old','unknown',io_stat)
+        nl = nlines(filetable)
+        call fopen(funit,filetable,'old','unknown',io_stat)
         call fileio_errmsg("read_filetable failed to open file "//trim(filetable),io_stat )
         allocate( filenames(nl), stat=alloc_stat )
         if(alloc_stat /= 0) call alloc_errchk ('In: read_filetable; simple_fileio  ', alloc_stat)
@@ -816,7 +709,7 @@ contains
         character(len=STDLEN), intent(in)  :: filenames(:)!< array of filenames
         integer :: nl, funit, iline, io_stat
         nl = size(filenames)
-        call fopen_1(funit,filetable, 'replace', 'unknown', io_stat)
+        call fopen(funit,filetable, 'replace', 'unknown', io_stat)
         call fileio_errmsg("write_filetable failed to open file "//filetable,io_stat )
         do iline=1,nl
             write(funit,'(a)') trim(filenames(iline))
@@ -830,12 +723,11 @@ contains
         character(len=*), intent(in) :: fnam    !< input table filename
         real, allocatable :: arr(:)             !< array of filenames
         integer :: i, n, funit, io_stat
-
         if( file_exists(trim(fnam)) )then
             n = nlines(fnam)
             allocate( arr(n), stat=alloc_stat )
             if(alloc_stat /= 0) call alloc_errchk('In: txtfile2rarr; simple_fileio  ', alloc_stat)
-            call fopen_1(funit,fnam,'old','unknown',io_stat)
+            call fopen(funit,fnam,'old','unknown',io_stat)
             call fileio_errmsg("txtfile2rarr failed to open  "//trim(fnam), io_stat)
             do i=1,n
                 read(funit,*) arr(i)
@@ -863,7 +755,7 @@ contains
         allocate( arr(n1+n2), stat=alloc_stat )
         if(alloc_stat /= 0) call alloc_errchk('In: merge_txtfiles; simple_fileio  ', alloc_stat)
         if( here(1) )then
-            call fopen_1(funit,file1,'old','unknown',io_stat)
+            call fopen(funit,file1,'old','unknown',io_stat)
             call fileio_errmsg("merge_txtfiles failed "//trim(file1), io_stat)
             cnt = 0
             do i=1,n1
@@ -874,7 +766,7 @@ contains
             call fileio_errmsg("merge_txtfiles failed to close "//trim(file1), io_stat)
             if( .not. here(2) ) return
         else
-            call fopen_1(funit,file2,'old','unknown',io_stat)
+            call fopen(funit,file2,'old','unknown',io_stat)
             call fileio_errmsg("merge_txtfiles failed to open "//trim(file2), io_stat)
             cnt = 0
             do i=1,n2
@@ -885,7 +777,7 @@ contains
             call fileio_errmsg("merge_txtfiles failed to close "//trim(file2), io_stat)
             return
         endif
-        call fopen_1(funit,file2,'old','unknown',io_stat)
+        call fopen(funit,file2,'old','unknown',io_stat)
         call fileio_errmsg("merge_txtfiles failed to open "//trim(file2), io_stat)
         do i=1,n2
             cnt = cnt+1
@@ -901,7 +793,7 @@ contains
         integer :: recsz, i, n, funit, ival, io_stat
         if( file_exists(trim(fnam)) )then
             inquire(iolength=recsz) ival
-            call fopen_1(funit,fnam,'OLD','unknown', io_stat,'direct','unformatted',recsz)
+            call fopen(funit,fnam,'OLD','unknown', io_stat,'direct','unformatted',recsz)
             call fileio_errmsg("file2iarr fopen failed "//trim(fnam),io_stat)
             read(funit, rec=1) n
             allocate( arr(n), stat=alloc_stat )
@@ -925,7 +817,7 @@ contains
         inquire(iolength=recsz)rval
         rval = size(arr)
         funit=-1
-        call fopen_1(funit,fnam,'replace','unknown', iostat=io_stat,access='direct',form='unformatted',recl=recsz)
+        call fopen(funit,fnam,'replace','unknown', iostat=io_stat,access='direct',form='unformatted',recl=recsz)
         call fileio_errmsg("arr2file_1 fopen failed "//trim(fnam),io_stat)
         write(funit, rec=1, iostat=io_stat) rval
         do i=1,size(arr)
@@ -942,7 +834,7 @@ contains
         integer :: recsz, i, n, funit,io_stat
         if( file_exists(trim(fnam)) )then
             inquire(iolength=recsz) rval
-            call fopen_1(funit,fnam,'old','unknown', io_stat,'direct','unformatted',recl=recsz)
+            call fopen(funit,fnam,'old','unknown', io_stat,'direct','unformatted',recl=recsz)
             call fileio_errmsg("file2rarr fopen failed "//trim(fnam),io_stat)
             read(funit, rec=1,iostat=io_stat) rval
             n = nint(rval)
@@ -965,7 +857,7 @@ contains
         integer :: recsz, i, funit, ival, io_stat
         inquire(iolength=recsz) ival
         ival = size(arr)
-        call fopen_1(funit,fnam,'replace','unknown', io_stat,'direct','unformatted',recl=recsz)
+        call fopen(funit,fnam,'replace','unknown', io_stat,'direct','unformatted',recl=recsz)
         call fileio_errmsg("arr2file_2 fopen failed "//trim(fnam),io_stat)
         write(funit, rec=1) ival
         do i=1,size(arr)
@@ -982,7 +874,7 @@ contains
         integer :: funit, io_stat
         dim1 = real(size(arr,dim=1))
         dim2 = real(size(arr,dim=2))
-        call fopen_1(funit,fnam,'replace','write', io_stat, 'STREAM')
+        call fopen(funit,fnam,'replace','write', io_stat, 'STREAM')
         call fileio_errmsg("simple_fileio::arr2D2file fopen failed "//trim(fnam),io_stat)
         write(unit=funit,pos=1,iostat=io_stat) dim1
         call fileio_errmsg('simple_fileio::arr2D2file: writing stream startbyte 1 to: '//trim(fnam), io_stat)
@@ -999,7 +891,7 @@ contains
         real, allocatable :: arr(:,:)          !< array of data
         real    :: dim1r, dim2r
         integer :: dim1, dim2, funit, io_stat
-        call fopen_1(funit,fname,'old','read',io_stat,'STREAM')
+        call fopen(funit,fname,'old','read',io_stat,'STREAM')
         call fileio_errmsg("simple_fileio::file2arr2D fopen failed "//trim(fname),io_stat)
         read(unit=funit,pos=1,iostat=io_stat) dim1r
         call fileio_errmsg("simple_fileio::file2arr2D  reading stream startbyte 1 from: "// trim(fname), io_stat)
@@ -1020,7 +912,7 @@ contains
         real,             intent(in) :: arr(:) !< array of data
         character(len=*), intent(in) :: fname !< output filename
         integer :: i, funit, io_stat
-        call fopen_1(funit, fname,'REPLACE', 'write', io_stat)
+        call fopen(funit, fname,'REPLACE', 'write', io_stat)
         call fileio_errmsg("simple_fileio ::arr2txtfile, tried to open file "//trim(fname), io_stat )
         do i=1,size(arr)
             write(funit,*) arr(i)
@@ -1038,7 +930,7 @@ contains
         integer :: filnum, io_stat
         character(len=100) :: io_message
 
-        call fopen_1(filnum, fname, 'OLD', 'READ', io_stat, 'STREAM', convert='NATIVE')
+        call fopen(filnum, fname, 'OLD', 'READ', io_stat, 'STREAM', convert='NATIVE')
         call fileio_errmsg("Error opening file "//trim(fname) , io_stat)
         read(unit=filnum,pos=first_byte,iostat=io_stat,iomsg=io_message) mat
         ! Check the read was successful
@@ -1054,7 +946,7 @@ contains
         integer,          intent(in) :: first_byte
         integer :: filnum, io_stat
         character(len=100) :: io_message
-        call fopen_1(filnum,fname, 'REPLACE', 'WRITE', io_stat, 'STREAM')
+        call fopen(filnum,fname, 'REPLACE', 'WRITE', io_stat, 'STREAM')
         call fileio_errmsg("Error opening file "//trim(fname), io_stat )
         write(unit=filnum,pos=first_byte,iostat=io_stat,iomsg=io_message) mat
         ! Check the write was successful

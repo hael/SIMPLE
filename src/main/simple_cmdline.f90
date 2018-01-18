@@ -466,7 +466,6 @@ contains
         endif
     end subroutine gen_job_descr
 
-
     ! EXCEPTION-HANDLING JIFFYS
 
     !> \brief  is for raising command line exception
@@ -488,6 +487,5 @@ contains
             stop
         endif
     end subroutine cmdline_err
-
 
 end module simple_cmdline

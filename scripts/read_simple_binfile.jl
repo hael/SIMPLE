@@ -1,45 +1,79 @@
 #!/usr/bin/env julia
-using dotsimple_filehandling
 
-# set constants
-const max_n_segments  = 20
-const n_vars_head_seg = 5
-const n_bytes_header  = max_n_segments * n_vars_head_seg * 8
+module simple_binoris
 
-function xplus2( x )
-    x + 2
-end
+    export max_n_segments, n_vars_head_seg, n_bytes_header, file_header_segment,
+    header, read_header
 
+    # set constants
+    const max_n_segments  = 20
+    const n_vars_head_seg = 5
+    const n_bytes_header  = max_n_segments * n_vars_head_seg * 8
+
+    # defines a struct for the header
+    struct file_header_segment
+        from               :: Int64
+        to                 :: Int64
+        n_bytes_per_record :: Int64
+        n_records          :: Int64
+        first_data_byte    :: Int64
+    end
+    header = Array{file_header_segment}(max_n_segments)
+
+    # module functions
+
+    function read_header( fhandle )
+        # read raw header bytes
+        byte_array   = Array{UInt8}(n_bytes_header)
+        n_bytes_read = readbytes!(fhandle, byte_array, n_bytes_header)
+        println("# bytes header: $n_bytes_header")
+        println("# bytes read: $n_bytes_read")
+        if n_bytes_read != n_bytes_header
+            error("# bytes read .ne. # bytes in header")
+        end
+        # re-shape the header & calculate # data bytes
+        tmp          = reinterpret(Int64, byte_array)
+        cnt          = 0
+        n_bytes_data = 0
+        for i in 1:5:max_n_segments * n_vars_head_seg
+            cnt += 1
+            header[cnt] = file_header_segment(tmp[i],tmp[i+1],tmp[i+2],tmp[i+3],tmp[i+4])
+            n_bytes_data += header[cnt].n_bytes_per_record * header[cnt].n_records
+        end
+        return(header, n_bytes_data)
+    end
+
+end # module simple_binoris
+
+# driver program
+using simple_binoris
 # input
 fname = ARGS[1]
 println("Name of input file: $fname")
 
-
-
-show(xplus2(200))
-
-# read raw header bytes
-
 fhandle = open(fname, "r")
+(header, n_bytes_data) = read_header(fhandle)
+show(header)
 
-byte_array   = Array{UInt8}(n_bytes_header)
-n_bytes_read = readbytes!(fhandle, byte_array, n_bytes_header)
-println("# bytes header: $n_bytes_header")
-println("# bytes read: $n_bytes_read")
-# n_bytes_read != n_bytes_header, throw exception
-# println("# bytes in header: $n_bytes_header")
+# # read raw header bytes
+# fhandle      = open(fname, "r")
+# byte_array   = Array{UInt8}(n_bytes_header)
+# n_bytes_read = readbytes!(fhandle, byte_array, n_bytes_header)
+# println("# bytes header: $n_bytes_header")
 # println("# bytes read: $n_bytes_read")
-# re-shape the header & calculate # data bytes
-tmp          = reinterpret(Int64, byte_array)
-cnt          = 0
-n_bytes_data = 0
-for i in 1:5:max_n_segments * n_vars_head_seg
-    cnt += 1
-    header[cnt] = file_header_segment(tmp[i],tmp[i+1],tmp[i+2],tmp[i+3],tmp[i+4])
-    n_bytes_data += header[cnt].n_bytes_per_record *  header[cnt].n_records
-end
-
-
+# if n_bytes_read != n_bytes_header
+#     error("# bytes read .ne. # bytes in header")
+# end
+#
+# # re-shape the header & calculate # data bytes
+# tmp          = reinterpret(Int64, byte_array)
+# cnt          = 0
+# n_bytes_data = 0
+# for i in 1:5:max_n_segments * n_vars_head_seg
+#     cnt += 1
+#     header[cnt] = file_header_segment(tmp[i],tmp[i+1],tmp[i+2],tmp[i+3],tmp[i+4])
+#     n_bytes_data += header[cnt].n_bytes_per_record *  header[cnt].n_records
+# end
 # show(header)
 
 # read raw bytes of data section
@@ -75,19 +109,3 @@ for i in 1:max_n_segments
         # show(transcode(String, byte_array[first_byte : last_byte])
     end
 end
-
-module dotsimple_filehandling
-
-export file_header_segment, header
-
-# define a struct for the header
-struct file_header_segment
-    from               :: Int64
-    to                 :: Int64
-    n_bytes_per_record :: Int64
-    n_records          :: Int64
-    first_data_byte    :: Int64
-end
-header = Array{file_header_segment}(max_n_segments)
-
-end # module dotsimple_filehandling
