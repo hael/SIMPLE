@@ -134,6 +134,7 @@ type :: params
     character(len=STDLEN) :: msklist=''           !< table (text file) of mask volume files(.txt)
     character(len=STDLEN) :: mskvols(MAXS)=''
     character(len=STDLEN) :: msktype='soft'       !< type of mask(hard|soft){soft}
+    character(len=7)      :: objfun='cc'          !< objective function(cc|ccres){cc}
     character(len=STDLEN) :: opt='bfgs'           !< optimiser (bfgs|simplex){bfgs}
     character(len=STDLEN) :: oritab=''            !< table  of orientations(.txt|.bin)
     character(len=STDLEN) :: oritab2=''           !< 2nd table of orientations(.txt|.bin)
@@ -507,6 +508,7 @@ contains
         call check_carg('noise',          self%noise)
         call check_carg('norec',          self%norec)
         call check_carg('norm',           self%norm)
+        call check_carg('objfun',         self%objfun)
         call check_carg('opt',            self%opt)
         call check_carg('order',          self%order)
         call check_carg('oritype',        self%oritype)
