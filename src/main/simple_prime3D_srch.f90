@@ -16,7 +16,7 @@ private
 real,    parameter :: SOFTMAXW_THRESH = 0.01 !< threshold for softmax weights
 logical, parameter :: DEBUG = .false., L_DEV=.false.
 
-! allocatables for prime3D_srch are class variables to improve caching and reduce alloc overheads 
+! allocatables for prime3D_srch are class variables to improve caching and reduce alloc overheads
 type(oris), allocatable :: o_peaks(:)                             !< solution objects
 real,       allocatable :: proj_space_euls(:,:,:)                 !< euler angles
 real,       allocatable :: proj_space_shift(:,:,:)                !< shift vector
@@ -141,12 +141,12 @@ contains
             &proj_space_corrs(nptcls,nrefs), proj_space_inds(nptcls,nrefs),&
             &proj_space_state(nptcls,nrefs), proj_space_proj(nptcls,nrefs),&
             &prev_proj(nptcls) )
-        ! The shared memory used in a parallel section should be initialised 
+        ! The shared memory used in a parallel section should be initialised
         ! with a (redundant) parallel section, because of how pages are organised.
         ! Memory otherwise becomes associated with the single thread used for
         ! allocation, causing load imbalance. This will reduce cache misses.
         !$omp parallel default(shared) private(i,iptcl,cnt,istate,iproj) proc_bind(close)
-        !$omp do schedule(static) 
+        !$omp do schedule(static)
         do i=1,nptcls
             proj_space_shift(i,:,:) = 0.
             proj_space_corrs(i,:)   = -1.
@@ -362,7 +362,7 @@ contains
         self%exists = .true.
         if( DEBUG ) print *,  '>>> PRIME3D_SRCH::CONSTRUCTED NEW SIMPLE_PRIME3D_SRCH OBJECT'
     end subroutine new
-    
+
     ! SEARCH ROUTINES
 
     !>  \brief  exec_prime3D_srch is a master prime search routine
@@ -828,37 +828,42 @@ contains
                 state           = shcloc(self%nstates, corrs_state, self%prev_corr)
                 corr            = corrs_state(state)
                 self%nrefs_eval = count(corrs_state <= self%prev_corr)
-                if(present(symmat) )then
-                    ! greedy in symmetry
-                    iproj = symprojs(self%iptcl_map, state)
-                    if( iproj == prev_proj(self%iptcl_map) )then
-                        mi_proj = 1.
-                    else
-                        mi_proj     = 0.
-                        iref_offset = (state-1) * self%nprojs
-                        iref        = iref_offset + iproj
-                        call self%a_ptr%e1set(self%iptcl, proj_space_euls(self%iptcl_map, iref, 1))
-                        call self%a_ptr%e2set(self%iptcl, proj_space_euls(self%iptcl_map, iref, 2))
-                    endif
-                    mi_inpl = 1.
-                else
-                    ! greedy inpl move
-                    mi_proj = 1.
-                    iref    = (state-1)*self%nprojs + prev_proj(self%iptcl_map)
-                    proj_space_corrs(self%iptcl_map,iref)      = corr
-                    proj_space_inds(self%iptcl_map,self%nrefs) = iref
-                    call self%inpl_srch
-                    if( proj_space_corrs(self%iptcl_map,iref) > corr )then
-                        corr  = proj_space_corrs(self%iptcl_map,iref)
-                        shvec = self%a_ptr%get_2Dshift(self%iptcl) + proj_space_shift(self%iptcl_map,iref,:)
-                        call self%a_ptr%e3set(self%iptcl, proj_space_euls(self%iptcl_map, iref, 3))
-                        call self%a_ptr%set_shift(self%iptcl, shvec)
-                    endif
-                    mi_inpl = 1.
-                    if( self%prev_roind .ne. self%pftcc_ptr%get_roind(360.-proj_space_euls(self%iptcl_map, iref, 3)) )then
-                        mi_inpl = 0.
-                    endif
-                endif
+                ! if( prev_states(self%iptcl_map) .eq. state )then
+                !     ! greedy search space move
+                !     if(present(symmat) )then
+                !         ! greedy in symmetry
+                !         iproj = symprojs(self%iptcl_map, state)
+                !         if( iproj == prev_proj(self%iptcl_map) )then
+                !             mi_proj = 1.
+                !         else
+                !             mi_proj     = 0.
+                !             iref_offset = (state-1) * self%nprojs
+                !             iref        = iref_offset + iproj
+                !             call self%a_ptr%e1set(self%iptcl, proj_space_euls(self%iptcl_map, iref, 1))
+                !             call self%a_ptr%e2set(self%iptcl, proj_space_euls(self%iptcl_map, iref, 2))
+                !         endif
+                !         mi_inpl = 1.
+                !     else
+                !         ! greedy inpl move
+                !         mi_proj = 1.
+                !         iref    = (state-1)*self%nprojs + prev_proj(self%iptcl_map)
+                !         proj_space_corrs(self%iptcl_map,iref)      = corr
+                !         proj_space_inds(self%iptcl_map,self%nrefs) = iref
+                !         call self%inpl_srch
+                !         if( proj_space_corrs(self%iptcl_map,iref) > corr )then
+                !             corr  = proj_space_corrs(self%iptcl_map,iref)
+                !             shvec = self%a_ptr%get_2Dshift(self%iptcl) + proj_space_shift(self%iptcl_map,iref,:)
+                !             call self%a_ptr%e3set(self%iptcl, proj_space_euls(self%iptcl_map, iref, 3))
+                !             call self%a_ptr%set_shift(self%iptcl, shvec)
+                !         endif
+                !         mi_inpl = 1.
+                !         if( self%prev_roind .ne. self%pftcc_ptr%get_roind(360.-proj_space_euls(self%iptcl_map, iref, 3)) )then
+                !             mi_inpl = 0.
+                !         endif
+                !     endif
+                ! endif
+                mi_proj = 1.
+                mi_inpl = 1.
                 ! updates peaks and orientation orientation
                 frac    = 100.*real(self%nrefs_eval) / real(self%nstates)
                 call self%a_ptr%set(self%iptcl,'frac', frac)
@@ -896,11 +901,15 @@ contains
         integer :: nrefs_eval, prev_state, zero_pop, i, iproj, iref
         if( .not.do_extr )return
         zero_pop  = a%get_pop( 0, 'state', consider_w=.false.)
-        iextr_lim = ceiling(2.*log( real(p%nptcls-zero_pop) ))
+        if(p%l_frac_update) then
+            iextr_lim = ceiling(2.*log(real(p%nptcls-zero_pop)) * (2.-p%update_frac))
+        else
+            iextr_lim = ceiling(2.*log(real(p%nptcls-zero_pop)))
+        endif
         n_incl    = count(prev_states(:) > 0)               ! # non-zero state particles in part
         extr_frac = EXTRINITHRESH * cos(PI/2. * real(p%extr_iter-1)/real(iextr_lim)) ! cosine decay
         extr_frac = min(EXTRINITHRESH, max(0.0, extr_frac)) ! fraction of particles to randomize
-        n_rnd     = nint(real(n_incl)*extr_frac)            ! # of particles to randomize
+        n_rnd     = ceiling(real(n_incl)*extr_frac)            ! # of particles to randomize
         ! collate and sort correlations
         allocate(curr_corrs(n_incl), curr_inds(n_incl), curr_inds_ptcl(n_incl))
         cnt  = 0
@@ -909,7 +918,7 @@ contains
             if( ptcl_mask_ptr(iptcl) )then
                 cnt = cnt + 1
                 if(prev_states(cnt) > 0)then
-                    cnt2                 = cnt2 + 1 
+                    cnt2                 = cnt2 + 1
                     curr_corrs(cnt2)     = het_corrs(cnt,prev_states(cnt))
                     curr_inds(cnt2)      = cnt
                     curr_inds_ptcl(cnt2) = iptcl
@@ -921,7 +930,7 @@ contains
             corr_thresh = 0.
         else
             ! both curr_inds & curr_inds_iptcl need to follow the same order
-            order = (/(ind,ind=1,n_incl)/) 
+            order = (/(ind,ind=1,n_incl)/)
             call hpsort(curr_corrs, order)
             tmp = curr_inds
             do ind = 1, n_incl
@@ -981,7 +990,7 @@ contains
                 mi_state = 0.
             else
                 mi_state = 1.
-            endif      
+            endif
             call a%set(iptcl, 'state',    real(istate))
             call a%set(iptcl, 'corr',     het_corrs(i, istate))
             call a%set(iptcl, 'frac',     frac)
@@ -1133,7 +1142,7 @@ contains
             where( abs(shvec) < 1e-6 ) shvec = 0.
             ! transfer to solution set
             corrs(ipeak) = proj_space_corrs(self%iptcl_map,ref)
-            if( corrs(ipeak) < 0. ) corrs(ipeak) = 0. 
+            if( corrs(ipeak) < 0. ) corrs(ipeak) = 0.
             call o_peaks(self%iptcl)%set(ipeak, 'state', real(state))
             call o_peaks(self%iptcl)%set(ipeak, 'proj',  real(proj_space_proj(self%iptcl_map,ref)))
             call o_peaks(self%iptcl)%set(ipeak, 'corr',  corrs(ipeak))
@@ -1370,4 +1379,3 @@ contains
     end subroutine kill
 
 end module simple_prime3D_srch
-

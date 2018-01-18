@@ -937,7 +937,7 @@ contains
                         src  = VOL_FBODY//one//'_iter'//str_iter//'_odd'//p_master%ext
                         dist = dir//VOL_FBODY//one//'_iter'//str_iter//'_odd'//p_master%ext
                         call rename(src, dist)
-                        src = 'RESOLUTION_STATE'//str_state//'_ITER'//str_iter
+                        src = 'RESOLUTION_STATE'//one//'_ITER'//str_iter
                         call rename(src, dir//src)
                     endif
                     ! orientation document
@@ -948,7 +948,7 @@ contains
                 if( p_master%eo.ne.'no')then
                     src  = FSC_FBODY//one//BIN_EXT
                     if( file_exists(src) )call rename(src, dir//src)
-                    src  = FRCS_ITER_FBODY//one//BIN_EXT
+                    src  = FRCS_FBODY//one//BIN_EXT
                     if( file_exists(src) )call rename(src, dir//src)
                     src  = ANISOLP_FBODY//one//p_master%ext
                     if( file_exists(src) )call rename(src, dir//src)

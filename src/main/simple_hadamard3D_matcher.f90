@@ -162,11 +162,20 @@ contains
         select case(trim(p%refine))
             case('het','hetsym')
                 zero_pop  = b%a%get_pop(0, 'state', consider_w=.false.)
-                iextr_lim = ceiling(2.*log(real(p%nptcls-zero_pop)))
-                if( which_iter==1 .or.(frac_srch_space <= 98. .and. p%extr_iter <= iextr_lim) )then
-                    do_extr = .true.  ! stochastic/SHC in state space
+                if(p%l_frac_update) then
+                    iextr_lim = ceiling(2.*log(real(p%nptcls-zero_pop)) * (2.-p%update_frac))
+                    if( which_iter==1 .or.(frac_srch_space <= 99. .and. p%extr_iter <= iextr_lim) )then
+                        do_extr = .true.
+                    else
+                        do_extr = .false.
+                    endif
                 else
-                    do_extr = .false. ! SHC in state space + in-plane search
+                    iextr_lim = ceiling(2.*log(real(p%nptcls-zero_pop)))
+                    if( which_iter==1 .or.(frac_srch_space <= 98. .and. p%extr_iter <= iextr_lim) )then
+                        do_extr = .true.  ! stochastic/SHC in state space
+                    else
+                        do_extr = .false. ! SHC in state space + in-plane search
+                    endif
                 endif
                 if(trim(p%refine).eq.'hetsym')then
                    ! symmetry pairing matrix

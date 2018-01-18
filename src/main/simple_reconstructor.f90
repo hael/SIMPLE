@@ -682,7 +682,7 @@ contains
             call progress(i, p%nptcls)
             if( i <= p%top .and. i >= p%fromp )then
                 cnt = cnt + 1
-                state_here = nint(o%get(i,'state'))
+                state_here = o%get_state(i)
                 if( state_here > 0 .and. (state_here == state) )then
                     statecnt(state) = statecnt(state) + 1
                     call rec_dens
@@ -711,7 +711,7 @@ contains
                 type(ori) :: orientation
                 integer   :: state, state_balance, ind
                 real      :: pw
-                state         = nint(o%get(i, 'state'))
+                state         = o%get_state(i)
                 state_balance = nint(o%get(i, 'state_balance'))
                 if( state == 0 .or. state_balance == 0 ) return
                 pw = 1.
