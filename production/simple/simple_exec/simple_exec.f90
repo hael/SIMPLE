@@ -732,9 +732,10 @@ select case(prg)
         keys_optional(22) = 'dyncls'
         keys_optional(23) = 'phaseplate'
         keys_optional(24) = 'opt'
+        keys_optional(25) = 'objfun'
         ! parse command line
         if( describe ) call print_doc_prime2D
-        call cline%parse(keys_required(:4), keys_optional(:24))
+        call cline%parse(keys_required(:4), keys_optional(:25))
         ! sanity check
         if( cline%defined('stk') .or. cline%defined('stktab') )then
             ! all ok
@@ -840,9 +841,10 @@ select case(prg)
         keys_optional(1) = 'hp'
         keys_optional(2) = 'nthr'
         keys_optional(3) = 'balance'
+        keys_optional(4) = 'objfun'
         ! parse command line
         ! if( describe ) call print_doc_cluster_cavgs
-        call cline%parse(keys_required(:5), keys_optional(:3))
+        call cline%parse(keys_required(:5), keys_optional(:4))
         ! execute
         call xcluster_cavgs%execute(cline)
 
@@ -1054,9 +1056,10 @@ select case(prg)
         keys_optional(36) = 'phaseplate'
         keys_optional(37) = 'opt'
         keys_optional(38) = 'focusmsk'
+        keys_optional(39) = 'objfun'
         ! parse command line
         if( describe ) call print_doc_prime3D
-        call cline%parse(keys_required(:5), keys_optional(:38))
+        call cline%parse(keys_required(:5), keys_optional(:39))
         ! sanity check
         if( cline%defined('stk') .or. cline%defined('stktab') )then
             ! all ok

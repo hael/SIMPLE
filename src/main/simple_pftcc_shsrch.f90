@@ -12,20 +12,20 @@ private
 
 type :: pftcc_shsrch
     private
-    type(opt_spec)                   :: ospec                !< optimizer specification object
-    class(optimizer), pointer        :: nlopt                !< optimizer object
-    class(polarft_corrcalc), pointer :: pftcc_ptr  =>null()  !< pointer to pftcc object
-    integer                          :: reference  = 0       !< reference pft
-    integer                          :: particle   = 0       !< particle pft
-    integer                          :: nrots      = 0       !< # rotations
-    integer                          :: maxits     = 100     !< max # iterations
-    logical                          :: shbarr     = .true.  !< shift barrier constraint or not
-    integer                          :: nrestarts  =  5      !< simplex restarts (randomized bounds)
+    type(opt_spec)                   :: ospec                  !< optimizer specification object
+    class(optimizer),        pointer :: nlopt                  !< optimizer object
+    class(polarft_corrcalc), pointer :: pftcc_ptr   => null()  !< pointer to pftcc object
+    integer                          :: reference   =  0       !< reference pft
+    integer                          :: particle    =  0       !< particle pft
+    integer                          :: nrots       =  0       !< # rotations
+    integer                          :: maxits      =  100     !< max # iterations
+    integer                          :: nrestarts   =   5      !< simplex restarts (randomized bounds)
+    logical                          :: shbarr      =  .true.  !< shift barrier constraint or not
   contains
     procedure :: new
     procedure :: set_indices
     procedure :: minimize
-    procedure :: costfun    
+    procedure :: costfun
 end type pftcc_shsrch
 
 contains
@@ -67,7 +67,7 @@ contains
         ! associate costfun
         self%ospec%costfun => costfun_wrapper
     end subroutine new
-    
+
     !> shsrch_set_indices Set indicies for shift search
     !! \param ref reference
     !! \param ptcl particle index
@@ -80,7 +80,7 @@ contains
         self%reference = ref
         self%particle  = ptcl
     end subroutine set_indices
-    
+
     !> Wrapper for cost function (gcc7+)
     function costfun_wrapper(self, vec, D) result( cost )
         class(*), intent(inout) :: self
@@ -95,7 +95,7 @@ contains
             stop
         end select
     end function costfun_wrapper
-    
+
     !> Cost function
     function costfun( self, vec, D ) result( cost )
         class(pftcc_shsrch), intent(inout) :: self
@@ -111,9 +111,9 @@ contains
             endif
         endif
         call self%pftcc_ptr%gencorrs(self%reference, self%particle, vec, corrs)
-        cost = -maxval(corrs)        
+        cost = -maxval(corrs)
     end function costfun
-    
+
     !> minimisation routine
     function minimize( self, irot ) result( cxy )
         class(pftcc_shsrch), intent(inout) :: self

@@ -373,7 +373,7 @@ type :: params
     logical :: cyclic(7)          = .false.
     logical :: l_distr_exec       = .false.
     logical :: l_match_filt       = .true.
-    logical :: doshift            = .false.
+    logical :: l_doshift          = .false.
     logical :: l_focusmsk         = .false.
     logical :: l_autoscale        = .false.
     logical :: l_dose_weight      = .false.
@@ -382,7 +382,7 @@ type :: params
     logical :: l_pick             = .false.
     logical :: l_remap_classes    = .false.
     logical :: l_stktab_input     = .false.
-    logical :: l_factorial_wdistr = .true.
+    logical :: l_cc_objfun        = .true.
   contains
     procedure :: new
 end type params
@@ -1111,10 +1111,10 @@ contains
                     self%trs = 1.
             end select
         endif
-        self%doshift = .true.
+        self%l_doshift = .true.
         if( self%trs < 0.5 )then
             self%trs = 0.00001
-            self%doshift = .false.
+            self%l_doshift = .false.
         endif
         ! set optlims
         self%optlims(:3,:)  = self%eullims
@@ -1152,6 +1152,16 @@ contains
         if( .not. cline%defined('nnn') )then
             self%nnn = nint(0.1 * real(self%nspace))
         endif
+        ! objective function used in prime2D/3D
+        select case(trim(self%objfun))
+            case('cc')
+                self%l_cc_objfun = .true.
+            case('ccres')
+                self%l_cc_objfun = .false.
+            case DEFAULT
+                write(*,*) 'objfun flag: ', trim(self%objfun)
+                stop 'unsupported objective function; params :: new'
+        end select
 
 !>>> END, IMAGE-PROCESSING-RELATED
 

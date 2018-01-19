@@ -650,7 +650,7 @@ contains
         call b%vol%new([p%box,p%box,p%box],p%smpd)
         ! centering
         do_center = .true.
-        if( p%center .eq. 'no' .or. p%nstates > 1 .or. .not. p%doshift .or.&
+        if( p%center .eq. 'no' .or. p%nstates > 1 .or. .not. p%l_doshift .or.&
         &p%pgrp(:1) .ne. 'c' .or. cline%defined('mskfile') .or. p%l_frac_update )then
             do_center = .false.
             xyz       = 0.

@@ -91,8 +91,9 @@ type :: polarft_corrcalc
     type(c_ptr)                      :: plan_fwd_1            !< FFTW plans for gencorrs
     type(c_ptr)                      :: plan_fwd_2            !< -"-
     type(c_ptr)                      :: plan_bwd              !< -"-
-    logical                          :: with_ctf  = .false.   !< CTF flag
-    logical                          :: existence = .false.   !< to indicate existence
+    logical                          :: with_ctf    = .false. !< CTF flag
+    logical                          :: existence   = .false. !< to indicate existence
+    logical                          :: l_cc_objfun = .true.  !< objective function(cc|ccres)
     type(heap_vars),     allocatable :: heap_vars(:)          !< allocated fields to save stack allocation in subroutines and functions
   contains
     ! CONSTRUCTOR
@@ -138,14 +139,16 @@ type :: polarft_corrcalc
     procedure, private :: calc_corr_for_rot
     procedure, private :: calc_corr_for_rot_8
     procedure, private :: genfrc
+    procedure, private :: gencorrs_cc_1
+    procedure, private :: gencorrs_cc_2
+    procedure, private :: gencorrs_cc_3
+    procedure, private :: gencorrs_resnorm_1
+    procedure, private :: gencorrs_resnorm_2
+    procedure, private :: gencorrs_resnorm_3
     procedure, private :: gencorrs_1
     procedure, private :: gencorrs_2
     procedure, private :: gencorrs_3
     generic            :: gencorrs => gencorrs_1, gencorrs_2, gencorrs_3
-    procedure, private :: gencorrs_resnorm_1
-    procedure, private :: gencorrs_resnorm_2
-    procedure, private :: gencorrs_resnorm_3
-    generic            :: gencorrs_resnorm => gencorrs_resnorm_1, gencorrs_resnorm_2, gencorrs_resnorm_3
     procedure          :: gencorr_for_rot
     procedure          :: gencorr_for_rot_8
     procedure          :: gencorrs_grad
@@ -213,15 +216,16 @@ contains
         else
             self%nptcls = p%top - p%fromp + 1                   !< the total number of particles in partition
         endif
-        self%nrefs      = nrefs                                 !< the number of references (logically indexded [1,nrefs])
-        self%ring2      = p%ring2                               !< radius of molecule
-        self%nrots      = round2even(twopi * real(p%ring2))     !< number of in-plane rotations for one pft  (determined by radius of molecule)
-        self%pftsz      = self%nrots / 2                        !< size of reference (nrots/2) (number of vectors used for matching)
-        self%smpd       = p%smpd                                !< sampling distance
-        self%kfromto    = p%kfromto                             !< Fourier index range
-        self%nk         = self%kfromto(2) - self%kfromto(1) + 1 !< # resolution elements
-        self%nthr       = p%nthr                                !< # OpenMP threads
-        self%phaseplate = p%tfplan%l_phaseplate                 !< images obtained with the Volta
+        self%nrefs       = nrefs                                 !< the number of references (logically indexded [1,nrefs])
+        self%ring2       = p%ring2                               !< radius of molecule
+        self%nrots       = round2even(twopi * real(p%ring2))     !< number of in-plane rotations for one pft  (determined by radius of molecule)
+        self%pftsz       = self%nrots / 2                        !< size of reference (nrots/2) (number of vectors used for matching)
+        self%smpd        = p%smpd                                !< sampling distance
+        self%kfromto     = p%kfromto                             !< Fourier index range
+        self%nk          = self%kfromto(2) - self%kfromto(1) + 1 !< # resolution elements
+        self%nthr        = p%nthr                                !< # OpenMP threads
+        self%phaseplate  = p%tfplan%l_phaseplate                 !< images obtained with the Volta
+        self%l_cc_objfun = p%l_cc_objfun                         !< cc|ccres objtective function
         ! generate polar coordinates & eo assignment
         allocate( self%polar(2*self%nrots,self%kfromto(1):self%kfromto(2)),&
                  &self%angtab(self%nrots), self%iseven(1:self%nptcls), stat=alloc_stat)
@@ -905,7 +909,7 @@ contains
         end do
     end subroutine genfrc
 
-    subroutine gencorrs_1( self, iref, iptcl, cc )
+    subroutine gencorrs_cc_1( self, iref, iptcl, cc )
         use simple_math, only: csq
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iref, iptcl
@@ -920,9 +924,9 @@ contains
         call self%prep_ref4corr(iref, self%pinds(iptcl), pft_ref, sqsum_ref, self%kfromto(2))
         call self%calc_corrs_over_k(pft_ref, self%pinds(iptcl), self%kfromto(2), corrs_over_k)
         cc = corrs_over_k / sqrt(sqsum_ref * self%sqsums_ptcls(self%pinds(iptcl)))
-    end subroutine gencorrs_1
+    end subroutine gencorrs_cc_1
 
-    subroutine gencorrs_2( self, iref, iptcl, kstop, cc )
+    subroutine gencorrs_cc_2( self, iref, iptcl, kstop, cc )
         use simple_math, only: csq
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iref, iptcl, kstop
@@ -938,9 +942,9 @@ contains
         call self%calc_corrs_over_k(pft_ref, self%pinds(iptcl), kstop, corrs_over_k)
         sqsum_ptcl = sum(csq(self%pfts_ptcls(self%pinds(iptcl), :, self%kfromto(1):kstop)))
         cc = corrs_over_k / sqrt(sqsum_ref * sqsum_ptcl)
-    end subroutine gencorrs_2
+    end subroutine gencorrs_cc_2
 
-    subroutine gencorrs_3( self, iref, iptcl, shvec, cc )
+    subroutine gencorrs_cc_3( self, iref, iptcl, shvec, cc )
         use simple_math, only: csq
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iref, iptcl
@@ -973,7 +977,7 @@ contains
         sqsum_ref = sum(csq(pft_ref))
         call self%calc_corrs_over_k(pft_ref, self%pinds(iptcl), self%kfromto(2), corrs_over_k)
         cc = corrs_over_k  / sqrt(sqsum_ref * self%sqsums_ptcls(self%pinds(iptcl)))
-    end subroutine gencorrs_3
+    end subroutine gencorrs_cc_3
 
     subroutine gencorrs_resnorm_1( self, iref, iptcl, cc )
         class(polarft_corrcalc), intent(inout) :: self
@@ -991,11 +995,7 @@ contains
         do k=self%kfromto(1),self%kfromto(2)
             call self%calc_k_corrs(pft_ref, self%pinds(iptcl), k, kcorrs)
             sumsqptcl = sum(csq(self%pfts_ptcls(self%pinds(iptcl),:,k)))
-            if( self%iseven(self%pinds(iptcl)) )then
-                sumsqref = sum(csq(self%pfts_refs_even(iref,:,k)))
-            else
-                sumsqref = sum(csq(self%pfts_refs_odd(iref,:,k)))
-            endif
+            sumsqref  = sum(csq(pft_ref(:,k)))
             ! all rotational correlations in one shell: kcorrs(:) / sqrt(sumsqref * sumsqptcl)
             ! sum over shells
             cc(:) = cc(:) + kcorrs(:) / sqrt(sumsqref * sumsqptcl)
@@ -1022,11 +1022,7 @@ contains
         do k=self%kfromto(1),kstop
             call self%calc_k_corrs(pft_ref, self%pinds(iptcl), k, kcorrs)
             sumsqptcl = sum(csq(self%pfts_ptcls(self%pinds(iptcl),:,k)))
-            if( self%iseven(self%pinds(iptcl)) )then
-                sumsqref = sum(csq(self%pfts_refs_even(iref,:,k)))
-            else
-                sumsqref = sum(csq(self%pfts_refs_odd(iref,:,k)))
-            endif
+            sumsqref  = sum(csq(pft_ref(:,k)))
             ! all rotational correlations in one shell: kcorrs(:) / sqrt(sumsqref * sumsqptcl)
             ! sum over shells
             cc(:) = cc(:) + kcorrs(:) / sqrt(sumsqref * sumsqptcl)
@@ -1081,6 +1077,40 @@ contains
         ! negative B-factor to up-weight corr contributions at higher resolution
         cc(:) = cc(:) / real(self%kfromto(2) - self%kfromto(1) + 1)
     end subroutine gencorrs_resnorm_3
+
+    subroutine gencorrs_1( self, iref, iptcl, cc )
+        class(polarft_corrcalc), intent(inout) :: self
+        integer,                 intent(in)    :: iref, iptcl
+        real(sp),                intent(out)   :: cc(self%nrots)
+        if( self%l_cc_objfun )then
+            call self%gencorrs_cc_1(iref, iptcl, cc)
+        else
+            call self%gencorrs_resnorm_1(iref, iptcl, cc)
+        endif
+    end subroutine gencorrs_1
+
+    subroutine gencorrs_2( self, iref, iptcl, kstop, cc )
+        class(polarft_corrcalc), intent(inout) :: self
+        integer,                 intent(in)    :: iref, iptcl, kstop
+        real,                    intent(out)   :: cc(self%nrots)
+        if( self%l_cc_objfun )then
+            call self%gencorrs_cc_2(iref, iptcl, kstop, cc)
+        else
+            call self%gencorrs_resnorm_2(iref, iptcl, kstop, cc)
+        endif
+    end subroutine gencorrs_2
+
+    subroutine gencorrs_3( self, iref, iptcl, shvec, cc )
+        class(polarft_corrcalc), intent(inout) :: self
+        integer,                 intent(in)    :: iref, iptcl
+        real(sp),                intent(in)    :: shvec(2)
+        real(sp),                intent(out)   :: cc(self%nrots)
+        if( self%l_cc_objfun )then
+            call self%gencorrs_cc_3(iref, iptcl, shvec, cc)
+        else
+            call self%gencorrs_resnorm_3(iref, iptcl, shvec, cc)
+        endif
+    end subroutine gencorrs_3
 
     !< brief  generates correlation for one specific rotation angle
     function gencorr_for_rot( self, iref, iptcl, shvec, irot ) result( cc )

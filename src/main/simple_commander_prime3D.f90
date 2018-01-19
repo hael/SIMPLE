@@ -360,7 +360,7 @@ contains
         endif
         ! reports convergence, shift activation, resolution update and
         ! fraction of search space scanned to the distr commander
-        if( p%doshift )then
+        if( p%l_doshift )then
             call cline%set('trs', p%trs)        ! activates shift search
         endif
         if( converged )then

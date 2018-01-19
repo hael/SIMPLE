@@ -14,7 +14,7 @@ public :: prime3D_srch, o_peaks
 private
 
 real,    parameter :: SOFTMAXW_THRESH = 0.01 !< threshold for softmax weights
-logical, parameter :: DEBUG = .false., L_DEV=.false.
+logical, parameter :: DEBUG = .false., L_DEV=.true.
 
 ! allocatables for prime3D_srch are class variables to improve caching and reduce alloc overheads
 type(oris), allocatable :: o_peaks(:)                             !< solution objects
@@ -317,7 +317,7 @@ contains
         self%nbetter    =  0
         self%nrefs_eval =  0
         self%nsym       =  se%get_nsym()
-        self%doshift    =  p%doshift
+        self%doshift    =  p%l_doshift
         self%refine     =  p%refine
         self%nnn_static =  p%nnn
         self%nnn        =  p%nnn
@@ -349,7 +349,7 @@ contains
             self%npeaks_grid = min(self%npeaks_grid,self%nrefs)
         endif
         ! updates option to search shift
-        self%doshift   = p%doshift
+        self%doshift   = p%l_doshift
         ! create in-plane search objects
         lims(:,1)      = -p%trs
         lims(:,2)      =  p%trs

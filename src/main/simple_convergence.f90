@@ -24,7 +24,7 @@ type convergence
     real :: mi_joint  = 0.                      !< joint parameter distribution overlap
     real :: mi_class  = 0.                      !< class parameter distribution overlap
     real :: mi_proj   = 0.                      !< projection parameter distribution overlap
-    real :: mi_inpl   = 0.                      !< in-plane parameter distribution overlap 
+    real :: mi_inpl   = 0.                      !< in-plane parameter distribution overlap
     real :: mi_state  = 0.                      !< state parameter distribution overlap
     real :: sdev      = 0.                      !< angular standard deviation of model
   contains
@@ -50,7 +50,7 @@ contains
         self%pp     => p
         self%pcline => cline
     end function constructor
-    
+
     function check_conv2D( self, ncls ) result( converged )
         class(convergence), intent(inout) :: self
         integer, optional,  intent(in)    :: ncls
@@ -81,11 +81,11 @@ contains
                 self%pp%trs = max(MINSHIFT,self%pp%trs)
                 self%pp%trs = min(MAXSHIFT,self%pp%trs)
                 ! set shift search flag
-                self%pp%doshift = .true.
+                self%pp%l_doshift = .true.
             endif
         endif
         ! determine convergence
-        if( nncls > 1 )then        
+        if( nncls > 1 )then
             if( self%mi_class > MI_CLASS_LIM_2D .and. self%frac > FRAC_LIM )then
                 write(*,'(A)') '>>> CONVERGED: .YES.'
                 converged = .true.
@@ -103,7 +103,7 @@ contains
             endif
         endif
     end function check_conv2D
-    
+
     function check_conv3D( self, update_res ) result( converged )
         class(convergence), intent(inout) :: self
         logical, optional,  intent(inout) :: update_res
@@ -165,7 +165,7 @@ contains
                 if(       self%pp%dynlp .eq. 'yes'  .and. &
                     .not. self%pcline%defined('lp') .and. &
                           self%dist <= self%pp%athres/2. )then
-                    update_res = .true.          
+                    update_res = .true.
                 endif
             endif
             if( update_res )then
@@ -188,7 +188,7 @@ contains
                 self%pp%trs = max(MINSHIFT,self%pp%trs)
                 self%pp%trs = min(MAXSHIFT,self%pp%trs)
                 ! set shift search flag
-                self%pp%doshift = .true.
+                self%pp%l_doshift = .true.
             endif
         endif
         ! determine convergence
@@ -312,8 +312,7 @@ contains
         class(convergence), intent(inout) :: self
         self%bap    => null()
         self%pp     => null()
-        self%pcline => null() 
+        self%pcline => null()
     end subroutine kill
 
 end module simple_convergence
-

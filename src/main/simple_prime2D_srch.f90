@@ -15,7 +15,7 @@ private
 logical, parameter :: L_BENCH = .false.
 logical, parameter :: DEBUG   = .false.
 
-! allocatables for prime3D_srch are class variables to improve caching and reduce alloc overheads 
+! allocatables for prime3D_srch are class variables to improve caching and reduce alloc overheads
 integer, allocatable :: cls_pops(:)
 integer, allocatable :: srch_order(:,:)
 
@@ -36,7 +36,7 @@ type prime2D_srch
     integer                          :: fromp         =  1   !< from particle index
     integer                          :: top           =  1   !< to particle index
     integer                          :: nnn           =  0   !< # nearest neighbors
-    integer                          :: iptcl         =  0   !< global particle index 
+    integer                          :: iptcl         =  0   !< global particle index
     real                             :: trs           =  0.  !< shift range parameter [-trs,trs]
     real                             :: prev_shvec(2) =  0.  !< previous origin shift vector
     real                             :: best_shvec(2) =  0.  !< best shift vector found by search
@@ -101,7 +101,7 @@ contains
         if( any(srch_order == 0) ) stop 'Invalid index in srch_order; simple_prime2D_srch :: prep4prime2D_srch'
         call rt%kill
     end subroutine prep4prime2D_srch
-    
+
     !>  \brief  is a constructor
     subroutine new( self, iptcl, pftcc, a, p )
         use simple_params, only: params
@@ -120,7 +120,7 @@ contains
         self%nrots      =  round2even(twopi*real(p%ring2))
         self%nrefs_eval =  0
         self%trs        =  p%trs
-        self%doshift    =  p%doshift
+        self%doshift    =  p%l_doshift
         self%refine     =  p%refine
         self%nthr       =  p%nthr
         self%fromp      =  p%fromp
@@ -139,7 +139,7 @@ contains
             ! init timers
             self%rt_refloop = 0.
             self%rt_inpl    = 0.
-            self%rt_tot     = 0.  
+            self%rt_tot     = 0.
         endif
         if( DEBUG ) print *, '>>> PRIME2D_SRCH::CONSTRUCTED NEW SIMPLE_PRIME2D_SRCH OBJECT'
     end subroutine new
@@ -177,13 +177,13 @@ contains
                 call self%pftcc_ptr%gencorrs(iref, self%iptcl, corrs)
                 loc       = maxloc(corrs)
                 inpl_ind  = loc(1)
-                inpl_corr = corrs(inpl_ind)         
+                inpl_corr = corrs(inpl_ind)
                 if( inpl_corr >= corr )then
                     corr            = inpl_corr
                     self%best_class = iref
                     self%best_corr  = inpl_corr
                     self%best_rot   = inpl_ind
-                endif    
+                endif
             end do
             self%nrefs_eval = self%nrefs
             call self%inpl_srch
@@ -206,7 +206,7 @@ contains
             do_inplsrch   = .true.
             corr_bound    = -1.
             cc_glob       = -1.
-            glob_best_set = .false. 
+            glob_best_set = .false.
             if( present(extr_bound) ) corr_bound = extr_bound
             call self%prep4srch
             if( corr_bound < 0. .or. self%prev_corr > corr_bound )then
@@ -274,7 +274,7 @@ contains
                     enddo
                 else
                     ! populated class
-                    call self%pftcc_ptr%gencorrs(iref, self%iptcl, corrs) 
+                    call self%pftcc_ptr%gencorrs(iref, self%iptcl, corrs)
                     loc       = maxloc(corrs)
                     inpl_ind  = loc(1)
                     inpl_corr = corrs(inpl_ind)
@@ -294,7 +294,7 @@ contains
                     self%best_rot   = inpl_glob
                 else
                     ! keep the old parameters
-                    self%best_class = self%prev_class 
+                    self%best_class = self%prev_class
                     self%best_corr  = self%prev_corr
                     self%best_rot   = self%prev_rot
                 endif
@@ -329,7 +329,7 @@ contains
             self%prev_rot   = self%pftcc_ptr%get_roind(360.-self%a_ptr%e3get(self%iptcl))     ! in-plane angle index
             self%prev_shvec = [self%a_ptr%get(self%iptcl,'x'),self%a_ptr%get(self%iptcl,'y')] ! shift vector
             ! set best to previous best by default
-            self%best_class = self%prev_class         
+            self%best_class = self%prev_class
             self%best_rot   = self%prev_rot
             ! calculate spectral score
             self%specscore  = self%pftcc_ptr%specscore(self%prev_class, self%iptcl, self%prev_rot)
@@ -338,16 +338,16 @@ contains
             do inn=1,self%nnn
                 iref      = nnmat(self%prev_class,inn)
                 if( cls_pops(iref) == 0 )cycle
-                call self%pftcc_ptr%gencorrs(iref, self%iptcl, corrs) 
+                call self%pftcc_ptr%gencorrs(iref, self%iptcl, corrs)
                 loc       = maxloc(corrs)
                 inpl_ind  = loc(1)
-                inpl_corr = corrs(inpl_ind)         
+                inpl_corr = corrs(inpl_ind)
                 if( inpl_corr >= corr )then
                     corr            = inpl_corr
                     self%best_class = iref
                     self%best_corr  = inpl_corr
                     self%best_rot   = inpl_ind
-                endif    
+                endif
             end do
             self%nrefs_eval = self%nrefs
             call self%inpl_srch
@@ -449,11 +449,11 @@ contains
         if( self%prev_rot ==  self%best_rot )then
             mi_inpl  = mi_inpl  + 1.
             mi_joint = mi_joint + 1.
-        endif 
+        endif
         mi_joint = mi_joint / 2.
         ! update parameters
         call self%a_ptr%e3set(self%iptcl,e3)
-        call self%a_ptr%set_shift(self%iptcl, self%prev_shvec + self%best_shvec) 
+        call self%a_ptr%set_shift(self%iptcl, self%prev_shvec + self%best_shvec)
         call self%a_ptr%set(self%iptcl, 'inpl',       real(self%best_rot))
         call self%a_ptr%set(self%iptcl, 'class',      real(self%best_class))
         call self%a_ptr%set(self%iptcl, 'corr',       self%best_corr)

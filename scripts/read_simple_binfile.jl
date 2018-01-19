@@ -26,8 +26,6 @@ module simple_binoris
         # read raw header bytes
         byte_array   = Array{UInt8}(n_bytes_header)
         n_bytes_read = readbytes!(fhandle, byte_array, n_bytes_header)
-        println("# bytes header: $n_bytes_header")
-        println("# bytes read: $n_bytes_read")
         if n_bytes_read != n_bytes_header
             error("# bytes read .ne. # bytes in header")
         end
@@ -54,27 +52,6 @@ println("Name of input file: $fname")
 fhandle = open(fname, "r")
 (header, n_bytes_data) = read_header(fhandle)
 show(header)
-
-# # read raw header bytes
-# fhandle      = open(fname, "r")
-# byte_array   = Array{UInt8}(n_bytes_header)
-# n_bytes_read = readbytes!(fhandle, byte_array, n_bytes_header)
-# println("# bytes header: $n_bytes_header")
-# println("# bytes read: $n_bytes_read")
-# if n_bytes_read != n_bytes_header
-#     error("# bytes read .ne. # bytes in header")
-# end
-#
-# # re-shape the header & calculate # data bytes
-# tmp          = reinterpret(Int64, byte_array)
-# cnt          = 0
-# n_bytes_data = 0
-# for i in 1:5:max_n_segments * n_vars_head_seg
-#     cnt += 1
-#     header[cnt] = file_header_segment(tmp[i],tmp[i+1],tmp[i+2],tmp[i+3],tmp[i+4])
-#     n_bytes_data += header[cnt].n_bytes_per_record *  header[cnt].n_records
-# end
-# show(header)
 
 # read raw bytes of data section
 byte_array = Array{UInt8}(n_bytes_data)

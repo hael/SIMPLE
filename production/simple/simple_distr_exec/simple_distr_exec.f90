@@ -465,9 +465,10 @@ select case(prg)
         keys_optional(25) = 'dyncls'
         keys_optional(26) = 'phaseplate'
         keys_optional(27) = 'opt'
+        keys_optional(28) = 'objfun'
         ! documentation
         if( describe ) call print_doc_prime2D
-        call cline%parse( keys_required(:5), keys_optional(:27) )
+        call cline%parse( keys_required(:5), keys_optional(:28) )
         ! sanity checks
         if( cline%defined('stk') .or. cline%defined('stktab') )then
             ! all ok
@@ -513,9 +514,10 @@ select case(prg)
         keys_optional(12) = 'autoscale'
         keys_optional(13) = 'weights2D'
         keys_optional(14) = 'opt'
+        keys_optional(15) = 'objfun'
         ! documentation
         if( describe ) call print_doc_prime2D
-        call cline%parse( keys_required(:7), keys_optional(:14) )
+        call cline%parse( keys_required(:7), keys_optional(:15) )
         ! set defaults
         if( .not. cline%defined('lp')        ) call cline%set('lp',          15.)
         if( .not. cline%defined('lpstop')    ) call cline%set('lpstop',       8.)
@@ -653,10 +655,11 @@ select case(prg)
         keys_optional(38) = 'opt'
         keys_optional(39) = 'update_frac'
         keys_optional(40) = 'focusmsk'
+        keys_optional(41) = 'objfun'
         ! documentation
         if( describe ) call print_doc_prime3D
         ! parse command line
-        call cline%parse( keys_required(:5), keys_optional(:40) )
+        call cline%parse( keys_required(:5), keys_optional(:41) )
         ! sanity check
         if( cline%defined('stk') .or. cline%defined('stktab') )then
             ! all ok
@@ -719,10 +722,11 @@ select case(prg)
         keys_optional(30) = 'weights3D'
         keys_optional(31) = 'phaseplate'
         keys_optional(32) = 'opt'
+        keys_optional(33) = 'objfun'
         ! documentation
         if( describe ) call print_doc_prime3D
         ! parse command line
-        call cline%parse( keys_required(:5), keys_optional(:32) )
+        call cline%parse( keys_required(:5), keys_optional(:33) )
         ! sanity check
         if( cline%defined('stk') .or. cline%defined('stktab') )then
             ! all ok
@@ -889,9 +893,10 @@ select case(prg)
         keys_optional(12) = 'center'
         keys_optional(13) = 'opt'
         keys_optional(14) = 'update_frac'
+        keys_optional(15) = 'objfun'
         ! parse command line
         if( describe ) call print_doc_ini3D_from_cavgs
-        call cline%parse(keys_required(:5), keys_optional(:14))
+        call cline%parse(keys_required(:5), keys_optional(:15))
         ! set defaults
         if( .not. cline%defined('autoscale') ) call cline%set('autoscale', 'yes')
         ! execute
@@ -927,9 +932,10 @@ select case(prg)
         keys_optional(14) = 'oritab2'
         keys_optional(15) = 'mskfile'
         keys_optional(16) = 'startit'
+        keys_optional(17) = 'objfun'
         ! parse command line
         ! if( describe ) call print_doc_het
-        call cline%parse(keys_required(:7), keys_optional(:16))
+        call cline%parse(keys_required(:7), keys_optional(:17))
         ! sanity check
         if( cline%defined('stk') .or. cline%defined('stktab') )then
             ! all ok
@@ -972,9 +978,10 @@ select case(prg)
         keys_optional(15) = 'vollist'
         keys_optional(16) = 'state'
         keys_optional(17) = 'trs'
+        keys_optional(18) = 'objfun'
         ! parse command line
         ! if( describe ) call print_doc_het_refine
-        call cline%parse(keys_required(:6), keys_optional(:17))
+        call cline%parse(keys_required(:6), keys_optional(:18))
         ! sanity check
         if( cline%defined('stk') .or. cline%defined('stktab') )then
             ! all ok

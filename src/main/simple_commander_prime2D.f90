@@ -247,7 +247,7 @@ contains
         p%ncls    = b%a%get_n('class')
         converged = b%conv%check_conv2D() ! convergence check
         call cline%set('frac', b%conv%get('frac'))
-        if( p%doshift )then
+        if( p%l_doshift )then
             ! activates shift search
             call cline%set('trs', p%trs)
         endif
