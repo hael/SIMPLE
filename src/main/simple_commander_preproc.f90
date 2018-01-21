@@ -1069,6 +1069,7 @@ contains
                     call micrograph%window(nint(particle_position), p%box, b%img, noutside)
                     if( p%pcontrast .eq. 'black' ) call b%img%neg
                     call b%img%norm
+                    call b%img%edges_norm
                     call b%img%write(trim(adjustl(stack)), cnt)
                 endif
             end do
@@ -1085,7 +1086,8 @@ contains
                         particle_position = boxdata(j,1:2)
                         call micrograph%window(nint(particle_position), p%box, b%img)
                         if( p%pcontrast .eq. 'black' ) call b%img%neg
-                        call b%img%edges_norm()
+                        call b%img%norm
+                        call b%img%edges_norm
                         call b%img%write(trim(adjustl(stack_frames)), cnt)
                     endif
                 end do

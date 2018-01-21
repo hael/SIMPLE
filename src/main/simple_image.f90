@@ -6429,7 +6429,7 @@ contains
         endif
     end subroutine noise_norm
 
-    !>  \brief  is for substracting a 2D image edges average
+    !>  \brief  putting the edge around the image to zero (necessary for avoiding FT artefacts)
     subroutine edges_norm( self )
         class(image), intent(inout) :: self
         real :: edges_sum, edges_ave
