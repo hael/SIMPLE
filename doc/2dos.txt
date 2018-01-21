@@ -1,11 +1,12 @@
-
-Edge normalisation on extraction (same as EMAN's edgenorm routine). The average of the boarder pixels must be zero for Fourier transformation.
-
+CTFFIT
 Consider using the natural logarithm of the power spectrum for CTF fitting rater than the square root. Should improve robustness. (Leave option speckind=sqrt|log)
 
-Consider
-
-
+NEW DEVELOPMENTS
+* Json as a User Interface Markup Language (Joe made a mockup)
+* Need methods for projecting the time of an execution, so that we can display accordingly
+* Edge normalisation on extraction (same as EMAN's edgenorm routine). The average of the
+boarder pixels must be zero for Fourier transformation.
+* statistical normalisation of particle images should be done based on background pixels ONLY
 * support for doc input to re-extract with shifts from doc
 * pipelined pick/extract
 * frac parameter for 2D (& consider outlier detection similar to picker)
@@ -13,24 +14,15 @@ Consider
 * extract should set the header right (smpd)
 * scaling should set the header right (smpd)
 
-Flip in postproc
-
-Picker should produce output identically to unblur/ctffind, output is boxfile per movie
-Make sure that output names are standardised
-
-
-Major Refactorings
+MAJOR REFACTORINGS
 * simple_auto exec
 * modularise commanders for Julia integration
 * simple_sp_projec controller
 
-Binary file format
-
+BINARY FILE FORMAT
 Should we keep track of jobid, out_dir, pid for every executed job?
 In this way we could kill processes, allowing cancellation
 Shall we keep track of which jobid wrote which entry in the segmented binary file?
-
-
 
 StkInfo
 ClsInfo
@@ -41,25 +33,13 @@ FSCInfo
 VolInfo (flip indicator)
 LastJob (append to structure to get history of workflow???)
 
-Json as a User Interface Markup Language
-
-Joe made a mockup
-
 JULIA
-Should be possible to use ccall to call Fortran subroutines, which means we need to re-code all commanders so they become subroutines of modules and so that their arguments are native types (i.e. the cmdline needs to be turned into a job_description string). Then we should have all the commander functionality at our hands with all the power of Julia.
+Should be possible to use ccall to call Fortran subroutines, which means we need to re-code all
+commanders so they become subroutines of modules and so that their arguments are native types
+(i.e. the cmdline needs to be turned into a job_description string). Then we should have all the
+commander functionality at our hands with all the power of Julia.
 
 Julia coding priorities:
 Support from reading MRC into matrix
 Support for  writing MRC from matrix
 Support for read/write *simple binary files
-
-Ideas from flow-based programming
-
-These kind of applications always keep a register of process ID:s and statuses. We should probably have a LIFO data structure that keeps track of jobid:s PID:s, execution times etc. as part of the sp_project structure
-
-Other ideas
-
-Need methods for projecting the time of an execution, so that we can display accordingly
-
-
-

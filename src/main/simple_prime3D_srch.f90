@@ -1212,7 +1212,6 @@ contains
                 ang_sdev = sym_os%ang_sdev(self%refine, self%nstates, self%npeaks)
             endif
         endif
-        ! Update the best orientation
         ! angular distances
         call self%se_ptr%sym_dists( self%a_ptr%get_ori(self%iptcl),&
             &o_peaks(self%iptcl)%get_ori(best_loc(1)), osym, euldist, dist_inpl)

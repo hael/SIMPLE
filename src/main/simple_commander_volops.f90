@@ -237,6 +237,11 @@ contains
         ! output
         p%outvol = add2fbody(trim(p%vols(state)), p%ext, '_pproc')
         call b%vol%write(p%outvol)
+        ! also output mirrored by default
+        call b%vol%mirror('x')
+        p%outvol = add2fbody(p%outvol, p%ext, '_flip')
+        call b%vol%write(p%outvol)
+        ! destruct
         call vol_copy%kill
         call mskvol%kill
         call simple_end('**** SIMPLE_POSTPROC_VOL NORMAL STOP ****', print_simple=.false.)
