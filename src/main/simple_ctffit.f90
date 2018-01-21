@@ -10,7 +10,7 @@ implicit none
 public :: ctffit_init, ctffit_srch, ctffit_kill
 private
 
-type(image)          :: pspec_ref               ! micrograph powerspec 
+type(image)          :: pspec_ref               ! micrograph powerspec
 type(image)          :: pspec_ctf               ! CTF powerspec
 type(image)          :: imgmsk                  ! mask image
 type(ctf)            :: tfun                    ! transfer function object
@@ -57,7 +57,7 @@ contains
             case('yes')
                 l_phaseplate = .true.
                 ndim         = 4
-            case DEFAULT 
+            case DEFAULT
                 l_phaseplate = .false.
                 ndim         = 3
         end select
@@ -105,7 +105,7 @@ contains
         real              :: cost, df, df_step, cost_lowest, dfstep
         real, allocatable :: frc(:)
         type(image)       :: pspec_half_n_half
-        integer           :: find
+        integer           :: find, hpind, nyq
         class(*), pointer :: fun_self => null()
         dfstep = (df_max - df_min) / 100.
         if( l_phaseplate )then
@@ -157,11 +157,15 @@ contains
         ! always normalise before FRC calc
         call pspec_ctf%norm
         call pspec_ref%norm
+        ! mask with inner mask @ hp limit and outer mask @ Nyqvist
+        hpind = pspec_ref%get_find(hp)
+        nyq   = pspec_ref%get_filtsz()
+        call pspec_ctf%mask(real(nyq), 'soft', real(hpind))
+        call pspec_ref%mask(real(nyq), 'soft', real(hpind))
         ! ctfres statistic
-        allocate(frc(pspec_ctf%get_filtsz()))
+        allocate(frc(nyq))
         call pspec_ctf%frc_pspec(pspec_ref, frc)
-        call phaseplate_correct_fsc(frc, find)
-        find   = get_lplim_at_corr(frc, 0.5)
+        find   = get_lplim_at_corr(frc, 0.5, startind=hpind)
         ctfres = pspec_ctf%get_lp(find)
         ! make a half-n-half diagnostic
         call pspec_ctf%mul(imgmsk)
@@ -173,7 +177,7 @@ contains
     ! cost function is real-space correlation within resolution mask between the CTF
     ! powerspectrum (the model) and the pre-processed micrograph powerspectrum (the data)
     function ctffit_cost( fun_self, vec, D ) result( cost )
-        class(*), intent(inout) :: fun_self   
+        class(*), intent(inout) :: fun_self
         integer,  intent(in)    :: D
         real,     intent(in)    :: vec(D)
         real                    :: cost

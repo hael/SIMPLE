@@ -5815,15 +5815,19 @@ contains
     subroutine frc_pspec( self1, self2, corrs )
         class(image), intent(inout) :: self1, self2
         real,         intent(out)   :: corrs(fdim(self1%ldim(1))-1)
-        integer     :: k, npix
-        type(image) :: maskimg
-        logical, allocatable :: l_mask(:,:,:)
-        corrs = 0.
-        do k=1,fdim(self1%ldim(1))-3
-            call maskimg%ring(self1%ldim, self1%smpd, real(k+2), real(k-2), npix )
-            l_mask = bin2logical(maskimg)
-            corrs(k) = self1%real_corr(self2, l_mask)
-        end do
+        ! integer     :: k, npix
+        ! type(image) :: maskimg
+        ! logical, allocatable :: l_mask(:,:,:)
+        type(image) :: imgft1, imgft2
+        ! corrs = 0.
+        ! do k=1,fdim(self1%ldim(1))-3
+        !     call maskimg%ring(self1%ldim, self1%smpd, real(k+2), real(k-2), npix )
+        !     l_mask = bin2logical(maskimg)
+        !     corrs(k) = self1%real_corr(self2, l_mask)
+        ! end do
+        call self1%img2ft(imgft1)
+        call self2%img2ft(imgft2)
+        call imgft1%fsc(imgft2, corrs)
     end subroutine frc_pspec
 
     !>  \brief  an image shifter to prepare for Fourier transformation

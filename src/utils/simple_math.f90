@@ -2,7 +2,7 @@
 
 module simple_math
 use simple_defs
-use simple_syslib, only: alloc_errchk 
+use simple_syslib, only: alloc_errchk
 implicit none
 
 interface is_a_number
@@ -143,7 +143,7 @@ contains
     ! JIFFYS
 
     !> \brief nvoxfind_1  to find the volume in number of voxels, given molecular weight
-    
+
     !! \details SI units \f$ \si{\kilo\dalton}= \SI{1e-10}{\metre} \f$, one dalton is defined as 1/12 of the mass of an atom of Carbon 12, or 1 amu \f$ \SI{1.66053892173e-27}{\kilo\gram} \f$
     !!
     !!  Protein density \f$ \rho_{\mathrm{prot}} \f$ is defined as \f$ \si{1.43}{\gram\per\centimetre\cubed} \f$
@@ -254,7 +254,7 @@ contains
     subroutine check4nans2D_2( arr )
         complex, intent(in)  :: arr(:,:)   !< query vector
         complex, allocatable :: arr1d(:)
-        arr1d = pack(arr, .true.)  
+        arr1d = pack(arr, .true.)
         call check4nans_2(arr1d)
         deallocate(arr1d)
     end subroutine check4nans2D_2
@@ -477,7 +477,7 @@ contains
             cswap   = carr(j)
             carr(j) = carr(i)
             carr(i) = cswap
-        end do 
+        end do
     end subroutine reverse_carr
 
     !>   implements the sortmeans algorithm
@@ -492,7 +492,7 @@ contains
         ncls = size(means)
         ndat = size(dat)
         if( allocated(labels) ) deallocate(labels)
-        allocate(  mask(ndat), labels(ndat), stat=alloc_stat ) 
+        allocate(  mask(ndat), labels(ndat), stat=alloc_stat )
         if(alloc_stat /= 0) call alloc_errchk("sortmeans; simple_math", alloc_stat)
         ! initialization by sorting
         dat_sorted = dat ! reallocation  dat_sorted(ndat),
@@ -615,7 +615,7 @@ contains
     pure subroutine sqwin_2d_2( x, y, winsz, lims, win )
         real,    intent(in)  :: x,y       !< input point
         real,    intent(in)  :: winsz     !< window size
-        integer, intent(in)  :: lims(2,2) !< bounds 
+        integer, intent(in)  :: lims(2,2) !< bounds
         integer, intent(out) :: win(2,2)  !< window
         call sqwin_1d_2(x,winsz,lims(1,:), win(1,:))
         call sqwin_1d_2(y,winsz,lims(2,:), win(2,:))
@@ -635,7 +635,7 @@ contains
     pure subroutine sqwin_3d_2( x, y, z, winsz, lims, win )
         real,    intent(in)  :: x,y,z     !< input point
         real,    intent(in)  :: winsz     !< window size
-        integer, intent(in)  :: lims(3,2) !< bounds 
+        integer, intent(in)  :: lims(3,2) !< bounds
         integer, intent(out) :: win(3,2)  !< window
         call sqwin_1d_2(x,winsz,[lims(1,1), lims(1,2)], win(1,:))
         call sqwin_1d_2(y,winsz,[lims(2,1), lims(2,2)], win(2,:))
@@ -674,7 +674,7 @@ contains
         else
             arg = pi*x
             r = sin(arg)/(arg)
-        endif 
+        endif
     end function sinc
 
     !>   is a truncated Gaussian window function
@@ -774,7 +774,7 @@ contains
         if( x == 0.) then
             sq = y*y
         else if( y == 0. ) then
-#endif  
+#endif
             sq = x*x
         else if( x > y ) then
             frac = y/x
@@ -1048,14 +1048,18 @@ contains
     end subroutine phaseplate_correct_fsc
 
     !>   returns the Fourier index of the resolution limit at corr
-    function get_lplim_at_corr( fsc, corr ) result( k )
-        real, intent(in) :: fsc(:), corr
+    function get_lplim_at_corr( fsc, corr, startind ) result( k )
+        real,              intent(in) :: fsc(:), corr
+        integer, optional, intent(in) :: startind
         integer :: n, k, h
+        integer :: sstartind
         n = size(fsc)
         if( n < 3 )then
             stop 'nonconforming size of fsc array; get_lplim_at_corr; simple_math'
         endif
         k = n-1
+        sstartind = 3
+        if( present(startind) ) sstartind = startind
         do h=3,n-1
             if( fsc(h) >= corr )then
                 cycle
@@ -1070,7 +1074,7 @@ contains
     !< \param smpd pixel size
     !! \param res resolution \f$ (\si{\angstrom}) \f$
     integer pure function calc_fourier_index( res, box, smpd )
-        real, intent(in)    :: res, smpd 
+        real, intent(in)    :: res, smpd
         integer, intent(in) :: box       !< box size
         calc_fourier_index = nint((real(box-1)*smpd)/res)
     end function calc_fourier_index
@@ -1177,7 +1181,7 @@ contains
     !!          the error in the derivative is returned in err
     !! \param func is the function to be derived at point x.
     !! \param x point query
-    !! \param err  estimated error 
+    !! \param err  estimated error
     subroutine numderiv( func, x, h, err, df )
     ! Parameters: Stepsize is decreased by CON at each iteration. Max size of tableu is
     ! set by NTAB. Return when error is SAFE worse than the best so far. The number of
@@ -2147,7 +2151,7 @@ contains
         integer,           intent(in)  :: kfromto(2), ring2
         real, allocatable, intent(out) :: coords(:,:,:), angtab(:)
         integer :: nradial_lines, i, j
-        real    :: ang 
+        real    :: ang
         nradial_lines = round2even(twopi*real(ring2))
         if( allocated(coords) ) deallocate(coords)
         if( allocated(angtab) ) deallocate(angtab)
@@ -2620,7 +2624,7 @@ contains
                     j=k
                 end do
             endif
-        end do 
+        end do
     end subroutine hpsel_1
 
     !>   selecting the size(rheap) largest
