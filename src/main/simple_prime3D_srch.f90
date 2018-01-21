@@ -14,7 +14,7 @@ public :: prime3D_srch, o_peaks
 private
 
 real,    parameter :: SOFTMAXW_THRESH = 0.01 !< threshold for softmax weights
-logical, parameter :: DEBUG = .false., L_DEV=.true.
+logical, parameter :: DEBUG = .false.
 
 ! allocatables for prime3D_srch are class variables to improve caching and reduce alloc overheads
 type(oris), allocatable :: o_peaks(:)                             !< solution objects
@@ -1119,7 +1119,6 @@ contains
         real       :: state_ws(self%nstates), frac, ang_sdev, dist, inpl_dist, euldist, mi_joint
         real       :: mi_proj, mi_inpl, mi_state, dist_inpl, wcorr
         integer    :: best_loc(1), loc(1), states(self%npeaks), s, ipeak, cnt, ref, state, roind, neff_states
-        integer    :: icen
         logical    :: included(self%npeaks)
         ! empty states
         neff_states = count(state_exists)
@@ -1154,7 +1153,6 @@ contains
         if( self%npeaks == 1 )then
             call o_peaks(self%iptcl)%set(1,'ow',1.0)
             wcorr = o_peaks(self%iptcl)%get(1,'corr')
-            icen  = 1
         else
             ! convert correlations to distances
             dists = 1.0 - corrs
@@ -1175,8 +1173,6 @@ contains
             wcorr = sum(ws*corrs,mask=included)
             ! update npeaks individual weights
             call o_peaks(self%iptcl)%set_all('ow', ws)
-            ! identify centroid of o_peaks
-            icen = o_peaks(self%iptcl)%find_centroid_proj()
         endif
         if( self%refine.ne.'states' .and. self%npeaks > 1 .and. self%nstates > 1 )then
             ! states weights
@@ -1199,168 +1195,84 @@ contains
             wcorr    = sum(ws*corrs, mask=included)
             ! update npeaks individual weights
             call o_peaks(self%iptcl)%set_all('ow', ws)
-            ! identify centroid of o_peaks
-            icen     = o_peaks(self%iptcl)%find_centroid_proj(state)
         endif
-        if( L_DEV )then
-            ! REPLACES REPORTING OF THE BEST ORIENTATION IN THE O_PEAKS SET WITH THE CENTROID
-            ! AS IT OUGHT TO DIVERSIFY THE SEARCH AND IMPROVE THE CONVERGENCE RADIUS
-            ! angular standard deviation
-            ang_sdev = 0.
-            if( trim(self%se_ptr%get_pgrp()).eq.'c1' )then
-                ang_sdev = o_peaks(self%iptcl)%ang_sdev(self%refine, self%nstates, self%npeaks)
-            else
-                if( self%npeaks > 2 )then
-                    sym_os = o_peaks(self%iptcl)
-                    do ipeak = 1, self%npeaks
-                        if( ipeak == icen )cycle
-                        call self%se_ptr%sym_dists( o_peaks(self%iptcl)%get_ori(icen),&
-                            &o_peaks(self%iptcl)%get_ori(ipeak), osym, dist, inpl_dist)
-                        call sym_os%set_ori(ipeak, osym)
-                    enddo
-                    ang_sdev = sym_os%ang_sdev(self%refine, self%nstates, self%npeaks)
-                endif
-            endif
-            ! Update the best orientation
-            ! angular distances
-            call self%se_ptr%sym_dists( self%a_ptr%get_ori(self%iptcl),&
-                &o_peaks(self%iptcl)%get_ori(icen), osym, euldist, dist_inpl)
-            ! convergence parameters
-            roind    = self%pftcc_ptr%get_roind(360. - o_peaks(self%iptcl)%e3get(icen))
-            mi_proj  = 0.
-            mi_inpl  = 0.
-            mi_joint = 0.
-            if( euldist < 0.5 )then
-                mi_proj = 1.
-                mi_joint = mi_joint + 1.
-            endif
-            if( self%prev_roind == roind )then
-                mi_inpl  = 1.
-                mi_joint = mi_joint + 1.
-            endif
-            ! states convergence
-            mi_state = 0.
-            state = nint( o_peaks(self%iptcl)%get(icen, 'state') )
-            if( .not. state_exists(state) )then
-                print *, 'empty state: ', state
-                stop 'simple_prime3d_srch; update_best'
-            endif
-            if(self%nstates > 1)then
-                if( self%prev_state == state )then
-                    mi_state = 1.
-                    mi_joint = mi_joint + mi_state
-                endif
-                mi_joint = mi_joint/3.
-            else
-                mi_joint = mi_joint/2.
-            endif
-            ! fraction search space
-            if( str_has_substr(self%refine, 'neigh') )then
-                frac = 100.*real(self%nrefs_eval) / real(self%nnn * neff_states)
-            else if( trim(self%refine).eq.'states' )then
-                frac = 100.*real(self%nrefs_eval) / real(self%nnn) ! 1 state searched
-            else
-                frac = 100.*real(self%nrefs_eval) / real(self%nprojs * neff_states)
-            endif
-            ! set the overlaps
-            call self%a_ptr%set(self%iptcl, 'mi_proj',  mi_proj )
-            call self%a_ptr%set(self%iptcl, 'mi_inpl',  mi_inpl )
-            call self%a_ptr%set(self%iptcl, 'mi_state', mi_state)
-            call self%a_ptr%set(self%iptcl, 'mi_joint', mi_joint)
-            ! set the distances before we update the orientation
-            call self%a_ptr%set(self%iptcl, 'dist', 0.5*euldist + 0.5*self%a_ptr%get(self%iptcl,'dist'))
-            call self%a_ptr%set(self%iptcl, 'dist_inpl', dist_inpl)
-            ! all the other stuff
-            call self%a_ptr%set_euler(self%iptcl, o_peaks(self%iptcl)%get_euler(icen))
-            call self%a_ptr%set_shift(self%iptcl, o_peaks(self%iptcl)%get_2Dshift(icen))
-            call self%a_ptr%set(self%iptcl, 'state', real(state))
-            call self%a_ptr%set(self%iptcl, 'frac', frac)
-            call self%a_ptr%set(self%iptcl, 'corr', wcorr)
-            call self%a_ptr%set(self%iptcl, 'specscore', self%specscore)
-            call self%a_ptr%set(self%iptcl, 'ow',    o_peaks(self%iptcl)%get(icen,'ow'))
-            call self%a_ptr%set(self%iptcl, 'proj',  o_peaks(self%iptcl)%get(icen,'proj'))
-            call self%a_ptr%set(self%iptcl, 'sdev',  ang_sdev )
-            call self%a_ptr%set(self%iptcl, 'npeaks', real(self%npeaks_eff))
-            if( DEBUG ) print *,  '>>> PRIME3D_SRCH::EXECUTED PREP_NPEAKS_ORIS'
+        ! angular standard deviation
+        ang_sdev = 0.
+        if( trim(self%se_ptr%get_pgrp()).eq.'c1' )then
+            ang_sdev = o_peaks(self%iptcl)%ang_sdev(self%refine, self%nstates, self%npeaks)
         else
-            ! angular standard deviation
-            ang_sdev = 0.
-            if( trim(self%se_ptr%get_pgrp()).eq.'c1' )then
-                ang_sdev = o_peaks(self%iptcl)%ang_sdev(self%refine, self%nstates, self%npeaks)
-            else
-                if( self%npeaks > 2 )then
-                    sym_os = o_peaks(self%iptcl)
-                    do ipeak = 1, self%npeaks
-                        if( ipeak == best_loc(1) )cycle
-                        call self%se_ptr%sym_dists( o_peaks(self%iptcl)%get_ori(best_loc(1)),&
-                            &o_peaks(self%iptcl)%get_ori(ipeak), osym, dist, inpl_dist)
-                        call sym_os%set_ori(ipeak, osym)
-                    enddo
-                    ang_sdev = sym_os%ang_sdev(self%refine, self%nstates, self%npeaks)
-                endif
+            if( self%npeaks > 2 )then
+                sym_os = o_peaks(self%iptcl)
+                do ipeak = 1, self%npeaks
+                    if( ipeak == best_loc(1) )cycle
+                    call self%se_ptr%sym_dists( o_peaks(self%iptcl)%get_ori(best_loc(1)),&
+                        &o_peaks(self%iptcl)%get_ori(ipeak), osym, dist, inpl_dist)
+                    call sym_os%set_ori(ipeak, osym)
+                enddo
+                ang_sdev = sym_os%ang_sdev(self%refine, self%nstates, self%npeaks)
             endif
-            ! Update the best orientation
-            ! angular distances
-            call self%se_ptr%sym_dists( self%a_ptr%get_ori(self%iptcl),&
-                &o_peaks(self%iptcl)%get_ori(best_loc(1)), osym, euldist, dist_inpl)
-            ! convergence parameters
-            roind    = self%pftcc_ptr%get_roind(360. - o_peaks(self%iptcl)%e3get(best_loc(1)))
-            mi_proj  = 0.
-            mi_inpl  = 0.
-            mi_joint = 0.
-            if( euldist < 0.5 )then
-                mi_proj = 1.
-                mi_joint = mi_joint + 1.
-            endif
-            if( self%prev_roind == roind )then
-                mi_inpl  = 1.
-                mi_joint = mi_joint + 1.
-            endif
-            ! states convergence
-            mi_state = 0.
-            state = nint( o_peaks(self%iptcl)%get(best_loc(1), 'state') )
-            if( .not. state_exists(state) )then
-                print *, 'empty state: ', state
-                stop 'simple_prime3d_srch; update_best'
-            endif
-            if(self%nstates > 1)then
-                if( self%prev_state == state )then
-                    mi_state = 1.
-                    mi_joint = mi_joint + mi_state
-                endif
-                mi_joint = mi_joint/3.
-            else
-                mi_joint = mi_joint/2.
-            endif
-            ! fraction search space
-            if( str_has_substr(self%refine, 'neigh') )then
-                frac = 100.*real(self%nrefs_eval) / real(self%nnn * neff_states)
-            else if( trim(self%refine).eq.'states' )then
-                frac = 100.*real(self%nrefs_eval) / real(self%nnn) ! 1 state searched
-            else
-                frac = 100.*real(self%nrefs_eval) / real(self%nprojs * neff_states)
-            endif
-            ! set the overlaps
-            call self%a_ptr%set(self%iptcl, 'mi_proj',  mi_proj )
-            call self%a_ptr%set(self%iptcl, 'mi_inpl',  mi_inpl )
-            call self%a_ptr%set(self%iptcl, 'mi_state', mi_state)
-            call self%a_ptr%set(self%iptcl, 'mi_joint', mi_joint)
-            ! set the distances before we update the orientation
-            call self%a_ptr%set(self%iptcl, 'dist', 0.5*euldist + 0.5*self%a_ptr%get(self%iptcl,'dist'))
-            call self%a_ptr%set(self%iptcl, 'dist_inpl', dist_inpl)
-            ! all the other stuff
-            call self%a_ptr%set_euler(self%iptcl, o_peaks(self%iptcl)%get_euler(best_loc(1)))
-            call self%a_ptr%set_shift(self%iptcl, o_peaks(self%iptcl)%get_2Dshift(best_loc(1)))
-            call self%a_ptr%set(self%iptcl, 'state', real(state))
-            call self%a_ptr%set(self%iptcl, 'frac', frac )
-            call self%a_ptr%set(self%iptcl, 'corr', wcorr )
-            call self%a_ptr%set(self%iptcl, 'specscore', self%specscore)
-            call self%a_ptr%set(self%iptcl, 'ow',    o_peaks(self%iptcl)%get(best_loc(1),'ow')   )
-            call self%a_ptr%set(self%iptcl, 'proj',  o_peaks(self%iptcl)%get(best_loc(1),'proj') )
-            call self%a_ptr%set(self%iptcl, 'sdev',  ang_sdev )
-            call self%a_ptr%set(self%iptcl, 'npeaks', real(self%npeaks_eff) )
-            if( DEBUG ) print *,  '>>> PRIME3D_SRCH::EXECUTED PREP_NPEAKS_ORIS'
         endif
+        ! Update the best orientation
+        ! angular distances
+        call self%se_ptr%sym_dists( self%a_ptr%get_ori(self%iptcl),&
+            &o_peaks(self%iptcl)%get_ori(best_loc(1)), osym, euldist, dist_inpl)
+        ! convergence parameters
+        roind    = self%pftcc_ptr%get_roind(360. - o_peaks(self%iptcl)%e3get(best_loc(1)))
+        mi_proj  = 0.
+        mi_inpl  = 0.
+        mi_joint = 0.
+        if( euldist < 0.5 )then
+            mi_proj = 1.
+            mi_joint = mi_joint + 1.
+        endif
+        if( self%prev_roind == roind )then
+            mi_inpl  = 1.
+            mi_joint = mi_joint + 1.
+        endif
+        ! states convergence
+        mi_state = 0.
+        state = nint( o_peaks(self%iptcl)%get(best_loc(1), 'state') )
+        if( .not. state_exists(state) )then
+            print *, 'empty state: ', state
+            stop 'simple_prime3d_srch; update_best'
+        endif
+        if(self%nstates > 1)then
+            if( self%prev_state == state )then
+                mi_state = 1.
+                mi_joint = mi_joint + mi_state
+            endif
+            mi_joint = mi_joint/3.
+        else
+            mi_joint = mi_joint/2.
+        endif
+        ! fraction search space
+        if( str_has_substr(self%refine, 'neigh') )then
+            frac = 100.*real(self%nrefs_eval) / real(self%nnn * neff_states)
+        else if( trim(self%refine).eq.'states' )then
+            frac = 100.*real(self%nrefs_eval) / real(self%nnn) ! 1 state searched
+        else
+            frac = 100.*real(self%nrefs_eval) / real(self%nprojs * neff_states)
+        endif
+        ! set the overlaps
+        call self%a_ptr%set(self%iptcl, 'mi_proj',  mi_proj )
+        call self%a_ptr%set(self%iptcl, 'mi_inpl',  mi_inpl )
+        call self%a_ptr%set(self%iptcl, 'mi_state', mi_state)
+        call self%a_ptr%set(self%iptcl, 'mi_joint', mi_joint)
+        ! set the distances before we update the orientation
+        call self%a_ptr%set(self%iptcl, 'dist', 0.5*euldist + 0.5*self%a_ptr%get(self%iptcl,'dist'))
+        call self%a_ptr%set(self%iptcl, 'dist_inpl', dist_inpl)
+        ! all the other stuff
+        call self%a_ptr%set_euler(self%iptcl, o_peaks(self%iptcl)%get_euler(best_loc(1)))
+        call self%a_ptr%set_shift(self%iptcl, o_peaks(self%iptcl)%get_2Dshift(best_loc(1)))
+        call self%a_ptr%set(self%iptcl, 'state', real(state))
+        call self%a_ptr%set(self%iptcl, 'frac', frac )
+        call self%a_ptr%set(self%iptcl, 'corr', wcorr )
+        call self%a_ptr%set(self%iptcl, 'specscore', self%specscore)
+        call self%a_ptr%set(self%iptcl, 'ow',    o_peaks(self%iptcl)%get(best_loc(1),'ow')   )
+        call self%a_ptr%set(self%iptcl, 'proj',  o_peaks(self%iptcl)%get(best_loc(1),'proj') )
+        call self%a_ptr%set(self%iptcl, 'sdev',  ang_sdev )
+        call self%a_ptr%set(self%iptcl, 'npeaks', real(self%npeaks_eff) )
+        if( DEBUG ) print *,  '>>> PRIME3D_SRCH::EXECUTED PREP_NPEAKS_ORIS'
     end subroutine prep_npeaks_oris_and_weights
 
     subroutine store_solution( self, ind, ref, inpl_ind, corr )
