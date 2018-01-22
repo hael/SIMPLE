@@ -3591,7 +3591,6 @@ contains
         class(lbfgsb_opt), intent(inout) :: self !< instance
         if( self%exists )then
             deallocate(self%iwa, self%l, self%u, self%g, self%wa )
-            !!!!!!!!!!!!!!!!!!!!!!!!1 deallocate here
             self%exists = .false.
         endif
     end subroutine kill_lbfgsb_opt
