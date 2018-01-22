@@ -223,7 +223,7 @@ contains
         call chdict%push('smpd',          'sampling distance, same as EMANs apix(in A)')
         call chdict%push('snr',           'signal-to-noise ratio')
         call chdict%push('soften',        'soften envelope with cosine edge(yes|no){no}')
-        call chdict%push('speckind',      'power spectrum kind(amp|square|phase|real|log|sqrt){sqrt}')
+        call chdict%push('speckind',      'power spectrum kind(real|power|sqrt|log|phase){sqrt}')
         call chdict%push('startit',       'start iterating from here')
         call chdict%push('state',         'state to extract')
         call chdict%push('state2split',   'state group to split')

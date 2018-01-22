@@ -7,30 +7,35 @@ use simple_de_opt,      only: de_opt
 use simple_simplex_opt, only: simplex_opt
 implicit none
 
-public :: ctffit_init, ctffit_srch, ctffit_kill
+public :: ctffit_init, ctffit_srch, ctffit_validate, ctffit_kill
 private
 
-type(image)          :: pspec_ref               ! micrograph powerspec
-type(image)          :: pspec_ctf               ! CTF powerspec
-type(image)          :: imgmsk                  ! mask image
-type(ctf)            :: tfun                    ! transfer function object
-type(opt_spec)       :: ospec_de                ! optimiser specification differential evolution (DE)
-type(opt_spec)       :: ospec_simplex           ! optimiser specification Nelder-Mead (N-M)
-type(de_opt)         :: diffevol                ! DE search object
-type(simplex_opt)    :: simplexsrch             ! N-M search object
-logical, allocatable :: cc_msk(:,:,:)           ! corr mask
-logical              :: l_phaseplate = .false.  ! Volta phase-plate flag
-integer              :: ndim         = 3        ! # optimisation dims
-integer              :: ldim(3)      = [0,0,0]  ! logical dimension of powerspec
-real                 :: df_min       = 0.5      ! close 2 focus limit
-real                 :: df_max       = 5.0      ! far from focus limit
-real                 :: hp           = 30.0     ! high-pass limit
-real                 :: lp           = 5.0      ! low-pass limit
-real                 :: sxx          = 0.       ! memoized corr term
+type(image)           :: pspec_ref               ! micrograph powerspec
+type(image)           :: pspec_ctf               ! CTF powerspec
+type(image)           :: imgmsk                  ! mask image
+type(ctf)             :: tfun                    ! transfer function object
+type(opt_spec)        :: ospec_de                ! optimiser specification differential evolution (DE)
+type(opt_spec)        :: ospec_simplex           ! optimiser specification Nelder-Mead (N-M)
+type(de_opt)          :: diffevol                ! DE search object
+type(simplex_opt)     :: simplexsrch             ! N-M search object
+logical, allocatable  :: cc_msk(:,:,:)           ! corr mask
+logical               :: l_phaseplate = .false.  ! Volta phase-plate flag
+integer               :: ndim         = 3        ! # optimisation dims
+integer               :: ldim(3)      = [0,0,0]  ! logical dimension of powerspec
+real                  :: df_min       = 0.5      ! close 2 focus limit
+real                  :: df_max       = 5.0      ! far from focus limit
+real                  :: hp           = 30.0     ! high-pass limit
+real                  :: lp           = 5.0      ! low-pass limit
+real                  :: sxx          = 0.       ! memoized corr term
+real                  :: fny                     ! Nyqvist frequency
+real                  :: dfx_glob                ! dfx,     global
+real                  :: dfy_glob                ! dfy,     global
+real                  :: angast_glob             ! angast,  global
+real                  :: phshift_glob            ! phshift, global
 
 contains
 
-  	subroutine ctffit_init( pspec, smpd, kV, Cs, amp_contr, dfrange, resrange, phaseplate )
+    subroutine ctffit_init( pspec, smpd, kV, Cs, amp_contr, dfrange, resrange, phaseplate )
         class(image),     intent(in) :: pspec       !< powerspectrum
         real,             intent(in) :: smpd        !< sampling distance
         real,             intent(in) :: kV          !< acceleration voltage
@@ -47,12 +52,12 @@ contains
         else
             stop 'invalid defocus range; simple_ctffit :: new'
         endif
-      	if( resrange(1) > resrange(2) )then
+        if( resrange(1) > resrange(2) )then
             hp = resrange(1)
             lp = resrange(2)
-      	else
+        else
             stop 'invalid resolution range; simple_ctffit :: new'
-      	endif
+        endif
         select case(trim(phaseplate))
             case('yes')
                 l_phaseplate = .true.
@@ -63,6 +68,7 @@ contains
         end select
         ! construct CTF object
         tfun = ctf(smpd, kV, Cs, amp_contr)
+        fny  = smpd * 2
         ! prepare powerspectra
         pspec_ref = pspec
         ldim = pspec_ref%get_ldim()
@@ -97,15 +103,15 @@ contains
         endif
         call diffevol%new(ospec_de)
         call simplexsrch%new(ospec_de)
-  	end subroutine ctffit_init
+    end subroutine ctffit_init
 
-  	subroutine ctffit_srch( dfx, dfy, angast, phshift, cc, ctfres, diagfname )
-        real,             intent(out) :: dfx, dfy, angast, phshift, cc, ctfres
+    subroutine ctffit_srch( dfx, dfy, angast, phshift, cc, diagfname )
+        real,             intent(out) :: dfx, dfy, angast, phshift, cc
         character(len=*), intent(in)  :: diagfname
         real              :: cost, df, df_step, cost_lowest, dfstep
         real, allocatable :: frc(:)
         type(image)       :: pspec_half_n_half
-        integer           :: find, hpind, nyq
+        integer           :: find, hpind, nyq, k
         class(*), pointer :: fun_self => null()
         dfstep = (df_max - df_min) / 100.
         if( l_phaseplate )then
@@ -152,27 +158,50 @@ contains
         cc      = -cost
         phshift = 0.
         if( l_phaseplate ) phshift = ospec_simplex%x(4)
-        ! calculate CTFres diagnostic
-        call tfun%ctf2pspecimg(pspec_ctf, dfx, dfy, angast, phshift)
-        ! always normalise before FRC calc
+        dfx_glob     = dfx
+        dfy_glob     = dfy
+        angast_glob  = angast
+        phshift_glob = phshift
+        ! make a half-n-half diagnostic
         call pspec_ctf%norm
         call pspec_ref%norm
-        ! mask with inner mask @ hp limit and outer mask @ Nyqvist
-        hpind = pspec_ref%get_find(hp)
-        nyq   = pspec_ref%get_filtsz()
-        call pspec_ctf%mask(real(nyq), 'soft', real(hpind))
-        call pspec_ref%mask(real(nyq), 'soft', real(hpind))
-        ! ctfres statistic
-        allocate(frc(nyq))
-        call pspec_ctf%frc_pspec(pspec_ref, frc)
-        find   = get_lplim_at_corr(frc, 0.5, startind=hpind)
-        ctfres = pspec_ctf%get_lp(find)
-        ! make a half-n-half diagnostic
         call pspec_ctf%mul(imgmsk)
+        call pspec_ref%mul(imgmsk)
         pspec_half_n_half = pspec_ref%before_after(pspec_ctf)
         call pspec_half_n_half%write(trim(diagfname), 1)
         call pspec_half_n_half%kill
-  	end subroutine ctffit_srch
+    end subroutine ctffit_srch
+
+    subroutine ctffit_validate( even_imgs, odd_imgs, ccvalid )
+        class(image), intent(inout) :: even_imgs(:), odd_imgs(:)
+        real,         intent(out)   :: ccvalid
+        real, allocatable :: corrs(:), res(:)
+        type(image) :: even_sum, odd_sum, tmp
+        integer     :: filtsz, ldim(3), i, neven, nodd
+        real        :: smpd
+        neven = size(even_imgs)
+        nodd  = size(odd_imgs)
+        ldim  = even_imgs(1)%get_ldim()
+        smpd  = even_imgs(1)%get_smpd()
+        call even_sum%new(ldim, smpd)
+        call odd_sum%new(ldim, smpd)
+        ! calculate even power-spectrum without applying phase flipping
+        do i=1,neven
+            call even_imgs(i)%fwd_ft
+            call even_imgs(i)%ft2img('sqrt', tmp)
+            call even_sum%add(tmp)
+        end do
+        ! calculate odd power-spectrum applying phase flipping with the estimated CTF params
+        do i=1,nodd
+            call tfun%apply(odd_imgs(i), dfx_glob, 'flip', dfy_glob, angast_glob, phshift_glob)
+            call odd_imgs(i)%ft2img('sqrt', tmp)
+            call odd_sum%add(tmp)
+        end do
+        ! calculate correlation for validation of both image quality and CTF fit
+        call even_sum%norm
+        call odd_sum%norm
+        ccvalid = even_sum%real_corr(odd_sum, cc_msk)
+    end subroutine ctffit_validate
 
     ! cost function is real-space correlation within resolution mask between the CTF
     ! powerspectrum (the model) and the pre-processed micrograph powerspectrum (the data)
@@ -183,7 +212,7 @@ contains
         real                    :: cost
         call tfun%ctf2pspecimg(pspec_ctf, vec(1), vec(2), rad2deg(vec(3)))
         cost = -pspec_ref%real_corr_prenorm(pspec_ctf, sxx, cc_msk)
-  	end function ctffit_cost
+    end function ctffit_cost
 
     ! cost function is real-space correlation within resolution mask between the CTF
     ! powerspectrum (the model) and the pre-processed micrograph powerspectrum (the data)

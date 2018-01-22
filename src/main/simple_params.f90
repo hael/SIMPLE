@@ -159,7 +159,7 @@ type :: params
     character(len=STDLEN) :: refs=''              !< initial2Dreferences.ext
     character(len=STDLEN) :: refs_even=''
     character(len=STDLEN) :: refs_odd=''
-    character(len=STDLEN) :: speckind='sqrt'      !< power spectrum kind(amp|square|phase|real|log|sqrt){sqrt}
+    character(len=STDLEN) :: speckind='sqrt'      !< power spectrum kind(real|power|sqrt|log|phase){sqrt}
     character(len=STDLEN) :: split_mode='even'
     character(len=STDLEN) :: stk_part=''
     character(len=STDLEN) :: stk=''               !< particle stack with all images(ptcls.ext)

@@ -1,5 +1,5 @@
 ! defines the Contrast Transfer Function (CTF) of the electron microscope
-! based on a class used in CTFFIND4, developed by Alexis Rohou and Nikolaus 
+! based on a class used in CTFFIND4, developed by Alexis Rohou and Nikolaus
 ! Grigorieff at Janelia Farm. The below copyright statement therefore
 ! needs to be included here:
 ! Copyright 2014 Howard Hughes Medical Institute
@@ -284,7 +284,7 @@ contains
                 spaFreqSq = hinv * hinv + kinv * kinv
                 ang       = atan2(real(k),real(h))
                 tval      = self%eval(spaFreqSq, ang, aadd_phshift)
-                tval      = sqrt(min(1.,max(tval**2.,0.001)))
+                tval      = sqrt(min(1.,max(tval * tval,0.001)))
                 call img%set(inds, tval)
             end do
         end do
@@ -488,17 +488,17 @@ contains
         real,       allocatable :: tvals_old(:,:), tvals_new(:,:)
         integer                 :: itst
         integer(timer_int_kind) :: tctf
-         ! test:            1 err    :    0.00000000    
-         ! test:            2 err    :    0.00000000    
-         ! test:            3 err    :    0.00000000    
-         ! test:            4 err    :    0.00000000    
-         ! test:            5 err    :    0.00000000    
-         ! test:            6 err    :    0.00000000    
-         ! test:            7 err    :    0.00000000    
-         ! test:            8 err    :    0.00000000    
-         ! test:            9 err    :    0.00000000    
-         ! test:           10 err    :    0.00000000    
-         ! err    :    0.00000000    
+         ! test:            1 err    :    0.00000000
+         ! test:            2 err    :    0.00000000
+         ! test:            3 err    :    0.00000000
+         ! test:            4 err    :    0.00000000
+         ! test:            5 err    :    0.00000000
+         ! test:            6 err    :    0.00000000
+         ! test:            7 err    :    0.00000000
+         ! test:            8 err    :    0.00000000
+         ! test:            9 err    :    0.00000000
+         ! test:           10 err    :    0.00000000
+         ! err    :    0.00000000
          ! time(s):   0.33581284400000000
         tctf   = tic()
         err = 0.
@@ -596,4 +596,3 @@ contains
 
 
 end module simple_ctf
-

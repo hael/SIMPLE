@@ -21,8 +21,8 @@ type :: eo_reconstructor
     type(reconstructor):: eosum
     type(masker)       :: envmask
     character(len=4)   :: ext
-    real               :: fsc05          !< target resolution at FSC=0.5
-    real               :: fsc0143        !< target resolution at FSC=0.143
+    real               :: res_fsc05          !< target resolution at FSC=0.5
+    real               :: res_fsc0143        !< target resolution at FSC=0.143
     real               :: smpd, msk, fny, inner=0., width=10.
     integer            :: box=0, nstates=1, numlen=2
     integer            :: cyc_lims(3,2)  = 0 !< redundant limits
@@ -78,7 +78,7 @@ contains
     subroutine new(self, p )
         class(eo_reconstructor), intent(inout) :: self !< instance
         class(params), target,   intent(in)    :: p    !< parameters object (provides constants)
-        logical     :: neg  
+        logical     :: neg
         call self%kill
         ! set constants
         neg = .false.
@@ -174,13 +174,13 @@ contains
     end function get_kbwin
 
     !> \brief  for getting the resolution
-    !> \param fsc05  target resolution a FSC=0.5
-    !> \param fsc0143  target resolution a FSC=0.143
-    subroutine get_res( self, fsc05, fsc0143 )
+    !> \param res_fsc05  target resolution a FSC=0.5
+    !> \param res_fsc0143  target resolution a FSC=0.143
+    subroutine get_res( self, res_fsc05, res_fsc0143 )
         class(eo_reconstructor), intent(in)  :: self !< instance
-        real,                    intent(out) :: fsc05, fsc0143
-        fsc0143 = self%fsc0143
-        fsc05   = self%fsc05
+        real,                    intent(out) :: res_fsc05, res_fsc0143
+        res_fsc0143 = self%res_fsc0143
+        res_fsc05   = self%res_fsc05
     end subroutine get_res
 
     ! I/O
@@ -363,10 +363,10 @@ contains
         else
             ! spherical masking
             if( self%inner > 1. )then
-                call even%mask(self%msk, 'soft', inner=self%inner, width=self%width) 
+                call even%mask(self%msk, 'soft', inner=self%inner, width=self%width)
                 call odd%mask(self%msk, 'soft', inner=self%inner, width=self%width)
             else
-                call even%mask(self%msk, 'soft') 
+                call even%mask(self%msk, 'soft')
                 call odd%mask(self%msk, 'soft')
             endif
         endif
@@ -384,11 +384,11 @@ contains
         end do
         ! save, get & print resolution
         call arr2file(corrs, 'fsc_state'//int2str_pad(state,2)//'.bin')
-        call get_resolution(corrs, res, self%fsc05, self%fsc0143)
-        self%fsc05   = max(self%fsc05,self%fny)
-        self%fsc0143 = max(self%fsc0143,self%fny)
-        write(*,'(A,1X,F6.2)') '>>> RESOLUTION AT FSC=0.500 DETERMINED TO:', self%fsc05
-        write(*,'(A,1X,F6.2)') '>>> RESOLUTION AT FSC=0.143 DETERMINED TO:', self%fsc0143
+        call get_resolution(corrs, res, self%res_fsc05, self%res_fsc0143)
+        self%res_fsc05   = max(self%res_fsc05,self%fny)
+        self%res_fsc0143 = max(self%res_fsc0143,self%fny)
+        write(*,'(A,1X,F6.2)') '>>> RESOLUTION AT FSC=0.500 DETERMINED TO:', self%res_fsc05
+        write(*,'(A,1X,F6.2)') '>>> RESOLUTION AT FSC=0.143 DETERMINED TO:', self%res_fsc0143
         ! Fourier index for eo averaging
         find4eoavg = max(K4EOAVGLB,get_lplim_at_corr(corrs, FSC4EOAVG3D))
         find4eoavg = max(find4eoavg, find_plate)
@@ -409,8 +409,8 @@ contains
     end subroutine sampl_dens_correct_sum
 
     ! RECONSTRUCTION
-    
-    !> \brief  for distributed reconstruction of even/odd maps  
+
+    !> \brief  for distributed reconstruction of even/odd maps
     subroutine eorec_distr( self, p, o, se, state, vol, fbody )
         use simple_oris,       only: oris
         use simple_sym,        only: sym
@@ -511,7 +511,7 @@ contains
                     call self%grid_fplane(se, orientation, img_pad, eo, pw)
                  endif
             end subroutine rec_dens
-            
+
     end subroutine eorec_distr
 
     ! DESTRUCTORS
@@ -543,4 +543,4 @@ contains
         endif
     end subroutine kill
 
-end module simple_eo_reconstructor  
+end module simple_eo_reconstructor

@@ -355,9 +355,9 @@ select case(prg)
         if( describe ) call print_doc_ctffit
         call cline%parse(keys_required(:6), keys_optional(:7))
         ! set defaults
-        if( .not. cline%defined('pspecsz') ) call cline%set('pspecsz', 512.)
-        if( .not. cline%defined('hp')      ) call cline%set('hp',       30.)
-        if( .not. cline%defined('lp')      ) call cline%set('lp',        5.)
+        if( .not. cline%defined('pspecsz') ) call cline%set('pspecsz',   512.)
+        if( .not. cline%defined('hp')      ) call cline%set('hp',         30.)
+        if( .not. cline%defined('lp')      ) call cline%set('lp',          5.)
         ! execute
         call xctffit_distr%execute(cline)
 

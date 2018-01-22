@@ -41,6 +41,7 @@ type :: image
     procedure          :: ring
     procedure          :: copy
     procedure          :: mic2spec
+    procedure          :: mic2eoimgs
     procedure          :: boxconv
     procedure          :: window
     procedure          :: window_slim
@@ -496,14 +497,14 @@ contains
     !!
     function mic2spec( self, box, speckind ) result( img_out )
         class(image),     intent(inout) :: self
-        integer,          intent(in)    :: box  !< boxwidth filter size
+        integer,          intent(in)    :: box
         character(len=*), intent(in)    :: speckind
         type(image) :: img_out, tmp, tmp2
         integer     :: xind, yind, cnt
         logical     :: didft
         if( self%ldim(3) /= 1 ) stop 'only for 2D images; mic2spec; simple_image'
         if( self%ldim(1) <= box .or. self%ldim(2) <= box )then
-            stop 'cannot boxconvolute using a box larger than the image; mic2spec; simple_image'
+            stop 'cannot use a box larger than the image; mic2spec; simple_image'
         endif
         didft = .false.
         if( self%ft )then
@@ -516,6 +517,7 @@ contains
             do yind=0,self%ldim(2)-box,box/2
                 call self%window([xind,yind],box,tmp)
                 call tmp%norm
+                call tmp%edges_norm
                 call tmp%fwd_ft
                 call tmp%ft2img(speckind, tmp2)
                 call img_out%add(tmp2)
@@ -527,6 +529,79 @@ contains
         call img_out%div(real(cnt))
         if( didft ) call self%fwd_ft
     end function mic2spec
+
+    subroutine mic2eoimgs( self, box, even_imgs, odd_imgs )
+        class(image),              intent(inout) :: self
+        integer,                   intent(in)    :: box
+        class(image), allocatable, intent(out)   :: even_imgs(:), odd_imgs(:)
+        integer :: xind, yind, cnt, neven, nodd, i, sz
+        logical :: didft
+        if( self%ldim(3) /= 1 ) stop 'only for 2D images; mic2eoimgs; simple_image'
+        if( self%ldim(1) <= box .or. self%ldim(2) <= box )then
+            stop 'cannot use a box larger than the image; mic2eoimgs; simple_image'
+        endif
+        didft = .false.
+        if( self%ft )then
+            call self%bwd_ft
+            didft = .true.
+        endif
+        ! count # odds & # evens
+        cnt   = 0
+        neven = 0
+        nodd  = 0
+        do xind=0,self%ldim(1)-box,box/2
+            do yind=0,self%ldim(2)-box,box/2
+                cnt = cnt + 1
+                if( mod(cnt,2) == 0 )then
+                    neven = neven + 1
+                else
+                    nodd = nodd + 1
+                endif
+            end do
+        end do
+        ! check allocations
+        if( allocated(even_imgs) )then
+            sz = size(even_imgs)
+            if( sz /= neven )then
+                do i=1,sz
+                    call even_imgs(i)%kill
+                end do
+                deallocate(even_imgs)
+            endif
+        endif
+        if( allocated(odd_imgs) )then
+            sz = size(odd_imgs)
+            if( sz /= nodd )then
+                do i=1,sz
+                    call odd_imgs(i)%kill
+                end do
+                deallocate(odd_imgs)
+            endif
+        endif
+        ! allocate if needed
+        if( .not. allocated(even_imgs) ) allocate( even_imgs(neven) )
+        if( .not. allocated(odd_imgs)  ) allocate( odd_imgs(nodd)  )
+        ! extract
+        cnt   = 0
+        neven = 0
+        nodd  = 0
+        do xind=0,self%ldim(1)-box,box/2
+            do yind=0,self%ldim(2)-box,box/2
+                cnt = cnt + 1
+                if( mod(cnt,2) == 0 )then
+                    neven = neven + 1
+                    call self%window([xind,yind],box,even_imgs(neven))
+                    call even_imgs(neven)%norm
+                    call even_imgs(neven)%edges_norm
+                else
+                    nodd = nodd + 1
+                    call self%window([xind,yind],box,odd_imgs(nodd))
+                    call odd_imgs(nodd)%norm
+                    call odd_imgs(nodd)%edges_norm
+                endif
+            end do
+        end do
+    end subroutine mic2eoimgs
 
     function boxconv( self, box ) result( img_out )
         class(image), intent(inout) :: self
@@ -3408,6 +3483,30 @@ contains
                         end do
                     end do
                 end do
+            case('sqrt')
+                do h=lims(1,1),lims(1,2)
+                    do k=lims(2,1),lims(2,2)
+                        do l=lims(3,1),lims(3,2)
+                            phys = self%fit%comp_addr_phys([h,k,l])
+                            sh = nint(hyp(real(h),real(k),real(l)))
+                            if( sh == 0 .or. sh > lfny ) cycle
+                            spec(sh) = spec(sh) + sqrt(csq(self%cmat(phys(1),phys(2),phys(3))))
+                            counts(sh) = counts(sh) + 1.
+                        end do
+                    end do
+                end do
+            case('log')
+                do h=lims(1,1),lims(1,2)
+                    do k=lims(2,1),lims(2,2)
+                        do l=lims(3,1),lims(3,2)
+                            phys = self%fit%comp_addr_phys([h,k,l])
+                            sh = nint(hyp(real(h),real(k),real(l)))
+                            if( sh == 0 .or. sh > lfny ) cycle
+                            spec(sh) = spec(sh) + log(csq(self%cmat(phys(1),phys(2),phys(3))))
+                            counts(sh) = counts(sh) + 1.
+                        end do
+                    end do
+                end do
             case('absreal')
                 do h=lims(1,1),lims(1,2)
                     do k=lims(2,1),lims(2,2)
@@ -5680,18 +5779,16 @@ contains
                     inds(2) = min(max(1,k+mk+1),self%ldim(2))
                     inds(3) = min(max(1,l+ml+1),self%ldim(3))
                     select case(which)
-                        case ('amp')
-                            call img%set(inds,cabs(comp))
-                        case('square')
-                            call img%set(inds,cabs(comp)**2.)
+                        case ('real')
+                            call img%set(inds,real(comp))
+                        case('power')
+                            call img%set(inds,csq(comp))
+                        case('sqrt')
+                            call img%set(inds,sqrt(csq(comp)))
+                        case ('log')
+                            call img%set(inds,log(csq(comp)))
                         case('phase')
                             call img%set(inds,phase_angle(comp))
-                        case('real')
-                            call img%set(inds,real(comp))
-                        case ('log')
-                            call img%set(inds,log10(cabs(comp)))
-                        case ('sqrt')
-                            call img%set(inds,sqrt(cabs(comp)))
                         case DEFAULT
                             write(*,*) 'Usupported mode: ', trim(which)
                             stop 'simple_image :: ft2img'
@@ -5815,19 +5912,15 @@ contains
     subroutine frc_pspec( self1, self2, corrs )
         class(image), intent(inout) :: self1, self2
         real,         intent(out)   :: corrs(fdim(self1%ldim(1))-1)
-        ! integer     :: k, npix
-        ! type(image) :: maskimg
-        ! logical, allocatable :: l_mask(:,:,:)
-        type(image) :: imgft1, imgft2
-        ! corrs = 0.
-        ! do k=1,fdim(self1%ldim(1))-3
-        !     call maskimg%ring(self1%ldim, self1%smpd, real(k+2), real(k-2), npix )
-        !     l_mask = bin2logical(maskimg)
-        !     corrs(k) = self1%real_corr(self2, l_mask)
-        ! end do
-        call self1%img2ft(imgft1)
-        call self2%img2ft(imgft2)
-        call imgft1%fsc(imgft2, corrs)
+        integer     :: k, npix
+        type(image) :: maskimg
+        logical, allocatable :: l_mask(:,:,:)
+        corrs = 0.
+        do k=1,fdim(self1%ldim(1))-3
+            call maskimg%ring(self1%ldim, self1%smpd, real(k+2), real(k-2), npix )
+            l_mask = bin2logical(maskimg)
+            corrs(k) = self1%real_corr(self2, l_mask)
+        end do
     end subroutine frc_pspec
 
     !>  \brief  an image shifter to prepare for Fourier transformation
