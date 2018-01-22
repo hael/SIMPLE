@@ -120,6 +120,9 @@ function viewOutput(element){
 		mainpaneiframe.src = "particleview.html?folder=" + element.getAttribute('data-jobfolder');
 	}else if (element.getAttribute('data-jobtype') == "prime3D"){
 		mainpaneiframe.src = "3dview.html?folder=" + element.getAttribute('data-jobfolder');
+	}else if (element.getAttribute('data-jobtype') == "ini3D"){
+		console.log("JILJ");
+		mainpaneiframe.src = "ini3dview.html?folder=" + element.getAttribute('data-jobfolder');
 	}
 }
 

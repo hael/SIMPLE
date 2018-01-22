@@ -2415,17 +2415,21 @@ void viewPrime3D(JSONResponse* response, struct http_message* message) {
 	std::string 							iteration;
 	std::string 							fsc50;
 	std::string 							fsc143;
+	std::string								currentvol;
 	std::vector<std::string>				files;
 	int										filesit;
 	std::ifstream 							input;
 	std::map<std::string, std::string>		iterationmap;
+	MRCFile*								frames;
+	int										framecount;
+	std::string 							thumbnails;
+	int										count;
 	
 	if (getRequestVariable(message, "folder", directory)){
 		listFilesInDirectory(files, directory);
 		for(filesit = 0; filesit < files.size(); filesit++){
 			if(files[filesit].find("RESOLUTION_STATE") != std::string::npos){
 				filename = directory + "/" + files[filesit];
-				std::cout << filename << std::endl;
 				input.open(filename.c_str());
 				while(getline(input, line)){
 					if(line.find("FSC=0.500") != std::string::npos){
@@ -2452,6 +2456,26 @@ void viewPrime3D(JSONResponse* response, struct http_message* message) {
 				response->iterations.push_back(iterationmap);
 			}
 		}
+		response->newformat["rootdir"] = "\"" + directory + "\""; 
+		currentvol = "recvol_state01_iter" + zeroPadNumber(response->iterations.size() - 1) + ".mrc";
+		std::cout << currentvol << std::endl;
+		response->newformat["viewtype"] = "\"prime3D\"";
+		response->newformat["targetflags"] = "[ {\"id\":\"slices\", \"contrast\" : \"6\", \"brightness\" : \"128\", \"scale\" : \"1\", \"zoom\" : \"1\"}]";
+		response->newformat["sourcefiles"] = "[\"" + currentvol + "\"]";
+		frames = new MRCFile();
+		readMRCFrame(frames, directory + "/" + currentvol, 0);
+		delete [] frames->data;
+		framecount = frames->nz;
+		delete frames; 
+		thumbnails = "[";
+		for(count = 0; count < framecount; count++){
+			thumbnails += "[";
+			thumbnails += "{ \"targetflag\": \"0\", \"sourcefile\": \"0\", \"image\": \""+ std::to_string(count) +"\"}";
+			thumbnails += "],";
+		}
+		thumbnails.pop_back();
+		thumbnails += "]";
+		response->newformat["thumbnails"] = thumbnails;
 	}
 }
 
@@ -3685,7 +3709,7 @@ void encodeJSON(JSONResponse* response){
 	}	
 	
 	if (response->newformat.size() > 0) {
-		response->JSONstring = "{";
+		//response->JSONstring = "{";
 		for (mapit=response->newformat.begin(); mapit!=response->newformat.end(); ++mapit){
 				response->JSONstring += "\"" + mapit->first + "\" : " + mapit->second + ",";
 		}

@@ -16,31 +16,12 @@
 	.header {
 		height: 40px;
 		padding: 5px;
-		padding-left: 30px;
 		}
 		
-	.headermenu,.headertitle{
+	.headertitle{
 		display: inline-block;
 		}
-			
-	
-	.headermenuelements {
-		width: 185px;
-		text-align: left;
-		padding: 5px;
-		display: none;
-		position: absolute;
-		background-color: #d7d7d7;
-		font-size: 12px;
-		left: 40px;
-		top: 20px;
-		z-index: 101;
-		}
-
-	.headermenu div:hover{
-		background-color: #acb2ba;
-		}
-		
+				
 	.simpleicon{
 		height: 20px;
 		}
@@ -55,52 +36,136 @@
 		background-color: white;
 		}
 		
+	.thumbnails{
+		width: calc(100vw - 50px);
+		}	
+		
 	.thumbnail{
 		display: inline-block;
 		margin: 5px;
 		}
 			
 	.thumbnailimage{
-		margin: 2px;
 		width:	100px;
 		height:	100px;
-		}	
+		}
+			
+	.thumbnailimagecontainer {
+		overflow: hidden;
+		}
 		
-	 #viewcontrols {
+	.sidemenutabs {
+		position: fixed;
+		right: 10px;
+		top: 80px;
+	}
+	
+	.sidemenutab {
+		transform: rotate(-90deg);
+		background-color: #7891b0;
 		border-style: solid;
 		border-width: 1px;
-		width: 300px;
-		height: 300px;
-		top: calc(50vh - 150px);
-		left: calc(50vw - 150px);
-	 }
-		
+		border-color: #7891b0;
+		padding: 5px;
+		color: white;
+	}
 	
-		
+	.sidemenutabselected {
+		transform: rotate(-90deg);
+		background-color: white;
+		border-style: solid;
+		border-width: 1px;
+		border-color: #7891b0;
+		padding: 5px;
+		color: #7891b0;
+	}
+	
+	.sidemenutab:hover {
+		background-color: grey;
+		color: white;
+	}
+	
+	.sidemenudisplay {
+		position: fixed;
+		right: 52px;
+		top: 80px;
+		width: 320px;
+		background-color: white;
+		border-style: solid;
+		border-width: 1px;
+		border-color: #7891b0;
+		display: none;
+	}
+	
+	.sidemenudisplay div{
+		padding: 10px;
+	}
+	
+	.sidemenudisplay input{
+		width: 150px;
+		right: 20px;
+		position: absolute;
+	}
+	
+	.sidemenudisplay select{
+		width: 150px;
+		right: 30px;
+		position: absolute;
+		background-color: white;
+		border-style: solid;
+		border-color: #7891b0;
+		border-width: 1px;
+	}
+	
+	.sidemenudisplay button{
+		background-color: #7891b0;
+		border-style: solid;
+		border-width: 1px;
+		border-color: #7891b0;
+		padding: 5px;
+		color: white;
+		width: 150px;
+		margin: auto;
+		display: flex;
+		margin-bottom: 10px;
+	}
+	
+	.sidemenudisplay button:hover{
+		background-color: grey;
+		color: white;
+	}
+	
+	.optiondiv {
+		border-style: solid;
+		border-width: 1px;
+		border-color: #7891b0;
+		margin: 10px;
+	}
+	
+			
 </style>
  </head>
  <body>
 	 
   <div class=header>
-	<div class=headermenu id=headermenu onclick=''>
-		<img class=simpleicon src=img/simple_favicon.ico onclick="showHeaderMenu()" >
-		<div class=headermenuelements id=headermenuelements></div>
-	</div>  
+	<img class=simpleicon src=img/simple_favicon.ico onclick="showHeaderMenu()" > 
 	<div class=headertitle>
 		<div class=subtitle id=bodysubtitle></div>
 		<div class=title id=bodytitle></div>
 	</div>
-	<img src=img/close.png class=closeicon onclick=''>
+	<img src=img/close.png class=closeicon onclick='parent.document.getElementById("mainpaneiframe").src = "projecthistory.html"'>
   </div>
-  
+  <div class=sidemenutabs id=sidemenutabs></div>
+  <div class=sidemenudisplay id=sidemenudisplay></div>
+  </div>
   <div class=mainpane id=mainpane></div>
-	
   <div class=gauze id=gauze></div>
  
   <script>
 	
   var sourcefiles;
   var targetflags;
+  var targetscale;
   var rootdir;
   var loadqueue;
 	  
@@ -115,48 +180,38 @@
 		xhr.send();
 	}
 	  
-  function showHeaderMenu(){
-	  document.getElementById('headermenuelements').style.display = "block";
-  }
-  
-  function hideHeaderMenu(){
-	  document.getElementById('headermenuelements').style.display = "none";
-  }
-  
-  function clearHeaderMenu(){
-	  document.getElementById('headermenuelements').innerHTML = "";
-  }
-  
-  function addHeaderMenuElement(elementName, elementFunction){
+  function addSideMenuTab(elementName, elementFunction){
 	  var div = document.createElement("div");
-	  div.className = "headermenuelement";
+	  div.className = "sidemenutab";
 	  div.innerHTML = elementName;
-	  div.onclick = elementFunction;
-	  document.getElementById('headermenuelements').appendChild(div);
+	  div.onclick = function(){
+		    var sidemenudisplay = document.getElementById('sidemenudisplay');
+			if(this.className == "sidemenutabselected"){
+				this.className = "sidemenutab";
+				sidemenudisplay.innerHTML = "";
+				sidemenudisplay.style.display = "none";
+			} else {
+				this.className = "sidemenutabselected";
+				sidemenudisplay.style.display = "block";
+				elementFunction();
+				
+			}
+		}
+	  document.getElementById('sidemenutabs').appendChild(div);
   }
   
-  function createPopup() {
-	  var popup = document.createElement("div");
+  function createSideMenuDisplay(title) {
+	  var sidemenudisplay = document.getElementById('sidemenudisplay');
+	  sidemenudisplay.innerHTML = "";
 	  var header = document.createElement("div");
-	  var headertitle = document.createElement("div");
-	  var popuptitle = document.createElement("div");
 	  var simpleicon = document.createElement("img");
-	  var closeicon = document.createElement("img");
-	  popup.className = "popup";
-	  header.className = "header popupheader";
-	  headertitle.className = "headertitle";
-	  popuptitle.className = "title";
+	  header.className = "sidemenuheader";
 	  simpleicon.className = "simpleicon";
-	  closeicon.className = "closeicon";
 	  simpleicon.src = 'img/simple_favicon.ico';
-	  closeicon.src = 'img/close.png';
-	  closeicon.onclick = function(){popup.remove()};
-	  headertitle.appendChild(popuptitle);
 	  header.appendChild(simpleicon);
-	  header.appendChild(headertitle);
-	  header.appendChild(closeicon);
-	  popup.appendChild(header);
-	  return popup;
+	  header.innerHTML += title;
+	  sidemenudisplay.appendChild(header);
+	  return sidemenudisplay;
   }
   
   function createInput(type, label, id, minimum, maximum, step){
@@ -167,6 +222,7 @@
 	  input.type = type;
 	  input.min = minimum;
 	  input.max = maximum;
+	  input.step = step;
 	  div.innerHTML = label;
 	  div.appendChild(input);
 	  div.appendChild(helpicon);
@@ -200,11 +256,13 @@
   
   function createThumbnails(thumbnails){
 	  var div = document.createElement("div");
+	  div.className = "thumbnails";
 	  for(var i = 0; i < thumbnails.length ; i++){
 		var thumbnail = document.createElement("div");
 		thumbnail.className = "thumbnail";
 		for(var j = 0; j < thumbnails[i].length; j++){
 			var imagediv = document.createElement("div");
+			imagediv.className = "thumbnailimagecontainer";
 			var image = document.createElement("img");
 			image.className = "thumbnailimage";
 			image.alt = "Loading ...";
@@ -220,57 +278,27 @@
 	 return div;
   }
   
-  function dragPopup(popup, elmnt) {
-	  
-	var pos1 = 0, pos2 = 0, pos3 = 0, pos4 = 0;
-	
-    elmnt.onmousedown = dragMouseDown;
-
-	function dragMouseDown(e) {
-		e = e || window.event;
-		pos3 = e.clientX;
-		pos4 = e.clientY;
-		document.onmouseup = closeDragElement;
-		document.onmousemove = elementDrag;
-	}
-
-	function elementDrag(e) {
-		e = e || window.event;
-		pos1 = pos3 - e.clientX;
-		pos2 = pos4 - e.clientY;
-		pos3 = e.clientX;
-		pos4 = e.clientY;
-		popup.style.top = (popup.offsetTop - pos2) + "px";
-		popup.style.left = (popup.offsetLeft - pos1) + "px";
-	  }
-
-    function closeDragElement() {
-		document.onmouseup = null;
-		document.onmousemove = null;
-	}
-}
-  
   function showViewControls(){
-	 hideHeaderMenu();
-	 var popup = createPopup();
-	 popup.id = "viewcontrols";
-	 popup.getElementsByClassName('title')[0].innerHTML = "View Controls";
+	 var display = createSideMenuDisplay("View Controls");
+	 var optiondiv = document.createElement("div");
+	 optiondiv.className = "optiondiv";
 	 if(targetflags.length > 0){
 		var select = createSelect("Target", "viewcontrolstarget");
 		for(var i = 0; i < targetflags.length; i++){
 			select.getElementsByTagName('select')[0].appendChild(createOption(targetflags[i].id, i)); 
 		}
-		popup.appendChild(select); 
+		optiondiv.appendChild(select); 
 		select.onchange = function(){setViewControls()};
 	 }
 
-	 popup.appendChild(createInput("range", "Contrast", "viewcontrolscontrast", 0.5, 10, 0.5));
-	 popup.appendChild(createInput("range", "Brightness", "viewcontrolsbrightness", 0.5, 256, 0.5));
-	 popup.appendChild(createInput("range", "Scale", "viewcontrolsscale",0.1, 10, 0.1));
-	 popup.appendChild(createInput("range", "Zoom", "viewcontrolszoom", 0.1, 10, 0.1));
-	 popup.appendChild(createButton("Apply", updateViewControls));
-	 dragPopup(popup, popup.getElementsByClassName('title')[0]);
-	 document.body.appendChild(popup); 
+	
+	 optiondiv.appendChild(createInput("range", "Contrast", "viewcontrolscontrast", 0.5, 10, 0.5));
+	 optiondiv.appendChild(createInput("range", "Brightness", "viewcontrolsbrightness", 0.5, 256, 0.5));
+	 optiondiv.appendChild(createInput("range", "Zoom", "viewcontrolszoom", 1, 10, 0.1));
+	 display.appendChild(optiondiv);
+	 display.appendChild(createInput("range", "Scale", "viewcontrolsscale",0.2, 5, 0.1));
+	 display.appendChild(createButton("Apply", updateViewControls));
+	 document.body.appendChild(display); 
 	 setViewControls();
   }
   
@@ -279,8 +307,8 @@
 	 var targetflagid = viewcontrolstarget.options[viewcontrolstarget.selectedIndex].value;
 	 document.getElementById('viewcontrolscontrast').value = targetflags[targetflagid]['contrast'];
 	 document.getElementById('viewcontrolsbrightness').value = targetflags[targetflagid]['brightness'];
-	 document.getElementById('viewcontrolsscale').value = targetflags[targetflagid]['scale'];
 	 document.getElementById('viewcontrolszoom').value = targetflags[targetflagid]['zoom'];
+	 document.getElementById('viewcontrolsscale').value = targetscale;
   }
    
   function updateViewControls(){
@@ -288,8 +316,8 @@
 	 var targetflagid = viewcontrolstarget.options[viewcontrolstarget.selectedIndex].value;
 	 targetflags[targetflagid]['contrast'] = document.getElementById('viewcontrolscontrast').value;
 	 targetflags[targetflagid]['brightness'] = document.getElementById('viewcontrolsbrightness').value;
-	 targetflags[targetflagid]['scale'] = document.getElementById('viewcontrolsscale').value;
 	 targetflags[targetflagid]['zoom'] = document.getElementById('viewcontrolszoom').value;
+	 targetscale = document.getElementById('viewcontrolsscale').value;
 	 setThumbnailSources();
   }
   
@@ -326,10 +354,12 @@
 		  var image = images[i].getAttribute('data-image');
 		  var contrast = targetflags[images[i].getAttribute('data-targetflag')]["contrast"];
 		  var brightness = targetflags[images[i].getAttribute('data-targetflag')]["brightness"];
-		  var scale = targetflags[images[i].getAttribute('data-targetflag')]["scale"];
 		  var zoom = targetflags[images[i].getAttribute('data-targetflag')]["zoom"];
-		  images[i].style.width = 100 * scale + "px";
-		  images[i].style.height = 100 * scale + "px";
+		  images[i].parentElement.style.width = 100 * targetscale + "px";
+		  images[i].parentElement.style.height = 100 * targetscale + "px";
+		  images[i].style.width = 100 * targetscale + "px";
+		  images[i].style.height = 100 * targetscale + "px";
+		  images[i].style.transform = "scale(" + zoom + ")";
 		  images[i].setAttribute('data-src', "JPEGhandler?filename="+ rootdir + "/" + sourcefile + "&contrast=" + contrast + "&brightness=" + brightness + "&frameid=" + image);
 	  }
 	  createLoadQueue();
@@ -339,18 +369,17 @@
 	var JSONdata = JSON.parse(data);
 	sourcefiles = JSONdata.sourcefiles;
 	targetflags = JSONdata.targetflags;
+	targetscale = 1;
 	rootdir = JSONdata.rootdir;
 	document.getElementById('mainpane').innerHTML = "";
 	document.getElementById('bodytitle').innerHTML = "Ini3D View";
-	clearHeaderMenu();
-	addHeaderMenuElement("View Controls", showViewControls);
+	addSideMenuTab("View", showViewControls);
 	document.getElementById('mainpane').appendChild(createThumbnails(JSONdata.thumbnails));
 	setThumbnailSources();
 	document.getElementById('mainpane').addEventListener('scroll', function(){createLoadQueue()});
   }
   
-  getAjax("JSONhandler?function=ini3dview&folder=/tmp/19_ini3D", ini3dViewInit);
-  
+  getAjax("JSONhandler?function=ini3dview&" + window.location.toString().split('?')[1], ini3dViewInit);
   </script>
   
   
