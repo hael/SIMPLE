@@ -684,7 +684,6 @@ contains
             allocate(correlations(nsel,nall), stat=alloc_stat)
             allocchk('In: exec_select; simple_commander_preproc')
             ! read matrix
-
             call fopen(funit, status='OLD', action='READ', file='corrmat_select.bin', access='STREAM', iostat=io_stat)
             call fileio_errmsg('simple_commander_preproc ; fopen error when opening corrmat_select.bin  ', io_stat)
             read(unit=funit,pos=1,iostat=io_stat) correlations
@@ -698,7 +697,6 @@ contains
             write(*,'(a)') '>>> CALCULATING CORRELATIONS'
             call calc_cartesian_corrmat(imgs_sel, imgs_all, correlations)
             ! write matrix
-
             call fopen(funit, status='REPLACE', action='WRITE', file='corrmat_select.bin', access='STREAM', iostat=io_stat)
             call fileio_errmsg('simple_commander_preproc ; error when opening corrmat_select.bin  ', io_stat)
             write(unit=funit,pos=1,iostat=io_stat) correlations

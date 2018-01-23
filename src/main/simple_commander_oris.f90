@@ -522,6 +522,14 @@ contains
             call b%se%symrandomize(b%a)
         endif
         if( cline%defined('nstates') ) call b%a%rnd_states(p%nstates)
+        ! Mirroring
+        if( cline%defined('mirr') )then
+            if( p%mirr.eq.'2d' )then
+                call b%a%mirror2d()
+            else if( p%mirr.eq.'3d' )then
+                call b%a%mirror3d()
+            endif
+        endif
         call binwrite_oritab(p%outfile, b%a, [1,b%a%get_noris()])
         call simple_end('**** SIMPLE_ORISOPS NORMAL STOP ****')
     end subroutine exec_orisops

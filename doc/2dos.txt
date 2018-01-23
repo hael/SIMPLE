@@ -1,6 +1,7 @@
 CTFFIT
 ctfres still needs attention.... 
 
+
 NEW DEVELOPMENTS
 * Need methods for projecting the time of an execution, so that we can display accordingly
 * Edge normalisation on extraction (same as EMAN's edgenorm routine). The average of the

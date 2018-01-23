@@ -177,6 +177,8 @@ type :: oris
     procedure, private :: map3dshift22d_1
     procedure, private :: map3dshift22d_2
     generic            :: map3dshift22d => map3dshift22d_1, map3dshift22d_2
+    procedure          :: mirror2d
+    procedure          :: mirror3d
     procedure          :: add_shift2class
     procedure, nopass  :: corr_oris
     procedure          :: gen_diverse
@@ -3022,6 +3024,28 @@ contains
             call self%o(i)%map3dshift22d(sh3d)
         endif
     end subroutine map3dshift22d_2
+
+    !>  \brief  generates the mirror of the projection
+    !!          can be equivalently accomplished by mirror('y')
+    !!          the image after projection
+    subroutine mirror2d( self )
+        class(oris), intent(inout) :: self
+        integer :: i
+        do i = 1, self%n
+            call self%o(i)%mirror2d()
+        enddo
+    end subroutine mirror2d
+
+    !>  \brief  generates the opposite hand of an Euler angle
+    !!          so that a set of Euler angles transformed by
+    !!          this operation changes the handedness of the volume
+    subroutine mirror3d( self )
+        class(oris), intent(inout) :: self
+        integer :: i
+        do i = 1, self%n
+            call self%o(i)%mirror3d()
+        enddo
+    end subroutine mirror3d
 
     !>  \brief  modulates the shifts (additive) within a class
     subroutine add_shift2class( self, class, sh2d )
