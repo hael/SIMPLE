@@ -506,6 +506,7 @@ contains
         class(cmdline),       intent(inout) :: cline
         ! constants
         integer,            parameter :: MAXITS   = 50
+        character(len=2),   parameter :: one = '01'
         ! distributed commanders
         type(prime3D_distr_commander) :: xprime3D_distr
         type(recvol_distr_commander)  :: xrecvol_distr
@@ -513,7 +514,7 @@ contains
         type(postproc_vol_commander)  :: xpostproc_vol
         ! command lines
         type(cmdline)                 :: cline_prime3D
-        type(cmdline)                 :: cline_recvol_distr
+        type(cmdline)                 :: cline_recvol_distr, cline_recvol_mixed_distr
         type(cmdline)                 :: cline_postproc_vol
         ! other variables
         type(sym)                     :: symop
@@ -528,15 +529,18 @@ contains
         ! sanity check
         if(nint(cline%get_rarg('nstates')) <= 1)&
             &stop 'Non-sensical NSTATES argument for heterogeneity analysis!'
+
         ! make master parameters
         p_master = params(cline)
         if( p_master%eo .eq. 'no' .and. .not. cline%defined('lp') )&
             &stop 'need lp input when eo .eq. no; het'
+
         ! prepare command lines from prototype
         call cline%delete('refine')
-        cline_prime3D      = cline
-        cline_postproc_vol = cline ! eo always eq yes
-        cline_recvol_distr = cline ! eo always eq yes
+        cline_prime3D            = cline
+        cline_postproc_vol       = cline ! eo always eq yes
+        cline_recvol_distr       = cline ! eo always eq yes
+        cline_recvol_mixed_distr = cline ! eo always eq yes
         call cline_prime3D%set('prg', 'prime3D')
         call cline_prime3D%set('maxits', real(MAXITS))
         if( trim(p_master%refine) .eq. 'sym' )then
@@ -548,20 +552,25 @@ contains
         call cline_prime3D%set('pproc', 'no')
         call cline_prime3D%delete('oritab2')
         call cline_recvol_distr%set('prg', 'recvol')
+        call cline_recvol_mixed_distr%set('prg', 'recvol')
         call cline_postproc_vol%set('prg', 'postproc_vol')
         call cline_recvol_distr%delete('lp')
+        call cline_recvol_mixed_distr%delete('lp')
         call cline_postproc_vol%delete('lp')
         call cline_recvol_distr%set('eo','yes')
+        call cline_recvol_mixed_distr%set('eo','yes')
+        call cline_recvol_mixed_distr%set('nstates', 1.)
         call cline_postproc_vol%set('eo','yes')
-        ! works out shift lmits for in-plane search
         if( cline%defined('trs') )then
             ! all good
         else
+            ! works out shift lmits for in-plane search
             trs = MSK_FRAC*real(p_master%msk)
             trs = min(MAXSHIFT, max(MINSHIFT, trs))
             call cline_prime3D%set('trs',trs)
         endif
-        ! generate diverse initial labels
+
+        ! generate diverse initial labels & orientations
         oritab = 'hetdoc_init'//trim(METADATEXT)
         call os%new(p_master%nptcls)
         call binread_oritab(p_master%oritab, os, [1,p_master%nptcls])
@@ -576,6 +585,7 @@ contains
             symop = sym(p_master%pgrp)
             call symop%symrandomize(os)
             call symop%kill
+            call binwrite_oritab(trim('symrnd_'//oritab), os, [1,p_master%nptcls])
         endif
         if( cline%defined('oritab2') )then
             ! this is  to force initialisation (4 testing)
@@ -586,25 +596,44 @@ contains
         else if( .not. cline%defined('startit') )then
             write(*,'(A)') '>>>'
             write(*,'(A)') '>>> GENERATING DIVERSE LABELING'
-            call diverse_labeling(os, p_master%nstates, labels, corr_ranked=.true.)
+            !call diverse_labeling(os, p_master%nstates, labels, corr_ranked=.true.)
+            call diverse_labeling(os, p_master%nstates, labels, corr_ranked=.false.)
             call os%set_all('state', real(labels))
         else
             ! starting from a previous solution
             labels = os%get_all('state')
         endif
+
         ! to accomodate state=0s in oritab input
         included = os%included()
         n_incl   = count(included)
         where( .not. included ) labels = 0
         call os%set_all('state', real(labels))
         call binwrite_oritab(trim(oritab), os, [1,p_master%nptcls])
-        deallocate(labels, included)
         call cline_prime3D%set('oritab', trim(oritab))
+        deallocate(labels, included)
+
+        ! retrieve mixed model FSC & anisotropic filter
+        if( p_master%eo .ne. 'no' )then
+            if( trim(p_master%refine) .eq. 'sym' )then
+                call cline%set('oritab', trim('symrnd_'//oritab))
+                call cline%set('pgrp', 'c1')
+            endif
+            call xrecvol_distr%execute( cline_recvol_mixed_distr )
+            call rename(VOL_FBODY//one//p_master%ext, HET_VOL//p_master%ext)
+            call rename(VOL_FBODY//one//'_even'//p_master%ext, HET_VOL//'_even'//p_master%ext)
+            call rename(VOL_FBODY//one//'_odd'//p_master%ext,  HET_VOL//'_odd'//p_master%ext)
+            call rename(FSC_FBODY//one//BIN_EXT, HET_FSC)
+            call rename(FRCS_FBODY//one//BIN_EXT, HET_FRCS)
+            call rename(ANISOLP_FBODY//one//p_master%ext, HET_ANISOLP//p_master%ext)
+        endif
+
         ! run prime3d
         write(*,'(A)')    '>>>'
         write(*,'(A,I3)') '>>> PRIME3D'
         write(*,'(A)')    '>>>'
         call xprime3D_distr%execute(cline_prime3D)
+
         ! final distributed reconstruction to obtain resolution estimate when eo .eq. 'no'
         if( p_master%eo .eq. 'no' )then
             iter   = nint(cline_prime3D%get_rarg('endit'))

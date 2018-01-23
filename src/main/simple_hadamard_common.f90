@@ -163,8 +163,12 @@ contains
                 all_fsc_bin_exist = .true.
                 fsc_bin_exists    = .false.
                 do s=1,p%nstates
-                    fsc_fname = 'fsc_state'//int2str_pad(s,2)//'.bin'
-                    if( file_exists(trim(adjustl(fsc_fname))) )fsc_bin_exists( s ) = .true.
+                    if( str_has_substr(p%refine,'het') )then
+                        fsc_fname = HET_FSC
+                    else
+                        fsc_fname = FSC_FBODY//int2str_pad(s,2)//BIN_EXT
+                    endif
+                    fsc_bin_exists( s ) = file_exists(trim(adjustl(fsc_fname)))
                     if( b%a%get_pop(s, 'state') > 0 .and. .not.fsc_bin_exists(s))&
                         & all_fsc_bin_exist = .false.
                 enddo
@@ -176,9 +180,13 @@ contains
                     do s=1,p%nstates
                         if( fsc_bin_exists(s) )then
                             ! these are the 'classical' resolution measures
-                            fsc_fname   = 'fsc_state'//int2str_pad(s,2)//'.bin'
-                            fsc_arr     = file2rarr(trim(adjustl(fsc_fname)))
-                            b%fsc(s,:)  = fsc_arr(:)
+                            if( str_has_substr(p%refine,'het') )then
+                                fsc_fname = HET_FSC
+                            else
+                                fsc_fname = FSC_FBODY//int2str_pad(s,2)//BIN_EXT
+                            endif
+                            fsc_arr    = file2rarr(trim(adjustl(fsc_fname)))
+                            b%fsc(s,:) = fsc_arr(:)
                             deallocate(fsc_arr)
                             call get_resolution(b%fsc(s,:), resarr, fsc05, fsc0143)
                             mapres(s)   = fsc0143
@@ -375,7 +383,7 @@ contains
     end subroutine grid_ptcl_tst
 
     !>  \brief  prepares one particle image for alignment
-    subroutine prepimg4align( b, p, iptcl, img_in, img_out, is3D )
+    subroutine prepimg4align( b, p, iptcl, img_in, img_out)
         use simple_polarizer,     only: polarizer
         use simple_estimate_ssnr, only: fsc2optlp_sub
         use simple_ctf,           only: ctf
@@ -384,21 +392,11 @@ contains
         integer,          intent(in)    :: iptcl
         class(image),     intent(inout) :: img_in
         class(polarizer), intent(inout) :: img_out
-        logical,          intent(in)    :: is3D
         real      :: frc(b%projfrcs%get_filtsz()), filter(b%projfrcs%get_filtsz())
         type(ctf) :: tfun
         real      :: x, y, dfx, dfy, angast, phshift
-        integer   :: frcind
         x      = b%a%get(iptcl, 'x')
         y      = b%a%get(iptcl, 'y')
-        frcind = 0
-        if( is3D .and. p%nstates==1 )then
-            if( p%nspace /= NSPACE_BALANCE )then
-                frcind = b%e_bal%find_closest_proj(b%a%get_ori(iptcl))
-            else
-                frcind = nint(b%a%get(iptcl, 'proj'))
-            endif
-        endif
         ! normalise
         call img_in%norm
         ! move to Fourier space
@@ -695,21 +693,19 @@ contains
             call b%vol%shift([xyz(1),xyz(2),xyz(3)])
         endif
         ! Volume filtering
-        if( p%eo .ne. 'no' )then
+        if( p%eo.ne.'no' .and. p%nstates.eq.1 )then
             ! anisotropic matched filter
-            allocate(fname_vol_filter, source='aniso_optlp_state'//int2str_pad(s,2)//p%ext)
-            if( file_exists(fname_vol_filter) .and. p%nstates==1 )then
+            allocate(fname_vol_filter, source=ANISOLP_FBODY//int2str_pad(s,2)//trim(p%ext))
+            if( file_exists(fname_vol_filter) )then
                 call b%vol2%read(fname_vol_filter)
                 call b%vol%fwd_ft ! needs to be here in case the shift was never applied (above)
                 call b%vol%shellnorm_and_apply_filter(b%vol2)
             else
-                if( p%nstates==1 )then
-                    ! matched filter based on Rosenthal & Henderson, 2003
-                    if( any(b%fsc(s,:) > 0.143) )then
-                        call b%vol%fwd_ft ! needs to be here in case the shift was never applied (above)
-                        filter = fsc2optlp(b%fsc(s,:))
-                        call b%vol%shellnorm_and_apply_filter(filter)
-                    endif
+                ! matched filter based on Rosenthal & Henderson, 2003
+                if( any(b%fsc(s,:) > 0.143) )then
+                    call b%vol%fwd_ft ! needs to be here in case the shift was never applied (above)
+                    filter = fsc2optlp(b%fsc(s,:))
+                    call b%vol%shellnorm_and_apply_filter(filter)
                 endif
             endif
             deallocate(fname_vol_filter)

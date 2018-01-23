@@ -385,7 +385,7 @@ contains
             !$omp schedule(static) proc_bind(close)
             do iptcl=batchlims(1),batchlims(2)
                 imatch = iptcl - batchlims(1) + 1
-                call prepimg4align(b, p, iptcl, b%imgbatch(imatch), match_imgs(imatch), is3D=.false.)
+                call prepimg4align(b, p, iptcl, b%imgbatch(imatch), match_imgs(imatch))
                 ! transfer to polar coordinates
                 call match_imgs(imatch)%polarize(pftcc, iptcl, .true., .true.)
             end do

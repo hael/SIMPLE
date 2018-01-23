@@ -1,4 +1,7 @@
 module simple_defs_fname
+! EXTENSIONS
+character(len=4),  parameter :: BIN_EXT            = '.bin'
+character(len=4),  parameter :: METADATA_EXT       = '.txt'
 ! PRIME2D
 character(len=11), parameter :: PRIME2D_ITER_FBODY = 'prime2Ddoc_'
 character(len=10), parameter :: CAVGS_ITER_FBODY   = 'cavgs_iter'
@@ -17,6 +20,11 @@ character(len=8),  parameter :: ALGN_FBODY         = 'algndoc_'
 ! EXTRACT
 character(len=11), parameter :: EXTRACT_STK_FBODY    = 'ptcls_from_'
 character(len=20), parameter :: EXTRACT_PARAMS_FBODY = 'extract_params_'
+! HET
+character(len=11), parameter :: HET_FSC     = 'het_fsc'//BIN_EXT
+character(len=12), parameter :: HET_FRCS    = 'het_frcs'//BIN_EXT
+character(len=15), parameter :: HET_ANISOLP = 'het_aniso_optlp'
+character(len=16), parameter :: HET_VOL     = 'het_mixed_recvol'
 ! SUFFIXES
 character(len=3),  parameter :: SCALE_SUFFIX       = '_sc'
 character(len=6),  parameter :: THUMBNAIL_SUFFIX   = '_thumb'
@@ -32,7 +40,4 @@ character(len=19), parameter :: EXTRACT_STREAM_DIR = PREPROC_STREAM_DIR//'partic
 character(len=17), parameter :: UNIDOC_STREAM_DIR  = PREPROC_STREAM_DIR//'unidocs/'
 ! UNIDOC
 character(len=14), parameter :: UNIDOC_OUTPUT      = 'unidoc_output_'
-! EXTENSIONS
-character(len=4),  parameter :: BIN_EXT            = '.bin'
-character(len=4),  parameter :: METADATA_EXT       = '.txt'
 end module simple_defs_fname

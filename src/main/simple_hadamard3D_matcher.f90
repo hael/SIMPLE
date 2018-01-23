@@ -549,7 +549,7 @@ contains
         class(cmdline),             intent(inout) :: cline !< command line
         type(polarizer), allocatable :: match_imgs(:)
         type(ori) :: o
-        integer   :: cnt, s, iptcl, iref, istate, ntot, nrefs, ldim(3)
+        integer   :: cnt, s, iptcl, ind, iref, istate, ntot, nrefs, ldim(3)
         integer   :: batchlims(2), imatch, iptcl_batch
         logical   :: do_center
         real      :: xyz(3)
@@ -578,21 +578,34 @@ contains
             endif
             call cenrefvol_and_mapshifts2ptcls(b, p, cline, s, p%vols(s), do_center, xyz)
             if( p%eo .ne. 'no' )then
-                if( .not. p%l_distr_exec ) write(*,'(A)') '>>> BUILDING EVEN REFERENCES'
-                call preprefvol(b, p, cline, s, p%vols_even(s), do_center, xyz)
-                !$omp parallel do default(shared) private(iref) schedule(static) proc_bind(close)
-                do iref=1,p%nspace
-                    call b%vol%fproject_polar((s - 1) * p%nspace + iref, b%e%get_ori(iref), pftcc, iseven=.true.)
-                end do
-                !$omp end parallel do
-                if( .not. p%l_distr_exec ) write(*,'(A)') '>>> BUILDING ODD REFERENCES'
-                call preprefvol(b, p, cline, s, p%vols_odd(s), do_center, xyz)
-                !$omp parallel do default(shared) private(iref) schedule(static) proc_bind(close)
-                do iref=1,p%nspace
-                    call b%vol%fproject_polar((s - 1) * p%nspace + iref, b%e%get_ori(iref), pftcc, iseven=.false.)
-                end do
-                !$omp end parallel do
+                if( p%nstates.eq.1 )then
+                    if( .not. p%l_distr_exec ) write(*,'(A)') '>>> BUILDING EVEN REFERENCES'
+                    call preprefvol(b, p, cline, s, p%vols_even(s), do_center, xyz)
+                    !$omp parallel do default(shared) private(iref) schedule(static) proc_bind(close)
+                    do iref=1,p%nspace
+                        call b%vol%fproject_polar((s - 1) * p%nspace + iref, b%e%get_ori(iref), pftcc, iseven=.true.)
+                    end do
+                    !$omp end parallel do
+                    if( .not. p%l_distr_exec ) write(*,'(A)') '>>> BUILDING ODD REFERENCES'
+                    call preprefvol(b, p, cline, s, p%vols_odd(s), do_center, xyz)
+                    !$omp parallel do default(shared) private(iref) schedule(static) proc_bind(close)
+                    do iref=1,p%nspace
+                        call b%vol%fproject_polar((s - 1) * p%nspace + iref, b%e%get_ori(iref), pftcc, iseven=.false.)
+                    end do
+                    !$omp end parallel do
+                else
+                    if( .not. p%l_distr_exec ) write(*,'(A)') '>>> BUILDING REFERENCES'
+                    call preprefvol(b, p, cline, s, p%vols(s), do_center, xyz)
+                    !$omp parallel do default(shared) private(iref, ind) schedule(static) proc_bind(close)
+                    do iref=1,p%nspace
+                        ind = (s - 1) * p%nspace + iref
+                        call b%vol%fproject_polar(ind, b%e%get_ori(iref), pftcc, iseven=.true.)
+                        call pftcc% cp_even2odd_ref(ind)
+                    end do
+                    !$omp end parallel do
+                endif
             else
+                ! low-pass set or multiple states
                 call preprefvol(b, p, cline, s, p%vols(s), do_center, xyz)
                 !$omp parallel do default(shared) private(iref) schedule(static) proc_bind(close)
                 do iref=1,p%nspace
@@ -624,7 +637,7 @@ contains
             do iptcl=batchlims(1),batchlims(2)
                 if( .not. ptcl_mask(iptcl) ) cycle
                 imatch = iptcl - batchlims(1) + 1
-                call prepimg4align(b, p, iptcl, b%imgbatch(imatch), match_imgs(imatch), is3D=.true.)
+                call prepimg4align(b, p, iptcl, b%imgbatch(imatch), match_imgs(imatch))
                 ! transfer to polar coordinates
                 call match_imgs(imatch)%polarize(pftcc, iptcl, .true., .true.)
             end do
