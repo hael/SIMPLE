@@ -237,7 +237,10 @@ contains
                     case('neg')
                         tval = -tval
                     case('square')
-                        tval = min(1.,max(tval**2.,0.001))
+                        tval = min(1.,max(tval * tval,0.001))
+                    case('sqrt')
+                        tval = min(1.,max(tval * tval,0.001))
+                        tval = sqrt(tval * tval)
                     case DEFAULT
                         write(*,*) 'mode:', mode
                         stop 'unsupported in ctf2img; simple_ctf'
@@ -260,7 +263,7 @@ contains
         real,           intent(in)    :: angast      !< angle of astigmatism
         real, optional, intent(in)    :: add_phshift !< aditional phase shift (radians), for phase plate
         integer :: lims(3,2),h,mh,k,mk,phys(3),ldim(3),inds(3)
-        real    :: ang, tval, spaFreqSq, hinv, aadd_phshift, kinv, inv_ldim(3)
+        real    :: ang, tval, spaFreqSq, hinv, aadd_phshift, kinv, inv_ldim(3), res, wght
         ! initialize
         aadd_phshift = 0.
         if( present(add_phshift) ) aadd_phshift = add_phshift
@@ -284,7 +287,8 @@ contains
                 spaFreqSq = hinv * hinv + kinv * kinv
                 ang       = atan2(real(k),real(h))
                 tval      = self%eval(spaFreqSq, ang, aadd_phshift)
-                tval      = sqrt(min(1.,max(tval * tval,0.001)))
+                tval      = min(1.,max(tval * tval,0.001))
+                tval      = sqrt(tval * tval)
                 call img%set(inds, tval)
             end do
         end do

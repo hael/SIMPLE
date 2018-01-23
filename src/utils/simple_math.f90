@@ -2809,6 +2809,22 @@ contains
         endif
     end function median_nocopy
 
+    function median_filter( arr, percen ) result( arr_med )
+        real, intent(in)  :: arr(:), percen
+        real, allocatable :: arr_med(:)
+        integer :: n, winsz, i, ileft, iright
+        n     = size(arr)
+        allocate( arr_med(n) )
+        winsz = round2even( (percen / 100.) * real(n) ) / 2
+        do i=winsz + 1,n - winsz
+            ileft  = i - winsz
+            iright = i + winsz
+            arr_med(i) = median(arr(ileft:iright))
+        end do
+        arr_med(:winsz) = arr_med(winsz + 1)
+        arr_med(n - winsz + 1:) = arr_med(n - winsz)
+    end function median_filter
+
     !>   for selecting kth largest, array is modified
     real function selec_1(k,n,arr)
       integer k,n

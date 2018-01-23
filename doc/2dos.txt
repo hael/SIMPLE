@@ -2,11 +2,9 @@ CTFFIT
 Consider using the natural logarithm of the power spectrum for CTF fitting rater than the square root. Should improve robustness. (Leave option speckind=sqrt|log)
 
 NEW DEVELOPMENTS
-* Json as a User Interface Markup Language (Joe made a mockup)
 * Need methods for projecting the time of an execution, so that we can display accordingly
 * Edge normalisation on extraction (same as EMAN's edgenorm routine). The average of the
-boarder pixels must be zero for Fourier transformation.
-* statistical normalisation of particle images should be done based on background pixels ONLY
+boarder pixels must be zero for Fourier transformation. NEEDS TESTING
 * support for doc input to re-extract with shifts from doc
 * pipelined pick/extract
 * frac parameter for 2D (& consider outlier detection similar to picker)
@@ -15,9 +13,17 @@ boarder pixels must be zero for Fourier transformation.
 * scaling should set the header right (smpd)
 
 MAJOR REFACTORINGS
-* simple_auto exec
+* simple_auto exec (for all programs executed internally by the commanders)
+* split programs (eg PRIME3D) into functional units that corresponds more closely to what users would recognize
 * modularise commanders for Julia integration
-* simple_sp_projec controller
+* simple_sp_projec controller for centralisation of meta-data
+* rename programs/commanders to be consistent with GUI
+* use JSON as user interface markup language to auto-generate GUI & command-line front-end
+* prime3D_search need to be slit to segregate het from single state:
+  a) the shared arrays need to be in a module of its own
+  b) common functionality need to be in a prime3D_srch_base class
+  c) het/SNHC/single-state functionality needs to be provided by extension
+  d) alternatively, we use a bona-fide strategy pattern
 
 BINARY FILE FORMAT
 Should we keep track of jobid, out_dir, pid for every executed job?

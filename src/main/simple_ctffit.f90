@@ -12,6 +12,8 @@ private
 
 type(image)           :: pspec_ref               ! micrograph powerspec
 type(image)           :: pspec_ctf               ! CTF powerspec
+type(image)           :: pspec_ref4valid         ! micrograph powerspec, for validation
+type(image)           :: pspec_ctf4valid         ! CTF powerspec,        for validation
 type(image)           :: imgmsk                  ! mask image
 type(ctf)             :: tfun                    ! transfer function object
 type(opt_spec)        :: ospec_de                ! optimiser specification differential evolution (DE)
@@ -27,25 +29,26 @@ real                  :: df_max       = 5.0      ! far from focus limit
 real                  :: hp           = 30.0     ! high-pass limit
 real                  :: lp           = 5.0      ! low-pass limit
 real                  :: sxx          = 0.       ! memoized corr term
+real                  :: smpd         = 0.       ! sampling distance
 real                  :: fny                     ! Nyqvist frequency
-real                  :: dfx_glob                ! dfx,     global
-real                  :: dfy_glob                ! dfy,     global
-real                  :: angast_glob             ! angast,  global
-real                  :: phshift_glob            ! phshift, global
+
+real, parameter :: MEDFILTWIDHT = 7.0 ! in percent
+real, parameter :: RESCRIT = 0.2
 
 contains
 
-    subroutine ctffit_init( pspec, smpd, kV, Cs, amp_contr, dfrange, resrange, phaseplate )
-        class(image),     intent(in) :: pspec       !< powerspectrum
-        real,             intent(in) :: smpd        !< sampling distance
-        real,             intent(in) :: kV          !< acceleration voltage
-        real,             intent(in) :: Cs          !< constant
-        real,             intent(in) :: amp_contr   !< amplitude contrast
-        real,             intent(in) :: dfrange(2)  !< defocus range, [30.0,5.0] default
-        real,             intent(in) :: resrange(2) !< resolution range, [30.0,5.0] default
-        character(len=*), intent(in) :: phaseplate  !< Volta phase-plate images (yes|no)
+    subroutine ctffit_init( pspec, smpd_in, kV, Cs, amp_contr, dfrange, resrange, phaseplate )
+        class(image),     intent(in) :: pspec        !< powerspectrum
+        real,             intent(in) :: smpd_in      !< sampling distance
+        real,             intent(in) :: kV           !< acceleration voltage
+        real,             intent(in) :: Cs           !< constant
+        real,             intent(in) :: amp_contr    !< amplitude contrast
+        real,             intent(in) :: dfrange(2)   !< defocus range, [30.0,5.0] default
+        real,             intent(in) :: resrange(2)  !< resolution range, [30.0,5.0] default
+        character(len=*), intent(in) :: phaseplate   !< Volta phase-plate images (yes|no)
         real :: limits(4,2)
         ! set constants
+        smpd = smpd_in
         if( dfrange(1) < dfrange(2) )then
             df_min = dfrange(1)
             df_max = dfrange(2)
@@ -61,14 +64,13 @@ contains
         select case(trim(phaseplate))
             case('yes')
                 l_phaseplate = .true.
-                ndim         = 4
+                ndim = 4
             case DEFAULT
-                l_phaseplate = .false.
-                ndim         = 3
+                ndim = 3
         end select
         ! construct CTF object
         tfun = ctf(smpd, kV, Cs, amp_contr)
-        fny  = smpd * 2
+        fny  = smpd * 2.0
         ! prepare powerspectra
         pspec_ref = pspec
         ldim = pspec_ref%get_ldim()
@@ -81,16 +83,16 @@ contains
         cc_msk = imgmsk%bin2logical()
         ! memoize reference corr components
         call pspec_ref%prenorm4real_corr(sxx, cc_msk)
-        ! contruct optimiser
+        ! contruct optimisers
         call seed_rnd
         limits        = 0.
         limits(1:2,1) = df_min
         limits(1:2,2) = df_max
         limits(3,1)   = 0.
-        limits(3,2)   = twopi ! miminise in radians so that the df:s are roughly on the same scale
+        limits(3,2)   = twopi  ! miminise in radians so that the df:s are roughly on the same scale
         if( l_phaseplate )then
-            limits(4,1)   = 0.
-            limits(4,2)   = 3.15 ! little over pi as max lim
+            limits(4,1) = 0.
+            limits(4,2) = 3.15 ! little over pi as max lim
         endif
         call ospec_de%specify('de', ndim, limits=limits(1:ndim,:), maxits=400)
         call ospec_simplex%specify('simplex', ndim, limits=limits(1:ndim,:), maxits=80, nrestarts=5)
@@ -110,25 +112,29 @@ contains
         character(len=*), intent(in)  :: diagfname
         real              :: cost, df, df_step, cost_lowest, dfstep
         real, allocatable :: frc(:)
-        type(image)       :: pspec_half_n_half
+        type(image)       :: pspec_half_n_half, tmp
         integer           :: find, hpind, nyq, k
         class(*), pointer :: fun_self => null()
         dfstep = (df_max - df_min) / 100.
         if( l_phaseplate )then
-            ! do a first grid search assuming no astigmatism
-            ! and pi half phase shift
+            ! do a first grid search assuming:
+            ! no astigmatism
+            ! pi half phase shift
+            ! zero B-factor
             df = df_min
             cost_lowest = ctffit_cost_phaseplate(fun_self, [df,df,0.,PIO2], ndim)
             do while( df <= df_max )
                 cost = ctffit_cost_phaseplate(fun_self, [df,df,0.,PIO2], ndim)
                 if( cost < cost_lowest )then
                     cost_lowest = cost
-                    ospec_de%x  = [df,df,0.,PIO2]
+                    ospec_de%x = [df,df,0.,PIO2]
                 endif
                 df = df + dfstep
             end do
         else
-            ! do a first grid search assuming no astigmatism
+            ! do a first grid search assuming:
+            ! no astigmatism
+            ! zero B-factor
             df = df_min
             cost_lowest = ctffit_cost(fun_self, [df,df,0.], ndim)
             do while( df <= df_max )
@@ -157,14 +163,12 @@ contains
         angast  = rad2deg(ospec_simplex%x(3))
         cc      = -cost
         phshift = 0.
-        if( l_phaseplate ) phshift = ospec_simplex%x(4)
-        dfx_glob     = dfx
-        dfy_glob     = dfy
-        angast_glob  = angast
-        phshift_glob = phshift
+        if( l_phaseplate ) phshift = ospec_de%x(4)
         ! make a half-n-half diagnostic
         call pspec_ctf%norm
         call pspec_ref%norm
+        pspec_ctf4valid = pspec_ctf
+        pspec_ref4valid = pspec_ref
         call pspec_ctf%mul(imgmsk)
         call pspec_ref%mul(imgmsk)
         pspec_half_n_half = pspec_ref%before_after(pspec_ctf)
@@ -172,35 +176,24 @@ contains
         call pspec_half_n_half%kill
     end subroutine ctffit_srch
 
-    subroutine ctffit_validate( even_imgs, odd_imgs, ccvalid )
-        class(image), intent(inout) :: even_imgs(:), odd_imgs(:)
-        real,         intent(out)   :: ccvalid
-        real, allocatable :: corrs(:), res(:)
-        type(image) :: even_sum, odd_sum, tmp
-        integer     :: filtsz, ldim(3), i, neven, nodd
-        real        :: smpd
-        neven = size(even_imgs)
-        nodd  = size(odd_imgs)
-        ldim  = even_imgs(1)%get_ldim()
-        smpd  = even_imgs(1)%get_smpd()
-        call even_sum%new(ldim, smpd)
-        call odd_sum%new(ldim, smpd)
-        ! calculate even power-spectrum without applying phase flipping
-        do i=1,neven
-            call even_imgs(i)%fwd_ft
-            call even_imgs(i)%ft2img('sqrt', tmp)
-            call even_sum%add(tmp)
+    subroutine ctffit_validate( ctfres )
+        real, intent(out) :: ctfres
+        real :: inner, outer, corrs(fdim(ldim(1))-1)
+        real, allocatable :: corrs_med(:)
+        integer :: k, kres
+        inner = real(calc_fourier_index(hp,  ldim(1), smpd))
+        outer = real(calc_fourier_index(fny, ldim(1), smpd))
+        call pspec_ref4valid%mask(outer, 'soft', inner)
+        call pspec_ctf4valid%mask(outer, 'soft', inner)
+        call pspec_ref4valid%frc_pspec(pspec_ctf4valid, corrs )
+        corrs_med = median_filter(corrs, MEDFILTWIDHT)
+        do k=fdim(ldim(1))-1,1,-1
+            if( corrs_med(k) >= RESCRIT )then
+                kres = k
+                exit
+            endif
         end do
-        ! calculate odd power-spectrum applying phase flipping with the estimated CTF params
-        do i=1,nodd
-            call tfun%apply(odd_imgs(i), dfx_glob, 'flip', dfy_glob, angast_glob, phshift_glob)
-            call odd_imgs(i)%ft2img('sqrt', tmp)
-            call odd_sum%add(tmp)
-        end do
-        ! calculate correlation for validation of both image quality and CTF fit
-        call even_sum%norm
-        call odd_sum%norm
-        ccvalid = even_sum%real_corr(odd_sum, cc_msk)
+        ctfres = calc_lowpass_lim(kres, ldim(1), smpd)
     end subroutine ctffit_validate
 
     ! cost function is real-space correlation within resolution mask between the CTF
@@ -222,7 +215,7 @@ contains
         real,     intent(in)    :: vec(D)
         real :: cost
         ! vec(4) is additional phase shift (in radians)
-        call tfun%ctf2pspecimg(pspec_ctf, vec(1), vec(2), rad2deg(vec(3)), vec(4))
+        call tfun%ctf2pspecimg(pspec_ctf, vec(1), vec(2), rad2deg(vec(3)), add_phshift=vec(4))
         cost = -pspec_ref%real_corr_prenorm(pspec_ctf, sxx, cc_msk)
     end function ctffit_cost_phaseplate
 
