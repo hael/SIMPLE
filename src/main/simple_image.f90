@@ -41,7 +41,7 @@ type :: image
     procedure          :: ring
     procedure          :: copy
     procedure          :: mic2spec
-    procedure          :: mic2eoimgs
+    procedure          :: mic2eospecs
     procedure          :: boxconv
     procedure          :: window
     procedure          :: window_slim
@@ -530,12 +530,14 @@ contains
         if( didft ) call self%fwd_ft
     end function mic2spec
 
-    subroutine mic2eoimgs( self, box, even_imgs, odd_imgs )
+    subroutine mic2eospecs( self, box, speckind, even_imgs, odd_imgs )
         class(image),              intent(inout) :: self
         integer,                   intent(in)    :: box
-        class(image), allocatable, intent(out)   :: even_imgs(:), odd_imgs(:)
-        integer :: xind, yind, cnt, neven, nodd, i, sz
-        logical :: didft
+        character(len=*),          intent(in)    :: speckind
+        class(image), allocatable, intent(out)   :: even_imgs(:), odd_imgs(:) ! even=lower, odd=upper
+        type(image) :: tmp
+        integer     :: xind, yind, cnt, neven, nodd, i, sz
+        logical     :: didft
         if( self%ldim(3) /= 1 ) stop 'only for 2D images; mic2eoimgs; simple_image'
         if( self%ldim(1) <= box .or. self%ldim(2) <= box )then
             stop 'cannot use a box larger than the image; mic2eoimgs; simple_image'
@@ -546,19 +548,14 @@ contains
             didft = .true.
         endif
         ! count # odds & # evens
-        cnt   = 0
-        neven = 0
-        nodd  = 0
+        cnt = 0
         do xind=0,self%ldim(1)-box,box/2
             do yind=0,self%ldim(2)-box,box/2
                 cnt = cnt + 1
-                if( mod(cnt,2) == 0 )then
-                    neven = neven + 1
-                else
-                    nodd = nodd + 1
-                endif
             end do
         end do
+        neven = cnt / 2
+        nodd  = cnt - neven
         ! check allocations
         if( allocated(even_imgs) )then
             sz = size(even_imgs)
@@ -588,20 +585,20 @@ contains
         do xind=0,self%ldim(1)-box,box/2
             do yind=0,self%ldim(2)-box,box/2
                 cnt = cnt + 1
-                if( mod(cnt,2) == 0 )then
+                call self%window([xind,yind],box,tmp)
+                call tmp%norm
+                call tmp%edges_norm
+                call tmp%fwd_ft
+                if( cnt <= neven )then
                     neven = neven + 1
-                    call self%window([xind,yind],box,even_imgs(neven))
-                    call even_imgs(neven)%norm
-                    call even_imgs(neven)%edges_norm
+                    call tmp%ft2img(speckind, even_imgs(neven))
                 else
                     nodd = nodd + 1
-                    call self%window([xind,yind],box,odd_imgs(nodd))
-                    call odd_imgs(nodd)%norm
-                    call odd_imgs(nodd)%edges_norm
+                    call tmp%ft2img(speckind, odd_imgs(nodd))
                 endif
             end do
         end do
-    end subroutine mic2eoimgs
+    end subroutine mic2eospecs
 
     function boxconv( self, box ) result( img_out )
         class(image), intent(inout) :: self
