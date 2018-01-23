@@ -238,8 +238,8 @@ contains
         p%outvol = add2fbody(trim(p%vols(state)), p%ext, '_pproc')
         call b%vol%write(p%outvol)
         ! also output mirrored by default
-        call b%vol%mirror('x')
-        p%outvol = add2fbody(p%outvol, p%ext, '_flip')
+        if( p%mirr .ne. 'no' ) call b%vol%mirror('x')
+        p%outvol = add2fbody(p%outvol, p%ext, '_mirr')
         call b%vol%write(p%outvol)
         ! destruct
         call vol_copy%kill

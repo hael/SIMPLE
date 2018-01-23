@@ -1,5 +1,5 @@
 CTFFIT
-Consider using the natural logarithm of the power spectrum for CTF fitting rater than the square root. Should improve robustness. (Leave option speckind=sqrt|log)
+ctfres still needs attention.... 
 
 NEW DEVELOPMENTS
 * Need methods for projecting the time of an execution, so that we can display accordingly
@@ -26,7 +26,7 @@ MAJOR REFACTORINGS
   d) alternatively, we use a bona-fide strategy pattern
 
 BINARY FILE FORMAT
-Should we keep track of jobid, out_dir, pid for every executed job?
+Should we keep track of jobid, out_dir, pid for every executed job? Or rather, when a field is filled-in jobproc should be updated with a job_descr and dir
 In this way we could kill processes, allowing cancellation
 Shall we keep track of which jobid wrote which entry in the segmented binary file?
 
