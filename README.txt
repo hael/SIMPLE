@@ -136,3 +136,23 @@ created can be safely removed. If any of the individual tests fail an error
 message will be displayed. If you detect an error, please carefully check the
 SIMPLE and FFTW installations and the gfortran version. If you still have
 issues, please file a help ticket on the webpage.
+
+
+### Using the GUI in multiuser mode
+
+The Simple GUI is designed to have a single instance of the server running on an accessible node, to which multiple users can connect using individual or shared login credentials.
+
+In this mode, the Simple GUI server will run as the user who started the server. Thus, this user must have read and write access to the directories where processing is to be undertaken.
+
+In order to use this mode, an htpasswd file must first be generated. The easiest way to do this is using the "htdigest" command from the apache2 package. Use the following command to create users:
+	
+	htdigest $SIMPLE_PATH/www/.htpasswd simple <username>
+
+You will be prompted to enter the new user's password twice.
+
+The Simple GUI server can now be started with the -m flag for multiuser mode. We recommend that this process is run in the background using the nohup command:
+
+	nohup simple -m &
+
+
+

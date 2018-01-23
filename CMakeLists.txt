@@ -27,7 +27,7 @@ option(USE_OPENMP "Use OpenMP for parallelization - debugging may disable OpemMP
 
 option(${PROJECT_NAME}_BUILD_TESTS "Build the test examples" ON)
 if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/gui)
-  option(${PROJECT_NAME}_BUILD_GUI "Build the simple GUI - not included in release2.5" OFF)
+  option(${PROJECT_NAME}_BUILD_GUI "Build the simple GUI - not included in release2.5" ON)
 endif()
 option(BUILD_SHARED_LIBS "Build the simple library as shared or static (default)" OFF)
 option(BUILD_DOCS "Enable the generation of PDF manuals and doxygen API documentation" OFF)
@@ -133,15 +133,12 @@ add_subdirectory(${SCRIPTS_PATH})
 #################################################################
 if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/gui)
   if (${PROJECT_NAME}_BUILD_GUI)
- #   add_subdirectory(gui  ${CMAKE_INSTALL_BINDIR}/gui)
-	#add_subdirectory(gui ${CMAKE_INSTALL_DIR}/gui)
 	include(ExternalProject)
 	ExternalProject_Add(
  	   simple_gui
     	SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/gui
 	PREFIX ${CMAKE_INSTALL_PREFIX}/gui
 	BINARY_DIR ${CMAKE_INSTALL_PREFIX}/gui
-	#BUILD_IN_SOURCE 1
     	LOG_DOWNLOAD 1
     	LOG_UPDATE 1
     	LOG_CONFIGURE 1
