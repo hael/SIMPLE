@@ -167,7 +167,7 @@ function refineBox(element, event){
 	url += "&boxsize=" + document.getElementById('boxsize').value;
 	url += "&xcoord=" + canvasX;
 	url += "&ycoord=" + canvasY;
-	url += "&particlediameter=" + document.getElementById('particlediameter').value;
+	url += "&particlediameter=" + parseInt(document.getElementById('particlediameter').value) * 2;
 	url += "&boxfile=" + canvas.getAttribute('data-boxfile');
 	getAjax(url, drawBoxes);
 }
@@ -219,7 +219,7 @@ function drawBoxes(data){
 		}
 		if(document.getElementById("pickparticle").checked){
 			context.beginPath();
-			context.arc(parseInt(JSONdata.boxes[i][0]) + parseInt(JSONdata.boxes[i][2]) / 2, parseInt(JSONdata.boxes[i][1]) + parseInt(JSONdata.boxes[i][2]) / 2, parseInt(particlediameter) / 2 ,0,2*Math.PI);
+			context.arc(parseInt(JSONdata.boxes[i][0]) + parseInt(JSONdata.boxes[i][2]) / 2, parseInt(JSONdata.boxes[i][1]) + parseInt(JSONdata.boxes[i][2]) / 2, parseInt(particlediameter),0,2*Math.PI);
 			context.lineWidth=8;
 			context.strokeStyle=  "green";
 			context.stroke();
