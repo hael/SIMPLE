@@ -152,9 +152,9 @@ contains
         do i=1,nptcls
             proj_space_shift(i,:,:) = 0.
             proj_space_corrs(i,:)   = -1.
-            proj_space_inds( i,:)   = 0.
-            proj_space_state(i,:)   = 0.
-            proj_space_proj( i,:)   = 0.
+            proj_space_inds( i,:)   = 0
+            proj_space_state(i,:)   = 0
+            proj_space_proj( i,:)   = 0
             ! reference projection directions
             cnt = 0
             do istate=1,p%nstates
@@ -211,12 +211,14 @@ contains
                 !$omp parallel do default(shared) private(i,iptcl) schedule(static) proc_bind(close)
                 do iptcl = p%fromp, p%top
                     i = pinds(iptcl)
-                    prev_states(i) = b%a%get_state(iptcl)
-                    if( prev_states(i) > 0 )then
-                         if(.not. state_exists(prev_states(i)) )&
-                        &stop 'empty previous state; prep4prime3D_srch; simple_prime3D_srch'
-                        if( prev_states(i) > p%nstates )&
-                        &stop 'previous best state outside boundary; prep4prime3D_srch; simple_prime3D_srch'
+                    if( i > 0 )then
+                        prev_states(i) = b%a%get_state(iptcl)
+                        if( prev_states(i) > 0 )then
+                             if(.not. state_exists(prev_states(i)) )&
+                            &stop 'empty previous state; prep4prime3D_srch; simple_prime3D_srch'
+                            if( prev_states(i) > p%nstates )&
+                            &stop 'previous best state outside boundary; prep4prime3D_srch; simple_prime3D_srch'
+                        endif
                     endif
                 end do
                 !$omp end parallel do
@@ -843,7 +845,7 @@ contains
                     endif
                 else
                     ! greedy moves after extremal optimization complete
-                    if( mi_state.eq.1 )then
+                    if( mi_state > 0.5 )then
                         if( hetsym )then
                             ! greedy in symmetric units
                             iproj   = sym_projs(state)

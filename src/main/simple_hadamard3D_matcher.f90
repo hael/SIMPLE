@@ -159,7 +159,7 @@ contains
             call b%a%set_all2single('state_balance', 1.0)
         endif
 
-        ! EXTREMAL LOGICS PART 1
+        ! EXTREMAL LOGICS
         do_extr  = .false.
         select case(trim(p%refine))
             case('het','hetsym')
