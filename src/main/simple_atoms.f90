@@ -69,7 +69,8 @@ contains
         character(len=*), intent(in)    :: fname
         character(len=STDLEN) :: line
         character(len=6)      :: atom_field
-        integer               :: i, l, nl, filnum, io_stat, n
+        character(len=5)      :: num_field
+        integer               :: i, l, nl, filnum, io_stat, n, num
         call self%kill
         nl = nlines(trim(fname))
         if(nl == 0 .or. .not.file_exists(fname))then
@@ -81,8 +82,9 @@ contains
         ! first pass
         n = 0
         do i = 1, nl
-            read(filnum,'(A6)')atom_field
-            if(is_valid_entry(atom_field))n = n + 1
+            read(filnum,'(A6,A5)')atom_field,num_field ! numbering exception, thank you chimera
+            call str2int(num_field, io_stat, num )
+            if(is_valid_entry(atom_field) .and. io_stat.eq.0) n = n + 1
         enddo
         if( n == 0 )then
             print *,'No atoms found in:'
@@ -95,7 +97,8 @@ contains
         i = 0
         do l = 1, nl
             read(filnum,'(A)')line
-            if(.not.is_valid_entry(line(1:6)))cycle
+            call str2int(line(7:11),io_stat,num)
+            if( .not.is_valid_entry(line(1:6)) .or. io_stat.ne.0 ) cycle
             i = i + 1
             read(line,pdbfmt, iostat=io_stat)atom_field, self%num(i), self%name(i), self%altloc(i),&
             &self%resname(i), self%chain(i), self%resnum(i), self%icode(i), self%xyz(i,:),&
@@ -116,6 +119,7 @@ contains
                     is_valid_entry = .false.
                 end select
             end function
+
     end subroutine new_from_pdb
 
     subroutine new_instance( self, n )
