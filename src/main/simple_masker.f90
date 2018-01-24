@@ -112,7 +112,7 @@ contains
         use simple_atoms, only: atoms
         class(masker),         intent(inout) :: self
         class(params),         intent(in)    :: p
-        type(atoms),           intent(in)    :: pdb
+        type(atoms),           intent(inout) :: pdb
         class(image),          intent(inout) :: vol_inout
         class(oris), optional, intent(inout) :: os
         type(image) :: distimg

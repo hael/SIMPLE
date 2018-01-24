@@ -334,10 +334,6 @@ contains
                 state_counts = 0
                 !$omp parallel do default(shared) private(i,iptcl) schedule(static) proc_bind(close)&
                 !$omp reduction(+:state_counts)
-                ! do i=1,nptcls2update
-                !     iptcl = pinds(i)
-                !     call primesrch3D(iptcl)%exec_prime3D_srch_het(corr_thresh, do_extr, state_counts)
-                ! end do
                 do iptcl=p%fromp,p%top
                     if(het_mask(iptcl))then
                         call primesrch3D(iptcl)%exec_prime3D_srch_het(corr_thresh, do_extr, state_counts)

@@ -10,7 +10,9 @@ private
 #include "simple_local_flags.inc"
 
 !character(len=74) :: pdbfmt = "(A6,I5,1X,A4,A1,A3,1X,A1,I4,A1,3X,3F8.3,2F6.2,10X,2A2)" ! v3.3
-character(len=74) :: pdbfmt = "(A6,I5,1X,A4,A1,A3,1X,A1,I4,A1,3X,3F8.3,2F6.2)" ! custom 3.3
+character(len=74) :: pdbfmt      = "(A6,I5,1X,A4,A1,A3,1X,A1,I4,A1,3X,3F8.3,2F6.2)" ! custom 3.3
+character(len=74) :: pdbfmt_long = "(A5,I6,1X,A4,A1,A3,1X,A1,I4,A1,3X,3F8.3,2F6.2)" ! custom 3.3
+character(len=74) :: pdbfmt_read = "(A11,1X,A4,A1,A3,1X,A1,I4,A1,3X,3F8.3,2F6.2)"   ! custom 3.3
 
 !>  \brief type for dealing with atomic structures
 type :: atoms
@@ -56,6 +58,7 @@ type :: atoms
     procedure, private :: Z_from_name
     procedure          :: get_geom_center
     ! MODIFIERS
+    procedure          :: translate
     ! DESTRUCTOR
     procedure          :: kill
 end type atoms
@@ -68,8 +71,8 @@ contains
         class(atoms),     intent(inout) :: self
         character(len=*), intent(in)    :: fname
         character(len=STDLEN) :: line
-        character(len=6)      :: atom_field
-        character(len=5)      :: num_field
+        character(len=11)     :: elevenfirst
+        character(len=6)     :: atom_field
         integer               :: i, l, nl, filnum, io_stat, n, num
         call self%kill
         nl = nlines(trim(fname))
@@ -82,27 +85,35 @@ contains
         ! first pass
         n = 0
         do i = 1, nl
-            read(filnum,'(A6,A5)')atom_field,num_field ! numbering exception, thank you chimera
-            call str2int(num_field, io_stat, num )
-            if(is_valid_entry(atom_field) .and. io_stat.eq.0) n = n + 1
+            read(filnum,'(A11)')elevenfirst
+            if( .not.is_valid_entry(elevenfirst(1:6)) )cycle
+            ! support for over 100000 entries
+            call str2int(elevenfirst(7:11), io_stat, num )
+            if( io_stat .ne. 0 )call str2int(elevenfirst(6:11), io_stat, num )
+            if( io_stat .ne. 0 )call str2int(elevenfirst(5:11), io_stat, num )
+            if( io_stat .ne. 0 )cycle
+            n = n + 1
         enddo
         if( n == 0 )then
             print *,'No atoms found in:'
             stop 'simple_atoms :: new_from_pdb'
         endif
-        ! instance
-        call self%new_instance(n)
         ! second pass
+        call self%new_instance(n)
         rewind(filnum)
         i = 0
         do l = 1, nl
             read(filnum,'(A)')line
-            call str2int(line(7:11),io_stat,num)
-            if( .not.is_valid_entry(line(1:6)) .or. io_stat.ne.0 ) cycle
+            if( .not.is_valid_entry(line(1:6)) )cycle
+            call str2int(line(7:11), io_stat, num )
+            if( io_stat .ne. 0 )call str2int(line(6:11), io_stat, num )
+            if( io_stat .ne. 0 )call str2int(line(5:11), io_stat, num )
+            if( io_stat .ne. 0 )cycle
             i = i + 1
-            read(line,pdbfmt, iostat=io_stat)atom_field, self%num(i), self%name(i), self%altloc(i),&
+            read(line,pdbfmt_read, iostat=io_stat)elevenfirst, self%name(i), self%altloc(i),&
             &self%resname(i), self%chain(i), self%resnum(i), self%icode(i), self%xyz(i,:),&
             &self%occupancy(i), self%beta(i)
+            self%num(i) = num
             call fileio_errmsg('new_from_pdb; simple_atoms error reading line '//trim(fname), io_stat)
             self%het(i) = atom_field == 'HETATM'
         enddo
@@ -110,16 +121,12 @@ contains
         call fclose(filnum, errmsg='new_from_pdb; simple_atoms closing '//trim(fname))
         contains
 
-            logical function is_valid_entry( str )
+            elemental logical function is_valid_entry( str )
                 character(len=6), intent(in) :: str
-                select case(str)
-                case( 'ATOM ', 'HETATM' )
-                    is_valid_entry = .true.
-                case DEFAULT
-                    is_valid_entry = .false.
-                end select
+                is_valid_entry = .false.
+                if( str(1:6).eq.'HETATM' ) is_valid_entry = .true.
+                if( str(1:4).eq.'ATOM' )   is_valid_entry = .true.
             end function
-
     end subroutine new_from_pdb
 
     subroutine new_instance( self, n )
@@ -258,12 +265,14 @@ contains
     ! I/O
 
     subroutine writepdb( self, fbody )
-        class(atoms),     intent(inout) :: self
-        character(len=*), intent(in)    :: fbody
+        class(atoms),     intent(in) :: self
+        character(len=*), intent(in) :: fbody
         character(len=STDLEN) :: fname
         character(len=76)     :: line
         integer               :: i, funit, io_stat
+        logical               :: long
         fname = trim(adjustl(fbody)) // '.pdb'
+        long  = self%n >= 99999
         if(.not.self%exists)stop 'Cannot write non existent atoms type; simple_atoms :: writePDB'
         call fopen(funit, status='REPLACE', action='WRITE', file=fname, iostat=io_stat)
         call fileio_errmsg('writepdb; simple_atoms opening '//trim(fname), io_stat)
@@ -278,12 +287,23 @@ contains
                 character(len=6) :: atom_field
                 if(self%het(ind))then
                     atom_field(1:6) = 'HETATM'
+                    write(pdbstr,pdbfmt)atom_field,self%num(ind),self%name(ind),self%altloc(ind),&
+                        self%resname(ind),self%chain(ind), self%resnum(ind), self%icode(ind), self%xyz(ind,:),&
+                        self%occupancy(ind), self%beta(ind)
                 else
-                    atom_field(1:6) = 'ATOM  '
+                    if( long )then
+                        atom_field(1:5) = 'ATOM '
+                        write(pdbstr,pdbfmt_long)atom_field,self%num(ind),self%name(ind),self%altloc(ind),&
+                            self%resname(ind),self%chain(ind), self%resnum(ind), self%icode(ind), self%xyz(ind,:),&
+                            self%occupancy(ind), self%beta(ind)
+
+                    else
+                        atom_field(1:6) = 'ATOM  '
+                        write(pdbstr,pdbfmt)atom_field,self%num(ind),self%name(ind),self%altloc(ind),&
+                            self%resname(ind),self%chain(ind), self%resnum(ind), self%icode(ind), self%xyz(ind,:),&
+                            self%occupancy(ind), self%beta(ind)
+                    endif
                 endif
-                write(pdbstr,pdbfmt)atom_field,self%num(ind),self%name(ind),self%altloc(ind),&
-                    self%resname(ind),self%chain(ind), self%resnum(ind), self%icode(ind), self%xyz(ind,:),&
-                    self%occupancy(ind), self%beta(ind)
             end function pdbstr
     end subroutine writepdb
 
@@ -325,6 +345,17 @@ contains
         center(2) = sum(self%xyz(:,2)) / real(self%n)
         center(3) = sum(self%xyz(:,3)) / real(self%n)
     end function get_geom_center
+
+    ! MODIFIERS
+
+    subroutine translate( self, shift )
+        class(atoms), intent(inout) :: self
+        real,         intent(in)    :: shift(3)
+        integer :: i
+        self%xyz(:,1) = self%xyz(:,1) + shift(1)
+        self%xyz(:,2) = self%xyz(:,2) + shift(2)
+        self%xyz(:,3) = self%xyz(:,3) + shift(3)
+    end subroutine translate
 
     ! DESTRUCTOR
     subroutine kill( self )
