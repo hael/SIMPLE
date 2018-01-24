@@ -3563,7 +3563,8 @@ void getDirectoryContents (JSONResponse* response, struct http_message* message)
 	int								fileit;
 	
 	if(!getRequestVariable(message, "directoryname", directory)) {
-		directory = "/";
+		//directory = "/";
+		directory = getenv("SIMPLE_PATH");
 	}
 	
 	

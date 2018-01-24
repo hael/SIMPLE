@@ -157,6 +157,14 @@
 				</tr>
 					
 				<tr data-queue=yes>
+					<td>Submission System</td>
+                    <td>
+						<select data-required=no name=qsys_name>
+							<option value=slurm selected>Slurm</option>
+                            <option value=torque selected>Torque</option>
+							<option value=pbs selected>PBS</option>
+						</select>
+					</td>
 					<td>Maximum Job Time</td>
 					<td>
 						<input data-required=no type=number name=time_per_image placeholder="time allowed in queue per job (s)" title="Maximum time allowed in queue per job in seconds">
@@ -190,13 +198,13 @@
 					<td>
 						<input data-required=no type=text name=qsys_qos>
 					</td>
-					<td >Submit Master to Queue</td>
+				<!--	<td >Submit Master to Queue</td>
 					<td>
 						<select data-required=no name=submitmaster title="Choose whether master process runs on queue or locally">
 							<option value=yes>Yes</option>
 							<option value=no selected>No</option>
 						</select>
-					</td>
+					</td>-->
 				</tr>
 				<tr>
 					<td colspan=4 style="text-align: center">
