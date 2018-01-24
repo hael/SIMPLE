@@ -614,7 +614,7 @@ contains
                 stop 'fromp & top args need to be defined in parallel execution; simple_ctffit'
             endif
         else
-            if(p%stream.eq.'yes')then
+            if( p%stream .eq. 'yes' )then
                 ! determine loop range
                 fromto(1) = 1
                 fromto(2) = 1
