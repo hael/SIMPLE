@@ -68,6 +68,7 @@ type prime3D_srch
     procedure          :: new
     procedure          :: exec_prime3D_srch
     procedure          :: exec_prime3D_srch_het
+    procedure          :: calc_corr
     procedure, private :: greedy_srch
     procedure, private :: greedy_subspace_srch
     procedure, private :: stochastic_srch
@@ -768,8 +769,6 @@ contains
     end subroutine stochastic_srch_snhc
 
     !> stochastic search heterogeneity
-    !! \param extr_bound corr threshold
-    !! \param statecnt state counter array
     subroutine stochastic_srch_het( self, corr_thresh, do_extr_opt, counts, symmat, c1_e )
         use simple_rnd,      only: shcloc, irnd_uni
         class(prime3D_srch),   intent(inout) :: self
@@ -887,8 +886,24 @@ contains
         else
             call self%a_ptr%reject(self%iptcl)
         endif
-        if( DEBUG ) print *,  '>>> PRIME3D_SRCH::FINISHED HETDEV SEARCH'
+        if( DEBUG ) print *,  '>>> PRIME3D_SRCH::FINISHED HET SEARCH'
     end subroutine stochastic_srch_het
+
+    !> evaluates correlation
+    subroutine calc_corr( self )
+        class(prime3D_srch),   intent(inout) :: self
+        integer :: iref
+        real    :: corrs_inpl(self%nrots)
+        if( prev_states(self%iptcl_map) > 0 )then
+            self%prev_roind = self%pftcc_ptr%get_roind(360.-self%a_ptr%e3get(self%iptcl))
+            iref = (prev_states(self%iptcl_map)-1) * self%nprojs + prev_proj(self%iptcl_map)
+            call self%pftcc_ptr%gencorrs(iref, self%iptcl, corrs_inpl)
+            call self%a_ptr%set(self%iptcl,'corr', corrs_inpl(self%prev_roind))
+        else
+            call self%a_ptr%reject(self%iptcl)
+        endif
+        if( DEBUG ) print *,  '>>> PRIME3D_SRCH::FINISHED calc_corr SEARCH'
+    end subroutine calc_corr
 
     !>  \brief  executes the in-plane search. This improved routine took HCN
     !!          from stall @ 5.4 to close to convergence @ 4.5 after 10 iters

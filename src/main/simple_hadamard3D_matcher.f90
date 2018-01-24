@@ -78,6 +78,7 @@ contains
         type(prep4cgrid)         :: gridprep
         type(image), allocatable :: rec_imgs(:)
         integer,     allocatable :: symmat(:,:)
+        logical,     allocatable :: het_mask(:)
         real    :: skewness, frac_srch_space, reslim, extr_thresh, corr_thresh
         integer :: iptcl, iextr_lim, i, zero_pop, fnr, cnt, i_batch, batchlims(2), ibatch
         integer :: state_counts(2)
@@ -159,37 +160,6 @@ contains
             call b%a%set_all2single('state_balance', 1.0)
         endif
 
-        ! EXTREMAL LOGICS
-        do_extr  = .false.
-        select case(trim(p%refine))
-            case('het','hetsym')
-                zero_pop    = b%a%get_pop(0, 'state', consider_w=.false.)
-                corr_thresh = -huge(corr_thresh)
-                if(p%l_frac_update) then
-                    iextr_lim = ceiling(2.*log(real(p%nptcls-zero_pop)) * (2.-p%update_frac))
-                    if( which_iter==1 .or.(frac_srch_space <= 99. .and. p%extr_iter <= iextr_lim) )&
-                        &do_extr = .true.
-                else
-                    iextr_lim = ceiling(2.*log(real(p%nptcls-zero_pop)))
-                    if( which_iter==1 .or.(frac_srch_space <= 98. .and. p%extr_iter <= iextr_lim) )&
-                        &do_extr = .true.
-                endif
-                if( do_extr )then
-                    extr_thresh = EXTRINITHRESH * cos(PI/2. * real(p%extr_iter-1)/real(iextr_lim))
-                    corr_thresh = b%a%extremal_bound(extr_thresh)
-                endif
-                if(trim(p%refine).eq.'hetsym')then
-                   ! symmetry pairing matrix
-                    c1_symop = sym('c1')
-                    p%nspace = min( p%nspace*b%se%get_nsym(), 3000 )
-                    call b%e%new( p%nspace )
-                    call b%e%spiral
-                    call b%se%nearest_sym_neighbors( b%e, symmat )
-                endif
-            case DEFAULT
-                ! nothing to do
-        end select
-
         ! PARTICLE INDEX SAMPLING FOR FRACTIONAL UPDATE (OR NOT)
         if( allocated(pinds) )     deallocate(pinds)
         if( allocated(ptcl_mask) ) deallocate(ptcl_mask)
@@ -215,6 +185,40 @@ contains
             pinds = (/(i,i=p%fromp,p%top)/)
             ptcl_mask = .true.
         endif
+
+        ! EXTREMAL LOGICS
+        do_extr  = .false.
+        select case(trim(p%refine))
+            case('het','hetsym')
+                if(allocated(het_mask))deallocate(het_mask)
+                allocate(het_mask(p%fromp:p%top), source=ptcl_mask)
+                zero_pop    = b%a%get_pop(0, 'state', consider_w=.false.)
+                corr_thresh = -huge(corr_thresh)
+                if(p%l_frac_update) then
+                    ptcl_mask = .true.
+                    iextr_lim = ceiling(2.*log(real(p%nptcls-zero_pop)) * (2.-p%update_frac))
+                    if( which_iter==1 .or.(frac_srch_space <= 99. .and. p%extr_iter <= iextr_lim) )&
+                        &do_extr = .true.
+                else
+                    iextr_lim = ceiling(2.*log(real(p%nptcls-zero_pop)))
+                    if( which_iter==1 .or.(frac_srch_space <= 98. .and. p%extr_iter <= iextr_lim) )&
+                        &do_extr = .true.
+                endif
+                if( do_extr )then
+                    extr_thresh = EXTRINITHRESH * cos(PI/2. * real(p%extr_iter-1)/real(iextr_lim))
+                    corr_thresh = b%a%extremal_bound(extr_thresh)
+                endif
+                if(trim(p%refine).eq.'hetsym')then
+                   ! symmetry pairing matrix
+                    c1_symop = sym('c1')
+                    p%nspace = min( p%nspace*b%se%get_nsym(), 3000 )
+                    call b%e%new( p%nspace )
+                    call b%e%spiral
+                    call b%se%nearest_sym_neighbors( b%e, symmat )
+                endif
+            case DEFAULT
+                ! nothing to do
+        end select
 
         if( L_BENCH ) rt_init = toc(t_init)
         ! PREPARE THE POLARFT_CORRCALC DATA STRUCTURE
@@ -330,9 +334,16 @@ contains
                 state_counts = 0
                 !$omp parallel do default(shared) private(i,iptcl) schedule(static) proc_bind(close)&
                 !$omp reduction(+:state_counts)
-                do i=1,nptcls2update
-                    iptcl = pinds(i)
-                    call primesrch3D(iptcl)%exec_prime3D_srch_het(corr_thresh, do_extr, state_counts)
+                ! do i=1,nptcls2update
+                !     iptcl = pinds(i)
+                !     call primesrch3D(iptcl)%exec_prime3D_srch_het(corr_thresh, do_extr, state_counts)
+                ! end do
+                do iptcl=p%fromp,p%top
+                    if(het_mask(iptcl))then
+                        call primesrch3D(iptcl)%exec_prime3D_srch_het(corr_thresh, do_extr, state_counts)
+                    else
+                        call primesrch3D(iptcl)%calc_corr()
+                    endif
                 end do
                 !$omp end parallel do
                 if( do_extr )then
@@ -374,6 +385,7 @@ contains
         deallocate(primesrch3D)
         if( L_BENCH ) rt_align = toc(t_align)
         if( allocated(symmat) )deallocate(symmat)
+        if( allocated(het_mask) )deallocate(het_mask)
 
         ! OUTPUT ORIENTATIONS
         call binwrite_oritab(p%outfile, b%a, [p%fromp,p%top])
