@@ -352,7 +352,7 @@ contains
             endif
         else
             select case(p%refine)
-                case('het', 'hetsym')
+            case('het', 'hetsym')
                     converged = b%conv%check_conv_het()
                 case DEFAULT
                     converged = b%conv%check_conv3D()

@@ -543,11 +543,12 @@ contains
         cline_recvol_mixed_distr = cline ! eo always eq yes
         call cline_prime3D%set('prg', 'prime3D')
         call cline_prime3D%set('maxits', real(MAXITS))
-        if( trim(p_master%refine) .eq. 'sym' )then
-            call cline_prime3D%set('refine', 'hetsym')
-        else
-            call cline_prime3D%set('refine', 'het')
-        endif
+        select case(trim(p_master%refine))
+            case('sym')
+                call cline_prime3D%set('refine', 'hetsym')
+            case DEFAULT
+                call cline_prime3D%set('refine', 'het')
+        end select
         call cline_prime3D%set('dynlp', 'no')
         call cline_prime3D%set('pproc', 'no')
         call cline_prime3D%delete('oritab2')
@@ -596,8 +597,8 @@ contains
         else if( .not. cline%defined('startit') )then
             write(*,'(A)') '>>>'
             write(*,'(A)') '>>> GENERATING DIVERSE LABELING'
-            !call diverse_labeling(os, p_master%nstates, labels, corr_ranked=.true.)
-            call diverse_labeling(os, p_master%nstates, labels, corr_ranked=.false.)
+            write(*,'(A)') '>>>'
+            call diverse_labeling(os, p_master%nstates, labels, corr_ranked=.true.)
             call os%set_all('state', real(labels))
         else
             ! starting from a previous solution

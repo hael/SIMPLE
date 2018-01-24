@@ -78,8 +78,9 @@ contains
         type(prep4cgrid)         :: gridprep
         type(image), allocatable :: rec_imgs(:)
         integer,     allocatable :: symmat(:,:)
-        real    :: skewness, frac_srch_space, reslim
+        real    :: skewness, frac_srch_space, reslim, extr_thresh, corr_thresh
         integer :: iptcl, iextr_lim, i, zero_pop, fnr, cnt, i_batch, batchlims(2), ibatch
+        integer :: state_counts(2)
         logical :: doprint, do_extr
 
         if( L_BENCH )then
@@ -159,23 +160,23 @@ contains
         endif
 
         ! EXTREMAL LOGICS PART 1
+        do_extr  = .false.
         select case(trim(p%refine))
             case('het','hetsym')
-                zero_pop  = b%a%get_pop(0, 'state', consider_w=.false.)
+                zero_pop    = b%a%get_pop(0, 'state', consider_w=.false.)
+                corr_thresh = -huge(corr_thresh)
                 if(p%l_frac_update) then
                     iextr_lim = ceiling(2.*log(real(p%nptcls-zero_pop)) * (2.-p%update_frac))
-                    if( which_iter==1 .or.(frac_srch_space <= 99. .and. p%extr_iter <= iextr_lim) )then
-                        do_extr = .true.
-                    else
-                        do_extr = .false.
-                    endif
+                    if( which_iter==1 .or.(frac_srch_space <= 99. .and. p%extr_iter <= iextr_lim) )&
+                        &do_extr = .true.
                 else
                     iextr_lim = ceiling(2.*log(real(p%nptcls-zero_pop)))
-                    if( which_iter==1 .or.(frac_srch_space <= 98. .and. p%extr_iter <= iextr_lim) )then
-                        do_extr = .true.  ! stochastic/SHC in state space
-                    else
-                        do_extr = .false. ! SHC in state space + in-plane search
-                    endif
+                    if( which_iter==1 .or.(frac_srch_space <= 98. .and. p%extr_iter <= iextr_lim) )&
+                        &do_extr = .true.
+                endif
+                if( do_extr )then
+                    extr_thresh = EXTRINITHRESH * cos(PI/2. * real(p%extr_iter-1)/real(iextr_lim))
+                    corr_thresh = b%a%extremal_bound(extr_thresh)
                 endif
                 if(trim(p%refine).eq.'hetsym')then
                    ! symmetry pairing matrix
@@ -326,18 +327,29 @@ contains
                 endif
             case('het')
                 if(p%oritab .eq. '') stop 'cannot run the refine=het mode without input oridoc (oritab)'
-                !$omp parallel do default(shared) private(i,iptcl) schedule(static) proc_bind(close)
+                state_counts = 0
+                !$omp parallel do default(shared) private(i,iptcl) schedule(static) proc_bind(close)&
+                !$omp reduction(+:state_counts)
                 do i=1,nptcls2update
                     iptcl = pinds(i)
-                    call primesrch3D(iptcl)%exec_prime3D_srch_het( do_extr )
+                    call primesrch3D(iptcl)%exec_prime3D_srch_het(corr_thresh, do_extr, state_counts)
                 end do
                 !$omp end parallel do
+                if( do_extr )then
+                    write(*,'(A,F8.3)')'>>> CORRELATION THRESHOLD:', corr_thresh
+                    write(*,'(A,F8.3)')'>>> RANDOMIZATION RATE:   ', extr_thresh
+                    write(*,'(A,I6,A1,F6.2,A1)')'>>> RANDOMIZED PARTICLES:',state_counts(1),';',&
+                        &100.*real(state_counts(1))/real(nptcls2update-zero_pop),'%'
+                    write(*,'(A,I6,A1,F6.2,A1)')'>>> SHC-OPT    PARTICLES:',state_counts(2),';',&
+                        &100.*real(state_counts(2))/real(nptcls2update-zero_pop),'%'
+                endif
             case('hetsym')
                 if(p%oritab .eq. '') stop 'cannot run the refine=hetsym mode without input oridoc (oritab)'
                 !$omp parallel do default(shared) private(i,iptcl) schedule(guided) proc_bind(close)
                 do i=1,nptcls2update
                     iptcl = pinds(i)
-                    call primesrch3D(iptcl)%exec_prime3D_srch_het( do_extr, symmat, b%e )
+                    call primesrch3D(iptcl)%exec_prime3D_srch_het(corr_thresh, do_extr, state_counts,&
+                        &symmat=symmat, c1_e=b%e)
                 end do
                 !$omp end parallel do
             case ('states')
@@ -351,16 +363,6 @@ contains
             case DEFAULT
                 write(*,*) 'The refinement mode: ', trim(p%refine), ' is unsupported'
                 stop
-        end select
-
-        ! EXTREMAL LOGICS PART 2
-        select case(trim(p%refine))
-            case('het')
-                call prime3D_srch_extr(b%a, p, do_extr)
-            case('hetsym')
-                call prime3D_srch_extr(b%a, p, do_extr, b%e)
-            case DEFAULT
-                ! nothing to do
         end select
 
         ! CLEANUP primesrch3D & pftcc
@@ -447,11 +449,12 @@ contains
         if( p%l_distr_exec )then
             call qsys_job_finished( p, 'simple_hadamard3D_matcher :: prime3D_exec')
         else
-            if( p%refine .eq. 'het' )then
-                converged = b%conv%check_conv_het()
-            else
-                converged = b%conv%check_conv3D(update_res)
-            endif
+            select case(trim(p%refine))
+                case('het', 'hetsym')
+                    converged = b%conv%check_conv_het()
+                case DEFAULT
+                    converged = b%conv%check_conv3D(update_res)
+            end select
         endif
         if( L_BENCH )then
             rt_tot  = toc(t_tot)
