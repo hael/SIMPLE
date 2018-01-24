@@ -536,7 +536,7 @@ contains
         character(len=*),          intent(in)    :: speckind
         class(image), allocatable, intent(out)   :: even_imgs(:), odd_imgs(:) ! even=lower, odd=upper
         type(image) :: tmp
-        integer     :: xind, yind, cnt, neven, nodd, i, sz
+        integer     :: xind, yind, cnt, neven, nodd, i, sz, neven_lim, nodd_lim
         logical     :: didft
         if( self%ldim(3) /= 1 ) stop 'only for 2D images; mic2eoimgs; simple_image'
         if( self%ldim(1) <= box .or. self%ldim(2) <= box )then
@@ -554,12 +554,12 @@ contains
                 cnt = cnt + 1
             end do
         end do
-        neven = cnt / 2
-        nodd  = cnt - neven
+        neven_lim = cnt / 2
+        nodd_lim  = cnt - neven_lim
         ! check allocations
         if( allocated(even_imgs) )then
             sz = size(even_imgs)
-            if( sz /= neven )then
+            if( sz /= neven_lim )then
                 do i=1,sz
                     call even_imgs(i)%kill
                 end do
@@ -568,7 +568,7 @@ contains
         endif
         if( allocated(odd_imgs) )then
             sz = size(odd_imgs)
-            if( sz /= nodd )then
+            if( sz /= nodd_lim )then
                 do i=1,sz
                     call odd_imgs(i)%kill
                 end do
@@ -576,8 +576,8 @@ contains
             endif
         endif
         ! allocate if needed
-        if( .not. allocated(even_imgs) ) allocate( even_imgs(neven) )
-        if( .not. allocated(odd_imgs)  ) allocate( odd_imgs(nodd)  )
+        if( .not. allocated(even_imgs) ) allocate( even_imgs(neven_lim) )
+        if( .not. allocated(odd_imgs)  ) allocate( odd_imgs(nodd_lim)   )
         ! extract
         cnt   = 0
         neven = 0
@@ -589,15 +589,17 @@ contains
                 call tmp%norm
                 call tmp%edges_norm
                 call tmp%fwd_ft
-                if( cnt <= neven )then
+                if( cnt <= neven_lim )then
                     neven = neven + 1
                     call tmp%ft2img(speckind, even_imgs(neven))
                 else
                     nodd = nodd + 1
                     call tmp%ft2img(speckind, odd_imgs(nodd))
                 endif
+                call tmp%zero_and_unflag_ft
             end do
         end do
+        if( didft ) call self%fwd_ft
     end subroutine mic2eospecs
 
     function boxconv( self, box ) result( img_out )
@@ -5648,18 +5650,29 @@ contains
     !! \param left,right input images
     !! \return ba output montage
     !!
-    function before_after( left, right ) result( ba )
-        class(image), intent(in) :: left, right
-        integer     :: ldim(3)
+    function before_after( left, right, mask ) result( ba )
+        class(image),      intent(in) :: left, right
+        logical, optional, intent(in) :: mask(left%ldim(1),left%ldim(2),left%ldim(3))
+        integer     :: ldim(3), i, j
         type(image) :: ba
         if( left.eqdims.right )then
             if( left.eqsmpd.right )then
                 if( left%ft .or. right%ft ) stop 'not for FTs; before_after; simple_image'
                 if( left%is_3d() .or. right%is_3d() ) stop 'not for 3D imgs; before_after; simple_image'
                 ldim = left%ldim
-                call ba%new(ldim, left%smpd)
+                ba = left
                 ba%rmat(:ldim(1)/2,:ldim(2),1)   = left%rmat(:ldim(1)/2,:ldim(2),1)
-                ba%rmat(ldim(1)/2+1:,:ldim(2),1) = right%rmat(ldim(1)/2+1:,:ldim(2),1)
+                if( present(mask) )then
+                    do i=ldim(1)/2+1,ldim(1)
+                        do j=1,ldim(2)
+                            if( mask(i,j,1) )then
+                                ba%rmat(i,j,1) = right%rmat(i,j,1)
+                            endif
+                        end do
+                    end do
+                else
+                    ba%rmat(ldim(1)/2+1:,:ldim(2),1) = right%rmat(ldim(1)/2+1:,:ldim(2),1)
+                endif
             else
                  stop 'before (left) and after (right) not of same smpd; before_after; simple_image'
             endif
