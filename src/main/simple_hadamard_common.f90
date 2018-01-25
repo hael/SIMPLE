@@ -280,7 +280,7 @@ contains
                 endif
             endif
             p%kfromto(2) = calc_fourier_index(lplim, p%boxmatch, p%smpd)
-            p%kfromto(2) = max(p%kfromto(2), p%kfromto(1) + 2) ! to avoid pathological cases    
+            p%kfromto(2) = max(p%kfromto(2), p%kfromto(1) + 3) ! to avoid pathological cases    
             p%lp_dyn = lplim
             call b%a%set_all2single('lp',lplim)
         endif
