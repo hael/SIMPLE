@@ -36,6 +36,9 @@ function showFileBrowserData(data){
 	var rootdir = JSONdata.rootdirectory.split('/');
 	rootdir.pop()
 	row.id = rootdir.join('/');
+	if(row.id == ""){
+		row.id = "/";
+	}
 	var cell1 = row.insertCell(0);
 	cell1.innerHTML = "<img src=../img/folder.png class=folderimage>";
 	var cell2 = row.insertCell(1);
@@ -95,6 +98,9 @@ function showFolderBrowserData(data){
 	var rootdir = JSONdata.rootdirectory.split('/');
 	rootdir.pop()
 	row.id = rootdir.join('/');
+	if(row.id == ""){
+		row.id = "/";
+	}
 	var cell1 = row.insertCell(0);
 	cell1.innerHTML = "<img src=../img/folder.png class=folderimage>";
 	var cell2 = row.insertCell(1);
