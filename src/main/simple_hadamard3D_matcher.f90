@@ -64,7 +64,6 @@ contains
         use simple_qsys_funs, only: qsys_job_finished
         use simple_oris,      only: oris
         use simple_fileio,    only: del_file
-        use simple_rnd,       only: irnd_uni
         use simple_sym,       only: sym
         use simple_image,     only: image
         class(build),   intent(inout) :: b

@@ -804,7 +804,9 @@ contains
                 else
                     iref = (state-1) * self%nprojs + prev_proj(self%iptcl_map)
                     call self%pftcc_ptr%gencorrs(iref, self%iptcl, corrs_inpl)
-                    corrs(state) = corrs_inpl(self%prev_roind)
+                    ! corrs(state) = corrs_inpl(self%prev_roind)
+                    ! this is to somewhat take into account alignment errors
+                    corrs(state) = maxval(corrs_inpl)
                 endif
             enddo
             ! make moves
