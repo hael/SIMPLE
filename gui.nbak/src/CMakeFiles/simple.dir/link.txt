@@ -1,1 +1,0 @@
-/usr/bin/c++   -O3 -pthread -std=c++11  -rdynamic CMakeFiles/simple.dir/simple_gui.cpp.o  -o simple ../ext/lib/libsqlite3.a ../ext/lib/libjpeg.a ../ext/lib/libmongoose.a -ldl 

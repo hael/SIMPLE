@@ -10,6 +10,7 @@
 
 #include <string>
 #include <map>
+#include <chrono>
 extern "C" {
     #include "../ext/mongoose/mongoose.h"
 }
@@ -22,9 +23,10 @@ extern "C" {
 struct mg_serve_http_opts 	http_server_opts;
 
 struct WebResponse {
-	std::string							user;
 	std::map<std::string, std::string>	requestmap;
 	std::map<std::string, std::string>	responsemap;
+	std::chrono::system_clock::time_point		starttime;
+	std::chrono::system_clock::time_point		endtime;
 	unsigned char* 						jpeg;
 	unsigned long						jpegsize;
 	int									jpegx;
@@ -38,6 +40,8 @@ struct WebResponse {
 // included internal dependencies
 
 #include "simple_gui_environment.h"
+#include "simple_gui_project.h"
+#include "simple_gui_logging.h"
 
 //=================================
 
@@ -51,6 +55,8 @@ void processRequest(struct http_message* message, struct WebResponse* webrespons
 	std::string		value;
 	int 	equals;
 	int 	ampersand;
+	
+	webresponse->starttime = std::chrono::system_clock::now();
 	
 	query_string.resize(message->query_string.len);
 	memcpy(&query_string[0], message->query_string.p, message->query_string.len);
@@ -86,6 +92,8 @@ void handleRequest(struct WebResponse* webresponse) {
 			
 		}else if (webresponse->requestmap["function"] == "newproject"){
 			
+		}else if (webresponse->requestmap["function"] == "listprojects"){
+			listProjects(webresponse);
 		}else{
 			log("Request function is invalid");
 			webresponse->responsemap["error"] = "Invalid function in request";
@@ -103,17 +111,29 @@ void handleRequest(struct WebResponse* webresponse) {
 
 void webResponse(struct mg_connection* http_connection, struct WebResponse* webresponse) {
 	
-	std::string JSONstring;
+	std::string		JSONstring;
+	std::chrono::duration<double> elapsed;
 	
-	if(sizeof(webresponse->jpeg) > 0){
+	if(webresponse->jpegsize > 0){
 		mg_send_head(http_connection, 200, webresponse->jpegsize, "Content-Type: image/jpeg");
 		mg_send(http_connection, webresponse->jpeg, webresponse->jpegsize);
 		delete [] webresponse->jpeg;
 	} else {
-		JSONstring = "joe";
+		JSONstring = "{";
+		for (auto const& element : webresponse->responsemap ){
+			JSONstring += "\"" + element.first + "\" : " + element.second + ",";
+		}
+		JSONstring.pop_back();
+		JSONstring += "}";
 		mg_send_head(http_connection, 200, JSONstring.length(), "Content-Type: application/json");
 		mg_send(http_connection, JSONstring.c_str(), JSONstring.length());
 	}
+	
+	webresponse->endtime = std::chrono::system_clock::now();
+	
+	elapsed = webresponse->endtime - webresponse->starttime;
+	
+	log("Handled request for function " + webresponse->requestmap["function"] + " in " + std::to_string(elapsed.count()) + " seconds");
 
 }
  
