@@ -150,7 +150,7 @@ contains
         call self%e%spiral( p%nsym, p%eullims )
         call self%e_bal%new(NSPACE_BALANCE)
         call self%e_bal%spiral( p%nsym, p%eullims )
-        self%grid_projs = self%e%create_proj_subspace(p%nsub, p%nsym, p%eullims )
+        self%grid_projs = self%e%create_proj_subspace(NPDIRS_SUBSPACE, p%nsym, p%eullims )
         DebugPrint 'generated discrete projection direction space'
         if( p%box > 0 )then
             ! build image objects

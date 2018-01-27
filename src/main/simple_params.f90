@@ -25,7 +25,7 @@ type :: params
     character(len=3)      :: append='no'          !< append in context of files(yes|no){no}
     character(len=3)      :: async='no'           !< asynchronous (yes|no){no}
     character(len=3)      :: autoscale='no'       !< automatic down-scaling(yes|no){yes}
-    character(len=3)      :: avg='no'             !< calc average automatic (yes|no){no}
+    character(len=3)      :: avg='no'             !< calculate average (yes|no){no}
     character(len=3)      :: bin='no'             !< binarise image(yes|no){no}
     character(len=3)      :: center='yes'         !< center image(s)/class average(s)/volume(s)(yes|no){no}
     character(len=3)      :: classtats='no'       !< calculate class population statistics(yes|no){no}
@@ -243,7 +243,6 @@ type :: params
     integer :: nrots=0
     integer :: nspace=2500         !< # projection directions
     integer :: nstates=1           !< # states to reconstruct
-    integer :: nsub=300
     integer :: nsym=1
     integer :: nthr=1              !< # OpenMP threads{1}
     integer :: numlen=0            !< length of number string
@@ -331,7 +330,6 @@ type :: params
     real    :: kv=300.             !< acceleration voltage(in kV){300.}
     real    :: lam=0.5
     real    :: lp_dyn=20.
-    real    :: lp_grid=20.
     real    :: lp=20.              !< low-pass limit(in A)
     real    :: lp_ctffind=5.0      !< low-pass limit 4 ctffind(in A)
     real    :: lp_pick=20.         !< low-pass limit 4 picker(in A)
@@ -635,7 +633,6 @@ contains
         call check_iarg('nrepeats',       self%nrepeats)
         call check_iarg('nrestarts',      self%nrestarts)
         call check_iarg('nspace',         self%nspace)
-        call check_iarg('nsub',           self%nsub)
         call check_iarg('nstates',        self%nstates)
         call check_iarg('class',          self%class)
         call check_iarg('nparts',         self%nparts)
@@ -719,7 +716,6 @@ contains
         call check_rarg('lam',            self%lam)
         call check_rarg('lp',             self%lp)
         call check_rarg('lp_ctffind',     self%lp_ctffind)
-        call check_rarg('lp_grid',        self%lp_grid)
         call check_rarg('lp_pick',        self%lp_pick)
         call check_rarg('lplim_crit',     self%lplim_crit)
         call check_rarg('lpstart',        self%lpstart)

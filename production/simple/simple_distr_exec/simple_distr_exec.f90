@@ -79,7 +79,7 @@ select case(prg)
         keys_required(3)  = 'cs'
         keys_required(4)  = 'fraca'
         keys_required(5)  = 'dir_movies'
-        keys_required(6)  = 'ncunits'
+        keys_required(6)  = 'nparts'
         ! set optional keys
         keys_optional(1)  = 'nthr'
         keys_optional(2)  = 'refs'
@@ -144,32 +144,31 @@ select case(prg)
         keys_required(6)  = 'nparts'
         ! set optional keys
         keys_optional(1)  = 'nthr'
-        keys_optional(2)  = 'ncunits'
-        keys_optional(3)  = 'fbody'
-        keys_optional(4)  = 'dose_rate'
-        keys_optional(5)  = 'exp_time'
-        keys_optional(6)  = 'lpstart'
-        keys_optional(7)  = 'lpstop'
-        keys_optional(8)  = 'trs'
-        keys_optional(9)  = 'pspecsz'
-        keys_optional(10) = 'numlen'
-        keys_optional(11) = 'startit'
-        keys_optional(12) = 'scale'
-        keys_optional(13) = 'nframesgrp'
-        keys_optional(14) = 'fromf'
-        keys_optional(15) = 'tof'
-        keys_optional(16) = 'nsig'
-        keys_optional(17) = 'outfile'
-        keys_optional(18) = 'hp'
-        keys_optional(19) = 'lp'
-        keys_optional(20) = 'dfmin'
-        keys_optional(21) = 'dfmax'
-        keys_optional(22) = 'dfstep'
-        keys_optional(23) = 'astigtol'
-        keys_optional(24) = 'phaseplate'
+        keys_optional(2)  = 'fbody'
+        keys_optional(3)  = 'dose_rate'
+        keys_optional(4)  = 'exp_time'
+        keys_optional(5)  = 'lpstart'
+        keys_optional(6)  = 'lpstop'
+        keys_optional(7)  = 'trs'
+        keys_optional(8)  = 'pspecsz'
+        keys_optional(9)  = 'numlen'
+        keys_optional(10) = 'startit'
+        keys_optional(11) = 'scale'
+        keys_optional(12) = 'nframesgrp'
+        keys_optional(13) = 'fromf'
+        keys_optional(14) = 'tof'
+        keys_optional(15) = 'nsig'
+        keys_optional(16) = 'outfile'
+        keys_optional(17) = 'hp'
+        keys_optional(18) = 'lp'
+        keys_optional(19) = 'dfmin'
+        keys_optional(20) = 'dfmax'
+        keys_optional(21) = 'dfstep'
+        keys_optional(22) = 'astigtol'
+        keys_optional(23) = 'phaseplate'
         ! parse command line
         if( describe ) call print_doc_unblur_ctffind
-        call cline%parse(keys_required(:6), keys_optional(:24))
+        call cline%parse(keys_required(:6), keys_optional(:23))
         ! set defaults
         call cline%set('dopick', 'no'     )
         call cline%set('prg',    'preproc')
@@ -206,25 +205,24 @@ select case(prg)
         keys_required(3)  = 'nparts'
         ! set optional keys
         keys_optional(1)  = 'nthr'
-        keys_optional(2)  = 'ncunits'
-        keys_optional(3)  = 'fbody'
-        keys_optional(4)  = 'dose_rate'
-        keys_optional(5)  = 'exp_time'
-        keys_optional(6)  = 'lpstart'
-        keys_optional(7)  = 'lpstop'
-        keys_optional(8)  = 'trs'
-        keys_optional(9)  = 'kv'
-        keys_optional(10) = 'pspecsz'
-        keys_optional(11) = 'numlen'
-        keys_optional(12) = 'startit'
-        keys_optional(13) = 'scale'
-        keys_optional(14) = 'nframesgrp'
-        keys_optional(15) = 'fromf'
-        keys_optional(16) = 'tof'
-        keys_optional(17) = 'nsig'
+        keys_optional(2)  = 'fbody'
+        keys_optional(3)  = 'dose_rate'
+        keys_optional(4)  = 'exp_time'
+        keys_optional(5)  = 'lpstart'
+        keys_optional(6)  = 'lpstop'
+        keys_optional(7)  = 'trs'
+        keys_optional(8)  = 'kv'
+        keys_optional(9)  = 'pspecsz'
+        keys_optional(10) = 'numlen'
+        keys_optional(11) = 'startit'
+        keys_optional(12) = 'scale'
+        keys_optional(13) = 'nframesgrp'
+        keys_optional(14) = 'fromf'
+        keys_optional(15) = 'tof'
+        keys_optional(16) = 'nsig'
         ! parse command line
         if( describe ) call print_doc_unblur
-        call cline%parse(keys_required(:3), keys_optional(:17))
+        call cline%parse(keys_required(:3), keys_optional(:16))
         ! set defaults
         if( .not. cline%defined('trs')     ) call cline%set('trs',      5.)
         if( .not. cline%defined('lpstart') ) call cline%set('lpstart', 15.)
@@ -248,20 +246,19 @@ select case(prg)
         keys_required(3)  = 'smpd'
         ! set optional keys
         keys_optional(1)  = 'nthr'
-        keys_optional(2)  = 'ncunits'
-        keys_optional(3)  = 'lpstart'
-        keys_optional(4)  = 'lpstop'
-        keys_optional(5)  = 'trs'
-        keys_optional(6)  = 'kv'
-        keys_optional(7)  = 'pspecsz'
-        keys_optional(8)  = 'numlen'
-        keys_optional(9)  = 'startit'
-        keys_optional(10) = 'scale'
-        keys_optional(11) = 'nframesgrp'
-        keys_optional(12) = 'nsig'
+        keys_optional(2)  = 'lpstart'
+        keys_optional(3)  = 'lpstop'
+        keys_optional(4)  = 'trs'
+        keys_optional(5)  = 'kv'
+        keys_optional(6)  = 'pspecsz'
+        keys_optional(7)  = 'numlen'
+        keys_optional(8)  = 'startit'
+        keys_optional(9)  = 'scale'
+        keys_optional(10) = 'nframesgrp'
+        keys_optional(11) = 'nsig'
         ! parse command line
         if( describe ) call print_doc_unblur_tomo
-        call cline%parse(keys_required(:3), keys_optional(:12))
+        call cline%parse(keys_required(:3), keys_optional(:11))
         ! set defaults
         if( .not. cline%defined('trs')     ) call cline%set('trs',       5.)
         if( .not. cline%defined('lpstart') ) call cline%set('lpstart',  15.)
@@ -312,18 +309,17 @@ select case(prg)
         keys_required(5) = 'fraca'
         keys_required(6) = 'nparts'
         ! set optional keys
-        keys_optional(1) = 'ncunits'
-        keys_optional(2) = 'pspecsz'
-        keys_optional(3) = 'hp'
-        keys_optional(4) = 'lp'
-        keys_optional(5) = 'dfmin'
-        keys_optional(6) = 'dfmax'
-        keys_optional(7) = 'dfstep'
-        keys_optional(8) = 'astigtol'
-        keys_optional(9) = 'phaseplate'
+        keys_optional(1) = 'pspecsz'
+        keys_optional(2) = 'hp'
+        keys_optional(3) = 'lp'
+        keys_optional(4) = 'dfmin'
+        keys_optional(5) = 'dfmax'
+        keys_optional(6) = 'dfstep'
+        keys_optional(7) = 'astigtol'
+        keys_optional(8) = 'phaseplate'
         ! parse command line
         if( describe ) call print_doc_ctffind
-        call cline%parse(keys_required(:6), keys_optional(:9))
+        call cline%parse(keys_required(:6), keys_optional(:8))
         ! set defaults
         call cline%set('nthr', 1.0)
         if( .not. cline%defined('pspecsz') ) call cline%set('pspecsz', 512.)
@@ -344,7 +340,7 @@ select case(prg)
         keys_required(5) = 'fraca'
         keys_required(6) = 'nparts'
         ! set optional keys
-        keys_optional(1) = 'ncunits'
+        keys_optional(1) = 'nthr'
         keys_optional(2) = 'pspecsz'
         keys_optional(3) = 'hp'
         keys_optional(4) = 'lp'
@@ -398,23 +394,22 @@ select case(prg)
         keys_required(3)  = 'nparts'
         ! set optional keys
         keys_optional(1)  = 'nthr'
-        keys_optional(2)  = 'ncunits'
-        keys_optional(3)  = 'ncls'
-        keys_optional(4)  = 'deftab'
-        keys_optional(5)  = 'oritab'
-        keys_optional(6)  = 'filwidth'
-        keys_optional(7)  = 'mul'
-        keys_optional(8)  = 'outfile'
-        keys_optional(9)  = 'refs'
-        keys_optional(10) = 'remap_classes'
-        keys_optional(11) = 'weights2D'
-        keys_optional(12) = 'balance'
-        keys_optional(13) = 'stk'
-        keys_optional(14) = 'stktab'
-        keys_optional(15) = 'phaseplate'
+        keys_optional(2)  = 'ncls'
+        keys_optional(3)  = 'deftab'
+        keys_optional(4)  = 'oritab'
+        keys_optional(5)  = 'filwidth'
+        keys_optional(6)  = 'mul'
+        keys_optional(7)  = 'outfile'
+        keys_optional(8)  = 'refs'
+        keys_optional(9)  = 'remap_classes'
+        keys_optional(10) = 'weights2D'
+        keys_optional(11) = 'balance'
+        keys_optional(12) = 'stk'
+        keys_optional(13) = 'stktab'
+        keys_optional(14) = 'phaseplate'
         ! parse command line
         if( describe ) call print_doc_makecavgs
-        call cline%parse(keys_required(:3), keys_optional(:15))
+        call cline%parse(keys_required(:3), keys_optional(:14))
         ! sanity check
         if( cline%defined('stk') .or. cline%defined('stktab') )then
             ! all ok
@@ -439,36 +434,33 @@ select case(prg)
         keys_required(5)  = 'nparts'
         ! set optional keys
         keys_optional(1)  = 'nthr'
-        keys_optional(2)  = 'ncunits'
-        keys_optional(3)  = 'deftab'
-        keys_optional(4)  = 'refs'
-        keys_optional(5)  = 'oritab'
-        keys_optional(6)  = 'hp'
-        keys_optional(7)  = 'lp'
-        keys_optional(8)  = 'lpstart'
-        keys_optional(9)  = 'lpstop'
-        keys_optional(10) = 'cenlp'
-        keys_optional(11) = 'trs'
-        keys_optional(12) = 'inner'
-        keys_optional(13) = 'width'
-        keys_optional(14) = 'startit'
-        keys_optional(15) = 'maxits'
-        keys_optional(16) = 'filwidth'
-        keys_optional(17) = 'center'
-        keys_optional(18) = 'autoscale'
-        keys_optional(19) = 'weights2D'
-        keys_optional(20) = 'refine'
-        keys_optional(21) = 'balance'
-        keys_optional(22) = 'match_filt'
-        keys_optional(23) = 'stk'
-        keys_optional(24) = 'stktab'
-        keys_optional(25) = 'dyncls'
-        keys_optional(26) = 'phaseplate'
-        keys_optional(27) = 'opt'
-        keys_optional(28) = 'objfun'
+        keys_optional(2)  = 'deftab'
+        keys_optional(3)  = 'refs'
+        keys_optional(4)  = 'oritab'
+        keys_optional(5)  = 'hp'
+        keys_optional(6)  = 'lp'
+        keys_optional(7)  = 'lpstart'
+        keys_optional(8)  = 'lpstop'
+        keys_optional(9)  = 'cenlp'
+        keys_optional(10) = 'trs'
+        keys_optional(11) = 'inner'
+        keys_optional(12) = 'width'
+        keys_optional(13) = 'startit'
+        keys_optional(14) = 'maxits'
+        keys_optional(15) = 'center'
+        keys_optional(16) = 'autoscale'
+        keys_optional(17) = 'weights2D'
+        keys_optional(18) = 'balance'
+        keys_optional(19) = 'match_filt'
+        keys_optional(20) = 'stk'
+        keys_optional(21) = 'stktab'
+        keys_optional(22) = 'dyncls'
+        keys_optional(23) = 'phaseplate'
+        keys_optional(24) = 'opt'
+        keys_optional(25) = 'objfun'
         ! documentation
         if( describe ) call print_doc_prime2D
-        call cline%parse( keys_required(:5), keys_optional(:28) )
+        call cline%parse( keys_required(:5), keys_optional(:25) )
         ! sanity checks
         if( cline%defined('stk') .or. cline%defined('stktab') )then
             ! all ok
@@ -573,20 +565,19 @@ select case(prg)
         keys_required(5)  = 'nparts'
         ! set optional keys
         keys_optional(1)  = 'nthr'
-        keys_optional(2)  = 'ncunits'
-        keys_optional(3)  = 'deftab'
-        keys_optional(4)  = 'lp'
-        keys_optional(5)  = 'inner'
-        keys_optional(6)  = 'width'
-        keys_optional(7)  = 'nspace'
-        keys_optional(8)  = 'nran'
-        keys_optional(9)  = 'npeaks'
-        keys_optional(10) = 'stk'
-        keys_optional(11) = 'stktab'
-        keys_optional(12) = 'phaseplate'
+        keys_optional(2)  = 'deftab'
+        keys_optional(3)  = 'lp'
+        keys_optional(4)  = 'inner'
+        keys_optional(5)  = 'width'
+        keys_optional(6)  = 'nspace'
+        keys_optional(7)  = 'nran'
+        keys_optional(8)  = 'npeaks'
+        keys_optional(9)  = 'stk'
+        keys_optional(10) = 'stktab'
+        keys_optional(11) = 'phaseplate'
         ! parse command line
         if( describe ) call print_doc_prime3D_init
-        call cline%parse(keys_required(:5), keys_optional(:12))
+        call cline%parse(keys_required(:5), keys_optional(:11))
         ! sanity check
         if( cline%defined('stk') .or. cline%defined('stktab') )then
             ! all ok
@@ -616,50 +607,47 @@ select case(prg)
         keys_required(5)  = 'nparts'
         ! set optional keys
         keys_optional(1)  = 'nthr'
-        keys_optional(2)  = 'ncunits'
-        keys_optional(3)  = 'deftab'
-        keys_optional(4)  = 'vol1'
-        keys_optional(5)  = 'oritab'
-        keys_optional(6)  = 'trs'
-        keys_optional(7)  = 'hp'
-        keys_optional(8)  = 'lp'
-        keys_optional(9)  = 'cenlp'
-        keys_optional(10) = 'dynlp'
-        keys_optional(11) = 'lpstart'
-        keys_optional(12) = 'lpstop'
-        keys_optional(13) = 'lplim_crit'
-        keys_optional(14) = 'eo'
-        keys_optional(15) = 'refine'
-        keys_optional(16) = 'frac'
-        keys_optional(17) = 'mskfile'
-        keys_optional(18) = 'inner'
-        keys_optional(19) = 'width'
-        keys_optional(20) = 'nspace'
-        keys_optional(21) = 'nstates'
-        keys_optional(22) = 'npeaks'
-        keys_optional(23) = 'startit'
-        keys_optional(24) = 'maxits'
-        keys_optional(25) = 'shbarrier'
-        keys_optional(26) = 'noise'
-        keys_optional(27) = 'nnn'
-        keys_optional(28) = 'norec'
-        keys_optional(29) = 'nsub'
-        keys_optional(30) = 'lp_grid'
-        keys_optional(31) = 'balance'
-        keys_optional(32) = 'center'
-        keys_optional(33) = 'pproc'
-        keys_optional(34) = 'stk'
-        keys_optional(35) = 'stktab'
-        keys_optional(36) = 'weights3D'
-        keys_optional(37) = 'phaseplate'
-        keys_optional(38) = 'opt'
-        keys_optional(39) = 'update_frac'
-        keys_optional(40) = 'focusmsk'
-        keys_optional(41) = 'objfun'
+        keys_optional(2)  = 'deftab'
+        keys_optional(3)  = 'vol1'
+        keys_optional(4)  = 'oritab'
+        keys_optional(5)  = 'trs'
+        keys_optional(6)  = 'hp'
+        keys_optional(7)  = 'lp'
+        keys_optional(8)  = 'cenlp'
+        keys_optional(9) = 'dynlp'
+        keys_optional(10) = 'lpstart'
+        keys_optional(11) = 'lpstop'
+        keys_optional(12) = 'lplim_crit'
+        keys_optional(13) = 'eo'
+        keys_optional(14) = 'refine'
+        keys_optional(15) = 'frac'
+        keys_optional(16) = 'mskfile'
+        keys_optional(17) = 'inner'
+        keys_optional(18) = 'width'
+        keys_optional(19) = 'nspace'
+        keys_optional(20) = 'nstates'
+        keys_optional(21) = 'npeaks'
+        keys_optional(22) = 'startit'
+        keys_optional(23) = 'maxits'
+        keys_optional(24) = 'shbarrier'
+        keys_optional(25) = 'noise'
+        keys_optional(26) = 'nnn'
+        keys_optional(27) = 'norec'
+        keys_optional(28) = 'balance'
+        keys_optional(29) = 'center'
+        keys_optional(30) = 'pproc'
+        keys_optional(31) = 'stk'
+        keys_optional(32) = 'stktab'
+        keys_optional(33) = 'weights3D'
+        keys_optional(34) = 'phaseplate'
+        keys_optional(35) = 'opt'
+        keys_optional(36) = 'update_frac'
+        keys_optional(37) = 'focusmsk'
+        keys_optional(38) = 'objfun'
         ! documentation
         if( describe ) call print_doc_prime3D
         ! parse command line
-        call cline%parse( keys_required(:5), keys_optional(:41) )
+        call cline%parse( keys_required(:5), keys_optional(:38) )
         ! sanity check
         if( cline%defined('stk') .or. cline%defined('stktab') )then
             ! all ok
@@ -678,67 +666,6 @@ select case(prg)
         endif
         ! execute
         call xprime3D_distr%execute(cline)
-    case( 'auto_refine3D' )
-        !==Program auto_refine3D
-        !
-        ! <auto_refine3D/begin><auto_refine3D/end>
-        !
-        ! set required keys
-        keys_required(1)  = 'smpd'
-        keys_required(2)  = 'msk'
-        keys_required(3)  = 'ctf'
-        keys_required(4)  = 'pgrp'
-        keys_required(5)  = 'nparts'
-        ! set optional keys
-        keys_optional(1)  = 'nthr'
-        keys_optional(2)  = 'deftab'
-        keys_optional(3)  = 'vol1'
-        keys_optional(4)  = 'oritab'
-        keys_optional(5)  = 'trs'
-        keys_optional(6)  = 'hp'
-        keys_optional(7)  = 'lp'
-        keys_optional(8)  = 'cenlp'
-        keys_optional(9)  = 'lpstop'
-        keys_optional(10) = 'lplim_crit'
-        keys_optional(11) = 'eo'
-        keys_optional(12) = 'frac'
-        keys_optional(13) = 'mskfile'
-        keys_optional(14) = 'inner'
-        keys_optional(15) = 'width'
-        keys_optional(16) = 'nspace'
-        keys_optional(17) = 'npeaks'
-        keys_optional(18) = 'startit'
-        keys_optional(19) = 'maxits'
-        keys_optional(20) = 'shbarrier'
-        keys_optional(21) = 'nnn'
-        keys_optional(22) = 'norec'
-        keys_optional(23) = 'nsub'
-        keys_optional(24) = 'lp_grid'
-        keys_optional(25) = 'balance'
-        keys_optional(26) = 'center'
-        keys_optional(27) = 'pproc'
-        keys_optional(28) = 'stk'
-        keys_optional(29) = 'stktab'
-        keys_optional(30) = 'weights3D'
-        keys_optional(31) = 'phaseplate'
-        keys_optional(32) = 'opt'
-        keys_optional(33) = 'objfun'
-        ! documentation
-        if( describe ) call print_doc_prime3D
-        ! parse command line
-        call cline%parse( keys_required(:5), keys_optional(:33) )
-        ! sanity check
-        if( cline%defined('stk') .or. cline%defined('stktab') )then
-            ! all ok
-        else
-            stop 'stk or stktab need to be part of command line!'
-        endif
-        ! set defaults
-        if( .not. cline%defined('cenlp')  ) call cline%set('cenlp',   30.)
-        if( .not. cline%defined('pproc')  ) call cline%set('pproc', 'yes')
-        if( .not. cline%defined('eo')     ) call cline%set('eo',    'yes')
-        ! execute
-        call xauto_refine3D%execute(cline)
     case( 'recvol' )
         !==Program recvol
         !
@@ -764,19 +691,18 @@ select case(prg)
         keys_required(6)  = 'nparts'
         ! set optional keys
         keys_optional(1)  = 'nthr'
-        keys_optional(2)  = 'ncunits'
-        keys_optional(3)  = 'eo'
-        keys_optional(4)  = 'deftab'
-        keys_optional(5)  = 'frac'
-        keys_optional(6)  = 'mskfile'
-        keys_optional(7)  = 'mul'
-        keys_optional(8)  = 'balance'
-        keys_optional(9)  = 'stk'
-        keys_optional(10) = 'stktab'
-        keys_optional(11) = 'phaseplate'
+        keys_optional(2)  = 'eo'
+        keys_optional(3)  = 'deftab'
+        keys_optional(4)  = 'frac'
+        keys_optional(5)  = 'mskfile'
+        keys_optional(6)  = 'mul'
+        keys_optional(7)  = 'balance'
+        keys_optional(8)  = 'stk'
+        keys_optional(9)  = 'stktab'
+        keys_optional(10) = 'phaseplate'
         ! parse command line
         if( describe ) call print_doc_recvol
-        call cline%parse(keys_required(:6), keys_optional(:11))
+        call cline%parse(keys_required(:6), keys_optional(:10))
         ! sanity check
         if( cline%defined('stk') .or. cline%defined('stktab') )then
             ! all ok
@@ -848,7 +774,7 @@ select case(prg)
         keys_required(2) = 'fbody'
         keys_required(3) = 'smpd'
         keys_required(4) = 'boxfile'
-        keys_required(5) = 'ncunits'
+        keys_required(5) = 'nparts'
         ! set optional keys
         keys_optional(1) = 'lp'
         keys_optional(2) = 'offset'
@@ -880,23 +806,22 @@ select case(prg)
         keys_required(5)  = 'nparts'
         ! set optional keys
         keys_optional(1)  = 'nthr'
-        keys_optional(2)  = 'ncunits'
-        keys_optional(3)  = 'hp'
-        keys_optional(4)  = 'lpstart'
-        keys_optional(5)  = 'lpstop'
-        keys_optional(6)  = 'frac'
-        keys_optional(7)  = 'inner'
-        keys_optional(8)  = 'width'
-        keys_optional(9)  = 'nspace'
-        keys_optional(10) = 'autoscale'
-        keys_optional(11) = 'pgrp_known'
-        keys_optional(12) = 'center'
-        keys_optional(13) = 'opt'
-        keys_optional(14) = 'update_frac'
-        keys_optional(15) = 'objfun'
+        keys_optional(2)  = 'hp'
+        keys_optional(3)  = 'lpstart'
+        keys_optional(4)  = 'lpstop'
+        keys_optional(5)  = 'frac'
+        keys_optional(6)  = 'inner'
+        keys_optional(7)  = 'width'
+        keys_optional(8)  = 'nspace'
+        keys_optional(9)  = 'autoscale'
+        keys_optional(10) = 'pgrp_known'
+        keys_optional(11) = 'center'
+        keys_optional(12) = 'opt'
+        keys_optional(13) = 'update_frac'
+        keys_optional(14) = 'objfun'
         ! parse command line
         if( describe ) call print_doc_ini3D_from_cavgs
-        call cline%parse(keys_required(:5), keys_optional(:15))
+        call cline%parse(keys_required(:5), keys_optional(:14))
         ! set defaults
         if( .not. cline%defined('autoscale') ) call cline%set('autoscale', 'yes')
         ! execute

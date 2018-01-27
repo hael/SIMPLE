@@ -128,7 +128,6 @@ contains
         call chdict%push('label',         'discrete label(class|state){class}')
         call chdict%push('lp',            'low-pass limit(in A)')
         call chdict%push('lp_ctffind',    'low-pass limit 4 ctffind(in A)')
-        call chdict%push('lp_grid',       'low-pass limit in coarse grid search(in A){20 A}')
         call chdict%push('lp_pick',       'low-pass limit 4 picker(in A)')
         call chdict%push('lplim_crit',    'corr criterion low-pass limit assignment(0.143-0.5){0.3}')
         call chdict%push('lpstart',       'start low-pass limit(in A){15}')

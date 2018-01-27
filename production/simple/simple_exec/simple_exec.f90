@@ -496,19 +496,20 @@ select case(prg)
         keys_required(4) = 'cs'
         keys_required(5) = 'fraca'
         ! set optional keys
-        keys_optional(1) = 'pspecsz'
-        keys_optional(2) = 'hp'
-        keys_optional(3) = 'lp'
-        keys_optional(4) = 'dfmin'
-        keys_optional(5) = 'dfmax'
-        keys_optional(6) = 'phaseplate'
+        keys_optional(1) = 'nthr'
+        keys_optional(2) = 'pspecsz'
+        keys_optional(3) = 'hp'
+        keys_optional(4) = 'lp'
+        keys_optional(5) = 'dfmin'
+        keys_optional(6) = 'dfmax'
+        keys_optional(7) = 'phaseplate'
         ! parse command line
         if( describe ) call print_doc_ctffit
-        call cline%parse(keys_required(:5), keys_optional(:6))
+        call cline%parse(keys_required(:5), keys_optional(:7))
         ! set defaults
-        if( .not. cline%defined('pspecsz') ) call cline%set('pspecsz',   512.)
-        if( .not. cline%defined('hp')      ) call cline%set('hp',         30.)
-        if( .not. cline%defined('lp')      ) call cline%set('lp',          5.)
+        if( .not. cline%defined('pspecsz') ) call cline%set('pspecsz', 512.)
+        if( .not. cline%defined('hp')      ) call cline%set('hp',       30.)
+        if( .not. cline%defined('lp')      ) call cline%set('lp',        5.)
         ! execute
         call xctffit%execute(cline)
 
@@ -1046,20 +1047,18 @@ select case(prg)
         keys_optional(26) = 'nnn'
         keys_optional(27) = 'rrate'
         keys_optional(28) = 'norec'
-        keys_optional(29) = 'nsub'
-        keys_optional(30) = 'lp_grid'
-        keys_optional(31) = 'balance'
-        keys_optional(32) = 'pproc'
-        keys_optional(33) = 'update_frac'
-        keys_optional(34) = 'stk'
-        keys_optional(35) = 'stktab'
-        keys_optional(36) = 'phaseplate'
-        keys_optional(37) = 'opt'
-        keys_optional(38) = 'focusmsk'
-        keys_optional(39) = 'objfun'
+        keys_optional(29) = 'balance'
+        keys_optional(30) = 'pproc'
+        keys_optional(31) = 'update_frac'
+        keys_optional(32) = 'stk'
+        keys_optional(33) = 'stktab'
+        keys_optional(34) = 'phaseplate'
+        keys_optional(35) = 'opt'
+        keys_optional(36) = 'focusmsk'
+        keys_optional(37) = 'objfun'
         ! parse command line
         if( describe ) call print_doc_prime3D
-        call cline%parse(keys_required(:5), keys_optional(:39))
+        call cline%parse(keys_required(:5), keys_optional(:37))
         ! sanity check
         if( cline%defined('stk') .or. cline%defined('stktab') )then
             ! all ok

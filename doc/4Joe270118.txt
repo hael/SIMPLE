@@ -1,0 +1,34 @@
+comments 2 Joe 27/1 2018
+
+Suggestions for changes before beta release:
+
+(1) I have removed every dependency on ncunits from the back-end, only nparts is ever required now. Suggestion for GUI: where "Number of Compute Units" are now should be "Number of Threads per Part"
+
+(2) When re-running jobs the job description becomes scrambled, easy fix?
+
+(3) We missed putting in the nthr flag in ctffit. It is there now so the GUI needs to be updated.
+
+(4) The ctfres stat is gone, now we need capability to sort on dferr (defocus error estimate) and ctfitcc
+
+(5) Manual picking: after I have deleted a box I need to click three times before I am able to select a new one again. The particle count is wrong. After deletion and multiple clicking to get back boxers appear in what seems to be random positions.
+
+(6) There is no ctfres input to extract. The GUI should be updated accordingly.
+
+(7) PRIME2D: the default value of weights2D should be "no"
+
+(8) INI3D:
+    * centering of volume should be "yes" by default
+    * It is currently impossible to start ini3D on an arbitrary set of class averages. This must be possible to do.
+    * The parameter descriptions don't make much sense for ini3d:
+        a) Low-resolution limit should be high-pass limit
+        b) There are two other limits required (lpstart + lpstop) that should be called:
+        low-pass limit, stage 1
+        low-pass limit, stage 2
+        There is no need to provide support for lp (currently called high-resolution limit)
+
+After this has been sorted and pushed and you declare that you are ready on your end, I will make a branch called betareleaseDATE so that we can continue to develop in the master branch. Major changes that will affect the GUI that will occur after creation of a release branch are:
+
+(1) renaming of program names and commanders to provide consistency between GUI and command line interface
+(2) reorganization of executables to distinguish between programs that are executed by SIMPLE itself and executables aimed at users as well as splitting of programs (eg PRIME3D) into functional units that correspond more closely to what users would recognize
+(3) integrate simple_sp_projec controller for centralisation of meta-data using the *simple binary file format
+(4) use JSON as user interface markup language to auto-generate GUI & command-line front-end 

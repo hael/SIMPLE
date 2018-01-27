@@ -245,11 +245,8 @@ contains
             case DEFAULT
                 stop 'Unsupported eo flag; simple_hadamard_common'
         end select
-        if( .not. kstop_grid_set )then
-            ! set highest Fourier index for coarse grid search
-            p%kstop_grid = calc_fourier_index(p%lp_grid, p%boxmatch, p%smpd)
-        endif
-        ! lp_grid check
+        ! set highest Fourier index for coarse grid search
+        if( .not. kstop_grid_set )        p%kstop_grid = p%kfromto(2)
         if( p%kstop_grid > p%kfromto(2) ) p%kstop_grid = p%kfromto(2)
         DebugPrint '*** simple_hadamard_common ***: did set Fourier index range'
     end subroutine set_bp_range
@@ -280,7 +277,7 @@ contains
                 endif
             endif
             p%kfromto(2) = calc_fourier_index(lplim, p%boxmatch, p%smpd)
-            p%kfromto(2) = max(p%kfromto(2), p%kfromto(1) + 3) ! to avoid pathological cases    
+            p%kfromto(2) = max(p%kfromto(2), p%kfromto(1) + 3) ! to avoid pathological cases
             p%lp_dyn = lplim
             call b%a%set_all2single('lp',lplim)
         endif
