@@ -1,0 +1,49 @@
+<DOCTYPE html>
+
+<html>
+	<head>
+		<title>Simple</title>
+		<link rel="shortcut icon" href="img/simple_favicon.ico" >
+		<link rel="stylesheet" type="text/css" href="simple.css">
+	</head>
+	<body>
+		<div class=header>
+			<div class=headermenu>
+				<img src=img/headermenu.png class=headermenuimage onclick="getMenu()">
+				<div class=headermenuitems id=headermenuitems>
+					<div class=headermenuitem onclick="showNewJob()">New Job</div>
+					<div class=headermenuitem onclick="showProjectManager()">Project Manager</div>
+				</div>
+			</div>
+			<img class=headerimage src=img/simple_logo_simple.png>
+			<div class=projectselector>
+				<div class=projectselectortitle id=projectselectortitle onclick="getProjects()">Select Project</div>
+				<div class=projects id=projects>
+				</div>
+			</div>
+		</div>
+		<div class=mainpane id=mainpane>
+			<div class=subheader>
+				<img class=simpleicon src=img/simple_favicon.ico> 
+				<div class=subheadertitle>
+					<div class=subtitlemajor>Project History</div>
+				</div>
+			</div>
+			<div class=tabular id=projecthistory></div>
+		</div>
+		<div class=gauze id=gauze></div>
+		<div class=largepopup id=largepopup>
+			<div class=subheader>
+				<img class=simpleicon src=img/simple_favicon.ico> 
+				<div class=subheadertitle>
+					<div class=subtitlemajor id=largepopuptitle></div>
+				</div>
+				<img src=img/close.png class=closeicon onclick='hidePopup()'>
+			</div>	
+			<div class=sidemenutabs id=sidemenutabs></div>
+			<div class=sidemenudisplay id=sidemenudisplay></div>
+			<div class=largepopupcontent id=largepopupcontent></div>
+		</div>
+		<script src="simple.js"></script> 
+	</body>
+</html> 

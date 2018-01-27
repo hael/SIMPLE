@@ -1425,7 +1425,7 @@ void prime3DPost (std::string directory){
 			prime3Din = new UniDoc();
 			readUniDoc(prime3Din, directory + "/" + "prime3D_in.simple");
 			
-			if(files[filesit].find("prime3Ddoc_") != std::string::npos){
+			if(files[filesit].find("prime3Ddoc_") != std::string::npos && files[filesit].find(".simple") == std::string::npos){
 				simplefile = directory + "/" + files[filesit];
 				simplefile.replace(simplefile.end() - 3, simplefile.end(), "simple");
 				std::cout << simplefile << std::endl;

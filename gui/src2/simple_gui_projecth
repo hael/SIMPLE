@@ -1,7 +1,7 @@
 // open include guard
 
-#ifndef __ENVIRONMENT_H_INCLUDED__
-#define __ENVIRONMENT_H_INCLUDED__
+#ifndef __PROJECT_H_INCLUDED__
+#define __PROJECT_H_INCLUDED__
 
 //=================================
 
@@ -20,7 +20,6 @@ extern struct Environment {
 	std::string			databasepath;
 	std::string			logpath;
 	std::string			webpath;
-	std::string			user;
 	int					port = 8088;
 	bool				multiuser;
 	bool				verbose;
@@ -118,5 +117,3 @@ void environmentSetup(int& argc, char* argv[]) {
 #endif
 
 //=================================
-
-
