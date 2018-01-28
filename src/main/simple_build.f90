@@ -157,7 +157,7 @@ contains
             ! box-sized ones
             call self%img%new([p%box,p%box,1],p%smpd,                 wthreads=.false.)
             call self%img_match%new([p%boxmatch,p%boxmatch,1],p%smpd, wthreads=.false.)
-            call self%img_copy%new([p%boxmatch,p%boxmatch,1],p%smpd,  wthreads=.false.)
+            call self%img_copy%new([p%box,p%box,1],p%smpd,  wthreads=.false.)
             DebugPrint   'did build box-sized image objects'
             ! for thread safety in the image class
             call self%img%construct_thread_safe_tmp_imgs(p%nthr)

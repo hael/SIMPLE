@@ -31,7 +31,6 @@ type(comlin_smat_distr_commander)        :: xcomlin_smat_distr
 ! PRIME3D
 type(prime3D_init_distr_commander)       :: xprime3D_init_distr
 type(prime3D_distr_commander)            :: xprime3D_distr
-type(auto_refine3D_commander)            :: xauto_refine3D
 type(recvol_distr_commander)             :: xrecvol_distr
 type(symsrch_distr_commander)            :: xsymsrch_distr
 

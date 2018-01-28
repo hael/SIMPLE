@@ -388,7 +388,6 @@ contains
         use simple_rnd, only: ran3
         class(ori), intent(inout)  :: self
         real, intent(in), optional :: trs         !< threshold
-        real :: x, y
         if( present(trs) )call self%rnd_shift(trs)
         call self%e3set(ran3()*359.99)
     end subroutine rnd_inpl
@@ -752,7 +751,7 @@ contains
         ori3dy = ori3d%get('y')
         euls   = ori3d%get_euler()
         mirr   = .false.
-        if( ori3d%get('mirr') == 1. )then
+        if( nint(ori3d%get('mirr')) == 1 )then
             mirr    = .true.
             euls(3) = -euls(3)
             ori3dy  = -ori3dy
@@ -1224,8 +1223,8 @@ contains
     subroutine test_ori_dists
         use simple_math, only: rad2deg
         type(ori) :: o1, o2, omed
-        real    :: frob_lim, dist, lr, diff, adiff, adist
-        integer :: itst, r
+        real    :: frob_lim, dist, adist
+        integer :: itst
         integer, parameter :: NTESTS=5000
         frob_lim = 2.*sqrt(2.)
         call o1%new_ori

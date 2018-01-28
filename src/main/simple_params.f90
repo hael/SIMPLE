@@ -409,7 +409,7 @@ contains
         ! type(binoris)                    :: bos
         character(len=STDLEN)            :: cwd_local, debug_local, verbose_local, stk_part_fname
         character(len=1)                 :: checkupfile(50)
-        character(len=:), allocatable    :: conv, stk_part_fname_sc, pid_file
+        character(len=:), allocatable    :: stk_part_fname_sc, pid_file
         integer                          :: i, ncls, ifoo, lfoo(3), cntfile, istate, pid
         logical                          :: nparts_set, vol_defined(MAXS), aamix, ddel_scaled
         nparts_set        = .false.

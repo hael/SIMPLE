@@ -810,6 +810,9 @@ contains
                 endif
             enddo
             ! make moves
+            mi_state = 0.
+            mi_inpl  = 1.
+            mi_proj  = 1.
             if( self%prev_corr < corr_thresh )then
                 ! state randomization
                 counts(1) = counts(1) + 1
@@ -819,9 +822,6 @@ contains
                 enddo
                 corr            = corrs(state)
                 self%nrefs_eval = 1
-                mi_state        = 0.
-                mi_inpl         = 1.
-                mi_proj         = 1.
             else
                 ! SHC state optimization
                 counts(2) = counts(2) + 1
@@ -829,9 +829,6 @@ contains
                 state           = shcloc(self%nstates, corrs, self%prev_corr)
                 corr            = corrs(state)
                 self%nrefs_eval = count(corrs <= self%prev_corr)
-                mi_proj  = 1.
-                mi_inpl  = 1.
-                mi_state = 0.
                 if( prev_states(self%iptcl_map) .eq. state ) mi_state = 1.
                 if( do_extr_opt )then
                     ! extremal optimization

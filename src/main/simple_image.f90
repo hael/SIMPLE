@@ -351,7 +351,6 @@ contains
         integer(kind=c_int) :: rc
         integer             :: i
         logical             :: do_allocate
-        integer(kind=c_int) :: wsdm_ret
         ! we need to be clever about allocation (because it is costly)
         if( self%existence )then
             if( any(self%ldim /= ldim) )then
@@ -2400,7 +2399,6 @@ contains
     function division( self1, self2 ) result( self )
         class(image), intent(in) :: self1, self2
         type(image) :: self
-        integer :: lims(3,2), h, k, l, phys(3)
         if( self1.eqdims.self2 )then
             call self%new(self1%ldim, self1%smpd)
             if( self1%ft .and. self2%ft )then
@@ -5715,8 +5713,8 @@ contains
     subroutine gauimg2D( self, xsigma, ysigma )
         class(image), intent(inout) :: self
         real,         intent(in)    :: xsigma, ysigma
-        real    :: x, y, z, xw, yw, zw
-        integer :: i, j, k
+        real    :: x, y, zw
+        integer :: i, j
         x = -real(self%ldim(1))/2.
         do i=1,self%ldim(1)
             y = -real(self%ldim(2))/2.
@@ -6117,11 +6115,10 @@ contains
         real,             intent(in)    :: mskrad
         character(len=*), intent(in)    :: which
         real, optional,   intent(in)    :: inner, width
-        real, allocatable :: pixels(:)
-        real              :: ci, cj, ck, e, wwidth
-        real              :: cis(self%ldim(1)), cjs(self%ldim(2)), cks(self%ldim(3))
-        integer           :: i, j, k, minlen, ir, jr, kr, npix, npix_tot, vec(3)
-        logical           :: didft, doinner, soft, err
+        real    :: e, wwidth
+        real    :: cis(self%ldim(1)), cjs(self%ldim(2)), cks(self%ldim(3))
+        integer :: i, j, k, minlen, ir, jr, kr
+        logical :: didft, doinner, soft
         ! width
         wwidth = 10.
         if( present(width) ) wwidth = width
@@ -7310,9 +7307,9 @@ contains
                 type(image)          :: img, img_2, img_3, img_4, img3d
                 type(image)          :: imgs(20)
                 complex, allocatable :: fplane_simple(:,:), fplane_frealix(:,:)
-                integer              :: i, j, k, cnt, lfny, ldim(3)
-                real                 :: input, msk, ave, sdev, var, med, xyz(3), pow
-                real                 :: imcorr, recorr, corr, corr_lp
+                integer              :: i, j, k, lfny, ldim(3)
+                real                 :: input, msk, sdev, var, med, xyz(3), pow
+                real                 :: imcorr, recorr
                 real, allocatable    :: pcavec1(:), pcavec2(:), spec(:), res(:)
                 real                 :: smpd=2.
                 logical              :: passed, test(6)

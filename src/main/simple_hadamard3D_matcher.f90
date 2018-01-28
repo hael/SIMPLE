@@ -497,9 +497,9 @@ contains
         class(params),     intent(inout) :: p         !< param object
         integer, optional, intent(in)    :: nsamp_in  !< num input samples
         type(ran_tabu)       :: rt
-        type(ori)            :: orientation, o_sym
+        type(ori)            :: orientation
         integer, allocatable :: sample(:)
-        integer              :: i, k, nsamp, alloc_stat
+        integer              :: i, nsamp, alloc_stat
         type(kbinterpol)     :: kbwin
         type(prep4cgrid)     :: gridprep
         if( p%vols(1) == '' )then
@@ -558,8 +558,7 @@ contains
         class(params),              intent(inout) :: p     !< param object
         class(cmdline),             intent(inout) :: cline !< command line
         type(polarizer), allocatable :: match_imgs(:)
-        type(ori) :: o
-        integer   :: cnt, s, iptcl, ind, iref, istate, ntot, nrefs, ldim(3)
+        integer   :: cnt, s, iptcl, ind, iref, nrefs
         integer   :: batchlims(2), imatch, iptcl_batch
         logical   :: do_center
         real      :: xyz(3)
@@ -610,7 +609,7 @@ contains
                     do iref=1,p%nspace
                         ind = (s - 1) * p%nspace + iref
                         call b%vol%fproject_polar(ind, b%e%get_ori(iref), pftcc, iseven=.true.)
-                        call pftcc% cp_even2odd_ref(ind)
+                        call pftcc%cp_even2odd_ref(ind)
                     end do
                     !$omp end parallel do
                 endif

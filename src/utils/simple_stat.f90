@@ -366,7 +366,7 @@ contains
                 do px=-winsz,winsz
                     ! reflect on x- boundary
                     h= i+px
-                    h = merge(i - px,  h,  (h < 1).or.(h > nx)) 
+                    h = merge(i - px,  h,  (h < 1).or.(h > nx))
                     do py=-winsz,winsz
                         k= j + py
                         k = merge(j - py, k, (k < 1).or.(k > ny))
@@ -382,7 +382,7 @@ contains
             end do
         end do
         !omp end parallel do
-    
+
     end subroutine mean_2D
 
     !> stdev_2D Standard deviation 2D filter
@@ -428,7 +428,7 @@ contains
                 do px=-winsz,winsz
                     ! reflect on x- boundary
                     h= i+px
-                    h = merge(i - px,  h,  (h < 1).or.(h > nx)) 
+                    h = merge(i - px,  h,  (h < 1).or.(h > nx))
                     do py=-winsz,winsz
                         k= j + py
                         k = merge(j - py, k, (k < 1).or.(k > ny))
@@ -445,9 +445,9 @@ contains
             end do
         end do
         !omp end parallel do
-    
+
     end subroutine stdev_2D
-    
+
     ! CORRELATION
 
     !>    calculates Pearson's correlation coefficient
@@ -893,7 +893,7 @@ contains
         binwidth2 = ( maxval(y)-minv2 ) / real( nbins )
         ! Joint
         allocate( h(nbins,nbins) , stat=alloc_stat )
-        if(alloc_stat /= 0) call alloc_errchk('In: simple_stat; get_jointhist' , alloc_stat) 
+        if(alloc_stat /= 0) call alloc_errchk('In: simple_stat; get_jointhist' , alloc_stat)
         h = 0
         do i=1,n
             bin1 = bin( x(i), minv1, binwidth1 )
@@ -980,7 +980,7 @@ contains
                 mi = mi + pxy * log( pxy/ (px*py) ) / logtwo
             enddo
         enddo
-        if( ( ex /= 0.0 ) .and. (ey /= 0.0 ) )then
+        if( (abs(ex) > TINY) .and. (abs(ey) > TINY) )then
             val = mi / sqrt(ex*ey)
         else
             val = 0.0

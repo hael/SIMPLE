@@ -360,10 +360,8 @@ contains
         class(params),         intent(inout) :: p
         class(image),          intent(inout) :: img
         class(ori),            intent(inout) :: orientation
-        type(oris) :: os_sym
-        type(ori)  :: o_sym, o_soft
-        real       :: pw, w
-        integer    :: jpeak, s, k, npeaks, eo, nstates
+        real       :: pw
+        integer    :: s, npeaks, eo, nstates
         npeaks  = 1
         nstates = 1
         ! particle weight
@@ -390,7 +388,6 @@ contains
         integer,          intent(in)    :: iptcl
         class(image),     intent(inout) :: img_in
         class(polarizer), intent(inout) :: img_out
-        real      :: frc(b%projfrcs%get_filtsz()), filter(b%projfrcs%get_filtsz())
         type(ctf) :: tfun
         real      :: x, y, dfx, dfy, angast, phshift
         x      = b%a%get(iptcl, 'x')
@@ -462,7 +459,7 @@ contains
         real,    optional, intent(in)    :: xyz_in(3)
         real,    optional, intent(out)   :: xyz_out(3)
         real    :: frc(b%projfrcs%get_filtsz()), filter(b%projfrcs%get_filtsz())
-        real    :: xyz(3), sharg, frc05, frc0143
+        real    :: xyz(3), sharg
         logical :: do_center
         ! normalise
         call img_in%norm
@@ -641,7 +638,6 @@ contains
         character(len=*), intent(in)    :: volfname
         logical,          intent(out)   :: do_center
         real,             intent(out)   :: xyz(3)
-        integer :: ldim(3)
         ! ensure correct b%vol dim
         call b%vol%new([p%box,p%box,p%box],p%smpd)
         ! centering
@@ -680,8 +676,6 @@ contains
         type(image)                     :: mskvol
         real,             allocatable   :: filter(:)
         character(len=:), allocatable   :: fname_vol_filter
-        real    :: shvec(3)
-        integer :: ldim(3)
         ! ensure correct b%vol dim
         call b%vol%new([p%box,p%box,p%box],p%smpd)
         call b%vol%read(volfname)
@@ -691,9 +685,13 @@ contains
             call b%vol%shift([xyz(1),xyz(2),xyz(3)])
         endif
         ! Volume filtering
-        if( p%eo.ne.'no' .and. p%nstates.eq.1 )then
+        if( p%eo.ne.'no' )then
             ! anisotropic matched filter
-            allocate(fname_vol_filter, source=ANISOLP_FBODY//int2str_pad(s,2)//trim(p%ext))
+            if( p%nstates.eq.1 )then
+                allocate(fname_vol_filter, source=ANISOLP_FBODY//int2str_pad(s,2)//trim(p%ext))
+            else
+                allocate(fname_vol_filter, source=HET_ANISOLP//trim(p%ext))
+            endif
             if( file_exists(fname_vol_filter) )then
                 call b%vol2%read(fname_vol_filter)
                 call b%vol%fwd_ft ! needs to be here in case the shift was never applied (above)
@@ -874,10 +872,10 @@ contains
         integer,                intent(in)    :: state
         class(projection_frcs), intent(inout) :: projfrcs
         type(oris)               :: e_space
-        type(image)              :: even, odd, mskvol
+        type(image)              :: mskvol
         type(image), allocatable :: even_imgs(:), odd_imgs(:)
         real,        allocatable :: frc(:)
-        integer :: iproj, ldim(3), find_plate
+        integer :: iproj, find_plate
         ! ensure correct b%vol dim
         call b%vol%new([p%box,p%box,p%box],p%smpd)
         ! read & prep even/odd pair

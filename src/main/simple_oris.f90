@@ -665,7 +665,6 @@ contains
         type(ran_tabu)       :: rt
         integer              :: iptcl, cls2split(1)
         integer              :: cnt, nempty, n_incl, maxpop, i, icls, ncls_here
-        logical              :: consider_w_here
         ncls_here = max(self%get_n('class'), ncls)
         call self%get_pops(pops, 'class', consider_w=.true., maxn=ncls_here)
         nempty    = count(pops == 0)
@@ -873,7 +872,7 @@ contains
         integer :: pop, cnt, clsnr, i, mystate
         real    :: val
         logical :: class_present, state_present
-        class_present = class_present
+        class_present = present(class)
         state_present = present(state)
         if( class_present )then
             pop = self%get_pop(class, 'class')
@@ -1114,7 +1113,7 @@ contains
                 real,    allocatable :: dists(:), ws(:)
                 integer, allocatable :: inds(:)
                 real                 :: wdmean, nw_nonzero, wsdev
-                integer              :: loc(1), i, n, cnt
+                integer              :: loc(1), i, n
                 inds = self%get_pinds(istate, 'state')
                 n = size(inds)
                 wsdev = 0.
@@ -1124,11 +1123,15 @@ contains
                 allocchk( 'ang_sdev_state; simple_oris')
                 ws    = 0.
                 dists = 0.
-                ! get best ori
+                ! gather weights & oris
                 do i=1,n
                     ws(i) = self%get(inds(i),'ow')
                     call os%set_ori( i, self%o(inds(i)) )
                 enddo
+                ! # nonzero weights
+                nw_nonzero = real(count(ws > 0.))
+                if( nint(nw_nonzero) < 3 ) return
+                ! get best ori
                 loc    = maxloc(ws)
                 o_best = os%get_ori( loc(1) )
                 ! build distance vector
@@ -1138,8 +1141,6 @@ contains
                 enddo
                 ! weighted distance mean
                 wdmean = sum(ws * dists) / sum(ws)
-                ! # nonzero weights
-                nw_nonzero = real(count(ws > 0.))
                 ! weighted standard deviation of distances
                 wsdev = sqrt(sum(ws * (dists - wdmean)**2.0) / (((nw_nonzero - 1.0) / nw_nonzero) * sum(ws)))
                 ! destruct
@@ -1231,9 +1232,8 @@ contains
     end function get_nodd
 
     !>  \brief  is getting the number of oris assigned to the odd partion
-    integer function get_nevenodd( self, fromto )
+    integer function get_nevenodd( self )
         class(oris),       intent(inout) :: self
-        integer, optional, intent(in)    :: fromto(2)
         get_nevenodd = self%get_neven() + self%get_nodd()
     end function get_nevenodd
 
@@ -1264,7 +1264,7 @@ contains
         logical,              intent(out)   :: mask(fromto(1):fromto(2))
         real,    allocatable :: counts(:), states(:)
         integer, allocatable :: inds_here(:)
-        integer :: i, cnt, n_incl
+        integer :: i, cnt
         real    :: val
         ! gather info
         allocate( states(fromto(1):fromto(2)), counts(fromto(1):fromto(2)), inds_here(fromto(1):fromto(2)))
@@ -1688,7 +1688,7 @@ contains
         real :: x, y
         do i=1,self%n
             if( present(trs) )then
-                if( trs == 0. )then
+                if( abs(trs) < TINY )then
                     x = 0.
                     y = 0.
                 else

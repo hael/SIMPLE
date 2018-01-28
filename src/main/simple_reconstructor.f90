@@ -72,7 +72,6 @@ type, extends(image) :: reconstructor
     procedure          :: dealloc_rho
 end type reconstructor
 
-real, parameter :: SHTHRESH=0.0001
 #include "simple_local_flags.inc"
 
 contains

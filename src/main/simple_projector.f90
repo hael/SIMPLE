@@ -1,5 +1,5 @@
 ! projection of 3D volumes in the Fourier domain by convolution interpolation
-! to generate band-pass limited Cartesian and polar 2D Fourier transforms 
+! to generate band-pass limited Cartesian and polar 2D Fourier transforms
 module simple_projector
 !$ use omp_lib
 !$ use omp_lib_kinds
@@ -12,6 +12,8 @@ implicit none
 
 public :: projector
 private
+
+integer, parameter :: iwinsz = ceiling(KBWINSZ - 0.5) !< half-window size
 
 type, extends(image) :: projector
     private
@@ -45,7 +47,7 @@ contains
     !>  \brief  is a constructor of the expanded Fourier matrix
     subroutine expand_cmat( self, alpha )
         use simple_math, only: cyci_1d
-        class(projector), intent(inout) :: self 
+        class(projector), intent(inout) :: self
         real,             intent(in)    :: alpha !< oversampling factor
         integer, allocatable :: cyck(:), cycm(:), cych(:)
         integer :: h, k, m, phys(3), logi(3)
@@ -117,7 +119,7 @@ contains
         real        :: loc(3)
         integer     :: h, k, sqarg, sqlp, lims(3,2), phys(3), ldim(3)
         complex(sp) :: comp
-        lims   = self%loop_lims(2) 
+        lims   = self%loop_lims(2)
         sqlp   = (maxval(lims(:,2)))**2
         ldim   = fplane%get_ldim()
         call fplane%zero_and_flag_ft()
@@ -153,7 +155,7 @@ contains
         real        :: loc(3)
         integer     :: h, k, sqarg, sqlp, lims(3,2), phys(3), ldim(3)
         complex(sp) :: comp
-        lims   = self%loop_lims(2) 
+        lims   = self%loop_lims(2)
         sqlp   = (maxval(lims(:,2)))**2
         ldim   = fplane%get_ldim()
         call fplane%zero_and_flag_ft()
@@ -201,31 +203,52 @@ contains
     end subroutine fproject_polar
 
     ! INTERPOLATORS
+    !>  \brief is to interpolate from the expanded complex matrix
+    ! function interp_fcomp( self, loc )result( comp )
+    !     class(projector), intent(inout) :: self
+    !     real,             intent(in)    :: loc(3)
+    !     complex :: comp
+    !     real    :: w(1:self%wdim,1:self%wdim,1:self%wdim)
+    !     integer :: i, win(3,2)
+    !     ! interpolation kernel window
+    !     call sqwin_3d(loc(1), loc(2), loc(3), KBWINSZ, win)
+    !     ! interpolation kernel matrix
+    !     w = 1.
+    !     do i=1,self%wdim
+    !         w(i,:,:) = w(i,:,:) * self%kbwin%apod( real(win(1,1)+i-1)-loc(1) )
+    !         w(:,i,:) = w(:,i,:) * self%kbwin%apod( real(win(2,1)+i-1)-loc(2) )
+    !         w(:,:,i) = w(:,:,i) * self%kbwin%apod( real(win(3,1)+i-1)-loc(3) )
+    !     end do
+    !     ! SUM( kernel x components )
+    !     comp = sum( w * self%cmat_exp(win(1,1):win(1,2), win(2,1):win(2,2),win(3,1):win(3,2)) )
+    ! end function interp_fcomp
 
-    !>  \brief is to interpolate from the expanded complex matrix 
+    !>  \brief is to interpolate from the expanded complex matrix
     function interp_fcomp( self, loc )result( comp )
         class(projector), intent(inout) :: self
         real,             intent(in)    :: loc(3)
         complex :: comp
         real    :: w(1:self%wdim,1:self%wdim,1:self%wdim)
-        integer :: i, win(3,2)
+        integer :: i, win(2,3) ! window boundary array in fortran contiguous format
         ! interpolation kernel window
-        call sqwin_3d(loc(1), loc(2), loc(3), KBWINSZ, win)
+        win(1,:) = nint(loc)
+        win(2,:) = win(1,:) + iwinsz
+        win(1,:) = win(1,:) - iwinsz
         ! interpolation kernel matrix
         w = 1.
         do i=1,self%wdim
             w(i,:,:) = w(i,:,:) * self%kbwin%apod( real(win(1,1)+i-1)-loc(1) )
-            w(:,i,:) = w(:,i,:) * self%kbwin%apod( real(win(2,1)+i-1)-loc(2) )
-            w(:,:,i) = w(:,:,i) * self%kbwin%apod( real(win(3,1)+i-1)-loc(3) )
+            w(:,i,:) = w(:,i,:) * self%kbwin%apod( real(win(1,2)+i-1)-loc(2) )
+            w(:,:,i) = w(:,:,i) * self%kbwin%apod( real(win(1,3)+i-1)-loc(3) )
         end do
         ! SUM( kernel x components )
-        comp = sum( w * self%cmat_exp(win(1,1):win(1,2), win(2,1):win(2,2),win(3,1):win(3,2)) )
+        comp = sum( w * self%cmat_exp(win(1,1):win(2,1), win(1,2):win(2,2),win(1,3):win(2,3)) )
     end function interp_fcomp
-    
+
     !>  \brief  is a destructor of expanded matrices (imgpolarizer AND expanded projection of)
     subroutine kill_expanded( self )
         class(projector), intent(inout) :: self !< projector instance
-        if( allocated(self%cmat_exp) )deallocate(self%cmat_exp)    
+        if( allocated(self%cmat_exp) )deallocate(self%cmat_exp)
         self%ldim_exp        = 0
         self%expanded_exists = .false.
     end subroutine kill_expanded

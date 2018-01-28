@@ -16,7 +16,6 @@ implicit none
 
 public :: prime2D_autoscale_commander
 public :: ini3D_from_cavgs_commander
-public :: auto_refine3D_commander
 public :: het_commander
 public :: het_refine_commander
 private
@@ -29,10 +28,6 @@ type, extends(commander_base) :: ini3D_from_cavgs_commander
   contains
     procedure :: execute      => exec_ini3D_from_cavgs
 end type ini3D_from_cavgs_commander
-type, extends(commander_base) :: auto_refine3D_commander
-  contains
-    procedure :: execute      => exec_auto_refine3D
-end type auto_refine3D_commander
 type, extends(commander_base) :: het_commander
   contains
     procedure :: execute      => exec_het
@@ -167,113 +162,6 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_PRIME2D NORMAL STOP ****')
     end subroutine exec_prime2D_autoscale
-
-    !> for generation of an initial 3d model from class averages
-    subroutine exec_auto_refine3D( self, cline )
-        use simple_defs_conv
-        !use simple_commander_rec, only: recvol_commander
-        class(auto_refine3D_commander), intent(inout) :: self
-        class(cmdline),                 intent(inout) :: cline
-        ! constants
-        integer,               parameter :: MAXITS_REFINE1=20, MAXITS_REFINE2=20
-        integer,               parameter :: STATE=1
-        character(len=32),     parameter :: ITERFBODY     = 'prime3Ddoc_'
-        ! distributed commanders
-        type(prime3D_distr_commander) :: xprime3D_distr
-        ! shared-mem commanders
-        !type(recvol_commander)        :: xrecvol
-        ! command lines
-        type(cmdline)         :: cline_prime3D_1, cline_prime3D_2, cline_prime3D_3
-        type(cmdline)         :: cline_recvol
-        ! other variables
-        type(params)          :: p_master
-        real                  :: iter, trs_lim, greedytrs_lim
-        character(len=2)      :: str_state
-        character(len=3)      :: str_iter
-        character(len=STDLEN) :: vol_iter, oritab, vol_pproc
-        ! set cline defaults
-        call cline%set('eo', 'yes')
-        call cline%set('dynlp', 'no') ! better be explicit about the dynlp
-        ! make master parameters
-        p_master = params(cline)
-        ! delete possibly pre-existing stack_parts
-        call del_files(STKPARTFBODY, p_master%nparts, ext=p_master%ext)
-        ! set global state string
-        str_state = int2str_pad(STATE,2)
-        ! prepare command lines from prototype master
-        cline_prime3D_1 = cline
-        cline_prime3D_2 = cline
-        cline_prime3D_3 = cline
-        ! determines shift limits
-        if( cline%defined('trs') )then
-            ! all good
-        else
-            trs_lim = MSK_FRAC*real(p_master%msk)
-            trs_lim = max(MINSHIFT, trs_lim)
-            trs_lim = min(MAXSHIFT, trs_lim)
-        endif
-        greedytrs_lim = min(MAXSHIFT, 2.*trs_lim)
-        ! REFINEMENT FROM MODEL - STEP 1
-        call cline_prime3D_1%set('prg', 'prime3D')
-        call cline_prime3D_1%set('refine', 'greedy')
-        call cline_prime3D_1%set('trs', greedytrs_lim)
-        ! REFINEMENT FROM MODEL - STEP 2
-        call cline_prime3D_2%set('prg', 'prime3D')
-        call cline_prime3D_2%set('refine', 'no')
-        call cline_prime3D_2%set('trs', trs_lim)
-        ! REFINEMENT FROM MODEL - STEP 3
-        call cline_prime3D_3%set('prg', 'prime3D')
-        call cline_prime3D_3%set('refine', 'greedyneigh')
-        call cline_prime3D_3%set('trs', trs_lim)
-        ! execute commanders
-        write(*,'(A)') '>>>'
-        write(*,'(A)') '>>> PRIME3D REFINEMENT STEP 1'
-        write(*,'(A)') '>>>'
-        call cline_prime3D_1%set('startit', 1.)
-        call cline_prime3D_1%set('maxits', 1.)
-        call xprime3D_distr%execute(cline_prime3D_1)
-        iter = cline_prime3D_1%get_rarg('endit')
-        call set_iter_dependencies
-        write(*,'(A)') '>>>'
-        write(*,'(A)') '>>> PRIME3D REFINEMENT STEP 2'
-        write(*,'(A)') '>>>'
-        iter = iter + 1
-        call cline_prime3D_2%set('startit', real(iter))
-        call cline_prime3D_2%set('maxits', real(MAXITS_REFINE1)+iter-1)
-        call cline_prime3D_2%set('oritab', oritab)
-        call cline_prime3D_2%set('vol1', vol_iter)
-        call xprime3D_distr%execute(cline_prime3D_2)
-        iter = cline_prime3D_2%get_rarg('endit')
-        call set_iter_dependencies
-        write(*,'(A)') '>>>'
-        write(*,'(A)') '>>> PRIME3D REFINEMENT STEP 3'
-        write(*,'(A)') '>>>'
-        iter = iter + 1
-        call cline_prime3D_2%set('maxits', real(MAXITS_REFINE2)+iter-1)
-        call cline_prime3D_3%set('startit', real(iter))
-        call cline_prime3D_3%set('oritab', oritab)
-        call cline_prime3D_3%set('vol1', vol_iter)
-        call xprime3D_distr%execute(cline_prime3D_3)
-        iter = cline_prime3D_3%get_rarg('endit')
-        call set_iter_dependencies
-        vol_pproc = trim(VOL_FBODY)//trim(str_state)//'_iter'//trim(str_iter)//'_pproc'//p_master%ext
-        call simple_rename(trim(vol_iter), 'rec_final'//p_master%ext)
-        call simple_rename(trim(vol_pproc), 'rec_final_pproc'//p_master%ext)
-        call simple_rename(trim(oritab), 'prime3Ddoc_final'//trim(METADATEXT))
-        ! delete stack parts (we are done with them)
-        call del_files(trim(STKPARTFBODY), p_master%nparts, ext=p_master%ext)
-        ! end gracefully
-        call simple_end('**** SIMPLE_AUTO_REFINE3D NORMAL STOP ****')
-
-        contains
-
-            subroutine set_iter_dependencies
-                str_iter = int2str_pad(nint(iter),3)
-                oritab   = trim(ITERFBODY)//trim(str_iter)//trim(METADATEXT)
-                vol_iter = trim(VOL_FBODY)//trim(str_state)//'_iter'//trim(str_iter)//p_master%ext
-            end subroutine set_iter_dependencies
-
-    end subroutine exec_auto_refine3D
 
     !> for generation of an initial 3d model from class averages
     subroutine exec_ini3D_from_cavgs( self, cline )
@@ -513,7 +401,7 @@ contains
         ! shared-mem commanders
         type(postproc_vol_commander)  :: xpostproc_vol
         ! command lines
-        type(cmdline)                 :: cline_prime3D
+        type(cmdline)                 :: cline_prime3D1, cline_prime3D2
         type(cmdline)                 :: cline_recvol_distr, cline_recvol_mixed_distr
         type(cmdline)                 :: cline_postproc_vol
         ! other variables
@@ -522,7 +410,7 @@ contains
         logical,     allocatable      :: included(:)
         type(params)                  :: p_master
         type(oris)                    :: os, os_states
-        character(len=STDLEN)         :: oritab, vol, str_state
+        character(len=STDLEN)         :: oritab, str_state
         real                          :: trs
         integer                       :: state, iter, n_incl
         call seed_rnd
@@ -537,21 +425,27 @@ contains
 
         ! prepare command lines from prototype
         call cline%delete('refine')
-        cline_prime3D            = cline
+        cline_prime3D2           = cline
+        cline_prime3D2           = cline
         cline_postproc_vol       = cline ! eo always eq yes
         cline_recvol_distr       = cline ! eo always eq yes
         cline_recvol_mixed_distr = cline ! eo always eq yes
-        call cline_prime3D%set('prg', 'prime3D')
-        call cline_prime3D%set('maxits', real(MAXITS))
+        call cline_prime3D1%set('prg', 'prime3D')
+        call cline_prime3D1%set('maxits', real(MAXITS))
         select case(trim(p_master%refine))
             case('sym')
-                call cline_prime3D%set('refine', 'hetsym')
+                call cline_prime3D1%set('refine', 'hetsym')
             case DEFAULT
-                call cline_prime3D%set('refine', 'het')
+                call cline_prime3D1%set('refine', 'het')
         end select
-        call cline_prime3D%set('dynlp', 'no')
-        call cline_prime3D%set('pproc', 'no')
-        call cline_prime3D%delete('oritab2')
+        call cline_prime3D1%set('dynlp', 'no')
+        call cline_prime3D1%set('pproc', 'no')
+        call cline_prime3D1%delete('oritab2')
+        call cline_prime3D2%set('dynlp', 'no')
+        call cline_prime3D2%set('pproc', 'no')
+        call cline_prime3D2%delete('oritab2')
+        call cline_prime3D2%set('refine', 'no')
+        if( .not.cline%defined('update_frac') )call cline_prime3D2%set('update_frac', 0.2)
         call cline_recvol_distr%set('prg', 'recvol')
         call cline_recvol_mixed_distr%set('prg', 'recvol')
         call cline_postproc_vol%set('prg', 'postproc_vol')
@@ -568,7 +462,8 @@ contains
             ! works out shift lmits for in-plane search
             trs = MSK_FRAC*real(p_master%msk)
             trs = min(MAXSHIFT, max(MINSHIFT, trs))
-            call cline_prime3D%set('trs',trs)
+            call cline_prime3D1%set('trs',trs)
+            call cline_prime3D2%set('trs',trs)
         endif
 
         ! generate diverse initial labels & orientations
@@ -602,7 +497,7 @@ contains
             call os%set_all('state', real(labels))
         else
             ! starting from a previous solution
-            labels = os%get_all('state')
+            labels = nint(os%get_all('state'))
         endif
 
         ! to accomodate state=0s in oritab input
@@ -611,7 +506,7 @@ contains
         where( .not. included ) labels = 0
         call os%set_all('state', real(labels))
         call binwrite_oritab(trim(oritab), os, [1,p_master%nptcls])
-        call cline_prime3D%set('oritab', trim(oritab))
+        call cline_prime3D1%set('oritab', trim(oritab))
         deallocate(labels, included)
 
         ! retrieve mixed model FSC & anisotropic filter
@@ -629,16 +524,19 @@ contains
             call rename(ANISOLP_FBODY//one//p_master%ext, HET_ANISOLP//p_master%ext)
         endif
 
-        ! run prime3d
+        ! STAGE1: frozen orientation parameters
         write(*,'(A)')    '>>>'
-        write(*,'(A,I3)') '>>> PRIME3D'
+        write(*,'(A,I3)') '>>> PRIME3D - STAGE 1'
         write(*,'(A)')    '>>>'
-        call xprime3D_distr%execute(cline_prime3D)
+        call xprime3D_distr%execute(cline_prime3D1)
+        iter   = nint(cline_prime3D1%get_rarg('endit'))
+        oritab = PRIME3D_ITER_FBODY//int2str_pad(iter,3)//trim(METADATEXT)
+        call binread_oritab(trim(oritab), os, [1,p_master%nptcls])
+        oritab = 'hetdoc_stage1'//trim(METADATEXT)
+        call binwrite_oritab(trim(oritab), os, [1,p_master%nptcls])
 
         ! final distributed reconstruction to obtain resolution estimate when eo .eq. 'no'
         if( p_master%eo .eq. 'no' )then
-            iter   = nint(cline_prime3D%get_rarg('endit'))
-            oritab = PRIME3D_ITER_FBODY//int2str_pad(iter,3)//trim(METADATEXT)
             call cline_recvol_distr%set('oritab', trim(oritab))
             call xrecvol_distr%execute(cline_recvol_distr)
             do state = 1, p_master%nstates
@@ -649,8 +547,25 @@ contains
                 call xpostproc_vol%execute(cline_postproc_vol)
             enddo
         endif
-        ! kill oris
+
+        ! cleanup
         call os%kill
+
+        ! STAGE2: soft multi-states refinement
+        ! startit = iter + 1
+        ! call cline_prime3D2%set('startit', real(startit))
+        ! call cline_prime3D2%set('maxits',  real(startit+50))
+        ! call cline_prime3D2%set('oritab',  trim(oritab))
+        ! write(*,'(A)')    '>>>'
+        ! write(*,'(A,I3)') '>>> PRIME3D - STAGE 2'
+        ! write(*,'(A)')    '>>>'
+        ! call xprime3D_distr%execute(cline_prime3D2)
+        ! iter   = nint(cline_prime3D2%get_rarg('endit'))
+        ! oritab = PRIME3D_ITER_FBODY//int2str_pad(iter,3)//trim(METADATEXT)
+        ! call binread_oritab(trim(oritab), os, [1,p_master%nptcls])
+        ! oritab = 'hetdoc_stage2'//trim(METADATEXT)
+        ! call binwrite_oritab(trim(oritab), os, [1,p_master%nptcls])
+
         ! end gracefully
         call simple_end('**** SIMPLE_HET NORMAL STOP ****')
 

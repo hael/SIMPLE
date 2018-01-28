@@ -93,7 +93,7 @@ contains
             else
                 allocate(fbody, source='recvol_state')
             endif
-            call b%eorecvol%eorec_distr(p, b%a, b%se, s, b%vol, fbody=fbody)
+            call b%eorecvol%eorec_distr(p, b%a, b%se, s, fbody=fbody)
             deallocate(fbody)
         end do
         call qsys_job_finished( p, 'simple_rec_master :: exec_eorec')

@@ -173,6 +173,7 @@ contains
         allocate(corrs(b%img%get_filtsz()))
         if( cline%defined('msk') )then
             if( p%stats .eq. 'yes' )then
+                deallocate(corrs)
                 allocate(corrs(p%nptcls), stat=alloc_stat)
                 allocchk('In: simple_commander_imgproc::corrcompare 1 ')
             endif
@@ -195,7 +196,7 @@ contains
                     if( p%stats .eq. 'yes' )then
                         corrs(iptcl) = corr
                     else
-                        write(*,'(A,1X,F7.3)') '>>> REAL-SPACE CORRELATION:', b%img%real_corr(b%img_copy)
+                        write(*,'(A,1X,F7.3)') '>>> REAL-SPACE CORRELATION:', corr
                     endif
                 endif
                 call progress(iptcl,p%nptcls)
@@ -732,7 +733,7 @@ contains
         type(oris)                               :: o_here, os_ran
         integer,          allocatable            :: pinds(:)
         character(len=:), allocatable            :: fname
-        integer :: i, s, ipst, cnt, cnt2, cnt3, nincl, lfoo(3), np1,np2,ntot
+        integer :: i, s, ipst, cnt, cnt2, cnt3, nincl
         real    :: p_ctf, p_dfx
         p = params(cline)                                ! parameters generated
         p%boxmatch = p%box
@@ -988,7 +989,7 @@ contains
              if( cline%defined('ctfreslim') .and. cline%defined('dfclose')) then
                 cnt3=0
                 do i=1,p%nptcls
-                    ipst = (b%a%get(i, 'state'))
+                    ipst = b%a%get_state(i)
                     if( ipst == 0) then
                         cnt3 = cnt3+1
                     endif

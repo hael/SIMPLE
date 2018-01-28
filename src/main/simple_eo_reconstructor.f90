@@ -411,7 +411,7 @@ contains
     ! RECONSTRUCTION
 
     !> \brief  for distributed reconstruction of even/odd maps
-    subroutine eorec_distr( self, p, o, se, state, vol, fbody )
+    subroutine eorec_distr( self, p, o, se, state, fbody )
         use simple_oris,       only: oris
         use simple_sym,        only: sym
         use simple_params,     only: params
@@ -421,14 +421,12 @@ contains
         class(oris),                intent(inout) :: o      !< orientations
         class(sym),                 intent(inout) :: se     !< symmetry element
         integer,                    intent(in)    :: state  !< state to reconstruct
-        class(image),               intent(inout) :: vol    !< reconstructed volume
         character(len=*), optional, intent(in)    :: fbody  !< body of output file
         type(kbinterpol)  :: wf
         type(image)       :: img, img_pad
         type(prep4cgrid)  :: gridprep
         real              :: skewness
         integer           :: statecnt(p%nstates), i, cnt, state_here, state_glob
-        character(len=32) :: eonames(2)
         ! stash global state index
         state_glob = state
         ! make the images
@@ -484,8 +482,8 @@ contains
             subroutine rec_dens
                 use simple_ori, only: ori
                 character(len=:), allocatable :: stkname
-                type(ori) :: o_sym, orientation
-                integer   :: j, state, state_balance, ind, eo
+                type(ori) :: orientation
+                integer   :: state, state_balance, ind, eo
                 real      :: pw
                 state         = nint(o%get(i, 'state'))
                 state_balance = nint(o%get(i, 'state_balance'))
