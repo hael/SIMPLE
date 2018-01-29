@@ -32,14 +32,14 @@ bool pathExists(std::string path) {
 
 //  get home directory of user running the server
 
-void getUserHome(std::string& databasepath) {
+void getUserHome(std::string& path) {
 	
 	struct passwd* 		pw;
 	uid_t 				uid;
 	
 	uid = geteuid();
 	pw = getpwuid(uid);
-	databasepath = std::string(pw->pw_dir);
+	path = std::string(pw->pw_dir);
 	
 }
 //=================================

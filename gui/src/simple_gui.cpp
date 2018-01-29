@@ -917,7 +917,7 @@ void ctffitPost (std::string directory){
 	delete ctffindunidocin;
 }
 
-void ini3DPre (std::string simpleinput, std::string& command){ // NEEDS WORK
+void ini3DPre (std::string simpleinput, std::string mrcinput, std::string& command){ // NEEDS WORK
 	
 	UniDoc*										inputunidoc;
 	std::ofstream								stktab;
@@ -967,6 +967,8 @@ void ini3DPre (std::string simpleinput, std::string& command){ // NEEDS WORK
 			writeUniDoc(inputunidoc, "ini3d_in.txt");
 			delete inputunidoc;
 		}
+	} else if(fileExists(mrcinput)){
+		command += " stk=" + mrcinput;
 	}
 }
 
@@ -1931,7 +1933,9 @@ void simpleJob (JSONResponse* response, struct http_message* message) {
 					extractPre(argval, argval2, "");
 					command += " unidoc=unidoc_in.txt boxtab=boxtab.txt";
 			}else if (program == "ini3D_from_cavgs" && getRequestVariable(message, "simpleinput", argval)){
-					ini3DPre(argval, command);
+					ini3DPre(argval, "", command);
+			}else if (program == "ini3D_from_cavgs" && getRequestVariable(message, "mrcinput", argval)){
+					ini3DPre("", argval, command);
 			}else if (program == "pick" && getRequestVariable(message, "simpleinput", argval) && getRequestVariable(message, "pickrefs", argval2)){
 				getRequestVariable(message, "pcontrast", argval3);
 				getRequestVariable(message, "pgrp", argval4);

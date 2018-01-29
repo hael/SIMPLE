@@ -82,7 +82,8 @@ function setReRun(){
 		console.log(key);
 		var value = queryelements[i].split("=")[1];
 		if (typeof document.getElementsByName(key)[0] !== "undefined"){
-			document.getElementsByName(key)[0].value = decodeURIComponent(value);
+			document.getElementsByName(key)[0].value = decodeURIComponent(decodeURIComponent(value));
+			console.log(decodeURIComponent(value));
 		}
 	}
 }

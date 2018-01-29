@@ -52,7 +52,7 @@ function showFileViewerData (data){
 	var sorton = document.getElementById('sorton');
 	sorton.innerHTML = "";
 	
-	var sortoptions = ["dfx", "dfy", "angast","ctfres"]; 
+	var sortoptions = ["dfx", "dfy", "angast","ctfitcc", "dferr"]; 
 					
 	for (var i = 0; i < sortoptions.length; i++) {
 		var option = document.createElement("option");

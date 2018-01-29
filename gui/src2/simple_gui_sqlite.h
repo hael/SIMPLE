@@ -29,16 +29,14 @@
 
 void getDatabaseLocation (std::string& databasepath) {
 	
-	struct passwd* 		pw;
-	uid_t 				uid;
+	std::string		userhome;
 	
-	uid = geteuid();
-	pw = getpwuid(uid);
-	
+	getUserHome(userhome);
+
 	if(environment.multiuser){
-		databasepath = std::string(pw->pw_dir) + "/.simple." + environment.user + ".sqlite";
+		databasepath = userhome + "/.simple." + environment.user + ".sqlite";
 	} else {
-		databasepath = std::string(pw->pw_dir) + "/.simple.sqlite";
+		databasepath = userhome + "/.simple.sqlite";
 	}
 }
 
@@ -63,9 +61,9 @@ void SQLQuery(std::vector<std::map<std::string, std::string> > &result, std::str
 		log("Database path " + databasepath);
 		log(sqlite3_errmsg(db));
 	}
-	
+
 	sqlite3_busy_timeout(db, 5000);
-	
+
 	if(sqlite3_prepare_v2(db, sql.c_str(), -1, &stmt, NULL) != SQLITE_OK ){
 		log("Failed to query sqlite database");
 		log(sqlite3_errmsg(db));

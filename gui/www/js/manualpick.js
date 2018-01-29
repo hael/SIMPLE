@@ -201,28 +201,34 @@ function drawBoxes(data){
 	var boxsize = document.getElementById('boxsize').value;
 	var particlediameter = document.getElementById('particlediameter').value;
 	var particlecount =  document.getElementById('particlecount');
-	particlecount.innerHTML = "Particle Count: " + JSONdata.boxes.length;
+	if(JSONdata.boxes){
+		particlecount.innerHTML = "Particle Count: " + JSONdata.boxes.length;
+	} else {
+		particlecount.innerHTML = "Particle Count: 0";
+	}
 	canvas.width = backgroundimage.width;
 	canvas.height = backgroundimage.height;
 	var scale = document.getElementById('scale').value;
 	canvas.style.width = canvas.width * scale;
 	context.clearRect(0, 0, canvas.width, canvas.height);
 	context.drawImage(backgroundimage, 0, 0,backgroundimage.width, backgroundimage.height, 0, 0, canvas.width, canvas.height);
-	for(var i = 0; i < JSONdata.boxes.length; i++) {
+	if(JSONdata.boxes){
+		for(var i = 0; i < JSONdata.boxes.length; i++) {
 
-		if(document.getElementById("pickbox").checked){
-			context.beginPath();
-			context.rect(parseInt(JSONdata.boxes[i][0]), parseInt(JSONdata.boxes[i][1]), parseInt(boxsize), parseInt(boxsize));
-			context.lineWidth=8;
-			context.strokeStyle=  "green";
-			context.stroke();
-		}
-		if(document.getElementById("pickparticle").checked){
-			context.beginPath();
-			context.arc(parseInt(JSONdata.boxes[i][0]) + parseInt(JSONdata.boxes[i][2]) / 2, parseInt(JSONdata.boxes[i][1]) + parseInt(JSONdata.boxes[i][2]) / 2, parseInt(particlediameter),0,2*Math.PI);
-			context.lineWidth=8;
-			context.strokeStyle=  "green";
-			context.stroke();
+			if(document.getElementById("pickbox").checked){
+				context.beginPath();
+				context.rect(parseInt(JSONdata.boxes[i][0]), parseInt(JSONdata.boxes[i][1]), parseInt(boxsize), parseInt(boxsize));
+				context.lineWidth=8;
+				context.strokeStyle=  "green";
+				context.stroke();
+			}
+			if(document.getElementById("pickparticle").checked){
+				context.beginPath();
+				context.arc(parseInt(JSONdata.boxes[i][0]) + parseInt(JSONdata.boxes[i][2]) / 2, parseInt(JSONdata.boxes[i][1]) + parseInt(JSONdata.boxes[i][2]) / 2, parseInt(particlediameter),0,2*Math.PI);
+				context.lineWidth=8;
+				context.strokeStyle=  "green";
+				context.stroke();
+			}
 		}
 	}
 }

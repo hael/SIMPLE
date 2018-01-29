@@ -42,6 +42,8 @@ struct WebResponse {
 #include "simple_gui_environment.h"
 #include "simple_gui_project.h"
 #include "simple_gui_logging.h"
+#include "simple_gui_job.h"
+#include "simple_gui_mrc.h" //tmeportart
 
 //=================================
 
@@ -94,6 +96,9 @@ void handleRequest(struct WebResponse* webresponse) {
 			
 		}else if (webresponse->requestmap["function"] == "listprojects"){
 			listProjects(webresponse);
+			readMRCHeader();
+		}else if (webresponse->requestmap["function"] == "simplejob"){
+			forkSimpleJobDaemon();
 		}else{
 			log("Request function is invalid");
 			webresponse->responsemap["error"] = "Invalid function in request";
