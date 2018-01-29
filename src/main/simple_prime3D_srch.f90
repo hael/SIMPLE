@@ -177,7 +177,7 @@ contains
         ! projection direction peaks, eo & CTF transfer
         select case(trim(p%refine))
             case('het','hetsym')
-                ! nothing to do
+               ! nothing to do
             case DEFAULT
                 allocate(o_peaks(p%fromp:p%top))
                 do iptcl = p%fromp, p%top
@@ -881,7 +881,7 @@ contains
             call self%a_ptr%set(self%iptcl,'mi_inpl',  mi_inpl)
             call self%a_ptr%set(self%iptcl,'mi_state', mi_state)
             call self%a_ptr%set(self%iptcl,'mi_joint', (mi_state+mi_inpl)/2.)
-            call self%a_ptr%set(self%iptcl,'w', 1.)
+            call self%a_ptr%set(self%iptcl,'w',        1.)
         else
             call self%a_ptr%reject(self%iptcl)
         endif

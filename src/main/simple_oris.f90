@@ -1981,8 +1981,8 @@ contains
         do i = istart, iend
             call self%o(i)%read(fnr)
             if( present(nst) )then
-                state = int(self%o(i)%get('state'))
-                nst = max(1,max(state,nst))
+                state = self%o(i)%get_state()
+                nst   = max(1,max(state,nst))
             endif
         end do
         call fclose(fnr,errmsg="oris ; read ,Error when closing file")

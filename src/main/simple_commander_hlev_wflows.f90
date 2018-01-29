@@ -412,7 +412,7 @@ contains
         type(oris)                    :: os, os_states
         character(len=STDLEN)         :: oritab, str_state
         real                          :: trs
-        integer                       :: state, iter, n_incl
+        integer                       :: state, iter, n_incl, startit
         call seed_rnd
         ! sanity check
         if(nint(cline%get_rarg('nstates')) <= 1)&
@@ -425,12 +425,13 @@ contains
 
         ! prepare command lines from prototype
         call cline%delete('refine')
-        cline_prime3D2           = cline
+        cline_prime3D1           = cline
         cline_prime3D2           = cline
         cline_postproc_vol       = cline ! eo always eq yes
         cline_recvol_distr       = cline ! eo always eq yes
         cline_recvol_mixed_distr = cline ! eo always eq yes
         call cline_prime3D1%set('prg', 'prime3D')
+        call cline_prime3D2%set('prg', 'prime3D')
         call cline_prime3D1%set('maxits', real(MAXITS))
         select case(trim(p_master%refine))
             case('sym')
@@ -438,13 +439,13 @@ contains
             case DEFAULT
                 call cline_prime3D1%set('refine', 'het')
         end select
+        call cline_prime3D2%set('refine', 'no')
         call cline_prime3D1%set('dynlp', 'no')
         call cline_prime3D1%set('pproc', 'no')
         call cline_prime3D1%delete('oritab2')
         call cline_prime3D2%set('dynlp', 'no')
         call cline_prime3D2%set('pproc', 'no')
         call cline_prime3D2%delete('oritab2')
-        call cline_prime3D2%set('refine', 'no')
         if( .not.cline%defined('update_frac') )call cline_prime3D2%set('update_frac', 0.2)
         call cline_recvol_distr%set('prg', 'recvol')
         call cline_recvol_mixed_distr%set('prg', 'recvol')
@@ -492,7 +493,6 @@ contains
         else if( .not. cline%defined('startit') )then
             write(*,'(A)') '>>>'
             write(*,'(A)') '>>> GENERATING DIVERSE LABELING'
-            write(*,'(A)') '>>>'
             call diverse_labeling(os, p_master%nstates, labels, corr_ranked=.true.)
             call os%set_all('state', real(labels))
         else
@@ -552,19 +552,19 @@ contains
         call os%kill
 
         ! STAGE2: soft multi-states refinement
-        ! startit = iter + 1
-        ! call cline_prime3D2%set('startit', real(startit))
-        ! call cline_prime3D2%set('maxits',  real(startit+50))
-        ! call cline_prime3D2%set('oritab',  trim(oritab))
-        ! write(*,'(A)')    '>>>'
-        ! write(*,'(A,I3)') '>>> PRIME3D - STAGE 2'
-        ! write(*,'(A)')    '>>>'
-        ! call xprime3D_distr%execute(cline_prime3D2)
-        ! iter   = nint(cline_prime3D2%get_rarg('endit'))
-        ! oritab = PRIME3D_ITER_FBODY//int2str_pad(iter,3)//trim(METADATEXT)
-        ! call binread_oritab(trim(oritab), os, [1,p_master%nptcls])
-        ! oritab = 'hetdoc_stage2'//trim(METADATEXT)
-        ! call binwrite_oritab(trim(oritab), os, [1,p_master%nptcls])
+        startit = iter + 1
+        call cline_prime3D2%set('startit', real(startit))
+        call cline_prime3D2%set('maxits',  real(startit+50))
+        call cline_prime3D2%set('oritab',  trim(oritab))
+        write(*,'(A)')    '>>>'
+        write(*,'(A,I3)') '>>> PRIME3D - STAGE 2'
+        write(*,'(A)')    '>>>'
+        call xprime3D_distr%execute(cline_prime3D2)
+        iter   = nint(cline_prime3D2%get_rarg('endit'))
+        oritab = PRIME3D_ITER_FBODY//int2str_pad(iter,3)//trim(METADATEXT)
+        call binread_oritab(trim(oritab), os, [1,p_master%nptcls])
+        oritab = 'hetdoc_stage2'//trim(METADATEXT)
+        call binwrite_oritab(trim(oritab), os, [1,p_master%nptcls])
 
         ! end gracefully
         call simple_end('**** SIMPLE_HET NORMAL STOP ****')
