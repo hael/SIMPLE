@@ -535,21 +535,18 @@ contains
         oritab = 'hetdoc_stage1'//trim(METADATEXT)
         call binwrite_oritab(trim(oritab), os, [1,p_master%nptcls])
 
-        ! final distributed reconstruction to obtain resolution estimate when eo .eq. 'no'
-        if( p_master%eo .eq. 'no' )then
-            call cline_recvol_distr%set('oritab', trim(oritab))
-            call xrecvol_distr%execute(cline_recvol_distr)
-            do state = 1, p_master%nstates
-                str_state  = int2str_pad(state, 2)
-                call cline_postproc_vol%set('vol1', VOL_FBODY//trim(str_state)//p_master%ext)
-                call cline_postproc_vol%set('fsc', FSC_FBODY//trim(str_state)//BIN_EXT)
-                call cline_postproc_vol%set('vol_filt', ANISOLP_FBODY//trim(str_state)//p_master%ext)
-                call xpostproc_vol%execute(cline_postproc_vol)
-            enddo
-        endif
-
-        ! cleanup
-        call os%kill
+        ! ! stage 1 reconstruction to obtain resolution estimate when eo .eq. 'no'
+        ! if( p_master%eo .eq. 'no' )then
+        !     call cline_recvol_distr%set('oritab', trim(oritab))
+        !     call xrecvol_distr%execute(cline_recvol_distr)
+        !     do state = 1, p_master%nstates
+        !         str_state  = int2str_pad(state, 2)
+        !         call cline_postproc_vol%set('vol1', VOL_FBODY//trim(str_state)//p_master%ext)
+        !         call cline_postproc_vol%set('fsc', FSC_FBODY//trim(str_state)//BIN_EXT)
+        !         call cline_postproc_vol%set('vol_filt', ANISOLP_FBODY//trim(str_state)//p_master%ext)
+        !         call xpostproc_vol%execute(cline_postproc_vol)
+        !     enddo
+        ! endif
 
         ! STAGE2: soft multi-states refinement
         startit = iter + 1
@@ -565,6 +562,22 @@ contains
         call binread_oritab(trim(oritab), os, [1,p_master%nptcls])
         oritab = 'hetdoc_stage2'//trim(METADATEXT)
         call binwrite_oritab(trim(oritab), os, [1,p_master%nptcls])
+
+        ! stage 2 reconstruction to obtain resolution estimate when eo .eq. 'no'
+        if( p_master%eo .eq. 'no' )then
+            call cline_recvol_distr%set('oritab', trim(oritab))
+            call xrecvol_distr%execute(cline_recvol_distr)
+            do state = 1, p_master%nstates
+                str_state  = int2str_pad(state, 2)
+                call cline_postproc_vol%set('vol1', VOL_FBODY//trim(str_state)//p_master%ext)
+                call cline_postproc_vol%set('fsc', FSC_FBODY//trim(str_state)//BIN_EXT)
+                call cline_postproc_vol%set('vol_filt', ANISOLP_FBODY//trim(str_state)//p_master%ext)
+                call xpostproc_vol%execute(cline_postproc_vol)
+            enddo
+        endif
+
+        ! cleanup
+        call os%kill
 
         ! end gracefully
         call simple_end('**** SIMPLE_HET NORMAL STOP ****')
