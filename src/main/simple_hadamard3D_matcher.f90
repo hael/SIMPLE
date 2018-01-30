@@ -191,7 +191,7 @@ contains
             case('het','hetsym')
                 if(allocated(het_mask))deallocate(het_mask)
                 allocate(het_mask(p%fromp:p%top), source=ptcl_mask)
-                zero_pop    = b%a%get_pop(0, 'state', consider_w=.false.)
+                zero_pop    = count(.not.b%a%included(consider_w=.false.))
                 corr_thresh = -huge(corr_thresh)
                 if(p%l_frac_update) then
                     ptcl_mask = .true.
@@ -345,9 +345,9 @@ contains
                     write(*,'(A,F8.3)')'>>> CORRELATION THRESHOLD:', corr_thresh
                     write(*,'(A,F8.3)')'>>> RANDOMIZATION RATE:   ', extr_thresh
                     write(*,'(A,I6,A1,F6.2,A1)')'>>> RANDOMIZED PARTICLES:',state_counts(1),';',&
-                        &100.*real(state_counts(1))/real(nptcls2update-zero_pop),'%'
+                        &100.*real(state_counts(1))/real(sum(state_counts)),'%'
                     write(*,'(A,I6,A1,F6.2,A1)')'>>> SHC-OPT    PARTICLES:',state_counts(2),';',&
-                        &100.*real(state_counts(2))/real(nptcls2update-zero_pop),'%'
+                        &100.*real(state_counts(2))/real(sum(state_counts)),'%'
                 endif
             case('hetsym')
                 if(p%oritab .eq. '') stop 'cannot run the refine=hetsym mode without input oridoc (oritab)'

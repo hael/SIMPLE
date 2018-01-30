@@ -381,6 +381,7 @@ type :: params
     logical :: l_remap_classes    = .false.
     logical :: l_stktab_input     = .false.
     logical :: l_cc_objfun        = .true.
+    logical :: l_cc_bfac          = .true.
   contains
     procedure :: new
 end type params
@@ -1158,6 +1159,9 @@ contains
                 write(*,*) 'objfun flag: ', trim(self%objfun)
                 stop 'unsupported objective function; params :: new'
         end select
+        ! B-factor weighted corr or not
+        self%l_cc_bfac = .false.
+        if( cline%defined('bfac') ) self%l_cc_bfac = .true.
 
 !>>> END, IMAGE-PROCESSING-RELATED
 
