@@ -95,8 +95,8 @@
 					<td>Center Volume/Clusters</td>
 					<td>
 						<select data-required=no name=center title="Use automatic centering {no}">
-							<option value=yes>Yes</option>
-							<option value=no selected>No</option>
+							<option value=yes selected>Yes</option>
+							<option value=no >No</option>
 						</select>
 					</td>
 					<td></td>
@@ -116,11 +116,15 @@
 					<td><input data-required=no type=number name=width placeholder="falloff of inner mask, pixels" title="Falloff of inner mask / filter in pixels {10}"></td>
 				</tr>
 				<tr>
+					<td>Initial High-resolution limit</td>
+					<td><input data-required=no type=number name=lpstart placeholder="initial high resolution limit during refinement in Angstroms {15}"></td>
+				<td></td>
+					<td>Final High-resolution limit</td>
+					<td><input data-required=no type=number name=lpstop placeholder="final high-resolution limit during refinement in Angstroms {8}"></td>
+				</tr>
+				<tr>
 					<td>Low Resolution Limit</td>
 					<td><input data-required=no type=number name=hp placeholder="low resolution limit, Angstroms" title="Low resolution limit in Angstroms"></td>
-				<td></td>
-					<td>High Resolution limit</td>
-					<td><input data-required=no type=number name=lp placeholder="high resolution limit, Angstroms" title="High resolution limint in Angstroms"></td>
 				</tr>
 				<tr>
 				<tr> <td><br></td>
@@ -149,18 +153,14 @@
 					<input type=hidden name=executable value=simple_distr_exec>
 				</tr>
 				<tr>
-					<td>Number Parts</td>
+					<td>Number of Parts</td>
 					<td><input data-required=no type=number name=nparts placeholder="divide job into # parts" title="Number of parts to divide distributed job into for processing {1}"></td>
-					<td>Number Threads per Part</td>
+					<td>Number of Threads per Part</td>
 					<td><input data-required=no type=number name=nthr placeholder="# shared-memory CPU threads" title="Number of shared-memory CPU threads available {1}"></td>
 				</tr>
 					
 				<tr>
-					<td>Number of Compute Units</td>
-					<td>
-						<input type=number type=number name=ncunits placeholder="# independent computing units" title="Number of separate computing units available, should be >= number of parts {1}">
-					</td>
-					<td>Submit to Queue</td>
+				<td>Submit to Queue</td>
 					<td>
 						<select data-required=no name=queue_submit onchange="showHideQueueOptions()">
 							<option value=yes>Yes</option>

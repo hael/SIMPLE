@@ -144,14 +144,14 @@
 					<td><input data-required=no type=number name=dfstep></td>
 				</tr>
 				<tr>
-					<td>CTFFIND High Pass Limit</td>
+					<td>CTFFIT High Pass Limit</td>
 					<td><input data-required=no type=number name=hp_ctffind></td>
 					<td></td>
-					<td>CTFFIND Low Pass Limit</td>
+					<td>CTFFIT Low Pass Limit</td>
 					<td><input data-required=no type=number name=lp_ctffind></td>
 				</tr>
 				<tr>
-					<td>CTFFIND Power Spectrum Size</td>
+					<td>CTFFIT Power Spectrum Size</td>
 					<td><input data-required=no type=number name=pspecz_ctffind></td>
 					<td></td>
 					<td>Maximum Halfwidth Shift</td>
@@ -229,17 +229,13 @@
 					<input type=hidden name=executable value=simple_distr_exec>
 				</tr>
 				<tr>
-					<td>Number Parts</td>
+					<td>Number of Parts</td>
 					<td><input data-required=no type=number name=nparts></td>
-					<td>Number Threads per Part</td>
+					<td>Number of Threads per Part</td>
 					<td><input data-required=no type=number name=nthr></td>
 				</tr>
 					
 				<tr>
-					<td>Number of Compute Units</td>
-					<td>
-						<input type=number type=number name=ncunits >
-					</td>
 					<td>Submit to Queue</td>
 					<td>
 						<select data-required=no name=queue_submit onchange="showHideQueueOptions()">
@@ -283,7 +279,7 @@
 				</tr>
 				
 				<tr data-queue=yes>
-					<td>Number Tasks Per Socket</td>
+					<td>Number of Tasks Per Socket</td>
 					<td>
 						<input data-required=no type=number name=job_ntasks_per_socket>
 					</td>

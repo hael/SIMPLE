@@ -121,8 +121,8 @@
 					<td>Spectral Weighting</td>
 					<td>
 						<select data-required=no name=weights2D title="Select use of spectral weights - often useful for small particles {no}">
-							<option value=yes selected>Yes</option>
-							<option value=no>No</option>
+							<option value=yes >Yes</option>
+							<option value=no selected>No</option>
 						</select>
 					</td>
 
@@ -175,30 +175,16 @@
 			
 			<table id=page4 style="display:none">
 				<tr>
-					<td>Submission System</td>
-                    <td>
-						<select data-required=no name=qsys_name>
-							<option value=" " selected></option>option>
-							<option value=slurm >Slurm</option>
-                            <option value=torque >Torque</option>
-							<option value=pbs >PBS</option>
-						</select>
-					</td>
 					<td colspan=2><b>Run Parameters</b></td>
 					<input type=hidden name=executable value=simple_distr_exec>
 				</tr>
 				<tr>
-					<td>Number Parts</td>
+					<td>Number of Parts</td>
 					<td><input data-required=no type=number name=nparts placeholder="divide job into # parts" title="Number of parts to divide distributed job into for processing {1}"></td>
-					<td>Number Threads per Part</td>
+					<td>Number of Threads per Part</td>
 					<td><input data-required=no type=number name=nthr placeholder="# shared-memory CPU threads" title="Number of shared-memory CPU threads available {1}"></td>
 				</tr>
-					
 				<tr>
-					<td>Number of Compute Units</td>
-					<td>
-						<input type=number type=number name=ncunits placeholder="# independent computing units" title="Number of separate computing units available, should be >= number of parts {1}">
-					</td>
 					<td>Submit to Queue</td>
 					<td>
 						<select data-required=no name=queue_submit onchange="showHideQueueOptions()">
@@ -235,7 +221,7 @@
 				</tr>
 				
 				<tr data-queue=yes>
-					<td>Number Tasks Per Socket</td>
+					<td>Number of Tasks Per Socket</td>
 					<td>
 						<input data-required=no type=number name=job_ntasks_per_socket placeholder="# jobs per CPU socket" title="Number of simultaneous jobs to run on each CPU socket">
 					</td>
