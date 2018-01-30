@@ -57,9 +57,9 @@ contains
             call dsym_os%set(i, 'x', -sh1(1))
             call dsym_os%set(i, 'y', -sh1(2))
             ! rotational image
-            call read_img%roavg(ang, roavg_img)
+            call read_img%roavg(nint(ang), roavg_img)
             call roavg_img%write('roavg.mrc',i)
-            
+
             corrs(i) = read_img%real_corr(roavg_img, l_msk)
             ! radii
             call read_img%bp(0., p%cenlp)
@@ -123,11 +123,11 @@ contains
             endif
         enddo
         call topview%div( real(count(labels==1)) )
-        call topview%roavg(ang, roavg_img)
+        call topview%roavg(nint(ang), roavg_img)
         topview = roavg_img
         call topview%norm
         call topview%mask(p%msk, 'soft')
-        cylinder = 0.     
+        cylinder = 0.
         do i=1,p%box
             if( abs( real(i-1)-real(p%box)/2. ) < height/2.)then
                 call cylinder%set_slice( i, topview )

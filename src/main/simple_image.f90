@@ -293,6 +293,7 @@ type :: image
     procedure          :: norm_bin
     procedure          :: roavg
     procedure          :: rtsq
+    procedure          :: rtsq_serial
     procedure          :: shift_phorig
     procedure          :: bwd_ft
     procedure          :: shift
@@ -424,17 +425,29 @@ contains
     subroutine construct_thread_safe_tmp_imgs( self, nthr )
         class(image), intent(in) :: self
         integer,      intent(in) :: nthr
-        integer :: i
+        integer :: i, ldim(3), sz
+        logical :: do_allocate
         if( allocated(thread_safe_tmp_imgs) )then
-            do i=1,size(thread_safe_tmp_imgs)
-                call thread_safe_tmp_imgs(i)%kill
-            end do
-            deallocate(thread_safe_tmp_imgs)
+            ldim = thread_safe_tmp_imgs(1)%get_ldim()
+            sz   = size(thread_safe_tmp_imgs)
+            if( any(self%ldim /= ldim) .or. sz /= nthr )then
+                do i=1,size(thread_safe_tmp_imgs)
+                    call thread_safe_tmp_imgs(i)%kill
+                end do
+                deallocate(thread_safe_tmp_imgs)
+                do_allocate = .true.
+            else
+                do_allocate = .false.
+            endif
+        else
+            do_allocate = .true.
         endif
-        allocate( thread_safe_tmp_imgs(nthr) )
-        do i=1,nthr
-            call thread_safe_tmp_imgs(i)%new(self%ldim, self%smpd, wthreads=.false.)
-        end do
+        if( do_allocate )then
+            allocate( thread_safe_tmp_imgs(nthr) )
+            do i=1,nthr
+                call thread_safe_tmp_imgs(i)%new(self%ldim, self%smpd, wthreads=.false.)
+            end do
+        endif
     end subroutine construct_thread_safe_tmp_imgs
 
     !>  \brief disc constructs a binary disc of given radius and returns the number of 1:s
@@ -6607,26 +6620,30 @@ contains
     !! \param angstep angular step
     !! \param avg output image rotation average
     !!
-    subroutine roavg(self, angstep, avg)
+    subroutine roavg( self, angstep, avg )
         class(image), intent(inout) :: self
-        real, intent(in)            :: angstep
+        integer,      intent(in)    :: angstep
         class(image), intent(inout) :: avg
-        type(image)                 :: rotated
-        real                        :: ang, div
-        call rotated%copy(self)
-        call avg%copy(self)
-        rotated = 0.
-        avg     = 0.
-        ang     = 0.
-        div     = 0.
-        do while(ang < 359.99 )
-            call self%rtsq(ang, 0., 0., rotated)
-            call avg%add_1( rotated )
-            ang = ang + angstep
-            div = div + 1.
+        real    :: avg_rmat(self%ldim(1),self%ldim(2),1)
+        integer :: irot, ithr
+        call self%construct_thread_safe_tmp_imgs(nthr_glob)
+        call avg%new(self%ldim, self%smpd)
+        avg_rmat = 0.
+        !$omp parallel do schedule(static) default(shared) private(irot)&
+        !$omp reduction(+:avg_rmat) proc_bind(close)
+        do irot = 0 + angstep,359,angstep
+            ! get thread index
+            ithr = omp_get_thread_num() + 1
+            call self%rtsq_serial(real(irot), 0., 0., thread_safe_tmp_imgs(ithr))
+            avg_rmat = avg_rmat + thread_safe_tmp_imgs(ithr)%rmat
         end do
-        call avg%div(div)
-        call rotated%kill()
+        !$omp end parallel do
+        ! add in the zero rotation
+        avg_rmat = avg_rmat + self%rmat(:self%ldim(1),:self%ldim(2),:)
+        ! set output image object
+        avg%rmat = avg_rmat
+        ! normalise
+        call avg%div(real(360/angstep))
     end subroutine roavg
 
     !> \brief rtsq  rotation of image by quadratic interpolation (from spider)
@@ -6636,20 +6653,18 @@ contains
     !! \param shyi shift in y axis
     !! \param self_out optional copy of processed result
     !!
-    subroutine rtsq(self_in, ang, shxi, shyi, self_out)
+    subroutine rtsq( self_in, ang, shxi, shyi, self_out )
         class(image),           intent(inout) :: self_in
         real,                   intent(in)    :: ang,shxi,shyi
         class(image), optional, intent(inout) :: self_out
         type(image) :: self_here
-        real    :: shx,shy,ry1,rx1,ry2,rx2,cod,sid,xi
-        real    :: fixcenmshx,fiycenmshy
-        real    :: rye2,rye1,rxe2,rxe1,yi
-        real    :: ycod,ysid,yold,xold
+        real    :: shx,shy,ry1,rx1,ry2,rx2,cod,sid,xi,fixcenmshx,fiycenmshy
+        real    :: rye2,rye1,rxe2,rxe1,yi,ycod,ysid,yold,xold
         integer :: iycen,ixcen,ix,iy
         real    :: mat_in(self_in%ldim(1),self_in%ldim(2))
         real    :: mat_out(self_in%ldim(1),self_in%ldim(2))
         logical :: didft
-        if( self_in%ldim(3) > 1 ) stop 'only for 2D images; rtsq; simple_image'
+        if( self_in%ldim(3) > 1 )         stop 'only for 2D images; rtsq; simple_image'
         if( .not. self_in%square_dims() ) stop 'only for square dims (need to sort shifts out); rtsq; simple_image'
         call self_here%new(self_in%ldim, self_in%smpd)
         didft = .false.
@@ -6722,6 +6737,73 @@ contains
             call self_in%bwd_ft
         endif
     end subroutine rtsq
+
+    !> \brief rtsq  rotation of image by quadratic interpolation (from spider)
+    !! \param self_in image object
+    !! \param ang angle of rotation
+    !! \param shxi shift in x axis
+    !! \param shyi shift in y axis
+    !! \param self_out optional copy of processed result
+    !!
+    subroutine rtsq_serial( self_in, ang, shxi, shyi, self_out )
+        class(image), intent(inout) :: self_in
+        real,         intent(in)    :: ang,shxi,shyi
+        class(image), intent(inout) :: self_out
+        real    :: shx,shy,ry1,rx1,ry2,rx2,cod,sid,xi,fixcenmshx,fiycenmshy
+        real    :: rye2,rye1,rxe2,rxe1,yi,ycod,ysid,yold,xold
+        integer :: iycen,ixcen,ix,iy
+        real    :: mat_in(self_in%ldim(1),self_in%ldim(2))
+        mat_in = self_in%rmat(:self_in%ldim(1),:self_in%ldim(2),1)
+        ! shift within image boundary
+        shx = amod(shxi,float(self_in%ldim(1)))
+        shy = amod(shyi,float(self_in%ldim(2)))
+        ! spider image center
+        iycen = self_in%ldim(1)/2+1
+        ixcen = self_in%ldim(2)/2+1
+        ! image dimensions around origin
+        rx1 = -self_in%ldim(1)/2
+        rx2 =  self_in%ldim(1)/2
+        ry1 = -self_in%ldim(2)/2
+        ry2 =  self_in%ldim(2)/2
+        if(mod(self_in%ldim(1),2) == 0)then
+            rx2  =  rx2-1.0
+            rxe1 = -self_in%ldim(1)
+            rxe2 =  self_in%ldim(1)
+        else
+            rxe1 = -self_in%ldim(1)-1
+            rxe2 =  self_in%ldim(1)+1
+        endif
+        if(mod(self_in%ldim(2),2) == 0)then
+            ry2  =  ry2-1.0
+            rye1 = -self_in%ldim(2)
+            rye2 =  self_in%ldim(2)
+        else
+            ry2  = -self_in%ldim(2)-1
+            rye2 =  self_in%ldim(2)+1
+        endif
+        ! create transformation matrix
+        cod = cos(deg2rad(ang))
+        sid = sin(deg2rad(ang))
+        !-(center plus shift)
+        fixcenmshx = -ixcen-shx
+        fiycenmshy = -iycen-shy
+        do iy=1,self_in%ldim(2)
+            yi = iy+fiycenmshy
+            if(yi < ry1) yi = min(yi+rye2, ry2)
+            if(yi > ry2) yi = max(yi+rye1, ry1)
+            ycod =  yi*cod+iycen
+            ysid = -yi*sid+ixcen
+            do ix=1,self_in%ldim(1)
+                xi = ix+fixcenmshx
+                if(xi < rx1) xi = min(xi+rxe2, rx2)
+                if(xi > rx2) xi = max(xi+rxe1, rx1)
+                yold = xi*sid+ycod
+                xold = xi*cod+ysid
+                self_out%rmat(ix,iy,1) = quadri(xold,yold,mat_in,self_in%ldim(1),self_in%ldim(2))
+            enddo
+        enddo
+        self_out%ft = .false.
+    end subroutine rtsq_serial
 
     !>  \brief  set pixels to value within a sphere
     subroutine set_within( self, xyz, radius, val )
@@ -7208,7 +7290,7 @@ contains
                     write(*,'(a)') '**info(simple_image_unit_test, part 19): testing rotational averager'
                     call img%square( 10 )
                     if( doplot ) call img%vis
-                    call img%roavg(5.,img_2)
+                    call img%roavg(5,img_2)
                     if( doplot ) call img_2%vis
                 endif
 
