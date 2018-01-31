@@ -1315,7 +1315,7 @@ contains
         shmat   => self%heap_vars(ithr)%shmat_8
         argmat  => self%heap_vars(ithr)%argmat_8
         argmat  =  self%argtransf(:self%pftsz,:) * shvec(1) + self%argtransf(self%pftsz+1:,:) * shvec(2)
-        shmat   =  cmplx(cos(argmat),sin(argmat))
+        shmat   =  cmplx(cos(argmat),sin(argmat),dp)
         if( self%with_ctf )then
             if( self%iseven(self%pinds(iptcl)) )then
                 pft_ref = (self%pfts_refs_even(iref,:,:) * self%ctfmats(self%pinds(iptcl),:,:)) * shmat
@@ -1350,7 +1350,7 @@ contains
         shmat   => self%heap_vars(ithr)%shmat
         argmat  => self%heap_vars(ithr)%argmat
         argmat  =  self%argtransf(:self%pftsz,:) * shvec(1) + self%argtransf(self%pftsz+1:,:) * shvec(2)
-        shmat   =  cmplx(cos(argmat),sin(argmat))
+        shmat   =  cmplx(cos(argmat),sin(argmat),dp)
         if( self%with_ctf )then
             if( self%iseven(self%pinds(iptcl)) )then
                 pft_ref = (self%pfts_refs_even(iref,:,:) * self%ctfmats(self%pinds(iptcl),:,:)) * shmat
@@ -1400,7 +1400,7 @@ contains
         shmat   => self%heap_vars(ithr)%shmat_8
         argmat  => self%heap_vars(ithr)%argmat_8
         argmat  =  self%argtransf(:self%pftsz,:) * shvec(1) + self%argtransf(self%pftsz+1:,:) * shvec(2)
-        shmat   =  cmplx(cos(argmat),sin(argmat))
+        shmat   =  cmplx(cos(argmat),sin(argmat),dp)
         if( self%with_ctf )then
             if( self%iseven(self%pinds(iptcl)) )then
                 pft_ref = (self%pfts_refs_even(iref,:,:) * self%ctfmats(self%pinds(iptcl),:,:)) * shmat
@@ -1609,7 +1609,7 @@ contains
         shmat       => self%heap_vars(ithr)%shmat_8
         argmat      => self%heap_vars(ithr)%argmat_8
         argmat      =  self%argtransf(:self%pftsz,:) * shvec(1) + self%argtransf(self%pftsz+1:,:) * shvec(2)
-        shmat       =  cmplx(cos(argmat),sin(argmat))
+        shmat       =  cmplx(cos(argmat),sin(argmat),dp)
         if( self%with_ctf )then
             if( self%iseven(self%pinds(iptcl)) )then
                 pft_ref = (self%pfts_refs_even(iref,:,:) * self%ctfmats(self%pinds(iptcl),:,:)) * shmat
@@ -1717,7 +1717,7 @@ contains
         shmat        => self%heap_vars(ithr)%shmat_8
         argmat       => self%heap_vars(ithr)%argmat_8
         argmat       =  self%argtransf(:self%pftsz,:) * shvec(1) + self%argtransf(self%pftsz+1:,:) * shvec(2)
-        shmat        =  cmplx(cos(argmat),sin(argmat))
+        shmat        =  cmplx(cos(argmat),sin(argmat),dp)
         if( self%with_ctf )then
             if( self%iseven(self%pinds(iptcl)) )then
                 pft_ref = (self%pfts_refs_even(iref,:,:) * self%ctfmats(self%pinds(iptcl),:,:)) * shmat
@@ -1851,7 +1851,7 @@ contains
         shmat       => self%heap_vars(ithr)%shmat_8
         argmat      => self%heap_vars(ithr)%argmat_8
         argmat      =  self%argtransf(:self%pftsz,:) * shvec(1) + self%argtransf(self%pftsz+1:,:) * shvec(2)
-        shmat       =  cmplx(cos(argmat),sin(argmat))
+        shmat       =  cmplx(cos(argmat),sin(argmat),dp)
         if( self%with_ctf )then
             if( self%iseven(self%pinds(iptcl)) )then
                 pft_ref = (self%pfts_refs_even(iref,:,:) * self%ctfmats(self%pinds(iptcl),:,:)) * shmat
@@ -1950,7 +1950,7 @@ contains
         shmat        => self%heap_vars(ithr)%shmat_8
         argmat       => self%heap_vars(ithr)%argmat_8
         argmat       =  self%argtransf(:self%pftsz,:) * shvec(1) + self%argtransf(self%pftsz+1:,:) * shvec(2)
-        shmat        =  cmplx(cos(argmat),sin(argmat))
+        shmat        =  cmplx(cos(argmat),sin(argmat),dp)
         if( self%with_ctf )then
             if( self%iseven(self%pinds(iptcl)) )then
                 pft_ref = (self%pfts_refs_even(iref,:,:) * self%ctfmats(self%pinds(iptcl),:,:)) * shmat
