@@ -1,19 +1,19 @@
 CTFFIT
-ctfres still needs attention.... 
-
 
 NEW DEVELOPMENTS
 * Need methods for projecting the time of an execution, so that we can display accordingly
-* Edge normalisation on extraction (same as EMAN's edgenorm routine). The average of the
-boarder pixels must be zero for Fourier transformation. NEEDS TESTING
 * support for doc input to re-extract with shifts from doc
-* pipelined pick/extract
+* pipelined pick/extract???
 * frac parameter for 2D (& consider outlier detection similar to picker)
 * dyncls should state=0 the ones that fall below threshold
 * extract should set the header right (smpd)
 * scaling should set the header right (smpd)
 
+EXCEPTION HANDLING
+* need a file-based system because of the different processes
+
 MAJOR REFACTORINGS
+* all output should be consistently written to cwd
 * simple_auto exec (for all programs executed internally by the commanders)
 * split programs (eg PRIME3D) into functional units that corresponds more closely to what users would recognize
 * modularise commanders for Julia integration

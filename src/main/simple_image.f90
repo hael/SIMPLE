@@ -6624,24 +6624,26 @@ contains
         class(image), intent(inout) :: self
         integer,      intent(in)    :: angstep
         class(image), intent(inout) :: avg
-        real    :: avg_rmat(self%ldim(1),self%ldim(2))
+        real    :: avg_rmat(self%ldim(1),self%ldim(2),1)
+        real    :: rotated(nthr_glob,self%ldim(1),self%ldim(2),1)
         integer :: irot, ithr
-        call self%construct_thread_safe_tmp_imgs(nthr_glob)
-        call avg%new(self%ldim, self%smpd)
-        avg_rmat(:,:) = 0.
+        avg_rmat = 0.
+        rotated  = 0.
         !$omp parallel do schedule(static) default(shared) private(irot)&
         !$omp reduction(+:avg_rmat) proc_bind(close)
         do irot = 0 + angstep,359,angstep
             ! get thread index
             ithr = omp_get_thread_num() + 1
-            call self%rtsq_serial(real(irot), 0., 0., thread_safe_tmp_imgs(ithr))
-            avg_rmat(:,:) = avg_rmat(:,:) + thread_safe_tmp_imgs(ithr)%rmat(:self%ldim(1),:self%ldim(2),1)
+            ! rotate & sum
+            call self%rtsq_serial(real(irot), 0., 0., rotated(ithr,:,:,:))
+            avg_rmat = avg_rmat + rotated(ithr,:,:,:)
         end do
         !$omp end parallel do
         ! add in the zero rotation
-        avg_rmat(:,:) = avg_rmat(:,:) + self%rmat(:self%ldim(1),:self%ldim(2),1)
+        avg_rmat = avg_rmat + self%rmat
         ! set output image object
-        avg%rmat(:self%ldim(1),:self%ldim(2),1) = avg_rmat(:,:)
+        call avg%new(self%ldim, self%smpd)
+        call avg%set_rmat(avg_rmat)
         ! normalise
         call avg%div(real(360/angstep))
     end subroutine roavg
@@ -6743,12 +6745,12 @@ contains
     !! \param ang angle of rotation
     !! \param shxi shift in x axis
     !! \param shyi shift in y axis
-    !! \param self_out optional copy of processed result
+    !! \param rmat_out is the rotated pixels
     !!
-    subroutine rtsq_serial( self_in, ang, shxi, shyi, self_out )
+    subroutine rtsq_serial( self_in, ang, shxi, shyi, rmat_out )
         class(image), intent(inout) :: self_in
         real,         intent(in)    :: ang,shxi,shyi
-        class(image), intent(inout) :: self_out
+        real,         intent(inout) :: rmat_out(self_in%ldim(1),self_in%ldim(2),1)
         real    :: shx,shy,ry1,rx1,ry2,rx2,cod,sid,xi,fixcenmshx,fiycenmshy
         real    :: rye2,rye1,rxe2,rxe1,yi,ycod,ysid,yold,xold
         integer :: iycen,ixcen,ix,iy
@@ -6799,10 +6801,9 @@ contains
                 if(xi > rx2) xi = max(xi+rxe1, rx1)
                 yold = xi*sid+ycod
                 xold = xi*cod+ysid
-                self_out%rmat(ix,iy,1) = quadri(xold,yold,mat_in,self_in%ldim(1),self_in%ldim(2))
+                rmat_out(ix,iy,1) = quadri(xold,yold,mat_in,self_in%ldim(1),self_in%ldim(2))
             enddo
         enddo
-        self_out%ft = .false.
     end subroutine rtsq_serial
 
     !>  \brief  set pixels to value within a sphere
