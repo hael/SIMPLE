@@ -1,10 +1,9 @@
 module simple_ctffit
 #include "simple_lib.f08"
-use simple_image,       only: image
-use simple_ctf,         only: ctf
-use simple_opt_spec,    only: opt_spec
-use simple_de_opt,      only: de_opt
-! use simple_simplex_opt, only: simplex_opt
+use simple_image,    only: image
+use simple_ctf,      only: ctf
+use simple_opt_spec, only: opt_spec
+use simple_de_opt,   only: de_opt
 implicit none
 
 public :: ctffit_init, ctffit_x_validated_fit, ctffit_kill
@@ -22,10 +21,9 @@ type(image)           :: pspec_lower_roavg       ! rotationally averaged lower h
 type(image)           :: pspec_upper_roavg       ! rotationally averaged upper half of micrograph powerspec
 type(image)           :: imgmsk                  ! mask image
 type(ctf)             :: tfun                    ! transfer function object
+type(ctf)             :: tfun_roavg              ! rotationally averaged transfer function object
 type(opt_spec)        :: ospec_de                ! optimiser specification differential evolution (DE)
-! type(opt_spec)        :: ospec_simplex           ! optimiser specification Nelder-Mead (N-M)
 type(de_opt)          :: diffevol                ! DE search object
-! type(simplex_opt)     :: simplexsrch             ! N-M search object
 logical, allocatable  :: cc_msk(:,:,:)           ! corr mask
 logical               :: l_phaseplate = .false.  ! Volta phase-plate flag
 integer               :: ndim         = 3        ! # optimisation dims
@@ -36,7 +34,7 @@ real                  :: sxx_roavg    = 0.       ! memoized corr term, rotationa
 real                  :: limits(4,2)  = 0.       ! barrier limits
 
 integer, parameter :: IARES = 10, NSTEPS = 100
-real,    parameter :: cc_weight_astig = 0.2 ! 4 now
+! real,    parameter :: cc_weight_astig = 0.2 ! 4 now
 
 contains
 
@@ -75,66 +73,48 @@ contains
                 l_phaseplate = .true.
                 ndim = 4
             case DEFAULT
+                l_phaseplate = .false.
                 ndim = 3
         end select
-        ! construct CTF object
-        tfun = ctf(smpd, kV, Cs, amp_contr)
+        ! construct CTF objects
+        tfun       = ctf(smpd, kV, Cs, amp_contr)
+        tfun_roavg = ctf(smpd, kV, Cs, amp_contr)
         ! prepare powerspectra
-
-        !>>> TASK PARALLELISM
-        !# TASK 1
         call ppspec_all%dampen_central_cross
         call ppspec_all%subtr_backgr(hp)
-        !# TASK 2
         call ppspec_lower%dampen_central_cross
         call ppspec_lower%subtr_backgr(hp)
-        !# TASK 3
         call ppspec_upper%dampen_central_cross
         call ppspec_upper%subtr_backgr(hp)
-        !<<< END TASK PARALLELISM
-
         ! prepare rotationally averaged power spectra
         call ppspec_all%roavg(IARES, pspec_all_roavg)
         call ppspec_lower%roavg(IARES, pspec_lower_roavg)
         call ppspec_upper%roavg(IARES, pspec_upper_roavg)
-
         ! prepare CTF power spectra
         call pspec_ctf%new(ldim, smpd)
         call pspec_ctf_roavg%new(ldim, smpd)
-
         ! generate correlation mask
         call imgmsk%new(ldim, smpd)
         call imgmsk%resmsk(hp, lp)
         cc_msk = imgmsk%bin2logical()
-
-
-        ! contruct optimisers
+        ! contruct DE optimiser
         call seed_rnd
         limits        = 0.
         limits(1:2,1) = df_min
         limits(1:2,2) = df_max
-        limits(3,1)   = 0.
-        limits(3,2)   = twopi  ! miminise in radians so that the df:s are roughly on the same scale
+        limits(3,1)   = -180.
+        limits(3,2)   = 180.
         if( l_phaseplate )then
             limits(4,1) = 0.
             limits(4,2) = 3.15
         endif
-
-        call ospec_de%specify('de', ndim, limits=limits(1:ndim,:), maxits=400)
-
-
-        ! call ospec_simplex%specify('simplex', ndim, limits=limits(1:ndim,:), maxits=80, nrestarts=3)
+        call ospec_de%specify('de', ndim, limits=limits(1:ndim,:), maxits=400, ftol=1e-3)
         if( l_phaseplate )then
-            call ospec_de%set_costfun(ctffit_cost_phaseplate_roavg)
-            ! call ospec_de%set_costfun(ctffit_cost_phaseplate)
-            ! call ospec_simplex%set_costfun(ctffit_cost_phaseplate_barrier)
+            call ospec_de%set_costfun(ctffit_cost_phaseplate)
         else
-            call ospec_de%set_costfun(ctffit_cost_roavg )
-            ! call ospec_de%set_costfun(ctffit_cost)
-            ! call ospec_simplex%set_costfun(ctffit_cost_barrier)
+            call ospec_de%set_costfun(ctffit_cost)
         endif
         call diffevol%new(ospec_de)
-        ! call simplexsrch%new(ospec_de)
     end subroutine ctffit_init
 
     subroutine ctffit_x_validated_fit( dfx, dfy, angast, phshift, dferr, cc, diagfname )
@@ -144,33 +124,15 @@ contains
         real        :: dfavg, dfavg_lower, dfavg_upper, dfx_lower, dfx_upper, dfy_lower
         real        :: dfy_upper, angast_lower, angast_upper, phshift_lower, phshift_upper
         real        :: cc_lower, cc_upper
-
-
-
-
-        !!!!!!!!!!!!!!!!TEST
-        call init_srch( ppspec_all, pspec_all_roavg )
-        call grid_srch( dfx, dfy, angast, phshift, cc )
-        call ctf2pspecimg(tfun, pspec_ctf, dfx, dfy, angast)
-        goto 999
-
-        !!!!!!!!!!!!!!!!!
-
-
         ! determine parameters based on lower half of micrograph
         call init_srch( ppspec_lower, pspec_lower_roavg )
         call grid_srch(   dfx_lower, dfy_lower, angast_lower, phshift_lower, cc_lower )
-
-        ! call refine( dfx_lower, dfy_lower, angast_lower, phshift_lower, cc_lower )
-
+        call refine( dfx_lower, dfy_lower, angast_lower, phshift_lower, cc_lower )
         ! determine parameters based on upper half of micrograph
         call init_srch( ppspec_upper, pspec_upper_roavg )
         call grid_srch(   dfx_upper, dfy_upper, angast_upper, phshift_upper, cc_upper )
-
-        ! call refine( dfx_upper, dfy_upper, angast_upper, phshift_upper, cc_upper )
-
+        call refine( dfx_upper, dfy_upper, angast_upper, phshift_upper, cc_upper )
         ! check which solution fits the global powerspec best
-
         if( l_phaseplate )then
             call ctf2pspecimg(tfun, pspec_ctf, dfx_lower, dfy_lower, angast_lower, add_phshift=phshift_lower)
             cc_lower = ppspec_all%real_corr_prenorm(pspec_ctf, sxx, cc_msk)
@@ -224,22 +186,24 @@ contains
         call ppspec_ref_roavg%prenorm4real_corr(sxx_roavg, cc_msk)
     end subroutine init_srch
 
+    ! CONSIDER TASK PARALLELISM HERE
     subroutine grid_srch( dfx, dfy, angast, phshift, cc )
         real, intent(out) :: dfx, dfy, angast, phshift, cc
-        real              :: cost, df, cost_lowest, dfstep
+        real              :: cost, df, cost_lowest, dfstep, df_best
         class(*), pointer :: fun_self => null()
         dfstep = (df_max - df_min) / real(NSTEPS)
         if( l_phaseplate )then
             ! do a first grid search assuming:
             ! no astigmatism
             ! pi half phase shift
-            df = df_min
+            df      = df_min
+            df_best = df
             cost_lowest = ctffit_cost_phaseplate_roavg(fun_self, [df,df,0.,PIO2], ndim)
             do while( df <= df_max )
                 cost = ctffit_cost_phaseplate_roavg(fun_self, [df,df,0.,PIO2], ndim)
                 if( cost < cost_lowest )then
                     cost_lowest = cost
-                    ospec_de%x = [df,df,0.,PIO2]
+                    df_best     = df
                 endif
                 df = df + dfstep
             end do
@@ -247,32 +211,24 @@ contains
             ! do a first grid search assuming:
             ! no astigmatism
             df = df_min
+            df_best = df
             cost_lowest = ctffit_cost_roavg(fun_self, [df,df,0.], ndim)
             do while( df <= df_max )
                 cost = ctffit_cost_roavg(fun_self, [df,df,0.], ndim)
                 if( cost < cost_lowest )then
                     cost_lowest = cost
-                    ospec_de%x  = [df,df,0.]
+                    df_best     = df
                 endif
                 df = df + dfstep
             end do
         endif
-
-        stop
-
+        dfx     = df_best
+        dfy     = df_best
+        angast  = 0.
+        phshift = 0.
+        if( l_phaseplate ) phshift = PIO2
+        cc      = -cost_lowest
     end subroutine grid_srch
-
-
-
-    !     ! refinement by DE (Differential Evolution)
-    !     call diffevol%minimize(ospec_de, fun_self, cost)
-    !     dfx     = ospec_de%x(1)
-    !     dfy     = ospec_de%x(2)
-    !     angast  = rad2deg(ospec_de%x(3))
-    !     cc      = -cost
-    !     phshift = 0.
-    !     if( l_phaseplate ) phshift = ospec_de%x(4)
-    ! end subroutine srch
 
     subroutine refine( dfx, dfy, angast, phshift, cc )
         real, intent(inout) :: dfx, dfy, angast, phshift, cc
@@ -284,34 +240,13 @@ contains
             ospec_de%x = [dfx,dfy,angast]
         endif
         call diffevol%minimize(ospec_de, fun_self, cost)
-        ! report solution
-        dfx     = ospec_de%x(1)
-        dfy     = ospec_de%x(2)
-        angast  = rad2deg(ospec_de%x(3))
+        dfx    = ospec_de%x(1)
+        dfy    = ospec_de%x(2)
+        angast = ospec_de%x(3)
         cc      = -cost
         phshift = 0.
         if( l_phaseplate ) phshift = ospec_de%x(4)
     end subroutine refine
-
-    ! subroutine refine( dfx, dfy, angast, phshift, cc )
-    !     real, intent(inout) :: dfx, dfy, angast, phshift, cc
-    !     real                :: cost
-    !     class(*), pointer   :: fun_self => null()
-    !     if( l_phaseplate )then
-    !         ospec_simplex%x = [dfx,dfy,angast,phshift]
-    !     else
-    !         ospec_simplex%x = [dfx,dfy,angast]
-    !     endif
-    !     ! refinement with unconstrained Nelder-Mead: critical to accuracy
-    !     call simplexsrch%minimize(ospec_simplex, fun_self, cost)
-    !     ! report solution
-    !     dfx     = ospec_simplex%x(1)
-    !     dfy     = ospec_simplex%x(2)
-    !     angast  = rad2deg(ospec_simplex%x(3))
-    !     cc      = -cost
-    !     phshift = 0.
-    !     if( l_phaseplate ) phshift = ospec_de%x(4)
-    ! end subroutine refine
 
     ! cost function is real-space correlation within resolution mask between the CTF
     ! powerspectrum (the model) and the pre-processed micrograph powerspectrum (the data)
@@ -321,11 +256,13 @@ contains
         integer,  intent(in)    :: D
         real,     intent(in)    :: vec(D)
         real :: cc, cc_roavg, cc_comb, cost
-        ! call ctf2pspecimgs(tfun, pspec_ctf, pspec_ctf_roavg, vec(1), vec(2), rad2deg(vec(3)))
+        call ctf2pspecimg(tfun, pspec_ctf, vec(1), vec(2), vec(3))
+        ! call ctf2pspecimgs(tfun, tfun_roavg, pspec_ctf, pspec_ctf_roavg, vec(1), vec(2), vec(3))
         cc       = ppspec_ref%real_corr_prenorm(pspec_ctf, sxx, cc_msk)
-        cc_roavg = ppspec_ref_roavg%real_corr_prenorm(pspec_ctf_roavg, sxx_roavg, cc_msk)
-        cc_comb  = cc_weight_astig * cc + (1.0 - cc_weight_astig) * cc_roavg
-        cost     = -cc_comb
+        ! cc_roavg = ppspec_ref_roavg%real_corr_prenorm(pspec_ctf_roavg, sxx_roavg, cc_msk)
+        ! cc_comb  = cc_weight_astig * cc + (1.0 - cc_weight_astig) * cc_roavg
+        ! cost     = -cc_comb
+        cost = -cc
     end function ctffit_cost
 
     ! this cost function considers only the rotationally averaged model
@@ -334,13 +271,7 @@ contains
         integer,  intent(in)    :: D
         real,     intent(in)    :: vec(D)
         real :: cc_roavg, cost
-        ! call ctf2pspecimgs(tfun, pspec_ctf, pspec_ctf_roavg, vec(1), vec(1), 0.)
-
         call ctf2pspecimg(tfun, pspec_ctf_roavg, vec(1), vec(1), 0.)
-
-        call pspec_ctf_roavg%vis
-        call ppspec_ref_roavg%vis
-
         cc_roavg = ppspec_ref_roavg%real_corr_prenorm(pspec_ctf_roavg, sxx_roavg, cc_msk)
         cost     = -cc_roavg
     end function ctffit_cost_roavg
@@ -354,11 +285,13 @@ contains
         real,     intent(in)    :: vec(D)
         real :: cc, cc_roavg, cc_comb, cost
         ! vec(4) is additional phase shift (in radians)
-        ! call ctf2pspecimgs(tfun, pspec_ctf, pspec_ctf_roavg, vec(1), vec(2), rad2deg(vec(3)), add_phshift=vec(4))
+        call ctf2pspecimg(tfun, pspec_ctf, vec(1), vec(2), vec(3), add_phshift=vec(4))
+        ! call ctf2pspecimgs(tfun, tfun_roavg, pspec_ctf, pspec_ctf_roavg, vec(1), vec(2), vec(3), add_phshift=vec(4))
         cc       = ppspec_ref%real_corr_prenorm(pspec_ctf, sxx, cc_msk)
-        cc_roavg = ppspec_ref_roavg%real_corr_prenorm(pspec_ctf_roavg, sxx_roavg, cc_msk)
-        cc_comb  = cc_weight_astig * cc + (1.0 - cc_weight_astig) * cc_roavg
-        cost     = -cc_comb
+        ! cc_roavg = ppspec_ref_roavg%real_corr_prenorm(pspec_ctf_roavg, sxx_roavg, cc_msk)
+        ! cc_comb  = cc_weight_astig * cc + (1.0 - cc_weight_astig) * cc_roavg
+        ! cost     = -cc_comb
+        cost = -cc
     end function ctffit_cost_phaseplate
 
     ! this cost function considers only the rotationally averaged model
@@ -368,12 +301,10 @@ contains
         real,     intent(in)    :: vec(D)
         real :: cc_roavg, cost
         ! vec(4) is additional phase shift (in radians)
-        ! call ctf2pspecimgs(tfun, pspec_ctf, pspec_ctf_roavg, vec(1), vec(1), 0., add_phshift=vec(4))
+        call ctf2pspecimg(tfun, pspec_ctf_roavg, vec(1), vec(1), 0., add_phshift=vec(4))
         cc_roavg = ppspec_ref_roavg%real_corr_prenorm(pspec_ctf_roavg, sxx_roavg, cc_msk)
         cost     = -cc_roavg
     end function ctffit_cost_phaseplate_roavg
-
-    ! with barrier constraint on the astigmatism angle [0,twopi]
 
     !>  \brief  is for making a CTF power-spec image
     subroutine ctf2pspecimg( tfun, img, dfx, dfy, angast, add_phshift )
@@ -418,53 +349,53 @@ contains
     end subroutine ctf2pspecimg
 
     !>  \brief  is for making a CTF power-spec image
-    subroutine ctf2pspecimgs( tfun, tfun_roavg, img, img_roavg, dfx, dfy, angast, add_phshift )
-        use simple_image, only: image
-        class(ctf),     intent(inout) :: tfun, tfun_roavg !< CTF objects
-        class(image),   intent(inout) :: img, img_roavg   !< image (outputs)
-        real,           intent(in)    :: dfx              !< defocus x-axis
-        real,           intent(in)    :: dfy              !< defocus y-axis
-        real,           intent(in)    :: angast           !< angle of astigmatism
-        real, optional, intent(in)    :: add_phshift      !< aditional phase shift (radians), for phase plate
-        integer :: lims(3,2),h,mh,k,mk,phys(3),ldim(3),inds(3)
-        real    :: ang, tval, spaFreqSq, hinv, aadd_phshift, kinv, inv_ldim(3), res, wght, df_avg, tval_roavg
-        ! initialize
-        aadd_phshift = 0.
-        if( present(add_phshift) ) aadd_phshift = add_phshift
-        call tfun%init(dfx, dfy, angast)
-        df_avg = (dfx + dfy) / 2.0
-        call tfun_roavg%init(df_avg, df_avg, 0.)
-        img       = 0.
-        img_roavg = 0.
-        lims      = img%loop_lims(3)
-        mh        = maxval(lims(1,:))
-        mk        = maxval(lims(2,:))
-        inds      = 1
-        ldim      = img%get_ldim()
-        inv_ldim  = 1./real(ldim)
-        !$omp parallel do collapse(2) default(shared) private(h,hinv,k,kinv,inds,spaFreqSq,ang,tval,tval_roavg,phys) &
-        !$omp schedule(static) proc_bind(close)
-        do h=lims(1,1),lims(1,2)
-            do k=lims(2,1),lims(2,2)
-                inds(1)    = min(max(1,h+mh+1),ldim(1))
-                inds(2)    = min(max(1,k+mk+1),ldim(2))
-                inds(3)    = 1
-                hinv       = real(h) * inv_ldim(1)
-                kinv       = real(k) * inv_ldim(2)
-                spaFreqSq  = hinv * hinv + kinv * kinv
-                ang        = atan2(real(k),real(h))
-                tval       = tfun%eval(spaFreqSq, ang, aadd_phshift)
-                tval       = min(1.,max(tval * tval,0.001))
-                tval       = sqrt(tval)
-                tval_roavg = tfun_roavg%eval(spaFreqSq, ang, aadd_phshift)
-                tval_roavg = min(1.,max(tval_roavg * tval_roavg,0.001))
-                tval_roavg = sqrt(tval_roavg)
-                call img%set(inds, tval)
-                call img_roavg%set(inds, tval_roavg)
-            end do
-        end do
-        !$omp end parallel do
-    end subroutine ctf2pspecimgs
+    ! subroutine ctf2pspecimgs( tfun, tfun_roavg, img, img_roavg, dfx, dfy, angast, add_phshift )
+    !     use simple_image, only: image
+    !     class(ctf),     intent(inout) :: tfun, tfun_roavg !< CTF objects
+    !     class(image),   intent(inout) :: img, img_roavg   !< image (outputs)
+    !     real,           intent(in)    :: dfx              !< defocus x-axis
+    !     real,           intent(in)    :: dfy              !< defocus y-axis
+    !     real,           intent(in)    :: angast           !< angle of astigmatism
+    !     real, optional, intent(in)    :: add_phshift      !< aditional phase shift (radians), for phase plate
+    !     integer :: lims(3,2),h,mh,k,mk,phys(3),ldim(3),inds(3)
+    !     real    :: ang, tval, spaFreqSq, hinv, aadd_phshift, kinv, inv_ldim(3), res, wght, df_avg, tval_roavg
+    !     ! initialize
+    !     aadd_phshift = 0.
+    !     if( present(add_phshift) ) aadd_phshift = add_phshift
+    !     call tfun%init(dfx, dfy, angast)
+    !     df_avg = (dfx + dfy) / 2.0
+    !     call tfun_roavg%init(df_avg, df_avg, 0.)
+    !     img       = 0.
+    !     img_roavg = 0.
+    !     lims      = img%loop_lims(3)
+    !     mh        = maxval(lims(1,:))
+    !     mk        = maxval(lims(2,:))
+    !     inds      = 1
+    !     ldim      = img%get_ldim()
+    !     inv_ldim  = 1./real(ldim)
+    !     !$omp parallel do collapse(2) default(shared) private(h,hinv,k,kinv,inds,spaFreqSq,ang,tval,tval_roavg,phys) &
+    !     !$omp schedule(static) proc_bind(close)
+    !     do h=lims(1,1),lims(1,2)
+    !         do k=lims(2,1),lims(2,2)
+    !             inds(1)    = min(max(1,h+mh+1),ldim(1))
+    !             inds(2)    = min(max(1,k+mk+1),ldim(2))
+    !             inds(3)    = 1
+    !             hinv       = real(h) * inv_ldim(1)
+    !             kinv       = real(k) * inv_ldim(2)
+    !             spaFreqSq  = hinv * hinv + kinv * kinv
+    !             ang        = atan2(real(k),real(h))
+    !             tval       = tfun%eval(spaFreqSq, ang, aadd_phshift)
+    !             tval       = min(1.,max(tval * tval,0.001))
+    !             tval       = sqrt(tval)
+    !             tval_roavg = tfun_roavg%eval(spaFreqSq, ang, aadd_phshift)
+    !             tval_roavg = min(1.,max(tval_roavg * tval_roavg,0.001))
+    !             tval_roavg = sqrt(tval_roavg)
+    !             call img%set(inds, tval)
+    !             call img_roavg%set(inds, tval_roavg)
+    !         end do
+    !     end do
+    !     !$omp end parallel do
+    ! end subroutine ctf2pspecimgs
 
     subroutine ctffit_kill
         ppspec_ref   => null()

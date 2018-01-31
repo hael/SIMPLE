@@ -1083,23 +1083,27 @@ contains
         kcorrs  => self%heap_vars(ithr)%kcorrs
         call self%prep_ref4corr(iref, self%pinds(iptcl), pft_ref, sumsqref, self%kfromto(2))
         cc(:) = 0.
-        do k=self%kfromto(1),self%kfromto(2)
-            call self%calc_k_corrs(pft_ref, self%pinds(iptcl), k, kcorrs)
-            sumsqptcl = sum(csq(self%pfts_ptcls(self%pinds(iptcl),:,k)))
-            sumsqref  = sum(csq(pft_ref(:,k)))
-            ! all rotational correlations in one shell: kcorrs(:) / sqrt(sumsqref * sumsqptcl)
-            ! sum over shells
-            if( self%l_cc_bfac )then
-                ! with B-factor weighting
-                cc(:) = cc(:) + (kcorrs(:) * self%bfac_arr(k)) / sqrt(sumsqref * sumsqptcl)
-            else
-                ! without
-                cc(:) = cc(:) + kcorrs(:) / sqrt(sumsqref * sumsqptcl)
-            endif
-        end do
         if( self%l_cc_bfac )then
+            ! with B-factor weighting
+            do k=self%kfromto(1),self%kfromto(2)
+                call self%calc_k_corrs(pft_ref, self%pinds(iptcl), k, kcorrs)
+                sumsqptcl = sum(csq(self%pfts_ptcls(self%pinds(iptcl),:,k)))
+                sumsqref  = sum(csq(pft_ref(:,k)))
+                ! all rotational correlations in one shell: kcorrs(:) / sqrt(sumsqref * sumsqptcl)
+                ! sum over shells
+                cc(:) = cc(:) + (kcorrs(:) * self%bfac_arr(k)) / sqrt(sumsqref * sumsqptcl)
+            end do
             cc(:) = cc(:) / self%bfac_norm
         else
+            ! without B-factor weighting
+            do k=self%kfromto(1),self%kfromto(2)
+                call self%calc_k_corrs(pft_ref, self%pinds(iptcl), k, kcorrs)
+                sumsqptcl = sum(csq(self%pfts_ptcls(self%pinds(iptcl),:,k)))
+                sumsqref  = sum(csq(pft_ref(:,k)))
+                ! all rotational correlations in one shell: kcorrs(:) / sqrt(sumsqref * sumsqptcl)
+                ! sum over shells
+                cc(:) = cc(:) + kcorrs(:) / sqrt(sumsqref * sumsqptcl)
+            end do
             cc(:) = cc(:) / real(self%nk)
         endif
     end subroutine gencorrs_resnorm_1
@@ -1117,23 +1121,27 @@ contains
         kcorrs  => self%heap_vars(ithr)%kcorrs
         call self%prep_ref4corr(iref, self%pinds(iptcl), pft_ref, sumsqref, kstop)
         cc(:) = 0.
-        do k=self%kfromto(1),kstop
-            call self%calc_k_corrs(pft_ref, self%pinds(iptcl), k, kcorrs)
-            sumsqptcl = sum(csq(self%pfts_ptcls(self%pinds(iptcl),:,k)))
-            sumsqref  = sum(csq(pft_ref(:,k)))
-            ! all rotational correlations in one shell: kcorrs(:) / sqrt(sumsqref * sumsqptcl)
-            ! sum over shells
-            if( self%l_cc_bfac )then
-                ! with B-factor weighting
-                cc(:) = cc(:) + (kcorrs(:) * self%bfac_arr(k)) / sqrt(sumsqref * sumsqptcl)
-            else
-                ! without
-                cc(:) = cc(:) + kcorrs(:) / sqrt(sumsqref * sumsqptcl)
-            endif
-        end do
         if( self%l_cc_bfac )then
+            ! with B-factor weighting
+            do k=self%kfromto(1),kstop
+                call self%calc_k_corrs(pft_ref, self%pinds(iptcl), k, kcorrs)
+                sumsqptcl = sum(csq(self%pfts_ptcls(self%pinds(iptcl),:,k)))
+                sumsqref  = sum(csq(pft_ref(:,k)))
+                ! all rotational correlations in one shell: kcorrs(:) / sqrt(sumsqref * sumsqptcl)
+                ! sum over shells
+                cc(:) = cc(:) + (kcorrs(:) * self%bfac_arr(k)) / sqrt(sumsqref * sumsqptcl)
+            end do
             cc(:) = cc(:) / sum(self%bfac_arr(self%kfromto(1):kstop))
         else
+            ! without B-factor weighting
+            do k=self%kfromto(1),kstop
+                call self%calc_k_corrs(pft_ref, self%pinds(iptcl), k, kcorrs)
+                sumsqptcl = sum(csq(self%pfts_ptcls(self%pinds(iptcl),:,k)))
+                sumsqref  = sum(csq(pft_ref(:,k)))
+                ! all rotational correlations in one shell: kcorrs(:) / sqrt(sumsqref * sumsqptcl)
+                ! sum over shells
+                cc(:) = cc(:) + kcorrs(:) / sqrt(sumsqref * sumsqptcl)
+            end do
             cc(:) = cc(:) / real(self%kfromto(2) - kstop + 1)
         endif
     end subroutine gencorrs_resnorm_2
@@ -1169,23 +1177,27 @@ contains
             endif
         endif
         cc(:) = 0.
-        do k=self%kfromto(1),self%kfromto(2)
-            call self%calc_k_corrs(pft_ref, self%pinds(iptcl), k, kcorrs)
-            sumsqptcl = sum(csq(self%pfts_ptcls(self%pinds(iptcl),:,k)))
-            sumsqref  = sum(csq(pft_ref(:,k)))
-            ! all rotational correlations in one shell: kcorrs(:) / sqrt(sumsqref * sumsqptcl)
-            ! sum over shells
-            if( self%l_cc_bfac )then
-                ! with B-factor weighting
-                cc(:) = cc(:) + (kcorrs(:) * self%bfac_arr(k)) / sqrt(sumsqref * sumsqptcl)
-            else
-                ! without
-                cc(:) = cc(:) + kcorrs(:) / sqrt(sumsqref * sumsqptcl)
-            endif
-        end do
         if( self%l_cc_bfac )then
+            ! with B-factor weighting
+            do k=self%kfromto(1),self%kfromto(2)
+                call self%calc_k_corrs(pft_ref, self%pinds(iptcl), k, kcorrs)
+                sumsqptcl = sum(csq(self%pfts_ptcls(self%pinds(iptcl),:,k)))
+                sumsqref  = sum(csq(pft_ref(:,k)))
+                ! all rotational correlations in one shell: kcorrs(:) / sqrt(sumsqref * sumsqptcl)
+                ! sum over shells
+                cc(:) = cc(:) + (kcorrs(:) * self%bfac_arr(k)) / sqrt(sumsqref * sumsqptcl)
+            end do
             cc(:) = cc(:) / self%bfac_norm
         else
+            ! without B-factor weighting
+            do k=self%kfromto(1),self%kfromto(2)
+                call self%calc_k_corrs(pft_ref, self%pinds(iptcl), k, kcorrs)
+                sumsqptcl = sum(csq(self%pfts_ptcls(self%pinds(iptcl),:,k)))
+                sumsqref  = sum(csq(pft_ref(:,k)))
+                ! all rotational correlations in one shell: kcorrs(:) / sqrt(sumsqref * sumsqptcl)
+                ! sum over shells
+                cc(:) = cc(:) + kcorrs(:) / sqrt(sumsqref * sumsqptcl)
+            end do
             cc(:) = cc(:) / real(self%nk)
         endif
     end subroutine gencorrs_resnorm_3
@@ -1322,7 +1334,7 @@ contains
         cc        = corr  / sqrt(sqsum_ref * self%sqsums_ptcls(self%pinds(iptcl)))
     end function gencorr_cc_for_rot_8
 
-        !< brief  generates correlation for one specific rotation angle
+    !< brief  generates correlation for one specific rotation angle
     function gencorr_resnorm_for_rot( self, iref, iptcl, shvec, irot ) result( cc )
         use simple_math, only: csq
         class(polarft_corrcalc), intent(inout) :: self
@@ -1353,20 +1365,21 @@ contains
             endif
         endif
         cc = 0.0
-        do k = self%kfromto(1),self%kfromto(2)
-            sqsumk_ref = sum(csq(pft_ref(:,k)))
-            corrk      = self%calc_corrk_for_rot(pft_ref, self%pinds(iptcl), self%kfromto(2), k, irot)
-            if( self%l_cc_bfac )then
-                ! with B-factor weighting
-                cc = cc + (corrk * self%bfac_arr(k)) / sqrt(sqsumk_ref * sum(csq(self%pfts_ptcls(self%pinds(iptcl),:,k))))
-            else
-                ! without
-                cc = cc + corrk / sqrt(sqsumk_ref * sum(csq(self%pfts_ptcls(self%pinds(iptcl),:,k))))
-            endif
-        end do
         if( self%l_cc_bfac )then
+            ! with B-factor weighting
+            do k = self%kfromto(1),self%kfromto(2)
+                sqsumk_ref = sum(csq(pft_ref(:,k)))
+                corrk      = self%calc_corrk_for_rot(pft_ref, self%pinds(iptcl), self%kfromto(2), k, irot)
+                cc = cc + (corrk * self%bfac_arr(k)) / sqrt(sqsumk_ref * sum(csq(self%pfts_ptcls(self%pinds(iptcl),:,k))))
+            end do
             cc = cc / self%bfac_norm
         else
+            ! without B-factor weighting
+            do k = self%kfromto(1),self%kfromto(2)
+                sqsumk_ref = sum(csq(pft_ref(:,k)))
+                corrk      = self%calc_corrk_for_rot(pft_ref, self%pinds(iptcl), self%kfromto(2), k, irot)
+                cc = cc + corrk / sqrt(sqsumk_ref * sum(csq(self%pfts_ptcls(self%pinds(iptcl),:,k))))
+            end do
             cc = cc / real(self%nk)
         endif
     end function gencorr_resnorm_for_rot
@@ -1402,18 +1415,23 @@ contains
             endif
         endif
         cc = 0.0_dp
-        do k = self%kfromto(1),self%kfromto(2)
-            sqsumk_ref = sum(csq(pft_ref(:,k)))
-            corrk      = self%calc_corrk_for_rot_8(pft_ref, self%pinds(iptcl), self%kfromto(2), k, irot)
-            if( self%l_cc_bfac )then
-                ! with B-factor weighting
+        if( self%l_cc_bfac )then
+            ! with B-factor weighting
+            do k = self%kfromto(1),self%kfromto(2)
+                sqsumk_ref = sum(csq(pft_ref(:,k)))
+                corrk      = self%calc_corrk_for_rot_8(pft_ref, self%pinds(iptcl), self%kfromto(2), k, irot)
                 cc = cc + (corrk * real(self%bfac_arr(k), kind=dp)) / sqrt(sqsumk_ref * sum(csq(self%pfts_ptcls(self%pinds(iptcl),:,k))))
-            else
-                ! without
+            end do
+            cc = cc / real(self%bfac_norm, kind=dp)
+        else
+            ! without B-factor weighting
+            do k = self%kfromto(1),self%kfromto(2)
+                sqsumk_ref = sum(csq(pft_ref(:,k)))
+                corrk      = self%calc_corrk_for_rot_8(pft_ref, self%pinds(iptcl), self%kfromto(2), k, irot)
                 cc = cc + corrk / sqrt(sqsumk_ref * sum(csq(self%pfts_ptcls(self%pinds(iptcl),:,k))))
-            endif
-        end do
-        cc = cc / real(self%nk, kind=dp)
+            end do
+            cc = cc / real(self%nk, kind=dp)
+        endif
     end function gencorr_resnorm_for_rot_8
 
     !< brief  calculates correlations and gradient for origin shift

@@ -18,6 +18,7 @@ type, extends(optimizer) :: de_opt
     real, allocatable :: pop(:,:)          !< solution vector population
     real, allocatable :: costs(:)          !< costs
     integer           :: best              !< index of best population member
+    integer           :: worst             !< index of worst population member
     real              :: F  = F_MULTIMODAL !< amplification factor
     real              :: CR = X_MULTIMODAL !< cross-over rate
     logical           :: exists = .false.  !< to indicate existence
@@ -68,15 +69,13 @@ contains
 
     !> \brief  is the differential evolution minimization routine
     subroutine de_minimize( self, spec, fun_self, lowest_cost )
-        class(de_opt),   intent(inout) :: self        !< instance     
+        class(de_opt),   intent(inout) :: self        !< instance
         class(opt_spec), intent(inout) :: spec        !< specification
         class(*),        intent(inout) :: fun_self    !< self-pointer for cost function
         real,            intent(out)   :: lowest_cost !< lowest cost
-        real    :: trial_costs(spec%npop)!, ran3s(spec%npop,spec%ndim)
-        real    :: trials(spec%npop,spec%ndim)
-        real    :: trial(spec%ndim), cost_trial, L
-        ! integer :: am(spec%npop), bm(spec%npop), rbm(spec%npop)
-        integer :: a, rb, b, i, j, X, t, npeaks, loc(1), nworse
+        real    :: trial_costs(spec%npop), rtol
+        real    :: trials(spec%npop,spec%ndim), trial(spec%ndim), cost_trial, L
+        integer :: a, rb, b, i, j, X, t, loc(1), nworse
         if( .not. associated(spec%costfun) )then
             stop 'cost function not associated in opt_spec; de_minimize; simple_de_opt'
         endif
@@ -101,9 +100,9 @@ contains
         end do
         loc = minloc(self%costs)
         self%best = loc(1)
-        ! initialize the remains
-        npeaks    = 0
-        nworse    = 0
+        loc = maxloc(self%costs)
+        self%worst = loc(1)
+        nworse = 0
         do t=1,spec%maxits ! generations loop
             ! select solution to modify
             X  = irnd_uni(spec%npop)
@@ -119,12 +118,12 @@ contains
             do i=1,spec%ndim
                 if( i == X .or. ran3() < self%CR )then
                     trial(i) = self%pop(self%best,i) + self%F * (self%pop(a,i) - self%pop(b,i))
-                    ! enforce limits
-                    trial(i) = min(spec%limits(i,2),trial(i))
-                    trial(i) = max(spec%limits(i,1),trial(i))
                 else
                     trial(i) = self%pop(X,i)
                 endif
+                ! enforce limits
+                trial(i) = min(spec%limits(i,2),trial(i))
+                trial(i) = max(spec%limits(i,1),trial(i))
             end do
             ! calculate cost
             cost_trial  = spec%costfun(fun_self, trial, spec%ndim)
@@ -136,22 +135,14 @@ contains
                 self%costs(X) = cost_trial
                 ! update global best if needed
                 if( cost_trial < self%costs(self%best) ) self%best = X
-                if( spec%npeaks > 0 )then
-                    ! we will output local optima
-                    if( cost_trial < spec%yb )then
-                        npeaks = npeaks + 1
-                        spec%peaks(npeaks,:spec%ndim)  = trial
-                        spec%peaks(npeaks,spec%ndim+1) = cost_trial
-                    endif
-                endif
             else
                 nworse = nworse + 1
+                if( cost_trial > self%costs(self%worst) ) self%worst = X
             endif
-            if( spec%npeaks > 0 )then
-                ! exit when we have identified spec%npeaks local optima
-                if( npeaks == spec%npeaks ) exit
-            endif
-            if( nworse > spec%npop ) exit
+            ! relative tolerance
+            rtol = 2.0 * abs(self%costs(self%best) - self%costs(self%worst)) / &
+                   &(abs(self%costs(self%best))+abs(self%costs(self%worst)) + TINY)
+            if( nworse > spec%npop .or. rtol <= spec%ftol ) exit
         end do
         lowest_cost = self%costs(self%best)
         spec%x = self%pop(self%best,:)
