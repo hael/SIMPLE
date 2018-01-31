@@ -108,7 +108,7 @@ contains
             limits(4,1) = 0.
             limits(4,2) = 3.15
         endif
-        call ospec_de%specify('de', ndim, limits=limits(1:ndim,:), maxits=400, ftol=1e-3)
+        call ospec_de%specify('de', ndim, limits=limits(1:ndim,:), maxits=400, ftol=1e-4)
         if( l_phaseplate )then
             call ospec_de%set_costfun(ctffit_cost_phaseplate)
         else

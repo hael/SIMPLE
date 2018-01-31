@@ -6624,24 +6624,24 @@ contains
         class(image), intent(inout) :: self
         integer,      intent(in)    :: angstep
         class(image), intent(inout) :: avg
-        real    :: avg_rmat(self%ldim(1),self%ldim(2),1)
+        real    :: avg_rmat(self%ldim(1),self%ldim(2))
         integer :: irot, ithr
         call self%construct_thread_safe_tmp_imgs(nthr_glob)
         call avg%new(self%ldim, self%smpd)
-        avg_rmat = 0.
+        avg_rmat(:,:) = 0.
         !$omp parallel do schedule(static) default(shared) private(irot)&
         !$omp reduction(+:avg_rmat) proc_bind(close)
         do irot = 0 + angstep,359,angstep
             ! get thread index
             ithr = omp_get_thread_num() + 1
             call self%rtsq_serial(real(irot), 0., 0., thread_safe_tmp_imgs(ithr))
-            avg_rmat = avg_rmat + thread_safe_tmp_imgs(ithr)%rmat
+            avg_rmat(:,:) = avg_rmat(:,:) + thread_safe_tmp_imgs(ithr)%rmat(:self%ldim(1),:self%ldim(2),1)
         end do
         !$omp end parallel do
         ! add in the zero rotation
-        avg_rmat = avg_rmat + self%rmat(:self%ldim(1),:self%ldim(2),:)
+        avg_rmat(:,:) = avg_rmat(:,:) + self%rmat(:self%ldim(1),:self%ldim(2),1)
         ! set output image object
-        avg%rmat = avg_rmat
+        avg%rmat(:self%ldim(1),:self%ldim(2),1) = avg_rmat(:,:)
         ! normalise
         call avg%div(real(360/angstep))
     end subroutine roavg
