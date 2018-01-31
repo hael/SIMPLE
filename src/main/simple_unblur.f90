@@ -77,7 +77,11 @@ contains
         ! make search object ready
         lims(:,1) = -maxshift
         lims(:,2) =  maxshift
-        call ftexp_shsrch_init(movie_sum_global_ftexp, movie_frames_ftexp(1), lims)
+        if ((p%opt == 'bfgs').or.(p%opt == 'lbfgsb').or.(p%opt == 'bfgs2')) then
+            call ftexp_shsrch_init(movie_sum_global_ftexp, movie_frames_ftexp(1), lims, 'lbfgsb')
+        else
+            call ftexp_shsrch_init(movie_sum_global_ftexp, movie_frames_ftexp(1), lims)
+        end if
         ! initialise with small random shifts (to average out dead/hot pixels)
         do iframe=1,nframes
             opt_shifts(iframe,1) = ran3()*2.*SMALLSHIFT-SMALLSHIFT
@@ -303,9 +307,9 @@ contains
         resstep   = (p%lpstart-p%lpstop)/3.
         ! ALLOCATE
         allocate( movie_frames_ftexp(nframes), movie_frames_scaled(nframes),&
-        movie_frames_ftexp_sh(nframes), corrs(nframes), opt_shifts(nframes,2),&
-        opt_shifts_saved(nframes,2), corrmat(nframes,nframes), frameweights(nframes),&
-        frameweights_saved(nframes), stat=alloc_stat )
+            movie_frames_ftexp_sh(nframes), corrs(nframes), opt_shifts(nframes,2),&
+            opt_shifts_saved(nframes,2), corrmat(nframes,nframes), frameweights(nframes),&
+            frameweights_saved(nframes), stat=alloc_stat )
         allocchk('unblur_init; simple_unblur')
         corrmat = 0.
         corrs   = 0.

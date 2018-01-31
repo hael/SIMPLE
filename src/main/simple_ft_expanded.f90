@@ -1,5 +1,9 @@
 ! expanded Fourier transform class for improved cache utilisation
 
+! Strategy: 
+! working version first -> hack
+! then on Monday we can unscramble the classes
+
 module simple_ft_expanded
 !$ use omp_lib
 !$ use omp_lib_kinds
@@ -8,6 +12,12 @@ module simple_ft_expanded
 use simple_image,  only: image
 
 implicit none
+
+complex(dp), parameter   :: J = complex(0.0_dp, 1.0_dp)
+complex(dp), allocatable :: ft_exp_shmat_2d(:,:)
+complex(dp), allocatable :: ft_exp_cmat2sh_2d(:,:)
+complex(dp), allocatable :: ft_exp_tmpmat_2d(:,:)
+
 
 public :: ft_expanded
 private
@@ -49,6 +59,9 @@ type :: ft_expanded
     ! calculators
     procedure          :: corr
     procedure          :: corr_shifted
+    procedure          :: corr_shifted_8_2d
+    procedure          :: corr_gshifted_8_2d
+    procedure          :: corr_fdfshifted_8_2d
     ! destructor
     procedure          :: kill
 end type ft_expanded
@@ -130,7 +143,7 @@ contains
                         phys = img%comp_addr_phys([h,k,l])
                         self%transfmat(hcnt,kcnt,lcnt,:) = real([h,k,l])*self%shconst
                         self%cmat(hcnt,kcnt,lcnt) = img%get_fcomp([h,k,l],phys)
-                     endif
+                    endif
                 end do
             end do
         end do
@@ -267,6 +280,29 @@ contains
         endif
     end subroutine subtr
 
+    subroutine allocate_shmat_2d_cmat2sh_2d( flims )        
+        integer, intent(in) :: flims(3,2)
+        logical             :: do_allocate
+        do_allocate = .false.
+        if (.not. allocated( ft_exp_shmat_2d )) then
+            do_allocate = .true.
+        else if (size(ft_exp_shmat_2d, 1) .ne. flims(1,2) .or. &
+                 size(ft_exp_shmat_2d, 2) .ne. flims(2,2)         ) then            
+            deallocate( ft_exp_shmat_2d, ft_exp_cmat2sh_2d, ft_exp_tmpmat_2d )
+            do_allocate = .true.
+        end if
+        if (do_allocate) then
+            allocate( ft_exp_shmat_2d(   flims(1,1):flims(1,2),     &
+                                         flims(2,1):flims(2,2) ),   &             
+                      ft_exp_cmat2sh_2d( flims(1,1):flims(1,2),     &
+                                         flims(2,1):flims(2,2) ),   &
+                      ft_exp_tmpmat_2d( flims(1,1):flims(1,2),     &
+                                        flims(2,1):flims(2,2) ),   &                                         
+                      stat=alloc_stat                             )
+            allocchk("In: allocate_shmat_2d_cmat2sh_2; simple_ft_expanded")
+        end if
+    end subroutine allocate_shmat_2d_cmat2sh_2d
+    
     ! MODIFIERS
 
     !>  \brief  is 4 shifting an ft_expanded instance
@@ -348,7 +384,7 @@ contains
                 do kind=self1%flims(2,1),self1%flims(2,2)
                     do lind=self1%flims(3,1),self1%flims(3,2)
                         arg = sum(shvec_here(:)*self1%transfmat(hind,kind,lind,:))
-                        shmat(hind,kind,lind) = cmplx(cos(arg),sin(arg))
+                        shmat(hind,kind,lind) = exp(cmplx(0., 1.) * arg)   !cmplx(cos(arg),sin(arg))
                     end do
                 end do
             end do
@@ -375,6 +411,136 @@ contains
             stop 'cannot correlate expanded_ft:s with different dims; ft_expanded::corr_shifted'
         endif ! end of if( self1.eqdims.self2 ) statement
     end function corr_shifted
+
+    !>  \brief  is a correlation calculator with origin shift of self2, double precision
+    function corr_shifted_8_2d( self1, self2, shvec ) result( r )
+        class(ft_expanded), intent(inout) :: self1, self2 !< instances
+        real(dp), intent(in)              :: shvec(2)
+        real(dp)                          :: r,sumasq,sumbsq,arg
+        integer                           :: hind,kind
+        if ( self1.eqdims.self2 ) then
+            call allocate_shmat_2d_cmat2sh_2d(self1%flims)
+            !$omp parallel do collapse(2) schedule(static) default(shared) &
+            !$omp private(hind,kind,arg) proc_bind(close)
+            do hind=self1%flims(1,1),self1%flims(1,2)
+                do kind=self1%flims(2,1),self1%flims(2,2)
+                    arg = sum(shvec(:)*self1%transfmat(hind,kind,1,1:2))
+                    ft_exp_shmat_2d(hind,kind) = exp(J * arg)  
+                end do
+            end do
+            !$omp end parallel do
+            ! shift self2
+            ft_exp_cmat2sh_2d = self2%cmat(:,:,1) * ft_exp_shmat_2d
+            ! corr is real part of the complex mult btw 1 and 2*
+            r = sum(real(self1%cmat(:,:,1) * conjg(ft_exp_cmat2sh_2d)))
+            ! normalisation terms
+            sumasq = sum(csq(self1%cmat))
+            sumbsq = sum(csq(ft_exp_cmat2sh_2d))
+            ! finalise the correlation coefficient
+            if( sumasq > 0.0_dp .and. sumbsq > 0.0_dp )then
+                r = r / sqrt(sumasq * sumbsq)
+            else
+                r = 0.0_dp
+            endif   
+        else
+            write(*,*) 'self1 flims: ', self1%flims(1,1), self1%flims(1,2), self1%flims(2,1),&
+            self1%flims(2,2), self1%flims(3,1), self1%flims(3,2)
+            write(*,*) 'self2 flims: ', self2%flims(1,1), self2%flims(1,2), self2%flims(2,1),&
+            self2%flims(2,2), self2%flims(3,1), self2%flims(3,2)
+            stop 'cannot correlate expanded_ft:s with different dims; ft_expanded::corr_shifted'
+        endif ! end of if( self1.eqdims.self2 ) statement
+    end function corr_shifted_8_2d
+
+    !>  \brief  is a correlation calculator with origin shift of self2, double precision
+    subroutine corr_gshifted_8_2d( self1, self2, shvec, grad )
+        class(ft_expanded), intent(inout) :: self1, self2 !< instances        
+        real(dp), intent(in)              :: shvec(2)
+        real(dp), intent(out)             :: grad(2)
+        real(dp)                          :: sumasq,sumbsq,arg
+        integer                           :: hind,kind        
+        if ( self1.eqdims.self2 ) then
+            call allocate_shmat_2d_cmat2sh_2d(self1%flims)
+            !$omp parallel do collapse(2) schedule(static) default(shared) &
+            !$omp private(hind,kind,arg) proc_bind(close)
+            do hind=self1%flims(1,1),self1%flims(1,2)
+                do kind=self1%flims(2,1),self1%flims(2,2)
+                    arg = sum(shvec(:)*self1%transfmat(hind,kind,1,1:2))
+                    ft_exp_shmat_2d(hind,kind) = exp(J * arg)  
+                end do
+            end do
+            !$omp end parallel do
+            ! shift self2
+            ft_exp_cmat2sh_2d = self2%cmat(:,:,1) * ft_exp_shmat_2d
+            ! corr is real part of the complex mult btw 1 and 2*
+            grad(1) = sum(real(self1%cmat(:,:,1)*conjg(J * self1%transfmat(:,:,1,1) * ft_exp_cmat2sh_2d)))
+            grad(2) = sum(real(self1%cmat(:,:,1)*conjg(J * self1%transfmat(:,:,1,2) * ft_exp_cmat2sh_2d)))
+            ! normalisation terms
+            sumasq = sum(csq(self1%cmat))
+            sumbsq = sum(csq(ft_exp_cmat2sh_2d))
+            ! finalise the correlation coefficient
+            if( sumasq > 0.0_dp .and. sumbsq > 0.0_dp )then
+                grad = grad / sqrt(sumasq * sumbsq)
+            else
+                grad = 0.0_dp
+            endif
+        else
+            write(*,*) 'self1 flims: ', self1%flims(1,1), self1%flims(1,2), self1%flims(2,1),&
+            self1%flims(2,2), self1%flims(3,1), self1%flims(3,2)
+            write(*,*) 'self2 flims: ', self2%flims(1,1), self2%flims(1,2), self2%flims(2,1),&
+            self2%flims(2,2), self2%flims(3,1), self2%flims(3,2)
+            stop 'cannot correlate expanded_ft:s with different dims; ft_expanded::corr_shifted'
+        endif ! end of if( self1.eqdims.self2 ) statement
+    end subroutine corr_gshifted_8_2d
+
+    !>  \brief  is a correlation calculator with origin shift of self2, double precision
+    subroutine corr_fdfshifted_8_2d( self1, self2, shvec, f, grad )
+        class(ft_expanded), intent(inout) :: self1, self2 !< instances
+        real(dp), intent(in)              :: shvec(2)
+        real(dp), intent(out)             :: grad(2), f
+        real(dp)                          :: sumasq,sumbsq,arg
+        integer                           :: hind,kind        
+        if ( self1.eqdims.self2 ) then
+            call allocate_shmat_2d_cmat2sh_2d(self1%flims)            
+            !$omp parallel do collapse(2) schedule(static) default(shared) &
+            !$omp private(hind,kind,arg) proc_bind(close)
+            do hind=self1%flims(1,1),self1%flims(1,2)
+                do kind=self1%flims(2,1),self1%flims(2,2)
+                    arg = sum(shvec(:)*self1%transfmat(hind,kind,1,1:2))
+                    ft_exp_shmat_2d(hind,kind) = exp(J * arg)  
+                end do
+            end do
+            !$omp end parallel do
+            ! shift self2
+            ft_exp_cmat2sh_2d(:,:) = self2%cmat(:,:,1) * ft_exp_shmat_2d(:,:)
+            ft_exp_tmpmat_2d       = sum(self1%cmat(:,:,1)*conjg(ft_exp_cmat2sh_2d))
+            ! corr is real part of the complex mult btw 1 and 2*
+            f       = sum(real(ft_exp_tmpmat_2d))
+            grad(1) = sum(real(ft_exp_tmpmat_2d*conjg(J * self1%transfmat(:,:,1,1))))
+            grad(2) = sum(real(ft_exp_tmpmat_2d*conjg(J * self1%transfmat(:,:,1,2))))
+
+            !grad(1) = sum(ft_exp_tmpmat_2d*real(self1%cmat(:,:,1)*conjg(J * self1%transfmat(:,:,1,1) * ft_exp_cmat2sh_2d)))
+            !grad(2) = sum(ft_exp_tmpmat_2d*real(self1%cmat(:,:,1)*conjg(J * self1%transfmat(:,:,1,2) * ft_exp_cmat2sh_2d)))
+
+            ! normalisation terms
+            sumasq = sum(csq(self1%cmat))
+            sumbsq = sum(csq(ft_exp_cmat2sh_2d))
+            ! finalise the correlation coefficient
+            if( sumasq > 0.0_dp .and. sumbsq > 0.0_dp )then
+                f    = f    / sqrt(sumasq * sumbsq)
+                grad = grad / sqrt(sumasq * sumbsq)
+            else
+                f    = 0.0_dp
+                grad = 0.0_dp
+            endif
+        else
+            write(*,*) 'self1 flims: ', self1%flims(1,1), self1%flims(1,2), self1%flims(2,1),&
+            self1%flims(2,2), self1%flims(3,1), self1%flims(3,2)
+            write(*,*) 'self2 flims: ', self2%flims(1,1), self2%flims(1,2), self2%flims(2,1),&
+            self2%flims(2,2), self2%flims(3,1), self2%flims(3,2)
+            stop 'cannot correlate expanded_ft:s with different dims; ft_expanded::corr_shifted'
+        endif ! end of if( self1.eqdims.self2 ) statement        
+    end subroutine corr_fdfshifted_8_2d
+    
 
     ! DESTRUCTOR
 
