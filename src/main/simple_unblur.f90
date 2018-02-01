@@ -1,4 +1,4 @@
-! unblur does motion correction, dose-weighting and frame-weighting of DDD movies 
+! unblur does motion correction, dose-weighting and frame-weighting of DDD movies
 module simple_unblur
 !$ use omp_lib
 !$ use omp_lib_kinds
@@ -58,26 +58,34 @@ real,    parameter :: SMALLSHIFT = 2. !< small initial shift to blur out fixed p
 contains
 
     !> Unblur DDD movie
-    subroutine unblur_movie( movie_stack_fname, p, corr, smpd_out, shifts, nsig )
+    subroutine unblur_movie( movie_stack_fname, p, corr, smpd_out, shifts, err, nsig )
         use simple_ftexp_shsrch ! use all in there
-        character(len=*),  intent(in)    :: movie_stack_fname !< filename 
+        character(len=*),  intent(in)    :: movie_stack_fname !< filename
         class(params),     intent(inout) :: p                 !< param object
         real,              intent(out)   :: corr              !< ave correlation per frame
         real,              intent(out)   :: smpd_out          !< sampling distance of the possibly scaled movies
         real, allocatable, intent(out)   :: shifts(:,:)       !< the nframes shifts identified
-        real, optional,    intent(in)    :: nsig              !<nr of sigmas (for outlier removal)
+        logical,           intent(out)   :: err               !< error flag
+        real, optional,    intent(in)    :: nsig              !< # sigmas (for outlier removal)
         real    :: ave, sdev, var, minw, maxw
         real    :: cxy(3), lims(2,2), corr_prev, frac_improved, corrfrac
         integer :: iframe, iter, nimproved, ires, updateres, i
-        logical :: didsave, didupdateres, err
+        logical :: didsave, didupdateres, err_stat
         ! initialise
         nsig_here = 6.0
         if( present(nsig) ) nsig_here = nsig
         call unblur_init(movie_stack_fname, p)
+        err = .false.
+        if( nframes < 2 )then
+            err = .true.
+            write(*,*) 'movie: ', trim(movie_stack_fname)
+            write(*,*) 'WARNING, nframes of movie < 2, aborting unblur'
+            return
+        endif
         ! make search object ready
         lims(:,1) = -maxshift
         lims(:,2) =  maxshift
-        if ((p%opt == 'bfgs').or.(p%opt == 'lbfgsb').or.(p%opt == 'bfgs2')) then
+        if( str_has_substr(p%opt,'bfgs') ) then
             call ftexp_shsrch_init(movie_sum_global_ftexp, movie_frames_ftexp(1), lims, 'lbfgsb')
         else
             call ftexp_shsrch_init(movie_sum_global_ftexp, movie_frames_ftexp(1), lims)
@@ -108,7 +116,7 @@ contains
                 call subtract_movie_frame( iframe )
                 call ftexp_shsrch_reset_ptrs(movie_sum_global_ftexp, movie_frames_ftexp(iframe))
                 cxy = ftexp_shsrch_minimize(corrs(iframe), opt_shifts(iframe,:))
-                if( cxy(1) > corrs(iframe) ) nimproved = nimproved+1
+                if( cxy(1) > corrs(iframe) ) nimproved = nimproved + 1
                 opt_shifts(iframe,:) = cxy(2:3)
                 corrs(iframe)        = cxy(1)
                 ! add the subtracted movie frame back to the weighted sum
@@ -158,7 +166,7 @@ contains
             if( doprint ) write(*,'(a)') '>>> WARNING! OPTIMAL CORRELATION < 0.0'
             if( doprint ) write(*,'(a,7x,f7.4)') '>>> OPTIMAL CORRELATION:', corr
         endif
-        call moment(frameweights, ave, sdev, var, err)
+        call moment(frameweights, ave, sdev, var, err_stat)
         minw = minval(frameweights)
         maxw = maxval(frameweights)
         if( doprint ) write(*,'(a,7x,f7.4)') '>>> AVERAGE WEIGHT     :', ave
@@ -204,67 +212,6 @@ contains
 
     end subroutine unblur_movie
 
-    !> Calulate stack sums 
-    !! \param movie_sum movie stack sums
-    !! \param movie_sum_corrected corrected movie stack sums
-    !! \param movie_sum_ctf CTF sum
-    subroutine unblur_calc_sums_1( movie_sum, movie_sum_corrected, movie_sum_ctf )
-        type(image), intent(out) :: movie_sum, movie_sum_corrected, movie_sum_ctf
-        integer :: iframe
-        ! calculate the sum for CTF estimation
-        call sum_movie_frames(opt_shifts)
-        movie_sum_ctf = movie_sum_global
-        call movie_sum_ctf%bwd_ft
-        ! re-calculate the weighted sum
-        call wsum_movie_frames(opt_shifts)
-        movie_sum_corrected = movie_sum_global
-        call movie_sum_corrected%bwd_ft
-        ! generate straight integrated movie frame for comparison
-        call sum_movie_frames
-        movie_sum = movie_sum_global
-        call movie_sum%bwd_ft
-    end subroutine unblur_calc_sums_1
-
-    !> Calulate stack sums in range 
-    !! \param fromto ranges to calc sum
-    !! \param movie_sum_corrected corrected movie stack sums
-    subroutine unblur_calc_sums_2( movie_sum_corrected, fromto )
-        type(image), intent(out) :: movie_sum_corrected
-        integer,     intent(in)  :: fromto(2)
-        integer :: iframe
-        logical :: l_tmp
-        ! re-calculate the weighted sum with dose_weighting turned off
-        l_tmp = do_dose_weight
-        do_dose_weight = .false.
-        call wsum_movie_frames(opt_shifts, fromto)
-        movie_sum_corrected = movie_sum_global
-        call movie_sum_corrected%bwd_ft
-        do_dose_weight = l_tmp
-    end subroutine unblur_calc_sums_2
-
-    !> Calulate stack sums per time frame
-    !! \param movie_sum movie stack sums
-    !! \param movie_sum_corrected corrected movie stack sums
-    !! \param movie_sum_ctf CTF sum
-    subroutine unblur_calc_sums_tomo( frame_counter, time_per_frame, movie_sum, movie_sum_corrected, movie_sum_ctf )
-        integer,     intent(inout) :: frame_counter  !< frame counter
-        real,        intent(in)    :: time_per_frame !< time resolution
-        type(image), intent(out)   :: movie_sum, movie_sum_corrected, movie_sum_ctf
-        integer :: iframe
-        ! calculate the sum for CTF estimation
-        call sum_movie_frames(opt_shifts)
-        movie_sum_ctf = movie_sum_global
-        call movie_sum_ctf%bwd_ft
-        ! re-calculate the weighted sum
-        call wsum_movie_frames_tomo(opt_shifts, frame_counter, time_per_frame)
-        movie_sum_corrected = movie_sum_global
-        call movie_sum_corrected%bwd_ft
-        ! generate straight integrated movie frame for comparison
-        call sum_movie_frames
-        movie_sum = movie_sum_global
-        call movie_sum%bwd_ft
-    end subroutine unblur_calc_sums_tomo
-
     !> Initialise unblur
     subroutine unblur_init( movie_stack_fname, p )
         character(len=*), intent(in)    :: movie_stack_fname  !< input filename of stack
@@ -279,6 +226,7 @@ contains
         call unblur_kill
         ! GET NUMBER OF FRAMES & DIM FROM STACK
         call find_ldim_nptcls(movie_stack_fname, ldim, nframes)
+        if( nframes < 2 ) return
         DebugPrint  'logical dimension: ', ldim
         ldim(3) = 1 ! to correct for the stupid 3:d dim of mrc stacks
         if( p%scale < 0.99 )then
@@ -380,6 +328,67 @@ contains
         existence = .true.
         DebugPrint  'unblur_init, done'
     end subroutine unblur_init
+
+    !> Calulate stack sums
+    !! \param movie_sum movie stack sums
+    !! \param movie_sum_corrected corrected movie stack sums
+    !! \param movie_sum_ctf CTF sum
+    subroutine unblur_calc_sums_1( movie_sum, movie_sum_corrected, movie_sum_ctf )
+        type(image), intent(out) :: movie_sum, movie_sum_corrected, movie_sum_ctf
+        integer :: iframe
+        ! calculate the sum for CTF estimation
+        call sum_movie_frames(opt_shifts)
+        movie_sum_ctf = movie_sum_global
+        call movie_sum_ctf%bwd_ft
+        ! re-calculate the weighted sum
+        call wsum_movie_frames(opt_shifts)
+        movie_sum_corrected = movie_sum_global
+        call movie_sum_corrected%bwd_ft
+        ! generate straight integrated movie frame for comparison
+        call sum_movie_frames
+        movie_sum = movie_sum_global
+        call movie_sum%bwd_ft
+    end subroutine unblur_calc_sums_1
+
+    !> Calulate stack sums in range
+    !! \param fromto ranges to calc sum
+    !! \param movie_sum_corrected corrected movie stack sums
+    subroutine unblur_calc_sums_2( movie_sum_corrected, fromto )
+        type(image), intent(out) :: movie_sum_corrected
+        integer,     intent(in)  :: fromto(2)
+        integer :: iframe
+        logical :: l_tmp
+        ! re-calculate the weighted sum with dose_weighting turned off
+        l_tmp = do_dose_weight
+        do_dose_weight = .false.
+        call wsum_movie_frames(opt_shifts, fromto)
+        movie_sum_corrected = movie_sum_global
+        call movie_sum_corrected%bwd_ft
+        do_dose_weight = l_tmp
+    end subroutine unblur_calc_sums_2
+
+    !> Calulate stack sums per time frame
+    !! \param movie_sum movie stack sums
+    !! \param movie_sum_corrected corrected movie stack sums
+    !! \param movie_sum_ctf CTF sum
+    subroutine unblur_calc_sums_tomo( frame_counter, time_per_frame, movie_sum, movie_sum_corrected, movie_sum_ctf )
+        integer,     intent(inout) :: frame_counter  !< frame counter
+        real,        intent(in)    :: time_per_frame !< time resolution
+        type(image), intent(out)   :: movie_sum, movie_sum_corrected, movie_sum_ctf
+        integer :: iframe
+        ! calculate the sum for CTF estimation
+        call sum_movie_frames(opt_shifts)
+        movie_sum_ctf = movie_sum_global
+        call movie_sum_ctf%bwd_ft
+        ! re-calculate the weighted sum
+        call wsum_movie_frames_tomo(opt_shifts, frame_counter, time_per_frame)
+        movie_sum_corrected = movie_sum_global
+        call movie_sum_corrected%bwd_ft
+        ! generate straight integrated movie frame for comparison
+        call sum_movie_frames
+        movie_sum = movie_sum_global
+        call movie_sum%bwd_ft
+    end subroutine unblur_calc_sums_tomo
 
     !> center_shifts
     !! \param shifts  2D origin shifts
@@ -505,8 +514,8 @@ contains
     end subroutine wsum_movie_frames_ftexp
 
     !> wsum_movie_frames
-    !! \param shifts 
-    !! \param fromto 
+    !! \param shifts
+    !! \param fromto
     !!
     subroutine wsum_movie_frames( shifts, fromto )
         real,              intent(in) :: shifts(nframes,2)
@@ -534,9 +543,9 @@ contains
     end subroutine wsum_movie_frames
 
     !> wsum movie frames tomo
-    !! \param shifts 
-    !! \param frame_counter 
-    !! \param time_per_frame 
+    !! \param shifts
+    !! \param frame_counter
+    !! \param time_per_frame
     !!
     subroutine wsum_movie_frames_tomo( shifts, frame_counter, time_per_frame )
         real,    intent(in)    :: shifts(nframes,2)
@@ -578,14 +587,14 @@ contains
     end subroutine add_movie_frame
 
     !> subtract_movie_frame
-    !! \param iframe frame index to remove 
+    !! \param iframe frame index to remove
     !!
     subroutine subtract_movie_frame( iframe )
         integer, intent(in) :: iframe
         if( frameweights(iframe) > 0. )&
         &call movie_sum_global_ftexp%subtr(movie_frames_ftexp_sh(iframe), w=frameweights(iframe))
     end subroutine subtract_movie_frame
-    
+
     !> unblur_kill class destructor
     !!
     subroutine unblur_kill

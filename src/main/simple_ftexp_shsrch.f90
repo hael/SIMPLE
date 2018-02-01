@@ -35,7 +35,7 @@ contains
         ! set opt_str & nrestarts
         if( allocated(opt_str) ) deallocate(opt_str)
         if( present(opt) ) then
-            allocate(opt_str, source=opt)
+            allocate(opt_str, source=trim(opt))
         else
             allocate(opt_str, source='simplex')
         endif
@@ -45,16 +45,15 @@ contains
         call ospec%specify(opt_str, 2, ftol=TOL, gtol=TOL,&
             limits=lims, nrestarts=nrestarts )
         ! set optimizer cost function
-        if( present(opt) .and. (opt == 'lbfgsb')) then            
+        if( trim(opt_str) .eq. 'lbfgsb' )then
             call ospec%set_costfun_8(ftexp_shsrch_cost_8)
             call ospec%set_gcostfun_8(ftexp_shsrch_gcost_8)
             call ospec%set_fdfcostfun_8(ftexp_shsrch_fdfcost_8)
         else
             call ospec%set_costfun(ftexp_shsrch_cost)
-            write (*,*) 'cost function set 1'
         end if
         ! generate optimizer object with the factory
-        if (associated(nlopt)) then
+        if( associated(nlopt) )then
             call nlopt%kill
             deallocate(nlopt)
         end if
@@ -76,7 +75,7 @@ contains
         real                    :: cost
         cost = -reference%corr_shifted(particle, -vec)
     end function ftexp_shsrch_cost
-    
+
     !> Cost function, double precision
     function ftexp_shsrch_cost_8( fun_self, vec, D ) result(cost)
         class(*),     intent(inout) :: fun_self
@@ -85,7 +84,7 @@ contains
         real(kind=8)                :: cost
         cost = -reference%corr_shifted_8_2d(particle, -vec)
     end function ftexp_shsrch_cost_8
-    
+
     !> Gradient function, double precision
     subroutine ftexp_shsrch_gcost_8( fun_self, vec, grad, D )
         class(*),     intent(inout) :: fun_self
@@ -95,7 +94,7 @@ contains
         call reference%corr_gshifted_8_2d(particle, -vec, grad)
         grad = grad * (-1.0_dp)
     end subroutine ftexp_shsrch_gcost_8
-    
+
     !> Gradient & cost function, double precision
     subroutine ftexp_shsrch_fdfcost_8( fun_self, vec, f, grad, D )
         class(*),     intent(inout) :: fun_self
@@ -107,7 +106,6 @@ contains
         grad = grad * (-1.0_dp)
     end subroutine ftexp_shsrch_fdfcost_8
 
-    
     !> Main search routine
     function ftexp_shsrch_minimize( prev_corr, prev_shift ) result( cxy )
         real, optional, intent(in) :: prev_corr, prev_shift(2)
@@ -120,9 +118,9 @@ contains
                 ! re-specify the limits
                 lims(:,1) = -maxshift
                 lims(:,2) = maxshift
-                call ospec%specify(opt_str, 2, ftol=TOL, gtol=TOL, limits=lims, nrestarts=nrestarts )
+                call ospec%specify(opt_str, 2, ftol=TOL, gtol=TOL, limits=lims, nrestarts=nrestarts)
                 ! set optimizer cost function
-                if( opt_str == 'lbfgsb' ) then                    
+                if( opt_str == 'lbfgsb' ) then
                     call ospec%set_costfun_8(ftexp_shsrch_cost_8)
                     call ospec%set_gcostfun_8(ftexp_shsrch_gcost_8)
                     call ospec%set_fdfcostfun_8(ftexp_shsrch_fdfcost_8)
@@ -130,7 +128,7 @@ contains
                     call ospec%set_costfun(ftexp_shsrch_cost)
                 end if
                 ! generate optimizer object with the factory
-                if (associated(nlopt)) then
+                if( associated(nlopt) )then
                     call nlopt%kill
                     deallocate(nlopt)
                 end if
@@ -140,11 +138,7 @@ contains
         else
             ospec%x = 0.
         endif
-        write (*,*) 'minimize start'
-        call flush(unit=6)
         call nlopt%minimize(ospec, fun_self, cxy(1))
-        write (*,*) 'minimize stop'
-        call flush(unit=6)
         cxy(1)  = -cxy(1) ! correlation
         cxy(2:) = ospec%x ! shift
         if( present(prev_corr) )then

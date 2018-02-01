@@ -1,6 +1,6 @@
 ! expanded Fourier transform class for improved cache utilisation
 
-! Strategy: 
+! Strategy:
 ! working version first -> hack
 ! then on Monday we can unscramble the classes
 
@@ -8,9 +8,7 @@ module simple_ft_expanded
 !$ use omp_lib
 !$ use omp_lib_kinds
 #include "simple_lib.f08"
-    
-use simple_image,  only: image
-
+use simple_image, only: image
 implicit none
 
 complex(dp), parameter   :: J = complex(0.0_dp, 1.0_dp)
@@ -88,10 +86,10 @@ contains
         self%hp   = hp
         self%lp   = lp
         self%lims = img%loop_lims(1,lp)
-        ! shift the limits 2 make transfer 2 GPU painless
+        ! shift the limits
         self%flims = 1
         do i=1,3
-            self%flims(i,2) = self%lims(i,2)-self%lims(i,1)+1
+            self%flims(i,2) = self%lims(i,2) - self%lims(i,1) + 1
         end do
         ! set the squared filter limits
         hplim = img%get_find(hp)
@@ -141,7 +139,7 @@ contains
                     sqarg = hh + kk + ll
                     if( sqarg <= lplim .and. sqarg >= hplim  )then
                         phys = img%comp_addr_phys([h,k,l])
-                        self%transfmat(hcnt,kcnt,lcnt,:) = real([h,k,l])*self%shconst
+                        self%transfmat(hcnt,kcnt,lcnt,:) = real([h,k,l]) * self%shconst
                         self%cmat(hcnt,kcnt,lcnt) = img%get_fcomp([h,k,l],phys)
                     endif
                 end do
@@ -280,29 +278,29 @@ contains
         endif
     end subroutine subtr
 
-    subroutine allocate_shmat_2d_cmat2sh_2d( flims )        
+    subroutine allocate_shmat_2d_cmat2sh_2d( flims )
         integer, intent(in) :: flims(3,2)
         logical             :: do_allocate
         do_allocate = .false.
         if (.not. allocated( ft_exp_shmat_2d )) then
             do_allocate = .true.
         else if (size(ft_exp_shmat_2d, 1) .ne. flims(1,2) .or. &
-                 size(ft_exp_shmat_2d, 2) .ne. flims(2,2)         ) then            
+                 size(ft_exp_shmat_2d, 2) .ne. flims(2,2)         ) then
             deallocate( ft_exp_shmat_2d, ft_exp_cmat2sh_2d, ft_exp_tmpmat_2d )
             do_allocate = .true.
         end if
         if (do_allocate) then
-            allocate( ft_exp_shmat_2d(   flims(1,1):flims(1,2),     &
-                                         flims(2,1):flims(2,2) ),   &             
-                      ft_exp_cmat2sh_2d( flims(1,1):flims(1,2),     &
-                                         flims(2,1):flims(2,2) ),   &
-                      ft_exp_tmpmat_2d( flims(1,1):flims(1,2),     &
-                                        flims(2,1):flims(2,2) ),   &                                         
-                      stat=alloc_stat                             )
+            allocate( ft_exp_shmat_2d(   flims(1,1):flims(1,2),  &
+                                         flims(2,1):flims(2,2) ),&
+                      ft_exp_cmat2sh_2d( flims(1,1):flims(1,2),  &
+                                         flims(2,1):flims(2,2) ),&
+                      ft_exp_tmpmat_2d(  flims(1,1):flims(1,2),  &
+                                         flims(2,1):flims(2,2)), &
+                      stat=alloc_stat)
             allocchk("In: allocate_shmat_2d_cmat2sh_2; simple_ft_expanded")
         end if
     end subroutine allocate_shmat_2d_cmat2sh_2d
-    
+
     ! MODIFIERS
 
     !>  \brief  is 4 shifting an ft_expanded instance
@@ -365,12 +363,12 @@ contains
         class(ft_expanded), intent(in) :: self1, self2 !< instances
         real,               intent(in) :: shvec(3)
         complex, allocatable :: shmat(:,:,:), cmat2sh(:,:,:)
-        real     :: r,sumasq,sumbsq,arg,shvec_here(3)
-        integer  ::hind,kind,lind
+        real    :: r,sumasq,sumbsq,arg,shvec_here(3)
+        integer :: hind,kind,lind
         if( self1.eqdims.self2 )then
             allocate(   shmat( self1%flims(1,1):self1%flims(1,2),   &
                                self1%flims(2,1):self1%flims(2,2),   &
-                               self1%flims(3,1):self1%flims(3,2)  ),&
+                               self1%flims(3,1):self1%flims(3,2)),  &
                       cmat2sh( self1%flims(1,1):self1%flims(1,2),   &
                                self1%flims(2,1):self1%flims(2,2),   &
                                self1%flims(3,1):self1%flims(3,2)),  &
@@ -425,7 +423,7 @@ contains
             do hind=self1%flims(1,1),self1%flims(1,2)
                 do kind=self1%flims(2,1),self1%flims(2,2)
                     arg = sum(shvec(:)*self1%transfmat(hind,kind,1,1:2))
-                    ft_exp_shmat_2d(hind,kind) = exp(J * arg)  
+                    ft_exp_shmat_2d(hind,kind) = exp(J * arg)
                 end do
             end do
             !$omp end parallel do
@@ -441,7 +439,7 @@ contains
                 r = r / sqrt(sumasq * sumbsq)
             else
                 r = 0.0_dp
-            endif   
+            endif
         else
             write(*,*) 'self1 flims: ', self1%flims(1,1), self1%flims(1,2), self1%flims(2,1),&
             self1%flims(2,2), self1%flims(3,1), self1%flims(3,2)
@@ -453,11 +451,11 @@ contains
 
     !>  \brief  is a correlation calculator with origin shift of self2, double precision
     subroutine corr_gshifted_8_2d( self1, self2, shvec, grad )
-        class(ft_expanded), intent(inout) :: self1, self2 !< instances        
+        class(ft_expanded), intent(inout) :: self1, self2 !< instances
         real(dp), intent(in)              :: shvec(2)
         real(dp), intent(out)             :: grad(2)
         real(dp)                          :: sumasq,sumbsq,arg
-        integer                           :: hind,kind        
+        integer                           :: hind,kind
         if ( self1.eqdims.self2 ) then
             call allocate_shmat_2d_cmat2sh_2d(self1%flims)
             !$omp parallel do collapse(2) schedule(static) default(shared) &
@@ -465,7 +463,7 @@ contains
             do hind=self1%flims(1,1),self1%flims(1,2)
                 do kind=self1%flims(2,1),self1%flims(2,2)
                     arg = sum(shvec(:)*self1%transfmat(hind,kind,1,1:2))
-                    ft_exp_shmat_2d(hind,kind) = exp(J * arg)  
+                    ft_exp_shmat_2d(hind,kind) = exp(J * arg)
                 end do
             end do
             !$omp end parallel do
@@ -498,15 +496,15 @@ contains
         real(dp), intent(in)              :: shvec(2)
         real(dp), intent(out)             :: grad(2), f
         real(dp)                          :: sumasq,sumbsq,arg
-        integer                           :: hind,kind        
+        integer                           :: hind,kind
         if ( self1.eqdims.self2 ) then
-            call allocate_shmat_2d_cmat2sh_2d(self1%flims)            
+            call allocate_shmat_2d_cmat2sh_2d(self1%flims)
             !$omp parallel do collapse(2) schedule(static) default(shared) &
             !$omp private(hind,kind,arg) proc_bind(close)
             do hind=self1%flims(1,1),self1%flims(1,2)
                 do kind=self1%flims(2,1),self1%flims(2,2)
                     arg = sum(shvec(:)*self1%transfmat(hind,kind,1,1:2))
-                    ft_exp_shmat_2d(hind,kind) = exp(J * arg)  
+                    ft_exp_shmat_2d(hind,kind) = exp(J * arg)
                 end do
             end do
             !$omp end parallel do
@@ -538,9 +536,8 @@ contains
             write(*,*) 'self2 flims: ', self2%flims(1,1), self2%flims(1,2), self2%flims(2,1),&
             self2%flims(2,2), self2%flims(3,1), self2%flims(3,2)
             stop 'cannot correlate expanded_ft:s with different dims; ft_expanded::corr_shifted'
-        endif ! end of if( self1.eqdims.self2 ) statement        
+        endif ! end of if( self1.eqdims.self2 ) statement
     end subroutine corr_fdfshifted_8_2d
-    
 
     ! DESTRUCTOR
 

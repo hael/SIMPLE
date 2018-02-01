@@ -6,7 +6,7 @@ use simple_image,        only: image
 use simple_cmdline,      only: cmdline
 use simple_params,       only: params
 use simple_ori,          only: ori
-use simple_procimgfile,  only: frameavg_imgfile 
+use simple_procimgfile,  only: frameavg_imgfile
 use simple_unblur       ! use all in there
 implicit none
 
@@ -44,6 +44,7 @@ contains
         character(len=STDLEN) :: dir
         integer               :: ldim(3), ldim_thumb(3), iframe, nframes
         real                  :: corr, scale
+        logical               :: err
         if( present(dir_out) )then
             dir = trim(adjustl(dir_out))
         else
@@ -76,12 +77,6 @@ contains
                 &//int2str(p%tof)//'_intg'//p%ext
             endif
         endif
-        call orientation%set('movie',  trim(moviename))
-        call orientation%set('intg',   trim(self%moviename_intg))
-        call orientation%set('forctf', trim(self%moviename_forctf))
-        call orientation%set('pspec',  trim(self%moviename_pspec))
-        call orientation%set('thumb',  trim(self%moviename_thumb))
-        if( cline%defined('tof') )call orientation%set('intg_frames', trim(self%moviename_intg_frames))
         ! check, increment counter & print
         if( .not. file_exists(moviename) )then
             write(*,*) 'inputted movie stack does not exist: ', moviename
@@ -96,9 +91,16 @@ contains
             self%moviename = trim(moviename)
         endif
         ! execute the unblurring
-        call unblur_movie(self%moviename, p, corr, smpd_out, shifts)
-        ! report new smpd & shifts to ori object
-        call orientation%set('smpd', smpd_out)
+        call unblur_movie(self%moviename, p, corr, smpd_out, shifts, err)
+        if( err ) return
+        ! report to ori object
+        call orientation%set('smpd',   smpd_out)
+        call orientation%set('movie',  trim(moviename))
+        call orientation%set('intg',   trim(self%moviename_intg))
+        call orientation%set('forctf', trim(self%moviename_forctf))
+        call orientation%set('pspec',  trim(self%moviename_pspec))
+        call orientation%set('thumb',  trim(self%moviename_thumb))
+        if( cline%defined('tof') )call orientation%set('intg_frames', trim(self%moviename_intg_frames))
         ! generate sums
         if( p%tomo .eq. 'yes' )then
             call unblur_calc_sums_tomo(frame_counter, p%time_per_frame,&
@@ -147,7 +149,7 @@ contains
     function get_moviename( self, which ) result( moviename )
         class(unblur_iter), intent(in) :: self
         character(len=*),   intent(in) :: which
-        character(len=:), allocatable  :: moviename  
+        character(len=:), allocatable  :: moviename
         select case( which )
             case('intg')
                 allocate(moviename, source=trim(self%moviename_intg))
