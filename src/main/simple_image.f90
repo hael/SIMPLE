@@ -6624,26 +6624,25 @@ contains
         class(image), intent(inout) :: self
         integer,      intent(in)    :: angstep
         class(image), intent(inout) :: avg
-        real    :: avg_rmat(self%ldim(1),self%ldim(2),1)
+        real    :: avgs_rmat(nthr_glob,self%ldim(1),self%ldim(2),1)
         real    :: rotated(nthr_glob,self%ldim(1),self%ldim(2),1)
         integer :: irot, ithr
-        avg_rmat = 0.
-        rotated  = 0.
-        !$omp parallel do schedule(static) default(shared) private(irot)&
-        !$omp reduction(+:avg_rmat) proc_bind(close)
+        avgs_rmat = 0.
+        rotated   = 0.
+        !$omp parallel do schedule(static) default(shared) private(irot) proc_bind(close)
         do irot = 0 + angstep,359,angstep
             ! get thread index
             ithr = omp_get_thread_num() + 1
             ! rotate & sum
             call self%rtsq_serial(real(irot), 0., 0., rotated(ithr,:,:,:))
-            avg_rmat = avg_rmat + rotated(ithr,:,:,:)
+            avgs_rmat(ithr,:,:,:) = avgs_rmat(ithr,:,:,:) + rotated(ithr,:,:,:)
         end do
         !$omp end parallel do
         ! add in the zero rotation
-        avg_rmat = avg_rmat + self%rmat
+        avgs_rmat(1,:,:,:) = avgs_rmat(1,:,:,:) + self%rmat(:self%ldim(1),:self%ldim(2),:)
         ! set output image object
         call avg%new(self%ldim, self%smpd)
-        call avg%set_rmat(avg_rmat)
+        call avg%set_rmat(sum(avgs_rmat, dim=1))
         ! normalise
         call avg%div(real(360/angstep))
     end subroutine roavg
