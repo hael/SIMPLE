@@ -517,10 +517,6 @@ contains
             f       = sum(real(ft_exp_tmpmat_2d))
             grad(1) = sum(real(ft_exp_tmpmat_2d*conjg(J * self1%transfmat(:,:,1,1))))
             grad(2) = sum(real(ft_exp_tmpmat_2d*conjg(J * self1%transfmat(:,:,1,2))))
-
-            !grad(1) = sum(ft_exp_tmpmat_2d*real(self1%cmat(:,:,1)*conjg(J * self1%transfmat(:,:,1,1) * ft_exp_cmat2sh_2d)))
-            !grad(2) = sum(ft_exp_tmpmat_2d*real(self1%cmat(:,:,1)*conjg(J * self1%transfmat(:,:,1,2) * ft_exp_cmat2sh_2d)))
-
             ! normalisation terms
             sumasq = sum(csq(self1%cmat))
             sumbsq = sum(csq(ft_exp_cmat2sh_2d))
