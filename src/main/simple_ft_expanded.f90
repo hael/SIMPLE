@@ -468,10 +468,11 @@ contains
             end do
             !$omp end parallel do
             ! shift self2
-            ft_exp_cmat2sh_2d = self2%cmat(:,:,1) * ft_exp_shmat_2d
+            ft_exp_cmat2sh_2d(:,:) = self2%cmat(:,:,1) *       ft_exp_shmat_2d(:,:)
+            ft_exp_tmpmat_2d       = self1%cmat(:,:,1) * conjg(ft_exp_cmat2sh_2d)
             ! corr is real part of the complex mult btw 1 and 2*
-            grad(1) = sum(real(self1%cmat(:,:,1)*conjg(J * self1%transfmat(:,:,1,1) * ft_exp_cmat2sh_2d)))
-            grad(2) = sum(real(self1%cmat(:,:,1)*conjg(J * self1%transfmat(:,:,1,2) * ft_exp_cmat2sh_2d)))
+            grad(1) = sum(real(ft_exp_tmpmat_2d*conjg(J * self1%transfmat(:,:,1,1))))
+            grad(2) = sum(real(ft_exp_tmpmat_2d*conjg(J * self1%transfmat(:,:,1,2))))
             ! normalisation terms
             sumasq = sum(csq(self1%cmat))
             sumbsq = sum(csq(ft_exp_cmat2sh_2d))
@@ -509,8 +510,8 @@ contains
             end do
             !$omp end parallel do
             ! shift self2
-            ft_exp_cmat2sh_2d(:,:) = self2%cmat(:,:,1) * ft_exp_shmat_2d(:,:)
-            ft_exp_tmpmat_2d       = sum(self1%cmat(:,:,1)*conjg(ft_exp_cmat2sh_2d))
+            ft_exp_cmat2sh_2d(:,:) = self2%cmat(:,:,1) *       ft_exp_shmat_2d(:,:)
+            ft_exp_tmpmat_2d       = self1%cmat(:,:,1) * conjg(ft_exp_cmat2sh_2d)
             ! corr is real part of the complex mult btw 1 and 2*
             f       = sum(real(ft_exp_tmpmat_2d))
             grad(1) = sum(real(ft_exp_tmpmat_2d*conjg(J * self1%transfmat(:,:,1,1))))
