@@ -139,6 +139,9 @@ contains
             ospec%x = 0.
         endif
         call nlopt%minimize(ospec, fun_self, cxy(1))
+        if( opt_str == 'lbfgsb' ) then
+            call reference%corr_normalize(particle, cxy(1))
+        end if
         cxy(1)  = -cxy(1) ! correlation
         cxy(2:) = ospec%x ! shift
         if( present(prev_corr) )then
