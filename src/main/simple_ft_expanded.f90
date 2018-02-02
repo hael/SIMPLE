@@ -15,6 +15,8 @@ complex(dp), parameter   :: J = complex(0.0_dp, 1.0_dp)
 complex(dp), allocatable :: ft_exp_shmat_2d(:,:)
 complex(dp), allocatable :: ft_exp_cmat2sh_2d(:,:)
 complex(dp), allocatable :: ft_exp_tmpmat_2d(:,:)
+real(dp),    allocatable :: ft_exp_tmpmat_re_2d(:,:)
+real(dp),    allocatable :: ft_exp_tmpmat_im_2d(:,:)
 
 
 public :: ft_expanded
@@ -286,7 +288,7 @@ contains
             do_allocate = .true.
         else if (size(ft_exp_shmat_2d, 1) .ne. flims(1,2) .or. &
                  size(ft_exp_shmat_2d, 2) .ne. flims(2,2)         ) then
-            deallocate( ft_exp_shmat_2d, ft_exp_cmat2sh_2d, ft_exp_tmpmat_2d )
+            deallocate( ft_exp_shmat_2d, ft_exp_cmat2sh_2d, ft_exp_tmpmat_2d, ft_exp_tmpmat_re_2d, ft_exp_tmpmat_im_2d )
             do_allocate = .true.
         end if
         if (do_allocate) then
@@ -295,6 +297,10 @@ contains
                       ft_exp_cmat2sh_2d( flims(1,1):flims(1,2),  &
                                          flims(2,1):flims(2,2) ),&
                       ft_exp_tmpmat_2d(  flims(1,1):flims(1,2),  &
+                                           flims(2,1):flims(2,2) ),   &
+                      ft_exp_tmpmat_re_2d( flims(1,1):flims(1,2),     &
+                                           flims(2,1):flims(2,2) ),   &
+                      ft_exp_tmpmat_im_2d( flims(1,1):flims(1,2),     &
                                          flims(2,1):flims(2,2)), &
                       stat=alloc_stat)
             allocchk("In: allocate_shmat_2d_cmat2sh_2; simple_ft_expanded")
@@ -422,15 +428,12 @@ contains
             !$omp private(hind,kind,arg) proc_bind(close)
             do hind=self1%flims(1,1),self1%flims(1,2)
                 do kind=self1%flims(2,1),self1%flims(2,2)
-                    arg = sum(shvec(:)*self1%transfmat(hind,kind,1,1:2))
-                    ft_exp_shmat_2d(hind,kind) = exp(J * arg)
+                    arg                            = dot_product(shvec(:), self1%transfmat(hind,kind,1,1:2))
+                    ft_exp_tmpmat_re_2d(hind,kind) = real(self1%cmat(hind,kind,1) * conjg(self2%cmat(hind,kind,1)) * exp(-J * arg),kind=dp)
                 end do
             end do
             !$omp end parallel do
-            ! shift self2
-            ft_exp_cmat2sh_2d = self2%cmat(:,:,1) * ft_exp_shmat_2d
-            ! corr is real part of the complex mult btw 1 and 2*
-            r = sum(real(self1%cmat(:,:,1) * conjg(ft_exp_cmat2sh_2d)))
+            r = sum(ft_exp_tmpmat_re_2d)
             ! normalisation terms
             sumasq = sum(csq(self1%cmat))
             sumbsq = sum(csq(ft_exp_cmat2sh_2d))
@@ -462,18 +465,16 @@ contains
             !$omp private(hind,kind,arg) proc_bind(close)
             do hind=self1%flims(1,1),self1%flims(1,2)
                 do kind=self1%flims(2,1),self1%flims(2,2)
-                    arg = sum(shvec(:)*self1%transfmat(hind,kind,1,1:2))
-                    ft_exp_shmat_2d(hind,kind) = exp(J * arg)
+                    arg                            = dot_product(shvec(:), self1%transfmat(hind,kind,1,1:2))
+                    ft_exp_tmpmat_2d(hind,kind)    = self1%cmat(hind,kind,1) * conjg(self2%cmat(hind,kind,1)) * exp(-J * arg)
+                    ft_exp_tmpmat_re_2d(hind,kind) = real(ft_exp_tmpmat_2d(hind,kind),kind=dp)
+                    ft_exp_tmpmat_im_2d(hind,kind) = imag(ft_exp_tmpmat_2d(hind,kind))
                 end do
             end do
             !$omp end parallel do
             ! shift self2
-            ft_exp_cmat2sh_2d(:,:) = self2%cmat(:,:,1) *       ft_exp_shmat_2d(:,:)
-            ft_exp_tmpmat_2d       = self1%cmat(:,:,1) * conjg(ft_exp_cmat2sh_2d)
-            ! corr is real part of the complex mult btw 1 and 2*
-            grad(1) = sum(real(ft_exp_tmpmat_2d*conjg(J * self1%transfmat(:,:,1,1))))
-            grad(2) = sum(real(ft_exp_tmpmat_2d*conjg(J * self1%transfmat(:,:,1,2))))
-            ! normalisation terms
+            grad(1) = sum(ft_exp_tmpmat_im_2d * self1%transfmat(:,:,1,1))
+            grad(2) = sum(ft_exp_tmpmat_im_2d * self1%transfmat(:,:,1,2))
             sumasq = sum(csq(self1%cmat))
             sumbsq = sum(csq(ft_exp_cmat2sh_2d))
             ! finalise the correlation coefficient
@@ -504,18 +505,16 @@ contains
             !$omp private(hind,kind,arg) proc_bind(close)
             do hind=self1%flims(1,1),self1%flims(1,2)
                 do kind=self1%flims(2,1),self1%flims(2,2)
-                    arg = sum(shvec(:)*self1%transfmat(hind,kind,1,1:2))
-                    ft_exp_shmat_2d(hind,kind) = exp(J * arg)
+                    arg                            = dot_product(shvec(:), self1%transfmat(hind,kind,1,1:2))
+                    ft_exp_tmpmat_2d(hind,kind)    = self1%cmat(hind,kind,1) * conjg(self2%cmat(hind,kind,1)) * exp(-J * arg)
+                    ft_exp_tmpmat_re_2d(hind,kind) = real(ft_exp_tmpmat_2d(hind,kind))
+                    ft_exp_tmpmat_im_2d(hind,kind) = imag(ft_exp_tmpmat_2d(hind,kind))
                 end do
             end do
             !$omp end parallel do
-            ! shift self2
-            ft_exp_cmat2sh_2d(:,:) = self2%cmat(:,:,1) *       ft_exp_shmat_2d(:,:)
-            ft_exp_tmpmat_2d       = self1%cmat(:,:,1) * conjg(ft_exp_cmat2sh_2d)
-            ! corr is real part of the complex mult btw 1 and 2*
-            f       = sum(real(ft_exp_tmpmat_2d))
-            grad(1) = sum(real(ft_exp_tmpmat_2d*conjg(J * self1%transfmat(:,:,1,1))))
-            grad(2) = sum(real(ft_exp_tmpmat_2d*conjg(J * self1%transfmat(:,:,1,2))))
+            f       = sum(ft_exp_tmpmat_re_2d)
+            grad(1) = sum(ft_exp_tmpmat_im_2d * self1%transfmat(:,:,1,1))
+            grad(2) = sum(ft_exp_tmpmat_im_2d * self1%transfmat(:,:,1,2))
             ! normalisation terms
             sumasq = sum(csq(self1%cmat))
             sumbsq = sum(csq(ft_exp_cmat2sh_2d))
