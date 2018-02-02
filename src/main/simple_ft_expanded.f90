@@ -437,7 +437,14 @@ contains
                 end do
             end do            
             !$omp end parallel do
-            r = sum(ft_exp_tmpmat_re_2d)
+            r = 0.0_dp
+            !$omp parallel do collapse(2) schedule(static) reduction(+:r) private(hind,kind) default(shared)
+            do hind=self1%flims(1,1),self1%flims(1,2)
+                do kind=self1%flims(2,1),self1%flims(2,2)
+                    r = r + ft_exp_tmpmat_re_2d(hind,kind)
+                end do
+            end do
+            !$omp end parallel do
             ! finalise the correlation coefficient
             r = r / denom
         else
@@ -455,6 +462,7 @@ contains
         real(dp), intent(in)              :: shvec(2)
         real(dp), intent(out)             :: grad(2)
         real(dp)                          :: arg
+        real(dp)                          :: grad1, grad2
         integer                           :: hind,kind
         if ( self1.eqdims.self2 ) then
             call allocate_shmat_2d_cmat2sh_2d(self1%flims)
@@ -468,10 +476,19 @@ contains
                     ft_exp_tmpmat_im_2d(hind,kind) = imag(ft_exp_tmpmat_2d(hind,kind))
                 end do
             end do
+            !$omp end parallel do            
+            grad1 = 0.0_dp
+            grad2 = 0.0_dp
+            !$omp parallel do collapse(2) schedule(static) reduction(+:grad1,grad2) private(hind,kind) default(shared)
+            do hind=self1%flims(1,1),self1%flims(1,2)
+                do kind=self1%flims(2,1),self1%flims(2,2)
+                    grad1 = grad1 + ft_exp_tmpmat_im_2d(hind,kind) * self1%transfmat(hind,kind,1,1)
+                    grad2 = grad2 + ft_exp_tmpmat_im_2d(hind,kind) * self1%transfmat(hind,kind,1,2)
+                end do
+            end do
             !$omp end parallel do
-            ! shift self2
-            grad(1) = sum(ft_exp_tmpmat_im_2d * self1%transfmat(:,:,1,1))
-            grad(2) = sum(ft_exp_tmpmat_im_2d * self1%transfmat(:,:,1,2))
+            grad(1) = grad1
+            grad(2) = grad2
             ! finalise the correlation coefficient
             grad = grad / denom
         else
@@ -488,7 +505,8 @@ contains
         class(ft_expanded), intent(inout) :: self1, self2 !< instances
         real(dp), intent(in)              :: shvec(2)
         real(dp), intent(out)             :: grad(2), f
-        real(dp)                          :: arg 
+        real(dp)                          :: arg
+        real(dp)                          :: grad1, grad2
         integer                           :: hind,kind
         if ( self1.eqdims.self2 ) then
             call allocate_shmat_2d_cmat2sh_2d(self1%flims)            
@@ -504,9 +522,20 @@ contains
             end do
             !$omp end parallel do
             ! corr is real part of the complex mult btw 1 and 2*
-            f       = sum(ft_exp_tmpmat_re_2d)
-            grad(1) = sum(ft_exp_tmpmat_im_2d * self1%transfmat(:,:,1,1))
-            grad(2) = sum(ft_exp_tmpmat_im_2d * self1%transfmat(:,:,1,2))
+            f     = 0.0_dp
+            grad1 = 0.0_dp
+            grad2 = 0.0_dp
+            !$omp parallel do collapse(2) schedule(static) reduction(+:f,grad1,grad2) private(hind,kind) default(shared)
+            do hind=self1%flims(1,1),self1%flims(1,2)
+                do kind=self1%flims(2,1),self1%flims(2,2)            
+                    f     = f     + ft_exp_tmpmat_re_2d(hind,kind)
+                    grad1 = grad1 + ft_exp_tmpmat_im_2d(hind,kind) * self1%transfmat(hind,kind,1,1)
+                    grad2 = grad2 + ft_exp_tmpmat_im_2d(hind,kind) * self1%transfmat(hind,kind,1,2)
+                end do
+            end do
+            !$omp end parallel do
+            grad(1) = grad1
+            grad(2) = grad2
             ! finalise the correlation coefficient
             f    = f    / denom
             grad = grad / denom
