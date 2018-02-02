@@ -323,6 +323,8 @@ type :: params
     real    :: frac_outliers=0.
     real    :: fraczero=0.
     real    :: ftol=1e-6
+    real    :: unblurftol = 1e-4
+    real    :: unblurgtol = 1e-4
     real    :: gw=0.5
     real    :: hp=100.             !< high-pass limit(in A)
     real    :: hp_ctffind=30.      !< high-pass limit 4 ctffind(in A)
@@ -740,6 +742,8 @@ contains
         call check_rarg('thres',          self%thres)
         call check_rarg('time_per_image', self%time_per_image)
         call check_rarg('trs',            self%trs)
+        call check_rarg('unblurftol',     self%unblurftol)
+        call check_rarg('unblurgtol',     self%unblurgtol)
         call check_rarg('update_frac',    self%update_frac)
         call check_rarg('width',          self%width)
         call check_rarg('winsz',          self%winsz)

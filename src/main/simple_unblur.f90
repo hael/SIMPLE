@@ -86,7 +86,8 @@ contains
         lims(:,1) = -maxshift
         lims(:,2) =  maxshift
         if( str_has_substr(p%opt,'bfgs') ) then
-            call ftexp_shsrch_init(movie_sum_global_ftexp, movie_frames_ftexp(1), lims, 'lbfgsb')
+            call ftexp_shsrch_init(movie_sum_global_ftexp, movie_frames_ftexp(1), lims, 'lbfgsb', &
+                unblur_ftol = p%unblurftol, unblur_gtol = p%unblurgtol)
         else
             call ftexp_shsrch_init(movie_sum_global_ftexp, movie_frames_ftexp(1), lims)
         end if
