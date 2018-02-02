@@ -5,7 +5,7 @@
 #include <vector>
 #include <cstring>
 #include <map>
-#include <sqlite3.h> 
+#include <sqlite3.h>
 #include <pwd.h>
 #include <map>
 #include <sys/wait.h>
@@ -16,19 +16,19 @@
 #include <cstdio>
 
 extern "C" {
-	#include "../../ext/include/mongoose.h"
+	#include "mongoose.h"
 }
 
 struct mg_serve_http_opts 	http_server_opts;
 
 struct JPEGResponse {
-	
+
 	unsigned char* 			pixels;
 	unsigned char* 			jpeg;
 	unsigned long			jpegsize;
 	int						xdim;
 	int						ydim;
-	
+
 };
 
 struct JSONResponse {
@@ -54,9 +54,9 @@ struct JSONResponse {
 };
 
 struct UniDoc {
-	
+
 	std::vector<std::string> data;
-	
+
 };
 
 struct MRCFile {
@@ -73,30 +73,30 @@ struct MRCFile {
 std::string User;
 
 bool getRequestVariable (struct http_message* message, std::string variable, std::string& value){
-	
+
 	char		buffer[524288];
 	int			returncode;
-	
+
 	returncode = mg_get_http_var(&message->query_string, variable.c_str(), buffer, sizeof(buffer));
-	
+
 	if (returncode > 0){
-		
+
 		value = std::string(buffer);
 		return true;
-		
+
 	} else {
-		
+
 		return false;
-	
+
 	}
 }
 
-void getElementFromString(std::string argstring, std::string& returnstring, int element){ 
+void getElementFromString(std::string argstring, std::string& returnstring, int element){
 	std::size_t 		location;
 	char 				character;
 	int 				currentelement;
 	int 				nextelement;
-	
+
 	returnstring.clear();
 
 	location = argstring.find("  ");
@@ -106,46 +106,46 @@ void getElementFromString(std::string argstring, std::string& returnstring, int 
 	}
 
 	location = 0;
-	
+
 	while(argstring.c_str()[0] == ' '){
 		argstring.erase (0, 1);
 	}
-	
+
 	currentelement = 0;
-	
+
 	while (currentelement  < element){
 		argstring.erase(0, argstring.find(" ") + 1);
 		currentelement += 1;
 	}
-	
+
 	returnstring = argstring.substr(0, argstring.find(" "));
 }
 
 void listFilesInDirectory (std::vector<std::string>& files, std::string directory) {
 	DIR 								*dir;
 	struct dirent 						*entry;
-	
+
 	dir = opendir(directory.c_str());
 	entry = readdir(dir);
-	
+
 	while (entry != NULL){
 		if (entry->d_type != DT_DIR){
 			files.push_back(entry->d_name);
 		}
 		entry = readdir(dir);
 	}
-	
+
 	closedir(dir);
-	
+
 }
 
 void listDirectory (std::vector<std::string>& files, std::vector<std::string>& directories, std::string directory) {
 	DIR 								*dir;
 	struct dirent 						*entry;
-	
+
 	dir = opendir(directory.c_str());
 	entry = readdir(dir);
-	
+
 	while (entry != NULL){
 		if (entry->d_type != DT_DIR){
 			files.push_back(entry->d_name);
@@ -154,13 +154,13 @@ void listDirectory (std::vector<std::string>& files, std::vector<std::string>& d
 		}
 		entry = readdir(dir);
 	}
-	
+
 	closedir(dir);
-	
+
 }
 
 bool fileExists(std::string filename) {
-	
+
 	struct stat 		buf;
 
 	if(stat(filename.c_str(), &buf) == 0) {
@@ -168,14 +168,14 @@ bool fileExists(std::string filename) {
 	} else {
 		return(false);
 	}
-	
+
 }
 
 std::string zeroPadNumber(int num) {
 	std::stringstream ss;
 	std::string ret;
-	
-	ss << num; 
+
+	ss << num;
 	ss >> ret;
 	int str_length = ret.length();
 	for (int i = 0; i < 3 - str_length; i++)
@@ -184,13 +184,13 @@ std::string zeroPadNumber(int num) {
 }
 
 void getDatabaseLocation (std::string& databasepath) {
-	
+
 	struct passwd* 		pw;
 	uid_t 				uid;
-	
+
 	uid = geteuid();
 	pw = getpwuid(uid);
-	
+
 	if(User.size() > 0){
 		databasepath = std::string(pw->pw_dir) + "/.simple." + User + ".sqlite";
 	} else {
@@ -204,9 +204,9 @@ void SQLQuery(std::string& databasepath, std::vector< std::map<std::string, std:
 	int 												rc;
 	int													id;
 	std::map<std::string, std::string>					resultlinekeyval;
-	
+
 	result.clear();
-	
+
 	if(sqlite3_open(databasepath.c_str(), &db)){
 		std::cout << "Failed to open database " << sqlite3_errmsg(db) << std::endl;
 	}
@@ -241,9 +241,9 @@ void SQLQuery(std::string& databasepath, std::vector< std::map<std::string, std:
 	int 												rc;
 	int													id;
 	std::map<std::string, std::string>					resultlinekeyval;
-	
+
 	std::cout << sql << std::endl;
-	
+
 	if(sqlite3_open(databasepath.c_str(), &db)){
 		std::cout << "Failed to open database " << sqlite3_errmsg(db) << std::endl;
 	}
@@ -270,12 +270,12 @@ void SQLQuery(std::string& databasepath, std::vector< std::map<std::string, std:
 
 	if(sqlite3_prepare_v2(db, "SELECT last_insert_rowid();", -1, &stmt, NULL)  != SQLITE_OK ){
 		std::cout << "Failed to query database " << sqlite3_errmsg(db) << std::endl;
-	}	
-	
+	}
+
 	while ((rc = sqlite3_step(stmt)) == SQLITE_ROW) {
 		rowid = sqlite3_column_int(stmt, 0);
 	}
-	
+
 	if (rc != SQLITE_DONE) {
 		std::cout << "Failed to parse query " << sqlite3_errmsg(db) << std::endl;
 	}
@@ -290,9 +290,9 @@ void SQLQuery(std::string& databasepath, std::string sql, int& rowid){
 	int 												rc;
 	int													id;
 	std::map<std::string, std::string>					resultlinekeyval;
-	
+
 	std::cout << sql << std::endl;
-	
+
 	if(sqlite3_open(databasepath.c_str(), &db)){
 		std::cout << "Failed to open database " << sqlite3_errmsg(db) << std::endl;
 	}
@@ -310,12 +310,12 @@ void SQLQuery(std::string& databasepath, std::string sql, int& rowid){
 
 	if(sqlite3_prepare_v2(db, "SELECT last_insert_rowid();", -1, &stmt, NULL)  != SQLITE_OK ){
 		std::cout << "Failed to query database " << sqlite3_errmsg(db) << std::endl;
-	}	
-	
+	}
+
 	while ((rc = sqlite3_step(stmt)) == SQLITE_ROW) {
 		rowid = sqlite3_column_int(stmt, 0);
 	}
-	
+
 	if (rc != SQLITE_DONE) {
 		std::cout << "Failed to parse query " << sqlite3_errmsg(db) << std::endl;
 	}
@@ -330,9 +330,9 @@ void SQLQuery(std::string& databasepath, std::string sql) {
 	int 												rc;
 	int													id;
 	std::map<std::string, std::string>					resultlinekeyval;
-	
+
 	std::cout << sql << std::endl;
-	
+
 	if(sqlite3_open(databasepath.c_str(), &db)){
 		std::cout << "Failed to open database " << sqlite3_errmsg(db) << std::endl;
 	}
@@ -340,25 +340,25 @@ void SQLQuery(std::string& databasepath, std::string sql) {
 	if(sqlite3_prepare_v2(db, sql.c_str(), -1, &stmt, NULL) != SQLITE_OK ){
 		std::cout << "Failed to query database " << sqlite3_errmsg(db) << std::endl;
 	}
-	
+
 	while ((rc = sqlite3_step(stmt)) == SQLITE_ROW) {
 	}
 
 	if (rc != SQLITE_DONE) {
 		std::cout << "Failed to parse query " << sqlite3_errmsg(db) << std::endl;
 	}
-	
+
 	sqlite3_finalize(stmt);
 	sqlite3_close(db);
 }
 
 void readUniDoc(UniDoc* unidoc, std::string filename){
-	
+
 	std::ifstream			input;
 	std::string 			line;
-	
+
 	input.open(filename.c_str());
-	
+
 	if(input.is_open()){
 		while(getline(input, line)){
 			unidoc->data.push_back(line);
@@ -370,12 +370,12 @@ void readUniDoc(UniDoc* unidoc, std::string filename){
 }
 
 void writeUniDoc(UniDoc* unidoc, std::string filename){
-	
+
 	std::ofstream							output;
 	std::vector<std::string>::iterator		datait;
-	
+
 	output.open(filename.c_str());
-	
+
 	if(output.is_open()){
 		for(datait = unidoc->data.begin(); datait != unidoc->data.end(); datait++){
 			output << *datait << "\n";
@@ -387,7 +387,7 @@ void writeUniDoc(UniDoc* unidoc, std::string filename){
 }
 
 void readMRCFrame(MRCFile* mrcfile, std::string filename, int frameid) {
-	
+
 	std::ifstream 				input;
 	int							datastart;
 	int							datalength;
@@ -399,9 +399,9 @@ void readMRCFrame(MRCFile* mrcfile, std::string filename, int frameid) {
 	short*						tmpint;
 	int 						count;
 	float						pixelvalue;
-		
+
 	input.open(filename.c_str(), std::ifstream::binary);
-	
+
 	if (input.is_open()){
 		input.read ((char*)mrcfile->header, 1024);
 		memcpy(&nx, &mrcfile->header[0], 4);
@@ -426,7 +426,7 @@ void readMRCFrame(MRCFile* mrcfile, std::string filename, int frameid) {
 			input.read((char*)tmpint, datalength);
 			for(count = 0; count < (nx * ny); count++){
 				mrcfile->data[count] = tmpint[count];
-			}			
+			}
 			delete [] tmpint;
 		}
 		mrcfile->nx = nx;
@@ -434,19 +434,19 @@ void readMRCFrame(MRCFile* mrcfile, std::string filename, int frameid) {
 		mrcfile->nz = nz;
 		mrcfile->mode = 2;
 		mrcfile->extendedheader = extendedheader;
-		
+
 	}
-	
+
 	input.close();
-	
+
 }
 
 void extractMRCBox(MRCFile* mrcfile, MRCFile* box, int xcoord, int ycoord, int boxsize) {
-	
+
 	int			xit;
 	int			yit;
 	float 		count = 0;
-	
+
 	box->data = new float[boxsize * boxsize];
 	for(yit = 0; yit < boxsize; yit++){
 		for(xit = 0; xit < boxsize; xit++){
@@ -460,12 +460,12 @@ void extractMRCBox(MRCFile* mrcfile, MRCFile* box, int xcoord, int ycoord, int b
 }
 
 bool getUniDocValue(UniDoc* unidoc, int line, std::string key, std::string& value){
-	
+
 	std::size_t 			startpos;
 	std::size_t 			endpos;
-	
+
 	startpos = unidoc->data[line].find(key + "=");
-	
+
 	value.clear();
 
 	if(startpos != std::string::npos) {
@@ -475,16 +475,16 @@ bool getUniDocValue(UniDoc* unidoc, int line, std::string key, std::string& valu
 	}else{
 		return(false);
 	}
-	
+
 }
 
 bool deleteUniDocValue(UniDoc* unidoc, int line, std::string key){
-	
+
 	std::size_t 			startpos;
 	std::size_t 			endpos;
-	
+
 	startpos = unidoc->data[line].find(key + "=");
-	
+
 	if(startpos != std::string::npos) {
 		endpos = unidoc->data[line].find(" ", startpos + 1);
 		unidoc->data[line].erase(startpos, endpos);
@@ -492,14 +492,14 @@ bool deleteUniDocValue(UniDoc* unidoc, int line, std::string key){
 	}else{
 		return(false);
 	}
-	
+
 }
 
 void addUniDocKeyVal(UniDoc* unidoc, int line, std::string key, std::string value){
-	
+
 	std::size_t 			startpos;
 	std::size_t 			endpos;
-	
+
 	startpos = unidoc->data[line].find(key + "=");
 	if(startpos != std::string::npos) {
 		endpos = unidoc->data[line].find(" ", startpos + 1);
@@ -510,7 +510,7 @@ void addUniDocKeyVal(UniDoc* unidoc, int line, std::string key, std::string valu
 }
 
 void addUnidocParticleIdentifiers(UniDoc* unidoc, std::string& unidocfilename){
-	
+
 	std::string					stacktabfilename;
 	std::string					rootdirectory;
 	char*						dirc;
@@ -521,7 +521,7 @@ void addUnidocParticleIdentifiers(UniDoc* unidoc, std::string& unidocfilename){
 	std::string					stackfile;
 	int							stackframeit;
 	int							frameit;
-	
+
 	dirc = strdup(unidocfilename.c_str());
 	rootdirectory = std::string(dirname(dirc));
 	stacktabfilename = rootdirectory + "/stktab_info.txt";
@@ -555,7 +555,7 @@ void writeRelionStar(UniDoc* unidoc, std::string filename){
 	std::string		state;
 	float			statef;
 	float			defocus;
-	
+
 	relionstar = new UniDoc();
 	relionstar->data.push_back("");
 	relionstar->data.push_back("data_");
@@ -570,7 +570,7 @@ void writeRelionStar(UniDoc* unidoc, std::string filename){
 	relionstar->data.push_back("_rlnAmplitudeContrast");
 	relionstar->data.push_back("_rlnMagnification");
 	relionstar->data.push_back("_rlnDetectorPixelSize");
-	
+
 	for(selectionit = 0; selectionit < unidoc->data.size(); selectionit++){
 		getUniDocValue(unidoc, selectionit, "state", state);
 		statef = std::stof(state);
@@ -609,69 +609,69 @@ void writeRelionStar(UniDoc* unidoc, std::string filename){
 }
 
 void addJob (std::string& jobname, std::string jobdescription, std::string& jobfolder, std::string& jobtype, std::string& table, std::string& runstring, int &jobid) {
-	
+
 	std::string				databasepath;
 	std::string::size_type  i;
-	
+
 	getDatabaseLocation(databasepath);
 
 	SQLQuery(databasepath, "INSERT INTO " + std::string(table) + "(jobname, jobdescription, jobfolder, jobtype, jobstatus, jobpid, jobrerun) VALUES('" + jobname + "','" + jobdescription + "','"	+ jobfolder + "','"	+ jobtype + "','" + "External" + "','"	+ std::to_string(0) + "','" + runstring + "');", jobid);
 }
 
 void deleteJob(JSONResponse* response, struct http_message* message) {
-	
+
 	std::string				databasepath;
 	std::string				table;
 	std::string				jobid;
-	
+
 	getDatabaseLocation(databasepath);
-	
+
 	if (getRequestVariable(message, "table", table) && getRequestVariable(message, "jobid", jobid)) {
 		SQLQuery(databasepath, "DELETE FROM " + table + " WHERE jobid=" + jobid + ";");
 	}
 }
 
 void updateJobStatus (std::string jobstatus, std::string& table, int &jobid) {
-	
+
 	std::string				databasepath;
-	
+
 	getDatabaseLocation(databasepath);
 
 	SQLQuery(databasepath, "UPDATE " + table + " SET  jobstatus = \'" + jobstatus + "\' WHERE jobid=" + std::to_string(jobid) +";");
 }
 
 void updateJobFolder (std::string folder, std::string& table, int &jobid) {
-	
+
 	std::string 	databasepath;
-	
+
 	getDatabaseLocation(databasepath);
-	
+
 	SQLQuery(databasepath, "UPDATE " + table + " SET  jobfolder = \'" + folder + "\' WHERE jobid=" + std::to_string(jobid) +";");
 }
 
 void updateJobPID (pid_t pid, std::string& table, int &jobid) {
-	
+
 	std::string 	databasepath;
-	
+
 	getDatabaseLocation(databasepath);
-	
+
 	SQLQuery(databasepath, "UPDATE " + table + " SET  jobpid = \'" + std::to_string(pid) + "\' WHERE jobid=" + std::to_string(jobid) +";");
 }
 
 void updateJobRerun (std::string runstring, std::string& table, int &jobid) {
-	
+
 	std::string 	databasepath;
-	
+
 	getDatabaseLocation(databasepath);
-	
+
 	SQLQuery(databasepath, "UPDATE " + table + " SET  jobrerun = \'" + runstring + "\' WHERE jobid=" + std::to_string(jobid) +";");
 }
 
 void ctffindPre (std::string micrographsdirectory, std::string unbluroutput){
-	
+
 	UniDoc* 									outputunidoc;
 	UniDoc* 									unidoc;
-	std::ofstream								filetab;								
+	std::ofstream								filetab;
 	std::vector<std::string> 					files;
 	std::vector<std::string>::iterator			filesit;
 	int											it;
@@ -682,14 +682,14 @@ void ctffindPre (std::string micrographsdirectory, std::string unbluroutput){
 	char*										dname;
 	char*										dirc;
 	int											status;
-	
+
 	outputunidoc = new UniDoc();
-	
+
 	filetab.open("micrographs.txt");
-	
+
 	if(filetab.is_open()){
 	//	status = mkdir("micrographs", S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
-		
+
 		if(micrographsdirectory.size() > 0 && fileExists(micrographsdirectory)){
 			status = symlink(micrographsdirectory.c_str(), "micrographs");
 			listFilesInDirectory(files, "micrographs" );
@@ -736,7 +736,7 @@ void ctffindPre (std::string micrographsdirectory, std::string unbluroutput){
 }
 
 void ctffindPost (std::string directory){
-	
+
 	int											it;
 	bool										newmicrograph;
 	UniDoc* 									ctffindunidocin;
@@ -744,14 +744,14 @@ void ctffindPost (std::string directory){
 	std::string									intgfilename;
 	std::string									ctffindfit;
 	std::string									value;
-	
+
 	ctffindunidocin = new UniDoc();
 	ctfparams = new UniDoc();
-	
+
 	if(fileExists(directory + "/ctffind_in.simple") && fileExists(directory + "/ctffind_output_merged.txt")){
 		readUniDoc(ctffindunidocin, directory + "/ctffind_in.simple");
 		readUniDoc(ctfparams, directory + "/ctffind_output_merged.txt");
-		
+
 		for(it = 0; it < ctffindunidocin->data.size(); it++){
 			getUniDocValue(ctfparams, it, "kv", value);
 			addUniDocKeyVal(ctffindunidocin, it, "kv", value);
@@ -774,22 +774,22 @@ void ctffindPost (std::string directory){
 			}
 			if(fileExists(ctffindfit)){
 				addUniDocKeyVal(ctffindunidocin, it, "ctffindfit", ctffindfit);
-			} 
-		} 
-	} 
-	
+			}
+		}
+	}
+
 	delete ctfparams;
-	
+
 	writeUniDoc(ctffindunidocin, directory + "/ctffind_out.simple");
-	
+
 	delete ctffindunidocin;
 }
 
 void ctffitPre (std::string micrographsdirectory, std::string unbluroutput){
-	
+
 	UniDoc* 									outputunidoc;
 	UniDoc* 									unidoc;
-	std::ofstream								filetab;								
+	std::ofstream								filetab;
 	std::vector<std::string> 					files;
 	std::vector<std::string>::iterator			filesit;
 	int											it;
@@ -800,12 +800,12 @@ void ctffitPre (std::string micrographsdirectory, std::string unbluroutput){
 	char*										dname;
 	char*										dirc;
 	int											status;
-	
+
 	outputunidoc = new UniDoc();
-	
-	
+
+
 	filetab.open("micrographs.txt");
-	
+
 	if(filetab.is_open()){
 		if(micrographsdirectory.size() > 0 && fileExists(micrographsdirectory)){
 			//status = symlink(micrographsdirectory.c_str(), "micrographs");
@@ -832,26 +832,26 @@ void ctffitPre (std::string micrographsdirectory, std::string unbluroutput){
 			status = mkdir("micrographs", S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
 			for(it = 0; it < unidoc->data.size(); it++){
 				outputunidoc->data.push_back("");
-				
+
 				getUniDocValue(unidoc, it, "intg", value);
 				addUniDocKeyVal(outputunidoc, it, "intg", "micrographs/" + value);
 				micrographpath = std::string(dname) + "/" + value;
 				micrographlink = "micrographs/" + value;
 				status = symlink(micrographpath.c_str(), micrographlink.c_str());
-				
+
 				getUniDocValue(unidoc, it, "forctf", value);
 				addUniDocKeyVal(outputunidoc, it, "forctf", "micrographs/" + value);
 				micrographpath = std::string(dname) + "/" + value;
 				micrographlink = "micrographs/" + value;
 				status = symlink(micrographpath.c_str(), micrographlink.c_str());
 				filetab << "micrographs/" + value + "\n";
-				
+
 				getUniDocValue(unidoc, it, "pspec", value);
 				addUniDocKeyVal(outputunidoc, it, "pspec", "micrographs/" + value);
 				micrographpath = std::string(dname) + "/" + value;
 				micrographlink = "micrographs/" + value;
 				status = symlink(micrographpath.c_str(), micrographlink.c_str());
-				
+
 				getUniDocValue(unidoc, it, "thumb", value);
 				addUniDocKeyVal(outputunidoc, it, "thumb", "micrographs/" + value);
 				micrographpath = std::string(dname) + "/" + value;
@@ -868,7 +868,7 @@ void ctffitPre (std::string micrographsdirectory, std::string unbluroutput){
 }
 
 void ctffitPost (std::string directory){
-	
+
 	int											it;
 	bool										newmicrograph;
 	UniDoc* 									ctffindunidocin;
@@ -876,14 +876,14 @@ void ctffitPost (std::string directory){
 	std::string									intgfilename;
 	std::string									ctffindfit;
 	std::string									value;
-	
+
 	ctffindunidocin = new UniDoc();
 	ctfparams = new UniDoc();
-	
+
 	if(fileExists(directory + "/ctffit_in.simple") && fileExists(directory + "/ctffit_output_merged.txt")){
 		readUniDoc(ctffindunidocin, directory + "/ctffit_in.simple");
 		readUniDoc(ctfparams, directory + "/ctffit_output_merged.txt");
-		
+
 		for(it = 0; it < ctffindunidocin->data.size(); it++){
 			getUniDocValue(ctfparams, it, "kv", value);
 			addUniDocKeyVal(ctffindunidocin, it, "kv", value);
@@ -906,19 +906,19 @@ void ctffitPost (std::string directory){
 			}
 			if(fileExists(ctffindfit)){
 				addUniDocKeyVal(ctffindunidocin, it, "ctffindfit", ctffindfit);
-			} 
-		} 
-	} 
-	
+			}
+		}
+	}
+
 	delete ctfparams;
-	
+
 	writeUniDoc(ctffindunidocin, directory + "/ctffit_out.simple");
-	
+
 	delete ctffindunidocin;
 }
 
 void ini3DPre (std::string simpleinput, std::string mrcinput, std::string& command){ // NEEDS WORK
-	
+
 	UniDoc*										inputunidoc;
 	std::ofstream								stktab;
 	int											inputit;
@@ -931,7 +931,7 @@ void ini3DPre (std::string simpleinput, std::string mrcinput, std::string& comma
 	std::string									stackfilepath;
 	std::string									stackfilelink;
 	std::string									stackfilerealpath;
-	
+
 	std::cout << "inipre" << std::endl;
 	if(fileExists(simpleinput)){
 		mkdir("particles", S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
@@ -973,7 +973,7 @@ void ini3DPre (std::string simpleinput, std::string mrcinput, std::string& comma
 }
 
 void ini3DPost (std::string directory){
-	
+
 	FILE*						stream;
 	std::string					command;
 	std::string					prime3ddoc;
@@ -986,9 +986,9 @@ void ini3DPost (std::string directory){
 	UniDoc*						inputunidoc;
 	UniDoc*						outputunidoc;
 	int							inputit;
-	
+
 	status = chdir(directory.c_str());
-	
+
 	if(fileExists("ini3d_in.simple") && fileExists("ini3d_in.txt")){
 		listFilesInDirectory(files, directory);
 		iterationcount = 0;
@@ -996,7 +996,7 @@ void ini3DPost (std::string directory){
 			if(files[it].find("prime3Ddoc") != std::string::npos) {
 				iterationcount++;
 			}
-		}	
+		}
 		prime3ddoc = "prime3Ddoc_" + zeroPadNumber(iterationcount) + ".txt";
 		command = "simple_exec prg=map2ptcls_doc oritab=ini3d_in.txt oritab3D="+ prime3ddoc +" outfile=ini3d_particles_out.txt >> simple_job.log";
 		std::cout << command << std::endl;
@@ -1012,7 +1012,7 @@ void ini3DPost (std::string directory){
 			addUniDocKeyVal(outputunidoc, inputit, "stackfile", stackfile);
 			addUniDocKeyVal(outputunidoc, inputit, "frameid", frameid);
 		}
-		
+
 		delete inputunidoc;
 		writeUniDoc(outputunidoc, "ini3d_particles_out.simple");
 		delete outputunidoc;
@@ -1020,11 +1020,11 @@ void ini3DPost (std::string directory){
 }
 
 void extractPre (std::string boxdirectory, std::string micrographsdirectory, std::string unidocname){
-	
+
 	UniDoc* 									outputunidoc;
-	UniDoc* 									unidoc;	
-	UniDoc* 									unidocout;	
-	UniDoc* 									boxtab;							
+	UniDoc* 									unidoc;
+	UniDoc* 									unidocout;
+	UniDoc* 									boxtab;
 	char*										bname;
 	char*										dname;
 	char*										dirc;
@@ -1032,13 +1032,13 @@ void extractPre (std::string boxdirectory, std::string micrographsdirectory, std
 	int											it;
 	std::string									intg;
 	std::string									boxfile;
-	
+
 	unidoc = new UniDoc();
 	unidocout = new UniDoc();
 	boxtab = new UniDoc();
 
 	if(micrographsdirectory.size() > 0){
-		
+
 	} else if(unidocname.size() > 0){
 		readUniDoc(unidoc, unidocname);
 		for(it = 0; it < unidoc->data.size(); it++){
@@ -1047,12 +1047,12 @@ void extractPre (std::string boxdirectory, std::string micrographsdirectory, std
 			bname = basename(dirc);
 			dird = strdup(unidocname.c_str());
 			dname = dirname(dird);
-		
+
 			dirc = strdup(intg.c_str());
 			bname = basename(dirc);
 			boxfile = boxdirectory + "/" + std::string(bname);
 			boxfile.replace(boxfile.end() - 3, boxfile.end(), "box");
-			
+
 			if(fileExists(boxfile)){
 				deleteUniDocValue(unidoc, it, "intg");
 				addUniDocKeyVal(unidoc, it, "intg", std::string(dname) + "/" + intg);
@@ -1071,7 +1071,7 @@ void extractPre (std::string boxdirectory, std::string micrographsdirectory, std
 }
 
 void extractPost (std::string directory){
-	
+
 	UniDoc*							unidoc;
 	UniDoc*							parts;
 	UniDoc*							unidocpart;
@@ -1079,18 +1079,18 @@ void extractPost (std::string directory){
 	int								filesit;
 	std::string						stack;
 	int								stackit;
-	
+
 	listFilesInDirectory(files, directory);
 	unidoc = new UniDoc();
 	parts = new UniDoc();
-	
+
 	for(filesit = 0; filesit < files.size(); filesit++){
 		if(files[filesit].find("extract_params") != std::string::npos){
 			stack = files[filesit];
 			stack.replace(stack.begin(), stack.begin() + 14, "ptcls_from");
 			stack.replace(stack.end() - 3, stack.end(), "mrc");
 			if(fileExists(stack)){
-				
+
 				unidocpart = new UniDoc();
 				readUniDoc(unidocpart, files[filesit]);
 				for(stackit = 0; stackit < unidocpart->data.size(); stackit++){
@@ -1103,7 +1103,7 @@ void extractPost (std::string directory){
 			}
 		}
 	}
-	
+
 	writeUniDoc(unidoc, "extract_out.simple");
 	writeUniDoc(parts, "extract_parts.txt");
 	delete unidoc;
@@ -1111,7 +1111,7 @@ void extractPost (std::string directory){
 }
 
 void pickPre (std::string simpleinput, std::string micrographsdirectory, std::string pickrefs, std::string pickvol, std::string pgrp, std::string pcontrast) {
-	
+
 	std::string		command;
 	std::string		micrograph;
 	std::string		rootdir;
@@ -1133,7 +1133,7 @@ void pickPre (std::string simpleinput, std::string micrographsdirectory, std::st
 		std::cout << command << std::endl;
 		stream = popen(command.c_str(), "r");
 		pclose(stream);
-	} else if (pickvol != "" && pcontrast != ""){		
+	} else if (pickvol != "" && pcontrast != ""){
 		command = "simple_exec prg=makepickrefs pgrp=" + pgrp + " vol1=" + pickrefs + " nthr=1 pcontrast=white >> simple_job.log";
 		std::cout << command << std::endl;
 		stream = popen(command.c_str(), "r");
@@ -1144,58 +1144,58 @@ void pickPre (std::string simpleinput, std::string micrographsdirectory, std::st
 		stream = popen(command.c_str(), "r");
 		pclose(stream);
 	}
-	
+
 	if (simpleinput != "" && fileExists	(simpleinput)){
-		
+
 		simplein = new UniDoc();
 		filetab = new UniDoc();
-		
+
 		readUniDoc(simplein, simpleinput);
-		
+
 		basec = strdup(simpleinput.c_str());
 		rootdir = std::string(dirname(basec));
-		
+
 		for(i = 0; i < simplein->data.size(); i++){
 			getUniDocValue(simplein, i, "intg", micrograph);
 			filetab->data.push_back(rootdir + "/" + micrograph);
 		}
-		
+
 		writeUniDoc(filetab, "picktab.txt");
 		writeUniDoc(simplein, "autopick_in.simple");
-		
+
 		delete simplein;
 		delete filetab;
-		
+
 	} else if(micrographsdirectory != ""){
 			listFilesInDirectory(files, micrographsdirectory);
-			
+
 			simplein = new UniDoc();
 			filetab = new UniDoc();
-			
+
 			for(filecount = 0; filecount < files.size(); filecount++){
 				if(files[filecount].find(".mrc") !=std::string::npos){
 					simplein->data.push_back("intg=" + files[filecount]);
 					filetab->data.push_back(micrographsdirectory + "/" + files[filecount]);
 				}
 			}
-			
+
 			writeUniDoc(filetab, "picktab.txt");
 			writeUniDoc(simplein, "autopick_in.simple");
-			
+
 			delete filetab;
 			delete simplein;
-			
+
 		}
 }
 
 void postprocessPre (std::string volume, std::string& command) {
-	
+
 	char*			basec;
 	std::string		volumename;
 	std::string		volumebase;
 	std::string		fscfile;
 	std::string		filtvol;
-	
+
 	if(fileExists(volume)){
 		basec = strdup(volume.c_str());
 		volumename = std::string(basename(basec));
@@ -1220,7 +1220,7 @@ void postprocessPre (std::string volume, std::string& command) {
 }
 
 void preprocPost (std::string directory){
-	
+
 	std::vector<std::string> 					files;
 	std::vector<std::string>::iterator			filesit;
 	int											datait;
@@ -1229,15 +1229,15 @@ void preprocPost (std::string directory){
 	UniDoc*										preprocunidoc;
 	std::string									unidocname;
 	std::string									ctffindfit;
-	
+
 	listFilesInDirectory(files, directory + "/pipeline/unidocs");
-	
+
 	preprocunidoc = new UniDoc();
-	
+
 	if(fileExists(directory + "/preproc_out.simple")){
 		readUniDoc(preprocunidoc, directory + "/preproc_out.simple");
 	}
-	
+
 	for(filesit = files.begin(); filesit != files.end(); filesit++) {
 		if(std::string(*filesit).find("unidoc") != std::string::npos) {
 			newmicrograph = true;
@@ -1260,13 +1260,13 @@ void preprocPost (std::string directory){
 				delete micrographunidoc;
 			}
 		}
-	} 
+	}
 	writeUniDoc(preprocunidoc, directory + "/preproc_out.simple");
 	delete preprocunidoc;
 }
 
 void prime2DPre (std::string simpleinput){
-	
+
 	UniDoc*										inputunidoc;
 	std::ofstream								stktab;
 	int											inputit;
@@ -1278,12 +1278,12 @@ void prime2DPre (std::string simpleinput){
 	std::string									stackfilepath;
 	std::string									stackfilelink;
 	std::string									stackfilerealpath;
-	
+
 	mkdir("particles", S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
 	stktab.open("stkparts.txt");
 	dirc = strdup(simpleinput.c_str());
 	inputroot = std::string(dirname(dirc));
-	
+
 	if(fileExists(simpleinput) && stktab.is_open()){
 		inputunidoc = new UniDoc();
 		readUniDoc(inputunidoc, simpleinput);
@@ -1314,7 +1314,7 @@ void prime2DPre (std::string simpleinput){
 }
 
 void prime2DPost (std::string directory){
-	
+
 	std::vector<std::string> 					files;
 	std::vector<std::string>::iterator			filesit;
 	int											datait;
@@ -1324,16 +1324,16 @@ void prime2DPost (std::string directory){
 	std::string									classdocname;
 	std::string									cavgsdoc;
 	std::string									prime2ddoc;
-	
+
 	listFilesInDirectory(files, directory);
-	
+
 	prime2dunidoc = new UniDoc();
 
-	
+
 	if(fileExists(directory + "/prime2D_iterations.simple")){
 		readUniDoc(prime2dunidoc, directory + "/prime2D_iterations.simple");
 	}
-	
+
 	for(filesit = files.begin(); filesit != files.end(); filesit++) {
 		if(std::string(*filesit).find("classdoc_") != std::string::npos) {
 			newclassdoc = true;
@@ -1359,13 +1359,13 @@ void prime2DPost (std::string directory){
 				delete classdocunidoc;
 			}
 		}
-	} 
+	}
 	writeUniDoc(prime2dunidoc, directory + "/prime2D_iterations.simple");
 	delete prime2dunidoc;
 }
 
 void prime3DPre (std::string simpleinput){
-	
+
 	UniDoc*										inputunidoc;
 	std::ofstream								stktab;
 	int											inputit;
@@ -1377,12 +1377,12 @@ void prime3DPre (std::string simpleinput){
 	std::string									stackfilepath;
 	std::string									stackfilelink;
 	std::string									stackfilerealpath;
-	
+
 	mkdir("particles", S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
 	stktab.open("stkparts.txt");
 	dirc = strdup(simpleinput.c_str());
 	inputroot = std::string(dirname(dirc));
-	
+
 	if(fileExists(simpleinput) && stktab.is_open()){
 		inputunidoc = new UniDoc();
 		readUniDoc(inputunidoc, simpleinput);
@@ -1410,7 +1410,7 @@ void prime3DPre (std::string simpleinput){
 }
 
 void prime3DPost (std::string directory){
-	
+
 	std::vector<std::string> 					files;
 	int											filesit;
 	std::string									simplefile;
@@ -1419,14 +1419,14 @@ void prime3DPost (std::string directory){
 	UniDoc*										prime3Din;
 	UniDoc*										prime3Diteration;
 	int											particlesit;
-	
+
 	listFilesInDirectory(files, directory);
-	
+
 	for(filesit = 0; filesit < files.size(); filesit++){
 		if(fileExists(directory + "/" + "prime3D_in.simple")){
 			prime3Din = new UniDoc();
 			readUniDoc(prime3Din, directory + "/" + "prime3D_in.simple");
-			
+
 			if(files[filesit].find("prime3Ddoc_") != std::string::npos && files[filesit].find(".simple") == std::string::npos){
 				simplefile = directory + "/" + files[filesit];
 				simplefile.replace(simplefile.end() - 3, simplefile.end(), "simple");
@@ -1450,14 +1450,14 @@ void prime3DPost (std::string directory){
 }
 
 void unblurPre (std::string moviesdirectory){
-	
+
 	std::ofstream								movietab;
 	std::vector<std::string>					directories;
 	std::vector<std::string>					files;
 	int											i;
-	
+
 	listDirectory(files, directories, moviesdirectory);
-	
+
 	movietab.open("movies.txt");
 	if(movietab.is_open()){
 		for(i = 0; i < files.size(); i++){
@@ -1470,7 +1470,7 @@ void unblurPre (std::string moviesdirectory){
 }
 
 void unblurPost (std::string directory){
-	
+
 	std::vector<std::string> 					files;
 	std::vector<std::string>::iterator			filesit;
 	int											datait;
@@ -1481,15 +1481,15 @@ void unblurPost (std::string directory){
 	std::string									unidocline;
 	std::string									attribute;
 	char*										dirc;
-	
+
 	listFilesInDirectory(files, directory);
-	
+
 	preprocunidoc = new UniDoc();
-	
+
 	if(fileExists(directory + "/unblur_out.simple")){
 		readUniDoc(preprocunidoc, directory + "/unblur_out.simple");
 	}
-	
+
 	for(filesit = files.begin(); filesit != files.end(); filesit++) {
 		if(std::string(*filesit).find("intg.mrc") != std::string::npos) {
 			newmicrograph = true;
@@ -1517,13 +1517,13 @@ void unblurPost (std::string directory){
 				preprocunidoc->data.push_back(unidocline);
 			}
 		}
-	} 
+	}
 	writeUniDoc(preprocunidoc, directory + "/unblur_out.simple");
 	delete preprocunidoc;
 }
 
 void externalJob (JSONResponse* response, struct http_message* message) {
-	
+
 	pid_t 					pid;
 	int						jobid;
 	std::string 			jobname;
@@ -1533,19 +1533,19 @@ void externalJob (JSONResponse* response, struct http_message* message) {
 	std::string 			table;
 	std::string 			loop;
 	std::string 			runstring;
-	
+
 	runstring = std::string(message->query_string.p);
 	runstring = runstring.substr (0,message->query_string.len);
-	
+
 	if(getRequestVariable(message, "jobfolder", jobfolder) && getRequestVariable(message, "jobtype", jobtype) && getRequestVariable(message, "table", table)){
 		getRequestVariable(message, "jobname", jobname);
 		getRequestVariable(message, "jobdescription", jobdescription);
 		getRequestVariable(message, "loop", loop);
-		
+
 		addJob(jobname, jobdescription, jobfolder, jobtype, table, runstring, jobid);
-	
+
 		pid = fork();
-	
+
 		if (pid == 0){
 			usleep(1000000);
 			updateJobStatus("Running", table, jobid);
@@ -1569,14 +1569,14 @@ void externalJob (JSONResponse* response, struct http_message* message) {
 			}else if (jobtype == "prime3D"){
 				prime3DPost(jobfolder);
 			}
-			
+
 			/*if (std::strstr(jobtype, "preproc") ) {
 				preprocPost (jobfolder);
 			}else if (std::strstr(jobtype, "prime2d") ) {
 				prime2DPost (jobfolder);
 			}else if (std::strstr(jobtype, "stream") ) {
 				streamPost (jobfolder);
-		*/	
+		*/
 			updateJobPID(0, table, jobid);
 			updateJobStatus ("External", table, jobid);
 		} else if (pid > 0) {
@@ -1589,21 +1589,21 @@ void externalJob (JSONResponse* response, struct http_message* message) {
 }
 
 void generateSimpleEnv (struct http_message* message){
-	
+
 	std::string							element;
 	char*								simplepath;
 	std::ofstream 						envfile;
-	
+
 	simplepath = std::getenv("SIMPLE_PATH");
-	
+
 	envfile.open ("simple_distr_config.env");
-	
+
 	envfile << "simple_path = " << simplepath << "\n";
 
 	if(getRequestVariable(message, "time_per_image", element)){
 		envfile << "time_per_image = " << element << "\n";
 	}
-	
+
 	if(getRequestVariable(message, "qsys_qos", element)){
 		envfile << "qsys_qos = " << element << "\n";
 	}
@@ -1615,19 +1615,19 @@ void generateSimpleEnv (struct http_message* message){
 			envfile << "qsys_name = " << element << "\n";
 		}
 	}
-	
+
 	if(getRequestVariable(message, "qsys_partition", element)){
 		envfile << "qsys_partition = " << element << "\n";
 	}
-	
+
 	//if(getRequestVariable(message, "nparts", element)){
 	envfile << "job_ntasks = 1" << "\n";
 	//}
-	
+
 	if(getRequestVariable(message, "job_memory_per_task", element)){
 		envfile << "job_memory_per_task = " << element << "\n";
 	}
-	
+
 	if(getRequestVariable(message, "job_name", element)){
 		envfile << "job_name = " << element << "\n";
 	}
@@ -1635,7 +1635,7 @@ void generateSimpleEnv (struct http_message* message){
 	if(getRequestVariable(message, "job_ntasks_per_socket", element)){
 		envfile << "job_ntasks_per_socket = " << element << "\n";
 	}
-	
+
 	if(getRequestVariable(message, "nthr", element)){
 		envfile << "job_cpus_per_task = " << element << "\n";
 	}
@@ -1644,21 +1644,21 @@ void generateSimpleEnv (struct http_message* message){
 }
 
 void getSimpleJobArgs (std::string& executable, std::string& program, std::vector<std::string>& arguments){
-	
+
 	FILE*			stream;
 	char 			buffer[1024];
 	std::string		command;
 	std::string		element;
 	int				status;
-	
+
 	command = executable + " prg=" + program + " 2>&1";
-	
+
 	stream = popen(command.c_str(), "r");
-	
+
 	if (stream == NULL){
 		//ERROR
 	}
-	
+
 	while (fgets(buffer, 512, stream) != NULL){
 		getElementFromString(std::string(buffer), element, 0);
 		if (element != "" && element != "\n" && element != " "){
@@ -1676,17 +1676,17 @@ void getSimpleJobArgs (std::string& executable, std::string& program, std::vecto
 void simpleSlurmSubmit(std::string& command, std::string& directory, int& jobid, char* table, char* databasepath, char* jobtype){
 		std::string 						slurmcommand;
 		FILE*								stream;
-		
+
 		char *cstr = new char[directory.length() + 1];
 		strcpy(cstr, directory.c_str());
-		
+
 		slurmcommand = "sbatch -n 1 -c 1 --wrap \"" + command + "\"";
-	
+
 		stream = popen(slurmcommand.c_str(), "r");
 		pclose(stream);
-		
+
 		updatePID (jobid, table, databasepath, "slurm");
-		
+
 		while(true){ // TEST SLURM JOB!
 			usleep(20000000);
 			if(jobtype == "prime2D_stream"){
@@ -1711,12 +1711,12 @@ void simpleSlurmSubmit(std::string& command, std::string& directory, int& jobid,
 */
 
 void simpleLocalSubmit(std::string& command, std::string& directory, int& jobid, std::string& table, std::string& jobtype){
-	
+
 	pid_t 								pid;
 	FILE*								stream;
-	
+
 	pid = fork();
-	
+
 	if (pid == 0){
 		stream = popen(command.c_str(), "r");
 		pclose(stream);
@@ -1746,7 +1746,7 @@ void simpleLocalSubmit(std::string& command, std::string& directory, int& jobid,
 		}else if (jobtype == "ctffind"){
 			ctffindPost(directory);
 		}else if (jobtype == "ctffit"){
-			ctffitPost(directory);	
+			ctffitPost(directory);
 		}else if (jobtype == "extract"){
 			extractPost(directory);
 		}else if (jobtype == "ini3D"){
@@ -1760,19 +1760,19 @@ void simpleLocalSubmit(std::string& command, std::string& directory, int& jobid,
 		updateJobStatus ("Finished", table, jobid);
 	} else {
 		std::cout << "Fork Failed" << std::endl;
-	}	
+	}
 
 }
 
 void syncJob (JSONResponse* response, struct http_message* message) {
-	
+
 	std::string								program;
 	std::string								executable;
 	std::string								jobname;
 	std::string								jobdescription;
 	std::string								jobtype;
 	std::string								jobfolder;
-	std::string								table;	
+	std::string								table;
 	std::string								sourcefolder;
 	std::string								destinationfolder;
 	std::string								fileidentifier;
@@ -1780,44 +1780,44 @@ void syncJob (JSONResponse* response, struct http_message* message) {
 	std::string								command;
 	std::string								outputfolder;
 	std::string								runstring;
-	FILE*									stream;		
-	int										jobid;	
+	FILE*									stream;
+	int										jobid;
 	int										status;
 	pid_t 									pid;
 	pid_t 									sid;
-	
+
 	runstring = std::string(message->query_string.p);
 	runstring = runstring.substr (0,message->query_string.len);
-	
+
 	if(getRequestVariable(message, "jobtype", jobtype) && getRequestVariable(message, "jobfolder", jobfolder) && getRequestVariable(message, "table", table)){
-		
+
 		getRequestVariable(message, "jobname", jobname);
 		getRequestVariable(message, "jobdescription", jobdescription);
-		
+
 		addJob(jobname, jobdescription, jobfolder, jobtype, table, runstring, jobid);
 		getRequestVariable(message, "sourcefolder", sourcefolder);
 		getRequestVariable(message, "destinationfolder", destinationfolder);
 		getRequestVariable(message, "fileidentifier", fileidentifier);
 		getRequestVariable(message, "deletesource", deletesource);
-		
+
 		pid = fork();
-	
+
 		if (pid == 0){
 			umask(0);
 			sid = setsid();
 
 			updateJobStatus("Running", table, jobid);
-			
+
 			outputfolder = jobfolder + "/" + std::to_string(jobid) + "_" + jobtype;
-			
+
 			updateJobFolder(outputfolder, table, jobid);
-			
+
 			status = mkdir(outputfolder.c_str(), S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
-			
+
 			status = chdir(outputfolder.c_str());
-			
+
 			command = "microscope_sync.sh -s " + sourcefolder + " -d " + destinationfolder + " -i " + fileidentifier;
-			
+
 			if(deletesource == "yes") {
 				command += " -r";
 			}
@@ -1825,14 +1825,14 @@ void syncJob (JSONResponse* response, struct http_message* message) {
 			std::cout << command << std::endl;
 			stream = popen(command.c_str(), "r");
 			pclose(stream);
-			
+
 			updateJobStatus ("Failed", table, jobid);
 			exit(0);
-			
-			
+
+
 		} else if (pid > 0) {
 			waitpid(pid, 0, WNOHANG);
-			
+
 		} else {
 			std::cout << "Fork Failed" << std::endl;
 		}
@@ -1840,14 +1840,14 @@ void syncJob (JSONResponse* response, struct http_message* message) {
 }
 
 void simpleJob (JSONResponse* response, struct http_message* message) {
-	
+
 	std::string								program;
 	std::string								executable;
 	std::string								jobname;
 	std::string								jobdescription;
 	std::string								jobtype;
 	std::string								jobfolder;
-	std::string								table;	
+	std::string								table;
 	std::string								outputfolder;
 	std::string								command;
 	std::string								programarg;
@@ -1855,47 +1855,47 @@ void simpleJob (JSONResponse* response, struct http_message* message) {
 	std::string								argval2;
 	std::string								argval3;
 	std::string								argval4;
-	int										jobid;	
-	int										status;	
+	int										jobid;
+	int										status;
 	pid_t 									pid;
 	pid_t 									sid;
 	std::vector<std::string> 				arguments;
 	std::vector<std::string>::iterator		argit;
 	std::string								runstring;
-	
+
 	runstring = std::string(message->query_string.p);
 	runstring = runstring.substr (0,message->query_string.len);
-	
+
 	if(getRequestVariable(message, "jobtype", jobtype) && getRequestVariable(message, "jobfolder", jobfolder) && getRequestVariable(message, "table", table)){
-		
+
 		getRequestVariable(message, "jobname", jobname);
 		getRequestVariable(message, "jobdescription", jobdescription);
-		
+
 		addJob(jobname, jobdescription, jobfolder, jobtype, table, runstring, jobid);
-		
+
 		pid = fork();
-	
+
 		if (pid == 0){
 			umask(0);
 			sid = setsid();
 
 			updateJobStatus("Running", table, jobid);
-			
+
 			outputfolder = jobfolder + "/" + std::to_string(jobid) + "_" + jobtype;
-			
+
 			updateJobFolder(outputfolder, table, jobid);
-			
+
 			status = mkdir(outputfolder.c_str(), S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
-			
+
 			status = chdir(outputfolder.c_str());
-			
+
 			if(getRequestVariable(message, "executable", executable) && getRequestVariable(message, "program", program)){
 
 				command = executable + " prg=" + std::string(program);
 
 				getSimpleJobArgs(executable, program, arguments);
 			}
-			
+
 			for(argit = arguments.begin(); argit != arguments.end(); ++argit) {
 				programarg = *argit;
 				if (getRequestVariable(message, programarg, argval)){
@@ -1905,8 +1905,8 @@ void simpleJob (JSONResponse* response, struct http_message* message) {
 				}
 				argval[0] = ' ';
 			}
-			
-			
+
+
 			if(program == "prime2D" && getRequestVariable(message, "simpleinput", argval)){
 					prime2DPre(argval);
 			} else if (program == "prime2D_stream" && getRequestVariable(message, "ptclsdir", argval)){
@@ -1963,20 +1963,20 @@ void simpleJob (JSONResponse* response, struct http_message* message) {
 				}
 			std::cout << command << std::endl;
 			command += " >> simple_job.log";
-			
+
 			generateSimpleEnv(message);
-			
+
 			//if(getRequestVariable(message, "submitmaster", argval)){
-				
+
 			//}else{
 				std::cout << command << std::endl;
 				simpleLocalSubmit(command, outputfolder, jobid, table, jobtype);
 			//}
 			exit(0);
-			
+
 		} else if (pid > 0) {
 			waitpid(pid, 0, WNOHANG);
-			
+
 		} else {
 			std::cout << "Fork Failed" << std::endl;
 		}
@@ -1984,92 +1984,92 @@ void simpleJob (JSONResponse* response, struct http_message* message) {
 }
 
 void getJobs (JSONResponse* response, struct http_message* message) {
-	
+
 	std::string 			databasepath;
 	std::string 			table;
-	
+
 	if(getRequestVariable(message, "table", table)){
 		getDatabaseLocation(databasepath);
-		SQLQuery(databasepath, response->jobs, "CREATE TABLE IF NOT EXISTS " + table + " (jobid integer PRIMARY KEY, jobname text NOT NULL, jobdescription text NOT NULL, jobfolder text NOT NULL, jobtype text NOT NULL, jobstatus text NOT NULL, jobpid integer NOT NULL, jobrerun text NOT NULL);");									
-		SQLQuery(databasepath, response->jobs, "SELECT * FROM " + table);	
-	}								
+		SQLQuery(databasepath, response->jobs, "CREATE TABLE IF NOT EXISTS " + table + " (jobid integer PRIMARY KEY, jobname text NOT NULL, jobdescription text NOT NULL, jobfolder text NOT NULL, jobtype text NOT NULL, jobstatus text NOT NULL, jobpid integer NOT NULL, jobrerun text NOT NULL);");
+		SQLQuery(databasepath, response->jobs, "SELECT * FROM " + table);
+	}
 }
 
 void killJob (JSONResponse* response, struct http_message* message) {
-	
+
 	std::string 				pid;
 	std::string 				table;
 	std::string 				jobid;
 	std::string 				jobfolder;
 	std::vector<std::string>	files;
 	int							fileit;
-	
+
 	if(getRequestVariable(message, "table", table) && getRequestVariable(message, "pid", pid) && getRequestVariable(message, "jobid", jobid) && getRequestVariable(message, "jobfolder", jobfolder)){
 		listFilesInDirectory(files, jobfolder);
 		for(fileit = 0; fileit < files.size(); fileit++){
 		//	if(files[fileit].find(".pid") != std::string::npos
 		}
-		
+
 	}
 }
 
 void newProject (JSONResponse* response, struct http_message* message) {
-	
+
 	std::string 			databasepath;
 	std::string				projectname;
 	std::string				projectdescription;
 	std::string				projectfolder;
-	std::string  			projecttable; 
-	
+	std::string  			projecttable;
+
 	if (getRequestVariable(message, "projectname", projectname) && getRequestVariable(message, "projectfolder", projectfolder)) {
 		if(fileExists(projectfolder)){
 			getRequestVariable(message, "projectdescription", projectdescription);
 			getDatabaseLocation(databasepath);
 			srand((int)time(0));
 			projecttable = "p" + std::to_string(rand());
-			SQLQuery(databasepath, response->projects, "CREATE TABLE IF NOT EXISTS projects (projectid integer PRIMARY KEY, projectname text NOT NULL, projectdescription text NOT NULL, projectfolder text NOT NULL, projecttable text NOT NULL, projectusage bool NOT NULL);");	
+			SQLQuery(databasepath, response->projects, "CREATE TABLE IF NOT EXISTS projects (projectid integer PRIMARY KEY, projectname text NOT NULL, projectdescription text NOT NULL, projectfolder text NOT NULL, projecttable text NOT NULL, projectusage bool NOT NULL);");
 			SQLQuery(databasepath, response->projects, "INSERT INTO projects(projectname, projectdescription, projectfolder, projecttable, projectusage) VALUES('"	+ projectname + "','" + projectdescription + "','" + projectfolder + "','" + projecttable + "','" + "true" + "');");
 		} else {
 			response->error = "Project folder does not exist!";
 		}
 	}
-	
+
 }
 
 void getProjects (JSONResponse* response) {
 
 	std::string  														sqlresult;
 	std::string															databasepath;
-	
+
 	getDatabaseLocation(databasepath);
-	
+
 	SQLQuery(databasepath, response->projects, "SELECT * FROM projects");
 
 }
 
 void deleteProject(JSONResponse* response, struct http_message* message) {
-	
+
 	std::string				databasepath;
 	std::string				table;
 	std::string				projectid;
-	
+
 	getDatabaseLocation(databasepath);
-	
+
 	if (getRequestVariable(message, "projectid", projectid)) {
 		SQLQuery(databasepath, "DELETE FROM projects WHERE projectid=" + projectid + ";");
 	}
 }
 
 void viewCtffind (JSONResponse* response, struct http_message* message) {
-	
+
 	std::string 							directory;
 	UniDoc*									unidoc;
 	int										datait;
 	std::map<std::string, std::string>		micrographmap;
 	std::string								value;
 	int										randomint;
-	
-	
+
+
 	if (getRequestVariable(message, "folder", directory)){
 		response->rootdirectory = directory;
 		if(fileExists(directory + "/ctffind_out.simple")){
@@ -2112,19 +2112,19 @@ void viewCtffind (JSONResponse* response, struct http_message* message) {
 			delete unidoc;
 		}
 	}
-	
+
 }
 
 void viewCtffit (JSONResponse* response, struct http_message* message) {
-	
+
 	std::string 							directory;
 	UniDoc*									unidoc;
 	int										datait;
 	std::map<std::string, std::string>		micrographmap;
 	std::string								value;
 	int										randomint;
-	
-	
+
+
 	if (getRequestVariable(message, "folder", directory)){
 		response->rootdirectory = directory;
 		if(fileExists(directory + "/ctffit_out.simple")){
@@ -2167,17 +2167,17 @@ void viewCtffit (JSONResponse* response, struct http_message* message) {
 			delete unidoc;
 		}
 	}
-	
+
 }
 
 void viewExtract (JSONResponse* response, struct http_message* message) {
-	
+
 	std::string 							directory;
 	UniDoc*									iterationsunidoc;
 	int										datait;
 	std::map<std::string, std::string>		iterationmap;
 	std::string								value;
-	
+
 	if (getRequestVariable(message, "folder", directory)){
 		response->rootdirectory = directory;
 		if(fileExists(directory + "/extract_parts.txt")){
@@ -2204,15 +2204,15 @@ void viewExtract (JSONResponse* response, struct http_message* message) {
 }
 
 void viewIni3D (JSONResponse* response, struct http_message* message) {
-	
+
 	std::string 							directory;
 	std::string 							thumbnails;
 	MRCFile*								clusters;
 	int										clustercount;
 	int										count;
-	
+
 	if (getRequestVariable(message, "folder", directory)){
-		response->newformat["rootdir"] = "\"" + directory + "\""; 
+		response->newformat["rootdir"] = "\"" + directory + "\"";
 		if(fileExists(directory + "/reprojs.mrc") && fileExists(directory + "/prime2D_selected_clusters.mrc")){
 			response->newformat["viewtype"] = "\"ini3D\"";
 			response->newformat["targetflags"] = "[ {\"id\":\"reprojections\", \"contrast\" : \"6\", \"brightness\" : \"128\", \"scale\" : \"1\", \"zoom\" : \"1\"},";
@@ -2222,7 +2222,7 @@ void viewIni3D (JSONResponse* response, struct http_message* message) {
 			readMRCFrame(clusters, directory + "/prime2D_selected_clusters.mrc", 0);
 			delete [] clusters->data;
 			clustercount = clusters->nz;
-			delete clusters; 
+			delete clusters;
 			thumbnails = "[";
 			for(count = 0; count < clustercount; count++){
 				thumbnails += "[";
@@ -2235,17 +2235,17 @@ void viewIni3D (JSONResponse* response, struct http_message* message) {
 			response->newformat["thumbnails"] = thumbnails;
 		}
 	}
-	
+
 }
 
 void viewPrime2D (JSONResponse* response, struct http_message* message) {
-	
+
 	std::string 							directory;
 	UniDoc*									iterationsunidoc;
 	int										datait;
 	std::map<std::string, std::string>		iterationmap;
 	std::string								value;
-	
+
 	if (getRequestVariable(message, "folder", directory)){
 		response->rootdirectory = directory;
 		if(fileExists(directory + "/prime2D_iterations.simple")){
@@ -2264,11 +2264,11 @@ void viewPrime2D (JSONResponse* response, struct http_message* message) {
 			delete iterationsunidoc;
 		}
 	}
-	
+
 }
 
 void viewPrime2DIteration (JSONResponse* response, struct http_message* message) {
-	
+
 	std::string 							classdoc;
 	std::string 							prime2ddoc;
 	std::string 							cavgs;
@@ -2276,7 +2276,7 @@ void viewPrime2DIteration (JSONResponse* response, struct http_message* message)
 	int										datait;
 	std::map<std::string, std::string>		iterationmap;
 	std::string								value;
-	
+
 	if (getRequestVariable(message, "classdoc", classdoc) && getRequestVariable(message, "prime2ddoc", prime2ddoc) && getRequestVariable(message, "cavgs", cavgs)){
 		response->prime2ddoc = prime2ddoc;
 		if(fileExists(classdoc)){
@@ -2301,18 +2301,18 @@ void viewPrime2DIteration (JSONResponse* response, struct http_message* message)
 			delete iterationunidoc;
 		}
 	}
-	
+
 }
 
 void viewPrime2DParticles (JSONResponse* response, struct http_message* message) {
-	
+
 	std::string 							prime2ddoc;
 	std::string								classnumber;
 	UniDoc*									unidoc;
 	int										datait;
 	std::map<std::string, std::string>		iterationmap;
 	std::string								value;
-	
+
 	if (getRequestVariable(message, "prime2ddoc", prime2ddoc) && getRequestVariable(message, "class", classnumber)){
 		if(fileExists(prime2ddoc)){
 			unidoc = new UniDoc();
@@ -2332,11 +2332,11 @@ void viewPrime2DParticles (JSONResponse* response, struct http_message* message)
 			delete unidoc;
 		}
 	}
-	
+
 }
 
 void savePrime2DSelection(JSONResponse* response, struct http_message* message) { //fix this
-	
+
 	std::string					inputfilename;
 	std::string					outputfilename;
 	std::string					selection;
@@ -2367,16 +2367,16 @@ void savePrime2DSelection(JSONResponse* response, struct http_message* message) 
 					framecount++;
 				}
 				output.seekp(8, std::fstream::beg);
-				
+
 				output.write(reinterpret_cast<const char*>(&framecount),4);
 				output.close();
-			}	
+			}
 		}
 	}
 }
 
 void savePrime2DSelectionParticles(JSONResponse* response, struct http_message* message) {
-	
+
 	std::string					inputfilename;
 	std::string					outputfilename;
 	std::string					inverseselection;
@@ -2385,7 +2385,7 @@ void savePrime2DSelectionParticles(JSONResponse* response, struct http_message* 
 	std::string					removeclass;
 	std::string					classnumber;
 	int							datait;
-	
+
 	if(getRequestVariable(message, "inputfilename", inputfilename) && getRequestVariable(message, "outputfilename", outputfilename)) {
 		getRequestVariable(message, "inverseselection", inverseselection);
 		unidoc = new UniDoc();
@@ -2411,7 +2411,7 @@ void savePrime2DSelectionParticles(JSONResponse* response, struct http_message* 
 }
 
 void viewPrime3D(JSONResponse* response, struct http_message* message) {
-	
+
 	std::string 							directory;
 	std::string 							line;
 	std::string 							filename;
@@ -2428,7 +2428,7 @@ void viewPrime3D(JSONResponse* response, struct http_message* message) {
 	int										framecount;
 	std::string 							thumbnails;
 	int										count;
-	
+
 	if (getRequestVariable(message, "folder", directory)){
 		listFilesInDirectory(files, directory);
 		for(filesit = 0; filesit < files.size(); filesit++){
@@ -2460,7 +2460,7 @@ void viewPrime3D(JSONResponse* response, struct http_message* message) {
 				response->iterations.push_back(iterationmap);
 			}
 		}
-		response->newformat["rootdir"] = "\"" + directory + "\""; 
+		response->newformat["rootdir"] = "\"" + directory + "\"";
 		currentvol = "recvol_state01_iter" + zeroPadNumber(response->iterations.size() - 1) + ".mrc";
 		std::cout << currentvol << std::endl;
 		response->newformat["viewtype"] = "\"prime3D\"";
@@ -2470,7 +2470,7 @@ void viewPrime3D(JSONResponse* response, struct http_message* message) {
 		readMRCFrame(frames, directory + "/" + currentvol, 0);
 		delete [] frames->data;
 		framecount = frames->nz;
-		delete frames; 
+		delete frames;
 		thumbnails = "[";
 		for(count = 0; count < framecount; count++){
 			thumbnails += "[";
@@ -2484,15 +2484,15 @@ void viewPrime3D(JSONResponse* response, struct http_message* message) {
 }
 
 void viewPreproc (JSONResponse* response, struct http_message* message) {
-	
+
 	std::string 							directory;
 	UniDoc*									unidoc;
 	int										datait;
 	std::map<std::string, std::string>		micrographmap;
 	std::string								value;
 	int										randomint;
-	
-	
+
+
 	if (getRequestVariable(message, "folder", directory)){
 		response->rootdirectory = directory;
 		if(fileExists(directory + "/preproc_out.simple")){
@@ -2541,9 +2541,9 @@ void viewPreproc (JSONResponse* response, struct http_message* message) {
 			}
 			delete unidoc;
 		}
-		
+
 		if(fileExists(directory + "/preproc_out_selected.simple")){
-			
+
 			unidoc = new UniDoc();
 			readUniDoc(unidoc, directory + "/preproc_out_selected.simple");
 			for(datait = 0; datait < unidoc->data.size(); datait++){
@@ -2554,13 +2554,13 @@ void viewPreproc (JSONResponse* response, struct http_message* message) {
 			}
 			delete unidoc;
 		}
-		
+
 	}
-	
+
 }
 
 void savePreprocSelection(JSONResponse* response, struct http_message* message) {
-	
+
 	std::string					inputfilename;
 	std::string					outputfilename;
 	std::string					inverseselection;
@@ -2568,7 +2568,7 @@ void savePreprocSelection(JSONResponse* response, struct http_message* message) 
 	int							selectionit;
 	std::string					removeline;
 	int							datacount;
-	
+
 	if(getRequestVariable(message, "inputfilename", inputfilename) && getRequestVariable(message, "outputfilename", outputfilename)) {
 		getRequestVariable(message, "inverseselection", inverseselection);
 		std::cout << inverseselection << std::endl;
@@ -2578,7 +2578,7 @@ void savePreprocSelection(JSONResponse* response, struct http_message* message) 
 			for(datacount = 0; datacount < unidoc->data.size(); datacount++){
 				addUniDocKeyVal(unidoc, datacount, "state", "1");
 			}
-			
+
 			selectionit = inverseselection.find(",");
 			while(selectionit != std::string::npos){
 				removeline = inverseselection.substr(0,selectionit);
@@ -2586,7 +2586,7 @@ void savePreprocSelection(JSONResponse* response, struct http_message* message) 
 				inverseselection.erase(0,selectionit + 1);
 				selectionit = inverseselection.find(",");
 			}
-			
+
 			writeUniDoc(unidoc, outputfilename);
 			delete unidoc;
 		}else{
@@ -2596,7 +2596,7 @@ void savePreprocSelection(JSONResponse* response, struct http_message* message) 
 }
 
 void savePreprocSelectionParticles(JSONResponse* response, struct http_message* message) {
-	
+
 	std::string					inputfilename;
 	std::string					outputfilename;
 	std::string					inverseselection;
@@ -2628,13 +2628,13 @@ void savePreprocSelectionParticles(JSONResponse* response, struct http_message* 
 				addUniDocKeyVal(unidoc, std::stoi(removeline), "state", "0");
 				inverseselection.erase(0,selectionit + 1);
 				selectionit = inverseselection.find(",");
-			}	
-			
+			}
+
 			dirc = strdup(inputfilename.c_str());
 			directory = std::string(dirname(dirc));
-			
+
 			outputunidoc = new UniDoc();
-			
+
 			for(selectionit = 0; selectionit < unidoc->data.size(); selectionit++){
 				getUniDocValue(unidoc, selectionit, "state", state);
 				if(state != "0"){
@@ -2671,7 +2671,7 @@ void savePreprocSelectionParticles(JSONResponse* response, struct http_message* 
 }
 
 void viewManualPick (JSONResponse* response, struct http_message* message) {
-	
+
 	std::string 							unidocfilename;
 	UniDoc*									unidoc;
 	int										datait;
@@ -2691,26 +2691,26 @@ void viewManualPick (JSONResponse* response, struct http_message* message) {
 	int										jobid;
 	int										status;
 	int										filecount;
-	std::string 							outputfolder;	
-			
+	std::string 							outputfolder;
+
 	runstring = std::string(message->query_string.p);
 	runstring = runstring.substr (0,message->query_string.len);
-							
+
 	if(getRequestVariable(message, "jobtype", jobtype) && getRequestVariable(message, "jobfolder", jobfolder) && getRequestVariable(message, "table", table)){
-		
+
 		getRequestVariable(message, "jobname", jobname);
 		getRequestVariable(message, "jobdescription", jobdescription);
-		
+
 		addJob(jobname, jobdescription, jobfolder, jobtype, table, runstring, jobid);
-		
+
 		outputfolder = jobfolder + "/" + std::to_string(jobid) + "_" + jobtype;
-			
+
 		updateJobFolder(outputfolder, table, jobid);
-			
+
 		status = mkdir(outputfolder.c_str(), S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
-		
+
 		response->jobfolder = outputfolder;
-		
+
 		if (getRequestVariable(message, "unbluroutput", unidocfilename)){
 			dirc = strdup(unidocfilename.c_str());
 			dname = dirname(dirc);
@@ -2737,20 +2737,20 @@ void viewManualPick (JSONResponse* response, struct http_message* message) {
 				writeUniDoc(unidoc, outputfolder + "/manualpick_out.simple");
 				delete unidoc;
 			}
-			
+
 		} else if(getRequestVariable(message, "micrographsdirectory", micrographsdirectory)){
 			listFilesInDirectory(files, micrographsdirectory);
-			
+
 			response->rootdirectory = micrographsdirectory;
-			
+
 			unidoc = new UniDoc();
-			
+
 			for(filecount = 0; filecount < files.size(); filecount++){
 				if(files[filecount].find(".mrc") !=std::string::npos){
 					unidoc->data.push_back("intg=" + files[filecount]);
 				}
 			}
-			
+
 			for(filecount = 0; filecount < unidoc->data.size(); filecount++){
 				micrographmap.clear();
 				micrographmap["id"] = std::to_string(filecount);
@@ -2761,25 +2761,25 @@ void viewManualPick (JSONResponse* response, struct http_message* message) {
 				micrographmap["boxfile"] = boxfile;
 				response->snapshots.push_back(micrographmap);
 			}
-			
+
 			writeUniDoc(unidoc, outputfolder + "/manualpick_out.simple");
-			
+
 			delete unidoc;
-			
+
 		}
 	}
 }
 
 void viewUnblur (JSONResponse* response, struct http_message* message) {
-	
+
 	std::string 							directory;
 	UniDoc*									unidoc;
 	int										datait;
 	std::map<std::string, std::string>		micrographmap;
 	std::string								value;
 	int										randomint;
-	
-	
+
+
 	if (getRequestVariable(message, "folder", directory)){
 		response->rootdirectory = directory;
 		if(fileExists(directory + "/unblur_out.simple")){
@@ -2801,13 +2801,13 @@ void viewUnblur (JSONResponse* response, struct http_message* message) {
 			}
 			delete unidoc;
 		}
-		
+
 	}
-	
+
 }
 
 void saveUnblurSelection(JSONResponse* response, struct http_message* message) {
-	
+
 	std::string					inputfilename;
 	std::string					outputfilename;
 	std::string					inverseselection;
@@ -2815,7 +2815,7 @@ void saveUnblurSelection(JSONResponse* response, struct http_message* message) {
 	int							selectionit;
 	std::string					removeline;
 	int							datacount;
-	
+
 	if(getRequestVariable(message, "inputfilename", inputfilename) && getRequestVariable(message, "outputfilename", outputfilename) && getRequestVariable(message, "inverseselection", inverseselection)) {
 		unidoc = new UniDoc();
 		if(fileExists(inputfilename)){
@@ -2823,7 +2823,7 @@ void saveUnblurSelection(JSONResponse* response, struct http_message* message) {
 			for(datacount = 0; datacount < unidoc->data.size(); datacount++){
 				addUniDocKeyVal(unidoc, datacount, "state", "1");
 			}
-			
+
 			selectionit = inverseselection.find(",");
 			while(selectionit != std::string::npos){
 				removeline = inverseselection.substr(0,selectionit);
@@ -2831,7 +2831,7 @@ void saveUnblurSelection(JSONResponse* response, struct http_message* message) {
 				inverseselection.erase(0,selectionit + 1);
 				selectionit = inverseselection.find(",");
 			}
-			
+
 			writeUniDoc(unidoc, outputfilename);
 			delete unidoc;
 		}else{
@@ -2841,7 +2841,7 @@ void saveUnblurSelection(JSONResponse* response, struct http_message* message) {
 }
 
 void getGuinierBFactor(JSONResponse* response, struct http_message* message) {
-	
+
 	FILE*								stream;
 	std::string							command;
 	std::string							hp;
@@ -2851,7 +2851,7 @@ void getGuinierBFactor(JSONResponse* response, struct http_message* message) {
 	std::string							line;
 	std::string							bfactor;
 	char 								buffer[1024];
-	
+
 	if(getRequestVariable(message, "hp", hp) && getRequestVariable(message, "lp", lp) && getRequestVariable(message, "vol1", vol1) && getRequestVariable(message, "smpd", smpd)){
 		command = "simple_exec prg=volops guinier=yes hp=" + hp + " lp=" + lp + " vol1=" + vol1 + " smpd=" + smpd;
 		stream = popen(command.c_str(), "r");
@@ -2869,7 +2869,7 @@ void getGuinierBFactor(JSONResponse* response, struct http_message* message) {
 }
 
 void getPixelsFromMRC(JPEGResponse* response, std::string filename, struct http_message* message){
-	
+
 	std::string			contrast;
 	std::string			brightness;
 	std::string			frameid;
@@ -2882,7 +2882,7 @@ void getPixelsFromMRC(JPEGResponse* response, std::string filename, struct http_
 	float 				datadiff2;
 	float 				datasd;
 	float 				datanorm;
-	
+
 	if (getRequestVariable(message, "contrast", contrast) && getRequestVariable(message, "brightness", brightness) && getRequestVariable(message, "frameid", frameid)){
 		mrcfile = new MRCFile();
 		readMRCFrame(mrcfile, filename, std::stoi(frameid));
@@ -2891,12 +2891,12 @@ void getPixelsFromMRC(JPEGResponse* response, std::string filename, struct http_
 
 		memcpy(&nx, &mrcfile->header[0], 4);
 		memcpy(&ny, &mrcfile->header[4], 4);
-		
+
 		datalength = nx * ny;
-		
+
 		for(datacount = 0; datacount < datalength; datacount++){
 			datamean += mrcfile->data[datacount];
-		}	
+		}
 
 		datamean = datamean / datalength;
 		datadiff2 = 0;
@@ -2904,7 +2904,7 @@ void getPixelsFromMRC(JPEGResponse* response, std::string filename, struct http_
 		for(datacount = 0; datacount < datalength; datacount++){
 			datadiff2 += pow((mrcfile->data[datacount] - datamean), 2);
 		}
-		
+
 		datasd = sqrt(datadiff2 /datalength);
 
 		response->pixels = new unsigned char[datalength];
@@ -2921,14 +2921,14 @@ void getPixelsFromMRC(JPEGResponse* response, std::string filename, struct http_
 				response->pixels[datacount] = round(datanorm);
 			}
 		}
-		
+
 		response->xdim = nx;
 		response->ydim = ny;
-		
+
 		delete [] mrcfile->data;
 		delete mrcfile;
 	}
-	
+
 }
 
 void clearBoxes (JSONResponse* response, struct http_message* message) {
@@ -2949,7 +2949,7 @@ void getBoxes (JSONResponse* response, struct http_message* message) {
 	std::string 							line;
 	std::string 							element;
 	std::map<std::string, std::string>		box;
-	
+
 	if (getRequestVariable(message, "filename", filename)){
 		input.open(filename.c_str());
 		if(input.is_open()){
@@ -2965,7 +2965,7 @@ void getBoxes (JSONResponse* response, struct http_message* message) {
 			}
 			input.close();
 		}
-	}	
+	}
 }
 
 void getBoxes (JSONResponse* response, std::string filename) {
@@ -2974,7 +2974,7 @@ void getBoxes (JSONResponse* response, std::string filename) {
 	std::string 							line;
 	std::string 							element;
 	std::map<std::string, std::string>		box;
-	
+
 	input.open(filename.c_str());
 	if(input.is_open()){
 		while(getline(input, line)){
@@ -2988,18 +2988,18 @@ void getBoxes (JSONResponse* response, std::string filename) {
 			response->boxes.push_back(box);
 		}
 		input.close();
-	}	
+	}
 }
 
 void getLogFile (JSONResponse* response, struct http_message* message) {
-	
+
 	std::string								folder;
 	std::string								logfilename;
 	std::ifstream 							input;
 	std::string 							line;
 //	char									finalchar;
 //	int										finalascii;
-	
+
 	if (getRequestVariable(message, "folder", folder)){
 		logfilename = folder + "/simple_job.log";
 		if(fileExists(logfilename)){
@@ -3013,14 +3013,14 @@ void getLogFile (JSONResponse* response, struct http_message* message) {
 				input.close();
 				std::replace( response->logfile.begin(), response->logfile.end(), '\\', '^');
 			}
-		
+
 		}
 	}
-	
+
 }
 
 void autoPick (JSONResponse* response, struct http_message* message){
-	
+
 	std::string		pickrefs;
 	std::string		pickvol;
 	std::string		pgrp;
@@ -3033,12 +3033,12 @@ void autoPick (JSONResponse* response, struct http_message* message){
 	std::string		picktab;
 	std::string		smpd;
 	std::string		pcontrast;
-	
+
 	FILE*								stream;
 	int				status;
 	std::ofstream					filetab;
 	char*			basec;
-	
+
 	if (getRequestVariable(message, "folder", folder) && getRequestVariable(message, "micrograph", micrograph) && getRequestVariable(message, "pgrp", pgrp)){
 		if(getRequestVariable(message, "pickrefs", pickrefs) && getRequestVariable(message, "pcontrast", pcontrast) && fileExists(folder)){
 			command = "cd " + folder + " && simple_exec prg=makepickrefs pgrp=" + pgrp + " stk=" + pickrefs + " nthr=1 pcontrast=" + pcontrast + " >> simple_job.log";
@@ -3051,7 +3051,7 @@ void autoPick (JSONResponse* response, struct http_message* message){
 			stream = popen(command.c_str(), "r");
 			pclose(stream);
 		}
-		
+
 		pickrefs = folder + "/pickrefs.mrc";
 		picktab = folder + "/picktab.txt";
 
@@ -3082,7 +3082,7 @@ void autoPick (JSONResponse* response, struct http_message* message){
 				std::cout << boxfile << std::endl;
 				stream = popen(command.c_str(), "r");
 				pclose(stream);
-				
+
 				getBoxes(response, boxfile);
 			}
 		}
@@ -3090,11 +3090,11 @@ void autoPick (JSONResponse* response, struct http_message* message){
 }
 
 void circularScore(MRCFile* box, int particlediameter, int boxsize, float& score){
-	
+
 	float 			r;
 	int				xit;
 	int				yit;
-	
+
 	score = 0;
 	for(yit = 0; yit < boxsize; yit++){
 		for(xit = 0; xit < boxsize; xit++){
@@ -3107,7 +3107,7 @@ void circularScore(MRCFile* box, int particlediameter, int boxsize, float& score
 }
 
 void refinePick (JSONResponse* response, struct http_message* message){
-	
+
 	std::string		micrographname;
 	std::string		xcoord;
 	std::string		ycoord;
@@ -3123,20 +3123,20 @@ void refinePick (JSONResponse* response, struct http_message* message){
 	std::vector<std::map<std::string, float> >		scores;
 	std::map<std::string, float>					scoreelement;
 	std::map<std::string, std::string>				returnbox;
-	
+
 	getRequestVariable(message, "micrograph", micrographname);
 	getRequestVariable(message, "xcoord", xcoord);
 	getRequestVariable(message, "ycoord", ycoord);
 	getRequestVariable(message, "boxsize", boxsize);
 	getRequestVariable(message, "particlediameter", particlediameter);
-	
+
 	micrograph = new MRCFile();
 	box = new MRCFile();
-	
+
 	readMRCFrame(micrograph, micrographname, 0);
-	
+
 	std::cout << xcoord << " " << ycoord << std::endl;
-	
+
 	for(yit = -searchsize; yit <=  searchsize; yit++){
 		for(xit = -searchsize; xit <=  searchsize; xit++){
 			extractMRCBox(micrograph, box, std::atoi(xcoord.c_str()) - (std::atoi(boxsize.c_str())/2) + xit, std::atoi(ycoord.c_str()) - (std::atoi(boxsize.c_str())/2) + yit, std::atoi(boxsize.c_str()));
@@ -3147,15 +3147,15 @@ void refinePick (JSONResponse* response, struct http_message* message){
 			scoreelement["score"] = score;
 			scores.push_back(scoreelement);
 			delete [] box->data;
-			
+
 		}
 	}
-	
+
 	returnbox["x"] = "0";
 	returnbox["y"] = "0";
 	returnbox["size"] = boxsize;
 	score = 1000000;
-	
+
 	for(i = 0; i <scores.size(); i++){
 		std::cout << scores[i]["score"] << std::endl;
 		if(scores[i]["score"] < score){
@@ -3167,14 +3167,14 @@ void refinePick (JSONResponse* response, struct http_message* message){
 
 	std::cout << returnbox["x"] << " " << returnbox["y"] << " " << returnbox["size"] << std::endl;
 	response->boxes.push_back(returnbox);
-	
+
 	delete [] micrograph->data;
 	delete micrograph;
 	delete box;
 }
 
 void swarmLikePick(JSONResponse* response, struct http_message* message){
-	
+
 	std::string		pickrefs;
 	std::string		boxfile;
 	std::string		folder;
@@ -3200,19 +3200,19 @@ void swarmLikePick(JSONResponse* response, struct http_message* message){
 	float			datadiff2;
 	float			datasd;
 	float			datanorm;
-	
-	
+
+
 	getRequestVariable(message, "micrograph", micrographname);
 	getRequestVariable(message, "xcoord", xcoord);
 	getRequestVariable(message, "ycoord", ycoord);
 	getRequestVariable(message, "boxsize", boxsize);
 	getRequestVariable(message, "particlediameter", particlediameter);
-	
-	
+
+
 	micrograph = new MRCFile();
 	box = new MRCFile();
 	oldbox = new MRCFile();
-	
+
 	filetab.open("/tmp/picktab.txt");
 	if(filetab.is_open()){
 			basec = strdup(micrographname.c_str());
@@ -3225,37 +3225,37 @@ void swarmLikePick(JSONResponse* response, struct http_message* message){
 				filetab << micrographname << "\n";
 				filetab.close();
 	}
-			
+
 	readMRCFrame(micrograph, micrographname, 0);
 	extractMRCBox(micrograph, box, std::atoi(xcoord.c_str()) - (std::atoi(boxsize.c_str())/2), std::atoi(ycoord.c_str()) - (std::atoi(boxsize.c_str())/2), std::atoi(boxsize.c_str()));
-	
+
 	delete [] micrograph->data;
 	delete micrograph;
-	
+
 	if(!fileExists("/tmp/refs.mrc")){
 		box->nx = std::stoi(boxsize);
 		box->ny = std::stoi(boxsize);
 		box->nz = 1;
-		box->mode = 2;		
-	
+		box->mode = 2;
+
 		memcpy(&box->header[0], &box->nx, 4);
 		memcpy(&box->header[4], &box->ny, 4);
 		memcpy(&box->header[8], &box->nz, 4);
 		memcpy(&box->header[12], &box->mode, 4);
-		
+
 		refs.open("/tmp/refs.mrc");
 		refs.write(box->header, 1024);
 		refs.write((char*)box->data, box->nx * box->ny * box->nz * 4);
 		refs.close();
 		delete [] box->data;
 		delete box;
-		
+
 	} else {
 		readMRCFrame(oldbox, "/tmp/refs.mrc", 0);
 		for(int i = 0; i < oldbox->nx * oldbox->ny; i++){
 			oldbox->data[i] += box->data[i];
 		}
-	
+
 		refs.open("/tmp/refs.mrc");
 		refs.write(oldbox->header, 1024);
 		refs.write((char*)oldbox->data, oldbox->nx * oldbox->ny * oldbox->nz * 4);
@@ -3265,46 +3265,46 @@ void swarmLikePick(JSONResponse* response, struct http_message* message){
 		delete oldbox;
 		delete box;
 	}
-	
+
 	micrograph = new MRCFile();
 	box = new MRCFile();
-	
+
 	readMRCFrame(micrograph, "/tmp/refs.mrc", 0);
 	readMRCFrame(box, "/tmp/refs.mrc", 0);
-	
+
 	datamean = 0;
-		
+
 	datalength = micrograph->nx * micrograph->ny;
-		
+
 	for(datacount = 0; datacount < datalength; datacount++){
 		datamean += micrograph->data[datacount];
-	}	
+	}
 
 	datamean = datamean / datalength;
-		
+
 	datadiff2 = 0;
 
 	for(datacount = 0; datacount < datalength; datacount++){
 		datadiff2 += pow((micrograph->data[datacount] - datamean), 2);
 	}
-		
+
 	datasd = sqrt(datadiff2 /datalength);
 
 	for(datacount = 0; datacount < datalength; datacount++){
 		datanorm = (micrograph->data[datacount] - datamean) / datasd;
 		box->data[datacount] = datanorm;
 	}
-	
+
 	refs.open("/tmp/refs_norm.mrc");
 	refs.write(box->header, 1024);
 	refs.write((char*)box->data, box->nx * box->ny * box->nz * 4);
 	refs.close();
-	
+
 	delete [] box->data;
 	delete [] micrograph->data;
 	delete micrograph;
 	delete box;
-	
+
 	command = "simple_exec prg=pick smpd=6.8 refs=/tmp/refs_norm.mrc filetab=/tmp/picktab.txt nthr=1";
 		if(getRequestVariable(message, "thres", thres)){
 			command += " thres="+thres;
@@ -3317,16 +3317,16 @@ void swarmLikePick(JSONResponse* response, struct http_message* message){
 				std::cout << boxfile << std::endl;
 				stream = popen(command.c_str(), "r");
 				pclose(stream);
-				
+
 				std::cout << boxfile << std::endl;
 				getBoxes(response, boxfile);
-			
-		
-	
+
+
+
 }
 
 void massCentre(JSONResponse* response, struct http_message* message){
-	
+
 	std::string		micrographname;
 	std::string		xcoord;
 	std::string		ycoord;
@@ -3354,51 +3354,51 @@ void massCentre(JSONResponse* response, struct http_message* message){
 	float			ycen;
 	std::map<std::string, std::string>				returnbox;
 	std::ofstream 							output;
-	
+
 	getRequestVariable(message, "micrograph", micrographname);
 	getRequestVariable(message, "xcoord", xcoord);
 	getRequestVariable(message, "ycoord", ycoord);
 	getRequestVariable(message, "boxsize", boxsize);
 	getRequestVariable(message, "particlediameter", particlediameter);
 	getRequestVariable(message, "boxfile", boxfile);
-	
+
 	micrograph = new MRCFile();
 	readMRCFrame(micrograph, micrographname, 0);
-	
+
 	if ((std::atoi(xcoord.c_str()) - std::atoi(boxsize.c_str())) > 0 &&
 		(std::atoi(xcoord.c_str()) + std::atoi(boxsize.c_str())) < micrograph->nx &&
 		(std::atoi(ycoord.c_str()) - std::atoi(boxsize.c_str())) > 0 &&
 		(std::atoi(ycoord.c_str()) + std::atoi(boxsize.c_str())) < micrograph->ny){
-	
+
 		box = new MRCFile();
-		
+
 		extractMRCBox(micrograph, box, std::atoi(xcoord.c_str()) - (std::atoi(boxsize.c_str())/2), std::atoi(ycoord.c_str()) - (std::atoi(boxsize.c_str())/2), std::atoi(boxsize.c_str()));
-		
+
 		datamean = 0;
-			
+
 		datalength = box->nx * box->ny;
-			
+
 		for(datacount = 0; datacount < datalength; datacount++){
 			datamean += box->data[datacount];
-		}	
+		}
 
 		datamean = datamean / datalength;
-			
+
 		datadiff2 = 0;
 
 		for(datacount = 0; datacount < datalength; datacount++){
 			datadiff2 += pow((box->data[datacount] - datamean), 2);
 		}
-			
+
 		datasd = sqrt(datadiff2 /datalength);
 
 		for(datacount = 0; datacount < datalength; datacount++){
 			datanorm = (box->data[datacount] - datamean) / datasd;
 			box->data[datacount] = datanorm;
 		}
-		
+
 		backgroundcount = 0;
-		
+
 		for(yit = 0; yit < std::atoi(boxsize.c_str()); yit++){
 			for(xit = 0; xit < std::atoi(boxsize.c_str()); xit++){
 				r = sqrt(pow((xit - (std::atoi(boxsize.c_str())/2)), 2) + pow((yit - std::atoi(boxsize.c_str())/2), 2));
@@ -3408,18 +3408,18 @@ void massCentre(JSONResponse* response, struct http_message* message){
 				}
 			}
 		}
-		
+
 		backaverage = backaverage / backgroundcount;
-		
+
 		for(datacount = 0; datacount < datalength; datacount++){
 			datasub = (box->data[datacount] - backaverage);
 			box->data[datacount] = datasub;
 		}
-		
+
 		backgroundcount = 0;
 		xcen = 0;
 		ycen = 0;
-		
+
 		for(yit = 0; yit < std::atoi(boxsize.c_str()); yit++){
 			for(xit = 0; xit < std::atoi(boxsize.c_str()); xit++){
 				r = sqrt(pow((xit - (std::atoi(boxsize.c_str())/2)), 2) + pow((yit - std::atoi(boxsize.c_str())/2), 2));
@@ -3432,31 +3432,31 @@ void massCentre(JSONResponse* response, struct http_message* message){
 		}
 		xcen = xcen / backgroundcount;
 		ycen = ycen / backgroundcount;
-		
+
 		delete [] box->data;
 		delete box;
 		std::cout << "centred" << std::endl;
-		
+
 	} else {
 		xcen = 0;
 		ycen = 0;
 		std::cout << "non-centred" << std::endl;
 	}
-	
+
 	delete [] micrograph->data;
 	delete micrograph;
-	
+
 	output.open(boxfile.c_str(), std::ios_base::app);
 	if(output.is_open()){
 		output << std::to_string((int) round(std::atoi(xcoord.c_str()) - (std::atoi(boxsize.c_str())/2) - xcen)) + " " + std::to_string((int) round(std::atoi(ycoord.c_str()) - (std::atoi(boxsize.c_str())/2) - ycen)) + " " + boxsize + " " + boxsize + "\n";
 		output.close();
 	}
-	
+
 	getBoxes(response, boxfile);
 }
 
 void deleteBox(JSONResponse* response, struct http_message* message){
-	
+
 	std::string		xcoord;
 	std::string		ycoord;
 	std::string		boxsize;
@@ -3470,22 +3470,22 @@ void deleteBox(JSONResponse* response, struct http_message* message){
 	int				ymax;
 	int				x;
 	int				y;
-	
+
 	getRequestVariable(message, "xcoord", xcoord);
 	getRequestVariable(message, "ycoord", ycoord);
 	getRequestVariable(message, "boxsize", boxsize);
 	getRequestVariable(message, "boxfile", boxfilename);
-	
+
 	boxfile = new UniDoc();
 	newboxfile = new UniDoc();
-	
+
 	readUniDoc(boxfile, boxfilename);
-	
+
 	x = std::atoi(xcoord.c_str());
 	y = std::atoi(ycoord.c_str());
-	
+
 	std::cout << x << " " << y << std::endl;
-	
+
 	for(i = 0; i < boxfile->data.size(); i++){
 		getElementFromString(boxfile->data[i], xcoord, 0);
 		getElementFromString(boxfile->data[i], ycoord, 1);
@@ -3503,20 +3503,20 @@ void deleteBox(JSONResponse* response, struct http_message* message){
 			   newboxfile->data.push_back(boxfile->data[i]);
 		   }
 	}
-	
+
 	writeUniDoc(newboxfile, boxfilename);
-	
+
 	delete boxfile;
 	delete newboxfile;
-	
+
 	getBoxes(response, boxfilename);
 }
 
 void generateGaussianRef (JPEGResponse* response, struct http_message* message) {
-	
+
 	std::string						boxsize;
-	std::string						sigma;	
-	std::string						directory;			
+	std::string						sigma;
+	std::string						directory;
 	int								xit;
 	int								yit;
 	float							r;
@@ -3525,24 +3525,24 @@ void generateGaussianRef (JPEGResponse* response, struct http_message* message) 
 	std::ofstream					output;
 
 	if (getRequestVariable(message, "boxsize", boxsize) && getRequestVariable(message, "sigma", sigma) && getRequestVariable(message, "directory", directory)){
-		
+
 		mrcfile = new MRCFile();
-		
+
 		mrcfile->nx = std::stoi(boxsize);
 		mrcfile->ny = std::stoi(boxsize);
 		mrcfile->nz = 1;
 		mrcfile->mode = 2;
 		mrcfile->data = new float[mrcfile->nx * mrcfile->ny];
-		
+
 		for(yit = 0; yit < mrcfile->ny; yit++){
-			for(xit = 0; xit < mrcfile->nx; xit++){ 
+			for(xit = 0; xit < mrcfile->nx; xit++){
 				r = sqrt(pow((xit - (mrcfile->nx/2)), 2) + pow((yit - (mrcfile->ny/2)), 2));
 				gauss = exp(-((pow(r, 2))/(2 * pow((std::stoi(sigma) / 2), 2))));
 				//mrcfile->data[(yit * mrcfile->nx) + xit] = (0.5 - gauss); // This Works
 				mrcfile->data[(yit * mrcfile->nx) + xit] = (-0.1 - gauss);// No zeros ;-)
 			}
 		}
-		
+
 		memcpy(&mrcfile->header[0], &mrcfile->nx, 4);
 		memcpy(&mrcfile->header[4], &mrcfile->ny, 4);
 		memcpy(&mrcfile->header[8], &mrcfile->nz, 4);
@@ -3552,31 +3552,31 @@ void generateGaussianRef (JPEGResponse* response, struct http_message* message) 
 		output.write(mrcfile->header, 1024);
 		output.write((char*)mrcfile->data, mrcfile->nx * mrcfile->ny * mrcfile->nz * 4);
 		output.close();
-		
+
 		getPixelsFromMRC(response, directory + "/gausspick.mrc", message);
-			
+
 		delete [] mrcfile->data;
 		delete mrcfile;
 	}
 }
 
 void getDirectoryContents (JSONResponse* response, struct http_message* message) {
-	
+
 	std::string						directory;
 	std::string						filter;
 	int								fileit;
-	
+
 	if(!getRequestVariable(message, "directoryname", directory)) {
 		//directory = "/";
 		directory = getenv("SIMPLE_PATH");
 	}
-	
-	
+
+
 	if(fileExists(directory)){
 		listDirectory(response->files, response->directories, directory);
 		response->rootdirectory = directory;
 	}
-	
+
 	if(getRequestVariable(message, "filefilter", filter)) {
 		for(fileit = response->files.size() - 1; fileit >= 0; fileit--){
 			if(response->files[fileit].find(filter) == std::string::npos){
@@ -3589,13 +3589,13 @@ void getDirectoryContents (JSONResponse* response, struct http_message* message)
 }
 
 void encodeJSON(JSONResponse* response){
-	
+
 	int 											i;
 	int												j;
 	std::map<std::string,std::string>::iterator 	mapit;
-	
+
 	response->JSONstring = "{ ";
-	
+
 	if (response->projects.size() > 0) {
 		response->JSONstring += "\"projects\" : [ ";
 		for (i = 0; i < response->projects.size(); i++){
@@ -3609,7 +3609,7 @@ void encodeJSON(JSONResponse* response){
 		response->JSONstring.pop_back();
 		response->JSONstring += "],";
 	}
-	
+
 	if (response->snapshots.size() > 0) {
 		response->JSONstring += "\"snapshots\" : [ ";
 		for (i = 0; i < response->snapshots.size(); i++){
@@ -3623,7 +3623,7 @@ void encodeJSON(JSONResponse* response){
 		response->JSONstring.pop_back();
 		response->JSONstring += "],";
 	}
-		
+
 	if (response->jobs.size() > 0) {
 		response->JSONstring += "\"jobs\" : [ ";
 		for (i = 0; i < response->jobs.size(); i++){
@@ -3637,7 +3637,7 @@ void encodeJSON(JSONResponse* response){
 		response->JSONstring.pop_back();
 		response->JSONstring += "],";
 	}
-	
+
 	if (response->iterations.size() > 0) {
 		response->JSONstring += "\"iterations\" : [ ";
 		for (i = 0; i < response->iterations.size(); i++){
@@ -3651,7 +3651,7 @@ void encodeJSON(JSONResponse* response){
 		response->JSONstring.pop_back();
 		response->JSONstring += "],";
 	}
-	
+
 	if (response->boxes.size() > 0) {
 		response->JSONstring += "\"boxes\" : [ ";
 		for (i = 0; i < response->boxes.size(); i++){
@@ -3662,7 +3662,7 @@ void encodeJSON(JSONResponse* response){
 		response->JSONstring.pop_back();
 		response->JSONstring += "],";
 	}
-	
+
 	if (response->files.size() > 0) {
 		response->JSONstring += "\"files\" : [ ";
 		for (i = 0; i < response->files.size(); i++){
@@ -3671,7 +3671,7 @@ void encodeJSON(JSONResponse* response){
 		response->JSONstring.pop_back();
 		response->JSONstring += "],";
 	}
-	
+
 	if (response->directories.size() > 0) {
 		response->JSONstring += "\"directories\" : [ ";
 		for (i = 0; i < response->directories.size(); i++){
@@ -3680,39 +3680,39 @@ void encodeJSON(JSONResponse* response){
 		response->JSONstring.pop_back();
 		response->JSONstring += "],";
 	}
-	
+
 	if (response->rootdirectory.size() > 0) {
 		response->JSONstring += "\"rootdirectory\" : \"" + response->rootdirectory + "\",";
 	}
-	
+
 	if (response->prime2ddoc.size() > 0) {
 		response->JSONstring += "\"prime2ddoc\" : \"" + response->prime2ddoc + "\",";
 	}
-	
+
 	if (response->inputfilename.size() > 0) {
 		response->JSONstring += "\"inputfilename\" : \"" + response->inputfilename + "\",";
 	}
-	
+
 	if (response->logfile.size() > 0) {
 		response->JSONstring += "\"logfile\" : \"" + response->logfile + "\",";
 	}
-	
+
 	if (response->error.size() > 0) {
 		response->JSONstring += "\"error\" : \"" + response->error + "\",";
 	}
-	
+
 	if (response->particlecount.size() > 0) {
 		response->JSONstring += "\"particlecount\" : \"" + response->particlecount + "\",";
 	}
-	
+
 	if (response->jobfolder.size() > 0) {
 		response->JSONstring += "\"jobfolder\" : \"" + response->jobfolder + "\",";
 	}
-	
+
 	if (response->bfactor.size() > 0) {
 		response->JSONstring += "\"bfactor\" : \"" + response->bfactor + "\",";
-	}	
-	
+	}
+
 	if (response->newformat.size() > 0) {
 		//response->JSONstring = "{";
 		for (mapit=response->newformat.begin(); mapit!=response->newformat.end(); ++mapit){
@@ -3724,17 +3724,17 @@ void encodeJSON(JSONResponse* response){
 }
 
 void JSONHandler (struct mg_connection* http_connection, struct http_message* message) {
-	
+
 	std::string				function;
 	JSONResponse*			response;
 	char 					user[200];
-	
+
 	response = new JSONResponse();
-	
+
 	struct mg_str *hdr = mg_get_http_header(message, "Authorization");
 	mg_http_parse_header(hdr, "username", user, sizeof(user));
 	User = user;
-	
+
 	if (getRequestVariable(message, "function", function)) {
 		std::cout << function << std::endl;
 		if (function == "getprojects") {
@@ -3813,23 +3813,23 @@ void JSONHandler (struct mg_connection* http_connection, struct http_message* me
 			viewIni3D(response, message);
 		}
 	}
-	
+
 	encodeJSON(response);
 
 	mg_send_head(http_connection, 200, response->JSONstring.length(), "Content-Type: application/json");
 	mg_send(http_connection, response->JSONstring.c_str(), response->JSONstring.length());
-	
+
 	delete response;
-	
+
 }
 
 void encodeJPEG(JPEGResponse* response, int size) {
-	
+
 	struct jpeg_compress_struct 		cinfo;
 	struct jpeg_error_mgr 				jerr;
 	int									numerator;
 	int 								newsize;
-	
+
 	for(numerator = 1; numerator <= 8; numerator++){
 		newsize = response->xdim * numerator / 8;
 		if(newsize > size){
@@ -3837,7 +3837,7 @@ void encodeJPEG(JPEGResponse* response, int size) {
 			break;
 		}
 	}
-	
+
 	if(response->xdim > 0){
 		cinfo.err = jpeg_std_error(&jerr);
 		jpeg_create_compress(&cinfo);
@@ -3862,7 +3862,7 @@ void encodeJPEG(JPEGResponse* response, int size) {
 }
 
 void encodeJPEG(JPEGResponse* response) {
-	
+
 	struct jpeg_compress_struct 		cinfo;
 	struct jpeg_error_mgr 				jerr;
 	std::cout << sizeof(response->pixels) << std::endl;
@@ -3888,23 +3888,23 @@ void encodeJPEG(JPEGResponse* response) {
 }
 
 void JPEGHandler (struct mg_connection* http_connection, struct http_message* message) {
- 
+
 	std::string			filename;
 	std::string			size;
 	std::string			function;
 	JPEGResponse*		response;
-	
+
 	response = new JPEGResponse();
-	
+
 	if (getRequestVariable(message, "function", function)) {
 		if (function == "createpickref") {
 			generateGaussianRef(response, message);
 		}
 	}
-	
+
 	if (getRequestVariable(message, "filename", filename)) {
 		if (filename.find(".mrc") != std::string::npos && fileExists(filename)){
-			getPixelsFromMRC(response, filename, message); 
+			getPixelsFromMRC(response, filename, message);
 		}
 	}
 
@@ -3913,7 +3913,7 @@ void JPEGHandler (struct mg_connection* http_connection, struct http_message* me
 	}else{
 		encodeJPEG(response);
 	}
-	
+
 	mg_send_head(http_connection, 200, response->jpegsize, "Content-Type: image/jpeg");
 	mg_send(http_connection, response->jpeg, response->jpegsize);
 	delete [] response->pixels;
@@ -3922,11 +3922,11 @@ void JPEGHandler (struct mg_connection* http_connection, struct http_message* me
 }
 
 void webEventHandler (struct mg_connection* http_connection, int event, void *eventdata) {
-	
+
 	struct http_message*   					message;
-	
+
 	message = (struct http_message *) eventdata;
-	
+
 	switch (event) {
 		case MG_EV_HTTP_REQUEST: {
 			if (mg_vcmp(&message->uri, "/JSONhandler") == 0) {
@@ -3944,18 +3944,18 @@ void webEventHandler (struct mg_connection* http_connection, int event, void *ev
 }
 
 void webServer(bool& multiuser){
-	
+
 	struct mg_mgr				http_manager;
 	struct mg_connection*		http_connection;
 	sig_atomic_t				http_signal_received;
-	
+
 	mg_mgr_init(&http_manager, NULL);
-	
+
 	std::cout << "" << std::endl;
 	std::cout << "Starting webserver on port 8088" << " ... ";
-	
+
 	http_connection = mg_bind(&http_manager, "8088", webEventHandler);
-	
+
 	if (http_connection == NULL) {
 		std::cout << "Failed" << std::endl;
 		exit(1);
@@ -3964,11 +3964,11 @@ void webServer(bool& multiuser){
 		std::cout << "" << std::endl;
 		std::cout << "Please direct your web browser to localhost:8088 to view the interface" << std::endl;
 	}
-	
-	mg_set_protocol_http_websocket(http_connection);	
+
+	mg_set_protocol_http_websocket(http_connection);
 
 	http_server_opts.document_root = ".";
-	
+
 	http_server_opts.enable_directory_listing = "no";
 	if (multiuser) {
 		std::cout << "" << std::endl;
@@ -3976,9 +3976,9 @@ void webServer(bool& multiuser){
 		http_server_opts.per_directory_auth_file = ".htpasswd";
 		http_server_opts.auth_domain = "simple";
 	}
-	
+
 	http_signal_received = 0;
-	
+
 	while (http_signal_received == 0) {
 		mg_mgr_poll(&http_manager, 200);
 	}
@@ -3987,21 +3987,21 @@ void webServer(bool& multiuser){
 }
 
 int main(int argc, char* argv[]) {
-    
+
     std::string     wwwdirectory;
     char*           simplepath;
     int				c;
     bool			multiuser;
-    
+
     simplepath = getenv("SIMPLE_PATH");
-    
+
     if(simplepath == NULL){
         std::cout << "SIMPLE_PATH is not set" << std::endl;
         return 1;
     }
-    
+
     multiuser = false;
-    
+
     while( ( c = getopt (argc, argv, "m") ) != -1 ) {
         switch(c){
             case 'm':
@@ -4009,9 +4009,9 @@ int main(int argc, char* argv[]) {
                 break;
         }
     }
-    
+
     wwwdirectory = std::string(simplepath) + "/www";
-    
+
     if(fileExists(wwwdirectory)){
         if(chdir(wwwdirectory.c_str()) == 0){
             webServer(multiuser);
@@ -4021,7 +4021,7 @@ int main(int argc, char* argv[]) {
         }
     }else {
         std::cout << "Error: Directory set in SIMPLE_PATH does not exist" << std::endl;
-        
+
     }
 	return 0;
 }

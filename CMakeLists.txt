@@ -27,7 +27,7 @@ option(USE_OPENMP "Use OpenMP for parallelization - debugging may disable OpemMP
 
 option(${PROJECT_NAME}_BUILD_TESTS "Build the test examples" ON)
 if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/gui)
-  option(${PROJECT_NAME}_BUILD_GUI "Build the simple GUI - not included in release2.5" ON)
+  option(${PROJECT_NAME}_BUILD_GUI "Build the simple GUI " ON)
 endif()
 option(BUILD_SHARED_LIBS "Build the simple library as shared or static (default)" OFF)
 option(BUILD_DOCS "Enable the generation of PDF manuals and doxygen API documentation" OFF)
@@ -107,7 +107,7 @@ endif()
 
 #################################################################
 #
-# CREATE libSIMPLE2.5
+# CREATE libSIMPLE<VERSION>
 #
 #################################################################
 add_subdirectory(${SRC_PATH} lib)
@@ -133,29 +133,7 @@ add_subdirectory(${SCRIPTS_PATH})
 #################################################################
 if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/gui)
   if (${PROJECT_NAME}_BUILD_GUI)
-	include(ExternalProject)
-	ExternalProject_Add(
- 	   simple_gui
-    	SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/gui
-	PREFIX ${CMAKE_INSTALL_PREFIX}/gui
-	BINARY_DIR ${CMAKE_INSTALL_PREFIX}/gui
-    	LOG_DOWNLOAD 1
-    	LOG_UPDATE 1
-    	LOG_CONFIGURE 1
-   	LOG_BUILD 1
-    	LOG_INSTALL 1
-	)
-	install(FILES ${CMAKE_INSTALL_PREFIX}/gui/bin/simple 
-  		DESTINATION ${CMAKE_INSTALL_PREFIX}/bin
-		CONFIGURATIONS DEBUG|RELEASE
-  		PERMISSIONS  OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_WRITE GROUP_EXECUTE WORLD_READ WORLD_EXECUTE
-	)
-	install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/gui/www
-                DESTINATION ${CMAKE_INSTALL_PREFIX}
-                CONFIGURATIONS DEBUG|RELEASE
-                FILE_PERMISSIONS  OWNER_READ OWNER_WRITE GROUP_READ GROUP_WRITE WORLD_READ
-		DIRECTORY_PERMISSIONS  OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_WRITE GROUP_EXECUTE WORLD_READ WORLD_EXECUTE
-        )
+    add_subdirectory(gui  ${CMAKE_INSTALL_BINDIR}/gui)
   endif()
 endif()
 
