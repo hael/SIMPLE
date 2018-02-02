@@ -504,77 +504,95 @@ contains
         real,    parameter   :: winsz  = 2.
         maxits_here = GRIDCORR_MAXITS
         if( present(maxits) )maxits_here = maxits
-        call W_img%new(self%ldim_img, self%get_smpd())
-        call Wprev_img%new(self%ldim_img, self%get_smpd())
-        call W_img%set_ft(.true.)
-        call Wprev_img%set_ft(.true.)
-        ! redundant parallel initialisation because the First Touch policy of OpenMP
-        ! distributes the pages over the memory of the system to allow better cache
-        ! utilisation
-        !$omp parallel do collapse(3) default(shared) schedule(static)&
-        !$omp private(h,k,m,phys) proc_bind(close)
-        do h = self%lims(1,1),self%lims(1,2)
-            do k = self%lims(2,1),self%lims(2,2)
-                do m = self%lims(3,1),self%lims(3,2)
-                    phys  = W_img%comp_addr_phys([h,k,m])
-                    call W_img%set_cmat_at(phys,cmplx(0., 0.))
-                    call Wprev_img%set_cmat_at(phys,cmplx(0., 0.))
-                end do
-            end do
-        end do
-        !$omp end parallel do
         ! kernel
         kbwin = kbinterpol(winsz, self%alpha)
-        ! weights init to 1.
-        W_img = one
-        do iter = 1, maxits_here
-            Wprev_img = W_img
-            ! W <- W * rho
+        if( maxits_here > 0 )then
+            call W_img%new(self%ldim_img, self%get_smpd())
+            call Wprev_img%new(self%ldim_img, self%get_smpd())
+            call W_img%set_ft(.true.)
+            call Wprev_img%set_ft(.true.)
+            ! redundant parallel initialisation because the First Touch policy of OpenMP
+            ! distributes the pages over the memory of the system to allow better cache
+            ! utilisation
             !$omp parallel do collapse(3) default(shared) schedule(static)&
             !$omp private(h,k,m,phys) proc_bind(close)
             do h = self%lims(1,1),self%lims(1,2)
                 do k = self%lims(2,1),self%lims(2,2)
                     do m = self%lims(3,1),self%lims(3,2)
                         phys  = W_img%comp_addr_phys([h,k,m])
-                        call W_img%mul_cmat_at(self%rho(phys(1),phys(2),phys(3)), phys)
+                        call W_img%set_cmat_at(phys,cmplx(0., 0.))
+                        call Wprev_img%set_cmat_at(phys,cmplx(0., 0.))
                     end do
                 end do
             end do
             !$omp end parallel do
-            ! W <- (W / rho) x kernel
-            call W_img%bwd_ft
-            call mul_w_instr(W_img, kbwin)
-            call W_img%fwd_ft
-            ! W <- Wprev / ((W/ rho) x kernel)
+            W_img = one ! weights init to 1.
+            do iter = 1, maxits_here
+                Wprev_img = W_img
+                ! W <- W * rho
+                !$omp parallel do collapse(3) default(shared) schedule(static)&
+                !$omp private(h,k,m,phys) proc_bind(close)
+                do h = self%lims(1,1),self%lims(1,2)
+                    do k = self%lims(2,1),self%lims(2,2)
+                        do m = self%lims(3,1),self%lims(3,2)
+                            phys  = W_img%comp_addr_phys([h,k,m])
+                            call W_img%mul_cmat_at(self%rho(phys(1),phys(2),phys(3)), phys)
+                        end do
+                    end do
+                end do
+                !$omp end parallel do
+                ! W <- (W / rho) x kernel
+                call W_img%bwd_ft
+                call mul_w_instr(W_img, kbwin)
+                call W_img%fwd_ft
+                ! W <- Wprev / ((W/ rho) x kernel)
+                !$omp parallel do collapse(3) default(shared) schedule(static)&
+                !$omp private(h,k,m,phys,val,val_prev) proc_bind(close)
+                do h = self%lims(1,1),self%lims(1,2)
+                    do k = self%lims(2,1),self%lims(2,2)
+                        do m = self%lims(3,1),self%lims(3,2)
+                            phys     = W_img%comp_addr_phys([h, k, m])
+                            val      = mycabs(W_img%get_cmat_at(phys))   !! ||C|| == ||C*||
+                            val_prev = real(Wprev_img%get_cmat_at(phys)) !! Real(C) == Real(C*)
+                            val      = min(val_prev/val, 1.e20)
+                            call W_img%set_cmat_at( phys, cmplx(val, 0.))
+                        end do
+                    end do
+                end do
+                !$omp end parallel do
+            enddo
+            call Wprev_img%kill
+            ! Fourier comps / rho
             !$omp parallel do collapse(3) default(shared) schedule(static)&
-            !$omp private(h,k,m,phys,val,val_prev) proc_bind(close)
+            !$omp private(h,k,m,phys,invrho) proc_bind(close)
             do h = self%lims(1,1),self%lims(1,2)
                 do k = self%lims(2,1),self%lims(2,2)
                     do m = self%lims(3,1),self%lims(3,2)
-                        phys     = W_img%comp_addr_phys([h, k, m])
-                        val      = mycabs(W_img%get_cmat_at(phys))   !! ||C|| == ||C*||
-                        val_prev = real(Wprev_img%get_cmat_at(phys)) !! Real(C) == Real(C*)
-                        val      = min(val_prev/val, 1.e20)
-                        call W_img%set_cmat_at( phys, cmplx(val, 0.))
+                        phys   = W_img%comp_addr_phys([h, k, m])
+                        invrho = real(W_img%get_cmat_at(phys)) !! Real(C) == Real(C*)
+                        call self%mul_cmat_at(invrho,phys)
                     end do
                 end do
             end do
             !$omp end parallel do
-        enddo
-        call Wprev_img%kill
-        ! Fourier comps / rho
-        !$omp parallel do collapse(3) default(shared) schedule(static)&
-        !$omp private(h,k,m,phys,invrho) proc_bind(close)
-        do h = self%lims(1,1),self%lims(1,2)
-            do k = self%lims(2,1),self%lims(2,2)
-                do m = self%lims(3,1),self%lims(3,2)
-                    phys   = W_img%comp_addr_phys([h, k, m])
-                    invrho = real(W_img%get_cmat_at(phys)) !! Real(C) == Real(C*)
-                    call self%mul_cmat_at(invrho,phys)
+        else
+            ! division by rho
+            !$omp parallel do collapse(3) default(shared) schedule(static)&
+            !$omp private(h,k,m,phys) proc_bind(close)
+            do h = self%lims(1,1),self%lims(1,2)
+                do k = self%lims(2,1),self%lims(2,2)
+                    do m = self%lims(3,1),self%lims(3,2)
+                        phys   = self%comp_addr_phys([h, k, m])
+                        if( self%rho(phys(1),phys(2),phys(3)) < 1.e-6 )then
+                            call self%set_cmat_at(phys,cmplx(0.,0.))
+                        else
+                            call self%mul_cmat_at(1./self%rho(phys(1),phys(2),phys(3)), phys)
+                        endif
+                    end do
                 end do
             end do
-        end do
-        !$omp end parallel do
+            !$omp end parallel do
+        endif
         ! cleanup
         call W_img%kill
     end subroutine sampl_dens_correct
