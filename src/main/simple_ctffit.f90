@@ -36,6 +36,7 @@ real                  :: sxx_roavg    = 0.       ! memoized corr term, rotationa
 real                  :: limits(4,2)  = 0.       ! barrier limits
 
 integer, parameter :: IARES = 10, NSTEPS = 100
+real,    parameter :: CC_WEIGHT_ASTIG = 0.2
 
 contains
 
@@ -203,7 +204,6 @@ contains
         call ppspec_ref_roavg%prenorm4real_corr(sxx_roavg, cc_msk)
     end subroutine init_srch
 
-    ! CONSIDER TASK PARALLELISM HERE
     subroutine grid_srch( dfx, dfy, angast, phshift, cc )
         real, intent(out) :: dfx, dfy, angast, phshift, cc
         real              :: cost, df, cost_lowest, dfstep, df_best
@@ -267,13 +267,17 @@ contains
 
     ! cost function is real-space correlation within resolution mask between the CTF
     ! powerspectrum (the model) and the pre-processed micrograph powerspectrum (the data)
+    ! the correlation considers both the rotationally averaged and astigmatic models with weight
     function ctffit_cost( fun_self, vec, D ) result( cost )
         class(*), intent(inout) :: fun_self
         integer,  intent(in)    :: D
         real,     intent(in)    :: vec(D)
-        real ::  cost
-        call ctf2pspecimg(tfun, pspec_ctf, vec(1), vec(2), vec(3))
-        cost = -ppspec_ref%real_corr_prenorm(pspec_ctf, sxx, cc_msk)
+        real ::  cc, cc_roavg, cc_comb, cost
+        call ctf2pspecimgs(tfun, tfun_roavg, pspec_ctf, pspec_ctf_roavg, vec(1), vec(2), vec(3))
+        cc       = ppspec_ref%real_corr_prenorm(pspec_ctf, sxx, cc_msk)
+        cc_roavg = ppspec_ref_roavg%real_corr_prenorm(pspec_ctf_roavg, sxx_roavg, cc_msk)
+        cc_comb  = CC_WEIGHT_ASTIG * cc + (1.0 - CC_WEIGHT_ASTIG) * cc_roavg
+        cost     = -cc_comb
     end function ctffit_cost
 
     ! this cost function considers only the rotationally averaged model
@@ -288,14 +292,17 @@ contains
 
     ! cost function is real-space correlation within resolution mask between the CTF
     ! powerspectrum (the model) and the pre-processed micrograph powerspectrum (the data)
+    ! the correlation considers both the rotationally averaged and astigmatic models with weight
     function ctffit_cost_phaseplate( fun_self, vec, D ) result( cost )
         class(*), intent(inout) :: fun_self
         integer,  intent(in)    :: D
         real,     intent(in)    :: vec(D)
-        real :: cost
+        real :: cc, cc_roavg, cc_comb, cost
         ! vec(4) is additional phase shift (in radians)
-        call ctf2pspecimg(tfun, pspec_ctf, vec(1), vec(2), vec(3), add_phshift=vec(4))
-        cost = -ppspec_ref%real_corr_prenorm(pspec_ctf, sxx, cc_msk)
+        call ctf2pspecimgs(tfun, tfun_roavg, pspec_ctf, pspec_ctf_roavg, vec(1), vec(2), vec(3), add_phshift=vec(4))
+        cc_roavg = ppspec_ref_roavg%real_corr_prenorm(pspec_ctf_roavg, sxx_roavg, cc_msk)
+        cc_comb  = CC_WEIGHT_ASTIG * cc + (1.0 - CC_WEIGHT_ASTIG) * cc_roavg
+        cost     = -cc_comb
     end function ctffit_cost_phaseplate
 
     ! this cost function considers only the rotationally averaged model
@@ -350,6 +357,55 @@ contains
         end do
         !$omp end parallel do
     end subroutine ctf2pspecimg
+
+    !>  \brief  is for making a CTF power-spec image
+    subroutine ctf2pspecimgs( tfun, tfun_roavg, img, img_roavg, dfx, dfy, angast, add_phshift )
+        use simple_image, only: image
+        class(ctf),     intent(inout) :: tfun, tfun_roavg !< CTF objects
+        class(image),   intent(inout) :: img, img_roavg   !< image (outputs)
+        real,           intent(in)    :: dfx              !< defocus x-axis
+        real,           intent(in)    :: dfy              !< defocus y-axis
+        real,           intent(in)    :: angast           !< angle of astigmatism
+        real, optional, intent(in)    :: add_phshift      !< aditional phase shift (radians), for phase plate
+        integer :: lims(3,2),h,mh,k,mk,phys(3),ldim(3),inds(3)
+        real    :: ang, tval, spaFreqSq, hinv, aadd_phshift, kinv, inv_ldim(3), res, wght, df_avg, tval_roavg
+        ! initialize
+        aadd_phshift = 0.
+        if( present(add_phshift) ) aadd_phshift = add_phshift
+        call tfun%init(dfx, dfy, angast)
+        df_avg = (dfx + dfy) / 2.0
+        call tfun_roavg%init(df_avg, df_avg, 0.)
+        img       = 0.
+        img_roavg = 0.
+        lims      = img%loop_lims(3)
+        mh        = maxval(lims(1,:))
+        mk        = maxval(lims(2,:))
+        inds      = 1
+        ldim      = img%get_ldim()
+        inv_ldim  = 1./real(ldim)
+        !$omp parallel do collapse(2) default(shared) private(h,hinv,k,kinv,inds,spaFreqSq,ang,tval,tval_roavg,phys) &
+        !$omp schedule(static) proc_bind(close)
+        do h=lims(1,1),lims(1,2)
+            do k=lims(2,1),lims(2,2)
+                inds(1)    = min(max(1,h+mh+1),ldim(1))
+                inds(2)    = min(max(1,k+mk+1),ldim(2))
+                inds(3)    = 1
+                hinv       = real(h) * inv_ldim(1)
+                kinv       = real(k) * inv_ldim(2)
+                spaFreqSq  = hinv * hinv + kinv * kinv
+                ang        = atan2(real(k),real(h))
+                tval       = tfun%eval(spaFreqSq, ang, aadd_phshift)
+                tval       = min(1.,max(tval * tval,0.001))
+                tval       = sqrt(tval)
+                tval_roavg = tfun_roavg%eval(spaFreqSq, ang, aadd_phshift)
+                tval_roavg = min(1.,max(tval_roavg * tval_roavg,0.001))
+                tval_roavg = sqrt(tval_roavg)
+                call img%set(inds, tval)
+                call img_roavg%set(inds, tval_roavg)
+            end do
+        end do
+        !$omp end parallel do
+    end subroutine ctf2pspecimgs
 
     subroutine ctffit_kill
         ppspec_all       => null()
