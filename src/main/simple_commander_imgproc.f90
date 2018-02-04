@@ -636,7 +636,7 @@ contains
         integer                               :: imovie, iframe, numlen, lfoo(3), nimgs, iimg
         character(len=STDLEN), allocatable    :: filenames(:)
         character(len=:), allocatable         :: moviename
-        type(image)                           :: mask, tmp, frameimg
+        type(image)                           :: tmp, frameimg
         real                                  :: mm(2)
         if( cline%defined('lp') )then
             if( .not. cline%defined('smpd') ) stop 'smpd (sampling distance) needs to be defined if lp is'
@@ -681,15 +681,6 @@ contains
             end do
         else
             p%box = ldim(1)
-            ! create mask
-            if( cline%defined('lp') )then
-                call tmp%new([p%clip,p%clip,1], p%smpd)
-                tmp = cmplx(1.,0.)
-                call tmp%bp(0.,p%lp,0.)
-                call tmp%ft2img('real', mask)
-                call mask%write('resolution_mask.mrc', 1)
-                tmp = 0.0
-            endif
             ! prepare b%img and tmp for reading
             call b%img%new([p%box,p%box,1], p%smpd)
             if( cline%defined('clip') ) call tmp%new([p%clip,p%clip,1], p%smpd)

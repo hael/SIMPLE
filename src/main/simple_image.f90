@@ -356,7 +356,7 @@ contains
         if( self%existence )then
             if( any(self%ldim /= ldim) )then
                 do_allocate = .true.
-                call self%kill()
+                call self%kill
             else
                 do_allocate = .false.
                 call fftwf_destroy_plan(self%plan_fwd)
@@ -513,7 +513,7 @@ contains
         character(len=*), intent(in)    :: speckind
         type(image) :: img_out, tmp, tmp2
         integer     :: xind, yind, cnt
-        logical     :: didft
+        logical     :: didft, outside
         if( self%ldim(3) /= 1 ) stop 'only for 2D images; mic2spec; simple_image'
         if( self%ldim(1) <= box .or. self%ldim(2) <= box )then
             stop 'cannot use a box larger than the image; mic2spec; simple_image'
@@ -524,10 +524,12 @@ contains
             didft = .true.
         endif
         call img_out%new([box,box,1], self%smpd)
+        call tmp%new([box,box,1], self%smpd)
+        call tmp2%new([box,box,1], self%smpd)
         cnt = 0
         do xind=0,self%ldim(1)-box,box/2
             do yind=0,self%ldim(2)-box,box/2
-                call self%window([xind,yind],box,tmp)
+                call self%window_slim([xind,yind],box,tmp,outside)
                 call tmp%norm
                 call tmp%edges_norm
                 call tmp%fwd_ft
@@ -539,17 +541,19 @@ contains
             end do
         end do
         call img_out%div(real(cnt))
+        call tmp%kill
+        call tmp2%kill
         if( didft ) call self%fwd_ft
     end function mic2spec
 
-    subroutine mic2eospecs( self, box, speckind, even_imgs, odd_imgs )
-        class(image),              intent(inout) :: self
-        integer,                   intent(in)    :: box
-        character(len=*),          intent(in)    :: speckind
-        class(image), allocatable, intent(out)   :: even_imgs(:), odd_imgs(:) ! even=lower, odd=upper
-        type(image) :: tmp
-        integer     :: xind, yind, cnt, neven, nodd, i, sz, neven_lim, nodd_lim
-        logical     :: didft
+    subroutine mic2eospecs( self, box, speckind, pspec_lower, pspec_upper, pspec_all )
+        class(image),     intent(inout) :: self
+        integer,          intent(in)    :: box
+        character(len=*), intent(in)    :: speckind
+        class(image),     intent(inout) :: pspec_lower, pspec_upper, pspec_all
+        type(image) :: tmp, tmp2
+        integer     :: xind, yind, cnt, neven_lim, nodd_lim, neven, nodd
+        logical     :: didft, outside
         if( self%ldim(3) /= 1 ) stop 'only for 2D images; mic2eoimgs; simple_image'
         if( self%ldim(1) <= box .or. self%ldim(2) <= box )then
             stop 'cannot use a box larger than the image; mic2eoimgs; simple_image'
@@ -559,58 +563,46 @@ contains
             call self%bwd_ft
             didft = .true.
         endif
-        ! count # odds & # evens
+        ! count # images
         cnt = 0
         do xind=0,self%ldim(1)-box,box/2
             do yind=0,self%ldim(2)-box,box/2
                 cnt = cnt + 1
             end do
         end do
+        ! divide eo
         neven_lim = cnt / 2
         nodd_lim  = cnt - neven_lim
-        ! check allocations
-        if( allocated(even_imgs) )then
-            sz = size(even_imgs)
-            if( sz /= neven_lim )then
-                do i=1,sz
-                    call even_imgs(i)%kill
-                end do
-                deallocate(even_imgs)
-            endif
-        endif
-        if( allocated(odd_imgs) )then
-            sz = size(odd_imgs)
-            if( sz /= nodd_lim )then
-                do i=1,sz
-                    call odd_imgs(i)%kill
-                end do
-                deallocate(odd_imgs)
-            endif
-        endif
-        ! allocate if needed
-        if( .not. allocated(even_imgs) ) allocate( even_imgs(neven_lim) )
-        if( .not. allocated(odd_imgs)  ) allocate( odd_imgs(nodd_lim)   )
-        ! extract
+        ! prepate lower/upper/all spectra
         cnt   = 0
         neven = 0
         nodd  = 0
+        call tmp%new([box,box,1], self%smpd)
+        call tmp2%new([box,box,1], self%smpd)
         do xind=0,self%ldim(1)-box,box/2
             do yind=0,self%ldim(2)-box,box/2
                 cnt = cnt + 1
-                call self%window([xind,yind],box,tmp)
+                call self%window_slim([xind,yind],box,tmp,outside)
                 call tmp%norm
                 call tmp%edges_norm
                 call tmp%fwd_ft
                 if( cnt <= neven_lim )then
                     neven = neven + 1
-                    call tmp%ft2img(speckind, even_imgs(neven))
+                    call tmp%ft2img(speckind, tmp2)
+                    call pspec_lower%add(tmp2)
                 else
                     nodd = nodd + 1
-                    call tmp%ft2img(speckind, odd_imgs(nodd))
+                    call tmp%ft2img(speckind, tmp2)
+                    call pspec_upper%add(tmp2)
                 endif
                 call tmp%zero_and_unflag_ft
+                call tmp2%zero_and_unflag_ft
             end do
         end do
+        call pspec_all%add(pspec_lower)
+        call pspec_all%add(pspec_upper)
+        call tmp%kill
+        call tmp2%kill
         if( didft ) call self%fwd_ft
     end subroutine mic2eospecs
 
@@ -5768,25 +5760,21 @@ contains
     subroutine ft2img( self, which, img )
         class(image),     intent(inout) :: self
         character(len=*), intent(in)    :: which
-        class(image),     intent(out)   :: img
+        class(image),     intent(inout) :: img
         integer :: h,mh,k,mk,l,ml,lims(3,2),inds(3),phys(3)
         logical :: didft
         complex :: comp
+        if( .not.(self.eqdims.img) )then
+            print *, 'self%ldim: ', self%ldim
+            print *, 'img%ldim:  ', img%ldim
+            stop 'non-equal dims; simple_image :: ft2img'
+        endif
         didft = .false.
-        if( self%ft )then
-        else
+        if( .not. self%ft )then
             call self%fwd_ft
             didft = .true.
         endif
-        if( img%exists() )then
-            if( .not.(self.eqdims.img) )then
-                call img%new(self%ldim, self%smpd)
-            else
-                img = 0.
-            endif
-        else
-            call img%new(self%ldim, self%smpd)
-        end if
+        call img%zero_and_unflag_ft
         lims = self%loop_lims(3)
         mh = maxval(lims(1,:))
         mk = maxval(lims(2,:))
@@ -5822,20 +5810,15 @@ contains
 
     subroutine img2ft( self, img )
         class(image), intent(inout) :: self
-        class(image), intent(out)   :: img
+        class(image), intent(inout) :: img
         integer :: h,k,l,lims(3,2),logi(3),phys(3)
         integer :: xcnt,ycnt,zcnt
-        if( img%exists() )then
-            if( .not.(self.eqdims.img) )then
-                call img%new(self%ldim, self%smpd)
-                call img%set_ft(.true.)
-            else
-                img = cmplx(0.,0.)
-            endif
-        else
-            call img%new(self%ldim, self%smpd)
-            call img%set_ft(.true.)
-        end if
+        if( .not.(self.eqdims.img) )then
+            print *, 'self%ldim: ', self%ldim
+            print *, 'img%ldim:  ', img%ldim
+            stop 'non-equal dims; simple_image :: img2ft'
+        endif
+        call img%zero_and_flag_ft
         xcnt = 0
         ycnt = 0
         zcnt = 0

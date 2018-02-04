@@ -30,11 +30,12 @@ integer               :: ndim         = 3        ! # optimisation dims
 real                  :: df_min       = 0.5      ! close 2 focus limit
 real                  :: df_max       = 5.0      ! far from focus limit
 real                  :: sxx          = 0.       ! memoized corr term
+real                  :: hp           = 0.       ! high-pass limit
+real                  :: lp           = 0.       ! low-pass limit
 real                  :: sxx_roavg    = 0.       ! memoized corr term, rotationally averaged power spec
 real                  :: limits(4,2)  = 0.       ! barrier limits
 
 integer, parameter :: IARES = 10, NSTEPS = 100
-! real,    parameter :: cc_weight_astig = 0.2 ! 4 now
 
 contains
 
@@ -49,7 +50,7 @@ contains
         real,                 intent(in)    :: dfrange(2)  !< defocus range, [30.0,5.0] default
         real,                 intent(in)    :: resrange(2) !< resolution range, [30.0,5.0] default
         character(len=*),     intent(in)    :: phaseplate  !< Volta phase-plate images (yes|no)
-        real    :: hp, lp
+
         integer :: ldim(3)
         ! set constants
         ppspec_all   => pspec_all
@@ -87,7 +88,7 @@ contains
         call ppspec_upper%dampen_central_cross
         call ppspec_upper%subtr_backgr(hp)
         ! prepare rotationally averaged power spectra
-        call ppspec_all%roavg(IARES, pspec_all_roavg)
+        call ppspec_all%roavg(IARES,   pspec_all_roavg)
         call ppspec_lower%roavg(IARES, pspec_lower_roavg)
         call ppspec_upper%roavg(IARES, pspec_upper_roavg)
         ! prepare CTF power spectra
@@ -117,13 +118,15 @@ contains
         call diffevol%new(ospec_de)
     end subroutine ctffit_init
 
-    subroutine ctffit_x_validated_fit( dfx, dfy, angast, phshift, dferr, cc, diagfname )
-        real,             intent(out) :: dfx, dfy, angast, phshift, dferr, cc
+    subroutine ctffit_x_validated_fit( dfx, dfy, angast, phshift, dferr, cc, ctfscore, diagfname )
+        real,             intent(out) :: dfx, dfy, angast, phshift, dferr, cc, ctfscore
         character(len=*), intent(in)  :: diagfname
-        type(image) :: pspec_half_n_half
-        real        :: dfavg, dfavg_lower, dfavg_upper, dfx_lower, dfx_upper, dfy_lower
-        real        :: dfy_upper, angast_lower, angast_upper, phshift_lower, phshift_upper
-        real        :: cc_lower, cc_upper
+        real, allocatable :: corrs(:)
+        type(image)       :: pspec_half_n_half
+        real              :: dfavg, dfavg_lower, dfavg_upper, dfx_lower, dfx_upper, dfy_lower
+        real              :: dfy_upper, angast_lower, angast_upper, phshift_lower, phshift_upper
+        real              :: cc_lower, cc_upper, df_avg
+        integer           :: filtsz, k, hpfind, lpfind
         ! determine parameters based on lower half of micrograph
         call init_srch( ppspec_lower, pspec_lower_roavg )
         call grid_srch(   dfx_lower, dfy_lower, angast_lower, phshift_lower, cc_lower )
@@ -175,6 +178,20 @@ contains
         pspec_half_n_half = ppspec_ref%before_after(pspec_ctf, cc_msk)
         call pspec_half_n_half%write(trim(diagfname), 1)
         call pspec_half_n_half%kill
+        ! calculate CTF score diagnostic
+        df_avg = dfx + dfy / 2.0
+        call ctf2pspecimg(tfun, pspec_ctf_roavg, df_avg, df_avg, 0.)
+        hpfind = pspec_all_roavg%get_find(hp)
+        filtsz = pspec_lower_roavg%get_filtsz()
+        call pspec_all_roavg%mask(real(filtsz), 'soft', real(hpfind))
+        call pspec_all_roavg%norm
+        call pspec_ctf_roavg%mask(real(filtsz), 'soft', real(hpfind))
+        allocate(corrs(filtsz))
+        call pspec_all_roavg%frc_pspec(pspec_ctf_roavg, corrs)
+        call pspec_all_roavg%write('pspec_all_roavg.mrc', 1)
+        call pspec_ctf_roavg%write('pspec_ctf_roavg.mrc', 1)
+        corrs(1:hpfind) = 1.0
+        ctfscore        = real(count(corrs > 0.)) / real(filtsz)
     end subroutine ctffit_x_validated_fit
 
     subroutine init_srch( which_pspec, which_pspec_roavg )
@@ -250,19 +267,13 @@ contains
 
     ! cost function is real-space correlation within resolution mask between the CTF
     ! powerspectrum (the model) and the pre-processed micrograph powerspectrum (the data)
-    ! the correlation considers both the rotationally averaged and astigmatic models with weight
     function ctffit_cost( fun_self, vec, D ) result( cost )
         class(*), intent(inout) :: fun_self
         integer,  intent(in)    :: D
         real,     intent(in)    :: vec(D)
-        real :: cc, cc_roavg, cc_comb, cost
+        real ::  cost
         call ctf2pspecimg(tfun, pspec_ctf, vec(1), vec(2), vec(3))
-        ! call ctf2pspecimgs(tfun, tfun_roavg, pspec_ctf, pspec_ctf_roavg, vec(1), vec(2), vec(3))
-        cc       = ppspec_ref%real_corr_prenorm(pspec_ctf, sxx, cc_msk)
-        ! cc_roavg = ppspec_ref_roavg%real_corr_prenorm(pspec_ctf_roavg, sxx_roavg, cc_msk)
-        ! cc_comb  = cc_weight_astig * cc + (1.0 - cc_weight_astig) * cc_roavg
-        ! cost     = -cc_comb
-        cost = -cc
+        cost = -ppspec_ref%real_corr_prenorm(pspec_ctf, sxx, cc_msk)
     end function ctffit_cost
 
     ! this cost function considers only the rotationally averaged model
@@ -270,28 +281,21 @@ contains
         class(*), intent(inout) :: fun_self
         integer,  intent(in)    :: D
         real,     intent(in)    :: vec(D)
-        real :: cc_roavg, cost
+        real :: cost
         call ctf2pspecimg(tfun, pspec_ctf_roavg, vec(1), vec(1), 0.)
-        cc_roavg = ppspec_ref_roavg%real_corr_prenorm(pspec_ctf_roavg, sxx_roavg, cc_msk)
-        cost     = -cc_roavg
+        cost = -ppspec_ref_roavg%real_corr_prenorm(pspec_ctf_roavg, sxx_roavg, cc_msk)
     end function ctffit_cost_roavg
 
     ! cost function is real-space correlation within resolution mask between the CTF
     ! powerspectrum (the model) and the pre-processed micrograph powerspectrum (the data)
-    ! the correlation considers both the rotationally averaged and astigmatic models with weight
     function ctffit_cost_phaseplate( fun_self, vec, D ) result( cost )
         class(*), intent(inout) :: fun_self
         integer,  intent(in)    :: D
         real,     intent(in)    :: vec(D)
-        real :: cc, cc_roavg, cc_comb, cost
+        real :: cost
         ! vec(4) is additional phase shift (in radians)
         call ctf2pspecimg(tfun, pspec_ctf, vec(1), vec(2), vec(3), add_phshift=vec(4))
-        ! call ctf2pspecimgs(tfun, tfun_roavg, pspec_ctf, pspec_ctf_roavg, vec(1), vec(2), vec(3), add_phshift=vec(4))
-        cc       = ppspec_ref%real_corr_prenorm(pspec_ctf, sxx, cc_msk)
-        ! cc_roavg = ppspec_ref_roavg%real_corr_prenorm(pspec_ctf_roavg, sxx_roavg, cc_msk)
-        ! cc_comb  = cc_weight_astig * cc + (1.0 - cc_weight_astig) * cc_roavg
-        ! cost     = -cc_comb
-        cost = -cc
+        cost = -ppspec_ref%real_corr_prenorm(pspec_ctf, sxx, cc_msk)
     end function ctffit_cost_phaseplate
 
     ! this cost function considers only the rotationally averaged model
@@ -299,11 +303,10 @@ contains
         class(*), intent(inout) :: fun_self
         integer,  intent(in)    :: D
         real,     intent(in)    :: vec(D)
-        real :: cc_roavg, cost
+        real :: cost
         ! vec(4) is additional phase shift (in radians)
         call ctf2pspecimg(tfun, pspec_ctf_roavg, vec(1), vec(1), 0., add_phshift=vec(4))
-        cc_roavg = ppspec_ref_roavg%real_corr_prenorm(pspec_ctf_roavg, sxx_roavg, cc_msk)
-        cost     = -cc_roavg
+        cost = -ppspec_ref_roavg%real_corr_prenorm(pspec_ctf_roavg, sxx_roavg, cc_msk)
     end function ctffit_cost_phaseplate_roavg
 
     !>  \brief  is for making a CTF power-spec image
@@ -348,65 +351,20 @@ contains
         !$omp end parallel do
     end subroutine ctf2pspecimg
 
-    !>  \brief  is for making a CTF power-spec image
-    ! subroutine ctf2pspecimgs( tfun, tfun_roavg, img, img_roavg, dfx, dfy, angast, add_phshift )
-    !     use simple_image, only: image
-    !     class(ctf),     intent(inout) :: tfun, tfun_roavg !< CTF objects
-    !     class(image),   intent(inout) :: img, img_roavg   !< image (outputs)
-    !     real,           intent(in)    :: dfx              !< defocus x-axis
-    !     real,           intent(in)    :: dfy              !< defocus y-axis
-    !     real,           intent(in)    :: angast           !< angle of astigmatism
-    !     real, optional, intent(in)    :: add_phshift      !< aditional phase shift (radians), for phase plate
-    !     integer :: lims(3,2),h,mh,k,mk,phys(3),ldim(3),inds(3)
-    !     real    :: ang, tval, spaFreqSq, hinv, aadd_phshift, kinv, inv_ldim(3), res, wght, df_avg, tval_roavg
-    !     ! initialize
-    !     aadd_phshift = 0.
-    !     if( present(add_phshift) ) aadd_phshift = add_phshift
-    !     call tfun%init(dfx, dfy, angast)
-    !     df_avg = (dfx + dfy) / 2.0
-    !     call tfun_roavg%init(df_avg, df_avg, 0.)
-    !     img       = 0.
-    !     img_roavg = 0.
-    !     lims      = img%loop_lims(3)
-    !     mh        = maxval(lims(1,:))
-    !     mk        = maxval(lims(2,:))
-    !     inds      = 1
-    !     ldim      = img%get_ldim()
-    !     inv_ldim  = 1./real(ldim)
-    !     !$omp parallel do collapse(2) default(shared) private(h,hinv,k,kinv,inds,spaFreqSq,ang,tval,tval_roavg,phys) &
-    !     !$omp schedule(static) proc_bind(close)
-    !     do h=lims(1,1),lims(1,2)
-    !         do k=lims(2,1),lims(2,2)
-    !             inds(1)    = min(max(1,h+mh+1),ldim(1))
-    !             inds(2)    = min(max(1,k+mk+1),ldim(2))
-    !             inds(3)    = 1
-    !             hinv       = real(h) * inv_ldim(1)
-    !             kinv       = real(k) * inv_ldim(2)
-    !             spaFreqSq  = hinv * hinv + kinv * kinv
-    !             ang        = atan2(real(k),real(h))
-    !             tval       = tfun%eval(spaFreqSq, ang, aadd_phshift)
-    !             tval       = min(1.,max(tval * tval,0.001))
-    !             tval       = sqrt(tval)
-    !             tval_roavg = tfun_roavg%eval(spaFreqSq, ang, aadd_phshift)
-    !             tval_roavg = min(1.,max(tval_roavg * tval_roavg,0.001))
-    !             tval_roavg = sqrt(tval_roavg)
-    !             call img%set(inds, tval)
-    !             call img_roavg%set(inds, tval_roavg)
-    !         end do
-    !     end do
-    !     !$omp end parallel do
-    ! end subroutine ctf2pspecimgs
-
     subroutine ctffit_kill
-        ppspec_ref   => null()
-        ppspec_all   => null()
-        ppspec_lower => null()
-        ppspec_upper => null()
+        ppspec_all       => null()
+        ppspec_lower     => null()
+        ppspec_upper     => null()
+        ppspec_ref       => null()
+        ppspec_ref_roavg => null()
         call pspec_ctf%kill
+        call pspec_ctf_roavg%kill
+        call pspec_all_roavg%kill
+        call pspec_lower_roavg%kill
+        call pspec_upper_roavg%kill
+        call imgmsk%kill
         call ospec_de%kill
-        ! call ospec_simplex%kill
         call diffevol%kill
-        ! call simplexsrch%kill
         call imgmsk%kill
         if( allocated(cc_msk) ) deallocate(cc_msk)
     end subroutine ctffit_kill

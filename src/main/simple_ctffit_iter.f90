@@ -25,11 +25,10 @@ contains
         character(len=*),   intent(in)         :: moviename_forctf
         class(oris),        intent(inout)      :: os
         character(len=*), optional, intent(in) :: dir_out
-        integer                        :: nframes, ldim(3), i, neven, nodd
-        character(len=:), allocatable  :: fname_diag
-        class(image),     allocatable  :: even_imgs(:), odd_imgs(:)
-        type(image)                    :: micrograph, pspec_lower, pspec_upper, pspec_all
-        real                           :: dfx, dfy, angast, phshift, cc, dferr
+        integer                       :: nframes, ldim(3), i
+        character(len=:), allocatable :: fname_diag
+        type(image)                   :: micrograph, pspec_lower, pspec_upper, pspec_all
+        real                          :: dfx, dfy, angast, phshift, cc, dferr, ctfscore
         if( .not. file_exists(moviename_forctf) )&
         & write(*,*) 'inputted micrograph does not exist: ', trim(adjustl(moviename_forctf))
         call find_ldim_nptcls(trim(adjustl(moviename_forctf)), ldim, nframes)
@@ -42,19 +41,11 @@ contains
         call micrograph%read(trim(adjustl(moviename_forctf)), 1)
         ! filter out frequencies lower than the box can express to avoid aliasing
         call micrograph%bp(real(p%pspecsz) * p%smpd, 0.)
-        ! extract even=lower and odd=upper powerspectra
-        call micrograph%mic2eospecs(p%pspecsz, 'sqrt', even_imgs, odd_imgs)
-        ! prepate lower/upper/all spectra
+        ! extract powerspectra
         call pspec_lower%new([p%pspecsz,p%pspecsz,1], p%smpd)
         call pspec_upper%new([p%pspecsz,p%pspecsz,1], p%smpd)
-        do i=1,size(even_imgs)
-            call pspec_lower%add(even_imgs(i))
-        end do
-        pspec_all = pspec_lower
-        do i=1,size(odd_imgs)
-            call pspec_upper%add(odd_imgs(i))
-        end do
-        call pspec_all%add(pspec_upper)
+        call pspec_all%new([p%pspecsz,p%pspecsz,1],   p%smpd)
+        call micrograph%mic2eospecs(p%pspecsz, 'sqrt', pspec_lower, pspec_upper, pspec_all)
         ! deal with output
         movie_counter = movie_counter + 1
         fname_diag    = add2fbody(moviename_forctf, p%ext, '_ctffit_diag')
@@ -65,18 +56,24 @@ contains
         ! fitting
         call ctffit_init(pspec_all, pspec_lower, pspec_upper, p%smpd, p%kv,&
             &p%cs, p%fraca, [p%dfmin,p%dfmax], [p%hp,p%lp], p%phaseplate)
-        call ctffit_x_validated_fit( dfx, dfy, angast, phshift, dferr, cc, fname_diag)
+        call ctffit_x_validated_fit( dfx, dfy, angast, phshift, dferr, cc, ctfscore, fname_diag)
         call ctffit_kill
         ! reporting
-        call os%set(movie_counter, 'kv',         p%kv   )
-        call os%set(movie_counter, 'cs',         p%cs   )
-        call os%set(movie_counter, 'fraca',      p%fraca)
-        call os%set(movie_counter, 'dfx',        dfx    )
-        call os%set(movie_counter, 'dfy',        dfy    )
-        call os%set(movie_counter, 'angast',     angast )
-        call os%set(movie_counter, 'phshift',    phshift)
-        call os%set(movie_counter, 'ctffitcc',   cc     )
-        call os%set(movie_counter, 'dferr',      dferr  )
+        call os%set(movie_counter, 'kv',         p%kv    )
+        call os%set(movie_counter, 'cs',         p%cs    )
+        call os%set(movie_counter, 'fraca',      p%fraca )
+        call os%set(movie_counter, 'dfx',        dfx     )
+        call os%set(movie_counter, 'dfy',        dfy     )
+        call os%set(movie_counter, 'angast',     angast  )
+        call os%set(movie_counter, 'phshift',    phshift )
+        call os%set(movie_counter, 'ctffitcc',   cc      )
+        call os%set(movie_counter, 'dferr',      dferr   )
+        call os%set(movie_counter, 'ctfscore',   ctfscore)
+        ! destruct (to avoid mem-leaks)
+        call micrograph%kill
+        call pspec_lower%kill
+        call pspec_upper%kill
+        call pspec_all%kill
     end subroutine iterate
 
 end module simple_ctffit_iter
