@@ -29,6 +29,7 @@ logical               :: l_phaseplate = .false.  ! Volta phase-plate flag
 integer               :: ndim         = 3        ! # optimisation dims
 real                  :: df_min       = 0.5      ! close 2 focus limit
 real                  :: df_max       = 5.0      ! far from focus limit
+real                  :: astigtol     = 0.05     ! tolerated astigmatism
 real                  :: sxx          = 0.       ! memoized corr term
 real                  :: hp           = 0.       ! high-pass limit
 real                  :: lp           = 0.       ! low-pass limit
@@ -36,11 +37,12 @@ real                  :: sxx_roavg    = 0.       ! memoized corr term, rotationa
 real                  :: limits(4,2)  = 0.       ! barrier limits
 
 integer, parameter :: IARES = 10, NSTEPS = 100
-real,    parameter :: CC_WEIGHT_ASTIG = 0.2
+! real,    parameter :: CC_WEIGHT_ASTIG = 0.2
 
 contains
 
-    subroutine ctffit_init( pspec_all, pspec_lower, pspec_upper, smpd, kV, Cs, amp_contr, dfrange, resrange, phaseplate )
+    subroutine ctffit_init( pspec_all, pspec_lower, pspec_upper, smpd, kV, Cs,&
+        &amp_contr, dfrange, resrange, astigtol_in, phaseplate )
         class(image), target, intent(inout) :: pspec_all   !< all micrograph powerspec
         class(image), target, intent(inout) :: pspec_lower !< lower half of micrograph powerspec
         class(image), target, intent(inout) :: pspec_upper !< upper half of micrograph powerspec
@@ -50,8 +52,8 @@ contains
         real,                 intent(in)    :: amp_contr   !< amplitude contrast
         real,                 intent(in)    :: dfrange(2)  !< defocus range, [30.0,5.0] default
         real,                 intent(in)    :: resrange(2) !< resolution range, [30.0,5.0] default
+        real,                 intent(in)    :: astigtol_in !< tolerated astigmatism, 0.05 microns default
         character(len=*),     intent(in)    :: phaseplate  !< Volta phase-plate images (yes|no)
-
         integer :: ldim(3)
         ! set constants
         ppspec_all   => pspec_all
@@ -70,6 +72,7 @@ contains
         else
             stop 'invalid resolution range; simple_ctffit :: new'
         endif
+        astigtol = astigtol_in
         select case(trim(phaseplate))
             case('yes')
                 l_phaseplate = .true.
@@ -267,18 +270,33 @@ contains
 
     ! cost function is real-space correlation within resolution mask between the CTF
     ! powerspectrum (the model) and the pre-processed micrograph powerspectrum (the data)
-    ! the correlation considers both the rotationally averaged and astigmatic models with weight
     function ctffit_cost( fun_self, vec, D ) result( cost )
         class(*), intent(inout) :: fun_self
         integer,  intent(in)    :: D
         real,     intent(in)    :: vec(D)
-        real ::  cc, cc_roavg, cc_comb, cost
-        call ctf2pspecimgs(tfun, tfun_roavg, pspec_ctf, pspec_ctf_roavg, vec(1), vec(2), vec(3))
-        cc       = ppspec_ref%real_corr_prenorm(pspec_ctf, sxx, cc_msk)
-        cc_roavg = ppspec_ref_roavg%real_corr_prenorm(pspec_ctf_roavg, sxx_roavg, cc_msk)
-        cc_comb  = CC_WEIGHT_ASTIG * cc + (1.0 - CC_WEIGHT_ASTIG) * cc_roavg
-        cost     = -cc_comb
+        real ::  cost
+        if( abs(vec(1) - vec(2)) > astigtol )then
+            cost = 1.0
+        else
+            call ctf2pspecimg(tfun, pspec_ctf, vec(1), vec(2), vec(3))
+            cost = -ppspec_ref%real_corr_prenorm(pspec_ctf, sxx, cc_msk)
+        endif
     end function ctffit_cost
+
+    ! cost function is real-space correlation within resolution mask between the CTF
+    ! powerspectrum (the model) and the pre-processed micrograph powerspectrum (the data)
+    ! the correlation considers both the rotationally averaged and astigmatic models with weight
+    ! function ctffit_cost( fun_self, vec, D ) result( cost )
+    !     class(*), intent(inout) :: fun_self
+    !     integer,  intent(in)    :: D
+    !     real,     intent(in)    :: vec(D)
+    !     real ::  cc, cc_roavg, cc_comb, cost
+    !     call ctf2pspecimgs(tfun, tfun_roavg, pspec_ctf, pspec_ctf_roavg, vec(1), vec(2), vec(3))
+    !     cc       = ppspec_ref%real_corr_prenorm(pspec_ctf, sxx, cc_msk)
+    !     cc_roavg = ppspec_ref_roavg%real_corr_prenorm(pspec_ctf_roavg, sxx_roavg, cc_msk)
+    !     cc_comb  = CC_WEIGHT_ASTIG * cc + (1.0 - CC_WEIGHT_ASTIG) * cc_roavg
+    !     cost     = -cc_comb
+    ! end function ctffit_cost
 
     ! this cost function considers only the rotationally averaged model
     function ctffit_cost_roavg( fun_self, vec, D ) result( cost )
@@ -292,18 +310,34 @@ contains
 
     ! cost function is real-space correlation within resolution mask between the CTF
     ! powerspectrum (the model) and the pre-processed micrograph powerspectrum (the data)
-    ! the correlation considers both the rotationally averaged and astigmatic models with weight
     function ctffit_cost_phaseplate( fun_self, vec, D ) result( cost )
         class(*), intent(inout) :: fun_self
         integer,  intent(in)    :: D
         real,     intent(in)    :: vec(D)
-        real :: cc, cc_roavg, cc_comb, cost
+        real :: cost
         ! vec(4) is additional phase shift (in radians)
-        call ctf2pspecimgs(tfun, tfun_roavg, pspec_ctf, pspec_ctf_roavg, vec(1), vec(2), vec(3), add_phshift=vec(4))
-        cc_roavg = ppspec_ref_roavg%real_corr_prenorm(pspec_ctf_roavg, sxx_roavg, cc_msk)
-        cc_comb  = CC_WEIGHT_ASTIG * cc + (1.0 - CC_WEIGHT_ASTIG) * cc_roavg
-        cost     = -cc_comb
+        if( abs(vec(1) - vec(2)) > astigtol )then
+            cost = 1.0
+        else
+            call ctf2pspecimg(tfun, pspec_ctf, vec(1), vec(2), vec(3), add_phshift=vec(4))
+            cost = -ppspec_ref%real_corr_prenorm(pspec_ctf, sxx, cc_msk)
+        endif
     end function ctffit_cost_phaseplate
+
+    ! cost function is real-space correlation within resolution mask between the CTF
+    ! powerspectrum (the model) and the pre-processed micrograph powerspectrum (the data)
+    ! the correlation considers both the rotationally averaged and astigmatic models with weight
+    ! function ctffit_cost_phaseplate( fun_self, vec, D ) result( cost )
+    !     class(*), intent(inout) :: fun_self
+    !     integer,  intent(in)    :: D
+    !     real,     intent(in)    :: vec(D)
+    !     real :: cc, cc_roavg, cc_comb, cost
+    !     ! vec(4) is additional phase shift (in radians)
+    !     call ctf2pspecimgs(tfun, tfun_roavg, pspec_ctf, pspec_ctf_roavg, vec(1), vec(2), vec(3), add_phshift=vec(4))
+    !     cc_roavg = ppspec_ref_roavg%real_corr_prenorm(pspec_ctf_roavg, sxx_roavg, cc_msk)
+    !     cc_comb  = CC_WEIGHT_ASTIG * cc + (1.0 - CC_WEIGHT_ASTIG) * cc_roavg
+    !     cost     = -cc_comb
+    ! end function ctffit_cost_phaseplate
 
     ! this cost function considers only the rotationally averaged model
     function ctffit_cost_phaseplate_roavg( fun_self, vec, D ) result( cost )

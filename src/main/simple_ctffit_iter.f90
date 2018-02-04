@@ -55,7 +55,7 @@ contains
         endif
         ! fitting
         call ctffit_init(pspec_all, pspec_lower, pspec_upper, p%smpd, p%kv,&
-            &p%cs, p%fraca, [p%dfmin,p%dfmax], [p%hp,p%lp], p%phaseplate)
+            &p%cs, p%fraca, [p%dfmin,p%dfmax], [p%hp,p%lp], p%astigtol, p%phaseplate)
         call ctffit_x_validated_fit( dfx, dfy, angast, phshift, dferr, cc, ctfscore, fname_diag)
         call ctffit_kill
         ! reporting
