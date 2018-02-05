@@ -4,7 +4,7 @@ module simple_ftexp_shsrch
 use simple_opt_factory, only: opt_factory
 use simple_opt_spec,    only: opt_spec
 use simple_optimizer,   only: optimizer
-use simple_ft_expanded, only: ft_expanded
+use simple_ft_expanded, only: ft_expanded, ft_exp_reset_tmp_pointers
 use simple_image,       only: image
 implicit none
 
@@ -151,9 +151,12 @@ contains
         else
             ospec%x = 0.
         endif
+        write (*,*) 'before minimize'
         call nlopt%minimize(ospec, fun_self, cxy(1))
+        write (*,*) 'after minimize'
         if( opt_str == 'lbfgsb' ) then
             call reference%corr_normalize(particle, cxy(1))
+            call ft_exp_reset_tmp_pointers
         end if
         cxy(1)  = -cxy(1) ! correlation
         cxy(2:) = ospec%x ! shift
