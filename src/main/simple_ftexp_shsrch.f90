@@ -151,9 +151,7 @@ contains
         else
             ospec%x = 0.
         endif
-        write (*,*) 'before minimize'
         call nlopt%minimize(ospec, fun_self, cxy(1))
-        write (*,*) 'after minimize'
         if( opt_str == 'lbfgsb' ) then
             call reference%corr_normalize(particle, cxy(1))
             call ft_exp_reset_tmp_pointers
