@@ -186,16 +186,15 @@ contains
         df_avg = dfx + dfy / 2.0
         call ctf2pspecimg(tfun, pspec_ctf_roavg, df_avg, df_avg, 0.)
         hpfind = pspec_all_roavg%get_find(hp)
+        lpfind = pspec_all_roavg%get_find(lp)
         filtsz = pspec_lower_roavg%get_filtsz()
-        call pspec_all_roavg%mask(real(filtsz), 'soft', real(hpfind))
-        call pspec_all_roavg%norm
-        call pspec_ctf_roavg%mask(real(filtsz), 'soft', real(hpfind))
+        call pspec_all_roavg%mask(real(lpfind), 'soft', real(hpfind))
+        call pspec_ctf_roavg%mask(real(lpfind), 'soft', real(hpfind))
+        call pspec_all_roavg%norm_bin
+        call pspec_ctf_roavg%norm_bin
         allocate(corrs(filtsz))
         call pspec_all_roavg%frc_pspec(pspec_ctf_roavg, corrs)
-        call pspec_all_roavg%write('pspec_all_roavg.mrc', 1)
-        call pspec_ctf_roavg%write('pspec_ctf_roavg.mrc', 1)
-        corrs(1:hpfind) = 1.0
-        ctfscore        = real(count(corrs > 0.)) / real(filtsz)
+        ctfscore = real(count(corrs(hpfind:lpfind) > 0.)) / real(lpfind - hpfind + 1)
     end subroutine ctffit_x_validated_fit
 
     subroutine init_srch( which_pspec, which_pspec_roavg )
