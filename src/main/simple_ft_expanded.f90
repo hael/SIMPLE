@@ -540,6 +540,7 @@ contains
                     ft_exp_tmpmat_re_2d(hind,kind) = real(ft_exp_tmp_cmat12(hind,kind) * exp(-J * arg),kind=dp)
                 end do
             end do
+            !$omp end parallel do            
         else
             !$omp parallel do collapse(2) schedule(static) default(shared) &
             !$omp private(hind,kind,arg) proc_bind(close)
@@ -571,6 +572,7 @@ contains
                     ft_exp_tmpmat_re_2d(hind,kind) = real(ft_exp_tmp_cmat12(hind,kind) * exp(-J * arg),kind=dp)
                 end do
             end do
+            !$omp end parallel do
         else
             !$omp parallel do collapse(2) schedule(static) default(shared) &
             !$omp private(hind,kind,arg) proc_bind(close)
@@ -602,8 +604,10 @@ contains
                     arg                            = dot_product(shvec(:), self1%transfmat(hind,kind,1,1:2))
                     tmp                            = ft_exp_tmp_cmat12(hind,kind) * exp(-J * arg)
                     ft_exp_tmpmat_re_2d(hind,kind) = real(tmp,kind=dp)
+                    ft_exp_tmpmat_im_2d(hind,kind) = imag(tmp)                    
                 end do
             end do
+            !$omp end parallel do
         else
             !$omp parallel do collapse(2) schedule(static) default(shared) &
             !$omp private(hind,kind,arg,tmp) proc_bind(close)
