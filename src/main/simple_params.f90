@@ -1039,6 +1039,8 @@ contains
                 if(self%focusmsk >= self%msk)stop 'focusmsk should be smaller than msk'
             endif
             self%l_focusmsk = .true.
+        else
+            self%focusmsk = self%msk
         endif
         ! scaling stuff
         self%l_autoscale = .false.
