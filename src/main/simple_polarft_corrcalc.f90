@@ -250,7 +250,7 @@ contains
         ! take care of objective function flags
         select case(trim(p%objfun))
             case('cc')
-                self%l_cc_objfun  = .true.
+                self%l_cc_objfun   = .true.
                 self%l_regularised = .false.
             case('ccres')
                 self%l_cc_objfun   = .false.
@@ -264,8 +264,8 @@ contains
                     self%bfac_norm = sum(self%bfac_arr)
                 endif
             case('ccreg')
-                self%l_cc_objfun = .false.
-                self%l_regularised = .false.
+                self%l_cc_objfun   = .false.
+                self%l_regularised = .true.
             case DEFAULT
                 write(*,*) 'unsupported objective function: ', trim(p%objfun)
                 stop 'ABORTING, simple_polarft_corrcalc :: new'
@@ -1091,9 +1091,8 @@ contains
         real(sp),                intent(out)   :: cc(self%nrots)
         complex(sp), pointer :: pft_ref(:,:)
         real(sp),    pointer :: kcorrs(:)
-        real(sp) :: sumsqref, sumsqptcl
+        real(sp) :: sumsqref, sumsqptcl, norm
         integer  :: k, ithr
-        real     :: norm
         ithr    =  omp_get_thread_num() + 1
         pft_ref => self%heap_vars(ithr)%pft_ref
         kcorrs  => self%heap_vars(ithr)%kcorrs
@@ -1140,9 +1139,8 @@ contains
         real(sp),                intent(out)   :: cc(self%nrots)
         complex(sp), pointer :: pft_ref(:,:)
         real(sp),    pointer :: kcorrs(:)
-        real(sp) :: sumsqref, sumsqptcl
-        integer  :: k, ithr
-        real     :: norm
+        real(sp) :: sumsqref, sumsqptcl, norm
+        integer  :: k, ithr 
         ithr    =  omp_get_thread_num() + 1
         pft_ref => self%heap_vars(ithr)%pft_ref
         kcorrs  => self%heap_vars(ithr)%kcorrs
