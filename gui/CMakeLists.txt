@@ -79,6 +79,13 @@ set_source_files_properties(${SIMPLE_GUI_SOURCES} PROPERTIES LANGUAGE CXX )
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src/)
 
 add_executable(simple_gui ${SIMPLE_GUI_SOURCES})
+
+## Added by Joe
+if (NOT USE_SYSTEM_JPEG_SQLite)
+  add_dependencies(simple_gui libjpeg libsqlite3)	
+endif (NOT USE_SYSTEM_JPEG_SQLite)
+#
+
 target_link_libraries(simple_gui  LINK_PUBLIC ${SQLITE3_LIBRARIES})
 target_link_libraries(simple_gui  LINK_PUBLIC ${JPEG_LIBRARIES})
 set_target_properties(simple_gui
