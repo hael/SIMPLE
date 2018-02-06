@@ -134,7 +134,7 @@ type :: params
     character(len=STDLEN) :: msklist=''           !< table (text file) of mask volume files(.txt)
     character(len=STDLEN) :: mskvols(MAXS)=''
     character(len=STDLEN) :: msktype='soft'       !< type of mask(hard|soft){soft}
-    character(len=7)      :: objfun='cc'          !< objective function(cc|ccres){cc}
+    character(len=7)      :: objfun='cc'          !< objective function(cc|ccres|ccreg){cc}
     character(len=STDLEN) :: opt='bfgs'           !< optimiser (bfgs|simplex){bfgs}
     character(len=STDLEN) :: oritab=''            !< table  of orientations(.txt|.bin)
     character(len=STDLEN) :: oritab2=''           !< 2nd table of orientations(.txt|.bin)
@@ -1160,6 +1160,8 @@ contains
             case('cc')
                 self%l_cc_objfun = .true.
             case('ccres')
+                self%l_cc_objfun = .false.
+            case('ccreg')
                 self%l_cc_objfun = .false.
             case DEFAULT
                 write(*,*) 'objfun flag: ', trim(self%objfun)

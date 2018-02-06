@@ -222,6 +222,10 @@ contains
                 write(*,*) '(3) Identify the pixel threshold that excludes any background noise'
                 stop 'commander_volops :: postproc_vol'
             endif
+            if( .not. cline%defined('mw') )then
+                write(*,*) 'Molecular weight must be provided for auto-masking (MW)'
+                stop 'commander_volops :: postproc_vol'
+            endif
             call vol_copy%bwd_ft
             call mskvol%automask3D(p, vol_copy)
             call mskvol%write('automask'//p%ext)
