@@ -1289,9 +1289,10 @@ select case(prg)
        keys_optional(18) = 'pdbfile'
        keys_optional(19) = 'oritab'
        keys_optional(20) = 'outfile'
+       keys_optional(21) = 'center'
        ! parse command line
        if( describe ) call print_doc_mask
-       call cline%parse( keys_required(:1), keys_optional(:20))
+       call cline%parse( keys_required(:1), keys_optional(:21))
        ! execute
        call xmask%execute(cline)
     case( 'automask2D' )

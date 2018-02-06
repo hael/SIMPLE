@@ -904,9 +904,10 @@ select case(prg)
         keys_optional(16) = 'state'
         keys_optional(17) = 'trs'
         keys_optional(18) = 'objfun'
+        keys_optional(19) = 'update_frac'
         ! parse command line
         ! if( describe ) call print_doc_het_refine
-        call cline%parse(keys_required(:6), keys_optional(:18))
+        call cline%parse(keys_required(:6), keys_optional(:19))
         ! sanity check
         if( cline%defined('stk') .or. cline%defined('stktab') )then
             ! all ok

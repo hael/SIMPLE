@@ -10,7 +10,7 @@ contains
 
     !> \brief  converts the FSC to SSNR (the 2.* is because of the division of the data)
     function fsc2ssnr( corrs ) result( ssnr )
-        real, intent(in)  :: corrs(:) !<  instrument FSC 
+        real, intent(in)  :: corrs(:) !<  instrument FSC
         real, allocatable :: ssnr(:) !<  instrument SSNR
         integer :: nyq, k
         real    :: fsc
@@ -131,5 +131,5 @@ contains
             filt_resamp(k) = filt_orig(ind)
         end do
       end function resample_filter
-      
+
 end module simple_estimate_ssnr
