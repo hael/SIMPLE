@@ -6,7 +6,7 @@
 # flags should be set in the CMakeList.txt by setting the CMAKE_Fortran_FLAGS_*
 # variables.
 
-# Override CMakeDetermineFortranCompiler default fortran of f95 
+# Override CMakeDetermineFortranCompiler default fortran of f95
 if(NOT $ENV{FC} STREQUAL "")
   set(CMAKE_Fortran_COMPILER_NAMES $ENV{FC})
 else()
@@ -37,7 +37,7 @@ else()
   endif()
   set(ENV{CPP} ${CMAKE_CPP_COMPILER_NAMES})
 endif()
-enable_language(Fortran C)
+enable_language(Fortran C CXX)
 include(CMakeDetermineFortranCompiler)
 include(CMakeDetermineCompiler)
 
@@ -56,7 +56,7 @@ PROGRAM main
   BLOCK
     INTEGER :: i
   END BLOCK
-END PROGRAM 
+END PROGRAM
 ")
   try_compile(CMAKE_Fortran_COMPILER_SUPPORTS_F08 ${CMAKE_BINARY_DIR}
     ${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/CMakeTmp/testFortranCompilerF08.f90
@@ -186,9 +186,9 @@ elseif (CMAKE_Fortran_COMPILER_ID STREQUAL "PGI")
   set(fordebug "-g ${warn}  -traceback -gopt -Mneginfo=all,ftn -Mpgicoff -traceback -Mprof  ")
   set(forspeed "-O3 -fast " ) # -Munroll -O4  -Mipa=fast -fast -Mcuda=fastmath,unroll -Mvect=nosizelimit,short,simd,sse  ")
   set(forpar   " -mp -acc -Mcuda=cc60,cuda8.0") # -Mconcur=bind,allcores -Mcuda=cuda8.0,cc60,flushz,fma
-  set(target   " -m64 -fPIC ")  # 
+  set(target   " -m64 -fPIC ")  #
   set(common   "${preproc} ${dialect} ${target}")
-  # further PGI options 
+  # further PGI options
   option(PGI_EXTRACT_ALL  "PGI --Extract subprograms for inlining (-Mextract)" OFF)
   option(PGI_LARGE_FILE_SUPPORT  "PGI -- Link with library directory for large file support (-Mlfs)" OFF)
   option(PGI_CUDA_MANAGED_MEMORY "Use CUDA Managed Memory" OFF)
@@ -228,9 +228,9 @@ endif ()
 string(TOUPPER "${CMAKE_Fortran_COMPILER_ID}" ID_STRING)
 set(CMAKE_Fortran_FLAGS_RELEASE_INIT "${common} ${forspeed} ${forpar} -D${ID_STRING}"  CACHE STRING "Default release flags -- this cannot be edited (see cmake/FortranOverride.cmake) -- Use CMAKE_Fortran_FLAGS_RELEASE instead" FORCE)
 set(CMAKE_Fortran_FLAGS_DEBUG_INIT  "${common} ${fordebug} ${forpar} -D${ID_STRING}"  CACHE STRING "Default debug flags -- this cannot be edited (see cmake/FortranOverride.cmake -- Use CMAKE_Fortran_FLAGS_DEBUG instead)" FORCE)
-message( STATUS "CMAKE_Fortran_FLAGS_RELEASE_INIT: ${CMAKE_Fortran_FLAGS_RELEASE_INIT}") 
+message( STATUS "CMAKE_Fortran_FLAGS_RELEASE_INIT: ${CMAKE_Fortran_FLAGS_RELEASE_INIT}")
 message( STATUS "CMAKE_Fortran_FLAGS_DEBUG_INIT: ${CMAKE_Fortran_FLAGS_DEBUG_INIT}")
-# 
+#
 # Make recent cmake not spam about stuff
 if(POLICY CMP0063)
   cmake_policy(SET CMP0063 OLD)
@@ -311,5 +311,3 @@ elseif(NOT BT)
 else()
   message(FATAL_ERROR "CMAKE_BUILD_TYPE not valid, choices are DEBUG, RELEASE, RELWITHDEBINFO or TESTING")
 endif(BT STREQUAL "RELEASE")
-
-

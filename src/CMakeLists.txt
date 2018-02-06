@@ -14,7 +14,7 @@ add_custom_target(simple_args
 
 add_custom_target(simple_gen_doc_f90
   COMMAND [ -x "${CMAKE_INSTALL_PREFIX}/bin/simple_exec" ] && SIMPLE_PATH=${CMAKE_INSTALL_PREFIX} ${CMAKE_SOURCE_DIR}/scripts/gen_simple_doc_primer.pl f90 > ${CMAKE_BINARY_DIR}/lib/simple/simple_gen_doc.f90
-  DEPENDS "${CMAKE_SOURCE_DIR}/scripts/gen_simple_doc_primer.pl" 
+  DEPENDS "${CMAKE_SOURCE_DIR}/scripts/gen_simple_doc_primer.pl"
   BYPRODUCTS "${CMAKE_BINARY_DIR}/lib/simple/simple_gen_doc.f90"
   WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
   COMMENT "Create new simple_gen_doc.f90 ... requires existing build of simple"
@@ -69,6 +69,7 @@ list(REMOVE_ITEM SIMPLECORELIB
    "${CMAKE_CURRENT_SOURCE_DIR}/utils/simple_imghead.f90"
    "${CMAKE_CURRENT_SOURCE_DIR}/utils/simple_imgfile.f90"
    "${CMAKE_CURRENT_SOURCE_DIR}/fileio/simple_alloc.f90"
+   "${CMAKE_CURRENT_SOURCE_DIR}/fileio/simple_png.f90"
    "${CMAKE_CURRENT_SOURCE_DIR}/main/simple_hash.f90"
    "${CMAKE_CURRENT_SOURCE_DIR}/main/simple_chash.f90"
    "${CMAKE_CURRENT_SOURCE_DIR}/main/simple_cftcc_scatsrch.f90"

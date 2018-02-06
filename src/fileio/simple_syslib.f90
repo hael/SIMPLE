@@ -445,7 +445,7 @@ contains
         integer,          intent(in), optional :: line !< line number from calling file
         character(len=*), intent(in), optional :: iomsg !< IO message
         integer                                :: syserr
-        
+
         if (alloc_status/=0)then
             write(stderr,'(a)') 'ERROR: Allocation failure!'
             call simple_error_check(alloc_status)
@@ -559,7 +559,7 @@ contains
         if( status ==  2 ) write(*,*) 'environment variables not supported by system; simple_syslib :: simple_getenv'
         if( length ==  0 .or. status /= 0 ) return
 #endif
-        
+
         write(simple_getenv,'(A)') value
         !        call alloc_errchk("In syslib::simple_getenv ", alloc_stat)
     end function simple_getenv
@@ -569,10 +569,10 @@ contains
 #if defined(INTEL)
         integer  :: msecs
         msecs = 1000*secs
-        call sleepqq(msecs)  !! milliseconds 
+        call sleepqq(msecs)  !! milliseconds
 #else
         call sleep(secs) !! intrinsic
-#endif        
+#endif
     end subroutine simple_sleep
 
 
@@ -769,6 +769,51 @@ contains
     !     endif
     ! end function get_lunit
 
+    !> simple_timestamp prints time stamp (based on John Burkardt's website code)
+    subroutine simple_timestamp ( )
+        character(len= 8) :: ampm
+        integer (kind=sp) :: d
+        integer (kind=sp) :: h
+        integer (kind=sp) :: m
+        integer (kind=sp) :: mm
+        character (len=9 ), parameter, dimension(12) :: month = (/ &
+            'January  ', 'February ', 'March    ', 'April    ', &
+            'May      ', 'June     ', 'July     ', 'August   ', &
+            'September', 'October  ', 'November ', 'December ' /)
+        integer    :: n, s, y, values(8)
+
+        call date_and_time(values=values)
+        y = values(1)
+        m = values(2)
+        d = values(3)
+        h = values(5)
+        n = values(6)
+        s = values(7)
+        mm = values(8)
+        if ( h < 12 ) then
+            ampm = 'AM'
+        else if ( h == 12 ) then
+            if ( n == 0 .and. s == 0 ) then
+                ampm = 'Noon'
+            else
+                ampm = 'PM'
+            end if
+        else
+            h = h - 12
+            if ( h < 12 ) then
+                ampm = 'PM'
+            else if ( h == 12 ) then
+                if ( n == 0 .and. s == 0 ) then
+                    ampm = 'Midnight'
+                else
+                    ampm = 'AM'
+                end if
+            end if
+        end if
+        write ( *, '(i2.2,1x,a,1x,i4,2x,i2,a1,i2.2,a1,i2.2,a1,i3.3,1x,a)' ) &
+            d, trim ( month(m) ), y, h, ':', n, ':', s, '.', mm, trim ( ampm )
+    end subroutine simple_timestamp
+
     function cpu_usage ()
         real :: cpu_usage
 
@@ -804,7 +849,7 @@ contains
             write(*, fmt = '(F6.2,A2)') percent, '%'
             oldidle = times(4)
             oldsum = sumtimes
-        
+
         end if
         cpu_usage=percent
 #else
@@ -828,7 +873,7 @@ contains
     CHARACTER(*), PARAMETER :: compilation_cmd = COMPILER_OPTIONS()
     CHARACTER(*), PARAMETER :: compiler_ver = COMPILER_VERSION()
 #endif
-    
+
     integer , intent (in), optional :: file_unit
     integer  :: file_unit_op
     integer       :: status
@@ -919,4 +964,3 @@ contains
 
 
 end module simple_syslib
-
