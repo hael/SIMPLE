@@ -41,6 +41,7 @@ contains
         type(image)                :: mskvol
         type(atoms)                :: pdb
         type(masker)               :: msker
+        character(len=STDLEN)      :: pdbout_fname
         integer                    :: ldim(3)
         p = params(cline)  ! parameters generated
         p%boxmatch = p%box ! turns off boxmatch logics
@@ -102,8 +103,14 @@ contains
                 endif
                 if( p%outvol .ne. '' )call b%vol%write(p%outvol, del_if_exists=.true.)
             else if( cline%defined('pdbfile') )then
+                ! focus masking
                 call pdb%new(p%pdbfile)
-                call msker%mask_from_pdb(p, pdb, b%vol, b%a)
+                pdbout_fname = trim(get_fbody(p%pdbfile, 'pdb')) // '_centered'
+                if( p%center.eq.'yes' )then
+                    call msker%mask_from_pdb(p, pdb, b%vol, os=b%a, pdbout=pdbout_fname)
+                else
+                    call msker%mask_from_pdb(p, pdb, b%vol)
+                endif
                 call b%a%write(p%outfile)
                 call b%vol%write(p%outvol)
                 call msker%write('maskfile'//p%ext)
