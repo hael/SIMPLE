@@ -27,7 +27,7 @@ FATAL: SQLite3 libraries and headers not found.
 ")
   endif (SQLITE3_FOUND)
 
-  find_package (JPEG REQUIRED)
+  find_package (JPEG9 REQUIRED)
   if (JPEG_FOUND)
     include_directories(${JPEG_INCLUDE_DIR})
   else()
@@ -82,7 +82,7 @@ add_executable(simple_gui ${SIMPLE_GUI_SOURCES})
 
 ## Added by Joe
 if (NOT USE_SYSTEM_JPEG_SQLite)
-  add_dependencies(simple_gui libjpeg libsqlite3)	
+  add_dependencies(simple_gui libjpeg libsqlite3)
 endif (NOT USE_SYSTEM_JPEG_SQLite)
 #
 
