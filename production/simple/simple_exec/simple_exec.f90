@@ -502,10 +502,11 @@ select case(prg)
         keys_optional(4) = 'lp'
         keys_optional(5) = 'dfmin'
         keys_optional(6) = 'dfmax'
-        keys_optional(7) = 'phaseplate'
+        keys_optional(7) = 'astigtol'
+        keys_optional(8) = 'phaseplate'
         ! parse command line
         if( describe ) call print_doc_ctffit
-        call cline%parse(keys_required(:5), keys_optional(:7))
+        call cline%parse(keys_required(:5), keys_optional(:8))
         ! set defaults
         if( .not. cline%defined('pspecsz') ) call cline%set('pspecsz', 512.)
         if( .not. cline%defined('hp')      ) call cline%set('hp',       30.)
@@ -1288,9 +1289,10 @@ select case(prg)
        keys_optional(18) = 'pdbfile'
        keys_optional(19) = 'oritab'
        keys_optional(20) = 'outfile'
+       keys_optional(21) = 'center'
        ! parse command line
        if( describe ) call print_doc_mask
-       call cline%parse( keys_required(:1), keys_optional(:20))
+       call cline%parse( keys_required(:1), keys_optional(:21))
        ! execute
        call xmask%execute(cline)
     case( 'automask2D' )
@@ -1894,17 +1896,16 @@ select case(prg)
         keys_required(2) = 'outstk'
         keys_required(3) = 'smpd'
         ! set optional keys
-        keys_optional(1) = 'lp'
-        keys_optional(2) = 'clip'
-        keys_optional(3) = 'nframes'
-        keys_optional(4) = 'fbody'
-        keys_optional(5) = 'numlen'
-        keys_optional(6) = 'xdim'
-        keys_optional(7) = 'ydim'
-        keys_optional(8) = 'endian'
+        keys_optional(1) = 'clip'
+        keys_optional(2) = 'nframes'
+        keys_optional(3) = 'fbody'
+        keys_optional(4) = 'numlen'
+        keys_optional(5) = 'xdim'
+        keys_optional(6) = 'ydim'
+        keys_optional(7) = 'endian'
         ! parse command line
         if( describe ) call print_doc_stack
-        call cline%parse(keys_required(:3), keys_optional(:8))
+        call cline%parse(keys_required(:3), keys_optional(:6))
         ! execute
         call xstack%execute(cline)
     case( 'stackops' )

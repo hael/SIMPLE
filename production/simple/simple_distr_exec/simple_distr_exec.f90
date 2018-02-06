@@ -345,10 +345,11 @@ select case(prg)
         keys_optional(4) = 'lp'
         keys_optional(5) = 'dfmin'
         keys_optional(6) = 'dfmax'
-        keys_optional(7) = 'phaseplate'
+        keys_optional(7) = 'astigtol'
+        keys_optional(8) = 'phaseplate'
         ! parse command line
         if( describe ) call print_doc_ctffit
-        call cline%parse(keys_required(:6), keys_optional(:7))
+        call cline%parse(keys_required(:6), keys_optional(:8))
         ! set defaults
         if( .not. cline%defined('pspecsz') ) call cline%set('pspecsz',   512.)
         if( .not. cline%defined('hp')      ) call cline%set('hp',         30.)
@@ -903,9 +904,10 @@ select case(prg)
         keys_optional(16) = 'state'
         keys_optional(17) = 'trs'
         keys_optional(18) = 'objfun'
+        keys_optional(19) = 'update_frac'
         ! parse command line
         ! if( describe ) call print_doc_het_refine
-        call cline%parse(keys_required(:6), keys_optional(:18))
+        call cline%parse(keys_required(:6), keys_optional(:19))
         ! sanity check
         if( cline%defined('stk') .or. cline%defined('stktab') )then
             ! all ok

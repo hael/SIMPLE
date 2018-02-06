@@ -354,8 +354,7 @@ contains
                 !$omp parallel do default(shared) private(i,iptcl) schedule(guided) proc_bind(close)
                 do i=1,nptcls2update
                     iptcl = pinds(i)
-                    call primesrch3D(iptcl)%exec_prime3D_srch_het(corr_thresh, do_extr, state_counts,&
-                        &symmat=symmat, c1_e=b%e)
+                    call primesrch3D(iptcl)%exec_prime3D_srch_het(corr_thresh, do_extr, state_counts, symmat=symmat)
                 end do
                 !$omp end parallel do
             case ('states')

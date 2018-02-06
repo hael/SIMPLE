@@ -41,8 +41,22 @@ contains
     function str2format( str) result( format )
         character(len=*), intent(in)  :: str
         character(len=:), allocatable :: format
-        integer :: io_stat, ifoo
+        integer :: iostat, ivar
+        real    :: rvar
         logical :: str_is_file
+        ! real
+        read(str,*, iostat=iostat) rvar
+        if( iostat == 0 )then
+            allocate( format, source='real' )
+            return
+        endif
+        ! integer
+        read(str,*, iostat=iostat) ivar
+        if( iostat == 0 )then
+            allocate( format, source='int' )
+            return
+        endif
+        ! file
         str_is_file = .true.
         if( index(str, '.spi') /= 0 )then
         else if( index(str, '.mrc') /= 0 )then
@@ -64,15 +78,6 @@ contains
         endif
         if( str_is_file )then
             allocate( format, source='file' )
-            return
-        endif
-        if( index(str, '.') /= 0 )then
-            allocate( format, source='real' )
-            return
-        endif
-        call str2int(str, io_stat, ifoo )
-        if( io_stat==0 )then
-            allocate( format, source='int' )
             return
         endif
         allocate( format, source='char' )
@@ -129,13 +134,28 @@ contains
                     end if
                     isp=1
                 case(33:) ! not a space, quote, or control character
-                k=k+1
-                outstr(k:k)=ch
-                isp=0
+                    k=k+1
+                    outstr(k:k)=ch
+                    isp=0
             end select
         end do
         str=adjustl(outstr)
     end subroutine compact
+
+    !> \brief  finds the first instance of a character 'delim' in the
+    !!         the string 'str'. The characters before the found delimiter are
+    !!         output in 'before'. The characters after the found delimiter are
+    !!         output in 'str'.
+    subroutine split_str(str, delim, before)
+      character(len=*), intent(inout) :: str
+      character(len=1), intent(in)    :: delim
+      character(len=*), intent(out)   :: before
+      integer :: index
+      str    = trim(str)
+      index  = scan(str, delim)
+      before = adjustl(trim(str(1:index-1)))
+      str    = adjustl(str(index+1:))
+    end subroutine split_str
 
     !> \brief  finds the first instance of a character 'delim' in the
     !!         the string 'str'. The characters before the found delimiter are

@@ -134,7 +134,7 @@ type :: params
     character(len=STDLEN) :: msklist=''           !< table (text file) of mask volume files(.txt)
     character(len=STDLEN) :: mskvols(MAXS)=''
     character(len=STDLEN) :: msktype='soft'       !< type of mask(hard|soft){soft}
-    character(len=7)      :: objfun='cc'          !< objective function(cc|ccres){cc}
+    character(len=7)      :: objfun='cc'          !< objective function(cc|ccres|ccreg){cc}
     character(len=STDLEN) :: opt='bfgs'           !< optimiser (bfgs|simplex){bfgs}
     character(len=STDLEN) :: oritab=''            !< table  of orientations(.txt|.bin)
     character(len=STDLEN) :: oritab2=''           !< 2nd table of orientations(.txt|.bin)
@@ -323,6 +323,8 @@ type :: params
     real    :: frac_outliers=0.
     real    :: fraczero=0.
     real    :: ftol=1e-6
+    real    :: unblurftol = 1e-4
+    real    :: unblurgtol = 1e-4
     real    :: gw=0.5
     real    :: hp=100.             !< high-pass limit(in A)
     real    :: hp_ctffind=30.      !< high-pass limit 4 ctffind(in A)
@@ -740,6 +742,8 @@ contains
         call check_rarg('thres',          self%thres)
         call check_rarg('time_per_image', self%time_per_image)
         call check_rarg('trs',            self%trs)
+        call check_rarg('unblurftol',     self%unblurftol)
+        call check_rarg('unblurgtol',     self%unblurgtol)
         call check_rarg('update_frac',    self%update_frac)
         call check_rarg('width',          self%width)
         call check_rarg('winsz',          self%winsz)
@@ -1035,6 +1039,8 @@ contains
                 if(self%focusmsk >= self%msk)stop 'focusmsk should be smaller than msk'
             endif
             self%l_focusmsk = .true.
+        else
+            self%focusmsk = self%msk
         endif
         ! scaling stuff
         self%l_autoscale = .false.
@@ -1154,6 +1160,8 @@ contains
             case('cc')
                 self%l_cc_objfun = .true.
             case('ccres')
+                self%l_cc_objfun = .false.
+            case('ccreg')
                 self%l_cc_objfun = .false.
             case DEFAULT
                 write(*,*) 'objfun flag: ', trim(self%objfun)

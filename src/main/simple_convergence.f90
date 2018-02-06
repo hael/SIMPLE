@@ -227,7 +227,7 @@ contains
             min_state_mi_joint = minval(state_mi_joint, MASK=statepops>0.)
             ! print the overlaps and pops for the different states
             do istate=1,self%pp%nstates
-                write(*,'(A,1X,I3,1X,A,1X,F7.4,1X,A,1X,I5)') '>>> STATE', istate,&
+                write(*,'(A,1X,I3,1X,A,1X,F7.4,1X,A,1X,I8)') '>>> STATE', istate,&
                 'DISTRIBUTION OVERLAP:', state_mi_joint(istate), 'POPULATION:', nint(statepops(istate))
             end do
             if( min_state_mi_joint > MI_STATE_LIM      .and.&
@@ -266,7 +266,7 @@ contains
         write(*,'(A,1X,F7.4)') '>>> CORRELATION        :', self%corr
         ! print the overlaps and pops for the different states
         do istate=1,self%pp%nstates
-            write(*,'(A,I2,1X,A,1X,I7)') '>>> STATE ',istate,'POPULATION:', nint(statepops(istate))
+            write(*,'(A,I2,1X,A,1X,I8)') '>>> STATE ',istate,'POPULATION:', nint(statepops(istate))
         end do
         if( self%mi_state > HET_MI_STATE_LIM .and.&
             self%frac     > HET_FRAC_LIM     )then

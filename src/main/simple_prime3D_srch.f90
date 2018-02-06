@@ -392,14 +392,13 @@ contains
     end subroutine exec_prime3D_srch
 
     !>  \brief state labeler
-    subroutine exec_prime3D_srch_het( self, corr_thresh, do_extr_opt, counts, symmat, c1_e )
+    subroutine exec_prime3D_srch_het( self, corr_thresh, do_extr_opt, counts, symmat )
         class(prime3D_srch),        intent(inout) :: self
         real,                       intent(in)    :: corr_thresh
         logical,                    intent(in)    :: do_extr_opt
         integer,                    intent(inout) :: counts(2)
         integer,          optional, intent(in)    :: symmat(self%nprojs, self%nsym)
-        class(oris),      optional, intent(inout) :: c1_e
-        call self%stochastic_srch_het( corr_thresh, do_extr_opt, counts, symmat, c1_e )
+        call self%stochastic_srch_het( corr_thresh, do_extr_opt, counts, symmat )
         if( DEBUG ) print *,  '>>> PRIME3D_SRCH::EXECUTED PRIME3D_SRCH_HET'
     end subroutine exec_prime3D_srch_het
 
@@ -769,14 +768,13 @@ contains
     end subroutine stochastic_srch_snhc
 
     !> stochastic search heterogeneity
-    subroutine stochastic_srch_het( self, corr_thresh, do_extr_opt, counts, symmat, c1_e )
+    subroutine stochastic_srch_het( self, corr_thresh, do_extr_opt, counts, symmat )
         use simple_rnd,      only: shcloc, irnd_uni
         class(prime3D_srch),   intent(inout) :: self
         real,                  intent(in)    :: corr_thresh
         logical,               intent(in)    :: do_extr_opt
         integer,               intent(inout) :: counts(2)
         integer,     optional, intent(in)    :: symmat(self%nprojs, self%nsym)
-        class(oris), optional, intent(inout) :: c1_e
         integer :: sym_projs(self%nstates), loc(1), iproj, iref, isym, state
         real    :: corrs(self%nstates), corrs_sym(self%nsym), corrs_inpl(self%nrots)
         real    :: shvec(2), corr, mi_state, frac, mi_inpl, mi_proj

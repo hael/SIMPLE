@@ -4,7 +4,7 @@ module simple_ftexp_shsrch
 use simple_opt_factory, only: opt_factory
 use simple_opt_spec,    only: opt_spec
 use simple_optimizer,   only: optimizer
-use simple_ft_expanded, only: ft_expanded
+use simple_ft_expanded, only: ft_expanded, ft_exp_reset_tmp_pointers
 use simple_image,       only: image
 implicit none
 
@@ -20,15 +20,28 @@ character(len=:), allocatable :: opt_str           !< optimiser string descripto
 integer                       :: nrestarts=3       !< number of optimisation restarts
 real,    parameter            :: TOL=1e-4          !< tolerance parameter
 integer, parameter            :: MAXITS=30         !< maximum number of iterations
+real                          :: unblurftol = 1e-4
+real                          :: unblurgtol = 1e-4
 
 contains
 
     !> Initialise  ftexp_shsrch
-    subroutine ftexp_shsrch_init( ref, ptcl, lims, opt, nrestarts_in )
+    subroutine ftexp_shsrch_init( ref, ptcl, lims, opt, nrestarts_in, unblur_ftol, unblur_gtol )
         class(ft_expanded), target, intent(in) :: ref, ptcl
         real,                       intent(in) :: lims(2,2)
         character(len=*), optional, intent(in) :: opt
         integer,          optional, intent(in) :: nrestarts_in
+        real,             optional, intent(in) :: unblur_ftol, unblur_gtol
+        if (present(unblur_ftol)) then
+            unblurftol = unblur_ftol
+        else
+            unblurftol = TOL
+        end if
+        if (present(unblur_gtol)) then
+            unblurgtol = unblur_gtol
+        else
+            unblurgtol = TOL
+        end if
         ! set pointers
         reference => ref
         particle  => ptcl
@@ -42,7 +55,7 @@ contains
         nrestarts = 1
         if( present(nrestarts_in) ) nrestarts = nrestarts_in
         ! make optimizer spec
-        call ospec%specify(opt_str, 2, ftol=TOL, gtol=TOL,&
+        call ospec%specify(opt_str, 2, ftol=unblurftol, gtol=unblurgtol,&
             limits=lims, nrestarts=nrestarts )
         ! set optimizer cost function
         if( trim(opt_str) .eq. 'lbfgsb' )then
@@ -118,7 +131,7 @@ contains
                 ! re-specify the limits
                 lims(:,1) = -maxshift
                 lims(:,2) = maxshift
-                call ospec%specify(opt_str, 2, ftol=TOL, gtol=TOL, limits=lims, nrestarts=nrestarts)
+                call ospec%specify(opt_str, 2, ftol=unblurftol, gtol=unblurgtol, limits=lims, nrestarts=nrestarts)
                 ! set optimizer cost function
                 if( opt_str == 'lbfgsb' ) then
                     call ospec%set_costfun_8(ftexp_shsrch_cost_8)
@@ -139,6 +152,10 @@ contains
             ospec%x = 0.
         endif
         call nlopt%minimize(ospec, fun_self, cxy(1))
+        if( opt_str == 'lbfgsb' ) then
+            call reference%corr_normalize(particle, cxy(1))
+            call ft_exp_reset_tmp_pointers
+        end if
         cxy(1)  = -cxy(1) ! correlation
         cxy(2:) = ospec%x ! shift
         if( present(prev_corr) )then

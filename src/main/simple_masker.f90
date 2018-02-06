@@ -107,15 +107,17 @@ contains
     end subroutine apply_2Denvmask22Dref
 
     !>  \brief  is for
-    subroutine mask_from_pdb( self, p, pdb, vol_inout, os)
+    subroutine mask_from_pdb( self, p, pdb, vol_inout, os, pdbout)
         use simple_oris,  only: oris
         use simple_atoms, only: atoms
-        class(masker),         intent(inout) :: self
-        class(params),         intent(in)    :: p
-        type(atoms),           intent(inout) :: pdb
-        class(image),          intent(inout) :: vol_inout
-        class(oris), optional, intent(inout) :: os
+        class(masker),              intent(inout) :: self
+        class(params),              intent(in)    :: p
+        type(atoms),                intent(inout) :: pdb
+        class(image),               intent(inout) :: vol_inout
+        class(oris),      optional, intent(inout) :: os
+        character(len=*), optional, intent(inout) :: pdbout
         type(image) :: distimg
+        type(atoms) :: shifted_pdb
         real        :: centre(3), shift(3), pdb_center(3), xyz(3), minmax(2), radius, smpd
         integer     :: i
         logical     :: was_ft
@@ -133,15 +135,24 @@ contains
         else
             radius = real(p%binwidth) * smpd
         endif
-        ! shift volume & oris
-        call vol_inout%shift(shift)
-        if(present(os))call os%map3dshift22d(-shift)
-        ! build mask
-        shift = shift * smpd
-        do i = 1, pdb%get_n()
-            xyz = pdb%get_coord(i) - shift
-            call self%set_within( xyz, radius, 1.)
-        enddo
+        if( p%center.eq.'yes' )then
+            ! shift volume & oris
+            call vol_inout%shift(shift)
+            if(present(os)) call os%map3dshift22d(-shift)
+            shift       = - shift * smpd
+            shifted_pdb = pdb
+            call shifted_pdb%translate(shift)
+            if( present(pdbout) ) call shifted_pdb%writepdb(pdbout) ! pdb output
+            do i = 1, shifted_pdb%get_n()
+                call self%set_within( shifted_pdb%get_coord(i), radius, 1.)
+            enddo
+            call shifted_pdb%kill
+        else
+            ! build mask
+            do i = 1, pdb%get_n()
+                call self%set_within( pdb%get_coord(i), radius, 1.)
+            enddo
+        endif
         call self%grow_bin()
         call distimg%mul(self) ! for suggested focusmsk
         call self%cos_edge(p%edge)
@@ -149,7 +160,7 @@ contains
         call vol_inout%bwd_ft()
         call vol_inout%mul(self)
         if(was_ft) call vol_inout%fwd_ft
-        ! suggested focusmsk
+        ! focusmsk
         minmax = distimg%minmax()
         write(*,'(A,I4)') '>>> SUGGESTED FOCUSMSK: ', ceiling(minmax(2))+p%edge
         call distimg%kill
