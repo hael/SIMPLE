@@ -22,7 +22,7 @@ set(SIMPLE_VERSION "${SIMPLE_VERSION_MAJOR}.${SIMPLE_VERSION_MINOR}")
 #
 #################################################################
 option(USE_OPENMP "Use OpenMP for parallelization - debugging may disable OpemMP" ON )
-#option(USE_OPENACC "Use OpenACC for auto GPU parallelization - debugging may disable OpenMP" ON)
+option(USE_OPENACC "Use OpenACC for auto GPU parallelization - debugging may disable OpenMP" OFF)
 #option(USE_CUDA "GPU NVIDIA - in development" OFF)
 
 option(${PROJECT_NAME}_BUILD_TESTS "Build the test examples" ON)
@@ -221,12 +221,12 @@ install(FILES  ${CMAKE_CURRENT_BINARY_DIR}/add2.bashrc ${CMAKE_CURRENT_BINARY_DI
   endif()
 
 if(VERBOSE) #only for the fool-hardy
-  option(ENABLE_LINK_TIME_OPTIMISATION "Enable link-time optimisation" OFF)
-  OPTION(ENABLE_FAST_MATH_OPTIMISATION "Optimize code for fastmath." OFF)
-  OPTION(ENABLE_PROFILE_OPTIMISATION "Optimize code for PFO. ( -fpfo )" OFF)
-  OPTION(ENABLE_AUTO_PARALLELISE "Optimize code for parallel systems." OFF)
+  option(USE_LINK_TIME_OPTIMISATION "Enable link-time optimisation" OFF)
+  OPTION(USE_FAST_MATH_OPTIMISATION "Optimize code for fastmath. " OFF)
+  OPTION(USE_PROFILE_OPTIMISATION "Optimize code for PFO. (GNU: -fpfo )" OFF)
+  OPTION(USE_AUTO_PARALLELISE "Optimize code for parallel systems. [Intel and PGI only]" OFF)
   #flags for optimization level. You can only turn one of following option to ON, or leave all of them to OFF.
-  OPTION(ENABLE_PROFILING "enable symbol generation without debug support" OFF)
+  OPTION(USE_PROFILING "enable symbol generation without debug support" OFF)
   option(CPACK_GENERATOR "Enable build of distribution packages using CPack" TGZ)
 
   #

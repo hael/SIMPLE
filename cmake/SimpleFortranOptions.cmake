@@ -52,7 +52,7 @@ if(Fortran_COMPILER_NAME MATCHES "gfortran*")
       DOC "Searching for GNU gfortran preprocessor "
       )
     if(NOT EXIST "${CMAKE_Fortran_COMPILER}")
-      message( FATAL_ERROR  "Cannot find ${CMAKE_Fortran_COMPILER} -- 
+      message( FATAL_ERROR  "Cannot find ${CMAKE_Fortran_COMPILER} --
 ${CLANG_FATAL_MSG}")
     endif()
   endif()
@@ -76,7 +76,7 @@ if(ACTUAL_FC_TARGET MATCHES "Clang|clang")
     DOC "Searching for GNU cpp preprocessor "
     )
   if(NOT EXISTS "${TMP_CPP_COMPILER}")
-    message( FATAL_ERROR  "Cannot find GNU cpp compiler -- 
+    message( FATAL_ERROR  "Cannot find GNU cpp compiler --
 ${CLANG_FATAL_MSG}")
   endif()
 endif()
@@ -87,7 +87,7 @@ set(CMAKE_Fortran_SOURCE_FILE_EXTENSIONS ${CMAKE_Fortran_SOURCE_FILE_EXTENSIONS}
 
 if(CMAKE_INSTALL_LIBDIR MATCHES "lib64")
   set(CMAKE_INSTALL_LIBDIR "lib" CACHE STRING "" FORCE)
-endif()			  
+endif()
 
 
 
@@ -135,14 +135,14 @@ message(STATUS "Fortran compiler ${CMAKE_Fortran_COMPILER_ID}")
 
 
 ################################################################
-# Generic Flags 
+# Generic Flags
 ################################################################
 
 
 # Optimize for the host's architecture
 # message(STATUS "Testing flag host arch")
 # SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_RELEASE "${CMAKE_Fortran_FLAGS_RELEASE}"
-#   Fortran 
+#   Fortran
 #   "-xHost"        # Intel
 #   "/QxHost"       # Intel Windows
 #   ${GNUNATIVE}    # GNU
@@ -167,7 +167,7 @@ message(STATUS "Fortran compiler ${CMAKE_Fortran_COMPILER_ID}")
 ## Disable optimizations
 # message(STATUS "Testing debug flags")
 # SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_DEBUG "${CMAKE_Fortran_FLAGS_DEBUG}"
-#   Fortran 
+#   Fortran
 #   "-O0" # All compilers not on Windows
 #   "/Od" # Intel Windows
 #   )
@@ -194,7 +194,7 @@ message(STATUS "Fortran compiler ${CMAKE_Fortran_COMPILER_ID}")
 # # Check array bounds
 # message(STATUS "Testing flags array bounds check")
 # SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_DEBUG "${CMAKE_Fortran_FLAGS_DEBUG}"
-#   Fortran 
+#   Fortran
 #   "-fbounds-check" # GNU (Old style)
 #   "-fcheck=bounds" # GNU (New style)
 #   "-Mbounds"       # Portland Group
@@ -220,7 +220,7 @@ message(STATUS "Fortran compiler ${CMAKE_Fortran_COMPILER_ID}")
 
 # Unroll loops
 #message(STATUS "Testing flags unroll")
-if(ENABLE_AGGRESSIVE_OPTIMISATION)
+if(USE_AGGRESSIVE_OPTIMISATION)
 SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_RELEASE "${CMAKE_Fortran_FLAGS_RELEASE}"
   Fortran
   "-unroll-aggressive"        # Intel
@@ -236,7 +236,7 @@ SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_RELEASE "${CMAKE_Fortran_FLAGS_RELEASE}"
   "-Minline=maxsize=100,reshape,smallsize=10"      # Portland Group
   )
 endif()
-if(ENABLE_LINK_TIME_OPTIMISATION)
+if(USE_LINK_TIME_OPTIMISATION)
   # Interprocedural (link-time) optimizations
   # See IPO performance issues https://software.intel.com/en-us/node/694501
   #  may need to use -ipo-separate in case of multi-file problems),  using the -ffat-lto-objects compiler option is provided for GCC compatibility
@@ -256,8 +256,8 @@ if(ENABLE_LINK_TIME_OPTIMISATION)
     "-fprofile-dir=.profiling" # GNU
     "-Mpfo "# PGI
     )
-endif(ENABLE_LINK_TIME_OPTIMISATION)
-#if(ENABLE_AUTOMATIC_VECTORIZATION)
+endif(USE_LINK_TIME_OPTIMISATION)
+#if(USE_AUTOMATIC_VECTORIZATION)
 #   # Interprocedural (link-time) optimizations
 #   SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_RELEASE "${CMAKE_Fortran_FLAGS_RELEASE}"
 #     Fortran
@@ -277,7 +277,7 @@ endif(ENABLE_LINK_TIME_OPTIMISATION)
 #   )
 
 # # Vectorize code
-if (ENABLE_FAST_MATH_OPTIMISATION)
+if (USE_FAST_MATH_OPTIMISATION)
   SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_RELEASE "${CMAKE_Fortran_FLAGS_RELEASE}"
     Fortran
     "-fast"             # Intel, PGI
@@ -294,12 +294,12 @@ if (ENABLE_FAST_MATH_OPTIMISATION)
     Fortran
     "-ffp-contract=fast"              # GNU
     "-Mfma -Mvect=assoc,tile,fuse,gather,simd,partial,prefetch"        # Portland Group
-    )   # PGI 
-endif(ENABLE_FAST_MATH_OPTIMISATION)
+    )   # PGI
+endif(USE_FAST_MATH_OPTIMISATION)
 
 if  (CMAKE_Fortran_COMPILER_ID STREQUAL "PGI" OR CMAKE_Fortran_COMPILER_ID STREQUAL "Intel")
 # Auto parallelize
- if (ENABLE_AUTO_PARALLELISE)
+ if (USE_AUTO_PARALLELISE)
    SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_RELEASE "${CMAKE_Fortran_FLAGS_RELEASE}"
      Fortran
      "-parallel -opt-report-phase=par -opt-report:5"            # Intel (Linux)
@@ -328,7 +328,7 @@ endif()
 # endif()
 
 # Profile-feedback optimisation
-if(ENABLE_PROFILE_OPTIMISATION)
+if(USE_PROFILE_OPTIMISATION)
   SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_RELEASE "${CMAKE_Fortran_FLAGS_RELEASE}"
     Fortran
     "-Mpfo"                 # PGI
@@ -375,7 +375,7 @@ if (${CMAKE_Fortran_COMPILER_ID} STREQUAL "GNU" ) #AND Fortran_COMPILER_NAME MAT
 -Wsuggest-final-methods -Wunused -Wsurprising -Wuse-without-only \
 -Wintrinsic-shadow -Wrealloc-lhs -Wrealloc-lhs-all \
 -Wno-unused-dummy-argument")
-  
+
   # #  CMAKE_EXE_LINKER_FLAGS
   # if (LINK_TIME_OPTIMISATION)
   #   set(CMAKE_EXE_LINKER_FLAGS             "${CMAKE_EXE_LINKER_FLAGS_INIT} -flto ")
@@ -407,7 +407,7 @@ elseif (${CMAKE_Fortran_COMPILER_ID} STREQUAL "Intel" OR Fortran_COMPILER_NAME M
   # -diag-file-append=diagnostics.txt
   set(CMAKE_AR                           "xiar")
   set(CMAKE_CPP_COMPILER                 "fpp")
-  set(CMAKE_CPP_COMPILER_FLAGS           " -noJ -B -C ")  #Recognize C,C++,F90 style comments. 
+  set(CMAKE_CPP_COMPILER_FLAGS           " -noJ -B -C ")  #Recognize C,C++,F90 style comments.
   set(CMAKE_Fortran_FLAGS                " ${CMAKE_Fortran_FLAGS_RELEASE_INIT}  ${CMAKE_Fortran_FLAGS} ${EXTRA_FLAGS} ")
   set(CMAKE_Fortran_FLAGS_DEBUG          " ${EXTRA_FLAGS} ${CMAKE_Fortran_FLAGS_DEBUG_INIT} ${CMAKE_Fortran_FLAGS}")
   # set(CMAKE_Fortran_FLAGS_MINSIZEREL    "-Os ${CMAKE_Fortran_FLAGS_RELEASE_INIT}")
@@ -421,7 +421,7 @@ elseif (${CMAKE_Fortran_COMPILER_ID} STREQUAL "Intel" OR Fortran_COMPILER_NAME M
   #   set(CMAKE_SHARED_LINKER_FLAGS        "${CMAKE_SHARED_LINKER_FLAGS} -ip -ipo-separate -ipo-jobs=${NUM_JOBS}")
   #   set(CMAKE_STATIC_LINKER_FLAGS        "${CMAKE_STATIC_LINKER_FLAGS} -ip -ipo")
   # endif(LINK_TIME_OPTIMISATION)
-  add_definitions("-DOPENMP") 
+  add_definitions("-DOPENMP")
 
 elseif(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR Fortran_COMPILER_NAME MATCHES "pgfortran.*")
   #############################################
@@ -431,7 +431,7 @@ elseif(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI" OR Fortran_COMPILER_NAME MATC
   #############################################
   message(STATUS "NVIDIA PGI Linux compiler")
   set(PGICOMPILER ON)
-  set(ENABLE_LINK_TIME_OPTIMISATION ON)
+  set(USE_LINK_TIME_OPTIMISATION ON)
   set(EXTRA_FLAGS "${EXTRA_FLAGS} -module ${CMAKE_Fortran_MODULE_DIRECTORY} -I${CMAKE_Fortran_MODULE_DIRECTORY}")
   # NVIDIA PGI Linux compiler
 #  set(CMAKE_AR                           "pgfortran")
@@ -602,13 +602,13 @@ endif()
  set(CMAKE_Fortran_COMPILE_OBJECT "grep --silent -E '#include.*timer' <SOURCE> && ( ${CMAKE_CPP_COMPILER} ${CMAKE_CPP_COMPILER_FLAGS} -DOPENMP <DEFINES> <INCLUDES> <SOURCE> > <OBJECT>.f90 &&  <CMAKE_Fortran_COMPILER> <DEFINES> <INCLUDES> <FLAGS> -c <OBJECT>.f90 -o <OBJECT> ) || <CMAKE_Fortran_COMPILER> <DEFINES> <INCLUDES> <FLAGS> -c <SOURCE> -o <OBJECT>")
  endif()
 
-if(ENABLE_PROFILING)
+if(USE_PROFILING)
   SET(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -pg")
 endif()
 # Option for code coverage
 #if(VERBOSE OR ${BUILD_WITH_COVERAGE})
-  option(CODE_COVERAGE "Build code coverage results, requires GCC compiler (forces Debug build)" OFF)
-  if(CODE_COVERAGE OR ${BUILD_WITH_COVERAGE} )
+  option(USE_CODE_COVERAGE "Build code coverage results, requires GCC compiler (forces Debug build)" OFF)
+  if(USE_CODE_COVERAGE OR ${BUILD_WITH_COVERAGE} )
     if (${CMAKE_Fortran_COMPILER_ID} STREQUAL "GNU" )
       set(CMAKE_Fortran_FLAGS         "${CMAKE_Fortran_FLAGS} -g -Og -pg -fprofile-arcs -ftest-coverage")
      # set(CMAKE_BUILD_TYPE DEBUG CACHE STRING "" FORCE)
@@ -657,4 +657,3 @@ elseif(UNIX)
   SET(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
 
 endif()
-
