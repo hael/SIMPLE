@@ -513,7 +513,7 @@ contains
         character(len=*), intent(in)    :: speckind
         type(image) :: img_out, tmp, tmp2
         integer     :: xind, yind, cnt
-        logical     :: didft, outside
+        logical     :: didft
         if( self%ldim(3) /= 1 ) stop 'only for 2D images; mic2spec; simple_image'
         if( self%ldim(1) <= box .or. self%ldim(2) <= box )then
             stop 'cannot use a box larger than the image; mic2spec; simple_image'
@@ -529,20 +529,18 @@ contains
         cnt = 0
         do xind=0,self%ldim(1)-box,box/2
             do yind=0,self%ldim(2)-box,box/2
-                call self%window_slim([xind,yind],box,tmp,outside)
+                call self%window([xind,yind],box,tmp)
                 call tmp%norm
                 call tmp%edges_norm
                 call tmp%fwd_ft
                 call tmp%ft2img(speckind, tmp2)
                 call img_out%add(tmp2)
                 cnt = cnt+1
-                call tmp%kill()
-                call tmp2%kill()
+                call tmp%zero_and_unflag_ft
+                call tmp2%zero_and_unflag_ft
             end do
         end do
         call img_out%div(real(cnt))
-        call tmp%kill
-        call tmp2%kill
         if( didft ) call self%fwd_ft
     end function mic2spec
 
