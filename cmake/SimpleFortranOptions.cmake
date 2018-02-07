@@ -214,130 +214,6 @@ message(STATUS "Fortran compiler ${CMAKE_Fortran_COMPILER_ID}")
 #  "/O2" # Intel Windows
 #  )
 
-#####################
-### RELEASE FLAGS ###
-#####################
-
-# Unroll loops
-#message(STATUS "Testing flags unroll")
-if(USE_AGGRESSIVE_OPTIMISATION)
-SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_RELEASE "${CMAKE_Fortran_FLAGS_RELEASE}"
-  Fortran
-  "-unroll-aggressive"        # Intel
-  "-funroll-all-loops"        # GNU, Intel, Clang
-  "/unroll"                   # Intel Windows
-  "-Munroll "                 # Portland Group
-  )
-SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_RELEASE "${CMAKE_Fortran_FLAGS_RELEASE}"
-  Fortran
-  "-inline-level=2"           # Intel
-  "-finline-functions"        # GNU, Intel, Clang
-  "/unroll"                   # Intel Windows
-  "-Minline=maxsize=100,reshape,smallsize=10"      # Portland Group
-  )
-endif()
-if(USE_LINK_TIME_OPTIMISATION)
-  # Interprocedural (link-time) optimizations
-  # See IPO performance issues https://software.intel.com/en-us/node/694501
-  #  may need to use -ipo-separate in case of multi-file problems),  using the -ffat-lto-objects compiler option is provided for GCC compatibility
-  SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_RELEASE "${CMAKE_Fortran_FLAGS_RELEASE}"
-    Fortran
-    "-ipo-separate -ffat-lto-object"   # Intel (Linux OS X)
-    "/Qipo-separate"                   # Intel Windows
-    "-flto "                           # GNU
-    "-Mipa=fast,libinline,vestigial,reaggregation"    # Portland Group
-    )
-
-  #Profile optimizations
-  SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_RELEASE "${CMAKE_Fortran_FLAGS_RELEASE}"
-    Fortran
-    "-ip-dir=.profiling"           # Intel
-    "/Qip-dir=_profiling"          # Intel Windows
-    "-fprofile-dir=.profiling" # GNU
-    "-Mpfo "# PGI
-    )
-endif(USE_LINK_TIME_OPTIMISATION)
-#if(USE_AUTOMATIC_VECTORIZATION)
-#   # Interprocedural (link-time) optimizations
-#   SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_RELEASE "${CMAKE_Fortran_FLAGS_RELEASE}"
-#     Fortran
-#     "-m"              # Intel ( may need to use -ipo-separate in case of multi-file problems)
-#     "/Qipo"             # Intel Windows
-#     "-flto "            # GNU
-#     "-Mvect"    # Portland Group
-#     )
-# endif()
-
-# # Fast math code
-# SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_RELEASE "${CMAKE_Fortran_FLAGS_RELEASE}"
-#   Fortran
-#   "-fastmath"        # Intel
-#   "-ffast-math"      # GNU
-#   "-Mcuda=fastmath"  # Portland Group
-#   )
-
-# # Vectorize code
-if (USE_FAST_MATH_OPTIMISATION)
-  SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_RELEASE "${CMAKE_Fortran_FLAGS_RELEASE}"
-    Fortran
-    "-fast"             # Intel, PGI
-    "/Ofast"     # Intel Windows
-    "-Ofast"            # GNU
-    )
-  SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_RELEASE "${CMAKE_Fortran_FLAGS_RELEASE}"
-    Fortran
-    "-fastmath"        # Intel
-    "-ffast-math"      # GNU
-    "-Mcuda=fastmath"  # Portland Group
-    )
-  SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_RELEASE "${CMAKE_Fortran_FLAGS_RELEASE}"
-    Fortran
-    "-ffp-contract=fast"              # GNU
-    "-Mfma -Mvect=assoc,tile,fuse,gather,simd,partial,prefetch"        # Portland Group
-    )   # PGI
-endif(USE_FAST_MATH_OPTIMISATION)
-
-if  (CMAKE_Fortran_COMPILER_ID STREQUAL "PGI" OR CMAKE_Fortran_COMPILER_ID STREQUAL "Intel")
-# Auto parallelize
- if (USE_AUTO_PARALLELISE)
-   SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_RELEASE "${CMAKE_Fortran_FLAGS_RELEASE}"
-     Fortran
-     "-parallel -opt-report-phase=par -opt-report:5"            # Intel (Linux)
-     "/Qparallel /Qopt-report-phase=par /Qopt-report:5"         # Intel (Windows)
-     "-Mconcur=bind,allcores,cncall"                            # PGI
-     )
- endif()
-endif()
-# Auto parallelize with OpenACC
-if (USE_OPENACC)
-  SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_RELEASE "${CMAKE_Fortran_FLAGS_RELEASE}"
-    Fortran
-    "-acc"                 # PGI
-    "-fopenacc"            # GNU
-    "/acc"
-    )
-endif()
-
-# # Instrumentation
-# if (USE_INSTRUMENTATION)
-# SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_RELEASE "${CMAKE_Fortran_FLAGS_RELEASE}"
-#   Fortran
-#   "-Minstrument -Mpfi"      # PGI
-#   "-finstrument "           # GNU
-#   )
-# endif()
-
-# Profile-feedback optimisation
-if(USE_PROFILE_OPTIMISATION)
-  SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_RELEASE "${CMAKE_Fortran_FLAGS_RELEASE}"
-    Fortran
-    "-Mpfo"                 # PGI
-    "-fpfo "                # GNU
-    "-prof-gen"             # Intel (Linux, OS X)
-    "/Qprof-gen"            # Intel (Windows)
-    )
-endif()
-
 
 
 #############################################
@@ -500,6 +376,132 @@ else ()
   set (CMAKE_Fortran_FLAGS_RELEASE "-O2")
   set (CMAKE_Fortran_FLAGS_DEBUG   "-O0 -g")
 endif () # COMPILER_ID
+
+
+#####################
+### RELEASE FLAGS ###
+#####################
+
+# Unroll loops
+#message(STATUS "Testing flags unroll")
+if(USE_AGGRESSIVE_OPTIMISATION)
+SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_RELEASE "${CMAKE_Fortran_FLAGS_RELEASE}"
+  Fortran
+  "-unroll-aggressive"        # Intel
+  "-funroll-all-loops"        # GNU, Intel, Clang
+  "/unroll"                   # Intel Windows
+  "-Munroll "                 # Portland Group
+  )
+SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_RELEASE "${CMAKE_Fortran_FLAGS_RELEASE}"
+  Fortran
+  "-inline-level=2"           # Intel
+  "-finline-functions"        # GNU, Intel, Clang
+  "/unroll"                   # Intel Windows
+  "-Minline=maxsize=100,reshape,smallsize=10"      # Portland Group
+  )
+endif()
+if(USE_LINK_TIME_OPTIMISATION)
+  # Interprocedural (link-time) optimizations
+  # See IPO performance issues https://software.intel.com/en-us/node/694501
+  #  may need to use -ipo-separate in case of multi-file problems),  using the -ffat-lto-objects compiler option is provided for GCC compatibility
+  SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_RELEASE "${CMAKE_Fortran_FLAGS_RELEASE}"
+    Fortran
+    "-ipo-separate -ffat-lto-object"   # Intel (Linux OS X)
+    "/Qipo-separate"                   # Intel Windows
+    "-flto "                           # GNU
+    "-Mipa=fast,libinline,vestigial,reaggregation"    # Portland Group
+    )
+
+  #Profile optimizations
+  SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_RELEASE "${CMAKE_Fortran_FLAGS_RELEASE}"
+    Fortran
+    "-ip-dir=.profiling"           # Intel
+    "/Qip-dir=_profiling"          # Intel Windows
+    "-fprofile-dir=.profiling" # GNU
+    "-Mpfo "# PGI
+    )
+endif(USE_LINK_TIME_OPTIMISATION)
+#if(USE_AUTOMATIC_VECTORIZATION)
+#   # Interprocedural (link-time) optimizations
+#   SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_RELEASE "${CMAKE_Fortran_FLAGS_RELEASE}"
+#     Fortran
+#     "-m"              # Intel ( may need to use -ipo-separate in case of multi-file problems)
+#     "/Qipo"             # Intel Windows
+#     "-flto "            # GNU
+#     "-Mvect"    # Portland Group
+#     )
+# endif()
+
+# # Fast math code
+# SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_RELEASE "${CMAKE_Fortran_FLAGS_RELEASE}"
+#   Fortran
+#   "-fastmath"        # Intel
+#   "-ffast-math"      # GNU
+#   "-Mcuda=fastmath"  # Portland Group
+#   )
+
+# # Vectorize code
+if (USE_FAST_MATH_OPTIMISATION)
+  SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_RELEASE "${CMAKE_Fortran_FLAGS_RELEASE}"
+    Fortran
+    "-fast"             # Intel, PGI
+    "/Ofast"     # Intel Windows
+    "-Ofast"            # GNU
+    )
+  SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_RELEASE "${CMAKE_Fortran_FLAGS_RELEASE}"
+    Fortran
+    "-fastmath"        # Intel
+    "-ffast-math"      # GNU
+    "-Mcuda=fastmath"  # Portland Group
+    )
+  SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_RELEASE "${CMAKE_Fortran_FLAGS_RELEASE}"
+    Fortran
+    "-ffp-contract=fast"              # GNU
+    "-Mfma -Mvect=assoc,tile,fuse,gather,simd,partial,prefetch"        # Portland Group
+    )   # PGI
+endif(USE_FAST_MATH_OPTIMISATION)
+
+if  (CMAKE_Fortran_COMPILER_ID STREQUAL "PGI" OR CMAKE_Fortran_COMPILER_ID STREQUAL "Intel")
+# Auto parallelize
+ if (USE_AUTO_PARALLELISE)
+   SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_RELEASE "${CMAKE_Fortran_FLAGS_RELEASE}"
+     Fortran
+     "-parallel -opt-report-phase=par -opt-report:5"            # Intel (Linux)
+     "/Qparallel /Qopt-report-phase=par /Qopt-report:5"         # Intel (Windows)
+     "-Mconcur=bind,allcores,cncall"                            # PGI
+     )
+ endif()
+endif()
+# Auto parallelize with OpenACC
+if (USE_OPENACC)
+  SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_RELEASE "${CMAKE_Fortran_FLAGS_RELEASE}"
+    Fortran
+    "-acc"                 # PGI
+    "-fopenacc"            # GNU
+    "/acc"
+    )
+endif()
+
+# # Instrumentation
+# if (USE_INSTRUMENTATION)
+# SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_RELEASE "${CMAKE_Fortran_FLAGS_RELEASE}"
+#   Fortran
+#   "-Minstrument -Mpfi"      # PGI
+#   "-finstrument "           # GNU
+#   )
+# endif()
+
+# Profile-feedback optimisation
+if(USE_PROFILE_OPTIMISATION)
+  SET_COMPILE_FLAG(CMAKE_Fortran_FLAGS_RELEASE "${CMAKE_Fortran_FLAGS_RELEASE}"
+    Fortran
+    "-Mpfo"                 # PGI
+    "-fpfo "                # GNU
+    "-prof-gen"             # Intel (Linux, OS X)
+    "/Qprof-gen"            # Intel (Windows)
+    )
+endif()
+
 
 
 
