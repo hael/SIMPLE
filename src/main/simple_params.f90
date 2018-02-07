@@ -67,6 +67,7 @@ type :: params
     character(len=3)      :: phrand='no'          !< phase randomize(yes|no){no}
     character(len=3)      :: plot='no'            !< make plot(yes|no){no}
     character(len=3)      :: pproc='yes'          !< whether to perform volume post-processing(yes|no){yes}
+    character(len=3)      :: projfrcs='no'
     character(len=3)      :: projstats='no'
     character(len=3)      :: readwrite='no'
     character(len=3)      :: remap_classes='no'
@@ -523,6 +524,7 @@ contains
         call check_carg('phshiftunit',    self%phshiftunit)
         call check_carg('prg',            self%prg)
         call check_carg('projfile',       self%projfile)
+        call check_carg('projfrcs',       self%projfrcs)
         call check_carg('projstats',      self%projstats)
         call check_carg('readwrite',      self%readwrite)
         call check_carg('real_filter',    self%real_filter)

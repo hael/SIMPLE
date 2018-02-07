@@ -3,6 +3,7 @@ module simple_hadamard3D_matcher
 !$ use omp_lib
 !$ use omp_lib_kinds
 #include "simple_lib.f08"
+use simple_defs_fname
 use simple_polarft_corrcalc, only: polarft_corrcalc
 use simple_ori,              only: ori
 use simple_oris,             only: oris
@@ -78,6 +79,7 @@ contains
         type(image), allocatable :: rec_imgs(:)
         integer,     allocatable :: symmat(:,:)
         logical,     allocatable :: het_mask(:)
+        character(len=STDLEN)    :: fname
         real    :: skewness, frac_srch_space, reslim, extr_thresh, corr_thresh
         integer :: iptcl, iextr_lim, i, zero_pop, fnr, cnt, i_batch, batchlims(2), ibatch
         integer :: state_counts(2)
@@ -357,18 +359,19 @@ contains
                     call primesrch3D(iptcl)%exec_prime3D_srch_het(corr_thresh, do_extr, state_counts, symmat=symmat)
                 end do
                 !$omp end parallel do
-            case ('states')
-                if(p%oritab .eq. '') stop 'cannot run the refine=states mode without input oridoc (oritab)'
-                !$omp parallel do default(shared) private(i,iptcl) schedule(static) proc_bind(close)
-                do i=1,nptcls2update
-                    iptcl = pinds(i)
-                    call primesrch3D(iptcl)%exec_prime3D_srch(greedy=.true., nnmat=b%nnmat)
-                end do
-                !$omp end parallel do
             case DEFAULT
                 write(*,*) 'The refinement mode: ', trim(p%refine), ' is unsupported'
                 stop
         end select
+
+        ! Projection FRCs output
+        if( trim(p%projfrcs) .eq. 'yes' )then
+            do iptcl = p%fromp, p%top
+                if( .not. ptcl_mask(iptcl) )cycle
+                fname = 'frcs_ptcl'//int2str_pad(iptcl,6)//BIN_EXT
+                call peaks_frcs(iptcl)%write(fname)
+            enddo
+        endif
 
         ! CLEANUP primesrch3D & pftcc
         call cleanprime3D_srch()

@@ -149,6 +149,7 @@ type :: polarft_corrcalc
     procedure, private :: calc_corrk_for_rot
     procedure, private :: calc_corrk_for_rot_8
     procedure, private :: genfrc
+    procedure          :: calc_frc
     procedure, private :: gencorrs_cc_1
     procedure, private :: gencorrs_cc_2
     procedure, private :: gencorrs_cc_3
@@ -198,7 +199,7 @@ contains
         logical, optional,       intent(in)    :: ptcl_mask(p%fromp:p%top)
         integer, optional,       intent(in)    :: eoarr(p%fromp:p%top)
         character(kind=c_char, len=:), allocatable :: fft_wisdoms_fname ! FFTW wisdoms (per part or suffer I/O lag)
-        integer             :: alloc_stat, irot, k, ithr, i, ik, iref, cnt
+        integer             :: alloc_stat, irot, k, ithr, i, ik, cnt
         logical             :: even_dims, test(2)
         real(sp)            :: ang, res
         integer(kind=c_int) :: wsdm_ret
@@ -594,12 +595,11 @@ contains
         xy(2) = self%polar(self%nrots+rot,k)
     end function get_coord
 
-    !>  \brief  returns polar Fourier transform of particle iptcl in rotation irot
-    !! \param irot rotation index
+    !>  \brief  returns polar Fourier transform of particle iptcl
     !! \param iptcl particle index
-    function get_ptcl_pft( self, iptcl, irot ) result( pft )
+    function get_ptcl_pft( self, iptcl) result( pft )
         class(polarft_corrcalc), intent(in) :: self
-        integer,                 intent(in) :: iptcl, irot
+        integer,                 intent(in) :: iptcl
         complex(sp), allocatable :: pft(:,:)
         allocate(pft(self%pftsz,self%kfromto(1):self%kfromto(2)),&
         source=self%pfts_ptcls(self%pinds(iptcl),:,:), stat=alloc_stat)
@@ -686,7 +686,7 @@ contains
     subroutine memoize_ffts( self )
         class(polarft_corrcalc), intent(inout) :: self
         type(fftw_carr) :: carray(self%nthr)
-        integer         :: iref, i, ik, ithr
+        integer         :: i, ik, ithr
         ! allocate local memory in a thread-safe manner
         do ithr = 1,self%nthr
             carray(ithr)%p_re = fftwf_alloc_real(int(self%pftsz, c_size_t))
@@ -989,7 +989,7 @@ contains
         corr = real(tmp)
     end function calc_corrk_for_rot_8
 
-    !>  \brief  is for generating resolution dependent correlations
+    !>  \brief  is PRIVATE (indexed on pinds) for generating resolution dependent correlations
     subroutine genfrc( self, iref, i, irot, frc )
         use simple_math, only: csq
         class(polarft_corrcalc),  intent(inout) :: self
@@ -1006,14 +1006,51 @@ contains
         do k=self%kfromto(1),self%kfromto(2)
             call self%calc_k_corrs(pft_ref, i, k, kcorrs)
             sumsqptcl = sum(csq(self%pfts_ptcls(i,:,k)))
-            if( self%iseven(i) )then
-                sumsqref = sum(csq(self%pfts_refs_even(iref,:,k)))
-            else
-                sumsqref = sum(csq(self%pfts_refs_odd(iref,:,k)))
-            endif
-            frc(k) = kcorrs(irot) / sqrt(sumsqref * sumsqptcl)
+            sumsqref  = sum(csq(pft_ref(:,k)))
+            frc(k)    = kcorrs(irot) / sqrt(sumsqref * sumsqptcl)
         end do
     end subroutine genfrc
+
+    !>  \brief  is PUBLIC (indexed in ptcl index) for generating resolution dependent correlations with shift
+    subroutine calc_frc( self, iref, iptcl, irot, shvec, frc )
+        use simple_math, only: csq
+        class(polarft_corrcalc),  intent(inout) :: self
+        integer,                  intent(in)    :: iref, iptcl, irot
+        real(sp),                 intent(in)    :: shvec(2)
+        real(sp),                 intent(out)   :: frc(self%kfromto(1):self%kfromto(2))
+        complex(sp), pointer :: pft_ref(:,:), shmat(:,:)
+        real(sp),    pointer :: kcorrs(:), argmat(:,:)
+        real(sp) :: sumsqref, sumsqptcl, sqsum_ref
+        integer  :: k, ithr, i
+        i       = self%pinds(iptcl)
+        ithr    =  omp_get_thread_num() + 1
+        pft_ref => self%heap_vars(ithr)%pft_ref
+        kcorrs  => self%heap_vars(ithr)%kcorrs
+        shmat   => self%heap_vars(ithr)%shmat
+        argmat  => self%heap_vars(ithr)%argmat
+        argmat  =  self%argtransf(:self%pftsz,:) * shvec(1) + self%argtransf(self%pftsz + 1:,:) * shvec(2)
+        shmat   =  cmplx(cos(argmat),sin(argmat))
+        if( self%with_ctf )then
+            if( self%iseven(i) )then
+                pft_ref = (self%pfts_refs_even(iref,:,:) * self%ctfmats(i,:,:)) * shmat
+            else
+                pft_ref = (self%pfts_refs_odd(iref,:,:)  * self%ctfmats(i,:,:)) * shmat
+            endif
+        else
+            if( self%iseven(i) )then
+                pft_ref = self%pfts_refs_even(iref,:,:) * shmat
+            else
+                pft_ref = self%pfts_refs_odd(iref,:,:)  * shmat
+            endif
+        endif
+        call self%prep_ref4corr(iref, i, pft_ref, sqsum_ref, self%kfromto(2))
+        do k=self%kfromto(1),self%kfromto(2)
+            call self%calc_k_corrs(pft_ref, i, k, kcorrs)
+            sumsqptcl = sum(csq(self%pfts_ptcls(i,:,k)))
+            sumsqref  = sum(csq(pft_ref(:,k)))
+            frc(k)    = kcorrs(irot) / sqrt(sumsqref * sumsqptcl)
+        end do
+    end subroutine calc_frc
 
     subroutine gencorrs_cc_1( self, iref, iptcl, cc )
         use simple_math, only: csq
@@ -1392,7 +1429,7 @@ contains
         shmat   => self%heap_vars(ithr)%shmat
         argmat  => self%heap_vars(ithr)%argmat
         argmat  =  self%argtransf(:self%pftsz,:) * shvec(1) + self%argtransf(self%pftsz + 1:,:) * shvec(2)
-        shmat   =  cmplx(cos(argmat),sin(argmat),dp)
+        shmat   =  cmplx(cos(argmat),sin(argmat))
         if( self%with_ctf )then
             if( self%iseven(self%pinds(iptcl)) )then
                 pft_ref = (self%pfts_refs_even(iref,:,:) * self%ctfmats(self%pinds(iptcl),:,:)) * shmat
@@ -1667,7 +1704,7 @@ contains
         real(dp),                intent(out)   :: f, grad(2)
         complex(dp), pointer :: pft_ref(:,:), pft_ref_tmp(:,:), shmat(:,:)
         real(dp),    pointer :: argmat(:,:)
-        real(dp) :: sqsum_ref, corr, denom
+        real(dp) :: corr, denom
         integer  :: ithr
         ithr        =  omp_get_thread_num() + 1
         pft_ref     => self%heap_vars(ithr)%pft_ref_8

@@ -201,6 +201,7 @@ contains
         call chdict%push('pproc',         'whether to perform volume post-processing(yes|no){yes}')
         call chdict%push('prg',           'SIMPLE program to execute')
         call chdict%push('projfile',      'SIMPLE *.simple project file')
+        call chdict%push('projfrcs',      'write peaks frcs to file (3D only)(yes|no){no}')
         call chdict%push('pspecsz',       'size of power spectrum(in pixels)')
         call chdict%push('pspecsz_ctffind','size of power spectrum 4 ctffind(in pixels)')
         call chdict%push('pspecsz_unblur','size of power spectrum 4 unblur(in pixels)')

@@ -4,13 +4,14 @@ module simple_prime3D_srch
 use simple_oris,              only: oris
 use simple_ori,               only: ori
 use simple_sym,               only: sym
+use simple_projection_frcs,   only: projection_frcs
 use simple_polarft_corrcalc,  only: polarft_corrcalc
 use simple_pftcc_shsrch,      only: pftcc_shsrch       ! simplex-based angle and shift search
 use simple_pftcc_grad_shsrch, only: pftcc_grad_shsrch  ! gradient-based angle and shift search
 implicit none
 
 public :: cleanprime3D_srch, prep4prime3D_srch
-public :: prime3D_srch, o_peaks
+public :: prime3D_srch, o_peaks, peaks_frcs
 private
 
 real,    parameter :: SOFTMAXW_THRESH = 0.01 !< threshold for softmax weights
@@ -29,6 +30,9 @@ integer,    allocatable :: prev_states(:)                         !< particle pr
 integer,    allocatable :: srch_order(:,:)                        !< stochastic search index
 logical,    allocatable :: state_exists(:)                        !< indicates state existence
 logical,    pointer     :: ptcl_mask_ptr(:) => null()             !< pointer to particle mask
+!
+type(projection_frcs), allocatable :: peaks_frcs(:)
+!
 
 type prime3D_srch
     private
@@ -63,6 +67,7 @@ type prime3D_srch
     character(len=STDLEN)            :: refine        = ''        !< refinement flag
     character(len=STDLEN)            :: opt           = ''        !< optimizer flag
     logical                          :: doshift       = .true.    !< 2 indicate whether 2 serch shifts
+    logical                          :: calc_frcs     = .false.   !< 2 indicate whether to calculate frcs
     logical                          :: exists        = .false.   !< 2 indicate existence
   contains
     procedure          :: new
@@ -75,7 +80,6 @@ type prime3D_srch
     procedure, private :: stochastic_srch_shc
     procedure, private :: stochastic_srch_snhc
     procedure, private :: stochastic_srch_het
-    procedure, private :: stochastic_srch_bystate
     procedure, private :: inpl_srch
     procedure, private :: prep4srch
     procedure, private :: prep_npeaks_oris_and_weights
@@ -110,13 +114,19 @@ contains
         type(ran_tabu) :: rt
         integer        :: i, istate, iproj, iptcl, prev_state
         integer        :: nnnrefs, cnt, prev_ref, nrefs, nptcls
-        ! clean all class arrays
+        ! clean all class arrays & types
         call cleanprime3D_srch()
         if( allocated(o_peaks) )then
             do i=p%fromp,p%top
                 call o_peaks(i)%kill
             enddo
             deallocate(o_peaks)
+        endif
+        if( allocated(peaks_frcs) )then
+            do i=p%fromp,p%top
+                call peaks_frcs(i)%kill
+            enddo
+            deallocate(peaks_frcs)
         endif
         ! parameters
         nrefs  = p%nspace * p%nstates
@@ -179,9 +189,10 @@ contains
             case('het','hetsym')
                ! nothing to do
             case DEFAULT
-                allocate(o_peaks(p%fromp:p%top))
+                allocate(o_peaks(p%fromp:p%top), peaks_frcs(p%fromp:p%top))
                 do iptcl = p%fromp, p%top
                     if( ptcl_mask(iptcl) )then
+                        ! ORIENTATION PEAKS
                         call o_peaks(iptcl)%new_clean(p%npeaks)
                         ! transfer CTF params
                         if( p%ctf.ne.'no' )then
@@ -194,7 +205,7 @@ contains
                                 call o_peaks(iptcl)%set_all2single('angast', b%a%get(iptcl,'angast'))
                             else
                                 call o_peaks(iptcl)%set_all2single('dfy',    b%a%get(iptcl,'dfx'))
-                                call o_peaks(iptcl)%set_all2single('angast', 0.                  )
+                                call o_peaks(iptcl)%set_all2single('angast', 0.)
                             endif
                             if( p%tfplan%l_phaseplate )then
                                 call o_peaks(iptcl)%set_all2single('phshift', b%a%get(iptcl,'phshift'))
@@ -202,6 +213,8 @@ contains
                         endif
                         ! transfer eo flag
                         call o_peaks(iptcl)%set_all2single('eo', b%a%get(iptcl,'eo'))
+                        ! FRCS
+                        call peaks_frcs(iptcl)%new(p%npeaks, p%boxmatch, p%smpd, 1 )
                     endif
                 enddo
         end select
@@ -222,18 +235,6 @@ contains
                         endif
                     endif
                 end do
-                !$omp end parallel do
-            case( 'states' )
-                allocate(srch_order(nptcls, p%nnn))
-                !$omp parallel do default(shared) private(iptcl,prev_state,prev_ref) schedule(static) proc_bind(close)
-                do iptcl = p%fromp, p%top
-                    if( pinds(iptcl) > 0 )then
-                        prev_state = b%a%get_state(iptcl)
-                        srch_order(pinds(iptcl),:) = b%nnmat(prev_proj(pinds(iptcl)),:) + (prev_state - 1) * p%nspace
-                        prev_ref = (prev_state - 1) * p%nspace + prev_proj(pinds(iptcl))
-                        call put_last(prev_ref, srch_order(pinds(iptcl),:))
-                    endif
-                enddo
                 !$omp end parallel do
             case( 'neigh','shcneigh', 'greedyneigh' )
                 nnnrefs =  p%nnn * p%nstates
@@ -317,6 +318,7 @@ contains
         self%nnnrefs    =  self%nnn*self%nstates
         self%kstop_grid =  p%kstop_grid
         self%opt        =  p%opt
+        self%calc_frcs  = trim(p%projfrcs) == 'yes'
         if( str_has_substr(self%refine,'shc') )then
             if( self%npeaks > 1 ) stop 'npeaks must be equal to 1 with refine=shc|shcneigh'
         endif
@@ -329,8 +331,6 @@ contains
             select case(trim(p%refine))
             case('het','hetsym')
                     self%npeaks_grid = 1
-                case('states')
-                    self%npeaks_grid = GRIDNPEAKS
                 case DEFAULT
                     ! "-(nstates_eff-1)" because all states share the same previous orientation
                     self%npeaks_grid = GRIDNPEAKS * nstates_eff - (nstates_eff - 1)
@@ -372,11 +372,7 @@ contains
         ggreedy = .false.
         if( present(greedy) ) ggreedy = greedy
         if( ggreedy )then
-            if( trim(self%refine).eq.'states' )then
-                call self%stochastic_srch_bystate(nnmat)
-            else
-                call self%greedy_srch(nnmat, grid_projs)
-            endif
+            call self%greedy_srch(nnmat, grid_projs)
         else if( self%refine.eq.'snhc' )then
             if( .not. present(szsn) )then
                 stop 'refine=snhc mode needs optional input szsn; simple_prime3D_srch :: exec_prime3D_srch'
@@ -401,56 +397,6 @@ contains
         call self%stochastic_srch_het( corr_thresh, do_extr_opt, counts, symmat )
         if( DEBUG ) print *,  '>>> PRIME3D_SRCH::EXECUTED PRIME3D_SRCH_HET'
     end subroutine exec_prime3D_srch_het
-
-    !>  \brief  Individual stochastic search by state
-    !! \param nnmat nearest neighbour matrix
-    subroutine stochastic_srch_bystate( self, nnmat )
-        class(prime3D_srch),     intent(inout) :: self
-        integer, optional,       intent(in)    :: nnmat(self%nprojs,self%nnn_static)
-        integer :: iref, isample, inpl_ind(1)
-        real    :: inpl_corrs(self%nrots), corrs(self%nrefs), inpl_corr
-        ! execute search
-        if( self%a_ptr%get_state(self%iptcl) > 0 )then
-            ! initialize
-            call self%prep4srch(nnmat=nnmat)
-            self%nbetter    = 0
-            self%nrefs_eval = 0
-            proj_space_corrs(self%iptcl_map,:) = -1.
-            ! search
-            do isample = 1, self%nnn
-                iref = srch_order(self%iptcl_map, isample) ! set the stochastic reference index
-                call per_ref_srch                      ! actual search
-                if( self%nbetter >= self%npeaks ) exit ! exit condition
-            end do
-            ! sort in correlation projection direction space
-            corrs = proj_space_corrs(self%iptcl_map,:)
-            call hpsort(corrs, proj_space_inds(self%iptcl_map,:))
-            call self%inpl_srch ! search shifts
-            ! prepare weights and orientations
-            call self%prep_npeaks_oris_and_weights
-        else
-            call self%a_ptr%reject(self%iptcl)
-        endif
-        if( DEBUG ) print *,  '>>> PRIME3D_SRCH::FINISHED STOCHASTIC BYSTATE SEARCH'
-
-        contains
-
-            subroutine per_ref_srch
-                call self%pftcc_ptr%gencorrs(iref, self%iptcl, inpl_corrs) ! In-plane correlations
-                inpl_ind   = maxloc(inpl_corrs)                            ! greedy in-plane index
-                inpl_corr  = inpl_corrs(inpl_ind(1))                       ! max in plane correlation
-                call self%store_solution(iref, iref, inpl_ind(1), inpl_corr)
-                ! update nbetter to keep track of how many improving solutions we have identified
-                if( self%npeaks == 1 )then
-                    if( inpl_corr > self%prev_corr ) self%nbetter = self%nbetter + 1
-                else
-                    if( inpl_corr >= self%prev_corr ) self%nbetter = self%nbetter + 1
-                endif
-                ! keep track of how many references we are evaluating
-                self%nrefs_eval = self%nrefs_eval + 1
-            end subroutine per_ref_srch
-
-    end subroutine stochastic_srch_bystate
 
     !>  \brief  greedy hill-climbing
     !! \param nnmat nearest neighbour matrix
@@ -970,7 +916,7 @@ contains
             case( 'neigh','shcneigh', 'greedyneigh' )
                 ! disjoint nearest neighbour set
                 self%nnvec = merge_into_disjoint_set(self%nprojs, self%nnn_static, nnmat, target_projs)
-            case( 'no','shc','snhc','greedy','yes','het','states' )
+            case( 'no','shc','snhc','greedy','yes','het' )
                 ! all good
             case DEFAULT
                 stop 'Unknown refinement mode; simple_prime3D_srch; prep4srch'
@@ -999,10 +945,12 @@ contains
         class(prime3D_srch),   intent(inout) :: self
         type(ori)  :: osym
         type(oris) :: sym_os
-        real       :: shvec(2), corrs(self%npeaks), ws(self%npeaks), dists(self%npeaks), arg4softmax(self%npeaks)
-        real       :: state_ws(self%nstates), frac, ang_sdev, dist, inpl_dist, euldist, mi_joint
-        real       :: mi_proj, mi_inpl, mi_state, dist_inpl, wcorr
-        integer    :: best_loc(1), loc(1), states(self%npeaks), s, ipeak, cnt, ref, state, roind, neff_states
+        real       :: shvec(2), corrs(self%npeaks), ws(self%npeaks), dists(self%npeaks)
+        real       :: arg4softmax(self%npeaks), state_ws(self%nstates), frc(1:peaks_frcs(self%iptcl)%get_filtsz())
+        real       :: mi_proj, mi_inpl, mi_state, dist_inpl, wcorr, realfrac, frac
+        real       :: ang_sdev, dist, inpl_dist, euldist, mi_joint
+        integer    :: best_loc(1), loc(1), kfromto(2), states(self%npeaks)
+        integer    ::  s, ipeak, cnt, ref, state, roind, neff_states
         logical    :: included(self%npeaks)
         ! empty states
         neff_states = count(state_exists)
@@ -1058,7 +1006,7 @@ contains
             ! update npeaks individual weights
             call o_peaks(self%iptcl)%set_all('ow', ws)
         endif
-        if( self%refine.ne.'states' .and. self%npeaks > 1 .and. self%nstates > 1 )then
+        if( self%npeaks > 1 .and. self%nstates > 1 )then
             ! states weights
             do ipeak = 1, self%npeaks
                 corrs(ipeak)  = o_peaks(self%iptcl)%get(ipeak,'corr')
@@ -1079,6 +1027,23 @@ contains
             wcorr    = sum(ws*corrs, mask=included)
             ! update npeaks individual weights
             call o_peaks(self%iptcl)%set_all('ow', ws)
+        endif
+        ! FRCs
+        if( self%calc_frcs )then
+            kfromto = self%pftcc_ptr%get_kfromto()
+            do ipeak = 1, self%npeaks
+                frc = 0.
+                if( ws(ipeak) > TINY )then
+                    cnt   = self%nrefs - self%npeaks + ipeak
+                    ref   = proj_space_inds(self%iptcl_map, cnt)
+                    shvec = 0.
+                    if( self%doshift )shvec = proj_space_shift(self%iptcl_map, ref, 1:2)
+                    roind = self%pftcc_ptr%get_roind(360. - proj_space_euls(self%iptcl_map, ref, 3))
+                    call self%pftcc_ptr%calc_frc(ref, self%iptcl, roind, shvec,& ! FRCs can only be calculated
+                        &frc(kfromto(1):kfromto(2)))                             ! within PFTCC range
+                endif
+                call peaks_frcs(self%iptcl)%set_frc(ipeak, frc, 1)
+            enddo
         endif
         ! angular standard deviation
         ang_sdev = 0.
@@ -1131,8 +1096,6 @@ contains
         ! fraction search space
         if( str_has_substr(self%refine, 'neigh') )then
             frac = 100.*real(self%nrefs_eval) / real(self%nnn * neff_states)
-        else if( trim(self%refine).eq.'states' )then
-            frac = 100.*real(self%nrefs_eval) / real(self%nnn) ! 1 state searched
         else
             frac = 100.*real(self%nrefs_eval) / real(self%nprojs * neff_states)
         endif
