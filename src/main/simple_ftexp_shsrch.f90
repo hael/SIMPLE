@@ -105,7 +105,6 @@ contains
         real(dp), intent(inout) :: vec( D )
         real(dp), intent(out)   :: grad( D )
         call reference%corr_gshifted_8_2d(particle, -vec, grad)
-        grad = grad * (-1.0_dp)
     end subroutine ftexp_shsrch_gcost_8
 
     !> Gradient & cost function, double precision
@@ -116,7 +115,6 @@ contains
         real(kind=8), intent(out)   :: f, grad(D)
         call reference%corr_fdfshifted_8_2d(particle, -vec, f, grad)
         f    = f    * (-1.0_dp)
-        grad = grad * (-1.0_dp)
     end subroutine ftexp_shsrch_fdfcost_8
 
     !> Main search routine

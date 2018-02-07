@@ -569,7 +569,7 @@ contains
             do hind=self1%flims(1,1),self1%flims(1,2)
                 do kind=self1%flims(2,1),self1%flims(2,2)
                     arg                            = dot_product(shvec(:), self1%transfmat(hind,kind,1,1:2))
-                    ft_exp_tmpmat_re_2d(hind,kind) = real(ft_exp_tmp_cmat12(hind,kind) * exp(-J * arg),kind=dp)
+                    ft_exp_tmpmat_im_2d(hind,kind) = imag(ft_exp_tmp_cmat12(hind,kind) * exp(-J * arg))
                 end do
             end do
             !$omp end parallel do
