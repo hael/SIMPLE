@@ -112,7 +112,7 @@ message(STATUS "Fortran compiler: ${Fortran_COMPILER_NAME}")
 include(ProcessorCount)
 ProcessorCount(NUM_JOBS)
 
-OPTION(BUILD_WITH_COVERAGE "Added code coverage flags" OFF)
+
 
 ##############################################
 # Linker            (FROM FACEBOOK HHVM)
@@ -607,8 +607,8 @@ if(USE_PROFILING)
 endif()
 # Option for code coverage
 #if(VERBOSE OR ${BUILD_WITH_COVERAGE})
-  option(USE_CODE_COVERAGE "Build code coverage results, requires GCC compiler (forces Debug build)" OFF)
-  if(USE_CODE_COVERAGE OR ${BUILD_WITH_COVERAGE} )
+#  option(USE_CODE_COVERAGE "Build code coverage results, requires GCC compiler (forces Debug build)" OFF)
+  if(USE_CODE_COVERAGE)
     if (${CMAKE_Fortran_COMPILER_ID} STREQUAL "GNU" )
       set(CMAKE_Fortran_FLAGS         "${CMAKE_Fortran_FLAGS} -g -Og -pg -fprofile-arcs -ftest-coverage")
      # set(CMAKE_BUILD_TYPE DEBUG CACHE STRING "" FORCE)

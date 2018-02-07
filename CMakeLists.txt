@@ -220,13 +220,16 @@ install(FILES  ${CMAKE_CURRENT_BINARY_DIR}/add2.bashrc ${CMAKE_CURRENT_BINARY_DI
     endif()
   endif()
 
+
+OPTION(USE_CODE_COVERAGE "Added code coverage flags" OFF)
+OPTION(USE_PROFILING "enable symbol generation without debug support" OFF)
+
+option(USE_LINK_TIME_OPTIMISATION "Enable link-time optimisation" OFF)
 if(VERBOSE) #only for the fool-hardy
-  option(USE_LINK_TIME_OPTIMISATION "Enable link-time optimisation" OFF)
   OPTION(USE_FAST_MATH_OPTIMISATION "Optimize code for fastmath. " OFF)
   OPTION(USE_PROFILE_OPTIMISATION "Optimize code for PFO. (GNU: -fpfo )" OFF)
   OPTION(USE_AUTO_PARALLELISE "Optimize code for parallel systems. [Intel and PGI only]" OFF)
-  #flags for optimization level. You can only turn one of following option to ON, or leave all of them to OFF.
-  OPTION(USE_PROFILING "enable symbol generation without debug support" OFF)
+  OPTION(USE_AGGRESSIVE_OPTIMISATION "Flags for aggressive optimization level. Unroll all loops and inline functions."  OFF)
   option(CPACK_GENERATOR "Enable build of distribution packages using CPack" TGZ)
 
   #
