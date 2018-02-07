@@ -946,7 +946,7 @@ contains
         type(ori)  :: osym
         type(oris) :: sym_os
         real       :: shvec(2), corrs(self%npeaks), ws(self%npeaks), dists(self%npeaks)
-        real       :: arg4softmax(self%npeaks), state_ws(self%nstates), frc(1:peaks_frcs(self%iptcl)%get_filtsz())
+        real       :: arg4softmax(self%npeaks), state_ws(self%nstates), frc(peaks_frcs(self%iptcl)%get_filtsz())
         real       :: mi_proj, mi_inpl, mi_state, dist_inpl, wcorr, realfrac, frac
         real       :: ang_sdev, dist, inpl_dist, euldist, mi_joint
         integer    :: best_loc(1), loc(1), kfromto(2), states(self%npeaks)
@@ -1030,7 +1030,7 @@ contains
         endif
         ! FRCs
         if( self%calc_frcs )then
-            kfromto = self%pftcc_ptr%get_kfromto()
+            kfromto = self%pftcc_ptr%get_kfromto() - 1 ! because zero is neglected in projection_frcs
             do ipeak = 1, self%npeaks
                 frc = 0.
                 if( ws(ipeak) > TINY )then
