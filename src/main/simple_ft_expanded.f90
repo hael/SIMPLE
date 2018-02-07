@@ -1,6 +1,6 @@
 ! expanded Fourier transform class for improved cache utilisation
 
-! Strategy: 
+! Strategy:
 ! working version first -> hack
 ! then on Monday we can unscramble the classes
 
@@ -8,7 +8,7 @@ module simple_ft_expanded
 !$ use omp_lib
 !$ use omp_lib_kinds
 #include "simple_lib.f08"
-    
+
 use simple_image,  only: image
 
 implicit none
@@ -287,14 +287,14 @@ contains
         endif
     end subroutine subtr
 
-    subroutine allocate_tmpmats( flims )        
+    subroutine allocate_tmpmats( flims )
         integer, intent(in) :: flims(3,2)
         logical             :: do_allocate
         do_allocate = .false.
         if (.not. allocated( ft_exp_tmpmat_re_2d )) then
             do_allocate = .true.
         else if (size(ft_exp_tmpmat_re_2d, 1) .ne. flims(1,2) .or. &
-                 size(ft_exp_tmpmat_re_2d, 2) .ne. flims(2,2)         ) then            
+                 size(ft_exp_tmpmat_re_2d, 2) .ne. flims(2,2)         ) then
             deallocate( ft_exp_tmpmat_re_2d, ft_exp_tmpmat_im_2d, ft_exp_tmp_cmat12 )
             do_allocate = .true.
         end if
@@ -309,7 +309,7 @@ contains
             allocchk("In: allocate_shmat_2d_cmat2sh_2; simple_ft_expanded")
         end if
     end subroutine allocate_tmpmats
-    
+
     ! MODIFIERS
 
     !>  \brief  is 4 shifting an ft_expanded instance
@@ -448,7 +448,7 @@ contains
 
     !>  \brief  is a correlation calculator with origin shift of self2, double precision
     subroutine corr_gshifted_8_2d( self1, self2, shvec, grad )
-        class(ft_expanded), intent(inout), target :: self1, self2 !< instances        
+        class(ft_expanded), intent(inout), target :: self1, self2 !< instances
         real(dp), intent(in)                      :: shvec(2)
         real(dp), intent(out)                     :: grad(2)
         real(dp)                                  :: grad1, grad2
@@ -493,7 +493,7 @@ contains
             grad2 = 0.0_dp
             !$omp parallel do collapse(2) schedule(static) reduction(+:f,grad1,grad2) private(hind,kind) default(shared)
             do hind=self1%flims(1,1),self1%flims(1,2)
-                do kind=self1%flims(2,1),self1%flims(2,2)            
+                do kind=self1%flims(2,1),self1%flims(2,2)
                     f     = f     + ft_exp_tmpmat_re_2d(hind,kind)
                     grad1 = grad1 + ft_exp_tmpmat_im_2d(hind,kind) * self1%transfmat(hind,kind,1,1)
                     grad2 = grad2 + ft_exp_tmpmat_im_2d(hind,kind) * self1%transfmat(hind,kind,1,2)
@@ -511,11 +511,11 @@ contains
             write(*,*) 'self2 flims: ', self2%flims(1,1), self2%flims(1,2), self2%flims(2,1),&
             self2%flims(2,2), self2%flims(3,1), self2%flims(3,2)
             stop 'cannot correlate expanded_ft:s with different dims; ft_expanded::corr_shifted'
-        endif ! end of if( self1.eqdims.self2 ) statement        
+        endif ! end of if( self1.eqdims.self2 ) statement
     end subroutine corr_fdfshifted_8_2d
 
-    !> \brief  correctly normalize correlations after minimization 
-    subroutine corr_normalize( self1, self2, corr ) 
+    !> \brief  correctly normalize correlations after minimization
+    subroutine corr_normalize( self1, self2, corr )
         class(ft_expanded), intent(inout) :: self1, self2 !< instances
         real,               intent(inout) :: corr
         real                              :: sumasq,sumbsq
@@ -540,7 +540,7 @@ contains
                     ft_exp_tmpmat_re_2d(hind,kind) = real(ft_exp_tmp_cmat12(hind,kind) * exp(-J * arg),kind=dp)
                 end do
             end do
-            !$omp end parallel do            
+            !$omp end parallel do
         else
             !$omp parallel do collapse(2) schedule(static) default(shared) &
             !$omp private(hind,kind,arg) proc_bind(close)
@@ -559,7 +559,7 @@ contains
 
     subroutine calc_tmpmat_im(self1, self2, shvec)
         class(ft_expanded), intent(inout), target :: self1, self2 !< instances
-        real(dp), intent(in)                      :: shvec(2)        
+        real(dp), intent(in)                      :: shvec(2)
         real(dp)                                  :: arg
         integer                                   :: hind,kind
         call allocate_tmpmats(self1%flims)
@@ -591,7 +591,7 @@ contains
 
     subroutine calc_tmpmat_re_im(self1, self2, shvec)
         class(ft_expanded), intent(inout), target :: self1, self2 !< instances
-        real(dp), intent(in)                      :: shvec(2)        
+        real(dp), intent(in)                      :: shvec(2)
         real(dp)                                  :: arg
         complex(dp)                               :: tmp
         integer                                   :: hind,kind
@@ -604,7 +604,7 @@ contains
                     arg                            = dot_product(shvec(:), self1%transfmat(hind,kind,1,1:2))
                     tmp                            = ft_exp_tmp_cmat12(hind,kind) * exp(-J * arg)
                     ft_exp_tmpmat_re_2d(hind,kind) = real(tmp,kind=dp)
-                    ft_exp_tmpmat_im_2d(hind,kind) = imag(tmp)                    
+                    ft_exp_tmpmat_im_2d(hind,kind) = imag(tmp)
                 end do
             end do
             !$omp end parallel do
@@ -630,7 +630,7 @@ contains
             ft_exp_tmp_cmat12_self1 => null()
             ft_exp_tmp_cmat12_self2 => null()
     end subroutine ft_exp_reset_tmp_pointers
-    
+
     ! DESTRUCTOR
 
     !>  \brief  is a destructor
@@ -642,6 +642,6 @@ contains
         endif
     end subroutine kill
 
-   
-    
+
+
 end module simple_ft_expanded

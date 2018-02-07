@@ -125,6 +125,7 @@ select case(prg)
         if( .not. cline%defined('lp_pick')         ) call cline%set('lp_pick',          20.)
         if( .not. cline%defined('stream')          ) call cline%set('stream',  'yes')
         if( .not. cline%defined('pcontrast')       ) call cline%set('pcontrast', 'black')
+        if( .not. cline%defined('opt')             ) call cline%set('opt', 'simplex')
         call xpreproc_stream%execute(cline)
 
     ! PIPELINED UNBLUR + CTFFIND
@@ -178,6 +179,7 @@ select case(prg)
         if( .not. cline%defined('pspecsz_ctffind') ) call cline%set('pspecsz_ctffind', 512.)
         if( .not. cline%defined('hp_ctffind')      ) call cline%set('hp_ctffind',       30.)
         if( .not. cline%defined('lp_ctffind')      ) call cline%set('lp_ctffind',        5.)
+        if( .not. cline%defined('opt')             ) call cline%set('opt', 'simplex')
         ! execute
         call xunblur_ctffind_distr%execute(cline)
 
@@ -223,9 +225,10 @@ select case(prg)
         if( describe ) call print_doc_unblur
         call cline%parse(keys_required(:3), keys_optional(:16))
         ! set defaults
-        if( .not. cline%defined('trs')     ) call cline%set('trs',      5.)
-        if( .not. cline%defined('lpstart') ) call cline%set('lpstart', 15.)
-        if( .not. cline%defined('lpstop')  ) call cline%set('lpstop',   8.)
+        if( .not. cline%defined('trs')     ) call cline%set('trs',        5.)
+        if( .not. cline%defined('lpstart') ) call cline%set('lpstart',   15.)
+        if( .not. cline%defined('lpstop')  ) call cline%set('lpstop',     8.)
+        if( .not. cline%defined('opt')     ) call cline%set('opt', 'simplex')
         ! execute
         call xunblur_distr%execute(cline)
     case( 'unblur_tomo' )
@@ -263,6 +266,7 @@ select case(prg)
         if( .not. cline%defined('lpstart') ) call cline%set('lpstart',  15.)
         if( .not. cline%defined('lpstop')  ) call cline%set('lpstop',    8.)
         if( .not. cline%defined('tomo')    ) call cline%set('tomo',   'yes')
+        if( .not. cline%defined('opt')     ) call cline%set('opt', 'simplex')
         ! execute
         call xunblur_tomo_distr%execute(cline)
 

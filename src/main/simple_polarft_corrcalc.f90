@@ -1091,7 +1091,7 @@ contains
         real(sp),                intent(out)   :: cc(self%nrots)
         complex(sp), pointer :: pft_ref(:,:)
         real(sp),    pointer :: kcorrs(:)
-        real(sp) :: sumsqref, sumsqptcl, norm
+        real(sp) :: sumsqref, sumsqptcl, norm(self%kfromto(1):self%kfromto(2))
         integer  :: k, ithr
         ithr    =  omp_get_thread_num() + 1
         pft_ref => self%heap_vars(ithr)%pft_ref
@@ -1109,16 +1109,15 @@ contains
             end do
             cc(:) = cc(:) / self%bfac_norm
         else if( self%l_regularised )then
-            norm = 0.
+            norm(:) = 0.
             do k=self%kfromto(1),self%kfromto(2)
                 call self%calc_k_corrs(pft_ref, self%pinds(iptcl), k, kcorrs)
                 sumsqptcl = sum(csq(self%pfts_ptcls(self%pinds(iptcl),:,k)))
                 sumsqref  = sum(csq(pft_ref(:,k)))
-                ! here the weight is the power of the particle image rather than the B-factor
-                cc(:) = cc(:) + (kcorrs(:) * sumsqptcl) / sqrt(sumsqref * sumsqptcl)
-                norm  = norm + sumsqptcl
+                cc(:)   = cc(:) + (kcorrs(:) * kcorrs(:)) / sqrt(sumsqref * sumsqptcl)
+                norm(:) = norm(:) + kcorrs(:)
             end do
-            cc(:) = cc(:) / norm
+            cc(:) = cc(:) / norm(:)
         else
             ! without B-factor weighting
             do k=self%kfromto(1),self%kfromto(2)
@@ -1139,8 +1138,8 @@ contains
         real(sp),                intent(out)   :: cc(self%nrots)
         complex(sp), pointer :: pft_ref(:,:)
         real(sp),    pointer :: kcorrs(:)
-        real(sp) :: sumsqref, sumsqptcl, norm
-        integer  :: k, ithr 
+        real(sp) :: sumsqref, sumsqptcl, norm(self%kfromto(1):self%kfromto(2))
+        integer  :: k, ithr
         ithr    =  omp_get_thread_num() + 1
         pft_ref => self%heap_vars(ithr)%pft_ref
         kcorrs  => self%heap_vars(ithr)%kcorrs
@@ -1157,16 +1156,15 @@ contains
             end do
             cc(:) = cc(:) / sum(self%bfac_arr(self%kfromto(1):kstop))
         else if( self%l_regularised )then
-            norm = 0.
+            norm(:) = 0.
             do k=self%kfromto(1),kstop
                 call self%calc_k_corrs(pft_ref, self%pinds(iptcl), k, kcorrs)
                 sumsqptcl = sum(csq(self%pfts_ptcls(self%pinds(iptcl),:,k)))
                 sumsqref  = sum(csq(pft_ref(:,k)))
-                ! here the weight is the power of the particle image rather than the B-factor
-                cc(:) = cc(:) + (kcorrs(:) * sumsqptcl) / sqrt(sumsqref * sumsqptcl)
-                norm = norm + 1
+                cc(:)     = cc(:) + (kcorrs(:) * kcorrs(:)) / sqrt(sumsqref * sumsqptcl)
+                norm(:)   = norm(:) + kcorrs(:)
             end do
-            cc(:) = cc(:) / norm
+            cc(:) = cc(:) / norm(:)
         else
             ! without B-factor weighting
             do k=self%kfromto(1),kstop
@@ -1189,9 +1187,8 @@ contains
         real(sp),                intent(out)   :: cc(self%nrots)
         complex(sp), pointer :: pft_ref(:,:), shmat(:,:)
         real(sp),    pointer :: kcorrs(:), argmat(:,:)
-        real(sp) :: sumsqptcl, sumsqref
+        real(sp) :: sumsqptcl, sumsqref, norm(self%kfromto(1):self%kfromto(2))
         integer  :: ithr, k
-        real     :: norm
         ithr    = omp_get_thread_num() + 1
         pft_ref => self%heap_vars(ithr)%pft_ref
         shmat   => self%heap_vars(ithr)%shmat
@@ -1224,16 +1221,15 @@ contains
             end do
             cc(:) = cc(:) / self%bfac_norm
         else if( self%l_regularised )then
-            norm = 0.
+            norm(:) = 0.
             do k=self%kfromto(1),self%kfromto(2)
                 call self%calc_k_corrs(pft_ref, self%pinds(iptcl), k, kcorrs)
                 sumsqptcl = sum(csq(self%pfts_ptcls(self%pinds(iptcl),:,k)))
                 sumsqref  = sum(csq(pft_ref(:,k)))
-                ! here the weight is the power of the particle image rather than the B-factor
-                cc(:) = cc(:) + (kcorrs(:) * sumsqptcl) / sqrt(sumsqref * sumsqptcl)
-                norm  = norm + sumsqptcl
+                cc(:)     = cc(:) + (kcorrs(:) * kcorrs(:)) / sqrt(sumsqref * sumsqptcl)
+                norm(:)   = norm(:) + kcorrs(:)
             end do
-            cc(:) = cc(:) / norm
+            cc(:) = cc(:) / norm(:)
         else
             ! without B-factor weighting
             do k=self%kfromto(1),self%kfromto(2)
@@ -1421,14 +1417,13 @@ contains
             end do
             cc = cc / self%bfac_norm
         else if( self%l_regularised )then
-            ! power of particle image is weight
             norm = 0.
             do k = self%kfromto(1),self%kfromto(2)
                 sqsumk_ref  = sum(csq(pft_ref(:,k)))
                 sqsumk_ptcl = sum(csq(self%pfts_ptcls(self%pinds(iptcl),:,k)))
                 corrk       = self%calc_corrk_for_rot(pft_ref, self%pinds(iptcl), self%kfromto(2), k, irot)
-                cc          = cc + (corrk * sqsumk_ptcl) / sqrt(sqsumk_ref * sqsumk_ptcl)
-                norm        = norm + sqsumk_ptcl
+                cc          = cc + (corrk * corrk) / sqrt(sqsumk_ref * sqsumk_ptcl)
+                norm        = norm + corrk
             end do
             cc = cc / norm
         else
@@ -1484,14 +1479,13 @@ contains
             end do
             cc = cc / real(self%bfac_norm, kind=dp)
         else if( self%l_regularised )then
-            ! power of particle image is weight
             norm = 0.0_dp
             do k = self%kfromto(1),self%kfromto(2)
                 sqsumk_ref  = sum(csq(pft_ref(:,k)))
                 sqsumk_ptcl = sum(csq(self%pfts_ptcls(self%pinds(iptcl),:,k)))
                 corrk       = self%calc_corrk_for_rot_8(pft_ref, self%pinds(iptcl), self%kfromto(2), k, irot)
-                cc          = cc + (corrk * sqsumk_ptcl) / sqrt(sqsumk_ref * sqsumk_ptcl)
-                norm        = norm + sqsumk_ptcl
+                cc          = cc + (corrk * corrk) / sqrt(sqsumk_ref * sqsumk_ptcl)
+                norm        = norm + corrk
             end do
             cc = cc / norm
         else
@@ -1764,12 +1758,12 @@ contains
                 sqsumk_ptcl = sum(csq(self%pfts_ptcls(self%pinds(iptcl),:,k)))
                 denom       = sqrt(sqsumk_ref * sqsumk_ptcl)
                 corrk       = self%calc_corrk_for_rot(pft_ref, self%pinds(iptcl), self%kfromto(2), k, irot)
-                f           = f + (corrk * sqsumk_ptcl)       / denom
+                f           = f + (corrk * corrk)       / denom
                 corrk       = self%calc_corrk_for_rot(pft_ref_tmp1, self%pinds(iptcl), self%kfromto(2), k, irot)
-                grad(1)     = grad(1) + (corrk * sqsumk_ptcl) / denom
+                grad(1)     = grad(1) + (corrk * corrk) / denom
                 corrk       = self%calc_corrk_for_rot(pft_ref_tmp2, self%pinds(iptcl), self%kfromto(2), k, irot)
-                grad(2)     = grad(2) + (corrk * sqsumk_ptcl) / denom
-                norm        = norm + sqsumk_ptcl
+                grad(2)     = grad(2) + (corrk * corrk) / denom
+                norm        = norm + corrk
             end do
             f = f / norm
             grad(:) = grad(:) / norm
@@ -1848,12 +1842,12 @@ contains
                 sqsumk_ptcl = sum(csq(self%pfts_ptcls(self%pinds(iptcl),:,k)))
                 denom       = sqrt(sqsumk_ref * sqsumk_ptcl)
                 corrk       = self%calc_corrk_for_rot_8(pft_ref, self%pinds(iptcl), self%kfromto(2), k, irot)
-                f           = f + (corrk * sqsumk_ptcl)       / denom
+                f           = f + (corrk * corrk)       / denom
                 corrk       = self%calc_corrk_for_rot_8(pft_ref_tmp1, self%pinds(iptcl), self%kfromto(2), k, irot)
-                grad(1)     = grad(1) + (corrk * sqsumk_ptcl) / denom
+                grad(1)     = grad(1) + (corrk * corrk) / denom
                 corrk       = self%calc_corrk_for_rot_8(pft_ref_tmp2, self%pinds(iptcl), self%kfromto(2), k, irot)
-                grad(2)     = grad(2) + (corrk * sqsumk_ptcl) / denom
-                norm        = norm + sqsumk_ptcl
+                grad(2)     = grad(2) + (corrk * corrk) / denom
+                norm        = norm + corrk
             end do
             f       = f       / norm
             grad(:) = grad(:) / norm
@@ -2040,10 +2034,10 @@ contains
                 sqsumk_ptcl = sum(csq(self%pfts_ptcls(self%pinds(iptcl),:,k)))
                 denom       = sqrt(sqsumk_ref * sqsumk_ptcl)
                 corrk       = self%calc_corrk_for_rot(pft_ref_tmp1, self%pinds(iptcl), self%kfromto(2), k, irot)
-                grad(1)     = grad(1) + (corrk * sqsumk_ptcl) / denom
+                grad(1)     = grad(1) + (corrk * corrk) / denom
                 corrk       = self%calc_corrk_for_rot(pft_ref_tmp2, self%pinds(iptcl), self%kfromto(2), k, irot)
-                grad(2)     = grad(2) + (corrk * sqsumk_ptcl) / denom
-                norm        = norm + sqsumk_ptcl
+                grad(2)     = grad(2) + (corrk * corrk) / denom
+                norm        = norm + corrk
             end do
             grad = grad / norm
         else
@@ -2114,10 +2108,10 @@ contains
                 sqsumk_ptcl = sum(csq(self%pfts_ptcls(self%pinds(iptcl),:,k)))
                 denom       = sqrt(sqsumk_ref * sqsumk_ptcl)
                 corrk       = self%calc_corrk_for_rot_8(pft_ref_tmp1, self%pinds(iptcl), self%kfromto(2), k, irot)
-                grad(1)     = grad(1) + (corrk * sqsumk_ptcl) / denom
+                grad(1)     = grad(1) + (corrk * corrk) / denom
                 corrk       = self%calc_corrk_for_rot_8(pft_ref_tmp2, self%pinds(iptcl), self%kfromto(2), k, irot)
-                grad(2)     = grad(2) + (corrk * sqsumk_ptcl) / denom
-                norm        = norm + sqsumk_ptcl
+                grad(2)     = grad(2) + (corrk * corrk) / denom
+                norm        = norm + corrk
             end do
             grad = grad / norm
         else
