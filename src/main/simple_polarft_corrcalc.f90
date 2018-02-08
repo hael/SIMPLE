@@ -101,7 +101,6 @@ type :: polarft_corrcalc
     logical                          :: existence   = .false. !< to indicate existence
     logical                          :: l_cc_objfun = .true.  !< objective function(cc|ccres)
     logical                          :: l_cc_bfac   = .false. !< flag for B-factor weighting of the correlation
-    logical                          :: l_regularised         !< regularised cross-correlation
     type(heap_vars),     allocatable :: heap_vars(:)          !< allocated fields to save stack allocation in subroutines and functions
   contains
     ! CONSTRUCTOR
@@ -252,10 +251,8 @@ contains
         select case(trim(p%objfun))
             case('cc')
                 self%l_cc_objfun   = .true.
-                self%l_regularised = .false.
             case('ccres')
                 self%l_cc_objfun   = .false.
-                self%l_regularised = .false.
                 if( self%l_cc_bfac )then
                     allocate(self%bfac_arr(self%kfromto(1):self%kfromto(2)))
                     do k=self%kfromto(1),self%kfromto(2)
@@ -264,9 +261,6 @@ contains
                     end do
                     self%bfac_norm = sum(self%bfac_arr)
                 endif
-            case('ccreg')
-                self%l_cc_objfun   = .false.
-                self%l_regularised = .true.
             case DEFAULT
                 write(*,*) 'unsupported objective function: ', trim(p%objfun)
                 stop 'ABORTING, simple_polarft_corrcalc :: new'
@@ -1145,16 +1139,6 @@ contains
                 cc(:) = cc(:) + (kcorrs(:) * self%bfac_arr(k)) / sqrt(sumsqref * sumsqptcl)
             end do
             cc(:) = cc(:) / self%bfac_norm
-        else if( self%l_regularised )then
-            norm(:) = 0.
-            do k=self%kfromto(1),self%kfromto(2)
-                call self%calc_k_corrs(pft_ref, self%pinds(iptcl), k, kcorrs)
-                sumsqptcl = sum(csq(self%pfts_ptcls(self%pinds(iptcl),:,k)))
-                sumsqref  = sum(csq(pft_ref(:,k)))
-                cc(:)   = cc(:) + (kcorrs(:) * kcorrs(:)) / sqrt(sumsqref * sumsqptcl)
-                norm(:) = norm(:) + kcorrs(:)
-            end do
-            cc(:) = cc(:) / norm(:)
         else
             ! without B-factor weighting
             do k=self%kfromto(1),self%kfromto(2)
@@ -1192,16 +1176,6 @@ contains
                 cc(:) = cc(:) + (kcorrs(:) * self%bfac_arr(k)) / sqrt(sumsqref * sumsqptcl)
             end do
             cc(:) = cc(:) / sum(self%bfac_arr(self%kfromto(1):kstop))
-        else if( self%l_regularised )then
-            norm(:) = 0.
-            do k=self%kfromto(1),kstop
-                call self%calc_k_corrs(pft_ref, self%pinds(iptcl), k, kcorrs)
-                sumsqptcl = sum(csq(self%pfts_ptcls(self%pinds(iptcl),:,k)))
-                sumsqref  = sum(csq(pft_ref(:,k)))
-                cc(:)     = cc(:) + (kcorrs(:) * kcorrs(:)) / sqrt(sumsqref * sumsqptcl)
-                norm(:)   = norm(:) + kcorrs(:)
-            end do
-            cc(:) = cc(:) / norm(:)
         else
             ! without B-factor weighting
             do k=self%kfromto(1),kstop
@@ -1257,16 +1231,6 @@ contains
                 cc(:) = cc(:) + (kcorrs(:) * self%bfac_arr(k)) / sqrt(sumsqref * sumsqptcl)
             end do
             cc(:) = cc(:) / self%bfac_norm
-        else if( self%l_regularised )then
-            norm(:) = 0.
-            do k=self%kfromto(1),self%kfromto(2)
-                call self%calc_k_corrs(pft_ref, self%pinds(iptcl), k, kcorrs)
-                sumsqptcl = sum(csq(self%pfts_ptcls(self%pinds(iptcl),:,k)))
-                sumsqref  = sum(csq(pft_ref(:,k)))
-                cc(:)     = cc(:) + (kcorrs(:) * kcorrs(:)) / sqrt(sumsqref * sumsqptcl)
-                norm(:)   = norm(:) + kcorrs(:)
-            end do
-            cc(:) = cc(:) / norm(:)
         else
             ! without B-factor weighting
             do k=self%kfromto(1),self%kfromto(2)
@@ -1453,16 +1417,6 @@ contains
                 cc          = cc + (corrk * self%bfac_arr(k)) / sqrt(sqsumk_ref * sqsumk_ptcl)
             end do
             cc = cc / self%bfac_norm
-        else if( self%l_regularised )then
-            norm = 0.
-            do k = self%kfromto(1),self%kfromto(2)
-                sqsumk_ref  = sum(csq(pft_ref(:,k)))
-                sqsumk_ptcl = sum(csq(self%pfts_ptcls(self%pinds(iptcl),:,k)))
-                corrk       = self%calc_corrk_for_rot(pft_ref, self%pinds(iptcl), self%kfromto(2), k, irot)
-                cc          = cc + (corrk * corrk) / sqrt(sqsumk_ref * sqsumk_ptcl)
-                norm        = norm + corrk
-            end do
-            cc = cc / norm
         else
             ! without B-factor weighting
             do k = self%kfromto(1),self%kfromto(2)
@@ -1515,16 +1469,6 @@ contains
                 cc          = cc + (corrk * real(self%bfac_arr(k), kind=dp)) / sqrt(sqsumk_ref * sqsumk_ptcl)
             end do
             cc = cc / real(self%bfac_norm, kind=dp)
-        else if( self%l_regularised )then
-            norm = 0.0_dp
-            do k = self%kfromto(1),self%kfromto(2)
-                sqsumk_ref  = sum(csq(pft_ref(:,k)))
-                sqsumk_ptcl = sum(csq(self%pfts_ptcls(self%pinds(iptcl),:,k)))
-                corrk       = self%calc_corrk_for_rot_8(pft_ref, self%pinds(iptcl), self%kfromto(2), k, irot)
-                cc          = cc + (corrk * corrk) / sqrt(sqsumk_ref * sqsumk_ptcl)
-                norm        = norm + corrk
-            end do
-            cc = cc / norm
         else
             ! without B-factor weighting
             do k = self%kfromto(1),self%kfromto(2)
@@ -1788,22 +1732,6 @@ contains
             end do
             f = f / real(self%bfac_norm)
             grad(:) = grad(:) / real(self%bfac_norm)
-        else if( self%l_regularised )then
-            norm = 0.0
-            do k = self%kfromto(1), self%kfromto(2)
-                sqsumk_ref  = sum(csq(pft_ref(:,k)))
-                sqsumk_ptcl = sum(csq(self%pfts_ptcls(self%pinds(iptcl),:,k)))
-                denom       = sqrt(sqsumk_ref * sqsumk_ptcl)
-                corrk       = self%calc_corrk_for_rot(pft_ref, self%pinds(iptcl), self%kfromto(2), k, irot)
-                f           = f + (corrk * corrk)       / denom
-                corrk       = self%calc_corrk_for_rot(pft_ref_tmp1, self%pinds(iptcl), self%kfromto(2), k, irot)
-                grad(1)     = grad(1) + (corrk * corrk) / denom
-                corrk       = self%calc_corrk_for_rot(pft_ref_tmp2, self%pinds(iptcl), self%kfromto(2), k, irot)
-                grad(2)     = grad(2) + (corrk * corrk) / denom
-                norm        = norm + corrk
-            end do
-            f = f / norm
-            grad(:) = grad(:) / norm
         else
             do k = self%kfromto(1), self%kfromto(2)
                 sqsumk_ref  = sum(csq(pft_ref(:,k)))
@@ -1872,22 +1800,6 @@ contains
             end do
             f       = f       / real(self%bfac_norm, kind=dp)
             grad(:) = grad(:) / real(self%bfac_norm, kind=dp)
-        else if( self%l_regularised )then
-            norm = 0.0_dp
-            do k = self%kfromto(1), self%kfromto(2)
-                sqsumk_ref  = sum(csq(pft_ref(:,k)))
-                sqsumk_ptcl = sum(csq(self%pfts_ptcls(self%pinds(iptcl),:,k)))
-                denom       = sqrt(sqsumk_ref * sqsumk_ptcl)
-                corrk       = self%calc_corrk_for_rot_8(pft_ref, self%pinds(iptcl), self%kfromto(2), k, irot)
-                f           = f + (corrk * corrk)       / denom
-                corrk       = self%calc_corrk_for_rot_8(pft_ref_tmp1, self%pinds(iptcl), self%kfromto(2), k, irot)
-                grad(1)     = grad(1) + (corrk * corrk) / denom
-                corrk       = self%calc_corrk_for_rot_8(pft_ref_tmp2, self%pinds(iptcl), self%kfromto(2), k, irot)
-                grad(2)     = grad(2) + (corrk * corrk) / denom
-                norm        = norm + corrk
-            end do
-            f       = f       / norm
-            grad(:) = grad(:) / norm
         else
             do k = self%kfromto(1), self%kfromto(2)
                 sqsumk_ref  = sum(csq(pft_ref(:,k)))
@@ -2064,19 +1976,6 @@ contains
                 grad(2)     = grad(2) + (corrk * self%bfac_arr(k)) / denom
             end do
             grad = grad / self%bfac_norm
-        else if( self%l_regularised )then
-            norm = 0.0
-            do k = self%kfromto(1), self%kfromto(1)
-                sqsumk_ref  = sum(csq(pft_ref(:,k)))
-                sqsumk_ptcl = sum(csq(self%pfts_ptcls(self%pinds(iptcl),:,k)))
-                denom       = sqrt(sqsumk_ref * sqsumk_ptcl)
-                corrk       = self%calc_corrk_for_rot(pft_ref_tmp1, self%pinds(iptcl), self%kfromto(2), k, irot)
-                grad(1)     = grad(1) + (corrk * corrk) / denom
-                corrk       = self%calc_corrk_for_rot(pft_ref_tmp2, self%pinds(iptcl), self%kfromto(2), k, irot)
-                grad(2)     = grad(2) + (corrk * corrk) / denom
-                norm        = norm + corrk
-            end do
-            grad = grad / norm
         else
             do k = self%kfromto(1), self%kfromto(1)
                 sqsumk_ref  = sum(csq(pft_ref(:,k)))
@@ -2138,19 +2037,6 @@ contains
                 grad(2)     = grad(2) + (corrk * real(self%bfac_arr(k), kind=dp)) / denom
             end do
             grad = grad / real(self%bfac_norm, kind=dp)
-        else if( self%l_regularised )then
-            norm = 0.0_dp
-            do k = self%kfromto(1), self%kfromto(1)
-                sqsumk_ref  = sum(csq(pft_ref(:,k)))
-                sqsumk_ptcl = sum(csq(self%pfts_ptcls(self%pinds(iptcl),:,k)))
-                denom       = sqrt(sqsumk_ref * sqsumk_ptcl)
-                corrk       = self%calc_corrk_for_rot_8(pft_ref_tmp1, self%pinds(iptcl), self%kfromto(2), k, irot)
-                grad(1)     = grad(1) + (corrk * corrk) / denom
-                corrk       = self%calc_corrk_for_rot_8(pft_ref_tmp2, self%pinds(iptcl), self%kfromto(2), k, irot)
-                grad(2)     = grad(2) + (corrk * corrk) / denom
-                norm        = norm + corrk
-            end do
-            grad = grad / norm
         else
             do k = self%kfromto(1), self%kfromto(1)
                 sqsumk_ref  = sum(csq(pft_ref(:,k)))
