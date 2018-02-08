@@ -389,9 +389,11 @@ contains
         class(image),     intent(inout) :: img_in
         class(polarizer), intent(inout) :: img_out
         type(ctf) :: tfun
+        real      :: frc(b%projfrcs%get_filtsz()), filter(b%projfrcs%get_filtsz())
         real      :: x, y, dfx, dfy, angast, phshift
-        x      = b%a%get(iptcl, 'x')
-        y      = b%a%get(iptcl, 'y')
+        integer   :: ifrc
+        x = b%a%get(iptcl, 'x')
+        y = b%a%get(iptcl, 'y')
         ! normalise
         call img_in%norm
         ! move to Fourier space
@@ -425,6 +427,21 @@ contains
             case DEFAULT
                 stop 'Unsupported ctf mode; simple_hadamard_common :: prepimg4align'
         end select
+        ! shell normalization & filter
+        if( p%imgfilt2D.eq.'yes' .or. p%imgfilt3D.eq.'yes' )then
+            if( p%imgfilt2D.eq.'yes' )then
+                ifrc = nint(b%a%get(iptcl,'class'))  ! 2D
+            else
+                ifrc = nint(b%a%get(iptcl,'proj'))   ! 3D
+            endif
+            if( ifrc > 0 .and. ifrc <= b%projfrcs%get_nprojs() )then
+                call b%projfrcs%frc_getter(ifrc, frc)
+                if( any(frc > 0.143) )then
+                    call fsc2optlp_sub(b%projfrcs%get_filtsz(), frc, filter)
+                    call img_in%shellnorm_and_apply_filter_serial(filter)
+                endif
+            endif
+        endif
         ! shift image to rotational origin
         if(abs(x) > SHTHRESH .or. abs(y) > SHTHRESH) call img_in%shift2Dserial([-x,-y])
         ! back to real-space
