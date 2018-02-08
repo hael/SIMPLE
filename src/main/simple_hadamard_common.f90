@@ -432,7 +432,7 @@ contains
             if( p%imgfilt2D.eq.'yes' )then
                 ifrc = nint(b%a%get(iptcl,'class'))  ! 2D
             else
-                ifrc = nint(b%a%get(iptcl,'proj'))   ! 3D
+                ifrc = b%e_bal%find_closest_proj( b%a%get_ori(iptcl) ) ! 3D
             endif
             if( ifrc > 0 .and. ifrc <= b%projfrcs%get_nprojs() )then
                 call b%projfrcs%frc_getter(ifrc, frc)
