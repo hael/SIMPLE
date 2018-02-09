@@ -67,7 +67,7 @@ do i=1,N
         end do
     end do
 end do
-!$acc parallel loop(3)
+!$acc end parallel loop
 
 print *, 'sum should be: ', N*M*P*2, 'sum is: ', total
 
