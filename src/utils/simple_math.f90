@@ -57,6 +57,10 @@ interface peakfinder
     module procedure peakfinder_3
 end interface
 
+interface peakfinder_inplace
+    module procedure peakfinder_inplace_2
+end interface
+
 interface find
     module procedure find_1
     module procedure find_2
@@ -2375,6 +2379,20 @@ contains
             end do
         end do
     end function peakfinder_3
+
+    subroutine peakfinder_inplace_2( vals, peakpos )
+        ! same as peakfinder_2 without allocation
+        real,    intent(in)  :: vals(:)
+        logical, intent(out) :: peakpos(:)
+        integer :: n, i, alloc_stat
+        n = size(vals)
+        peakpos = .false.
+        if( vals(1) > vals(2) )  peakpos(1) = .true.
+        do i=2,n-1
+            if( vals(i) >= vals(i-1) .and. vals(i) >= vals(i+1) ) peakpos(i) = .true.
+        end do
+        if( vals(n) > vals(n-1) ) peakpos(n) = .true.
+    end subroutine peakfinder_inplace_2
 
     !>   rheapsort from numerical recipes (largest last)
     subroutine hpsort_1( rarr, iarr )

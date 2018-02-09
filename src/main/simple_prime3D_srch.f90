@@ -4,14 +4,13 @@ module simple_prime3D_srch
 use simple_oris,              only: oris
 use simple_ori,               only: ori
 use simple_sym,               only: sym
-use simple_projection_frcs,   only: projection_frcs
 use simple_polarft_corrcalc,  only: polarft_corrcalc
 use simple_pftcc_shsrch,      only: pftcc_shsrch       ! simplex-based angle and shift search
 use simple_pftcc_grad_shsrch, only: pftcc_grad_shsrch  ! gradient-based angle and shift search
 implicit none
 
 public :: cleanprime3D_srch, prep4prime3D_srch
-public :: prime3D_srch, o_peaks, peaks_frcs
+public :: prime3D_srch, o_peaks
 private
 
 real,    parameter :: SOFTMAXW_THRESH = 0.01 !< threshold for softmax weights
@@ -30,9 +29,6 @@ integer,    allocatable :: prev_states(:)                         !< particle pr
 integer,    allocatable :: srch_order(:,:)                        !< stochastic search index
 logical,    allocatable :: state_exists(:)                        !< indicates state existence
 logical,    pointer     :: ptcl_mask_ptr(:) => null()             !< pointer to particle mask
-!
-type(projection_frcs), allocatable :: peaks_frcs(:)
-!
 
 type prime3D_srch
     private
@@ -67,7 +63,6 @@ type prime3D_srch
     character(len=STDLEN)            :: refine        = ''        !< refinement flag
     character(len=STDLEN)            :: opt           = ''        !< optimizer flag
     logical                          :: doshift       = .true.    !< 2 indicate whether 2 serch shifts
-    logical                          :: calc_frcs     = .false.   !< 2 indicate whether to calculate frcs
     logical                          :: exists        = .false.   !< 2 indicate existence
   contains
     procedure          :: new
@@ -121,12 +116,6 @@ contains
                 call o_peaks(i)%kill
             enddo
             deallocate(o_peaks)
-        endif
-        if( allocated(peaks_frcs) )then
-            do i=p%fromp,p%top
-                call peaks_frcs(i)%kill
-            enddo
-            deallocate(peaks_frcs)
         endif
         ! parameters
         nrefs  = p%nspace * p%nstates
@@ -189,7 +178,7 @@ contains
             case('het','hetsym')
                ! nothing to do
             case DEFAULT
-                allocate(o_peaks(p%fromp:p%top), peaks_frcs(p%fromp:p%top))
+                allocate(o_peaks(p%fromp:p%top))
                 do iptcl = p%fromp, p%top
                     if( ptcl_mask(iptcl) )then
                         ! ORIENTATION PEAKS
@@ -213,8 +202,6 @@ contains
                         endif
                         ! transfer eo flag
                         call o_peaks(iptcl)%set_all2single('eo', b%a%get(iptcl,'eo'))
-                        ! FRCS
-                        call peaks_frcs(iptcl)%new(p%npeaks, p%boxmatch, p%smpd, 1 )
                     endif
                 enddo
         end select
@@ -318,7 +305,6 @@ contains
         self%nnnrefs    =  self%nnn*self%nstates
         self%kstop_grid =  p%kstop_grid
         self%opt        =  p%opt
-        self%calc_frcs  = trim(p%projfrcs) == 'yes'
         if( str_has_substr(self%refine,'shc') )then
             if( self%npeaks > 1 ) stop 'npeaks must be equal to 1 with refine=shc|shcneigh'
         endif
@@ -946,11 +932,11 @@ contains
         type(ori)  :: osym
         type(oris) :: sym_os
         real       :: shvec(2), corrs(self%npeaks), ws(self%npeaks), dists(self%npeaks)
-        real       :: arg4softmax(self%npeaks), state_ws(self%nstates), frc(peaks_frcs(self%iptcl)%get_filtsz())
+        real       :: arg4softmax(self%npeaks), state_ws(self%nstates)
         real       :: mi_proj, mi_inpl, mi_state, dist_inpl, wcorr, realfrac, frac
-        real       :: ang_sdev, dist, inpl_dist, euldist, mi_joint
+        real       :: ang_sdev, dist, inpl_dist, euldist, mi_joint, bfac
         integer    :: best_loc(1), loc(1), kfromto(2), states(self%npeaks)
-        integer    ::  s, ipeak, cnt, ref, state, roind, neff_states
+        integer    :: s, ipeak, cnt, ref, state, roind, neff_states
         logical    :: included(self%npeaks)
         ! empty states
         neff_states = count(state_exists)
@@ -1028,23 +1014,20 @@ contains
             ! update npeaks individual weights
             call o_peaks(self%iptcl)%set_all('ow', ws)
         endif
-        ! FRCs
-        if( self%calc_frcs )then
-            kfromto = self%pftcc_ptr%get_kfromto() - 1 ! because zero is neglected in projection_frcs
-            do ipeak = 1, self%npeaks
-                frc = 0.
-                if( ws(ipeak) > TINY )then
-                    cnt   = self%nrefs - self%npeaks + ipeak
-                    ref   = proj_space_inds(self%iptcl_map, cnt)
-                    shvec = 0.
-                    if( self%doshift )shvec = proj_space_shift(self%iptcl_map, ref, 1:2)
-                    roind = self%pftcc_ptr%get_roind(360. - proj_space_euls(self%iptcl_map, ref, 3))
-                    call self%pftcc_ptr%calc_frc(ref, self%iptcl, roind, shvec,& ! FRCs can only be calculated
-                        &frc(kfromto(1):kfromto(2)))                             ! within PFTCC range
-                endif
-                call peaks_frcs(self%iptcl)%set_frc(ipeak, frc, 1)
-            enddo
-        endif
+        ! B factors
+        do ipeak = 1, self%npeaks
+            if( ws(ipeak) > TINY .or. self%npeaks==1 )then
+                cnt   = self%nrefs - self%npeaks + ipeak
+                ref   = proj_space_inds(self%iptcl_map, cnt)
+                shvec = 0.
+                if( self%doshift )shvec = proj_space_shift(self%iptcl_map, ref, 1:2)
+                roind = self%pftcc_ptr%get_roind(360. - proj_space_euls(self%iptcl_map, ref, 3))
+                bfac  = self%pftcc_ptr%calc_bfac(ref, self%iptcl, roind, shvec)
+                call o_peaks(self%iptcl)%set(ipeak, 'bfac', bfac)
+            else
+                call o_peaks(self%iptcl)%set(ipeak, 'bfac', 0.)
+            endif
+        enddo
         ! angular standard deviation
         ang_sdev = 0.
         if( trim(self%se_ptr%get_pgrp()).eq.'c1' )then

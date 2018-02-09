@@ -147,8 +147,6 @@ type :: polarft_corrcalc
     procedure, private :: calc_corr_for_rot_8
     procedure, private :: calc_corrk_for_rot
     procedure, private :: calc_corrk_for_rot_8
-    procedure, private :: genfrc
-    procedure          :: calc_frc
     procedure, private :: gencorrs_cc_1
     procedure, private :: gencorrs_cc_2
     procedure, private :: gencorrs_cc_3
@@ -179,7 +177,10 @@ type :: polarft_corrcalc
     procedure          :: gencorr_resnorm_grad_only_for_rot
     procedure          :: gencorr_resnorm_grad_for_rot_8
     procedure          :: gencorr_resnorm_grad_only_for_rot_8
+    procedure, private :: genfrc
+    procedure          :: calc_frc
     procedure          :: specscore
+    procedure          :: calc_bfac
     ! DESTRUCTOR
     procedure          :: kill
 end type polarft_corrcalc
@@ -983,7 +984,7 @@ contains
         corr = real(tmp)
     end function calc_corrk_for_rot_8
 
-    !>  \brief  is PRIVATE (indexed on pinds) for generating resolution dependent correlations
+    !>  \brief  is for generating resolution dependent correlations
     subroutine genfrc( self, iref, i, irot, frc )
         use simple_math, only: csq
         class(polarft_corrcalc),  intent(inout) :: self
@@ -1005,7 +1006,7 @@ contains
         end do
     end subroutine genfrc
 
-    !>  \brief  is PUBLIC (indexed in ptcl index) for generating resolution dependent correlations with shift
+    !>  \brief  is for generating resolution dependent correlations with shift
     subroutine calc_frc( self, iref, iptcl, irot, shvec, frc )
         use simple_math, only: csq
         class(polarft_corrcalc),  intent(inout) :: self
@@ -2053,13 +2054,50 @@ contains
 
     !>  \brief  is for generating resolution dependent correlations
     real function specscore( self, iref, iptcl, irot )
-        use simple_math, only: median_nocopy
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iref, iptcl, irot
         real :: frc(self%kfromto(1):self%kfromto(2))
         call self%genfrc(iref, self%pinds(iptcl), irot, frc)
         specscore = max(0.,median_nocopy(frc))
     end function specscore
+
+    !>  \brief  is for fitting a bfactor to ptcl vs. ref FRC
+    real function calc_bfac( self, iref, iptcl, irot, shvec )
+        ! Fitting to Y = A * exp( -B/(4s2) )
+        ! modified from mathworld.wolfram.com/LeastSquaresFittingExponential.html
+        class(polarft_corrcalc),  intent(inout) :: self
+        integer,                  intent(in)    :: iref, iptcl, irot
+        real(sp),                 intent(in)    :: shvec(2)
+        real(sp) :: denom, frc(self%kfromto(1):self%kfromto(2)), X(self%kfromto(1):self%kfromto(2)), rn
+        logical  :: peakmsk(self%kfromto(1):self%kfromto(2))
+        integer  :: i
+        call self%calc_frc(iref, iptcl, irot, shvec, frc)
+        call peakfinder_inplace(frc, peakmsk)
+        where(frc <= TINY) peakmsk = .false.
+        if( count(peakmsk) < 3 )then
+            where(frc > TINY) peakmsk = .true.
+            if( count(peakmsk) < 3 )then
+                calc_bfac = 666666.666
+                return
+            endif
+        endif
+        X = self%smpd * real(self%ldim(1)) / real((/(i,i=self%kfromto(1),self%kfromto(2))/))
+        X = -1. / (4.*X*X)
+        ! uniform weights
+        ! rn = real(count(peakmsk))
+        ! denom = rn * sum(X*X,mask=peakmsk) - sum(X,mask=peakmsk)**2.
+        ! calc_bfac = rn * sum(X*log(frc),mask=peakmsk) - sum(X,mask=peakmsk) * sum(log(frc),mask=peakmsk)
+        ! calc_bfac = calc_bfac / denom
+        ! all points are weighted by Y
+        denom = (sum(frc,mask=peakmsk) * sum(X*X*frc,mask=peakmsk) - sum(X*frc,mask=peakmsk)**2.)
+        calc_bfac = sum(frc,mask=peakmsk) * sum(X*frc*log(frc),mask=peakmsk)
+        calc_bfac = calc_bfac - sum(X*frc,mask=peakmsk) * sum(frc*log(frc),mask=peakmsk)
+        calc_bfac = calc_bfac / denom
+        !A = sum(X*X*Y) * sum(y*log(Y)) - sum(X*Y) * sum(X*Y*log(Y))
+        !A = A / denom
+        !A = exp(A)
+        !print *,iptcl,calc_bfac,count(peakmsk)
+    end function calc_bfac
 
     ! DESTRUCTOR
 

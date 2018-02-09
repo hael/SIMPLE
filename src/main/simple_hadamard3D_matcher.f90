@@ -364,15 +364,6 @@ contains
                 stop
         end select
 
-        ! Projection FRCs output
-        if( trim(p%projfrcs) .eq. 'yes' )then
-            do iptcl = p%fromp, p%top
-                if( .not. ptcl_mask(iptcl) )cycle
-                fname = 'frcs_ptcl'//int2str_pad(iptcl,6)//BIN_EXT
-                call peaks_frcs(iptcl)%write(fname)
-            enddo
-        endif
-
         ! CLEANUP primesrch3D & pftcc
         call cleanprime3D_srch()
         call pftcc%kill
