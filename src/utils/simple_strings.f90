@@ -38,14 +38,28 @@ contains
     end function spaces
 
     !> \brief  assesses whether a string represents a filename
-    function str2format( str) result( format )
+    function str2format( str ) result( format )
         character(len=*), intent(in)  :: str
         character(len=:), allocatable :: format
-        integer :: iostat, ivar
+        integer :: iostat, ivar, ind, i
         real    :: rvar
         logical :: str_is_file
+        i = index(str, '.')
+        ! check if first symbol after . is a character
+        if( i /= 0 .and. i < len_trim(str)  )then
+            if( is_a_letter(str(i+1:i+1)) )then
+                str_is_file = .true.
+            else
+                str_is_file = .false.
+            endif
+        endif
+        ! file name
+        if( str_is_file )then
+            allocate( format, source='file' )
+            return
+        endif
         ! real
-        read(str,*, iostat=iostat) rvar
+        read(str,*,iostat=iostat) rvar
         if( iostat == 0 )then
             allocate( format, source='real' )
             return
@@ -56,31 +70,19 @@ contains
             allocate( format, source='int' )
             return
         endif
-        ! file
-        str_is_file = .true.
-        if( index(str, '.spi') /= 0 )then
-        else if( index(str, '.mrc') /= 0 )then
-        else if( index(str, '.map') /= 0 )then
-        else if( index(str, '.ctf') /= 0 )then
-        else if( index(str, '.bin') /= 0 )then
-        else if( index(str, '.txt') /= 0 )then
-        else if( index(str, '.asc') /= 0 )then
-        else if( index(str, '.log') /= 0 )then
-        else if( index(str, '.dat') /= 0 )then
-        else if( index(str, '.box') /= 0 )then
-        else if( index(str, '.raw') /= 0 )then
-        else if( index(str, '.hed') /= 0 )then
-        else if( index(str, '.img') /= 0 )then
-        else if( index(str, '.ccp') /= 0 )then
-        else if( index(str, '.simple') /= 0 )then
-        else
-            str_is_file = .false.
-        endif
-        if( str_is_file )then
-            allocate( format, source='file' )
-            return
-        endif
+        ! char is last resort
         allocate( format, source='char' )
+
+        contains
+
+            logical function is_a_letter( c )
+                character(len=1), intent(in) :: c
+                integer :: itst1, itst2
+                itst1 = scan(LOWER_CASE_LETTERS,c)
+                itst2 = scan(UPPER_CASE_LETTERS,c)
+                is_a_letter = itst1 > 0 .or. itst2 > 0
+            end function is_a_letter
+
     end function str2format
 
     !> \brief  parses the string 'str' into arguments args(1), ..., args(nargs) based on
