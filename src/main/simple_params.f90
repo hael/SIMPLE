@@ -326,8 +326,8 @@ type :: params
     real    :: frac_outliers=0.
     real    :: fraczero=0.
     real    :: ftol=1e-6
-    real    :: unblurftol = 1e-4
-    real    :: unblurgtol = 1e-4
+    real    :: unblurftol = 1e-2   !< tolerance (gradient) for unblurrer 
+    real    :: unblurgtol = 1e-2   !< tolerance (function value) for unblurrer
     real    :: gw=0.5
     real    :: hp=100.             !< high-pass limit(in A)
     real    :: hp_ctffind=30.      !< high-pass limit 4 ctffind(in A)
