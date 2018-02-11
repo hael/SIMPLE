@@ -12,8 +12,7 @@ implicit none
 
 public :: read_img, read_img_and_norm, read_imgbatch, set_bp_range, set_bp_range2D, grid_ptcl,&
 &prepimg4align, eonorm_struct_facts, norm_struct_facts, cenrefvol_and_mapshifts2ptcls, preprefvol,&
-&prep2Dref, gen2Dclassdoc, preprecvols, killrecvols, gen_projection_frcs, prepimgbatch, grid_ptcl_tst,&
-&filterimg4rec
+&prep2Dref, gen2Dclassdoc, preprecvols, killrecvols, gen_projection_frcs, prepimgbatch, grid_ptcl_tst
 private
 #include "simple_local_flags.inc"
 
@@ -463,28 +462,6 @@ contains
         call img_out%fwd_ft
         DebugPrint  '*** simple_hadamard_common ***: finished prepimg4align'
     end subroutine prepimg4align
-
-    !>  \brief  filters particle image for 3D reconstruction
-    subroutine filterimg4rec( b, p, iptcl, img_inout )
-        use simple_polarizer,     only: polarizer
-        use simple_estimate_ssnr, only: fsc2optlp_sub
-        use simple_ctf,           only: ctf
-        class(build),     intent(inout) :: b
-        class(params),    intent(inout) :: p
-        integer,          intent(in)    :: iptcl
-        class(image),     intent(inout) :: img_inout
-        real      :: frc(b%projfrcs%get_filtsz()), filter(b%projfrcs%get_filtsz())
-        integer   :: ifrc
-        ! move to Fourier space
-        call img_inout%fwd_ft
-        ! filter
-        ifrc = b%e_bal%find_closest_proj( b%a%get_ori(iptcl) )
-        call b%projfrcs%frc_getter(ifrc, frc)
-        call fsc2optlp_sub(b%projfrcs%get_filtsz(), frc, filter)
-        call img_inout%apply_filter_serial(filter)
-        ! back to real-space
-        call img_inout%bwd_ft
-    end subroutine filterimg4rec
 
     !>  \brief  prepares one cluster centre image for alignment
     subroutine prep2Dref( b, p, img_in, img_out, icls, center, xyz_in, xyz_out )
