@@ -406,6 +406,10 @@ contains
                 !$omp parallel do default(shared) private(i,ibatch) schedule(static) proc_bind(close)
                 do i=batchlims(1),batchlims(2)
                     ibatch = i - batchlims(1) + 1
+                    ! normalise (read_imgbatch does not normalise)
+                    call b%imgbatch(ibatch)%norm
+                    ! in dev=yes code, we filter before inserting into 3D vol
+                    if( p%l_dev ) call filterimg4rec(b, p, pinds(i), b%imgbatch(ibatch))
                     call gridprep%prep_serial_no_fft(b%imgbatch(ibatch), rec_imgs(ibatch))
                 end do
                 !$omp end parallel do

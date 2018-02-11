@@ -372,20 +372,21 @@ type :: params
     real    :: ysh=0.              !< y shift(in pixels){0}
     real    :: zsh=0.              !< z shift(in pixels){0}
     ! logical variables in ascending alphabetical order
-    logical :: cyclic(7)          = .false.
-    logical :: l_distr_exec       = .false.
-    logical :: l_match_filt       = .true.
-    logical :: l_doshift          = .false.
-    logical :: l_focusmsk         = .false.
-    logical :: l_autoscale        = .false.
-    logical :: l_dose_weight      = .false.
-    logical :: l_frac_update      = .false.
-    logical :: l_innermsk         = .false.
-    logical :: l_pick             = .false.
-    logical :: l_remap_classes    = .false.
-    logical :: l_stktab_input     = .false.
-    logical :: l_cc_objfun        = .true.
-    logical :: l_cc_bfac          = .true.
+    logical :: cyclic(7)       = .false.
+    logical :: l_distr_exec    = .false.
+    logical :: l_match_filt    = .true.
+    logical :: l_doshift       = .false.
+    logical :: l_focusmsk      = .false.
+    logical :: l_autoscale     = .false.
+    logical :: l_dose_weight   = .false.
+    logical :: l_frac_update   = .false.
+    logical :: l_innermsk      = .false.
+    logical :: l_pick          = .false.
+    logical :: l_remap_classes = .false.
+    logical :: l_stktab_input  = .false.
+    logical :: l_cc_objfun     = .true.
+    logical :: l_cc_bfac       = .true.
+    logical :: l_dev           = .false.
   contains
     procedure :: new
 end type params
@@ -1172,6 +1173,9 @@ contains
         ! B-factor weighted corr or not
         self%l_cc_bfac = .false.
         if( cline%defined('bfac') ) self%l_cc_bfac = .true.
+        ! global dev (development) flag
+        self%l_dev = .false.
+        if( trim(self%dev) .eq. 'yes' ) self%l_dev = .true.
 
 !>>> END, IMAGE-PROCESSING-RELATED
 

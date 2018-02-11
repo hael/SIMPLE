@@ -208,6 +208,7 @@ type :: image
     procedure, private :: apply_filter_1
     procedure, private :: apply_filter_2
     generic            :: apply_filter => apply_filter_1, apply_filter_2
+    procedure          :: apply_filter_serial
     procedure          :: phase_rand
     procedure          :: hannw
     procedure          :: real_space_filter
@@ -3924,7 +3925,6 @@ contains
 
     !> \brief apply_filter_1  is for application of an arbitrary 1D filter function
     !! \param filter
-    !!
     subroutine apply_filter_1( self, filter )
         class(image), intent(inout) :: self
         real,         intent(in)    :: filter(:)
@@ -3997,6 +3997,36 @@ contains
             stop 'equal dims assumed; apply_filter_2; simple_image'
         endif
     end subroutine apply_filter_2
+
+    !> \brief apply_filter_1  is for application of an arbitrary 1D filter function
+    !! \param filter
+    subroutine apply_filter_serial( self, filter )
+        class(image), intent(inout) :: self
+        real,         intent(in)    :: filter(:)
+        integer :: nyq, sh, h, k, l, lims(3,2)
+        real    :: fwght, wzero
+        nyq   = size(filter)
+        wzero = maxval(filter)
+        lims  = self%fit%loop_lims(2)
+        do h=lims(1,1),lims(1,2)
+            do k=lims(2,1),lims(2,2)
+                do l=lims(3,1),lims(3,2)
+                    ! find shell
+                    sh = nint(hyp(real(h),real(k),real(l)))
+                    ! set filter weight
+                    if( sh > nyq )then
+                        fwght = 0.
+                    else if( sh == 0 )then
+                        fwght = wzero
+                    else
+                        fwght = filter(sh)
+                    endif
+                    ! multiply with the weight
+                    call self%mul([h,k,l], fwght)
+                end do
+            end do
+        end do
+    end subroutine apply_filter_serial
 
     !> \brief phase_rand  is for randomzing the phases of the FT of an image from lp and out
     !! \param lp
