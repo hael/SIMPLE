@@ -1123,7 +1123,7 @@ contains
         real(sp),                intent(out)   :: cc(self%nrots)
         complex(sp), pointer :: pft_ref(:,:)
         real(sp),    pointer :: kcorrs(:)
-        real(sp) :: sumsqref, sumsqptcl, norm(self%kfromto(1):self%kfromto(2))
+        real(sp) :: sumsqref, sumsqptcl
         integer  :: k, ithr
         ithr    =  omp_get_thread_num() + 1
         pft_ref => self%heap_vars(ithr)%pft_ref
@@ -1160,7 +1160,7 @@ contains
         real(sp),                intent(out)   :: cc(self%nrots)
         complex(sp), pointer :: pft_ref(:,:)
         real(sp),    pointer :: kcorrs(:)
-        real(sp) :: sumsqref, sumsqptcl, norm(self%kfromto(1):self%kfromto(2))
+        real(sp) :: sumsqref, sumsqptcl
         integer  :: k, ithr
         ithr    =  omp_get_thread_num() + 1
         pft_ref => self%heap_vars(ithr)%pft_ref
@@ -1199,7 +1199,7 @@ contains
         real(sp),                intent(out)   :: cc(self%nrots)
         complex(sp), pointer :: pft_ref(:,:), shmat(:,:)
         real(sp),    pointer :: kcorrs(:), argmat(:,:)
-        real(sp) :: sumsqptcl, sumsqref, norm(self%kfromto(1):self%kfromto(2))
+        real(sp) :: sumsqptcl, sumsqref
         integer  :: ithr, k
         ithr    = omp_get_thread_num() + 1
         pft_ref => self%heap_vars(ithr)%pft_ref
@@ -1387,7 +1387,7 @@ contains
         integer,                 intent(in)    :: irot
         complex(sp), pointer :: pft_ref(:,:), shmat(:,:)
         real(sp),    pointer :: argmat(:,:)
-        real(sp) :: cc, corrk, sqsumk_ref, norm, sqsumk_ptcl
+        real(sp) :: cc, corrk, sqsumk_ref, sqsumk_ptcl
         integer  :: ithr, k
         ithr    =  omp_get_thread_num() + 1
         pft_ref => self%heap_vars(ithr)%pft_ref
@@ -1439,7 +1439,7 @@ contains
         integer,                 intent(in)    :: irot
         complex(dp), pointer :: pft_ref(:,:), shmat(:,:)
         real(dp),    pointer :: argmat(:,:)
-        real(dp) :: cc, corrk, sqsumk_ref, sqsumk_ptcl, norm
+        real(dp) :: cc, corrk, sqsumk_ref, sqsumk_ptcl
         integer  :: ithr, k
         ithr    =  omp_get_thread_num() + 1
         pft_ref => self%heap_vars(ithr)%pft_ref_8
@@ -1692,7 +1692,7 @@ contains
         real(sp),                intent(out)   :: f, grad(2)
         complex(sp), pointer :: pft_ref(:,:), pft_ref_tmp1(:,:), pft_ref_tmp2(:,:), shmat(:,:)
         real(sp),    pointer :: argmat(:,:)
-        real(sp) :: sqsumk_ref, corrk, sqsumk_ptcl, norm, denom
+        real(sp) :: sqsumk_ref, corrk, sqsumk_ptcl, denom
         integer  :: ithr, k
         ithr         =  omp_get_thread_num() + 1
         pft_ref      => self%heap_vars(ithr)%pft_ref
@@ -1760,7 +1760,7 @@ contains
         real(dp),                intent(out)   :: f, grad(2)
         complex(dp), pointer :: pft_ref(:,:), pft_ref_tmp1(:,:), pft_ref_tmp2(:,:), shmat(:,:)
         real(dp),    pointer :: argmat(:,:)
-        real(dp) :: sqsumk_ref, corrk, sqsumk_ptcl, norm, denom
+        real(dp) :: sqsumk_ref, corrk, sqsumk_ptcl, denom
         integer  :: ithr, k
         ithr         =  omp_get_thread_num() + 1
         pft_ref      => self%heap_vars(ithr)%pft_ref_8
@@ -1940,7 +1940,7 @@ contains
         real(sp),                intent(out)   :: grad(2)
         complex(sp), pointer :: pft_ref(:,:), pft_ref_tmp1(:,:), pft_ref_tmp2(:,:), shmat(:,:)
         real(sp),    pointer :: argmat(:,:)
-        real(sp) :: sqsumk_ref, corrk, sqsumk_ptcl, denom, norm
+        real(sp) :: sqsumk_ref, corrk, sqsumk_ptcl, denom
         integer  :: ithr, k
         ithr         =  omp_get_thread_num() + 1
         pft_ref      => self%heap_vars(ithr)%pft_ref
@@ -2001,7 +2001,7 @@ contains
         real(dp),                intent(out)   :: grad(2)
         complex(dp), pointer :: pft_ref(:,:), pft_ref_tmp1(:,:), pft_ref_tmp2(:,:), shmat(:,:)
         real(dp),    pointer :: argmat(:,:)
-        real(dp) :: sqsumk_ref, corrk, sqsumk_ptcl, norm, denom
+        real(dp) :: sqsumk_ref, corrk, sqsumk_ptcl, denom
         integer  :: ithr, k
         ithr         =  omp_get_thread_num() + 1
         pft_ref      => self%heap_vars(ithr)%pft_ref_8
@@ -2068,7 +2068,7 @@ contains
         class(polarft_corrcalc),  intent(inout) :: self
         integer,                  intent(in)    :: iref, iptcl, irot
         real(sp),                 intent(in)    :: shvec(2)
-        real(sp) :: denom, frc(self%kfromto(1):self%kfromto(2)), X(self%kfromto(1):self%kfromto(2)), rn
+        real(sp) :: denom, frc(self%kfromto(1):self%kfromto(2)), X(self%kfromto(1):self%kfromto(2))
         logical  :: peakmsk(self%kfromto(1):self%kfromto(2))
         integer  :: i
         call self%calc_frc(iref, iptcl, irot, shvec, frc)

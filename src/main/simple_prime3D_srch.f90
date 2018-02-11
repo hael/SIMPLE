@@ -932,10 +932,10 @@ contains
         type(ori)  :: osym
         type(oris) :: sym_os
         real       :: shvec(2), corrs(self%npeaks), ws(self%npeaks), dists(self%npeaks)
-        real       :: arg4softmax(self%npeaks), state_ws(self%nstates)
-        real       :: mi_proj, mi_inpl, mi_state, dist_inpl, wcorr, realfrac, frac
+        real       :: arg4softmax(self%npeaks), state_ws(self%nstates), bfacs(self%npeaks)
+        real       :: mi_proj, mi_inpl, mi_state, dist_inpl, wcorr, frac
         real       :: ang_sdev, dist, inpl_dist, euldist, mi_joint, bfac
-        integer    :: best_loc(1), loc(1), kfromto(2), states(self%npeaks)
+        integer    :: best_loc(1), loc(1), states(self%npeaks)
         integer    :: s, ipeak, cnt, ref, state, roind, neff_states
         logical    :: included(self%npeaks)
         ! empty states
@@ -1015,19 +1015,21 @@ contains
             call o_peaks(self%iptcl)%set_all('ow', ws)
         endif
         ! B factors
+        bfacs = 0.
         do ipeak = 1, self%npeaks
             if( ws(ipeak) > TINY .or. self%npeaks==1 )then
                 cnt   = self%nrefs - self%npeaks + ipeak
                 ref   = proj_space_inds(self%iptcl_map, cnt)
                 shvec = 0.
                 if( self%doshift )shvec = proj_space_shift(self%iptcl_map, ref, 1:2)
-                roind = self%pftcc_ptr%get_roind(360. - proj_space_euls(self%iptcl_map, ref, 3))
-                bfac  = self%pftcc_ptr%calc_bfac(ref, self%iptcl, roind, shvec)
-                call o_peaks(self%iptcl)%set(ipeak, 'bfac', bfac)
+                roind        = self%pftcc_ptr%get_roind(360. - proj_space_euls(self%iptcl_map, ref, 3))
+                bfacs(ipeak) = self%pftcc_ptr%calc_bfac(ref, self%iptcl, roind, shvec)
+                call o_peaks(self%iptcl)%set(ipeak, 'bfac', bfacs(ipeak))
             else
                 call o_peaks(self%iptcl)%set(ipeak, 'bfac', 0.)
             endif
         enddo
+        bfac = sum(ws * bfacs, mask=(ws>TINY))
         ! angular standard deviation
         ang_sdev = 0.
         if( trim(self%se_ptr%get_pgrp()).eq.'c1' )then
@@ -1100,6 +1102,7 @@ contains
         call self%a_ptr%set(self%iptcl, 'ow',    o_peaks(self%iptcl)%get(best_loc(1),'ow')   )
         call self%a_ptr%set(self%iptcl, 'proj',  o_peaks(self%iptcl)%get(best_loc(1),'proj') )
         call self%a_ptr%set(self%iptcl, 'sdev',  ang_sdev )
+        call self%a_ptr%set(self%iptcl, 'bfacs',  bfac )
         call self%a_ptr%set(self%iptcl, 'npeaks', real(self%npeaks_eff) )
         if( DEBUG ) print *,  '>>> PRIME3D_SRCH::EXECUTED PREP_NPEAKS_ORIS'
     end subroutine prep_npeaks_oris_and_weights
