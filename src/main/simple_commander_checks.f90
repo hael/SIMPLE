@@ -10,6 +10,7 @@ implicit none
 public :: check_box_commander
 public :: check_nptcls_commander
 public :: iminfo_commander
+public :: stktabinfo_commander
 private
 
 type, extends(commander_base) :: check_box_commander
@@ -24,6 +25,10 @@ type, extends(commander_base) :: iminfo_commander
  contains
    procedure :: execute      => exec_iminfo
 end type iminfo_commander
+type, extends(commander_base) :: stktabinfo_commander
+ contains
+   procedure :: execute      => exec_stktabinfo
+end type stktabinfo_commander
 
 contains
 
@@ -66,13 +71,12 @@ contains
         type(params)      :: p
         type(image)       :: img
         integer           :: ldim(3), maxim, i, n_nans
-        real              :: smpd, sdev, ave, minv, maxv
+        real              :: sdev, ave, minv, maxv
         p = params(cline) ! constants & derived constants produced
         if( cline%defined('fname') )then
             call find_ldim_nptcls(p%fname, ldim, maxim, doprint=.true.)
         endif
-        p%box  = ldim(1)
-        ! p%smpd = smpd          !! UNDEFINED
+        p%box = ldim(1)
         call img%new([ldim(1),ldim(2),1],p%smpd)
         if( p%vis .eq. 'yes' .or. p%stats .ne. 'no' )then
             do i=1,maxim
@@ -93,5 +97,18 @@ contains
         endif
         call simple_end('**** SIMPLE_IMINFO NORMAL STOP ****')
     end subroutine exec_iminfo
+
+    !> for printing information about stktab
+    subroutine exec_stktabinfo( self, cline )
+        class(stktabinfo_commander), intent(inout) :: self
+        class(cmdline),              intent(inout) :: cline
+        type(params) :: p
+        p = params(cline) ! constants & derived constants produced
+        write(*,*) '# micrograps: ', p%nmics
+        write(*,*) '# particles : ', p%nptcls
+        write(*,*) 'ldim        : ', p%ldim
+        write(*,*) 'box size    : ', p%box
+        call simple_end('**** SIMPLE_STKTABINFO NORMAL STOP ****')
+    end subroutine exec_stktabinfo
 
 end module simple_commander_checks

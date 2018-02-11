@@ -78,6 +78,7 @@ type(volassemble_commander)          :: xvolassemble
 type(check_box_commander)            :: xcheck_box
 type(check_nptcls_commander)         :: xcheck_nptcls
 type(iminfo_commander)               :: ximinfo
+type(stktabinfo_commander)           :: xstktabinfo
 
 ! VOLOPS PROGRAMS
 type(fsc_commander)                  :: xfsc
@@ -1500,6 +1501,18 @@ select case(prg)
         call cline%parse(keys_required(:1), keys_optional(:4))
         ! execute
         call ximinfo%execute(cline)
+    case( 'stktabinfo' )
+        !==Program stktabinfo
+        !
+        ! <stktabinfo/begin>is a program for for printing information about stktab <stktabinfo/end>
+        !
+        ! set required keys
+        keys_required(1) = 'stktab'
+        ! parse command line
+        ! if( describe ) call print_doc_stktabinfo
+        call cline%parse(keys_required(:1))
+        ! execute
+        call xstktabinfo%execute(cline)
 
     ! VOLOPS PROGRAMS
 
