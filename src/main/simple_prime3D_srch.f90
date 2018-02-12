@@ -969,6 +969,7 @@ contains
         best_loc = maxloc(corrs)
         ! stochastic weights
         if( self%npeaks == 1 )then
+            ws(1) = 1.
             call o_peaks(self%iptcl)%set(1,'ow',1.0)
             wcorr = o_peaks(self%iptcl)%get(1,'corr')
         else
@@ -1024,10 +1025,10 @@ contains
                 if( self%doshift )shvec = proj_space_shift(self%iptcl_map, ref, 1:2)
                 roind        = self%pftcc_ptr%get_roind(360. - proj_space_euls(self%iptcl_map, ref, 3))
                 bfacs(ipeak) = self%pftcc_ptr%calc_bfac(ref, self%iptcl, roind, shvec)
-                call o_peaks(self%iptcl)%set(ipeak, 'bfac', bfacs(ipeak))
             else
-                call o_peaks(self%iptcl)%set(ipeak, 'bfac', 0.)
+                bfacs(ipeak) = 0.
             endif
+            call o_peaks(self%iptcl)%set(ipeak, 'bfac', bfacs(ipeak))
         enddo
         bfac = sum(ws * bfacs, mask=(ws>TINY))
         ! angular standard deviation
@@ -1102,7 +1103,7 @@ contains
         call self%a_ptr%set(self%iptcl, 'ow',    o_peaks(self%iptcl)%get(best_loc(1),'ow')   )
         call self%a_ptr%set(self%iptcl, 'proj',  o_peaks(self%iptcl)%get(best_loc(1),'proj') )
         call self%a_ptr%set(self%iptcl, 'sdev',  ang_sdev )
-        call self%a_ptr%set(self%iptcl, 'bfacs',  bfac )
+        call self%a_ptr%set(self%iptcl, 'bfac',  bfac )
         call self%a_ptr%set(self%iptcl, 'npeaks', real(self%npeaks_eff) )
         if( DEBUG ) print *,  '>>> PRIME3D_SRCH::EXECUTED PREP_NPEAKS_ORIS'
     end subroutine prep_npeaks_oris_and_weights

@@ -2064,11 +2064,12 @@ contains
     !>  \brief  is for fitting a bfactor to ptcl vs. ref FRC
     real function calc_bfac( self, iref, iptcl, irot, shvec )
         ! Fitting to Y = A * exp( -B/(4s2) )
-        ! modified from mathworld.wolfram.com/LeastSquaresFittingExponential.html
+        ! from mathworld.wolfram.com/LeastSquaresFittingExponential.html
         class(polarft_corrcalc),  intent(inout) :: self
         integer,                  intent(in)    :: iref, iptcl, irot
         real(sp),                 intent(in)    :: shvec(2)
         real(sp) :: denom, frc(self%kfromto(1):self%kfromto(2)), X(self%kfromto(1):self%kfromto(2))
+        real(sp) :: sumxfrc, sumfrc
         logical  :: peakmsk(self%kfromto(1):self%kfromto(2))
         integer  :: i
         call self%calc_frc(iref, iptcl, irot, shvec, frc)
@@ -2083,20 +2084,13 @@ contains
         endif
         X = self%smpd * real(self%ldim(1)) / real((/(i,i=self%kfromto(1),self%kfromto(2))/))
         X = -1. / (4.*X*X)
-        ! uniform weights
-        ! rn = real(count(peakmsk))
-        ! denom = rn * sum(X*X,mask=peakmsk) - sum(X,mask=peakmsk)**2.
-        ! calc_bfac = rn * sum(X*log(frc),mask=peakmsk) - sum(X,mask=peakmsk) * sum(log(frc),mask=peakmsk)
-        ! calc_bfac = calc_bfac / denom
         ! all points are weighted by Y
-        denom = (sum(frc,mask=peakmsk) * sum(X*X*frc,mask=peakmsk) - sum(X*frc,mask=peakmsk)**2.)
-        calc_bfac = sum(frc,mask=peakmsk) * sum(X*frc*log(frc),mask=peakmsk)
-        calc_bfac = calc_bfac - sum(X*frc,mask=peakmsk) * sum(frc*log(frc),mask=peakmsk)
+        sumfrc    = sum(frc,mask=peakmsk)
+        sumxfrc   = sum(X*frc,mask=peakmsk)
+        denom     = sumfrc * sum(X*X*frc,mask=peakmsk) - sumxfrc**2.
+        calc_bfac = sumfrc * sum(X*frc*log(frc), mask=peakmsk)
+        calc_bfac = calc_bfac - sumxfrc * sum(frc*log(frc), mask=peakmsk)
         calc_bfac = calc_bfac / denom
-        !A = sum(X*X*Y) * sum(y*log(Y)) - sum(X*Y) * sum(X*Y*log(Y))
-        !A = A / denom
-        !A = exp(A)
-        !print *,iptcl,calc_bfac,count(peakmsk)
     end function calc_bfac
 
     ! DESTRUCTOR
