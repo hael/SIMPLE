@@ -14,7 +14,7 @@ use simple_image,  only: image
 implicit none
 
 
-complex(dp), parameter     :: J = complex(0.0_dp, 1.0_dp)
+complex(dp), parameter     :: J = CMPLX(0.0_dp, 1.0_dp, kind=dp)
 real(dp),    parameter     :: denom = 0.00075_dp         !denominator for rescaling of cost function
 
 real(dp),    allocatable   :: ft_exp_tmpmat_re_2d(:,:)

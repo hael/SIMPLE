@@ -413,6 +413,7 @@ contains
         character(len=STDLEN)         :: oritab, str_state
         real                          :: trs
         integer                       :: state, iter, n_incl, startit
+        integer                       :: rename_stat
         call seed_rnd
         ! sanity check
         if(nint(cline%get_rarg('nstates')) <= 1)&
@@ -516,12 +517,12 @@ contains
                 call cline%set('pgrp', 'c1')
             endif
             call xrecvol_distr%execute( cline_recvol_mixed_distr )
-            call rename(VOL_FBODY//one//p_master%ext, HET_VOL//p_master%ext)
-            call rename(VOL_FBODY//one//'_even'//p_master%ext, HET_VOL//'_even'//p_master%ext)
-            call rename(VOL_FBODY//one//'_odd'//p_master%ext,  HET_VOL//'_odd'//p_master%ext)
-            call rename(FSC_FBODY//one//BIN_EXT, HET_FSC)
-            call rename(FRCS_FBODY//one//BIN_EXT, HET_FRCS)
-            call rename(ANISOLP_FBODY//one//p_master%ext, HET_ANISOLP//p_master%ext)
+            rename_stat = rename(VOL_FBODY//one//p_master%ext, HET_VOL//p_master%ext)
+            rename_stat = rename(VOL_FBODY//one//'_even'//p_master%ext, HET_VOL//'_even'//p_master%ext)
+            rename_stat = rename(VOL_FBODY//one//'_odd'//p_master%ext,  HET_VOL//'_odd'//p_master%ext)
+            rename_stat = rename(FSC_FBODY//one//BIN_EXT, HET_FSC)
+            rename_stat = rename(FRCS_FBODY//one//BIN_EXT, HET_FRCS)
+            rename_stat = rename(ANISOLP_FBODY//one//p_master%ext, HET_ANISOLP//p_master%ext)
         endif
 
         ! STAGE1: frozen orientation parameters
@@ -617,7 +618,9 @@ contains
                     enddo
                     deallocate(tmp,states)
                 else
-                    allocate(config_diverse(nptcls), order(nptcls), tmp(nlabels), source=0, stat=alloc_stat )
+                    allocate(config_diverse(nptcls), source=0, stat=alloc_stat )
+                    allocate(order(nptcls),          source=0, stat=alloc_stat )
+                    allocate(tmp(nlabels),           source=0, stat=alloc_stat )
                     corrs = os%get_all('corr')
                     tmp   = (/(s,s=1,nlabels)/)
                     where( states<=0 ) corrs = -1.
@@ -675,7 +678,7 @@ contains
         character(len=2)      :: str_state
         integer               :: state, iptcl, iter
         logical               :: l_singlestate, error
-
+        integer               :: rename_stat
         ! make master parameters
         p_master      = params(cline)
         l_singlestate = cline%defined('state')
@@ -698,7 +701,8 @@ contains
             print *, 'Non-sensical number of states argument for heterogeneity refinemnt: ',p_master%nstates
             stop
         endif
-        allocate(l_hasmskvols(p_master%nstates), l_hasvols(p_master%nstates), source=.false.)
+        allocate(l_hasmskvols(p_master%nstates), source=.false.)
+        allocate(l_hasvols(p_master%nstates),    source=.false.)
         allocate(init_docs(p_master%nstates), final_docs(p_master%nstates))
         call os_master%get_pops(state_pops, 'state', consider_w=.false.)
         do state = 1, p_master%nstates
@@ -730,34 +734,34 @@ contains
                         print *, 'File missing: ', trim(fname)
                         error = .true.
                     else
-                        call rename(fname, dir//trim(fname))
+                        rename_stat = rename(fname, dir//trim(fname))
                     endif
                     ! FRC
                     fname = FRCS_FBODY//str_state//BIN_EXT
                     if( .not.file_exists(fname) )then
                         print *, 'File missing: ', trim(fname)
                     else
-                        call rename(fname, dir//trim(fname))
+                        rename_stat = rename(fname, dir//trim(fname))
                     endif
                     ! aniso
                     fname = ANISOLP_FBODY//str_state//p_master%ext
                     if( .not.file_exists(fname) )then
                         print *, 'File missing: ', trim(fname)
                     else
-                        call rename(fname, dir//trim(fname))
+                        rename_stat = rename(fname, dir//trim(fname))
                     endif
                     ! e/o
                     fname = add2fbody(trim(p_master%vols(state)), p_master%ext, '_even')
                     if( .not.file_exists(fname) )then
                         print *, 'File missing: ', trim(fname)
                     else
-                        call rename(fname, dir//trim(fname))
+                        rename_stat = rename(fname, dir//trim(fname))
                     endif
                     fname = add2fbody(trim(p_master%vols(state)), p_master%ext, '_odd')
                     if( .not.file_exists(fname) )then
                         print *, 'File missing: ', trim(fname)
                     else
-                        call rename(fname, dir//trim(fname))
+                        rename_stat = rename(fname, dir//trim(fname))
                     endif
                 endif
                 ! volume
@@ -767,7 +771,7 @@ contains
                 else
                     fname = trim(p_master%vols(state))
                     p_master%vols(state) = dir//trim(fname) ! name change
-                    call rename(fname, p_master%vols(state))
+                    rename_stat = rename(fname, p_master%vols(state))
                 endif
             endif
             ! mask volume
@@ -875,7 +879,7 @@ contains
                 character(len=STDLEN) :: src, dist
                 character(len=2), parameter :: one = '01'
                 character(len=3) :: str_iter
-                integer          :: it
+                integer          :: it, rename_stat
                 dir = 'state_'//str_state//'/'
                 call mkdir(dir)
                 do it = 1, iter
@@ -883,33 +887,33 @@ contains
                     ! volumes
                     src  = VOL_FBODY//one//'_iter'//str_iter//p_master%ext
                     dist = dir//VOL_FBODY//one//'_iter'//str_iter//p_master%ext
-                    call rename(src, dist)
+                    rename_stat = rename(src, dist)
                     src  = VOL_FBODY//one//'_iter'//str_iter//'_pproc'//p_master%ext
                     dist = dir//VOL_FBODY//one//'_iter'//str_iter//'_pproc'//p_master%ext
-                    call rename(src, dist)
+                    rename_stat = rename(src, dist)
                     ! e/o
                     if( p_master%eo.ne.'no')then
                         src  = VOL_FBODY//one//'_iter'//str_iter//'_even'//p_master%ext
                         dist = dir//VOL_FBODY//one//'_iter'//str_iter//'_even'//p_master%ext
-                        call rename(src, dist)
+                        rename_stat = rename(src, dist)
                         src  = VOL_FBODY//one//'_iter'//str_iter//'_odd'//p_master%ext
                         dist = dir//VOL_FBODY//one//'_iter'//str_iter//'_odd'//p_master%ext
-                        call rename(src, dist)
+                        rename_stat = rename(src, dist)
                         src = 'RESOLUTION_STATE'//one//'_ITER'//str_iter
-                        call rename(src, dir//src)
+                        rename_stat = rename(src, dir//src)
                     endif
                     ! orientation document
                     src = PRIME3D_ITER_FBODY//str_iter//trim(METADATEXT)
-                    if( file_exists(src) )call rename(src, dir//src)
+                    if( file_exists(src) ) rename_stat = rename(src, dir//src)
                 enddo
                 ! resolution measures
                 if( p_master%eo.ne.'no')then
                     src  = FSC_FBODY//one//BIN_EXT
-                    if( file_exists(src) )call rename(src, dir//src)
+                    if( file_exists(src) ) rename_stat = rename(src, dir//src)
                     src  = FRCS_FBODY//one//BIN_EXT
-                    if( file_exists(src) )call rename(src, dir//src)
+                    if( file_exists(src) ) rename_stat = rename(src, dir//src)
                     src  = ANISOLP_FBODY//one//p_master%ext
-                    if( file_exists(src) )call rename(src, dir//src)
+                    if( file_exists(src) ) rename_stat = rename(src, dir//src)
                 endif
             end subroutine prime3d_cleanup
 

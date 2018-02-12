@@ -14,7 +14,7 @@ use simple_commander_distr   ! use all in there
 use simple_commander_mask    ! use all in there
 use simple_commander_distr   ! use all in there
 use simple_qsys_funs         ! use all in there
-use simple_binoris_io,       ! use all in there
+use simple_binoris_io        ! use all in there
 implicit none
 
 public :: unblur_ctffind_distr_commander

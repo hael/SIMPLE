@@ -1,5 +1,7 @@
 ! generic optimisation subroutines
 module simple_opt_subs
+
+use simple_opt_spec, only: costfun
 implicit none
 
 logical :: warn=.false.
@@ -224,14 +226,7 @@ contains
         real    :: x(n),xold(n),ALF,TOLX
         class(*), intent(inout) :: fun_self
         parameter (ALF=1.e-4,TOLX=1.e-7)
-        interface
-            function func( fun_self, vec, D ) result(cost)
-                class(*), intent(inout) :: fun_self
-                integer,  intent(in)    :: D
-                real,     intent(in)    :: vec(D)
-                real                    :: cost
-            end function
-        end interface
+        procedure(costfun), pointer :: func
         integer :: i
         real    :: a,alam,alam2,alamin,b,disc,f2,fold2
         real    :: rhs1,rhs2,slope,sum,temp,test,tmplam
@@ -319,14 +314,7 @@ contains
         integer,  intent(out)   :: iter     !< number of exectuted iterations
         integer,  intent(in)    :: itmax    !< maximum number of iterations
         integer,  intent(inout) :: nevals   !< number of costfun evals counter
-        interface
-            function func( fun_self, vec, D ) result( cost ) !< the external function used for callback
-                class(*), intent(inout) :: fun_self
-                integer,  intent(in)    :: d
-                real,     intent(in)    :: vec(D)
-                real                    :: cost
-            end function
-        end interface
+        procedure(costfun), pointer :: func
         real, parameter :: tiny=1.0e-10
         integer         :: ihi,ndim
         real, dimension(size(p,2)) :: psum

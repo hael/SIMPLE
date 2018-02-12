@@ -38,9 +38,13 @@ contains
             lims(:,2) = ldim
         endif
         ! make the window
-        allocate( w1(lims(1,1):lims(1,2)), w2(lims(2,1):lims(2,2)),&
-        w3(lims(3,1):lims(3,2)), source=1., stat=alloc_stat )
+        allocate( w1(lims(1,1):lims(1,2)), source=1., stat=alloc_stat )
         allocchk("In: divide_w_instr; simple_gridding")
+        allocate( w2(lims(2,1):lims(2,2)), source=1., stat=alloc_stat )
+        allocchk("In: divide_w_instr; simple_gridding")
+        allocate( w3(lims(3,1):lims(3,2)), source=1., stat=alloc_stat )
+        allocchk("In: divide_w_instr; simple_gridding")
+
         ! calculate the values
         call calc_w(lims(1,1), lims(1,2), w1)
         if( img%square_dims() )then
@@ -99,8 +103,11 @@ contains
         lims(:,1) = 1
         lims(:,2) = ldim
         ! make the window
-        allocate( w1(lims(1,1):lims(1,2)), w2(lims(2,1):lims(2,2)),&
-        w3(lims(3,1):lims(3,2)), source=1., stat=alloc_stat )
+        allocate( w1(lims(1,1):lims(1,2)), source=1., stat=alloc_stat )
+        allocchk("In: divide_w_instr; simple_gridding")
+        allocate( w2(lims(2,1):lims(2,2)), source=1., stat=alloc_stat )
+        allocchk("In: divide_w_instr; simple_gridding")
+        allocate( w3(lims(3,1):lims(3,2)), source=1., stat=alloc_stat )
         allocchk("In: divide_w_instr; simple_gridding")
         ! calculate the values
         call calc_w(lims(1,1), lims(1,2), w1)

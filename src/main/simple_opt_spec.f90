@@ -3,7 +3,7 @@ module simple_opt_spec
 #include "simple_lib.f08"
 implicit none
 
-public :: opt_spec
+public :: opt_spec, costfun
 private
 
 !> struct for all opt specifications
@@ -465,11 +465,6 @@ contains
     !>  \brief  sets the gradient function in the spec object
     subroutine set_gcostfun( self, fun )
         class(opt_spec), intent(inout) :: self !< instance
-#if defined (PGI)
-        ! GNU COMPILER DOES NOT COPE W EXTERNAL
-        subroutine, external  :: fun !< defines cost function gradient interface
-#else
-        ! PGI COMPILER DOES NOT COPE W INTERFACE
         interface
             !< defines cost function gradient interface
             subroutine fun( fun_self, vec, grad, D )
@@ -479,18 +474,12 @@ contains
                 real,     intent(out)   :: grad( D )
             end subroutine fun
         end interface
-#endif
         self%gcostfun => fun
     end subroutine set_gcostfun
 
     !>  \brief  sets the cost and simultaneous gradient function in the spec object
     subroutine set_fdfcostfun( self, fun )
         class(opt_spec), intent(inout) :: self !< instance
-#if defined (PGI)
-        ! GNU COMPILER DOES NOT COPE W EXTERNAL
-        subroutine, external  :: fun !< defines cost function with simultaneous gradient interface
-#else
-        ! PGI COMPILER DOES NOT COPE W INTERFACE
         interface
             !< defines cost function gradient interface
             subroutine fun( fun_self, vec, f, grad, D )
@@ -500,7 +489,6 @@ contains
                 real,     intent(out)   :: f, grad(D)
             end subroutine fun
         end interface
-#endif
         self%fdfcostfun => fun
     end subroutine set_fdfcostfun
 
@@ -508,11 +496,6 @@ contains
     !>  \brief  sets the cost function in the spec object
     subroutine set_costfun_8( self, fun )
         class(opt_spec), intent(inout) :: self !< instance
-#if defined (PGI)
-        ! GNU COMPILER DOES NOT COPE W EXTERNAL
-        real, external :: fun !< defines cost function interface
-#else
-        ! PGI COMPILER DOES NOT COPE W INTERFACE
         interface
             !< defines cost function interface
             function fun( fun_self, vec, D ) result(cost)
@@ -522,18 +505,12 @@ contains
                 real(kind=8)                :: cost
             end function
         end interface
-#endif
         self%costfun_8 => fun
     end subroutine set_costfun_8
 
     !>  \brief  sets the gradient function in the spec object
     subroutine set_gcostfun_8( self, fun )
         class(opt_spec), intent(inout) :: self !< instance
-#if defined (PGI)
-        ! GNU COMPILER DOES NOT COPE W EXTERNAL
-        subroutine, external  :: fun !< defines cost function gradient interface
-#else
-        ! PGI COMPILER DOES NOT COPE W INTERFACE
         interface
             !< defines cost function gradient interface
             subroutine fun( fun_self, vec, grad, D )
@@ -543,18 +520,12 @@ contains
                 real(kind=8), intent(out)   :: grad( D )
             end subroutine fun
         end interface
-#endif
         self%gcostfun_8 => fun
     end subroutine set_gcostfun_8
 
     !>  \brief  sets the cost and simultaneous gradient function in the spec object
     subroutine set_fdfcostfun_8( self, fun )
         class(opt_spec), intent(inout) :: self !< instance
-#if defined (PGI)
-        ! GNU COMPILER DOES NOT COPE W EXTERNAL
-        subroutine, external  :: fun !< defines cost function with simultaneous gradient interface
-#else
-        ! PGI COMPILER DOES NOT COPE W INTERFACE
         interface
             !< defines cost function gradient interface
             subroutine fun( fun_self, vec, f, grad, D )
@@ -564,7 +535,6 @@ contains
                 real(kind=8), intent(out)   :: f, grad(D)
             end subroutine fun
         end interface
-#endif
         self%fdfcostfun_8 => fun
     end subroutine set_fdfcostfun_8
     

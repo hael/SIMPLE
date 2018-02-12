@@ -11,8 +11,8 @@ use simple_cmdline,          only: cmdline
 use simple_hadamard_common   ! use all in there
 use simple_filterer          ! use all in there
 use simple_timer             ! use all in there
-use simple_classaverager,    ! use all in there
-use simple_prime2D_srch,     ! use all in there
+use simple_classaverager     ! use all in there
+use simple_prime2D_srch      ! use all in there
 implicit none
 
 public :: prime2D_exec, preppftcc4align, pftcc

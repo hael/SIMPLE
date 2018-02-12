@@ -5,6 +5,7 @@ module simple_pr_cg_opt
 
 use simple_optimizer, only: optimizer
 use simple_opt_helpers
+use simple_math
 implicit none
 
 public :: pr_cg_opt
@@ -108,7 +109,7 @@ contains
                 call spec%eval_fdf(fun_self, spec%x_8, self%f, self%gradient)
                 self%p = self%gradient
                 self%g0 = self%gradient
-                gnorm = norm2(self%gradient)
+                gnorm = norm_2(self%gradient)
                 self%pnorm = gnorm
                 self%g0norm = gnorm
             end subroutine pr_cg_set
@@ -171,7 +172,7 @@ contains
                     beta = g0g1 / (self%g0norm**2)             ! beta = -((g1 - g0).g1)/(g0.g0)                    
                     self%p = -beta * self%p
                     self%p = self%p + self%gradient
-                    self%pnorm = norm2(self%p)
+                    self%pnorm = norm_2(self%p)
                 end if
                 self%g0norm = g1norm
                 self%g0 = self%gradient

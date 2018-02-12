@@ -136,7 +136,9 @@ contains
         ! build CTF related matrices
         if( self%ctf%flag .ne. CTFFLAG_NO)then
             allocate(self%ctf_ang(self%cyc_lims(1,1):self%cyc_lims(1,2), self%cyc_lims(2,1):self%cyc_lims(2,2)),&
-            &self%ctf_sqSpatFreq(self%cyc_lims(1,1):self%cyc_lims(1,2), self%cyc_lims(2,1):self%cyc_lims(2,2)), source=0.)
+                source=0.)
+            allocate(self%ctf_sqSpatFreq(self%cyc_lims(1,1):self%cyc_lims(1,2), self%cyc_lims(2,1):self%cyc_lims(2,2)),&
+                source=0.)
             !$omp parallel do collapse(2) default(shared) schedule(static) private(h,k,sh,inv1,inv2) proc_bind(close)
             do h=self%cyc_lims(1,1),self%cyc_lims(1,2)
                 do k=self%cyc_lims(2,1),self%cyc_lims(2,2)

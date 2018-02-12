@@ -5,6 +5,7 @@ module simple_bfgs2_opt
 
 use simple_optimizer, only: optimizer
 use simple_opt_helpers
+use simple_math
 implicit none
 
 public :: bfgs2_opt
@@ -125,9 +126,9 @@ contains
             call spec%eval_fdf(fun_self, spec%x_8, self%f, self%gradient)
             self%x0         = spec%x_8
             self%g0         = self%gradient
-            self%g0norm     = norm2(self%g0)
+            self%g0norm     = norm_2(self%g0)
             self%p          = -self%gradient / self%g0norm
-            self%pnorm      = norm2(self%p)
+            self%pnorm      = norm_2(self%p)
             self%fp0        = -self%g0norm
             ! Prepare the wrapper
             call prepare_wrapper
@@ -195,7 +196,7 @@ contains
             dxg    = dot_product(self%dx0, self%gradient)
             dgg    = dot_product(self%dg0, self%gradient)
             dxdg   = dot_product(self%dx0, self%dg0)
-            dgnorm = norm2(self%dg0)
+            dgnorm = norm_2(self%dg0)
             if (dxdg .ne. 0.0_8) then
                 B = dxg / dxdg
                 A = -(1.0_8 + dgnorm * dgnorm / dxdg) * B + dgg / dxdg
@@ -206,8 +207,8 @@ contains
             self%p      = self%gradient - A*self%dx0 - B*self%dg0
             self%g0     = self%gradient
             self%x0     = spec%x_8
-            self%g0norm = norm2(self%g0)
-            self%pnorm  = norm2(self%p)
+            self%g0norm = norm_2(self%g0)
+            self%pnorm  = norm_2(self%p)
             ! update direction and fp0
             pg = dot_product(self%p, self%gradient)
             if (pg >= 0.) then
@@ -216,7 +217,7 @@ contains
                 dir = 1.0_8
             end if
             self%p     = self%p * dir / self%pnorm
-            self%pnorm = norm2(self%p)
+            self%pnorm = norm_2(self%p)
             self%fp0   = dot_product(self%p, self%g0)
             call change_direction
             status = OPT_STATUS_SUCCESS

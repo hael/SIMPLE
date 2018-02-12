@@ -4,7 +4,7 @@ module simple_powell_opt
 #include "simple_lib.f08"
     
 use simple_optimizer, only: optimizer
-use simple_opt_spec,  only: opt_spec
+use simple_opt_spec,  only: opt_spec, costfun
 
 implicit none
 
@@ -39,7 +39,7 @@ contains
         self%yb            = huge(x) ! initialize best cost to huge number
         ! make line minimizer
         call self%spec_linmin%specify('linmin', spec%ndim, maxits=spec%maxits, ftol=spec%ftol)
-        call self%spec_linmin%set_costfun(spec%costfun)
+        self%spec_linmin%costfun => spec%costfun
         self%exists = .true.
     end subroutine
 

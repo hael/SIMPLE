@@ -15,7 +15,7 @@ use simple_kbinterpol,       only: kbinterpol
 use simple_prep4cgrid,       only: prep4cgrid
 use simple_hadamard_common   ! use all in there
 use simple_timer             ! use all in there
-use simple_prime3D_srch,     ! use all in there
+use simple_prime3D_srch      ! use all in there
 implicit none
 
 public :: prime3D_find_resrange, prime3D_exec, gen_random_model

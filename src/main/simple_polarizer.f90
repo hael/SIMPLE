@@ -91,10 +91,11 @@ contains
         self%pdim = self_in%pdim
         self%wdim = self_in%wdim
         self%wlen = self_in%wlen
-        allocate( self%polcyc1_mat(1:self%pdim(1), self%pdim(2):self%pdim(3), 1:self%wdim), source=self_in%polcyc1_mat )
-        allocate( self%polcyc2_mat(1:self%pdim(1), self%pdim(2):self%pdim(3), 1:self%wdim), source=self_in%polcyc2_mat )
+        allocate( self%polcyc1_mat(1:self%pdim(1), self%pdim(2):self%pdim(3), 1:self%wdim),    source=self_in%polcyc1_mat )
+        allocate( self%polcyc2_mat(1:self%pdim(1), self%pdim(2):self%pdim(3), 1:self%wdim),    source=self_in%polcyc2_mat )
         allocate( self%polweights_mat(1:self%pdim(1), self%pdim(2):self%pdim(3), 1:self%wlen), source=self_in%polweights_mat )
-        allocate( self%comps(1:self%wdim,1:self%wdim), self%pft(self%pdim(1),self%pdim(2):self%pdim(3)), source=cmplx(0.,0.) )
+        allocate( self%comps(1:self%wdim,1:self%wdim),                                         source=cmplx(0.,0.) )
+        allocate( self%pft(self%pdim(1),self%pdim(2):self%pdim(3)),                            source=cmplx(0.,0.) )        
     end subroutine copy_polarizer
 
     !> \brief  creates the polar Fourier transform

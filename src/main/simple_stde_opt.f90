@@ -5,6 +5,7 @@ module simple_stde_opt
 
 use simple_optimizer, only: optimizer
 use simple_opt_helpers
+use simple_math
 implicit none
 
 public :: stde_opt
@@ -109,7 +110,7 @@ contains
             failed = .false.
             ! compute new trial point at x1= x - step * dir, where dir is the
             ! normalized gradient
-            gnorm = norm2(self%gradient)
+            gnorm = norm_2(self%gradient)
             if (gnorm == 0.0_8) then
                 status = OPT_STATUS_ERROR
                 return

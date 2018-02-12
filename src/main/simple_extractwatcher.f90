@@ -12,6 +12,12 @@ implicit none
 public :: extractwatcher
 private
 
+abstract interface
+    pure character*(24) function ctime_iface(stime)
+        integer, intent(in) :: stime
+    end function ctime_iface
+end interface
+
 type extractwatcher
     private
     character(len=STDLEN), allocatable :: history(:)             !< history of micrographs detected
@@ -79,10 +85,6 @@ contains
 
     !>  \brief  is the watching procedure
     subroutine watch( self, n_stks )
-#ifdef PGI
-        include 'lib3f.h'
-        procedure :: cast_time_char => ctime
-#endif
         class(extractwatcher), intent(inout) :: self
         integer,               intent(out)   :: n_stks
         character(len=STDLEN),   allocatable :: farray(:)
@@ -92,6 +94,11 @@ contains
         integer               :: i, io_stat, alloc_stat, n_lsfiles, cnt, fail_cnt
         character(len=STDLEN) :: fname, abs_fname, fbody, ext
         logical               :: is_closed
+#ifdef PGI
+        include 'lib3f.h'
+        procedure(ctime_iface), pointer :: cast_time_char
+        cast_time_char => ctime
+#endif
         ! init
         self%n_watch = self%n_watch + 1
         tnow = simple_gettime()

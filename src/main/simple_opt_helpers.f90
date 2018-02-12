@@ -2,6 +2,7 @@
 module simple_opt_helpers
 #include "simple_lib.f08"
 
+    use simple_math
     implicit none
     !< constants for return values
     integer, parameter  :: OPT_STATUS_SUCCESS = 1, OPT_STATUS_CONTINUE = 0, OPT_STATUS_ERROR = -1
@@ -71,7 +72,7 @@ contains
         x2 = x1
         f = fb
         step = stepb
-        gnorm = norm2(gradient)
+        gnorm = norm_2(gradient)
 10      iter = iter + 1 ! label: mid_trial
         if (iter > 10) then
             return ! MAX ITERATIONS
@@ -128,7 +129,7 @@ contains
             x2 = x1
             call spec%eval_df(fun_self, x1, gradient)
             pg = dot_product(p, gradient)
-            gnorm1 = norm2(gradient)
+            gnorm1 = norm_2(gradient)
             if (global_debug .and. global_verbose) then
                 write (*,*) 'p: ', p
                 write (*,*) 'g: ', gradient
@@ -163,7 +164,7 @@ contains
     function test_gradient(g, epsabs) result(status)
         real(dp), intent(in) :: g(:), epsabs
         integer                  :: status
-        if (norm2(g) < epsabs) then
+        if (norm_2(g) < epsabs) then
             status = OPT_STATUS_SUCCESS
         else
             status = OPT_STATUS_CONTINUE

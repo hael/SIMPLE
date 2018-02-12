@@ -142,6 +142,11 @@ end interface
 
 logical, parameter,private :: warn=.false.
 
+interface norm_2
+    module procedure norm_2_sp
+    module procedure norm_2_dp
+end interface norm_2
+
 contains
 
     ! JIFFYS
@@ -2961,6 +2966,18 @@ contains
          if (j.le.k) l = i
       endif
       goto 2
-    end function selec_2
+  end function selec_2
+
+  function norm_2_sp(v) result(r)
+      real, intent(in) :: v(:)
+      real             :: r
+      r = sqrt(dot_product(v,v))
+  end function norm_2_sp
+
+  function norm_2_dp(v) result(r)
+      real(dp), intent(in) :: v(:)
+      real(dp)             :: r
+      r = sqrt(dot_product(v,v))
+  end function norm_2_dp
 
 end module simple_math
