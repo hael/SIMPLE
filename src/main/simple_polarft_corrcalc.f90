@@ -256,7 +256,7 @@ contains
             case('cc')
                 self%l_cc_objfun   = .true.
             case('ccres')
-                self%l_cc_objfun   = .false.
+                self%l_cc_objfun       = .false.
                 allocate(self%ptcl_bfac_weights(1:self%nptcls, self%kfromto(1):self%kfromto(2)), self%ptcl_bfac_norms(1:self%nptcls))
                 self%ptcl_bfac_weights = 1.0
                 self%ptcl_bfac_norms   = real(self%nk)
@@ -719,13 +719,18 @@ contains
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iptcl
         real,                    intent(in)    :: bfac
-        integer :: k
+        integer :: k, i
         real    :: res
-        do k=self%kfromto(1),self%kfromto(2)
-            res = real(k) / (real(self%ldim(1)) * self%smpd) ! assuming square dimensions
-            self%ptcl_bfac_weights(self%pinds(iptcl),k) = max(0., exp(-(bfac/4.) * res * res))
-        end do
-        self%ptcl_bfac_norms(self%pinds(iptcl)) = sum(self%ptcl_bfac_weights(self%pinds(iptcl),:))
+        if( self%l_cc_objfun )then
+            ! nothing to do
+        else
+            i = self%pinds(iptcl)
+            do k=self%kfromto(1),self%kfromto(2)
+                res = real(k) / (real(self%ldim(1)) * self%smpd) ! assuming square dimensions
+                self%ptcl_bfac_weights(i,k) = max(0., exp(-(bfac/4.) * res * res))
+            end do
+            self%ptcl_bfac_norms(i) = sum(self%ptcl_bfac_weights(i,:))
+        endif
     end subroutine memoize_bfac
 
     !>  \brief  is for memoization of the ffts used in gencorrs
@@ -735,26 +740,30 @@ contains
         class(oris),             intent(inout) :: a
         integer  :: iptcl, k
         real(sp) :: resarrsq(self%kfromto(1):self%kfromto(2)), bfac, tmp(self%kfromto(1):self%kfromto(2))
-        ! pre-calc squared spatial frequencies
-        do k=self%kfromto(1),self%kfromto(2)
-            resarrsq(k) = real(k) / (real(self%ldim(1)) * self%smpd) ! assuming square dimensions
-            resarrsq(k) = resarrsq(k) * resarrsq(k)
-        end do
-        ! pre-calc B-factor weight arrays
-        !$omp parallel do default(shared) private(iptcl,bfac,tmp) proc_bind(close) schedule(static)
-        do iptcl=self%pfromto(1),self%pfromto(2)
-            if( self%pinds(iptcl) > 0 )then
-                bfac = a%get(iptcl, 'bfac')
-                tmp  = exp(-(bfac/4.) * resarrsq(:))
-                where( tmp > 0. )
-                    self%ptcl_bfac_weights(self%pinds(iptcl),:) = tmp
-                else where
-                    self%ptcl_bfac_weights(self%pinds(iptcl),:) = 0.
-                end where
-                self%ptcl_bfac_norms(self%pinds(iptcl)) = sum(self%ptcl_bfac_weights(self%pinds(iptcl),:))
-            endif
-        end do
-        !$omp end parallel do
+        if( self%l_cc_objfun )then
+            !nothing to do
+        else
+            ! pre-calc squared spatial frequencies
+            do k=self%kfromto(1),self%kfromto(2)
+                resarrsq(k) = real(k) / (real(self%ldim(1)) * self%smpd) ! assuming square dimensions
+                resarrsq(k) = resarrsq(k) * resarrsq(k)
+            end do
+            ! pre-calc B-factor weight arrays
+            !$omp parallel do default(shared) private(iptcl,bfac,tmp) proc_bind(close) schedule(static)
+            do iptcl=self%pfromto(1),self%pfromto(2)
+                if( self%pinds(iptcl) > 0 )then
+                    bfac = a%get(iptcl, 'bfac')
+                    tmp  = exp(-(bfac/4.) * resarrsq(:))
+                    where( tmp > 0. )
+                        self%ptcl_bfac_weights(self%pinds(iptcl),:) = tmp
+                    else where
+                        self%ptcl_bfac_weights(self%pinds(iptcl),:) = 0.
+                    end where
+                    self%ptcl_bfac_norms(self%pinds(iptcl)) = sum(self%ptcl_bfac_weights(self%pinds(iptcl),:))
+                endif
+            end do
+            !$omp end parallel do
+        endif
     end subroutine memoize_bfacs
 
     ! CALCULATORS
