@@ -48,8 +48,6 @@ type :: params
     character(len=3)      :: ft2img='no'          !< convert Fourier transform to real image of power(yes|no){no}
     character(len=3)      :: for3D='yes'          !< for 3D analysis(yes|no){yes}
     character(len=3)      :: guinier='no'         !< calculate Guinier plot(yes|no){no}
-    character(len=3)      :: imgfilt2D='no'       !<
-    character(len=3)      :: imgfilt3D='no'       !<
     character(len=3)      :: kmeans='yes'
     character(len=3)      :: local='no'
     character(len=3)      :: masscen='no'         !< center using binarisation and mass centering(yes|no){no}
@@ -499,8 +497,6 @@ contains
         call check_carg('guinier',        self%guinier)
         call check_carg('hfun',           self%hfun)
         call check_carg('hist',           self%hist)
-        call check_carg('imgfilt2D',      self%imgfilt2D)
-        call check_carg('imgfilt3D',      self%imgfilt3D)
         call check_carg('kmeans',         self%kmeans)
         call check_carg('label',          self%label)
         call check_carg('local',          self%local)

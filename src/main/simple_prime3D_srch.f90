@@ -882,7 +882,7 @@ contains
         integer, optional,   intent(in)    :: nnmat(self%nprojs,self%nnn_static), target_projs(self%npeaks_grid)
         real      :: corrs(self%nrots)
         type(ori) :: o_prev
-        real      :: corr
+        real      :: corr, bfac
         if( str_has_substr(self%refine,'neigh') )then
             if( .not. present(nnmat) )&
             &stop 'need optional nnmat to be present for refine=neigh modes :: prep4srch (prime3D_srch)'
@@ -909,6 +909,13 @@ contains
         end select
         ! calc specscore
         self%specscore = self%pftcc_ptr%specscore(self%prev_ref, self%iptcl, self%prev_roind)
+        ! B-factor memoization
+        if( self%pftcc_ptr%objfun_is_ccres() )then
+            if( .not. self%a_ptr%isthere(self%iptcl, 'bfac') )then
+                bfac = self%pftcc_ptr%fit_bfac(self%prev_ref, self%iptcl, self%prev_roind, [0.,0.])
+                call self%pftcc_ptr%memoize_bfac(self%iptcl, bfac)
+            endif
+        endif
         ! prep corr
         if( self%refine .ne. 'het' )then
             call self%pftcc_ptr%gencorrs(self%prev_ref, self%iptcl, corrs)
@@ -1024,7 +1031,7 @@ contains
                 shvec = 0.
                 if( self%doshift )shvec = proj_space_shift(self%iptcl_map, ref, 1:2)
                 roind        = self%pftcc_ptr%get_roind(360. - proj_space_euls(self%iptcl_map, ref, 3))
-                bfacs(ipeak) = self%pftcc_ptr%calc_bfac(ref, self%iptcl, roind, shvec)
+                bfacs(ipeak) = self%pftcc_ptr%fit_bfac(ref, self%iptcl, roind, shvec)
             else
                 bfacs(ipeak) = 0.
             endif

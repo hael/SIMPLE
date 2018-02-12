@@ -462,10 +462,9 @@ select case(prg)
         keys_optional(23) = 'phaseplate'
         keys_optional(24) = 'opt'
         keys_optional(25) = 'objfun'
-        keys_optional(26) = 'imgfilt2D'
         ! documentation
         if( describe ) call print_doc_prime2D
-        call cline%parse( keys_required(:5), keys_optional(:26) )
+        call cline%parse( keys_required(:5), keys_optional(:25) )
         ! sanity checks
         if( cline%defined('stk') .or. cline%defined('stktab') )then
             ! all ok
@@ -649,11 +648,10 @@ select case(prg)
         keys_optional(36) = 'update_frac'
         keys_optional(37) = 'focusmsk'
         keys_optional(38) = 'objfun'
-        keys_optional(39) = 'imgfilt3D'
         ! documentation
         if( describe ) call print_doc_prime3D
         ! parse command line
-        call cline%parse( keys_required(:5), keys_optional(:39) )
+        call cline%parse( keys_required(:5), keys_optional(:38) )
         ! sanity check
         if( cline%defined('stk') .or. cline%defined('stktab') )then
             ! all ok

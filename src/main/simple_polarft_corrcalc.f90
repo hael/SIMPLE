@@ -27,7 +27,7 @@ end type fftw_carr
 
 type fftw_carr_fft
     type(c_ptr)                            :: p_re                      !< pointer for C-style allocation
-    type(c_ptr)                            :: p_im                      !< -"-
+    type(c_ptr)                            :: p_im                      !< -"-bfac_norms
     complex(kind=c_float_complex), pointer :: re(:) => null()           !< corresponding Fortran pointers
     complex(kind=c_float_complex), pointer :: im(:) => null()           !< -"-
 end type fftw_carr_fft
@@ -78,9 +78,9 @@ type :: polarft_corrcalc
     integer                          :: ldim(3)    = 0        !< logical dimensions of original cartesian image
     integer                          :: kfromto(2) = 0        !< Fourier index range
     real(sp)                         :: smpd       = 0.       !< sampling distance
-    real(sp)                         :: bfac_norm  = 0.       !< normalisation constant for B-factor weighted ccres
     integer,             allocatable :: pinds(:)              !< index array (to reduce memory when frac_update < 1)
-    real(sp),            allocatable :: bfac_arr(:)           !< B-factor array for weighting of the correlation
+    real(sp),            allocatable :: ptcl_bfac_weights(:,:)!< B-factor per particle array for weighting of the correlation
+    real(sp),            allocatable :: ptcl_bfac_norms(:)    !< normalisation constants for B-factor weighted ccres
     real(sp),            allocatable :: sqsums_ptcls(:)       !< memoized square sums for the correlation calculations
     real(sp),            allocatable :: angtab(:)             !< table of in-plane angles (in degrees)
     real(sp),            allocatable :: argtransf(:,:)        !< argument transfer constants for shifting the references
@@ -129,6 +129,7 @@ type :: polarft_corrcalc
     procedure          :: get_coord
     procedure          :: get_ptcl_pft
     procedure          :: get_ref_pft
+    procedure          :: objfun_is_ccres
     procedure          :: exists
     ! PRINTERS/VISUALISERS
     procedure          :: print
@@ -137,6 +138,8 @@ type :: polarft_corrcalc
     ! MEMOIZER
     procedure, private :: memoize_sqsum_ptcl
     procedure          :: memoize_ffts
+    procedure          :: memoize_bfac
+    procedure          :: memoize_bfacs
     ! CALCULATORS
     procedure, private :: create_polar_ctfmat
     procedure          :: create_polar_ctfmats
@@ -180,7 +183,7 @@ type :: polarft_corrcalc
     procedure, private :: genfrc
     procedure          :: calc_frc
     procedure          :: specscore
-    procedure          :: calc_bfac
+    procedure          :: fit_bfac
     ! DESTRUCTOR
     procedure          :: kill
 end type polarft_corrcalc
@@ -254,14 +257,9 @@ contains
                 self%l_cc_objfun   = .true.
             case('ccres')
                 self%l_cc_objfun   = .false.
-                if( self%l_cc_bfac )then
-                    allocate(self%bfac_arr(self%kfromto(1):self%kfromto(2)))
-                    do k=self%kfromto(1),self%kfromto(2)
-                        res = real(k)/(real(self%ldim(1))*self%smpd) ! assuming square dimensions
-                        self%bfac_arr(k) = max(0.,exp(-(p%bfac/4.)*res*res))
-                    end do
-                    self%bfac_norm = sum(self%bfac_arr)
-                endif
+                allocate(self%ptcl_bfac_weights(1:self%nptcls, self%kfromto(1):self%kfromto(2)), self%ptcl_bfac_norms(1:self%nptcls))
+                self%ptcl_bfac_weights = 1.0
+                self%ptcl_bfac_norms   = real(self%nk)
             case DEFAULT
                 write(*,*) 'unsupported objective function: ', trim(p%objfun)
                 stop 'ABORTING, simple_polarft_corrcalc :: new'
@@ -618,6 +616,12 @@ contains
         allocchk("In: get_ref_pft; simple_polarft_corrcalc")
     end function get_ref_pft
 
+    function objfun_is_ccres( self ) result( is )
+        class(polarft_corrcalc), intent(in) :: self
+        logical :: is
+        is = .not. self%l_cc_objfun
+    end function objfun_is_ccres
+
     !>  \brief  checks for existence
     function exists( self ) result( yes )
         class(polarft_corrcalc), intent(in) :: self
@@ -710,6 +714,48 @@ contains
             call fftwf_free(carray(ithr)%p_im)
         end do
     end subroutine memoize_ffts
+
+    subroutine memoize_bfac( self, iptcl, bfac )
+        class(polarft_corrcalc), intent(inout) :: self
+        integer,                 intent(in)    :: iptcl
+        real,                    intent(in)    :: bfac
+        integer :: k
+        real    :: res
+        do k=self%kfromto(1),self%kfromto(2)
+            res = real(k) / (real(self%ldim(1)) * self%smpd) ! assuming square dimensions
+            self%ptcl_bfac_weights(self%pinds(iptcl),k) = max(0., exp(-(bfac/4.) * res * res))
+        end do
+        self%ptcl_bfac_norms(self%pinds(iptcl)) = sum(self%ptcl_bfac_weights(self%pinds(iptcl),:))
+    end subroutine memoize_bfac
+
+    !>  \brief  is for memoization of the ffts used in gencorrs
+    subroutine memoize_bfacs( self, a )
+        use simple_oris, only: oris
+        class(polarft_corrcalc), intent(inout) :: self
+        class(oris),             intent(inout) :: a
+        integer  :: iptcl, k
+        real(sp) :: resarrsq(self%kfromto(1):self%kfromto(2)), bfac, tmp(self%kfromto(1):self%kfromto(2))
+        ! pre-calc squared spatial frequencies
+        do k=self%kfromto(1),self%kfromto(2)
+            resarrsq(k) = real(k) / (real(self%ldim(1)) * self%smpd) ! assuming square dimensions
+            resarrsq(k) = resarrsq(k) * resarrsq(k)
+        end do
+        ! pre-calc B-factor weight arrays
+        !$omp parallel do default(shared) private(iptcl,bfac,tmp) proc_bind(close) schedule(static)
+        do iptcl=self%pfromto(1),self%pfromto(2)
+            if( self%pinds(iptcl) > 0 )then
+                bfac = a%get(iptcl, 'bfac')
+                tmp  = exp(-(bfac/4.) * resarrsq(:))
+                where( tmp > 0. )
+                    self%ptcl_bfac_weights(self%pinds(iptcl),:) = tmp
+                else where
+                    self%ptcl_bfac_weights(self%pinds(iptcl),:) = 0.
+                end where
+                self%ptcl_bfac_norms(self%pinds(iptcl)) = sum(self%ptcl_bfac_weights(self%pinds(iptcl),:))
+            endif
+        end do
+        !$omp end parallel do
+    end subroutine memoize_bfacs
 
     ! CALCULATORS
 
@@ -1137,9 +1183,9 @@ contains
                 sumsqptcl = sum(csq(self%pfts_ptcls(self%pinds(iptcl),:,k)))
                 sumsqref  = sum(csq(pft_ref(:,k)))
                 ! B-factor weighted correlation
-                cc(:) = cc(:) + (kcorrs(:) * self%bfac_arr(k)) / sqrt(sumsqref * sumsqptcl)
+                cc(:) = cc(:) + (kcorrs(:) * self%ptcl_bfac_weights(self%pinds(iptcl),k)) / sqrt(sumsqref * sumsqptcl)
             end do
-            cc(:) = cc(:) / self%bfac_norm
+            cc(:) = cc(:) / self%ptcl_bfac_norms(self%pinds(iptcl))
         else
             ! without B-factor weighting
             do k=self%kfromto(1),self%kfromto(2)
@@ -1174,9 +1220,9 @@ contains
                 sumsqptcl = sum(csq(self%pfts_ptcls(self%pinds(iptcl),:,k)))
                 sumsqref  = sum(csq(pft_ref(:,k)))
                 ! B-factor weighted correlation
-                cc(:) = cc(:) + (kcorrs(:) * self%bfac_arr(k)) / sqrt(sumsqref * sumsqptcl)
+                cc(:) = cc(:) + (kcorrs(:) * self%ptcl_bfac_weights(self%pinds(iptcl),k)) / sqrt(sumsqref * sumsqptcl)
             end do
-            cc(:) = cc(:) / sum(self%bfac_arr(self%kfromto(1):kstop))
+            cc(:) = cc(:) / sum(self%ptcl_bfac_weights(self%pinds(iptcl),self%kfromto(1):kstop))
         else
             ! without B-factor weighting
             do k=self%kfromto(1),kstop
@@ -1229,9 +1275,9 @@ contains
                 sumsqptcl = sum(csq(self%pfts_ptcls(self%pinds(iptcl),:,k)))
                 sumsqref  = sum(csq(pft_ref(:,k)))
                 ! B-factor weighted correlation
-                cc(:) = cc(:) + (kcorrs(:) * self%bfac_arr(k)) / sqrt(sumsqref * sumsqptcl)
+                cc(:) = cc(:) + (kcorrs(:) * self%ptcl_bfac_weights(self%pinds(iptcl),k)) / sqrt(sumsqref * sumsqptcl)
             end do
-            cc(:) = cc(:) / self%bfac_norm
+            cc(:) = cc(:) / self%ptcl_bfac_norms(self%pinds(iptcl))
         else
             ! without B-factor weighting
             do k=self%kfromto(1),self%kfromto(2)
@@ -1415,9 +1461,9 @@ contains
                 sqsumk_ref  = sum(csq(pft_ref(:,k)))
                 sqsumk_ptcl = sum(csq(self%pfts_ptcls(self%pinds(iptcl),:,k)))
                 corrk       = self%calc_corrk_for_rot(pft_ref, self%pinds(iptcl), self%kfromto(2), k, irot)
-                cc          = cc + (corrk * self%bfac_arr(k)) / sqrt(sqsumk_ref * sqsumk_ptcl)
+                cc          = cc + (corrk * self%ptcl_bfac_weights(self%pinds(iptcl),k)) / sqrt(sqsumk_ref * sqsumk_ptcl)
             end do
-            cc = cc / self%bfac_norm
+            cc = cc / self%ptcl_bfac_norms(self%pinds(iptcl))
         else
             ! without B-factor weighting
             do k = self%kfromto(1),self%kfromto(2)
@@ -1467,9 +1513,9 @@ contains
                 sqsumk_ref  = sum(csq(pft_ref(:,k)))
                 sqsumk_ptcl = sum(csq(self%pfts_ptcls(self%pinds(iptcl),:,k)))
                 corrk       = self%calc_corrk_for_rot_8(pft_ref, self%pinds(iptcl), self%kfromto(2), k, irot)
-                cc          = cc + (corrk * real(self%bfac_arr(k), kind=dp)) / sqrt(sqsumk_ref * sqsumk_ptcl)
+                cc          = cc + (corrk * real(self%ptcl_bfac_weights(self%pinds(iptcl),k), kind=dp)) / sqrt(sqsumk_ref * sqsumk_ptcl)
             end do
-            cc = cc / real(self%bfac_norm, kind=dp)
+            cc = cc / real(self%ptcl_bfac_norms(self%pinds(iptcl)), kind=dp)
         else
             ! without B-factor weighting
             do k = self%kfromto(1),self%kfromto(2)
@@ -1725,14 +1771,14 @@ contains
                 sqsumk_ptcl = sum(csq(self%pfts_ptcls(self%pinds(iptcl),:,k)))
                 denom       = sqrt(sqsumk_ref * sqsumk_ptcl)
                 corrk       = self%calc_corrk_for_rot(pft_ref, self%pinds(iptcl), self%kfromto(2), k, irot)
-                f           = f + (corrk * self%bfac_arr(k))       / denom
+                f           = f +       (corrk * self%ptcl_bfac_weights(self%pinds(iptcl),k)) / denom
                 corrk       = self%calc_corrk_for_rot(pft_ref_tmp1, self%pinds(iptcl), self%kfromto(2), k, irot)
-                grad(1)     = grad(1) + (corrk * self%bfac_arr(k)) / denom
+                grad(1)     = grad(1) + (corrk * self%ptcl_bfac_weights(self%pinds(iptcl),k)) / denom
                 corrk       = self%calc_corrk_for_rot(pft_ref_tmp2, self%pinds(iptcl), self%kfromto(2), k, irot)
-                grad(2)     = grad(2) + (corrk * self%bfac_arr(k)) / denom
+                grad(2)     = grad(2) + (corrk * self%ptcl_bfac_weights(self%pinds(iptcl),k)) / denom
             end do
-            f = f / real(self%bfac_norm)
-            grad(:) = grad(:) / real(self%bfac_norm)
+            f = f             / real(self%ptcl_bfac_norms(self%pinds(iptcl)))
+            grad(:) = grad(:) / real(self%ptcl_bfac_norms(self%pinds(iptcl)))
         else
             do k = self%kfromto(1), self%kfromto(2)
                 sqsumk_ref  = sum(csq(pft_ref(:,k)))
@@ -1793,14 +1839,14 @@ contains
                 sqsumk_ptcl = sum(csq(self%pfts_ptcls(self%pinds(iptcl),:,k)))
                 denom       = sqrt(sqsumk_ref * sqsumk_ptcl)
                 corrk       = self%calc_corrk_for_rot_8(pft_ref, self%pinds(iptcl), self%kfromto(2), k, irot)
-                f           = f + (corrk * real(self%bfac_arr(k), kind=dp))       / denom
+                f           = f +       (corrk * real(self%ptcl_bfac_weights(self%pinds(iptcl),k), kind=dp)) / denom
                 corrk       = self%calc_corrk_for_rot_8(pft_ref_tmp1, self%pinds(iptcl), self%kfromto(2), k, irot)
-                grad(1)     = grad(1) + (corrk * real(self%bfac_arr(k), kind=dp)) / denom
+                grad(1)     = grad(1) + (corrk * real(self%ptcl_bfac_weights(self%pinds(iptcl),k), kind=dp)) / denom
                 corrk       = self%calc_corrk_for_rot_8(pft_ref_tmp2, self%pinds(iptcl), self%kfromto(2), k, irot)
-                grad(2)     = grad(2) + (corrk * real(self%bfac_arr(k), kind=dp)) / denom
+                grad(2)     = grad(2) + (corrk * real(self%ptcl_bfac_weights(self%pinds(iptcl),k), kind=dp)) / denom
             end do
-            f       = f       / real(self%bfac_norm, kind=dp)
-            grad(:) = grad(:) / real(self%bfac_norm, kind=dp)
+            f       = f       / real(self%ptcl_bfac_norms(self%pinds(iptcl)), kind=dp)
+            grad(:) = grad(:) / real(self%ptcl_bfac_norms(self%pinds(iptcl)), kind=dp)
         else
             do k = self%kfromto(1), self%kfromto(2)
                 sqsumk_ref  = sum(csq(pft_ref(:,k)))
@@ -1972,11 +2018,11 @@ contains
                 sqsumk_ptcl = sum(csq(self%pfts_ptcls(self%pinds(iptcl),:,k)))
                 denom       = sqrt(sqsumk_ref * sqsumk_ptcl)
                 corrk       = self%calc_corrk_for_rot(pft_ref_tmp1, self%pinds(iptcl), self%kfromto(2), k, irot)
-                grad(1)     = grad(1) + (corrk * self%bfac_arr(k)) / denom
+                grad(1)     = grad(1) + (corrk * self%ptcl_bfac_weights(self%pinds(iptcl),k)) / denom
                 corrk       = self%calc_corrk_for_rot(pft_ref_tmp2, self%pinds(iptcl), self%kfromto(2), k, irot)
-                grad(2)     = grad(2) + (corrk * self%bfac_arr(k)) / denom
+                grad(2)     = grad(2) + (corrk * self%ptcl_bfac_weights(self%pinds(iptcl),k)) / denom
             end do
-            grad = grad / self%bfac_norm
+            grad = grad / self%ptcl_bfac_norms(self%pinds(iptcl))
         else
             do k = self%kfromto(1), self%kfromto(1)
                 sqsumk_ref  = sum(csq(pft_ref(:,k)))
@@ -2033,11 +2079,11 @@ contains
                 sqsumk_ptcl = sum(csq(self%pfts_ptcls(self%pinds(iptcl),:,k)))
                 denom       = sqrt(sqsumk_ref * sqsumk_ptcl)
                 corrk       = self%calc_corrk_for_rot_8(pft_ref_tmp1, self%pinds(iptcl), self%kfromto(2), k, irot)
-                grad(1)     = grad(1) + (corrk * real(self%bfac_arr(k), kind=dp)) / denom
+                grad(1)     = grad(1) + (corrk * real(self%ptcl_bfac_weights(self%pinds(iptcl),k), kind=dp)) / denom
                 corrk       = self%calc_corrk_for_rot_8(pft_ref_tmp2, self%pinds(iptcl), self%kfromto(2), k, irot)
-                grad(2)     = grad(2) + (corrk * real(self%bfac_arr(k), kind=dp)) / denom
+                grad(2)     = grad(2) + (corrk * real(self%ptcl_bfac_weights(self%pinds(iptcl),k), kind=dp)) / denom
             end do
-            grad = grad / real(self%bfac_norm, kind=dp)
+            grad = grad / real(self%ptcl_bfac_norms(self%pinds(iptcl)), kind=dp)
         else
             do k = self%kfromto(1), self%kfromto(1)
                 sqsumk_ref  = sum(csq(pft_ref(:,k)))
@@ -2062,7 +2108,7 @@ contains
     end function specscore
 
     !>  \brief  is for fitting a bfactor to ptcl vs. ref FRC
-    real function calc_bfac( self, iref, iptcl, irot, shvec )
+    real function fit_bfac( self, iref, iptcl, irot, shvec )
         ! Fitting to Y = A * exp( -B/(4s2) )
         ! from mathworld.wolfram.com/LeastSquaresFittingExponential.html
         class(polarft_corrcalc),  intent(inout) :: self
@@ -2078,20 +2124,20 @@ contains
         if( count(peakmsk) < 3 )then
             where(frc > TINY) peakmsk = .true.
             if( count(peakmsk) < 3 )then
-                calc_bfac = 666666.666
+                fit_bfac = 1000.
                 return
             endif
         endif
         X = self%smpd * real(self%ldim(1)) / real((/(i,i=self%kfromto(1),self%kfromto(2))/))
         X = -1. / (4.*X*X)
         ! all points are weighted by Y
-        sumfrc    = sum(frc,mask=peakmsk)
-        sumxfrc   = sum(X*frc,mask=peakmsk)
-        denom     = sumfrc * sum(X*X*frc,mask=peakmsk) - sumxfrc**2.
-        calc_bfac = sumfrc * sum(X*frc*log(frc), mask=peakmsk)
-        calc_bfac = calc_bfac - sumxfrc * sum(frc*log(frc), mask=peakmsk)
-        calc_bfac = calc_bfac / denom
-    end function calc_bfac
+        sumfrc   = sum(frc,mask=peakmsk)
+        sumxfrc  = sum(X*frc,mask=peakmsk)
+        denom    = sumfrc * sum(X*X*frc,mask=peakmsk) - sumxfrc**2.
+        fit_bfac = sumfrc * sum(X*frc*log(frc), mask=peakmsk)
+        fit_bfac = fit_bfac - sumxfrc * sum(frc*log(frc), mask=peakmsk)
+        fit_bfac = fit_bfac / denom
+    end function fit_bfac
 
     ! DESTRUCTOR
 
@@ -2121,7 +2167,8 @@ contains
                     call fftwf_free(self%fftdat_ptcls(i,ik)%p_im)
                 end do
             end do
-            if( allocated(self%bfac_arr) ) deallocate(self%bfac_arr)
+            if( allocated(self%ptcl_bfac_weights) ) deallocate(self%ptcl_bfac_weights)
+            if( allocated(self%ptcl_bfac_norms)   ) deallocate(self%ptcl_bfac_norms)
             deallocate( self%sqsums_ptcls, self%angtab, self%argtransf,&
                 &self%polar, self%pfts_refs_even, self%pfts_refs_odd, self%pfts_ptcls,&
                 &self%fft_factors, self%fftdat, self%fftdat_ptcls,&

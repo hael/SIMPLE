@@ -379,7 +379,7 @@ contains
     end subroutine grid_ptcl_tst
 
     !>  \brief  prepares one particle image for alignment
-    subroutine prepimg4align( b, p, iptcl, img_in, img_out)
+    subroutine prepimg4align( b, p, iptcl, img_in, img_out, is3D )
         use simple_polarizer,     only: polarizer
         use simple_estimate_ssnr, only: fsc2optlp_sub
         use simple_ctf,           only: ctf
@@ -388,6 +388,7 @@ contains
         integer,          intent(in)    :: iptcl
         class(image),     intent(inout) :: img_in
         class(polarizer), intent(inout) :: img_out
+        logical,          intent(in)    :: is3D
         type(ctf) :: tfun
         real      :: frc(b%projfrcs%get_filtsz()), filter(b%projfrcs%get_filtsz())
         real      :: x, y, dfx, dfy, angast, phshift
@@ -428,18 +429,24 @@ contains
                 stop 'Unsupported ctf mode; simple_hadamard_common :: prepimg4align'
         end select
         ! shell normalization & filter
-        if( p%imgfilt2D.eq.'yes' .or. p%imgfilt3D.eq.'yes' )then
-            if( p%imgfilt2D.eq.'yes' )then
-                ifrc = nint(b%a%get(iptcl,'class'))  ! 2D
+        if( is3D )then
+            if( trim(p%eo) .ne. 'no' )then
+                ifrc = b%e_bal%find_closest_proj( b%a%get_ori(iptcl) )
             else
-                ifrc = b%e_bal%find_closest_proj( b%a%get_ori(iptcl) ) ! 3D
+                ifrc = 0 ! turns off the matched filter
             endif
-            if( ifrc > 0 .and. ifrc <= b%projfrcs%get_nprojs() )then
-                call b%projfrcs%frc_getter(ifrc, frc)
-                if( any(frc > 0.143) )then
-                    call fsc2optlp_sub(b%projfrcs%get_filtsz(), frc, filter)
-                    call img_in%shellnorm_and_apply_filter_serial(filter)
-                endif
+        else
+            if( trim(p%match_filt) .eq. 'yes' )then
+                ifrc = nint(b%a%get(iptcl,'class'))
+            else
+                ifrc = 0 ! turns off the matched filter
+            endif
+        endif
+        if( ifrc > 0 )then
+            call b%projfrcs%frc_getter(ifrc, frc)
+            if( any(frc > 0.143) )then
+                call fsc2optlp_sub(b%projfrcs%get_filtsz(), frc, filter)
+                call img_in%shellnorm_and_apply_filter_serial(filter)
             endif
         endif
         ! shift image to rotational origin

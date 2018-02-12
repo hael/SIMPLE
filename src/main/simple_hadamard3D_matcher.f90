@@ -261,6 +261,8 @@ contains
         if( p%ctf .ne. 'no' ) call pftcc%create_polar_ctfmats(b%a)
         ! memoize FFTs for improved performance
         call pftcc%memoize_ffts
+        ! memoize B-factors
+        if( p%eo .ne. 'no' ) call pftcc%memoize_bfacs(b%a)
         ! execute the search
         call del_file(p%outfile)
         if( L_BENCH ) t_align = tic()
@@ -642,7 +644,7 @@ contains
             do iptcl=batchlims(1),batchlims(2)
                 if( .not. ptcl_mask(iptcl) ) cycle
                 imatch = iptcl - batchlims(1) + 1
-                call prepimg4align(b, p, iptcl, b%imgbatch(imatch), match_imgs(imatch))
+                call prepimg4align(b, p, iptcl, b%imgbatch(imatch), match_imgs(imatch), is3D=.true.)
                 ! transfer to polar coordinates
                 call match_imgs(imatch)%polarize(pftcc, iptcl, .true., .true.)
             end do
