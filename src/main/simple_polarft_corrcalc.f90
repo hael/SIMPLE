@@ -250,13 +250,14 @@ contains
         self%nk          = self%kfromto(2) - self%kfromto(1) + 1 !< # resolution elements
         self%nthr        = p%nthr                                !< # OpenMP threads
         self%phaseplate  = p%tfplan%l_phaseplate                 !< images obtained with the Volta
-        self%l_cc_bfac   = p%l_cc_bfac                           !< B-factor weighting of the correlation
+        ! self%l_cc_bfac   = p%l_cc_bfac                           !< B-factor weighting of the correlation
         ! take care of objective function flags
         select case(trim(p%objfun))
             case('cc')
                 self%l_cc_objfun   = .true.
             case('ccres')
-                self%l_cc_objfun       = .false.
+                self%l_cc_objfun = .false.
+                self%l_cc_bfac   = .true.
                 allocate(self%ptcl_bfac_weights(1:self%nptcls, self%kfromto(1):self%kfromto(2)), self%ptcl_bfac_norms(1:self%nptcls))
                 self%ptcl_bfac_weights = 1.0
                 self%ptcl_bfac_norms   = real(self%nk)
