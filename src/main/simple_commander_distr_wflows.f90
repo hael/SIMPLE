@@ -632,17 +632,15 @@ contains
                             call frcs%new(p_master%ncls, p_master%box, p_master%smpd, state)
                             call frcs%read(frcs_iter)
                             do icls = 1, size(fromtocls, dim=1)
-                                call frcs%set_frc( fromtocls(icls,2), frcs%get_frc(fromtocls(icls,1),&
-                                &p_master%box, p_master%hpind_fsc, p_master%tfplan%l_phaseplate, state), state)
+                                call frcs%set_frc( fromtocls(icls,2),&
+                                &frcs%get_frc(fromtocls(icls,1), p_master%box, state), state)
                             enddo
                             call frcs%write(frcs_iter)
                         endif
                     endif
                 endif
             end subroutine remap_empty_cavgs
-
-
-
+            
     end subroutine exec_prime2D_distr
 
     subroutine exec_comlin_smat_distr( self, cline )

@@ -154,10 +154,9 @@ contains
         endif
     end subroutine set_frc
 
-    function get_frc( self, proj, box, hpind_fsc, phaseplate, state ) result( frc )
+    function get_frc( self, proj, box, state ) result( frc )
         class(projection_frcs), intent(in) :: self
-        integer,                intent(in) :: proj, box, hpind_fsc
-        logical,                intent(in) :: phaseplate
+        integer,                intent(in) :: proj, box
         integer, optional,      intent(in) :: state
         real, allocatable :: frc(:)
         real, allocatable :: res(:)
@@ -172,11 +171,6 @@ contains
         else
             allocate(frc(self%filtsz), source=self%frcs(sstate,proj,:))
         endif
-        if( phaseplate ) call phaseplate_correct_fsc(frc, find_plate)
-        if( hpind_fsc > 0 )then
-            frcmax = maxval(frc)
-            frc(:hpind_fsc) = frcmax
-        endif
     end function get_frc
 
     subroutine frc_getter( self, proj, hpind_fsc, phaseplate, frc, state )
@@ -189,7 +183,7 @@ contains
         integer :: sstate, find_plate
         sstate = 1
         if( present(state) ) sstate = state
-        call self%raise_exception( proj, sstate, 'ERROR, out of bounds in get_frc')
+        call self%raise_exception( proj, sstate, 'ERROR, out of bounds in frc_getter')
         frc = self%frcs(sstate,proj,:)
         if( phaseplate ) call phaseplate_correct_fsc(frc, find_plate)
         if( hpind_fsc > 0 )then
