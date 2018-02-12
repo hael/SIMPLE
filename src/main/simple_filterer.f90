@@ -12,11 +12,11 @@ implicit none
 
 contains
 
-    !>  \brief generates an optimal low-pass filter (3D) from FRCs (2D) by 
+    !>  \brief generates an optimal low-pass filter (3D) from FRCs (2D) by
     !!         (1) taking the average filter coefficients for frequencies 1 & 2
     !!         (2) minimizing the angle between the vector defined by the 3D Fourier index
     !!         and the planes used for calculating FRCs to find a matching filter coeff
-    subroutine gen_anisotropic_optlp( vol_filter, projfrcs, e_space, state, pgrp )
+    subroutine gen_anisotropic_optlp( vol_filter, projfrcs, e_space, state, pgrp, hpind_fsc, phaseplate )
         use simple_estimate_ssnr,   only: fsc2optlp
         use simple_projection_frcs, only: projection_frcs
         class(image),           intent(inout) :: vol_filter
@@ -24,6 +24,8 @@ contains
         class(oris),            intent(inout) :: e_space
         integer,                intent(in)    :: state
         character(len=*),       intent(in)    :: pgrp
+        integer,                intent(in)    :: hpind_fsc
+        logical,                intent(in)    :: phaseplate
         type(sym)         :: se
         type(ori)         :: orientation, o_sym
         integer           :: noris, iori, nprojs, ldim(3), lims(3,2), isym, nsym
@@ -39,16 +41,16 @@ contains
         &stop 'e_space & projfrcs objects non-conforming; filterer :: gen_anisotropic_optlp'
         ldim   = vol_filter%get_ldim()
         if( ldim(3) == 1 ) stop 'only for 3D filter generation; filterer :: gen_anisotropic_optlp'
-        frc    = projfrcs%get_frc(1, ldim(1), state)
-        filtsz = size(frc)
+        filtsz = vol_filter%get_filtsz()
+        allocate(frc(filtsz))
         lims   = vol_filter%loop_lims(2)
         if( pgrp .eq. 'c1' )then
             nsym = 1
             ! extract plane normals and L2 norms from e_space & extract 2D filters from projfrcs
             allocate( plane_normals(1,noris,3), plane_normals_L2(1,noris), filters2D(noris,filtsz) )
             plane_normals    = 0.0
-            plane_normals_L2 = 0.0 
-            filters2D        = 0.0 
+            plane_normals_L2 = 0.0
+            filters2D        = 0.0
             do iori=1,noris
                 ! plane normals & L2 norms
                 plane_normals(1,iori,:)  = e_space%get_normal(iori)
@@ -57,7 +59,7 @@ contains
                     plane_normals_L2(1,iori) = sqrt(plane_normals_L2(1,iori))
                 endif
                 ! 2D filters
-                frc = projfrcs%get_frc(iori, ldim(1), state)
+                call projfrcs%frc_getter(iori, hpind_fsc, phaseplate, frc, state)
                 filters2D(iori,:) = fsc2optlp(frc)
             end do
         else
@@ -67,8 +69,8 @@ contains
             ! extract plane normals and L2 norms from e_space & extract 2D filters from projfrcs
             allocate( plane_normals(nsym,noris,3), plane_normals_L2(nsym,noris), filters2D(noris,filtsz) )
             plane_normals    = 0.0
-            plane_normals_L2 = 0.0 
-            filters2D        = 0.0 
+            plane_normals_L2 = 0.0
+            filters2D        = 0.0
             do iori=1,noris
                 orientation = e_space%get_ori(iori)
                 do isym=1,nsym
@@ -81,7 +83,7 @@ contains
                     endif
                 end do
                 ! 2D filters
-                frc = projfrcs%get_frc(iori, ldim(1), state)
+                call projfrcs%frc_getter(iori, hpind_fsc, phaseplate, frc, state)
                 filters2D(iori,:) = fsc2optlp(frc)
             end do
             call se%kill

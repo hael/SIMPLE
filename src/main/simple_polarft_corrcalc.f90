@@ -67,6 +67,7 @@ end type heap_vars
 type :: polarft_corrcalc
     private
     integer                          :: pfromto(2) = 1        !< from/to particle indices (in parallel execution)
+    integer                          :: hpind_fsc  = 0        !< high-pass index FSC
     integer                          :: nptcls     = 1        !< the total number of particles in partition (logically indexded [fromp,top])
     integer                          :: nrefs      = 1        !< the number of references (logically indexded [1,nrefs])
     integer                          :: nrots      = 0        !< number of in-plane rotations for one pft (determined by radius of molecule)

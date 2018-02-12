@@ -440,12 +440,13 @@ contains
                             call frcs%new(ncls_glob, box_glob, smpd_glob, state)
                             call frcs_prev%read(frcs_glob)
                             do icls = 1, ncls_glob_prev
-                                call frcs%set_frc(icls,&
-                                &frcs_prev%get_frc(icls, box_glob, state), state)
+                                call frcs%set_frc(icls, frcs_prev%get_frc(icls, box_glob, p_master%hpind_fsc,&
+                                &p_master%tfplan%l_phaseplate, state), state)
                             enddo
                             do icls = 1, size(fromtocls, dim=1)
                                 call frcs%set_frc( fromtocls(icls,2),&
-                                &frcs%get_frc(fromtocls(icls,1), box_glob, state), state)
+                                &frcs%get_frc(fromtocls(icls,1), box_glob, p_master%hpind_fsc,&
+                                &p_master%tfplan%l_phaseplate, state), state)
                             enddo
                             call frcs%write(frcs_glob)
                         endif

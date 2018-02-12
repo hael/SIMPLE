@@ -16,20 +16,20 @@ private
 
 type :: eo_reconstructor
     private
-    type(reconstructor):: even
-    type(reconstructor):: odd
-    type(reconstructor):: eosum
-    type(masker)       :: envmask
-    character(len=4)   :: ext
-    real               :: res_fsc05          !< target resolution at FSC=0.5
-    real               :: res_fsc0143        !< target resolution at FSC=0.143
-    real               :: smpd, msk, fny, inner=0., width=10.
-    integer            :: box=0, nstates=1, numlen=2
-    integer            :: cyc_lims(3,2)  = 0 !< redundant limits
-    logical            :: phaseplate = .false.
-    logical            :: automsk    = .false.
-    logical            :: wiener     = .false.
-    logical            :: exists     = .false.
+    type(reconstructor) :: even
+    type(reconstructor) :: odd
+    type(reconstructor) :: eosum
+    type(masker)        :: envmask
+    character(len=4)    :: ext
+    real                :: res_fsc05          !< target resolution at FSC=0.5
+    real                :: res_fsc0143        !< target resolution at FSC=0.143
+    real                :: smpd, msk, fny, inner=0., width=10.
+    integer             :: box=0, nstates=1, numlen=2, hpind_fsc=0
+    integer             :: cyc_lims(3,2)  = 0 !< redundant limits
+    logical             :: phaseplate = .false.
+    logical             :: automsk    = .false.
+    logical             :: wiener     = .false.
+    logical             :: exists     = .false.
   contains
     ! CONSTRUCTOR
     procedure          :: new
@@ -75,7 +75,7 @@ contains
     ! CONSTRUCTOR
 
     !>  \brief  is a constructor
-    subroutine new(self, p )
+    subroutine new( self, p )
         class(eo_reconstructor), intent(inout) :: self !< instance
         class(params), target,   intent(in)    :: p    !< parameters object (provides constants)
         logical     :: neg
@@ -94,6 +94,7 @@ contains
         self%msk        = p%msk
         self%automsk    = file_exists(p%mskfile)
         self%phaseplate = p%tfplan%l_phaseplate
+        self%hpind_fsc  = p%hpind_fsc
         ! create composites
         if( self%automsk )then
             call self%envmask%new([p%box,p%box,p%box], p%smpd)
@@ -336,6 +337,7 @@ contains
         real, allocatable :: res(:), corrs(:)
         type(image)       :: even, odd
         integer           :: j, find_plate
+        real              :: corrmax
         ! make clipped volumes
         call even%new([self%box,self%box,self%box],self%smpd)
         call odd%new([self%box,self%box,self%box],self%smpd)
@@ -379,6 +381,10 @@ contains
         call even%fsc(odd, corrs)
         find_plate = 0
         if( self%phaseplate ) call phaseplate_correct_fsc(corrs, find_plate)
+        if( self%hpind_fsc > 0 )then
+            corrmax = maxval(corrs)
+            corrs(:self%hpind_fsc) = corrmax
+        endif
         do j=1,size(res)
            write(*,'(A,1X,F6.2,1X,A,1X,F7.3)') '>>> RESOLUTION:', res(j), '>>> CORRELATION:', corrs(j)
         end do
@@ -390,8 +396,12 @@ contains
         write(*,'(A,1X,F6.2)') '>>> RESOLUTION AT FSC=0.500 DETERMINED TO:', self%res_fsc05
         write(*,'(A,1X,F6.2)') '>>> RESOLUTION AT FSC=0.143 DETERMINED TO:', self%res_fsc0143
         ! Fourier index for eo averaging
-        find4eoavg = max(K4EOAVGLB,get_lplim_at_corr(corrs, FSC4EOAVG3D))
-        find4eoavg = max(find4eoavg, find_plate)
+        if( self%hpind_fsc > 0 )then
+            find4eoavg = self%hpind_fsc
+        else
+            find4eoavg = max(K4EOAVGLB,get_lplim_at_corr(corrs, FSC4EOAVG3D))
+            find4eoavg = max(find4eoavg, find_plate)
+        endif
         deallocate(corrs, res)
         call even%kill
         call odd%kill

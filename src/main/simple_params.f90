@@ -203,6 +203,7 @@ type :: params
     integer :: fromp=1             !< start ptcl index
     integer :: fstep=1
     integer :: grow=0              !< # binary layers to grow(in pixels)
+    integer :: hpind_fsc           !< high-pass Fourier index for FSC
     integer :: iares=10            !< integer angular resolution{10}
     integer :: ind=0
     integer :: iptcl=1
@@ -327,6 +328,7 @@ type :: params
     real    :: unblurgtol = 1e-2   !< tolerance (function value) for unblurrer
     real    :: gw=0.5
     real    :: hp=100.             !< high-pass limit(in A)
+    real    :: hp_fsc=0.           !< FSC high-pass limit(in A)
     real    :: hp_ctffind=30.      !< high-pass limit 4 ctffind(in A)
     real    :: inner=0.            !< inner mask radius(in pixels)
     real    :: kv=300.             !< acceleration voltage(in kV){300.}
@@ -975,6 +977,8 @@ contains
             self%lpstop = self%fny                                 ! deafult lpstop
         endif
         if( self%fny > 0. ) self%tofny = nint(self%dstep/self%fny) ! Nyqvist Fourier index
+        self%hpind_fsc = 0                                         ! high-pass Fouirer index FSC
+        if( cline%defined('hp_fsc') ) self%hpind_fsc = nint(self%dstep/self%hp_fsc)
         if( cline%defined('lp') ) self%dynlp = 'no'                ! override dynlp=yes and lpstop
         ! set 2D low-pass limits and smpd_targets 4 scaling
         self%lplims2D(1)       = self%lpstart
