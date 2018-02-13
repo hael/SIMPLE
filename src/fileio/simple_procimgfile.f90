@@ -583,6 +583,7 @@ contains
             call progress(i,n)
             call img%read(fname2masscen, i)
             xyz = img%center(lp, msk)
+            call img%shift(xyz)
             call img%write(fname, i)
         end do
         call img%kill
