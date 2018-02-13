@@ -44,14 +44,11 @@ contains
         class(cmdline), intent(inout) :: cline
         integer,        intent(in)    :: which_iter
         logical,        intent(inout) :: converged
-        integer, allocatable :: prev_pops(:), pinds(:)
-        logical, allocatable :: ptcl_mask(:), clsupdate_mask(:)
+        integer, allocatable :: prev_pops(:), pinds(:), clsupdate_cntarr(:,:)
+        logical, allocatable :: ptcl_mask(:)
         integer :: iptcl, icls, i, j, fnr
         real    :: corr_thresh, frac_srch_space, skewness, extr_thresh
         logical :: l_do_read, doprint
-
-        ! PREPARE CLASS UPDATE MASK
-        allocate(clsupdate_mask(p%ncls), source=.true.)
 
         ! PREP REFERENCES
         if( L_BENCH )then
@@ -74,7 +71,7 @@ contains
                 if( .not. cline%defined('refs') .and. cline%defined('oritab') )then
                     ! we make references
                     call cavger_transf_oridat(b%a)
-                    call cavger_assemble_sums()
+                    call cavger_assemble_sums
                     l_do_read = .false.
                 else if( cline%defined('refs') )then
                     ! do nothing
@@ -265,9 +262,10 @@ contains
                     !$omp end parallel do
                 endif
         end select
-        ! update class mask, needs to be serial
+        ! class update counter array (keeps track of updates to even/odd assignments)
+        allocate(clsupdate_cntarr(0:1,p%ncls), source=0)
         do iptcl=p%fromp,p%top
-            if( ptcl_mask(iptcl) ) call primesrch2D(iptcl)%update_clsmask(clsupdate_mask)
+            if( ptcl_mask(iptcl) ) call primesrch2D(iptcl)%incr_clsupdate_cntarr(clsupdate_cntarr)
         end do
 
         ! pftcc & primesrch2D not needed anymore
@@ -293,10 +291,10 @@ contains
         ! WIENER RESTORATION OF CLASS AVERAGES
         if( L_BENCH ) t_cavg = tic()
         call cavger_transf_oridat(b%a)
-        call cavger_assemble_sums()
+        call cavger_assemble_sums(clsupdate_cntarr)
         ! write results to disk
         if( p%l_distr_exec )then
-            call cavger_write_partial_sums()
+            call cavger_readwrite_partial_sums('write')
         else
             p%frcs = 'frcs_iter'//int2str_pad(which_iter,3)//'.bin'
             call cavger_calc_and_write_frcs_and_eoavg(p%frcs)
@@ -383,7 +381,6 @@ contains
             call match_imgs(imatch)%new([p%boxmatch, p%boxmatch, 1], p%smpd)
             call match_imgs(imatch)%copy_polarizer(b%img_match)
         end do
-
         ! PREPARATION OF REFERENCES IN PFTCC
         ! read references and transform into polar coordinates
         if( .not. p%l_distr_exec ) write(*,'(A)') '>>> BUILDING REFERENCES'
@@ -402,13 +399,13 @@ contains
                 ! prepare the references
                 do_center = (p%oritab /= '' .and. (pop > MINCLSPOPLIM) .and. (which_iter > 2))
                 ! here we are determining the shifts and map them back to classes
-                call prep2Dref(b, p, cavgs_merged(1,icls), match_imgs(icls), icls, center=do_center, xyz_out=xyz)
+                call prep2Dref(b, p, cavgs_merged(icls), match_imgs(icls), icls, center=do_center, xyz_out=xyz)
                 if( pop_even >= MINCLSPOPLIM .and. pop_odd >= MINCLSPOPLIM )then
                     ! here we are passing in the shifts and do NOT map them back to classes
-                    call prep2Dref(b, p, cavgs_even(1,icls), match_imgs(icls), icls, center=do_center, xyz_in=xyz)
+                    call prep2Dref(b, p, cavgs_even(icls), match_imgs(icls), icls, center=do_center, xyz_in=xyz)
                     call match_imgs(icls)%polarize(pftcc, icls, isptcl=.false., iseven=.true.)  ! 2 polar coords
                     ! here we are passing in the shifts and do NOT map them back to classes
-                    call prep2Dref(b, p, cavgs_odd(1,icls), match_imgs(icls), icls, center=do_center, xyz_in=xyz)
+                    call prep2Dref(b, p, cavgs_odd(icls), match_imgs(icls), icls, center=do_center, xyz_in=xyz)
                     call match_imgs(icls)%polarize(pftcc, icls, isptcl=.false., iseven=.false.) ! 2 polar coords
                 else
                     ! put the merged class average in both even and odd positions
@@ -418,10 +415,8 @@ contains
             endif
         end do
         !$omp end parallel do
-
         ! PREPARATION OF PARTICLES IN PFTCC
         call build_pftcc_particles( b, p, pftcc, batchsz_max, match_imgs, .false.)
-
         ! DESTRUCT
         do imatch=1,batchsz_max
             call match_imgs(imatch)%kill_polarizer
@@ -429,7 +424,6 @@ contains
             call b%imgbatch(imatch)%kill
         end do
         deallocate(match_imgs, b%imgbatch)
-
         DebugPrint '*** hadamard2D_matcher ***: finished preppftcc4align'
     end subroutine preppftcc4align
 

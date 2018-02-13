@@ -1174,54 +1174,12 @@ contains
         end do
     end function included
 
-    !>  \brief  is getting the number of oris assigned to the even partion
-    ! integer function get_neven( self, fromto )
-    !     class(oris),       intent(inout) :: self
-    !     integer, optional, intent(in)    :: fromto(2)
-    !     integer :: i, from, to
-    !     from = 1
-    !     to   = self%n
-    !     if(present(fromto))then
-    !         from = fromto(1)
-    !         to   = fromto(2)
-    !     endif
-    !     get_neven = 0
-    !     do i = from, to
-    !         if( self%o(i)%isthere('eo') )then
-    !             if( self%o(i)%get('state') < 0.5 )cycle
-    !             if( self%o(i)%get('weights') < TINY )cycle
-    !             if( self%o(i)%iseven() )get_neven = get_neven + 1
-    !         endif
-    !     enddo
-    ! end function get_neven
-
     integer function get_neven( self )
         class(oris), intent(inout) :: self
         integer, allocatable :: eopart(:)
         eopart = nint(self%get_all('eo'))
         get_neven = count(eopart == 0)
     end function get_neven
-
-    !>  \brief  is getting the number of oris assigned to the odd partion
-    ! integer function get_nodd( self, fromto )
-    !     class(oris),       intent(inout) :: self
-    !     integer, optional, intent(in)    :: fromto(2)
-    !     integer :: i, from, to
-    !     from = 1
-    !     to   = self%n
-    !     if(present(fromto))then
-    !         from = fromto(1)
-    !         to   = fromto(2)
-    !     endif
-    !     get_nodd = 0
-    !     do i = from, to
-    !         if( self%o(i)%isthere('eo') )then
-    !             if( self%o(i)%get('state') < 0.5 )cycle
-    !             if( self%o(i)%get('weights') < TINY )cycle
-    !             if( self%o(i)%isodd() )get_nodd = get_nodd + 1
-    !         endif
-    !     enddo
-    ! end function get_nodd
 
     !>  \brief  is getting the number of oris assigned to the odd partion
     integer function get_nodd( self )

@@ -2332,7 +2332,7 @@ contains
     subroutine mul_2( self, rc )
         class(image), intent(inout) :: self
         real,         intent(in)    :: rc
-        if( self%is_ft() )then
+        if( self%ft )then
             self%cmat = self%cmat*rc
         else
             self%rmat = self%rmat*rc

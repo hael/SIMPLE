@@ -133,7 +133,7 @@ contains
         endif
         ! write sums
         if( p%l_distr_exec)then
-            call cavger_write_partial_sums()
+            call cavger_readwrite_partial_sums('write')
             call qsys_job_finished( p, 'simple_commander_prime2D :: exec_makecavgs' )
         else
             call cavger_calc_and_write_frcs_and_eoavg('frcs.bin')
