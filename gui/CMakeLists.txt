@@ -2,7 +2,7 @@
 # project (simple_gui)
 #enable_language(CXX)
 #
-set(CMAKE_CXX_COMPILER_NAMES g++)
+#set(CMAKE_CXX_COMPILER_NAMES g++)
 #include(${CMAKE_ROOT}/Modules/CMakeDetermineCXXCompilerABI.cmake)
 #CMAKE_DETERMINE_COMPILER_ABI(CXX ${CMAKE_ROOT}/Modules/CMakeCXXCompilerABI.cpp)
 
@@ -11,8 +11,8 @@ set(CMAKE_CXX_COMPILER_NAMES g++)
 project(simple_gui CXX)
 #include ( CheckCXXIncludeFile )
 INCLUDE(CMakeForceCompiler)
-CMAKE_FORCE_C_COMPILER(gcc GNU)
-CMAKE_FORCE_CXX_COMPILER(g++ GNU)
+#CMAKE_FORCE_C_COMPILER(gcc GNU)
+#CMAKE_FORCE_CXX_COMPILER(g++ GNU)
 
 
 if (USE_SYSTEM_JPEG_SQLite)
@@ -70,6 +70,12 @@ else()
 
 endif(USE_SYSTEM_JPEG_SQLite)
 
+if (${CMAKE_Fortran_COMPILER_ID} STREQUAL "GNU" )
+  set(CPPSTANDARD "-std=gnu++11 -pthread")
+elseif(${CMAKE_CXX_COMPILER_ID} STREQUAL "PGI")
+ set(CPPSTANDARD "--c++11 -Mconcur")
+endif()
+
 
 set (SIMPLE_GUI_SOURCES
   ${CMAKE_CURRENT_SOURCE_DIR}/src/simple_gui.cpp
@@ -92,8 +98,8 @@ set_target_properties(simple_gui
   PROPERTIES
   OUTPUT_NAME simple
   LANGUAGE CXX
-  COMPILE_FLAGS "-std=gnu++11 -DSIMPLE_DIR=${CMAKE_INSTALL_PREFIX} ${OpenMP_CXX_FLAGS} -O3 "
-  LINK_FLAGS "${OpenMP_CXX_FLAGS} -pthread -lm"
+  COMPILE_FLAGS "${CPPSTANDARD} -DSIMPLE_DIR=${CMAKE_INSTALL_PREFIX} ${OpenMP_CXX_FLAGS} -O3 "
+  LINK_FLAGS "${OpenMP_CXX_FLAGS} -lm"
   JOB_POOL_COMPILE NUM_JOBS
   )
 

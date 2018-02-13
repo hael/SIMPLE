@@ -100,7 +100,7 @@ contains
             call update_background_images(iframe, pos)
         end do
     end subroutine track_particle
-    
+
     !> write results of time series tracker
     subroutine write_tracked_series( fbody )
         character(len=*), intent(in) :: fbody
@@ -138,9 +138,9 @@ contains
         endif
         if( mod(iframe,CENRATE) == 0 )then
             ! center the reference
-            if( l_neg ) call reference%neg
+            if( l_neg ) call reference%neg()
             xyz = reference%center(cenlp)
-            if( l_neg ) call reference%neg
+            if( l_neg ) call reference%neg()
         endif
     end subroutine update_reference
 

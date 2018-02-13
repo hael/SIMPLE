@@ -459,11 +459,11 @@ contains
             if( .not.file_exists(p%vols(1)) )stop 'Cannot find input volume'
             call b%vol%read(p%vols(1))
             if( p%norm.eq.'yes' )then
-                call b%vol%norm
+                call b%vol%norm()
                 call b%vol%write(p%outvol, del_if_exists=.true.)
             else if( p%shellnorm.eq.'yes' )then
                 ! shell normalization
-                call b%vol%shellnorm
+                call b%vol%shellnorm()
                 spec = b%vol%spectrum('power')
                 do k=1,size(spec)
                     print *, k, spec(k)
@@ -926,7 +926,7 @@ contains
         if( p%vis .eq. 'yes' )then
             do i=1,p%nptcls
                 call read_image(i)
-                call b%img%vis
+                call b%img%vis()
             end do
             goto 999
         endif

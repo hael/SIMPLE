@@ -409,7 +409,7 @@ contains
                 do i=batchlims(1),batchlims(2)
                     ibatch = i - batchlims(1) + 1
                     ! normalise (read_imgbatch does not normalise)
-                    call b%imgbatch(ibatch)%norm
+                    call b%imgbatch(ibatch)%norm()
                     ! in dev=yes code, we filter before inserting into 3D vol
                     call gridprep%prep_serial_no_fft(b%imgbatch(ibatch), rec_imgs(ibatch))
                 end do

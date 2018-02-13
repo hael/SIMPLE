@@ -176,8 +176,8 @@ contains
         else
             call ctf2pspecimg(tfun, pspec_ctf, dfx, dfy, angast)
         endif
-        call pspec_ctf%norm
-        call ppspec_ref%norm
+        call pspec_ctf%norm()
+        call ppspec_ref%norm()
         call pspec_ctf%mul(imgmsk)
         pspec_half_n_half = ppspec_ref%before_after(pspec_ctf, cc_msk)
         call pspec_half_n_half%write(trim(diagfname), 1)

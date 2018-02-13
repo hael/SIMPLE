@@ -61,9 +61,8 @@ contains
         call self%bin_vol_thres
         ! add volume soft edge
         call self%cos_edge(self%edge)
-        ! apply mask to volume
-        call vol_inout%norm
-        call vol_inout%zero_background
+        ! apply mask to volume call vol_inout%norm()
+        call vol_inout%zero_background()
         call vol_inout%mul(self)
         ! the end
         if( was_ft )call vol_inout%fwd_ft

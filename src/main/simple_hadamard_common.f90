@@ -54,7 +54,7 @@ contains
         class(params), intent(inout)  :: p
         integer,       intent(in)     :: iptcl
         call read_img( b, p, iptcl )
-        call b%img%norm
+        call b%img%norm()
     end subroutine read_img_and_norm
 
     subroutine read_imgbatch_1( b, p, fromptop, ptcl_mask )
@@ -396,7 +396,7 @@ contains
         x = b%a%get(iptcl, 'x')
         y = b%a%get(iptcl, 'y')
         ! normalise
-        call img_in%norm
+        call img_in%norm()
         ! move to Fourier space
         call img_in%fwd_ft
         ! deal with CTF
@@ -486,7 +486,7 @@ contains
         real    :: xyz(3), sharg
         logical :: do_center
         ! normalise
-        call img_in%norm
+        call img_in%norm()
         do_center = (p%center .eq. 'yes')
         ! centering only performed if p%center.eq.'yes'
         if( present(center) ) do_center = do_center .and. center
@@ -673,7 +673,7 @@ contains
             return
         endif
         call b%vol%read(volfname)
-        call b%vol%norm ! because auto-normalisation on read is taken out
+        call b%vol%norm() ! because auto-normalisation on read is taken out
         xyz = b%vol%center(p%cenlp,p%msk) ! find center of mass shift
         if( arg(xyz) <= CENTHRESH )then
             do_center = .false.
@@ -703,7 +703,7 @@ contains
         ! ensure correct b%vol dim
         call b%vol%new([p%box,p%box,p%box],p%smpd)
         call b%vol%read(volfname)
-        call b%vol%norm ! because auto-normalisation on read is taken out
+        call b%vol%norm() ! because auto-normalisation on read is taken out
         if( do_center )then
             call b%vol%fwd_ft
             call b%vol%shift([xyz(1),xyz(2),xyz(3)])
@@ -936,7 +936,7 @@ contains
             !>  \brief  prepares even/odd volume for FSC/FRC calcualtion
             subroutine prepeovol( vol )
                 class(image), intent(inout) :: vol
-                call vol%norm ! because auto-normalisation on read is taken out
+                call vol%norm() ! because auto-normalisation on read is taken out
                 ! masking
                 if( cline%defined('mskfile') )then
                     ! mask provided

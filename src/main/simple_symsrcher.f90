@@ -125,7 +125,7 @@ contains
         call topview%div( real(count(labels==1)) )
         call topview%roavg(nint(ang), roavg_img)
         topview = roavg_img
-        call topview%norm
+        call topview%norm()
         call topview%mask(p%msk, 'soft')
         cylinder = 0.
         do i=1,p%box

@@ -60,7 +60,7 @@ contains
             ! clip
             call imgs_pad(ithr)%clip(imgs(i))
             ! normalise
-            call imgs(i)%norm
+            call imgs(i)%norm()
         end do
         !$omp end parallel do
         ! destruct
@@ -116,7 +116,7 @@ contains
             end do
         end do
         !$omp end parallel do
-        call rovol_pad%bwd_ft()
+        call rovol_pad%bwd_ft
         call rovol_pad%clip(rovol)
         call rovol%norm()
         call vol_pad%kill_expanded

@@ -100,13 +100,13 @@ contains
         integer,                     intent(out)   :: D, recsz     !< record size
         real, allocatable, optional, intent(out)   :: avg(:)       !< frame stack average
         class(oris),       optional, intent(inout) :: otab         !< oris table
-        character(len=*),  optional, intent(in)    :: hfun         !< which normalise pca vec 
+        character(len=*),  optional, intent(in)    :: hfun         !< which normalise pca vec
         type(image)        :: img
         real, allocatable  :: pcavec(:)
         real               :: x, y
         integer            :: n, fnum, ier, i, ldim(3)
         logical            :: err
-#include "simple_local_flags.inc" 
+#include "simple_local_flags.inc"
         call find_ldim_nptcls(fnameStack, ldim, n)
         ldim(3) = 1
         call raise_exception_imgfile( n, ldim, 'make_pattern_stack' )
@@ -177,7 +177,7 @@ contains
     end subroutine make_pattern_stack
 
     !>  \brief pad_imgfile is for padding
-    !! \param fname2pad,fname filename strings 
+    !! \param fname2pad,fname filename strings
     !! \param ldim_pad logical dimension of padding
     !! \param smpd sampling distance
     !!
@@ -500,7 +500,7 @@ contains
         do i=1,n
             call progress(i,n)
             call img%read(fname2norm, i)
-            call img%shellnorm
+            call img%shellnorm()
             call img%write(fname, i)
         end do
         call img%kill
@@ -557,7 +557,7 @@ contains
         do i=1,n
             call progress(i,n)
             call img%read(fname2neg, i)
-            call img%neg
+            call img%neg()
             call img%write(fname, i)
         end do
         call img%kill
@@ -833,7 +833,7 @@ contains
         end do
         call img%kill
     end subroutine real_filter_imgfile
-    
+
     !>  \brief  is for phase randomization
     !! \param fname2process output filename
     !! \param fname input filename
@@ -1010,7 +1010,7 @@ contains
     !! \param smpd sampling distance
     subroutine bin_imgfile( fname2process, fname, smpd, thres )
         character(len=*), intent(in) :: fname2process, fname
-        real,             intent(in) :: smpd 
+        real,             intent(in) :: smpd
         real, optional,   intent(in) :: thres
         type(image) :: img
         integer     :: n, i, ldim(3)
@@ -1063,7 +1063,7 @@ contains
         call avg%div(real(n))
         call avg%write(avgname,1)
     end subroutine make_avg_imgfile
-    
+
     !>  random_selection_from_imgfile
     !! \param fname2selfrom  output filename
     !! \param fname  input filename
@@ -1093,7 +1093,7 @@ contains
             call find_ldim_nptcls(fname2selfrom, ldim, n)
             ldim(3) = 1
             l_stktab_input = .false.
-        endif        
+        endif
         ldim_scaled = [box,box,1]
         doscale = any(ldim /= ldim_scaled)
         if( doscale ) call img_scaled%new(ldim_scaled,smpd) ! this sampling distance will be overwritten

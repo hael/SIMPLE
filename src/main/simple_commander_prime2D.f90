@@ -61,7 +61,7 @@ contains
         write(*,'(a)') '>>> GENERATING CLUSTER CENTERS'
         ! deal with the orientations
         if( cline%defined('oritab') .and. p%l_remap_classes )then
-            call b%a%remap_classes
+            call b%a%remap_classes()
             ncls_in_oritab = b%a%get_n('class')
             if( cline%defined('ncls') )then
                 if( p%ncls < ncls_in_oritab ) stop 'ERROR, inputted ncls < ncls_in_oritab; not allowed!'

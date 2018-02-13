@@ -443,7 +443,7 @@ contains
                         iprec = iprecs(batches(batch,1) + i - 1)
                         iori  = ioris(batches(batch,1)  + i - 1)
                         ! normalise and FFT
-                        call batch_imgs(i)%norm
+                        call batch_imgs(i)%norm()
                         call batch_imgs(i)%fwd_ft
                         ! apply CTF and shift
                         if( phaseplate )then
@@ -606,13 +606,13 @@ contains
                 ! (w*CTF)**2 density correction
                 call cavgs_even(istate,icls)%ctf_dens_correct(ctfsqsums_even(istate,icls))
                 call cavgs_even(istate,icls)%bwd_ft
-                call cavgs_even(istate,icls)%norm
+                call cavgs_even(istate,icls)%norm()
                 call cavgs_odd(istate,icls)%ctf_dens_correct(ctfsqsums_odd(istate,icls))
                 call cavgs_odd(istate,icls)%bwd_ft
-                call cavgs_odd(istate,icls)%norm
+                call cavgs_odd(istate,icls)%norm()
                 call cavgs_merged(istate,icls)%ctf_dens_correct(ctfsqsums_merged(istate,icls))
                 call cavgs_merged(istate,icls)%bwd_ft
-                call cavgs_merged(istate,icls)%norm
+                call cavgs_merged(istate,icls)%norm()
             end do
         end do
         !$omp end parallel do
@@ -636,8 +636,8 @@ contains
         !$omp parallel do default(shared) private(istate,icls,frc,find,find_plate) schedule(static) proc_bind(close)
         do icls=1,ncls
             do istate=1,nstates
-                call even_imgs(istate,icls)%norm
-                call odd_imgs(istate,icls)%norm
+                call even_imgs(istate,icls)%norm()
+                call odd_imgs(istate,icls)%norm()
                 if( pp%l_innermsk )then
                     call even_imgs(istate,icls)%mask(pp%msk, 'soft', inner=pp%inner, width=pp%width)
                     call odd_imgs(istate,icls)%mask(pp%msk, 'soft', inner=pp%inner, width=pp%width)

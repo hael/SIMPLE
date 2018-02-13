@@ -51,7 +51,7 @@ if( p%vis .eq. 'yes' .or. p%stats .ne. 'no' )then
                 write(*,*) 'n_nans = ', n_nans
             endif
         endif
-        if( p%vis .eq. 'yes' ) call img%vis
+        if( p%vis .eq. 'yes' ) call img%vis()
     end do
 endif
 call simple_end('**** SIMPLE_IMINFO NORMAL STOP ****')

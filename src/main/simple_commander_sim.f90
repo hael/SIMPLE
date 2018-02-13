@@ -210,7 +210,7 @@ contains
             call b%img%read(p%stk, i)
             call b%img%insert(ptcl_positions(i,:), base_image)
         end do
-        if( p%vis .eq. 'yes' ) call base_image%vis
+        if( p%vis .eq. 'yes' ) call base_image%vis()
 
         ! call base_image%vis
         ! stop
@@ -286,7 +286,7 @@ contains
             call shifted_base_image%bwd_ft
             ! add the detector noise
             call shifted_base_image%add_gauran(snr_detector)
-            if( p%vis .eq. 'yes' ) call shifted_base_image%vis
+            if( p%vis .eq. 'yes' ) call shifted_base_image%vis()
             call shifted_base_image%write('simmovie'//p%ext, i)
             ! set orientation parameters in object
             call b%a%set(1, 'dfx',    dfx)
@@ -309,7 +309,7 @@ contains
         call base_image%div(real(p%nframes))
         DebugPrint  'generated optimal average'
         call base_image%write('optimal_movie_average'//p%ext, 1)
-        if( p%vis .eq. 'yes' ) call base_image%vis
+        if( p%vis .eq. 'yes' ) call base_image%vis()
         ! output orientations
         call binwrite_oritab('simmovie_params'//trim(METADATEXT), b%a, [1,b%a%get_noris()])
         ! end gracefully

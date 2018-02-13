@@ -222,7 +222,7 @@ contains
                 do iptcl=parts(ipart,1),parts(ipart,2)
                     cnt = cnt + 1
                     call read_image( iptcl )
-                    if( p%neg .eq. 'yes' ) call img%neg
+                    if( p%neg .eq. 'yes' ) call img%neg()
                     call img%write(trim(STKPARTFBODY)//int2str_pad(ipart,p%numlen)//p%ext, cnt)
                 end do
             end do

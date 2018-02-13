@@ -48,15 +48,15 @@ do movie=1,nmovies
     nframes = imgstk%getStackSz()
     call imgstk%close
     if( debug ) write(*,*) 'number of frames: ', nframes
-    ! SUM THE FRAMES 
+    ! SUM THE FRAMES
     img_sum = 0.
     do i=1,nframes
         ! READ FRAME
         call img_frame%read(moviename,i)
-        if( p%vis .eq. 'yes' ) call img_frame%vis
+        if( p%vis .eq. 'yes' ) call img_frame%vis()
         ! AGGLOMERATE SUM
         call img_sum%add(img_frame)
-        if( p%vis .eq. 'yes' ) call img_sum%vis
+        if( p%vis .eq. 'yes' ) call img_sum%vis()
     end do
     call img_sum%write(sumfilename, 1)
     if( p%vis .eq. 'yes' ) exit

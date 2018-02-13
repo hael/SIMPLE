@@ -354,8 +354,8 @@ contains
         call even%write(trim(fname_even), del_if_exists=.true.)
         call odd%write(trim(fname_odd),   del_if_exists=.true.)
         ! always normalise before masking
-        call even%norm
-        call odd%norm
+        call even%norm()
+        call odd%norm()
         if( self%automsk )then
             call even%zero_background
             call odd%zero_background

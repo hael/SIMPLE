@@ -118,7 +118,7 @@ type, extends(commander_base) :: simsubtomo_commander
 end type simsubtomo_commander
 
 ! PRE-PROCESSING METHODS (commander_preproc)
-type, extends(commander_base) :: select_frames_commander 
+type, extends(commander_base) :: select_frames_commander
   contains
     procedure :: execute      => exec_select_frames
 end type select_frames_commander
@@ -151,14 +151,14 @@ type, extends(commander_base) :: extr_ptcls_commander
     procedure :: execute      => exec_extr_ptcls
 end type extr_ptcls_commander
 ! PRIME2D METHODS (commander_prime2D)
-type, extends(commander_base) :: prime2D_init_commander 
+type, extends(commander_base) :: prime2D_init_commander
   contains
     procedure :: execute      => exec_prime2D_init
-end type prime2D_init_commander 
-type, extends(commander_base) :: prime2D_commander 
+end type prime2D_init_commander
+type, extends(commander_base) :: prime2D_commander
   contains
     procedure :: execute      => exec_prime2D
-end type prime2D_commander 
+end type prime2D_commander
 type, extends(commander_base) :: cavgassemble_commander
   contains
     procedure :: execute      => exec_cavgassemble
@@ -185,7 +185,7 @@ type, extends(commander_base) :: nspace_commander
  contains
    procedure :: execute      => exec_nspace
 end type nspace_commander
-type, extends(commander_base) :: prime3D_init_commander 
+type, extends(commander_base) :: prime3D_init_commander
   contains
     procedure :: execute      => exec_prime3D_init
 end type prime3D_init_commander
@@ -385,9 +385,9 @@ contains
 !         ! end gracefully
 !         call simple_end('**** SIMPLE_TEMPLATE NORMAL STOP ****')
 !     end subroutine exec_template
-      
+
     ! SIMULATORS
-    
+
     subroutine exec_simimgs( self, cline )
         use simple_ori,      only: ori
         use simple_rnd,      only: ran3
@@ -513,7 +513,7 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_SIMIMGS NORMAL STOP ****')
     end subroutine exec_simimgs
-    
+
     subroutine exec_simmovie( self, cline )
         use simple_ori,         only: ori
         use simple_math,        only: deg2rad, gen_ptcl_pos
@@ -642,7 +642,7 @@ contains
             call shifted_base_image%bwd_ft
             ! add the detector noise
             call shifted_base_image%add_gauran(snr_detector)
-            if( p%vis .eq. 'yes' ) call shifted_base_image%vis
+            if( p%vis .eq. 'yes' ) call shifted_base_image%vis()
             call shifted_base_image%write('simmovie'//p%ext, i)
             ! set orientation parameters in object
             call b%a%set(1, 'dfx',    dfx)
@@ -671,7 +671,7 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_SIMMOVIE NORMAL STOP ****')
     end subroutine exec_simmovie
-    
+
     subroutine exec_simsubtomo( self, cline )
         use simple_image, only: image
         use simple_ori,   only: ori
@@ -700,7 +700,7 @@ contains
     end subroutine exec_simsubtomo
 
     ! PRE-PROCESSING METHODS
-    
+
     subroutine exec_select_frames( self, cline )
         use simple_imgfile, only: imgfile
         use simple_image,   only: image
@@ -767,7 +767,7 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_SELECT_FRAMES NORMAL STOP ****')
     end subroutine exec_select_frames
-    
+
     subroutine exec_boxconvs( self, cline )
         use simple_image, only: image
         class(boxconvs_commander), intent(inout) :: self
@@ -827,7 +827,7 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_BOXCONVS NORMAL STOP ****')
     end subroutine exec_boxconvs
-    
+
     subroutine exec_integrate_movies(self,cline)
         use simple_imgfile, only: imgfile
         use simple_image,   only: image
@@ -919,7 +919,7 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_INTEGRATE_MOVIES NORMAL STOP ****')
     end subroutine exec_integrate_movies
-    
+
     subroutine exec_powerspecs( self, cline )
         use simple_imgfile, only: imgfile
         use simple_image,   only: image
@@ -987,7 +987,7 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_INTEGRATE_MOVIES NORMAL STOP ****')
     end subroutine exec_powerspecs
-    
+
     subroutine exec_unblur_movies( self, cline )
         use simple_unblur   ! singleton
         use simple_imgfile, only: imgfile
@@ -1119,7 +1119,7 @@ contains
         !shutting down the timers
         ! call stop_Alltimers_cpu()
     end subroutine exec_unblur_movies
-    
+
     subroutine exec_stack_powerspecs( self, cline )
         use simple_imgfile, only: imgfile
         use simple_image,   only: image
@@ -1131,7 +1131,7 @@ contains
         character(len=STDLEN), allocatable :: specnames(:)
         type(image)                        :: mask, tmp
         real                               :: mm(2)
-        logical, parameter                 :: debug = .false.    
+        logical, parameter                 :: debug = .false.
         p = params(cline,checkdistr=.false.)             ! constants & derived constants produced
         call b%build_general_tbox(p,cline,do3d=.false.) ! general stuff built
         call read_filetable(p%filetab, specnames)
@@ -1156,7 +1156,7 @@ contains
                 write(*,*) 'inputted spec file does not exist: ', trim(adjustl(specnames(ispec)))
             endif
             call b%img%read(specnames(ispec))
-            call b%img%clip(tmp)  
+            call b%img%clip(tmp)
             mm = tmp%minmax()
             if( debug ) print *, 'min/max: ', mm(1), mm(2)
             call tmp%write(p%outstk, ispec)
@@ -1242,7 +1242,7 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_SELECT NORMAL STOP ****')
     end subroutine exec_select
-    
+
     subroutine exec_extr_ptcls( self, cline )
         use simple_nrtxtfile, only: nrtxtfile
         use simple_imgfile,   only: imgfile
@@ -1305,7 +1305,7 @@ contains
         ! count the number of particles & find ldim
         nptcls = 0
         do movie=fromto(1),fromto(2)
-            if( file_exists(boxfilenames(movie)) )then 
+            if( file_exists(boxfilenames(movie)) )then
                 call boxfile%new(boxfilenames(movie), 1)
                 ndatlines = boxfile%get_ndatalines()
                 nptcls = nptcls+ndatlines
@@ -1329,12 +1329,12 @@ contains
         ! loop over exposures (movies)
         niter = 0
         do movie=fromto(1),fromto(2)
-            
+
             ! show progress
             if( niter > 1 )then
                 call progress(niter,ntot)
             endif
-            
+
             ! get movie index (parsing the number string from the filename)
             call fname2ind(trim(adjustl(movienames(movie))), movie_ind)
 
@@ -1342,13 +1342,13 @@ contains
             ndatlines = 0
             if( file_exists(boxfilenames(movie)) )then
                 call boxfile%new(boxfilenames(movie), 1)
-                ndatlines = boxfile%get_ndatalines()        
+                ndatlines = boxfile%get_ndatalines()
             endif
             if( ndatlines == 0 ) cycle
-            
+
             ! update iteration counter (has to be after the cycle statements or suffer bug!!!)
             niter = niter+1
-            
+
             ! read box data
             allocate( boxdata(ndatlines,boxfile%get_nrecs_per_line()),&
             nninds(ndatlines), nndists(ndatlines), pinds(ndatlines), stat=alloc_stat )
@@ -1360,7 +1360,7 @@ contains
                     stop 'Only square windows are currently allowed!'
                 endif
             end do
-            
+
             ! create particle index list and set movie index
             if( .not. cline%defined('box') ) p%box = nint(boxdata(1,3)) ! use the box size from the box file
             do j=1,ndatlines
@@ -1372,7 +1372,7 @@ contains
                     pinds(j) = 0
                 endif
             end do
-            
+
             ! create nearest neighbor structure
             if( p%mapnn .eq. 'yes' )then
                 if( ndatlines > 1 )then
@@ -1397,7 +1397,7 @@ contains
                     end do
                 endif
             endif
-            
+
             ! check box parsing
             if( .not. cline%defined('box') )then
                 if( niter == 1 )then
@@ -1415,12 +1415,12 @@ contains
                 endif
             endif
             if( debug ) write(*,*) 'did check box parsing'
-            
+
             ! get number of frames from stack
             call find_ldim_nptcls(movienames(movie), lfoo, nframes )
             numlen  = len(int2str(nframes))
             if( debug ) write(*,*) 'number of frames: ', nframes
-            
+
             ! build general objects
             if( niter == 1 )then
                 call b%build_general_tbox(p,cline,do3d=.false.)
@@ -1461,13 +1461,13 @@ contains
                 end do
                 if( debug ) write(*,*) 'did set CTF parameters dfx/dfy/angast/ctfres: ', dfx, dfy, angast, ctfres
             endif
-            
+
             ! loop over frames
             do frame=1,nframes
-                
+
                 ! read frame
                 call img_frame%read(movienames(movie),frame)
-                
+
                 if( nframes > 1 )then
                     ! shift frame according to global shift (drift correction)
                     if( b%a%isthere(movie, 'x'//int2str(frame)) .and. b%a%isthere(movie, 'y'//int2str(frame))  )then
@@ -1481,7 +1481,7 @@ contains
                         stop 'use simple_unblur_movies if you want to integrate frames'
                     endif
                 endif
-                
+
                 ! extract the particle images & normalize
                 if( nframes > 1 )then
                     framestack = 'framestack'//int2str_pad(frame,numlen)//p%ext
@@ -1492,10 +1492,10 @@ contains
                 do j=1,ndatlines ! loop over boxes
                     if( pinds(j) > 0 )then
                         ! modify coordinates if change in box (shift by half)
-                        if( debug ) print *, 'original coordinate: ', boxdata(j,1:2) 
+                        if( debug ) print *, 'original coordinate: ', boxdata(j,1:2)
                         if( orig_box /= p%box ) boxdata(j,1:2) = boxdata(j,1:2)-real(p%box-orig_box)/2.
-                        if( debug ) print *, 'shifted coordinate: ', boxdata(j,1:2) 
-                        ! extract the window    
+                        if( debug ) print *, 'shifted coordinate: ', boxdata(j,1:2)
+                        ! extract the window
                         call img_frame%window(nint(boxdata(j,1:2)), p%box, b%img)
                         if( p%neg .eq. 'yes' ) call b%img%neg
                         pixels = b%img%extr_pixels(mskimg)
@@ -1523,7 +1523,7 @@ contains
                     endif
                 end do
             end do
-            
+
             if( nframes > 1 )then
                 ! create the sum and normalize it
                 sumstack = 'sumstack'//p%ext
@@ -1561,7 +1561,7 @@ contains
                     endif
                 end do
             endif
-            
+
             ! write output
             do j=1,ndatlines ! loop over boxes
                 if( pinds(j) > 0 )then
@@ -1572,7 +1572,7 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_EXTR_PTCLS NORMAL STOP ****')
         contains
-            
+
             function box_inside( ldim, coord, box ) result( inside )
                 integer, intent(in) :: ldim(3), coord(2), box
                 integer             :: fromc(2), toc(2)
@@ -1587,9 +1587,9 @@ contains
                 if( toc(1) > ldim(1) .or. toc(2) > ldim(2) ) inside = .false.
             end function
     end subroutine exec_extr_ptcls
-    
+
     ! PRIME2D METHODS
-    
+
     subroutine exec_prime2D_init( self, cline )
         use simple_hadamard2D_matcher, only: prime2D_assemble_sums, prime2D_write_sums
         class(prime2D_init_commander), intent(inout) :: self
@@ -1629,7 +1629,7 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_PRIME2D_INIT NORMAL STOP ****')
     end subroutine exec_prime2D_init
-    
+
     subroutine exec_prime2D( self, cline )
         use simple_hadamard2D_matcher, only: prime2D_exec
         class(prime2D_commander), intent(inout) :: self
@@ -1661,7 +1661,7 @@ contains
         ! execute
         if( cline%defined('part') )then
             if( .not. cline%defined('outfile') ) stop 'need unique output file for parallel jobs'
-            call prime2D_exec(b, p, cline, 0, converged) ! partition or not, depending on 'part'       
+            call prime2D_exec(b, p, cline, 0, converged) ! partition or not, depending on 'part'
         else
             startit = 1
             if( cline%defined('startit') ) startit = p%startit
@@ -1680,7 +1680,7 @@ contains
         ! shutting down timers
         ! call stop_Alltimers_cpu()
     end subroutine exec_prime2D
-    
+
     subroutine exec_cavgassemble( self, cline )
         use simple_hadamard2D_matcher, only: prime2D_assemble_sums_from_parts, prime2D_write_sums
         class(cavgassemble_commander), intent(inout) :: self
@@ -1695,7 +1695,7 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_CAVGASSEMBLE NORMAL STOP ****')
     end subroutine exec_cavgassemble
-    
+
     subroutine exec_check2D_conv( self, cline )
         class(check2D_conv_commander), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
@@ -1709,7 +1709,7 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_CHECK2D_CONV STOP ****')
     end subroutine exec_check2D_conv
-    
+
     subroutine exec_rank_cavgs( self, cline )
         use simple_oris, only: oris
         class(rank_cavgs_commander), intent(inout) :: self
@@ -1721,20 +1721,20 @@ contains
         p = params(cline)                   ! parameters generated
         call b%build_general_tbox(p, cline) ! general objects built
         p%ncls   = p%nptcls
-        p%nptcls = nlines(p%oritab) 
+        p%nptcls = nlines(p%oritab)
         call b%a%new(p%nptcls)
         call b%a%read(p%oritab)
         order = b%a%order_cls()
         do iclass=1,p%ncls
-            write(*,'(a,1x,i5,1x,a,i5)') 'CLASS:', order(iclass), 'POP:', b%a%get_clspop(order(iclass)) 
+            write(*,'(a,1x,i5,1x,a,i5)') 'CLASS:', order(iclass), 'POP:', b%a%get_clspop(order(iclass))
             call b%img%read(p%stk, order(iclass))
             call b%img%write(p%outstk, iclass)
         end do
         call simple_end('**** SIMPLE_RANK_CAVGS NORMAL STOP ****')
     end subroutine exec_rank_cavgs
-    
+
     ! PRIME3D METHODS
-    
+
     subroutine exec_resrange( self, cline )
         use simple_hadamard3D_matcher, only: prime3D_find_resrange
         class(resrange_commander), intent(inout) :: self
@@ -1763,7 +1763,7 @@ contains
         !shutting down the timers
         call stop_Alltimers_cpu()
     end subroutine exec_resrange
-    
+
     subroutine exec_npeaks( self, cline )
         use simple_oris, only: oris
         class(npeaks_commander), intent(inout) :: self
@@ -1777,7 +1777,7 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_NPEAKS NORMAL STOP ****')
     end subroutine exec_npeaks
-    
+
     subroutine exec_nspace(self,cline)
         use simple_math, only: resang
         use simple_oris, only: oris
@@ -1796,7 +1796,7 @@ contains
         end do
         call simple_end('**** SIMPLE_NSPACE NORMAL STOP ****')
     end subroutine exec_nspace
-    
+
     subroutine exec_prime3D_init( self, cline )
         use simple_hadamard3D_matcher, only: gen_random_model, prime3D_find_resrange
         class(prime3D_init_commander), intent(inout) :: self
@@ -1842,7 +1842,7 @@ contains
         ! shutting down the timers
         call stop_Alltimers_cpu()
     end subroutine exec_prime3D_init
-    
+
     subroutine exec_multiptcl_init( self, cline )
         use simple_rec_master, only: exec_rec, exec_eorec
         class(multiptcl_init_commander), intent(inout) :: self
@@ -1876,7 +1876,7 @@ contains
         if( p%zero .eq. 'yes' ) call b%a%set_all('corr', 0.)
         call b%a%write('multiptcl_startdoc.txt')
         ! end gracefully
-        call simple_end('**** SIMPLE_MULTIPTCL_INIT NORMAL STOP ****')    
+        call simple_end('**** SIMPLE_MULTIPTCL_INIT NORMAL STOP ****')
 
           contains
 
@@ -1891,7 +1891,7 @@ contains
             end subroutine errify_oris
 
     end subroutine exec_multiptcl_init
-    
+
     subroutine exec_prime3D( self, cline )
         use simple_hadamard3D_matcher, only: prime3D_exec, prime3D_find_resrange
         use simple_file_utils
@@ -1946,7 +1946,7 @@ contains
         endif
         call b%build_general_tbox(p, cline)   ! general objects built
         if( .not. cline%defined('eo') ) p%eo = 'no' ! default
-        if( p%eo .eq. 'yes' ) p%dynlp = 'no'    
+        if( p%eo .eq. 'yes' ) p%dynlp = 'no'
         if( cline%defined('lp') .or. cline%defined('find')&
         .or. p%eo .eq. 'yes' .or. p%dynlp .eq. 'yes' )then
             ! alles ok!
@@ -2042,7 +2042,7 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_CONT3D NORMAL STOP ****')
     end subroutine exec_cont3D
-    
+
     subroutine exec_check3D_conv( self, cline )
         use simple_math,    only: rad2deg, get_lplim
         class(check3D_conv_commander), intent(inout) :: self
@@ -2100,9 +2100,9 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_CHECK3D_CONV STOP ****')
     end subroutine exec_check3D_conv
-    
+
     ! COMMON-LINES METHODS
-    
+
     subroutine exec_comlin_smat( self, cline )
         use simple_comlin_sym  ! singleton
         use simple_comlin_corr ! singleton
@@ -2218,7 +2218,7 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_COMLIN_SMAT NORMAL STOP ****')
     end subroutine exec_comlin_smat
-    
+
     subroutine exec_symsrch( self, cline )
         use simple_oris,      only: oris
         use simple_symsrcher, only: symsrch_master
@@ -2320,7 +2320,7 @@ contains
         call b%build_general_tbox(p, cline) ! general objects built
         write(*,'(A,F8.2,A)') '>>> AUTOMASK LOW-PASS:',        p%amsklp, ' ANGSTROMS'
         write(*,'(A,I3,A)')   '>>> AUTOMASK SOFT EDGE WIDTH:', p%edge,   ' PIXELS'
-        p%outstk = add2fbody(p%stk, p%ext, 'msk') 
+        p%outstk = add2fbody(p%stk, p%ext, 'msk')
         do iptcl=1,p%nptcls
             call b%img%read(p%stk, iptcl)
             call automask2D(b%img, p, b%img_msk)
@@ -2330,7 +2330,7 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_AUTOMASK2D NORMAL STOP ****')
     end subroutine exec_automask2D
-    
+
     subroutine exec_automask3D( self, cline )
         use simple_masker, only: automask
         class(automask3D_commander), intent(inout) :: self
@@ -2352,7 +2352,7 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_AUTOMASK3D NORMAL STOP ****')
     end subroutine exec_automask3D
-    
+
     ! RECONSTRUCTION METHODS
 
     subroutine exec_eo_recvol( self, cline )
@@ -2366,7 +2366,7 @@ contains
         call b%build_eo_rec_tbox(p)         ! eo_reconstruction objs built
         call exec_eorec(b, p, cline)
         ! end gracefully
-        call simple_end('**** SIMPLE_EO_RECVOL NORMAL STOP ****')    
+        call simple_end('**** SIMPLE_EO_RECVOL NORMAL STOP ****')
     end subroutine exec_eo_recvol
 
     subroutine exec_eo_volassemble( self, cline )
@@ -2424,7 +2424,7 @@ contains
         write(0,'(a)') "GENERATED VOLUMES: recvol*.ext"
         ! end gracefully
         call simple_end('**** SIMPLE_EO_VOLASSEMBLE NORMAL STOP ****')
-        
+
         contains
 
             subroutine assemble( fbody )
@@ -2433,7 +2433,7 @@ contains
                 ! sum the Fourier coefficients
                 call b%eorecvol%sum(eorecvol_read)
             end subroutine
-            
+
             subroutine normalize( recnam )
                 use simple_image, only: image
                 character(len=*), intent(in)  :: recnam
@@ -2445,7 +2445,7 @@ contains
                 call b%vol%write(recnam//p%ext, del_if_exists=.true.)
             end subroutine
     end subroutine exec_eo_volassemble
-    
+
     subroutine exec_recvol( self, cline )
         use simple_rec_master, only: exec_rec
         class(recvol_commander), intent(inout) :: self
@@ -2457,9 +2457,9 @@ contains
         call b%build_rec_tbox(p)            ! reconstruction objects built
         call exec_rec(b, p, cline)
         ! end gracefully
-        call simple_end('**** SIMPLE_RECVOL NORMAL STOP ****')    
+        call simple_end('**** SIMPLE_RECVOL NORMAL STOP ****')
     end subroutine exec_recvol
-    
+
     subroutine exec_volassemble( self, cline )
         use simple_reconstructor, only: reconstructor
         class(volassemble_commander), intent(inout) :: self
@@ -2521,7 +2521,7 @@ contains
                             else
                                 p%vols(s) = fbody//'_even'//p%ext
                                 p%masks(s) = 'rho_'//fbody//'_even'//p%ext
-                            endif   
+                            endif
                         else
                             p%vols(s)  = fbody//p%ext
                             p%masks(s) = 'rho_'//fbody//p%ext
@@ -2551,7 +2551,7 @@ contains
                 character(len=*), intent(in) :: kernam
                 inquire(FILE=recnam, EXIST=here(1))
                 inquire(FILE=kernam, EXIST=here(2))
-                if( all(here) )then     
+                if( all(here) )then
                     call recvol_read%read(recnam)
                     if( debug )then
                         if( recvol_read%contains_nans() )then
@@ -2568,7 +2568,7 @@ contains
                     if( debug )then
                         if( b%recvol%contains_nans() )then
                             write(*,*) 'WARRNING! summed image part contains NaN:s'
-                        endif 
+                        endif
                         if( b%recvol%rho_contains_nans() )then
                             write(*,*) 'WARNING! summed kernel part contains NaN:s'
                         endif
@@ -2579,7 +2579,7 @@ contains
                     return
                 endif
             end subroutine
-    
+
             subroutine normalize( recnam )
                 character(len=*), intent(in) :: recnam
                 call b%recvol%sampl_dens_correct
@@ -2588,9 +2588,9 @@ contains
                 call b%vol%write(recnam, del_if_exists=.true.)
             end subroutine
     end subroutine exec_volassemble
-    
+
     ! CHECKER METHODS
-    
+
     subroutine exec_check_box( self, cline )
         class(check_box_commander), intent(inout) :: self
         class(cmdline),             intent(inout) :: cline
@@ -2610,7 +2610,7 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_CHECK_NPTCLS NORMAL STOP ****')
     end subroutine exec_check_nptcls
-    
+
     subroutine exec_iminfo( self, cline)
         use simple_image,   only: image
         use simple_imgfile, only: imgfile
@@ -2641,14 +2641,14 @@ contains
                         write(*,*) 'n_nans = ', n_nans
                     endif
                 endif
-                if( p%vis .eq. 'yes' ) call img%vis
+                if( p%vis .eq. 'yes' ) call img%vis()
             end do
         endif
         call simple_end('**** SIMPLE_IMINFO NORMAL STOP ****')
     end subroutine exec_iminfo
-    
+
     ! VOLOPS METHODS
-    
+
     subroutine exec_cenvol( self, cline )
         class(cenvol_commander), intent(inout) :: self
         class(cmdline),          intent(inout) :: cline
@@ -2675,7 +2675,7 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_CENVOL NORMAL STOP ****')
     end subroutine exec_cenvol
-    
+
     subroutine exec_postproc_vol(self,cline)
         use simple_estimate_ssnr ! singleton
         use simple_masker,       only: automask
@@ -2706,7 +2706,7 @@ contains
                 pssnr_ctfsq3D = 1.
             endif
             allocate(pssnr3D(size(fsc)), sqrtssnr(size(fsc)))
-            pssnr3D = estimate_pssnr3D(p%avr, fsc)*pssnr_ctfsq3D    
+            pssnr3D = estimate_pssnr3D(p%avr, fsc)*pssnr_ctfsq3D
             optlp = ssnr2optlp(pssnr3D)
         else
             write(*,*) 'FSC file: ', trim(p%fsc), ' not in cwd'
@@ -2730,7 +2730,7 @@ contains
         call b%vol%write(p%outvol)
         call simple_end('**** SIMPLE_POSTPROC_VOL NORMAL STOP ****')
     end subroutine exec_postproc_vol
-    
+
     subroutine exec_projvol( self, cline )
         use simple_image, only: image
         class(projvol_commander), intent(inout) :: self
@@ -2824,7 +2824,7 @@ contains
         call b%a%write('projvol_oris.txt')
         call simple_end('**** SIMPLE_PROJVOL NORMAL STOP ****')
     end subroutine exec_projvol
-    
+
     subroutine exec_volaverager( self, cline )
         use simple_image, only: image
         class(volaverager_commander), intent(inout) :: self
@@ -2893,13 +2893,13 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_VOLAVERAGER NORMAL STOP ****')
     end subroutine exec_volaverager
-    
+
     subroutine exec_volops( self, cline )
         class(volops_commander), intent(inout) :: self
         class(cmdline),          intent(inout) :: cline
         type(params) :: p
         type(build)  :: b
-        logical      :: here 
+        logical      :: here
         p = params(cline,checkdistr=.false.)        ! constants & derived constants produced, mode=2
         call b%build_general_tbox(p, cline)         ! general objects built
         call b%vol%new([p%box,p%box,p%box], p%smpd) ! reallocate vol (boxmatch issue)
@@ -2925,7 +2925,7 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_VOLOPS NORMAL STOP ****')
     end subroutine exec_volops
-    
+
     subroutine exec_volume_smat( self, cline )
         use simple_image, only: image
         class(volume_smat_commander), intent(inout) :: self
@@ -2981,7 +2981,7 @@ contains
             close(funit)
             deallocate(fname)
             ! make real-space mask if needed
-            if( .not. cline%defined('lp') .and. cline%defined('msk') )then 
+            if( .not. cline%defined('lp') .and. cline%defined('msk') )then
                 call mskimg%disc(vol1%get_ldim(), p%smpd, p%msk, npix)
             endif
             ! calculate the similarities
@@ -3048,13 +3048,13 @@ contains
             endif
             close(funit)
             deallocate(corrmat)
-        endif     
+        endif
         ! end gracefully
-        call simple_end('**** SIMPLE_VOLUME_SMAT NORMAL STOP ****')        
+        call simple_end('**** SIMPLE_VOLUME_SMAT NORMAL STOP ****')
     end subroutine exec_volume_smat
-    
+
     ! MISCELLANOUS METHODS
-    
+
     subroutine exec_binarise( self, cline )
         class(binarise_commander), intent(inout) :: self
         class(cmdline),            intent(inout) :: cline
@@ -3086,9 +3086,9 @@ contains
         endif
         ! end gracefully
         call simple_end('**** SIMPLE_BINARISE NORMAL STOP ****')
-        
+
         contains
-            
+
             subroutine doit( img_or_vol )
                 use simple_image, only: image
                 class(image), intent(inout) :: img_or_vol
@@ -3109,7 +3109,7 @@ contains
                 if( cline%defined('edge') ) call img_or_vol%cos_edge(p%edge)
                 if( cline%defined('neg')  ) call img_or_vol%bin_inv
             end subroutine
-                
+
     end subroutine exec_binarise
 
     subroutine exec_cluster_smat( self, cline )
@@ -3168,7 +3168,7 @@ contains
             validinds(ncls) = avg_ratio/real(NRESTARTS)
         end do
         ncls_stop = 0
-        done = .false. 
+        done = .false.
         do ncls=2,p%ncls
             write(*,'(a,1x,f9.3,8x,a,1x,i3)') 'COHESION/SEPARATION RATIO INDEX: ', validinds(ncls), ' NCLS: ', ncls
             call b%a%read('shc_clustering_ncls'//int2str_pad(ncls,numlen)//'.txt')
@@ -3193,7 +3193,7 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_CLUSTER_SMAT NORMAL STOP ****')
     end subroutine exec_cluster_smat
-    
+
     subroutine exec_converter( self, cline )
         class(converter_commander), intent(inout) :: self
         class(cmdline),             intent(inout) :: cline
@@ -3207,7 +3207,7 @@ contains
                 call progress(iptcl, p%nptcls)
                 call b%img%read(p%stk, iptcl)
                 call b%img%write(p%outstk, iptcl)
-            end do 
+            end do
         else if( cline%defined('vol1') )then
             call b%vol%read(p%vols(1))
             call b%img%write(p%outvol)
@@ -3256,7 +3256,7 @@ contains
                     call apply_ctf_imgfile(p%stk, p%outstk, b%a, p%smpd, b%tfun, 'abs')
                 case( 'wiener' )
                     print *, 'DOING THE WIENER THING'
-                    call apply_wiener_imgfile(p%stk, p%outstk, b%a, p%smpd, b%tfun)    
+                    call apply_wiener_imgfile(p%stk, p%outstk, b%a, p%smpd, b%tfun)
                 case DEFAULT
                     stop 'Unknown ctf argument'
             end select
@@ -3372,7 +3372,7 @@ contains
                 deallocate(moviename)
             end do
         else
-            do imrc=1,nmrcs 
+            do imrc=1,nmrcs
                 read(funit_mrc,'(a256)') mrcfnam
                 call frameimg%read(mrcfnam,1,readhead=.false.)
                 call frameimg%write(mrcfnam,1)
@@ -3382,7 +3382,7 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_GATANMRC2MRC NORMAL STOP ****')
     end subroutine exec_gatanmrc2mrc
-    
+
     subroutine exec_image_smat(self, cline)
         use simple_corrmat  ! singleton
         use simple_ori,     only: ori
@@ -3425,7 +3425,7 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_IMAGE_SMAT NORMAL STOP ****')
     end subroutine exec_image_smat
-    
+
     subroutine exec_map2ptcls( self, cline )
         use simple_oris,    only: oris
         use simple_ori,     only: ori
@@ -3435,7 +3435,7 @@ contains
         class(cmdline),             intent(inout) :: cline
         type state_organiser
             integer, allocatable :: particles(:)
-            integer              :: cls_orig = 0 
+            integer              :: cls_orig = 0
             integer              :: cls_sel  = 0
             integer              :: istate   = 0
             type(ori)            :: ori3d
@@ -3474,7 +3474,7 @@ contains
         endif
         if( cline%defined('doclist') )then
             if( .not. cline%defined('comlindoc') )then
-                if( nlines(p%doclist) /= 1 ) stop 'need a comlindoc together with statelist'        
+                if( nlines(p%doclist) /= 1 ) stop 'need a comlindoc together with statelist'
             endif
         endif
         if( cline%defined('comlindoc') .and. cline%defined('oritab2') ) stop 'either comlindoc or oritab2 can be inputted, not both'
@@ -3560,7 +3560,7 @@ contains
                 labeler(isel)%istate = nint(labeler(isel)%ori3d%get('state'))
                 corr                 = labeler(isel)%ori3d%get('corr')
                 do iptcl=1,size(labeler(isel)%particles)
-                    ! get particle index 
+                    ! get particle index
                     pind = labeler(isel)%particles(iptcl)
                     ! get 2d ori
                     ori2d = b%a%get_ori(pind)
@@ -3568,7 +3568,7 @@ contains
                         call ori2d%set('x', p%mul*ori2d%get('x'))
                         call ori2d%set('y', p%mul*ori2d%get('y'))
                     endif
-                    ! transfer original parameters in b%a 
+                    ! transfer original parameters in b%a
                     ori_comp = b%a%get_ori(pind)
                     ! compose ori3d and ori2d
                     call labeler(isel)%ori3d%compose3d2d(ori2d, ori_comp)
@@ -3737,7 +3737,7 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_NORM NORMAL STOP ****')
     end subroutine exec_norm
-   
+
     subroutine exec_orisops(self,cline)
         use simple_ori,  only: ori
         use simple_oris, only: oris
@@ -3814,7 +3814,7 @@ contains
                 call orientation%new
                 call orientation%e1set(p%e1)
                 call orientation%e2set(p%e2)
-                call orientation%e3set(p%e3) 
+                call orientation%e3set(p%e3)
                 if( cline%defined('state') )then
                     do i=1,b%a%get_noris()
                         s = nint(b%a%get(i, 'state'))
@@ -3830,7 +3830,7 @@ contains
                 call b%a%mul_shifts(p%mul)
             endif
             if( p%zero  .eq. 'yes' ) call b%a%zero_shifts
-            if( p%plot  .eq. 'yes' )then ! plot polar vectors                          
+            if( p%plot  .eq. 'yes' )then ! plot polar vectors
                 do i=1,b%a%get_noris()
                     normal = b%a%get_normal(i)
                     write(*,'(1x,f7.2,3x,f7.2)') normal(1), normal(2)
@@ -3885,7 +3885,7 @@ contains
                         call b%a%set_ori(cnt, orientation)
                     end do
                 end do
-                if( p%zero .ne. 'yes' ) call b%a%rnd_inpls(p%trs)   
+                if( p%zero .ne. 'yes' ) call b%a%rnd_inpls(p%trs)
             else if( cline%defined('ndiscrete') )then
                 if( p%ndiscrete > 0 )then
                     call b%a%rnd_oris_discrete(p%ndiscrete, p%nsym, p%eullims)
@@ -3895,7 +3895,7 @@ contains
                 call b%a%spiral(p%nsym, p%eullims)
                 call b%a%rnd_inpls(p%trs)
             else
-                call b%a%rnd_oris(p%trs) 
+                call b%a%rnd_oris(p%trs)
             endif
             if( p%nstates > 1 ) call b%a%rnd_states(p%nstates)
             if( cline%defined('astigerr') )then
@@ -3907,7 +3907,7 @@ contains
         call b%a%write(p%outfile)
         999 call simple_end('**** SIMPLE_ORISOPS NORMAL STOP ****')
     end subroutine exec_orisops
-    
+
     subroutine exec_print_fsc(self,cline)
         use simple_math,    only: get_resolution, get_lplim
         use simple_image,   only: image
@@ -3921,9 +3921,9 @@ contains
         real              :: res0143, res05
         p = params(cline) ! parameters generated
         call img%new([p%box,p%box,1], p%smpd)
-        res = img%get_res() 
+        res = img%get_res()
         fsc = file2rarr(p%fsc)
-        do k=1,size(fsc) 
+        do k=1,size(fsc)
         write(*,'(A,1X,F6.2,1X,A,1X,F15.3)') '>>> RESOLUTION:', res(k), '>>> FSC:', fsc(k)
         end do
         ! get & print resolution
@@ -3935,7 +3935,7 @@ contains
 
         return
     end subroutine exec_print_fsc
-    
+
     subroutine exec_res( self, cline )
         class(res_commander), intent(inout) :: self
         class(cmdline),       intent(inout) :: cline
@@ -3945,7 +3945,7 @@ contains
         lp = (real(p%box-1)*p%smpd)/real(p%find)
         write(*,'(A,1X,f7.2)') '>>> LOW-PASS LIMIT:', lp
     end subroutine exec_res
-    
+
     subroutine exec_scale( self, cline )
         use simple_procimgfile, only: resize_and_clip_imgfile, resize_imgfile, clip_imgfile
         use simple_image,       only: image
@@ -4009,13 +4009,13 @@ contains
             if( cline%defined('clip') )then
                 ! Clipping
                 call vol2%new([p%clip,p%clip,p%clip],p%smpd)
-                if( p%clip < p%box )then 
+                if( p%clip < p%box )then
                     call b%vol%clip(vol2)
                 else
                     if( cline%defined('msk') )then
-                        call b%vol%stats( 'background', ave, sdev, var, med, p%msk ) 
+                        call b%vol%stats( 'background', ave, sdev, var, med, p%msk )
                     else
-                        call b%vol%stats( 'background', ave, sdev, var, med ) 
+                        call b%vol%stats( 'background', ave, sdev, var, med )
                     endif
                     call b%vol%pad(vol2, backgr=med)
                 endif
@@ -4023,7 +4023,7 @@ contains
             endif
             if( p%outvol .ne. '' )call b%vol%write(p%outvol, del_if_exists=.true.)
         else
-            stop 'SIMPLE_SCALE needs input image(s) or volume!'          
+            stop 'SIMPLE_SCALE needs input image(s) or volume!'
         endif
         ! end gracefully
         call simple_end('**** SIMPLE_SCALE NORMAL STOP ****')
@@ -4211,7 +4211,7 @@ contains
         if( p%vis .eq. 'yes' )then
             do i=1,p%nptcls
                 call img%read(p%stk, i)
-                call img%vis
+                call img%vis()
             end do
             goto 999
         endif
@@ -4301,7 +4301,7 @@ contains
     end subroutine exec_tseries_split
 
     ! PARALLEL PROCESSING METHODS
-    
+
     subroutine exec_merge_algndocs( self, cline )
         use simple_oris, only: oris
         class(merge_algndocs_commander), intent(inout) :: self
@@ -4345,7 +4345,7 @@ contains
                 endif
             endif
             ! calculate the number of all entries
-            nentries_all = istop-istart+1 
+            nentries_all = istop-istart+1
             ! calculate the actual number of entries
             inquire(FILE=fname, EXIST=here)
             if( here )then
@@ -4384,7 +4384,7 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_MERGE_ALGNDOCS NORMAL STOP ****')
     end subroutine exec_merge_algndocs
-    
+
     subroutine exec_merge_similarities( self, cline )
         use simple_map_reduce, only: merge_similarities_from_parts
         class(merge_similarities_commander), intent(inout) :: self

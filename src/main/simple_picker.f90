@@ -7,7 +7,7 @@ use simple_image,        only: image
 implicit none
 
 public :: init_picker, exec_picker, kill_picker
-private 
+private
 
 ! PEAK STATS INDICES
 integer,          parameter   :: CC2REF   = 1
@@ -51,10 +51,10 @@ contains
         allocchk('picker;init, 1')
         allocate(refsname, source=trim(refsfname), stat=alloc_stat)
         allocchk('picker;init, 2')
-        boxname = remove_abspath( fname_new_ext(micname,'box') )   
+        boxname = remove_abspath( fname_new_ext(micname,'box') )
         if( present(dir_out) )boxname = trim(dir_out)//trim(boxname)
         smpd = smpd_in
-        lp   = 20.0 
+        lp   = 20.0
         if( present(lp_in) ) lp = lp_in
         ndev = 2.0
         if( present(ndev_in)) ndev = ndev_in
@@ -136,7 +136,7 @@ contains
             call gaussimg%gauimg2D(sigma, sigma)
             ! call gaussimg%write('gaussimg.mrc', 1)
             call gaussimg%fwd_ft
-            call gaussimg%neg
+            call gaussimg%neg()
             ! convolve
             call gaussimg%mul(mic_shrunken)
             call gaussimg%bwd_ft
@@ -356,7 +356,7 @@ contains
         call fopen(funit, status='REPLACE', action='WRITE', file=trim(adjustl(boxname)),iostat=iostat)
         call fileio_errmsg('picker; write_boxfile ', iostat)
         do ipeak=1,npeaks
-            if( selected_peak_positions(ipeak) )then             
+            if( selected_peak_positions(ipeak) )then
                 write(funit,'(I7,I7,I7,I7,I7)') peak_positions_refined(ipeak,1),&
                 peak_positions_refined(ipeak,2), orig_box, orig_box, -3
             endif

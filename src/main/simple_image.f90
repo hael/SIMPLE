@@ -531,7 +531,7 @@ contains
         do xind=0,self%ldim(1)-box,box/2
             do yind=0,self%ldim(2)-box,box/2
                 call self%window([xind,yind],box,tmp)
-                call tmp%norm
+                call tmp%norm()
                 call tmp%edges_norm
                 call tmp%fwd_ft
                 call tmp%ft2img(speckind, tmp2)
@@ -582,7 +582,7 @@ contains
             do yind=0,self%ldim(2)-box,box/2
                 cnt = cnt + 1
                 call self%window_slim([xind,yind],box,tmp,outside)
-                call tmp%norm
+                call tmp%norm()
                 call tmp%edges_norm
                 call tmp%fwd_ft
                 if( cnt <= neven_lim )then
@@ -6536,7 +6536,7 @@ contains
         call moment(pixels, ave, sdev, var, err)
         deallocate(pixels)
         if( err )then
-            call self%norm
+            call self%norm()
         else
             ! we subtract the pixel values with this ruboust estimate of the background average
             self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) =&
@@ -6596,7 +6596,7 @@ contains
         call moment( pixels, ave, sdev, var, err )
         deallocate(pixels)
         if( err )then
-            call self%norm
+            call self%norm()
         else
             self%rmat = self%rmat - ave
             if( present(errout) )then

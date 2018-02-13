@@ -78,8 +78,8 @@ contains
         call odd%read(p%vols(1))
         call even%read(p%vols(2))
         ! always normalise before masking
-        call even%norm
-        call odd%norm
+        call even%norm()
+        call odd%norm()
         if( cline%defined('mskfile') )then
             if( file_exists(p%mskfile) )then
                 call mskvol%new([p%box,p%box,p%box], p%smpd)
@@ -306,7 +306,7 @@ contains
                 y = b%a%get(i, 'y')
                 call imgs(i)%shift([x,y,0.])
             endif
-            if( p%neg .eq. 'yes' ) call imgs(i)%neg
+            if( p%neg .eq. 'yes' ) call imgs(i)%neg()
             call imgs(i)%write(p%outstk,i)
         end do
         call binwrite_oritab('projvol_oris'//trim(METADATEXT), b%a, [1,p%nptcls])

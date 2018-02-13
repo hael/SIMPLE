@@ -17,16 +17,16 @@
 ! \texttt{norm=yes}. \texttt{hfun} controls the normalisation function. With \texttt{avg=yes} the global average of the inputted stack
 ! is calculated. With \texttt{ctf=flip} the contrast inversions due to the CTF are corrected by the
 ! infamous (but effective) phase-flipping heuristic. This requires additional input of CTF-related parameters (\texttt{kv}, \texttt{fraca}
-! and \texttt{cs}) in addition to the defocus and astigmatism angle values, communicated either via \texttt{oritab} or via \texttt{deftab}. 
+! and \texttt{cs}) in addition to the defocus and astigmatism angle values, communicated either via \texttt{oritab} or via \texttt{deftab}.
 ! Even if you do initially
 ! phase-flip the images, which you should do for initial model production with PRIME, you can turn on the Wiener restoration later anyway,
 ! to accomplish correct weighting of information around the CTF zeroes and maximal noise reduction. \texttt{ft2img=yes} produces images of
-! the square power spectrum of the images in \texttt{stk}. If you define \texttt{frameavg} to some integer number larger than one averages 
-! with chunk sizes of \texttt{frameavg} are produced, which may be useful for analysis of dose-fractionated image series. \texttt{clip} can 
+! the square power spectrum of the images in \texttt{stk}. If you define \texttt{frameavg} to some integer number larger than one averages
+! with chunk sizes of \texttt{frameavg} are produced, which may be useful for analysis of dose-fractionated image series. \texttt{clip} can
 ! be used to re-window or pad the images to a different box size. When \texttt{compare=yes}, the two inputted stacks are Fourier ring correlated.
 ! \texttt{neg} inverts the contrast of the images. \texttt{ctfsq} applies the squared CTF to
 ! the inputted images. \texttt{inner} is for applying an inner mask with fall-off width \texttt{width}. Finally, \texttt{append} is for
-! appending stack \texttt{stk2} with stack \texttt{stk}, so that the \texttt{stk2} images occur last in the series and the stk name is 
+! appending stack \texttt{stk2} with stack \texttt{stk}, so that the \texttt{stk2} images occur last in the series and the stk name is
 ! preserved.<comment/end> <stackops/end>
 !
 ! The code is distributed with the hope that it will be useful, but _WITHOUT_ _ANY_ _WARRANTY_.
@@ -228,7 +228,7 @@ endif
 if( p%vis .eq. 'yes' )then
     do i=1,p%nptcls
         call img%read(p%stk, i)
-        call img%vis
+        call img%vis()
     end do
     goto 999
 endif
@@ -452,12 +452,12 @@ else if( p%ctf .eq. 'mul' )then
     goto 999
 else if( p%ctf .eq. 'abs' )then
     call apply_ctf_imgfile(p%stk, p%outstk, b%a, p%smpd, b%tfun, 'abs')
-    goto 999  
+    goto 999
 else if( p%ctf .eq. 'wiener' )then
-    
+
     print *, 'DOING THE WIENER THING'
-    
-    call apply_wiener_imgfile(p%stk, p%outstk, b%a, p%smpd, b%tfun)    
+
+    call apply_wiener_imgfile(p%stk, p%outstk, b%a, p%smpd, b%tfun)
     goto 999
 endif
 
