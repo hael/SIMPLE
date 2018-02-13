@@ -96,6 +96,7 @@ contains
         ! make random reference direction order
         nptcls = count(ptcl_mask)
         allocate(srch_order(1:nptcls, p%ncls), source=0)
+        rt  = ran_tabu(p%ncls)
         cnt = 0
         do iptcl = p%fromp, p%top
             if(ptcl_mask(iptcl))then
