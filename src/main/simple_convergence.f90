@@ -27,6 +27,7 @@ type convergence
     real :: mi_inpl   = 0.                      !< in-plane parameter distribution overlap
     real :: mi_state  = 0.                      !< state parameter distribution overlap
     real :: sdev      = 0.                      !< angular standard deviation of model
+    real :: bfac      = 0.                      !< average per-particle B-factor
   contains
     procedure :: check_conv2D
     procedure :: check_conv3D
@@ -126,6 +127,7 @@ contains
             self%mi_inpl   = self%bap%get_avg('mi_inpl',   mask=mask)
             self%mi_state  = self%bap%get_avg('mi_state',  mask=mask)
             self%sdev      = self%bap%get_avg('sdev',      mask=mask)
+            self%bfac      = self%bap%get_avg('bfac',      mask=mask)
         else
             self%corr      = self%bap%get_avg('corr')
             self%dist      = self%bap%get_avg('dist')
@@ -137,6 +139,7 @@ contains
             self%mi_inpl   = self%bap%get_avg('mi_inpl')
             self%mi_state  = self%bap%get_avg('mi_state')
             self%sdev      = self%bap%get_avg('sdev')
+            self%bfac      = self%bap%get_avg('bfac')
         endif
         if( self%pp%athres==0. )then
             ! required for distributed mode
@@ -151,6 +154,7 @@ contains
         write(*,'(A,1X,F7.1)') '>>> AVERAGE ANGULAR DISTANCE BTW ORIS: ', self%dist
         write(*,'(A,1X,F7.1)') '>>> AVERAGE IN-PLANE ANGULAR DISTANCE: ', self%dist_inpl
         write(*,'(A,1X,F7.1)') '>>> AVERAGE # PEAKS:                   ', self%npeaks
+        write(*,'(A,1X,F7.1)') '>>> AVERAGE PER-PARTICLE B-FACTOR:     ', self%bfac
         write(*,'(A,1X,F7.1)') '>>> PERCENTAGE OF SEARCH SPACE SCANNED:', self%frac
         write(*,'(A,1X,F7.4)') '>>> CORRELATION:                       ', self%corr
         write(*,'(A,1X,F7.2)') '>>> ANGULAR SDEV OF MODEL:             ', self%sdev
