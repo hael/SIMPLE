@@ -82,6 +82,7 @@ type :: polarft_corrcalc
     integer,             allocatable :: pinds(:)              !< index array (to reduce memory when frac_update < 1)
     real(sp),            allocatable :: ptcl_bfac_weights(:,:)!< B-factor per particle array for weighting of the correlation
     real(sp),            allocatable :: ptcl_bfac_norms(:)    !< normalisation constants for B-factor weighted ccres
+    real(sp),            allocatable :: inv_resarrsq(:)       !< memoized -1./(4*res^2) for B-factors calculation
     real(sp),            allocatable :: sqsums_ptcls(:)       !< memoized square sums for the correlation calculations
     real(sp),            allocatable :: angtab(:)             !< table of in-plane angles (in degrees)
     real(sp),            allocatable :: argtransf(:,:)        !< argument transfer constants for shifting the references
@@ -205,7 +206,7 @@ contains
         character(kind=c_char, len=:), allocatable :: fft_wisdoms_fname ! FFTW wisdoms (per part or suffer I/O lag)
         integer             :: alloc_stat, irot, k, ithr, i, ik, cnt
         logical             :: even_dims, test(2)
-        real(sp)            :: ang, res
+        real(sp)            :: ang
         integer(kind=c_int) :: wsdm_ret
         ! kill possibly pre-existing object
         call self%kill
@@ -259,9 +260,12 @@ contains
             case('ccres')
                 self%l_cc_objfun = .false.
                 self%l_cc_bfac   = .true.
-                allocate(self%ptcl_bfac_weights(1:self%nptcls, self%kfromto(1):self%kfromto(2)), self%ptcl_bfac_norms(1:self%nptcls))
+                allocate(self%ptcl_bfac_weights(1:self%nptcls, self%kfromto(1):self%kfromto(2)),&
+                    &self%ptcl_bfac_norms(1:self%nptcls), self%inv_resarrsq(self%kfromto(1):self%kfromto(2)))
                 self%ptcl_bfac_weights = 1.0
                 self%ptcl_bfac_norms   = real(self%nk)
+                self%inv_resarrsq      = self%smpd * real(self%ldim(1)) / real((/(k,k=self%kfromto(1),self%kfromto(2))/))
+                self%inv_resarrsq      = -1. / (4.*self%inv_resarrsq*self%inv_resarrsq)
             case DEFAULT
                 write(*,*) 'unsupported objective function: ', trim(p%objfun)
                 stop 'ABORTING, simple_polarft_corrcalc :: new'
@@ -618,10 +622,10 @@ contains
         allocchk("In: get_ref_pft; simple_polarft_corrcalc")
     end function get_ref_pft
 
-    function objfun_is_ccres( self ) result( is )
+    !>  \brief  returns whether objective function is cc/ccres
+    logical function objfun_is_ccres( self )
         class(polarft_corrcalc), intent(in) :: self
-        logical :: is
-        is = .not. self%l_cc_objfun
+        objfun_is_ccres = .not. self%l_cc_objfun
     end function objfun_is_ccres
 
     !>  \brief  checks for existence
@@ -721,17 +725,12 @@ contains
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iptcl
         real,                    intent(in)    :: bfac
-        integer :: k, i
-        real    :: res
         if( self%l_cc_objfun )then
             ! nothing to do
         else
-            i = self%pinds(iptcl)
-            do k=self%kfromto(1),self%kfromto(2)
-                res = real(k) / (real(self%ldim(1)) * self%smpd) ! assuming square dimensions
-                self%ptcl_bfac_weights(i,k) = max(0., exp(-(bfac/4.) * res * res))
-            end do
-            self%ptcl_bfac_norms(i) = sum(self%ptcl_bfac_weights(i,:))
+            self%ptcl_bfac_weights(self%pinds(iptcl),:) = exp( bfac * self%inv_resarrsq(:) ) ! exp( -bfac/(4.*res^2) )
+            where( self%ptcl_bfac_weights(self%pinds(iptcl),:) < TINY) self%ptcl_bfac_weights(self%pinds(iptcl),:) = 0.
+            self%ptcl_bfac_norms(self%pinds(iptcl)) = sum(self%ptcl_bfac_weights(self%pinds(iptcl),:))
         endif
     end subroutine memoize_bfac
 
@@ -740,28 +739,15 @@ contains
         use simple_oris, only: oris
         class(polarft_corrcalc), intent(inout) :: self
         class(oris),             intent(inout) :: a
-        integer  :: iptcl, k
-        real(sp) :: resarrsq(self%kfromto(1):self%kfromto(2)), bfac, tmp(self%kfromto(1):self%kfromto(2))
+        integer  :: iptcl
         if( self%l_cc_objfun )then
-            !nothing to do
+            ! nothing to do
         else
-            ! pre-calc squared spatial frequencies
-            do k=self%kfromto(1),self%kfromto(2)
-                resarrsq(k) = real(k) / (real(self%ldim(1)) * self%smpd) ! assuming square dimensions
-                resarrsq(k) = resarrsq(k) * resarrsq(k)
-            end do
             ! pre-calc B-factor weight arrays
-            !$omp parallel do default(shared) private(iptcl,bfac,tmp) proc_bind(close) schedule(static)
+            !$omp parallel do default(shared) private(iptcl) proc_bind(close) schedule(static)
             do iptcl=self%pfromto(1),self%pfromto(2)
                 if( self%pinds(iptcl) > 0 )then
-                    bfac = a%get(iptcl, 'bfac')
-                    tmp  = exp(-(bfac/4.) * resarrsq(:))
-                    where( tmp > 0. )
-                        self%ptcl_bfac_weights(self%pinds(iptcl),:) = tmp
-                    else where
-                        self%ptcl_bfac_weights(self%pinds(iptcl),:) = 0.
-                    end where
-                    self%ptcl_bfac_norms(self%pinds(iptcl)) = sum(self%ptcl_bfac_weights(self%pinds(iptcl),:))
+                    call self%memoize_bfac(iptcl, a%get(iptcl, 'bfac'))
                 endif
             end do
             !$omp end parallel do
@@ -2125,10 +2111,9 @@ contains
         class(polarft_corrcalc),  intent(inout) :: self
         integer,                  intent(in)    :: iref, iptcl, irot
         real(sp),                 intent(in)    :: shvec(2)
-        real(sp) :: denom, frc(self%kfromto(1):self%kfromto(2)), X(self%kfromto(1):self%kfromto(2))
+        real(sp) :: denom, frc(self%kfromto(1):self%kfromto(2)), logfrc(self%kfromto(1):self%kfromto(2))
         real(sp) :: sumxfrc, sumfrc
         logical  :: peakmsk(self%kfromto(1):self%kfromto(2))
-        integer  :: i
         call self%calc_frc(iref, iptcl, irot, shvec, frc)
         call peakfinder_inplace(frc, peakmsk)
         where(frc <= TINY) peakmsk = .false.
@@ -2139,14 +2124,17 @@ contains
                 return
             endif
         endif
-        X = self%smpd * real(self%ldim(1)) / real((/(i,i=self%kfromto(1),self%kfromto(2))/))
-        X = -1. / (4.*X*X)
         ! all points are weighted by Y
-        sumfrc   = sum(frc,mask=peakmsk)
-        sumxfrc  = sum(X*frc,mask=peakmsk)
-        denom    = sumfrc * sum(X*X*frc,mask=peakmsk) - sumxfrc**2.
-        fit_bfac = sumfrc * sum(X*frc*log(frc), mask=peakmsk)
-        fit_bfac = fit_bfac - sumxfrc * sum(frc*log(frc), mask=peakmsk)
+        sumfrc   = sum(frc, mask=peakmsk)
+        sumxfrc  = sum(self%inv_resarrsq * frc, mask=peakmsk)
+        where( frc > TINY )
+            logfrc = log(frc)
+        else where
+            logfrc = 0.
+        end where
+        denom    = sumfrc * sum(self%inv_resarrsq * self%inv_resarrsq * frc, mask=peakmsk) - sumxfrc*sumxfrc
+        fit_bfac = sumfrc * sum(self%inv_resarrsq * frc * logfrc, mask=peakmsk)
+        fit_bfac = fit_bfac - sumxfrc * sum(frc*logfrc, mask=peakmsk)
         fit_bfac = fit_bfac / denom
     end function fit_bfac
 
@@ -2180,6 +2168,7 @@ contains
             end do
             if( allocated(self%ptcl_bfac_weights) ) deallocate(self%ptcl_bfac_weights)
             if( allocated(self%ptcl_bfac_norms)   ) deallocate(self%ptcl_bfac_norms)
+            if( allocated(self%inv_resarrsq)      ) deallocate(self%inv_resarrsq)
             deallocate( self%sqsums_ptcls, self%angtab, self%argtransf,&
                 &self%polar, self%pfts_refs_even, self%pfts_refs_odd, self%pfts_ptcls,&
                 &self%fft_factors, self%fftdat, self%fftdat_ptcls,&
