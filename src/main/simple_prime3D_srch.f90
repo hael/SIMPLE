@@ -28,7 +28,6 @@ integer,    allocatable :: prev_proj(:)                           !< particle pr
 integer,    allocatable :: prev_states(:)                         !< particle previous state
 integer,    allocatable :: srch_order(:,:)                        !< stochastic search index
 logical,    allocatable :: state_exists(:)                        !< indicates state existence
-logical,    pointer     :: ptcl_mask_ptr(:) => null()             !< pointer to particle mask
 
 type prime3D_srch
     private
@@ -104,9 +103,9 @@ contains
         class(build),    intent(inout) :: b
         class(params),   intent(inout) :: p
         logical, target, intent(in)    :: ptcl_mask(p%fromp:p%top)
-        integer,        allocatable :: pinds(:)
         type(ran_tabu), allocatable :: rts(:)
         type(ran_tabu) :: rt
+        integer        :: pinds(p%fromp:p%top)
         integer        :: i, istate, iproj, iptcl, prev_state
         integer        :: nnnrefs, cnt, prev_ref, nrefs, nptcls
         ! clean all class arrays & types
@@ -121,7 +120,6 @@ contains
         nrefs  = p%nspace * p%nstates
         nptcls = count(ptcl_mask)
         ! particle index mapping
-        allocate(pinds(p%fromp:p%top))
         pinds = 0
         cnt   = 0
         do i=p%fromp,p%top
@@ -130,8 +128,6 @@ contains
                 pinds(i) = cnt
             endif
         end do
-        ! set patcl_mask pointer
-        ptcl_mask_ptr => ptcl_mask
         ! shared-memory arrays
         allocate(proj_space_euls(nptcls,nrefs,3), proj_space_shift(nptcls,nrefs,2),&
             &proj_space_corrs(nptcls,nrefs), proj_space_inds(nptcls,nrefs),&
@@ -822,16 +818,16 @@ contains
     subroutine calc_corr( self )
         class(prime3D_srch),   intent(inout) :: self
         integer :: iref
-        real    :: corrs_inpl(self%nrots)
+        real    :: cc
         if( prev_states(self%iptcl_map) > 0 )then
             self%prev_roind = self%pftcc_ptr%get_roind(360.-self%a_ptr%e3get(self%iptcl))
             iref = (prev_states(self%iptcl_map)-1) * self%nprojs + prev_proj(self%iptcl_map)
-            call self%pftcc_ptr%gencorrs(iref, self%iptcl, corrs_inpl)
-            call self%a_ptr%set(self%iptcl,'corr', corrs_inpl(self%prev_roind))
+            cc = self%pftcc_ptr%gencorr_cc_for_rot(iref, self%iptcl, [0.,0.], self%prev_roind)
+            call self%a_ptr%set(self%iptcl,'corr', cc)
         else
             call self%a_ptr%reject(self%iptcl)
         endif
-        if( DEBUG ) print *,  '>>> PRIME3D_SRCH::FINISHED calc_corr SEARCH'
+        if( DEBUG ) print *,  '>>> PRIME3D_SRCH::FINISHED CALC_CORR'
     end subroutine calc_corr
 
     !>  \brief  executes the in-plane search. This improved routine took HCN

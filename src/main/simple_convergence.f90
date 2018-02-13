@@ -308,6 +308,8 @@ contains
                 get = self%mi_state
             case('sdev')
                 get = self%sdev
+            case('bfac')
+                get = self%bfac
             case DEFAULT
         end select
     end function get

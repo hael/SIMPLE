@@ -9,6 +9,9 @@ NEW DEVELOPMENTS
 * extract should set the header right (smpd)
 * scaling should set the header right (smpd)
 
+NEEDS DOING
+* proper PFTs for picker, with whitening etc.
+
 EXCEPTION HANDLING
 * need a file-based system because of the different processes
 

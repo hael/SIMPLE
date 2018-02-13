@@ -634,22 +634,7 @@ contains
             call match_imgs(imatch)%new([p%boxmatch, p%boxmatch, 1], p%smpd)
             call match_imgs(imatch)%copy_polarizer(b%img_match)
         end do
-        if( .not. p%l_distr_exec ) write(*,'(A)') '>>> BUILDING PARTICLES'
-        call prepimgbatch(b, p, MAXIMGBATCHSZ)
-        do iptcl_batch=p%fromp,p%top,MAXIMGBATCHSZ
-            batchlims = [iptcl_batch,min(p%top,iptcl_batch + MAXIMGBATCHSZ - 1)]
-            call read_imgbatch( b, p, batchlims, ptcl_mask )
-            !$omp parallel do default(shared) private(iptcl,imatch)&
-            !$omp schedule(static) proc_bind(close)
-            do iptcl=batchlims(1),batchlims(2)
-                if( .not. ptcl_mask(iptcl) ) cycle
-                imatch = iptcl - batchlims(1) + 1
-                call prepimg4align(b, p, iptcl, b%imgbatch(imatch), match_imgs(imatch), is3D=.true.)
-                ! transfer to polar coordinates
-                call match_imgs(imatch)%polarize(pftcc, iptcl, .true., .true.)
-            end do
-            !$omp end parallel do
-        end do
+        call build_pftcc_particles( b, p, pftcc, MAXIMGBATCHSZ, match_imgs, .true., ptcl_mask)
 
         ! DESTRUCT
         do imatch=1,MAXIMGBATCHSZ

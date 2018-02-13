@@ -12,7 +12,8 @@ implicit none
 
 public :: read_img, read_img_and_norm, read_imgbatch, set_bp_range, set_bp_range2D, grid_ptcl,&
 &prepimg4align, eonorm_struct_facts, norm_struct_facts, cenrefvol_and_mapshifts2ptcls, preprefvol,&
-&prep2Dref, gen2Dclassdoc, preprecvols, killrecvols, gen_projection_frcs, prepimgbatch, grid_ptcl_tst
+&prep2Dref, gen2Dclassdoc, preprecvols, killrecvols, gen_projection_frcs, prepimgbatch, grid_ptcl_tst,&
+&build_pftcc_particles
 private
 #include "simple_local_flags.inc"
 
@@ -377,6 +378,42 @@ contains
         ! one peak & one state
          call b%eorecvols(s)%grid_fplane(b%se, orientation, img, eo, pw)
     end subroutine grid_ptcl_tst
+
+    !>  \brief  prepares all particle images for alignment
+    subroutine build_pftcc_particles( b, p, pftcc, batchsz_max, match_imgs, is3D,  ptcl_mask )
+        use simple_polarft_corrcalc, only: polarft_corrcalc
+        use simple_polarizer,        only: polarizer
+        class(build),            intent(inout) :: b
+        class(params),           intent(inout) :: p
+        class(polarft_corrcalc), intent(inout) :: pftcc
+        integer,                 intent(in)    :: batchsz_max
+        class(polarizer),        intent(inout) :: match_imgs(batchsz_max)
+        logical,                 intent(in)    :: is3D
+        logical, optional,       intent(in)    :: ptcl_mask(p%fromp:p%top)
+        logical :: mask_here(p%fromp:p%top)
+        integer :: iptcl_batch, batchlims(2), imatch, iptcl
+        if( present(ptcl_mask) )then
+            mask_here = ptcl_mask
+        else
+            mask_here = .true.
+        endif
+        if( .not. p%l_distr_exec ) write(*,'(A)') '>>> BUILDING PARTICLES'
+        call prepimgbatch(b, p, batchsz_max)
+        do iptcl_batch=p%fromp,p%top,batchsz_max
+            batchlims = [iptcl_batch,min(p%top,iptcl_batch + batchsz_max - 1)]
+            call read_imgbatch( b, p, batchlims, mask_here )
+            !$omp parallel do default(shared) private(iptcl,imatch)&
+            !$omp schedule(static) proc_bind(close)
+            do iptcl=batchlims(1),batchlims(2)
+                if( .not. mask_here(iptcl) ) cycle
+                imatch = iptcl - batchlims(1) + 1
+                call prepimg4align(b, p, iptcl, b%imgbatch(imatch), match_imgs(imatch), is3D=is3D)
+                ! transfer to polar coordinates
+                call match_imgs(imatch)%polarize(pftcc, iptcl, .true., .true.)
+            end do
+            !$omp end parallel do
+        end do
+    end subroutine build_pftcc_particles
 
     !>  \brief  prepares one particle image for alignment
     subroutine prepimg4align( b, p, iptcl, img_in, img_out, is3D )

@@ -23,6 +23,9 @@ logical, parameter              :: L_BENCH         = .false.
 logical, parameter              :: L_BENCH_PRIME2D = .false.
 type(polarft_corrcalc)          :: pftcc
 type(prime2D_srch), allocatable :: primesrch2D(:)
+integer,            allocatable :: pinds(:)
+logical,            allocatable :: ptcl_mask(:)
+integer                         :: nptcls2update
 integer(timer_int_kind)         :: t_init, t_prep_pftcc, t_align, t_cavg, t_tot
 real(timer_int_kind)            :: rt_init, rt_prep_pftcc, rt_align, rt_cavg
 real(timer_int_kind)            :: rt_tot, rt_refloop, rt_inpl, rt_tot_sum, rt_refloop_sum
@@ -42,10 +45,13 @@ contains
         integer,        intent(in)    :: which_iter
         logical,        intent(inout) :: converged
         integer, allocatable :: prev_pops(:), pinds(:)
-        logical, allocatable :: ptcl_mask(:)
-        integer :: iptcl, icls, j, fnr
+        logical, allocatable :: ptcl_mask(:), clsupdate_mask(:)
+        integer :: iptcl, icls, i, j, fnr
         real    :: corr_thresh, frac_srch_space, skewness, extr_thresh
         logical :: l_do_read, doprint
+
+        ! PREPARE CLASS UPDATE MASK
+        allocate(clsupdate_mask(p%ncls), source=.true.)
 
         ! PREP REFERENCES
         if( L_BENCH )then
@@ -150,6 +156,30 @@ contains
             call b%a%set_all2single('state_balance', 1.0)
         endif
 
+        ! PARTICLE INDEX SAMPLING FOR FRACTIONAL UPDATE (OR NOT)
+        if( allocated(pinds) )     deallocate(pinds)
+        if( allocated(ptcl_mask) ) deallocate(ptcl_mask)
+        if( p%l_frac_update )then
+            allocate(ptcl_mask(p%fromp:p%top))
+            call b%a%sample4update_and_incrcnt([p%fromp,p%top], p%update_frac, nptcls2update, pinds, ptcl_mask)
+            ! correct convergence stats
+            do iptcl=p%fromp,p%top
+                if( .not. ptcl_mask(iptcl) )then
+                    ! these are not updated
+                    call b%a%set(iptcl, 'mi_class',    1.0)
+                    call b%a%set(iptcl, 'mi_inpl',     1.0)
+                    call b%a%set(iptcl, 'mi_joint',    1.0)
+                    call b%a%set(iptcl, 'dist_inpl',   0.0)
+                    call b%a%set(iptcl, 'frac',      100.0)
+                endif
+            end do
+        else
+            nptcls2update = p%top - p%fromp + 1
+            allocate(pinds(nptcls2update), ptcl_mask(p%fromp:p%top))
+            pinds = (/(i,i=p%fromp,p%top)/)
+            ptcl_mask = .true.
+        endif
+
         ! EXTREMAL LOGICS
         if( frac_srch_space < 98. .and. p%extr_iter <= 15 )then
             extr_thresh = EXTRINITHRESH * (1.-EXTRTHRESH_CONST)**real(p%extr_iter-1)  ! factorial decay
@@ -176,11 +206,13 @@ contains
 
         ! STOCHASTIC IMAGE ALIGNMENT
         ! create the search objects, need to re-create every round because parameters are changing
-        call prep4prime2D_srch( b, p, which_iter )
+        call prep4prime2D_srch( b, p, ptcl_mask, which_iter )
         allocate( primesrch2D(p%fromp:p%top), stat=alloc_stat)
         allocchk("In hadamard2D_matcher::prime2D_exec primesrch2D objects ")
-        do iptcl=p%fromp,p%top
-            call primesrch2D(iptcl)%new(iptcl, pftcc, b%a, p)
+        i = 0
+        do iptcl = p%fromp, p%top
+            if( ptcl_mask(iptcl) ) i = i + 1
+            call primesrch2D(iptcl)%new(iptcl, i, pftcc, b%a, p)
         end do
         ! generate CTF matrices
         if( p%ctf .ne. 'no' ) call pftcc%create_polar_ctfmats(b%a)
@@ -193,7 +225,11 @@ contains
             case('neigh')
                 !$omp parallel do default(shared) schedule(guided) private(iptcl) proc_bind(close)
                 do iptcl=p%fromp,p%top
-                    call primesrch2D(iptcl)%nn_srch(b%nnmat)
+                    if( ptcl_mask(iptcl) )then
+                        call primesrch2D(iptcl)%nn_srch(b%nnmat)
+                    else
+                        call primesrch2D(iptcl)%calc_corr()
+                    endif
                 end do
                 !$omp end parallel do
             case DEFAULT
@@ -214,7 +250,11 @@ contains
                     endif
                     !$omp parallel do default(shared) schedule(guided) private(iptcl) proc_bind(close)
                     do iptcl=p%fromp,p%top
-                        call primesrch2D(iptcl)%exec_prime2D_srch(extr_bound=corr_thresh)
+                        if( ptcl_mask(iptcl) )then
+                            call primesrch2D(iptcl)%exec_prime2D_srch(extr_bound=corr_thresh)
+                        else
+                            call primesrch2D(iptcl)%calc_corr()
+                        endif
                         if( L_BENCH_PRIME2D )then
                             call primesrch2D(iptcl)%get_times(rt_refloop, rt_inpl, rt_tot)
                             rt_refloop_sum      = rt_refloop_sum + rt_refloop
@@ -225,6 +265,11 @@ contains
                     !$omp end parallel do
                 endif
         end select
+        ! update class mask, needs to be serial
+        do iptcl=p%fromp,p%top
+            if( ptcl_mask(iptcl) ) call primesrch2D(iptcl)%update_clsmask(clsupdate_mask)
+        end do
+
         ! pftcc & primesrch2D not needed anymore
         call pftcc%kill
         deallocate( primesrch2D )
@@ -322,7 +367,7 @@ contains
         integer,       intent(in)    :: which_iter
         type(polarizer), allocatable :: match_imgs(:)
         integer   :: iptcl, icls, pop, pop_even, pop_odd
-        integer   :: batchlims(2), batchsz, imatch, batchsz_max, iptcl_batch
+        integer   :: batchlims(2), imatch, batchsz_max, iptcl_batch
         logical   :: do_center
         real      :: xyz(3)
         if( .not. p%l_distr_exec ) write(*,'(A)') '>>> BUILDING PRIME2D SEARCH ENGINE'
@@ -375,22 +420,8 @@ contains
         !$omp end parallel do
 
         ! PREPARATION OF PARTICLES IN PFTCC
-        if( .not. p%l_distr_exec ) write(*,'(A)') '>>> BUILDING PARTICLES'
-        call prepimgbatch(b, p, batchsz_max)
-        do iptcl_batch=p%fromp,p%top,batchsz_max
-            batchlims = [iptcl_batch,min(p%top,iptcl_batch + batchsz_max - 1)]
-            batchsz   = batchlims(2) - batchlims(1) + 1
-            call read_imgbatch( b, p, batchlims)
-            !$omp parallel do default(shared) private(iptcl,imatch)&
-            !$omp schedule(static) proc_bind(close)
-            do iptcl=batchlims(1),batchlims(2)
-                imatch = iptcl - batchlims(1) + 1
-                call prepimg4align(b, p, iptcl, b%imgbatch(imatch), match_imgs(imatch), is3D=.false.)
-                ! transfer to polar coordinates
-                call match_imgs(imatch)%polarize(pftcc, iptcl, .true., .true.)
-            end do
-            !$omp end parallel do
-        end do
+        call build_pftcc_particles( b, p, pftcc, batchsz_max, match_imgs, .false.)
+
         ! DESTRUCT
         do imatch=1,batchsz_max
             call match_imgs(imatch)%kill_polarizer

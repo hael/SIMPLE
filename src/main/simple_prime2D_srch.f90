@@ -37,6 +37,7 @@ type prime2D_srch
     integer                          :: top           =  1   !< to particle index
     integer                          :: nnn           =  0   !< # nearest neighbors
     integer                          :: iptcl         =  0   !< global particle index
+    integer                          :: iptcl_map     =  0   !< index in pre-allocated arrays
     real                             :: trs           =  0.  !< shift range parameter [-trs,trs]
     real                             :: prev_shvec(2) =  0.  !< previous origin shift vector
     real                             :: best_shvec(2) =  0.  !< best shift vector found by search
@@ -57,24 +58,27 @@ type prime2D_srch
     procedure          :: stochastic_srch
     procedure          :: greedy_srch
     procedure          :: nn_srch
+    procedure          :: calc_corr
     procedure, private :: inpl_srch
     procedure          :: prep4srch
     procedure          :: update_best
+    procedure          :: update_clsmask
     procedure          :: get_times
     procedure          :: kill
 end type prime2D_srch
 
 contains
 
-    subroutine prep4prime2D_srch( b, p, which_iter )
+    subroutine prep4prime2D_srch( b, p, ptcl_mask, which_iter )
         use simple_ran_tabu,  only: ran_tabu
         use simple_params,    only: params
         use simple_build,     only: build
         class(build),   intent(inout) :: b
         class(params),  intent(inout) :: p
+        logical,        intent(in)    :: ptcl_mask(p%fromp:p%top)
         integer,        intent(in)    :: which_iter
         type(ran_tabu) :: rt
-        integer        :: iptcl, prev_class
+        integer        :: iptcl, prev_class, cnt, nptcls
         if( allocated(cls_pops)   ) deallocate(cls_pops)
         if( allocated(srch_order) ) deallocate(srch_order)
         ! gather class populations
@@ -90,23 +94,27 @@ contains
             allocchk("simple_hadamard2D_matcher; prime2D_exec cls_pops")
         endif
         ! make random reference direction order
-        allocate(srch_order(p%fromp:p%top,p%ncls), source=0)
-        rt = ran_tabu(p%ncls)
+        nptcls = count(ptcl_mask)
+        allocate(srch_order(1:nptcls, p%ncls), source=0)
+        cnt = 0
         do iptcl = p%fromp, p%top
-            call rt%reset
-            call rt%ne_ran_iarr( srch_order(iptcl,:) )
-            prev_class = nint(b%a%get(iptcl,'class'))
-            call put_last(prev_class, srch_order(iptcl,:))
+            if(ptcl_mask(iptcl))then
+                cnt = cnt + 1
+                call rt%reset
+                call rt%ne_ran_iarr( srch_order(cnt,:) )
+                prev_class = nint(b%a%get(iptcl,'class'))
+                call put_last(prev_class, srch_order(cnt,:))
+            endif
         end do
         if( any(srch_order == 0) ) stop 'Invalid index in srch_order; simple_prime2D_srch :: prep4prime2D_srch'
         call rt%kill
     end subroutine prep4prime2D_srch
 
     !>  \brief  is a constructor
-    subroutine new( self, iptcl, pftcc, a, p )
+    subroutine new( self, iptcl, iptcl_map, pftcc, a, p )
         use simple_params, only: params
         class(prime2D_srch),             intent(inout) :: self   !< instance
-        integer,                         intent(in)    :: iptcl  !< global particle index
+        integer,                         intent(in)    :: iptcl, iptcl_map  !< particle indices
         class(polarft_corrcalc), target, intent(inout) :: pftcc  !< correlator
         class(oris),             target, intent(in)    :: a      !< primary particle orientation table
         class(params),                   intent(in)    :: p      !< parameters
@@ -116,6 +124,7 @@ contains
         self%pftcc_ptr  => pftcc
         self%a_ptr      => a
         self%iptcl      =  iptcl
+        self%iptcl_map  = iptcl_map
         self%nrefs      =  p%ncls
         self%nrots      =  round2even(twopi*real(p%ring2))
         self%nrefs_eval =  0
@@ -215,7 +224,7 @@ contains
                 self%nrefs_eval = 0
                 if( L_BENCH ) self%t_refloop = tic()
                 do isample=1,self%nrefs
-                    iref = srch_order(self%iptcl, isample)
+                    iref = srch_order(self%iptcl_map, isample)
                     ! keep track of how many references we are evaluating
                     self%nrefs_eval = self%nrefs_eval + 1
                     ! passes empty classes
@@ -251,7 +260,7 @@ contains
                 ! random move
                 self%nrefs_eval = 1 ! evaluate one random ref
                 isample = 1         ! random .ne. prev
-                iref    = srch_order(self%iptcl, isample)
+                iref    = srch_order(self%iptcl_map, isample)
                 if( self%dyncls )then
                     ! all good
                 else
@@ -259,7 +268,7 @@ contains
                     ! such that a search is performed
                     do while( cls_pops(iref) == 0 )
                         isample = isample + 1
-                        iref    = srch_order(self%iptcl, isample)
+                        iref    = srch_order(self%iptcl_map, isample)
                         if( isample.eq.self%nrefs )exit
                     enddo
                 endif
@@ -324,15 +333,7 @@ contains
         integer :: iref,loc(1),inpl_ind,inn
         real    :: corrs(self%nrots),inpl_corr,corr
         if( nint(self%a_ptr%get(self%iptcl,'state')) > 0 )then
-            ! find previous discrete alignment parameters
-            self%prev_class = nint(self%a_ptr%get(self%iptcl,'class'))                        ! class index
-            self%prev_rot   = self%pftcc_ptr%get_roind(360.-self%a_ptr%e3get(self%iptcl))     ! in-plane angle index
-            self%prev_shvec = [self%a_ptr%get(self%iptcl,'x'),self%a_ptr%get(self%iptcl,'y')] ! shift vector
-            ! set best to previous best by default
-            self%best_class = self%prev_class
-            self%best_rot   = self%prev_rot
-            ! calculate spectral score
-            self%specscore  = self%pftcc_ptr%specscore(self%prev_class, self%iptcl, self%prev_rot)
+            call self%prep4srch
             corr            = -1.
             ! evaluate neighbors (greedy selection)
             do inn=1,self%nnn
@@ -357,6 +358,25 @@ contains
         endif
         if( DEBUG ) print *, '>>> PRIME2D_SRCH::FINISHED NEAREST-NEIGHBOR SEARCH'
     end subroutine nn_srch
+
+    !> evaluates correlation
+    subroutine calc_corr( self )
+        class(prime2D_srch),   intent(inout) :: self
+        integer :: iref, prev_roind, state
+        real    :: cc
+        state = self%a_ptr%get_state(self%iptcl)
+        if( state > 0 )then
+            self%prev_class = nint(self%a_ptr%get(self%iptcl,'class'))                   ! class index
+            if( self%prev_class > 0 )then
+                prev_roind = self%pftcc_ptr%get_roind(360.-self%a_ptr%e3get(self%iptcl)) ! rotation index
+                cc = self%pftcc_ptr%gencorr_cc_for_rot(self%prev_class, self%iptcl, [0.,0.], prev_roind)
+                call self%a_ptr%set(self%iptcl,'corr', cc)
+            endif
+        else
+            call self%a_ptr%reject(self%iptcl)
+        endif
+        if( DEBUG ) print *, '>>> PRIME2D_SRCH::FINISHED CALC_CORR'
+    end subroutine calc_corr
 
     !>  \brief  executes the shift search over the best matching reference
     subroutine inpl_srch( self )
@@ -390,7 +410,7 @@ contains
     !>  \brief  prepares for the search
     subroutine prep4srch( self )
         class(prime2D_srch), intent(inout) :: self
-        real             :: corrs(self%pftcc_ptr%get_nrots())
+        real :: corrs(self%pftcc_ptr%get_nrots())
         ! find previous discrete alignment parameters
         self%prev_class = nint(self%a_ptr%get(self%iptcl,'class')) ! class index
         if( self%dyncls )then
@@ -465,6 +485,15 @@ contains
         call self%a_ptr%set(self%iptcl, 'frac',       100.*(real(self%nrefs_eval)/real(self%nrefs)))
         if( DEBUG ) print *, '>>> PRIME2D_SRCH::GOT BEST ORI'
     end subroutine update_best
+
+    subroutine update_clsmask( self, clsmask )
+        class(prime2D_srch), intent(in)    :: self
+        logical,             intent(inout) :: clsmask(self%nrefs)
+        if( self%a_ptr%get_state(self%iptcl) > 0 )then
+            if( self%prev_class > 0 ) clsmask(self%prev_class) = .true.
+            if( self%best_class > 0 ) clsmask(self%best_class) = .true.
+        endif
+    end subroutine update_clsmask
 
     subroutine get_times( self, rt_refloop, rt_inpl, rt_tot )
         class(prime2D_srch),  intent(in) :: self
