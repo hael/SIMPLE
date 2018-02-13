@@ -17,18 +17,18 @@ type(image)              :: img, img_shifted
 type(image), allocatable :: noisy_imgs(:)
 integer                  :: x, y
 
-interface
-    pure real function etime(tarray)
-        real, intent(out) :: tarray(2)
-    end function etime
-    
-    pure real function dtime(tarray)
-        real, intent(out) :: tarray(2)
-    end function dtime
-end interface
+! interface
+!     pure real function etime(tarray)
+!         real, intent(out) :: tarray(2)
+!     end function etime
+!
+!     pure real function dtime(tarray)
+!         real, intent(out) :: tarray(2)
+!     end function dtime
+! end interface
 
 contains
-    
+
     subroutine exec_ft_expanded_test
         type(image)       :: img, img2
         type(ft_expanded) :: ftexp
@@ -118,7 +118,7 @@ contains
 #ifdef INTEL
         use ifport
 #endif
-        
+
         !$ use omp_lib
         !$ use omp_lib_kinds
         integer, parameter   :: NTSTS=1000, NTHR=8
@@ -146,8 +146,8 @@ contains
         write(*,'(A,2X,F9.2)') 'Actual cpu-time:', actual
         delta = dtime( tarray )
         write(*,'(A,F9.2)') 'Relative cpu-time:', delta
-        
-        write(*,'(a)') '>>> PROFILING STANDARD CORRELATOR' 
+
+        write(*,'(a)') '>>> PROFILING STANDARD CORRELATOR'
         do itst=1,NTST
             corr = img_ref%corr_shifted(img_ptcl, shvecs(itst,:), lp_dyn=LP)
         end do
@@ -155,13 +155,13 @@ contains
         write(*,'(A,2X,F9.2)') 'Actual cpu-time:', actual
         delta = dtime( tarray )
         write(*,'(A,F9.2)') 'Relative cpu-time:', delta
-        write(*,'(a)') '>>> PROFILING FTEXP CORRELATOR' 
+        write(*,'(a)') '>>> PROFILING FTEXP CORRELATOR'
         !$omp parallel do schedule(auto) default(shared) private(itst)
         do itst=1,NTST
             corr = ftexp_ref%corr_shifted(ftexp_ptcl, shvecs(itst,:))
         end do
         !$omp end parallel do
-       
+
         actual = etime( tarray )
         write(*,'(A,2X,F9.2)') 'Actual cpu-time:', actual
         delta = dtime( tarray )
