@@ -67,6 +67,8 @@ type :: image
     procedure          :: get_cmat_at
     procedure          :: set_cmat_at
     procedure          :: add2_cmat_at
+    procedure          :: set_cmats_from_cmats
+    procedure          :: add_cmats_to_cmats
     procedure          :: div_cmat_at
     procedure, private :: mul_cmat_at_1
     procedure, private :: mul_cmat_at_2
@@ -1209,6 +1211,58 @@ contains
         complex, intent(in) :: comp
         self%cmat(phys(1),phys(2),phys(3)) = self%cmat(phys(1),phys(2),phys(3)) + comp
     end subroutine add2_cmat_at
+
+    !>  set complex matrices from images & arrays. Specialized routine from simple_classaverager
+    subroutine set_cmats_from_cmats( self1 , self2 , self3, self4, self2set1, self2set2, lims, expcmat3, expcmat4)
+        class(image), intent(in)    :: self1, self2,self3,self4
+        class(image), intent(inout) :: self2set1, self2set2
+        integer,      intent(in)    :: lims(3,2)
+        real,         intent(inout) :: expcmat3(lims(1,1):lims(1,2),lims(2,1):lims(2,2))
+        real,         intent(inout) :: expcmat4(lims(1,1):lims(1,2),lims(2,1):lims(2,2))
+        integer :: h, k, logi(3), phys(3)
+        !$omp parallel default(shared) private(h,k,logi,phys) proc_bind(close)
+        !$omp workshare
+        self1%cmat = self2set1%cmat
+        self2%cmat = self2set2%cmat
+        !$omp end workshare nowait
+        !$omp do collapse(2) schedule(static)
+        do h=lims(1,1),lims(1,2)
+            do k=lims(2,1),lims(2,2)
+                logi = [h,k,0]
+                phys = self1%comp_addr_phys(logi)
+                self3%cmat(phys(1),phys(2),phys(3)) = cmplx(expcmat3(h,k),0.)
+                self4%cmat(phys(1),phys(2),phys(3)) = cmplx(expcmat4(h,k),0.)
+            enddo
+        enddo
+        !$omp end do nowait
+        !$omp end parallel
+    end subroutine set_cmats_from_cmats
+
+    !>  adds complex matrices from images & arrays. Specialized routine from simple_classaverager
+    subroutine add_cmats_to_cmats( self1 , self2 , self3, self4, self2set1, self2set2, lims, expcmat3, expcmat4)
+        class(image), intent(in)    :: self1, self2,self3,self4
+        class(image), intent(inout) :: self2set1, self2set2
+        integer,      intent(in)    :: lims(3,2)
+        real,         intent(inout) :: expcmat3(lims(1,1):lims(1,2),lims(2,1):lims(2,2))
+        real,         intent(inout) :: expcmat4(lims(1,1):lims(1,2),lims(2,1):lims(2,2))
+        integer :: h, k, logi(3), phys(3)
+        !$omp parallel default(shared) private(h,k,logi,phys) proc_bind(close)
+        !$omp workshare
+        self1%cmat = self1%cmat + self2set1%cmat
+        self2%cmat = self2%cmat + self2set2%cmat
+        !$omp end workshare nowait
+        !$omp do collapse(2) schedule(static)
+        do h=lims(1,1),lims(1,2)
+            do k=lims(2,1),lims(2,2)
+                logi = [h,k,0]
+                phys = self1%comp_addr_phys(logi)
+                self3%cmat(phys(1),phys(2),phys(3)) = self3%cmat(phys(1),phys(2),phys(3)) + cmplx(expcmat3(h,k),0.)
+                self4%cmat(phys(1),phys(2),phys(3)) = self4%cmat(phys(1),phys(2),phys(3)) + cmplx(expcmat4(h,k),0.)
+            enddo
+        enddo
+        !$omp end do nowait
+        !$omp end parallel
+    end subroutine add_cmats_to_cmats
 
     !! set comp to cmat at index phys
     pure subroutine set_cmat_at( self, phys, comp)

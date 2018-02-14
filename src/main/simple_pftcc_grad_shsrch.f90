@@ -11,7 +11,7 @@ public :: pftcc_grad_shsrch
 private
 
 type :: pftcc_grad_shsrch
-    private    
+    private
     type(opt_spec)                   :: ospec                  !< optimizer specification object
     class(optimizer), pointer        :: nlopt        =>null()  !< optimizer object
     class(polarft_corrcalc), pointer :: pftcc_ptr    =>null()  !< pointer to pftcc object
@@ -20,7 +20,7 @@ type :: pftcc_grad_shsrch
     integer                          :: nrots        = 0       !< # rotations
     integer                          :: maxits       = 100     !< max # iterations
     logical                          :: shbarr       = .true.  !< shift barrier constraint or not
-    integer                          :: cur_inpl_idx = 0       !< index of inplane angle for shift search              
+    integer                          :: cur_inpl_idx = 0       !< index of inplane angle for shift search
     real                             :: maxshift     = 0.      !< maximal shift
     integer                          :: max_evals    = 5       !< max # inplrot/shsrch cycles
   contains
@@ -35,7 +35,6 @@ contains
 
     !> Shift search constructor
     subroutine grad_shsrch_new( self, pftcc, lims, lims_init, shbarrier, maxits )
-        use simple_projector, only: projector
         class(pftcc_grad_shsrch),           intent(inout) :: self           !< instance
         class(polarft_corrcalc),    target, intent(in)    :: pftcc          !< correlator
         real,                               intent(in)    :: lims(:,:)      !< limits for barrier constraint
@@ -54,14 +53,14 @@ contains
         call self%ospec%specify('lbfgsb', 2, ftol=1e-1, gtol=1e-3, limits=lims,&
             max_step=0.01, limits_init=lims_init, maxits=self%maxits)
         ! generate the optimizer object
-        call opt_fact%new(self%ospec, self%nlopt)        
+        call opt_fact%new(self%ospec, self%nlopt)
         ! set pointer to corrcalc object
         self%pftcc_ptr => pftcc
         ! get # rotations
         self%nrots = pftcc%get_nrots()
         call self%grad_shsrch_set_costfun
     end subroutine grad_shsrch_new
-    
+
     subroutine grad_shsrch_set_costfun( self )
         class(pftcc_grad_shsrch), intent(inout) :: self
         self%ospec%costfun_8    => grad_shsrch_costfun
@@ -69,7 +68,7 @@ contains
         self%ospec%fdfcostfun_8 => grad_shsrch_fdfcostfun
         self%ospec%opt_callback => grad_shsrch_optimize_angle_wrapper
     end subroutine grad_shsrch_set_costfun
-       
+
     function grad_shsrch_costfun( self, vec, D ) result( cost )
         class(*), intent(inout) :: self
         integer,  intent(in)    :: D
@@ -83,7 +82,7 @@ contains
             stop
         end select
     end function grad_shsrch_costfun
-    
+
     subroutine grad_shsrch_gcostfun( self, vec, grad, D )
         class(*), intent(inout) :: self
         integer,  intent(in)    :: D
@@ -94,7 +93,7 @@ contains
         class is (pftcc_grad_shsrch)
             call self%pftcc_ptr%gencorr_grad_only_for_rot_8(self%reference, self%particle, vec, self%cur_inpl_idx, corrs_grad)
             grad = - corrs_grad
-        class default            
+        class default
             write (*,*) 'error in grad_shsrch_gcostfun: unknown type'
             grad = 0.
             stop
@@ -106,7 +105,7 @@ contains
         integer,  intent(in)    :: D
         real(dp), intent(inout) :: vec(D)
         real(dp), intent(out)   :: f, grad(D)
-        real(dp)                :: corrs          
+        real(dp)                :: corrs
         real(dp)                :: corrs_grad(2)
         select type(self)
         class is (pftcc_grad_shsrch)
@@ -129,7 +128,7 @@ contains
         loc = maxloc(corrs)
         self%cur_inpl_idx = loc(1)
     end subroutine grad_shsrch_optimize_angle
-    
+
     subroutine grad_shsrch_optimize_angle_wrapper( self )
         class(*), intent(inout) :: self
         select type(self)
@@ -140,7 +139,7 @@ contains
             stop
         end select
     end subroutine grad_shsrch_optimize_angle_wrapper
-    
+
     !> shsrch_set_indices Set indicies for shift search
     !! \param ref reference
     !! \param ptcl particle index
@@ -153,7 +152,7 @@ contains
         self%reference = ref
         self%particle  = ptcl
     end subroutine grad_shsrch_set_indices
-    
+
     !> minimisation routine
     function grad_shsrch_minimize( self, irot ) result( cxy )
         class(pftcc_grad_shsrch), intent(inout) :: self
@@ -176,7 +175,7 @@ contains
             self%cur_inpl_idx = loc(1)
         end do
         ! update best
-        lowest_cost = -corrs(self%cur_inpl_idx)            
+        lowest_cost = -corrs(self%cur_inpl_idx)
         if( lowest_cost < lowest_cost_overall )then
             found_better        = .true.
             lowest_cost_overall = lowest_cost
@@ -202,7 +201,7 @@ contains
             nullify(self%nlopt)
         end if
     end subroutine grad_shsrch_kill
-    
+
     function grad_shsrch_get_nevals( self ) result( nevals )
         class(pftcc_grad_shsrch), intent(inout) :: self
         integer :: nevals

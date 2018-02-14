@@ -104,7 +104,7 @@ contains
             case('yes')
                 ctfflag%flag = CTFFLAG_YES
             case('mul')
-                stop 'ERROR ctf=mul deprecated; simple_classaverager_dev :: cavger_new'
+                stop 'ERROR ctf=mul deprecated; simple_classaverager :: cavger_new'
             case('flip')
                 ctfflag%flag = CTFFLAG_FLIP
         end select
@@ -121,7 +121,7 @@ contains
         allocate(precs(partsz), cavgs_even(ncls), cavgs_odd(ncls),&
         &cavgs_merged(ncls), ctfsqsums_even(ncls),&
         &ctfsqsums_odd(ncls), ctfsqsums_merged(ncls), stat=alloc_stat)
-        call alloc_errchk('cavger_new; simple_classaverager_dev', alloc_stat)
+        call alloc_errchk('cavger_new; simple_classaverager', alloc_stat)
         do icls=1,ncls
             call cavgs_even(icls)%new(ldim,p%smpd,wthreads=.false.)
             call cavgs_odd(icls)%new(ldim,p%smpd,wthreads=.false.)
@@ -378,6 +378,8 @@ contains
                 call cavger_readwrite_partial_sums( 'read' )
                 call cavger_apply_weights( clsupdate_cntarr )
                 do_frac_update = .true.
+            else
+                call init_cavgs_sums
             endif
         else
             call init_cavgs_sums
@@ -430,6 +432,9 @@ contains
         do icls=1,ncls
             cnt_progress = cnt_progress + 1
             call progress(cnt_progress, ncls)
+            if( do_frac_update )then
+                if( all(clsupdate_cntarr(:,icls) < 1 ) ) cycle
+            endif
             icls_pop = class_pop(icls)
             if( icls_pop == 0 ) cycle
             call get_indices(icls, ptcls_inds, iprecs, ioris)
@@ -568,23 +573,25 @@ contains
             call cls_imgsum_odd%fwd_ft
             ! updates cavgs & rhos
             if( do_frac_update )then
-
-
-
+                !!$omp workshare
+                call cavgs_even(icls)%add_cmats_to_cmats(cavgs_odd(icls), ctfsqsums_even(icls), ctfsqsums_odd(icls),&
+                    &cls_imgsum_even,cls_imgsum_odd, lims_small, rho_even, rho_odd)
             else
-                !$omp parallel do collapse(2) default(shared) private(h,k,logi,phys)&
-                !$omp schedule(static) proc_bind(close)
-                do h=lims_small(1,1),lims_small(1,2)
-                    do k=lims_small(2,1),lims_small(2,2)
-                        logi = [h,k,0]
-                        phys = cls_imgsum_even%comp_addr_phys([h,k,0])
-                        call cavgs_even(icls)%set_fcomp(logi, phys, cls_imgsum_even%get_fcomp(logi, phys))
-                        call cavgs_odd(icls)%set_fcomp( logi, phys, cls_imgsum_odd%get_fcomp(logi, phys))
-                        call ctfsqsums_even(icls)%set_fcomp(logi, phys, cmplx(rho_even(h,k),0.))
-                        call ctfsqsums_odd(icls)%set_fcomp( logi, phys, cmplx(rho_odd(h,k), 0.))
-                    enddo
-                enddo
-                !$omp end parallel do
+                call cavgs_even(icls)%set_cmats_from_cmats(cavgs_odd(icls), ctfsqsums_even(icls), ctfsqsums_odd(icls),&
+                    &cls_imgsum_even,cls_imgsum_odd, lims_small, rho_even, rho_odd)
+                ! !$omp parallel do collapse(2) default(shared) private(h,k,logi,phys)&
+                ! !$omp schedule(static) proc_bind(close)
+                ! do h=lims_small(1,1),lims_small(1,2)
+                !     do k=lims_small(2,1),lims_small(2,2)
+                !         logi = [h,k,0]
+                !         phys = cls_imgsum_even%comp_addr_phys(logi)
+                !         call cavgs_even(icls)%set_fcomp(logi, phys, cls_imgsum_even%get_fcomp(logi, phys))
+                !         call cavgs_odd(icls)%set_fcomp( logi, phys, cls_imgsum_odd%get_fcomp(logi, phys))
+                !         call ctfsqsums_even(icls)%set_fcomp(logi, phys, cmplx(rho_even(h,k),0.))
+                !         call ctfsqsums_odd(icls)%set_fcomp( logi, phys, cmplx(rho_odd(h,k), 0.))
+                !     enddo
+                ! enddo
+                ! !$omp end parallel do
             endif
             deallocate(ptcls_inds, batches, iprecs, ioris)
         enddo ! class loop

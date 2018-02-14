@@ -48,7 +48,7 @@ contains
         logical, allocatable :: ptcl_mask(:)
         integer :: iptcl, icls, i, j, fnr
         real    :: corr_thresh, frac_srch_space, skewness, extr_thresh
-        logical :: l_do_read, doprint
+        logical :: l_do_read, doprint, l_no_partial_sums
 
         ! PREP REFERENCES
         if( L_BENCH )then
@@ -218,6 +218,7 @@ contains
         ! execute the search
         call del_file(p%outfile)
         if( L_BENCH ) t_align = tic()
+        l_no_partial_sums = .false.
         select case(trim(p%refine))
             case('neigh')
                 !$omp parallel do default(shared) schedule(guided) private(iptcl) proc_bind(close)
@@ -236,6 +237,7 @@ contains
                         call primesrch2D(iptcl)%exec_prime2D_srch(greedy=.true.)
                     end do
                     !$omp end parallel do
+                    l_no_partial_sums = .true.
                 else
                     if( corr_thresh > 0. )then
                         write(*,'(A,F8.2)') '>>> PARTICLE RANDOMIZATION(%):', 100.*extr_thresh
@@ -291,7 +293,11 @@ contains
         ! WIENER RESTORATION OF CLASS AVERAGES
         if( L_BENCH ) t_cavg = tic()
         call cavger_transf_oridat(b%a)
-        call cavger_assemble_sums(clsupdate_cntarr)
+        if( l_no_partial_sums )then
+            call cavger_assemble_sums
+        else
+            call cavger_assemble_sums(clsupdate_cntarr)
+        endif
         ! write results to disk
         if( p%l_distr_exec )then
             call cavger_readwrite_partial_sums('write')
@@ -397,7 +403,8 @@ contains
             endif
             if( pop > 0 )then
                 ! prepare the references
-                do_center = (p%oritab /= '' .and. (pop > MINCLSPOPLIM) .and. (which_iter > 2))
+                do_center = (p%oritab /= '' .and. (pop > MINCLSPOPLIM) .and.&
+                    &(which_iter > 2) .and. .not.p%l_frac_update)
                 ! here we are determining the shifts and map them back to classes
                 call prep2Dref(b, p, cavgs_merged(icls), match_imgs(icls), icls, center=do_center, xyz_out=xyz)
                 if( pop_even >= MINCLSPOPLIM .and. pop_odd >= MINCLSPOPLIM )then
