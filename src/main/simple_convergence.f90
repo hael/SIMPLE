@@ -55,6 +55,8 @@ contains
     function check_conv2D( self, ncls ) result( converged )
         class(convergence), intent(inout) :: self
         integer, optional,  intent(in)    :: ncls
+        real,    allocatable :: updatecnts(:)
+        logical, allocatable :: mask(:)
         logical :: converged
         integer :: nncls
         if( present(ncls) )then
@@ -62,12 +64,24 @@ contains
         else
             nncls = self%pp%ncls
         endif
-        self%corr      = self%bap%get_avg('corr')
-        self%dist_inpl = self%bap%get_avg('dist_inpl')
-        self%frac      = self%bap%get_avg('frac')
-        self%mi_joint  = self%bap%get_avg('mi_joint')
-        self%mi_class  = self%bap%get_avg('mi_class')
-        self%mi_inpl   = self%bap%get_avg('mi_inpl')
+        if( self%pp%l_frac_update )then
+            ! fractional particle update
+            updatecnts     = self%bap%get_all('updatecnt')
+            allocate(mask(size(updatecnts)), source=updatecnts > 0.5)
+            self%corr      = self%bap%get_avg('corr',      mask=mask)
+            self%dist_inpl = self%bap%get_avg('dist_inpl', mask=mask)
+            self%frac      = self%bap%get_avg('frac',      mask=mask)
+            self%mi_joint  = self%bap%get_avg('mi_joint',  mask=mask)
+            self%mi_inpl   = self%bap%get_avg('mi_inpl',   mask=mask)
+            self%mi_class  = self%bap%get_avg('mi_class',  mask=mask)
+        else
+            self%corr      = self%bap%get_avg('corr')
+            self%dist_inpl = self%bap%get_avg('dist_inpl')
+            self%frac      = self%bap%get_avg('frac')
+            self%mi_joint  = self%bap%get_avg('mi_joint')
+            self%mi_class  = self%bap%get_avg('mi_class')
+            self%mi_inpl   = self%bap%get_avg('mi_inpl')
+        endif
         write(*,'(A,1X,F7.4)') '>>> JOINT    DISTRIBUTION OVERLAP:     ', self%mi_joint
         write(*,'(A,1X,F7.4)') '>>> CLASS    DISTRIBUTION OVERLAP:     ', self%mi_class
         write(*,'(A,1X,F7.4)') '>>> IN-PLANE DISTRIBUTION OVERLAP:     ', self%mi_inpl
@@ -87,15 +101,16 @@ contains
         endif
         ! determine convergence
         if( nncls > 1 )then
-            if( self%pp%l_frac_update .and. self%mi_class > MI_CLASS_LIM_2D_FRAC .and. self%frac > FRAC_LIM )then
+            converged = .false.
+            if( self%pp%l_frac_update )then
+                if( self%mi_class > MI_CLASS_LIM_2D_FRAC .and. self%frac > FRAC_LIM_FRAC )converged = .true.
+            else
+                if( self%mi_class > MI_CLASS_LIM_2D .and. self%frac > FRAC_LIM )converged = .true.
+            endif
+            if( converged )then
                 write(*,'(A)') '>>> CONVERGED: .YES.'
-                converged = .true.
-            else if( self%mi_class > MI_CLASS_LIM_2D .and. self%frac > FRAC_LIM )then
-                write(*,'(A)') '>>> CONVERGED: .YES.'
-                converged = .true.
             else
                 write(*,'(A)') '>>> CONVERGED: .NO.'
-                converged = .false.
             endif
         else
             if( self%mi_inpl > MI_INPL_LIM .or. self%dist_inpl < 0.5 )then
