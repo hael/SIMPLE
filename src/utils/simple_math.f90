@@ -2968,13 +2968,13 @@ contains
       goto 2
   end function selec_2
 
-  function norm_2_sp(v) result(r)
+  pure function norm_2_sp(v) result(r)
       real, intent(in) :: v(:)
       real             :: r
       r = sqrt(dot_product(v,v))
   end function norm_2_sp
 
-  function norm_2_dp(v) result(r)
+  pure function norm_2_dp(v) result(r)
       real(dp), intent(in) :: v(:)
       real(dp)             :: r
       r = sqrt(dot_product(v,v))
