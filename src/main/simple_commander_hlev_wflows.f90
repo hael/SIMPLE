@@ -122,7 +122,7 @@ contains
             endif
             call cline_prime2D_stage2%delete('deftab')
             call cline_prime2D_stage2%set('oritab',  trim(finaldoc))
-            call cline_prime2D_stage2%set('startit', real(MAXITS_STAGE1 + 1))
+            call cline_prime2D_stage2%set('startit', real(last_iter_stage1 + 1))
             call xprime2D_distr%execute(cline_prime2D_stage2)
             last_iter_stage2 = nint(cline_prime2D_stage2%get_rarg('endit'))
             finaldoc         = trim(PRIME2D_ITER_FBODY)//int2str_pad(last_iter_stage2,3)//trim(METADATEXT)
