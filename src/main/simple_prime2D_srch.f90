@@ -62,7 +62,6 @@ type prime2D_srch
     procedure, private :: inpl_srch
     procedure          :: prep4srch
     procedure          :: update_best
-    procedure          :: incr_clsupdate_cntarr
     procedure          :: get_times
     procedure          :: kill
 end type prime2D_srch
@@ -486,19 +485,6 @@ contains
         call self%a_ptr%set(self%iptcl, 'frac',       100.*(real(self%nrefs_eval)/real(self%nrefs)))
         if( DEBUG ) print *, '>>> PRIME2D_SRCH::GOT BEST ORI'
     end subroutine update_best
-
-    subroutine incr_clsupdate_cntarr( self, clsupdate_cntarr )
-        class(prime2D_srch), intent(in)    :: self
-        integer,             intent(inout) :: clsupdate_cntarr(0:1,self%nrefs)
-        real :: eo
-        if( self%a_ptr%get_state(self%iptcl) > 0 )then
-            if( self%best_class > 0 )then
-                eo = self%a_ptr%get(self%iptcl, 'eo')
-                if( eo > -0.5 .and. eo < 0.5 ) clsupdate_cntarr(0,self%best_class) = clsupdate_cntarr(0,self%best_class) + 1
-                if( eo >  0.5                ) clsupdate_cntarr(1,self%best_class) = clsupdate_cntarr(1,self%best_class) + 1
-            endif
-        endif
-    end subroutine incr_clsupdate_cntarr
 
     subroutine get_times( self, rt_refloop, rt_inpl, rt_tot )
         class(prime2D_srch),  intent(in) :: self

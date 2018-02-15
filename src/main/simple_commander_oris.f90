@@ -97,7 +97,7 @@ contains
         ! generate the class documents
         numlen = len(int2str(p%ncls))
         do icls=1,p%ncls
-            clsarr = b%a%get_pinds(icls, 'class')                               !! realloc warning
+            call b%a%get_pinds(icls, 'class', clsarr)
             if( allocated(clsarr) )then
                 call os_class%new(size(clsarr))
                 do iptcl=1,size(clsarr)
@@ -409,15 +409,15 @@ contains
             selected = .false.
             write(*,'(a)') '>>> MAPPING SELECTED TO ORIGINAL CLUSTERS'
             do isel=1,nsel
-                loc                     = maxloc(correlations(isel,:))
-                selected(loc(1))        = .true.
-                labeler(isel)%particles = b%a%get_pinds(loc(1), 'class')
+                loc              = maxloc(correlations(isel,:))
+                selected(loc(1)) = .true.
+                call b%a%get_pinds(loc(1), 'class', labeler(isel)%particles)
             end do
             ! erase deselected (by setting their state to zero)
             do icls=1,p%ncls
                 if( selected(icls) ) cycle
                 if( b%a%get_pop(icls, 'class') > 0 )then
-                    rejected_particles = b%a%get_pinds(icls, 'class')
+                    call b%a%get_pinds(icls, 'class',rejected_particles)
                     do iptcl=1,size(rejected_particles)
                         call b%a%set(rejected_particles(iptcl), 'state', 0.)
                     end do
@@ -427,7 +427,7 @@ contains
         else
             allocate(labeler(nsel))
             do isel=1,nsel
-                labeler(isel)%particles = b%a%get_pinds(isel, 'class')
+                call b%a%get_pinds(isel, 'class', labeler(isel)%particles)
             end do
         endif
         if( cline%defined('oritab3D') )then

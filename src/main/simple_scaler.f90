@@ -32,14 +32,15 @@ logical, parameter :: DEBUG=.false.
 
 contains
 
-    subroutine init( self, p_master, cline, box_original, smpd_target, stkscaledbody )
+    subroutine init( self, p_master, cline, box_original, smpd_target, stkscaledbody, box_new )
         use simple_params, only: params
         class(scaler),              intent(inout) :: self
         class(params),              intent(in)    :: p_master
         class(cmdline),             intent(inout) :: cline
         integer,                    intent(in)    :: box_original
-        real,                       intent(in)    :: smpd_target
+        real,                       intent(inout) :: smpd_target
         character(len=*), optional, intent(in)    :: stkscaledbody
+        integer,          optional, intent(in)    :: box_new
         ! set constants
         self%stkname_changed = present(stkscaledbody)
         self%original_stk = ''
@@ -51,8 +52,17 @@ contains
         ! prep scale command line
         self%cline_scale   = cline
         ! identify scaling params
-        call autoscale(self%original_box, p_master%smpd,&
-        &smpd_target, self%box_sc, self%smpd_sc, self%scale)
+        if( present(box_new) )then
+            ! scaling based on new box size
+            self%box_sc = box_new
+            call autoscale(self%original_box, p_master%smpd,&
+            &self%box_sc, self%smpd_sc, self%scale)
+            smpd_target = self%smpd_sc
+        else
+            ! scaling based on sampling distance
+            call autoscale(self%original_box, p_master%smpd,&
+            &smpd_target, self%box_sc, self%smpd_sc, self%scale)
+        endif
         self%msk_sc = self%scale * p_master%msk
         if( DEBUG )then
             print *, 'original box: ', self%original_box

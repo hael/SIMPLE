@@ -225,7 +225,7 @@ type :: params
     integer :: ncomps=0
     integer :: ndiscrete=0         !< # discrete orientations
     integer :: ndocs=0             !< # documents
-    integer :: newbox=0            !< new box for scaling (by Fourier padding/clipping
+    integer :: newbox=0            !< new box for scaling (by Fourier padding/clipping)
     integer :: newbox2=0
     integer :: nframes=0           !< # frames{30}
     integer :: nmembers=0

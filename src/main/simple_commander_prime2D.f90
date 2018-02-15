@@ -129,7 +129,7 @@ contains
             end do
         else
             ! standard cavg assembly
-            call cavger_assemble_sums()
+            call cavger_assemble_sums( .false. )
         endif
         ! write sums
         if( p%l_distr_exec)then

@@ -47,6 +47,7 @@ type(image),       allocatable :: cavgs_merged(:)               !< -"-
 type(image),       allocatable :: ctfsqsums_even(:)             !< CTF**2 sums for Wiener normalisation
 type(image),       allocatable :: ctfsqsums_odd(:)              !< -"-
 type(image),       allocatable :: ctfsqsums_merged(:)           !< -"-
+logical,           allocatable :: pptcl_mask(:)
 logical                        :: phaseplate    = .false.       !< Volta phaseplate images or not
 logical                        :: l_is_class    = .true.        !< for prime2D or not
 logical                        :: l_hard_assign = .true.        !< npeaks == 1 or not
@@ -64,16 +65,22 @@ contains
     !!          data is now managed so that all exclusions are taken care of here
     !!          which means properly balanced batches can be produced for both soft
     !!          and hard clustering solutions
-    subroutine cavger_new( b, p, which )
+    subroutine cavger_new( b, p, which, ptcl_mask )
         class(build),  target, intent(inout) :: b     !< builder
         class(params), target, intent(inout) :: p     !< params
         character(len=*),      intent(in)    :: which !< class/proj
+        logical, optional,     intent(in)    :: ptcl_mask(p%fromp:p%top)
         integer :: alloc_stat, icls
         ! destruct possibly pre-existing instance
         call cavger_kill
         ! set pointers
         bp => b
         pp => p
+        if(present(ptcl_mask))then
+            allocate(pptcl_mask(p%fromp:p%top), source=ptcl_mask)
+        else
+            allocate(pptcl_mask(p%fromp:p%top), source=.true.)
+        endif
         ! class or proj
         select case(which)
             case('class')
@@ -91,12 +98,11 @@ contains
         if( p%l_distr_exec )then
             istart = p%fromp
             iend   = p%top
-            partsz = iend - istart + 1
         else
             istart = 1
             iend   = p%nptcls
-            partsz = p%nptcls
         endif
+        partsz = count(pptcl_mask)
         ! CTF logics
         select case(p%ctf)
             case('no')
@@ -152,9 +158,10 @@ contains
         cnt    = 0
         ! fetch data from a_here
         do iptcl=istart,iend
+            if(.not.pptcl_mask(iptcl)) cycle
             cnt = cnt + 1
             ! exclusion condition
-            if( nint(a_here%get(iptcl,'state')) == 0 .or.&
+            if( a_here%get_state(iptcl) == 0 .or.&
                &nint(a_here%get(iptcl,'state_balance')) == 0 .or.&
                &a_here%get(iptcl,'w') < TINY )then
                 precs(cnt)%pind  = 0
@@ -181,6 +188,7 @@ contains
         l_hard_assign = .true.
         cnt = 0
         do iptcl=istart,iend
+            if(.not.pptcl_mask(iptcl)) cycle
             cnt = cnt + 1
             ! inclusion condition
             if( precs(cnt)%pind > 0 )then
@@ -346,12 +354,12 @@ contains
 
     !>  \brief  is for assembling the sums in distributed/non-distributed mode
     !!          using gridding interpolation in Fourier space
-    subroutine cavger_assemble_sums( clsupdate_cntarr )
+    subroutine cavger_assemble_sums( do_frac_update )
         use simple_kbinterpol,      only: kbinterpol
         use simple_prep4cgrid,      only: prep4cgrid
         use simple_map_reduce,      only: split_nobjs_even
         use simple_hadamard_common, only: read_img
-        integer, optional, intent(in) :: clsupdate_cntarr(0:1,ncls)
+        logical,           intent(in) :: do_frac_update
         type(kbinterpol)              :: kbwin
         type(prep4cgrid)              :: gridprep
         type(image)                   :: cls_imgsum_even, cls_imgsum_odd
@@ -362,31 +370,22 @@ contains
         integer,     allocatable      :: ioris(:), cyc1(:), cyc2(:)
         complex   :: zero
         real      :: loc(2), mat(2,2), pw, add_phshift
-        integer   :: cnt_progress, nbatches, batch, icls_pop, iprec, iori, i, batchsz, fnr, sh
+        integer   :: cnt_progress, nbatches, batch, icls_pop, iprec, iori, i, batchsz, fnr, sh, iwinsz
         integer   :: lims(3,2), nyq, logi(3), phys(3), win(2,2), lims_small(3,2), phys_cmat(3)
         integer   :: cyc_lims(3,2), alloc_stat, wdim, h, k, l, m, incr, icls, iptcl, batchsz_max
-        logical   :: do_frac_update
+        logical   :: pptcl_mask(pp%fromp:pp%top)
         if( .not. pp%l_distr_exec ) write(*,'(a)') '>>> ASSEMBLING CLASS SUMS'
         ! init cavgs
-        do_frac_update = .false.
-        if( pp%l_frac_update )then
-            if( .not. pp%l_distr_exec )then
-                write(*,*) 'ERROR, incremental learning only supported for distributed mode'
-                stop 'classaverager :: cavger_assemble_sums'
-            endif
-            if( present(clsupdate_cntarr) )then
-                call cavger_readwrite_partial_sums( 'read' )
-                call cavger_apply_weights( clsupdate_cntarr )
-                do_frac_update = .true.
-            else
-                call init_cavgs_sums
-            endif
+        if( do_frac_update )then
+            call cavger_readwrite_partial_sums( 'read' )
+            call cavger_apply_weights( 1. - pp%update_frac )
         else
             call init_cavgs_sums
         endif
-        kbwin = kbinterpol(KBWINSZ, pp%alpha)
-        zero  = cmplx(0.,0.)
-        wdim  = kbwin%get_wdim()
+        kbwin  = kbinterpol(KBWINSZ, pp%alpha)
+        zero   = cmplx(0.,0.)
+        wdim   = kbwin%get_wdim()
+        ! iwinsz = ceiling(kbwin%get_winsz() - 0.5)
         ! determines max batch size
         batchsz_max = 0
         ! class loop
@@ -432,9 +431,6 @@ contains
         do icls=1,ncls
             cnt_progress = cnt_progress + 1
             call progress(cnt_progress, ncls)
-            if( do_frac_update )then
-                if( all(clsupdate_cntarr(:,icls) < 1 ) ) cycle
-            endif
             icls_pop = class_pop(icls)
             if( icls_pop == 0 ) cycle
             call get_indices(icls, ptcls_inds, iprecs, ioris)
@@ -515,6 +511,10 @@ contains
                             sh = nint(hyp(real(h),real(k)))
                             if( sh > nyq + 1 )cycle
                             loc = matmul(real([h,k]),mat)
+                            ! window
+                            ! win(1,:) = nint(loc)
+                            ! win(2,:) = win(1,:) + iwinsz
+                            ! win(1,:) = win(1,:) - iwinsz
                             call sqwin_2d(loc(1),loc(2), KBWINSZ, win)
                             w = pw
                             do l=1,wdim
@@ -573,25 +573,11 @@ contains
             call cls_imgsum_odd%fwd_ft
             ! updates cavgs & rhos
             if( do_frac_update )then
-                !!$omp workshare
                 call cavgs_even(icls)%add_cmats_to_cmats(cavgs_odd(icls), ctfsqsums_even(icls), ctfsqsums_odd(icls),&
                     &cls_imgsum_even,cls_imgsum_odd, lims_small, rho_even, rho_odd)
             else
                 call cavgs_even(icls)%set_cmats_from_cmats(cavgs_odd(icls), ctfsqsums_even(icls), ctfsqsums_odd(icls),&
                     &cls_imgsum_even,cls_imgsum_odd, lims_small, rho_even, rho_odd)
-                ! !$omp parallel do collapse(2) default(shared) private(h,k,logi,phys)&
-                ! !$omp schedule(static) proc_bind(close)
-                ! do h=lims_small(1,1),lims_small(1,2)
-                !     do k=lims_small(2,1),lims_small(2,2)
-                !         logi = [h,k,0]
-                !         phys = cls_imgsum_even%comp_addr_phys(logi)
-                !         call cavgs_even(icls)%set_fcomp(logi, phys, cls_imgsum_even%get_fcomp(logi, phys))
-                !         call cavgs_odd(icls)%set_fcomp( logi, phys, cls_imgsum_odd%get_fcomp(logi, phys))
-                !         call ctfsqsums_even(icls)%set_fcomp(logi, phys, cmplx(rho_even(h,k),0.))
-                !         call ctfsqsums_odd(icls)%set_fcomp( logi, phys, cmplx(rho_odd(h,k), 0.))
-                !     enddo
-                ! enddo
-                ! !$omp end parallel do
             endif
             deallocate(ptcls_inds, batches, iprecs, ioris)
         enddo ! class loop
@@ -799,24 +785,14 @@ contains
         deallocate(cae, cao, cte, cto)
     end subroutine cavger_readwrite_partial_sums
 
-    subroutine cavger_apply_weights( clsupdate_cntarr )
-        integer, intent(in) :: clsupdate_cntarr(0:1,ncls)
-        integer :: icls, pop
-        real    :: w_update, w_static
+    subroutine cavger_apply_weights( w )
+        real, intent(in) :: w
+        integer :: icls
         do icls=1,ncls
-            if( clsupdate_cntarr(0,icls) > 0 )then
-                pop      = class_pop_eo(icls, 0)
-                w_update = real(clsupdate_cntarr(0,icls)) / real(pop)
-                w_static = 1.0 - w_update
-                call cavgs_even(icls)%mul(w_static)
-                call ctfsqsums_even(icls)%mul(w_static)
-            else if( clsupdate_cntarr(1,icls) > 0 )then
-                pop      = class_pop_eo(icls, 1)
-                w_update = real(clsupdate_cntarr(1,icls)) / real(pop)
-                w_static = 1.0 - w_update
-                call cavgs_odd(icls)%mul(w_static)
-                call ctfsqsums_odd(icls)%mul(w_static)
-            endif
+            call cavgs_even(icls)%mul(w)
+            call ctfsqsums_even(icls)%mul(w)
+            call cavgs_odd(icls)%mul(w)
+            call ctfsqsums_odd(icls)%mul(w)
         end do
     end subroutine cavger_apply_weights
 
@@ -891,7 +867,7 @@ contains
                 call ctfsqsums_merged(icls)%kill
             end do
             deallocate( cavgs_even, cavgs_odd, cavgs_merged,&
-            &ctfsqsums_even, ctfsqsums_odd, ctfsqsums_merged)
+            &ctfsqsums_even, ctfsqsums_odd, ctfsqsums_merged, pptcl_mask)
             do iprec=1,partsz
                 if( allocated(precs(iprec)%classes) ) deallocate(precs(iprec)%classes)
                 if( allocated(precs(iprec)%states)  ) deallocate(precs(iprec)%states)

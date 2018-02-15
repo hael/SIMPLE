@@ -103,7 +103,7 @@ contains
         if( nncls > 1 )then
             converged = .false.
             if( self%pp%l_frac_update )then
-                if( self%mi_class > MI_CLASS_LIM_2D_FRAC .and. self%frac > FRAC_LIM_FRAC )converged = .true.
+                if( self%mi_joint > MI_CLASS_LIM_2D_FRAC .and. self%frac > FRAC_LIM_FRAC )converged = .true.
             else
                 if( self%mi_class > MI_CLASS_LIM_2D .and. self%frac > FRAC_LIM )converged = .true.
             endif

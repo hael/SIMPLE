@@ -67,6 +67,7 @@ type :: oris
     procedure          :: print_
     procedure          :: print_matrices
     procedure          :: sample4update_and_incrcnt
+    procedure          :: sample4update_and_incrcnt2D
     procedure          :: ori2str
     ! SETTERS
     procedure, private :: assign
@@ -582,7 +583,7 @@ contains
         if( which < 1 .or. which > nstates )then
             stop 'which (state) is out of range; simple_oris::split_state'
         endif
-        ptcls_in_which = self%get_pinds(which, 'state')
+        call self%get_pinds(which, 'state', ptcls_in_which)
         n = size(ptcls_in_which)
         allocate(states(n), stat=alloc_stat)
         allocchk("simple_oris::split_state")
@@ -611,7 +612,7 @@ contains
         if( which < 1 .or. which > nmembers )then
             stop 'which member is out of range; simple_oris :: split_class'
         endif
-        ptcls_in_which = self%get_pinds(which, 'class')
+        call self%get_pinds(which, 'class', ptcls_in_which)
         n = size(ptcls_in_which)
         allocate(members(n), stat=alloc_stat)
         allocchk("simple_oris::split_class")
@@ -683,7 +684,7 @@ contains
             maxpop     = pops(cls2split(1))
             if( maxpop <= 2*MINCLSPOPLIM )exit
             ! migration
-            inds2split = self%get_pinds(cls2split(1), 'class', consider_w=.false.) ! needs to be false
+            call self%get_pinds(cls2split(1), 'class', inds2split, consider_w=.false.) ! needs to be false
             rt = ran_tabu(maxpop)
             allocate(membership(maxpop), stat=alloc_stat)
             allocchk("simple_oris:: fill_empty_classes membership")
@@ -799,12 +800,12 @@ contains
     end function create_conforming_npeaks_set
 
     !>  \brief  is for getting an allocatable array with ptcl indices of the label 'label'
-    function get_pinds( self, ind, label, consider_w ) result( indices )
-        class(oris),       intent(inout) :: self
-        character(len=*),  intent(in)    :: label
-        integer,           intent(in)    :: ind
-        logical, optional, intent(in)    :: consider_w
-        integer, allocatable :: indices(:)
+    subroutine get_pinds( self, ind, label, indices, consider_w )
+        class(oris),          intent(inout) :: self
+        character(len=*),     intent(in)    :: label
+        integer,              intent(in)    :: ind
+        integer, allocatable, intent(out)   :: indices(:)
+        logical, optional,    intent(in)    :: consider_w
         integer :: pop, mystate, cnt, myval, i
         logical :: cconsider_w
         real    :: w
@@ -813,6 +814,7 @@ contains
         if( cconsider_w )then
             if( .not. self%isthere('w') ) stop 'ERROR, oris :: get_pinds with optional consider_w assumes w set'
         endif
+        if( allocated(indices) )deallocate(indices)
         pop = self%get_pop(ind, label, cconsider_w )
         if( pop > 0 )then
             allocate( indices(pop), stat=alloc_stat )
@@ -831,7 +833,7 @@ contains
                 endif
             end do
         endif
-    end function get_pinds
+    end subroutine get_pinds
 
     !>  \brief  generate a mask with the oris with mystate == state/ind == get(label)
     subroutine gen_mask( self, state, ind, label, l_mask, consider_w, fromto )
@@ -1114,7 +1116,7 @@ contains
                 integer, allocatable :: inds(:)
                 real                 :: wdmean, nw_nonzero, wsdev
                 integer              :: loc(1), i, n
-                inds = self%get_pinds(istate, 'state')
+                call self%get_pinds(istate, 'state', inds)
                 n = size(inds)
                 wsdev = 0.
                 if( n < 3 ) return
@@ -1213,7 +1215,6 @@ contains
     end subroutine print_matrices
 
     subroutine sample4update_and_incrcnt( self, fromto, update_frac, nsamples, inds, mask )
-        use simple_rnd, only: multinomal_many
         class(oris),          intent(inout) :: self
         integer,              intent(in)    :: fromto(2)
         real,                 intent(in)    :: update_frac
@@ -1260,6 +1261,69 @@ contains
             mask(inds(i)) = .true.
         end do
     end subroutine sample4update_and_incrcnt
+
+    subroutine sample4update_and_incrcnt2D( self, ncls, fromto, update_frac, nsamples, inds, mask )
+        class(oris),          intent(inout) :: self
+        integer,              intent(in)    :: ncls, fromto(2)
+        real,                 intent(in)    :: update_frac
+        integer,              intent(out)   :: nsamples
+        integer, allocatable, intent(out)   :: inds(:)
+        logical,              intent(out)   :: mask(fromto(1):fromto(2))
+        real,    allocatable :: counts(:)
+        integer, allocatable :: clsarr(:)
+        integer :: i, cnt, icls, sz
+        real    :: val, update_frac_here
+        update_frac_here = update_frac * real(fromto(2)-fromto(1)+1) / real(self%n)
+        mask = .false.
+        do icls=1,ncls
+            call self%get_pinds(icls, 'class', clsarr)
+            if( allocated(clsarr) )then
+                sz      = size(clsarr)
+                nsamples = max(1,nint(real(sz) * update_frac_here ))
+                allocate(counts(sz))
+                do i=1,sz
+                    if( self%o(clsarr(i))%isthere('updatecnt') )then
+                        counts(i) = self%o(clsarr(i))%get('updatecnt')
+                    else
+                        counts(i) = 0.
+                    endif
+                end do
+                ! order counts
+                call hpsort(counts, clsarr)
+                cnt = 0
+                do i=1,sz
+                    if( clsarr(i) >= fromto(1) .and. clsarr(i) <= fromto(2) )then
+                        cnt = cnt +1
+                        if( cnt > nsamples )exit
+                        mask(clsarr(i)) = .true.
+                    endif
+                end do
+                deallocate(counts,clsarr)
+            endif
+        end do
+        nsamples = count(mask)
+        if( nsamples > 0 )then
+            allocate(inds(nsamples), source=0)
+            ! increment update counter and set mask
+            cnt  = 0
+            do i=fromto(1),fromto(2)
+                if( mask(i) )then
+                    cnt       = cnt + 1
+                    inds(cnt) = i
+                    val       = self%o(i)%get('updatecnt')
+                    val       = val + 1.0
+                    call self%o(i)%set('updatecnt', val)
+                endif
+            end do
+        else
+            nsamples = fromto(2)-fromto(1)+1
+            mask     = .true.
+            inds     = (/ (i,i=fromto(1),fromto(2)) /)
+            do i=fromto(1),fromto(2)
+                call self%o(i)%set('updatecnt', 1.)
+            end do
+        endif
+    end subroutine sample4update_and_incrcnt2D
 
     !>  \brief  joins the hashes into a string that represent the ith ori
     function ori2str( self, i ) result( str )
@@ -2396,7 +2460,7 @@ contains
             ! zero case
             if( pop < 1 ) cycle
             ! get indices of particles in class subject to weight not zero
-            inds = self%get_pinds(i, 'class', consider_w=.true.)
+            call self%get_pinds(i, 'class', inds, consider_w=.true.)
             if( pop <= popmax )then ! all inclded
                 do j=1,pop
                     included(inds(j)) = .true.
@@ -3293,7 +3357,7 @@ contains
         maxd  = 0.
         mind  = 0.
         do icls=1,ncls
-            clsarr = self%get_pinds(icls, 'class')
+            call self%get_pinds(icls, 'class', clsarr)
             if( allocated(clsarr) )then
                 sz = size(clsarr)
                 n  = (sz*(sz-1))/2

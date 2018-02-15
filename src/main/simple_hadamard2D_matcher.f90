@@ -44,18 +44,61 @@ contains
         class(cmdline), intent(inout) :: cline
         integer,        intent(in)    :: which_iter
         logical,        intent(inout) :: converged
-        integer, allocatable :: prev_pops(:), pinds(:), clsupdate_cntarr(:,:)
+        integer, allocatable :: prev_pops(:), pinds(:)
         logical, allocatable :: ptcl_mask(:)
         integer :: iptcl, icls, i, j, fnr
         real    :: corr_thresh, frac_srch_space, skewness, extr_thresh
-        logical :: l_do_read, doprint, l_no_partial_sums
+        logical :: l_do_read, doprint, l_partial_sums
+
+        ! SET FRACTION OF SEARCH SPACE
+        frac_srch_space = b%a%get_avg('frac')
+
+        ! EXTREMAL LOGICS
+        if( frac_srch_space < 98. .and. p%extr_iter <= 15 )then
+            extr_thresh = EXTRINITHRESH * (1.-EXTRTHRESH_CONST)**real(p%extr_iter-1)  ! factorial decay
+            extr_thresh = min(EXTRINITHRESH, max(0., extr_thresh))
+            corr_thresh = b%a%extremal_bound(extr_thresh)
+        else
+            extr_thresh = 0.
+            corr_thresh = -huge(corr_thresh)
+        endif
+
+        ! PARTICLE INDEX SAMPLING FOR FRACTIONAL UPDATE (OR NOT)
+        if( allocated(pinds) )     deallocate(pinds)
+        if( allocated(ptcl_mask) ) deallocate(ptcl_mask)
+        if( p%l_frac_update )then
+            allocate(ptcl_mask(p%fromp:p%top))
+            call b%a%sample4update_and_incrcnt2D(p%ncls, [p%fromp,p%top], p%update_frac, nptcls2update, pinds, ptcl_mask)
+            ! correct convergence stats
+            do iptcl=p%fromp,p%top
+                if( .not. ptcl_mask(iptcl) )then
+                    ! these are not updated
+                    call b%a%set(iptcl, 'mi_class',    1.0)
+                    call b%a%set(iptcl, 'mi_inpl',     1.0)
+                    call b%a%set(iptcl, 'mi_joint',    1.0)
+                    call b%a%set(iptcl, 'dist_inpl',   0.0)
+                    call b%a%set(iptcl, 'frac',      100.0)
+                endif
+            end do
+        else
+            nptcls2update = p%top - p%fromp + 1
+            allocate(pinds(nptcls2update), ptcl_mask(p%fromp:p%top))
+            pinds = (/(i,i=p%fromp,p%top)/)
+            ptcl_mask = .true.
+        endif
 
         ! PREP REFERENCES
         if( L_BENCH )then
             t_init = tic()
             t_tot  = t_init
         endif
-        call cavger_new(b, p, 'class')
+        if( p%oritab .eq. '' )then
+            call cavger_new(b, p, 'class')
+            l_partial_sums = .false.
+        else
+            call cavger_new(b, p, 'class', ptcl_mask)
+            l_partial_sums = p%l_frac_update
+        endif
         l_do_read = .true.
         if( p%l_distr_exec )then
             if( b%a%get_nevenodd() == 0 )then
@@ -71,7 +114,7 @@ contains
                 if( .not. cline%defined('refs') .and. cline%defined('oritab') )then
                     ! we make references
                     call cavger_transf_oridat(b%a)
-                    call cavger_assemble_sums
+                    call cavger_assemble_sums( .false. )
                     l_do_read = .false.
                 else if( cline%defined('refs') )then
                     ! do nothing
@@ -80,13 +123,11 @@ contains
                     p%refs      = 'start2Drefs'//p%ext
                     p%refs_even = 'start2Drefs_even'//p%ext
                     p%refs_odd  = 'start2Drefs_odd'//p%ext
-                    ptcl_mask   = b%a%included()
                     if( cline%defined('stktab') )then
-                        call random_selection_from_imgfile(p%stktab, p%refs, p%ncls, p%box, p%smpd, ptcl_mask)
+                        call random_selection_from_imgfile(p%stktab, p%refs, p%ncls, p%box, p%smpd, b%a%included())
                     else
-                        call random_selection_from_imgfile(p%stk, p%refs, p%ncls, p%box, p%smpd, ptcl_mask)
+                        call random_selection_from_imgfile(p%stk, p%refs, p%ncls, p%box, p%smpd, b%a%included())
                     endif
-                    deallocate(ptcl_mask)
                     call copy_imgfile(trim(p%refs), trim(p%refs_even), p%smpd, [1,p%ncls])
                     call copy_imgfile(trim(p%refs), trim(p%refs_odd),  p%smpd, [1,p%ncls])
                 endif
@@ -98,9 +139,6 @@ contains
             call cavger_read(p%refs_even, 'even'  )
             call cavger_read(p%refs_odd,  'odd'   )
         endif
-
-        ! SET FRACTION OF SEARCH SPACE
-        frac_srch_space = b%a%get_avg('frac')
 
         ! SETUP WEIGHTS
         ! this needs to be done prior to search such that each part
@@ -124,8 +162,8 @@ contains
                     ! zero-populated classes, for congruence with empty cavgs
                     do icls = 1, p%ncls
                         if( prev_pops(icls) > 0 )cycle
-                        if( b%a%get_pop(icls, 'class', consider_w=.false.) == 0 )cycle
-                        pinds = b%a%get_pinds(icls, 'class', consider_w=.false.)
+                        call b%a%get_pinds(icls, 'class', pinds, consider_w=.false.)
+                        if( .not.allocated(pinds) )cycle
                         do iptcl = 1, size(pinds)
                             call b%a%set(pinds(iptcl), 'w', 0.)
                         enddo
@@ -145,7 +183,7 @@ contains
 
         ! POPULATION BALANCING LOGICS
         ! this needs to be done prior to search such that each part
-        ! sees the same information in distributed execution
+        ! sees the same information in distributed execution(p%oritab.ne.'') .and. p%l_frac_update
         if( p%balance > 0 )then
             call b%a%balance(p%balance, skewness)
             write(*,'(A,F8.2)') '>>> CLASS DISTRIBUTION SKEWNESS(%):', 100. * skewness
@@ -153,38 +191,6 @@ contains
             call b%a%set_all2single('state_balance', 1.0)
         endif
 
-        ! PARTICLE INDEX SAMPLING FOR FRACTIONAL UPDATE (OR NOT)
-        if( allocated(pinds) )     deallocate(pinds)
-        if( allocated(ptcl_mask) ) deallocate(ptcl_mask)
-        if( p%l_frac_update )then
-            allocate(ptcl_mask(p%fromp:p%top))
-            call b%a%sample4update_and_incrcnt([p%fromp,p%top], p%update_frac, nptcls2update, pinds, ptcl_mask)
-            ! correct convergence stats
-            do iptcl=p%fromp,p%top
-                if( .not. ptcl_mask(iptcl) )then
-                    ! these are not updated
-                    call b%a%set(iptcl, 'mi_class',    1.0)
-                    call b%a%set(iptcl, 'mi_inpl',     1.0)
-                    call b%a%set(iptcl, 'mi_joint',    1.0)
-                    call b%a%set(iptcl, 'dist_inpl',   0.0)
-                    call b%a%set(iptcl, 'frac',      100.0)
-                endif
-            end do
-        else
-            nptcls2update = p%top - p%fromp + 1
-            allocate(pinds(nptcls2update), ptcl_mask(p%fromp:p%top))
-            pinds = (/(i,i=p%fromp,p%top)/)
-            ptcl_mask = .true.
-        endif
-
-        ! EXTREMAL LOGICS
-        if( frac_srch_space < 98. .and. p%extr_iter <= 15 )then
-            extr_thresh = EXTRINITHRESH * (1.-EXTRTHRESH_CONST)**real(p%extr_iter-1)  ! factorial decay
-            extr_thresh = min(EXTRINITHRESH, max(0., extr_thresh))
-            corr_thresh = b%a%extremal_bound(extr_thresh)
-        else
-            corr_thresh = -huge(corr_thresh)
-        endif
 
         ! SET FOURIER INDEX RANGE
         call set_bp_range2D( b, p, cline, which_iter, frac_srch_space )
@@ -218,7 +224,6 @@ contains
         ! execute the search
         call del_file(p%outfile)
         if( L_BENCH ) t_align = tic()
-        l_no_partial_sums = .false.
         select case(trim(p%refine))
             case('neigh')
                 !$omp parallel do default(shared) schedule(guided) private(iptcl) proc_bind(close)
@@ -237,7 +242,6 @@ contains
                         call primesrch2D(iptcl)%exec_prime2D_srch(greedy=.true.)
                     end do
                     !$omp end parallel do
-                    l_no_partial_sums = .true.
                 else
                     if( corr_thresh > 0. )then
                         write(*,'(A,F8.2)') '>>> PARTICLE RANDOMIZATION(%):', 100.*extr_thresh
@@ -264,11 +268,6 @@ contains
                     !$omp end parallel do
                 endif
         end select
-        ! class update counter array (keeps track of updates to even/odd assignments)
-        allocate(clsupdate_cntarr(0:1,p%ncls), source=0)
-        do iptcl=p%fromp,p%top
-            if( ptcl_mask(iptcl) ) call primesrch2D(iptcl)%incr_clsupdate_cntarr(clsupdate_cntarr)
-        end do
 
         ! pftcc & primesrch2D not needed anymore
         call pftcc%kill
@@ -293,11 +292,11 @@ contains
         ! WIENER RESTORATION OF CLASS AVERAGES
         if( L_BENCH ) t_cavg = tic()
         call cavger_transf_oridat(b%a)
-        if( l_no_partial_sums )then
-            call cavger_assemble_sums
-        else
-            call cavger_assemble_sums(clsupdate_cntarr)
-        endif
+        print *, 'passed cavger_transf_oridat'
+        call flush()
+        call cavger_assemble_sums( l_partial_sums )
+        print *, 'passed cavger_assemble_sums'
+        call flush()
         ! write results to disk
         if( p%l_distr_exec )then
             call cavger_readwrite_partial_sums('write')
