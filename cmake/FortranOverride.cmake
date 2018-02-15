@@ -179,7 +179,7 @@ elseif (CMAKE_Fortran_COMPILER_ID STREQUAL "PGI")
   message(STATUS " PGI Compiler settings: default USE_CUDA=ON")
   set(USE_CUDA ON)
   set(preproc  "-Mpreprocess ")
-  set(dialect  "-Mfreeform  -Mextend -Mnosecond_underscore -Mlarge_arrays -Miomutex") #-Mstandard -Mallocatable=03
+  set(dialect  "-Mfreeform  -Mextend -Mnosecond_underscore -Mlarge_arrays ") #-Mstandard -Mallocatable=03
   set(checks   "-Mdclchk -Mchkptr -Mchkstk -Mdepchk -Munixlogical -Mflushz -Mdaz -Mfpmisalign")
   set(warn     "-Minform=warn -Minfo=all,ftn ") # ${checks}")
   # bounds checking cannot be done in CUDA fortran or OpenACC GPU
@@ -192,6 +192,9 @@ elseif (CMAKE_Fortran_COMPILER_ID STREQUAL "PGI")
   option(PGI_EXTRACT_ALL  "PGI --Extract subprograms for inlining (-Mextract)" OFF)
   option(PGI_LARGE_FILE_SUPPORT  "PGI -- Link with library directory for large file support (-Mlfs)" OFF)
   option(PGI_CUDA_MANAGED_MEMORY "Use CUDA Managed Memory" OFF)
+  option(PGI_CUDA_IOMUTEX "Use mutex for IO calls" ON)
+  option(PGI_CHECKING "Use extra checks in commandline " ON)
+  option(PGI_EXTRA_FAST "Use extra compile options to speed up code e.g. -Munroll -Mvect" ON)
   #
   message(STATUS "In PGI: FFTW should be set with one of the following environment variables: FFTWDIR,FFTW_DIR, or FFTW_ROOT ")
   if(NOT "$ENV{FFTW_DIR}" STREQUAL "")
@@ -313,3 +316,8 @@ elseif(NOT BT)
 else()
   message(FATAL_ERROR "CMAKE_BUILD_TYPE not valid, choices are DEBUG, RELEASE, RELWITHDEBINFO or TESTING")
 endif(BT STREQUAL "RELEASE")
+
+
+IF (LINUX)
+    option(MAP_TEXT_HUGE_PAGES "Remap hot static code onto huge pages" ON)
+ENDIF()

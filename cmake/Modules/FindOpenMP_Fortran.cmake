@@ -14,7 +14,7 @@
 
 #=============================================================================
 # Copyright 2009 Kitware, Inc.
-# Copyright 2008-2009 André Rigland Brodtkorb <Andre.Brodtkorb@ifi.uio.no>
+# Copyright 2008-2009 Andr\`e Rigland Brodtkorb <Andre.Brodtkorb@ifi.uio.no>
 #
 # Distributed under the OSI-approved BSD License (the "License");
 # see accompanying file Copyright.txt for details.
