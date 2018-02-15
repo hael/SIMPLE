@@ -48,13 +48,34 @@ contains
         logical, allocatable :: ptcl_mask(:)
         integer :: iptcl, icls, i, j, fnr
         real    :: corr_thresh, frac_srch_space, skewness, extr_thresh
-        logical :: l_do_read, doprint, l_partial_sums
+        logical :: l_do_read, doprint, l_partial_sums, l_extr, l_frac_update
 
         ! SET FRACTION OF SEARCH SPACE
         frac_srch_space = b%a%get_avg('frac')
 
+        ! SWITCHES
+        if( p%extr_iter == 1 )then
+            ! greedy start
+            l_partial_sums = .false.
+            l_extr         = .false.
+            l_frac_update  = .false.
+        else if( p%extr_iter <= 15 )then
+            ! extremal opt without fractional update
+            l_partial_sums = .false.
+            l_extr         = .true.
+            l_frac_update  = .false.
+        else
+            ! optional fractional update, no extremal opt
+            l_partial_sums = p%l_frac_update
+            l_extr         = .false.
+            l_frac_update  = p%l_frac_update
+        endif
+        print *, 'l_partial_sums:', l_partial_sums
+        print *, 'l_extr        :', l_extr
+        print *, 'l_frac_update :', l_frac_update
+
         ! EXTREMAL LOGICS
-        if( frac_srch_space < 98. .and. p%extr_iter <= 15 )then
+        if( l_extr  )then
             extr_thresh = EXTRINITHRESH * (1.-EXTRTHRESH_CONST)**real(p%extr_iter-1)  ! factorial decay
             extr_thresh = min(EXTRINITHRESH, max(0., extr_thresh))
             corr_thresh = b%a%extremal_bound(extr_thresh)
@@ -66,7 +87,7 @@ contains
         ! PARTICLE INDEX SAMPLING FOR FRACTIONAL UPDATE (OR NOT)
         if( allocated(pinds) )     deallocate(pinds)
         if( allocated(ptcl_mask) ) deallocate(ptcl_mask)
-        if( p%l_frac_update )then
+        if( l_frac_update )then
             allocate(ptcl_mask(p%fromp:p%top))
             call b%a%sample4update_and_incrcnt2D(p%ncls, [p%fromp,p%top], p%update_frac, nptcls2update, pinds, ptcl_mask)
             ! correct convergence stats
@@ -92,13 +113,7 @@ contains
             t_init = tic()
             t_tot  = t_init
         endif
-        if( p%oritab .eq. '' )then
-            call cavger_new(b, p, 'class')
-            l_partial_sums = .false.
-        else
-            call cavger_new(b, p, 'class', ptcl_mask)
-            l_partial_sums = p%l_frac_update
-        endif
+        call cavger_new(b, p, 'class', ptcl_mask)
         l_do_read = .true.
         if( p%l_distr_exec )then
             if( b%a%get_nevenodd() == 0 )then
@@ -191,7 +206,6 @@ contains
             call b%a%set_all2single('state_balance', 1.0)
         endif
 
-
         ! SET FOURIER INDEX RANGE
         call set_bp_range2D( b, p, cline, which_iter, frac_srch_space )
         if( L_BENCH ) rt_init = toc(t_init)
@@ -230,8 +244,6 @@ contains
                 do iptcl=p%fromp,p%top
                     if( ptcl_mask(iptcl) )then
                         call primesrch2D(iptcl)%nn_srch(b%nnmat)
-                    else
-                        call primesrch2D(iptcl)%calc_corr()
                     endif
                 end do
                 !$omp end parallel do
@@ -249,14 +261,14 @@ contains
                     endif
                     if( L_BENCH_PRIME2D )then
                         rt_refloop_sum = 0.
+                        rt_inpl_sum    = 0.
                         rt_tot_sum     = 0.
                     endif
-                    !$omp parallel do default(shared) schedule(guided) private(iptcl) proc_bind(close)
+                    !$omp parallel do default(shared) schedule(guided) private(iptcl) proc_bind(close)&
+                    !$omp reduction(+:rt_refloop_sum,rt_inpl_sum,rt_tot_sum)
                     do iptcl=p%fromp,p%top
                         if( ptcl_mask(iptcl) )then
                             call primesrch2D(iptcl)%exec_prime2D_srch(extr_bound=corr_thresh)
-                        else
-                            call primesrch2D(iptcl)%calc_corr()
                         endif
                         if( L_BENCH_PRIME2D )then
                             call primesrch2D(iptcl)%get_times(rt_refloop, rt_inpl, rt_tot)
@@ -291,12 +303,8 @@ contains
 
         ! WIENER RESTORATION OF CLASS AVERAGES
         if( L_BENCH ) t_cavg = tic()
-        call cavger_transf_oridat(b%a)
-        print *, 'passed cavger_transf_oridat'
-        call flush()
+        call cavger_transf_oridat( b%a )
         call cavger_assemble_sums( l_partial_sums )
-        print *, 'passed cavger_assemble_sums'
-        call flush()
         ! write results to disk
         if( p%l_distr_exec )then
             call cavger_readwrite_partial_sums('write')

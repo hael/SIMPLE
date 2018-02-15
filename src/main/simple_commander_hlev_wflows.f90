@@ -46,6 +46,7 @@ contains
         class(cmdline),                     intent(inout) :: cline
         ! constants
         integer,           parameter :: MAXITS_STAGE1   = 10
+        integer,           parameter :: MAXITS_EXTR   = 14
         ! commanders
         type(split_commander)           :: xsplit
         type(makecavgs_distr_commander) :: xmakecavgs
@@ -71,131 +72,85 @@ contains
             call xsplit%execute(cline)
         endif
         if( p_master%l_autoscale )then
-            if( p_master%l_frac_update )then
-                ! auto-scaling prep (cline is modified by scobj%init)
-                call scobj%init(p_master, cline, p_master%box, p_master%smpd_targets2D(1),&
-                    &box_new=p_master%newbox)
-                scale_stage1 = scobj%get_scaled_var('scale')
-                ! scale images in parallel
-                call scobj%scale_distr_exec
-                if( cline%defined('stktab') )then
-                    ! updates command lines
-                    scaled_stktab = add2fbody(p_master%stktab, trim(METADATEXT), SCALE_SUFFIX)
-                    ! update stktab
-                    call p_master%stkhandle%add_scale_tag
-                    call p_master%stkhandle%write_stktab(trim(scaled_stktab))
-                endif
-                ! execute prime2D, only one stage
-                cline_prime2D_stage1 = cline
-                if( cline%defined('stktab') )then
-                    call cline_prime2D_stage1%set('stktab', trim(scaled_stktab))
-                endif
-                call cline_prime2D_stage1%delete('automsk') ! delete possible automsk flag from stage 1
-                call xprime2D_distr%execute(cline_prime2D_stage1)
-                last_iter  = nint(cline_prime2D_stage1%get_rarg('endit'))
-                finaldoc   = trim(PRIME2D_ITER_FBODY)//int2str_pad(last_iter,3)//trim(METADATEXT)
-                finalcavgs = trim(CAVGS_ITER_FBODY)//int2str_pad(last_iter,3)//p_master%ext
-                ! delete scaled stacks
-                if( cline%defined('stktab') )then
-                    ! delete downscaled stack parts & stktab (we are done with them)
-                    call del_file(trim(scaled_stktab))
-                    call p_master%stkhandle%del_stktab_files
-                    ! put back original stktab
-                    call p_master%stkhandle%del_scale_tag
-                else
-                    ! delete downscaled stack parts (we are done with them)
-                    call del_files(trim(STKPARTFBODY), p_master%nparts, ext=p_master%ext, suffix='_sc')
-                endif
-                ! shift modulation
-                call os%new(p_master%nptcls)
-                call scobj%uninit(cline) ! puts back the old command line
-                call binread_oritab(finaldoc, os, [1,p_master%nptcls])
-                call os%mul_shifts(1./scale_stage1)
-                call binwrite_oritab(finaldoc, os, [1,p_master%nptcls])
-                ! re-generate class averages at original sampling
-                cline_makecavgs = cline
-                call cline_makecavgs%delete('autoscale')
-                call cline_makecavgs%delete('balance')
-                call cline_makecavgs%set('prg',    'makecavgs')
-                call cline_makecavgs%set('oritab', trim(finaldoc))
-                call cline_makecavgs%set('nparts', real(nparts))
-                call cline_makecavgs%set('refs',   trim(finalcavgs))
-                call xmakecavgs%execute(cline_makecavgs)
-            else
-                ! auto-scaling prep (cline is modified by scobj%init)
-                call scobj%init(p_master, cline, p_master%box, p_master%smpd_targets2D(1))
-                scale_stage1 = scobj%get_scaled_var('scale')
-                ! scale images in parallel
-                call scobj%scale_distr_exec
-                if( cline%defined('stktab') )then
-                    ! updates command lines
-                    scaled_stktab = add2fbody(p_master%stktab, trim(METADATEXT), SCALE_SUFFIX)
-                    ! update stktab
-                    call p_master%stkhandle%add_scale_tag
-                    call p_master%stkhandle%write_stktab(trim(scaled_stktab))
-                endif
-                ! execute stage 1
-                cline_prime2D_stage1 = cline
-                if( cline%defined('stktab') )then
-                    call cline_prime2D_stage1%set('stktab', trim(scaled_stktab))
-                endif
-                call cline_prime2D_stage1%delete('automsk') ! delete possible automsk flag from stage 1
-                call cline_prime2D_stage1%set('maxits', real(MAXITS_STAGE1))
-                call xprime2D_distr%execute(cline_prime2D_stage1)
-                last_iter_stage1 = nint(cline_prime2D_stage1%get_rarg('endit'))
-                finaldoc         = trim(PRIME2D_ITER_FBODY)//int2str_pad(last_iter_stage1,3)//trim(METADATEXT)
-                finalcavgs       = trim(CAVGS_ITER_FBODY)//int2str_pad(last_iter_stage1,3)//p_master%ext
-                ! prepare stage 2 input -- re-scale
-                call scobj%uninit(cline) ! puts back the old command line
-                call scobj%init(p_master, cline, p_master%box, p_master%smpd_targets2D(2))
-                scale_stage2 = scobj%get_scaled_var('scale')
-                call scobj%scale_distr_exec
-                ! prepare stage 2 input -- shift modulation
-                call os%new(p_master%nptcls)
-                call binread_oritab(finaldoc, os, [1,p_master%nptcls])
-                call os%mul_shifts(scale_stage2/scale_stage1)
-                call binwrite_oritab(finaldoc, os, [1,p_master%nptcls])
-                ! prepare stage 2 input -- command line
-                cline_prime2D_stage2 = cline
-                ! if automsk .eq. yes, we need to replace it with cavg
-                if( p_master%automsk .eq. 'yes' )then
-                    call cline_prime2D_stage2%set('automsk', 'cavg')
-                endif
-                if( cline%defined('stktab') )then
-                    call cline_prime2D_stage2%set('stktab', trim(scaled_stktab))
-                endif
-                call cline_prime2D_stage2%delete('deftab')
-                call cline_prime2D_stage2%set('oritab',  trim(finaldoc))
-                call cline_prime2D_stage2%set('startit', real(MAXITS_STAGE1 + 1))
-                call xprime2D_distr%execute(cline_prime2D_stage2)
-                last_iter_stage2 = nint(cline_prime2D_stage2%get_rarg('endit'))
-                finaldoc         = trim(PRIME2D_ITER_FBODY)//int2str_pad(last_iter_stage2,3)//trim(METADATEXT)
-                finalcavgs       = trim(CAVGS_ITER_FBODY)//int2str_pad(last_iter_stage2,3)//p_master%ext
-                last_iter        = last_iter_stage2 ! for ranking
-                if( cline%defined('stktab') )then
-                    ! delete downscaled stack parts & stktab (we are done with them)
-                    call del_file(trim(scaled_stktab))
-                    call p_master%stkhandle%del_stktab_files
-                    ! put back original stktab
-                    call p_master%stkhandle%del_scale_tag
-                else
-                    ! delete downscaled stack parts (we are done with them)
-                    call del_files(trim(STKPARTFBODY), p_master%nparts, ext=p_master%ext, suffix='_sc')
-                endif
-                ! re-generate class averages at original sampling
-                call scobj%uninit(cline) ! puts back the old command line
-                call binread_oritab(finaldoc, os, [1,p_master%nptcls])
-                call os%mul_shifts(1./scale_stage2)
-                call binwrite_oritab(finaldoc, os, [1,p_master%nptcls])
-                cline_makecavgs = cline
-                call cline_makecavgs%delete('autoscale')
-                call cline_makecavgs%delete('balance')
-                call cline_makecavgs%set('prg',    'makecavgs')
-                call cline_makecavgs%set('oritab', trim(finaldoc))
-                call cline_makecavgs%set('nparts', real(nparts))
-                call cline_makecavgs%set('refs',   trim(finalcavgs))
-                call xmakecavgs%execute(cline_makecavgs)
+            ! auto-scaling prep (cline is modified by scobj%init)
+            call scobj%init(p_master, cline, p_master%box, p_master%smpd_targets2D(1))
+            scale_stage1 = scobj%get_scaled_var('scale')
+            ! scale images in parallel
+            call scobj%scale_distr_exec
+            if( cline%defined('stktab') )then
+                ! updates command lines
+                scaled_stktab = add2fbody(p_master%stktab, trim(METADATEXT), SCALE_SUFFIX)
+                ! update stktab
+                call p_master%stkhandle%add_scale_tag
+                call p_master%stkhandle%write_stktab(trim(scaled_stktab))
             endif
+            ! execute stage 1
+            cline_prime2D_stage1 = cline
+            ! no incremental learning in stage 1
+            if( p_master%l_frac_update )then
+                call cline_prime2D_stage1%delete('update_frac')
+                call cline_prime2D_stage1%set('maxits', real(MAXITS_EXTR))
+            else
+                call cline_prime2D_stage1%set('maxits', real(MAXITS_STAGE1))
+            endif
+            if( cline%defined('stktab') )then
+                call cline_prime2D_stage1%set('stktab', trim(scaled_stktab))
+            endif
+            call cline_prime2D_stage1%delete('automsk') ! delete possible automsk flag from stage 1
+            call xprime2D_distr%execute(cline_prime2D_stage1)
+            last_iter_stage1 = nint(cline_prime2D_stage1%get_rarg('endit'))
+            finaldoc         = trim(PRIME2D_ITER_FBODY)//int2str_pad(last_iter_stage1,3)//trim(METADATEXT)
+            finalcavgs       = trim(CAVGS_ITER_FBODY)//int2str_pad(last_iter_stage1,3)//p_master%ext
+            ! prepare stage 2 input -- re-scale
+            call scobj%uninit(cline) ! puts back the old command line
+            call scobj%init(p_master, cline, p_master%box, p_master%smpd_targets2D(2))
+            scale_stage2 = scobj%get_scaled_var('scale')
+            call scobj%scale_distr_exec
+            ! prepare stage 2 input -- shift modulation
+            call os%new(p_master%nptcls)
+            call binread_oritab(finaldoc, os, [1,p_master%nptcls])
+            call os%mul_shifts(scale_stage2/scale_stage1)
+            call binwrite_oritab(finaldoc, os, [1,p_master%nptcls])
+            ! prepare stage 2 input -- command line
+            cline_prime2D_stage2 = cline
+            ! if automsk .eq. yes, we need to replace it with cavg
+            if( p_master%automsk .eq. 'yes' )then
+                call cline_prime2D_stage2%set('automsk', 'cavg')
+            endif
+            if( cline%defined('stktab') )then
+                call cline_prime2D_stage2%set('stktab', trim(scaled_stktab))
+            endif
+            call cline_prime2D_stage2%delete('deftab')
+            call cline_prime2D_stage2%set('oritab',  trim(finaldoc))
+            call cline_prime2D_stage2%set('startit', real(MAXITS_STAGE1 + 1))
+            call xprime2D_distr%execute(cline_prime2D_stage2)
+            last_iter_stage2 = nint(cline_prime2D_stage2%get_rarg('endit'))
+            finaldoc         = trim(PRIME2D_ITER_FBODY)//int2str_pad(last_iter_stage2,3)//trim(METADATEXT)
+            finalcavgs       = trim(CAVGS_ITER_FBODY)//int2str_pad(last_iter_stage2,3)//p_master%ext
+            last_iter        = last_iter_stage2 ! for ranking
+            if( cline%defined('stktab') )then
+                ! delete downscaled stack parts & stktab (we are done with them)
+                call del_file(trim(scaled_stktab))
+                call p_master%stkhandle%del_stktab_files
+                ! put back original stktab
+                call p_master%stkhandle%del_scale_tag
+            else
+                ! delete downscaled stack parts (we are done with them)
+                call del_files(trim(STKPARTFBODY), p_master%nparts, ext=p_master%ext, suffix='_sc')
+            endif
+            ! re-generate class averages at original sampling
+            call scobj%uninit(cline) ! puts back the old command line
+            call binread_oritab(finaldoc, os, [1,p_master%nptcls])
+            call os%mul_shifts(1./scale_stage2)
+            call binwrite_oritab(finaldoc, os, [1,p_master%nptcls])
+            cline_makecavgs = cline
+            call cline_makecavgs%delete('autoscale')
+            call cline_makecavgs%delete('balance')
+            call cline_makecavgs%set('prg',    'makecavgs')
+            call cline_makecavgs%set('oritab', trim(finaldoc))
+            call cline_makecavgs%set('nparts', real(nparts))
+            call cline_makecavgs%set('refs',   trim(finalcavgs))
+            call xmakecavgs%execute(cline_makecavgs)
         else ! no auto-scaling
             call xprime2D_distr%execute(cline)
             last_iter_stage2 = nint(cline%get_rarg('endit'))
