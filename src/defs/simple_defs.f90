@@ -81,15 +81,16 @@ real, parameter :: KBALPHA                 = sqrt(2.0) !< interpolation alpha (o
 real, parameter :: RECWINSZ                = 1.0       !< half-window size for 3D reconstruction
 
 ! real constants that control search and convergence
-real, parameter :: FRAC_SH_LIM             = 80.0      !< at what frac to turn on the shift search
-real, parameter :: FRAC_INTERPOL           = 60.0      !< at what frac to turn on the gridding interpolation (2D)
-real, parameter :: EXTRINITHRESH           = 0.5       !< initial randomization threshold for extremal search
-real, parameter :: EXTRTHRESH_CONST        = 0.2       !< threshold for factorial decay in extremal search
-real, parameter :: LP2SMPDFAC              = 0.4125    !< low-pass limit scaling constant
-real, parameter :: NPEAKSATHRES            = 12.0      !< angular threshold for determining npeaks (PRIME3D)
-real, parameter :: TAU                     = 0.005     !< controls the sharpeness of the orientation weight distribution
+real, parameter    :: FRAC_SH_LIM             = 80.0      !< at what frac to turn on the shift search
+real, parameter    :: FRAC_INTERPOL           = 60.0      !< at what frac to turn on the gridding interpolation (2D)
+real, parameter    :: EXTRINITHRESH           = 0.5       !< initial randomization threshold for extremal search
+real, parameter    :: EXTRTHRESH_CONST        = 0.2       !< threshold for factorial decay in extremal search
+real, parameter    :: LP2SMPDFAC              = 0.4125    !< low-pass limit scaling constant
+real, parameter    :: NPEAKSATHRES            = 12.0      !< angular threshold for determining npeaks (PRIME3D)
+real, parameter    :: TAU                     = 0.005     !< controls the sharpeness of the orientation weight distribution
                                                        !! smaller number means sharper distribution
-                                                       
+integer, parameter :: MAX_EXTRLIM2D        = 14        !< maximum # of iterations for which 2D extremal opt is performed
+
 ! integer #/threshold constants
 integer, parameter :: LPLIM1ITERBOUND      = 5         !< # iteration bound lplim stage 1 (PRIME2D)
 integer, parameter :: LPLIM3ITERBOUND      = 7         !< # iteration bound lplim stage 2 (PRIME2D)

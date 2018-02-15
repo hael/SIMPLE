@@ -45,8 +45,8 @@ contains
         class(prime2D_autoscale_commander), intent(inout) :: self
         class(cmdline),                     intent(inout) :: cline
         ! constants
-        integer,           parameter :: MAXITS_STAGE1   = 10
-        integer,           parameter :: MAXITS_EXTR   = 14
+        integer,           parameter :: MAXITS_STAGE1 = 10
+        integer,           parameter :: MAXITS_EXTR   = MAX_EXTRLIM2D
         ! commanders
         type(split_commander)           :: xsplit
         type(makecavgs_distr_commander) :: xmakecavgs

@@ -59,7 +59,7 @@ contains
             l_partial_sums = .false.
             l_extr         = .false.
             l_frac_update  = .false.
-        else if( p%extr_iter <= 15 )then
+        else if( p%extr_iter <= MAX_EXTRLIM2D )then
             ! extremal opt without fractional update
             l_partial_sums = .false.
             l_extr         = .true.
