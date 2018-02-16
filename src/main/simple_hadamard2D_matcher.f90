@@ -149,8 +149,16 @@ contains
         if( l_do_read )then
             if( .not. file_exists(p%refs) ) stop 'input references (refs) does not exist in cwd'
             call cavger_read(p%refs,      'merged')
-            call cavger_read(p%refs_even, 'even'  )
-            call cavger_read(p%refs_odd,  'odd'   )
+            if( file_exists(p%refs_even) )then
+                call cavger_read(p%refs_even, 'even'  )
+            else
+                call cavger_read(p%refs, 'even'  )
+            endif
+            if( file_exists(p%refs_odd) )then
+                call cavger_read(p%refs_odd,  'odd'   )
+            else
+                call cavger_read(p%refs,  'odd'   )
+            endif
         endif
 
         ! SETUP WEIGHTS

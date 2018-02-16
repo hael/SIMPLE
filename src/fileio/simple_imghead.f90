@@ -44,6 +44,7 @@ contains
     ! I/O
     procedure          :: print_imghead
     procedure          :: read
+    ! rocedure          :: read_dims
     procedure          :: write
     ! byte array conversions
     procedure, private :: transfer_obj2byte_array
@@ -369,6 +370,80 @@ contains
                 stop 'Format not supported; print; simle_imghead'
         end select
     end subroutine read
+
+    ! !>  \brief  Read only the header data from disk for stack dimensions
+    ! subroutine read_dims( self, lun, pos, print_entire )
+    !     class(ImgHead),            intent(inout) :: self
+    !     integer,                   intent(in)    :: lun
+    !     integer(kind=8), optional, intent(in)    :: pos
+    !     logical,         optional, intent(in)    :: print_entire
+    !     integer(kind=8)                   ::  ppos, i, cnt
+    !     integer                   :: io_status
+    !     character(len=512)        :: io_message
+    !     real(kind=4), allocatable :: spihed(:)
+    !     ppos = 1
+    !     if( present(pos) ) ppos = pos
+    !     select type( self )
+    !         type is( SpiImgHead )
+    !             allocate(spihed(self%getLabbyt()/4), stat=alloc_stat)
+    !             if(alloc_stat/=0) call alloc_errchk("In simple_imghead::read spihed ", alloc_stat)
+    !             cnt = 0
+    !             do i=ppos,ppos+self%getLabbyt()-1,4
+    !                 cnt = cnt+1
+    !                 read(unit=lun,pos=i) spihed(cnt)
+    !                 if( present(print_entire) )then
+    !                     write(*,*) i, spihed(cnt)
+    !                 endif
+    !                 if( cnt > )
+    !             end do
+    !             self%nz       = spihed(1)
+    !             self%ny       = spihed(2)
+    !             self%irec     = spihed(3)
+    !             self%iform    = spihed(5)
+    !             self%imami    = spihed(6)
+    !             self%fmax     = spihed(7)
+    !             self%fmin     = spihed(8)
+    !             self%av       = spihed(9)
+    !             self%sig      = spihed(10)
+    !             self%nx       = spihed(12)
+    !             self%labrec   = spihed(13)
+    !             self%iangle   = spihed(14)
+    !             self%phi      = spihed(15)
+    !             self%theta    = spihed(16)
+    !             self%gamma    = spihed(17)
+    !             self%xoff     = spihed(18)
+    !             self%yoff     = spihed(19)
+    !             self%zoff     = spihed(20)
+    !             self%scale    = spihed(21)
+    !             self%labbyt   = spihed(22)
+    !             self%lenbyt   = spihed(23)
+    !             self%istack   = spihed(24)
+    !             self%maxim    = spihed(26)
+    !             self%imgnum   = spihed(27)
+    !             self%lastindx = spihed(28)
+    !             self%kangle   = spihed(31)
+    !             self%phi1     = spihed(32)
+    !             self%theta1   = spihed(33)
+    !             self%psi1     = spihed(34)
+    !             self%phi2     = spihed(35)
+    !             self%theta2   = spihed(36)
+    !             self%psi2     = spihed(37)
+    !             self%pixsiz   = spihed(38)
+    !             self%ev       = spihed(39)
+    !             self%proj     = spihed(40)
+    !             self%mic      = spihed(41)
+    !             self%num      = spihed(42)
+    !             self%glonum   = spihed(43)
+    !             deallocate(spihed)
+    !         type is( MrcImgHead )
+    !             read(unit=lun,pos=ppos,iostat=io_status,iomsg=io_message) self%byte_array
+    !             call fileio_errmsg(" simple_imghead::read header bytes to disk , message "&
+    !                 //trim(io_message),io_status)
+    !             call self%transfer_byte_array2obj
+    !         class DEFAULT
+    !             stop 'Format not supported; print; simle_imghead'
+    !     end select
+    ! end subroutine read_dims
 
     !>  \brief write header data to disk
     subroutine write( self, lun, pos )
