@@ -441,7 +441,7 @@ contains
             call self%transfer_obj2byte_array
             write(unit=lun,pos=ppos,iostat=io_status) self%byte_array
             call fileio_errmsg(" simple_imghead::write  writing header bytes to disk , unit "//int2str(lun),io_status)
-           
+
         class DEFAULT
             stop 'Format not supported; print; simle_imghead'
         end select
@@ -667,7 +667,7 @@ contains
                     self%iform = -22.
                 else
                     stop 'undefined file type, setMinimal; simple_imghead'
-                endif 
+                endif
                 self%irec = real(ldim(2), kind=4)+self%labrec ! Total number of records (including header records)
                 ! in each image of a simple image or stacked image file
                 self%sig = -1.         ! Standard deviation of data. A value of -1.0 or 0.0
@@ -1146,7 +1146,7 @@ contains
                     call print_spihed
                     return
                 endif
-                open(NEWUNIT=filnum, status='OLD', action='READ', file=fname, access='STREAM', convert='BIG_ENDIAN') ! 
+                open(NEWUNIT=filnum, status='OLD', action='READ', file=fname, access='STREAM', convert='BIG_ENDIAN') !
                 call read_spihed
                 close(filnum)
                 if( .not. any(ldim < 1) )then
@@ -1154,7 +1154,7 @@ contains
                     call print_spihed
                     return
                 endif
-                open(NEWUNIT=filnum, status='OLD', action='READ', file=fname, access='STREAM', convert='LITTLE_ENDIAN') ! 
+                open(NEWUNIT=filnum, status='OLD', action='READ', file=fname, access='STREAM', convert='LITTLE_ENDIAN') !
                 call read_spihed
                 close(filnum)
                 if( .not. any(ldim < 1) )then
@@ -1172,9 +1172,9 @@ contains
             write(*,*) fname
             stop
         endif
-        
+
         contains
-            
+
             subroutine read_spihed
                 cnt = 0
                 do i=1,40*4,4
@@ -1186,7 +1186,7 @@ contains
                 maxim = int(spihed(26))
                 smpd  = spihed(38)
             end subroutine
-            
+
             subroutine print_spihed
                 if( doprint )then
                     write(*,'(a,3(i0,1x))') 'Number of columns, rows, sections: ', int(spihed(12)), int(spihed(2)), int(spihed(1))
@@ -1195,7 +1195,7 @@ contains
                     write(*,'(a,1x,f7.3)')  'Pixel size: ', spihed(38)
                 endif
             end subroutine
-            
+
     end subroutine get_spifile_info
 
     !>  \brief  is for finding logical dimension and number of particles in stack

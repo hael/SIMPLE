@@ -63,20 +63,8 @@ list(APPEND SIMPLECORELIB  ${DEFS_src} ${UTILS_src} ${FILEIO_src} ${SIMPLE_src})
 ##########################################################################
 # Remove unused files here
 ##########################################################################
-list(REMOVE_ITEM SIMPLECORELIB
-   "${CMAKE_CURRENT_SOURCE_DIR}/utils/simple_filehandling.f90"
-   "${CMAKE_CURRENT_SOURCE_DIR}/utils/simple_syscalls.f90"
-   "${CMAKE_CURRENT_SOURCE_DIR}/utils/simple_imghead.f90"
-   "${CMAKE_CURRENT_SOURCE_DIR}/utils/simple_imgfile.f90"
-   "${CMAKE_CURRENT_SOURCE_DIR}/fileio/simple_alloc.f90"
-   "${CMAKE_CURRENT_SOURCE_DIR}/fileio/simple_png.f90"
-   "${CMAKE_CURRENT_SOURCE_DIR}/main/simple_hash.f90"
-   "${CMAKE_CURRENT_SOURCE_DIR}/main/simple_chash.f90"
-   "${CMAKE_CURRENT_SOURCE_DIR}/main/simple_cftcc_scatsrch.f90"
-   "${CMAKE_CURRENT_SOURCE_DIR}/main/simple_kbinterpol_elemental.f90"
-   "${CMAKE_CURRENT_SOURCE_DIR}/main/simple_pbinterpol.f90"
-   "${CMAKE_CURRENT_SOURCE_DIR}/main/simple_nuttalinterpol.f90"
-)
+# list(REMOVE_ITEM SIMPLECORELIB
+# )
 
 
 if (${CMAKE_Fortran_COMPILER_ID} STREQUAL "Intel")
