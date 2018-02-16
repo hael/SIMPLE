@@ -4,12 +4,11 @@ use, intrinsic :: iso_fortran_env, only: &
 stderr=>ERROR_UNIT,&
 stdout=>OUTPUT_UNIT,&
 stdin=>INPUT_UNIT
+use simple_defs_fname
 implicit none
 integer, parameter  :: ascii = selected_char_kind ("ascii")
 integer, parameter  :: ucs4  = selected_char_kind ('ISO_10646')
 integer,  parameter :: MAXS         = 99   !< maximum number of states
-integer,  parameter :: STDLEN       = 256  !< standard string length
-integer,  parameter :: LONGSTRLEN   = 2048 !< longer string length
 integer,  parameter :: short        = selected_int_kind(4)
 integer,  parameter :: long         = selected_int_kind(9)
 integer,  parameter :: longer       = selected_int_kind(16)
@@ -58,12 +57,6 @@ end enum
 type :: CTFFLAGTYPE
     integer(kind(CTFFLAG_NO)) :: flag=CTFFLAG_NO
 end type CTFFLAGTYPE
-
-! oritype enumeration
-enum, bind(c)
-    enumerator :: STK_SEG = 1, PTCL2D_SEG = 2, CLS2D_SEG = 3,&
-    &CLS3D_SEG = 4, PTCL3D_SEG = 5, PROJINFO_SEG=11, JOBPROC_SEG = 12
-end enum
 
 ! command line
 integer, parameter :: MAXNKEYS=100, KEYLEN=32
@@ -114,23 +107,15 @@ real,    parameter :: FSC4EOAVG3D = 0.9                !< corr criterium for eo-
 real,    parameter :: FSC4EOAVG2D = 0.7                !< corr criterium for eo-averaging in 2D
 integer, parameter :: K4EOAVGLB   = 4                  !< Fourier index lower-bound
 
+! SNHC-related global constants, PRIME3D, refine=snhc
+integer,           parameter :: SZSN_INIT  = 5
+integer,           parameter :: SZSN_STEP  = 3
+integer,           parameter :: SZSN_MAX   = 20
+
 ! global  variables
 integer(kind=c_int)       :: nthr_glob                 !< number of threads global variable
 logical                   :: l_distr_exec_glob         !< global distributed execution flag
 character(len=LONGSTRLEN) :: cmdline_glob              !< global command line string
-
-! stack part related and file format constants
-character(len=32),     parameter :: STKPARTSDIR         = 'stack_parts'
-character(len=STDLEN), parameter :: STKPARTFBODY        = trim(STKPARTSDIR)//'/stack_part'
-character(len=7),      parameter :: METADATEXT          = '.txt'
-character(len=1),      parameter :: DEFAULT_FILE_FORMAT = 'M'
-
-! SNHC-related global constants, PRIME3D, refine=snhc
-character(len=32), parameter :: SNHCDOC    = 'snhc_oris'//METADATEXT
-character(len=32), parameter :: SNHCVOL    = 'snhc_recvol_state'
-integer,           parameter :: SZSN_INIT  = 5
-integer,           parameter :: SZSN_STEP  = 3
-integer,           parameter :: SZSN_MAX   = 20
 
 ! precision constants
 #ifndef IMAGE_SINGLE_PRECISION

@@ -103,7 +103,7 @@ contains
                 do iptcl=1,size(clsarr)
                     call os_class%set_ori(iptcl, b%a%get_ori(clsarr(iptcl)))
                 end do
-                call binwrite_oritab('oris_class'//int2str_pad(icls,numlen)//trim(METADATEXT),&
+                call binwrite_oritab('oris_class'//int2str_pad(icls,numlen)//trim(METADATA_EXT),&
                     &os_class, [1,size(clsarr)])
                 deallocate(clsarr)
                 call os_class%kill
@@ -320,7 +320,7 @@ contains
             do i=1,nl
                 call o%set(i,'state', real(consensus(i)))
             end do
-            call binwrite_oritab('aggregated_oris'//trim(METADATEXT), o, [1,nl])
+            call binwrite_oritab('aggregated_oris'//trim(METADATA_EXT), o, [1,nl])
             return
         else
             call b%a%rnd_oris(p%trs)
@@ -660,7 +660,7 @@ contains
                 allocate(clustering(noris), clustszs(NSPACE_BALANCE))
                 call osubspace%new(NSPACE_BALANCE)
                 call osubspace%spiral(p%nsym, p%eullims)
-                call binwrite_oritab('even_pdirs'//trim(METADATEXT), osubspace, [1,NSPACE_BALANCE])
+                call binwrite_oritab('even_pdirs'//trim(METADATA_EXT), osubspace, [1,NSPACE_BALANCE])
                 do iptcl=1,b%a%get_noris()
                     if( ptcl_mask(iptcl) )then
                         o_single = b%a%get_ori(iptcl)

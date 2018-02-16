@@ -9,7 +9,6 @@ use simple_imghead,         only: find_ldim_nptcls
 use simple_hadamard_common, only: gen2Dclassdoc
 use simple_qsys_funs,       only: qsys_job_finished
 use simple_projection_frcs, only: projection_frcs
-use simple_defs_fname       ! use all in there
 use simple_binoris_io       ! use all in there
 implicit none
 
@@ -88,7 +87,7 @@ contains
         if( cline%defined('outfile') )then
             p%oritab = p%outfile
         else
-            p%oritab = 'prime2D_startdoc'//trim(METADATEXT)
+            p%oritab = 'prime2D_startdoc'//trim(METADATA_EXT)
         endif
         ! shift multiplication
         if( p%mul > 1. ) call b%a%mul_shifts(p%mul)

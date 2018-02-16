@@ -1,7 +1,6 @@
 ! concrete commander: 3D reconstruction routines
 module simple_commander_rec
 #include "simple_lib.f08"
-use simple_defs_fname
 use simple_cmdline,         only: cmdline
 use simple_params,          only: params
 use simple_build,           only: build

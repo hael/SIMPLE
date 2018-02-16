@@ -85,7 +85,6 @@ end type extract_commander
 contains
 
     subroutine exec_preproc( self, cline )
-        use simple_defs_fname
         class(preproc_commander), intent(inout) :: self
         class(cmdline),           intent(inout) :: cline
         !type(ctffind_iter)      :: cfiter
@@ -163,10 +162,10 @@ contains
                 ! picker: on call
                 ! extract
                 allocate(fname_stk_extract, source=trim(EXTRACT_STK_FBODY)//trim(movie_fbody)//'.'//trim(movie_ext))
-                allocate(fname_ctf_extract, source=trim(EXTRACT_PARAMS_FBODY)//trim(movie_fbody)//trim(METADATEXT))
+                allocate(fname_ctf_extract, source=trim(EXTRACT_PARAMS_FBODY)//trim(movie_fbody)//trim(METADATA_EXT))
                 call cline%set('fbody', trim(p%fbody))
             else
-                allocate(fname_unidoc_output, source='unidoc_output'//trim(METADATEXT))
+                allocate(fname_unidoc_output, source='unidoc_output'//trim(METADATA_EXT))
             endif
             ! determine loop range
             fromto(1) = 1
@@ -758,7 +757,7 @@ contains
         class(makepickrefs_commander), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline !< command line input
         integer, parameter           :: NREFS=100, NPROJS=20
-        character(STDLEN), parameter :: ORIFILE='pickrefs_oris'//trim(METADATEXT)
+        character(STDLEN), parameter :: ORIFILE='pickrefs_oris'//trim(METADATA_EXT)
         type(params)                 :: p
         type(build)                  :: b
         type(cmdline)                :: cline_projvol
@@ -852,7 +851,6 @@ contains
 
     !> for extracting particle images from integrated DDD movies
     subroutine exec_extract( self, cline )
-        use simple_defs_fname
         class(extract_commander), intent(inout) :: self
         class(cmdline),           intent(inout) :: cline !< command line input
         type(params)                       :: p
@@ -1041,7 +1039,7 @@ contains
                     outfile = p%outfile
                 else
                     fbody   = get_fbody(trim(remove_abspath(moviename)), p%ext, separator=.false.)
-                    outfile = trim(EXTRACT_PARAMS_FBODY) // trim(fbody) // trim(METADATEXT)
+                    outfile = trim(EXTRACT_PARAMS_FBODY) // trim(fbody) // trim(METADATA_EXT)
                 endif
                 if( cline%defined('dir_ptcls') ) outfile = trim(p%dir_ptcls) //'/'// trim(outfile)
                 call del_file(outfile)

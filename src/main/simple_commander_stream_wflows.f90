@@ -1,7 +1,6 @@
 ! concrete commander: stream processing routines
 module simple_commander_stream_wflows
 #include "simple_lib.f08"
-use simple_defs_fname
 use simple_cmdline,           only: cmdline
 use simple_chash,             only: chash
 use simple_params,            only: params
@@ -108,7 +107,6 @@ contains
 
     subroutine exec_prime2D_stream_distr( self, cline )
         use simple_defs_conv
-        use simple_defs_fname
         use simple_timer
         use simple_commander_distr_wflows, only: prime2D_distr_commander, makecavgs_distr_commander
         use simple_oris,                   only: oris
@@ -122,7 +120,7 @@ contains
         character(len=32),       parameter :: STK_FILETAB     = 'stkstreamtab.txt'
         character(len=32),       parameter :: SCALE_FILETAB   = 'stkscale.txt'
         character(len=32),       parameter :: DEFTAB          = 'deftab.txt'
-        character(len=32),       parameter :: FINALDOC        = 'prime2Ddoc_final'//trim(METADATEXT)
+        character(len=32),       parameter :: FINALDOC        = 'prime2Ddoc_final'//trim(METADATA_EXT)
         integer,                 parameter :: SHIFTSRCH_PTCLSLIM = 2000 ! # of ptcls required to turm on shift search
         integer,                 parameter :: SHIFTSRCH_ITERLIM  = 5    ! # of iterations prior to turm on shift search
         integer,                 parameter :: WAIT_WATCHER       = 60   ! seconds prior to new stack detection
@@ -235,7 +233,7 @@ contains
                 call cline_prime2D%set('trs', MINSHIFT)
             endif
             call xprime2D_distr%execute(cline_prime2D)
-            oritab_glob = trim(PRIME2D_ITER_FBODY)//trim(str_iter)//trim(METADATEXT)
+            oritab_glob = trim(PRIME2D_ITER_FBODY)//trim(str_iter)//trim(METADATA_EXT)
             refs_glob   = trim(CAVGS_ITER_FBODY)//trim(str_iter)//trim(p_master%ext)
             frcs_glob   = trim(FRCS_ITER_FBODY)//trim(str_iter)//'.bin'
             call cline_prime2D%set('oritab', trim(oritab_glob))

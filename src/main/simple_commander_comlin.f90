@@ -143,9 +143,9 @@ contains
         integer                      :: bestloc(1), nbest_here, noris
         real                         :: shvec(3)
         character(len=STDLEN)        :: fname_finished
-        character(len=32), parameter :: SYMSHTAB   = 'sym_3dshift'//trim(METADATEXT)
+        character(len=32), parameter :: SYMSHTAB   = 'sym_3dshift'//trim(METADATA_EXT)
         character(len=32), parameter :: SYMPROJSTK = 'sym_projs.mrc'
-        character(len=32), parameter :: SYMPROJTAB = 'sym_projs'//trim(METADATEXT)
+        character(len=32), parameter :: SYMPROJTAB = 'sym_projs'//trim(METADATA_EXT)
         integer,           parameter :: NBEST = 30
         p = params(cline) ! parameters generated
         call b%build_general_tbox(p, cline, do3d=.true., nooritab=.true.) ! general objects built (no oritab reading)
@@ -196,7 +196,7 @@ contains
             call comlin_srch_init( b, p, 'simplex', 'sym')
             call comlin_coarsesrch_symaxis( [p%fromp,p%top], symaxes)
             if( p%l_distr_exec )then
-                call binwrite_oritab(trim(p%fbody)//int2str_pad(p%part,p%numlen)//trim(METADATEXT), symaxes, [p%fromp,p%top])
+                call binwrite_oritab(trim(p%fbody)//int2str_pad(p%part,p%numlen)//trim(METADATA_EXT), symaxes, [p%fromp,p%top])
             else
                 noris      = symaxes%get_noris()
                 nbest_here = min(NBEST, noris)
@@ -208,7 +208,7 @@ contains
                     call tmp_os%set_ori(cnt, symaxes%get_ori(order(i)))
                 enddo
                 symaxes = tmp_os
-                call binwrite_oritab('sympeaks'//trim(METADATEXT), symaxes, [1,nbest_here])
+                call binwrite_oritab('sympeaks'//trim(METADATA_EXT), symaxes, [1,nbest_here])
                 deallocate(order)
                 call tmp_os%kill
             endif
@@ -243,7 +243,7 @@ contains
                 call comlin_srch_init( b, p, 'simplex', 'sym')
                 call comlin_singlesrch_symaxis(orientation)
                 call orientation_best%set_ori(1, orientation)
-                call binwrite_oritab(trim(p%fbody)//int2str_pad(p%part, p%numlen)//trim(METADATEXT), orientation_best, [1,1])
+                call binwrite_oritab(trim(p%fbody)//int2str_pad(p%part, p%numlen)//trim(METADATA_EXT), orientation_best, [1,1])
             else
                 ! search selected peaks in non-distributed modes
                 write(*,'(A)') '>>> CONTINOUS SYMMETRY AXIS REFINEMENT'

@@ -1,7 +1,6 @@
 ! batch-processing manager - SLURM
 module simple_qsys_slurm
 use simple_defs
-use simple_defs_fname
 use simple_qsys_base, only: qsys_base
 use simple_chash,     only: chash
 implicit none
@@ -23,7 +22,7 @@ type, extends(qsys_base) :: qsys_slurm
 end type qsys_slurm
 
 contains
-    
+
     !> \brief  is a constructor
     subroutine new_slurm_env( self )
         use simple_fileio, only: mkdir
@@ -95,7 +94,7 @@ contains
             write(*,'(a)') '#SBATCH --mail-type=FAIL'
         endif
     end subroutine write_slurm_header
-    
+
     !> \brief  is a destructor
     subroutine kill_slurm_env( self )
         class(qsys_slurm), intent(inout) :: self

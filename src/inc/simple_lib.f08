@@ -15,6 +15,7 @@
     use, intrinsic :: iso_fortran_env, only: stderr=>ERROR_UNIT, stdout=>OUTPUT_UNIT, stdin=>INPUT_UNIT
     ! use ISO_C_BINDING
     use simple_defs
+    use simple_defs_fname
     use simple_jiffys
     use simple_strings
     use simple_syslib
@@ -29,4 +30,3 @@
     use simple_chash,   only: chash
     use simple_arr,     only: arr
     use simple_imghead, only: find_ldim_nptcls
-    

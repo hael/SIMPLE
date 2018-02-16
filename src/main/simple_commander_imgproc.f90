@@ -1,7 +1,6 @@
 ! concrete commander: general image processing routines
 module simple_commander_imgproc
 #include "simple_lib.f08"
-use simple_defs_fname
 use simple_binoris_io      ! use all in there
 use simple_procimgfile     ! use all in there
 use simple_cmdline,        only: cmdline
@@ -803,7 +802,7 @@ contains
                         call o_here%set_ori(cnt, b%a%get_ori(pinds(i)))
                     endif
                 end do
-                allocate(fname, source='extracted_oris_state'//int2str_pad(p%state,2)//trim(METADATEXT))
+                allocate(fname, source='extracted_oris_state'//int2str_pad(p%state,2)//trim(METADATA_EXT))
             else if( cline%defined('class') )then
                 cnt = 0
                 do i=1,nincl
@@ -826,7 +825,7 @@ contains
                         call o_here%set_ori(cnt, b%a%get_ori(pinds(i)))
                     endif
                 end do
-                allocate(fname, source='extracted_oris_class'//int2str_pad(p%class,5)//trim(METADATEXT))
+                allocate(fname, source='extracted_oris_class'//int2str_pad(p%class,5)//trim(METADATA_EXT))
             else
                 o_here = oris(nincl)
                 do i=1,nincl
@@ -835,7 +834,7 @@ contains
                     call b%img%write(p%outstk, i)
                     call o_here%set_ori(i, b%a%get_ori(pinds(i)))
                 end do
-                allocate(fname, source='extracted_oris'//trim(METADATEXT))
+                allocate(fname, source='extracted_oris'//trim(METADATA_EXT))
             endif
             if( cline%defined('outfile') )then
                 call binwrite_oritab(p%outfile, o_here, [1,o_here%get_noris()])
@@ -869,7 +868,7 @@ contains
                         call o_here%set_ori(cnt, b%a%get_ori(i))
                     endif
                 end do
-                allocate(fname, source='extracted_oris_state'//int2str_pad(p%state,2)//trim(METADATEXT))
+                allocate(fname, source='extracted_oris_state'//int2str_pad(p%state,2)//trim(METADATA_EXT))
             else if( cline%defined('class') )then
                 cnt = 0
                 do i=1,p%nptcls
@@ -892,7 +891,7 @@ contains
                         call o_here%set_ori(cnt, b%a%get_ori(i))
                     endif
                 end do
-                allocate(fname, source='extracted_oris_class'//int2str_pad(p%class,5)//trim(METADATEXT))
+                allocate(fname, source='extracted_oris_class'//int2str_pad(p%class,5)//trim(METADATA_EXT))
             endif
             if( cline%defined('outfile') )then
                 call binwrite_oritab(p%outfile, o_here, [1,o_here%get_noris()])

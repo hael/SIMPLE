@@ -1,7 +1,6 @@
 ! ctffind iterator
 module simple_ctffind_iter
 #include "simple_lib.f08"
-use simple_defs_fname
 use simple_nrtxtfile, only: nrtxtfile
 implicit none
 

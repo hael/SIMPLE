@@ -60,7 +60,7 @@ contains
         else
             numlen = len(int2str(p%ndocs))
         endif
-        select case(trim(METADATEXT))
+        select case(trim(METADATA_EXT))
             case('.simple')
                 ! allocate merged string representation
                 allocate( os_strings(p%nptcls) )
@@ -78,7 +78,7 @@ contains
                 end select
                 ! read into string representation
                 do i=1,p%ndocs
-                    fname     = trim(adjustl(p%fbody))//int2str_pad(i,numlen)//trim(METADATEXT)
+                    fname     = trim(adjustl(p%fbody))//int2str_pad(i,numlen)//trim(METADATA_EXT)
                     call bos_doc%open(trim(fname))
                     n_records = bos_doc%get_n_records(isegment)
                     fromto    = bos_doc%get_fromto(isegment)
@@ -120,7 +120,7 @@ contains
                 &action='write', position='append', access='sequential')
                 call fileio_errmsg("Error opening file"//trim(adjustl(p%outfile)), io_stat)
                 do i=1,p%ndocs
-                    fname = trim(adjustl(p%fbody))//int2str_pad(i,numlen)//trim(METADATEXT)
+                    fname = trim(adjustl(p%fbody))//int2str_pad(i,numlen)//trim(METADATA_EXT)
                     nj = nlines(fname)
                     partsz = parts(i,2) - parts(i,1) + 1
                     if( partsz /= nj ) then

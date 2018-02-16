@@ -1,7 +1,6 @@
 ! iterator for unblur (a program for motion correction, dose-weighting and frame-weighting of DDD movies)
 module simple_unblur_iter
 #include "simple_lib.f08"
-use simple_defs_fname
 use simple_image,        only: image
 use simple_cmdline,      only: cmdline
 use simple_params,       only: params

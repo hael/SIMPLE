@@ -119,7 +119,7 @@ contains
                 avg_ratio = avg_ratio+ratio
                 if( ratio < min_ratio )then
                     min_ratio = ratio
-                    call binwrite_oritab('shc_clustering_ncls'//int2str_pad(ncls,numlen)//trim(METADATEXT), b%a, [1,p%nptcls])
+                    call binwrite_oritab('shc_clustering_ncls'//int2str_pad(ncls,numlen)//trim(METADATA_EXT), b%a, [1,p%nptcls])
                 endif
             end do
             validinds(ncls) = avg_ratio/real(NRESTARTS)
@@ -128,7 +128,7 @@ contains
         done = .false.
         do ncls=2,p%ncls
             write(*,'(a,1x,f9.3,8x,a,1x,i3)') 'COHESION/SEPARATION RATIO INDEX: ', validinds(ncls), ' NCLS: ', ncls
-            call binread_oritab('shc_clustering_ncls'//int2str_pad(ncls,numlen)//trim(METADATEXT), b%a, [1,b%a%get_noris()])
+            call binread_oritab('shc_clustering_ncls'//int2str_pad(ncls,numlen)//trim(METADATA_EXT), b%a, [1,b%a%get_noris()])
             do icls=1,ncls
                 pop = b%a%get_pop(icls, p%label)
                 write(*,'(a,3x,i5,1x,a,1x,i3)') '  CLUSTER POPULATION:', pop, 'CLUSTER:', icls
@@ -314,7 +314,7 @@ contains
         call b%build_general_tbox(p, cline, do3d=.false.) ! general objects built
         call shift_imgfile(p%stk, p%outstk, b%a, p%smpd, p%mul)
         call b%a%zero_shifts
-        call binwrite_oritab('shiftdoc'//trim(METADATEXT), b%a, [1,p%nptcls])
+        call binwrite_oritab('shiftdoc'//trim(METADATA_EXT), b%a, [1,p%nptcls])
         call simple_end('**** SIMPLE_SHIFT NORMAL STOP ****')
     end subroutine exec_shift
 

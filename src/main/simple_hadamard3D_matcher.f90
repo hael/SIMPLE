@@ -3,7 +3,6 @@ module simple_hadamard3D_matcher
 !$ use omp_lib
 !$ use omp_lib_kinds
 #include "simple_lib.f08"
-use simple_defs_fname
 use simple_polarft_corrcalc, only: polarft_corrcalc
 use simple_ori,              only: ori
 use simple_oris,             only: oris
@@ -233,7 +232,7 @@ contains
             if( p%refine .eq. 'snhc')then
                 p%outfile = SNHCDOC
             else
-                p%outfile = 'prime3Ddoc_'//int2str_pad(which_iter,3)//trim(METADATEXT)
+                p%outfile = 'prime3Ddoc_'//int2str_pad(which_iter,3)//trim(METADATA_EXT)
             endif
         endif
 
@@ -503,7 +502,7 @@ contains
         if( p%vols(1) == '' )then
             ! init volumes
             call preprecvols(b, p)
-            p%oritab = 'prime3D_startdoc'//trim(METADATEXT)
+            p%oritab = 'prime3D_startdoc'//trim(METADATA_EXT)
             if( trim(p%refine).eq.'tseries' )then
                 call b%a%spiral
             else

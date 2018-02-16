@@ -3,7 +3,6 @@ module simple_moviewatcher
 #include "simple_lib.f08"
 use simple_params,        only: params
 use simple_timer
-use simple_defs_fname
 implicit none
 
 public :: moviewatcher
@@ -129,7 +128,7 @@ contains
                     if(    (last_accessed      > self%report_time)&
                     &.and. (last_modified      > self%report_time)&
                     &.and. (last_status_change > self%report_time)&
-                    &.and. is_closed ) is_new_movie(i) = .true.                     
+                    &.and. is_closed ) is_new_movie(i) = .true.
                 else
                     ! some error occured
                     fail_cnt = fail_cnt + 1
@@ -162,7 +161,7 @@ contains
     end subroutine watch
 
     !>  \brief whether the movie should be processed or not
-    !!         if one file is missing it is re-processed  
+    !!         if one file is missing it is re-processed
     logical function to_process( self, fname )
         class(moviewatcher), intent(inout) :: self
         character(len=*),    intent(in)    :: fname

@@ -1,7 +1,6 @@
 ! common PRIME2D/PRIME3D routines used primarily by the Hadamard matchers
 module simple_hadamard_common
 #include "simple_lib.f08"
-use simple_defs_fname
 use simple_image,    only: image
 use simple_cmdline,  only: cmdline
 use simple_build,    only: build

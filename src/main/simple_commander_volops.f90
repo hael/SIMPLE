@@ -309,7 +309,7 @@ contains
             if( p%neg .eq. 'yes' ) call imgs(i)%neg()
             call imgs(i)%write(p%outstk,i)
         end do
-        call binwrite_oritab('projvol_oris'//trim(METADATEXT), b%a, [1,p%nptcls])
+        call binwrite_oritab('projvol_oris'//trim(METADATA_EXT), b%a, [1,p%nptcls])
         call simple_end('**** SIMPLE_PROJVOL NORMAL STOP ****')
     end subroutine exec_projvol
 

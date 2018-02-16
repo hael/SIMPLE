@@ -73,7 +73,7 @@ contains
 		do iptcl=1,p%nptcls
 			call clsdoc%set(iptcl, 'class', real(labels(iptcl)))
 		end do
-		call binwrite_oritab('aff_prop_clustering'//trim(METADATEXT), clsdoc, [1,p%nptcls])
+		call binwrite_oritab('aff_prop_clustering'//trim(METADATA_EXT), clsdoc, [1,p%nptcls])
 		! calculate within cluster correlations
 		corr_within_cls_avg =  0.
 		corr_within_cls_min =  1.0
@@ -202,7 +202,7 @@ contains
         do icen=1,p%ncls
             write(*,*) nint(pops(icen)),"|",('*', j=1,nint(pops(icen)*scale))
         end do
-		call binwrite_oritab('aff_prop_ceninfo'//trim(METADATEXT), ceninfo, [1,p%ncls])
+		call binwrite_oritab('aff_prop_ceninfo'//trim(METADATA_EXT), ceninfo, [1,p%ncls])
 		! write selected class averages
 		if( p%balance > 0 )then
 			cnt = 0

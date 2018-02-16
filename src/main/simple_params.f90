@@ -451,7 +451,7 @@ contains
             verbose        = .true.
         end if
         ! default initialisations that depend on meta-data file format
-        self%outfile = 'outfile'//METADATEXT
+        self%outfile = 'outfile'//METADATA_EXT
         ! checkers in ascending alphabetical order
         call check_carg('acf',            self%acf)
         call check_carg('angastunit',     self%angastunit)
