@@ -124,7 +124,7 @@ type(oristats_commander)             :: xoristats
 type(rotmats2oris_commander)         :: xrotmats2oris
 type(txt2project_commander)          :: xtxt2project
 type(project2txt_commander)          :: xproject2txt
-type(print_project_header_commander) :: xprint_project_header
+type(print_project_info_commander)   :: xprint_project_info
 type(vizoris_commander)              :: xvizoris
 
 ! TIME-SERIES ANALYSIS PROGRAMS
@@ -2386,17 +2386,17 @@ select case(prg)
         call cline%parse(keys_required(:2), keys_optional(:1))
         ! execute
         call xproject2txt%execute(cline)
-    case( 'print_project_header' )
-        !==Program print_project_header
+    case( 'print_project_info' )
+        !==Program print_project_info
         !
-        ! <print_project_header/begin>prints the header of a *.simple project file<print_project_header/end>
+        ! <print_project_info/begin>prints information abourt a *.simple project file<print_project_info/end>
         !
         ! Required keys
         keys_required(1) = 'projfile'
-        ! if( describe ) call print_doc_print_project_header
+        ! if( describe ) call print_doc_print_project_info
         call cline%parse(keys_required(:1))
         ! execute
-        call xprint_project_header%execute(cline)
+        call xprint_project_info%execute(cline)
     case( 'vizoris' )
         !==Program vizoris
         !

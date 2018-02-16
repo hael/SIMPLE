@@ -212,7 +212,7 @@ contains
             call job_descr%set('part',    int2str(ipart))
             call job_descr%set('nparts',  int2str(self%nparts_tot))
             if( allocated(outfile_body_local) )then
-                call job_descr%set('outfile', trim(outfile_body_local)//int2str_pad(ipart,self%numlen)//METADATA_EXT)
+                call job_descr%set('outfile', trim(outfile_body_local)//int2str_pad(ipart,self%numlen)//trim(METADATA_EXT))
             endif
             if( part_params_present  )then
                 do iadd=1,part_params(ipart)%size_of_chash()

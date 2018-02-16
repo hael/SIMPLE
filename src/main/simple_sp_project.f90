@@ -2,8 +2,6 @@ module simple_sp_project
 #include "simple_lib.f08"
 use simple_oris,    only: oris
 use simple_binoris, only: binoris
-use simple_fileio
-use simple_defs
 implicit none
 
 integer, parameter :: MAXN_OS_SEG = 11
@@ -23,19 +21,25 @@ type sp_project
     type(binoris) :: bos
 contains
     ! constructor
-    procedure :: new
+    procedure          :: new
     ! modifiers
-    procedure :: new_sp_oris
-    procedure :: set_sp_oris
+    procedure          :: new_sp_oris
+    procedure          :: set_sp_oris
+    ! printers
+    procedure          :: print_info
     ! I/O
-    procedure :: read
-    procedure :: write
-    procedure :: write_sp_oris
-    procedure :: read_sp_oris
-    procedure :: read_header
-    procedure :: print_header
+    ! readers
+    procedure, private :: segreader
+    procedure          :: read
+    procedure          :: read_segment
+    procedure          :: read_sp_oris
+    ! writers
+    procedure, private :: segwriter
+    procedure          :: write
+    procedure          :: write_segment
+    procedure          :: write_sp_oris
     ! destructor
-    procedure :: kill
+    procedure          :: kill
 end type sp_project
 
 contains
@@ -119,6 +123,55 @@ contains
         end select
     end subroutine set_sp_oris
 
+    subroutine print_info( self )
+        class(sp_project), intent(in) :: self
+        integer :: n
+        n = self%os_stk%get_noris()
+        if( n > 1 ) write(*,'(a,1x,i10)') '# entries in per-micrograph stack segment (1) :', n
+        n = self%os_ptcl2D%get_noris()
+        if( n > 1 ) write(*,'(a,1x,i10)') '# entries in per-particle 2D      segment (2) :', n
+        n = self%os_cls2D%get_noris()
+        if( n > 1 ) write(*,'(a,1x,i10)') '# entries in per-cluster  2D      segment (3) :', n
+        n = self%os_cls3D%get_noris()
+        if( n > 1 ) write(*,'(a,1x,i10)') '# entries in per-cluster  3D      segment (4) :', n
+        n = self%os_ptcl3D%get_noris()
+        if( n > 1 ) write(*,'(a,1x,i10)') '# entries in per-particle 3D      segment (5) :', n
+        n = self%projinfo%get_noris()
+        if( n > 1 ) write(*,'(a,1x,i10)') '# entries in project info         segment (11):', n
+        n = self%jobproc%get_noris()
+        if( n > 1 ) write(*,'(a,1x,i10)') '# entries in jobproc              segment (12):', n
+    end subroutine print_info
+
+    subroutine segreader( self, isegment )
+        class(sp_project), intent(inout) :: self
+        integer,           intent(in)    :: isegment
+        integer :: n
+        n = self%bos%get_n_records(isegment)
+        select case(isegment)
+            case(STK_SEG)
+                call self%os_stk%new_clean(n)
+                call self%bos%read_segment(isegment, self%os_stk)
+            case(PTCL2D_SEG)
+                call self%os_ptcl2D%new_clean(n)
+                call self%bos%read_segment(isegment, self%os_ptcl2D)
+            case(CLS2D_SEG)
+                call self%os_cls2D%new_clean(n)
+                call self%bos%read_segment(isegment, self%os_cls2D)
+            case(CLS3D_SEG)
+                call self%os_cls3D%new_clean(n)
+                call self%bos%read_segment(isegment, self%os_cls3D)
+            case(PTCL3D_SEG)
+                call self%os_ptcl3D%new_clean(n)
+                call self%bos%read_segment(isegment, self%os_ptcl3D)
+            case(PROJINFO_SEG)
+                call self%projinfo%new_clean(n)
+                call self%bos%read_segment(isegment, self%projinfo)
+            case(JOBPROC_SEG)
+                call self%jobproc%new_clean(n)
+                call self%bos%read_segment(isegment, self%jobproc)
+        end select
+    end subroutine segreader
+
     subroutine read( self, fname )
         class(sp_project), intent(inout) :: self
         character(len=*),  intent(in)    :: fname
@@ -133,33 +186,99 @@ contains
         endif
         call self%bos%open(fname)
         do isegment=1,self%bos%get_n_segments()
-            n = self%bos%get_n_records(isegment)
-            select case(isegment)
-                case(STK_SEG)
-                    call self%os_stk%new_clean(n)
-                    call self%bos%read_segment(isegment, self%os_stk)
-                case(PTCL2D_SEG)
-                    call self%os_ptcl2D%new_clean(n)
-                    call self%bos%read_segment(isegment, self%os_ptcl2D)
-                case(CLS2D_SEG)
-                    call self%os_cls2D%new_clean(n)
-                    call self%bos%read_segment(isegment, self%os_cls2D)
-                case(CLS3D_SEG)
-                    call self%os_cls3D%new_clean(n)
-                    call self%bos%read_segment(isegment, self%os_cls3D)
-                case(PTCL3D_SEG)
-                    call self%os_ptcl3D%new_clean(n)
-                    call self%bos%read_segment(isegment, self%os_ptcl3D)
-                case(PROJINFO_SEG)
-                    call self%projinfo%new_clean(n)
-                    call self%bos%read_segment(isegment, self%projinfo)
-                case(JOBPROC_SEG)
-                    call self%jobproc%new_clean(n)
-                    call self%bos%read_segment(isegment, self%jobproc)
-            end select
+            call self%segreader(isegment)
         end do
         call self%bos%close
     end subroutine read
+
+    subroutine read_segment( self, fname, isegment )
+        class(sp_project), intent(inout) :: self
+        character(len=*),  intent(in)    :: fname
+        integer,           intent(in)    :: isegment
+        integer :: n
+        if( .not. file_exists(trim(fname)) )then
+            write(*,*) 'fname: ', trim(fname)
+            stop 'inputted file does not exist; sp_project :: read_segment'
+        endif
+        if( fname2format(fname) .ne. 'O' )then
+            write(*,*) 'fname: ', trim(fname)
+            stop 'file format not supported; sp_project :: read_segment'
+        endif
+        call self%bos%open(fname)
+        call self%segreader(isegment)
+        call self%bos%close
+    end subroutine read_segment
+
+    subroutine read_sp_oris( self, which, fname, fromto )
+        class(sp_project), intent(inout) :: self
+        character(len=*),  intent(in)    :: which
+        character(len=*),  intent(in)    :: fname
+        integer, optional, intent(in)    :: fromto(2)
+        select case(fname2format(fname))
+            case('O')
+                write(*,*) 'fname: ', trim(fname)
+                stop 'reading individual sp_oris not supported for binary *.simple files :: read_sp_oris'
+            case('T')
+                ! *.txt plain text ori file
+                select case(trim(which))
+                    case('stk')
+                        call self%os_stk%read(fname)
+                    case('ptcl2D')
+                        call self%os_ptcl2D%read(fname, fromto)
+                    case('cls2D')
+                        call self%os_cls2D%read(fname)
+                    case('cls3D')
+                        call self%os_cls3D%read(fname,  fromto)
+                    case('ptcl3D')
+                        call self%os_ptcl3D%read(fname, fromto)
+                    case('projinfo')
+                        call self%projinfo%read(fname)
+                    case('jobproc')
+                        call self%jobproc%read(fname)
+                    case DEFAULT
+                        stop 'unsupported which flag; sp_project :: read_sp_oris'
+                end select
+            case DEFAULT
+                write(*,*) 'fname: ', trim(fname)
+                stop 'file format not supported; sp_project :: read_sp_oris'
+        end select
+    end subroutine read_sp_oris
+
+    subroutine segwriter( self, isegment, fromto )
+        class(sp_project), intent(inout) :: self
+        integer,           intent(in)    :: isegment
+        integer, optional, intent(in)    :: fromto(2)
+        logical :: fromto_present
+        fromto_present = present(fromto)
+        select case(isegment)
+            case(STK_SEG)
+                call self%bos%write_segment(isegment, self%os_stk)
+            case(PTCL2D_SEG)
+                if( fromto_present )then
+                    call self%bos%write_segment(isegment, self%os_ptcl2D, fromto)
+                else
+                    call self%bos%write_segment(isegment, self%os_ptcl2D)
+                endif
+            case(CLS2D_SEG)
+                call self%bos%write_segment(isegment, self%os_cls2D)
+            case(CLS3D_SEG)
+                if( fromto_present )then
+                    call self%bos%write_segment(isegment, self%os_cls3D, fromto)
+                else
+                    call self%bos%write_segment(isegment, self%os_cls3D)
+                endif
+            case(PTCL3D_SEG)
+                if( fromto_present )then
+                    call self%bos%write_segment(isegment, self%os_ptcl3D, fromto)
+                else
+                    call self%bos%write_segment(isegment, self%os_ptcl3D)
+                endif
+            case(PROJINFO_SEG)
+                call self%bos%write_segment(isegment, self%projinfo)
+            case(JOBPROC_SEG)
+                call self%bos%write_segment(isegment, self%jobproc)
+        end select
+    end subroutine segwriter
 
     subroutine write( self, fname, fromto )
         class(sp_project), intent(inout) :: self
@@ -172,26 +291,25 @@ contains
         endif
         call self%bos%open(fname, del_if_exists=.true.)
         do isegment=1,MAXN_OS_SEG
-            select case(isegment)
-                case(STK_SEG)
-                    call self%bos%write_segment(isegment, self%os_stk)
-                case(PTCL2D_SEG)
-                    call self%bos%write_segment(isegment, self%os_ptcl2D, fromto)
-                case(CLS2D_SEG)
-                    call self%bos%write_segment(isegment, self%os_cls2D)
-                case(CLS3D_SEG)
-                    call self%bos%write_segment(isegment, self%os_cls3D, fromto)
-                case(PTCL3D_SEG)
-                    call self%bos%write_segment(isegment, self%os_ptcl3D, fromto)
-                case(PROJINFO_SEG)
-                    call self%bos%write_segment(isegment, self%projinfo)
-                case(JOBPROC_SEG)
-                    call self%bos%write_segment(isegment, self%jobproc)
-            end select
+            call self%segwriter(isegment, fromto)
         end do
         call self%bos%write_header
         call self%bos%close
     end subroutine write
+
+    subroutine write_segment( self, fname, isegment )
+        class(sp_project), intent(inout) :: self
+        character(len=*),  intent(in)    :: fname
+        integer,           intent(in)    :: isegment
+        if( fname2format(fname) .ne. 'O' )then
+            write(*,*) 'fname: ', trim(fname)
+            stop 'file format not supported; sp_project :: write_segment'
+        endif
+        call self%bos%open(fname, del_if_exists=.false.)
+        call self%segwriter(isegment)
+        call self%bos%write_header
+        call self%bos%close
+    end subroutine write_segment
 
     subroutine write_sp_oris( self, which, fname, fromto )
         class(sp_project), intent(inout) :: self
@@ -255,62 +373,6 @@ contains
                 stop 'file format not supported; sp_project :: write_sp_oris'
         end select
     end subroutine write_sp_oris
-
-    subroutine read_sp_oris( self, which, fname, fromto )
-        class(sp_project), intent(inout) :: self
-        character(len=*),  intent(in)    :: which
-        character(len=*),  intent(in)    :: fname
-        integer, optional, intent(in)    :: fromto(2)
-        select case(fname2format(fname))
-            case('O')
-                write(*,*) 'fname: ', trim(fname)
-                stop 'reading individual sp_oris not supported for binary *.simple files :: read_sp_oris'
-            case('T')
-                ! *.txt plain text ori file
-                select case(trim(which))
-                    case('stk')
-                        call self%os_stk%read(fname)
-                    case('ptcl2D')
-                        call self%os_ptcl2D%read(fname, fromto)
-                    case('cls2D')
-                        call self%os_cls2D%read(fname)
-                    case('cls3D')
-                        call self%os_cls3D%read(fname,  fromto)
-                    case('ptcl3D')
-                        call self%os_ptcl3D%read(fname, fromto)
-                    case('projinfo')
-                        call self%projinfo%read(fname)
-                    case('jobproc')
-                        call self%jobproc%read(fname)
-                    case DEFAULT
-                        stop 'unsupported which flag; sp_project :: read_sp_oris'
-                end select
-            case DEFAULT
-                write(*,*) 'fname: ', trim(fname)
-                stop 'file format not supported; sp_project :: read_sp_oris'
-        end select
-    end subroutine read_sp_oris
-
-    subroutine read_header( self, fname )
-        class(sp_project), intent(inout) :: self
-        character(len=*),  intent(in)    :: fname
-        if( .not. file_exists(trim(fname)) )then
-            write(*,*) 'fname: ', trim(fname)
-            stop 'inputted file does not exist; sp_project :: read_header'
-        endif
-        if( fname2format(fname) .ne. 'O' )then
-            write(*,*) 'fname: ', trim(fname)
-            stop 'file format not supported; sp_project :: read_header'
-        endif
-        call self%bos%open(fname)
-        call self%bos%read_header
-        call self%bos%close
-    end subroutine read_header
-
-    subroutine print_header( self )
-        class(sp_project), intent(in) :: self
-        call self%bos%print_header
-    end subroutine print_header
 
     subroutine kill( self )
         class(sp_project), intent(inout) :: self
