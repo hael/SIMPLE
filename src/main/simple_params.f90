@@ -984,8 +984,8 @@ contains
         self%lplims2D(1)       = self%lpstart
         self%lplims2D(2)       = self%lplims2D(1) - (self%lpstart - self%lpstop)/2.
         self%lplims2D(3)       = self%lpstop
-        self%smpd_targets2D(1) = self%lplims2D(2)*LP2SMPDFAC
-        self%smpd_targets2D(2) = self%lplims2D(3)*LP2SMPDFAC
+        self%smpd_targets2D(1) = self%lplims2D(2)*LP2SMPDFAC2D
+        self%smpd_targets2D(2) = self%lplims2D(3)*LP2SMPDFAC2D
         ! set default ring2 value
         if( .not. cline%defined('ring2') )then
             if( cline%defined('msk') )then
@@ -1012,12 +1012,8 @@ contains
         endif
         ! set nr of rotations
         self%nrots = round2even(twopi*real(self%ring2))
-        if( self%box > 2*(nint(self%msk)+10) )then
-            self%boxmatch = find_magic_box(2*(nint(self%msk)+10))
-            if( self%boxmatch > self%box ) self%boxmatch = self%box
-        else
-            self%boxmatch = self%box
-        endif
+        ! boxmatch
+        self%boxmatch = find_boxmatch(self%box, self%msk)
         ! set default outer mask value
         if( .not. cline%defined('outer') ) self%outer = self%msk
         ! matched filter flag

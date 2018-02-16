@@ -70,13 +70,11 @@ contains
             l_extr         = .false.
             l_frac_update  = p%l_frac_update
         endif
-        print *, 'l_partial_sums:', l_partial_sums
-        print *, 'l_extr        :', l_extr
-        print *, 'l_frac_update :', l_frac_update
 
         ! EXTREMAL LOGICS
         if( l_extr  )then
-            extr_thresh = EXTRINITHRESH * (1.-EXTRTHRESH_CONST)**real(p%extr_iter-1)  ! factorial decay
+            ! factorial decay, -2 because first step is always greedy
+            extr_thresh = EXTRINITHRESH * (1.-EXTRTHRESH_CONST)**real(p%extr_iter-2)
             extr_thresh = min(EXTRINITHRESH, max(0., extr_thresh))
             corr_thresh = b%a%extremal_bound(extr_thresh)
         else

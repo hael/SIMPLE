@@ -46,7 +46,6 @@ contains
         class(cmdline),                     intent(inout) :: cline
         ! constants
         integer,           parameter :: MAXITS_STAGE1 = 10
-        integer,           parameter :: MAXITS_EXTR   = MAX_EXTRLIM2D
         ! commanders
         type(split_commander)           :: xsplit
         type(makecavgs_distr_commander) :: xmakecavgs
@@ -98,7 +97,7 @@ contains
             ! no incremental learning in stage 1
             if( p_master%l_frac_update )then
                 call cline_prime2D_stage1%delete('update_frac')
-                call cline_prime2D_stage1%set('maxits', real(MAXITS_EXTR))
+                call cline_prime2D_stage1%set('maxits', real(MAX_EXTRLIM2D))
             else
                 call cline_prime2D_stage1%set('maxits', real(MAXITS_STAGE1))
             endif

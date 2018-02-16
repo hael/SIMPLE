@@ -385,7 +385,7 @@ contains
         kbwin  = kbinterpol(KBWINSZ, pp%alpha)
         zero   = cmplx(0.,0.)
         wdim   = kbwin%get_wdim()
-        ! iwinsz = ceiling(kbwin%get_winsz() - 0.5)
+        iwinsz = ceiling(kbwin%get_winsz() - 0.5)
         ! determines max batch size
         batchsz_max = 0
         ! class loop
@@ -511,20 +511,21 @@ contains
                             sh = nint(hyp(real(h),real(k)))
                             if( sh > nyq + 1 )cycle
                             loc = matmul(real([h,k]),mat)
-                            ! window
-                            ! win(1,:) = nint(loc)
-                            ! win(2,:) = win(1,:) + iwinsz
-                            ! win(1,:) = win(1,:) - iwinsz
-                            call sqwin_2d(loc(1),loc(2), KBWINSZ, win)
+                            ! window using fortran layered array, equivalent to
+                            ! call sqwin_2d(loc(1),loc(2), KBWINSZ, win) with win transposed
+                            win(1,:) = nint(loc)
+                            win(2,:) = win(1,:) + iwinsz
+                            win(1,:) = win(1,:) - iwinsz
+                            ! weights kernel
                             w = pw
                             do l=1,wdim
                                 incr = l - 1
                                 ! circular addresses
                                 cyc1(l) = cyci_1d(cyc_lims(1,:), win(1,1) + incr)
-                                cyc2(l) = cyci_1d(cyc_lims(2,:), win(2,1) + incr)
+                                cyc2(l) = cyci_1d(cyc_lims(2,:), win(1,2) + incr)
                                 ! interpolation kernel matrix
                                 w(l,:) = w(l,:) * kbwin%apod( real(win(1,1) + incr) - loc(1) )
-                                w(:,l) = w(:,l) * kbwin%apod( real(win(2,1) + incr) - loc(2) )
+                                w(:,l) = w(:,l) * kbwin%apod( real(win(1,2) + incr) - loc(2) )
                             enddo
                             ! point of addition
                             phys_cmat = cgrid_imgs(i)%comp_addr_phys([h,k,0])

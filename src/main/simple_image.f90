@@ -1212,7 +1212,7 @@ contains
         self%cmat(phys(1),phys(2),phys(3)) = self%cmat(phys(1),phys(2),phys(3)) + comp
     end subroutine add2_cmat_at
 
-    !>  set complex matrices from images & arrays. Specialized routine from simple_classaverager
+    !>  set complex matrices from images & arrays. Specialized routine for simple_classaverager
     subroutine set_cmats_from_cmats( self1 , self2 , self3, self4, self2set1, self2set2, lims, expcmat3, expcmat4)
         class(image), intent(in)    :: self1, self2,self3,self4
         class(image), intent(inout) :: self2set1, self2set2
@@ -1238,7 +1238,7 @@ contains
         !$omp end parallel
     end subroutine set_cmats_from_cmats
 
-    !>  adds complex matrices from images & arrays. Specialized routine from simple_classaverager
+    !>  adds complex matrices from images & arrays. Specialized routine for simple_classaverager
     subroutine add_cmats_to_cmats( self1 , self2 , self3, self4, self2set1, self2set2, lims, expcmat3, expcmat4)
         class(image), intent(in)    :: self1, self2,self3,self4
         class(image), intent(inout) :: self2set1, self2set2

@@ -3,7 +3,7 @@ module simple_magic_boxes
 use simple_math, only: find
 implicit none
 
-public :: find_magic_box, print_magic_box_range, find_magic_boxes4scale, autoscale
+public :: find_magic_box, find_boxmatch, print_magic_box_range, find_magic_boxes4scale, autoscale
 private
 
 interface autoscale
@@ -26,6 +26,17 @@ contains
         call find(boxsizes, NSZS, trial_box, ind, dist)
         best_box = boxsizes(ind)
     end function find_magic_box
+
+    integer function find_boxmatch( box, msk )
+        integer, intent(in) :: box
+        real,    intent(in) :: msk
+        if( box > 2*(nint(msk)+10) )then
+            find_boxmatch = find_magic_box(2*(nint(msk)+10))
+            find_boxmatch = min(find_boxmatch, box)
+        else
+            find_boxmatch = box
+        endif
+    end function find_boxmatch
 
     subroutine print_magic_box_range( smpd, diam )
         real, intent(in) :: smpd, diam
