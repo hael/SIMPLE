@@ -1,0 +1,24 @@
+#!/bin/bash
+if [ -z "${SIMPLE_TESTBENCH_DATA+set}" ]; then
+   echo "SIMPLE_TESTBENCH_DATA env variable is not set."; exit 1
+fi
+
+if [ ! -d "${SIMPLE_TESTBENCH_DATA}" ]; then
+    echo "SIMPLE_TESTBENCH_DATA variable is not a directory."; exit 1
+fi
+
+if [ ! -d "${SIMPLE_TESTBENCH_DATA}/bgal" ]; then
+    echo "recvol_1wcm is not a directory in the benchmark data folder."; exit 1
+fi
+
+cd ${SIMPLE_TESTBENCH_DATA}/bgal
+prime_cleanup.pl
+pkill simple_exec
+[ -d prime3Dini_bench ] && rm -rf prime3Dini_bench
+mkdir prime3Dini_bench && cd prime3Dini_bench
+
+time simple_exec prg=prime3D_init stk=../cavgs_final.mrc smpd=1.5 msk=50 ctf=no pgrp=c1
+
+
+## valgrind --tool=cachegrind  simple_exec prg=prime3D_init stk=../cavgs_final.mrc smpd=1.5 msk=50 ctf=no pgrp=c1
+## valgrind --tool=memgrind  simple_exec prg=prime3D_init stk=../cavgs_final.mrc smpd=1.5 msk=50 ctf=no pgrp=c1

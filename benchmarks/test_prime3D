@@ -1,0 +1,22 @@
+#!/bin/bash
+if [ -z "${SIMPLE_TESTBENCH_DATA+set}" ]; then
+   echo "SIMPLE_TESTBENCH_DATA env variable is not set."; exit 1
+fi
+
+if [ ! -d "${SIMPLE_TESTBENCH_DATA}" ]; then
+    echo "SIMPLE_TESTBENCH_DATA variable is not a directory."; exit 1
+fi
+
+if [ ! -d "${SIMPLE_TESTBENCH_DATA}/bgal" ]; then
+    echo "recvol_1wcm is not a directory in the benchmark data folder."; exit 1
+fi
+
+cd ${SIMPLE_TESTBENCH_DATA}/bgal
+prime_cleanup.pl
+pkill simple_exec
+[ -d prime3D_bench ] && rm -rf prime3D_bench
+mkdir prime3D_bench && cd prime3D_bench
+
+nohup simple_distr_exec prg=prime3D stk=../scaledsel.mrc oritab=../prime3Ddoc_035.txt ctf=yes smpd=2.55 msk=40 pgrp=d2 deftab=../extract_params.txt eo=yes nparts=2 nthr=8 mul=0.5 > PRIME3D &
+
+# simple_distr_exec prg=prime3D stk=scaledstack.mrc ctf=yes smpd=2.55 msk=40 pgrp=d2 deftab=../extract_params.txt eo=yes nparts=2 nthr=8 vol1=startvol_state01.mrc lp=15 PRIME3D

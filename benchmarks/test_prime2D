@@ -1,0 +1,27 @@
+#!/bin/bash
+if [ -z "${SIMPLE_TESTBENCH_DATA+set}" ]; then
+   echo "SIMPLE_TESTBENCH_DATA env variable is not set."; exit 1
+fi
+
+if [ ! -d "${SIMPLE_TESTBENCH_DATA}" ]; then
+    echo "SIMPLE_TESTBENCH_DATA variable is not a directory."; exit 1
+fi
+
+if [ ! -d "${SIMPLE_TESTBENCH_DATA}/bgal" ]; then
+    echo "recvol_1wcm is not a directory in the benchmark data folder."; exit 1
+fi
+
+echo "${SIMPLE_PATH}"
+echo "${SIMPLE_TESTBENCH_DATA}"
+cd "${SIMPLE_TESTBENCH_DATA}"/bgal
+prime_cleanup.pl
+pkill simple_exec
+[ -d prime2D_bench ] && rm -rf prime2D_bench
+mkdir prime2D_bench && cd prime2D_bench
+
+nohup simple_distr_exec prg=prime2D stk=../sumstack.mrc smpd=1.275 msk=88 ncls=100 ctf=yes nparts=4 nthr=8 deftab=../extract_params.txt > PRIME2D &
+# BGAL
+
+
+
+## valgrind --tool=cachegrind simple_exec  prg=prime2D stk=../sumstack.mrc smpd=1.275 msk=88 ncls=100 ctf=yes nparts=4 nthr=8 deftab=../extract_params.txt
