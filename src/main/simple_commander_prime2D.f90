@@ -173,6 +173,7 @@ contains
         endif
         startit = 1
         if( cline%defined('startit') )startit = p%startit
+        if( startit == 1 )call b%a%clean_updatecnt
         ! execute
         if( p%l_distr_exec )then
             if( .not. cline%defined('outfile') ) stop 'need unique output file for parallel jobs'

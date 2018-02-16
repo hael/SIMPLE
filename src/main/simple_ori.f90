@@ -29,6 +29,7 @@ type :: ori
     generic            :: assignment(=) => assign_ori
     procedure          :: copy_ori
     procedure          :: copy => copy_ori
+    procedure          :: delete_entry
     procedure          :: set_euler
     procedure          :: e1set
     procedure          :: e2set
@@ -195,6 +196,17 @@ contains
         self_out%htab   = self_in%htab
         self_out%chtab  = self_in%chtab
     end subroutine copy_ori
+
+    !>  \brief  is a setter
+    subroutine delete_entry( self, key )
+        class(ori),       intent(inout) :: self
+        character(len=*), intent(in)    :: key
+        if( self%htab%isthere(key) )then
+            call self%htab%delete(key)
+        else
+            call self%chtab%delete(key)
+        endif
+    end subroutine delete_entry
 
     !>  \brief  is a setter
     subroutine set_euler( self, euls  )

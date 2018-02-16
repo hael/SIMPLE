@@ -171,10 +171,7 @@ contains
         character(len=*), intent(in)    :: key
         integer :: i, ind
         ind = self%lookup( key )
-        if( ind==0 .or. ind>self%chash_index )then
-            !write(*,*)'Nothing to delete; key:',key,'; simple_chash::delete'
-            return
-        endif
+        if( ind==0 .or. ind>self%chash_index ) return
         do i=ind,self%chash_index-1
             self%keys(i)   = self%keys(i+1)
             self%values(i) = self%values(i+1)

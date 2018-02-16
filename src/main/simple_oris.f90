@@ -114,6 +114,7 @@ type :: oris
     procedure          :: ini_tseries
     procedure          :: symmetrize
     procedure          :: merge
+    procedure          :: clean_updatecnt
     procedure          :: partition_eo
     procedure          :: transf_proj2class
     procedure          :: str2ori
@@ -1925,6 +1926,15 @@ contains
         call self%kill
         call self2add%kill
     end subroutine merge
+
+    !>  \brief  for balanced assignment of even/odd partitions
+    subroutine clean_updatecnt( self )
+        class(oris),       intent(inout) :: self    !< instance
+        integer :: i
+        do i = 1,self%n
+            call self%o(i)%delete_entry('updatecnt')
+        enddo
+    end subroutine clean_updatecnt
 
     !>  \brief  for balanced assignment of even/odd partitions
     subroutine partition_eo( self, tseries )

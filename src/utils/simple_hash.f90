@@ -22,10 +22,12 @@ type :: hash
     procedure, private :: assign
     generic   :: assignment(=) => assign
     procedure :: push
+    procedure :: delete
     procedure :: size_of_hash
     procedure :: set
     procedure :: isthere
     procedure :: get
+    procedure :: lookup
     procedure :: get_keys
     procedure :: get_vals
     procedure :: hash2str
@@ -70,6 +72,22 @@ contains
         self%keys(self%hash_index) = trim(key)
         self%vals(self%hash_index) = val
     end subroutine push
+
+    !>  \brief  sets a value in the chash
+    subroutine delete( self, key )
+        class(hash),      intent(inout) :: self
+        character(len=*), intent(in)    :: key
+        integer :: i, ind
+        ind = self%lookup( key )
+        if( ind==0 .or. ind>self%hash_index ) return
+        do i=ind,self%hash_index-1
+            self%keys(i) = self%keys(i+1)
+            self%vals(i) = self%vals(i+1)
+        enddo
+        self%keys( self%hash_index ) = ''
+        self%vals( self%hash_index ) = 0.
+        self%hash_index = self%hash_index-1
+    end subroutine delete
 
     !>  \brief  returns size of hash
     function size_of_hash( self ) result( sz )
@@ -126,6 +144,19 @@ contains
             endif
         end do
     end function get
+
+    !>  \brief  gets the index to a key
+    integer function lookup( self, key )
+        class(hash),      intent(inout) :: self
+        character(len=*), intent(in)    :: key
+        integer :: i
+        do i=1,self%hash_index
+            if( trim(self%keys(i)) .eq. trim(key) )then
+                lookup = i
+                return
+            endif
+        end do
+    end function lookup
 
     !>  \brief  returns the keys of the hash
     function get_keys( self ) result( keys )

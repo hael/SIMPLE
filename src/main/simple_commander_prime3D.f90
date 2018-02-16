@@ -218,6 +218,7 @@ contains
         call b%build_hadamard_prime3D_tbox(p) ! prime3D objects built
         startit = 1
         if( cline%defined('startit') )startit = p%startit
+        if( startit == 1 )call b%a%clean_updatecnt
         if( p%l_distr_exec )then
             if( .not. cline%defined('outfile') ) stop 'need unique output file for parallel jobs'
             if( cline%defined('find') )then
