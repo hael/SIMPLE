@@ -102,7 +102,6 @@ type :: polarft_corrcalc
     logical                          :: with_ctf    = .false. !< CTF flag
     logical                          :: existence   = .false. !< to indicate existence
     logical                          :: l_cc_objfun = .true.  !< objective function(cc|ccres)
-    logical                          :: l_cc_bfac   = .false. !< flag for B-factor weighting of the correlation
     type(heap_vars),     allocatable :: heap_vars(:)          !< allocated fields to save stack allocation in subroutines and functions
   contains
     ! CONSTRUCTOR
@@ -252,14 +251,12 @@ contains
         self%nk          = self%kfromto(2) - self%kfromto(1) + 1 !< # resolution elements
         self%nthr        = p%nthr                                !< # OpenMP threads
         self%phaseplate  = p%tfplan%l_phaseplate                 !< images obtained with the Volta
-        ! self%l_cc_bfac   = p%l_cc_bfac                           !< B-factor weighting of the correlation
         ! take care of objective function flags
         select case(trim(p%objfun))
             case('cc')
                 self%l_cc_objfun   = .true.
             case('ccres')
                 self%l_cc_objfun = .false.
-                self%l_cc_bfac   = .true.
                 allocate(self%ptcl_bfac_weights(1:self%nptcls, self%kfromto(1):self%kfromto(2)),&
                     &self%ptcl_bfac_norms(1:self%nptcls), self%inv_resarrsq(self%kfromto(1):self%kfromto(2)))
                 self%ptcl_bfac_weights = 1.0
@@ -1173,17 +1170,7 @@ contains
         kcorrs  => self%heap_vars(ithr)%kcorrs
         call self%prep_ref4corr(iref, self%pinds(iptcl), pft_ref, sumsqref, self%kfromto(2))
         cc(:) = 0.
-        if( self%l_cc_bfac )then
-            ! with B-factor weighting
-            do k=self%kfromto(1),self%kfromto(2)
-                call self%calc_k_corrs(pft_ref, self%pinds(iptcl), k, kcorrs)
-                sumsqptcl = sum(csq(self%pfts_ptcls(self%pinds(iptcl),:,k)))
-                sumsqref  = sum(csq(pft_ref(:,k)))
-                ! B-factor weighted correlation
-                cc(:) = cc(:) + (kcorrs(:) * self%ptcl_bfac_weights(self%pinds(iptcl),k)) / sqrt(sumsqref * sumsqptcl)
-            end do
-            cc(:) = cc(:) / self%ptcl_bfac_norms(self%pinds(iptcl))
-        else
+        if( self%l_cc_objfun )then
             ! without B-factor weighting
             do k=self%kfromto(1),self%kfromto(2)
                 call self%calc_k_corrs(pft_ref, self%pinds(iptcl), k, kcorrs)
@@ -1194,6 +1181,16 @@ contains
                 cc(:) = cc(:) + kcorrs(:) / sqrt(sumsqref * sumsqptcl)
             end do
             cc(:) = cc(:) / real(self%nk)
+        else
+            ! with B-factor weighting
+            do k=self%kfromto(1),self%kfromto(2)
+                call self%calc_k_corrs(pft_ref, self%pinds(iptcl), k, kcorrs)
+                sumsqptcl = sum(csq(self%pfts_ptcls(self%pinds(iptcl),:,k)))
+                sumsqref  = sum(csq(pft_ref(:,k)))
+                ! B-factor weighted correlation
+                cc(:) = cc(:) + (kcorrs(:) * self%ptcl_bfac_weights(self%pinds(iptcl),k)) / sqrt(sumsqref * sumsqptcl)
+            end do
+            cc(:) = cc(:) / self%ptcl_bfac_norms(self%pinds(iptcl))
         endif
     end subroutine gencorrs_resnorm_1
 
@@ -1210,17 +1207,7 @@ contains
         kcorrs  => self%heap_vars(ithr)%kcorrs
         call self%prep_ref4corr(iref, self%pinds(iptcl), pft_ref, sumsqref, kstop)
         cc(:) = 0.
-        if( self%l_cc_bfac )then
-            ! with B-factor weighting
-            do k=self%kfromto(1),kstop
-                call self%calc_k_corrs(pft_ref, self%pinds(iptcl), k, kcorrs)
-                sumsqptcl = sum(csq(self%pfts_ptcls(self%pinds(iptcl),:,k)))
-                sumsqref  = sum(csq(pft_ref(:,k)))
-                ! B-factor weighted correlation
-                cc(:) = cc(:) + (kcorrs(:) * self%ptcl_bfac_weights(self%pinds(iptcl),k)) / sqrt(sumsqref * sumsqptcl)
-            end do
-            cc(:) = cc(:) / sum(self%ptcl_bfac_weights(self%pinds(iptcl),self%kfromto(1):kstop))
-        else
+        if( self%l_cc_objfun )then
             ! without B-factor weighting
             do k=self%kfromto(1),kstop
                 call self%calc_k_corrs(pft_ref, self%pinds(iptcl), k, kcorrs)
@@ -1231,6 +1218,16 @@ contains
                 cc(:) = cc(:) + kcorrs(:) / sqrt(sumsqref * sumsqptcl)
             end do
             cc(:) = cc(:) / real(self%kfromto(2) - kstop + 1)
+        else
+            ! with B-factor weighting
+            do k=self%kfromto(1),kstop
+                call self%calc_k_corrs(pft_ref, self%pinds(iptcl), k, kcorrs)
+                sumsqptcl = sum(csq(self%pfts_ptcls(self%pinds(iptcl),:,k)))
+                sumsqref  = sum(csq(pft_ref(:,k)))
+                ! B-factor weighted correlation
+                cc(:) = cc(:) + (kcorrs(:) * self%ptcl_bfac_weights(self%pinds(iptcl),k)) / sqrt(sumsqref * sumsqptcl)
+            end do
+            cc(:) = cc(:) / sum(self%ptcl_bfac_weights(self%pinds(iptcl),self%kfromto(1):kstop))
         endif
     end subroutine gencorrs_resnorm_2
 
@@ -1265,17 +1262,7 @@ contains
             endif
         endif
         cc(:) = 0.
-        if( self%l_cc_bfac )then
-            ! with B-factor weighting
-            do k=self%kfromto(1),self%kfromto(2)
-                call self%calc_k_corrs(pft_ref, self%pinds(iptcl), k, kcorrs)
-                sumsqptcl = sum(csq(self%pfts_ptcls(self%pinds(iptcl),:,k)))
-                sumsqref  = sum(csq(pft_ref(:,k)))
-                ! B-factor weighted correlation
-                cc(:) = cc(:) + (kcorrs(:) * self%ptcl_bfac_weights(self%pinds(iptcl),k)) / sqrt(sumsqref * sumsqptcl)
-            end do
-            cc(:) = cc(:) / self%ptcl_bfac_norms(self%pinds(iptcl))
-        else
+        if( self%l_cc_objfun )then
             ! without B-factor weighting
             do k=self%kfromto(1),self%kfromto(2)
                 call self%calc_k_corrs(pft_ref, self%pinds(iptcl), k, kcorrs)
@@ -1286,6 +1273,16 @@ contains
                 cc(:) = cc(:) + kcorrs(:) / sqrt(sumsqref * sumsqptcl)
             end do
             cc(:) = cc(:) / real(self%nk)
+        else
+            ! with B-factor weighting
+            do k=self%kfromto(1),self%kfromto(2)
+                call self%calc_k_corrs(pft_ref, self%pinds(iptcl), k, kcorrs)
+                sumsqptcl = sum(csq(self%pfts_ptcls(self%pinds(iptcl),:,k)))
+                sumsqref  = sum(csq(pft_ref(:,k)))
+                ! B-factor weighted correlation
+                cc(:) = cc(:) + (kcorrs(:) * self%ptcl_bfac_weights(self%pinds(iptcl),k)) / sqrt(sumsqref * sumsqptcl)
+            end do
+            cc(:) = cc(:) / self%ptcl_bfac_norms(self%pinds(iptcl))
         endif
     end subroutine gencorrs_resnorm_3
 
@@ -1452,16 +1449,7 @@ contains
             endif
         endif
         cc = 0.0
-        if( self%l_cc_bfac )then
-            ! with B-factor weighting
-            do k = self%kfromto(1),self%kfromto(2)
-                sqsumk_ref  = sum(csq(pft_ref(:,k)))
-                sqsumk_ptcl = sum(csq(self%pfts_ptcls(self%pinds(iptcl),:,k)))
-                corrk       = self%calc_corrk_for_rot(pft_ref, self%pinds(iptcl), self%kfromto(2), k, irot)
-                cc          = cc + (corrk * self%ptcl_bfac_weights(self%pinds(iptcl),k)) / sqrt(sqsumk_ref * sqsumk_ptcl)
-            end do
-            cc = cc / self%ptcl_bfac_norms(self%pinds(iptcl))
-        else
+        if( self%l_cc_objfun )then
             ! without B-factor weighting
             do k = self%kfromto(1),self%kfromto(2)
                 sqsumk_ref  = sum(csq(pft_ref(:,k)))
@@ -1470,6 +1458,15 @@ contains
                 cc          = cc + corrk / sqrt(sqsumk_ref * sqsumk_ptcl)
             end do
             cc = cc / real(self%nk)
+        else
+            ! with B-factor weighting
+            do k = self%kfromto(1),self%kfromto(2)
+                sqsumk_ref  = sum(csq(pft_ref(:,k)))
+                sqsumk_ptcl = sum(csq(self%pfts_ptcls(self%pinds(iptcl),:,k)))
+                corrk       = self%calc_corrk_for_rot(pft_ref, self%pinds(iptcl), self%kfromto(2), k, irot)
+                cc          = cc + (corrk * self%ptcl_bfac_weights(self%pinds(iptcl),k)) / sqrt(sqsumk_ref * sqsumk_ptcl)
+            end do
+            cc = cc / self%ptcl_bfac_norms(self%pinds(iptcl))
         endif
     end function gencorr_resnorm_for_rot
 
@@ -1504,16 +1501,7 @@ contains
             endif
         endif
         cc = 0.0_dp
-        if( self%l_cc_bfac )then
-            ! with B-factor weighting
-            do k = self%kfromto(1),self%kfromto(2)
-                sqsumk_ref  = sum(csq(pft_ref(:,k)))
-                sqsumk_ptcl = sum(csq(self%pfts_ptcls(self%pinds(iptcl),:,k)))
-                corrk       = self%calc_corrk_for_rot_8(pft_ref, self%pinds(iptcl), self%kfromto(2), k, irot)
-                cc          = cc + (corrk * real(self%ptcl_bfac_weights(self%pinds(iptcl),k), kind=dp)) / sqrt(sqsumk_ref * sqsumk_ptcl)
-            end do
-            cc = cc / real(self%ptcl_bfac_norms(self%pinds(iptcl)), kind=dp)
-        else
+        if( self%l_cc_objfun )then
             ! without B-factor weighting
             do k = self%kfromto(1),self%kfromto(2)
                 sqsumk_ref = sum(csq(pft_ref(:,k)))
@@ -1522,6 +1510,15 @@ contains
                 cc         = cc + corrk / sqrt(sqsumk_ref * sqsumk_ptcl)
             end do
             cc = cc / real(self%nk, kind=dp)
+        else
+            ! with B-factor weighting
+            do k = self%kfromto(1),self%kfromto(2)
+                sqsumk_ref  = sum(csq(pft_ref(:,k)))
+                sqsumk_ptcl = sum(csq(self%pfts_ptcls(self%pinds(iptcl),:,k)))
+                corrk       = self%calc_corrk_for_rot_8(pft_ref, self%pinds(iptcl), self%kfromto(2), k, irot)
+                cc          = cc + (corrk * real(self%ptcl_bfac_weights(self%pinds(iptcl),k), kind=dp)) / sqrt(sqsumk_ref * sqsumk_ptcl)
+            end do
+            cc = cc / real(self%ptcl_bfac_norms(self%pinds(iptcl)), kind=dp)
         endif
     end function gencorr_resnorm_for_rot_8
 
@@ -1762,21 +1759,7 @@ contains
         grad = 0.0
         pft_ref_tmp1 = pft_ref * (0., 1.) * self%argtransf(:self%pftsz,:)
         pft_ref_tmp2 = pft_ref * (0., 1.) * self%argtransf(self%pftsz + 1:,:)
-        if( self%l_cc_bfac )then
-            do k = self%kfromto(1), self%kfromto(2)
-                sqsumk_ref  = sum(csq(pft_ref(:,k)))
-                sqsumk_ptcl = sum(csq(self%pfts_ptcls(self%pinds(iptcl),:,k)))
-                denom       = sqrt(sqsumk_ref * sqsumk_ptcl)
-                corrk       = self%calc_corrk_for_rot(pft_ref, self%pinds(iptcl), self%kfromto(2), k, irot)
-                f           = f +       (corrk * self%ptcl_bfac_weights(self%pinds(iptcl),k)) / denom
-                corrk       = self%calc_corrk_for_rot(pft_ref_tmp1, self%pinds(iptcl), self%kfromto(2), k, irot)
-                grad(1)     = grad(1) + (corrk * self%ptcl_bfac_weights(self%pinds(iptcl),k)) / denom
-                corrk       = self%calc_corrk_for_rot(pft_ref_tmp2, self%pinds(iptcl), self%kfromto(2), k, irot)
-                grad(2)     = grad(2) + (corrk * self%ptcl_bfac_weights(self%pinds(iptcl),k)) / denom
-            end do
-            f = f             / real(self%ptcl_bfac_norms(self%pinds(iptcl)))
-            grad(:) = grad(:) / real(self%ptcl_bfac_norms(self%pinds(iptcl)))
-        else
+        if( self%l_cc_objfun )then
             do k = self%kfromto(1), self%kfromto(2)
                 sqsumk_ref  = sum(csq(pft_ref(:,k)))
                 sqsumk_ptcl = sum(csq(self%pfts_ptcls(self%pinds(iptcl),:,k)))
@@ -1790,6 +1773,20 @@ contains
             end do
             f = f             / real(self%nk)
             grad(:) = grad(:) / real(self%nk)
+        else
+            do k = self%kfromto(1), self%kfromto(2)
+                sqsumk_ref  = sum(csq(pft_ref(:,k)))
+                sqsumk_ptcl = sum(csq(self%pfts_ptcls(self%pinds(iptcl),:,k)))
+                denom       = sqrt(sqsumk_ref * sqsumk_ptcl)
+                corrk       = self%calc_corrk_for_rot(pft_ref, self%pinds(iptcl), self%kfromto(2), k, irot)
+                f           = f +       (corrk * self%ptcl_bfac_weights(self%pinds(iptcl),k)) / denom
+                corrk       = self%calc_corrk_for_rot(pft_ref_tmp1, self%pinds(iptcl), self%kfromto(2), k, irot)
+                grad(1)     = grad(1) + (corrk * self%ptcl_bfac_weights(self%pinds(iptcl),k)) / denom
+                corrk       = self%calc_corrk_for_rot(pft_ref_tmp2, self%pinds(iptcl), self%kfromto(2), k, irot)
+                grad(2)     = grad(2) + (corrk * self%ptcl_bfac_weights(self%pinds(iptcl),k)) / denom
+            end do
+            f = f             / real(self%ptcl_bfac_norms(self%pinds(iptcl)))
+            grad(:) = grad(:) / real(self%ptcl_bfac_norms(self%pinds(iptcl)))
         endif
     end subroutine gencorr_resnorm_grad_for_rot
 
@@ -1830,21 +1827,7 @@ contains
         grad = 0.0_dp
         pft_ref_tmp1 = pft_ref * (0., 1.) * self%argtransf(:self%pftsz,:)
         pft_ref_tmp2 = pft_ref * (0., 1.) * self%argtransf(self%pftsz + 1:,:)
-        if( self%l_cc_bfac )then
-            do k = self%kfromto(1), self%kfromto(2)
-                sqsumk_ref  = sum(csq(pft_ref(:,k)))
-                sqsumk_ptcl = sum(csq(self%pfts_ptcls(self%pinds(iptcl),:,k)))
-                denom       = sqrt(sqsumk_ref * sqsumk_ptcl)
-                corrk       = self%calc_corrk_for_rot_8(pft_ref, self%pinds(iptcl), self%kfromto(2), k, irot)
-                f           = f +       (corrk * real(self%ptcl_bfac_weights(self%pinds(iptcl),k), kind=dp)) / denom
-                corrk       = self%calc_corrk_for_rot_8(pft_ref_tmp1, self%pinds(iptcl), self%kfromto(2), k, irot)
-                grad(1)     = grad(1) + (corrk * real(self%ptcl_bfac_weights(self%pinds(iptcl),k), kind=dp)) / denom
-                corrk       = self%calc_corrk_for_rot_8(pft_ref_tmp2, self%pinds(iptcl), self%kfromto(2), k, irot)
-                grad(2)     = grad(2) + (corrk * real(self%ptcl_bfac_weights(self%pinds(iptcl),k), kind=dp)) / denom
-            end do
-            f       = f       / real(self%ptcl_bfac_norms(self%pinds(iptcl)), kind=dp)
-            grad(:) = grad(:) / real(self%ptcl_bfac_norms(self%pinds(iptcl)), kind=dp)
-        else
+        if( self%l_cc_objfun )then
             do k = self%kfromto(1), self%kfromto(2)
                 sqsumk_ref  = sum(csq(pft_ref(:,k)))
                 sqsumk_ptcl = sum(csq(self%pfts_ptcls(self%pinds(iptcl),:,k)))
@@ -1858,6 +1841,20 @@ contains
             end do
             f       = f       / real(self%nk, kind=dp)
             grad(:) = grad(:) / real(self%nk, kind=dp)
+        else
+            do k = self%kfromto(1), self%kfromto(2)
+                sqsumk_ref  = sum(csq(pft_ref(:,k)))
+                sqsumk_ptcl = sum(csq(self%pfts_ptcls(self%pinds(iptcl),:,k)))
+                denom       = sqrt(sqsumk_ref * sqsumk_ptcl)
+                corrk       = self%calc_corrk_for_rot_8(pft_ref, self%pinds(iptcl), self%kfromto(2), k, irot)
+                f           = f +       (corrk * real(self%ptcl_bfac_weights(self%pinds(iptcl),k), kind=dp)) / denom
+                corrk       = self%calc_corrk_for_rot_8(pft_ref_tmp1, self%pinds(iptcl), self%kfromto(2), k, irot)
+                grad(1)     = grad(1) + (corrk * real(self%ptcl_bfac_weights(self%pinds(iptcl),k), kind=dp)) / denom
+                corrk       = self%calc_corrk_for_rot_8(pft_ref_tmp2, self%pinds(iptcl), self%kfromto(2), k, irot)
+                grad(2)     = grad(2) + (corrk * real(self%ptcl_bfac_weights(self%pinds(iptcl),k), kind=dp)) / denom
+            end do
+            f       = f       / real(self%ptcl_bfac_norms(self%pinds(iptcl)), kind=dp)
+            grad(:) = grad(:) / real(self%ptcl_bfac_norms(self%pinds(iptcl)), kind=dp)
         endif
     end subroutine gencorr_resnorm_grad_for_rot_8
 
@@ -2009,18 +2006,7 @@ contains
         pft_ref_tmp1 = pft_ref * (0., 1.) * self%argtransf(:self%pftsz,:)
         pft_ref_tmp2 = pft_ref * (0., 1.) * self%argtransf(self%pftsz + 1:,:)
         grad = 0.0
-        if( self%l_cc_bfac )then
-            do k = self%kfromto(1), self%kfromto(1)
-                sqsumk_ref  = sum(csq(pft_ref(:,k)))
-                sqsumk_ptcl = sum(csq(self%pfts_ptcls(self%pinds(iptcl),:,k)))
-                denom       = sqrt(sqsumk_ref * sqsumk_ptcl)
-                corrk       = self%calc_corrk_for_rot(pft_ref_tmp1, self%pinds(iptcl), self%kfromto(2), k, irot)
-                grad(1)     = grad(1) + (corrk * self%ptcl_bfac_weights(self%pinds(iptcl),k)) / denom
-                corrk       = self%calc_corrk_for_rot(pft_ref_tmp2, self%pinds(iptcl), self%kfromto(2), k, irot)
-                grad(2)     = grad(2) + (corrk * self%ptcl_bfac_weights(self%pinds(iptcl),k)) / denom
-            end do
-            grad = grad / self%ptcl_bfac_norms(self%pinds(iptcl))
-        else
+        if( self%l_cc_objfun )then
             do k = self%kfromto(1), self%kfromto(1)
                 sqsumk_ref  = sum(csq(pft_ref(:,k)))
                 sqsumk_ptcl = sum(csq(self%pfts_ptcls(self%pinds(iptcl),:,k)))
@@ -2031,6 +2017,17 @@ contains
                 grad(2)     = grad(2) + corrk / denom
             end do
             grad = grad / real(self%nk)
+        else
+            do k = self%kfromto(1), self%kfromto(1)
+                sqsumk_ref  = sum(csq(pft_ref(:,k)))
+                sqsumk_ptcl = sum(csq(self%pfts_ptcls(self%pinds(iptcl),:,k)))
+                denom       = sqrt(sqsumk_ref * sqsumk_ptcl)
+                corrk       = self%calc_corrk_for_rot(pft_ref_tmp1, self%pinds(iptcl), self%kfromto(2), k, irot)
+                grad(1)     = grad(1) + (corrk * self%ptcl_bfac_weights(self%pinds(iptcl),k)) / denom
+                corrk       = self%calc_corrk_for_rot(pft_ref_tmp2, self%pinds(iptcl), self%kfromto(2), k, irot)
+                grad(2)     = grad(2) + (corrk * self%ptcl_bfac_weights(self%pinds(iptcl),k)) / denom
+            end do
+            grad = grad / self%ptcl_bfac_norms(self%pinds(iptcl))
         endif
     end subroutine gencorr_resnorm_grad_only_for_rot
 
@@ -2070,18 +2067,7 @@ contains
         pft_ref_tmp1 = pft_ref * (0., 1.) * self%argtransf(:self%pftsz,:)
         pft_ref_tmp2 = pft_ref * (0., 1.) * self%argtransf(self%pftsz + 1:,:)
         grad = 0.0_dp
-        if( self%l_cc_bfac )then
-            do k = self%kfromto(1), self%kfromto(1)
-                sqsumk_ref  = sum(csq(pft_ref(:,k)))
-                sqsumk_ptcl = sum(csq(self%pfts_ptcls(self%pinds(iptcl),:,k)))
-                denom       = sqrt(sqsumk_ref * sqsumk_ptcl)
-                corrk       = self%calc_corrk_for_rot_8(pft_ref_tmp1, self%pinds(iptcl), self%kfromto(2), k, irot)
-                grad(1)     = grad(1) + (corrk * real(self%ptcl_bfac_weights(self%pinds(iptcl),k), kind=dp)) / denom
-                corrk       = self%calc_corrk_for_rot_8(pft_ref_tmp2, self%pinds(iptcl), self%kfromto(2), k, irot)
-                grad(2)     = grad(2) + (corrk * real(self%ptcl_bfac_weights(self%pinds(iptcl),k), kind=dp)) / denom
-            end do
-            grad = grad / real(self%ptcl_bfac_norms(self%pinds(iptcl)), kind=dp)
-        else
+        if( self%l_cc_objfun )then
             do k = self%kfromto(1), self%kfromto(1)
                 sqsumk_ref  = sum(csq(pft_ref(:,k)))
                 sqsumk_ptcl = sum(csq(self%pfts_ptcls(self%pinds(iptcl),:,k)))
@@ -2092,6 +2078,17 @@ contains
                 grad(2)     = grad(2) + corrk / denom
             end do
             grad = grad / real(self%nk, kind=dp)
+        else
+            do k = self%kfromto(1), self%kfromto(1)
+                sqsumk_ref  = sum(csq(pft_ref(:,k)))
+                sqsumk_ptcl = sum(csq(self%pfts_ptcls(self%pinds(iptcl),:,k)))
+                denom       = sqrt(sqsumk_ref * sqsumk_ptcl)
+                corrk       = self%calc_corrk_for_rot_8(pft_ref_tmp1, self%pinds(iptcl), self%kfromto(2), k, irot)
+                grad(1)     = grad(1) + (corrk * real(self%ptcl_bfac_weights(self%pinds(iptcl),k), kind=dp)) / denom
+                corrk       = self%calc_corrk_for_rot_8(pft_ref_tmp2, self%pinds(iptcl), self%kfromto(2), k, irot)
+                grad(2)     = grad(2) + (corrk * real(self%ptcl_bfac_weights(self%pinds(iptcl),k), kind=dp)) / denom
+            end do
+            grad = grad / real(self%ptcl_bfac_norms(self%pinds(iptcl)), kind=dp)
         endif
     end subroutine gencorr_resnorm_grad_only_for_rot_8
 

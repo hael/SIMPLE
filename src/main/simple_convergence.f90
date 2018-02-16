@@ -71,6 +71,7 @@ contains
             self%corr      = self%bap%get_avg('corr',      mask=mask)
             self%dist_inpl = self%bap%get_avg('dist_inpl', mask=mask)
             self%frac      = self%bap%get_avg('frac',      mask=mask)
+            self%bfac      = self%bap%get_avg('bfac',      mask=mask)
             self%mi_joint  = self%bap%get_avg('mi_joint',  mask=mask)
             self%mi_inpl   = self%bap%get_avg('mi_inpl',   mask=mask)
             self%mi_class  = self%bap%get_avg('mi_class',  mask=mask)
@@ -78,6 +79,7 @@ contains
             self%corr      = self%bap%get_avg('corr')
             self%dist_inpl = self%bap%get_avg('dist_inpl')
             self%frac      = self%bap%get_avg('frac')
+            self%bfac      = self%bap%get_avg('bfac')
             self%mi_joint  = self%bap%get_avg('mi_joint')
             self%mi_class  = self%bap%get_avg('mi_class')
             self%mi_inpl   = self%bap%get_avg('mi_inpl')
@@ -86,6 +88,7 @@ contains
         write(*,'(A,1X,F7.4)') '>>> CLASS    DISTRIBUTION OVERLAP:     ', self%mi_class
         write(*,'(A,1X,F7.4)') '>>> IN-PLANE DISTRIBUTION OVERLAP:     ', self%mi_inpl
         write(*,'(A,1X,F7.1)') '>>> AVERAGE IN-PLANE ANGULAR DISTANCE: ', self%dist_inpl
+        write(*,'(A,1X,F7.1)') '>>> AVERAGE PER-PARTICLE B-FACTOR:     ', self%bfac
         write(*,'(A,1X,F7.1)') '>>> PERCENTAGE OF SEARCH SPACE SCANNED:', self%frac
         write(*,'(A,1X,F7.4)') '>>> CORRELATION:                       ', self%corr
         ! dynamic shift search range update

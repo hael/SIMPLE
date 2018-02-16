@@ -337,7 +337,7 @@ contains
         real    :: corrs(self%nrots),inpl_corr,corr
         if( nint(self%a_ptr%get(self%iptcl,'state')) > 0 )then
             call self%prep4srch
-            corr            = -1.
+            corr = -1.
             ! evaluate neighbors (greedy selection)
             do inn=1,self%nnn
                 iref      = nnmat(self%prev_class,inn)

@@ -154,7 +154,7 @@ contains
         endif
 
         ! SETUP WEIGHTS
-        ! this needs to be done prior to search such that each part
+        ! this needs to be done prior tfit_bfaco search such that each part
         ! sees the same information in distributed execution
         if( p%weights2D .eq. 'yes' .and. frac_srch_space >= FRAC_INTERPOL )then
             if( p%nptcls <= SPECWMINPOP )then
@@ -233,6 +233,8 @@ contains
         if( p%ctf .ne. 'no' ) call pftcc%create_polar_ctfmats(b%a)
         ! memoize FFTs for improved performance
         call pftcc%memoize_ffts
+        ! memoize B-factors
+        if( p%objfun.eq.'ccres' ) call pftcc%memoize_bfacs(b%a)
         ! execute the search
         call del_file(p%outfile)
         if( L_BENCH ) t_align = tic()

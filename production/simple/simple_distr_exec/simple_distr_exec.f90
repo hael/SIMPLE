@@ -476,7 +476,7 @@ select case(prg)
         if( .not. cline%defined('lpstop')    ) call cline%set('lpstop',      8. )
         if( .not. cline%defined('eo')        ) call cline%set('eo',        'no' )
         if( .not. cline%defined('cenlp')     ) call cline%set('cenlp',      30. )
-        if( .not. cline%defined('maxits')    ) call cline%set('maxits',     30. )
+        if( .not. cline%defined('maxits')    ) call cline%set('maxits',     50. )
         if( .not. cline%defined('weights2D') ) call cline%set('weights2D', 'no' )
         if( .not. cline%defined('autoscale') ) call cline%set('autoscale', 'yes')
         ! execute
