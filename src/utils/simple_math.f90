@@ -500,7 +500,8 @@ contains
         allocate(  mask(ndat), labels(ndat), stat=alloc_stat )
         if(alloc_stat /= 0) call allocchk("sortmeans; simple_math", alloc_stat)
         ! initialization by sorting
-        dat_sorted = dat ! reallocation  dat_sorted(ndat),
+        !$ allocate(dat_sorted(ndat))
+        dat_sorted = dat
         call hpsort(dat_sorted)
         clssz = int(real(ndat)/real(ncls))
         cnt_means = 0
@@ -1056,7 +1057,6 @@ contains
     function get_lplim_at_corr( fsc, corr ) result( k )
         real, intent(in) :: fsc(:), corr
         integer          :: n, k, h
-        integer          :: sstartind
         n = size(fsc)
         if( n < 3 )then
             stop 'nonconforming size of fsc array; get_lplim_at_corr; simple_math'
@@ -2202,7 +2202,7 @@ contains
     subroutine ratint(xa, ya, x, y, dy)
         real, intent(in)  :: xa(:), ya(:), x  !< x position
         real, intent(out) :: y, dy            !< est value and accuracy
-        real, parameter   :: TINY = 1.e-25
+        real, parameter   :: TINY_sp = 1.e-20 ! previous value of 1.e-25 too small for single-precision float
         real, allocatable :: c(:), d(:)
         integer :: n, i, m, ns
         real    :: dd, h, hh, t, w
@@ -2223,7 +2223,7 @@ contains
                 hh = h
             endif
             c(i) = ya(i)
-            d(i) = ya(i)+TINY ! TINY needed to prevent rare zero-over-zero
+            d(i) = ya(i)+TINY_sp ! TINY needed to prevent rare zero-over-zero
         end do
         y  = ya(ns)
         ns = ns-1
@@ -2248,7 +2248,7 @@ contains
         end do
         deallocate(c,d,stat=alloc_stat)
         if(alloc_stat .ne. 0)call allocchk("In: ratint; simple_math", alloc_stat)
-    end subroutine
+    end subroutine ratint
 
     !>    quadratic interpolation in 2D, from spider
     function quadri(xx, yy, fdata, nx, ny) result(q)
@@ -2352,7 +2352,7 @@ contains
     function peakfinder_2( vals ) result( peakpos )
         real,    intent(in)  :: vals(:)
         logical, allocatable :: peakpos(:)
-        integer :: n, i, alloc_stat
+        integer :: n, i
         n = size(vals)
         allocate(peakpos(n), source=.false.)
         if( vals(1) > vals(2) )  peakpos(1) = .true.
@@ -2365,7 +2365,7 @@ contains
     function peakfinder_3( mat ) result( peakpos )
         real,    intent(in)  :: mat(:,:)
         logical, allocatable :: peakpos(:,:)
-        integer :: nx, ny, i, j, alloc_stat
+        integer :: nx, ny, i, j
         nx = size(mat,1)
         ny = size(mat,2)
         allocate(peakpos(nx,ny), source=.false.)
@@ -2383,7 +2383,7 @@ contains
         ! same as peakfinder_2 without allocation
         real,    intent(in)  :: vals(:)
         logical, intent(out) :: peakpos(:)
-        integer :: n, i, alloc_stat
+        integer :: n, i
         n = size(vals)
         peakpos = .false.
         if( vals(1) > vals(2) )  peakpos(1) = .true.

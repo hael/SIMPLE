@@ -3,7 +3,10 @@ module simple_cufft_test2
     use simple_image,       only: image
     use simple_fftshifter
     use gnufor2
+#ifdef PGI
     use simple_cufft
+#endif
+
     implicit none
 
 #ifdef PGI
@@ -19,7 +22,7 @@ module simple_cufft_test2
     real(kind=sp), parameter :: tolerance = 1.e-05_sp
 #include "simple_local_flags.inc"
 contains
-
+#ifdef PGI
     !> \brief fft  forward Fourier transform
     !!
     subroutine fft_pgi_cuda_test( self )
@@ -2097,5 +2100,6 @@ contains
             call exec_cmdline("pkill gnuplot_x11")
         end do
     end subroutine test_pgi_ifft
+#endif
 
 end module simple_cufft_test2

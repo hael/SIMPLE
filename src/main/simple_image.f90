@@ -66,9 +66,9 @@ type :: image
     procedure          :: get_smpd
     procedure          :: get_nyq
     procedure          :: get_filtsz
-    procedure          :: get_shconst
     procedure          :: cyci
     procedure          :: get
+    procedure          :: get_rmat
     procedure          :: get_cmat
     procedure, private :: get_cmat_at_1
     procedure, private :: get_cmat_at_2
@@ -77,38 +77,19 @@ type :: image
     procedure, private :: get_rmat_at_2
     generic            :: get_rmat_at => get_rmat_at_1, get_rmat_at_2
     procedure          :: get_cmatfull
-    procedure          :: get_rmat
-    procedure          :: set_cmat_1
-    procedure          :: set_cmat_2
+    procedure          :: set
+    procedure          :: set_rmat
+    procedure, private :: set_cmat_1
+    procedure, private :: set_cmat_2
     generic            :: set_cmat => set_cmat_1, set_cmat_2
     procedure          :: set_cmat_at_1
     procedure          :: set_cmat_at_2
     generic            :: set_cmat_at => set_cmat_at_1, set_cmat_at_2
     procedure          :: set_cmats_from_cmats
     procedure          :: add_cmats_to_cmats
-    procedure, private :: mul_rmat_at_1
-    procedure, private :: mul_rmat_at_2
-    generic            :: mul_rmat_at => mul_rmat_at_1, mul_rmat_at_2
-    procedure, private :: div_rmat_at_1
-    procedure, private :: div_rmat_at_2
-    generic            :: div_rmat_at => div_rmat_at_1, div_rmat_at_2
-    procedure, private :: add_cmat_at_1
-    procedure, private :: add_cmat_at_2
-    generic            :: add_cmat_at => add_cmat_at_1, add_cmat_at_2
-    procedure, private :: mul_cmat_at_1
-    procedure, private :: mul_cmat_at_2
-    procedure, private :: mul_cmat_at_3
-    procedure, private :: mul_cmat_at_4
-    generic            :: mul_cmat_at => mul_cmat_at_1, mul_cmat_at_2, mul_cmat_at_3, mul_cmat_at_4
-    procedure, private :: div_cmat_at_1
-    procedure, private :: div_cmat_at_2
-    procedure, private :: div_cmat_at_3
-    procedure, private :: div_cmat_at_4
-    generic            :: div_cmat_at => div_cmat_at_1, div_cmat_at_2, div_cmat_at_3, div_cmat_at_4
     procedure          :: print_cmat
+    procedure          :: print_rmat
     procedure          :: expand_ft
-    procedure          :: set
-    procedure          :: set_rmat
     procedure          :: set_ldim
     procedure          :: set_smpd
     procedure          :: get_slice
@@ -190,6 +171,25 @@ type :: image
     generic            :: mul => mul_1, mul_2, mul_3, mul_4
     procedure, private :: conjugate
     generic            :: conjg => conjugate
+    procedure, private :: mul_rmat_at_1
+    procedure, private :: mul_rmat_at_2
+    generic            :: mul_rmat_at => mul_rmat_at_1, mul_rmat_at_2
+    procedure, private :: div_rmat_at_1
+    procedure, private :: div_rmat_at_2
+    generic            :: div_rmat_at => div_rmat_at_1, div_rmat_at_2
+    procedure, private :: add_cmat_at_1
+    procedure, private :: add_cmat_at_2
+    generic            :: add_cmat_at => add_cmat_at_1, add_cmat_at_2
+    procedure, private :: mul_cmat_at_1
+    procedure, private :: mul_cmat_at_2
+    procedure, private :: mul_cmat_at_3
+    procedure, private :: mul_cmat_at_4
+    generic            :: mul_cmat_at => mul_cmat_at_1, mul_cmat_at_2, mul_cmat_at_3, mul_cmat_at_4
+    procedure, private :: div_cmat_at_1
+    procedure, private :: div_cmat_at_2
+    procedure, private :: div_cmat_at_3
+    procedure, private :: div_cmat_at_4
+    generic            :: div_cmat_at => div_cmat_at_1, div_cmat_at_2, div_cmat_at_3, div_cmat_at_4
     procedure          :: sqpow
     procedure          :: signswap_aimag
     procedure          :: signswap_real
@@ -804,7 +804,8 @@ contains
         if( self%is_ft() ) call simple_stop('only 4 real images; extr_pixels; simple_image')
         if( self.eqdims.mskimg )then
             ! pixels = self%packer(mskimg) ! Intel hickup
-            !pgi$ allocate(pixels(self%ldim(1)*self%ldim(2)*self%ldim(3)))
+            !$ allocate(pixels(self%ldim(1)*self%ldim(2)*self%ldim(3)), stat=alloc_stat)
+            !$ if(alloc_stat.ne.0)call allocchk("In simple_image::extr_pixels PGI prealloc ",alloc_stat)
             pixels = pack( self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)),&
                 &mskimg%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3))>0.5 )
         else
@@ -1251,45 +1252,6 @@ contains
         !! pure function cannot call allocchk
         !! if (alloc_stat /= 0)call allocchk("simple_image::get_cmat ")
     end function get_cmat
-<<<<<<< variant A
->>>>>>> variant B
-    !>  \brief   get_cmat get the image object's complex matrix
-    !! \return cmat a copy of this image object's cmat
-    !!
-    function get_cmatfull( self , llims) result( cmat )
-        class(image), intent(in) :: self
-        integer, intent(inout), optional :: llims(3,2)
-        complex, allocatable :: cmat(:,:,:)
-        integer :: ll(3,2)
-        if (present(llims))then
-            ll=llims
-        else
-            ll=1
-            ll(:,2) = self%array_shape
-        end if
-        allocate(cmat(ll(1,1):ll(1,2),ll(2,1):ll(2,2),ll(3,1):ll(3,2)), source=self%cmat, stat=alloc_stat)
-        if (alloc_stat /= 0)call allocchk("simple_image::get_cmat ",alloc_stat)
-    end function get_cmatfull
-####### Ancestor
-    !>  \brief   get_cmat get the image object's complex matrix
-    !! \return cmat a copy of this image object's cmat
-    !!
-    function get_cmatfull( self , llims) result( cmat )
-        class(image), intent(in) :: self
-        integer, intent(inout), optional :: llims(3,2)
-        complex, allocatable :: cmat(:,:,:)
-        integer :: ll(3,2)
-        if (present(llims))then
-            ll=llims
-        else
-            ll=1
-            ll(:,2) = self%array_shape
-        end if
-        print *,"  get_cmatfull ", ll
-        allocate(cmat(ll(1,1):ll(1,2),ll(2,1):ll(2,2),ll(3,1):ll(3,2)), source=self%cmat, stat=alloc_stat)
-        if (alloc_stat /= 0)call allocchk("simple_image::get_cmat ",alloc_stat)
-    end function get_cmatfull
-======= end
 
     !>  \brief   get_cmatfull get the image object's complex matrix, including index limits
     !! \return cmat a copy of this image object's cmat
@@ -1311,21 +1273,6 @@ contains
         if (alloc_stat /= 0)call allocchk("simple_image::get_cmat ",alloc_stat)
     end function get_cmatfull
 
-
-    pure subroutine set_cmat_1( self, cmat )
-        class(image), intent(inout) :: self
-        complex,      intent(in)    :: cmat(self%array_shape(1),self%array_shape(2),self%array_shape(3))
-        self%ft = .true.
-        self%cmat = cmat
-    end subroutine set_cmat_1
-
-    pure subroutine set_cmat_2( self, cval )
-        class(image), intent(inout) :: self
-        complex,      intent(in)    :: cval
-        self%ft = .true.
-        self%cmat = cval
-    end subroutine set_cmat_2
-
     !! get cmat value at index phys
     pure function get_cmat_at_1( self, phys ) result( comp )
         class(image), intent(in)  :: self
@@ -1341,6 +1288,20 @@ contains
         complex :: comp
         comp = self%cmat(h,k,l)
     end function get_cmat_at_2
+
+    pure subroutine set_cmat_1( self, cmat )
+        class(image), intent(inout) :: self
+        complex,      intent(in)    :: cmat(self%array_shape(1),self%array_shape(2),self%array_shape(3))
+        self%ft = .true.
+        self%cmat = cmat
+    end subroutine set_cmat_1
+
+    pure subroutine set_cmat_2( self, cval )
+        class(image), intent(inout) :: self
+        complex,      intent(in)    :: cval
+        self%ft = .true.
+        self%cmat = cval
+    end subroutine set_cmat_2
 
     !! set comp to cmat at index phys
     subroutine set_cmat_at_1( self , phys , comp)
@@ -1358,15 +1319,13 @@ contains
         self%cmat(h,k,l) =  comp
     end subroutine set_cmat_at_2
 
-
-
-   !> add comp to cmat at index phys
-   subroutine add_cmat_at_1( self , phys , comp)
-       class(image), intent(in) :: self
-       integer, intent(in) :: phys(3)
-       complex, intent(in) :: comp
-       self%cmat(phys(1),phys(2),phys(3)) = self%cmat(phys(1),phys(2),phys(3)) + comp
-   end subroutine add_cmat_at_1
+    !> add comp to cmat at index phys
+    subroutine add_cmat_at_1( self , phys , comp)
+        class(image), intent(in) :: self
+        integer, intent(in) :: phys(3)
+        complex, intent(in) :: comp
+        self%cmat(phys(1),phys(2),phys(3)) = self%cmat(phys(1),phys(2),phys(3)) + comp
+    end subroutine add_cmat_at_1
 
     !> add comp to cmat at index (h,k,l)
     subroutine add_cmat_at_2( self, h, k, l, comp)
@@ -1453,7 +1412,7 @@ contains
     end subroutine div_cmat_at_2
     ! divide cmat at index phys by cval
     subroutine div_cmat_at_3( self, phys, cval )
-            class(image),      intent(inout) :: self
+        class(image),      intent(inout) :: self
         integer,           intent(in)    :: phys(3)
         complex,           intent(in)    :: cval
         if( abs(cval) > 1.e-6 )then
@@ -1480,7 +1439,7 @@ contains
         class(image),      intent(inout) :: self
         integer,           intent(in)    :: phys(3)
         real,              intent(in)    :: rval
-        self%cmat(phys(1),phys(2),phys(3)) = self%cmat(phys(1),phys(2),phys(3)) * rval
+        self%cmat(phys(1),phys(2),phys(3)) = self%cmat(phys(1),phys(2),phys(3)) * cmplx(rval,0.)
     end subroutine mul_cmat_at_1
 
     !! multiply cmat with complex k at index phys
@@ -1490,6 +1449,7 @@ contains
         complex,           intent(in)    :: cval
         self%cmat(phys(1),phys(2),phys(3)) = self%cmat(phys(1),phys(2),phys(3)) * cval
     end subroutine mul_cmat_at_2
+
     !! multiply cmat at index h,k,l by real
     subroutine mul_cmat_at_3( self, h,k,l,rval )
         class(image),      intent(inout) :: self
@@ -1850,7 +1810,7 @@ contains
                 end do
             end do
         else
-            if( size(coord) < 3 ) call simple_stop('need a 3D coordinate for a 3D image; winserialize; simple_imgae')
+            if( size(coord) < 3 ) call simple_stop('need a 3D coordinate for a 3D image; winserialize; simple_image')
             npix = winsz**3
             call set_action
             cnt = 0
@@ -1877,17 +1837,17 @@ contains
 
     contains
 
-            subroutine set_action
-                if( allocated(pcavec) )then
-                    if( size(pcavec) /= npix ) stop 'size mismatch mask/npix; winserialize; simple_image'
-                    pack = .false.
-                else
-                    pack = .true.
-                    allocate( pcavec(npix), stat=alloc_stat )
-                    if(alloc_stat/=0)call allocchk('winserialize; simple_image')
-                    pcavec = 0.
-                endif
-            end subroutine set_action
+        subroutine set_action
+            if( allocated(pcavec) )then
+                if( size(pcavec) /= npix ) call simple_stop('size mismatch mask/npix; winserialize; simple_image')
+                pack = .false.
+            else
+                pack = .true.
+                allocate( pcavec(npix), stat=alloc_stat )
+                if(alloc_stat.ne.0)call allocchk('winserialize; simple_image',alloc_stat)
+                pcavec = 0.
+            endif
+        end subroutine set_action
 
     end subroutine winserialize
 
@@ -1898,7 +1858,7 @@ contains
         do i=1,self%ldim(1)
             do j=1,self%ldim(2)
                 do k=1,self%ldim(3)
-                    if( abs(self%rmat(i,j,k)) < TINY ) self%rmat(i,j,k) = 1.
+                    if( self%rmat(i,j,k) == 0. ) self%rmat(i,j,k) = 1.
                 end do
             end do
         end do
@@ -1981,7 +1941,6 @@ contains
         complex, allocatable :: fplane(:,:)
         integer              :: sect_here
         logical              :: geomorsphr_here
-
         sect_here = 1
         if( present(sect) ) sect_here = sect
         geomorsphr_here=.true.
@@ -1999,7 +1958,6 @@ contains
                 call gnufor_image(cabs(fplane), palette='gray')
                 call gnufor_image(atan2(real(fplane),aimag(fplane)), palette='gray')
             endif
-
             deallocate(fplane)
         else
             if( self%ldim(3) == 1 ) sect_here = 1
@@ -2602,7 +2560,6 @@ contains
         self%rmat(i,j,k) = self%rmat(i,j,k)*rval
     end subroutine mul_rmat_at_2
 
-
     !>  \brief mul_1 is for component-wise multiplication of an image with a real constant
     !! \param logi
     !! \param rc
@@ -2727,12 +2684,12 @@ contains
     end function division
 
     ! component-wise division of an image with a real number
-    subroutine div_rmat_at_1( self, logi, k )
+    subroutine div_rmat_at_1( self, logi, rval )
         class(image), intent(inout) :: self
         integer,      intent(in)    :: logi(3)
-        real,         intent(in)    :: k
-        if( abs(k) > 1e-6 )then
-            self%rmat(logi(1),logi(2),logi(3)) = self%rmat(logi(1),logi(2),logi(3))/k
+        real,         intent(in)    :: rval
+        if( abs(rval) > 1e-6 )then
+            self%rmat(logi(1),logi(2),logi(3)) = self%rmat(logi(1),logi(2),logi(3))/rval
         endif
     end subroutine div_rmat_at_1
 
@@ -2966,7 +2923,8 @@ contains
         if( self%ft ) call simple_stop('only for real images; bin_2; simple image')
         npixtot = product(self%ldim)
         ! forsort = self%packer() ! Intel hickup
-        !pgi$ allocate(forsort(self%ldim(1)*self%ldim(2)*self%ldim(3)))
+        !$ allocate(forsort(self%ldim(1)*self%ldim(2)*self%ldim(3)),stat=alloc_stat)
+        !$ if(alloc_stat.ne.0)call allocchk("simple_image::bin_2 packing rmat for sorting - PGI prealloc", alloc_stat)
         forsort = pack( self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)), .true.)
         call hpsort(forsort)
         thres = forsort(npixtot-npix-1) ! everyting above this value 1 else 0
@@ -3014,7 +2972,7 @@ contains
         ! foreground/background identification with k-means
         do l=1,MAXITS
             where( (cen1 - self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)))**2.0 <&
-                  &(cen2 - self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)))**2.0 )
+                &(cen2 - self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)))**2.0 )
                 l_msk = .true.
             else where
                 l_msk = .false.
@@ -3081,7 +3039,8 @@ contains
         call mask2d%new([self%ldim(1), self%ldim(2), 1], self%smpd)
         mask2d = 1.
         call mask2d%mask(rad, 'hard')
-        !pgi$ allocate(plane(self%ldim(1),self%ldim(2),self%ldim(3)))
+        !$ allocate(plane(self%ldim(1),self%ldim(2),self%ldim(3)),stat=alloc_stat)
+        !$ if(alloc_stat.ne.0)call allocchk("In simple_image::bin_cylinder PGI prealloc plane",alloc_stat)
         plane = mask2d%get_rmat()
         self%rmat = 0.
         do k = 1,self%ldim(3)
@@ -3181,7 +3140,6 @@ contains
         xyz = xyz / spix
         if( self%ldim(3) == 1 ) xyz(3) = 0.
     end subroutine masscens
-
 
     !>  \brief center is for centering an image based on center of mass
     !! \param lp low-pass cut-off freq
@@ -3302,10 +3260,11 @@ contains
                 il = max(1,i-1)
                 ir = min(self%ldim(1),i+1)
                 do j=1,self%ldim(2)
-                    if (abs(self%rmat(i,j,1)) < TINY) then
+                    if (self%rmat(i,j,1) == 0.) then
                         jl = max(1,j-1)
                         jr = min(self%ldim(2),j+1)
-                        if( any(abs(self%rmat(il:ir,jl:jr,1)-1) < TINY )) sub_pixels(i,j,1) = .true.
+                        if( any(self%rmat(il:ir,jl:jr,1) == 1.) ) &
+                            sub_pixels(i,j,1) = .true.
                     end if
                 end do
             end do
@@ -3319,10 +3278,11 @@ contains
                     jl = max(1,j-1)
                     jr = min(self%ldim(2),j+1)
                     do k=1,self%ldim(3)
-                        if (abs(self%rmat(i,j,k)) < TINY) then
+                        if (self%rmat(i,j,k) == 0.) then
                             kl = max(1,k-1)
                             kr = min(self%ldim(3),k+1)
-                            if( any(abs(self%rmat(il:ir,jl:jr,kl:kr)-1.)<TINY))sub_pixels(i,j,k) = .true.
+                            if( any(self%rmat(il:ir,jl:jr,kl:kr) == 1.) ) &
+                                sub_pixels(i,j,k) = .true.
                         end if
                     end do
                 end do
@@ -3369,7 +3329,7 @@ contains
         enddo
         ! init paddedd logical array
         add_pixels = .false.
-        forall( i=1:self%ldim(1), j=1:self%ldim(2), k=1:self%ldim(3), abs(self%rmat(i,j,k)-1.)<TINY )&
+        forall( i=1:self%ldim(1), j=1:self%ldim(2), k=1:self%ldim(3), self%rmat(i,j,k)==1. )&
             & add_pixels(i,j,k) = .true.
         ! cycle
         if( self%is_3d() )then
@@ -3444,7 +3404,7 @@ contains
         ! init paddedd logical array
         sub_pixels = .false.
 
-        forall( i=1:self%ldim(1), j=1:self%ldim(2), k=1:self%ldim(3), abs(self%rmat(i,j,k)-1.) < TINY )&
+        forall( i=1:self%ldim(1), j=1:self%ldim(2), k=1:self%ldim(3), self%rmat(i,j,k)==1. )&
             & sub_pixels(i,j,k) = .true.
         ! cycle
         if( self%is_3d() )then
@@ -3555,7 +3515,7 @@ contains
             ie = min(i+1,self%ldim(1))       ! right neighbour
             il = max(1,i-falloff)            ! left bounding box limit
             ir = min(i+falloff,self%ldim(1)) ! right bounding box limit
-            if( any(abs(rmat(i,:,:)-1.) > TINY) )cycle ! no values equal to one
+            if( any(rmat(i,:,:)==1.) )cycle ! no values equal to one
             do j=1,self%ldim(2)
                 js = max(1,j-1)
                 je = min(j+1,self%ldim(2))
@@ -3563,16 +3523,16 @@ contains
                 jr = min(j+falloff,self%ldim(2))
                 if( self%ldim(3)==1 )then
                     ! 2d
-                    if( (abs(rmat(i,j,1) - 1.) > TINY) ) cycle ! cycle if not equal to one
+                    if( rmat(i,j,1) == 1. ) cycle ! cycle if not equal to one
                     ! within mask region
                     ! update if has a masked neighbour
                     if( any( rmat(is:ie,js:je,1) < 1.) )call update_mask_2d
                 else
                     ! 3d
-                    if(.not. any(abs(rmat(i,j,:) - 1.) < TINY))cycle ! cycle if equal to one
+                    if(.not. any(rmat(i,j,:) == 1.))cycle ! cycle if equal to one
                     do k=1,self%ldim(3)
 
-                        if( abs(rmat(i,j,k)-1.)>TINY )cycle
+                        if( rmat(i,j,k) /= 1. )cycle
                         ! within mask region
                         ks = max(1,k-1)
                         ke = min(k+1,self%ldim(3))
@@ -3724,7 +3684,7 @@ contains
         real, allocatable :: spec(:), plot(:,:)
         integer           :: lfny, k
         if( .not. self%is_3d() ) call simple_stop('Only for 3D images; guinier; simple_image')
-        spec = self%spectrum('absreal')
+        call self%spectrum('absreal',spec=spec)
         lfny = self%get_lfny(1)
         allocate( plot(lfny,2), stat=alloc_stat )
         if(alloc_stat/=0)call allocchk("In: guinier; simple_image")
@@ -3741,11 +3701,11 @@ contains
     !! \param norm normalise result
     !! \return spec Power spectrum array
     !!
-    function spectrum( self, which, norm ) result( spec )
+    subroutine spectrum( self, which, spec, norm)
         class(image),      intent(inout) :: self
         character(len=*),  intent(in)    :: which
+        real, allocatable, intent(inout) :: spec(:)
         logical, optional, intent(in)    :: norm
-        real, allocatable :: spec(:)
         real, allocatable :: counts(:)
         integer :: lfny, h, k, l
         integer :: sh, lims(3,2), phys(3)
@@ -3760,8 +3720,11 @@ contains
             endif
         endif
         lfny = self%get_lfny(1)
+        DebugPrint "In simple_image::spectrum lfny", lfny
+        if(allocated(spec))deallocate(spec)
         allocate( spec(lfny), counts(lfny), stat=alloc_stat )
-        if(alloc_stat/=0)call allocchk('spectrum; simple_image')
+        if(alloc_stat.ne.0)call allocchk('spectrum; simple_image',alloc_stat)
+        DebugPrint "In simple_image::spectrum spec size", size(spec)
         spec   = 0.
         counts = 0.
         lims   = self%fit%loop_lims(2)
@@ -3876,7 +3839,7 @@ contains
                 end do
             case DEFAULT
                 write(*,*) 'Spectrum kind: ', trim(which)
-                stop 'Unsupported spectrum kind; simple_image; spectrum'
+                call simple_stop('Unsupported spectrum kind; simple_image; spectrum', __FILENAME__,__LINE__)
         end select
         if( which .ne. 'count' .and. nnorm )then
             where(counts > 0.)
@@ -3884,7 +3847,8 @@ contains
             end where
         endif
         if( didft ) call self%ifft()
-    end function spectrum
+        DebugPrint "In simple_image::spectrum done"
+    end subroutine spectrum
 
     !> \brief shellnorm for normalising each shell to uniform (=1) power
     !!
@@ -3907,7 +3871,8 @@ contains
         lfny  = self%get_lfny(1)
         lims  = self%fit%loop_lims(2)
         ! calculate the expectation value of the signal power in each shell
-        expec_pow = self%spectrum('power')
+        !$ allocate(expec_pow(1))
+        call self%spectrum('power',expec_pow)
         ! normalise
         !$omp parallel do collapse(3) default(shared) private(h,k,l,sh,phys)&
         !$omp schedule(static) proc_bind(close)
@@ -3954,7 +3919,7 @@ contains
         lfny      = self%get_lfny(1)
         lims      = self%fit%loop_lims(2)
         ! calculate the expectation value of the signal power in each shell
-        expec_pow = self%spectrum('power')
+        call self%spectrum('power',expec_pow )
         ! normalise
         do h=lims(1,1),lims(1,2)
             do k=lims(2,1),lims(2,2)
@@ -3998,7 +3963,7 @@ contains
         lfny      = self%get_lfny(1)
         lims      = self%fit%loop_lims(2)
         ! calculate the expectation value of the signal power in each shell
-        expec_pow = self%spectrum('power')
+        call self%spectrum('poer',expec_pow)
         ! normalise
         do h=lims(1,1),lims(1,2)
             do k=lims(2,1),lims(2,2)
@@ -4039,7 +4004,7 @@ contains
         lfny      = self%get_lfny(1)
         lims      = self%fit%loop_lims(2)
         ! calculate the expectation value of the signal power in each shell
-        expec_pow = self%spectrum('power')
+        call self%spectrum('power', expec_pow )
         ! normalise
         !$omp parallel do collapse(3) default(shared) private(h,k,l,sh,phys,fwght)&
         !$omp schedule(static) proc_bind(close)
@@ -4086,7 +4051,7 @@ contains
         lfny      = self%get_lfny(1)
         lims      = self%fit%loop_lims(2)
         ! calculate the expectation value of the signal power in each shell
-        expec_pow = self%spectrum('power')
+        call self%spectrum('power',expec_pow )
         ! normalise
         !$omp parallel do collapse(3) default(shared) private(h,k,l,sh,phys,comp,fwght)&
         !$omp schedule(static) proc_bind(close)
@@ -4639,7 +4604,7 @@ contains
         else if( which.eq.'foreground' )then
             background = .false.
         else
-            stop 'unrecognized parameter: which; stats_1; simple_image'
+            call simple_stop('unrecognized parameter: which; stats_1; simple_image', __FILENAME__,__LINE__)
         endif
         allocate( pixels(product(self%ldim)), stat=alloc_stat )
         if(alloc_stat/=0)call allocchk('backgr; simple_image')
@@ -4696,8 +4661,10 @@ contains
         endif
         maxv = maxval(pixels(:npix))
         minv = minval(pixels(:npix))
-        call moment( pixels(:npix), ave, sdev, var, err )
-        if( present(med) ) med  = median_nocopy(pixels(:npix))
+        if(npix>1)then
+            call moment( pixels(:npix), ave, sdev, var, err )
+            if( present(med) ) med  = median_nocopy(pixels(:npix))
+        end if
         deallocate( pixels )
         if( present(errout) )then
             errout = err
@@ -6099,106 +6066,10 @@ contains
         self%ft = .false.
     end subroutine gauimg2D
 
-    !> \brief fwd_ft  forward Fourier transform FFTW3
-    !!
-    subroutine fft_pgi_cuda( self )
-#ifndef PGI
-        class(image), intent(inout)      :: self
-        print *,"simple_image::fft_pgi_cuda cannot be called from this compiler"
-#else
-        !! IN-PLACE 3D FFT using CUDA's cufft
-        use simple_cufft
-        use openacc
-        use cudafor
-        class(image), intent(inout)      :: self
-        complex, allocatable, device     :: coutput_d(:,:,:)
-        complex, allocatable             :: coutput(:,:,:)
-        real,    allocatable             :: rinput(:,:,:)
-        integer      :: plan, planType
-        integer      :: i,j,k,h,l,n,istat
-        integer      :: nerrors, cdim(3),ldim(3),lims(3,2),phys(3)
-        real         :: nscale
-        integer(timer_int_kind) :: t1
-        if( self%ft ) return
-        ldim = self%ldim
-        verbose=.true.
-        if(verbose)t1=tic()
-        ! synchronise
-        istat=cudaDeviceSynchronize()
-        istat=istat+cudaThreadSynchronize()
-        if(istat.ne.0)then
-            call simple_cuda_stop("In simple_image::fft sync ",__FILENAME__,__LINE__)
-        endif
-
-        ! allocate arrays on the host
-        allocate(coutput(ldim(1),ldim(2),ldim(3)),stat=alloc_stat)
-        if(alloc_stat.ne.0)call allocchk("In simple_image::fft coutput",alloc_stat)
-        ! allocate( rinput(ldim(1), ldim(2), ldim(3)),source=0.,stat=alloc_stat)
-        !if(alloc_stat.ne.0)call allocchk("In simple_image::pgi_fft rinput",alloc_stat)
-        rinput = self%get_rmat()
-
-        ! allocate arrays on the device
-        allocate(coutput_d(ldim(1),ldim(2),ldim(3)))
-        ! set planType to either single or double precision
-        planType = CUFFT_C2C    !! (fp_kind == singlePrecision)
-
-        ! copy arrays to device
-        coutput=cmplx(rinput,0.)
-        coutput_d = coutput
-
-        ! Initialize the plan for real to complex transform
-        call cufftPlan3d(plan,ldim(1),ldim(2),ldim(3),planType)
-        VerbosePrint "In Image::fft  PGI ", toc()
-
-        ! Execute  Forward transform in place
-        call cufftExec(plan,planType,coutput_d,coutput_d,CUFFT_FORWARD )
-
-        ! now scale the values so that a ifft of the output yields the
-        ! original image back, rather than a scaled version
-        !$acc kernels
-        coutput_d = coutput_d / nscale
-        !$acc end kernels
-
-        ! Copy results back to host
-        coutput = coutput_d
-
-        ! release memory on the host and on the device
-        deallocate(coutput_d)
-
-        ! Destroy the plans
-        call cufftDestroy(plan)
-        VerbosePrint "In simple_cufft::fft_pgi  PGI destroyed ", toc()
-
-
-        call self%set_ft(.true.)
-        call self%set_cmat(coutput(:cdim(1),:cdim(2),:cdim(3)))
-
-
-        VerbosePrint "In simple_cufft::fft_pgi  deallocating host arrays", toc()
-        ! Remove host storage
-        if(allocated(coutput))then
-            deallocate(coutput,stat=alloc_stat)
-            if(alloc_stat /= 0)call allocchk("In simple_image::fft dealloc host coutput",alloc_stat)
-        end if
-        if(allocated(rinput))then
-            deallocate(rinput,stat=alloc_stat)
-            if(alloc_stat /= 0)call allocchk("In simple_image::fft dealloc host rinput",alloc_stat)
-        end if
-        VerbosePrint "In simple_cufft::fft_pgi deallocating done "
-        ! istat=cudaThreadSynchronize()
-        !   VerbosePrint "In simple_cufft::fft_pgi  PGI scaling ", size(coutput), LBOUND(coutput), UBOUND(coutput)
-        istat=cudaThreadSynchronize()
-        istat=istat+cudaDeviceSynchronize()
-       ! if(istat.ne.0)then
-         call simple_cuda_stop("In simple_image::fft post fft sync ",__FILENAME__,__LINE__)
-       ! endif
-        VerbosePrint "In simple_cufft::fft_pgi finished ", toc(), toc(t1)
-#endif
-    end subroutine fft_pgi_cuda
-
     subroutine fwd_ft(self)
         class(image), intent(inout) :: self
         if( self%ft ) return
+        if( shift_to_phase_origin ) call self%shift_phorig
         call fftwf_execute_dft_r2c(self%plan_fwd,self%rmat,self%cmat)
         ! now scale the values so that a ifft() of the output yields the
         ! original image back, rather than a scaled version
@@ -6303,6 +6174,101 @@ contains
         end do
     end subroutine img2ft
 
+
+    subroutine fft_pgi_cuda( self )
+#ifndef PGI
+        class(image), intent(inout)      :: self
+        print *,"simple_image::fft_pgi_cuda cannot be called from this compiler"
+#else
+        !! IN-PLACE 3D FFT using CUDA's cufft library
+        use simple_cufft
+#ifdef _OPENACC
+        use openacc
+#endif
+        use cudafor
+        class(image), intent(inout)      :: self
+        complex, allocatable, device     :: coutput_d(:,:,:)
+        complex, allocatable             :: coutput(:,:,:)
+        real,    allocatable             :: rinput(:,:,:)
+        integer      :: plan, planType
+        integer      :: i,j,k,h,l,n,istat
+        integer      :: nerrors, cdim(3),ldim(3),lims(3,2),phys(3)
+        real         :: nscale
+        integer(timer_int_kind) :: t1
+        if( self%ft ) return
+        ldim = self%ldim
+        verbose=.true.
+        if(debug)t1=tic()
+        ! synchronise
+!        istat=cudaDeviceSynchronize()
+!        if(istat.ne.0)then
+!            call simple_cuda_stop("In simple_image::fft sync ",__FILENAME__,__LINE__)
+!        endif
+
+        ! Allocate arrays on the host
+        allocate(coutput(ldim(1),ldim(2),ldim(3)),stat=istat)
+        if(alloc_stat.ne.0)call allocchk("In simple_image::fft coutput",istat)
+        !$ allocate( rinput(ldim(1), ldim(2), ldim(3)),source=0.,stat=alloc_stat)
+        !$ if(alloc_stat.ne.0)call allocchk("In simple_image::pgi_fft rinput",alloc_stat)
+        rinput = self%get_rmat()
+
+        ! Allocate arrays on the device
+        allocate(coutput_d(ldim(1),ldim(2),ldim(3)))
+        ! Set planType to either single or double precision
+        planType = CUFFT_C2C    !! (fp_kind == singlePrecision)
+
+        ! Copy arrays to device
+        coutput=cmplx(rinput,0.)
+        coutput_d = coutput
+
+        ! Initialize the plan for real to complex transform
+        call cufftPlan3d(plan,ldim(1),ldim(2),ldim(3),planType)
+        DebugPrint "In Image::fft  PGI ", toc()
+
+        ! Execute  Forward transform in place
+        call cufftExec(plan,planType,coutput_d,coutput_d,CUFFT_FORWARD )
+
+        ! Scale
+        !$acc kernels
+        coutput_d = coutput_d / nscale
+        !$acc end kernels
+
+        ! Copy results back to host
+        coutput = coutput_d
+
+
+        self%ft =.true.
+        self%cmat(:cdim(1),:cdim(2),:cdim(3))=coutput(:cdim(1),:cdim(2),:cdim(3))
+
+
+        ! Release memory on the host and on the device
+        deallocate(coutput_d,coutput,rinput,stat=istat)
+        if(alloc_stat /= 0)call allocchk("In simple_image::fft dealloc host coutput",istat)
+        ! Destroy the plans
+        call cufftDestroy(plan)
+        DebugPrint "In simple_cufft::fft_pgi  PGI destroyed ", toc()
+
+        ! DebugPrint "In simple_cufft::fft_pgi  deallocating host arrays", toc()
+        ! ! Remove host storage
+        ! if(allocated(coutput))then
+        !     deallocate(coutput,stat=alloc_stat)
+        !     if(alloc_stat /= 0)call allocchk("In simple_image::fft dealloc host coutput",alloc_stat)
+        ! end if
+        ! if(allocated(rinput))then
+        !     deallocate(rinput,stat=alloc_stat)
+        !     if(alloc_stat /= 0)call allocchk("In simple_image::fft dealloc host rinput",alloc_stat)
+        ! end if
+        ! DebugPrint "In simple_cufft::fft_pgi deallocating done "
+        ! istat=cudaThreadSynchronize()
+        !   VerbosePrint "In simple_cufft::fft_pgi  PGI scaling ", size(coutput), LBOUND(coutput), UBOUND(coutput)
+
+        !istat=istat+cudaDeviceSynchronize()
+        !if(istat.ne.0)then
+        !    call simple_cuda_stop("In simple_image::fft post fft sync ",__FILENAME__,__LINE__)
+        !endif
+        DebugPrint "In simple_cufft::fft_pgi finished ", toc(t1)
+#endif
+    end subroutine fft_pgi_cuda
 
     subroutine ifft_pgi_cuda( self )
 #ifndef PGI
@@ -6872,6 +6838,8 @@ contains
         .and. self_out%ldim(3) >= self_in%ldim(3) )then
             if( self_in%ft )then
                 self_out = cmplx(0.,0.)
+                !$ allocate(antialw(1), stat=alloc_stat)
+                !$ if(alloc_stat.ne.0)call allocchk("In simple_image::pad PGI prealloc antialw",alloc_stat)
                 antialw = self_in%hannw()
                 lims = self_in%fit%loop_lims(2)
                 !$omp parallel do collapse(3) schedule(static) default(shared)&
@@ -7107,6 +7075,7 @@ contains
         call maskimg%disc(self%ldim, self%smpd, msk, npix)
         npix_tot = product(self%ldim)
         nbackgr = npix_tot-npix
+        ! possible realloc
         pixels = pack( self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)),&
             &maskimg%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) < 0.5 )
         med = median_nocopy(pixels)
@@ -7567,6 +7536,8 @@ contains
         logical, intent(in)  :: doplot
         write(*,'(a)') '**info(simple_image_unit_test): testing square dimensions'
         call test_image_local( 100, 100, 100, doplot )
+!        write(*,'(a)') '**info(simple_image_unit_test): testing non-square dimensions'
+!        call test_image_local( 120, 90, 80, doplot )
         write(*,'(a)') 'SIMPLE_IMAGE_UNIT_TEST COMPLETED SUCCESSFULLY ;-)'
 
         contains
@@ -7923,7 +7894,8 @@ contains
                     do j=i+1,20
                         corr = imgs(i)%corr(imgs(j))
                         if( corr < 0.99999 )then
-                            stop 'SPIDER vs. MRC & converted vs. nonconverted test failed'
+                           call simple_stop('SPIDER vs. MRC & converted vs. nonconverted test failed',&
+                            __FILENAME__,__LINE__)
                         endif
                     end do
                 end do
@@ -7955,7 +7927,8 @@ contains
                     do j=i+1,4
                         corr = imgs(i)%corr(imgs(j))
                         if( corr < 0.99999 )then
-                            stop 'SPIDER vs. MRC & converted vs. nonconverted test failed'
+                         call simple_stop('SPIDER vs. MRC & converted vs. nonconverted test failed', &
+                           & __FILENAME__,__LINE__)
                         endif
                     end do
                 end do

@@ -79,7 +79,7 @@ contains
         if(file_stat/=0)call fileiochk("qsys_funs; terminate_if_prg_in_cwd read failed", file_stat)
         call fclose(funit,errmsg="qsys_funs; terminate_if_prg_in_cwd fclose failed")
         ! get pwd
-        ios = simple_getenv('PWD',pwd)
+        status = simple_getenv('PWD',pwd)
         pwd = trim(adjustl( pwd ))
         if (status /= 0 ) call simple_stop("In simple_qsys_funs::terminate_if_prg_in_cwd PWD not found")
         ! assert

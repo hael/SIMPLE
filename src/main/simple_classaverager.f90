@@ -425,7 +425,7 @@ contains
                     iori  = ioris(batches(batch,1)  + i - 1)
                     ! normalise and FFT
                     call batch_imgs(i)%norm()
-                    call batch_imgs(i)%fwd_ft
+                    call batch_imgs(i)%fft()
                     ! apply CTF and shift
                     if( phaseplate )then
                         add_phshift = precs(iprec)%phshift
@@ -583,13 +583,13 @@ contains
             call ctfsqsums_merged(icls)%add(ctfsqsums_odd(icls))
             ! (w*CTF)**2 density correction
             call cavgs_even(icls)%ctf_dens_correct(ctfsqsums_even(icls))
-            call cavgs_even(icls)%bwd_ft
+            call cavgs_even(icls)%ifft()
             call cavgs_even(icls)%norm()
             call cavgs_odd(icls)%ctf_dens_correct(ctfsqsums_odd(icls))
-            call cavgs_odd(icls)%bwd_ft
+            call cavgs_odd(icls)%ifft()
             call cavgs_odd(icls)%norm()
             call cavgs_merged(icls)%ctf_dens_correct(ctfsqsums_merged(icls))
-            call cavgs_merged(icls)%bwd_ft
+            call cavgs_merged(icls)%ifft()
             call cavgs_merged(icls)%norm()
         end do
         !$omp end parallel do

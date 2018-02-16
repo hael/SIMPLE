@@ -211,7 +211,7 @@ contains
         call self%init(dfx, ddfy, aangast)
         ! initialize
         call img%set_ft(.true.)
-        call img%set_cmat(cmplx(0.,0.))
+        img      = 0.
         lims     = img%loop_lims(2)
         ldim     = img%get_ldim()
         inv_ldim = 1./real(ldim)

@@ -119,24 +119,24 @@ contains
         call mic_shrunken%bp(hp, lp)
         hp = real(ldim_shrink_refine(1) / 2) * smpd_shrunken_refine
         call mic_shrunken_refine%bp(hp, lp)
-        call mic_shrunken%bwd_ft
-        call mic_shrunken_refine%bwd_ft
+        call mic_shrunken%ifft()
+        call mic_shrunken_refine%ifft()
         if( GAUPICK )then
             mic_shrunken_copy = mic_shrunken
             ! create variance image
             call mic_shrunken%subtr_avg_and_square
             ! call mic_shrunken%write('varimg.mrc', 1)
-            call mic_shrunken%fwd_ft
+            call mic_shrunken%fft()
             ! create Gaussian image
             call gaussimg%new(ldim_shrink, smpd_shrunken)
             sigma = real(orig_box)/PICKER_SHRINK/GAUPICK_SIGMA_SHRINK
             call gaussimg%gauimg2D(sigma, sigma)
             ! call gaussimg%write('gaussimg.mrc', 1)
-            call gaussimg%fwd_ft
+            call gaussimg%fft()
             call gaussimg%neg()
             ! convolve
             call gaussimg%mul(mic_shrunken)
-            call gaussimg%bwd_ft
+            call gaussimg%ifft()
             cnt_glob = cnt_glob + 1
             call gaussimg%write('peakimgs.mrc', cnt_glob)
             ! put back the original shrunken micrograph
@@ -306,7 +306,7 @@ contains
                 cnt = cnt + 1
                 call mic_shrunken_refine%window_slim(peak_positions_refined(ipeak,:),&
                     &ldim_refs_refine(1), ptcl_target, outside)
-                spec = ptcl_target%spectrum('power')
+                call ptcl_target%spectrum('power', spec)
                 peak_stats(cnt,SSCORE) = sum(spec)/real(size(spec))
                 call ptcl_target%stats('background', ave, peak_stats(cnt,SDEV), maxv, minv)
                 peak_stats(cnt,DYNRANGE) = maxv - minv

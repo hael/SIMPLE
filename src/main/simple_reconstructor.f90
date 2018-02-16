@@ -514,9 +514,9 @@ contains
                 end do
                 !$omp end parallel do
                 ! W <- (W / rho) x kernel
-                call W_img%bwd_ft
+                call W_img%ifft()
                 call mul_w_instr(W_img, kbwin)
-                call W_img%fwd_ft
+                call W_img%fft()
                 ! W <- Wprev / ((W/ rho) x kernel)
                 !$omp parallel do collapse(3) default(shared) schedule(static)&
                 !$omp private(h,k,m,phys,val,val_prev) proc_bind(close)

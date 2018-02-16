@@ -465,7 +465,7 @@ contains
             else if( p%shellnorm.eq.'yes' )then
                 ! shell normalization
                 call b%vol%shellnorm()
-                spec = b%vol%spectrum('power')
+                call b%vol%spectrum('power', spec)
                 do k=1,size(spec)
                     print *, k, spec(k)
                 end do

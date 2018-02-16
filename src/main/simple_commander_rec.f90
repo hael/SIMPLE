@@ -153,18 +153,18 @@ contains
             call wait_for_closure( volname )
             ! need to put the sum back at lowres for the eo pairs
             if( L_BENCH ) t_eoavg = tic()
-            call b%vol%fwd_ft
+            call b%vol%fft()
             call b%vol2%zero_and_unflag_ft
             call b%vol2%read(eonames(1))
-            call b%vol2%fwd_ft
+            call b%vol2%fft()
             call b%vol2%insert_lowres(b%vol, find4eoavg)
-            call b%vol2%bwd_ft
+            call b%vol2%ifft()
             call b%vol2%write(eonames(1), del_if_exists=.true.)
             call b%vol2%zero_and_unflag_ft
             call b%vol2%read(eonames(2))
-            call b%vol2%fwd_ft
+            call b%vol2%fft()
             call b%vol2%insert_lowres(b%vol, find4eoavg)
-            call b%vol2%bwd_ft
+            call b%vol2%ifft()
             call b%vol2%write(eonames(2), del_if_exists=.true.)
             if( L_BENCH ) rt_eoavg = rt_eoavg + toc(t_eoavg)
             deallocate(recname, volname)

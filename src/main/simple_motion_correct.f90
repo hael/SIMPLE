@@ -308,7 +308,7 @@ a       corrmat = 0.
                 call progress(iframe, nframes)
                 call movie_frames_scaled(iframe)%new(ldim_scaled, smpd_scaled)
                 call frame_tmp%read(movie_stack_fname, iframe)
-                call frame_tmp%fwd_ft
+                call frame_tmp%fft()
                 call frame_tmp%clip(movie_frames_scaled(iframe))
                 call movie_frames_ftexp(iframe)%new(movie_frames_scaled(iframe), hp, lp)
                 call movie_frames_ftexp_sh(iframe)%new(movie_frames_ftexp(iframe))
@@ -342,15 +342,15 @@ a       corrmat = 0.
         ! calculate the sum for CTF estimation
         call sum_movie_frames(opt_shifts)
         movie_sum_ctf = movie_sum_global
-        call movie_sum_ctf%bwd_ft
+        call movie_sum_ctf%ifft()
         ! re-calculate the weighted sum
         call wsum_movie_frames(opt_shifts)
         movie_sum_corrected = movie_sum_global
-        call movie_sum_corrected%bwd_ft
+        call movie_sum_corrected%ifft()
         ! generate straight integrated movie frame for comparison
         call sum_movie_frames
         movie_sum = movie_sum_global
-        call movie_sum%bwd_ft
+        call movie_sum%ifft()
     end subroutine motion_correct_calc_sums_1
 
     !> Calulate stack sums in range
@@ -366,7 +366,7 @@ a       corrmat = 0.
         do_dose_weight = .false.
         call wsum_movie_frames(opt_shifts, fromto)
         movie_sum_corrected = movie_sum_global
-        call movie_sum_corrected%bwd_ft
+        call movie_sum_corrected%ifft()
         do_dose_weight = l_tmp
     end subroutine motion_correct_calc_sums_2
 
@@ -382,15 +382,15 @@ a       corrmat = 0.
         ! calculate the sum for CTF estimation
         call sum_movie_frames(opt_shifts)
         movie_sum_ctf = movie_sum_global
-        call movie_sum_ctf%bwd_ft
+        call movie_sum_ctf%ifft()
         ! re-calculate the weighted sum
         call wsum_movie_frames_tomo(opt_shifts, frame_counter, time_per_frame)
         movie_sum_corrected = movie_sum_global
-        call movie_sum_corrected%bwd_ft
+        call movie_sum_corrected%ifft()
         ! generate straight integrated movie frame for comparison
         call sum_movie_frames
         movie_sum = movie_sum_global
-        call movie_sum%bwd_ft
+        call movie_sum%ifft()
     end subroutine motion_correct_calc_sums_tomo
 
     !> center_shifts

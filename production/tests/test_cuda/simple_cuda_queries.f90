@@ -738,5 +738,5 @@ contains
 
     end subroutine test_transposeP2P
 
-
+#endif
 end module simple_cuda_tests

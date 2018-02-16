@@ -55,7 +55,7 @@ contains
         write(*,'(A,I7,A)'  ) '>>> AUTOMASK BINARY LAYERS WIDTH:', self%binwidth,' PIXEL(S)'
         write(*,'(A,F7.1,A)') '>>> AUTOMASK MOLECULAR WEIGHT:   ', self%mw,      ' kDa'
         was_ft = vol_inout%is_ft()
-        if( vol_inout%is_ft() )call vol_inout%bwd_ft
+        if( vol_inout%is_ft() )call vol_inout%ifft()
         call self%copy(vol_inout)
         ! binarize volume
         call self%bin_vol_thres
@@ -156,7 +156,7 @@ contains
         call distimg%mul(self) ! for suggested focusmsk
         call self%cos_edge(p%edge)
         ! multiply with mask
-        call vol_inout%bwd_ft()
+        call vol_inout%ifft()
         call vol_inout%mul(self)
         if(was_ft) call vol_inout%fwd_ft
         ! focusmsk

@@ -74,7 +74,11 @@ if (CMAKE_Fortran_COMPILER_ID STREQUAL "Intel")
 else()
   list(REMOVE_ITEM TESTDIRS "tests/test_intel")
 endif()
-
+if (NOT (CMAKE_Fortran_COMPILER_ID STREQUAL "PGI"))
+else()
+  list(REMOVE_ITEM TESTDIRS "tests/test_cuda")
+  list(REMOVE_ITEM TESTDIRS "tests/test_cufft")
+endif()
 message( STATUS "Test directories ${TESTDIRS}")
 
 foreach(TESTNAME ${TESTDIRS})

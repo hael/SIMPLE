@@ -56,7 +56,7 @@ contains
             ! extract central secion
             call vol_pad%fproject_serial(o%get_ori(i), imgs_pad(ithr))
             ! back FT
-            call imgs_pad(ithr)%bwd_ft
+            call imgs_pad(ithr)%ifft()
             ! clip
             call imgs_pad(ithr)%clip(imgs(i))
             ! normalise
