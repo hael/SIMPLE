@@ -60,6 +60,7 @@ type prime2D_srch
     procedure          :: nn_srch
     procedure          :: calc_corr
     procedure, private :: inpl_srch
+    procedure, private :: fit_bfac
     procedure          :: prep4srch
     procedure          :: update_best
     procedure          :: get_times
@@ -124,7 +125,7 @@ contains
         self%pftcc_ptr  => pftcc
         self%a_ptr      => a
         self%iptcl      =  iptcl
-        self%iptcl_map  = iptcl_map
+        self%iptcl_map  =  iptcl_map
         self%nrefs      =  p%ncls
         self%nrots      =  round2even(twopi*real(p%ring2))
         self%nrefs_eval =  0
@@ -196,6 +197,7 @@ contains
             end do
             self%nrefs_eval = self%nrefs
             call self%inpl_srch
+            call self%fit_bfac
             call self%update_best
         else
             call self%a_ptr%reject(self%iptcl)
@@ -313,6 +315,7 @@ contains
                 call self%inpl_srch
                 if( L_BENCH ) self%rt_inpl = self%rt_inpl + toc(self%t_inpl)
             endif
+            call self%fit_bfac
             if( .not. is_a_number(self%best_corr) )then
                 print *, 'FLOATING POINT EXCEPTION ALARM; simple_prime2D_srch :: stochastic_srch'
                 print *, self%iptcl, self%best_class, self%best_corr, self%best_rot
@@ -352,6 +355,7 @@ contains
             end do
             self%nrefs_eval = self%nrefs
             call self%inpl_srch
+            call self%fit_bfac
             call self%update_best
         else
             call self%a_ptr%reject(self%iptcl)
@@ -407,10 +411,20 @@ contains
         if( DEBUG ) write(*,'(A)') '>>> PRIME2D_SRCH::FINISHED SHIFT SEARCH'
     end subroutine inpl_srch
 
+    !>  \brief  fits a B-factor for resolution-weighted correlation (ccres)
+    subroutine fit_bfac( self )
+        class(prime2D_srch), intent(inout) :: self
+        real :: bfac
+        if( self%pftcc_ptr%objfun_is_ccres() )then
+            bfac = self%pftcc_ptr%fit_bfac(self%best_class, self%iptcl, self%best_rot, self%best_shvec)
+            call self%a_ptr%set(self%iptcl, 'bfac',  bfac )
+        endif
+    end subroutine fit_bfac
+
     !>  \brief  prepares for the search
     subroutine prep4srch( self )
         class(prime2D_srch), intent(inout) :: self
-        real :: corrs(self%pftcc_ptr%get_nrots())
+        real :: corrs(self%pftcc_ptr%get_nrots()), bfac
         ! find previous discrete alignment parameters
         self%prev_class = nint(self%a_ptr%get(self%iptcl,'class')) ! class index
         if( self%dyncls )then
@@ -435,10 +449,16 @@ contains
             self%prev_class = irnd_uni(self%nrefs)
             self%prev_corr  = 0.
             self%best_corr  = 0.
-            self%specscore  = 0.
         endif
         ! calculate spectral score
         self%specscore = self%pftcc_ptr%specscore(self%prev_class, self%iptcl, self%prev_rot)
+        ! B-factor memoization
+        if( self%pftcc_ptr%objfun_is_ccres() )then
+            if( .not. self%a_ptr%isthere(self%iptcl, 'bfac') )then
+                bfac = self%pftcc_ptr%fit_bfac(self%prev_class, self%iptcl, self%prev_rot, [0.,0.])
+                call self%pftcc_ptr%memoize_bfac(self%iptcl, bfac)
+            endif
+        endif
         if( DEBUG ) print *, '>>> PRIME2D_SRCH::PREPARED FOR SIMPLE_PRIME2D_SRCH'
     end subroutine prep4srch
 

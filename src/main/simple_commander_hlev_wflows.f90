@@ -72,6 +72,15 @@ contains
             call xsplit%execute(cline)
         endif
         if( p_master%l_autoscale )then
+            ! this workflow executes two stages of PRIME2D
+            ! Stage 1: high down-scaling for fast execution, hybrid extremal/SHC optimisation for
+            !          improved population distribution of clusters, no incremental learning,
+            !          objective function is standard cross-correlation (cc)
+            ! Stage 2: refinement stage, less down-scaling, no extremal updates, incremental
+            !          learning for acceleration, objective function is resolution weighted
+            !          cross-correlation with automtic fitting of B-factors
+            ! remove possible objfun flag from cline
+            call cline%delete('objfun')
             ! auto-scaling prep (cline is modified by scobj%init)
             call scobj%init(p_master, cline, p_master%box, p_master%smpd_targets2D(1))
             scale_stage1 = scobj%get_scaled_var('scale')
@@ -96,7 +105,8 @@ contains
             if( cline%defined('stktab') )then
                 call cline_prime2D_stage1%set('stktab', trim(scaled_stktab))
             endif
-            call cline_prime2D_stage1%delete('automsk') ! delete possible automsk flag from stage 1
+            call cline_prime2D_stage1%delete('automsk')   ! delete possible automsk flag from stage 1
+            call cline_prime2D_stage1%set('objfun', 'cc') ! goal function is standard cross-correlation
             call xprime2D_distr%execute(cline_prime2D_stage1)
             last_iter_stage1 = nint(cline_prime2D_stage1%get_rarg('endit'))
             finaldoc         = trim(PRIME2D_ITER_FBODY)//int2str_pad(last_iter_stage1,3)//trim(METADATEXT)
@@ -123,6 +133,7 @@ contains
             call cline_prime2D_stage2%delete('deftab')
             call cline_prime2D_stage2%set('oritab',  trim(finaldoc))
             call cline_prime2D_stage2%set('startit', real(last_iter_stage1 + 1))
+            call cline_prime2D_stage2%set('objfun', 'ccres') ! goal function is resolution weighted (ccres)
             call xprime2D_distr%execute(cline_prime2D_stage2)
             last_iter_stage2 = nint(cline_prime2D_stage2%get_rarg('endit'))
             finaldoc         = trim(PRIME2D_ITER_FBODY)//int2str_pad(last_iter_stage2,3)//trim(METADATEXT)
