@@ -5,7 +5,7 @@ integer,  parameter :: STDLEN     = 256  !< standard string length
 integer,  parameter :: LONGSTRLEN = 2048 !< longer string length
 ! EXTENSIONS
 character(len=4),  parameter :: BIN_EXT                 = '.bin'
-character(len=7),  parameter :: METADATA_EXT            = '.simple'
+character(len=7),  parameter :: METADATA_EXT            = '.txt'
 ! stack part related and file format constants
 character(len=32),     parameter :: STKPARTSDIR         = 'stack_parts'
 character(len=STDLEN), parameter :: STKPARTFBODY        = trim(STKPARTSDIR)//'/stack_part'
