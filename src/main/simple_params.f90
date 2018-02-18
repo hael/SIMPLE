@@ -717,6 +717,7 @@ contains
         call check_rarg('gw',             self%gw)
         call check_rarg('hp',             self%hp)
         call check_rarg('hp_ctffind',     self%hp_ctffind)
+        call check_rarg('hp_fsc',         self%hp_fsc)
         call check_rarg('inner',          self%inner)
         call check_rarg('kv',             self%kv)
         call check_rarg('lam',            self%lam)

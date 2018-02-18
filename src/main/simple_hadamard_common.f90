@@ -217,16 +217,20 @@ contains
                     write(*,*) 'no method available for setting the low-pass limit'
                     stop 'need fsc file, lp, or find; set_bp_range; simple_hadamard_common'
                 endif
-                if( p%kfromto(2)-p%kfromto(1) <= 2 )then
-                    write(*,*) 'fromto:', p%kfromto(1), p%kfromto(2)
-                    stop 'resolution range too narrow; set_bp_range; simple_hadamard_common'
-                endif
                 ! lpstop overrides any other method for setting the low-pass limit
                 if( cline%defined('lpstop') )then
                     p%kfromto(2) = min(p%kfromto(2), calc_fourier_index(p%lpstop, p%boxmatch, p%smpd))
                 endif
                 ! set high-pass Fourier index limit
                 p%kfromto(1) = max(2,calc_fourier_index( p%hp, p%boxmatch, p%smpd))
+                if( p%kfromto(2)-p%kfromto(1) <= 2 )then
+                    if( p%hpind_fsc > 0 )then
+                        p%kfromto(2) = p%kfromto(1) + 3
+                    else
+                        write(*,*) 'fromto:', p%kfromto(1), p%kfromto(2)
+                        stop 'resolution range too narrow; set_bp_range; simple_hadamard_common'
+                    endif
+                endif
                 ! re-set the low-pass limit
                 p%lp = calc_lowpass_lim(p%kfromto(2), p%boxmatch, p%smpd)
                 p%lp_dyn = p%lp
@@ -258,7 +262,8 @@ contains
         class(cmdline), intent(inout) :: cline
         integer,        intent(in)    :: which_iter
         real,           intent(in)    :: frac_srch_space
-        real :: lplim
+        real    :: lplim
+        integer :: lpstart_find
         p%kfromto(1) = max(2, calc_fourier_index(p%hp, p%boxmatch, p%smpd))
         if( cline%defined('lp') )then
             p%kfromto(2) = calc_fourier_index(p%lp, p%boxmatch, p%smpd)
@@ -277,7 +282,9 @@ contains
                 endif
             endif
             p%kfromto(2) = calc_fourier_index(lplim, p%boxmatch, p%smpd)
-            p%kfromto(2) = max(p%kfromto(2), p%kfromto(1) + 3) ! to avoid pathological cases
+            ! to avoid pathological cases, fall-back on lpstart
+            lpstart_find = calc_fourier_index(p%lpstart, p%boxmatch, p%smpd)
+            if( lpstart_find > p%kfromto(2) ) p%kfromto(2) = lpstart_find
             p%lp_dyn = lplim
             call b%a%set_all2single('lp',lplim)
         endif

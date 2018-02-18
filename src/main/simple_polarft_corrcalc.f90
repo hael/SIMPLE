@@ -227,9 +227,9 @@ contains
             call simple_stop ('nrefs (# of reference sections) must be > 0; new; simple_polarft_corrcalc')
         endif
         self%ldim = [p%boxmatch,p%boxmatch,1] !< logical dimensions of original cartesian image
-        test    = .false.
-        test(1) = is_even(self%ldim(1))
-        test(2) = is_even(self%ldim(2))
+        test      = .false.
+        test(1)   = is_even(self%ldim(1))
+        test(2)   = is_even(self%ldim(2))
         even_dims = all(test)
         if( .not. even_dims )then
             write(*,*) 'self%ldim: ', self%ldim
@@ -826,7 +826,7 @@ contains
     end subroutine create_polar_ctfmats
 
     subroutine prep_ref4corr( self, iref, i, pft_ref, sqsum_ref, kstop )
-         use simple_estimate_ssnr, only: fsc2optlp
+        use simple_estimate_ssnr, only: fsc2optlp
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iref, i
         complex(sp),             intent(out)   :: pft_ref(self%pftsz,self%kfromto(1):kstop)

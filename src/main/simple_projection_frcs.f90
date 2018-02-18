@@ -179,17 +179,13 @@ contains
         logical,                intent(in)  :: phaseplate
         real,                   intent(out) :: frc(self%filtsz)
         integer, optional,      intent(in)  :: state
-        real    :: frcmax
         integer :: sstate, find_plate
         sstate = 1
         if( present(state) ) sstate = state
         call self%raise_exception( proj, sstate, 'ERROR, out of bounds in frc_getter')
         frc = self%frcs(sstate,proj,:)
         if( phaseplate ) call phaseplate_correct_fsc(frc, find_plate)
-        if( hpind_fsc > 0 )then
-            frcmax = maxval(frc)
-            frc(:hpind_fsc) = frcmax
-        endif
+        if( hpind_fsc > 0 ) frc(:hpind_fsc) = frc(hpind_fsc + 1)
     end subroutine frc_getter
 
     subroutine estimate_res( self, proj, res_frc05, res_frc0143, state )

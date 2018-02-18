@@ -381,10 +381,7 @@ contains
         call even%fsc(odd, corrs)
         find_plate = 0
         if( self%phaseplate ) call phaseplate_correct_fsc(corrs, find_plate)
-        if( self%hpind_fsc > 0 )then
-            corrmax = maxval(corrs)
-            corrs(:self%hpind_fsc) = corrmax
-        endif
+        if( self%hpind_fsc > 0 ) corrs(:self%hpind_fsc) = corrs(self%hpind_fsc + 1)
         do j=1,size(res)
            write(*,'(A,1X,F6.2,1X,A,1X,F7.3)') '>>> RESOLUTION:', res(j), '>>> CORRELATION:', corrs(j)
         end do

@@ -1057,18 +1057,15 @@ contains
     end subroutine phaseplate_correct_fsc
 
     !>   returns the Fourier index of the resolution limit at corr
-    function get_lplim_at_corr( fsc, corr, startind ) result( k )
-        real,              intent(in) :: fsc(:), corr
-        integer, optional, intent(in) :: startind
-        integer :: n, k, h
-        integer :: sstartind
+    function get_lplim_at_corr( fsc, corr ) result( k )
+        real, intent(in) :: fsc(:), corr
+        integer          :: n, k, h
+        integer          :: sstartind
         n = size(fsc)
         if( n < 3 )then
             stop 'nonconforming size of fsc array; get_lplim_at_corr; simple_math'
         endif
         k = n-1
-        sstartind = 3
-        if( present(startind) ) sstartind = startind
         do h=3,n-1
             if( fsc(h) >= corr )then
                 cycle
