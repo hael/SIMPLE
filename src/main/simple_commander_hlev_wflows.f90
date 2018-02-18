@@ -41,6 +41,7 @@ contains
     !> for distributed PRIME2D with two-stage autoscaling
     subroutine exec_prime2D_autoscale( self, cline )
         use simple_commander_prime2D, only: rank_cavgs_commander
+        use simple_commander_imgproc, only: scale_commander
         class(prime2D_autoscale_commander), intent(inout) :: self
         class(cmdline),                     intent(inout) :: cline
         ! constants
@@ -50,9 +51,11 @@ contains
         type(makecavgs_distr_commander) :: xmakecavgs
         type(prime2D_distr_commander)   :: xprime2D_distr
         type(rank_cavgs_commander)      :: xrank_cavgs
+        type(scale_commander)           :: xscale
         ! command lines
         type(cmdline) :: cline_prime2D_stage1
         type(cmdline) :: cline_prime2D_stage2
+        type(cmdline) :: cline_scalerefs
         type(cmdline) :: cline_makecavgs
         type(cmdline) :: cline_rank_cavgs
         ! other variables
@@ -61,6 +64,7 @@ contains
         type(oris)            :: os
         type(scaler)          :: scobj
         type(params)          :: p_master
+        character(len=STDLEN) :: refs_sc
         real                  :: scale_stage1, scale_stage2
         integer               :: nparts, last_iter_stage1, last_iter_stage2, last_iter
         p_master = params(cline, del_scaled=.true.)
@@ -103,7 +107,17 @@ contains
             if( cline%defined('stktab') )then
                 call cline_prime2D_stage1%set('stktab', trim(scaled_stktab))
             endif
-            call cline_prime2D_stage1%delete('automsk')   ! delete possible automsk flag from stage 1
+            if( cline%defined('refs') )then
+                ! scale references
+                call cline_scalerefs%set('stk', cline%get_carg('refs'))
+                refs_sc = trim(cline_scalerefs%get_carg('refs')) // '_sc'//p_master%ext
+                call cline_scalerefs%set('outstk', trim(refs_sc))
+                call cline_scalerefs%set('smpd', cline%get_rarg('smpd'))
+                call cline_scalerefs%set('newbox', scobj%get_scaled_var('box'))
+                call xscale%execute(cline_scalerefs)
+                call cline_prime2D_stage1%set('refs',trim(refs_sc))
+            endif
+            call cline_prime2D_stage1%delete('automsk')
             call cline_prime2D_stage1%set('objfun', 'cc') ! goal function is standard cross-correlation
             call xprime2D_distr%execute(cline_prime2D_stage1)
             last_iter_stage1 = nint(cline_prime2D_stage1%get_rarg('endit'))
@@ -121,6 +135,7 @@ contains
             call binwrite_oritab(finaldoc, os, [1,p_master%nptcls])
             ! prepare stage 2 input -- command line
             cline_prime2D_stage2 = cline
+            call cline_prime2D_stage2%delete('refs')
             ! if automsk .eq. yes, we need to replace it with cavg
             if( p_master%automsk .eq. 'yes' )then
                 call cline_prime2D_stage2%set('automsk', 'cavg')

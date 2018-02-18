@@ -6,11 +6,6 @@ implicit none
 public :: find_magic_box, find_boxmatch, print_magic_box_range, find_magic_boxes4scale, autoscale
 private
 
-interface autoscale
-    module procedure autoscale_1
-    module procedure autoscale_2
-end interface autoscale
-
 integer, parameter :: NSZS=97
 integer :: boxsizes(NSZS) = [32, 36, 40, 48, 52, 56, 64, 66, 70, 72, 80, 84, 88, 100, 104, 108, 112, 120, 128, 130, 132,&
 140, 144, 150, 160, 162, 168, 176, 180, 182, 192, 200, 208, 216, 220, 224, 240, 256, 264, 288, 300, 308, 320, 324, 336,&
@@ -59,7 +54,7 @@ contains
         boxes(2) = boxsizes(ind2)
     end function find_magic_boxes4scale
 
-    subroutine autoscale_1( box_in, smpd_in, smpd_target, box_new, smpd_new, scale )
+    subroutine autoscale( box_in, smpd_in, smpd_target, box_new, smpd_new, scale )
         integer, intent(in)  :: box_in
         real,    intent(in)  :: smpd_in, smpd_target
         integer, intent(out) :: box_new
@@ -77,30 +72,6 @@ contains
         box_new  = max(64,find_magic_box(nint(scale*real(box_in))))
         scale    = real(box_new)/real(box_in)
         smpd_new = smpd_in/scale
-    end subroutine autoscale_1
-
-    subroutine autoscale_2( box_in, smpd_in, box_new, smpd_new, scale )
-        integer, intent(in)    :: box_in
-        real,    intent(in)    :: smpd_in
-        integer, intent(inout) :: box_new
-        real,    intent(out)   :: smpd_new, scale
-        integer, parameter :: minboxsz = 128
-        if( box_new < box_in )then
-            if( box_new <= 0 )then
-                ! box_new undefined
-                box_new = max( minboxsz, find_magic_box(nint(real(box_in)/2.)))
-            else
-                ! box_new provided
-                box_new  = max( minboxsz, find_magic_box(box_new))
-                box_new  = min(box_new, box_in)
-            endif
-            scale    = real(box_new) / real(box_in)
-            smpd_new = smpd_in / scale
-        else
-            ! box_new idiotic
-            scale    = 1.
-            smpd_new = smpd_in
-        endif
-    end subroutine autoscale_2
+    end subroutine autoscale
 
 end module simple_magic_boxes
