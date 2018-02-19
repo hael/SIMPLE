@@ -14,7 +14,7 @@ use simple_commander_distr        ! use all in there
 implicit none
 
 public :: prime2D_autoscale_commander
-public :: ini3D_from_cavgs_commander
+public :: initial_3Dmodel_commander
 public :: het_commander
 public :: het_refine_commander
 private
@@ -23,10 +23,10 @@ type, extends(commander_base) :: prime2D_autoscale_commander
   contains
     procedure :: execute      => exec_prime2D_autoscale
 end type prime2D_autoscale_commander
-type, extends(commander_base) :: ini3D_from_cavgs_commander
+type, extends(commander_base) :: initial_3Dmodel_commander
   contains
-    procedure :: execute      => exec_ini3D_from_cavgs
-end type ini3D_from_cavgs_commander
+    procedure :: execute      => exec_initial_3Dmodel
+end type initial_3Dmodel_commander
 type, extends(commander_base) :: het_commander
   contains
     procedure :: execute      => exec_het
@@ -197,10 +197,10 @@ contains
     end subroutine exec_prime2D_autoscale
 
     !> for generation of an initial 3d model from class averages
-    subroutine exec_ini3D_from_cavgs( self, cline )
+    subroutine exec_initial_3Dmodel( self, cline )
         use simple_commander_volops, only: projvol_commander
         use simple_commander_rec,    only: recvol_commander
-        class(ini3D_from_cavgs_commander), intent(inout) :: self
+        class(initial_3Dmodel_commander), intent(inout) :: self
         class(cmdline),                    intent(inout) :: cline
         ! constants
         real,                  parameter :: CENLP=30.           !< consistency with prime3D
@@ -208,7 +208,7 @@ contains
         integer,               parameter :: STATE=1, NPROJS_SYMSRCH=50, NPEAKS_REFINE=6
         integer,               parameter :: NSPACE_SNHC = 1000, NSPACE_DEFAULT= 2500
         character(len=32),     parameter :: ITERFBODY     = 'prime3Ddoc_'
-        character(len=STDLEN), parameter :: STKSCALEDBODY = 'stk_sc_ini3D_from_cavgs'
+        character(len=STDLEN), parameter :: STKSCALEDBODY = 'stk_sc_initial_3Dmodel'
         ! distributed commanders
         type(prime3D_distr_commander) :: xprime3D_distr
         type(symsrch_distr_commander) :: xsymsrch_distr
@@ -404,7 +404,7 @@ contains
         call xprojvol%execute(cline_projvol)
         ! end gracefully
         call del_file(trim(STKSCALEDBODY)//p_master%ext)
-        call simple_end('**** SIMPLE_INI3D_FROM_CAVGS NORMAL STOP ****')
+        call simple_end('**** SIMPLE_initial_3Dmodel NORMAL STOP ****')
 
         contains
 
@@ -415,7 +415,7 @@ contains
                 vol_iter = trim(VOL_FBODY)//trim(str_state)//'_iter'//trim(str_iter)//p_master%ext
             end subroutine set_iter_dependencies
 
-    end subroutine exec_ini3D_from_cavgs
+    end subroutine exec_initial_3Dmodel
 
     !> for heterogeinity analysis
     subroutine exec_het( self, cline )

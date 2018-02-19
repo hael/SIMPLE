@@ -1014,7 +1014,7 @@ select case(prg)
         ! projection matching. PRIME is short for PRobabilistic Initial 3D Model generation for Single-
         ! particle cryo-Electron microscopy. There are a daunting number of options in PRIME3D. If you
         ! are processing class averages we recommend that you instead use the simple_distr_exec prg=
-        ! ini3D_from_cavgs route for executing PRIME3D. Automated workflows for single- and multi-particle
+        ! initial_3Dmodel route for executing PRIME3D. Automated workflows for single- and multi-particle
         ! refinement using prime3D are planned for the next release (3.0)<prime3D/end>
         !
         ! set required keys

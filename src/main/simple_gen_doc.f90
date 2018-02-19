@@ -366,7 +366,7 @@ contains
         write(*,'(A)', advance='no') 'on matching. PRIME is short for PRobabilistic Initial 3D Model generation for Si'
         write(*,'(A)', advance='no') 'ngle- particle cryo-Electron microscopy. There are a daunting number of options'
         write(*,'(A)', advance='no') 'in PRIME3D. If you are processing class averages we recommend that you instead u'
-        write(*,'(A)', advance='no') 'se the simple_distr_exec prg= ini3D_from_cavgs route for executing PRIME3D. Auto'
+        write(*,'(A)', advance='no') 'se the simple_distr_exec prg= initial_3Dmodel route for executing PRIME3D. Auto'
         write(*,'(A)', advance='no') 'mated workflows for single- and multi-particle refinement using prime3D are plan'
         write(*,'(A)') 'ned for the next release (3.0)'
         stop
@@ -664,11 +664,11 @@ contains
         stop
     end subroutine print_doc_het_ensemble
 
-    subroutine print_doc_ini3D_from_cavgs
+    subroutine print_doc_initial_3Dmodel
         write(*,'(A)', advance='no') 'is a distributed workflow for generating an initial 3D model from class averages'
         write(*,'(A)') ' obtained with prime2D'
         stop
-    end subroutine print_doc_ini3D_from_cavgs
+    end subroutine print_doc_initial_3Dmodel
 
     subroutine print_doc_scale_stk_parts
         write(*,'(A)') 'is a distributed workflow for scaling balanced partial stacks'
@@ -786,7 +786,7 @@ contains
         write(*,'(A)') 'ctffind'
         write(*,'(A)') 'ctf_estimate'
         write(*,'(A)') 'het_ensemble'
-        write(*,'(A)') 'ini3D_from_cavgs'
+        write(*,'(A)') 'initial_3Dmodel'
         write(*,'(A)') 'makecavgs'
         write(*,'(A)') 'pick'
         write(*,'(A)') 'powerspecs'

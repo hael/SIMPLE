@@ -38,7 +38,7 @@ type(symsrch_distr_commander)            :: xsymsrch_distr
 type(tseries_track_distr_commander)      :: xtseries_track_distr
 
 ! HIGH-LEVEL WORKFLOWS
-type(ini3D_from_cavgs_commander)         :: xini3D_from_cavgs
+type(initial_3Dmodel_commander)         :: xinitial_3Dmodel
 type(het_commander)                      :: xhet
 type(het_refine_commander)               :: xhet_refine
 
@@ -599,7 +599,7 @@ select case(prg)
         ! probabilistic projection matching. PRIME is short for PRobabilistic Initial 3D Model
         ! generation for Single-particle cryo-Electron microscopy. There are a daunting number of
         ! options in PRIME3D. If you are processing class averages we recommend that you instead
-        ! use the simple_distr_exec prg=ini3D_from_cavgs route for executing PRIME3D. Automated
+        ! use the simple_distr_exec prg=initial_3Dmodel route for executing PRIME3D. Automated
         ! workflows for single- and multi-particle refinement using prime3D are planned for the
         ! next release (3.0)<prime3D/end>
         !
@@ -796,11 +796,11 @@ select case(prg)
 
     ! HIGH-LEVEL DISTRIBUTED WORKFLOWS
 
-    case( 'ini3D_from_cavgs' )
-        !==Program ini3D_from_cavgs
+    case( 'initial_3Dmodel' )
+        !==Program initial_3Dmodel
         !
-        ! <ini3D_from_cavgs/begin>is a distributed workflow for generating an initial
-        ! 3D model from class averages obtained with cluster2D<ini3D_from_cavgs/end>
+        ! <initial_3Dmodel/begin>is a distributed workflow for generating an initial
+        ! 3D model from class averages obtained with cluster2D<initial_3Dmodel/end>
         !
         ! set required keys
         keys_required(1)  = 'stk'
@@ -824,12 +824,12 @@ select case(prg)
         keys_optional(13) = 'update_frac'
         keys_optional(14) = 'objfun'
         ! parse command line
-        if( describe ) call print_doc_ini3D_from_cavgs
+        if( describe ) call print_doc_initial_3Dmodel
         call cline%parse(keys_required(:5), keys_optional(:14))
         ! set defaults
         if( .not. cline%defined('autoscale') ) call cline%set('autoscale', 'yes')
         ! execute
-        call xini3D_from_cavgs%execute( cline )
+        call xinitial_3Dmodel%execute( cline )
     case( 'het' )
         !==Program het
         !
