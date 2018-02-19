@@ -592,16 +592,16 @@ select case(prg)
         if( .not. cline%defined('nspace') ) call cline%set('nspace', 1000.)
         ! execute
         call xprime3D_init_distr%execute( cline )
-    case( 'prime3D' )
-        !==Program prime3D
+    case( 'refine3D' )
+        !==Program refine3D
         !
-        ! <prime3D/begin>is a distributed workflow for ab inito reconstruction/refinement based on
+        ! <refine3D/begin>is a distributed workflow for ab inito reconstruction/refinement based on
         ! probabilistic projection matching. PRIME is short for PRobabilistic Initial 3D Model
         ! generation for Single-particle cryo-Electron microscopy. There are a daunting number of
-        ! options in PRIME3D. If you are processing class averages we recommend that you instead
-        ! use the simple_distr_exec prg=initial_3Dmodel route for executing PRIME3D. Automated
-        ! workflows for single- and multi-particle refinement using prime3D are planned for the
-        ! next release (3.0)<prime3D/end>
+        ! options in refine3D. If you are processing class averages we recommend that you instead
+        ! use the simple_distr_exec prg=initial_3Dmodel route for executing refine3D. Automated
+        ! workflows for single- and multi-particle refinement using refine3D are planned for the
+        ! next release (3.0)<refine3D/end>
         !
         ! set required keys
         keys_required(1)  = 'smpd'
@@ -649,7 +649,7 @@ select case(prg)
         keys_optional(37) = 'focusmsk'
         keys_optional(38) = 'objfun'
         ! documentation
-        if( describe ) call print_doc_prime3D
+        ! if( describe ) call print_doc_refine3D
         ! parse command line
         call cline%parse( keys_required(:5), keys_optional(:38) )
         ! sanity check
