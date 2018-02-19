@@ -41,7 +41,7 @@ contains
         call b%build_general_tbox(p, cline) ! general objects built
         select case(p%eo)
             case( 'yes', 'aniso' )
-                call b%build_eo_rec_tbox(p) ! eo_reconstruction objs built
+                call b%build_rec_eo_tbox(p) ! eo_reconstruction objs built
             case( 'no' )
                 call b%build_rec_tbox(p)    ! reconstruction objects built
             case DEFAULT
@@ -80,8 +80,8 @@ contains
         endif
         p = params(cline)                   ! parameters generated
         call b%build_general_tbox(p, cline) ! general objects built
-        call b%build_eo_rec_tbox(p)         ! reconstruction toolbox built
-        call b%eoreconstruct3D%kill_exp            ! reduced meory usage
+        call b%build_rec_eo_tbox(p)         ! reconstruction toolbox built
+        call b%eorecvol%kill_exp            ! reduced meory usage
         allocate(res05s(p%nstates), res0143s(p%nstates), stat=alloc_stat)
         allocchk("In: simple_volassemble_eo res05s res0143s")
         res0143s = 0.
@@ -113,12 +113,12 @@ contains
             endif
             if( b%a%get_pop(state, 'state' ) == 0 )cycle ! Empty state
             if( L_BENCH ) t_assemble = tic()
-            call b%eoreconstruct3D%reset_all
+            call b%eorecvol%reset_all
             ! assemble volumes
             do part=1,p%nparts
                 call eoreconstruct3D_read%read_eos(VOL_FBODY//int2str_pad(state,2)//'_part'//int2str_pad(part,p%numlen))
                 ! sum the Fourier coefficients
-                call b%eoreconstruct3D%sum(eoreconstruct3D_read)
+                call b%eorecvol%sum(eoreconstruct3D_read)
             end do
             if( L_BENCH ) rt_assemble = rt_assemble + toc(t_assemble)
             ! correct for sampling density and estimate resolution
@@ -128,12 +128,12 @@ contains
             eonames(2) = trim(recname)//'_odd'//p%ext
             resmskname = 'resmask'//p%ext
             if( L_BENCH ) t_sum_eos = tic()
-            call b%eoreconstruct3D%sum_eos
+            call b%eorecvol%sum_eos
             if( L_BENCH )then
                 rt_sum_eos               = rt_sum_eos + toc(t_sum_eos)
                 t_sampl_dens_correct_eos = tic()
             endif
-            call b%eoreconstruct3D%sampl_dens_correct_eos(state, eonames(1), eonames(2), resmskname, find4eoavg)
+            call b%eorecvol%sampl_dens_correct_eos(state, eonames(1), eonames(2), resmskname, find4eoavg)
             if( L_BENCH )then
                 rt_sampl_dens_correct_eos = rt_sampl_dens_correct_eos + toc(t_sampl_dens_correct_eos)
                 t_gen_projection_frcs     = tic()
@@ -145,9 +145,9 @@ contains
             call gen_anisotropic_optlp(b%vol2, b%projfrcs, b%e_bal, s, p%pgrp, p%hpind_fsc, p%tfplan%l_phaseplate)
             if( L_BENCH ) rt_gen_anisotropic_optlp = rt_gen_anisotropic_optlp + toc(t_gen_anisotropic_optlp)
             call b%vol2%write('aniso_optlp_state'//int2str_pad(state,2)//p%ext)
-            call b%eoreconstruct3D%get_res(res05s(s), res0143s(s))
+            call b%eorecvol%get_res(res05s(s), res0143s(s))
             if( L_BENCH ) t_sampl_dens_correct_sum = tic()
-            call b%eoreconstruct3D%sampl_dens_correct_sum( b%vol )
+            call b%eorecvol%sampl_dens_correct_sum( b%vol )
             if( L_BENCH ) rt_sampl_dens_correct_sum = rt_sampl_dens_correct_sum + toc(t_sampl_dens_correct_sum)
             call b%vol%write( volname, del_if_exists=.true. )
             call wait_for_closure( volname )
@@ -242,7 +242,7 @@ contains
                 state = ss
             endif
             if( b%a%get_pop(state, 'state' ) == 0 ) cycle ! Empty state
-            call b%reconstruct3D%reset
+            call b%recvol%reset
             do part=1,p%nparts
                 allocate(fbody, source=VOL_FBODY//int2str_pad(state,2)//'_part'//int2str_pad(part,p%numlen))
                 p%vols(s) = fbody//p%ext
@@ -281,7 +281,7 @@ contains
                 if( all(here) )then
                     call reconstruct3D_read%read(recnam)
                     call reconstruct3D_read%read_rho(kernam)
-                    call b%reconstruct3D%sum(reconstruct3D_read)
+                    call b%recvol%sum(reconstruct3D_read)
                 else
                     if( .not. here(1) ) write(*,'(A,A,A)') 'WARNING! ', adjustl(trim(recnam)), ' missing'
                     if( .not. here(2) ) write(*,'(A,A,A)') 'WARNING! ', adjustl(trim(kernam)), ' missing'
@@ -291,9 +291,9 @@ contains
 
             subroutine correct_for_sampling_density( recname )
                 character(len=*), intent(in) :: recname
-                call b%reconstruct3D%sampl_dens_correct
-                call b%reconstruct3D%bwd_ft
-                call b%reconstruct3D%clip(b%vol)
+                call b%recvol%sampl_dens_correct
+                call b%recvol%bwd_ft
+                call b%recvol%clip(b%vol)
                 call b%vol%write(recname, del_if_exists=.true.)
                 call wait_for_closure(recname)
             end subroutine correct_for_sampling_density

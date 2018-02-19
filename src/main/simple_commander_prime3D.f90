@@ -175,7 +175,7 @@ contains
                 call b%build_rec_tbox(p)
                 p%eo = 'no'
             else
-                call b%build_eo_rec_tbox(p)
+                call b%build_rec_eo_tbox(p)
                 p%eo = 'yes'
             endif
             call exec_rec_master(b, p, cline, 'startvol')

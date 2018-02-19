@@ -35,7 +35,7 @@ contains
         t_init = tic()
         t_tot  = t_init
         ! make the gridding prepper
-        kbwin = b%eoreconstruct3Ds(1)%get_kbwin()
+        kbwin = b%eorecvols(1)%get_kbwin()
         call gridprep%new(b%img, kbwin, [p%boxpd,p%boxpd,1])
         ! init volumes
         call prepreconstruct3Ds(b, p)
@@ -87,7 +87,7 @@ contains
         t_init = tic()
         t_tot  = t_init
         ! make the gridding prepper
-        kbwin = b%eoreconstruct3Ds(1)%get_kbwin()
+        kbwin = b%eorecvols(1)%get_kbwin()
         call gridprep%new(b%img, kbwin, [p%boxpd,p%boxpd,1])
         ! init volumes
         call prepreconstruct3Ds(b, p)

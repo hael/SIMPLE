@@ -119,7 +119,7 @@ contains
                 avg_ratio = avg_ratio+ratio
                 if( ratio < min_ratio )then
                     min_ratio = ratio
-                    call binwrite_oritab('cluster_shcing_ncls'//int2str_pad(ncls,numlen)//trim(METADATA_EXT), b%a, [1,p%nptcls])
+                    call binwrite_oritab('clustering_shc_ncls'//int2str_pad(ncls,numlen)//trim(METADATA_EXT), b%a, [1,p%nptcls])
                 endif
             end do
             validinds(ncls) = avg_ratio/real(NRESTARTS)
@@ -128,7 +128,7 @@ contains
         done = .false.
         do ncls=2,p%ncls
             write(*,'(a,1x,f9.3,8x,a,1x,i3)') 'COHESION/SEPARATION RATIO INDEX: ', validinds(ncls), ' NCLS: ', ncls
-            call binread_oritab('cluster_shcing_ncls'//int2str_pad(ncls,numlen)//trim(METADATA_EXT), b%a, [1,b%a%get_noris()])
+            call binread_oritab('clustering_shc_ncls'//int2str_pad(ncls,numlen)//trim(METADATA_EXT), b%a, [1,b%a%get_noris()])
             do icls=1,ncls
                 pop = b%a%get_pop(icls, p%label)
                 write(*,'(a,3x,i5,1x,a,1x,i3)') '  CLUSTER POPULATION:', pop, 'CLUSTER:', icls
@@ -392,8 +392,8 @@ contains
                 type(params) :: p
                 type(sym)    :: se
                 call b%build_rec_tbox(p)
-                call b%reconstruct3D%rec(p, b%a, se, 1)
-                call b%reconstruct3D%clip(b%vol)
+                call b%recvol%rec(p, b%a, se, 1)
+                call b%recvol%clip(b%vol)
                 call b%vol%bp(p%hp, p%lp)
                 call b%vol%mask(p%msk, 'soft')
             end subroutine rec_vol

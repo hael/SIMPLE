@@ -53,10 +53,10 @@ contains
                 endif
                 p%vols(s) = fbody//p%ext
                 rho_name  = 'rho_'//fbody//p%ext
-                call b%reconstruct3D%rec(p, b%a, b%se, s, part=p%part)
-                call b%reconstruct3D%compress_exp
-                call b%reconstruct3D%write(p%vols(s), del_if_exists=.true.)
-                call b%reconstruct3D%write_rho(trim(rho_name))
+                call b%recvol%rec(p, b%a, b%se, s, part=p%part)
+                call b%recvol%compress_exp
+                call b%recvol%write(p%vols(s), del_if_exists=.true.)
+                call b%recvol%write_rho(trim(rho_name))
             else ! shared-mem parallel rec
                 if( present(fbody_in) )then
                     allocate(fbody, source=trim(adjustl(fbody_in))//'_state')
@@ -64,8 +64,8 @@ contains
                     allocate(fbody, source='reconstruct3D_state')
                 endif
                 p%vols(s) = fbody//int2str_pad(s,2)//p%ext
-                call b%reconstruct3D%rec(p, b%a, b%se, s)
-                call b%reconstruct3D%clip(b%vol)
+                call b%recvol%rec(p, b%a, b%se, s)
+                call b%recvol%clip(b%vol)
                 call b%vol%write(p%vols(s), del_if_exists=.true.)
             endif
             deallocate(fbody)
@@ -93,7 +93,7 @@ contains
             else
                 allocate(fbody, source='reconstruct3D_state')
             endif
-            call b%eoreconstruct3D%eorec_distr(p, b%a, b%se, s, fbody=fbody)
+            call b%eorecvol%eorec_distr(p, b%a, b%se, s, fbody=fbody)
             deallocate(fbody)
         end do
         call qsys_job_finished( p, 'simple_rec_master :: exec_eorec')

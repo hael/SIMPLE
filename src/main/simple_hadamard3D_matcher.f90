@@ -385,9 +385,9 @@ contains
         if( p%norec .ne. 'yes' )then
             ! make the gridding prepper
             if( p%eo .ne. 'no' )then
-                kbwin = b%eoreconstruct3Ds(1)%get_kbwin()
+                kbwin = b%eorecvols(1)%get_kbwin()
             else
-                kbwin = b%reconstruct3Ds(1)%get_kbwin()
+                kbwin = b%recvols(1)%get_kbwin()
             endif
             call gridprep%new(b%img, kbwin, [p%boxpd,p%boxpd,1])
             ! init volumes
@@ -533,14 +533,14 @@ contains
             endif
             write(*,'(A)') '>>> RECONSTRUCTING RANDOM MODEL'
             ! make the gridding prepper
-            kbwin = b%reconstruct3Ds(1)%get_kbwin()
+            kbwin = b%recvols(1)%get_kbwin()
             call gridprep%new(b%img, kbwin, [p%boxpd,p%boxpd,1])
             do i=1,nsamp
                 call progress(i, nsamp)
                 orientation = b%a%get_ori(sample(i) + p%fromp - 1)
                 call read_img_and_norm( b, p, sample(i) + p%fromp - 1 )
                 call gridprep%prep(b%img, b%img_pad)
-                call b%reconstruct3Ds(1)%insert_fplane(b%se, orientation, b%img_pad, pwght=1.0)
+                call b%recvols(1)%insert_fplane(b%se, orientation, b%img_pad, pwght=1.0)
             end do
             deallocate(sample)
             call norm_struct_facts(b, p)

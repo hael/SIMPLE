@@ -220,7 +220,7 @@ type :: params
     character(len=STDLEN) :: boxtab=''            !< table (text file) of files with EMAN particle coordinates(.txt/.asc)
     character(len=STDLEN) :: chunktag=''
     character(len=STDLEN) :: clsdoc=''
-    character(len=STDLEN) :: comlindoc=''         !< cluster_shcing_nclsX.txt
+    character(len=STDLEN) :: comlindoc=''         !< clustering_shc_nclsX.txt
     character(len=STDLEN) :: cwd=''
     character(len=STDLEN) :: deftab=''            !< text file with CTF info(.txt/.asc)
     character(len=STDLEN) :: dir=''               !< directory

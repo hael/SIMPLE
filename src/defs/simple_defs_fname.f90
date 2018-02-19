@@ -18,10 +18,10 @@ character(len=10),     parameter :: SCSTK_DIR                 = 'stacks_sc/'
 ! PRIME3D
 character(len=11),     parameter :: PRIME3D_ITER_FBODY        = 'prime3Ddoc_'
 character(len=14),     parameter :: STARTVOL_FBODY            = 'startvol_state'
-character(len=12),     parameter :: VOL_FBODY                 = 'reconstruct3D_state'
+character(len=12),     parameter :: VOL_FBODY                 = 'recvol_state'
 character(len=17),     parameter :: ANISOLP_FBODY             = 'aniso_optlp_state'
 character(len=13),     parameter :: SNHCDOC                   = 'snhc_oris'//METADATA_EXT
-character(len=17),     parameter :: SNHCVOL                   = 'snhc_reconstruct3D_state'
+character(len=17),     parameter :: SNHCVOL                   = 'snhc_recvol_state'
 ! PRIME COMMON
 character(len=9),      parameter :: FSC_FBODY                 = 'fsc_state'
 character(len=10),     parameter :: FRCS_FBODY                = 'frcs_state'
@@ -36,7 +36,7 @@ character(len=14),     parameter :: UNIDOC_OUTPUT             = 'unidoc_output_'
 character(len=11),     parameter :: CLUSTER3D_FSC             = 'cluster3D_fsc'//BIN_EXT
 character(len=12),     parameter :: CLUSTER3D_FRCS            = 'cluster3D_frcs'//BIN_EXT
 character(len=15),     parameter :: CLUSTER3D_ANISOLP         = 'cluster3D_aniso_optlp'
-character(len=16),     parameter :: CLUSTER3D_VOL             = 'cluster3D_mixed_reconstruct3D'
+character(len=16),     parameter :: CLUSTER3D_VOL             = 'cluster3D_mixed_recvol'
 ! SUFFIXES
 character(len=3),      parameter :: SCALE_SUFFIX              = '_sc'
 character(len=6),      parameter :: THUMBNAIL_SUFFIX          = '_thumb'

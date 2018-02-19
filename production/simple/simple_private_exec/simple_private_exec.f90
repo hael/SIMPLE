@@ -20,7 +20,7 @@ use simple_commander_tseries
 implicit none
 
 ! PRE-PROCESSING PROGRAMS
-type(preprocess_commander)            :: xpreprocess
+type(preprocess_commander)           :: xpreprocess
 type(select_frames_commander)        :: xselect_frames
 type(boxconvs_commander)             :: xboxconvs
 type(powerspecs_commander)           :: xpowerspecs
@@ -30,7 +30,7 @@ type(ctf_estimate_commander)         :: xctf_estimate
 type(pick_commander)                 :: xpick
 
 ! PRIME2D PROGRAMS
-type(make_cavgs_commander)            :: xmake_cavgs
+type(make_cavgs_commander)           :: xmake_cavgs
 type(prime2D_commander)              :: xprime2D
 type(cavgassemble_commander)         :: xcavgassemble
 type(check2D_conv_commander)         :: xcheck2D_conv
@@ -58,7 +58,7 @@ type(resmask_commander)              :: xresmask
 
 ! RECONSTRUCTION PROGRAMS
 type(volassemble_eo_commander)       :: xvolassemble_eo
-type(reconstruct3D_commander)               :: xreconstruct3D
+type(reconstruct3D_commander)        :: xreconstruct3D
 type(volassemble_commander)          :: xvolassemble
 
 ! CHECKER PROGRAMS
