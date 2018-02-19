@@ -198,7 +198,7 @@ type :: params
     integer :: edge=6              !< edge size for softening molecular envelope(in pixels)
     integer :: extr_iter=1
     integer :: find=1              !< Fourier index
-    integer :: nframesgrp=0        !< # frames to group before unblur(Falcon 3){0}
+    integer :: nframesgrp=0        !< # frames to group before motion_correct(Falcon 3){0}
     integer :: fromf=1             !< start frame index
     integer :: fromp=1             !< start ptcl index
     integer :: fstep=1
@@ -256,7 +256,7 @@ type :: params
     integer :: pcasz=0
     integer :: ppca=0
     integer :: pspecsz=512         !< size of power spectrum(in pixels)
-    integer :: pspecsz_unblur=512  !< size of power spectrum 4 unblur(in pixels)
+    integer :: pspecsz_motion_correct=512  !< size of power spectrum 4 motion_correct(in pixels)
     integer :: pspecsz_ctffind=512
     integer :: ptcl=1
     integer :: recl_cgrid=-1
@@ -324,8 +324,8 @@ type :: params
     real    :: frac_outliers=0.
     real    :: fraczero=0.
     real    :: ftol=1e-6
-    real    :: unblurftol = 1e-2   !< tolerance (gradient) for unblurrer
-    real    :: unblurgtol = 1e-2   !< tolerance (function value) for unblurrer
+    real    :: motion_correctftol = 1e-2   !< tolerance (gradient) for motion_correctrer
+    real    :: motion_correctgtol = 1e-2   !< tolerance (function value) for motion_correctrer
     real    :: gw=0.5
     real    :: hp=100.             !< high-pass limit(in A)
     real    :: hp_fsc=0.           !< FSC high-pass limit(in A)
@@ -655,7 +655,7 @@ contains
         call check_iarg('part',           self%part)
         call check_iarg('ppca',           self%ppca)
         call check_iarg('pspecsz',        self%pspecsz)
-        call check_iarg('pspecsz_unblur', self%pspecsz_unblur)
+        call check_iarg('pspecsz_motion_correct', self%pspecsz_motion_correct)
         call check_iarg('pspecsz_ctffind', self%pspecsz_ctffind)
         call check_iarg('ring1',          self%ring1)
         call check_iarg('ring2',          self%ring2)
@@ -746,8 +746,8 @@ contains
         call check_rarg('thres',          self%thres)
         call check_rarg('time_per_image', self%time_per_image)
         call check_rarg('trs',            self%trs)
-        call check_rarg('unblurftol',     self%unblurftol)
-        call check_rarg('unblurgtol',     self%unblurgtol)
+        call check_rarg('motion_correctftol',     self%motion_correctftol)
+        call check_rarg('motion_correctgtol',     self%motion_correctgtol)
         call check_rarg('update_frac',    self%update_frac)
         call check_rarg('width',          self%width)
         call check_rarg('winsz',          self%winsz)

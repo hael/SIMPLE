@@ -1,4 +1,4 @@
-! shift search using expanded Fourier transforms (used in unblur)
+! shift search using expanded Fourier transforms (used in motion_correct)
 module simple_ftexp_shsrch
 #include "simple_lib.f08"
 use simple_opt_factory, only: opt_factory
@@ -20,27 +20,27 @@ character(len=:), allocatable :: opt_str           !< optimiser string descripto
 integer                       :: nrestarts=3       !< number of optimisation restarts
 real,    parameter            :: TOL=1e-4          !< tolerance parameter
 integer, parameter            :: MAXITS=30         !< maximum number of iterations
-real                          :: unblurftol = 1e-4
-real                          :: unblurgtol = 1e-4
+real                          :: motion_correctftol = 1e-4
+real                          :: motion_correctgtol = 1e-4
 
 contains
 
     !> Initialise  ftexp_shsrch
-    subroutine ftexp_shsrch_init( ref, ptcl, lims, opt, nrestarts_in, unblur_ftol, unblur_gtol )
+    subroutine ftexp_shsrch_init( ref, ptcl, lims, opt, nrestarts_in, motion_correct_ftol, motion_correct_gtol )
         class(ft_expanded), target, intent(in) :: ref, ptcl
         real,                       intent(in) :: lims(2,2)
         character(len=*), optional, intent(in) :: opt
         integer,          optional, intent(in) :: nrestarts_in
-        real,             optional, intent(in) :: unblur_ftol, unblur_gtol
-        if (present(unblur_ftol)) then
-            unblurftol = unblur_ftol
+        real,             optional, intent(in) :: motion_correct_ftol, motion_correct_gtol
+        if (present(motion_correct_ftol)) then
+            motion_correctftol = motion_correct_ftol
         else
-            unblurftol = TOL
+            motion_correctftol = TOL
         end if
-        if (present(unblur_gtol)) then
-            unblurgtol = unblur_gtol
+        if (present(motion_correct_gtol)) then
+            motion_correctgtol = motion_correct_gtol
         else
-            unblurgtol = TOL
+            motion_correctgtol = TOL
         end if
         ! set pointers
         reference => ref
@@ -55,7 +55,7 @@ contains
         nrestarts = 1
         if( present(nrestarts_in) ) nrestarts = nrestarts_in
         ! make optimizer spec
-        call ospec%specify(opt_str, 2, ftol=unblurftol, gtol=unblurgtol,&
+        call ospec%specify(opt_str, 2, ftol=motion_correctftol, gtol=motion_correctgtol,&
             limits=lims, nrestarts=nrestarts )
         ! set optimizer cost function
         if( trim(opt_str) .eq. 'lbfgsb' )then
@@ -129,7 +129,7 @@ contains
                 ! re-specify the limits
                 lims(:,1) = -maxshift
                 lims(:,2) = maxshift
-                call ospec%specify(opt_str, 2, ftol=unblurftol, gtol=unblurgtol, limits=lims, nrestarts=nrestarts)
+                call ospec%specify(opt_str, 2, ftol=motion_correctftol, gtol=motion_correctgtol, limits=lims, nrestarts=nrestarts)
                 ! set optimizer cost function
                 if( opt_str == 'lbfgsb' ) then
                     call ospec%set_costfun_8(ftexp_shsrch_cost_8)

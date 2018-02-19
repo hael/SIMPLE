@@ -45,7 +45,7 @@ character(len=6),  parameter :: POWSPEC_SUFFIX          = '_pspec'
 ! DIRECTORIES
 character(len=10), parameter :: STDERROUT_DIR           = 'stderrout/'
 character(len=9),  parameter :: PREPROC_STREAM_DIR      = 'pipeline/'
-character(len=21), parameter :: UNBLUR_STREAM_DIR       = PREPROC_STREAM_DIR//'micrographs/'
+character(len=21), parameter :: motion_correct_STREAM_DIR       = PREPROC_STREAM_DIR//'micrographs/'
 character(len=13), parameter :: CTF_STREAM_DIR          = PREPROC_STREAM_DIR//'ctf/'
 character(len=15), parameter :: PICK_STREAM_DIR         = PREPROC_STREAM_DIR//'boxes/'
 character(len=19), parameter :: EXTRACT_STREAM_DIR      = PREPROC_STREAM_DIR//'particles/'

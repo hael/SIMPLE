@@ -351,7 +351,7 @@ contains
     end subroutine print_doc_powerspecs
 
     subroutine print_doc_preproc
-        write(*,'(A)') 'is a program that executes unblur, ctffind and pick in sequence'
+        write(*,'(A)') 'is a program that executes motion_correct, ctffind and pick in sequence'
         stop
     end subroutine print_doc_preproc
 
@@ -601,8 +601,8 @@ contains
         stop
     end subroutine print_doc_txt2bin
 
-    subroutine print_doc_unblur
-        write(*,'(A)', advance='no') 'is a program for movie alignment or unblurring based the same principal strategy'
+    subroutine print_doc_motion_correct
+        write(*,'(A)', advance='no') 'is a program for movie alignment or motion_correctring based the same principal strategy'
         write(*,'(A)', advance='no') ' as Grigorieffs program (hence the name). There are two important differences: a'
         write(*,'(A)', advance='no') 'utomatic weighting of the frames using a correlation-based M-estimator and conti'
         write(*,'(A)', advance='no') 'nuous optimisation of the shift parameters. Input is a textfile with absolute pa'
@@ -614,12 +614,12 @@ contains
         write(*,'(A)', advance='no') 'en chunk size (Falcon 3 movies). If fromf/tof are given, a contiguous subset of'
         write(*,'(A)') 'frames will be averaged without any dose-weighting applied.'
         stop
-    end subroutine print_doc_unblur
+    end subroutine print_doc_motion_correct
 
-    subroutine print_doc_unblur_ctffind
-        write(*,'(A)') 'is a pipelined unblur + ctffind program'
+    subroutine print_doc_motion_correct_ctffind
+        write(*,'(A)') 'is a pipelined motion_correct + ctffind program'
         stop
-    end subroutine print_doc_unblur_ctffind
+    end subroutine print_doc_motion_correct_ctffind
 
     subroutine print_doc_vizoris
         write(*,'(A)', advance='no') 'extract projection direction from an orientation direction for visualization in'
@@ -675,8 +675,8 @@ contains
         stop
     end subroutine print_doc_scale_stk_parts
 
-    subroutine print_doc_unblur_tomo
-        write(*,'(A)', advance='no') 'is a distributed workflow for movie alignment or unblurring of tomographic movie'
+    subroutine print_doc_motion_correct_tomo
+        write(*,'(A)', advance='no') 'is a distributed workflow for movie alignment or motion_correctring of tomographic movie'
         write(*,'(A)', advance='no') 's. Input is a textfile with absolute paths to movie files in addition to a few i'
         write(*,'(A)', advance='no') 'nput parameters, some of which deserve a comment. The exp_doc document should co'
         write(*,'(A)', advance='no') 'ntain per line exp_time=X and dose_rate=Y. It is asssumed that the input list of'
@@ -686,7 +686,7 @@ contains
         write(*,'(A)', advance='no') ' If nframesgrp is given the frames will be pre-averaged in the given chunk size'
         write(*,'(A)') '(Falcon 3 movies).'
         stop
-    end subroutine print_doc_unblur_tomo
+    end subroutine print_doc_motion_correct_tomo
 
     subroutine list_all_simple_programs
         write(*,'(A)') 'automask2D'
@@ -769,8 +769,8 @@ contains
         write(*,'(A)') 'tseries_split'
         write(*,'(A)') 'tseries_track'
         write(*,'(A)') 'txt2bin'
-        write(*,'(A)') 'unblur'
-        write(*,'(A)') 'unblur_ctffind'
+        write(*,'(A)') 'motion_correct'
+        write(*,'(A)') 'motion_correct_ctffind'
         write(*,'(A)') 'vizoris'
         write(*,'(A)') 'volassemble'
         write(*,'(A)') 'volaverager'
@@ -799,9 +799,9 @@ contains
         write(*,'(A)') 'scale_stk_parts'
         write(*,'(A)') 'symsrch'
         write(*,'(A)') 'tseries_track'
-        write(*,'(A)') 'unblur'
-        write(*,'(A)') 'unblur_ctffind'
-        write(*,'(A)') 'unblur_tomo'
+        write(*,'(A)') 'motion_correct'
+        write(*,'(A)') 'motion_correct_ctffind'
+        write(*,'(A)') 'motion_correct_tomo'
         stop
     end subroutine list_all_simple_distr_programs
 

@@ -30,7 +30,7 @@ type(preproc_commander)              :: xpreproc
 type(select_frames_commander)        :: xselect_frames
 type(boxconvs_commander)             :: xboxconvs
 type(powerspecs_commander)           :: xpowerspecs
-type(unblur_commander)               :: xunblur
+type(motion_correct_commander)               :: xmotion_correct
 type(ctffind_commander)              :: xctffind
 type(ctffit_commander)               :: xctffit
 type(select_commander)               :: xselect
@@ -291,7 +291,7 @@ select case(prg)
     case( 'preproc' )
         !==Program preproc
         !
-        ! <preproc/begin>is a program that executes unblur, ctffind and pick in sequence
+        ! <preproc/begin>is a program that executes motion_correct, ctffind and pick in sequence
         ! <preproc/end>
         !
         ! set required keys
@@ -309,7 +309,7 @@ select case(prg)
         keys_optional(6)   = 'lpstart'
         keys_optional(7)   = 'lpstop'
         keys_optional(8)   = 'trs'
-        keys_optional(9)   = 'pspecsz_unblur'
+        keys_optional(9)   = 'pspecsz_motion_correct'
         keys_optional(10)  = 'pspecsz_ctffind'
         keys_optional(11)  = 'numlen'
         keys_optional(12)  = 'startit'
@@ -339,7 +339,7 @@ select case(prg)
         if( .not. cline%defined('trs')             ) call cline%set('trs',               5.)
         if( .not. cline%defined('lpstart')         ) call cline%set('lpstart',          15.)
         if( .not. cline%defined('lpstop')          ) call cline%set('lpstop',            8.)
-        if( .not. cline%defined('pspecsz_unblur')  ) call cline%set('pspecsz_unblur',  512.)
+        if( .not. cline%defined('pspecsz_motion_correct')  ) call cline%set('pspecsz_motion_correct',  512.)
         if( .not. cline%defined('pspecsz_ctffind') ) call cline%set('pspecsz_ctffind', 512.)
         if( .not. cline%defined('hp_ctffind')      ) call cline%set('hp_ctffind',       30.)
         if( .not. cline%defined('lp_ctffind')      ) call cline%set('lp_ctffind',        5.)
@@ -412,10 +412,10 @@ select case(prg)
         if( .not. cline%defined('clip')    ) call cline%set('clip',    256.)
         ! execute
         call xpowerspecs%execute(cline)
-    case( 'unblur' )
-        !==Program unblur
+    case( 'motion_correct' )
+        !==Program motion_correct
         !
-        ! <unblur/begin>is a program for movie alignment or unblurring based the same principal strategy as
+        ! <motion_correct/begin>is a program for movie alignment or motion_correctring based the same principal strategy as
         ! Grigorieffs program (hence the name). There are two important differences: automatic weighting of
         ! the frames using a correlation-based M-estimator and continuous optimisation of the shift parameters.
         ! Input is a textfile with absolute paths to movie files in addition to a few input parameters, some
@@ -424,7 +424,7 @@ select case(prg)
         ! cropped according to the down-scaling factor (for super-resolution movies). If nframesgrp is given
         ! the frames will be pre-averaged in the given chunk size (Falcon 3 movies). If fromf/tof are given,
         ! a contiguous subset of frames will be averaged without any dose-weighting applied.
-        ! <unblur/end>
+        ! <motion_correct/end>
         !
         ! set required keys
         keys_required(1)  = 'filetab'
@@ -448,7 +448,7 @@ select case(prg)
         keys_optional(16) = 'nsig'
         keys_optional(17) = 'outfile'
         ! parse command line
-        if( describe ) call print_doc_unblur
+        if( describe ) call print_doc_motion_correct
         call cline%parse(keys_required(:2), keys_optional(:17))
         ! set defaults
         if( .not. cline%defined('trs')     ) call cline%set('trs',                      5.)
@@ -457,7 +457,7 @@ select case(prg)
         if( .not. cline%defined('outfile') ) call cline%set('outfile', 'simple_unidoc.txt')
         if( .not. cline%defined('opt')     ) call cline%set('opt',               'simplex')
         ! execute
-        call xunblur%execute(cline)
+        call xmotion_correct%execute(cline)
     case( 'ctffind' )
         !==Program ctffind
         !
@@ -517,10 +517,10 @@ select case(prg)
         ! execute
         call xctffit%execute(cline)
 
-    case( 'unblur_ctffind' )
-        !==Program unblur_ctffind
+    case( 'motion_correct_ctffind' )
+        !==Program motion_correct_ctffind
         !
-        ! <unblur_ctffind/begin>is a pipelined unblur + ctffind program<unblur_ctffind/end>
+        ! <motion_correct_ctffind/begin>is a pipelined motion_correct + ctffind program<motion_correct_ctffind/end>
         !
         ! set required keys
         keys_required(1)  = 'filetab'
@@ -553,7 +553,7 @@ select case(prg)
         keys_optional(22) = 'astigtol'
         keys_optional(23) = 'phaseplate'
         ! parse command line
-        if( describe ) call print_doc_unblur_ctffind
+        if( describe ) call print_doc_motion_correct_ctffind
         call cline%parse(keys_required(:5), keys_optional(:23))
         ! set defaults
         call cline%set('dopick', 'no'     )
@@ -561,7 +561,7 @@ select case(prg)
         if( .not. cline%defined('trs')             ) call cline%set('trs',               5.)
         if( .not. cline%defined('lpstart')         ) call cline%set('lpstart',          15.)
         if( .not. cline%defined('lpstop')          ) call cline%set('lpstop',            8.)
-        if( .not. cline%defined('pspecsz_unblur')  ) call cline%set('pspecsz_unblur',  512.)
+        if( .not. cline%defined('pspecsz_motion_correct')  ) call cline%set('pspecsz_motion_correct',  512.)
         if( .not. cline%defined('pspecsz_ctffind') ) call cline%set('pspecsz_ctffind', 512.)
         if( .not. cline%defined('hp_ctffind')      ) call cline%set('hp_ctffind',       30.)
         if( .not. cline%defined('lp_ctffind')      ) call cline%set('lp_ctffind',        5.)

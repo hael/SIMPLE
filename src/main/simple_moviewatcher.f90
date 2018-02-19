@@ -165,23 +165,23 @@ contains
     logical function to_process( self, fname )
         class(moviewatcher), intent(inout) :: self
         character(len=*),    intent(in)    :: fname
-        character(len=STDLEN) :: fname_here, fbody, ext, unblur_name, unidoc_name, picker_name
-        logical :: unblur_done, ctffind_done, picker_done
+        character(len=STDLEN) :: fname_here, fbody, ext, motion_correct_name, unidoc_name, picker_name
+        logical :: motion_correct_done, ctffind_done, picker_done
         fname_here = remove_abspath(trim(adjustl(fname)))
         ext        = trim(fname2ext(fname_here))
         fbody      = get_fbody(trim(fname_here), trim(ext))
         if( trim(self%fbody) .ne. '' )fbody = trim(self%fbody)//trim(adjustl(fbody))
-        ! unblur
-        unblur_name = UNBLUR_STREAM_DIR//trim(adjustl(fbody))//THUMBNAIL_SUFFIX//trim(self%ext)
-        unblur_done = file_exists(trim(unblur_name))
-        if( unblur_done )then
-            unblur_name = UNBLUR_STREAM_DIR//trim(adjustl(fbody))//INTGMOV_SUFFIX//trim(self%ext)
-            unblur_done = file_exists(trim(unblur_name))
+        ! motion_correct
+        motion_correct_name = motion_correct_STREAM_DIR//trim(adjustl(fbody))//THUMBNAIL_SUFFIX//trim(self%ext)
+        motion_correct_done = file_exists(trim(motion_correct_name))
+        if( motion_correct_done )then
+            motion_correct_name = motion_correct_STREAM_DIR//trim(adjustl(fbody))//INTGMOV_SUFFIX//trim(self%ext)
+            motion_correct_done = file_exists(trim(motion_correct_name))
         endif
         ! ctffind
         unidoc_name  = UNIDOC_STREAM_DIR//UNIDOC_OUTPUT//trim(adjustl(fbody))//'.txt'
         ctffind_done = file_exists(trim(unidoc_name))
-        to_process = .not. (unblur_done .and. ctffind_done)
+        to_process = .not. (motion_correct_done .and. ctffind_done)
     end function to_process
 
     !>  \brief  is for adding to the history of already reported files

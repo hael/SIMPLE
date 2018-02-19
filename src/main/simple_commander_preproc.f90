@@ -15,7 +15,7 @@ use simple_ori,            only: ori
 !! import functions
 use simple_imghead,        only: find_ldim_nptcls
 use simple_corrmat,        only: calc_cartesian_corrmat
-use simple_unblur_iter,    only: unblur_iter
+use simple_motion_correct_iter,    only: motion_correct_iter
 use simple_ctffind_iter,   only: ctffind_iter
 use simple_ctffit_iter,    only: ctffit_iter
 use simple_pick_iter,      only: pick_iter
@@ -27,7 +27,7 @@ public :: preproc_commander
 public :: select_frames_commander
 public :: boxconvs_commander
 public :: powerspecs_commander
-public :: unblur_commander
+public :: motion_correct_commander
 public :: ctffind_commander
 public :: ctffit_commander
 public :: select_commander
@@ -53,10 +53,10 @@ type, extends(commander_base) :: powerspecs_commander
  contains
    procedure :: execute       => exec_powerspecs
 end type powerspecs_commander
-type, extends(commander_base) :: unblur_commander
+type, extends(commander_base) :: motion_correct_commander
   contains
-    procedure :: execute      => exec_unblur
-end type unblur_commander
+    procedure :: execute      => exec_motion_correct
+end type motion_correct_commander
 type, extends(commander_base) :: ctffind_commander
   contains
     procedure :: execute      => exec_ctffind
@@ -89,7 +89,7 @@ contains
         class(cmdline),           intent(inout) :: cline
         !type(ctffind_iter)      :: cfiter
         type(ctffit_iter)       :: cfiter
-        type(unblur_iter)       :: ubiter
+        type(motion_correct_iter)       :: ubiter
         type(pick_iter)         :: piter
         type(extract_commander) :: xextract
         type(cmdline)           :: cline_extract
@@ -156,7 +156,7 @@ contains
                 movie_fbody = get_fbody(trim(movie_fname), trim(movie_ext))
                 if( cline%defined('fbody') )movie_fbody = trim(p%fbody)//trim(movie_fbody)
                 p%fbody = trim(movie_fbody)
-                ! unblur: on call
+                ! motion_correct: on call
                 ! ctf: on call and output set below
                 allocate(fname_unidoc_output, source=UNIDOC_STREAM_DIR//UNIDOC_OUTPUT//trim(movie_fbody)//'.txt')
                 ! picker: on call
@@ -181,16 +181,16 @@ contains
         ! loop over exposures (movies)
         do imovie=fromto(1),fromto(2)
             p%smpd    = smpd_original
-            p%pspecsz = p%pspecsz_unblur
+            p%pspecsz = p%pspecsz_motion_correct
             if( ntot == 1 )then
                 movie_ind = p%part ! streaming mode
             else
                 movie_ind = imovie ! standard mode
             endif
-            ! unblur
+            ! motion_correct
             if( p%stream.eq.'yes' )then
                 call ubiter%iterate(cline, p, orientation, movie_ind, movie_counter,&
-                &frame_counter, movienames(imovie), smpd_scaled, dir_out=UNBLUR_STREAM_DIR)
+                &frame_counter, movienames(imovie), smpd_scaled, dir_out=motion_correct_STREAM_DIR)
             else
                 call ubiter%iterate(cline, p, orientation, movie_ind, movie_counter,&
                 &frame_counter, movienames(imovie), smpd_scaled)
@@ -463,11 +463,11 @@ contains
         call simple_end('**** SIMPLE_POWERSPECS NORMAL STOP ****')
     end subroutine exec_powerspecs
 
-    subroutine exec_unblur( self, cline )
-        class(unblur_commander), intent(inout) :: self
+    subroutine exec_motion_correct( self, cline )
+        class(motion_correct_commander), intent(inout) :: self
         class(cmdline),          intent(inout) :: cline !< command line input
         type(params)      :: p
-        type(unblur_iter) :: ubiter
+        type(motion_correct_iter) :: ubiter
         type(oris)        :: os_uni
         type(ori)         :: orientation
         character(len=STDLEN), allocatable :: movienames(:)
@@ -476,7 +476,7 @@ contains
         integer :: frame_counter, lfoo(3), nframes
         p = params(cline) ! constants & derived constants produced
         if( p%scale > 1.05 )then
-            stop 'scale cannot be > 1; simple_commander_preproc :: exec_unblur'
+            stop 'scale cannot be > 1; simple_commander_preproc :: exec_motion_correct'
         endif
         if( p%tomo .eq. 'yes' )then
             if( .not. p%l_dose_weight )then
@@ -498,7 +498,7 @@ contains
                     fromto(1) = p%fromp
                     fromto(2) = p%top
                 else
-                    stop 'fromp & top args need to be defined in parallel execution; simple_unblur'
+                    stop 'fromp & top args need to be defined in parallel execution; simple_motion_correct'
                 endif
             else
                 fromto(1) = 1
@@ -530,10 +530,10 @@ contains
         end do
         call os_uni%write(p%outfile)
         call os_uni%kill
-        call qsys_job_finished( p, 'simple_commander_preproc :: exec_unblur' )
+        call qsys_job_finished( p, 'simple_commander_preproc :: exec_motion_correct' )
         ! end gracefully
-        call simple_end('**** SIMPLE_UNBLUR NORMAL STOP ****')
-    end subroutine exec_unblur
+        call simple_end('**** SIMPLE_motion_correct NORMAL STOP ****')
+    end subroutine exec_motion_correct
 
     subroutine exec_ctffind( self, cline )
         class(ctffind_commander), intent(inout) :: self

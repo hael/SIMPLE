@@ -12,9 +12,9 @@ implicit none
 
 ! PRE-PROCESSING
 type(preproc_stream_commander)           :: xpreproc_stream
-type(unblur_ctffind_distr_commander)     :: xunblur_ctffind_distr
-type(unblur_distr_commander)             :: xunblur_distr
-type(unblur_tomo_movies_distr_commander) :: xunblur_tomo_distr
+type(motion_correct_ctffind_distr_commander)     :: xmotion_correct_ctffind_distr
+type(motion_correct_distr_commander)             :: xmotion_correct_distr
+type(motion_correct_tomo_movies_distr_commander) :: xmotion_correct_tomo_distr
 type(powerspecs_distr_commander)         :: xpowerspecs_distr
 type(ctffind_distr_commander)            :: xctffind_distr
 type(ctffit_distr_commander)             :: xctffit_distr
@@ -64,12 +64,12 @@ if( str_has_substr(prg, 'simple_') ) stop 'giving program names with simple_* pr
 
 select case(prg)
 
-    ! PRE-PROCESSING STREAM, LINKING UNBLUR + CTFFIND + PICK
+    ! PRE-PROCESSING STREAM, LINKING motion_correct + CTFFIND + PICK
 
     case( 'preproc' )
         !==Program preproc
         !
-        ! <preproc/begin>is a distributed workflow that executes unblur, ctffind and pick in sequence
+        ! <preproc/begin>is a distributed workflow that executes motion_correct, ctffind and pick in sequence
         ! and in streaming mode as the microscope collects the data <preproc/end>
         !
         ! set required keys
@@ -88,7 +88,7 @@ select case(prg)
         keys_optional(6)  = 'lpstart'
         keys_optional(7)  = 'lpstop'
         keys_optional(8)  = 'trs'
-        keys_optional(9)  = 'pspecsz_unblur'
+        keys_optional(9)  = 'pspecsz_motion_correct'
         keys_optional(10) = 'pspecsz_ctffind'
         keys_optional(11) = 'numlen'
         keys_optional(12) = 'startit'
@@ -118,7 +118,7 @@ select case(prg)
         if( .not. cline%defined('trs')             ) call cline%set('trs',               5.)
         if( .not. cline%defined('lpstart')         ) call cline%set('lpstart',          15.)
         if( .not. cline%defined('lpstop')          ) call cline%set('lpstop',            8.)
-        if( .not. cline%defined('pspecsz_unblur')  ) call cline%set('pspecsz_unblur',  512.)
+        if( .not. cline%defined('pspecsz_motion_correct')  ) call cline%set('pspecsz_motion_correct',  512.)
         if( .not. cline%defined('pspecsz_ctffind') ) call cline%set('pspecsz_ctffind', 512.)
         if( .not. cline%defined('hp_ctffind')      ) call cline%set('hp_ctffind',       30.)
         if( .not. cline%defined('lp_ctffind')      ) call cline%set('lp_ctffind',        5.)
@@ -128,12 +128,12 @@ select case(prg)
         if( .not. cline%defined('opt')             ) call cline%set('opt', 'simplex')
         call xpreproc_stream%execute(cline)
 
-    ! PIPELINED UNBLUR + CTFFIND
+    ! PIPELINED motion_correct + CTFFIND
 
-    case( 'unblur_ctffind' )
-        !==Program unblur_ctffind
+    case( 'motion_correct_ctffind' )
+        !==Program motion_correct_ctffind
         !
-        ! <unblur_ctffind/begin>is a pipelined distributed workflow: unblur + ctffind program<unblur_ctffind/end>
+        ! <motion_correct_ctffind/begin>is a pipelined distributed workflow: motion_correct + ctffind program<motion_correct_ctffind/end>
         !
         ! set required keys
         keys_required(1)  = 'filetab'
@@ -167,7 +167,7 @@ select case(prg)
         keys_optional(22) = 'astigtol'
         keys_optional(23) = 'phaseplate'
         ! parse command line
-        if( describe ) call print_doc_unblur_ctffind
+        if( describe ) call print_doc_motion_correct_ctffind
         call cline%parse(keys_required(:6), keys_optional(:23))
         ! set defaults
         call cline%set('dopick', 'no'     )
@@ -175,20 +175,20 @@ select case(prg)
         if( .not. cline%defined('trs')             ) call cline%set('trs',               5.)
         if( .not. cline%defined('lpstart')         ) call cline%set('lpstart',          15.)
         if( .not. cline%defined('lpstop')          ) call cline%set('lpstop',            8.)
-        if( .not. cline%defined('pspecsz_unblur')  ) call cline%set('pspecsz_unblur',  512.)
+        if( .not. cline%defined('pspecsz_motion_correct')  ) call cline%set('pspecsz_motion_correct',  512.)
         if( .not. cline%defined('pspecsz_ctffind') ) call cline%set('pspecsz_ctffind', 512.)
         if( .not. cline%defined('hp_ctffind')      ) call cline%set('hp_ctffind',       30.)
         if( .not. cline%defined('lp_ctffind')      ) call cline%set('lp_ctffind',        5.)
         if( .not. cline%defined('opt')             ) call cline%set('opt', 'simplex')
         ! execute
-        call xunblur_ctffind_distr%execute(cline)
+        call xmotion_correct_ctffind_distr%execute(cline)
 
-    ! UNBLUR_MOVIES
+    ! motion_correct_MOVIES
 
-    case( 'unblur' )
-        !==Program unblur
+    case( 'motion_correct' )
+        !==Program motion_correct
         !
-        ! <unblur/begin>is a distributed workflow for movie alignment or unblurring based the same
+        ! <motion_correct/begin>is a distributed workflow for movie alignment or motion_correctring based the same
         ! principal strategy as Grigorieffs program (hence the name). There are two important
         ! differences: automatic weighting of the frames using a correlation-based M-estimator and
         ! continuous optimisation of the shift parameters. Input is a textfile with absolute paths
@@ -198,7 +198,7 @@ select case(prg)
         ! the down-scaling factor (for super-resolution movies). If nframesgrp is given the frames will
         ! be pre-averaged in the given chunk size (Falcon 3 movies). If fromf/tof are given, a
         ! contiguous subset of frames will be averaged without any dose-weighting applied.
-        ! <unblur/end>
+        ! <motion_correct/end>
         !
         ! set required keys
         keys_required(1)  = 'filetab'
@@ -222,7 +222,7 @@ select case(prg)
         keys_optional(15) = 'tof'
         keys_optional(16) = 'nsig'
         ! parse command line
-        if( describe ) call print_doc_unblur
+        if( describe ) call print_doc_motion_correct
         call cline%parse(keys_required(:3), keys_optional(:16))
         ! set defaults
         if( .not. cline%defined('trs')     ) call cline%set('trs',        5.)
@@ -230,17 +230,17 @@ select case(prg)
         if( .not. cline%defined('lpstop')  ) call cline%set('lpstop',     8.)
         if( .not. cline%defined('opt')     ) call cline%set('opt', 'simplex')
         ! execute
-        call xunblur_distr%execute(cline)
-    case( 'unblur_tomo' )
-        !==Program unblur_tomo
+        call xmotion_correct_distr%execute(cline)
+    case( 'motion_correct_tomo' )
+        !==Program motion_correct_tomo
         !
-        ! <unblur_tomo/begin>is a distributed workflow for movie alignment or unblurring of tomographic movies.
+        ! <motion_correct_tomo/begin>is a distributed workflow for movie alignment or motion_correctring of tomographic movies.
         ! Input is a textfile with absolute paths to movie files in addition to a few input parameters, some
         ! of which deserve a comment. The exp_doc document should contain per line exp_time=X and dose_rate=Y.
         ! It is asssumed that the input list of movies (one per tilt) are ordered temporally. This is necessary
         ! for correct dose-weighting of tomographic tilt series. If scale is given, the movie will be Fourier
         ! cropped according to the down-scaling factor (for super-resolution movies). If nframesgrp is given
-        ! the frames will be pre-averaged in the given chunk size (Falcon 3 movies). <unblur_tomo/end>
+        ! the frames will be pre-averaged in the given chunk size (Falcon 3 movies). <motion_correct_tomo/end>
         !
         ! set required keys
         keys_required(1)  = 'tomoseries'
@@ -259,7 +259,7 @@ select case(prg)
         keys_optional(10) = 'nframesgrp'
         keys_optional(11) = 'nsig'
         ! parse command line
-        if( describe ) call print_doc_unblur_tomo
+        if( describe ) call print_doc_motion_correct_tomo
         call cline%parse(keys_required(:3), keys_optional(:11))
         ! set defaults
         if( .not. cline%defined('trs')     ) call cline%set('trs',       5.)
@@ -268,7 +268,7 @@ select case(prg)
         if( .not. cline%defined('tomo')    ) call cline%set('tomo',   'yes')
         if( .not. cline%defined('opt')     ) call cline%set('opt', 'simplex')
         ! execute
-        call xunblur_tomo_distr%execute(cline)
+        call xmotion_correct_tomo_distr%execute(cline)
 
     ! GENERATE POWERSPECTRA
 

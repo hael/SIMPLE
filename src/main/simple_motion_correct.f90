@@ -1,5 +1,5 @@
-! unblur does motion correction, dose-weighting and frame-weighting of DDD movies
-module simple_unblur
+! motion_correct does motion correction, dose-weighting and frame-weighting of DDD movies
+module simple_motion_correct
 !$ use omp_lib
 !$ use omp_lib_kinds
 #include "simple_lib.f08"
@@ -10,13 +10,13 @@ use simple_estimate_ssnr,only: acc_dose2filter
 use simple_oris,         only: oris
 implicit none
 
-public :: unblur_movie, unblur_calc_sums, unblur_calc_sums_tomo
+public :: motion_correct_movie, motion_correct_calc_sums, motion_correct_calc_sums_tomo
 private
 #include "simple_local_flags.inc"
 
-interface unblur_calc_sums
-    module procedure unblur_calc_sums_1
-    module procedure unblur_calc_sums_2
+interface motion_correct_calc_sums
+    module procedure motion_correct_calc_sums_1
+    module procedure motion_correct_calc_sums_2
 end interface
 
 type(ft_expanded), allocatable  :: movie_frames_ftexp(:)      !< movie frames
@@ -57,8 +57,8 @@ real,    parameter :: SMALLSHIFT = 2. !< small initial shift to blur out fixed p
 
 contains
 
-    !> Unblur DDD movie
-    subroutine unblur_movie( movie_stack_fname, p, corr, smpd_out, shifts, err, nsig )
+    !> motion_correct DDD movie
+    subroutine motion_correct_movie( movie_stack_fname, p, corr, smpd_out, shifts, err, nsig )
         use simple_ftexp_shsrch ! use all in there
         character(len=*),  intent(in)    :: movie_stack_fname !< filename
         class(params),     intent(inout) :: p                 !< param object
@@ -74,12 +74,12 @@ contains
         ! initialise
         nsig_here = 6.0
         if( present(nsig) ) nsig_here = nsig
-        call unblur_init(movie_stack_fname, p)
+        call motion_correct_init(movie_stack_fname, p)
         err = .false.
         if( nframes < 2 )then
             err = .true.
             write(*,*) 'movie: ', trim(movie_stack_fname)
-            write(*,*) 'WARNING, nframes of movie < 2, aborting unblur'
+            write(*,*) 'WARNING, nframes of movie < 2, aborting motion_correct'
             return
         endif
         ! make search object ready
@@ -87,7 +87,7 @@ contains
         lims(:,2) =  maxshift
         if( str_has_substr(p%opt,'bfgs') ) then
             call ftexp_shsrch_init(movie_sum_global_ftexp, movie_frames_ftexp(1), lims, 'lbfgsb', &
-                unblur_ftol = p%unblurftol, unblur_gtol = p%unblurgtol)
+                motion_correct_ftol = p%motion_correctftol, motion_correct_gtol = p%motion_correctgtol)
         else
             call ftexp_shsrch_init(movie_sum_global_ftexp, movie_frames_ftexp(1), lims)
         end if
@@ -211,10 +211,10 @@ contains
                 endif
             end subroutine update_res
 
-    end subroutine unblur_movie
+    end subroutine motion_correct_movie
 
-    !> Initialise unblur
-    subroutine unblur_init( movie_stack_fname, p )
+    !> Initialise motion_correct
+    subroutine motion_correct_init( movie_stack_fname, p )
         character(len=*), intent(in)    :: movie_stack_fname  !< input filename of stack
         class(params),    intent(inout) :: p                  !< params object
         type(image)          :: tmpmovsum
@@ -224,7 +224,7 @@ contains
         integer, parameter   :: HWINSZ = 6
         real,    allocatable :: rmat(:,:,:), rmat_pad(:,:), win(:,:)
         logical, allocatable :: outliers(:,:)
-        call unblur_kill
+        call motion_correct_kill
         ! GET NUMBER OF FRAMES & DIM FROM STACK
         call find_ldim_nptcls(movie_stack_fname, ldim, nframes)
         if( nframes < 2 ) return
@@ -259,14 +259,14 @@ contains
             movie_frames_ftexp_sh(nframes), corrs(nframes), opt_shifts(nframes,2),&
             opt_shifts_saved(nframes,2), corrmat(nframes,nframes), frameweights(nframes),&
             frameweights_saved(nframes), stat=alloc_stat )
-        allocchk('unblur_init; simple_unblur')
+        allocchk('motion_correct_init; simple_motion_correct')
         corrmat = 0.
         corrs   = 0.
         call frame_tmp%new(ldim, smpd)
         ! allocate padded matrix
         winsz   = 2*HWINSZ+1
         allocate(rmat_pad(1-hwinsz:ldim(1)+hwinsz, 1-hwinsz:ldim(2)+hwinsz), win(winsz,winsz), stat=alloc_stat )
-        allocchk('unblur_init; simple_unblur, rmat_pad')
+        allocchk('motion_correct_init; simple_motion_correct, rmat_pad')
         ! calculate image sum and identify outliers
         if( doprint ) write(*,'(a)') '>>> READING & REMOVING DEAD/HOT PIXELS & FOURIER TRANSFORMING FRAMES'
         call tmpmovsum%new(ldim, smpd)
@@ -317,7 +317,7 @@ contains
         if( p%l_dose_weight )then
             do_dose_weight = .true.
             allocate( acc_doses(nframes), stat=alloc_stat )
-            allocchk('unblur_init; simple_unblur, acc_doses')
+            allocchk('motion_correct_init; simple_motion_correct, acc_doses')
             kV = p%kv
             time_per_frame = p%exp_time/real(nframes)           ! unit: s
             dose_rate      = p%dose_rate
@@ -327,14 +327,14 @@ contains
             end do
         endif
         existence = .true.
-        DebugPrint  'unblur_init, done'
-    end subroutine unblur_init
+        DebugPrint  'motion_correct_init, done'
+    end subroutine motion_correct_init
 
     !> Calulate stack sums
     !! \param movie_sum movie stack sums
     !! \param movie_sum_corrected corrected movie stack sums
     !! \param movie_sum_ctf CTF sum
-    subroutine unblur_calc_sums_1( movie_sum, movie_sum_corrected, movie_sum_ctf )
+    subroutine motion_correct_calc_sums_1( movie_sum, movie_sum_corrected, movie_sum_ctf )
         type(image), intent(out) :: movie_sum, movie_sum_corrected, movie_sum_ctf
         integer :: iframe
         ! calculate the sum for CTF estimation
@@ -349,12 +349,12 @@ contains
         call sum_movie_frames
         movie_sum = movie_sum_global
         call movie_sum%bwd_ft
-    end subroutine unblur_calc_sums_1
+    end subroutine motion_correct_calc_sums_1
 
     !> Calulate stack sums in range
     !! \param fromto ranges to calc sum
     !! \param movie_sum_corrected corrected movie stack sums
-    subroutine unblur_calc_sums_2( movie_sum_corrected, fromto )
+    subroutine motion_correct_calc_sums_2( movie_sum_corrected, fromto )
         type(image), intent(out) :: movie_sum_corrected
         integer,     intent(in)  :: fromto(2)
         integer :: iframe
@@ -366,13 +366,13 @@ contains
         movie_sum_corrected = movie_sum_global
         call movie_sum_corrected%bwd_ft
         do_dose_weight = l_tmp
-    end subroutine unblur_calc_sums_2
+    end subroutine motion_correct_calc_sums_2
 
     !> Calulate stack sums per time frame
     !! \param movie_sum movie stack sums
     !! \param movie_sum_corrected corrected movie stack sums
     !! \param movie_sum_ctf CTF sum
-    subroutine unblur_calc_sums_tomo( frame_counter, time_per_frame, movie_sum, movie_sum_corrected, movie_sum_ctf )
+    subroutine motion_correct_calc_sums_tomo( frame_counter, time_per_frame, movie_sum, movie_sum_corrected, movie_sum_ctf )
         integer,     intent(inout) :: frame_counter  !< frame counter
         real,        intent(in)    :: time_per_frame !< time resolution
         type(image), intent(out)   :: movie_sum, movie_sum_corrected, movie_sum_ctf
@@ -389,7 +389,7 @@ contains
         call sum_movie_frames
         movie_sum = movie_sum_global
         call movie_sum%bwd_ft
-    end subroutine unblur_calc_sums_tomo
+    end subroutine motion_correct_calc_sums_tomo
 
     !> center_shifts
     !! \param shifts  2D origin shifts
@@ -596,9 +596,9 @@ contains
         &call movie_sum_global_ftexp%subtr(movie_frames_ftexp_sh(iframe), w=frameweights(iframe))
     end subroutine subtract_movie_frame
 
-    !> unblur_kill class destructor
+    !> motion_correct_kill class destructor
     !!
-    subroutine unblur_kill
+    subroutine motion_correct_kill
         integer :: iframe
         if( existence )then
             do iframe=1,nframes
@@ -614,6 +614,6 @@ contains
             if( allocated(acc_doses) ) deallocate(acc_doses)
             existence = .false.
         endif
-    end subroutine unblur_kill
+    end subroutine motion_correct_kill
 
-end module simple_unblur
+end module simple_motion_correct

@@ -10,7 +10,7 @@ integer, allocatable :: strlens(:)
 
 ! prepare stack oris in project
 call myproject%os_stk%new_clean(2)
-! unblur
+! motion_correct
 call myproject%os_stk%set(1, 'movie',       'movie1.mrc')
 call myproject%os_stk%set(1, 'intg',        'movie1_intg.mrc')
 call myproject%os_stk%set(1, 'forctf',      'movie1_forctf.mrc')

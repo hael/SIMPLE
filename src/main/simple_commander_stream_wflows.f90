@@ -51,7 +51,7 @@ contains
         call cline%set('stream', 'yes')
         ! ! make target directories
         call mkdir(PREPROC_STREAM_DIR)
-        call mkdir(UNBLUR_STREAM_DIR)
+        call mkdir(motion_correct_STREAM_DIR)
         call mkdir(CTF_STREAM_DIR)
         call mkdir(UNIDOC_STREAM_DIR)
         if( p_master%l_pick )then

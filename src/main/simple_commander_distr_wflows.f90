@@ -16,9 +16,9 @@ use simple_qsys_funs         ! use all in there
 use simple_binoris_io        ! use all in there
 implicit none
 
-public :: unblur_ctffind_distr_commander
-public :: unblur_distr_commander
-public :: unblur_tomo_movies_distr_commander
+public :: motion_correct_ctffind_distr_commander
+public :: motion_correct_distr_commander
+public :: motion_correct_tomo_movies_distr_commander
 public :: powerspecs_distr_commander
 public :: ctffind_distr_commander
 public :: ctffit_distr_commander
@@ -34,18 +34,18 @@ public :: symsrch_distr_commander
 public :: scale_stk_parts_commander
 private
 
-type, extends(commander_base) :: unblur_ctffind_distr_commander
+type, extends(commander_base) :: motion_correct_ctffind_distr_commander
   contains
-    procedure :: execute      => exec_unblur_ctffind_distr
-end type unblur_ctffind_distr_commander
-type, extends(commander_base) :: unblur_distr_commander
+    procedure :: execute      => exec_motion_correct_ctffind_distr
+end type motion_correct_ctffind_distr_commander
+type, extends(commander_base) :: motion_correct_distr_commander
   contains
-    procedure :: execute      => exec_unblur_distr
-end type unblur_distr_commander
-type, extends(commander_base) :: unblur_tomo_movies_distr_commander
+    procedure :: execute      => exec_motion_correct_distr
+end type motion_correct_distr_commander
+type, extends(commander_base) :: motion_correct_tomo_movies_distr_commander
   contains
-    procedure :: execute      => exec_unblur_tomo_movies_distr
-end type unblur_tomo_movies_distr_commander
+    procedure :: execute      => exec_motion_correct_tomo_movies_distr
+end type motion_correct_tomo_movies_distr_commander
 type, extends(commander_base) :: powerspecs_distr_commander
   contains
     procedure :: execute      => exec_powerspecs_distr
@@ -101,9 +101,9 @@ end type scale_stk_parts_commander
 
 contains
 
-    subroutine exec_unblur_ctffind_distr( self, cline )
+    subroutine exec_motion_correct_ctffind_distr( self, cline )
         use simple_commander_preproc
-        class(unblur_ctffind_distr_commander), intent(inout) :: self
+        class(motion_correct_ctffind_distr_commander), intent(inout) :: self
         class(cmdline),                        intent(inout) :: cline
         character(len=32), parameter   :: UNIDOCFBODY = 'unidoc_'
         type(merge_algndocs_commander) :: xmerge_algndocs
@@ -142,11 +142,11 @@ contains
         ! clean
         call qsys_cleanup(p_master)
         ! end gracefully
-        call simple_end('**** SIMPLE_DISTR_UNBLUR_CTFFIND NORMAL STOP ****')
-    end subroutine exec_unblur_ctffind_distr
+        call simple_end('**** SIMPLE_DISTR_motion_correct_CTFFIND NORMAL STOP ****')
+    end subroutine exec_motion_correct_ctffind_distr
 
-    subroutine exec_unblur_distr( self, cline )
-        class(unblur_distr_commander), intent(inout) :: self
+    subroutine exec_motion_correct_distr( self, cline )
+        class(motion_correct_distr_commander), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
         character(len=32), parameter   :: UNIDOCFBODY = 'unidoc_'
         type(merge_algndocs_commander) :: xmerge_algndocs
@@ -185,12 +185,12 @@ contains
         ! clean
         call qsys_cleanup(p_master)
         ! end gracefully
-        call simple_end('**** SIMPLE_DISTR_UNBLUR NORMAL STOP ****')
-    end subroutine exec_unblur_distr
+        call simple_end('**** SIMPLE_DISTR_motion_correct NORMAL STOP ****')
+    end subroutine exec_motion_correct_distr
 
-    subroutine exec_unblur_tomo_movies_distr( self, cline )
+    subroutine exec_motion_correct_tomo_movies_distr( self, cline )
         use simple_oris,           only: oris
-        class(unblur_tomo_movies_distr_commander), intent(inout) :: self
+        class(motion_correct_tomo_movies_distr_commander), intent(inout) :: self
         class(cmdline),                            intent(inout) :: cline
         character(len=STDLEN), allocatable :: tomonames(:)
         type(oris)               :: exp_doc
@@ -200,7 +200,7 @@ contains
         character(len=KEYLEN)    :: str
         type(chash)              :: job_descr
         type(chash), allocatable :: part_params(:)
-        call cline%set('prg', 'unblur')
+        call cline%set('prg', 'motion_correct')
         ! seed the random number generator
         call seed_rnd
         ! output command line executed
@@ -229,7 +229,7 @@ contains
         p_master%nptcls = nseries
         ! prepare part-dependent parameters
         allocate(part_params(p_master%nparts), stat=alloc_stat) ! -1. is default excluded value
-        allocchk("simple_commander_distr_wflows::unblur_tomo_moview_distr ")
+        allocchk("simple_commander_distr_wflows::motion_correct_tomo_moview_distr ")
         do ipart=1,p_master%nparts
             call part_params(ipart)%new(4)
             call part_params(ipart)%set('filetab', trim(tomonames(ipart)))
@@ -246,8 +246,8 @@ contains
         ! schedule & clean
         call qenv%gen_scripts_and_schedule_jobs(p_master, job_descr, part_params=part_params)
         call qsys_cleanup(p_master)
-        call simple_end('**** SIMPLE_DISTR_UNBLUR_TOMO_MOVIES NORMAL STOP ****')
-    end subroutine exec_unblur_tomo_movies_distr
+        call simple_end('**** SIMPLE_DISTR_motion_correct_TOMO_MOVIES NORMAL STOP ****')
+    end subroutine exec_motion_correct_tomo_movies_distr
 
     subroutine exec_powerspecs_distr( self, cline )
         class(powerspecs_distr_commander), intent(inout) :: self

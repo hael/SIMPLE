@@ -319,7 +319,7 @@ type :: params
     integer :: edge=3              !< edge size for softening molecular envelope(in pixels)
     integer :: extr_iter=1
     integer :: find=1              !< Fourier index
-    integer :: nframesgrp=0        !< # frames to group before unblur(Falcon 3){0}
+    integer :: nframesgrp=0        !< # frames to group before motion_correct(Falcon 3){0}
     integer :: fromf=1             !< start frame index
     integer :: fromp=1             !< start ptcl index
     integer :: fromm=1             !< start movie index
@@ -375,7 +375,7 @@ type :: params
     integer :: pcasz=0
     integer :: ppca=0
     integer :: pspecsz=512         !< size of power spectrum(in pixels)
-    integer :: pspecsz_unblur=512  !< size of power spectrum 4 unblur(in pixels)
+    integer :: pspecsz_motion_correct=512  !< size of power spectrum 4 motion_correct(in pixels)
     integer :: pspecsz_ctffind=1024
     integer :: ptcl=1
     integer :: ring1=2
@@ -748,7 +748,7 @@ contains
         call check_iarg('part',           self%part)
         call check_iarg('ppca',           self%ppca)
         call check_iarg('pspecsz',        self%pspecsz)
-        call check_iarg('pspecsz_unblur', self%pspecsz_unblur)
+        call check_iarg('pspecsz_motion_correct', self%pspecsz_motion_correct)
         call check_iarg('pspecsz_ctffind', self%pspecsz_ctffind)
         call check_iarg('ring1',          self%ring1)
         call check_iarg('ring2',          self%ring2)

@@ -1,19 +1,19 @@
-! iterator for unblur (a program for motion correction, dose-weighting and frame-weighting of DDD movies)
-module simple_unblur_iter
+! iterator for motion_correct (a program for motion correction, dose-weighting and frame-weighting of DDD movies)
+module simple_motion_correct_iter
 #include "simple_lib.f08"
 use simple_image,        only: image
 use simple_cmdline,      only: cmdline
 use simple_params,       only: params
 use simple_ori,          only: ori
 use simple_procimgfile,  only: frameavg_imgfile
-use simple_unblur       ! use all in there
+use simple_motion_correct       ! use all in there
 implicit none
 
-public :: unblur_iter
+public :: motion_correct_iter
 private
 #include "simple_local_flags.inc"
 
-type :: unblur_iter
+type :: motion_correct_iter
     private
     character(len=4)      :: speckind = 'sqrt'
     character(len=STDLEN) :: moviename, moviename_intg, moviename_intg_frames
@@ -25,12 +25,12 @@ type :: unblur_iter
   contains
     procedure :: iterate
     procedure :: get_moviename
-end type unblur_iter
+end type motion_correct_iter
 
 contains
 
     subroutine iterate( self, cline, p, orientation, imovie, movie_counter, frame_counter, moviename, smpd_out, dir_out )
-        class(unblur_iter),         intent(inout) :: self
+        class(motion_correct_iter),         intent(inout) :: self
         class(cmdline),             intent(inout) :: cline
         class(params),              intent(inout) :: p
         class(ori),                 intent(inout) :: orientation
@@ -89,8 +89,8 @@ contains
         else
             self%moviename = trim(moviename)
         endif
-        ! execute the unblurring
-        call unblur_movie(self%moviename, p, corr, smpd_out, shifts, err)
+        ! execute the motion_correctring
+        call motion_correct_movie(self%moviename, p, corr, smpd_out, shifts, err)
         if( err ) return
         ! report to ori object
         call orientation%set('smpd',   smpd_out)
@@ -102,14 +102,14 @@ contains
         if( cline%defined('tof') )call orientation%set('intg_frames', trim(self%moviename_intg_frames))
         ! generate sums
         if( p%tomo .eq. 'yes' )then
-            call unblur_calc_sums_tomo(frame_counter, p%time_per_frame,&
+            call motion_correct_calc_sums_tomo(frame_counter, p%time_per_frame,&
             &self%moviesum, self%moviesum_corrected, self%moviesum_ctf)
         else
             if( cline%defined('tof') )then
-                call unblur_calc_sums(self%moviesum_corrected_frames, [p%fromf,p%tof])
-                call unblur_calc_sums(self%moviesum, self%moviesum_corrected, self%moviesum_ctf)
+                call motion_correct_calc_sums(self%moviesum_corrected_frames, [p%fromf,p%tof])
+                call motion_correct_calc_sums(self%moviesum, self%moviesum_corrected, self%moviesum_ctf)
             else
-                call unblur_calc_sums(self%moviesum, self%moviesum_corrected, self%moviesum_ctf)
+                call motion_correct_calc_sums(self%moviesum, self%moviesum_corrected, self%moviesum_ctf)
             endif
             DebugPrint 'ldim(moviesum):           ', self%moviesum%get_ldim()
             DebugPrint 'ldim(moviesum_corrected): ', self%moviesum_corrected%get_ldim()
@@ -146,7 +146,7 @@ contains
     end subroutine iterate
 
     function get_moviename( self, which ) result( moviename )
-        class(unblur_iter), intent(in) :: self
+        class(motion_correct_iter), intent(in) :: self
         character(len=*),   intent(in) :: which
         character(len=:), allocatable  :: moviename
         select case( which )
@@ -161,8 +161,8 @@ contains
             case('thumb')
                 allocate(moviename, source=trim(self%moviename_thumb))
             case DEFAULT
-                stop 'unsupported which flag; simple_unblur_iter :: get_moviename'
+                stop 'unsupported which flag; simple_motion_correct_iter :: get_moviename'
         end select
     end function get_moviename
 
-end module  simple_unblur_iter
+end module  simple_motion_correct_iter
