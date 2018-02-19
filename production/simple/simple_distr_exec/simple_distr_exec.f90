@@ -11,14 +11,14 @@ use simple_commander_hlev_wflows
 implicit none
 
 ! PRE-PROCESSING
-type(preproc_stream_commander)           :: xpreproc_stream
+type(preproc_stream_commander)                   :: xpreproc_stream
 type(motion_correct_ctffind_distr_commander)     :: xmotion_correct_ctffind_distr
 type(motion_correct_distr_commander)             :: xmotion_correct_distr
 type(motion_correct_tomo_movies_distr_commander) :: xmotion_correct_tomo_distr
-type(powerspecs_distr_commander)         :: xpowerspecs_distr
-type(ctffind_distr_commander)            :: xctffind_distr
-type(ctf_estimate_distr_commander)             :: xctf_estimate_distr
-type(pick_distr_commander)               :: xpick_distr
+type(powerspecs_distr_commander)                 :: xpowerspecs_distr
+type(ctffind_distr_commander)                    :: xctffind_distr
+type(ctf_estimate_distr_commander)               :: xctf_estimate_distr
+type(pick_distr_commander)                       :: xpick_distr
 
 ! PRIME2D
 type(makecavgs_distr_commander)          :: xmakecavgs_distr
@@ -390,7 +390,7 @@ select case(prg)
         !==Program makecavgs
         !
         ! <makecavgs/begin>is a distributed workflow used for producing class averages or
-        ! initial random references for prime2D execution. <makecavgs/end>
+        ! initial random references for cluster2D execution. <makecavgs/end>
         !
         ! set required keys
         keys_required(1)  = 'smpd'
@@ -424,11 +424,11 @@ select case(prg)
         if( .not. cline%defined('weights2D') ) call cline%set('weights2D', 'no')
         ! execute
         call xmakecavgs_distr%execute(cline)
-    case( 'prime2D' )
-        !==Program prime2D
+    case( 'cluster2D' )
+        !==Program cluster2D
         !
-        ! <prime2D/begin>is a distributed workflow implementing a reference-free 2D alignment/clustering
-        ! algorithm adopted from the prime3D probabilistic ab initio 3D reconstruction algorithm<prime2D/end>
+        ! <cluster2D/begin>is a distributed workflow implementing a reference-free 2D alignment/clustering
+        ! algorithm adopted from the prime3D probabilistic ab initio 3D reconstruction algorithm<cluster2D/end>
         !
         ! set required keys
         keys_required(1)  = 'smpd'
@@ -463,7 +463,7 @@ select case(prg)
         keys_optional(24) = 'opt'
         keys_optional(25) = 'objfun'
         ! documentation
-        if( describe ) call print_doc_prime2D
+        ! if( describe ) call print_doc_cluster2D
         call cline%parse( keys_required(:5), keys_optional(:25) )
         ! sanity checks
         if( cline%defined('stk') .or. cline%defined('stktab') )then
@@ -481,11 +481,11 @@ select case(prg)
         if( .not. cline%defined('autoscale') ) call cline%set('autoscale', 'yes')
         ! execute
         call xprime2D_distr%execute(cline)
-    case( 'prime2D_stream' )
-        !==Program prime2D
+    case( 'cluster2D_stream' )
+        !==Program cluster2D_stream
         !
-        ! <prime2D/begin>is a distributed workflow implementing reference-free 2D alignment/clustering
-        ! algorithm adopted from the prime3D probabilistic ab initio 3D reconstruction algorithm<prime2D/end>
+        ! <cluster2D_stream/begin>is a distributed workflow implementing reference-free 2D alignment/clustering
+        ! algorithm adopted from the prime3D probabilistic ab initio 3D reconstruction algorithm<cluster2D_stream/end>
         !
         ! set required keys
         keys_required(1)  = 'smpd'
@@ -512,7 +512,7 @@ select case(prg)
         keys_optional(14) = 'opt'
         keys_optional(15) = 'objfun'
         ! documentation
-        if( describe ) call print_doc_prime2D
+        ! if( describe ) call print_doc_cluster2D_stream
         call cline%parse( keys_required(:7), keys_optional(:15) )
         ! set defaults
         if( .not. cline%defined('lp')        ) call cline%set('lp',          15.)
@@ -800,7 +800,7 @@ select case(prg)
         !==Program ini3D_from_cavgs
         !
         ! <ini3D_from_cavgs/begin>is a distributed workflow for generating an initial
-        ! 3D model from class averages obtained with prime2D<ini3D_from_cavgs/end>
+        ! 3D model from class averages obtained with cluster2D<ini3D_from_cavgs/end>
         !
         ! set required keys
         keys_required(1)  = 'stk'
