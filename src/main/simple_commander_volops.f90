@@ -17,7 +17,7 @@ implicit none
 
 public :: fsc_commander
 public :: cenvol_commander
-public :: postproc_vol_commander
+public :: postprocess_commander
 public :: projvol_commander
 public :: volaverager_commander
 public :: volops_commander
@@ -34,10 +34,10 @@ type, extends(commander_base) :: cenvol_commander
   contains
     procedure :: execute      => exec_cenvol
 end type cenvol_commander
-type, extends(commander_base) :: postproc_vol_commander
+type, extends(commander_base) :: postprocess_commander
  contains
-   procedure :: execute      => exec_postproc_vol
-end type postproc_vol_commander
+   procedure :: execute      => exec_postprocess
+end type postprocess_commander
 type, extends(commander_base) :: projvol_commander
  contains
    procedure :: execute      => exec_projvol
@@ -149,9 +149,9 @@ contains
         call simple_end('**** SIMPLE_CENVOL NORMAL STOP ****')
     end subroutine exec_cenvol
 
-    subroutine exec_postproc_vol(self, cline)
+    subroutine exec_postprocess(self, cline)
         use simple_estimate_ssnr, only: fsc2optlp
-        class(postproc_vol_commander), intent(inout) :: self
+        class(postprocess_commander), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
         type(params)      :: p
         type(build)       :: b
@@ -193,7 +193,7 @@ contains
             call b%vol%bp(0., p%lp)
         else
             write(*,*) 'no method for low-pass filtering defined; give fsc|lp|vol_filt on command line'
-            stop 'comple_commander_volops :: exec_postproc_vol'
+            stop 'comple_commander_volops :: exec_postprocess'
         endif
         call vol_copy%copy(b%vol)
         ! B-fact
@@ -220,11 +220,11 @@ contains
                 write(*,*) '(1) postproc vol without bfac or automsk'
                 write(*,*) '(2) Use UCSF Chimera to look at the volume'
                 write(*,*) '(3) Identify the pixel threshold that excludes any background noise'
-                stop 'commander_volops :: postproc_vol'
+                stop 'commander_volops :: postprocess'
             endif
             if( .not. cline%defined('mw') )then
                 write(*,*) 'Molecular weight must be provided for auto-masking (MW)'
-                stop 'commander_volops :: postproc_vol'
+                stop 'commander_volops :: postprocess'
             endif
             call vol_copy%bwd_ft
             call mskvol%automask3D(p, vol_copy)
@@ -250,8 +250,8 @@ contains
         ! destruct
         call vol_copy%kill
         call mskvol%kill
-        call simple_end('**** SIMPLE_POSTPROC_VOL NORMAL STOP ****', print_simple=.false.)
-    end subroutine exec_postproc_vol
+        call simple_end('**** SIMPLE_postprocess NORMAL STOP ****', print_simple=.false.)
+    end subroutine exec_postprocess
 
     !> exec_projvol generate projections from volume
     !! \param cline command line

@@ -340,10 +340,10 @@ contains
         stop
     end subroutine print_doc_pick
 
-    subroutine print_doc_postproc_vol
+    subroutine print_doc_postprocess
         write(*,'(A)') 'is a program for post-processing of volumes'
         stop
-    end subroutine print_doc_postproc_vol
+    end subroutine print_doc_postprocess
 
     subroutine print_doc_powerspecs
         write(*,'(A)') 'is a program for generating powerspectra from a stack or filetable'
@@ -735,7 +735,7 @@ contains
         write(*,'(A)') 'orisops'
         write(*,'(A)') 'oristats'
         write(*,'(A)') 'pick'
-        write(*,'(A)') 'postproc_vol'
+        write(*,'(A)') 'postprocess'
         write(*,'(A)') 'powerspecs'
         write(*,'(A)') 'preproc'
         write(*,'(A)') 'prime2D'

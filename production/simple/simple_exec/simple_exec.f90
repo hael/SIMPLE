@@ -83,7 +83,7 @@ type(stktabinfo_commander)           :: xstktabinfo
 ! VOLOPS PROGRAMS
 type(fsc_commander)                  :: xfsc
 type(cenvol_commander)               :: xcenvol
-type(postproc_vol_commander)         :: xpostproc_vol
+type(postprocess_commander)         :: xpostprocess
 type(projvol_commander)              :: xprojvol
 type(volaverager_commander)          :: xvolaverager
 type(volops_commander)               :: xvolops
@@ -1551,10 +1551,10 @@ select case(prg)
         if( .not. cline%defined('cenlp') ) call cline%set('cenlp', 30.)
         ! execute
         call xcenvol%execute(cline)
-    case( 'postproc_vol' )
-        !==Program postproc_vol
+    case( 'postprocess' )
+        !==Program postprocess
         !
-        ! <postproc_vol/begin>is a program for post-processing of volumes<postproc_vol/end>
+        ! <postprocess/begin>is a program for post-processing of volumes<postprocess/end>
         !
         ! set required keys
         keys_required(1)  = 'vol1'
@@ -1575,10 +1575,10 @@ select case(prg)
         keys_optional(12) = 'inner'
         keys_optional(13) = 'mirr'
         ! parse command line
-        if( describe ) call print_doc_postproc_vol
+        if( describe ) call print_doc_postprocess
         call cline%parse(keys_required(:3), keys_optional(:13))
         ! execute
-        call xpostproc_vol%execute(cline)
+        call xpostprocess%execute(cline)
     case( 'projvol' )
         !==Program projvol
         !

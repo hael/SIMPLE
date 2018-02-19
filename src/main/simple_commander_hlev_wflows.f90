@@ -421,7 +421,7 @@ contains
     subroutine exec_het( self, cline )
         use simple_defs_conv
         use simple_commander_rec,    only: recvol_commander
-        use simple_commander_volops, only: postproc_vol_commander
+        use simple_commander_volops, only: postprocess_commander
         use simple_sym,              only: sym
         class(het_commander), intent(inout) :: self
         class(cmdline),       intent(inout) :: cline
@@ -432,11 +432,11 @@ contains
         type(prime3D_distr_commander) :: xprime3D_distr
         type(recvol_distr_commander)  :: xrecvol_distr
         ! shared-mem commanders
-        type(postproc_vol_commander)  :: xpostproc_vol
+        type(postprocess_commander)  :: xpostprocess
         ! command lines
         type(cmdline)                 :: cline_prime3D1, cline_prime3D2
         type(cmdline)                 :: cline_recvol_distr, cline_recvol_mixed_distr
-        type(cmdline)                 :: cline_postproc_vol
+        type(cmdline)                 :: cline_postprocess
         ! other variables
         type(sym)                     :: symop
         integer,     allocatable      :: labels(:)
@@ -461,7 +461,7 @@ contains
         call cline%delete('refine')
         cline_prime3D1           = cline
         cline_prime3D2           = cline
-        cline_postproc_vol       = cline ! eo always eq yes
+        cline_postprocess       = cline ! eo always eq yes
         cline_recvol_distr       = cline ! eo always eq yes
         cline_recvol_mixed_distr = cline ! eo always eq yes
         call cline_prime3D1%set('prg', 'prime3D')
@@ -483,14 +483,14 @@ contains
         if( .not.cline%defined('update_frac') )call cline_prime3D2%set('update_frac', 0.2)
         call cline_recvol_distr%set('prg', 'recvol')
         call cline_recvol_mixed_distr%set('prg', 'recvol')
-        call cline_postproc_vol%set('prg', 'postproc_vol')
+        call cline_postprocess%set('prg', 'postprocess')
         call cline_recvol_distr%delete('lp')
         call cline_recvol_mixed_distr%delete('lp')
-        call cline_postproc_vol%delete('lp')
+        call cline_postprocess%delete('lp')
         call cline_recvol_distr%set('eo','yes')
         call cline_recvol_mixed_distr%set('eo','yes')
         call cline_recvol_mixed_distr%set('nstates', 1.)
-        call cline_postproc_vol%set('eo','yes')
+        call cline_postprocess%set('eo','yes')
         if( cline%defined('trs') )then
             ! all good
         else
@@ -575,10 +575,10 @@ contains
         !     call xrecvol_distr%execute(cline_recvol_distr)
         !     do state = 1, p_master%nstates
         !         str_state  = int2str_pad(state, 2)
-        !         call cline_postproc_vol%set('vol1', VOL_FBODY//trim(str_state)//p_master%ext)
-        !         call cline_postproc_vol%set('fsc', FSC_FBODY//trim(str_state)//BIN_EXT)
-        !         call cline_postproc_vol%set('vol_filt', ANISOLP_FBODY//trim(str_state)//p_master%ext)
-        !         call xpostproc_vol%execute(cline_postproc_vol)
+        !         call cline_postprocess%set('vol1', VOL_FBODY//trim(str_state)//p_master%ext)
+        !         call cline_postprocess%set('fsc', FSC_FBODY//trim(str_state)//BIN_EXT)
+        !         call cline_postprocess%set('vol_filt', ANISOLP_FBODY//trim(str_state)//p_master%ext)
+        !         call xpostprocess%execute(cline_postprocess)
         !     enddo
         ! endif
 
@@ -603,10 +603,10 @@ contains
             call xrecvol_distr%execute(cline_recvol_distr)
             do state = 1, p_master%nstates
                 str_state  = int2str_pad(state, 2)
-                call cline_postproc_vol%set('vol1', VOL_FBODY//trim(str_state)//p_master%ext)
-                call cline_postproc_vol%set('fsc', FSC_FBODY//trim(str_state)//BIN_EXT)
-                call cline_postproc_vol%set('vol_filt', ANISOLP_FBODY//trim(str_state)//p_master%ext)
-                call xpostproc_vol%execute(cline_postproc_vol)
+                call cline_postprocess%set('vol1', VOL_FBODY//trim(str_state)//p_master%ext)
+                call cline_postprocess%set('fsc', FSC_FBODY//trim(str_state)//BIN_EXT)
+                call cline_postprocess%set('vol_filt', ANISOLP_FBODY//trim(str_state)//p_master%ext)
+                call xpostprocess%execute(cline_postprocess)
             enddo
         endif
 
@@ -683,7 +683,7 @@ contains
     subroutine exec_het_refine( self, cline )
         use simple_defs_conv
         use simple_commander_rec,    only: recvol_commander
-        use simple_commander_volops, only: postproc_vol_commander
+        use simple_commander_volops, only: postprocess_commander
         class(het_refine_commander), intent(inout) :: self
         class(cmdline),              intent(inout) :: cline
         ! constants
@@ -694,12 +694,12 @@ contains
         type(prime3D_distr_commander) :: xprime3D_distr
         type(recvol_distr_commander)  :: xrecvol_distr
         ! shared-mem commanders
-        type(postproc_vol_commander)  :: xpostproc_vol
+        type(postprocess_commander)  :: xpostprocess
         ! command lines
         type(cmdline)                 :: cline_prime3D_master
         type(cmdline)                 :: cline_prime3D
         type(cmdline)                 :: cline_recvol_distr
-        type(cmdline)                 :: cline_postproc_vol
+        type(cmdline)                 :: cline_postprocess
         ! other variables
         integer,               allocatable :: state_pops(:), states(:)
         character(len=STDLEN), allocatable :: init_docs(:), final_docs(:)
@@ -834,14 +834,14 @@ contains
         enddo
         cline_prime3D_master = cline
         cline_recvol_distr   = cline
-        cline_postproc_vol   = cline
+        cline_postprocess   = cline
         call cline_prime3D_master%set('prg', 'prime3D')
         call cline_prime3D_master%set('dynlp', 'no')
         call cline_recvol_distr%set('prg', 'recvol')
         call cline_recvol_distr%set('oritab', trim(FINAL_DOC))
         call cline_recvol_distr%set('nstates', trim(int2str(p_master%nstates)))
         call cline_recvol_distr%set('eo', 'yes')
-        call cline_postproc_vol%delete('lp')
+        call cline_postprocess%delete('lp')
 
         ! Main loop
         do state = 1, p_master%nstates
@@ -894,12 +894,12 @@ contains
                 if( state_pops(state) == 0 )cycle
                 if( l_singlestate .and. state.ne.p_master%state )cycle
                 str_state = int2str_pad(state, 2)
-                if( l_hasmskvols(state) )call cline_postproc_vol%set('mskfile', trim(p_master%mskvols(state)))
+                if( l_hasmskvols(state) )call cline_postprocess%set('mskfile', trim(p_master%mskvols(state)))
                 vol = 'recvol_state'//trim(str_state)//p_master%ext
-                call cline_postproc_vol%set('vol1', trim(vol))
-                call cline_postproc_vol%set('fsc', FSC_FBODY//trim(str_state)//BIN_EXT)
-                call cline_postproc_vol%set('vol_filt', ANISOLP_FBODY//trim(str_state)//p_master%ext)
-                call xpostproc_vol%execute(cline_postproc_vol)
+                call cline_postprocess%set('vol1', trim(vol))
+                call cline_postprocess%set('fsc', FSC_FBODY//trim(str_state)//BIN_EXT)
+                call cline_postprocess%set('vol_filt', ANISOLP_FBODY//trim(str_state)//p_master%ext)
+                call xpostprocess%execute(cline_postprocess)
             enddo
         endif
 

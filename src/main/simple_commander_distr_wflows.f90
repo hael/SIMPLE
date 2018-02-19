@@ -743,7 +743,7 @@ contains
         type(merge_algndocs_commander)       :: xmerge_algndocs
         type(check3D_conv_commander)         :: xcheck3D_conv
         type(split_commander)                :: xsplit
-        type(postproc_vol_commander)         :: xpostproc_vol
+        type(postprocess_commander)         :: xpostprocess
         ! command lines
         type(cmdline)         :: cline_recvol_distr
         type(cmdline)         :: cline_prime3D_init
@@ -751,7 +751,7 @@ contains
         type(cmdline)         :: cline_check3D_conv
         type(cmdline)         :: cline_merge_algndocs
         type(cmdline)         :: cline_volassemble
-        type(cmdline)         :: cline_postproc_vol
+        type(cmdline)         :: cline_postprocess
         ! other variables
         type(qsys_env)        :: qenv
         type(params)          :: p_master
@@ -795,7 +795,7 @@ contains
         cline_check3D_conv   = cline
         cline_merge_algndocs = cline
         cline_volassemble    = cline
-        cline_postproc_vol   = cline
+        cline_postprocess   = cline
 
         ! initialise static command line parameters and static job description parameter
         call cline_recvol_distr%set( 'prg', 'recvol' )       ! required for distributed call
@@ -807,8 +807,8 @@ contains
         call cline_merge_algndocs%set('ndocs',    real(p_master%nparts))
         call cline_check3D_conv%set('box',        real(p_master%box)   )
         call cline_check3D_conv%set('nptcls',     real(p_master%nptcls))
-        call cline_postproc_vol%set('nstates',    1.)
-        call cline_postproc_vol%set('mirr',       'no')
+        call cline_postprocess%set('nstates',    1.)
+        call cline_postprocess%set('mirr',       'no')
 
         ! for parallel volassemble over states
         allocate(state_assemble_finished(p_master%nstates) )
@@ -1014,7 +1014,7 @@ contains
                         ! cleanup postprocessing cmdline as it only takes one volume at a time
                         do s = 1,p_master%nstates
                             vol = 'vol'//int2str(s)
-                            call cline_postproc_vol%delete( trim(vol) )
+                            call cline_postprocess%delete( trim(vol) )
                         enddo
                     endif
                     ! rename state volume
@@ -1036,21 +1036,21 @@ contains
                     ! post-process
                     if( p_master%pproc.eq.'yes' )then
                         vol = 'vol'//trim(int2str(state))
-                        call cline_postproc_vol%set( 'vol1', trim(vol_iter))
+                        call cline_postprocess%set( 'vol1', trim(vol_iter))
                         fsc_file   = 'fsc_state'//trim(str_state)//'.bin'
                         optlp_file = 'aniso_optlp_state'//trim(str_state)//p_master%ext
                         if( file_exists(optlp_file) .and. p_master%eo .ne. 'no' )then
-                            call cline_postproc_vol%delete('lp')
-                            call cline_postproc_vol%set('fsc', trim(fsc_file))
-                            call cline_postproc_vol%set('vol_filt', trim(optlp_file))
+                            call cline_postprocess%delete('lp')
+                            call cline_postprocess%set('fsc', trim(fsc_file))
+                            call cline_postprocess%set('vol_filt', trim(optlp_file))
                         else if( file_exists(fsc_file) .and. p_master%eo .ne. 'no' )then
-                            call cline_postproc_vol%delete('lp')
-                            call cline_postproc_vol%set('fsc', trim(fsc_file))
+                            call cline_postprocess%delete('lp')
+                            call cline_postprocess%set('fsc', trim(fsc_file))
                         else
-                            call cline_postproc_vol%delete('fsc')
-                            call cline_postproc_vol%set('lp', p_master%lp)
+                            call cline_postprocess%delete('fsc')
+                            call cline_postprocess%set('lp', p_master%lp)
                         endif
-                        call xpostproc_vol%execute(cline_postproc_vol)
+                        call xpostprocess%execute(cline_postprocess)
                     endif
                     ! updates cmdlines & job description
                     vol = 'vol'//trim(int2str(state))

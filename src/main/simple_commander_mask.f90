@@ -89,7 +89,7 @@ contains
                 call mskvol%kill
                 if( p%outvol .ne. '' )call b%vol%write(p%outvol, del_if_exists=.true.)
             else if( p%automsk.eq.'yes' )then
-                stop '3D automasking now deferred to program: postproc_vol'
+                stop '3D automasking now deferred to program: postprocess'
             else if( cline%defined('msk') )then
                 ! spherical
                 if( cline%defined('inner') )then
