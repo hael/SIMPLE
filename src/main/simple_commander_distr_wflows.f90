@@ -21,7 +21,7 @@ public :: motion_correct_distr_commander
 public :: motion_correct_tomo_movies_distr_commander
 public :: powerspecs_distr_commander
 public :: ctffind_distr_commander
-public :: ctffit_distr_commander
+public :: ctf_estimate_distr_commander
 public :: pick_distr_commander
 public :: makecavgs_distr_commander
 public :: comlin_smat_distr_commander
@@ -54,10 +54,10 @@ type, extends(commander_base) :: ctffind_distr_commander
   contains
     procedure :: execute      => exec_ctffind_distr
 end type ctffind_distr_commander
-type, extends(commander_base) :: ctffit_distr_commander
+type, extends(commander_base) :: ctf_estimate_distr_commander
   contains
-    procedure :: execute      => exec_ctffit_distr
-end type ctffit_distr_commander
+    procedure :: execute      => exec_ctf_estimate_distr
+end type ctf_estimate_distr_commander
 type, extends(commander_base) :: pick_distr_commander
   contains
     procedure :: execute      => exec_pick_distr
@@ -313,8 +313,8 @@ contains
         call simple_end('**** SIMPLE_DISTR_CTFFIND NORMAL STOP ****')
     end subroutine exec_ctffind_distr
 
-    subroutine exec_ctffit_distr( self, cline )
-        class(ctffit_distr_commander), intent(inout) :: self
+    subroutine exec_ctf_estimate_distr( self, cline )
+        class(ctf_estimate_distr_commander), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
         type(merge_algndocs_commander) :: xmerge_algndocs
         type(cmdline)                  :: cline_merge_algndocs
@@ -332,10 +332,10 @@ contains
         if( p_master%nparts > p_master%nptcls ) stop 'nr of partitions (nparts) mjust be < number of entries in filetable'
         ! prepare merge_algndocs command line
         cline_merge_algndocs = cline
-        call cline_merge_algndocs%set( 'fbody',    'ctffit_output_part'       )
+        call cline_merge_algndocs%set( 'fbody',    'ctf_estimate_output_part'       )
         call cline_merge_algndocs%set( 'nptcls',   real(p_master%nptcls)      )
         call cline_merge_algndocs%set( 'ndocs',    real(p_master%nparts)      )
-        call cline_merge_algndocs%set( 'outfile',  'ctffit_output_merged.txt' )
+        call cline_merge_algndocs%set( 'outfile',  'ctf_estimate_output_merged.txt' )
         ! setup the environment for distributed execution
         call qenv%new(p_master)
         ! prepare job description
@@ -346,8 +346,8 @@ contains
         call xmerge_algndocs%execute( cline_merge_algndocs )
         ! clean
         call qsys_cleanup(p_master)
-        call simple_end('**** SIMPLE_DISTR_CTFFIT NORMAL STOP ****')
-    end subroutine exec_ctffit_distr
+        call simple_end('**** SIMPLE_DISTR_ctf_estimate NORMAL STOP ****')
+    end subroutine exec_ctf_estimate_distr
 
     subroutine exec_pick_distr( self, cline )
         class(pick_distr_commander), intent(inout) :: self

@@ -1,4 +1,4 @@
-module simple_ctffit
+module simple_ctf_estimate
 #include "simple_lib.f08"
 use simple_image,    only: image
 use simple_ctf,      only: ctf
@@ -6,7 +6,7 @@ use simple_opt_spec, only: opt_spec
 use simple_de_opt,   only: de_opt
 implicit none
 
-public :: ctffit_init, ctffit_x_validated_fit, ctffit_kill
+public :: ctf_estimate_init, ctf_estimate_x_validated_fit, ctf_estimate_kill
 private
 
 class(image), pointer :: ppspec_all              ! all micrograph powerspec
@@ -41,7 +41,7 @@ integer, parameter :: IARES = 10, NSTEPS = 100
 
 contains
 
-    subroutine ctffit_init( pspec_all, pspec_lower, pspec_upper, smpd, kV, Cs,&
+    subroutine ctf_estimate_init( pspec_all, pspec_lower, pspec_upper, smpd, kV, Cs,&
         &amp_contr, dfrange, resrange, astigtol_in, phaseplate )
         class(image), target, intent(inout) :: pspec_all   !< all micrograph powerspec
         class(image), target, intent(inout) :: pspec_lower !< lower half of micrograph powerspec
@@ -64,13 +64,13 @@ contains
             df_min = dfrange(1)
             df_max = dfrange(2)
         else
-            stop 'invalid defocus range; simple_ctffit :: new'
+            stop 'invalid defocus range; simple_ctf_estimate :: new'
         endif
         if( resrange(1) > resrange(2) )then
             hp = resrange(1)
             lp = resrange(2)
         else
-            stop 'invalid resolution range; simple_ctffit :: new'
+            stop 'invalid resolution range; simple_ctf_estimate :: new'
         endif
         astigtol = astigtol_in
         select case(trim(phaseplate))
@@ -115,14 +115,14 @@ contains
         endif
         call ospec_de%specify('de', ndim, limits=limits(1:ndim,:), maxits=400, ftol=1e-4)
         if( l_phaseplate )then
-            call ospec_de%set_costfun(ctffit_cost_phaseplate)
+            call ospec_de%set_costfun(ctf_estimate_cost_phaseplate)
         else
-            call ospec_de%set_costfun(ctffit_cost)
+            call ospec_de%set_costfun(ctf_estimate_cost)
         endif
         call diffevol%new(ospec_de)
-    end subroutine ctffit_init
+    end subroutine ctf_estimate_init
 
-    subroutine ctffit_x_validated_fit( dfx, dfy, angast, phshift, dferr, cc, ctfscore, diagfname )
+    subroutine ctf_estimate_x_validated_fit( dfx, dfy, angast, phshift, dferr, cc, ctfscore, diagfname )
         real,             intent(out) :: dfx, dfy, angast, phshift, dferr, cc, ctfscore
         character(len=*), intent(in)  :: diagfname
         real, allocatable :: corrs(:)
@@ -195,7 +195,7 @@ contains
         allocate(corrs(filtsz))
         call pspec_all_roavg%frc_pspec(pspec_ctf_roavg, corrs)
         ctfscore = real(count(corrs(hpfind:lpfind) > 0.)) / real(lpfind - hpfind + 1)
-    end subroutine ctffit_x_validated_fit
+    end subroutine ctf_estimate_x_validated_fit
 
     subroutine init_srch( which_pspec, which_pspec_roavg )
         class(image), target :: which_pspec, which_pspec_roavg
@@ -217,9 +217,9 @@ contains
             ! pi half phase shift
             df      = df_min
             df_best = df
-            cost_lowest = ctffit_cost_phaseplate_roavg(fun_self, [df,df,0.,PIO2], ndim)
+            cost_lowest = ctf_estimate_cost_phaseplate_roavg(fun_self, [df,df,0.,PIO2], ndim)
             do while( df <= df_max )
-                cost = ctffit_cost_phaseplate_roavg(fun_self, [df,df,0.,PIO2], ndim)
+                cost = ctf_estimate_cost_phaseplate_roavg(fun_self, [df,df,0.,PIO2], ndim)
                 if( cost < cost_lowest )then
                     cost_lowest = cost
                     df_best     = df
@@ -231,9 +231,9 @@ contains
             ! no astigmatism
             df = df_min
             df_best = df
-            cost_lowest = ctffit_cost_roavg(fun_self, [df,df,0.], ndim)
+            cost_lowest = ctf_estimate_cost_roavg(fun_self, [df,df,0.], ndim)
             do while( df <= df_max )
-                cost = ctffit_cost_roavg(fun_self, [df,df,0.], ndim)
+                cost = ctf_estimate_cost_roavg(fun_self, [df,df,0.], ndim)
                 if( cost < cost_lowest )then
                     cost_lowest = cost
                     df_best     = df
@@ -269,7 +269,7 @@ contains
 
     ! cost function is real-space correlation within resolution mask between the CTF
     ! powerspectrum (the model) and the pre-processed micrograph powerspectrum (the data)
-    function ctffit_cost( fun_self, vec, D ) result( cost )
+    function ctf_estimate_cost( fun_self, vec, D ) result( cost )
         class(*), intent(inout) :: fun_self
         integer,  intent(in)    :: D
         real,     intent(in)    :: vec(D)
@@ -280,12 +280,12 @@ contains
             call ctf2pspecimg(tfun, pspec_ctf, vec(1), vec(2), vec(3))
             cost = -ppspec_ref%real_corr_prenorm(pspec_ctf, sxx, cc_msk)
         endif
-    end function ctffit_cost
+    end function ctf_estimate_cost
 
     ! cost function is real-space correlation within resolution mask between the CTF
     ! powerspectrum (the model) and the pre-processed micrograph powerspectrum (the data)
     ! the correlation considers both the rotationally averaged and astigmatic models with weight
-    ! function ctffit_cost( fun_self, vec, D ) result( cost )
+    ! function ctf_estimate_cost( fun_self, vec, D ) result( cost )
     !     class(*), intent(inout) :: fun_self
     !     integer,  intent(in)    :: D
     !     real,     intent(in)    :: vec(D)
@@ -295,21 +295,21 @@ contains
     !     cc_roavg = ppspec_ref_roavg%real_corr_prenorm(pspec_ctf_roavg, sxx_roavg, cc_msk)
     !     cc_comb  = CC_WEIGHT_ASTIG * cc + (1.0 - CC_WEIGHT_ASTIG) * cc_roavg
     !     cost     = -cc_comb
-    ! end function ctffit_cost
+    ! end function ctf_estimate_cost
 
     ! this cost function considers only the rotationally averaged model
-    function ctffit_cost_roavg( fun_self, vec, D ) result( cost )
+    function ctf_estimate_cost_roavg( fun_self, vec, D ) result( cost )
         class(*), intent(inout) :: fun_self
         integer,  intent(in)    :: D
         real,     intent(in)    :: vec(D)
         real :: cost
         call ctf2pspecimg(tfun, pspec_ctf_roavg, vec(1), vec(1), 0.)
         cost = -ppspec_ref_roavg%real_corr_prenorm(pspec_ctf_roavg, sxx_roavg, cc_msk)
-    end function ctffit_cost_roavg
+    end function ctf_estimate_cost_roavg
 
     ! cost function is real-space correlation within resolution mask between the CTF
     ! powerspectrum (the model) and the pre-processed micrograph powerspectrum (the data)
-    function ctffit_cost_phaseplate( fun_self, vec, D ) result( cost )
+    function ctf_estimate_cost_phaseplate( fun_self, vec, D ) result( cost )
         class(*), intent(inout) :: fun_self
         integer,  intent(in)    :: D
         real,     intent(in)    :: vec(D)
@@ -321,12 +321,12 @@ contains
             call ctf2pspecimg(tfun, pspec_ctf, vec(1), vec(2), vec(3), add_phshift=vec(4))
             cost = -ppspec_ref%real_corr_prenorm(pspec_ctf, sxx, cc_msk)
         endif
-    end function ctffit_cost_phaseplate
+    end function ctf_estimate_cost_phaseplate
 
     ! cost function is real-space correlation within resolution mask between the CTF
     ! powerspectrum (the model) and the pre-processed micrograph powerspectrum (the data)
     ! the correlation considers both the rotationally averaged and astigmatic models with weight
-    ! function ctffit_cost_phaseplate( fun_self, vec, D ) result( cost )
+    ! function ctf_estimate_cost_phaseplate( fun_self, vec, D ) result( cost )
     !     class(*), intent(inout) :: fun_self
     !     integer,  intent(in)    :: D
     !     real,     intent(in)    :: vec(D)
@@ -336,10 +336,10 @@ contains
     !     cc_roavg = ppspec_ref_roavg%real_corr_prenorm(pspec_ctf_roavg, sxx_roavg, cc_msk)
     !     cc_comb  = CC_WEIGHT_ASTIG * cc + (1.0 - CC_WEIGHT_ASTIG) * cc_roavg
     !     cost     = -cc_comb
-    ! end function ctffit_cost_phaseplate
+    ! end function ctf_estimate_cost_phaseplate
 
     ! this cost function considers only the rotationally averaged model
-    function ctffit_cost_phaseplate_roavg( fun_self, vec, D ) result( cost )
+    function ctf_estimate_cost_phaseplate_roavg( fun_self, vec, D ) result( cost )
         class(*), intent(inout) :: fun_self
         integer,  intent(in)    :: D
         real,     intent(in)    :: vec(D)
@@ -347,7 +347,7 @@ contains
         ! vec(4) is additional phase shift (in radians)
         call ctf2pspecimg(tfun, pspec_ctf_roavg, vec(1), vec(1), 0., add_phshift=vec(4))
         cost = -ppspec_ref_roavg%real_corr_prenorm(pspec_ctf_roavg, sxx_roavg, cc_msk)
-    end function ctffit_cost_phaseplate_roavg
+    end function ctf_estimate_cost_phaseplate_roavg
 
     !>  \brief  is for making a CTF power-spec image
     subroutine ctf2pspecimg( tfun, img, dfx, dfy, angast, add_phshift )
@@ -440,7 +440,7 @@ contains
         !$omp end parallel do
     end subroutine ctf2pspecimgs
 
-    subroutine ctffit_kill
+    subroutine ctf_estimate_kill
         ppspec_all       => null()
         ppspec_lower     => null()
         ppspec_upper     => null()
@@ -456,6 +456,6 @@ contains
         call diffevol%kill
         call imgmsk%kill
         if( allocated(cc_msk) ) deallocate(cc_msk)
-    end subroutine ctffit_kill
+    end subroutine ctf_estimate_kill
 
-end module simple_ctffit
+end module simple_ctf_estimate

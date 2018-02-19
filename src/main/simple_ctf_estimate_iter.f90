@@ -1,15 +1,15 @@
-! ctffit iterator
-module simple_ctffit_iter
+! ctf_estimate iterator
+module simple_ctf_estimate_iter
 #include "simple_lib.f08"
 implicit none
 
-public :: ctffit_iter
+public :: ctf_estimate_iter
 private
 
-type :: ctffit_iter
+type :: ctf_estimate_iter
   contains
     procedure :: iterate
-end type ctffit_iter
+end type ctf_estimate_iter
 
 contains
 
@@ -17,8 +17,8 @@ contains
         use simple_params, only: params
         use simple_oris,   only: oris
         use simple_image,  only: image
-        use simple_ctffit  ! use all in there
-        class(ctffit_iter), intent(inout)      :: self
+        use simple_ctf_estimate  ! use all in there
+        class(ctf_estimate_iter), intent(inout)      :: self
         class(params),      intent(inout)      :: p
         integer,            intent(in)         :: imovie
         integer,            intent(inout)      :: movie_counter
@@ -34,7 +34,7 @@ contains
         call find_ldim_nptcls(trim(adjustl(moviename_forctf)), ldim, nframes)
         if( nframes /= 1 )then
             print *, 'nframes: ', nframes
-            stop 'single frame input to ctffit assumed; simple_ctffit_iter :: iterate'
+            stop 'single frame input to ctf_estimate assumed; simple_ctf_estimate_iter :: iterate'
         endif
         ldim(3) = 1
         call micrograph%new(ldim, p%smpd)
@@ -48,16 +48,16 @@ contains
         call micrograph%mic2eospecs(p%pspecsz, 'sqrt', pspec_lower, pspec_upper, pspec_all)
         ! deal with output
         movie_counter = movie_counter + 1
-        fname_diag    = add2fbody(moviename_forctf, p%ext, '_ctffit_diag')
+        fname_diag    = add2fbody(moviename_forctf, p%ext, '_ctf_estimate_diag')
         if( present(dir_out) )then
             fname_diag = remove_abspath(trim(fname_diag))
             fname_diag = trim(dir_out)//'/'//trim(fname_diag)
         endif
         ! fitting
-        call ctffit_init(pspec_all, pspec_lower, pspec_upper, p%smpd, p%kv,&
+        call ctf_estimate_init(pspec_all, pspec_lower, pspec_upper, p%smpd, p%kv,&
             &p%cs, p%fraca, [p%dfmin,p%dfmax], [p%hp,p%lp], p%astigtol, p%phaseplate)
-        call ctffit_x_validated_fit( dfx, dfy, angast, phshift, dferr, cc, ctfscore, fname_diag)
-        call ctffit_kill
+        call ctf_estimate_x_validated_fit( dfx, dfy, angast, phshift, dferr, cc, ctfscore, fname_diag)
+        call ctf_estimate_kill
         ! reporting
         call os%set(movie_counter, 'kv',         p%kv    )
         call os%set(movie_counter, 'cs',         p%cs    )
@@ -66,7 +66,7 @@ contains
         call os%set(movie_counter, 'dfy',        dfy     )
         call os%set(movie_counter, 'angast',     angast  )
         call os%set(movie_counter, 'phshift',    phshift )
-        call os%set(movie_counter, 'ctffitcc',   cc      )
+        call os%set(movie_counter, 'ctf_estimatecc',   cc      )
         call os%set(movie_counter, 'dferr',      dferr   )
         call os%set(movie_counter, 'ctfscore',   ctfscore)
         ! destruct (to avoid mem-leaks)
@@ -76,4 +76,4 @@ contains
         call pspec_all%kill
     end subroutine iterate
 
-end module simple_ctffit_iter
+end module simple_ctf_estimate_iter

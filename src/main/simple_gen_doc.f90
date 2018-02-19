@@ -118,10 +118,10 @@ contains
         stop
     end subroutine print_doc_ctffind
 
-    subroutine print_doc_ctffit
+    subroutine print_doc_ctf_estimate
         write(*,'(A)') 'is a SIMPLE program for fitting the CTF'
         stop
-    end subroutine print_doc_ctffit
+    end subroutine print_doc_ctf_estimate
 
     subroutine print_doc_ctfops
         write(*,'(A)') 'is a program for applying CTF to stacked images'
@@ -705,7 +705,7 @@ contains
         write(*,'(A)') 'convert'
         write(*,'(A)') 'corrcompare'
         write(*,'(A)') 'ctffind'
-        write(*,'(A)') 'ctffit'
+        write(*,'(A)') 'ctf_estimate'
         write(*,'(A)') 'ctfops'
         write(*,'(A)') 'dock_volpair'
         write(*,'(A)') 'dsymsrch'
@@ -784,7 +784,7 @@ contains
         write(*,'(A)') 'cga_hres_sel'
         write(*,'(A)') 'comlin_smat'
         write(*,'(A)') 'ctffind'
-        write(*,'(A)') 'ctffit'
+        write(*,'(A)') 'ctf_estimate'
         write(*,'(A)') 'het_ensemble'
         write(*,'(A)') 'ini3D_from_cavgs'
         write(*,'(A)') 'makecavgs'

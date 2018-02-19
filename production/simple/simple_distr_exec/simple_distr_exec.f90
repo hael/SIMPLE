@@ -17,7 +17,7 @@ type(motion_correct_distr_commander)             :: xmotion_correct_distr
 type(motion_correct_tomo_movies_distr_commander) :: xmotion_correct_tomo_distr
 type(powerspecs_distr_commander)         :: xpowerspecs_distr
 type(ctffind_distr_commander)            :: xctffind_distr
-type(ctffit_distr_commander)             :: xctffit_distr
+type(ctf_estimate_distr_commander)             :: xctf_estimate_distr
 type(pick_distr_commander)               :: xpick_distr
 
 ! PRIME2D
@@ -330,10 +330,10 @@ select case(prg)
         if( .not. cline%defined('lp')      ) call cline%set('lp',        5.)
         ! execute
         call xctffind_distr%execute(cline)
-    case( 'ctffit' )
-        !==Program ctffit
+    case( 'ctf_estimate' )
+        !==Program ctf_estimate
         !
-        ! <ctffit/begin>is a distributed SIMPLE workflow for fitting the CTF<ctffit/end>
+        ! <ctf_estimate/begin>is a distributed SIMPLE workflow for fitting the CTF<ctf_estimate/end>
         !
         ! set required keys
         keys_required(1) = 'filetab'
@@ -352,14 +352,14 @@ select case(prg)
         keys_optional(7) = 'astigtol'
         keys_optional(8) = 'phaseplate'
         ! parse command line
-        if( describe ) call print_doc_ctffit
+        if( describe ) call print_doc_ctf_estimate
         call cline%parse(keys_required(:6), keys_optional(:8))
         ! set defaults
         if( .not. cline%defined('pspecsz') ) call cline%set('pspecsz',   512.)
         if( .not. cline%defined('hp')      ) call cline%set('hp',         30.)
         if( .not. cline%defined('lp')      ) call cline%set('lp',          5.)
         ! execute
-        call xctffit_distr%execute(cline)
+        call xctf_estimate_distr%execute(cline)
 
     ! PARTICLE PICKER
 

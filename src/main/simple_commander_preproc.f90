@@ -17,7 +17,7 @@ use simple_imghead,        only: find_ldim_nptcls
 use simple_corrmat,        only: calc_cartesian_corrmat
 use simple_motion_correct_iter,    only: motion_correct_iter
 use simple_ctffind_iter,   only: ctffind_iter
-use simple_ctffit_iter,    only: ctffit_iter
+use simple_ctf_estimate_iter,    only: ctf_estimate_iter
 use simple_pick_iter,      only: pick_iter
 use simple_binoris_io,     only: binread_oritab, binwrite_oritab
 use simple_qsys_funs,      only: qsys_job_finished
@@ -29,7 +29,7 @@ public :: boxconvs_commander
 public :: powerspecs_commander
 public :: motion_correct_commander
 public :: ctffind_commander
-public :: ctffit_commander
+public :: ctf_estimate_commander
 public :: select_commander
 public :: makepickrefs_commander
 public :: pick_commander
@@ -61,10 +61,10 @@ type, extends(commander_base) :: ctffind_commander
   contains
     procedure :: execute      => exec_ctffind
 end type ctffind_commander
-type, extends(commander_base) :: ctffit_commander
+type, extends(commander_base) :: ctf_estimate_commander
   contains
-    procedure :: execute      => exec_ctffit
-end type ctffit_commander
+    procedure :: execute      => exec_ctf_estimate
+end type ctf_estimate_commander
 type, extends(commander_base) :: select_commander
   contains
     procedure :: execute      => exec_select
@@ -88,7 +88,7 @@ contains
         class(preproc_commander), intent(inout) :: self
         class(cmdline),           intent(inout) :: cline
         !type(ctffind_iter)      :: cfiter
-        type(ctffit_iter)       :: cfiter
+        type(ctf_estimate_iter)       :: cfiter
         type(motion_correct_iter)       :: ubiter
         type(pick_iter)         :: piter
         type(extract_commander) :: xextract
@@ -590,13 +590,13 @@ contains
         call simple_end('**** SIMPLE_CTFFIND NORMAL STOP ****')
     end subroutine exec_ctffind
 
-    subroutine exec_ctffit( self, cline )
-        class(ctffit_commander), intent(inout) :: self
+    subroutine exec_ctf_estimate( self, cline )
+        class(ctf_estimate_commander), intent(inout) :: self
         class(cmdline),          intent(inout) :: cline  !< command line input
         type(params)                       :: p
-        type(ctffit_iter)                  :: cfiter
+        type(ctf_estimate_iter)                  :: cfiter
         character(len=STDLEN), allocatable :: movienames_forctf(:)
-        character(len=:),      allocatable :: fname_ctffit_output
+        character(len=:),      allocatable :: fname_ctf_estimate_output
         character(len=STDLEN) :: movie_fbody, movie_ext, movie_name
         type(oris)            :: os
         integer               :: nmovies, fromto(2), imovie, ntot, movie_counter
@@ -604,13 +604,13 @@ contains
         call read_filetable(p%filetab, movienames_forctf)
         nmovies = size(movienames_forctf)
         if( p%l_distr_exec )then
-            allocate(fname_ctffit_output, source='ctffit_output_part'//int2str_pad(p%part,p%numlen)//'.txt')
+            allocate(fname_ctf_estimate_output, source='ctf_estimate_output_part'//int2str_pad(p%part,p%numlen)//'.txt')
             ! determine loop range
             if( cline%defined('fromp') .and. cline%defined('top') )then
                 fromto(1) = p%fromp
                 fromto(2) = p%top
             else
-                stop 'fromp & top args need to be defined in parallel execution; simple_ctffit'
+                stop 'fromp & top args need to be defined in parallel execution; simple_ctf_estimate'
             endif
         else
             if( p%stream .eq. 'yes' )then
@@ -620,13 +620,13 @@ contains
                 movie_name  = remove_abspath(trim(movienames_forctf(1)))
                 movie_ext   = fname2ext(trim(movie_name))
                 movie_fbody = get_fbody(trim(movie_name), trim(movie_ext))
-                allocate(fname_ctffit_output, source='ctffit_output_'//trim(movie_fbody)//'.txt')
+                allocate(fname_ctf_estimate_output, source='ctf_estimate_output_'//trim(movie_fbody)//'.txt')
             else
                 ! determine loop range
                 fromto(1) = 1
                 if( cline%defined('startit') ) fromto(1) = p%startit
                 fromto(2) = nmovies
-                allocate(fname_ctffit_output, source='ctffit_output.txt')
+                allocate(fname_ctf_estimate_output, source='ctf_estimate_output.txt')
             endif
         endif
         ntot = fromto(2) - fromto(1) + 1
@@ -637,13 +637,13 @@ contains
             call cfiter%iterate(p, imovie, movie_counter, movienames_forctf(imovie), os)
             write(*,'(f4.0,1x,a)') 100.*(real(movie_counter)/real(ntot)), 'percent of the micrographs processed'
         end do
-        call os%write(fname_ctffit_output)
+        call os%write(fname_ctf_estimate_output)
         call os%kill
-        deallocate(fname_ctffit_output)
-        call qsys_job_finished( p, 'simple_commander_preproc :: exec_ctffit' )
+        deallocate(fname_ctf_estimate_output)
+        call qsys_job_finished( p, 'simple_commander_preproc :: exec_ctf_estimate' )
         ! end gracefully
-        call simple_end('**** SIMPLE_CTFFIT NORMAL STOP ****')
-    end subroutine exec_ctffit
+        call simple_end('**** SIMPLE_ctf_estimate NORMAL STOP ****')
+    end subroutine exec_ctf_estimate
 
     subroutine exec_select( self, cline )
         class(select_commander), intent(inout) :: self
@@ -865,10 +865,10 @@ contains
         real,                  allocatable :: boxdata(:,:)
         logical,               allocatable :: oris_mask(:)
         real                               :: kv, cs, fraca, dfx, dfy, angast, ctfres
-        real                               :: particle_position(2), ctffitcc, phshift
+        real                               :: particle_position(2), ctf_estimatecc, phshift
         type(image)                        :: micrograph
         type(oris)                         :: outoris, os_uni
-        logical                            :: params_present(3), ctffitcc_is_there, phshift_is_there
+        logical                            :: params_present(3), ctf_estimatecc_is_there, phshift_is_there
         logical                            :: ctfres_is_there
         noutside = 0
         p = params(cline) ! constants & derived constants produced
@@ -1002,10 +1002,10 @@ contains
                 cs    = b%a%get(movie,'cs')
                 fraca = b%a%get(movie,'fraca')
                 dfx   = b%a%get(movie,'dfx')
-                ctffitcc_is_there = b%a%isthere('ctffitcc')
+                ctf_estimatecc_is_there = b%a%isthere('ctf_estimatecc')
                 phshift_is_there  = b%a%isthere('phshift')
                 ctfres_is_there   = b%a%isthere('ctfres')
-                if( ctffitcc_is_there ) ctffitcc = b%a%get(movie,'ctffitcc')
+                if( ctf_estimatecc_is_there ) ctf_estimatecc = b%a%get(movie,'ctf_estimatecc')
                 if( phshift_is_there  ) phshift  = b%a%get(movie,'phshift')
                 if( ctfres_is_there   ) ctfres   = b%a%get(movie,'ctfres')
                 angast = 0.
@@ -1025,7 +1025,7 @@ contains
                             call outoris%set(j, 'angast', angast)
                             call outoris%set(j, 'dfy',       dfy)
                         endif
-                        if( ctffitcc_is_there ) call outoris%set(j, 'ctffitcc', ctffitcc)
+                        if( ctf_estimatecc_is_there ) call outoris%set(j, 'ctf_estimatecc', ctf_estimatecc)
                         if( phshift_is_there  ) call outoris%set(j, 'phshift',  phshift)
                         if( ctfres_is_there   ) call outoris%set(j, 'ctfres',   ctfres)
                     endif
