@@ -3,7 +3,7 @@ module simple_ctf_estimate
 use simple_image,    only: image
 use simple_ctf,      only: ctf
 use simple_opt_spec, only: opt_spec
-use simple_de_opt,   only: de_opt
+use simple_opt_de,   only: opt_de
 implicit none
 
 public :: ctf_estimate_init, ctf_estimate_x_validated_fit, ctf_estimate_kill
@@ -23,7 +23,7 @@ type(image)           :: imgmsk                  ! mask image
 type(ctf)             :: tfun                    ! transfer function object
 type(ctf)             :: tfun_roavg              ! rotationally averaged transfer function object
 type(opt_spec)        :: ospec_de                ! optimiser specification differential evolution (DE)
-type(de_opt)          :: diffevol                ! DE search object
+type(opt_de)          :: diffevol                ! DE search object
 logical, allocatable  :: cc_msk(:,:,:)           ! corr mask
 logical               :: l_phaseplate = .false.  ! Volta phase-plate flag
 integer               :: ndim         = 3        ! # optimisation dims

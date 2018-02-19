@@ -6,7 +6,7 @@ use simple_ori,               only: ori
 use simple_sym,               only: sym
 use simple_polarft_corrcalc,  only: polarft_corrcalc
 use simple_pftcc_shsrch,      only: pftcc_shsrch       ! simplex-based angle and shift search
-use simple_pftcc_grad_shsrch, only: pftcc_grad_shsrch  ! gradient-based angle and shift search
+use simple_pftcc_shsrch_grad, only: pftcc_shsrch_grad  ! gradient-based angle and shift search
 implicit none
 
 public :: cleanprime3D_srch, prep4prime3D_srch
@@ -35,7 +35,7 @@ type prime3D_srch
     class(oris),             pointer :: a_ptr     => null()       !< b%a (primary particle orientation table)
     class(sym),              pointer :: se_ptr    => null()       !< b%se (symmetry elements)
     type(pftcc_shsrch)               :: shsrch_obj                !< origin shift search object
-    type(pftcc_grad_shsrch)          :: grad_shsrch_obj           !< origin shift search object, L-BFGS with gradient
+    type(pftcc_shsrch_grad)          :: grad_shsrch_obj           !< origin shift search object, L-BFGS with gradient
     integer, allocatable             :: nnvec(:)                  !< nearest neighbours indices
     integer                          :: iptcl         = 0         !< global particle index
     integer                          :: iptcl_map     = 0         !< index in pre-allocated 2D arrays

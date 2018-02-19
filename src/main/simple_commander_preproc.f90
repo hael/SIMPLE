@@ -1,26 +1,24 @@
 ! concrete commander: pre-processing routines
 module simple_commander_preproc
 #include "simple_lib.f08"
-!! import classes
-use simple_cmdline,        only: cmdline
-use simple_params,         only: params
-use simple_build,          only: build
-use simple_commander_base, only: commander_base
-use simple_image,          only: image
-use simple_procimgfile,    only: neg_imgfile
-use simple_nrtxtfile,      only: nrtxtfile
-use simple_imgfile,        only: imgfile
-use simple_oris,           only: oris
-use simple_ori,            only: ori
-!! import functions
-use simple_imghead,        only: find_ldim_nptcls
-use simple_corrmat,        only: calc_cartesian_corrmat
-use simple_motion_correct_iter,    only: motion_correct_iter
-use simple_ctffind_iter,   only: ctffind_iter
-use simple_ctf_estimate_iter,    only: ctf_estimate_iter
-use simple_pick_iter,      only: pick_iter
-use simple_binoris_io,     only: binread_oritab, binwrite_oritab
-use simple_qsys_funs,      only: qsys_job_finished
+use simple_cmdline,             only: cmdline
+use simple_params,              only: params
+use simple_build,               only: build
+use simple_commander_base,      only: commander_base
+use simple_image,               only: image
+use simple_procimgfile,         only: neg_imgfile
+use simple_nrtxtfile,           only: nrtxtfile
+use simple_imgfile,             only: imgfile
+use simple_oris,                only: oris
+use simple_ori,                 only: ori
+use simple_imghead,             only: find_ldim_nptcls
+use simple_corrmat,             only: calc_cartesian_corrmat
+use simple_motion_correct_iter, only: motion_correct_iter
+use simple_ctffind_iter,        only: ctffind_iter
+use simple_ctf_estimate_iter,   only: ctf_estimate_iter
+use simple_picker_iter,         only: picker_iter
+use simple_binoris_io,          only: binread_oritab, binwrite_oritab
+use simple_qsys_funs,           only: qsys_job_finished
 implicit none
 
 public :: preproc_commander
@@ -31,7 +29,7 @@ public :: motion_correct_commander
 public :: ctffind_commander
 public :: ctf_estimate_commander
 public :: select_commander
-public :: makepickrefs_commander
+public :: make_pickrefs_commander
 public :: pick_commander
 public :: extract_commander
 private
@@ -69,10 +67,10 @@ type, extends(commander_base) :: select_commander
   contains
     procedure :: execute      => exec_select
 end type select_commander
-type, extends(commander_base) :: makepickrefs_commander
+type, extends(commander_base) :: make_pickrefs_commander
   contains
-    procedure :: execute      => exec_makepickrefs
-end type makepickrefs_commander
+    procedure :: execute      => exec_make_pickrefs
+end type make_pickrefs_commander
 type, extends(commander_base) :: pick_commander
   contains
     procedure :: execute      => exec_pick
@@ -90,7 +88,7 @@ contains
         !type(ctffind_iter)      :: cfiter
         type(ctf_estimate_iter)       :: cfiter
         type(motion_correct_iter)       :: ubiter
-        type(pick_iter)         :: piter
+        type(picker_iter)         :: piter
         type(extract_commander) :: xextract
         type(cmdline)           :: cline_extract
         character(len=STDLEN), allocatable :: movienames(:)
@@ -204,7 +202,6 @@ contains
             p%pspecsz        = p%pspecsz_ctffind
             p%hp             = p%hp_ctffind
             p%lp             = p%lp_ctffind
-            !call cfiter%iterate(p, movie_ind, movie_counter, moviename_forctf, os_uni)
             if( p%stream.eq.'yes' )then
                 call cfiter%iterate(p, movie_ind, movie_counter, moviename_forctf, os_uni,&
                 &dir_out=CTF_STREAM_DIR)
@@ -752,16 +749,16 @@ contains
     end subroutine exec_select
 
     !> for making picker references
-    subroutine exec_makepickrefs( self, cline )
-        use simple_commander_volops,  only: projvol_commander
-        class(makepickrefs_commander), intent(inout) :: self
+    subroutine exec_make_pickrefs( self, cline )
+        use simple_commander_volops,  only: project_commander
+        class(make_pickrefs_commander), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline !< command line input
         integer, parameter           :: NREFS=100, NPROJS=20
         character(STDLEN), parameter :: ORIFILE='pickrefs_oris'//trim(METADATA_EXT)
         type(params)                 :: p
         type(build)                  :: b
-        type(cmdline)                :: cline_projvol
-        type(projvol_commander)      :: xprojvol
+        type(cmdline)                :: cline_project
+        type(project_commander)      :: xproject
         integer                      :: nrots, cnt, iref, irot
         real                         :: ang, rot
         p = params(cline)                   ! parameters generated
@@ -773,15 +770,15 @@ contains
                 call b%a%new(NPROJS)
                 call b%a%spiral( p%nsym, p%eullims )
                 call binwrite_oritab(trim(ORIFILE), b%a, [1,NPROJS])
-                cline_projvol = cline
-                call cline_projvol%set('nspace', real(NPROJS))
+                cline_project = cline
+                call cline_project%set('nspace', real(NPROJS))
                 p%stk = 'even_projs'//p%ext
-                call cline_projvol%set('outstk', trim(p%stk)  )
-                call cline_projvol%set('oritab', trim(ORIFILE))
-                call cline_projvol%set('smpd',   PICKER_SHRINK)
-                call cline_projvol%set('neg',    'no'         )
-                call cline_projvol%set('msk',    real(p%box/2-5))
-                call xprojvol%execute(cline_projvol)
+                call cline_project%set('outstk', trim(p%stk)  )
+                call cline_project%set('oritab', trim(ORIFILE))
+                call cline_project%set('smpd',   PICKER_SHRINK)
+                call cline_project%set('neg',    'no'         )
+                call cline_project%set('msk',    real(p%box/2-5))
+                call xproject%execute(cline_project)
             endif
             ! expand in in-plane rotation
             nrots = NREFS/p%nptcls
@@ -794,30 +791,30 @@ contains
                     do irot=1,nrots
                         cnt = cnt + 1
                         call b%img%rtsq(rot, 0., 0., b%img_copy)
-                        call b%img_copy%write('rotated_from_makepickrefs'//p%ext, cnt)
+                        call b%img_copy%write('rotated_from_make_pickrefs'//p%ext, cnt)
                         rot = rot + ang
                     end do
                 end do
-                call cline%set('stk', 'rotated_from_makepickrefs'//p%ext)
+                call cline%set('stk', 'rotated_from_make_pickrefs'//p%ext)
             endif
             if( p%pcontrast .eq. 'black' )then
-                call neg_imgfile('rotated_from_makepickrefs'//p%ext, 'pickrefs'//p%ext, p%smpd)
+                call neg_imgfile('rotated_from_make_pickrefs'//p%ext, 'pickrefs'//p%ext, p%smpd)
             else
-                call simple_rename('rotated_from_makepickrefs'//p%ext, 'pickrefs'//p%ext)
+                call simple_rename('rotated_from_make_pickrefs'//p%ext, 'pickrefs'//p%ext)
             endif
         else
             stop 'need input volume (vol1) or class averages (stk) to generate picking references'
         endif
-        call del_file('rotated_from_makepickrefs'//p%ext)
+        call del_file('rotated_from_make_pickrefs'//p%ext)
         ! end gracefully
-        call simple_end('**** SIMPLE_MAKEPICKREFS NORMAL STOP ****')
-    end subroutine exec_makepickrefs
+        call simple_end('**** SIMPLE_make_pickrefs NORMAL STOP ****')
+    end subroutine exec_make_pickrefs
 
     subroutine exec_pick( self, cline)
         class(pick_commander), intent(inout) :: self
         class(cmdline),        intent(inout) :: cline !< command line input
         type(params)    :: p
-        type(pick_iter) :: piter
+        type(picker_iter) :: piter
         character(len=STDLEN), allocatable :: movienames_intg(:)
         character(len=STDLEN) :: boxfile
         integer :: nmovies, fromto(2), imovie, ntot, movie_counter, nptcls_out

@@ -12,7 +12,7 @@ use simple_projection_frcs, only: projection_frcs
 use simple_binoris_io       ! use all in there
 implicit none
 
-public :: makecavgs_commander
+public :: make_cavgs_commander
 public :: prime2D_commander
 public :: cavgassemble_commander
 public :: check2D_conv_commander
@@ -20,10 +20,10 @@ public :: rank_cavgs_commander
 public :: cluster_cavgs_commander
 private
 
-type, extends(commander_base) :: makecavgs_commander
+type, extends(commander_base) :: make_cavgs_commander
  contains
-    procedure :: execute      => exec_makecavgs
-end type makecavgs_commander
+    procedure :: execute      => exec_make_cavgs
+end type make_cavgs_commander
 type, extends(commander_base) :: prime2D_commander
   contains
     procedure :: execute      => exec_prime2D
@@ -47,9 +47,9 @@ end type cluster_cavgs_commander
 
 contains
 
-    subroutine exec_makecavgs( self, cline )
+    subroutine exec_make_cavgs( self, cline )
         use simple_classaverager
-        class(makecavgs_commander), intent(inout) :: self
+        class(make_cavgs_commander), intent(inout) :: self
         class(cmdline),             intent(inout) :: cline
         type(params)  :: p
         type(build)   :: b
@@ -120,7 +120,7 @@ contains
         if( cline%defined('filwidth') )then
             ! filament option
             if( p%l_distr_exec)then
-                stop 'filwidth mode not implemented for distributed mode; simple_commander_prime2D.f90; exec_makecavgs'
+                stop 'filwidth mode not implemented for distributed mode; simple_commander_prime2D.f90; exec_make_cavgs'
             endif
             call b%img%bin_filament(p%filwidth)
             do icls=1,p%ncls
@@ -133,7 +133,7 @@ contains
         ! write sums
         if( p%l_distr_exec)then
             call cavger_readwrite_partial_sums('write')
-            call qsys_job_finished( p, 'simple_commander_prime2D :: exec_makecavgs' )
+            call qsys_job_finished( p, 'simple_commander_prime2D :: exec_make_cavgs' )
         else
             call cavger_calc_and_write_frcs_and_eoavg('frcs.bin')
             call gen2Dclassdoc( b, p, 'classdoc.txt')
@@ -149,8 +149,8 @@ contains
         endif
         call cavger_kill
         ! end gracefully
-        call simple_end('**** SIMPLE_MAKECAVGS NORMAL STOP ****', print_simple=.false.)
-    end subroutine exec_makecavgs
+        call simple_end('**** SIMPLE_make_cavgs NORMAL STOP ****', print_simple=.false.)
+    end subroutine exec_make_cavgs
 
     subroutine exec_prime2D( self, cline )
         use simple_hadamard2D_matcher, only: prime2D_exec

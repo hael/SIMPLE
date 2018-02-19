@@ -70,14 +70,14 @@ end type dsymsrch_commander
 contains
 
     subroutine exec_cluster_smat( self, cline )
-        use simple_shc_cluster,   only: shc_cluster
+        use simple_cluster_shc,   only: cluster_shc
         use simple_oris,          only: oris
         use simple_cluster_valid, only: cluster_valid
         class(cluster_smat_commander), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
         type(params)        :: p
         type(build)         :: b
-        type(shc_cluster)   :: shcc
+        type(cluster_shc)   :: shcc
         type(cluster_valid) :: cvalid
         real, allocatable   :: smat(:,:)
         integer             :: funit, io_stat, ncls_min, loc(1), ncls_stop, icls
@@ -119,7 +119,7 @@ contains
                 avg_ratio = avg_ratio+ratio
                 if( ratio < min_ratio )then
                     min_ratio = ratio
-                    call binwrite_oritab('shc_clustering_ncls'//int2str_pad(ncls,numlen)//trim(METADATA_EXT), b%a, [1,p%nptcls])
+                    call binwrite_oritab('cluster_shcing_ncls'//int2str_pad(ncls,numlen)//trim(METADATA_EXT), b%a, [1,p%nptcls])
                 endif
             end do
             validinds(ncls) = avg_ratio/real(NRESTARTS)
@@ -128,7 +128,7 @@ contains
         done = .false.
         do ncls=2,p%ncls
             write(*,'(a,1x,f9.3,8x,a,1x,i3)') 'COHESION/SEPARATION RATIO INDEX: ', validinds(ncls), ' NCLS: ', ncls
-            call binread_oritab('shc_clustering_ncls'//int2str_pad(ncls,numlen)//trim(METADATA_EXT), b%a, [1,b%a%get_noris()])
+            call binread_oritab('cluster_shcing_ncls'//int2str_pad(ncls,numlen)//trim(METADATA_EXT), b%a, [1,b%a%get_noris()])
             do icls=1,ncls
                 pop = b%a%get_pop(icls, p%label)
                 write(*,'(a,3x,i5,1x,a,1x,i3)') '  CLUSTER POPULATION:', pop, 'CLUSTER:', icls

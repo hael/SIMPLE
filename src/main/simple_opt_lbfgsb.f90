@@ -1,12 +1,12 @@
 ! memory limited bound-constained BFGS optimiser
-module simple_lbfgsb_opt
+module simple_opt_lbfgsb
 #include "simple_lib.f08"
 
 use simple_optimizer, only: optimizer
 use simple_opt_helpers
 implicit none
 
-public :: lbfgsb_opt
+public :: opt_lbfgsb
 private
 
 real(dp), parameter :: zero=0.0d0,one=1.0d0,p5=0.5d0,p66=0.66d0
@@ -16,7 +16,7 @@ real(dp), parameter :: ftol_lbfgsb=1.0d-3,gtol_lbfgsb=0.9d0,xtol_lbfgsb=0.1d0
 real(dp), parameter :: two=2.0d0,three=3.0d0
 real(dp), parameter :: factr  = 1.0d+7, pgtol  = 1.0d-5
 
-type, extends(optimizer) :: lbfgsb_opt
+type, extends(optimizer) :: opt_lbfgsb
     private
     character(len=60)      :: task, csave
     logical                :: lsave(4)
@@ -27,18 +27,18 @@ type, extends(optimizer) :: lbfgsb_opt
     real(dp), allocatable  ::  l(:), u(:), g(:), wa(:)    
     logical                :: exists=.false.
 contains
-    procedure :: new      => new_lbfgsb_opt
+    procedure :: new      => new_opt_lbfgsb
     procedure :: minimize => lbfgsb_minimize
-    procedure :: kill     => kill_lbfgsb_opt
-end type lbfgsb_opt
+    procedure :: kill     => kill_opt_lbfgsb
+end type opt_lbfgsb
 
 contains
 
     !> \brief  is a constructor
-    subroutine new_lbfgsb_opt( self, spec )
+    subroutine new_opt_lbfgsb( self, spec )
         use simple_opt_spec, only: opt_spec
         use simple_syslib,   only: alloc_errchk
-        class(lbfgsb_opt), intent(inout) :: self !< instance
+        class(opt_lbfgsb), intent(inout) :: self !< instance
         class(opt_spec),   intent(inout) :: spec !< specification
         integer                          :: n, m        
         call self%kill
@@ -49,24 +49,24 @@ contains
         allocate ( self%wa(2*m*n + 5*n + 11*m*m + 8*m) )
         self%nbd = 2
         self%exists = .true.
-    end subroutine new_lbfgsb_opt
+    end subroutine new_opt_lbfgsb
 
     !>  \brief  nonlinear conjugate gradient minimizer
     subroutine lbfgsb_minimize( self, spec, fun_self, lowest_cost )
         use simple_opt_spec, only: opt_spec
         use simple_opt_subs, only: lnsrch
-        class(lbfgsb_opt), intent(inout) :: self        !< instance
+        class(opt_lbfgsb), intent(inout) :: self        !< instance
         class(opt_spec),   intent(inout) :: spec        !< specification
         class(*),          intent(inout) :: fun_self    !< self-pointer for cost function
         real,              intent(out)   :: lowest_cost !< minimum function value
         if ( (.not. associated(spec%costfun) ).and.( .not. associated(spec%costfun_8)) ) then
-            stop 'cost function not associated in opt_spec; lbfgsb_minimize; simple_lbfgsb_opt'
+            stop 'cost function not associated in opt_spec; lbfgsb_minimize; simple_opt_lbfgsb'
         endif
         if ( (.not. associated(spec%gcostfun) ).and.(.not. associated(spec%gcostfun_8)) ) then
-            stop 'gradient of cost function not associated in opt_spec; lbfgsb_minimize; simple_lbfgsb_opt'
+            stop 'gradient of cost function not associated in opt_spec; lbfgsb_minimize; simple_opt_lbfgsb'
         endif
         if ( .not. allocated(spec%limits) ) then
-            stop 'limits not allocated in opt_spec; lbfgsb_minimize; simple_lbfgsb_opt'
+            stop 'limits not allocated in opt_spec; lbfgsb_minimize; simple_opt_lbfgsb'
         end if
         spec%x_8 = spec%x
         ! initialise nevals counters
@@ -3587,12 +3587,12 @@ contains
     end subroutine lbfgsb_minimize
            
     !> \brief  is a destructor
-    subroutine kill_lbfgsb_opt( self )
-        class(lbfgsb_opt), intent(inout) :: self !< instance
+    subroutine kill_opt_lbfgsb( self )
+        class(opt_lbfgsb), intent(inout) :: self !< instance
         if( self%exists )then
             deallocate(self%iwa, self%l, self%u, self%g, self%wa )
             self%exists = .false.
         endif
-    end subroutine kill_lbfgsb_opt
+    end subroutine kill_opt_lbfgsb
 
-end module simple_lbfgsb_opt
+end module simple_opt_lbfgsb

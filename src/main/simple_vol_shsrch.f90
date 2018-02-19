@@ -2,7 +2,7 @@
 module simple_vol_shsrch
 use simple_image,       only: image
 use simple_opt_spec,    only: opt_spec
-use simple_simplex_opt, only: simplex_opt
+use simple_opt_simplex, only: opt_simplex
 use simple_defs         ! use all in there
 implicit none
 
@@ -10,7 +10,7 @@ public :: vol_shsrch_init, vol_shsrch_minimize
 private
 
 type(opt_spec)       :: ospec           !< optimizer specification object
-type(simplex_opt)    :: nlopt           !< optimizer object
+type(opt_simplex)    :: nlopt           !< optimizer object
 integer              :: nrestarts = 3   !< simplex restarts (randomized bounds)
 real                 :: hp, lp, trs     !< corr/srch ctrl params
 logical              :: shbarr = .true. !< shift barrier constraint or not

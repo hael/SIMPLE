@@ -2,7 +2,6 @@
 
 module simple_commander_comlin
 #include "simple_lib.f08"
-
 use simple_cmdline,        only: cmdline
 use simple_params,         only: params
 use simple_build,          only: build
@@ -90,7 +89,6 @@ contains
             write(unit=funit,pos=1,iostat=io_stat) corrs(p%fromp:p%top)
             ! Check if the write was successful
             if( io_stat .ne. 0 )call fileio_errmsg('simple_comlin_smat writing  '//trim(fname), io_stat)
-
             call fclose(funit, errmsg='simple_comlin_smat opening  '//trim(fname))
             deallocate(fname, corrs, pairs)
             call qsys_job_finished(p,'simple_commander_comlin :: exec_comlin_smat')
@@ -110,12 +108,10 @@ contains
                 end do
             end do
             call progress(ntot, ntot)
-
             call fopen(funit, status='REPLACE', action='WRITE', file='clin_smat.bin', access='STREAM', iostat=io_stat)
             call fileio_errmsg('simple_comlin_smat opening  clin_smat.bin', io_stat)
             write(unit=funit,pos=1,iostat=io_stat) corrmat
             if( io_stat .ne. 0 ) call fileio_errmsg('simple_comlin_smat writing  clin_smat.bin', io_stat)
-
             call fclose(funit, errmsg='simple_comlin_smat closing clin_smat.bin ')
             deallocate(corrmat)
         endif
@@ -128,7 +124,7 @@ contains
         use simple_strings,        only: int2str_pad
         use simple_oris,           only: oris
         use simple_ori,            only: ori
-        use simple_projector_hlev, only: projvol
+        use simple_projector_hlev, only: project
         use simple_comlin_srch     ! use all in there
         use simple_binoris_io,     only: binwrite_oritab, binread_oritab, binread_nlines
         class(symsrch_commander), intent(inout) :: self
@@ -169,7 +165,7 @@ contains
             call b%vol%mask(p%msk, 'soft')
             call b%vol%fwd_ft
             call b%vol%expand_cmat(p%alpha)
-            b%ref_imgs(1,:) = projvol(b%vol, b%e, p)
+            b%ref_imgs(1,:) = project(b%vol, b%e, p)
             if( p%l_distr_exec .and. p%part > 1 )then
                 ! do nothing
             else

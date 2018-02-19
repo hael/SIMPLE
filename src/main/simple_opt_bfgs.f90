@@ -1,37 +1,37 @@
 ! function minimization by L-BFGS (Limited memory Broyden–Fletcher–Goldfarb–Shannon optimisation)
 
-module simple_bfgs_opt
+module simple_opt_bfgs
 #include "simple_lib.f08"
     
 use simple_optimizer, only: optimizer
 
 implicit none
 
-public :: bfgs_opt
+public :: opt_bfgs
 private
 
-type, extends(optimizer) :: bfgs_opt
+type, extends(optimizer) :: opt_bfgs
     private
     real, allocatable :: p(:),dg(:),g(:),hdg(:),hessin(:,:),pnew(:),xi(:)
     logical :: exists=.false.
   contains
-    procedure :: new          => new_bfgs_opt
+    procedure :: new          => new_opt_bfgs
     procedure :: minimize     => bfgs_minimize
-    procedure :: kill         => kill_bfgs_opt
+    procedure :: kill         => kill_opt_bfgs
 end type
 
 contains
 
     !> \brief  is a constructor
-    subroutine new_bfgs_opt( self, spec )
+    subroutine new_opt_bfgs( self, spec )
         use simple_opt_spec, only: opt_spec
         use simple_syslib,   only: alloc_errchk
-        class(bfgs_opt), intent(inout) :: self !< instance
+        class(opt_bfgs), intent(inout) :: self !< instance
         class(opt_spec), intent(inout) :: spec !< specification
         call self%kill
         allocate(self%p(spec%ndim),self%dg(spec%ndim),self%hdg(spec%ndim),&
         self%hessin(spec%ndim,spec%ndim),self%pnew(spec%ndim),self%xi(spec%ndim),stat=alloc_stat)
-        allocchk('In: new_bfgs_opt; simple_bfgs_opt')
+        allocchk('In: new_opt_bfgs; simple_opt_bfgs')
         self%dg     = 0.
         self%hdg    = 0.
         self%hessin = 0.
@@ -45,16 +45,16 @@ contains
     subroutine bfgs_minimize( self, spec, fun_self, lowest_cost )
         use simple_opt_spec, only: opt_spec
         use simple_opt_subs, only: lnsrch
-        class(bfgs_opt), intent(inout) :: self        !< instance
+        class(opt_bfgs), intent(inout) :: self        !< instance
         class(opt_spec), intent(inout) :: spec        !< specification
         class(*),        intent(inout) :: fun_self    !< self-pointer for cost function        
         real, intent(out)              :: lowest_cost !< minimum function value
         integer                        :: avgniter,i
         if( .not. associated(spec%costfun) )then
-            stop 'cost function not associated in opt_spec; bfgs_minimize; simple_bfgs_opt'
+            stop 'cost function not associated in opt_spec; bfgs_minimize; simple_opt_bfgs'
         endif
         if( .not. associated(spec%gcostfun) )then
-            stop 'gradient of cost function not associated in opt_spec; bfgs_minimize; simple_bfgs_opt'
+            stop 'gradient of cost function not associated in opt_spec; bfgs_minimize; simple_opt_bfgs'
         endif
         ! initialise nevals counters
         spec%nevals  = 0
@@ -167,14 +167,14 @@ contains
                         end do
                     end do
                 end do
-                if(spec%warn) write(*,'(a)') 'too many iterations in minimize; simple_bfgs_opt'
+                if(spec%warn) write(*,'(a)') 'too many iterations in minimize; simple_opt_bfgs'
             end subroutine
 
     end subroutine
 
     !> \brief  is a destructor
-    subroutine kill_bfgs_opt( self )
-        class(bfgs_opt), intent(inout) :: self !< instance
+    subroutine kill_opt_bfgs( self )
+        class(opt_bfgs), intent(inout) :: self !< instance
         if( self%exists )then
             deallocate(self%p,self%dg,self%hdg,self%hessin,self%pnew,self%xi)
             if( allocated(self%g) ) deallocate(self%g)
@@ -182,4 +182,4 @@ contains
         endif
     end subroutine
 
-end module simple_bfgs_opt
+end module simple_opt_bfgs

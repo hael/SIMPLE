@@ -1,5 +1,5 @@
 ! 3D reconstruction of even-odd pairs for FSC estimation
-module simple_eo_reconstructor
+module simple_reconstructor_eo
 #include "simple_lib.f08"
 use simple_reconstructor, only: reconstructor
 use simple_image,         only: image
@@ -11,10 +11,10 @@ use simple_kbinterpol,    only: kbinterpol
 use simple_masker,        only: masker
 implicit none
 
-public :: eo_reconstructor
+public :: reconstructor_eo
 private
 
-type :: eo_reconstructor
+type :: reconstructor_eo
     private
     type(reconstructor) :: even
     type(reconstructor) :: odd
@@ -68,7 +68,7 @@ type :: eo_reconstructor
     ! DESTRUCTORS
     procedure          :: kill_exp
     procedure          :: kill
-end type eo_reconstructor
+end type reconstructor_eo
 
 contains
 
@@ -76,7 +76,7 @@ contains
 
     !>  \brief  is a constructor
     subroutine new( self, p )
-        class(eo_reconstructor), intent(inout) :: self !< instance
+        class(reconstructor_eo), intent(inout) :: self !< instance
         class(params), target,   intent(in)    :: p    !< parameters object (provides constants)
         logical     :: neg
         call self%kill
@@ -119,7 +119,7 @@ contains
 
     !>  \brief  resets all
     subroutine reset_all( self )
-        class(eo_reconstructor), intent(inout) :: self
+        class(reconstructor_eo), intent(inout) :: self
         call self%reset_eos
         call self%reset_eoexp
         call self%reset_sum
@@ -127,38 +127,38 @@ contains
 
     !>  \brief  resets the even odd pairs
     subroutine reset_eos( self )
-        class(eo_reconstructor), intent(inout) :: self
+        class(reconstructor_eo), intent(inout) :: self
         call self%even%reset
         call self%odd%reset
     end subroutine reset_eos
 
     !>  \brief  resets the even odd pairs expanded matrices
     subroutine reset_eoexp( self )
-        class(eo_reconstructor), intent(inout) :: self
+        class(reconstructor_eo), intent(inout) :: self
         call self%even%reset_exp
         call self%odd%reset_exp
     end subroutine reset_eoexp
 
     !>  \brief  resets the even
     subroutine reset_even( self )
-        class(eo_reconstructor), intent(inout) :: self
+        class(reconstructor_eo), intent(inout) :: self
         call self%even%reset
     end subroutine reset_even
 
     !>  \brief  resets the odd
     subroutine reset_odd( self )
-        class(eo_reconstructor), intent(inout) :: self
+        class(reconstructor_eo), intent(inout) :: self
         call self%odd%reset
     end subroutine reset_odd
 
     !>  \brief  resets the sum
     subroutine reset_sum( self )
-        class(eo_reconstructor), intent(inout) :: self
+        class(reconstructor_eo), intent(inout) :: self
         call self%eosum%reset
     end subroutine reset_sum
 
     subroutine apply_weight( self, w )
-        class(eo_reconstructor), intent(inout) :: self
+        class(reconstructor_eo), intent(inout) :: self
         real,                    intent(in)    :: w
         call self%even%apply_weight(w)
         call self%odd%apply_weight(w)
@@ -166,10 +166,10 @@ contains
 
     ! GETTERS
 
-    !>  \brief  return the window functions used by eo_reconstructor
+    !>  \brief  return the window functions used by reconstructor_eo
     function get_kbwin( self ) result( wf )
         use simple_kbinterpol, only: kbinterpol
-        class(eo_reconstructor), intent(inout) :: self
+        class(reconstructor_eo), intent(inout) :: self
         type(kbinterpol) :: wf
         wf = self%even%get_kbwin()
     end function get_kbwin
@@ -178,7 +178,7 @@ contains
     !> \param res_fsc05  target resolution a FSC=0.5
     !> \param res_fsc0143  target resolution a FSC=0.143
     subroutine get_res( self, res_fsc05, res_fsc0143 )
-        class(eo_reconstructor), intent(in)  :: self !< instance
+        class(reconstructor_eo), intent(in)  :: self !< instance
         real,                    intent(out) :: res_fsc05, res_fsc0143
         res_fsc0143 = self%res_fsc0143
         res_fsc05   = self%res_fsc05
@@ -188,7 +188,7 @@ contains
 
     !>  \brief  write the even and odd reconstructions
     subroutine write_eos( self, fbody )
-        class(eo_reconstructor), intent(inout) :: self
+        class(reconstructor_eo), intent(inout) :: self
         character(len=*),        intent(in)    :: fbody !< filename
         call self%write_even(fbody)
         call self%write_odd(fbody)
@@ -196,7 +196,7 @@ contains
 
     !>  \brief  write the even reconstruction
     subroutine write_even( self, fbody )
-        class(eo_reconstructor), intent(inout) :: self
+        class(reconstructor_eo), intent(inout) :: self
         character(len=*),        intent(in)    :: fbody
         call self%even%write(trim(adjustl(fbody))//'_even'//self%ext, del_if_exists=.true.)
         call self%even%write_rho(trim('rho_'//trim(adjustl(fbody))//'_even'//self%ext))
@@ -204,7 +204,7 @@ contains
 
     !>  \brief  write the odd reconstruction
     subroutine write_odd( self, fbody )
-        class(eo_reconstructor), intent(inout) :: self
+        class(reconstructor_eo), intent(inout) :: self
         character(len=*),        intent(in)    :: fbody
         call self%odd%write(trim(adjustl(fbody))//'_odd'//self%ext, del_if_exists=.true.)
         call self%odd%write_rho('rho_'//trim(adjustl(fbody))//'_odd'//self%ext)
@@ -212,7 +212,7 @@ contains
 
     !>  \brief read the even and odd reconstructions
     subroutine read_eos( self, fbody )
-        class(eo_reconstructor), intent(inout) :: self
+        class(reconstructor_eo), intent(inout) :: self
         character(len=*),        intent(in)    :: fbody
         call self%read_even(fbody)
         call self%read_odd(fbody)
@@ -220,7 +220,7 @@ contains
 
     !>  \brief  read the even reconstruction
     subroutine read_even( self, fbody )
-        class(eo_reconstructor), intent(inout) :: self
+        class(reconstructor_eo), intent(inout) :: self
         character(len=*),        intent(in)    :: fbody
         character(len=STDLEN)                  :: even_vol, even_rho
         logical                                :: here(2)
@@ -238,7 +238,7 @@ contains
 
     !>  \brief  read the odd reconstruction
     subroutine read_odd( self, fbody )
-        class(eo_reconstructor), intent(inout) :: self
+        class(reconstructor_eo), intent(inout) :: self
         character(len=*),        intent(in)    :: fbody
         character(len=STDLEN)                  :: odd_vol, odd_rho
         logical                                :: here(2)
@@ -260,7 +260,7 @@ contains
     subroutine grid_fplane_1( self, se, o, fpl, eo, pwght )
         use simple_ori, only: ori
         use simple_sym, only: sym
-        class(eo_reconstructor), intent(inout) :: self  !< instance
+        class(reconstructor_eo), intent(inout) :: self  !< instance
         class(sym),              intent(inout) :: se    !< symmetry elements
         class(ori),              intent(inout) :: o     !< orientation
         class(image),            intent(inout) :: fpl   !< Fourier plane
@@ -272,14 +272,14 @@ contains
             case(1)
                 call self%odd%insert_fplane(se, o, fpl, pwght)
             case DEFAULT
-                stop 'unsupported eo flag; eo_reconstructor :: grid_fplane'
+                stop 'unsupported eo flag; reconstructor_eo :: grid_fplane'
         end select
     end subroutine grid_fplane_1
 
     subroutine grid_fplane_2( self, se, os, fpl, eo, pwght, state )
         use simple_oris, only: oris
         use simple_sym,  only: sym
-        class(eo_reconstructor), intent(inout) :: self  !< instance
+        class(reconstructor_eo), intent(inout) :: self  !< instance
         class(sym),              intent(inout) :: se    !< symmetry elements
         class(oris),             intent(inout) :: os    !< orientation
         class(image),            intent(inout) :: fpl   !< Fourier plane
@@ -292,13 +292,13 @@ contains
             case(1)
                 call self%odd%insert_fplane(se, os, fpl, pwght, state)
             case DEFAULT
-                stop 'unsupported eo flag; eo_reconstructor :: grid_fplane'
+                stop 'unsupported eo flag; reconstructor_eo :: grid_fplane'
         end select
     end subroutine grid_fplane_2
 
     !> \brief  for summing the even odd pairs, resulting sum in self%even
     subroutine sum_eos( self )
-        class(eo_reconstructor), intent(inout) :: self !< instance
+        class(reconstructor_eo), intent(inout) :: self !< instance
         call self%eosum%reset
         call self%eosum%sum(self%even)
         call self%eosum%sum(self%odd)
@@ -306,22 +306,22 @@ contains
 
     !> \brief  for summing reconstructors generated by parallel execution
     subroutine sum( self, self_in )
-         class(eo_reconstructor), intent(inout) :: self
-         class(eo_reconstructor), intent(in)    :: self_in
+         class(reconstructor_eo), intent(inout) :: self
+         class(reconstructor_eo), intent(in)    :: self_in
          call self%even%sum(self_in%even)
          call self%odd%sum(self_in%odd)
     end subroutine sum
 
     !>  \brief compress e/o
     subroutine compress_exp( self )
-        class(eo_reconstructor), intent(inout) :: self
+        class(reconstructor_eo), intent(inout) :: self
         call self%even%compress_exp
         call self%odd%compress_exp
     end subroutine compress_exp
 
     !>  \brief expand e/o
     subroutine expand_exp( self )
-        class(eo_reconstructor), intent(inout) :: self
+        class(reconstructor_eo), intent(inout) :: self
         call self%even%expand_exp
         call self%odd%expand_exp
     end subroutine expand_exp
@@ -329,7 +329,7 @@ contains
     !> \brief  for sampling density correction of the eo pairs
     subroutine sampl_dens_correct_eos( self, state, fname_even, fname_odd, resmskname, find4eoavg )
         use simple_masker,  only: masker
-        class(eo_reconstructor), intent(inout) :: self                  !< instance
+        class(reconstructor_eo), intent(inout) :: self                  !< instance
         integer,                 intent(in)    :: state                 !< state
         character(len=*),        intent(in)    :: fname_even, fname_odd !< even/odd filenames
         character(len=*),        intent(in)    :: resmskname            !< resolution mask name
@@ -406,7 +406,7 @@ contains
 
     !> \brief  for sampling density correction, antialiasing, bwd_ft & normalization of the sum
     subroutine sampl_dens_correct_sum( self, reference )
-        class(eo_reconstructor), intent(inout) :: self      !< instance
+        class(reconstructor_eo), intent(inout) :: self      !< instance
         class(image),            intent(inout) :: reference !< reference volume
         write(*,'(A)') '>>> SAMPLING DENSITY (RHO) CORRECTION & WIENER NORMALIZATION'
         call reference%set_ft(.false.)
@@ -423,7 +423,7 @@ contains
         use simple_sym,        only: sym
         use simple_params,     only: params
         use simple_prep4cgrid, only: prep4cgrid
-        class(eo_reconstructor),    intent(inout) :: self   !< object
+        class(reconstructor_eo),    intent(inout) :: self   !< object
         class(params),              intent(in)    :: p      !< parameters
         class(oris),                intent(inout) :: o      !< orientations
         class(sym),                 intent(inout) :: se     !< symmetry element
@@ -523,7 +523,7 @@ contains
 
     !>  \brief  is the expanded destructor
     subroutine kill_exp( self )
-        class(eo_reconstructor), intent(inout) :: self !< instance
+        class(reconstructor_eo), intent(inout) :: self !< instance
         if( self%exists )then
             call self%even%dealloc_exp
             call self%odd%dealloc_exp
@@ -533,7 +533,7 @@ contains
 
     !>  \brief  is a destructor
     subroutine kill( self )
-        class(eo_reconstructor), intent(inout) :: self !< instance
+        class(reconstructor_eo), intent(inout) :: self !< instance
         if( self%exists )then
             ! kill composites
             call self%envmask%kill
@@ -548,4 +548,4 @@ contains
         endif
     end subroutine kill
 
-end module simple_eo_reconstructor
+end module simple_reconstructor_eo

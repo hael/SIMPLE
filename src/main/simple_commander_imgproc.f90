@@ -18,7 +18,7 @@ public :: ctfops_commander
 public :: filter_commander
 public :: image_diff_commander
 public :: image_smat_commander
-public :: norm_commander
+public :: normalize_commander
 public :: scale_commander
 public :: stack_commander
 public :: stackops_commander
@@ -53,10 +53,10 @@ type, extends(commander_base) :: image_diff_commander
  contains
    procedure :: execute      => exec_image_diff
 end type image_diff_commander
-type, extends(commander_base) :: norm_commander
+type, extends(commander_base) :: normalize_commander
   contains
-    procedure :: execute      => exec_norm
-end type norm_commander
+    procedure :: execute      => exec_normalize
+end type normalize_commander
 type, extends(commander_base) :: scale_commander
   contains
     procedure :: execute      => exec_scale
@@ -415,14 +415,14 @@ contains
         call simple_end('**** SIMPLE_IMAGE_DIFF NORMAL STOP ****')
       end subroutine exec_image_diff
 
-    !> norm is a program for normalization of MRC or SPIDER stacks and volumes.
-    !! If you want to normalise your images inputted with stk, set norm=yes.
-    !! hfun (e.g. hfun=sigm) controls the normalisation function. If you want to
-    !! perform noise normalisation of the images set noise_norm=yes given a mask
-    !! radius msk (pixels). If you want to normalise your images or volume
+    !> normalize is a program for normalization of MRC or SPIDER stacks and volumes.
+    !! If you want to normalize your images inputted with stk, set norm=yes.
+    !! hfun (e.g. hfun=sigm) controls the normalization function. If you want to
+    !! perform noise normalization of the images set noise_norm=yes given a mask
+    !! radius msk (pixels). If you want to normalize your images or volume
     !! (vol1) with respect to their power spectrum set shell_norm=yes
-    subroutine exec_norm( self, cline )
-        class(norm_commander), intent(inout) :: self
+    subroutine exec_normalize( self, cline )
+        class(normalize_commander), intent(inout) :: self
         class(cmdline),        intent(inout) :: cline
         type(build)       :: b
         type(params)      :: p
@@ -475,8 +475,8 @@ contains
             stop 'No input images(s) or volume provided'
         endif
         ! end gracefully
-        call simple_end('**** SIMPLE_NORM NORMAL STOP ****')
-    end subroutine exec_norm
+        call simple_end('**** SIMPLE_NORMALIZE NORMAL STOP ****')
+    end subroutine exec_normalize
 
     !> provides re-scaling and clipping routines for MRC or SPIDER stacks and volumes
     subroutine exec_scale( self, cline )

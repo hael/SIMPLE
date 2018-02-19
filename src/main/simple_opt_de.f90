@@ -1,11 +1,11 @@
 ! continuous function optimisation by differential evolution
-module simple_de_opt
+module simple_opt_de
 #include "simple_lib.f08"
 use simple_optimizer, only: optimizer
 use simple_opt_spec,  only: opt_spec
 implicit none
 
-public :: de_opt
+public :: opt_de
 private
 
 integer, parameter :: N_GENERAL = 136,    N_VALLEY = 126,    N_MULTIMODAL = 103,    N_FLAT = 106
@@ -13,7 +13,7 @@ real,    parameter :: F_GENERAL = 0.2790, F_VALLEY = 0.4027, F_MULTIMODAL = 0.39
 real,    parameter :: X_GENERAL = 0.9813, X_VALLEY = 0.9211, X_MULTIMODAL = 0.9794, X_FLAT = 0.3345
 #include "simple_local_flags.inc"
 
-type, extends(optimizer) :: de_opt
+type, extends(optimizer) :: opt_de
     private
     real, allocatable :: pop(:,:)          !< solution vector population
     real, allocatable :: costs(:)          !< costs
@@ -26,14 +26,14 @@ type, extends(optimizer) :: de_opt
     procedure :: new      => new_de
     procedure :: minimize => de_minimize
     procedure :: kill     => kill_de
-end type de_opt
+end type opt_de
 
 contains
 
     !> \brief  is a constructor
     subroutine new_de( self, spec )
         use simple_syslib, only: alloc_errchk
-        class(de_opt),   intent(inout) :: self !< instance
+        class(opt_de),   intent(inout) :: self !< instance
         class(opt_spec), intent(inout) :: spec !< specification
         ! destruct if exists
         call self%kill
@@ -62,14 +62,14 @@ contains
         end select
         ! allocate
         allocate(self%pop(spec%npop,spec%ndim), self%costs(spec%npop), stat=alloc_stat)
-        allocchk("In: new_de; simple_de_opt")
+        allocchk("In: new_de; simple_opt_de")
         self%exists = .true. ! indicates existence
         if( spec%DEBUG ) write(*,*) 'created new differential evolution population'
     end subroutine new_de
 
     !> \brief  is the differential evolution minimization routine
     subroutine de_minimize( self, spec, fun_self, lowest_cost )
-        class(de_opt),   intent(inout) :: self        !< instance
+        class(opt_de),   intent(inout) :: self        !< instance
         class(opt_spec), intent(inout) :: spec        !< specification
         class(*),        intent(inout) :: fun_self    !< self-pointer for cost function
         real,            intent(out)   :: lowest_cost !< lowest cost
@@ -77,7 +77,7 @@ contains
         real    :: trials(spec%npop,spec%ndim), trial(spec%ndim), cost_trial, L
         integer :: a, rb, b, i, j, X, t, loc(1), nworse
         if( .not. associated(spec%costfun) )then
-            stop 'cost function not associated in opt_spec; de_minimize; simple_de_opt'
+            stop 'cost function not associated in opt_spec; de_minimize; simple_opt_de'
         endif
         ! initialise nevals counters
         spec%nevals = 0
@@ -152,11 +152,11 @@ contains
 
     !> \brief  is a destructor
     subroutine kill_de( self )
-        class(de_opt), intent(inout) :: self !< instance
+        class(opt_de), intent(inout) :: self !< instance
         if( self%exists )then
             deallocate(self%pop,self%costs)
             self%exists = .false.
         endif
     end subroutine kill_de
 
-end module simple_de_opt
+end module simple_opt_de

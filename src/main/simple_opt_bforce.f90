@@ -1,57 +1,57 @@
 ! brute force function minimisation
-module simple_bforce_opt
+module simple_opt_bforce
 #include "simple_lib.f08"
 use simple_optimizer, only: optimizer
 implicit none
 
-public :: bforce_opt
+public :: opt_bforce
 private
 #include "simple_local_flags.inc"
 
-type, extends(optimizer) :: bforce_opt
+type, extends(optimizer) :: opt_bforce
     private
     real, allocatable :: pb(:)          !< best point
     real, allocatable :: pc(:)          !< current point
     real              :: yb=0.          !< best cost function value
     logical           :: exists=.false. !< to indicate existence
   contains
-    procedure :: new      => new_bforce_opt
+    procedure :: new      => new_opt_bforce
     procedure :: minimize => bforce_minimize
-    procedure :: kill     => kill_bforce_opt
+    procedure :: kill     => kill_opt_bforce
 end type
 
 contains
 
     !> \brief  is a constructor
-    subroutine new_bforce_opt( self, spec )
+    subroutine new_opt_bforce( self, spec )
         use simple_opt_spec, only: opt_spec
-        class(bforce_opt), intent(inout) :: self !< instance
+        class(opt_bforce), intent(inout) :: self !< instance
         class(opt_spec), intent(inout)   :: spec !< specification
         integer                          :: i
         real                             :: x
         call self%kill
         allocate(self%pb(spec%ndim), self%pc(spec%ndim), stat=alloc_stat)
-        allocchk("In: new_bforce_opt")
+        allocchk("In: new_opt_bforce")
         self%pb = spec%limits(:,1)
         self%pc = spec%limits(:,1)
         if( all(spec%stepsz == 0.) ) stop 'step size (stepsz) not set in&
-        &specification (opt_spec); new_bforce_opt; simple_bforce_opt'
+        &specification (opt_spec); new_opt_bforce; simple_opt_bforce'
         ! initialize best cost to huge number
         self%yb = huge(x)
         self%exists = .true. ! indicates existence
-        DebugPrint  'created new bforce_opt object'
-    end subroutine new_bforce_opt
+        DebugPrint  'created new opt_bforce object'
+    end subroutine new_opt_bforce
     
     !> \brief  brute force minimization
     subroutine bforce_minimize( self, spec, fun_self, lowest_cost )
         use simple_opt_spec, only: opt_spec
-        class(bforce_opt), intent(inout) :: self        !< instance
+        class(opt_bforce), intent(inout) :: self        !< instance
         class(opt_spec),   intent(inout) :: spec        !< specification
         class(*),          intent(inout) :: fun_self    !< self-pointer for cost function
         real, intent(out)                :: lowest_cost !< lowest cost
         real :: y
         if( .not. associated(spec%costfun) )then
-            stop 'cost function not associated in opt_spec; bforce_minimize; simple_bforce_opt'
+            stop 'cost function not associated in opt_spec; bforce_minimize; simple_opt_bforce'
         endif
         ! init nevals counter
         spec%nevals = 0
@@ -111,12 +111,12 @@ contains
     end subroutine bforce_minimize
 
     !> \brief  is a destructor
-    subroutine kill_bforce_opt( self )
-        class(bforce_opt), intent(inout) :: self
+    subroutine kill_opt_bforce( self )
+        class(opt_bforce), intent(inout) :: self
         if( self%exists )then
             deallocate(self%pb, self%pc)
             self%exists = .false.
         endif
-    end subroutine kill_bforce_opt
+    end subroutine kill_opt_bforce
     
-end module simple_bforce_opt
+end module simple_opt_bforce

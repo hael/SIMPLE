@@ -8,7 +8,7 @@ use simple_image,            only: image
 use simple_oris,             only: oris ! to be replaced with sp_project
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 use simple_reconstructor,    only: reconstructor
-use simple_eo_reconstructor, only: eo_reconstructor
+use simple_reconstructor_eo, only: reconstructor_eo
 use simple_params,           only: params
 use simple_sym,              only: sym
 use simple_convergence,      only: convergence
@@ -47,11 +47,11 @@ type :: build
     type(comlin)                        :: clins              !< common lines data structure
     type(image),            allocatable :: ref_imgs(:,:)      !< array of reference images
     ! RECONSTRUCTION TOOLBOX
-    type(eo_reconstructor)              :: eorecvol           !< object for eo reconstruction
+    type(reconstructor_eo)              :: eorecvol           !< object for eo reconstruction
     type(reconstructor)                 :: recvol             !< object for reconstruction
     ! PRIME TOOLBOX
     type(reconstructor),    allocatable :: recvols(:)         !< array of volumes for reconstruction
-    type(eo_reconstructor), allocatable :: eorecvols(:)       !< array of volumes for eo-reconstruction
+    type(reconstructor_eo), allocatable :: eorecvols(:)       !< array of volumes for eo-reconstruction
     real,                   allocatable :: fsc(:,:)           !< Fourier Shell Correlation
     integer,                allocatable :: nnmat(:,:)         !< matrix with nearest neighbor indices
     integer,                allocatable :: grid_projs(:)      !< projection directions for coarse grid search

@@ -1,6 +1,6 @@
 ! function minimization by BFGS algorithm, translated from gsl 2.4 (vector_bfgs2.c)
 
-module simple_bfgs2_opt
+module simple_opt_bfgs2
 #include "simple_lib.f08"
 
 use simple_optimizer, only: optimizer
@@ -8,7 +8,7 @@ use simple_opt_helpers
 use simple_math
 implicit none
 
-public :: bfgs2_opt
+public :: opt_bfgs2
 private
 
 type :: bfgs2_wrapper
@@ -19,7 +19,7 @@ type :: bfgs2_wrapper
     real(dp) :: f_cache_key, df_cache_key, x_cache_key, g_cache_key
 end type bfgs2_wrapper
 
-type, extends(optimizer) :: bfgs2_opt
+type, extends(optimizer) :: opt_bfgs2
     private
     integer :: bfgs2_iter       !< internal iter for bfgs2 algorithm
     real(dp) :: step, g0norm, pnorm, delta_f, f
@@ -34,41 +34,41 @@ type, extends(optimizer) :: bfgs2_opt
     integer :: order
     logical :: exists=.false.
 contains
-    procedure :: new      => new_bfgs2_opt
+    procedure :: new      => new_opt_bfgs2
     procedure :: minimize => bfgs2_minimize
-    procedure :: kill     => kill_bfgs2_opt
+    procedure :: kill     => kill_opt_bfgs2
 end type
 
 contains
 
     !> \brief  is a constructor
-    subroutine new_bfgs2_opt( self, spec )
+    subroutine new_opt_bfgs2( self, spec )
         use simple_opt_spec, only: opt_spec
         use simple_syslib,   only: alloc_errchk
-        class(bfgs2_opt), intent(inout) :: self !< instance
+        class(opt_bfgs2), intent(inout) :: self !< instance
         class(opt_spec), intent(inout)  :: spec !< specification
         call self%kill
         allocate(self%x0(spec%ndim),self%p(spec%ndim),self%g0(spec%ndim),&
             & self%gradient(spec%ndim), self%dx0(spec%ndim), self%dg0(spec%ndim),&
             & self%dx(spec%ndim), self%wrapper%x_alpha(spec%ndim), &
             & self%wrapper%g_alpha(spec%ndim), stat=alloc_stat)
-        allocchk('In: new_bfgs2_opt; simple_bfgs2_opt')
+        allocchk('In: new_opt_bfgs2; simple_opt_bfgs2')
         self%exists = .true.
-    end subroutine new_bfgs2_opt
+    end subroutine new_opt_bfgs2
 
     !>  \brief  nonlinear conjugate gradient minimizer
     subroutine bfgs2_minimize( self, spec, fun_self, lowest_cost )
         use simple_opt_spec, only: opt_spec
         use simple_opt_subs, only: lnsrch
-        class(bfgs2_opt), intent(inout) :: self        !< instance
+        class(opt_bfgs2), intent(inout) :: self        !< instance
         class(opt_spec),  intent(inout) :: spec        !< specification
         class(*),         intent(inout) :: fun_self    !< self-pointer for cost function
         real, intent(out)               :: lowest_cost !< minimum function value
         if ( (.not. associated(spec%costfun) ).and.( .not. associated(spec%costfun_8)) ) then
-            stop 'cost function not associated in opt_spec; bfgs2_minimize; simple_bfgs2_opt'
+            stop 'cost function not associated in opt_spec; bfgs2_minimize; simple_opt_bfgs2'
         endif
         if ( (.not. associated(spec%gcostfun) ).and.(.not. associated(spec%gcostfun_8)) ) then
-            stop 'gradient of cost function not associated in opt_spec; bfgs2_minimize; simple_bfgs2_opt'
+            stop 'gradient of cost function not associated in opt_spec; bfgs2_minimize; simple_opt_bfgs2'
         endif
         spec%x_8 = spec%x
         ! initialise nevals counters
@@ -92,7 +92,7 @@ contains
                 iter = iter + 1
                 status = bfgs2_iterate()
                 if (status == OPT_STATUS_ERROR) then
-                    write (*,*) 'simple_bfgs2_opt: error in minimizer routine'
+                    write (*,*) 'simple_opt_bfgs2: error in minimizer routine'
                     return
                 end if
                 status = test_gradient(self%gradient, real(spec%gtol, dp))
@@ -300,7 +300,7 @@ contains
                 falpha = wrap_f(alpha)
                 if ((a-alpha)*fpa <= EPSILON(rho)) then
                     ! roundoff prevents progress
-                    write (*,*) 'simple_bfgs2_opt: roundoff prevents progress'
+                    write (*,*) 'simple_opt_bfgs2: roundoff prevents progress'
                     status = OPT_STATUS_ERROR
                     return
                 end if
@@ -585,13 +585,13 @@ contains
     end subroutine bfgs2_minimize
 
     !> \brief  is a destructor
-    subroutine kill_bfgs2_opt( self )
-        class(bfgs2_opt), intent(inout) :: self !< instance
+    subroutine kill_opt_bfgs2( self )
+        class(opt_bfgs2), intent(inout) :: self !< instance
         if( self%exists )then
             deallocate(self%x0, self%g0, self%p, self%gradient, &
                 & self%dx0, self%dg0, self%dx, self%wrapper%x_alpha, self%wrapper%g_alpha)
             self%exists = .false.
         endif
-    end subroutine kill_bfgs2_opt
+    end subroutine kill_opt_bfgs2
 
-end module simple_bfgs2_opt
+end module simple_opt_bfgs2

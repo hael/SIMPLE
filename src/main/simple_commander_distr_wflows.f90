@@ -18,12 +18,12 @@ implicit none
 
 public :: motion_correct_ctffind_distr_commander
 public :: motion_correct_distr_commander
-public :: motion_correct_tomo_movies_distr_commander
+public :: motion_correct_tomo_distr_commander
 public :: powerspecs_distr_commander
 public :: ctffind_distr_commander
 public :: ctf_estimate_distr_commander
 public :: pick_distr_commander
-public :: makecavgs_distr_commander
+public :: make_cavgs_distr_commander
 public :: comlin_smat_distr_commander
 public :: prime2D_distr_commander
 public :: prime3D_init_distr_commander
@@ -42,10 +42,10 @@ type, extends(commander_base) :: motion_correct_distr_commander
   contains
     procedure :: execute      => exec_motion_correct_distr
 end type motion_correct_distr_commander
-type, extends(commander_base) :: motion_correct_tomo_movies_distr_commander
+type, extends(commander_base) :: motion_correct_tomo_distr_commander
   contains
-    procedure :: execute      => exec_motion_correct_tomo_movies_distr
-end type motion_correct_tomo_movies_distr_commander
+    procedure :: execute      => exec_motion_correct_tomo_distr
+end type motion_correct_tomo_distr_commander
 type, extends(commander_base) :: powerspecs_distr_commander
   contains
     procedure :: execute      => exec_powerspecs_distr
@@ -62,10 +62,10 @@ type, extends(commander_base) :: pick_distr_commander
   contains
     procedure :: execute      => exec_pick_distr
 end type pick_distr_commander
-type, extends(commander_base) :: makecavgs_distr_commander
+type, extends(commander_base) :: make_cavgs_distr_commander
   contains
-    procedure :: execute      => exec_makecavgs_distr
-end type makecavgs_distr_commander
+    procedure :: execute      => exec_make_cavgs_distr
+end type make_cavgs_distr_commander
 type, extends(commander_base) :: comlin_smat_distr_commander
   contains
     procedure :: execute      => exec_comlin_smat_distr
@@ -142,7 +142,7 @@ contains
         ! clean
         call qsys_cleanup(p_master)
         ! end gracefully
-        call simple_end('**** SIMPLE_DISTR_motion_correct_CTFFIND NORMAL STOP ****')
+        call simple_end('**** SIMPLE_DISTR_MOTION_CORRECT_CTFFIND NORMAL STOP ****')
     end subroutine exec_motion_correct_ctffind_distr
 
     subroutine exec_motion_correct_distr( self, cline )
@@ -185,12 +185,12 @@ contains
         ! clean
         call qsys_cleanup(p_master)
         ! end gracefully
-        call simple_end('**** SIMPLE_DISTR_motion_correct NORMAL STOP ****')
+        call simple_end('**** SIMPLE_DISTR_MOTION_CORRECT NORMAL STOP ****')
     end subroutine exec_motion_correct_distr
 
-    subroutine exec_motion_correct_tomo_movies_distr( self, cline )
+    subroutine exec_motion_correct_tomo_distr( self, cline )
         use simple_oris,           only: oris
-        class(motion_correct_tomo_movies_distr_commander), intent(inout) :: self
+        class(motion_correct_tomo_distr_commander), intent(inout) :: self
         class(cmdline),                            intent(inout) :: cline
         character(len=STDLEN), allocatable :: tomonames(:)
         type(oris)               :: exp_doc
@@ -246,8 +246,8 @@ contains
         ! schedule & clean
         call qenv%gen_scripts_and_schedule_jobs(p_master, job_descr, part_params=part_params)
         call qsys_cleanup(p_master)
-        call simple_end('**** SIMPLE_DISTR_motion_correct_TOMO_MOVIES NORMAL STOP ****')
-    end subroutine exec_motion_correct_tomo_movies_distr
+        call simple_end('**** SIMPLE_DISTR_MOTION_CORRECT_TOMO NORMAL STOP ****')
+    end subroutine exec_motion_correct_tomo_distr
 
     subroutine exec_powerspecs_distr( self, cline )
         class(powerspecs_distr_commander), intent(inout) :: self
@@ -374,8 +374,8 @@ contains
         call simple_end('**** SIMPLE_DISTR_PICK NORMAL STOP ****')
     end subroutine exec_pick_distr
 
-    subroutine exec_makecavgs_distr( self, cline )
-        class(makecavgs_distr_commander), intent(inout) :: self
+    subroutine exec_make_cavgs_distr( self, cline )
+        class(make_cavgs_distr_commander), intent(inout) :: self
         class(cmdline),                   intent(inout) :: cline
         type(split_commander) :: xsplit
         type(cmdline)         :: cline_cavgassemble
@@ -398,7 +398,7 @@ contains
         call cline_cavgassemble%set('nthr',1.)
         call cline_cavgassemble%set('prg', 'cavgassemble')
         if( cline%defined('outfile') )then
-            ! because outfile is output from distributed exec of makecavgs
+            ! because outfile is output from distributed exec of make_cavgs
             call cline_cavgassemble%set('oritab', p_master%outfile)
         else
             ! because prime2D_startdoc.txt is default output in the absence of outfile
@@ -413,8 +413,8 @@ contains
         ! assemble class averages
         call qenv%exec_simple_prg_in_queue(cline_cavgassemble, 'CAVGASSEMBLE', 'CAVGASSEMBLE_FINISHED')
         call qsys_cleanup(p_master)
-        call simple_end('**** SIMPLE_DISTR_MAKECAVGS NORMAL STOP ****', print_simple=.false.)
-    end subroutine exec_makecavgs_distr
+        call simple_end('**** SIMPLE_DISTR_MAKE_CAVGS NORMAL STOP ****', print_simple=.false.)
+    end subroutine exec_make_cavgs_distr
 
     subroutine exec_prime2D_distr( self, cline )
         use simple_procimgfile, only: random_selection_from_imgfile, copy_imgfile
@@ -424,12 +424,12 @@ contains
         type(check2D_conv_commander)         :: xcheck2D_conv
         type(merge_algndocs_commander)       :: xmerge_algndocs
         type(split_commander)                :: xsplit
-        type(makecavgs_distr_commander)      :: xmakecavgs
+        type(make_cavgs_distr_commander)      :: xmake_cavgs
         ! command lines
         type(cmdline)         :: cline_check2D_conv
         type(cmdline)         :: cline_cavgassemble
         type(cmdline)         :: cline_merge_algndocs
-        type(cmdline)         :: cline_makecavgs
+        type(cmdline)         :: cline_make_cavgs
         ! other variables
         type(qsys_env)        :: qenv
         type(params)          :: p_master
@@ -465,7 +465,7 @@ contains
         cline_check2D_conv     = cline
         cline_cavgassemble     = cline
         cline_merge_algndocs   = cline
-        cline_makecavgs        = cline
+        cline_make_cavgs        = cline
 
         ! initialise static command line parameters and static job description parameters
         call cline_merge_algndocs%set('fbody',    ALGN_FBODY           )
@@ -474,7 +474,7 @@ contains
         call cline_check2D_conv%set('box',        real(p_master%box)   )
         call cline_check2D_conv%set('nptcls',     real(p_master%nptcls))
         call cline_cavgassemble%set('prg',        'cavgassemble'       )
-        call cline_makecavgs%set('prg',           'makecavgs'          )
+        call cline_make_cavgs%set('prg',           'make_cavgs'          )
         if( job_descr%isthere('automsk') ) call job_descr%delete('automsk')
 
         if( .not. cline%defined('stktab') )then
@@ -488,8 +488,8 @@ contains
             p_master%refs_even = 'start2Drefs_even'//p_master%ext
             p_master%refs_odd  = 'start2Drefs_odd'//p_master%ext
             if( cline%defined('oritab') )then
-                call cline_makecavgs%set('refs', p_master%refs)
-                call xmakecavgs%execute(cline_makecavgs)
+                call cline_make_cavgs%set('refs', p_master%refs)
+                call xmake_cavgs%execute(cline_make_cavgs)
             else
                 if( cline%defined('stktab') )then
                     call random_selection_from_imgfile(p_master%stktab, p_master%refs,&

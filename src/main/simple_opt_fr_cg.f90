@@ -1,6 +1,6 @@
 ! function minimization by Fletcher-Reeves conjugate gradient algorithm, translated from gsl 2.4
 
-module simple_fr_cg_opt
+module simple_opt_fr_cg
 #include "simple_lib.f08"
 
 use simple_optimizer, only: optimizer
@@ -8,33 +8,33 @@ use simple_opt_helpers
 use simple_math
 implicit none
 
-public :: fr_cg_opt
+public :: opt_fr_cg
 private
 
-type, extends(optimizer) :: fr_cg_opt
+type, extends(optimizer) :: opt_fr_cg
     private
     real(kind=8), allocatable :: x1(:), x2(:), p(:), g0(:), gradient(:)
     real(kind=8) :: step, pnorm, g0norm, f
     integer :: fr_cg_iter       !< internal iter for fr_cg algorithm
     logical :: exists=.false.
 contains
-    procedure :: new          => new_fr_cg_opt
+    procedure :: new          => new_opt_fr_cg
     procedure :: minimize     => fr_cg_minimize
-    procedure :: kill         => kill_fr_cg_opt
+    procedure :: kill         => kill_opt_fr_cg
 end type
 
 contains
 
     !> \brief  is a constructor
-    subroutine new_fr_cg_opt( self, spec )
+    subroutine new_opt_fr_cg( self, spec )
         use simple_opt_spec, only: opt_spec
         use simple_syslib,   only: alloc_errchk
-        class(fr_cg_opt), intent(inout) :: self        !< instance
+        class(opt_fr_cg), intent(inout) :: self        !< instance
         class(opt_spec),  intent(inout) :: spec        !< specification
         call self%kill
         allocate(self%x1(spec%ndim),self%x2(spec%ndim),self%p(spec%ndim),self%g0(spec%ndim),&
             & self%gradient(spec%ndim),stat=alloc_stat)
-        allocchk('In: new_fr_cg_opt; simple_fr_cg_opt')
+        allocchk('In: new_opt_fr_cg; simple_opt_fr_cg')
         self%exists = .true.
     end subroutine
 
@@ -42,15 +42,15 @@ contains
     subroutine fr_cg_minimize( self, spec, fun_self, lowest_cost )
         use simple_opt_spec, only: opt_spec
         use simple_opt_subs, only: lnsrch
-        class(fr_cg_opt), intent(inout) :: self        !< instance
+        class(opt_fr_cg), intent(inout) :: self        !< instance
         class(opt_spec),  intent(inout) :: spec        !< specification
         class(*),         intent(inout) :: fun_self    !< self-pointer for cost function        
         real, intent(out)               :: lowest_cost !< minimum function value
         if ( (.not. associated(spec%costfun) ).and.( .not. associated(spec%costfun_8)) ) then
-            stop 'cost function not associated in opt_spec; fr_cg_minimize; simple_fr_cg_opt'
+            stop 'cost function not associated in opt_spec; fr_cg_minimize; simple_opt_fr_cg'
         endif
         if ( (.not. associated(spec%gcostfun) ).and.(.not. associated(spec%gcostfun_8)) ) then
-            stop 'gradient of cost function not associated in opt_spec; fr_cg_minimize; simple_fr_cg_opt'
+            stop 'gradient of cost function not associated in opt_spec; fr_cg_minimize; simple_opt_fr_cg'
         endif
         spec%x_8 = spec%x
         ! initialise nevals counters
@@ -75,7 +75,7 @@ contains
                     iter = iter + 1
                     status = fr_cg_iterate()
                     if (status == OPT_STATUS_ERROR) then
-                        write (*,*) 'simple_fr_cg_opt: error in minimizer routine'
+                        write (*,*) 'simple_opt_fr_cg: error in minimizer routine'
                         return
                     end if
                     status = test_gradient(self%gradient, real(spec%gtol, kind=8))                    
@@ -183,12 +183,12 @@ contains
     end subroutine
 
     !> \brief  is a destructor
-    subroutine kill_fr_cg_opt( self )
-        class(fr_cg_opt), intent(inout) :: self !< instance
+    subroutine kill_opt_fr_cg( self )
+        class(opt_fr_cg), intent(inout) :: self !< instance
         if( self%exists )then
             deallocate(self%x1, self%x2, self%p, self%g0, self%gradient)
             self%exists = .false.
         endif
     end subroutine
 
-end module simple_fr_cg_opt
+end module simple_opt_fr_cg

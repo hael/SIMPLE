@@ -2,18 +2,18 @@
 module simple_opt_factory
 use simple_optimizer,          only: optimizer
 use simple_opt_spec,           only: opt_spec
-use simple_bfgs_opt,           only: bfgs_opt
-use simple_bfgs2_opt,          only: bfgs2_opt
-use simple_lbfgsb_opt,         only: lbfgsb_opt
-use simple_fr_cg_opt,          only: fr_cg_opt
-use simple_pr_cg_opt,          only: pr_cg_opt
-use simple_stde_opt,           only: stde_opt
-use simple_powell_opt,         only: powell_opt
-use simple_simplex_opt,        only: simplex_opt
-use simple_bforce_opt,         only: bforce_opt
-use simple_particle_swarm_opt, only: particle_swarm_opt
-use simple_de_opt,             only: de_opt
-use simple_bforce_opt,         only: bforce_opt
+use simple_opt_bfgs,           only: opt_bfgs
+use simple_opt_bfgs2,          only: opt_bfgs2
+use simple_opt_lbfgsb,         only: opt_lbfgsb
+use simple_opt_fr_cg,          only: opt_fr_cg
+use simple_opt_pr_cg,          only: opt_pr_cg
+use simple_opt_stde,           only: opt_stde
+use simple_opt_powell,         only: opt_powell
+use simple_opt_simplex,        only: opt_simplex
+use simple_opt_bforce,         only: opt_bforce
+use simple_opt_particle_swarm, only: opt_particle_swarm
+use simple_opt_de,             only: opt_de
+use simple_opt_bforce,         only: opt_bforce
 implicit none
 
 public :: opt_factory
@@ -35,27 +35,27 @@ contains
         class(optimizer), pointer                 :: ptr  !< pointer to constructed object
         select case(spec%str_opt)
             case('bfgs')
-                allocate(bfgs_opt           :: self%optimizer_type)
+                allocate(opt_bfgs           :: self%optimizer_type)
             case('powell')
-                allocate(powell_opt         :: self%optimizer_type)
+                allocate(opt_powell         :: self%optimizer_type)
             case('simplex')
-                allocate(simplex_opt        :: self%optimizer_type)
+                allocate(opt_simplex        :: self%optimizer_type)
             case('bforce')
-                allocate(bforce_opt         :: self%optimizer_type)
+                allocate(opt_bforce         :: self%optimizer_type)
             case('pso')
-                allocate(particle_swarm_opt :: self%optimizer_type)
+                allocate(opt_particle_swarm :: self%optimizer_type)
             case('de')
-                allocate(de_opt             :: self%optimizer_type)
+                allocate(opt_de             :: self%optimizer_type)
             case('fr_cg')
-                allocate(fr_cg_opt          :: self%optimizer_type)
+                allocate(opt_fr_cg          :: self%optimizer_type)
             case('pr_cg')
-                allocate(pr_cg_opt          :: self%optimizer_type)
+                allocate(opt_pr_cg          :: self%optimizer_type)
             case('bfgs2')
-                allocate(bfgs2_opt          :: self%optimizer_type)
+                allocate(opt_bfgs2          :: self%optimizer_type)
             case('lbfgsb')
-                allocate(lbfgsb_opt         :: self%optimizer_type)
+                allocate(opt_lbfgsb         :: self%optimizer_type)
             case('stde')
-                allocate(stde_opt           :: self%optimizer_type)                
+                allocate(opt_stde           :: self%optimizer_type)                
             case DEFAULT
                 write(*,*) 'class:', spec%str_opt
                 stop 'unsupported in opt_factory constructor'

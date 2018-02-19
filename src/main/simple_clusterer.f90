@@ -6,13 +6,13 @@ implicit none
 contains
 
     ! routine for SHC-based clustering of orientation based on Geodesic distance
-    subroutine shc_cluster_oris( os, ncls )
-        use simple_shc_cluster, only: shc_cluster
+    subroutine cluster_shc_oris( os, ncls )
+        use simple_cluster_shc, only: cluster_shc
         use simple_oris,        only: oris
         class(oris), intent(inout) :: os
         integer,     intent(in)    :: ncls
         type(oris)        :: labels
-        type(shc_cluster) :: shcc
+        type(cluster_shc) :: shcc
         real, allocatable :: smat(:,:)
         integer :: noris, i
         real    :: sim
@@ -28,6 +28,6 @@ contains
             call os%set(i, 'class', labels%get(i,'class'))
         end do
         deallocate(smat)
-    end subroutine shc_cluster_oris
+    end subroutine cluster_shc_oris
 
 end module simple_clusterer

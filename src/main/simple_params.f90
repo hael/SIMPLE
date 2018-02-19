@@ -101,7 +101,7 @@ type :: params
     character(len=STDLEN) :: boxtab=''            !< table (text file) of files with EMAN particle coordinates(.txt)
     character(len=STDLEN) :: boxtype='eman'
     character(len=STDLEN) :: classdoc=''          !< doc with per-class stats(.txt)
-    character(len=STDLEN) :: comlindoc=''         !< shc_clustering_nclsX.txt
+    character(len=STDLEN) :: comlindoc=''         !< cluster_shcing_nclsX.txt
     character(len=STDLEN) :: ctf='no'             !< ctf flag(yes|no|flip)
     character(len=STDLEN) :: cwd=''
     character(len=STDLEN) :: deftab=''            !< file with CTF info(.txt|.bin)

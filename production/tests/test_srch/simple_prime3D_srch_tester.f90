@@ -90,7 +90,7 @@ contains
 
     ! subroutine setup_testenv( cline, be_verbose )
     !     use simple_strings,        only: str_has_substr
-    !     use simple_projector_hlev, only: projvol
+    !     use simple_projector_hlev, only: project
     !     class(cmdline),    intent(inout) :: cline
     !     logical, optional, intent(in)    :: be_verbose
     !     !type(ori)          :: o
@@ -137,7 +137,7 @@ contains
     !     call b%vol%read(p%vols(1))
     !     call b%vol%fwd_ft
     !     call b%vol%expand_cmat(p%alpha)
-    !     imgs_ptcls = projvol(b%vol, o_ptcls, p)
+    !     imgs_ptcls = project(b%vol, o_ptcls, p)
     !     call b%vol%kill_expanded
     !     do i=1,NPROJS
     !         call imgs_ptcls(i)%write(ptclsname, i)

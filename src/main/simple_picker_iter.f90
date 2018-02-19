@@ -1,17 +1,17 @@
 ! particle picker iterator
-module simple_pick_iter
+module simple_picker_iter
 #include "simple_lib.f08"
 
 use simple_picker
 implicit none
 
-public :: pick_iter
+public :: picker_iter
 private
 
-type :: pick_iter
+type :: picker_iter
   contains
     procedure :: iterate
-end type pick_iter
+end type picker_iter
 
 contains
 
@@ -19,7 +19,7 @@ contains
         use simple_params,  only: params
         use simple_oris,    only: oris
         use simple_cmdline, only: cmdline
-        class(pick_iter),           intent(inout) :: self
+        class(picker_iter),           intent(inout) :: self
         class(cmdline),             intent(in)    :: cline
         class(params),              intent(inout) :: p
         integer,                    intent(inout) :: movie_counter
@@ -42,4 +42,4 @@ contains
         call kill_picker
     end subroutine iterate
 
-end module simple_pick_iter
+end module simple_picker_iter

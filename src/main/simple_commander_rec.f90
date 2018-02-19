@@ -54,14 +54,14 @@ contains
 
     !> for assembling even/odd volumes generated with distributed execution
     subroutine exec_eo_volassemble( self, cline )
-        use simple_eo_reconstructor, only: eo_reconstructor
+        use simple_reconstructor_eo, only: reconstructor_eo
         use simple_filterer,         only: gen_anisotropic_optlp
         use simple_timer             ! use all in there
         class(eo_volassemble_commander), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline
         type(params)                  :: p
         type(build)                   :: b
-        type(eo_reconstructor)        :: eorecvol_read
+        type(reconstructor_eo)        :: eorecvol_read
         character(len=:), allocatable :: finished_fname, recname, volname
         character(len=32)             :: eonames(2), resmskname, benchfname
         real, allocatable             :: res05s(:), res0143s(:)

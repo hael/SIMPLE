@@ -2,7 +2,7 @@
 module simple_volpft_srch
 use simple_opt_spec,        only: opt_spec
 use simple_volpft_corrcalc, only: volpft_corrcalc
-use simple_simplex_opt,     only: simplex_opt
+use simple_opt_simplex,     only: opt_simplex
 use simple_ori,             only: ori
 use simple_defs             ! use all in there
 implicit none
@@ -18,9 +18,9 @@ type(volpft_corrcalc) :: vpftcc               !< corr calculator
 type(opt_spec)        :: ospec_eul            !< optimizer specification object, Euler angles
 type(opt_spec)        :: ospec_shift          !< optimizer specification object, rotational origin shifts
 type(opt_spec)        :: ospec_all            !< optimizer specification object, all df:s
-type(simplex_opt)     :: nlopt_eul            !< optimizer object, Euler angles
-type(simplex_opt)     :: nlopt_shift          !< optimizer object, rotational origin shifts
-type(simplex_opt)     :: nlopt_all            !< optimizer object, all df:s
+type(opt_simplex)     :: nlopt_eul            !< optimizer object, Euler angles
+type(opt_simplex)     :: nlopt_shift          !< optimizer object, rotational origin shifts
+type(opt_simplex)     :: nlopt_all            !< optimizer object, all df:s
 type(ori)             :: e_glob               !< ori of best solution found so far
 real                  :: shift_scale =  1.0   !< shift scale factor
 logical               :: shbarr      = .true. !< shift barrier constraint or not

@@ -7,7 +7,7 @@ use simple_params,         only: params
 use simple_build,          only: build
 use simple_commander_base, only: commander_base
 use simple_image,          only: image
-use simple_projector_hlev, only: projvol, rotvol
+use simple_projector_hlev, only: project, rotvol
 use simple_ori,            only: ori
 use simple_masker,         only:masker
 !! import functions
@@ -16,9 +16,9 @@ use simple_imghead,        only: find_ldim_nptcls
 implicit none
 
 public :: fsc_commander
-public :: cenvol_commander
+public :: center_commander
 public :: postprocess_commander
-public :: projvol_commander
+public :: project_commander
 public :: volaverager_commander
 public :: volops_commander
 public :: volume_smat_commander
@@ -30,18 +30,18 @@ type, extends(commander_base) :: fsc_commander
   contains
     procedure :: execute      => exec_fsc
 end type fsc_commander
-type, extends(commander_base) :: cenvol_commander
+type, extends(commander_base) :: center_commander
   contains
-    procedure :: execute      => exec_cenvol
-end type cenvol_commander
+    procedure :: execute      => exec_center
+end type center_commander
 type, extends(commander_base) :: postprocess_commander
  contains
    procedure :: execute      => exec_postprocess
 end type postprocess_commander
-type, extends(commander_base) :: projvol_commander
+type, extends(commander_base) :: project_commander
  contains
-   procedure :: execute      => exec_projvol
-end type projvol_commander
+   procedure :: execute      => exec_project
+end type project_commander
 type, extends(commander_base) :: volaverager_commander
   contains
     procedure :: execute      => exec_volaverager
@@ -123,8 +123,8 @@ contains
     end subroutine exec_fsc
 
     !> centers a 3D volume and associated particle document
-    subroutine exec_cenvol( self, cline )
-        class(cenvol_commander), intent(inout) :: self
+    subroutine exec_center( self, cline )
+        class(center_commander), intent(inout) :: self
         class(cmdline),          intent(inout) :: cline
         type(params)         :: p
         type(build)          :: b
@@ -146,8 +146,8 @@ contains
             call binwrite_oritab(p%outfile, b%a, [1,b%a%get_noris()])
         endif
         ! end gracefully
-        call simple_end('**** SIMPLE_CENVOL NORMAL STOP ****')
-    end subroutine exec_cenvol
+        call simple_end('**** SIMPLE_center NORMAL STOP ****')
+    end subroutine exec_center
 
     subroutine exec_postprocess(self, cline)
         use simple_estimate_ssnr, only: fsc2optlp
@@ -253,11 +253,11 @@ contains
         call simple_end('**** SIMPLE_postprocess NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_postprocess
 
-    !> exec_projvol generate projections from volume
+    !> exec_project generate projections from volume
     !! \param cline command line
     !!
-    subroutine exec_projvol( self, cline )
-        class(projvol_commander), intent(inout) :: self
+    subroutine exec_project( self, cline )
+        class(project_commander), intent(inout) :: self
         class(cmdline),           intent(inout) :: cline
         type(params)             :: p
         type(build)              :: b
@@ -293,10 +293,10 @@ contains
         ! generate projections
         if( p%swap .eq. 'yes' ) call b%a%swape1e3
         if( cline%defined('top') )then
-            imgs = projvol(b%vol, b%a, p, p%top)
+            imgs = project(b%vol, b%a, p, p%top)
             loop_end = p%top
         else
-            imgs = projvol(b%vol, b%a, p)
+            imgs = project(b%vol, b%a, p)
             loop_end = p%nspace
         endif
         if( file_exists(p%outstk) ) call del_file(p%outstk)
@@ -309,9 +309,9 @@ contains
             if( p%neg .eq. 'yes' ) call imgs(i)%neg()
             call imgs(i)%write(p%outstk,i)
         end do
-        call binwrite_oritab('projvol_oris'//trim(METADATA_EXT), b%a, [1,p%nptcls])
-        call simple_end('**** SIMPLE_PROJVOL NORMAL STOP ****')
-    end subroutine exec_projvol
+        call binwrite_oritab('project_oris'//trim(METADATA_EXT), b%a, [1,p%nptcls])
+        call simple_end('**** SIMPLE_project NORMAL STOP ****')
+    end subroutine exec_project
 
     !> exec_volaverager create volume average
     !! \param cline

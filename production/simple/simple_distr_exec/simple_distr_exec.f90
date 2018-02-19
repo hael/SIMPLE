@@ -14,14 +14,14 @@ implicit none
 type(preproc_stream_commander)                   :: xpreproc_stream
 type(motion_correct_ctffind_distr_commander)     :: xmotion_correct_ctffind_distr
 type(motion_correct_distr_commander)             :: xmotion_correct_distr
-type(motion_correct_tomo_movies_distr_commander) :: xmotion_correct_tomo_distr
+type(motion_correct_tomo_distr_commander) :: xmotion_correct_tomo_distr
 type(powerspecs_distr_commander)                 :: xpowerspecs_distr
 type(ctffind_distr_commander)                    :: xctffind_distr
 type(ctf_estimate_distr_commander)               :: xctf_estimate_distr
 type(pick_distr_commander)                       :: xpick_distr
 
 ! PRIME2D
-type(makecavgs_distr_commander)          :: xmakecavgs_distr
+type(make_cavgs_distr_commander)          :: xmake_cavgs_distr
 type(prime2D_autoscale_commander)        :: xprime2D_distr
 type(prime2D_stream_distr_commander)     :: xprime2D_stream_distr
 
@@ -386,11 +386,11 @@ select case(prg)
 
     ! PRIME2D
 
-    case( 'makecavgs' )
-        !==Program makecavgs
+    case( 'make_cavgs' )
+        !==Program make_cavgs
         !
-        ! <makecavgs/begin>is a distributed workflow used for producing class averages or
-        ! initial random references for cluster2D execution. <makecavgs/end>
+        ! <make_cavgs/begin>is a distributed workflow used for producing class averages or
+        ! initial random references for cluster2D execution. <make_cavgs/end>
         !
         ! set required keys
         keys_required(1)  = 'smpd'
@@ -412,7 +412,7 @@ select case(prg)
         keys_optional(13) = 'stktab'
         keys_optional(14) = 'phaseplate'
         ! parse command line
-        if( describe ) call print_doc_makecavgs
+        if( describe ) call print_doc_make_cavgs
         call cline%parse(keys_required(:3), keys_optional(:14))
         ! sanity check
         if( cline%defined('stk') .or. cline%defined('stktab') )then
@@ -423,7 +423,7 @@ select case(prg)
         ! set defaults
         if( .not. cline%defined('weights2D') ) call cline%set('weights2D', 'no')
         ! execute
-        call xmakecavgs_distr%execute(cline)
+        call xmake_cavgs_distr%execute(cline)
     case( 'cluster2D' )
         !==Program cluster2D
         !

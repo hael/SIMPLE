@@ -4,7 +4,7 @@ module simple_prime2D_srch
 #include "simple_lib.f08"
 use simple_polarft_corrcalc,  only: polarft_corrcalc
 use simple_pftcc_shsrch,      only: pftcc_shsrch      ! simplex-based angle and shift search
-use simple_pftcc_grad_shsrch, only: pftcc_grad_shsrch ! gradient-based angle and shift search
+use simple_pftcc_shsrch_grad, only: pftcc_shsrch_grad ! gradient-based angle and shift search
 use simple_oris,              only: oris
 use simple_timer              ! use all in there
 implicit none
@@ -24,7 +24,7 @@ type prime2D_srch
     class(polarft_corrcalc), pointer :: pftcc_ptr => null()  !< pointer to pftcc (corrcalc) object
     class(oris),             pointer :: a_ptr     => null()  !< pointer to b%a (primary particle orientation table)
     type(pftcc_shsrch)               :: shsrch_obj           !< origin shift search object
-    type(pftcc_grad_shsrch)          :: grad_shsrch_obj      !< origin shift search object, L-BFGS with gradient
+    type(pftcc_shsrch_grad)          :: grad_shsrch_obj      !< origin shift search object, L-BFGS with gradient
     integer                          :: nrefs         =  0   !< number of references
     integer                          :: nrots         =  0   !< number of in-plane rotations in polar representation
     integer                          :: nrefs_eval    =  0   !< nr of references evaluated

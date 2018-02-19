@@ -3,7 +3,7 @@ program simple_test_install
 
 use simple_testfuns          ! use all in there
 use simple_image,            only: image
-use simple_commander_volops, only: projvol_commander
+use simple_commander_volops, only: project_commander
 implicit none
 type( image )         :: cube, img
 real                  :: smpd

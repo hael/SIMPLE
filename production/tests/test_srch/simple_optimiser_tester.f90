@@ -194,7 +194,7 @@ contains
         end do
         deallocate(success,nevals)
         ! Finally, we test the brute-force one
-        call simple_test_bforce_opt
+        call simple_test_opt_bforce
     end subroutine test_all_optimizers
 
     !>  \brief  optimizer test routine, parameterized with respect to optimizer & testfunction
@@ -225,13 +225,13 @@ contains
         deallocate(opt_ptr)
     end subroutine test_optimizer
 
-    subroutine simple_test_bforce_opt
-        use simple_bforce_opt, only: bforce_opt
+    subroutine simple_test_opt_bforce
+        use simple_opt_bforce, only: opt_bforce
         use simple_opt_spec,   only: opt_spec
         use simple_testfuns
         implicit none
         type(opt_spec)              :: spec
-        type(bforce_opt)            :: bforce
+        type(opt_bforce)            :: bforce
         real                        :: lowest_cost, limits(2,2), range(2), gmin, dist
         procedure(testfun), pointer :: pfun
         class(*), pointer           :: fun_self => null()
@@ -250,8 +250,8 @@ contains
         else
             write(*,*) 'dist from global opt (0,0): ', dist
             write(*,*) 'cost obtained (lowest=0):   ', lowest_cost
-            stop '****optimiser_test FAILURE bforce_opt'
+            stop '****optimiser_test FAILURE opt_bforce'
         endif
-    end subroutine simple_test_bforce_opt
+    end subroutine simple_test_opt_bforce
 
 end module simple_optimiser_tester

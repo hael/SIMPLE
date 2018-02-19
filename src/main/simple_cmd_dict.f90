@@ -47,7 +47,7 @@ contains
         call chdict%push('classtats',     'calculate class population statistics(yes|no){no}')
         call chdict%push('clip',          'clipped image box size(in pixels)')
         call chdict%push('clustvalid',    'validate clustering(yes|homo|no){no}')
-        call chdict%push('comlindoc',     'shc_clustering_nclsX.txt')
+        call chdict%push('comlindoc',     'cluster_shcing_nclsX.txt')
         call chdict%push('compare',       'do comparison(yes|no){no}')
         call chdict%push('corner',        'corner size(in pixels){0}')
         call chdict%push('countvox',      'count # voxels(yes|no){no}')

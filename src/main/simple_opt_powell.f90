@@ -1,6 +1,6 @@
 ! continuous function optimisation by Powell's method of conjugate search directions
 
-module simple_powell_opt
+module simple_opt_powell
 #include "simple_lib.f08"
     
 use simple_optimizer, only: optimizer
@@ -8,33 +8,33 @@ use simple_opt_spec,  only: opt_spec, costfun
 
 implicit none
 
-public :: powell_opt
+public :: opt_powell
 private
 
-type, extends(optimizer) :: powell_opt
+type, extends(optimizer) :: opt_powell
     private
     type(opt_spec)    :: spec_linmin        !< specification of linmin optimizer
     real, allocatable :: direction_set(:,:) !< set of search directions
     real              :: yb=0.              !< best cost function value
     logical           :: exists=.false.     !< to indicate existence
   contains
-    procedure :: new          => new_powell_opt
+    procedure :: new          => new_opt_powell
     procedure :: minimize     => powell_minimize
-    procedure :: kill         => kill_powell_opt
-end type powell_opt
+    procedure :: kill         => kill_opt_powell
+end type opt_powell
 
 #include "simple_local_flags.inc"
 
 contains
 
     !> \brief  is a constructor
-    subroutine new_powell_opt( self, spec )
-        class(powell_opt), intent(inout) :: self !< instance
+    subroutine new_opt_powell( self, spec )
+        class(opt_powell), intent(inout) :: self !< instance
         class(opt_spec), intent(inout)   :: spec !< specification
         real                             :: x
         call self%kill
         allocate(self%direction_set(spec%ndim,spec%ndim), stat=alloc_stat)
-        allocchk("In: new; simple_powell_opt")
+        allocchk("In: new; simple_opt_powell")
         self%direction_set = 0.
         self%yb            = huge(x) ! initialize best cost to huge number
         ! make line minimizer
@@ -46,7 +46,7 @@ contains
     !>  \brief  the high-level minimization routine
     subroutine powell_minimize(self,spec,fun_self,lowest_cost)
         use simple_rnd, only: ran3
-        class(powell_opt), intent(inout) :: self        !< instance
+        class(opt_powell), intent(inout) :: self        !< instance
         class(opt_spec),   intent(inout) :: spec        !< specification
         class(*),          intent(inout) :: fun_self    !< self-pointer for cost function
         real, intent(out)                :: lowest_cost !< lowest cost
@@ -55,7 +55,7 @@ contains
         integer :: i, j
         logical :: arezero(spec%ndim)
         if( .not. associated(spec%costfun) )then
-            stop 'cost function not associated in opt_spec; powell_minimize; simple_powell_opt'
+            stop 'cost function not associated in opt_spec; powell_minimize; simple_opt_powell'
         endif
         ! initialise nevals counters
         spec%nevals  = 0
@@ -125,7 +125,7 @@ contains
                 integer :: i,ibig,j,iter
                 real    :: del,fp,fptt,t
                 allocate(pt(spec%ndim),ptt(spec%ndim), stat=alloc_stat)
-                allocchk("In: powell; simple_powell_opt")
+                allocchk("In: powell; simple_opt_powell")
                 cost=spec%costfun(fun_self,self%spec_linmin%x,spec%ndim) ! set initial costfun val
                 spec%nevals = spec%nevals+1
                 do j=1,spec%ndim
@@ -152,7 +152,7 @@ contains
                     end do
                     if(2.*abs(fp-cost).le.spec%ftol*(abs(fp)+abs(cost))) return ! termination criterion
                     if(iter.eq.spec%maxits)then
-                        if( warn ) write(*,'(a)') 'powell exceeding maximum iterations; simple_powell_opt'
+                        if( warn ) write(*,'(a)') 'powell exceeding maximum iterations; simple_opt_powell'
                         return
                     end if
                     do j=1,spec%ndim
@@ -183,8 +183,8 @@ contains
     ! DESTRUCTOR
 
     !> \brief  is a destructor
-    subroutine kill_powell_opt( self )
-        class(powell_opt), intent(inout) :: self
+    subroutine kill_opt_powell( self )
+        class(opt_powell), intent(inout) :: self
         if( self%exists )then
             deallocate(self%direction_set)
             call self%spec_linmin%kill
@@ -192,4 +192,4 @@ contains
         endif
     end subroutine
 
-end module simple_powell_opt
+end module simple_opt_powell

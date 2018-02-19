@@ -48,7 +48,7 @@ contains
         integer,           parameter :: MAXITS_STAGE1 = 10
         ! commanders
         type(split_commander)           :: xsplit
-        type(makecavgs_distr_commander) :: xmakecavgs
+        type(make_cavgs_distr_commander) :: xmake_cavgs
         type(prime2D_distr_commander)   :: xprime2D_distr
         type(rank_cavgs_commander)      :: xrank_cavgs
         type(scale_commander)           :: xscale
@@ -56,7 +56,7 @@ contains
         type(cmdline) :: cline_prime2D_stage1
         type(cmdline) :: cline_prime2D_stage2
         type(cmdline) :: cline_scalerefs
-        type(cmdline) :: cline_makecavgs
+        type(cmdline) :: cline_make_cavgs
         type(cmdline) :: cline_rank_cavgs
         ! other variables
         character(len=STDLEN) :: scaled_stktab
@@ -167,14 +167,14 @@ contains
             call binread_oritab(finaldoc, os, [1,p_master%nptcls])
             call os%mul_shifts(1./scale_stage2)
             call binwrite_oritab(finaldoc, os, [1,p_master%nptcls])
-            cline_makecavgs = cline
-            call cline_makecavgs%delete('autoscale')
-            call cline_makecavgs%delete('balance')
-            call cline_makecavgs%set('prg',    'makecavgs')
-            call cline_makecavgs%set('oritab', trim(finaldoc))
-            call cline_makecavgs%set('nparts', real(nparts))
-            call cline_makecavgs%set('refs',   trim(finalcavgs))
-            call xmakecavgs%execute(cline_makecavgs)
+            cline_make_cavgs = cline
+            call cline_make_cavgs%delete('autoscale')
+            call cline_make_cavgs%delete('balance')
+            call cline_make_cavgs%set('prg',    'make_cavgs')
+            call cline_make_cavgs%set('oritab', trim(finaldoc))
+            call cline_make_cavgs%set('nparts', real(nparts))
+            call cline_make_cavgs%set('refs',   trim(finalcavgs))
+            call xmake_cavgs%execute(cline_make_cavgs)
         else ! no auto-scaling
             call xprime2D_distr%execute(cline)
             last_iter_stage2 = nint(cline%get_rarg('endit'))
@@ -198,7 +198,7 @@ contains
 
     !> for generation of an initial 3d model from class averages
     subroutine exec_initial_3Dmodel( self, cline )
-        use simple_commander_volops, only: projvol_commander
+        use simple_commander_volops, only: project_commander
         use simple_commander_rec,    only: recvol_commander
         class(initial_3Dmodel_commander), intent(inout) :: self
         class(cmdline),                    intent(inout) :: cline
@@ -214,14 +214,14 @@ contains
         type(symsrch_distr_commander) :: xsymsrch_distr
         ! shared-mem commanders
         type(recvol_commander)        :: xrecvol
-        type(projvol_commander)       :: xprojvol
+        type(project_commander)       :: xproject
         ! command lines
         type(cmdline)         :: cline_prime3D_snhc
         type(cmdline)         :: cline_prime3D_init
         type(cmdline)         :: cline_prime3D_refine
         type(cmdline)         :: cline_symsrch
         type(cmdline)         :: cline_recvol
-        type(cmdline)         :: cline_projvol
+        type(cmdline)         :: cline_project
         ! other variables
         type(scaler)          :: scobj
         type(params)          :: p_master
@@ -274,10 +274,10 @@ contains
         cline_prime3D_refine = cline
         cline_symsrch        = cline
         cline_recvol         = cline
-        cline_projvol        = cline
-        ! recvol & projvol are not distributed executions, so remove the nparts flag
+        cline_project        = cline
+        ! recvol & project are not distributed executions, so remove the nparts flag
         call cline_recvol%delete('nparts')
-        call cline_projvol%delete('nparts')
+        call cline_project%delete('nparts')
         ! initialise command line parameters
         ! (1) INITIALIZATION BY STOCHASTIC NEIGHBORHOOD HILL-CLIMBING
         call cline_prime3D_snhc%delete('update_frac') ! no fractional update in first phase
@@ -333,11 +333,11 @@ contains
             call cline_prime3D_refine%set('nspace', real(NSPACE_DEFAULT))
         endif
         ! (5) RE-PROJECT VOLUME
-        call cline_projvol%set('prg', 'projvol')
-        call cline_projvol%set('outstk', 'reprojs'//p_master%ext)
-        call cline_projvol%delete('stk')
+        call cline_project%set('prg', 'project')
+        call cline_project%set('outstk', 'reprojs'//p_master%ext)
+        call cline_project%delete('stk')
         if( doautoscale )then
-            call scobj%update_smpd_msk(cline_projvol, 'original')
+            call scobj%update_smpd_msk(cline_project, 'original')
             ! scale class averages
             call scobj%scale_exec
         endif
@@ -399,12 +399,12 @@ contains
         write(*,'(A)') '>>>'
         write(*,'(A)') '>>> RE-PROJECTION OF THE FINAL VOLUME'
         write(*,'(A)') '>>>'
-        call cline_projvol%set('vol1', 'rec_final'//p_master%ext)
-        call cline_projvol%set('oritab', trim(oritab))
-        call xprojvol%execute(cline_projvol)
+        call cline_project%set('vol1', 'rec_final'//p_master%ext)
+        call cline_project%set('oritab', trim(oritab))
+        call xproject%execute(cline_project)
         ! end gracefully
         call del_file(trim(STKSCALEDBODY)//p_master%ext)
-        call simple_end('**** SIMPLE_initial_3Dmodel NORMAL STOP ****')
+        call simple_end('**** SIMPLE_INITIAL_3DMODEL NORMAL STOP ****')
 
         contains
 

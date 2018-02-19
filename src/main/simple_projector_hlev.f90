@@ -18,7 +18,7 @@ implicit none
 contains
 
     !>  \brief  generates an array of projection images of volume vol in orientations o
-    function projvol( vol, o, p, top ) result( imgs )
+    function project( vol, o, p, top ) result( imgs )
         class(image),      intent(inout) :: vol     !< volume to project
         class(oris),       intent(inout) :: o       !< orientations
         class(params),     intent(inout) :: p       !< parameters
@@ -37,7 +37,7 @@ contains
             n = o%get_noris()
         endif
         allocate( imgs(n), imgs_pad(p%nthr), stat=alloc_stat )
-        allocchk('projvol; simple_projector')
+        allocchk('project; simple_projector')
         ! construct thread safe images
         do i=1,n
             call imgs(i)%new([p%box,p%box,1], p%smpd, wthreads=.false.)
@@ -70,7 +70,7 @@ contains
         deallocate(imgs_pad)
         call vol_pad%kill_expanded
         call vol_pad%kill
-    end function projvol
+    end function project
 
     !>  \brief  rotates a volume by Euler angle o using Fourier gridding
     function rotvol( vol, o, p, shvec ) result( rovol )

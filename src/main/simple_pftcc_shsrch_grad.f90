@@ -1,5 +1,5 @@
 ! rotational origin shift alignment of band-pass limited polar projections in the Fourier domain, gradient based minimizer
-module simple_pftcc_grad_shsrch
+module simple_pftcc_shsrch_grad
 #include "simple_lib.f08"
 use simple_opt_spec,          only: opt_spec
 use simple_polarft_corrcalc,  only: polarft_corrcalc
@@ -7,10 +7,10 @@ use simple_opt_factory,       only: opt_factory
 use simple_optimizer,         only: optimizer
 implicit none
 
-public :: pftcc_grad_shsrch
+public :: pftcc_shsrch_grad
 private
 
-type :: pftcc_grad_shsrch
+type :: pftcc_shsrch_grad
     private
     type(opt_spec)                   :: ospec                  !< optimizer specification object
     class(optimizer), pointer        :: nlopt        =>null()  !< optimizer object
@@ -29,13 +29,13 @@ type :: pftcc_grad_shsrch
     procedure          :: minimize    => grad_shsrch_minimize
     procedure          :: kill        => grad_shsrch_kill
     procedure, private :: grad_shsrch_set_costfun
-end type pftcc_grad_shsrch
+end type pftcc_shsrch_grad
 
 contains
 
     !> Shift search constructor
     subroutine grad_shsrch_new( self, pftcc, lims, lims_init, shbarrier, maxits )
-        class(pftcc_grad_shsrch),           intent(inout) :: self           !< instance
+        class(pftcc_shsrch_grad),           intent(inout) :: self           !< instance
         class(polarft_corrcalc),    target, intent(in)    :: pftcc          !< correlator
         real,                               intent(in)    :: lims(:,:)      !< limits for barrier constraint
         real,             optional,         intent(in)    :: lims_init(:,:) !< limits for simplex initialisation by randomised bounds
@@ -62,7 +62,7 @@ contains
     end subroutine grad_shsrch_new
 
     subroutine grad_shsrch_set_costfun( self )
-        class(pftcc_grad_shsrch), intent(inout) :: self
+        class(pftcc_shsrch_grad), intent(inout) :: self
         self%ospec%costfun_8    => grad_shsrch_costfun
         self%ospec%gcostfun_8   => grad_shsrch_gcostfun
         self%ospec%fdfcostfun_8 => grad_shsrch_fdfcostfun
@@ -75,7 +75,7 @@ contains
         real(dp), intent(in)    :: vec(D)
         real(dp)                :: cost
         select type(self)
-        class is (pftcc_grad_shsrch)
+        class is (pftcc_shsrch_grad)
             cost = - self%pftcc_ptr%gencorr_for_rot_8(self%reference, self%particle, vec, self%cur_inpl_idx)
         class default
             write (*,*) 'error in grad_shsrch_costfun: unknown type'
@@ -90,7 +90,7 @@ contains
         real(dp), intent(out)   :: grad(D)
         real(dp)                :: corrs_grad(2)
         select type(self)
-        class is (pftcc_grad_shsrch)
+        class is (pftcc_shsrch_grad)
             call self%pftcc_ptr%gencorr_grad_only_for_rot_8(self%reference, self%particle, vec, self%cur_inpl_idx, corrs_grad)
             grad = - corrs_grad
         class default
@@ -108,7 +108,7 @@ contains
         real(dp)                :: corrs
         real(dp)                :: corrs_grad(2)
         select type(self)
-        class is (pftcc_grad_shsrch)
+        class is (pftcc_shsrch_grad)
             call self%pftcc_ptr%gencorr_grad_for_rot_8(self%reference, self%particle, vec, self%cur_inpl_idx, corrs, corrs_grad)
             f    = - corrs
             grad = - corrs_grad
@@ -121,7 +121,7 @@ contains
     end subroutine grad_shsrch_fdfcostfun
 
     subroutine grad_shsrch_optimize_angle( self )
-        class(pftcc_grad_shsrch), intent(inout) :: self
+        class(pftcc_shsrch_grad), intent(inout) :: self
         real                                    :: corrs(self%nrots)
         integer                                 :: loc(1)
         call self%pftcc_ptr%gencorrs(self%reference, self%particle, self%ospec%x, corrs)
@@ -132,7 +132,7 @@ contains
     subroutine grad_shsrch_optimize_angle_wrapper( self )
         class(*), intent(inout) :: self
         select type(self)
-        class is (pftcc_grad_shsrch)
+        class is (pftcc_shsrch_grad)
             call grad_shsrch_optimize_angle(self)
         class default
             write (*,*) 'error in grad_shsrch_optimize_angle_wrapper: unknown type'
@@ -147,7 +147,7 @@ contains
     !! \param state current state
     !!
     subroutine grad_shsrch_set_indices( self, ref, ptcl )
-        class(pftcc_grad_shsrch), intent(inout) :: self
+        class(pftcc_shsrch_grad), intent(inout) :: self
         integer,                  intent(in)    :: ref, ptcl
         self%reference = ref
         self%particle  = ptcl
@@ -155,7 +155,7 @@ contains
 
     !> minimisation routine
     function grad_shsrch_minimize( self, irot ) result( cxy )
-        class(pftcc_grad_shsrch), intent(inout) :: self
+        class(pftcc_shsrch_grad), intent(inout) :: self
         integer,                  intent(out)   :: irot
         real    :: cost, corrs(self%nrots), cxy(3)
         real    :: lowest_cost, grad(2), f, lowest_cost_overall, lowest_shift(2)
@@ -195,7 +195,7 @@ contains
     end function grad_shsrch_minimize
 
     subroutine grad_shsrch_kill( self )
-        class(pftcc_grad_shsrch), intent(inout) :: self
+        class(pftcc_shsrch_grad), intent(inout) :: self
         if( associated(self%nlopt) )then
             call self%nlopt%kill
             nullify(self%nlopt)
@@ -203,16 +203,16 @@ contains
     end subroutine grad_shsrch_kill
 
     function grad_shsrch_get_nevals( self ) result( nevals )
-        class(pftcc_grad_shsrch), intent(inout) :: self
+        class(pftcc_shsrch_grad), intent(inout) :: self
         integer :: nevals
         nevals = self%ospec%nevals
     end function grad_shsrch_get_nevals
 
     subroutine grad_shsrch_get_peaks( self, peaks )
-        class(pftcc_grad_shsrch), intent(inout) :: self
+        class(pftcc_shsrch_grad), intent(inout) :: self
         real, allocatable,        intent(out)   :: peaks(:,:) !< output peak matrix
         allocate(peaks(1,2))
         peaks(1,:) = self%ospec%x
     end subroutine grad_shsrch_get_peaks
 
-end module simple_pftcc_grad_shsrch
+end module simple_pftcc_shsrch_grad

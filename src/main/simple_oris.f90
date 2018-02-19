@@ -3179,7 +3179,7 @@ contains
     !!          distance sense. If mode='diverse' it creates the rotation matrix that is
     !!          maximally diverse to the rotation matrices in the instance
     function ori_generator( self, mode, part_of_set, weights ) result( oout )
-        use simple_simplex_opt, only: simplex_opt
+        use simple_opt_simplex, only: opt_simplex
         use simple_opt_spec,    only: opt_spec
         class(oris), target, intent(in) :: self
         character(len=*),    intent(in) :: mode
@@ -3188,7 +3188,7 @@ contains
         real, parameter                 :: TOL=1e-6
         type(ori)                       :: oout
         type(opt_spec)                  :: ospec
-        type(simplex_opt)               :: opt
+        type(opt_simplex)               :: opt
         real                            :: dist, lims(3,2)
         class(*), pointer               :: fun_self => null()
         ! manage class vars

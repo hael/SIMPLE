@@ -12,8 +12,8 @@ use simple_nrtxtfile,      only: nrtxtfile
 implicit none
 
 public :: cluster_oris_commander
-public :: makedeftab_commander
-public :: makeoris_commander
+public :: make_deftab_commander
+public :: make_oris_commander
 public :: map2ptcls_commander
 public :: orisops_commander
 public :: oristats_commander
@@ -26,56 +26,56 @@ private
 #include "simple_local_flags.inc"
 
 type, extends(commander_base) :: cluster_oris_commander
- contains
-   procedure :: execute      => exec_cluster_oris
+  contains
+    procedure :: execute      => exec_cluster_oris
 end type cluster_oris_commander
-type, extends(commander_base) :: makedeftab_commander
- contains
-   procedure :: execute      => exec_makedeftab
-end type makedeftab_commander
-type, extends(commander_base) :: makeoris_commander
- contains
-   procedure :: execute      => exec_makeoris
-end type makeoris_commander
+type, extends(commander_base) :: make_deftab_commander
+  contains
+    procedure :: execute      => exec_make_deftab
+end type make_deftab_commander
+type, extends(commander_base) :: make_oris_commander
+  contains
+    procedure :: execute      => exec_make_oris
+end type make_oris_commander
 type, extends(commander_base) :: map2ptcls_commander
- contains
-   procedure :: execute      => exec_map2ptcls
+  contains
+    procedure :: execute      => exec_map2ptcls
 end type map2ptcls_commander
 type, extends(commander_base) :: orisops_commander
- contains
-   procedure :: execute      => exec_orisops
+  contains
+    procedure :: execute      => exec_orisops
 end type orisops_commander
 type, extends(commander_base) :: oristats_commander
- contains
-   procedure :: execute      => exec_oristats
+  contains
+    procedure :: execute      => exec_oristats
 end type oristats_commander
 type, extends(commander_base) :: rotmats2oris_commander
- contains
-   procedure :: execute      => exec_rotmats2oris
+  contains
+    procedure :: execute      => exec_rotmats2oris
 end type rotmats2oris_commander
 type, extends(commander_base) :: project2txt_commander
- contains
-   procedure :: execute      => exec_project2txt
+  contains
+    procedure :: execute      => exec_project2txt
 end type project2txt_commander
 type, extends(commander_base) :: txt2project_commander
- contains
-   procedure :: execute      => exec_txt2project
+  contains
+    procedure :: execute      => exec_txt2project
 end type txt2project_commander
 type, extends(commander_base) :: print_project_info_commander
- contains
-   procedure :: execute      => exec_print_project_info
+  contains
+    procedure :: execute      => exec_print_project_info
 end type print_project_info_commander
 type, extends(commander_base) :: vizoris_commander
- contains
-   procedure :: execute      => exec_vizoris
+  contains
+    procedure :: execute      => exec_vizoris
 end type vizoris_commander
 
 contains
 
     !> cluster_oris is a program for clustering orientations based on geodesic distance
     subroutine exec_cluster_oris( self, cline )
-        use simple_shc_cluster, only: shc_cluster
-        use simple_clusterer,   only: shc_cluster_oris
+        use simple_cluster_shc, only: cluster_shc
+        use simple_clusterer,   only: cluster_shc_oris
         use simple_oris,        only: oris
         class(cluster_oris_commander), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
@@ -87,7 +87,7 @@ contains
         integer, allocatable :: clsarr(:)
         p = params(cline)
         call b%build_general_tbox(p, cline, do3d=.false.)
-        call shc_cluster_oris(b%a, p%ncls)
+        call cluster_shc_oris(b%a, p%ncls)
         ! calculate distance statistics
         call b%a%cluster_diststat(avgd, sdevd, maxd, mind)
         write(*,'(a,1x,f15.6)') 'AVG      GEODESIC DIST WITHIN CLUSTERS(degrees): ', rad2deg(avgd)
@@ -114,8 +114,8 @@ contains
     end subroutine exec_cluster_oris
 
     !>  for creating a SIMPLE conformant file of CTF parameter values (deftab)
-    subroutine exec_makedeftab( self, cline )
-        class(makedeftab_commander), intent(inout) :: self
+    subroutine exec_make_deftab( self, cline )
+        class(make_deftab_commander), intent(inout) :: self
         class(cmdline),              intent(inout) :: cline
         type(build)       :: b
         type(params)      :: p
@@ -141,7 +141,7 @@ contains
                 ! all ok, non-astigmatic CTF
             else
                 write(*,*) 'defocus params (dfx, dfy, anagst) need to be in inputted via oritab/deftab'
-                stop 'simple_commander_oris :: exec_makedeftab'
+                stop 'simple_commander_oris :: exec_make_deftab'
             endif
             if( p%tfplan%l_phaseplate )then
                 if( .not. b%a%isthere('phshift') )then
@@ -161,7 +161,7 @@ contains
             nrecs     = ctfparamfile%get_nrecs_per_line()
             if( nrecs < 1 .or. nrecs > 4 .or. nrecs == 2 )then
                 write(*,*) 'unsupported nr of rec:s in plaintexttab'
-                stop 'simple_commander_oris :: exec_makedeftab'
+                stop 'simple_commander_oris :: exec_make_deftab'
             endif
             call b%a%new(ndatlines)
             allocate( line(nrecs) )
@@ -174,7 +174,7 @@ contains
                     case( 'microns' )
                         ! nothing to do
                     case DEFAULT
-                        stop 'unsupported dfunit; simple_commander_oris :: exec_makedeftab'
+                        stop 'unsupported dfunit; simple_commander_oris :: exec_make_deftab'
                 end select
                 select case(p%angastunit)
                     case( 'radians' )
@@ -182,7 +182,7 @@ contains
                     case( 'degrees' )
                         ! nothing to do
                     case DEFAULT
-                        stop 'unsupported angastunit; simple_commander_oris :: exec_makedeftab'
+                        stop 'unsupported angastunit; simple_commander_oris :: exec_make_deftab'
                 end select
                 select case(p%phshiftunit)
                     case( 'radians' )
@@ -190,7 +190,7 @@ contains
                     case( 'degrees' )
                         if( nrecs == 4 ) line(4) = deg2rad(line(4))
                     case DEFAULT
-                        stop 'unsupported phshiftunit; simple_commander_oris :: exec_makedeftab'
+                        stop 'unsupported phshiftunit; simple_commander_oris :: exec_make_deftab'
                 end select
                 call b%a%set(iptcl, 'smpd',  p%smpd )
                 call b%a%set(iptcl, 'kv',    p%kv   )
@@ -210,15 +210,15 @@ contains
         endif
         call binwrite_oritab(p%outfile, b%a, [1,b%a%get_noris()])
         ! end gracefully
-        call simple_end('**** SIMPLE_MAKEDEFTAB NORMAL STOP ****')
-    end subroutine exec_makedeftab
+        call simple_end('**** SIMPLE_MAKE_DEFTAB NORMAL STOP ****')
+    end subroutine exec_make_deftab
 
     !> for making SIMPLE orientation/parameter files
-    subroutine exec_makeoris( self, cline )
+    subroutine exec_make_oris( self, cline )
         use simple_ori,           only: ori
         use simple_oris,          only: oris
         use simple_combinatorics, only: shc_aggregation
-        class(makeoris_commander), intent(inout) :: self
+        class(make_oris_commander), intent(inout) :: self
         class(cmdline),            intent(inout) :: cline
         character(len=STDLEN), allocatable :: oritabs(:)
         integer, allocatable :: labels(:,:), consensus(:)
@@ -304,7 +304,7 @@ contains
                     nl1 = nl
                 else
                     if( nl /= nl1 ) stop 'nonconfoming nr of oris in oritabs;&
-                    &simple_commander_oris :: makeoris'
+                    &simple_commander_oris :: make_oris'
                 endif
             end do
             allocate(labels(noritabs,nl), consensus(nl), corrs(noritabs))
@@ -336,8 +336,8 @@ contains
         endif
         call binwrite_oritab(p%outfile, b%a, [1,b%a%get_noris()])
         ! end gracefully
-        call simple_end('**** SIMPLE_MAKEORIS NORMAL STOP ****')
-    end subroutine exec_makeoris
+        call simple_end('**** SIMPLE_MAKE_ORIS NORMAL STOP ****')
+    end subroutine exec_make_oris
 
     !> for mapping parameters that have been obtained using class averages to the individual particle images
     subroutine exec_map2ptcls( self, cline )

@@ -1,15 +1,15 @@
 ! clustering of a similarity matrix using stochastic hill-climbing
 
-module simple_shc_cluster
+module simple_cluster_shc
 #include "simple_lib.f08"
 use simple_oris, only: oris
 use simple_rnd,  only: irnd_uni
 implicit none
 
-public :: shc_cluster, test_shc_cluster
+public :: cluster_shc, test_cluster_shc
 private
 
-type shc_cluster
+type cluster_shc
     private
     integer              :: ncls              !< number of clusters
     integer              :: N                 !< number of elements to cluster
@@ -27,13 +27,13 @@ type shc_cluster
     procedure, private :: per_ptcl_sim
     procedure, private :: eval_change
     procedure          :: kill
-end type shc_cluster
+end type cluster_shc
 
 contains
 
     !>  \brief  is a constructor
     subroutine new( self, N_in, ncls_in, S_in, o, minsim )
-        class(shc_cluster), intent(inout) :: self
+        class(cluster_shc), intent(inout) :: self
         integer,            intent(in)    :: N_in, ncls_in
         real, target,       intent(in)    :: S_in(N_in,N_in)
         type(oris), target, intent(in)    :: o
@@ -49,7 +49,7 @@ contains
             self%MINS = -1.
         endif
         allocate(self%labels(self%N), self%SPS(self%N), stat=alloc_stat)
-        allocchk('In: nsimple_shc_cluster::new')
+        allocchk('In: nsimple_cluster_shc::new')
         self%labels = 0
         self%SPS    = 0.
         self%existence = .true.
@@ -58,7 +58,7 @@ contains
     !>  \brief  is the stochastic hill climbing routine for clustering
     subroutine shc( self, doprint, label, sim )
         use simple_ran_tabu, only: ran_tabu
-        class(shc_cluster), intent(inout) :: self
+        class(cluster_shc), intent(inout) :: self
         logical,            intent(in)    :: doprint
         character(len=*),   intent(in)    :: label
         real,               intent(out)   :: sim
@@ -103,7 +103,7 @@ contains
 
     !>  \brief  initialises randomly and calculates per-particle similarities
     subroutine init( self )
-        class(shc_cluster), intent(inout) :: self
+        class(cluster_shc), intent(inout) :: self
         integer :: iptcl
         ! random labels
         do iptcl=1,self%N
@@ -119,7 +119,7 @@ contains
     subroutine move( self, iptcl )
         !$ use omp_lib
         !$ use omp_lib_kinds
-        class(shc_cluster), intent(inout) :: self
+        class(cluster_shc), intent(inout) :: self
         integer,            intent(in)    :: iptcl
         real    :: new_sim
         integer :: cls, new_cls, jptcl
@@ -146,7 +146,7 @@ contains
 
     !>  \brief  calculates the per-particle similarity
     subroutine per_ptcl_sim( self, iptcl )
-        class(shc_cluster), intent(inout) :: self
+        class(cluster_shc), intent(inout) :: self
         integer,            intent(in)    :: iptcl
         integer :: pop, jptcl
         pop = 0
@@ -167,7 +167,7 @@ contains
 
     !>  \brief  evaluates a solution element replacement
     function eval_change( self, iptcl, cls ) result( sim )
-        class(shc_cluster), intent(inout) :: self
+        class(cluster_shc), intent(inout) :: self
         integer,            intent(in)    :: iptcl, cls
         real    :: sim
         integer :: pop, jptcl
@@ -188,10 +188,10 @@ contains
     end function eval_change
 
     !>  \brief  is the unit test
-    subroutine test_shc_cluster
+    subroutine test_cluster_shc
         real              :: smat(10,10)
         integer           :: labels(10), iptcl, jptcl
-        type(shc_cluster) :: shcc
+        type(cluster_shc) :: shcc
         type(oris)        :: o
         real              :: sim
         o = oris(10)
@@ -211,19 +211,19 @@ contains
         end do
         call shcc%new(10, 2, smat, o)
         call shcc%shc(.true., 'class', sim)
-        call o%write('test_shc_cluster_doc.txt')
-    end subroutine test_shc_cluster
+        call o%write('test_cluster_shc_doc.txt')
+    end subroutine test_cluster_shc
 
     !>  \brief  is the destructor
     subroutine kill( self )
-        class(shc_cluster), intent(inout) :: self
+        class(cluster_shc), intent(inout) :: self
         if( self%existence )then
             self%o_ptr => null()
             self%S     => null()
             deallocate( self%labels, self%SPS , stat=alloc_stat)
-            allocchk('In: nsimple_shc_cluster::kill ')
+            allocchk('In: nsimple_cluster_shc::kill ')
             self%existence = .false.
         endif
     end subroutine kill
 
-end module simple_shc_cluster
+end module simple_cluster_shc

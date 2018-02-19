@@ -9,8 +9,8 @@ implicit none
 
 public :: check_box_commander
 public :: check_nptcls_commander
-public :: iminfo_commander
-public :: stktabinfo_commander
+public :: info_image_commander
+public :: info_stktab_commander
 private
 
 type, extends(commander_base) :: check_box_commander
@@ -21,14 +21,14 @@ type, extends(commander_base) :: check_nptcls_commander
   contains
     procedure :: execute      => exec_check_nptcls
 end type check_nptcls_commander
-type, extends(commander_base) :: iminfo_commander
+type, extends(commander_base) :: info_image_commander
  contains
-   procedure :: execute      => exec_iminfo
-end type iminfo_commander
-type, extends(commander_base) :: stktabinfo_commander
+   procedure :: execute      => exec_info_image
+end type info_image_commander
+type, extends(commander_base) :: info_stktab_commander
  contains
-   procedure :: execute      => exec_stktabinfo
-end type stktabinfo_commander
+   procedure :: execute      => exec_info_stktab
+end type info_stktab_commander
 
 contains
 
@@ -62,11 +62,11 @@ contains
     end subroutine exec_check_nptcls
 
     !> for printing header information in MRC and SPIDER stacks and volumes
-    subroutine exec_iminfo( self, cline)
+    subroutine exec_info_image( self, cline)
         use simple_image,   only: image
         use simple_imgfile, only: imgfile
         use simple_imghead, only: find_ldim_nptcls
-        class(iminfo_commander), intent(inout) :: self
+        class(info_image_commander), intent(inout) :: self
         class(cmdline),          intent(inout) :: cline
         type(params)      :: p
         type(image)       :: img
@@ -95,12 +95,12 @@ contains
                 if( p%vis .eq. 'yes' ) call img%vis()
             end do
         endif
-        call simple_end('**** SIMPLE_IMINFO NORMAL STOP ****')
-    end subroutine exec_iminfo
+        call simple_end('**** SIMPLE_INFO_IMAGE NORMAL STOP ****')
+    end subroutine exec_info_image
 
     !> for printing information about stktab
-    subroutine exec_stktabinfo( self, cline )
-        class(stktabinfo_commander), intent(inout) :: self
+    subroutine exec_info_stktab( self, cline )
+        class(info_stktab_commander), intent(inout) :: self
         class(cmdline),              intent(inout) :: cline
         type(params) :: p
         p = params(cline) ! constants & derived constants produced
@@ -108,7 +108,7 @@ contains
         write(*,*) '# particles : ', p%nptcls
         write(*,*) 'ldim        : ', p%ldim
         write(*,*) 'box size    : ', p%box
-        call simple_end('**** SIMPLE_STKTABINFO NORMAL STOP ****')
-    end subroutine exec_stktabinfo
+        call simple_end('**** SIMPLE_INFO_STKTAB NORMAL STOP ****')
+    end subroutine exec_info_stktab
 
 end module simple_commander_checks

@@ -9,35 +9,35 @@ use simple_commander_base, only: commander_base
 use simple_binoris_io      ! use all in there
 implicit none
 
-public :: noiseimgs_commander
-public :: simimgs_commander
-public :: simmovie_commander
-public :: simsubtomo_commander
+public :: simulate_noise_commander
+public :: simulate_particles_commander
+public :: simulate_movie_commander
+public :: simulate_subtomogram_commander
 private
 #include "simple_local_flags.inc"
 
-type, extends(commander_base) :: noiseimgs_commander
+type, extends(commander_base) :: simulate_noise_commander
   contains
-    procedure :: execute      => exec_noiseimgs
-end type noiseimgs_commander
-type, extends(commander_base) :: simimgs_commander
+    procedure :: execute      => exec_simulate_noise
+end type simulate_noise_commander
+type, extends(commander_base) :: simulate_particles_commander
   contains
-    procedure :: execute      => exec_simimgs
-end type simimgs_commander
-type, extends(commander_base) :: simmovie_commander
+    procedure :: execute      => exec_simulate_particles
+end type simulate_particles_commander
+type, extends(commander_base) :: simulate_movie_commander
   contains
-    procedure :: execute      => exec_simmovie
-end type simmovie_commander
-type, extends(commander_base) :: simsubtomo_commander
+    procedure :: execute      => exec_simulate_movie
+end type simulate_movie_commander
+type, extends(commander_base) :: simulate_subtomogram_commander
   contains
-    procedure :: execute      => exec_simsubtomo
-end type simsubtomo_commander
+    procedure :: execute      => exec_simulate_subtomogram
+end type simulate_subtomogram_commander
 
 
 contains
 
-    subroutine exec_noiseimgs( self, cline )
-        class(noiseimgs_commander), intent(inout) :: self
+    subroutine exec_simulate_noise( self, cline )
+        class(simulate_noise_commander), intent(inout) :: self
         class(cmdline),             intent(inout) :: cline
         type(params) :: p
         type(build)  :: b
@@ -51,15 +51,15 @@ contains
             call progress(cnt,ntot)
             call b%img%ran
             if( cline%defined('part') )then
-                call b%img%write('noiseimgs_part'//int2str_pad(p%part,p%numlen)//p%ext, cnt)
+                call b%img%write('simulate_noise_part'//int2str_pad(p%part,p%numlen)//p%ext, cnt)
             else
                 call b%img%write(p%outstk, i)
             endif
         end do
-        call simple_end('**** SIMPLE_NOISEIMGS NORMAL STOP ****')
-    end subroutine exec_noiseimgs
+        call simple_end('**** SIMPLE_simulate_noise NORMAL STOP ****')
+    end subroutine exec_simulate_noise
 
-    subroutine exec_simimgs( self, cline )
+    subroutine exec_simulate_particles( self, cline )
         use simple_ori,        only: ori
         use simple_rnd,        only: ran3
         use simple_math,       only: deg2rad
@@ -68,7 +68,7 @@ contains
         use simple_ctf,        only: ctf
         use simple_kbinterpol, only: kbinterpol
         use simple_projector,  only: projector
-        class(simimgs_commander), intent(inout) :: self
+        class(simulate_particles_commander), intent(inout) :: self
         class(cmdline),           intent(inout) :: cline
         type(params)       :: p
         type(build)        :: b
@@ -83,7 +83,7 @@ contains
         call b%build_general_tbox(p, cline) ! general objects built
         kbwin = kbinterpol(KBWINSZ, p%alpha)
         tfun  = ctf(p%smpd, p%kv, p%cs, p%fraca)
-        if( .not. cline%defined('outstk') ) p%outstk = 'simimgs'//p%ext
+        if( .not. cline%defined('outstk') ) p%outstk = 'simulate_particles'//p%ext
         if( cline%defined('part') )then
             if( .not. cline%defined('outfile') ) stop 'need unique output file for parallel jobs'
         else
@@ -156,23 +156,23 @@ contains
             call b%img_pad%clip(b%img)
             ! write to stack
             if( cline%defined('part') )then
-                call b%img%write('simimgs_part'//int2str_pad(p%part,p%numlen)//p%ext, cnt)
+                call b%img%write('simulate_particles_part'//int2str_pad(p%part,p%numlen)//p%ext, cnt)
             else
                 call b%img%write(p%outstk, i)
             endif
         end do
         call vol_pad%kill_expanded
         ! end gracefully
-        call simple_end('**** SIMPLE_SIMIMGS NORMAL STOP ****')
-    end subroutine exec_simimgs
+        call simple_end('**** SIMPLE_simulate_particles NORMAL STOP ****')
+    end subroutine exec_simulate_particles
 
-    subroutine exec_simmovie( self, cline )
+    subroutine exec_simulate_movie( self, cline )
         use simple_ori,   only: ori
         use simple_math,  only: deg2rad
         use simple_image, only: image
         use simple_rnd,   only: ran3
         use simple_ctf,   only: ctf
-        class(simmovie_commander), intent(inout) :: self
+        class(simulate_movie_commander), intent(inout) :: self
         class(cmdline),            intent(inout) :: cline
         type(params)         :: p
         type(build)          :: b
@@ -238,7 +238,7 @@ contains
         DebugPrint  'initialized shifts'
         ! generate shifts
         allocate( shifts(p%nframes,2), stat=alloc_stat )
-        allocchk('In: simple_simmovie; shifts')
+        allocchk('In: simple_simulate_movie; shifts')
         x = 0.
         y = 0.
         do i=1,p%nframes
@@ -287,7 +287,7 @@ contains
             ! add the detector noise
             call shifted_base_image%add_gauran(snr_detector)
             if( p%vis .eq. 'yes' ) call shifted_base_image%vis()
-            call shifted_base_image%write('simmovie'//p%ext, i)
+            call shifted_base_image%write('simulate_movie'//p%ext, i)
             ! set orientation parameters in object
             call b%a%set(1, 'dfx',    dfx)
             call b%a%set(1, 'dfy',    dfy)
@@ -299,7 +299,7 @@ contains
         write(*,'(a)') '>>> GENERATING OPTIMAL AVERAGE'
         do i=1,p%nframes
             call progress(i,p%nframes)
-            call shifted_base_image%read('simmovie'//p%ext, i)
+            call shifted_base_image%read('simulate_movie'//p%ext, i)
             x = b%a%get(1, 'x'//int2str(i))
             y = b%a%get(1, 'y'//int2str(i))
             call shifted_base_image%shift([-x,-y,0.])
@@ -311,9 +311,9 @@ contains
         call base_image%write('optimal_movie_average'//p%ext, 1)
         if( p%vis .eq. 'yes' ) call base_image%vis()
         ! output orientations
-        call binwrite_oritab('simmovie_params'//trim(METADATA_EXT), b%a, [1,b%a%get_noris()])
+        call binwrite_oritab('simulate_movie_params'//trim(METADATA_EXT), b%a, [1,b%a%get_noris()])
         ! end gracefully
-        call simple_end('**** SIMPLE_SIMMOVIE NORMAL STOP ****')
+        call simple_end('**** SIMPLE_simulate_movie NORMAL STOP ****')
 
         contains
 
@@ -360,13 +360,13 @@ contains
                 end do
             end function gen_ptcl_pos
 
-    end subroutine exec_simmovie
+    end subroutine exec_simulate_movie
 
-    subroutine exec_simsubtomo( self, cline )
+    subroutine exec_simulate_subtomogram( self, cline )
         use simple_image,          only: image
         use simple_ori,            only: ori
         use simple_projector_hlev, only: rotvol
-        class(simsubtomo_commander), intent(inout) :: self
+        class(simulate_subtomogram_commander), intent(inout) :: self
         class(cmdline),              intent(inout) :: cline
         type(params) :: p
         type(build)  :: b
@@ -387,7 +387,7 @@ contains
             call vol_rot%write('subtomo'//int2str_pad(iptcl,numlen)//p%ext)
         end do
         ! end gracefully
-        call simple_end('**** SIMPLE_SIMSUBTOMO NORMAL STOP ****')
-    end subroutine exec_simsubtomo
+        call simple_end('**** SIMPLE_simulate_subtomogram NORMAL STOP ****')
+    end subroutine exec_simulate_subtomogram
 
 end module simple_commander_sim

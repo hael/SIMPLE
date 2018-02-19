@@ -858,12 +858,12 @@ contains
 
     !! \param self1,self2 ori class type rotational matrices
     subroutine oripair_diverse( self1, self2 )
-        use simple_simplex_opt, only: simplex_opt
+        use simple_opt_simplex, only: opt_simplex
         use simple_opt_spec,    only: opt_spec
         class(ori), target, intent(inout) :: self1, self2
         real, parameter                   :: TOL=1e-6
         type(opt_spec)                    :: ospec
-        type(simplex_opt)                 :: opt
+        type(opt_simplex)                 :: opt
         real                              :: dist, lims(3,2)
         class(*), pointer                 :: fun_self
         if( .not. self1%exists() ) call self1%new_ori
@@ -892,13 +892,13 @@ contains
     end subroutine oripair_diverse
 
     subroutine oripair_diverse_projdir( self1, self2, rangthres )
-        use simple_simplex_opt, only: simplex_opt
+        use simple_opt_simplex, only: opt_simplex
         use simple_opt_spec,    only: opt_spec
         class(ori), target, intent(inout) :: self1, self2
         real,               intent(in)    :: rangthres
         real, parameter                   :: TOL=1e-6
         type(opt_spec)                    :: ospec
-        type(simplex_opt)                 :: opt
+        type(opt_simplex)                 :: opt
         real                              :: e3,dist,lims(2,2)
         class(*), pointer                 :: fun_self => null()
         if( .not. self1%exists() )stop 'need a fixed ori! simple_oris::oripair_diverse_projdir'
@@ -933,7 +933,7 @@ contains
     !! \param mode 'median' or 'diverse'
     !! \param self1,self2 ori class type rotaional matrices
     function ori_generator( self1, self2, mode ) result( oout )
-        use simple_simplex_opt, only: simplex_opt
+        use simple_opt_simplex, only: opt_simplex
         use simple_opt_spec,    only: opt_spec
         class(ori), target, intent(in) :: self1, self2
         character(len=*),   intent(in) :: mode
@@ -941,7 +941,7 @@ contains
         type(ori)                      :: oout
         type(ori), target              :: otst
         type(opt_spec)                 :: ospec
-        type(simplex_opt)              :: opt
+        type(opt_simplex)              :: opt
         real                           :: dist, lims(3,2)
         class(*), pointer              :: fun_self => null()
         call oout%new_ori

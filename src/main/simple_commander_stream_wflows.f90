@@ -108,7 +108,7 @@ contains
     subroutine exec_prime2D_stream_distr( self, cline )
         use simple_defs_conv
         use simple_timer
-        use simple_commander_distr_wflows, only: prime2D_distr_commander, makecavgs_distr_commander
+        use simple_commander_distr_wflows, only: prime2D_distr_commander, make_cavgs_distr_commander
         use simple_oris,                   only: oris
         use simple_image,                  only: image
         use simple_binoris_io,             only: binwrite_oritab, binread_oritab
@@ -126,9 +126,9 @@ contains
         integer,                 parameter :: WAIT_WATCHER       = 60   ! seconds prior to new stack detection
         integer,                 parameter :: MAXNCLS            = 1000 ! maximum # of classes
         type(prime2D_distr_commander)      :: xprime2D_distr
-        type(makecavgs_distr_commander)    :: xmakecavgs
+        type(make_cavgs_distr_commander)    :: xmake_cavgs
         type(extractwatcher)               :: mic_watcher
-        type(cmdline)                      :: cline_prime2D, cline_scale, cline_makecavgs
+        type(cmdline)                      :: cline_prime2D, cline_scale, cline_make_cavgs
         type(params)                       :: p_master, p_scale
         type(oris)                         :: os
         character(len=STDLEN), allocatable :: newstacks(:), stktab(:)
@@ -147,7 +147,7 @@ contains
         ! init command-lines
         cline_scale     = cline
         cline_prime2D   = cline
-        cline_makecavgs = cline
+        cline_make_cavgs = cline
         call cline_prime2D%set('prg',       'prime2D')
         call cline_prime2D%set('stktab',    STK_FILETAB)
         call cline_prime2D%set('extr_iter', 100.) ! no extremal randomization
@@ -159,10 +159,10 @@ contains
         call cline_scale%set('filetab', SCALE_FILETAB)
         call cline_scale%set('stream', 'yes')
         call cline_scale%set('numlen', 1.)
-        call cline_makecavgs%set('prg',    'makecavgs')
-        call cline_makecavgs%set('stktab', STK_FILETAB)
-        call cline_makecavgs%set('refs',   'cavgs_final'//p_master%ext)
-        call cline_makecavgs%delete('autoscale')
+        call cline_make_cavgs%set('prg',    'make_cavgs')
+        call cline_make_cavgs%set('stktab', STK_FILETAB)
+        call cline_make_cavgs%set('refs',   'cavgs_final'//p_master%ext)
+        call cline_make_cavgs%delete('autoscale')
         ! scope init
         ncls_glob        = 0
         ncls_glob_prev   = 0
@@ -256,9 +256,9 @@ contains
         call binread_oritab(oritab_glob, os, [1,nptcls_glob])
         call os%mul_shifts(1./scale)
         call binwrite_oritab(FINALDOC, os, [1,nptcls_glob])
-        call cline_makecavgs%set('oritab',  trim(FINALDOC))
-        call cline_makecavgs%set('ncls', real(ncls_glob))
-        call xmakecavgs%execute(cline_makecavgs)
+        call cline_make_cavgs%set('oritab',  trim(FINALDOC))
+        call cline_make_cavgs%set('ncls', real(ncls_glob))
+        call xmake_cavgs%execute(cline_make_cavgs)
         ! end gracefully
         call simple_end('**** SIMPLE_DISTR_PRIME2D_STREAM NORMAL STOP ****')
 

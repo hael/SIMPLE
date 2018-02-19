@@ -1,13 +1,13 @@
 ! The Nelder-Mead simplex method for continuous function minimisation
-module simple_simplex_opt
+module simple_opt_simplex
 #include "simple_lib.f08"
 use simple_optimizer, only: optimizer
 implicit none
 
-public :: simplex_opt
+public :: opt_simplex
 private
 
-type, extends(optimizer) :: simplex_opt
+type, extends(optimizer) :: opt_simplex
     private
     real, allocatable :: p(:,:)         !< vertices of the simplex
     real, allocatable :: y(:)           !< cost function vals
@@ -15,33 +15,33 @@ type, extends(optimizer) :: simplex_opt
     real              :: yb=0.          !< best cost function value
     logical           :: exists=.false. !< to indicate existence
   contains
-    procedure :: new      => new_simplex_opt
+    procedure :: new      => new_opt_simplex
     procedure :: minimize => simplex_minimize
-    procedure :: kill     => kill_simplex_opt
-end type simplex_opt
+    procedure :: kill     => kill_opt_simplex
+end type opt_simplex
 
 contains
 
     !> \brief  is a constructor
-    subroutine new_simplex_opt( self, spec )
+    subroutine new_opt_simplex( self, spec )
         use simple_opt_spec, only: opt_spec
-        class(simplex_opt), intent(inout) :: self !< instance
+        class(opt_simplex), intent(inout) :: self !< instance
         class(opt_spec),    intent(inout) :: spec !< specification
         real :: x
         call self%kill
         allocate(self%p(spec%ndim+1,spec%ndim), self%y(spec%ndim+1), self%pb(spec%ndim), stat=alloc_stat)
-        allocchk("In: new_simplex_opt")
+        allocchk("In: new_opt_simplex")
         ! initialize best cost to huge number
         self%yb = huge(x)
         self%exists = .true. ! indicates existence
-    end subroutine new_simplex_opt
+    end subroutine new_opt_simplex
 
     !> \brief  restarted simplex minimization
     subroutine simplex_minimize( self, spec, fun_self, lowest_cost )
         use simple_opt_spec, only: opt_spec
         use simple_opt_subs, only: amoeba
         use simple_rnd,      only: ran3
-        class(simplex_opt), intent(inout) :: self        !< instance
+        class(opt_simplex), intent(inout) :: self        !< instance
         class(opt_spec),    intent(inout) :: spec        !< specification
         class(*),           intent(inout) :: fun_self    !< self-pointer for cost function
         real,               intent(out)   :: lowest_cost !< lowest cost
@@ -50,7 +50,7 @@ contains
         integer           :: niters(spec%nrestarts)
         logical           :: arezero(spec%ndim)
         if( .not. associated(spec%costfun) )then
-           call simple_stop ('cost function not associated in opt_spec; simplex_minimize; simple_simplex_opt')
+           call simple_stop ('cost function not associated in opt_spec; simplex_minimize; simple_opt_simplex')
         end if
         ! initialise nevals counter
         spec%nevals = 0
@@ -125,22 +125,22 @@ contains
     end subroutine simplex_minimize
 
     !> \brief  is a destructor
-    subroutine kill_simplex_opt( self )
-        class(simplex_opt), intent(inout) :: self
+    subroutine kill_opt_simplex( self )
+        class(opt_simplex), intent(inout) :: self
         alloc_stat=0
         if( allocated(self%p) )then
             deallocate(self%p, stat=alloc_stat)
-            allocchk("In: kill_simplex_opt p")
+            allocchk("In: kill_opt_simplex p")
         end if
         if( allocated(self%y) )then
             deallocate(self%y, stat=alloc_stat)
-            allocchk("In: kill_simplex_opt y ")
+            allocchk("In: kill_opt_simplex y ")
         end if
         if( allocated(self%pb) )then
             deallocate(self%pb, stat=alloc_stat)
-            allocchk("In: kill_simplex_opt pb ")
+            allocchk("In: kill_opt_simplex pb ")
         end if
         self%exists = .false.
-    end subroutine kill_simplex_opt
+    end subroutine kill_opt_simplex
 
-end module simple_simplex_opt
+end module simple_opt_simplex

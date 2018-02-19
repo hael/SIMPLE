@@ -930,7 +930,7 @@ contains
     !>  \brief generate projection FRCs from even/odd pairs
     subroutine gen_projection_frcs( b, p, cline, ename, oname, resmskname, state, projfrcs )
         use simple_oris,            only: oris
-        use simple_projector_hlev,  only: projvol
+        use simple_projector_hlev,  only: project
         use simple_projection_frcs, only: projection_frcs
         class(build),           intent(inout) :: b
         class(params),          intent(inout) :: p
@@ -955,8 +955,8 @@ contains
         call e_space%new(NSPACE_BALANCE)
         call e_space%spiral(p%nsym, p%eullims)
         ! generate even/odd projections
-        even_imgs = projvol(b%vol,  e_space, p)
-        odd_imgs  = projvol(b%vol2, e_space, p)
+        even_imgs = project(b%vol,  e_space, p)
+        odd_imgs  = project(b%vol2, e_space, p)
         ! calculate FRCs and fill-in projfrcs object
         allocate(frc(even_imgs(1)%get_filtsz()))
         !$omp parallel do default(shared) private(iproj,frc) schedule(static) proc_bind(close)

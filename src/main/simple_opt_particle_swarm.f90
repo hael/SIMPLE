@@ -1,15 +1,15 @@
 ! continuous particle swarm optimisation
 
-module simple_particle_swarm_opt
+module simple_opt_particle_swarm
 #include "simple_lib.f08"
 use simple_optimizer, only: optimizer
 use simple_opt_spec,  only: opt_spec
 implicit none
 
-public :: particle_swarm_opt
+public :: opt_particle_swarm
 private
 #include "simple_local_flags.inc"
-type, extends(optimizer) :: particle_swarm_opt
+type, extends(optimizer) :: opt_particle_swarm
     private
     real, allocatable :: swarm(:,:)       !< particle positions
     real, allocatable :: velocities(:,:)  !< particle velocities
@@ -22,19 +22,19 @@ type, extends(optimizer) :: particle_swarm_opt
     procedure :: new          => new_particle_swarm
     procedure :: minimize     => particle_swarm_minimize
     procedure :: kill         => kill_particle_swarm
-end type particle_swarm_opt
+end type opt_particle_swarm
 
 contains
 
     !> \brief  is a constructor
     subroutine new_particle_swarm( self, spec )
-        class(particle_swarm_opt), intent(inout) :: self !< instance
+        class(opt_particle_swarm), intent(inout) :: self !< instance
         class(opt_spec), intent(inout)           :: spec !< specification
         ! destruct if exists
         call self%kill
         ! allocate
         allocate(self%swarm(spec%npop,spec%ndim), self%velocities(spec%npop,spec%ndim), stat=alloc_stat)
-        allocchk("In: new_particle_swarm_opt, 1")
+        allocchk("In: new_opt_particle_swarm, 1")
         self%exists = .true. ! indicates existence
         if( spec%debug ) write(*,*) 'created new particle swarm (spec debug)'
         DebugPrint 'created new particle swarm (instance)'
@@ -42,7 +42,7 @@ contains
 
     !> \brief  is the particle swarm minimize minimization routine
     subroutine particle_swarm_minimize( self, spec, fun_self, lowest_cost )
-        class(particle_swarm_opt), intent(inout) :: self        !< instance
+        class(opt_particle_swarm), intent(inout) :: self        !< instance
         class(opt_spec),           intent(inout) :: spec        !< specification
         class(*),                  intent(inout) :: fun_self    !< self-pointer for cost function
         real, intent(out)                        :: lowest_cost !< lowest cost
@@ -52,7 +52,7 @@ contains
         real    :: costs(spec%npop) !< particle costs
         integer :: loc(1), nworse
         if( .not. associated(spec%costfun) )then
-            stop 'cost function not associated in opt_spec; particle_swarm_minimize; simple_particle_swarm_opt'
+            stop 'cost function not associated in opt_spec; particle_swarm_minimize; simple_opt_particle_swarm'
         endif
         ! initialize
         call init
@@ -149,12 +149,12 @@ contains
 
     !> \brief  is a destructor
     subroutine kill_particle_swarm( self )
-        class(particle_swarm_opt), intent(inout) :: self !< instance
+        class(opt_particle_swarm), intent(inout) :: self !< instance
         if( self%exists )then
             deallocate(self%swarm, self%velocities, stat=alloc_stat)
-            allocchk("simple_particle_swarm_opt::kill")
+            allocchk("simple_opt_particle_swarm::kill")
             self%exists = .false.
         endif
     end subroutine kill_particle_swarm
 
-end module simple_particle_swarm_opt
+end module simple_opt_particle_swarm
