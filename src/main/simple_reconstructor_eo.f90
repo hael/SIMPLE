@@ -473,7 +473,7 @@ contains
             if( present(fbody) )then
                 call self%write_eos(fbody//int2str_pad(state,2)//'_part'//int2str_pad(p%part,self%numlen))
             else
-                call self%write_eos('reconstruct3D_state'//int2str_pad(state,2)//'_part'//int2str_pad(p%part,self%numlen))
+                call self%write_eos('recvol_state'//int2str_pad(state,2)//'_part'//int2str_pad(p%part,self%numlen))
             endif
         endif
         call img%kill

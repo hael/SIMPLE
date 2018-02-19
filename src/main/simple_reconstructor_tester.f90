@@ -38,7 +38,7 @@ contains
         kbwin = b%eorecvols(1)%get_kbwin()
         call gridprep%new(b%img, kbwin, [p%boxpd,p%boxpd,1])
         ! init volumes
-        call prepreconstruct3Ds(b, p)
+        call preprecvols(b, p)
         rt_init = toc(t_init)
         ! reconstruction
         t_rec = tic()
@@ -53,8 +53,8 @@ contains
         t_norm = tic()
         call eonorm_struct_facts(b, p, cline, reslim)
         rt_norm = toc(t_norm)
-        ! reconstruct3Ds % gridprep not needed anymore
-        call killreconstruct3Ds(b, p)
+        ! recvols % gridprep not needed anymore
+        call killrecvols(b, p)
         call gridprep%kill
         rt_tot = toc(t_tot)
         call gridprep%kill
@@ -90,7 +90,7 @@ contains
         kbwin = b%eorecvols(1)%get_kbwin()
         call gridprep%new(b%img, kbwin, [p%boxpd,p%boxpd,1])
         ! init volumes
-        call prepreconstruct3Ds(b, p)
+        call preprecvols(b, p)
         ! prep rec imgs
         allocate(rec_imgs(MAXIMGBATCHSZ))
         do i=1,MAXIMGBATCHSZ
@@ -132,7 +132,7 @@ contains
         call eonorm_struct_facts(b, p, cline, reslim)
         rt_norm = toc(t_norm)
         ! destruct
-        call killreconstruct3Ds(b, p)
+        call killrecvols(b, p)
         call gridprep%kill
         do ibatch=1,MAXIMGBATCHSZ
             call rec_imgs(ibatch)%kill

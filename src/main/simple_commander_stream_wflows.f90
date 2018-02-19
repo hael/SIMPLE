@@ -120,7 +120,7 @@ contains
         character(len=32),       parameter :: STK_FILETAB     = 'stkstreamtab.txt'
         character(len=32),       parameter :: SCALE_FILETAB   = 'stkscale.txt'
         character(len=32),       parameter :: DEFTAB          = 'deftab.txt'
-        character(len=32),       parameter :: FINALDOC        = 'prime2Ddoc_final'//trim(METADATA_EXT)
+        character(len=32),       parameter :: FINALDOC        = 'cluster2Ddoc_final'//trim(METADATA_EXT)
         integer,                 parameter :: SHIFTSRCH_PTCLSLIM = 2000 ! # of ptcls required to turm on shift search
         integer,                 parameter :: SHIFTSRCH_ITERLIM  = 5    ! # of iterations prior to turm on shift search
         integer,                 parameter :: WAIT_WATCHER       = 60   ! seconds prior to new stack detection
@@ -128,7 +128,7 @@ contains
         type(prime2D_distr_commander)      :: xprime2D_distr
         type(make_cavgs_distr_commander)    :: xmake_cavgs
         type(extractwatcher)               :: mic_watcher
-        type(cmdline)                      :: cline_prime2D, cline_scale, cline_make_cavgs
+        type(cmdline)                      :: cline_cluster2D, cline_scale, cline_make_cavgs
         type(params)                       :: p_master, p_scale
         type(oris)                         :: os
         character(len=STDLEN), allocatable :: newstacks(:), stktab(:)
@@ -146,13 +146,13 @@ contains
         p_master = params(cline)
         ! init command-lines
         cline_scale     = cline
-        cline_prime2D   = cline
+        cline_cluster2D   = cline
         cline_make_cavgs = cline
-        call cline_prime2D%set('prg',       'prime2D')
-        call cline_prime2D%set('stktab',    STK_FILETAB)
-        call cline_prime2D%set('extr_iter', 100.) ! no extremal randomization
+        call cline_cluster2D%set('prg',       'prime2D')
+        call cline_cluster2D%set('stktab',    STK_FILETAB)
+        call cline_cluster2D%set('extr_iter', 100.) ! no extremal randomization
         if( p_master%ctf.ne.'no' )then
-            call cline_prime2D%set('deftab', DEFTAB)
+            call cline_cluster2D%set('deftab', DEFTAB)
         endif
         call cline_scale%set('prg', 'scale')
         call cline_scale%set('ctf','no') ! to clear up display
@@ -200,9 +200,9 @@ contains
                         box_glob = box_original
                     endif
                     deallocate(stktab)
-                    call cline_prime2D%set('box',  real(box_glob))
-                    call cline_prime2D%set('smpd', real(smpd_glob))
-                    call cline_prime2D%set('msk',  real(msk_glob))
+                    call cline_cluster2D%set('box',  real(box_glob))
+                    call cline_cluster2D%set('smpd', real(smpd_glob))
+                    call cline_cluster2D%set('msk',  real(msk_glob))
                 endif
                 nptcls_glob_prev = nptcls_glob
                 call add_newstacks
@@ -212,7 +212,7 @@ contains
             call simple_sleep(WAIT_WATCHER) ! parameter instead
         enddo
         ncls_glob = ncls
-        call cline_prime2D%set('ncls', real(ncls_glob))
+        call cline_cluster2D%set('ncls', real(ncls_glob))
         last_injection = simple_gettime()
         ! Main loop
         do iter = 1, 999
@@ -224,20 +224,20 @@ contains
                 exit
             endif
             ! prime2D
-            call cline_prime2D%set('startit', real(iter))
-            call cline_prime2D%set('maxits',  real(iter))
-            call cline_prime2D%delete('endit')
-            call cline_prime2D%set('ncls',    real(ncls_glob))
-            call cline_prime2D%set('nparts',  real(min(ncls,p_master%nparts)))
+            call cline_cluster2D%set('startit', real(iter))
+            call cline_cluster2D%set('maxits',  real(iter))
+            call cline_cluster2D%delete('endit')
+            call cline_cluster2D%set('ncls',    real(ncls_glob))
+            call cline_cluster2D%set('nparts',  real(min(ncls,p_master%nparts)))
             if(nptcls_glob > SHIFTSRCH_PTCLSLIM .and. iter > SHIFTSRCH_ITERLIM)then
-                call cline_prime2D%set('trs', MINSHIFT)
+                call cline_cluster2D%set('trs', MINSHIFT)
             endif
-            call xprime2D_distr%execute(cline_prime2D)
-            oritab_glob = trim(PRIME2D_ITER_FBODY)//trim(str_iter)//trim(METADATA_EXT)
+            call xprime2D_distr%execute(cline_cluster2D)
+            oritab_glob = trim(CLUSTER2D_ITER_FBODY)//trim(str_iter)//trim(METADATA_EXT)
             refs_glob   = trim(CAVGS_ITER_FBODY)//trim(str_iter)//trim(p_master%ext)
             frcs_glob   = trim(FRCS_ITER_FBODY)//trim(str_iter)//'.bin'
-            call cline_prime2D%set('oritab', trim(oritab_glob))
-            call cline_prime2D%set('refs',   trim(refs_glob))
+            call cline_cluster2D%set('oritab', trim(oritab_glob))
+            call cline_cluster2D%set('refs',   trim(refs_glob))
             call remap_empty_classes
             ! detects new images
             call mic_watcher%watch(n_newstks)

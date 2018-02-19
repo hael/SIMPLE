@@ -223,7 +223,7 @@ contains
         type(params)                  :: p
         type(build)                   :: b
         character(len=:), allocatable :: fbody, finished_fname
-        character(len=STDLEN)         :: reconstruct3Dname, rho_name
+        character(len=STDLEN)         :: recvolname, rho_name
         integer                       :: part, s, ss, state, ldim(3)
         type(reconstructor)           :: reconstruct3D_read
         p = params(cline)                   ! parameters generated
@@ -251,11 +251,11 @@ contains
                 deallocate(fbody)
             end do
             if( p%nstates == 1 .and. cline%defined('outvol') )then
-                reconstruct3Dname = trim(p%outvol)
+                recvolname = trim(p%outvol)
             else
-                reconstruct3Dname = 'reconstruct3D_state'//int2str_pad(state,2)//p%ext
+                recvolname = 'recvol_state'//int2str_pad(state,2)//p%ext
             endif
-            call correct_for_sampling_density(trim(reconstruct3Dname))
+            call correct_for_sampling_density(trim(recvolname))
             if( cline%defined('state') )exit
         end do
         call reconstruct3D_read%dealloc_rho

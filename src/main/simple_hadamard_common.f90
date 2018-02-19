@@ -11,7 +11,7 @@ implicit none
 
 public :: read_img, read_img_and_norm, read_imgbatch, set_bp_range, set_bp_range2D, grid_ptcl,&
 &prepimg4align, eonorm_struct_facts, norm_struct_facts, cenrefvol_and_mapshifts2ptcls, preprefvol,&
-&prep2Dref, gen2Dclassdoc, prepreconstruct3Ds, killreconstruct3Ds, gen_projection_frcs, prepimgbatch, grid_ptcl_tst,&
+&prep2Dref, gen2Dclassdoc, preprecvols, killrecvols, gen_projection_frcs, prepimgbatch, grid_ptcl_tst,&
 &build_pftcc_particles
 private
 #include "simple_local_flags.inc"
@@ -608,7 +608,7 @@ contains
     end subroutine gen2Dclassdoc
 
     !>  \brief  initializes all volumes for reconstruction
-    subroutine prepreconstruct3Ds( b, p )
+    subroutine preprecvols( b, p )
         class(build),   intent(inout) :: b
         class(params),  intent(inout) :: p
         character(len=:), allocatable :: recname, rhoname, part_str
@@ -648,10 +648,10 @@ contains
                     endif
                 end do
         end select
-    end subroutine prepreconstruct3Ds
+    end subroutine preprecvols
 
     !>  \brief  destructs all volumes for reconstruction
-    subroutine killreconstruct3Ds( b, p )
+    subroutine killrecvols( b, p )
         class(build),   intent(inout) :: b
         class(params),  intent(inout) :: p
         integer :: istate
@@ -665,7 +665,7 @@ contains
                 call b%recvols(istate)%kill
             end do
         endif
-    end subroutine killreconstruct3Ds
+    end subroutine killrecvols
 
     !>  \brief  prepares a batch of images
     subroutine prepimgbatch( b, p, batchsz )
@@ -813,7 +813,7 @@ contains
                 cycle
             endif
             if( p%l_distr_exec )then
-                allocate(fbody, source='reconstruct3D_state'//int2str_pad(s,2)//'_part'//int2str_pad(p%part,p%numlen))
+                allocate(fbody, source='recvol_state'//int2str_pad(s,2)//'_part'//int2str_pad(p%part,p%numlen))
                 p%vols(s)  = trim(adjustl(fbody))//p%ext
                 call b%recvols(s)%compress_exp
                 call b%recvols(s)%write(p%vols(s), del_if_exists=.true.)
@@ -824,7 +824,7 @@ contains
                      p%vols(s) = trim(SNHCVOL)//int2str_pad(s,2)//p%ext
                 else
                     if( present(which_iter) )then
-                        p%vols(s) = 'reconstruct3D_state'//int2str_pad(s,2)//'_iter'//int2str_pad(which_iter,3)//p%ext
+                        p%vols(s) = 'recvol_state'//int2str_pad(s,2)//'_iter'//int2str_pad(which_iter,3)//p%ext
                     else
                         p%vols(s) = 'startvol_state'//int2str_pad(s,2)//p%ext
                     endif
@@ -872,10 +872,10 @@ contains
             endif
             call b%eorecvols(s)%compress_exp
             if( p%l_distr_exec )then
-                call b%eorecvols(s)%write_eos('reconstruct3D_state'//int2str_pad(s,2)//'_part'//int2str_pad(p%part,p%numlen))
+                call b%eorecvols(s)%write_eos('recvol_state'//int2str_pad(s,2)//'_part'//int2str_pad(p%part,p%numlen))
             else
                 if( present(which_iter) )then
-                    p%vols(s) = 'reconstruct3D_state'//int2str_pad(s,2)//'_iter'//int2str_pad(which_iter,3)//p%ext
+                    p%vols(s) = 'recvol_state'//int2str_pad(s,2)//'_iter'//int2str_pad(which_iter,3)//p%ext
                 else
                     p%vols(s) = 'startvol_state'//int2str_pad(s,2)//p%ext
                 endif

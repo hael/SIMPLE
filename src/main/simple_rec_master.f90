@@ -48,7 +48,7 @@ contains
                     allocate(fbody, source=trim(adjustl(fbody_in))//&
                     &'_state'//int2str_pad(s,2)//'_part'//int2str_pad(p%part,p%numlen))
                 else
-                    allocate(fbody, source='reconstruct3D_state'//int2str_pad(s,2)//&
+                    allocate(fbody, source='recvol_state'//int2str_pad(s,2)//&
                     &'_part'//int2str_pad(p%part,p%numlen))
                 endif
                 p%vols(s) = fbody//p%ext
@@ -61,7 +61,7 @@ contains
                 if( present(fbody_in) )then
                     allocate(fbody, source=trim(adjustl(fbody_in))//'_state')
                 else
-                    allocate(fbody, source='reconstruct3D_state')
+                    allocate(fbody, source='recvol_state')
                 endif
                 p%vols(s) = fbody//int2str_pad(s,2)//p%ext
                 call b%recvol%rec(p, b%a, b%se, s)
@@ -91,7 +91,7 @@ contains
             if( present(fbody_in) )then
                 allocate(fbody, source=trim(adjustl(fbody_in))//'_state')
             else
-                allocate(fbody, source='reconstruct3D_state')
+                allocate(fbody, source='recvol_state')
             endif
             call b%eorecvol%eorec_distr(p, b%a, b%se, s, fbody=fbody)
             deallocate(fbody)

@@ -11,7 +11,7 @@ real,    parameter            :: SMPD=1.1, MSK=50., TRS=5.0
 type(image)                   :: cube, square
 type(project_commander)       :: xproject
 type(prime3D_distr_commander) :: xprime3D
-type(cmdline)                 :: cline_project, cline_prime3D
+type(cmdline)                 :: cline_project, cline_refine3D
 
 contains
 
@@ -35,20 +35,20 @@ contains
         call cline_project%set('nspace',  real(NSPACE))
         call cline_project%set('nthr',    nthr)
         call xproject%execute(cline_project)
-        call cline_prime3D%set('prg',    'prime3D')
-        call cline_prime3D%set('stk',    'speedtester_cubes.mrc')
-        call cline_prime3D%set('smpd',    real(SMPD))
-        call cline_prime3D%set('msk',     real(MSK))
-        call cline_prime3D%set('ctf',    'no')
-        call cline_prime3D%set('pgrp',   'c1')
-        call cline_prime3D%set('nparts',  1.0)
-        call cline_prime3D%set('vol1',   'speedtester_cube.mrc')
-        call cline_prime3D%set('trs',     TRS)
-        call cline_prime3D%set('lp',      6.0)
-        call cline_prime3D%set('nthr',    nthr)
-        call cline_prime3D%set('eo',      'no')
-        call cline_prime3D%set('maxits',  1.0)
-        call xprime3D%execute(cline_prime3D)
+        call cline_refine3D%set('prg',    'prime3D')
+        call cline_refine3D%set('stk',    'speedtester_cubes.mrc')
+        call cline_refine3D%set('smpd',    real(SMPD))
+        call cline_refine3D%set('msk',     real(MSK))
+        call cline_refine3D%set('ctf',    'no')
+        call cline_refine3D%set('pgrp',   'c1')
+        call cline_refine3D%set('nparts',  1.0)
+        call cline_refine3D%set('vol1',   'speedtester_cube.mrc')
+        call cline_refine3D%set('trs',     TRS)
+        call cline_refine3D%set('lp',      6.0)
+        call cline_refine3D%set('nthr',    nthr)
+        call cline_refine3D%set('eo',      'no')
+        call cline_refine3D%set('maxits',  1.0)
+        call xprime3D%execute(cline_refine3D)
     end subroutine setup_testenv
 
 end module simple_speedtester

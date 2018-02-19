@@ -550,7 +550,7 @@ contains
             ! schedule
             call qenv%gen_scripts_and_schedule_jobs(p_master, job_descr, algnfbody=ALGN_FBODY)
             ! merge orientation documents
-            oritab = trim(PRIME2D_ITER_FBODY)//trim(str_iter)//trim(METADATA_EXT)
+            oritab = trim(CLUSTER2D_ITER_FBODY)//trim(str_iter)//trim(METADATA_EXT)
             call cline_merge_algndocs%set('outfile', trim(oritab))
             call xmerge_algndocs%execute(cline_merge_algndocs)
             ! assemble class averages
@@ -746,7 +746,7 @@ contains
         type(postprocess_commander)         :: xpostprocess
         ! command lines
         type(cmdline)         :: cline_reconstruct3D_distr
-        type(cmdline)         :: cline_prime3D_init
+        type(cmdline)         :: cline_refine3D_init
         type(cmdline)         :: cline_resrange
         type(cmdline)         :: cline_check3D_conv
         type(cmdline)         :: cline_merge_algndocs
@@ -790,7 +790,7 @@ contains
         call cline%set( 'box', real(p_master%box) )
         ! prepare command lines from prototype master
         cline_reconstruct3D_distr   = cline
-        cline_prime3D_init   = cline
+        cline_refine3D_init   = cline
         cline_resrange       = cline
         cline_check3D_conv   = cline
         cline_merge_algndocs = cline
@@ -799,7 +799,7 @@ contains
 
         ! initialise static command line parameters and static job description parameter
         call cline_reconstruct3D_distr%set( 'prg', 'reconstruct3D' )       ! required for distributed call
-        call cline_prime3D_init%set( 'prg', 'prime3D_init' ) ! required for distributed call
+        call cline_refine3D_init%set( 'prg', 'prime3D_init' ) ! required for distributed call
         if( trim(p_master%refine).eq.'hetsym' ) call cline_reconstruct3D_distr%set( 'pgrp', 'c1' )
         call cline_merge_algndocs%set('nthr',     1.)
         call cline_merge_algndocs%set('fbody',    ALGN_FBODY)
@@ -841,7 +841,7 @@ contains
         enddo
         if( .not.cline%defined('oritab') .and. .not.vol_defined )then
             ! ab-initio
-            call xprime3D_init_distr%execute( cline_prime3D_init )
+            call xprime3D_init_distr%execute( cline_refine3D_init )
             call cline%set( 'vol1', 'startvol_state01'//p_master%ext )
             call cline%set( 'oritab', oritab )
         else if( cline%defined('oritab') .and. .not.vol_defined )then
@@ -965,7 +965,7 @@ contains
             if( p_master%refine .eq. 'snhc' )then
                 oritab = trim(SNHCDOC)
             else
-                oritab = trim(PRIME3D_ITER_FBODY)//trim(str_iter)//trim(METADATA_EXT)
+                oritab = trim(REFINE3D_ITER_FBODY)//trim(str_iter)//trim(METADATA_EXT)
             endif
             call cline%set( 'oritab', oritab )
             call cline_merge_algndocs%set( 'outfile', trim(oritab) )

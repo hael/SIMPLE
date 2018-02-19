@@ -232,7 +232,7 @@ contains
             if( p%refine .eq. 'snhc')then
                 p%outfile = SNHCDOC
             else
-                p%outfile = 'prime3Ddoc_'//int2str_pad(which_iter,3)//trim(METADATA_EXT)
+                p%outfile = 'refine3Ddoc_'//int2str_pad(which_iter,3)//trim(METADATA_EXT)
             endif
         endif
 
@@ -391,7 +391,7 @@ contains
             endif
             call gridprep%new(b%img, kbwin, [p%boxpd,p%boxpd,1])
             ! init volumes
-            call prepreconstruct3Ds(b, p)
+            call preprecvols(b, p)
             ! prep rec imgs
             allocate(rec_imgs(MAXIMGBATCHSZ))
             do i=1,MAXIMGBATCHSZ
@@ -438,7 +438,7 @@ contains
                 call norm_struct_facts(b, p, which_iter)
             endif
             ! destruct
-            call killreconstruct3Ds(b, p)
+            call killrecvols(b, p)
             call gridprep%kill
             do ibatch=1,MAXIMGBATCHSZ
                 call rec_imgs(ibatch)%kill
@@ -501,7 +501,7 @@ contains
         type(prep4cgrid)     :: gridprep
         if( p%vols(1) == '' )then
             ! init volumes
-            call prepreconstruct3Ds(b, p)
+            call preprecvols(b, p)
             p%oritab = 'prime3D_startdoc'//trim(METADATA_EXT)
             if( trim(p%refine).eq.'tseries' )then
                 call b%a%spiral
@@ -544,7 +544,7 @@ contains
             end do
             deallocate(sample)
             call norm_struct_facts(b, p)
-            call killreconstruct3Ds(b, p)
+            call killrecvols(b, p)
         endif
     end subroutine gen_random_model
 

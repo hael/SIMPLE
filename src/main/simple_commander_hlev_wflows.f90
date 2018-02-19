@@ -53,8 +53,8 @@ contains
         type(rank_cavgs_commander)      :: xrank_cavgs
         type(scale_commander)           :: xscale
         ! command lines
-        type(cmdline) :: cline_prime2D_stage1
-        type(cmdline) :: cline_prime2D_stage2
+        type(cmdline) :: cline_cluster2D_stage1
+        type(cmdline) :: cline_cluster2D_stage2
         type(cmdline) :: cline_scalerefs
         type(cmdline) :: cline_make_cavgs
         type(cmdline) :: cline_rank_cavgs
@@ -96,16 +96,16 @@ contains
                 call p_master%stkhandle%write_stktab(trim(scaled_stktab))
             endif
             ! execute stage 1
-            cline_prime2D_stage1 = cline
+            cline_cluster2D_stage1 = cline
             ! no incremental learning in stage 1
             if( p_master%l_frac_update )then
-                call cline_prime2D_stage1%delete('update_frac')
-                call cline_prime2D_stage1%set('maxits', real(MAX_EXTRLIM2D))
+                call cline_cluster2D_stage1%delete('update_frac')
+                call cline_cluster2D_stage1%set('maxits', real(MAX_EXTRLIM2D))
             else
-                call cline_prime2D_stage1%set('maxits', real(MAXITS_STAGE1))
+                call cline_cluster2D_stage1%set('maxits', real(MAXITS_STAGE1))
             endif
             if( cline%defined('stktab') )then
-                call cline_prime2D_stage1%set('stktab', trim(scaled_stktab))
+                call cline_cluster2D_stage1%set('stktab', trim(scaled_stktab))
             endif
             if( cline%defined('refs') )then
                 ! scale references
@@ -115,13 +115,13 @@ contains
                 call cline_scalerefs%set('smpd', cline%get_rarg('smpd'))
                 call cline_scalerefs%set('newbox', scobj%get_scaled_var('box'))
                 call xscale%execute(cline_scalerefs)
-                call cline_prime2D_stage1%set('refs',trim(refs_sc))
+                call cline_cluster2D_stage1%set('refs',trim(refs_sc))
             endif
-            call cline_prime2D_stage1%delete('automsk')
-            call cline_prime2D_stage1%set('objfun', 'cc') ! goal function is standard cross-correlation
-            call xprime2D_distr%execute(cline_prime2D_stage1)
-            last_iter_stage1 = nint(cline_prime2D_stage1%get_rarg('endit'))
-            finaldoc         = trim(PRIME2D_ITER_FBODY)//int2str_pad(last_iter_stage1,3)//trim(METADATA_EXT)
+            call cline_cluster2D_stage1%delete('automsk')
+            call cline_cluster2D_stage1%set('objfun', 'cc') ! goal function is standard cross-correlation
+            call xprime2D_distr%execute(cline_cluster2D_stage1)
+            last_iter_stage1 = nint(cline_cluster2D_stage1%get_rarg('endit'))
+            finaldoc         = trim(CLUSTER2D_ITER_FBODY)//int2str_pad(last_iter_stage1,3)//trim(METADATA_EXT)
             finalcavgs       = trim(CAVGS_ITER_FBODY)//int2str_pad(last_iter_stage1,3)//p_master%ext
             ! prepare stage 2 input -- re-scale
             call scobj%uninit(cline) ! puts back the old command line
@@ -134,22 +134,22 @@ contains
             call os%mul_shifts(scale_stage2/scale_stage1)
             call binwrite_oritab(finaldoc, os, [1,p_master%nptcls])
             ! prepare stage 2 input -- command line
-            cline_prime2D_stage2 = cline
-            call cline_prime2D_stage2%delete('refs')
+            cline_cluster2D_stage2 = cline
+            call cline_cluster2D_stage2%delete('refs')
             ! if automsk .eq. yes, we need to replace it with cavg
             if( p_master%automsk .eq. 'yes' )then
-                call cline_prime2D_stage2%set('automsk', 'cavg')
+                call cline_cluster2D_stage2%set('automsk', 'cavg')
             endif
             if( cline%defined('stktab') )then
-                call cline_prime2D_stage2%set('stktab', trim(scaled_stktab))
+                call cline_cluster2D_stage2%set('stktab', trim(scaled_stktab))
             endif
-            call cline_prime2D_stage2%delete('deftab')
-            call cline_prime2D_stage2%set('oritab',  trim(finaldoc))
-            call cline_prime2D_stage2%set('startit', real(last_iter_stage1 + 1))
-            call cline_prime2D_stage2%set('objfun', 'ccres') ! goal function is resolution weighted (ccres)
-            call xprime2D_distr%execute(cline_prime2D_stage2)
-            last_iter_stage2 = nint(cline_prime2D_stage2%get_rarg('endit'))
-            finaldoc         = trim(PRIME2D_ITER_FBODY)//int2str_pad(last_iter_stage2,3)//trim(METADATA_EXT)
+            call cline_cluster2D_stage2%delete('deftab')
+            call cline_cluster2D_stage2%set('oritab',  trim(finaldoc))
+            call cline_cluster2D_stage2%set('startit', real(last_iter_stage1 + 1))
+            call cline_cluster2D_stage2%set('objfun', 'ccres') ! goal function is resolution weighted (ccres)
+            call xprime2D_distr%execute(cline_cluster2D_stage2)
+            last_iter_stage2 = nint(cline_cluster2D_stage2%get_rarg('endit'))
+            finaldoc         = trim(CLUSTER2D_ITER_FBODY)//int2str_pad(last_iter_stage2,3)//trim(METADATA_EXT)
             finalcavgs       = trim(CAVGS_ITER_FBODY)//int2str_pad(last_iter_stage2,3)//p_master%ext
             last_iter        = last_iter_stage2 ! for ranking
             if( cline%defined('stktab') )then
@@ -178,7 +178,7 @@ contains
         else ! no auto-scaling
             call xprime2D_distr%execute(cline)
             last_iter_stage2 = nint(cline%get_rarg('endit'))
-            finaldoc         = trim(PRIME2D_ITER_FBODY)//int2str_pad(last_iter_stage2,3)//trim(METADATA_EXT)
+            finaldoc         = trim(CLUSTER2D_ITER_FBODY)//int2str_pad(last_iter_stage2,3)//trim(METADATA_EXT)
             finalcavgs       = trim(CAVGS_ITER_FBODY)//int2str_pad(last_iter_stage2,3)//p_master%ext
             last_iter        = last_iter_stage2 ! for ranking
         endif
@@ -207,7 +207,7 @@ contains
         integer,               parameter :: MAXITS_SNHC=30, MAXITS_INIT=15, MAXITS_REFINE=40
         integer,               parameter :: STATE=1, NPROJS_SYMSRCH=50, NPEAKS_REFINE=6
         integer,               parameter :: NSPACE_SNHC = 1000, NSPACE_DEFAULT= 2500
-        character(len=32),     parameter :: ITERFBODY     = 'prime3Ddoc_'
+        character(len=32),     parameter :: ITERFBODY     = 'refine3Ddoc_'
         character(len=STDLEN), parameter :: STKSCALEDBODY = 'stk_sc_initial_3Dmodel'
         ! distributed commanders
         type(prime3D_distr_commander) :: xprime3D_distr
@@ -216,9 +216,9 @@ contains
         type(reconstruct3D_commander)        :: xreconstruct3D
         type(project_commander)       :: xproject
         ! command lines
-        type(cmdline)         :: cline_prime3D_snhc
-        type(cmdline)         :: cline_prime3D_init
-        type(cmdline)         :: cline_prime3D_refine
+        type(cmdline)         :: cline_refine3D_snhc
+        type(cmdline)         :: cline_refine3D_init
+        type(cmdline)         :: cline_refine3D_refine
         type(cmdline)         :: cline_symsrch
         type(cmdline)         :: cline_reconstruct3D
         type(cmdline)         :: cline_project
@@ -269,9 +269,9 @@ contains
             call scobj%init(p_master, cline, p_master%box, smpd_target, STKSCALEDBODY)
         endif
         ! prepare command lines from prototype master
-        cline_prime3D_snhc   = cline
-        cline_prime3D_init   = cline
-        cline_prime3D_refine = cline
+        cline_refine3D_snhc   = cline
+        cline_refine3D_init   = cline
+        cline_refine3D_refine = cline
         cline_symsrch        = cline
         cline_reconstruct3D         = cline
         cline_project        = cline
@@ -280,30 +280,30 @@ contains
         call cline_project%delete('nparts')
         ! initialise command line parameters
         ! (1) INITIALIZATION BY STOCHASTIC NEIGHBORHOOD HILL-CLIMBING
-        call cline_prime3D_snhc%delete('update_frac') ! no fractional update in first phase
-        call cline_prime3D_snhc%set('prg',    'prime3D')
-        call cline_prime3D_snhc%set('ctf',    'no')
-        call cline_prime3D_snhc%set('maxits', real(MAXITS_SNHC))
-        call cline_prime3D_snhc%set('refine', 'snhc')
-        call cline_prime3D_snhc%set('dynlp',  'no') ! better be explicit about the dynlp
-        call cline_prime3D_snhc%set('lp',     lplims(1))
-        call cline_prime3D_snhc%set('nspace', real(NSPACE_SNHC))
+        call cline_refine3D_snhc%delete('update_frac') ! no fractional update in first phase
+        call cline_refine3D_snhc%set('prg',    'refine3D')
+        call cline_refine3D_snhc%set('ctf',    'no')
+        call cline_refine3D_snhc%set('maxits', real(MAXITS_SNHC))
+        call cline_refine3D_snhc%set('refine', 'snhc')
+        call cline_refine3D_snhc%set('dynlp',  'no') ! better be explicit about the dynlp
+        call cline_refine3D_snhc%set('lp',     lplims(1))
+        call cline_refine3D_snhc%set('nspace', real(NSPACE_SNHC))
         ! (2) PRIME3D_INIT
-        call cline_prime3D_init%set('prg',    'prime3D')
-        call cline_prime3D_init%set('ctf',    'no')
-        call cline_prime3D_init%set('maxits', real(MAXITS_INIT))
-        call cline_prime3D_init%set('vol1',   trim(SNHCVOL)//trim(str_state)//p_master%ext)
-        call cline_prime3D_init%set('oritab', SNHCDOC)
-        call cline_prime3D_init%set('dynlp',  'no') ! better be explicit about the dynlp
-        call cline_prime3D_init%set('lp',     lplims(1))
-        if( .not. cline_prime3D_init%defined('nspace') )then
-            call cline_prime3D_init%set('nspace', real(NSPACE_DEFAULT))
+        call cline_refine3D_init%set('prg',    'refine3D')
+        call cline_refine3D_init%set('ctf',    'no')
+        call cline_refine3D_init%set('maxits', real(MAXITS_INIT))
+        call cline_refine3D_init%set('vol1',   trim(SNHCVOL)//trim(str_state)//p_master%ext)
+        call cline_refine3D_init%set('oritab', SNHCDOC)
+        call cline_refine3D_init%set('dynlp',  'no') ! better be explicit about the dynlp
+        call cline_refine3D_init%set('lp',     lplims(1))
+        if( .not. cline_refine3D_init%defined('nspace') )then
+            call cline_refine3D_init%set('nspace', real(NSPACE_DEFAULT))
         endif
         ! (3) SYMMETRY AXIS SEARCH
         if( srch4symaxis )then
             ! need to replace original point-group flag with c1
-            call cline_prime3D_snhc%set('pgrp', 'c1')
-            call cline_prime3D_init%set('pgrp', 'c1')
+            call cline_refine3D_snhc%set('pgrp', 'c1')
+            call cline_refine3D_init%set('pgrp', 'c1')
             ! symsrch
             call cline_symsrch%set('prg', 'symsrch')
             call cline_symsrch%delete('stk')  ! volumetric symsrch
@@ -318,19 +318,19 @@ contains
             call cline_reconstruct3D%set('ctf',  'no')
             call cline_reconstruct3D%set('oritab', 'symdoc'//trim(METADATA_EXT))
             ! refinement step now uses the symmetrised vol and doc
-            call cline_prime3D_refine%set('oritab', 'symdoc'//trim(METADATA_EXT))
-            call cline_prime3D_refine%set('vol1', 'rec_sym'//p_master%ext)
+            call cline_refine3D_refine%set('oritab', 'symdoc'//trim(METADATA_EXT))
+            call cline_refine3D_refine%set('vol1', 'rec_sym'//p_master%ext)
         endif
         ! (4) PRIME3D REFINE STEP
-        call cline_prime3D_refine%set('prg', 'prime3D')
-        call cline_prime3D_refine%set('ctf', 'no')
-        call cline_prime3D_refine%set('maxits', real(MAXITS_REFINE))
-        call cline_prime3D_refine%set('refine', 'no')
-        call cline_prime3D_refine%set('npeaks', real(NPEAKS_REFINE))
-        call cline_prime3D_refine%set('dynlp', 'no') ! better be explicit about the dynlp
-        call cline_prime3D_refine%set('lp', lplims(2))
-        if( .not. cline_prime3D_refine%defined('nspace') )then
-            call cline_prime3D_refine%set('nspace', real(NSPACE_DEFAULT))
+        call cline_refine3D_refine%set('prg', 'refine3D')
+        call cline_refine3D_refine%set('ctf', 'no')
+        call cline_refine3D_refine%set('maxits', real(MAXITS_REFINE))
+        call cline_refine3D_refine%set('refine', 'no')
+        call cline_refine3D_refine%set('npeaks', real(NPEAKS_REFINE))
+        call cline_refine3D_refine%set('dynlp', 'no') ! better be explicit about the dynlp
+        call cline_refine3D_refine%set('lp', lplims(2))
+        if( .not. cline_refine3D_refine%defined('nspace') )then
+            call cline_refine3D_refine%set('nspace', real(NSPACE_DEFAULT))
         endif
         ! (5) RE-PROJECT VOLUME
         call cline_project%set('prg', 'project')
@@ -345,12 +345,12 @@ contains
         write(*,'(A)') '>>>'
         write(*,'(A)') '>>> INITIALIZATION WITH STOCHASTIC NEIGHBORHOOD HILL-CLIMBING'
         write(*,'(A)') '>>>'
-        call xprime3D_distr%execute(cline_prime3D_snhc)
+        call xprime3D_distr%execute(cline_refine3D_snhc)
         write(*,'(A)') '>>>'
         write(*,'(A)') '>>> INITIAL 3D MODEL GENERATION WITH PRIME3D'
         write(*,'(A)') '>>>'
-        call xprime3D_distr%execute(cline_prime3D_init)
-        iter = cline_prime3D_init%get_rarg('endit')
+        call xprime3D_distr%execute(cline_refine3D_init)
+        iter = cline_refine3D_init%get_rarg('endit')
         call set_iter_dependencies
         if( srch4symaxis )then
             write(*,'(A)') '>>>'
@@ -366,15 +366,15 @@ contains
             call simple_rename(trim(VOL_FBODY)//trim(str_state)//p_master%ext, 'rec_sym'//p_master%ext)
         else
             ! refinement step needs to use iter dependent vol/oritab
-            call cline_prime3D_refine%set('oritab', trim(oritab))
-            call cline_prime3D_refine%set('vol1', trim(vol_iter))
+            call cline_refine3D_refine%set('oritab', trim(oritab))
+            call cline_refine3D_refine%set('vol1', trim(vol_iter))
         endif
         write(*,'(A)') '>>>'
         write(*,'(A)') '>>> PRIME3D REFINEMENT STEP'
         write(*,'(A)') '>>>'
-        call cline_prime3D_refine%set('startit', iter + 1.0)
-        call xprime3D_distr%execute(cline_prime3D_refine)
-        iter = cline_prime3D_refine%get_rarg('endit')
+        call cline_refine3D_refine%set('startit', iter + 1.0)
+        call xprime3D_distr%execute(cline_refine3D_refine)
+        iter = cline_refine3D_refine%get_rarg('endit')
         call set_iter_dependencies
         ! delete stack parts (we are done with them)
         call del_files(trim(STKPARTFBODY), p_master%nparts, ext=p_master%ext)
@@ -434,7 +434,7 @@ contains
         ! shared-mem commanders
         type(postprocess_commander)  :: xpostprocess
         ! command lines
-        type(cmdline)                 :: cline_prime3D1, cline_prime3D2
+        type(cmdline)                 :: cline_refine3D1, cline_refine3D2
         type(cmdline)                 :: cline_reconstruct3D_distr, cline_reconstruct3D_mixed_distr
         type(cmdline)                 :: cline_postprocess
         ! other variables
@@ -459,28 +459,28 @@ contains
 
         ! prepare command lines from prototype
         call cline%delete('refine')
-        cline_prime3D1           = cline
-        cline_prime3D2           = cline
+        cline_refine3D1           = cline
+        cline_refine3D2           = cline
         cline_postprocess       = cline ! eo always eq yes
         cline_reconstruct3D_distr       = cline ! eo always eq yes
         cline_reconstruct3D_mixed_distr = cline ! eo always eq yes
-        call cline_prime3D1%set('prg', 'prime3D')
-        call cline_prime3D2%set('prg', 'prime3D')
-        call cline_prime3D1%set('maxits', real(MAXITS))
+        call cline_refine3D1%set('prg', 'refine3D')
+        call cline_refine3D2%set('prg', 'refine3D')
+        call cline_refine3D1%set('maxits', real(MAXITS))
         select case(trim(p_master%refine))
             case('sym')
-                call cline_prime3D1%set('refine', 'hetsym')
+                call cline_refine3D1%set('refine', 'hetsym')
             case DEFAULT
-                call cline_prime3D1%set('refine', 'het')
+                call cline_refine3D1%set('refine', 'het')
         end select
-        call cline_prime3D2%set('refine', 'no')
-        call cline_prime3D1%set('dynlp', 'no')
-        call cline_prime3D1%set('pproc', 'no')
-        call cline_prime3D1%delete('oritab2')
-        call cline_prime3D2%set('dynlp', 'no')
-        call cline_prime3D2%set('pproc', 'no')
-        call cline_prime3D2%delete('oritab2')
-        if( .not.cline%defined('update_frac') )call cline_prime3D2%set('update_frac', 0.2)
+        call cline_refine3D2%set('refine', 'no')
+        call cline_refine3D1%set('dynlp', 'no')
+        call cline_refine3D1%set('pproc', 'no')
+        call cline_refine3D1%delete('oritab2')
+        call cline_refine3D2%set('dynlp', 'no')
+        call cline_refine3D2%set('pproc', 'no')
+        call cline_refine3D2%delete('oritab2')
+        if( .not.cline%defined('update_frac') )call cline_refine3D2%set('update_frac', 0.2)
         call cline_reconstruct3D_distr%set('prg', 'reconstruct3D')
         call cline_reconstruct3D_mixed_distr%set('prg', 'reconstruct3D')
         call cline_postprocess%set('prg', 'postprocess')
@@ -497,8 +497,8 @@ contains
             ! works out shift lmits for in-plane search
             trs = MSK_FRAC*real(p_master%msk)
             trs = min(MAXSHIFT, max(MINSHIFT, trs))
-            call cline_prime3D1%set('trs',trs)
-            call cline_prime3D2%set('trs',trs)
+            call cline_refine3D1%set('trs',trs)
+            call cline_refine3D2%set('trs',trs)
         endif
 
         ! generate diverse initial labels & orientations
@@ -540,7 +540,7 @@ contains
         where( .not. included ) labels = 0
         call os%set_all('state', real(labels))
         call binwrite_oritab(trim(oritab), os, [1,p_master%nptcls])
-        call cline_prime3D1%set('oritab', trim(oritab))
+        call cline_refine3D1%set('oritab', trim(oritab))
         deallocate(labels, included)
 
         ! retrieve mixed model FSC & anisotropic filter
@@ -562,9 +562,9 @@ contains
         write(*,'(A)')    '>>>'
         write(*,'(A,I3)') '>>> PRIME3D - STAGE 1'
         write(*,'(A)')    '>>>'
-        call xprime3D_distr%execute(cline_prime3D1)
-        iter   = nint(cline_prime3D1%get_rarg('endit'))
-        oritab = PRIME3D_ITER_FBODY//int2str_pad(iter,3)//trim(METADATA_EXT)
+        call xprime3D_distr%execute(cline_refine3D1)
+        iter   = nint(cline_refine3D1%get_rarg('endit'))
+        oritab = REFINE3D_ITER_FBODY//int2str_pad(iter,3)//trim(METADATA_EXT)
         call binread_oritab(trim(oritab), os, [1,p_master%nptcls])
         oritab = 'cluster3Ddoc_stage1'//trim(METADATA_EXT)
         call binwrite_oritab(trim(oritab), os, [1,p_master%nptcls])
@@ -584,15 +584,15 @@ contains
 
         ! STAGE2: soft multi-states refinement
         startit = iter + 1
-        call cline_prime3D2%set('startit', real(startit))
-        call cline_prime3D2%set('maxits',  real(startit+50))
-        call cline_prime3D2%set('oritab',  trim(oritab))
+        call cline_refine3D2%set('startit', real(startit))
+        call cline_refine3D2%set('maxits',  real(startit+50))
+        call cline_refine3D2%set('oritab',  trim(oritab))
         write(*,'(A)')    '>>>'
         write(*,'(A,I3)') '>>> PRIME3D - STAGE 2'
         write(*,'(A)')    '>>>'
-        call xprime3D_distr%execute(cline_prime3D2)
-        iter   = nint(cline_prime3D2%get_rarg('endit'))
-        oritab = PRIME3D_ITER_FBODY//int2str_pad(iter,3)//trim(METADATA_EXT)
+        call xprime3D_distr%execute(cline_refine3D2)
+        iter   = nint(cline_refine3D2%get_rarg('endit'))
+        oritab = REFINE3D_ITER_FBODY//int2str_pad(iter,3)//trim(METADATA_EXT)
         call binread_oritab(trim(oritab), os, [1,p_master%nptcls])
         oritab = 'cluster3Ddoc_stage2'//trim(METADATA_EXT)
         call binwrite_oritab(trim(oritab), os, [1,p_master%nptcls])
@@ -696,8 +696,8 @@ contains
         ! shared-mem commanders
         type(postprocess_commander)  :: xpostprocess
         ! command lines
-        type(cmdline)                 :: cline_prime3D_master
-        type(cmdline)                 :: cline_prime3D
+        type(cmdline)                 :: cline_refine3D_master
+        type(cmdline)                 :: cline_refine3D
         type(cmdline)                 :: cline_reconstruct3D_distr
         type(cmdline)                 :: cline_postprocess
         ! other variables
@@ -832,11 +832,11 @@ contains
         do state = 1, p_master%nstates
             call cline%delete('vol'//int2str_pad(state,1))
         enddo
-        cline_prime3D_master = cline
+        cline_refine3D_master = cline
         cline_reconstruct3D_distr   = cline
         cline_postprocess   = cline
-        call cline_prime3D_master%set('prg', 'prime3D')
-        call cline_prime3D_master%set('dynlp', 'no')
+        call cline_refine3D_master%set('prg', 'refine3D')
+        call cline_refine3D_master%set('dynlp', 'no')
         call cline_reconstruct3D_distr%set('prg', 'reconstruct3D')
         call cline_reconstruct3D_distr%set('oritab', trim(FINAL_DOC))
         call cline_reconstruct3D_distr%set('nstates', trim(int2str(p_master%nstates)))
@@ -853,10 +853,10 @@ contains
             write(*,'(A,I2)')'>>> REFINING STATE: ', state
             write(*,'(A)')   '>>>'
             ! prime3D prep
-            cline_prime3D = cline_prime3D_master
-            call cline_prime3D%set('oritab', trim(init_docs(state)))
+            cline_refine3D = cline_refine3D_master
+            call cline_refine3D%set('oritab', trim(init_docs(state)))
             if( l_hasvols(state) )then
-                call cline_prime3D%set('vol1', trim(p_master%vols(state)))
+                call cline_refine3D%set('vol1', trim(p_master%vols(state)))
                 if( p_master%eo.ne.'no' )then
                     fname = dir//FSC_FBODY//str_state//BIN_EXT
                     call exec_cmdline('cp '//trim(fname)//' fsc_state01.bin')
@@ -866,12 +866,12 @@ contains
                     if(file_exists(fname))call exec_cmdline('cp '//trim(fname)//' aniso_optlp_state01.mrc')
                 endif
             endif
-            if( l_hasmskvols(state) )call cline_prime3D%set('mskfile', trim(p_master%mskvols(state)))
+            if( l_hasmskvols(state) )call cline_refine3D%set('mskfile', trim(p_master%mskvols(state)))
             ! run prime3D
-            call xprime3D_distr%execute(cline_prime3D)
+            call xprime3D_distr%execute(cline_refine3D)
             ! harvest outcome
-            iter   = nint(cline_prime3D%get_rarg('endit'))
-            oritab = PRIME3D_ITER_FBODY//int2str_pad(iter,3)//trim(METADATA_EXT)
+            iter   = nint(cline_refine3D%get_rarg('endit'))
+            oritab = REFINE3D_ITER_FBODY//int2str_pad(iter,3)//trim(METADATA_EXT)
             ! stash
             call os_state%new(p_master%nptcls)
             call binread_oritab(oritab, os_state, [1,p_master%nptcls])
@@ -895,7 +895,7 @@ contains
                 if( l_singlestate .and. state.ne.p_master%state )cycle
                 str_state = int2str_pad(state, 2)
                 if( l_hasmskvols(state) )call cline_postprocess%set('mskfile', trim(p_master%mskvols(state)))
-                vol = 'reconstruct3D_state'//trim(str_state)//p_master%ext
+                vol = 'recvol_state'//trim(str_state)//p_master%ext
                 call cline_postprocess%set('vol1', trim(vol))
                 call cline_postprocess%set('fsc', FSC_FBODY//trim(str_state)//BIN_EXT)
                 call cline_postprocess%set('vol_filt', ANISOLP_FBODY//trim(str_state)//p_master%ext)
@@ -936,7 +936,7 @@ contains
                         rename_stat = rename(src, dir//src)
                     endif
                     ! orientation document
-                    src = PRIME3D_ITER_FBODY//str_iter//trim(METADATA_EXT)
+                    src = REFINE3D_ITER_FBODY//str_iter//trim(METADATA_EXT)
                     if( file_exists(src) ) rename_stat = rename(src, dir//src)
                 enddo
                 ! resolution measures
