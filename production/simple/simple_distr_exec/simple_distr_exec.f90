@@ -11,39 +11,39 @@ use simple_commander_hlev_wflows
 implicit none
 
 ! PRE-PROCESSING
-type(preproc_stream_commander)                   :: xpreproc_stream
-type(motion_correct_ctffind_distr_commander)     :: xmotion_correct_ctffind_distr
-type(motion_correct_distr_commander)             :: xmotion_correct_distr
-type(motion_correct_tomo_distr_commander) :: xmotion_correct_tomo_distr
-type(powerspecs_distr_commander)                 :: xpowerspecs_distr
-type(ctffind_distr_commander)                    :: xctffind_distr
-type(ctf_estimate_distr_commander)               :: xctf_estimate_distr
-type(pick_distr_commander)                       :: xpick_distr
+type(preprocess_stream_commander)            :: xpreprocess_stream
+type(motion_correct_ctffind_distr_commander) :: xmotion_correct_ctffind_distr
+type(motion_correct_distr_commander)         :: xmotion_correct_distr
+type(motion_correct_tomo_distr_commander)    :: xmotion_correct_tomo_distr
+type(powerspecs_distr_commander)             :: xpowerspecs_distr
+type(ctffind_distr_commander)                :: xctffind_distr
+type(ctf_estimate_distr_commander)           :: xctf_estimate_distr
+type(pick_distr_commander)                   :: xpick_distr
 
 ! PRIME2D
-type(make_cavgs_distr_commander)          :: xmake_cavgs_distr
-type(prime2D_autoscale_commander)        :: xprime2D_distr
-type(prime2D_stream_distr_commander)     :: xprime2D_stream_distr
+type(make_cavgs_distr_commander)             :: xmake_cavgs_distr
+type(prime2D_autoscale_commander)            :: xprime2D_distr
+type(prime2D_stream_distr_commander)         :: xprime2D_stream_distr
 
 ! 3D SIMILARITY MATRIX GENERATION WITH COMMON LINES
-type(comlin_smat_distr_commander)        :: xcomlin_smat_distr
+type(comlin_smat_distr_commander)            :: xcomlin_smat_distr
 
 ! PRIME3D
-type(prime3D_init_distr_commander)       :: xprime3D_init_distr
-type(prime3D_distr_commander)            :: xprime3D_distr
-type(recvol_distr_commander)             :: xrecvol_distr
-type(symsrch_distr_commander)            :: xsymsrch_distr
+type(prime3D_init_distr_commander)           :: xprime3D_init_distr
+type(prime3D_distr_commander)                :: xprime3D_distr
+type(reconstruct3D_distr_commander)          :: xreconstruct3D_distr
+type(symsrch_distr_commander)                :: xsymsrch_distr
 
 ! TIME-SERIES WORKFLOWS
-type(tseries_track_distr_commander)      :: xtseries_track_distr
+type(tseries_track_distr_commander)          :: xtseries_track_distr
 
 ! HIGH-LEVEL WORKFLOWS
-type(initial_3Dmodel_commander)         :: xinitial_3Dmodel
-type(het_commander)                      :: xhet
-type(het_refine_commander)               :: xhet_refine
+type(initial_3Dmodel_commander)              :: xinitial_3Dmodel
+type(cluster3D_commander)                    :: xcluster3D
+type(cluster3D_refine_commander)             :: xcluster3D_refine
 
 ! SUPORTING DISTRIBUTED WORKFLOWS
-type(scale_stk_parts_commander)          :: xscale_stk_parts
+type(scale_stk_parts_commander)              :: xscale_stk_parts
 
 ! OTHER DECLARATIONS
 character(len=KEYLEN) :: keys_required(MAXNKEYS)='', keys_optional(MAXNKEYS)=''
@@ -64,13 +64,13 @@ if( str_has_substr(prg, 'simple_') ) stop 'giving program names with simple_* pr
 
 select case(prg)
 
-    ! PRE-PROCESSING STREAM, LINKING motion_correct + CTFFIND + PICK
+    ! PRE-PROCESSING STREAM, LINKING MOTION_CORRECT + CTFFIND + PICK
 
-    case( 'preproc' )
-        !==Program preproc
+    case( 'preprocess' )
+        !==Program preprocess
         !
-        ! <preproc/begin>is a distributed workflow that executes motion_correct, ctffind and pick in sequence
-        ! and in streaming mode as the microscope collects the data <preproc/end>
+        ! <preprocess/begin>is a distributed workflow that executes motion_correct, ctffind and pick in sequence
+        ! and in streaming mode as the microscope collects the data <preprocess/end>
         !
         ! set required keys
         keys_required(1)  = 'smpd'
@@ -112,7 +112,7 @@ select case(prg)
         keys_optional(30) = 'box_extract'
         keys_optional(31) = 'pcontrast'
         ! parse command line
-        if( describe ) call print_doc_preproc
+        if( describe ) call print_doc_preprocess
         call cline%parse(keys_required(:6), keys_optional(:31))
         ! set defaults
         if( .not. cline%defined('trs')             ) call cline%set('trs',               5.)
@@ -126,9 +126,9 @@ select case(prg)
         if( .not. cline%defined('stream')          ) call cline%set('stream',  'yes')
         if( .not. cline%defined('pcontrast')       ) call cline%set('pcontrast', 'black')
         if( .not. cline%defined('opt')             ) call cline%set('opt', 'simplex')
-        call xpreproc_stream%execute(cline)
+        call xpreprocess_stream%execute(cline)
 
-    ! PIPELINED motion_correct + CTFFIND
+    ! PIPELINED MOTION_CORRECT + CTFFIND
 
     case( 'motion_correct_ctffind' )
         !==Program motion_correct_ctffind
@@ -171,7 +171,7 @@ select case(prg)
         call cline%parse(keys_required(:6), keys_optional(:23))
         ! set defaults
         call cline%set('dopick', 'no'     )
-        call cline%set('prg',    'preproc')
+        call cline%set('prg',    'preprocess')
         if( .not. cline%defined('trs')             ) call cline%set('trs',               5.)
         if( .not. cline%defined('lpstart')         ) call cline%set('lpstart',          15.)
         if( .not. cline%defined('lpstop')          ) call cline%set('lpstop',            8.)
@@ -183,7 +183,7 @@ select case(prg)
         ! execute
         call xmotion_correct_ctffind_distr%execute(cline)
 
-    ! motion_correct_MOVIES
+    ! MOTION_CORRECT_MOVIES
 
     case( 'motion_correct' )
         !==Program motion_correct
@@ -670,10 +670,10 @@ select case(prg)
         endif
         ! execute
         call xprime3D_distr%execute(cline)
-    case( 'recvol' )
-        !==Program recvol
+    case( 'reconstruct3D' )
+        !==Program reconstruct3D
         !
-        ! <recvol/begin>is a distributed workflow for reconstructing volumes from MRC and SPIDER stacks,
+        ! <reconstruct3D/begin>is a distributed workflow for reconstructing volumes from MRC and SPIDER stacks,
         ! given input orientations and state assignments. The algorithm is based on direct Fourier inversion
         ! with a Kaiser-Bessel (KB) interpolation kernel. This window function reduces the real-space ripple
         ! artifacts associated with direct moving windowed-sinc interpolation. The feature sought when
@@ -684,7 +684,7 @@ select case(prg)
         ! control the solvent mask: the low-pass limit used to generate the envelope; the molecular weight of
         ! the molecule (protein assumed but it works reasonably well also for RNA; slight modification of mw
         ! might be needed). The inner parameter controls the radius of the soft-edged mask used to remove
-        ! the unordered DNA/RNA core of spherical icosahedral viruses<recvol/end>
+        ! the unordered DNA/RNA core of spherical icosahedral viruses<reconstruct3D/end>
         !
         ! set required keys
         keys_required(1)  = 'smpd'
@@ -705,7 +705,7 @@ select case(prg)
         keys_optional(9)  = 'stktab'
         keys_optional(10) = 'phaseplate'
         ! parse command line
-        if( describe ) call print_doc_recvol
+        if( describe ) call print_doc_reconstruct3D
         call cline%parse(keys_required(:6), keys_optional(:10))
         ! sanity check
         if( cline%defined('stk') .or. cline%defined('stktab') )then
@@ -717,7 +717,7 @@ select case(prg)
         if( .not. cline%defined('trs') ) call cline%set('trs',  5.) ! to assure that shifts are being used
         if( .not. cline%defined('eo')  ) call cline%set('eo', 'no')
         ! execute
-        call xrecvol_distr%execute( cline )
+        call xreconstruct3D_distr%execute( cline )
     case( 'symsrch' )
         !==Program symsrch
         !
@@ -728,7 +728,7 @@ select case(prg)
         ! be inputted. The 3D reconstruction is then projected in 50 (default option) even directions,
         ! common lines-based optimisation is used to identify the principal symmetry axis, the rotational
         ! transformation is applied to the inputted orientations, and a new alignment document is produced.
-        ! Input this document to recvol together with the images and the point-group symmetry to generate a
+        ! Input this document to reconstruct3D together with the images and the point-group symmetry to generate a
         ! symmetrised map. If you are unsure about the point-group, you should use the compare=yes mode and
         ! input the highest conceviable point-group. The program then calculates probabilities for all lower
         ! groups inclusive.<symsrch/end>
@@ -830,11 +830,11 @@ select case(prg)
         if( .not. cline%defined('autoscale') ) call cline%set('autoscale', 'yes')
         ! execute
         call xinitial_3Dmodel%execute( cline )
-    case( 'het' )
-        !==Program het
+    case( 'cluster3D' )
+        !==Program cluster3D
         !
-        ! <het/begin>is a distributed workflow for heterogeneity analysis
-        ! <het/end>
+        ! <cluster3D/begin>is a distributed workflow for heterogeneity analysis by 3D clustering
+        ! <cluster3D/end>
         !
         ! set required keys
         keys_required(1)  = 'smpd'
@@ -863,7 +863,7 @@ select case(prg)
         keys_optional(16) = 'startit'
         keys_optional(17) = 'objfun'
         ! parse command line
-        ! if( describe ) call print_doc_het
+        ! if( describe ) call print_doc_cluster3D
         call cline%parse(keys_required(:7), keys_optional(:17))
         ! sanity check
         if( cline%defined('stk') .or. cline%defined('stktab') )then
@@ -875,12 +875,12 @@ select case(prg)
         if( .not. cline%defined('eo') .and. .not. cline%defined('lp') ) call cline%set('eo','yes')
         if( cline%defined('lp') ) call cline%set('eo','no')
         ! execute
-        call xhet%execute( cline )
-    case( 'het_refine' )
-        !==Program het_ensemble
+        call xcluster3D%execute( cline )
+    case( 'cluster3D_refine' )
+        !==Program cluster3D_refine
         !
-        ! <het_refine/begin>is a distributed workflow for heterogeneity analysis refinement
-        ! <het_refine/end>
+        ! <cluster3D_refine/begin>is a distributed workflow for refinement of heterogeneity analysis
+        ! by cluster3D<cluster3D_refine/end>
         !
         ! set required keys
         keys_required(1)  = 'smpd'
@@ -910,7 +910,7 @@ select case(prg)
         keys_optional(18) = 'objfun'
         keys_optional(19) = 'update_frac'
         ! parse command line
-        ! if( describe ) call print_doc_het_refine
+        ! if( describe ) call print_doc_cluster3D_refine
         call cline%parse(keys_required(:6), keys_optional(:19))
         ! sanity check
         if( cline%defined('stk') .or. cline%defined('stktab') )then
@@ -921,7 +921,7 @@ select case(prg)
         ! set defaults
         if( .not. cline%defined('eo')       ) call cline%set('eo',       'no')
         ! execute
-        call xhet_refine%execute( cline )
+        call xcluster3D_refine%execute( cline )
 
     ! SUPPORTING DISTRIBUTED WORKFLOWS
 

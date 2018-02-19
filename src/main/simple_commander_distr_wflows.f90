@@ -7,7 +7,7 @@ use simple_qsys_env,         only: qsys_env
 use simple_build,            only: build
 use simple_params,           only: params
 use simple_commander_base,   only: commander_base
-use simple_commander_preproc ! use all in there
+use simple_commander_preprocess ! use all in there
 use simple_commander_prime2D ! use all in there
 use simple_commander_distr   ! use all in there
 use simple_commander_mask    ! use all in there
@@ -28,7 +28,7 @@ public :: comlin_smat_distr_commander
 public :: prime2D_distr_commander
 public :: prime3D_init_distr_commander
 public :: prime3D_distr_commander
-public :: recvol_distr_commander
+public :: reconstruct3D_distr_commander
 public :: tseries_track_distr_commander
 public :: symsrch_distr_commander
 public :: scale_stk_parts_commander
@@ -82,10 +82,10 @@ type, extends(commander_base) :: prime3D_distr_commander
   contains
     procedure :: execute      => exec_prime3D_distr
 end type prime3D_distr_commander
-type, extends(commander_base) :: recvol_distr_commander
+type, extends(commander_base) :: reconstruct3D_distr_commander
   contains
-    procedure :: execute      => exec_recvol_distr
-end type recvol_distr_commander
+    procedure :: execute      => exec_reconstruct3D_distr
+end type reconstruct3D_distr_commander
 type, extends(commander_base) :: tseries_track_distr_commander
   contains
     procedure :: execute      => exec_tseries_track_distr
@@ -102,7 +102,7 @@ end type scale_stk_parts_commander
 contains
 
     subroutine exec_motion_correct_ctffind_distr( self, cline )
-        use simple_commander_preproc
+        use simple_commander_preprocess
         class(motion_correct_ctffind_distr_commander), intent(inout) :: self
         class(cmdline),                        intent(inout) :: cline
         character(len=32), parameter   :: UNIDOCFBODY = 'unidoc_'
@@ -738,14 +738,14 @@ contains
         class(cmdline),                 intent(inout) :: cline
         ! commanders
         type(prime3D_init_distr_commander)   :: xprime3D_init_distr
-        type(recvol_distr_commander)         :: xrecvol_distr
+        type(reconstruct3D_distr_commander)         :: xreconstruct3D_distr
         type(resrange_commander)             :: xresrange
         type(merge_algndocs_commander)       :: xmerge_algndocs
         type(check3D_conv_commander)         :: xcheck3D_conv
         type(split_commander)                :: xsplit
         type(postprocess_commander)         :: xpostprocess
         ! command lines
-        type(cmdline)         :: cline_recvol_distr
+        type(cmdline)         :: cline_reconstruct3D_distr
         type(cmdline)         :: cline_prime3D_init
         type(cmdline)         :: cline_resrange
         type(cmdline)         :: cline_check3D_conv
@@ -789,7 +789,7 @@ contains
         if( .not. cline%defined('nspace') ) call cline%set('nspace', 1000.)
         call cline%set( 'box', real(p_master%box) )
         ! prepare command lines from prototype master
-        cline_recvol_distr   = cline
+        cline_reconstruct3D_distr   = cline
         cline_prime3D_init   = cline
         cline_resrange       = cline
         cline_check3D_conv   = cline
@@ -798,9 +798,9 @@ contains
         cline_postprocess   = cline
 
         ! initialise static command line parameters and static job description parameter
-        call cline_recvol_distr%set( 'prg', 'recvol' )       ! required for distributed call
+        call cline_reconstruct3D_distr%set( 'prg', 'reconstruct3D' )       ! required for distributed call
         call cline_prime3D_init%set( 'prg', 'prime3D_init' ) ! required for distributed call
-        if( trim(p_master%refine).eq.'hetsym' ) call cline_recvol_distr%set( 'pgrp', 'c1' )
+        if( trim(p_master%refine).eq.'hetsym' ) call cline_reconstruct3D_distr%set( 'pgrp', 'c1' )
         call cline_merge_algndocs%set('nthr',     1.)
         call cline_merge_algndocs%set('fbody',    ALGN_FBODY)
         call cline_merge_algndocs%set('nptcls',   real(p_master%nptcls))
@@ -846,7 +846,7 @@ contains
             call cline%set( 'oritab', oritab )
         else if( cline%defined('oritab') .and. .not.vol_defined )then
             ! reconstructions needed
-            call xrecvol_distr%execute( cline_recvol_distr )
+            call xreconstruct3D_distr%execute( cline_reconstruct3D_distr )
             do state = 1,p_master%nstates
                 ! rename volumes and update cline
                 str_state = int2str_pad(state,2)
@@ -972,18 +972,18 @@ contains
             call xmerge_algndocs%execute( cline_merge_algndocs )
             if( p_master%norec .eq. 'yes' )then
                 ! RECONSTRUCT VOLUMES
-                call cline_recvol_distr%set( 'oritab', trim(oritab) )
+                call cline_reconstruct3D_distr%set( 'oritab', trim(oritab) )
                 do state = 1,p_master%nstates
-                    call cline_recvol_distr%delete('state')
-                    call cline_recvol_distr%set('state', real(state))
-                    call xrecvol_distr%execute( cline_recvol_distr )
+                    call cline_reconstruct3D_distr%delete('state')
+                    call cline_reconstruct3D_distr%set('state', real(state))
+                    call xreconstruct3D_distr%execute( cline_reconstruct3D_distr )
                 end do
-                call cline_recvol_distr%delete('state')
+                call cline_reconstruct3D_distr%delete('state')
             else
                 ! ASSEMBLE VOLUMES
                 call cline_volassemble%set( 'oritab', trim(oritab) )
                 if( p_master%eo.ne.'no' )then
-                    call cline_volassemble%set( 'prg', 'eo_volassemble' ) ! required for cmdline exec
+                    call cline_volassemble%set( 'prg', 'volassemble_eo' ) ! required for cmdline exec
                 else
                     call cline_volassemble%set( 'prg', 'volassemble' )    ! required for cmdline exec
                 endif
@@ -1094,10 +1094,10 @@ contains
         call simple_end('**** SIMPLE_DISTR_PRIME3D NORMAL STOP ****')
     end subroutine exec_prime3D_distr
 
-    subroutine exec_recvol_distr( self, cline )
+    subroutine exec_reconstruct3D_distr( self, cline )
         use simple_commander_rec
         use simple_oris, only: oris
-        class(recvol_distr_commander), intent(inout) :: self
+        class(reconstruct3D_distr_commander), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
         type(split_commander)              :: xsplit
         type(qsys_env)                     :: qenv
@@ -1147,7 +1147,7 @@ contains
         enddo
         cline_volassemble = cline
         if( p_master%eo .ne. 'no' )then
-            call cline_volassemble%set('prg', 'eo_volassemble')
+            call cline_volassemble%set('prg', 'volassemble_eo')
         else
             call cline_volassemble%set('prg', 'volassemble')
         endif
@@ -1166,8 +1166,8 @@ contains
         call qsys_watcher(state_assemble_finished)
         ! termination
         call qsys_cleanup(p_master)
-        call simple_end('**** SIMPLE_RECVOL NORMAL STOP ****', print_simple=.false.)
-    end subroutine exec_recvol_distr
+        call simple_end('**** SIMPLE_reconstruct3D NORMAL STOP ****', print_simple=.false.)
+    end subroutine exec_reconstruct3D_distr
 
     subroutine exec_tseries_track_distr( self, cline )
         use simple_nrtxtfile,         only: nrtxtfile

@@ -156,7 +156,7 @@ contains
       real(dp), dimension(3):: elapsed
       integer :: ii
       do ii = 1, 3
-         timestamp = tic_omp() 
+         timestamp = tic_omp()
          cloop = REAL(.1, dp)
          cloop = saxy(cloop)
          elapsed(ii) = toc_omp(timestamp)

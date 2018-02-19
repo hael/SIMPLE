@@ -1,5 +1,5 @@
 ! concrete commander: pre-processing routines
-module simple_commander_preproc
+module simple_commander_preprocess
 #include "simple_lib.f08"
 use simple_cmdline,             only: cmdline
 use simple_params,              only: params
@@ -21,7 +21,7 @@ use simple_binoris_io,          only: binread_oritab, binwrite_oritab
 use simple_qsys_funs,           only: qsys_job_finished
 implicit none
 
-public :: preproc_commander
+public :: preprocess_commander
 public :: select_frames_commander
 public :: boxconvs_commander
 public :: powerspecs_commander
@@ -35,10 +35,10 @@ public :: extract_commander
 private
 #include "simple_local_flags.inc"
 
-type, extends(commander_base) :: preproc_commander
+type, extends(commander_base) :: preprocess_commander
   contains
-    procedure :: execute      => exec_preproc
-end type preproc_commander
+    procedure :: execute      => exec_preprocess
+end type preprocess_commander
 type, extends(commander_base) :: select_frames_commander
   contains
     procedure :: execute      => exec_select_frames
@@ -82,8 +82,8 @@ end type extract_commander
 
 contains
 
-    subroutine exec_preproc( self, cline )
-        class(preproc_commander), intent(inout) :: self
+    subroutine exec_preprocess( self, cline )
+        class(preprocess_commander), intent(inout) :: self
         class(cmdline),           intent(inout) :: cline
         !type(ctffind_iter)      :: cfiter
         type(ctf_estimate_iter)       :: cfiter
@@ -104,13 +104,13 @@ contains
         integer      :: frame_counter, movie_ind, nptcls_out
         p = params(cline) ! constants & derived constants produced
         if( p%scale > 1.05 )then
-            stop 'scale cannot be > 1; simple_commander_preproc :: exec_preproc'
+            stop 'scale cannot be > 1; simple_commander_preprocess :: exec_preprocess'
         endif
         if( p%tomo .eq. 'yes' )then
             stop 'tomography mode (tomo=yes) not yet supported!'
         endif
         if( p%stream.eq.'yes' )then
-            p%dir_target = PREPROC_STREAM_DIR
+            p%dir_target = preprocess_STREAM_DIR
         endif
         if( p%l_pick .and. .not. cline%defined('refs'))then
             stop 'need references for picker or turn off picking with dopick=no'
@@ -144,7 +144,7 @@ contains
                 fromto(1) = p%fromp
                 fromto(2) = p%top
             else
-                stop 'fromp & top args need to be defined in parallel execution; exec_preproc'
+                stop 'fromp & top args need to be defined in parallel execution; exec_preprocess'
             endif
         else
             if( p%stream.eq.'yes' )then
@@ -246,10 +246,10 @@ contains
         ! destruct
         call os_uni%kill
         deallocate(fname_unidoc_output)
-        call qsys_job_finished( p, 'simple_commander_preproc :: exec_preproc' )
+        call qsys_job_finished( p, 'simple_commander_preprocess :: exec_preprocess' )
         ! end gracefully
-        call simple_end('**** SIMPLE_PREPROC NORMAL STOP ****')
-    end subroutine exec_preproc
+        call simple_end('**** SIMPLE_PREPROCESS NORMAL STOP ****')
+    end subroutine exec_preprocess
 
     subroutine exec_select_frames( self, cline )
         class(select_frames_commander), intent(inout) :: self
@@ -402,7 +402,7 @@ contains
         ! do the work
         if( cline%defined('stk') )then
             if( p%l_distr_exec )then
-                stop 'stk input incompatible with distributed exection; commander_preproc :: powerspecs'
+                stop 'stk input incompatible with distributed exection; commander_preprocess :: powerspecs'
             endif
             call b%img%new(p%ldim, p%smpd) ! img re-generated (to account for possible non-square)
             tmp = 0.0
@@ -455,7 +455,7 @@ contains
                 endif
             end do
         endif
-        call qsys_job_finished( p, 'simple_commander_preproc :: exec_powerspecs' )
+        call qsys_job_finished( p, 'simple_commander_preprocess :: exec_powerspecs' )
         ! end gracefully
         call simple_end('**** SIMPLE_POWERSPECS NORMAL STOP ****')
     end subroutine exec_powerspecs
@@ -473,7 +473,7 @@ contains
         integer :: frame_counter, lfoo(3), nframes
         p = params(cline) ! constants & derived constants produced
         if( p%scale > 1.05 )then
-            stop 'scale cannot be > 1; simple_commander_preproc :: exec_motion_correct'
+            stop 'scale cannot be > 1; simple_commander_preprocess :: exec_motion_correct'
         endif
         if( p%tomo .eq. 'yes' )then
             if( .not. p%l_dose_weight )then
@@ -527,9 +527,9 @@ contains
         end do
         call os_uni%write(p%outfile)
         call os_uni%kill
-        call qsys_job_finished( p, 'simple_commander_preproc :: exec_motion_correct' )
+        call qsys_job_finished( p, 'simple_commander_preprocess :: exec_motion_correct' )
         ! end gracefully
-        call simple_end('**** SIMPLE_motion_correct NORMAL STOP ****')
+        call simple_end('**** SIMPLE_MOTION_CORRECT NORMAL STOP ****')
     end subroutine exec_motion_correct
 
     subroutine exec_ctffind( self, cline )
@@ -582,7 +582,7 @@ contains
         call os%write(fname_ctffind_output)
         call os%kill
         deallocate(fname_ctffind_output)
-        call qsys_job_finished( p, 'simple_commander_preproc :: exec_ctffind' )
+        call qsys_job_finished( p, 'simple_commander_preprocess :: exec_ctffind' )
         ! end gracefully
         call simple_end('**** SIMPLE_CTFFIND NORMAL STOP ****')
     end subroutine exec_ctffind
@@ -637,9 +637,9 @@ contains
         call os%write(fname_ctf_estimate_output)
         call os%kill
         deallocate(fname_ctf_estimate_output)
-        call qsys_job_finished( p, 'simple_commander_preproc :: exec_ctf_estimate' )
+        call qsys_job_finished( p, 'simple_commander_preprocess :: exec_ctf_estimate' )
         ! end gracefully
-        call simple_end('**** SIMPLE_ctf_estimate NORMAL STOP ****')
+        call simple_end('**** SIMPLE_CTF_ESTIMATE NORMAL STOP ****')
     end subroutine exec_ctf_estimate
 
     subroutine exec_select( self, cline )
@@ -678,34 +678,34 @@ contains
         end do
         if( file_exists('corrmat_select.bin') )then
             allocate(correlations(nsel,nall), stat=alloc_stat)
-            allocchk('In: exec_select; simple_commander_preproc')
+            allocchk('In: exec_select; simple_commander_preprocess')
             ! read matrix
             call fopen(funit, status='OLD', action='READ', file='corrmat_select.bin', access='STREAM', iostat=io_stat)
-            call fileio_errmsg('simple_commander_preproc ; fopen error when opening corrmat_select.bin  ', io_stat)
+            call fileio_errmsg('simple_commander_preprocess ; fopen error when opening corrmat_select.bin  ', io_stat)
             read(unit=funit,pos=1,iostat=io_stat) correlations
             ! Check if the read was successful
             if(io_stat/=0) then
-                call fileio_errmsg('**ERROR(simple_commander_preproc): I/O error reading corrmat_select.bin. Remove the file to override the memoization.', io_stat)
+                call fileio_errmsg('**ERROR(simple_commander_preprocess): I/O error reading corrmat_select.bin. Remove the file to override the memoization.', io_stat)
             endif
 
-            call fclose(funit,errmsg='simple_commander_preproc ; error when closing corrmat_select.bin  ')
+            call fclose(funit,errmsg='simple_commander_preprocess ; error when closing corrmat_select.bin  ')
         else
             write(*,'(a)') '>>> CALCULATING CORRELATIONS'
             call calc_cartesian_corrmat(imgs_sel, imgs_all, correlations)
             ! write matrix
             call fopen(funit, status='REPLACE', action='WRITE', file='corrmat_select.bin', access='STREAM', iostat=io_stat)
-            call fileio_errmsg('simple_commander_preproc ; error when opening corrmat_select.bin  ', io_stat)
+            call fileio_errmsg('simple_commander_preprocess ; error when opening corrmat_select.bin  ', io_stat)
             write(unit=funit,pos=1,iostat=io_stat) correlations
             ! Check if the write was successful
             if(io_stat/=0) then
-                call fileio_errmsg('**ERROR(simple_commander_preproc): I/O error writing corrmat_select.bin. Remove the file to override the memoization.', io_stat)
+                call fileio_errmsg('**ERROR(simple_commander_preprocess): I/O error writing corrmat_select.bin. Remove the file to override the memoization.', io_stat)
             endif
-            call fclose(funit,errmsg='simple_commander_preproc ; error when closing corrmat_select.bin  ')
+            call fclose(funit,errmsg='simple_commander_preprocess ; error when closing corrmat_select.bin  ')
         endif
         ! find selected
         ! in addition to the index array, also make a logical array encoding the selection (to be able to reject)
         allocate(selected(nsel), lselected(nall),stat=alloc_stat)
-        allocchk("In commander_preproc::select selected lselected ")
+        allocchk("In commander_preprocess::select selected lselected ")
         lselected = .false.
         do isel=1,nsel
             loc = maxloc(correlations(isel,:))
@@ -718,7 +718,7 @@ contains
             call read_filetable(p%filetab, imgnames)
             if( size(imgnames) /= nall ) stop 'nr of entries in filetab and stk not consistent'
             call fopen(funit, file=p%outfile,status="replace", action="write", access="sequential", iostat=io_stat)
-            call fileio_errmsg('simple_commander_preproc ; fopen error when opening '//trim(p%outfile), io_stat)
+            call fileio_errmsg('simple_commander_preprocess ; fopen error when opening '//trim(p%outfile), io_stat)
             call exec_cmdline('mkdir -p '//trim(adjustl(p%dir_select))//'|| true')
             call exec_cmdline('mkdir -p '//trim(adjustl(p%dir_reject))//'|| true')
             ! write outoput & move files
@@ -732,7 +732,7 @@ contains
                     call exec_cmdline(cmd_str)
                 endif
             end do
-            call fclose(funit,errmsg='simple_commander_preproc ; fopen error when closing '//trim(p%outfile))
+            call fclose(funit,errmsg='simple_commander_preprocess ; fopen error when closing '//trim(p%outfile))
             deallocate(imgnames)
         endif
         if( cline%defined('stk3') )then
@@ -807,7 +807,7 @@ contains
         endif
         call del_file('rotated_from_make_pickrefs'//p%ext)
         ! end gracefully
-        call simple_end('**** SIMPLE_make_pickrefs NORMAL STOP ****')
+        call simple_end('**** SIMPLE_MAKE_PICKREFS NORMAL STOP ****')
     end subroutine exec_make_pickrefs
 
     subroutine exec_pick( self, cline)
@@ -841,7 +841,7 @@ contains
             call piter%iterate(cline, p, movie_counter, movienames_intg(imovie), boxfile, nptcls_out)
             write(*,'(f4.0,1x,a)') 100.*(real(movie_counter)/real(ntot)), 'percent of the micrographs processed'
         end do
-        call qsys_job_finished( p, 'simple_commander_preproc :: exec_pick' )
+        call qsys_job_finished( p, 'simple_commander_preprocess :: exec_pick' )
         ! end gracefully
         call simple_end('**** SIMPLE_PICK NORMAL STOP ****')
     end subroutine exec_pick
@@ -1109,4 +1109,4 @@ contains
 
     end subroutine exec_extract
 
-end module simple_commander_preproc
+end module simple_commander_preprocess

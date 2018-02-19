@@ -47,11 +47,11 @@ type :: build
     type(comlin)                        :: clins              !< common lines data structure
     type(image),            allocatable :: ref_imgs(:,:)      !< array of reference images
     ! RECONSTRUCTION TOOLBOX
-    type(reconstructor_eo)              :: eorecvol           !< object for eo reconstruction
-    type(reconstructor)                 :: recvol             !< object for reconstruction
+    type(reconstructor_eo)              :: eoreconstruct3D           !< object for eo reconstruction
+    type(reconstructor)                 :: reconstruct3D             !< object for reconstruction
     ! PRIME TOOLBOX
-    type(reconstructor),    allocatable :: recvols(:)         !< array of volumes for reconstruction
-    type(reconstructor_eo), allocatable :: eorecvols(:)       !< array of volumes for eo-reconstruction
+    type(reconstructor),    allocatable :: reconstruct3Ds(:)         !< array of volumes for reconstruction
+    type(reconstructor_eo), allocatable :: eoreconstruct3Ds(:)       !< array of volumes for eo-reconstruction
     real,                   allocatable :: fsc(:,:)           !< Fourier Shell Correlation
     integer,                allocatable :: nnmat(:,:)         !< matrix with nearest neighbor indices
     integer,                allocatable :: grid_projs(:)      !< projection directions for coarse grid search
@@ -282,8 +282,8 @@ contains
         class(params), intent(in)    :: p
         call self%kill_rec_tbox
         call self%raise_hard_ctf_exception(p)
-        call self%recvol%new([p%boxpd,p%boxpd,p%boxpd],p%smpd)
-        call self%recvol%alloc_rho(p)
+        call self%reconstruct3D%new([p%boxpd,p%boxpd,p%boxpd],p%smpd)
+        call self%reconstruct3D%alloc_rho(p)
         if( .not. self%a%isthere('proj') ) call self%a%set_projs(self%e)
         write(*,'(A)') '>>> DONE BUILDING RECONSTRUCTION TOOLBOX'
         self%rec_tbox_exists = .true.
@@ -293,8 +293,8 @@ contains
     subroutine kill_rec_tbox( self )
         class(build), intent(inout) :: self
         if( self%rec_tbox_exists )then
-            call self%recvol%dealloc_rho
-            call self%recvol%kill
+            call self%reconstruct3D%dealloc_rho
+            call self%reconstruct3D%kill
             self%rec_tbox_exists = .false.
         endif
     end subroutine kill_rec_tbox
@@ -305,7 +305,7 @@ contains
         class(params), intent(in)    :: p
         call self%kill_eo_rec_tbox
         call self%raise_hard_ctf_exception(p)
-        call self%eorecvol%new(p)
+        call self%eoreconstruct3D%new(p)
         if( .not. self%a%isthere('proj') ) call self%a%set_projs(self%e)
         call self%projfrcs%new(NSPACE_BALANCE, p%box, p%smpd, p%nstates)
         write(*,'(A)') '>>> DONE BUILDING EO RECONSTRUCTION TOOLBOX'
@@ -316,7 +316,7 @@ contains
     subroutine kill_eo_rec_tbox( self )
         class(build), intent(inout) :: self
         if( self%eo_rec_tbox_exists )then
-            call self%eorecvol%kill
+            call self%eoreconstruct3D%kill
             call self%projfrcs%kill
             self%eo_rec_tbox_exists = .false.
         endif
@@ -362,10 +362,10 @@ contains
         call self%kill_hadamard_prime3D_tbox
         call self%raise_hard_ctf_exception(p)
         if( p%eo .ne. 'no' )then
-            allocate( self%eorecvols(p%nstates), stat=alloc_stat )
+            allocate( self%eoreconstruct3Ds(p%nstates), stat=alloc_stat )
             allocchk('build_hadamard_prime3D_tbox; simple_build, 1')
         else
-            allocate( self%recvols(p%nstates), stat=alloc_stat )
+            allocate( self%reconstruct3Ds(p%nstates), stat=alloc_stat )
             allocchk('build_hadamard_prime3D_tbox; simple_build, 2')
         endif
         if( str_has_substr(p%refine,'neigh') .or. trim(p%refine).eq.'states' )then
@@ -383,18 +383,18 @@ contains
         class(build), intent(inout) :: self
         integer :: i
         if( self%hadamard_prime3D_tbox_exists )then
-            if( allocated(self%eorecvols) )then
-                do i=1,size(self%eorecvols)
-                    call self%eorecvols(i)%kill
+            if( allocated(self%eoreconstruct3Ds) )then
+                do i=1,size(self%eoreconstruct3Ds)
+                    call self%eoreconstruct3Ds(i)%kill
                 end do
-                deallocate(self%eorecvols)
+                deallocate(self%eoreconstruct3Ds)
             endif
-            if( allocated(self%recvols) )then
-                do i=1,size(self%recvols)
-                    call self%recvols(i)%dealloc_rho
-                    call self%recvols(i)%kill
+            if( allocated(self%reconstruct3Ds) )then
+                do i=1,size(self%reconstruct3Ds)
+                    call self%reconstruct3Ds(i)%dealloc_rho
+                    call self%reconstruct3Ds(i)%kill
                 end do
-                deallocate(self%recvols)
+                deallocate(self%reconstruct3Ds)
             endif
             if( allocated(self%nnmat) ) deallocate(self%nnmat)
             call self%projfrcs%kill
@@ -408,10 +408,10 @@ contains
         class(params), intent(in)    :: p
         call self%kill_extremal3D_tbox
         call self%raise_hard_ctf_exception(p)
-        allocate( self%recvols(1), stat=alloc_stat )
+        allocate( self%reconstruct3Ds(1), stat=alloc_stat )
         allocchk('build_hadamard_prime3D_tbox; simple_build, 2')
-        call self%recvols(1)%new([p%boxpd,p%boxpd,p%boxpd],p%smpd)
-        call self%recvols(1)%alloc_rho(p)
+        call self%reconstruct3Ds(1)%new([p%boxpd,p%boxpd,p%boxpd],p%smpd)
+        call self%reconstruct3Ds(1)%alloc_rho(p)
         if( .not. self%a%isthere('proj') ) call self%a%set_projs(self%e)
         write(*,'(A)') '>>> DONE BUILDING EXTREMAL3D TOOLBOX'
         self%extremal3D_tbox_exists = .true.
@@ -421,9 +421,9 @@ contains
     subroutine kill_extremal3D_tbox( self )
         class(build), intent(inout) :: self
         if( self%extremal3D_tbox_exists )then
-            call self%recvols(1)%dealloc_rho
-            call self%recvols(1)%kill
-            deallocate(self%recvols)
+            call self%reconstruct3Ds(1)%dealloc_rho
+            call self%reconstruct3Ds(1)%kill
+            deallocate(self%reconstruct3Ds)
             self%extremal3D_tbox_exists = .false.
         endif
     end subroutine kill_extremal3D_tbox

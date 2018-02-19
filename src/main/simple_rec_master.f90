@@ -48,29 +48,29 @@ contains
                     allocate(fbody, source=trim(adjustl(fbody_in))//&
                     &'_state'//int2str_pad(s,2)//'_part'//int2str_pad(p%part,p%numlen))
                 else
-                    allocate(fbody, source='recvol_state'//int2str_pad(s,2)//&
+                    allocate(fbody, source='reconstruct3D_state'//int2str_pad(s,2)//&
                     &'_part'//int2str_pad(p%part,p%numlen))
                 endif
                 p%vols(s) = fbody//p%ext
                 rho_name  = 'rho_'//fbody//p%ext
-                call b%recvol%rec(p, b%a, b%se, s, part=p%part)
-                call b%recvol%compress_exp
-                call b%recvol%write(p%vols(s), del_if_exists=.true.)
-                call b%recvol%write_rho(trim(rho_name))
+                call b%reconstruct3D%rec(p, b%a, b%se, s, part=p%part)
+                call b%reconstruct3D%compress_exp
+                call b%reconstruct3D%write(p%vols(s), del_if_exists=.true.)
+                call b%reconstruct3D%write_rho(trim(rho_name))
             else ! shared-mem parallel rec
                 if( present(fbody_in) )then
                     allocate(fbody, source=trim(adjustl(fbody_in))//'_state')
                 else
-                    allocate(fbody, source='recvol_state')
+                    allocate(fbody, source='reconstruct3D_state')
                 endif
                 p%vols(s) = fbody//int2str_pad(s,2)//p%ext
-                call b%recvol%rec(p, b%a, b%se, s)
-                call b%recvol%clip(b%vol)
+                call b%reconstruct3D%rec(p, b%a, b%se, s)
+                call b%reconstruct3D%clip(b%vol)
                 call b%vol%write(p%vols(s), del_if_exists=.true.)
             endif
             deallocate(fbody)
         end do
-        write(*,'(a)') "GENERATED VOLUMES: recvol*.ext"
+        write(*,'(a)') "GENERATED VOLUMES: reconstruct3D*.ext"
         call qsys_job_finished( p, 'simple_rec_master :: exec_rec')
     end subroutine exec_rec
 
@@ -91,13 +91,13 @@ contains
             if( present(fbody_in) )then
                 allocate(fbody, source=trim(adjustl(fbody_in))//'_state')
             else
-                allocate(fbody, source='recvol_state')
+                allocate(fbody, source='reconstruct3D_state')
             endif
-            call b%eorecvol%eorec_distr(p, b%a, b%se, s, fbody=fbody)
+            call b%eoreconstruct3D%eorec_distr(p, b%a, b%se, s, fbody=fbody)
             deallocate(fbody)
         end do
         call qsys_job_finished( p, 'simple_rec_master :: exec_eorec')
-        write(*,'(a,1x,a)') "GENERATED VOLUMES: recvol*.ext"
+        write(*,'(a,1x,a)') "GENERATED VOLUMES: reconstruct3D*.ext"
     end subroutine exec_eorec_distr
 
 end module simple_rec_master

@@ -42,7 +42,7 @@ contains
         call del_files('ctffind_ctrl_file_part',     p%nparts, ext='.txt')
         ! state and part numbered files
         do istate=1,MAXS
-            ! allocate(rec_base_str, source='recvol_state'//int2str_pad(istate,NUMLEN_STATE))
+            ! allocate(rec_base_str, source='reconstruct3D_state'//int2str_pad(istate,NUMLEN_STATE))
             ! allocate(rho_base_str, source='rho_'//rec_base_str)
             ! allocate(rec_base_str_part, source=rec_base_str//'_part')
             ! allocate(rho_base_str_part, source='rho_'//rec_base_str_part)

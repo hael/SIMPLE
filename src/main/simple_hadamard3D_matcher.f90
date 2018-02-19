@@ -385,13 +385,13 @@ contains
         if( p%norec .ne. 'yes' )then
             ! make the gridding prepper
             if( p%eo .ne. 'no' )then
-                kbwin = b%eorecvols(1)%get_kbwin()
+                kbwin = b%eoreconstruct3Ds(1)%get_kbwin()
             else
-                kbwin = b%recvols(1)%get_kbwin()
+                kbwin = b%reconstruct3Ds(1)%get_kbwin()
             endif
             call gridprep%new(b%img, kbwin, [p%boxpd,p%boxpd,1])
             ! init volumes
-            call preprecvols(b, p)
+            call prepreconstruct3Ds(b, p)
             ! prep rec imgs
             allocate(rec_imgs(MAXIMGBATCHSZ))
             do i=1,MAXIMGBATCHSZ
@@ -438,7 +438,7 @@ contains
                 call norm_struct_facts(b, p, which_iter)
             endif
             ! destruct
-            call killrecvols(b, p)
+            call killreconstruct3Ds(b, p)
             call gridprep%kill
             do ibatch=1,MAXIMGBATCHSZ
                 call rec_imgs(ibatch)%kill
@@ -501,7 +501,7 @@ contains
         type(prep4cgrid)     :: gridprep
         if( p%vols(1) == '' )then
             ! init volumes
-            call preprecvols(b, p)
+            call prepreconstruct3Ds(b, p)
             p%oritab = 'prime3D_startdoc'//trim(METADATA_EXT)
             if( trim(p%refine).eq.'tseries' )then
                 call b%a%spiral
@@ -533,18 +533,18 @@ contains
             endif
             write(*,'(A)') '>>> RECONSTRUCTING RANDOM MODEL'
             ! make the gridding prepper
-            kbwin = b%recvols(1)%get_kbwin()
+            kbwin = b%reconstruct3Ds(1)%get_kbwin()
             call gridprep%new(b%img, kbwin, [p%boxpd,p%boxpd,1])
             do i=1,nsamp
                 call progress(i, nsamp)
                 orientation = b%a%get_ori(sample(i) + p%fromp - 1)
                 call read_img_and_norm( b, p, sample(i) + p%fromp - 1 )
                 call gridprep%prep(b%img, b%img_pad)
-                call b%recvols(1)%insert_fplane(b%se, orientation, b%img_pad, pwght=1.0)
+                call b%reconstruct3Ds(1)%insert_fplane(b%se, orientation, b%img_pad, pwght=1.0)
             end do
             deallocate(sample)
             call norm_struct_facts(b, p)
-            call killrecvols(b, p)
+            call killreconstruct3Ds(b, p)
         endif
     end subroutine gen_random_model
 

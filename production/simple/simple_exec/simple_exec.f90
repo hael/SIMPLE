@@ -10,7 +10,7 @@ use simple_commander_imgproc
 use simple_commander_mask
 use simple_commander_misc
 use simple_commander_oris
-use simple_commander_preproc
+use simple_commander_preprocess
 use simple_commander_prime2D
 use simple_commander_prime3D
 use simple_commander_rec

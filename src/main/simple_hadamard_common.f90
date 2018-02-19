@@ -11,7 +11,7 @@ implicit none
 
 public :: read_img, read_img_and_norm, read_imgbatch, set_bp_range, set_bp_range2D, grid_ptcl,&
 &prepimg4align, eonorm_struct_facts, norm_struct_facts, cenrefvol_and_mapshifts2ptcls, preprefvol,&
-&prep2Dref, gen2Dclassdoc, preprecvols, killrecvols, gen_projection_frcs, prepimgbatch, grid_ptcl_tst,&
+&prep2Dref, gen2Dclassdoc, prepreconstruct3Ds, killreconstruct3Ds, gen_projection_frcs, prepimgbatch, grid_ptcl_tst,&
 &build_pftcc_particles
 private
 #include "simple_local_flags.inc"
@@ -164,7 +164,7 @@ contains
                 fsc_bin_exists    = .false.
                 do s=1,p%nstates
                     if( str_has_substr(p%refine,'het') )then
-                        fsc_fname = HET_FSC
+                        fsc_fname = CLUSTER3D_FSC
                     else
                         fsc_fname = FSC_FBODY//int2str_pad(s,2)//BIN_EXT
                     endif
@@ -181,7 +181,7 @@ contains
                         if( fsc_bin_exists(s) )then
                             ! these are the 'classical' resolution measures
                             if( str_has_substr(p%refine,'het') )then
-                                fsc_fname = HET_FSC
+                                fsc_fname = CLUSTER3D_FSC
                             else
                                 fsc_fname = FSC_FBODY//int2str_pad(s,2)//BIN_EXT
                             endif
@@ -312,9 +312,9 @@ contains
             s = o%get_state()
             ! gridding
             if( p%eo .ne. 'no' )then
-                call b%eorecvols(s)%grid_fplane(se, o, img, eo, pwght=pw)
+                call b%eoreconstruct3Ds(s)%grid_fplane(se, o, img, eo, pwght=pw)
             else
-                call b%recvols(s)%insert_fplane(se, o, img, pwght=pw)
+                call b%reconstruct3Ds(s)%insert_fplane(se, o, img, pwght=pw)
             endif
         endif
     end subroutine grid_ptcl_1
@@ -341,18 +341,18 @@ contains
             ! gridding
             if( p%nstates == 1 )then
                 if( p%eo .ne. 'no' )then
-                    call b%eorecvols(1)%grid_fplane(se, os, img, eo, pwght=pw)
+                    call b%eoreconstruct3Ds(1)%grid_fplane(se, os, img, eo, pwght=pw)
                 else
-                    call b%recvols(1)%insert_fplane(se, os, img, pwght=pw)
+                    call b%reconstruct3Ds(1)%insert_fplane(se, os, img, pwght=pw)
                 endif
             else
                 states = os%get_all('state')
                 do s=1,p%nstates
                     if( count(nint(states) == s) > 0 )then
                         if( p%eo .ne. 'no' )then
-                            call b%eorecvols(s)%grid_fplane(se, os, img, eo, pwght=pw, state=s)
+                            call b%eoreconstruct3Ds(s)%grid_fplane(se, os, img, eo, pwght=pw, state=s)
                         else
-                            call b%recvols(s)%insert_fplane(se, os, img, pwght=pw, state=s)
+                            call b%reconstruct3Ds(s)%insert_fplane(se, os, img, pwght=pw, state=s)
                         endif
                     endif
                 end do
@@ -382,7 +382,7 @@ contains
         ! fwd ft
         call img%fwd_ft
         ! one peak & one state
-         call b%eorecvols(s)%grid_fplane(b%se, orientation, img, eo, pw)
+         call b%eoreconstruct3Ds(s)%grid_fplane(b%se, orientation, img, eo, pw)
     end subroutine grid_ptcl_tst
 
     !>  \brief  prepares all particle images for alignment
@@ -608,7 +608,7 @@ contains
     end subroutine gen2Dclassdoc
 
     !>  \brief  initializes all volumes for reconstruction
-    subroutine preprecvols( b, p )
+    subroutine prepreconstruct3Ds( b, p )
         class(build),   intent(inout) :: b
         class(params),  intent(inout) :: p
         character(len=:), allocatable :: recname, rhoname, part_str
@@ -618,54 +618,54 @@ contains
             case('yes','aniso')
                 do istate = 1, p%nstates
                     if( b%a%get_pop(istate, 'state') > 0)then
-                        call b%eorecvols(istate)%new(p)
-                        call b%eorecvols(istate)%reset_all
+                        call b%eoreconstruct3Ds(istate)%new(p)
+                        call b%eoreconstruct3Ds(istate)%reset_all
                         if( p%l_frac_update )then
-                            call b%eorecvols(istate)%read_eos(VOL_FBODY//int2str_pad(istate,2)//'_part'//part_str)
-                            call b%eorecvols(istate)%expand_exp
-                            call b%eorecvols(istate)%apply_weight(1.0 - p%update_frac)
+                            call b%eoreconstruct3Ds(istate)%read_eos(VOL_FBODY//int2str_pad(istate,2)//'_part'//part_str)
+                            call b%eoreconstruct3Ds(istate)%expand_exp
+                            call b%eoreconstruct3Ds(istate)%apply_weight(1.0 - p%update_frac)
                         endif
                     endif
                 end do
             case DEFAULT
                 do istate = 1, p%nstates
                     if( b%a%get_pop(istate, 'state') > 0)then
-                        call b%recvols(istate)%new([p%boxpd, p%boxpd, p%boxpd], p%smpd)
-                        call b%recvols(istate)%alloc_rho(p)
-                        call b%recvols(istate)%reset
-                        call b%recvols(istate)%reset_exp
+                        call b%reconstruct3Ds(istate)%new([p%boxpd, p%boxpd, p%boxpd], p%smpd)
+                        call b%reconstruct3Ds(istate)%alloc_rho(p)
+                        call b%reconstruct3Ds(istate)%reset
+                        call b%reconstruct3Ds(istate)%reset_exp
                         if( p%l_frac_update )then
                             allocate(recname, source=VOL_FBODY//int2str_pad(istate,2)//'_part'//part_str//p%ext)
                             allocate(rhoname, source='rho_'//VOL_FBODY//int2str_pad(istate,2)//'_part'//part_str//p%ext)
                             if( file_exists(recname) .and. file_exists(rhoname) )then
-                                call b%recvols(istate)%read(recname)
-                                call b%recvols(istate)%read_rho(rhoname)
-                                call b%recvols(istate)%expand_exp
-                                call b%recvols(istate)%apply_weight(1.0 - p%update_frac)
+                                call b%reconstruct3Ds(istate)%read(recname)
+                                call b%reconstruct3Ds(istate)%read_rho(rhoname)
+                                call b%reconstruct3Ds(istate)%expand_exp
+                                call b%reconstruct3Ds(istate)%apply_weight(1.0 - p%update_frac)
                             endif
                             deallocate(recname, rhoname)
                         endif
                     endif
                 end do
         end select
-    end subroutine preprecvols
+    end subroutine prepreconstruct3Ds
 
     !>  \brief  destructs all volumes for reconstruction
-    subroutine killrecvols( b, p )
+    subroutine killreconstruct3Ds( b, p )
         class(build),   intent(inout) :: b
         class(params),  intent(inout) :: p
         integer :: istate
         if( p%eo .ne. 'no' )then
             do istate = 1, p%nstates
-                call b%eorecvols(istate)%kill
+                call b%eoreconstruct3Ds(istate)%kill
             end do
         else
             do istate = 1, p%nstates
-                call b%recvols(istate)%dealloc_rho
-                call b%recvols(istate)%kill
+                call b%reconstruct3Ds(istate)%dealloc_rho
+                call b%reconstruct3Ds(istate)%kill
             end do
         endif
-    end subroutine killrecvols
+    end subroutine killreconstruct3Ds
 
     !>  \brief  prepares a batch of images
     subroutine prepimgbatch( b, p, batchsz )
@@ -757,7 +757,7 @@ contains
             if( p%nstates.eq.1 )then
                 allocate(fname_vol_filter, source=ANISOLP_FBODY//int2str_pad(s,2)//trim(p%ext))
             else
-                allocate(fname_vol_filter, source=HET_ANISOLP//trim(p%ext))
+                allocate(fname_vol_filter, source=CLUSTER3D_ANISOLP//trim(p%ext))
             endif
             if( file_exists(fname_vol_filter) )then
                 call b%vol2%read(fname_vol_filter)
@@ -813,26 +813,26 @@ contains
                 cycle
             endif
             if( p%l_distr_exec )then
-                allocate(fbody, source='recvol_state'//int2str_pad(s,2)//'_part'//int2str_pad(p%part,p%numlen))
+                allocate(fbody, source='reconstruct3D_state'//int2str_pad(s,2)//'_part'//int2str_pad(p%part,p%numlen))
                 p%vols(s)  = trim(adjustl(fbody))//p%ext
-                call b%recvols(s)%compress_exp
-                call b%recvols(s)%write(p%vols(s), del_if_exists=.true.)
-                call b%recvols(s)%write_rho('rho_'//trim(adjustl(fbody))//p%ext)
+                call b%reconstruct3Ds(s)%compress_exp
+                call b%reconstruct3Ds(s)%write(p%vols(s), del_if_exists=.true.)
+                call b%reconstruct3Ds(s)%write_rho('rho_'//trim(adjustl(fbody))//p%ext)
                 deallocate(fbody)
             else
                 if( p%refine .eq. 'snhc' )then
                      p%vols(s) = trim(SNHCVOL)//int2str_pad(s,2)//p%ext
                 else
                     if( present(which_iter) )then
-                        p%vols(s) = 'recvol_state'//int2str_pad(s,2)//'_iter'//int2str_pad(which_iter,3)//p%ext
+                        p%vols(s) = 'reconstruct3D_state'//int2str_pad(s,2)//'_iter'//int2str_pad(which_iter,3)//p%ext
                     else
                         p%vols(s) = 'startvol_state'//int2str_pad(s,2)//p%ext
                     endif
                 endif
-                call b%recvols(s)%compress_exp
-                call b%recvols(s)%sampl_dens_correct
-                call b%recvols(s)%bwd_ft
-                call b%recvols(s)%clip(b%vol)
+                call b%reconstruct3Ds(s)%compress_exp
+                call b%reconstruct3Ds(s)%sampl_dens_correct
+                call b%reconstruct3Ds(s)%bwd_ft
+                call b%reconstruct3Ds(s)%clip(b%vol)
                 call b%vol%write(p%vols(s), del_if_exists=.true.)
                 if( present(which_iter) )then
                     ! post-process volume
@@ -870,26 +870,26 @@ contains
                 if( present(which_iter) ) b%fsc(s,:) = 0.
                 cycle
             endif
-            call b%eorecvols(s)%compress_exp
+            call b%eoreconstruct3Ds(s)%compress_exp
             if( p%l_distr_exec )then
-                call b%eorecvols(s)%write_eos('recvol_state'//int2str_pad(s,2)//'_part'//int2str_pad(p%part,p%numlen))
+                call b%eoreconstruct3Ds(s)%write_eos('reconstruct3D_state'//int2str_pad(s,2)//'_part'//int2str_pad(p%part,p%numlen))
             else
                 if( present(which_iter) )then
-                    p%vols(s) = 'recvol_state'//int2str_pad(s,2)//'_iter'//int2str_pad(which_iter,3)//p%ext
+                    p%vols(s) = 'reconstruct3D_state'//int2str_pad(s,2)//'_iter'//int2str_pad(which_iter,3)//p%ext
                 else
                     p%vols(s) = 'startvol_state'//int2str_pad(s,2)//p%ext
                 endif
                 p%vols_even(s) = add2fbody(p%vols(s), p%ext, '_even')
                 p%vols_odd(s)  = add2fbody(p%vols(s), p%ext, '_odd')
                 resmskname     = 'resmask'//p%ext
-                call b%eorecvols(s)%sum_eos
-                call b%eorecvols(s)%sampl_dens_correct_eos(s, p%vols_even(s), p%vols_odd(s), resmskname, find4eoavg)
+                call b%eoreconstruct3Ds(s)%sum_eos
+                call b%eoreconstruct3Ds(s)%sampl_dens_correct_eos(s, p%vols_even(s), p%vols_odd(s), resmskname, find4eoavg)
                 call gen_projection_frcs( b, p, cline, p%vols_even(s), p%vols_odd(s), resmskname, s, b%projfrcs)
                 call b%projfrcs%write('frcs_state'//int2str_pad(s,2)//'.bin')
                 call gen_anisotropic_optlp(b%vol2, b%projfrcs, b%e_bal, s, p%pgrp, p%hpind_fsc, p%tfplan%l_phaseplate)
                 call b%vol2%write('aniso_optlp_state'//int2str_pad(s,2)//p%ext)
-                call b%eorecvols(s)%get_res(res05s(s), res0143s(s))
-                call b%eorecvols(s)%sampl_dens_correct_sum(b%vol)
+                call b%eoreconstruct3Ds(s)%get_res(res05s(s), res0143s(s))
+                call b%eoreconstruct3Ds(s)%sampl_dens_correct_sum(b%vol)
                 call b%vol%write(p%vols(s), del_if_exists=.true.)
                  ! need to put the sum back at lowres for the eo pairs
                 call b%vol%fwd_ft

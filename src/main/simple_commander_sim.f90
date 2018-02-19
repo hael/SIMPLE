@@ -56,7 +56,7 @@ contains
                 call b%img%write(p%outstk, i)
             endif
         end do
-        call simple_end('**** SIMPLE_simulate_noise NORMAL STOP ****')
+        call simple_end('**** SIMPLE_SIMULATE_NOISE NORMAL STOP ****')
     end subroutine exec_simulate_noise
 
     subroutine exec_simulate_particles( self, cline )
@@ -163,7 +163,7 @@ contains
         end do
         call vol_pad%kill_expanded
         ! end gracefully
-        call simple_end('**** SIMPLE_simulate_particles NORMAL STOP ****')
+        call simple_end('**** SIMPLE_SIMULATE_PARTICLES NORMAL STOP ****')
     end subroutine exec_simulate_particles
 
     subroutine exec_simulate_movie( self, cline )
@@ -313,7 +313,7 @@ contains
         ! output orientations
         call binwrite_oritab('simulate_movie_params'//trim(METADATA_EXT), b%a, [1,b%a%get_noris()])
         ! end gracefully
-        call simple_end('**** SIMPLE_simulate_movie NORMAL STOP ****')
+        call simple_end('**** SIMPLE_SIMULATE_MOVIE NORMAL STOP ****')
 
         contains
 
@@ -387,7 +387,7 @@ contains
             call vol_rot%write('subtomo'//int2str_pad(iptcl,numlen)//p%ext)
         end do
         ! end gracefully
-        call simple_end('**** SIMPLE_simulate_subtomogram NORMAL STOP ****')
+        call simple_end('**** SIMPLE_SIMULATE_SUBTOMOGRAM NORMAL STOP ****')
     end subroutine exec_simulate_subtomogram
 
 end module simple_commander_sim

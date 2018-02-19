@@ -146,15 +146,15 @@ contains
         stop
     end subroutine print_doc_dsymsrch
 
-    subroutine print_doc_eo_volassemble
-        write(*,'(A)', advance='no') 'is a program that assembles volume(s) when the reconstruction program (recvol wi'
+    subroutine print_doc_volassemble_eo
+        write(*,'(A)', advance='no') 'is a program that assembles volume(s) when the reconstruction program (reconstruct3D wi'
         write(*,'(A)', advance='no') 'th eo=yes) has been executed in distributed mode. inner applies a soft-edged inn'
         write(*,'(A)', advance='no') 'er mask. An inner mask is used for icosahedral virus reconstruction, because the'
         write(*,'(A)', advance='no') ' DNA or RNA core is often unordered and  if not removed it may negatively impact'
         write(*,'(A)', advance='no') ' the alignment. The width parameter controls the fall-off of the edge of the inn'
         write(*,'(A)') 'er mask'
         stop
-    end subroutine print_doc_eo_volassemble
+    end subroutine print_doc_volassemble_eo
 
     subroutine print_doc_extract
         write(*,'(A)', advance='no') 'is a program that extracts particle images from DDD movies or integrated movies.'
@@ -377,10 +377,10 @@ contains
         stop
     end subroutine print_doc_powerspecs
 
-    subroutine print_doc_preproc
+    subroutine print_doc_preprocess
         write(*,'(A)') 'is a program that executes motion_correct, ctffind and pick in sequence'
         stop
-    end subroutine print_doc_preproc
+    end subroutine print_doc_preprocess
 
     subroutine print_doc_prime3D_init
         write(*,'(A)', advance='no') 'is a program for generating a random initial model for initialisation of PRIME3D'
@@ -443,7 +443,7 @@ contains
         stop
     end subroutine print_doc_rank_cavgs
 
-    subroutine print_doc_recvol
+    subroutine print_doc_reconstruct3D
         write(*,'(A)', advance='no') 'is a program for reconstructing volumes from MRC and SPIDER stacks, given input'
         write(*,'(A)', advance='no') 'orientations and state assignments. The algorithm is based on direct Fourier inv'
         write(*,'(A)', advance='no') 'ersion with a Kaiser-Bessel (KB) interpolation kernel. This window function redu'
@@ -456,7 +456,7 @@ contains
         write(*,'(A)', advance='no') 'eter controls the radius of the soft-edged mask used to remove the unordered DNA'
         write(*,'(A)') '/RNA core of spherical icosahedral viruses'
         stop
-    end subroutine print_doc_recvol
+    end subroutine print_doc_reconstruct3D
 
     subroutine print_doc_refine3D
         write(*,'(A)', advance='no') 'is an ab inito reconstruction/refinement program based on probabilistic projecti'
@@ -646,7 +646,7 @@ contains
     end subroutine print_doc_vizoris
 
     subroutine print_doc_volassemble
-        write(*,'(A)', advance='no') 'is a program that assembles volume(s) when the reconstruction program (recvol) h'
+        write(*,'(A)', advance='no') 'is a program that assembles volume(s) when the reconstruction program (reconstruct3D) h'
         write(*,'(A)', advance='no') 'as been executed in distributed mode. odd is used to assemble the odd reconstruc'
         write(*,'(A)', advance='no') 'tion, even is used to assemble the even reconstruction, eo is used to assemble b'
         write(*,'(A)', advance='no') 'oth the even and the odd reconstruction and state is used to assemble the inputt'
@@ -734,7 +734,7 @@ contains
         write(*,'(A)') 'ctfops'
         write(*,'(A)') 'dock_volpair'
         write(*,'(A)') 'dsymsrch'
-        write(*,'(A)') 'eo_volassemble'
+        write(*,'(A)') 'volassemble_eo'
         write(*,'(A)') 'extract'
         write(*,'(A)') 'filter'
         write(*,'(A)') 'fsc'
@@ -765,7 +765,7 @@ contains
         write(*,'(A)') 'pick'
         write(*,'(A)') 'postprocess'
         write(*,'(A)') 'powerspecs'
-        write(*,'(A)') 'preproc'
+        write(*,'(A)') 'preprocess'
         write(*,'(A)') 'prime3D_init'
         write(*,'(A)') 'print_cmd_dict'
         write(*,'(A)') 'print_dose_weights'
@@ -776,7 +776,7 @@ contains
         write(*,'(A)') 'project'
         write(*,'(A)') 'rank_cavgs'
         write(*,'(A)') 'rec_test'
-        write(*,'(A)') 'recvol'
+        write(*,'(A)') 'reconstruct3D'
         write(*,'(A)') 'refine3D'
         write(*,'(A)') 'res'
         write(*,'(A)') 'resmask'
@@ -824,9 +824,9 @@ contains
         write(*,'(A)') 'motion_correct_tomo'
         write(*,'(A)') 'pick'
         write(*,'(A)') 'powerspecs'
-        write(*,'(A)') 'preproc'
+        write(*,'(A)') 'preprocess'
         write(*,'(A)') 'prime3D_init'
-        write(*,'(A)') 'recvol'
+        write(*,'(A)') 'reconstruct3D'
         write(*,'(A)') 'refine3D'
         write(*,'(A)') 'scale_stk_parts'
         write(*,'(A)') 'symsrch'

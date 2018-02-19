@@ -10,7 +10,7 @@ use simple_commander_imgproc
 use simple_commander_mask
 use simple_commander_misc
 use simple_commander_oris
-use simple_commander_preproc
+use simple_commander_preprocess
 use simple_commander_prime2D
 use simple_commander_prime3D
 use simple_commander_rec
@@ -20,7 +20,7 @@ use simple_commander_tseries
 implicit none
 
 ! PRE-PROCESSING PROGRAMS
-type(preproc_commander)              :: xpreproc
+type(preprocess_commander)            :: xpreprocess
 type(select_frames_commander)        :: xselect_frames
 type(boxconvs_commander)             :: xboxconvs
 type(powerspecs_commander)           :: xpowerspecs
@@ -57,8 +57,8 @@ type(dsymsrch_commander)             :: xdsymsrch
 type(resmask_commander)              :: xresmask
 
 ! RECONSTRUCTION PROGRAMS
-type(eo_volassemble_commander)       :: xeo_volassemble
-type(recvol_commander)               :: xrecvol
+type(volassemble_eo_commander)       :: xvolassemble_eo
+type(reconstruct3D_commander)               :: xreconstruct3D
 type(volassemble_commander)          :: xvolassemble
 
 ! CHECKER PROGRAMS
@@ -127,11 +127,11 @@ select case(prg)
 
     ! PRE-PROCESSING PROGRAMS
 
-    case( 'preproc' )
-        !==Program preproc
+    case( 'preprocess' )
+        !==Program preprocess
         !
-        ! <preproc/begin>is a program that executes motion_correct, ctffind and pick in sequence
-        ! <preproc/end>
+        ! <preprocess/begin>is a program that executes motion_correct, ctffind and pick in sequence
+        ! <preprocess/end>
         !
         ! set required keys
         keys_required(1)   = 'filetab'
@@ -172,7 +172,7 @@ select case(prg)
         keys_optional(30)  = 'pcontrast'
         keys_optional(31)  = 'ctfreslim'
         ! parse command line
-        if( describe ) call print_doc_preproc
+        if( describe ) call print_doc_preprocess
         call cline%parse(keys_required(:5), keys_optional(:31))
         ! set defaults
         if( .not. cline%defined('trs')             ) call cline%set('trs',               5.)
@@ -186,7 +186,7 @@ select case(prg)
         if( .not. cline%defined('outfile')         ) call cline%set('outfile', 'simple_unidoc.txt')
         if( .not. cline%defined('pcontrast')       ) call cline%set('pcontrast', 'black')
         if( .not. cline%defined('opt')             ) call cline%set('opt', 'simplex')
-        call xpreproc%execute(cline)
+        call xpreprocess%execute(cline)
     case( 'select_frames' )
         !==Program select_frames
         !
@@ -395,7 +395,7 @@ select case(prg)
         call cline%parse(keys_required(:5), keys_optional(:23))
         ! set defaults
         call cline%set('dopick', 'no'     )
-        call cline%set('prg',    'preproc')
+        call cline%set('prg',    'preprocess')
         if( .not. cline%defined('trs')             ) call cline%set('trs',               5.)
         if( .not. cline%defined('lpstart')         ) call cline%set('lpstart',          15.)
         if( .not. cline%defined('lpstop')          ) call cline%set('lpstop',            8.)
@@ -406,7 +406,7 @@ select case(prg)
         if( .not. cline%defined('outfile')         ) call cline%set('outfile', 'simple_unidoc.txt')
         if( .not. cline%defined('opt')             ) call cline%set('opt', 'simplex')
         ! execute
-        call xpreproc%execute(cline)
+        call xpreprocess%execute(cline)
     case( 'pick' )
         !==Program pick
         !
@@ -892,7 +892,7 @@ select case(prg)
         ! be inputted. The 3D reconstruction is then projected in 50 (default option) even directions,
         ! common lines-based optimisation is used to identify the principal symmetry axis, the rotational
         ! transformation is applied to the inputted orientations, and a new alignment document is produced.
-        ! Input this document to recvol together with the images and the point-group symmetry to generate a
+        ! Input this document to reconstruct3D together with the images and the point-group symmetry to generate a
         ! symmetrised map.<symsrch/end>
         !
         ! set required keys
@@ -998,10 +998,10 @@ select case(prg)
 
     ! RECONSTRUCTION PROGRAMS
 
-    case( 'recvol' )
-        !==Program recvol
+    case( 'reconstruct3D' )
+        !==Program reconstruct3D
         !
-        ! <recvol/begin>is a program for reconstructing volumes from MRC and SPIDER stacks, given input
+        ! <reconstruct3D/begin>is a program for reconstructing volumes from MRC and SPIDER stacks, given input
         ! orientations and state assignments. The algorithm is based on direct Fourier inversion with a
         ! Kaiser-Bessel (KB) interpolation kernel. This window function reduces the real-space ripple
         ! artifacts associated with direct moving windowed-sinc interpolation. The feature sought when
@@ -1010,7 +1010,7 @@ select case(prg)
         ! were used for alignment and the original images are used for reconstruction. ctf=yes or ctf=flip
         ! turns on the Wiener restoration. If the images were phase-flipped set ctf=flip. The inner parameter
         ! controls the radius of the soft-edged mask used to remove the unordered DNA/RNA core of spherical
-        ! icosahedral viruses<recvol/end>
+        ! icosahedral viruses<reconstruct3D/end>
         !
         ! set required keys
         keys_required(1)  = 'smpd'
@@ -1030,7 +1030,7 @@ select case(prg)
         keys_optional(9)  = 'stktab'
         keys_optional(10) = 'phaseplate'
         ! parse command line
-        if( describe ) call print_doc_recvol
+        if( describe ) call print_doc_reconstruct3D
         call cline%parse(keys_required(:5), keys_optional(:10))
         ! sanity check
         if( cline%defined('stk') .or. cline%defined('stktab') )then
@@ -1042,16 +1042,16 @@ select case(prg)
         if( .not. cline%defined('trs') ) call cline%set('trs', 5.) ! to assure that shifts are being used
         if( .not. cline%defined('eo')  ) call cline%set('eo', 'no')
         ! execute
-        call xrecvol%execute(cline)
-    case( 'eo_volassemble' )
-        !==Program eo_volassemble
+        call xreconstruct3D%execute(cline)
+    case( 'volassemble_eo' )
+        !==Program volassemble_eo
         !
-        ! <eo_volassemble/begin>is a program that assembles volume(s) when the reconstruction
-        ! program (recvol with eo=yes) has been executed in distributed mode. inner applies a soft-edged
+        ! <volassemble_eo/begin>is a program that assembles volume(s) when the reconstruction
+        ! program (reconstruct3D with eo=yes) has been executed in distributed mode. inner applies a soft-edged
         ! inner mask. An inner mask is used for icosahedral virus reconstruction, because the
         ! DNA or RNA core is often unordered and  if not removed it may negatively impact the
         ! alignment. The width parameter controls the fall-off of the edge of the
-        ! inner mask<eo_volassemble/end>
+        ! inner mask<volassemble_eo/end>
         !
         ! set required keys
         keys_required(1) = 'nparts'
@@ -1066,7 +1066,7 @@ select case(prg)
         keys_optional(5) = 'stk'
         keys_optional(6) = 'stktab'
         ! parse command line
-        if( describe ) call print_doc_eo_volassemble
+        if( describe ) call print_doc_volassemble_eo
         call cline%parse(keys_required(:4), keys_optional(:6))
         ! sanity check
         if( cline%defined('stk') .or. cline%defined('stktab') )then
@@ -1075,12 +1075,12 @@ select case(prg)
             stop 'stk or stktab need to be part of command line!'
         endif
         ! execute
-        call xeo_volassemble%execute(cline)
+        call xvolassemble_eo%execute(cline)
     case( 'volassemble' )
         !==Program volassemble
         !
         ! <volassemble/begin>is a program that assembles volume(s) when the reconstruction program
-        ! (recvol) has been executed in distributed mode. odd is used to assemble the odd reconstruction,
+        ! (reconstruct3D) has been executed in distributed mode. odd is used to assemble the odd reconstruction,
         ! even is used to assemble the even reconstruction, eo is used to assemble both the even and the
         ! odd reconstruction and state is used to assemble the inputted state. Normally, you do not fiddle with
         ! these parameters. They are used internally<volassemble/end>

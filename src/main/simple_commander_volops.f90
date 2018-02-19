@@ -1,7 +1,6 @@
 ! concrete commander: operations on volumes
 module simple_commander_volops
 #include "simple_lib.f08"
-!! import classes
 use simple_cmdline,        only: cmdline
 use simple_params,         only: params
 use simple_build,          only: build
@@ -10,7 +9,6 @@ use simple_image,          only: image
 use simple_projector_hlev, only: project, rotvol
 use simple_ori,            only: ori
 use simple_masker,         only:masker
-!! import functions
 use simple_binoris_io,     only: binread_oritab, binwrite_oritab, binread_nlines
 use simple_imghead,        only: find_ldim_nptcls
 implicit none
@@ -120,6 +118,8 @@ contains
         write(*,'(A,1X,F6.2)') '>>> RESOLUTION AT FSC=0.143 DETERMINED TO:', res_fsc0143
         call even%kill
         call odd%kill
+        ! end gracefully
+        call simple_end('**** SIMPLE_FSC NORMAL STOP ****')
     end subroutine exec_fsc
 
     !> centers a 3D volume and associated particle document
@@ -146,7 +146,7 @@ contains
             call binwrite_oritab(p%outfile, b%a, [1,b%a%get_noris()])
         endif
         ! end gracefully
-        call simple_end('**** SIMPLE_center NORMAL STOP ****')
+        call simple_end('**** SIMPLE_CENTER NORMAL STOP ****')
     end subroutine exec_center
 
     subroutine exec_postprocess(self, cline)
@@ -250,7 +250,7 @@ contains
         ! destruct
         call vol_copy%kill
         call mskvol%kill
-        call simple_end('**** SIMPLE_postprocess NORMAL STOP ****', print_simple=.false.)
+        call simple_end('**** SIMPLE_POSTPROCESS NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_postprocess
 
     !> exec_project generate projections from volume
@@ -310,7 +310,7 @@ contains
             call imgs(i)%write(p%outstk,i)
         end do
         call binwrite_oritab('project_oris'//trim(METADATA_EXT), b%a, [1,p%nptcls])
-        call simple_end('**** SIMPLE_project NORMAL STOP ****')
+        call simple_end('**** SIMPLE_PROJECT NORMAL STOP ****')
     end subroutine exec_project
 
     !> exec_volaverager create volume average
@@ -618,6 +618,8 @@ contains
                 vol_out     = rotvol(vol2, orientation, p, orientation%get_3Dshift())
         end select
         call vol_out%write(p%outvol, del_if_exists=.true.)
+        ! end gracefully
+        call simple_end('**** SIMPLE_DOCK_VOLPAIR NORMAL STOP ****')
     end subroutine exec_dock_volpair
 
 end module simple_commander_volops

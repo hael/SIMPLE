@@ -392,8 +392,8 @@ contains
                 type(params) :: p
                 type(sym)    :: se
                 call b%build_rec_tbox(p)
-                call b%recvol%rec(p, b%a, se, 1)
-                call b%recvol%clip(b%vol)
+                call b%reconstruct3D%rec(p, b%a, se, 1)
+                call b%reconstruct3D%clip(b%vol)
                 call b%vol%bp(p%hp, p%lp)
                 call b%vol%mask(p%msk, 'soft')
             end subroutine rec_vol

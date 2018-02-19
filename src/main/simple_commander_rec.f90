@@ -9,20 +9,20 @@ use simple_projection_frcs, only: projection_frcs
 use simple_hadamard_common  ! use all in there
 implicit none
 
-public :: recvol_commander
-public :: eo_volassemble_commander
+public :: reconstruct3D_commander
+public :: volassemble_eo_commander
 public :: volassemble_commander
 private
 #include "simple_local_flags.inc"
 
-type, extends(commander_base) :: recvol_commander
+type, extends(commander_base) :: reconstruct3D_commander
   contains
-    procedure :: execute      => exec_recvol
-end type recvol_commander
-type, extends(commander_base) :: eo_volassemble_commander
+    procedure :: execute      => exec_reconstruct3D
+end type reconstruct3D_commander
+type, extends(commander_base) :: volassemble_eo_commander
   contains
-    procedure :: execute      => exec_eo_volassemble
-end type eo_volassemble_commander
+    procedure :: execute      => exec_volassemble_eo
+end type volassemble_eo_commander
 type, extends(commander_base) :: volassemble_commander
   contains
     procedure :: execute      => exec_volassemble
@@ -31,9 +31,9 @@ end type volassemble_commander
 contains
 
     !> for reconstructing volumes from image stacks and their estimated orientations
-    subroutine exec_recvol( self, cline )
+    subroutine exec_reconstruct3D( self, cline )
         use simple_rec_master, only: exec_rec_master
-        class(recvol_commander), intent(inout) :: self
+        class(reconstruct3D_commander), intent(inout) :: self
         class(cmdline),          intent(inout) :: cline
         type(params) :: p
         type(build)  :: b
@@ -45,23 +45,23 @@ contains
             case( 'no' )
                 call b%build_rec_tbox(p)    ! reconstruction objects built
             case DEFAULT
-                stop 'unknonw eo flag; simple_commander_rec :: exec_recvol'
+                stop 'unknonw eo flag; simple_commander_rec :: exec_reconstruct3D'
         end select
         call exec_rec_master(b, p, cline)
         ! end gracefully
-        call simple_end('**** SIMPLE_RECVOL NORMAL STOP ****', print_simple=.false.)
-    end subroutine exec_recvol
+        call simple_end('**** SIMPLE_RECONSTRUCT3D NORMAL STOP ****', print_simple=.false.)
+    end subroutine exec_reconstruct3D
 
     !> for assembling even/odd volumes generated with distributed execution
-    subroutine exec_eo_volassemble( self, cline )
+    subroutine exec_volassemble_eo( self, cline )
         use simple_reconstructor_eo, only: reconstructor_eo
         use simple_filterer,         only: gen_anisotropic_optlp
         use simple_timer             ! use all in there
-        class(eo_volassemble_commander), intent(inout) :: self
+        class(volassemble_eo_commander), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline
         type(params)                  :: p
         type(build)                   :: b
-        type(reconstructor_eo)        :: eorecvol_read
+        type(reconstructor_eo)        :: eoreconstruct3D_read
         character(len=:), allocatable :: finished_fname, recname, volname
         character(len=32)             :: eonames(2), resmskname, benchfname
         real, allocatable             :: res05s(:), res0143s(:)
@@ -81,15 +81,15 @@ contains
         p = params(cline)                   ! parameters generated
         call b%build_general_tbox(p, cline) ! general objects built
         call b%build_eo_rec_tbox(p)         ! reconstruction toolbox built
-        call b%eorecvol%kill_exp            ! reduced meory usage
+        call b%eoreconstruct3D%kill_exp            ! reduced meory usage
         allocate(res05s(p%nstates), res0143s(p%nstates), stat=alloc_stat)
-        allocchk("In: simple_eo_volassemble res05s res0143s")
+        allocchk("In: simple_volassemble_eo res05s res0143s")
         res0143s = 0.
         res05s   = 0.
         ! rebuild b%vol according to box size (beacuse it is otherwise boxmatch)
         call b%vol%new([p%box,p%box,p%box], p%smpd)
-        call eorecvol_read%new(p)
-        call eorecvol_read%kill_exp ! reduced memory usage
+        call eoreconstruct3D_read%new(p)
+        call eoreconstruct3D_read%kill_exp ! reduced memory usage
         n = p%nstates*p%nparts
         if( L_BENCH )then
             ! end of init
@@ -105,7 +105,7 @@ contains
         endif
         do ss=1,p%nstates
             if( cline%defined('state') )then
-                s     = 1        ! index in recvol
+                s     = 1        ! index in reconstruct3D
                 state = p%state  ! actual state
             else
                 s     = ss
@@ -113,12 +113,12 @@ contains
             endif
             if( b%a%get_pop(state, 'state' ) == 0 )cycle ! Empty state
             if( L_BENCH ) t_assemble = tic()
-            call b%eorecvol%reset_all
+            call b%eoreconstruct3D%reset_all
             ! assemble volumes
             do part=1,p%nparts
-                call eorecvol_read%read_eos(VOL_FBODY//int2str_pad(state,2)//'_part'//int2str_pad(part,p%numlen))
+                call eoreconstruct3D_read%read_eos(VOL_FBODY//int2str_pad(state,2)//'_part'//int2str_pad(part,p%numlen))
                 ! sum the Fourier coefficients
-                call b%eorecvol%sum(eorecvol_read)
+                call b%eoreconstruct3D%sum(eoreconstruct3D_read)
             end do
             if( L_BENCH ) rt_assemble = rt_assemble + toc(t_assemble)
             ! correct for sampling density and estimate resolution
@@ -128,12 +128,12 @@ contains
             eonames(2) = trim(recname)//'_odd'//p%ext
             resmskname = 'resmask'//p%ext
             if( L_BENCH ) t_sum_eos = tic()
-            call b%eorecvol%sum_eos
+            call b%eoreconstruct3D%sum_eos
             if( L_BENCH )then
                 rt_sum_eos               = rt_sum_eos + toc(t_sum_eos)
                 t_sampl_dens_correct_eos = tic()
             endif
-            call b%eorecvol%sampl_dens_correct_eos(state, eonames(1), eonames(2), resmskname, find4eoavg)
+            call b%eoreconstruct3D%sampl_dens_correct_eos(state, eonames(1), eonames(2), resmskname, find4eoavg)
             if( L_BENCH )then
                 rt_sampl_dens_correct_eos = rt_sampl_dens_correct_eos + toc(t_sampl_dens_correct_eos)
                 t_gen_projection_frcs     = tic()
@@ -145,9 +145,9 @@ contains
             call gen_anisotropic_optlp(b%vol2, b%projfrcs, b%e_bal, s, p%pgrp, p%hpind_fsc, p%tfplan%l_phaseplate)
             if( L_BENCH ) rt_gen_anisotropic_optlp = rt_gen_anisotropic_optlp + toc(t_gen_anisotropic_optlp)
             call b%vol2%write('aniso_optlp_state'//int2str_pad(state,2)//p%ext)
-            call b%eorecvol%get_res(res05s(s), res0143s(s))
+            call b%eoreconstruct3D%get_res(res05s(s), res0143s(s))
             if( L_BENCH ) t_sampl_dens_correct_sum = tic()
-            call b%eorecvol%sampl_dens_correct_sum( b%vol )
+            call b%eoreconstruct3D%sampl_dens_correct_sum( b%vol )
             if( L_BENCH ) rt_sampl_dens_correct_sum = rt_sampl_dens_correct_sum + toc(t_sampl_dens_correct_sum)
             call b%vol%write( volname, del_if_exists=.true. )
             call wait_for_closure( volname )
@@ -174,19 +174,19 @@ contains
         res  = maxval(res0143s)
         p%lp = max( p%lpstop,res )
         write(*,'(a,1x,F6.2)') '>>> LOW-PASS LIMIT:', p%lp
-        call eorecvol_read%kill
+        call eoreconstruct3D_read%kill
         ! end gracefully
-        call simple_end('**** SIMPLE_EO_VOLASSEMBLE NORMAL STOP ****', print_simple=.false.)
+        call simple_end('**** SIMPLE_VOLASSEMBLE_EO NORMAL STOP ****', print_simple=.false.)
         ! indicate completion (when run in a qsys env)
         if( cline%defined('state') )then
             allocate( finished_fname, source='VOLASSEMBLE_FINISHED_STATE'//int2str_pad(state,2))
         else
             allocate( finished_fname, source='VOLASSEMBLE_FINISHED' )
         endif
-        call simple_touch( finished_fname , errmsg='In: commander_rec::eo_volassemble')
+        call simple_touch( finished_fname , errmsg='In: commander_rec::volassemble_eo')
         if( L_BENCH )then
             rt_tot     = toc(t_tot)
-            benchfname = 'EO_VOLASSEMBLE_BENCH.txt'
+            benchfname = 'volassemble_eo_BENCH.txt'
             call fopen(fnr, FILE=trim(benchfname), STATUS='REPLACE', action='WRITE')
             write(fnr,'(a)') '*** TIMINGS (s) ***'
             write(fnr,'(a,1x,f9.2)') 'initialisation           : ', rt_init
@@ -213,7 +213,7 @@ contains
             &rt_gen_anisotropic_optlp+rt_sampl_dens_correct_sum+rt_eoavg)/rt_tot) * 100.
             call fclose(fnr)
         endif
-    end subroutine exec_eo_volassemble
+    end subroutine exec_volassemble_eo
 
     !> for assembling a volume generated with distributed execution
     subroutine exec_volassemble( self, cline )
@@ -223,26 +223,26 @@ contains
         type(params)                  :: p
         type(build)                   :: b
         character(len=:), allocatable :: fbody, finished_fname
-        character(len=STDLEN)         :: recvolname, rho_name
+        character(len=STDLEN)         :: reconstruct3Dname, rho_name
         integer                       :: part, s, ss, state, ldim(3)
-        type(reconstructor)           :: recvol_read
+        type(reconstructor)           :: reconstruct3D_read
         p = params(cline)                   ! parameters generated
         call b%build_general_tbox(p, cline) ! general objects built
         call b%build_rec_tbox(p)            ! reconstruction toolbox built
         ! rebuild b%vol according to box size (because it is otherwise boxmatch)
         call b%vol%new([p%box,p%box,p%box], p%smpd)
-        call recvol_read%new([p%boxpd,p%boxpd,p%boxpd], p%smpd)
-        call recvol_read%alloc_rho(p)
+        call reconstruct3D_read%new([p%boxpd,p%boxpd,p%boxpd], p%smpd)
+        call reconstruct3D_read%alloc_rho(p)
         do ss=1,p%nstates
             if( cline%defined('state') )then
-                s     = 1        ! index in recvol
+                s     = 1        ! index in reconstruct3D
                 state = p%state  ! actual state
             else
                 s     = ss
                 state = ss
             endif
             if( b%a%get_pop(state, 'state' ) == 0 ) cycle ! Empty state
-            call b%recvol%reset
+            call b%reconstruct3D%reset
             do part=1,p%nparts
                 allocate(fbody, source=VOL_FBODY//int2str_pad(state,2)//'_part'//int2str_pad(part,p%numlen))
                 p%vols(s) = fbody//p%ext
@@ -251,15 +251,15 @@ contains
                 deallocate(fbody)
             end do
             if( p%nstates == 1 .and. cline%defined('outvol') )then
-                recvolname = trim(p%outvol)
+                reconstruct3Dname = trim(p%outvol)
             else
-                recvolname = 'recvol_state'//int2str_pad(state,2)//p%ext
+                reconstruct3Dname = 'reconstruct3D_state'//int2str_pad(state,2)//p%ext
             endif
-            call correct_for_sampling_density(trim(recvolname))
+            call correct_for_sampling_density(trim(reconstruct3Dname))
             if( cline%defined('state') )exit
         end do
-        call recvol_read%dealloc_rho
-        call recvol_read%kill
+        call reconstruct3D_read%dealloc_rho
+        call reconstruct3D_read%kill
         ! end gracefully
         call simple_end('**** SIMPLE_VOLASSEMBLE NORMAL STOP ****', print_simple=.false.)
         ! indicate completion (when run in a qsys env)
@@ -279,9 +279,9 @@ contains
                 here(1)=file_exists(recnam)
                 here(2)=file_exists(kernam)
                 if( all(here) )then
-                    call recvol_read%read(recnam)
-                    call recvol_read%read_rho(kernam)
-                    call b%recvol%sum(recvol_read)
+                    call reconstruct3D_read%read(recnam)
+                    call reconstruct3D_read%read_rho(kernam)
+                    call b%reconstruct3D%sum(reconstruct3D_read)
                 else
                     if( .not. here(1) ) write(*,'(A,A,A)') 'WARNING! ', adjustl(trim(recnam)), ' missing'
                     if( .not. here(2) ) write(*,'(A,A,A)') 'WARNING! ', adjustl(trim(kernam)), ' missing'
@@ -291,9 +291,9 @@ contains
 
             subroutine correct_for_sampling_density( recname )
                 character(len=*), intent(in) :: recname
-                call b%recvol%sampl_dens_correct
-                call b%recvol%bwd_ft
-                call b%recvol%clip(b%vol)
+                call b%reconstruct3D%sampl_dens_correct
+                call b%reconstruct3D%bwd_ft
+                call b%reconstruct3D%clip(b%vol)
                 call b%vol%write(recname, del_if_exists=.true.)
                 call wait_for_closure(recname)
             end subroutine correct_for_sampling_density

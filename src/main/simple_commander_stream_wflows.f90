@@ -5,21 +5,21 @@ use simple_cmdline,           only: cmdline
 use simple_chash,             only: chash
 use simple_params,            only: params
 use simple_commander_base,    only: commander_base
-use simple_commander_preproc, only: preproc_commander
+use simple_commander_preprocess, only: preprocess_commander
 use simple_qsys_env,          only: qsys_env
 use simple_jiffys,            only: simple_end
 use simple_qsys_funs          ! use all in there
 implicit none
 
-public :: preproc_stream_commander
+public :: preprocess_stream_commander
 public :: prime2D_stream_distr_commander
 private
 #include "simple_local_flags.inc"
 
-type, extends(commander_base) :: preproc_stream_commander
+type, extends(commander_base) :: preprocess_stream_commander
   contains
-    procedure :: execute      => exec_preproc_stream
-end type preproc_stream_commander
+    procedure :: execute      => exec_preprocess_stream
+end type preprocess_stream_commander
 type, extends(commander_base) :: prime2D_stream_distr_commander
   contains
     procedure :: execute      => exec_prime2D_stream_distr
@@ -27,10 +27,10 @@ end type prime2D_stream_distr_commander
 
 contains
 
-    subroutine exec_preproc_stream( self, cline )
-        use simple_commander_preproc, only: preproc_commander
+    subroutine exec_preprocess_stream( self, cline )
+        use simple_commander_preprocess, only: preprocess_commander
         use simple_moviewatcher,      only: moviewatcher
-        class(preproc_stream_commander), intent(inout) :: self
+        class(preprocess_stream_commander), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline
         integer,               parameter   :: SHORTTIME = 60   ! folder watched every minute
         integer,               parameter   :: LONGTIME  = 900  ! 15 mins before processing a new movie
@@ -50,7 +50,7 @@ contains
         call cline%set('numlen', real(p_master%numlen))
         call cline%set('stream', 'yes')
         ! ! make target directories
-        call mkdir(PREPROC_STREAM_DIR)
+        call mkdir(preprocess_STREAM_DIR)
         call mkdir(motion_correct_STREAM_DIR)
         call mkdir(CTF_STREAM_DIR)
         call mkdir(UNIDOC_STREAM_DIR)
@@ -95,15 +95,15 @@ contains
                 character(len=STDLEN) :: fname, ext, movie_here
                 movie_here = remove_abspath(trim(movie))
                 ext   = fname2ext(trim(movie_here))
-                fname = 'preproc_'//trim(get_fbody(trim(movie_here), trim(ext)))//'.txt'
+                fname = 'preprocess_'//trim(get_fbody(trim(movie_here), trim(ext)))//'.txt'
                 call fopen(fnr, status='replace', action='write', file=trim(fname), iostat=file_stat)
-                call fileio_errmsg('exec_preproc_stream :: create_individual_filetab '//trim(fname), file_stat)
+                call fileio_errmsg('exec_preprocess_stream :: create_individual_filetab '//trim(fname), file_stat)
                 write(fnr,'(a)') trim(movie)
-                call fclose(fnr, errmsg='exec_preproc_stream closing filetab '//trim(fname))
+                call fclose(fnr, errmsg='exec_preprocess_stream closing filetab '//trim(fname))
                 call cline%set('filetab', fname)
             end subroutine create_individual_filetab
 
-    end subroutine exec_preproc_stream
+    end subroutine exec_preprocess_stream
 
     subroutine exec_prime2D_stream_distr( self, cline )
         use simple_defs_conv

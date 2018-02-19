@@ -19,7 +19,7 @@
   #     COMMAND "${CMAKE_CPP_COMPILER}" "${CMAKE_CPP_COMPILER_FLAGS}" "-E ${SIMPLE_EXE_src} -o ${SOURCE_F08}"
   #     DEPENDS ${SIMPLE_EXE_src} "${CMAKE_SOURCE_DIR}/simple_utils/simple_timer.h"
   #     WORKING_DIRECTORY ${LIB}
-  #     COMMENT "Preprocessing ${SIMPLE_EXE_src} in CPP for variadic macros."
+  #     COMMENT "preprocessing ${SIMPLE_EXE_src} in CPP for variadic macros."
   #     )
   #   set(SIMPLE_EXE_src  "${SOURCE_F08}")
   # endif()
@@ -32,7 +32,7 @@
   #     COMMAND "${CMAKE_CPP_COMPILER}" "${CMAKE_CPP_COMPILER_FLAGS}" "-E ${SIMPLE_DISTR_src} -o ${SOURCE_F08}"
   #     DEPENDS ${SIMPLE_DISTR_src} "${CMAKE_SOURCE_DIR}/simple_utils/simple_timer.h"
   #     WORKING_DIRECTORY ${LIB}
-  #     COMMENT "Preprocessing ${SIMPLE_DISTR_src} in CPP for variadic macros."
+  #     COMMENT "preprocessing ${SIMPLE_DISTR_src} in CPP for variadic macros."
   #     )
   #   set(SIMPLE_EXE_src  "${SOURCE_F08}")
 

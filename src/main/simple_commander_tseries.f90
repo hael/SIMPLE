@@ -1,7 +1,6 @@
 ! concrete commander: time-series analysis
 module simple_commander_tseries
 #include "simple_lib.f08"
-
 use simple_cmdline,        only: cmdline
 use simple_params,         only: params
 use simple_build,          only: build
@@ -151,6 +150,8 @@ contains
             call kill_tracker
         end do
         if( p%l_distr_exec ) call qsys_job_finished(p, 'simple_commander_tseries :: exec_tseries_track')
+        ! end gracefully
+        call simple_end('**** SIMPLE_TSERIES_TRACK NORMAL STOP ****')
     end subroutine exec_tseries_track
 
     subroutine exec_tseries_backgr_subtr( self, cline )
@@ -221,6 +222,8 @@ contains
             ! output corrected image
             call b%img%write(p%outstk, iptcl)
         end do
+        ! end gracefully
+        call simple_end('**** SIMPLE_BACKGR_SUBTR NORMAL STOP ****')
     end subroutine exec_tseries_backgr_subtr
 
     subroutine exec_tseries_split( self, cline )
@@ -271,6 +274,8 @@ contains
             call os%kill
             deallocate(stkname, oriname)
         end do
+        ! end gracefully
+        call simple_end('**** SIMPLE_TSERIES_SPLIT NORMAL STOP ****')
     end subroutine exec_tseries_split
 
 end module simple_commander_tseries

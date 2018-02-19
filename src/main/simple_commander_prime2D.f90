@@ -149,7 +149,7 @@ contains
         endif
         call cavger_kill
         ! end gracefully
-        call simple_end('**** SIMPLE_make_cavgs NORMAL STOP ****', print_simple=.false.)
+        call simple_end('**** SIMPLE_MAKE_CAVGS NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_make_cavgs
 
     subroutine exec_prime2D( self, cline )

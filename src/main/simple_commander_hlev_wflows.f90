@@ -15,8 +15,8 @@ implicit none
 
 public :: prime2D_autoscale_commander
 public :: initial_3Dmodel_commander
-public :: het_commander
-public :: het_refine_commander
+public :: cluster3D_commander
+public :: cluster3D_refine_commander
 private
 
 type, extends(commander_base) :: prime2D_autoscale_commander
@@ -27,14 +27,14 @@ type, extends(commander_base) :: initial_3Dmodel_commander
   contains
     procedure :: execute      => exec_initial_3Dmodel
 end type initial_3Dmodel_commander
-type, extends(commander_base) :: het_commander
+type, extends(commander_base) :: cluster3D_commander
   contains
-    procedure :: execute      => exec_het
-end type het_commander
-type, extends(commander_base) :: het_refine_commander
+    procedure :: execute      => exec_cluster3D
+end type cluster3D_commander
+type, extends(commander_base) :: cluster3D_refine_commander
   contains
-    procedure :: execute      => exec_het_refine
-end type het_refine_commander
+    procedure :: execute      => exec_cluster3D_refine
+end type cluster3D_refine_commander
 
 contains
 
@@ -199,7 +199,7 @@ contains
     !> for generation of an initial 3d model from class averages
     subroutine exec_initial_3Dmodel( self, cline )
         use simple_commander_volops, only: project_commander
-        use simple_commander_rec,    only: recvol_commander
+        use simple_commander_rec,    only: reconstruct3D_commander
         class(initial_3Dmodel_commander), intent(inout) :: self
         class(cmdline),                    intent(inout) :: cline
         ! constants
@@ -213,14 +213,14 @@ contains
         type(prime3D_distr_commander) :: xprime3D_distr
         type(symsrch_distr_commander) :: xsymsrch_distr
         ! shared-mem commanders
-        type(recvol_commander)        :: xrecvol
+        type(reconstruct3D_commander)        :: xreconstruct3D
         type(project_commander)       :: xproject
         ! command lines
         type(cmdline)         :: cline_prime3D_snhc
         type(cmdline)         :: cline_prime3D_init
         type(cmdline)         :: cline_prime3D_refine
         type(cmdline)         :: cline_symsrch
-        type(cmdline)         :: cline_recvol
+        type(cmdline)         :: cline_reconstruct3D
         type(cmdline)         :: cline_project
         ! other variables
         type(scaler)          :: scobj
@@ -273,10 +273,10 @@ contains
         cline_prime3D_init   = cline
         cline_prime3D_refine = cline
         cline_symsrch        = cline
-        cline_recvol         = cline
+        cline_reconstruct3D         = cline
         cline_project        = cline
-        ! recvol & project are not distributed executions, so remove the nparts flag
-        call cline_recvol%delete('nparts')
+        ! reconstruct3D & project are not distributed executions, so remove the nparts flag
+        call cline_reconstruct3D%delete('nparts')
         call cline_project%delete('nparts')
         ! initialise command line parameters
         ! (1) INITIALIZATION BY STOCHASTIC NEIGHBORHOOD HILL-CLIMBING
@@ -313,10 +313,10 @@ contains
             call cline_symsrch%set('outfile', 'symdoc'//trim(METADATA_EXT))
             call cline_symsrch%set('lp',      lplims(2))
             ! (4.5) RECONSTRUCT SYMMETRISED VOLUME
-            call cline_recvol%set('prg', 'recvol')
-            call cline_recvol%set('trs',  5.) ! to assure that shifts are being used
-            call cline_recvol%set('ctf',  'no')
-            call cline_recvol%set('oritab', 'symdoc'//trim(METADATA_EXT))
+            call cline_reconstruct3D%set('prg', 'reconstruct3D')
+            call cline_reconstruct3D%set('trs',  5.) ! to assure that shifts are being used
+            call cline_reconstruct3D%set('ctf',  'no')
+            call cline_reconstruct3D%set('oritab', 'symdoc'//trim(METADATA_EXT))
             ! refinement step now uses the symmetrised vol and doc
             call cline_prime3D_refine%set('oritab', 'symdoc'//trim(METADATA_EXT))
             call cline_prime3D_refine%set('vol1', 'rec_sym'//p_master%ext)
@@ -362,7 +362,7 @@ contains
             write(*,'(A)') '>>>'
             write(*,'(A)') '>>> 3D RECONSTRUCTION OF SYMMETRISED VOLUME'
             write(*,'(A)') '>>>'
-            call xrecvol%execute(cline_recvol)
+            call xreconstruct3D%execute(cline_reconstruct3D)
             call simple_rename(trim(VOL_FBODY)//trim(str_state)//p_master%ext, 'rec_sym'//p_master%ext)
         else
             ! refinement step needs to use iter dependent vol/oritab
@@ -387,11 +387,11 @@ contains
             call binread_oritab(oritab, os, [1,p_master%nptcls])
             call os%mul_shifts(1./scobj%get_scaled_var('scale'))
             call binwrite_oritab(oritab, os, [1,p_master%nptcls])
-            ! prepare recvol command line
-            call scobj%update_stk_smpd_msk(cline_recvol, 'original')
-            call cline_recvol%set('oritab', trim(oritab))
+            ! prepare reconstruct3D command line
+            call scobj%update_stk_smpd_msk(cline_reconstruct3D, 'original')
+            call cline_reconstruct3D%set('oritab', trim(oritab))
             ! re-reconstruct volume
-            call xrecvol%execute(cline_recvol)
+            call xreconstruct3D%execute(cline_reconstruct3D)
             call simple_rename(trim(VOL_FBODY)//trim(str_state)//p_master%ext, 'rec_final'//p_master%ext)
         else
             call simple_rename(trim(vol_iter), 'rec_final'//p_master%ext)
@@ -418,24 +418,24 @@ contains
     end subroutine exec_initial_3Dmodel
 
     !> for heterogeinity analysis
-    subroutine exec_het( self, cline )
+    subroutine exec_cluster3D( self, cline )
         use simple_defs_conv
-        use simple_commander_rec,    only: recvol_commander
+        use simple_commander_rec,    only: reconstruct3D_commander
         use simple_commander_volops, only: postprocess_commander
         use simple_sym,              only: sym
-        class(het_commander), intent(inout) :: self
-        class(cmdline),       intent(inout) :: cline
+        class(cluster3D_commander), intent(inout) :: self
+        class(cmdline),             intent(inout) :: cline
         ! constants
         integer,            parameter :: MAXITS   = 50
         character(len=2),   parameter :: one = '01'
         ! distributed commanders
         type(prime3D_distr_commander) :: xprime3D_distr
-        type(recvol_distr_commander)  :: xrecvol_distr
+        type(reconstruct3D_distr_commander)  :: xreconstruct3D_distr
         ! shared-mem commanders
         type(postprocess_commander)  :: xpostprocess
         ! command lines
         type(cmdline)                 :: cline_prime3D1, cline_prime3D2
-        type(cmdline)                 :: cline_recvol_distr, cline_recvol_mixed_distr
+        type(cmdline)                 :: cline_reconstruct3D_distr, cline_reconstruct3D_mixed_distr
         type(cmdline)                 :: cline_postprocess
         ! other variables
         type(sym)                     :: symop
@@ -455,15 +455,15 @@ contains
         ! make master parameters
         p_master = params(cline)
         if( p_master%eo .eq. 'no' .and. .not. cline%defined('lp') )&
-            &stop 'need lp input when eo .eq. no; het'
+            &stop 'need lp input when eo .eq. no; cluster3D'
 
         ! prepare command lines from prototype
         call cline%delete('refine')
         cline_prime3D1           = cline
         cline_prime3D2           = cline
         cline_postprocess       = cline ! eo always eq yes
-        cline_recvol_distr       = cline ! eo always eq yes
-        cline_recvol_mixed_distr = cline ! eo always eq yes
+        cline_reconstruct3D_distr       = cline ! eo always eq yes
+        cline_reconstruct3D_mixed_distr = cline ! eo always eq yes
         call cline_prime3D1%set('prg', 'prime3D')
         call cline_prime3D2%set('prg', 'prime3D')
         call cline_prime3D1%set('maxits', real(MAXITS))
@@ -481,15 +481,15 @@ contains
         call cline_prime3D2%set('pproc', 'no')
         call cline_prime3D2%delete('oritab2')
         if( .not.cline%defined('update_frac') )call cline_prime3D2%set('update_frac', 0.2)
-        call cline_recvol_distr%set('prg', 'recvol')
-        call cline_recvol_mixed_distr%set('prg', 'recvol')
+        call cline_reconstruct3D_distr%set('prg', 'reconstruct3D')
+        call cline_reconstruct3D_mixed_distr%set('prg', 'reconstruct3D')
         call cline_postprocess%set('prg', 'postprocess')
-        call cline_recvol_distr%delete('lp')
-        call cline_recvol_mixed_distr%delete('lp')
+        call cline_reconstruct3D_distr%delete('lp')
+        call cline_reconstruct3D_mixed_distr%delete('lp')
         call cline_postprocess%delete('lp')
-        call cline_recvol_distr%set('eo','yes')
-        call cline_recvol_mixed_distr%set('eo','yes')
-        call cline_recvol_mixed_distr%set('nstates', 1.)
+        call cline_reconstruct3D_distr%set('eo','yes')
+        call cline_reconstruct3D_mixed_distr%set('eo','yes')
+        call cline_reconstruct3D_mixed_distr%set('nstates', 1.)
         call cline_postprocess%set('eo','yes')
         if( cline%defined('trs') )then
             ! all good
@@ -502,7 +502,7 @@ contains
         endif
 
         ! generate diverse initial labels & orientations
-        oritab = 'hetdoc_init'//trim(METADATA_EXT)
+        oritab = 'cluster3Ddoc_init'//trim(METADATA_EXT)
         call os%new(p_master%nptcls)
         call binread_oritab(p_master%oritab, os, [1,p_master%nptcls])
         if( p_master%eo.eq.'no' )then
@@ -549,13 +549,13 @@ contains
                 call cline%set('oritab', trim('symrnd_'//oritab))
                 call cline%set('pgrp', 'c1')
             endif
-            call xrecvol_distr%execute( cline_recvol_mixed_distr )
-            rename_stat = rename(VOL_FBODY//one//p_master%ext, HET_VOL//p_master%ext)
-            rename_stat = rename(VOL_FBODY//one//'_even'//p_master%ext, HET_VOL//'_even'//p_master%ext)
-            rename_stat = rename(VOL_FBODY//one//'_odd'//p_master%ext,  HET_VOL//'_odd'//p_master%ext)
-            rename_stat = rename(FSC_FBODY//one//BIN_EXT, HET_FSC)
-            rename_stat = rename(FRCS_FBODY//one//BIN_EXT, HET_FRCS)
-            rename_stat = rename(ANISOLP_FBODY//one//p_master%ext, HET_ANISOLP//p_master%ext)
+            call xreconstruct3D_distr%execute( cline_reconstruct3D_mixed_distr )
+            rename_stat = rename(VOL_FBODY//one//p_master%ext, CLUSTER3D_VOL//p_master%ext)
+            rename_stat = rename(VOL_FBODY//one//'_even'//p_master%ext, CLUSTER3D_VOL//'_even'//p_master%ext)
+            rename_stat = rename(VOL_FBODY//one//'_odd'//p_master%ext,  CLUSTER3D_VOL//'_odd'//p_master%ext)
+            rename_stat = rename(FSC_FBODY//one//BIN_EXT, CLUSTER3D_FSC)
+            rename_stat = rename(FRCS_FBODY//one//BIN_EXT, CLUSTER3D_FRCS)
+            rename_stat = rename(ANISOLP_FBODY//one//p_master%ext, CLUSTER3D_ANISOLP//p_master%ext)
         endif
 
         ! STAGE1: frozen orientation parameters
@@ -566,13 +566,13 @@ contains
         iter   = nint(cline_prime3D1%get_rarg('endit'))
         oritab = PRIME3D_ITER_FBODY//int2str_pad(iter,3)//trim(METADATA_EXT)
         call binread_oritab(trim(oritab), os, [1,p_master%nptcls])
-        oritab = 'hetdoc_stage1'//trim(METADATA_EXT)
+        oritab = 'cluster3Ddoc_stage1'//trim(METADATA_EXT)
         call binwrite_oritab(trim(oritab), os, [1,p_master%nptcls])
 
         ! ! stage 1 reconstruction to obtain resolution estimate when eo .eq. 'no'
         ! if( p_master%eo .eq. 'no' )then
-        !     call cline_recvol_distr%set('oritab', trim(oritab))
-        !     call xrecvol_distr%execute(cline_recvol_distr)
+        !     call cline_reconstruct3D_distr%set('oritab', trim(oritab))
+        !     call xreconstruct3D_distr%execute(cline_reconstruct3D_distr)
         !     do state = 1, p_master%nstates
         !         str_state  = int2str_pad(state, 2)
         !         call cline_postprocess%set('vol1', VOL_FBODY//trim(str_state)//p_master%ext)
@@ -594,13 +594,13 @@ contains
         iter   = nint(cline_prime3D2%get_rarg('endit'))
         oritab = PRIME3D_ITER_FBODY//int2str_pad(iter,3)//trim(METADATA_EXT)
         call binread_oritab(trim(oritab), os, [1,p_master%nptcls])
-        oritab = 'hetdoc_stage2'//trim(METADATA_EXT)
+        oritab = 'cluster3Ddoc_stage2'//trim(METADATA_EXT)
         call binwrite_oritab(trim(oritab), os, [1,p_master%nptcls])
 
         ! stage 2 reconstruction to obtain resolution estimate when eo .eq. 'no'
         if( p_master%eo .eq. 'no' )then
-            call cline_recvol_distr%set('oritab', trim(oritab))
-            call xrecvol_distr%execute(cline_recvol_distr)
+            call cline_reconstruct3D_distr%set('oritab', trim(oritab))
+            call xreconstruct3D_distr%execute(cline_reconstruct3D_distr)
             do state = 1, p_master%nstates
                 str_state  = int2str_pad(state, 2)
                 call cline_postprocess%set('vol1', VOL_FBODY//trim(str_state)//p_master%ext)
@@ -614,7 +614,7 @@ contains
         call os%kill
 
         ! end gracefully
-        call simple_end('**** SIMPLE_HET NORMAL STOP ****')
+        call simple_end('**** SIMPLE_CLUSTER3D NORMAL STOP ****')
 
         contains
 
@@ -677,28 +677,28 @@ contains
                 call rt%kill
             end subroutine diverse_labeling
 
-    end subroutine exec_het
+    end subroutine exec_cluster3D
 
-    !> multi-particle refinement after het
-    subroutine exec_het_refine( self, cline )
+    !> multi-particle refinement after cluster3D
+    subroutine exec_cluster3D_refine( self, cline )
         use simple_defs_conv
-        use simple_commander_rec,    only: recvol_commander
+        use simple_commander_rec,    only: reconstruct3D_commander
         use simple_commander_volops, only: postprocess_commander
-        class(het_refine_commander), intent(inout) :: self
-        class(cmdline),              intent(inout) :: cline
+        class(cluster3D_refine_commander), intent(inout) :: self
+        class(cmdline),                    intent(inout) :: cline
         ! constants
-        character(len=20),  parameter :: INIT_FBODY  = 'hetinit_refine_state'
-        character(len=19),  parameter :: FINAL_FBODY = 'hetdoc_refine_state'
-        character(len=17),  parameter :: FINAL_DOC   = 'hetdoc_refine'//trim(METADATA_EXT)
+        character(len=20),  parameter :: INIT_FBODY  = 'cluster3Dinit_refine_state'
+        character(len=19),  parameter :: FINAL_FBODY = 'cluster3Ddoc_refine_state'
+        character(len=17),  parameter :: FINAL_DOC   = 'cluster3Ddoc_refine'//trim(METADATA_EXT)
         ! distributed commanders
         type(prime3D_distr_commander) :: xprime3D_distr
-        type(recvol_distr_commander)  :: xrecvol_distr
+        type(reconstruct3D_distr_commander)  :: xreconstruct3D_distr
         ! shared-mem commanders
         type(postprocess_commander)  :: xpostprocess
         ! command lines
         type(cmdline)                 :: cline_prime3D_master
         type(cmdline)                 :: cline_prime3D
-        type(cmdline)                 :: cline_recvol_distr
+        type(cmdline)                 :: cline_reconstruct3D_distr
         type(cmdline)                 :: cline_postprocess
         ! other variables
         integer,               allocatable :: state_pops(:), states(:)
@@ -719,7 +719,7 @@ contains
 
         ! sanity checks
         if( p_master%eo .eq. 'no' .and. .not. cline%defined('lp') )&
-            &stop 'need lp input when eo .eq. no; het_refine'
+            &stop 'need lp input when eo .eq. no; cluster3D_refine'
         if(.not.file_exists(p_master%oritab))then
             print *,'Document ',trim(p_master%oritab),' does not exist!'
             stop
@@ -731,7 +731,7 @@ contains
         call binread_oritab(p_master%oritab, os_master, [1,p_master%nptcls])
         p_master%nstates = os_master%get_n('state')
         if(p_master%nstates < 2 .and. .not.l_singlestate)then
-            print *, 'Non-sensical number of states argument for heterogeneity refinemnt: ',p_master%nstates
+            print *, 'Non-sensical number of states argument for heterogeneity refinement: ',p_master%nstates
             stop
         endif
         allocate(l_hasmskvols(p_master%nstates), source=.false.)
@@ -833,14 +833,14 @@ contains
             call cline%delete('vol'//int2str_pad(state,1))
         enddo
         cline_prime3D_master = cline
-        cline_recvol_distr   = cline
+        cline_reconstruct3D_distr   = cline
         cline_postprocess   = cline
         call cline_prime3D_master%set('prg', 'prime3D')
         call cline_prime3D_master%set('dynlp', 'no')
-        call cline_recvol_distr%set('prg', 'recvol')
-        call cline_recvol_distr%set('oritab', trim(FINAL_DOC))
-        call cline_recvol_distr%set('nstates', trim(int2str(p_master%nstates)))
-        call cline_recvol_distr%set('eo', 'yes')
+        call cline_reconstruct3D_distr%set('prg', 'reconstruct3D')
+        call cline_reconstruct3D_distr%set('oritab', trim(FINAL_DOC))
+        call cline_reconstruct3D_distr%set('nstates', trim(int2str(p_master%nstates)))
+        call cline_reconstruct3D_distr%set('eo', 'yes')
         call cline_postprocess%delete('lp')
 
         ! Main loop
@@ -889,13 +889,13 @@ contains
 
         ! final reconstruction
         if( p_master%eo .eq.'no' )then
-            call xrecvol_distr%execute(cline_recvol_distr)
+            call xreconstruct3D_distr%execute(cline_reconstruct3D_distr)
             do state = 1, p_master%nstates
                 if( state_pops(state) == 0 )cycle
                 if( l_singlestate .and. state.ne.p_master%state )cycle
                 str_state = int2str_pad(state, 2)
                 if( l_hasmskvols(state) )call cline_postprocess%set('mskfile', trim(p_master%mskvols(state)))
-                vol = 'recvol_state'//trim(str_state)//p_master%ext
+                vol = 'reconstruct3D_state'//trim(str_state)//p_master%ext
                 call cline_postprocess%set('vol1', trim(vol))
                 call cline_postprocess%set('fsc', FSC_FBODY//trim(str_state)//BIN_EXT)
                 call cline_postprocess%set('vol_filt', ANISOLP_FBODY//trim(str_state)//p_master%ext)
@@ -904,7 +904,7 @@ contains
         endif
 
         ! end gracefully
-        call simple_end('**** SIMPLE_HET_REFINE NORMAL STOP ****')
+        call simple_end('**** SIMPLE_CLUSTER3D_REFINE NORMAL STOP ****')
         contains
 
             ! stash docs, volumes , etc.
@@ -950,6 +950,6 @@ contains
                 endif
             end subroutine prime3d_cleanup
 
-    end subroutine exec_het_refine
+    end subroutine exec_cluster3D_refine
 
 end module simple_commander_hlev_wflows
