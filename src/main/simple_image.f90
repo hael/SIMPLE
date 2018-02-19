@@ -2779,7 +2779,7 @@ contains
             background_cen = cen1
         endif
         ! binarize the image
-        where( (cen1 - self%rmat)**2. < (cen2 - self%rmat)**2. )
+        where( (background_cen - self%rmat)**2. < (foreground_cen - self%rmat)**2. )
             self%rmat = val1
         elsewhere
             self%rmat = val2
@@ -2914,6 +2914,9 @@ contains
             rmsk = real( self%ldim(1) )/2. - 5. ! 5 pixels outer width
         endif
         call tmp%mask(rmsk, 'soft')
+        ! where( tmp%rmat < 0. )
+        !     tmp%rmat = 0.
+        ! end where
         call tmp%bin_kmeans
         xyz = tmp%masscen()
         call tmp%kill

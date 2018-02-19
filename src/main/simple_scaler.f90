@@ -50,6 +50,7 @@ contains
         self%nptcls        = p_master%nptcls
         ! prep scale command line
         self%cline_scale   = cline
+        call self%cline_scale%delete('update_frac')
         ! identify scaling params
         call autoscale(self%original_box, p_master%smpd,&
         &smpd_target, self%box_sc, self%smpd_sc, self%scale)
