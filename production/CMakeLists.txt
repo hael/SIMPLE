@@ -1,19 +1,15 @@
-
-
 # Add the source files
-set(SIMPLE_EXEC_src "${CMAKE_CURRENT_SOURCE_DIR}/simple/simple_exec/simple_exec.f90")
-set(SIMPLE_DISTR_src "${CMAKE_CURRENT_SOURCE_DIR}/simple/simple_distr_exec/simple_distr_exec.f90")
-
-
-add_executable(${SIMPLE_SERIAL_EXE} ${SIMPLE_EXEC_src})
-add_executable(${SIMPLE_DISTR_EXE} ${SIMPLE_DISTR_src})
+add_executable(${SIMPLE_EXE} "${CMAKE_CURRENT_SOURCE_DIR}/simple/simple_exec/simple_exec.f90")
+add_executable(${SIMPLE_DISTR_EXE} "${CMAKE_CURRENT_SOURCE_DIR}/simple/simple_distr_exec/simple_distr_exec.f90")
+add_executable(${SIMPLE_PRIVATE_EXE} "${CMAKE_CURRENT_SOURCE_DIR}/simple/simple_private_exec/simple_private_exec.f90")
 
 # This links foo to the bar library
-target_link_libraries(${SIMPLE_SERIAL_EXE} LINK_PUBLIC ${EXTRA_LIBS})
+target_link_libraries(${SIMPLE_EXE} LINK_PUBLIC ${EXTRA_LIBS})
 target_link_libraries(${SIMPLE_DISTR_EXE} LINK_PUBLIC ${EXTRA_LIBS})
+target_link_libraries(${SIMPLE_PRIVATE_EXE} LINK_PUBLIC ${EXTRA_LIBS})
 
 IF(USE_OPENMP)
-  set_target_properties(${SIMPLE_SERIAL_EXE}
+  set_target_properties(${SIMPLE_EXE}
     PROPERTIES
       COMPILE_FLAGS "${OpenMP_Fortran_FLAGS}"
       LINK_FLAGS "${OpenMP_Fortran_FLAGS}"
@@ -23,16 +19,16 @@ IF(USE_OPENMP)
       COMPILE_FLAGS "${OpenMP_Fortran_FLAGS}"
       LINK_FLAGS "${OpenMP_Fortran_FLAGS}"
       JOB_POOL_COMPILE NUM_JOBS)
+  set_target_properties(${SIMPLE_PRIVATE_EXE}
+  PROPERTIES
+    COMPILE_FLAGS "${OpenMP_Fortran_FLAGS}"
+    LINK_FLAGS "${OpenMP_Fortran_FLAGS}"
+    JOB_POOL_COMPILE NUM_JOBS)
 ELSEIF(USE_MPI)
-#    SET_TARGET_PROPERTIES(${SIMPLE_EXECEXE} PROPERTIES
-#                          COMPILE_FLAGS "${MPI_Fortran_COMPILE_FLAGS}"
-#                          LINK_FLAGS "${MPI_Fortran_LINK_FLAGS}")
-#    INCLUDE_DIRECTORIES(${MPI_Fortran_INCLUDE_PATH})
-#    TARGET_LINK_LIBRARIES(${SIMPLE_EXECEXE} ${MPI_Fortran_LIBRARIES})
+    # nothing here
 ENDIF(USE_OPENMP)
 
-
-install(TARGETS "${SIMPLE_SERIAL_EXE}"
+install(TARGETS "${SIMPLE_EXE}"
   ARCHIVE DESTINATION "${CMAKE_INSTALL_BINDIR}"
   RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}"
          CONFIGURATIONS DEBUG|RELEASE
@@ -43,6 +39,11 @@ install(TARGETS "${SIMPLE_DISTR_EXE}"
   CONFIGURATIONS DEBUG|RELEASE
 )
 
+install(TARGETS "${SIMPLE_PRIVATE_EXE}"
+  ARCHIVE DESTINATION "${CMAKE_INSTALL_BINDIR}"
+  RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}"
+         CONFIGURATIONS DEBUG|RELEASE
+)
 
 #################################################################
 #
@@ -91,7 +92,7 @@ foreach(TESTNAME ${TESTDIRS})
 
     file(GLOB_RECURSE TESTTXTSOURCES LIST_DIRECTORIES true "tests/${TESTNAME}/*.txt")
     if(NOT "${TESTTXTSOURCES}" STREQUAL "")
-    foreach(TXTNAME "${TESTTXTSOURCES}") 
+    foreach(TXTNAME "${TESTTXTSOURCES}")
        install(FILES ${TXTNAME}
        DESTINATION ${CMAKE_INSTALL_PREFIX}/tests/${TESTNAME}
        CONFIGURATIONS DEBUG|RELEASE
@@ -117,22 +118,20 @@ list(APPEND CTESTDIRS
 add_test(NAME test_parse
   CONFIGURATIONS Debug|Release
   WORKING_DIRECTORY ${CMAKE_INSTALL_BINDIR}
-  COMMAND simple_test_parse nthr=4 verbose=yes) 
+  COMMAND simple_test_parse nthr=4 verbose=yes)
 
 add_test(NAME test_install
   CONFIGURATIONS Debug|Release
   WORKING_DIRECTORY ${CMAKE_INSTALL_BINDIR}
-  COMMAND simple_test_install nthr=4 verbose=yes) 
+  COMMAND simple_test_install nthr=4 verbose=yes)
 
 
 add_test(NAME test_units
   CONFIGURATIONS Debug|Release
   WORKING_DIRECTORY ${CMAKE_INSTALL_BINDIR}
-  COMMAND simple_test_units nthr=4) 
+  COMMAND simple_test_units nthr=4)
 
 add_test(NAME test_timer
   CONFIGURATIONS Debug|Release
   WORKING_DIRECTORY ${CMAKE_INSTALL_BINDIR}
-  COMMAND simple_test_timer verbose=yes debug=yes) 
-
-
+  COMMAND simple_test_timer verbose=yes debug=yes)

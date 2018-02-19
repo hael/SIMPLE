@@ -14,11 +14,6 @@ contains
         stop
     end subroutine print_doc_automask2D
 
-    subroutine print_doc_bin2txt
-        write(*,'(A)') 'converts a binary oritab to a text oritab'
-        stop
-    end subroutine print_doc_bin2txt
-
     subroutine print_doc_binarise
         write(*,'(A)') 'is a program for binarisation of stacks and volumes'
         stop
@@ -31,8 +26,8 @@ contains
     end subroutine print_doc_boxconvs
 
     subroutine print_doc_cavgassemble
-        write(*,'(A)', advance='no') 'is a program that assembles class averages when the clustering program (prime2D)'
-        write(*,'(A)') ' has been executed in distributed mode'
+        write(*,'(A)', advance='no') 'is a program that assembles class averages when the clustering program (cluster2'
+        write(*,'(A)') 'D) has been executed in distributed mode'
         stop
     end subroutine print_doc_cavgassemble
 
@@ -43,14 +38,14 @@ contains
     end subroutine print_doc_cenvol
 
     subroutine print_doc_check2D_conv
-        write(*,'(A)', advance='no') 'is a program for checking if a PRIME2D run has converged. The statistics outputt'
-        write(*,'(A)', advance='no') 'ed include (1) the overlap between the distribution of parameters for succesive'
-        write(*,'(A)', advance='no') 'runs. (2) The percentage of search space scanned, i.e. how many reference images'
-        write(*,'(A)', advance='no') ' are evaluated on average. (3) The average correlation between the images and th'
-        write(*,'(A)', advance='no') 'eir corresponding best matching reference section. If convergence to a local opt'
-        write(*,'(A)', advance='no') 'imum is achieved, the fraction increases. Convergence is achieved if the paramet'
-        write(*,'(A)', advance='no') 'er distribution overlap is larger than 0.95 and more than 99% of the reference s'
-        write(*,'(A)') 'ections need to be searched to find an improving solution'
+        write(*,'(A)', advance='no') 'is a program for checking if a cluster2D run has converged. The statistics outpu'
+        write(*,'(A)', advance='no') 'tted include (1) the overlap between the distribution of parameters for succesiv'
+        write(*,'(A)', advance='no') 'e runs. (2) The percentage of search space scanned, i.e. how many reference imag'
+        write(*,'(A)', advance='no') 'es are evaluated on average. (3) The average correlation between the images and'
+        write(*,'(A)', advance='no') 'their corresponding best matching reference section. If convergence to a local o'
+        write(*,'(A)', advance='no') 'ptimum is achieved, the fraction increases. Convergence is achieved if the param'
+        write(*,'(A)', advance='no') 'eter distribution overlap is larger than 0.95 and more than 99% of the reference'
+        write(*,'(A)') ' sections need to be searched to find an improving solution'
         stop
     end subroutine print_doc_check2D_conv
 
@@ -81,6 +76,18 @@ contains
         write(*,'(A)') 'is a program for checking the number of images in MRC and SPIDER stacks'
         stop
     end subroutine print_doc_check_nptcls
+
+    subroutine print_doc_cluster2D
+        write(*,'(A)', advance='no') 'is a reference-free 2D alignment/clustering algorithm adopted from the prime3D p'
+        write(*,'(A)') 'robabilistic ab initio 3D reconstruction algorithm'
+        stop
+    end subroutine print_doc_cluster2D
+
+    subroutine print_doc_cluster_cavgs
+        write(*,'(A)', advance='no') 'is a program for analyzing class averages with affinity propagation, in order to'
+        write(*,'(A)') ' get a better understanding of the view distribution'
+        stop
+    end subroutine print_doc_cluster_cavgs
 
     subroutine print_doc_cluster_oris
         write(*,'(A)') 'is a program for clustering orientations based on geodesic distance'
@@ -113,15 +120,15 @@ contains
         stop
     end subroutine print_doc_corrcompare
 
-    subroutine print_doc_ctffind
-        write(*,'(A)') 'is a wrapper program for CTFFIND4 (Grigorieff lab)'
-        stop
-    end subroutine print_doc_ctffind
-
     subroutine print_doc_ctf_estimate
         write(*,'(A)') 'is a SIMPLE program for fitting the CTF'
         stop
     end subroutine print_doc_ctf_estimate
+
+    subroutine print_doc_ctffind
+        write(*,'(A)') 'is a wrapper program for CTFFIND4 (Grigorieff lab)'
+        stop
+    end subroutine print_doc_ctffind
 
     subroutine print_doc_ctfops
         write(*,'(A)') 'is a program for applying CTF to stacked images'
@@ -197,8 +204,8 @@ contains
     end subroutine print_doc_intgpeaks
 
     subroutine print_doc_makecavgs
-        write(*,'(A)', advance='no') 'is used  to produce class averages or initial random references for prime2D exec'
-        write(*,'(A)') 'ution.'
+        write(*,'(A)', advance='no') 'is used  to produce class averages or initial random references for cluster2D ex'
+        write(*,'(A)') 'ecution.'
         stop
     end subroutine print_doc_makecavgs
 
@@ -215,18 +222,18 @@ contains
 
     subroutine print_doc_makeoris
         write(*,'(A)', advance='no') 'is a program for making SIMPLE orientation/parameter files (text files containin'
-        write(*,'(A)', advance='no') 'g input parameters and/or parameters estimated by prime2D or prime3D). The progr'
-        write(*,'(A)', advance='no') 'am generates random Euler angles e1.in.[0,360], e2.in.[0,180], and e3.in.[0,360]'
-        write(*,'(A)', advance='no') ' and random origin shifts x.in.[-trs,yrs] and y.in.[-trs,yrs]. If ndiscrete is s'
-        write(*,'(A)', advance='no') 'et to an integer number > 0, the orientations produced are randomly sampled from'
-        write(*,'(A)', advance='no') ' the set of ndiscrete quasi-even projection directions, and the in-plane paramet'
-        write(*,'(A)', advance='no') 'ers are assigned randomly. If even=yes, then all nptcls orientations are assigne'
-        write(*,'(A)', advance='no') 'd quasi-even projection directions,and random in-plane parameters. If nstates is'
-        write(*,'(A)', advance='no') ' set to some integer number > 0, then states are assigned randomly .in.[1,nstate'
-        write(*,'(A)', advance='no') 's]. If zero=yes in this mode of execution, the projection directions are zeroed'
-        write(*,'(A)', advance='no') 'and only the in-plane parameters are kept intact. If errify=yes and astigerr is'
-        write(*,'(A)', advance='no') 'defined, then uniform random astigmatism errors are introduced .in.[-astigerr,as'
-        write(*,'(A)') 'tigerr]'
+        write(*,'(A)', advance='no') 'g input parameters and/or parameters estimated by cluster2D or refine3D). The pr'
+        write(*,'(A)', advance='no') 'ogram generates random Euler angles e1.in.[0,360], e2.in.[0,180], and e3.in.[0,3'
+        write(*,'(A)', advance='no') '60] and random origin shifts x.in.[-trs,yrs] and y.in.[-trs,yrs]. If ndiscrete i'
+        write(*,'(A)', advance='no') 's set to an integer number > 0, the orientations produced are randomly sampled f'
+        write(*,'(A)', advance='no') 'rom the set of ndiscrete quasi-even projection directions, and the in-plane para'
+        write(*,'(A)', advance='no') 'meters are assigned randomly. If even=yes, then all nptcls orientations are assi'
+        write(*,'(A)', advance='no') 'gned quasi-even projection directions,and random in-plane parameters. If nstates'
+        write(*,'(A)', advance='no') ' is set to some integer number > 0, then states are assigned randomly .in.[1,nst'
+        write(*,'(A)', advance='no') 'ates]. If zero=yes in this mode of execution, the projection directions are zero'
+        write(*,'(A)', advance='no') 'ed and only the in-plane parameters are kept intact. If errify=yes and astigerr'
+        write(*,'(A)', advance='no') 'is defined, then uniform random astigmatism errors are introduced .in.[-astigerr'
+        write(*,'(A)') ',astigerr]'
         stop
     end subroutine print_doc_makeoris
 
@@ -270,6 +277,26 @@ contains
         stop
     end subroutine print_doc_merge_similarities
 
+    subroutine print_doc_motion_correct
+        write(*,'(A)', advance='no') 'is a program for movie alignment or motion_correctring based the same principal'
+        write(*,'(A)', advance='no') 'strategy as Grigorieffs program (hence the name). There are two important differ'
+        write(*,'(A)', advance='no') 'ences: automatic weighting of the frames using a correlation-based M-estimator a'
+        write(*,'(A)', advance='no') 'nd continuous optimisation of the shift parameters. Input is a textfile with abs'
+        write(*,'(A)', advance='no') 'olute paths to movie files in addition to a few input parameters, some of which'
+        write(*,'(A)', advance='no') 'deserve a comment. If dose_rate and exp_time are given the individual frames wil'
+        write(*,'(A)', advance='no') 'l be low-pass filtered accordingly (dose-weighting strategy). If scale is given,'
+        write(*,'(A)', advance='no') ' the movie will be Fourier cropped according to the down-scaling factor (for sup'
+        write(*,'(A)', advance='no') 'er-resolution movies). If nframesgrp is given the frames will be pre-averaged in'
+        write(*,'(A)', advance='no') ' the given chunk size (Falcon 3 movies). If fromf/tof are given, a contiguous su'
+        write(*,'(A)') 'bset of frames will be averaged without any dose-weighting applied.'
+        stop
+    end subroutine print_doc_motion_correct
+
+    subroutine print_doc_motion_correct_ctffind
+        write(*,'(A)') 'is a pipelined motion_correct + ctffind program'
+        stop
+    end subroutine print_doc_motion_correct_ctffind
+
     subroutine print_doc_multiptcl_init
         write(*,'(A)', advance='no') 'is a program for generating random initial models for initialisation of PRIME3D'
         write(*,'(A)') 'when run in multiparticle mode'
@@ -305,33 +332,33 @@ contains
 
     subroutine print_doc_orisops
         write(*,'(A)', advance='no') 'is a program for analyzing SIMPLE orientation/parameter files (text files contai'
-        write(*,'(A)', advance='no') 'ning input parameters and/or parameters estimated by prime2D or prime3D). If onl'
-        write(*,'(A)', advance='no') 'y oritab is inputted, there are a few options available. If errify=yes, then the'
-        write(*,'(A)', advance='no') ' program introduces uniform random angular errors .in.[-angerr,angerr], and unif'
-        write(*,'(A)', advance='no') 'orm origin shift errors .in.[-sherr,sherr], and uniform random defocus errors .i'
-        write(*,'(A)', advance='no') 'n.[-dferr,dferr]. If nstates > 1 then random states are assigned .in.[1,nstates]'
-        write(*,'(A)', advance='no') '. If mirr=2d, then the Euler angles in oritab are mirrored according to the rela'
-        write(*,'(A)', advance='no') 'tion e1=e1, e2=180.+e2, e3=-e3. If mirr=3d, then the Euler angles in oritab are'
-        write(*,'(A)', advance='no') 'mirrored according to the relation R=M(M*R), where R is the rotation matrix calc'
-        write(*,'(A)', advance='no') 'ulated from the Euler angle triplet and M is a 3D reflection matrix (like a unit'
-        write(*,'(A)', advance='no') ' matrix but with the 3,3-component sign swapped). If e1, e2, or e3 is inputted,'
-        write(*,'(A)', advance='no') 'the orientations in oritab are rotated correspondingly. If you input state as we'
-        write(*,'(A)', advance='no') 'll, you rotate only the orientations assigned to state state. If mul is defined,'
-        write(*,'(A)', advance='no') ' you multiply the origin shifts with mul. If zero=yes, then the shifts are zeroe'
-        write(*,'(A)', advance='no') 'd. If none of the above described parameter are defined, and oritab is still def'
-        write(*,'(A)', advance='no') 'ined, the program projects the 3D orientation into the xy-plane and plots the re'
-        write(*,'(A)') 'sulting vector (this is useful for checking orientation coverage)'
+        write(*,'(A)', advance='no') 'ning input parameters and/or parameters estimated by cluster2D or refine3D). If'
+        write(*,'(A)', advance='no') 'only oritab is inputted, there are a few options available. If errify=yes, then'
+        write(*,'(A)', advance='no') 'the program introduces uniform random angular errors .in.[-angerr,angerr], and u'
+        write(*,'(A)', advance='no') 'niform origin shift errors .in.[-sherr,sherr], and uniform random defocus errors'
+        write(*,'(A)', advance='no') ' .in.[-dferr,dferr]. If nstates > 1 then random states are assigned .in.[1,nstat'
+        write(*,'(A)', advance='no') 'es]. If mirr=2d, then the Euler angles in oritab are mirrored according to the r'
+        write(*,'(A)', advance='no') 'elation e1=e1, e2=180.+e2, e3=-e3. If mirr=3d, then the Euler angles in oritab a'
+        write(*,'(A)', advance='no') 're mirrored according to the relation R=M(M*R), where R is the rotation matrix c'
+        write(*,'(A)', advance='no') 'alculated from the Euler angle triplet and M is a 3D reflection matrix (like a u'
+        write(*,'(A)', advance='no') 'nit matrix but with the 3,3-component sign swapped). If e1, e2, or e3 is inputte'
+        write(*,'(A)', advance='no') 'd, the orientations in oritab are rotated correspondingly. If you input state as'
+        write(*,'(A)', advance='no') ' well, you rotate only the orientations assigned to state state. If mul is defin'
+        write(*,'(A)', advance='no') 'ed, you multiply the origin shifts with mul. If zero=yes, then the shifts are ze'
+        write(*,'(A)', advance='no') 'roed. If none of the above described parameter are defined, and oritab is still'
+        write(*,'(A)', advance='no') 'defined, the program projects the 3D orientation into the xy-plane and plots the'
+        write(*,'(A)') ' resulting vector (this is useful for checking orientation coverage)'
         stop
     end subroutine print_doc_orisops
 
     subroutine print_doc_oristats
         write(*,'(A)', advance='no') 'is a program for analyzing SIMPLE orientation/parameter files (text files contai'
-        write(*,'(A)', advance='no') 'ning input parameters and/or parameters estimated by prime2D or prime3D). If two'
-        write(*,'(A)', advance='no') ' orientation tables (oritab and oritab2) are inputted, the program provides stat'
-        write(*,'(A)', advance='no') 'istics of the distances between the orientations in the two documents. These sta'
-        write(*,'(A)', advance='no') 'tistics include the sum of angular distances between the orientations, the avera'
-        write(*,'(A)', advance='no') 'ge angular distance between the orientations, the standard deviation of angular'
-        write(*,'(A)') 'distances, the minimum angular distance, and the maximum angular distance'
+        write(*,'(A)', advance='no') 'ning input parameters and/or parameters estimated by cluster2D or refine3D). If'
+        write(*,'(A)', advance='no') 'two orientation tables (oritab and oritab2) are inputted, the program provides s'
+        write(*,'(A)', advance='no') 'tatistics of the distances between the orientations in the two documents. These'
+        write(*,'(A)', advance='no') 'statistics include the sum of angular distances between the orientations, the av'
+        write(*,'(A)', advance='no') 'erage angular distance between the orientations, the standard deviation of angul'
+        write(*,'(A)') 'ar distances, the minimum angular distance, and the maximum angular distance'
         stop
     end subroutine print_doc_oristats
 
@@ -354,23 +381,6 @@ contains
         write(*,'(A)') 'is a program that executes motion_correct, ctffind and pick in sequence'
         stop
     end subroutine print_doc_preproc
-
-    subroutine print_doc_prime2D
-        write(*,'(A)', advance='no') 'is a reference-free 2D alignment/clustering algorithm adopted from the prime3D p'
-        write(*,'(A)') 'robabilistic ab initio 3D reconstruction algorithm'
-        stop
-    end subroutine print_doc_prime2D
-
-    subroutine print_doc_prime3D
-        write(*,'(A)', advance='no') 'is an ab inito reconstruction/refinement program based on probabilistic projecti'
-        write(*,'(A)', advance='no') 'on matching. PRIME is short for PRobabilistic Initial 3D Model generation for Si'
-        write(*,'(A)', advance='no') 'ngle- particle cryo-Electron microscopy. There are a daunting number of options'
-        write(*,'(A)', advance='no') 'in PRIME3D. If you are processing class averages we recommend that you instead u'
-        write(*,'(A)', advance='no') 'se the simple_distr_exec prg= initial_3Dmodel route for executing PRIME3D. Auto'
-        write(*,'(A)', advance='no') 'mated workflows for single- and multi-particle refinement using prime3D are plan'
-        write(*,'(A)') 'ned for the next release (3.0)'
-        stop
-    end subroutine print_doc_prime3D
 
     subroutine print_doc_prime3D_init
         write(*,'(A)', advance='no') 'is a program for generating a random initial model for initialisation of PRIME3D'
@@ -400,6 +410,16 @@ contains
         stop
     end subroutine print_doc_print_magic_boxes
 
+    subroutine print_doc_print_project_info
+        write(*,'(A)') 'prints information abourt a *.simple project file'
+        stop
+    end subroutine print_doc_print_project_info
+
+    subroutine print_doc_project2txt
+        write(*,'(A)') 'converts a binary *.simple project file to a text oritab'
+        stop
+    end subroutine print_doc_project2txt
+
     subroutine print_doc_projvol
         write(*,'(A)', advance='no') 'is a program for projecting a volume using interpolation in Fourier space. Input'
         write(*,'(A)', advance='no') ' is a SPIDER or MRC volume. Output is a stack of projection images of the same f'
@@ -419,7 +439,7 @@ contains
     subroutine print_doc_rank_cavgs
         write(*,'(A)', advance='no') 'is a program for ranking class averages by decreasing population, given the stac'
         write(*,'(A)', advance='no') 'k of class averages (stk argument) and the 2D orientations document (oritab) gen'
-        write(*,'(A)') 'erated by prime2D'
+        write(*,'(A)') 'erated by cluster2D'
         stop
     end subroutine print_doc_rank_cavgs
 
@@ -438,11 +458,24 @@ contains
         stop
     end subroutine print_doc_recvol
 
+    subroutine print_doc_refine3D
+        write(*,'(A)', advance='no') 'is an ab inito reconstruction/refinement program based on probabilistic projecti'
+        write(*,'(A)', advance='no') 'on matching. There are a daunting number of options in refine3D. If you are proc'
+        write(*,'(A)', advance='no') 'essing class averages we recommend that you instead use the simple_distr_exec pr'
+        write(*,'(A)') 'g= initial_3Dmodel route.'
+        stop
+    end subroutine print_doc_refine3D
+
     subroutine print_doc_res
         write(*,'(A)', advance='no') 'is a program for checking the low-pass resolution limit for a given Fourier inde'
         write(*,'(A)') 'x'
         stop
     end subroutine print_doc_res
+
+    subroutine print_doc_resmask
+        write(*,'(A)') 'is a program for 3D envelope masking for resolution estimation'
+        stop
+    end subroutine print_doc_resmask
 
     subroutine print_doc_resrange
         write(*,'(A)', advance='no') 'is a program for estimating the resolution range used in the heuristic resolutio'
@@ -552,6 +585,11 @@ contains
         stop
     end subroutine print_doc_stackops
 
+    subroutine print_doc_stktabinfo
+        write(*,'(A)') 'is a program for for printing information about stktab'
+        stop
+    end subroutine print_doc_stktabinfo
+
     subroutine print_doc_sym_aggregate
         write(*,'(A)', advance='no') 'is a program for robust identifiaction of the symmetry axis of a map using image'
         write(*,'(A)') '-to-volume simiarity validation of the axis'
@@ -596,30 +634,10 @@ contains
         stop
     end subroutine print_doc_tseries_track
 
-    subroutine print_doc_txt2bin
-        write(*,'(A)') 'converts a text oritab to a binary oritab'
+    subroutine print_doc_txt2project
+        write(*,'(A)') 'adds or replaces a text oritab in a binary *.simple project file'
         stop
-    end subroutine print_doc_txt2bin
-
-    subroutine print_doc_motion_correct
-        write(*,'(A)', advance='no') 'is a program for movie alignment or motion_correctring based the same principal strategy'
-        write(*,'(A)', advance='no') ' as Grigorieffs program (hence the name). There are two important differences: a'
-        write(*,'(A)', advance='no') 'utomatic weighting of the frames using a correlation-based M-estimator and conti'
-        write(*,'(A)', advance='no') 'nuous optimisation of the shift parameters. Input is a textfile with absolute pa'
-        write(*,'(A)', advance='no') 'ths to movie files in addition to a few input parameters, some of which deserve'
-        write(*,'(A)', advance='no') 'a comment. If dose_rate and exp_time are given the individual frames will be low'
-        write(*,'(A)', advance='no') '-pass filtered accordingly (dose-weighting strategy). If scale is given, the mov'
-        write(*,'(A)', advance='no') 'ie will be Fourier cropped according to the down-scaling factor (for super-resol'
-        write(*,'(A)', advance='no') 'ution movies). If nframesgrp is given the frames will be pre-averaged in the giv'
-        write(*,'(A)', advance='no') 'en chunk size (Falcon 3 movies). If fromf/tof are given, a contiguous subset of'
-        write(*,'(A)') 'frames will be averaged without any dose-weighting applied.'
-        stop
-    end subroutine print_doc_motion_correct
-
-    subroutine print_doc_motion_correct_ctffind
-        write(*,'(A)') 'is a pipelined motion_correct + ctffind program'
-        stop
-    end subroutine print_doc_motion_correct_ctffind
+    end subroutine print_doc_txt2project
 
     subroutine print_doc_vizoris
         write(*,'(A)', advance='no') 'extract projection direction from an orientation direction for visualization in'
@@ -653,44 +671,49 @@ contains
         stop
     end subroutine print_doc_volume_smat
 
-    subroutine print_doc_cga_hres_sel
-        write(*,'(A)', advance='no') 'is a distributed workflow for high-resolution particle selection based on FSC op'
-        write(*,'(A)') 'timisation with a compact genetic algorithm'
+    subroutine print_doc_cluster2D_stream
+        write(*,'(A)', advance='no') 'is a distributed workflow implementing reference-free 2D alignment/clustering al'
+        write(*,'(A)', advance='no') 'gorithm adopted from the prime3D probabilistic ab initio 3D reconstruction algor'
+        write(*,'(A)') 'ithm'
         stop
-    end subroutine print_doc_cga_hres_sel
+    end subroutine print_doc_cluster2D_stream
 
-    subroutine print_doc_het_ensemble
+    subroutine print_doc_het
         write(*,'(A)') 'is a distributed workflow for heterogeneity analysis'
         stop
-    end subroutine print_doc_het_ensemble
+    end subroutine print_doc_het
+
+    subroutine print_doc_het_refine
+        write(*,'(A)') 'is a distributed workflow for heterogeneity analysis refinement'
+        stop
+    end subroutine print_doc_het_refine
 
     subroutine print_doc_initial_3Dmodel
         write(*,'(A)', advance='no') 'is a distributed workflow for generating an initial 3D model from class averages'
-        write(*,'(A)') ' obtained with prime2D'
+        write(*,'(A)') ' obtained with cluster2D'
         stop
     end subroutine print_doc_initial_3Dmodel
 
-    subroutine print_doc_scale_stk_parts
-        write(*,'(A)') 'is a distributed workflow for scaling balanced partial stacks'
-        stop
-    end subroutine print_doc_scale_stk_parts
-
     subroutine print_doc_motion_correct_tomo
-        write(*,'(A)', advance='no') 'is a distributed workflow for movie alignment or motion_correctring of tomographic movie'
-        write(*,'(A)', advance='no') 's. Input is a textfile with absolute paths to movie files in addition to a few i'
-        write(*,'(A)', advance='no') 'nput parameters, some of which deserve a comment. The exp_doc document should co'
-        write(*,'(A)', advance='no') 'ntain per line exp_time=X and dose_rate=Y. It is asssumed that the input list of'
-        write(*,'(A)', advance='no') ' movies (one per tilt) are ordered temporally. This is necessary for correct dos'
-        write(*,'(A)', advance='no') 'e-weighting of tomographic tilt series. If scale is given, the movie will be Fou'
-        write(*,'(A)', advance='no') 'rier cropped according to the down-scaling factor (for super-resolution movies).'
-        write(*,'(A)', advance='no') ' If nframesgrp is given the frames will be pre-averaged in the given chunk size'
-        write(*,'(A)') '(Falcon 3 movies).'
+        write(*,'(A)', advance='no') 'is a distributed workflow for movie alignment or motion_correctring of tomograph'
+        write(*,'(A)', advance='no') 'ic movies. Input is a textfile with absolute paths to movie files in addition to'
+        write(*,'(A)', advance='no') ' a few input parameters, some of which deserve a comment. The exp_doc document s'
+        write(*,'(A)', advance='no') 'hould contain per line exp_time=X and dose_rate=Y. It is asssumed that the input'
+        write(*,'(A)', advance='no') ' list of movies (one per tilt) are ordered temporally. This is necessary for cor'
+        write(*,'(A)', advance='no') 'rect dose-weighting of tomographic tilt series. If scale is given, the movie wil'
+        write(*,'(A)', advance='no') 'l be Fourier cropped according to the down-scaling factor (for super-resolution'
+        write(*,'(A)', advance='no') 'movies). If nframesgrp is given the frames will be pre-averaged in the given chu'
+        write(*,'(A)') 'nk size (Falcon 3 movies).'
         stop
     end subroutine print_doc_motion_correct_tomo
 
+    subroutine print_doc_scale_stk_parts
+        write(*,'(A)') 'is a distributed workflow for scaling partial stacks'
+        stop
+    end subroutine print_doc_scale_stk_parts
+
     subroutine list_all_simple_programs
         write(*,'(A)') 'automask2D'
-        write(*,'(A)') 'bin2txt'
         write(*,'(A)') 'binarise'
         write(*,'(A)') 'boxconvs'
         write(*,'(A)') 'cavgassemble'
@@ -699,13 +722,15 @@ contains
         write(*,'(A)') 'check3D_conv'
         write(*,'(A)') 'check_box'
         write(*,'(A)') 'check_nptcls'
+        write(*,'(A)') 'cluster2D'
+        write(*,'(A)') 'cluster_cavgs'
         write(*,'(A)') 'cluster_oris'
         write(*,'(A)') 'cluster_smat'
         write(*,'(A)') 'comlin_smat'
         write(*,'(A)') 'convert'
         write(*,'(A)') 'corrcompare'
-        write(*,'(A)') 'ctffind'
         write(*,'(A)') 'ctf_estimate'
+        write(*,'(A)') 'ctffind'
         write(*,'(A)') 'ctfops'
         write(*,'(A)') 'dock_volpair'
         write(*,'(A)') 'dsymsrch'
@@ -722,11 +747,14 @@ contains
         write(*,'(A)') 'makeoris'
         write(*,'(A)') 'makepickrefs'
         write(*,'(A)') 'map2ptcls'
+        write(*,'(A)') 'map2ptcls_doc'
         write(*,'(A)') 'mask'
         write(*,'(A)') 'masscen'
         write(*,'(A)') 'merge_algndocs'
         write(*,'(A)') 'merge_nnmat'
         write(*,'(A)') 'merge_similarities'
+        write(*,'(A)') 'motion_correct'
+        write(*,'(A)') 'motion_correct_ctffind'
         write(*,'(A)') 'multiptcl_init'
         write(*,'(A)') 'noiseimgs'
         write(*,'(A)') 'norm'
@@ -738,17 +766,20 @@ contains
         write(*,'(A)') 'postprocess'
         write(*,'(A)') 'powerspecs'
         write(*,'(A)') 'preproc'
-        write(*,'(A)') 'prime2D'
-        write(*,'(A)') 'prime3D'
         write(*,'(A)') 'prime3D_init'
         write(*,'(A)') 'print_cmd_dict'
         write(*,'(A)') 'print_dose_weights'
         write(*,'(A)') 'print_fsc'
         write(*,'(A)') 'print_magic_boxes'
+        write(*,'(A)') 'print_project_info'
+        write(*,'(A)') 'project2txt'
         write(*,'(A)') 'projvol'
         write(*,'(A)') 'rank_cavgs'
+        write(*,'(A)') 'rec_test'
         write(*,'(A)') 'recvol'
+        write(*,'(A)') 'refine3D'
         write(*,'(A)') 'res'
+        write(*,'(A)') 'resmask'
         write(*,'(A)') 'resrange'
         write(*,'(A)') 'rotmats2oris'
         write(*,'(A)') 'scale'
@@ -762,15 +793,14 @@ contains
         write(*,'(A)') 'split_pairs'
         write(*,'(A)') 'stack'
         write(*,'(A)') 'stackops'
+        write(*,'(A)') 'stktabinfo'
         write(*,'(A)') 'sym_aggregate'
         write(*,'(A)') 'symsrch'
         write(*,'(A)') 'tseries_backgr_subtr'
         write(*,'(A)') 'tseries_extract'
         write(*,'(A)') 'tseries_split'
         write(*,'(A)') 'tseries_track'
-        write(*,'(A)') 'txt2bin'
-        write(*,'(A)') 'motion_correct'
-        write(*,'(A)') 'motion_correct_ctffind'
+        write(*,'(A)') 'txt2project'
         write(*,'(A)') 'vizoris'
         write(*,'(A)') 'volassemble'
         write(*,'(A)') 'volaverager'
@@ -780,28 +810,27 @@ contains
     end subroutine list_all_simple_programs
 
     subroutine list_all_simple_distr_programs
-        write(*,'(A)') 'auto_refine3D'
-        write(*,'(A)') 'cga_hres_sel'
+        write(*,'(A)') 'cluster2D'
+        write(*,'(A)') 'cluster2D_stream'
         write(*,'(A)') 'comlin_smat'
-        write(*,'(A)') 'ctffind'
         write(*,'(A)') 'ctf_estimate'
-        write(*,'(A)') 'het_ensemble'
+        write(*,'(A)') 'ctffind'
+        write(*,'(A)') 'het'
+        write(*,'(A)') 'het_refine'
         write(*,'(A)') 'initial_3Dmodel'
         write(*,'(A)') 'makecavgs'
-        write(*,'(A)') 'pick'
-        write(*,'(A)') 'powerspecs'
-        write(*,'(A)') 'preproc'
-        write(*,'(A)') 'prime2D'
-        write(*,'(A)') 'prime2D_stream'
-        write(*,'(A)') 'prime3D'
-        write(*,'(A)') 'prime3D_init'
-        write(*,'(A)') 'recvol'
-        write(*,'(A)') 'scale_stk_parts'
-        write(*,'(A)') 'symsrch'
-        write(*,'(A)') 'tseries_track'
         write(*,'(A)') 'motion_correct'
         write(*,'(A)') 'motion_correct_ctffind'
         write(*,'(A)') 'motion_correct_tomo'
+        write(*,'(A)') 'pick'
+        write(*,'(A)') 'powerspecs'
+        write(*,'(A)') 'preproc'
+        write(*,'(A)') 'prime3D_init'
+        write(*,'(A)') 'recvol'
+        write(*,'(A)') 'refine3D'
+        write(*,'(A)') 'scale_stk_parts'
+        write(*,'(A)') 'symsrch'
+        write(*,'(A)') 'tseries_track'
         stop
     end subroutine list_all_simple_distr_programs
 

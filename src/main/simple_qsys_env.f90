@@ -84,7 +84,7 @@ contains
         qsnam = self%qdescr%get('qsys_name')
         call self%qsys_fac%new(qsnam, self%myqsys)
         ! create the user specific qsys and qsys controller (script generator)
-        self%simple_exec_bin = trim(self%qdescr%get('simple_path'))//'/bin/simple_exec'
+        self%simple_exec_bin = trim(self%qdescr%get('simple_path'))//'/bin/simple_private_exec'
         if( present(numlen) )then
             call self%qscripts%new(self%simple_exec_bin, self%myqsys, self%parts,&
             &[1, nparts], p_master%ncunits, sstream, numlen)
