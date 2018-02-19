@@ -62,7 +62,7 @@ contains
         character(len=30)     :: async_this, access_this, action_this, status_this,&
             &blank_this, pad_this, decimal_this, delim_this, form_this, round_this,&
             &position_this, errmsg_this
-
+        
         ! check to see if filename is empty
         write(filename,'(A)') trim(adjustl(file))
         if ( strIsBlank(filename) )then
@@ -125,7 +125,7 @@ contains
             if (stringsAreEqual(access, 'STREAM',.false.))then
 #ifdef PGI
                 print *,"** Cannot 'stream' in current PGI version, using DIRECT"
-                write(access_this,'(A)')'DIRECT'
+                write(access_this,'(A)')  upperCase(access)
 #else
                 write(access_this ,'(A)') upperCase(access)
 #endif
